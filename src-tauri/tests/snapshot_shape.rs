@@ -188,9 +188,9 @@ async fn test_snapshot_empty_db_defaults_partial_false() {
     assert_eq!(theme["themeId"], "slate");
     assert_eq!(theme["mode"], "system");
 
-    // safeMode — default { mode: "off" } (or similar default sentinel)
+    // safeMode — default { mode: "warn" } (#1113: 신규 설치 실효 기본값).
     let safe = stores["safeMode"].as_object().unwrap();
-    assert!(safe.contains_key("mode"));
+    assert_eq!(safe["mode"], "warn");
 
     // runtime.activeStatuses — {}
     let runtime = &json["runtime"];
@@ -518,7 +518,7 @@ async fn test_snapshot_reads_theme_and_safe_mode_from_settings() {
         .unwrap();
     sqlx::query("INSERT INTO settings(key, value_json, updated_at) VALUES (?, ?, ?)")
         .bind("safe_mode")
-        .bind(r#"{"mode":"on"}"#)
+        .bind(r#"{"mode":"strict"}"#)
         .bind(now)
         .execute(&pool)
         .await
@@ -530,6 +530,7 @@ async fn test_snapshot_reads_theme_and_safe_mode_from_settings() {
     let json = serde_json::to_value(&snap).unwrap();
     assert_eq!(json["stores"]["theme"]["themeId"], "dracula");
     assert_eq!(json["stores"]["theme"]["mode"], "dark");
-    assert_eq!(json["stores"]["safeMode"]["mode"], "on");
+    // 영속된 유효 3-tier 값은 wire 로 그대로 round-trip (#1113 하위 호환).
+    assert_eq!(json["stores"]["safeMode"]["mode"], "strict");
     cleanup();
 }

@@ -52,7 +52,10 @@ async function persistSafeModeSetting(mode: SafeMode): Promise<void> {
 }
 
 export const useSafeModeStore = create<SafeModeState>()((set, get) => ({
-  mode: "strict",
+  // 이슈 #1113 — hydration 전 실효 기본값. backend `SafeModeStore::default()`
+  // (snapshot) 와 동일한 `warn` 으로 통일. strict 였던 이전 값은 hydration
+  // 전 짧은 창에서만 실효였고 backend default (off) 와 어긋나 4중 모순이었다.
+  mode: "warn",
 
   setMode: async (next) => {
     await persistSafeModeSetting(next);
