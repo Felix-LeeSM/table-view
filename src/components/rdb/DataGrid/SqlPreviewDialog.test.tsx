@@ -12,6 +12,7 @@ import {
   fireEvent,
   act,
   cleanup,
+  waitFor,
 } from "@testing-library/react";
 import { userEvent } from "@testing-library/user-event";
 import { SqlPreviewDialog } from "./SqlPreviewDialog";
@@ -55,6 +56,13 @@ describe("SqlPreviewDialog — reflexive Enter / double-execution guards", () =>
     const user = userEvent.setup();
     renderDialog(editState);
 
+    // Wait for the arm window to elapse first so the focus-on-arm effect has
+    // already fired (it moves focus to Execute). Only then park focus on
+    // Cancel — otherwise a slow runner can let the arm effect steal focus back
+    // to Execute mid-keystroke and flake the assertion.
+    await waitFor(() =>
+      expect(screen.getByTestId("execute-button")).not.toBeDisabled(),
+    );
     const cancel = screen.getByRole("button", { name: /^cancel$/i });
     cancel.focus();
     await user.keyboard("{Enter}");
