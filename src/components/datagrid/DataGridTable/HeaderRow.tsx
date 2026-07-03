@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Key } from "lucide-react";
 import type { SortInfo, TableData } from "@/types/schema";
@@ -109,6 +109,13 @@ export default function HeaderRow({
 }: HeaderRowProps) {
   const { t } = useTranslation("datagrid");
   const sortMouseStartRef = useRef<{ x: number; y: number } | null>(null);
+  // issue #1130 (B1) — 헤더행은 단일 roving tab stop. 정적 tabIndex={0} N개는
+  // grid 안에 N개 tab stop 을 만들어(헤더에서 Tab N연타) body 단일 roving 과
+  // nav 모델을 이원화한다. 헤더도 첫 columnheader 만 tab stop 이고 ArrowLeft/
+  // Right/Home/End 로 이동한다 (body roving 과 분리된 1 stop, Tab 으로 body 진입).
+  const [focusedHeaderCol, setFocusedHeaderCol] = useState(0);
+  const clampedHeaderCol =
+    order.length > 0 ? Math.min(focusedHeaderCol, order.length - 1) : 0;
   const hasContextMenu = !!(
     onSortColumn ||
     onClearColumnSort ||
@@ -151,7 +158,9 @@ export default function HeaderRow({
                     : "descending"
                   : "none"
               }
-              className="relative flex cursor-pointer flex-col justify-center overflow-hidden border-b border-r border-border px-3 py-1.5 text-left text-xs font-medium text-secondary-foreground hover:bg-muted"
+              tabIndex={visualIdx === clampedHeaderCol ? 0 : -1}
+              onFocus={() => setFocusedHeaderCol(visualIdx)}
+              className="relative flex cursor-pointer flex-col justify-center overflow-hidden border-b border-r border-border px-3 py-1.5 text-left text-xs font-medium text-secondary-foreground hover:bg-muted focus-visible:outline-1 focus-visible:-outline-offset-1 focus-visible:outline-ring"
               onMouseDown={(e) => {
                 sortMouseStartRef.current = { x: e.clientX, y: e.clientY };
               }}
@@ -162,6 +171,44 @@ export default function HeaderRow({
                   sortMouseStartRef.current = null;
                   if (dx > 4 || dy > 4) return;
                 }
+                if (editingCell) onSaveCurrentEdit();
+                onSort(col.name, e.shiftKey);
+              }}
+              onKeyDown={(e) => {
+                // 내부 resize separator / context menu item 에서 버블한 키는
+                // 무시(자기 셀만).
+                if (e.target !== e.currentTarget) return;
+                const { key } = e;
+                // issue #1130 (B1) — 헤더행 roving: ArrowLeft/Right/Home/End 로
+                // 단일 tab stop 을 형제 columnheader 로 옮긴다. body roving 과
+                // 같은 방식(이벤트 상대 querySelector + .focus(), 가상화 없어
+                // 즉시 focus). Tab 은 헤더↔body 이동에 그대로 쓴다.
+                if (
+                  key === "ArrowLeft" ||
+                  key === "ArrowRight" ||
+                  key === "Home" ||
+                  key === "End"
+                ) {
+                  e.preventDefault();
+                  const last = order.length - 1;
+                  let next = visualIdx;
+                  if (key === "ArrowLeft") next = Math.max(visualIdx - 1, 0);
+                  else if (key === "ArrowRight")
+                    next = Math.min(visualIdx + 1, last);
+                  else if (key === "Home") next = 0;
+                  else if (key === "End") next = last;
+                  setFocusedHeaderCol(next);
+                  const rowEl = e.currentTarget.closest('[role="row"]');
+                  const headers = rowEl?.querySelectorAll<HTMLElement>(
+                    '[role="columnheader"]',
+                  );
+                  headers?.[next]?.focus();
+                  return;
+                }
+                // issue #1130 AC3 — Enter/Space 로 정렬, Shift 는 shift+click 과
+                // 동일하게 multi-sort append.
+                if (key !== "Enter" && key !== " ") return;
+                e.preventDefault();
                 if (editingCell) onSaveCurrentEdit();
                 onSort(col.name, e.shiftKey);
               }}

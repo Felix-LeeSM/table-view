@@ -18,6 +18,7 @@ import {
   editKey,
   getInputTypeForColumn,
   useColumnResize,
+  useGridRoving,
 } from "@components/datagrid";
 import { getDefaultRem } from "@/lib/columnCategory";
 import {
@@ -162,6 +163,15 @@ export default function EditableQueryResultGrid({
     onCommitWidth: setWidth,
   });
 
+  // issue #1130 AC1/AC2 — 공유 data-cell roving. raw editable grid 는 모든 row
+  // 를 렌더(가상화 없음)라 scrollRowIntoView 불필요. 좌표계: reorder 없어
+  // visualCol == colIdx.
+  const roving = useGridRoving(
+    result.rows.length,
+    result.columns.length,
+    scrollContainerRef,
+  );
+
   const contextMenuItems: ContextMenuItem[] = contextMenu
     ? [
         {
@@ -252,6 +262,7 @@ export default function EditableQueryResultGrid({
         aria-rowcount={1 + result.rows.length}
         aria-colcount={result.columns.length}
         style={{ "--cols": colsTemplate } as CSSProperties}
+        onKeyDown={roving.onKeyDown}
       >
         <div
           role="rowgroup"
@@ -346,6 +357,10 @@ export default function EditableQueryResultGrid({
                       role="gridcell"
                       aria-colindex={colIdx + 1}
                       data-editing={isEditing ? "true" : undefined}
+                      data-grid-row={rowIdx}
+                      data-grid-col={colIdx}
+                      tabIndex={roving.cellTabIndex(rowIdx, colIdx)}
+                      onFocus={() => roving.syncFocus(rowIdx, colIdx)}
                       className={`flex min-w-0 items-center overflow-hidden border-r border-border px-3 py-1 text-xs text-foreground ${
                         isEditing
                           ? "bg-primary/10 ring-2 ring-inset ring-primary"
@@ -354,6 +369,18 @@ export default function EditableQueryResultGrid({
                             : ""
                       }`}
                       title={formatCellDisplay(cell)}
+                      onKeyDown={(e) => {
+                        // issue #1130 AC2 — Enter/F2 로 focus 된 cell 편집 진입
+                        // (double-click 과 동일 경로). 편집 중엔 input 이 Enter/
+                        // Escape 를 stopPropagation 하므로 여기 안 옴. noPk 면
+                        // 편집 불가라 무시(context menu 도 동일 disabled).
+                        if (isEditing) return;
+                        if (e.key !== "Enter" && e.key !== "F2") return;
+                        if (grid.noPk) return;
+                        e.preventDefault();
+                        e.stopPropagation();
+                        grid.startEdit(rowIdx, colIdx);
+                      }}
                       onDoubleClick={() => grid.startEdit(rowIdx, colIdx)}
                       onClick={() => {
                         if (grid.editingCell && !isEditing) {
