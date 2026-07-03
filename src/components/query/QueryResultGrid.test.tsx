@@ -363,6 +363,51 @@ describe("QueryResultGrid", () => {
     expect(screen.getByText(/single-table/)).toBeInTheDocument();
   });
 
+  // Purpose: edit-ability must be judged against the EXECUTED SQL snapshot
+  // stored on `queryState.completed.sql`, not the live `sql` prop. The store
+  // snapshot survives a QueryTab remount (tab switch) where the pre-fix
+  // component-local approach reset and fell back to the live editor text,
+  // which could flip a JOIN result to falsely-editable → wrong-row write.
+  // PR #1236 review, issue #1226 (2026-07-03).
+  it("judges edit-ability on queryState.sql snapshot, ignoring a live JOIN prop", async () => {
+    render(
+      <QueryResultGrid
+        queryState={{
+          status: "completed",
+          result: SELECT_RESULT,
+          sql: "SELECT id, name FROM public.users",
+        }}
+        connectionId="conn1"
+        database="db1"
+        // Live editor text (parent passes it) is a JOIN — must be ignored.
+        sql="SELECT * FROM users u JOIN orders o ON u.id = o.uid"
+      />,
+    );
+    await waitFor(() => {
+      expect(screen.getByText(/Editable/)).toBeInTheDocument();
+    });
+    expect(screen.queryByText(/Read-only/)).not.toBeInTheDocument();
+  });
+
+  it("keeps a JOIN result read-only even when the live sql prop is single-table", () => {
+    render(
+      <QueryResultGrid
+        queryState={{
+          status: "completed",
+          result: SELECT_RESULT,
+          sql: "SELECT * FROM users u JOIN orders o ON u.id = o.uid",
+        }}
+        connectionId="conn1"
+        // Live editor was edited to a single-table SELECT after the JOIN run —
+        // must NOT make the already-shown JOIN result editable.
+        sql="SELECT id, name FROM users"
+      />,
+    );
+    expect(screen.getByText(/Read-only/)).toBeInTheDocument();
+    expect(screen.getByText(/single-table/)).toBeInTheDocument();
+    expect(screen.queryByText(/Editable/)).not.toBeInTheDocument();
+  });
+
   it("renders read-only table when no SQL/connectionId is supplied (back-compat)", () => {
     render(
       <QueryResultGrid

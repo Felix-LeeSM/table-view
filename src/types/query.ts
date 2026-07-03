@@ -270,6 +270,14 @@ export type QueryState =
       result: QueryResult;
       statements?: QueryStatementResult[];
       isDryRun?: boolean;
+      // #1226 — the SQL actually executed for this single-statement result,
+      // captured at completion so edit-ability is judged against the run, not
+      // the live editor text. Survives QueryTab remount (tab switch) because
+      // it lives in the store, unlike component-local state. Multi-statement
+      // runs carry per-statement `statements[].sql` instead and leave this
+      // undefined; document / kv completions leave it undefined (their
+      // results are never edit-mapped).
+      sql?: string;
     }
   | {
       status: "completedSearch";
