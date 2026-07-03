@@ -115,6 +115,96 @@ INSERT INTO t (col) VALUES ('a;b')`;
   });
 });
 
+// Purpose: #1223 comment/split edge-case coverage — the single-statement RAW
+// path bug traced to trailing `;`+comment fragments; these lock split behaviour
+// across the comment, string-literal, and dollar-quote surfaces the #1118 /
+// #1223 pipeline depends on (2026-07-03, user directive: bulk test 보충).
+describe("splitSqlStatements — #1223 comment & literal edge cases", () => {
+  it("keeps a pure trailing line comment as its own fragment", () => {
+    // Reason: #1223 root case — `SELECT 1;\n-- c` split to [stmt, comment];
+    // the comment fragment is what prepareRdbStatements must drop.
+    expect(splitSqlStatements("SELECT 1;\n-- c")).toEqual(["SELECT 1", "-- c"]);
+  });
+
+  it("keeps a trailing line comment with no newline as its own fragment", () => {
+    expect(splitSqlStatements("SELECT 1;-- c")).toEqual(["SELECT 1", "-- c"]);
+  });
+
+  it("keeps a trailing block comment as its own fragment", () => {
+    expect(splitSqlStatements("SELECT 1; /* c */")).toEqual([
+      "SELECT 1",
+      "/* c */",
+    ]);
+  });
+
+  it("returns a comment-only line input as a single comment fragment", () => {
+    expect(splitSqlStatements("-- just a comment")).toEqual([
+      "-- just a comment",
+    ]);
+  });
+
+  it("returns a comment-only block input as a single comment fragment", () => {
+    expect(splitSqlStatements("/* block */")).toEqual(["/* block */"]);
+  });
+
+  it("does not split on a semicolon inside a trailing line comment", () => {
+    expect(splitSqlStatements("SELECT 1; -- c;")).toEqual([
+      "SELECT 1",
+      "-- c;",
+    ]);
+  });
+
+  it("does not split on a semicolon inside a leading line comment", () => {
+    expect(splitSqlStatements("-- c;\nSELECT 2")).toEqual(["-- c;\nSELECT 2"]);
+  });
+
+  it("keeps interleaved comments between statements", () => {
+    expect(
+      splitSqlStatements("SELECT 1;\n-- mid\nSELECT 2;\n/* end */"),
+    ).toEqual(["SELECT 1", "-- mid\nSELECT 2", "/* end */"]);
+  });
+
+  it("ignores --, ;, and keywords inside a single-quoted string literal", () => {
+    expect(splitSqlStatements("SELECT 'a -- b ; JOIN c' FROM t")).toEqual([
+      "SELECT 'a -- b ; JOIN c' FROM t",
+    ]);
+  });
+
+  it("ignores -- and ; inside a backtick identifier", () => {
+    expect(splitSqlStatements("SELECT `weird;--col` FROM t")).toEqual([
+      "SELECT `weird;--col` FROM t",
+    ]);
+  });
+
+  it("does not split on a semicolon inside a mid-statement block comment", () => {
+    expect(splitSqlStatements("SELECT /* a;b */ 1; SELECT 2")).toEqual([
+      "SELECT /* a;b */ 1",
+      "SELECT 2",
+    ]);
+  });
+
+  it("drops empty statements from a bare semicolon run", () => {
+    expect(splitSqlStatements(";;")).toEqual([]);
+  });
+
+  // KNOWN LIMITATION (#1223 follow-up): splitSqlStatements is not
+  // dollar-quote aware, so a PG `$$ ... ; ... $$` routine body is mis-split
+  // on its inner semicolons. Out of scope for the #1223 trailing-comment
+  // fix (adding `$$` support also changes the sqlSafety classifier that
+  // shares this splitter). Pinned here so the follow-up has a baseline.
+  it("mis-splits a PG dollar-quoted body (documented limitation)", () => {
+    expect(
+      splitSqlStatements(
+        "CREATE FUNCTION f() RETURNS int AS $$ BEGIN RETURN 1; END; $$ LANGUAGE plpgsql",
+      ),
+    ).toEqual([
+      "CREATE FUNCTION f() RETURNS int AS $$ BEGIN RETURN 1",
+      "END",
+      "$$ LANGUAGE plpgsql",
+    ]);
+  });
+});
+
 // -- Sprint 40: SQL Formatting --
 
 describe("formatSql", () => {
