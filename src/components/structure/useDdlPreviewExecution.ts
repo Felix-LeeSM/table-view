@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from "react";
 import i18n from "@lib/i18n";
 import { analyzeStatement } from "@/lib/sql/sqlSafety";
+import { splitSqlStatements } from "@lib/sql/sqlUtils";
 import { useSafeModeGate } from "@/hooks/useSafeModeGate";
 import { recordHistoryEntry } from "@lib/runtime/history/recordHistoryEntry";
 import { syncMismatchedActiveDb } from "@lib/runtime/recovery/syncMismatchedActiveDb";
@@ -12,9 +13,10 @@ import { getDbMismatchInfo, getTauriErrorMessage } from "@lib/tauri/error";
  * (ColumnsEditor / IndexesEditor / ConstraintsEditor). Lifecycle:
  *
  *   1. fetch preview SQL via a Tauri `*_preview_only=true` call.
- *   2. on Execute, split `previewSql` on `";"`, walk each statement
- *      through `analyzeStatement` + `useSafeModeGate.decide`, and branch
- *      on strict / warn / safe.
+ *   2. on Execute, split `previewSql` with `splitSqlStatements` (literal/
+ *      comment-aware, issue #1118), walk each statement through
+ *      `analyzeStatement` + `useSafeModeGate.decide`, and branch on
+ *      strict / warn / safe.
  *   3. warn-tier surfaces a `ConfirmDestructiveDialog`; the user clicks
  *      Confirm (or hits Enter) and the same commit closure runs.
  *   4. commit (`*_preview_only=false`) records a
@@ -61,7 +63,7 @@ export interface UseDdlPreviewExecutionResult {
   /**
    * Non-null while the warn-tier dialog is mounted. `reason` is the
    * verbatim analyzer reason; `sql` is the offending statement (post
-   * `;`-split + trim) — both are forwarded to the dialog props.
+   * `splitSqlStatements`) — both are forwarded to the dialog props.
    */
   pendingConfirm: DdlPreviewPendingConfirm | null;
   /**
@@ -79,8 +81,8 @@ export interface UseDdlPreviewExecutionResult {
     prepareCommit: () => () => Promise<void>,
   ) => Promise<void>;
   /**
-   * `";"`-split the previewed SQL, run each statement through
-   * `analyzeStatement` + `useSafeModeGate.decide`. block → set
+   * Split the previewed SQL with `splitSqlStatements`, run each statement
+   * through `analyzeStatement` + `useSafeModeGate.decide`. block → set
    * `previewError`; confirm → set `pendingConfirm`; otherwise call
    * the registered commit closure.
    */
@@ -204,13 +206,11 @@ export function useDdlPreviewExecution({
 
   const attemptExecute = useCallback(async () => {
     if (!pendingExecuteRef.current) return;
-    // `;`-split + analyseStatement + decide loop. A batch with any
-    // DROP COLUMN / DROP CONSTRAINT / DROP INDEX trips the gate even
-    // when sibling statements are safe ADDs.
-    const statements = previewSql
-      .split(";")
-      .map((s) => s.trim())
-      .filter(Boolean);
+    // Split (literal/comment-aware, issue #1118) + analyzeStatement + decide
+    // loop. A batch with any DROP COLUMN / DROP CONSTRAINT / DROP INDEX trips
+    // the gate even when sibling statements are safe ADDs. `splitSqlStatements`
+    // already trims and drops empty statements.
+    const statements = splitSqlStatements(previewSql);
     for (const stmt of statements) {
       const analysis = analyzeStatement(stmt);
       const decision = safeModeGate.decide(analysis);

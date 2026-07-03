@@ -183,4 +183,32 @@ describe("useDdlPreviewExecution — PostgreSQL structure DDL plan", () => {
     });
     expect(entries[0]?.sqlRedacted).toContain("DROP INDEX");
   });
+
+  it("[#1118] treats a `;` inside a string literal as one statement — no false Safe Mode block", async () => {
+    // A naive `.split(";")` fragments this single CREATE into a bogus
+    // `DROP TABLE x')` tail that the strict gate would block. The
+    // literal-aware `splitSqlStatements` keeps it whole → info → commits.
+    const onCommit = vi.fn().mockResolvedValue(undefined);
+    const onRefresh = vi.fn().mockResolvedValue(undefined);
+    render(
+      <Harness
+        sql={"CREATE TABLE t (label text DEFAULT 'a;DROP TABLE x')"}
+        onCommit={onCommit}
+        onRefresh={onRefresh}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Load plan" }));
+    await waitFor(() => {
+      expect(screen.getByLabelText("preview sql")).toHaveTextContent(
+        "CREATE TABLE",
+      );
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Execute" }));
+
+    await waitFor(() => expect(onCommit).toHaveBeenCalledTimes(1));
+    expect(screen.getByLabelText("pending confirm")).toHaveTextContent("");
+    expect(screen.getByLabelText("preview error")).toHaveTextContent("");
+  });
 });
