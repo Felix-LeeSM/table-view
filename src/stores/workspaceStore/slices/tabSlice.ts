@@ -302,6 +302,10 @@ export function createTabSlice(set: WorkspaceSet, get: WorkspaceGet): TabSlice {
       });
       if (hadAny) {
         useDataGridEditStore.getState().purgeForConnection(connId);
+        // Issue #1102 — symmetric raw-grid teardown. HomePage.handleActivate
+        // calls clearForConnection directly (bypassing cleanupConnectionFrontendState),
+        // so the raw-grid purge must live here too or pending raw edits leak.
+        useRawQueryGridEditStore.getState().purgeForConnection(connId);
       }
     },
   };
