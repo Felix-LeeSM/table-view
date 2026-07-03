@@ -801,6 +801,35 @@ mod tests {
 
     #[tokio::test]
     #[serial]
+    async fn inner_bare_string_safe_mode_ignored_by_boot_read() {
+        // #1190 characterization — frontend `persistSettingValue("safe_mode", mode)`
+        // 는 bare JSON string(`"off"`)을 value_json 에 저장하지만 `read_safe_mode`
+        // 는 object(`{"mode":...}`) 를 기대해 역직렬화 실패 → `.unwrap_or_default()`.
+        // 따라서 boot snapshot 은 영속된 값을 무시하고 항상 default(warn)를 노출한다.
+        // 위 시나리오 3개는 전부 object shape 를 seed 해 이 버그를 놓쳤다 (리뷰 blind
+        // spot). #1113 의 "실효 기본값 = SafeModeStore::default()" 전제를 코드로 잠근다.
+        // #1190 fix 시 이 assertion 이 뒤집힌다 (그때는 영속된 off 를 존중).
+        let (_dir, pool) = pool_setup().await;
+        sqlx::query("INSERT INTO settings(key, value_json, updated_at) VALUES (?, ?, ?)")
+            .bind("safe_mode")
+            .bind(r#""off""#) // bare string — frontend 실제 저장 shape
+            .bind(1i64)
+            .execute(&pool)
+            .await
+            .unwrap();
+        let snap = get_initial_app_state_inner(&pool, "launcher", &HashMap::new())
+            .await
+            .unwrap();
+        match &snap.stores.safe_mode {
+            // 영속값 off 가 무시되고 default(warn)로 fallback (#1190 witness).
+            StoreSlot::Ok(s) => assert_eq!(s.mode, SafeMode::Warn),
+            StoreSlot::Err { error } => panic!("safe_mode must read OK, got error={}", error),
+        }
+        pool_cleanup();
+    }
+
+    #[tokio::test]
+    #[serial]
     async fn inner_reads_mru_in_last_used_desc_order() {
         let (_dir, pool) = pool_setup().await;
         for (id, ts) in [("c-1", 100i64), ("c-2", 500), ("c-3", 200)] {
