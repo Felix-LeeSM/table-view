@@ -508,6 +508,12 @@ jobs:
       - name: Run integration coverage
         working-directory: src-tauri
         env:
+          # llvm-cov source-based coverage carries its mapping in a dedicated
+          # section and needs no DWARF, so drop the dev-profile default
+          # debug=true to shrink the ten duckdb-static-linked test binaries that
+          # exhausted the runner disk ("No space left on device"). Backtrace line
+          # info is lost — irrelevant to a pass/fail coverage gate.
+          CARGO_PROFILE_DEV_DEBUG: "0"
           PGHOST: localhost
           PGPORT: 5432
           PGUSER: testuser
