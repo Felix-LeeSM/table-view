@@ -1,4 +1,4 @@
-import { useEffect, forwardRef, useImperativeHandle, useRef } from "react";
+import { useEffect, forwardRef, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Compartment, EditorState, type Extension } from "@codemirror/state";
 import {
@@ -19,6 +19,7 @@ import {
 import { acceptCompletion, autocompletion } from "@codemirror/autocomplete";
 import { viewTableHighlightStyle } from "@lib/editor/highlightStyle";
 import { autocompleteTooltipTheme } from "@lib/editor/autocompleteTheme";
+import { setForwardedRef } from "@lib/editor/setForwardedRef";
 import { syncEditorDocument } from "./editorDocumentSync";
 
 export interface SearchQueryEditorProps {
@@ -41,7 +42,6 @@ const SearchQueryEditor = forwardRef<EditorView | null, SearchQueryEditorProps>(
     const { t } = useTranslation("query");
     const containerRef = useRef<HTMLDivElement>(null);
     const viewRef = useRef<EditorView | null>(null);
-    useImperativeHandle(ref, () => viewRef.current as EditorView, []);
 
     const onSqlChangeRef = useRef(onSqlChange);
     onSqlChangeRef.current = onSqlChange;
@@ -135,11 +135,15 @@ const SearchQueryEditor = forwardRef<EditorView | null, SearchQueryEditorProps>(
         parent: containerRef.current,
       });
       viewRef.current = view;
+      // Expose the live EditorView to the parent's forwarded ref (#1248).
+      setForwardedRef(ref, view);
 
       return () => {
         view.destroy();
         viewRef.current = null;
+        setForwardedRef(ref, null);
       };
+      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     useEffect(() => {
