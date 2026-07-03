@@ -7,6 +7,10 @@ import {
   type WorkspaceKey,
 } from "@stores/workspaceStore";
 import { useMruStore } from "@stores/mruStore";
+import {
+  useTableActivityStore,
+  tableActivityKey,
+} from "@stores/tableActivityStore";
 import { useSchemaCache } from "@/hooks/useSchemaCache";
 import {
   useMigrationExport,
@@ -104,6 +108,9 @@ export interface SchemaTreeActions {
   // modal (delegated to `useDdlPreviewExecution`).
   handleDropTable: (tableName: string, schemaName: string) => void;
   handleStartRename: (tableName: string, schemaName: string) => void;
+  // #1218 — pin/unpin a table + current pin state (for the menu label).
+  handleTogglePin: (tableName: string, schemaName: string) => void;
+  isTablePinned: (tableName: string, schemaName: string) => boolean;
   handleViewClick: (viewName: string, schemaName: string) => void;
   handleOpenViewStructure: (viewName: string, schemaName: string) => void;
   handleFunctionClick: (funcName: string, schemaName: string) => void;
@@ -164,6 +171,12 @@ export function useSchemaTreeActions({
   const setExpandedStore = useWorkspaceStore((s) => s.setExpanded);
   const setSelectedNodeStore = useWorkspaceStore((s) => s.setSelectedNode);
   const markConnectionUsed = useMruStore((s) => s.markConnectionUsed);
+  // #1218 — table-level usage record + pin. `recordTableUsed` fires on the
+  // same table-open handlers as `markConnectionUsed`; `entries` subscription
+  // keeps `isTablePinned` reactive so the context-menu label flips live.
+  const recordTableUsed = useTableActivityStore((s) => s.recordTableUsed);
+  const togglePin = useTableActivityStore((s) => s.togglePin);
+  const tableActivityEntries = useTableActivityStore((s) => s.entries);
 
   const expandedArray = useWorkspaceStore((s) =>
     workspaceKey
@@ -278,6 +291,22 @@ export function useSchemaTreeActions({
   // kept the last-clicked table lit even after the user moved to a
   // different tab). Clearing also displaces any prior schema/category
   // selection so AC-SEL-03 still holds.
+  // #1218 — record a table-level open (connectionId, db, schema?, table) for
+  // the Pinned/Recent sections. `db` is the workspace's active db; `schema` is
+  // the raw name the tree passes (a real schema for PG, the db name for MySQL,
+  // "main" for SQLite) so the reopen path is byte-identical to a tree click.
+  const recordTableActivity = useCallback(
+    (tableName: string, schemaName: string) => {
+      recordTableUsed({
+        connectionId,
+        db: workspaceKeyRef.current?.db ?? "",
+        schema: schemaName,
+        table: tableName,
+      });
+    },
+    [recordTableUsed, connectionId],
+  );
+
   const handleTableClick = useCallback(
     (tableName: string, schemaName: string) => {
       setSelectedNodeId(null);
@@ -291,8 +320,15 @@ export function useSchemaTreeActions({
         subView: "records",
       });
       markConnectionUsed(connectionId);
+      recordTableActivity(tableName, schemaName);
     },
-    [addTab, markConnectionUsed, connectionId, setSelectedNodeId],
+    [
+      addTab,
+      markConnectionUsed,
+      recordTableActivity,
+      connectionId,
+      setSelectedNodeId,
+    ],
   );
 
   const handleTableDoubleClick = useCallback(
@@ -309,8 +345,15 @@ export function useSchemaTreeActions({
         permanent: true,
       });
       markConnectionUsed(connectionId);
+      recordTableActivity(tableName, schemaName);
     },
-    [addTab, markConnectionUsed, connectionId, setSelectedNodeId],
+    [
+      addTab,
+      markConnectionUsed,
+      recordTableActivity,
+      connectionId,
+      setSelectedNodeId,
+    ],
   );
 
   const handleOpenStructure = useCallback(
@@ -326,8 +369,44 @@ export function useSchemaTreeActions({
         subView: "structure",
       });
       markConnectionUsed(connectionId);
+      recordTableActivity(tableName, schemaName);
     },
-    [addTab, markConnectionUsed, connectionId, setSelectedNodeId],
+    [
+      addTab,
+      markConnectionUsed,
+      recordTableActivity,
+      connectionId,
+      setSelectedNodeId,
+    ],
+  );
+
+  // #1218 — pin/unpin a table from the tree context menu. Same (connectionId,
+  // db, schema?, table) tuple as the recent record.
+  const handleTogglePin = useCallback(
+    (tableName: string, schemaName: string) => {
+      togglePin({
+        connectionId,
+        db: workspaceKeyRef.current?.db ?? "",
+        schema: schemaName,
+        table: tableName,
+      });
+    },
+    [togglePin, connectionId],
+  );
+
+  const isTablePinned = useCallback(
+    (tableName: string, schemaName: string): boolean => {
+      const key = tableActivityKey({
+        connectionId,
+        db: workspaceKey?.db ?? "",
+        schema: schemaName,
+        table: tableName,
+      });
+      return tableActivityEntries.some(
+        (e) => tableActivityKey(e) === key && e.pinnedAt != null,
+      );
+    },
+    [tableActivityEntries, connectionId, workspaceKey],
   );
 
   // Sprint 235 — opener for the new DropTableDialog. The legacy version
@@ -517,6 +596,8 @@ export function useSchemaTreeActions({
     handleOpenStructure,
     handleDropTable,
     handleStartRename,
+    handleTogglePin,
+    isTablePinned,
     handleViewClick,
     handleOpenViewStructure,
     handleFunctionClick,

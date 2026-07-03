@@ -74,9 +74,20 @@ vi.mock("@lib/window-label", async () => {
 // `("conn1", "db1", "public", "users")` fixture. Resetting in setup keeps those
 // tests byte-identical (no `beforeEach` edits required) while the new
 // store backs the per-mount lifecycle correctly.
-beforeEach(() => {
+beforeEach(async () => {
   resetTauriMock();
   useDataGridEditStore.setState({ entries: new Map() });
+  // #1218 — `tableActivityStore` is a process singleton like the datagrid
+  // edit store above. Recording a table open in one test would otherwise
+  // leak a Pinned/Recent row into the next SchemaTree render (e.g. duplicate
+  // "public.users" text). Reset keeps existing suites byte-identical.
+  //
+  // Imported dynamically (not at the top of this setup file) so it never
+  // eagerly binds the real `@lib/tauri/tableActivity` wrapper before a store
+  // spec's per-file `vi.mock` registers — a static import here would defeat
+  // that mock and drop the persist assertions.
+  const { useTableActivityStore } = await import("@stores/tableActivityStore");
+  useTableActivityStore.setState({ entries: [] });
 });
 
 // crypto.randomUUID polyfill for jsdom (used by FilterBar)

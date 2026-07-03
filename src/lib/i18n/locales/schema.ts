@@ -38,6 +38,15 @@ export const en = {
   refreshSchemasTitle: "Refresh schemas",
   schemaTreeAria: "{{name}} schema tree",
 
+  // #1218 — pinned / recent table sections
+  pinnedHeader: "Pinned",
+  recentHeader: "Recent",
+  pinTableAria: "Pin {{table}}",
+  unpinTableAria: "Unpin {{table}}",
+  pinTable: "Pin",
+  unpinTable: "Unpin",
+  clearRecentTablesAria: "Clear recent tables",
+
   // StructurePanel
   indexesTab: "Indexes",
   constraintsTab: "Constraints",
@@ -265,6 +274,15 @@ export const ko = {
   refreshSchemasAria: "스키마 새로고침",
   refreshSchemasTitle: "스키마 새로고침",
   schemaTreeAria: "{{name}} 스키마 트리",
+
+  // #1218 — 고정 / 최근 테이블 섹션
+  pinnedHeader: "고정됨",
+  recentHeader: "최근",
+  pinTableAria: "{{table}} 고정",
+  unpinTableAria: "{{table}} 고정 해제",
+  pinTable: "고정",
+  unpinTable: "고정 해제",
+  clearRecentTablesAria: "최근 테이블 지우기",
 
   // StructurePanel
   indexesTab: "인덱스",

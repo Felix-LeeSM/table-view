@@ -11,6 +11,8 @@ import {
   Columns3,
   Trash2,
   Pencil,
+  Pin,
+  PinOff,
   Plus,
   X,
   Search,
@@ -95,6 +97,9 @@ export interface SchemaTreeRowsContext {
   handleOpenStructure: (tableName: string, schemaName: string) => void;
   handleDropTable: (tableName: string, schemaName: string) => void;
   handleStartRename: (tableName: string, schemaName: string) => void;
+  // #1218 — pin/unpin a table + its current pin state (menu label toggle).
+  handleTogglePin: (tableName: string, schemaName: string) => void;
+  isTablePinned: (tableName: string, schemaName: string) => boolean;
   handleViewClick: (viewName: string, schemaName: string) => void;
   handleOpenViewStructure: (viewName: string, schemaName: string) => void;
   handleFunctionClick: (funcName: string, schemaName: string) => void;
@@ -562,6 +567,19 @@ export function renderItemRow(
                 </ContextMenuSubContent>
               </ContextMenuSub>
             )}
+            <ContextMenuItem
+              onClick={() => ctx.handleTogglePin(item.name, row.schemaName)}
+            >
+              {ctx.isTablePinned(item.name, row.schemaName) ? (
+                <>
+                  <PinOff size={14} /> {ctx.t("unpinTable")}
+                </>
+              ) : (
+                <>
+                  <Pin size={14} /> {ctx.t("pinTable")}
+                </>
+              )}
+            </ContextMenuItem>
             <ContextMenuItem
               onClick={() => ctx.handleStartRename(item.name, row.schemaName)}
             >

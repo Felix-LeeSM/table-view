@@ -19,6 +19,8 @@ pub fn register_all(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<tauri
         commands::persist_settings::reset_setting,
         commands::persist_settings::get_setting,
         commands::persist_favorites::list_favorites,
+        commands::persist_table_activity::persist_table_activity,
+        commands::persist_table_activity::list_table_activity,
         commands::persist_workspace::persist_workspace,
         commands::cancel_query::cancel_query_native,
         commands::release_tab_connection::release_tab_connection,
