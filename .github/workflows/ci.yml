@@ -13,14 +13,20 @@ on:
   pull_request:
     types: [opened, edited, reopened, synchronize]
 
-# Always cancel in-flight runs on the same branch when a newer commit
-# arrives — the previous run's result is stale the moment a new commit
-# lands, both on PR branches and on `main`. We trade "permanent green
-# tip-of-main signal" for "fast feedback on the latest commit"; the
-# latest commit's run is what actually represents the state of `main`.
+# Cancel policy differs by event (audit 2026-07-03):
+# - pull_request: cancel in-flight runs when a newer commit arrives — the old
+#   run is stale the moment a new commit lands, and fast feedback wins.
+# - push to main: do NOT cancel. Let the running post-merge run finish; GitHub
+#   keeps at most one running + one pending per group and replaces the pending
+#   one, so a burst of N merges converges to first-run + last-run = 2 runs.
+#   Cancelling on main could leave zero main runs ever completing during a merge
+#   wave, which (a) forfeits the rust-cache main save (only main writes the
+#   shared cache) and (b) opens a post-merge verification gap — the background
+#   condition behind the 3-week-frozen partial e2e cache. Cost: the tip-of-main
+#   signal lags by up to one run.
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
