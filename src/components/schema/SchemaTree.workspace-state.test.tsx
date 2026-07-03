@@ -121,9 +121,24 @@ describe("SchemaTree — workspace-keyed sidebar state (Slice B)", () => {
     // 않으므로 우리는 직접 scrollTop 을 세팅한 다음 `scroll` 이벤트를
     // dispatch 해서 production 의 onScroll 경로를 그대로 실행시킨다.
     container.scrollTop = 142;
-    await act(async () => {
-      container.dispatchEvent(new Event("scroll"));
-    });
+    // #1238 — the scroll event arms @tanstack/virtual-core's isScrolling-reset
+    // debounce (a 150ms `setTimeout`, see `isScrollingResetDelay`). React's
+    // onScroll writes scrollTop synchronously, but the virtualizer's debounce
+    // is *not* cleared by unmount cleanup. Left pending, it fires after jsdom
+    // teardown and crashes the whole vitest run with an unhandled
+    // `ReferenceError: window is not defined`. Fake timers let us flush it
+    // deterministically here, while the window still exists.
+    vi.useFakeTimers();
+    try {
+      await act(async () => {
+        container.dispatchEvent(new Event("scroll"));
+      });
+      act(() => {
+        vi.runOnlyPendingTimers();
+      });
+    } finally {
+      vi.useRealTimers();
+    }
 
     expect(
       useWorkspaceStore.getState().workspaces.conn1!.db1!.sidebar.scrollTop,
