@@ -7,7 +7,6 @@ import {
 import { render, fireEvent, act } from "@testing-library/react";
 import App from "./App";
 import {
-  resolveActiveDb,
   useWorkspaceStore,
   type TableTab,
   type QueryTab,
@@ -467,26 +466,6 @@ describe("App global shortcuts", () => {
     ) as TableTab | undefined;
     expect(tab).toBeDefined();
     expect(tab!.objectKind).toBe("view");
-    useWorkspaceStore.setState({ workspaces: {} });
-  });
-
-  it("reveal-schema expands the schema in the target connection, even when it is not driving the sidebar", () => {
-    // c2 has no tab and is not focused, so it never drives the mounted tree.
-    // A connectionId-agnostic root handler (mirroring navigate-table) must
-    // still expand c2's schema rather than silently no-op.
-    render(<App />);
-    act(() => {
-      window.dispatchEvent(
-        new CustomEvent("reveal-schema", {
-          detail: { connectionId: "c2", schema: "sales" },
-        }),
-      );
-    });
-    const db = resolveActiveDb("c2");
-    const expanded =
-      useWorkspaceStore.getState().workspaces["c2"]?.[db]?.sidebar.expanded ??
-      [];
-    expect(expanded).toContain("sales");
     useWorkspaceStore.setState({ workspaces: {} });
   });
 

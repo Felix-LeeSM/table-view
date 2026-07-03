@@ -27,6 +27,7 @@ import { Button } from "@components/ui/button";
 import { resolveRdbTreeShape, type RdbTreeShape } from "./treeShape";
 import {
   getVisibleRows,
+  nodeIdToString,
   ROW_HEIGHT_ESTIMATE,
   VIRTUALIZE_THRESHOLD,
 } from "./SchemaTree/treeRows";
@@ -213,6 +214,33 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
     visibleRows.find(
       (r) => r.kind === "schema" || r.kind === "category" || r.kind === "item",
     )?.key ?? null;
+
+  // Quick Open "schema" result reveal (#1216). The mounted tree owns the
+  // *visible* outcome: ensure the target schema is expanded, then focus/scroll
+  // its row into view via the shared roving `focusByKey`. Reads expansion +
+  // the toggle through refs so the listener never re-subscribes per render;
+  // `focusByKey` is stable (keyed on `treeRef`). QuickOpen scopes schema
+  // results to this window's connection, so a matching event always targets
+  // the tree the user is looking at.
+  const expandedSchemasRef = useRef(actions.expandedSchemas);
+  expandedSchemasRef.current = actions.expandedSchemas;
+  const handleExpandSchemaRef = useRef(actions.handleExpandSchema);
+  handleExpandSchemaRef.current = actions.handleExpandSchema;
+  const { focusByKey } = roving;
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (
+        e as CustomEvent<{ connectionId: string; schema: string }>
+      ).detail;
+      if (!detail || detail.connectionId !== connectionId) return;
+      if (!expandedSchemasRef.current.has(detail.schema)) {
+        void handleExpandSchemaRef.current(detail.schema);
+      }
+      focusByKey(nodeIdToString({ type: "schema", schema: detail.schema }));
+    };
+    window.addEventListener("reveal-schema", handler);
+    return () => window.removeEventListener("reveal-schema", handler);
+  }, [connectionId, focusByKey]);
 
   const ctx: SchemaTreeRowsContext = {
     t: (key, options) => t(key, options as Record<string, unknown>),

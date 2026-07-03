@@ -12,6 +12,7 @@ import {
 import { useSchemaStore } from "@stores/schemaStore";
 import { useConnectionStore } from "@stores/connectionStore";
 import { resolveRdbTreeShape } from "@components/schema/treeShape";
+import { useCurrentWindowConnectionId } from "@hooks/useCurrentWindowConnectionId";
 import { rankQuickOpen, type RankableFields } from "./quickOpenRanking";
 
 type QuickOpenItemKind = "schema" | "table" | "view" | "function" | "procedure";
@@ -55,6 +56,12 @@ export default function QuickOpen() {
   const functions = useSchemaStore((s) => s.functions);
   const connections = useConnectionStore((s) => s.connections);
   const activeStatuses = useConnectionStore((s) => s.activeStatuses);
+  // The connection whose SchemaTree this window's sidebar renders. Schema
+  // results are scoped to it because reveal (expand + scroll) only lands on the
+  // *mounted* tree — offering another window's schema would be an invisible
+  // no-op. `null` outside a workspace window (launcher / jsdom) → no schema
+  // results, matching the sidebar showing no tree there.
+  const sidebarConnId = useCurrentWindowConnectionId();
 
   // Build the searchable inventory from every connected schema's cached objects.
   // Sprint 263 — schemaStore is now `(connId, db, schema)` nested. QuickOpen
@@ -79,9 +86,10 @@ export default function QuickOpen() {
       // below so ranking never re-lowercases on every keystroke.
       const connLower = conn.name.toLowerCase();
 
-      // Schemas are only reachable as first-class results where the sidebar
-      // renders a focusable schema row to reveal (`with-schema`).
-      if (shape === "with-schema") {
+      // Schemas are first-class results only for the connection this window's
+      // sidebar actually renders (`with-schema` + the mounted tree), so a
+      // selected schema always reveals visibly instead of no-op'ing.
+      if (shape === "with-schema" && conn.id === sidebarConnId) {
         for (const s of schemas[conn.id]?.[db] ?? []) {
           const nameLower = s.name.toLowerCase();
           result.push({
@@ -153,7 +161,15 @@ export default function QuickOpen() {
       }
     }
     return result;
-  }, [schemas, tables, views, functions, connections, activeStatuses]);
+  }, [
+    schemas,
+    tables,
+    views,
+    functions,
+    connections,
+    activeStatuses,
+    sidebarConnId,
+  ]);
 
   useEffect(() => {
     const handler = () => {
