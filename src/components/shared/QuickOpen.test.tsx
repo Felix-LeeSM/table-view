@@ -22,6 +22,12 @@ vi.mock("lucide-react", () => ({
   Folder: () => <span data-testid="icon-schema" />,
 }));
 
+// The window's sidebar connection scopes schema results. Control it per test.
+let mockSidebarConnId: string | null = null;
+vi.mock("@hooks/useCurrentWindowConnectionId", () => ({
+  useCurrentWindowConnectionId: () => mockSidebarConnId,
+}));
+
 function makeConn(
   id: string,
   name: string,
@@ -135,6 +141,7 @@ function setupStores(opts: {
 describe("QuickOpen", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockSidebarConnId = null;
     useSchemaStore.setState({
       schemas: {},
       tables: {},
@@ -252,6 +259,7 @@ describe("QuickOpen", () => {
   });
 
   it("surfaces schemas as first-class results and reveals on select (with-schema)", async () => {
+    mockSidebarConnId = "c1"; // this window's sidebar renders c1
     const reveal = vi.fn();
     window.addEventListener("reveal-schema", reveal);
 
@@ -288,7 +296,33 @@ describe("QuickOpen", () => {
     window.removeEventListener("reveal-schema", reveal);
   });
 
+  it("scopes schema results to this window's sidebar connection only", async () => {
+    mockSidebarConnId = "c1"; // sidebar renders c1; c2 is a different window
+    setupStores({
+      connections: [makeConn("c1", "Prod"), makeConn("c2", "Dev")],
+      active: ["c1", "c2"],
+      schemas: { c1: [{ name: "sales" }], c2: [{ name: "sales" }] },
+    });
+
+    render(<QuickOpen />);
+    act(() => {
+      window.dispatchEvent(new CustomEvent("quick-open"));
+    });
+
+    const input = screen.getByPlaceholderText(/search tables/i);
+    await act(async () => {
+      fireEvent.change(input, { target: { value: "sales" } });
+    });
+
+    // Both connections have a "sales" schema, but only c1's is revealable in
+    // this window, so exactly one schema result appears — the c1 one.
+    const options = screen.getAllByRole("option");
+    expect(options).toHaveLength(1);
+    expect(options[0]).toHaveTextContent("Prod");
+  });
+
   it("does not surface schema results for flat (SQLite) connections", async () => {
+    mockSidebarConnId = "s1"; // sidebar renders s1, so scope is satisfied
     setupStores({
       connections: [makeConn("s1", "Local", "sqlite")], // flat
       active: ["s1"],
@@ -301,8 +335,8 @@ describe("QuickOpen", () => {
       window.dispatchEvent(new CustomEvent("quick-open"));
     });
 
-    // Only the table is a result — "main" has no first-class schema row to
-    // reveal in a flat tree, so it is not offered as a palette result.
+    // Even as the sidebar connection, a flat tree has no focusable schema row —
+    // the shape guard (not the scope) excludes it. Only the table is a result.
     expect(screen.getAllByRole("option")).toHaveLength(1);
     expect(screen.getByText("orders")).toBeInTheDocument();
   });
@@ -335,6 +369,7 @@ describe("QuickOpen", () => {
   });
 
   it("does not surface schema results for no-schema (MySQL) connections", async () => {
+    mockSidebarConnId = "m1"; // sidebar renders m1, so scope is satisfied
     setupStores({
       connections: [makeConn("m1", "MyApp", "mysql")], // no-schema
       active: ["m1"],
