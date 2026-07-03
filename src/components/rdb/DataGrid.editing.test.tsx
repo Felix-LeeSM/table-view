@@ -13,7 +13,13 @@
 // the last two cases stay inline (vi.mock-avoidance is intentional).
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { setupTauriMock } from "@/test-utils/tauriMock";
-import { screen, fireEvent, act, within } from "@testing-library/react";
+import {
+  screen,
+  fireEvent,
+  act,
+  within,
+  waitFor,
+} from "@testing-library/react";
 import { useConnectionStore } from "@stores/connectionStore";
 import type { SortInfo, TableData } from "@/types/schema";
 import {
@@ -640,6 +646,9 @@ describe("DataGrid", () => {
 
     // Find the execute/confirm button in the modal
     const executeBtn = screen.getByLabelText("Execute SQL");
+    // #1111 — Execute is briefly disabled after the preview opens (reflexive
+    // Enter absorption); wait for it to arm before clicking.
+    await waitFor(() => expect(executeBtn).not.toBeDisabled());
     await act(async () => {
       fireEvent.click(executeBtn);
     });
@@ -1111,9 +1120,10 @@ describe("DataGrid", () => {
       act(() => {
         window.dispatchEvent(new Event("commit-changes"));
       });
-      await screen.findByLabelText("Execute SQL");
+      const executeBtn = await screen.findByLabelText("Execute SQL");
+      await waitFor(() => expect(executeBtn).not.toBeDisabled());
       act(() => {
-        screen.getByLabelText("Execute SQL").click();
+        executeBtn.click();
       });
       await screen.findByText("PRODUCTION DATABASE");
       const dialogContent = document.querySelector(

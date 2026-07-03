@@ -141,6 +141,7 @@ export default function ExecuteButton({
       variant="default"
       autoFocus={autoFocus}
       disabled={disabled || loading}
+      aria-busy={loading}
       onClick={onClick}
       aria-label={ariaLabel ?? fullLabel}
       title={fullLabel}

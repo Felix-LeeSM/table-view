@@ -89,7 +89,7 @@ describe("ConfirmDestructiveDialog", () => {
     expect(screen.getByText(/Safe Mode \(strict\)/)).toBeInTheDocument();
   });
 
-  it("[AC-246-D3] Confirm button initially enabled (type-to-confirm removed)", () => {
+  it("[AC-246-D3][#1111] Confirm button is disabled during the 150ms arm window, then enabled", async () => {
     render(
       <ConfirmDestructiveDialog
         open={true}
@@ -104,10 +104,12 @@ describe("ConfirmDestructiveDialog", () => {
       />,
     );
     const confirm = screen.getByRole("button", { name: "Confirm" });
-    expect(confirm).not.toBeDisabled();
+    // Reflexive-Enter absorption: destructive confirm is not immediately live.
+    expect(confirm).toBeDisabled();
+    await waitFor(() => expect(confirm).not.toBeDisabled(), { timeout: 500 });
   });
 
-  it("[AC-246-D4] Confirm click invokes onConfirm exactly once", async () => {
+  it("[AC-246-D4] Confirm click invokes onConfirm exactly once (after arm)", async () => {
     const onConfirm = vi.fn();
     const user = userEvent.setup();
     render(
@@ -123,7 +125,9 @@ describe("ConfirmDestructiveDialog", () => {
         onCancel={vi.fn()}
       />,
     );
-    await user.click(screen.getByTestId("confirm-destructive-confirm"));
+    const confirm = screen.getByTestId("confirm-destructive-confirm");
+    await waitFor(() => expect(confirm).not.toBeDisabled(), { timeout: 500 });
+    await user.click(confirm);
     expect(onConfirm).toHaveBeenCalledTimes(1);
   });
 
@@ -147,7 +151,7 @@ describe("ConfirmDestructiveDialog", () => {
     expect(onCancel).toHaveBeenCalledTimes(1);
   });
 
-  it("[AC-246-D6] Enter key on dialog invokes onConfirm exactly once", () => {
+  it("[AC-246-D6][#1111] Enter is absorbed during the arm window, then confirms exactly once", async () => {
     const onConfirm = vi.fn();
     render(
       <ConfirmDestructiveDialog
@@ -162,11 +166,20 @@ describe("ConfirmDestructiveDialog", () => {
         onCancel={vi.fn()}
       />,
     );
-    // The dialog's content listens on the AlertDialogContent root, so we
-    // dispatch keydown there. There is no input field anymore — the user
-    // muscle-memory of "Enter to submit" still works because the dialog
-    // is autoFocused on the Confirm button.
+    // The dialog's content listens on the AlertDialogContent root. A
+    // reflexive Enter fired right after the dialog opens is swallowed so a
+    // DROP/TRUNCATE can't be confirmed before the user reads it (#1111).
     const dialog = screen.getByRole("alertdialog");
+    fireEvent.keyDown(dialog, { key: "Enter" });
+    expect(onConfirm).not.toHaveBeenCalled();
+    // After the arm window the muscle-memory Enter-to-confirm still works.
+    await waitFor(
+      () =>
+        expect(
+          screen.getByRole("button", { name: "Confirm" }),
+        ).not.toBeDisabled(),
+      { timeout: 500 },
+    );
     fireEvent.keyDown(dialog, { key: "Enter" });
     expect(onConfirm).toHaveBeenCalledTimes(1);
   });

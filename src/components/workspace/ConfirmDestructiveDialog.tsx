@@ -9,7 +9,16 @@ import {
 } from "@components/ui/alert-dialog";
 import { Button } from "@components/ui/button";
 import ExecuteButton from "@components/ui/ExecuteButton";
+import { useDelayedFlag } from "@/hooks/useDelayedFlag";
 import DryRunPreview from "./DryRunPreview";
+
+// Issue #1111 (decision 2026-07-02) — the Confirm button stays disabled for
+// a short window after the dialog opens so a reflexive Enter/click (fired
+// right after the Cmd+Enter that triggered the dialog) is absorbed instead
+// of confirming a DROP/TRUNCATE before the user reads it. autoFocus stays on
+// Confirm; Cancel/Esc remain live throughout. Overrides #1141's
+// "initial focus = Cancel" per the explicit user decision.
+const CONFIRM_ARM_DELAY_MS = 150;
 
 /**
  * `ConfirmDestructiveDialog` — Sprint 246 (ADR 0022 Phase 2). Single
@@ -89,6 +98,8 @@ export default function ConfirmDestructiveDialog({
   onCancel,
 }: ConfirmDestructiveDialogProps) {
   const { t } = useTranslation("workspace");
+  // Armed only after the dialog has been open for CONFIRM_ARM_DELAY_MS.
+  const armed = useDelayedFlag(open, CONFIRM_ARM_DELAY_MS);
   const isProduction = environment === "production";
   const title = isProduction
     ? t("confirmDestructive.titleProduction")
@@ -114,15 +125,16 @@ export default function ConfirmDestructiveDialog({
       <AlertDialogContent
         className="w-[28rem]"
         tone="destructive"
-        // Enter on the dialog itself submits — matches the keystroke
-        // that the prior type-to-confirm input listened on, so users
-        // who muscle-memory'd Enter still get the confirm-on-Enter
-        // affordance.
+        // Enter on the dialog itself submits — matches the keystroke that
+        // the prior type-to-confirm input listened on, so users who
+        // muscle-memory'd Enter still get the confirm-on-Enter affordance.
+        // During the arm window (#1111) Enter is absorbed (preventDefault
+        // without confirming) so a reflexive keystroke can't fire the
+        // destructive action before the user reads the dialog.
         onKeyDown={(e) => {
-          if (e.key === "Enter") {
-            e.preventDefault();
-            onConfirm();
-          }
+          if (e.key !== "Enter") return;
+          e.preventDefault();
+          if (armed) onConfirm();
         }}
       >
         <AlertDialogHeader
@@ -179,7 +191,7 @@ export default function ConfirmDestructiveDialog({
             environment={isProduction ? "production" : null}
             connectionLabel={connectionLabel}
             loading={false}
-            disabled={false}
+            disabled={!armed}
             onClick={onConfirm}
             ariaLabel={t("confirmDestructive.confirmAria")}
             autoFocus

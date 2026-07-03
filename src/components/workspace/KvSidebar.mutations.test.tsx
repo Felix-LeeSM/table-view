@@ -450,9 +450,12 @@ describe("KvSidebar mutations", () => {
         );
         expect(dialog).toHaveTextContent(/kv delete key user:1/i);
 
-        fireEvent.click(
-          within(dialog).getByRole("button", { name: "Confirm" }),
-        );
+        const confirmBtn = within(dialog).getByRole("button", {
+          name: "Confirm",
+        });
+        // #1111 — Confirm arms after a short delay; wait before clicking.
+        await waitFor(() => expect(confirmBtn).not.toBeDisabled());
+        fireEvent.click(confirmBtn);
       }
 
       await waitFor(() => {

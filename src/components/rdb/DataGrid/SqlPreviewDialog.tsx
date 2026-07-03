@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { DataGridEditState } from "@components/datagrid/useDataGridEdit";
@@ -12,6 +13,12 @@ import {
 import PreviewCopyButton from "@components/ui/dialog/PreviewCopyButton";
 import ExecuteButton from "@components/ui/ExecuteButton";
 import SqlSyntax from "@components/shared/SqlSyntax";
+import { useDelayedFlag } from "@/hooks/useDelayedFlag";
+
+// Issue #1111/#1141 — same reflexive-Enter absorption window as
+// ConfirmDestructiveDialog: the Execute button is disabled for a short
+// window after the preview opens.
+const EXECUTE_ARM_DELAY_MS = 150;
 
 interface SqlPreviewDialogProps {
   editState: Pick<
@@ -28,10 +35,24 @@ export function SqlPreviewDialog({
   connectionLabel,
 }: SqlPreviewDialogProps) {
   const { t } = useTranslation("rdb");
+  const open = !!editState.sqlPreview;
+  const armed = useDelayedFlag(open, EXECUTE_ARM_DELAY_MS);
+  // Guards against a second Enter/click re-firing the commit while the
+  // first execution is still in flight (#1141 double-execution).
+  const [executing, setExecuting] = useState(false);
+  const runExecute = async () => {
+    if (executing) return;
+    setExecuting(true);
+    try {
+      await editState.handleExecuteCommit();
+    } finally {
+      setExecuting(false);
+    }
+  };
   return (
     <Dialog
-      open={!!editState.sqlPreview}
-      onOpenChange={(open) => !open && editState.setSqlPreview(null)}
+      open={open}
+      onOpenChange={(o) => !o && editState.setSqlPreview(null)}
     >
       <DialogContent
         className="w-dialog-xl max-h-[80vh] bg-background p-0"
@@ -43,15 +64,13 @@ export function SqlPreviewDialog({
             {t("sqlPreviewDialog.description")}
           </DialogDescription>
         </DialogHeader>
-        <div
-          className="flex max-h-[80vh] flex-col rounded-lg border border-border bg-background shadow-xl"
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              editState.handleExecuteCommit();
-            }
-          }}
-        >
+        {/*
+          No dialog-wide Enter handler: it previously (#1141) executed the
+          destructive commit even when focus was on Cancel/Close. Enter now
+          only fires the commit via the autoFocus'd Execute button's native
+          activation, which is gated by the arm/executing disabled state.
+        */}
+        <div className="flex max-h-[80vh] flex-col rounded-lg border border-border bg-background shadow-xl">
           <div className="flex items-center justify-between border-b border-border px-4 py-3">
             <h3 className="text-sm font-semibold text-foreground">
               {t("sqlPreviewDialog.title")}
@@ -120,9 +139,9 @@ export function SqlPreviewDialog({
               severity="warn"
               environment={connectionEnvironment}
               connectionLabel={connectionLabel}
-              loading={false}
-              disabled={false}
-              onClick={editState.handleExecuteCommit}
+              loading={executing}
+              disabled={!armed || executing}
+              onClick={runExecute}
               ariaLabel={t("sqlPreviewDialog.executeAria")}
               autoFocus
             />

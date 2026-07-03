@@ -172,8 +172,10 @@ describe("IndexesEditor — Sprint 187 Safe Mode gate", () => {
     await screen.findByText("PRODUCTION DATABASE");
     // Sprint 246 (ADR 0022 Phase 2) — Confirm is a single Yes button;
     // type-to-confirm + Run anyway gate removed.
+    const confirmBtn = screen.getByTestId("confirm-destructive-confirm");
+    await waitFor(() => expect(confirmBtn).not.toBeDisabled());
     act(() => {
-      fireEvent.click(screen.getByTestId("confirm-destructive-confirm"));
+      fireEvent.click(confirmBtn);
     });
 
     await waitFor(() => {

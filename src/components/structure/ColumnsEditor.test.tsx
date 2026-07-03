@@ -281,8 +281,10 @@ describe("ColumnsEditor — Sprint 187 Safe Mode gate (inline MODIFY path)", () 
       fireEvent.click(screen.getByRole("button", { name: /Execute/i }));
     });
     await screen.findByText("PRODUCTION DATABASE");
+    const confirmBtn = screen.getByTestId("confirm-destructive-confirm");
+    await waitFor(() => expect(confirmBtn).not.toBeDisabled());
     act(() => {
-      fireEvent.click(screen.getByTestId("confirm-destructive-confirm"));
+      fireEvent.click(confirmBtn);
     });
 
     await waitFor(() => {

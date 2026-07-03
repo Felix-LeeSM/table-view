@@ -236,16 +236,16 @@ describe("EditableQueryResultGrid — Sprint 185 Safe Mode gate", () => {
   });
 
   it("[AC-186-05a] production + warn + WHERE-less DELETE → ConfirmDestructiveDialog opens, executeQueryBatch not called", async () => {
-    // Sprint 246 (ADR 0022 Phase 2) — header is "PRODUCTION DATABASE"
-    // and the Confirm button is enabled immediately (no type-to-confirm
-    // gate). The mount-only invariant (no commit until user clicks
-    // Confirm) is preserved.
+    // Sprint 246 (ADR 0022 Phase 2) — header is "PRODUCTION DATABASE".
+    // #1111 — Confirm is briefly disabled after mount to absorb a reflexive
+    // Enter, then arms. The mount-only invariant (no commit until the user
+    // clicks the armed Confirm) is preserved.
     setup("production", "warn");
     await clickExecute(["DELETE FROM users"]);
 
     await screen.findByText("PRODUCTION DATABASE");
     const confirmBtn = screen.getByTestId("confirm-destructive-confirm");
-    expect(confirmBtn).not.toBeDisabled();
+    await waitFor(() => expect(confirmBtn).not.toBeDisabled());
     expect(mockExecuteQueryBatch).not.toHaveBeenCalled();
     expect(mockToastError).not.toHaveBeenCalled();
   });
@@ -257,8 +257,10 @@ describe("EditableQueryResultGrid — Sprint 185 Safe Mode gate", () => {
     await clickExecute(["DELETE FROM users"]);
 
     await screen.findByText("PRODUCTION DATABASE");
+    const confirmBtn = screen.getByTestId("confirm-destructive-confirm");
+    await waitFor(() => expect(confirmBtn).not.toBeDisabled());
     act(() => {
-      screen.getByTestId("confirm-destructive-confirm").click();
+      confirmBtn.click();
     });
     await waitFor(() => {
       expect(mockExecuteQueryBatch).toHaveBeenCalledTimes(1);

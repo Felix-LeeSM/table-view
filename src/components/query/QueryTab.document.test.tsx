@@ -687,6 +687,8 @@ describe("QueryTab — document", () => {
       const confirmBtn = await screen.findByTestId(
         "confirm-destructive-confirm",
       );
+      // #1111 — Confirm arms after a short delay; wait before clicking.
+      await waitFor(() => expect(confirmBtn).not.toBeDisabled());
       const user = userEvent.setup();
       await user.click(confirmBtn);
 

@@ -24,13 +24,14 @@ import {
 import ConnectionDialog from "./ConnectionDialog";
 import { DB_TYPE_META } from "@lib/db-meta";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@components/ui/dialog";
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+} from "@components/ui/alert-dialog";
 import {
   Database,
   GripVertical,
@@ -356,30 +357,26 @@ export default function ConnectionItem({
       )}
 
       {showDeleteConfirm && (
-        <Dialog
+        // Destructive confirm shares the role="alertdialog" surface + Cancel
+        // focus with the other destructive dialogs (#1141 consistency).
+        <AlertDialog
           open={showDeleteConfirm}
           onOpenChange={(open) => !open && setShowDeleteConfirm(false)}
         >
-          <DialogContent
+          <AlertDialogContent
             className="w-80 bg-secondary p-4"
-            showCloseButton={false}
+            tone="destructive"
           >
-            <DialogHeader>
-              <DialogTitle className="text-sm font-semibold text-foreground">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="text-sm font-semibold text-foreground">
                 {t("item.deleteTitle")}
-              </DialogTitle>
-              <DialogDescription className="mt-2 text-sm text-secondary-foreground">
+              </AlertDialogTitle>
+              <AlertDialogDescription className="mt-2 text-sm text-secondary-foreground">
                 {t("item.deleteDescription", { name: connection.name })}
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter className="mt-4 flex justify-end gap-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowDeleteConfirm(false)}
-              >
-                {t("item.cancel")}
-              </Button>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter className="mt-4 flex justify-end gap-2">
+              <AlertDialogCancel>{t("item.cancel")}</AlertDialogCancel>
               <Button
                 variant="destructive"
                 size="sm"
@@ -394,9 +391,9 @@ export default function ConnectionItem({
               >
                 {t("item.delete")}
               </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       )}
     </>
   );

@@ -14,7 +14,7 @@
 // pipeline matches the existing editing-axis tests verbatim.
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { setupTauriMock } from "@/test-utils/tauriMock";
-import { screen, fireEvent, act } from "@testing-library/react";
+import { screen, fireEvent, act, waitFor } from "@testing-library/react";
 import type { SortInfo } from "@/types/schema";
 import {
   mockQueryTableData,
@@ -237,8 +237,11 @@ describe("DataGrid — Sprint 249 Cmd+Z / Ctrl+Z undo (AC-249-K1..K5)", () => {
     await act(async () => {
       fireEvent.click(screen.getByLabelText("Commit changes"));
     });
+    // #1111 — Execute is briefly disabled after the preview opens.
+    const executeBtn = screen.getByLabelText("Execute SQL");
+    await waitFor(() => expect(executeBtn).not.toBeDisabled());
     await act(async () => {
-      fireEvent.click(screen.getByLabelText("Execute SQL"));
+      fireEvent.click(executeBtn);
     });
 
     // Pending state cleared.

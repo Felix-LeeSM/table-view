@@ -526,6 +526,8 @@ describe("QueryTab — Sprint 231 raw RDB Safe Mode gate", () => {
     );
     expect(preview.textContent).toContain("DELETE FROM logs");
 
+    // #1111 — Confirm arms after a short delay; wait before clicking.
+    await waitFor(() => expect(confirmBtn).not.toBeDisabled());
     await act(async () => {
       confirmBtn.click();
     });

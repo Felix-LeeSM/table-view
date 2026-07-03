@@ -163,9 +163,12 @@ describe("ConstraintsEditor — Sprint 187 Safe Mode gate", () => {
     });
     await screen.findByText("PRODUCTION DATABASE");
     // Sprint 246 (ADR 0022 Phase 2) — Confirm is a simple Yes button;
-    // the prior verbatim-typing gate was removed.
+    // the prior verbatim-typing gate was removed. #1111 — it arms after a
+    // short delay, so wait for it to enable before clicking.
+    const confirmBtn = screen.getByTestId("confirm-destructive-confirm");
+    await waitFor(() => expect(confirmBtn).not.toBeDisabled());
     act(() => {
-      fireEvent.click(screen.getByTestId("confirm-destructive-confirm"));
+      fireEvent.click(confirmBtn);
     });
 
     await waitFor(() => {
