@@ -54,6 +54,10 @@ Backend 변경은 Tauri command / state / DB adapter contract 를 깨지 않는 
 - error 는 `AppError` 계열로 context 를 보존한다. 문자열만 맞추는 테스트 금지.
 - secret / connection string / password 는 log, debug output, fixture direct write 에 남기지 않음.
 - async path 에 blocking 작업을 섞지 않는다. 필요 시 `spawn_blocking` 로 격리.
+- active connection 은 `AppState::active_adapter` (lookup + `Arc` clone) 로
+  resolve 하고 lock 을 놓은 뒤 await 한다. `active_connections` guard 를 adapter
+  await 내내 잡으면 장기 쿼리가 전 연결·전 커맨드와 native cancel 을 직렬화한다
+  (issue #1087). connect/disconnect/keep-alive 의 map mutation 만 짧은 lock 유지.
 - command 가 cancel token 을 등록했다면 early return path 에서도 release 를
   보장한다. native cancel / cooperative cancel 의미를 섞지 않는다.
 - wire struct 를 확장할 때는 `#[serde(rename_all = "camelCase")]` 와
