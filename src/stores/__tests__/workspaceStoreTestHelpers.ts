@@ -78,7 +78,10 @@ export function emptyWorkspace(): WorkspaceState {
     activeTabId: null,
     closedTabHistory: [],
     dirtyTabIds: [],
-    sidebar: { selectedNode: null, expanded: [], scrollTop: 0 },
+    // #1217 — mirror production `emptyWorkspace`: a fresh cell's sidebar is
+    // never-seeded (`expanded: null`), so SchemaTree's first-schema seed
+    // fires for `seedWorkspace`-built cells exactly as it would in the app.
+    sidebar: { selectedNode: null, expanded: null, scrollTop: 0 },
   };
 }
 

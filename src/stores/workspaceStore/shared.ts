@@ -24,7 +24,9 @@ export function emptyWorkspace(): WorkspaceState {
     activeTabId: null,
     closedTabHistory: [],
     dirtyTabIds: [],
-    sidebar: { selectedNode: null, expanded: [], scrollTop: 0 },
+    // #1217 — `expanded: null` marks a never-seeded sidebar so the
+    // first-schema seed can distinguish it from a user-emptied `[]`.
+    sidebar: { selectedNode: null, expanded: null, scrollTop: 0 },
   };
 }
 

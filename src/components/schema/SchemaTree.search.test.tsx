@@ -215,7 +215,12 @@ describe("SchemaTree — search", () => {
       render(<SchemaTree connectionId="conn1" />);
     });
 
-    // Sprint 144: both schemas auto-expanded on mount.
+    // #1217: only the first schema (public) auto-expands now — expand
+    // analytics manually so the per-schema search independence is observable.
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText("analytics schema"));
+    });
+
     // Filter in public
     const publicSearch = screen.getByLabelText("Filter tables in public");
     await act(async () => {

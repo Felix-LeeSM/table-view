@@ -11,10 +11,11 @@ export function createSidebarSlice(set: WorkspaceSet): SidebarSlice {
     toggleExpand: (connId, db, nodeId) => {
       set((state) => {
         const next = withWorkspace(state, connId, db, (ws) => {
-          const has = ws.sidebar.expanded.includes(nodeId);
+          const current = ws.sidebar.expanded ?? [];
+          const has = current.includes(nodeId);
           const expanded = has
-            ? ws.sidebar.expanded.filter((n) => n !== nodeId)
-            : [...ws.sidebar.expanded, nodeId];
+            ? current.filter((n) => n !== nodeId)
+            : [...current, nodeId];
           return { ...ws, sidebar: { ...ws.sidebar, expanded } };
         });
         return next ? { workspaces: next } : state;
@@ -24,9 +25,11 @@ export function createSidebarSlice(set: WorkspaceSet): SidebarSlice {
     setExpanded: (connId, db, nodes) => {
       set((state) => {
         const next = withWorkspace(state, connId, db, (ws) => {
+          const current = ws.sidebar.expanded;
           if (
-            ws.sidebar.expanded.length === nodes.length &&
-            ws.sidebar.expanded.every((n, i) => n === nodes[i])
+            current !== null &&
+            current.length === nodes.length &&
+            current.every((n, i) => n === nodes[i])
           ) {
             return ws;
           }

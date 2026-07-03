@@ -71,6 +71,10 @@ export interface SchemaTreeActions {
       | ((prev: Record<string, string>) => Record<string, string>),
   ) => void;
 
+  // #1217 — top-level global filter across the whole tree.
+  globalFilter: string;
+  setGlobalFilter: (value: string) => void;
+
   // Sprint 235 — modal slots. Each slot's null state keeps the modal
   // closed; setting `{ schemaName, tableName }` opens the matching
   // dialog. The modal's own commit-success path closes itself by
@@ -221,14 +225,16 @@ export function useSchemaTreeActions({
     [setSelectedNodeStore],
   );
 
-  // Sprint 262 Slice B — fresh-workspace seed of "all schemas expanded".
-  // 한 component-instance 동안 같은 `(connId, db)` 는 단 한 번만 시드한다.
-  // Why ref-based (vs. checking store): seedWorkspace test helper 가 빈
-  // sidebar 인 workspace 엔트리를 미리 만들어두는 경우가 있어서, store
-  // 의 `expanded.length === 0` 만으로는 "한 번도 시드 안 됨" 과 "유저가
-  // 다 collapse 함" 을 구분할 수 없다. session-scoped ref 는 그 차이를
-  // 명확히 한다 — 한 번 시드한 워크스페이스는 그 이후 매 마운트마다 유저
-  // 상태가 덮이지 않는다 (AC-262-05).
+  // Sprint 262 Slice B — fresh-workspace seed. #1217 changed the seed from
+  // "all schemas expanded" to "only the first schema expanded" (the product
+  // rule for long collapsible lists). Two guards keep it non-destructive:
+  //   - session-scoped ref: one seed per `(connId, db)` per component
+  //     instance, so a user collapse isn't re-seeded mid-session (AC-262-05).
+  //   - `expanded === null` check: `null` marks a genuinely never-seeded
+  //     sidebar; an array — including a user-emptied `[]` — means "already
+  //     seeded / user-set", so we never re-seed it. This is what lets a user
+  //     collapse everything, restart, and keep it collapsed (the persisted
+  //     `[]` rehydrates as an array, not `null`).
   const seededKeysRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     if (!workspaceKey) return;
@@ -236,11 +242,14 @@ export function useSchemaTreeActions({
     const keyStr = `${workspaceKey.connId}:${workspaceKey.db}`;
     if (seededKeysRef.current.has(keyStr)) return;
     seededKeysRef.current.add(keyStr);
-    setExpandedStore(
-      workspaceKey.connId,
-      workspaceKey.db,
-      schemas.map((s) => s.name),
-    );
+    // `undefined` (no cell yet) or `null` (fresh cell) → never seeded → seed.
+    // A real array (even `[]`, a user who collapsed all) → respect it.
+    const expanded =
+      useWorkspaceStore.getState().workspaces[workspaceKey.connId]?.[
+        workspaceKey.db
+      ]?.sidebar.expanded;
+    if (expanded != null) return;
+    setExpandedStore(workspaceKey.connId, workspaceKey.db, [schemas[0]!.name]);
   }, [workspaceKey, schemas, setExpandedStore]);
 
   const [expandedCategories, setExpandedCategories] = useState<
@@ -261,6 +270,7 @@ export function useSchemaTreeActions({
     tableName: string;
   } | null>(null);
   const [tableSearch, setTableSearch] = useState<Record<string, string>>({});
+  const [globalFilter, setGlobalFilter] = useState("");
   const [createTableDialog, setCreateTableDialog] = useState<{
     schemaName: string;
   } | null>(null);
@@ -571,6 +581,8 @@ export function useSchemaTreeActions({
     // Search
     tableSearch,
     setTableSearch,
+    globalFilter,
+    setGlobalFilter,
 
     // Dialog
     renameTableDialog,

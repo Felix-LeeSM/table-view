@@ -207,7 +207,11 @@ function migrateWorkspace(
     dirtyTabIds: raw.dirtyTabIds ?? [],
     sidebar: {
       selectedNode: raw.sidebar?.selectedNode ?? null,
-      expanded: raw.sidebar?.expanded ?? [],
+      // #1217 — preserve `null` (never-seeded) vs `[]` (user-emptied). The
+      // boot snapshot normalizer (`loadAll.normalizeWorkspaceState`) already
+      // coerces persisted rows to arrays, so `null` here only survives for a
+      // raw cell that truly carried no `expanded` field.
+      expanded: raw.sidebar?.expanded ?? null,
       scrollTop: raw.sidebar?.scrollTop ?? 0,
     },
   };
