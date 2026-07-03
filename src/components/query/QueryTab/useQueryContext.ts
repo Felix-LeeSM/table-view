@@ -201,16 +201,19 @@ export function useQueryContext(tab: QueryTab) {
         });
         return;
       }
-      if (tab.paradigm !== "document") {
+      if (tab.paradigm === "document") {
+        recordHistoryEntry({
+          ...common,
+          paradigm: "document",
+          queryMode:
+            payload.queryMode ??
+            (tab.queryMode === "aggregate" ? "aggregate" : "find"),
+        });
         return;
       }
-      recordHistoryEntry({
-        ...common,
-        paradigm: tab.paradigm,
-        queryMode:
-          payload.queryMode ??
-          (tab.queryMode === "aggregate" ? "aggregate" : "find"),
-      });
+      // Issue #1171 — kv / search record with a paradigm-only entry; the
+      // backend fixes the query mode (`command` / `dsl`).
+      recordHistoryEntry({ ...common, paradigm: tab.paradigm });
     },
     [
       tab.connectionId,

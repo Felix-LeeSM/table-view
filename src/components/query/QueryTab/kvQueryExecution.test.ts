@@ -31,6 +31,7 @@ function createActions() {
     completeQuery: vi.fn(),
     failQuery: vi.fn(),
     setPendingKvConfirm: vi.fn(),
+    recordHistory: vi.fn(),
   };
 }
 
@@ -78,6 +79,9 @@ describe("kvQueryExecution seam", () => {
       "query-redis",
       expect.stringMatching(/^query-redis-/),
       REDIS_RESULT,
+    );
+    expect(actions.recordHistory).toHaveBeenCalledWith(
+      expect.objectContaining({ sql: "GET profile:1", status: "success" }),
     );
   });
 
@@ -185,6 +189,7 @@ describe("kvQueryExecution seam", () => {
       updateQueryState: actions.updateQueryState,
       completeQuery: actions.completeQuery,
       failQuery: actions.failQuery,
+      recordHistory: actions.recordHistory,
     });
 
     expect(actions.completeQuery).not.toHaveBeenCalled();
@@ -192,6 +197,9 @@ describe("kvQueryExecution seam", () => {
       "query-redis",
       expect.stringMatching(/^query-redis-/),
       "redis unavailable",
+    );
+    expect(actions.recordHistory).toHaveBeenCalledWith(
+      expect.objectContaining({ sql: "GET profile:1", status: "error" }),
     );
   });
 });

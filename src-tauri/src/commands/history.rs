@@ -60,6 +60,19 @@ pub enum HistoryQueryMode {
         #[serde(rename = "queryMode")]
         query_mode: DocumentQueryMode,
     },
+    // Issue #1171 — kv (Redis/Valkey) / search (ES/OpenSearch) recording. Each
+    // paradigm carries a single query mode (`command` / `dsl`); the display path
+    // (#1055/#1166) labels by paradigm, so a fixed mode is sufficient. Backward
+    // compat: existing rows are only rdb/document, so adding variants is a pure
+    // read/write superset — no migration.
+    Kv {
+        #[serde(rename = "queryMode")]
+        query_mode: KvQueryMode,
+    },
+    Search {
+        #[serde(rename = "queryMode")]
+        query_mode: SearchQueryMode,
+    },
 }
 
 /// RDB paradigm 의 허용 query mode. 현재 "sql" 만.
@@ -67,6 +80,20 @@ pub enum HistoryQueryMode {
 #[serde(rename_all = "lowercase")]
 pub enum RdbQueryMode {
     Sql,
+}
+
+/// KV paradigm (Redis/Valkey) 의 허용 query mode. Redis 명령 한 종류.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum KvQueryMode {
+    Command,
+}
+
+/// Search paradigm (ES/OpenSearch) 의 허용 query mode. Search DSL 한 종류.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum SearchQueryMode {
+    Dsl,
 }
 
 /// Document paradigm 의 허용 query mode. mongosh 명령 family.
@@ -96,6 +123,8 @@ impl HistoryQueryMode {
         match self {
             Self::Rdb { .. } => "rdb",
             Self::Document { .. } => "document",
+            Self::Kv { .. } => "kv",
+            Self::Search { .. } => "search",
         }
     }
 
@@ -103,6 +132,12 @@ impl HistoryQueryMode {
         match self {
             Self::Rdb { query_mode } => match query_mode {
                 RdbQueryMode::Sql => "sql",
+            },
+            Self::Kv { query_mode } => match query_mode {
+                KvQueryMode::Command => "command",
+            },
+            Self::Search { query_mode } => match query_mode {
+                SearchQueryMode::Dsl => "dsl",
             },
             Self::Document { query_mode } => match query_mode {
                 DocumentQueryMode::Find => "find",
@@ -140,6 +175,14 @@ pub enum HistoryQueryModeFilter {
         #[serde(default, rename = "queryMode", skip_serializing_if = "Option::is_none")]
         query_mode: Option<DocumentQueryMode>,
     },
+    Kv {
+        #[serde(default, rename = "queryMode", skip_serializing_if = "Option::is_none")]
+        query_mode: Option<KvQueryMode>,
+    },
+    Search {
+        #[serde(default, rename = "queryMode", skip_serializing_if = "Option::is_none")]
+        query_mode: Option<SearchQueryMode>,
+    },
 }
 
 impl HistoryQueryModeFilter {
@@ -147,6 +190,8 @@ impl HistoryQueryModeFilter {
         match self {
             Self::Rdb { .. } => "rdb",
             Self::Document { .. } => "document",
+            Self::Kv { .. } => "kv",
+            Self::Search { .. } => "search",
         }
     }
 
@@ -154,6 +199,12 @@ impl HistoryQueryModeFilter {
         match self {
             Self::Rdb { query_mode } => query_mode.as_ref().map(|q| match q {
                 RdbQueryMode::Sql => "sql",
+            }),
+            Self::Kv { query_mode } => query_mode.as_ref().map(|q| match q {
+                KvQueryMode::Command => "command",
+            }),
+            Self::Search { query_mode } => query_mode.as_ref().map(|q| match q {
+                SearchQueryMode::Dsl => "dsl",
             }),
             Self::Document { query_mode } => query_mode.as_ref().map(|q| match q {
                 DocumentQueryMode::Find => "find",
@@ -1346,6 +1397,79 @@ mod tests {
             let parsed: HistoryQueryMode = serde_json::from_str(&json).unwrap();
             assert_eq!(parsed, mode);
         }
+    }
+
+    #[test]
+    fn kv_and_search_query_modes_serialize_lowercase() {
+        let kv = HistoryQueryMode::Kv {
+            query_mode: KvQueryMode::Command,
+        };
+        let kv_json = serde_json::to_value(&kv).unwrap();
+        assert_eq!(kv_json["paradigm"], "kv");
+        assert_eq!(kv_json["queryMode"], "command");
+
+        let search = HistoryQueryMode::Search {
+            query_mode: SearchQueryMode::Dsl,
+        };
+        let search_json = serde_json::to_value(&search).unwrap();
+        assert_eq!(search_json["paradigm"], "search");
+        assert_eq!(search_json["queryMode"], "dsl");
+    }
+
+    #[test]
+    fn all_four_paradigms_round_trip() {
+        // AC 4 — serde 왕복이 4 paradigm 전부 대칭. rdb/document 기존값 + kv/search 신규.
+        let modes = [
+            HistoryQueryMode::Rdb {
+                query_mode: RdbQueryMode::Sql,
+            },
+            HistoryQueryMode::Document {
+                query_mode: DocumentQueryMode::Find,
+            },
+            HistoryQueryMode::Kv {
+                query_mode: KvQueryMode::Command,
+            },
+            HistoryQueryMode::Search {
+                query_mode: SearchQueryMode::Dsl,
+            },
+        ];
+        for mode in modes {
+            let json = serde_json::to_string(&mode).unwrap();
+            let parsed: HistoryQueryMode = serde_json::from_str(&json).unwrap();
+            assert_eq!(parsed, mode);
+        }
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn add_inner_persists_kv_and_search_paradigms() {
+        let (_dir, pool) = setup().await;
+        for (paradigm, query_mode, sql) in [
+            ("kv", "command", "GET user:1"),
+            ("search", "dsl", "{\"index\":\"logs\",\"body\":{}}"),
+        ] {
+            let req: AddHistoryEntryRequest = serde_json::from_value(serde_json::json!({
+                "connectionId": "c-nonrdb",
+                "paradigm": paradigm,
+                "queryMode": query_mode,
+                "source": "raw",
+                "sql": sql,
+                "status": "success",
+                "durationMs": 1,
+                "executedAt": now_ms(),
+            }))
+            .unwrap();
+            let resp = add_history_entry_inner(&pool, req).await.unwrap();
+            let row: (String, String) =
+                sqlx::query_as("SELECT paradigm, query_mode FROM query_history WHERE id = ?")
+                    .bind(resp.id)
+                    .fetch_one(&pool)
+                    .await
+                    .unwrap();
+            assert_eq!(row.0, paradigm);
+            assert_eq!(row.1, query_mode);
+        }
+        cleanup();
     }
 
     #[test]

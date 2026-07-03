@@ -38,6 +38,7 @@ function createActions() {
     completeSearchQuery: vi.fn(),
     cancelRunningQuery: vi.fn(),
     failQuery: vi.fn(),
+    recordHistory: vi.fn(),
   };
 }
 
@@ -178,6 +179,9 @@ describe("searchQueryExecution seam", () => {
       SEARCH_RESULT,
     );
     expect(actions.cancelRunningQuery).not.toHaveBeenCalled();
+    expect(actions.recordHistory).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "success" }),
+    );
   });
 
   it("keeps invalid Search DSL on the tab error path without IPC dispatch", async () => {
@@ -218,6 +222,9 @@ describe("searchQueryExecution seam", () => {
       "search unavailable",
     );
     expect(actions.cancelRunningQuery).not.toHaveBeenCalled();
+    expect(actions.recordHistory).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "error" }),
+    );
   });
 
   it("routes typed Search cancellation envelopes to the cancelled query state", async () => {
