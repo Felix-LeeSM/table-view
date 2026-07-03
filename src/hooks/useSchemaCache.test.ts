@@ -140,6 +140,64 @@ describe("useSchemaCache", () => {
     expect(listTables).not.toHaveBeenCalled();
   });
 
+  it("[AC-1219-1] mount above the eager threshold loads the schema list only (lazy)", async () => {
+    // #1219 — a DB with many schemas must not fan out into a per-schema
+    // loadTables / prefetch loop at mount (the N+1 first-paint bottleneck).
+    const tauri = await import("@lib/tauri");
+    const listSchemas = tauri.listSchemas as ReturnType<typeof vi.fn>;
+    const listTables = tauri.listTables as ReturnType<typeof vi.fn>;
+    const listSchemaColumns = tauri.listSchemaColumns as ReturnType<
+      typeof vi.fn
+    >;
+    listSchemas.mockResolvedValue(
+      Array.from({ length: 6 }, (_, i) => ({ name: `s${i}` })),
+    );
+
+    const { result } = renderHook(() => useSchemaCache("conn1", "db1"));
+    await waitFor(() => expect(result.current.schemas.length).toBe(6));
+
+    expect(listTables).not.toHaveBeenCalled();
+    expect(listSchemaColumns).not.toHaveBeenCalled();
+  });
+
+  it("[AC-1219-2] mount at or below the eager threshold loads every schema's tables", async () => {
+    const tauri = await import("@lib/tauri");
+    const listSchemas = tauri.listSchemas as ReturnType<typeof vi.fn>;
+    const listTables = tauri.listTables as ReturnType<typeof vi.fn>;
+    listSchemas.mockResolvedValue([{ name: "public" }, { name: "analytics" }]);
+
+    const { result } = renderHook(() => useSchemaCache("conn1", "db1"));
+    await waitFor(() => expect(result.current.schemas.length).toBe(2));
+
+    await waitFor(() => {
+      expect(listTables).toHaveBeenCalledWith("conn1", "public", "db1");
+      expect(listTables).toHaveBeenCalledWith("conn1", "analytics", "db1");
+    });
+  });
+
+  it("[AC-1219-3] expandSchema prefetches columns so autocomplete keeps working", async () => {
+    // In the lazy path columns are not prefetched at mount; expanding a
+    // schema must pull them so the SQL autocomplete catalog is populated.
+    const tauri = await import("@lib/tauri");
+    const listSchemas = tauri.listSchemas as ReturnType<typeof vi.fn>;
+    const listSchemaColumns = tauri.listSchemaColumns as ReturnType<
+      typeof vi.fn
+    >;
+    listSchemas.mockResolvedValue(
+      Array.from({ length: 6 }, (_, i) => ({ name: `s${i}` })),
+    );
+
+    const { result } = renderHook(() => useSchemaCache("conn1", "db1"));
+    await waitFor(() => expect(result.current.schemas.length).toBe(6));
+    expect(listSchemaColumns).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await result.current.expandSchema("s0");
+    });
+
+    expect(listSchemaColumns).toHaveBeenCalledWith("conn1", "s0", "db1");
+  });
+
   it("[AC-191-02-4] backend listSchemas rejection records store error (current contract)", async () => {
     // Sprint 191 finding — `useSchemaStore.loadSchemas` swallows tauri
     // rejections internally and writes `String(e)` to the store's `error`
