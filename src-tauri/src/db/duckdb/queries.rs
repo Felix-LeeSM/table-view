@@ -26,6 +26,8 @@ impl DuckdbAdapter {
         &self,
         query: &str,
         cancel_token: Option<&CancellationToken>,
+        // Issue #1231 — fetch-stage row cap (see SQLite adapter).
+        row_cap: usize,
     ) -> Result<QueryResult, AppError> {
         if cancel_token.is_some_and(CancellationToken::is_cancelled) {
             return Err(AppError::Database("Query cancelled".into()));
@@ -47,8 +49,10 @@ impl DuckdbAdapter {
             return Ok(result);
         }
 
-        self.with_connection(move |conn| execute_query_uncancelled(conn, &query, query_type, start))
-            .await
+        self.with_connection(move |conn| {
+            execute_query_uncancelled(conn, &query, query_type, start, row_cap)
+        })
+        .await
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -94,6 +98,7 @@ fn execute_query_uncancelled(
     query: &str,
     query_type: QueryType,
     start: std::time::Instant,
+    row_cap: usize,
 ) -> Result<QueryResult, AppError> {
     match query_type {
         QueryType::Select => {
@@ -109,8 +114,15 @@ fn execute_query_uncancelled(
                 .map(|stmt| duckdb_query_columns(stmt, column_count))
                 .unwrap_or_default();
 
+            // Issue #1231 — stop pulling from the cursor at cap+1 (the extra
+            // row only flags `truncated`).
             let mut json_rows = Vec::new();
+            let mut truncated = false;
             while let Some(row) = rows.next().map_err(|e| AppError::Database(e.to_string()))? {
+                if json_rows.len() >= row_cap {
+                    truncated = true;
+                    break;
+                }
                 let mut out = Vec::with_capacity(column_count);
                 for idx in 0..column_count {
                     let value = row
@@ -122,7 +134,7 @@ fn execute_query_uncancelled(
             }
             let total_count = json_rows.len() as i64;
             Ok(QueryResult {
-                truncated: false,
+                truncated,
                 columns,
                 rows: json_rows,
                 total_count,

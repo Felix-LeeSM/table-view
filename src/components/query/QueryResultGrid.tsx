@@ -354,6 +354,7 @@ function CompletedSingleResult({
   tabId?: string;
   onAfterCommit?: () => void;
 }) {
+  const { t } = useTranslation("query");
   // Sprint 312 (Phase 28 Slice A6, 2026-05-14) — `resultKind` discriminator
   // router. Mongo paradigms set `"scalar"` / `"list"` / `"writeSummary"`;
   // RDB + Mongo find / aggregate / findOne(matched) leave it undefined or
@@ -442,6 +443,20 @@ function CompletedSingleResult({
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
+      {/* Issue #1231 — raw-query row cap truncation banner. Same copy +
+          placement across every DBMS (consistency principle). The count is
+          the returned row total (== the cap that was hit). */}
+      {result.truncated && (
+        <div
+          role="status"
+          data-testid="row-cap-banner"
+          className="border-b border-warning/40 bg-warning/10 px-3 py-1 text-xs text-warning"
+        >
+          {t("resultGrid.rowCapBanner", {
+            count: result.rows.length.toLocaleString(),
+          })}
+        </div>
+      )}
       {/* Status bar */}
       <div className="flex items-center justify-between border-b border-border px-3 py-1.5 text-xs text-secondary-foreground">
         <span>

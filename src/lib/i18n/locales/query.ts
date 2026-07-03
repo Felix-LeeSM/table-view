@@ -125,6 +125,8 @@ export const en = {
   resultGrid: {
     executing: "Executing query...",
     dryRunBanner: "Dry Run — rolled back. No data was changed.",
+    rowCapBanner:
+      "Results truncated at {{count}} rows. Add a LIMIT clause, or raise the row cap in settings.",
     idlePrompt: "Press Cmd+Return to execute the query",
     cancelled: "Query cancelled",
     statementResultsAria: "Statement results",
@@ -344,6 +346,8 @@ export const ko = {
   resultGrid: {
     executing: "쿼리 실행 중...",
     dryRunBanner: "드라이 런 — 롤백되었습니다. 데이터가 변경되지 않았습니다.",
+    rowCapBanner:
+      "결과가 {{count}}행에서 잘렸습니다. LIMIT을 추가하거나 설정에서 행 상한을 조정하세요.",
     idlePrompt: "Cmd+Return을 눌러 쿼리를 실행하세요",
     cancelled: "쿼리가 취소되었습니다",
     statementResultsAria: "구문 결과",

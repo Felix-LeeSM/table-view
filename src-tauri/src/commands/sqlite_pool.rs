@@ -20,6 +20,17 @@ pub async fn get_or_init_pool() -> Result<SqlitePool, AppError> {
     Ok(pool.clone())
 }
 
+/// Issue #1231 — read the persisted `query_row_cap` and publish it to the
+/// process-global the adapters read at fetch time. Called by the raw-query
+/// commands (RDB `execute_query`/batch, Mongo `find`/`aggregate`) right before
+/// dispatch. A pool-open failure leaves the previous cap in place (worst case
+/// the default) rather than failing the query.
+pub async fn publish_row_cap() {
+    if let Ok(pool) = get_or_init_pool().await {
+        crate::db::row_cap::set(crate::db::row_cap::read_from_settings(&pool).await);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     //! 작성 2026-05-17 — sprint-376 직후 baseline cleanup.

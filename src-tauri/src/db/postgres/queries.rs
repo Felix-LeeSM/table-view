@@ -6,6 +6,7 @@
 //! helpers (`strip_leading_comments`, `strip_trailing_terminator`,
 //! `pg_cast_type`) co-located here since query-path is the sole consumer.
 
+use futures_util::TryStreamExt;
 use sqlx::Column;
 use sqlx::Executor;
 use sqlx::Row;
@@ -309,6 +310,10 @@ impl PostgresAdapter {
         &self,
         query: &str,
         cancel_token: Option<&CancellationToken>,
+        // Issue #1231 — fetch-stage row cap. The wrapped path also parses and
+        // drops each `row_to_json` string per-row (no intermediate `Vec<String>`)
+        // so the 2× peak the issue flags is gone.
+        row_cap: usize,
     ) -> Result<QueryResult, AppError> {
         let start = std::time::Instant::now();
 
@@ -363,71 +368,76 @@ impl PostgresAdapter {
                         && !with_is_data_modifying(&trimmed_query));
 
                 let query_future = async {
-                    let (columns, json_rows): (Vec<QueryColumn>, Vec<Vec<serde_json::Value>>) =
-                        if wrappable {
-                            // Column metadata WITHOUT executing the statement.
-                            let described = pool.describe(query).await?;
-                            let columns: Vec<QueryColumn> = described
-                                .columns()
+                    let (columns, json_rows, truncated): (
+                        Vec<QueryColumn>,
+                        Vec<Vec<serde_json::Value>>,
+                        bool,
+                    ) = if wrappable {
+                        // Column metadata WITHOUT executing the statement.
+                        let described = pool.describe(query).await?;
+                        let columns: Vec<QueryColumn> = described
+                            .columns()
+                            .iter()
+                            .map(|col| {
+                                let data_type = col.type_info().to_string();
+                                let category = map_pg_data_type(&data_type);
+                                QueryColumn {
+                                    name: col.name().to_string(),
+                                    data_type,
+                                    category,
+                                }
+                            })
+                            .collect();
+
+                        // Single execution. row_to_json coerces every PG type
+                        // to JSON and applies side effects once. Issue #1231 —
+                        // stream the scalar strings and parse-and-drop each one
+                        // into its projected row so the `Vec<String>` + parsed
+                        // `Vec<Value>` never coexist (the old 2× peak), and stop
+                        // at cap+1 so the buffer is bounded.
+                        let wrapped_sql = format!("SELECT row_to_json(q)::text FROM ({}) q", query);
+                        let mut stream = sqlx::query_scalar::<_, String>(&wrapped_sql).fetch(&pool);
+                        let mut json_rows: Vec<Vec<serde_json::Value>> = Vec::new();
+                        let mut truncated = false;
+                        while let Some(json_str) = stream.try_next().await? {
+                            if json_rows.len() >= row_cap {
+                                truncated = true;
+                                break;
+                            }
+                            let obj: serde_json::Map<String, serde_json::Value> =
+                                serde_json::from_str(&json_str).unwrap_or_default();
+                            let row: Vec<serde_json::Value> = columns
                                 .iter()
                                 .map(|col| {
-                                    let data_type = col.type_info().to_string();
-                                    let category = map_pg_data_type(&data_type);
-                                    QueryColumn {
-                                        name: col.name().to_string(),
-                                        data_type,
-                                        category,
-                                    }
+                                    let raw = obj
+                                        .get(&col.name)
+                                        .cloned()
+                                        .unwrap_or(serde_json::Value::Null);
+                                    // Sprint 261 (ADR 0026) — bigint / numeric
+                                    // cells are pre-stringified so native
+                                    // JSON.parse on the JS side preserves
+                                    // digit-for-digit precision.
+                                    stringify_numeric_if_precision_sensitive(raw, &col.data_type)
                                 })
                                 .collect();
+                            json_rows.push(row);
+                        }
 
-                            // Single execution. row_to_json coerces every PG
-                            // type to JSON and applies side effects once.
-                            // Direct try_get::<serde_json::Value> only works
-                            // for json/jsonb columns, so the wrapper handles
-                            // the rest.
-                            let wrapped_sql =
-                                format!("SELECT row_to_json(q)::text FROM ({}) q", query);
-                            let json_rows_raw = sqlx::query_scalar::<_, String>(&wrapped_sql)
-                                .fetch_all(&pool)
-                                .await?;
-
-                            let json_rows: Vec<Vec<serde_json::Value>> = json_rows_raw
-                                .iter()
-                                .map(|json_str| {
-                                    let obj: serde_json::Map<String, serde_json::Value> =
-                                        serde_json::from_str(json_str).unwrap_or_default();
-                                    columns
-                                        .iter()
-                                        .map(|col| {
-                                            let raw = obj
-                                                .get(&col.name)
-                                                .cloned()
-                                                .unwrap_or(serde_json::Value::Null);
-                                            // Sprint 261 (ADR 0026) — bigint /
-                                            // numeric cells are pre-stringified
-                                            // so native JSON.parse on the JS
-                                            // side preserves digit-for-digit
-                                            // precision.
-                                            stringify_numeric_if_precision_sensitive(
-                                                raw,
-                                                &col.data_type,
-                                            )
-                                        })
-                                        .collect()
-                                })
-                                .collect();
-
-                            (columns, json_rows)
-                        } else {
-                            // Un-wrappable: SHOW / EXPLAIN / data-modifying
-                            // WITH. Single execution; columns and values
-                            // decoded per-cell straight from the returned rows
-                            // (bigint/numeric emitted as strings to match the
-                            // wrapped path's ADR 0026 wire format).
-                            let rows = sqlx::query(query).fetch_all(&pool).await?;
-                            let columns: Vec<QueryColumn> = if let Some(first_row) = rows.first() {
-                                first_row
+                        (columns, json_rows, truncated)
+                    } else {
+                        // Un-wrappable: SHOW / EXPLAIN / data-modifying WITH.
+                        // Single execution; columns and values decoded per-cell
+                        // straight from the returned rows (bigint/numeric
+                        // emitted as strings to match the wrapped path's ADR
+                        // 0026 wire format). Streamed + capped like the wrapped
+                        // path (#1231).
+                        let mut stream = sqlx::query(query).fetch(&pool);
+                        let mut columns: Vec<QueryColumn> = Vec::new();
+                        let mut json_rows: Vec<Vec<serde_json::Value>> = Vec::new();
+                        let mut truncated = false;
+                        while let Some(row) = stream.try_next().await? {
+                            if columns.is_empty() {
+                                columns = row
                                     .columns()
                                     .iter()
                                     .map(|col| {
@@ -439,26 +449,26 @@ impl PostgresAdapter {
                                             category,
                                         }
                                     })
-                                    .collect()
-                            } else {
-                                Vec::new()
-                            };
-                            let json_rows: Vec<Vec<serde_json::Value>> = rows
-                                .iter()
-                                .map(|row| {
-                                    (0..row.columns().len())
-                                        .map(|idx| pg_cell_to_json(row, idx))
-                                        .collect()
-                                })
-                                .collect();
-                            (columns, json_rows)
-                        };
+                                    .collect();
+                            }
+                            if json_rows.len() >= row_cap {
+                                truncated = true;
+                                break;
+                            }
+                            json_rows.push(
+                                (0..row.columns().len())
+                                    .map(|idx| pg_cell_to_json(&row, idx))
+                                    .collect(),
+                            );
+                        }
+                        (columns, json_rows, truncated)
+                    };
 
                     let total_count = json_rows.len() as i64;
                     let execution_time_ms = start.elapsed().as_millis() as u64;
 
                     Ok::<QueryResult, AppError>(QueryResult {
-                        truncated: false,
+                        truncated,
                         columns,
                         rows: json_rows,
                         total_count,

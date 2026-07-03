@@ -95,7 +95,10 @@ impl RdbAdapter for DuckdbAdapter {
         sql: &'a str,
         cancel: Option<&'a tokio_util::sync::CancellationToken>,
     ) -> Pin<Box<dyn Future<Output = Result<RdbQueryResult, AppError>> + Send + 'a>> {
-        Box::pin(async move { self.execute_query(sql, cancel).await })
+        Box::pin(async move {
+            self.execute_query(sql, cancel, crate::db::row_cap::current())
+                .await
+        })
     }
 
     #[allow(clippy::too_many_arguments)]

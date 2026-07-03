@@ -25,6 +25,8 @@ impl MssqlAdapter {
         &self,
         query: &str,
         cancel_token: Option<&CancellationToken>,
+        // Issue #1231 — fetch-stage row cap (see SQLite adapter).
+        row_cap: usize,
     ) -> Result<QueryResult, AppError> {
         if cancel_token.is_some_and(CancellationToken::is_cancelled) {
             return Err(query_cancelled());
@@ -59,6 +61,8 @@ impl MssqlAdapter {
                     let mut columns = Vec::new();
                     let mut rows = Vec::new();
                     let mut result_index = None;
+                    // Issue #1231 — stop buffering rows at cap+1.
+                    let mut truncated = false;
 
                     while let Some(item) = stream
                         .try_next()
@@ -85,13 +89,17 @@ impl MssqlAdapter {
                                     columns =
                                         row.columns().iter().map(mssql_query_column).collect();
                                 }
+                                if rows.len() >= row_cap {
+                                    truncated = true;
+                                    break;
+                                }
                                 rows.push(mssql_row_to_json(&row));
                             }
                         }
                     }
 
                     Ok(QueryResult {
-                        truncated: false,
+                        truncated,
                         total_count: rows.len() as i64,
                         columns,
                         rows,
@@ -1063,7 +1071,10 @@ mod tests {
             "SELECT 1\nGO /* repeat */\nSELECT 2",
             "WITH cte AS (SELECT 1 AS id) UPDATE dbo.users SET name = 'Ada'",
         ] {
-            let err = adapter.execute_query(query, None).await.unwrap_err();
+            let err = adapter
+                .execute_query(query, None, crate::db::row_cap::DEFAULT_ROW_CAP)
+                .await
+                .unwrap_err();
             assert!(
                 matches!(err, AppError::Unsupported(ref msg) if msg.contains("outside issue #903")),
                 "expected issue #903 unsupported boundary for {query}, got {err:?}"
@@ -1071,7 +1082,11 @@ mod tests {
         }
 
         let err = adapter
-            .execute_query("UPDATE dbo.users SET note = 'a;b' WHERE id = 1", None)
+            .execute_query(
+                "UPDATE dbo.users SET note = 'a;b' WHERE id = 1",
+                None,
+                crate::db::row_cap::DEFAULT_ROW_CAP,
+            )
             .await
             .unwrap_err();
         assert!(
@@ -1142,7 +1157,10 @@ mod tests {
     async fn validation_and_cancel_paths_short_circuit_before_connection_lookup() {
         let adapter = MssqlAdapter::new();
 
-        let err = adapter.execute_query("  ;\n", None).await.unwrap_err();
+        let err = adapter
+            .execute_query("  ;\n", None, crate::db::row_cap::DEFAULT_ROW_CAP)
+            .await
+            .unwrap_err();
         assert!(matches!(err, AppError::Validation(msg) if msg.contains("SQL query is empty")));
 
         let err = adapter
@@ -1160,7 +1178,11 @@ mod tests {
         assert!(matches!(err, AppError::Database(msg) if msg == "Query cancelled"));
 
         let err = adapter
-            .execute_query("SELECT 1", Some(&cancel))
+            .execute_query(
+                "SELECT 1",
+                Some(&cancel),
+                crate::db::row_cap::DEFAULT_ROW_CAP,
+            )
             .await
             .unwrap_err();
         assert!(matches!(err, AppError::Database(msg) if msg == "Query cancelled"));
@@ -1186,13 +1208,20 @@ mod tests {
         let adapter = connected_loopback_adapter().await;
 
         for query in ["SELECT 1", "UPDATE dbo.users SET name = 'Ada'"] {
-            let err = adapter.execute_query(query, None).await.unwrap_err();
+            let err = adapter
+                .execute_query(query, None, crate::db::row_cap::DEFAULT_ROW_CAP)
+                .await
+                .unwrap_err();
             assert!(matches!(err, AppError::Connection(msg) if msg.contains("network connection")));
         }
 
         let cancel = CancellationToken::new();
         let err = adapter
-            .execute_query("SELECT 1", Some(&cancel))
+            .execute_query(
+                "SELECT 1",
+                Some(&cancel),
+                crate::db::row_cap::DEFAULT_ROW_CAP,
+            )
             .await
             .unwrap_err();
         assert!(matches!(err, AppError::Connection(msg) if msg.contains("network connection")));
@@ -1225,7 +1254,10 @@ mod tests {
         let adapter = MssqlAdapter::new();
 
         for query in ["SELECT 1", "UPDATE dbo.users SET name = 'Ada'"] {
-            let err = adapter.execute_query(query, None).await.unwrap_err();
+            let err = adapter
+                .execute_query(query, None, crate::db::row_cap::DEFAULT_ROW_CAP)
+                .await
+                .unwrap_err();
             assert!(matches!(err, AppError::Connection(msg) if msg.contains("not open")));
         }
 

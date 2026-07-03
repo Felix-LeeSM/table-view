@@ -197,6 +197,8 @@ pub async fn execute_query(
         )
         .await?;
     }
+    // Issue #1231 — publish the persisted row cap for the adapter fetch loop.
+    crate::commands::sqlite_pool::publish_row_cap().await;
     execute_query_inner(
         state.inner(),
         &connection_id,
@@ -310,6 +312,8 @@ pub async fn execute_query_batch(
         )
         .await?;
     }
+    // Issue #1231 — a batch may carry a SELECT; publish the cap too.
+    crate::commands::sqlite_pool::publish_row_cap().await;
     execute_query_batch_inner(
         state.inner(),
         &connection_id,

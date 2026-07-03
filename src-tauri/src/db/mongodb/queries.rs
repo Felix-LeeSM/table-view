@@ -64,10 +64,20 @@ impl MongoAdapter {
             .await
             .map_err(|e| AppError::Database(format!("find failed: {e}")))?;
 
+        // Issue #1231 — stop draining the cursor at cap+1 so a huge find can't
+        // buffer the whole collection into the Rust Vec.
+        let row_cap = crate::db::row_cap::current();
         let mut raw_documents: Vec<Document> = Vec::new();
+        let mut truncated = false;
         while let Some(next) = cursor.next().await {
             match next {
-                Ok(d) => raw_documents.push(d),
+                Ok(d) => {
+                    if raw_documents.len() >= row_cap {
+                        truncated = true;
+                        break;
+                    }
+                    raw_documents.push(d);
+                }
                 Err(e) => {
                     return Err(AppError::Database(format!("cursor iteration failed: {e}")));
                 }
@@ -100,7 +110,7 @@ impl MongoAdapter {
         let execution_time_ms = elapsed.as_millis().min(u128::from(u64::MAX)) as u64;
 
         Ok(DocumentQueryResult {
-            truncated: false,
+            truncated,
             columns,
             rows,
             raw_documents,
@@ -231,10 +241,19 @@ impl MongoAdapter {
             .await
             .map_err(|e| AppError::Database(format!("aggregate failed: {e}")))?;
 
+        // Issue #1231 — cap the aggregate output like `find` (cap+1 break).
+        let row_cap = crate::db::row_cap::current();
         let mut raw_documents: Vec<Document> = Vec::new();
+        let mut truncated = false;
         while let Some(next) = cursor.next().await {
             match next {
-                Ok(d) => raw_documents.push(d),
+                Ok(d) => {
+                    if raw_documents.len() >= row_cap {
+                        truncated = true;
+                        break;
+                    }
+                    raw_documents.push(d);
+                }
                 Err(e) => {
                     return Err(AppError::Database(format!(
                         "aggregate cursor iteration failed: {e}"
@@ -262,7 +281,7 @@ impl MongoAdapter {
         let execution_time_ms = elapsed.as_millis().min(u128::from(u64::MAX)) as u64;
 
         Ok(DocumentQueryResult {
-            truncated: false,
+            truncated,
             columns,
             rows,
             raw_documents,

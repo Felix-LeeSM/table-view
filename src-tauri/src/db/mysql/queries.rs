@@ -244,6 +244,9 @@ impl MysqlAdapter {
         &self,
         query: &str,
         cancel_token: Option<&CancellationToken>,
+        // Issue #1231 — fetch-stage row cap. See SQLite adapter for the
+        // streaming rationale.
+        row_cap: usize,
     ) -> Result<QueryResult, AppError> {
         let start = std::time::Instant::now();
 
@@ -282,43 +285,48 @@ impl MysqlAdapter {
         let result = match query_type {
             QueryType::Select => {
                 let query_future = async {
-                    let rows = sqlx::query(query)
-                        .fetch_all(&pool)
+                    // Issue #1231 — stream + cap so a no-LIMIT result cannot
+                    // buffer the whole table into the Rust Vec.
+                    let mut stream = sqlx::query(query).fetch(&pool);
+                    let mut columns: Vec<QueryColumn> = Vec::new();
+                    let mut json_rows: Vec<Vec<serde_json::Value>> = Vec::new();
+                    let mut truncated = false;
+                    while let Some(row) = stream
+                        .try_next()
                         .await
-                        .map_err(|e| AppError::Database(e.to_string()))?;
-
-                    let columns: Vec<QueryColumn> = if let Some(first_row) = rows.first() {
-                        first_row
-                            .columns()
-                            .iter()
-                            .map(|col| {
-                                let data_type = col.type_info().name().to_string();
-                                let category = map_mysql_data_type(&data_type);
-                                QueryColumn {
-                                    name: col.name().to_string(),
-                                    data_type,
-                                    category,
-                                }
-                            })
-                            .collect()
-                    } else {
-                        Vec::new()
-                    };
-
-                    let json_rows: Vec<Vec<serde_json::Value>> = rows
-                        .iter()
-                        .map(|row| {
+                        .map_err(|e| AppError::Database(e.to_string()))?
+                    {
+                        if columns.is_empty() {
+                            columns = row
+                                .columns()
+                                .iter()
+                                .map(|col| {
+                                    let data_type = col.type_info().name().to_string();
+                                    let category = map_mysql_data_type(&data_type);
+                                    QueryColumn {
+                                        name: col.name().to_string(),
+                                        data_type,
+                                        category,
+                                    }
+                                })
+                                .collect();
+                        }
+                        if json_rows.len() >= row_cap {
+                            truncated = true;
+                            break;
+                        }
+                        json_rows.push(
                             (0..row.columns().len())
-                                .map(|idx| cell_to_json(row, idx))
-                                .collect()
-                        })
-                        .collect();
+                                .map(|idx| cell_to_json(&row, idx))
+                                .collect(),
+                        );
+                    }
 
                     let total_count = json_rows.len() as i64;
                     let execution_time_ms = start.elapsed().as_millis() as u64;
 
                     Ok::<QueryResult, AppError>(QueryResult {
-                        truncated: false,
+                        truncated,
                         columns,
                         rows: json_rows,
                         total_count,

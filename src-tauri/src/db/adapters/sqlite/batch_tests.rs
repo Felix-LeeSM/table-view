@@ -95,7 +95,10 @@ async fn connected_read_only_adapter() -> (tempfile::TempDir, SqliteAdapter) {
 }
 
 async fn scalar_count(adapter: &SqliteAdapter, sql: &str) -> i64 {
-    let result = adapter.execute_query(sql, None).await.unwrap();
+    let result = adapter
+        .execute_query(sql, None, crate::db::row_cap::DEFAULT_ROW_CAP)
+        .await
+        .unwrap();
     result.rows[0][0].as_i64().unwrap()
 }
 

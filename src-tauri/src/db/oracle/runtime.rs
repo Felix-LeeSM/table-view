@@ -18,6 +18,8 @@ impl OracleAdapter {
         &self,
         query: &str,
         cancel_token: Option<&CancellationToken>,
+        // Issue #1231 — fetch-stage row cap (see SQLite adapter).
+        row_cap: usize,
     ) -> Result<QueryResult, AppError> {
         if cancel_token.is_some_and(CancellationToken::is_cancelled) {
             return Err(query_cancelled());
@@ -49,8 +51,9 @@ impl OracleAdapter {
                         .query(query, &[])
                         .await
                         .map_err(|err| oracle_query_error("Oracle SELECT failed", err))?;
-                    let result = fetch_remaining_select_rows(&connection, result).await?;
-                    normalize_select_result(result, start.elapsed().as_millis() as u64)
+                    let (result, truncated) =
+                        fetch_remaining_select_rows(&connection, result, row_cap).await?;
+                    normalize_select_result(result, start.elapsed().as_millis() as u64, truncated)
                 }
                 QueryType::Dml { .. } => {
                     let result = connection
@@ -203,8 +206,13 @@ async fn rollback(
 fn normalize_select_result(
     result: OracleQueryResult,
     execution_time_ms: u64,
+    truncated: bool,
 ) -> Result<QueryResult, AppError> {
-    ensure_select_fully_fetched(&result)?;
+    // When we deliberately stopped at the cap the cursor still reports more
+    // rows — that is expected, not an error, so skip the fully-fetched guard.
+    if !truncated {
+        ensure_select_fully_fetched(&result)?;
+    }
 
     let columns: Vec<QueryColumn> = result.columns.iter().map(oracle_query_column).collect();
     let rows = result
@@ -214,7 +222,7 @@ fn normalize_select_result(
         .collect::<Vec<Vec<serde_json::Value>>>();
 
     Ok(QueryResult {
-        truncated: false,
+        truncated,
         total_count: rows.len() as i64,
         columns,
         rows,
@@ -223,13 +231,17 @@ fn normalize_select_result(
     })
 }
 
+/// Issue #1231 — pull batches until the cursor is exhausted OR we hold more
+/// than `row_cap` rows, then trim to exactly `row_cap`. Returns the (possibly
+/// trimmed) result and whether it was truncated.
 async fn fetch_remaining_select_rows(
     connection: &oracle_rs::Connection,
     mut result: OracleQueryResult,
-) -> Result<OracleQueryResult, AppError> {
+    row_cap: usize,
+) -> Result<(OracleQueryResult, bool), AppError> {
     let columns = result.columns.clone();
 
-    while result.has_more_rows {
+    while result.has_more_rows && result.rows.len() <= row_cap {
         if result.cursor_id == 0 {
             return Err(AppError::Unsupported(
                 "Oracle SELECT returned a partial cursor without a cursor id".into(),
@@ -245,7 +257,14 @@ async fn fetch_remaining_select_rows(
         result.cursor_id = next.cursor_id;
     }
 
-    Ok(result)
+    // Truncated if we hold more than the cap, or stopped with the cursor still
+    // open. Trim to exactly the cap so the wire payload is bounded.
+    let truncated = result.rows.len() > row_cap || result.has_more_rows;
+    if result.rows.len() > row_cap {
+        result.rows.truncate(row_cap);
+    }
+
+    Ok((result, truncated))
 }
 
 fn ensure_select_fully_fetched(result: &OracleQueryResult) -> Result<(), AppError> {
@@ -565,7 +584,11 @@ mod tests {
         token.cancel();
 
         let err = adapter
-            .execute_query("SELECT 1 FROM DUAL", Some(&token))
+            .execute_query(
+                "SELECT 1 FROM DUAL",
+                Some(&token),
+                crate::db::row_cap::DEFAULT_ROW_CAP,
+            )
             .await
             .expect_err("cancelled query should fail before requiring a connection");
 
@@ -633,7 +656,7 @@ mod tests {
             cursor_id: 0,
         };
 
-        let normalized = normalize_select_result(result, 7).unwrap();
+        let normalized = normalize_select_result(result, 7, false).unwrap();
         assert_eq!(normalized.total_count, 1);
         assert_eq!(normalized.execution_time_ms, 7);
         assert!(matches!(normalized.query_type, QueryType::Select));
@@ -665,7 +688,7 @@ mod tests {
         };
 
         assert!(matches!(
-            normalize_select_result(result, 7),
+            normalize_select_result(result, 7, false),
             Err(AppError::Unsupported(message))
                 if message.contains("unfetched rows")
         ));
@@ -681,7 +704,7 @@ mod tests {
             cursor_id: 7,
         };
 
-        let normalized = normalize_select_result(result, 7).unwrap();
+        let normalized = normalize_select_result(result, 7, false).unwrap();
 
         assert_eq!(normalized.total_count, 1);
         assert_eq!(normalized.rows, vec![vec![serde_json::json!(1)]]);
