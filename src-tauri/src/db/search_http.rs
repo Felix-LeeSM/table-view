@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::sync::OnceLock;
 use std::time::Duration;
 
+use percent_encoding::{utf8_percent_encode, AsciiSet, NON_ALPHANUMERIC};
 use regex::Regex;
 use reqwest::{RequestBuilder, Response, StatusCode};
 use serde_json::{json, Map, Value};
@@ -17,9 +18,29 @@ use crate::models::{
     SearchTemplateEndpointKind, SearchVersionInfo,
 };
 
+use super::search_dsl::validate_search_target;
 use super::search_live_query::{
     live_search_body, parse_search_response, search_error_detail, validate_live_search_request,
 };
+
+// RFC 3986 unreserved set (ALPHA / DIGIT / `-` `.` `_` `~`) stays literal; every
+// other byte — including non-ASCII UTF-8 — is percent-encoded so a validated index
+// name can never break out of its URL path segment. ES/OpenSearch percent-decode
+// the path, so this round-trips to the original name on the cluster.
+const INDEX_PATH_SEGMENT: &AsciiSet = &NON_ALPHANUMERIC
+    .remove(b'-')
+    .remove(b'.')
+    .remove(b'_')
+    .remove(b'~');
+
+/// #1107 — single chokepoint for `/{index}/{suffix}` URLs: reuse the live-search
+/// `validate_search_target` allowlist, then percent-encode the surviving name.
+/// `get_index_field_stats` routes through `get_index_mapping`, so it inherits this.
+fn validated_index_path(index: &str, suffix: &str) -> Result<String, AppError> {
+    validate_search_target(index)?;
+    let encoded = utf8_percent_encode(index.trim(), INDEX_PATH_SEGMENT);
+    Ok(format!("/{encoded}/{suffix}"))
+}
 
 #[derive(Debug, Clone)]
 pub(crate) struct SearchHttpConnection {
@@ -124,7 +145,9 @@ impl SearchHttpConnection {
         &self,
         index: &str,
     ) -> Result<SearchIndexMapping, AppError> {
-        let payload = self.get_json(&format!("/{index}/_mapping")).await?;
+        let payload = self
+            .get_json(&validated_index_path(index, "_mapping")?)
+            .await?;
         parse_mapping_response(index, &payload)
     }
 
@@ -132,7 +155,9 @@ impl SearchHttpConnection {
         &self,
         index: &str,
     ) -> Result<SearchIndexSettings, AppError> {
-        let payload = self.get_json(&format!("/{index}/_settings")).await?;
+        let payload = self
+            .get_json(&validated_index_path(index, "_settings")?)
+            .await?;
         parse_settings_response(index, &payload)
     }
 
@@ -197,7 +222,10 @@ impl SearchHttpConnection {
         cancel: Option<&CancellationToken>,
     ) -> Result<SearchResultEnvelope, AppError> {
         validate_live_search_request(request)?;
-        let path = format!("/{}/_search", request.index.trim());
+        // Same allowlist as validate_live_search_request above, but this also
+        // percent-encodes the surviving name for URL-segment parity with the
+        // mapping/settings paths (#1107).
+        let path = validated_index_path(&request.index, "_search")?;
         let body = live_search_body(request)?;
         let payload = self.post_json(&path, &Value::Object(body), cancel).await?;
         parse_search_response(&payload, self.label())
@@ -1086,5 +1114,101 @@ mod tests {
         );
 
         assert!(matches!(error, AppError::SearchShardFailure(_)));
+    }
+
+    fn test_connection() -> SearchHttpConnection {
+        SearchHttpConnection {
+            // Unroutable target: the guard must reject before any request is sent.
+            base_url: "http://127.0.0.1:0".into(),
+            client: reqwest::Client::builder()
+                .timeout(Duration::from_secs(1))
+                .build()
+                .expect("test client builds"),
+            auth: SearchHttpAuth {
+                user: String::new(),
+                password: String::new(),
+            },
+            product: SearchProductKind::Elasticsearch,
+            identity: SearchClusterIdentity {
+                product: SearchProductKind::Elasticsearch,
+                cluster_name: "test".into(),
+                cluster_uuid: None,
+                version: SearchVersionInfo {
+                    number: "8.12.2".into(),
+                    distribution: None,
+                    lucene: None,
+                    build_flavor: None,
+                    build_type: None,
+                    build_hash: None,
+                    build_date: None,
+                    build_snapshot: None,
+                },
+                capabilities: root_probe_capabilities(SearchProductKind::Elasticsearch),
+                product_delta: SearchProductDelta::for_product(SearchProductKind::Elasticsearch),
+            },
+        }
+    }
+
+    #[test]
+    fn validated_index_path_preserves_valid_names_and_encodes_the_rest() {
+        // Happy path: ASCII index names use only RFC 3986 unreserved chars, so they
+        // round-trip unchanged — the mock-server contract (`/logs-.../_mapping`) holds.
+        assert_eq!(
+            validated_index_path("logs-elastic-2026.05.24", "_mapping").unwrap(),
+            "/logs-elastic-2026.05.24/_mapping"
+        );
+        // Unicode index names percent-encode to UTF-8 bytes, which the cluster
+        // decodes back to the original name — still cluster-compatible.
+        assert_eq!(
+            validated_index_path("한글", "_settings").unwrap(),
+            "/%ED%95%9C%EA%B8%80/_settings"
+        );
+        // The allowlist still rejects the dangerous classes before any encoding.
+        for bad in [
+            "*",
+            "_all",
+            "../_cluster/settings",
+            "logs?pretty=true",
+            "logs%2f_search",
+        ] {
+            assert!(
+                matches!(
+                    validated_index_path(bad, "_mapping"),
+                    Err(AppError::Validation(_))
+                ),
+                "validated_index_path should reject {bad}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn index_detail_paths_reject_unvalidated_targets() {
+        // Reason: #1107 — mapping/settings/field-stats must not bypass the
+        // validate_search_target allowlist the live search() path already enforces.
+        // wildcard dump / `../_cluster` admin reach / `?` query-param injection.
+        let conn = test_connection();
+        for target in ["*", "../_cluster/settings", "logs?pretty=true"] {
+            assert!(
+                matches!(
+                    conn.get_index_mapping(target).await,
+                    Err(AppError::Validation(_))
+                ),
+                "get_index_mapping should reject {target} before any HTTP request"
+            );
+            assert!(
+                matches!(
+                    conn.get_index_settings(target).await,
+                    Err(AppError::Validation(_))
+                ),
+                "get_index_settings should reject {target} before any HTTP request"
+            );
+            assert!(
+                matches!(
+                    conn.get_index_field_stats(target).await,
+                    Err(AppError::Validation(_))
+                ),
+                "get_index_field_stats should inherit the mapping guard for {target}"
+            );
+        }
     }
 }
