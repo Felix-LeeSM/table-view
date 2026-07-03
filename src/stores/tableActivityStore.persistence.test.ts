@@ -21,6 +21,7 @@ import {
   persistTableActivity,
   listTableActivity,
 } from "@lib/tauri/tableActivity";
+import { getCurrentWindowLabel } from "@lib/window-label";
 import {
   useTableActivityStore,
   __resetTableActivityStoreForTests,
@@ -31,12 +32,14 @@ import {
 
 const persistMock = vi.mocked(persistTableActivity);
 const listMock = vi.mocked(listTableActivity);
+const windowLabelMock = vi.mocked(getCurrentWindowLabel);
 
 beforeEach(() => {
   persistMock.mockReset();
   persistMock.mockResolvedValue(undefined);
   listMock.mockReset();
   listMock.mockResolvedValue([]);
+  windowLabelMock.mockReturnValue("workspace-pg1");
   __resetTableActivityStoreForTests();
 });
 
@@ -96,9 +99,10 @@ describe("tableActivityStore persistence round-trip", () => {
     await Promise.resolve();
 
     expect(persistMock).toHaveBeenCalled();
+    // persist(connectionId, entries) — payload is arg 1.
     const lastPayload = persistMock.mock.calls[
       persistMock.mock.calls.length - 1
-    ]![0] as PersistTableActivityPayload[];
+    ]![1] as PersistTableActivityPayload[];
     expect(lastPayload).toHaveLength(1);
     const row = lastPayload[0]!;
     expect(row.schema).toBe("public");
@@ -121,6 +125,44 @@ describe("tableActivityStore persistence round-trip", () => {
         pinnedAt: row.pinnedAt,
       },
     ]);
+  });
+
+  it("normalizes raw persisted shape (schema '' + non-number timestamps) on hydrate — #1091", async () => {
+    // Simulate exactly what the SQLite/serde boundary can hand back: an empty
+    // schema sentinel and timestamps that arrive as something other than a
+    // number. The mapper's backfill branch must run, not crash.
+    const raw = [
+      {
+        connectionId: "my1",
+        db: "appdb",
+        schema: "", // '' sentinel from the backend NOT NULL DEFAULT ''
+        table: "orders",
+        lastUsed: null as unknown as number,
+        pinnedAt: 7,
+      },
+      {
+        connectionId: "my1",
+        db: "appdb",
+        schema: undefined as unknown as string,
+        table: "customers",
+        lastUsed: "bad" as unknown as number, // non-number → normalize to null
+        pinnedAt: null as unknown as number,
+      },
+    ] as PersistTableActivityPayload[];
+    listMock.mockResolvedValueOnce(raw);
+
+    await useTableActivityStore.getState().loadPersistedTableActivity();
+
+    const entries = useTableActivityStore.getState().entries;
+    expect(entries).toHaveLength(2);
+    const orders = entries.find((e) => e.table === "orders")!;
+    expect(orders.schema).toBeNull(); // '' -> null
+    expect(orders.lastUsed).toBeNull();
+    expect(orders.pinnedAt).toBe(7);
+    const customers = entries.find((e) => e.table === "customers")!;
+    expect(customers.schema).toBeNull(); // undefined -> null
+    expect(customers.lastUsed).toBeNull(); // "bad" -> null
+    expect(customers.pinnedAt).toBeNull();
   });
 
   it("hydrate tolerates a rejected IPC (keeps default empty state)", async () => {

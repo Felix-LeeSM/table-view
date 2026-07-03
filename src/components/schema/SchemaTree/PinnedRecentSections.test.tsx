@@ -169,4 +169,39 @@ describe("PinnedRecentSections", () => {
       }),
     ).toBe(false);
   });
+
+  it("Clear recent affordance drops recents but keeps pins (product §1)", () => {
+    seed([
+      {
+        connectionId: "pg1",
+        db: "app",
+        schema: "public",
+        table: "orders",
+        lastUsed: 30,
+        pinnedAt: 5, // pinned
+      },
+      {
+        connectionId: "pg1",
+        db: "app",
+        schema: "public",
+        table: "users",
+        lastUsed: 20,
+        pinnedAt: null, // recent-only
+      },
+    ]);
+    render(
+      <PinnedRecentSections
+        connectionId="pg1"
+        db="app"
+        treeShape="with-schema"
+        onOpenTable={vi.fn()}
+      />,
+    );
+    // users is under Recent; orders is under Pinned.
+    expect(screen.getByText("public.users")).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText("clearRecentTablesAria"));
+    // Recent row gone; pinned row still present.
+    expect(screen.queryByText("public.users")).toBeNull();
+    expect(screen.getByText("public.orders")).toBeInTheDocument();
+  });
 });

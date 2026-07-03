@@ -19,10 +19,17 @@ export interface PersistTableActivityPayload {
   pinnedAt: number | null;
 }
 
+/**
+ * Persist is scoped to a single `connectionId`: the backend replaces only that
+ * connection's rows, so a concurrent workspace window (a different connection)
+ * is never clobbered. Callers pass their owning connection and the subset of
+ * entries for it.
+ */
 export async function persistTableActivity(
+  connectionId: string,
   entries: PersistTableActivityPayload[],
 ): Promise<void> {
-  await invoke("persist_table_activity", { entries });
+  await invoke("persist_table_activity", { connectionId, entries });
 }
 
 export async function listTableActivity(): Promise<

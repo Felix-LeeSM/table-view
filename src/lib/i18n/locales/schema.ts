@@ -45,6 +45,7 @@ export const en = {
   unpinTableAria: "Unpin {{table}}",
   pinTable: "Pin",
   unpinTable: "Unpin",
+  clearRecentTablesAria: "Clear recent tables",
 
   // StructurePanel
   indexesTab: "Indexes",
@@ -281,6 +282,7 @@ export const ko = {
   unpinTableAria: "{{table}} 고정 해제",
   pinTable: "고정",
   unpinTable: "고정 해제",
+  clearRecentTablesAria: "최근 테이블 지우기",
 
   // StructurePanel
   indexesTab: "인덱스",

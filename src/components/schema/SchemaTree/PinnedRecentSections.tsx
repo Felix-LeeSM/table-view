@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { Pin, PinOff, Table2, Clock } from "lucide-react";
+import { Pin, PinOff, Table2, Clock, Eraser } from "lucide-react";
 import { cn } from "@lib/utils";
 import {
   useTableActivityStore,
@@ -42,17 +42,16 @@ export function PinnedRecentSections({
   const { t } = useTranslation("schema");
   const entries = useTableActivityStore((s) => s.entries);
   const togglePin = useTableActivityStore((s) => s.togglePin);
+  const clearRecentTables = useTableActivityStore((s) => s.clearRecentTables);
 
   const pinned = useMemo(
     () => selectPinnedTables(entries, connectionId, db),
     [entries, connectionId, db],
   );
-  // A pinned table already surfaces under "Pinned"; don't double-list it.
+  // `selectRecentTables` already excludes pinned rows, so the Recent list
+  // stays at its full `limit` and never double-lists a pinned table.
   const recent = useMemo(
-    () =>
-      selectRecentTables(entries, connectionId, db).filter(
-        (e) => e.pinnedAt == null,
-      ),
+    () => selectRecentTables(entries, connectionId, db),
     [entries, connectionId, db],
   );
 
@@ -83,7 +82,10 @@ export function PinnedRecentSections({
           type="button"
           className={cn(
             "shrink-0 px-1.5 py-0.5 text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
-            pinnedRow ? "" : "opacity-0 group-hover:opacity-100",
+            // Keyboard focus must reveal the hidden pin button, not just hover.
+            pinnedRow
+              ? ""
+              : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100",
           )}
           onClick={() =>
             togglePin({
@@ -119,9 +121,20 @@ export function PinnedRecentSections({
       )}
       {recent.length > 0 && (
         <div>
-          <div className="flex items-center gap-1 px-3 pt-1 text-3xs font-medium uppercase tracking-wider text-muted-foreground">
+          {/* product §1 — reset affordance for persistent Recent state lives on
+              the sidebar section header. Pins keep their per-item unpin. */}
+          <div className="group/hdr flex items-center gap-1 px-3 pt-1 text-3xs font-medium uppercase tracking-wider text-muted-foreground">
             <Clock size={10} />
             <span>{t("recentHeader")}</span>
+            <button
+              type="button"
+              className="ml-auto opacity-0 group-hover/hdr:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+              onClick={() => clearRecentTables(connectionId, db)}
+              aria-label={t("clearRecentTablesAria")}
+              title={t("clearRecentTablesAria")}
+            >
+              <Eraser size={11} />
+            </button>
           </div>
           {recent.map((e) => renderRow(e, false))}
         </div>

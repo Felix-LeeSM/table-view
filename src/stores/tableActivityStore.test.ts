@@ -21,6 +21,10 @@ import {
   persistTableActivity,
   listTableActivity,
 } from "@lib/tauri/tableActivity";
+// `getCurrentWindowLabel` is globally mocked in `test-setup.ts`; persist reads
+// it to scope writes to the owning connection, so each test points it at the
+// window under test.
+import { getCurrentWindowLabel } from "@lib/window-label";
 import {
   useTableActivityStore,
   __resetTableActivityStoreForTests,
@@ -35,6 +39,7 @@ import {
 
 const persistMock = vi.mocked(persistTableActivity);
 const listMock = vi.mocked(listTableActivity);
+const windowLabelMock = vi.mocked(getCurrentWindowLabel);
 
 const PG = (table: string): TableRef => ({
   connectionId: "pg1",
@@ -48,6 +53,7 @@ beforeEach(() => {
   persistMock.mockResolvedValue(undefined);
   listMock.mockReset();
   listMock.mockResolvedValue([]);
+  windowLabelMock.mockReturnValue("workspace-pg1"); // owning window = pg1
   __resetTableActivityStoreForTests();
 });
 
@@ -75,10 +81,77 @@ describe("tableActivityStore", () => {
 
     await Promise.resolve();
     expect(persistMock).toHaveBeenCalled();
+    // persist(connectionId, entries) — arg 0 is the owning connection scope.
+    expect(persistMock.mock.calls[0]![0]).toBe("pg1");
     const payload = persistMock.mock
-      .calls[0]![0] as PersistTableActivityPayload[];
+      .calls[0]![1] as PersistTableActivityPayload[];
     expect(payload[0]!.table).toBe("users");
     expect(payload[0]!.schema).toBe("public");
+  });
+
+  it("persist ships only the owning window's connection (no cross-window clobber)", async () => {
+    const store = useTableActivityStore.getState();
+    // Simulate a global hydrate carrying another connection's rows.
+    useTableActivityStore.setState({
+      entries: [
+        {
+          connectionId: "pg2",
+          db: "app",
+          schema: "public",
+          table: "elsewhere",
+          lastUsed: 1,
+          pinnedAt: 2,
+        },
+      ],
+    });
+    store.recordTableUsed(PG("users")); // window = pg1
+    await Promise.resolve();
+
+    const lastCall = persistMock.mock.calls[persistMock.mock.calls.length - 1]!;
+    expect(lastCall[0]).toBe("pg1");
+    const payload = lastCall[1] as PersistTableActivityPayload[];
+    expect(payload.every((e) => e.connectionId === "pg1")).toBe(true);
+    expect(payload.some((e) => e.table === "elsewhere")).toBe(false);
+  });
+
+  it("does not persist when the window owns no connection (launcher)", async () => {
+    windowLabelMock.mockReturnValue(null);
+    useTableActivityStore.getState().recordTableUsed(PG("users"));
+    await Promise.resolve();
+    expect(persistMock).not.toHaveBeenCalled();
+    // In-memory state still updates so the UI stays responsive.
+    expect(useTableActivityStore.getState().entries).toHaveLength(1);
+  });
+
+  it("clearRecentTables drops recent rows for the scope but keeps pins", () => {
+    const store = useTableActivityStore.getState();
+    store.recordTableUsed(PG("users"));
+    store.recordTableUsed(PG("orders"));
+    store.togglePin(PG("orders")); // orders is pinned + recent
+    store.recordTableUsed({
+      connectionId: "pg1",
+      db: "other",
+      schema: "public",
+      table: "keep",
+    });
+
+    store.clearRecentTables("pg1", "app");
+
+    const recent = selectRecentTables(
+      useTableActivityStore.getState().entries,
+      "pg1",
+      "app",
+    );
+    expect(recent).toHaveLength(0); // users cleared
+    // orders stays because it's pinned.
+    expect(store.isPinned(PG("orders"))).toBe(true);
+    // A different (conn, db) scope is untouched.
+    const other = selectRecentTables(
+      useTableActivityStore.getState().entries,
+      "pg1",
+      "other",
+    );
+    expect(other.map((e) => e.table)).toEqual(["keep"]);
   });
 
   it("recordTableUsed dedupes by key and refreshes lastUsed (most-recent first)", () => {

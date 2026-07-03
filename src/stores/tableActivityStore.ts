@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { logger } from "@lib/logger";
 import { toast } from "@lib/runtime/toast";
 import i18n from "@lib/i18n";
+import { getCurrentWindowLabel, parseWorkspaceLabel } from "@lib/window-label";
 import {
   listTableActivity,
   persistTableActivity,
@@ -26,12 +27,27 @@ import {
  * paradigm and is exercised by the round-trip tests.
  *
  * Persistence mirrors `favoritesStore`: synchronous in-memory mutate + a
- * fire-and-forget full-list `persist_table_activity` IPC, boot hydrate via
+ * fire-and-forget `persist_table_activity` IPC, boot hydrate via
  * `list_table_activity`. #1092 — a failed write has no fallback source, so a
- * reject surfaces a dev log AND an error toast. No cross-window bridge: a
- * workspace window is single per connection (`workspace-{connection_id}`), so
- * the sections never need to converge a sibling window.
+ * reject surfaces a dev log AND an error toast.
+ *
+ * Cross-window safety (#1232 review): persist ships ONLY the entries owned by
+ * the current workspace window's connection, and the backend replace is scoped
+ * to that `connection_id`. So even though the in-memory list is global (boot
+ * hydrate loads every connection), two windows on different connections write
+ * to disjoint partitions and never clobber each other — no sync bridge needed
+ * because the persist units don't overlap.
  */
+
+/**
+ * The connection this window owns, parsed from its workspace label
+ * (`workspace-{connection_id}`). `null` in the launcher or under vitest
+ * without a window mock — a window that owns nothing persists nothing.
+ */
+function owningConnectionId(): string | null {
+  const label = getCurrentWindowLabel();
+  return label ? parseWorkspaceLabel(label) : null;
+}
 
 export interface TableRef {
   connectionId: string;
@@ -74,13 +90,18 @@ function toPersistPayload(
 }
 
 function persist(entries: TableActivityEntry[]): void {
-  void persistTableActivity(toPersistPayload(entries)).catch((e: unknown) => {
-    const message = e instanceof Error ? e.message : String(e ?? "");
-    logger.warn(
-      `[tableActivityStore] persist_table_activity failed: ${message}`,
-    );
-    toast.error(i18n.t("feedback:storageWriteFailed"));
-  });
+  const connId = owningConnectionId();
+  if (!connId) return; // window owns no connection → nothing to persist
+  const owned = entries.filter((e) => e.connectionId === connId);
+  void persistTableActivity(connId, toPersistPayload(owned)).catch(
+    (e: unknown) => {
+      const message = e instanceof Error ? e.message : String(e ?? "");
+      logger.warn(
+        `[tableActivityStore] persist_table_activity failed: ${message}`,
+      );
+      toast.error(i18n.t("feedback:storageWriteFailed"));
+    },
+  );
 }
 
 /**
@@ -114,6 +135,12 @@ interface TableActivityState {
   recordTableUsed: (ref: TableRef) => void;
   togglePin: (ref: TableRef) => void;
   isPinned: (ref: TableRef) => boolean;
+  /**
+   * Reset affordance for the Recent list (product §1 — persistent state needs
+   * a reset path). Drops the recent-only rows for one `(connectionId, db)`;
+   * pins survive (they have their own per-item unpin).
+   */
+  clearRecentTables: (connectionId: string, db: string) => void;
   loadPersistedTableActivity: () => Promise<void>;
 }
 
@@ -172,6 +199,18 @@ export const useTableActivityStore = create<TableActivityState>((set, get) => ({
     );
   },
 
+  clearRecentTables: (connectionId, db) => {
+    set((state) => {
+      const next = state.entries.filter(
+        (e) =>
+          e.connectionId !== connectionId || e.db !== db || e.pinnedAt != null, // keep pins; drop recent-only rows for this scope
+      );
+      if (next.length === state.entries.length) return state;
+      persist(next);
+      return { entries: next };
+    });
+  },
+
   loadPersistedTableActivity: async () => {
     try {
       const rows = await listTableActivity();
@@ -200,7 +239,13 @@ export const useTableActivityStore = create<TableActivityState>((set, get) => ({
 // Pure selectors — Quick Open (#1216) consumes these as ranking signals.
 // ---------------------------------------------------------------------------
 
-/** Recent tables for a `(connectionId, db)`, most-recent first, capped. */
+/**
+ * Recent tables for a `(connectionId, db)`, most-recent first, capped.
+ * Pinned rows are excluded — they surface in the Pinned section, so counting
+ * them here would silently shrink the visible Recent list below `limit`
+ * (#1232 review). Quick Open reads `selectTableActivitySignals` for the full
+ * picture (pins included).
+ */
 export function selectRecentTables(
   entries: TableActivityEntry[],
   connectionId: string,
@@ -210,7 +255,10 @@ export function selectRecentTables(
   return entries
     .filter(
       (e) =>
-        e.connectionId === connectionId && e.db === db && e.lastUsed != null,
+        e.connectionId === connectionId &&
+        e.db === db &&
+        e.lastUsed != null &&
+        e.pinnedAt == null,
     )
     .sort((a, b) => (b.lastUsed ?? 0) - (a.lastUsed ?? 0))
     .slice(0, limit);
