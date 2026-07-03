@@ -40,6 +40,12 @@ backend contract 를 통해서만 다룬다.
 - Dialog 수정은 기존 component contract/test 를 먼저 보며 close button,
   feedback slot, alert role, toast hookup 같은 테스트된 invariant 를 깨지 않는다.
   preset/layout source-order 강제 규칙은 retired 상태다.
+- 파괴적 confirm (DROP/TRUNCATE/삭제 등) 은 `ConfirmDestructiveDialog` 또는
+  `AlertDialog` 프리셋 (`role="alertdialog"`) 로 통일한다. primary(Confirm/Execute)
+  버튼은 open 후 150ms `disabled` 로 arm (`useDelayedFlag`) 해 반사적 Enter 를
+  흡수하고, Cancel/Esc 는 항상 즉시 동작한다. dialog 전역 `Enter=confirm` 핸들러로
+  Cancel focus 에서도 실행되게 만들지 않는다. 실행 중엔 loading/disabled+aria-busy
+  로 이중 실행을 막는다. (#1111 결정 / #1141 안전)
 
 ## Contract 경계
 
