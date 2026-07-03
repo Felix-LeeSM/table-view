@@ -334,6 +334,51 @@ describe("QuickOpen", () => {
     expect(screen.getByText("orders")).toBeInTheDocument();
   });
 
+  it("does not surface schema results for no-schema (MySQL) connections", async () => {
+    setupStores({
+      connections: [makeConn("m1", "MyApp", "mysql")], // no-schema
+      active: ["m1"],
+      schemas: { m1: [{ name: "appdb" }] },
+      tables: { "m1:appdb": [{ name: "orders", schema: "appdb" }] },
+    });
+
+    render(<QuickOpen />);
+    act(() => {
+      window.dispatchEvent(new CustomEvent("quick-open"));
+    });
+
+    // MySQL conflates schema with database and renders no focusable schema row,
+    // so "appdb" is not offered as a first-class result — only the table is.
+    expect(screen.queryByTestId("icon-schema")).toBeNull();
+    expect(screen.getByText("orders")).toBeInTheDocument();
+  });
+
+  it("scopes `.` to the database grouping on no-schema (MySQL) connections", async () => {
+    setupStores({
+      connections: [makeConn("m1", "MyApp", "mysql")], // no-schema
+      active: ["m1"],
+      tables: { "m1:appdb": [{ name: "orders", schema: "appdb" }] },
+    });
+
+    render(<QuickOpen />);
+    act(() => {
+      window.dispatchEvent(new CustomEvent("quick-open"));
+    });
+
+    const input = screen.getByPlaceholderText(/search tables/i);
+    // no-schema still schema-scopes `.` — the grouping is the database name.
+    await act(async () => {
+      fireEvent.change(input, { target: { value: "appdb.ord" } });
+    });
+    expect(screen.getAllByRole("option")).toHaveLength(1);
+    expect(screen.getByText("orders")).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.change(input, { target: { value: "other.ord" } });
+    });
+    expect(screen.queryAllByRole("option")).toHaveLength(0);
+  });
+
   it("Escape closes the modal", () => {
     setupStores({
       connections: [makeConn("c1", "Prod")],

@@ -52,6 +52,7 @@ export default function App() {
   const reopenLastClosedTab = useWorkspaceStore((s) => s.reopenLastClosedTab);
   const addTab = useWorkspaceStore((s) => s.addTab);
   const updateQuerySql = useWorkspaceStore((s) => s.updateQuerySql);
+  const setExpanded = useWorkspaceStore((s) => s.setExpanded);
   const themeMode = useThemeStore((s) => s.mode);
   const setThemeMode = useThemeStore((s) => s.setMode);
 
@@ -493,6 +494,29 @@ export default function App() {
     window.addEventListener("quickopen-function", handler);
     return () => window.removeEventListener("quickopen-function", handler);
   }, [addQueryTab, markConnectionUsed, updateQuerySql]);
+
+  // Quick Open schema result — reveal a schema in the sidebar tree. Handled at
+  // the app root (like navigate-table) so it is connectionId-agnostic: it
+  // expands the schema in the *target* connection's workspace regardless of
+  // which connection currently drives the mounted sidebar, instead of the
+  // per-tree listener silently dropping events for a non-driving connection.
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { connectionId, schema } = (
+        e as CustomEvent<{ connectionId: string; schema: string }>
+      ).detail;
+      const db = resolveActiveDb(connectionId);
+      // eslint-disable-next-line no-restricted-syntax
+      const ws = useWorkspaceStore.getState().workspaces[connectionId]?.[db];
+      const expanded = ws?.sidebar.expanded ?? [];
+      if (!expanded.includes(schema)) {
+        setExpanded(connectionId, db, [...expanded, schema]);
+      }
+      markConnectionUsed(connectionId);
+    };
+    window.addEventListener("reveal-schema", handler);
+    return () => window.removeEventListener("reveal-schema", handler);
+  }, [setExpanded, markConnectionUsed]);
 
   // Sprint 256 (ADR 0023, AC-256-02) — prod-only 1px window border
   // tracks the *active tab* (not focusedConnId) so a user pivoting from

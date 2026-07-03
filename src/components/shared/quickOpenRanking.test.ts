@@ -157,4 +157,77 @@ describe("rankQuickOpen — ordering & tiebreak", () => {
   it("drops non-matches", () => {
     expect(rankQuickOpen(items, "nonexistent")).toHaveLength(0);
   });
+
+  it("breaks equal scores by schema then connection", () => {
+    const bySchema = rankQuickOpen(
+      [
+        { nameLower: "orders", schemaLower: "b", connLower: "prod" },
+        { nameLower: "orders", schemaLower: "a", connLower: "prod" },
+      ],
+      "orders",
+    );
+    expect(bySchema.map((i) => i.schemaLower)).toEqual(["a", "b"]);
+
+    const byConn = rankQuickOpen(
+      [
+        { nameLower: "orders", schemaLower: "a", connLower: "z" },
+        { nameLower: "orders", schemaLower: "a", connLower: "a" },
+      ],
+      "orders",
+    );
+    expect(byConn.map((i) => i.connLower)).toEqual(["a", "z"]);
+  });
+});
+
+describe("scoreItem — `.` token edge cases", () => {
+  const item: RankableFields = {
+    nameLower: "orders",
+    schemaLower: "sales",
+    connLower: "prod",
+  };
+
+  it("treats an empty name part (`sales.`) as match-all within the schema", () => {
+    expect(scoreItem(item, "sales.")).toBeGreaterThan(0);
+    expect(scoreItem({ ...item, schemaLower: "hr" }, "sales.")).toBe(0);
+  });
+
+  it("treats an empty schema part (`.orders`) as schema-unconstrained", () => {
+    expect(scoreItem(item, ".orders")).toBeGreaterThan(0);
+    expect(scoreItem({ ...item, schemaLower: "anything" }, ".orders")).toBe(
+      scoreItem(item, ".orders"),
+    );
+  });
+
+  it("splits a multi-dot token at the first dot", () => {
+    // "a.b.c" → schema "a", name "b.c"
+    expect(
+      scoreItem(
+        { nameLower: "b.c", schemaLower: "a", connLower: "x" },
+        "a.b.c",
+      ),
+    ).toBeGreaterThan(0);
+    expect(
+      scoreItem(
+        { nameLower: "c", schemaLower: "a.b", connLower: "x" },
+        "a.b.c",
+      ),
+    ).toBe(0); // name "c" != "b.c"
+  });
+});
+
+describe("scoreItem — Unicode / non-ASCII input", () => {
+  const item: RankableFields = {
+    nameLower: "사용자_주문",
+    schemaLower: "공개",
+    connLower: "운영",
+  };
+
+  it("matches Hangul prefixes, word boundaries, and fuzzy subsequences", () => {
+    const prefix = scoreItem(item, "사용자"); // startsWith
+    const boundary = scoreItem(item, "주문"); // after "_"
+    const fuzzy = scoreItem(item, "사주"); // subsequence 사…주
+    expect(prefix).toBeGreaterThan(boundary);
+    expect(boundary).toBeGreaterThan(fuzzy);
+    expect(fuzzy).toBeGreaterThan(0);
+  });
 });

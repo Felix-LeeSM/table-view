@@ -35,6 +35,13 @@ export function resolveRdbTreeShape(dbType: DatabaseType): RdbTreeShape {
     case "sqlite":
     case "duckdb":
       return "flat";
+    // Non-relational types never reach the RDB sidebar (they route via
+    // `pickSidebar`), so this arm is a defensive fallback, not a real mapping.
+    // Callers that branch on the shape for non-tree behavior (e.g. QuickOpen
+    // offering schema results only for `with-schema`) must NOT treat this arm
+    // as "these DBs have SQL schemas" — it just avoids throwing on a type that
+    // won't hit an RDB tree. Keep such callers keyed off `paradigm`/store
+    // population, not this fallback.
     case "mongodb":
     case "redis":
     case "valkey":

@@ -8,11 +8,13 @@
  *
  * Tier ladder (best → worst), applied per field:
  *   exact > prefix > word-boundary (after _ / - / space / .) > substring
- * Field priority: name > schema > connection. A solid match in a
- * higher-priority field always outranks any solid match in a lower one — so the
- * fields live in non-overlapping score bands. Fuzzy (subsequence) is the last
- * resort: it only applies when no field has a solid match, and every fuzzy
- * score sits below every solid score. Equal scores break alphabetically.
+ * Field priority within a single token: name > schema > connection — a solid
+ * match in a higher-priority field outranks any solid match in a lower one via
+ * non-overlapping per-token score bands. Fuzzy (subsequence) is the last
+ * resort: only when no field has a solid match, and every fuzzy score sits
+ * below every solid score. A multi-token query AND-s its tokens and SUMS their
+ * per-token scores, so the band guarantee holds per token, not on the total.
+ * Equal totals break alphabetically (name, then schema, then connection).
  */
 
 /** Pre-lowercased searchable fields for one Quick Open entry. */
