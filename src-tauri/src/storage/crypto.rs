@@ -6,7 +6,7 @@ use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use bip39::{Language, Mnemonic};
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 #[cfg(any(test, debug_assertions))]
 use std::sync::Mutex;
 use zeroize::Zeroizing;
@@ -251,44 +251,100 @@ pub struct EncryptedEnvelope {
 }
 
 fn key_file_path() -> Result<PathBuf, AppError> {
-    let dir = dirs::data_local_dir()
-        .or_else(dirs::data_dir)
-        .ok_or_else(|| AppError::Storage("Cannot determine app data directory".into()))?;
-    let dir = dir.join("table-view");
-    fs::create_dir_all(&dir)?;
-    Ok(dir.join(".key"))
+    // Reuse the canonical data-dir resolver so the key lives next to
+    // connections.json and honors TABLE_VIEW_TEST_DATA_DIR (test isolation).
+    Ok(crate::storage::local::app_data_dir()?.join(".key"))
 }
 
 pub fn get_or_create_key() -> Result<Vec<u8>, AppError> {
     let path = key_file_path()?;
 
     if path.exists() {
-        let key_base64 = fs::read_to_string(&path)?;
-        let key = BASE64
-            .decode(key_base64.trim())
-            .map_err(|e| AppError::Encryption(format!("Failed to decode key: {}", e)))?;
-        if key.len() != 32 {
-            return Err(AppError::Encryption(
-                "Invalid key length, expected 32 bytes".into(),
-            ));
-        }
-        return Ok(key);
+        return read_key_file(&path);
     }
 
-    // Generate new key
-    let key = Aes256Gcm::generate_key(OsRng);
-    let key_bytes = key.as_slice().to_vec();
+    // Orphan guard (#1093): the master key is missing. If encrypted passwords
+    // still exist on disk, minting a fresh key would silently orphan every one
+    // of them (permanent, unrecoverable). Refuse instead of regenerating.
+    let dir = path
+        .parent()
+        .ok_or_else(|| AppError::Storage("Key path has no parent directory".into()))?;
+    if crate::storage::key_migration::data_has_password_ciphertext(dir)? {
+        return Err(AppError::Encryption(
+            "Master key (.key) is missing but encrypted passwords still exist — \
+             refusing to regenerate the key, which would permanently orphan every \
+             stored password. Restore the .key file from a backup."
+                .into(),
+        ));
+    }
 
-    let key_base64 = BASE64.encode(&key_bytes);
-    fs::write(&path, key_base64)?;
+    // Generate and publish a new key. `create_key_file` writes atomically
+    // (temp + fsync + exclusive link) so a crash never leaves a truncated key
+    // and two concurrent creators can't clobber each other. Re-reading the
+    // published file makes any racing creator converge on the single winner.
+    let key_bytes = Aes256Gcm::generate_key(OsRng).as_slice().to_vec();
+    create_key_file(&path, &key_bytes)?;
+    read_key_file(&path)
+}
 
-    #[cfg(unix)]
+/// Read and validate the base64-encoded 32-byte master key from `path`.
+fn read_key_file(path: &Path) -> Result<Vec<u8>, AppError> {
+    let key_base64 = fs::read_to_string(path)?;
+    let key = BASE64
+        .decode(key_base64.trim())
+        .map_err(|e| AppError::Encryption(format!("Failed to decode key: {}", e)))?;
+    if key.len() != 32 {
+        return Err(AppError::Encryption(
+            "Invalid key length, expected 32 bytes".into(),
+        ));
+    }
+    Ok(key)
+}
+
+/// Atomically create the master key file (#1093). Mirrors the connections.json
+/// sequence (temp + mode(0o600) at create + sync_all + rename) but writes raw
+/// base64 bytes rather than JSON, and publishes with an exclusive hard link so
+/// a concurrent creator can never overwrite the winner's key (which would
+/// orphan any ciphertext already encrypted under it). If the final path already
+/// exists, another instance won the race — that is success, and the caller
+/// re-reads the winning key.
+fn create_key_file(path: &Path, key_bytes: &[u8]) -> Result<(), AppError> {
+    let parent = path
+        .parent()
+        .ok_or_else(|| AppError::Storage("Key path has no parent directory".into()))?;
+    let key_base64 = BASE64.encode(key_bytes);
+
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.subsec_nanos())
+        .unwrap_or(0);
+    let tmp_path = parent.join(format!(".key.tmp.{}.{}", std::process::id(), nanos));
+
     {
-        use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(&path, fs::Permissions::from_mode(0o600))?;
+        let mut opts = fs::OpenOptions::new();
+        opts.create(true).truncate(true).write(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            opts.mode(0o600);
+        }
+        let mut f = opts.open(&tmp_path)?;
+        use std::io::Write;
+        f.write_all(key_base64.as_bytes())?;
+        f.sync_all()?;
     }
 
-    Ok(key_bytes)
+    // Publish exclusively: hard_link fails with AlreadyExists rather than
+    // overwriting, so the first writer's key is never clobbered. The link
+    // shares the temp file's inode (already 0600), so there is no permission
+    // window either. Clean up the temp entry regardless of outcome.
+    let publish = match fs::hard_link(&tmp_path, path) {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => Ok(()),
+        Err(e) => Err(AppError::from(e)),
+    };
+    let _ = fs::remove_file(&tmp_path);
+    publish
 }
 
 pub fn encrypt(plaintext: &str, key: &[u8]) -> Result<String, AppError> {
@@ -471,10 +527,129 @@ pub fn aead_decrypt_with_password(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
+    use tempfile::TempDir;
 
     /// Generate a deterministic 32-byte key for testing.
     fn test_key() -> Vec<u8> {
         vec![42u8; 32]
+    }
+
+    // -----------------------------------------------------------------
+    // #1093 — master key (.key) atomic write / race / orphan guard
+    // -----------------------------------------------------------------
+
+    fn setup_key_env() -> TempDir {
+        let dir = TempDir::new().unwrap();
+        std::env::set_var("TABLE_VIEW_TEST_DATA_DIR", dir.path());
+        dir
+    }
+
+    fn cleanup_key_env() {
+        std::env::remove_var("TABLE_VIEW_TEST_DATA_DIR");
+    }
+
+    /// (a) The `.key` file must land at 0600 — no world-readable window.
+    #[cfg(unix)]
+    #[test]
+    #[serial]
+    fn get_or_create_key_writes_file_with_0600_mode() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = setup_key_env();
+
+        let key = get_or_create_key().unwrap();
+        assert_eq!(key.len(), 32);
+
+        let meta = fs::metadata(dir.path().join(".key")).unwrap();
+        assert_eq!(
+            meta.permissions().mode() & 0o777,
+            0o600,
+            "master key file must be created 0600"
+        );
+
+        cleanup_key_env();
+    }
+
+    /// (c) An existing `.key` is re-read, returning the same bytes across calls.
+    #[test]
+    #[serial]
+    fn get_or_create_key_rereads_existing_key() {
+        let _dir = setup_key_env();
+
+        let first = get_or_create_key().unwrap();
+        let second = get_or_create_key().unwrap();
+        assert_eq!(
+            first, second,
+            "existing key must be re-read, not regenerated"
+        );
+
+        cleanup_key_env();
+    }
+
+    /// (b) Ciphertext present + `.key` gone → refuse to regenerate. Silently
+    /// minting a new key would orphan every stored password forever.
+    #[test]
+    #[serial]
+    fn get_or_create_key_refuses_when_ciphertext_present_but_key_missing() {
+        let dir = setup_key_env();
+
+        // Persist a real ciphertext under the current key, then delete the key.
+        let key = get_or_create_key().unwrap();
+        let enc = encrypt("stored-secret", &key).unwrap();
+        fs::write(
+            dir.path().join("connections.json"),
+            serde_json::json!({ "connections": [{ "id": "c1", "password": enc }] }).to_string(),
+        )
+        .unwrap();
+        fs::remove_file(dir.path().join(".key")).unwrap();
+
+        let err = get_or_create_key().unwrap_err();
+        assert!(
+            matches!(err, AppError::Encryption(_)),
+            "expected Encryption error, got {err:?}"
+        );
+        assert!(
+            !dir.path().join(".key").exists(),
+            "must NOT regenerate the key (would orphan existing ciphertext)"
+        );
+
+        cleanup_key_env();
+    }
+
+    /// The race-safety headline: a second `create_key_file` on an existing path
+    /// must NOT clobber the first writer's key (the losing concurrent creator
+    /// re-reads the winner). This exercises the exclusive-link `AlreadyExists`
+    /// branch deterministically — swap the `hard_link` back to `rename` and
+    /// this test fails, catching a clobber-bug regression. No env / no serial:
+    /// `create_key_file` takes an explicit path with no global state.
+    #[test]
+    fn create_key_file_second_write_preserves_first_key() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join(".key");
+        let key_a = vec![0xAAu8; 32];
+        let key_b = vec![0xBBu8; 32];
+
+        create_key_file(&path, &key_a).unwrap();
+        // A racing creator arriving second: succeeds (loser's create is not an
+        // error) but must leave the winner's key on disk untouched.
+        create_key_file(&path, &key_b).unwrap();
+
+        let got = read_key_file(&path).unwrap();
+        assert_eq!(
+            got, key_a,
+            "exclusive publish must preserve the first-written key, not clobber it"
+        );
+
+        let leftovers: Vec<String> = fs::read_dir(dir.path())
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .filter(|n| n.starts_with(".key.tmp."))
+            .collect();
+        assert!(
+            leftovers.is_empty(),
+            "temp files must be cleaned up regardless of publish outcome: {leftovers:?}"
+        );
     }
 
     #[test]
