@@ -18,7 +18,7 @@ use crate::error::AppError;
 use crate::storage::corrupt_recovery;
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use sqlx::SqlitePool;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::str::FromStr;
 use std::sync::atomic::Ordering;
 use tracing::{info, warn};
@@ -43,6 +43,59 @@ pub fn app_data_dir() -> Result<PathBuf, AppError> {
 /// SQLite DB 파일 경로. Phase 1 부터 영구 위치.
 pub fn db_path() -> Result<PathBuf, AppError> {
     Ok(app_data_dir()?.join("state.db"))
+}
+
+/// 렌더러가 지정한, Tauri command 가 파일로 쓸 대상 경로를 검증한다. 상대경로
+/// (must be absolute) 와 내부 app SQLite state DB 로 resolve 되는 경로를 거부 —
+/// 침해된 렌더러가 export target 을 빌미로 내부 state 를 overwrite/삭제하지
+/// 못하게 막는다. Issue #1094. sqlite `create_database_file` 가 쓰는
+/// `reject_internal_app_state_path` 와 같은 가드를 재사용한다.
+pub fn validate_export_target_path(path: &Path) -> Result<(), AppError> {
+    if !path.is_absolute() {
+        return Err(AppError::Validation(
+            "Export target path must be absolute".into(),
+        ));
+    }
+    reject_internal_app_state_path(path)
+}
+
+/// 인자 경로가 내부 app SQLite state DB (`db_path()`) 로 resolve 되면 거부.
+/// direct / normalized (`..`·`.` 정리) / canonical (symlink 해소) 세 방식으로
+/// 비교한다. sqlite connection.rs 와 commands/export 가 공유.
+pub fn reject_internal_app_state_path(path: &Path) -> Result<(), AppError> {
+    let internal = db_path()?;
+    let direct_match = path == internal.as_path();
+    let normalized_match = normalize_absolute_path(path) == normalize_absolute_path(&internal);
+    let canonical_match = match (
+        std::fs::canonicalize(path),
+        std::fs::canonicalize(&internal),
+    ) {
+        (Ok(candidate), Ok(internal)) => candidate == internal,
+        _ => false,
+    };
+
+    if direct_match || normalized_match || canonical_match {
+        return Err(AppError::Validation(
+            "Path cannot target internal app SQLite state".into(),
+        ));
+    }
+    Ok(())
+}
+
+fn normalize_absolute_path(path: &Path) -> PathBuf {
+    let mut normalized = PathBuf::new();
+    for component in path.components() {
+        match component {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                normalized.pop();
+            }
+            Component::Prefix(prefix) => normalized.push(prefix.as_os_str()),
+            Component::RootDir => normalized.push(component.as_os_str()),
+            Component::Normal(segment) => normalized.push(segment),
+        }
+    }
+    normalized
 }
 
 /// SQLite pool 을 열고 migration 을 적용. corrupt 파일은 자동으로 quarantine
