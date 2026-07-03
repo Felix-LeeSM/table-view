@@ -13,8 +13,11 @@ import { isEditableTarget } from "@/lib/keyboard/isEditableTarget";
 //   - `?` (Shift+/) → open. Suppressed when focus is inside an
 //     INPUT/TEXTAREA/SELECT/contenteditable element so the user can still
 //     type "?" into a SQL editor or search box.
-//   - Cmd+/ / Ctrl+/ → open unconditionally. Modifier combos cannot be
-//     produced by typing characters into a text field.
+//   - Cmd+/ / Ctrl+/ → open, but suppressed when focus is inside an
+//     editable surface. CodeMirror binds Mod-/ to toggleComment and only
+//     calls preventDefault (not stopPropagation), so the keystroke still
+//     bubbles to document; the guard keeps comment-toggle from also opening
+//     the cheatsheet (#1224).
 //   - Esc / outside-click → handled by the underlying `Dialog` primitive.
 //
 // Read-only: `PreviewDialog` *without* `onConfirm` so the footer
@@ -97,8 +100,12 @@ export default function ShortcutCheatsheet() {
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      // Cmd+/ or Ctrl+/ — modifier combo, no editable-target guard needed.
+      // Cmd+/ or Ctrl+/. Skip when focus is in a text-entry element:
+      // CodeMirror binds Mod-/ to toggleComment and only preventDefaults, so
+      // the keystroke bubbles to document — without this guard the comment
+      // toggle would also open the cheatsheet (#1224).
       if ((event.metaKey || event.ctrlKey) && event.key === "/") {
+        if (isEditableTarget(event.target)) return;
         event.preventDefault();
         setSearch("");
         setOpen(true);

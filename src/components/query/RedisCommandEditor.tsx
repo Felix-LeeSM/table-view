@@ -8,7 +8,7 @@ import {
   highlightActiveLine,
   placeholder,
 } from "@codemirror/view";
-import { defaultKeymap } from "@codemirror/commands";
+import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import {
   syntaxHighlighting,
   defaultHighlightStyle,
@@ -95,6 +95,8 @@ const RedisCommandEditor = forwardRef<
         lineNumbers(),
         highlightActiveLine(),
         bracketMatching(),
+        // #1225 — undo/redo history so Cmd+Z reverts edits (incl. paste).
+        history(),
         placeholder("GET key"),
         completionCompartment.current.of(
           buildRedisCommandExtensions(
@@ -127,6 +129,8 @@ const RedisCommandEditor = forwardRef<
             run: (view) => acceptCompletion(view),
           },
           ...defaultKeymap,
+          // #1225 — Mod-z / Mod-y undo/redo (defaultKeymap omits these).
+          ...historyKeymap,
         ]),
         EditorView.updateListener.of((update) => {
           if (!update.docChanged) return;
