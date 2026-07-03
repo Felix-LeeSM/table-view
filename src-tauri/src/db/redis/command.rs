@@ -30,6 +30,7 @@ pub(super) async fn execute_command(
     let start = Instant::now();
     let result = dispatch_command(adapter, command, cancel).await?;
     Ok(QueryResult {
+        truncated: false,
         execution_time_ms: start.elapsed().as_millis() as u64,
         ..result
     })

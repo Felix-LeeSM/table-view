@@ -91,6 +91,7 @@ impl MssqlAdapter {
                     }
 
                     Ok(QueryResult {
+                        truncated: false,
                         total_count: rows.len() as i64,
                         columns,
                         rows,
@@ -105,6 +106,7 @@ impl MssqlAdapter {
                         .map_err(|err| mssql_query_error("SQL Server DML failed", err))?
                         .total();
                     Ok(QueryResult {
+                        truncated: false,
                         columns: Vec::new(),
                         rows: Vec::new(),
                         total_count: rows_affected as i64,
@@ -304,6 +306,7 @@ impl MssqlAdapter {
                     Ok(result) => {
                         let rows_affected = result.total();
                         results.push(QueryResult {
+                            truncated: false,
                             columns: Vec::new(),
                             rows: Vec::new(),
                             total_count: rows_affected as i64,

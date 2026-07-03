@@ -214,6 +214,7 @@ fn normalize_select_result(
         .collect::<Vec<Vec<serde_json::Value>>>();
 
     Ok(QueryResult {
+        truncated: false,
         total_count: rows.len() as i64,
         columns,
         rows,
@@ -258,6 +259,7 @@ fn ensure_select_fully_fetched(result: &OracleQueryResult) -> Result<(), AppErro
 
 fn normalize_dml_result(rows_affected: u64, execution_time_ms: u64) -> QueryResult {
     QueryResult {
+        truncated: false,
         columns: Vec::new(),
         rows: Vec::new(),
         total_count: rows_affected as i64,

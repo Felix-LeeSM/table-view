@@ -165,6 +165,7 @@ impl SqliteAdapter {
                         .collect::<Vec<Vec<serde_json::Value>>>();
                     let total_count = json_rows.len() as i64;
                     Ok(QueryResult {
+                        truncated: false,
                         columns,
                         rows: json_rows,
                         total_count,
@@ -179,6 +180,7 @@ impl SqliteAdapter {
                         .map_err(|e| AppError::Database(e.to_string()))?;
                     let rows_affected = result.rows_affected();
                     Ok(QueryResult {
+                        truncated: false,
                         columns: Vec::new(),
                         rows: Vec::new(),
                         total_count: rows_affected as i64,
@@ -192,6 +194,7 @@ impl SqliteAdapter {
                         .await
                         .map_err(|e| AppError::Database(e.to_string()))?;
                     Ok(QueryResult {
+                        truncated: false,
                         columns: Vec::new(),
                         rows: Vec::new(),
                         total_count: 0,

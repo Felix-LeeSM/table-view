@@ -318,6 +318,7 @@ impl MysqlAdapter {
                     let execution_time_ms = start.elapsed().as_millis() as u64;
 
                     Ok::<QueryResult, AppError>(QueryResult {
+                        truncated: false,
                         columns,
                         rows: json_rows,
                         total_count,
@@ -346,6 +347,7 @@ impl MysqlAdapter {
                     let rows_affected = result.rows_affected();
                     let execution_time_ms = start.elapsed().as_millis() as u64;
                     Ok::<QueryResult, AppError>(QueryResult {
+                        truncated: false,
                         columns: Vec::new(),
                         rows: Vec::new(),
                         total_count: rows_affected as i64,
@@ -372,6 +374,7 @@ impl MysqlAdapter {
                         .map_err(|e| AppError::Database(e.to_string()))?;
                     let execution_time_ms = start.elapsed().as_millis() as u64;
                     Ok::<QueryResult, AppError>(QueryResult {
+                        truncated: false,
                         columns: Vec::new(),
                         rows: Vec::new(),
                         total_count: 0,
@@ -800,6 +803,7 @@ impl MysqlAdapter {
                             return Err(err);
                         }
                         results.push(QueryResult {
+                            truncated: false,
                             columns: Vec::new(),
                             rows: Vec::new(),
                             total_count: rows_affected as i64,
@@ -879,6 +883,7 @@ impl MysqlAdapter {
                     Ok(res) => {
                         let rows_affected = res.rows_affected();
                         results.push(QueryResult {
+                            truncated: false,
                             columns: Vec::new(),
                             rows: Vec::new(),
                             total_count: rows_affected as i64,

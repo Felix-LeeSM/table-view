@@ -92,6 +92,7 @@ fn active_adapter_as_rdb_rejects_non_rdb_with_unsupported() {
         ) -> BoxFuture<'a, Result<DocumentQueryResult, AppError>> {
             Box::pin(async {
                 Ok(DocumentQueryResult {
+                    truncated: false,
                     columns: Vec::new(),
                     rows: Vec::new(),
                     raw_documents: Vec::new(),
@@ -109,6 +110,7 @@ fn active_adapter_as_rdb_rejects_non_rdb_with_unsupported() {
         ) -> BoxFuture<'a, Result<DocumentQueryResult, AppError>> {
             Box::pin(async {
                 Ok(DocumentQueryResult {
+                    truncated: false,
                     columns: Vec::new(),
                     rows: Vec::new(),
                     raw_documents: Vec::new(),
@@ -444,6 +446,7 @@ impl RdbAdapter for FakeCancellableRdb {
     ) -> BoxFuture<'a, Result<RdbQueryResult, AppError>> {
         Box::pin(async {
             Ok(RdbQueryResult {
+                truncated: false,
                 columns: Vec::new(),
                 rows: Vec::new(),
                 total_count: 0,
@@ -692,6 +695,7 @@ impl DocumentAdapter for FakeCancellableDocument {
             let work = async {
                 tokio::time::sleep(Duration::from_secs(60)).await;
                 Ok(DocumentQueryResult {
+                    truncated: false,
                     columns: Vec::new(),
                     rows: Vec::new(),
                     raw_documents: Vec::new(),
@@ -719,6 +723,7 @@ impl DocumentAdapter for FakeCancellableDocument {
             let work = async {
                 tokio::time::sleep(Duration::from_secs(60)).await;
                 Ok(DocumentQueryResult {
+                    truncated: false,
                     columns: Vec::new(),
                     rows: Vec::new(),
                     raw_documents: Vec::new(),
@@ -1170,6 +1175,7 @@ impl RdbAdapter for FastFakeRdb {
     ) -> BoxFuture<'a, Result<RdbQueryResult, AppError>> {
         Box::pin(async {
             Ok(RdbQueryResult {
+                truncated: false,
                 columns: Vec::new(),
                 rows: Vec::new(),
                 total_count: 0,
@@ -1629,6 +1635,7 @@ async fn test_rdb_default_current_database_empty_first_row_returns_no_columns_er
     let stub = CurrentDbStub {
         response: Box::new(|| {
             Ok(RdbQueryResult {
+                truncated: false,
                 columns: Vec::new(),
                 rows: vec![Vec::new()],
                 total_count: 0,
@@ -1651,6 +1658,7 @@ async fn test_rdb_default_current_database_string_val_returns_some() {
     let stub = CurrentDbStub {
         response: Box::new(|| {
             Ok(RdbQueryResult {
+                truncated: false,
                 columns: Vec::new(),
                 rows: vec![vec![serde_json::json!("mydb")]],
                 total_count: 0,
@@ -1670,6 +1678,7 @@ async fn test_rdb_default_current_database_non_string_val_returns_none() {
     let stub = CurrentDbStub {
         response: Box::new(|| {
             Ok(RdbQueryResult {
+                truncated: false,
                 columns: Vec::new(),
                 rows: vec![vec![serde_json::json!(42)]],
                 total_count: 0,

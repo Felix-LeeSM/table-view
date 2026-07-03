@@ -119,6 +119,10 @@ pub struct DocumentQueryResult {
     pub raw_documents: Vec<bson::Document>,
     pub total_count: i64,
     pub execution_time_ms: u64,
+    /// Issue #1231 — `true` when the find/aggregate cursor hit the raw-query
+    /// row cap and documents beyond the cap were dropped at fetch time.
+    #[serde(default)]
+    pub truncated: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -180,6 +184,7 @@ mod wire_shape_tests {
     #[test]
     fn document_query_result_serializes_public_keys_as_camel_case() {
         let result = DocumentQueryResult {
+            truncated: false,
             columns: vec![QueryColumn {
                 name: "_id".into(),
                 data_type: "ObjectId".into(),
@@ -229,6 +234,7 @@ mod wire_shape_tests {
     #[test]
     fn document_result_envelope_wraps_document_query_result() {
         let result = DocumentQueryResult {
+            truncated: false,
             columns: vec![QueryColumn {
                 name: "_id".into(),
                 data_type: "ObjectId".into(),

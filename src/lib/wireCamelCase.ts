@@ -139,6 +139,9 @@ export function normalizeQueryResult(value: unknown): QueryResult {
     executionTimeMs: numberOr(pick(r, "executionTimeMs", "execution_time_ms")),
     queryType: (pick(r, "queryType", "query_type") ?? "select") as QueryType,
   };
+  if (r.truncated === true) {
+    result.truncated = true;
+  }
   if (
     r.resultKind === "grid" ||
     r.resultKind === "scalar" ||
@@ -167,6 +170,7 @@ export function normalizeDocumentQueryResult(
       : [],
     totalCount: numberOr(pick(r, "totalCount", "total_count")),
     executionTimeMs: numberOr(pick(r, "executionTimeMs", "execution_time_ms")),
+    truncated: r.truncated === true,
   };
 }
 

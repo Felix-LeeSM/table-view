@@ -589,6 +589,7 @@ fn execute_select_query(
     let total_count = rows.len() as i64;
 
     Ok(QueryResult {
+        truncated: false,
         columns,
         rows,
         total_count,

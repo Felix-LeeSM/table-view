@@ -819,6 +819,7 @@ async fn run_schema_dump_writes_insert_lines_for_streamed_rows() {
         ) -> BoxFuture<'a, Result<RdbQueryResult, AppError>> {
             Box::pin(async {
                 Ok(RdbQueryResult {
+                    truncated: false,
                     columns: Vec::new(),
                     rows: Vec::new(),
                     total_count: 0,

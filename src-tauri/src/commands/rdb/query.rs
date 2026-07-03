@@ -811,6 +811,7 @@ mod tests {
         let mut s = StubRdbAdapter::default();
         s.execute_sql_fn = Some(Box::new(|sql: &str| {
             Ok(RdbQueryResult {
+                truncated: false,
                 columns: vec![QueryColumn {
                     name: "echo".into(),
                     data_type: "text".into(),
@@ -884,6 +885,7 @@ mod tests {
 
         fn empty_result() -> RdbQueryResult {
             RdbQueryResult {
+                truncated: false,
                 columns: Vec::new(),
                 rows: Vec::new(),
                 total_count: 0,
@@ -978,6 +980,7 @@ mod tests {
         s.current_database_fn = Some(Box::new(|| Ok(Some("db1".into()))));
         s.execute_sql_fn = Some(Box::new(|sql: &str| {
             Ok(RdbQueryResult {
+                truncated: false,
                 columns: vec![QueryColumn {
                     name: "echo".into(),
                     data_type: "text".into(),
@@ -1005,6 +1008,7 @@ mod tests {
         s.current_database_fn = Some(Box::new(|| Ok(Some("XEPDB1".into()))));
         s.execute_sql_fn = Some(Box::new(|sql: &str| {
             Ok(RdbQueryResult {
+                truncated: false,
                 columns: vec![QueryColumn {
                     name: "oracle".into(),
                     data_type: "text".into(),
@@ -1038,6 +1042,7 @@ mod tests {
         }));
         s.execute_sql_fn = Some(Box::new(|_| {
             Ok(RdbQueryResult {
+                truncated: false,
                 columns: vec![],
                 rows: vec![],
                 total_count: 0,
@@ -1178,6 +1183,7 @@ mod tests {
             Ok(stmts
                 .iter()
                 .map(|sql| RdbQueryResult {
+                    truncated: false,
                     columns: vec![QueryColumn {
                         name: "s".into(),
                         data_type: "text".into(),
@@ -1233,6 +1239,7 @@ mod tests {
             Ok(stmts
                 .iter()
                 .map(|_| RdbQueryResult {
+                    truncated: false,
                     columns: vec![],
                     rows: vec![],
                     total_count: 0,
@@ -1260,6 +1267,7 @@ mod tests {
             Ok(stmts
                 .iter()
                 .map(|sql| RdbQueryResult {
+                    truncated: false,
                     columns: Vec::new(),
                     rows: vec![vec![serde_json::Value::String(sql.clone())]],
                     total_count: 1,
@@ -1335,6 +1343,7 @@ mod tests {
         };
         s.execute_sql_fn = Some(Box::new(|_| {
             Ok(RdbQueryResult {
+                truncated: false,
                 columns: vec![],
                 rows: vec![],
                 total_count: 0,
@@ -1478,6 +1487,7 @@ mod tests {
             Ok(stmts
                 .iter()
                 .map(|_| RdbQueryResult {
+                    truncated: false,
                     columns: Vec::new(),
                     rows: Vec::new(),
                     total_count: 3,
@@ -1586,6 +1596,7 @@ mod tests {
             Ok(stmts
                 .iter()
                 .map(|_| RdbQueryResult {
+                    truncated: false,
                     columns: Vec::new(),
                     rows: Vec::new(),
                     total_count: 0,
@@ -1614,6 +1625,7 @@ mod tests {
             Ok(stmts
                 .iter()
                 .map(|_| RdbQueryResult {
+                    truncated: false,
                     columns: Vec::new(),
                     rows: Vec::new(),
                     total_count: 1,

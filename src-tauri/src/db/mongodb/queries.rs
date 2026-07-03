@@ -100,6 +100,7 @@ impl MongoAdapter {
         let execution_time_ms = elapsed.as_millis().min(u128::from(u64::MAX)) as u64;
 
         Ok(DocumentQueryResult {
+            truncated: false,
             columns,
             rows,
             raw_documents,
@@ -261,6 +262,7 @@ impl MongoAdapter {
         let execution_time_ms = elapsed.as_millis().min(u128::from(u64::MAX)) as u64;
 
         Ok(DocumentQueryResult {
+            truncated: false,
             columns,
             rows,
             raw_documents,

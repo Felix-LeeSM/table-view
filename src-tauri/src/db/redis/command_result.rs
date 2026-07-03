@@ -5,6 +5,7 @@ use crate::models::{ColumnCategory, QueryColumn, QueryResult, QueryType};
 
 pub(super) fn rows_result(columns: &[QueryColumn], rows: Vec<Vec<Value>>) -> QueryResult {
     QueryResult {
+        truncated: false,
         columns: columns.to_vec(),
         total_count: rows.len() as i64,
         rows,
@@ -19,6 +20,7 @@ pub(super) fn single_row(columns: &[QueryColumn], row: Vec<Value>) -> QueryResul
 
 pub(super) fn mutation_result(key: &str, command: &str, changed: u64) -> QueryResult {
     QueryResult {
+        truncated: false,
         columns: vec![text_col("key"), text_col("command"), int_col("changed")],
         rows: vec![vec![json!(key), json!(command), json!(changed)]],
         total_count: changed as i64,

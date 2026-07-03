@@ -458,6 +458,7 @@ impl PostgresAdapter {
                     let execution_time_ms = start.elapsed().as_millis() as u64;
 
                     Ok::<QueryResult, AppError>(QueryResult {
+                        truncated: false,
                         columns,
                         rows: json_rows,
                         total_count,
@@ -485,6 +486,7 @@ impl PostgresAdapter {
                     let execution_time_ms = start.elapsed().as_millis() as u64;
 
                     Ok::<QueryResult, AppError>(QueryResult {
+                        truncated: false,
                         columns: Vec::new(),
                         rows: Vec::new(),
                         total_count: rows_affected as i64,
@@ -510,6 +512,7 @@ impl PostgresAdapter {
                     let execution_time_ms = start.elapsed().as_millis() as u64;
 
                     Ok::<QueryResult, AppError>(QueryResult {
+                        truncated: false,
                         columns: Vec::new(),
                         rows: Vec::new(),
                         total_count: 0,
@@ -590,6 +593,7 @@ impl PostgresAdapter {
                             return Err(err);
                         }
                         results.push(QueryResult {
+                            truncated: false,
                             columns: Vec::new(),
                             rows: Vec::new(),
                             total_count: rows_affected as i64,
@@ -676,6 +680,7 @@ impl PostgresAdapter {
                     Ok(res) => {
                         let rows_affected = res.rows_affected();
                         results.push(QueryResult {
+                            truncated: false,
                             columns: Vec::new(),
                             rows: Vec::new(),
                             total_count: rows_affected as i64,

@@ -67,6 +67,13 @@ export interface QueryResult {
    * non-write result.
    */
   writeSummary?: WriteSummaryData;
+  /**
+   * Issue #1231 — `true` when the SELECT result hit the raw-query row cap and
+   * rows beyond the cap were dropped at fetch time on the backend. Drives the
+   * truncation banner in `QueryResultGrid`. Absent / `false` for DML/DDL and
+   * uncapped results.
+   */
+  truncated?: boolean;
 }
 
 /**
@@ -186,6 +193,7 @@ export function toCompatibleQueryResult(
           executionTimeMs: envelope.documentResult.executionTimeMs,
           queryType: "select",
           resultUnit: "document",
+          truncated: envelope.documentResult.truncated === true,
         },
       };
     case "searchHits":
