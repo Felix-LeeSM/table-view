@@ -168,6 +168,18 @@ pub struct AppState {
     /// Keyed by `(connection_id, tab_id)` so the same tab id can coexist
     /// across two different connections (codex 7차 #4 — connection scope).
     pub tab_affinity: Mutex<HashMap<(String, String), TabAffinity>>,
+    /// Issue #1230 — per-query server pid for native cancel.
+    ///
+    /// `execute_query` records the executing backend's server-side pid
+    /// (pg `pg_backend_pid()` / mysql `CONNECTION_ID()`) here, keyed by the
+    /// caller's unique `query_id`, as soon as the query pins a connection —
+    /// i.e. while a long query is still running. The frontend fetches it via
+    /// `get_query_server_pid(query_id)` and passes it to
+    /// `cancel_query_native`, which finally makes the pre-built
+    /// `pg_cancel_backend` / `KILL QUERY` path reachable for long queries
+    /// (`pg_sleep`, big JOINs) the cooperative token can't abort. The entry
+    /// is removed when the query finishes, so only in-flight queries appear.
+    pub query_server_pids: Mutex<HashMap<String, i64>>,
     /// Sprint 359 (Q5.4) — per-connection **introspection pool** selector.
     ///
     /// Sidebar / autocomplete / prefetch borrow idle slots from this map
@@ -210,6 +222,7 @@ impl AppState {
             keep_alive_handles: Mutex::new(HashMap::new()),
             query_tokens: Mutex::new(HashMap::new()),
             tab_affinity: Mutex::new(HashMap::new()),
+            query_server_pids: Mutex::new(HashMap::new()),
             introspection_pools: Mutex::new(HashMap::new()),
             session_id: uuid::Uuid::new_v4().to_string(),
         }

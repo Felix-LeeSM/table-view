@@ -1,6 +1,6 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useWorkspaceStore } from "@stores/workspaceStore";
-import { cancelQuery } from "@lib/tauri";
+import { cancelQuery, cancelQueryNative, getQueryServerPid } from "@lib/tauri";
 import { toast } from "@lib/runtime/toast";
 import type { QueryTab } from "@stores/workspaceStore";
 import { createMongoWriteDispatchers } from "@features/query";
@@ -27,6 +27,29 @@ import { logger } from "@lib/logger";
 
 export interface UseQueryExecutionArgs {
   tab: QueryTab;
+}
+
+// Issue #1230 — read the native server pid off the *live* running tab. The
+// pid is recorded a beat after the query starts (status stays "running"), so
+// the Cancel callback's closed-over `tab` is stale; the store is the source
+// of truth. Walks the connection's workspaces because the tab may have moved
+// db slots mid-flight (mirrors `findLiveIdleTab`).
+function readRunningServerPid(
+  connectionId: string,
+  tabId: string,
+  queryId: string,
+): number | undefined {
+  const conns = useWorkspaceStore.getState().workspaces[connectionId];
+  if (!conns) return undefined;
+  for (const ws of Object.values(conns)) {
+    const found = ws?.tabs.find((t) => t.id === tabId);
+    if (!found || found.type !== "query") continue;
+    const qs = found.queryState;
+    if (qs.status === "running" && qs.queryId === queryId) {
+      return qs.serverPid;
+    }
+  }
+  return undefined;
 }
 
 export interface QueryExecution {
@@ -77,9 +100,11 @@ export function useQueryExecution({
     workspaceDb,
     dbType,
     canCancelQuery,
+    canNativeCancel,
     canExecuteQuery,
     queryProductLabel,
     updateQueryState,
+    setRunningQueryServerPid,
     completeQuery,
     completeSearchQuery,
     failQuery,
@@ -374,6 +399,32 @@ export function useQueryExecution({
     pendingWriteRunnerRef.current = null;
   }, []);
 
+  // Issue #1230 — once a native-cancel DBMS enters the running state, fetch
+  // the executing backend's server pid and stash it on the running tab so the
+  // Cancel button can issue a server-side abort. The backend fetch resolves
+  // while the query is still in flight (that is the point — long queries), and
+  // is a no-op fallback (null) for adapters without a native path.
+  const runningQueryId =
+    tab.queryState.status === "running" ? tab.queryState.queryId : null;
+  useEffect(() => {
+    if (!runningQueryId || !canNativeCancel) return;
+    let active = true;
+    void (async () => {
+      try {
+        const pid = await getQueryServerPid(runningQueryId);
+        if (active && pid != null) {
+          setRunningQueryServerPid(tab.id, runningQueryId, pid);
+        }
+      } catch {
+        // pid fetch failed — keep cooperative cancel, no native pid. Never
+        // let a pid-lookup fault surface to the user.
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [runningQueryId, canNativeCancel, setRunningQueryServerPid, tab.id]);
+
   const mongoWriteDispatchers = useMemo(
     () =>
       createMongoWriteDispatchers({
@@ -393,8 +444,33 @@ export function useQueryExecution({
     // If already running, cancel
     if (tab.queryState.status === "running") {
       if (!canCancelQuery) return;
+      const { queryId } = tab.queryState;
+      // Issue #1230 — for native-cancel DBMS, fire the server-side abort
+      // (pg_cancel_backend / KILL QUERY) FIRST so a long JOIN / `pg_sleep`
+      // that the cooperative token can't reach still stops. The pid is read
+      // live from the store (it is recorded after this closure captured
+      // `tab`). Then always fire the cooperative token too — double-firing is
+      // harmless (once the server kills the backend, the token is a no-op),
+      // and it covers the race where the pid hasn't arrived yet.
+      if (canNativeCancel) {
+        const serverPid = readRunningServerPid(
+          tab.connectionId,
+          tab.id,
+          queryId,
+        );
+        if (serverPid != null) {
+          try {
+            await cancelQueryNative(tab.connectionId, serverPid);
+          } catch (err) {
+            logger.warn(
+              "cancelQueryNative failed (likely already completed):",
+              err,
+            );
+          }
+        }
+      }
       try {
-        await cancelQuery(tab.queryState.queryId);
+        await cancelQuery(queryId);
       } catch (err) {
         // Most cancel failures are benign races: the query finished between
         // the user clicking Cancel and the IPC dispatch (backend returns
@@ -483,6 +559,7 @@ export function useQueryExecution({
     tab.collection,
     workspaceDb,
     canCancelQuery,
+    canNativeCancel,
     canExecuteQuery,
     dbType,
     fileAnalyticsSources,

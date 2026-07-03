@@ -22,6 +22,7 @@ type QuerySlice = Pick<
   | "addQueryTab"
   | "updateQuerySql"
   | "updateQueryState"
+  | "setRunningQueryServerPid"
   | "setQueryTabDatabase"
   | "setQueryMode"
   | "completeQuery"
@@ -153,6 +154,23 @@ export function createQuerySlice(
             return { ...t, queryState };
           });
           return changed ? { ...ws, tabs } : ws;
+        });
+        return next ? { workspaces: next } : state;
+      });
+    },
+
+    // Issue #1230 — record the native server pid on a still-running query.
+    // Guarded by `patchRunningQueryTab` so a late pid arrival (the fetch
+    // resolves a beat after the query started) can never resurrect a tab that
+    // already completed/failed/was cancelled, and never targets a different
+    // run (the queryId must still match).
+    setRunningQueryServerPid: (connId, db, tabId, queryId, serverPid) => {
+      set((state) => {
+        const next = patchExistingWorkspace(state, connId, db, (ws) => {
+          return patchRunningQueryTab(ws, tabId, queryId, (tab) => ({
+            ...tab,
+            queryState: { status: "running" as const, queryId, serverPid },
+          }));
         });
         return next ? { workspaces: next } : state;
       });
