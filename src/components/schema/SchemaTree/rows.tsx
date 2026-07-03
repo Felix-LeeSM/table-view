@@ -86,6 +86,10 @@ export interface SchemaTreeRowsContext {
   // 3-way indent class (PG `with-schema` → deepest, MySQL `no-schema`
   // → one step less, SQLite `flat` → root level).
   treeShape: RdbTreeShape;
+  // #1217 — true while the top-level global filter is active. The eager
+  // renderer uses it to drop the per-schema search input and empty
+  // categories (the flat/virtualized path handles this in `getVisibleRows`).
+  globalFilterActive: boolean;
   toggleCategory: (schemaName: string, categoryKey: CategoryKey) => void;
   setSelectedNodeId: (id: string | null) => void;
   setTableSearch: Dispatch<SetStateAction<Record<string, string>>>;
@@ -171,8 +175,26 @@ export function renderSchemaRow(
             <Folder size={13} className="shrink-0 text-muted-foreground" />
           )}
           <span className="truncate">{row.schemaName}</span>
+          {/* #1217 — table-count badge; readable at a glance even while the
+              schema is collapsed. */}
+          {row.tableCount > 0 && (
+            <span
+              className="ml-auto shrink-0 text-3xs tabular-nums text-muted-foreground"
+              aria-label={ctx.t("schemaTableCountAria", {
+                count: row.tableCount,
+              })}
+            >
+              {row.tableCount}
+            </span>
+          )}
           {row.isLoadingTables && (
-            <Loader2 size={10} className="ml-auto animate-spin" />
+            <Loader2
+              size={10}
+              className={cn(
+                "shrink-0 animate-spin",
+                row.tableCount > 0 ? "ml-1" : "ml-auto",
+              )}
+            />
           )}
         </button>
       </ContextMenuTrigger>

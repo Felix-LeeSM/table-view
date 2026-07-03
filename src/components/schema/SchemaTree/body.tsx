@@ -158,6 +158,7 @@ function SchemaSection(props: SchemaSectionProps) {
             isExpanded,
             isLoadingTables,
             isSelected: isSchemaSelected,
+            tableCount: schemaTables.length,
           },
           ctx,
         )}
@@ -344,6 +345,11 @@ function CategorySection({
     searchValue: tableSearch[schemaName] ?? "",
   });
 
+  // #1217 — during a global filter the caller has pre-narrowed the items;
+  // drop empty categories and force the rest open so matches are visible.
+  if (ctx.globalFilterActive && items.length === 0) return null;
+  const effectiveExpanded = ctx.globalFilterActive ? true : catExpanded;
+
   return (
     <div>
       {renderCategoryRow(
@@ -352,14 +358,14 @@ function CategorySection({
           key: categoryId,
           schemaName,
           category: cat,
-          isExpanded: catExpanded,
+          isExpanded: effectiveExpanded,
           isSelected: selectedNodeId === categoryId,
           itemCount: items.length,
         },
         ctx,
       )}
 
-      {catExpanded && (
+      {effectiveExpanded && (
         // Cap dense metadata lists so one schema doesn't push other
         // categories out of the sidebar.
         <div
@@ -382,6 +388,7 @@ function CategorySection({
         >
           {cat.key === "tables" &&
             unfilteredItems.length > 0 &&
+            !ctx.globalFilterActive &&
             renderSearchRow(
               {
                 kind: "search",

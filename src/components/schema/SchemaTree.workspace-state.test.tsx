@@ -45,19 +45,18 @@ describe("SchemaTree — workspace-keyed sidebar state (Slice B)", () => {
       render(<SchemaTree connectionId="conn1" />);
     });
 
-    // 1) Mount 시 auto-expand-all-schemas 효과로 두 스키마 모두 expanded
-    //    가 store 에 기록되어야 한다.
+    // 1) #1217 — mount 시 첫 스키마만 seed expanded 로 기록.
     const initialDb1 =
       useWorkspaceStore.getState().workspaces.conn1?.db1?.sidebar.expanded;
-    expect(initialDb1).toEqual(["public", "analytics"]);
+    expect(initialDb1).toEqual(["public"]);
 
-    // 2) `public` 스키마를 collapse — store 가 그것만 빼고 유지.
+    // 2) `public` 스키마를 collapse — store 가 그것만 빼고 유지 (빈 배열).
     await act(async () => {
       fireEvent.click(screen.getByLabelText("public schema"));
     });
     expect(
       useWorkspaceStore.getState().workspaces.conn1!.db1!.sidebar.expanded,
-    ).toEqual(["analytics"]);
+    ).toEqual([]);
 
     // 3) DbSwitcher 가 activeDb 를 db2 로 옮긴 시뮬레이션.
     await act(async () => {
@@ -69,17 +68,18 @@ describe("SchemaTree — workspace-keyed sidebar state (Slice B)", () => {
       }));
     });
 
-    // db2 workspace 는 fresh — auto-expand 가 다시 두 스키마 모두 expand.
+    // db2 workspace 는 fresh — seed 가 다시 첫 스키마만 expand.
     const db2Expanded =
       useWorkspaceStore.getState().workspaces.conn1?.db2?.sidebar.expanded;
-    expect(db2Expanded).toEqual(["public", "analytics"]);
+    expect(db2Expanded).toEqual(["public"]);
 
     // db1 의 expanded 는 그대로 보존 (다른 workspace 의 변경에 영향 없음).
     expect(
       useWorkspaceStore.getState().workspaces.conn1!.db1!.sidebar.expanded,
-    ).toEqual(["analytics"]);
+    ).toEqual([]);
 
-    // 4) db1 으로 복귀 — UI 는 db1 의 collapsed-public 상태를 다시 보여줘야.
+    // 4) db1 으로 복귀 — UI 는 db1 의 collapsed 상태를 다시 보여줘야
+    //    (seed 는 세션 ref 로 한 번만; persist 존중으로 재-seed 안 함).
     await act(async () => {
       useConnectionStore.setState((s) => ({
         activeStatuses: {
@@ -95,7 +95,7 @@ describe("SchemaTree — workspace-keyed sidebar state (Slice B)", () => {
     );
     expect(screen.getByLabelText("analytics schema")).toHaveAttribute(
       "aria-expanded",
-      "true",
+      "false",
     );
   });
 
