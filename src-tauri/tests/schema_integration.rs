@@ -48,6 +48,58 @@ async fn test_list_schemas() {
     adapter.disconnect_pool().await.unwrap();
 }
 
+/// #1229 (사용자 리포트 2026-07-03) — `CREATE TEMP TABLE` 은 backend 슬롯별
+/// 내부 스키마 `pg_temp_<N>` / `pg_toast_temp_<N>` 를 만들고, 그 pg_namespace
+/// 항목은 세션 종료 후에도 잔존한다. `list_schemas` 가 정확 매칭 3개만
+/// 제외하던 시절엔 이 temp 스키마가 사이드바로 샜다. 여기서는 실 PG 로
+/// temp table 을 만든 뒤 `list_schemas` 결과에 temp 패턴이 없는지 + `public`
+/// 같은 정상 스키마는 그대로 노출되는지(과차단 없음)를 가드한다. 같은
+/// 소스에서 스키마를 나열하는 `list_types` 도 temp 를 흘리지 않음을 함께
+/// 확인한다.
+#[tokio::test]
+async fn test_list_schemas_excludes_temp_namespaces() {
+    let adapter = match common::setup_adapter(DatabaseType::Postgresql).await {
+        Some(a) => a,
+        None => return,
+    };
+
+    // 현재 세션에 temp table 을 만들면 backend 가 pg_temp_<N> 네임스페이스를
+    // materialize 한다.
+    adapter
+        .execute("CREATE TEMP TABLE issue_1229_tmp (id INT, blob TEXT)")
+        .await
+        .expect("create temp table");
+
+    let schemas = adapter.list_schemas().await.expect("list_schemas failed");
+    let names: Vec<&str> = schemas.iter().map(|s| s.name.as_str()).collect();
+
+    assert!(
+        !names
+            .iter()
+            .any(|n| n.starts_with("pg_temp_") || n.starts_with("pg_toast_temp_")),
+        "list_schemas must not surface internal temp namespaces, got: {names:?}"
+    );
+    // 과차단 금지: 정상 스키마는 그대로.
+    assert!(
+        names.contains(&"public"),
+        "list_schemas must still surface 'public', got: {names:?}"
+    );
+
+    // 같은 카탈로그 소스인 list_types 도 temp 스키마를 흘리지 않아야 한다
+    // (temp table 의 composite row type 은 `NOT EXISTS (reltype = t.oid)` 로
+    // 이미 배제되지만, 회귀 가드로 명시).
+    let types = adapter.list_types().await.expect("list_types failed");
+    assert!(
+        !types
+            .iter()
+            .any(|t| t.schema.starts_with("pg_temp_") || t.schema.starts_with("pg_toast_temp_")),
+        "list_types must not surface types from internal temp namespaces, got schemas: {:?}",
+        types.iter().map(|t| &t.schema).collect::<Vec<_>>()
+    );
+
+    adapter.disconnect_pool().await.unwrap();
+}
+
 #[tokio::test]
 async fn test_list_tables_empty() {
     let adapter = match common::setup_adapter(DatabaseType::Postgresql).await {
