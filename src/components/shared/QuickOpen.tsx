@@ -11,10 +11,11 @@ import {
 } from "@components/ui/dialog";
 import { useSchemaStore } from "@stores/schemaStore";
 import { useConnectionStore } from "@stores/connectionStore";
+import { rankQuickOpen, type RankableFields } from "./quickOpenRanking";
 
 type QuickOpenItemKind = "table" | "view" | "function" | "procedure";
 
-interface QuickOpenItem {
+interface QuickOpenItem extends RankableFields {
   kind: QuickOpenItemKind;
   name: string;
   schema: string;
@@ -64,6 +65,10 @@ export default function QuickOpen() {
       const db = status.activeDb;
       if (!db) continue;
 
+      // Precompute the connection name once; per-object lowercasing happens
+      // below so ranking never re-lowercases on every keystroke.
+      const connLower = conn.name.toLowerCase();
+
       const tablesBySchema = tables[conn.id]?.[db] ?? {};
       for (const list of Object.values(tablesBySchema)) {
         for (const t of list) {
@@ -73,6 +78,9 @@ export default function QuickOpen() {
             schema: t.schema,
             connectionId: conn.id,
             connectionName: conn.name,
+            nameLower: t.name.toLowerCase(),
+            schemaLower: t.schema.toLowerCase(),
+            connLower,
           });
         }
       }
@@ -86,6 +94,9 @@ export default function QuickOpen() {
             schema: v.schema,
             connectionId: conn.id,
             connectionName: conn.name,
+            nameLower: v.name.toLowerCase(),
+            schemaLower: v.schema.toLowerCase(),
+            connLower,
           });
         }
       }
@@ -102,6 +113,9 @@ export default function QuickOpen() {
             connectionId: conn.id,
             connectionName: conn.name,
             source: f.source,
+            nameLower: f.name.toLowerCase(),
+            schemaLower: f.schema.toLowerCase(),
+            connLower,
           });
         }
       }
@@ -122,17 +136,9 @@ export default function QuickOpen() {
     return () => window.removeEventListener("quick-open", handler);
   }, []);
 
-  // Fuzzy-ish filter: match against "connection.schema.name" and individual parts.
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return items;
-    return items.filter((item) => {
-      const haystack =
-        `${item.connectionName} ${item.schema} ${item.name}`.toLowerCase();
-      // every whitespace-separated token must appear
-      return q.split(/\s+/).every((tok) => haystack.includes(tok));
-    });
-  }, [items, search]);
+  // Deterministic ranking + subsequence fuzzy + `schema.name` scoping. Empty
+  // query returns the inventory unchanged. See quickOpenRanking.ts.
+  const filtered = useMemo(() => rankQuickOpen(items, search), [items, search]);
 
   const handleClose = () => {
     setIsOpen(false);
