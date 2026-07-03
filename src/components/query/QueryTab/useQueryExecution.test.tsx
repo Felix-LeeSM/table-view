@@ -30,8 +30,6 @@ vi.mock("@lib/api/verifyActiveDb", () => ({
 const executeQueryMock = vi.fn();
 const executeQueryDryRunMock = vi.fn();
 const cancelQueryMock = vi.fn();
-const cancelQueryNativeMock = vi.fn();
-const getQueryServerPidMock = vi.fn();
 const findDocumentsMock = vi.fn();
 
 const SELECT_RESULT: QueryResult = {
@@ -138,10 +136,6 @@ describe("useQueryExecution scaffold", () => {
     executeQueryMock.mockReset();
     executeQueryDryRunMock.mockReset();
     cancelQueryMock.mockReset();
-    cancelQueryNativeMock.mockReset();
-    // Default: no native pid captured (adapters that support it override per
-    // test). Keeps the pid-fetch effect a benign no-op elsewhere.
-    getQueryServerPidMock.mockReset().mockResolvedValue(null);
     findDocumentsMock.mockReset();
     verifyActiveDbMock.mockReset().mockResolvedValue("");
     setupTauriMock({
@@ -149,8 +143,6 @@ describe("useQueryExecution scaffold", () => {
       executeQueryDryRun: (...args: unknown[]) =>
         executeQueryDryRunMock(...args),
       cancelQuery: (...args: unknown[]) => cancelQueryMock(...args),
-      cancelQueryNative: (...args: unknown[]) => cancelQueryNativeMock(...args),
-      getQueryServerPid: (...args: unknown[]) => getQueryServerPidMock(...args),
       findDocuments: (...args: unknown[]) => findDocumentsMock(...args),
     });
     useWorkspaceStore.setState({ workspaces: {} });
@@ -732,102 +724,6 @@ describe("useQueryExecution scaffold", () => {
     });
 
     expect(cancelQueryMock).not.toHaveBeenCalled();
-  });
-
-  // Issue #1230 — native (server-side) cancel wiring.
-
-  it("records the fetched server pid on a running native-cancel query", async () => {
-    getQueryServerPidMock.mockResolvedValueOnce(4242);
-    const pending = deferred<QueryResult>();
-    executeQueryMock.mockReturnValueOnce(pending.promise);
-    const tab = seedRdbTab("SELECT pg_sleep(10)", {}, { dbType: "postgresql" });
-    const { result, rerender } = renderHook(
-      ({ currentTab }) => useQueryExecution({ tab: currentTab }),
-      { initialProps: { currentTab: tab } },
-    );
-
-    act(() => {
-      void result.current.handleExecute();
-    });
-
-    await waitFor(() => {
-      expect(getSeededRdbTab().queryState.status).toBe("running");
-    });
-    rerender({ currentTab: getSeededRdbTab() });
-
-    await waitFor(() => {
-      const qs = getSeededRdbTab().queryState;
-      if (qs.status !== "running") throw new Error("not running");
-      expect(qs.serverPid).toBe(4242);
-    });
-    const runningQueryId = executeQueryMock.mock.calls[0]?.[2];
-    expect(getQueryServerPidMock).toHaveBeenCalledWith(runningQueryId);
-
-    await act(async () => {
-      pending.resolve(SELECT_RESULT);
-    });
-  });
-
-  it("fires native cancel with the captured pid for a supported DBMS", async () => {
-    const tab = seedRdbTab(
-      "SELECT pg_sleep(10)",
-      {
-        queryState: {
-          status: "running",
-          queryId: "query-1-9999",
-          serverPid: 5150,
-        },
-      },
-      { dbType: "postgresql" },
-    );
-    const { result } = renderHook(() => useQueryExecution({ tab }));
-
-    await act(async () => {
-      await result.current.handleExecute();
-    });
-
-    expect(cancelQueryNativeMock).toHaveBeenCalledWith("conn1", 5150);
-    // The cooperative token still fires — double-firing is harmless.
-    expect(cancelQueryMock).toHaveBeenCalledWith("query-1-9999");
-  });
-
-  it("falls back to cooperative-only cancel when no pid was captured", async () => {
-    const tab = seedRdbTab(
-      "SELECT pg_sleep(10)",
-      { queryState: { status: "running", queryId: "query-1-8888" } },
-      { dbType: "postgresql" },
-    );
-    const { result } = renderHook(() => useQueryExecution({ tab }));
-
-    await act(async () => {
-      await result.current.handleExecute();
-    });
-
-    expect(cancelQueryNativeMock).not.toHaveBeenCalled();
-    expect(cancelQueryMock).toHaveBeenCalledWith("query-1-8888");
-  });
-
-  it("never fires native cancel for a DBMS without a native path", async () => {
-    const tab = seedRdbTab(
-      "SELECT 1",
-      {
-        queryState: {
-          status: "running",
-          queryId: "query-1-7777",
-          // Even if a stray pid were present, an sqlite tab must not fire it.
-          serverPid: 1,
-        },
-      },
-      { dbType: "sqlite" },
-    );
-    const { result } = renderHook(() => useQueryExecution({ tab }));
-
-    await act(async () => {
-      await result.current.handleExecute();
-    });
-
-    expect(cancelQueryNativeMock).not.toHaveBeenCalled();
-    expect(cancelQueryMock).toHaveBeenCalledWith("query-1-7777");
   });
 
   it("syncs activeDb and surfaces a retry toast on DbMismatch", async () => {
