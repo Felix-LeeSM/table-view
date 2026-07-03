@@ -62,6 +62,21 @@ describe("parseSingleTableSelect", () => {
     ).toEqual({ schema: null, table: "users" });
   });
 
+  // Issue #1234/#1236 — parseSingleTableSelect runs the local comment-stripper
+  // (queryAnalyzer.ts `stripComments`, built on `tokenizeSql`) before FROM_RE.
+  // Now that tokenizeSql is dollar-quote aware, a `--` *inside* a $tag$…$tag$
+  // literal is body text, not a line comment. Previously tokenizeSql tagged it
+  // a comment, stripComments dropped the rest of the line (including the FROM
+  // clause), and this single-table select fell to a false read-only verdict
+  // (returned null). Verified RED: fails on base production, passes after fix.
+  it("keeps a dollar-quoted select-list literal intact (inner -- is not a comment)", () => {
+    expect(
+      parseSingleTableSelect(
+        "SELECT $tok$-- not a comment$tok$ AS label FROM accounts",
+      ),
+    ).toEqual({ schema: null, table: "accounts" });
+  });
+
   it("accepts WHERE / ORDER BY / LIMIT clauses", () => {
     expect(
       parseSingleTableSelect(

@@ -79,4 +79,43 @@ describe("tokenizeSql", () => {
     const puncts = tokens.filter((t) => t.kind === "punct");
     expect(puncts.map((t) => t.text)).toEqual(["=", ","]);
   });
+
+  // Issue #1234 — PG dollar-quoted strings ($$…$$ / $tag$…$tag$).
+  it("tokenises a $$…$$ dollar-quoted body as a single string token", () => {
+    const tokens = tokenizeSql("AS $$ BEGIN RETURN 1; END $$");
+    const strings = tokens.filter((t) => t.kind === "string");
+    expect(strings).toHaveLength(1);
+    expect(strings[0]!.text).toBe("$$ BEGIN RETURN 1; END $$");
+  });
+
+  it("tokenises a $tag$…$tag$ body as one string and ignores an inner --", () => {
+    const tokens = tokenizeSql("$fn$ a -- b ; c $fn$");
+    const strings = tokens.filter((t) => t.kind === "string");
+    expect(strings.map((t) => t.text)).toEqual(["$fn$ a -- b ; c $fn$"]);
+    expect(tokens.some((t) => t.kind === "comment")).toBe(false);
+  });
+
+  it("does not treat a positional parameter ($1) as a dollar-quote string", () => {
+    const tokens = tokenizeSql("WHERE id = $1");
+    expect(tokens.some((t) => t.kind === "string")).toBe(false);
+    expect(
+      tokens.filter((t) => t.kind === "number").map((t) => t.text),
+    ).toEqual(["1"]);
+  });
+
+  it("treats an unterminated dollar-quote as one string token through EOF", () => {
+    const tokens = tokenizeSql("AS $$ BEGIN oops");
+    const strings = tokens.filter((t) => t.kind === "string");
+    expect(strings).toHaveLength(1);
+    expect(strings[0]!.text).toBe("$$ BEGIN oops");
+  });
+
+  it("preserves the source when joining dollar-quote tokens back", () => {
+    const sql = "CREATE FUNCTION f() AS $$ x; -- y\n$$ LANGUAGE plpgsql";
+    expect(
+      tokenizeSql(sql)
+        .map((t) => t.text)
+        .join(""),
+    ).toBe(sql);
+  });
 });

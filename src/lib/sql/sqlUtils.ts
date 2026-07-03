@@ -1,7 +1,10 @@
+import { scanDollarQuoteEnd } from "./sqlTokenize";
+
 /**
  * Splits a SQL string into individual statements by semicolons,
  * correctly handling semicolons inside string literals, quoted identifiers,
- * line comments (--), and block comments (/* *\/).
+ * line comments (--), block comments (/* *\/), and PostgreSQL dollar-quoted
+ * strings ($$…$$ / $tag$…$tag$).
  */
 export function splitSqlStatements(sql: string): string[] {
   const statements: string[] = [];
@@ -98,6 +101,19 @@ export function splitSqlStatements(sql: string): string[] {
         }
       }
       continue;
+    }
+
+    // PostgreSQL dollar-quoted string ($$…$$ / $tag$…$tag$). Opaque like the
+    // quote handlers above so inner ;/--/'/comments never split the body. A
+    // non-opening `$` (positional param $1, lone $) returns null and falls
+    // through to the default char append below.
+    if (ch === "$") {
+      const end = scanDollarQuoteEnd(sql, i);
+      if (end !== null) {
+        current += sql.slice(i, end);
+        i = end;
+        continue;
+      }
     }
 
     // Line comment (--)
