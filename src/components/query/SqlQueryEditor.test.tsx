@@ -303,6 +303,36 @@ describe("SqlQueryEditor (Sprint 139)", () => {
     expect(changes).toEqual(["SELECT 1 AS x", "SELECT 1"]);
   });
 
+  // #1248 — a passive external sql sync (favorite load / query-history load /
+  // tab-switch remount all flow store → sql prop → editor) must NOT enter the
+  // undo stack. After the load, Cmd+Z must not "undo" something the user never
+  // typed. RED before `syncEditorDocument` marks the mirror `addToHistory:
+  // false`: undo reverts to the pre-sync doc.
+  it("does not undo a passive external sql sync (#1248)", () => {
+    const { rerender } = render(
+      <SqlQueryEditor
+        sql="SELECT 1"
+        onSqlChange={vi.fn()}
+        onExecute={vi.fn()}
+      />,
+    );
+    rerender(
+      <SqlQueryEditor
+        sql="SELECT 2"
+        onSqlChange={vi.fn()}
+        onExecute={vi.fn()}
+      />,
+    );
+
+    const view = getEditorView();
+    expect(view.state.doc.toString()).toBe("SELECT 2");
+
+    act(() => {
+      undo(view);
+    });
+    expect(view.state.doc.toString()).toBe("SELECT 2");
+  });
+
   // External sql prop syncs into editor.
   it("syncs external sql prop changes into the editor document", async () => {
     const { rerender } = render(
