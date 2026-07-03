@@ -4,9 +4,19 @@
 //! `connect → ping → list_databases → list_collections → disconnect`.
 //!
 //! Sprint 66 adds the read-path coverage: seeding a small fixture
-//! (`table_view_test.users`) with heterogeneous documents, invoking
-//! `infer_collection_fields` and `find`, and verifying the expected column
-//! shape + sentinel flattening before dropping the fixture.
+//! (a per-test `table_view_test.users_*` collection) with heterogeneous
+//! documents, invoking `infer_collection_fields` and `find`, and verifying
+//! the expected column shape + sentinel flattening before dropping the
+//! fixture.
+//!
+//! Isolation note (#1240): CI runs these via `cargo nextest`, which executes
+//! each test in its OWN process. `#[serial_test::serial]` is an in-process
+//! lock and therefore does NOT serialise tests across nextest processes — so
+//! every test that touches Mongo must own a unique collection name. The
+//! Sprint 66/72 read-path tests originally shared `table_view_test.users`,
+//! which let one test's idempotency `drop()` empty another's freshly seeded
+//! fixture mid-flight (flaky "$group ... got 0 rows"). Each read-path test
+//! now uses a dedicated `users_*` collection like the mutate/index tests.
 //!
 //! Sprint 72 (Phase 6 plan E-1) adds aggregate-pipeline coverage:
 //!   * `test_mongo_adapter_aggregate_match_sort` — `$match` + `$sort` stage
@@ -147,7 +157,7 @@ async fn test_mongo_adapter_ping_without_connect_returns_error() {
 
 /// Sprint 66 — infer + find happy path against a seeded fixture.
 ///
-/// Seeds `table_view_test.users` with three documents:
+/// Seeds `table_view_test.users_infer_find` with three documents:
 ///   1. `{ _id, name, age, profile: { city } }`
 ///   2. `{ _id, name, age }` (missing `profile` — enforces nullability)
 ///   3. `{ _id, name, tags: ["a", "b"] }` (array field; missing `age`)
@@ -175,7 +185,7 @@ async fn test_mongo_adapter_infer_and_find_on_seeded_collection() {
         .expect("mongo endpoint resolution failed");
     let seed = seed_client(&config).await;
     let db = seed.database("table_view_test");
-    let coll = db.collection::<Document>("users");
+    let coll = db.collection::<Document>("users_infer_find");
 
     // Idempotency: drop any leftover collection from a previous aborted run.
     let _ = coll.drop().await;
@@ -204,7 +214,7 @@ async fn test_mongo_adapter_infer_and_find_on_seeded_collection() {
 
     // ── infer_collection_fields ───────────────────────────────────────────
     let columns = adapter
-        .infer_collection_fields("table_view_test", "users", 100, None)
+        .infer_collection_fields("table_view_test", "users_infer_find", 100, None)
         .await
         .expect("infer_collection_fields should succeed");
 
@@ -248,7 +258,7 @@ async fn test_mongo_adapter_infer_and_find_on_seeded_collection() {
         ..Default::default()
     };
     let result = adapter
-        .find("table_view_test", "users", body, None)
+        .find("table_view_test", "users_infer_find", body, None)
         .await
         .expect("find should succeed");
 
@@ -339,7 +349,7 @@ async fn test_mongo_adapter_aggregate_match_sort() {
         .expect("mongo endpoint resolution failed");
     let seed = seed_client(&config).await;
     let db = seed.database("table_view_test");
-    let coll = db.collection::<Document>("users");
+    let coll = db.collection::<Document>("users_agg_match_sort");
 
     // Idempotency.
     let _ = coll.drop().await;
@@ -359,7 +369,7 @@ async fn test_mongo_adapter_aggregate_match_sort() {
     ];
 
     let result = adapter
-        .aggregate("table_view_test", "users", pipeline, None)
+        .aggregate("table_view_test", "users_agg_match_sort", pipeline, None)
         .await
         .expect("aggregate should succeed");
 
@@ -429,7 +439,7 @@ async fn test_mongo_adapter_aggregate_group_count() {
         .expect("mongo endpoint resolution failed");
     let seed = seed_client(&config).await;
     let db = seed.database("table_view_test");
-    let coll = db.collection::<Document>("users");
+    let coll = db.collection::<Document>("users_agg_group_count");
 
     // Idempotency.
     let _ = coll.drop().await;
@@ -448,7 +458,7 @@ async fn test_mongo_adapter_aggregate_group_count() {
     }];
 
     let result = adapter
-        .aggregate("table_view_test", "users", pipeline, None)
+        .aggregate("table_view_test", "users_agg_group_count", pipeline, None)
         .await
         .expect("aggregate should succeed");
 
