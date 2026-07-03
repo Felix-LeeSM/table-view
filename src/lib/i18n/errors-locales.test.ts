@@ -1,11 +1,15 @@
 import { describe, it, expect } from "vitest";
 
-import i18n from "../index";
+import i18n from "./index";
 import { DRIVER_ERROR_CATEGORIES } from "@lib/errors/driverErrorHints";
 
 // Purpose: classifyDriverError 가 파생하는 errors:hint.<category>.{title,hint}
 //          키가 en/ko 양쪽에 존재하는지(드리프트 가드) 잠근다 (issue #1056)
 //          — Phase 22 milestone 22.30 (2026-07-03).
+//
+// 위치 주의: 이 파일은 `locales/` **밖**에 둔다. `index.ts` 의
+// `import.meta.glob("./locales/*.ts")` 는 파일명=네임스페이스 계약이라
+// locales/ 안의 test 파일까지 네임스페이스로 import 해 앱 부팅/빌드를 깬다 (#1227).
 describe("errors namespace", () => {
   // 카테고리 SOT(union 파생 배열)에서 그대로 순회 — 하드코딩 없음. 카테고리를
   // 추가하면 이 테스트가 자동으로 새 카테고리의 en/ko 문구를 요구한다 (#1227).

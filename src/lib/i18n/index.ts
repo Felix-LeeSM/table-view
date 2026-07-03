@@ -26,9 +26,13 @@ type LocaleBundle = Partial<Record<Locale, Record<string, unknown>>>;
 
 // 각 `locales/<ns>.ts` 가 `{ en, ko }` 를 named export. eager 로 빌드 타임에
 // 모두 로드해 동기 init — 인라인 리소스라 비동기 로드/Suspense 가 없다.
-const modules = import.meta.glob<LocaleBundle>("./locales/*.ts", {
-  eager: true,
-});
+// `*.test.ts` 는 명시적으로 제외한다 — 파일명=네임스페이스 계약상 locales/ 안에
+// 테스트 파일이 있으면 네임스페이스로 import 돼 부팅/빌드가 깨진다 (#1227). 계약
+// 강제를 위해 locale 테스트는 locales/ 밖(`src/lib/i18n/*-locales.test.ts`)에 둔다.
+const modules = import.meta.glob<LocaleBundle>(
+  ["./locales/*.ts", "!./locales/*.test.ts"],
+  { eager: true },
+);
 
 const resources: Record<Locale, Record<string, Record<string, unknown>>> = {
   en: {},
