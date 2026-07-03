@@ -1,7 +1,10 @@
+import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { ArrowLeft, Sun, Moon, Monitor } from "lucide-react";
 import Sidebar from "@components/layout/Sidebar";
 import MainArea from "@components/layout/MainArea";
+import { useCurrentWindowConnectionId } from "@hooks/useCurrentWindowConnectionId";
+import { useConnectionStore } from "@stores/connectionStore";
 import { Button } from "@components/ui/button";
 import {
   Popover,
@@ -85,13 +88,39 @@ export default function WorkspacePage() {
   // workspace picks up the latest connection state from the launcher.
   useWindowFocusHydration();
 
+  // #1134 — the workspace window's landmark heading. `useCurrentWindowConnectionId`
+  // derives the connection from the Tauri label; the store lookup resolves its
+  // display name. The `<h1>` is visually hidden (sr-only) so the layout is
+  // unchanged, and focus moves to it on mount so screen-reader users land on the
+  // page name after the window opens (`document.title` is owned by AppRouter).
+  const connId = useCurrentWindowConnectionId();
+  const connectionName = useConnectionStore((s) =>
+    connId ? s.connections.find((c) => c.id === connId)?.name : null,
+  );
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    headingRef.current?.focus();
+  }, []);
+
   return (
     <div className="flex h-full w-full overflow-hidden bg-background">
       {/* Sidebar column — back button + theme picker stacked above the
           existing Sidebar so its layout (header / mode toggle / body) stays
           unchanged from the user's perspective. The buttons get their own
-          aria-labels per the sprint contract for unambiguous e2e selection. */}
-      <div className="flex h-full flex-col">
+          aria-labels per the sprint contract for unambiguous e2e selection.
+          Promoted to a <nav> landmark (#1134) so the left column is
+          reachable via screen-reader landmark navigation. */}
+      <nav
+        aria-label={t("workspaceSidebarAria")}
+        className="flex h-full flex-col"
+      >
+        <h1
+          ref={headingRef}
+          tabIndex={-1}
+          className="sr-only focus:outline-none"
+        >
+          {connectionName ?? t("workspaceHeading")}
+        </h1>
         <div className="flex items-center justify-between border-b border-border bg-secondary px-2 py-1.5">
           <Button
             variant="ghost"
@@ -141,7 +170,7 @@ export default function WorkspacePage() {
           </Popover>
         </div>
         <Sidebar />
-      </div>
+      </nav>
       <MainArea />
     </div>
   );

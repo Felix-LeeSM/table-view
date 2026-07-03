@@ -373,6 +373,7 @@ function EmptyState() {
 }
 
 export default function MainArea() {
+  const { t } = useTranslation("layout");
   const tabs = useCurrentTabs();
   const activeTabId = useActiveTabId();
   const workspaceKey = useCurrentWorkspaceKey();
@@ -395,7 +396,10 @@ export default function MainArea() {
   }, []);
 
   return (
-    <div className="flex flex-1 flex-col overflow-hidden">
+    <main
+      aria-label={t("mainArea.mainLandmarkAria")}
+      className="flex flex-1 flex-col overflow-hidden"
+    >
       <WorkspaceToolbar />
       <TabBar />
       <div
@@ -447,6 +451,6 @@ export default function MainArea() {
         visible={showGlobalLog}
         onClose={() => setShowGlobalLog(false)}
       />
-    </div>
+    </main>
   );
 }

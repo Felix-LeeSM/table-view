@@ -138,6 +138,22 @@ describe("HomePage", () => {
     expect(screen.getByTestId("connection-list")).toBeInTheDocument();
   });
 
+  // --- #1134: heading a11y ---
+
+  it("renders the 'Connections' title as a top-level <h1> (a11y #1134)", () => {
+    render(<HomePage />);
+    expect(
+      screen.getByRole("heading", { level: 1, name: /connections/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("moves focus to the Connections heading on mount (a11y #1134)", () => {
+    render(<HomePage />);
+    expect(
+      screen.getByRole("heading", { level: 1, name: /connections/i }),
+    ).toHaveFocus();
+  });
+
   it("renders Import/Export, New Group, New Connection buttons", () => {
     render(<HomePage />);
     expect(
