@@ -2,6 +2,8 @@
 
 import { invoke } from "@tauri-apps/api/core";
 
+import { toIpcSafeRows } from "@/lib/jsonCell";
+
 export type ExportFormat = "csv" | "tsv" | "sql" | "json";
 
 export type ExportContext =
@@ -36,7 +38,9 @@ export async function exportGridRows(
     format,
     targetPath,
     headers,
-    rows,
+    // BigInt / Decimal cells (ADR 0026 promotion) would make Tauri's native
+    // JSON.stringify throw; send them back as wire strings (issue #1082).
+    rows: toIpcSafeRows(rows),
     context,
     exportId,
   });

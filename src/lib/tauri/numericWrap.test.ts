@@ -133,10 +133,92 @@ describe("wrapNumericCells (Sprint 261 / ADR 0026)", () => {
     expect(cellAt(wrapped, 1, 0)).toBe("1.5");
   });
 
+  it("wraps SQLite integer-family declared types as BigInt (issue #1082)", () => {
+    // SQLite 는 INTEGER affinity 컬럼을 선언 타입과 무관하게 i64 로 저장하므로
+    // 백엔드가 정수 셀을 wire string 으로 보낸다. free-form 쿼리는 storage class
+    // "INTEGER" 로, table preview 는 PRAGMA 선언 타입 (BIGINT/SMALLINT/TINYINT/INT)
+    // 으로 data_type 을 보고한다 — 양쪽 모두 BigInt 로 승격되어야 한다.
+    const result = {
+      columns: [
+        col("a", "INTEGER"),
+        col("b", "INT"),
+        col("c", "BIGINT"),
+        col("d", "SMALLINT"),
+        col("e", "TINYINT"),
+      ],
+      rows: [
+        [
+          "9223372036854775807",
+          "9007199254740993",
+          "42",
+          "9007199254740993",
+          "9007199254740993",
+        ],
+      ],
+    };
+    const wrapped = wrapNumericCells(result);
+    expect(cellAt(wrapped, 0, 0)).toBe(9223372036854775807n);
+    expect(cellAt(wrapped, 0, 1)).toBe(9007199254740993n);
+    expect(cellAt(wrapped, 0, 2)).toBe(42n);
+    expect(cellAt(wrapped, 0, 3)).toBe(9007199254740993n);
+    expect(cellAt(wrapped, 0, 4)).toBe(9007199254740993n);
+  });
+
+  it("wraps MySQL uppercase BIGINT declared type as BigInt (issue #1082)", () => {
+    // MySQL execute_query 는 컬럼 data_type 을 sqlx type_info().name() (대문자
+    // "BIGINT") 으로 보고한다. wrapperFor 는 대소문자 무관하게 승격해야 한다.
+    const result = {
+      columns: [col("id", "BIGINT")],
+      rows: [["9223372036854775807"]],
+    };
+    const wrapped = wrapNumericCells(result);
+    expect(cellAt(wrapped, 0, 0)).toBe(9223372036854775807n);
+  });
+
+  it("wraps MySQL BIGINT UNSIGNED and SQLite exotic integer decltypes as BigInt (issue #1082 review)", () => {
+    // MySQL reports unsigned as "BIGINT UNSIGNED" (sqlx column.rs L180);
+    // SQLite affinity accepts any declared type containing "INT" — e.g.
+    // "UNSIGNED BIG INT" / "INT8" / "INT2". All must promote.
+    const result = {
+      columns: [
+        col("a", "BIGINT UNSIGNED"),
+        col("b", "UNSIGNED BIG INT"),
+        col("c", "INT8"),
+        col("d", "int2"),
+      ],
+      rows: [
+        [
+          "18446744073709551615",
+          "9223372036854775807",
+          "9007199254740993",
+          "42",
+        ],
+      ],
+    };
+    const wrapped = wrapNumericCells(result);
+    expect(cellAt(wrapped, 0, 0)).toBe(18446744073709551615n);
+    expect(cellAt(wrapped, 0, 1)).toBe(9223372036854775807n);
+    expect(cellAt(wrapped, 0, 2)).toBe(9007199254740993n);
+    expect(cellAt(wrapped, 0, 3)).toBe(42n);
+  });
+
+  it("leaves small-integer number cells untouched on int-family columns (issue #1082)", () => {
+    // MySQL/PG INT·SMALLINT 등은 ≤32bit 라 백엔드가 raw Number 로 보낸다.
+    // wrapperFor 가 int-family 를 bigint 후보로 분류하더라도 실제 승격은 string
+    // 셀에만 일어나므로 Number 셀은 그대로 유지된다 (정렬/필터/편집 회귀 방지).
+    const result = {
+      columns: [col("a", "int"), col("b", "smallint")],
+      rows: [[42, 7]],
+    };
+    const wrapped = wrapNumericCells(result);
+    expect(cellAt(wrapped, 0, 0)).toBe(42);
+    expect(cellAt(wrapped, 0, 1)).toBe(7);
+  });
+
   it("fast-path returns the same reference when no precision-sensitive columns are present", () => {
     const result = {
-      columns: [col("name", "text"), col("count", "integer")],
-      rows: [["alice", 1]],
+      columns: [col("name", "text"), col("ratio", "real")],
+      rows: [["alice", 1.5]],
     };
     const wrapped = wrapNumericCells(result);
     expect(wrapped).toBe(result);

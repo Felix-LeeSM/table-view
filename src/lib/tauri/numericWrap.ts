@@ -22,20 +22,23 @@ interface ColumnLike {
 
 function wrapperFor(dataType: string): Wrapper {
   const lower = dataType.toLowerCase();
-  if (lower === "bigint" || lower === "int8" || lower === "bigserial") {
-    return "bigint";
-  }
-  if (lower.includes("numeric") || lower.includes("decimal")) {
+  // Decimal first — PG numeric/decimal and Mongo Decimal128 all carry
+  // "decimal"/"numeric" in their reported type. Checking before the integer
+  // rule keeps them out of the "int" substring match.
+  if (lower.includes("decimal") || lower.includes("numeric")) {
     return "decimal";
   }
-  // Mongo flatten_cell emits Int64 / Decimal128 as string. The Mongo
-  // `data_type` strings reported by the schema sniffer are "Int64" and
-  // "Decimal128" — match those explicitly.
-  if (lower === "int64") {
+  // 64-bit-capable integers, wired as string tokens by the backend and
+  // promoted to BigInt. Uses SQLite's own affinity rule (a declared type
+  // containing "INT" has INTEGER affinity) to cover every variant in one
+  // check: SQLite exotic decltypes (UNSIGNED BIG INT / INT2 / INT8 / …), PG
+  // bigint/int8/bigserial, MySQL "BIGINT" and "BIGINT UNSIGNED", and Mongo
+  // Int64. wrapNumericCells only promotes string cells, so:
+  // - PG/MySQL small integers arrive as Number and are skipped (no regression);
+  // - string types that merely contain "int" (PG "point", "int4range") make
+  //   BigInt() throw and fall back to the raw string — harmless.
+  if (lower.includes("int") || lower === "bigserial") {
     return "bigint";
-  }
-  if (lower === "decimal128") {
-    return "decimal";
   }
   return "passthrough";
 }

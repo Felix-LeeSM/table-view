@@ -44,7 +44,18 @@ fn cell_to_json(row: &SqliteRow, idx: usize) -> serde_json::Value {
 
     match type_name.as_str() {
         "INTEGER" | "INT" | "BIGINT" | "SMALLINT" | "TINYINT" => {
-            try_decode!(i64, |v: i64| serde_json::Value::Number(v.into()));
+            // ADR 0026 (issue #1082) — SQLite 는 INTEGER-affinity 컬럼을 선언
+            // 타입과 무관하게 i64 로 저장하므로 (sqlx 는 declared type 이 아니라
+            // storage class "INTEGER" 를 report 한다), 2^53 을 넘는 값이 raw
+            // JSON number 로 wire 되면 프론트의 native JSON.parse 가 f64 로
+            // 강등하며 무음 손상시킨다. 정밀도-보존 JSON string token 으로
+            // 직렬화하고, 프론트 wrapNumericCells 가 컬럼 data_type (free-form
+            // 은 storage class "INTEGER", table preview 는 PRAGMA 선언 타입)
+            // 을 보고 BigInt 로 승격한다. 타입 정보가 없는 컬럼/표현식
+            // (type_info == "NULL") 은 아래 untyped fallback 으로 내려가 Number
+            // 로 남는다 — 프론트에 승격 매핑이 없으므로 string 화하면 오히려
+            // grid 에 raw string 이 노출된다.
+            try_decode!(i64, |v: i64| serde_json::Value::String(v.to_string()));
         }
         "REAL" | "DOUBLE" | "FLOAT" | "NUMERIC" | "DECIMAL" => {
             try_decode!(f64, |v: f64| serde_json::Number::from_f64(v)

@@ -1,3 +1,4 @@
+import Decimal from "decimal.js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ExportContext, SchemaDumpTable } from "./export";
 
@@ -49,6 +50,37 @@ describe("export Tauri wrappers", () => {
       exportId: null,
     });
     expect(summary.rows_written).toBe(2);
+  });
+
+  it("serializes BigInt / Decimal cells to wire strings so Tauri IPC never throws (issue #1082)", async () => {
+    // SQLite INTEGER PRIMARY KEY (and PG bigint / numeric) cells arrive as
+    // BigInt / Decimal after wrapNumericCells. Passing them raw makes Tauri's
+    // native JSON.stringify throw `TypeError: Do not know how to serialize a
+    // BigInt`, which broke Export for most SQLite tables. They must cross the
+    // IPC boundary as digit-preserving strings.
+    const context: ExportContext = {
+      kind: "table",
+      schema: "main",
+      name: "big",
+    };
+    invokeMock.mockResolvedValueOnce({ rows_written: 1, bytes_written: 64 });
+
+    await exportGridRows(
+      "csv",
+      "/tmp/big.csv",
+      ["id", "amount"],
+      [[9223372036854775807n, new Decimal("0.10")]],
+      context,
+    );
+
+    expect(invokeMock).toHaveBeenCalledWith(
+      "export_grid_rows",
+      expect.objectContaining({
+        rows: [["9223372036854775807", "0.1"]],
+      }),
+    );
+    // The serialized arg must be JSON-stringifiable (the real IPC codec path).
+    expect(() => JSON.stringify(invokeMock.mock.calls[0]?.[1])).not.toThrow();
   });
 
   it("passes caller-owned export ids for cancellable row streaming", async () => {
