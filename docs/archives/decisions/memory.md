@@ -54,6 +54,7 @@ be read from `docs/product/README.md` and `docs/ROADMAP.md` first.
 | [0044](./0044-e2e-smoke-remote-required/memory.md)                                   | E2E smoke — remote PR/main blocking check                                                     | Accepted | 2026-05-20 | 0019, 0020 |
 | [0045](./0045-language-completion-profile-wasm-boundary/memory.md)                   | language completion — dialect profile + WASM hot-path boundary                                | Accepted | 2026-05-21 | —          |
 | [0046](./0046-data-source-profile-capability-architecture/memory.md)                 | data source extension — profile, capability, language, result envelope                        | Accepted | 2026-05-22 | —          |
+| [0047](./0047-keep-duckdb-defer-removal/memory.md)                                   | DuckDB 지원 유지 (제거 보류)                                                                  | Accepted | 2026-07-03 | —          |
 
 ## 역사 (Superseded / Deprecated)
 
