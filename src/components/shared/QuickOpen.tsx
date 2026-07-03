@@ -9,10 +9,19 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@components/ui/dialog";
+import type { UnlistenFn } from "@tauri-apps/api/event";
 import { useSchemaStore } from "@stores/schemaStore";
 import { useConnectionStore } from "@stores/connectionStore";
 import { resolveRdbTreeShape } from "@components/schema/treeShape";
 import { useCurrentWindowConnectionId } from "@hooks/useCurrentWindowConnectionId";
+import { openWorkspaceWindow } from "@lib/tauri/window";
+import { logger } from "@lib/logger";
+import {
+  dispatchLocalIntent,
+  forwardIntent,
+  subscribeIntents,
+  type QuickOpenIntent,
+} from "@lib/quickOpenIntent";
 import { rankQuickOpen, type RankableFields } from "./quickOpenRanking";
 
 type QuickOpenItemKind = "schema" | "table" | "view" | "function" | "procedure";
@@ -35,6 +44,31 @@ const KIND_ICON: Record<QuickOpenItemKind, typeof Table2> = {
   procedure: Terminal,
 };
 
+/** Serializable intent for local dispatch or cross-window forwarding (#1235). */
+function toQuickOpenIntent(item: QuickOpenItem): QuickOpenIntent {
+  if (item.kind === "schema") {
+    return {
+      kind: "schema",
+      connectionId: item.connectionId,
+      schema: item.schema,
+    };
+  }
+  if (item.kind === "function" || item.kind === "procedure") {
+    return {
+      kind: item.kind,
+      connectionId: item.connectionId,
+      source: item.source ?? "",
+      title: `${item.schema}.${item.name}`,
+    };
+  }
+  return {
+    kind: item.kind,
+    connectionId: item.connectionId,
+    schema: item.schema,
+    table: item.name,
+  };
+}
+
 export default function QuickOpen() {
   const { t } = useTranslation("shared");
   const [isOpen, setIsOpen] = useState(false);
@@ -56,11 +90,12 @@ export default function QuickOpen() {
   const functions = useSchemaStore((s) => s.functions);
   const connections = useConnectionStore((s) => s.connections);
   const activeStatuses = useConnectionStore((s) => s.activeStatuses);
-  // The connection whose SchemaTree this window's sidebar renders. Schema
-  // results are scoped to it because reveal (expand + scroll) only lands on the
-  // *mounted* tree — offering another window's schema would be an invisible
-  // no-op. `null` outside a workspace window (launcher / jsdom) → no schema
-  // results, matching the sidebar showing no tree there.
+  // The connection whose SchemaTree this window's sidebar renders. #1235 —
+  // results (schema included) are now global across connections; this id is the
+  // routing pivot: a selection whose connection matches dispatches locally,
+  // otherwise we jump to that connection's window and forward the intent.
+  // `null` outside a workspace window (launcher / jsdom) → every pick is
+  // cross-connection, so it jumps to the target window.
   const sidebarConnId = useCurrentWindowConnectionId();
 
   // Build the searchable inventory from every connected schema's cached objects.
@@ -86,10 +121,10 @@ export default function QuickOpen() {
       // below so ranking never re-lowercases on every keystroke.
       const connLower = conn.name.toLowerCase();
 
-      // Schemas are first-class results only for the connection this window's
-      // sidebar actually renders (`with-schema` + the mounted tree), so a
-      // selected schema always reveals visibly instead of no-op'ing.
-      if (shape === "with-schema" && conn.id === sidebarConnId) {
+      // #1235 — schemas are first-class results for every `with-schema`
+      // connection (global scope). A cross-connection pick jumps to the target
+      // window before revealing, so it no longer no-ops on another window.
+      if (shape === "with-schema") {
         for (const s of schemas[conn.id]?.[db] ?? []) {
           const nameLower = s.name.toLowerCase();
           result.push({
@@ -161,15 +196,7 @@ export default function QuickOpen() {
       }
     }
     return result;
-  }, [
-    schemas,
-    tables,
-    views,
-    functions,
-    connections,
-    activeStatuses,
-    sidebarConnId,
-  ]);
+  }, [schemas, tables, views, functions, connections, activeStatuses]);
 
   useEffect(() => {
     const handler = () => {
@@ -184,6 +211,22 @@ export default function QuickOpen() {
     return () => window.removeEventListener("quick-open", handler);
   }, []);
 
+  // #1235 — cross-window receiver: a Quick Open pick in another window that
+  // targets THIS window's connection arrives as a Tauri event; convert it back
+  // into the local DOM CustomEvent the in-window handlers already consume.
+  useEffect(() => {
+    if (sidebarConnId === null) return;
+    let unlisten: UnlistenFn | undefined;
+    void subscribeIntents(sidebarConnId)
+      .then((fn) => {
+        unlisten = fn;
+      })
+      .catch(() => {
+        // Tauri runtime unavailable (jsdom) — no cross-window delivery to wire.
+      });
+    return () => unlisten?.();
+  }, [sidebarConnId]);
+
   // Deterministic ranking + subsequence fuzzy + `schema.name` scoping. Empty
   // query returns the inventory unchanged. See quickOpenRanking.ts.
   const filtered = useMemo(() => rankQuickOpen(items, search), [items, search]);
@@ -194,37 +237,24 @@ export default function QuickOpen() {
   };
 
   const handleSelect = (item: QuickOpenItem) => {
-    if (item.kind === "schema") {
-      // Reveal the schema in the sidebar tree (expand + focus/scroll). The
-      // mounted SchemaTree for this connection consumes the event; see
-      // SchemaTree.tsx's `reveal-schema` listener.
-      window.dispatchEvent(
-        new CustomEvent("reveal-schema", {
-          detail: { connectionId: item.connectionId, schema: item.schema },
-        }),
-      );
-    } else if (item.kind === "function" || item.kind === "procedure") {
-      // Open in a new query tab with the function source pre-filled
-      window.dispatchEvent(
-        new CustomEvent("quickopen-function", {
-          detail: {
-            connectionId: item.connectionId,
-            source: item.source ?? "",
-            title: `${item.schema}.${item.name}`,
-          },
-        }),
-      );
+    const intent = toQuickOpenIntent(item);
+    if (item.connectionId === sidebarConnId) {
+      // Target is this window's connection — reveal / open directly. The
+      // in-window handlers (SchemaTree's `reveal-schema`, App's `navigate-table`
+      // / `quickopen-function`) consume the DOM event.
+      dispatchLocalIntent(intent);
     } else {
-      window.dispatchEvent(
-        new CustomEvent("navigate-table", {
-          detail: {
-            connectionId: item.connectionId,
-            schema: item.schema,
-            table: item.name,
-            objectKind: item.kind,
-          },
-        }),
-      );
+      // #1235 — cross-connection: jump to the target connection's workspace
+      // window, then forward the intent so it lands there. Same entry point for
+      // every result kind (table / view / schema / function).
+      void openWorkspaceWindow(item.connectionId)
+        .then(() => forwardIntent(intent))
+        .catch((e) => {
+          logger.warn(
+            `[quick-open] cross-connection jump to ${item.connectionId} failed:`,
+            e instanceof Error ? e.message : e,
+          );
+        });
     }
     handleClose();
   };

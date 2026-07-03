@@ -315,31 +315,6 @@ describe("QuickOpen", () => {
     window.removeEventListener("reveal-schema", reveal);
   });
 
-  it("scopes schema results to this window's sidebar connection only", async () => {
-    mockSidebarConnId = "c1"; // sidebar renders c1; c2 is a different window
-    setupStores({
-      connections: [makeConn("c1", "Prod"), makeConn("c2", "Dev")],
-      active: ["c1", "c2"],
-      schemas: { c1: [{ name: "sales" }], c2: [{ name: "sales" }] },
-    });
-
-    render(<QuickOpen />);
-    act(() => {
-      window.dispatchEvent(new CustomEvent("quick-open"));
-    });
-
-    const input = screen.getByPlaceholderText(/search tables/i);
-    await act(async () => {
-      fireEvent.change(input, { target: { value: "sales" } });
-    });
-
-    // Both connections have a "sales" schema, but only c1's is revealable in
-    // this window, so exactly one schema result appears — the c1 one.
-    const options = screen.getAllByRole("option");
-    expect(options).toHaveLength(1);
-    expect(options[0]).toHaveTextContent("Prod");
-  });
-
   it("does not surface schema results for flat (SQLite) connections", async () => {
     mockSidebarConnId = "s1"; // sidebar renders s1, so scope is satisfied
     setupStores({
@@ -452,6 +427,7 @@ describe("QuickOpen", () => {
   });
 
   it("Enter on a table dispatches navigate-table with objectKind=table", async () => {
+    mockSidebarConnId = "c1"; // same-connection pick → local dispatch, no jump
     const handler = vi.fn();
     window.addEventListener("navigate-table", handler);
 
@@ -484,6 +460,7 @@ describe("QuickOpen", () => {
   });
 
   it("Enter on a view dispatches navigate-table with objectKind=view", async () => {
+    mockSidebarConnId = "c1"; // same-connection pick → local dispatch, no jump
     const handler = vi.fn();
     window.addEventListener("navigate-table", handler);
 
@@ -513,6 +490,7 @@ describe("QuickOpen", () => {
   });
 
   it("Enter on a function dispatches quickopen-function with source", async () => {
+    mockSidebarConnId = "c1"; // same-connection pick → local dispatch, no jump
     const handler = vi.fn();
     window.addEventListener("quickopen-function", handler);
 
@@ -552,6 +530,7 @@ describe("QuickOpen", () => {
   });
 
   it("ArrowDown / ArrowUp move active row, Enter activates it", async () => {
+    mockSidebarConnId = "c1"; // same-connection pick → local dispatch, no jump
     const handler = vi.fn();
     window.addEventListener("navigate-table", handler);
 
@@ -591,6 +570,7 @@ describe("QuickOpen", () => {
   });
 
   it("clicking a row dispatches and closes modal", async () => {
+    mockSidebarConnId = "c1"; // same-connection pick → local dispatch, no jump
     const handler = vi.fn();
     window.addEventListener("navigate-table", handler);
 
