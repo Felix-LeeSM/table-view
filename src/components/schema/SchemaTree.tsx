@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
@@ -176,12 +176,21 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
     treeShape === "with-schema" && visibleRows.length > VIRTUALIZE_THRESHOLD;
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const headerRef = useRef<HTMLDivElement>(null);
+
+  // The virtualized list is not at the top of its scroll container — the
+  // "Schemas" header (label + action buttons) sits above it. Feed the
+  // header height to the virtualizer as `scrollMargin` so its coordinate
+  // origin matches where the list actually starts; without it the last
+  // rows fall past the computed end and the bottom of the list clips.
+  const [scrollMargin, setScrollMargin] = useState(0);
 
   const rowVirtualizer = useVirtualizer({
     count: shouldVirtualize ? visibleRows.length : 0,
     getScrollElement: () => scrollContainerRef.current,
     estimateSize: () => ROW_HEIGHT_ESTIMATE,
     overscan: 8,
+    scrollMargin,
   });
 
   // Sprint 262 Slice B — sidebar scrollTop persistence per `(connId, db)`.
@@ -197,6 +206,23 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
   // focusable row is the default tab stop until the user moves focus, so
   // the tree is always reachable with a single Tab.
   const treeRef = useRef<HTMLDivElement>(null);
+
+  // Measure the header offset that precedes the list and keep it in sync
+  // as the header reflows. `offsetTop` is relative to the (now `relative`)
+  // scroll container, so it equals the header height that the virtualizer
+  // needs as `scrollMargin`.
+  useLayoutEffect(() => {
+    const tree = treeRef.current;
+    if (!tree) return;
+    const measure = () => setScrollMargin(tree.offsetTop);
+    measure();
+    const header = headerRef.current;
+    if (!header) return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(header);
+    return () => observer.disconnect();
+  }, []);
+
   const roving = useTreeRoving(
     visibleRows,
     {
@@ -274,7 +300,7 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
     <div
       ref={scrollContainerRef}
       onScroll={handleScroll}
-      className="flex flex-col select-none overflow-y-auto"
+      className="relative flex flex-col select-none overflow-y-auto"
     >
       {/* sr-only connection name for accessibility */}
       <span className="sr-only">{connectionName || connectionId}</span>
@@ -284,7 +310,10 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
           text. MySQL (`no-schema`) and SQLite (`flat`) hide the label
           because schema == database in their model. Action buttons row
           stays visible for all RDB shapes. */}
-      <div className="flex items-center justify-between px-3 py-1">
+      <div
+        ref={headerRef}
+        className="flex items-center justify-between px-3 py-1"
+      >
         {treeShape === "with-schema" ? (
           <span className="text-3xs font-medium uppercase tracking-wider text-muted-foreground">
             {t("schemasHeader")}

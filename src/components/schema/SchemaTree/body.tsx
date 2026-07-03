@@ -61,9 +61,18 @@ function VirtualizedBranch({
   // the windowed rows live in the DOM.
   const virtualItems: VirtualItem[] = rowVirtualizer.getVirtualItems();
   const totalSize = rowVirtualizer.getTotalSize();
-  const paddingTop = virtualItems.length ? virtualItems[0]!.start : 0;
+  // `getVirtualItems()` reports offsets in scroll-element coordinates, i.e.
+  // shifted down by `scrollMargin` (the header sitting above this list in
+  // the same scroll container). The spacers position rows *within* this
+  // list container, which already starts below the header, so subtract
+  // `scrollMargin` back out — otherwise the whole list is pushed down by
+  // the header height and its tail clips off the bottom.
+  const scrollMargin = rowVirtualizer.options.scrollMargin;
+  const paddingTop = virtualItems.length
+    ? virtualItems[0]!.start - scrollMargin
+    : 0;
   const paddingBottom = virtualItems.length
-    ? totalSize - virtualItems[virtualItems.length - 1]!.end
+    ? totalSize - (virtualItems[virtualItems.length - 1]!.end - scrollMargin)
     : 0;
   return (
     <div style={{ position: "relative" }}>
@@ -73,7 +82,15 @@ function VirtualizedBranch({
       {virtualItems.map((virtualRow) => {
         const row = visibleRows[virtualRow.index]!;
         return (
-          <div key={row.key} data-index={virtualRow.index}>
+          <div
+            key={row.key}
+            data-index={virtualRow.index}
+            // Attach the virtualizer's ResizeObserver ref so rows report
+            // their real height instead of staying pinned to the 26px
+            // estimate (which under-counts taller rows like the search
+            // input and clips the list bottom).
+            ref={rowVirtualizer.measureElement}
+          >
             {renderVisibleRow(row, ctx)}
           </div>
         );
