@@ -284,10 +284,15 @@ const RDB_CAPABILITIES: &[BackendAdapterCapability] = &[
     BackendAdapterCapability::RelationalQuery,
     BackendAdapterCapability::RelationalSchemaMutation,
 ];
+// Wired production SQLite adapter (`make_adapter` -> `SqliteAdapter`) implements
+// bounded structured DDL via `create_table` / `create_table_plan`, so the
+// declaration claims `RelationalSchemaMutation` to match the wired path (#1044).
+// Other DDL surfaces stay `Unsupported`; the flag reflects support, not full DDL.
 const SQLITE_RDB_CAPABILITIES: &[BackendAdapterCapability] = &[
     BackendAdapterCapability::Lifecycle,
     BackendAdapterCapability::RelationalCatalog,
     BackendAdapterCapability::RelationalQuery,
+    BackendAdapterCapability::RelationalSchemaMutation,
 ];
 const DUCKDB_RDB_CAPABILITIES: &[BackendAdapterCapability] = &[
     BackendAdapterCapability::Lifecycle,
