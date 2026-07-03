@@ -616,6 +616,42 @@ mod tests {
         cleanup_key_env();
     }
 
+    /// The race-safety headline: a second `create_key_file` on an existing path
+    /// must NOT clobber the first writer's key (the losing concurrent creator
+    /// re-reads the winner). This exercises the exclusive-link `AlreadyExists`
+    /// branch deterministically — swap the `hard_link` back to `rename` and
+    /// this test fails, catching a clobber-bug regression. No env / no serial:
+    /// `create_key_file` takes an explicit path with no global state.
+    #[test]
+    fn create_key_file_second_write_preserves_first_key() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join(".key");
+        let key_a = vec![0xAAu8; 32];
+        let key_b = vec![0xBBu8; 32];
+
+        create_key_file(&path, &key_a).unwrap();
+        // A racing creator arriving second: succeeds (loser's create is not an
+        // error) but must leave the winner's key on disk untouched.
+        create_key_file(&path, &key_b).unwrap();
+
+        let got = read_key_file(&path).unwrap();
+        assert_eq!(
+            got, key_a,
+            "exclusive publish must preserve the first-written key, not clobber it"
+        );
+
+        let leftovers: Vec<String> = fs::read_dir(dir.path())
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .filter(|n| n.starts_with(".key.tmp."))
+            .collect();
+        assert!(
+            leftovers.is_empty(),
+            "temp files must be cleaned up regardless of publish outcome: {leftovers:?}"
+        );
+    }
+
     #[test]
     fn encrypt_decrypt_roundtrip() {
         let key = test_key();
