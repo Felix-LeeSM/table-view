@@ -5,14 +5,14 @@
  * |---|---|---|
  * | RDB Safe Mode / history / result state | WARN-tier UPDATE waits for review; confirm executes, completes the tab, and records SQL history. Partial multi-statement failure keeps visible rows from the last success while marking history as error. | #761 |
  * | Mongo dispatch / history | Parser-routed `find` failures set the tab error and record document history with the parsed query mode. | #762 |
- * | KV dispatch | Redis command execution uses the KV IPC wrapper, completes the tab, and skips query history because KV history wire support is absent. | #763 |
- * | Search dispatch | Search DSL JSON dispatches to the Search IPC wrapper, stores `completedSearch`, and skips query history because Search history wire support is absent. | #763 |
+ * | KV dispatch | Redis command execution uses the KV IPC wrapper, completes the tab, and records a `kv`/`command` history entry (#1171). | #763/#1171 |
+ * | Search dispatch | Search DSL JSON dispatches to the Search IPC wrapper, stores `completedSearch`, and records a `search`/`dsl` history entry (#1171). | #763/#1171 |
  *
  * #743/#744 no-impact: this file touches no profile registry, capability, Tauri
  * error-envelope, or backend error serialization code.
  */
 import { act, renderHook, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { setupTauriMock } from "@/test-utils/tauriMock";
 import {
   getTestWorkspace,
@@ -253,6 +253,13 @@ describe("useQueryExecution — issue #737 characterization matrix", () => {
     useToastStore.setState({ toasts: [] });
   });
 
+  // Issue #1171 — kv/search executions now record history; clear the shared
+  // optimistic cache after each test so recorded rows never leak into the
+  // singleton store and pollute later test files in the same worker.
+  afterEach(() => {
+    useQueryHistoryStore.setState({ recentVisible: [] });
+  });
+
   it("RDB WARN waits for review, then confirm completes result and records success history", async () => {
     executeQueryDryRunMock.mockResolvedValueOnce([UPDATE_RESULT]);
     executeQueryMock.mockResolvedValueOnce(UPDATE_RESULT);
@@ -372,7 +379,7 @@ describe("useQueryExecution — issue #737 characterization matrix", () => {
     });
   });
 
-  it("KV Redis dispatch completes the tab and skips query history", async () => {
+  it("KV Redis dispatch completes the tab and records a kv/command history entry (#1171)", async () => {
     executeKvCommandMock.mockResolvedValueOnce(SELECT_RESULT);
     const tab = seedRedisTab("GET profile:1");
     const { result } = renderHook(() => useQueryExecution({ tab }));
@@ -396,10 +403,15 @@ describe("useQueryExecution — issue #737 characterization matrix", () => {
       throw new Error(`expected completed, got ${completed.queryState.status}`);
     }
     expect(completed.queryState.result).toEqual(SELECT_RESULT);
-    expect(useQueryHistoryStore.getState().recentVisible).toHaveLength(0);
+    const rows = await waitForHistoryRows(1);
+    expect(rows[0]).toMatchObject({
+      paradigm: "kv",
+      queryMode: "command",
+      status: "success",
+    });
   });
 
-  it("Search DSL dispatch completes with a Search result and skips query history", async () => {
+  it("Search DSL dispatch completes with a Search result and records a search/dsl history entry (#1171)", async () => {
     executeSearchQueryMock.mockResolvedValueOnce(SEARCH_RESULT);
     const sql = JSON.stringify({
       index: "logs-2026.06.10",
@@ -438,6 +450,11 @@ describe("useQueryExecution — issue #737 characterization matrix", () => {
       );
     }
     expect(completed.queryState.result).toEqual(SEARCH_RESULT);
-    expect(useQueryHistoryStore.getState().recentVisible).toHaveLength(0);
+    const rows = await waitForHistoryRows(1);
+    expect(rows[0]).toMatchObject({
+      paradigm: "search",
+      queryMode: "dsl",
+      status: "success",
+    });
   });
 });

@@ -94,6 +94,29 @@ describe("recordHistoryEntry", () => {
   });
 
   it.each([
+    ["kv", "GET user:1", "command"],
+    ["search", '{"index":"logs","body":{}}', "dsl"],
+  ] as const)(
+    "records %s paradigm entries with the %s query mode (issue #1171)",
+    (paradigm, sql, expectedMode) => {
+      recordHistoryEntry({
+        sql,
+        executedAt: 1_700_000_000_000,
+        duration: 5,
+        status: "success",
+        connectionId: "conn-1",
+        paradigm,
+        source: "raw",
+      } as RecordHistoryEntryArgs);
+
+      const entry = useQueryHistoryStore.getState().recentVisible[0];
+      expect(entry?.paradigm).toBe(paradigm);
+      expect(entry?.queryMode).toBe(expectedMode);
+      expect(countAddHistoryCalls()).toBe(1);
+    },
+  );
+
+  it.each([
     ["document", "sql"],
     ["rdb", "deleteMany"],
   ] as const)(

@@ -8,6 +8,15 @@ import { isRecord } from "./queryHelpers";
 
 type SearchTabContext = Pick<QueryTab, "id" | "connectionId" | "searchTarget">;
 
+/** Issue #1171 — Search execution history payload (paradigm/queryMode resolved
+ * by the `recordHistory` factory in `useQueryContext`). */
+export interface SearchHistoryPayload {
+  sql: string;
+  executedAt: number;
+  duration: number;
+  status: "success" | "error" | "cancelled";
+}
+
 interface SearchLifecycleActions {
   updateQueryState: (tabId: string, state: QueryState) => void;
   completeSearchQuery: (
@@ -17,6 +26,7 @@ interface SearchLifecycleActions {
   ) => void;
   cancelRunningQuery: (tabId: string, queryId: string, message: string) => void;
   failQuery: (tabId: string, queryId: string, errorMessage: string) => void;
+  recordHistory: (payload: SearchHistoryPayload) => void;
 }
 
 export interface ExecuteSearchDslQueryRequest extends SearchLifecycleActions {
@@ -72,6 +82,7 @@ export async function executeSearchDslQuery({
   completeSearchQuery,
   failQuery,
   cancelRunningQuery,
+  recordHistory,
 }: ExecuteSearchDslQueryRequest): Promise<void> {
   let request: SearchQueryRequest;
   try {
@@ -85,17 +96,36 @@ export async function executeSearchDslQuery({
   }
 
   const queryId = `${tab.id}-${Date.now()}`;
+  const startTime = Date.now();
   updateQueryState(tab.id, { status: "running", queryId });
   try {
     const result = await executeSearchQuery(tab.connectionId, request, queryId);
     completeSearchQuery(tab.id, queryId, result);
+    recordHistory({
+      sql,
+      executedAt: Date.now(),
+      duration: Date.now() - startTime,
+      status: "success",
+    });
   } catch (err) {
     const message = getTauriErrorMessage(err);
     if (isSearchCancellationMessage(message)) {
       cancelRunningQuery(tab.id, queryId, "Search query cancelled");
+      recordHistory({
+        sql,
+        executedAt: Date.now(),
+        duration: Date.now() - startTime,
+        status: "cancelled",
+      });
       return;
     }
     failQuery(tab.id, queryId, message);
+    recordHistory({
+      sql,
+      executedAt: Date.now(),
+      duration: Date.now() - startTime,
+      status: "error",
+    });
   }
 }
 

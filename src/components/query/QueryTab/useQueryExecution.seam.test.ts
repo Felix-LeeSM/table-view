@@ -118,10 +118,12 @@ describe("useQueryExecution KV/Search seams", () => {
     expect(seamSource).toContain("executeKvCommand");
     expect(seamSource).toContain("parseRedisDatabaseIndex");
     expect(seamSource).toContain("kvCommandConfirmationKey");
+    // Issue #1171 — KV execution now records query history through the shared
+    // `recordHistory` callback (paradigm/queryMode resolved in useQueryContext).
+    expect(seamSource).toContain("recordHistory");
     expect(seamSource).not.toContain("executeSearchQuery");
     expect(seamSource).not.toContain("executeRdbQuery");
     expect(seamSource).not.toContain("executeMongoQuery");
-    expect(seamSource).not.toContain("recordHistory");
   });
 
   it("keeps Search result routing out of RDB/Mongo/KV seams", () => {
@@ -131,9 +133,11 @@ describe("useQueryExecution KV/Search seams", () => {
     expect(seamSource).toContain("parseSearchDslRequest");
     expect(seamSource).toContain("executeSearchQuery");
     expect(seamSource).toContain("completeSearchQuery");
+    // Issue #1171 — Search execution now records query history through the
+    // shared `recordHistory` callback.
+    expect(seamSource).toContain("recordHistory");
     expect(seamSource).not.toContain("executeKvCommand");
     expect(seamSource).not.toContain("executeRdbQuery");
     expect(seamSource).not.toContain("executeMongoQuery");
-    expect(seamSource).not.toContain("recordHistory");
   });
 });

@@ -79,8 +79,8 @@ export type RecordHistoryEntryArgs = RecordHistoryEntryCommonArgs &
 /**
  * Frontend history input → backend `DocumentQueryMode` 매핑.
  * `countDocuments` 가 유일한 legacy method-name 정정 — 나머지는 1:1.
- * `kv` / `search` paradigm 은 본 sprint 범위 밖이라 호출자가
- * `paradigm: "rdb" | "document"` 만 넘긴다 (외 paradigm 은 호출 site 가 없음).
+ * `kv` / `search` paradigm 은 `toAddHistoryEntryRequest` 가 고정 query mode
+ * (`command` / `dsl`) 로 직접 처리 (#1171) — 본 함수는 document 전용.
  */
 function toDocumentQueryMode(
   mode: DocumentRecordHistoryQueryMode | undefined,
@@ -158,8 +158,16 @@ function toAddHistoryEntryRequest(
     };
   }
 
-  // kv / search — no backend wire support today. silent skip to avoid
-  // backend serde reject (`paradigm: "kv"` 자체가 union 에 부재).
+  // Issue #1171 — kv (Redis/Valkey) / search (ES/OpenSearch) now record. Each
+  // paradigm has a single backend query mode; the display path labels by
+  // paradigm (#1055/#1166), so the fixed mode is all the wire needs.
+  if (args.paradigm === "kv") {
+    return { ...common, paradigm: "kv", queryMode: "command" };
+  }
+  if (args.paradigm === "search") {
+    return { ...common, paradigm: "search", queryMode: "dsl" };
+  }
+
   return null;
 }
 

@@ -30,6 +30,12 @@ import type { Paradigm } from "@/types/connection";
 /** RDB paradigm — currently only `sql` query mode is supported. */
 export type RdbQueryMode = "sql";
 
+/** KV paradigm (Redis/Valkey) — single `command` query mode (#1171). */
+export type KvQueryMode = "command";
+
+/** Search paradigm (ES/OpenSearch) — single `dsl` query mode (#1171). */
+export type SearchQueryMode = "dsl";
+
 /** Document paradigm — mongosh command family. */
 export type DocumentQueryMode =
   | "find"
@@ -56,7 +62,9 @@ export type DocumentQueryMode =
  */
 export type HistoryQueryMode =
   | { paradigm: "rdb"; queryMode: RdbQueryMode }
-  | { paradigm: "document"; queryMode: DocumentQueryMode };
+  | { paradigm: "document"; queryMode: DocumentQueryMode }
+  | { paradigm: "kv"; queryMode: KvQueryMode }
+  | { paradigm: "search"; queryMode: SearchQueryMode };
 
 /**
  * Filter variant — same shape as `HistoryQueryMode` but with `queryMode`
@@ -65,7 +73,9 @@ export type HistoryQueryMode =
  */
 export type HistoryQueryModeFilter =
   | { paradigm: "rdb"; queryMode?: RdbQueryMode }
-  | { paradigm: "document"; queryMode?: DocumentQueryMode };
+  | { paradigm: "document"; queryMode?: DocumentQueryMode }
+  | { paradigm: "kv"; queryMode?: KvQueryMode }
+  | { paradigm: "search"; queryMode?: SearchQueryMode };
 
 // ---------------------------------------------------------------------------
 // add_history_entry

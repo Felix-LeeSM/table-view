@@ -18,10 +18,20 @@ export interface PendingKvConfirmation {
 
 type KvTabContext = Pick<QueryTab, "id" | "connectionId">;
 
+/** Issue #1171 — KV execution history payload (paradigm/queryMode resolved by
+ * the `recordHistory` factory in `useQueryContext`). */
+export interface KvHistoryPayload {
+  sql: string;
+  executedAt: number;
+  duration: number;
+  status: "success" | "error" | "cancelled";
+}
+
 interface KvLifecycleActions {
   updateQueryState: (tabId: string, state: QueryState) => void;
   completeQuery: (tabId: string, queryId: string, result: QueryResult) => void;
   failQuery: (tabId: string, queryId: string, errorMessage: string) => void;
+  recordHistory: (payload: KvHistoryPayload) => void;
 }
 
 export interface ExecuteKvCommandNowRequest extends KvLifecycleActions {
@@ -69,8 +79,10 @@ export async function executeKvCommandNow({
   updateQueryState,
   completeQuery,
   failQuery,
+  recordHistory,
 }: ExecuteKvCommandNowRequest): Promise<void> {
   const queryId = `${tab.id}-${Date.now()}`;
+  const startTime = Date.now();
   updateQueryState(tab.id, { status: "running", queryId });
   try {
     const result = await executeKvCommand(
@@ -79,12 +91,24 @@ export async function executeKvCommandNow({
       queryId,
     );
     completeQuery(tab.id, queryId, result);
+    recordHistory({
+      sql: command,
+      executedAt: Date.now(),
+      duration: Date.now() - startTime,
+      status: "success",
+    });
   } catch (err) {
     failQuery(
       tab.id,
       queryId,
       err instanceof Error ? err.message : String(err),
     );
+    recordHistory({
+      sql: command,
+      executedAt: Date.now(),
+      duration: Date.now() - startTime,
+      status: "error",
+    });
   }
 }
 
@@ -98,6 +122,7 @@ export async function executeKvQuery({
   updateQueryState,
   completeQuery,
   failQuery,
+  recordHistory,
   setPendingKvConfirm,
 }: ExecuteKvQueryRequest): Promise<void> {
   if (!canExecuteQuery) {
@@ -143,5 +168,6 @@ export async function executeKvQuery({
     updateQueryState,
     completeQuery,
     failQuery,
+    recordHistory,
   });
 }

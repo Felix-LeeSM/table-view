@@ -1,11 +1,12 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { setupTauriMock } from "@/test-utils/tauriMock";
 import {
   getTestWorkspace,
   seedWorkspace,
 } from "@/stores/__tests__/workspaceStoreTestHelpers";
 import { useConnectionStore } from "@stores/connectionStore";
+import { useQueryHistoryStore } from "@stores/queryHistoryStore";
 import { useSafeModeStore } from "@stores/safeModeStore";
 import { useWorkspaceStore } from "@stores/workspaceStore";
 import { useQueryExecution } from "./useQueryExecution";
@@ -102,6 +103,14 @@ describe("useQueryExecution — Redis command dispatch", () => {
     useWorkspaceStore.setState({ workspaces: {} });
     useConnectionStore.setState({ connections: [] });
     useSafeModeStore.setState({ mode: "strict" });
+    // Issue #1171 — KV executions now record query history. These tests assert
+    // dispatch only; reset the shared optimistic cache before and after so the
+    // recorded rows never leak into the singleton store (cross-file pollution).
+    useQueryHistoryStore.setState({ recentVisible: [] });
+  });
+
+  afterEach(() => {
+    useQueryHistoryStore.setState({ recentVisible: [] });
   });
 
   it("runs bounded Redis commands through the KV IPC wrapper", async () => {

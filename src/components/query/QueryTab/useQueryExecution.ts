@@ -150,9 +150,10 @@ export function useQueryExecution({
         updateQueryState,
         completeQuery,
         failQuery,
+        recordHistory,
       });
     },
-    [tab, updateQueryState, completeQuery, failQuery],
+    [tab, updateQueryState, completeQuery, failQuery, recordHistory],
   );
 
   const confirmKvDangerous = useCallback(async () => {
@@ -500,6 +501,7 @@ export function useQueryExecution({
         updateQueryState,
         completeQuery,
         failQuery,
+        recordHistory,
         setPendingKvConfirm,
       });
       return;
@@ -513,6 +515,7 @@ export function useQueryExecution({
         completeSearchQuery,
         cancelRunningQuery,
         failQuery,
+        recordHistory,
       });
       return;
     }
