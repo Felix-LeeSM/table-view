@@ -9,9 +9,19 @@ export type SearchErrorScope =
   | "query"
   | "deletePreview";
 
+import {
+  classifyDriverError,
+  type DriverErrorHint,
+} from "@lib/errors/driverErrorHints";
+
 export interface SearchUiError {
   label: string;
   detail: string;
+  /**
+   * 크리덴셜 redact 후 원문(detail)을 분류해 얻은 행동 힌트 (issue #1056).
+   * 미분류면 undefined — 표면은 label + detail(원문)만 보여준다 (fail-open).
+   */
+  hint?: DriverErrorHint;
 }
 
 const ERROR_LABELS: Record<SearchErrorScope, string> = {
@@ -40,9 +50,12 @@ export function formatSearchUiError(
   const detail =
     redactSearchErrorDetail(stringifySearchError(error)) ||
     "Unknown Search error";
+  // redact 후 분류 — 힌트는 원문(detail)에서만 나온다.
+  const hint = classifyDriverError(detail);
   return {
     label: ERROR_LABELS[scope],
     detail,
+    ...(hint ? { hint } : {}),
   };
 }
 

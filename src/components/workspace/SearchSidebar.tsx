@@ -22,6 +22,7 @@ import {
   formatSearchUiError,
   type SearchUiError,
 } from "@lib/search/searchUiError";
+import { DriverErrorHint } from "@components/errors/DriverErrorHint";
 import { listSearchCatalogSummary } from "@lib/tauri/search";
 import type {
   SearchAliasInfo,
@@ -264,6 +265,11 @@ export default function SearchSidebar({ connectionId }: SearchSidebarProps) {
           className="border-b border-border px-3 py-2 text-destructive"
         >
           <div className="font-medium">{error.label}</div>
+          <DriverErrorHint
+            hint={error.hint ?? null}
+            showTitle={false}
+            className="mt-1"
+          />
           <p className="mt-1 whitespace-pre-wrap text-3xs">{error.detail}</p>
         </div>
       )}

@@ -15,6 +15,7 @@ import { ExportButton } from "@components/shared/ExportButton";
 import { Skeleton } from "@components/ui/skeleton";
 import type { QueryState } from "@/types/query";
 import { formatSearchUiError } from "@lib/search/searchUiError";
+import { DriverErrorHint } from "@components/errors/DriverErrorHint";
 import type {
   SearchAggregationEnvelope,
   SearchHitEnvelope,
@@ -135,6 +136,11 @@ function SearchErrorState({ message }: { message: string }) {
           <AlertTriangle size={14} aria-hidden="true" />
           <span>{error.label}</span>
         </div>
+        <DriverErrorHint
+          hint={error.hint ?? null}
+          showTitle={false}
+          className="mt-1"
+        />
         <p className="mt-1 whitespace-pre-wrap text-xs">{error.detail}</p>
       </div>
     </section>

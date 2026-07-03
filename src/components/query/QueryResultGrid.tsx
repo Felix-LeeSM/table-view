@@ -19,6 +19,8 @@ import { CopyTextButton } from "@components/shared/CopyTextButton";
 import { ExportButton } from "@components/shared/ExportButton";
 import { getDataSourceProfile } from "@/types/dataSource";
 import { SearchResultView } from "@components/search/SearchResultView";
+import { DriverErrorHint } from "@components/errors/DriverErrorHint";
+import { classifyDriverError } from "@lib/errors/driverErrorHints";
 import EditableQueryResultGrid from "./EditableQueryResultGrid";
 import { QueryResultTable } from "./QueryResultTable";
 import ScalarOrListPanel from "./ScalarOrListPanel";
@@ -582,7 +584,12 @@ function CompletedMultiResult({
               <div className="font-medium">
                 {t("resultGrid.statementFailed", { n: idx + 1 })}
               </div>
-              <div className="mt-1 whitespace-pre-wrap text-xs">
+              <DriverErrorHint
+                hint={classifyDriverError(stmt.error ?? "")}
+                showTitle={false}
+                className="mt-1"
+              />
+              <div className="mt-1 whitespace-pre-wrap text-xs opacity-80">
                 {stmt.error ?? t("resultGrid.unknownError")}
               </div>
             </div>
@@ -629,13 +636,17 @@ export default function QueryResultGrid({
 
   // Error state
   if (queryState.status === "error") {
+    const hint = classifyDriverError(queryState.error);
     return (
       <div className="flex flex-1 flex-col">
         <div
           role="alert"
           className="border-b border-border bg-muted px-3 py-2 text-sm text-destructive"
         >
-          {queryState.error}
+          <DriverErrorHint hint={hint} className="mb-1" />
+          <div className={hint ? "text-xs opacity-80" : undefined}>
+            {queryState.error}
+          </div>
         </div>
       </div>
     );

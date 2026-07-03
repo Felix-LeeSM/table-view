@@ -27,12 +27,79 @@ export interface DriverErrorHint {
 }
 
 /**
- * 카테고리 → 원문 needle 목록. **순서가 우선순위다** (먼저 매칭되면 이긴다).
- * needle 은 소문자, `includes` 부분일치. GREEN 커밋에서 채운다.
+ * 카테고리 → 원문 needle 목록. **배열 순서가 우선순위다** (먼저 매칭되면 이긴다).
+ * needle 은 소문자, `includes` 부분일치.
+ *
+ * 우선순위 근거:
+ *   - authFailed > permissionDenied: mysql 은 "denied" 를 둘 다 쓴다
+ *     ("Access denied for user" 인증 vs "command denied to user" 권한).
+ *   - connectionRefused > timeout: mongo 는 "Server selection timeout ...
+ *     Error: Connection refused" 처럼 timeout 래퍼 안에 root cause(refused)를
+ *     담는다 — 사용자에게 더 실행가능한 refused 힌트가 이겨야 한다.
  */
 const PATTERNS: ReadonlyArray<
   readonly [DriverErrorCategory, readonly string[]]
-> = [];
+> = [
+  [
+    "authFailed",
+    [
+      "password authentication failed", // pg 28P01
+      "access denied for user", // mysql 1045
+      "login failed for user", // mssql 18456
+      "ora-01017", // oracle invalid username/password
+      "invalid username/password", // oracle (code 미포함 변형)
+      "wrongpass", // redis
+      "noauth", // redis auth required
+      "authentication required", // redis / generic
+      "authentication failed", // mongo code 18 / generic
+      "authentication error", // AppError::SearchAuthentication prefix
+      "bad credentials", // ES / generic
+    ],
+  ],
+  [
+    "permissionDenied",
+    [
+      "permission denied", // pg 42501 "permission denied for ..."
+      "command denied to user", // mysql 1142
+      "permission was denied", // mssql "The SELECT permission was denied"
+      "not authorized", // mongo code 13
+      "insufficient privilege", // oracle text
+      "ora-01031", // oracle insufficient privileges
+      "permission error", // AppError::SearchPermission prefix
+    ],
+  ],
+  [
+    "unknownHost",
+    [
+      "failed to lookup address information", // rust std / sqlx
+      "nodename nor servname", // macOS getaddrinfo
+      "name or service not known", // linux getaddrinfo
+      "name resolution", // "Temporary failure in name resolution"
+      "no such host", // windows / generic
+      "could not resolve host", // libcurl / generic
+      "getaddrinfo", // node / generic ENOTFOUND
+    ],
+  ],
+  [
+    "connectionRefused",
+    [
+      "connection refused", // pg/mysql/mssql/redis/mongo (+ "(os error 61/111)")
+      "actively refused", // windows
+      "econnrefused", // node / generic
+      "os error 61", // macOS ECONNREFUSED (bare IO error)
+      "os error 111", // linux ECONNREFUSED (bare IO error)
+    ],
+  ],
+  [
+    "timeout",
+    [
+      "timed out", // "connection timed out" / "operation timed out"
+      "timeout", // "server selection timeout" / "Search timeout error"
+      "os error 60", // macOS ETIMEDOUT (bare IO error)
+      "os error 110", // linux ETIMEDOUT (bare IO error)
+    ],
+  ],
+];
 
 export function classifyDriverError(message: string): DriverErrorHint | null {
   const haystack = message.toLowerCase();

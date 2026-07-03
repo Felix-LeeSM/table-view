@@ -22,6 +22,7 @@ import {
   ContextMenuSeparator,
 } from "@components/ui/context-menu";
 import ConnectionDialog from "./ConnectionDialog";
+import { classifyDriverError } from "@lib/errors/driverErrorHints";
 import { DB_TYPE_META } from "@lib/db-meta";
 import {
   AlertDialog,
@@ -122,6 +123,10 @@ export default function ConnectionItem({
   const isConnected = status.type === "connected";
   const isConnecting = status.type === "connecting";
   const errorMessage = status.type === "error" ? status.message : null;
+  // #1056 — 드라이버 원문을 사람 문장 + 행동 힌트로 분류. 미분류면 null 이라
+  // 기존처럼 원문만 보여준다 (fail-open).
+  const errorHint = errorMessage ? classifyDriverError(errorMessage) : null;
+  const errorSummary = errorHint ? t(errorHint.titleKey) : errorMessage;
   const [showErrorDetail, setShowErrorDetail] = useState(false);
 
   // Row aria-label 의 상태어는 standalone status-dot(대문자 "Connecting" 등)
@@ -327,16 +332,30 @@ export default function ConnectionItem({
             className="truncate text-xs text-destructive"
             title={errorMessage}
           >
-            {errorMessage}
+            {errorSummary}
           </span>
         </Button>
       )}
       {errorMessage && showErrorDetail && (
         <div className="flex w-full items-start gap-2 px-3 py-0">
           <span className="shrink-0 w-2" />
-          <span className="break-all text-xs text-destructive">
-            {errorMessage}
-          </span>
+          <div className="min-w-0 flex-1 text-destructive">
+            {errorHint && (
+              <>
+                <div className="text-xs font-medium">
+                  {t(errorHint.titleKey)}
+                </div>
+                <p className="mt-1 text-xs opacity-90">
+                  {t(errorHint.hintKey)}
+                </p>
+              </>
+            )}
+            <span
+              className={`block break-all text-xs text-destructive${errorHint ? " mt-1 opacity-80" : ""}`}
+            >
+              {errorMessage}
+            </span>
+          </div>
           <Button
             variant="ghost"
             size="icon-xs"

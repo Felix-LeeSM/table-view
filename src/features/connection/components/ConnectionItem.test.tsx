@@ -284,21 +284,69 @@ describe("ConnectionItem", () => {
     expect(mockConnect).not.toHaveBeenCalled();
   });
 
-  it("renders inline error message when error status", () => {
+  // Reason: #1056 (2026-07-03) — 분류된 드라이버 에러는 collapsed 에서 사람이
+  //         읽는 요약(title)을 보이고, 원문은 title 속성/expand 로 보존한다.
+  //         이전(Sprint 110)엔 원문을 그대로 collapsed 에 노출했다.
+  it("renders classified summary collapsed with raw preserved in title attr", () => {
     setStoreState({
       activeStatuses: {
-        "conn-1": { type: "error", message: "Connection refused" },
+        "conn-1": {
+          type: "error",
+          message: "Connection refused (os error 61)",
+        },
       },
     });
 
     render(<ConnectionItem connection={makeConnection()} />);
 
-    const errorSpan = screen.getByText("Connection refused");
+    const errorSpan = screen.getByText("Can't reach the database server");
     expect(errorSpan).toBeInTheDocument();
-    // Sprint 110 — error font promoted from text-3xs to text-xs.
     expect(errorSpan.className).toContain("text-xs");
     expect(errorSpan.className).toContain("text-destructive");
-    expect(errorSpan).toHaveAttribute("title", "Connection refused");
+    // 원문은 tooltip 으로 보존.
+    expect(errorSpan).toHaveAttribute(
+      "title",
+      "Connection refused (os error 61)",
+    );
+  });
+
+  // Reason: #1056 (2026-07-03) — fail-open. 미분류 원문은 그대로 collapsed 노출.
+  it("renders raw message collapsed when the error is unclassified", () => {
+    setStoreState({
+      activeStatuses: {
+        "conn-1": { type: "error", message: "some unmapped driver failure" },
+      },
+    });
+
+    render(<ConnectionItem connection={makeConnection()} />);
+
+    const errorSpan = screen.getByText("some unmapped driver failure");
+    expect(errorSpan).toBeInTheDocument();
+    expect(errorSpan.className).toContain("text-xs");
+    expect(errorSpan.className).toContain("text-destructive");
+    expect(errorSpan).toHaveAttribute("title", "some unmapped driver failure");
+  });
+
+  // Reason: #1056 (2026-07-03) — expand 는 행동 힌트 + 원문을 함께 보인다.
+  it("shows the action hint and raw message when a classified error is expanded", () => {
+    setStoreState({
+      activeStatuses: {
+        "conn-1": {
+          type: "error",
+          message: "Connection refused (os error 61)",
+        },
+      },
+    });
+
+    render(<ConnectionItem connection={makeConnection()} />);
+    fireEvent.click(screen.getByLabelText("Show error details"));
+
+    expect(
+      screen.getByText(/Check that the host and port are correct/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Connection refused (os error 61)"),
+    ).toBeInTheDocument();
   });
 
   it("shows full error message on click and hides on close", () => {
