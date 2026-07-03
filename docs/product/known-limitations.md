@@ -49,6 +49,12 @@ smoke or measurement gates:
   evidence is a deterministic page-size 1000 fixture plus advisory render
   p50/p95/env and virtualization DOM bounds only.
 - VoiceOver/NVDA paths for Quick Open, DataGrid, and SchemaTree.
+- Quick Open cross-connection results are global (every connected source) and
+  selecting another connection's result jumps to that connection's workspace
+  window. The window focus/create is reliable, but the forwarded action (open
+  the table tab / reveal the schema) is best-effort for a not-yet-open target
+  window because of a Tauri-event mount race; guaranteed replay-on-mount for a
+  fresh window is a follow-up.
 - Candidate-source UI accessibility smoke.
 - 1024x600 minimum viewport with max sidebar and dialog overlap.
 - Tauri production shortcut audit for `Cmd+Shift+I`.
