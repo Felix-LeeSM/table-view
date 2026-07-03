@@ -222,18 +222,6 @@ jobs:
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
 
-      - name: Cache Vite transform output
-        uses: actions/cache@v4
-        with:
-          path: node_modules/.vite
-          # Key on config + lockfile only; src 파일 해시는 거의 매 커밋
-          # 변경되어 cache miss 가 거의 100% 였음 (audit m6, 2026-05-05).
-          # restore-keys 로 부분 일치도 허용 → 전혀 다른 src 변경에서도
-          # cache reuse 가능.
-          key: vite-${{ runner.os }}-${{ hashFiles('vite.config.ts', 'tsconfig.json', 'package.json', 'pnpm-lock.yaml') }}
-          restore-keys: |
-            vite-${{ runner.os }}-
-
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
@@ -326,7 +314,14 @@ jobs:
       - name: Cache Rust artifacts
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: src-tauri -> target
+          # sql-parser-core is a path crate (not a workspace member), so the
+          # standalone `--manifest-path src-tauri/sql-parser-core/Cargo.toml`
+          # test below compiles into its OWN target dir. Caching only
+          # `src-tauri -> target` left it uncached, recompiling every run
+          # (audit 2026-07-03). List its target as a second workspace.
+          workspaces: |
+            src-tauri -> target
+            src-tauri/sql-parser-core -> target
           cache-bin: false
           save-if: ${{ github.ref == 'refs/heads/main' }}
 

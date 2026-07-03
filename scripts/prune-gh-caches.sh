@@ -3,8 +3,14 @@ set -euo pipefail
 
 REPO="${GITHUB_REPOSITORY:?GITHUB_REPOSITORY is required}"
 DRY_RUN="${PRUNE_DRY_RUN:-false}"
-MAX_AGE_DAYS="${PRUNE_MAX_AGE_DAYS:-30}"
-MIN_SIZE_GB="${PRUNE_MIN_SIZE_GB:-1}"
+# Defaults tuned 2026-07-03: GitHub already auto-evicts caches unaccessed for
+# 7 days, so a 30-day floor was effectively unreachable; and the real dead
+# caches (per-tag release trees) are each <1GiB, so a 1GiB size filter never
+# caught them. 7 days / 0GiB makes this a genuine backstop for when GitHub's
+# own eviction lags (observed 8-9 days). MIN_SIZE_GB=0 => MIN_SIZE_BYTES=0,
+# which passes every size.
+MAX_AGE_DAYS="${PRUNE_MAX_AGE_DAYS:-7}"
+MIN_SIZE_GB="${PRUNE_MIN_SIZE_GB:-0}"
 KEY_PREFIX="${PRUNE_KEY_PREFIX:-}"
 
 if ! command -v gh >/dev/null 2>&1; then
