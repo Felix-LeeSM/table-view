@@ -579,6 +579,9 @@ export default function QueryTab({ tab }: QueryTabProps) {
             queryState={tab.queryState}
             connectionId={tab.connectionId}
             database={tab.database}
+            // #1226 — live editor text; only a fallback. Edit-ability is
+            // judged against `tab.queryState.completed.sql` (executed snapshot)
+            // inside the grid, so post-run edits don't retoggle it.
             sql={tab.sql}
             tabId={tab.id}
             onAfterCommit={handleExecuteAndShowResults}

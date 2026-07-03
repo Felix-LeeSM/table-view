@@ -72,7 +72,14 @@ interface RdbSharedLifecycleActions {
 }
 
 interface RdbSingleLifecycleActions extends RdbSharedLifecycleActions {
-  completeQuery: (tabId: string, queryId: string, result: QueryResult) => void;
+  completeQuery: (
+    tabId: string,
+    queryId: string,
+    result: QueryResult,
+    // #1226 — executed statement, stored so the grid judges edit-ability
+    // against the run, not the live editor text.
+    sql?: string,
+  ) => void;
   failQuery: (tabId: string, queryId: string, errorMessage: string) => void;
 }
 
@@ -91,6 +98,9 @@ interface RdbDryRunActions {
     queryId: string,
     result: QueryResult,
     statements?: QueryStatementResult[],
+    // #1226 — executed statement for a single-statement dry-run (same
+    // edit-ability rationale as `completeQuery`).
+    sql?: string,
   ) => void;
   failQuery: (tabId: string, queryId: string, errorMessage: string) => void;
 }
@@ -242,7 +252,7 @@ export async function executeRdbSingleStatement({
       workspaceDb ?? undefined,
       safetyConfirmed,
     );
-    completeQuery(tab.id, queryId, result);
+    completeQuery(tab.id, queryId, result, stmt); // #1226 — pin executed SQL.
     if (result.queryType === "ddl") {
       clearSchemaForConnection(tab.connectionId);
     }
@@ -578,7 +588,15 @@ export async function executeRdbDryRun({
           executionTimeMs: 0,
           queryType: "ddl",
         } satisfies QueryResult);
-      completeQueryDryRun(tab.id, queryId, lastResult);
+      // #1226 — pin the executed statement so the dry-run result's
+      // edit-ability survives a tab-switch remount.
+      completeQueryDryRun(
+        tab.id,
+        queryId,
+        lastResult,
+        undefined,
+        statements[0],
+      );
       return;
     }
     const statementResults: QueryStatementResult[] = results.map(

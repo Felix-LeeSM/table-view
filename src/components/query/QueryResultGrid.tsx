@@ -37,7 +37,10 @@ export interface QueryResultGridProps {
   /** Database (schemaStore cache key dimension) — required when
    *  `connectionId` is supplied for editable-result lookups. */
   database?: string;
-  /** SQL of the executed query — used to detect a single-table SELECT. */
+  /** Live editor SQL — back-compat fallback ONLY. Edit-ability is judged
+   *  against the executed snapshot on `queryState.completed.sql` (single) or
+   *  each `stmt.sql` (multi); this prop is used only when that snapshot is
+   *  absent. Issue #1226. */
   sql?: string;
   /** Owning query tab id — Issue #1102, scopes the editable-result pending
    *  store and drives `setTabDirty`. */
@@ -689,7 +692,10 @@ export default function QueryResultGrid({
           result={queryState.result}
           connectionId={connectionId}
           database={database}
-          sql={sql}
+          // #1226 — judge edit-ability against the executed snapshot stored on
+          // the completed state; the `sql` prop (live editor text) is only a
+          // back-compat fallback for callers that don't populate the snapshot.
+          sql={queryState.sql ?? sql}
           tabId={tabId}
           onAfterCommit={onAfterCommit}
         />

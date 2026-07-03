@@ -197,12 +197,12 @@ export function createQuerySlice(
       });
     },
 
-    completeQuery: (connId, db, tabId, queryId, result) => {
+    completeQuery: (connId, db, tabId, queryId, result, sql) => {
       set((state) => {
         const next = patchExistingWorkspace(state, connId, db, (ws) => {
           return patchRunningQueryTab(ws, tabId, queryId, (tab) => ({
             ...tab,
-            queryState: { status: "completed" as const, result },
+            queryState: { status: "completed" as const, result, sql },
           }));
         });
         return next ? { workspaces: next } : state;
@@ -293,7 +293,15 @@ export function createQuerySlice(
       });
     },
 
-    completeQueryDryRun: (connId, db, tabId, queryId, result, statements) => {
+    completeQueryDryRun: (
+      connId,
+      db,
+      tabId,
+      queryId,
+      result,
+      statements,
+      sql,
+    ) => {
       set((state) => {
         const next = patchExistingWorkspace(state, connId, db, (ws) => {
           return patchRunningQueryTab(ws, tabId, queryId, (tab) => ({
@@ -304,6 +312,7 @@ export function createQuerySlice(
                     status: "completed" as const,
                     result,
                     isDryRun: true,
+                    sql,
                   }
                 : {
                     status: "completed" as const,
