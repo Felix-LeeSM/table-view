@@ -6,13 +6,14 @@
 //! co-located since the only producer is `list_databases`'s row-level
 //! permission probe and connection lifecycle tests.
 
-use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
+use sqlx::postgres::{PgConnectOptions, PgPoolOptions, PgSslMode};
 use sqlx::PgPool;
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tracing::info;
 
+use crate::db::tls::{resolve_tls_decision, TlsDecision};
 use crate::error::AppError;
 use crate::models::ConnectionConfig;
 
@@ -96,17 +97,29 @@ impl PostgresAdapter {
     }
 
     /// Build PgConnectOptions safely without string interpolation (prevents injection).
-    fn connect_options(config: &ConnectionConfig) -> PgConnectOptions {
-        PgConnectOptions::new()
+    ///
+    /// Issue #1062 — wire `tls_enabled` / `trust_server_certificate` onto
+    /// `PgSslMode` so an operator who turns TLS on is never silently
+    /// downgraded to plaintext by sqlx's default `sslmode=prefer`. Invalid
+    /// combinations (see `resolve_tls_decision`) are rejected here rather
+    /// than silently ignored, so the fallible signature propagates to every
+    /// caller that opens a pool.
+    fn connect_options(config: &ConnectionConfig) -> Result<PgConnectOptions, AppError> {
+        let options = PgConnectOptions::new()
             .host(&config.host)
             .port(config.port)
             .username(&config.user)
             .password(&config.password)
-            .database(&config.database)
+            .database(&config.database);
+        Ok(match resolve_tls_decision(config)? {
+            TlsDecision::Default => options,
+            TlsDecision::RequireSkipVerify => options.ssl_mode(PgSslMode::Require),
+            TlsDecision::RequireVerifyFull => options.ssl_mode(PgSslMode::VerifyFull),
+        })
     }
 
     pub async fn test(config: &ConnectionConfig) -> Result<(), AppError> {
-        let options = Self::connect_options(config);
+        let options = Self::connect_options(config)?;
         let pool = PgPoolOptions::new()
             .max_connections(1)
             .acquire_timeout(std::time::Duration::from_secs(5))
@@ -127,7 +140,7 @@ impl PostgresAdapter {
     }
 
     pub async fn connect_pool(&self, config: &ConnectionConfig) -> Result<(), AppError> {
-        let options = Self::connect_options(config);
+        let options = Self::connect_options(config)?;
         let timeout_secs = config
             .connection_timeout
             .unwrap_or(PG_POOL_ACQUIRE_TIMEOUT_DEFAULT_SECS);
@@ -250,7 +263,7 @@ impl PostgresAdapter {
             SwitchPath::Miss(boxed_config) => {
                 let mut config = *boxed_config;
                 config.database = db_name.to_string();
-                let options = Self::connect_options(&config);
+                let options = Self::connect_options(&config)?;
                 let timeout_secs = config
                     .connection_timeout
                     .unwrap_or(PG_POOL_ACQUIRE_TIMEOUT_DEFAULT_SECS);
@@ -361,7 +374,7 @@ impl PostgresAdapter {
                 .ok_or_else(|| AppError::Connection("Not connected — cannot issue cancel".into()))?
         };
 
-        let options = Self::connect_options(&config);
+        let options = Self::connect_options(&config)?;
         // 5-second hard ceiling — cancel should be sub-second on a healthy
         // network; longer than that the user's intent is to give up
         // anyway.
@@ -625,7 +638,7 @@ mod tests {
     #[test]
     fn connect_options_builder() {
         let config = sample_config();
-        let opts = PostgresAdapter::connect_options(&config);
+        let opts = PostgresAdapter::connect_options(&config).unwrap();
 
         // PgConnectOptions exposes host, port, username, database via Debug
         // We verify by building a connection string and checking the components
@@ -636,6 +649,57 @@ mod tests {
             opts_str.contains("localhost") || opts_str.contains("5432"),
             "Options should reflect the config parameters"
         );
+    }
+
+    // Issue #1062 — regression guard for the silent TLS downgrade. Without
+    // the fix, `connect_options` never touched `ssl_mode`, so a config with
+    // `tls_enabled = Some(true)` fell back to sqlx's default `Prefer`
+    // ("encrypt if possible, else plaintext"). These assert the mapping is
+    // actually wired.
+
+    #[test]
+    fn connect_options_default_when_tls_unset_preserves_prefer() {
+        // Legacy connections (no TLS fields) must keep the driver default so
+        // existing sessions are not forced onto TLS unexpectedly.
+        let config = sample_config();
+        let opts = PostgresAdapter::connect_options(&config).unwrap();
+        assert!(
+            matches!(opts.get_ssl_mode(), PgSslMode::Prefer),
+            "tls_enabled unset must leave the default Prefer ssl_mode"
+        );
+    }
+
+    #[test]
+    fn connect_options_tls_with_trust_maps_to_require() {
+        let mut config = sample_config();
+        config.tls_enabled = Some(true);
+        config.trust_server_certificate = Some(true);
+        let opts = PostgresAdapter::connect_options(&config).unwrap();
+        assert!(
+            matches!(opts.get_ssl_mode(), PgSslMode::Require),
+            "tls_enabled + trust must force encryption without cert verification"
+        );
+    }
+
+    #[test]
+    fn connect_options_tls_without_trust_maps_to_verify_full() {
+        let mut config = sample_config();
+        config.tls_enabled = Some(true);
+        config.trust_server_certificate = Some(false);
+        let opts = PostgresAdapter::connect_options(&config).unwrap();
+        assert!(
+            matches!(opts.get_ssl_mode(), PgSslMode::VerifyFull),
+            "tls_enabled without trust must verify the full certificate chain"
+        );
+    }
+
+    #[test]
+    fn connect_options_tls_without_trust_decision_is_rejected() {
+        let mut config = sample_config();
+        config.tls_enabled = Some(true);
+        config.trust_server_certificate = None;
+        let err = PostgresAdapter::connect_options(&config).unwrap_err();
+        assert!(matches!(err, AppError::Validation(_)));
     }
     /// Stub `DatabaseError` so the SQLSTATE / message matchers can be
     /// exercised without a live Postgres server. Sprint 128 tests for
