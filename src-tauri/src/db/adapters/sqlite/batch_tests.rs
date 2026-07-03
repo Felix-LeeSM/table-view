@@ -56,6 +56,18 @@ async fn seed_sqlite(path: &std::path::Path) {
     .execute(&pool)
     .await
     .unwrap();
+    // Issue #1079 — a primary-key-less table that can hold fully-duplicate
+    // rows. The grid's all-column WHERE fallback matches every duplicate, so a
+    // single-row edit intent silently becomes an N-row write unless the commit
+    // batch enforces the one-row-per-statement contract.
+    sqlx::query("CREATE TABLE logs (id INTEGER, msg TEXT)")
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO logs(id, msg) VALUES (1, 'a'), (1, 'a')")
+        .execute(&pool)
+        .await
+        .unwrap();
     pool.close().await;
 }
 
@@ -136,6 +148,28 @@ async fn execute_query_batch_rolls_back_on_statement_failure() {
         scalar_count(&adapter, "SELECT COUNT(*) FROM users WHERE id = 3").await,
         0
     );
+}
+
+#[tokio::test]
+async fn execute_query_batch_rolls_back_when_statement_matches_multiple_rows() {
+    // Issue #1079 — PK-less table with two identical rows. The grid's
+    // all-column WHERE fallback matches both, so a one-row delete intent would
+    // silently delete two rows. The commit batch must roll the whole
+    // transaction back when a statement affects anything other than one row.
+    let (_dir, adapter) = connected_adapter().await;
+    let statements = vec!["DELETE FROM logs WHERE id = 1 AND msg = 'a'".to_string()];
+
+    let result = adapter.execute_query_batch(&statements, None).await;
+
+    match result {
+        Err(AppError::Database(message)) => assert!(
+            message.contains("statement 1 of 1 failed") && message.contains("affected 2"),
+            "unexpected error message: {message}"
+        ),
+        other => panic!("Expected single-row guard rollback, got: {:?}", other),
+    }
+    // Rolled back — both duplicate rows survive.
+    assert_eq!(scalar_count(&adapter, "SELECT COUNT(*) FROM logs").await, 2);
 }
 
 #[tokio::test]

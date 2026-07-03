@@ -773,6 +773,15 @@ impl MysqlAdapter {
                 match exec_result {
                     Ok(res) => {
                         let rows_affected = res.rows_affected();
+                        // Issue #1079 — a one-row grid edit that touches != 1
+                        // rows (PK-less all-column WHERE hitting duplicates)
+                        // rolls the whole transaction back.
+                        if let Err(err) =
+                            crate::db::enforce_single_row_effect(idx, total, rows_affected)
+                        {
+                            let _ = tx.rollback().await;
+                            return Err(err);
+                        }
                         results.push(QueryResult {
                             columns: Vec::new(),
                             rows: Vec::new(),

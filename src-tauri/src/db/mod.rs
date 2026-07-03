@@ -71,6 +71,72 @@ pub use kv_types::{
     KvWriteSafety, KvZSetValue,
 };
 
+/// Issue #1079 — grid inline-edit commit contract: every statement in an
+/// `execute_query_batch` targets exactly one row (single-cell UPDATE,
+/// single-row DELETE/INSERT). A primary-key-less table can hold fully-
+/// duplicate rows, and the grid's all-column WHERE fallback then matches every
+/// duplicate, so a one-row intent silently becomes an N-row write with no
+/// Safe Mode confirm/dry-run in the way. This guard rolls the whole
+/// transaction back when a committed statement affects anything other than one
+/// row. The `statement K of N failed:` prefix mirrors the per-statement
+/// failure shape `executeRdbBatch` already routes on, so the commit banner
+/// highlights the offending line without a frontend change.
+///
+/// ponytail: unconditional one-row rule — both current batch callers (the
+/// structured grid commit and the raw-query grid edit) emit one-row
+/// statements; a future multi-row batch caller would need an opt-out flag on
+/// the IPC. MySQL reports *changed* (not matched) rows, so a no-op re-save of
+/// an already-equal value can read 0 and roll back — harmless (no data loss)
+/// and the grid skips unchanged edits anyway.
+pub(crate) fn enforce_single_row_effect(
+    statement_index: usize,
+    total: usize,
+    rows_affected: u64,
+) -> Result<(), crate::error::AppError> {
+    if rows_affected == 1 {
+        return Ok(());
+    }
+    Err(crate::error::AppError::Database(format!(
+        "statement {} of {} failed: expected to affect exactly 1 row but affected {}; \
+         transaction rolled back (row is not uniquely identifiable — add a primary key \
+         or unique constraint)",
+        statement_index + 1,
+        total,
+        rows_affected
+    )))
+}
+
+#[cfg(test)]
+mod single_row_guard_tests {
+    use super::enforce_single_row_effect;
+    use crate::error::AppError;
+
+    #[test]
+    fn exactly_one_row_is_ok() {
+        assert!(enforce_single_row_effect(0, 3, 1).is_ok());
+    }
+
+    #[test]
+    fn zero_or_many_rows_roll_back_with_routable_message() {
+        // 0-row (vanished row / NULL match) and N-row (duplicate mass write)
+        // both violate the one-row contract. The message keeps the
+        // `statement K of N failed:` prefix (1-based) so the commit banner
+        // routes the failure back to the right preview line.
+        for (idx, total, affected, marker) in [
+            (1usize, 2usize, 0u64, "affected 0"),
+            (2, 3, 4, "affected 4"),
+        ] {
+            match enforce_single_row_effect(idx, total, affected) {
+                Err(AppError::Database(msg)) => {
+                    assert!(msg.contains(&format!("statement {} of {} failed", idx + 1, total)));
+                    assert!(msg.contains(marker), "message missing count: {msg}");
+                }
+                other => panic!("expected rollback error, got {other:?}"),
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests;
 
