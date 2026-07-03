@@ -59,6 +59,11 @@ export type StatementKind =
   | "dml-update"
   | "dml-delete"
   | "dml-merge"
+  // Issue #1115 — MySQL/MariaDB `REPLACE INTO` is a destructive upsert
+  // (DELETE conflicting row, then INSERT). Always `danger`: it can silently
+  // drop an existing row's data. Distinct kind so callers can surface it in
+  // the confirm dialog copy.
+  | "dml-replace"
   | "ddl-drop"
   | "ddl-truncate"
   | "ddl-alter-drop"
