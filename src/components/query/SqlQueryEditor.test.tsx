@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { useState } from "react";
+import { createRef, useState } from "react";
 import { act, render, screen, waitFor } from "@testing-library/react";
 import { EditorView } from "@codemirror/view";
 import { ensureSyntaxTree, language } from "@codemirror/language";
@@ -322,6 +322,21 @@ describe("SqlQueryEditor (Sprint 139)", () => {
       undo(view);
     });
     expect(view.state.doc.toString()).toBe("SELECT 2");
+  });
+
+  // #1248 — the forwarded ref must resolve to the live EditorView (it was
+  // permanently null under the old `useImperativeHandle(ref, () => x, [])`).
+  it("forwards a live EditorView to the parent ref (#1248)", () => {
+    const ref = createRef<EditorView | null>();
+    render(
+      <SqlQueryEditor
+        ref={ref}
+        sql="SELECT 1"
+        onSqlChange={vi.fn()}
+        onExecute={vi.fn()}
+      />,
+    );
+    expect(ref.current).toBe(getEditorView());
   });
 
   // External sql prop syncs into editor.

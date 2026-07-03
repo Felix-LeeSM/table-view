@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { createRef } from "react";
 import { render, screen } from "@testing-library/react";
 import { EditorView } from "@codemirror/view";
 import SearchQueryEditor from "./SearchQueryEditor";
@@ -41,5 +42,19 @@ describe("SearchQueryEditor", () => {
       <SearchQueryEditor sql="{}" onSqlChange={vi.fn()} onExecute={vi.fn()} />,
     );
     expectUndoRevertsEdit(getEditorView());
+  });
+
+  // #1248 — the forwarded ref must resolve to the live EditorView.
+  it("forwards a live EditorView to the parent ref (#1248)", () => {
+    const ref = createRef<EditorView | null>();
+    render(
+      <SearchQueryEditor
+        ref={ref}
+        sql="{}"
+        onSqlChange={vi.fn()}
+        onExecute={vi.fn()}
+      />,
+    );
+    expect(ref.current).toBe(getEditorView());
   });
 });

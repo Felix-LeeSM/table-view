@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { createRef } from "react";
 import {
   act,
   render,
@@ -243,6 +244,21 @@ describe("MongoQueryEditor (Sprint 139)", () => {
       />,
     );
     expectUndoRevertsEdit(getEditorView("MongoDB Query Editor"));
+  });
+
+  // #1248 — the forwarded ref must resolve to the live EditorView.
+  it("forwards a live EditorView to the parent ref (#1248)", () => {
+    const ref = createRef<EditorView | null>();
+    render(
+      <MongoQueryEditor
+        ref={ref}
+        sql="{}"
+        onSqlChange={vi.fn()}
+        onExecute={vi.fn()}
+        mongoExtensions={[]}
+      />,
+    );
+    expect(ref.current).toBe(getEditorView("MongoDB Query Editor"));
   });
 
   it("preserves cursor position across external query text sync", () => {

@@ -1,52 +1,64 @@
 import { describe, it, expect, vi } from "vitest";
-import { renderHook, act } from "@testing-library/react";
-import { EditorState } from "@codemirror/state";
-import { EditorView, keymap } from "@codemirror/view";
-import { history, historyKeymap, undo } from "@codemirror/commands";
+import { useMemo } from "react";
+import { render, act } from "@testing-library/react";
+import { EditorView } from "@codemirror/view";
+import { undo } from "@codemirror/commands";
 import { useQueryEvents } from "./useQueryEvents";
 import { makeQueryTab } from "../__tests__/queryTabTestHelpers";
+import SqlQueryEditor from "../SqlQueryEditor";
 
-function makeView(doc: string): EditorView {
-  return new EditorView({
-    state: EditorState.create({
-      doc,
-      extensions: [history(), keymap.of(historyKeymap)],
-    }),
-  });
-}
-
-describe("useQueryEvents — format", () => {
-  // #1248 — a whole-doc format (Cmd+I / toolbar button) is a user-initiated
-  // action, so it must stay on the editor's undo stack (standard UX). It must
-  // therefore dispatch on the EditorView, not route through the passive
-  // store→editor mirror. RED before the fix: the whole-doc branch calls
-  // `updateQuerySql` and never touches the view, so nothing is formatted and
-  // nothing is undoable.
-  it("formats the whole doc on the editor so Cmd+Z restores the pre-format text (#1248)", () => {
-    const tab = makeQueryTab({ sql: "select 1" });
+// #1248 review — the original test manually injected `editorRef.current = view`,
+// which hid a production seam: the query editors exposed the view via
+// `useImperativeHandle(ref, () => viewRef.current, [])`, whose layout-phase
+// empty-deps snapshot captured `null` before the view was created — so
+// `editorRef.current` was permanently null and whole-doc format silently fell
+// back to the store (passive, non-undoable). This test mounts a real editor and
+// drives format through the actual forwarded ref.
+describe("useQueryEvents — format (real editor mount)", () => {
+  it("formats the whole doc through the forwarded ref so Cmd+Z restores it (#1248)", () => {
+    const captured: {
+      format?: () => void;
+      getRef?: () => EditorView | null;
+    } = {};
     const updateQuerySql = vi.fn();
-    const { result } = renderHook(() =>
-      useQueryEvents({ tab, updateQuerySql, canCancelQuery: false }),
+
+    function Harness() {
+      const tab = useMemo(() => makeQueryTab({ sql: "select 1" }), []);
+      const { editorRef, handleFormat } = useQueryEvents({
+        tab,
+        updateQuerySql,
+        canCancelQuery: false,
+      });
+      captured.format = handleFormat;
+      captured.getRef = () => editorRef.current;
+      return (
+        <SqlQueryEditor
+          ref={editorRef}
+          sql={tab.sql}
+          onSqlChange={vi.fn()}
+          onExecute={vi.fn()}
+        />
+      );
+    }
+
+    const { container } = render(<Harness />);
+    const domView = EditorView.findFromDOM(
+      container.querySelector(".cm-editor") as HTMLElement,
     );
+    if (!domView) throw new Error("EditorView not mounted");
 
-    const view = makeView("select 1");
-    result.current.editorRef.current = view;
-
-    act(() => {
-      result.current.handleFormat();
-    });
-
-    // Format applied on the view (formatSql upper-cases keywords).
-    expect(view.state.doc.toString()).not.toBe("select 1");
-    // Editor-first path: the store is updated via the editor's updateListener
-    // in production, never by a direct updateQuerySql call from the handler.
-    expect(updateQuerySql).not.toHaveBeenCalled();
+    // The forwarded ref must resolve to the live view (null before the fix).
+    expect(captured.getRef!()).toBe(domView);
 
     act(() => {
-      undo(view);
+      captured.format!();
     });
-    expect(view.state.doc.toString()).toBe("select 1");
+    // Format applied on the editor (formatSql upper-cases keywords) → undoable.
+    expect(domView.state.doc.toString()).not.toBe("select 1");
 
-    view.destroy();
+    act(() => {
+      undo(domView);
+    });
+    expect(domView.state.doc.toString()).toBe("select 1");
   });
 });
