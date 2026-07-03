@@ -124,19 +124,22 @@ describe("QueryTab — result editability snapshot (#1226)", () => {
       database: "db1",
     });
     useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
-    const { unmount } = render(<QueryTab tab={tab} />);
+    const { rerender, unmount } = render(<QueryTab tab={tab} />);
 
     await act(async () => {
       screen.getByTestId("execute-btn").click();
     });
-    // First mount: the executed single-table SELECT is editable.
-    expect(await screen.findByText(/Editable/)).toBeInTheDocument();
 
-    // Grab the tab as it now lives in the store (completed queryState carrying
-    // the executed-SQL snapshot), then simulate a tab-switch remount where the
-    // editor text has since been edited to a JOIN.
+    // Reflect the completed queryState back into the tab prop, exactly as
+    // MainArea re-renders QueryTab from the store. The completed state carries
+    // the executed-SQL snapshot; the editor text is still the executed SELECT.
     const stored = getTestWorkspace().tabs.find((t) => t.id === "query-1");
     if (!stored || stored.type !== "query") throw new Error("tab missing");
+    rerender(<QueryTab tab={stored} />);
+    expect(await screen.findByText(/Editable/)).toBeInTheDocument();
+
+    // Simulate a tab-switch remount where the editor has since been edited to a
+    // JOIN. The completed queryState (with its snapshot) persists in the store.
     unmount();
     const editedTab = {
       ...stored,

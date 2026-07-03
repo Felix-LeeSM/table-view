@@ -69,8 +69,9 @@ export function useQueryContext(tab: QueryTab) {
       tabId: string,
       queryId: string,
       result: Parameters<typeof completeQueryAction>[4],
+      sql?: Parameters<typeof completeQueryAction>[5],
     ) => {
-      completeQueryAction(wsConnId, workspaceDb, tabId, queryId, result);
+      completeQueryAction(wsConnId, workspaceDb, tabId, queryId, result, sql);
     },
     [completeQueryAction, wsConnId, workspaceDb],
   );
@@ -118,6 +119,7 @@ export function useQueryContext(tab: QueryTab) {
       queryId: string,
       result: Parameters<typeof completeQueryDryRunAction>[4],
       statements?: Parameters<typeof completeQueryDryRunAction>[5],
+      sql?: Parameters<typeof completeQueryDryRunAction>[6],
     ) => {
       completeQueryDryRunAction(
         wsConnId,
@@ -126,6 +128,7 @@ export function useQueryContext(tab: QueryTab) {
         queryId,
         result,
         statements,
+        sql,
       );
     },
     [completeQueryDryRunAction, wsConnId, workspaceDb],

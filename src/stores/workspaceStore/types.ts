@@ -229,6 +229,10 @@ export interface WorkspaceStoreState {
     tabId: string,
     queryId: string,
     result: QueryResult,
+    // #1226 — executed SQL snapshot for single-statement RDB results, so the
+    // grid judges edit-ability against the run (not the live editor). Omitted
+    // by document / kv completions whose results are never edit-mapped.
+    sql?: string,
   ) => void;
   completeSearchQuery: (
     connId: string,
@@ -265,6 +269,10 @@ export interface WorkspaceStoreState {
     queryId: string,
     result: QueryResult,
     statements?: QueryStatementResult[],
+    // #1226 — executed SQL snapshot for a single-statement dry-run result
+    // (same edit-ability rationale as `completeQuery`). Multi-statement
+    // dry-runs pass `statements` and leave this undefined.
+    sql?: string,
   ) => void;
   loadQueryIntoTab: (payload: LoadQueryPayload) => void;
 

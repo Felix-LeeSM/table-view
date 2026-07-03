@@ -140,12 +140,6 @@ export default function QueryTab({ tab }: QueryTabProps) {
   }, [connection]);
   const [showFileAnalytics, setShowFileAnalytics] = useState(false);
   const [explainSql, setExplainSql] = useState<string | null>(null);
-  // #1226 — snapshot of the SQL that produced the currently shown result.
-  // The result grid judges edit-ability against the *executed* query, so it
-  // must not react to live editor edits made after the run. Captured at
-  // execution start; falls back to live `tab.sql` before the first run (and
-  // after a tab remount, where behaviour matches the pre-#1226 baseline).
-  const [executedSql, setExecutedSql] = useState<string | undefined>(undefined);
   // `dbType` flows in so the autocomplete namespace surfaces
   // dialect-specific keywords (PG: RETURNING/ILIKE; MySQL: AUTO_INCREMENT;
   // SQLite: PRAGMA / WITHOUT ROWID).
@@ -359,15 +353,13 @@ export default function QueryTab({ tab }: QueryTabProps) {
 
   const handleExecuteAndShowResults = useCallback(() => {
     setExplainSql(null);
-    setExecutedSql(tab.sql); // #1226 — pin the grid's edit-ability SQL.
     handleExecute();
-  }, [handleExecute, tab.sql]);
+  }, [handleExecute]);
 
   const handleDryRunAndShowResults = useCallback(() => {
     setExplainSql(null);
-    setExecutedSql(tab.sql); // #1226 — pin the grid's edit-ability SQL.
     handleDryRun();
-  }, [handleDryRun, tab.sql]);
+  }, [handleDryRun]);
 
   const handleExplain = useCallback(() => {
     const sql = tab.sql.trim();
@@ -587,9 +579,10 @@ export default function QueryTab({ tab }: QueryTabProps) {
             queryState={tab.queryState}
             connectionId={tab.connectionId}
             database={tab.database}
-            // #1226 — executed snapshot (not live `tab.sql`) so edit-ability
-            // reflects the query that produced the result, not later edits.
-            sql={executedSql ?? tab.sql}
+            // #1226 — live editor text; only a fallback. Edit-ability is
+            // judged against `tab.queryState.completed.sql` (executed snapshot)
+            // inside the grid, so post-run edits don't retoggle it.
+            sql={tab.sql}
             tabId={tab.id}
             onAfterCommit={handleExecuteAndShowResults}
             // Sprint 248 (ADR 0022 Phase 4) — surface the dry-run flag so
