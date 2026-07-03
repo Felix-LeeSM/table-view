@@ -337,6 +337,53 @@ describe("AC-367-01 boot-critical 5 store hydrate shape", () => {
     expect(closedTab.queryState.result.totalCount).toBe(1);
   });
 
+  it("#1091 — backfills dirtyTabIds + sidebar defaults absent from the backend snapshot shape", async () => {
+    // The backend `read_workspaces` reconstitutes only { activeTabId, tabs,
+    // sidebar: { expanded }, closedTabHistory } — dirtyTabIds is a window-local
+    // marker that is intentionally never persisted, and selectedNode/scrollTop
+    // are dehydrated to defaults. Before #1091, persist was a no-op so this
+    // partial shape never reached the store. Now that a reopened workspace
+    // hydrates a non-empty snapshot, hydrate must backfill the missing fields
+    // or `App.tsx`'s `useConnectionHasDirtyTabs` hits `undefined.length` and
+    // unmounts the whole workspace window.
+    const snap = makeSnapshot();
+    snap.stores.workspaces = {
+      byConnectionId: {
+        c1: {
+          d: {
+            tabs: [
+              {
+                type: "table",
+                id: "tab-1",
+                title: "users",
+                connectionId: "c1",
+                closable: true,
+                schema: "public",
+                table: "users",
+                subView: "records",
+                database: "d",
+              },
+            ],
+            activeTabId: "tab-1",
+            closedTabHistory: [],
+            sidebar: { expanded: ["public"] },
+          },
+        },
+      },
+    } as never;
+    invokeMock.mockResolvedValueOnce(snap);
+
+    await loadAllFromSnapshot();
+
+    const ws = useWorkspaceStore.getState().workspaces.c1?.d;
+    expect(ws?.dirtyTabIds).toEqual([]);
+    expect(ws?.sidebar).toEqual({
+      selectedNode: null,
+      expanded: ["public"],
+      scrollTop: 0,
+    });
+  });
+
   it("does NOT hydrate favorites / queryHistory / datagrid_prefs (lazy via mount IPC)", async () => {
     invokeMock.mockResolvedValueOnce(makeSnapshot());
 

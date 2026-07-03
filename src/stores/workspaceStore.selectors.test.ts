@@ -36,9 +36,11 @@ vi.mock("@lib/window-label", async () => {
 
 import { useConnectionStore } from "./connectionStore";
 import {
+  useConnectionHasDirtyTabs,
   useCurrentWorkspace,
   useCurrentWorkspaceKey,
   useWorkspaceStore,
+  type WorkspaceState,
 } from "./workspaceStore";
 import {
   setFakeWindowConnectionId,
@@ -139,5 +141,39 @@ describe("workspaceStore — selectors", () => {
     const { result } = renderHook(() => useCurrentWorkspace());
     expect(result.current).not.toBeNull();
     expect(result.current!.tabs).toHaveLength(1);
+  });
+
+  it("#1091 — useConnectionHasDirtyTabs tolerates a hydrated workspace with no dirtyTabIds", () => {
+    // App.tsx's top-level `useConnectionHasDirtyTabs(currentConnId)` runs on
+    // every workspace-window render. A boot-hydrated workspace omits the
+    // window-local `dirtyTabIds` marker (it is never persisted), so reading
+    // `ws.dirtyTabIds.length` on the raw hydrate shape threw and unmounted the
+    // whole workspace window (#1091 reopen crash — root left empty). Seed the
+    // store with that exact partial shape and assert the selector is safe.
+    useWorkspaceStore.setState({
+      workspaces: {
+        conn1: {
+          dbA: {
+            activeTabId: "tab-1",
+            tabs: [
+              {
+                type: "table",
+                id: "tab-1",
+                title: "users",
+                connectionId: "conn1",
+                closable: true,
+                subView: "records",
+                database: "dbA",
+              },
+            ],
+            closedTabHistory: [],
+            sidebar: { expanded: [] },
+          } as unknown as WorkspaceState,
+        },
+      },
+    });
+
+    const { result } = renderHook(() => useConnectionHasDirtyTabs("conn1"));
+    expect(result.current).toBe(false);
   });
 });
