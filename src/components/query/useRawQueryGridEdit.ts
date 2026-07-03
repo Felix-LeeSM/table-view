@@ -325,7 +325,15 @@ export function useRawQueryGridEdit({
       const startedAt = Date.now();
       const joinedSql = sqls.join(";\n");
       try {
-        await executeQueryBatch(connectionId, sqls, `raw-edit-${Date.now()}`);
+        // Issue #1112 — committed only after the user confirms the raw-edit
+        // SQL preview; forward the Safe Mode confirmation proof.
+        await executeQueryBatch(
+          connectionId,
+          sqls,
+          `raw-edit-${Date.now()}`,
+          undefined,
+          true,
+        );
         setSqlPreview(null);
         // Commit succeeded — clear both pending slices (drops dirty).
         purgeStoreKey(storeKey);

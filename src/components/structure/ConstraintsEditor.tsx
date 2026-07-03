@@ -452,15 +452,20 @@ export default function ConstraintsEditor({
           expected_database: database,
         }),
       () => async () => {
-        await tauri.dropConstraint({
-          connection_id: connectionId,
-          schema,
-          table,
-          constraint_name: constraintName,
-          preview_only: false,
-          // Sprint 271c — opt-in DbMismatch guard.
-          expected_database: database,
-        });
+        await tauri.dropConstraint(
+          {
+            connection_id: connectionId,
+            schema,
+            table,
+            constraint_name: constraintName,
+            preview_only: false,
+            // Sprint 271c — opt-in DbMismatch guard.
+            expected_database: database,
+          },
+          // Issue #1112 — commit runs only after the Safe Mode gate + preview
+          // confirmation; forward the proof.
+          true,
+        );
         setShowPreviewModal(false);
       },
     );

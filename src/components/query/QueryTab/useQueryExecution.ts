@@ -232,7 +232,11 @@ export function useQueryExecution({
   // re-enter the same try/catch + recordHistory + DB-mutation hint flow
   // without inline duplication.
   const runRdbSingleNow = useCallback(
-    async (stmt: string, history?: RdbHistoryOverrides) => {
+    async (
+      stmt: string,
+      history?: RdbHistoryOverrides,
+      safetyConfirmed?: boolean,
+    ) => {
       await executeRdbSingleStatement({
         tab,
         stmt,
@@ -246,6 +250,7 @@ export function useQueryExecution({
         recordHistory,
         findLiveIdleTab,
         runRdbSingleRef,
+        safetyConfirmed,
       });
     },
     [
@@ -269,7 +274,11 @@ export function useQueryExecution({
   // pre-split `statements` (post-comment-strip) so the warn-tier confirm
   // path executes the exact same batch the user typed.
   const runRdbBatchNow = useCallback(
-    async (statements: string[], joinedSql: string) => {
+    async (
+      statements: string[],
+      joinedSql: string,
+      safetyConfirmed?: boolean,
+    ) => {
       await executeRdbStatementBatch({
         tab,
         statements,
@@ -282,6 +291,7 @@ export function useQueryExecution({
         recordHistory,
         findLiveIdleTab,
         runRdbBatchRef,
+        safetyConfirmed,
       });
     },
     [
@@ -306,11 +316,17 @@ export function useQueryExecution({
     const pending = pendingRdbConfirm;
     if (!pending) return;
     setPendingRdbConfirm(null);
+    // Issue #1112 — the user cleared the destructive confirm dialog; forward
+    // the proof so the backend Safe Mode gate lets the statement through.
     if (pending.statements.length === 1) {
-      await runRdbSingleNow(pending.statements[0]!);
+      await runRdbSingleNow(pending.statements[0]!, undefined, true);
       return;
     }
-    await runRdbBatchNow(pending.statements, pending.statements.join(";\n"));
+    await runRdbBatchNow(
+      pending.statements,
+      pending.statements.join(";\n"),
+      true,
+    );
   }, [pendingRdbConfirm, runRdbSingleNow, runRdbBatchNow]);
 
   const cancelRdbDangerous = useCallback(() => {

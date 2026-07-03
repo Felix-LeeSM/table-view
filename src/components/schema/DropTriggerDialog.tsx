@@ -152,7 +152,9 @@ export default function DropTriggerDialog({
           return { sql: result.sql };
         },
         () => async () => {
-          await tauri.dropTrigger(buildRequest(false));
+          // Issue #1112 — commit runs only after this dialog's confirmation;
+          // forward the Safe Mode proof.
+          await tauri.dropTrigger(buildRequest(false), true);
         },
       );
     }, 250);

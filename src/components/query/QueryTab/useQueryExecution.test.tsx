@@ -172,6 +172,7 @@ describe("useQueryExecution scaffold", () => {
       "SELECT * FROM users",
       expect.stringMatching(/^query-1-/),
       "db1",
+      undefined,
     );
     await waitFor(() => {
       expect(getSeededRdbTab().queryState.status).toBe("completed");
@@ -224,6 +225,7 @@ describe("useQueryExecution scaffold", () => {
       'SELECT name FROM "sales_csv" WHERE id = 1',
       expect.stringMatching(/^query-1-/),
       "db1",
+      undefined,
     );
     await waitFor(() => {
       expect(getSeededRdbTab().queryState.status).toBe("completed");
@@ -374,6 +376,7 @@ describe("useQueryExecution scaffold", () => {
         sql,
         expect.stringMatching(/^query-1-/),
         "db1",
+        undefined,
       );
       await waitFor(() => {
         expect(getSeededRdbTab().queryState.status).toBe("completed");
@@ -649,6 +652,7 @@ describe("useQueryExecution scaffold", () => {
       "SELECT 1",
       runningQueryId,
       "db1",
+      undefined,
     );
     expect(executeQueryMock).toHaveBeenNthCalledWith(
       2,
@@ -656,6 +660,7 @@ describe("useQueryExecution scaffold", () => {
       "SELECT 2",
       runningQueryId,
       "db1",
+      undefined,
     );
     const updated = getSeededRdbTab();
     if (updated.queryState.status !== "completed") {

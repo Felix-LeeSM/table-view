@@ -235,6 +235,9 @@ describe("EditableQueryResultGrid", () => {
       "conn1",
       [expect.stringMatching(/UPDATE/)],
       expect.any(String),
+      undefined,
+      // Issue #1112 — raw-edit commit forwards the Safe Mode confirmation.
+      true,
     );
     expect(mockExecuteQuery).not.toHaveBeenCalled();
     await waitFor(() => {

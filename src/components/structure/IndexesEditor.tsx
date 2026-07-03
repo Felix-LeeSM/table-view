@@ -353,15 +353,20 @@ export default function IndexesEditor({
           expected_database: database,
         }),
       () => async () => {
-        await tauri.dropIndex({
-          connection_id: connectionId,
-          schema,
-          table,
-          index_name: indexName,
-          preview_only: false,
-          // Sprint 271c — opt-in DbMismatch guard.
-          expected_database: database,
-        });
+        await tauri.dropIndex(
+          {
+            connection_id: connectionId,
+            schema,
+            table,
+            index_name: indexName,
+            preview_only: false,
+            // Sprint 271c — opt-in DbMismatch guard.
+            expected_database: database,
+          },
+          // Issue #1112 — commit runs only after the Safe Mode gate + preview
+          // confirmation; forward the proof.
+          true,
+        );
         setShowPreviewModal(false);
       },
     );

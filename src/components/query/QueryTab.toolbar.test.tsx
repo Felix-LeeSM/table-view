@@ -253,6 +253,7 @@ describe("QueryTab — toolbar", () => {
       "SELECT 1",
       expect.any(String),
       expect.any(String),
+      undefined,
     );
   });
 
