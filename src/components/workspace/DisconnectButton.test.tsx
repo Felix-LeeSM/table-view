@@ -11,6 +11,10 @@ import { useConnectionStore } from "@stores/connectionStore";
 import { useToastStore } from "@stores/toastStore";
 import { useWorkspaceStore } from "@stores/workspaceStore";
 import { useDataGridEditStore, entryKey } from "@stores/dataGridEditStore";
+import {
+  useRawQueryGridEditStore,
+  rawEntryKey,
+} from "@stores/rawQueryGridEditStore";
 import { emptyWorkspace } from "@/stores/__tests__/workspaceStoreTestHelpers";
 import type { ConnectionConfig, ConnectionStatus } from "@/types/connection";
 
@@ -78,11 +82,30 @@ function seedInactivePendingEdit(connId: string): void {
     );
 }
 
+/**
+ * Issue #1204 — the raw-query result grid parks its pending edits in
+ * `rawQueryGridEditStore` keyed by `(connectionId, tabId)`. An inactive query
+ * tab's grid is unmounted so its `dirtyTabIds` marker is gone, but the pending
+ * edit lives on. Disconnect wipes it, so the guard must see connection-wide raw
+ * pending edits too — symmetric with the table-grid store seed above.
+ */
+function seedInactiveRawPendingEdit(connId: string): void {
+  useRawQueryGridEditStore
+    .getState()
+    .setSlice(
+      rawEntryKey(connId, "t-raw"),
+      "pendingEdits",
+      new Map([["0-0", "edited"]]),
+    );
+}
+
 describe("DisconnectButton", () => {
   beforeEach(() => {
     setStore({});
     useToastStore.getState().clear();
     useWorkspaceStore.setState({ workspaces: {} });
+    useDataGridEditStore.setState({ entries: new Map() });
+    useRawQueryGridEditStore.setState({ entries: new Map() });
   });
 
   it("exposes an aria-label of 'Disconnect' (AC-S134-05)", () => {
@@ -261,6 +284,29 @@ describe("DisconnectButton", () => {
       disconnectImpl: spy,
     });
     seedInactivePendingEdit("c1"); // no dirtyTabIds entry
+    render(<DisconnectButton />);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Disconnect" }));
+    });
+
+    expect(spy).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole("button", { name: "Discard and close" }),
+    ).toBeInTheDocument();
+  });
+
+  // #1204 — same gap for the raw-query result grid, whose pending edits live
+  // in `rawQueryGridEditStore` (tab-scoped key) rather than `dataGridEditStore`.
+  it("confirms before disconnect when only an INACTIVE query tab has a pending raw edit (#1204)", async () => {
+    const spy = vi.fn(() => Promise.resolve());
+    setStore({
+      connections: [makeConnection("c1")],
+      statuses: { c1: { type: "connected" } },
+      focusedConnId: "c1",
+      disconnectImpl: spy,
+    });
+    seedInactiveRawPendingEdit("c1"); // no dirtyTabIds entry
     render(<DisconnectButton />);
 
     await act(async () => {

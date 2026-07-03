@@ -402,7 +402,16 @@ export function useDataGridEdit({
   // Publish the active tab's dirty state to the tabStore. The dirty signal
   // is narrowed to the three pending diff fields — an open MQL preview
   // alone does not mark the tab dirty, since the modal is its own commit
-  // affordance. Cleared on unmount so a stale marker can't outlive the grid.
+  // affordance.
+  //
+  // Issue #1204 — the marker tracks *pending edits existing*, not the grid
+  // being mounted. The four pending slices live in the cross-mount
+  // `dataGridEditStore` (Sprint 251), so a tab switch (which unmounts this
+  // grid) must NOT clear the marker while the edits survive in the store —
+  // otherwise the inactive tab's close / disconnect guard reads a stale
+  // false. The marker clears through this effect when the pending diff empties
+  // (commit / discard, still mounted) and through `removeTab` /
+  // `clearForConnection` on explicit close.
   useEffect(() => {
     if (!activeTabId) return;
     const isDirty =
@@ -411,9 +420,6 @@ export function useDataGridEdit({
         pendingNewRows.length > 0 ||
         pendingDeletedRowKeys.size > 0);
     setTabDirty(activeTabId, isDirty);
-    return () => {
-      setTabDirty(activeTabId, false);
-    };
   }, [
     activeTabId,
     pendingEdits,

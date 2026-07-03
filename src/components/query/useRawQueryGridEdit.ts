@@ -180,9 +180,16 @@ export function useRawQueryGridEdit({
 
   // Issue #1102 — publish dirty state to the workspace store so TabBar
   // renders the dot and the close-on-dirty guard (#1101) fires. Symmetric
-  // with `useDataGridEdit`: register on pending change, clear on unmount so
-  // a stale marker can't outlive the grid (the next mount re-derives it from
-  // the surviving store entry).
+  // with `useDataGridEdit`: register on pending change.
+  //
+  // Issue #1204 — the marker tracks *pending edits existing*, not the grid
+  // being mounted. The pending slices live in the cross-mount
+  // `rawQueryGridEditStore` keyed by `(connectionId, tabId)`, so a tab switch
+  // (which unmounts this grid) must NOT clear the marker while the edits
+  // survive in the store — otherwise the inactive tab's close / disconnect
+  // guard reads a stale false. The marker clears through this effect when the
+  // pending diff empties (commit / discard, still mounted) and through
+  // `removeTab` / `clearForConnection` on explicit close.
   const workspaceKey = useCurrentWorkspaceKey();
   const setTabDirtyAction = useWorkspaceStore((s) => s.setTabDirty);
   useEffect(() => {
@@ -193,9 +200,6 @@ export function useRawQueryGridEdit({
       tabId,
       hasPendingChanges,
     );
-    return () => {
-      setTabDirtyAction(workspaceKey.connId, workspaceKey.db, tabId, false);
-    };
   }, [tabId, workspaceKey, hasPendingChanges, setTabDirtyAction]);
 
   const persistInflightEdit = useCallback(

@@ -9,6 +9,7 @@ import type { Tab, WorkspaceState } from "./types";
 import { useConnectionStore } from "../connectionStore";
 import { useWorkspaceStore } from "../workspaceStore";
 import { useDataGridEditStore } from "../dataGridEditStore";
+import { useRawQueryGridEditStore } from "../rawQueryGridEditStore";
 /* eslint-enable no-restricted-imports */
 
 export type WorkspaceKey = { connId: string; db: string };
@@ -101,20 +102,21 @@ export function useDirtyTabIds(): readonly string[] {
 }
 
 /**
- * #1101 — does `connId` have any unsaved change that a whole-connection /
- * whole-window close would discard? Two sources, OR'd:
+ * #1101 / #1204 — does `connId` have any unsaved change that a whole-connection
+ * / whole-window close would discard? Three sources, OR'd, all deriving dirty
+ * from *pending edits existing* rather than a grid being mounted:
  *
- * 1. `workspaceStore.dirtyTabIds` — but that marker only exists while the
- *    tab is the mounted active tab; `useDataGridEdit` clears it on unmount
- *    (#1204). So it alone misses inactive dirty tabs.
- * 2. `dataGridEditStore` pending entries — the durable window-local buffer
- *    that survives tab unmount, keyed `${connId}::${db}::${schema}::${table}`.
- *    An entry counts only when it holds real pending content (edits / new
- *    rows / deletes), matching `useDataGridEdit`'s own dirty predicate.
+ * 1. `workspaceStore.dirtyTabIds` — the per-tab marker. #1204 stopped the grid
+ *    hooks clearing it on unmount, so it now survives a tab switch and covers
+ *    inactive dirty tabs. Still OR'd with the store scans below because a
+ *    hydrated workspace may omit the window-local marker (#1091).
+ * 2. `dataGridEditStore` pending entries — the durable window-local buffer for
+ *    table grids, keyed `${connId}::${db}::${schema}::${table}`.
+ * 3. `rawQueryGridEditStore` pending entries — the same for raw-query result
+ *    grids, keyed `${connId}::${tabId}` (#1102).
  *
- * ponytail: raw-query grid edits aren't reachable here yet — they live in
- * `useRawQueryGridEdit`'s component-local state (no store). #1102 promotes
- * them to `dirtyTabIds`, after which source 1 covers them too.
+ * A store entry counts only when it holds real pending content, matching each
+ * grid hook's own dirty predicate.
  */
 export function useConnectionHasDirtyTabs(connId: string | null): boolean {
   const tabMarkerDirty = useWorkspaceStore((state) => {
@@ -141,7 +143,18 @@ export function useConnectionHasDirtyTabs(connId: string | null): boolean {
     }
     return false;
   });
-  return tabMarkerDirty || pendingEditDirty;
+  const rawPendingEditDirty = useRawQueryGridEditStore((state) => {
+    if (!connId) return false;
+    const prefix = `${connId}::`;
+    for (const [key, entry] of state.entries) {
+      if (!key.startsWith(prefix)) continue;
+      if (entry.pendingEdits.size > 0 || entry.pendingDeletedRowKeys.size > 0) {
+        return true;
+      }
+    }
+    return false;
+  });
+  return tabMarkerDirty || pendingEditDirty || rawPendingEditDirty;
 }
 
 export function useClosedTabHistory(): readonly Tab[] {
