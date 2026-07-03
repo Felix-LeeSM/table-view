@@ -118,7 +118,17 @@ fn cell_to_json(row: &sqlx::mysql::MySqlRow, idx: usize) -> serde_json::Value {
             }
             try_decode!(i64, |v: i64| serde_json::Value::Number(v.into()));
         }
-        "SMALLINT" | "MEDIUMINT" | "INT" | "INTEGER" | "BIGINT" | "YEAR" => {
+        "BIGINT" => {
+            // ADR 0026 (issue #1082) — BIGINT (i64) 및 BIGINT UNSIGNED (u64) 는
+            // ±(2^53-1) 을 넘을 수 있어 raw JSON number 로 wire 하면 프론트의
+            // native JSON.parse 가 f64 로 강등하며 무음 손상시킨다. PG bigint 와
+            // 동일하게 정밀도-보존 JSON string token 으로 직렬화하고, 프론트
+            // wrapNumericCells 가 컬럼 data_type 을 보고 BigInt 로 승격한다.
+            try_decode!(i64, |v: i64| serde_json::Value::String(v.to_string()));
+            try_decode!(u64, |v: u64| serde_json::Value::String(v.to_string()));
+        }
+        "SMALLINT" | "MEDIUMINT" | "INT" | "INTEGER" | "YEAR" => {
+            // 전부 ≤32bit 라 f64 (±2^53-1) 로 무손실 round-trip — raw Number 유지.
             // unsigned 변형도 같은 keyword name 으로 들어옴 — i64 우선
             // (signed) → 실패 시 u64.
             try_decode!(i64, |v: i64| serde_json::Value::Number(v.into()));

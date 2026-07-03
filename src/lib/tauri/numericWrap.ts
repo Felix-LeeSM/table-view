@@ -20,20 +20,43 @@ interface ColumnLike {
   data_type?: string;
 }
 
+// Declared types whose backend wire cells are precision-sensitive 64-bit
+// integers, emitted as string tokens and promoted to BigInt here.
+// - PG: bigint / int8 / bigserial (int2/int4/smallint/integer stay Number).
+// - MySQL: BIGINT (lowercased) — INT/SMALLINT/etc. are ≤32-bit, wired as Number.
+// - SQLite (issue #1082): every INTEGER-affinity declared type. sqlx reports
+//   the storage class "integer" for free-form queries, but table preview
+//   reports the PRAGMA declared type (int/bigint/smallint/tinyint/mediumint/
+//   int2/int4/int8), so all variants are mapped.
+// - Mongo: Int64 (schema sniffer reports "int64").
+// Listing the small-integer aliases here is safe: wrapNumericCells only
+// promotes string cells, and MySQL/PG small integers arrive as Number, so
+// they are skipped. Exact matches (not substring) avoid catching PG "point"
+// / "int4range" and preserve the no-op fast path for other columns.
+const BIGINT_TYPES = new Set([
+  "bigint",
+  "int8",
+  "bigserial",
+  "integer",
+  "int",
+  "smallint",
+  "tinyint",
+  "mediumint",
+  "int2",
+  "int4",
+  "int64",
+]);
+
 function wrapperFor(dataType: string): Wrapper {
   const lower = dataType.toLowerCase();
-  if (lower === "bigint" || lower === "int8" || lower === "bigserial") {
+  if (BIGINT_TYPES.has(lower)) {
     return "bigint";
   }
   if (lower.includes("numeric") || lower.includes("decimal")) {
     return "decimal";
   }
-  // Mongo flatten_cell emits Int64 / Decimal128 as string. The Mongo
-  // `data_type` strings reported by the schema sniffer are "Int64" and
-  // "Decimal128" — match those explicitly.
-  if (lower === "int64") {
-    return "bigint";
-  }
+  // Mongo flatten_cell emits Decimal128 as string; the schema sniffer reports
+  // the `data_type` string "Decimal128" — match it explicitly.
   if (lower === "decimal128") {
     return "decimal";
   }

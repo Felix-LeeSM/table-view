@@ -195,7 +195,9 @@ async fn test_mysql_call_procedure_returns_result_rows() {
     assert_eq!(result.columns[0].name, "echoed_id");
     assert_eq!(result.total_count, 1);
     assert_eq!(result.rows.len(), 1);
-    assert_eq!(result.rows[0][0].as_i64(), Some(872));
+    // echoed_id 는 BIGINT 파라미터를 투영하므로 ADR 0026 (issue #1082) 에 따라
+    // JSON string token 으로 wire 된다.
+    assert_eq!(result.rows[0][0].as_str(), Some("872"));
 
     sqlx::raw_sql(&format!("DROP PROCEDURE IF EXISTS {proc_name}"))
         .execute(&setup_pool)
@@ -665,11 +667,12 @@ async fn test_mysql_execute_query_batch_commits_all_statements() {
         .execute_query(&format!("SELECT COUNT(*) AS n FROM {table}"), None)
         .await
         .expect("count");
-    // MySQL adapter 는 ADR 0026 의 BIGINT→string wire-encoding 정책을 따르지
-    // 않음 — COUNT(*) 가 i64 number 로 직접 wire 됨. (PG mirror 에서 dialect-adjust.)
+    // COUNT(*) 는 MySQL 에서 BIGINT 를 반환하므로 ADR 0026 (issue #1082) 에 따라
+    // 정밀도-보존 JSON string token 으로 wire 된다 (PG mirror 와 동일).
     let n: i64 = count.rows[0][0]
-        .as_i64()
-        .expect("COUNT(*) returns i64 number wire-encoded");
+        .as_str()
+        .and_then(|s| s.parse().ok())
+        .expect("COUNT(*) returns a BIGINT string token");
     assert_eq!(n, 3);
 
     adapter
@@ -725,8 +728,9 @@ async fn test_mysql_execute_query_batch_rolls_back_on_mid_failure() {
         .await
         .expect("count");
     let n: i64 = count.rows[0][0]
-        .as_i64()
-        .expect("COUNT(*) returns i64 number wire-encoded");
+        .as_str()
+        .and_then(|s| s.parse().ok())
+        .expect("COUNT(*) returns a BIGINT string token");
     assert_eq!(n, 0, "rollback must leave the table empty");
 
     adapter
@@ -1366,10 +1370,10 @@ async fn test_mysql_execute_query_batch_strips_trailing_semicolons() {
 // - PG `data_type="serial"`    → MySQL `data_type="int"` (AUTO_INCREMENT 는
 //                                 컬럼 default 의 fingerprint 일 뿐 column_type 미반영)
 //
-// Wire encoding 차이 (ADR 0026 은 PG-only):
-// - PG BIGINT → JSON string. MySQL BIGINT → JSON number (i64).
+// Wire encoding (ADR 0026 정합 — issue #1082 로 MySQL 정수 경로도 합류):
+// - PG BIGINT → JSON string. MySQL BIGINT → JSON string (issue #1082).
 // - PG NUMERIC → JSON string. MySQL DECIMAL → JSON string (queries.rs line 145).
-// - INT 는 둘 다 JSON number.
+// - INT/SMALLINT/MEDIUMINT/YEAR 는 둘 다 JSON number (≤32bit, f64 무손실).
 // - CHECK clauses: MySQL adapter 는 information_schema CHECK expression 을
 //   column-level check_clauses 로 투영.
 
@@ -2748,15 +2752,16 @@ async fn test_mysql_get_table_columns_populates_fk_reference_in_child() {
     adapter.disconnect_pool().await.ok();
 }
 
-// ── Wire-encoding 시나리오 — DIALECT-divergent (MySQL ≠ PG ADR 0026) ─────
+// ── Wire-encoding 시나리오 — ADR 0026 정합 (MySQL == PG, issue #1082) ─────
 // MySQL adapter (queries.rs):
-// - BIGINT (INT/INTEGER/MEDIUMINT/SMALLINT/BIGINT/YEAR): JSON number (i64)
-// - DECIMAL/NEWDECIMAL: JSON string (line 145)
-// - INT: JSON number (i64) — PG 와 동일.
+// - BIGINT (i64/u64): JSON string — 프론트가 BigInt 로 승격 (정밀도 보존).
+// - DECIMAL/NEWDECIMAL: JSON string (line 145).
+// - INT/SMALLINT/MEDIUMINT/INTEGER/YEAR/TINYINT: JSON number (i64) — ≤32bit
+//   라 f64 (±2^53-1) 무손실이므로 그대로 Number.
 
 #[tokio::test]
 #[serial_test::serial]
-async fn test_mysql_query_table_data_bigint_value_is_number_wire() {
+async fn test_mysql_query_table_data_bigint_value_is_string_wire() {
     let adapter = match common::setup_mysql_adapter().await {
         Some(a) => a,
         None => return,
@@ -2774,8 +2779,9 @@ async fn test_mysql_query_table_data_bigint_value_is_number_wire() {
         )
         .await
         .expect("CREATE TABLE");
-    // i64::MAX = 9223372036854775807. PG 는 string 으로 wrap (ADR 0026) — 본
-    // MySQL adapter 는 i64 number 유지.
+    // i64::MAX = 9223372036854775807 은 f64 (±2^53-1) 범위를 초과한다. ADR 0026
+    // (issue #1082) — BIGINT 은 정밀도-보존 JSON string token 으로 wire 되고
+    // 프론트 wrapNumericCells 가 BigInt 로 승격한다.
     adapter
         .execute_query(
             &format!("INSERT INTO {table} (id) VALUES (9223372036854775807)"),
@@ -2791,10 +2797,10 @@ async fn test_mysql_query_table_data_bigint_value_is_number_wire() {
     assert_eq!(data.rows.len(), 1);
     let cell = &data.rows[0][0];
     assert!(
-        cell.is_number(),
-        "MySQL bigint cell should be JSON number (PG-divergent), got: {cell:?}"
+        cell.is_string(),
+        "MySQL bigint cell must be JSON string (ADR 0026 / issue #1082), got: {cell:?}"
     );
-    assert_eq!(cell.as_i64(), Some(9223372036854775807));
+    assert_eq!(cell.as_str(), Some("9223372036854775807"));
 
     adapter
         .execute_query(&format!("DROP TABLE {table}"), None)
@@ -3554,7 +3560,7 @@ async fn test_mysql_trait_dispatch_covers_rdb_adapter_surface() {
 
 #[tokio::test]
 #[serial_test::serial]
-async fn test_mysql_execute_query_bigint_select_emits_number_wire() {
+async fn test_mysql_execute_query_bigint_select_emits_string_wire() {
     let adapter = match common::setup_mysql_adapter().await {
         Some(a) => a,
         None => return,
@@ -3562,6 +3568,7 @@ async fn test_mysql_execute_query_bigint_select_emits_number_wire() {
 
     // PG 의 `SELECT 9223372036854775807::bigint` 의 MySQL 대응. MySQL 의
     // integer literal 은 자동으로 BIGINT 로 promote — 별도 cast 불필요.
+    // ADR 0026 (issue #1082) — BIGINT literal 도 정밀도-보존 string token 으로 wire.
     let result = adapter
         .execute_query("SELECT 9223372036854775807 AS big", None)
         .await
@@ -3569,10 +3576,10 @@ async fn test_mysql_execute_query_bigint_select_emits_number_wire() {
     assert_eq!(result.rows.len(), 1);
     let cell = &result.rows[0][0];
     assert!(
-        cell.is_number(),
-        "MySQL execute_query bigint cell must be JSON number (PG-divergent), got: {cell:?}"
+        cell.is_string(),
+        "MySQL execute_query bigint cell must be JSON string (ADR 0026 / issue #1082), got: {cell:?}"
     );
-    assert_eq!(cell.as_i64(), Some(9223372036854775807));
+    assert_eq!(cell.as_str(), Some("9223372036854775807"));
 
     adapter.disconnect_pool().await.ok();
 }

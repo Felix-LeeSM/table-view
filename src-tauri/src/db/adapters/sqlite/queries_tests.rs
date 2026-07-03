@@ -145,7 +145,9 @@ async fn execute_query_select_returns_columns_and_rows() {
         vec!["id", "email"]
     );
     assert_eq!(result.total_count, 3);
-    assert_eq!(result.rows[0][0], serde_json::json!(1));
+    // id 는 INTEGER 컬럼 — ADR 0026 (issue #1082) 에 따라 정밀도-보존 string
+    // token 으로 wire 되고 프론트가 BigInt 로 승격한다.
+    assert_eq!(result.rows[0][0], serde_json::json!("1"));
     assert_eq!(result.rows[0][1], serde_json::json!("ada@example.test"));
 }
 
