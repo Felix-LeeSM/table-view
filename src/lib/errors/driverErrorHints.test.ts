@@ -33,13 +33,13 @@ describe("classifyDriverError", () => {
     "Search authentication error: bad credentials", // AppError::SearchAuthentication
   ];
 
-  // Reason: 타임아웃은 네트워크/방화벽/도달성 점검을 유도 (2026-07-03).
+  // Reason: 연결-phase 타임아웃만 네트워크/방화벽/도달성 점검을 유도 (2026-07-03).
+  //         쿼리-phase 타임아웃(락 경합/statement/request)은 여기 없다 — 아래
+  //         음성 케이스가 null 을 강제한다.
   const timeout = [
     "Connection error: connection timed out (os error 60)", // macOS ETIMEDOUT
     "Connection error: connection timed out (os error 110)", // linux ETIMEDOUT
-    "Search timeout error: request timed out",
-    "Server selection timeout: No available servers", // mongo (no refused inside)
-    "operation timed out",
+    "Server selection timeout: No available servers", // mongo — 연결 단계(서버 못 찾음)
   ];
 
   // Reason: 호스트 미해석은 오타/ DNS/VPN 점검을 유도 (2026-07-03).
@@ -113,6 +113,23 @@ describe("classifyDriverError", () => {
     expect(
       classifyDriverError("Access denied for user 'app'@'%'")?.category,
     ).toBe("authFailed");
+  });
+
+  // Reason: 쿼리-phase 타임아웃을 연결 에러로 오분류 금지 — 락 경합/statement/
+  //         request timeout 에 "네트워크/VPN/방화벽 점검" 조언은 오도 (#1227 리뷰, 2026-07-03).
+  //         bare "timeout"/"timed out" needle 제거로 연결-phase 마커만 매치한다.
+  it("does not classify query-phase timeouts as connection errors", () => {
+    expect(
+      classifyDriverError(
+        "Lock wait timeout exceeded; try restarting transaction",
+      ), // mysql 락 경합
+    ).toBeNull();
+    expect(
+      classifyDriverError("canceling statement due to statement timeout"), // pg statement_timeout
+    ).toBeNull();
+    expect(
+      classifyDriverError("Search timeout error: request timed out"), // ES search request timeout
+    ).toBeNull();
   });
 
   // Reason: fail-open — 매핑 없는 원문은 그대로(null) 두고 억지 분류 금지 (2026-07-03).

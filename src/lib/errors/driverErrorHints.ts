@@ -11,12 +11,19 @@
  * 매칭 실패 시 `null` (fail-open) — 억지 분류하지 않고 원문을 그대로 보여준다.
  */
 
-export type DriverErrorCategory =
-  | "connectionRefused"
-  | "authFailed"
-  | "timeout"
-  | "unknownHost"
-  | "permissionDenied";
+/**
+ * 카테고리 SOT. union 과 (테스트의 exhaustiveness 순회에 쓰는) 목록이 한 배열에서
+ * 파생된다 — 카테고리 추가 시 locale/테스트 누락이 강제로 드러난다.
+ */
+export const DRIVER_ERROR_CATEGORIES = [
+  "connectionRefused",
+  "authFailed",
+  "timeout",
+  "unknownHost",
+  "permissionDenied",
+] as const;
+
+export type DriverErrorCategory = (typeof DRIVER_ERROR_CATEGORIES)[number];
 
 export interface DriverErrorHint {
   category: DriverErrorCategory;
