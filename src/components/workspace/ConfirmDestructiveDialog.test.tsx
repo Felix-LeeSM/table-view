@@ -89,7 +89,7 @@ describe("ConfirmDestructiveDialog", () => {
     expect(screen.getByText(/Safe Mode \(strict\)/)).toBeInTheDocument();
   });
 
-  it("[AC-246-D3] Confirm button initially enabled (type-to-confirm removed)", () => {
+  it("[AC-246-D3][#1111] Confirm button is disabled during the 150ms arm window, then enabled", async () => {
     render(
       <ConfirmDestructiveDialog
         open={true}
@@ -104,10 +104,12 @@ describe("ConfirmDestructiveDialog", () => {
       />,
     );
     const confirm = screen.getByRole("button", { name: "Confirm" });
-    expect(confirm).not.toBeDisabled();
+    // Reflexive-Enter absorption: destructive confirm is not immediately live.
+    expect(confirm).toBeDisabled();
+    await waitFor(() => expect(confirm).not.toBeDisabled(), { timeout: 500 });
   });
 
-  it("[AC-246-D4] Confirm click invokes onConfirm exactly once", async () => {
+  it("[AC-246-D4] Confirm click invokes onConfirm exactly once (after arm)", async () => {
     const onConfirm = vi.fn();
     const user = userEvent.setup();
     render(
@@ -123,7 +125,9 @@ describe("ConfirmDestructiveDialog", () => {
         onCancel={vi.fn()}
       />,
     );
-    await user.click(screen.getByTestId("confirm-destructive-confirm"));
+    const confirm = screen.getByTestId("confirm-destructive-confirm");
+    await waitFor(() => expect(confirm).not.toBeDisabled(), { timeout: 500 });
+    await user.click(confirm);
     expect(onConfirm).toHaveBeenCalledTimes(1);
   });
 
@@ -147,8 +151,9 @@ describe("ConfirmDestructiveDialog", () => {
     expect(onCancel).toHaveBeenCalledTimes(1);
   });
 
-  it("[AC-246-D6] Enter key on dialog invokes onConfirm exactly once", () => {
+  it("[AC-246-D6][#1111] after arming, focus moves to Confirm and Enter confirms exactly once", async () => {
     const onConfirm = vi.fn();
+    const user = userEvent.setup();
     render(
       <ConfirmDestructiveDialog
         open={true}
@@ -162,13 +167,47 @@ describe("ConfirmDestructiveDialog", () => {
         onCancel={vi.fn()}
       />,
     );
-    // The dialog's content listens on the AlertDialogContent root, so we
-    // dispatch keydown there. There is no input field anymore — the user
-    // muscle-memory of "Enter to submit" still works because the dialog
-    // is autoFocused on the Confirm button.
+    // No dialog-wide Enter handler anymore (#1141): a stray keyDown on the
+    // dialog root must not confirm.
     const dialog = screen.getByRole("alertdialog");
     fireEvent.keyDown(dialog, { key: "Enter" });
+    expect(onConfirm).not.toHaveBeenCalled();
+    // After the arm window focus is handed to Confirm so the muscle-memory
+    // Enter lands on it and confirms via the button's native activation.
+    const confirm = screen.getByTestId("confirm-destructive-confirm");
+    await waitFor(() => expect(confirm).not.toBeDisabled(), { timeout: 500 });
+    expect(confirm).toHaveFocus();
+    await user.keyboard("{Enter}");
     expect(onConfirm).toHaveBeenCalledTimes(1);
+  });
+
+  it("[#1141] Enter while Cancel is focused cancels and never confirms", async () => {
+    const onConfirm = vi.fn();
+    const onCancel = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <ConfirmDestructiveDialog
+        open={true}
+        reason={REASON}
+        sqlPreview={SQL}
+        environment="production"
+        connectionId="c"
+        statements={[]}
+        paradigm="rdb"
+        onConfirm={onConfirm}
+        onCancel={onCancel}
+      />,
+    );
+    const confirm = screen.getByTestId("confirm-destructive-confirm");
+    await waitFor(() => expect(confirm).not.toBeDisabled(), { timeout: 500 });
+    // Move focus to Cancel — where Radix parks it during the arm window
+    // (Confirm disabled) and where a Tab would land it. A dialog-wide Enter
+    // handler would wrongly confirm here; the button's native Enter cancels.
+    const cancel = screen.getByTestId("confirm-destructive-cancel");
+    cancel.focus();
+    await user.keyboard("{Enter}");
+    expect(onConfirm).not.toHaveBeenCalled();
+    expect(onCancel).toHaveBeenCalledTimes(1);
   });
 
   it("[AC-246-D7] dry-run preview section is rendered (Phase 3 mounts <DryRunPreview>)", () => {

@@ -25,6 +25,7 @@
  *   - `max-w-[260px] truncate` ensures the visible label never blows up
  *     a tight footer.
  */
+import type { Ref } from "react";
 import { Loader2, Play } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@components/ui/button";
@@ -57,6 +58,12 @@ export interface ExecuteButtonProps {
   ariaLabel?: string;
   /** Optional autoFocus pass-through for the dialog primary action. */
   autoFocus?: boolean;
+  /**
+   * Optional ref to the underlying `<button>`. Dialogs use it to move
+   * focus onto the primary action once it arms (#1111), so the
+   * muscle-memory Enter lands on Confirm rather than Cancel.
+   */
+  ref?: Ref<HTMLButtonElement>;
   /** Optional className passthrough. */
   className?: string;
   /** Optional data-testid override for legacy regression tests. */
@@ -121,6 +128,7 @@ export default function ExecuteButton({
   onClick,
   ariaLabel,
   autoFocus,
+  ref,
   className,
   testId,
 }: ExecuteButtonProps) {
@@ -139,8 +147,10 @@ export default function ExecuteButton({
       type="button"
       size="sm"
       variant="default"
+      ref={ref}
       autoFocus={autoFocus}
       disabled={disabled || loading}
+      aria-busy={loading}
       onClick={onClick}
       aria-label={ariaLabel ?? fullLabel}
       title={fullLabel}

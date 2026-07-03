@@ -89,9 +89,15 @@ export function DbLifecycleDialog({
 
   if (!open) return null;
 
+  const isDrop = mode === "drop";
+
   return (
+    // The DROP path is destructive, so it shares role="alertdialog" + Cancel
+    // focus with the other destructive confirms (#1141 consistency).
+    // ponytail: this is an inline panel, not a modal — a full Radix
+    // focus-trap belongs here only once it is actually mounted as a dialog.
     <div
-      role="dialog"
+      role={isDrop ? "alertdialog" : "dialog"}
       aria-label={`Database ${mode}`}
       data-testid="db-lifecycle-dialog"
       data-paradigm={paradigm}
@@ -149,6 +155,7 @@ export function DbLifecycleDialog({
           aria-label="Close database lifecycle dialog"
           onClick={onClose}
           disabled={saving}
+          autoFocus={isDrop}
         >
           {t("lifecycle.cancel")}
         </Button>

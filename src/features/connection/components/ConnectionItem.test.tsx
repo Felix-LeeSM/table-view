@@ -605,7 +605,9 @@ describe("ConnectionItem", () => {
       fireEvent.click(deleteBtn);
     });
 
-    const dialog = screen.getByRole("dialog", { name: /delete connection/i });
+    const dialog = screen.getByRole("alertdialog", {
+      name: /delete connection/i,
+    });
     expect(dialog).toBeInTheDocument();
     expect(
       within(dialog).getByText(/Are you sure you want to delete/),
@@ -631,7 +633,7 @@ describe("ConnectionItem", () => {
     });
 
     // Find the actual Delete button inside the dialog
-    const dialog = screen.getByRole("dialog");
+    const dialog = screen.getByRole("alertdialog");
     const deleteConfirmBtn = within(dialog).getAllByText("Delete").pop()!;
     act(() => {
       fireEvent.click(deleteConfirmBtn);
@@ -655,12 +657,12 @@ describe("ConnectionItem", () => {
     });
 
     // Click Cancel
-    const dialog = screen.getByRole("dialog");
+    const dialog = screen.getByRole("alertdialog");
     act(() => {
       fireEvent.click(within(dialog).getByText("Cancel"));
     });
 
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
   });
 
   // -----------------------------------------------------------------------
