@@ -4,6 +4,19 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
+# WebKitGTK render mitigation for headless (xvfb, no GPU) CI runners.
+# The 2026-07-03 ubuntu-latest runner image bump (ubuntu24/20260622.220 ->
+# 20260628.225) refreshed Mesa/libEGL/WebKitGTK; under xvfb the DMABUF renderer
+# intermittently hard-crashes the webview compositor (`no such window`, DRI3
+# error signature), failing in-process-heavy specs (duckdb) and the valkey/redis
+# render flake first. Disabling the DMABUF renderer routes WebKitGTK to the
+# stable software path. Injected here at the single chokepoint so every smoke
+# spec inherits it. See issues #1261 and #1200.
+# Kept minimal (DMABUF only) on purpose: WEBKIT_DISABLE_COMPOSITING_MODE=1 /
+# LIBGL_ALWAYS_SOFTWARE=1 force fuller software rendering and lengthen e2e; add
+# them only if DMABUF disable alone proves insufficient.
+export WEBKIT_DISABLE_DMABUF_RENDERER="${WEBKIT_DISABLE_DMABUF_RENDERER:-1}"
+
 export E2E_PG_HOST="${E2E_PG_HOST:-${PGHOST:-localhost}}"
 export E2E_PG_PORT="${E2E_PG_PORT:-${PGPORT:-15432}}"
 export PGUSER="${PGUSER:-testuser}"
