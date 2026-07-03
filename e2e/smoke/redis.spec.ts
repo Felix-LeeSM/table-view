@@ -21,10 +21,20 @@ describe("Redis smoke", () => {
       await waitForLauncher();
       await createRedisConnection(CONNECTION_NAME);
       await openConnection(CONNECTION_NAME);
+      // #1113: Safe Mode default is now `warn`, which pauses KvSidebar
+      // auto-scan (`autoScanAllowed = safeMode === "off"`). Assert the
+      // paused gate, then run the manual "Scan 100 keys" a warn-default
+      // user performs to load the bounded key page.
       await waitForWorkspaceTextAll(
-        ["Keys", "tv:string"],
+        ["Keys", "Safe Mode paused automatic key scan"],
         30000,
-        "Redis key browser did not render seeded keys",
+        "Redis key browser did not surface the Safe Mode scan-paused gate",
+      );
+      await triggerKvKeyScan();
+      await waitForWorkspaceTextAll(
+        ["tv:string"],
+        15000,
+        "Redis key browser did not render seeded keys after manual scan",
       );
     });
 
@@ -111,6 +121,12 @@ describe("Redis smoke", () => {
     });
   });
 });
+
+async function triggerKvKeyScan() {
+  const scanButton = await $("button=Scan 100 keys");
+  await scanButton.waitForEnabled({ timeout: 15000 });
+  await scanButton.click();
+}
 
 async function clickRedisKey(key: string) {
   await browser.waitUntil(
