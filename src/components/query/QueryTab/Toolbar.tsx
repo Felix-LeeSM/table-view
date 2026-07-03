@@ -175,7 +175,10 @@ export default function QueryTabToolbar({
           <span className="text-3xs text-muted-foreground">{"⌘⇧⏎"}</span>
         </Button>
       )}
-      {isRdbTab && canExplain && (
+      {/* #1041 — Explain visibility is driven by `canExplain` (the
+          capability contract), not the paradigm. `canExplain` is only true
+          for sources whose `query.explain` flag is set (PG + Mongo today). */}
+      {canExplain && (
         <Button
           variant="ghost"
           size="xs"
