@@ -28,6 +28,24 @@ vi.mock("@hooks/useCurrentWindowConnectionId", () => ({
   useCurrentWindowConnectionId: () => mockSidebarConnId,
 }));
 
+// #1235 — cross-connection jump reuses the per-conn window-focus command and a
+// Tauri broadcast. Mock both lib boundaries (Tauri IPC / event).
+const mockOpenWorkspaceWindow = vi.fn().mockResolvedValue(undefined);
+vi.mock("@lib/tauri/window", () => ({
+  openWorkspaceWindow: (...args: unknown[]) => mockOpenWorkspaceWindow(...args),
+}));
+
+const mockEmit = vi.fn().mockResolvedValue(undefined);
+// Capture the quick-open intent listener so tests can drive inbound events.
+const mockListenState: { cb?: (e: { payload: unknown }) => void } = {};
+vi.mock("@tauri-apps/api/event", () => ({
+  emit: (...args: unknown[]) => mockEmit(...args),
+  listen: (channel: string, cb: (e: { payload: unknown }) => void) => {
+    if (channel === "quick-open:intent") mockListenState.cb = cb;
+    return Promise.resolve(() => {});
+  },
+}));
+
 function makeConn(
   id: string,
   name: string,
@@ -142,6 +160,7 @@ describe("QuickOpen", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockSidebarConnId = null;
+    mockListenState.cb = undefined;
     useSchemaStore.setState({
       schemas: {},
       tables: {},
@@ -594,6 +613,100 @@ describe("QuickOpen", () => {
     await waitFor(() => {
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     });
+    window.removeEventListener("navigate-table", handler);
+  });
+
+  // #1235 — cross-connection jump + unified global scope.
+  it("surfaces schema results for every with-schema connection (global scope)", async () => {
+    mockSidebarConnId = "c1";
+    setupStores({
+      connections: [makeConn("c1", "Prod"), makeConn("c2", "Dev")],
+      active: ["c1", "c2"],
+      schemas: { c1: [{ name: "sales" }], c2: [{ name: "sales" }] },
+    });
+
+    render(<QuickOpen />);
+    act(() => {
+      window.dispatchEvent(new CustomEvent("quick-open"));
+    });
+
+    const input = screen.getByPlaceholderText(/search tables/i);
+    await act(async () => {
+      fireEvent.change(input, { target: { value: "sales" } });
+    });
+
+    // Both connections' "sales" schema are now first-class results.
+    expect(screen.getAllByRole("option")).toHaveLength(2);
+  });
+
+  it("cross-connection selection focuses the target window and forwards the intent", async () => {
+    mockSidebarConnId = "c1"; // this window renders c1; the pick targets c2
+    const local = vi.fn();
+    window.addEventListener("navigate-table", local);
+    setupStores({
+      connections: [makeConn("c1", "Prod"), makeConn("c2", "Dev")],
+      active: ["c1", "c2"],
+      tables: { "c2:public": [{ name: "orders", schema: "public" }] },
+    });
+
+    render(<QuickOpen />);
+    act(() => {
+      window.dispatchEvent(new CustomEvent("quick-open"));
+    });
+
+    const input = screen.getByPlaceholderText(/search tables/i);
+    await act(async () => {
+      fireEvent.change(input, { target: { value: "orders" } });
+    });
+    await act(async () => {
+      fireEvent.keyDown(input, { key: "Enter" });
+    });
+
+    await waitFor(() =>
+      expect(mockOpenWorkspaceWindow).toHaveBeenCalledWith("c2"),
+    );
+    expect(mockEmit).toHaveBeenCalledWith(
+      "quick-open:intent",
+      expect.objectContaining({
+        kind: "table",
+        connectionId: "c2",
+        table: "orders",
+      }),
+    );
+    // A cross-connection pick must NOT also fire the local event in this window.
+    expect(local).not.toHaveBeenCalled();
+    window.removeEventListener("navigate-table", local);
+  });
+
+  it("re-dispatches an inbound intent for this window's connection as a local event", async () => {
+    mockSidebarConnId = "c2";
+    const handler = vi.fn();
+    window.addEventListener("navigate-table", handler);
+
+    render(<QuickOpen />);
+    await waitFor(() => expect(mockListenState.cb).toBeDefined());
+
+    act(() => {
+      mockListenState.cb!({
+        payload: {
+          kind: "table",
+          connectionId: "c2",
+          schema: "public",
+          table: "orders",
+        },
+      });
+    });
+
+    expect(handler).toHaveBeenCalledWith(
+      expect.objectContaining({
+        detail: {
+          connectionId: "c2",
+          schema: "public",
+          table: "orders",
+          objectKind: "table",
+        },
+      }),
+    );
     window.removeEventListener("navigate-table", handler);
   });
 });
