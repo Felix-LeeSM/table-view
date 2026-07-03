@@ -6,12 +6,21 @@ import { resolve } from "node:path";
 // synchronous in-memory mutate + fire-and-forget IPC persist through the typed
 // `@lib/tauri/tableActivity` wrapper (never a direct `@tauri-apps/api/core`
 // import), boot hydrate via `list_table_activity`.
+//
+// The wrapper is mocked (not raw `@tauri-apps/api/core`) so the assertion is
+// load-order-robust: `test-setup.ts` eagerly imports this store for its
+// per-test reset, which would otherwise bind the real `invoke` before a core
+// mock could take effect.
 
-vi.mock("@tauri-apps/api/core", () => ({
-  invoke: vi.fn(),
+vi.mock("@lib/tauri/tableActivity", () => ({
+  persistTableActivity: vi.fn().mockResolvedValue(undefined),
+  listTableActivity: vi.fn().mockResolvedValue([]),
 }));
 
-import { invoke } from "@tauri-apps/api/core";
+import {
+  persistTableActivity,
+  listTableActivity,
+} from "@lib/tauri/tableActivity";
 import {
   useTableActivityStore,
   __resetTableActivityStoreForTests,
@@ -21,9 +30,11 @@ import {
   tableActivityKey,
   RECENT_CAP,
   type TableRef,
+  type PersistTableActivityPayload,
 } from "./tableActivityStore";
 
-const invokeMock = vi.mocked(invoke);
+const persistMock = vi.mocked(persistTableActivity);
+const listMock = vi.mocked(listTableActivity);
 
 const PG = (table: string): TableRef => ({
   connectionId: "pg1",
@@ -33,8 +44,10 @@ const PG = (table: string): TableRef => ({
 });
 
 beforeEach(() => {
-  invokeMock.mockReset();
-  invokeMock.mockResolvedValue(undefined);
+  persistMock.mockReset();
+  persistMock.mockResolvedValue(undefined);
+  listMock.mockReset();
+  listMock.mockResolvedValue([]);
   __resetTableActivityStoreForTests();
 });
 
@@ -61,15 +74,11 @@ describe("tableActivityStore", () => {
     expect(entries[0]!.pinnedAt).toBeNull();
 
     await Promise.resolve();
-    const calls = invokeMock.mock.calls.filter(
-      (c) => c[0] === "persist_table_activity",
-    );
-    expect(calls.length).toBeGreaterThanOrEqual(1);
-    const payload = calls[0]![1] as {
-      entries: Array<{ table: string; schema: string | null }>;
-    };
-    expect(payload.entries[0]!.table).toBe("users");
-    expect(payload.entries[0]!.schema).toBe("public");
+    expect(persistMock).toHaveBeenCalled();
+    const payload = persistMock.mock
+      .calls[0]![0] as PersistTableActivityPayload[];
+    expect(payload[0]!.table).toBe("users");
+    expect(payload[0]!.schema).toBe("public");
   });
 
   it("recordTableUsed dedupes by key and refreshes lastUsed (most-recent first)", () => {

@@ -32,6 +32,7 @@ import {
 } from "./SchemaTree/treeRows";
 import { SchemaTreeBody } from "./SchemaTree/body";
 import type { SchemaTreeRowsContext } from "./SchemaTree/rows";
+import { PinnedRecentSections } from "./SchemaTree/PinnedRecentSections";
 import { useTreeRoving } from "./SchemaTree/useTreeRoving";
 import type { FileAnalyticsSourceMetadata } from "@/types/fileAnalytics";
 import {
@@ -231,6 +232,8 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
     handleOpenStructure: actions.handleOpenStructure,
     handleDropTable: actions.handleDropTable,
     handleStartRename: actions.handleStartRename,
+    handleTogglePin: actions.handleTogglePin,
+    isTablePinned: actions.isTablePinned,
     handleViewClick: actions.handleViewClick,
     handleOpenViewStructure: actions.handleOpenViewStructure,
     handleFunctionClick: actions.handleFunctionClick,
@@ -450,6 +453,20 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
           </Button>
         </div>
       </div>
+
+      {/* #1218 — Pinned + Recent table sections. Rendered above the tree and
+          outside `role="tree"` so their native <button> rows stay
+          keyboard-reachable without touching the tree's roving-tabindex
+          model (#1129). Clicking a row reuses `handleTableClick` — the same
+          entry point as a tree node click. */}
+      {db && (
+        <PinnedRecentSections
+          connectionId={connectionId}
+          db={db}
+          treeShape={treeShape}
+          onOpenTable={actions.handleTableClick}
+        />
+      )}
 
       <div
         ref={treeRef}

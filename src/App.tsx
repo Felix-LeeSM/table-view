@@ -19,6 +19,7 @@ import { useCurrentWindowConnectionId } from "./hooks/useCurrentWindowConnection
 import { useDiscardConfirm } from "./hooks/useDiscardConfirm";
 import { useFavoritesStore } from "./stores/favoritesStore";
 import { useMruStore } from "./stores/mruStore";
+import { useTableActivityStore } from "./stores/tableActivityStore";
 import { isEditableTarget } from "./lib/keyboard/isEditableTarget";
 import { useThemeStore } from "./stores/themeStore";
 import { markBootMilestone } from "./lib/perf/bootInstrumentation";
@@ -35,6 +36,9 @@ export default function App() {
     (s) => s.loadPersistedFavorites,
   );
   const loadPersistedMru = useMruStore((s) => s.loadPersistedMru);
+  const loadPersistedTableActivity = useTableActivityStore(
+    (s) => s.loadPersistedTableActivity,
+  );
   // MRU marking is the caller's responsibility — `addTab`/`addQueryTab` no
   // longer emit it implicitly, so the three handlers below pair the call.
   const markConnectionUsed = useMruStore((s) => s.markConnectionUsed);
@@ -73,6 +77,7 @@ export default function App() {
     initEventListeners();
     loadPersistedFavorites();
     loadPersistedMru();
+    loadPersistedTableActivity();
     // Workspace-side anchor for cold-boot tracing — fires after the five
     // IPC dispatches above have been kicked off (not awaited).
     markBootMilestone("app:effects-fired");
@@ -82,6 +87,7 @@ export default function App() {
     initEventListeners,
     loadPersistedFavorites,
     loadPersistedMru,
+    loadPersistedTableActivity,
   ]);
 
   // Cmd+W / Ctrl+W — 활성 탭이 있으면 그 탭을 닫고, 빈 워크스페이스면 창

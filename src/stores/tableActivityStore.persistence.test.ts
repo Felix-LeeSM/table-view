@@ -8,12 +8,19 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 // `lastUsed` / `pinnedAt`. hydrate MUST normalize them without throwing, and a
 // full entry must survive entry -> persist payload -> SQLite row shape ->
 // hydrate unchanged.
+//
+// Mock the typed wrapper (not raw core) so the assertion survives the eager
+// store import in `test-setup.ts`.
 
-vi.mock("@tauri-apps/api/core", () => ({
-  invoke: vi.fn(),
+vi.mock("@lib/tauri/tableActivity", () => ({
+  persistTableActivity: vi.fn().mockResolvedValue(undefined),
+  listTableActivity: vi.fn().mockResolvedValue([]),
 }));
 
-import { invoke } from "@tauri-apps/api/core";
+import {
+  persistTableActivity,
+  listTableActivity,
+} from "@lib/tauri/tableActivity";
 import {
   useTableActivityStore,
   __resetTableActivityStoreForTests,
@@ -22,11 +29,14 @@ import {
   type PersistTableActivityPayload,
 } from "./tableActivityStore";
 
-const invokeMock = vi.mocked(invoke);
+const persistMock = vi.mocked(persistTableActivity);
+const listMock = vi.mocked(listTableActivity);
 
 beforeEach(() => {
-  invokeMock.mockReset();
-  invokeMock.mockResolvedValue(undefined);
+  persistMock.mockReset();
+  persistMock.mockResolvedValue(undefined);
+  listMock.mockReset();
+  listMock.mockResolvedValue([]);
   __resetTableActivityStoreForTests();
 });
 
@@ -52,7 +62,7 @@ describe("tableActivityStore persistence round-trip", () => {
         pinnedAt: null,
       },
     ];
-    invokeMock.mockResolvedValueOnce(rows);
+    listMock.mockResolvedValueOnce(rows);
 
     await useTableActivityStore.getState().loadPersistedTableActivity();
 
@@ -85,21 +95,19 @@ describe("tableActivityStore persistence round-trip", () => {
     });
     await Promise.resolve();
 
-    const persistCalls = invokeMock.mock.calls.filter(
-      (c) => c[0] === "persist_table_activity",
-    );
-    const lastPayload = persistCalls[persistCalls.length - 1]![1] as {
-      entries: PersistTableActivityPayload[];
-    };
-    expect(lastPayload.entries).toHaveLength(1);
-    const row = lastPayload.entries[0]!;
+    expect(persistMock).toHaveBeenCalled();
+    const lastPayload = persistMock.mock.calls[
+      persistMock.mock.calls.length - 1
+    ]![0] as PersistTableActivityPayload[];
+    expect(lastPayload).toHaveLength(1);
+    const row = lastPayload[0]!;
     expect(row.schema).toBe("public");
     expect(typeof row.lastUsed).toBe("number");
     expect(typeof row.pinnedAt).toBe("number");
 
     // Feed the exact persisted payload back through hydrate.
     __resetTableActivityStoreForTests();
-    invokeMock.mockResolvedValueOnce(lastPayload.entries);
+    listMock.mockResolvedValueOnce(lastPayload);
     await useTableActivityStore.getState().loadPersistedTableActivity();
 
     const hydrated = useTableActivityStore.getState().entries;
@@ -116,7 +124,7 @@ describe("tableActivityStore persistence round-trip", () => {
   });
 
   it("hydrate tolerates a rejected IPC (keeps default empty state)", async () => {
-    invokeMock.mockRejectedValueOnce(new Error("boom"));
+    listMock.mockRejectedValueOnce(new Error("boom"));
     await useTableActivityStore.getState().loadPersistedTableActivity();
     expect(useTableActivityStore.getState().entries).toEqual([]);
   });
