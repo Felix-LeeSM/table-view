@@ -175,6 +175,8 @@ describe("buildRdbSession + execute", () => {
       ["UPDATE users SET name='bob' WHERE id=1"],
       expect.stringMatching(/^edit-/),
       "db1",
+      // Issue #1112 — datagrid commit forwards the Safe Mode confirmation proof.
+      true,
     );
     expect(toastSuccess).toHaveBeenCalledWith("1 change committed.");
     expect(history.recordSuccess).toHaveBeenCalledTimes(1);

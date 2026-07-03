@@ -542,6 +542,8 @@ describe("QueryTab — Sprint 231 raw RDB Safe Mode gate", () => {
       "UPDATE users SET active = 1 WHERE id = 1",
       expect.any(String),
       expect.any(String),
+      // Issue #1112 — confirmed destructive batch forwards the proof.
+      true,
     );
     expect(mockExecuteQuery).toHaveBeenNthCalledWith(
       2,
@@ -549,6 +551,7 @@ describe("QueryTab — Sprint 231 raw RDB Safe Mode gate", () => {
       "DELETE FROM logs",
       expect.any(String),
       expect.any(String),
+      true,
     );
   });
 

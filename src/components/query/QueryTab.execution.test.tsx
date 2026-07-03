@@ -182,6 +182,7 @@ describe("QueryTab — execution", () => {
       "SELECT 1",
       expect.any(String),
       expect.any(String),
+      undefined,
     );
     expect(mockExecuteQuery).toHaveBeenNthCalledWith(
       2,
@@ -189,6 +190,7 @@ describe("QueryTab — execution", () => {
       "SELECT 2",
       expect.any(String),
       expect.any(String),
+      undefined,
     );
 
     // Final state should show the last result

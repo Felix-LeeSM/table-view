@@ -161,16 +161,21 @@ export default function DropColumnDialog({
           return { sql: result.sql };
         },
         () => async () => {
-          await tauri.dropColumnRequest({
-            connectionId,
-            schema: schemaName,
-            table: tableName,
-            columnName,
-            cascade,
-            previewOnly: false,
-            // Sprint 271c — opt-in DbMismatch guard.
-            expectedDatabase: database,
-          });
+          await tauri.dropColumnRequest(
+            {
+              connectionId,
+              schema: schemaName,
+              table: tableName,
+              columnName,
+              cascade,
+              previewOnly: false,
+              // Sprint 271c — opt-in DbMismatch guard.
+              expectedDatabase: database,
+            },
+            // Issue #1112 — commit runs only after the Safe Mode gate + this
+            // dialog's confirmation; forward the proof.
+            true,
+          );
         },
       );
     }, 250);

@@ -40,13 +40,19 @@ export interface RdbHistoryOverrides {
   collection?: string | null;
 }
 
+// Issue #1112 — `safetyConfirmed` flows to the backend Safe Mode gate. It is
+// `true` only when the user reached this runner *through* the confirm dialog
+// (`confirmRdbDangerous`); the direct allow-path and the WARN-tier path leave
+// it `false`, and the backend independently re-decides.
 export type RdbSingleRunner = (
   stmt: string,
   history?: RdbHistoryOverrides,
+  safetyConfirmed?: boolean,
 ) => Promise<void>;
 export type RdbBatchRunner = (
   statements: string[],
   joinedSql: string,
+  safetyConfirmed?: boolean,
 ) => Promise<void>;
 
 interface RdbRunnerRef<T> {
@@ -101,6 +107,9 @@ export interface ExecuteRdbSingleStatementRequest extends RdbSingleLifecycleActi
   workspaceDb: string | null | undefined;
   findLiveIdleTab: (tabId: string, connectionId: string) => QueryTab | null;
   runRdbSingleRef: RdbRunnerRef<RdbSingleRunner>;
+  // Issue #1112 — proof the destructive-statement confirm dialog was
+  // satisfied. Forwarded verbatim to the backend Safe Mode gate.
+  safetyConfirmed?: boolean;
 }
 
 export interface ExecuteRdbStatementBatchRequest extends RdbBatchLifecycleActions {
@@ -110,6 +119,8 @@ export interface ExecuteRdbStatementBatchRequest extends RdbBatchLifecycleAction
   workspaceDb: string | null | undefined;
   findLiveIdleTab: (tabId: string, connectionId: string) => QueryTab | null;
   runRdbBatchRef: RdbRunnerRef<RdbBatchRunner>;
+  // Issue #1112 — see `ExecuteRdbSingleStatementRequest`.
+  safetyConfirmed?: boolean;
 }
 
 export interface ExecuteRdbQueryRequest {
@@ -218,6 +229,7 @@ export async function executeRdbSingleStatement({
   recordHistory,
   findLiveIdleTab,
   runRdbSingleRef,
+  safetyConfirmed,
 }: ExecuteRdbSingleStatementRequest): Promise<void> {
   const queryId = `${tab.id}-${Date.now()}`;
   const startTime = Date.now();
@@ -228,6 +240,7 @@ export async function executeRdbSingleStatement({
       stmt,
       queryId,
       workspaceDb ?? undefined,
+      safetyConfirmed,
     );
     completeQuery(tab.id, queryId, result);
     if (result.queryType === "ddl") {
@@ -298,6 +311,7 @@ export async function executeRdbStatementBatch({
   recordHistory,
   findLiveIdleTab,
   runRdbBatchRef,
+  safetyConfirmed,
 }: ExecuteRdbStatementBatchRequest): Promise<void> {
   const queryId = `${tab.id}-${Date.now()}`;
   const startTime = Date.now();
@@ -316,6 +330,7 @@ export async function executeRdbStatementBatch({
         stmt,
         queryId,
         workspaceDb ?? undefined,
+        safetyConfirmed,
       );
       lastResult = result;
       statementResults.push({

@@ -351,6 +351,7 @@ describe("QueryTab — lifecycle", () => {
       "SELECT 1",
       expect.any(String),
       expect.any(String),
+      undefined,
     );
 
     // Wait for async completion

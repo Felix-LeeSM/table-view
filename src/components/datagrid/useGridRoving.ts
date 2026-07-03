@@ -39,6 +39,10 @@ const clamp = (v: number, max: number) => Math.min(Math.max(v, 0), max);
 // 뒤엔 포기해 focus 가 무한 루프 돌지 않게 한다.
 const MAX_FOCUS_FRAMES = 6;
 
+// ponytail: fixed page size. viewport row 수 기반 동적 페이징이 필요해지면
+// container clientHeight / row height 로 계산해 넘겨받는 방향으로 올린다.
+const PAGE_ROWS = 10;
+
 export function useGridRoving(
   rowCount: number,
   colCount: number,
@@ -107,7 +111,9 @@ export function useGridRoving(
         key !== "ArrowLeft" &&
         key !== "ArrowRight" &&
         key !== "Home" &&
-        key !== "End"
+        key !== "End" &&
+        key !== "PageUp" &&
+        key !== "PageDown"
       ) {
         return;
       }
@@ -129,6 +135,10 @@ export function useGridRoving(
       else if (key === "ArrowRight") nextCol = clamp(nextCol + 1, colCount - 1);
       else if (key === "Home") nextCol = 0;
       else if (key === "End") nextCol = colCount - 1;
+      else if (key === "PageUp")
+        nextRow = clamp(nextRow - PAGE_ROWS, rowCount - 1);
+      else if (key === "PageDown")
+        nextRow = clamp(nextRow + PAGE_ROWS, rowCount - 1);
 
       const next = { row: nextRow, col: nextCol };
       focusedRef.current = next;

@@ -229,6 +229,8 @@ describe("QueryTab — Sprint 255 WARN dialog mount (raw SQL/MQL editor)", () =>
       "UPDATE users SET name = 'a' WHERE id = 1",
       expect.any(String),
       expect.any(String),
+      // Issue #1112 — WARN-tier confirm is not backend-gated; flag stays unset.
+      undefined,
     );
   });
 

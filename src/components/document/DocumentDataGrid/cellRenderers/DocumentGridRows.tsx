@@ -152,10 +152,26 @@ export default function DocumentGridRows({
                     tabIndex={cellTabIndex(rowIdx, visualIdx)}
                     onFocus={() => onFocusCell(rowIdx, visualIdx)}
                     onKeyDown={(e) => {
+                      // issue #1130 (N1) — cell 내부 native 컨트롤(nested
+                      // toggle 버튼) focus 시 Space/Enter 를 셀 키맵이
+                      // 가로채지 않도록 자기 셀 focus 일 때만 동작.
+                      if (e.target !== e.currentTarget) return;
                       // Design-swarm #4 Phase 3 — Enter/F2 로 focus 된 cell
                       // 편집 진입 (double-click 과 동일 경로). 편집 중엔 editor
                       // input 이 Enter/Escape 를 stopPropagation 하므로 안 옴.
                       if (isEditing) return;
+                      // issue #1130 AC2 — Space 로 행 선택 (onClick 과 동일
+                      // modifier 시맨틱). preventDefault 로 page scroll 억제.
+                      if (e.key === " ") {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        editState.handleSelectRow(
+                          rowIdx,
+                          e.metaKey || e.ctrlKey,
+                          e.shiftKey,
+                        );
+                        return;
+                      }
                       if (e.key !== "Enter" && e.key !== "F2") return;
                       e.preventDefault();
                       e.stopPropagation();

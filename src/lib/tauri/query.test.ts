@@ -43,12 +43,15 @@ describe("RDBMS query Tauri wrappers", () => {
       sql: "select id from users",
       queryId: "q-1",
       expectedDatabase: "app",
+      safetyConfirmed: false,
     });
     expect(envelope).toEqual({
       kind: "tabular",
       queryResult: {
         columns: [{ name: "id", dataType: "integer", category: "int" }],
-        rows: [["9007199254740993"]],
+        // SQLite `integer` 컬럼의 정밀도-보존 string token 은 ADR 0026
+        // (issue #1082) 에 따라 BigInt 로 승격된다.
+        rows: [[9007199254740993n]],
         totalCount: 1,
         executionTimeMs: 7,
         queryType: "select",
@@ -61,7 +64,8 @@ describe("RDBMS query Tauri wrappers", () => {
 
     await expect(executeQuery("conn-1", "select 1", "q-2")).resolves.toEqual({
       columns: [{ name: "id", dataType: "integer", category: "int" }],
-      rows: [["9007199254740993"]],
+      // SQLite `integer` string token → BigInt (ADR 0026 / issue #1082).
+      rows: [[9007199254740993n]],
       totalCount: 1,
       executionTimeMs: 7,
       queryType: "select",
@@ -72,6 +76,7 @@ describe("RDBMS query Tauri wrappers", () => {
       sql: "select 1",
       queryId: "q-2",
       expectedDatabase: null,
+      safetyConfirmed: false,
     });
   });
 

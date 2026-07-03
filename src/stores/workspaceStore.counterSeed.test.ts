@@ -139,6 +139,50 @@ describe("workspaceStore — counter seed (M-2 fix)", () => {
     expect(ws!.tabs[1]!.id).toBe("query-1");
   });
 
+  it("#1091 — hydrateWorkspacesFromSnapshot (real boot path) seeds counters so restored ids never collide", () => {
+    // The production boot path is snapshot IPC → hydrateWorkspacesFromSnapshot,
+    // NOT the legacy-LS loadPersistedWorkspaces. Before #1091 that path never
+    // seeded the counters, so a restored workspace holding tab-1..tab-3 with
+    // tabCounter=0 re-issued tab-1 on the next addTab → duplicate id (React
+    // key collision + removeTab filter dropping both same-id tabs).
+    useWorkspaceStore.getState().hydrateWorkspacesFromSnapshot({
+      conn1: {
+        dbA: {
+          tabs: [
+            makeTableTab("tab-1"),
+            makeTableTab("tab-2"),
+            makeTableTab("tab-3"),
+          ],
+          activeTabId: "tab-3",
+          closedTabHistory: [],
+          dirtyTabIds: [],
+          sidebar: { selectedNode: null, expanded: [], scrollTop: 0 },
+        },
+      },
+    });
+
+    useWorkspaceStore.getState().addTab("conn1", {
+      type: "table",
+      title: "fresh",
+      connectionId: "conn1",
+      closable: true,
+      schema: "public",
+      table: "fresh",
+      subView: "records",
+      database: "dbA",
+      permanent: true,
+    });
+
+    const tabs =
+      useWorkspaceStore.getState().workspaces["conn1"]?.["dbA"]?.tabs;
+    expect(tabs).toBeDefined();
+    const ids = tabs!.map((t) => t.id);
+    // No id collision — every tab id is unique.
+    expect(new Set(ids).size).toBe(ids.length);
+    // Freshly added tab is tab-4 (max persisted + 1), not a re-issued tab-1.
+    expect(ids[ids.length - 1]).toBe("tab-4");
+  });
+
   it("AC-354-02 — persisted query tabs (query-2, query-5, query-9) seed queryCounter; next addQueryTab assigns query-10", () => {
     window.localStorage.setItem(
       STORAGE_KEY,

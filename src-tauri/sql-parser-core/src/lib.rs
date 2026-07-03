@@ -24,6 +24,7 @@ pub mod ast;
 pub mod completion;
 pub mod lexer;
 pub mod parser;
+pub mod safety;
 
 pub use ast::{
     AlterAction, AlterTableStatement, CallArgument, CallStatement, CascadeBehavior, CaseWhen,
