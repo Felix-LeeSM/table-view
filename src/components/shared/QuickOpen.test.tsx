@@ -36,13 +36,26 @@ vi.mock("@lib/tauri/window", () => ({
 }));
 
 const mockEmit = vi.fn().mockResolvedValue(undefined);
-// Capture the quick-open intent listener so tests can drive inbound events.
-const mockListenState: { cb?: (e: { payload: unknown }) => void } = {};
+// The unlisten fn returned by `listen()`; a spy so teardown tests can assert it.
+const mockUnlisten = vi.fn();
+// Capture the quick-open intent listener so tests can drive inbound events. When
+// `deferred` is set, `listen()` stays pending until `resolveListen()` fires —
+// this reproduces the #1261 teardown race (unmount before listen resolves).
+const mockListenState: {
+  cb?: (e: { payload: unknown }) => void;
+  deferred: boolean;
+  resolveListen?: () => void;
+} = { deferred: false };
 vi.mock("@tauri-apps/api/event", () => ({
   emit: (...args: unknown[]) => mockEmit(...args),
   listen: (channel: string, cb: (e: { payload: unknown }) => void) => {
     if (channel === "quick-open:intent") mockListenState.cb = cb;
-    return Promise.resolve(() => {});
+    if (mockListenState.deferred) {
+      return new Promise<() => void>((resolve) => {
+        mockListenState.resolveListen = () => resolve(mockUnlisten);
+      });
+    }
+    return Promise.resolve(mockUnlisten);
   },
 }));
 
@@ -161,6 +174,8 @@ describe("QuickOpen", () => {
     vi.clearAllMocks();
     mockSidebarConnId = null;
     mockListenState.cb = undefined;
+    mockListenState.deferred = false;
+    mockListenState.resolveListen = undefined;
     useSchemaStore.setState({
       schemas: {},
       tables: {},
@@ -688,5 +703,28 @@ describe("QuickOpen", () => {
       }),
     );
     window.removeEventListener("navigate-table", handler);
+  });
+
+  // #1261 — teardown race: the cross-window receiver effect calls the async
+  // `subscribeIntents` (Tauri `listen()`). On a Back navigation the workspace
+  // window tears down before that promise resolves; without a cancelled guard
+  // the effect cleanup runs while `unlisten` is still undefined, so the
+  // listener is never removed. A dangling listener on a destroyed webview is
+  // what crashed the duckdb-file-analytics e2e (`no such window`).
+  it("unlistens even when unmounted before listen() resolves (#1261)", async () => {
+    mockSidebarConnId = "c1";
+    mockListenState.deferred = true;
+
+    const { unmount } = render(<QuickOpen />);
+    // Back navigation: the workspace unmounts before the pending listen settles.
+    unmount();
+    // Now the in-flight listen() resolves — post-teardown.
+    await act(async () => {
+      mockListenState.resolveListen?.();
+    });
+
+    // The resolved unlisten must still fire, or the destroyed webview keeps a
+    // live intent listener.
+    expect(mockUnlisten).toHaveBeenCalledTimes(1);
   });
 });
