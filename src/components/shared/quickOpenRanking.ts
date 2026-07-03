@@ -137,10 +137,13 @@ export function scoreItem(
   for (const token of q.split(/\s+/)) {
     if (!token) continue;
     const dot = token.indexOf(".");
-    const tokenScore =
-      dot >= 0
-        ? scoreDotToken(token.slice(0, dot), token.slice(dot + 1), fields)
-        : scorePlainToken(token, fields);
+    // A `.` only scopes to the schema on shapes that have one. On a flat shape
+    // (`hasSchema === false`) the token degrades to a plain literal match so a
+    // `.` query is a graceful no-op rather than an error.
+    const schemaScoped = dot >= 0 && fields.hasSchema !== false;
+    const tokenScore = schemaScoped
+      ? scoreDotToken(token.slice(0, dot), token.slice(dot + 1), fields)
+      : scorePlainToken(token, fields);
     if (tokenScore === 0) return 0; // AND: any failed token drops the item
     total += tokenScore;
   }

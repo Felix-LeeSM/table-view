@@ -68,6 +68,12 @@ export interface TreeRoving {
    * wherever the user moved next (e.g. the query editor), dropping keystrokes.
    */
   setFocusKey: (key: string) => void;
+  /**
+   * Move the roving anchor to `key` AND imperatively focus/scroll its row.
+   * Unlike `setFocusKey`, this DOES call `.focus()` — used for external reveal
+   * (e.g. Quick Open's schema results) where the target does not yet have focus.
+   */
+  focusByKey: (key: string) => void;
   /** `onKeyDown` for the `role="tree"` container. */
   onKeyDown: (e: React.KeyboardEvent<HTMLDivElement>) => void;
 }
@@ -209,7 +215,7 @@ export function useTreeRoving(
     [focusByKey],
   );
 
-  return { focusKey, setFocusKey: syncFocusKey, onKeyDown };
+  return { focusKey, setFocusKey: syncFocusKey, focusByKey, onKeyDown };
 }
 
 /** First earlier row whose depth is shallower than `rows[idx]`. */

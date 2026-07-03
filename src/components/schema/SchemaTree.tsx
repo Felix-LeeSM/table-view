@@ -27,6 +27,7 @@ import { Button } from "@components/ui/button";
 import { resolveRdbTreeShape, type RdbTreeShape } from "./treeShape";
 import {
   getVisibleRows,
+  nodeIdToString,
   ROW_HEIGHT_ESTIMATE,
   VIRTUALIZE_THRESHOLD,
 } from "./SchemaTree/treeRows";
@@ -213,6 +214,30 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
     visibleRows.find(
       (r) => r.kind === "schema" || r.kind === "category" || r.kind === "item",
     )?.key ?? null;
+
+  // Quick Open "schema" results reveal a schema here: ensure it's expanded,
+  // then focus/scroll its row via the roving `focusByKey`. Read expansion +
+  // the toggle through refs so the listener never re-subscribes per render;
+  // `focusByKey` is stable (keyed on `treeRef`).
+  const expandedSchemasRef = useRef(actions.expandedSchemas);
+  expandedSchemasRef.current = actions.expandedSchemas;
+  const handleExpandSchemaRef = useRef(actions.handleExpandSchema);
+  handleExpandSchemaRef.current = actions.handleExpandSchema;
+  const { focusByKey } = roving;
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (
+        e as CustomEvent<{ connectionId: string; schema: string }>
+      ).detail;
+      if (!detail || detail.connectionId !== connectionId) return;
+      if (!expandedSchemasRef.current.has(detail.schema)) {
+        void handleExpandSchemaRef.current(detail.schema);
+      }
+      focusByKey(nodeIdToString({ type: "schema", schema: detail.schema }));
+    };
+    window.addEventListener("reveal-schema", handler);
+    return () => window.removeEventListener("reveal-schema", handler);
+  }, [connectionId, focusByKey]);
 
   const ctx: SchemaTreeRowsContext = {
     t: (key, options) => t(key, options as Record<string, unknown>),
