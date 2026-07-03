@@ -4,6 +4,7 @@ import { Button } from "@components/ui/button";
 import DbSwitcher from "./DbSwitcher";
 import DisconnectButton from "./DisconnectButton";
 import SafeModeToggle from "./SafeModeToggle";
+import RowCapSetting from "@components/settings/RowCapSetting";
 
 /**
  * Workspace toolbar — top-of-pane container that hosts the `[DB ▼]` chip
@@ -61,6 +62,7 @@ export default function WorkspaceToolbar() {
           no-ops. */}
       <div className="ml-auto flex items-center gap-2">
         <HistoryButton />
+        <RowCapSetting />
         <SafeModeToggle />
         <DisconnectButton />
       </div>

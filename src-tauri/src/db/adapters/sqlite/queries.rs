@@ -1,5 +1,6 @@
 //! SQLite free-form query execution and table preview.
 
+use futures_util::TryStreamExt;
 use sqlx::sqlite::SqliteRow;
 use sqlx::{Column, Row, TypeInfo};
 use tokio_util::sync::CancellationToken;
@@ -129,6 +130,10 @@ impl SqliteAdapter {
         &self,
         query: &str,
         cancel_token: Option<&CancellationToken>,
+        // Issue #1231 — stop fetching after this many rows so the Rust buffer
+        // never grows past the cap. `crate::db::row_cap::current()` in the
+        // trait impl; tests pass an explicit small cap.
+        row_cap: usize,
     ) -> Result<QueryResult, AppError> {
         if cancel_token.is_some_and(CancellationToken::is_cancelled) {
             return Err(AppError::Database("Query cancelled".into()));
@@ -149,22 +154,34 @@ impl SqliteAdapter {
         let work = async {
             match query_type {
                 QueryType::Select => {
-                    let rows = sqlx::query(query)
-                        .fetch_all(&pool)
+                    // Issue #1231 — stream rows and stop at cap+1 (the extra
+                    // row only sets `truncated`, it is never buffered) so a
+                    // no-LIMIT JOIN cannot blow up the heap.
+                    let mut stream = sqlx::query(query).fetch(&pool);
+                    let mut columns: Vec<QueryColumn> = Vec::new();
+                    let mut json_rows: Vec<Vec<serde_json::Value>> = Vec::new();
+                    let mut truncated = false;
+                    while let Some(row) = stream
+                        .try_next()
                         .await
-                        .map_err(|e| AppError::Database(e.to_string()))?;
-
-                    let columns = rows.first().map(sqlite_query_columns).unwrap_or_default();
-                    let json_rows = rows
-                        .iter()
-                        .map(|row| {
+                        .map_err(|e| AppError::Database(e.to_string()))?
+                    {
+                        if columns.is_empty() {
+                            columns = sqlite_query_columns(&row);
+                        }
+                        if json_rows.len() >= row_cap {
+                            truncated = true;
+                            break;
+                        }
+                        json_rows.push(
                             (0..row.columns().len())
-                                .map(|idx| cell_to_json(row, idx))
-                                .collect()
-                        })
-                        .collect::<Vec<Vec<serde_json::Value>>>();
+                                .map(|idx| cell_to_json(&row, idx))
+                                .collect(),
+                        );
+                    }
                     let total_count = json_rows.len() as i64;
                     Ok(QueryResult {
+                        truncated,
                         columns,
                         rows: json_rows,
                         total_count,
@@ -179,6 +196,7 @@ impl SqliteAdapter {
                         .map_err(|e| AppError::Database(e.to_string()))?;
                     let rows_affected = result.rows_affected();
                     Ok(QueryResult {
+                        truncated: false,
                         columns: Vec::new(),
                         rows: Vec::new(),
                         total_count: rows_affected as i64,
@@ -192,6 +210,7 @@ impl SqliteAdapter {
                         .await
                         .map_err(|e| AppError::Database(e.to_string()))?;
                     Ok(QueryResult {
+                        truncated: false,
                         columns: Vec::new(),
                         rows: Vec::new(),
                         total_count: 0,

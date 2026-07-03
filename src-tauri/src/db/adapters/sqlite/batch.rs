@@ -87,6 +87,7 @@ impl SqliteAdapter {
                             }
                         }
                         results.push(QueryResult {
+                            truncated: false,
                             columns: Vec::new(),
                             rows: Vec::new(),
                             total_count: rows_affected as i64,

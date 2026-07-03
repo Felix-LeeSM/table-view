@@ -23,6 +23,14 @@ export const en = {
     tooltipOff:
       "Query history is disabled. Click to enable — future queries will be recorded.",
   },
+  rowCap: {
+    ariaLabel: "Query row cap",
+    tooltip: "Query row cap: {{count}} rows",
+    label: "Maximum rows per query",
+    help: "Results larger than this are truncated at fetch time to bound memory. Add a LIMIT clause for precise control.",
+    reset: "Reset",
+    range: "Allowed range: {{min}}–{{max}}",
+  },
 } as const;
 
 export const ko = {
@@ -43,5 +51,13 @@ export const ko = {
       "쿼리 히스토리가 활성화되어 있습니다. 클릭하면 비활성화 — 이후 쿼리는 기록되지 않습니다. 기존 행은 유지됩니다(지우려면 Clear 사용).",
     tooltipOff:
       "쿼리 히스토리가 비활성화되어 있습니다. 클릭하면 활성화 — 이후 쿼리가 기록됩니다.",
+  },
+  rowCap: {
+    ariaLabel: "쿼리 행 상한",
+    tooltip: "쿼리 행 상한: {{count}}행",
+    label: "쿼리당 최대 행 수",
+    help: "이보다 큰 결과는 메모리 보호를 위해 fetch 단계에서 잘립니다. 정밀한 제어는 LIMIT을 사용하세요.",
+    reset: "기본값",
+    range: "허용 범위: {{min}}–{{max}}",
   },
 } as const;

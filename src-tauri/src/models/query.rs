@@ -153,6 +153,13 @@ pub struct QueryResult {
     pub execution_time_ms: u64,
     /// Type of query that was executed
     pub query_type: QueryType,
+    /// Issue #1231 — `true` when the SELECT result hit the raw-query row cap
+    /// and rows beyond the cap were dropped at fetch time. Only meaningful
+    /// for `QueryType::Select`; DML/DDL always leave this `false`. Tolerant
+    /// of absent (`#[serde(default)]`) so legacy payloads / non-adapter
+    /// constructors deserialize unchanged.
+    #[serde(default)]
+    pub truncated: bool,
 }
 
 #[cfg(test)]
@@ -249,6 +256,7 @@ mod tests {
     #[test]
     fn query_result_select_serializes_correctly() {
         let result = QueryResult {
+            truncated: false,
             columns: vec![
                 QueryColumn {
                     name: "id".to_string(),
@@ -305,6 +313,7 @@ mod tests {
     #[test]
     fn query_result_dml_serializes_correctly() {
         let result = QueryResult {
+            truncated: false,
             columns: vec![],
             rows: vec![],
             total_count: 5,
@@ -328,6 +337,7 @@ mod tests {
     #[test]
     fn query_result_ddl_serializes_correctly() {
         let result = QueryResult {
+            truncated: false,
             columns: vec![],
             rows: vec![],
             total_count: 0,

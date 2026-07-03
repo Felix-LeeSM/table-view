@@ -283,7 +283,10 @@ impl RdbAdapter for OracleAdapter {
         sql: &'a str,
         cancel: Option<&'a CancellationToken>,
     ) -> BoxFuture<'a, Result<RdbQueryResult, AppError>> {
-        Box::pin(async move { self.execute_query(sql, cancel).await })
+        Box::pin(async move {
+            self.execute_query(sql, cancel, crate::db::row_cap::current())
+                .await
+        })
     }
 
     fn execute_sql_batch<'a>(

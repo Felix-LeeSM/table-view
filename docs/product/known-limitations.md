@@ -70,6 +70,22 @@ smoke or measurement gates:
   each wired spec. That does not add Cassandra, DynamoDB, graph, vector, stream,
   or broader MSSQL/Oracle/Search service coverage.
 
+## Query Results
+
+- Raw query results are capped at a configurable row limit (default 10,000
+  rows; adjustable 100–1,000,000 via the workspace toolbar row-cap control,
+  persisted as the `query_row_cap` setting). The cap is enforced at fetch
+  time across every DBMS — the backend stops pulling rows past the cap rather
+  than buffering the full result set, so a no-`LIMIT` JOIN cannot exhaust
+  memory. When a result is capped the grid shows a truncation banner and the
+  row count reflects the returned (capped) rows, not the true total. Add an
+  explicit `LIMIT`/`TOP`/`FETCH` clause for precise control, or raise the cap.
+  Oracle fetches in ~100-row batches, so it may transiently buffer up to one
+  batch beyond the cap before trimming to exactly the cap. Write (rows-affected)
+  results and the dedicated Explain plan viewer are not capped; a raw `EXPLAIN`
+  typed into the editor streams through the cap like any other SELECT (its plan
+  output is well under the default).
+
 ## Related
 
 - [`docs/product/README.md`](README.md) — current support snapshot

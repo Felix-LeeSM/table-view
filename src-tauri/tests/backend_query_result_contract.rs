@@ -25,6 +25,7 @@ fn document_result_envelope_stays_document_boundary() {
         raw_documents: vec![doc! { "_id": "507f1f77bcf86cd799439011" }],
         total_count: 1,
         execution_time_ms: 7,
+        truncated: false,
     });
 
     let value = serde_json::to_value(envelope).expect("document envelope should serialize");

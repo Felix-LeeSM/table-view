@@ -149,7 +149,11 @@ async fn mariadb_returning_runtime_boundary_is_server_resolved_for_fixture_versi
     let adapter = runtime.adapter;
 
     let version_result = adapter
-        .execute_query("SELECT VERSION() AS version", None)
+        .execute_query(
+            "SELECT VERSION() AS version",
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .expect("SELECT VERSION()");
     let version = version_result.rows[0][0].as_str().unwrap_or_default();
@@ -170,6 +174,7 @@ async fn mariadb_returning_runtime_boundary_is_server_resolved_for_fixture_versi
         .execute_query(
             &format!("CREATE TABLE {table_name} (id INT PRIMARY KEY, label VARCHAR(64))"),
             None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
         )
         .await
         .expect("CREATE TABLE");
@@ -177,6 +182,7 @@ async fn mariadb_returning_runtime_boundary_is_server_resolved_for_fixture_versi
         .execute_query(
             &format!("INSERT INTO {table_name} VALUES (1, 'runtime-boundary')"),
             None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
         )
         .await
         .expect("INSERT seed row");
@@ -185,6 +191,7 @@ async fn mariadb_returning_runtime_boundary_is_server_resolved_for_fixture_versi
         .execute_query(
             &format!("DELETE FROM {table_name} WHERE id = 1 RETURNING label"),
             None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
         )
         .await
         .expect("DELETE RETURNING should be server-resolved by the current MariaDB fixture");
@@ -210,6 +217,7 @@ async fn mariadb_returning_runtime_boundary_is_server_resolved_for_fixture_versi
         .execute_query(
             &format!("SELECT COUNT(*) AS remaining FROM {table_name} WHERE id = 1"),
             None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
         )
         .await
         .expect("RETURNING readback SELECT");
@@ -223,7 +231,11 @@ async fn mariadb_returning_runtime_boundary_is_server_resolved_for_fixture_versi
     );
 
     adapter
-        .execute_query(&format!("DROP TABLE {table_name}"), None)
+        .execute_query(
+            &format!("DROP TABLE {table_name}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .ok();
     adapter.disconnect_pool().await.ok();

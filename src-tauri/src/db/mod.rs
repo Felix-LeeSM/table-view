@@ -30,6 +30,7 @@ pub mod oracle;
 pub mod postgres;
 pub(crate) mod raw_where;
 pub mod redis;
+pub mod row_cap;
 pub mod search;
 pub(crate) mod search_destructive;
 pub(crate) mod search_dsl;

@@ -312,7 +312,11 @@ async fn cancellable_metadata_obeys_cancel_token_before_work_completes() {
 async fn raw_ddl_admin_execution_fails_closed_without_connection() {
     let adapter = OracleAdapter::new();
     let err = adapter
-        .execute_query("ALTER SESSION SET CURRENT_SCHEMA = HR", None)
+        .execute_query(
+            "ALTER SESSION SET CURRENT_SCHEMA = HR",
+            None,
+            crate::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .unwrap_err();
 

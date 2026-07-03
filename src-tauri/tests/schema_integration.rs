@@ -1717,7 +1717,11 @@ async fn test_execute_query_bigint_select_emits_string_wire() {
     };
 
     let result = adapter
-        .execute_query("SELECT 9223372036854775807::bigint AS big", None)
+        .execute_query(
+            "SELECT 9223372036854775807::bigint AS big",
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .expect("execute_query bigint literal");
     assert_eq!(result.rows.len(), 1);

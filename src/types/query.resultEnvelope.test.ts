@@ -89,6 +89,8 @@ describe("result envelope compatibility layer", () => {
         executionTimeMs: documentResult.executionTimeMs,
         queryType: "select",
         resultUnit: "document",
+        // Issue #1231 — the document conversion now carries the truncation flag.
+        truncated: false,
       },
     });
     expect(converted.ok && "rawDocuments" in converted.queryResult).toBe(false);

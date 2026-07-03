@@ -94,6 +94,7 @@ async fn seed_filter_table_mysql(adapter: &table_view_lib::db::mysql::MysqlAdapt
                 )"
             ),
             None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
         )
         .await
         .expect("CREATE TABLE");
@@ -108,6 +109,7 @@ async fn seed_filter_table_mysql(adapter: &table_view_lib::db::mysql::MysqlAdapt
                  (5, 'Eve', 500.0, true, 'fifth')"
             ),
             None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
         )
         .await
         .expect("INSERT");
@@ -128,7 +130,11 @@ async fn test_mysql_select_query_returns_columns_and_rows() {
     };
 
     let result = adapter
-        .execute_query("SELECT 1 as num, 'test' as str", None)
+        .execute_query(
+            "SELECT 1 as num, 'test' as str",
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .expect("SELECT query should succeed");
 
@@ -138,6 +144,42 @@ async fn test_mysql_select_query_returns_columns_and_rows() {
     assert_eq!(result.rows.len(), 1, "Should have 1 row");
     assert_eq!(result.total_count, 1);
     assert!(matches!(result.query_type, QueryType::Select));
+
+    adapter.disconnect_pool().await.ok();
+}
+
+/// Issue #1231 — MySQL mirror of the PG row-cap boundary test. Explicit cap
+/// arg (no global), 3-row UNION, silent-skip without a live MySQL.
+#[tokio::test]
+#[serial_test::serial]
+async fn test_mysql_row_cap_truncates_select_1231() {
+    let adapter = match common::setup_mysql_adapter().await {
+        Some(a) => a,
+        None => return,
+    };
+    let sql = "SELECT 1 AS n UNION ALL SELECT 2 UNION ALL SELECT 3";
+
+    let capped = adapter
+        .execute_query(sql, None, 2)
+        .await
+        .expect("capped SELECT should succeed");
+    assert_eq!(capped.rows.len(), 2, "row cap must bound fetched rows");
+    assert!(capped.truncated, "truncated must be set at the cap");
+    assert_eq!(capped.total_count, 2);
+
+    let full = adapter
+        .execute_query(sql, None, 10)
+        .await
+        .expect("uncapped SELECT should succeed");
+    assert_eq!(full.rows.len(), 3);
+    assert!(!full.truncated, "under-cap results must not be truncated");
+
+    let boundary = adapter
+        .execute_query(sql, None, 3)
+        .await
+        .expect("boundary SELECT should succeed");
+    assert_eq!(boundary.rows.len(), 3);
+    assert!(!boundary.truncated, "cap == row count must not truncate");
 
     adapter.disconnect_pool().await.ok();
 }
@@ -186,7 +228,11 @@ async fn test_mysql_call_procedure_returns_result_rows() {
     .expect("CREATE PROCEDURE");
 
     let result = adapter
-        .execute_query(&format!("CALL {proc_name}(872)"), None)
+        .execute_query(
+            &format!("CALL {proc_name}(872)"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .expect("CALL procedure");
 
@@ -216,7 +262,11 @@ async fn test_mysql_check_constraint_catalog_gate_uses_live_server_version() {
     };
 
     let version = adapter
-        .execute_query("SELECT VERSION() AS version", None)
+        .execute_query(
+            "SELECT VERSION() AS version",
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .expect("SELECT VERSION()");
     let raw = version.rows[0][0].as_str().unwrap_or_default();
@@ -249,7 +299,11 @@ async fn test_mysql_dml_query_returns_rows_affected() {
     );
 
     adapter
-        .execute_query(&format!("CREATE TABLE {table_name} (id INT)"), None)
+        .execute_query(
+            &format!("CREATE TABLE {table_name} (id INT)"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .expect("CREATE TABLE should succeed");
 
@@ -257,6 +311,7 @@ async fn test_mysql_dml_query_returns_rows_affected() {
         .execute_query(
             &format!("INSERT INTO {table_name} VALUES (1), (2), (3)"),
             None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
         )
         .await
         .expect("INSERT query should succeed");
@@ -270,19 +325,31 @@ async fn test_mysql_dml_query_returns_rows_affected() {
     }
 
     let update_result = adapter
-        .execute_query(&format!("UPDATE {table_name} SET id = 10"), None)
+        .execute_query(
+            &format!("UPDATE {table_name} SET id = 10"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .expect("UPDATE query should succeed");
     assert_eq!(update_result.total_count, 3);
 
     let delete_result = adapter
-        .execute_query(&format!("DELETE FROM {table_name}"), None)
+        .execute_query(
+            &format!("DELETE FROM {table_name}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .expect("DELETE query should succeed");
     assert_eq!(delete_result.total_count, 3);
 
     adapter
-        .execute_query(&format!("DROP TABLE {table_name}"), None)
+        .execute_query(
+            &format!("DROP TABLE {table_name}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .ok();
     adapter.disconnect_pool().await.ok();
@@ -309,7 +376,11 @@ async fn test_mysql_ddl_query_returns_success() {
     );
 
     let result = adapter
-        .execute_query(&format!("CREATE TABLE {table_name} (id INT)"), None)
+        .execute_query(
+            &format!("CREATE TABLE {table_name} (id INT)"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .expect("CREATE TABLE should succeed");
 
@@ -325,6 +396,7 @@ async fn test_mysql_ddl_query_returns_success() {
                  WHERE table_name = '{table_name}' AND table_schema = DATABASE()) as exists_flag"
             ),
             None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
         )
         .await
         .expect("EXISTS query should succeed");
@@ -333,7 +405,11 @@ async fn test_mysql_ddl_query_returns_success() {
     assert_eq!(check_result.total_count, 1);
 
     adapter
-        .execute_query(&format!("DROP TABLE {table_name}"), None)
+        .execute_query(
+            &format!("DROP TABLE {table_name}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .ok();
     adapter.disconnect_pool().await.ok();
@@ -355,7 +431,11 @@ async fn test_mysql_query_cancellation_works() {
 
     let query_handle = tokio::spawn(async move {
         spawned_adapter
-            .execute_query("SELECT SLEEP(10)", Some(&child_token))
+            .execute_query(
+                "SELECT SLEEP(10)",
+                Some(&child_token),
+                table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+            )
             .await
     });
 
@@ -392,7 +472,11 @@ async fn test_mysql_query_error_returns_database_error() {
     };
 
     let result = adapter
-        .execute_query("SELECT * FROM nonexistent_table_mysql_mirror", None)
+        .execute_query(
+            "SELECT * FROM nonexistent_table_mysql_mirror",
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await;
 
     assert!(result.is_err(), "Invalid query should return error");
@@ -427,6 +511,7 @@ async fn test_mysql_complex_select_query() {
         .execute_query(
             &format!("CREATE TABLE users_{ts} (id INT, name TEXT)"),
             None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
         )
         .await
         .ok();
@@ -435,6 +520,7 @@ async fn test_mysql_complex_select_query() {
         .execute_query(
             &format!("CREATE TABLE orders_{ts} (id INT, user_id INT, amount DECIMAL(10, 2))"),
             None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
         )
         .await
         .ok();
@@ -443,6 +529,7 @@ async fn test_mysql_complex_select_query() {
         .execute_query(
             &format!("INSERT INTO users_{ts} VALUES (1, 'Alice'), (2, 'Bob')"),
             None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
         )
         .await
         .ok();
@@ -453,6 +540,7 @@ async fn test_mysql_complex_select_query() {
                 "INSERT INTO orders_{ts} VALUES (1, 1, 100.50), (2, 1, 200.00), (3, 2, 50.00)"
             ),
             None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
         )
         .await
         .ok();
@@ -464,6 +552,7 @@ async fn test_mysql_complex_select_query() {
                  JOIN orders_{ts} o ON u.id = o.user_id ORDER BY o.amount"
             ),
             None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
         )
         .await
         .expect("JOIN query should succeed");
@@ -474,11 +563,19 @@ async fn test_mysql_complex_select_query() {
     assert!(matches!(result.query_type, QueryType::Select));
 
     adapter
-        .execute_query(&format!("DROP TABLE users_{ts}"), None)
+        .execute_query(
+            &format!("DROP TABLE users_{ts}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .ok();
     adapter
-        .execute_query(&format!("DROP TABLE orders_{ts}"), None)
+        .execute_query(
+            &format!("DROP TABLE orders_{ts}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .ok();
     adapter.disconnect_pool().await.ok();
@@ -500,12 +597,20 @@ async fn test_mysql_empty_result_set() {
     let table_name = format!("test_empty_{ts}");
 
     adapter
-        .execute_query(&format!("CREATE TABLE {table_name} (id INT)"), None)
+        .execute_query(
+            &format!("CREATE TABLE {table_name} (id INT)"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .ok();
 
     let result = adapter
-        .execute_query(&format!("SELECT * FROM {table_name}"), None)
+        .execute_query(
+            &format!("SELECT * FROM {table_name}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .expect("Query should succeed");
 
@@ -514,7 +619,11 @@ async fn test_mysql_empty_result_set() {
     assert!(matches!(result.query_type, QueryType::Select));
 
     adapter
-        .execute_query(&format!("DROP TABLE {table_name}"), None)
+        .execute_query(
+            &format!("DROP TABLE {table_name}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .ok();
     adapter.disconnect_pool().await.ok();
@@ -534,7 +643,11 @@ async fn test_mysql_select_with_leading_comment() {
     };
 
     let result = adapter
-        .execute_query("-- This is a comment\nSELECT 42 as answer", None)
+        .execute_query(
+            "-- This is a comment\nSELECT 42 as answer",
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .expect("SELECT with leading comment should succeed");
 
@@ -557,7 +670,11 @@ async fn test_mysql_select_with_trailing_semicolon() {
     };
 
     let result = adapter
-        .execute_query("SELECT 1 as one;", None)
+        .execute_query(
+            "SELECT 1 as one;",
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .expect("SELECT with trailing semicolon should succeed");
 
@@ -585,19 +702,31 @@ async fn test_mysql_dml_with_trailing_semicolon() {
     );
 
     adapter
-        .execute_query(&format!("CREATE TABLE {table_name} (id INT);"), None)
+        .execute_query(
+            &format!("CREATE TABLE {table_name} (id INT);"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .expect("CREATE TABLE should succeed");
 
     let result = adapter
-        .execute_query(&format!("INSERT INTO {table_name} VALUES (1);"), None)
+        .execute_query(
+            &format!("INSERT INTO {table_name} VALUES (1);"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .expect("INSERT with trailing semicolon should succeed");
 
     assert!(matches!(result.query_type, QueryType::Dml { .. }));
 
     adapter
-        .execute_query(&format!("DROP TABLE {table_name}"), None)
+        .execute_query(
+            &format!("DROP TABLE {table_name}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .ok();
     adapter.disconnect_pool().await.ok();
@@ -613,7 +742,11 @@ async fn test_mysql_select_with_block_comment() {
     };
 
     let result = adapter
-        .execute_query("/* block comment */ SELECT 1 as num", None)
+        .execute_query(
+            "/* block comment */ SELECT 1 as num",
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .expect("SELECT with block comment should succeed");
 
@@ -642,7 +775,11 @@ async fn test_mysql_execute_query_batch_commits_all_statements() {
     let table = format!("test_batch_commit_{ts}");
 
     adapter
-        .execute_query(&format!("CREATE TABLE {table} (id INT)"), None)
+        .execute_query(
+            &format!("CREATE TABLE {table} (id INT)"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .expect("CREATE TABLE");
 
@@ -667,7 +804,11 @@ async fn test_mysql_execute_query_batch_commits_all_statements() {
     }
 
     let count = adapter
-        .execute_query(&format!("SELECT COUNT(*) AS n FROM {table}"), None)
+        .execute_query(
+            &format!("SELECT COUNT(*) AS n FROM {table}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .expect("count");
     // COUNT(*) 는 MySQL 에서 BIGINT 를 반환하므로 ADR 0026 (issue #1082) 에 따라
@@ -679,7 +820,11 @@ async fn test_mysql_execute_query_batch_commits_all_statements() {
     assert_eq!(n, 2);
 
     adapter
-        .execute_query(&format!("DROP TABLE {table}"), None)
+        .execute_query(
+            &format!("DROP TABLE {table}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .ok();
     adapter.disconnect_pool().await.ok();
@@ -706,6 +851,7 @@ async fn test_mysql_execute_query_batch_rolls_back_on_mid_failure() {
         .execute_query(
             &format!("CREATE TABLE {table} (id INT) ENGINE=InnoDB"),
             None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
         )
         .await
         .expect("CREATE TABLE");
@@ -727,7 +873,11 @@ async fn test_mysql_execute_query_batch_rolls_back_on_mid_failure() {
     );
 
     let count = adapter
-        .execute_query(&format!("SELECT COUNT(*) AS n FROM {table}"), None)
+        .execute_query(
+            &format!("SELECT COUNT(*) AS n FROM {table}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .expect("count");
     let n: i64 = count.rows[0][0]
@@ -737,7 +887,11 @@ async fn test_mysql_execute_query_batch_rolls_back_on_mid_failure() {
     assert_eq!(n, 0, "rollback must leave the table empty");
 
     adapter
-        .execute_query(&format!("DROP TABLE {table}"), None)
+        .execute_query(
+            &format!("DROP TABLE {table}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .ok();
     adapter.disconnect_pool().await.ok();
@@ -765,6 +919,7 @@ async fn test_mysql_execute_query_batch_rolls_back_when_update_changes_multiple_
         .execute_query(
             &format!("CREATE TABLE {table} (id INT, msg TEXT) ENGINE=InnoDB"),
             None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
         )
         .await
         .expect("CREATE TABLE");
@@ -772,6 +927,7 @@ async fn test_mysql_execute_query_batch_rolls_back_when_update_changes_multiple_
         .execute_query(
             &format!("INSERT INTO {table} VALUES (1, 'a'), (1, 'a')"),
             None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
         )
         .await
         .expect("INSERT duplicates");
@@ -796,6 +952,7 @@ async fn test_mysql_execute_query_batch_rolls_back_when_update_changes_multiple_
         .execute_query(
             &format!("SELECT COUNT(*) AS n FROM {table} WHERE msg = 'a'"),
             None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
         )
         .await
         .expect("count");
@@ -808,7 +965,11 @@ async fn test_mysql_execute_query_batch_rolls_back_when_update_changes_multiple_
     assert_eq!(n, 2, "rollback must leave both rows unchanged");
 
     adapter
-        .execute_query(&format!("DROP TABLE {table}"), None)
+        .execute_query(
+            &format!("DROP TABLE {table}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .ok();
     adapter.disconnect_pool().await.ok();
@@ -882,6 +1043,7 @@ async fn test_mysql_stream_table_rows_yields_batches_in_order() {
         .execute_query(
             &format!("CREATE TABLE {table} (id INT PRIMARY KEY, label TEXT)"),
             None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
         )
         .await
         .expect("CREATE");
@@ -892,6 +1054,7 @@ async fn test_mysql_stream_table_rows_yields_batches_in_order() {
                  (1,'a'),(2,'b'),(3,'c'),(4,'d'),(5,'e')"
             ),
             None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
         )
         .await
         .expect("INSERT");
@@ -923,7 +1086,11 @@ async fn test_mysql_stream_table_rows_yields_batches_in_order() {
     assert_eq!(sorted, vec![1, 2, 3, 4, 5]);
 
     adapter
-        .execute_query(&format!("DROP TABLE {table}"), None)
+        .execute_query(
+            &format!("DROP TABLE {table}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .ok();
     adapter.disconnect_pool().await.ok();
@@ -944,7 +1111,11 @@ async fn test_mysql_stream_table_rows_aborts_when_receiver_drops() {
     let table = format!("test_stream_drop_{ts}");
 
     adapter
-        .execute_query(&format!("CREATE TABLE {table} (id INT PRIMARY KEY)"), None)
+        .execute_query(
+            &format!("CREATE TABLE {table} (id INT PRIMARY KEY)"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .expect("CREATE");
     let mut values = String::new();
@@ -955,7 +1126,11 @@ async fn test_mysql_stream_table_rows_aborts_when_receiver_drops() {
         values.push_str(&format!("({i})"));
     }
     adapter
-        .execute_query(&format!("INSERT INTO {table} VALUES {values}"), None)
+        .execute_query(
+            &format!("INSERT INTO {table} VALUES {values}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .expect("INSERT");
 
@@ -977,7 +1152,11 @@ async fn test_mysql_stream_table_rows_aborts_when_receiver_drops() {
     }
 
     adapter
-        .execute_query(&format!("DROP TABLE {table}"), None)
+        .execute_query(
+            &format!("DROP TABLE {table}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .ok();
     adapter.disconnect_pool().await.ok();
@@ -1025,7 +1204,11 @@ async fn test_mysql_query_table_data_filter_eq_with_numeric_cast() {
     assert_eq!(data.rows[0][0].as_i64(), Some(3));
 
     adapter
-        .execute_query(&format!("DROP TABLE {table}"), None)
+        .execute_query(
+            &format!("DROP TABLE {table}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .ok();
     adapter.disconnect_pool().await.ok();
@@ -1108,7 +1291,11 @@ async fn test_mysql_query_table_data_filter_like_and_isnull() {
     assert_eq!(data.total_count, 3);
 
     adapter
-        .execute_query(&format!("DROP TABLE {table}"), None)
+        .execute_query(
+            &format!("DROP TABLE {table}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .ok();
     adapter.disconnect_pool().await.ok();
@@ -1152,7 +1339,11 @@ async fn test_mysql_query_table_data_filter_unknown_column_is_ignored() {
     assert_eq!(data.total_count, 5);
 
     adapter
-        .execute_query(&format!("DROP TABLE {table}"), None)
+        .execute_query(
+            &format!("DROP TABLE {table}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .ok();
     adapter.disconnect_pool().await.ok();
@@ -1190,7 +1381,11 @@ async fn test_mysql_query_table_data_raw_where_accepts_clean_clause() {
     assert_eq!(data.total_count, 2);
 
     adapter
-        .execute_query(&format!("DROP TABLE {table}"), None)
+        .execute_query(
+            &format!("DROP TABLE {table}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .ok();
     adapter.disconnect_pool().await.ok();
@@ -1248,7 +1443,11 @@ async fn test_mysql_query_table_data_cancel_token_interrupts_in_flight_raw_where
     }
 
     adapter
-        .execute_query(&format!("DROP TABLE {table}"), None)
+        .execute_query(
+            &format!("DROP TABLE {table}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .ok();
     adapter.disconnect_pool().await.ok();
@@ -1291,7 +1490,11 @@ async fn test_mysql_query_table_data_raw_where_rejects_semicolon() {
     }
 
     adapter
-        .execute_query(&format!("DROP TABLE {table}"), None)
+        .execute_query(
+            &format!("DROP TABLE {table}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .ok();
     adapter.disconnect_pool().await.ok();
@@ -1328,7 +1531,11 @@ async fn test_mysql_query_table_data_raw_where_rejects_dangerous_keywords() {
     }
 
     adapter
-        .execute_query(&format!("DROP TABLE {table}"), None)
+        .execute_query(
+            &format!("DROP TABLE {table}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .ok();
     adapter.disconnect_pool().await.ok();
@@ -1379,7 +1586,11 @@ async fn test_mysql_query_table_data_pagination_and_ordering() {
     assert_eq!(data.rows[1][0].as_i64(), Some(4));
 
     adapter
-        .execute_query(&format!("DROP TABLE {table}"), None)
+        .execute_query(
+            &format!("DROP TABLE {table}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .ok();
     adapter.disconnect_pool().await.ok();
@@ -1401,7 +1612,11 @@ async fn test_mysql_execute_query_batch_strips_trailing_semicolons() {
     let table = format!("test_batch_semi_{ts}");
 
     adapter
-        .execute_query(&format!("CREATE TABLE {table} (id INT)"), None)
+        .execute_query(
+            &format!("CREATE TABLE {table} (id INT)"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .expect("CREATE TABLE");
 
@@ -1418,7 +1633,11 @@ async fn test_mysql_execute_query_batch_strips_trailing_semicolons() {
     assert_eq!(results[1].total_count, 1);
 
     adapter
-        .execute_query(&format!("DROP TABLE {table}"), None)
+        .execute_query(
+            &format!("DROP TABLE {table}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .ok();
     adapter.disconnect_pool().await.ok();
@@ -1510,6 +1729,7 @@ async fn test_mysql_create_table_and_list() {
                  email TEXT)"
             ),
             None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
         )
         .await
         .expect("CREATE TABLE");
@@ -1524,7 +1744,11 @@ async fn test_mysql_create_table_and_list() {
     );
 
     adapter
-        .execute_query(&format!("DROP TABLE {table}"), None)
+        .execute_query(
+            &format!("DROP TABLE {table}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .ok();
     adapter.disconnect_pool().await.ok();
@@ -1552,6 +1776,7 @@ async fn test_mysql_get_table_columns() {
                  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
             ),
             None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
         )
         .await
         .expect("CREATE TABLE");
@@ -1594,7 +1819,11 @@ async fn test_mysql_get_table_columns() {
     );
 
     adapter
-        .execute_query(&format!("DROP TABLE {table}"), None)
+        .execute_query(
+            &format!("DROP TABLE {table}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .ok();
     adapter.disconnect_pool().await.ok();
@@ -1619,6 +1848,7 @@ async fn test_mysql_query_table_data_pagination() {
                 "CREATE TABLE {table} (id INT AUTO_INCREMENT PRIMARY KEY, value TEXT NOT NULL)"
             ),
             None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
         )
         .await
         .expect("CREATE TABLE");
@@ -1626,6 +1856,7 @@ async fn test_mysql_query_table_data_pagination() {
         .execute_query(
             &format!("INSERT INTO {table} (value) VALUES ('alpha'), ('beta'), ('gamma')"),
             None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
         )
         .await
         .expect("INSERT");
@@ -1647,7 +1878,11 @@ async fn test_mysql_query_table_data_pagination() {
     assert_eq!(page2.rows.len(), 1);
 
     adapter
-        .execute_query(&format!("DROP TABLE {table}"), None)
+        .execute_query(
+            &format!("DROP TABLE {table}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .ok();
     adapter.disconnect_pool().await.ok();
@@ -1672,6 +1907,7 @@ async fn test_mysql_query_table_data_ordering_asc() {
                 "CREATE TABLE {table} (id INT AUTO_INCREMENT PRIMARY KEY, label TEXT NOT NULL)"
             ),
             None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
         )
         .await
         .expect("CREATE TABLE");
@@ -1679,6 +1915,7 @@ async fn test_mysql_query_table_data_ordering_asc() {
         .execute_query(
             &format!("INSERT INTO {table} (label) VALUES ('charlie'), ('alpha'), ('bravo')"),
             None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
         )
         .await
         .expect("INSERT");
@@ -1692,7 +1929,11 @@ async fn test_mysql_query_table_data_ordering_asc() {
     assert_eq!(data.rows[2][1].as_str().unwrap_or(""), "charlie");
 
     adapter
-        .execute_query(&format!("DROP TABLE {table}"), None)
+        .execute_query(
+            &format!("DROP TABLE {table}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .ok();
     adapter.disconnect_pool().await.ok();
@@ -1717,6 +1958,7 @@ async fn test_mysql_query_table_data_ordering_desc() {
                 "CREATE TABLE {table} (id INT AUTO_INCREMENT PRIMARY KEY, label TEXT NOT NULL)"
             ),
             None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
         )
         .await
         .expect("CREATE TABLE");
@@ -1724,6 +1966,7 @@ async fn test_mysql_query_table_data_ordering_desc() {
         .execute_query(
             &format!("INSERT INTO {table} (label) VALUES ('charlie'), ('alpha'), ('bravo')"),
             None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
         )
         .await
         .expect("INSERT");
@@ -1753,7 +1996,11 @@ async fn test_mysql_query_table_data_ordering_desc() {
     assert_eq!(asc.rows[0][1].as_str().unwrap_or(""), "alpha");
 
     adapter
-        .execute_query(&format!("DROP TABLE {table}"), None)
+        .execute_query(
+            &format!("DROP TABLE {table}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .ok();
     adapter.disconnect_pool().await.ok();
@@ -1784,6 +2031,7 @@ async fn test_mysql_get_table_columns_with_comments() {
                  email TEXT)"
             ),
             None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
         )
         .await
         .expect("CREATE TABLE");
@@ -1809,7 +2057,11 @@ async fn test_mysql_get_table_columns_with_comments() {
     assert_eq!(email_col.comment, None);
 
     adapter
-        .execute_query(&format!("DROP TABLE {table}"), None)
+        .execute_query(
+            &format!("DROP TABLE {table}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .ok();
     adapter.disconnect_pool().await.ok();
@@ -1840,6 +2092,7 @@ async fn test_mysql_get_table_columns_populates_check_clauses() {
                  CHECK (min_v <= max_v))"
             ),
             None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
         )
         .await
         .expect("CREATE TABLE");
@@ -1879,7 +2132,11 @@ async fn test_mysql_get_table_columns_populates_check_clauses() {
     assert!(id_col.check_clauses.is_empty(), "id has no check");
 
     adapter
-        .execute_query(&format!("DROP TABLE {table}"), None)
+        .execute_query(
+            &format!("DROP TABLE {table}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .ok();
     adapter.disconnect_pool().await.ok();
@@ -1902,6 +2159,7 @@ async fn test_mysql_query_table_data_with_filter_bigint() {
         .execute_query(
             &format!("CREATE TABLE {table} (id BIGINT PRIMARY KEY, name TEXT NOT NULL)"),
             None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
         )
         .await
         .expect("CREATE TABLE");
@@ -1912,6 +2170,7 @@ async fn test_mysql_query_table_data_with_filter_bigint() {
                  (1, 'alice'), (2, 'bob'), (3, 'charlie')"
             ),
             None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
         )
         .await
         .expect("INSERT");
@@ -1939,7 +2198,11 @@ async fn test_mysql_query_table_data_with_filter_bigint() {
     assert_eq!(data.rows[0][1].as_str().unwrap_or(""), "bob");
 
     adapter
-        .execute_query(&format!("DROP TABLE {table}"), None)
+        .execute_query(
+            &format!("DROP TABLE {table}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .ok();
     adapter.disconnect_pool().await.ok();
@@ -1964,6 +2227,7 @@ async fn test_mysql_query_table_data_with_filter_text() {
                 "CREATE TABLE {table} (id INT AUTO_INCREMENT PRIMARY KEY, name TEXT NOT NULL)"
             ),
             None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
         )
         .await
         .expect("CREATE TABLE");
@@ -1974,6 +2238,7 @@ async fn test_mysql_query_table_data_with_filter_text() {
                  ('alice'), ('bob'), ('charlie'), ('david')"
             ),
             None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
         )
         .await
         .expect("INSERT");
@@ -2001,7 +2266,11 @@ async fn test_mysql_query_table_data_with_filter_text() {
     assert_eq!(data.total_count, 2);
 
     adapter
-        .execute_query(&format!("DROP TABLE {table}"), None)
+        .execute_query(
+            &format!("DROP TABLE {table}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .ok();
     adapter.disconnect_pool().await.ok();
@@ -2029,6 +2298,7 @@ async fn test_mysql_query_table_data_with_filter_integer() {
                  label TEXT NOT NULL)"
             ),
             None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
         )
         .await
         .expect("CREATE TABLE");
@@ -2039,6 +2309,7 @@ async fn test_mysql_query_table_data_with_filter_integer() {
                  (10, 'low'), (50, 'mid'), (90, 'high'), (100, 'top')"
             ),
             None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
         )
         .await
         .expect("INSERT");
@@ -2065,7 +2336,11 @@ async fn test_mysql_query_table_data_with_filter_integer() {
     assert_eq!(data.total_count, 2);
 
     adapter
-        .execute_query(&format!("DROP TABLE {table}"), None)
+        .execute_query(
+            &format!("DROP TABLE {table}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .ok();
     adapter.disconnect_pool().await.ok();
@@ -2093,6 +2368,7 @@ async fn test_mysql_query_table_data_multi_column_ordering() {
                  label TEXT NOT NULL)"
             ),
             None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
         )
         .await
         .expect("CREATE TABLE");
@@ -2103,6 +2379,7 @@ async fn test_mysql_query_table_data_multi_column_ordering() {
                  ('B', 'charlie'), ('A', 'alpha'), ('B', 'bravo'), ('A', 'beta')"
             ),
             None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
         )
         .await
         .expect("INSERT");
@@ -2146,7 +2423,11 @@ async fn test_mysql_query_table_data_multi_column_ordering() {
     assert_eq!(desc.rows[1][2].as_str().unwrap_or(""), "alpha");
 
     adapter
-        .execute_query(&format!("DROP TABLE {table}"), None)
+        .execute_query(
+            &format!("DROP TABLE {table}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .ok();
     adapter.disconnect_pool().await.ok();
@@ -2175,6 +2456,7 @@ async fn test_mysql_get_view_columns_returns_columns_in_order() {
                  score INT)"
             ),
             None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
         )
         .await
         .expect("CREATE TABLE");
@@ -2185,6 +2467,7 @@ async fn test_mysql_get_view_columns_returns_columns_in_order() {
                  SELECT id, name, score FROM {base} WHERE score IS NOT NULL"
             ),
             None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
         )
         .await
         .expect("CREATE VIEW");
@@ -2206,11 +2489,19 @@ async fn test_mysql_get_view_columns_returns_columns_in_order() {
     }
 
     adapter
-        .execute_query(&format!("DROP VIEW {view}"), None)
+        .execute_query(
+            &format!("DROP VIEW {view}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .ok();
     adapter
-        .execute_query(&format!("DROP TABLE {base}"), None)
+        .execute_query(
+            &format!("DROP TABLE {base}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .ok();
     adapter.disconnect_pool().await.ok();
@@ -2252,6 +2543,7 @@ async fn test_mysql_list_views_returns_created_view() {
         .execute_query(
             &format!("CREATE TABLE {base} (id INT AUTO_INCREMENT PRIMARY KEY, name TEXT)"),
             None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
         )
         .await
         .expect("CREATE TABLE");
@@ -2259,6 +2551,7 @@ async fn test_mysql_list_views_returns_created_view() {
         .execute_query(
             &format!("CREATE VIEW {view} AS SELECT id, name FROM {base}"),
             None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
         )
         .await
         .expect("CREATE VIEW");
@@ -2271,11 +2564,19 @@ async fn test_mysql_list_views_returns_created_view() {
     );
 
     adapter
-        .execute_query(&format!("DROP VIEW {view}"), None)
+        .execute_query(
+            &format!("DROP VIEW {view}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .ok();
     adapter
-        .execute_query(&format!("DROP TABLE {base}"), None)
+        .execute_query(
+            &format!("DROP TABLE {base}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .ok();
     adapter.disconnect_pool().await.ok();
@@ -2296,13 +2597,18 @@ async fn test_mysql_get_view_definition_returns_select_text() {
     let view = format!("{base}_v");
 
     adapter
-        .execute_query(&format!("CREATE TABLE {base} (id INT, name TEXT)"), None)
+        .execute_query(
+            &format!("CREATE TABLE {base} (id INT, name TEXT)"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .expect("CREATE TABLE");
     adapter
         .execute_query(
             &format!("CREATE VIEW {view} AS SELECT id FROM {base}"),
             None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
         )
         .await
         .expect("CREATE VIEW");
@@ -2323,11 +2629,19 @@ async fn test_mysql_get_view_definition_returns_select_text() {
     );
 
     adapter
-        .execute_query(&format!("DROP VIEW {view}"), None)
+        .execute_query(
+            &format!("DROP VIEW {view}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .ok();
     adapter
-        .execute_query(&format!("DROP TABLE {base}"), None)
+        .execute_query(
+            &format!("DROP TABLE {base}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .ok();
     adapter.disconnect_pool().await.ok();
@@ -2360,6 +2674,7 @@ async fn test_mysql_list_functions_returns_user_function() {
         .execute_query(
             &format!("CREATE FUNCTION {fn_name}(x INT) RETURNS INT DETERMINISTIC RETURN x + 1"),
             None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
         )
         .await
         .expect("CREATE FUNCTION");
@@ -2375,7 +2690,11 @@ async fn test_mysql_list_functions_returns_user_function() {
     );
 
     adapter
-        .execute_query(&format!("DROP FUNCTION {fn_name}"), None)
+        .execute_query(
+            &format!("DROP FUNCTION {fn_name}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .ok();
     adapter.disconnect_pool().await.ok();
@@ -2399,6 +2718,7 @@ async fn test_mysql_get_function_source_returns_body() {
         .execute_query(
             &format!("CREATE FUNCTION {fn_name}(x INT) RETURNS INT DETERMINISTIC RETURN x * 2"),
             None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
         )
         .await
         .expect("CREATE FUNCTION");
@@ -2415,7 +2735,11 @@ async fn test_mysql_get_function_source_returns_body() {
     );
 
     adapter
-        .execute_query(&format!("DROP FUNCTION {fn_name}"), None)
+        .execute_query(
+            &format!("DROP FUNCTION {fn_name}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .ok();
     adapter.disconnect_pool().await.ok();
@@ -2466,11 +2790,16 @@ async fn test_mysql_list_schema_columns_aggregates_multiple_tables() {
                  score INT CHECK (score >= 0))"
             ),
             None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
         )
         .await
         .expect("CREATE t1");
     adapter
-        .execute_query(&format!("CREATE TABLE {t2} (k INT, v BIGINT)"), None)
+        .execute_query(
+            &format!("CREATE TABLE {t2} (k INT, v BIGINT)"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .expect("CREATE t2");
 
@@ -2496,11 +2825,19 @@ async fn test_mysql_list_schema_columns_aggregates_multiple_tables() {
     }
 
     adapter
-        .execute_query(&format!("DROP TABLE {t1}"), None)
+        .execute_query(
+            &format!("DROP TABLE {t1}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .ok();
     adapter
-        .execute_query(&format!("DROP TABLE {t2}"), None)
+        .execute_query(
+            &format!("DROP TABLE {t2}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .ok();
     adapter.disconnect_pool().await.ok();
@@ -2530,6 +2867,7 @@ async fn test_mysql_get_table_indexes_returns_pk_and_secondary_indexes() {
                   status VARCHAR(50))"
             ),
             None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
         )
         .await
         .expect("CREATE TABLE");
@@ -2539,11 +2877,16 @@ async fn test_mysql_get_table_indexes_returns_pk_and_secondary_indexes() {
         .execute_query(
             &format!("CREATE UNIQUE INDEX {idx_email} ON {t} (email)"),
             None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
         )
         .await
         .expect("UNIQUE INDEX");
     adapter
-        .execute_query(&format!("CREATE INDEX {idx_status} ON {t} (status)"), None)
+        .execute_query(
+            &format!("CREATE INDEX {idx_status} ON {t} (status)"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .expect("INDEX");
 
@@ -2577,7 +2920,11 @@ async fn test_mysql_get_table_indexes_returns_pk_and_secondary_indexes() {
     assert_eq!(plain.columns, vec!["status".to_string()]);
 
     adapter
-        .execute_query(&format!("DROP TABLE {t}"), None)
+        .execute_query(
+            &format!("DROP TABLE {t}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .ok();
     adapter.disconnect_pool().await.ok();
@@ -2597,12 +2944,20 @@ async fn test_mysql_get_table_indexes_composite_columns_preserve_order() {
     let t = format!("test_idx_comp_{ts}");
 
     adapter
-        .execute_query(&format!("CREATE TABLE {t} (a INT, b INT, c INT)"), None)
+        .execute_query(
+            &format!("CREATE TABLE {t} (a INT, b INT, c INT)"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .expect("CREATE TABLE");
     let idx = format!("{t}_ab_idx");
     adapter
-        .execute_query(&format!("CREATE INDEX {idx} ON {t} (a, b)"), None)
+        .execute_query(
+            &format!("CREATE INDEX {idx} ON {t} (a, b)"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .expect("composite INDEX");
 
@@ -2618,7 +2973,11 @@ async fn test_mysql_get_table_indexes_composite_columns_preserve_order() {
     assert_eq!(composite.columns, vec!["a".to_string(), "b".to_string()]);
 
     adapter
-        .execute_query(&format!("DROP TABLE {t}"), None)
+        .execute_query(
+            &format!("DROP TABLE {t}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .ok();
     adapter.disconnect_pool().await.ok();
@@ -2663,6 +3022,7 @@ async fn test_mysql_get_table_constraints_pk_unique_check() {
                   age INT CHECK (age >= 0))"
             ),
             None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
         )
         .await
         .expect("CREATE TABLE");
@@ -2697,7 +3057,11 @@ async fn test_mysql_get_table_constraints_pk_unique_check() {
     }
 
     adapter
-        .execute_query(&format!("DROP TABLE {t}"), None)
+        .execute_query(
+            &format!("DROP TABLE {t}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .ok();
     adapter.disconnect_pool().await.ok();
@@ -2723,6 +3087,7 @@ async fn test_mysql_get_table_constraints_foreign_key_carries_reference() {
         .execute_query(
             &format!("CREATE TABLE {parent} (id INT PRIMARY KEY) ENGINE=InnoDB"),
             None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
         )
         .await
         .expect("CREATE parent");
@@ -2736,6 +3101,7 @@ async fn test_mysql_get_table_constraints_foreign_key_carries_reference() {
                 ) ENGINE=InnoDB"
             ),
             None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
         )
         .await
         .expect("CREATE child");
@@ -2757,11 +3123,19 @@ async fn test_mysql_get_table_constraints_foreign_key_carries_reference() {
     );
 
     adapter
-        .execute_query(&format!("DROP TABLE {child}"), None)
+        .execute_query(
+            &format!("DROP TABLE {child}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .ok();
     adapter
-        .execute_query(&format!("DROP TABLE {parent}"), None)
+        .execute_query(
+            &format!("DROP TABLE {parent}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .ok();
     adapter.disconnect_pool().await.ok();
@@ -2785,6 +3159,7 @@ async fn test_mysql_get_table_columns_populates_fk_reference_in_child() {
         .execute_query(
             &format!("CREATE TABLE {parent} (id INT PRIMARY KEY) ENGINE=InnoDB"),
             None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
         )
         .await
         .expect("CREATE parent");
@@ -2798,6 +3173,7 @@ async fn test_mysql_get_table_columns_populates_fk_reference_in_child() {
                 ) ENGINE=InnoDB"
             ),
             None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
         )
         .await
         .expect("CREATE child");
@@ -2816,11 +3192,19 @@ async fn test_mysql_get_table_columns_populates_fk_reference_in_child() {
     assert_eq!(parent_id.fk_reference.as_deref(), Some(expected.as_str()));
 
     adapter
-        .execute_query(&format!("DROP TABLE {child}"), None)
+        .execute_query(
+            &format!("DROP TABLE {child}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .ok();
     adapter
-        .execute_query(&format!("DROP TABLE {parent}"), None)
+        .execute_query(
+            &format!("DROP TABLE {parent}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .ok();
     adapter.disconnect_pool().await.ok();
@@ -2850,6 +3234,7 @@ async fn test_mysql_query_table_data_bigint_value_is_string_wire() {
         .execute_query(
             &format!("CREATE TABLE {table} (id BIGINT PRIMARY KEY)"),
             None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
         )
         .await
         .expect("CREATE TABLE");
@@ -2860,6 +3245,7 @@ async fn test_mysql_query_table_data_bigint_value_is_string_wire() {
         .execute_query(
             &format!("INSERT INTO {table} (id) VALUES (9223372036854775807)"),
             None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
         )
         .await
         .expect("INSERT");
@@ -2877,7 +3263,11 @@ async fn test_mysql_query_table_data_bigint_value_is_string_wire() {
     assert_eq!(cell.as_str(), Some("9223372036854775807"));
 
     adapter
-        .execute_query(&format!("DROP TABLE {table}"), None)
+        .execute_query(
+            &format!("DROP TABLE {table}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .ok();
     adapter.disconnect_pool().await.ok();
@@ -2900,6 +3290,7 @@ async fn test_mysql_query_table_data_bigint_unsigned_value_is_string_wire() {
         .execute_query(
             &format!("CREATE TABLE {table} (id BIGINT UNSIGNED PRIMARY KEY)"),
             None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
         )
         .await
         .expect("CREATE TABLE");
@@ -2911,6 +3302,7 @@ async fn test_mysql_query_table_data_bigint_unsigned_value_is_string_wire() {
         .execute_query(
             &format!("INSERT INTO {table} (id) VALUES (18446744073709551615)"),
             None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
         )
         .await
         .expect("INSERT");
@@ -2928,7 +3320,11 @@ async fn test_mysql_query_table_data_bigint_unsigned_value_is_string_wire() {
     assert_eq!(cell.as_str(), Some("18446744073709551615"));
 
     adapter
-        .execute_query(&format!("DROP TABLE {table}"), None)
+        .execute_query(
+            &format!("DROP TABLE {table}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .ok();
     adapter.disconnect_pool().await.ok();
@@ -2955,6 +3351,7 @@ async fn test_mysql_query_table_data_decimal_value_is_string_wire() {
         .execute_query(
             &format!("CREATE TABLE {table} (id INT PRIMARY KEY, amount DECIMAL(38, 18))"),
             None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
         )
         .await
         .expect("CREATE TABLE");
@@ -2962,6 +3359,7 @@ async fn test_mysql_query_table_data_decimal_value_is_string_wire() {
         .execute_query(
             &format!("INSERT INTO {table} (id, amount) VALUES (1, 123456789.123456789012345678)"),
             None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
         )
         .await
         .expect("INSERT");
@@ -2979,7 +3377,11 @@ async fn test_mysql_query_table_data_decimal_value_is_string_wire() {
     assert_eq!(cell.as_str(), Some("123456789.123456789012345678"));
 
     adapter
-        .execute_query(&format!("DROP TABLE {table}"), None)
+        .execute_query(
+            &format!("DROP TABLE {table}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .ok();
     adapter.disconnect_pool().await.ok();
@@ -2999,11 +3401,19 @@ async fn test_mysql_query_table_data_int_value_remains_number_wire() {
     let table = format!("test_wire_int_{ts}");
 
     adapter
-        .execute_query(&format!("CREATE TABLE {table} (id INT PRIMARY KEY)"), None)
+        .execute_query(
+            &format!("CREATE TABLE {table} (id INT PRIMARY KEY)"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .expect("CREATE TABLE");
     adapter
-        .execute_query(&format!("INSERT INTO {table} (id) VALUES (42)"), None)
+        .execute_query(
+            &format!("INSERT INTO {table} (id) VALUES (42)"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .expect("INSERT");
 
@@ -3020,7 +3430,11 @@ async fn test_mysql_query_table_data_int_value_remains_number_wire() {
     assert_eq!(cell.as_i64(), Some(42));
 
     adapter
-        .execute_query(&format!("DROP TABLE {table}"), None)
+        .execute_query(
+            &format!("DROP TABLE {table}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .ok();
     adapter.disconnect_pool().await.ok();
@@ -3355,6 +3769,7 @@ async fn test_mysql_create_index_executes_unique_btree() {
         .execute_query(
             &format!("CREATE TABLE {table} (id INT PRIMARY KEY, code VARCHAR(64))"),
             None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
         )
         .await
         .expect("CREATE TABLE");
@@ -3388,7 +3803,11 @@ async fn test_mysql_create_index_executes_unique_btree() {
     assert_eq!(created.columns, vec!["code".to_string()]);
 
     adapter
-        .execute_query(&format!("DROP TABLE {table}"), None)
+        .execute_query(
+            &format!("DROP TABLE {table}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .ok();
     adapter.disconnect_pool().await.ok();
@@ -3695,7 +4114,11 @@ async fn test_mysql_execute_query_bigint_select_emits_string_wire() {
     // integer literal 은 자동으로 BIGINT 로 promote — 별도 cast 불필요.
     // ADR 0026 (issue #1082) — BIGINT literal 도 정밀도-보존 string token 으로 wire.
     let result = adapter
-        .execute_query("SELECT 9223372036854775807 AS big", None)
+        .execute_query(
+            "SELECT 9223372036854775807 AS big",
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .expect("execute_query bigint literal");
     assert_eq!(result.rows.len(), 1);
@@ -3732,7 +4155,11 @@ async fn test_mysql_list_triggers_empty_table_returns_vec() {
     let table = format!("test_trg_empty_{ts}");
 
     adapter
-        .execute_query(&format!("CREATE TABLE {table} (id INT PRIMARY KEY)"), None)
+        .execute_query(
+            &format!("CREATE TABLE {table} (id INT PRIMARY KEY)"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .expect("CREATE TABLE");
 
@@ -3748,7 +4175,11 @@ async fn test_mysql_list_triggers_empty_table_returns_vec() {
     );
 
     adapter
-        .execute_query(&format!("DROP TABLE {table}"), None)
+        .execute_query(
+            &format!("DROP TABLE {table}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .ok();
     adapter.disconnect_pool().await.ok();

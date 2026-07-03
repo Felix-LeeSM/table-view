@@ -154,13 +154,18 @@ async fn test_sqlite_read_only_connection_rejects_writes() {
 
     adapter.connect_pool(&config).await.unwrap();
     adapter
-        .execute_query("SELECT COUNT(*) FROM users", None)
+        .execute_query(
+            "SELECT COUNT(*) FROM users",
+            None,
+            crate::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .unwrap();
     let result = adapter
         .execute_query(
             "INSERT INTO users(id, email, name) VALUES (2, 'ro@example.test', 'Read Only')",
             None,
+            crate::db::row_cap::DEFAULT_ROW_CAP,
         )
         .await;
 
@@ -226,7 +231,11 @@ async fn test_sqlite_adapter_caches_capability_inventory_until_disconnect() {
     let inventory = adapter.capability_inventory().await.unwrap();
     if inventory.json1 {
         adapter
-            .execute_query("SELECT json_extract('{\"a\":1}', '$.a') AS value", None)
+            .execute_query(
+                "SELECT json_extract('{\"a\":1}', '$.a') AS value",
+                None,
+                crate::db::row_cap::DEFAULT_ROW_CAP,
+            )
             .await
             .unwrap();
     }

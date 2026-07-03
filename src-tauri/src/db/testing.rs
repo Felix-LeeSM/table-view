@@ -938,6 +938,7 @@ impl DocumentAdapter for StubDocumentAdapter {
     ) -> BoxFuture<'a, Result<DocumentQueryResult, AppError>> {
         Box::pin(async {
             Ok(DocumentQueryResult {
+                truncated: false,
                 columns: Vec::new(),
                 rows: Vec::new(),
                 raw_documents: Vec::new(),
@@ -955,6 +956,7 @@ impl DocumentAdapter for StubDocumentAdapter {
     ) -> BoxFuture<'a, Result<DocumentQueryResult, AppError>> {
         Box::pin(async {
             Ok(DocumentQueryResult {
+                truncated: false,
                 columns: Vec::new(),
                 rows: Vec::new(),
                 raw_documents: Vec::new(),

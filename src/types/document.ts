@@ -94,6 +94,11 @@ export interface DocumentQueryResult {
   rawDocuments: Record<string, unknown>[];
   totalCount: number;
   executionTimeMs: number;
+  /**
+   * Issue #1231 — `true` when the find/aggregate cursor hit the raw-query row
+   * cap and documents beyond the cap were dropped at fetch time.
+   */
+  truncated?: boolean;
 }
 
 /**

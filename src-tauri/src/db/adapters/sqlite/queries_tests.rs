@@ -123,6 +123,48 @@ fn sqlite_load_extension_scanner_ignores_comments_and_strings() {
     ));
 }
 
+// Issue #1231 — raw query row cap. Seed has 3 rows. An explicit small cap
+// must return exactly `cap` rows with truncated=true; a cap ≥ 3 leaves it
+// false. The cap is a direct arg (not the global) so these run in parallel
+// with every other adapter test without leaking.
+#[tokio::test]
+async fn execute_query_caps_rows_and_flags_truncated_1231() {
+    let (_dir, adapter) = connected_adapter().await;
+    let result = adapter
+        .execute_query("SELECT * FROM users ORDER BY id", None, 2)
+        .await
+        .unwrap();
+    assert_eq!(result.rows.len(), 2, "row cap must limit fetched rows");
+    assert!(result.truncated, "truncated must be set when capped");
+    assert_eq!(
+        result.total_count, 2,
+        "total_count reflects the capped rows"
+    );
+}
+
+#[tokio::test]
+async fn execute_query_at_cap_boundary_not_truncated_1231() {
+    let (_dir, adapter) = connected_adapter().await;
+    // Exactly the row count — no (cap+1)th row exists, so not truncated.
+    let result = adapter
+        .execute_query("SELECT * FROM users ORDER BY id", None, 3)
+        .await
+        .unwrap();
+    assert_eq!(result.rows.len(), 3);
+    assert!(!result.truncated);
+}
+
+#[tokio::test]
+async fn execute_query_under_cap_not_truncated_1231() {
+    let (_dir, adapter) = connected_adapter().await;
+    let result = adapter
+        .execute_query("SELECT * FROM users ORDER BY id", None, 100)
+        .await
+        .unwrap();
+    assert_eq!(result.rows.len(), 3);
+    assert!(!result.truncated);
+}
+
 #[tokio::test]
 async fn execute_query_select_returns_columns_and_rows() {
     let (_dir, adapter) = connected_adapter().await;
@@ -159,6 +201,7 @@ async fn execute_query_dml_returns_rows_affected() {
         .execute_query(
             "INSERT INTO users(id, email, name) VALUES (4, 'cy@example.test', 'Cy')",
             None,
+            crate::db::row_cap::DEFAULT_ROW_CAP,
         )
         .await
         .unwrap();
@@ -179,6 +222,7 @@ async fn execute_query_rejects_cte_prefixed_write_on_read_only_sqlite() {
             "WITH next_name(value) AS (SELECT 'Ada Readonly')
              UPDATE users SET name = (SELECT value FROM next_name) WHERE id = 1",
             None,
+            crate::db::row_cap::DEFAULT_ROW_CAP,
         )
         .await;
 
@@ -195,7 +239,11 @@ async fn execute_query_rejects_sqlite_ddl_clearly() {
     let (_dir, adapter) = connected_adapter().await;
 
     let result = adapter
-        .execute_query("ALTER TABLE users ADD COLUMN nickname TEXT", None)
+        .execute_query(
+            "ALTER TABLE users ADD COLUMN nickname TEXT",
+            None,
+            crate::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await;
 
     match result {
@@ -211,7 +259,11 @@ async fn execute_query_rejects_loadable_extensions_explicitly() {
     let (_dir, adapter) = connected_adapter().await;
 
     let result = adapter
-        .execute_query("SELECT load_extension('spellfix')", None)
+        .execute_query(
+            "SELECT load_extension('spellfix')",
+            None,
+            crate::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await;
 
     match result {

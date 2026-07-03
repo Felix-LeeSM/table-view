@@ -28,7 +28,11 @@ async fn test_select_query_returns_columns_and_rows() {
 
     // Execute a simple SELECT query
     let result = adapter
-        .execute_query("SELECT 1 as num, 'test' as str", None)
+        .execute_query(
+            "SELECT 1 as num, 'test' as str",
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .expect("SELECT query should succeed");
 
@@ -41,6 +45,47 @@ async fn test_select_query_returns_columns_and_rows() {
     assert!(matches!(result.query_type, QueryType::Select));
 
     // Clean up
+    adapter.disconnect_pool().await.ok();
+}
+
+/// Issue #1231 — the row cap must stop the fetch at exactly `cap` rows and
+/// flag `truncated`. Uses the explicit cap arg (not the global) so it cannot
+/// leak into any sibling test. A 3-row UNION is dialect-agnostic and needs no
+/// table lifecycle. Silent-skips when no live Postgres is up.
+#[tokio::test]
+#[serial_test::serial]
+async fn test_row_cap_truncates_select_1231() {
+    let adapter = match common::setup_adapter(DatabaseType::Postgresql).await {
+        Some(a) => a,
+        None => return,
+    };
+    let sql = "SELECT 1 AS n UNION ALL SELECT 2 UNION ALL SELECT 3";
+
+    // cap below the row count → exactly cap rows, truncated.
+    let capped = adapter
+        .execute_query(sql, None, 2)
+        .await
+        .expect("capped SELECT should succeed");
+    assert_eq!(capped.rows.len(), 2, "row cap must bound fetched rows");
+    assert!(capped.truncated, "truncated must be set at the cap");
+    assert_eq!(capped.total_count, 2);
+
+    // cap above the row count → all rows, not truncated.
+    let full = adapter
+        .execute_query(sql, None, 10)
+        .await
+        .expect("uncapped SELECT should succeed");
+    assert_eq!(full.rows.len(), 3);
+    assert!(!full.truncated, "under-cap results must not be truncated");
+
+    // exactly at the row count → no (cap+1)th row, so not truncated.
+    let boundary = adapter
+        .execute_query(sql, None, 3)
+        .await
+        .expect("boundary SELECT should succeed");
+    assert_eq!(boundary.rows.len(), 3);
+    assert!(!boundary.truncated, "cap == row count must not truncate");
+
     adapter.disconnect_pool().await.ok();
 }
 
@@ -64,7 +109,11 @@ async fn test_dml_query_returns_rows_affected() {
 
     // Create table via execute_query (DDL)
     adapter
-        .execute_query(&format!("CREATE TABLE {table_name} (id INT)"), None)
+        .execute_query(
+            &format!("CREATE TABLE {table_name} (id INT)"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .expect("CREATE TABLE should succeed");
 
@@ -73,6 +122,7 @@ async fn test_dml_query_returns_rows_affected() {
         .execute_query(
             &format!("INSERT INTO {table_name} VALUES (1), (2), (3)"),
             None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
         )
         .await
         .expect("INSERT query should succeed");
@@ -90,7 +140,11 @@ async fn test_dml_query_returns_rows_affected() {
 
     // Test UPDATE
     let update_result = adapter
-        .execute_query(&format!("UPDATE {table_name} SET id = 10"), None)
+        .execute_query(
+            &format!("UPDATE {table_name} SET id = 10"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .expect("UPDATE query should succeed");
 
@@ -98,7 +152,11 @@ async fn test_dml_query_returns_rows_affected() {
 
     // Test DELETE
     let delete_result = adapter
-        .execute_query(&format!("DELETE FROM {table_name}"), None)
+        .execute_query(
+            &format!("DELETE FROM {table_name}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .expect("DELETE query should succeed");
 
@@ -106,7 +164,11 @@ async fn test_dml_query_returns_rows_affected() {
 
     // Clean up: drop the test table
     adapter
-        .execute_query(&format!("DROP TABLE {table_name}"), None)
+        .execute_query(
+            &format!("DROP TABLE {table_name}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .ok();
     adapter.disconnect_pool().await.ok();
@@ -130,11 +192,19 @@ async fn test_explain_query_does_not_execute_mutation() {
     );
 
     adapter
-        .execute_query(&format!("CREATE TABLE {table_name} (id INT)"), None)
+        .execute_query(
+            &format!("CREATE TABLE {table_name} (id INT)"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .expect("CREATE TABLE should succeed");
     adapter
-        .execute_query(&format!("INSERT INTO {table_name} VALUES (1)"), None)
+        .execute_query(
+            &format!("INSERT INTO {table_name} VALUES (1)"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .expect("INSERT should succeed");
 
@@ -145,13 +215,21 @@ async fn test_explain_query_does_not_execute_mutation() {
     assert!(plan.is_array(), "PostgreSQL FORMAT JSON returns an array");
 
     let rows = adapter
-        .execute_query(&format!("SELECT id FROM {table_name}"), None)
+        .execute_query(
+            &format!("SELECT id FROM {table_name}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .expect("SELECT should succeed");
     assert_eq!(rows.rows[0][0].as_i64(), Some(1));
 
     adapter
-        .execute_query(&format!("DROP TABLE {table_name}"), None)
+        .execute_query(
+            &format!("DROP TABLE {table_name}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .ok();
     adapter.disconnect_pool().await.ok();
@@ -168,7 +246,11 @@ async fn test_ddl_query_returns_success() {
 
     // Execute CREATE TABLE query
     let result = adapter
-        .execute_query("CREATE TEMP TABLE test_ddl (id INT)", None)
+        .execute_query(
+            "CREATE TEMP TABLE test_ddl (id INT)",
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .expect("CREATE TABLE should succeed");
 
@@ -183,6 +265,7 @@ async fn test_ddl_query_returns_success() {
         .execute_query(
             "SELECT EXISTS (SELECT FROM pg_tables WHERE tablename = 'test_ddl')",
             None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
         )
         .await
         .expect("EXISTS query should succeed");
@@ -215,7 +298,11 @@ async fn test_query_cancellation_works() {
     // Spawn a long-running query and cancel it
     let query_handle = tokio::spawn(async move {
         spawned_adapter
-            .execute_query("SELECT pg_sleep(10)", Some(&child_token))
+            .execute_query(
+                "SELECT pg_sleep(10)",
+                Some(&child_token),
+                table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+            )
             .await
     });
 
@@ -260,7 +347,11 @@ async fn test_query_error_returns_database_error() {
 
     // Execute an invalid query
     let result = adapter
-        .execute_query("SELECT * FROM nonexistent_table", None)
+        .execute_query(
+            "SELECT * FROM nonexistent_table",
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await;
 
     // Verify error is returned
@@ -297,6 +388,7 @@ async fn test_complex_select_query() {
         .execute_query(
             &format!("CREATE TABLE users_{ts} (id INT, name TEXT)"),
             None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
         )
         .await
         .ok();
@@ -305,6 +397,7 @@ async fn test_complex_select_query() {
         .execute_query(
             &format!("CREATE TABLE orders_{ts} (id INT, user_id INT, amount NUMERIC)"),
             None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
         )
         .await
         .ok();
@@ -314,6 +407,7 @@ async fn test_complex_select_query() {
         .execute_query(
             &format!("INSERT INTO users_{ts} VALUES (1, 'Alice'), (2, 'Bob')"),
             None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
         )
         .await
         .ok();
@@ -324,6 +418,7 @@ async fn test_complex_select_query() {
                 "INSERT INTO orders_{ts} VALUES (1, 1, 100.50), (2, 1, 200.00), (3, 2, 50.00)"
             ),
             None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
         )
         .await
         .ok();
@@ -333,6 +428,7 @@ async fn test_complex_select_query() {
         .execute_query(
             &format!("SELECT u.name, o.amount FROM users_{ts} u JOIN orders_{ts} o ON u.id = o.user_id ORDER BY o.amount"),
             None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
         )
         .await
         .expect("JOIN query should succeed");
@@ -345,11 +441,19 @@ async fn test_complex_select_query() {
 
     // Clean up
     adapter
-        .execute_query(&format!("DROP TABLE users_{ts}"), None)
+        .execute_query(
+            &format!("DROP TABLE users_{ts}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .ok();
     adapter
-        .execute_query(&format!("DROP TABLE orders_{ts}"), None)
+        .execute_query(
+            &format!("DROP TABLE orders_{ts}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .ok();
     adapter.disconnect_pool().await.ok();
@@ -372,14 +476,22 @@ async fn test_empty_result_set() {
 
     // Create table via execute_query
     adapter
-        .execute_query(&format!("CREATE TABLE {table_name} (id INT)"), None)
+        .execute_query(
+            &format!("CREATE TABLE {table_name} (id INT)"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .ok();
 
     // Query empty table — columns will be empty because no rows returned
     // (sqlx cannot determine column types from an empty result set)
     let result = adapter
-        .execute_query(&format!("SELECT * FROM {table_name}"), None)
+        .execute_query(
+            &format!("SELECT * FROM {table_name}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .expect("Query should succeed");
 
@@ -390,7 +502,11 @@ async fn test_empty_result_set() {
 
     // Clean up
     adapter
-        .execute_query(&format!("DROP TABLE {table_name}"), None)
+        .execute_query(
+            &format!("DROP TABLE {table_name}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .ok();
     adapter.disconnect_pool().await.ok();
@@ -520,7 +636,11 @@ async fn test_cancellation_token_aborts_select() {
 
     let handle = tokio::spawn(async move {
         spawned
-            .execute_query("SELECT pg_sleep(10)", Some(&child))
+            .execute_query(
+                "SELECT pg_sleep(10)",
+                Some(&child),
+                table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+            )
             .await
     });
 
@@ -555,7 +675,11 @@ async fn test_select_with_leading_comment() {
     };
 
     let result = adapter
-        .execute_query("-- This is a comment\nSELECT 42 as answer", None)
+        .execute_query(
+            "-- This is a comment\nSELECT 42 as answer",
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .expect("SELECT with leading comment should succeed");
 
@@ -578,7 +702,11 @@ async fn test_select_with_trailing_semicolon() {
     };
 
     let result = adapter
-        .execute_query("SELECT 1 as one;", None)
+        .execute_query(
+            "SELECT 1 as one;",
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .expect("SELECT with trailing semicolon should succeed");
 
@@ -610,19 +738,31 @@ async fn test_dml_with_trailing_semicolon() {
     );
 
     adapter
-        .execute_query(&format!("CREATE TABLE {table_name} (id integer);"), None)
+        .execute_query(
+            &format!("CREATE TABLE {table_name} (id integer);"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .expect("CREATE TABLE should succeed");
 
     let result = adapter
-        .execute_query(&format!("INSERT INTO {table_name} VALUES (1);"), None)
+        .execute_query(
+            &format!("INSERT INTO {table_name} VALUES (1);"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .expect("INSERT with trailing semicolon should succeed");
 
     assert!(matches!(result.query_type, QueryType::Dml { .. }));
 
     adapter
-        .execute_query(&format!("DROP TABLE {table_name}"), None)
+        .execute_query(
+            &format!("DROP TABLE {table_name}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .ok();
     adapter.disconnect_pool().await.ok();
@@ -638,7 +778,11 @@ async fn test_select_with_block_comment() {
     };
 
     let result = adapter
-        .execute_query("/* block comment */ SELECT 1 as num", None)
+        .execute_query(
+            "/* block comment */ SELECT 1 as num",
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .expect("SELECT with block comment should succeed");
 
@@ -682,12 +826,20 @@ async fn test_select_nextval_executes_exactly_once() {
     let seq = format!("test_seq_once_{ts}");
 
     adapter
-        .execute_query(&format!("CREATE SEQUENCE {seq}"), None)
+        .execute_query(
+            &format!("CREATE SEQUENCE {seq}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .expect("CREATE SEQUENCE should succeed");
 
     let first = adapter
-        .execute_query(&format!("SELECT nextval('{seq}') AS v"), None)
+        .execute_query(
+            &format!("SELECT nextval('{seq}') AS v"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .expect("first nextval should succeed");
     assert_eq!(
@@ -697,7 +849,11 @@ async fn test_select_nextval_executes_exactly_once() {
     );
 
     let second = adapter
-        .execute_query(&format!("SELECT nextval('{seq}') AS v"), None)
+        .execute_query(
+            &format!("SELECT nextval('{seq}') AS v"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .expect("second nextval should succeed");
     assert_eq!(
@@ -708,7 +864,11 @@ async fn test_select_nextval_executes_exactly_once() {
 
     // Server-side counter must reflect exactly two increments.
     let last = adapter
-        .execute_query(&format!("SELECT last_value FROM {seq}"), None)
+        .execute_query(
+            &format!("SELECT last_value FROM {seq}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .expect("last_value read should succeed");
     assert_eq!(
@@ -718,7 +878,11 @@ async fn test_select_nextval_executes_exactly_once() {
     );
 
     adapter
-        .execute_query(&format!("DROP SEQUENCE {seq}"), None)
+        .execute_query(
+            &format!("DROP SEQUENCE {seq}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .ok();
     adapter.disconnect_pool().await.ok();
@@ -734,7 +898,11 @@ async fn test_show_returns_row_without_wrap_error() {
         None => return,
     };
     let result = adapter
-        .execute_query("SHOW server_version", None)
+        .execute_query(
+            "SHOW server_version",
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .expect("SHOW should succeed (was a wrap syntax error before #1086)");
     assert_eq!(result.rows.len(), 1, "SHOW server_version returns one row");
@@ -762,7 +930,11 @@ async fn test_data_modifying_with_executes_once() {
         .as_millis();
     let table = format!("test_dml_cte_{ts}");
     adapter
-        .execute_query(&format!("CREATE TABLE {table} (a INT)"), None)
+        .execute_query(
+            &format!("CREATE TABLE {table} (a INT)"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .expect("CREATE TABLE should succeed");
 
@@ -772,6 +944,7 @@ async fn test_data_modifying_with_executes_once() {
                 "WITH ins AS (INSERT INTO {table}(a) VALUES (1) RETURNING a) SELECT a FROM ins"
             ),
             None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
         )
         .await
         .expect("data-modifying WITH should succeed (was error-after-commit before #1086)");
@@ -780,7 +953,11 @@ async fn test_data_modifying_with_executes_once() {
 
     // Exactly one row inserted — a wrap re-execution or a retry would double it.
     let count = adapter
-        .execute_query(&format!("SELECT COUNT(*) AS n FROM {table}"), None)
+        .execute_query(
+            &format!("SELECT COUNT(*) AS n FROM {table}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .expect("count");
     assert_eq!(
@@ -790,7 +967,11 @@ async fn test_data_modifying_with_executes_once() {
     );
 
     adapter
-        .execute_query(&format!("DROP TABLE {table}"), None)
+        .execute_query(
+            &format!("DROP TABLE {table}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .ok();
     adapter.disconnect_pool().await.ok();
@@ -821,7 +1002,11 @@ async fn test_execute_query_batch_commits_all_statements() {
     let table = format!("test_batch_commit_{ts}");
 
     adapter
-        .execute_query(&format!("CREATE TABLE {table} (id INT)"), None)
+        .execute_query(
+            &format!("CREATE TABLE {table} (id INT)"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .expect("CREATE TABLE");
 
@@ -850,7 +1035,11 @@ async fn test_execute_query_batch_commits_all_statements() {
     // wire-encoded as a JSON string token to preserve precision past
     // ±(2^53-1). Parse the string for the integer assertion.
     let count = adapter
-        .execute_query(&format!("SELECT COUNT(*) AS n FROM {table}"), None)
+        .execute_query(
+            &format!("SELECT COUNT(*) AS n FROM {table}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .expect("count");
     let n: i64 = count.rows[0][0]
@@ -861,7 +1050,11 @@ async fn test_execute_query_batch_commits_all_statements() {
     assert_eq!(n, 2);
 
     adapter
-        .execute_query(&format!("DROP TABLE {table}"), None)
+        .execute_query(
+            &format!("DROP TABLE {table}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .ok();
     adapter.disconnect_pool().await.ok();
@@ -881,7 +1074,11 @@ async fn test_execute_query_batch_rolls_back_on_mid_failure() {
     let table = format!("test_batch_rollback_{ts}");
 
     adapter
-        .execute_query(&format!("CREATE TABLE {table} (id INT)"), None)
+        .execute_query(
+            &format!("CREATE TABLE {table} (id INT)"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .expect("CREATE TABLE");
 
@@ -904,7 +1101,11 @@ async fn test_execute_query_batch_rolls_back_on_mid_failure() {
     // Sprint 261 (ADR 0026) — COUNT(*) returns bigint, wire-encoded as
     // JSON string token to preserve precision. Parse before asserting 0.
     let count = adapter
-        .execute_query(&format!("SELECT COUNT(*) AS n FROM {table}"), None)
+        .execute_query(
+            &format!("SELECT COUNT(*) AS n FROM {table}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .expect("count");
     let n: i64 = count.rows[0][0]
@@ -915,7 +1116,11 @@ async fn test_execute_query_batch_rolls_back_on_mid_failure() {
     assert_eq!(n, 0, "rollback must leave the table empty");
 
     adapter
-        .execute_query(&format!("DROP TABLE {table}"), None)
+        .execute_query(
+            &format!("DROP TABLE {table}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .ok();
     adapter.disconnect_pool().await.ok();
@@ -940,13 +1145,18 @@ async fn test_execute_query_batch_rolls_back_when_statement_matches_multiple_row
     let table = format!("test_batch_multi_row_{ts}");
 
     adapter
-        .execute_query(&format!("CREATE TABLE {table} (id INT, msg TEXT)"), None)
+        .execute_query(
+            &format!("CREATE TABLE {table} (id INT, msg TEXT)"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .expect("CREATE TABLE");
     adapter
         .execute_query(
             &format!("INSERT INTO {table} VALUES (1, 'a'), (1, 'a')"),
             None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
         )
         .await
         .expect("INSERT duplicates");
@@ -963,7 +1173,11 @@ async fn test_execute_query_batch_rolls_back_when_statement_matches_multiple_row
     );
 
     let count = adapter
-        .execute_query(&format!("SELECT COUNT(*) AS n FROM {table}"), None)
+        .execute_query(
+            &format!("SELECT COUNT(*) AS n FROM {table}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .expect("count");
     let n: i64 = count.rows[0][0]
@@ -974,7 +1188,11 @@ async fn test_execute_query_batch_rolls_back_when_statement_matches_multiple_row
     assert_eq!(n, 2, "rollback must leave both duplicate rows");
 
     adapter
-        .execute_query(&format!("DROP TABLE {table}"), None)
+        .execute_query(
+            &format!("DROP TABLE {table}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .ok();
     adapter.disconnect_pool().await.ok();
@@ -994,7 +1212,11 @@ async fn test_execute_query_batch_strips_trailing_semicolons() {
     let table = format!("test_batch_semi_{ts}");
 
     adapter
-        .execute_query(&format!("CREATE TABLE {table} (id INT)"), None)
+        .execute_query(
+            &format!("CREATE TABLE {table} (id INT)"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .expect("CREATE TABLE");
 
@@ -1013,7 +1235,11 @@ async fn test_execute_query_batch_strips_trailing_semicolons() {
     assert_eq!(results[1].total_count, 1);
 
     adapter
-        .execute_query(&format!("DROP TABLE {table}"), None)
+        .execute_query(
+            &format!("DROP TABLE {table}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .ok();
     adapter.disconnect_pool().await.ok();
@@ -1037,6 +1263,7 @@ async fn seed_filter_table(adapter: &table_view_lib::db::postgres::PostgresAdapt
                 )"
             ),
             None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
         )
         .await
         .expect("CREATE TABLE");
@@ -1051,6 +1278,7 @@ async fn seed_filter_table(adapter: &table_view_lib::db::postgres::PostgresAdapt
                  (5, 'Eve', 500.0, true, 'fifth')"
             ),
             None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
         )
         .await
         .expect("INSERT");
@@ -1085,7 +1313,11 @@ async fn test_query_table_data_filter_eq_with_numeric_cast() {
     assert_eq!(data.rows[0][0].as_i64(), Some(3));
 
     adapter
-        .execute_query(&format!("DROP TABLE {table}"), None)
+        .execute_query(
+            &format!("DROP TABLE {table}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .ok();
     adapter.disconnect_pool().await.ok();
@@ -1143,7 +1375,11 @@ async fn test_query_table_data_filter_like_and_isnull() {
     assert_eq!(data.total_count, 3);
 
     adapter
-        .execute_query(&format!("DROP TABLE {table}"), None)
+        .execute_query(
+            &format!("DROP TABLE {table}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .ok();
     adapter.disconnect_pool().await.ok();
@@ -1177,7 +1413,11 @@ async fn test_query_table_data_filter_unknown_column_is_ignored() {
     assert_eq!(data.total_count, 5);
 
     adapter
-        .execute_query(&format!("DROP TABLE {table}"), None)
+        .execute_query(
+            &format!("DROP TABLE {table}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .ok();
     adapter.disconnect_pool().await.ok();
@@ -1214,7 +1454,11 @@ async fn test_query_table_data_raw_where_accepts_clean_clause() {
     assert_eq!(data.total_count, 2);
 
     adapter
-        .execute_query(&format!("DROP TABLE {table}"), None)
+        .execute_query(
+            &format!("DROP TABLE {table}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .ok();
     adapter.disconnect_pool().await.ok();
@@ -1273,7 +1517,11 @@ async fn test_query_table_data_cancel_token_interrupts_in_flight_raw_where() {
     }
 
     adapter
-        .execute_query(&format!("DROP TABLE {table}"), None)
+        .execute_query(
+            &format!("DROP TABLE {table}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .ok();
     adapter.disconnect_pool().await.ok();
@@ -1314,7 +1562,11 @@ async fn test_query_table_data_raw_where_rejects_semicolon() {
     }
 
     adapter
-        .execute_query(&format!("DROP TABLE {table}"), None)
+        .execute_query(
+            &format!("DROP TABLE {table}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .ok();
     adapter.disconnect_pool().await.ok();
@@ -1350,7 +1602,11 @@ async fn test_query_table_data_raw_where_rejects_dangerous_keywords() {
     }
 
     adapter
-        .execute_query(&format!("DROP TABLE {table}"), None)
+        .execute_query(
+            &format!("DROP TABLE {table}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .ok();
     adapter.disconnect_pool().await.ok();
@@ -1391,7 +1647,11 @@ async fn test_query_table_data_pagination_and_ordering() {
     assert_eq!(data.rows[1][0].as_i64(), Some(4));
 
     adapter
-        .execute_query(&format!("DROP TABLE {table}"), None)
+        .execute_query(
+            &format!("DROP TABLE {table}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .ok();
     adapter.disconnect_pool().await.ok();
@@ -1462,6 +1722,7 @@ async fn test_stream_table_rows_yields_batches_in_order() {
         .execute_query(
             &format!("CREATE TABLE {table} (id INT PRIMARY KEY, label TEXT)"),
             None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
         )
         .await
         .expect("CREATE");
@@ -1472,6 +1733,7 @@ async fn test_stream_table_rows_yields_batches_in_order() {
                  (1,'a'),(2,'b'),(3,'c'),(4,'d'),(5,'e')"
             ),
             None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
         )
         .await
         .expect("INSERT");
@@ -1505,7 +1767,11 @@ async fn test_stream_table_rows_yields_batches_in_order() {
     assert_eq!(sorted, vec![1, 2, 3, 4, 5]);
 
     adapter
-        .execute_query(&format!("DROP TABLE {table}"), None)
+        .execute_query(
+            &format!("DROP TABLE {table}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .ok();
     adapter.disconnect_pool().await.ok();
@@ -1525,7 +1791,11 @@ async fn test_stream_table_rows_aborts_when_receiver_drops() {
     let table = format!("test_stream_drop_{ts}");
 
     adapter
-        .execute_query(&format!("CREATE TABLE {table} (id INT PRIMARY KEY)"), None)
+        .execute_query(
+            &format!("CREATE TABLE {table} (id INT PRIMARY KEY)"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .expect("CREATE");
     // Insert enough rows that batch_size=1 yields more than one send call,
@@ -1538,7 +1808,11 @@ async fn test_stream_table_rows_aborts_when_receiver_drops() {
         values.push_str(&format!("({i})"));
     }
     adapter
-        .execute_query(&format!("INSERT INTO {table} VALUES {values}"), None)
+        .execute_query(
+            &format!("INSERT INTO {table} VALUES {values}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .expect("INSERT");
 
@@ -1563,7 +1837,11 @@ async fn test_stream_table_rows_aborts_when_receiver_drops() {
     }
 
     adapter
-        .execute_query(&format!("DROP TABLE {table}"), None)
+        .execute_query(
+            &format!("DROP TABLE {table}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
         .await
         .ok();
     adapter.disconnect_pool().await.ok();

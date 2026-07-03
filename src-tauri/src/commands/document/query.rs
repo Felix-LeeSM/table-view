@@ -70,6 +70,8 @@ pub async fn find_documents(
     // Sprint 180 (AC-180-04): optional cancel-token id.
     query_id: Option<String>,
 ) -> Result<DocumentQueryResult, AppError> {
+    // Issue #1231 — publish the persisted row cap for the cursor drain loop.
+    crate::commands::sqlite_pool::publish_row_cap().await;
     find_documents_inner(
         state.inner(),
         &connection_id,
@@ -135,6 +137,8 @@ pub async fn aggregate_documents(
     // Sprint 180 (AC-180-04): optional cancel-token id, mirrors find_documents.
     query_id: Option<String>,
 ) -> Result<DocumentQueryResult, AppError> {
+    // Issue #1231 — publish the persisted row cap for the cursor drain loop.
+    crate::commands::sqlite_pool::publish_row_cap().await;
     aggregate_documents_inner(
         state.inner(),
         &connection_id,
