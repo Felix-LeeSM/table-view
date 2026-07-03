@@ -53,6 +53,10 @@ csv = "1"
 # (quoted/numeric literal → `?`). 같은 crate 가 `tracing-subscriber` /
 # `globset` / `mongodb` 의 transitive 로 이미 잠겨 있어 build cost 추가 0.
 regex = "1"
+# #1107 — percent-encode ES/OpenSearch index names into URL path segments so a
+# validated index can never break out of its segment. Already locked at 2.3.2 via
+# reqwest/url transitives, so making it a direct dep adds zero build cost.
+percent-encoding = "2"
 # Sprint 466 — Redis/Valkey KV adapter. `tokio-rustls-comp` gives async
 # command support on the existing Tokio runtime and `rediss://` TLS.
 redis = { version = "0.32", features = ["tokio-rustls-comp"] }

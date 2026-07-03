@@ -6652,6 +6652,7 @@ dependencies = [
  "keyring",
  "mongodb",
  "oracle-rs",
+ "percent-encoding",
  "redis",
  "regex",
  "reqwest 0.12.28",
