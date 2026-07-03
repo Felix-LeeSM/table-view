@@ -1,13 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { useState } from "react";
+import { createRef, useState } from "react";
 import { act, render, screen, waitFor } from "@testing-library/react";
-import { EditorView, keymap } from "@codemirror/view";
+import { EditorView } from "@codemirror/view";
 import { ensureSyntaxTree, language } from "@codemirror/language";
 import { undo } from "@codemirror/commands";
 import { MySQL, PostgreSQL, SQLite } from "@codemirror/lang-sql";
-import type { KeyBinding } from "@codemirror/view";
 import SqlQueryEditor from "./SqlQueryEditor";
-import { expectUndoRevertsEdit } from "./__tests__/editorHistoryHelpers";
+import {
+  expectUndoRevertsEdit,
+  getKeymapBindings,
+} from "./__tests__/editorHistoryHelpers";
 
 /**
  * Sprint 139 — SqlQueryEditor unit tests.
@@ -30,17 +32,6 @@ function getEditorView(): EditorView {
   const view = EditorView.findFromDOM(cmEditor);
   if (!view) throw new Error("EditorView not found");
   return view;
-}
-
-function getKeymapBindings(view: EditorView): KeyBinding[] {
-  const bindings: KeyBinding[] = [];
-  const facetValues = view.state.facet(keymap);
-  for (const set of facetValues) {
-    if (Array.isArray(set)) {
-      for (const binding of set) bindings.push(binding);
-    }
-  }
-  return bindings;
 }
 
 function collectKeywords(view: EditorView): Set<string> {
@@ -301,6 +292,51 @@ describe("SqlQueryEditor (Sprint 139)", () => {
     expect(getEditorView().state.doc.toString()).toBe("SELECT 1");
     // No runaway sync loop — exactly one onChange per real doc mutation.
     expect(changes).toEqual(["SELECT 1 AS x", "SELECT 1"]);
+  });
+
+  // #1248 — a passive external sql sync (favorite load / query-history load /
+  // tab-switch remount all flow store → sql prop → editor) must NOT enter the
+  // undo stack. After the load, Cmd+Z must not "undo" something the user never
+  // typed. RED before `syncEditorDocument` marks the mirror `addToHistory:
+  // false`: undo reverts to the pre-sync doc.
+  it("does not undo a passive external sql sync (#1248)", () => {
+    const { rerender } = render(
+      <SqlQueryEditor
+        sql="SELECT 1"
+        onSqlChange={vi.fn()}
+        onExecute={vi.fn()}
+      />,
+    );
+    rerender(
+      <SqlQueryEditor
+        sql="SELECT 2"
+        onSqlChange={vi.fn()}
+        onExecute={vi.fn()}
+      />,
+    );
+
+    const view = getEditorView();
+    expect(view.state.doc.toString()).toBe("SELECT 2");
+
+    act(() => {
+      undo(view);
+    });
+    expect(view.state.doc.toString()).toBe("SELECT 2");
+  });
+
+  // #1248 — the forwarded ref must resolve to the live EditorView (it was
+  // permanently null under the old `useImperativeHandle(ref, () => x, [])`).
+  it("forwards a live EditorView to the parent ref (#1248)", () => {
+    const ref = createRef<EditorView | null>();
+    render(
+      <SqlQueryEditor
+        ref={ref}
+        sql="SELECT 1"
+        onSqlChange={vi.fn()}
+        onExecute={vi.fn()}
+      />,
+    );
+    expect(ref.current).toBe(getEditorView());
   });
 
   // External sql prop syncs into editor.

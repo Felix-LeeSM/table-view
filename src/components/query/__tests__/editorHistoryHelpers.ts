@@ -1,16 +1,32 @@
 import { act } from "@testing-library/react";
 import { undo } from "@codemirror/commands";
-import type { EditorView } from "@codemirror/view";
+import { keymap, type EditorView, type KeyBinding } from "@codemirror/view";
 import { expect } from "vitest";
 
-// Reason: #1225 — 전 쿼리 에디터(sql/mongo/redis/search)는 CodeMirror
-// history() + historyKeymap 을 장착해야 Cmd+Z undo 가 동작한다. 이 헬퍼는
-// 네 에디터 회귀 테스트가 동일한 undo 계약을 검증하도록 공유한다
-// (사용자 보고 2026-07-03).
+// #1248 — hoisted from the six editor test files (query 4 + document 2) so the
+// keymap-binding assertion has one source of truth. Collects every KeyBinding
+// registered in the editor's `keymap` facet.
+export function getKeymapBindings(view: EditorView): KeyBinding[] {
+  const bindings: KeyBinding[] = [];
+  for (const set of view.state.facet(keymap)) {
+    if (Array.isArray(set)) bindings.push(...set);
+  }
+  return bindings;
+}
+
+// Reason: #1225 / #1247 — every editor (sql/mongo/redis/search + the two
+// document editors) must install CodeMirror `history()` AND bind
+// `historyKeymap` so Cmd+Z undo works. This helper is the shared undo contract.
 //
-// RED: history() 미장착 시 `undo` 는 no-op → doc 이 그대로라 revert 단언 실패.
-// GREEN: history 장착 시 삽입이 되돌려져 `before` 로 복원.
+// #1248 — the earlier revert tests called `undo()` directly, so a missing
+// `historyKeymap` binding was a silent regression (the command still ran). We
+// now assert the Mod-z binding exists first, then exercise the revert:
+// RED (history / keymap absent): undo is a no-op → doc unchanged → revert fails,
+//   or the binding assert fails outright.
+// GREEN: the appended insert is reverted back to `before`.
 export function expectUndoRevertsEdit(view: EditorView): void {
+  expect(getKeymapBindings(view).some((b) => b.key === "Mod-z")).toBe(true);
+
   const before = view.state.doc.toString();
   const appended = `${before} X`;
 

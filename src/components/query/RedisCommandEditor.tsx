@@ -1,4 +1,4 @@
-import { useRef, useEffect, forwardRef, useImperativeHandle } from "react";
+import { useRef, useEffect, forwardRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Compartment, EditorState, type Extension } from "@codemirror/state";
 import {
@@ -22,6 +22,7 @@ import {
   type RedisCommandCompletionTarget,
   type RedisKeySuggestion,
 } from "@features/completion";
+import { setForwardedRef } from "@lib/editor/setForwardedRef";
 import { syncEditorDocument } from "./editorDocumentSync";
 
 export interface RedisCommandEditorProps {
@@ -73,7 +74,6 @@ const RedisCommandEditor = forwardRef<
 ) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
-  useImperativeHandle(ref, () => viewRef.current as EditorView, []);
 
   const { t } = useTranslation("query");
   const onSqlChangeRef = useRef(onSqlChange);
@@ -178,10 +178,13 @@ const RedisCommandEditor = forwardRef<
       parent: containerRef.current,
     });
     viewRef.current = view;
+    // Expose the live EditorView to the parent's forwarded ref (#1248).
+    setForwardedRef(ref, view);
 
     return () => {
       view.destroy();
       viewRef.current = null;
+      setForwardedRef(ref, null);
     };
     // Completion props reconfigure in the effect below; remounting would
     // drop cursor and undo history.

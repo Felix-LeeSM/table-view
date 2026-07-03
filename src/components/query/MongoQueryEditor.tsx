@@ -1,4 +1,4 @@
-import { useRef, useEffect, forwardRef, useImperativeHandle } from "react";
+import { useRef, useEffect, forwardRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Compartment, EditorState, type Extension } from "@codemirror/state";
 import {
@@ -19,6 +19,7 @@ import {
 import { autocompletion, acceptCompletion } from "@codemirror/autocomplete";
 import { viewTableHighlightStyle } from "@lib/editor/highlightStyle";
 import { autocompleteTooltipTheme } from "@lib/editor/autocompleteTheme";
+import { setForwardedRef } from "@lib/editor/setForwardedRef";
 import { syncEditorDocument } from "./editorDocumentSync";
 
 /**
@@ -70,9 +71,6 @@ const MongoQueryEditor = forwardRef<EditorView | null, MongoQueryEditorProps>(
     const { t } = useTranslation("query");
     const containerRef = useRef<HTMLDivElement>(null);
     const viewRef = useRef<EditorView | null>(null);
-
-    // Expose the EditorView to the parent via the forwarded ref.
-    useImperativeHandle(ref, () => viewRef.current as EditorView, []);
 
     // Keep refs to latest callbacks so the listener closure always reads
     // fresh values without recreating the editor.
@@ -196,11 +194,15 @@ const MongoQueryEditor = forwardRef<EditorView | null, MongoQueryEditorProps>(
       });
 
       viewRef.current = view;
+      // Expose the live EditorView to the parent's forwarded ref (#1248).
+      setForwardedRef(ref, view);
 
       return () => {
         view.destroy();
         viewRef.current = null;
+        setForwardedRef(ref, null);
       };
+      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     // Reconfigure the JSON + Mongo extension bundle in place when the

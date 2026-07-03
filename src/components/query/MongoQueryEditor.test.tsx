@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { createRef } from "react";
 import {
   act,
   render,
@@ -6,31 +7,21 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react";
-import { EditorView, keymap } from "@codemirror/view";
+import { EditorView } from "@codemirror/view";
 import { language } from "@codemirror/language";
 import { CompletionContext } from "@codemirror/autocomplete";
 import { EditorState } from "@codemirror/state";
 import { json as jsonLanguage } from "@codemirror/lang-json";
-import type { KeyBinding } from "@codemirror/view";
 import MongoQueryEditor from "./MongoQueryEditor";
-import { expectUndoRevertsEdit } from "./__tests__/editorHistoryHelpers";
+import {
+  expectUndoRevertsEdit,
+  getKeymapBindings,
+} from "./__tests__/editorHistoryHelpers";
 import {
   createMongoCompletionSource,
   createMongoOperatorHighlight,
   useMongoAutocomplete,
 } from "@features/completion";
-
-/** Extract all keymap bindings from the editor state. */
-function getKeymapBindings(view: EditorView): KeyBinding[] {
-  const bindings: KeyBinding[] = [];
-  const facetValues = view.state.facet(keymap);
-  for (const set of facetValues) {
-    if (Array.isArray(set)) {
-      for (const binding of set) bindings.push(binding);
-    }
-  }
-  return bindings;
-}
 
 /**
  * Sprint 139 — MongoQueryEditor unit tests.
@@ -253,6 +244,21 @@ describe("MongoQueryEditor (Sprint 139)", () => {
       />,
     );
     expectUndoRevertsEdit(getEditorView("MongoDB Query Editor"));
+  });
+
+  // #1248 — the forwarded ref must resolve to the live EditorView.
+  it("forwards a live EditorView to the parent ref (#1248)", () => {
+    const ref = createRef<EditorView | null>();
+    render(
+      <MongoQueryEditor
+        ref={ref}
+        sql="{}"
+        onSqlChange={vi.fn()}
+        onExecute={vi.fn()}
+        mongoExtensions={[]}
+      />,
+    );
+    expect(ref.current).toBe(getEditorView("MongoDB Query Editor"));
   });
 
   it("preserves cursor position across external query text sync", () => {

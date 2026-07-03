@@ -1,8 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
+import { createRef } from "react";
 import { render, screen, act } from "@testing-library/react";
-import { EditorView, keymap, type KeyBinding } from "@codemirror/view";
+import { EditorView } from "@codemirror/view";
 import RedisCommandEditor from "./RedisCommandEditor";
-import { expectUndoRevertsEdit } from "./__tests__/editorHistoryHelpers";
+import {
+  expectUndoRevertsEdit,
+  getKeymapBindings,
+} from "./__tests__/editorHistoryHelpers";
 
 function getEditorView(): EditorView {
   const container = screen.getByLabelText("Redis Command Editor");
@@ -10,14 +14,6 @@ function getEditorView(): EditorView {
   const view = EditorView.findFromDOM(cmEditor);
   if (!view) throw new Error("EditorView not found");
   return view;
-}
-
-function getKeymapBindings(view: EditorView): KeyBinding[] {
-  const bindings: KeyBinding[] = [];
-  for (const set of view.state.facet(keymap)) {
-    if (Array.isArray(set)) bindings.push(...set);
-  }
-  return bindings;
 }
 
 describe("RedisCommandEditor", () => {
@@ -115,6 +111,20 @@ describe("RedisCommandEditor", () => {
       />,
     );
     expectUndoRevertsEdit(getEditorView());
+  });
+
+  // #1248 — the forwarded ref must resolve to the live EditorView.
+  it("forwards a live EditorView to the parent ref (#1248)", () => {
+    const ref = createRef<EditorView | null>();
+    render(
+      <RedisCommandEditor
+        ref={ref}
+        sql="GET session:1"
+        onSqlChange={vi.fn()}
+        onExecute={vi.fn()}
+      />,
+    );
+    expect(ref.current).toBe(getEditorView());
   });
 
   it("binds Mod-Enter to execute and Cmd-Shift-Enter to unsupported dry-run", () => {
