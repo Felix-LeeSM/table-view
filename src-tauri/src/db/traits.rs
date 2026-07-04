@@ -105,8 +105,15 @@ pub trait DbAdapter: Send + Sync {
     /// no `inprog`/`killop` privilege) synchronous with the user's click so
     /// it surfaces through `CancelError` rather than degrading silently.
     ///
-    /// The default returns `Unsupported`; `cancel_query_native` folds that
-    /// into the cooperative-token path for adapters that carry a real pid.
+    /// The default returns `Unsupported`. Note this is NOT folded back into the
+    /// cooperative-token path: `cancel_query_native_inner` passes the error
+    /// message straight to `classify_cancel_error`, which has no "unsupported"
+    /// keyword and so buckets it as `NetworkError` (a toast). That misclassify
+    /// is currently a dead path — every tag-cancel caller targets Mongo, which
+    /// overrides this method, and no other adapter routes the tag path — but
+    /// the default must not claim a graceful fold that does not exist. Any new
+    /// adapter that wants tag-based cancel overrides this rather than relying
+    /// on the default.
     fn cancel_query_by_tag<'a>(&'a self, _tag: &'a str) -> BoxFuture<'a, Result<(), AppError>> {
         Box::pin(async {
             Err(AppError::Unsupported(

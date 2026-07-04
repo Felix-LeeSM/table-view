@@ -522,15 +522,20 @@ impl MongoAdapter {
 
     /// Issue #1269 (P1) — resolve the `opid` of the running op tagged with
     /// `comment == tag` so native cancel can `killOp` it. Reuses the same
-    /// `currentOp: 1, $all: true` scan + opid extraction as `current_op_impl`.
+    /// `currentOp: 1, $all: true` scan as `current_op_impl`.
     ///
-    /// `Ok(Some(opid))` — a live op carries the tag. `Ok(None)` — no op
-    /// matches (already finished, or the runner never reached the server):
-    /// the caller treats this as a benign "already completed". `Err` — the
-    /// scan itself failed (no `inprog` privilege on Atlas shared, driver
+    /// `Ok(Some(opid))` — a live op carries the tag; the opid is returned as
+    /// the raw BSON variant (`Int32` / `Int64` standalone, `String` on a
+    /// sharded `mongos`) so the kill path can forward it verbatim. `Ok(None)`
+    /// — no op matches (already finished, or the runner never reached the
+    /// server): the caller treats this as a benign "already completed". `Err`
+    /// — the scan itself failed (no `inprog` privilege on Atlas shared, driver
     /// fault); it propagates so the failure surfaces rather than looking like
     /// a completed query.
-    pub(super) async fn resolve_opid_by_comment(&self, tag: &str) -> Result<Option<i64>, AppError> {
+    pub(super) async fn resolve_opid_by_comment(
+        &self,
+        tag: &str,
+    ) -> Result<Option<Bson>, AppError> {
         let client = self.current_client().await?;
         let resp = client
             .database("admin")
@@ -557,20 +562,29 @@ impl MongoAdapter {
             if !tagged {
                 continue;
             }
-            return Ok(op
-                .get_i64("opid")
-                .or_else(|_| op.get_i32("opid").map(|v| v as i64))
-                .ok());
+            return Ok(extract_opid(op));
         }
         Ok(None)
     }
 
-    /// Sprint 336 (U1 live wire) — `adminCommand({killOp: 1, op: id})`.
+    /// Sprint 336 (U1 live wire) — `adminCommand({killOp: 1, op: id})`. The
+    /// currentOp panel's manual kill carries an `i64` opid (standalone /
+    /// replica-set), so this delegates to the BSON-typed path.
     pub(super) async fn kill_op_impl(&self, id: i64) -> Result<(), AppError> {
+        self.kill_op_by_opid_impl(Bson::Int64(id)).await
+    }
+
+    /// Issue #1269 (PR #1322 review) — `adminCommand({killOp: 1, op: <opid>})`
+    /// accepting the raw BSON opid. A sharded `mongos` reports the opid as the
+    /// shard-qualified string `"shard0000:12345"`, which `killOp` matches
+    /// verbatim; forcing it into an `i64` would drop the shard prefix and the
+    /// cancel would silently target nothing (surfacing to the user as a false
+    /// "cancelled" while the op keeps running).
+    pub(super) async fn kill_op_by_opid_impl(&self, op: Bson) -> Result<(), AppError> {
         let client = self.current_client().await?;
         client
             .database("admin")
-            .run_command(doc! { "killOp": 1, "op": id })
+            .run_command(doc! { "killOp": 1, "op": op })
             .await
             .map_err(|e| AppError::Database(format!("killOp failed: {e}")))?;
         Ok(())
@@ -1221,11 +1235,54 @@ fn modal_type(counts: &HashMap<&'static str, usize>) -> Option<&'static str> {
         .map(|(name, _)| *name)
 }
 
+/// Issue #1269 (PR #1322 review) — pull a `$currentOp` entry's `opid` out as
+/// the raw BSON variant so the kill path can forward it verbatim.
+///
+/// Standalone / replica-set report the opid as `Int32` / `Int64`; a sharded
+/// `mongos` reports the shard-qualified `String` form (`"shard0000:12345"`).
+/// The old i64-only extraction (`get_i64().or(get_i32())`) failed on the
+/// string, resolved to `None`, and the cancel path reported a false
+/// "already completed" while the op kept running. Returning the string
+/// through lets `killOp` match it. Any other type (a malformed / absent
+/// opid) yields `None`, which the caller still treats as "not running".
+pub(super) fn extract_opid(op: &Document) -> Option<Bson> {
+    match op.get("opid") {
+        Some(v @ (Bson::Int32(_) | Bson::Int64(_) | Bson::String(_))) => Some(v.clone()),
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::db::DocumentAdapter;
     use bson::doc;
+
+    // Issue #1269 (PR #1322 review) — opid extraction must survive the
+    // sharded `mongos` string form. Standalone/replica-set report Int32 /
+    // Int64; a sharded cluster reports `"shard0000:12345"`. Before the fix the
+    // string opid resolved to None → false "already completed".
+    #[test]
+    fn extract_opid_reads_int32_int64_and_sharded_string() {
+        assert_eq!(
+            extract_opid(&doc! { "opid": 12345_i32 }),
+            Some(Bson::Int32(12345))
+        );
+        assert_eq!(
+            extract_opid(&doc! { "opid": 9_876_543_210_i64 }),
+            Some(Bson::Int64(9_876_543_210))
+        );
+        assert_eq!(
+            extract_opid(&doc! { "opid": "shard0000:12345" }),
+            Some(Bson::String("shard0000:12345".into()))
+        );
+    }
+
+    #[test]
+    fn extract_opid_rejects_absent_or_unexpected_type() {
+        assert_eq!(extract_opid(&doc! { "ns": "db.coll" }), None);
+        assert_eq!(extract_opid(&doc! { "opid": 1.5_f64 }), None);
+    }
 
     #[tokio::test]
     async fn list_databases_without_connection_returns_connection_error() {

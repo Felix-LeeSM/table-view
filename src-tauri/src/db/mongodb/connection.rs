@@ -341,11 +341,13 @@ impl DbAdapter for MongoAdapter {
     /// gone (already completed) — reported as a "not running" error so
     /// `classify_cancel_error` buckets it as `AlreadyCompleted` (frontend
     /// silent). A resolve/kill failure (missing `inprog`/`killop` privilege)
-    /// propagates and surfaces as `PermissionDenied`.
+    /// propagates and surfaces as `PermissionDenied`. The opid flows through as
+    /// raw BSON so a sharded `mongos` string opid (`"shard0000:12345"`) reaches
+    /// `killOp` intact instead of being dropped (PR #1322 review).
     fn cancel_query_by_tag<'a>(&'a self, tag: &'a str) -> BoxFuture<'a, Result<(), AppError>> {
         Box::pin(async move {
             match self.resolve_opid_by_comment(tag).await? {
-                Some(opid) => self.kill_op_impl(opid).await,
+                Some(opid) => self.kill_op_by_opid_impl(opid).await,
                 None => Err(AppError::Database(
                     "operation not running (already completed)".into(),
                 )),
