@@ -15,12 +15,72 @@ use crate::error::AppError;
 use crate::models::{ConnectionConfig, ConnectionGroup, StorageData};
 use std::fs;
 use std::path::PathBuf;
-use std::sync::LazyLock;
-use tracing::{debug, info, warn};
+use std::sync::{LazyLock, Mutex};
+use tracing::{debug, error, info, warn};
 
 /// In-process lock to prevent TOCTOU race conditions between concurrent Tauri commands.
 /// Storage operations are all synchronous (blocking file I/O), so std::sync::Mutex is correct.
 static STORAGE_LOCK: LazyLock<std::sync::Mutex<()>> = LazyLock::new(|| std::sync::Mutex::new(()));
+
+/// #1103 / Sprint 356 — process master key resolved once at boot by
+/// [`boot_wire_master_key`] (which runs the keyring migration) and read by
+/// every storage secret path. `None` until boot seeds it; the sole in-process
+/// writer is boot, so the seeded key is effectively immutable at runtime.
+static MASTER_KEY: Mutex<Option<Vec<u8>>> = Mutex::new(None);
+
+/// #1103 — seed the process master key from the boot-time keyring migration
+/// ([`key_migration::migrate_or_initialize`]). Called once from `lib.rs::run()`
+/// before any IPC handler can fire.
+pub fn seed_master_key(key: Vec<u8>) {
+    *MASTER_KEY.lock().expect("master key mutex poisoned") = Some(key);
+}
+
+/// Resolve the AES master key for encrypt/decrypt. Returns the boot-seeded
+/// keyring key when present; otherwise (unit tests, or any call before boot
+/// wiring runs) falls back to the on-disk `.key` via
+/// [`crypto::get_or_create_key`], preserving the pre-#1103 behavior and its
+/// #1093 orphan guard.
+fn master_key() -> Result<Vec<u8>, AppError> {
+    if let Some(key) = MASTER_KEY
+        .lock()
+        .expect("master key mutex poisoned")
+        .as_ref()
+    {
+        return Ok(key.clone());
+    }
+    crypto::get_or_create_key()
+}
+
+/// #1103 — boot-time master-key resolution. Runs the Sprint 356 keyring
+/// migration once (new install → key born in the keyring; existing plaintext
+/// `.key` → migrated into the keyring then retired; headless Linux / locked
+/// keychain → explicit disk fallback) and seeds the process master key. On
+/// `KeySource::Fatal` (key lost but ciphertext still present) it logs and does
+/// NOT seed — the decrypt path then refuses via the #1093 orphan guard, which
+/// is the effective safe-mode entry. Returns the outcome so the caller can log
+/// / surface the Linux-fallback state.
+pub fn boot_wire_master_key() -> Result<key_migration::KeyOutcome, AppError> {
+    let dir = key_migration::app_data_dir_for_keyring()?;
+    let backend = crypto::OsKeyringBackend::new();
+    let outcome = key_migration::migrate_or_initialize(&backend, &dir)?;
+    if outcome.is_fatal() {
+        error!(
+            target: "boot",
+            "key_migration: FATAL — master key lost but encrypted passwords present; \
+             entering safe mode (decrypt disabled until the key is restored)"
+        );
+    } else {
+        seed_master_key(outcome.key.clone());
+    }
+    Ok(outcome)
+}
+
+/// Test-only: clear the seeded master key so a subsequent storage call falls
+/// back to the on-disk `.key` path. Keeps the global isolated between tests.
+#[cfg(test)]
+pub(crate) fn reset_master_key_for_test() {
+    *MASTER_KEY.lock().expect("master key mutex poisoned") = None;
+}
 
 fn app_data_dir() -> Result<PathBuf, AppError> {
     // Allow tests to override data directory via env var
@@ -181,7 +241,7 @@ pub fn load_storage_redacted() -> Result<StorageData, AppError> {
 pub fn load_storage_with_secrets() -> Result<StorageData, AppError> {
     with_lock(|| {
         let mut data = load_storage_raw()?;
-        let key = crypto::get_or_create_key()?;
+        let key = master_key()?;
         for conn in &mut data.connections {
             if !conn.password.is_empty() {
                 conn.password = crypto::decrypt(&conn.password, &key)?;
@@ -216,7 +276,7 @@ pub fn get_decrypted_password(id: &str) -> Result<Option<String>, AppError> {
             None => Ok(None),
             Some(c) if c.password.is_empty() => Ok(Some(String::new())),
             Some(c) => {
-                let key = crypto::get_or_create_key()?;
+                let key = master_key()?;
                 Ok(Some(crypto::decrypt(&c.password, &key)?))
             }
         }
@@ -249,7 +309,7 @@ pub fn save_connection(
         // Resolve the encrypted password to persist
         let encrypted = match new_password {
             Some(s) if !s.is_empty() => {
-                let key = crypto::get_or_create_key()?;
+                let key = master_key()?;
                 crypto::encrypt(&s, &key)?
             }
             Some(_) => String::new(),
@@ -812,6 +872,63 @@ mod tests {
 
         let loaded = load_storage().unwrap();
         assert_eq!(loaded.connections.len(), 1);
+
+        cleanup_test_env();
+    }
+
+    // -------------------------------------------------------------------
+    // #1103 — master-key wiring: storage secret paths read the boot-seeded
+    // keyring key instead of the disk `.key`.
+    // -------------------------------------------------------------------
+
+    /// When a key is seeded (as boot does from the keyring outcome), saving a
+    /// connection encrypts under that key and never touches the disk `.key`.
+    #[test]
+    #[serial]
+    fn seeded_master_key_is_used_and_no_disk_key_written() {
+        let dir = setup_test_env();
+        seed_master_key((7..39u8).collect());
+        // Use whatever is actually seeded (robust to global state ordering).
+        let effective = master_key().unwrap();
+
+        let mut conn = sample_connection("c1", "DB1");
+        conn.password = "sekret".into();
+        save_conn(conn).unwrap();
+
+        // No disk `.key` — the master key came from the (mocked-at-boot) seed.
+        assert!(
+            !dir.path().join(".key").exists(),
+            "seeded key path must not create a disk .key"
+        );
+
+        // The persisted ciphertext decrypts under the seeded key.
+        let raw = fs::read_to_string(dir.path().join("connections.json")).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&raw).unwrap();
+        let enc = parsed["connections"][0]["password"].as_str().unwrap();
+        assert_eq!(crypto::decrypt(enc, &effective).unwrap(), "sekret");
+
+        reset_master_key_for_test();
+        cleanup_test_env();
+    }
+
+    /// With no seed (the pre-#1103 / unit path), storage falls back to the
+    /// disk `.key`, which is created on first secret write.
+    #[test]
+    #[serial]
+    fn unseeded_master_key_falls_back_to_disk_key() {
+        let dir = setup_test_env();
+        reset_master_key_for_test();
+
+        let mut conn = sample_connection("c1", "DB1");
+        conn.password = "ondisk".into();
+        save_conn(conn).unwrap();
+
+        assert!(
+            dir.path().join(".key").exists(),
+            "unseeded path must fall back to the disk .key"
+        );
+        let loaded = load_storage_with_secrets().unwrap();
+        assert_eq!(loaded.connections[0].password, "ondisk");
 
         cleanup_test_env();
     }
