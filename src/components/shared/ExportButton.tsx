@@ -1,12 +1,8 @@
 import { useState } from "react";
+import { DropdownMenu } from "radix-ui";
 import { Download } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import { runExport } from "@/lib/runtime/export";
 import type { ExportContext, ExportFormat } from "@/lib/tauri";
 import { cn } from "@/lib/utils";
@@ -61,13 +57,11 @@ export function ExportButton({
     json: t("export.json"),
   };
   const DEFAULT_DISABLED_REASON = t("export.singleTableOnly");
-  const [open, setOpen] = useState(false);
   const [running, setRunning] = useState(false);
   const formats = FORMATS_BY_KIND[context.kind];
 
   async function handleSelect(format: ExportFormat) {
     if (disabled || disabledFormats.includes(format) || running) return;
-    setOpen(false);
     setRunning(true);
     try {
       const rows = await Promise.resolve(getRows());
@@ -79,14 +73,13 @@ export function ExportButton({
     }
   }
 
+  // Radix DropdownMenu (already bundled via the unified `radix-ui` package)
+  // supplies the WAI-ARIA menu keyboard model the old `role="menu"` popover
+  // only claimed: ArrowUp/Down roving, Home/End, typeahead, Escape, single
+  // tab stop. No new dependency, no hand-rolled menu.
   return (
-    <Popover
-      open={disabled ? false : open}
-      onOpenChange={(nextOpen) => {
-        if (!disabled) setOpen(nextOpen);
-      }}
-    >
-      <PopoverTrigger asChild>
+    <DropdownMenu.Root>
+      <DropdownMenu.Trigger asChild>
         <Button
           type="button"
           variant="ghost"
@@ -99,36 +92,43 @@ export function ExportButton({
         >
           <Download size={12} aria-hidden />
         </Button>
-      </PopoverTrigger>
-      <PopoverContent align="start" className="w-36 p-1" role="menu">
-        {formats.map((format) => {
-          const disabled = disabledFormats.includes(format);
-          return (
-            <button
-              type="button"
-              key={format}
-              role="menuitem"
-              aria-disabled={disabled || undefined}
-              disabled={disabled}
-              onClick={() => handleSelect(format)}
-              title={
-                disabled
-                  ? (disabledFormatReasons[format] ?? DEFAULT_DISABLED_REASON)
-                  : t("export.exportAs", { label: FORMAT_LABELS[format] })
-              }
-              className={cn(
-                "flex w-full items-center justify-between rounded-sm px-2 py-1 text-left text-xs",
-                "hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:outline-none",
-                disabled &&
-                  "cursor-not-allowed opacity-50 hover:bg-transparent",
-              )}
-            >
-              <span>{FORMAT_LABELS[format]}</span>
-              <span className="text-3xs text-muted-foreground">.{format}</span>
-            </button>
-          );
-        })}
-      </PopoverContent>
-    </Popover>
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content
+          align="start"
+          sideOffset={4}
+          className={cn(
+            "z-50 w-36 rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md outline-none",
+            "data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95",
+          )}
+        >
+          {formats.map((format) => {
+            const itemDisabled = disabledFormats.includes(format);
+            return (
+              <DropdownMenu.Item
+                key={format}
+                disabled={itemDisabled}
+                onSelect={() => handleSelect(format)}
+                title={
+                  itemDisabled
+                    ? (disabledFormatReasons[format] ?? DEFAULT_DISABLED_REASON)
+                    : t("export.exportAs", { label: FORMAT_LABELS[format] })
+                }
+                className={cn(
+                  "flex w-full cursor-pointer items-center justify-between rounded-sm px-2 py-1 text-left text-xs outline-none select-none",
+                  "focus:bg-accent focus:text-accent-foreground data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground",
+                  "data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50 data-[disabled]:bg-transparent",
+                )}
+              >
+                <span>{FORMAT_LABELS[format]}</span>
+                <span className="text-3xs text-muted-foreground">
+                  .{format}
+                </span>
+              </DropdownMenu.Item>
+            );
+          })}
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
   );
 }

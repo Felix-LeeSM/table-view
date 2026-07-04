@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import FormDialog from "@components/ui/dialog/FormDialog";
 import { Input } from "@components/ui/input";
@@ -31,6 +31,49 @@ export default function GroupDialog({ group, onClose }: GroupDialogProps) {
 
   const addGroup = useConnectionStore((s) => s.addGroup);
   const updateGroup = useConnectionStore((s) => s.updateGroup);
+
+  // WAI-ARIA radiogroup roving: the palette is a single tab stop (the checked
+  // swatch) and arrows move *and* select in one step. Ordered `null` sentinel
+  // ("No color") first, then the palette.
+  const colorValues = useMemo<(string | null)[]>(
+    () => [null, ...CONNECTION_COLOR_PALETTE],
+    [],
+  );
+  const paletteRef = useRef<HTMLDivElement>(null);
+
+  const handlePaletteKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    const { key } = e;
+    if (
+      key !== "ArrowRight" &&
+      key !== "ArrowDown" &&
+      key !== "ArrowLeft" &&
+      key !== "ArrowUp" &&
+      key !== "Home" &&
+      key !== "End"
+    ) {
+      return;
+    }
+    e.preventDefault();
+    const cur = Math.max(0, colorValues.indexOf(color));
+    const last = colorValues.length - 1;
+    const forward = key === "ArrowRight" || key === "ArrowDown";
+    const next =
+      key === "Home"
+        ? 0
+        : key === "End"
+          ? last
+          : forward
+            ? cur === last
+              ? 0
+              : cur + 1
+            : cur === 0
+              ? last
+              : cur - 1;
+    setColor(colorValues[next] ?? null);
+    paletteRef.current
+      ?.querySelector<HTMLElement>(`[data-color-index="${next}"]`)
+      ?.focus();
+  };
 
   const handleSave = async () => {
     const trimmed = name.trim();
@@ -98,8 +141,10 @@ export default function GroupDialog({ group, onClose }: GroupDialogProps) {
           {t("groupDialog.labelColor")}
         </span>
         <div
+          ref={paletteRef}
           role="radiogroup"
           aria-label="Group color"
+          onKeyDown={handlePaletteKeyDown}
           className="flex flex-wrap items-center gap-2"
         >
           <button
@@ -108,6 +153,8 @@ export default function GroupDialog({ group, onClose }: GroupDialogProps) {
             aria-checked={color === null}
             aria-label={t("groupDialog.ariaNoColor")}
             title={t("groupDialog.titleNoColor")}
+            data-color-index={0}
+            tabIndex={color === null ? 0 : -1}
             onClick={() => setColor(null)}
             className={`flex h-6 w-6 items-center justify-center rounded-full border border-border bg-muted text-3xs text-muted-foreground transition-shadow ${
               color === null
@@ -117,7 +164,7 @@ export default function GroupDialog({ group, onClose }: GroupDialogProps) {
           >
             —
           </button>
-          {CONNECTION_COLOR_PALETTE.map((swatch) => (
+          {CONNECTION_COLOR_PALETTE.map((swatch, i) => (
             <button
               key={swatch}
               type="button"
@@ -125,6 +172,8 @@ export default function GroupDialog({ group, onClose }: GroupDialogProps) {
               aria-checked={color === swatch}
               aria-label={t("groupDialog.ariaColorSwatch", { swatch })}
               title={swatch}
+              data-color-index={i + 1}
+              tabIndex={color === swatch ? 0 : -1}
               onClick={() => setColor(swatch)}
               className={`h-6 w-6 rounded-full border border-border transition-shadow ${
                 color === swatch
