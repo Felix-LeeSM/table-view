@@ -146,6 +146,12 @@ pub async fn connect(
     app: tauri::AppHandle,
     id: String,
 ) -> Result<(), AppError> {
+    // Issue #1100 — serialize connect/disconnect for this id. Held for the
+    // whole lifecycle mutation so a concurrent connect (double-click) or a
+    // racing disconnect can't interleave across the three registry maps and
+    // leak a server session / a second keep-alive loop.
+    let _guard = state.connection_guard(&id).await;
+
     let data = storage::load_storage_with_secrets()?;
     let config = data
         .connections
@@ -187,32 +193,20 @@ pub async fn connect(
         return Err(e);
     }
 
-    // Abort any previous keep-alive task for this connection
-    {
-        let mut handles = state.keep_alive_handles.lock().await;
-        if let Some(old_handle) = handles.remove(&id) {
-            old_handle.abort();
-        }
-    }
+    // Sprint 364 — pool ready, transition to Connected. `active_db` is
+    // seeded from the connection's default database; `None` when the user
+    // left `database` empty (e.g. Mongo without a default DB). Computed
+    // before `config` is moved into the keep-alive task below.
+    let active_db = if config.database.is_empty() {
+        None
+    } else {
+        Some(config.database.clone())
+    };
 
-    {
-        let mut connections = state.active_connections.lock().await;
-        connections.insert(id.clone(), Arc::new(adapter));
-    }
-    {
-        // Sprint 364 — pool ready, transition to Connected. `active_db` is
-        // seeded from the connection's default database; `None` when the
-        // user left `database` empty (e.g. Mongo without a default DB).
-        let active_db = if config.database.is_empty() {
-            None
-        } else {
-            Some(config.database.clone())
-        };
-        let mut status = state.connection_status.lock().await;
-        status.insert(id.clone(), ConnectionStatus::Connected { active_db });
-    }
-
-    // Start keep-alive background task
+    // Start keep-alive background task, then install atomically (issue #1100).
+    // `install_connection` aborts any previous keep-alive handle and
+    // `disconnect()`s any previous adapter for this id, so a re-connect never
+    // leaks a server session or leaves a second ping loop running.
     let keep_alive_interval = config.keep_alive_interval.unwrap_or(30) as u64;
     let handle = tokio::spawn(keep_alive_loop(
         app,
@@ -220,9 +214,13 @@ pub async fn connect(
         keep_alive_interval,
         config,
     ));
+    state
+        .install_connection(&id, Arc::new(adapter), handle)
+        .await;
+
     {
-        let mut handles = state.keep_alive_handles.lock().await;
-        handles.insert(id, handle);
+        let mut status = state.connection_status.lock().await;
+        status.insert(id.clone(), ConnectionStatus::Connected { active_db });
     }
 
     Ok(())
@@ -230,6 +228,10 @@ pub async fn connect(
 
 #[tauri::command]
 pub async fn disconnect(state: tauri::State<'_, AppState>, id: String) -> Result<(), AppError> {
+    // Issue #1100 — serialize against a concurrent connect for this id so the
+    // teardown can't interleave with an install (same check-then-act class).
+    let _guard = state.connection_guard(&id).await;
+
     // Cancel keep-alive task
     {
         let mut handles = state.keep_alive_handles.lock().await;
@@ -675,5 +677,107 @@ mod tests {
         }
 
         cleanup_test_env();
+    }
+
+    // -------------------------------------------------------------------
+    // Issue #1100 — connect double-click check-then-act race.
+    //
+    // `install_connection` is the atomic registry swap that `connect` routes
+    // through. The original `connect` did a blind `insert` (discarding the
+    // displaced adapter/handle), so a re-connect leaked a server session
+    // (old adapter dropped without `disconnect()`) and left a second
+    // keep-alive loop running (old handle overwritten without `abort()`).
+    // These tests use the shared `StubRdbAdapter` (fake adapter) to count
+    // teardowns without standing up a real DB, per the issue's "test at the
+    // Rust level with a mock/fake adapter" guidance.
+    // -------------------------------------------------------------------
+    mod connect_race {
+        use super::*;
+        use crate::db::testing::StubRdbAdapter;
+        use crate::db::ActiveAdapter;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::sync::Arc;
+
+        /// A fake RDB adapter whose `disconnect()` bumps `counter` — lets a
+        /// test assert the predecessor was actually torn down.
+        fn counting_adapter(counter: Arc<AtomicUsize>) -> Arc<ActiveAdapter> {
+            let stub = StubRdbAdapter {
+                disconnect_fn: Some(Box::new(move || {
+                    counter.fetch_add(1, Ordering::SeqCst);
+                    Ok(())
+                })),
+                ..StubRdbAdapter::default()
+            };
+            Arc::new(ActiveAdapter::Rdb(Box::new(stub)))
+        }
+
+        /// Replacing a live connection must `disconnect()` the old adapter and
+        /// `abort()` the old keep-alive loop — not leak them. Red against the
+        /// pre-fix blind-`insert` path (which left `disconnects == 0` and the
+        /// predecessor loop alive).
+        #[tokio::test]
+        async fn install_connection_tears_down_replaced_predecessor() {
+            let state = AppState::new();
+            let disconnects = Arc::new(AtomicUsize::new(0));
+
+            let handle_a = tokio::spawn(std::future::pending::<()>());
+            let abort_a = handle_a.abort_handle();
+            state
+                .install_connection("c1", counting_adapter(disconnects.clone()), handle_a)
+                .await;
+
+            let handle_b = tokio::spawn(std::future::pending::<()>());
+            state
+                .install_connection("c1", counting_adapter(disconnects.clone()), handle_b)
+                .await;
+
+            // Let the runtime process the abort of the displaced task.
+            tokio::task::yield_now().await;
+            assert!(
+                abort_a.is_finished(),
+                "predecessor keep-alive loop must be aborted on replace"
+            );
+            assert_eq!(
+                disconnects.load(Ordering::SeqCst),
+                1,
+                "predecessor adapter must be disconnect()-ed exactly once"
+            );
+            assert_eq!(state.active_connections.lock().await.len(), 1);
+            assert_eq!(state.keep_alive_handles.lock().await.len(), 1);
+        }
+
+        /// Eight concurrent connects for the same id (double-click / retry
+        /// storm), each serialized by `connection_guard`, must leave exactly
+        /// one live adapter + one keep-alive handle; the other seven are
+        /// disconnected (no leaked sessions) and aborted (no extra loops).
+        #[tokio::test]
+        async fn concurrent_installs_leave_one_live_connection() {
+            let state = Arc::new(AppState::new());
+            let disconnects = Arc::new(AtomicUsize::new(0));
+
+            let mut tasks = Vec::new();
+            for _ in 0..8 {
+                let state = state.clone();
+                let counter = disconnects.clone();
+                tasks.push(tokio::spawn(async move {
+                    let _guard = state.connection_guard("c1").await;
+                    let handle = tokio::spawn(std::future::pending::<()>());
+                    state
+                        .install_connection("c1", counting_adapter(counter), handle)
+                        .await;
+                }));
+            }
+            for t in tasks {
+                t.await.unwrap();
+            }
+
+            assert_eq!(state.active_connections.lock().await.len(), 1);
+            assert_eq!(state.keep_alive_handles.lock().await.len(), 1);
+            assert_eq!(
+                disconnects.load(Ordering::SeqCst),
+                7,
+                "7 of 8 concurrent connects must be torn down, leaving one live"
+            );
+        }
     }
 }
