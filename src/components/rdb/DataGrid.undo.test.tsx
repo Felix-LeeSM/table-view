@@ -7,7 +7,8 @@
 // - K2: Ctrl+Z (ctrlKey) → editState.undo invoked.
 // - K3: Cmd+Shift+Z (redo slot) → editState.undo NOT invoked.
 // - K4: focused INPUT / contenteditable → browser native undo wins.
-// - K5: commit success → canUndo flips to false (clearAllPending).
+// - K5: commit success → undo stack SURVIVES; post-commit Cmd+Z re-stages
+//   the pre-commit value as a new pending edit (ADR 0048 / #1126 Phase 1).
 //
 // We share the helper-mocked schema/tab stores from
 // `__tests__/dataGridTestHelpers.tsx` so the renderDataGrid
@@ -215,12 +216,12 @@ describe("DataGrid — Sprint 249 Cmd+Z / Ctrl+Z undo (AC-249-K1..K5)", () => {
     expect(screen.getAllByRole("row").length).toBe(5);
   });
 
-  it("[AC-249-K5] commit success → undo no longer reaches pre-commit state", async () => {
+  it("[AC-249-K5] commit success → post-commit Cmd+Z re-stages the reverted value (ADR 0048)", async () => {
     renderDataGrid();
     await screen.findByText("3 rows");
 
     // Build a pending edit that is committable (mockExecuteQueryBatch
-    // is wired to resolve in the helper module).
+    // is wired to resolve in the helper module). Alice → Bob at cell 0-1.
     const cells = screen.getAllByRole("gridcell");
     const nameCell = cells[1]!;
     await act(async () => {
@@ -244,14 +245,21 @@ describe("DataGrid — Sprint 249 Cmd+Z / Ctrl+Z undo (AC-249-K1..K5)", () => {
       fireEvent.click(executeBtn);
     });
 
-    // Pending state cleared.
+    // Pending state cleared by the commit — nothing staged yet.
     expect(screen.queryByText(/edit/)).not.toBeInTheDocument();
+    // Exactly one DB write happened (the commit). Baseline for the
+    // no-write-on-undo assertion below.
+    expect(mockExecuteQueryBatch).toHaveBeenCalledTimes(1);
 
-    // Cmd+Z must NOT resurrect the pre-commit pending edit — the DB is
-    // the new baseline. Dispatching Cmd+Z is a no-op (canUndo=false).
+    // ADR 0048 (#1126) — the undo stack SURVIVES the commit. Cmd+Z now
+    // re-stages the pre-commit value ("Alice") as a NEW pending edit rather
+    // than resurrecting nothing. The user must commit again to apply it.
     await act(async () => {
       fireEvent.keyDown(window, { key: "z", metaKey: true });
     });
-    expect(screen.queryByText(/edit/)).not.toBeInTheDocument();
+    // A pending edit is back on the grid...
+    expect(screen.getByText(/1 edit/)).toBeInTheDocument();
+    // ...and undo did NOT touch the DB — writes stay commit-only.
+    expect(mockExecuteQueryBatch).toHaveBeenCalledTimes(1);
   });
 });

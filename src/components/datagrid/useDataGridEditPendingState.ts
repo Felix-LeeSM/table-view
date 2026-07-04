@@ -4,7 +4,13 @@ import {
   entryKey as makeStoreEntryKey,
   EMPTY_ENTRY,
 } from "@stores/dataGridEditStore";
-import { UNDO_STACK_MAX, type EditSnapshot } from "./dataGridEditFsm";
+import { toast } from "@/lib/runtime/toast";
+import i18n from "@lib/i18n";
+import {
+  UNDO_STACK_MAX,
+  buildRestageSnapshot,
+  type EditSnapshot,
+} from "./dataGridEditFsm";
 
 type PendingEdits = Map<string, string | null>;
 type PendingNewRows = unknown[][];
@@ -185,6 +191,22 @@ export function useDataGridEditPendingState({
     storeClearEntry(storeKey);
   }, [storeKey, storeClearEntry]);
 
+  // #1126 Phase 1 (ADR 0048) — on commit success the undo stack must SURVIVE.
+  // Collapse the just-committed pending edits into one reversal snapshot so a
+  // post-commit Cmd+Z re-stages the pre-commit values as a new pending edit;
+  // clear the pending slices but replace the stack with that snapshot (or
+  // leave it empty when there was nothing restageable). Reads the current
+  // store entry BEFORE clearing so the committed edits + row anchors are still
+  // present.
+  const restageAfterCommit = useCallback(() => {
+    const current = useDataGridEditStore.getState().getEntry(storeKey);
+    const restage = buildRestageSnapshot(current);
+    storeClearEntry(storeKey);
+    if (restage) {
+      storeSetSlice(storeKey, "undoStack", [restage]);
+    }
+  }, [storeKey, storeClearEntry, storeSetSlice]);
+
   const pushSnapshot = useCallback(() => {
     setUndoStack((prev) => {
       const snap: EditSnapshot = {
@@ -209,18 +231,27 @@ export function useDataGridEditPendingState({
   ]);
 
   const undo = useCallback(() => {
-    setUndoStack((prevStack) => {
-      if (prevStack.length === 0) return prevStack;
-      const last = prevStack[prevStack.length - 1]!;
-      setPendingEdits(new Map(last.pendingEdits));
-      setPendingNewRows(last.pendingNewRows.map((row) => [...row]));
-      setPendingDeletedRowKeys(new Set(last.pendingDeletedRowKeys));
-      // Issue #1081 — restore the row-identity anchors in lockstep.
-      setPendingEditRowSnapshots(new Map(last.pendingEditRowSnapshots));
-      setPendingDeletedRowSnapshots(new Map(last.pendingDeletedRowSnapshots));
-      return prevStack.slice(0, -1);
-    });
+    const stack = useDataGridEditStore.getState().getEntry(storeKey).undoStack;
+    if (stack.length === 0) return;
+    const last = stack[stack.length - 1]!;
+    const rest = stack.slice(0, -1);
+    // #1126 Phase 1 — a post-commit snapshot flagged `restageBlocked` covered a
+    // commit that added/deleted rows; Phase 1 can't re-stage those, so drop it
+    // and tell the user instead of a silent no-op.
+    if (last.restageBlocked) {
+      setUndoStack(rest);
+      toast.info(i18n.t("datagrid:undoRestageBlocked"));
+      return;
+    }
+    setPendingEdits(new Map(last.pendingEdits));
+    setPendingNewRows(last.pendingNewRows.map((row) => [...row]));
+    setPendingDeletedRowKeys(new Set(last.pendingDeletedRowKeys));
+    // Issue #1081 — restore the row-identity anchors in lockstep.
+    setPendingEditRowSnapshots(new Map(last.pendingEditRowSnapshots));
+    setPendingDeletedRowSnapshots(new Map(last.pendingDeletedRowSnapshots));
+    setUndoStack(rest);
   }, [
+    storeKey,
     setPendingEdits,
     setPendingNewRows,
     setPendingDeletedRowKeys,
@@ -239,6 +270,7 @@ export function useDataGridEditPendingState({
     setPendingNewRows,
     setPendingDeletedRowKeys,
     clearPendingEntry,
+    restageAfterCommit,
     pushSnapshot,
     undo,
     canUndo: undoStack.length > 0,
