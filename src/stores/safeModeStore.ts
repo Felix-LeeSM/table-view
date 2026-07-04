@@ -1,6 +1,4 @@
 import { create } from "zustand";
-import { attachZustandIpcBridge } from "@lib/zustand-ipc-bridge";
-import { getCurrentWindowLabel } from "@lib/window-label";
 import type { SafeMode } from "@/lib/safeMode";
 import { getSetting, persistSettingValue } from "@lib/tauri/settings";
 
@@ -74,20 +72,19 @@ export const useSafeModeStore = create<SafeModeState>()((set, get) => ({
 }));
 
 /**
- * Cross-window broadcast allowlist. Only `mode` is sync-safe; the
- * action functions are local and must never be broadcast.
+ * #1122 (2026-07-04) — single authoritative cross-window sync path.
+ *
+ * safe_mode previously had TWO sync mechanisms: the older zustand IPC
+ * bridge (`"safe-mode-sync"` channel, broadcasting `set({mode})`) AND the
+ * backend-first settings receiver (backend persists → emits
+ * `setting.update` → this window refetches via `applySafeModeSettingFromBackend`).
+ * The dual path caused redundant traffic, echo re-fires, and a mid-flight
+ * race where a refetch could overwrite a newer local value. Per the
+ * 2026-07-02 Safe Mode audit decision, the bridge channel is removed and
+ * the backend-SOT settings receiver is the sole sync path — `setMode` /
+ * `toggle` persist through `persist_setting`, and remote windows converge
+ * only via the `state-changed` → refetch route below.
  */
-export const SYNCED_KEYS: ReadonlyArray<keyof SafeModeState> = [
-  "mode",
-] as const;
-
-void attachZustandIpcBridge<SafeModeState>(useSafeModeStore, {
-  channel: "safe-mode-sync",
-  syncKeys: SYNCED_KEYS,
-  originId: getCurrentWindowLabel() ?? "unknown",
-}).catch(() => {
-  // best-effort: see mruStore.ts rationale.
-});
 
 /**
  * Per-entity `setting.update` refetch for the `safe_mode` key. Exported
