@@ -291,12 +291,18 @@ export async function findDocuments(
   database: string,
   collection: string,
   body?: FindBody,
+  // Issue #1269 (P1) — optional per-load cancel-token id. The backend
+  // `find_documents` command registers a `CancellationToken` under this id
+  // (Sprint 180 AC-180-04), so the grid Cancel button can abort the browse
+  // via `cancelQuery` / `cancelQueryNative`. Omitting it keeps the fast-path.
+  queryId?: string,
 ): Promise<DocumentQueryResult> {
   const result = await invoke<unknown>("find_documents", {
     connectionId,
     database,
     collection,
     body: body ?? null,
+    queryId: queryId ?? null,
   });
   return wrapNumericCells(normalizeDocumentQueryResult(result));
 }

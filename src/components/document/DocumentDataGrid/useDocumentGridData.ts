@@ -100,17 +100,29 @@ export function useDocumentGridData({
     const fetchId = ++fetchIdRef.current;
     setLoading(true);
     setError(null);
+    // Issue #1269 (P1) — register a cancel-token id for this browse so the
+    // overlay Cancel button can abort it (cooperative `cancel_query` + native
+    // `killOp`). The backend `find_documents` command registers the token
+    // under this id (Sprint 180 AC-180-04).
+    const queryId = crypto.randomUUID();
+    queryIdRef.current = queryId;
     try {
-      await runFind(connectionId, database, collection, {
-        filter: activeFilterCount > 0 ? activeFilter : undefined,
-        sort: mongoSort,
-        projection:
-          projection && Object.keys(projection).length > 0
-            ? projection
-            : undefined,
-        skip: (page - 1) * pageSize,
-        limit: pageSize,
-      });
+      await runFind(
+        connectionId,
+        database,
+        collection,
+        {
+          filter: activeFilterCount > 0 ? activeFilter : undefined,
+          sort: mongoSort,
+          projection:
+            projection && Object.keys(projection).length > 0
+              ? projection
+              : undefined,
+          skip: (page - 1) * pageSize,
+          limit: pageSize,
+        },
+        queryId,
+      );
     } catch (e) {
       if (fetchIdRef.current === fetchId) setError(String(e));
     } finally {
@@ -141,14 +153,17 @@ export function useDocumentGridData({
     setLoading(false);
     const queryId = queryIdRef.current;
     queryIdRef.current = null;
-    if (queryId) {
-      cancelQuery(queryId).catch(() => {
-        // best-effort: backend cancel registry may have already evicted
-        // the token (race with finally clause), or the connection may
-        // have been swapped. The frontend has already settled into a
-        // consistent state, so we do not surface this to the user.
-      });
-    }
+    if (!queryId) return;
+    // Issue #1269 (P1) — fire the cooperative token so the backend
+    // `find_documents` `tokio::select!` returns cancelled and frees the
+    // driver. Best-effort: the UI settled synchronously above. Mongo has no
+    // native (server-side) cancel wired yet — `killOp` exists but no path
+    // materialises the running op's opid, so the Stop stays cooperative-only
+    // until the opid-capture follow-up lands.
+    cancelQuery(queryId).catch(() => {
+      // Backend cancel registry may have already evicted the token, or the
+      // connection was swapped — the frontend is already consistent.
+    });
   }, []);
 
   useEffect(() => {
