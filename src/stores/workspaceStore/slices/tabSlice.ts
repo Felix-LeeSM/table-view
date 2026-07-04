@@ -51,12 +51,20 @@ export function createTabSlice(set: WorkspaceSet, get: WorkspaceGet): TabSlice {
       const tabFields = { ...rest, database: db };
       set((state) => {
         const next = withWorkspace(state, connId, db, (ws) => {
+          // Issue #1096 — dedup on the same 4-axis key removeTab uses
+          // (connectionId + database + schema + table). `database` is already
+          // isolated by the (connId, db) bucket; the `?? db` default matches
+          // tabs that never wrote `database`. `schema` is the axis that was
+          // missing, so `public.users` and `audit.users` no longer collide
+          // into one tab.
           const exists = ws.tabs.find(
             (t): t is TableTab =>
               t.type === "table" &&
               t.connectionId === tabFields.connectionId &&
               t.table === tabFields.table &&
               t.table !== undefined &&
+              t.schema === tabFields.schema &&
+              (t.database ?? db) === tabFields.database &&
               (t.subView ?? "records") === (tabFields.subView ?? "records"),
           );
           if (exists) {
