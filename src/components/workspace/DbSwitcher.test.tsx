@@ -326,6 +326,48 @@ describe("DbSwitcher", () => {
     ]);
   });
 
+  // #1132 — the listbox declared `role="option"` rows but had no keyboard
+  // model beyond autofocusing the first row. It now rovs a single tab stop
+  // with ArrowUp/Down + Home/End, anchored on the active db.
+  it("roves a single tab stop across options with Arrow/Home/End keys (#1132)", async () => {
+    setStores({ paradigm: "rdb", connected: true, activeDb: "postgres" });
+    listDatabasesMock.mockResolvedValueOnce([
+      { name: "postgres" },
+      { name: "warehouse" },
+      { name: "analytics" },
+    ]);
+    render(<DbSwitcher />);
+    fireEvent.click(
+      screen.getByRole("button", { name: /active database switcher/i }),
+    );
+    const listbox = await screen.findByRole("listbox", {
+      name: /available databases/i,
+    });
+    const options = within(listbox).getAllByRole("option");
+
+    // Single tab stop: exactly one option is tabbable.
+    expect(
+      options.filter((o) => o.getAttribute("tabindex") === "0"),
+    ).toHaveLength(1);
+    // Roving anchor starts on the active db (postgres, index 0).
+    await waitFor(() => expect(options[0]).toHaveFocus());
+
+    fireEvent.keyDown(listbox, { key: "ArrowDown" });
+    expect(options[1]).toHaveFocus();
+    expect(options[1]).toHaveAttribute("tabindex", "0");
+    expect(options[0]).toHaveAttribute("tabindex", "-1");
+
+    fireEvent.keyDown(listbox, { key: "End" });
+    expect(options[2]).toHaveFocus();
+
+    fireEvent.keyDown(listbox, { key: "Home" });
+    expect(options[0]).toHaveFocus();
+
+    // ArrowUp at the top clamps (no wrap).
+    fireEvent.keyDown(listbox, { key: "ArrowUp" });
+    expect(options[0]).toHaveFocus();
+  });
+
   it("shows the loading state while the fetch is in flight", async () => {
     setStores({ paradigm: "rdb", connected: true });
     let resolveFetch: ((value: { name: string }[]) => void) | null = null;
