@@ -132,9 +132,25 @@ export async function switchToLauncherWindow(timeoutMs = 15000) {
   );
 }
 
+// #1292 — workspace windows are per-connection (`workspace-{connId}`), so
+// once a spec opens a SECOND connection two workspace documents coexist and a
+// content-generic switch ("any window with Back to connections") can bind to
+// the stale first window. `openConnection` records the connection it opened
+// here; `switchToWorkspaceWindow` then targets that connection's window by its
+// `document.title` (`"{{name}} — Table View"`, set in AppRouter for exactly
+// this disambiguation). Single-connection specs are unaffected — their sole
+// workspace window still matches, and the title-less fallback preserves the
+// old behavior when no connection has been opened yet.
+let activeWorkspaceConnection: string | null = null;
+
+export function setActiveWorkspaceConnection(name: string | null) {
+  activeWorkspaceConnection = name;
+}
+
 export async function switchToWorkspaceWindow(timeoutMs = 30000) {
   const start = Date.now();
   let lastError: unknown = null;
+  let fallbackHandle: string | null = null;
   while (Date.now() - start < timeoutMs) {
     let handles: string[] = [];
     try {
@@ -145,12 +161,30 @@ export async function switchToWorkspaceWindow(timeoutMs = 30000) {
     for (const handle of handles) {
       try {
         await browser.switchToWindow(handle);
-        if (await isWorkspaceDocument()) return;
+        if (!(await isWorkspaceDocument())) continue;
+        // No target set (single-connection specs) → first workspace wins.
+        if (!activeWorkspaceConnection) return;
+        const title = await browser.getTitle();
+        if (title.includes(activeWorkspaceConnection)) return;
+        // A workspace window, but not the targeted connection (or its title
+        // hasn't hydrated the name yet). Remember it and keep polling so a
+        // still-rendering target window isn't skipped past.
+        fallbackHandle = handle;
       } catch (e) {
         lastError = e;
       }
     }
     await browser.pause(200);
+  }
+  // The targeted window never surfaced within the budget; land on any
+  // workspace window rather than leaving the driver on the launcher.
+  if (fallbackHandle) {
+    try {
+      await browser.switchToWindow(fallbackHandle);
+      return;
+    } catch (e) {
+      lastError = e;
+    }
   }
   throw new Error(
     `workspace window did not appear within ${timeoutMs}ms: ${String(lastError ?? "")}`,
@@ -626,6 +660,10 @@ export async function openConnection(name: string) {
       new MouseEvent("dblclick", { bubbles: true, cancelable: true }),
     );
   }, row);
+  // Target this connection's per-connection workspace window for every
+  // subsequent switch (#1292) — otherwise a still-open earlier workspace can
+  // be bound instead once a second connection is opened.
+  setActiveWorkspaceConnection(name);
   await switchToWorkspaceWindow();
   const back = await $(WORKSPACE_MARKER_SELECTOR);
   await back.waitForDisplayed({ timeout: 30000 });
