@@ -183,7 +183,8 @@ describe("EditableQueryResultGrid — Sprint 185 Safe Mode gate", () => {
   it("[AC-245-C3] production + strict + safe DML (UPDATE WHERE pk) → executeQueryBatch called once (Sprint 244 block reverted)", async () => {
     // Sprint 245 — was [AC-244-09] "block". Safe writes flow through
     // on production regardless of mode under the destructive-only
-    // policy; Cmd+Z (Phase 5) is the safety net.
+    // policy. Cmd+Z undoes uncommitted grid edits only; committed writes
+    // are not recoverable (Phase 5 compensating-commit undo pending, #1126).
     setup("production", "strict");
     await openPreviewAndExecute([
       "UPDATE users SET name = 'Alicia' WHERE id = 1",
