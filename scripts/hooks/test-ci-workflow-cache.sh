@@ -114,7 +114,7 @@ assert_contains "$frontend_block" "cache-dependency-path: pnpm-lock.yaml" "front
 # against reintroduction.
 assert_not_contains "$frontend_block" "Cache Vite transform output" "vite cache step removed"
 assert_not_contains "$frontend_block" "node_modules/.vite" "vite cache path removed"
-assert_contains "$frontend_block" "run: git fetch --no-tags --prune --depth=1 origin refs/heads/main:refs/remotes/origin/main" "frontend coverage ratchet base fetch"
+assert_contains "$frontend_block" "run: git fetch --no-tags --prune --depth=1 origin +refs/heads/main:refs/remotes/origin/main" "frontend coverage ratchet base fetch"
 assert_contains "$frontend_block" "COVERAGE_RATCHET_REQUIRE_MAIN: \"1\"" "frontend coverage ratchet require main"
 assert_contains "$frontend_block" "run: pnpm exec tsx scripts/check-coverage-ratchet.ts" "frontend coverage ratchet"
 assert_order "$frontend_block" "- name: Fetch coverage ratchet base" "- name: Coverage ratchet" "frontend coverage ratchet base fetch order"

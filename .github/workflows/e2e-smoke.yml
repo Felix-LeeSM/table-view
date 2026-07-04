@@ -60,15 +60,25 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Install Tauri Linux dependencies
+        # Retry wrapper: transient apt mirror failures (e.g. packages.microsoft.com
+        # 403) fail the whole setup. Up to 3 attempts with linear backoff.
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev \
-            libgtk-3-dev \
-            libayatana-appindicator3-dev \
-            librsvg2-dev \
-            webkit2gtk-driver \
-            xvfb
+          install_deps() {
+            sudo apt-get update && sudo apt-get install -y \
+              libwebkit2gtk-4.1-dev \
+              libgtk-3-dev \
+              libayatana-appindicator3-dev \
+              librsvg2-dev \
+              webkit2gtk-driver \
+              xvfb
+          }
+          for i in 1 2 3; do
+            install_deps && exit 0
+            echo "apt install attempt $i failed; retrying in $((i * 10))s" >&2
+            sleep "$((i * 10))"
+          done
+          echo "apt install failed after 3 attempts" >&2
+          exit 1
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
@@ -308,15 +318,25 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Install Tauri Linux dependencies
+        # Retry wrapper: transient apt mirror failures (e.g. packages.microsoft.com
+        # 403) fail the whole setup. Up to 3 attempts with linear backoff.
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev \
-            libgtk-3-dev \
-            libayatana-appindicator3-dev \
-            librsvg2-dev \
-            webkit2gtk-driver \
-            xvfb
+          install_deps() {
+            sudo apt-get update && sudo apt-get install -y \
+              libwebkit2gtk-4.1-dev \
+              libgtk-3-dev \
+              libayatana-appindicator3-dev \
+              librsvg2-dev \
+              webkit2gtk-driver \
+              xvfb
+          }
+          for i in 1 2 3; do
+            install_deps && exit 0
+            echo "apt install attempt $i failed; retrying in $((i * 10))s" >&2
+            sleep "$((i * 10))"
+          done
+          echo "apt install failed after 3 attempts" >&2
+          exit 1
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
@@ -492,15 +512,25 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Install Tauri Linux dependencies
+        # Retry wrapper: transient apt mirror failures (e.g. packages.microsoft.com
+        # 403) fail the whole setup. Up to 3 attempts with linear backoff.
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev \
-            libgtk-3-dev \
-            libayatana-appindicator3-dev \
-            librsvg2-dev \
-            webkit2gtk-driver \
-            xvfb
+          install_deps() {
+            sudo apt-get update && sudo apt-get install -y \
+              libwebkit2gtk-4.1-dev \
+              libgtk-3-dev \
+              libayatana-appindicator3-dev \
+              librsvg2-dev \
+              webkit2gtk-driver \
+              xvfb
+          }
+          for i in 1 2 3; do
+            install_deps && exit 0
+            echo "apt install attempt $i failed; retrying in $((i * 10))s" >&2
+            sleep "$((i * 10))"
+          done
+          echo "apt install failed after 3 attempts" >&2
+          exit 1
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
@@ -603,15 +633,25 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Install Tauri Linux dependencies
+        # Retry wrapper: transient apt mirror failures (e.g. packages.microsoft.com
+        # 403) fail the whole setup. Up to 3 attempts with linear backoff.
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev \
-            libgtk-3-dev \
-            libayatana-appindicator3-dev \
-            librsvg2-dev \
-            webkit2gtk-driver \
-            xvfb
+          install_deps() {
+            sudo apt-get update && sudo apt-get install -y \
+              libwebkit2gtk-4.1-dev \
+              libgtk-3-dev \
+              libayatana-appindicator3-dev \
+              librsvg2-dev \
+              webkit2gtk-driver \
+              xvfb
+          }
+          for i in 1 2 3; do
+            install_deps && exit 0
+            echo "apt install attempt $i failed; retrying in $((i * 10))s" >&2
+            sleep "$((i * 10))"
+          done
+          echo "apt install failed after 3 attempts" >&2
+          exit 1
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
