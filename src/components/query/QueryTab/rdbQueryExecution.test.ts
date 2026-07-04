@@ -287,3 +287,83 @@ describe("executeRdbQuery MERGE impact escalation (#1116)", () => {
     });
   });
 });
+
+// Issue #1110 — the warn-escalation reason must match reality. MySQL/SQLite
+// reject the dry-run probe with `Unsupported`, so the confirm dialog can't
+// claim a measured "100+ rows" impact for a 1-row UPDATE (or MERGE).
+describe("executeRdbQuery warn-escalation reason (#1110)", () => {
+  beforeEach(() => {
+    executeQueryMock.mockReset();
+    executeQueryDryRunMock.mockReset();
+    dispatchDbMutationHintMock.mockReset();
+  });
+
+  async function runWarnStmt(
+    sql: string,
+    dryRun: () => Promise<unknown>,
+    dbType: "mysql" | "postgresql" = "mysql",
+  ) {
+    executeQueryDryRunMock.mockImplementation(dryRun);
+    const setPendingRdbConfirm = vi.fn();
+    await executeRdbQuery({
+      tab: { ...tab, sql },
+      sql,
+      dbType,
+      decideSafeMode: () => allow,
+      updateQueryState: vi.fn(),
+      recordHistory: vi.fn(),
+      setPendingRdbConfirm,
+      setPendingRdbWarn: vi.fn(),
+      runRdbSingle: vi.fn(),
+      runRdbBatch: vi.fn(),
+    });
+    return setPendingRdbConfirm;
+  }
+
+  it("does NOT claim '100+ rows' when the dry-run probe is unsupported", async () => {
+    const setPendingRdbConfirm = await runWarnStmt(
+      "UPDATE t SET x = 1 WHERE id = 5",
+      () => Promise.reject(new Error("Unsupported")),
+    );
+
+    expect(setPendingRdbConfirm).toHaveBeenCalledTimes(1);
+    const reason = setPendingRdbConfirm.mock.calls[0]![0].reason as string;
+    expect(reason).not.toContain("100+");
+    expect(reason).toMatch(/unknown number of rows/i);
+    expect(reason).toMatch(/not supported/i);
+  });
+
+  it("does NOT claim '100+ rows' for an unsupported-probe MERGE, and names MERGE", async () => {
+    const setPendingRdbConfirm = await runWarnStmt(
+      "MERGE INTO users USING incoming ON users.id = incoming.id WHEN MATCHED THEN DELETE",
+      () => Promise.reject(new Error("Unsupported")),
+      "postgresql",
+    );
+
+    expect(setPendingRdbConfirm).toHaveBeenCalledTimes(1);
+    const reason = setPendingRdbConfirm.mock.calls[0]![0].reason as string;
+    expect(reason).not.toContain("100+");
+    expect(reason).toContain("MERGE");
+    expect(reason).toMatch(/unknown number of rows/i);
+  });
+
+  it("keeps the measured '100+ rows' copy when the probe counts the impact", async () => {
+    const setPendingRdbConfirm = await runWarnStmt(
+      "UPDATE t SET x = 1 WHERE id = 5",
+      () =>
+        Promise.resolve([
+          {
+            columns: [],
+            rows: [],
+            totalCount: 0,
+            executionTimeMs: 0,
+            queryType: { dml: { rows_affected: 250 } },
+          },
+        ]),
+    );
+
+    expect(setPendingRdbConfirm).toHaveBeenCalledTimes(1);
+    const reason = setPendingRdbConfirm.mock.calls[0]![0].reason as string;
+    expect(reason).toContain("100+ rows");
+  });
+});

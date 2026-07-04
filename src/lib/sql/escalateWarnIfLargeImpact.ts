@@ -38,24 +38,41 @@ export interface EscalateWarnOptions {
 }
 
 /**
+ * Why a WARN escalated (or not). `measured` = the dry-run probe ran and
+ * returned a row count at/above the threshold. `unsupported` = the probe
+ * could not run (adapter rejected — MySQL/SQLite today — or IPC error).
+ * `timeout` = the probe ran past the 2s budget. `unsupported`/`timeout`
+ * are fail-closed fallbacks with NO measured count, so callers must not
+ * claim a concrete row impact for them (issue #1110).
+ */
+export type EscalationCause = "measured" | "unsupported" | "timeout";
+
+export interface EscalateWarnResult {
+  severity: Severity;
+  /** Set only when `severity === "danger"` via the WARN probe path. */
+  cause?: EscalationCause;
+}
+
+/**
  * Returns the *effective* severity for a WARN-tier bounded UPDATE/DELETE
- * after a dry-run row-count probe. Returns the input severity unchanged
- * for non-WARN inputs.
+ * after a dry-run row-count probe, plus the `cause` behind an escalation
+ * so callers can render a truthful reason. Returns the input severity
+ * unchanged (no `cause`) for non-WARN inputs.
  *
  * Behaviour matrix:
- *   - severity !== "warn"             → return severity (no probe).
- *   - dry-run rowCount >= threshold   → "danger" (escalate).
- *   - dry-run rowCount < threshold    → "warn" (no escalate).
- *   - dry-run timeout (2s)            → "danger" (fallback, conservative).
- *   - dry-run IPC unsupported / err   → "danger" (fallback, conservative).
+ *   - severity !== "warn"             → { severity } (no probe).
+ *   - dry-run rowCount >= threshold   → { danger, cause: "measured" }.
+ *   - dry-run rowCount < threshold    → { warn } (no escalate).
+ *   - dry-run timeout (2s)            → { danger, cause: "timeout" }.
+ *   - dry-run IPC unsupported / err   → { danger, cause: "unsupported" }.
  */
 export async function escalateWarnIfLargeImpact(
   connectionId: string,
   statement: string,
   severity: Severity,
   options: EscalateWarnOptions = {},
-): Promise<Severity> {
-  if (severity !== "warn") return severity;
+): Promise<EscalateWarnResult> {
+  if (severity !== "warn") return { severity };
 
   const timeoutMs = options.timeoutMs ?? DRY_RUN_ESCALATION_TIMEOUT_MS;
   const threshold = options.threshold ?? DRY_RUN_ESCALATION_THRESHOLD;
@@ -76,21 +93,24 @@ export async function escalateWarnIfLargeImpact(
     // IPC error (Unsupported, syntax error, transaction failure, …) →
     // STOP fallback. Conservative: better to surface a confirm dialog
     // than silently auto-execute when the dry-run probe couldn't run.
-    return "danger";
+    // No count was measured — cause "unsupported" so the caller does
+    // NOT claim a "100+ rows" impact (issue #1110).
+    return { severity: "danger", cause: "unsupported" };
   }
 
-  if (results === "__timeout__") return "danger";
+  if (results === "__timeout__")
+    return { severity: "danger", cause: "timeout" };
 
   const result = results[0];
   // IPC succeeded but returned no per-statement result. Treat as 0 rows
   // (no escalation) — the dry-run probe ran without error so we have
   // signal that the statement is syntactically valid; an empty result
   // shape just means no rows matched.
-  if (!result) return "warn";
+  if (!result) return { severity: "warn" };
 
   const rowCount = extractRowsAffected(result);
-  if (rowCount >= threshold) return "danger";
-  return "warn";
+  if (rowCount >= threshold) return { severity: "danger", cause: "measured" };
+  return { severity: "warn" };
 }
 
 /**
