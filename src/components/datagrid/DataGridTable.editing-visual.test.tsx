@@ -105,6 +105,28 @@ describe("DataGridTable editing visual emphasis", () => {
     expect(input.className).toMatch(/bg-transparent/);
   });
 
+  // #1139 — WCAG 1.4.1: a pending edit was signalled only by `bg-highlight/20`
+  // (color). Add an sr-only announcement + a non-color shape marker so AT
+  // users and color-blind users know the cell is modified.
+  it("pending-edit cell exposes an sr-only 'modified' announcement and a non-color shape marker", () => {
+    render(
+      <DataGridTable
+        {...makeProps({
+          pendingEdits: new Map([["0-1", "Alicia"]]),
+        })}
+      />,
+    );
+    const tds = document.querySelectorAll(
+      '[role="row"][aria-rowindex="2"] [role="gridcell"]',
+    );
+    const pendingTd = tds[1] as HTMLElement;
+    const sr = pendingTd.querySelector(".sr-only");
+    expect(sr?.textContent ?? "").toMatch(/modified/i);
+    // A visible marker that does not rely on color (aria-hidden glyph).
+    const marker = pendingTd.querySelector('[aria-hidden="true"]');
+    expect(marker).not.toBeNull();
+  });
+
   it("pending-only (not editing) cell uses yellow bg, not primary ring", () => {
     render(
       <DataGridTable

@@ -256,6 +256,39 @@ describe("ConnectionItem", () => {
   });
 
   // -----------------------------------------------------------------------
+  // #1139 — WCAG 1.4.1: status must be distinguished by SHAPE, not color
+  // alone. Each state renders a distinct lucide glyph (spinner already
+  // distinct); assert the icon class so a future "same dot, new color"
+  // regression fails.
+  // -----------------------------------------------------------------------
+  it("connected indicator uses a distinct shape (check circle), not color alone", () => {
+    setStoreState({ activeStatuses: { "conn-1": { type: "connected" } } });
+    render(<ConnectionItem connection={makeConnection()} />);
+    const ind = screen.getByLabelText("Connected");
+    expect(ind.tagName.toLowerCase()).toBe("svg");
+    expect(ind.classList.contains("lucide-circle-check")).toBe(true);
+  });
+
+  it("error indicator uses a distinct shape (alert circle), not color alone", () => {
+    setStoreState({
+      activeStatuses: { "conn-1": { type: "error", message: "boom" } },
+    });
+    render(<ConnectionItem connection={makeConnection()} />);
+    // Tooltip lives on the labelled wrapper (svg has no title attr); the
+    // distinct shape is the icon inside it.
+    const ind = screen.getByLabelText("Error: boom");
+    expect(ind.querySelector("svg.lucide-circle-alert")).not.toBeNull();
+  });
+
+  it("disconnected indicator uses a distinct shape (hollow circle), not color alone", () => {
+    setStoreState({ activeStatuses: { "conn-1": { type: "disconnected" } } });
+    render(<ConnectionItem connection={makeConnection()} />);
+    const ind = screen.getByLabelText("Disconnected");
+    expect(ind.tagName.toLowerCase()).toBe("svg");
+    expect(ind.classList.contains("lucide-circle")).toBe(true);
+  });
+
+  // -----------------------------------------------------------------------
   // Sprint 46: Connecting spinner and error inline message
   // -----------------------------------------------------------------------
   it("renders spinner when connecting", () => {

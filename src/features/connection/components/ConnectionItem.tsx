@@ -44,6 +44,9 @@ import {
   X,
   FolderInput,
   Check,
+  Circle,
+  CircleCheck,
+  CircleAlert,
 } from "lucide-react";
 
 /** Module-level drag state shared between ConnectionItem, ConnectionGroup, ConnectionList */
@@ -72,26 +75,36 @@ function StatusIndicator({ status }: { status: ConnectionStatus }) {
       />
     );
   }
+  // #1139 — distinct SHAPE per state (WCAG 1.4.1), not color alone:
+  // connected = filled check circle, error = alert circle, disconnected =
+  // hollow ring. Connecting keeps its spinner above.
   if (status.type === "connected") {
     return (
-      <span
-        className="inline-block h-2 w-2 rounded-full bg-success"
+      <CircleCheck
+        size={10}
+        className="shrink-0 text-success"
         aria-label={t("item.statusConnected")}
       />
     );
   }
   if (status.type === "error") {
+    // lucide's svg type has no `title` attr; keep the hover tooltip on a
+    // labelled wrapper span and let the icon supply the (color-blind-safe)
+    // shape.
     return (
       <span
-        className="inline-block h-2 w-2 rounded-full bg-destructive"
+        className="inline-flex shrink-0 text-destructive"
         title={status.message}
         aria-label={t("item.statusError", { message: status.message })}
-      />
+      >
+        <CircleAlert size={10} aria-hidden="true" />
+      </span>
     );
   }
   return (
-    <span
-      className="inline-block h-2 w-2 rounded-full bg-muted-foreground"
+    <Circle
+      size={10}
+      className="shrink-0 text-muted-foreground"
       aria-label={t("item.statusDisconnected")}
     />
   );
