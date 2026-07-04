@@ -70,20 +70,41 @@ interface QueryTabProps {
 // frozen mongosh text into the `{database, collection, filter}` spec the
 // ExplainViewer document branch expects; aggregate / write / admin
 // statements have no find spec and return `null`.
+interface MongoExplainDerivation {
+  readonly spec: ExplainMongoFindArgs;
+  // #1210 — true when sort/limit/skip (cursor chain) or projection (args[1])
+  // are set. The backend explain only receives the filter, so these clauses
+  // are absent from the plan and the ExplainViewer surfaces a hint.
+  readonly hasIgnoredClauses: boolean;
+}
+
 function deriveMongoExplainSpec(
   sql: string,
   database: string | undefined,
-): ExplainMongoFindArgs | null {
+): MongoExplainDerivation | null {
   const parsed = parseMongoshExpression(sql);
   if (parsed.kind !== "success" || parsed.method !== "find") return null;
   const filter = parsed.args[0];
+  const projection = parsed.args[1];
+  const hasProjection =
+    projection !== null &&
+    typeof projection === "object" &&
+    !Array.isArray(projection) &&
+    Object.keys(projection).length > 0;
+  const hasCursorClause = parsed.cursorChain.some(
+    (step) =>
+      step.name === "sort" || step.name === "limit" || step.name === "skip",
+  );
   return {
-    database: database ?? "",
-    collection: parsed.collection,
-    filter:
-      filter !== null && typeof filter === "object" && !Array.isArray(filter)
-        ? (filter as Record<string, unknown>)
-        : {},
+    spec: {
+      database: database ?? "",
+      collection: parsed.collection,
+      filter:
+        filter !== null && typeof filter === "object" && !Array.isArray(filter)
+          ? (filter as Record<string, unknown>)
+          : {},
+    },
+    hasIgnoredClauses: hasProjection || hasCursorClause,
   };
 }
 
@@ -317,7 +338,7 @@ export default function QueryTab({ tab }: QueryTabProps) {
     (tab.paradigm === "rdb" || tab.paradigm === "document") &&
     !!connection &&
     getDataSourceProfile(connection.dbType).capabilities.query.explain;
-  const explainMongoSpec = useMemo(
+  const explainMongo = useMemo(
     () =>
       isDocument && explainSql
         ? deriveMongoExplainSpec(explainSql, tab.database)
@@ -561,11 +582,12 @@ export default function QueryTab({ tab }: QueryTabProps) {
         explainSql &&
         canExplainQuery &&
         isDocument &&
-        explainMongoSpec ? (
+        explainMongo ? (
           <ExplainViewer
             connectionId={tab.connectionId}
             dbType={connection.dbType}
-            mongoSpec={explainMongoSpec}
+            mongoSpec={explainMongo.spec}
+            mongoHasIgnoredClauses={explainMongo.hasIgnoredClauses}
             onPlanSettled={handleExplainSettled}
           />
         ) : connection && explainSql && canExplainQuery && !isDocument ? (
