@@ -271,6 +271,29 @@ pub fn run() {
             info!(target: "boot", "rust:setup-done delta_ms={:.3}", delta_ms);
         }
 
+        // #1103 / Sprint 356 (Q22) — wire the OS-keyring master-key migration.
+        // Runs BEFORE the SQLite pool spawns below (documented ordering: the
+        // key resolves as a boot-time step ahead of SQLite migration) and
+        // before any IPC handler can fire, so every storage secret path reads
+        // the keyring-sourced key rather than a plaintext disk `.key`. On a
+        // fresh install the key is born in the keyring; an existing plaintext
+        // `.key` is imported into the keyring, verified, then retired; a
+        // headless Linux / locked keychain falls back to the disk key
+        // explicitly (ADR 0040). A key-lost fatal outcome logs and skips
+        // seeding, so the decrypt path refuses (safe mode) instead of
+        // orphaning ciphertext.
+        match storage::boot_wire_master_key() {
+            Ok(outcome) => info!(
+                target: "boot",
+                "key_migration wired: source={:?} fallback_to_disk={}",
+                outcome.source, outcome.fallback_to_disk
+            ),
+            Err(e) => tracing::error!(
+                target: "boot",
+                "key_migration failed to wire master key: {e}"
+            ),
+        }
+
         // Sprint 370 (Phase 4 W2→W3) — boot mismatch metric. Compares the
         // 4 dual-write domains (connections / favorites / mru / settings)
         // between file/LS SOT and SQLite mirror. The result is logged
