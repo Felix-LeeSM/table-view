@@ -492,21 +492,34 @@ export default function DataRow({ rowIdx, ctx, rowStyle }: DataRowProps) {
                 );
               })()
             ) : hasPendingEdit ? (
-              pendingValue === null ? (
+              // #1139 — a pending edit was signalled only by `bg-highlight/20`
+              // (color). Announce it to AT via sr-only text and give a
+              // color-independent shape marker (● glyph) for color-blind users.
+              <>
+                <span className="sr-only">{t("cellModifiedAria")}</span>
                 <span
-                  className="italic text-muted-foreground"
-                  aria-label="NULL"
+                  aria-hidden="true"
+                  title={t("cellModifiedAria")}
+                  className="mr-1 shrink-0 text-3xs text-warning"
                 >
-                  NULL
+                  ●
                 </span>
-              ) : (
-                <span
-                  dir="auto"
-                  className="block overflow-hidden text-ellipsis whitespace-nowrap [unicode-bidi:isolate]"
-                >
-                  {pendingValue}
-                </span>
-              )
+                {pendingValue === null ? (
+                  <span
+                    className="italic text-muted-foreground"
+                    aria-label="NULL"
+                  >
+                    NULL
+                  </span>
+                ) : (
+                  <span
+                    dir="auto"
+                    className="block overflow-hidden text-ellipsis whitespace-nowrap [unicode-bidi:isolate]"
+                  >
+                    {pendingValue}
+                  </span>
+                )}
+              </>
             ) : isBlob && cell != null ? (
               <Button
                 variant="ghost"
