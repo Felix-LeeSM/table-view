@@ -1,4 +1,4 @@
-import { useRef, useEffect, forwardRef } from "react";
+import { useRef, useEffect, useId, forwardRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Compartment, EditorState, type Extension } from "@codemirror/state";
 import {
@@ -27,6 +27,7 @@ import {
 } from "@features/completion";
 import { viewTableHighlightStyle } from "@lib/editor/highlightStyle";
 import { autocompleteTooltipTheme } from "@lib/editor/autocompleteTheme";
+import { editorContentAria } from "@lib/editor/editorContentAria";
 import { setForwardedRef } from "@lib/editor/setForwardedRef";
 import { syncEditorDocument } from "./editorDocumentSync";
 
@@ -103,6 +104,8 @@ const SqlQueryEditor = forwardRef<EditorView | null, SqlQueryEditorProps>(
     const { t } = useTranslation("query");
     const containerRef = useRef<HTMLDivElement>(null);
     const viewRef = useRef<EditorView | null>(null);
+    // #1133 — stable id linking `.cm-content` to the SR-only autocomplete hint.
+    const hintId = useId();
 
     // Keep refs to latest callbacks so the listener closure always reads
     // fresh values without recreating the editor.
@@ -153,6 +156,9 @@ const SqlQueryEditor = forwardRef<EditorView | null, SqlQueryEditorProps>(
           syntaxHighlighting(viewTableHighlightStyle),
           syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
           autocompletion(),
+          // #1133 — name the real editable surface + describe the autocomplete
+          // combobox on `.cm-content`, not on a decoy wrapper div.
+          editorContentAria(t("sql.editorAria"), hintId),
           keymap.of([
             // Custom bindings MUST come before defaultKeymap to take
             // priority — defaultKeymap also binds Mod-Enter.
@@ -281,15 +287,19 @@ const SqlQueryEditor = forwardRef<EditorView | null, SqlQueryEditorProps>(
     }, [sql]);
 
     return (
-      <div
-        ref={containerRef}
-        className="h-full w-full overflow-hidden"
-        role="textbox"
-        aria-label={t("sql.editorAria")}
-        aria-multiline="true"
-        data-paradigm="rdb"
-        data-query-mode="sql"
-      />
+      <>
+        {/* #1133 — wrapper is no longer a decoy textbox; the accessible name
+            and combobox aria live on CodeMirror's real `.cm-content`. */}
+        <div
+          ref={containerRef}
+          className="h-full w-full overflow-hidden"
+          data-paradigm="rdb"
+          data-query-mode="sql"
+        />
+        <span id={hintId} className="sr-only">
+          {t("editorAutocompleteHint")}
+        </span>
+      </>
     );
   },
 );

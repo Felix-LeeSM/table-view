@@ -8,6 +8,10 @@ export const en = {
   // Resize grips (keyboard, WCAG 2.1.1)
   resizeEditorAria: "Resize editor",
   resizeColumnAria: "Resize column",
+  // #1133 — SR-only autocomplete usage hint, wired to `.cm-content` via
+  // `aria-describedby` (the popup's ::after CSS hint is invisible to SRs).
+  editorAutocompleteHint:
+    "Autocomplete: press up or down arrow to navigate suggestions, Enter or Tab to accept, Escape to close.",
   // ── DuckdbFileAnalyticsDialog ─────────────────────────────────────────────
   fileAnalytics: {
     dialogTitle: "Local file query",
@@ -242,6 +246,10 @@ export const ko = {
   // Resize grips (keyboard, WCAG 2.1.1)
   resizeEditorAria: "편집기 크기 조절",
   resizeColumnAria: "열 크기 조절",
+  // #1133 — 자동완성 사용법 SR 전용 힌트. 팝업의 ::after CSS 힌트는 SR 이
+  // 못 읽으므로 `aria-describedby` 로 `.cm-content` 에 연결.
+  editorAutocompleteHint:
+    "자동완성: 위/아래 화살표로 항목 이동, Enter 또는 Tab 으로 선택, Escape 로 닫기.",
   fileAnalytics: {
     dialogTitle: "로컬 파일 쿼리",
     dialogDescriptionSrOnly: "등록된 DuckDB 로컬 파일 소스를 조회합니다.",

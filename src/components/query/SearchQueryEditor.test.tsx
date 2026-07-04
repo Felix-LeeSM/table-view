@@ -9,9 +9,16 @@ import { expectUndoRevertsEdit } from "./__tests__/editorHistoryHelpers";
 // 검색(Elasticsearch/OpenSearch) 에디터도 다른 세 에디터와 동일하게
 // CodeMirror history() 를 장착해야 Cmd+Z undo 가 동작한다.
 
+// #1133 — the accessible name now lives on CodeMirror's real `.cm-content`;
+// walk up to the editor wrapper (carries data-paradigm) for DOM queries.
+function getWrapper(): HTMLElement {
+  return screen
+    .getByLabelText("Search Query Editor")
+    .closest("[data-paradigm]") as HTMLElement;
+}
+
 function getEditorView(): EditorView {
-  const container = screen.getByLabelText("Search Query Editor");
-  const cmEditor = container.querySelector(".cm-editor") as HTMLElement;
+  const cmEditor = getWrapper().querySelector(".cm-editor") as HTMLElement;
   const view = EditorView.findFromDOM(cmEditor);
   if (!view) throw new Error("EditorView not found");
   return view;
@@ -27,8 +34,12 @@ describe("SearchQueryEditor", () => {
       />,
     );
 
-    const container = screen.getByLabelText("Search Query Editor");
-    expect(container).toHaveAttribute("role", "textbox");
+    // #1133 — role/aria on the real `.cm-content`; wrapper keeps data hooks.
+    const content = screen.getByLabelText("Search Query Editor");
+    expect(content).toHaveClass("cm-content");
+    expect(content).toHaveAttribute("role", "textbox");
+    const container = getWrapper();
+    expect(container).not.toHaveAttribute("role");
     expect(container).toHaveAttribute("data-paradigm", "search");
     expect(container.querySelector(".cm-content")?.textContent).toContain(
       "match_all",

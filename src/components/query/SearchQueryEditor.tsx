@@ -1,4 +1,4 @@
-import { useEffect, forwardRef, useRef } from "react";
+import { useEffect, forwardRef, useId, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Compartment, EditorState, type Extension } from "@codemirror/state";
 import {
@@ -19,6 +19,7 @@ import {
 import { acceptCompletion, autocompletion } from "@codemirror/autocomplete";
 import { viewTableHighlightStyle } from "@lib/editor/highlightStyle";
 import { autocompleteTooltipTheme } from "@lib/editor/autocompleteTheme";
+import { editorContentAria } from "@lib/editor/editorContentAria";
 import { setForwardedRef } from "@lib/editor/setForwardedRef";
 import { syncEditorDocument } from "./editorDocumentSync";
 
@@ -42,6 +43,8 @@ const SearchQueryEditor = forwardRef<EditorView | null, SearchQueryEditorProps>(
     const { t } = useTranslation("query");
     const containerRef = useRef<HTMLDivElement>(null);
     const viewRef = useRef<EditorView | null>(null);
+    // #1133 — stable id linking `.cm-content` to the SR-only autocomplete hint.
+    const hintId = useId();
 
     const onSqlChangeRef = useRef(onSqlChange);
     onSqlChangeRef.current = onSqlChange;
@@ -73,6 +76,9 @@ const SearchQueryEditor = forwardRef<EditorView | null, SearchQueryEditorProps>(
           syntaxHighlighting(viewTableHighlightStyle),
           syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
           autocompletion(),
+          // #1133 — name the real editable surface + describe the autocomplete
+          // combobox on `.cm-content`, not on a decoy wrapper div.
+          editorContentAria(t("search.editorAria"), hintId),
           keymap.of([
             {
               key: "Mod-Enter",
@@ -137,6 +143,9 @@ const SearchQueryEditor = forwardRef<EditorView | null, SearchQueryEditorProps>(
       viewRef.current = view;
       // Expose the live EditorView to the parent's forwarded ref (#1248).
       setForwardedRef(ref, view);
+      // #1133 — unified mount focus across all four query editors so a freshly
+      // opened tab is immediately typeable on the `.cm-content` surface.
+      view.focus();
 
       return () => {
         view.destroy();
@@ -162,15 +171,19 @@ const SearchQueryEditor = forwardRef<EditorView | null, SearchQueryEditorProps>(
       if (syncEditorDocument(view, sql)) sqlRef.current = sql;
     }, [sql]);
 
+    // #1133 — the accessible name and combobox aria live on the real
+    // `.cm-content`; the wrapper is no longer a decoy textbox.
     return (
-      <div
-        ref={containerRef}
-        className="h-full w-full overflow-hidden"
-        role="textbox"
-        aria-label={t("search.editorAria")}
-        aria-multiline="true"
-        data-paradigm="search"
-      />
+      <>
+        <div
+          ref={containerRef}
+          className="h-full w-full overflow-hidden"
+          data-paradigm="search"
+        />
+        <span id={hintId} className="sr-only">
+          {t("editorAutocompleteHint")}
+        </span>
+      </>
     );
   },
 );

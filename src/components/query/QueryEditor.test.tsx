@@ -17,8 +17,14 @@ import {
 // Note: CodeMirror's .cm-content div also has role="textbox", so we use
 // aria-label queries instead of getByRole("textbox").
 
+// #1133 — the accessible name now lives on CodeMirror's real `.cm-content`;
+// walk up to the editor wrapper (carries data-paradigm) for DOM queries.
+function getWrapper(label: string): HTMLElement {
+  return screen.getByLabelText(label).closest("[data-paradigm]") as HTMLElement;
+}
+
 function getContainer() {
-  return screen.getByLabelText("SQL Query Editor");
+  return getWrapper("SQL Query Editor");
 }
 
 function getEditorView(): EditorView {
@@ -52,25 +58,30 @@ describe("QueryEditor", () => {
     onExecute.mockReset();
   });
 
-  // AC-01: role=textbox + aria-label
-  it("renders with role=textbox and aria-label=SQL Query Editor", () => {
+  // AC-01: role=textbox + aria-label — #1133: on the real `.cm-content`.
+  it("names the real .cm-content surface (role=textbox + aria-label), not the wrapper", () => {
     render(
       <QueryEditor sql="" onSqlChange={onSqlChange} onExecute={onExecute} />,
     );
 
-    const container = getContainer();
-    expect(container).toBeInTheDocument();
-    expect(container).toHaveAttribute("role", "textbox");
-    expect(container).toHaveAttribute("aria-label", "SQL Query Editor");
+    const content = screen.getByLabelText("SQL Query Editor");
+    expect(content).toBeInTheDocument();
+    expect(content).toHaveClass("cm-content");
+    expect(content).toHaveAttribute("role", "textbox");
+    expect(content).toHaveAttribute("aria-label", "SQL Query Editor");
+    // The wrapper is no longer a decoy textbox.
+    expect(getContainer()).not.toHaveAttribute("role");
   });
 
-  it("has aria-multiline=true", () => {
+  it("has aria-multiline=true on the .cm-content surface", () => {
     render(
       <QueryEditor sql="" onSqlChange={onSqlChange} onExecute={onExecute} />,
     );
 
-    const container = getContainer();
-    expect(container).toHaveAttribute("aria-multiline", "true");
+    expect(screen.getByLabelText("SQL Query Editor")).toHaveAttribute(
+      "aria-multiline",
+      "true",
+    );
   });
 
   it("creates the editor with the initial sql content", () => {
@@ -353,7 +364,7 @@ describe("QueryEditor", () => {
         paradigm="document"
       />,
     );
-    const container = screen.getByLabelText("MongoDB Query Editor");
+    const container = getWrapper("MongoDB Query Editor");
     expect(container).toBeInTheDocument();
     const view = EditorView.findFromDOM(
       container.querySelector(".cm-editor") as HTMLElement,
@@ -373,7 +384,7 @@ describe("QueryEditor", () => {
       />,
     );
 
-    const container = screen.getByLabelText("Redis Command Editor");
+    const container = getWrapper("Redis Command Editor");
     expect(container).toHaveAttribute("data-paradigm", "kv");
     expect(container.querySelector(".cm-content")?.textContent).toContain(
       "GET session:1",
@@ -390,7 +401,7 @@ describe("QueryEditor", () => {
       />,
     );
 
-    const container = screen.getByLabelText("Search Query Editor");
+    const container = getWrapper("Search Query Editor");
     expect(container).toHaveAttribute("data-paradigm", "search");
     const view = EditorView.findFromDOM(
       container.querySelector(".cm-editor") as HTMLElement,
@@ -428,7 +439,7 @@ describe("QueryEditor", () => {
     );
 
     await waitFor(() => {
-      const container = screen.getByLabelText("MongoDB Query Editor");
+      const container = getWrapper("MongoDB Query Editor");
       const viewAfter = EditorView.findFromDOM(
         container.querySelector(".cm-editor") as HTMLElement,
       )!;
@@ -602,7 +613,7 @@ describe("QueryEditor", () => {
         sqlDialect={MySQL}
       />,
     );
-    const container = screen.getByLabelText("MongoDB Query Editor");
+    const container = getWrapper("MongoDB Query Editor");
     const view = EditorView.findFromDOM(
       container.querySelector(".cm-editor") as HTMLElement,
     )!;
@@ -630,7 +641,7 @@ describe("QueryEditor", () => {
         mongoExtensions={[createMongoOperatorHighlight()]}
       />,
     );
-    const container = screen.getByLabelText("MongoDB Query Editor");
+    const container = getWrapper("MongoDB Query Editor");
     const view = EditorView.findFromDOM(
       container.querySelector(".cm-editor") as HTMLElement,
     )!;
@@ -660,7 +671,7 @@ describe("QueryEditor", () => {
         mongoExtensions={[createMongoOperatorHighlight()]}
       />,
     );
-    const container = screen.getByLabelText("MongoDB Query Editor");
+    const container = getWrapper("MongoDB Query Editor");
     const view = EditorView.findFromDOM(
       container.querySelector(".cm-editor") as HTMLElement,
     )!;
@@ -705,7 +716,7 @@ describe("QueryEditor", () => {
     );
 
     await waitFor(() => {
-      const container = screen.getByLabelText("MongoDB Query Editor");
+      const container = getWrapper("MongoDB Query Editor");
       const viewAfter = EditorView.findFromDOM(
         container.querySelector(".cm-editor") as HTMLElement,
       )!;
