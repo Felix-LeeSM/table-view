@@ -7,6 +7,7 @@
 
 use tracing::info;
 
+use crate::db::ddl_fragment::validate_ddl_fragment;
 use crate::error::AppError;
 use crate::models::{
     AddColumnRequest, AddConstraintRequest, AlterTableRequest, ColumnChange, ColumnDefinition,
@@ -387,10 +388,12 @@ fn build_alter_table_statement(qualified: &str, change: &ColumnChange) -> Result
                         name
                     )));
                 }
+                validate_ddl_fragment(data_type, "Data type")?;
                 clauses.push(data_type.to_string());
             }
             if let Some(default) = new_default_value.as_deref().map(str::trim) {
                 if !default.is_empty() {
+                    validate_ddl_fragment(default, "DEFAULT value")?;
                     clauses.push(format!("DEFAULT {}", default));
                 }
             }
@@ -430,6 +433,10 @@ fn build_column_definition(column: &ColumnDefinition) -> Result<String, AppError
             "Column '{}' must have a non-empty data type",
             column.name
         )));
+    }
+    validate_ddl_fragment(data_type, "Data type")?;
+    if let Some(default) = &column.default_value {
+        validate_ddl_fragment(default, "DEFAULT value")?;
     }
 
     let mut definition = format!("{} {}", quote_ident(&column.name), data_type);

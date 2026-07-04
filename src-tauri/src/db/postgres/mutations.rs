@@ -1639,6 +1639,72 @@ mod tests {
         }
     }
 
+    // ── issue #1108 — raw DDL fragment injection guards ────────────────
+    //
+    // data_type / DEFAULT / USING are raw-interpolated (not quoted). Before
+    // the fix a statement separator or comment token in these fragments
+    // passed the non-empty check and reached the emitted DDL, allowing a
+    // stacked statement under the simple query protocol. Each test asserts
+    // the fragment is now rejected before any SQL is produced.
+
+    #[tokio::test]
+    async fn add_column_rejects_data_type_statement_separator() {
+        let adapter = PostgresAdapter::new();
+        let req = add_col_req(
+            "public",
+            "users",
+            coldef("email", "int; DROP TABLE audit", true, None),
+            None,
+            true,
+        );
+        let err = adapter.add_column(&req).await.unwrap_err().to_string();
+        assert!(
+            err.contains("Data type must not contain"),
+            "expected data-type breakout rejection, got: {err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn add_column_rejects_default_comment_token() {
+        let adapter = PostgresAdapter::new();
+        let req = add_col_req(
+            "public",
+            "users",
+            coldef("email", "int", true, Some("0 -- DROP")),
+            None,
+            true,
+        );
+        let err = adapter.add_column(&req).await.unwrap_err().to_string();
+        assert!(
+            err.contains("DEFAULT value must not contain"),
+            "expected default breakout rejection, got: {err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn alter_table_rejects_using_expression_breakout() {
+        let adapter = PostgresAdapter::new();
+        let req = AlterTableRequest {
+            connection_id: "conn1".to_string(),
+            schema: "public".to_string(),
+            table: "users".to_string(),
+            changes: vec![ColumnChange::Modify {
+                name: "col".to_string(),
+                new_data_type: Some("int".to_string()),
+                new_nullable: None,
+                new_default_value: None,
+                using_expression: Some("col::int; DROP TABLE audit".to_string()),
+            }],
+            preview_only: true,
+            expected_database: None,
+        };
+        let err = adapter.alter_table(&req).await.unwrap_err().to_string();
+        assert!(
+            err.contains("USING expression must not contain"),
+            "expected USING breakout rejection, got: {err}"
+        );
+    }
+
     // ── create_index tests ────────────────────────────────────────────
 
     #[tokio::test]

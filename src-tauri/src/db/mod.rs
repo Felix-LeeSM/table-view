@@ -19,6 +19,7 @@ pub mod active;
 pub mod adapters;
 pub mod capabilities;
 pub mod contracts;
+pub(crate) mod ddl_fragment;
 pub mod duckdb;
 pub mod fixtures;
 pub mod kv_trait;
