@@ -1,3 +1,6 @@
+// Issue #1307 — install the global BigInt → decimal-string JSON patch BEFORE
+// anything (React/react-dom included) can hit a stringify site with a BigInt.
+import "@lib/bigintJson";
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { isTauri } from "@tauri-apps/api/core";

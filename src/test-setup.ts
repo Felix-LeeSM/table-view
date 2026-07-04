@@ -1,3 +1,7 @@
+// Issue #1307 — the app entry installs this globally; vitest does not run
+// `main.tsx`, so mirror the patch here or component tests rendering BigInt
+// cells would hit react-dom's stringify throw.
+import "@lib/bigintJson";
 import "@testing-library/jest-dom/vitest";
 // i18n 전역 인스턴스를 테스트 프로세스 시작 시 1회 init — useTranslation 을
 // 쓰는 컴포넌트(ThemePicker / LanguageSwitcher 등)가 provider 없이도 동작.
