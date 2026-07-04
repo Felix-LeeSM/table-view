@@ -4,7 +4,10 @@ import { useConnectionStore } from "@stores/connectionStore";
 import type { StatementAnalysis } from "@/lib/sql/sqlSafety";
 import { decideSafeModeAction, type SafeModeDecision } from "@/lib/safeMode";
 import type { ConnectionConfig } from "@/types/connection";
-import { canonicalEnvironmentTag } from "@/features/connection/model";
+import {
+  canonicalEnvironmentTag,
+  type EnvironmentTag,
+} from "@/features/connection/model";
 
 /**
  * Paradigm-agnostic Safe Mode gate. Pure store wiring around
@@ -37,40 +40,37 @@ export interface SafeModeGate {
   decide(analysis: StatementAnalysis): SafeModeDecision;
 }
 
-export interface SafeModeGateOptions {
-  missingConnectionEnvironment?: string | null;
-}
-
 type SafeModeConnection = Pick<ConnectionConfig, "id" | "environment">;
 
+/**
+ * Single environment-resolution path for every Safe Mode entry point.
+ *
+ * #1114 — "environment 미확정 = allow" uniformly. A missing connection
+ * (unknown id, store not yet hydrated) resolves to null; there is no
+ * per-call-site fail-closed override anymore, so raw query / KV / grid / DDL /
+ * Mongo all read the SAME protection. Same risk = same gate at every surface.
+ *
+ * #1125 — canonicalize at this decision trust boundary so a non-canonical
+ * stored tag (e.g. "Production", "prod") never masquerades as production and
+ * never silently loses the guard. Unrecognized → null → env-unset = allow; the
+ * "Unknown" ConnectionItem badge is the surfaced signal. Return type is the
+ * canonical `EnvironmentTag | null` union, not a raw string, so the production
+ * comparison downstream is a compiler-guarded equality.
+ */
 export function resolveSafeModeEnvironment(
   connections: readonly SafeModeConnection[],
   connectionId: string | null,
-  missingConnectionEnvironment: string | null = null,
-): string | null {
+): EnvironmentTag | null {
   if (!connectionId) return null;
   const connection = connections.find((c) => c.id === connectionId);
-  // #1125 — canonicalize at the decision trust boundary so a non-canonical
-  // stored tag (e.g. "Production", "prod") never masquerades as production
-  // and never silently loses the guard. Unrecognized → null → env-unset =
-  // allow (#1114 policy); the "Unknown" badge is the surfaced signal.
-  if (!connection) return canonicalEnvironmentTag(missingConnectionEnvironment);
+  if (!connection) return null;
   return canonicalEnvironmentTag(connection.environment);
 }
 
-export function useSafeModeGate(
-  connectionId: string | null,
-  options: SafeModeGateOptions = {},
-): SafeModeGate {
+export function useSafeModeGate(connectionId: string | null): SafeModeGate {
   const mode = useSafeModeStore((s) => s.mode);
-  const missingConnectionEnvironment =
-    options.missingConnectionEnvironment ?? null;
   const environment = useConnectionStore((s) =>
-    resolveSafeModeEnvironment(
-      s.connections,
-      connectionId,
-      missingConnectionEnvironment,
-    ),
+    resolveSafeModeEnvironment(s.connections, connectionId),
   );
 
   const decide = useCallback(

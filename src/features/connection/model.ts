@@ -497,7 +497,11 @@ export const ENVIRONMENT_OPTIONS: EnvironmentTag[] = [
 export function canonicalEnvironmentTag(
   raw: string | null | undefined,
 ): EnvironmentTag | null {
-  return raw != null && raw in ENVIRONMENT_META
+  // #1114 nit — membership check against the options array, not `in
+  // ENVIRONMENT_META`: the `in` operator matches inherited prototype keys (a
+  // stored `"constructor"` / `"toString"` would otherwise canonicalize as a
+  // valid tag).
+  return raw != null && (ENVIRONMENT_OPTIONS as string[]).includes(raw)
     ? (raw as EnvironmentTag)
     : null;
 }

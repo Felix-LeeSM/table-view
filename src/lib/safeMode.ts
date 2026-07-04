@@ -1,4 +1,5 @@
 import type { StatementAnalysis } from "@/lib/sql/sqlSafety";
+import type { EnvironmentTag } from "@/features/connection/model";
 
 /**
  * Paradigm-agnostic Safe Mode decision matrix as a pure function.
@@ -53,7 +54,11 @@ export type SafeModeDecision =
 
 export function decideSafeModeAction(
   mode: SafeMode,
-  environment: string | null,
+  // #1114 — `EnvironmentTag | null`, not a raw string: callers must
+  // canonicalize (via `resolveSafeModeEnvironment` / `canonicalEnvironmentTag`)
+  // before deciding, so the `=== "production"` guard is compiler-checked and a
+  // look-alike tag ("Production", "prod") can never reach this comparison.
+  environment: EnvironmentTag | null,
   analysis: StatementAnalysis,
 ): SafeModeDecision {
   const isProduction = environment === "production";

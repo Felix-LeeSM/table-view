@@ -435,10 +435,16 @@ describe("QueryTab — Sprint 231 raw RDB Safe Mode gate", () => {
     ).toBeGreaterThan(0);
   });
 
-  it("[AC-436-R1] missing connection metadata + off + DROP TABLE → production confirm, executeQuery NOT called", async () => {
-    // Regression: per-connection workspace could execute before boot snapshot
-    // hydrated `connections[]`. Backend default safe mode is off, so missing
-    // environment must fail closed or a production destructive query can run.
+  it("[#1114] missing connection metadata + off + DROP TABLE → allow, executeQuery called (env-unset = allow)", async () => {
+    // #1114 (supersedes AC-436-R1's fail-closed contract): environment
+    // unset/unresolved = allow, uniformly at every entry point. The old
+    // per-call-site `missingConnectionEnvironment: "production"` fail-closed
+    // fallback was removed — a missing/unhydrated connection no longer
+    // masquerades as production on the raw query surface. A production
+    // connection that momentarily reads as unresolved during a hydration race
+    // is still covered structurally by the backend Rust IPC gate, which
+    // re-reads `environment` from its own SQLite store.
+    mockExecuteQuery.mockResolvedValueOnce(MOCK_RESULT);
     useConnectionStore.setState({ connections: [] });
     useSafeModeStore.setState({ mode: "off" });
     const tab = seedTab("DROP TABLE users");
@@ -448,12 +454,10 @@ describe("QueryTab — Sprint 231 raw RDB Safe Mode gate", () => {
       screen.getByTestId("execute-btn").click();
     });
 
-    expect(mockExecuteQuery).not.toHaveBeenCalled();
-    await screen.findByText("PRODUCTION DATABASE");
-    await screen.findByTestId("confirm-destructive-confirm");
-    expect(
-      screen.getAllByText(/production environment forces Safe Mode/).length,
-    ).toBeGreaterThan(0);
+    await waitFor(() => {
+      expect(mockExecuteQuery).toHaveBeenCalledTimes(1);
+    });
+    expect(screen.queryByTestId("confirm-destructive-confirm")).toBeNull();
   });
 
   // ── AC-231-01d: Allow on non-production (env-gated) — warn / off ──

@@ -225,9 +225,7 @@ export function useQueryContext(tab: QueryTab) {
     ],
   );
 
-  const { decide: decideSafeMode } = useSafeModeGate(tab.connectionId, {
-    missingConnectionEnvironment: "production",
-  });
+  const { decide: decideSafeMode } = useSafeModeGate(tab.connectionId);
 
   return {
     workspaceDb,
