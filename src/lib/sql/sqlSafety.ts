@@ -104,6 +104,12 @@ export type StatementKind =
   | "mongo-delete-many"
   | "mongo-update-all"
   | "mongo-update-many"
+  // Issue #1117 — explicitly-registered benign utility/session statements
+  // (transaction control, maintenance, benign PRAGMA reads). Distinct from
+  // `other` so "classified as safe" is auditable and distinguishable from
+  // "unrecognised → fail-open info". severity is always `info`. This roster is
+  // the precondition for any future revisit of the fail-open fallback policy.
+  | "known-safe"
   | "other";
 
 export interface StatementAnalysis {
@@ -135,6 +141,29 @@ function worstAnalysis(analyses: StatementAnalysis[]): StatementAnalysis {
     SEVERITY_RANK[cur.severity] > SEVERITY_RANK[worst.severity] ? cur : worst,
   );
 }
+
+// Issue #1117 — session integrity switches that disable FK / uniqueness /
+// constraint / trigger enforcement. Only the *disabling* direction warns
+// (re-enabling `=1` / `ON` stays benign config). Disabling one of these arms a
+// later write to corrupt data silently, the same blast-radius class as a
+// bounded write, so it shares the WARN tier (consistency: same risk = same
+// warning). Covers MySQL (`FOREIGN_KEY_CHECKS`/`UNIQUE_CHECKS`), PostgreSQL
+// (`session_replication_role = replica|local` disables FK/trigger firing), and
+// SQLite (`PRAGMA foreign_keys = off`, `PRAGMA ignore_check_constraints = on`).
+const INTEGRITY_SWITCH_OFF_RES: RegExp[] = [
+  /^SET\s+(?:SESSION\s+|GLOBAL\s+|@@(?:SESSION\.|GLOBAL\.)?)?(?:FOREIGN_KEY_CHECKS|UNIQUE_CHECKS)\s*=\s*0\b/,
+  /^SET\s+(?:SESSION\s+)?SESSION_REPLICATION_ROLE\s*(?:=|\bTO\b)\s*'?(?:REPLICA|LOCAL)\b/,
+  /^PRAGMA\s+(?:\w+\.)?FOREIGN_KEYS\s*=\s*(?:OFF|0|FALSE|NO)\b/,
+  /^PRAGMA\s+(?:\w+\.)?IGNORE_CHECK_CONSTRAINTS\s*=\s*(?:ON|1|TRUE|YES)\b/,
+];
+
+// Issue #1117 — known-safe utility/session verbs (transaction control,
+// maintenance, benign PRAGMA reads). Registered explicitly so the classifier
+// distinguishes "known benign" from "unrecognised, fail-open". Integrity
+// PRAGMA (see above) is intercepted before this reaches, so any PRAGMA landing
+// here is a benign read/config.
+const KNOWN_SAFE_RE =
+  /^(BEGIN|START\s+TRANSACTION|COMMIT|END\s+TRANSACTION|ROLLBACK|SAVEPOINT|RELEASE|VACUUM|ANALYZE|REINDEX|CHECKPOINT|PRAGMA)\b/;
 
 const LINE_COMMENT_RE = /--[^\n\r]*/g;
 const BLOCK_COMMENT_RE = /\/\*[\s\S]*?\*\//g;
@@ -544,6 +573,19 @@ export function analyzeStatement(
     return worstAnalysis(parts.map((part) => analyzeStatement(part, options)));
   }
 
+  // Issue #1117 — session integrity switch OFF → warn. Placed *before* the
+  // AST gate because `SET FOREIGN_KEY_CHECKS=0` otherwise parses as a
+  // `set-stmt` node and returns `config-write`/info, masking the risk. Same
+  // early placement covers the SQLite PRAGMA forms (which never reach the AST
+  // gate since PRAGMA is not in its keyword alternation).
+  if (INTEGRITY_SWITCH_OFF_RES.some((re) => re.test(upper))) {
+    return {
+      kind: "config-write",
+      severity: "warn",
+      reasons: ["세션 무결성 검사 비활성화 — 후속 파괴 작업 발판"],
+    };
+  }
+
   // Sprint 391 — DDL destructive (DROP / TRUNCATE / ALTER … DROP) is
   // classified through the AST first.
   // Sprint 392 — extended to the DML write triad (INSERT / UPDATE /
@@ -605,6 +647,11 @@ export function analyzeStatement(
       };
     }
     // Sprint 254 — bounded DELETE WHERE = WARN tier (was "safe").
+    // Issue #1117 — an always-true predicate (`WHERE 1=1`) still classifies as
+    // WARN, not danger, by design: the static classifier only checks WHERE
+    // *presence*, and full predicate evaluation is intentionally deferred to
+    // the dynamic dry-run escalation (`escalateWarnIfLargeImpact`), which
+    // promotes WARN→danger once the row-impact estimate crosses the threshold.
     return { kind: "dml-delete", severity: "warn", reasons: [] };
   }
 
@@ -641,6 +688,36 @@ export function analyzeStatement(
       kind: "routine-call",
       severity: "warn",
       reasons: ["EXEC — stored routine execution"],
+    };
+  }
+
+  // Issue #1117 — PREPARE defines a deferred/opaque statement for later
+  // EXECUTE. EXECUTE is already warn (routine-call); the definition side was
+  // fail-open info — asymmetric. The prepared body is opaque to the static
+  // classifier and may be destructive, so mirror EXECUTE at warn.
+  if (/^PREPARE\b/.test(upper)) {
+    return {
+      kind: "routine-call",
+      severity: "warn",
+      reasons: ["PREPARE — dynamic statement definition"],
+    };
+  }
+
+  // Issue #1117 — ATTACH/DETACH mount/unmount an external DB file
+  // (SQLite/DuckDB), widening the write surface. Same config-write kind as USE
+  // (database-context change) at warn.
+  if (/^ATTACH\b/.test(upper)) {
+    return {
+      kind: "config-write",
+      severity: "warn",
+      reasons: ["ATTACH — 외부 DB 파일 마운트"],
+    };
+  }
+  if (/^DETACH\b/.test(upper)) {
+    return {
+      kind: "config-write",
+      severity: "warn",
+      reasons: ["DETACH — 외부 DB 파일 해제"],
     };
   }
 
@@ -875,8 +952,25 @@ export function analyzeStatement(
     return { kind: "info", severity: "info", reasons: [] };
   }
 
-  // Sprint 254 — unrecognised input defaults to INFO (defensive — never
-  // surface WARN/STOP for unknown statements).
+  // Issue #1117 — known-safe utility/session statements (transaction control,
+  // maintenance, benign PRAGMA reads). Registered as `known-safe`/info so a
+  // caller/reviewer can tell "known benign" apart from the fail-open `other`
+  // bucket below. Integrity-disabling SET/PRAGMA already returned warn above,
+  // so a PRAGMA reaching here is a benign read/config.
+  if (KNOWN_SAFE_RE.test(upper)) {
+    return { kind: "known-safe", severity: "info", reasons: [] };
+  }
+
+  // Fallback policy (2026-07-02 decision, Issue #1117): an unrecognised
+  // statement defaults to `other`/info (allow) — a deliberate fail-*open*
+  // trade-off. The known-list above is kept maximal to minimise the residual,
+  // but any statement no branch recognises must never surface WARN/STOP on its
+  // own. This is intentionally asymmetric with the Oracle path
+  // (`oracleSafety.ts`), which fails *closed* (block) for anything outside its
+  // bounded slice because PL/SQL opacity makes an unknown statement
+  // unclassifiable. The final defense for RDB is the backend Safe Mode gate at
+  // the Rust IPC chokepoint (#1112), not this classifier. See
+  // `docs/product/known-limitations.md` (Security / admin surface).
   return { kind: "other", severity: "info", reasons: [] };
 }
 
