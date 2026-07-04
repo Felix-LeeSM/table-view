@@ -129,7 +129,7 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
               role="menuitem"
               tabIndex={index === activeIndex ? 0 : -1}
               aria-disabled={item.disabled}
-              className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm outline-none ${
+              className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${
                 item.disabled
                   ? "cursor-not-allowed opacity-40"
                   : index === activeIndex
