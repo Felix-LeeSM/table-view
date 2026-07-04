@@ -179,6 +179,7 @@ export const en = {
   },
   treePanel: {
     ariaLabel: "Document tree",
+    fieldsTreeAriaLabel: "Document field tree",
     unsavedEdits_one: "{{count}} unsaved edit",
     unsavedEdits_other: "{{count}} unsaved edits",
     closeAriaLabel: "Close tree panel",
@@ -463,6 +464,7 @@ export const ko = {
   },
   treePanel: {
     ariaLabel: "문서 트리",
+    fieldsTreeAriaLabel: "문서 필드 트리",
     unsavedEdits_one: "{{count}}개 미저장 편집",
     unsavedEdits_other: "{{count}}개 미저장 편집",
     closeAriaLabel: "트리 패널 닫기",
