@@ -450,4 +450,29 @@ describe("FilterBar", () => {
     expect(alertEl).toBeInTheDocument();
     expect(alertEl.textContent).toContain("semicolons");
   });
+
+  // -----------------------------------------------------------------------
+  // Issue #1136 — validation error programmatically tied to the input.
+  // -----------------------------------------------------------------------
+  it("ties raw SQL error to the input via aria-invalid + aria-describedby (#1136)", async () => {
+    const user = userEvent.setup();
+    renderFilterBar({ filterMode: "raw", rawSql: "id = 1; DROP TABLE" });
+
+    const input = screen.getByLabelText("Raw SQL WHERE clause");
+    expect(input).not.toHaveAttribute("aria-invalid");
+
+    await user.type(input, "{Enter}");
+
+    expect(input).toHaveAttribute("aria-invalid", "true");
+    const describedBy = input.getAttribute("aria-describedby");
+    expect(describedBy).toBeTruthy();
+    expect(document.getElementById(describedBy!)?.getAttribute("role")).toBe(
+      "alert",
+    );
+  });
+
+  it("labels the structured value input with the target column name (#1136)", () => {
+    renderFilterBar();
+    expect(screen.getByLabelText("Filter value for id")).toBeInTheDocument();
+  });
 });

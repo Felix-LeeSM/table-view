@@ -194,7 +194,10 @@ function CreateIndexModal({
 
           {/* Error */}
           {error && (
-            <div className="mx-4 mb-3 rounded bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            <div
+              role="alert"
+              className="mx-4 mb-3 rounded bg-destructive/10 px-3 py-2 text-sm text-destructive"
+            >
               {error}
             </div>
           )}
