@@ -100,6 +100,20 @@ describe("checked-in SQL WASM artifact", () => {
     expect(result.error_kind).toBe("unsupported-statement");
   });
 
+  it("[AC-1119-W01] real parser still rejects writable CTE bodies — sentinel for issue #1119", async () => {
+    // The safe-mode CTE mapper (statementAnalysisFromAst, sqlSafety.ts) now
+    // analyzes `ctes[]` bodies defensively, but the safety invariant it backs
+    // up is that the real grammar restricts CTE bodies to SELECT — so a
+    // PostgreSQL writable CTE fails to parse and the regex fallback
+    // (analyzeDmlCte) still guards it. When the parser is widened to accept
+    // writable CTEs this assertion fails, summoning issue #1119 so the AST
+    // path's ctes[] traversal gets end-to-end (real-parser) coverage.
+    const result = await parseSql(
+      "WITH d AS (DELETE FROM users RETURNING id) SELECT * FROM d",
+    );
+    expect(result.kind).toBe("error");
+  });
+
   it("[AC-512-W03] TOP remains contextual through real WASM", async () => {
     const result = await parseSql("SELECT top FROM users");
 

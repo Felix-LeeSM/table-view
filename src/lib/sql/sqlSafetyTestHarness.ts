@@ -371,14 +371,18 @@ vi.mock("./wasm/sql_parser_core.js", () => {
         };
       }
       if (/^WITH\b/i.test(trimmed)) {
+        // group 1 = CTE body (inside the `AS (...)` parens), group 2 = the
+        // inner statement after the CTE list. Issue #1119: the CTE body is
+        // captured so the mock can seed `ctes[]` with a writable body,
+        // simulating a future parser that accepts PostgreSQL writable CTEs.
         const m = trimmed.match(
-          /^WITH\s+(?:RECURSIVE\s+)?[A-Z_][A-Z0-9_]*\s*(?:\([^)]*\)\s*)?AS\s*\([^)]*\)\s*(.+)$/i,
+          /^WITH\s+(?:RECURSIVE\s+)?[A-Z_][A-Z0-9_]*\s*(?:\([^)]*\)\s*)?AS\s*\(([^)]*)\)\s*(.+)$/i,
         );
-        if (m && m[1]) {
-          const innerSql = m[1].trim();
-          const innerUpper = innerSql.toUpperCase();
-          const innerResult = (() => {
-            if (innerUpper.startsWith("INSERT")) {
+        if (m && m[2]) {
+          const buildStmtNode = (sql: string) => {
+            const s = sql.trim();
+            const u = s.toUpperCase();
+            if (u.startsWith("INSERT")) {
               return {
                 kind: "insert",
                 table: "stub",
@@ -389,8 +393,8 @@ vi.mock("./wasm/sql_parser_core.js", () => {
                 returning: [],
               };
             }
-            if (innerUpper.startsWith("UPDATE")) {
-              const hasWhere = /\bWHERE\b/i.test(innerSql);
+            if (u.startsWith("UPDATE")) {
+              const hasWhere = /\bWHERE\b/i.test(s);
               return {
                 kind: "update",
                 table: "stub",
@@ -410,8 +414,8 @@ vi.mock("./wasm/sql_parser_core.js", () => {
                 returning: [],
               };
             }
-            if (innerUpper.startsWith("DELETE")) {
-              const hasWhere = /\bWHERE\b/i.test(innerSql);
+            if (u.startsWith("DELETE")) {
+              const hasWhere = /\bWHERE\b/i.test(s);
               return {
                 kind: "delete",
                 table: "stub",
@@ -449,12 +453,18 @@ vi.mock("./wasm/sql_parser_core.js", () => {
               limit: null,
               set_operation: [],
             };
-          })();
+          };
           return {
             kind: "with",
             recursive: false,
-            ctes: [],
-            inner_statement: innerResult,
+            // Issue #1119 — seed ctes[] with the (possibly writable) CTE
+            // body so the mapper's ctes[] traversal is exercised. The real
+            // grammar restricts this to SELECT today; the mock intentionally
+            // reflects a widened parser to prove the safety-gating fix.
+            ctes: [
+              { name: "cte", columns: [], body: buildStmtNode(m[1] ?? "") },
+            ],
+            inner_statement: buildStmtNode(m[2]),
           };
         }
       }

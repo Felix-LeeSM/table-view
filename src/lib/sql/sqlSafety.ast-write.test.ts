@@ -298,4 +298,51 @@ describe("sqlSafety.analyzeStatement — AST destructive and write contracts", (
       });
     });
   });
+
+  // -------------------------------------------------------------------------
+  // Issue #1119 — writable-CTE body classification. The mocked parser here is
+  // deliberately widened to emit a write op inside `ctes[]` (the real grammar
+  // restricts CTE bodies to SELECT today — see the real-parser canary in
+  // sqlWasmArtifact.test.ts). These prove the AST mapper analyzes CTE bodies
+  // defensively: a destructive body inside a WITH clause is classified by its
+  // worst part, not silently dropped as the wrapping SELECT's `info`.
+  // -------------------------------------------------------------------------
+  describe("Issue #1119 — AST-path writable CTE body analysis", () => {
+    usePreloadedSqlAst();
+
+    it("[AC-1119-01] WITH d AS (DELETE FROM users RETURNING id) SELECT * → danger (WHERE-less write in CTE body)", () => {
+      const a = analyzeStatement(
+        "WITH d AS (DELETE FROM users RETURNING id) SELECT * FROM d",
+      );
+      expect(a.kind).toBe("dml-delete");
+      expect(a.severity).toBe("danger");
+      expect(a.reasons).toEqual(["DELETE without WHERE clause"]);
+      expect(isDangerous(a)).toBe(true);
+    });
+
+    it("[AC-1119-02] WITH d AS (DELETE FROM users WHERE id = 1 RETURNING id) SELECT * → warn (bounded write in CTE body)", () => {
+      const a = analyzeStatement(
+        "WITH d AS (DELETE FROM users WHERE id = 1 RETURNING id) SELECT * FROM d",
+      );
+      expect(a.kind).toBe("dml-delete");
+      expect(a.severity).toBe("warn");
+      expect(isInfoStatement(a)).toBe(false);
+    });
+
+    it("[AC-1119-03] WITH u AS (UPDATE users SET active = false RETURNING id) SELECT * → danger (WHERE-less update in CTE body)", () => {
+      const a = analyzeStatement(
+        "WITH u AS (UPDATE users SET active = false RETURNING id) SELECT * FROM u",
+      );
+      expect(a.kind).toBe("dml-update");
+      expect(a.severity).toBe("danger");
+      expect(a.reasons).toEqual(["UPDATE without WHERE clause"]);
+    });
+
+    it("[AC-1119-04] read-only WITH t AS (SELECT 1) SELECT * → info (no regression for normal CTE)", () => {
+      const a = analyzeStatement("WITH t AS (SELECT 1) SELECT * FROM t");
+      expect(a.kind).toBe("select");
+      expect(a.severity).toBe("info");
+      expect(isInfoStatement(a)).toBe(true);
+    });
+  });
 });
