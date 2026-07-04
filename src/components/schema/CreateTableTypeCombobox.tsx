@@ -228,6 +228,11 @@ export default function CreateTableTypeCombobox({
             aria-autocomplete="list"
             aria-expanded={open}
             aria-controls="create-table-type-combobox-listbox"
+            aria-activedescendant={
+              open && suggestions.length > 0
+                ? `create-table-type-option-${highlight}`
+                : undefined
+            }
             placeholder={resolvedPlaceholder}
             role="combobox"
           />
@@ -288,6 +293,7 @@ export default function CreateTableTypeCombobox({
                 <li key={t}>
                   <button
                     type="button"
+                    id={`create-table-type-option-${idx}`}
                     role="option"
                     aria-selected={idx === highlight}
                     className={cn(
