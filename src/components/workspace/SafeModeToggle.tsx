@@ -2,6 +2,7 @@ import { ShieldCheck, ShieldAlert, ShieldOff } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@components/ui/button";
 import { useSafeModeStore, type SafeMode } from "@stores/safeModeStore";
+import { toast } from "@lib/runtime/toast";
 
 /**
  * Safe Mode toggle — workspace-toolbar control that cycles
@@ -48,6 +49,19 @@ export default function SafeModeToggle() {
   const label = t(`safeMode.${mode}.label`);
   const tooltip = t(`safeMode.${mode}.tooltip`);
 
+  // #1123 — backend-first toggle (sprint-368): the store only advances the
+  // mode after `persist_setting` resolves, so on IPC failure the displayed
+  // mode is already correct (unchanged). Awaiting + catching here surfaces
+  // that silent divergence as an error toast instead of an unhandled
+  // rejection — claimed protection must equal actual protection.
+  const handleClick = async () => {
+    try {
+      await toggle();
+    } catch (e) {
+      toast.error(t("safeMode.toastFailed", { mode: label, error: String(e) }));
+    }
+  };
+
   return (
     <Button
       variant="ghost"
@@ -57,7 +71,7 @@ export default function SafeModeToggle() {
       aria-pressed={MODE_ARIA_PRESSED[mode]}
       title={tooltip}
       data-mode={mode}
-      onClick={toggle}
+      onClick={() => void handleClick()}
     >
       <Icon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
       <span className="ml-1 text-xs">{label}</span>

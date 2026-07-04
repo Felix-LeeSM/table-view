@@ -17,15 +17,20 @@ vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(() => Promise.resolve()),
 }));
 
-import { render, screen } from "@testing-library/react";
+import { invoke } from "@tauri-apps/api/core";
+import { render, screen, waitFor } from "@testing-library/react";
 import { userEvent } from "@testing-library/user-event";
 import SafeModeToggle from "./SafeModeToggle";
 import { useSafeModeStore, SAFE_MODE_STORAGE_KEY } from "@stores/safeModeStore";
+import { useToastStore } from "@stores/toastStore";
 
 describe("SafeModeToggle", () => {
   beforeEach(() => {
     localStorage.removeItem(SAFE_MODE_STORAGE_KEY);
     useSafeModeStore.setState({ mode: "strict" });
+    useToastStore.setState({ toasts: [] });
+    vi.mocked(invoke).mockReset();
+    vi.mocked(invoke).mockResolvedValue(undefined);
   });
 
   it('[AC-185-03a] strict renders shield-on + "Safe Mode" label', () => {
@@ -132,5 +137,35 @@ describe("SafeModeToggle", () => {
     expect(offTitle).toMatch(/production-auto|Production-tagged/);
     expect(offTitle).toMatch(/local \/ testing/);
     expect(offTitle).toMatch(/development \/ staging/);
+  });
+
+  // #1123 — backend-first toggle: on `persist_setting` IPC rejection the
+  // store keeps the previous mode (correct by design), but the failure was
+  // silent — no toast, unhandled rejection. Regression guard: reject the
+  // IPC, click, assert the mode display is unchanged AND an error toast
+  // surfaces the divergence (claimed protection must equal actual).
+  it("[#1123] IPC reject surfaces error toast + leaves aria-pressed unchanged", async () => {
+    const user = userEvent.setup();
+    vi.mocked(invoke).mockRejectedValueOnce(new Error("db locked"));
+    render(<SafeModeToggle />);
+
+    const btn = screen.getByRole("button", { name: "Safe Mode" });
+    expect(btn).toHaveAttribute("aria-pressed", "true");
+    await user.click(btn);
+
+    // Store must NOT advance strict → warn on failure.
+    expect(useSafeModeStore.getState().mode).toBe("strict");
+    expect(screen.getByRole("button", { name: "Safe Mode" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+
+    await waitFor(() => {
+      const toasts = useToastStore.getState().toasts;
+      expect(toasts).toHaveLength(1);
+      expect(toasts[0]!.variant).toBe("error");
+      expect(toasts[0]!.message).toMatch(/wasn't saved/);
+      expect(toasts[0]!.message).toMatch(/db locked/);
+    });
   });
 });

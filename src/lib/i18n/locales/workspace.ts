@@ -188,6 +188,7 @@ export const en = {
       tooltip:
         "Safe Mode: Off (click to re-enable for non-production)\n\nProduction-tagged connections still confirm destructive statements automatically (production-auto). Non-production is fully unguarded — use Off for one-off destructive maintenance on local / testing / development / staging.",
     },
+    toastFailed: "Safe Mode change wasn't saved — still {{mode}}. {{error}}",
   },
   search: {
     catalogHeader: "Search catalog",
@@ -408,6 +409,8 @@ export const ko = {
       tooltip:
         "세이프 모드: 끔 (클릭하여 비-프로덕션 재활성화)\n\n프로덕션 태그 연결은 여전히 위험한 구문을 자동으로 확인합니다(프로덕션-자동). 비-프로덕션은 완전히 차단 해제됩니다 — 로컬/테스트/개발/스테이징에서 일회성 위험한 유지보수를 위해 끔을 사용하세요.",
     },
+    toastFailed:
+      "세이프 모드 변경이 저장되지 않았습니다 — 현재 {{mode}} 유지. {{error}}",
   },
   search: {
     catalogHeader: "검색 카탈로그",
