@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, act } from "@testing-library/react";
+import { render, screen, act } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { ExportButton } from "./ExportButton";
 import type { ExportContext } from "@/lib/tauri";
 import { useToastStore } from "@/stores/toastStore";
@@ -37,6 +38,13 @@ const ROWS = [
   [2, "bob"],
 ];
 
+// #1132 — ExportButton is a Radix DropdownMenu (menu keyboard model). Radix
+// menus open on pointer/keyboard events, not a bare `click`, so drive them
+// with userEvent which simulates the full pointer sequence.
+async function openMenu(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole("button", { name: /export/i }));
+}
+
 beforeEach(() => {
   mockSave.mockReset();
   mockInvoke.mockReset();
@@ -65,6 +73,7 @@ describe("ExportButton", () => {
   // [AC-181-01a] RDB table surface lists CSV / TSV / SQL INSERT.
   // 2026-05-01 — JSON is omitted on RDB because BSON shape doesn't apply.
   it("renders CSV / TSV / SQL menu items for table context", async () => {
+    const user = userEvent.setup();
     render(
       <ExportButton
         context={tableContext()}
@@ -72,7 +81,7 @@ describe("ExportButton", () => {
         getRows={() => ROWS}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: /export/i }));
+    await openMenu(user);
     expect(
       await screen.findByRole("menuitem", { name: /CSV/i }),
     ).toBeInTheDocument();
@@ -86,6 +95,7 @@ describe("ExportButton", () => {
   // [AC-181-01b] Mongo collection surface lists JSON / CSV / TSV.
   // 2026-05-01 — SQL is omitted because no SQL identifier context exists.
   it("renders JSON / CSV / TSV menu items for collection context", async () => {
+    const user = userEvent.setup();
     render(
       <ExportButton
         context={collectionContext()}
@@ -93,7 +103,7 @@ describe("ExportButton", () => {
         getRows={() => ROWS}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: /export/i }));
+    await openMenu(user);
     expect(
       await screen.findByRole("menuitem", { name: /^JSON/i }),
     ).toBeInTheDocument();
@@ -102,9 +112,37 @@ describe("ExportButton", () => {
     expect(screen.queryByRole("menuitem", { name: /SQL INSERT/i })).toBeNull();
   });
 
+  // #1132 — the menu keyboard model: ArrowDown roving across items with a
+  // single tab stop, Enter selects the highlighted format.
+  it("supports ArrowDown roving + Enter selection (menu keyboard model)", async () => {
+    const user = userEvent.setup();
+    mockSave.mockResolvedValueOnce("/tmp/out.tsv");
+    mockInvoke.mockResolvedValueOnce({ rows_written: 2, bytes_written: 30 });
+    render(
+      <ExportButton
+        context={tableContext()}
+        headers={HEADERS}
+        getRows={() => ROWS}
+      />,
+    );
+    // Open via keyboard so Radix auto-focuses the first item (CSV); ArrowDown
+    // then rovs to the second (TSV) — the single-tab-stop menu model.
+    screen.getByRole("button", { name: /export/i }).focus();
+    await user.keyboard("{Enter}");
+    expect(await screen.findByRole("menuitem", { name: /CSV/i })).toHaveFocus();
+    await user.keyboard("{ArrowDown}");
+    expect(screen.getByRole("menuitem", { name: /TSV/i })).toHaveFocus();
+    await act(async () => {
+      await user.keyboard("{Enter}");
+    });
+    expect(mockInvoke).toHaveBeenCalledTimes(1);
+    expect(mockInvoke.mock.calls[0]![1]).toMatchObject({ format: "tsv" });
+  });
+
   // [AC-181-01c] disabledFormats marks SQL as aria-disabled with tooltip.
   // 2026-05-01 — Multi-table SELECT keeps the menu visible but blocks click.
   it("marks disabled formats as aria-disabled", async () => {
+    const user = userEvent.setup();
     render(
       <ExportButton
         context={queryContext()}
@@ -113,7 +151,7 @@ describe("ExportButton", () => {
         disabledFormats={["sql"]}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: /export/i }));
+    await openMenu(user);
     const sqlItem = await screen.findByRole("menuitem", {
       name: /SQL INSERT/i,
     });
@@ -122,6 +160,7 @@ describe("ExportButton", () => {
   });
 
   it("uses caller-provided disabled reasons for SQL export", async () => {
+    const user = userEvent.setup();
     render(
       <ExportButton
         context={queryContext()}
@@ -133,7 +172,7 @@ describe("ExportButton", () => {
         }}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: /export/i }));
+    await openMenu(user);
     const sqlItem = await screen.findByRole("menuitem", {
       name: /SQL INSERT/i,
     });
@@ -160,6 +199,7 @@ describe("ExportButton", () => {
   // [AC-181-02e] Save dialog cancel produces no toast.
   // 2026-05-01 — User-initiated cancel must stay silent.
   it("does not show a toast when the save dialog is cancelled", async () => {
+    const user = userEvent.setup();
     mockSave.mockResolvedValueOnce(null);
     render(
       <ExportButton
@@ -168,12 +208,9 @@ describe("ExportButton", () => {
         getRows={() => ROWS}
       />,
     );
+    await openMenu(user);
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: /export/i }));
-    });
-    fireEvent.click(await screen.findByRole("menuitem", { name: /CSV/i }));
-    await act(async () => {
-      // Allow the save promise to resolve.
+      await user.click(await screen.findByRole("menuitem", { name: /CSV/i }));
     });
     expect(mockInvoke).not.toHaveBeenCalled();
     expect(useToastStore.getState().toasts).toHaveLength(0);
@@ -182,6 +219,7 @@ describe("ExportButton", () => {
   // [AC-181-09a] Invoke reject surfaces a destructive (error) toast.
   // 2026-05-01 — IO failures must reach the user.
   it("surfaces a destructive toast when invoke rejects", async () => {
+    const user = userEvent.setup();
     mockSave.mockResolvedValueOnce("/tmp/out.csv");
     mockInvoke.mockRejectedValueOnce(new Error("disk full"));
     render(
@@ -191,11 +229,10 @@ describe("ExportButton", () => {
         getRows={() => ROWS}
       />,
     );
+    await openMenu(user);
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: /export/i }));
+      await user.click(await screen.findByRole("menuitem", { name: /CSV/i }));
     });
-    fireEvent.click(await screen.findByRole("menuitem", { name: /CSV/i }));
-    await act(async () => {});
     const toasts = useToastStore.getState().toasts;
     expect(toasts).toHaveLength(1);
     expect(toasts[0]?.variant).toBe("error");
@@ -206,6 +243,7 @@ describe("ExportButton", () => {
   // password fields. 2026-05-01 — guards ADR-0005 plaintext password
   // boundary.
   it("never sends a password field in the invoke payload", async () => {
+    const user = userEvent.setup();
     mockSave.mockResolvedValueOnce("/tmp/out.csv");
     mockInvoke.mockResolvedValueOnce({ rows_written: 2, bytes_written: 30 });
     render(
@@ -215,11 +253,10 @@ describe("ExportButton", () => {
         getRows={() => ROWS}
       />,
     );
+    await openMenu(user);
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: /export/i }));
+      await user.click(await screen.findByRole("menuitem", { name: /CSV/i }));
     });
-    fireEvent.click(await screen.findByRole("menuitem", { name: /CSV/i }));
-    await act(async () => {});
     expect(mockInvoke).toHaveBeenCalledTimes(1);
     const [, payload] = mockInvoke.mock.calls[0]!;
     expect(JSON.stringify(payload)).not.toMatch(/password/i);

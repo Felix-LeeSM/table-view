@@ -6,6 +6,7 @@ import {
   waitFor,
   act,
 } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import GroupDialog from "./GroupDialog";
 import { useConnectionStore } from "@stores/connectionStore";
 import { CONNECTION_COLOR_PALETTE } from "@lib/connectionColor";
@@ -61,6 +62,34 @@ describe("GroupDialog", () => {
     expect(
       screen.getByRole("radio", { name: /no color/i }),
     ).toBeInTheDocument();
+  });
+
+  it("radiogroup: single tab stop on the checked radio, arrows move + select", async () => {
+    const user = userEvent.setup();
+    render(<GroupDialog onClose={() => {}} />);
+    const radios = screen.getAllByRole("radio");
+    // Default new group is "No color" (index 0) — the only tab stop.
+    expect(radios[0]).toHaveAttribute("tabindex", "0");
+    expect(radios[1]).toHaveAttribute("tabindex", "-1");
+
+    // Focus the checked radio, then ArrowRight selects + focuses the next.
+    radios[0]!.focus();
+    await user.keyboard("{ArrowRight}");
+    expect(radios[1]).toHaveFocus();
+    expect(radios[1]).toHaveAttribute("aria-checked", "true");
+    expect(radios[1]).toHaveAttribute("tabindex", "0");
+    expect(radios[0]).toHaveAttribute("aria-checked", "false");
+    expect(radios[0]).toHaveAttribute("tabindex", "-1");
+
+    // ArrowLeft wraps back to "No color".
+    await user.keyboard("{ArrowLeft}");
+    expect(radios[0]).toHaveFocus();
+    expect(radios[0]).toHaveAttribute("aria-checked", "true");
+
+    // ArrowLeft from index 0 wraps to the last swatch.
+    await user.keyboard("{ArrowLeft}");
+    expect(radios[radios.length - 1]).toHaveFocus();
+    expect(radios[radios.length - 1]).toHaveAttribute("aria-checked", "true");
   });
 
   it("disables the Create button when the name is blank", () => {

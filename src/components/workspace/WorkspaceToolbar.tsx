@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { History } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@components/ui/button";
@@ -5,6 +6,7 @@ import DbSwitcher from "./DbSwitcher";
 import DisconnectButton from "./DisconnectButton";
 import SafeModeToggle from "./SafeModeToggle";
 import RowCapSetting from "@components/settings/RowCapSetting";
+import { useToolbarRoving } from "./useToolbarRoving";
 
 /**
  * Workspace toolbar — top-of-pane container that hosts the `[DB ▼]` chip
@@ -49,10 +51,16 @@ function HistoryButton() {
 
 export default function WorkspaceToolbar() {
   const { t } = useTranslation("workspace");
+  const toolbarRef = useRef<HTMLDivElement>(null);
+  // Roving tabindex: the toolbar is a single tab stop; ArrowLeft/Right +
+  // Home/End move focus across its controls (WAI-ARIA toolbar pattern).
+  const { onKeyDown } = useToolbarRoving(toolbarRef);
   return (
     <div
+      ref={toolbarRef}
       role="toolbar"
       aria-label={t("toolbar.ariaLabel")}
+      onKeyDown={onKeyDown}
       className="flex h-9 items-center gap-2 border-b border-border bg-secondary px-2"
     >
       <DbSwitcher />

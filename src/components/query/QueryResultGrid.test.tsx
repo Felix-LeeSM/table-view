@@ -7,6 +7,7 @@ import {
   act,
   waitFor,
 } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import QueryResultGrid from "./QueryResultGrid";
 import type { QueryResult } from "@/types/query";
 import { useSchemaStore } from "@stores/schemaStore";
@@ -245,7 +246,7 @@ describe("QueryResultGrid", () => {
       expect(writeText).toHaveBeenCalledWith("42");
     });
 
-    fireEvent.click(screen.getByRole("button", { name: /export/i }));
+    await userEvent.click(screen.getByRole("button", { name: /export/i }));
     expect(
       await screen.findByRole("menuitem", { name: /CSV/i }),
     ).toBeInTheDocument();
@@ -491,7 +492,7 @@ describe("QueryResultGrid", () => {
     ).toBeInTheDocument();
     expect(screen.queryByText(/Editable/)).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: /export/i }));
+    await userEvent.click(screen.getByRole("button", { name: /export/i }));
     const sqlItem = await screen.findByRole("menuitem", {
       name: /SQL INSERT/i,
     });
@@ -556,9 +557,12 @@ describe("QueryResultGrid", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /export/i }));
-    fireEvent.click(await screen.findByRole("menuitem", { name: /CSV/i }));
-    await act(async () => {});
+    await userEvent.click(screen.getByRole("button", { name: /export/i }));
+    await act(async () => {
+      await userEvent.click(
+        await screen.findByRole("menuitem", { name: /CSV/i }),
+      );
+    });
 
     expect(exportGridRows).toHaveBeenCalledWith(
       "csv",
