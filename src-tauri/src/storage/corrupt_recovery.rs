@@ -64,9 +64,27 @@ fn probe_blocking(path: &Path) -> Result<(), AppError> {
     Ok(())
 }
 
+/// Append a raw suffix to a full path's filename (e.g. `state.db` + `-wal` =>
+/// `state.db-wal`). `Path::with_extension` cannot do this — SQLite sidecars
+/// are `-wal`/`-shm` glued onto the whole filename, not extensions.
+fn with_suffix(base: &Path, suffix: &str) -> PathBuf {
+    let mut s = base.as_os_str().to_os_string();
+    s.push(suffix);
+    PathBuf::from(s)
+}
+
 /// Rename `state.db` to `state.db.bak` (Q2). 기존 `.bak` 가 있으면 timestamp
 /// suffix 를 붙여 누적 보존 — 사용자가 manual 복구 시 여러 corruption epoch
 /// 을 모두 inspect 가능.
+///
+/// Issue #1095: the `-wal`/`-shm` WAL sidecars relocate together with the main
+/// file (paired to the same backup name). SQLite replays any `-wal` left
+/// beside a DB on open, so a stale WAL from the corrupt epoch would re-poison
+/// the fresh DB that boot creates in this same spot. Sidecars move BEFORE the
+/// main file, and any relocation error aborts the whole quarantine: leaving
+/// the main file in place means the next boot re-probes and retries, whereas
+/// renaming the main file while a sidecar lingers would let boot start fresh
+/// over stale WAL — the exact re-corruption this fixes.
 pub fn quarantine(path: &Path) -> Result<PathBuf, AppError> {
     let primary = path.with_extension(format!(
         "{}.bak",
@@ -85,12 +103,19 @@ pub fn quarantine(path: &Path) -> Result<PathBuf, AppError> {
     } else {
         primary
     };
+    // Sidecars first so a failure leaves the main file untouched for retry.
+    for suffix in ["-wal", "-shm"] {
+        let src = with_suffix(path, suffix);
+        if src.exists() {
+            fs::rename(&src, with_suffix(&backup, suffix))?;
+        }
+    }
     fs::rename(path, &backup)?;
     info!(
         target: "storage",
         path = %path.display(),
         backup = %backup.display(),
-        "Quarantined corrupt SQLite file"
+        "Quarantined corrupt SQLite file (with WAL sidecars)"
     );
     Ok(backup)
 }
@@ -153,6 +178,37 @@ mod tests {
                 .ends_with(".bak"),
             "Backup must end with .bak; got {}",
             backup.display()
+        );
+    }
+
+    // Issue #1095: WAL sidecars (`-wal`/`-shm`) must NOT be left next to the
+    // quarantined main file. SQLite replays any `-wal` found beside a DB on
+    // open, so a stale WAL from the corrupt epoch would re-poison the fresh
+    // DB that boot creates in the same spot. Quarantine must relocate the
+    // sidecars alongside the backup.
+    #[test]
+    fn test_quarantine_relocates_wal_and_shm_sidecars() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("state.db");
+        let wal = dir.path().join("state.db-wal");
+        let shm = dir.path().join("state.db-shm");
+        fs::write(&path, b"corrupt").unwrap();
+        fs::write(&wal, b"stale wal").unwrap();
+        fs::write(&shm, b"stale shm").unwrap();
+
+        let backup = quarantine(&path).unwrap();
+
+        // Original main + sidecars must all be gone from the fresh-DB spot.
+        assert!(!path.exists(), "main must be gone");
+        assert!(!wal.exists(), "stale -wal must NOT remain beside fresh DB");
+        assert!(!shm.exists(), "stale -shm must NOT remain beside fresh DB");
+
+        // Sidecars relocated paired with the backup for manual inspection.
+        let mut wal_bak = backup.as_os_str().to_os_string();
+        wal_bak.push("-wal");
+        assert!(
+            PathBuf::from(wal_bak).exists(),
+            "backup -wal sidecar must exist"
         );
     }
 
