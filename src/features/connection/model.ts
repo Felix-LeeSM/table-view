@@ -478,3 +478,26 @@ export const ENVIRONMENT_OPTIONS: EnvironmentTag[] = [
   "staging",
   "production",
 ];
+
+/**
+ * Canonicalize a raw stored `environment` string to a known tag, else `null`.
+ *
+ * The connection form is a fixed Select, but the data layer (`environment` is
+ * still a free `string | null` — type hardening is #1114's) can receive
+ * non-canonical values via URL import, legacy-store reconcile, or a
+ * hand-edited SQLite row (`"Production"`, `"prod"`, `"production "`). Those
+ * must never masquerade as a canonical tag: production protection keys off
+ * exact `=== "production"`, so a look-alike silently loses the guard.
+ *
+ * #1125 decision: unrecognized tag = null (treated as env-unset → allow, no
+ * added friction) but surfaced as an info-level signal (an "Unknown" badge)
+ * so the mismatch is visible rather than silent. This is the trust boundary
+ * for that policy — safe-mode decision and badge both route through it.
+ */
+export function canonicalEnvironmentTag(
+  raw: string | null | undefined,
+): EnvironmentTag | null {
+  return raw != null && raw in ENVIRONMENT_META
+    ? (raw as EnvironmentTag)
+    : null;
+}
