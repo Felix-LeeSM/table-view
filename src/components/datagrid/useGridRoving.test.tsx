@@ -177,6 +177,127 @@ describe("useGridRoving (Design-swarm #4 Phase 2)", () => {
     container.remove();
   });
 
+  // Reason: #1127 AC1 — 최상단 row 에서 ArrowUp → 대응 컬럼 header 셀 진입.
+  // header 는 role="columnheader" 형제로 container 에 있고, N번째 columnheader =
+  // visual col N. body roving anchor 는 (0,col) 그대로 유지된다. (2026-07-05)
+  it("ArrowUp at row 0 focuses the header cell of the current col (#1127)", async () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const h0 = document.createElement("div");
+    h0.setAttribute("role", "columnheader");
+    h0.tabIndex = -1;
+    const h1 = document.createElement("div");
+    h1.setAttribute("role", "columnheader");
+    h1.tabIndex = -1;
+    const cell00 = makeCell(0, 0);
+    const cell01 = makeCell(0, 1);
+    container.append(h0, h1, cell00, cell01);
+    const containerRef = createRef<HTMLElement>();
+    (containerRef as { current: HTMLElement }).current = container;
+
+    const { result } = renderHook(() => useGridRoving(3, 2, containerRef));
+
+    cell01.focus();
+    act(() => result.current.syncFocus(0, 1));
+    act(() => {
+      result.current.onKeyDown({
+        key: "ArrowUp",
+        target: cell01,
+        preventDefault: vi.fn(),
+      } as unknown as React.KeyboardEvent);
+    });
+    await flushRaf();
+
+    expect(h1).toHaveFocus();
+    // body anchor 유지: (0,1) 여전히 tab stop.
+    expect(result.current.cellTabIndex(0, 1)).toBe(0);
+    container.remove();
+  });
+
+  // Reason: #1127 AC2 — Ctrl+Home = 첫 셀(0,0), Ctrl+End = 마지막 셀
+  // (last row, last col) 점프. 수식어 없는 Home/End 는 col 만 이동(기존). (2026-07-05)
+  it("Ctrl+Home jumps to (0,0), Ctrl+End to the last cell (#1127)", async () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const cells: Record<string, HTMLElement> = {};
+    for (let r = 0; r <= 2; r++) {
+      for (let c = 0; c <= 1; c++) {
+        const el = makeCell(r, c);
+        cells[`${r},${c}`] = el;
+        container.append(el);
+      }
+    }
+    const containerRef = createRef<HTMLElement>();
+    (containerRef as { current: HTMLElement }).current = container;
+
+    const { result } = renderHook(() => useGridRoving(3, 2, containerRef));
+
+    cells["1,0"]!.focus();
+    act(() => result.current.syncFocus(1, 0));
+    act(() => {
+      result.current.onKeyDown({
+        key: "End",
+        ctrlKey: true,
+        target: cells["1,0"],
+        preventDefault: vi.fn(),
+      } as unknown as React.KeyboardEvent);
+    });
+    await flushRaf();
+    expect(cells["2,1"]).toHaveFocus();
+    expect(result.current.cellTabIndex(2, 1)).toBe(0);
+
+    act(() => {
+      result.current.onKeyDown({
+        key: "Home",
+        ctrlKey: true,
+        target: cells["2,1"],
+        preventDefault: vi.fn(),
+      } as unknown as React.KeyboardEvent);
+    });
+    await flushRaf();
+    expect(cells["0,0"]).toHaveFocus();
+    expect(result.current.cellTabIndex(0, 0)).toBe(0);
+    container.remove();
+  });
+
+  // Reason: #1127 AC2 — 가상화 경로에서 PageDown 이 off-window row 로 점프해도
+  // scrollRowIntoView 로 스크롤-인 후 focus 가 유지된다 (page 단위 + 가상화). (2026-07-05)
+  it("PageDown to an off-window row scrolls it in then focuses (virtualized) (#1127)", async () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    container.append(makeCell(0, 0), makeCell(5, 0));
+    const containerRef = createRef<HTMLElement>();
+    (containerRef as { current: HTMLElement }).current = container;
+
+    const scrollSpy = vi.fn((row: number) => {
+      if (!container.querySelector(`[data-grid-row="${row}"]`)) {
+        container.appendChild(makeCell(row, 0));
+      }
+    });
+
+    const { result } = renderHook(() =>
+      useGridRoving(50, 1, containerRef, { scrollRowIntoView: scrollSpy }),
+    );
+
+    act(() => result.current.syncFocus(5, 0));
+    act(() => {
+      result.current.onKeyDown({
+        key: "PageDown",
+        target: container.querySelector('[data-grid-row="5"]'),
+        preventDefault: vi.fn(),
+      } as unknown as React.KeyboardEvent);
+    });
+    await flushRaf();
+
+    // 5 + PAGE_ROWS(10) = 15, off-DOM → scroll 콜백으로 render 후 focus.
+    expect(scrollSpy).toHaveBeenCalledWith(15);
+    const target = container.querySelector<HTMLElement>(
+      `[data-grid-row="15"][data-grid-col="0"]`,
+    );
+    expect(target).toHaveFocus();
+    container.remove();
+  });
+
   // Reason: ArrowUp at row 0 은 clamp (no wrap), (0,0) 이 tab stop 유지. (2026-07-01)
   it("ArrowUp at row 0 clamps and keeps (0,0) the tab stop", async () => {
     const container = document.createElement("div");

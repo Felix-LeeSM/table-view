@@ -179,6 +179,21 @@ export default function HeaderRow({
                 // 무시(자기 셀만).
                 if (e.target !== e.currentTarget) return;
                 const { key } = e;
+                // #1127 AC1 — header 에서 ArrowDown → 대응 컬럼 최상단 data cell
+                // (row 0) 복귀. body roving 의 ArrowUp(row 0 → header) 과 짝을
+                // 이뤄 컬럼을 보존한다. body cell 의 onFocus 가 roving anchor 를
+                // (0, visualIdx) 로 sync 한다. 가상화로 row 0 이 미렌더면 no-op
+                // (sticky header + scroll 상태의 edge; round-trip 은 top row 기준).
+                if (key === "ArrowDown") {
+                  e.preventDefault();
+                  const gridEl = e.currentTarget.closest('[role="grid"]');
+                  gridEl
+                    ?.querySelector<HTMLElement>(
+                      `[data-grid-row="0"][data-grid-col="${visualIdx}"]`,
+                    )
+                    ?.focus();
+                  return;
+                }
                 // issue #1130 (B1) — 헤더행 roving: ArrowLeft/Right/Home/End 로
                 // 단일 tab stop 을 형제 columnheader 로 옮긴다. body roving 과
                 // 같은 방식(이벤트 상대 querySelector + .focus(), 가상화 없어
