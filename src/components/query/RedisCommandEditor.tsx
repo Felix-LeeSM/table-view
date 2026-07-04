@@ -1,4 +1,4 @@
-import { useRef, useEffect, forwardRef } from "react";
+import { useRef, useEffect, useId, forwardRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Compartment, EditorState, type Extension } from "@codemirror/state";
 import {
@@ -22,6 +22,7 @@ import {
   type RedisCommandCompletionTarget,
   type RedisKeySuggestion,
 } from "@features/completion";
+import { editorContentAria } from "@lib/editor/editorContentAria";
 import { setForwardedRef } from "@lib/editor/setForwardedRef";
 import { syncEditorDocument } from "./editorDocumentSync";
 
@@ -83,6 +84,18 @@ const RedisCommandEditor = forwardRef<
   const onDryRunRef = useRef(onDryRun);
   onDryRunRef.current = onDryRun;
   const sqlRef = useRef(sql);
+  // #1133 — stable id linking `.cm-content` to the SR-only autocomplete hint.
+  const hintId = useId();
+
+  const editorLabel =
+    redisCommandTarget === "valkey"
+      ? t("redis.valkeyEditorAria")
+      : t("redis.redisEditorAria");
+  // ponytail: captured at mount; `redisCommandTarget` is fixed per connection
+  // so the `.cm-content` name never goes stale in practice. Move into a
+  // contentAttributes compartment reconfigure only if a live target swap ships.
+  const editorLabelRef = useRef(editorLabel);
+  editorLabelRef.current = editorLabel;
 
   const completionCompartment = useRef(new Compartment());
 
@@ -107,6 +120,9 @@ const RedisCommandEditor = forwardRef<
         ),
         syntaxHighlighting(viewTableHighlightStyle),
         syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
+        // #1133 — name the real editable surface + describe the autocomplete
+        // combobox on `.cm-content`, not on a decoy wrapper div.
+        editorContentAria(editorLabelRef.current, hintId),
         keymap.of([
           {
             key: "Mod-Enter",
@@ -180,6 +196,9 @@ const RedisCommandEditor = forwardRef<
     viewRef.current = view;
     // Expose the live EditorView to the parent's forwarded ref (#1248).
     setForwardedRef(ref, view);
+    // #1133 — unified mount focus across all four query editors so a freshly
+    // opened tab is immediately typeable on the `.cm-content` surface.
+    view.focus();
 
     return () => {
       view.destroy();
@@ -211,21 +230,20 @@ const RedisCommandEditor = forwardRef<
     if (syncEditorDocument(view, sql)) sqlRef.current = sql;
   }, [sql]);
 
-  const editorLabel =
-    redisCommandTarget === "valkey"
-      ? t("redis.valkeyEditorAria")
-      : t("redis.redisEditorAria");
-
+  // #1133 — the accessible name and combobox aria live on the real
+  // `.cm-content`; the wrapper is no longer a decoy textbox.
   return (
-    <div
-      ref={containerRef}
-      className="h-full w-full overflow-hidden"
-      role="textbox"
-      aria-label={editorLabel}
-      aria-multiline="true"
-      data-paradigm="kv"
-      data-command-target={redisCommandTarget}
-    />
+    <>
+      <div
+        ref={containerRef}
+        className="h-full w-full overflow-hidden"
+        data-paradigm="kv"
+        data-command-target={redisCommandTarget}
+      />
+      <span id={hintId} className="sr-only">
+        {t("editorAutocompleteHint")}
+      </span>
+    </>
   );
 });
 
