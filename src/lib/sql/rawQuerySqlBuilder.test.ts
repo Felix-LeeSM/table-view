@@ -274,4 +274,47 @@ describe("buildRawEditSql — multi-table (issue #1299)", () => {
       "UPDATE `public`.`users` SET `name` = 'Alicia' WHERE `id` = 1;",
     ]);
   });
+
+  // Adversarial: two result columns are BOTH `a.id` (`SELECT a.id AS x,
+  // a.id AS y`). Editing the second one must still UPDATE the source column
+  // `id` — a name-keyed builder would ambiguously resolve the duplicate name.
+  it("targets the true source column when two aliases share it", () => {
+    const dupPlan: RawEditPlan = {
+      schema: "",
+      table: "",
+      pkColumns: [],
+      resultColumnNames: ["id", "id"],
+      dialect: "postgresql",
+      multi: {
+        instances: [
+          {
+            schema: "public",
+            table: "a",
+            pkColumns: ["id"],
+            pkPositions: { id: 0 },
+          },
+        ],
+        columns: [
+          {
+            instance: 0,
+            sourceColumn: "id",
+            editable: true,
+            readonlyReason: null,
+          },
+          {
+            instance: 0,
+            sourceColumn: "id",
+            editable: true,
+            readonlyReason: null,
+          },
+        ],
+      },
+    };
+    const rows: unknown[][] = [[7, 7]];
+    const edits = new Map([["0-1", "8"]]); // edit the `y` alias (col 1)
+    const sqls = buildRawEditSql(rows, edits, new Set(), dupPlan);
+    expect(sqls).toEqual([
+      `UPDATE "public"."a" SET "id" = '8' WHERE "id" = 7;`,
+    ]);
+  });
 });

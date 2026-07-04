@@ -179,5 +179,35 @@ describe("PostgreSQL multi-table (JOIN) result editing smoke", () => {
         "JOIN edit did not commit / re-run",
       );
     });
+
+    const newTotal = "88.88";
+    await step(
+      "edit the orders side (same-named id columns) and round-trip",
+      async () => {
+        // Column 4 is o.total on the matched (Alice) row. Alice is the only
+        // matched order row, so her new name pins the needle after the re-run.
+        await doubleClickCell(aliceName, 4);
+        await setEditorValue("Editing total", newTotal);
+
+        const commit = await $('[aria-label="Commit pending changes"]');
+        await commit.waitForDisplayed({ timeout: 10000 });
+        await commit.click();
+
+        // Routing must target orders, not users, despite the duplicate `id`
+        // columns (#1296 transport keeps them distinct, positional PK WHERE).
+        await waitForDialogTextAll(
+          ["UPDATE", "orders", newTotal],
+          15000,
+          "orders-side edit SQL preview did not target the orders table",
+        );
+        await executeSqlPreview();
+
+        await waitForGridTextAll(
+          [newTotal],
+          15000,
+          "orders-side edit did not commit / re-run",
+        );
+      },
+    );
   });
 });

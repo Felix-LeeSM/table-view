@@ -609,4 +609,63 @@ describe("analyzeMultiTableEditability (#1299)", () => {
     const r = analyzeMultiTableEditability(sql, cols, lookup, "public");
     expect(r.editable).toBe(false);
   });
+
+  // --- adversarial: silent mis-mapping contract (regression guard) -------
+  // The safety claim is "no silent mis-mapping". These pin it so a future
+  // reintroduction of name-based lookup (indexOf on result names) fails here.
+  const abLookup = (_schema: string | null, table: string) => {
+    if (table === "a")
+      return [
+        { name: "id", is_primary_key: true },
+        { name: "name", is_primary_key: false },
+      ];
+    if (table === "b")
+      return [
+        { name: "id", is_primary_key: true },
+        { name: "a_id", is_primary_key: false },
+      ];
+    return null;
+  };
+
+  it("attributes two aliases of the SAME source column to that column", () => {
+    // Both `x` and `y` are `a.id`; a name-keyed model would collide on `id`.
+    const sql = "SELECT a.id AS x, a.id AS y FROM a JOIN b ON b.a_id = a.id";
+    const cols = [qcol("x"), qcol("y")];
+    const r = analyzeMultiTableEditability(sql, cols, abLookup, "public");
+    expect(r.editable).toBe(true);
+    if (!r.editable) return;
+    expect(r.plan.columns[0]).toMatchObject({
+      instance: 0,
+      sourceColumn: "id",
+      editable: true,
+    });
+    expect(r.plan.columns[1]).toMatchObject({
+      instance: 0,
+      sourceColumn: "id",
+      editable: true,
+    });
+  });
+
+  it("does not let an alias name-collision mis-map or falsely unlock a column", () => {
+    // `a.name AS id` collides (by result name) with the real `b.id`. Positional
+    // attribution must keep col0 = a.name (a's PK `a.id` is NOT projected, so a
+    // is read-only) and col1 = b.id (editable), never swapping the two.
+    const sql = "SELECT a.name AS id, b.id FROM a JOIN b ON b.a_id = a.id";
+    const cols = [qcol("id"), qcol("id")];
+    const r = analyzeMultiTableEditability(sql, cols, abLookup, "public");
+    expect(r.editable).toBe(true);
+    if (!r.editable) return;
+    // col0 → a.name, read-only because a's PK (a.id) is absent from the result.
+    expect(r.plan.columns[0]).toMatchObject({
+      instance: 0,
+      sourceColumn: "name",
+      editable: false,
+    });
+    // col1 → b.id, editable (b's PK is present); the alias never leaks in.
+    expect(r.plan.columns[1]).toMatchObject({
+      instance: 1,
+      sourceColumn: "id",
+      editable: true,
+    });
+  });
 });
