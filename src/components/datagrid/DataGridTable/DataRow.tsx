@@ -374,6 +374,7 @@ export default function DataRow({ rowIdx, ctx, rowStyle }: DataRowProps) {
             ) : isEditing ? (
               (() => {
                 const errorMessage = pendingEditErrors?.get(key);
+                const cellErrorId = `datagrid-cell-error-${key}`;
                 return (
                   <div className="flex flex-col">
                     {editValue === null ? (
@@ -384,6 +385,10 @@ export default function DataRow({ rowIdx, ctx, rowStyle }: DataRowProps) {
                         className="flex items-center gap-2 outline-none"
                         role="textbox"
                         aria-label={t("editingNullAria", { col: col.name })}
+                        aria-invalid={errorMessage ? true : undefined}
+                        aria-describedby={
+                          errorMessage ? cellErrorId : undefined
+                        }
                         tabIndex={0}
                         onBlur={onSaveCurrentEdit}
                         onKeyDown={(e) => {
@@ -446,6 +451,10 @@ export default function DataRow({ rowIdx, ctx, rowStyle }: DataRowProps) {
                         className="w-full bg-transparent px-1 py-0 text-xs text-foreground outline-none"
                         value={editValue}
                         aria-label={t("editingAria", { col: col.name })}
+                        aria-invalid={errorMessage ? true : undefined}
+                        aria-describedby={
+                          errorMessage ? cellErrorId : undefined
+                        }
                         onChange={(e) => onSetEditValue(e.target.value)}
                         onBlur={onSaveCurrentEdit}
                         onKeyDown={(e) => {
@@ -481,6 +490,7 @@ export default function DataRow({ rowIdx, ctx, rowStyle }: DataRowProps) {
                     )}
                     {errorMessage && (
                       <span
+                        id={cellErrorId}
                         role="alert"
                         aria-live="polite"
                         className="mt-0.5 text-2xs text-destructive"

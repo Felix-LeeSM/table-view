@@ -199,6 +199,49 @@ describe("DataGridTable — Sprint 75 inline validation hint", () => {
     expect(hint.textContent).toMatch(/integer/i);
   });
 
+  // Issue #1136 — the editor input is programmatically tied to its error.
+  it("ties the editor input to its error via aria-invalid + aria-describedby (#1136)", () => {
+    render(
+      <DataGridTable
+        {...makeProps({
+          pendingEditErrors: new Map([["0-1", "Expected integer"]]),
+        })}
+      />,
+    );
+    const input = screen.getByLabelText("Editing age");
+    expect(input).toHaveAttribute("aria-invalid", "true");
+    const describedBy = input.getAttribute("aria-describedby");
+    expect(describedBy).toBeTruthy();
+    expect(document.getElementById(describedBy!)).toBe(
+      screen.getByRole("alert"),
+    );
+  });
+
+  it("does not set aria-invalid on the editor input when there is no error (#1136)", () => {
+    render(<DataGridTable {...makeProps()} />);
+    const input = screen.getByLabelText("Editing age");
+    expect(input).not.toHaveAttribute("aria-invalid");
+    expect(input).not.toHaveAttribute("aria-describedby");
+  });
+
+  it("ties the NULL-chip editor to its error via aria-describedby (#1136)", () => {
+    render(
+      <DataGridTable
+        {...makeProps({
+          editValue: null,
+          pendingEditErrors: new Map([["0-1", "Expected integer"]]),
+        })}
+      />,
+    );
+    const chip = screen.getByRole("textbox", { name: /currently NULL/ });
+    expect(chip).toHaveAttribute("aria-invalid", "true");
+    const describedBy = chip.getAttribute("aria-describedby");
+    expect(describedBy).toBeTruthy();
+    expect(document.getElementById(describedBy!)).toBe(
+      screen.getByRole("alert"),
+    );
+  });
+
   it("hint uses text-destructive token (not raw red) — ADR 0008 compliance", () => {
     render(
       <DataGridTable

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Plus, Trash2, X } from "lucide-react";
 import { Button } from "@components/ui/button";
@@ -62,6 +62,7 @@ export default function FilterBar({
 }: FilterBarProps) {
   const { t } = useTranslation("rdb");
   const [rawSqlError, setRawSqlError] = useState<string | null>(null);
+  const rawSqlErrorId = useId();
 
   const addFilter = () => {
     const firstCol = columns[0]?.name ?? "";
@@ -169,9 +170,15 @@ export default function FilterBar({
               }
             }}
             aria-label={t("filterBar.rawSqlAria")}
+            aria-invalid={rawSqlError ? true : undefined}
+            aria-describedby={rawSqlError ? rawSqlErrorId : undefined}
           />
           {rawSqlError && (
-            <div className="mt-1 text-2xs text-destructive" role="alert">
+            <div
+              id={rawSqlErrorId}
+              className="mt-1 text-2xs text-destructive"
+              role="alert"
+            >
               {rawSqlError}
             </div>
           )}
@@ -268,6 +275,9 @@ export default function FilterBar({
                   type="text"
                   className="h-7 min-w-30 flex-1 border-border bg-background px-2 py-1 text-xs text-foreground"
                   placeholder={t("filterBar.valuePlaceholder")}
+                  aria-label={t("filterBar.valueForColumnAria", {
+                    col: filter.column,
+                  })}
                   value={filter.value ?? ""}
                   onChange={(e) =>
                     updateFilter(index, { value: e.target.value })
