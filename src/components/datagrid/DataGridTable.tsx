@@ -451,13 +451,16 @@ const DataGridTable = forwardRef<DataGridTableHandle, DataGridTableProps>(
     // 좌표계: row=data row index, col=visual column index. virtualized 일 때
     // target row 가 window 밖이면 scrollToIndex 로 스크롤-인 후 hook 이 재시도해
     // focus 한다 (useGridRoving 의 bounded rAF retry).
+    // #1127 AC3 — pendingNewRows 도 roving 좌표계에 포함해 방향키 nav 로 도달
+    // 가능하게 한다 (셀 wiring 은 아래 pending rowgroup 참고). virtualizer 는
+    // data.rows 만 세므로 pending row index 는 scrollToIndex 범위 밖 → guard.
     const roving = useGridRoving(
-      data.rows.length,
+      totalBodyRowCount,
       order.length,
       scrollContainerRef,
       {
         scrollRowIntoView: (row) => {
-          if (shouldVirtualize) {
+          if (shouldVirtualize && row < data.rows.length) {
             rowVirtualizer.scrollToIndex(row, { align: "auto" });
           }
         },
@@ -731,12 +734,20 @@ const DataGridTable = forwardRef<DataGridTableHandle, DataGridTableProps>(
               >
                 {order.map((dIdx, visualIdx) => {
                   const cell = (newRow as unknown[])[dIdx];
+                  // #1127 AC3 — pending row 의 roving index 는 data rows 뒤에
+                  // 이어 붙는다 (rowCount = totalBodyRowCount). 셀에 data-grid-*
+                  // + tabIndex + onFocus 를 달아 data row 격자와 동일 nav.
+                  const pendingRowIdx = data.rows.length + newIdx;
                   return (
                     <div
                       key={`${dIdx}-${visualIdx}`}
                       role="gridcell"
                       aria-colindex={visualIdx + 1}
-                      className="overflow-hidden border-r border-border px-3 py-1 text-xs italic text-muted-foreground whitespace-nowrap text-ellipsis"
+                      data-grid-row={pendingRowIdx}
+                      data-grid-col={visualIdx}
+                      tabIndex={roving.cellTabIndex(pendingRowIdx, visualIdx)}
+                      onFocus={() => roving.syncFocus(pendingRowIdx, visualIdx)}
+                      className="overflow-hidden border-r border-border px-3 py-1 text-xs italic text-muted-foreground whitespace-nowrap text-ellipsis focus-visible:outline-1 focus-visible:-outline-offset-1 focus-visible:outline-ring"
                     >
                       {cell == null ? "NULL" : String(cell)}
                     </div>

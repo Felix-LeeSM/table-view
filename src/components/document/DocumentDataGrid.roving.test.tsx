@@ -11,6 +11,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import DocumentDataGrid from "./DocumentDataGrid";
 import { __resetDocumentStoreForTests } from "@/test-utils/documentStore";
@@ -132,8 +133,9 @@ describe("DocumentDataGrid roving tabindex (Design-swarm #4 Phase 1)", () => {
     expect(cell(grid, 1, 1)).toHaveFocus();
   });
 
-  // Reason: ArrowLeft/ArrowUp 가 edge 에서 clamp (no wrap, no move) (2026-07-01)
-  it("ArrowLeft/ArrowUp clamp at the top-left edge (no wrap)", async () => {
+  // Reason: ArrowLeft 는 left edge 에서 clamp (no wrap). ArrowUp at row 0 은
+  // #1127 로 header 진입으로 바뀌어 더 이상 clamp 하지 않는다 (별도 케이스). (2026-07-05)
+  it("ArrowLeft clamps at the left edge (no wrap)", async () => {
     const grid = await renderGrid();
     act(() => cell(grid, 0, 0).focus());
 
@@ -141,11 +143,18 @@ describe("DocumentDataGrid roving tabindex (Design-swarm #4 Phase 1)", () => {
     await flushRaf();
     expect(cell(grid, 0, 0)).toHaveAttribute("tabindex", "0");
     expect(cell(grid, 0, 0)).toHaveFocus();
+  });
+
+  // Reason: #1127 AC1 — 공유 HeaderRow/useGridRoving 확장이 Document 그리드에도
+  // 동일 적용된다: 최상단 row 에서 ArrowUp → 대응 컬럼 header 셀 진입. (2026-07-05)
+  it("ArrowUp from the top data row enters the header cell (#1127)", async () => {
+    const grid = await renderGrid();
+    act(() => cell(grid, 0, 0).focus());
 
     fireEvent.keyDown(cell(grid, 0, 0), { key: "ArrowUp" });
     await flushRaf();
-    expect(cell(grid, 0, 0)).toHaveAttribute("tabindex", "0");
-    expect(cell(grid, 0, 0)).toHaveFocus();
+    const headers = within(grid).getAllByRole("columnheader");
+    expect(headers[0]).toHaveFocus();
   });
 
   // Reason: Home → 같은 row 첫 col, End → 마지막 col (2026-07-01)

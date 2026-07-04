@@ -129,17 +129,13 @@ describe("DataGridTable roving tabindex (Design-swarm #4 Phase 2)", () => {
     expect(cell(1, 1)).toHaveFocus();
   });
 
-  // Reason: ArrowLeft/ArrowUp 가 top-left edge 에서 clamp (no wrap). (2026-07-01)
-  it("ArrowLeft/ArrowUp clamp at the top-left edge", async () => {
+  // Reason: ArrowLeft 는 left edge 에서 clamp (no wrap). ArrowUp at row 0 은
+  // 더 이상 clamp 하지 않고 header 로 진입한다 (#1127; 별도 케이스에서 검증). (2026-07-05)
+  it("ArrowLeft clamps at the left edge", async () => {
     render(<DataGridTable {...makeProps()} />);
     act(() => cell(0, 0).focus());
 
     fireEvent.keyDown(cell(0, 0), { key: "ArrowLeft" });
-    await flushRaf();
-    expect(cell(0, 0)).toHaveAttribute("tabindex", "0");
-    expect(cell(0, 0)).toHaveFocus();
-
-    fireEvent.keyDown(cell(0, 0), { key: "ArrowUp" });
     await flushRaf();
     expect(cell(0, 0)).toHaveAttribute("tabindex", "0");
     expect(cell(0, 0)).toHaveFocus();
@@ -231,5 +227,45 @@ describe("DataGridTable roving tabindex (Design-swarm #4 Phase 2)", () => {
     act(() => cell(0, 1).focus());
     fireEvent.keyDown(cell(0, 1), { key: "Enter" });
     expect(onStartEdit).not.toHaveBeenCalled();
+  });
+
+  // Reason: #1127 AC1 — 최상단 data row 에서 ArrowUp → 대응 컬럼 header 진입.
+  // 헤더행/body 를 잇는 유일한 크로스-바운더리 이동 (roving anchor 유지). (2026-07-05)
+  it("ArrowUp from the top data row enters the header cell of the same column (#1127)", async () => {
+    render(<DataGridTable {...makeProps()} />);
+    act(() => cell(0, 1).focus());
+    fireEvent.keyDown(cell(0, 1), { key: "ArrowUp" });
+    await flushRaf();
+    const headers = screen.getAllByRole("columnheader");
+    expect(headers[1]).toHaveFocus();
+  });
+
+  // Reason: #1127 AC1 — header 셀에서 ArrowDown → 대응 컬럼의 최상단 data cell
+  // 복귀. header ArrowUp→body ArrowDown round-trip 이 컬럼을 보존한다. (2026-07-05)
+  it("ArrowDown from a header cell returns to the top data row of the same column (#1127)", async () => {
+    render(<DataGridTable {...makeProps()} />);
+    const headers = screen.getAllByRole("columnheader");
+    act(() => headers[2]!.focus());
+    fireEvent.keyDown(headers[2]!, { key: "ArrowDown" });
+    await flushRaf();
+    expect(cell(0, 2)).toHaveFocus();
+  });
+
+  // Reason: #1127 AC3 — pending-new-rows 도 방향키 nav 로 도달 가능해야 한다.
+  // roving rowCount 가 pendingNewRows 를 포함하고 셀에 data-grid-* + tabIndex +
+  // onFocus 가 붙어 last data row 에서 ArrowDown 으로 내려간다. (2026-07-05)
+  it("pending new rows are reachable by ArrowDown (#1127)", async () => {
+    const pendingNewRows = [[99, "New", "new@example.com"]];
+    render(<DataGridTable {...makeProps({ pendingNewRows })} />);
+    // data rows 0..2, pending row index = 3.
+    const pendingCell = document.querySelector<HTMLElement>(
+      `[data-grid-row="3"][data-grid-col="0"]`,
+    );
+    expect(pendingCell).not.toBeNull();
+
+    act(() => cell(2, 0).focus());
+    fireEvent.keyDown(cell(2, 0), { key: "ArrowDown" });
+    await flushRaf();
+    expect(pendingCell).toHaveFocus();
   });
 });

@@ -28,7 +28,11 @@ export interface GridRoving {
   focusedCell: { row: number; col: number };
   /** cell `onFocus` 용 — STATE ONLY. `.focus()` 를 호출하지 않는다. */
   syncFocus: (row: number, col: number) => void;
-  /** `role="grid"` 컨테이너용 — 방향키/Home/End. 이것만 DOM focus 를 움직인다. */
+  /**
+   * `role="grid"` 컨테이너용 — 방향키/Home/End/PageUp·Down/Ctrl+Home·End. 이것만
+   * DOM focus 를 움직인다. row 0 에서 ArrowUp 은 대응 컬럼 header 셀로 진입한다
+   * (#1127; header→body 복귀는 HeaderRow 의 ArrowDown).
+   */
   onKeyDown: (e: React.KeyboardEvent) => void;
   cellTabIndex: (row: number, col: number) => 0 | -1;
 }
@@ -129,13 +133,36 @@ export function useGridRoving(
       const { row, col } = focusedRef.current;
       let nextRow = clamp(row, rowCount - 1);
       let nextCol = clamp(col, colCount - 1);
+
+      // #1127 AC1 — 최상단 data row 에서 ArrowUp → 대응 컬럼 header 셀 진입.
+      // header 는 grid container 의 N번째 role="columnheader" (N=visual col).
+      // body roving anchor 는 그대로 두고 header 로 focus 만 넘긴다 (header 의
+      // onFocus 가 자체 roving 을 sync; ArrowDown 으로 이 컬럼 data cell 복귀).
+      // header 없는 grid 는 undefined → 아래 clamp 로 fall through (기존 동작).
+      if (key === "ArrowUp" && nextRow === 0) {
+        const header = containerRef.current?.querySelectorAll<HTMLElement>(
+          '[role="columnheader"]',
+        )[nextCol];
+        if (header) {
+          header.focus();
+          return;
+        }
+      }
+
+      // #1127 AC2 — Ctrl/Cmd+Home/End = 첫/마지막 *셀* 점프 (grid corner). 수식어
+      // 없는 Home/End 는 현재 row 의 첫/마지막 col 만 이동한다.
+      const corner = e.ctrlKey || e.metaKey;
       if (key === "ArrowUp") nextRow = clamp(nextRow - 1, rowCount - 1);
       else if (key === "ArrowDown") nextRow = clamp(nextRow + 1, rowCount - 1);
       else if (key === "ArrowLeft") nextCol = clamp(nextCol - 1, colCount - 1);
       else if (key === "ArrowRight") nextCol = clamp(nextCol + 1, colCount - 1);
-      else if (key === "Home") nextCol = 0;
-      else if (key === "End") nextCol = colCount - 1;
-      else if (key === "PageUp")
+      else if (key === "Home") {
+        nextCol = 0;
+        if (corner) nextRow = 0;
+      } else if (key === "End") {
+        nextCol = colCount - 1;
+        if (corner) nextRow = rowCount - 1;
+      } else if (key === "PageUp")
         nextRow = clamp(nextRow - PAGE_ROWS, rowCount - 1);
       else if (key === "PageDown")
         nextRow = clamp(nextRow + PAGE_ROWS, rowCount - 1);
@@ -145,7 +172,7 @@ export function useGridRoving(
       setFocusedCell(next);
       focusCell(nextRow, nextCol);
     },
-    [rowCount, colCount, focusCell],
+    [rowCount, colCount, focusCell, containerRef],
   );
 
   return {
