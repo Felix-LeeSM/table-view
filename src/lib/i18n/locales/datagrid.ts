@@ -25,8 +25,9 @@ export const en = {
   discard: "Discard",
   discardAria: "Discard changes",
   undo: "Undo",
-  undoAria: "Undo last pending change",
-  undoTitle: "Undo (Cmd+Z) — pending changes only",
+  undoAria: "Undo a pending edit, or re-stage the last commit's values",
+  undoTitle:
+    "Undo (Cmd+Z) — steps back pending edits; after a commit, re-stages the previous values as a new pending edit (commit again to apply)",
 
   // DataGridToolbar — discard confirmation
   discardConfirmTitle: "Discard all changes?",
@@ -113,6 +114,10 @@ export const en = {
 
   // useDataGridEdit — toast
   noChangesToCommit: "No changes to commit",
+  // #1126 Phase 1 — post-commit Cmd+Z can't re-stage a commit that added or
+  // removed rows (auto-increment / server defaults aren't reproducible).
+  undoRestageBlocked:
+    "This commit added or removed rows and can't be undone. Re-add or re-delete manually to change it.",
 
   // useDataGridPreviewCommit / paradigmEditAdapter — commit lifecycle
   commitFlow: {
@@ -154,8 +159,9 @@ export const ko = {
   discard: "취소",
   discardAria: "변경사항 취소",
   undo: "실행 취소",
-  undoAria: "마지막 대기 변경 실행 취소",
-  undoTitle: "실행 취소 (Cmd+Z) — 대기 중인 변경사항만",
+  undoAria: "대기 편집을 되돌리거나 직전 커밋 값을 다시 스테이징",
+  undoTitle:
+    "실행 취소 (Cmd+Z) — 대기 편집을 되돌리고, 커밋 후에는 이전 값을 새 대기 편집으로 다시 올립니다 (다시 커밋해야 반영)",
 
   // DataGridToolbar — discard confirmation
   discardConfirmTitle: "모든 변경사항을 취소할까요?",
@@ -242,6 +248,10 @@ export const ko = {
 
   // useDataGridEdit — toast
   noChangesToCommit: "커밋할 변경사항이 없습니다",
+  // #1126 Phase 1 — 행 추가/삭제가 포함된 커밋은 커밋 후 Cmd+Z 로 재스테이징
+  // 불가 (auto-increment / 서버 기본값 재현 불가).
+  undoRestageBlocked:
+    "행 추가/삭제가 포함된 커밋은 되돌릴 수 없습니다. 변경하려면 직접 다시 추가/삭제하세요.",
 
   // useDataGridPreviewCommit / paradigmEditAdapter — commit lifecycle
   commitFlow: {

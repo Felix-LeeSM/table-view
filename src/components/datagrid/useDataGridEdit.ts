@@ -98,6 +98,7 @@ export function useDataGridEdit({
     setPendingNewRows,
     setPendingDeletedRowKeys,
     clearPendingEntry,
+    restageAfterCommit,
     pushSnapshot,
     undo,
     canUndo,
@@ -145,6 +146,19 @@ export function useDataGridEdit({
     setEditValue("");
   }, [clearPendingEntry, clearSelection]);
 
+  // ADR 0048 (#1126) — commit-success cleanup differs from discard: the undo
+  // stack must SURVIVE the commit. `restageAfterCommit` swaps the committed
+  // pending edits for a single reversal snapshot so a post-commit Cmd+Z
+  // re-stages the old values as a new pending edit (DB writes stay commit-only).
+  // Everything else mirrors `clearAllPending` (drop editor / selection / errors).
+  const clearPendingAfterCommit = useCallback(() => {
+    restageAfterCommit();
+    setPendingEditErrors(new Map());
+    clearSelection();
+    setEditingCell(null);
+    setEditValue("");
+  }, [restageAfterCommit, clearSelection]);
+
   const {
     sqlPreview,
     setSqlPreview: setSqlPreviewExposed,
@@ -174,7 +188,7 @@ export function useDataGridEdit({
     pendingDeletedRowSnapshots,
     canEditRows,
     setPendingEditErrors,
-    clearAllPending,
+    onCommitCleanup: clearPendingAfterCommit,
     beginCommitFlash,
   });
 

@@ -53,11 +53,12 @@ export interface UseDataGridPreviewCommitParams {
   pendingDeletedRowSnapshots: ReadonlyMap<string, ReadonlyArray<unknown>>;
   canEditRows?: boolean;
   /**
-   * 성공 / discard 등에서 facade 가 보유한 모든 pending state 와
-   * editing cell / selection 을 한 번에 비우는 cleanup. RDB / MQL 양쪽
-   * 성공 분기에서 호출.
+   * Commit-success cleanup. ADR 0048 (#1126): this is NOT a plain
+   * clear-all — the facade re-stages the committed edits into the undo
+   * stack (post-commit Cmd+Z) while dropping editor / selection / errors.
+   * Called on the RDB / MQL success branch only.
    */
-  clearAllPending: () => void;
+  onCommitCleanup: () => void;
   /**
    * 커밋 시도 중 surface 한 cell-level coercion error map. preview 생성
    * 시 reset (adapter 가 채운 `coerceErrors`), batch 실패 시 실패
@@ -136,7 +137,7 @@ export function useDataGridPreviewCommit(
     pendingEditRowSnapshots,
     pendingDeletedRowSnapshots,
     canEditRows = true,
-    clearAllPending,
+    onCommitCleanup,
     setPendingEditErrors,
     beginCommitFlash,
   } = params;
@@ -340,7 +341,7 @@ export function useDataGridPreviewCommit(
       if (result.ok) {
         setSession(null);
         setCommitError(null);
-        clearAllPending();
+        onCommitCleanup();
         fetchData();
         return;
       }
@@ -373,7 +374,7 @@ export function useDataGridPreviewCommit(
         });
       }
     },
-    [clearAllPending, fetchData, setPendingEditErrors],
+    [onCommitCleanup, fetchData, setPendingEditErrors],
   );
 
   const handleCommit = useCallback(

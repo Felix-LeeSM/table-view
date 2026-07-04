@@ -211,6 +211,67 @@ export type EditSnapshot = {
   // three diff slices. Must mirror `dataGridEditStore.EditSnapshot`.
   pendingEditRowSnapshots: ReadonlyMap<string, ReadonlyArray<unknown>>;
   pendingDeletedRowSnapshots: ReadonlyMap<string, ReadonlyArray<unknown>>;
+  // #1126 Phase 1 (ADR 0048) — set on a post-commit snapshot whose commit
+  // included INSERT/DELETE rows, which can't be re-staged (auto-increment /
+  // server defaults aren't reproducible). `undo()` pops it with a toast
+  // instead of staging anything. Must mirror `dataGridEditStore.EditSnapshot`.
+  restageBlocked?: boolean;
 };
 
 export const UNDO_STACK_MAX = 50;
+
+/**
+ * #1126 Phase 1 (ADR 0048) — collapse the just-committed pending state into a
+ * single reversal snapshot for the undo stack, so a post-commit Cmd+Z
+ * re-stages the pre-commit values as a NEW pending edit (DB writes stay
+ * commit-only). Pure Map/Set rebuild — no IPC, no DB write.
+ *
+ * - UPDATE-only commit → reversal edits keyed by the base cell key
+ *   (`${rowIdx}-${colIdx}`), value = the ORIGINAL cell from the row-identity
+ *   anchor (`pendingEditRowSnapshots`). Nested JSON-path keys collapse to one
+ *   whole-cell reversal. The anchor is carried so the reversal's own commit
+ *   builds its WHERE from the row the user touched.
+ * - Commit that added or deleted rows → a `restageBlocked` marker: Phase 1
+ *   does not reproduce auto-increment / server defaults, so the whole commit
+ *   (even a mixed batch) is non-restageable. `undo()` skips it with a toast.
+ * - Nothing pending (or no anchored edit) → `null`; the stack ends up empty.
+ */
+export function buildRestageSnapshot(source: {
+  pendingEdits: ReadonlyMap<string, string | null>;
+  pendingNewRows: ReadonlyArray<ReadonlyArray<unknown>>;
+  pendingDeletedRowKeys: ReadonlySet<string>;
+  pendingEditRowSnapshots: ReadonlyMap<string, ReadonlyArray<unknown>>;
+}): EditSnapshot | null {
+  if (
+    source.pendingNewRows.length > 0 ||
+    source.pendingDeletedRowKeys.size > 0
+  ) {
+    return {
+      pendingEdits: new Map(),
+      pendingNewRows: [],
+      pendingDeletedRowKeys: new Set(),
+      pendingEditRowSnapshots: new Map(),
+      pendingDeletedRowSnapshots: new Map(),
+      restageBlocked: true,
+    };
+  }
+  const reversalEdits = new Map<string, string | null>();
+  const reversalAnchors = new Map<string, ReadonlyArray<unknown>>();
+  for (const key of source.pendingEdits.keys()) {
+    const baseKey = key.split(":")[0]!;
+    if (reversalEdits.has(baseKey)) continue;
+    const anchor = source.pendingEditRowSnapshots.get(baseKey);
+    if (!anchor) continue; // no row identity → can't rebuild the reversal
+    const colIdx = Number.parseInt(baseKey.split("-")[1]!, 10);
+    reversalEdits.set(baseKey, cellToEditValue(anchor[colIdx]));
+    reversalAnchors.set(baseKey, anchor);
+  }
+  if (reversalEdits.size === 0) return null;
+  return {
+    pendingEdits: reversalEdits,
+    pendingNewRows: [],
+    pendingDeletedRowKeys: new Set(),
+    pendingEditRowSnapshots: reversalAnchors,
+    pendingDeletedRowSnapshots: new Map(),
+  };
+}

@@ -138,7 +138,9 @@ describe("DataGridToolbar — Duplicate Row button", () => {
       screen.queryByRole("button", { name: "Commit changes" }),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "Undo last pending change" }),
+      screen.queryByRole("button", {
+        name: "Undo a pending edit, or re-stage the last commit's values",
+      }),
     ).not.toBeInTheDocument();
   });
 });
@@ -182,7 +184,7 @@ describe("DataGridToolbar — Sprint 249 Undo button (AC-249-T1..T3)", () => {
     const onUndo = vi.fn();
     renderToolbar({ onUndo, canUndo: true });
     const btn = screen.getByRole("button", {
-      name: "Undo last pending change",
+      name: "Undo a pending edit, or re-stage the last commit's values",
     });
     expect(btn).toBeInTheDocument();
     expect(btn).not.toBeDisabled();
@@ -192,7 +194,7 @@ describe("DataGridToolbar — Sprint 249 Undo button (AC-249-T1..T3)", () => {
     const onUndo = vi.fn();
     renderToolbar({ onUndo, canUndo: false });
     const btn = screen.getByRole("button", {
-      name: "Undo last pending change",
+      name: "Undo a pending edit, or re-stage the last commit's values",
     });
     expect(btn).toBeDisabled();
   });
@@ -201,7 +203,7 @@ describe("DataGridToolbar — Sprint 249 Undo button (AC-249-T1..T3)", () => {
     const onUndo = vi.fn();
     renderToolbar({ onUndo, canUndo: true });
     const btn = screen.getByRole("button", {
-      name: "Undo last pending change",
+      name: "Undo a pending edit, or re-stage the last commit's values",
     });
 
     fireEvent.click(btn);
@@ -216,7 +218,9 @@ describe("DataGridToolbar — Sprint 249 Undo button (AC-249-T1..T3)", () => {
     // can't bleed a non-functional button into the document toolbar.
     renderToolbar();
     expect(
-      screen.queryByRole("button", { name: "Undo last pending change" }),
+      screen.queryByRole("button", {
+        name: "Undo a pending edit, or re-stage the last commit's values",
+      }),
     ).not.toBeInTheDocument();
   });
 });
