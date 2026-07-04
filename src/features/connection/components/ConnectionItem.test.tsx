@@ -904,15 +904,28 @@ describe("ConnectionItem", () => {
     expect(screen.getByText(label)).toBeInTheDocument();
   });
 
-  it("does not render badge for unknown environment value", () => {
+  // Reason: #1125 (2026-07-04) — a non-canonical tag (URL import / legacy
+  //         reconcile / hand-edited SQLite) used to render NO badge, so
+  //         "something is wrong with this tag" showed as "nothing". It must
+  //         now surface an info-level "Unknown" signal; raw value in the
+  //         title so the user can spot the typo. Safe Mode treats it as unset.
+  it("renders an 'Unknown' badge signal for a non-canonical environment value", () => {
     setStoreState({});
     render(
       <ConnectionItem
-        connection={makeConnection({ environment: "unknown-env" })}
+        connection={makeConnection({ environment: "Production" })}
       />,
     );
-    // Should not render a badge for an unrecognized environment
-    expect(screen.queryByText("unknown-env")).not.toBeInTheDocument();
+    const badge = screen.getByText("Unknown");
+    expect(badge).toBeInTheDocument();
+    // The raw, unrecognized value is preserved in the tooltip, not the label.
+    expect(badge).toHaveAttribute(
+      "title",
+      expect.stringContaining("Production"),
+    );
+    // The canonical "Production" badge (exact "production") must NOT show —
+    // that would falsely imply production protection is active.
+    expect(screen.queryByText("Production")).not.toBeInTheDocument();
   });
 
   it("environment badge has correct title attribute", () => {

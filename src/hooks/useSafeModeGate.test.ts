@@ -98,6 +98,28 @@ describe("useSafeModeGate (store wiring)", () => {
     });
   });
 
+  // Reason: #1125 (2026-07-04) — a non-canonical stored tag ("Production",
+  // "prod", "production ") must NOT masquerade as production. It is
+  // canonicalized to null at the gate → env-unset → allow (#1114 policy);
+  // the "Unknown" ConnectionItem badge is the surfaced signal.
+  it("[#1125] non-canonical environment tag is not treated as production", () => {
+    useConnectionStore.setState({
+      connections: [makeConn({ environment: "Production" })],
+    });
+    useSafeModeStore.setState({ mode: "off" });
+    const { result } = renderHook(() => useSafeModeGate("c1"));
+    expect(result.current.decide(DANGER).action).toBe("allow");
+  });
+
+  it("[#1125] non-canonical missingConnectionEnvironment fallback is not production", () => {
+    useConnectionStore.setState({ connections: [] });
+    useSafeModeStore.setState({ mode: "off" });
+    const { result } = renderHook(() =>
+      useSafeModeGate("missing", { missingConnectionEnvironment: "prod" }),
+    );
+    expect(result.current.decide(DANGER).action).toBe("allow");
+  });
+
   it("[AC-436-H2] null connectionId still maps to null environment", () => {
     useConnectionStore.setState({ connections: [] });
     useSafeModeStore.setState({ mode: "warn" });

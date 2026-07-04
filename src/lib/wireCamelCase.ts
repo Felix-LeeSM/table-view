@@ -1,4 +1,6 @@
 import type { ConnectionConfig, ConnectionStatus } from "@/types/connection";
+import { canonicalEnvironmentTag } from "@/features/connection/model";
+import { logger } from "@/lib/logger";
 import type {
   DocumentColumn,
   DocumentQueryResult,
@@ -222,6 +224,23 @@ export function normalizeQueryState(value: unknown): QueryState {
   return { status: "idle" };
 }
 
+/**
+ * #1125 — the connection load boundary. A non-canonical stored `environment`
+ * (URL import / store reconcile / hand-edited SQLite) loses production
+ * protection silently because the guard is an exact `=== "production"`. We
+ * keep the raw value (the UI renders an "Unknown" badge — the info-level
+ * signal) but emit a dev warning so the mismatch is diagnosable at the source.
+ */
+function warnNonCanonicalEnv(env: string | null | undefined): string | null {
+  const normalized = env ?? null;
+  if (normalized !== null && canonicalEnvironmentTag(normalized) === null) {
+    logger.warn(
+      `[connection] non-canonical environment tag ${JSON.stringify(normalized)} — treated as unset for Safe Mode; fix the connection's environment tag`,
+    );
+  }
+  return normalized;
+}
+
 export function normalizeConnectionConfig(value: unknown): ConnectionConfig {
   const r = record(value);
   const dbType = stringOr(pick(r, "dbType", "db_type"), "postgresql");
@@ -242,7 +261,7 @@ export function normalizeConnectionConfig(value: unknown): ConnectionConfig {
     keepAliveInterval: optionalNumber(
       pick(r, "keepAliveInterval", "keep_alive_interval"),
     ),
-    environment: optionalString(r.environment),
+    environment: warnNonCanonicalEnv(optionalString(r.environment)),
     hasPassword: r.hasPassword === true || r.has_password === true,
     paradigm:
       r.paradigm === "document" ||

@@ -4,6 +4,7 @@ import { useConnectionStore } from "@stores/connectionStore";
 import type { StatementAnalysis } from "@/lib/sql/sqlSafety";
 import { decideSafeModeAction, type SafeModeDecision } from "@/lib/safeMode";
 import type { ConnectionConfig } from "@/types/connection";
+import { canonicalEnvironmentTag } from "@/features/connection/model";
 
 /**
  * Paradigm-agnostic Safe Mode gate. Pure store wiring around
@@ -49,8 +50,12 @@ export function resolveSafeModeEnvironment(
 ): string | null {
   if (!connectionId) return null;
   const connection = connections.find((c) => c.id === connectionId);
-  if (!connection) return missingConnectionEnvironment;
-  return connection.environment ?? null;
+  // #1125 — canonicalize at the decision trust boundary so a non-canonical
+  // stored tag (e.g. "Production", "prod") never masquerades as production
+  // and never silently loses the guard. Unrecognized → null → env-unset =
+  // allow (#1114 policy); the "Unknown" badge is the surfaced signal.
+  if (!connection) return canonicalEnvironmentTag(missingConnectionEnvironment);
+  return canonicalEnvironmentTag(connection.environment);
 }
 
 export function useSafeModeGate(

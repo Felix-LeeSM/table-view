@@ -202,7 +202,7 @@ export default function ConnectionItem({
               {connection.name}
             </span>
             {connection.environment &&
-              connection.environment in ENVIRONMENT_META && (
+              (connection.environment in ENVIRONMENT_META ? (
                 <span
                   className="shrink-0 rounded px-1.5 py-0.5 text-3xs font-medium leading-none"
                   style={{
@@ -221,7 +221,19 @@ export default function ConnectionItem({
                       .label
                   }
                 </span>
-              )}
+              ) : (
+                // #1125 — a non-canonical tag was silent before (no badge at
+                // all). Surface it as an info-level "Unknown" signal so the
+                // user sees Safe Mode isn't keying off it; raw value in title.
+                <span
+                  className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-3xs font-medium leading-none text-muted-foreground"
+                  title={t("item.unknownEnvironment", {
+                    value: connection.environment,
+                  })}
+                >
+                  {t("item.unknownEnvironmentBadge")}
+                </span>
+              ))}
             <span
               className="ml-auto shrink-0 rounded px-1 py-0.5 text-4xs font-semibold leading-none"
               style={{

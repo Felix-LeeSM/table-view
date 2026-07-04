@@ -92,6 +92,9 @@ export const en = {
     deleteDescription: 'Are you sure you want to delete "{{name}}"?',
     cancel: "Cancel",
     delete: "Delete",
+    unknownEnvironmentBadge: "Unknown",
+    unknownEnvironment:
+      'Unrecognized environment tag "{{value}}" — Safe Mode treats it as unset. Re-select the environment in the connection settings.',
   },
   // ConnectionList
   list: {
@@ -389,6 +392,9 @@ export const ko = {
     deleteDescription: '"{{name}}"을(를) 정말 삭제하시겠습니까?',
     cancel: "취소",
     delete: "삭제",
+    unknownEnvironmentBadge: "알 수 없음",
+    unknownEnvironment:
+      '인식되지 않은 environment 태그 "{{value}}" — Safe Mode 는 미설정으로 처리합니다. 연결 설정에서 environment 를 다시 선택하세요.',
   },
   list: {
     ariaLabel: "그룹 없는 연결 드롭 영역",
