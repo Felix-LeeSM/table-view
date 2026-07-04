@@ -140,7 +140,7 @@ describe("DataGridTable virtualization (sprint-114)", () => {
       />,
     );
     const rows = screen.getAllByRole("row");
-    // 1 header + ≤ 100 body rows. 600 / 32 ≈ 18 visible + overscan ≈ 28 total.
+    // 1 header + ≤ 100 body rows. 600 / 32 ≈ 19 visible + overscan(40, clamped at top since scrolled to index 0) ≈ 59 total.
     expect(rows.length).toBeLessThanOrEqual(101);
     // Sanity: at least the header + a non-trivial slice rendered.
     expect(rows.length).toBeGreaterThan(1);
