@@ -173,13 +173,30 @@ function statementAnalysisFromAst(
   switch (ast.kind) {
     // Sprint-393b — `WITH (CTE wrap) <inner-statement>` inherits the inner
     // statement's classification per D1/D2. The recursive call uses the
-    // same mapper to avoid duplicating the per-variant rules. CTE bodies
-    // are SELECTs (read-only), so they do not need their own classification.
+    // same mapper to avoid duplicating the per-variant rules.
+    //
+    // Issue #1119 — the CTE bodies (`ctes[]`) are analyzed too, not just
+    // `inner_statement`. The grammar currently restricts CTE bodies to
+    // SELECT, but a future widening to PostgreSQL writable CTEs
+    // (`WITH d AS (DELETE FROM t RETURNING *) SELECT * FROM d`) would
+    // otherwise let a destructive body slip through the AST path as
+    // `info` — the regex fallback (`analyzeDmlCte`) only runs when parsing
+    // fails. Combine the inner statement and every CTE body at worst
+    // severity; any part the mapper cannot classify returns `null` so the
+    // caller falls through to the regex matcher on the raw SQL, the more
+    // protective outcome.
     case "with": {
-      const inner = ast.inner_statement;
-      const innerAnalysis = statementAnalysisFromAst(inner);
-      if (innerAnalysis === null) return null;
-      return innerAnalysis;
+      const parts: SqlParseResult[] = [
+        ast.inner_statement,
+        ...ast.ctes.map((cte) => cte.body),
+      ];
+      const analyses: StatementAnalysis[] = [];
+      for (const part of parts) {
+        const analysis = statementAnalysisFromAst(part);
+        if (analysis === null) return null;
+        analyses.push(analysis);
+      }
+      return worstAnalysis(analyses);
     }
     // Sprint-395 — EXPLAIN wrap inherits the inner statement's
     // classification verbatim per D1. The outer EXPLAIN does not add a
