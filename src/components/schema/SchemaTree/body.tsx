@@ -197,7 +197,8 @@ function FlatTableList({
   if (isLoadingTables && schemaTables.length === 0) {
     return (
       <div>
-        <div className="px-3 py-1 text-xs text-muted-foreground">
+        {/* #1137 — RDB tree loading/empty announced like DocumentDatabaseTree. */}
+        <div className="px-3 py-1 text-xs text-muted-foreground" role="status">
           {ctx.t("loadingTables")}
         </div>
       </div>
@@ -207,7 +208,10 @@ function FlatTableList({
   if (schemaTables.length === 0 && fileAnalyticsSources.length === 0) {
     return (
       <div>
-        <div className="px-3 py-1 text-2xs italic text-muted-foreground">
+        <div
+          className="px-3 py-1 text-2xs italic text-muted-foreground"
+          role="status"
+        >
           {ctx.t("emptyTables")}
         </div>
       </div>
@@ -217,7 +221,10 @@ function FlatTableList({
   return (
     <div>
       {schemaTables.length === 0 && (
-        <div className="px-3 py-1 text-2xs italic text-muted-foreground">
+        <div
+          className="px-3 py-1 text-2xs italic text-muted-foreground"
+          role="status"
+        >
           {ctx.t("emptyTables")}
         </div>
       )}
@@ -276,7 +283,7 @@ function CategoryCascade({
   if (isLoadingTables && schemaTables.length === 0) {
     return (
       <div>
-        <div className="px-8 py-1 text-xs text-muted-foreground">
+        <div className="px-8 py-1 text-xs text-muted-foreground" role="status">
           {ctx.t("loadingTables")}
         </div>
       </div>

@@ -487,7 +487,14 @@ function CompletedSingleResult({
         </div>
       )}
       {/* Status bar */}
-      <div className="flex items-center justify-between border-b border-border px-3 py-1.5 text-xs text-secondary-foreground">
+      {/* #1137 — completion summary (query type + row count) routed to a
+          polite live region so SR users hear "done — N rows", matching the
+          error `role="alert"` on the error branch (consistency). */}
+      <div
+        role="status"
+        aria-live="polite"
+        className="flex items-center justify-between border-b border-border px-3 py-1.5 text-xs text-secondary-foreground"
+      >
         <span>
           {queryTypeLabel(result.queryType)}
           {result.queryType === "select" && (
@@ -664,10 +671,15 @@ export default function QueryResultGrid({
   // Running state
   if (queryState.status === "running") {
     return (
-      <div className="flex flex-1 flex-col items-center justify-center">
+      <div
+        role="status"
+        aria-busy="true"
+        className="flex flex-1 flex-col items-center justify-center"
+      >
         <Loader2
           className="mb-2 animate-spin text-muted-foreground"
           size={24}
+          aria-hidden="true"
         />
         <p className="text-sm text-muted-foreground">
           {t("resultGrid.executing")}

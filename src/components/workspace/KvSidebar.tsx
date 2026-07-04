@@ -297,6 +297,12 @@ export default function KvSidebar({ connectionId }: KvSidebarProps) {
       <div
         className="flex items-center justify-between gap-2 border-b border-border px-3 py-1.5 text-3xs text-muted-foreground"
         data-testid="redis-scan-status"
+        // #1137 — announce scanned-key count / cursor politely; busy while
+        // scanning. Bare `aria-live` (no `role="status"`) keeps this a live
+        // region without colliding with the sidebar's transient status
+        // messages (safe-mode / loading), which own the single status role.
+        aria-live="polite"
+        aria-busy={loadingKeys || undefined}
       >
         <span>{t("kvSidebar.limitLabel", { limit: KEY_SCAN_LIMIT })}</span>
         <span>{scanStatusText}</span>

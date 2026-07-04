@@ -524,6 +524,10 @@ const DataGridTable = forwardRef<DataGridTableHandle, DataGridTableProps>(
         className="relative flex-1 overflow-auto text-sm"
         ref={scrollContainerRef}
         role="grid"
+        // #1137 — flag the grid busy while a (re)fetch is in flight so SR
+        // users hear the loading transition (consistent with the toolbar
+        // commit-flash `aria-busy`).
+        aria-busy={loading || undefined}
         aria-rowcount={1 + data.rows.length + pendingNewRows.length}
         aria-colcount={colCount}
         style={gridStyle}

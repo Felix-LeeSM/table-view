@@ -201,7 +201,14 @@ function CompletedSearchResult({ result }: { result: SearchResultEnvelope }) {
     >
       <header className="shrink-0 border-b border-border px-3 py-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+          {/* #1137 — hit-count summary in a polite live region so SR users
+              hear the result scale when the run completes (loading state
+              already announces via role="status"; keep them consistent). */}
+          <div
+            role="status"
+            aria-live="polite"
+            className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground"
+          >
             <Metric icon={Search}>
               {t("hitsCount", {
                 count: formatTotalHits(data.total.value, data.total.relation),
