@@ -80,13 +80,17 @@ pub fn classify_cancel_error(message: &str) -> CancelError {
 /// adapter's `cancel_query`, then surfaces the result with classification.
 /// Returns `Ok(())` on success, `Err(CancelError)` otherwise.
 ///
-/// `server_pid_override` lets the caller bypass the affinity lookup when
-/// they already know the pid (typical Mongo flow: the runner exposes the
-/// opid mid-query, and the cancel IPC reads it from the user-visible UI).
+/// `query_tag`, when present, routes through the adapter's tag-based cancel
+/// (`cancel_query_by_tag`) instead of the pid path. Mongo uses this: the
+/// opid is not client-visible, so the runner tags the op with
+/// `command.comment == query_id` and the adapter resolves + `killOp`s it at
+/// cancel time (Issue #1269). RDB adapters keep the pid path (`server_pid`
+/// captured at executeQuery time via `query_server_pids`, Issue #1230).
 pub async fn cancel_query_native_inner(
     state: &AppState,
     connection_id: &str,
     server_pid: i64,
+    query_tag: Option<&str>,
 ) -> Result<(), CancelError> {
     if connection_id.trim().is_empty() {
         return Err(CancelError::NetworkError {
@@ -107,11 +111,16 @@ pub async fn cancel_query_native_inner(
             .unwrap_or(fallback)
     })?;
 
-    match active.lifecycle().cancel_query(server_pid).await {
+    let outcome = match query_tag {
+        Some(tag) => active.lifecycle().cancel_query_by_tag(tag).await,
+        None => active.lifecycle().cancel_query(server_pid).await,
+    };
+    match outcome {
         Ok(()) => {
             info!(
                 connection_id = %connection_id,
                 server_pid = server_pid,
+                query_tag = query_tag.unwrap_or(""),
                 "Native cancel issued"
             );
             Ok(())
@@ -120,6 +129,7 @@ pub async fn cancel_query_native_inner(
             warn!(
                 connection_id = %connection_id,
                 server_pid = server_pid,
+                query_tag = query_tag.unwrap_or(""),
                 error = %app_err,
                 "Native cancel failed"
             );
@@ -139,7 +149,10 @@ impl CancelError {
     }
 }
 
-/// IPC entry — `cancel_query_native(connection_id, server_pid)`.
+/// IPC entry — `cancel_query_native(connection_id, server_pid, query_id?)`.
+///
+/// `query_id` (Issue #1269) is the tag-based route for adapters without a
+/// client-visible pid (Mongo): when present it wins over `server_pid`.
 ///
 /// Returns `Ok(())` on success. Failure path surfaces `AppError::Cancel`,
 /// which serialises as `{ "type": "Cancel", "payload": <CancelError> }`.
@@ -148,8 +161,16 @@ pub async fn cancel_query_native(
     state: State<'_, AppState>,
     connection_id: String,
     server_pid: i64,
+    query_id: Option<String>,
 ) -> Result<(), AppError> {
-    match cancel_query_native_inner(state.inner(), &connection_id, server_pid).await {
+    match cancel_query_native_inner(
+        state.inner(),
+        &connection_id,
+        server_pid,
+        query_id.as_deref(),
+    )
+    .await
+    {
         Ok(()) => Ok(()),
         Err(class) => Err(AppError::Cancel(class)),
     }
@@ -171,7 +192,16 @@ mod tests {
         // AlreadyCompleted 로 분류 → frontend silent. NotFound 와는
         // 별도 — 이쪽은 사용자가 disconnect 후 cancel 누른 경우.
         let state = AppState::new();
-        let r = cancel_query_native_inner(&state, "absent", 1234).await;
+        let r = cancel_query_native_inner(&state, "absent", 1234, None).await;
+        assert!(matches!(r, Err(CancelError::AlreadyCompleted)));
+    }
+
+    #[tokio::test]
+    async fn tag_route_on_unknown_connection_returns_already_completed() {
+        // Issue #1269 — the Mongo tag route (query_id set) on a missing
+        // connection is the same disconnect-then-cancel race → silent.
+        let state = AppState::new();
+        let r = cancel_query_native_inner(&state, "absent", 0, Some("q-tag")).await;
         assert!(matches!(r, Err(CancelError::AlreadyCompleted)));
     }
 
@@ -179,7 +209,7 @@ mod tests {
     async fn empty_connection_id_is_network_error() {
         // empty conn_id 는 frontend 가 코딩 실수한 경우 — toast 로 보임.
         let state = AppState::new();
-        let r = cancel_query_native_inner(&state, "  ", 1).await;
+        let r = cancel_query_native_inner(&state, "  ", 1, None).await;
         assert!(matches!(r, Err(CancelError::NetworkError { .. })));
     }
 

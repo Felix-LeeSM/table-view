@@ -102,6 +102,13 @@ pub struct FindBody {
     pub skip: u64,
     #[serde(default)]
     pub limit: i64,
+    /// Issue #1269 (P1) — server-only cancel tag. The `find_documents`
+    /// command stamps this with the request's `query_id` so the running op
+    /// carries `command.comment == query_id`; native cancel (`killOp`) then
+    /// resolves the opid via `$currentOp` matched on that comment. `serde(skip)`
+    /// keeps it off the wire — the frontend never sends it.
+    #[serde(skip)]
+    pub comment: Option<String>,
 }
 
 /// Result shape for document-oriented query/aggregation (Phase 6).

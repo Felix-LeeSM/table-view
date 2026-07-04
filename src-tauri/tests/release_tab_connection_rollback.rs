@@ -49,7 +49,7 @@ async fn release_after_bind_drops_entry_and_subsequent_cancel_is_already_complet
 
     // cancel against the (now unmapped) pid — adapter 자체가 등록 안 됨 →
     // AlreadyCompleted 로 분류 (frontend silent path).
-    let r = cancel_query_native_inner(&state, "conn-x", 7777).await;
+    let r = cancel_query_native_inner(&state, "conn-x", 7777, None).await;
     assert!(
         matches!(r, Err(CancelError::AlreadyCompleted)),
         "release 후 cancel 은 AlreadyCompleted 여야 한다, got {:?}",
