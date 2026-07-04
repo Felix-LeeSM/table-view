@@ -2,6 +2,8 @@ import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { Pin, PinOff, Table2, Clock, Eraser } from "lucide-react";
 import { cn } from "@lib/utils";
+import HistoryCollapseToggle from "@components/shared/HistoryCollapseToggle";
+import { useCollapsibleHistory } from "@hooks/useCollapsibleHistory";
 import {
   useTableActivityStore,
   selectPinnedTables,
@@ -54,6 +56,8 @@ export function PinnedRecentSections({
     () => selectRecentTables(entries, connectionId, db),
     [entries, connectionId, db],
   );
+  // #1309 — Recent is a history surface: show ~5 then collapse the rest.
+  const recentCollapse = useCollapsibleHistory(recent);
 
   if (pinned.length === 0 && recent.length === 0) return null;
 
@@ -136,7 +140,18 @@ export function PinnedRecentSections({
               <Eraser size={11} />
             </button>
           </div>
-          {recent.map((e) => renderRow(e, false))}
+          {recentCollapse.visible.map((e) => renderRow(e, false))}
+          {recentCollapse.canToggle && (
+            <div className="flex px-3 pt-0.5">
+              <HistoryCollapseToggle
+                expanded={recentCollapse.expanded}
+                hiddenCount={recentCollapse.hiddenCount}
+                onToggle={recentCollapse.toggle}
+                className="h-5 px-1 text-3xs text-muted-foreground"
+                data-testid="recent-tables-collapse"
+              />
+            </div>
+          )}
         </div>
       )}
     </div>

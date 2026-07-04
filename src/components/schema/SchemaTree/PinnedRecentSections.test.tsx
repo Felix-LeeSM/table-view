@@ -22,6 +22,8 @@ function seed(entries: TableActivityEntry[]) {
   useTableActivityStore.setState({ entries });
 }
 
+const range = (n: number) => Array.from({ length: n }, (_, i) => i);
+
 beforeEach(() => {
   __resetTableActivityStoreForTests();
 });
@@ -138,6 +140,59 @@ describe("PinnedRecentSections", () => {
     expect(screen.getByText("pinnedHeader")).toBeInTheDocument();
     // orders is pinned -> only under Pinned, not duplicated under Recent.
     expect(screen.getAllByText("public.orders")).toHaveLength(1);
+  });
+
+  it("caps Recent to the shared default and expands via the collapse toggle (#1309)", () => {
+    seed(
+      range(7).map((i) => ({
+        connectionId: "pg1",
+        db: "app",
+        schema: "public",
+        table: `t${i}`,
+        lastUsed: 100 - i, // t0 is most-recent, t6 the oldest
+        pinnedAt: null,
+      })),
+    );
+    render(
+      <PinnedRecentSections
+        connectionId="pg1"
+        db="app"
+        treeShape="with-schema"
+        onOpenTable={vi.fn()}
+      />,
+    );
+    // 7 recents, cap 5 → most-recent 5 shown, oldest 2 hidden behind the toggle.
+    expect(screen.getByText("public.t0")).toBeInTheDocument();
+    expect(screen.queryByText("public.t6")).toBeNull();
+
+    const toggle = screen.getByTestId("recent-tables-collapse");
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(toggle);
+
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByText("public.t6")).toBeInTheDocument();
+  });
+
+  it("does not render the collapse toggle when Recent is at or below the cap", () => {
+    seed(
+      range(4).map((i) => ({
+        connectionId: "pg1",
+        db: "app",
+        schema: "public",
+        table: `t${i}`,
+        lastUsed: 100 - i,
+        pinnedAt: null,
+      })),
+    );
+    render(
+      <PinnedRecentSections
+        connectionId="pg1"
+        db="app"
+        treeShape="with-schema"
+        onOpenTable={vi.fn()}
+      />,
+    );
+    expect(screen.queryByTestId("recent-tables-collapse")).toBeNull();
   });
 
   it("the pin toggle unpins a pinned table via the store", () => {

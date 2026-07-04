@@ -20,7 +20,9 @@ import { ChevronDown, ChevronRight, Clock, RefreshCw } from "lucide-react";
 import { Button } from "@components/ui/button";
 import QuerySyntax from "@components/shared/QuerySyntax";
 import QueryHistorySourceBadge from "@components/shared/QueryHistorySourceBadge";
+import HistoryCollapseToggle from "@components/shared/HistoryCollapseToggle";
 import { useQueryHistory } from "@hooks/useQueryHistory";
+import { useCollapsibleHistory } from "@hooks/useCollapsibleHistory";
 import QueryHistoryDetailModal from "./QueryHistoryDetailModal";
 
 export interface QueryHistoryPanelProps {
@@ -46,6 +48,10 @@ export default function QueryHistoryPanel({
   const [isExpanded, setIsExpanded] = useState(false);
   const [detailId, setDetailId] = useState<number | null>(null);
   const bodyId = useId();
+  // #1309 — cap the loaded rows to the shared history default; expanding reveals
+  // the rest of the current page, `loadMore` still fetches the next page.
+  const rowCollapse = useCollapsibleHistory(rows);
+  const allRowsShown = rowCollapse.hiddenCount === 0;
 
   return (
     <div
@@ -120,7 +126,7 @@ export default function QueryHistoryPanel({
             className="max-h-40 overflow-y-auto"
             data-testid="query-history-panel-rows"
           >
-            {rows.map((row) => (
+            {rowCollapse.visible.map((row) => (
               <li
                 key={row.id}
                 className="flex items-center gap-2 border-b border-border px-3 py-1 hover:bg-muted"
@@ -161,7 +167,18 @@ export default function QueryHistoryPanel({
             ))}
           </ul>
 
-          {hasMore && (
+          {rowCollapse.canToggle && (
+            <div className="flex items-center justify-center px-3 py-1.5">
+              <HistoryCollapseToggle
+                expanded={rowCollapse.expanded}
+                hiddenCount={rowCollapse.hiddenCount}
+                onToggle={rowCollapse.toggle}
+                data-testid="query-history-panel-collapse"
+              />
+            </div>
+          )}
+
+          {allRowsShown && hasMore && (
             <div className="flex items-center justify-center px-3 py-1.5">
               <Button
                 variant="ghost"
@@ -179,7 +196,7 @@ export default function QueryHistoryPanel({
             </div>
           )}
 
-          {!hasMore && rows.length > 0 && (
+          {allRowsShown && !hasMore && rows.length > 0 && (
             <p
               className="px-3 py-1.5 text-center text-xs text-muted-foreground"
               data-testid="query-history-panel-end"
