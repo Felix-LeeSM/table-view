@@ -4275,3 +4275,75 @@ async fn test_mysql_list_types_trait_default_returns_unsupported() {
         .expect_err("MySQL list_types → Unsupported (trait default)");
     matches!(err, AppError::Unsupported(_));
 }
+
+/// issue #1083 — MySQL cell decode 실패가 무음 NULL 로 위장하면 안 된다. GEOMETRY
+/// 는 `cell_to_json` 에 매치 branch 가 없어 `_` String decode 가 실패하는
+/// deterministic repro (zero-date 는 server sql_mode 의존이라 pool-connection
+/// 마다 SET SESSION 이 필요해 불안정). 실값이 있는 GEOMETRY 셀은 진짜 NULL 이
+/// 아니라 `<decode error: GEOMETRY>` 마커로 surface 되어야 하고, 같은 행의 실제
+/// NULL 컬럼은 여전히 Null 이어야 한다 (진짜 NULL vs 실패 분리 검증).
+#[tokio::test]
+#[serial_test::serial]
+async fn test_mysql_geometry_decode_failure_surfaces_marker_not_null_1083() {
+    let adapter = match common::setup_mysql_adapter().await {
+        Some(a) => a,
+        None => return,
+    };
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis();
+    let table = format!("test_decode_fail_{ts}");
+
+    adapter
+        .execute_query(
+            &format!("CREATE TABLE {table} (id INT PRIMARY KEY, geom GEOMETRY, maybe TEXT)"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
+        .await
+        .expect("CREATE TABLE with GEOMETRY");
+    adapter
+        .execute_query(
+            &format!("INSERT INTO {table} VALUES (1, ST_GeomFromText('POINT(1 1)'), NULL)"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
+        .await
+        .expect("INSERT geometry + real NULL");
+
+    let data = adapter
+        .query_table_data(&table, MYSQL_SCHEMA, 1, 50, None, None, None, None)
+        .await
+        .expect("read back the GEOMETRY row");
+    assert_eq!(data.rows.len(), 1);
+
+    // geom 컬럼: 실값이 있으므로 무음 NULL 이 아니라 decode-error 마커.
+    let geom_cell = &data.rows[0][1];
+    assert!(
+        !geom_cell.is_null(),
+        "GEOMETRY with a real value must not masquerade as NULL, got {geom_cell:?}"
+    );
+    assert_eq!(
+        geom_cell.as_str(),
+        Some("<decode error: GEOMETRY>"),
+        "decode failure should surface an explicit marker, got {geom_cell:?}"
+    );
+
+    // maybe 컬럼: 실제 NULL 은 여전히 Null 이어야 한다 (거짓 마커 금지).
+    assert!(
+        data.rows[0][2].is_null(),
+        "a genuine NULL must stay NULL, got {:?}",
+        data.rows[0][2]
+    );
+
+    adapter
+        .execute_query(
+            &format!("DROP TABLE {table}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
+        .await
+        .ok();
+    adapter.disconnect_pool().await.ok();
+}
