@@ -218,6 +218,51 @@ function handleDbMismatch(connId: string, err: unknown): void {
 }
 
 // ---------------------------------------------------------------------------
+// Request-generation guard (issue #1099)
+//
+// Each introspection fetcher below writes a `(connId, …)`-keyed cache slot
+// AFTER an `await`. If the connection is torn down (disconnect / remove /
+// post-DDL punch / mismatch recovery → `clearForConnection`) while an IPC is
+// still in flight, the late resolve would re-populate the slot that was just
+// cleared — and because several fetchers are cache-first, a reconnect then
+// short-circuits to that stale list. A per-connection generation counter,
+// bumped by `clearForConnection`, lets the shared `writeIfCurrent` wrapper drop
+// any write whose generation was superseded across the await. Mirrors
+// `documentQueryStore`'s request counter (issue reference).
+// ---------------------------------------------------------------------------
+const connectionGenerations = new Map<string, number>();
+
+function connectionGeneration(connId: string): number {
+  return connectionGenerations.get(connId) ?? 0;
+}
+
+function bumpConnectionGeneration(connId: string): void {
+  connectionGenerations.set(connId, connectionGeneration(connId) + 1);
+}
+
+/**
+ * Run an introspection IPC and apply its store write only if the connection's
+ * generation is unchanged across the `await`. Returns the fetched value either
+ * way so callers keep their existing return contract (cache-first fetchers
+ * still hand the fresh list back to the caller that triggered the fetch).
+ */
+async function writeIfCurrent<T>(
+  connId: string,
+  fetch: () => Promise<T>,
+  commit: (result: T) => void,
+): Promise<T> {
+  const generation = connectionGeneration(connId);
+  const result = await fetch();
+  if (connectionGeneration(connId) === generation) commit(result);
+  return result;
+}
+
+/** Test-only: reset the generation map so counters don't leak across specs. */
+export function __resetSchemaGenerationsForTests(): void {
+  connectionGenerations.clear();
+}
+
+// ---------------------------------------------------------------------------
 // Store
 // ---------------------------------------------------------------------------
 
@@ -241,14 +286,17 @@ export const useSchemaStore = create<SchemaState>((set, get) => ({
     const cached = get().databases[connId];
     if (cached) return cached;
     try {
-      const databases = await tauri.listDatabases(connId);
-      set((state) => ({
-        databases: {
-          ...state.databases,
-          [connId]: databases,
-        },
-      }));
-      return databases;
+      return await writeIfCurrent(
+        connId,
+        () => tauri.listDatabases(connId),
+        (databases) =>
+          set((state) => ({
+            databases: {
+              ...state.databases,
+              [connId]: databases,
+            },
+          })),
+      );
     } catch (e) {
       handleDbMismatch(connId, e);
       return [];
@@ -258,11 +306,15 @@ export const useSchemaStore = create<SchemaState>((set, get) => ({
   loadSchemas: async (connId, db) => {
     set({ loading: true, error: null });
     try {
-      const schemas = await tauri.listSchemas(connId, db);
-      set((state) => ({
-        schemas: setConnDb(state.schemas, connId, db, schemas),
-        loading: false,
-      }));
+      await writeIfCurrent(
+        connId,
+        () => tauri.listSchemas(connId, db),
+        (schemas) =>
+          set((state) => ({
+            schemas: setConnDb(state.schemas, connId, db, schemas),
+          })),
+      );
+      set({ loading: false });
     } catch (e) {
       handleDbMismatch(connId, e);
       set({ error: getTauriErrorMessage(e), loading: false });
@@ -272,11 +324,15 @@ export const useSchemaStore = create<SchemaState>((set, get) => ({
   loadTables: async (connId, db, schema) => {
     set({ loading: true, error: null });
     try {
-      const tables = await tauri.listTables(connId, schema, db);
-      set((state) => ({
-        tables: setConnDbSchema(state.tables, connId, db, schema, tables),
-        loading: false,
-      }));
+      await writeIfCurrent(
+        connId,
+        () => tauri.listTables(connId, schema, db),
+        (tables) =>
+          set((state) => ({
+            tables: setConnDbSchema(state.tables, connId, db, schema, tables),
+          })),
+      );
+      set({ loading: false });
     } catch (e) {
       handleDbMismatch(connId, e);
       set({ error: getTauriErrorMessage(e), loading: false });
@@ -366,10 +422,14 @@ export const useSchemaStore = create<SchemaState>((set, get) => ({
 
   loadViews: async (connId, db, schema) => {
     try {
-      const views = await tauri.listViews(connId, schema, db);
-      set((state) => ({
-        views: setConnDbSchema(state.views, connId, db, schema, views),
-      }));
+      await writeIfCurrent(
+        connId,
+        () => tauri.listViews(connId, schema, db),
+        (views) =>
+          set((state) => ({
+            views: setConnDbSchema(state.views, connId, db, schema, views),
+          })),
+      );
     } catch (e) {
       handleDbMismatch(connId, e);
       set({ error: getTauriErrorMessage(e) });
@@ -378,16 +438,20 @@ export const useSchemaStore = create<SchemaState>((set, get) => ({
 
   loadFunctions: async (connId, db, schema) => {
     try {
-      const functions = await tauri.listFunctions(connId, schema, db);
-      set((state) => ({
-        functions: setConnDbSchema(
-          state.functions,
-          connId,
-          db,
-          schema,
-          functions,
-        ),
-      }));
+      await writeIfCurrent(
+        connId,
+        () => tauri.listFunctions(connId, schema, db),
+        (functions) =>
+          set((state) => ({
+            functions: setConnDbSchema(
+              state.functions,
+              connId,
+              db,
+              schema,
+              functions,
+            ),
+          })),
+      );
     } catch (e) {
       handleDbMismatch(connId, e);
       set({ error: getTauriErrorMessage(e) });
@@ -398,16 +462,19 @@ export const useSchemaStore = create<SchemaState>((set, get) => ({
     const cached = get().postgresExtensions[connId]?.[db];
     if (cached) return cached;
     try {
-      const extensions = await tauri.listPostgresExtensions(connId, db);
-      set((state) => ({
-        postgresExtensions: setConnDb(
-          state.postgresExtensions,
-          connId,
-          db,
-          extensions,
-        ),
-      }));
-      return extensions;
+      return await writeIfCurrent(
+        connId,
+        () => tauri.listPostgresExtensions(connId, db),
+        (extensions) =>
+          set((state) => ({
+            postgresExtensions: setConnDb(
+              state.postgresExtensions,
+              connId,
+              db,
+              extensions,
+            ),
+          })),
+      );
     } catch (e) {
       handleDbMismatch(connId, e);
       set({ error: getTauriErrorMessage(e) });
@@ -419,16 +486,19 @@ export const useSchemaStore = create<SchemaState>((set, get) => ({
     const cached = get().sqliteCapabilities[connId]?.[db];
     if (cached) return cached;
     try {
-      const capabilities = await tauri.listSqliteCapabilities(connId, db);
-      set((state) => ({
-        sqliteCapabilities: setConnDb(
-          state.sqliteCapabilities,
-          connId,
-          db,
-          capabilities,
-        ),
-      }));
-      return capabilities;
+      return await writeIfCurrent(
+        connId,
+        () => tauri.listSqliteCapabilities(connId, db),
+        (capabilities) =>
+          set((state) => ({
+            sqliteCapabilities: setConnDb(
+              state.sqliteCapabilities,
+              connId,
+              db,
+              capabilities,
+            ),
+          })),
+      );
     } catch (e) {
       handleDbMismatch(connId, e);
       set({ error: getTauriErrorMessage(e) });
@@ -438,14 +508,17 @@ export const useSchemaStore = create<SchemaState>((set, get) => ({
 
   loadFileAnalyticsSources: async (connId) => {
     try {
-      const sources = await tauri.listFileAnalyticsSourceMetadata(connId);
-      set((state) => ({
-        fileAnalyticsSources: {
-          ...state.fileAnalyticsSources,
-          [connId]: sources,
-        },
-      }));
-      return sources;
+      return await writeIfCurrent(
+        connId,
+        () => tauri.listFileAnalyticsSourceMetadata(connId),
+        (sources) =>
+          set((state) => ({
+            fileAnalyticsSources: {
+              ...state.fileAnalyticsSources,
+              [connId]: sources,
+            },
+          })),
+      );
     } catch (e) {
       set({ error: getTauriErrorMessage(e) });
       throw e;
@@ -463,18 +536,21 @@ export const useSchemaStore = create<SchemaState>((set, get) => ({
 
   getTableColumns: async (connId, db, table, schema) => {
     try {
-      const columns = await tauri.getTableColumns(connId, table, schema, db);
-      set((state) => ({
-        tableColumnsCache: setConnDbSchemaTable(
-          state.tableColumnsCache,
-          connId,
-          db,
-          schema,
-          table,
-          columns,
-        ),
-      }));
-      return columns;
+      return await writeIfCurrent(
+        connId,
+        () => tauri.getTableColumns(connId, table, schema, db),
+        (columns) =>
+          set((state) => ({
+            tableColumnsCache: setConnDbSchemaTable(
+              state.tableColumnsCache,
+              connId,
+              db,
+              schema,
+              table,
+              columns,
+            ),
+          })),
+      );
     } catch (e) {
       handleDbMismatch(connId, e);
       throw e;
@@ -486,18 +562,21 @@ export const useSchemaStore = create<SchemaState>((set, get) => ({
   // rejects a swapped pool BEFORE the trait dispatches.
   getTableIndexes: async (connId, db, table, schema) => {
     try {
-      const indexes = await tauri.getTableIndexes(connId, table, schema, db);
-      set((state) => ({
-        tableIndexesCache: setConnDbSchemaTable(
-          state.tableIndexesCache,
-          connId,
-          db,
-          schema,
-          table,
-          indexes,
-        ),
-      }));
-      return indexes;
+      return await writeIfCurrent(
+        connId,
+        () => tauri.getTableIndexes(connId, table, schema, db),
+        (indexes) =>
+          set((state) => ({
+            tableIndexesCache: setConnDbSchemaTable(
+              state.tableIndexesCache,
+              connId,
+              db,
+              schema,
+              table,
+              indexes,
+            ),
+          })),
+      );
     } catch (e) {
       handleDbMismatch(connId, e);
       throw e;
@@ -506,23 +585,21 @@ export const useSchemaStore = create<SchemaState>((set, get) => ({
 
   getTableConstraints: async (connId, db, table, schema) => {
     try {
-      const constraints = await tauri.getTableConstraints(
+      return await writeIfCurrent(
         connId,
-        table,
-        schema,
-        db,
+        () => tauri.getTableConstraints(connId, table, schema, db),
+        (constraints) =>
+          set((state) => ({
+            tableConstraintsCache: setConnDbSchemaTable(
+              state.tableConstraintsCache,
+              connId,
+              db,
+              schema,
+              table,
+              constraints,
+            ),
+          })),
       );
-      set((state) => ({
-        tableConstraintsCache: setConnDbSchemaTable(
-          state.tableConstraintsCache,
-          connId,
-          db,
-          schema,
-          table,
-          constraints,
-        ),
-      }));
-      return constraints;
     } catch (e) {
       handleDbMismatch(connId, e);
       throw e;
@@ -537,18 +614,21 @@ export const useSchemaStore = create<SchemaState>((set, get) => ({
     const cached = get().triggers[connId]?.[db]?.[schema]?.[table];
     if (cached) return cached;
     try {
-      const triggers = await tauri.listTriggers(connId, schema, table, db);
-      set((state) => ({
-        triggers: setConnDbSchemaTable(
-          state.triggers,
-          connId,
-          db,
-          schema,
-          table,
-          triggers,
-        ),
-      }));
-      return triggers;
+      return await writeIfCurrent(
+        connId,
+        () => tauri.listTriggers(connId, schema, table, db),
+        (triggers) =>
+          set((state) => ({
+            triggers: setConnDbSchemaTable(
+              state.triggers,
+              connId,
+              db,
+              schema,
+              table,
+              triggers,
+            ),
+          })),
+      );
     } catch (e) {
       handleDbMismatch(connId, e);
       throw e;
@@ -561,18 +641,21 @@ export const useSchemaStore = create<SchemaState>((set, get) => ({
   // new trigger. Throws on IPC error.
   refreshTableTriggers: async (connId, db, table, schema) => {
     try {
-      const triggers = await tauri.listTriggers(connId, schema, table, db);
-      set((state) => ({
-        triggers: setConnDbSchemaTable(
-          state.triggers,
-          connId,
-          db,
-          schema,
-          table,
-          triggers,
-        ),
-      }));
-      return triggers;
+      return await writeIfCurrent(
+        connId,
+        () => tauri.listTriggers(connId, schema, table, db),
+        (triggers) =>
+          set((state) => ({
+            triggers: setConnDbSchemaTable(
+              state.triggers,
+              connId,
+              db,
+              schema,
+              table,
+              triggers,
+            ),
+          })),
+      );
     } catch (e) {
       handleDbMismatch(connId, e);
       throw e;
@@ -598,6 +681,10 @@ export const useSchemaStore = create<SchemaState>((set, get) => ({
   },
 
   clearForConnection: (connId) => {
+    // #1099 — invalidate any introspection IPC already in flight for this
+    // connection so its late resolve can't re-pollute the caches we clear here
+    // (and a cache-first reconnect can't short-circuit to that stale list).
+    bumpConnectionGeneration(connId);
     set((state) => ({
       databases: (() => {
         const next = { ...state.databases };
@@ -664,23 +751,28 @@ export const useSchemaStore = create<SchemaState>((set, get) => ({
 
   prefetchSchemaColumns: async (connId, db, schema) => {
     try {
-      const result = await tauri.listSchemaColumns(connId, schema, db);
-      const tableEntries = Object.entries(result);
-      if (tableEntries.length === 0) return;
-      set((state) => {
-        let next = state.tableColumnsCache;
-        for (const [tableName, columns] of tableEntries) {
-          next = setConnDbSchemaTable(
-            next,
-            connId,
-            db,
-            schema,
-            tableName,
-            columns,
-          );
-        }
-        return { tableColumnsCache: next };
-      });
+      await writeIfCurrent(
+        connId,
+        () => tauri.listSchemaColumns(connId, schema, db),
+        (result) => {
+          const tableEntries = Object.entries(result);
+          if (tableEntries.length === 0) return;
+          set((state) => {
+            let next = state.tableColumnsCache;
+            for (const [tableName, columns] of tableEntries) {
+              next = setConnDbSchemaTable(
+                next,
+                connId,
+                db,
+                schema,
+                tableName,
+                columns,
+              );
+            }
+            return { tableColumnsCache: next };
+          });
+        },
+      );
     } catch (e) {
       // best-effort prefetch — silently ignore failures. Sprint 271a — still
       // surface a DbMismatch via the sync helper so the next dispatch uses
