@@ -6,11 +6,12 @@ import {
 import type { SafeModeDecision } from "@/lib/safeMode";
 
 const executeQueryMock = vi.hoisted(() => vi.fn());
+const executeQueryDryRunMock = vi.hoisted(() => vi.fn());
 const dispatchDbMutationHintMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@lib/tauri", () => ({
   executeQuery: (...args: unknown[]) => executeQueryMock(...args),
-  executeQueryDryRun: vi.fn(),
+  executeQueryDryRun: (...args: unknown[]) => executeQueryDryRunMock(...args),
 }));
 
 vi.mock("@lib/runtime/recovery/syncMismatchedActiveDb", () => ({
@@ -206,5 +207,65 @@ describe("executeRdbQuery single-statement routing (#1223)", () => {
       "app",
       undefined,
     );
+  });
+});
+
+// Issue #1110 — the warn-escalation reason must match reality. MySQL/SQLite
+// reject the dry-run probe with `Unsupported`, so the confirm dialog can't
+// claim a measured "100+ rows" impact for a 1-row UPDATE.
+describe("executeRdbQuery warn-escalation reason (#1110)", () => {
+  beforeEach(() => {
+    executeQueryMock.mockReset();
+    executeQueryDryRunMock.mockReset();
+    dispatchDbMutationHintMock.mockReset();
+  });
+
+  async function runWarnUpdate(dryRun: () => Promise<unknown>) {
+    executeQueryDryRunMock.mockImplementation(dryRun);
+    const setPendingRdbConfirm = vi.fn();
+    const sql = "UPDATE t SET x = 1 WHERE id = 5";
+    await executeRdbQuery({
+      tab: { ...tab, sql },
+      sql,
+      dbType: "mysql",
+      decideSafeMode: () => allow,
+      updateQueryState: vi.fn(),
+      recordHistory: vi.fn(),
+      setPendingRdbConfirm,
+      setPendingRdbWarn: vi.fn(),
+      runRdbSingle: vi.fn(),
+      runRdbBatch: vi.fn(),
+    });
+    return setPendingRdbConfirm;
+  }
+
+  it("does NOT claim '100+ rows' when the dry-run probe is unsupported", async () => {
+    const setPendingRdbConfirm = await runWarnUpdate(() =>
+      Promise.reject(new Error("Unsupported")),
+    );
+
+    expect(setPendingRdbConfirm).toHaveBeenCalledTimes(1);
+    const reason = setPendingRdbConfirm.mock.calls[0]![0].reason as string;
+    expect(reason).not.toContain("100+");
+    expect(reason).toMatch(/unknown number of rows/i);
+    expect(reason).toMatch(/not supported/i);
+  });
+
+  it("keeps the measured '100+ rows' copy when the probe counts the impact", async () => {
+    const setPendingRdbConfirm = await runWarnUpdate(() =>
+      Promise.resolve([
+        {
+          columns: [],
+          rows: [],
+          totalCount: 0,
+          executionTimeMs: 0,
+          queryType: { dml: { rows_affected: 250 } },
+        },
+      ]),
+    );
+
+    expect(setPendingRdbConfirm).toHaveBeenCalledTimes(1);
+    const reason = setPendingRdbConfirm.mock.calls[0]![0].reason as string;
+    expect(reason).toContain("100+ rows");
   });
 });

@@ -9,7 +9,10 @@ import {
   analyzeRdbStatementForDialect,
   decideOracleOrGenericSafeMode,
 } from "@lib/sql/oracleSafety";
-import { escalateWarnIfLargeImpact } from "@lib/sql/escalateWarnIfLargeImpact";
+import {
+  escalateWarnIfLargeImpact,
+  type EscalationCause,
+} from "@lib/sql/escalateWarnIfLargeImpact";
 import { toast } from "@lib/runtime/toast";
 import { dispatchDbMutationHint } from "./queryHelpers";
 import type { SafeModeGate } from "@hooks/useSafeModeGate";
@@ -439,6 +442,26 @@ export async function executeRdbStatementBatch({
   dispatchDbMutationHint(tab.connectionId, tab.paradigm, joinedSql);
 }
 
+// Issue #1110 — the reason string must match reality. A "measured" cause
+// means the dry-run probe actually counted 100+ rows. "unsupported"/"timeout"
+// are fail-closed fallbacks with NO count (MySQL/SQLite reject the probe), so
+// the copy must not fabricate a "100+ rows" claim. Reason strings are raw
+// English, matching every other Safe Mode reason (safeMode.ts) which flows to
+// the dialog un-translated.
+function escalationReason(
+  kind: "dml-update" | "dml-delete",
+  cause: EscalationCause | undefined,
+): string {
+  const verb = kind === "dml-update" ? "UPDATE" : "DELETE";
+  if (cause === "unsupported") {
+    return `${verb} affects an unknown number of rows — dry-run is not supported on this database, so the impact could not be measured`;
+  }
+  if (cause === "timeout") {
+    return `${verb} affects an unknown number of rows — the dry-run row-count probe timed out before it could measure the impact`;
+  }
+  return `${verb} affects 100+ rows (dry-run threshold)`;
+}
+
 export async function executeRdbQuery({
   tab,
   sql,
@@ -478,7 +501,10 @@ export async function executeRdbQuery({
   let worstAction: "allow" | "confirm" | "block" = "allow";
   let worstReason = "";
   let hasWarn = false;
-  const escalationCandidates: { stmt: string; reason: string }[] = [];
+  const escalationCandidates: {
+    stmt: string;
+    kind: "dml-update" | "dml-delete";
+  }[] = [];
   for (const stmt of statements) {
     const dialect =
       dbType === "mssql" || dbType === "oracle" ? dbType : undefined;
@@ -496,13 +522,7 @@ export async function executeRdbQuery({
     if (decision.action === "allow" && analysis.severity === "warn") {
       hasWarn = true;
       if (analysis.kind === "dml-update" || analysis.kind === "dml-delete") {
-        escalationCandidates.push({
-          stmt,
-          reason:
-            analysis.kind === "dml-update"
-              ? "UPDATE affects 100+ rows (dry-run threshold)"
-              : "DELETE affects 100+ rows (dry-run threshold)",
-        });
+        escalationCandidates.push({ stmt, kind: analysis.kind });
       }
     }
   }
@@ -528,8 +548,11 @@ export async function executeRdbQuery({
         candidate.stmt,
         "warn",
       );
-      if (escalated === "danger") {
-        setPendingRdbConfirm({ statements, reason: candidate.reason });
+      if (escalated.severity === "danger") {
+        setPendingRdbConfirm({
+          statements,
+          reason: escalationReason(candidate.kind, escalated.cause),
+        });
         return;
       }
     }
