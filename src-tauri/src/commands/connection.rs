@@ -24,6 +24,7 @@ use serde::Deserialize;
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
+use tracing::warn;
 
 use crate::db::mongodb::MongoAdapter;
 use crate::db::mysql::MysqlAdapter;
@@ -154,6 +155,14 @@ pub struct AppState {
     pub active_connections: Mutex<HashMap<String, Arc<ActiveAdapter>>>,
     pub connection_status: Mutex<HashMap<String, ConnectionStatus>>,
     pub keep_alive_handles: Mutex<HashMap<String, JoinHandle<()>>>,
+    /// Issue #1100 — per-connection lifecycle lock. `connect` / `disconnect`
+    /// acquire [`AppState::connection_guard`] for the whole mutation so the
+    /// check-then-act windows across the three registry maps can't interleave
+    /// for the same id (double-click connect, auto-reconnect overlap). The map
+    /// grows by distinct connection id (bounded by saved connections) and
+    /// entries are never reclaimed — a handful of stale `Arc<Mutex>` is cheaper
+    /// than reference-counting their teardown.
+    pub connection_guards: Mutex<HashMap<String, Arc<Mutex<()>>>>,
     pub query_tokens: Mutex<HashMap<String, CancellationToken>>,
     /// Sprint 359 (Q5.1 / Q5.6) — per-tab native-cancel affinity.
     ///
@@ -213,11 +222,64 @@ impl AppState {
             .cloned()
     }
 
+    /// Issue #1100 — acquire the per-connection lifecycle lock. `connect` /
+    /// `disconnect` hold the returned guard for the whole mutation so same-id
+    /// calls serialize instead of racing across the separate registry mutexes.
+    pub async fn connection_guard(&self, id: &str) -> tokio::sync::OwnedMutexGuard<()> {
+        let lock = {
+            let mut guards = self.connection_guards.lock().await;
+            guards.entry(id.to_string()).or_default().clone()
+        };
+        lock.lock_owned().await
+    }
+
+    /// Issue #1100 — atomically install a freshly-connected adapter and its
+    /// keep-alive handle for `id`, tearing down any predecessor: the previous
+    /// keep-alive task is `abort()`-ed and the previous adapter
+    /// `disconnect()`-ed. The original `connect` did a blind `insert` that
+    /// dropped the old adapter without `disconnect()` and overwrote the old
+    /// handle without `abort()`, so a re-connect (double-click, auto-reconnect
+    /// overlap) leaked a server session and left a second ping loop alive.
+    /// `HashMap::insert` returns the displaced value, so the swap always
+    /// captures the predecessor; callers still hold [`AppState::connection_guard`]
+    /// to keep the two map swaps and the status transition consistent.
+    pub async fn install_connection(
+        &self,
+        id: &str,
+        adapter: Arc<ActiveAdapter>,
+        keep_alive: JoinHandle<()>,
+    ) {
+        let old_handle = self
+            .keep_alive_handles
+            .lock()
+            .await
+            .insert(id.to_string(), keep_alive);
+        if let Some(handle) = old_handle {
+            handle.abort();
+        }
+
+        let old_adapter = self
+            .active_connections
+            .lock()
+            .await
+            .insert(id.to_string(), adapter);
+        if let Some(old) = old_adapter {
+            if let Err(e) = old.lifecycle().disconnect().await {
+                warn!(
+                    conn_id = %id,
+                    error = %e,
+                    "Failed to disconnect replaced adapter during reconnect"
+                );
+            }
+        }
+    }
+
     pub fn new() -> Self {
         Self {
             active_connections: Mutex::new(HashMap::new()),
             connection_status: Mutex::new(HashMap::new()),
             keep_alive_handles: Mutex::new(HashMap::new()),
+            connection_guards: Mutex::new(HashMap::new()),
             query_tokens: Mutex::new(HashMap::new()),
             tab_affinity: Mutex::new(HashMap::new()),
             query_server_pids: Mutex::new(HashMap::new()),
