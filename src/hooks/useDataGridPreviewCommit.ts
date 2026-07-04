@@ -27,20 +27,9 @@ import {
   type DocumentAdapterDeps,
 } from "@/lib/datagrid/paradigmEditAdapter";
 import type { MqlPreview } from "@/lib/mongo/mqlGenerator";
-import type { SqlDialect } from "@/lib/sql/sqlLiteral";
+import { dialectFromDbType } from "@/lib/sql/sqlLiteral";
 import type { TableData } from "@/types/schema";
 import type { CommitError } from "@/components/datagrid/dataGridEditFsm";
-
-/** Sprint 347 — connection.dbType → sqlGenerator dialect tag. Redis /
- *  unsupported types fall through to undefined (the generator default). */
-function dialectFromDbType(dbType: string | undefined): SqlDialect | undefined {
-  if (dbType === "postgresql") return "postgresql";
-  if (dbType === "mysql" || dbType === "mariadb") return "mysql";
-  if (dbType === "sqlite") return "sqlite";
-  if (dbType === "mssql") return "mssql";
-  if (dbType === "oracle") return "oracle";
-  return undefined;
-}
 
 export interface UseDataGridPreviewCommitParams {
   data: TableData | null;

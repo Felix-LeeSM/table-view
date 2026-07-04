@@ -14,6 +14,15 @@ import type { QueryColumn } from "@/types/query";
 import type { DatabaseType } from "@/types/connection";
 import { tokenizeSql } from "./sqlTokenize";
 import { parseSqlPreloaded, type SqlSelectStatement } from "./sqlAst";
+import {
+  resolveResultColumns,
+  type SchemaColumnLookup,
+} from "./multiTableResolver";
+import type {
+  MultiTableColumnPlan,
+  MultiTableInstance,
+  MultiTablePlan,
+} from "./rawQuerySqlBuilder";
 
 export interface SingleTableSelectInfo {
   schema: string | null;
@@ -287,4 +296,106 @@ export function analyzeResultEditability(
     pkColumns: pkCols.map((c) => c.name),
     resultToColumnName,
   };
+}
+
+// ---- multi-table editability (issue #1299) ----------------------------
+
+/** Parse a SELECT and return its FROM source tables (for PK prefetch), or
+ *  `null` when the input is not a plain-table SELECT (WASM unloaded, parse
+ *  failure, non-SELECT, or a derived-table / subquery FROM). */
+export function parseSelectInstances(
+  sql: string,
+): { schema: string | null; table: string }[] | null {
+  const stripped = stripTrailingTerminator(stripComments(sql).trim());
+  if (!stripped) return null;
+  const ast = parseSqlPreloaded(stripped);
+  if (ast === null || ast.kind !== "select") return null;
+  if (ast.from.length === 0) return null;
+  if (ast.from.some((f) => f.source.kind !== "table")) return null;
+  return ast.from.map((f) => ({ schema: f.schema, table: f.table }));
+}
+
+export type MultiTableEditability =
+  | { editable: true; plan: MultiTablePlan }
+  | { editable: false; reason: string };
+
+/**
+ * Decide whether a multi-table (JOIN) raw result can be edited per-column.
+ * Consumes the positional attribution from `resolveResultColumns` (#1298) and
+ * projects it into a `MultiTablePlan`: each column is editable iff it is
+ * attributed to an instance whose full primary key is present in the result.
+ * The resolver's self-verification downgrade (whole result → unattributable on
+ * any name mismatch) is preserved — such a result reports `editable: false`.
+ *
+ * `lookup` resolves a `(schema, table)` pair to its cached column metadata;
+ * the caller applies its default-schema policy inside the closure.
+ */
+export function analyzeMultiTableEditability(
+  sql: string,
+  resultColumns: QueryColumn[],
+  lookup: SchemaColumnLookup,
+  defaultSchema: string,
+): MultiTableEditability {
+  const stripped = stripTrailingTerminator(stripComments(sql).trim());
+  if (!stripped) return { editable: false, reason: NOT_SINGLE_TABLE_REASON };
+  const ast = parseSqlPreloaded(stripped);
+  if (ast === null || ast.kind !== "select") {
+    return { editable: false, reason: NOT_SINGLE_TABLE_REASON };
+  }
+
+  const resolved = resolveResultColumns(
+    ast,
+    resultColumns.map((c) => c.name),
+    lookup,
+  );
+  const editByInstance = new Map(
+    resolved.instanceEditability.map((e) => [e.instance, e]),
+  );
+
+  const instances: MultiTableInstance[] = resolved.instances.map((inst) => {
+    const ed = editByInstance.get(inst.index);
+    return {
+      schema: inst.schema ?? defaultSchema,
+      table: inst.table,
+      pkColumns: ed?.pkComplete ? Object.keys(ed.pkPositions) : [],
+      pkPositions: ed?.pkPositions ?? {},
+    };
+  });
+
+  const columns: MultiTableColumnPlan[] = resolved.columns.map((c) => {
+    if (c.kind === "unattributable") {
+      return {
+        instance: null,
+        sourceColumn: null,
+        editable: false,
+        readonlyReason: c.reason,
+      };
+    }
+    const pkComplete = editByInstance.get(c.instance)?.pkComplete ?? false;
+    return {
+      instance: c.instance,
+      sourceColumn: c.sourceColumn,
+      editable: pkComplete,
+      readonlyReason: pkComplete
+        ? null
+        : `Result is missing the primary key for ${c.table}, so its rows can't be uniquely identified.`,
+    };
+  });
+
+  if (!columns.some((c) => c.editable)) {
+    // Nothing editable — surface the resolver's shared downgrade reason when
+    // the whole result was poisoned (e.g. name self-verification mismatch).
+    const downgraded = resolved.columns.find(
+      (c) => c.kind === "unattributable",
+    );
+    return {
+      editable: false,
+      reason:
+        downgraded && downgraded.kind === "unattributable"
+          ? downgraded.reason
+          : NOT_SINGLE_TABLE_REASON,
+    };
+  }
+
+  return { editable: true, plan: { instances, columns } };
 }

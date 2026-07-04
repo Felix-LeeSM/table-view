@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import {
   parseSingleTableSelect,
   analyzeResultEditability,
+  analyzeMultiTableEditability,
   resolveDefaultSchema,
 } from "./queryAnalyzer";
 import { preloadSqlWasm, __resetSqlWasmModuleForTests } from "./sqlAst";
@@ -510,5 +511,102 @@ describe("analyzeResultEditability — WASM unavailable fallback (#1297)", () =>
       [col("id", "integer", true)],
     );
     expect(result.editable).toBe(false);
+  });
+});
+
+describe("analyzeMultiTableEditability (#1299)", () => {
+  beforeAll(async () => {
+    __resetSqlWasmModuleForTests();
+    await preloadSqlWasm();
+  });
+  afterAll(() => __resetSqlWasmModuleForTests());
+
+  // Schema lookup: (schema, table) -> ResolverColumn[] | null.
+  const lookup = (_schema: string | null, table: string) => {
+    if (table === "users")
+      return [
+        { name: "id", is_primary_key: true },
+        { name: "name", is_primary_key: false },
+      ];
+    if (table === "orders")
+      return [
+        { name: "id", is_primary_key: true },
+        { name: "user_id", is_primary_key: false },
+        { name: "total", is_primary_key: false },
+      ];
+    return null;
+  };
+
+  it("makes a JOIN result editable with per-column instance attribution", () => {
+    const sql =
+      "SELECT u.id, u.name, o.id, o.total FROM users u JOIN orders o ON o.user_id = u.id";
+    const cols = [qcol("id"), qcol("name"), qcol("id"), qcol("total")];
+    const r = analyzeMultiTableEditability(sql, cols, lookup, "public");
+    expect(r.editable).toBe(true);
+    if (!r.editable) return;
+    expect(r.plan.instances).toHaveLength(2);
+    expect(r.plan.columns[0]).toMatchObject({
+      instance: 0,
+      sourceColumn: "id",
+      editable: true,
+    });
+    expect(r.plan.columns[3]).toMatchObject({
+      instance: 1,
+      sourceColumn: "total",
+      editable: true,
+    });
+    // users PK is at result index 0, orders PK at result index 2.
+    expect(r.plan.instances[0]).toMatchObject({
+      table: "users",
+      pkPositions: { id: 0 },
+    });
+    expect(r.plan.instances[1]).toMatchObject({
+      table: "orders",
+      pkPositions: { id: 2 },
+    });
+  });
+
+  it("keeps an aliased-PK JOIN editable (alias-aware resolver)", () => {
+    const sql =
+      "SELECT u.id AS uid, o.id AS oid, o.total AS amt FROM users u JOIN orders o ON o.user_id = u.id";
+    const cols = [qcol("uid"), qcol("oid"), qcol("amt")];
+    const r = analyzeMultiTableEditability(sql, cols, lookup, "public");
+    expect(r.editable).toBe(true);
+    if (!r.editable) return;
+    expect(r.plan.columns[0]).toMatchObject({
+      instance: 0,
+      sourceColumn: "id",
+      editable: true,
+    });
+    // orders.total editable because orders.id (aliased `oid`) carries its PK.
+    expect(r.plan.columns[2]).toMatchObject({
+      instance: 1,
+      sourceColumn: "total",
+      editable: true,
+    });
+  });
+
+  it("marks a column read-only when its instance PK is absent from the result", () => {
+    // orders.id is NOT projected → orders columns cannot be identified.
+    const sql =
+      "SELECT u.id, u.name, o.total FROM users u JOIN orders o ON o.user_id = u.id";
+    const cols = [qcol("id"), qcol("name"), qcol("total")];
+    const r = analyzeMultiTableEditability(sql, cols, lookup, "public");
+    expect(r.editable).toBe(true);
+    if (!r.editable) return;
+    expect(r.plan.columns[0]).toMatchObject({ editable: true }); // users editable
+    const ordersCol = r.plan.columns[2]!;
+    expect(ordersCol.editable).toBe(false);
+    expect(ordersCol.readonlyReason).toBeTruthy();
+  });
+
+  it("downgrades the whole result to read-only on a name self-verification mismatch", () => {
+    // Result's second column name (`nickname`) differs from the projected
+    // `name` → resolver poisons the positional model → read-only.
+    const sql =
+      "SELECT u.id, u.name FROM users u JOIN orders o ON o.user_id = u.id";
+    const cols = [qcol("id"), qcol("nickname")];
+    const r = analyzeMultiTableEditability(sql, cols, lookup, "public");
+    expect(r.editable).toBe(false);
   });
 });

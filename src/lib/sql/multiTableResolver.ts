@@ -25,12 +25,12 @@
  * Upstream parser gating (verified against sql-parser-core): qualified star
  * (`SELECT u.*`) and `DISTINCT` are rejected at *parse* time with a
  * `SqlParseError`, so they never reach this resolver — the caller treats a
- * parse error as read-only. Column-level aliases (`SELECT id AS foo`) DO parse
- * since issue #1297 (`SelectListItem::Column` carries `alias`), but this
- * resolver predicts a slot's name from `reference.column` and ignores the
- * alias, so an aliased projection name-mismatches the DB-assigned result name
- * and the whole result degrades to `nameMismatch` (read-only) — safe, so we do
- * not special-case aliases here. Alias-aware attribution is a follow-up.
+ * parse error as read-only. Column-level aliases (`SELECT id AS foo`) parse
+ * since issue #1297 (`SelectListItem::Column` carries `alias`); issue #1299
+ * makes this resolver alias-aware — a slot's predicted name is `alias ??
+ * reference.column`, so an aliased projection matches its DB-assigned result
+ * name while attribution still points at the *source* column. Positional +
+ * name self-verification is unchanged, so silent mis-mapping stays impossible.
  */
 
 import type {
@@ -246,7 +246,11 @@ function buildSlots(
           instances,
           instanceColumns,
         ),
-        predictedName: item.reference.column,
+        // Issue #1299 — a projection alias (`SELECT id AS user_id`) becomes the
+        // DB-assigned result name, so predict against the alias when present.
+        // Attribution still maps to the *source* column, so self-verification
+        // stays sound (silent mis-mapping remains structurally impossible).
+        predictedName: item.alias ?? item.reference.column,
       });
       continue;
     }

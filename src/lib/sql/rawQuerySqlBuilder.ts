@@ -1,5 +1,6 @@
 import type { ColumnInfo } from "@/types/schema";
 import { safeStringifyCell } from "@lib/jsonCell";
+import { sqlIdentifier, type SqlDialect } from "./sqlLiteral";
 
 /**
  * Quote a SQL identifier with double quotes, escaping internal `"`.
@@ -7,6 +8,21 @@ import { safeStringifyCell } from "@lib/jsonCell";
  */
 function quoteIdent(name: string): string {
   return `"${name.replace(/"/g, '""')}"`;
+}
+
+/**
+ * Dialect-aware identifier quoting for raw-edit SQL (issue #1299). Raw-edit
+ * identifiers are ALWAYS quoted so case + special chars survive: Postgres /
+ * SQLite / Oracle use double quotes, MySQL backticks, MSSQL brackets. We do
+ * NOT route Postgres through `sqlLiteral.sqlIdentifier` because that helper
+ * leaves Postgres idents bare (case-folding + special-char unsafe here); the
+ * structured grid can afford that, a user-typed raw result needs the exact
+ * cached name preserved.
+ */
+function ident(name: string, dialect: SqlDialect): string {
+  return dialect === "mysql" || dialect === "mssql"
+    ? sqlIdentifier(name, dialect)
+    : quoteIdent(name);
 }
 
 /** Escape a single-quoted SQL string literal. */
@@ -35,37 +51,197 @@ function literal(value: unknown): string {
   return quoteString(String(value));
 }
 
+/** A `(pkColumnName, resultRowIndex)` pair used to build a PK WHERE clause. */
+interface PkEntry {
+  name: string;
+  idx: number;
+}
+
 /**
- * Build the WHERE clause that uniquely identifies one row by its primary
- * key columns. The row layout matches `resultColumnNames`, which is the
- * raw query's projection — we use index lookups to find each PK value.
+ * Build the WHERE clause that uniquely identifies one row by its primary-key
+ * columns, given each PK column's *positional* index into the result row.
+ *
+ * Returns `null` — meaning "do not emit a statement for this row" — when:
+ *  - there are no PK entries, or
+ *  - every PK value in the row is NULL (a LEFT JOIN unmatched instance, issue
+ *    #1299 #3 — there is no source row to target).
+ *
+ * A NULL value in an otherwise-populated PK tuple compares with `IS NULL`, not
+ * `= NULL` (which is UNKNOWN in SQL 3-valued logic and matches zero rows). This
+ * mirrors the #1305 fix in `datagrid/sqlGenerator.ts` and repairs the prior
+ * `col = NULL` bug for both the single- and multi-table paths.
  */
-function buildPkWhere(
+function buildPkWhereByPositions(
   row: unknown[],
-  resultColumnNames: string[],
-  pkColumns: string[],
-): string {
-  return pkColumns
-    .map((pk) => {
-      const idx = resultColumnNames.indexOf(pk);
-      const value = row[idx];
-      return `${quoteIdent(pk)} = ${literal(value)}`;
-    })
+  entries: PkEntry[],
+  dialect: SqlDialect,
+): string | null {
+  if (entries.length === 0) return null;
+  if (entries.every((e) => row[e.idx] == null)) return null;
+  return entries
+    .map((e) =>
+      row[e.idx] == null
+        ? `${ident(e.name, dialect)} IS NULL`
+        : `${ident(e.name, dialect)} = ${literal(row[e.idx])}`,
+    )
     .join(" AND ");
+}
+
+/** One source table occurrence in a multi-table result (issue #1299). */
+export interface MultiTableInstance {
+  schema: string;
+  table: string;
+  /** PK column names — empty when the instance's PK is not fully in-result. */
+  pkColumns: string[];
+  /** PK column name → result column index (positional identity). */
+  pkPositions: Record<string, number>;
+}
+
+/** Per result column attribution for a multi-table result (issue #1299). */
+export interface MultiTableColumnPlan {
+  /** Owning `MultiTablePlan.instances` index, or `null` if unattributable. */
+  instance: number | null;
+  /** Underlying source column name, or `null` (expression / unattributable). */
+  sourceColumn: string | null;
+  /** Base editability (attributed + owning instance carries its full PK). */
+  editable: boolean;
+  /** Reason shown when the column is read-only, else `null`. */
+  readonlyReason: string | null;
+}
+
+/**
+ * Multi-table edit plan (issue #1299). Present on `RawEditPlan.multi` when the
+ * result maps to more than one source table (or an aliased/JOIN result); it
+ * replaces the single-table `schema` / `table` / `pkColumns` routing with
+ * per-instance UPDATE targeting. DELETE is intentionally unsupported here.
+ */
+export interface MultiTablePlan {
+  /** FROM-position ordered; index === attribution's `instance`. */
+  instances: MultiTableInstance[];
+  /** Positional, aligned 1:1 with the result columns. */
+  columns: MultiTableColumnPlan[];
 }
 
 export interface RawEditPlan {
   schema: string;
   table: string;
   pkColumns: string[];
-  /** Result column index → underlying column name (no aliasing for now). */
+  /** Result column index → underlying column name (aliases resolved). */
   resultColumnNames: string[];
+  /** DBMS dialect for identifier quoting. Defaults to `"postgresql"`. */
+  dialect?: SqlDialect;
+  /**
+   * Issue #1299 — multi-table per-column routing. When set, `buildRawEditSql`
+   * groups edits by source instance and emits one table-scoped UPDATE each;
+   * the single-table `schema` / `table` / `pkColumns` fields are unused.
+   */
+  multi?: MultiTablePlan;
+}
+
+/** True when the plan is a multi-table result (issue #1299 — DELETE disabled). */
+export function isMultiTablePlan(plan: RawEditPlan): boolean {
+  return plan.multi !== undefined;
+}
+
+/** Result column indices that are a PK of their owning instance (header 🔑). */
+export function multiPkColumnIndices(multi: MultiTablePlan): Set<number> {
+  const indices = new Set<number>();
+  for (const inst of multi.instances) {
+    for (const pk of inst.pkColumns) {
+      const idx = inst.pkPositions[pk];
+      if (idx !== undefined) indices.add(idx);
+    }
+  }
+  return indices;
+}
+
+/**
+ * Whether a multi-table cell is editable *for this specific row* — base
+ * column editability AND the owning instance's PK is not all-NULL in the row
+ * (LEFT JOIN unmatched rows lock, issue #1299 #3).
+ */
+export function isMultiCellEditable(
+  multi: MultiTablePlan,
+  row: unknown[],
+  colIdx: number,
+): boolean {
+  const colPlan = multi.columns[colIdx];
+  if (!colPlan || !colPlan.editable || colPlan.instance == null) return false;
+  const inst = multi.instances[colPlan.instance];
+  if (!inst || inst.pkColumns.length === 0) return false;
+  return !inst.pkColumns.every((pk) => row[inst.pkPositions[pk]!] == null);
+}
+
+/** The read-only reason for a multi-table cell in a given row, or `null`. */
+export function multiCellReadonlyReason(
+  multi: MultiTablePlan,
+  row: unknown[],
+  colIdx: number,
+): string | null {
+  const colPlan = multi.columns[colIdx];
+  if (!colPlan) return null;
+  if (!colPlan.editable) return colPlan.readonlyReason;
+  if (colPlan.instance != null) {
+    const inst = multi.instances[colPlan.instance];
+    if (
+      inst &&
+      inst.pkColumns.length > 0 &&
+      inst.pkColumns.every((pk) => row[inst.pkPositions[pk]!] == null)
+    ) {
+      return "This row is unmatched (LEFT JOIN) — there is no source row to edit.";
+    }
+  }
+  return null;
+}
+
+/** Emit table-scoped UPDATEs for a multi-table plan (issue #1299). */
+function buildMultiTableEditSql(
+  rows: unknown[][],
+  pendingEdits: Map<string, string>,
+  multi: MultiTablePlan,
+  dialect: SqlDialect,
+): string[] {
+  const statements: string[] = [];
+  pendingEdits.forEach((newValue, key) => {
+    const [rowStr, colStr] = key.split("-");
+    const rowIdx = parseInt(rowStr!, 10);
+    const colIdx = parseInt(colStr!, 10);
+    const row = rows[rowIdx];
+    const colPlan = multi.columns[colIdx];
+    if (
+      !row ||
+      !colPlan ||
+      !colPlan.editable ||
+      colPlan.instance == null ||
+      colPlan.sourceColumn == null
+    ) {
+      return;
+    }
+    const inst = multi.instances[colPlan.instance];
+    if (!inst) return;
+    const entries = inst.pkColumns.map((pk) => ({
+      name: pk,
+      idx: inst.pkPositions[pk]!,
+    }));
+    const where = buildPkWhereByPositions(row, entries, dialect);
+    if (where === null) return; // locked / unmatched row
+    const qualified = `${ident(inst.schema, dialect)}.${ident(inst.table, dialect)}`;
+    const valueLiteral = newValue === "" ? "NULL" : quoteString(newValue);
+    statements.push(
+      `UPDATE ${qualified} SET ${ident(colPlan.sourceColumn, dialect)} = ${valueLiteral} WHERE ${where};`,
+    );
+  });
+  return statements;
 }
 
 /**
  * Generate UPDATE / DELETE statements for raw query edits. The shape mirrors
  * `datagrid/sqlGenerator.ts` so the preview UX feels consistent — but it
  * skips INSERT (raw query results have no canonical "new row" target).
+ *
+ * When `plan.multi` is present the result spans multiple source tables: edits
+ * route per-instance and DELETE is disabled (issue #1299 #4 — which table a
+ * joined row deletes from is inherently ambiguous).
  */
 export function buildRawEditSql(
   rows: unknown[][],
@@ -73,8 +249,17 @@ export function buildRawEditSql(
   pendingDeletedRowKeys: Set<string>,
   plan: RawEditPlan,
 ): string[] {
-  const qualifiedTable = `${quoteIdent(plan.schema)}.${quoteIdent(plan.table)}`;
+  const dialect = plan.dialect ?? "postgresql";
+  if (plan.multi) {
+    return buildMultiTableEditSql(rows, pendingEdits, plan.multi, dialect);
+  }
+
+  const qualifiedTable = `${ident(plan.schema, dialect)}.${ident(plan.table, dialect)}`;
   const statements: string[] = [];
+  const pkEntries: PkEntry[] = plan.pkColumns.map((pk) => ({
+    name: pk,
+    idx: plan.resultColumnNames.indexOf(pk),
+  }));
 
   pendingEdits.forEach((newValue, key) => {
     const [rowStr, colStr] = key.split("-");
@@ -83,10 +268,11 @@ export function buildRawEditSql(
     const colName = plan.resultColumnNames[colIdx];
     const row = rows[rowIdx];
     if (!colName || !row) return;
-    const where = buildPkWhere(row, plan.resultColumnNames, plan.pkColumns);
+    const where = buildPkWhereByPositions(row, pkEntries, dialect);
+    if (where === null) return;
     const valueLiteral = newValue === "" ? "NULL" : quoteString(newValue);
     statements.push(
-      `UPDATE ${qualifiedTable} SET ${quoteIdent(colName)} = ${valueLiteral} WHERE ${where};`,
+      `UPDATE ${qualifiedTable} SET ${ident(colName, dialect)} = ${valueLiteral} WHERE ${where};`,
     );
   });
 
@@ -96,7 +282,8 @@ export function buildRawEditSql(
     const rowIdx = parseInt(parts[2]!, 10);
     const row = rows[rowIdx];
     if (!row) return;
-    const where = buildPkWhere(row, plan.resultColumnNames, plan.pkColumns);
+    const where = buildPkWhereByPositions(row, pkEntries, dialect);
+    if (where === null) return;
     statements.push(`DELETE FROM ${qualifiedTable} WHERE ${where};`);
   });
 

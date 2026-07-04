@@ -407,3 +407,73 @@ describe("resolveResultColumns — instanceEditability", () => {
     });
   });
 });
+
+// --- alias-aware attribution (issue #1299) -----------------------------
+
+describe("resolveResultColumns — alias-aware projection (#1299)", () => {
+  it("attributes an `AS`-aliased column back to its source, no downgrade", () => {
+    const stmt = select(
+      {
+        kind: "expressions",
+        items: [
+          {
+            kind: "column",
+            reference: { table: null, column: "id" },
+            alias: "user_id",
+          },
+          {
+            kind: "column",
+            reference: { table: "u", column: "name" },
+            alias: null,
+          },
+        ],
+      },
+      [fromTable("users", "u")],
+    );
+    const lookup = lookupFrom({ users: [col("id", true), col("name")] });
+
+    // The DB names the first result column by its alias.
+    const r = resolveResultColumns(stmt, ["user_id", "name"], lookup);
+
+    expect(r.columns[0]).toEqual({
+      kind: "attributed",
+      instance: 0,
+      schema: null,
+      table: "users",
+      sourceColumn: "id",
+    });
+    expect(r.instanceEditability[0]).toMatchObject({ pkComplete: true });
+  });
+
+  it("keeps a JOIN with an aliased PK editable across instances", () => {
+    const stmt = select(
+      {
+        kind: "expressions",
+        items: [
+          {
+            kind: "column",
+            reference: { table: "u", column: "id" },
+            alias: "uid",
+          },
+          {
+            kind: "column",
+            reference: { table: "o", column: "id" },
+            alias: "oid",
+          },
+        ],
+      },
+      [fromTable("users", "u"), fromTable("orders", "o", innerJoin)],
+    );
+    const lookup = lookupFrom({
+      users: [col("id", true)],
+      orders: [col("id", true)],
+    });
+
+    const r = resolveResultColumns(stmt, ["uid", "oid"], lookup);
+
+    expect(r.columns[0]).toMatchObject({ instance: 0, sourceColumn: "id" });
+    expect(r.columns[1]).toMatchObject({ instance: 1, sourceColumn: "id" });
+    expect(r.instanceEditability[0]).toMatchObject({ pkComplete: true });
+    expect(r.instanceEditability[1]).toMatchObject({ pkComplete: true });
+  });
+});

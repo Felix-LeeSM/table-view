@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { cellToEditString, editKey } from "@components/datagrid";
-import { buildRawEditSql, type RawEditPlan } from "@lib/sql/rawQuerySqlBuilder";
+import {
+  buildRawEditSql,
+  isMultiCellEditable,
+  type RawEditPlan,
+} from "@lib/sql/rawQuerySqlBuilder";
 import { executeQueryBatch } from "@lib/tauri";
 import { analyzeStatement } from "@lib/sql/sqlSafety";
 import { recordHistoryEntry } from "@lib/runtime/history/recordHistoryEntry";
@@ -58,6 +62,10 @@ export interface UseRawQueryGridEditOptions {
 export interface UseRawQueryGridEditResult {
   // Read-only flags
   noPk: boolean;
+  /** Issue #1299 — false for multi-table results (which table is ambiguous). */
+  canDelete: boolean;
+  /** Issue #1299 — per-cell editability (multi-table read-only + NULL lock). */
+  canEditCell: (rowIdx: number, colIdx: number) => boolean;
   hasPendingChanges: boolean;
   // Cell editing state
   editingCell: { row: number; col: number } | null;
@@ -173,7 +181,28 @@ export function useRawQueryGridEdit({
   // results to the read-only `<ResultTable>`, so this guard only fires
   // if some future caller mounts us directly. Without it, `buildPkWhere`
   // would emit `WHERE ;` and the DB would reject with a syntax error.
-  const noPk = plan.pkColumns.length === 0;
+  // Multi-table plans gate per-cell instead (some columns editable), so a
+  // multi plan is never wholesale `noPk`.
+  const noPk = !plan.multi && plan.pkColumns.length === 0;
+
+  // Issue #1299 — per-cell editability. Single-table: every cell editable when
+  // a PK exists. Multi-table: only cells whose owning instance carries its full
+  // PK, and whose PK is not all-NULL in the row (LEFT JOIN unmatched lock).
+  const canEditCell = useCallback(
+    (rowIdx: number, colIdx: number): boolean => {
+      if (noPk) return false;
+      if (!plan.multi) return true;
+      const row = result.rows[rowIdx];
+      return row
+        ? isMultiCellEditable(plan.multi, row as unknown[], colIdx)
+        : false;
+    },
+    [noPk, plan.multi, result.rows],
+  );
+
+  // Row DELETE is disabled for multi-table results (which source table a joined
+  // row deletes from is inherently ambiguous — issue #1299 #4).
+  const canDelete = !plan.multi && !noPk;
 
   const hasPendingChanges =
     pendingEdits.size > 0 || pendingDeletedRowKeys.size > 0;
@@ -223,7 +252,7 @@ export function useRawQueryGridEdit({
 
   const startEdit = useCallback(
     (rowIdx: number, colIdx: number) => {
-      if (noPk) return;
+      if (!canEditCell(rowIdx, colIdx)) return;
       // Persist the previous in-flight edit (with the unchanged-skip rule)
       // before opening a new editor.
       setPendingEdits(persistInflightEdit);
@@ -233,7 +262,13 @@ export function useRawQueryGridEdit({
       setEditingCell({ row: rowIdx, col: colIdx });
       setEditValue(pending ?? cellToEditString(cell));
     },
-    [noPk, pendingEdits, persistInflightEdit, result.rows, setPendingEdits],
+    [
+      canEditCell,
+      pendingEdits,
+      persistInflightEdit,
+      result.rows,
+      setPendingEdits,
+    ],
   );
 
   const cancelEdit = useCallback(() => {
@@ -249,13 +284,14 @@ export function useRawQueryGridEdit({
 
   const deleteRow = useCallback(
     (rowIdx: number) => {
+      if (!canDelete) return;
       setPendingDeletedRowKeys((prev) => {
         const next = new Set(prev);
         next.add(rowKeyFn(rowIdx));
         return next;
       });
     },
-    [setPendingDeletedRowKeys],
+    [canDelete, setPendingDeletedRowKeys],
   );
 
   const handleCommit = useCallback(() => {
@@ -421,6 +457,8 @@ export function useRawQueryGridEdit({
 
   return {
     noPk,
+    canDelete,
+    canEditCell,
     hasPendingChanges,
     editingCell,
     editValue,
