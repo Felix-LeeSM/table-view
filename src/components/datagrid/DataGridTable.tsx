@@ -429,7 +429,14 @@ const DataGridTable = forwardRef<DataGridTableHandle, DataGridTableProps>(
       count: shouldVirtualize ? data.rows.length : 0,
       getScrollElement: () => scrollContainerRef.current,
       estimateSize: () => ROW_HEIGHT_ESTIMATE,
-      overscan: 40,
+      // #1295 — widen the pre-render band so a fast scrollbar drag doesn't
+      // outrun the rendered window and flash blank rows. Kept at 24 (not 40):
+      // each data row is heavy (multi-cell + pendingEdits subscription), so 24
+      // caps per-frame pre-render at ~48 extra rows — enough to cover typical
+      // drag jumps without the constant-render cost 40 would add. Higher than
+      // SchemaTree's 8 because grid rows are shorter (32px) and scrollbar drags
+      // jump farther than tree keyboard nav.
+      overscan: 24,
     });
 
     useEffect(() => {
@@ -646,10 +653,10 @@ const DataGridTable = forwardRef<DataGridTableHandle, DataGridTableProps>(
                                       // object value to its JSON literal so
                                       // the SQL generator sees a string.
                                       // Objects are only ever produced by
-                                      // the BSON branch (Mong-only), which
+                                      // the BSON branch (Mongo-only), which
                                       // doesn't apply here — but keep the
                                       // safe stringify as a guard.
-                                    const serialized: string =
+                                      const serialized: string =
                                         typeof value === "string"
                                           ? value
                                           : safeStringifyCell(value);
@@ -659,8 +666,8 @@ const DataGridTable = forwardRef<DataGridTableHandle, DataGridTableProps>(
                                       );
                                       setPendingEdits(next);
                                     }
-                                    : undefined
-                                  }
+                                  : undefined
+                              }
                               onClose={() => setExpandedNested(null)}
                             />
                           </div>

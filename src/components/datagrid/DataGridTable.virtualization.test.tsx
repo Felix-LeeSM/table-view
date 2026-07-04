@@ -140,10 +140,15 @@ describe("DataGridTable virtualization (sprint-114)", () => {
       />,
     );
     const rows = screen.getAllByRole("row");
-    // 1 header + ≤ 100 body rows. 600 / 32 ≈ 19 visible + overscan(40, clamped at top since scrolled to index 0) ≈ 59 total.
+    // 1 header + ≤ 100 body rows. 600 / 32 ≈ 18 visible + overscan(24) ≈ 43 body.
     expect(rows.length).toBeLessThanOrEqual(101);
-    // Sanity: at least the header + a non-trivial slice rendered.
-    expect(rows.length).toBeGreaterThan(1);
+    // #1295 regression pin: overscan=24 must keep a wide band rendered so a
+    // fast scrollbar drag can't flash blank rows. At mount (index 0, top
+    // overscan clamped) the window is ~19 visible + 24 bottom overscan ≈ 43
+    // body rows (44 with header). The old overscan=10 rendered only ~30; the
+    // floor below sits between the two so a silent revert to a small overscan
+    // fails this test.
+    expect(rows.length).toBeGreaterThan(40);
   });
 
   it("reports advisory render timing for the deterministic page-size 1000 fixture", async () => {
