@@ -126,7 +126,16 @@ export function createTabSlice(set: WorkspaceSet, get: WorkspaceGet): TabSlice {
               ws.activeTabId === tabId
                 ? (remaining[remaining.length - 1]?.id ?? null)
                 : ws.activeTabId;
-            const newHistory = [closingTab, ...ws.closedTabHistory].slice(
+            // Issue #1088 — never park a live queryState in the history. A
+            // tab closed mid-run would otherwise be restored "running" with a
+            // stale queryId no completion callback can reach, leaving a
+            // permanent ghost spinner. Reset to idle on push (matches the
+            // persistence dehydrate invariant); SQL text is preserved.
+            const historyEntry: Tab =
+              closingTab.type === "query"
+                ? { ...closingTab, queryState: { status: "idle" as const } }
+                : closingTab;
+            const newHistory = [historyEntry, ...ws.closedTabHistory].slice(
               0,
               25,
             );
