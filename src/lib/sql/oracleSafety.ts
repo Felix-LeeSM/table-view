@@ -1,4 +1,5 @@
 import { decideSafeModeAction, type SafeModeDecision } from "@/lib/safeMode";
+import type { EnvironmentTag } from "@/features/connection/model";
 import { stripSqlComments } from "./stripSqlComments";
 import {
   analyzeStatement,
@@ -249,7 +250,7 @@ export function analyzeOracleStatement(sql: string): OracleStatementAnalysis {
 
 export function decideOracleSafeModeAction(
   mode: "strict" | "warn" | "off",
-  environment: string | null,
+  environment: EnvironmentTag | null,
   analysis: OracleStatementAnalysis,
 ): SafeModeDecision {
   if (analysis.support === "unsupported") {

@@ -132,8 +132,7 @@ export default function QueryTab({ tab }: QueryTabProps) {
     [connections, tab.connectionId],
   );
   const safeModeEnvironment = useMemo(
-    () =>
-      resolveSafeModeEnvironment(connections, tab.connectionId, "production"),
+    () => resolveSafeModeEnvironment(connections, tab.connectionId),
     [connections, tab.connectionId],
   );
   const destructiveDialogEnvironment =

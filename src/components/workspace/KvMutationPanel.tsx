@@ -102,9 +102,7 @@ export function KvMutationPanel({
     useState<SafeModePendingMutation | null>(null);
   const [mutationError, setMutationError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const safeModeGate = useSafeModeGate(connectionId, {
-    missingConnectionEnvironment: "production",
-  });
+  const safeModeGate = useSafeModeGate(connectionId);
   const connection = useConnectionStore((s) =>
     s.connections.find((candidate) => candidate.id === connectionId),
   );
