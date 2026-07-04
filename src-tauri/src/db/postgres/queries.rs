@@ -147,6 +147,80 @@ pub(super) fn stringify_numeric_if_precision_sensitive(
     cell
 }
 
+/// issue #1296 — parse a `row_to_json(q)::text` payload into `(key, value)`
+/// pairs **in emission order**, preserving duplicate keys. `serde_json::Value`
+/// / `Map` collapse duplicate keys to the last one, so a same-name JOIN
+/// projection (`SELECT u.id, o.id …` → `{"id":1,"id":7}`) loses one real value
+/// silently. `row_to_json` emits keys in subquery column order, which matches
+/// `describe()`'s column order, so the caller assigns pairs **positionally**.
+fn parse_ordered_object(
+    json_str: &str,
+) -> Result<Vec<(String, serde_json::Value)>, serde_json::Error> {
+    struct OrderedVisitor;
+    impl<'de> serde::de::Visitor<'de> for OrderedVisitor {
+        type Value = Vec<(String, serde_json::Value)>;
+        fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            f.write_str("a JSON object")
+        }
+        fn visit_map<M>(self, mut map: M) -> Result<Self::Value, M::Error>
+        where
+            M: serde::de::MapAccess<'de>,
+        {
+            let mut out = Vec::with_capacity(map.size_hint().unwrap_or(0));
+            while let Some((k, v)) = map.next_entry::<String, serde_json::Value>()? {
+                out.push((k, v));
+            }
+            Ok(out)
+        }
+    }
+    use serde::Deserializer as _;
+    let mut de = serde_json::Deserializer::from_str(json_str);
+    let out = de.deserialize_map(OrderedVisitor)?;
+    de.end()?;
+    Ok(out)
+}
+
+/// issue #1296/#1083 — a row whose `row_to_json` payload cannot be parsed, or
+/// whose value count disagrees with the described columns, must never fall
+/// through as a silent all-`Null` row (the caller can't tell corruption from a
+/// genuinely empty row and may overwrite real data on edit). Fill every cell
+/// with a surfaced marker instead — mirrors MySQL's `decode_error_marker`
+/// (#1083) so the grid distinguishes it from an empty cell.
+fn wrapped_row_error_marker(column_count: usize, reason: &str) -> Vec<serde_json::Value> {
+    vec![serde_json::Value::String(format!("<{reason}>")); column_count]
+}
+
+/// issue #1296 — decode one streamed `row_to_json(q)::text` payload into a row
+/// aligned with `columns` **by position**, not by name lookup (which collapses
+/// duplicate output columns). Parse failure or a value/column count mismatch is
+/// surfaced as a marker row rather than progressing silently.
+fn parse_wrapped_row(json_str: &str, columns: &[QueryColumn]) -> Vec<serde_json::Value> {
+    let pairs = match parse_ordered_object(json_str) {
+        Ok(pairs) => pairs,
+        Err(e) => return wrapped_row_error_marker(columns.len(), &format!("row parse error: {e}")),
+    };
+    if pairs.len() != columns.len() {
+        return wrapped_row_error_marker(
+            columns.len(),
+            &format!(
+                "row shape error: {} values for {} columns",
+                pairs.len(),
+                columns.len()
+            ),
+        );
+    }
+    columns
+        .iter()
+        .zip(pairs)
+        .map(|(col, (_key, raw))| {
+            // Sprint 261 (ADR 0026) — bigint / numeric cells are pre-stringified
+            // so native JSON.parse on the JS side preserves digit-for-digit
+            // precision.
+            stringify_numeric_if_precision_sensitive(raw, &col.data_type)
+        })
+        .collect()
+}
+
 /// Maps PostgreSQL `data_type` strings (from `information_schema.columns`) to
 /// the corresponding cast target type name. Returns `None` for text-like types
 /// where no cast is needed (binding as `text` is fine).
@@ -481,23 +555,11 @@ impl PostgresAdapter {
                                 truncated = true;
                                 break;
                             }
-                            let obj: serde_json::Map<String, serde_json::Value> =
-                                serde_json::from_str(&json_str).unwrap_or_default();
-                            let row: Vec<serde_json::Value> = columns
-                                .iter()
-                                .map(|col| {
-                                    let raw = obj
-                                        .get(&col.name)
-                                        .cloned()
-                                        .unwrap_or(serde_json::Value::Null);
-                                    // Sprint 261 (ADR 0026) — bigint / numeric
-                                    // cells are pre-stringified so native
-                                    // JSON.parse on the JS side preserves
-                                    // digit-for-digit precision.
-                                    stringify_numeric_if_precision_sensitive(raw, &col.data_type)
-                                })
-                                .collect();
-                            json_rows.push(row);
+                            // #1296 — positional decode (duplicate output column
+                            // names would collapse under name lookup). parse-and
+                            // -drop each payload so the scalar `String` and the
+                            // parsed row never coexist (#1231 memory contract).
+                            json_rows.push(parse_wrapped_row(&json_str, &columns));
                         }
 
                         (columns, json_rows, truncated)
@@ -1334,6 +1396,107 @@ mod tests {
     #[test]
     fn strip_trailing_terminator_only_semicolons_returns_empty() {
         assert_eq!(strip_trailing_terminator(";  ;  "), "");
+    }
+
+    // -------------------------------------------------------------------
+    // #1296 — wrapped-path (row_to_json) positional decode + parse-failure
+    // surfacing. These drive the pure parsing helper directly, exactly the
+    // string a live PG `row_to_json(q)::text` stream yields, so the same-name
+    // JOIN corruption is provable without standing up a Postgres pool.
+    // -------------------------------------------------------------------
+
+    fn col(name: &str, data_type: &str) -> QueryColumn {
+        QueryColumn {
+            name: name.to_string(),
+            data_type: data_type.to_string(),
+            category: map_pg_data_type(data_type),
+        }
+    }
+
+    // Regression: `SELECT u.id, o.id FROM users u JOIN orders o …` yields two
+    // output columns both named `id`. row_to_json emits `{"id":1,"id":7}`. The
+    // old name-lookup / serde_json::Map path collapsed both cells to `7`,
+    // silently dropping `1`. Positional decode must keep them distinct.
+    #[test]
+    fn parse_wrapped_row_duplicate_columns_stay_distinct() {
+        let columns = vec![col("id", "int4"), col("id", "int4")];
+        let row = parse_wrapped_row(r#"{"id":1,"id":7}"#, &columns);
+        assert_eq!(
+            row,
+            vec![
+                serde_json::Value::Number(1.into()),
+                serde_json::Value::Number(7.into()),
+            ],
+            "duplicate output columns must receive their own positional values"
+        );
+    }
+
+    // Contrast: with distinct names the positional order still matches, and the
+    // ADR 0026 bigint-as-string coercion still applies per column.
+    #[test]
+    fn parse_wrapped_row_distinct_names_positional_and_bigint_stringified() {
+        let columns = vec![col("id", "int4"), col("big", "int8")];
+        let row = parse_wrapped_row(r#"{"id":1,"big":9007199254740993}"#, &columns);
+        assert_eq!(
+            row,
+            vec![
+                serde_json::Value::Number(1.into()),
+                serde_json::Value::String("9007199254740993".to_string()),
+            ]
+        );
+    }
+
+    // #1083 class — a malformed row_to_json payload must never masquerade as an
+    // all-NULL row (the old `unwrap_or_default()`); every cell is a surfaced
+    // marker the grid can distinguish from an empty cell.
+    #[test]
+    fn parse_wrapped_row_parse_failure_surfaces_marker_not_silent_null() {
+        let columns = vec![col("id", "int4"), col("name", "text")];
+        let row = parse_wrapped_row("{not valid json", &columns);
+        assert_eq!(row.len(), 2);
+        for cell in &row {
+            assert!(
+                !cell.is_null(),
+                "parse failure must never masquerade as NULL"
+            );
+            match cell {
+                serde_json::Value::String(s) => {
+                    assert!(s.starts_with("<row parse error:"), "unexpected marker: {s}")
+                }
+                other => panic!("expected marker string, got {other:?}"),
+            }
+        }
+    }
+
+    // A payload whose key count disagrees with the described columns is
+    // structural corruption; surface it rather than mis-align by position.
+    #[test]
+    fn parse_wrapped_row_count_mismatch_surfaces_marker() {
+        let columns = vec![col("a", "int4"), col("b", "int4"), col("c", "int4")];
+        let row = parse_wrapped_row(r#"{"a":1,"b":2}"#, &columns);
+        assert_eq!(row.len(), 3);
+        match &row[0] {
+            serde_json::Value::String(s) => {
+                assert!(s.starts_with("<row shape error:"), "unexpected marker: {s}")
+            }
+            other => panic!("expected marker string, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_ordered_object_keeps_duplicate_keys_in_order() {
+        let pairs = parse_ordered_object(r#"{"id":1,"name":"x","id":7}"#).unwrap();
+        assert_eq!(
+            pairs,
+            vec![
+                ("id".to_string(), serde_json::Value::Number(1.into())),
+                (
+                    "name".to_string(),
+                    serde_json::Value::String("x".to_string())
+                ),
+                ("id".to_string(), serde_json::Value::Number(7.into())),
+            ]
+        );
     }
 
     // -------------------------------------------------------------------
