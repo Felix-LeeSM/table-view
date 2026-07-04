@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import TabBar from "./TabBar";
 import type { TableTab, TabSubView } from "@stores/workspaceStore";
@@ -32,6 +32,7 @@ import ErrorBoundary from "@components/shared/ErrorBoundary";
 import SearchIndexDetailPanel from "@components/search/SearchIndexDetailPanel";
 import { assertNever, type Paradigm } from "@/lib/paradigm";
 import WorkspaceToolbar from "@components/workspace/WorkspaceToolbar";
+import { useTablistRoving } from "@components/shared/tablist/useTablistRoving";
 
 interface TableTabProps {
   tab: TableTab;
@@ -52,6 +53,21 @@ function TableTabView({ tab, onSubViewChange }: TableTabProps) {
   const [mongoStructureSubTab, setMongoStructureSubTab] =
     useState<MongoStructureSubTab>("indexes");
 
+  // Shared roving nav for whichever sub-tab bar this paradigm renders. Only
+  // rdb carries the ERD tab; mongo/kv are records/structure only. One
+  // unconditional hook call drives the single tablist the active branch mounts.
+  const subTabBarRef = useRef<HTMLDivElement>(null);
+  const subViewValues: TabSubView[] =
+    paradigm === "rdb"
+      ? ["records", "structure", "erd"]
+      : ["records", "structure"];
+  const subTabRoving = useTablistRoving(
+    subViewValues,
+    tab.subView,
+    onSubViewChange,
+    subTabBarRef,
+  );
+
   switch (paradigm) {
     case "document": {
       // Prefer the dedicated `database` / `collection` fields; fall back to
@@ -62,14 +78,17 @@ function TableTabView({ tab, onSubViewChange }: TableTabProps) {
       return (
         <div className="flex flex-1 flex-col overflow-hidden">
           <div
+            ref={subTabBarRef}
             className="flex items-center border-b border-border bg-secondary"
             role="tablist"
             aria-label={t("mainArea.mongoCollectionViewAria")}
             data-testid="mongo-table-subtab-bar"
+            onKeyDown={subTabRoving.onKeyDown}
           >
             <button
               role="tab"
               id="tab-mongo-records"
+              data-tab-value="records"
               aria-controls="tabpanel-mongo-records"
               aria-selected={tab.subView === "records"}
               tabIndex={tab.subView === "records" ? 0 : -1}
@@ -79,20 +98,13 @@ function TableTabView({ tab, onSubViewChange }: TableTabProps) {
                   : "text-muted-foreground hover:text-secondary-foreground"
               }`}
               onClick={() => onSubViewChange("records")}
-              onKeyDown={(e) => {
-                if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
-                  e.preventDefault();
-                  onSubViewChange(
-                    tab.subView === "records" ? "structure" : "records",
-                  );
-                }
-              }}
             >
               {t("mainArea.records")}
             </button>
             <button
               role="tab"
               id="tab-mongo-structure"
+              data-tab-value="structure"
               aria-controls="tabpanel-mongo-structure"
               aria-selected={tab.subView === "structure"}
               tabIndex={tab.subView === "structure" ? 0 : -1}
@@ -102,14 +114,6 @@ function TableTabView({ tab, onSubViewChange }: TableTabProps) {
                   : "text-muted-foreground hover:text-secondary-foreground"
               }`}
               onClick={() => onSubViewChange("structure")}
-              onKeyDown={(e) => {
-                if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
-                  e.preventDefault();
-                  onSubViewChange(
-                    tab.subView === "structure" ? "records" : "structure",
-                  );
-                }
-              }}
             >
               {t("mainArea.structure")}
             </button>
@@ -161,13 +165,16 @@ function TableTabView({ tab, onSubViewChange }: TableTabProps) {
         <div className="flex flex-1 flex-col overflow-hidden">
           {/* Sub-tab bar */}
           <div
+            ref={subTabBarRef}
             className="flex items-center border-b border-border bg-secondary"
             role="tablist"
             aria-label={t("mainArea.tableViewAria")}
+            onKeyDown={subTabRoving.onKeyDown}
           >
             <button
               role="tab"
               id="tab-rdb-records"
+              data-tab-value="records"
               aria-controls="tabpanel-rdb-records"
               aria-selected={tab.subView === "records"}
               tabIndex={tab.subView === "records" ? 0 : -1}
@@ -177,20 +184,13 @@ function TableTabView({ tab, onSubViewChange }: TableTabProps) {
                   : "text-muted-foreground hover:text-secondary-foreground"
               }`}
               onClick={() => onSubViewChange("records")}
-              onKeyDown={(e) => {
-                if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
-                  e.preventDefault();
-                  onSubViewChange(
-                    tab.subView === "records" ? "structure" : "records",
-                  );
-                }
-              }}
             >
               {t("mainArea.records")}
             </button>
             <button
               role="tab"
               id="tab-rdb-structure"
+              data-tab-value="structure"
               aria-controls="tabpanel-rdb-structure"
               aria-selected={tab.subView === "structure"}
               tabIndex={tab.subView === "structure" ? 0 : -1}
@@ -200,14 +200,6 @@ function TableTabView({ tab, onSubViewChange }: TableTabProps) {
                   : "text-muted-foreground hover:text-secondary-foreground"
               }`}
               onClick={() => onSubViewChange("structure")}
-              onKeyDown={(e) => {
-                if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
-                  e.preventDefault();
-                  onSubViewChange(
-                    tab.subView === "structure" ? "records" : "structure",
-                  );
-                }
-              }}
             >
               {t("mainArea.structure")}
             </button>
@@ -215,6 +207,7 @@ function TableTabView({ tab, onSubViewChange }: TableTabProps) {
               <button
                 role="tab"
                 id="tab-rdb-erd"
+                data-tab-value="erd"
                 aria-controls="tabpanel-rdb-erd"
                 aria-selected={tab.subView === "erd"}
                 tabIndex={tab.subView === "erd" ? 0 : -1}
@@ -224,12 +217,6 @@ function TableTabView({ tab, onSubViewChange }: TableTabProps) {
                     : "text-muted-foreground hover:text-secondary-foreground"
                 }`}
                 onClick={() => onSubViewChange("erd")}
-                onKeyDown={(e) => {
-                  if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
-                    e.preventDefault();
-                    onSubViewChange("records");
-                  }
-                }}
               >
                 {t("mainArea.erd")}
               </button>

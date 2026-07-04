@@ -347,6 +347,54 @@ describe("SearchIndexDetailPanel", () => {
     expect(mappingTab).toHaveAttribute("aria-controls", mappingPanel.id);
   });
 
+  // #1131 — the six detail tabs form one roving tab stop navigated with the
+  // arrow keys (previously each was a separate tab stop with no arrow nav).
+  it("roves the detail tabs with arrow keys and Home/End", async () => {
+    render(
+      <SearchIndexDetailPanel
+        connectionId="search-1"
+        index="logs-elastic-2026.05.24"
+      />,
+    );
+
+    await screen.findByText(/Elasticsearch fixture/);
+
+    const tablist = screen.getByRole("tablist");
+    // Exactly one tab stop on entry.
+    const stops = () =>
+      screen
+        .getAllByRole("tab")
+        .filter((t) => t.getAttribute("tabindex") === "0");
+    expect(stops()).toHaveLength(1);
+    expect(screen.getByRole("tab", { selected: true })).toHaveAttribute(
+      "id",
+      "tab-search-detail-overview",
+    );
+
+    // ArrowRight → Mapping, activation follows focus.
+    fireEvent.keyDown(tablist, { key: "ArrowRight" });
+    expect(screen.getByRole("tab", { selected: true })).toHaveAttribute(
+      "id",
+      "tab-search-detail-mapping",
+    );
+    expect(stops()).toHaveLength(1);
+
+    // ArrowLeft wraps Overview → Stats (last tab).
+    fireEvent.keyDown(tablist, { key: "ArrowLeft" });
+    fireEvent.keyDown(tablist, { key: "ArrowLeft" });
+    expect(screen.getByRole("tab", { selected: true })).toHaveAttribute(
+      "id",
+      "tab-search-detail-stats",
+    );
+
+    // Home returns to the first tab.
+    fireEvent.keyDown(tablist, { key: "Home" });
+    expect(screen.getByRole("tab", { selected: true })).toHaveAttribute(
+      "id",
+      "tab-search-detail-overview",
+    );
+  });
+
   it("opens a preview-only delete-by-query plan from the index header", async () => {
     installInvokeMock({
       plan_search_delete_by_query: {

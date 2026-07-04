@@ -49,6 +49,7 @@ export default function TabItem({
       id={`tab-${tab.id}`}
       aria-controls={`tabpanel-${tab.id}`}
       data-tab-id={tab.id}
+      data-tab-value={tab.id}
       data-preview={isPreviewTable ? "true" : undefined}
       aria-selected={isActive}
       tabIndex={isActive ? 0 : -1}
