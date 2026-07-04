@@ -61,6 +61,15 @@ describe("BsonTreeViewer", () => {
 
   // ── aria-expanded + keyboard ─────────────────────────────────────────
 
+  it("renders focusable treeitems with a keyboard focus ring (WCAG 2.4.7)", () => {
+    render(<BsonTreeViewer value={{ deep: { inner: { leaf: 1 } } }} />);
+
+    const deepNode = screen.getByRole("treeitem", { name: "deep node" });
+    expect(deepNode).toHaveAttribute("tabindex", "0");
+    expect(deepNode.className).toContain("focus-visible:ring-2");
+    expect(deepNode.className).toContain("focus-visible:ring-ring");
+  });
+
   it("toggles aria-expanded on mouse click and keyboard (Enter/Space)", async () => {
     const user = userEvent.setup();
     render(
