@@ -140,6 +140,14 @@ export const en = {
     sidebarTitle:
       "Recorded from a sidebar table/collection preview (DataGrid open)",
   },
+
+  // HistoryCollapseToggle (#1309) — shared show-more/collapse for history surfaces
+  historyCollapse: {
+    showMore: "Show {{count}} more",
+    showLess: "Show less",
+    expandAria: "Show {{count}} more history entries",
+    collapseAria: "Show fewer history entries",
+  },
 } as const;
 
 export const ko = {
@@ -273,5 +281,13 @@ export const ko = {
     fileTitle: "DuckDB 로컬 파일 소스 쿼리에서 기록됨",
     fileCustomTitle: "{{label}} DuckDB 로컬 파일 소스 쿼리에서 기록됨",
     sidebarTitle: "사이드바 테이블/컬렉션 미리보기(DataGrid 열기)에서 기록됨",
+  },
+
+  // HistoryCollapseToggle (#1309) — shared show-more/collapse for history surfaces
+  historyCollapse: {
+    showMore: "{{count}}개 더 보기",
+    showLess: "접기",
+    expandAria: "히스토리 {{count}}개 더 보기",
+    collapseAria: "히스토리 접기",
   },
 } as const;

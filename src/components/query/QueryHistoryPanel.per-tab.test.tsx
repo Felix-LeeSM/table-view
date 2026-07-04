@@ -34,6 +34,8 @@ const row = (id: number, sqlRedacted = `SELECT ${id}`) => ({
   executedAt: 1_700_000_000_000 + id,
 });
 
+const range = (n: number) => Array.from({ length: n }, (_, i) => i);
+
 const fileAnalyticsRow = (id: number) => ({
   ...row(id, 'SELECT * FROM "sales_csv"'),
   source: "file-analytics" as const,
@@ -91,6 +93,45 @@ describe("QueryHistoryPanel per-tab (sprint-372)", () => {
     expect(toggle).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByTestId("query-history-panel-rows")).toBeInTheDocument();
     expect(screen.getByTestId("query-history-panel-row-1")).toBeInTheDocument();
+  });
+
+  // #1309 — history surfaces share a "default N + collapse" convention. The
+  // per-tab panel caps its loaded rows to the shared default and hides the
+  // rest (and the page-level Load more) behind one keyboard-reachable toggle.
+  it("caps tab history rows to the shared default and expands via the collapse toggle", async () => {
+    invokeMock.mockResolvedValueOnce({
+      rows: range(8).map((i) => row(i + 1)),
+      nextCursor: 1,
+    });
+    render(<QueryHistoryPanel connectionId="conn-1" tabId="tab-1" />);
+    await expandHistoryPanel();
+
+    await waitFor(() => {
+      expect(
+        screen.getByTestId("query-history-panel-row-1"),
+      ).toBeInTheDocument();
+    });
+    // 8 rows loaded, cap 5 → rows 1..5 visible, 6..8 hidden.
+    expect(screen.getByTestId("query-history-panel-row-5")).toBeInTheDocument();
+    expect(
+      screen.queryByTestId("query-history-panel-row-8"),
+    ).not.toBeInTheDocument();
+    // Load more stays hidden until the current page is fully revealed.
+    expect(
+      screen.queryByTestId("query-history-panel-load-more"),
+    ).not.toBeInTheDocument();
+
+    const collapse = screen.getByTestId("query-history-panel-collapse");
+    expect(collapse).toHaveAttribute("aria-expanded", "false");
+    await act(async () => {
+      collapse.click();
+    });
+
+    expect(collapse).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByTestId("query-history-panel-row-8")).toBeInTheDocument();
+    expect(
+      screen.getByTestId("query-history-panel-load-more"),
+    ).toBeInTheDocument();
   });
 
   // AC-372-08 — redact-only display. 원문 sql 은 list 응답에 없고
