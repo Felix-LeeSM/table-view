@@ -64,10 +64,17 @@ describe("BsonTreeViewer", () => {
   it("renders focusable treeitems with a keyboard focus ring (WCAG 2.4.7)", () => {
     render(<BsonTreeViewer value={{ deep: { inner: { leaf: 1 } } }} />);
 
-    const deepNode = screen.getByRole("treeitem", { name: "deep node" });
-    expect(deepNode).toHaveAttribute("tabindex", "0");
-    expect(deepNode.className).toContain("focus-visible:ring-2");
-    expect(deepNode.className).toContain("focus-visible:ring-ring");
+    // Roving tabindex (#1128): every treeitem is focusable and carries the
+    // focus ring, but exactly one (the active anchor, initially the root)
+    // is in the Tab order — the rest are `tabindex="-1"`.
+    const items = screen.getAllByRole("treeitem");
+    for (const item of items) {
+      expect(item).toHaveAttribute("tabindex");
+      expect(item.className).toContain("focus-visible:ring-2");
+      expect(item.className).toContain("focus-visible:ring-ring");
+    }
+    const tabbable = items.filter((el) => el.getAttribute("tabindex") === "0");
+    expect(tabbable).toHaveLength(1);
   });
 
   it("toggles aria-expanded on mouse click and keyboard (Enter/Space)", async () => {
