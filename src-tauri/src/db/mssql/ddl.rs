@@ -126,6 +126,7 @@ impl MssqlAdapter {
         if let Some(expr) = &req.check_expression {
             let trimmed = expr.trim();
             if !trimmed.is_empty() {
+                validate_ddl_fragment(trimmed, "Check expression")?;
                 statement.push_str(&format!(" CHECK ({})", trimmed));
             }
         }
@@ -488,6 +489,7 @@ fn build_constraint_definition(definition: &ConstraintDefinition) -> Result<Stri
                     "Check constraint expression must not be empty".into(),
                 ));
             }
+            validate_ddl_fragment(expression, "Check expression")?;
             Ok(format!("CHECK ({})", expression))
         }
     }

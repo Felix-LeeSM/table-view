@@ -996,6 +996,27 @@ mod tests {
         );
     }
 
+    /// issue #1108 — inline CHECK expression is a raw, unquoted fragment
+    /// interpolated into the ADD COLUMN statement. A statement separator
+    /// inside it would stack a second statement under the simple query
+    /// protocol, so it must be rejected before any SQL is produced.
+    #[tokio::test]
+    async fn add_column_rejects_check_expression_statement_separator() {
+        let adapter = PostgresAdapter::new();
+        let req = add_col_req(
+            "public",
+            "users",
+            coldef("age", "int", true, None),
+            Some("age >= 0); DROP TABLE users"),
+            true,
+        );
+        let err = adapter.add_column(&req).await.unwrap_err();
+        assert!(
+            matches!(err, AppError::Validation(_)),
+            "expected check-expression breakout rejection, got: {err}"
+        );
+    }
+
     /// Sprint 236 — locked emission order verified end-to-end:
     /// `<name> <type> NOT NULL DEFAULT <expr> CHECK (<expr>)`.
     #[tokio::test]

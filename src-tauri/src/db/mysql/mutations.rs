@@ -252,6 +252,7 @@ impl MysqlAdapter {
         if let Some(expr) = &req.check_expression {
             let trimmed = expr.trim();
             if !trimmed.is_empty() {
+                validate_ddl_fragment(trimmed, "Check expression")?;
                 col_def.push_str(&format!(" CHECK ({})", trimmed));
             }
         }
@@ -687,11 +688,13 @@ impl MysqlAdapter {
                 format!("UNIQUE ({})", cols.join(", "))
             }
             ConstraintDefinition::Check { expression } => {
-                if expression.trim().is_empty() {
+                let expression = expression.trim();
+                if expression.is_empty() {
                     return Err(AppError::Validation(
                         "Check constraint expression must not be empty".into(),
                     ));
                 }
+                validate_ddl_fragment(expression, "Check expression")?;
                 // MySQL 8.0.16+ 에서 CHECK enforced. 그 이전 server 는 SQL
                 // 을 parse 받되 무시 — server 가 surface 하는 호환성 문제.
                 format!("CHECK ({})", expression)
