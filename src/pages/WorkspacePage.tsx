@@ -163,7 +163,7 @@ export default function WorkspacePage() {
               side="bottom"
               sideOffset={4}
               collisionPadding={8}
-              className="w-72 p-2"
+              className="w-72 max-h-[var(--radix-popover-content-available-height)] overflow-y-auto p-2"
             >
               <ThemePicker />
             </PopoverContent>
