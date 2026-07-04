@@ -86,6 +86,14 @@ pub(super) fn qualified_table(schema: &str, table: &str) -> String {
     format!("{}.{}", quote_ident(schema), quote_ident(table))
 }
 
+/// MySQL string-literal body escaping. 기본 SQL 모드(`NO_BACKSLASH_ESCAPES`
+/// off)에서 `'` 와 `\` 둘 다 escape 문자다 — backslash 를 먼저 doubling 한 뒤
+/// quote 를 doubling 해야 `C:\data\` 같은 값이 종료 quote 를 escape 해버리는
+/// 리터럴 파손/탈출을 막는다. COMMENT 등 사용자 문자열을 `'…'` 로 감쌀 때 사용.
+pub(super) fn escape_string_literal(value: &str) -> String {
+    value.replace('\\', "\\\\").replace('\'', "''")
+}
+
 /// MySQL referential action whitelist — PG 와 동일 closed set.
 const REFERENTIAL_ACTIONS: &[&str] = &[
     "NO ACTION",
@@ -232,7 +240,7 @@ impl MysqlAdapter {
         if let Some(raw) = &req.column.comment {
             let trimmed = raw.trim();
             if !trimmed.is_empty() {
-                let escaped = trimmed.replace('\'', "''");
+                let escaped = escape_string_literal(trimmed);
                 col_def.push_str(&format!(" COMMENT '{}'", escaped));
             }
         }
@@ -342,7 +350,7 @@ impl MysqlAdapter {
             if let Some(raw) = &col.comment {
                 let trimmed = raw.trim();
                 if !trimmed.is_empty() {
-                    let escaped = trimmed.replace('\'', "''");
+                    let escaped = escape_string_literal(trimmed);
                     def.push_str(&format!(" COMMENT '{}'", escaped));
                 }
             }
@@ -365,7 +373,7 @@ impl MysqlAdapter {
         if let Some(raw) = &req.table_comment {
             let trimmed = raw.trim();
             if !trimmed.is_empty() {
-                let escaped = trimmed.replace('\'', "''");
+                let escaped = escape_string_literal(trimmed);
                 create_sql.push_str(&format!(" COMMENT = '{}'", escaped));
             }
         }
@@ -928,6 +936,77 @@ mod tests {
             .contains("`name` VARCHAR(120) NOT NULL DEFAULT 'anon'"));
         assert!(r.sql.contains("PRIMARY KEY (`id`)"));
         assert!(r.sql.ends_with("COMMENT = 'user records'"));
+    }
+
+    #[test]
+    fn escape_string_literal_doubles_backslash_and_quote() {
+        // #1109: 기본 SQL 모드에서 `\` 와 `'` 둘 다 escape 문자 — 둘 다 doubling.
+        // backslash 를 먼저 처리하지 않으면 `''` 로 넣은 quote 를 다시 escape 해
+        // 리터럴 탈출이 생긴다.
+        assert_eq!(escape_string_literal("C:\\data\\"), "C:\\\\data\\\\");
+        assert_eq!(escape_string_literal("x\\'; DROP"), "x\\\\''; DROP");
+        assert_eq!(escape_string_literal("plain"), "plain");
+        assert_eq!(escape_string_literal("O'Brien"), "O''Brien");
+    }
+
+    #[tokio::test]
+    async fn column_comment_escapes_backslash_so_literal_stays_closed() {
+        // #1109 회귀: `C:\data\` COMMENT 가 종료 quote 를 escape 해 DDL 을
+        // 파손하던 버그. backslash doubling 으로 리터럴이 정상 종료돼야 한다.
+        let a = MysqlAdapter::new();
+        let req = AddColumnRequest {
+            connection_id: "c".into(),
+            schema: "app".into(),
+            table: "users".into(),
+            column: ColumnDefinition {
+                name: "path".into(),
+                data_type: "VARCHAR(255)".into(),
+                nullable: true,
+                default_value: None,
+                is_identity: false,
+                comment: Some("C:\\data\\".into()),
+            },
+            check_expression: None,
+            preview_only: true,
+            expected_database: None,
+        };
+        let r = a.add_column(&req).await.unwrap();
+        // 종료 quote 는 escape 되지 않은 홑따옴표로 닫힌다 (직전은 `\\`).
+        assert!(
+            r.sql.ends_with(" COMMENT 'C:\\\\data\\\\'"),
+            "backslash 미escape 로 리터럴 파손: {}",
+            r.sql
+        );
+    }
+
+    #[tokio::test]
+    async fn comment_backslash_quote_cannot_escape_literal() {
+        // #1109 보안 측면: `x\'; DROP` 가 backslash 로 `''` doubling 을 무력화해
+        // 리터럴을 탈출하던 여지. backslash 를 doubling 하면 탈출 불가.
+        let a = MysqlAdapter::new();
+        let req = CreateTableRequest {
+            connection_id: "c".into(),
+            schema: "app".into(),
+            name: "t".into(),
+            columns: vec![ColumnDefinition {
+                name: "c".into(),
+                data_type: "INT".into(),
+                nullable: true,
+                default_value: None,
+                is_identity: false,
+                comment: None,
+            }],
+            primary_key: None,
+            table_comment: Some("x\\'; DROP".into()),
+            preview_only: true,
+            expected_database: None,
+        };
+        let r = a.create_table(&req).await.unwrap();
+        assert!(
+            r.sql.ends_with(" COMMENT = 'x\\\\''; DROP'"),
+            "backslash 로 quote escape 를 무력화하는 탈출 여지: {}",
+            r.sql
+        );
     }
 
     #[tokio::test]
