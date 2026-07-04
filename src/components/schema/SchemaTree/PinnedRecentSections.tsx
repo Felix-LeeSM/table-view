@@ -80,7 +80,7 @@ export function PinnedRecentSections({
           ) : (
             <Table2 size={12} className="shrink-0 text-muted-foreground" />
           )}
-          <span className="truncate text-xs">{label}</span>
+          <span className="truncate text-sm">{label}</span>
         </button>
         <button
           type="button"

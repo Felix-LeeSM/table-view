@@ -410,7 +410,7 @@ function CatalogRow({
           aria-hidden
         />
         <div className="min-w-0">
-          <div className="truncate font-medium text-secondary-foreground">
+          <div className="truncate text-sm font-medium text-secondary-foreground">
             {entryTitle(entry)}
           </div>
           <div className="truncate text-3xs text-muted-foreground">

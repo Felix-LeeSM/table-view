@@ -99,7 +99,7 @@ export function DatabaseRow({
             <ChevronRight size={12} className="shrink-0" />
           )}
           <DbIcon size={12} className="shrink-0 text-muted-foreground" />
-          <span className="truncate">{db.name}</span>
+          <span className="truncate text-sm">{db.name}</span>
           {isLoading && <Loader2 size={10} className="ml-auto animate-spin" />}
         </button>
       </ContextMenuTrigger>
@@ -178,7 +178,7 @@ export function CollectionRow({
           }}
         >
           <FileText size={12} className="shrink-0 text-muted-foreground" />
-          <span className="min-w-0 truncate text-xs leading-5">
+          <span className="min-w-0 truncate text-sm leading-5">
             {collection.name}
           </span>
           <span className="ml-auto flex shrink-0 items-center gap-1 text-3xs text-muted-foreground">

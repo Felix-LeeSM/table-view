@@ -343,7 +343,9 @@ export default function KvSidebar({ connectionId }: KvSidebarProps) {
             >
               <div className="flex min-w-0 items-center gap-2">
                 {iconForKeyType(item.keyType)}
-                <span className="min-w-0 flex-1 truncate">{item.key}</span>
+                <span className="min-w-0 flex-1 truncate text-sm">
+                  {item.key}
+                </span>
               </div>
               <div className="flex shrink-0 items-center gap-1.5 text-3xs text-muted-foreground">
                 <span className="rounded bg-muted px-1.5 py-0.5">

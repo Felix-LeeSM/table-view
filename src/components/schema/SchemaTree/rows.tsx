@@ -174,7 +174,7 @@ export function renderSchemaRow(
           ) : (
             <Folder size={13} className="shrink-0 text-muted-foreground" />
           )}
-          <span className="truncate">{row.schemaName}</span>
+          <span className="truncate text-sm">{row.schemaName}</span>
           {/* #1217 — table-count badge; readable at a glance even while the
               schema is collapsed. */}
           {row.tableCount > 0 && (
@@ -375,7 +375,7 @@ export function renderFileAnalyticsSourceRow(
       className="flex w-full items-center gap-1.5 px-3 py-0.5 text-foreground hover:bg-muted"
     >
       <FileText size={12} className="shrink-0 text-muted-foreground" />
-      <span className="min-w-0 flex-1 truncate text-xs">{source.alias}</span>
+      <span className="min-w-0 flex-1 truncate text-sm">{source.alias}</span>
       <span className="max-w-[7rem] truncate text-3xs text-muted-foreground">
         {source.fileName}
       </span>
@@ -487,7 +487,7 @@ export function renderItemRow(
         }}
       >
         {icon}
-        <span className="truncate text-xs">{item.name}</span>
+        <span className="truncate text-sm">{item.name}</span>
         {"arguments" in item && (item as FunctionInfo).arguments && (
           <span className="ml-auto truncate text-3xs text-muted-foreground">
             {(item as FunctionInfo).arguments}
@@ -525,7 +525,7 @@ export function renderItemRow(
           }}
         >
           {icon}
-          <span className="truncate text-xs">{item.name}</span>
+          <span className="truncate text-sm">{item.name}</span>
           {isTableItem && "row_count" in item && (
             <span
               className="ml-auto text-3xs text-muted-foreground"
