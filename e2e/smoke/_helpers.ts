@@ -70,6 +70,43 @@ export async function waitForLauncher() {
   await waitForDomSelector(LAUNCHER_MARKER_SELECTOR, 30000);
 }
 
+export type SafeMode = "strict" | "warn" | "off";
+
+/**
+ * Drive the workspace-toolbar `SafeModeToggle` to a target mode by
+ * clicking through its `strict → warn → off → strict` cycle. The button
+ * carries `data-mode={mode}` (unlike the theme `data-mode` which lives on
+ * `<html>`, so `button[data-mode]` is unambiguous). Each `toggle` action
+ * is backend-first (`persist_setting` IPC → store set), so we wait for the
+ * attribute to advance after every click instead of assuming it is sync.
+ */
+export async function setSafeMode(mode: SafeMode) {
+  await switchToWorkspaceWindow();
+  const toggle = await $("button[data-mode]");
+  await toggle.waitForDisplayed({ timeout: 10000 });
+  // At most 3 clicks reaches any mode from any starting mode.
+  for (let i = 0; i < 4; i++) {
+    const current = await toggle.getAttribute("data-mode");
+    if (current === mode) return;
+    await toggle.click();
+    await browser.waitUntil(
+      async () => (await toggle.getAttribute("data-mode")) !== current,
+      {
+        timeout: 5000,
+        timeoutMsg: `Safe Mode toggle did not advance from ${current}`,
+      },
+    );
+  }
+  throw new Error(`Safe Mode did not reach ${mode} after cycling the toggle`);
+}
+
+export async function readSafeMode(): Promise<string | null> {
+  await switchToWorkspaceWindow();
+  const toggle = await $("button[data-mode]");
+  await toggle.waitForDisplayed({ timeout: 10000 });
+  return toggle.getAttribute("data-mode");
+}
+
 export async function switchToLauncherWindow(timeoutMs = 15000) {
   const start = Date.now();
   let lastError: unknown = null;

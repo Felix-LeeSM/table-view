@@ -128,6 +128,7 @@
       "specs": [
         "e2e/smoke/postgres.spec.ts",
         "e2e/smoke/postgres-safe-mode.spec.ts",
+        "e2e/smoke/postgres-safe-mode-matrix.spec.ts",
         "e2e/smoke/postgres-explain.spec.ts",
         "e2e/smoke/postgres-extension-completion.spec.ts",
         "e2e/smoke/postgres-cancellation.spec.ts",
@@ -137,6 +138,7 @@
       "specKeys": [
         "postgres",
         "postgres-safe-mode",
+        "postgres-safe-mode-matrix",
         "postgres-explain",
         "postgres-extension-completion",
         "postgres-cancellation",
@@ -150,7 +152,7 @@
       "flakeRisk": "Existing Postgres runtime risk; isolated app data directory per spec and idempotent seed reduce cross-spec state bleed.",
       "cacheImpact": "Uses shared prepared Tauri binary and Rust target cache.",
       "failureArtifacts": "wdio report uploaded as e2e-smoke-artifacts-<spec_key>.",
-      "supportClaimImpact": "Runtime Happy Path evidence for the documented PostgreSQL slices only, including bounded table-plus-index Structure DDL and dense ERD render/search/selection/zoom/fit screenshot evidence. ERD smoke does not claim FK row navigation, schema diff, migration impact, or data compare.",
+      "supportClaimImpact": "Runtime Happy Path evidence for the documented PostgreSQL slices only, including bounded table-plus-index Structure DDL, dense ERD render/search/selection/zoom/fit screenshot evidence, and the Safe Mode mode-dial matrix (toolbar toggle -> store -> gate -> dialog across strict/warn/off x prod/non-prod, issue #1124). ERD smoke does not claim FK row navigation, schema diff, migration impact, or data compare.",
       "action": "keep blocking E2E"
     },
     {

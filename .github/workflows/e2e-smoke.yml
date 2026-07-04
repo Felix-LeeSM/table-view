@@ -171,6 +171,9 @@ jobs:
           - spec_key: postgres-safe-mode
             spec: e2e/smoke/postgres-safe-mode.spec.ts
             needs_postgres: true
+          - spec_key: postgres-safe-mode-matrix
+            spec: e2e/smoke/postgres-safe-mode-matrix.spec.ts
+            needs_postgres: true
           - spec_key: postgres-explain
             spec: e2e/smoke/postgres-explain.spec.ts
             needs_postgres: true
