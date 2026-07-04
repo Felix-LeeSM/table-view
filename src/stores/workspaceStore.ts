@@ -13,7 +13,7 @@
 import { create } from "zustand";
 import { combine } from "zustand/middleware";
 import { attachZustandIpcBridge } from "@lib/zustand-ipc-bridge";
-import { getCurrentWindowLabel } from "@lib/window-label";
+import { getCurrentWindowLabel, parseWorkspaceLabel } from "@lib/window-label";
 import type { WorkspaceStoreState } from "./workspaceStore/types";
 // Same-store internals live under `./workspaceStore/*`; this exception keeps
 // the root public module as the single composition point after the split.
@@ -128,11 +128,18 @@ export const SYNCED_KEYS: ReadonlyArray<keyof WorkspaceStoreState> = [
   "workspaces",
 ] as const;
 
-if (getCurrentWindowLabel() === "workspace") {
+// #1097 — attach only in workspace windows. sprint-361 renamed the window
+// label from bare `"workspace"` to `workspace-{connection_id}`, so a strict
+// `=== "workspace"` guard never matched and the bridge was dead code. Reuse
+// `parseWorkspaceLabel` (the single label parser) so the guard tracks the real
+// label format: non-null connection id → a workspace window; `"launcher"`,
+// the pre-sprint-361 bare `"workspace"`, and `null` (vitest jsdom) → no attach.
+const currentLabel = getCurrentWindowLabel();
+if (currentLabel && parseWorkspaceLabel(currentLabel) !== null) {
   void attachZustandIpcBridge<WorkspaceStoreState>(useWorkspaceStore, {
     channel: "workspace-sync",
     syncKeys: SYNCED_KEYS,
-    originId: getCurrentWindowLabel() ?? "unknown",
+    originId: currentLabel,
   }).catch(() => {
     // best-effort: see mruStore.ts for the trade-off rationale.
   });
