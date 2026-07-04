@@ -134,6 +134,16 @@ export const config: Options.Testrunner = {
   port: 4444,
   specs: ["./e2e/smoke/**/*.spec.ts"],
   maxInstances: 1,
+  // WebKitGTK/wry webview can hard-crash mid-spec on headless CI (`no such
+  // window`, DRI3 crash — issues #1261/#1200/#1293). The window handle is gone,
+  // so command-level retries can't recover; only a fresh session (spec re-run)
+  // can. specFileRetries re-runs the whole spec file in a new session as a
+  // second layer behind the render-mitigation env in scripts/e2e-smoke-ci.sh.
+  // Not concealed: the first attempt's `no such window` failure stays in stdout
+  // and WDIO logs the retry, so `grep "no such window"` on a green run still
+  // surfaces the flake for #1293 tracking.
+  specFileRetries: 1,
+  specFileRetriesDelay: 5,
   capabilities: [
     {
       maxInstances: 1,

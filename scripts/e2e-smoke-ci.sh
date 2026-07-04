@@ -9,13 +9,19 @@ cd "$ROOT_DIR"
 # 20260628.225) refreshed Mesa/libEGL/WebKitGTK; under xvfb the DMABUF renderer
 # intermittently hard-crashes the webview compositor (`no such window`, DRI3
 # error signature), failing in-process-heavy specs (duckdb) and the valkey/redis
-# render flake first. Disabling the DMABUF renderer routes WebKitGTK to the
-# stable software path. Injected here at the single chokepoint so every smoke
-# spec inherits it. See issues #1261 and #1200.
-# Kept minimal (DMABUF only) on purpose: WEBKIT_DISABLE_COMPOSITING_MODE=1 /
-# LIBGL_ALWAYS_SOFTWARE=1 force fuller software rendering and lengthen e2e; add
-# them only if DMABUF disable alone proves insufficient.
+# render flake first. Injected here at the single chokepoint so every smoke
+# spec inherits it. See issues #1261, #1200 and #1293.
+#
+# DMABUF disable alone proved insufficient (#1268 mitigation still crashed on
+# 2026-07-04; #1293 measured duckdb no-such-window ~15x/3d). Escalated to full
+# software rendering: LIBGL_ALWAYS_SOFTWARE routes GL to llvmpipe so the DRI3
+# device probe that emits `DRI3 error: Could not get DRI3 device` is bypassed,
+# and WEBKIT_DISABLE_COMPOSITING_MODE drops the accelerated compositor that was
+# the actual crash surface. Trade-off: slightly longer e2e vs. repeated flake
+# reruns. All three are override-able (`:-1`) for local WKWebView (no-op there).
 export WEBKIT_DISABLE_DMABUF_RENDERER="${WEBKIT_DISABLE_DMABUF_RENDERER:-1}"
+export WEBKIT_DISABLE_COMPOSITING_MODE="${WEBKIT_DISABLE_COMPOSITING_MODE:-1}"
+export LIBGL_ALWAYS_SOFTWARE="${LIBGL_ALWAYS_SOFTWARE:-1}"
 
 export E2E_PG_HOST="${E2E_PG_HOST:-${PGHOST:-localhost}}"
 export E2E_PG_PORT="${E2E_PG_PORT:-${PGPORT:-15432}}"
