@@ -221,7 +221,11 @@ function EditableColumnRow({
           )}
           {col.is_foreign_key && (
             <span title={t("col.foreignKey")}>
-              <Link2 size={12} className="shrink-0 text-primary" />
+              <Link2
+                size={12}
+                className="shrink-0 text-primary"
+                aria-label={t("col.foreignKey")}
+              />
             </span>
           )}
           <span className="text-foreground">{col.name}</span>
@@ -597,14 +601,30 @@ export default function ColumnsEditor({
         <StructureTable fixed>
           <thead className={STRUCTURE_THEAD}>
             <tr>
-              <th className={STRUCTURE_TH}>{t("th.name")}</th>
-              <th className={STRUCTURE_TH}>{t("th.type")}</th>
-              <th className={STRUCTURE_TH}>{t("th.nullable")}</th>
-              <th className={STRUCTURE_TH}>{t("th.default")}</th>
-              <th className={STRUCTURE_TH}>{t("th.check")}</th>
-              <th className={STRUCTURE_TH}>{t("th.ref")}</th>
-              <th className={STRUCTURE_TH}>{t("th.comment")}</th>
-              <th className={STRUCTURE_TH_ACTIONS}>{t("th.actions")}</th>
+              <th scope="col" className={STRUCTURE_TH}>
+                {t("th.name")}
+              </th>
+              <th scope="col" className={STRUCTURE_TH}>
+                {t("th.type")}
+              </th>
+              <th scope="col" className={STRUCTURE_TH}>
+                {t("th.nullable")}
+              </th>
+              <th scope="col" className={STRUCTURE_TH}>
+                {t("th.default")}
+              </th>
+              <th scope="col" className={STRUCTURE_TH}>
+                {t("th.check")}
+              </th>
+              <th scope="col" className={STRUCTURE_TH}>
+                {t("th.ref")}
+              </th>
+              <th scope="col" className={STRUCTURE_TH}>
+                {t("th.comment")}
+              </th>
+              <th scope="col" className={STRUCTURE_TH_ACTIONS}>
+                {t("th.actions")}
+              </th>
             </tr>
           </thead>
           <tbody>

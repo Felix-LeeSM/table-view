@@ -514,11 +514,21 @@ export default function ConstraintsEditor({
         <StructureTable>
           <thead className={STRUCTURE_THEAD}>
             <tr>
-              <th className={STRUCTURE_TH}>{t("th.name")}</th>
-              <th className={STRUCTURE_TH}>{t("th.type")}</th>
-              <th className={STRUCTURE_TH}>{t("th.columns")}</th>
-              <th className={STRUCTURE_TH}>{t("th.reference")}</th>
-              <th className={STRUCTURE_TH_ACTIONS}>{t("th.actions")}</th>
+              <th scope="col" className={STRUCTURE_TH}>
+                {t("th.name")}
+              </th>
+              <th scope="col" className={STRUCTURE_TH}>
+                {t("th.type")}
+              </th>
+              <th scope="col" className={STRUCTURE_TH}>
+                {t("th.columns")}
+              </th>
+              <th scope="col" className={STRUCTURE_TH}>
+                {t("th.reference")}
+              </th>
+              <th scope="col" className={STRUCTURE_TH_ACTIONS}>
+                {t("th.actions")}
+              </th>
             </tr>
           </thead>
           <tbody>

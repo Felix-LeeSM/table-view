@@ -60,6 +60,7 @@ export function Toaster() {
   return (
     <div
       data-slot="toaster"
+      role="region"
       aria-label={t("notifications")}
       // z-100 sits above dialog overlays (z-50) so a toast surfaced from inside
       // a modal stays visible after the modal closes. Fixed top-right, stacked

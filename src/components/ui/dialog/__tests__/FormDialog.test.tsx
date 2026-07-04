@@ -86,8 +86,9 @@ describe("FormDialog (sprint-96 preset)", () => {
     const slot = document.querySelector('[data-slot="dialog-feedback"]');
     expect(slot).not.toBeNull();
     expect(slot!.getAttribute("data-state")).toBe("success");
-    const alert = slot!.querySelector('[role="alert"]') as HTMLElement;
-    expect(alert.textContent).toContain("Saved.");
+    // #1142: success feedback is polite (role="status"), not assertive alert.
+    const status = slot!.querySelector('[role="status"]') as HTMLElement;
+    expect(status.textContent).toContain("Saved.");
   });
 
   it("forwards tone='destructive' to DialogContent", () => {

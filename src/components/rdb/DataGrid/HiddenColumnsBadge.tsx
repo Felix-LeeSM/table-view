@@ -15,6 +15,7 @@ export function HiddenColumnsBadge({
 
   return (
     <div
+      role="status"
       className="flex items-center justify-between border-b border-border bg-muted/40 px-3 py-1.5 text-xs"
       aria-label={t("hiddenColumnsBadge.badgeAria")}
     >

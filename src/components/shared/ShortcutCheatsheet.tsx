@@ -191,12 +191,12 @@ export default function ShortcutCheatsheet() {
                       <dt className="text-sm text-foreground">{item.label}</dt>
                       <dd className="flex shrink-0 items-center gap-1">
                         {item.keys.map((key, idx) => (
-                          <span
+                          <kbd
                             key={`${item.label}-${key}-${idx}`}
                             className="rounded border border-border bg-background px-2 py-0.5 font-mono text-xs text-foreground shadow-sm dark:bg-muted/30"
                           >
                             {key}
-                          </span>
+                          </kbd>
                         ))}
                       </dd>
                     </div>

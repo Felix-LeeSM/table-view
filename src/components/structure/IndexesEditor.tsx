@@ -405,11 +405,21 @@ export default function IndexesEditor({
         <StructureTable>
           <thead className={STRUCTURE_THEAD}>
             <tr>
-              <th className={STRUCTURE_TH}>{t("th.name")}</th>
-              <th className={STRUCTURE_TH}>{t("th.columns")}</th>
-              <th className={STRUCTURE_TH}>{t("th.type")}</th>
-              <th className={STRUCTURE_TH}>{t("th.properties")}</th>
-              <th className={STRUCTURE_TH_ACTIONS}>{t("th.actions")}</th>
+              <th scope="col" className={STRUCTURE_TH}>
+                {t("th.name")}
+              </th>
+              <th scope="col" className={STRUCTURE_TH}>
+                {t("th.columns")}
+              </th>
+              <th scope="col" className={STRUCTURE_TH}>
+                {t("th.type")}
+              </th>
+              <th scope="col" className={STRUCTURE_TH}>
+                {t("th.properties")}
+              </th>
+              <th scope="col" className={STRUCTURE_TH_ACTIONS}>
+                {t("th.actions")}
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -431,7 +441,7 @@ export default function IndexesEditor({
                     )}
                     {idx.is_unique && !idx.is_primary && (
                       <span className="flex items-center gap-0.5 text-primary">
-                        <Shield size={10} /> UNIQUE
+                        <Shield size={10} aria-hidden="true" /> UNIQUE
                       </span>
                     )}
                     {!idx.is_primary && !idx.is_unique && (
