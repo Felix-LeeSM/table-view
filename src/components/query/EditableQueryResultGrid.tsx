@@ -280,7 +280,13 @@ export default function EditableQueryResultGrid({
             }}
           >
             {result.columns.map((col, visualIdx) => {
-              const isPk = plan.pkColumns.includes(col.name);
+              // Issue #1297 — a PK can be projected under an alias, so match
+              // against the source column name (plan.resultColumnNames maps a
+              // result column index back to its underlying column) instead of
+              // the displayed result name.
+              const isPk = plan.pkColumns.includes(
+                plan.resultColumnNames[visualIdx] ?? col.name,
+              );
               return (
                 <div
                   key={col.name}

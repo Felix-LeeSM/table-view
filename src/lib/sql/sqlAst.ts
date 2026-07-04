@@ -47,7 +47,11 @@ export type SqlColumns =
 
 export type SqlSelectListItem =
   | { kind: "star" }
-  | { kind: "column"; reference: SqlColumnRef }
+  // Issue #1297 — `alias` carries the `AS <ident>` / bare-ident output alias
+  // (`SELECT id AS user_id` → `alias: "user_id"`); `null` when the column is
+  // projected under its own name. Mirrors `SelectListItem::Column` in
+  // `src-tauri/sql-parser-core/src/ast.rs`.
+  | { kind: "column"; reference: SqlColumnRef; alias: string | null }
   | { kind: "expression"; expression: SqlSelectExpr };
 
 // ---- sprint-393a SELECT widening types -------------------------------

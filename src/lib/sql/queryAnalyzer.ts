@@ -13,6 +13,7 @@ import type { ColumnInfo } from "@/types/schema";
 import type { QueryColumn } from "@/types/query";
 import type { DatabaseType } from "@/types/connection";
 import { tokenizeSql } from "./sqlTokenize";
+import { parseSqlPreloaded, type SqlSelectStatement } from "./sqlAst";
 
 export interface SingleTableSelectInfo {
   schema: string | null;
@@ -158,23 +159,94 @@ export type ResultEditability =
       editable: true;
       schema: string;
       table: string;
+      // Source (underlying) primary-key column names.
       pkColumns: string[];
-      // Map result column index → underlying column name (same name today;
-      // kept as a level of indirection so AS-aliasing can be added later).
+      // Result column index → SOURCE column name. Aliased projections
+      // (`id AS user_id`) resolve back to `id` here, so the raw-edit builder's
+      // WHERE / UPDATE SET target the real columns while value lookup stays
+      // index-based against the result row. Issue #1297.
       resultToColumnName: string[];
     }
   | { editable: false; reason: string };
 
+export const NOT_SINGLE_TABLE_REASON =
+  "Editing requires a single-table SELECT (no JOIN, subquery, aggregation, or set operations).";
+
 /**
- * Decide whether a raw query result can be edited in place. We allow it
- * only when:
- *   - the query is a simple single-table SELECT (see parseSingleTableSelect),
+ * Single-table metadata plus the result→source column map, derived from the
+ * sql-parser-core AST. `null` when the statement is anything other than a
+ * plain single-table SELECT (or when the AST is unavailable / fails to parse
+ * — the caller then keeps the result read-only, never editable). Issue #1297.
+ */
+interface SingleTableAstInfo {
+  schema: string | null;
+  table: string;
+  /** result column name (alias or bare) → source column name. */
+  sourceByResultName: Map<string, string>;
+}
+
+function singleTableFromSelect(
+  stmt: SqlSelectStatement,
+): SingleTableAstInfo | null {
+  // Aggregation / grouping / set operations merge or collapse source rows,
+  // so a result row no longer maps 1:1 to a source row — read-only.
+  if (stmt.set_operation.length > 0) return null;
+  if (stmt.group_by.length > 0) return null;
+  if (stmt.having !== null) return null;
+  // Exactly one FROM item, a plain table (no JOIN, no derived table).
+  if (stmt.from.length !== 1) return null;
+  const item = stmt.from[0]!;
+  if (item.join.kind !== "comma") return null;
+  if (item.source.kind !== "table") return null;
+
+  const sourceByResultName = new Map<string, string>();
+  const cols = stmt.columns;
+  if (cols.kind === "expressions") {
+    for (const it of cols.items) {
+      // `*` inside an expression list contributes identity-mapped columns;
+      // leave them out of the map (the identity fallback covers them).
+      if (it.kind === "star") continue;
+      // Any non-column expression projection (CASE / function / literal /
+      // subquery) has no single source column — read-only. Issue #1297 #3.
+      if (it.kind !== "column") return null;
+      const resultName = it.alias ?? it.reference.column;
+      sourceByResultName.set(resultName, it.reference.column);
+    }
+  }
+  // `star` / `named` variants project source columns under their own names,
+  // so the identity fallback (result name === source name) is correct.
+  return {
+    schema: item.source.schema,
+    table: item.source.table,
+    sourceByResultName,
+  };
+}
+
+/**
+ * Parse via the preloaded WASM AST and extract single-table-select info.
+ * Returns `null` (→ read-only) when the AST module is not yet loaded, the
+ * input fails to parse, or the statement is not a plain single-table SELECT.
+ */
+function parseSingleTableAst(sql: string): SingleTableAstInfo | null {
+  const stripped = stripTrailingTerminator(stripComments(sql).trim());
+  if (!stripped) return null;
+  const ast = parseSqlPreloaded(stripped);
+  // `null` = WASM not loaded; `error` = parse failure. Both stay read-only
+  // (issue #1297 #4 — the fallback never opens editing).
+  if (ast === null || ast.kind !== "select") return null;
+  return singleTableFromSelect(ast);
+}
+
+/**
+ * Decide whether a raw query result can be edited in place. Allowed only when:
+ *   - the query is a plain single-table SELECT (no JOIN / subquery /
+ *     aggregation / GROUP BY / set operation), resolved via the WASM AST,
  *   - the table has at least one primary-key column,
- *   - every primary-key column appears in the result by name.
+ *   - every primary-key column is reachable in the result (directly or under
+ *     a column alias — `SELECT id AS user_id` keeps an aliased PK editable).
  *
- * The result column names must match the underlying column names exactly —
- * `SELECT id, name AS alias FROM users` would fail PK lookup if `id` is the
- * PK because we don't track aliases yet.
+ * When the AST is unavailable (module not loaded) or the parse fails, the
+ * result stays read-only — the fallback direction never opens editing.
  */
 export function analyzeResultEditability(
   sql: string,
@@ -182,19 +254,12 @@ export function analyzeResultEditability(
   tableColumns: ColumnInfo[] | null,
   defaultSchema = "public",
 ): ResultEditability {
-  const parsed = parseSingleTableSelect(sql);
+  const parsed = parseSingleTableAst(sql);
   if (!parsed) {
-    return {
-      editable: false,
-      reason:
-        "Editing requires a single-table SELECT (no JOIN, subquery, or set operations).",
-    };
+    return { editable: false, reason: NOT_SINGLE_TABLE_REASON };
   }
   if (!tableColumns) {
-    return {
-      editable: false,
-      reason: "Loading column metadata…",
-    };
+    return { editable: false, reason: "Loading column metadata…" };
   }
   const pkCols = tableColumns.filter((c) => c.is_primary_key);
   if (pkCols.length === 0) {
@@ -203,8 +268,12 @@ export function analyzeResultEditability(
       reason: `Table ${parsed.table} has no primary key, so rows cannot be uniquely identified.`,
     };
   }
-  const resultNames = new Set(resultColumns.map((c) => c.name));
-  const missing = pkCols.filter((pk) => !resultNames.has(pk.name));
+  // Map each result column (in grid order) back to its source column name.
+  const resultToColumnName = resultColumns.map(
+    (c) => parsed.sourceByResultName.get(c.name) ?? c.name,
+  );
+  const sourceNames = new Set(resultToColumnName);
+  const missing = pkCols.filter((pk) => !sourceNames.has(pk.name));
   if (missing.length > 0) {
     return {
       editable: false,
@@ -216,6 +285,6 @@ export function analyzeResultEditability(
     schema: parsed.schema ?? defaultSchema,
     table: parsed.table,
     pkColumns: pkCols.map((c) => c.name),
-    resultToColumnName: resultColumns.map((c) => c.name),
+    resultToColumnName,
   };
 }

@@ -12,6 +12,13 @@ import type { QueryResult } from "@/types/query";
 import { useSchemaStore } from "@stores/schemaStore";
 import { useConnectionStore } from "@stores/connectionStore";
 
+// Issue #1297 — the editability gate parses through the real sql-parser-core
+// WASM AST; load the checked-in bytes so `preloadSqlWasm` resolves in jsdom
+// and the Editable badge can appear.
+vi.mock("@lib/sql/wasm/sql_parser_core.js", async () =>
+  (await import("@lib/sql/realSqlWasmTestMock")).realSqlWasmModuleMock(),
+);
+
 const mockSave = vi.fn();
 vi.mock("@tauri-apps/plugin-dialog", () => ({
   save: (opts: unknown) => mockSave(opts),

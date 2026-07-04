@@ -11,41 +11,10 @@ import type { QueryColumn } from "@/types/query";
 // Issue #1297 — the editability gate now consumes the real sql-parser-core
 // WASM AST (via `parseSqlPreloaded`). Load the checked-in `.wasm` bytes so
 // these tests exercise the actual parser (including the new SELECT-list
-// alias capture), mirroring `sqlWasmArtifact.test.ts`.
-vi.mock("./wasm/sql_parser_core.js", async () => {
-  const actual = await vi.importActual<
-    typeof import("./wasm/sql_parser_core.js")
-  >("./wasm/sql_parser_core.js");
-  const { readFileSync } = await import("node:fs");
-  const { resolve } = await import("node:path");
-  const { fileURLToPath } = await import("node:url");
-  const wasmUrl = new URL("./wasm/sql_parser_core_bg.wasm", import.meta.url);
-  const rootFlagIndex = process.argv.indexOf("--root");
-  const testRoot =
-    process.argv.find((arg) => arg.startsWith("--root="))?.slice(7) ??
-    (rootFlagIndex >= 0 ? process.argv[rootFlagIndex + 1] : undefined) ??
-    process.env.PWD ??
-    process.cwd();
-  const servedPath = decodeURIComponent(wasmUrl.pathname);
-  const wasmPath =
-    wasmUrl.protocol === "file:"
-      ? fileURLToPath(wasmUrl)
-      : servedPath.startsWith("/@fs/")
-        ? servedPath.replace(/^\/@fs\//, "/")
-        : resolve(testRoot, servedPath.replace(/^\//, ""));
-  const wasm = readFileSync(wasmPath);
-  const wasmBytes = wasm.buffer.slice(
-    wasm.byteOffset,
-    wasm.byteOffset + wasm.byteLength,
-  );
-  return {
-    ...actual,
-    default: vi.fn(async () => {
-      actual.initSync({ module: wasmBytes });
-      return undefined;
-    }),
-  };
-});
+// alias capture).
+vi.mock("./wasm/sql_parser_core.js", async () =>
+  (await import("./realSqlWasmTestMock")).realSqlWasmModuleMock(),
+);
 
 function col(
   name: string,

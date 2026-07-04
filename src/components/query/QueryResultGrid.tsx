@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AlertTriangle, Info, Loader2, Pencil } from "lucide-react";
 import type {
@@ -11,7 +11,9 @@ import {
   analyzeResultEditability,
   parseSingleTableSelect,
   resolveDefaultSchema,
+  NOT_SINGLE_TABLE_REASON,
 } from "@lib/sql/queryAnalyzer";
+import { preloadSqlWasm } from "@lib/sql/sqlAst";
 import { useSchemaStore } from "@stores/schemaStore";
 import { useConnectionStore } from "@stores/connectionStore";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@components/ui/tabs";
@@ -152,6 +154,24 @@ function SelectResultArea({
   onAfterCommit?: () => void;
 }) {
   const { t } = useTranslation("query");
+  // Issue #1297 — the editability gate parses through the sql-parser-core WASM
+  // AST (`parseSqlPreloaded`, sync). The module is lazy-loaded, so kick off the
+  // load and re-run the gate once it is ready; until then the result stays
+  // read-only (the fallback never opens editing).
+  const [astReady, setAstReady] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    preloadSqlWasm()
+      .then(() => {
+        if (alive) setAstReady(true);
+      })
+      .catch(() => {
+        // Load failure leaves `astReady` false → result stays read-only.
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
   const tableColumnsCache = useSchemaStore((s) => s.tableColumnsCache);
   const getTableColumns = useSchemaStore((s) => s.getTableColumns);
   const fileAnalyticsSources = useSchemaStore((s) =>
@@ -242,32 +262,36 @@ function SelectResultArea({
     tableColumnsCache,
   ]);
 
-  const editability = useMemo(
-    () =>
-      isDocumentResult
-        ? null
-        : exportBoundary.readOnlyReason
-          ? {
-              editable: false as const,
-              reason: exportBoundary.readOnlyReason,
-            }
-          : sql
-            ? analyzeResultEditability(
-                sql,
-                result.columns,
-                tableColumns,
-                defaultSchema,
-              )
-            : null,
-    [
-      isDocumentResult,
-      exportBoundary.readOnlyReason,
+  const editability = useMemo(() => {
+    if (isDocumentResult) return null;
+    if (exportBoundary.readOnlyReason) {
+      return {
+        editable: false as const,
+        reason: exportBoundary.readOnlyReason,
+      };
+    }
+    if (!sql) return null;
+    // Issue #1297 — the gate parses through the lazy-loaded WASM AST; until it
+    // is ready keep the result read-only with the same reason a genuine
+    // non-single-table gives, and recompute once `astReady` flips.
+    if (!astReady) {
+      return { editable: false as const, reason: NOT_SINGLE_TABLE_REASON };
+    }
+    return analyzeResultEditability(
       sql,
       result.columns,
       tableColumns,
       defaultSchema,
-    ],
-  );
+    );
+  }, [
+    isDocumentResult,
+    exportBoundary.readOnlyReason,
+    sql,
+    result.columns,
+    tableColumns,
+    defaultSchema,
+    astReady,
+  ]);
   const rowEditBlockReason = useMemo(() => {
     if (!connection) return null;
     const profile = getDataSourceProfile(connection.dbType);
