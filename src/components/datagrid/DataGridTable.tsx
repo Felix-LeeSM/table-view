@@ -429,7 +429,7 @@ const DataGridTable = forwardRef<DataGridTableHandle, DataGridTableProps>(
       count: shouldVirtualize ? data.rows.length : 0,
       getScrollElement: () => scrollContainerRef.current,
       estimateSize: () => ROW_HEIGHT_ESTIMATE,
-      overscan: 10,
+      overscan: 40,
     });
 
     useEffect(() => {
@@ -646,10 +646,10 @@ const DataGridTable = forwardRef<DataGridTableHandle, DataGridTableProps>(
                                       // object value to its JSON literal so
                                       // the SQL generator sees a string.
                                       // Objects are only ever produced by
-                                      // the BSON branch (Mongo-only), which
+                                      // the BSON branch (Mong-only), which
                                       // doesn't apply here — but keep the
                                       // safe stringify as a guard.
-                                      const serialized: string =
+                                    const serialized: string =
                                         typeof value === "string"
                                           ? value
                                           : safeStringifyCell(value);
@@ -659,8 +659,8 @@ const DataGridTable = forwardRef<DataGridTableHandle, DataGridTableProps>(
                                       );
                                       setPendingEdits(next);
                                     }
-                                  : undefined
-                              }
+                                    : undefined
+                                  }
                               onClose={() => setExpandedNested(null)}
                             />
                           </div>
