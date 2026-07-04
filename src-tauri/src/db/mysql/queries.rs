@@ -20,6 +20,7 @@ use futures_util::TryStreamExt;
 use sqlx::Column;
 use sqlx::Row;
 use sqlx::TypeInfo;
+use sqlx::ValueRef;
 use tokio_util::sync::CancellationToken;
 use tracing::warn;
 
@@ -210,11 +211,29 @@ fn cell_to_json(row: &sqlx::mysql::MySqlRow, idx: usize) -> serde_json::Value {
         }
     }
 
-    // 위 모든 path 가 실패하면 String fallback 한 번 더.
+    // 위 모든 path 가 실패하면 String fallback 한 번 더. 실제 NULL 이면
+    // try_get::<Option<String>> 이 Ok(None) 이라 아래 raw NULL 분기로 떨어진다.
     if let Ok(Some(v)) = row.try_get::<Option<String>, _>(idx) {
         return serde_json::Value::String(v);
     }
-    serde_json::Value::Null
+
+    // issue #1083 — 여기까지 온 셀은 "진짜 NULL" 이거나 "값은 있으나 어떤
+    // decode 도 실패" 둘 중 하나다. 예전엔 둘 다 무음 Null 로 뭉갰다 (legacy
+    // zero-date `0000-00-00` / GEOMETRY / 24h 초과 TIME 등 실값이 빈 셀로
+    // 위장 → 사용자가 오인해 덮어쓰면 원본 소실). raw value 의 NULL flag 를
+    // 직접 보고, 진짜 NULL 만 Null 로 내보내고 decode 실패는 명시 마커로
+    // surface 한다 — grid 에서 빈 셀과 시각적으로 구분되어 오인을 막는다.
+    match row.try_get_raw(idx) {
+        Ok(raw) if raw.is_null() => serde_json::Value::Null,
+        _ => decode_error_marker(&type_name),
+    }
+}
+
+/// issue #1083 — decode 실패 셀 마커. 진짜 NULL 과 구분되는 문자열로,
+/// grid 에서 빈 셀로 오인되어 덮어써지는 데이터 손실을 막는다. 프론트가
+/// 편집 차단/경고 surface 를 붙일 때 훅으로 삼을 수 있는 안정된 형식.
+fn decode_error_marker(type_name: &str) -> serde_json::Value {
+    serde_json::Value::String(format!("<decode error: {type_name}>"))
 }
 
 /// `hex` crate 의존성을 피하기 위한 minimal hex encoder. Slice B-1 의
@@ -1047,5 +1066,17 @@ mod tests {
     fn hex_encode_lower_two_chars_per_byte() {
         assert_eq!(hex_encode(&[0x00, 0xff, 0xab]), "00ffab");
         assert_eq!(hex_encode(&[]), "");
+    }
+
+    /// issue #1083 — decode 실패는 절대 무음 NULL 로 위장하면 안 된다. 마커
+    /// 는 진짜 NULL 과 구분되는 문자열이어야 하고 실패한 컬럼 타입을 담는다.
+    #[test]
+    fn decode_error_marker_is_not_null_and_names_type() {
+        let v = decode_error_marker("GEOMETRY");
+        assert_eq!(
+            v,
+            serde_json::Value::String("<decode error: GEOMETRY>".to_string())
+        );
+        assert!(!v.is_null(), "decode failure must never masquerade as NULL");
     }
 }
