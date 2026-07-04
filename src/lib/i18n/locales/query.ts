@@ -136,6 +136,8 @@ export const en = {
     statementResultsAria: "Statement results",
     statementTab: "Statement {{n}} {{verb}}",
     statementFailed: "Statement {{n}} failed",
+    statementSkipped:
+      "Statement {{n}} was not executed — a prior statement failed and execution stopped.",
     unknownError: "Unknown error",
     editableBanner:
       "Editable — double-click a cell to edit, right-click for delete",
@@ -358,6 +360,8 @@ export const ko = {
     statementResultsAria: "구문 결과",
     statementTab: "구문 {{n}} {{verb}}",
     statementFailed: "구문 {{n}} 실패",
+    statementSkipped:
+      "구문 {{n}}은(는) 실행되지 않았습니다 — 앞 구문이 실패하여 실행이 중단되었습니다.",
     unknownError: "알 수 없는 오류",
     editableBanner: "편집 가능 — 셀을 더블클릭하여 편집, 우클릭으로 삭제",
     readonlyBanner: "읽기 전용 —",

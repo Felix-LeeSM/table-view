@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   executeRdbQuery,
   executeRdbSingleStatement,
+  executeRdbStatementBatch,
 } from "./rdbQueryExecution";
 import type { SafeModeDecision } from "@/lib/safeMode";
 
@@ -365,5 +366,88 @@ describe("executeRdbQuery warn-escalation reason (#1110)", () => {
     expect(setPendingRdbConfirm).toHaveBeenCalledTimes(1);
     const reason = setPendingRdbConfirm.mock.calls[0]![0].reason as string;
     expect(reason).toContain("100+ rows");
+  });
+});
+
+// Issue #1089 — stop-on-error is the default for editor multi-statement runs:
+// once statement K fails, statements K+1..N must NOT reach the driver, and they
+// surface as `skipped` in the per-statement breakdown so the partial-apply
+// boundary is explicit. Asserts on the `executeQuery` IPC boundary (call count)
+// and on the `completeMultiStatementQuery` payload the result panel consumes.
+function okResult() {
+  return {
+    columns: [],
+    rows: [],
+    totalCount: 0,
+    executionTimeMs: 0,
+    queryType: "select" as const,
+  };
+}
+
+function createBatchActions() {
+  return {
+    updateQueryState: vi.fn(),
+    completeMultiStatementQuery: vi.fn(),
+    cancelRunningQuery: vi.fn(),
+    clearSchemaForConnection: vi.fn(),
+    recordHistory: vi.fn(),
+  };
+}
+
+async function runBatch(statements: string[]) {
+  const actions = createBatchActions();
+  await executeRdbStatementBatch({
+    tab,
+    statements,
+    joinedSql: statements.join(";\n"),
+    workspaceDb: "app",
+    findLiveIdleTab: vi.fn(),
+    runRdbBatchRef: { current: null },
+    ...actions,
+  });
+  return actions;
+}
+
+describe("executeRdbStatementBatch stop-on-error (#1089)", () => {
+  beforeEach(() => {
+    executeQueryMock.mockReset();
+    dispatchDbMutationHintMock.mockReset();
+  });
+
+  it("stops after the first failure and marks later statements skipped", async () => {
+    executeQueryMock
+      .mockResolvedValueOnce(okResult()) // stmt 1 ok
+      .mockRejectedValueOnce(new Error("syntax error at UPDATE")); // stmt 2 fails
+
+    const actions = await runBatch([
+      "INSERT INTO t VALUES (1)",
+      "UPDATE t SET bad syntax",
+      "DELETE FROM t WHERE id = 1",
+    ]);
+
+    // stmt 3 (DELETE) must never be sent to the driver.
+    expect(executeQueryMock).toHaveBeenCalledTimes(2);
+
+    const payload = actions.completeMultiStatementQuery.mock.calls[0]![2];
+    expect(
+      payload.statementResults.map((s: { status: string }) => s.status),
+    ).toEqual(["success", "error", "skipped"]);
+    expect(payload.statementResults[2].sql).toBe("DELETE FROM t WHERE id = 1");
+    expect(payload.allFailed).toBe(false);
+  });
+
+  it("runs every statement when none fail", async () => {
+    executeQueryMock.mockResolvedValue(okResult());
+
+    const actions = await runBatch([
+      "INSERT INTO t VALUES (1)",
+      "INSERT INTO t VALUES (2)",
+    ]);
+
+    expect(executeQueryMock).toHaveBeenCalledTimes(2);
+    const payload = actions.completeMultiStatementQuery.mock.calls[0]![2];
+    expect(
+      payload.statementResults.map((s: { status: string }) => s.status),
+    ).toEqual(["success", "success"]);
   });
 });

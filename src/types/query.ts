@@ -239,13 +239,16 @@ export function requireCompatibleQueryResult(
  *
  * - `status: "success"` — `result` is set and `error` is undefined.
  * - `status: "error"` — `error` is set and `result` is undefined.
+ * - `status: "skipped"` — #1089 stop-on-error: a statement after the first
+ *   failure that was never sent to the driver. Both `result` and `error` are
+ *   undefined and `durationMs` is 0.
  *
  * `durationMs` is the wall-clock duration measured around the
  * `executeQuery` call for that single statement.
  */
 export interface QueryStatementResult {
   sql: string;
-  status: "success" | "error";
+  status: "success" | "error" | "skipped";
   result?: QueryResult;
   error?: string;
   durationMs: number;
