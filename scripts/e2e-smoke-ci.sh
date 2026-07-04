@@ -127,6 +127,7 @@ if [[ -n "$SPEC_TO_RUN" ]]; then
 else
   run_wdio "$BASE_DATA_DIR/postgres" "e2e/smoke/postgres.spec.ts"
   run_wdio "$BASE_DATA_DIR/postgres-safe-mode" "e2e/smoke/postgres-safe-mode.spec.ts"
+  run_wdio "$BASE_DATA_DIR/postgres-safe-mode-matrix" "e2e/smoke/postgres-safe-mode-matrix.spec.ts"
   run_wdio "$BASE_DATA_DIR/postgres-explain" "e2e/smoke/postgres-explain.spec.ts"
   run_wdio "$BASE_DATA_DIR/postgres-extension-completion" "e2e/smoke/postgres-extension-completion.spec.ts"
   run_wdio "$BASE_DATA_DIR/postgres-cancellation" "e2e/smoke/postgres-cancellation.spec.ts"
