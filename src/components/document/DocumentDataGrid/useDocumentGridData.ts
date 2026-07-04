@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useDocumentQueryStore } from "@stores/documentQueryStore";
-import { cancelQuery } from "@lib/tauri";
+import { cancelQuery, cancelQueryNative } from "@lib/tauri";
+import type { CancelError } from "@lib/tauri/cancel";
+import { toast } from "@lib/runtime/toast";
+import i18n from "@lib/i18n";
 import type { ColumnInfo, SortInfo, TableData } from "@/types/schema";
 import type { DocumentQueryResult } from "@/types/document";
 
@@ -154,17 +157,36 @@ export function useDocumentGridData({
     const queryId = queryIdRef.current;
     queryIdRef.current = null;
     if (!queryId) return;
-    // Issue #1269 (P1) — fire the cooperative token so the backend
-    // `find_documents` `tokio::select!` returns cancelled and frees the
-    // driver. Best-effort: the UI settled synchronously above. Mongo has no
-    // native (server-side) cancel wired yet — `killOp` exists but no path
-    // materialises the running op's opid, so the Stop stays cooperative-only
-    // until the opid-capture follow-up lands.
-    cancelQuery(queryId).catch(() => {
-      // Backend cancel registry may have already evicted the token, or the
-      // connection was swapped — the frontend is already consistent.
-    });
-  }, []);
+    // Issue #1269 (P1) — two-step cancel mirroring the SQL/RDB path. Fire the
+    // cooperative token FIRST so the backend `find_documents` `tokio::select!`
+    // returns cancelled and frees the driver; THEN the native `killOp` so a
+    // long collection scan actually stops on the server. `find` stamped the op
+    // with `comment == queryId`, so the backend resolves its opid via
+    // `$currentOp` and kills it (no client-visible pid → `serverPid` unused).
+    void (async () => {
+      try {
+        await cancelQuery(queryId);
+      } catch {
+        // Backend cancel registry may have already evicted the token, or the
+        // connection was swapped — the frontend is already consistent.
+      }
+      try {
+        await cancelQueryNative(connectionId, 0, queryId);
+      } catch (err) {
+        // Surface a genuine server rejection (no killop/inprog privilege on
+        // Atlas shared, driver fault) so the Stop does not fail silently.
+        // `AlreadyCompleted` is the common finished-before-click race → silent.
+        const ce = err as CancelError;
+        if (ce?.type === "PermissionDenied" || ce?.type === "NetworkError") {
+          toast.error(
+            i18n.t("document:gridCancel.nativeFailed", {
+              message: ce.message,
+            }),
+          );
+        }
+      }
+    })();
+  }, [connectionId]);
 
   useEffect(() => {
     fetchData();

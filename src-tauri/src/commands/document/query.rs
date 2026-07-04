@@ -30,10 +30,14 @@ async fn find_documents_inner(
     connection_id: &str,
     database: &str,
     collection: &str,
-    body: FindBody,
+    mut body: FindBody,
     query_id: Option<&str>,
 ) -> Result<DocumentQueryResult, AppError> {
     let cancel_handle = register_cancel_token(state, query_id).await;
+
+    // Issue #1269 (P1) — stamp the running op with the cancel tag so native
+    // cancel (`killOp`) can resolve its opid via `$currentOp` on this comment.
+    body.comment = query_id.map(str::to_string);
 
     let result = {
         let active = state

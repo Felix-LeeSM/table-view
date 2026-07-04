@@ -92,6 +92,28 @@ pub trait DbAdapter: Send + Sync {
             ))
         })
     }
+
+    /// Issue #1269 (P1) — native cancel keyed by an execution tag rather than
+    /// a pre-captured server pid.
+    ///
+    /// Mongo has no client-visible pid: the running op's `opid` only exists
+    /// while it runs and is discoverable via `$currentOp`. Instead of the
+    /// runner materialising it mid-query, the runner stamps the op with
+    /// `command.comment == tag` (the request's `query_id`) and this method
+    /// resolves the opid on demand at cancel time, then issues `killOp`.
+    /// Resolving at cancel time keeps the permission failure (Atlas shared /
+    /// no `inprog`/`killop` privilege) synchronous with the user's click so
+    /// it surfaces through `CancelError` rather than degrading silently.
+    ///
+    /// The default returns `Unsupported`; `cancel_query_native` folds that
+    /// into the cooperative-token path for adapters that carry a real pid.
+    fn cancel_query_by_tag<'a>(&'a self, _tag: &'a str) -> BoxFuture<'a, Result<(), AppError>> {
+        Box::pin(async {
+            Err(AppError::Unsupported(
+                "This adapter does not support tag-based native cancel".into(),
+            ))
+        })
+    }
 }
 
 // ── RdbAdapter ────────────────────────────────────────────────────────────
