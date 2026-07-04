@@ -28,6 +28,12 @@ export async function queryTableData(
   filters?: FilterCondition[],
   rawWhere?: string,
   expectedDatabase?: string,
+  // Issue #1269 (P1) — optional per-load cancel-token id. The backend
+  // `query_table_data` command already registers a `CancellationToken` under
+  // this id (Sprint 180), so passing it lets the grid Cancel button abort the
+  // in-flight browse via `cancelQuery` / `cancelQueryNative`. Omitting it
+  // preserves the pre-#1269 fast-path (no token registered).
+  queryId?: string,
 ): Promise<TableData> {
   const result = await invoke<TableData>("query_table_data", {
     connectionId,
@@ -39,6 +45,7 @@ export async function queryTableData(
     filters: filters ?? null,
     rawWhere: rawWhere ?? null,
     expectedDatabase: expectedDatabase ?? null,
+    queryId: queryId ?? null,
   });
   return wrapNumericCells(result);
 }

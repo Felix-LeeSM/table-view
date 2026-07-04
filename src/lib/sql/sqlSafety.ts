@@ -358,8 +358,30 @@ function statementAnalysisFromAst(
         };
       }
       return { kind: "dml-delete", severity: "warn", reasons: [] };
-    case "merge":
+    case "merge": {
+      // Issue #1116 — a MERGE is a bounded conditional write (warn), and
+      // `dml-merge` participates in dry-run impact escalation (same gate as
+      // DELETE/UPDATE WHERE). The current AST grammar models only
+      // update/insert/do-nothing branch actions — it has no DELETE action, so
+      // a `WHEN MATCHED THEN DELETE` merge fails to parse and reaches the
+      // regex fallback instead. Guard against a future grammar widening that
+      // adds a branch action outside the analyzable set: if any clause action
+      // is unrecognized, return null so the raw-SQL regex matcher takes over —
+      // the more protective path (mirrors the #1119 CTE composition style).
+      const analyzableMergeActions = new Set([
+        "update",
+        "insert",
+        "do-nothing",
+      ]);
+      if (
+        !ast.clauses.every((clause) =>
+          analyzableMergeActions.has(clause.action),
+        )
+      ) {
+        return null;
+      }
       return { kind: "dml-merge", severity: "warn", reasons: [] };
+    }
     // Sprint-393a — successful widened SELECT parse always classifies as
     // read-only `info`. No JOIN / GROUP / ORDER / LIMIT shape escalates
     // severity — the AST simply confirms the statement is a valid SELECT

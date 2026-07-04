@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { FilterCondition, SortInfo, TableData } from "@/types/schema";
-import { cancelQuery, queryTableData } from "@lib/tauri";
+import {
+  cancelQuery,
+  cancelQueryNative,
+  getQueryServerPid,
+  queryTableData,
+} from "@lib/tauri";
+import { useConnectionStore } from "@stores/connectionStore";
+import { supportsNativeCancel } from "@components/query/QueryTab/useQueryContext";
 import { getDbMismatchInfo, getTauriErrorMessage } from "@lib/tauri/error";
 import { syncMismatchedActiveDb } from "@lib/runtime/recovery/syncMismatchedActiveDb";
 import { recordHistoryEntry } from "@lib/runtime/history/recordHistoryEntry";
@@ -43,11 +50,22 @@ export function useRdbTableData({
   const [error, setError] = useState<string | null>(null);
   const fetchIdRef = useRef(0);
   const queryIdRef = useRef<string | null>(null);
+  // Issue #1269 (P1) — native server-side cancel gates on the DBMS the browse
+  // runs against (pg/mysql/mariadb `pg_cancel_backend`/`KILL QUERY`).
+  const dbType = useConnectionStore(
+    (s) => s.connections.find((c) => c.id === connectionId)?.dbType,
+  );
 
   const fetchData = useCallback(async () => {
     const fetchId = ++fetchIdRef.current;
     setLoading(true);
     setError(null);
+
+    // Issue #1269 (P1) — register a cancel-token id for this browse so the
+    // overlay Cancel button can abort it (cooperative + native). The backend
+    // `query_table_data` command registers the token under this id.
+    const queryId = crypto.randomUUID();
+    queryIdRef.current = queryId;
 
     const startedAt = Date.now();
     const previewSql = `SELECT * FROM ${schema ? `${schema}.` : ""}${table}`;
@@ -72,6 +90,7 @@ export function useRdbTableData({
         activeRaw ? undefined : activeFilters,
         activeRaw,
         database,
+        queryId,
       );
 
       if (fetchId === fetchIdRef.current) {
@@ -137,12 +156,30 @@ export function useRdbTableData({
     setLoading(false);
     const queryId = queryIdRef.current;
     queryIdRef.current = null;
-    if (queryId) {
-      cancelQuery(queryId).catch(() => {
-        // Best effort: the backend may already have settled the refetch.
-      });
-    }
-  }, []);
+    if (!queryId) return;
+    // Issue #1269 (P1) — mirror the SQL query tab's two-step cancel
+    // (useQueryExecution). Fire the cooperative token FIRST so the backend
+    // `tokio::select!` returns the canonical "cancelled" outcome, THEN, for a
+    // native-cancel DBMS, tear down the actual server-side backend so a
+    // long browse (big table scan) stops consuming server resources. Both
+    // steps are best-effort: the UI already settled synchronously above.
+    void (async () => {
+      try {
+        await cancelQuery(queryId);
+      } catch {
+        // Backend may already have settled the refetch (benign race).
+      }
+      if (!supportsNativeCancel(dbType)) return;
+      try {
+        const serverPid = await getQueryServerPid(queryId);
+        if (serverPid != null) {
+          await cancelQueryNative(connectionId, serverPid);
+        }
+      } catch {
+        // Native cancel is best-effort — query likely already completed.
+      }
+    })();
+  }, [connectionId, dbType]);
 
   useEffect(() => {
     const handler = () => {

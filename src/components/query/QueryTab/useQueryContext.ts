@@ -19,9 +19,19 @@ import type { RdbHistoryOverrides } from "./rdbQueryExecution";
  * `cancelQueryNative` (pg `pg_cancel_backend` / mysql `KILL QUERY`). Every
  * other cancel-capable DBMS keeps only the cooperative token.
  *
- * Derived from `dbType` rather than a new capability field: it is a 3-value
- * check the adapter side already fixes (`execute_sql_tracked` overrides), and
- * expanding the capability contract across ~13 profiles buys nothing here.
+ * Issue #1269 — mongo is deliberately NOT here yet. Its adapter's
+ * `cancel_query` delegates to `killOp` (connection.rs), but no execution path
+ * (`run_mongo_command` / `find_documents`) materialises the running op's opid
+ * into `query_server_pids`, so `getQueryServerPid` always resolves null for
+ * mongo. Adding mongo here would flip `Toolbar`'s cancel tooltip to claim a
+ * server-side stop the app cannot yet deliver (claimed != actual). Promote
+ * mongo together with the opid-capture follow-up (comment tag + `$currentOp`,
+ * keyed by `queryId`).
+ *
+ * Derived from `dbType` rather than a new capability field: it is a fixed
+ * small-value check the adapter side already fixes (`execute_sql_tracked`
+ * overrides), and expanding the capability contract across ~13 profiles buys
+ * nothing here.
  */
 export function supportsNativeCancel(
   dbType: DatabaseType | null | undefined,

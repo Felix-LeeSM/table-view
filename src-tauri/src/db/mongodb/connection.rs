@@ -353,6 +353,24 @@ mod tests {
         assert!(matches!(a.kind(), DatabaseType::Mongodb));
     }
 
+    /// Issue #1269 (P1) — the native cancel IPC
+    /// (`cancel_query_native` → `active.lifecycle().cancel_query(opid)`)
+    /// routes the opid (carried in the `server_pid` slot) through
+    /// `MongoAdapter::cancel_query` → `kill_op_impl` →
+    /// `adminCommand({killOp: 1, op})`. Without a live client the killOp
+    /// admin command cannot run, so the call must surface a `Connection`
+    /// error — proving the delegation reaches the driver boundary rather
+    /// than silently no-op'ing (which would make the Cancel button a lie).
+    #[tokio::test]
+    async fn cancel_query_delegates_to_kill_op_and_errors_without_client() {
+        let adapter = MongoAdapter::new();
+        let err = adapter
+            .cancel_query(4242)
+            .await
+            .expect_err("killOp without a client must error");
+        assert!(matches!(err, AppError::Connection(_)));
+    }
+
     fn sample_config() -> ConnectionConfig {
         ConnectionConfig {
             id: "m1".into(),

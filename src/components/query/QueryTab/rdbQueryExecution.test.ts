@@ -210,9 +210,87 @@ describe("executeRdbQuery single-statement routing (#1223)", () => {
   });
 });
 
+// Issue #1116 — a MERGE ... WHEN MATCHED THEN DELETE is a bounded write (warn)
+// but must participate in dry-run impact escalation exactly like a DELETE WHERE
+// of the same blast radius. Before the fix, `dml-merge` was excluded from the
+// escalation whitelist, so a MERGE deleting 100+ rows landed on the 1-click
+// warn preview instead of the confirm gate ("same risk = same gate").
+async function runMergeEscalationPath(sql: string, dryRunRows: number) {
+  executeQueryMock.mockResolvedValue({
+    columns: [],
+    rows: [],
+    totalCount: 0,
+    executionTimeMs: 0,
+    queryType: "select",
+  });
+  executeQueryDryRunMock.mockResolvedValue([
+    {
+      columns: [],
+      rows: [],
+      totalCount: dryRunRows,
+      executionTimeMs: 0,
+      queryType: { dml: { rows_affected: dryRunRows } },
+    },
+  ]);
+  const actions = createSingleActions();
+  const setPendingRdbConfirm = vi.fn();
+  const setPendingRdbWarn = vi.fn();
+  await executeRdbQuery({
+    tab: { ...tab, sql },
+    sql,
+    dbType: "postgresql",
+    decideSafeMode: () => allow,
+    updateQueryState: actions.updateQueryState,
+    recordHistory: actions.recordHistory,
+    setPendingRdbConfirm,
+    setPendingRdbWarn,
+    runRdbSingle: makeProductionSingleRunner(actions),
+    runRdbBatch: vi.fn(),
+  });
+  return { setPendingRdbConfirm, setPendingRdbWarn };
+}
+
+describe("executeRdbQuery MERGE impact escalation (#1116)", () => {
+  beforeEach(() => {
+    executeQueryMock.mockReset();
+    executeQueryDryRunMock.mockReset();
+    dispatchDbMutationHintMock.mockReset();
+  });
+
+  it("escalates a MERGE ... WHEN MATCHED THEN DELETE affecting 100+ rows to the confirm gate", async () => {
+    const { setPendingRdbConfirm, setPendingRdbWarn } =
+      await runMergeEscalationPath(
+        "MERGE INTO users USING incoming ON users.id = incoming.id WHEN MATCHED THEN DELETE",
+        150,
+      );
+
+    expect(setPendingRdbConfirm).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reason: "MERGE affects 100+ rows (dry-run threshold)",
+      }),
+    );
+    expect(setPendingRdbWarn).not.toHaveBeenCalled();
+  });
+
+  it("keeps a MERGE under the threshold on the warn preview, not the confirm gate", async () => {
+    const { setPendingRdbConfirm, setPendingRdbWarn } =
+      await runMergeEscalationPath(
+        "MERGE INTO users USING incoming ON users.id = incoming.id WHEN MATCHED THEN DELETE",
+        3,
+      );
+
+    expect(setPendingRdbConfirm).not.toHaveBeenCalled();
+    expect(setPendingRdbWarn).toHaveBeenCalledWith({
+      statements: [
+        "MERGE INTO users USING incoming ON users.id = incoming.id WHEN MATCHED THEN DELETE",
+      ],
+    });
+  });
+});
+
 // Issue #1110 — the warn-escalation reason must match reality. MySQL/SQLite
 // reject the dry-run probe with `Unsupported`, so the confirm dialog can't
-// claim a measured "100+ rows" impact for a 1-row UPDATE.
+// claim a measured "100+ rows" impact for a 1-row UPDATE (or MERGE).
 describe("executeRdbQuery warn-escalation reason (#1110)", () => {
   beforeEach(() => {
     executeQueryMock.mockReset();
@@ -220,14 +298,17 @@ describe("executeRdbQuery warn-escalation reason (#1110)", () => {
     dispatchDbMutationHintMock.mockReset();
   });
 
-  async function runWarnUpdate(dryRun: () => Promise<unknown>) {
+  async function runWarnStmt(
+    sql: string,
+    dryRun: () => Promise<unknown>,
+    dbType: "mysql" | "postgresql" = "mysql",
+  ) {
     executeQueryDryRunMock.mockImplementation(dryRun);
     const setPendingRdbConfirm = vi.fn();
-    const sql = "UPDATE t SET x = 1 WHERE id = 5";
     await executeRdbQuery({
       tab: { ...tab, sql },
       sql,
-      dbType: "mysql",
+      dbType,
       decideSafeMode: () => allow,
       updateQueryState: vi.fn(),
       recordHistory: vi.fn(),
@@ -240,8 +321,9 @@ describe("executeRdbQuery warn-escalation reason (#1110)", () => {
   }
 
   it("does NOT claim '100+ rows' when the dry-run probe is unsupported", async () => {
-    const setPendingRdbConfirm = await runWarnUpdate(() =>
-      Promise.reject(new Error("Unsupported")),
+    const setPendingRdbConfirm = await runWarnStmt(
+      "UPDATE t SET x = 1 WHERE id = 5",
+      () => Promise.reject(new Error("Unsupported")),
     );
 
     expect(setPendingRdbConfirm).toHaveBeenCalledTimes(1);
@@ -251,17 +333,33 @@ describe("executeRdbQuery warn-escalation reason (#1110)", () => {
     expect(reason).toMatch(/not supported/i);
   });
 
+  it("does NOT claim '100+ rows' for an unsupported-probe MERGE, and names MERGE", async () => {
+    const setPendingRdbConfirm = await runWarnStmt(
+      "MERGE INTO users USING incoming ON users.id = incoming.id WHEN MATCHED THEN DELETE",
+      () => Promise.reject(new Error("Unsupported")),
+      "postgresql",
+    );
+
+    expect(setPendingRdbConfirm).toHaveBeenCalledTimes(1);
+    const reason = setPendingRdbConfirm.mock.calls[0]![0].reason as string;
+    expect(reason).not.toContain("100+");
+    expect(reason).toContain("MERGE");
+    expect(reason).toMatch(/unknown number of rows/i);
+  });
+
   it("keeps the measured '100+ rows' copy when the probe counts the impact", async () => {
-    const setPendingRdbConfirm = await runWarnUpdate(() =>
-      Promise.resolve([
-        {
-          columns: [],
-          rows: [],
-          totalCount: 0,
-          executionTimeMs: 0,
-          queryType: { dml: { rows_affected: 250 } },
-        },
-      ]),
+    const setPendingRdbConfirm = await runWarnStmt(
+      "UPDATE t SET x = 1 WHERE id = 5",
+      () =>
+        Promise.resolve([
+          {
+            columns: [],
+            rows: [],
+            totalCount: 0,
+            executionTimeMs: 0,
+            queryType: { dml: { rows_affected: 250 } },
+          },
+        ]),
     );
 
     expect(setPendingRdbConfirm).toHaveBeenCalledTimes(1);
