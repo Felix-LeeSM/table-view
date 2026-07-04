@@ -57,6 +57,14 @@ export interface DataGridTableProps {
   editingCell: { row: number; col: number } | null;
   editValue: string | null;
   pendingEdits: Map<string, string | null>;
+  /**
+   * Issue #1174 — edit-time row-identity anchors keyed by base cell key
+   * `${rowIdx}-${colIdx}`. When present, the render overlay follows a
+   * pending edit to its actual row instead of the visual row index (which
+   * drifts across pagination / sort / filter). Optional → grids that don't
+   * thread it keep the pre-#1081 index-match behavior.
+   */
+  pendingEditRowSnapshots?: ReadonlyMap<string, ReadonlyArray<unknown>>;
   pendingEditErrors?: Map<string, string>;
   selectedRowIds: Set<number>;
   pendingDeletedRowKeys: Set<string>;
@@ -167,6 +175,7 @@ const DataGridTable = forwardRef<DataGridTableHandle, DataGridTableProps>(
       editingCell,
       editValue,
       pendingEdits,
+      pendingEditRowSnapshots,
       pendingEditErrors,
       selectedRowIds,
       pendingDeletedRowKeys,
@@ -456,6 +465,7 @@ const DataGridTable = forwardRef<DataGridTableHandle, DataGridTableProps>(
         editingCell,
         editValue,
         pendingEdits,
+        pendingEditRowSnapshots,
         pendingEditErrors,
         pendingDeletedRowKeys,
         selectedRowIds,
@@ -483,6 +493,7 @@ const DataGridTable = forwardRef<DataGridTableHandle, DataGridTableProps>(
         editingCell,
         editValue,
         pendingEdits,
+        pendingEditRowSnapshots,
         pendingEditErrors,
         pendingDeletedRowKeys,
         selectedRowIds,

@@ -16,6 +16,49 @@ export function rowKeyFn(rowIdx: number, page: number): string {
 }
 
 /**
+ * Issue #1174 — stable row-identity string for the pending-edit render
+ * overlay. Uses primary-key columns when declared (mirrors
+ * `buildWhereClause` + the inline-tree auto-close guard), else the whole
+ * row. `safeStringifyCell` keeps Decimal / BigInt / object cells lossless
+ * and comparable.
+ */
+export function rowIdentityKey(
+  row: readonly unknown[] | undefined,
+  columns: ReadonlyArray<{ is_primary_key: boolean }>,
+): string {
+  if (!row) return "";
+  const pkValues: unknown[] = [];
+  for (let i = 0; i < columns.length; i++) {
+    if (columns[i]!.is_primary_key) pkValues.push(row[i]);
+  }
+  return safeStringifyCell(pkValues.length > 0 ? pkValues : (row as unknown));
+}
+
+/**
+ * Issue #1174 — decide whether the pending edit anchored at `cellKey`
+ * (`${rowIdx}-${colIdx}`) still belongs to the row now rendered at that
+ * visual index. `pendingEdits` is index-keyed, but each edit captured a
+ * row-identity snapshot at edit time (`pendingEditRowSnapshots`, the same
+ * anchor the commit's WHERE uses). After pagination / sort / filter the
+ * index can point at a different row — so an index-only overlay lights up
+ * the WRONG cell. Compare the current row's identity against the anchor's.
+ *
+ * - No snapshot for the key → pre-#1081 edit or a nested key without an
+ *   anchor; fall back to the index match (unchanged behavior → `true`).
+ * - Snapshot present → overlay only when the identities match.
+ */
+export function pendingEditAnchorMatches(
+  cellKey: string,
+  currentRowIdentity: string,
+  columns: ReadonlyArray<{ is_primary_key: boolean }>,
+  editRowSnapshots: ReadonlyMap<string, ReadonlyArray<unknown>> | undefined,
+): boolean {
+  const snap = editRowSnapshots?.get(cellKey);
+  if (!snap) return true;
+  return rowIdentityKey(snap, columns) === currentRowIdentity;
+}
+
+/**
  * Determine the HTML input type for a given column data type.
  */
 export function getInputTypeForColumn(dataType: string): string {

@@ -21,6 +21,8 @@ import {
   DataGridHeaderRow as HeaderRow,
   cellToEditValue,
   editKey,
+  pendingEditAnchorMatches,
+  rowIdentityKey,
   useColumnResize,
   useDocumentDataGridEdit,
   useGridRoving,
@@ -438,7 +440,19 @@ export default function DocumentDataGrid({
         return;
       }
       const key = editKey(rowIdx, colIdx);
-      const pendingValue = editState.pendingEdits.has(key)
+      // Issue #1174 — only seed from the pending value when the row now at
+      // this index still matches the edit-time anchor; otherwise this is a
+      // different row (paginated / sorted / filtered in) so seed its real
+      // cell value, matching what the overlay shows.
+      const anchored =
+        editState.pendingEdits.has(key) &&
+        pendingEditAnchorMatches(
+          key,
+          rowIdentityKey(data.rows[rowIdx] as unknown[], data.columns),
+          data.columns,
+          editState.pendingEditRowSnapshots,
+        );
+      const pendingValue = anchored
         ? (editState.pendingEdits.get(key) as string | null)
         : cellToEditValue(cell);
       editState.handleStartEdit(rowIdx, colIdx, pendingValue);

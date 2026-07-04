@@ -499,6 +499,9 @@ export function useDataGridEdit({
     pendingEditErrors,
     pendingNewRows,
     pendingDeletedRowKeys,
+    // Issue #1174 — expose the edit-time row anchors so the render overlay
+    // can follow a pending edit to its actual row across pagination.
+    pendingEditRowSnapshots,
     sqlPreview,
     setSqlPreview: setSqlPreviewExposed,
     commitError,

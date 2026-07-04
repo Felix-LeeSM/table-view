@@ -3,7 +3,12 @@ import { useTranslation } from "react-i18next";
 import Decimal from "decimal.js";
 import { isDocumentSentinel, type DocumentQueryResult } from "@/types/document";
 import type { ColumnInfo, TableData } from "@/types/schema";
-import { editKey, type DataGridEditState } from "@components/datagrid";
+import {
+  editKey,
+  pendingEditAnchorMatches,
+  rowIdentityKey,
+  type DataGridEditState,
+} from "@components/datagrid";
 import { safeStringifyCell } from "@lib/jsonCell";
 import { cn } from "@lib/utils";
 import { DocumentTreePanel } from "@components/document/DocumentTreePanel";
@@ -96,6 +101,12 @@ export default function DocumentGridRows({
       {data.rows.map((row, rowIdx) => {
         const selected = editState.selectedRowIds.has(rowIdx);
         const isDeleted = editState.pendingDeletedRowKeys.has(rowKeyOf(rowIdx));
+        // Issue #1174 — identity of the row now at this visual index; a
+        // pending edit's overlay paints only when its anchor matches.
+        const currentRowIdentity = rowIdentityKey(
+          row as unknown[],
+          data.columns,
+        );
         const isExpandedHere = expandedNested?.rowIdx === rowIdx;
         const expandedColName = isExpandedHere
           ? (visibleEntries[expandedNested!.colIdx]?.[0]?.name ?? null)
@@ -137,7 +148,16 @@ export default function DocumentGridRows({
                 const isEditing =
                   editState.editingCell?.row === rowIdx &&
                   editState.editingCell?.col === colIdx;
-                const hasPendingEdit = editState.pendingEdits.has(key);
+                // Issue #1174 — index-keyed hit only counts when the row now
+                // at this index still matches the edit-time anchor.
+                const anchorMatches = pendingEditAnchorMatches(
+                  key,
+                  currentRowIdentity,
+                  data.columns,
+                  editState.pendingEditRowSnapshots,
+                );
+                const hasPendingEdit =
+                  editState.pendingEdits.has(key) && anchorMatches;
                 const pendingValue = hasPendingEdit
                   ? (editState.pendingEdits.get(key) as string | null)
                   : null;
@@ -239,6 +259,7 @@ export default function DocumentGridRows({
                         expandedNested={expandedNested}
                         setExpandedNested={setExpandedNested}
                         pendingEdits={editState.pendingEdits}
+                        anchorMatches={anchorMatches}
                         rowId={queryResult?.rawDocuments[rowIdx]?._id}
                       />
                     ) : (
@@ -296,6 +317,9 @@ interface NestedCellToggleProps {
   expandedNested: ExpandedNestedCell | null;
   setExpandedNested: (next: ExpandedNestedCell | null) => void;
   pendingEdits: ReadonlyMap<string, string | null>;
+  /** Issue #1174 — false when the row at this index no longer matches the
+   * edit-time anchor, so the nested pending ring must not paint. */
+  anchorMatches: boolean;
   rowId: unknown;
 }
 
@@ -307,6 +331,7 @@ function NestedCellToggle({
   expandedNested,
   setExpandedNested,
   pendingEdits,
+  anchorMatches,
   rowId,
 }: NestedCellToggleProps) {
   const { t } = useTranslation("document");
@@ -320,6 +345,7 @@ function NestedCellToggle({
       ? sentinelStr.slice(1, -1).trim()
       : "...";
   const hasPending =
+    anchorMatches &&
     buildNestedPendingByPath(pendingEdits, rowIdx, colIdx).size > 0;
 
   return (
