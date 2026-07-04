@@ -495,13 +495,24 @@ export async function executeRdbQuery({
     }
     if (decision.action === "allow" && analysis.severity === "warn") {
       hasWarn = true;
-      if (analysis.kind === "dml-update" || analysis.kind === "dml-delete") {
+      // Issue #1116 — MERGE is a bounded conditional write (warn), but a
+      // WHEN MATCHED THEN DELETE/UPDATE branch carries the same blast radius
+      // as an equivalent DELETE/UPDATE WHERE. It must participate in the
+      // dry-run impact escalation so a MERGE deleting 100+ rows escalates to
+      // a confirm gate, matching "same risk = same gate".
+      if (
+        analysis.kind === "dml-update" ||
+        analysis.kind === "dml-delete" ||
+        analysis.kind === "dml-merge"
+      ) {
         escalationCandidates.push({
           stmt,
           reason:
             analysis.kind === "dml-update"
               ? "UPDATE affects 100+ rows (dry-run threshold)"
-              : "DELETE affects 100+ rows (dry-run threshold)",
+              : analysis.kind === "dml-delete"
+                ? "DELETE affects 100+ rows (dry-run threshold)"
+                : "MERGE affects 100+ rows (dry-run threshold)",
         });
       }
     }

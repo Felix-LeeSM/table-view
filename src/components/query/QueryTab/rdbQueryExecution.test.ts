@@ -6,11 +6,12 @@ import {
 import type { SafeModeDecision } from "@/lib/safeMode";
 
 const executeQueryMock = vi.hoisted(() => vi.fn());
+const executeQueryDryRunMock = vi.hoisted(() => vi.fn());
 const dispatchDbMutationHintMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@lib/tauri", () => ({
   executeQuery: (...args: unknown[]) => executeQueryMock(...args),
-  executeQueryDryRun: vi.fn(),
+  executeQueryDryRun: (...args: unknown[]) => executeQueryDryRunMock(...args),
 }));
 
 vi.mock("@lib/runtime/recovery/syncMismatchedActiveDb", () => ({
@@ -206,5 +207,83 @@ describe("executeRdbQuery single-statement routing (#1223)", () => {
       "app",
       undefined,
     );
+  });
+});
+
+// Issue #1116 — a MERGE ... WHEN MATCHED THEN DELETE is a bounded write (warn)
+// but must participate in dry-run impact escalation exactly like a DELETE WHERE
+// of the same blast radius. Before the fix, `dml-merge` was excluded from the
+// escalation whitelist, so a MERGE deleting 100+ rows landed on the 1-click
+// warn preview instead of the confirm gate ("same risk = same gate").
+async function runMergeEscalationPath(sql: string, dryRunRows: number) {
+  executeQueryMock.mockResolvedValue({
+    columns: [],
+    rows: [],
+    totalCount: 0,
+    executionTimeMs: 0,
+    queryType: "select",
+  });
+  executeQueryDryRunMock.mockResolvedValue([
+    {
+      columns: [],
+      rows: [],
+      totalCount: dryRunRows,
+      executionTimeMs: 0,
+      queryType: { dml: { rows_affected: dryRunRows } },
+    },
+  ]);
+  const actions = createSingleActions();
+  const setPendingRdbConfirm = vi.fn();
+  const setPendingRdbWarn = vi.fn();
+  await executeRdbQuery({
+    tab: { ...tab, sql },
+    sql,
+    dbType: "postgresql",
+    decideSafeMode: () => allow,
+    updateQueryState: actions.updateQueryState,
+    recordHistory: actions.recordHistory,
+    setPendingRdbConfirm,
+    setPendingRdbWarn,
+    runRdbSingle: makeProductionSingleRunner(actions),
+    runRdbBatch: vi.fn(),
+  });
+  return { setPendingRdbConfirm, setPendingRdbWarn };
+}
+
+describe("executeRdbQuery MERGE impact escalation (#1116)", () => {
+  beforeEach(() => {
+    executeQueryMock.mockReset();
+    executeQueryDryRunMock.mockReset();
+    dispatchDbMutationHintMock.mockReset();
+  });
+
+  it("escalates a MERGE ... WHEN MATCHED THEN DELETE affecting 100+ rows to the confirm gate", async () => {
+    const { setPendingRdbConfirm, setPendingRdbWarn } =
+      await runMergeEscalationPath(
+        "MERGE INTO users USING incoming ON users.id = incoming.id WHEN MATCHED THEN DELETE",
+        150,
+      );
+
+    expect(setPendingRdbConfirm).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reason: "MERGE affects 100+ rows (dry-run threshold)",
+      }),
+    );
+    expect(setPendingRdbWarn).not.toHaveBeenCalled();
+  });
+
+  it("keeps a MERGE under the threshold on the warn preview, not the confirm gate", async () => {
+    const { setPendingRdbConfirm, setPendingRdbWarn } =
+      await runMergeEscalationPath(
+        "MERGE INTO users USING incoming ON users.id = incoming.id WHEN MATCHED THEN DELETE",
+        3,
+      );
+
+    expect(setPendingRdbConfirm).not.toHaveBeenCalled();
+    expect(setPendingRdbWarn).toHaveBeenCalledWith({
+      statements: [
+        "MERGE INTO users USING incoming ON users.id = incoming.id WHEN MATCHED THEN DELETE",
+      ],
+    });
   });
 });
