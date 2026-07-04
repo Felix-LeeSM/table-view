@@ -5,6 +5,8 @@ use crate::models::{
     DropConstraintRequest, DropIndexRequest, DropTableRequest, RenameTableRequest,
 };
 
+use crate::db::ddl_fragment::validate_ddl_fragment;
+
 use super::{qualified_table, quote_identifier, validate_identifier};
 
 const PG_INDEX_TYPES: &[&str] = &["btree", "hash", "gist", "gin", "brin"];
@@ -59,6 +61,7 @@ pub(super) fn build_add_column_sql(req: &AddColumnRequest) -> Result<String, App
     if let Some(expr) = &req.check_expression {
         let trimmed = expr.trim();
         if !trimmed.is_empty() {
+            validate_ddl_fragment(trimmed, "Check expression")?;
             col_def.push_str(&format!(" CHECK ({})", trimmed));
         }
     }
@@ -146,10 +149,22 @@ pub(super) fn build_alter_table_sql(req: &AlterTableRequest) -> Result<String, A
 
     for change in &req.changes {
         match change {
-            ColumnChange::Add { name, .. } => validate_identifier(name, "Column name")?,
+            ColumnChange::Add {
+                name,
+                data_type,
+                default_value,
+                ..
+            } => {
+                validate_identifier(name, "Column name")?;
+                validate_ddl_fragment(data_type, "Data type")?;
+                if let Some(default) = default_value {
+                    validate_ddl_fragment(default, "DEFAULT value")?;
+                }
+            }
             ColumnChange::Modify {
                 name,
                 new_data_type,
+                new_default_value,
                 using_expression,
                 ..
             } => {
@@ -158,6 +173,15 @@ pub(super) fn build_alter_table_sql(req: &AlterTableRequest) -> Result<String, A
                     return Err(AppError::Validation(
                         "USING expression requires a new data type".into(),
                     ));
+                }
+                if let Some(dt) = new_data_type {
+                    validate_ddl_fragment(dt, "Data type")?;
+                }
+                if let Some(default) = new_default_value {
+                    validate_ddl_fragment(default, "DEFAULT value")?;
+                }
+                if let Some(expr) = using_expression {
+                    validate_ddl_fragment(expr, "USING expression")?;
                 }
             }
             ColumnChange::Drop { name } => validate_identifier(name, "Column name")?,
@@ -257,6 +281,10 @@ fn validate_column_data_type(col: &ColumnDefinition) -> Result<(), AppError> {
             "Column '{}' must have a non-empty data type",
             col.name
         )));
+    }
+    validate_ddl_fragment(&col.data_type, "Data type")?;
+    if let Some(default) = &col.default_value {
+        validate_ddl_fragment(default, "DEFAULT value")?;
     }
     Ok(())
 }
@@ -438,11 +466,13 @@ fn build_constraint_definition_sql(definition: &ConstraintDefinition) -> Result<
             Ok(format!("UNIQUE ({})", cols.join(", ")))
         }
         ConstraintDefinition::Check { expression } => {
-            if expression.trim().is_empty() {
+            let expression = expression.trim();
+            if expression.is_empty() {
                 return Err(AppError::Validation(
                     "Check constraint expression must not be empty".into(),
                 ));
             }
+            validate_ddl_fragment(expression, "Check expression")?;
             Ok(format!("CHECK ({})", expression))
         }
     }

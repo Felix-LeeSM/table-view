@@ -7,6 +7,7 @@
 
 use tracing::info;
 
+use crate::db::ddl_fragment::validate_ddl_fragment;
 use crate::error::AppError;
 use crate::models::{
     AddColumnRequest, AddConstraintRequest, AlterTableRequest, ColumnChange, ColumnDefinition,
@@ -125,6 +126,7 @@ impl MssqlAdapter {
         if let Some(expr) = &req.check_expression {
             let trimmed = expr.trim();
             if !trimmed.is_empty() {
+                validate_ddl_fragment(trimmed, "Check expression")?;
                 statement.push_str(&format!(" CHECK ({})", trimmed));
             }
         }
@@ -391,6 +393,7 @@ fn build_alter_table_statement(qualified: &str, change: &ColumnChange) -> Result
                     name
                 )));
             }
+            validate_ddl_fragment(data_type, "Data type")?;
             let nullability = match new_nullable {
                 Some(true) => " NULL",
                 Some(false) => " NOT NULL",
@@ -423,6 +426,10 @@ fn build_column_definition(column: &ColumnDefinition) -> Result<String, AppError
             "Column '{}' must have a non-empty data type",
             column.name
         )));
+    }
+    validate_ddl_fragment(data_type, "Data type")?;
+    if let Some(default) = &column.default_value {
+        validate_ddl_fragment(default, "DEFAULT value")?;
     }
 
     let mut definition = format!("{} {}", quote_ident(&column.name), data_type);
@@ -482,6 +489,7 @@ fn build_constraint_definition(definition: &ConstraintDefinition) -> Result<Stri
                     "Check constraint expression must not be empty".into(),
                 ));
             }
+            validate_ddl_fragment(expression, "Check expression")?;
             Ok(format!("CHECK ({})", expression))
         }
     }

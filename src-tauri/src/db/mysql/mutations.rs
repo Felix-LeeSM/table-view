@@ -25,6 +25,7 @@
 use sqlx::MySqlPool;
 use tracing::info;
 
+use crate::db::ddl_fragment::validate_ddl_fragment;
 use crate::error::AppError;
 use crate::models::{
     AddColumnRequest, AddConstraintRequest, AlterTableRequest, ColumnChange, ConstraintDefinition,
@@ -212,6 +213,10 @@ impl MysqlAdapter {
                 req.column.name
             )));
         }
+        validate_ddl_fragment(&req.column.data_type, "Data type")?;
+        if let Some(default) = &req.column.default_value {
+            validate_ddl_fragment(default, "DEFAULT value")?;
+        }
 
         let qualified = qualified_table(&req.schema, &req.table);
         let mut col_def = format!(
@@ -247,6 +252,7 @@ impl MysqlAdapter {
         if let Some(expr) = &req.check_expression {
             let trimmed = expr.trim();
             if !trimmed.is_empty() {
+                validate_ddl_fragment(trimmed, "Check expression")?;
                 col_def.push_str(&format!(" CHECK ({})", trimmed));
             }
         }
@@ -312,6 +318,10 @@ impl MysqlAdapter {
                     "Column '{}' must have a non-empty data type",
                     col.name
                 )));
+            }
+            validate_ddl_fragment(&col.data_type, "Data type")?;
+            if let Some(default) = &col.default_value {
+                validate_ddl_fragment(default, "DEFAULT value")?;
             }
         }
 
@@ -403,10 +413,22 @@ impl MysqlAdapter {
 
         for change in &req.changes {
             match change {
-                ColumnChange::Add { name, .. } => validate_identifier(name, "Column name")?,
+                ColumnChange::Add {
+                    name,
+                    data_type,
+                    default_value,
+                    ..
+                } => {
+                    validate_identifier(name, "Column name")?;
+                    validate_ddl_fragment(data_type, "Data type")?;
+                    if let Some(default) = default_value {
+                        validate_ddl_fragment(default, "DEFAULT value")?;
+                    }
+                }
                 ColumnChange::Modify {
                     name,
                     new_data_type,
+                    new_default_value,
                     using_expression,
                     ..
                 } => {
@@ -415,6 +437,12 @@ impl MysqlAdapter {
                         return Err(AppError::Validation(
                             "USING expression requires a new data type (MySQL ignores USING — use raw SQL for casts)".into(),
                         ));
+                    }
+                    if let Some(dt) = new_data_type {
+                        validate_ddl_fragment(dt, "Data type")?;
+                    }
+                    if let Some(default) = new_default_value {
+                        validate_ddl_fragment(default, "DEFAULT value")?;
                     }
                 }
                 ColumnChange::Drop { name } => validate_identifier(name, "Column name")?,
@@ -660,11 +688,13 @@ impl MysqlAdapter {
                 format!("UNIQUE ({})", cols.join(", "))
             }
             ConstraintDefinition::Check { expression } => {
-                if expression.trim().is_empty() {
+                let expression = expression.trim();
+                if expression.is_empty() {
                     return Err(AppError::Validation(
                         "Check constraint expression must not be empty".into(),
                     ));
                 }
+                validate_ddl_fragment(expression, "Check expression")?;
                 // MySQL 8.0.16+ 에서 CHECK enforced. 그 이전 server 는 SQL
                 // 을 parse 받되 무시 — server 가 surface 하는 호환성 문제.
                 format!("CHECK ({})", expression)
