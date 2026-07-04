@@ -62,6 +62,7 @@ describe("document Tauri wrappers", () => {
       database: "shop",
       collection: "orders",
       body: null,
+      queryId: null,
     });
     expect(result.columns[1]?.dataType).toBe("Int64");
     expect(result.rows[0]?.[1]).toBe(9007199254740993n);

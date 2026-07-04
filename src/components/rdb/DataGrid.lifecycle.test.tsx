@@ -152,6 +152,8 @@ describe("DataGrid", () => {
       undefined,
       undefined,
       "db1",
+      // Issue #1269 (P1) — per-browse cancel-token id threaded to the backend.
+      expect.any(String),
     );
   });
 

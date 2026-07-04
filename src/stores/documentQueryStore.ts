@@ -22,6 +22,9 @@ export interface DocumentQueryState {
     database: string,
     collection: string,
     body?: FindBody,
+    // Issue #1269 (P1) — optional cancel-token id forwarded to
+    // `find_documents` so the grid Cancel button can abort the browse.
+    queryId?: string,
   ) => Promise<DocumentQueryResult>;
   runAggregate: (
     connectionId: string,
@@ -60,11 +63,17 @@ export const useDocumentQueryStore = create<DocumentQueryState>((set) => ({
   queryResults: {},
   aggregateResults: {},
 
-  runFind: async (connectionId, database, collection, body) => {
+  runFind: async (connectionId, database, collection, body, queryId) => {
     const key = `find:${connectionId}:${database}:${collection}`;
     const reqId = nextRequestId(key);
     const result = normalizeDocumentQueryResult(
-      await tauri.findDocuments(connectionId, database, collection, body),
+      await tauri.findDocuments(
+        connectionId,
+        database,
+        collection,
+        body,
+        queryId,
+      ),
     );
     if (isLatestRequest(key, reqId)) {
       set((state) => ({
