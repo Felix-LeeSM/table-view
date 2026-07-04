@@ -152,7 +152,8 @@ describe("DbSwitcher", () => {
       loading: false,
       error: null,
     });
-    useToastStore.setState({ toasts: [] });
+    // #1270 — toast queue reset moved to the shared `test-setup.ts` beforeEach
+    // (process-singleton isolation, alongside datagrid/tableActivity stores).
   });
 
   // -- Read-only chrome (S127 invariants preserved for non-eligible cases) --

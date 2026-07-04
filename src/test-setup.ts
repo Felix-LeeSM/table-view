@@ -4,6 +4,7 @@ import "@testing-library/jest-dom/vitest";
 import "@lib/i18n";
 import { beforeAll, beforeEach, vi } from "vitest";
 import { useDataGridEditStore } from "@stores/dataGridEditStore";
+import { useToastStore } from "@stores/toastStore";
 import { resetTauriMock } from "./test-utils/tauriMock";
 
 vi.mock("@lib/tauri", async () => {
@@ -77,6 +78,16 @@ vi.mock("@lib/window-label", async () => {
 beforeEach(async () => {
   resetTauriMock();
   useDataGridEditStore.setState({ entries: new Map() });
+  // #1270 — `toastStore` is a process singleton like the two stores above.
+  // The toast queue never auto-clears (the auto-dismiss timer lives in the
+  // React toaster, which most specs don't mount), so a toast surfaced by
+  // one test's fire-and-forget async (e.g. DbSwitcher's `void handleSelect`
+  // success/error toast) lingers in the global queue. Under parallel-suite
+  // load its settle could slip past a sibling test's assertion, flaking
+  // `toHaveLength` checks. ~14 specs carried their own per-file reset as a
+  // bandaid; resetting here gives every test the same clean-start guarantee
+  // the datagrid/tableActivity singletons already get.
+  useToastStore.setState({ toasts: [] });
   // #1218 — `tableActivityStore` is a process singleton like the datagrid
   // edit store above. Recording a table open in one test would otherwise
   // leak a Pinned/Recent row into the next SchemaTree render (e.g. duplicate
