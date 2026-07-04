@@ -6,6 +6,15 @@ import i18n from "@lib/i18n";
 
 interface ErrorBoundaryProps {
   children: ReactNode;
+  /**
+   * `screen` (default) fills the viewport — used at the App/router root so a
+   * total render failure gets a full-page fallback. `panel` fills only its
+   * container so one crashed panel (sidebar, grid, query result, detail)
+   * degrades in place while the rest of the workspace keeps working (#1312).
+   */
+  variant?: "screen" | "panel";
+  /** Optional panel name shown in the `panel` fallback heading. */
+  label?: string;
 }
 
 interface ErrorBoundaryState {
@@ -35,20 +44,41 @@ export default class ErrorBoundary extends Component<
   };
 
   render() {
-    if (this.state.hasError) {
+    if (!this.state.hasError) {
+      return this.props.children;
+    }
+
+    const message = this.state.error?.message ?? i18n.t("shared:errorFallback");
+
+    if (this.props.variant === "panel") {
       return (
-        <div className="flex h-screen w-screen flex-col items-center justify-center gap-4 bg-background p-8">
-          <h1 className="text-lg font-semibold text-foreground">
-            {i18n.t("shared:errorTitle")}
-          </h1>
-          <p className="max-w-md text-center text-sm text-secondary-foreground">
-            {this.state.error?.message ?? i18n.t("shared:errorFallback")}
+        <div
+          role="alert"
+          className="flex h-full w-full flex-col items-center justify-center gap-3 bg-background p-6"
+        >
+          <h2 className="text-sm font-semibold text-foreground">
+            {this.props.label ?? i18n.t("shared:errorTitle")}
+          </h2>
+          <p className="max-w-md text-center text-xs text-secondary-foreground">
+            {message}
           </p>
-          <Button onClick={this.handleReload}>{i18n.t("shared:reload")}</Button>
+          <Button size="sm" onClick={this.handleReload}>
+            {i18n.t("shared:retry")}
+          </Button>
         </div>
       );
     }
 
-    return this.props.children;
+    return (
+      <div className="flex h-screen w-screen flex-col items-center justify-center gap-4 bg-background p-8">
+        <h1 className="text-lg font-semibold text-foreground">
+          {i18n.t("shared:errorTitle")}
+        </h1>
+        <p className="max-w-md text-center text-sm text-secondary-foreground">
+          {message}
+        </p>
+        <Button onClick={this.handleReload}>{i18n.t("shared:reload")}</Button>
+      </div>
+    );
   }
 }

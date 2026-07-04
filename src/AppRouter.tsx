@@ -13,6 +13,7 @@ import { useFavoritesStore } from "./stores/favoritesStore";
 import { useMruStore } from "./stores/mruStore";
 import { getCurrentWindowLabel, parseWorkspaceLabel } from "@lib/window-label";
 import { markBootMilestone } from "@lib/perf/bootInstrumentation";
+import { installGlobalErrorToast } from "@lib/runtime/globalErrorToast";
 import { logger } from "@lib/logger";
 
 /**
@@ -69,6 +70,10 @@ export default function AppRouter() {
     firstPaintMarkedRef.current = true;
     markBootMilestone("react:first-paint");
   }, []);
+
+  // #1312 — surface async/IPC rejections and uncaught (incl. commit-phase)
+  // errors as a toast so a background failure never disappears silently.
+  useEffect(() => installGlobalErrorToast(), []);
 
   // sprint-361 (Phase 3, Q13) — workspace windows are now per-connection,
   // labeled `workspace-{connection_id}`. The router recognizes the new
