@@ -55,6 +55,10 @@ export const en = {
     refresh: "Refresh",
     planSummary: "Plan Summary",
     rawJson: "Raw JSON",
+    // #1210 — Mongo explain sends filter only; sort/limit/projection are not
+    // part of the plan, so warn when the query sets them.
+    mongoFilterOnlyHint:
+      "Filter-only plan — sort/limit/projection are not reflected and the actual execution may differ.",
   },
 
   // ── FavoritesPanel ────────────────────────────────────────────────────────
@@ -282,6 +286,8 @@ export const ko = {
     refresh: "새로고침",
     planSummary: "계획 요약",
     rawJson: "원본 JSON",
+    mongoFilterOnlyHint:
+      "filter만 반영된 계획 — sort/limit/projection은 반영되지 않아 실제 실행과 다를 수 있습니다.",
   },
 
   favorites: {

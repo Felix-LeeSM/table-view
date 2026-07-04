@@ -37,6 +37,12 @@ export interface ExplainViewerProps {
   expectedDatabase?: string;
   /** Mongo only — `{database, collection, filter?, verbosity?}` */
   mongoSpec?: ExplainMongoFindArgs;
+  /**
+   * Mongo only (#1210) — true when the query sets sort/limit/skip/projection.
+   * The backend explain sends filter only, so these clauses are absent from
+   * the plan; surface a hint so the divergence is not silent.
+   */
+  mongoHasIgnoredClauses?: boolean;
   onPlanSettled?: (result: {
     status: "success" | "error";
     durationMs: number;
@@ -51,6 +57,7 @@ export function ExplainViewer({
   rdbSql,
   expectedDatabase,
   mongoSpec,
+  mongoHasIgnoredClauses = false,
   onPlanSettled,
 }: ExplainViewerProps) {
   const { t } = useTranslation("query");
@@ -138,6 +145,16 @@ export function ExplainViewer({
           {t("explain.refresh")}
         </Button>
       </header>
+
+      {paradigm === "document" && mongoHasIgnoredClauses && (
+        <div
+          role="status"
+          data-testid="explain-filter-only-hint"
+          className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning"
+        >
+          {t("explain.mongoFilterOnlyHint")}
+        </div>
+      )}
 
       {error !== null && (
         <div
