@@ -35,7 +35,11 @@ import {
 } from "@components/shared/ContextMenu";
 import { ConfirmDestructiveDialog } from "@features/workspace";
 import ExecuteButton from "@components/ui/ExecuteButton";
-import type { RawEditPlan } from "@lib/sql/rawQuerySqlBuilder";
+import {
+  multiCellReadonlyReason,
+  multiPkColumnIndices,
+  type RawEditPlan,
+} from "@lib/sql/rawQuerySqlBuilder";
 import { useConnectionStore } from "@stores/connectionStore";
 import PendingChangesTray from "./PendingChangesTray";
 import { useRawQueryGridEdit } from "./useRawQueryGridEdit";
@@ -127,6 +131,13 @@ export default function EditableQueryResultGrid({
     () => result.columns.map((c) => ({ name: c.name, category: c.category })),
     [result.columns],
   );
+
+  // Issue #1299 — result column indices that are a PK of their owning source
+  // instance (multi-table); drives the 🔑 header marker per instance.
+  const multiPkIndices = useMemo(
+    () => (plan.multi ? multiPkColumnIndices(plan.multi) : null),
+    [plan.multi],
+  );
   const { widths, setWidth } = useColumnWidths(widthColumns);
 
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
@@ -192,14 +203,14 @@ export default function EditableQueryResultGrid({
         {
           label: t("editableGrid.contextMenu.editCell"),
           icon: <Pencil size={14} />,
-          disabled: grid.noPk,
+          disabled: !grid.canEditCell(contextMenu.rowIdx, contextMenu.colIdx),
           onClick: () => grid.startEdit(contextMenu.rowIdx, contextMenu.colIdx),
         },
         {
           label: t("editableGrid.contextMenu.deleteRow"),
           icon: <Trash2 size={14} />,
           danger: true,
-          disabled: grid.noPk,
+          disabled: !grid.canDelete,
           onClick: () => grid.deleteRow(contextMenu.rowIdx),
         },
       ]
@@ -283,10 +294,13 @@ export default function EditableQueryResultGrid({
               // Issue #1297 — a PK can be projected under an alias, so match
               // against the source column name (plan.resultColumnNames maps a
               // result column index back to its underlying column) instead of
-              // the displayed result name.
-              const isPk = plan.pkColumns.includes(
-                plan.resultColumnNames[visualIdx] ?? col.name,
-              );
+              // the displayed result name. Issue #1299 — multi-table uses the
+              // resolver's per-instance PK position set.
+              const isPk = multiPkIndices
+                ? multiPkIndices.has(visualIdx)
+                : plan.pkColumns.includes(
+                    plan.resultColumnNames[visualIdx] ?? col.name,
+                  );
               return (
                 <div
                   key={col.name}
@@ -356,12 +370,27 @@ export default function EditableQueryResultGrid({
                   const displayValue = hasPendingEdit
                     ? grid.pendingEdits.get(key)!
                     : cellStr;
+                  // Issue #1299 — per-cell editability. Multi-table read-only
+                  // columns + LEFT JOIN NULL rows surface a reason tooltip.
+                  const cellEditable = grid.canEditCell(rowIdx, colIdx);
+                  const readonlyReason =
+                    plan.multi && !cellEditable
+                      ? // ponytail: reason strings stay English (dynamic
+                        // per-row content is impractical to i18n); localize
+                        // when the query surface gets a locale pass.
+                        multiCellReadonlyReason(
+                          plan.multi,
+                          row as unknown[],
+                          colIdx,
+                        )
+                      : null;
 
                   return (
                     <div
                       key={colIdx}
                       role="gridcell"
                       aria-colindex={colIdx + 1}
+                      aria-readonly={!cellEditable || undefined}
                       data-editing={isEditing ? "true" : undefined}
                       data-grid-row={rowIdx}
                       data-grid-col={colIdx}
@@ -372,17 +401,19 @@ export default function EditableQueryResultGrid({
                           ? "bg-primary/10 ring-2 ring-inset ring-primary"
                           : hasPendingEdit
                             ? "bg-highlight/20"
-                            : ""
+                            : readonlyReason
+                              ? "cursor-not-allowed bg-muted/30 text-muted-foreground"
+                              : ""
                       }`}
-                      title={formatCellDisplay(cell)}
+                      title={readonlyReason ?? formatCellDisplay(cell)}
                       onKeyDown={(e) => {
                         // issue #1130 AC2 — Enter/F2 로 focus 된 cell 편집 진입
                         // (double-click 과 동일 경로). 편집 중엔 input 이 Enter/
-                        // Escape 를 stopPropagation 하므로 여기 안 옴. noPk 면
-                        // 편집 불가라 무시(context menu 도 동일 disabled).
+                        // Escape 를 stopPropagation 하므로 여기 안 옴. 편집 불가
+                        // cell (noPk / multi read-only / NULL 잠금) 은 무시.
                         if (isEditing) return;
                         if (e.key !== "Enter" && e.key !== "F2") return;
-                        if (grid.noPk) return;
+                        if (!cellEditable) return;
                         e.preventDefault();
                         e.stopPropagation();
                         grid.startEdit(rowIdx, colIdx);

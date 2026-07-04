@@ -13,7 +13,11 @@ import {
   resolveDefaultSchema,
   NOT_SINGLE_TABLE_REASON,
 } from "@lib/sql/queryAnalyzer";
+import { dialectFromDbType } from "@lib/sql/sqlLiteral";
+import type { RawEditPlan } from "@lib/sql/rawQuerySqlBuilder";
 import { preloadSqlWasm } from "@lib/sql/sqlAst";
+import { useMultiTableResultEditability } from "./useMultiTableResultEditability";
+import { formatCopyJson, formatNonGridCopyText } from "./queryResultCopy";
 import { useSchemaStore } from "@stores/schemaStore";
 import { useConnectionStore } from "@stores/connectionStore";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@components/ui/tabs";
@@ -70,40 +74,6 @@ function queryTypeLabel(qt: QueryType): string {
 function resultUnitNoun(result: QueryResult): string {
   const singular = result.resultUnit === "document" ? "document" : "row";
   return result.totalCount === 1 ? singular : `${singular}s`;
-}
-
-function formatCopyValue(value: unknown): string {
-  if (value === null || value === undefined) return "NULL";
-  if (typeof value === "string") return value;
-  if (
-    typeof value === "number" ||
-    typeof value === "bigint" ||
-    typeof value === "boolean"
-  ) {
-    return String(value);
-  }
-  try {
-    return JSON.stringify(value);
-  } catch {
-    return String(value);
-  }
-}
-
-function formatCopyJson(value: unknown): string {
-  try {
-    return JSON.stringify(value, null, 2);
-  } catch {
-    return String(value);
-  }
-}
-
-function formatNonGridCopyText(
-  result: QueryResult,
-  mode: "count" | "list" | "findOne-empty",
-): string {
-  if (mode === "findOne-empty" || result.rows.length === 0) return "";
-  if (mode === "count") return formatCopyValue(result.rows[0]?.[0]);
-  return result.rows.map((row) => formatCopyValue(row[0])).join("\n");
 }
 
 function DmlMessage({ result }: { result: QueryResult }) {
@@ -292,6 +262,25 @@ function SelectResultArea({
     defaultSchema,
     astReady,
   ]);
+
+  const dialect = dialectFromDbType(connection?.dbType);
+
+  // Issue #1299 — multi-table (JOIN) editability. The single-table gate above
+  // declines a JOIN; this hook attributes each result column back to a source
+  // table instance and reports per-column editability.
+  const multiEditability = useMultiTableResultEditability({
+    disabled:
+      isDocumentResult ||
+      exportBoundary.registeredFileAlias ||
+      exportBoundary.readOnlyReason !== null,
+    sql,
+    astReady,
+    connectionId,
+    database,
+    defaultSchema,
+    resultColumns: result.columns,
+  });
+
   const rowEditBlockReason = useMemo(() => {
     if (!connection) return null;
     const profile = getDataSourceProfile(connection.dbType);
@@ -314,7 +303,32 @@ function SelectResultArea({
     />
   );
 
-  if (editability && editability.editable && rowEditBlockReason === null) {
+  // Single-table gate wins; else issue #1299 multi-table plan (per-column
+  // read-only + no DELETE enforced inside the grid). Both render one editable
+  // grid, so a single plan resolves the branch.
+  const editablePlan: RawEditPlan | null =
+    editability && editability.editable && rowEditBlockReason === null
+      ? {
+          schema: editability.schema,
+          table: editability.table,
+          pkColumns: editability.pkColumns,
+          resultColumnNames: editability.resultToColumnName,
+          dialect,
+        }
+      : multiEditability?.editable &&
+          (!editability || !editability.editable) &&
+          rowEditBlockReason === null
+        ? {
+            schema: "",
+            table: "",
+            pkColumns: [],
+            resultColumnNames: result.columns.map((c) => c.name),
+            dialect,
+            multi: multiEditability.plan,
+          }
+        : null;
+
+  if (editablePlan && connectionId) {
     return (
       <>
         <div className="flex items-center justify-between gap-2 border-b border-border bg-success/10 px-3 py-0.5 text-xs text-success">
@@ -326,13 +340,8 @@ function SelectResultArea({
         </div>
         <EditableQueryResultGrid
           result={result}
-          connectionId={connectionId!}
-          plan={{
-            schema: editability.schema,
-            table: editability.table,
-            pkColumns: editability.pkColumns,
-            resultColumnNames: editability.resultToColumnName,
-          }}
+          connectionId={connectionId}
+          plan={editablePlan}
           tabId={tabId}
           onAfterCommit={onAfterCommit}
         />
@@ -340,6 +349,9 @@ function SelectResultArea({
     );
   }
 
+  // A genuine JOIN that resolved to no editable column keeps the specific
+  // per-cell tooltips inside the grid; the banner shows the single-table
+  // reason (multi-table declines still land here as read-only).
   return (
     <>
       {editability ? (

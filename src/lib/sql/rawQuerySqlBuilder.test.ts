@@ -118,3 +118,203 @@ describe("buildRawEditSql", () => {
     ]);
   });
 });
+
+// --- NULL primary key (issue #1299, IS NULL fix mirrors #1305) ---------
+
+describe("buildRawEditSql — NULL primary key handling", () => {
+  it("skips a single-table edit when the row's PK is NULL (no `= NULL`)", () => {
+    // A NULL PK can't identify a source row; the legacy builder emitted
+    // `WHERE "id" = NULL` (matches nothing). We now skip the statement.
+    const rows: unknown[][] = [[null, "Ghost", "g@x.com"]];
+    const edits = new Map([["0-1", "Renamed"]]);
+    const sqls = buildRawEditSql(rows, edits, new Set(), PLAN);
+    expect(sqls).toEqual([]);
+  });
+});
+
+// --- multi-table per-column edits (issue #1299) ------------------------
+
+import type { MultiTablePlan } from "./rawQuerySqlBuilder";
+
+// SELECT u.id, u.name, o.id, o.total FROM users u JOIN orders o ...
+// columns:      0     1      2      3
+const MULTI_PLAN: RawEditPlan = {
+  schema: "",
+  table: "",
+  pkColumns: [],
+  resultColumnNames: ["id", "name", "id", "total"],
+  dialect: "postgresql",
+  multi: {
+    instances: [
+      {
+        schema: "public",
+        table: "users",
+        pkColumns: ["id"],
+        pkPositions: { id: 0 },
+      },
+      {
+        schema: "public",
+        table: "orders",
+        pkColumns: ["id"],
+        pkPositions: { id: 2 },
+      },
+    ],
+    columns: [
+      { instance: 0, sourceColumn: "id", editable: true, readonlyReason: null },
+      {
+        instance: 0,
+        sourceColumn: "name",
+        editable: true,
+        readonlyReason: null,
+      },
+      { instance: 1, sourceColumn: "id", editable: true, readonlyReason: null },
+      {
+        instance: 1,
+        sourceColumn: "total",
+        editable: true,
+        readonlyReason: null,
+      },
+    ],
+  } satisfies MultiTablePlan,
+};
+
+// user 1 (Alice) has two orders → two result rows for the same user.
+const MULTI_ROWS: unknown[][] = [
+  [1, "Alice", 10, 100],
+  [1, "Alice", 11, 250],
+];
+
+describe("buildRawEditSql — multi-table (issue #1299)", () => {
+  it("routes an edit to the owning table with a positional PK WHERE", () => {
+    const edits = new Map([["0-3", "999"]]); // orders.total on row 0
+    const sqls = buildRawEditSql(MULTI_ROWS, edits, new Set(), MULTI_PLAN);
+    expect(sqls).toEqual([
+      `UPDATE "public"."orders" SET "total" = '999' WHERE "id" = 10;`,
+    ]);
+  });
+
+  it("edits the users instance by its own PK position", () => {
+    const edits = new Map([["1-1", "Alicia"]]); // users.name on row 1
+    const sqls = buildRawEditSql(MULTI_ROWS, edits, new Set(), MULTI_PLAN);
+    expect(sqls).toEqual([
+      `UPDATE "public"."users" SET "name" = 'Alicia' WHERE "id" = 1;`,
+    ]);
+  });
+
+  it("ignores DELETE keys entirely (row delete disabled multi-table)", () => {
+    const sqls = buildRawEditSql(
+      MULTI_ROWS,
+      new Map(),
+      new Set(["row-1-0", "row-1-1"]),
+      MULTI_PLAN,
+    );
+    expect(sqls).toEqual([]);
+  });
+
+  it("locks a LEFT JOIN unmatched row (instance PK all NULL) — no UPDATE", () => {
+    // orders side unmatched: its PK column (idx 2) is NULL.
+    const rows: unknown[][] = [[1, "Alice", null, null]];
+    const edits = new Map([["0-3", "50"]]); // try to edit orders.total
+    const sqls = buildRawEditSql(rows, edits, new Set(), MULTI_PLAN);
+    expect(sqls).toEqual([]);
+  });
+
+  it("emits `IS NULL` for a NULL column inside a composite PK tuple", () => {
+    const compositePlan: RawEditPlan = {
+      schema: "",
+      table: "",
+      pkColumns: [],
+      resultColumnNames: ["org_id", "user_id", "role"],
+      dialect: "postgresql",
+      multi: {
+        instances: [
+          {
+            schema: "public",
+            table: "memberships",
+            pkColumns: ["org_id", "user_id"],
+            pkPositions: { org_id: 0, user_id: 1 },
+          },
+        ],
+        columns: [
+          {
+            instance: 0,
+            sourceColumn: "org_id",
+            editable: true,
+            readonlyReason: null,
+          },
+          {
+            instance: 0,
+            sourceColumn: "user_id",
+            editable: true,
+            readonlyReason: null,
+          },
+          {
+            instance: 0,
+            sourceColumn: "role",
+            editable: true,
+            readonlyReason: null,
+          },
+        ],
+      },
+    };
+    // Partial-null composite: org_id set, user_id NULL → not fully locked.
+    const rows: unknown[][] = [[10, null, "member"]];
+    const edits = new Map([["0-2", "owner"]]);
+    const sqls = buildRawEditSql(rows, edits, new Set(), compositePlan);
+    expect(sqls).toEqual([
+      `UPDATE "public"."memberships" SET "role" = 'owner' WHERE "org_id" = 10 AND "user_id" IS NULL;`,
+    ]);
+  });
+
+  it("uses dialect-aware identifier quoting (mysql backticks)", () => {
+    const mysqlPlan: RawEditPlan = { ...MULTI_PLAN, dialect: "mysql" };
+    const edits = new Map([["0-1", "Alicia"]]);
+    const sqls = buildRawEditSql(MULTI_ROWS, edits, new Set(), mysqlPlan);
+    expect(sqls).toEqual([
+      "UPDATE `public`.`users` SET `name` = 'Alicia' WHERE `id` = 1;",
+    ]);
+  });
+
+  // Adversarial: two result columns are BOTH `a.id` (`SELECT a.id AS x,
+  // a.id AS y`). Editing the second one must still UPDATE the source column
+  // `id` — a name-keyed builder would ambiguously resolve the duplicate name.
+  it("targets the true source column when two aliases share it", () => {
+    const dupPlan: RawEditPlan = {
+      schema: "",
+      table: "",
+      pkColumns: [],
+      resultColumnNames: ["id", "id"],
+      dialect: "postgresql",
+      multi: {
+        instances: [
+          {
+            schema: "public",
+            table: "a",
+            pkColumns: ["id"],
+            pkPositions: { id: 0 },
+          },
+        ],
+        columns: [
+          {
+            instance: 0,
+            sourceColumn: "id",
+            editable: true,
+            readonlyReason: null,
+          },
+          {
+            instance: 0,
+            sourceColumn: "id",
+            editable: true,
+            readonlyReason: null,
+          },
+        ],
+      },
+    };
+    const rows: unknown[][] = [[7, 7]];
+    const edits = new Map([["0-1", "8"]]); // edit the `y` alias (col 1)
+    const sqls = buildRawEditSql(rows, edits, new Set(), dupPlan);
+    expect(sqls).toEqual([
+      `UPDATE "public"."a" SET "id" = '8' WHERE "id" = 7;`,
+    ]);
+  });
+});

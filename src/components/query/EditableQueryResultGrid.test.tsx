@@ -440,3 +440,145 @@ describe("EditableQueryResultGrid", () => {
   // instead. The regression guard for the stripe is intentionally
   // dropped.
 });
+
+// Issue #1299 — multi-table (JOIN) per-column editing.
+describe("EditableQueryResultGrid — multi-table (#1299)", () => {
+  beforeEach(() => {
+    mockExecuteQueryBatch.mockReset();
+    mockExecuteQueryBatch.mockResolvedValue([]);
+  });
+
+  // SELECT u.id, u.name, o.id AS order_id, o.total
+  //   FROM users u LEFT JOIN orders o ON o.user_id = u.id
+  const MULTI_RESULT: QueryResult = {
+    columns: [
+      { name: "id", dataType: "integer", category: "unknown" },
+      { name: "name", dataType: "text", category: "unknown" },
+      { name: "order_id", dataType: "integer", category: "unknown" },
+      { name: "total", dataType: "numeric", category: "unknown" },
+    ],
+    rows: [
+      [1, "Alice", 10, 100],
+      [2, "Bob", null, null], // orders side unmatched (LEFT JOIN)
+    ],
+    totalCount: 2,
+    executionTimeMs: 5,
+    queryType: "select",
+  };
+
+  const MULTI_PLAN: RawEditPlan = {
+    schema: "",
+    table: "",
+    pkColumns: [],
+    resultColumnNames: ["id", "name", "id", "total"],
+    dialect: "postgresql",
+    multi: {
+      instances: [
+        {
+          schema: "public",
+          table: "users",
+          pkColumns: ["id"],
+          pkPositions: { id: 0 },
+        },
+        {
+          schema: "public",
+          table: "orders",
+          pkColumns: ["id"],
+          pkPositions: { id: 2 },
+        },
+      ],
+      columns: [
+        {
+          instance: 0,
+          sourceColumn: "id",
+          editable: true,
+          readonlyReason: null,
+        },
+        {
+          instance: 0,
+          sourceColumn: "name",
+          editable: true,
+          readonlyReason: null,
+        },
+        {
+          instance: 1,
+          sourceColumn: "id",
+          editable: true,
+          readonlyReason: null,
+        },
+        {
+          instance: 1,
+          sourceColumn: "total",
+          editable: true,
+          readonlyReason: null,
+        },
+      ],
+    },
+  };
+
+  function renderMulti() {
+    return render(
+      <EditableQueryResultGrid
+        result={MULTI_RESULT}
+        connectionId="conn1"
+        plan={MULTI_PLAN}
+      />,
+    );
+  }
+
+  it("marks both instance PK columns with the key indicator", () => {
+    renderMulti();
+    // users.id (col 0) and orders.id (col 2) are each their instance's PK.
+    expect(screen.getAllByLabelText("Primary key")).toHaveLength(2);
+  });
+
+  it("edits a matched instance cell and commits a per-table UPDATE", async () => {
+    renderMulti();
+    const tds = document.querySelectorAll(
+      '[role="row"][aria-rowindex="2"] [role="gridcell"]',
+    );
+    act(() => {
+      fireEvent.doubleClick(tds[1]!); // users.name = 'Alice'
+    });
+    const input = screen.getByLabelText("Editing name") as HTMLInputElement;
+    act(() => {
+      fireEvent.change(input, { target: { value: "Alicia" } });
+    });
+    act(() => {
+      fireEvent.keyDown(input, { key: "Enter" });
+    });
+    act(() => {
+      screen.getByLabelText("Commit pending changes").click();
+    });
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog.textContent).toMatch(
+      /UPDATE "public"\."users" SET "name" = 'Alicia' WHERE "id" = 1/,
+    );
+  });
+
+  it("locks a LEFT JOIN unmatched cell (orders NULL row) from editing", () => {
+    renderMulti();
+    const tds = document.querySelectorAll(
+      '[role="row"][aria-rowindex="3"] [role="gridcell"]',
+    );
+    // Row 2 (Bob) orders.total cell is NULL / unmatched.
+    expect(tds[3]).toHaveAttribute("aria-readonly", "true");
+    act(() => {
+      fireEvent.doubleClick(tds[3]!);
+    });
+    expect(screen.queryByLabelText("Editing total")).not.toBeInTheDocument();
+  });
+
+  it("disables row DELETE in the context menu", () => {
+    renderMulti();
+    const tds = document.querySelectorAll(
+      '[role="row"][aria-rowindex="2"] [role="gridcell"]',
+    );
+    act(() => {
+      fireEvent.contextMenu(tds[0]!, { clientX: 50, clientY: 50 });
+    });
+    expect(
+      screen.getByRole("menuitem", { name: "Delete Row" }),
+    ).toHaveAttribute("aria-disabled", "true");
+  });
+});

@@ -20,6 +20,19 @@ export type SqlTypeFamily =
 
 export type SqlDialect = "postgresql" | "mysql" | "sqlite" | "mssql" | "oracle";
 
+/** Map a connection `dbType` to a SQL identifier/literal dialect. Redis /
+ *  unsupported types fall through to `undefined` (callers default). */
+export function dialectFromDbType(
+  dbType: string | undefined,
+): SqlDialect | undefined {
+  if (dbType === "postgresql") return "postgresql";
+  if (dbType === "mysql" || dbType === "mariadb") return "mysql";
+  if (dbType === "sqlite") return "sqlite";
+  if (dbType === "mssql") return "mssql";
+  if (dbType === "oracle") return "oracle";
+  return undefined;
+}
+
 /**
  * Textual data types that preserve `''` as an empty string literal (ADR 0009).
  * Anything outside this set coerces empty string to `NULL` on commit. Oracle is
