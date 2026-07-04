@@ -26,18 +26,22 @@ import i18n from "@lib/i18n";
  * DBMS-aware label for the sidebar row-count cell. PG/MySQL/MariaDB report
  * estimates (`pg_class.reltuples`, `information_schema.tables.TABLE_ROWS`);
  * SQLite reports an exact COUNT(*) since it has no estimate catalog and
- * the file-local count is fast enough. Both `aria-label` (screen readers)
- * and `title` (hover tooltip) read this string.
+ * the file-local count is fast enough (backend
+ * `sqlite/connection.rs::list_tables` sends `row_count: Some(COUNT(*))`).
+ * Both `aria-label` (screen readers) and `title` (hover tooltip) read this
+ * string.
  */
 export function rowCountLabel(
   dbType: string | undefined,
   rowCount: number | null | undefined,
 ): string {
-  // SQLite reports the exact count synchronously, but `rowCount` may be
-  // null on PG/MySQL/MariaDB when ANALYZE hasn't run yet. Avoid promising a
-  // count we don't have.
-  if (dbType === "sqlite" || rowCount == null) {
+  // `?` (unknown) only when we genuinely have no number — null on
+  // PG/MySQL/MariaDB when ANALYZE hasn't run, or a failed catalog query.
+  if (rowCount == null) {
     return i18n.t("schema:rowCountUnknown");
+  }
+  if (dbType === "sqlite") {
+    return i18n.t("schema:rowCountExact");
   }
   if (dbType === "postgresql") {
     return i18n.t("schema:rowCountPg");
@@ -50,18 +54,20 @@ export function rowCountLabel(
 
 /**
  * Visible row-count text:
- *   - `?` when unknown (SQLite always; PG/MySQL/MariaDB when null)
- *   - `~12,345` for PG/MySQL/MariaDB estimates — the tilde flags "estimate" at a
- *     glance so the user can tell it apart from an exact count.
+ *   - `?` when unknown (any DBMS when `rowCount == null`)
+ *   - `12,345` for SQLite — an exact COUNT(*), shown bare (no tilde)
+ *   - `~12,345` for PG/MySQL/MariaDB estimates — the tilde flags "estimate"
+ *     at a glance so the user can tell it apart from an exact count.
  */
 export function rowCountText(
   dbType: string | undefined,
   rowCount: number | null | undefined,
 ): string {
-  if (dbType === "sqlite" || rowCount == null) {
+  if (rowCount == null) {
     return "?";
   }
-  return `~${rowCount.toLocaleString()}`;
+  const formatted = rowCount.toLocaleString();
+  return dbType === "sqlite" ? formatted : `~${formatted}`;
 }
 
 /** Category definitions for schema objects. */

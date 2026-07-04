@@ -219,6 +219,7 @@ export const en = {
 
   // treeRows categories / row count
   rowCountUnknown: "Exact row count not yet fetched",
+  rowCountExact: "Exact row count",
   rowCountPg: "Estimated row count from pg_class.reltuples",
   rowCountMysql: "Estimated row count from information_schema.tables",
   rowCountEstimated: "Estimated row count",
@@ -464,6 +465,7 @@ export const ko = {
 
   // treeRows categories / row count
   rowCountUnknown: "정확한 행 수를 아직 가져오지 않음",
+  rowCountExact: "정확한 행 수",
   rowCountPg: "pg_class.reltuples의 추정 행 수",
   rowCountMysql: "information_schema.tables의 추정 행 수",
   rowCountEstimated: "추정 행 수",
