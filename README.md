@@ -43,7 +43,7 @@ TablePlus처럼 빠르게 연결하고, 스키마와 컬렉션을 탐색하고, 
 ### 5. Safe Mode
 
 > [!IMPORTANT]
-> 운영(Production) 환경으로 표시된 연결에서는 `WHERE` 없는 `UPDATE`/`DELETE`, `DROP`, `TRUNCATE`, destructive Mongo command 같은 작업이 바로 실행되지 않습니다. 사용자는 preview와 type-to-confirm 대화상자를 거쳐 명시적으로 승인해야 합니다.
+> 운영(Production) 환경으로 표시된 연결에서는 `WHERE` 없는 `UPDATE`/`DELETE`, `DROP`, `TRUNCATE`, destructive Mongo command 같은 작업이 바로 실행되지 않습니다. 사용자는 preview와 Yes/No 확인 대화상자를 거쳐 명시적으로 승인해야 합니다.
 
 ### 6. 쿼리 에디터
 

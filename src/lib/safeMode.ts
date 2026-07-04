@@ -13,8 +13,8 @@ import type { StatementAnalysis } from "@/lib/sql/sqlSafety";
  *     and Mongo $out / $merge / drop / *-all variants — anything the
  *     analyzer marks `severity === "danger"`):
  *       * production + strict / warn → confirm with bare analyzer reason
- *         (preserves Phase 1 dialog type-to-confirm flow — Phase 2 will
- *         replace the typing with simple Yes/No)
+ *         (rendered verbatim by the single-click Yes/No confirm dialog —
+ *         Sprint 246, Phase 2 replaced the earlier type-to-confirm gate)
  *       * production + off            → confirm with prod-auto copy
  *         (preserves the distinguishing "off can't bypass production"
  *         hint inherited from Sprint 190's hard-auto policy)
@@ -23,8 +23,11 @@ import type { StatementAnalysis } from "@/lib/sql/sqlSafety";
  *       * non-prod + warn / off       → allow
  *
  *   - non-destructive writes (INSERT / UPDATE WHERE / DELETE WHERE /
- *     CREATE / ALTER additive / Mongo *-many): always allow. Cmd+Z
- *     (Phase 5) is the safety net here, not a dialog.
+ *     CREATE / ALTER additive / Mongo *-many): always allow, no dialog.
+ *     Cmd+Z undoes *uncommitted* grid edits only
+ *     (`dataGridEditStore.undoStack`, Sprint 249); once committed, a safe
+ *     write is not recoverable. Phase 5 compensating-commit undo is not
+ *     yet implemented (#1126) — do not claim commits can be reverted.
  *
  *   - read (SELECT / WITH / Mongo read pipeline): always allow.
  *
@@ -39,10 +42,10 @@ import type { StatementAnalysis } from "@/lib/sql/sqlSafety";
  *   - off: prod-auto — production still confirms (with prod-auto copy);
  *     non-prod is unguarded (safe writes + destructive both allowed).
  *
- * Block action survives in the type union for the future "Phase 2 dialog
- * unification" and Mongo single-node fallback (where dry-run is
- * unavailable). Phase 1 never returns `block`; production destructive
- * always returns `confirm` so the dialog UI can take over uniformly.
+ * Block action survives in the type union for the Mongo single-node
+ * fallback (where dry-run is unavailable). This function never returns
+ * `block`; production destructive always returns `confirm` so the dialog
+ * UI can take over uniformly.
  */
 export type SafeMode = "strict" | "warn" | "off";
 
@@ -84,10 +87,8 @@ export function decideSafeModeAction(
       };
     }
     // strict / warn on production share the analyzer's bare reason — the
-    // existing Phase 1 dialog renders this verbatim with a type-to-confirm
-    // input so a longer parenthesised hint would force users to type the
-    // override instructions. Phase 2 will redesign the dialog to surface
-    // the override hint outside the typed string.
+    // single-click Yes/No confirm dialog (Sprint 246, Phase 2) renders it
+    // verbatim.
     return { action: "confirm", reason };
   }
 

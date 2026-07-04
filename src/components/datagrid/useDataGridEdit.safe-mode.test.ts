@@ -119,7 +119,7 @@ describe("useDataGridEdit — Sprint 185 Safe Mode gate", () => {
     // Sprint 245 (ADR 0022 Phase 1) — was "block" under Sprint 244's
     // read-only policy. Production destructive now opens the confirm
     // dialog regardless of mode. Reason copy stays bare for strict /
-    // warn (Phase 1 dialog uses type-to-confirm; Phase 2 will redesign).
+    // warn (rendered by the Yes/No confirm dialog — Sprint 246, Phase 2).
     const { result } = renderHookFor("production", "strict");
 
     act(() => {
@@ -140,8 +140,9 @@ describe("useDataGridEdit — Sprint 185 Safe Mode gate", () => {
 
   it("[AC-245-C1] production + strict + safe DML (DELETE WHERE pk) → executeQueryBatch called once (Sprint 244 block reverted)", async () => {
     // Sprint 245 — was [AC-244-10] "block". The destructive-only policy
-    // lets safe writes flow through on production regardless of mode;
-    // Cmd+Z (Phase 5) is the safety net for accidental commits.
+    // lets safe writes flow through on production regardless of mode.
+    // Cmd+Z undoes uncommitted grid edits only; committed writes are not
+    // recoverable (Phase 5 compensating-commit undo pending, #1126).
     const { result } = renderHookFor("production", "strict");
 
     act(() => {
@@ -225,8 +226,8 @@ describe("useDataGridEdit — Sprint 185 Safe Mode gate", () => {
 
   it("[AC-186-04a] production + warn + WHERE-less DELETE → pendingConfirm set, executeQueryBatch not called", async () => {
     // Sprint 245 — preserves Sprint 244 warn-tier dialog text exactly
-    // (bare analyzer reason). The Phase 1 dialog uses type-to-confirm
-    // and the user types this reason verbatim.
+    // (bare analyzer reason). The Yes/No confirm dialog (Sprint 246,
+    // Phase 2) renders this reason verbatim.
     const { result } = renderHookFor("production", "warn");
 
     act(() => {

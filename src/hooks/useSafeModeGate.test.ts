@@ -12,8 +12,9 @@
 // removed. Its describe block (5 cases) was deleted because the
 // destructive-only policy no longer needs a UI-level read-only gate;
 // the per-statement `useSafeModeGate.decide` covers the destructive
-// dialog and Cmd+Z (Phase 5) handles the safe-write safety net. date
-// 2026-05-08.
+// dialog. Cmd+Z undoes uncommitted grid edits only; committed safe
+// writes are not recoverable yet (Phase 5 compensating-commit undo
+// pending, #1126). date 2026-05-08.
 import { describe, it, expect, beforeEach } from "vitest";
 import { renderHook } from "@testing-library/react";
 import { useSafeModeGate } from "./useSafeModeGate";

@@ -176,12 +176,12 @@ export const en = {
     strict: {
       label: "Safe Mode",
       tooltip:
-        "Safe Mode: Strict (click to switch to warn)\n\nConfirms destructive statements in all environments (production + non-production strict). Destructive includes:\n • DROP TABLE / DATABASE / SCHEMA / INDEX / VIEW\n • TRUNCATE TABLE\n • ALTER TABLE … DROP COLUMN / DROP CONSTRAINT\n • UPDATE / DELETE without WHERE\n\nSafe writes (INSERT, UPDATE WHERE, CREATE, ALTER additive) flow through without a dialog — Cmd+Z protects recent commits.",
+        "Safe Mode: Strict (click to switch to warn)\n\nConfirms destructive statements in all environments (production + non-production strict). Destructive includes:\n • DROP TABLE / DATABASE / SCHEMA / INDEX / VIEW\n • TRUNCATE TABLE\n • ALTER TABLE … DROP COLUMN / DROP CONSTRAINT\n • UPDATE / DELETE without WHERE\n\nSafe writes (INSERT, UPDATE WHERE, CREATE, ALTER additive) flow through without a dialog — Cmd+Z undoes uncommitted grid edits, but committed writes cannot be undone.",
     },
     warn: {
       label: "Safe Mode: Warn",
       tooltip:
-        "Safe Mode: Warn (click to disable)\n\nConfirms destructive statements in production only. Non-production environments (local / testing / development / staging) are never gated.\n\nSafe writes flow through everywhere — Cmd+Z protects recent commits.",
+        "Safe Mode: Warn (click to disable)\n\nConfirms destructive statements in production only. Non-production environments (local / testing / development / staging) are never gated.\n\nSafe writes flow through everywhere — Cmd+Z undoes uncommitted grid edits, but committed writes cannot be undone.",
     },
     off: {
       label: "Safe Mode: Off",
@@ -396,12 +396,12 @@ export const ko = {
     strict: {
       label: "세이프 모드",
       tooltip:
-        "세이프 모드: 엄격 (클릭하여 경고로 전환)\n\n모든 환경(프로덕션 + 비-프로덕션 엄격)에서 위험한 구문을 확인합니다. 위험한 구문 포함:\n • DROP TABLE / DATABASE / SCHEMA / INDEX / VIEW\n • TRUNCATE TABLE\n • ALTER TABLE … DROP COLUMN / DROP CONSTRAINT\n • WHERE 없는 UPDATE / DELETE\n\n안전한 쓰기(INSERT, UPDATE WHERE, CREATE, ALTER 추가)는 다이얼로그 없이 실행됩니다 — Cmd+Z가 최근 커밋을 보호합니다.",
+        "세이프 모드: 엄격 (클릭하여 경고로 전환)\n\n모든 환경(프로덕션 + 비-프로덕션 엄격)에서 위험한 구문을 확인합니다. 위험한 구문 포함:\n • DROP TABLE / DATABASE / SCHEMA / INDEX / VIEW\n • TRUNCATE TABLE\n • ALTER TABLE … DROP COLUMN / DROP CONSTRAINT\n • WHERE 없는 UPDATE / DELETE\n\n안전한 쓰기(INSERT, UPDATE WHERE, CREATE, ALTER 추가)는 다이얼로그 없이 실행됩니다 — Cmd+Z는 미커밋 그리드 편집을 되돌리지만, 커밋된 쓰기는 되돌릴 수 없습니다.",
     },
     warn: {
       label: "세이프 모드: 경고",
       tooltip:
-        "세이프 모드: 경고 (클릭하여 비활성화)\n\n프로덕션 환경에서만 위험한 구문을 확인합니다. 비-프로덕션 환경(로컬/테스트/개발/스테이징)은 차단되지 않습니다.\n\n안전한 쓰기는 모든 곳에서 실행됩니다 — Cmd+Z가 최근 커밋을 보호합니다.",
+        "세이프 모드: 경고 (클릭하여 비활성화)\n\n프로덕션 환경에서만 위험한 구문을 확인합니다. 비-프로덕션 환경(로컬/테스트/개발/스테이징)은 차단되지 않습니다.\n\n안전한 쓰기는 모든 곳에서 실행됩니다 — Cmd+Z는 미커밋 그리드 편집을 되돌리지만, 커밋된 쓰기는 되돌릴 수 없습니다.",
     },
     off: {
       label: "세이프 모드: 끔",

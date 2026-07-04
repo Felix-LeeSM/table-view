@@ -25,10 +25,12 @@ import type { ConnectionConfig } from "@/types/connection";
  *
  * Sprint 244's "production + strict | off = read-only" was reverted —
  * INSERT / UPDATE WHERE / CREATE / ALTER additive flow without a
- * confirm dialog on production. Cmd+Z (Phase 5) is the safety net for
- * commit-time safe writes; the destructive dialog (Phase 2) handles the
- * unrecoverable cases. See `src/lib/safeMode.ts` for the canonical
- * matrix + reason copy.
+ * confirm dialog on production. Cmd+Z undoes *uncommitted* grid edits
+ * only (`dataGridEditStore.undoStack`, Sprint 249) — committed safe
+ * writes are not recoverable yet (Phase 5 compensating-commit undo
+ * pending, #1126). The Yes/No destructive dialog (Sprint 246, Phase 2)
+ * handles the unrecoverable destructive cases. See `src/lib/safeMode.ts`
+ * for the canonical matrix + reason copy.
  */
 export type { SafeModeDecision };
 
