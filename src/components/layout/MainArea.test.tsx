@@ -514,6 +514,47 @@ describe("MainArea", () => {
     }
   });
 
+  // #1131 — ArrowRight roving reaches the ERD sub-tab (previously the ERD
+  // tab's ArrowRight always jumped back to Records, so it was keyboard-
+  // unreachable). Records → Structure → ERD, one step per key.
+  it("#1131 ArrowRight roves Records → Structure → ERD (ERD keyboard-reachable)", () => {
+    const tab = makeTableTab({ subView: "records" });
+    useWorkspaceStore.setState(seedWorkspace([tab], tab.id));
+
+    render(<MainArea />);
+
+    const tablist = screen.getByRole("tablist", { name: "Table view" });
+    const subView = () => {
+      const s = getTestWorkspace().tabs.find((t) => t.id === tab.id);
+      return s && s.type === "table" ? s.subView : undefined;
+    };
+
+    act(() => {
+      fireEvent.keyDown(tablist, { key: "ArrowRight" });
+    });
+    expect(subView()).toBe("structure");
+
+    act(() => {
+      fireEvent.keyDown(tablist, { key: "ArrowRight" });
+    });
+    expect(subView()).toBe("erd");
+    expect(screen.getByRole("tab", { name: "ERD" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+
+    // Home jumps back to Records — exactly one tab stop rolls.
+    act(() => {
+      fireEvent.keyDown(tablist, { key: "Home" });
+    });
+    expect(subView()).toBe("records");
+    const stops = Array.from(tablist.querySelectorAll("[role='tab']")).filter(
+      (el) => el.getAttribute("tabindex") === "0",
+    );
+    expect(stops).toHaveLength(1);
+    expect(stops[0]).toHaveTextContent("Records");
+  });
+
   it("switches to structure subView when Structure tab is clicked", () => {
     const tab = makeTableTab({ subView: "records" });
     useWorkspaceStore.setState(seedWorkspace([tab], tab.id));
