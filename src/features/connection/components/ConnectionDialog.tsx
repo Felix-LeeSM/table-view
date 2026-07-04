@@ -310,7 +310,7 @@ export default function ConnectionDialog({
   };
 
   const inputClass =
-    "w-full rounded border border-border bg-background px-2.5 py-1.5 text-sm text-foreground outline-none focus:border-primary";
+    "w-full rounded border border-border bg-background px-2.5 py-1.5 text-sm text-foreground outline-none focus:border-primary focus-visible:ring-2 focus-visible:ring-ring";
   const labelClass = "mb-1 block text-xs font-medium text-secondary-foreground";
 
   return (

@@ -378,6 +378,18 @@ export async function executeRdbStatementBatch({
         error: message,
         durationMs: Date.now() - stmtStart,
       });
+      // Issue #1089 — stop-on-error is the default (TablePlus mental model):
+      // once statement K fails, statements K+1..N are NOT sent to the driver.
+      // Record them as `skipped` so the result panel shows the partial-apply
+      // boundary explicitly. Transaction-wrap / continue-on-error stay as
+      // future opt-in toggles.
+      for (let j = i + 1; j < statements.length; j++) {
+        statementResults.push({
+          sql: statements[j]!,
+          status: "skipped",
+          durationMs: 0,
+        });
+      }
       if (dbMismatch && !mismatchToastPushed) {
         mismatchToastPushed = true;
         const capturedTabId = tab.id;
@@ -409,6 +421,7 @@ export async function executeRdbStatementBatch({
           /* no toast on repeat - keep queue uncluttered */
         });
       }
+      break; // #1089 stop-on-error — leave remaining statements skipped.
     }
   }
 
@@ -424,7 +437,9 @@ export async function executeRdbStatementBatch({
   }
 
   const joinedErrors = statementResults
-    .map((s, idx) => `Statement ${idx + 1}: ${s.error ?? ""}`)
+    .map((s, idx) => ({ s, n: idx + 1 }))
+    .filter(({ s }) => s.status === "error")
+    .map(({ s, n }) => `Statement ${n}: ${s.error ?? ""}`)
     .join("\n");
   completeMultiStatementQuery(tab.id, queryId, {
     statementResults,

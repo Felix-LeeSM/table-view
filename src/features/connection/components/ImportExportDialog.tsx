@@ -216,7 +216,7 @@ function ExportPanel() {
             <div className="flex items-stretch gap-2">
               <textarea
                 id="export-recovery-phrase"
-                className="h-16 flex-1 resize-none rounded border border-border bg-background p-2 font-mono text-xs text-foreground outline-none focus:border-primary"
+                className="h-16 flex-1 resize-none rounded border border-border bg-background p-2 font-mono text-xs text-foreground outline-none focus:border-primary focus-visible:ring-2 focus-visible:ring-ring"
                 value={generatedPassword}
                 readOnly
                 aria-label={t("importExport.ariaRecoveryPhrase")}
@@ -280,7 +280,7 @@ function ExportPanel() {
             </Button>
           </div>
           <textarea
-            className="h-48 w-full resize-none rounded border border-border bg-background p-2 font-mono text-2xs text-foreground outline-none focus:border-primary disabled:opacity-50"
+            className="h-48 w-full resize-none rounded border border-border bg-background p-2 font-mono text-2xs text-foreground outline-none focus:border-primary focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
             value={acknowledged ? json : ""}
             placeholder={
               acknowledged ? undefined : t("importExport.exportJsonPlaceholder")
@@ -382,7 +382,7 @@ function ImportPanel({ onImported }: ImportPanelProps) {
       />
 
       <textarea
-        className="h-40 w-full resize-none rounded border border-border bg-background p-2 font-mono text-2xs text-foreground outline-none focus:border-primary"
+        className="h-40 w-full resize-none rounded border border-border bg-background p-2 font-mono text-2xs text-foreground outline-none focus:border-primary focus-visible:ring-2 focus-visible:ring-ring"
         placeholder='{"v":1,"kdf":"argon2id","alg":"aes-256-gcm",...} or {"schema_version":1,"connections":[...],"groups":[...]}'
         value={text}
         onChange={(e) => setText(e.target.value)}

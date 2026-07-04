@@ -40,6 +40,32 @@ describe("CreateTableTypeCombobox (Sprint 227 — AC-227-03)", () => {
     vi.clearAllMocks();
   });
 
+  // #1132 — the combobox moved the highlight with ArrowUp/Down but never
+  // exposed it via `aria-activedescendant` + per-option `id`, so a screen
+  // reader could not announce the highlighted type.
+  it("tracks the highlighted option via aria-activedescendant + option ids (#1132)", async () => {
+    render(<ControlledHost />);
+    const input = screen.getByRole("combobox", { name: "Column data type" });
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: "int" } });
+    await screen.findByRole("listbox", { name: /PostgreSQL types/i });
+
+    const first = input.getAttribute("aria-activedescendant");
+    expect(first).toBeTruthy();
+    const highlighted = document.getElementById(first!);
+    expect(highlighted).toHaveAttribute("role", "option");
+    expect(highlighted).toHaveAttribute("aria-selected", "true");
+
+    fireEvent.keyDown(input, { key: "ArrowDown" });
+    const next = input.getAttribute("aria-activedescendant");
+    expect(next).toBeTruthy();
+    expect(next).not.toBe(first);
+    expect(document.getElementById(next!)).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+  });
+
   it("typing 'int' filters to integer/bigint/smallint/interval (case-insensitive substring)", async () => {
     render(<ControlledHost />);
     const input = screen.getByRole("combobox", { name: "Column data type" });

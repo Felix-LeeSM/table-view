@@ -314,7 +314,7 @@ export function renderSearchRow(
       <Search size={11} className="shrink-0 text-muted-foreground" />
       <input
         type="text"
-        className="min-w-0 flex-1 rounded border border-border bg-background px-1.5 py-0.5 text-2xs text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
+        className="min-w-0 flex-1 rounded border border-border bg-background px-1.5 py-0.5 text-2xs text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         placeholder={ctx.t("filterTablesPlaceholder")}
         value={row.searchValue}
         onChange={(e) =>

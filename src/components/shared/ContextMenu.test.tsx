@@ -73,6 +73,14 @@ describe("ContextMenu", () => {
     expect(deleteItem.className).toContain("destructive");
   });
 
+  it("renders menuitems with a keyboard focus ring (WCAG 2.4.7)", () => {
+    render(<ContextMenu x={100} y={100} items={items} onClose={onClose} />);
+
+    const editItem = screen.getByRole("menuitem", { name: "Edit" });
+    expect(editItem.className).toContain("focus-visible:ring-2");
+    expect(editItem.className).toContain("focus-visible:ring-ring");
+  });
+
   it("renders items with icons", () => {
     const itemsWithIcon: ContextMenuItem[] = [
       {

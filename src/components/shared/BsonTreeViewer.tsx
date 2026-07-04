@@ -237,7 +237,7 @@ function TreeNode({
       aria-expanded={ariaExpanded}
       aria-level={depth + 1}
       aria-label={t("bson.nodeAria", { keyLabel })}
-      className="font-mono text-xs"
+      className="rounded font-mono text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
       onKeyDown={handleKeyDown}
       // ARIA tree: focus + Enter/Space toggle belong on the treeitem
       // itself, not the inner presentational row. Leaves stay reachable
