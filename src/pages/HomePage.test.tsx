@@ -154,6 +154,20 @@ describe("HomePage", () => {
     ).toHaveFocus();
   });
 
+  // #1310 — theme popover was clipped when its content overflowed the viewport
+  // top. The fix caps PopoverContent at Radix's available-height and scrolls
+  // instead of clipping. Assert the classes survive on the rendered content.
+  it("caps the theme popover at the available height and scrolls (#1310)", () => {
+    render(<HomePage />);
+    fireEvent.click(screen.getByRole("button", { name: /theme picker/i }));
+    const content = document.querySelector('[data-slot="popover-content"]');
+    expect(content).not.toBeNull();
+    expect(content).toHaveClass(
+      "max-h-[var(--radix-popover-content-available-height)]",
+      "overflow-y-auto",
+    );
+  });
+
   it("renders Import/Export, New Group, New Connection buttons", () => {
     render(<HomePage />);
     expect(

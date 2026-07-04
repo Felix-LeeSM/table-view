@@ -187,11 +187,13 @@ describe("SchemaTree — Sprint 137 / 143 row count rendering", () => {
     expect(cell?.textContent).toBe(`~${(9876).toLocaleString()}`);
   });
 
-  it("AC-148-2: SQLite row-count cell renders `?` (no estimate metadata)", async () => {
-    // Sprint 143 (AC-148-2) — SQLite has no estimate catalog, so the
-    // sidebar shows `?` until the lazy exact-count fetch (deferred to a
-    // later sprint) replaces it. The cell is always present so the
-    // user never sees a blank slot where a number used to be.
+  it("#1308: SQLite row-count cell renders the exact COUNT(*) (bare number, no tilde, no `?`)", async () => {
+    // #1308 — the backend (`sqlite/connection.rs::list_tables`) sends an
+    // exact `row_count: Some(COUNT(*))` for SQLite, matching the module
+    // comment. The old code force-returned `?` for every SQLite cell,
+    // dropping the real number and diverging from the grid footer. SQLite
+    // is exact, so the cell shows the bare locale-separated number with no
+    // `~` estimate prefix.
     useConnectionStore.setState({
       connections: [makeConnection("lite1", "sqlite")],
     });
@@ -209,13 +211,11 @@ describe("SchemaTree — Sprint 137 / 143 row count rendering", () => {
 
     const cell = document.querySelector('[data-row-count="true"]');
     expect(cell).not.toBeNull();
-    // Visible cue: literal `?` rather than the locale-separated number.
-    expect(cell?.textContent).toBe("?");
-    // Long-form a11y copy explains the `?` to screen-reader users.
-    expect(cell?.getAttribute("aria-label")).toBe(
-      "Exact row count not yet fetched",
-    );
-    expect(cell?.getAttribute("title")).toBe("Exact row count not yet fetched");
+    // Exact count shown bare — no `~` (that flags estimates) and no `?`.
+    expect(cell?.textContent).toBe((42).toLocaleString());
+    // Long-form a11y copy tells screen-reader users the count is exact.
+    expect(cell?.getAttribute("aria-label")).toBe("Exact row count");
+    expect(cell?.getAttribute("title")).toBe("Exact row count");
   });
 
   it("AC-148-2: PG row-count cell renders `?` when the schema fetch returned no estimate", async () => {

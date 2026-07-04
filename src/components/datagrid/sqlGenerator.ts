@@ -68,6 +68,12 @@ function buildWhereClause(
     const clauses: string[] = [];
     for (const pk of pkCols) {
       const pkIdx = columns.indexOf(pk);
+      // Issue #1080 — a NULL identity value must compare with `IS NULL`, not
+      // `= NULL` (which is UNKNOWN in SQL 3-valued logic and matches 0 rows).
+      if (row[pkIdx] == null) {
+        clauses.push(`${sqlIdentifier(pk.name, dialect)} IS NULL`);
+        continue;
+      }
       const coerced = coerceToSqlLiteral(
         rowValueToCoerceInput(row[pkIdx], pk.data_type),
         pk.data_type,
@@ -87,7 +93,11 @@ function buildWhereClause(
   return {
     kind: "sql",
     sql: columns
-      .map((c, i) => `${sqlIdentifier(c.name, dialect)} = ${literal(row[i])}`)
+      .map((c, i) =>
+        row[i] == null
+          ? `${sqlIdentifier(c.name, dialect)} IS NULL`
+          : `${sqlIdentifier(c.name, dialect)} = ${literal(row[i])}`,
+      )
       .join(" AND "),
   };
 }
