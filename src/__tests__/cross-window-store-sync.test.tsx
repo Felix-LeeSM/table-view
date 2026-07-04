@@ -122,9 +122,15 @@ beforeEach(() => {
   });
 });
 
-// Default the window label to "workspace" so `tabStore`'s attach guard fires
-// at module load. The launcher-only test below re-imports tabStore with the
-// label flipped to "launcher" via `vi.resetModules` + `vi.doMock`.
+// Default the window label to a real `workspace-{connection_id}` label so
+// `workspaceStore`'s attach guard fires at module load. #1097: the guard used
+// to compare against the bare legacy `"workspace"` label that sprint-361 no
+// longer produces, so mocking bare `"workspace"` here masked the dead branch.
+// Mocking the real format keeps this file honest — the guard must accept
+// `parseWorkspaceLabel(label) !== null`, not a byte-for-byte `"workspace"`.
+// The launcher-only test below re-imports the store with the label flipped to
+// "launcher" via `vi.resetModules` + `vi.doMock`.
+const WORKSPACE_LABEL = "workspace-c1";
 vi.mock("@lib/window-label", async () => {
   // sprint-366 (2026-05-16) — keep the real parseWorkspaceLabel /
   // formatWorkspaceLabel exports (pure string ops) so
@@ -136,7 +142,7 @@ vi.mock("@lib/window-label", async () => {
     );
   return {
     ...actual,
-    getCurrentWindowLabel: vi.fn(() => "workspace"),
+    getCurrentWindowLabel: vi.fn(() => "workspace-c1"),
   };
 });
 
@@ -253,7 +259,7 @@ describe("cross-window store sync (Sprint 153)", () => {
         origin: string;
         state: Record<string, unknown>;
       };
-      expect(payload.origin).toBe("workspace");
+      expect(payload.origin).toBe(WORKSPACE_LABEL);
       expect(payload.state).toHaveProperty("workspaces");
     });
 
@@ -373,9 +379,13 @@ describe("cross-window store sync (Sprint 153)", () => {
       // does NOT register a listener on `tab-sync`. A subsequent remote emit
       // must therefore leave the launcher's tabs untouched.
       vi.resetModules();
-      vi.doMock("@lib/window-label", () => ({
-        getCurrentWindowLabel: vi.fn(() => "launcher"),
-      }));
+      vi.doMock("@lib/window-label", async () => {
+        const actual =
+          await vi.importActual<typeof import("@lib/window-label")>(
+            "@lib/window-label",
+          );
+        return { ...actual, getCurrentWindowLabel: vi.fn(() => "launcher") };
+      });
       vi.doMock("@tauri-apps/api/event", () => ({
         emit: busModule.emit,
         listen: busModule.listen,
@@ -429,6 +439,122 @@ describe("cross-window store sync (Sprint 153)", () => {
         launcherWorkspaceStore.getState().workspaces["conn1"]?.["db1"]
           ?.activeTabId ?? null,
       ).toBeNull();
+
+      vi.doUnmock("@lib/window-label");
+      vi.doUnmock("@tauri-apps/api/event");
+      doUnmockTauriModule();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // workspaceStore — cross-window bridge label guard (#1097)
+  //
+  // sprint-361 renamed workspace windows from bare `"workspace"` to
+  // `workspace-{connection_id}`, but the attach guard kept a strict
+  // `=== "workspace"` compare, so the `workspace-sync` bridge never attached
+  // (dead code). The fix routes the guard through `parseWorkspaceLabel`, the
+  // single label parser, so it tracks the real format. These pin the single
+  // sync path (the bridge) the way AC-1122 pins safeMode's single path:
+  //   (a) a real `workspace-{id}` label DOES attach — a mutation broadcasts
+  //       on `workspace-sync` tagged with that exact label (RED before the
+  //       fix: the bridge never attached so no emit fires).
+  //   (b) the legacy bare `"workspace"` label sprint-361 no longer produces
+  //       does NOT attach — the guard is format-aware, not a loosened
+  //       `startsWith("workspace")` that would re-admit the dead label.
+  // -------------------------------------------------------------------------
+
+  describe("workspaceStore bridge label guard (#1097)", () => {
+    it("AC-1097-01: a `workspace-{id}` window attaches the bridge and broadcasts on `workspace-sync` tagged with its real label", async () => {
+      mockedEmit.mockClear();
+      useWorkspaceStore.setState(
+        seedWorkspace(
+          [
+            {
+              type: "table",
+              id: "tab-1097",
+              title: "users",
+              connectionId: "c1",
+              closable: true,
+              schema: "public",
+              table: "users",
+              subView: "records",
+            },
+          ],
+          "tab-1097",
+        ),
+      );
+      await Promise.resolve();
+
+      const syncCall = mockedEmit.mock.calls.find(
+        (call) => call[0] === "workspace-sync",
+      );
+      expect(syncCall).toBeDefined();
+      const payload = syncCall![1] as { origin: string };
+      // The regression: origin is the real `workspace-{connection_id}` label,
+      // proving the guard matched the sprint-361 format (not bare "workspace").
+      expect(payload.origin).toBe(WORKSPACE_LABEL);
+    });
+
+    it("AC-1097-02: a fresh store loaded under the legacy bare `workspace` label does NOT attach", async () => {
+      // Re-import with the label pinned to the pre-sprint-361 bare
+      // `"workspace"`. `parseWorkspaceLabel("workspace")` is null, so the
+      // guard must short-circuit — the bridge does not attach and a local
+      // mutation emits nothing on `workspace-sync`. A naive
+      // `startsWith("workspace")` guard would wrongly re-admit this label.
+      vi.resetModules();
+      vi.doMock("@lib/window-label", async () => {
+        const actual =
+          await vi.importActual<typeof import("@lib/window-label")>(
+            "@lib/window-label",
+          );
+        return { ...actual, getCurrentWindowLabel: vi.fn(() => "workspace") };
+      });
+      vi.doMock("@tauri-apps/api/event", () => ({
+        emit: busModule.emit,
+        listen: busModule.listen,
+      }));
+      setupTauriMock({
+        listConnections: vi.fn(() => Promise.resolve([])),
+        listGroups: vi.fn(() => Promise.resolve([])),
+        saveConnection: vi.fn(() => Promise.resolve({})),
+        deleteConnection: vi.fn(() => Promise.resolve()),
+        testConnection: vi.fn(() => Promise.resolve("ok")),
+        connectToDatabase: vi.fn(() => Promise.resolve()),
+        disconnectFromDatabase: vi.fn(() => Promise.resolve()),
+        saveGroup: vi.fn(() => Promise.resolve({})),
+        deleteGroup: vi.fn(() => Promise.resolve()),
+        moveConnectionToGroup: vi.fn(() => Promise.resolve()),
+      });
+      doMockTauriModule();
+
+      const { useWorkspaceStore: bareWorkspaceStore } =
+        await import("@stores/workspaceStore");
+      bareWorkspaceStore.setState({ workspaces: {} });
+      await Promise.resolve();
+      await Promise.resolve();
+      mockedEmit.mockClear();
+
+      bareWorkspaceStore.setState(
+        seedWorkspace(
+          [
+            {
+              type: "table",
+              id: "tab-bare",
+              title: "bare",
+              connectionId: "c1",
+              closable: true,
+              schema: "public",
+              table: "bare",
+              subView: "records",
+            },
+          ],
+          "tab-bare",
+        ),
+      );
+      await Promise.resolve();
+
+      const channels = mockedEmit.mock.calls.map((call) => call[0]);
+      expect(channels).not.toContain("workspace-sync");
 
       vi.doUnmock("@lib/window-label");
       vi.doUnmock("@tauri-apps/api/event");
