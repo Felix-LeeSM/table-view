@@ -72,9 +72,11 @@ describe("ConfirmDialog (sprint-96 preset)", () => {
     );
 
     expect(screen.getByRole("button", { name: "Cancel" })).toBeDisabled();
-    // aria-label is `confirmLabel` ("OK"); visible text is "Processing..."
-    const confirmBtn = screen.getByRole("button", { name: "OK" });
+    // #1142: no stale aria-label — accessible name follows visible text
+    // ("Processing...") and aria-busy signals the pending state.
+    const confirmBtn = screen.getByRole("button", { name: "Processing..." });
     expect(confirmBtn).toBeDisabled();
+    expect(confirmBtn).toHaveAttribute("aria-busy", "true");
     expect(confirmBtn.textContent).toBe("Processing...");
   });
 });

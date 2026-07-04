@@ -67,7 +67,7 @@ export default function ConfirmDialog({
             size="sm"
             onClick={onConfirm}
             disabled={loading}
-            aria-label={confirmLabel}
+            aria-busy={loading}
           >
             {loading ? t("processing") : confirmLabel}
           </Button>

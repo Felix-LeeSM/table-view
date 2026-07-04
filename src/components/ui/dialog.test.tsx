@@ -389,21 +389,21 @@ describe("DialogFeedback (sprint-95 AC-03)", () => {
     expect(status.textContent).toContain("Working...");
   });
 
-  it("AC-03: success state shows the message inside an alert with success tokens", () => {
+  it("AC-03: success state shows the message inside a status region with success tokens", () => {
     render(<DialogFeedback state="success" message="Saved." />);
 
     const slot = document.querySelector(
       '[data-slot="dialog-feedback"]',
     ) as HTMLElement;
     expect(slot.getAttribute("data-state")).toBe("success");
-    const alert = slot.querySelector('[role="alert"]') as HTMLElement;
-    expect(alert).not.toBeNull();
-    // role="alert" is an implicit assertive live region; a redundant
-    // aria-live="polite" contradicted the role, so it was removed.
-    expect(alert.getAttribute("aria-live")).toBeNull();
-    expect(alert.textContent).toContain("Saved.");
-    expect(alert.className).toContain("text-success");
-    expect(alert.className).toContain("bg-success/10");
+    // #1142: success is not an emergency — role="status" (polite) instead of
+    // role="alert" (assertive). Errors keep role="alert".
+    expect(slot.querySelector('[role="alert"]')).toBeNull();
+    const status = slot.querySelector('[role="status"]') as HTMLElement;
+    expect(status).not.toBeNull();
+    expect(status.textContent).toContain("Saved.");
+    expect(status.className).toContain("text-success");
+    expect(status.className).toContain("bg-success/10");
   });
 
   it("AC-03: error state shows the message inside an alert with destructive tokens", () => {

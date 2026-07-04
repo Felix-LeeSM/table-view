@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronRight } from "lucide-react";
 import SqlSyntax from "@components/shared/SqlSyntax";
@@ -9,6 +9,7 @@ interface ExecutedQueryBarProps {
 
 export function ExecutedQueryBar({ sql }: ExecutedQueryBarProps) {
   const { t } = useTranslation("rdb");
+  const regionId = useId();
   const [showQuery, setShowQuery] = useState(true);
 
   return (
@@ -17,6 +18,7 @@ export function ExecutedQueryBar({ sql }: ExecutedQueryBarProps) {
         className="flex w-full items-center gap-1 px-3 py-1 text-xs text-muted-foreground hover:bg-muted"
         onClick={() => setShowQuery((visible) => !visible)}
         aria-expanded={showQuery}
+        aria-controls={regionId}
         aria-label={
           showQuery
             ? t("executedQueryBar.hideQueryAria")
@@ -31,6 +33,7 @@ export function ExecutedQueryBar({ sql }: ExecutedQueryBarProps) {
       </button>
       {showQuery && (
         <div
+          id={regionId}
           className="max-h-32 overflow-auto bg-secondary px-3 py-1.5"
           role="region"
           aria-label={t("executedQueryBar.executedSqlAria")}

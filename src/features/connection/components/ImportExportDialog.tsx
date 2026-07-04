@@ -230,7 +230,11 @@ function ExportPanel() {
               >
                 {copiedTarget === "password" ? (
                   <>
-                    <Check size={12} className="text-success" />{" "}
+                    <Check
+                      size={12}
+                      className="text-success"
+                      aria-hidden="true"
+                    />{" "}
                     {t("importExport.copied")}
                   </>
                 ) : (
@@ -269,7 +273,11 @@ function ExportPanel() {
             >
               {copiedTarget === "json" ? (
                 <>
-                  <Check size={12} className="text-success" />{" "}
+                  <Check
+                    size={12}
+                    className="text-success"
+                    aria-hidden="true"
+                  />{" "}
                   {t("importExport.copied")}
                 </>
               ) : (
@@ -435,7 +443,7 @@ function ImportResultPanel({ result }: { result: ImportResult }) {
   return (
     <div className="space-y-2 rounded border border-border bg-background px-3 py-2 text-xs">
       <div className="flex items-center gap-2">
-        <Check size={12} className="text-success" />
+        <Check size={12} className="text-success" aria-hidden="true" />
         <span className="font-medium text-foreground">
           {t("importExport.resultImported", {
             count: result.imported.length,
