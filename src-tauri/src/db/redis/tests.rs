@@ -63,6 +63,24 @@ fn destructive_delete_requires_exact_key_confirmation() {
     ));
 }
 
+// Issue #1090 — a bare "must match the target key" message is a dead-end: the
+// editor DEL/PERSIST caller has no key input, so the mismatch error must name
+// the expected key and the confirm path instead of just stating the rule.
+#[test]
+fn confirm_key_mismatch_names_target_key_and_resolution() {
+    let Err(AppError::Validation(message)) = require_confirm_key("prod:1", "prod") else {
+        panic!("expected a validation error on key mismatch");
+    };
+    assert!(
+        message.contains("prod:1"),
+        "error should name the target key, got: {message}"
+    );
+    assert!(
+        message.to_lowercase().contains("confirm"),
+        "error should point at the confirm path, got: {message}"
+    );
+}
+
 #[tokio::test]
 async fn valkey_direct_mutations_validate_requests_without_unsupported_gate() {
     let adapter = RedisAdapter::new_valkey();
