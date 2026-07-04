@@ -185,6 +185,44 @@ describe("useQueryExecution — Redis command dispatch", () => {
     );
   });
 
+  // Issue #1090 — the editor DEL/PERSIST path must wire the same confirm key
+  // the sidebar key browser does, end to end: handleExecute stages a pending
+  // confirmation carrying the target key, and confirmKvDangerous forwards that
+  // key to the KV IPC so the backend `require_confirm_key` gate matches instead
+  // of always rejecting with the bare "must match the target key" error.
+  it.each([
+    ["DEL", "DEL session:1", "session:1"],
+    ["PERSIST", "PERSIST session:1", "session:1"],
+  ])(
+    "wires the editor %s through Safe Mode confirmation with its target key (issue #1090)",
+    async (_verb, command, confirmKey) => {
+      executeKvCommandMock.mockResolvedValueOnce(REDIS_RESULT);
+      useSafeModeStore.setState({ mode: "strict" });
+      const tab = seedRedisTab(command, "2", "development");
+      const { result } = renderHook(() => useQueryExecution({ tab }));
+
+      await act(async () => {
+        await result.current.handleExecute();
+      });
+
+      expect(executeKvCommandMock).not.toHaveBeenCalled();
+      expect(result.current.pendingKvConfirm).toMatchObject({
+        command,
+        confirmKey,
+      });
+
+      await act(async () => {
+        await result.current.confirmKvDangerous();
+      });
+
+      expect(executeKvCommandMock).toHaveBeenCalledWith(
+        "conn-redis",
+        { command, database: 2, confirmKey },
+        expect.stringMatching(/^query-redis-/),
+      );
+    },
+  );
+
   it("allows Redis KEYS in non-production warn mode", async () => {
     executeKvCommandMock.mockResolvedValueOnce(REDIS_RESULT);
     useSafeModeStore.setState({ mode: "warn" });

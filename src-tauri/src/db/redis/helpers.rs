@@ -18,9 +18,13 @@ pub(super) fn validate_key(key: &str) -> Result<(), AppError> {
 
 pub(super) fn require_confirm_key(key: &str, confirm_key: &str) -> Result<(), AppError> {
     if key != confirm_key {
-        return Err(AppError::Validation(
-            "Confirmation key must exactly match the target key".into(),
-        ));
+        // Issue #1090 — name the target key and the resolution: editor callers
+        // have no key input, so a bare "must match" message is a dead-end.
+        return Err(AppError::Validation(format!(
+            "Confirmation key must exactly match the target key \"{key}\". \
+             Confirm the operation in the destructive-action dialog, or run it \
+             from the key's action in the sidebar."
+        )));
     }
     Ok(())
 }
@@ -30,9 +34,10 @@ pub(super) fn require_confirm_pattern(
     confirm_pattern: &str,
 ) -> Result<(), AppError> {
     if pattern != confirm_pattern {
-        return Err(AppError::Validation(
-            "Confirmation pattern must exactly match the Redis pattern".into(),
-        ));
+        return Err(AppError::Validation(format!(
+            "Confirmation pattern must exactly match the Redis pattern \"{pattern}\". \
+             Confirm the operation in the destructive-action dialog."
+        )));
     }
     Ok(())
 }
