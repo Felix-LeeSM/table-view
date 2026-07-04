@@ -14,7 +14,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { entryKey, useDataGridEditStore } from "./dataGridEditStore";
 import { useWorkspaceStore } from "./workspaceStore";
-import type { TableTabInit } from "./workspaceStore/types";
+import type { QueryTab, TableTabInit } from "./workspaceStore/types";
 
 function makeTableInit(overrides: Partial<TableTabInit> = {}): TableTabInit {
   return {
@@ -343,5 +343,41 @@ describe("workspaceStore — lifecycle", () => {
     expect(ws.closedTabHistory[0]!.id).toBe(ids[25]);
     // The oldest survivor is id[1]; id[0] was evicted as the 26th overflow.
     expect(ws.closedTabHistory[24]!.id).toBe(ids[1]);
+  });
+
+  // Issue #1088 — closing a query tab mid-run then reopening it left a
+  // permanent "running" ghost: removeTab pushed the live queryState into
+  // closedTabHistory and reopenLastClosedTab restored it verbatim, so the
+  // completion callback (targeting the old tabId) never reached the new tab.
+  // Fix: history never holds a live queryState — sanitize to idle on push.
+  it("#1088 — closing a running query tab and reopening restores it as idle", () => {
+    const store = useWorkspaceStore.getState();
+    store.addQueryTab("conn1", "dbA", { title: "run", sql: "SELECT 1" });
+    const opened = useWorkspaceStore.getState().workspaces["conn1"]!["dbA"]!;
+    const tabId = opened.tabs[0]!.id;
+
+    // Drive the tab into a running state (query in flight).
+    store.updateQueryState("conn1", "dbA", tabId, {
+      status: "running",
+      queryId: "qexec-1",
+    });
+    store.removeTab("conn1", "dbA", tabId);
+
+    // History must not carry the live running state.
+    const afterClose =
+      useWorkspaceStore.getState().workspaces["conn1"]!["dbA"]!;
+    expect(afterClose.closedTabHistory[0]!.type).toBe("query");
+    expect((afterClose.closedTabHistory[0] as QueryTab).queryState).toEqual({
+      status: "idle",
+    });
+
+    store.reopenLastClosedTab("conn1", "dbA");
+
+    const reopenedWs =
+      useWorkspaceStore.getState().workspaces["conn1"]!["dbA"]!;
+    const reopened = reopenedWs.tabs[reopenedWs.tabs.length - 1] as QueryTab;
+    expect(reopened.type).toBe("query");
+    expect(reopened.queryState).toEqual({ status: "idle" });
+    expect(reopened.sql).toBe("SELECT 1"); // SQL text preserved.
   });
 });
