@@ -1,10 +1,10 @@
 ---
 id: 0022
 title: Safe Mode — destructive 만 confirm + dry-run preview, safe write 는 Cmd+Z 보호
-status: Accepted
+status: Superseded
 date: 2026-05-09
 supersedes: null
-superseded_by: null
+superseded_by: "0048"
 ---
 
 **결정**: Safe Mode 를 "production+strict = read-only" 가 아닌 "destructive (DROP / TRUNCATE / ALTER DROP / WHERE-less DELETE·UPDATE) 만 confirm dialog + dry-run preview" 정책으로 통일 — production 은 mode 무관 destructive 에 dialog, non-prod 는 strict 일 때만 destructive 에 dialog, safe write (INSERT / UPDATE WHERE / DELETE WHERE / CREATE / ALTER additive) 는 모든 mode 에서 dialog 없이 통과 + Cmd+Z (pending undo) 안전망. dialog 는 "PRODUCTION DATABASE" 헤더 + dry-run preview (D.1: `BEGIN; <stmt>; ROLLBACK` 후 별도 tx 로 commit) + 단순 Yes/No. mode 3-tier 는 의미만 재정의 — strict=all-env, warn=prod-only, off=prod-auto.
