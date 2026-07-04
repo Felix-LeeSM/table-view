@@ -142,12 +142,24 @@ vi.mock("@lib/window-label", async () => {
 
 // Import AFTER all mocks are registered.
 import { emit } from "@tauri-apps/api/event";
+import { invoke } from "@tauri-apps/api/core";
 import { useWorkspaceStore } from "@stores/workspaceStore";
 import { useMruStore } from "@stores/mruStore";
 import { useThemeStore } from "@stores/themeStore";
 import { useFavoritesStore } from "@stores/favoritesStore";
+import { useSafeModeStore } from "@stores/safeModeStore";
+import {
+  dispatchStateChangedPayload,
+  resetStateChangedRegistryForTests,
+  type StateChangedPayload,
+} from "@lib/events/stateChanged";
+import {
+  registerSettingReceiver,
+  resetSettingReceiverForTests,
+} from "@lib/runtime/settings/settingsReceiver";
 
 const mockedEmit = emit as unknown as Mock;
+const mockedInvoke = invoke as unknown as Mock;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -591,6 +603,107 @@ describe("cross-window store sync (Sprint 153)", () => {
       await Promise.resolve();
 
       expect(useFavoritesStore.getState().favorites).toEqual([]);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // safeModeStore — single sync path (settings receiver only), issue #1122
+  //
+  // safe_mode used to ride BOTH the zustand IPC bridge (`safe-mode-sync`
+  // channel) AND the backend-first settings receiver. #1122 removed the
+  // bridge so the backend-SOT receiver (`setting.update` → refetch) is the
+  // sole path. These cases pin that single-path coherence:
+  //   (a) a local `setMode` no longer emits on ANY bridge channel — the
+  //       removed second path stays removed (red before the bridge removal).
+  //   (b) a remote `setting.update` for `safe_mode` converges the local
+  //       store to the refetched value — the surviving path still works.
+  // -------------------------------------------------------------------------
+
+  describe("safeModeStore (single sync path: settings receiver, #1122)", () => {
+    async function flushReceiver(): Promise<void> {
+      // dispatch → onUpdated → dispatchSettingUpdate → getSetting (invoke)
+      // → parse → setState. Drain enough microtasks for the async chain.
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    }
+
+    function safeModeUpdatePayload(originWindow: string): StateChangedPayload {
+      return {
+        domain: "setting",
+        op: "update",
+        entityId: "safe_mode",
+        // Unique ascending version so the dispatcher's dedup never drops it
+        // (registry is reset per case, so any value clears the empty baseline).
+        version: Date.now(),
+        snapshotVersion: 0,
+        originWindow,
+        emittedAt: 1700000000000,
+      };
+    }
+
+    beforeEach(() => {
+      useSafeModeStore.setState({ mode: "warn" });
+      resetStateChangedRegistryForTests();
+      resetSettingReceiverForTests();
+      registerSettingReceiver();
+      // Default invoke → resolve undefined; per-case override for get_setting.
+      mockedInvoke.mockReset();
+      mockedInvoke.mockResolvedValue(undefined);
+    });
+
+    afterEach(() => {
+      mockedInvoke.mockReset();
+      mockedInvoke.mockResolvedValue(undefined);
+    });
+
+    it("AC-1122-01: local setMode does NOT broadcast on the removed `safe-mode-sync` bridge channel", async () => {
+      mockedEmit.mockClear();
+      await useSafeModeStore.getState().setMode("off");
+      await Promise.resolve();
+
+      const channels = mockedEmit.mock.calls.map((call) => call[0]);
+      expect(channels).not.toContain("safe-mode-sync");
+      expect(useSafeModeStore.getState().mode).toBe("off");
+    });
+
+    it("AC-1122-02: a remote safe_mode `setting.update` converges the local store via refetch", async () => {
+      mockedInvoke.mockImplementation((cmd: string, args?: unknown) => {
+        if (
+          cmd === "get_setting" &&
+          (args as { key?: string } | undefined)?.key === "safe_mode"
+        ) {
+          // strategy F.4 wire shape — bare JSON string literal.
+          return Promise.resolve(JSON.stringify("strict"));
+        }
+        return Promise.resolve(undefined);
+      });
+
+      dispatchStateChangedPayload(
+        "workspace",
+        safeModeUpdatePayload("launcher"),
+      );
+      await flushReceiver();
+
+      expect(useSafeModeStore.getState().mode).toBe("strict");
+    });
+
+    it("AC-1122-03: a self-origin safe_mode `setting.update` does NOT refetch (no double-apply)", async () => {
+      // originWindow === currentWindowLabel ("workspace") → dispatcher
+      // self-echo skip. The origin already applied via its IPC response, so
+      // no `get_setting` refetch fires and the store is left untouched.
+      dispatchStateChangedPayload(
+        "workspace",
+        safeModeUpdatePayload("workspace"),
+      );
+      await flushReceiver();
+
+      const getCalls = mockedInvoke.mock.calls.filter(
+        (call) => call[0] === "get_setting",
+      );
+      expect(getCalls).toHaveLength(0);
+      expect(useSafeModeStore.getState().mode).toBe("warn");
     });
   });
 

@@ -16,11 +16,7 @@ vi.mock("@tauri-apps/api/core", () => ({
 }));
 
 import { invoke } from "@tauri-apps/api/core";
-import {
-  useSafeModeStore,
-  SAFE_MODE_STORAGE_KEY,
-  SYNCED_KEYS,
-} from "./safeModeStore";
+import { useSafeModeStore, SAFE_MODE_STORAGE_KEY } from "./safeModeStore";
 
 const invokeMock = vi.mocked(invoke);
 
@@ -69,9 +65,5 @@ describe("safeModeStore", () => {
     useSafeModeStore.setState({ mode: "off" });
     await useSafeModeStore.getState().toggle();
     expect(useSafeModeStore.getState().mode).toBe("strict");
-  });
-
-  it('[AC-185-02e] SYNCED_KEYS exactly ["mode"]', () => {
-    expect(SYNCED_KEYS).toEqual(["mode"]);
   });
 });
