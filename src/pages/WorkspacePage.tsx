@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { ArrowLeft, Sun, Moon, Monitor } from "lucide-react";
 import Sidebar from "@components/layout/Sidebar";
 import MainArea from "@components/layout/MainArea";
+import ErrorBoundary from "@components/shared/ErrorBoundary";
 import { useCurrentWindowConnectionId } from "@hooks/useCurrentWindowConnectionId";
 import { useConnectionStore } from "@stores/connectionStore";
 import { Button } from "@components/ui/button";
@@ -169,7 +170,11 @@ export default function WorkspacePage() {
             </PopoverContent>
           </Popover>
         </div>
-        <Sidebar />
+        {/* #1312 — a sidebar render crash must not take down the whole
+            workspace; isolate it so MainArea keeps working. */}
+        <ErrorBoundary variant="panel" label={t("workspaceSidebarAria")}>
+          <Sidebar />
+        </ErrorBoundary>
       </nav>
       <MainArea />
     </div>

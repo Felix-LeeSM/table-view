@@ -28,6 +28,7 @@ import GlobalQueryLogPanel from "@components/query/GlobalQueryLogPanel";
 import { Button } from "@components/ui/button";
 import { Skeleton } from "@components/ui/skeleton";
 import { LogoWordmark } from "@components/shared/Logo";
+import ErrorBoundary from "@components/shared/ErrorBoundary";
 import SearchIndexDetailPanel from "@components/search/SearchIndexDetailPanel";
 import { assertNever, type Paradigm } from "@/lib/paradigm";
 import WorkspaceToolbar from "@components/workspace/WorkspaceToolbar";
@@ -417,35 +418,45 @@ export default function MainArea() {
             }
           : {})}
       >
-        {activeTab?.type === "table" &&
-        (activeTab.table ?? activeTab.collection) &&
-        (activeTab.schema ?? activeTab.database) ? (
-          // Keying by `activeTab.id` forces React to unmount the previous
-          // tab's grid and mount a fresh instance when the user swaps tabs.
-          // Without this the same `useDataGridEdit` hook instance survives
-          // the prop change and its locally-held `pendingEdits` Map leaks
-          // across tabs — making the dirty marker flip onto the newly
-          // focused tab.
-          <TableTabView
-            key={activeTab.id}
-            tab={activeTab}
-            onSubViewChange={(subView) => {
-              if (!workspaceKey) return;
-              setSubView(
-                workspaceKey.connId,
-                workspaceKey.db,
-                activeTab.id,
-                subView,
-              );
-            }}
-          />
-        ) : activeTab?.type === "query" ? (
-          <QueryTab key={activeTab.id} tab={activeTab} />
-        ) : hasLoadedOnce ? (
-          <EmptyState />
-        ) : (
-          <MainAreaSkeleton />
-        )}
+        {/* #1312 — isolate the active tab's content (grid / query result /
+            detail panel) so a render crash degrades to a retryable panel
+            fallback while TabBar, toolbar, and sidebar keep working. Keyed by
+            the active tab id so both the boundary and the underlying panel
+            reset when the user swaps tabs. */}
+        <ErrorBoundary
+          key={activeTab?.id ?? "empty"}
+          variant="panel"
+          label={t("mainArea.mainLandmarkAria")}
+        >
+          {activeTab?.type === "table" &&
+          (activeTab.table ?? activeTab.collection) &&
+          (activeTab.schema ?? activeTab.database) ? (
+            // Keying by `activeTab.id` forces React to unmount the previous
+            // tab's grid and mount a fresh instance when the user swaps tabs.
+            // Without this the same `useDataGridEdit` hook instance survives
+            // the prop change and its locally-held `pendingEdits` Map leaks
+            // across tabs — making the dirty marker flip onto the newly
+            // focused tab.
+            <TableTabView
+              tab={activeTab}
+              onSubViewChange={(subView) => {
+                if (!workspaceKey) return;
+                setSubView(
+                  workspaceKey.connId,
+                  workspaceKey.db,
+                  activeTab.id,
+                  subView,
+                );
+              }}
+            />
+          ) : activeTab?.type === "query" ? (
+            <QueryTab tab={activeTab} />
+          ) : hasLoadedOnce ? (
+            <EmptyState />
+          ) : (
+            <MainAreaSkeleton />
+          )}
+        </ErrorBoundary>
       </div>
       <GlobalQueryLogPanel
         visible={showGlobalLog}

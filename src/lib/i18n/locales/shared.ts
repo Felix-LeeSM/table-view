@@ -35,6 +35,8 @@ export const en = {
   errorTitle: "Something went wrong",
   errorFallback: "An unexpected error occurred.",
   reload: "Reload",
+  retry: "Retry",
+  asyncError: "Something failed in the background: {{message}}",
 
   // ExportButton
   export: {
@@ -172,6 +174,8 @@ export const ko = {
   errorTitle: "오류가 발생했습니다",
   errorFallback: "예기치 않은 오류가 발생했습니다.",
   reload: "다시 로드",
+  retry: "다시 시도",
+  asyncError: "백그라운드 작업이 실패했습니다: {{message}}",
 
   // ExportButton
   export: {
