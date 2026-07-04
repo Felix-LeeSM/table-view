@@ -248,20 +248,18 @@ describe("QueryTab — execution", () => {
     });
   });
 
-  it("collapses to error status when ALL statements fail", async () => {
-    // Sprint 100 — when every statement fails, the run still reports
-    // `status: "error"` (joined message) so single-statement-error
-    // consumers (history list, error banner) keep working unchanged.
+  it("collapses to error status when the first statement fails (stop-on-error)", async () => {
+    // #1089 — stop-on-error: the first failure halts the batch and later
+    // statements are never sent to the driver. With zero successes the run
+    // still collapses to `status: "error"` (joined message) so
+    // single-statement-error consumers (history list, error banner) keep
+    // working unchanged. The joined message carries ONLY the statement that
+    // actually failed — the skipped tail is never executed, so there is no
+    // "Syntax error 2".
     //
-    // Sprint 255 (2026-05-09) — `BAD` statements 는 analyzer 가 `kind:
-    // "other"` 로 분류한다.
-    //
-    // Sprint 254 (2026-05-09) — `kind: "other"` 의 default severity 가
-    // `"safe"` → `"info"` 로 변경. INFO statements 는 WARN dialog 를 skip
-    // 하고 직접 IPC 를 호출하므로, 본 테스트의 multi-statement 실행 후
-    // 모두 실패 → error collapsing 의 store 행동 검증은 dialog 우회
-    // 없이 직접 검증된다. 단일 click 으로 IPC 2회 호출 → 모두 fail → state
-    // 가 error 로 collapse.
+    // Sprint 255/254 (2026-05-09) — `BAD` statements 는 analyzer 가 `kind:
+    // "other"` (default severity `info`) 로 분류해 WARN dialog 를 skip 하고
+    // 직접 IPC 를 호출하므로, dialog 우회 없이 store 행동이 검증된다.
     mockExecuteQuery
       .mockRejectedValueOnce(new Error("Syntax error 1"))
       .mockRejectedValueOnce(new Error("Syntax error 2"));
@@ -282,10 +280,12 @@ describe("QueryTab — execution", () => {
         expect(updatedTab.queryState.status).toBe("error");
         if (updatedTab.queryState.status === "error") {
           expect(updatedTab.queryState.error).toContain("Syntax error 1");
-          expect(updatedTab.queryState.error).toContain("Syntax error 2");
+          expect(updatedTab.queryState.error).not.toContain("Syntax error 2");
         }
       }
     });
+    // Stop-on-error: statement 2 was never dispatched.
+    expect(mockExecuteQuery).toHaveBeenCalledTimes(1);
   });
 
   it("populates statements[] with all-success on multi-statement happy path", async () => {

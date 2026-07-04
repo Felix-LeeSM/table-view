@@ -60,6 +60,13 @@ const ERROR_STMT: QueryStatementResult = {
   durationMs: 3,
 };
 
+// #1089 — a stop-on-error skipped statement: never sent to the driver.
+const SKIPPED_STMT: QueryStatementResult = {
+  sql: "DELETE FROM t1 WHERE id = 1",
+  status: "skipped",
+  durationMs: 0,
+};
+
 describe("QueryResultGrid — multi-statement (sprint 100)", () => {
   beforeEach(() => {
     useSchemaStore.setState({ tableColumnsCache: {} });
@@ -120,6 +127,33 @@ describe("QueryResultGrid — multi-statement (sprint 100)", () => {
     const alert = screen.getByRole("alert");
     expect(alert).toHaveTextContent(/Statement 2 failed/);
     expect(alert).toHaveTextContent(/relation "missing" does not exist/);
+  });
+
+  // #1089 — stop-on-error: statements after the first failure are `skipped`.
+  // The skipped tab is muted (data-status='skipped', "—" badge) and its panel
+  // explains it was not executed — no destructive error styling.
+  it("stop-on-error → skipped tab is muted and explains it was not executed", () => {
+    render(
+      <QueryResultGrid
+        queryState={{
+          status: "completed",
+          result: SELECT_RESULT_A,
+          statements: [SUCCESS_STMT_A, ERROR_STMT, SKIPPED_STMT],
+        }}
+      />,
+    );
+
+    const tabs = screen.getAllByRole("tab");
+    expect(tabs).toHaveLength(3);
+    expect(tabs[2]!).toHaveAttribute("data-status", "skipped");
+    expect(tabs[2]!).toHaveTextContent(/SKIPPED/);
+    expect(tabs[2]!).toHaveTextContent(/—/);
+
+    fireEvent.mouseDown(tabs[2]!);
+    const panel = screen.getByRole("tabpanel");
+    expect(within(panel).getByText(/was not executed/)).toBeInTheDocument();
+    // No destructive alert for a skipped statement.
+    expect(within(panel).queryByRole("alert")).toBeNull();
   });
 
   // ── AC-03 ──

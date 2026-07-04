@@ -319,14 +319,11 @@ describe("QueryTab — DbMismatch auto-sync (Sprint 267)", () => {
   it("AC-269-02 batch: clicking Retry re-runs the same multi-statement batch", async () => {
     const user = userEvent.setup();
     seedConn1WithActiveDb("db1");
-    // First two calls (initial batch): both reject with mismatch.
-    // Retry batch: both succeed.
+    // #1089 stop-on-error: the initial batch halts at statement 1's mismatch
+    // failure, so statement 2 is never dispatched (1 call, not 2). The Retry
+    // toast still fires from that first failure. Retry re-runs the whole batch
+    // from scratch and both statements succeed (2 calls).
     mockExecuteQuery
-      .mockRejectedValueOnce(
-        new Error(
-          "Database mismatch: expected 'db1', backend pool has 'db_actual'",
-        ),
-      )
       .mockRejectedValueOnce(
         new Error(
           "Database mismatch: expected 'db1', backend pool has 'db_actual'",
@@ -366,12 +363,12 @@ describe("QueryTab — DbMismatch auto-sync (Sprint 267)", () => {
       await user.click(retry);
     });
 
-    // Initial batch (2 statements) + retry batch (2 statements) = 4 calls.
+    // Initial batch (1 call — stop-on-error) + retry batch (2 statements) = 3.
     await waitFor(() => {
-      expect(mockExecuteQuery).toHaveBeenCalledTimes(4);
+      expect(mockExecuteQuery).toHaveBeenCalledTimes(3);
     });
-    expect(mockExecuteQuery.mock.calls[2]?.[1]).toBe("SELECT 1");
-    expect(mockExecuteQuery.mock.calls[3]?.[1]).toBe("SELECT 2");
+    expect(mockExecuteQuery.mock.calls[1]?.[1]).toBe("SELECT 1");
+    expect(mockExecuteQuery.mock.calls[2]?.[1]).toBe("SELECT 2");
   });
 
   it("AC-269-03 closed-tab: Retry no-ops when the tab no longer exists", async () => {
