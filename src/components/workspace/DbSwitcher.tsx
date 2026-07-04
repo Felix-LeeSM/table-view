@@ -120,6 +120,10 @@ export default function DbSwitcher() {
   const [loading, setLoading] = useState(false);
   const [databases, setDatabases] = useState<DatabaseInfo[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  // Roving-tabindex anchor for the listbox: index of the currently-focusable
+  // option. The list is a single tab stop; ArrowUp/Down + Home/End move it.
+  const [activeIndex, setActiveIndex] = useState(0);
+  const listRef = useRef<HTMLUListElement | null>(null);
   // Track the last `(connectionId, paradigm)` pair we fetched against so a
   // tab swap to a different connection invalidates the cached list (we do
   // not LRU-cache the list, but stale rendering across connections is a
@@ -159,6 +163,48 @@ export default function DbSwitcher() {
   } else {
     label = t("dbSwitcher.defaultLabel");
   }
+
+  // Anchor the roving index on the active db when the list (re)loads and pull
+  // DOM focus onto it, so the first Arrow key moves from the selection rather
+  // than the top. When the popover is closed the `<ul>` is unmounted, so the
+  // focus call is a no-op (optional chaining on a null ref).
+  useEffect(() => {
+    if (databases.length === 0) return;
+    const sel = databases.findIndex((db) => db.name === label);
+    const idx = sel >= 0 ? sel : 0;
+    setActiveIndex(idx);
+    listRef.current
+      ?.querySelector<HTMLElement>(`[data-option-index="${idx}"]`)
+      ?.focus();
+  }, [databases, label]);
+
+  // ponytail: Arrow/Home/End roving only — no typeahead (add if users ask;
+  // the db list is short and label-sorted).
+  const handleListKeyDown = (e: React.KeyboardEvent<HTMLUListElement>) => {
+    const { key } = e;
+    if (
+      key !== "ArrowDown" &&
+      key !== "ArrowUp" &&
+      key !== "Home" &&
+      key !== "End"
+    )
+      return;
+    if (databases.length === 0) return;
+    e.preventDefault();
+    const last = databases.length - 1;
+    const next =
+      key === "Home"
+        ? 0
+        : key === "End"
+          ? last
+          : key === "ArrowDown"
+            ? Math.min(activeIndex + 1, last)
+            : Math.max(activeIndex - 1, 0);
+    setActiveIndex(next);
+    listRef.current
+      ?.querySelector<HTMLElement>(`[data-option-index="${next}"]`)
+      ?.focus();
+  };
 
   const fetchList = useCallback(async () => {
     if (!activeConn) return;
@@ -356,9 +402,11 @@ export default function DbSwitcher() {
           </div>
         ) : (
           <ul
+            ref={listRef}
             role="listbox"
             aria-label={t("dbSwitcher.availableDatabases")}
             className="flex flex-col"
+            onKeyDown={handleListKeyDown}
           >
             {databases.map((db, idx) => (
               <li key={db.name} role="presentation">
@@ -367,9 +415,10 @@ export default function DbSwitcher() {
                   role="option"
                   aria-selected={db.name === label}
                   data-active={db.name === label || undefined}
-                  // Pin autofocus on the first row so keyboard users can
-                  // hit Enter immediately on open.
-                  autoFocus={idx === 0}
+                  data-option-index={idx}
+                  // Single tab stop: only the roving anchor is tabbable;
+                  // an effect pulls focus onto it (the selected db) on open.
+                  tabIndex={idx === activeIndex ? 0 : -1}
                   onClick={() => {
                     void handleSelect(db.name);
                   }}

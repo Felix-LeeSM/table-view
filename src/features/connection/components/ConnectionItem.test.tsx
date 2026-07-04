@@ -256,6 +256,38 @@ describe("ConnectionItem", () => {
   });
 
   // -----------------------------------------------------------------------
+  // #1139 — WCAG 1.4.1: status must be distinguished by SHAPE, not color
+  // alone, AND the accessible name must be exposed via a real role. Each
+  // state wraps a distinct lucide glyph in span[role="img"][aria-label];
+  // getByRole("img", …) fails if the wrapper regresses to a bare
+  // svg[aria-label] (whose accessible name is unreliable), and the icon
+  // class assertion fails on a "same dot, new color" regression.
+  // -----------------------------------------------------------------------
+  it("connected indicator exposes role=img with a distinct shape (check circle)", () => {
+    setStoreState({ activeStatuses: { "conn-1": { type: "connected" } } });
+    render(<ConnectionItem connection={makeConnection()} />);
+    const ind = screen.getByRole("img", { name: "Connected" });
+    expect(ind.querySelector("svg.lucide-circle-check")).not.toBeNull();
+  });
+
+  it("error indicator exposes role=img with a distinct shape (alert circle) and keeps the tooltip", () => {
+    setStoreState({
+      activeStatuses: { "conn-1": { type: "error", message: "boom" } },
+    });
+    render(<ConnectionItem connection={makeConnection()} />);
+    const ind = screen.getByRole("img", { name: "Error: boom" });
+    expect(ind).toHaveAttribute("title", "boom");
+    expect(ind.querySelector("svg.lucide-circle-alert")).not.toBeNull();
+  });
+
+  it("disconnected indicator exposes role=img with a distinct shape (hollow circle)", () => {
+    setStoreState({ activeStatuses: { "conn-1": { type: "disconnected" } } });
+    render(<ConnectionItem connection={makeConnection()} />);
+    const ind = screen.getByRole("img", { name: "Disconnected" });
+    expect(ind.querySelector("svg.lucide-circle")).not.toBeNull();
+  });
+
+  // -----------------------------------------------------------------------
   // Sprint 46: Connecting spinner and error inline message
   // -----------------------------------------------------------------------
   it("renders spinner when connecting", () => {

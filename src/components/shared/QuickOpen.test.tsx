@@ -242,6 +242,35 @@ describe("QuickOpen", () => {
     expect(screen.getByText("do_migration")).toBeInTheDocument();
   });
 
+  // #1132 — combobox must reference its listbox via `aria-controls` so a
+  // screen reader can associate the typed query with the result popup.
+  it("wires combobox aria-controls to the results listbox (#1132)", () => {
+    setupStores({
+      connections: [makeConn("c1", "Prod")],
+      active: ["c1"],
+      tables: { "c1:public": [{ name: "users", schema: "public" }] },
+    });
+    render(<QuickOpen />);
+    act(() => {
+      window.dispatchEvent(new CustomEvent("quick-open"));
+    });
+    const combobox = screen.getByRole("combobox");
+    const listbox = screen.getByRole("listbox");
+    expect(listbox.id).toBeTruthy();
+    expect(combobox).toHaveAttribute("aria-controls", listbox.id);
+  });
+
+  // #1132 — the icon-only clear/close control had no accessible name.
+  it("exposes an accessible name on the clear control (#1132)", () => {
+    render(<QuickOpen />);
+    act(() => {
+      window.dispatchEvent(new CustomEvent("quick-open"));
+    });
+    expect(
+      screen.getByRole("button", { name: /clear|close/i }),
+    ).toBeInTheDocument();
+  });
+
   it("excludes disconnected connections", () => {
     setupStores({
       connections: [makeConn("c1", "Prod"), makeConn("c2", "Idle")],

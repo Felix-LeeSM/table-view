@@ -274,8 +274,12 @@ describe("QueryTab search route", () => {
     });
 
     render(<LiveQueryTab />);
+    // #1133 — the accessible name is on CodeMirror's `.cm-content`; the
+    // data-paradigm hook lives on the editor wrapper above it.
     expect(
-      screen.getByRole("textbox", { name: "Search Query Editor" }),
+      screen
+        .getByRole("textbox", { name: "Search Query Editor" })
+        .closest("[data-paradigm]"),
     ).toHaveAttribute("data-paradigm", "search");
     expect(
       screen.queryByText(/Search query editor is planned/i),

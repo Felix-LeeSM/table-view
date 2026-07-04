@@ -100,6 +100,7 @@ export const en = {
     kindView: "View",
     kindFunction: "Function",
     kindProcedure: "Procedure",
+    closeAria: "Close quick open",
   },
 
   // ShortcutCheatsheet
@@ -246,6 +247,7 @@ export const ko = {
     kindView: "뷰",
     kindFunction: "함수",
     kindProcedure: "프로시저",
+    closeAria: "빠른 열기 닫기",
   },
 
   // ShortcutCheatsheet

@@ -8,9 +8,14 @@ import {
   getKeymapBindings,
 } from "./__tests__/editorHistoryHelpers";
 
+// #1133 — the accessible name now lives on CodeMirror's real `.cm-content`;
+// walk up to the editor wrapper (carries data-paradigm) for DOM queries.
+function getWrapper(label = "Redis Command Editor"): HTMLElement {
+  return screen.getByLabelText(label).closest("[data-paradigm]") as HTMLElement;
+}
+
 function getEditorView(): EditorView {
-  const container = screen.getByLabelText("Redis Command Editor");
-  const cmEditor = container.querySelector(".cm-editor") as HTMLElement;
+  const cmEditor = getWrapper().querySelector(".cm-editor") as HTMLElement;
   const view = EditorView.findFromDOM(cmEditor);
   if (!view) throw new Error("EditorView not found");
   return view;
@@ -26,9 +31,13 @@ describe("RedisCommandEditor", () => {
       />,
     );
 
-    const container = screen.getByLabelText("Redis Command Editor");
-    expect(container).toHaveAttribute("role", "textbox");
-    expect(container).toHaveAttribute("aria-multiline", "true");
+    // #1133 — role/aria on the real `.cm-content`; wrapper keeps data hooks.
+    const content = screen.getByLabelText("Redis Command Editor");
+    expect(content).toHaveClass("cm-content");
+    expect(content).toHaveAttribute("role", "textbox");
+    expect(content).toHaveAttribute("aria-multiline", "true");
+    const container = getWrapper();
+    expect(container).not.toHaveAttribute("role");
     expect(container).toHaveAttribute("data-paradigm", "kv");
     expect(container).toHaveAttribute("data-command-target", "redis");
     expect(container.querySelector(".cm-content")?.textContent).toContain(
@@ -46,8 +55,11 @@ describe("RedisCommandEditor", () => {
       />,
     );
 
-    const container = screen.getByLabelText("Valkey Command Editor");
-    expect(container).toHaveAttribute("role", "textbox");
+    // #1133 — Valkey name is on `.cm-content`; wrapper keeps the target hook.
+    const content = screen.getByLabelText("Valkey Command Editor");
+    expect(content).toHaveAttribute("role", "textbox");
+    const container = getWrapper("Valkey Command Editor");
+    expect(container).not.toHaveAttribute("role");
     expect(container).toHaveAttribute("data-command-target", "valkey");
   });
 

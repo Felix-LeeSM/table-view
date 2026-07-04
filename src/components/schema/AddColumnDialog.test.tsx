@@ -138,9 +138,7 @@ describe("AddColumnDialog (Sprint 236)", () => {
     fireEvent.change(screen.getByLabelText("Column name"), {
       target: { value: "bad name" },
     });
-    expect(
-      screen.getByLabelText("Identifier validation error"),
-    ).toHaveTextContent(/letter or underscore/);
+    expect(screen.getByRole("alert")).toHaveTextContent(/letter or underscore/);
   });
 
   it("[AC-236-09] inline error when name has embedded quote", () => {
@@ -148,9 +146,7 @@ describe("AddColumnDialog (Sprint 236)", () => {
     fireEvent.change(screen.getByLabelText("Column name"), {
       target: { value: 'bad"name' },
     });
-    expect(
-      screen.getByLabelText("Identifier validation error"),
-    ).toHaveTextContent(/letter or underscore/);
+    expect(screen.getByRole("alert")).toHaveTextContent(/letter or underscore/);
   });
 
   it("[AC-236-09] inline error when name has leading digit", () => {
@@ -158,9 +154,7 @@ describe("AddColumnDialog (Sprint 236)", () => {
     fireEvent.change(screen.getByLabelText("Column name"), {
       target: { value: "1bad" },
     });
-    expect(
-      screen.getByLabelText("Identifier validation error"),
-    ).toHaveTextContent(/letter or underscore/);
+    expect(screen.getByRole("alert")).toHaveTextContent(/letter or underscore/);
   });
 
   it("[AC-236-09] inline error when name length > 63 bytes", () => {
@@ -168,9 +162,7 @@ describe("AddColumnDialog (Sprint 236)", () => {
     fireEvent.change(screen.getByLabelText("Column name"), {
       target: { value: "a".repeat(64) },
     });
-    expect(
-      screen.getByLabelText("Identifier validation error"),
-    ).toHaveTextContent(/63 bytes/);
+    expect(screen.getByRole("alert")).toHaveTextContent(/63 bytes/);
   });
 
   it("[AC-236-09] inline error when name has embedded NULL byte", () => {
@@ -178,9 +170,7 @@ describe("AddColumnDialog (Sprint 236)", () => {
     fireEvent.change(screen.getByLabelText("Column name"), {
       target: { value: "bad\0name" },
     });
-    expect(
-      screen.getByLabelText("Identifier validation error"),
-    ).toHaveTextContent(/letter or underscore/);
+    expect(screen.getByRole("alert")).toHaveTextContent(/letter or underscore/);
   });
 
   // AC-236-04 — collision pre-check disables Apply.
@@ -192,10 +182,27 @@ describe("AddColumnDialog (Sprint 236)", () => {
     fireEvent.change(screen.getByLabelText("Column data type"), {
       target: { value: "varchar(255)" },
     });
-    expect(screen.getByLabelText("Column name collision")).toHaveTextContent(
-      /already exists/,
-    );
+    expect(screen.getByRole("alert")).toHaveTextContent(/already exists/);
     expect(screen.getByRole("button", { name: "Apply" })).toBeDisabled();
+  });
+
+  // Issue #1136 — the name input is programmatically tied to its error and
+  // the error text is no longer masked by an aria-label.
+  it("[#1136] ties name input to its error via aria-invalid + aria-describedby", () => {
+    renderDialog();
+    const nameInput = screen.getByLabelText("Column name");
+    expect(nameInput).not.toHaveAttribute("aria-invalid");
+
+    fireEvent.change(nameInput, { target: { value: "bad name" } });
+
+    expect(nameInput).toHaveAttribute("aria-invalid", "true");
+    const describedBy = nameInput.getAttribute("aria-describedby");
+    expect(describedBy).toBeTruthy();
+    const alert = screen.getByRole("alert");
+    expect(alert.id).toBe(describedBy);
+    // Error message is exposed as text (no masking aria-label).
+    expect(alert).toHaveTextContent(/letter or underscore/);
+    expect(alert).not.toHaveAttribute("aria-label");
   });
 
   // AC-236-03 — IPC payload shape on Show DDL preview fetch.

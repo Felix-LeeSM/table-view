@@ -321,13 +321,14 @@ function BsonRow({ node, isActive, onToggle, onFocus }: BsonRowProps) {
       aria-expanded={ariaExpanded}
       aria-level={depth + 1}
       aria-label={t("bson.nodeAria", { keyLabel })}
-      className="font-mono text-xs"
+      className="rounded font-mono text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
       data-tree-key={node.key}
       // WAI-ARIA tree roving (#1128) — the container manages one tab stop; the
       // arrow keys move it. Leaves are focusable too so the whole tree is
       // arrow-navigable, but only the active row is in the Tab order. The
       // inner copy/expand buttons stay reachable as row controls (mirrors the
-      // sidebar trees keeping their toolbar controls tabbable).
+      // sidebar trees keeping their toolbar controls tabbable). The focus-ring
+      // classes (from #1332) now apply because this row is focusable.
       tabIndex={isActive ? 0 : -1}
       onFocus={onFocus}
       onKeyDown={handleKeyDown}

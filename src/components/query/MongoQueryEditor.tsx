@@ -1,4 +1,4 @@
-import { useRef, useEffect, forwardRef } from "react";
+import { useRef, useEffect, useId, forwardRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Compartment, EditorState, type Extension } from "@codemirror/state";
 import {
@@ -19,6 +19,7 @@ import {
 import { autocompletion, acceptCompletion } from "@codemirror/autocomplete";
 import { viewTableHighlightStyle } from "@lib/editor/highlightStyle";
 import { autocompleteTooltipTheme } from "@lib/editor/autocompleteTheme";
+import { editorContentAria } from "@lib/editor/editorContentAria";
 import { setForwardedRef } from "@lib/editor/setForwardedRef";
 import { syncEditorDocument } from "./editorDocumentSync";
 
@@ -71,6 +72,8 @@ const MongoQueryEditor = forwardRef<EditorView | null, MongoQueryEditorProps>(
     const { t } = useTranslation("query");
     const containerRef = useRef<HTMLDivElement>(null);
     const viewRef = useRef<EditorView | null>(null);
+    // #1133 — stable id linking `.cm-content` to the SR-only autocomplete hint.
+    const hintId = useId();
 
     // Keep refs to latest callbacks so the listener closure always reads
     // fresh values without recreating the editor.
@@ -112,6 +115,9 @@ const MongoQueryEditor = forwardRef<EditorView | null, MongoQueryEditorProps>(
           syntaxHighlighting(viewTableHighlightStyle),
           syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
           autocompletion(),
+          // #1133 — name the real editable surface + describe the autocomplete
+          // combobox on `.cm-content`, not on a decoy wrapper div.
+          editorContentAria(t("mongo.editorAria"), hintId),
           keymap.of([
             // Custom bindings MUST come before defaultKeymap to take
             // priority — defaultKeymap also binds Mod-Enter.
@@ -196,6 +202,9 @@ const MongoQueryEditor = forwardRef<EditorView | null, MongoQueryEditorProps>(
       viewRef.current = view;
       // Expose the live EditorView to the parent's forwarded ref (#1248).
       setForwardedRef(ref, view);
+      // #1133 — unified mount focus across all four query editors so a freshly
+      // opened tab is immediately typeable on the `.cm-content` surface.
+      view.focus();
 
       return () => {
         view.destroy();
@@ -224,17 +233,19 @@ const MongoQueryEditor = forwardRef<EditorView | null, MongoQueryEditorProps>(
       if (syncEditorDocument(view, sql)) sqlRef.current = sql;
     }, [sql]);
 
-    // Sprint 309 — aria-label is hard-coded to the single mongosh
-    // editor identity. `data-query-mode` removed from the wrapper.
+    // #1133 — the accessible name and combobox aria live on the real
+    // `.cm-content`; the wrapper is no longer a decoy textbox.
     return (
-      <div
-        ref={containerRef}
-        className="h-full w-full overflow-hidden"
-        role="textbox"
-        aria-label={t("mongo.editorAria")}
-        aria-multiline="true"
-        data-paradigm="document"
-      />
+      <>
+        <div
+          ref={containerRef}
+          className="h-full w-full overflow-hidden"
+          data-paradigm="document"
+        />
+        <span id={hintId} className="sr-only">
+          {t("editorAutocompleteHint")}
+        </span>
+      </>
     );
   },
 );

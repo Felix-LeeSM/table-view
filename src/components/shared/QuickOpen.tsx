@@ -308,6 +308,7 @@ export default function QuickOpen() {
             role="combobox"
             aria-autocomplete="list"
             aria-expanded={filtered.length > 0}
+            aria-controls="quick-open-listbox"
             aria-activedescendant={
               filtered.length > 0
                 ? `quick-open-option-${activeIndex}`
@@ -326,6 +327,7 @@ export default function QuickOpen() {
           <Button
             variant="ghost"
             size="icon-xs"
+            aria-label={t("quickOpen.closeAria")}
             className="shrink-0 text-muted-foreground hover:text-foreground"
             onClick={handleClose}
           >
@@ -334,7 +336,11 @@ export default function QuickOpen() {
         </div>
 
         {/* Results list */}
-        <div className="max-h-80 overflow-y-auto" role="listbox">
+        <div
+          id="quick-open-listbox"
+          className="max-h-80 overflow-y-auto"
+          role="listbox"
+        >
           {filtered.length === 0 ? (
             // #1137 — announce the empty state politely; the combobox already
             // conveys populated results via aria-activedescendant, so no

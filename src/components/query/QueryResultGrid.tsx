@@ -544,16 +544,19 @@ function CompletedSingleResult({
 /** Verb label shown in each multi-statement tab trigger. */
 function statementVerb(stmt: QueryStatementResult): string {
   if (stmt.status === "error") return "ERROR";
+  if (stmt.status === "skipped") return "SKIPPED";
   if (stmt.result) return queryTypeLabel(stmt.result.queryType);
   return "Query";
 }
 
 /**
- * Trigger badge: "{rows} rows" / "{ms} ms" for success, "✕" for error.
+ * Trigger badge: "{rows} rows" / "{ms} ms" for success, "✕" for error,
+ * "—" for a #1089 stop-on-error skipped statement.
  * SELECT shows row count; DML/DDL show wall-clock duration.
  */
 function statementBadge(stmt: QueryStatementResult): string {
   if (stmt.status === "error") return "✕";
+  if (stmt.status === "skipped") return "—";
   if (!stmt.result) return `${stmt.durationMs} ms`;
   if (stmt.result.queryType === "select") {
     const n = stmt.result.totalCount;
@@ -597,15 +600,20 @@ function CompletedMultiResult({
       >
         {statements.map((stmt, idx) => {
           const isError = stmt.status === "error";
+          const isSkipped = stmt.status === "skipped";
           return (
             <TabsTrigger
               key={`stmt-trigger-${idx}`}
               value={`stmt-${idx}`}
-              data-status={isError ? "error" : "success"}
+              data-status={
+                isError ? "error" : isSkipped ? "skipped" : "success"
+              }
               className={
                 isError
                   ? "text-destructive data-[state=active]:border-destructive data-[state=active]:text-destructive"
-                  : ""
+                  : isSkipped
+                    ? "text-muted-foreground"
+                    : ""
               }
             >
               <span className="flex items-center gap-1.5">
@@ -637,7 +645,14 @@ function CompletedMultiResult({
           value={`stmt-${idx}`}
           className="flex flex-1 flex-col overflow-hidden data-[state=inactive]:hidden"
         >
-          {stmt.status === "error" || !stmt.result ? (
+          {stmt.status === "skipped" ? (
+            <div
+              role="status"
+              className="border-b border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground"
+            >
+              {t("resultGrid.statementSkipped", { n: idx + 1 })}
+            </div>
+          ) : stmt.status === "error" || !stmt.result ? (
             <div
               role="alert"
               className="border-b border-border bg-destructive/10 px-3 py-2 text-sm text-destructive"

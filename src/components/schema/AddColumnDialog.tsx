@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronDown, ChevronUp, Loader2 } from "lucide-react";
 import { Button } from "@components/ui/button";
@@ -108,6 +108,7 @@ export default function AddColumnDialog({
   onColumnAdded,
 }: AddColumnDialogProps) {
   const { t } = useTranslation("schemaDialogs");
+  const nameErrorId = useId();
   const [columnName, setColumnName] = useState("");
   const [dataType, setDataType] = useState("");
   const [notNull, setNotNull] = useState(false);
@@ -165,6 +166,9 @@ export default function AddColumnDialog({
     [columns, trimmedName],
   );
 
+  const showValidationError = !!validationError && columnName.length > 0;
+  const showCollisionError = !validationError && collision;
+  const nameHasError = showValidationError || showCollisionError;
   const canPreview = !validationError && trimmedType.length > 0 && !collision;
   const canApply = canPreview && !ddl.previewLoading && !!ddl.previewSql;
 
@@ -280,22 +284,24 @@ export default function AddColumnDialog({
                   onChange={(e) => setColumnName(e.target.value)}
                   placeholder={t("addColumn.columnNamePlaceholder")}
                   aria-label={t("addColumn.columnNameAria")}
+                  aria-invalid={nameHasError || undefined}
+                  aria-describedby={nameHasError ? nameErrorId : undefined}
                   autoFocus
                 />
-                {validationError && columnName.length > 0 && (
+                {showValidationError && (
                   <p
+                    id={nameErrorId}
                     className="mt-1 text-xs text-destructive"
                     role="alert"
-                    aria-label={t("addColumn.identifierErrorAria")}
                   >
                     {validationError}
                   </p>
                 )}
-                {!validationError && collision && (
+                {showCollisionError && (
                   <p
+                    id={nameErrorId}
                     className="mt-1 text-xs text-destructive"
                     role="alert"
-                    aria-label={t("addColumn.columnCollisionAria")}
                   >
                     {t("addColumn.columnAlreadyExists", { name: trimmedName })}
                   </p>

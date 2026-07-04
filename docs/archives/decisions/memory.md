@@ -30,7 +30,6 @@ be read from `docs/product/README.md` and `docs/ROADMAP.md` first.
 | [0017](./0017-launcher-lazy-workspace-window/memory.md)                              | Sprint 175 — workspace WebviewWindow를 lazy 생성으로 전환                                     | Accepted | 2026-04-30 | —          |
 | [0018](./0018-async-cancel-policy/memory.md)                                         | Sprint 180 — 비동기 작업 1초 임계 + Cancel UX 단일화                                          | Accepted | 2026-04-30 | —          |
 | [0021](./0021-export-envelope-auto-mnemonic-no-ttl/memory.md)                        | Export envelope: 자동 생성 BIP39 mnemonic + Argon2id OWASP first profile, TTL/max_uses 미도입 | Accepted | 2026-05-05 | —          |
-| [0022](./0022-safe-mode-destructive-only-confirm-with-dry-run/memory.md)             | Safe Mode — destructive 만 confirm + dry-run preview, safe write 는 Cmd+Z 보호                | Accepted | 2026-05-09 | —          |
 | [0023](./0023-production-warning-environment-aware-chrome-and-warn-dialog/memory.md) | Production Warning — environment-aware chrome + WARN dialog 게이트                            | Accepted | 2026-05-09 | —          |
 | [0024](./0024-testcontainers-pid-label-sweep/memory.md)                              | 통합 테스트 컨테이너 cleanup — owner-pid 라벨 + 시작 시 dead-owner sweep                      | Accepted | 2026-05-11 | —          |
 | [0025](./0025-datagrid-self-managed-no-tanstack/memory.md)                           | DataGrid layout/sorting/filtering/virtualization 자체 관리 — TanStack Table 도입 안 함        | Accepted | 2026-05-11 | —          |
@@ -55,6 +54,7 @@ be read from `docs/product/README.md` and `docs/ROADMAP.md` first.
 | [0045](./0045-language-completion-profile-wasm-boundary/memory.md)                   | language completion — dialect profile + WASM hot-path boundary                                | Accepted | 2026-05-21 | —          |
 | [0046](./0046-data-source-profile-capability-architecture/memory.md)                 | data source extension — profile, capability, language, result envelope                        | Accepted | 2026-05-22 | —          |
 | [0047](./0047-keep-duckdb-defer-removal/memory.md)                                   | DuckDB 지원 유지 (제거 보류)                                                                  | Accepted | 2026-07-03 | —          |
+| [0048](./0048-undo-stack-survives-commit-restage-pending/memory.md)                  | undo 스택 commit 생존 — Cmd+Z 는 복원값을 pending 편집으로 재스테이징 (보상 commit 폐기)      | Accepted | 2026-07-05 | 0022       |
 
 ## 역사 (Superseded / Deprecated)
 
@@ -65,6 +65,7 @@ be read from `docs/product/README.md` and `docs/ROADMAP.md` first.
 | [0019](./0019-e2e-pre-push-not-ci/memory.md)                       | E2E를 CI에서 제거하고 lefthook pre-push(host-native)로 이동                                                     | Superseded | 2026-05-01 | [0044](./0044-e2e-smoke-remote-required/memory.md)       |
 | [0020](./0020-e2e-pre-push-host-docker/memory.md)                  | ADR 0019 후속 — pre-push e2e는 host docker로 한정 (tauri-driver macOS 미지원)                                   | Superseded | 2026-05-01 | [0044](./0044-e2e-smoke-remote-required/memory.md)       |
 | [0029](./0029-mongosh-parser-strategy/memory.md)                   | mongosh expression parser — handwritten whitelist (WASM sidecar 미채택)                                         | Superseded | 2026-05-14 | [0043](./0043-mongosh-parser-rust-wasm-sot/memory.md)    |
+| [0022](./0022-safe-mode-destructive-only-confirm-with-dry-run/memory.md) | Safe Mode — destructive 만 confirm + dry-run preview, safe write 는 Cmd+Z 보호 | Superseded | 2026-05-09 | [0048](./0048-undo-stack-survives-commit-restage-pending/memory.md) |
 
 형식:
 

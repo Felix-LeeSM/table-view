@@ -23,7 +23,11 @@ import {
  */
 
 function getContainer() {
-  return screen.getByLabelText("SQL Query Editor");
+  // #1133 — the accessible name now lives on CodeMirror's real `.cm-content`;
+  // walk up to the editor wrapper (carries data-paradigm) for DOM queries.
+  return screen
+    .getByLabelText("SQL Query Editor")
+    .closest("[data-paradigm]") as HTMLElement;
 }
 
 function getEditorView(): EditorView {
@@ -76,12 +80,17 @@ describe("SqlQueryEditor (Sprint 139)", () => {
     await waitFor(() => expect(document.activeElement).toBe(cmContent));
   });
 
-  it("renders with role=textbox + aria-label=SQL Query Editor", () => {
+  it("names the real .cm-content surface (role=textbox + aria-label), not the wrapper (#1133)", () => {
     render(
       <SqlQueryEditor sql="" onSqlChange={onSqlChange} onExecute={onExecute} />,
     );
+    // #1133 — accessible name is on CodeMirror's `.cm-content`, not a decoy.
+    const content = screen.getByLabelText("SQL Query Editor");
+    expect(content).toHaveClass("cm-content");
+    expect(content).toHaveAttribute("role", "textbox");
+    // The wrapper keeps its data hooks but is no longer a decoy textbox.
     const container = getContainer();
-    expect(container).toHaveAttribute("role", "textbox");
+    expect(container).not.toHaveAttribute("role");
     expect(container).toHaveAttribute("data-paradigm", "rdb");
     expect(container).toHaveAttribute("data-query-mode", "sql");
   });

@@ -42,7 +42,9 @@ import {
  */
 
 function getContainer(label: string) {
-  return screen.getByLabelText(label);
+  // #1133 — the accessible name now lives on CodeMirror's real `.cm-content`;
+  // walk up to the editor wrapper (carries data-paradigm) for DOM queries.
+  return screen.getByLabelText(label).closest("[data-paradigm]") as HTMLElement;
 }
 
 function getEditorView(label: string): EditorView {

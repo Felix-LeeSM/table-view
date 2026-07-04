@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useId, useState } from "react";
 import { Loader2, RefreshCw } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@components/ui/button";
@@ -28,6 +28,8 @@ export function KvStreamReaderPanel({
   const [result, setResult] = useState<KvStreamReadResult>(stream);
   const [loading, setLoading] = useState(false);
   const [streamError, setStreamError] = useState<string | null>(null);
+  const streamErrorId = useId();
+  const limitInvalid = !Number.isFinite(Number.parseInt(limitText, 10));
 
   useEffect(() => {
     setStart(stream.start || "-");
@@ -96,6 +98,8 @@ export function KvStreamReaderPanel({
             max={STREAM_READ_MAX_LIMIT}
             value={limitText}
             onChange={(event) => setLimitText(event.target.value)}
+            aria-invalid={limitInvalid || undefined}
+            aria-describedby={streamError ? streamErrorId : undefined}
           />
         </label>
         <div className="flex items-end">
@@ -129,6 +133,7 @@ export function KvStreamReaderPanel({
 
       {streamError && (
         <div
+          id={streamErrorId}
           role="alert"
           className="border-b border-border px-2 py-2 text-destructive"
         >
