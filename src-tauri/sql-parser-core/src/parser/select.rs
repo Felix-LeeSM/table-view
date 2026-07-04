@@ -1388,9 +1388,15 @@ impl Parser<'_> {
                 self.parse_optional_select_item_alias()?;
                 return Ok(SelectListItem::Expression { expression: expr });
             }
-            // Plain column ref (followed by `,` / `FROM` / clause kw).
+            // Plain column ref, optionally followed by an `AS alias` /
+            // bare-ident alias (issue #1297 — the alias is captured so the
+            // editability gate can map a result column back to its source).
+            let alias = self.parse_optional_select_item_alias()?;
             if Self::is_select_list_boundary(self.peek().map(|t| &t.token)) {
-                return Ok(SelectListItem::Column { reference: column });
+                return Ok(SelectListItem::Column {
+                    reference: column,
+                    alias,
+                });
             }
             // Anything else after the column ref is unexpected at top-
             // level select-list position (we don't support arithmetic
@@ -1402,7 +1408,10 @@ impl Parser<'_> {
         Err(syntax_err(at, "expected SELECT list item"))
     }
 
-    fn parse_optional_select_item_alias(&mut self) -> Result<(), ParseError> {
+    /// Consume an optional select-item alias and return the alias identifier
+    /// (issue #1297 — previously discarded). `AS <ident>` is explicit; a bare
+    /// `<ident>` immediately followed by a list boundary is a shorthand alias.
+    fn parse_optional_select_item_alias(&mut self) -> Result<Option<String>, ParseError> {
         if matches!(self.peek().map(|t| &t.token), Some(Token::As)) {
             self.advance();
             let tok = self
@@ -1410,19 +1419,20 @@ impl Parser<'_> {
                 .ok_or_else(|| syntax_err(None, "expected alias after AS"))?
                 .clone();
             match tok.token {
-                Token::Ident(_) => {
+                Token::Ident(name) => {
                     self.advance();
-                    return Ok(());
+                    return Ok(Some(name));
                 }
                 _ => return Err(syntax_err(Some(tok.at), "expected alias ident after AS")),
             }
         }
-        if matches!(self.peek().map(|t| &t.token), Some(Token::Ident(_)))
-            && Self::is_select_list_boundary(self.tokens.get(self.cursor + 1).map(|t| &t.token))
-        {
-            self.advance();
+        if let Some(Token::Ident(name)) = self.peek().map(|t| t.token.clone()) {
+            if Self::is_select_list_boundary(self.tokens.get(self.cursor + 1).map(|t| &t.token)) {
+                self.advance();
+                return Ok(Some(name));
+            }
         }
-        Ok(())
+        Ok(None)
     }
 
     /// Sprint-393b — parse one expression that lives in select-list
