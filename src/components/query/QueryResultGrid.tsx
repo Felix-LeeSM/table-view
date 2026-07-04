@@ -17,6 +17,7 @@ import { dialectFromDbType } from "@lib/sql/sqlLiteral";
 import type { RawEditPlan } from "@lib/sql/rawQuerySqlBuilder";
 import { preloadSqlWasm } from "@lib/sql/sqlAst";
 import { useMultiTableResultEditability } from "./useMultiTableResultEditability";
+import { formatCopyJson, formatNonGridCopyText } from "./queryResultCopy";
 import { useSchemaStore } from "@stores/schemaStore";
 import { useConnectionStore } from "@stores/connectionStore";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@components/ui/tabs";
@@ -73,40 +74,6 @@ function queryTypeLabel(qt: QueryType): string {
 function resultUnitNoun(result: QueryResult): string {
   const singular = result.resultUnit === "document" ? "document" : "row";
   return result.totalCount === 1 ? singular : `${singular}s`;
-}
-
-function formatCopyValue(value: unknown): string {
-  if (value === null || value === undefined) return "NULL";
-  if (typeof value === "string") return value;
-  if (
-    typeof value === "number" ||
-    typeof value === "bigint" ||
-    typeof value === "boolean"
-  ) {
-    return String(value);
-  }
-  try {
-    return JSON.stringify(value);
-  } catch {
-    return String(value);
-  }
-}
-
-function formatCopyJson(value: unknown): string {
-  try {
-    return JSON.stringify(value, null, 2);
-  } catch {
-    return String(value);
-  }
-}
-
-function formatNonGridCopyText(
-  result: QueryResult,
-  mode: "count" | "list" | "findOne-empty",
-): string {
-  if (mode === "findOne-empty" || result.rows.length === 0) return "";
-  if (mode === "count") return formatCopyValue(result.rows[0]?.[0]);
-  return result.rows.map((row) => formatCopyValue(row[0])).join("\n");
 }
 
 function DmlMessage({ result }: { result: QueryResult }) {
@@ -532,7 +499,14 @@ function CompletedSingleResult({
         </div>
       )}
       {/* Status bar */}
-      <div className="flex items-center justify-between border-b border-border px-3 py-1.5 text-xs text-secondary-foreground">
+      {/* #1137 — completion summary (query type + row count) routed to a
+          polite live region so SR users hear "done — N rows", matching the
+          error `role="alert"` on the error branch (consistency). */}
+      <div
+        role="status"
+        aria-live="polite"
+        className="flex items-center justify-between border-b border-border px-3 py-1.5 text-xs text-secondary-foreground"
+      >
         <span>
           {queryTypeLabel(result.queryType)}
           {result.queryType === "select" && (
@@ -709,10 +683,15 @@ export default function QueryResultGrid({
   // Running state
   if (queryState.status === "running") {
     return (
-      <div className="flex flex-1 flex-col items-center justify-center">
+      <div
+        role="status"
+        aria-busy="true"
+        className="flex flex-1 flex-col items-center justify-center"
+      >
         <Loader2
           className="mb-2 animate-spin text-muted-foreground"
           size={24}
+          aria-hidden="true"
         />
         <p className="text-sm text-muted-foreground">
           {t("resultGrid.executing")}

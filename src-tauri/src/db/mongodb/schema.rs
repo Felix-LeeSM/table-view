@@ -520,6 +520,51 @@ impl MongoAdapter {
         Ok(out)
     }
 
+    /// Issue #1269 (P1) — resolve the `opid` of the running op tagged with
+    /// `comment == tag` so native cancel can `killOp` it. Reuses the same
+    /// `currentOp: 1, $all: true` scan + opid extraction as `current_op_impl`.
+    ///
+    /// `Ok(Some(opid))` — a live op carries the tag. `Ok(None)` — no op
+    /// matches (already finished, or the runner never reached the server):
+    /// the caller treats this as a benign "already completed". `Err` — the
+    /// scan itself failed (no `inprog` privilege on Atlas shared, driver
+    /// fault); it propagates so the failure surfaces rather than looking like
+    /// a completed query.
+    pub(super) async fn resolve_opid_by_comment(&self, tag: &str) -> Result<Option<i64>, AppError> {
+        let client = self.current_client().await?;
+        let resp = client
+            .database("admin")
+            .run_command(doc! { "currentOp": 1, "$all": true })
+            .await
+            .map_err(|e| AppError::Database(format!("currentOp failed: {e}")))?;
+        let inprog = resp
+            .get_array("inprog")
+            .map_err(|e| AppError::Database(format!("currentOp inprog missing: {e}")))?;
+        for entry in inprog {
+            let Some(op) = entry.as_document() else {
+                continue;
+            };
+            // The comment stamped on the find/aggregate options surfaces under
+            // `command.comment`; some server versions also echo a top-level
+            // `comment`, so check both.
+            let tagged = op
+                .get_document("command")
+                .ok()
+                .and_then(|c| c.get_str("comment").ok())
+                .or_else(|| op.get_str("comment").ok())
+                .map(|c| c == tag)
+                .unwrap_or(false);
+            if !tagged {
+                continue;
+            }
+            return Ok(op
+                .get_i64("opid")
+                .or_else(|_| op.get_i32("opid").map(|v| v as i64))
+                .ok());
+        }
+        Ok(None)
+    }
+
     /// Sprint 336 (U1 live wire) — `adminCommand({killOp: 1, op: id})`.
     pub(super) async fn kill_op_impl(&self, id: i64) -> Result<(), AppError> {
         let client = self.current_client().await?;

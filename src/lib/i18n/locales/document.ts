@@ -170,6 +170,13 @@ export const en = {
     projectionActiveTitle: "Projection: {{count}} field(s)",
     projectionInactiveTitle: "Server-side field projection",
   },
+  gridCancel: {
+    // Issue #1269 (P1) — surfaced when mongo native cancel (killOp) is
+    // rejected (e.g. no killop/inprog privilege on Atlas shared) so the stop
+    // does not fail silently.
+    nativeFailed:
+      "Server-side stop failed: {{message}}. The query may keep running on the server.",
+  },
   treePanel: {
     ariaLabel: "Document tree",
     unsavedEdits_one: "{{count}} unsaved edit",
@@ -449,6 +456,10 @@ export const ko = {
     projectionAriaLabel: "필드 프로젝션",
     projectionActiveTitle: "프로젝션: {{count}}개 필드",
     projectionInactiveTitle: "서버 측 필드 프로젝션",
+  },
+  gridCancel: {
+    nativeFailed:
+      "서버측 중단 실패: {{message}}. 쿼리가 서버에서 계속 실행 중일 수 있습니다.",
   },
   treePanel: {
     ariaLabel: "문서 트리",

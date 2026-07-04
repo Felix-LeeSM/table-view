@@ -1022,7 +1022,7 @@ mod tests {
         // (b) native cancel 이 락 대기 없이 발행 (성공/실패 무관, 블록만 안 되면 됨).
         let cancel = timeout(
             Duration::from_secs(5),
-            cancel_query_native_inner(&state, "c", 1234),
+            cancel_query_native_inner(&state, "c", 1234, None),
         )
         .await;
         assert!(

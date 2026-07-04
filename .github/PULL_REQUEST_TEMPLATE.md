@@ -1,3 +1,12 @@
+<!--
+ALL sections below are REQUIRED — including for external contributions.
+Do not delete a section: if it does not apply, keep the heading and fill it
+with "Not required: <reason>" or "n/a".
+The "Smoke-Test-Plan:" line is read by review/CI contracts; keep the exact
+spelling. PRs whose body is supplied programmatically (e.g. gh pr create
+with a body file) must reproduce every section of this template.
+-->
+
 ## Summary
 
 <!-- What changed, in one or two sentences. -->

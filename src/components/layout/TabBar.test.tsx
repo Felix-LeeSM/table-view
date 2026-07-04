@@ -161,6 +161,57 @@ describe("TabBar", () => {
     expect(getTestWorkspace().activeTabId).toBe(firstTabId);
   });
 
+  // #1131 — ArrowLeft/Right/Home/End rove focus + activation across the tab
+  // strip so tabs past Cmd/Ctrl+1..9's reach stay keyboard-navigable, with a
+  // single roving tab stop.
+  it("#1131 arrow keys rove tab activation with a single tab stop", () => {
+    const mkTab = (id: string, table: string): TableTab => ({
+      id,
+      type: "table",
+      title: table,
+      connectionId: "conn1",
+      closable: true,
+      subView: "records",
+      isPreview: false,
+      schema: "public",
+      table,
+    });
+    useWorkspaceStore.setState(
+      seedWorkspace(
+        [mkTab("t1", "a"), mkTab("t2", "b"), mkTab("t3", "c")],
+        "t3",
+      ),
+    );
+
+    render(<TabBar />);
+
+    const tablist = screen.getByRole("tablist");
+    expect(getTestWorkspace().activeTabId).toBe("t3");
+
+    // ArrowRight from the last tab wraps to the first.
+    act(() => {
+      fireEvent.keyDown(tablist, { key: "ArrowRight" });
+    });
+    expect(getTestWorkspace().activeTabId).toBe("t1");
+
+    // ArrowLeft from the first wraps to the last.
+    act(() => {
+      fireEvent.keyDown(tablist, { key: "ArrowLeft" });
+    });
+    expect(getTestWorkspace().activeTabId).toBe("t3");
+
+    // Home → first, and exactly one tab owns tabindex 0.
+    act(() => {
+      fireEvent.keyDown(tablist, { key: "Home" });
+    });
+    expect(getTestWorkspace().activeTabId).toBe("t1");
+    const stops = screen
+      .getAllByRole("tab")
+      .filter((t) => t.getAttribute("tabindex") === "0");
+    expect(stops).toHaveLength(1);
+    expect(stops[0]).toHaveAttribute("data-tab-id", "t1");
+  });
+
   it("closes tab via close button", () => {
     addTableTab({ title: "Users", table: "users" });
 

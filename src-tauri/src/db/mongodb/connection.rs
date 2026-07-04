@@ -335,6 +335,23 @@ impl DbAdapter for MongoAdapter {
     fn cancel_query<'a>(&'a self, server_pid: i64) -> BoxFuture<'a, Result<(), AppError>> {
         Box::pin(async move { self.kill_op_impl(server_pid).await })
     }
+
+    /// Issue #1269 (P1) — resolve the tagged op's opid via `$currentOp` then
+    /// `killOp` it. `resolve_opid_by_comment` returning `None` means the op is
+    /// gone (already completed) — reported as a "not running" error so
+    /// `classify_cancel_error` buckets it as `AlreadyCompleted` (frontend
+    /// silent). A resolve/kill failure (missing `inprog`/`killop` privilege)
+    /// propagates and surfaces as `PermissionDenied`.
+    fn cancel_query_by_tag<'a>(&'a self, tag: &'a str) -> BoxFuture<'a, Result<(), AppError>> {
+        Box::pin(async move {
+            match self.resolve_opid_by_comment(tag).await? {
+                Some(opid) => self.kill_op_impl(opid).await,
+                None => Err(AppError::Database(
+                    "operation not running (already completed)".into(),
+                )),
+            }
+        })
+    }
 }
 
 #[cfg(test)]
@@ -368,6 +385,20 @@ mod tests {
             .cancel_query(4242)
             .await
             .expect_err("killOp without a client must error");
+        assert!(matches!(err, AppError::Connection(_)));
+    }
+
+    /// Issue #1269 (P1) — the tag route resolves the opid via `$currentOp`
+    /// before `killOp`. Without a live client the `$currentOp` scan cannot
+    /// run, so the call surfaces a `Connection` error rather than a silent
+    /// no-op — proving cancel-by-tag reaches the driver boundary.
+    #[tokio::test]
+    async fn cancel_query_by_tag_errors_without_client() {
+        let adapter = MongoAdapter::new();
+        let err = adapter
+            .cancel_query_by_tag("q-tag")
+            .await
+            .expect_err("currentOp resolve without a client must error");
         assert!(matches!(err, AppError::Connection(_)));
     }
 

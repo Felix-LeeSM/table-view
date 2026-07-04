@@ -34,6 +34,7 @@ import type {
   SearchResultEnvelope,
 } from "@/types/search";
 import { SearchDeleteByQueryPreviewDialog } from "./SearchDeleteByQueryPreviewDialog";
+import { useTablistRoving } from "@components/shared/tablist/useTablistRoving";
 
 export interface SearchIndexDetailPanelProps {
   connectionId: string;
@@ -92,6 +93,7 @@ export default function SearchIndexDetailPanel({
     useState<AsyncSlot<SearchFieldStatsEnvelope>>(idle());
   const [deletePreviewOpen, setDeletePreviewOpen] = useState(false);
   const detailRequestGeneration = useRef(0);
+  const tablistRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -251,6 +253,8 @@ export default function SearchIndexDetailPanel({
       ),
     [supportsSearchSamples],
   );
+  const tabValues = availableTabs.map((item) => item.value);
+  const tablist = useTablistRoving(tabValues, active, setActive, tablistRef);
   const matchingTemplates = useMemo(() => {
     if (templates.status !== "loaded") return [];
     return templates.data.filter((template) =>
@@ -319,9 +323,11 @@ export default function SearchIndexDetailPanel({
       </header>
 
       <div
+        ref={tablistRef}
         role="tablist"
         aria-label={t("tablistAria")}
         className="flex shrink-0 items-center gap-0 overflow-x-auto border-b border-border bg-secondary"
+        onKeyDown={tablist.onKeyDown}
       >
         {availableTabs.map((item) => {
           const Icon = item.icon;
@@ -331,8 +337,10 @@ export default function SearchIndexDetailPanel({
               type="button"
               role="tab"
               id={`tab-search-detail-${item.value}`}
+              data-tab-value={item.value}
               aria-controls={`tabpanel-search-detail-${item.value}`}
               aria-selected={active === item.value}
+              tabIndex={active === item.value ? 0 : -1}
               className={`flex h-8 shrink-0 items-center gap-1.5 border-b-2 px-3 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${
                 active === item.value
                   ? "border-primary text-foreground"

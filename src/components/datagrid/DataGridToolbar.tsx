@@ -176,29 +176,37 @@ export default function DataGridToolbar({
       <div className="flex items-center gap-2 text-xs text-secondary-foreground">
         {data ? (
           <>
-            {data.total_count.toLocaleString()} {rowCountLabel}
-            {sorts.length > 0 && (
-              <span className="text-muted-foreground">
-                {t("sortedBy")}{" "}
-                {sorts.map((s) => `${s.column} ${s.direction}`).join(", ")}
-              </span>
-            )}
-            {pendingEditsSize > 0 && (
-              <span className="text-warning">
-                {t("pendingEdits", { count: pendingEditsSize })}
-              </span>
-            )}
-            {(pendingNewRowsCount > 0 || pendingDeletedRowKeysSize > 0) && (
-              <span className="text-warning">
-                {pendingNewRowsCount > 0 &&
-                  t("pendingNew", { count: pendingNewRowsCount })}
-                {pendingNewRowsCount > 0 &&
-                  pendingDeletedRowKeysSize > 0 &&
-                  ", "}
-                {pendingDeletedRowKeysSize > 0 &&
-                  t("pendingDel", { count: pendingDeletedRowKeysSize })}
-              </span>
-            )}
+            {/* #1137 — row count / sort / pending summary in a polite live
+                region (buttons stay outside so only the status text speaks). */}
+            <span
+              role="status"
+              aria-live="polite"
+              className="flex items-center gap-2"
+            >
+              {data.total_count.toLocaleString()} {rowCountLabel}
+              {sorts.length > 0 && (
+                <span className="text-muted-foreground">
+                  {t("sortedBy")}{" "}
+                  {sorts.map((s) => `${s.column} ${s.direction}`).join(", ")}
+                </span>
+              )}
+              {pendingEditsSize > 0 && (
+                <span className="text-warning">
+                  {t("pendingEdits", { count: pendingEditsSize })}
+                </span>
+              )}
+              {(pendingNewRowsCount > 0 || pendingDeletedRowKeysSize > 0) && (
+                <span className="text-warning">
+                  {pendingNewRowsCount > 0 &&
+                    t("pendingNew", { count: pendingNewRowsCount })}
+                  {pendingNewRowsCount > 0 &&
+                    pendingDeletedRowKeysSize > 0 &&
+                    ", "}
+                  {pendingDeletedRowKeysSize > 0 &&
+                    t("pendingDel", { count: pendingDeletedRowKeysSize })}
+                </span>
+              )}
+            </span>
             {canEditRows && hasPendingChanges && (
               <>
                 <Button

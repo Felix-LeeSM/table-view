@@ -77,20 +77,26 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-/// Fire a paradigm-native cancel against the server pid recorded in
-/// `AppState.tab_affinity`. Resolves on success. Rejects with a typed
+/// Fire a paradigm-native cancel. Resolves on success. Rejects with a typed
 /// `CancelError` so callers can branch on the discriminator.
 ///
-/// Mongo callers pass the opid (materialised by the runner mid-query)
-/// in the `serverPid` slot — the IPC signature is paradigm-agnostic.
+/// Two routes (the backend picks by presence of `queryId`):
+///   * RDB — pass `serverPid` (pg backend pid / mysql thread id) captured at
+///     executeQuery time via `getQueryServerPid` (Issue #1230).
+///   * Mongo — pass `queryId` (Issue #1269). The opid is not client-visible,
+///     so the backend resolves it via `$currentOp` matched on the tag the
+///     runner stamped, then `killOp`s it. `serverPid` is ignored on this route
+///     (pass `0`).
 export async function cancelQueryNative(
   connectionId: string,
   serverPid: number,
+  queryId?: string,
 ): Promise<void> {
   try {
     await invoke<void>("cancel_query_native", {
       connectionId,
       serverPid,
+      queryId,
     });
   } catch (err) {
     throw parseCancelError(err);

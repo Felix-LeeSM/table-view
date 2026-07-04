@@ -350,7 +350,12 @@ export function renderEmptyRow(
   ctx: SchemaTreeRowsContext,
 ) {
   return (
-    <div className="px-10 py-1 text-2xs italic text-muted-foreground">
+    // #1137 — filter/empty category announced politely (DocumentDatabaseTree parity).
+    <div
+      className="px-10 py-1 text-2xs italic text-muted-foreground"
+      role="status"
+      aria-live="polite"
+    >
       {row.category.key === "tables" && row.hasActiveSearch
         ? ctx.t("noMatchingTablesEmpty")
         : ctx.t(row.category.emptyLabelKey)}

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Table2, Code2 } from "lucide-react";
 import {
@@ -12,6 +12,7 @@ import type { Tab, TableTab } from "@stores/workspaceStore";
 import ConfirmDialog from "@components/ui/dialog/ConfirmDialog";
 import TabItem from "./TabItem";
 import { useTabDrag } from "./useTabDrag";
+import { useTablistRoving } from "@components/shared/tablist/useTablistRoving";
 
 /**
  * 2026-05-11 — split into `useTabDrag` (pointer-capture-backed drag
@@ -48,6 +49,19 @@ export default function TabBar() {
   // surface ConfirmDialog; the actual `removeTab` only runs on `onConfirm`.
   // `onCancel` clears the pending state (the close is rejected).
   const [pendingClose, setPendingClose] = useState<Tab | null>(null);
+
+  // ArrowLeft/Right/Home/End roving nav across the open tabs (automatic
+  // activation). Reuses `scrollRef` — it already wraps the `role="tablist"`
+  // strip — as the focus lookup container.
+  const roving = useTablistRoving(
+    useMemo(() => tabs.map((tab) => tab.id), [tabs]),
+    activeTabId,
+    (id) => {
+      if (!workspaceKey) return;
+      setActiveTab(workspaceKey.connId, workspaceKey.db, id);
+    },
+    scrollRef,
+  );
 
   const requestCloseTab = (tab: Tab) => {
     if (dirtyTabIds.includes(tab.id)) {
@@ -86,6 +100,7 @@ export default function TabBar() {
         aria-label={t("tabBar.openConnectionsAria")}
         className="flex flex-1 overflow-x-auto select-none"
         style={{ scrollbarWidth: "none" }}
+        onKeyDown={roving.onKeyDown}
       >
         {tabs.map((tab) => {
           const displayTitle =

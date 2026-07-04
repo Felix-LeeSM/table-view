@@ -336,7 +336,14 @@ export default function QuickOpen() {
         {/* Results list */}
         <div className="max-h-80 overflow-y-auto" role="listbox">
           {filtered.length === 0 ? (
-            <div className="px-3 py-6 text-center text-sm text-muted-foreground">
+            // #1137 — announce the empty state politely; the combobox already
+            // conveys populated results via aria-activedescendant, so no
+            // per-keystroke count region (spam avoidance per issue).
+            <div
+              role="status"
+              aria-live="polite"
+              className="px-3 py-6 text-center text-sm text-muted-foreground"
+            >
               {items.length === 0
                 ? t("quickOpen.noConnections")
                 : t("quickOpen.noResults")}

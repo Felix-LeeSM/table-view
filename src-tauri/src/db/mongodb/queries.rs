@@ -39,6 +39,7 @@ impl MongoAdapter {
             projection,
             skip,
             limit,
+            comment,
         } = body;
 
         let mut opts = FindOptions::default();
@@ -47,6 +48,11 @@ impl MongoAdapter {
         }
         if let Some(p) = projection {
             opts.projection = Some(p);
+        }
+        // Issue #1269 (P1) — stamp the cancel tag so the running op is
+        // discoverable via `$currentOp` matched on `command.comment`.
+        if let Some(c) = comment {
+            opts.comment = Some(Bson::String(c));
         }
         if skip > 0 {
             opts.skip = Some(skip);
