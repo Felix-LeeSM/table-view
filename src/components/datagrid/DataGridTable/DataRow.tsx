@@ -12,6 +12,8 @@ import {
   cellToEditValue,
   deriveEditorSeed,
   getInputTypeForColumn,
+  pendingEditAnchorMatches,
+  rowIdentityKey,
 } from "../dataGridEditFsm";
 import { cn } from "@lib/utils";
 import { isBlobColumn, parseFkReference } from "./columnUtils";
@@ -68,6 +70,13 @@ export interface DataGridRowContext {
   editingCell: { row: number; col: number } | null;
   editValue: string | null;
   pendingEdits: Map<string, string | null>;
+  /**
+   * Issue #1174 — edit-time row-identity anchors keyed by base cell key.
+   * The overlay renders only when the row now at `rowIdx` still matches the
+   * anchor, so a pending edit follows its row across pagination / sort /
+   * filter instead of lighting up a stale visual index.
+   */
+  pendingEditRowSnapshots?: ReadonlyMap<string, ReadonlyArray<unknown>>;
   pendingEditErrors?: Map<string, string>;
   pendingDeletedRowKeys: Set<string>;
   selectedRowIds: Set<number>;
@@ -136,6 +145,7 @@ export default function DataRow({ rowIdx, ctx, rowStyle }: DataRowProps) {
     editingCell,
     editValue,
     pendingEdits,
+    pendingEditRowSnapshots,
     pendingEditErrors,
     pendingDeletedRowKeys,
     selectedRowIds,
@@ -159,6 +169,9 @@ export default function DataRow({ rowIdx, ctx, rowStyle }: DataRowProps) {
 
   const row = data.rows[rowIdx] as unknown[] | undefined;
   if (!row) return null;
+  // Issue #1174 — identity of the row now at this visual index. A pending
+  // edit's overlay only paints when its edit-time anchor matches this.
+  const currentRowIdentity = rowIdentityKey(row, data.columns);
   const rk = `row-${page}-${rowIdx}`;
   const isDeleted = pendingDeletedRowKeys.has(rk);
   const isSelected = selectedRowIds.has(rowIdx);
@@ -190,7 +203,17 @@ export default function DataRow({ rowIdx, ctx, rowStyle }: DataRowProps) {
         const key = editKey(rowIdx, dIdx);
         const isEditing =
           editingCell?.row === rowIdx && editingCell?.col === dIdx;
-        const hasPendingEdit = pendingEdits.has(key);
+        // Issue #1174 — index-keyed hit must also pass the row-identity
+        // anchor so a pending edit doesn't paint on a different row that
+        // paginated / sorted / filtered into this index.
+        const hasPendingEdit =
+          pendingEdits.has(key) &&
+          pendingEditAnchorMatches(
+            key,
+            currentRowIdentity,
+            data.columns,
+            pendingEditRowSnapshots,
+          );
         const cellEditValue = cellToEditValue(cell);
         const pendingValue: string | null = hasPendingEdit
           ? (pendingEdits.get(key) as string | null)
@@ -227,7 +250,17 @@ export default function DataRow({ rowIdx, ctx, rowStyle }: DataRowProps) {
         // Count nested pending edits on this cell so we can flag it
         // with the same amber highlight a top-level pending uses.
         let nestedPendingCount = 0;
-        if (isNestedCapable) {
+        // Issue #1174 — nested edits anchor under the base cell key, so the
+        // same row-identity gate applies before counting them.
+        if (
+          isNestedCapable &&
+          pendingEditAnchorMatches(
+            key,
+            currentRowIdentity,
+            data.columns,
+            pendingEditRowSnapshots,
+          )
+        ) {
           const nestedPrefix = `${rowIdx}-${dIdx}:`;
           for (const k of pendingEdits.keys()) {
             if (k.startsWith(nestedPrefix)) nestedPendingCount++;

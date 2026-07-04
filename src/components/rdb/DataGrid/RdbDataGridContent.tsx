@@ -99,6 +99,7 @@ export const RdbDataGridContent = forwardRef<
           editingCell={editState.editingCell}
           editValue={editState.editValue}
           pendingEdits={editState.pendingEdits}
+          pendingEditRowSnapshots={editState.pendingEditRowSnapshots}
           setPendingEdits={editState.setPendingEdits}
           pendingEditErrors={editState.pendingEditErrors}
           selectedRowIds={editState.selectedRowIds}

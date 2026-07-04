@@ -25,6 +25,13 @@ export interface DataGridEditState {
   pendingNewRows: unknown[][];
   pendingDeletedRowKeys: Set<string>;
   pendingEditErrors: Map<string, string>;
+  /**
+   * Issue #1174 — row-identity anchors captured at edit time, keyed by the
+   * base cell key `${rowIdx}-${colIdx}`. The render overlay reads these to
+   * follow a pending edit to its actual row across pagination / sort /
+   * filter instead of lighting up the same visual row index.
+   */
+  pendingEditRowSnapshots: ReadonlyMap<string, ReadonlyArray<unknown>>;
 
   sqlPreview: string[] | null;
   setSqlPreview: (v: string[] | null) => void;

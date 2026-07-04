@@ -21,6 +21,7 @@ function makeEditState(
     pendingNewRows: [],
     pendingDeletedRowKeys: new Set(),
     pendingEditErrors: new Map(),
+    pendingEditRowSnapshots: new Map(),
     sqlPreview: null,
     setSqlPreview: vi.fn(),
     commitError: null,

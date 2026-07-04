@@ -29,6 +29,8 @@ export {
   deriveEditorSeed,
   editKey,
   getInputTypeForColumn,
+  pendingEditAnchorMatches,
+  rowIdentityKey,
   rowKeyFn,
   UNDO_STACK_MAX,
 } from "./dataGridEditFsm";
