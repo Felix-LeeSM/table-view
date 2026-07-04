@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useDocumentQueryStore } from "@stores/documentQueryStore";
-import { useConnectionStore } from "@stores/connectionStore";
-import { cancelQuery, cancelQueryNative, getQueryServerPid } from "@lib/tauri";
-import { supportsNativeCancel } from "@components/query/QueryTab/useQueryContext";
+import { cancelQuery } from "@lib/tauri";
 import type { ColumnInfo, SortInfo, TableData } from "@/types/schema";
 import type { DocumentQueryResult } from "@/types/document";
 
@@ -86,10 +84,6 @@ export function useDocumentGridData({
   const queryResult = useDocumentQueryStore(
     (s) => s.queryResults[connectionId]?.[database]?.[collection],
   );
-  // Issue #1269 (P1) — native cancel (mongo `killOp`) gates on the DBMS.
-  const dbType = useConnectionStore(
-    (s) => s.connections.find((c) => c.id === connectionId)?.dbType,
-  );
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -160,28 +154,17 @@ export function useDocumentGridData({
     const queryId = queryIdRef.current;
     queryIdRef.current = null;
     if (!queryId) return;
-    // Issue #1269 (P1) — mirror the SQL query tab's two-step cancel: fire the
-    // cooperative token first (backend `tokio::select!` returns cancelled),
-    // then, for mongo, fire the native `killOp` so a long collection scan is
-    // torn down server-side. Both best-effort — the UI settled synchronously
-    // above; a race with the finally clause or a swapped connection is silent.
-    void (async () => {
-      try {
-        await cancelQuery(queryId);
-      } catch {
-        // Backend cancel registry may have already evicted the token.
-      }
-      if (!supportsNativeCancel(dbType)) return;
-      try {
-        const serverPid = await getQueryServerPid(queryId);
-        if (serverPid != null) {
-          await cancelQueryNative(connectionId, serverPid);
-        }
-      } catch {
-        // Native cancel is best-effort — query likely already completed.
-      }
-    })();
-  }, [connectionId, dbType]);
+    // Issue #1269 (P1) — fire the cooperative token so the backend
+    // `find_documents` `tokio::select!` returns cancelled and frees the
+    // driver. Best-effort: the UI settled synchronously above. Mongo has no
+    // native (server-side) cancel wired yet — `killOp` exists but no path
+    // materialises the running op's opid, so the Stop stays cooperative-only
+    // until the opid-capture follow-up lands.
+    cancelQuery(queryId).catch(() => {
+      // Backend cancel registry may have already evicted the token, or the
+      // connection was swapped — the frontend is already consistent.
+    });
+  }, []);
 
   useEffect(() => {
     fetchData();

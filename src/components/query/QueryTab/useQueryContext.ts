@@ -16,28 +16,27 @@ import type { RdbHistoryOverrides } from "./rdbQueryExecution";
 /**
  * Issue #1230 — DBMS whose adapter implements native (server-side) cancel,
  * i.e. `execute_query` captures a server pid the Cancel button can pass to
- * `cancelQueryNative` (pg `pg_cancel_backend` / mysql `KILL QUERY` / mongo
- * `killOp`). Every other cancel-capable DBMS keeps only the cooperative token.
+ * `cancelQueryNative` (pg `pg_cancel_backend` / mysql `KILL QUERY`). Every
+ * other cancel-capable DBMS keeps only the cooperative token.
  *
- * Issue #1269 (P1) — mongo joins the set: `MongoAdapter::cancel_query`
- * delegates to `killOp` (connection.rs), so the Cancel button can pass the
- * opid through the same `cancelQueryNative` IPC (opid rides the `serverPid`
- * slot — the IPC signature is paradigm-agnostic).
+ * Issue #1269 — mongo is deliberately NOT here yet. Its adapter's
+ * `cancel_query` delegates to `killOp` (connection.rs), but no execution path
+ * (`run_mongo_command` / `find_documents`) materialises the running op's opid
+ * into `query_server_pids`, so `getQueryServerPid` always resolves null for
+ * mongo. Adding mongo here would flip `Toolbar`'s cancel tooltip to claim a
+ * server-side stop the app cannot yet deliver (claimed != actual). Promote
+ * mongo together with the opid-capture follow-up (comment tag + `$currentOp`,
+ * keyed by `queryId`).
  *
  * Derived from `dbType` rather than a new capability field: it is a fixed
- * small-value check the adapter side already fixes (`execute_sql_tracked` /
- * `cancel_query` overrides), and expanding the capability contract across ~13
- * profiles buys nothing here.
+ * small-value check the adapter side already fixes (`execute_sql_tracked`
+ * overrides), and expanding the capability contract across ~13 profiles buys
+ * nothing here.
  */
 export function supportsNativeCancel(
   dbType: DatabaseType | null | undefined,
 ): boolean {
-  return (
-    dbType === "postgresql" ||
-    dbType === "mysql" ||
-    dbType === "mariadb" ||
-    dbType === "mongodb"
-  );
+  return dbType === "postgresql" || dbType === "mysql" || dbType === "mariadb";
 }
 
 /**

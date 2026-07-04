@@ -1,35 +1,17 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { setupTauriMock } from "@/test-utils/tauriMock";
-import { useConnectionStore } from "@stores/connectionStore";
 import { __resetDocumentQueryStoreForTests } from "@stores/documentQueryStore";
-import type { ConnectionConfig } from "@/types/connection";
 import type { DocumentQueryResult } from "@/types/document";
 import { useDocumentGridData } from "./useDocumentGridData";
 
-// Issue #1269 (P1) — mongo grid browse cancel wiring. The Cancel button fires
-// the cooperative `cancelQuery(queryId)` and, because mongo is a native-cancel
-// DBMS (supportsNativeCancel → killOp), additionally resolves the opid and
-// fires `cancelQueryNative`. The `queryId` threads through `runFind` →
-// `findDocuments` so the backend registers a cancel token for the browse.
-
-function seedMongoConnection(): void {
-  const conn: ConnectionConfig = {
-    id: "conn-1",
-    name: "c",
-    dbType: "mongodb",
-    host: "localhost",
-    port: 27017,
-    user: "u",
-    hasPassword: false,
-    database: "app",
-    groupId: null,
-    color: null,
-    environment: null,
-    paradigm: "document",
-  };
-  useConnectionStore.setState({ connections: [conn] });
-}
+// Issue #1269 (P1) — mongo grid browse cancel wiring. The Cancel button
+// threads a `queryId` through `runFind` → `findDocuments` so the backend
+// registers a cancel token, then fires the cooperative `cancelQuery(queryId)`.
+// Mongo has NO native (server-side) cancel wired yet: `killOp` exists but no
+// execution path materialises the running op's opid, so the grid stays
+// cooperative-only (see `supportsNativeCancel`). The native step lands with
+// the opid-capture follow-up.
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -54,7 +36,6 @@ function renderGrid() {
 describe("useDocumentGridData cancel wiring (#1269)", () => {
   const findDocuments = vi.fn();
   const cancelQuery = vi.fn();
-  const getQueryServerPid = vi.fn();
   const cancelQueryNative = vi.fn();
 
   beforeEach(() => {
@@ -63,18 +44,14 @@ describe("useDocumentGridData cancel wiring (#1269)", () => {
     setupTauriMock({
       findDocuments: (...a: unknown[]) => findDocuments(...a),
       cancelQuery: (...a: unknown[]) => cancelQuery(...a),
-      getQueryServerPid: (...a: unknown[]) => getQueryServerPid(...a),
       cancelQueryNative: (...a: unknown[]) => cancelQueryNative(...a),
     });
     cancelQuery.mockResolvedValue("cancelled");
-    cancelQueryNative.mockResolvedValue(undefined);
   });
 
-  it("threads a queryId through findDocuments and fires cooperative + native cancel (killOp)", async () => {
-    seedMongoConnection();
+  it("threads a queryId through findDocuments and fires the cooperative cancel", async () => {
     const d = deferred<DocumentQueryResult>();
     findDocuments.mockReturnValue(d.promise);
-    getQueryServerPid.mockResolvedValue(99001);
 
     const { result } = renderGrid();
     await waitFor(() => expect(findDocuments).toHaveBeenCalled());
@@ -87,28 +64,8 @@ describe("useDocumentGridData cancel wiring (#1269)", () => {
       result.current.handleCancelRefetch();
     });
 
-    await waitFor(() =>
-      expect(cancelQueryNative).toHaveBeenCalledWith("conn-1", 99001),
-    );
-    expect(cancelQuery).toHaveBeenCalledWith(queryId);
-    expect(getQueryServerPid).toHaveBeenCalledWith(queryId);
-  });
-
-  it("skips native cancel when no opid is captured", async () => {
-    seedMongoConnection();
-    const d = deferred<DocumentQueryResult>();
-    findDocuments.mockReturnValue(d.promise);
-    getQueryServerPid.mockResolvedValue(null);
-
-    const { result } = renderGrid();
-    await waitFor(() => expect(findDocuments).toHaveBeenCalled());
-
-    await act(async () => {
-      result.current.handleCancelRefetch();
-    });
-
-    await waitFor(() => expect(getQueryServerPid).toHaveBeenCalled());
-    expect(cancelQuery).toHaveBeenCalled();
+    await waitFor(() => expect(cancelQuery).toHaveBeenCalledWith(queryId));
+    // Mongo has no native cancel wired — the killOp path must not be reached.
     expect(cancelQueryNative).not.toHaveBeenCalled();
   });
 });
