@@ -68,32 +68,37 @@ function StatusIndicator({ status }: { status: ConnectionStatus }) {
   const { t } = useTranslation("featuresConnection");
   if (status.type === "connecting") {
     return (
-      <Loader2
-        size={10}
-        className="shrink-0 animate-spin text-muted-foreground"
+      <span
+        className="inline-flex shrink-0 text-muted-foreground"
+        role="img"
         aria-label={t("item.statusConnecting")}
-      />
+      >
+        <Loader2 size={10} className="animate-spin" aria-hidden="true" />
+      </span>
     );
   }
   // #1139 — distinct SHAPE per state (WCAG 1.4.1), not color alone:
   // connected = filled check circle, error = alert circle, disconnected =
-  // hollow ring. Connecting keeps its spinner above.
+  // hollow ring. Connecting keeps its spinner above. Each wraps the icon in
+  // span[role="img"][aria-label] (repo pattern, e.g. DocumentDatabaseTree
+  // rows.tsx) — a bare svg has no default role so the accessible name is
+  // unreliable across AT/browser combos.
   if (status.type === "connected") {
     return (
-      <CircleCheck
-        size={10}
-        className="shrink-0 text-success"
+      <span
+        className="inline-flex shrink-0 text-success"
+        role="img"
         aria-label={t("item.statusConnected")}
-      />
+      >
+        <CircleCheck size={10} aria-hidden="true" />
+      </span>
     );
   }
   if (status.type === "error") {
-    // lucide's svg type has no `title` attr; keep the hover tooltip on a
-    // labelled wrapper span and let the icon supply the (color-blind-safe)
-    // shape.
     return (
       <span
         className="inline-flex shrink-0 text-destructive"
+        role="img"
         title={status.message}
         aria-label={t("item.statusError", { message: status.message })}
       >
@@ -102,11 +107,13 @@ function StatusIndicator({ status }: { status: ConnectionStatus }) {
     );
   }
   return (
-    <Circle
-      size={10}
-      className="shrink-0 text-muted-foreground"
+    <span
+      className="inline-flex shrink-0 text-muted-foreground"
+      role="img"
       aria-label={t("item.statusDisconnected")}
-    />
+    >
+      <Circle size={10} aria-hidden="true" />
+    </span>
   );
 }
 
