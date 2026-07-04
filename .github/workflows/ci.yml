@@ -232,7 +232,11 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Fetch coverage ratchet base
-        run: git fetch --no-tags --prune --depth=1 origin refs/heads/main:refs/remotes/origin/main
+        # Force refspec (leading `+`): concurrent main pushes advance origin/main
+        # between checkout and this fetch, and a plain shallow fetch rejects the
+        # non-fast-forward update. The ratchet only ever compares against the
+        # current main tip, so overwriting the local ref is the intended base.
+        run: git fetch --no-tags --prune --depth=1 origin +refs/heads/main:refs/remotes/origin/main
 
       - name: Coverage ratchet
         env:
