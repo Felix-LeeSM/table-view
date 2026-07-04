@@ -124,6 +124,8 @@ export function ExplainViewer({
       aria-label={t("explain.viewerAria")}
       data-paradigm={paradigm}
       data-testid="explain-viewer"
+      // #1137 — busy while the plan refreshes (error already role="alert").
+      aria-busy={loading || undefined}
       className="flex flex-col gap-2 p-3"
     >
       <header className="flex items-center justify-between text-xs font-medium text-muted-foreground">

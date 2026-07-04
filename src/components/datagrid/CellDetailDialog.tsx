@@ -107,6 +107,11 @@ export default function CellDetailDialog({
               )}
             </Button>
           </div>
+          {/* #1137 — SR-only polite confirmation; the button's inline label
+              swap isn't a live region so "Copied" would otherwise be silent. */}
+          <span className="sr-only" role="status" aria-live="polite">
+            {copied ? t("copied") : ""}
+          </span>
 
           <div className="max-h-[70vh] overflow-auto rounded border border-border bg-muted/30">
             <pre className="whitespace-pre-wrap break-words p-3 font-mono text-xs leading-5 text-foreground">

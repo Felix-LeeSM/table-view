@@ -53,17 +53,20 @@ export default function DryRunPreview({
       aria-label={t("dryRun.sectionAria")}
       data-testid="dry-run-status"
       data-status={state.status}
+      // #1137 — per-branch live roles: status for running/success/unsupported,
+      // alert for real errors; busy while the dry-run is in flight.
+      aria-busy={state.status === "running" || undefined}
       className="rounded-md border border-dashed border-border bg-background/40 p-2 text-xs text-muted-foreground"
     >
       {state.status === "running" && (
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2" role="status">
           <Loader2 className="size-3 animate-spin" aria-hidden="true" />
           <span>{t("dryRun.running")}</span>
         </div>
       )}
 
       {state.status === "success" && state.results !== null && (
-        <ul className="space-y-1">
+        <ul className="space-y-1" role="status">
           {state.results.map((r, idx) => (
             <li
               key={idx}
@@ -83,6 +86,7 @@ export default function DryRunPreview({
 
       {state.status === "error" && (
         <p
+          role="alert"
           data-testid="dry-run-error-message"
           className="whitespace-pre-wrap break-words font-mono text-3xs text-destructive"
         >
@@ -91,7 +95,9 @@ export default function DryRunPreview({
       )}
 
       {state.status === "unsupported" && (
-        <p className="italic">{t("dryRun.unsupported")}</p>
+        <p className="italic" role="status">
+          {t("dryRun.unsupported")}
+        </p>
       )}
 
       {state.status === "idle" && (
