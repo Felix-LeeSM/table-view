@@ -39,6 +39,10 @@ import {
 import BsonTypeEditor from "@/components/document/BsonTypeEditor";
 import { detectBsonType, type BsonType } from "@/lib/mongo/bsonTypes";
 import { safeStringifyCell } from "@/lib/jsonCell";
+import {
+  useTreeRoving,
+  type TreeRovingRow,
+} from "@/components/shared/tree/useTreeRoving";
 
 const BSON_TAG = "__bson__:";
 
@@ -207,6 +211,8 @@ export function DocumentTreePanel({
   // AddKeyRow). Reusing `valueInputRef` would race on parallel
   // mounting in renders where both rows happen to exist transiently.
   const itemValueInputRef = useRef<HTMLInputElement | null>(null);
+  // WAI-ARIA tree roving container (#1128).
+  const listRef = useRef<HTMLDivElement | null>(null);
 
   const startAddKey = useCallback((parentPath: string) => {
     setAddingPath(parentPath);
@@ -498,6 +504,27 @@ export function DocumentTreePanel({
 
   const pendingCount = pendingByPath?.size ?? 0;
 
+  // WAI-ARIA tree roving (#1128) — a single tab stop over the *visible* rows
+  // (collapsed / filtered nodes drop out), with arrow-key nav + expand/collapse.
+  // The root path is "" so it uses the `__root` sentinel as its tree key, kept
+  // consistent with the existing `data-testid` naming.
+  const visibleNodes = useMemo(
+    () => nodes.filter((n) => !isHidden(n.path)),
+    [nodes, isHidden],
+  );
+  const rovingRows: TreeRovingRow[] = visibleNodes.map((n) => ({
+    key: n.path || "__root",
+    depth: n.depth,
+    expanded: n.kind === "leaf" ? null : !collapsed.has(n.path),
+    focusable: true,
+  }));
+  const roving = useTreeRoving(
+    rovingRows,
+    (key) => toggleCollapsed(key === "__root" ? "" : key),
+    listRef,
+  );
+  const activeKey = roving.focusKey ?? rovingRows[0]?.key ?? null;
+
   return (
     <section
       aria-label={t("treePanel.ariaLabel")}
@@ -580,8 +607,12 @@ export function DocumentTreePanel({
       </div>
 
       <div
+        ref={listRef}
+        role="tree"
+        aria-label={t("treePanel.fieldsTreeAriaLabel")}
         data-testid="document-tree-list"
         className="max-h-96 overflow-auto rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
+        onKeyDown={roving.onKeyDown}
       >
         {nodes.map((node, idx) => {
           const objAffsAfter = onCommitEdit
@@ -671,28 +702,54 @@ export function DocumentTreePanel({
           const isCollapsed = collapsed.has(node.path);
           const pending = pendingByPath?.get(node.path);
           const isEditing = editingPath === node.path;
+          const treeKey = node.path || "__root";
+          const isContainer = node.kind === "obj" || node.kind === "arr";
           return (
             <Fragment key={node.path || "__root"}>
               <div
                 data-testid={`tree-node-${node.path || "__root"}`}
+                // WAI-ARIA tree roving (#1128) — every visible node is a
+                // treeitem; the container owns one tab stop and arrow-key nav.
+                // Enter/Space toggles a container; Enter opens a leaf's editor.
+                // Editing inputs are skipped by the roving handler (it ignores
+                // INPUT/TEXTAREA targets) so typing is never hijacked.
+                role="treeitem"
+                aria-level={node.depth + 1}
+                aria-expanded={isContainer ? !isCollapsed : undefined}
+                aria-label={node.label || fieldName}
+                data-tree-key={treeKey}
+                tabIndex={activeKey === treeKey ? 0 : -1}
+                onFocus={() => roving.setFocusKey(treeKey)}
+                onKeyDown={(e) => {
+                  if (e.target !== e.currentTarget) return;
+                  if (isContainer && (e.key === "Enter" || e.key === " ")) {
+                    e.preventDefault();
+                    toggleCollapsed(node.path);
+                  } else if (
+                    node.kind === "leaf" &&
+                    e.key === "Enter" &&
+                    !isPendingUnset(pending)
+                  ) {
+                    e.preventDefault();
+                    startEdit(node);
+                  }
+                }}
                 className={
                   node.isGhost
-                    ? "rounded border border-warning/30 bg-warning/10 px-1 py-0.5"
+                    ? "rounded border border-warning/30 bg-warning/10 px-1 py-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                     : pending !== undefined
-                      ? "rounded bg-warning/10 px-1 py-0.5"
-                      : "px-1 py-0.5"
+                      ? "rounded bg-warning/10 px-1 py-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                      : "px-1 py-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                 }
                 style={{ paddingLeft: `${node.depth * 16}px` }}
               >
                 {(node.kind === "obj" || node.kind === "arr") && (
                   <button
                     type="button"
+                    tabIndex={-1}
                     onClick={() => toggleCollapsed(node.path)}
                     className="inline-flex items-center align-middle text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                     data-testid={`tree-twist-${node.path || "__root"}`}
-                    role="treeitem"
-                    aria-level={node.depth + 1}
-                    aria-expanded={!isCollapsed}
                     aria-label={t("treePanel.toggleAriaLabel", {
                       label: node.label,
                     })}
