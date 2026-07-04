@@ -540,8 +540,16 @@ pub enum SelectListItem {
     /// `*` inside an `Expressions` list — preserved verbatim so a mix
     /// of `*` and expressions stays serializable.
     Star,
-    /// Bare or qualified identifier.
-    Column { reference: ColumnRef },
+    /// Bare or qualified identifier, with an optional output alias.
+    /// `alias` carries the `AS <ident>` / bare-ident alias the user wrote
+    /// (`SELECT id AS user_id` → `alias: Some("user_id")`); `None` when the
+    /// column is projected under its own name. Downstream editability gating
+    /// (issue #1297) uses it to map a result column back to its source
+    /// column so an aliased primary key stays editable.
+    Column {
+        reference: ColumnRef,
+        alias: Option<String>,
+    },
     /// A widened expression — CASE / window-function / scalar-subquery
     /// / IN-list etc. The expression uses the same `SelectExpr` grammar
     /// as WHERE / HAVING / JOIN ON.

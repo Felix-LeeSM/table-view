@@ -65,6 +65,53 @@ fn ac_p2_single_named_column() {
 }
 
 #[test]
+fn issue_1297_select_list_column_alias_captured() {
+    // `AS alias` and bare-ident alias on plain / qualified columns are
+    // captured (issue #1297 — the editability gate maps result → source).
+    let s = ok_select("SELECT id AS user_id, u.name display FROM users u");
+    assert_eq!(
+        s.columns,
+        Columns::Expressions {
+            items: vec![
+                SelectListItem::Column {
+                    reference: ColumnRef {
+                        table: None,
+                        column: "id".into(),
+                    },
+                    alias: Some("user_id".into()),
+                },
+                SelectListItem::Column {
+                    reference: ColumnRef {
+                        table: Some("u".into()),
+                        column: "name".into(),
+                    },
+                    alias: Some("display".into()),
+                },
+            ],
+        }
+    );
+}
+
+#[test]
+fn issue_1297_unaliased_columns_have_no_alias() {
+    // A qualified column without an alias routes through Expressions with
+    // `alias: None` (bare-ident-only lists still use Columns::Named).
+    let s = ok_select("SELECT u.id FROM users u");
+    assert_eq!(
+        s.columns,
+        Columns::Expressions {
+            items: vec![SelectListItem::Column {
+                reference: ColumnRef {
+                    table: Some("u".into()),
+                    column: "id".into(),
+                },
+                alias: None,
+            }],
+        }
+    );
+}
+
+#[test]
 fn ac_p3_where_integer_literal() {
     let s = ok_select("SELECT id FROM users WHERE id = 42");
     let w = s.where_clause.expect("WHERE");

@@ -22,11 +22,15 @@
  * Out of scope (the whole result becomes unattributable): aggregates /
  * GROUP BY / HAVING / set-operations / FROM subqueries (derived tables).
  *
- * Upstream parser gating (verified against sql-parser-core): column-level
- * aliases (`SELECT id AS foo`), qualified star (`SELECT u.*`), and `DISTINCT`
- * are rejected at *parse* time with a `SqlParseError`, so they never reach
- * this resolver — the caller treats a parse error as read-only. We therefore
- * do not special-case them here.
+ * Upstream parser gating (verified against sql-parser-core): qualified star
+ * (`SELECT u.*`) and `DISTINCT` are rejected at *parse* time with a
+ * `SqlParseError`, so they never reach this resolver — the caller treats a
+ * parse error as read-only. Column-level aliases (`SELECT id AS foo`) DO parse
+ * since issue #1297 (`SelectListItem::Column` carries `alias`), but this
+ * resolver predicts a slot's name from `reference.column` and ignores the
+ * alias, so an aliased projection name-mismatches the DB-assigned result name
+ * and the whole result degrades to `nameMismatch` (read-only) — safe, so we do
+ * not special-case aliases here. Alias-aware attribution is a follow-up.
  */
 
 import type {

@@ -27,6 +27,12 @@ import {
   resetQueryTabStores,
 } from "./__tests__/queryTabTestHelpers";
 
+// Issue #1297 — the editability gate parses through the real sql-parser-core
+// WASM AST; load the checked-in bytes so `preloadSqlWasm` resolves in jsdom.
+vi.mock("@lib/sql/wasm/sql_parser_core.js", async () =>
+  (await import("@lib/sql/realSqlWasmTestMock")).realSqlWasmModuleMock(),
+);
+
 const PK_COLUMNS = [
   {
     name: "id",

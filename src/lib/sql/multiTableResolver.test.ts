@@ -99,8 +99,16 @@ describe("resolveResultColumns — projection", () => {
       {
         kind: "expressions",
         items: [
-          { kind: "column", reference: { table: "u", column: "id" } },
-          { kind: "column", reference: { table: "o", column: "total" } },
+          {
+            kind: "column",
+            reference: { table: "u", column: "id" },
+            alias: null,
+          },
+          {
+            kind: "column",
+            reference: { table: "o", column: "total" },
+            alias: null,
+          },
         ],
       },
       [fromTable("users", "u"), fromTable("orders", "o", innerJoin)],
@@ -181,7 +189,11 @@ describe("resolveResultColumns — projection", () => {
       {
         kind: "expressions",
         items: [
-          { kind: "column", reference: { table: null, column: "id" } },
+          {
+            kind: "column",
+            reference: { table: null, column: "id" },
+            alias: null,
+          },
           {
             kind: "expression",
             expression: {
@@ -217,8 +229,16 @@ describe("resolveResultColumns — projection", () => {
       {
         kind: "expressions",
         items: [
-          { kind: "column", reference: { table: "u", column: "id" } },
-          { kind: "column", reference: { table: "o", column: "total" } },
+          {
+            kind: "column",
+            reference: { table: "u", column: "id" },
+            alias: null,
+          },
+          {
+            kind: "column",
+            reference: { table: "o", column: "total" },
+            alias: null,
+          },
         ],
       },
       [fromTable("users", "u"), fromTable("orders", "o", leftJoin)],
@@ -367,7 +387,13 @@ describe("resolveResultColumns — instanceEditability", () => {
     const stmt = select(
       {
         kind: "expressions",
-        items: [{ kind: "column", reference: { table: "u", column: "name" } }],
+        items: [
+          {
+            kind: "column",
+            reference: { table: "u", column: "name" },
+            alias: null,
+          },
+        ],
       },
       [fromTable("users", "u")],
     );
