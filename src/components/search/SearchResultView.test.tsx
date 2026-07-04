@@ -5,6 +5,7 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { SearchResultEnvelope } from "@/types/search";
 import { SearchResultView } from "./SearchResultView";
@@ -91,7 +92,7 @@ describe("SearchResultView", () => {
     });
     expect(writeText.mock.calls[0]?.[0]).toContain("fixture log");
 
-    fireEvent.click(screen.getByRole("button", { name: /export/i }));
+    await userEvent.click(screen.getByRole("button", { name: /export/i }));
     expect(
       await screen.findByRole("menuitem", { name: /CSV/i }),
     ).toBeInTheDocument();
