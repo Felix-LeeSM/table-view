@@ -200,6 +200,41 @@ describe("dataGridEditStore — Sprint 251 in-memory pending-edit lift", () => {
     expect(entries.has(KEY_OTHER_CONN)).toBe(true);
   });
 
+  it("[#1364] hasDirtyEntries — false with no entries, true only when a prefixed entry holds pending content", () => {
+    const store = () => useDataGridEditStore.getState();
+    expect(store().hasDirtyEntries("conn1::")).toBe(false);
+
+    // Empty entry (all slices cleared) does not count as dirty.
+    store().setSlice(KEY_A, "pendingEdits", new Map());
+    expect(store().hasDirtyEntries("conn1::")).toBe(false);
+
+    // pendingEdits.
+    store().setSlice(KEY_A, "pendingEdits", new Map([["0-1", "x"]]));
+    expect(store().hasDirtyEntries("conn1::")).toBe(true);
+
+    // pendingNewRows drives dirty on its own.
+    store().clearEntry(KEY_A);
+    store().setSlice(KEY_A, "pendingNewRows", [[1, "a"]] as unknown[][]);
+    expect(store().hasDirtyEntries("conn1::")).toBe(true);
+
+    // pendingDeletedRowKeys drives dirty on its own.
+    store().clearEntry(KEY_A);
+    store().setSlice(KEY_A, "pendingDeletedRowKeys", new Set(["row-1-0"]));
+    expect(store().hasDirtyEntries("conn1::")).toBe(true);
+  });
+
+  it("[#1364] hasDirtyEntries — prefix-scoped: another connection's pending edits never count", () => {
+    useDataGridEditStore
+      .getState()
+      .setSlice(KEY_OTHER_CONN, "pendingEdits", new Map([["0-1", "x"]]));
+    expect(useDataGridEditStore.getState().hasDirtyEntries("conn1::")).toBe(
+      false,
+    );
+    expect(useDataGridEditStore.getState().hasDirtyEntries("conn2::")).toBe(
+      true,
+    );
+  });
+
   it("entryKey helper composes the canonical `${cid}::${database}::${schema}::${table}` shape", () => {
     expect(entryKey("conn1", "db1", "public", "users")).toBe(
       "conn1::db1::public::users",

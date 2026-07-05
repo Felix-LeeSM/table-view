@@ -169,6 +169,14 @@ export interface DataGridEditStore {
    * `setSlice` calls don't accidentally try to mutate `EMPTY_ENTRY`.
    */
   clearEntry: (key: string) => void;
+  /**
+   * #1364 — does any entry keyed under `keyPrefix` hold real pending content?
+   * Owns the table-grid dirty predicate (edits / new rows / deletes) so
+   * whole-connection close gates route through the store instead of
+   * re-deriving it. Reactive: called from a store selector, so a slice write
+   * flips the result.
+   */
+  hasDirtyEntries: (keyPrefix: string) => boolean;
   /** Remove the entry for `key` entirely. */
   purgeKey: (key: string) => void;
   /**
@@ -209,6 +217,20 @@ export const useDataGridEditStore = create<DataGridEditStore>((set, get) => ({
   getEntry: (key) => {
     const entry = get().entries.get(key);
     return entry ?? EMPTY_ENTRY;
+  },
+
+  hasDirtyEntries: (keyPrefix) => {
+    for (const [key, entry] of get().entries) {
+      if (!key.startsWith(keyPrefix)) continue;
+      if (
+        entry.pendingEdits.size > 0 ||
+        entry.pendingNewRows.length > 0 ||
+        entry.pendingDeletedRowKeys.size > 0
+      ) {
+        return true;
+      }
+    }
+    return false;
   },
 
   setSlice: (key, slice, value) =>

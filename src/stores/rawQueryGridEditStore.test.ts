@@ -58,6 +58,24 @@ describe("rawQueryGridEditStore", () => {
     expect(getEntry(KEY_OTHER_CONN).pendingEdits.get("0-1")).toBe("z");
   });
 
+  it("[#1364] hasDirtyEntries — prefix-scoped, driven by edits or deletes only", () => {
+    const store = () => useRawQueryGridEditStore.getState();
+    expect(store().hasDirtyEntries("conn1::")).toBe(false);
+
+    store().setSlice(KEY_A, "pendingEdits", new Map([["0-1", "x"]]));
+    expect(store().hasDirtyEntries("conn1::")).toBe(true);
+
+    store().purgeKey(KEY_A);
+    store().setSlice(KEY_A, "pendingDeletedRowKeys", new Set(["row-1"]));
+    expect(store().hasDirtyEntries("conn1::")).toBe(true);
+
+    // Another connection's pending edits never bleed into conn1's gate.
+    store().purgeKey(KEY_A);
+    store().setSlice(KEY_OTHER_CONN, "pendingEdits", new Map([["0-1", "z"]]));
+    expect(store().hasDirtyEntries("conn1::")).toBe(false);
+    expect(store().hasDirtyEntries("conn2::")).toBe(true);
+  });
+
   it("purgeForConnection is a no-op (identity-stable) with no matching keys", () => {
     const { setSlice, purgeForConnection } =
       useRawQueryGridEditStore.getState();

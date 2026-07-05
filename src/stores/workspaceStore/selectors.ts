@@ -115,10 +115,14 @@ export function useDirtyTabIds(): readonly string[] {
  * 3. `rawQueryGridEditStore` pending entries — the same for raw-query result
  *    grids, keyed `${connId}::${tabId}` (#1102).
  *
- * A store entry counts only when it holds real pending content, matching each
- * grid hook's own dirty predicate.
+ * #1364 — each pending-edit store owns its own `hasDirtyEntries(prefix)`
+ * predicate (dirty = it holds real pending content, matching that grid hook's
+ * own predicate). This aggregator only ORs the store-owned selectors, so a new
+ * edit surface adds its own `hasDirtyEntries` here instead of re-implementing
+ * the pending-content scan.
  */
 export function useConnectionHasDirtyTabs(connId: string | null): boolean {
+  const prefix = connId ? `${connId}::` : null;
   const tabMarkerDirty = useWorkspaceStore((state) => {
     if (!connId) return false;
     const dbs = state.workspaces[connId];
@@ -128,32 +132,12 @@ export function useConnectionHasDirtyTabs(connId: string | null): boolean {
     // `.length` on undefined would unmount the workspace window.
     return Object.values(dbs).some((ws) => (ws.dirtyTabIds?.length ?? 0) > 0);
   });
-  const pendingEditDirty = useDataGridEditStore((state) => {
-    if (!connId) return false;
-    const prefix = `${connId}::`;
-    for (const [key, entry] of state.entries) {
-      if (!key.startsWith(prefix)) continue;
-      if (
-        entry.pendingEdits.size > 0 ||
-        entry.pendingNewRows.length > 0 ||
-        entry.pendingDeletedRowKeys.size > 0
-      ) {
-        return true;
-      }
-    }
-    return false;
-  });
-  const rawPendingEditDirty = useRawQueryGridEditStore((state) => {
-    if (!connId) return false;
-    const prefix = `${connId}::`;
-    for (const [key, entry] of state.entries) {
-      if (!key.startsWith(prefix)) continue;
-      if (entry.pendingEdits.size > 0 || entry.pendingDeletedRowKeys.size > 0) {
-        return true;
-      }
-    }
-    return false;
-  });
+  const pendingEditDirty = useDataGridEditStore((state) =>
+    prefix ? state.hasDirtyEntries(prefix) : false,
+  );
+  const rawPendingEditDirty = useRawQueryGridEditStore((state) =>
+    prefix ? state.hasDirtyEntries(prefix) : false,
+  );
   return tabMarkerDirty || pendingEditDirty || rawPendingEditDirty;
 }
 
