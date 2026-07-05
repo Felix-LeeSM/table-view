@@ -123,6 +123,7 @@ export interface StatementAnalysisOptions {
 }
 
 import { parseSqlPreloaded, type SqlParseResult } from "./sqlAst";
+import { scanDollarQuoteEnd } from "./sqlTokenize";
 import { splitSqlStatements } from "./sqlUtils";
 
 const SEVERITY_RANK: Record<Severity, number> = {
@@ -502,19 +503,58 @@ function analyzeDmlCte(
  * Helper — given a string and the index of an opening paren, return the
  * substring from `idx` through the matching closing paren (inclusive).
  * Returns null if no balanced match exists.
+ *
+ * Review #1374 — literal-aware: a `(` / `)` inside a string literal, quoted
+ * identifier, or dollar-quote must NOT move the depth, or a payload like
+ * `(SELECT '(')` skews the count and swallows the following CTE. Skip logic
+ * mirrors `splitSqlStatements` (sqlUtils.ts) so the two agree.
  */
 function extractBalanced(s: string, idx: number): string | null {
   if (s[idx] !== "(") return null;
   let depth = 0;
-  for (let i = idx; i < s.length; i++) {
+  let i = idx;
+  while (i < s.length) {
     const ch = s[i];
+    if (ch === "'" || ch === '"' || ch === "`") {
+      i = skipQuotedLiteral(s, i, ch);
+      continue;
+    }
+    if (ch === "$") {
+      const end = scanDollarQuoteEnd(s, i);
+      if (end !== null) {
+        i = end;
+        continue;
+      }
+    }
     if (ch === "(") depth++;
     else if (ch === ")") {
       depth--;
       if (depth === 0) return s.slice(idx, i + 1);
     }
+    i++;
   }
   return null;
+}
+
+/**
+ * Skip a quoted literal opened at `start` (`q` ∈ `'` `"` `` ` ``), returning the
+ * index just past the closing quote. `'` and `` ` `` treat a doubled quote as
+ * an escape; `"` does not (mirrors `splitSqlStatements`). Unterminated → EOF.
+ */
+function skipQuotedLiteral(s: string, start: number, q: string): number {
+  const escapesByDoubling = q === "'" || q === "`";
+  let i = start + 1;
+  while (i < s.length) {
+    if (s[i] === q) {
+      if (escapesByDoubling && s[i + 1] === q) {
+        i += 2;
+        continue;
+      }
+      return i + 1;
+    }
+    i++;
+  }
+  return i;
 }
 
 /**

@@ -255,9 +255,14 @@ fn find_cte_body_open_paren(upper: &str, from: usize) -> Option<usize> {
     None
 }
 
-/// Slice from the `(` at `open` through its matching `)` (inclusive). Simple
-/// depth counter, mirroring the frontend `extractBalanced`. `(` / `)` are
-/// ASCII and UTF-8 self-synchronising, so byte indexing stays on boundaries.
+/// Slice from the `(` at `open` through its matching `)` (inclusive). Mirrors
+/// the frontend `extractBalanced`. `(` / `)` are ASCII and UTF-8 self-
+/// synchronising, so byte indexing stays on boundaries.
+///
+/// Review #1374 — literal-aware: a `(` / `)` inside a string literal, quoted
+/// identifier, or dollar-quote must NOT move the depth, or a payload like
+/// `(SELECT '(')` skews the count and swallows the following CTE. The skip
+/// rules mirror the frontend `skipQuotedLiteral` / `scanDollarQuoteEnd`.
 fn balanced_paren_slice(upper: &str, open: usize) -> Option<String> {
     let bytes = upper.as_bytes();
     if bytes.get(open) != Some(&b'(') {
@@ -266,7 +271,18 @@ fn balanced_paren_slice(upper: &str, open: usize) -> Option<String> {
     let mut depth = 0i32;
     let mut i = open;
     while i < bytes.len() {
-        match bytes[i] {
+        let c = bytes[i];
+        if c == b'\'' || c == b'"' || c == b'`' {
+            i = skip_quoted_literal(bytes, i, c);
+            continue;
+        }
+        if c == b'$' {
+            if let Some(end) = scan_dollar_quote_end(bytes, i) {
+                i = end;
+                continue;
+            }
+        }
+        match c {
             b'(' => depth += 1,
             b')' => {
                 depth -= 1;
@@ -279,6 +295,62 @@ fn balanced_paren_slice(upper: &str, open: usize) -> Option<String> {
         i += 1;
     }
     None
+}
+
+/// Byte index just past the quoted literal opened at `start` (`q` ∈ `'` `"`
+/// `` ` ``). `'` and `` ` `` treat a doubled quote as an escape; `"` does not
+/// (mirrors the frontend `skipQuotedLiteral` / `splitSqlStatements`).
+/// Unterminated → EOF.
+fn skip_quoted_literal(bytes: &[u8], start: usize, q: u8) -> usize {
+    let escapes_by_doubling = q == b'\'' || q == b'`';
+    let mut i = start + 1;
+    while i < bytes.len() {
+        if bytes[i] == q {
+            if escapes_by_doubling && bytes.get(i + 1) == Some(&q) {
+                i += 2;
+                continue;
+            }
+            return i + 1;
+        }
+        i += 1;
+    }
+    i
+}
+
+/// Byte index just past a PostgreSQL dollar-quote (`$$…$$` / `$tag$…$tag$`)
+/// opened at `start`, or `None` when `start` is not a dollar-quote opener (a
+/// positional param `$1` / lone `$`). Unterminated → EOF. Mirrors the frontend
+/// `scanDollarQuoteEnd` (sqlTokenize.ts): the tag follows unquoted-identifier
+/// rules and dollar-quotes do not nest.
+fn scan_dollar_quote_end(bytes: &[u8], start: usize) -> Option<usize> {
+    if bytes.get(start) != Some(&b'$') {
+        return None;
+    }
+    let mut j = start + 1;
+    if bytes
+        .get(j)
+        .is_some_and(|c| c.is_ascii_alphabetic() || *c == b'_')
+    {
+        j += 1;
+        while bytes
+            .get(j)
+            .is_some_and(|c| c.is_ascii_alphanumeric() || *c == b'_')
+        {
+            j += 1;
+        }
+    }
+    if bytes.get(j) != Some(&b'$') {
+        return None;
+    }
+    let delim = &bytes[start..=j];
+    let mut k = j + 1;
+    while k + delim.len() <= bytes.len() {
+        if &bytes[k..k + delim.len()] == delim {
+            return Some(k + delim.len());
+        }
+        k += 1;
+    }
+    Some(bytes.len())
 }
 
 /// Leading identifier word (`[A-Za-z0-9_]+`) of a trimmed string, upper-cased
