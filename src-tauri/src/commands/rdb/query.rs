@@ -16,9 +16,51 @@ use tracing::{info, warn};
 use crate::commands::connection::AppState;
 use crate::db::postgres::validate_identifier;
 use crate::error::AppError;
-use crate::models::{FilterCondition, QueryResult, TableData};
+use crate::models::{DatabaseType, FilterCondition, QueryResult, TableData};
 
 use super::{ensure_expected_db, not_connected, register_cancel_token, release_cancel_token};
+
+/// Issue #1351 — the Safe Mode danger check that respects the connection
+/// dialect. The shared `safety::is_danger` is dialect-agnostic and misses
+/// Oracle PL/SQL blocks (`BEGIN … END;`), routine execution (`EXEC` /
+/// `EXECUTE IMMEDIATE` / `CALL`), and admin DDL (`ALTER SYSTEM`, `DROP USER`,
+/// `AUDIT`, non table/index/view `CREATE`, …). On an Oracle connection those
+/// are widened to danger so the backend gate reaches the SAME verdict as the
+/// frontend `oracleSafety.ts` (same risk = same judgment). The Oracle scan
+/// only runs when the shared classifier did not already flag danger and the
+/// connection is Oracle, so non-Oracle paths pay nothing.
+async fn rdb_sql_is_danger(state: &AppState, connection_id: &str, sql: &str) -> bool {
+    sql_parser_core::safety::is_danger(sql)
+        || (is_oracle_connection(state, connection_id).await
+            && sql_parser_core::oracle::is_oracle_danger(sql))
+}
+
+/// Batch form of [`rdb_sql_is_danger`]. Worst tier wins — a single Oracle
+/// PL/SQL / admin statement anywhere in the atomic batch gates the whole
+/// batch. The dialect is resolved once, not per statement.
+async fn rdb_batch_is_danger(state: &AppState, connection_id: &str, statements: &[String]) -> bool {
+    if statements
+        .iter()
+        .any(|sql| sql_parser_core::safety::is_danger(sql))
+    {
+        return true;
+    }
+    is_oracle_connection(state, connection_id).await
+        && statements
+            .iter()
+            .any(|sql| sql_parser_core::oracle::is_oracle_danger(sql))
+}
+
+/// True when `connection_id` currently resolves to an Oracle adapter. A
+/// missing / non-RDB connection returns `false` — the generic classifier has
+/// already run and the connection error surfaces downstream in dispatch.
+async fn is_oracle_connection(state: &AppState, connection_id: &str) -> bool {
+    state
+        .active_adapter(connection_id)
+        .await
+        .map(|adapter| matches!(adapter.kind(), DatabaseType::Oracle))
+        .unwrap_or(false)
+}
 
 /// Validate query execution inputs.
 ///
@@ -211,7 +253,7 @@ pub async fn execute_query(
     // pays the settings/environment SQLite read. Runs before dispatch, using
     // the backend's own store, so a frontend hydration race or a direct IPC
     // bypass can't run destructive SQL unconfirmed.
-    if sql_parser_core::safety::is_danger(&sql) {
+    if rdb_sql_is_danger(state.inner(), &connection_id, &sql).await {
         let pool = crate::commands::sqlite_pool::get_or_init_pool().await?;
         crate::commands::safe_mode::enforce_rdb_danger(
             &pool,
@@ -323,10 +365,7 @@ pub async fn execute_query_batch(
     // single destructive statement anywhere in the atomic batch requires
     // confirmation for the whole batch. Non-destructive batches never touch
     // the settings store.
-    if statements
-        .iter()
-        .any(|sql| sql_parser_core::safety::is_danger(sql))
-    {
+    if rdb_batch_is_danger(state.inner(), &connection_id, &statements).await {
         let pool = crate::commands::sqlite_pool::get_or_init_pool().await?;
         crate::commands::safe_mode::enforce_rdb_danger(
             &pool,

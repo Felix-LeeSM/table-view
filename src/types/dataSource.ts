@@ -262,6 +262,9 @@ export const ORACLE_CAPABILITIES = capabilities({
     editRows: true,
     requiresPrimaryKeyForEdit: true,
   },
+  intelligence: {
+    erd: true,
+  },
 });
 
 export const POSTGRESQL_CAPABILITIES = capabilities({
@@ -290,6 +293,9 @@ export const POSTGRESQL_CAPABILITIES = capabilities({
     alterTable: true,
     createIndex: true,
     dropObject: true,
+  },
+  intelligence: {
+    erd: true,
   },
   operations: {
     activity: true,
@@ -325,6 +331,9 @@ export const MYSQL_FAMILY_CAPABILITIES = capabilities({
     createIndex: true,
     dropObject: true,
   },
+  intelligence: {
+    erd: true,
+  },
 });
 
 export const SQLITE_CAPABILITIES = capabilities({
@@ -345,6 +354,9 @@ export const SQLITE_CAPABILITIES = capabilities({
   edit: {
     editRows: true,
     requiresPrimaryKeyForEdit: true,
+  },
+  intelligence: {
+    erd: true,
   },
 });
 
@@ -382,6 +394,9 @@ export const MSSQL_CAPABILITIES = capabilities({
   edit: {
     editRows: true,
     requiresPrimaryKeyForEdit: true,
+  },
+  intelligence: {
+    erd: true,
   },
 });
 

@@ -326,8 +326,9 @@ fn is_word_byte(b: u8) -> bool {
 }
 
 /// Collapse comments to spaces so keyword detection ignores commented-out
-/// tokens (mirrors the frontend `stripComments`).
-fn strip_comments_collapse(sql: &str) -> String {
+/// tokens (mirrors the frontend `stripComments`). `pub(crate)` so the
+/// dialect classifiers (e.g. `oracle`) share the exact comment stripping.
+pub(crate) fn strip_comments_collapse(sql: &str) -> String {
     let bytes = sql.as_bytes();
     let mut out = String::with_capacity(sql.len());
     let mut i = 0;
@@ -360,8 +361,10 @@ fn strip_comments_collapse(sql: &str) -> String {
 /// Literal/comment-aware statement splitter — a byte-faithful port of the
 /// frontend `splitSqlStatements` (`src/lib/sql/sqlUtils.ts`). Only the
 /// semicolon-boundary behavior matters for classification (each fragment is
-/// classified independently and the worst tier wins).
-fn split_statements(sql: &str) -> Vec<String> {
+/// classified independently and the worst tier wins). `pub(crate)` so the
+/// dialect classifiers (e.g. `oracle`) split on the same literal/comment
+/// boundaries — a trailing admin DDL can't hide behind a leading SELECT.
+pub(crate) fn split_statements(sql: &str) -> Vec<String> {
     let s: Vec<char> = sql.chars().collect();
     let len = s.len();
     let mut statements: Vec<String> = Vec::new();

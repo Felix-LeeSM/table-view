@@ -23,6 +23,7 @@
 pub mod ast;
 pub mod completion;
 pub mod lexer;
+pub mod oracle;
 pub mod parser;
 pub mod safety;
 

@@ -186,38 +186,50 @@ fn parse_ordered_object(
 /// genuinely empty row and may overwrite real data on edit). Fill every cell
 /// with a surfaced marker instead — mirrors MySQL's `decode_error_marker`
 /// (#1083) so the grid distinguishes it from an empty cell.
-fn wrapped_row_error_marker(column_count: usize, reason: &str) -> Vec<serde_json::Value> {
+fn row_payload_error_marker(column_count: usize, reason: &str) -> Vec<serde_json::Value> {
     vec![serde_json::Value::String(format!("<{reason}>")); column_count]
 }
 
-/// issue #1296 — decode one streamed `row_to_json(q)::text` payload into a row
-/// aligned with `columns` **by position**, not by name lookup (which collapses
-/// duplicate output columns). Parse failure or a value/column count mismatch is
-/// surfaced as a marker row rather than progressing silently.
-fn parse_wrapped_row(json_str: &str, columns: &[QueryColumn]) -> Vec<serde_json::Value> {
+/// issue #1296/#1353 — the single `row_to_json(q)::text` decoder shared by every
+/// PG path that turns a payload into a positional row: `execute_query` (free-form
+/// / JOIN results), `query_table_data` (grid paging), and `stream_table_rows`
+/// (export). Prior to #1353 these three had diverged — silent all-`Null`, hard
+/// abort, and raw-number (precision-losing) decodes respectively — and only the
+/// JOIN path carried the ADR 0026 numeric fix. Unifying them here means every
+/// caller inherits the same behavior:
+///
+/// - **positional** alignment against `data_types` (order the JSON keys are
+///   emitted in), never name lookup — duplicate output column names would
+///   collapse under `serde_json::Map`;
+/// - Sprint 261 (ADR 0026) **bigint / numeric stringify** per column so the JS
+///   side preserves digit-for-digit precision (`JSON.parse` else coerces to f64);
+/// - a parse failure or a value/column count mismatch surfaces a **marker row**
+///   rather than a silent all-`Null` or an aborted stream.
+///
+/// `data_types` carries only the per-column type string (the sole field the
+/// decode needs); callers build it once, outside their row loop, so the shared
+/// path adds no per-row allocation over the previous inline decodes.
+fn parse_row_payload(json_str: &str, data_types: &[&str]) -> Vec<serde_json::Value> {
     let pairs = match parse_ordered_object(json_str) {
         Ok(pairs) => pairs,
-        Err(e) => return wrapped_row_error_marker(columns.len(), &format!("row parse error: {e}")),
+        Err(e) => {
+            return row_payload_error_marker(data_types.len(), &format!("row parse error: {e}"))
+        }
     };
-    if pairs.len() != columns.len() {
-        return wrapped_row_error_marker(
-            columns.len(),
+    if pairs.len() != data_types.len() {
+        return row_payload_error_marker(
+            data_types.len(),
             &format!(
                 "row shape error: {} values for {} columns",
                 pairs.len(),
-                columns.len()
+                data_types.len()
             ),
         );
     }
-    columns
+    data_types
         .iter()
         .zip(pairs)
-        .map(|(col, (_key, raw))| {
-            // Sprint 261 (ADR 0026) — bigint / numeric cells are pre-stringified
-            // so native JSON.parse on the JS side preserves digit-for-digit
-            // precision.
-            stringify_numeric_if_precision_sensitive(raw, &col.data_type)
-        })
+        .map(|(data_type, (_key, raw))| stringify_numeric_if_precision_sensitive(raw, data_type))
         .collect()
 }
 
@@ -548,6 +560,10 @@ impl PostgresAdapter {
                         let wrapped_sql = format!("SELECT row_to_json(q)::text FROM ({}) q", query);
                         let mut stream =
                             sqlx::query_scalar::<_, String>(&wrapped_sql).fetch(&mut *conn);
+                        // #1353 — build the per-column type slice once; the shared
+                        // `parse_row_payload` reads only `data_type`.
+                        let data_types: Vec<&str> =
+                            columns.iter().map(|c| c.data_type.as_str()).collect();
                         let mut json_rows: Vec<Vec<serde_json::Value>> = Vec::new();
                         let mut truncated = false;
                         while let Some(json_str) = stream.try_next().await? {
@@ -559,7 +575,7 @@ impl PostgresAdapter {
                             // names would collapse under name lookup). parse-and
                             // -drop each payload so the scalar `String` and the
                             // parsed row never coexist (#1231 memory contract).
-                            json_rows.push(parse_wrapped_row(&json_str, &columns));
+                            json_rows.push(parse_row_payload(&json_str, &data_types));
                         }
 
                         (columns, json_rows, truncated)
@@ -1081,26 +1097,17 @@ impl PostgresAdapter {
             .await
             .map_err(|e| AppError::Connection(e.to_string()))?;
 
-        // Parse JSON strings into Vec<Vec<serde_json::Value>> in column order
+        // #1353 — decode through the shared `parse_row_payload`. `SELECT *`
+        // inside the `row_to_json(q)` wrapper emits keys in `pg_attribute.attnum`
+        // order, the same order `get_table_columns_inner` returns `columns` in,
+        // so positional alignment is exact. This replaces the previous
+        // name-lookup that silently returned an all-`Null` row on a parse
+        // failure (indistinguishable from a genuinely empty row on edit) — a
+        // malformed payload now surfaces a marker row instead.
+        let data_types: Vec<&str> = columns.iter().map(|c| c.data_type.as_str()).collect();
         let result_rows: Vec<Vec<serde_json::Value>> = json_rows
             .into_iter()
-            .map(|(json_str,)| {
-                let obj: serde_json::Map<String, serde_json::Value> =
-                    serde_json::from_str(&json_str).unwrap_or_default();
-                columns
-                    .iter()
-                    .map(|col| {
-                        let raw = obj
-                            .get(&col.name)
-                            .cloned()
-                            .unwrap_or(serde_json::Value::Null);
-                        // Sprint 261 (ADR 0026) — bigint / numeric cells
-                        // are pre-stringified so native JSON.parse on the
-                        // JS side preserves digit-for-digit precision.
-                        stringify_numeric_if_precision_sensitive(raw, &col.data_type)
-                    })
-                    .collect()
-            })
+            .map(|(json_str,)| parse_row_payload(&json_str, &data_types))
             .collect();
 
         Ok(TableData {
@@ -1149,6 +1156,31 @@ impl PostgresAdapter {
         }
 
         let pool = self.active_pool().await?;
+
+        // #1353 — resolve each requested column's `data_type` so the shared
+        // `parse_row_payload` can apply the ADR 0026 bigint/numeric stringify
+        // the export stream previously skipped (raw JSON numbers truncated
+        // bigint > 2^53 and every high-precision numeric through f64). One
+        // describe per table — negligible next to streaming its rows.
+        let col_meta = self.get_table_columns_inner(&pool, table, schema).await?;
+        let type_by_name: std::collections::HashMap<&str, &str> = col_meta
+            .iter()
+            .map(|c| (c.name.as_str(), c.data_type.as_str()))
+            .collect();
+        let data_types: Vec<&str> = column_names
+            .iter()
+            .map(|n| type_by_name.get(n.as_str()).copied().unwrap_or(""))
+            .collect();
+        // Project the requested columns explicitly, in caller order, so
+        // `row_to_json` emits keys in exactly that order. `parse_row_payload`
+        // then aligns positionally (matching `data_types` and the INSERT column
+        // list the caller writes), and any column subset stays correct.
+        let column_list = column_names
+            .iter()
+            .map(|n| quote_identifier(n))
+            .collect::<Vec<_>>()
+            .join(", ");
+
         let mut tx = pool
             .begin()
             .await
@@ -1158,7 +1190,7 @@ impl PostgresAdapter {
         let cursor_name = "_vt_export_cur";
         let declare = format!(
             "DECLARE {cursor_name} NO SCROLL CURSOR FOR \
-             SELECT row_to_json(t)::text FROM {qualified} AS t",
+             SELECT row_to_json(t)::text FROM (SELECT {column_list} FROM {qualified}) AS t",
         );
         sqlx::query(&declare)
             .execute(&mut *tx)
@@ -1186,13 +1218,10 @@ impl PostgresAdapter {
             }
             let mut batch: Vec<Vec<serde_json::Value>> = Vec::with_capacity(strings.len());
             for s in strings {
-                let obj: serde_json::Map<String, serde_json::Value> = serde_json::from_str(&s)
-                    .map_err(|e| AppError::Database(format!("row_to_json parse failed: {e}")))?;
-                let row: Vec<serde_json::Value> = column_names
-                    .iter()
-                    .map(|name| obj.get(name).cloned().unwrap_or(serde_json::Value::Null))
-                    .collect();
-                batch.push(row);
+                // #1353 — shared decode: applies ADR 0026 stringify and, on a
+                // malformed payload, surfaces a marker row instead of aborting
+                // the whole export mid-stream (the previous `?` behavior).
+                batch.push(parse_row_payload(&s, &data_types));
             }
             let count = batch.len() as u64;
             if sender.send(batch).await.is_err() {
@@ -1405,22 +1434,13 @@ mod tests {
     // JOIN corruption is provable without standing up a Postgres pool.
     // -------------------------------------------------------------------
 
-    fn col(name: &str, data_type: &str) -> QueryColumn {
-        QueryColumn {
-            name: name.to_string(),
-            data_type: data_type.to_string(),
-            category: map_pg_data_type(data_type),
-        }
-    }
-
     // Regression: `SELECT u.id, o.id FROM users u JOIN orders o …` yields two
     // output columns both named `id`. row_to_json emits `{"id":1,"id":7}`. The
     // old name-lookup / serde_json::Map path collapsed both cells to `7`,
     // silently dropping `1`. Positional decode must keep them distinct.
     #[test]
-    fn parse_wrapped_row_duplicate_columns_stay_distinct() {
-        let columns = vec![col("id", "int4"), col("id", "int4")];
-        let row = parse_wrapped_row(r#"{"id":1,"id":7}"#, &columns);
+    fn parse_row_payload_duplicate_columns_stay_distinct() {
+        let row = parse_row_payload(r#"{"id":1,"id":7}"#, &["int4", "int4"]);
         assert_eq!(
             row,
             vec![
@@ -1434,9 +1454,8 @@ mod tests {
     // Contrast: with distinct names the positional order still matches, and the
     // ADR 0026 bigint-as-string coercion still applies per column.
     #[test]
-    fn parse_wrapped_row_distinct_names_positional_and_bigint_stringified() {
-        let columns = vec![col("id", "int4"), col("big", "int8")];
-        let row = parse_wrapped_row(r#"{"id":1,"big":9007199254740993}"#, &columns);
+    fn parse_row_payload_distinct_names_positional_and_bigint_stringified() {
+        let row = parse_row_payload(r#"{"id":1,"big":9007199254740993}"#, &["int4", "int8"]);
         assert_eq!(
             row,
             vec![
@@ -1450,9 +1469,8 @@ mod tests {
     // all-NULL row (the old `unwrap_or_default()`); every cell is a surfaced
     // marker the grid can distinguish from an empty cell.
     #[test]
-    fn parse_wrapped_row_parse_failure_surfaces_marker_not_silent_null() {
-        let columns = vec![col("id", "int4"), col("name", "text")];
-        let row = parse_wrapped_row("{not valid json", &columns);
+    fn parse_row_payload_parse_failure_surfaces_marker_not_silent_null() {
+        let row = parse_row_payload("{not valid json", &["int4", "text"]);
         assert_eq!(row.len(), 2);
         for cell in &row {
             assert!(
@@ -1471,15 +1489,57 @@ mod tests {
     // A payload whose key count disagrees with the described columns is
     // structural corruption; surface it rather than mis-align by position.
     #[test]
-    fn parse_wrapped_row_count_mismatch_surfaces_marker() {
-        let columns = vec![col("a", "int4"), col("b", "int4"), col("c", "int4")];
-        let row = parse_wrapped_row(r#"{"a":1,"b":2}"#, &columns);
+    fn parse_row_payload_count_mismatch_surfaces_marker() {
+        let row = parse_row_payload(r#"{"a":1,"b":2}"#, &["int4", "int4", "int4"]);
         assert_eq!(row.len(), 3);
         match &row[0] {
             serde_json::Value::String(s) => {
                 assert!(s.starts_with("<row shape error:"), "unexpected marker: {s}")
             }
             other => panic!("expected marker string, got {other:?}"),
+        }
+    }
+
+    // issue #1353 — `stream_table_rows` previously emitted raw JSON numbers,
+    // silently truncating PG `bigint` above 2^53 through IEEE-754 f64 on export.
+    // Every path now shares `parse_row_payload`, so a bigint cell is kept as a
+    // string byte-for-byte regardless of the path that decoded it.
+    #[test]
+    fn parse_row_payload_stream_bigint_over_2pow53_stays_string() {
+        let row = parse_row_payload(r#"{"big":9007199254740993}"#, &["int8"]);
+        assert_eq!(
+            row,
+            vec![serde_json::Value::String("9007199254740993".to_string())]
+        );
+    }
+
+    // A high-precision NUMERIC (more digits than an f64 mantissa can hold) must
+    // survive the export stream intact — `arbitrary_precision` keeps the token
+    // and the stringify emits it verbatim.
+    #[test]
+    fn parse_row_payload_stream_high_precision_numeric_stays_string() {
+        let row = parse_row_payload(r#"{"amount":12345678901234567890.12345}"#, &["numeric"]);
+        assert_eq!(
+            row,
+            vec![serde_json::Value::String(
+                "12345678901234567890.12345".to_string()
+            )]
+        );
+    }
+
+    // The unification's failure contract: a malformed payload surfaces a marker
+    // on every path — never a silent all-NULL grid row nor a hard export abort.
+    #[test]
+    fn parse_row_payload_malformed_surfaces_marker_not_null_or_abort() {
+        let row = parse_row_payload("{not valid json", &["int8", "text"]);
+        assert_eq!(row.len(), 2);
+        for cell in &row {
+            match cell {
+                serde_json::Value::String(s) => {
+                    assert!(s.starts_with("<row parse error:"), "unexpected marker: {s}")
+                }
+                other => panic!("expected marker string, got {other:?}"),
+            }
         }
     }
 

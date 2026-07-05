@@ -61,6 +61,7 @@ describe("DataSourceProfile registry", () => {
       createIndex: true,
       dropObject: true,
     },
+    intelligence: { erd: true },
   });
 
   const expectedCapabilitiesByType: Record<
@@ -89,6 +90,7 @@ describe("DataSourceProfile registry", () => {
         createIndex: true,
         dropObject: true,
       },
+      intelligence: { erd: true },
       operations: {
         activity: true,
         slowQueries: true,
@@ -103,6 +105,7 @@ describe("DataSourceProfile registry", () => {
       query: { query: true, multiStatement: true, cancel: true },
       catalog: { browse: true, schema: true },
       edit: { editRows: true, requiresPrimaryKeyForEdit: true },
+      intelligence: { erd: true },
     }),
     duckdb: expectedCapabilities({
       connection: { test: true, filePicker: true, readOnly: true },
@@ -120,6 +123,7 @@ describe("DataSourceProfile registry", () => {
         relationships: true,
       },
       edit: { editRows: true, requiresPrimaryKeyForEdit: true },
+      intelligence: { erd: true },
     }),
     oracle: expectedCapabilities({
       connection: { test: true },
@@ -132,6 +136,7 @@ describe("DataSourceProfile registry", () => {
         relationships: true,
       },
       edit: { editRows: true, requiresPrimaryKeyForEdit: true },
+      intelligence: { erd: true },
     }),
     mongodb: expectedCapabilities({
       connection: { test: true },
