@@ -68,9 +68,14 @@ function completionPublicApiFixture(extraLines: readonly string[] = []) {
 
 describe("check-eslint-static-policy", () => {
   it("keeps the measured max-lines allowlist explicit", () => {
-    expect(MAX_LINES_ALLOWLIST).toHaveLength(18);
+    expect(MAX_LINES_ALLOWLIST).toHaveLength(17);
     expect(MAX_LINES_ALLOWLIST).not.toContain(
       "src/components/datagrid/sqlGenerator.test.ts",
+    );
+    // #1360 — CreateTableDialog.tsx dropped below 700 lines after the
+    // hook + tab-body split, so its allowlist entry was removed.
+    expect(MAX_LINES_ALLOWLIST).not.toContain(
+      "src/components/schema/CreateTableDialog.tsx",
     );
     expect(MAX_LINES_ALLOWLIST).not.toContain(
       "src/components/schema/CreateTableDialog.test.tsx",
