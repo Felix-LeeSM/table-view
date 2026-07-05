@@ -1,0 +1,71 @@
+{
+  "$schema": "classifier-parity@1",
+  "issue": 1352,
+  "description": "Shared FE<->BE SQL Safe Mode severity parity fixture. Consumed by both vitest (src/lib/sql/sqlSafety.parity-fixture.test.ts, `analyzeStatement(sql).severity`) and cargo test (src-tauri/sql-parser-core/src/safety.rs `classifier_parity_fixture`, `classify(sql)`). Replaces the hand-copied 'Parity mirror' block so a classifier change on one side that drifts the other trips a test. Only cases whose FE regex-fallback (jsdom, no WASM) equals the BE native parse are listed here; EXPLAIN inner-inheritance and `ALTER … DROP INDEX` depend on the WASM AST and diverge in the vitest jsdom env, so they stay in each side's own unit tests.",
+  "severities": ["info", "warn", "danger"],
+  "consumedBy": [
+    "src/lib/sql/sqlSafety.parity-fixture.test.ts",
+    "src-tauri/sql-parser-core/src/safety.rs"
+  ],
+  "cases": [
+    { "name": "read_select", "sql": "SELECT * FROM users", "expectedSeverity": "info" },
+    { "name": "explain_select", "sql": "EXPLAIN SELECT * FROM users", "expectedSeverity": "info" },
+    { "name": "insert", "sql": "INSERT INTO users (id) VALUES (1)", "expectedSeverity": "info" },
+    { "name": "create_table", "sql": "CREATE TABLE t (id int)", "expectedSeverity": "info" },
+
+    { "name": "update_where", "sql": "UPDATE users SET active = false WHERE id = 1", "expectedSeverity": "warn" },
+    { "name": "delete_where", "sql": "DELETE FROM users WHERE id = 1", "expectedSeverity": "warn" },
+    { "name": "grant", "sql": "GRANT SELECT ON users TO bob", "expectedSeverity": "warn" },
+    { "name": "revoke", "sql": "REVOKE SELECT ON users FROM bob", "expectedSeverity": "warn" },
+    { "name": "alter_add_column", "sql": "ALTER TABLE users ADD COLUMN age integer", "expectedSeverity": "warn" },
+    { "name": "alter_rename_table", "sql": "ALTER TABLE users RENAME TO people", "expectedSeverity": "warn" },
+
+    { "name": "update_no_where", "sql": "UPDATE users SET active = false", "expectedSeverity": "danger" },
+    { "name": "delete_no_where", "sql": "DELETE FROM users", "expectedSeverity": "danger" },
+    { "name": "truncate", "sql": "TRUNCATE users", "expectedSeverity": "danger" },
+    { "name": "replace_into", "sql": "REPLACE INTO users VALUES (1)", "expectedSeverity": "danger" },
+    { "name": "restore_database", "sql": "RESTORE DATABASE shop FROM DISK = 'x.bak'", "expectedSeverity": "danger" },
+    { "name": "alter_drop_column", "sql": "ALTER TABLE orders DROP COLUMN email", "expectedSeverity": "danger" },
+    { "name": "alter_drop_constraint", "sql": "ALTER TABLE orders DROP CONSTRAINT fk_user", "expectedSeverity": "danger" },
+
+    { "name": "drop_table", "sql": "DROP TABLE users", "expectedSeverity": "danger" },
+    { "name": "drop_database", "sql": "DROP DATABASE app", "expectedSeverity": "danger" },
+    { "name": "drop_schema", "sql": "DROP SCHEMA s", "expectedSeverity": "danger" },
+    { "name": "drop_index", "sql": "DROP INDEX i", "expectedSeverity": "danger" },
+    { "name": "drop_view", "sql": "DROP VIEW v", "expectedSeverity": "danger" },
+    { "name": "drop_trigger", "sql": "DROP TRIGGER t ON users", "expectedSeverity": "danger" },
+    { "name": "drop_function_warn", "sql": "DROP FUNCTION f()", "expectedSeverity": "warn" },
+    { "name": "drop_procedure_warn", "sql": "DROP PROCEDURE p", "expectedSeverity": "warn" },
+    { "name": "drop_role_warn", "sql": "DROP ROLE r", "expectedSeverity": "warn" },
+    { "name": "drop_extension_warn", "sql": "DROP EXTENSION postgis", "expectedSeverity": "warn" },
+    { "name": "drop_materialized_view_warn", "sql": "DROP MATERIALIZED VIEW mv", "expectedSeverity": "warn" },
+
+    { "name": "cte_update_where", "sql": "WITH x AS (UPDATE users SET active = false WHERE id = 1 RETURNING id) SELECT * FROM x", "expectedSeverity": "warn" },
+    { "name": "cte_delete_where", "sql": "WITH x AS (DELETE FROM users WHERE id = 1 RETURNING id) SELECT * FROM x", "expectedSeverity": "warn" },
+    { "name": "cte_delete_no_where", "sql": "WITH x AS (DELETE FROM users RETURNING id) SELECT * FROM x", "expectedSeverity": "danger" },
+    { "name": "cte_update_no_where", "sql": "WITH x AS (UPDATE users SET active = false RETURNING id) SELECT * FROM x", "expectedSeverity": "danger" },
+    { "name": "cte_insert", "sql": "WITH x AS (INSERT INTO users (id) VALUES (1) RETURNING id) SELECT * FROM x", "expectedSeverity": "info" },
+    { "name": "cte_pure_read", "sql": "WITH x AS (SELECT 1 AS n) SELECT n FROM x", "expectedSeverity": "info" },
+    { "name": "cte_recursive_delete", "sql": "WITH RECURSIVE x (id) AS (DELETE FROM users RETURNING id) SELECT * FROM x", "expectedSeverity": "danger" },
+
+    { "name": "mcte_2nd_delete_no_where", "sql": "WITH a AS (SELECT 1), b AS (DELETE FROM users) SELECT * FROM b", "expectedSeverity": "danger" },
+    { "name": "mcte_2nd_update_no_where", "sql": "WITH a AS (SELECT 1), b AS (UPDATE users SET active = false) SELECT * FROM b", "expectedSeverity": "danger" },
+    { "name": "mcte_middle_delete", "sql": "WITH a AS (SELECT 1), b AS (DELETE FROM users), c AS (SELECT 2) SELECT * FROM c", "expectedSeverity": "danger" },
+    { "name": "mcte_2nd_truncate", "sql": "WITH a AS (SELECT 1), b AS (TRUNCATE users) SELECT * FROM a", "expectedSeverity": "danger" },
+    { "name": "mcte_nested_subquery_read", "sql": "WITH a AS (SELECT (SELECT 1)), b AS (DELETE FROM users) SELECT * FROM b", "expectedSeverity": "danger" },
+    { "name": "mcte_bounded_delete_where", "sql": "WITH a AS (SELECT 1), b AS (DELETE FROM users WHERE id IN (SELECT id FROM stale)) SELECT * FROM b", "expectedSeverity": "warn" },
+    { "name": "mcte_delete_in_string", "sql": "WITH a AS (SELECT 'DELETE FROM users' AS note), b AS (SELECT 2) SELECT * FROM a", "expectedSeverity": "info" },
+    { "name": "mcte_2nd_insert", "sql": "WITH a AS (SELECT 1), b AS (INSERT INTO users (id) VALUES (1) RETURNING id) SELECT * FROM a", "expectedSeverity": "info" },
+
+    { "name": "mcte_open_paren_string", "sql": "WITH a AS (SELECT '(' ), b AS (DELETE FROM users) SELECT * FROM b", "expectedSeverity": "danger" },
+    { "name": "mcte_open_paren_dollar", "sql": "WITH a AS (SELECT $$($$), b AS (DELETE FROM users) SELECT * FROM b", "expectedSeverity": "danger" },
+    { "name": "mcte_open_paren_quoted_ident", "sql": "WITH a AS (SELECT 1 AS \"x(\"), b AS (DELETE FROM users) SELECT * FROM b", "expectedSeverity": "danger" },
+    { "name": "mcte_open_paren_on_body", "sql": "WITH a AS (SELECT 1), b AS (UPDATE users SET note = '(') SELECT * FROM b", "expectedSeverity": "danger" },
+    { "name": "mcte_close_paren_string", "sql": "WITH a AS (SELECT ')' ), b AS (DELETE FROM users) SELECT * FROM b", "expectedSeverity": "danger" },
+    { "name": "mcte_close_paren_dollar", "sql": "WITH a AS (SELECT $$)$$), b AS (DELETE FROM users) SELECT * FROM b", "expectedSeverity": "danger" },
+
+    { "name": "multi_trailing_drop", "sql": "SELECT 1; DROP TABLE users", "expectedSeverity": "danger" },
+    { "name": "multi_semicolon_in_string", "sql": "SELECT ';DROP TABLE users' AS note", "expectedSeverity": "info" },
+    { "name": "commented_danger_keyword", "sql": "/* DROP TABLE users */ SELECT 1", "expectedSeverity": "info" }
+  ]
+}
