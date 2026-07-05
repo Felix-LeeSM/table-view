@@ -21,8 +21,8 @@
 //!   - `REPLACE …` (MySQL/MariaDB destructive upsert — issue #1115)
 //!   - `RESTORE …` (SQL Server — may overwrite a database)
 //!   - data-modifying CTE — `WITH x AS (DELETE/UPDATE … no WHERE) SELECT …`
-//!     (mirrors the frontend `analyzeDmlCte`; the parser rejects the CTE
-//!     body so this rides the keyword fallback)
+//!     in ANY CTE position (issue #1350; mirrors the frontend `analyzeDmlCte`;
+//!     the parser rejects the CTE body so this rides the keyword fallback)
 //!
 //! `DROP FUNCTION` / `PROCEDURE` / `ROLE` / `EXTENSION` / `MATERIALIZED VIEW`
 //! are intentionally NOT danger — the frontend classifies them as
@@ -205,35 +205,38 @@ fn drop_keyword_severity(upper: &str) -> Severity {
     }
 }
 
-/// Classify a `WITH …` statement by its first CTE body — a native port of the
-/// frontend `analyzeDmlCte` (`sqlSafety.ts`). Returns `None` when the first
-/// CTE body is not a write op (the caller then treats the WITH as a read),
-/// matching the frontend's "only the first CTE, worst is the caller's job"
-/// contract (issue #1112 review B1).
+/// Classify a `WITH …` statement by scanning EVERY CTE body — a native port of
+/// the frontend `analyzeDmlCte` (`sqlSafety.ts`). Issue #1350: the first-CTE-
+/// only scan let a destructive body in the 2nd+ CTE (`WITH a AS (SELECT 1), b
+/// AS (DELETE FROM t) SELECT …`) read as a benign SELECT. Each `AS ( … )` body
+/// is re-classified with the full `classify_single` (mirroring the frontend's
+/// recursive `analyzeStatement`) and the worst tier wins. Returns `None` when
+/// no `AS (` body is present (the caller then treats the WITH as a read).
+/// After each body the scan resumes past its closing paren, so nested `AS (`
+/// subqueries and `'DELETE …'` string literals never register as body openers.
 fn classify_dml_cte(upper: &str) -> Option<Severity> {
-    let open = find_cte_body_open_paren(upper)?;
-    let body = balanced_paren_slice(upper, open)?;
-    // Strip the enclosing parens; `body` is `(…)`, both ASCII.
-    let inner = body[1..body.len() - 1].trim();
-    match first_word(inner).as_str() {
-        // WHERE presence decides bounded (warn) vs unbounded (danger), exactly
-        // like the top-level DELETE/UPDATE branches.
-        "DELETE" | "UPDATE" => Some(if has_where(inner) {
-            Severity::Warn
-        } else {
-            Severity::Danger
-        }),
-        "INSERT" => Some(Severity::Info),
-        _ => None,
+    let mut worst: Option<Severity> = None;
+    let mut from = 0;
+    while let Some(open) = find_cte_body_open_paren(upper, from) {
+        let body = match balanced_paren_slice(upper, open) {
+            Some(b) => b,
+            None => break,
+        };
+        // Strip the enclosing parens; `body` is `(…)`, both ASCII.
+        let inner = body[1..body.len() - 1].trim();
+        let sev = classify_single(inner);
+        worst = Some(worst.map_or(sev, |w| w.max(sev)));
+        from = open + body.len();
     }
+    worst
 }
 
-/// Byte index of the `(` that opens the first `AS ( … )` CTE body. Mirrors the
-/// frontend regex `AS\s*\(` anchor — the CTE's optional column list `(a, b)`
-/// sits before `AS`, so the first `AS (` is the body opener.
-fn find_cte_body_open_paren(upper: &str) -> Option<usize> {
+/// Byte index of the `(` that opens the next `AS ( … )` CTE body at or after
+/// `from`. Mirrors the frontend regex `\bAS\s*\(` anchor — the CTE's optional
+/// column list `(a, b)` sits before `AS`, so `AS (` is the body opener.
+fn find_cte_body_open_paren(upper: &str, from: usize) -> Option<usize> {
     let bytes = upper.as_bytes();
-    let mut i = 0;
+    let mut i = from;
     while i + 2 <= bytes.len() {
         let is_as_word = &bytes[i..i + 2] == b"AS"
             && (i == 0 || !is_word_byte(bytes[i - 1]))
@@ -252,9 +255,14 @@ fn find_cte_body_open_paren(upper: &str) -> Option<usize> {
     None
 }
 
-/// Slice from the `(` at `open` through its matching `)` (inclusive). Simple
-/// depth counter, mirroring the frontend `extractBalanced`. `(` / `)` are
-/// ASCII and UTF-8 self-synchronising, so byte indexing stays on boundaries.
+/// Slice from the `(` at `open` through its matching `)` (inclusive). Mirrors
+/// the frontend `extractBalanced`. `(` / `)` are ASCII and UTF-8 self-
+/// synchronising, so byte indexing stays on boundaries.
+///
+/// Review #1374 — literal-aware: a `(` / `)` inside a string literal, quoted
+/// identifier, or dollar-quote must NOT move the depth, or a payload like
+/// `(SELECT '(')` skews the count and swallows the following CTE. The skip
+/// rules mirror the frontend `skipQuotedLiteral` / `scanDollarQuoteEnd`.
 fn balanced_paren_slice(upper: &str, open: usize) -> Option<String> {
     let bytes = upper.as_bytes();
     if bytes.get(open) != Some(&b'(') {
@@ -263,7 +271,18 @@ fn balanced_paren_slice(upper: &str, open: usize) -> Option<String> {
     let mut depth = 0i32;
     let mut i = open;
     while i < bytes.len() {
-        match bytes[i] {
+        let c = bytes[i];
+        if c == b'\'' || c == b'"' || c == b'`' {
+            i = skip_quoted_literal(bytes, i, c);
+            continue;
+        }
+        if c == b'$' {
+            if let Some(end) = scan_dollar_quote_end(bytes, i) {
+                i = end;
+                continue;
+            }
+        }
+        match c {
             b'(' => depth += 1,
             b')' => {
                 depth -= 1;
@@ -276,6 +295,62 @@ fn balanced_paren_slice(upper: &str, open: usize) -> Option<String> {
         i += 1;
     }
     None
+}
+
+/// Byte index just past the quoted literal opened at `start` (`q` ∈ `'` `"`
+/// `` ` ``). `'` and `` ` `` treat a doubled quote as an escape; `"` does not
+/// (mirrors the frontend `skipQuotedLiteral` / `splitSqlStatements`).
+/// Unterminated → EOF.
+fn skip_quoted_literal(bytes: &[u8], start: usize, q: u8) -> usize {
+    let escapes_by_doubling = q == b'\'' || q == b'`';
+    let mut i = start + 1;
+    while i < bytes.len() {
+        if bytes[i] == q {
+            if escapes_by_doubling && bytes.get(i + 1) == Some(&q) {
+                i += 2;
+                continue;
+            }
+            return i + 1;
+        }
+        i += 1;
+    }
+    i
+}
+
+/// Byte index just past a PostgreSQL dollar-quote (`$$…$$` / `$tag$…$tag$`)
+/// opened at `start`, or `None` when `start` is not a dollar-quote opener (a
+/// positional param `$1` / lone `$`). Unterminated → EOF. Mirrors the frontend
+/// `scanDollarQuoteEnd` (sqlTokenize.ts): the tag follows unquoted-identifier
+/// rules and dollar-quotes do not nest.
+fn scan_dollar_quote_end(bytes: &[u8], start: usize) -> Option<usize> {
+    if bytes.get(start) != Some(&b'$') {
+        return None;
+    }
+    let mut j = start + 1;
+    if bytes
+        .get(j)
+        .is_some_and(|c| c.is_ascii_alphabetic() || *c == b'_')
+    {
+        j += 1;
+        while bytes
+            .get(j)
+            .is_some_and(|c| c.is_ascii_alphanumeric() || *c == b'_')
+        {
+            j += 1;
+        }
+    }
+    if bytes.get(j) != Some(&b'$') {
+        return None;
+    }
+    let delim = &bytes[start..=j];
+    let mut k = j + 1;
+    while k + delim.len() <= bytes.len() {
+        if &bytes[k..k + delim.len()] == delim {
+            return Some(k + delim.len());
+        }
+        k += 1;
+    }
+    Some(bytes.len())
 }
 
 /// Leading identifier word (`[A-Za-z0-9_]+`) of a trimmed string, upper-cased
@@ -685,6 +760,98 @@ mod tests {
         assert!(is_danger(
             "WITH RECURSIVE x (id) AS (DELETE FROM users RETURNING id) SELECT * FROM x"
         ));
+    }
+
+    #[test]
+    fn multi_cte_parity() {
+        // Mirror sqlSafety.test.ts AC-1350-01..08. Issue #1350: a destructive
+        // body in the 2nd+ CTE must not hide behind a leading read CTE. The
+        // classifier scans every `AS ( … )` body and merges the worst tier.
+        // AC-1350-01 — 2nd CTE DELETE without WHERE → danger.
+        assert_eq!(
+            classify("WITH a AS (SELECT 1), b AS (DELETE FROM users) SELECT * FROM b"),
+            Severity::Danger
+        );
+        // AC-1350-02 — 2nd CTE UPDATE without WHERE → danger.
+        assert_eq!(
+            classify("WITH a AS (SELECT 1), b AS (UPDATE users SET active = false) SELECT * FROM b"),
+            Severity::Danger
+        );
+        // AC-1350-03 — middle CTE (of 3) destructive → danger.
+        assert_eq!(
+            classify(
+                "WITH a AS (SELECT 1), b AS (DELETE FROM users), c AS (SELECT 2) SELECT * FROM c"
+            ),
+            Severity::Danger
+        );
+        // AC-1350-04 — 2nd CTE TRUNCATE → danger.
+        assert_eq!(
+            classify("WITH a AS (SELECT 1), b AS (TRUNCATE users) SELECT * FROM a"),
+            Severity::Danger
+        );
+        // AC-1350-05 — nested subquery parens in read CTE, destructive 2nd → danger.
+        assert_eq!(
+            classify("WITH a AS (SELECT (SELECT 1)), b AS (DELETE FROM users) SELECT * FROM b"),
+            Severity::Danger
+        );
+        // AC-1350-06 — bounded DELETE WHERE with nested subquery → warn (not over-escalated).
+        assert_eq!(
+            classify(
+                "WITH a AS (SELECT 1), b AS (DELETE FROM users WHERE id IN (SELECT id FROM stale)) SELECT * FROM b"
+            ),
+            Severity::Warn
+        );
+        // AC-1350-07 — 'DELETE' text inside a string literal → info (no false positive).
+        assert_eq!(
+            classify(
+                "WITH a AS (SELECT 'DELETE FROM users' AS note), b AS (SELECT 2) SELECT * FROM a"
+            ),
+            Severity::Info
+        );
+        // AC-1350-08 — 2nd CTE INSERT → info (not escalated).
+        assert_eq!(
+            classify(
+                "WITH a AS (SELECT 1), b AS (INSERT INTO users (id) VALUES (1) RETURNING id) SELECT * FROM a"
+            ),
+            Severity::Info
+        );
+    }
+
+    #[test]
+    fn multi_cte_literal_paren_parity() {
+        // Mirror sqlSafety.test.ts AC-1350-09..14 (review #1374). A `(` / `)`
+        // inside a string literal, quoted identifier, or dollar-quote must not
+        // skew the balanced-paren depth, or the destructive CTE is swallowed /
+        // early-closed and reads as info. AC-1350-09 — '(' in string literal.
+        assert_eq!(
+            classify("WITH a AS (SELECT '(' ), b AS (DELETE FROM users) SELECT * FROM b"),
+            Severity::Danger
+        );
+        // AC-1350-10 — '(' in dollar-quote.
+        assert_eq!(
+            classify("WITH a AS (SELECT $$($$), b AS (DELETE FROM users) SELECT * FROM b"),
+            Severity::Danger
+        );
+        // AC-1350-11 — '(' in quoted identifier.
+        assert_eq!(
+            classify("WITH a AS (SELECT 1 AS \"x(\"), b AS (DELETE FROM users) SELECT * FROM b"),
+            Severity::Danger
+        );
+        // AC-1350-12 — '(' in string on the destructive body, UPDATE no WHERE.
+        assert_eq!(
+            classify("WITH a AS (SELECT 1), b AS (UPDATE users SET note = '(') SELECT * FROM b"),
+            Severity::Danger
+        );
+        // AC-1350-13 — ')' in string literal.
+        assert_eq!(
+            classify("WITH a AS (SELECT ')' ), b AS (DELETE FROM users) SELECT * FROM b"),
+            Severity::Danger
+        );
+        // AC-1350-14 — ')' in dollar-quote.
+        assert_eq!(
+            classify("WITH a AS (SELECT $$)$$), b AS (DELETE FROM users) SELECT * FROM b"),
+            Severity::Danger
+        );
     }
 
     #[test]

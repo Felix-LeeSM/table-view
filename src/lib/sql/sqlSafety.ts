@@ -123,6 +123,7 @@ export interface StatementAnalysisOptions {
 }
 
 import { parseSqlPreloaded, type SqlParseResult } from "./sqlAst";
+import { scanDollarQuoteEnd } from "./sqlTokenize";
 import { splitSqlStatements } from "./sqlUtils";
 
 const SEVERITY_RANK: Record<Severity, number> = {
@@ -470,50 +471,90 @@ function analyzeDmlCte(
   upper: string,
   options?: StatementAnalysisOptions,
 ): StatementAnalysis | null {
-  // Match: WITH [RECURSIVE]? <ident> AS ( <innerKeyword>
-  // 여러 CTE 가 있을 경우 가장 first 의 CTE body 만 검사한다 (worst tier
-  // 결정은 caller 의 multi-statement 루프 책임 — single statement 단위에서는
-  // first-CTE 가 wrapped statement 의 dominant write op).
-  const match = upper.match(
-    /^WITH\s+(?:RECURSIVE\s+)?[A-Z_][A-Z0-9_]*\s*(?:\([^)]*\)\s*)?AS\s*\(\s*(UPDATE|DELETE|INSERT)\b/,
-  );
-  if (!match) return null;
-  const innerOp = match[1];
-  // Recursively analyse the inner DML body. We approximate by stripping
-  // the WITH-AS prefix and feeding the inner op + operand to
-  // `analyzeStatement` so the WHERE-or-not invariant is preserved.
-  const innerStartIdx = upper.indexOf(`(${innerOp}`);
-  if (innerStartIdx === -1) return null;
-  const innerBody = extractBalanced(upper, innerStartIdx);
-  if (innerBody == null) return null;
-  // `innerBody` includes surrounding parens; strip them.
-  const inner = innerBody.slice(1, -1).trim();
-  // Re-analyse the inner statement; preserve outer kind so callers /
-  // tests that key on `kind === "select"` for pure WITH-SELECT still pass
-  // — but the inner *severity* is what flows through.
-  const innerAnalysis = analyzeStatement(inner, options);
-  // The wrapped form's kind stays as the inner DML op so downstream
-  // dispatch (e.g. dry-run) treats it as a write surface, not a SELECT.
-  return innerAnalysis;
+  // Issue #1350 — scan EVERY `… AS ( … )` CTE body, not just the first. A
+  // destructive body in the 2nd+ CTE (`WITH a AS (SELECT 1), b AS (DELETE
+  // FROM t) SELECT …`) would otherwise read as a benign SELECT and run with
+  // no confirm dialog. Each body is re-analysed and the worst severity wins,
+  // so the wrapped statement inherits its most dangerous CTE. After each body
+  // we resume scanning past its closing paren, so nested `AS (` subqueries
+  // inside a body aren't rescanned and a `'DELETE …'` string literal never
+  // registers as a body opener.
+  const asRe = /\bAS\s*\(/g;
+  const analyses: StatementAnalysis[] = [];
+  let searchFrom = 0;
+  for (;;) {
+    asRe.lastIndex = searchFrom;
+    const m = asRe.exec(upper);
+    if (m === null) break;
+    const openIdx = asRe.lastIndex - 1; // index of the `(`
+    const body = extractBalanced(upper, openIdx);
+    if (body == null) break;
+    // `body` includes surrounding parens; strip them and re-analyse. The
+    // inner *severity* flows through; `worstAnalysis` keeps the dominant
+    // body's `kind` so downstream dispatch treats a write CTE as a write.
+    analyses.push(analyzeStatement(body.slice(1, -1).trim(), options));
+    searchFrom = openIdx + body.length;
+  }
+  if (analyses.length === 0) return null;
+  return worstAnalysis(analyses);
 }
 
 /**
  * Helper — given a string and the index of an opening paren, return the
  * substring from `idx` through the matching closing paren (inclusive).
  * Returns null if no balanced match exists.
+ *
+ * Review #1374 — literal-aware: a `(` / `)` inside a string literal, quoted
+ * identifier, or dollar-quote must NOT move the depth, or a payload like
+ * `(SELECT '(')` skews the count and swallows the following CTE. Skip logic
+ * mirrors `splitSqlStatements` (sqlUtils.ts) so the two agree.
  */
 function extractBalanced(s: string, idx: number): string | null {
   if (s[idx] !== "(") return null;
   let depth = 0;
-  for (let i = idx; i < s.length; i++) {
+  let i = idx;
+  while (i < s.length) {
     const ch = s[i];
+    if (ch === "'" || ch === '"' || ch === "`") {
+      i = skipQuotedLiteral(s, i, ch);
+      continue;
+    }
+    if (ch === "$") {
+      const end = scanDollarQuoteEnd(s, i);
+      if (end !== null) {
+        i = end;
+        continue;
+      }
+    }
     if (ch === "(") depth++;
     else if (ch === ")") {
       depth--;
       if (depth === 0) return s.slice(idx, i + 1);
     }
+    i++;
   }
   return null;
+}
+
+/**
+ * Skip a quoted literal opened at `start` (`q` ∈ `'` `"` `` ` ``), returning the
+ * index just past the closing quote. `'` and `` ` `` treat a doubled quote as
+ * an escape; `"` does not (mirrors `splitSqlStatements`). Unterminated → EOF.
+ */
+function skipQuotedLiteral(s: string, start: number, q: string): number {
+  const escapesByDoubling = q === "'" || q === "`";
+  let i = start + 1;
+  while (i < s.length) {
+    if (s[i] === q) {
+      if (escapesByDoubling && s[i + 1] === q) {
+        i += 2;
+        continue;
+      }
+      return i + 1;
+    }
+    i++;
+  }
+  return i;
 }
 
 /**

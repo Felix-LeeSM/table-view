@@ -358,6 +358,132 @@ describe("sqlSafety.analyzeStatement — fallback and severity contracts", () =>
   });
 
   // -------------------------------------------------------------------------
+  // Issue #1350 (2026-07-05) — multi-CTE classifier gap. `analyzeDmlCte` used
+  // to inspect ONLY the first CTE body, so a destructive body in the 2nd+ CTE
+  // (`WITH a AS (SELECT 1), b AS (DELETE FROM t) SELECT …`) was classified as a
+  // benign read and ran without a confirm dialog in strict+production. The fix
+  // scans EVERY `AS ( … )` body and merges the worst severity. Must stay in
+  // parity with the backend `classify_dml_cte` (safety.rs `multi_cte_parity`).
+  // -------------------------------------------------------------------------
+  describe("Issue #1350 — multi-CTE destructive body detection", () => {
+    it("[AC-1350-01] 2nd CTE DELETE without WHERE → danger", () => {
+      expect(
+        analyzeStatement(
+          "WITH a AS (SELECT 1), b AS (DELETE FROM users) SELECT * FROM b",
+        ).severity,
+      ).toBe("danger");
+    });
+
+    it("[AC-1350-02] 2nd CTE UPDATE without WHERE → danger", () => {
+      expect(
+        analyzeStatement(
+          "WITH a AS (SELECT 1), b AS (UPDATE users SET active = false) SELECT * FROM b",
+        ).severity,
+      ).toBe("danger");
+    });
+
+    it("[AC-1350-03] middle CTE (of 3) destructive → danger", () => {
+      expect(
+        analyzeStatement(
+          "WITH a AS (SELECT 1), b AS (DELETE FROM users), c AS (SELECT 2) SELECT * FROM c",
+        ).severity,
+      ).toBe("danger");
+    });
+
+    it("[AC-1350-04] 2nd CTE TRUNCATE → danger", () => {
+      expect(
+        analyzeStatement(
+          "WITH a AS (SELECT 1), b AS (TRUNCATE users) SELECT * FROM a",
+        ).severity,
+      ).toBe("danger");
+    });
+
+    it("[AC-1350-05] nested subquery parens in read CTE, destructive 2nd → danger", () => {
+      expect(
+        analyzeStatement(
+          "WITH a AS (SELECT (SELECT 1)), b AS (DELETE FROM users) SELECT * FROM b",
+        ).severity,
+      ).toBe("danger");
+    });
+
+    it("[AC-1350-06] bounded DELETE WHERE with nested subquery → warn (not over-escalated)", () => {
+      expect(
+        analyzeStatement(
+          "WITH a AS (SELECT 1), b AS (DELETE FROM users WHERE id IN (SELECT id FROM stale)) SELECT * FROM b",
+        ).severity,
+      ).toBe("warn");
+    });
+
+    it("[AC-1350-07] 'DELETE' text inside a string literal → info (no false positive)", () => {
+      expect(
+        analyzeStatement(
+          "WITH a AS (SELECT 'DELETE FROM users' AS note), b AS (SELECT 2) SELECT * FROM a",
+        ).severity,
+      ).toBe("info");
+    });
+
+    it("[AC-1350-08] 2nd CTE INSERT → info (not escalated)", () => {
+      expect(
+        analyzeStatement(
+          "WITH a AS (SELECT 1), b AS (INSERT INTO users (id) VALUES (1) RETURNING id) SELECT * FROM a",
+        ).severity,
+      ).toBe("info");
+    });
+
+    // Review #1374 — literal-blind paren scan bypass. A `(` / `)` inside a
+    // string literal, quoted identifier, or dollar-quote skewed the balanced-
+    // paren depth, so the destructive CTE was swallowed / early-closed and read
+    // as info. The scan must skip literal bodies.
+    it("[AC-1350-09] read CTE with '(' in string literal, destructive 2nd → danger", () => {
+      expect(
+        analyzeStatement(
+          "WITH a AS (SELECT '(' ), b AS (DELETE FROM users) SELECT * FROM b",
+        ).severity,
+      ).toBe("danger");
+    });
+
+    it("[AC-1350-10] read CTE with '(' in dollar-quote, destructive 2nd → danger", () => {
+      expect(
+        analyzeStatement(
+          "WITH a AS (SELECT $$($$), b AS (DELETE FROM users) SELECT * FROM b",
+        ).severity,
+      ).toBe("danger");
+    });
+
+    it("[AC-1350-11] read CTE with '(' in quoted identifier, destructive 2nd → danger", () => {
+      expect(
+        analyzeStatement(
+          'WITH a AS (SELECT 1 AS "x("), b AS (DELETE FROM users) SELECT * FROM b',
+        ).severity,
+      ).toBe("danger");
+    });
+
+    it("[AC-1350-12] destructive body with '(' in string, UPDATE no WHERE → danger", () => {
+      expect(
+        analyzeStatement(
+          "WITH a AS (SELECT 1), b AS (UPDATE users SET note = '(') SELECT * FROM b",
+        ).severity,
+      ).toBe("danger");
+    });
+
+    it("[AC-1350-13] read CTE with ')' in string literal, destructive 2nd → danger", () => {
+      expect(
+        analyzeStatement(
+          "WITH a AS (SELECT ')' ), b AS (DELETE FROM users) SELECT * FROM b",
+        ).severity,
+      ).toBe("danger");
+    });
+
+    it("[AC-1350-14] read CTE with ')' in dollar-quote, destructive 2nd → danger", () => {
+      expect(
+        analyzeStatement(
+          "WITH a AS (SELECT $$)$$), b AS (DELETE FROM users) SELECT * FROM b",
+        ).severity,
+      ).toBe("danger");
+    });
+  });
+
+  // -------------------------------------------------------------------------
   // Issue #1115 (2026-07-03) — MySQL/MariaDB `REPLACE INTO` is a destructive
   // upsert (DELETE conflicting row, then INSERT). It was absent from both the
   // gate regex alternation and the per-keyword branches, so it fell through
