@@ -1,25 +1,24 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo } from "react";
 import { useDocumentQueryStore } from "@stores/documentQueryStore";
-import { cancelQuery, cancelQueryNative } from "@lib/tauri";
+import { cancelQueryNative } from "@lib/tauri";
 import type { CancelError } from "@lib/tauri/cancel";
 import { toast } from "@lib/runtime/toast";
 import i18n from "@lib/i18n";
 import type { ColumnInfo, SortInfo, TableData } from "@/types/schema";
 import type { DocumentQueryResult } from "@/types/document";
+import {
+  type GridDataLoaderRunContext,
+  useGridDataLoader,
+} from "@hooks/useGridDataLoader";
 
 /**
- * Read-flow plumbing for `DocumentDataGrid`. Owns the `runFind`
- * dispatch with current pagination + `activeFilter`, the loading/error
- * state, the `fetchIdRef` stale-response guard, and the `queryIdRef`
- * the threshold-overlay Cancel button routes through `cancel_query`.
- * Projects `DocumentQueryResult` to a `TableData`-shaped surface so
- * `useDataGridEdit` consumes it unchanged.
- *
- * Invariants:
- *   - `fetchIdRef` is bumped synchronously on cancel; late resolves
- *     whose `fetchId` no longer matches drop their writes.
- *   - `cancelQuery` is best-effort — the frontend already settled
- *     into a consistent state by the time we call it.
+ * Read-flow plumbing for `DocumentDataGrid`. Supplies the `runFind`
+ * dispatch (current pagination + `activeFilter`) and the mongo-native
+ * `killOp` cancel step to the shared `useGridDataLoader`, which owns the
+ * loading/error state, the `fetchIdRef` stale-response guard, and the
+ * `queryIdRef` the threshold-overlay Cancel button routes through
+ * `cancel_query`. Projects `DocumentQueryResult` to a `TableData`-shaped
+ * surface so `useDataGridEdit` consumes it unchanged.
  */
 
 export interface UseDocumentGridDataParams {
@@ -88,88 +87,54 @@ export function useDocumentGridData({
     (s) => s.queryResults[connectionId]?.[database]?.[collection],
   );
 
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const fetchIdRef = useRef(0);
-  // In-flight `find_documents` query id. Cancel calls (a) `cancel_query`
-  // for the backend-side abort and (b) clear `loading` synchronously so
-  // the overlay drops within one frame even before the driver settles.
-  const queryIdRef = useRef<string | null>(null);
-
   const mongoSort = useMemo(() => toMongoSort(sorts), [sorts]);
 
-  const fetchData = useCallback(async () => {
-    const fetchId = ++fetchIdRef.current;
-    setLoading(true);
-    setError(null);
-    // Issue #1269 (P1) — register a cancel-token id for this browse so the
-    // overlay Cancel button can abort it (cooperative `cancel_query` + native
-    // `killOp`). The backend `find_documents` command registers the token
-    // under this id (Sprint 180 AC-180-04).
-    const queryId = crypto.randomUUID();
-    queryIdRef.current = queryId;
-    try {
-      await runFind(
-        connectionId,
-        database,
-        collection,
-        {
-          filter: activeFilterCount > 0 ? activeFilter : undefined,
-          sort: mongoSort,
-          projection:
-            projection && Object.keys(projection).length > 0
-              ? projection
-              : undefined,
-          skip: (page - 1) * pageSize,
-          limit: pageSize,
-        },
-        queryId,
-      );
-    } catch (e) {
-      if (fetchIdRef.current === fetchId) setError(String(e));
-    } finally {
-      if (fetchIdRef.current === fetchId) {
-        setLoading(false);
-        queryIdRef.current = null;
-      }
-    }
-  }, [
-    runFind,
-    connectionId,
-    database,
-    collection,
-    page,
-    pageSize,
-    activeFilter,
-    activeFilterCount,
-    mongoSort,
-    projection,
-  ]);
-
-  // Cancel handler for the threshold overlay. Bumps `fetchIdRef` so the
-  // in-flight resolve is treated as stale, clears `loading` synchronously,
-  // and best-effort calls `cancel_query` (UI is already consistent if the
-  // backend doesn't observe it).
-  const handleCancelRefetch = useCallback(() => {
-    fetchIdRef.current++;
-    setLoading(false);
-    const queryId = queryIdRef.current;
-    queryIdRef.current = null;
-    if (!queryId) return;
-    // Issue #1269 (P1) — two-step cancel mirroring the SQL/RDB path. Fire the
-    // cooperative token FIRST so the backend `find_documents` `tokio::select!`
-    // returns cancelled and frees the driver; THEN the native `killOp` so a
-    // long collection scan actually stops on the server. `find` stamped the op
-    // with `comment == queryId`, so the backend resolves its opid via
-    // `$currentOp` and kills it (no client-visible pid → `serverPid` unused).
-    void (async () => {
+  const runQuery = useCallback(
+    async ({ queryId, isStale, setError }: GridDataLoaderRunContext) => {
+      // The backend `find_documents` command registers the cancel token under
+      // `queryId` and stamps the running op with `comment == queryId`
+      // (Sprint 180 AC-180-04), which the native `killOp` step keys off.
       try {
-        await cancelQuery(queryId);
-      } catch {
-        // Backend cancel registry may have already evicted the token, or the
-        // connection was swapped — the frontend is already consistent.
+        await runFind(
+          connectionId,
+          database,
+          collection,
+          {
+            filter: activeFilterCount > 0 ? activeFilter : undefined,
+            sort: mongoSort,
+            projection:
+              projection && Object.keys(projection).length > 0
+                ? projection
+                : undefined,
+            skip: (page - 1) * pageSize,
+            limit: pageSize,
+          },
+          queryId,
+        );
+      } catch (e) {
+        if (!isStale()) setError(String(e));
       }
+    },
+    [
+      runFind,
+      connectionId,
+      database,
+      collection,
+      page,
+      pageSize,
+      activeFilter,
+      activeFilterCount,
+      mongoSort,
+      projection,
+    ],
+  );
+
+  const cancelNative = useCallback(
+    async (queryId: string) => {
+      // Native `killOp` so a long collection scan actually stops on the server.
+      // `find` stamped the op with `comment == queryId`, so the backend
+      // resolves its opid via `$currentOp` and kills it (no client-visible pid
+      // → `serverPid` unused, pass 0).
       try {
         await cancelQueryNative(connectionId, 0, queryId);
       } catch (err) {
@@ -185,12 +150,14 @@ export function useDocumentGridData({
           );
         }
       }
-    })();
-  }, [connectionId]);
+    },
+    [connectionId],
+  );
 
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+  const { loading, error, fetchData, handleCancelRefetch } = useGridDataLoader({
+    runQuery,
+    cancelNative,
+  });
 
   // Convert DocumentQueryResult → a minimal TableData-compatible shape so
   // the edit hook (which speaks TableData) can consume it. The `rawDocuments`
