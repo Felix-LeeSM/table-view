@@ -136,6 +136,14 @@ type AreaCapabilityGroup = Exclude<
   "profile" | "result" | "safety"
 >;
 
+// Issue #1356 — `edit.requiresPrimaryKeyForEdit` is a write-safety *constraint*,
+// not a feature the adapter claims to support, so it stays out of the
+// support/unsupported conformance enumeration (a `false` value is a relaxed
+// policy, not a missing capability).
+const NON_CLAIM_CAPABILITY_KEYS: ReadonlySet<string> = new Set([
+  "edit.requiresPrimaryKeyForEdit",
+]);
+
 const AREA_CAPABILITY_GROUP = Object.freeze({
   connection: "connection",
   catalog: "catalog",
@@ -313,9 +321,9 @@ function runtimeClaim(
   area: AreaCapabilityGroup,
 ): AdapterConformanceClaim {
   const group = AREA_CAPABILITY_GROUP[area];
-  const capabilityChecks = Object.entries(capabilities[group]).map(
-    ([name, supported]) => [`${group}.${name}`, supported] as const,
-  );
+  const capabilityChecks = Object.entries(capabilities[group])
+    .map(([name, supported]) => [`${group}.${name}`, supported] as const)
+    .filter(([id]) => !NON_CLAIM_CAPABILITY_KEYS.has(id));
   const checks = capabilityChecks
     .filter(([, supported]) => supported)
     .map(([id]) => id);

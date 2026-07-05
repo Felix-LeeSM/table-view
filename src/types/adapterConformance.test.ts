@@ -110,6 +110,11 @@ describe("adapter conformance matrix", () => {
         for (const [name, supported] of Object.entries(capabilities[group])) {
           const checkId = `${group}.${name}`;
 
+          // Issue #1356 — `edit.requiresPrimaryKeyForEdit` is a write-safety
+          // constraint, not a support claim, so it is intentionally absent from
+          // the conformance buckets.
+          if (checkId === "edit.requiresPrimaryKeyForEdit") continue;
+
           if (supported) {
             expect(claim.checks, `${dbType}:${checkId}`).toContain(checkId);
           } else {
