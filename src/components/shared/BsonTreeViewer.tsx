@@ -165,6 +165,10 @@ interface FlatNode {
   hasChildren: boolean;
   /** Expand state for containers; `false` for leaves. */
   expanded: boolean;
+  /** 1-based position among siblings (WAI-ARIA aria-posinset). */
+  posinset: number;
+  /** Total sibling count (WAI-ARIA aria-setsize). */
+  setsize: number;
 }
 
 function classify(value: unknown) {
@@ -214,6 +218,8 @@ function flattenBson(
     value: unknown,
     depth: number,
     isArrayElement: boolean,
+    posinset: number,
+    setsize: number,
   ) => {
     const { badge, isObject, isArray, hasChildren } = classify(value);
     const key = path === "" ? "$" : path;
@@ -232,20 +238,40 @@ function flattenBson(
       isArray,
       hasChildren,
       expanded,
+      posinset,
+      setsize,
     });
     if (hasChildren && expanded) {
       if (isArray) {
-        (value as unknown[]).forEach((c, i) =>
-          walk(String(i), joinArrayPath(path, i), c, depth + 1, true),
+        const arr = value as unknown[];
+        arr.forEach((c, i) =>
+          walk(
+            String(i),
+            joinArrayPath(path, i),
+            c,
+            depth + 1,
+            true,
+            i + 1,
+            arr.length,
+          ),
         );
       } else {
-        Object.entries(value as Record<string, unknown>).forEach(([k, v]) =>
-          walk(k, joinObjectPath(path, k), v, depth + 1, false),
+        const entries = Object.entries(value as Record<string, unknown>);
+        entries.forEach(([k, v], i) =>
+          walk(
+            k,
+            joinObjectPath(path, k),
+            v,
+            depth + 1,
+            false,
+            i + 1,
+            entries.length,
+          ),
         );
       }
     }
   };
-  walk(rootLabel ?? null, "", root, 0, false);
+  walk(rootLabel ?? null, "", root, 0, false, 1, 1);
   return out;
 }
 
@@ -273,6 +299,8 @@ function BsonRow({ node, isActive, onToggle, onFocus }: BsonRowProps) {
     hasChildren,
     expanded,
     keyLabel,
+    posinset,
+    setsize,
   } = node;
 
   const handleCopyPath = useCallback(async () => {
@@ -320,6 +348,8 @@ function BsonRow({ node, isActive, onToggle, onFocus }: BsonRowProps) {
       role="treeitem"
       aria-expanded={ariaExpanded}
       aria-level={depth + 1}
+      aria-posinset={posinset}
+      aria-setsize={setsize}
       aria-label={t("bson.nodeAria", { keyLabel })}
       className="rounded font-mono text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
       data-tree-key={node.key}
