@@ -17,12 +17,10 @@ interface KvMutationPanelProps {
   value: KvValueEnvelope;
   connectionId: string;
   database: number;
-  mutationScope?: KvMutationScope;
   actionIntent?: KvMutationActionIntent | null;
   onMutationSuccess: (key: string) => Promise<void>;
 }
 
-export type KvMutationScope = "redis" | "valkey";
 export interface KvMutationActionIntent {
   kind: "edit" | "delete";
   key: string;
@@ -30,17 +28,12 @@ export interface KvMutationActionIntent {
 }
 
 export function canRenderKvMutationPanel(
-  value: KvValueEnvelope,
+  _value: KvValueEnvelope,
   mutationEnabled: boolean,
-  mutationScope: KvMutationScope,
 ): boolean {
-  if (!mutationEnabled) return false;
-  if (mutationScope === "redis") return true;
-  return (
-    value.value.type === "string" &&
-    value.value.encoding === "utf8" &&
-    value.value.text !== undefined
-  );
+  // #1075 — Redis/Valkey share one mutation surface; per-type support is
+  // decided by unsupportedMutationMessage, not by product.
+  return mutationEnabled;
 }
 
 interface PendingMutation {
@@ -89,7 +82,6 @@ export function KvMutationPanel({
   value,
   connectionId,
   database,
-  mutationScope = "redis",
   actionIntent = null,
   onMutationSuccess,
 }: KvMutationPanelProps) {
@@ -114,8 +106,7 @@ export function KvMutationPanel({
     key: value.key,
     type: value.value.type,
   });
-  const unsupported = unsupportedMutationMessage(value, mutationScope, t);
-  const collectionMutationsEnabled = mutationScope === "redis";
+  const unsupported = unsupportedMutationMessage(value, t);
   const fieldClass =
     "rounded border border-border bg-background px-2 py-1 text-3xs outline-none";
 
@@ -348,7 +339,7 @@ export function KvMutationPanel({
           )}
         </div>
       )}
-      {collectionMutationsEnabled && value.value.type === "hash" && (
+      {value.value.type === "hash" && (
         <div className="grid gap-1">
           {input(
             t("kvMutation.hashField"),
@@ -362,7 +353,7 @@ export function KvMutationPanel({
           )}
         </div>
       )}
-      {collectionMutationsEnabled && value.value.type === "list" && (
+      {value.value.type === "list" && (
         <div className="grid gap-1">
           {input(
             t("kvMutation.listValue"),
@@ -375,7 +366,7 @@ export function KvMutationPanel({
           )}
         </div>
       )}
-      {collectionMutationsEnabled && value.value.type === "set" && (
+      {value.value.type === "set" && (
         <div className="grid gap-1">
           {input(
             t("kvMutation.setMember"),
@@ -388,7 +379,7 @@ export function KvMutationPanel({
           )}
         </div>
       )}
-      {collectionMutationsEnabled && value.value.type === "zSet" && (
+      {value.value.type === "zSet" && (
         <div className="grid gap-1">
           {input(
             t("kvMutation.zsetScore"),
@@ -518,13 +509,9 @@ function analyzeKvMutationSafety(
 
 function unsupportedMutationMessage(
   envelope: KvValueEnvelope,
-  mutationScope: KvMutationScope,
   t: (key: string) => string,
 ): string | null {
   const { value } = envelope;
-  if (mutationScope === "valkey" && value.type !== "string") {
-    return t("kvMutation.unsupported.valkeyNonString");
-  }
   switch (value.type) {
     case "string":
       return value.encoding === "utf8" && value.text !== undefined

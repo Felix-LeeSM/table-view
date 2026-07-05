@@ -26,7 +26,6 @@ import {
   canRenderKvMutationPanel,
   KvMutationPanel,
   type KvMutationActionIntent,
-  type KvMutationScope,
 } from "./KvMutationPanel";
 import { KvKeyActions } from "./KvKeyActions";
 import { KvStreamReaderPanel } from "./KvStreamReaderPanel";
@@ -51,8 +50,6 @@ export default function KvSidebar({ connectionId }: KvSidebarProps) {
   const mutationEnabled = connection
     ? getDataSourceProfile(connection.dbType).capabilities.edit.editKeys
     : true;
-  const mutationScope: KvMutationScope =
-    connection?.dbType === "valkey" ? "valkey" : "redis";
   const initialDatabase = useMemo(() => {
     const activeDb = status?.type === "connected" ? status.activeDb : undefined;
     const raw = activeDb ?? connection?.database ?? "0";
@@ -214,7 +211,7 @@ export default function KvSidebar({ connectionId }: KvSidebarProps) {
   const selectedMutationReady = Boolean(
     selectedValueReady &&
     value &&
-    canRenderKvMutationPanel(value, mutationEnabled, mutationScope),
+    canRenderKvMutationPanel(value, mutationEnabled),
   );
   const requestMutationAction = (kind: KvMutationActionIntent["kind"]) => {
     if (!value || !selectedMutationReady) return;
@@ -411,7 +408,6 @@ export default function KvSidebar({ connectionId }: KvSidebarProps) {
           connectionId={connectionId}
           database={database}
           mutationEnabled={mutationEnabled}
-          mutationScope={mutationScope}
           mutationActionIntent={mutationActionIntent}
           onMutationSuccess={refreshAfterMutation}
         />
@@ -466,7 +462,6 @@ function KvValuePreview({
   connectionId,
   database,
   mutationEnabled,
-  mutationScope,
   mutationActionIntent,
   onMutationSuccess,
 }: {
@@ -475,7 +470,6 @@ function KvValuePreview({
   connectionId: string;
   database: number;
   mutationEnabled: boolean;
-  mutationScope: KvMutationScope;
   mutationActionIntent: KvMutationActionIntent | null;
   onMutationSuccess: (key: string) => Promise<void>;
 }) {
@@ -530,12 +524,11 @@ function KvValuePreview({
         )}
       </div>
       {valueBody}
-      {canRenderKvMutationPanel(value, mutationEnabled, mutationScope) && (
+      {canRenderKvMutationPanel(value, mutationEnabled) && (
         <KvMutationPanel
           value={value}
           connectionId={connectionId}
           database={database}
-          mutationScope={mutationScope}
           actionIntent={mutationActionIntent}
           onMutationSuccess={onMutationSuccess}
         />
