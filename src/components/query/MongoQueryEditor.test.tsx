@@ -64,6 +64,22 @@ describe("MongoQueryEditor (Sprint 139)", () => {
     onExecute.mockReset();
   });
 
+  // #1336 follow-up — every query editor mounts with a unified `view.focus()`
+  // so a freshly opened tab is immediately typeable on the real `.cm-content`.
+  it("auto-focuses the .cm-content surface on mount (#1336)", async () => {
+    const { container } = render(
+      <MongoQueryEditor
+        sql=""
+        onSqlChange={onSqlChange}
+        onExecute={onExecute}
+        mongoExtensions={[]}
+      />,
+    );
+    const cmContent = container.querySelector(".cm-content");
+    expect(cmContent).not.toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(cmContent));
+  });
+
   // Sprint 309 — single aria-label `"MongoDB Query Editor"`, no
   // `data-query-mode`, JSON language. Combines the old find/aggregate
   // aria-label assertions into one.

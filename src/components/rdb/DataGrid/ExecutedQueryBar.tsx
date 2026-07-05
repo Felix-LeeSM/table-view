@@ -18,7 +18,9 @@ export function ExecutedQueryBar({ sql }: ExecutedQueryBarProps) {
         className="flex w-full items-center gap-1 px-3 py-1 text-xs text-muted-foreground hover:bg-muted"
         onClick={() => setShowQuery((visible) => !visible)}
         aria-expanded={showQuery}
-        aria-controls={regionId}
+        // The region only mounts while expanded; drop the reference when
+        // collapsed so aria-controls never dangles (#1339 follow-up).
+        aria-controls={showQuery ? regionId : undefined}
         aria-label={
           showQuery
             ? t("executedQueryBar.hideQueryAria")
