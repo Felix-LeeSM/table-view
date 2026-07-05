@@ -495,6 +495,49 @@ describe("MainArea", () => {
     );
   });
 
+  // #1042 — the ERD sub-tab must be gated on the `intelligence.erd`
+  // capability, not on `paradigm === "rdb"`. DuckDB is an rdb paradigm but a
+  // read-only file-analytics engine that declares `intelligence.erd = false`,
+  // so its ERD tab must not render (avoids a permanently-empty tab). #1046
+  // (unsupported-표현 규약) is unconfirmed, so the conservative default is
+  // "flag false = tab hidden".
+  it("#1042 — hides ERD sub-tab for DuckDB (intelligence.erd = false)", () => {
+    const duckConn: ConnectionConfig = {
+      ...makeConnection("duck1"),
+      dbType: "duckdb",
+      paradigm: "rdb",
+    };
+    setConnections({ connections: [duckConn], active: ["duck1"] });
+    const tab = makeTableTab({ connectionId: "duck1", subView: "records" });
+    useWorkspaceStore.setState(seedWorkspace([tab], tab.id));
+
+    render(<MainArea />);
+
+    const tablist = screen.getByRole("tablist", { name: "Table view" });
+    const tabs = tablist.querySelectorAll("[role='tab']");
+    expect(tabs).toHaveLength(2);
+    expect(tabs[0]).toHaveTextContent("Records");
+    expect(tabs[1]).toHaveTextContent("Structure");
+    expect(screen.queryByRole("tab", { name: "ERD" })).toBeNull();
+  });
+
+  // #1042 — the capability path is the single source of truth: a PostgreSQL
+  // connection declares `intelligence.erd = true`, so the ERD tab renders.
+  it("#1042 — shows ERD sub-tab for PostgreSQL (intelligence.erd = true)", () => {
+    setConnections({
+      connections: [makeConnection("conn1")],
+      active: ["conn1"],
+    });
+    const tab = makeTableTab({ connectionId: "conn1", subView: "records" });
+    useWorkspaceStore.setState(seedWorkspace([tab], tab.id));
+
+    render(<MainArea />);
+
+    const tablist = screen.getByRole("tablist", { name: "Table view" });
+    expect(tablist.querySelectorAll("[role='tab']")).toHaveLength(3);
+    expect(screen.getByRole("tab", { name: "ERD" })).toBeInTheDocument();
+  });
+
   it("switches to erd subView when ERD tab is clicked", () => {
     const tab = makeTableTab({ subView: "records" });
     useWorkspaceStore.setState(seedWorkspace([tab], tab.id));
