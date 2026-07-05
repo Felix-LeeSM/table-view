@@ -289,15 +289,25 @@ describe("DbSwitcher", () => {
     ).not.toBeInTheDocument();
   });
 
-  // Sprint 328 — Mongo paradigm hides the toolbar switcher entirely (no
-  // chip, no read-only fallback). DataGrip-style tab-local chip will take
-  // over in Sprint 329; sidebar selection no longer mutates connection
-  // state. RDB keeps the switcher because PG's strong database isolation
-  // makes a global active-sub-pool chip meaningful.
-  it("renders nothing when active tab paradigm is document (Sprint 328)", () => {
+  // #1047 — Mongo (document) paradigm must not hide the toolbar switcher
+  // (former `return null` violated the ui-parity gate: same action = same
+  // entry point). It now surfaces the shared read-only chip whose Radix
+  // tooltip explains the tab-local DB scope (ADR 0030 preserved — only the
+  // exposure changes, per the #1046 standard).
+  it("renders a read-only chip with a tab-local tooltip for document (mongo) paradigm (#1047)", async () => {
     setStores({ paradigm: "document", connected: true });
-    const { container } = render(<DbSwitcher />);
-    expect(container).toBeEmptyDOMElement();
+    render(<DbSwitcher />);
+    const trigger = screen.getByRole("button", {
+      name: /active database \(read-only\)/i,
+    });
+    expect(trigger).toBeInTheDocument();
+    expect(trigger).toHaveAttribute("aria-disabled", "true");
+    // No interactive switcher for document — DB scope is tab-local.
+    expect(
+      screen.queryByRole("button", { name: /active database switcher/i }),
+    ).not.toBeInTheDocument();
+    fireEvent.pointerMove(trigger);
+    expect(await screen.findAllByText(/per (query )?tab/i)).not.toHaveLength(0);
   });
 
   it("fetches the database list on click and renders the popover items", async () => {
