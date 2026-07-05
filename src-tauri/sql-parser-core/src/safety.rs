@@ -743,6 +743,43 @@ mod tests {
     }
 
     #[test]
+    fn multi_cte_literal_paren_parity() {
+        // Mirror sqlSafety.test.ts AC-1350-09..14 (review #1374). A `(` / `)`
+        // inside a string literal, quoted identifier, or dollar-quote must not
+        // skew the balanced-paren depth, or the destructive CTE is swallowed /
+        // early-closed and reads as info. AC-1350-09 — '(' in string literal.
+        assert_eq!(
+            classify("WITH a AS (SELECT '(' ), b AS (DELETE FROM users) SELECT * FROM b"),
+            Severity::Danger
+        );
+        // AC-1350-10 — '(' in dollar-quote.
+        assert_eq!(
+            classify("WITH a AS (SELECT $$($$), b AS (DELETE FROM users) SELECT * FROM b"),
+            Severity::Danger
+        );
+        // AC-1350-11 — '(' in quoted identifier.
+        assert_eq!(
+            classify("WITH a AS (SELECT 1 AS \"x(\"), b AS (DELETE FROM users) SELECT * FROM b"),
+            Severity::Danger
+        );
+        // AC-1350-12 — '(' in string on the destructive body, UPDATE no WHERE.
+        assert_eq!(
+            classify("WITH a AS (SELECT 1), b AS (UPDATE users SET note = '(') SELECT * FROM b"),
+            Severity::Danger
+        );
+        // AC-1350-13 — ')' in string literal.
+        assert_eq!(
+            classify("WITH a AS (SELECT ')' ), b AS (DELETE FROM users) SELECT * FROM b"),
+            Severity::Danger
+        );
+        // AC-1350-14 — ')' in dollar-quote.
+        assert_eq!(
+            classify("WITH a AS (SELECT $$)$$), b AS (DELETE FROM users) SELECT * FROM b"),
+            Severity::Danger
+        );
+    }
+
+    #[test]
     fn drop_object_parity_danger_vs_warn() {
         // Mirror sqlSafety.ts:656 (danger objects) vs :759 (`ddl-other`
         // warn). B2: only these object kinds are danger.

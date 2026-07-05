@@ -429,6 +429,58 @@ describe("sqlSafety.analyzeStatement — fallback and severity contracts", () =>
         ).severity,
       ).toBe("info");
     });
+
+    // Review #1374 — literal-blind paren scan bypass. A `(` / `)` inside a
+    // string literal, quoted identifier, or dollar-quote skewed the balanced-
+    // paren depth, so the destructive CTE was swallowed / early-closed and read
+    // as info. The scan must skip literal bodies.
+    it("[AC-1350-09] read CTE with '(' in string literal, destructive 2nd → danger", () => {
+      expect(
+        analyzeStatement(
+          "WITH a AS (SELECT '(' ), b AS (DELETE FROM users) SELECT * FROM b",
+        ).severity,
+      ).toBe("danger");
+    });
+
+    it("[AC-1350-10] read CTE with '(' in dollar-quote, destructive 2nd → danger", () => {
+      expect(
+        analyzeStatement(
+          "WITH a AS (SELECT $$($$), b AS (DELETE FROM users) SELECT * FROM b",
+        ).severity,
+      ).toBe("danger");
+    });
+
+    it("[AC-1350-11] read CTE with '(' in quoted identifier, destructive 2nd → danger", () => {
+      expect(
+        analyzeStatement(
+          'WITH a AS (SELECT 1 AS "x("), b AS (DELETE FROM users) SELECT * FROM b',
+        ).severity,
+      ).toBe("danger");
+    });
+
+    it("[AC-1350-12] destructive body with '(' in string, UPDATE no WHERE → danger", () => {
+      expect(
+        analyzeStatement(
+          "WITH a AS (SELECT 1), b AS (UPDATE users SET note = '(') SELECT * FROM b",
+        ).severity,
+      ).toBe("danger");
+    });
+
+    it("[AC-1350-13] read CTE with ')' in string literal, destructive 2nd → danger", () => {
+      expect(
+        analyzeStatement(
+          "WITH a AS (SELECT ')' ), b AS (DELETE FROM users) SELECT * FROM b",
+        ).severity,
+      ).toBe("danger");
+    });
+
+    it("[AC-1350-14] read CTE with ')' in dollar-quote, destructive 2nd → danger", () => {
+      expect(
+        analyzeStatement(
+          "WITH a AS (SELECT $$)$$), b AS (DELETE FROM users) SELECT * FROM b",
+        ).severity,
+      ).toBe("danger");
+    });
   });
 
   // -------------------------------------------------------------------------
