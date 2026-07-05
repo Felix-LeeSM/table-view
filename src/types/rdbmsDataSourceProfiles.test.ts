@@ -43,7 +43,7 @@ const expectedMssqlRuntimeCapabilities = expectedCapabilities({
     constraints: true,
     relationships: true,
   },
-  edit: { editRows: true },
+  edit: { editRows: true, requiresPrimaryKeyForEdit: true },
 });
 
 const expectedOracleRuntimeCapabilities = expectedCapabilities({
@@ -56,7 +56,7 @@ const expectedOracleRuntimeCapabilities = expectedCapabilities({
     constraints: true,
     relationships: true,
   },
-  edit: { editRows: true },
+  edit: { editRows: true, requiresPrimaryKeyForEdit: true },
 });
 
 describe("RDBMS data source profiles", () => {

@@ -102,7 +102,7 @@ describe("DataSourceProfile registry", () => {
       connection: { test: true, filePicker: true, readOnly: true },
       query: { query: true, multiStatement: true, cancel: true },
       catalog: { browse: true, schema: true },
-      edit: { editRows: true },
+      edit: { editRows: true, requiresPrimaryKeyForEdit: true },
     }),
     duckdb: expectedCapabilities({
       connection: { test: true, filePicker: true, readOnly: true },
@@ -119,7 +119,7 @@ describe("DataSourceProfile registry", () => {
         constraints: true,
         relationships: true,
       },
-      edit: { editRows: true },
+      edit: { editRows: true, requiresPrimaryKeyForEdit: true },
     }),
     oracle: expectedCapabilities({
       connection: { test: true },
@@ -131,7 +131,7 @@ describe("DataSourceProfile registry", () => {
         constraints: true,
         relationships: true,
       },
-      edit: { editRows: true },
+      edit: { editRows: true, requiresPrimaryKeyForEdit: true },
     }),
     mongodb: expectedCapabilities({
       connection: { test: true },
