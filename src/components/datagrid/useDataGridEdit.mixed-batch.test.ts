@@ -759,6 +759,135 @@ describe("useDataGridEdit — Sprint 184 mixed-batch + perf smoke", () => {
     expect(mockFetchData).toHaveBeenCalledTimes(1);
   });
 
+  // Issue #1358 — mixed-batch (UPDATE + INSERT + DELETE) partial-failure
+  // regression. The prior mixed-batch coverage (AC-184-01/02) only exercised
+  // the happy path; the sole failure coverage lived in commit-error.test.ts
+  // and was UPDATE-only. These two tests pin that when executeQueryBatch
+  // rejects mid-batch:
+  //   1. the failedKey is routed back to the correct namespace key for the
+  //      DELETE (`row-page-idx`) and INSERT (`new-N-0`) statements — the two
+  //      namespaces the UPDATE-only failure test never touched, and
+  //   2. NONE of the three pending collections (pendingEdits / pendingNewRows
+  //      / pendingDeletedRowKeys) are cleared on failure. The whole batch is
+  //      atomic + rolled back, so the user's edits must survive so they can
+  //      retry or discard. A stray onCommitCleanup() leaking into the failure
+  //      branch would silently drop them; this is the guard against that.
+  // Date 2026-07-06.
+  function stageMixedBatch(result: {
+    current: ReturnType<typeof useDataGridEdit>;
+  }) {
+    // UPDATE row 0 col 1 → key "0-1".
+    act(() => {
+      result.current.handleStartEdit(0, 1, "Alice");
+    });
+    act(() => {
+      result.current.setEditValue("Alicia");
+    });
+    act(() => {
+      result.current.saveCurrentEdit();
+    });
+    // INSERT — duplicate row 1 → key "new-0-0".
+    act(() => {
+      result.current.handleSelectRow(1, false, false);
+    });
+    act(() => {
+      result.current.handleDuplicateRow();
+    });
+    // DELETE row 2 → key "row-1-2".
+    act(() => {
+      result.current.handleSelectRow(2, false, false);
+    });
+    act(() => {
+      result.current.handleDeleteRow();
+    });
+    act(() => {
+      result.current.handleCommit();
+    });
+  }
+
+  it("[#1358] mixed batch: DELETE-statement failure keeps all pending edits + flags the delete row key", async () => {
+    const { result } = renderRdbHook();
+    stageMixedBatch(result);
+
+    // Sanity — three statements staged, one pending item of each kind.
+    expect(result.current.sqlPreview!.length).toBe(3);
+    expect(result.current.pendingEdits.size).toBe(1);
+    expect(result.current.pendingNewRows).toHaveLength(1);
+    expect(result.current.pendingDeletedRowKeys.size).toBe(1);
+
+    // Locate the DELETE statement's 1-based position and reject there so the
+    // backend "statement N of 3 failed" index maps back onto the delete item
+    // regardless of generator statement ordering.
+    const kinds = result.current.sqlPreview!.map((s) => s.split(/\s+/)[0]!);
+    const deletePos = kinds.indexOf("DELETE") + 1;
+    expect(deletePos).toBeGreaterThan(0);
+    mockExecuteQueryBatch.mockImplementationOnce(() =>
+      Promise.reject(
+        new Error(`statement ${deletePos} of 3 failed: FK violation`),
+      ),
+    );
+
+    await act(async () => {
+      await result.current.handleExecuteCommit();
+    });
+
+    // commitError surfaced, pointed at the delete statement.
+    expect(result.current.commitError).not.toBeNull();
+    expect(result.current.commitError?.statementIndex).toBe(deletePos - 1);
+    expect(result.current.commitError?.statementCount).toBe(3);
+    expect(result.current.commitError?.message).toMatch(
+      /Commit failed — all changes rolled back/,
+    );
+
+    // Delete-row namespace key routed into pendingEditErrors.
+    expect(result.current.pendingEditErrors.has("row-1-2")).toBe(true);
+    expect(result.current.pendingEditErrors.get("row-1-2")).toContain(
+      "FK violation",
+    );
+
+    // Retention: NONE of the three pending collections cleared on failure.
+    expect(result.current.pendingEdits.size).toBe(1);
+    expect(result.current.pendingNewRows).toHaveLength(1);
+    expect(result.current.pendingDeletedRowKeys.size).toBe(1);
+    // Modal stays open with the full batch; no refetch on a rolled-back commit.
+    expect(result.current.sqlPreview?.length).toBe(3);
+    expect(mockFetchData).not.toHaveBeenCalled();
+  });
+
+  it("[#1358] mixed batch: INSERT-statement failure keeps all pending edits + flags the new-row key", async () => {
+    const { result } = renderRdbHook();
+    stageMixedBatch(result);
+
+    const kinds = result.current.sqlPreview!.map((s) => s.split(/\s+/)[0]!);
+    const insertPos = kinds.indexOf("INSERT") + 1;
+    expect(insertPos).toBeGreaterThan(0);
+    mockExecuteQueryBatch.mockImplementationOnce(() =>
+      Promise.reject(
+        new Error(`statement ${insertPos} of 3 failed: duplicate key`),
+      ),
+    );
+
+    await act(async () => {
+      await result.current.handleExecuteCommit();
+    });
+
+    expect(result.current.commitError?.statementIndex).toBe(insertPos - 1);
+    expect(result.current.commitError?.statementCount).toBe(3);
+
+    // New-row namespace key routed into pendingEditErrors.
+    expect(result.current.pendingEditErrors.has("new-0-0")).toBe(true);
+    expect(result.current.pendingEditErrors.get("new-0-0")).toContain(
+      "duplicate key",
+    );
+
+    // Retention across all three pending collections.
+    expect(result.current.pendingEdits.size).toBe(1);
+    expect(result.current.pendingNewRows).toHaveLength(1);
+    expect(result.current.pendingDeletedRowKeys.size).toBe(1);
+    expect(result.current.sqlPreview?.length).toBe(3);
+    expect(mockFetchData).not.toHaveBeenCalled();
+  });
+
   it("[AC-184-03] RDB 100-edit handleCommit completes under 1000ms with 100 UPDATE statements", () => {
     // AC-184-03 — perf smoke. Crude wall-clock budget guards against an
     // O(N²) regression in generateSqlWithKeys; on a healthy machine this
