@@ -488,7 +488,11 @@ export function renderItemRow(
         {...rovingProps(ctx, row.key)}
         onClick={handleClick}
         onKeyDown={(e) => {
-          if (e.key === "Enter") handleClick();
+          // #1142 — activation-key parity with schema/category rows (Enter+Space).
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            handleClick();
+          }
         }}
       >
         {icon}
@@ -522,8 +526,11 @@ export function renderItemRow(
           onClick={handleClick}
           onDoubleClick={handleDoubleClick}
           onKeyDown={(e) => {
-            if (e.key === "Enter") handleClick();
-            else if (e.key === "F2" && isTableItem) {
+            // #1142 — activation-key parity with schema/category rows (Enter+Space).
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              handleClick();
+            } else if (e.key === "F2" && isTableItem) {
               e.preventDefault();
               ctx.handleStartRename(item.name, row.schemaName);
             }

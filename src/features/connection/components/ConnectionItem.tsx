@@ -198,7 +198,12 @@ export default function ConnectionItem({
             onClick={handleSingleClick}
             onDoubleClick={handleDoubleClick}
             onKeyDown={(e) => {
-              if (e.key === "Enter") handleDoubleClick();
+              // #1142 — WAI-ARIA button pattern: activate on Enter AND Space.
+              // preventDefault stops Space from page-scrolling this div.
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                handleDoubleClick();
+              }
             }}
             onDragStart={(e) => {
               draggedConnectionId = connection.id;
