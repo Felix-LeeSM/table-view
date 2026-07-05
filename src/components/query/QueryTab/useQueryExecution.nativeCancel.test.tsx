@@ -166,6 +166,41 @@ describe("useQueryExecution — native cancel (#1230)", () => {
     expect(cancelQueryMock).toHaveBeenCalledWith("query-1-8888");
   });
 
+  it("fires the mongo tag route (conn, 0, queryId) for a running mongo query", async () => {
+    // Issue #1269 — mongo has no client-visible pid; native cancel routes
+    // through the comment tag: `cancelQueryNative(conn, 0, queryId)`.
+    const tab = makeQueryTab({
+      paradigm: "document",
+      queryMode: "aggregate",
+      database: "shop",
+      collection: "orders",
+      sql: "db.orders.aggregate([])",
+      queryState: { status: "running", queryId: "query-1-4242" },
+    });
+    useWorkspaceStore.setState(seedWorkspace([tab], tab.id));
+    useConnectionStore.setState({
+      connections: [
+        makeConn({
+          id: tab.connectionId,
+          dbType: "mongodb",
+          paradigm: "document",
+        }),
+      ],
+    });
+    const { result } = renderHook(() => useQueryExecution({ tab }));
+
+    await act(async () => {
+      await result.current.handleExecute();
+    });
+
+    expect(cancelQueryMock).toHaveBeenCalledWith("query-1-4242");
+    expect(cancelQueryNativeMock).toHaveBeenCalledWith(
+      "conn1",
+      0,
+      "query-1-4242",
+    );
+  });
+
   it("never fires native cancel for a DBMS without a native path", async () => {
     const tab = seedRdbTab(
       "SELECT 1",
