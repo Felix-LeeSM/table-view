@@ -685,6 +685,61 @@ mod tests {
     }
 
     #[test]
+    fn multi_cte_parity() {
+        // Mirror sqlSafety.test.ts AC-1350-01..08. Issue #1350: a destructive
+        // body in the 2nd+ CTE must not hide behind a leading read CTE. The
+        // classifier scans every `AS ( … )` body and merges the worst tier.
+        // AC-1350-01 — 2nd CTE DELETE without WHERE → danger.
+        assert_eq!(
+            classify("WITH a AS (SELECT 1), b AS (DELETE FROM users) SELECT * FROM b"),
+            Severity::Danger
+        );
+        // AC-1350-02 — 2nd CTE UPDATE without WHERE → danger.
+        assert_eq!(
+            classify("WITH a AS (SELECT 1), b AS (UPDATE users SET active = false) SELECT * FROM b"),
+            Severity::Danger
+        );
+        // AC-1350-03 — middle CTE (of 3) destructive → danger.
+        assert_eq!(
+            classify(
+                "WITH a AS (SELECT 1), b AS (DELETE FROM users), c AS (SELECT 2) SELECT * FROM c"
+            ),
+            Severity::Danger
+        );
+        // AC-1350-04 — 2nd CTE TRUNCATE → danger.
+        assert_eq!(
+            classify("WITH a AS (SELECT 1), b AS (TRUNCATE users) SELECT * FROM a"),
+            Severity::Danger
+        );
+        // AC-1350-05 — nested subquery parens in read CTE, destructive 2nd → danger.
+        assert_eq!(
+            classify("WITH a AS (SELECT (SELECT 1)), b AS (DELETE FROM users) SELECT * FROM b"),
+            Severity::Danger
+        );
+        // AC-1350-06 — bounded DELETE WHERE with nested subquery → warn (not over-escalated).
+        assert_eq!(
+            classify(
+                "WITH a AS (SELECT 1), b AS (DELETE FROM users WHERE id IN (SELECT id FROM stale)) SELECT * FROM b"
+            ),
+            Severity::Warn
+        );
+        // AC-1350-07 — 'DELETE' text inside a string literal → info (no false positive).
+        assert_eq!(
+            classify(
+                "WITH a AS (SELECT 'DELETE FROM users' AS note), b AS (SELECT 2) SELECT * FROM a"
+            ),
+            Severity::Info
+        );
+        // AC-1350-08 — 2nd CTE INSERT → info (not escalated).
+        assert_eq!(
+            classify(
+                "WITH a AS (SELECT 1), b AS (INSERT INTO users (id) VALUES (1) RETURNING id) SELECT * FROM a"
+            ),
+            Severity::Info
+        );
+    }
+
+    #[test]
     fn drop_object_parity_danger_vs_warn() {
         // Mirror sqlSafety.ts:656 (danger objects) vs :759 (`ddl-other`
         // warn). B2: only these object kinds are danger.
