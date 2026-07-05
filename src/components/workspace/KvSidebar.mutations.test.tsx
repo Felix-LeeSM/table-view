@@ -331,27 +331,76 @@ describe("KvSidebar mutations", () => {
   );
 
   it.each([
-    ["hash", defaultValueEnvelope],
-    ["list", listValueEnvelope],
-    ["set", setValueEnvelope],
-    ["zset", zSetValueEnvelope],
+    {
+      name: "hash",
+      envelope: () => defaultValueEnvelope(),
+      fills: [
+        ["Hash field", "email"],
+        ["Hash value", "ada@example.com"],
+      ],
+      preview: /preview hset/i,
+      confirm: /confirm hset/i,
+      command: "HSET user:1 email ada@example.com",
+    },
+    {
+      name: "list",
+      envelope: () => listValueEnvelope(),
+      fills: [["List value", "queued"]],
+      preview: /preview rpush/i,
+      confirm: /confirm rpush/i,
+      command: "RPUSH user:1 queued",
+    },
+    {
+      name: "set",
+      envelope: () => setValueEnvelope(),
+      fills: [["Set member", "beta"]],
+      preview: /preview sadd/i,
+      confirm: /confirm sadd/i,
+      command: "SADD user:1 beta",
+    },
+    {
+      name: "zset",
+      envelope: () => zSetValueEnvelope(),
+      fills: [
+        ["ZSet score", "9.5"],
+        ["ZSet member", "ada"],
+      ],
+      preview: /preview zadd/i,
+      confirm: /confirm zadd/i,
+      command: "ZADD user:1 9.5 ada",
+    },
   ])(
-    "hides Valkey %s collection mutation controls",
-    async (_name, envelope) => {
+    "previews and confirms Valkey $name edits through bounded commands (parity #1075)",
+    async ({ envelope, fills, preview, confirm, command }) => {
       useConnectionStore.setState({
         connections: [valkeyConnection()],
         activeStatuses: { "valkey-1": { type: "connected", activeDb: "0" } },
       });
-      mockRedisRuntime(envelope);
+      mockRedisRuntime(envelope, {
+        execute_kv_command: () => mutationQueryResult(),
+      });
 
       render(<KvSidebar connectionId="valkey-1" />);
       await selectRenderedKey(/valkey keys/i);
 
-      expect(screen.queryByText("Mutation")).not.toBeInTheDocument();
-      expect(
-        screen.queryByRole("button", { name: /preview hset|rpush|sadd|zadd/i }),
-      ).not.toBeInTheDocument();
+      expect(screen.getByText("Mutation")).toBeInTheDocument();
+      for (const [label, value] of fills as [string, string][]) {
+        fireEvent.change(screen.getByLabelText(label), { target: { value } });
+      }
+      fireEvent.click(screen.getByRole("button", { name: preview }));
+
+      expect(await screen.findByRole("status")).toHaveTextContent(command);
       expect(commandCalls("execute_kv_command")).toHaveLength(0);
+
+      fireEvent.click(screen.getByRole("button", { name: confirm }));
+
+      await waitFor(() => {
+        expect(invokeMock).toHaveBeenCalledWith("execute_kv_command", {
+          connectionId: "valkey-1",
+          queryId: undefined,
+          request: { database: 0, command },
+        });
+      });
     },
   );
 
