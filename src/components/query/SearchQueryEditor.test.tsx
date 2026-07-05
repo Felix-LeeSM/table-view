@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { createRef } from "react";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { EditorView } from "@codemirror/view";
 import SearchQueryEditor from "./SearchQueryEditor";
 import { expectUndoRevertsEdit } from "./__tests__/editorHistoryHelpers";
@@ -25,6 +25,17 @@ function getEditorView(): EditorView {
 }
 
 describe("SearchQueryEditor", () => {
+  // #1336 follow-up — every query editor mounts with a unified `view.focus()`
+  // so a freshly opened tab is immediately typeable on the real `.cm-content`.
+  it("auto-focuses the .cm-content surface on mount (#1336)", async () => {
+    const { container } = render(
+      <SearchQueryEditor sql="" onSqlChange={vi.fn()} onExecute={vi.fn()} />,
+    );
+    const cmContent = container.querySelector(".cm-content");
+    expect(cmContent).not.toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(cmContent));
+  });
+
   it("renders the search query editor surface", () => {
     render(
       <SearchQueryEditor

@@ -77,6 +77,34 @@ describe("BsonTreeViewer", () => {
     expect(tabbable).toHaveLength(1);
   });
 
+  // #1340 follow-up — WAI-ARIA tree items need aria-setsize / aria-posinset so
+  // screen readers announce "2 of 3" position among siblings.
+  it("assigns aria-setsize / aria-posinset among siblings (#1340)", () => {
+    render(<BsonTreeViewer value={{ a: 1, tags: ["x", "y"] }} />);
+
+    // Root is a single node.
+    const root = screen.getByRole("treeitem", { name: "$ node" });
+    expect(root).toHaveAttribute("aria-posinset", "1");
+    expect(root).toHaveAttribute("aria-setsize", "1");
+
+    // Object children: 2 siblings.
+    expect(screen.getByRole("treeitem", { name: "a node" })).toHaveAttribute(
+      "aria-posinset",
+      "1",
+    );
+    const tags = screen.getByRole("treeitem", { name: "tags node" });
+    expect(tags).toHaveAttribute("aria-posinset", "2");
+    expect(tags).toHaveAttribute("aria-setsize", "2");
+
+    // Array children: position/setsize track the array length.
+    const first = screen.getByRole("treeitem", { name: "[0] node" });
+    const second = screen.getByRole("treeitem", { name: "[1] node" });
+    expect(first).toHaveAttribute("aria-posinset", "1");
+    expect(first).toHaveAttribute("aria-setsize", "2");
+    expect(second).toHaveAttribute("aria-posinset", "2");
+    expect(second).toHaveAttribute("aria-setsize", "2");
+  });
+
   it("toggles aria-expanded on mouse click and keyboard (Enter/Space)", async () => {
     const user = userEvent.setup();
     render(

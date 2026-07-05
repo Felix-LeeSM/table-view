@@ -465,6 +465,43 @@ describe("ConnectionItem", () => {
     expect(mockConnect).toHaveBeenCalledWith("conn-1");
   });
 
+  // #1142 — `role="button"` row activated on Enter only; WAI-ARIA button
+  // pattern requires Space to activate too. Regression: Space must run the
+  // same handler as Enter/double-click.
+  it("calls connectToDatabase on Space keydown when disconnected (#1142)", () => {
+    const mockConnect = vi.fn().mockResolvedValue(undefined);
+    setStoreState({
+      activeStatuses: { "conn-1": { type: "disconnected" } },
+      connectToDatabase: mockConnect,
+    });
+
+    render(<ConnectionItem connection={makeConnection()} />);
+
+    const item = screen.getByRole("button", { name: /Test DB/ });
+    act(() => {
+      fireEvent.keyDown(item, { key: " " });
+    });
+
+    expect(mockConnect).toHaveBeenCalledWith("conn-1");
+  });
+
+  it("calls connectToDatabase on Enter keydown when disconnected (parity guard)", () => {
+    const mockConnect = vi.fn().mockResolvedValue(undefined);
+    setStoreState({
+      activeStatuses: { "conn-1": { type: "disconnected" } },
+      connectToDatabase: mockConnect,
+    });
+
+    render(<ConnectionItem connection={makeConnection()} />);
+
+    const item = screen.getByRole("button", { name: /Test DB/ });
+    act(() => {
+      fireEvent.keyDown(item, { key: "Enter" });
+    });
+
+    expect(mockConnect).toHaveBeenCalledWith("conn-1");
+  });
+
   it("does not call connectToDatabase on double-click when already connected", () => {
     const mockConnect = vi.fn().mockResolvedValue(undefined);
     setStoreState({

@@ -99,7 +99,12 @@ export function KvStreamReaderPanel({
             value={limitText}
             onChange={(event) => setLimitText(event.target.value)}
             aria-invalid={limitInvalid || undefined}
-            aria-describedby={streamError ? streamErrorId : undefined}
+            // Describe the count field only when it is the invalid one and an
+            // error element exists — a generic (non-field) stream error must
+            // not claim to describe a valid limit input (#1333 follow-up).
+            aria-describedby={
+              limitInvalid && streamError ? streamErrorId : undefined
+            }
           />
         </label>
         <div className="flex items-end">
