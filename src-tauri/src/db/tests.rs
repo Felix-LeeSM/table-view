@@ -106,6 +106,7 @@ fn active_adapter_as_rdb_rejects_non_rdb_with_unsupported() {
             _db: &'a str,
             _collection: &'a str,
             _pipeline: Vec<bson::Document>,
+            _comment: Option<String>,
             _cancel: Option<&'a CancellationToken>,
         ) -> BoxFuture<'a, Result<DocumentQueryResult, AppError>> {
             Box::pin(async {
@@ -717,6 +718,7 @@ impl DocumentAdapter for FakeCancellableDocument {
         _db: &'a str,
         _collection: &'a str,
         _pipeline: Vec<bson::Document>,
+        _comment: Option<String>,
         cancel: Option<&'a CancellationToken>,
     ) -> BoxFuture<'a, Result<DocumentQueryResult, AppError>> {
         Box::pin(async move {
@@ -1099,7 +1101,9 @@ async fn test_document_aggregate_honors_cancel_token() {
     let adapter = FakeCancellableDocument;
     let token = CancellationToken::new();
     token.cancel();
-    let result = adapter.aggregate("db", "c", Vec::new(), Some(&token)).await;
+    let result = adapter
+        .aggregate("db", "c", Vec::new(), None, Some(&token))
+        .await;
     assert_cancelled(result);
 }
 

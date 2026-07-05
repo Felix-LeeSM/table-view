@@ -144,6 +144,7 @@ describe("useQueryExecution — sprint-381 runCommand dispatch", () => {
         ping: 1,
       },
       false,
+      expect.any(String),
     );
     // Other dispatch paths must NOT fire.
     expect(findDocumentsMock).not.toHaveBeenCalled();
@@ -186,6 +187,7 @@ describe("useQueryExecution — sprint-381 runCommand dispatch", () => {
         serverStatus: 1,
       },
       false,
+      expect.any(String),
     );
   });
 
@@ -213,6 +215,7 @@ describe("useQueryExecution — sprint-381 runCommand dispatch", () => {
         dbStats: 1,
       },
       false,
+      expect.any(String),
     );
   });
 
@@ -293,6 +296,7 @@ describe("useQueryExecution — sprint-381 runCommand dispatch", () => {
       "scratch",
       { dropDatabase: 1 },
       true,
+      expect.any(String),
     );
   });
 
@@ -330,6 +334,7 @@ describe("useQueryExecution — sprint-381 runCommand dispatch", () => {
         deletes: [{ q: { active: false }, limit: 0 }],
       },
       true,
+      expect.any(String),
     );
   });
 

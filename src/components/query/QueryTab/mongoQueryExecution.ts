@@ -148,6 +148,7 @@ async function executeMongoRunCommandIfPresent(
         dbArg,
         body,
         adminAnalysis.severity !== "info",
+        queryId,
       );
       const responseJson = JSON.stringify(response, null, 2);
       const queryResult: QueryResult = {

@@ -200,6 +200,7 @@ describe("QueryTab — document", () => {
       "table_view_test",
       "users",
       { filter: { active: true } },
+      expect.any(String),
     );
 
     await waitFor(() => {
@@ -228,6 +229,7 @@ describe("QueryTab — document", () => {
       "table_view_test",
       "users",
       { filter: { active: true }, sort: { name: 1 }, limit: 10 },
+      expect.any(String),
     );
   });
 
@@ -251,6 +253,7 @@ describe("QueryTab — document", () => {
       "table_view_test",
       "users",
       [{ $match: { active: true } }, { $limit: 10 }],
+      expect.any(String),
     );
   });
 
@@ -700,6 +703,7 @@ describe("QueryTab — document", () => {
         "table_view_test",
         "users",
         [{ $match: {} }, { $out: "snapshot" }],
+        expect.any(String),
       );
     });
 

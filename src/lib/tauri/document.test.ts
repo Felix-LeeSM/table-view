@@ -98,8 +98,31 @@ describe("document Tauri wrappers", () => {
       database: "shop",
       collection: "orders",
       pipeline,
+      queryId: null,
     });
     expect(result.rows[0]?.[0]).toBe(2n);
+  });
+
+  it("forwards the cancel-tag queryId to aggregate_documents / run_mongo_command (#1269)", async () => {
+    invokeMock.mockResolvedValue(undefined);
+
+    await aggregateDocuments("mongo-1", "shop", "orders", [], "q-agg");
+    await runMongoCommand("mongo-1", null, { serverStatus: 1 }, true, "q-cmd");
+
+    expect(invokeMock).toHaveBeenNthCalledWith(1, "aggregate_documents", {
+      connectionId: "mongo-1",
+      database: "shop",
+      collection: "orders",
+      pipeline: [],
+      queryId: "q-agg",
+    });
+    expect(invokeMock).toHaveBeenNthCalledWith(2, "run_mongo_command", {
+      connectionId: "mongo-1",
+      database: null,
+      command: { serverStatus: 1 },
+      safetyConfirmed: true,
+      queryId: "q-cmd",
+    });
   });
 
   it("normalizes single-row and write id variants returned by the backend", async () => {
@@ -403,6 +426,7 @@ describe("document Tauri wrappers", () => {
           database: null,
           command: { serverStatus: 1 },
           safetyConfirmed: true,
+          queryId: null,
         },
       ],
     ]);

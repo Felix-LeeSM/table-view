@@ -317,12 +317,16 @@ export async function aggregateDocuments(
   database: string,
   collection: string,
   pipeline: Record<string, unknown>[],
+  // Issue #1269 (P1) — optional cancel-token id, stamped as the op's
+  // `comment` so native cancel (`cancel_query_by_tag`) can `killOp` it.
+  queryId?: string,
 ): Promise<DocumentQueryResult> {
   const result = await invoke<unknown>("aggregate_documents", {
     connectionId,
     database,
     collection,
     pipeline,
+    queryId: queryId ?? null,
   });
   return wrapNumericCells(normalizeDocumentQueryResult(result));
 }
@@ -618,11 +622,15 @@ export async function runMongoCommand(
   database: string | null,
   command: Record<string, unknown>,
   safetyConfirmed = false,
+  // Issue #1269 (P1) — optional cancel-token id, stamped as the op's
+  // `comment` so native cancel (`cancel_query_by_tag`) can `killOp` it.
+  queryId?: string,
 ): Promise<unknown> {
   return invoke<unknown>("run_mongo_command", {
     connectionId,
     database,
     command,
     safetyConfirmed,
+    queryId: queryId ?? null,
   });
 }

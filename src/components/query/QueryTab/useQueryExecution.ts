@@ -409,6 +409,9 @@ export function useQueryExecution({
     tab.queryState.status === "running" ? tab.queryState.queryId : null;
   useEffect(() => {
     if (!runningQueryId || !canNativeCancel) return;
+    // Issue #1269 — mongo cancels via the comment tag (queryId), not a pid, so
+    // the pid fetch is a guaranteed null no-op; skip the pointless round-trip.
+    if (dbType === "mongodb") return;
     let active = true;
     void (async () => {
       try {
@@ -424,7 +427,13 @@ export function useQueryExecution({
     return () => {
       active = false;
     };
-  }, [runningQueryId, canNativeCancel, setRunningQueryServerPid, tab.id]);
+  }, [
+    runningQueryId,
+    canNativeCancel,
+    setRunningQueryServerPid,
+    tab.id,
+    dbType,
+  ]);
 
   const mongoWriteDispatchers = useMemo(
     () =>
@@ -468,22 +477,38 @@ export function useQueryExecution({
       }
       // Then native: tear down the actual server-side backend so a long query
       // (pg_sleep, big JOIN) doesn't keep consuming server resources after the
-      // client gave up. The pid is read live from the store (recorded after
-      // this closure captured `tab`).
+      // client gave up.
       if (canNativeCancel) {
-        const serverPid = readRunningServerPid(
-          tab.connectionId,
-          tab.id,
-          queryId,
-        );
-        if (serverPid != null) {
+        if (dbType === "mongodb") {
+          // Issue #1269 — mongo has no client-visible pid; the running op is
+          // tagged with `command.comment == queryId`, so cancel routes through
+          // the tag path (`cancelQueryNative(conn, 0, queryId)` →
+          // `cancel_query_by_tag` → `$currentOp` match → `killOp`).
           try {
-            await cancelQueryNative(tab.connectionId, serverPid);
+            await cancelQueryNative(tab.connectionId, 0, queryId);
           } catch (err) {
             logger.warn(
-              "cancelQueryNative failed (likely already completed):",
+              "cancelQueryNative (mongo tag) failed (likely already completed):",
               err,
             );
+          }
+        } else {
+          // RDB pid path — the pid is read live from the store (recorded after
+          // this closure captured `tab`).
+          const serverPid = readRunningServerPid(
+            tab.connectionId,
+            tab.id,
+            queryId,
+          );
+          if (serverPid != null) {
+            try {
+              await cancelQueryNative(tab.connectionId, serverPid);
+            } catch (err) {
+              logger.warn(
+                "cancelQueryNative failed (likely already completed):",
+                err,
+              );
+            }
           }
         }
       }
