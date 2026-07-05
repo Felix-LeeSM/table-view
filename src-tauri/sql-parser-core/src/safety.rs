@@ -21,8 +21,8 @@
 //!   - `REPLACE …` (MySQL/MariaDB destructive upsert — issue #1115)
 //!   - `RESTORE …` (SQL Server — may overwrite a database)
 //!   - data-modifying CTE — `WITH x AS (DELETE/UPDATE … no WHERE) SELECT …`
-//!     (mirrors the frontend `analyzeDmlCte`; the parser rejects the CTE
-//!     body so this rides the keyword fallback)
+//!     in ANY CTE position (issue #1350; mirrors the frontend `analyzeDmlCte`;
+//!     the parser rejects the CTE body so this rides the keyword fallback)
 //!
 //! `DROP FUNCTION` / `PROCEDURE` / `ROLE` / `EXTENSION` / `MATERIALIZED VIEW`
 //! are intentionally NOT danger — the frontend classifies them as
@@ -205,35 +205,38 @@ fn drop_keyword_severity(upper: &str) -> Severity {
     }
 }
 
-/// Classify a `WITH …` statement by its first CTE body — a native port of the
-/// frontend `analyzeDmlCte` (`sqlSafety.ts`). Returns `None` when the first
-/// CTE body is not a write op (the caller then treats the WITH as a read),
-/// matching the frontend's "only the first CTE, worst is the caller's job"
-/// contract (issue #1112 review B1).
+/// Classify a `WITH …` statement by scanning EVERY CTE body — a native port of
+/// the frontend `analyzeDmlCte` (`sqlSafety.ts`). Issue #1350: the first-CTE-
+/// only scan let a destructive body in the 2nd+ CTE (`WITH a AS (SELECT 1), b
+/// AS (DELETE FROM t) SELECT …`) read as a benign SELECT. Each `AS ( … )` body
+/// is re-classified with the full `classify_single` (mirroring the frontend's
+/// recursive `analyzeStatement`) and the worst tier wins. Returns `None` when
+/// no `AS (` body is present (the caller then treats the WITH as a read).
+/// After each body the scan resumes past its closing paren, so nested `AS (`
+/// subqueries and `'DELETE …'` string literals never register as body openers.
 fn classify_dml_cte(upper: &str) -> Option<Severity> {
-    let open = find_cte_body_open_paren(upper)?;
-    let body = balanced_paren_slice(upper, open)?;
-    // Strip the enclosing parens; `body` is `(…)`, both ASCII.
-    let inner = body[1..body.len() - 1].trim();
-    match first_word(inner).as_str() {
-        // WHERE presence decides bounded (warn) vs unbounded (danger), exactly
-        // like the top-level DELETE/UPDATE branches.
-        "DELETE" | "UPDATE" => Some(if has_where(inner) {
-            Severity::Warn
-        } else {
-            Severity::Danger
-        }),
-        "INSERT" => Some(Severity::Info),
-        _ => None,
+    let mut worst: Option<Severity> = None;
+    let mut from = 0;
+    while let Some(open) = find_cte_body_open_paren(upper, from) {
+        let body = match balanced_paren_slice(upper, open) {
+            Some(b) => b,
+            None => break,
+        };
+        // Strip the enclosing parens; `body` is `(…)`, both ASCII.
+        let inner = body[1..body.len() - 1].trim();
+        let sev = classify_single(inner);
+        worst = Some(worst.map_or(sev, |w| w.max(sev)));
+        from = open + body.len();
     }
+    worst
 }
 
-/// Byte index of the `(` that opens the first `AS ( … )` CTE body. Mirrors the
-/// frontend regex `AS\s*\(` anchor — the CTE's optional column list `(a, b)`
-/// sits before `AS`, so the first `AS (` is the body opener.
-fn find_cte_body_open_paren(upper: &str) -> Option<usize> {
+/// Byte index of the `(` that opens the next `AS ( … )` CTE body at or after
+/// `from`. Mirrors the frontend regex `\bAS\s*\(` anchor — the CTE's optional
+/// column list `(a, b)` sits before `AS`, so `AS (` is the body opener.
+fn find_cte_body_open_paren(upper: &str, from: usize) -> Option<usize> {
     let bytes = upper.as_bytes();
-    let mut i = 0;
+    let mut i = from;
     while i + 2 <= bytes.len() {
         let is_as_word = &bytes[i..i + 2] == b"AS"
             && (i == 0 || !is_word_byte(bytes[i - 1]))
