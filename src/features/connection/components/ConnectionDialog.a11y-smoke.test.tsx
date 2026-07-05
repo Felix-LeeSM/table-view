@@ -10,6 +10,14 @@ import ConnectionDialog from "./ConnectionDialog";
 import { useConnectionStore } from "@stores/connectionStore";
 import type { ConnectionConfig } from "@/types/connection";
 
+// #1366 — mock the toast lib boundary (P6: mock only at lib boundaries) so the
+// dialog's real `useConnectionMutations` success path doesn't push into the
+// process-wide `toastStore` singleton and leak a lingering toast into a
+// sibling spec's assertion under parallel-suite load (#1270 flake class).
+vi.mock("@lib/runtime/toast", () => ({
+  toast: { success: vi.fn(), error: vi.fn() },
+}));
+
 const mockAddConnection = vi.fn();
 const mockUpdateConnection = vi.fn();
 const mockTestConnection = vi.fn();
@@ -113,5 +121,42 @@ describe("ConnectionDialog critical accessibility smoke", () => {
       ).toMatch(/connection refused/i);
     });
     expectSecretAbsent(secret);
+  });
+
+  // Reason: #1366 — the a11y-smoke masking test above only covered the Test
+  // Connection failure path; the Save failure path (`handleSave` catch →
+  // `setError(sanitizeMessage(...))`, ConnectionDialog.tsx:284-289) was
+  // unguarded, leaving ADR-0005 (no plaintext password leaves the frontend)
+  // open to regression on save. A backend that echoes the connection string
+  // in its save error must not surface the password in the footer alert.
+  // (2026-07-06)
+  it("keeps connection passwords out of the save-failure alert", async () => {
+    const secret = "pass@789ZZ";
+    mockAddConnection.mockRejectedValue(
+      new Error(
+        `save failed: postgres://user:${encodeURIComponent(secret)}@localhost/db`,
+      ),
+    );
+    render(<ConnectionDialog onClose={vi.fn()} />);
+
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText("Name"), {
+        target: { value: "My DB" },
+      });
+      fireEvent.change(screen.getByLabelText("Password"), {
+        target: { value: secret },
+      });
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent(/save failed/i);
+    });
+    expectSecretAbsent(secret);
+    // The mask token proves the sanitizer ran on the echoed connection string
+    // rather than the error simply not containing the secret.
+    expect(screen.getByRole("alert")).toHaveTextContent("***");
   });
 });

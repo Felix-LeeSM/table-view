@@ -14,6 +14,16 @@ import * as dataSourceProfiles from "@/types/dataSource";
 import type { DataSourceProfile } from "@/types/dataSource";
 import { expectNodeStable } from "@/__tests__/utils/expectNodeStable";
 
+// #1366 — mock the toast lib boundary (P6: mock only at lib boundaries). The
+// dialog's real `useConnectionMutations` success path pushes into the
+// process-wide `toastStore` singleton; unmocked, that toast lingers in the
+// global queue and can slip past a sibling spec's `toHaveLength` assertion
+// under parallel-suite load (the #1270 flake that test-setup's global reset
+// currently masks). Mocking the facade keeps this suite from feeding it.
+vi.mock("@lib/runtime/toast", () => ({
+  toast: { success: vi.fn(), error: vi.fn() },
+}));
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------

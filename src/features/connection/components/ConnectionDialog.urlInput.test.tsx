@@ -11,6 +11,14 @@ import { useConnectionStore } from "@stores/connectionStore";
 import type { ConnectionConfig, ConnectionDraft } from "@/types/connection";
 import * as dataSourceProfiles from "@/types/dataSource";
 
+// #1366 — mock the toast lib boundary (P6: mock only at lib boundaries) so the
+// dialog's real `useConnectionMutations` success path doesn't push into the
+// process-wide `toastStore` singleton and leak a lingering toast into a
+// sibling spec's assertion under parallel-suite load (#1270 flake class).
+vi.mock("@lib/runtime/toast", () => ({
+  toast: { success: vi.fn(), error: vi.fn() },
+}));
+
 // ---------------------------------------------------------------------------
 // ConnectionDialog — URL-form input handling (Postel's Law).
 //
