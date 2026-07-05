@@ -7,7 +7,7 @@
 
 use std::time::Instant;
 
-use ::mongodb::options::{FindOneOptions, FindOptions};
+use ::mongodb::options::{AggregateOptions, FindOneOptions, FindOptions};
 use bson::{Bson, Document};
 use futures_util::stream::StreamExt;
 
@@ -231,19 +231,29 @@ impl MongoAdapter {
     }
 
     /// Sprint 197 — body of `DocumentAdapter::aggregate`.
+    ///
+    /// Issue #1269 (P1) — `comment` stamps the cancel tag on the aggregate op
+    /// (mirrors `find_impl`) so it is discoverable via `$currentOp` matched on
+    /// `command.comment` for native `killOp`.
     pub(super) async fn aggregate_impl(
         &self,
         db: &str,
         collection: &str,
         pipeline: Vec<Document>,
+        comment: Option<String>,
     ) -> Result<DocumentQueryResult, AppError> {
         validate_ns(db, collection)?;
         let started = Instant::now();
         let client = self.current_client().await?;
         let coll = client.database(db).collection::<Document>(collection);
 
+        let mut opts = AggregateOptions::default();
+        if let Some(c) = comment {
+            opts.comment = Some(Bson::String(c));
+        }
         let mut cursor = coll
             .aggregate(pipeline)
+            .with_options(opts)
             .await
             .map_err(|e| AppError::Database(format!("aggregate failed: {e}")))?;
 
@@ -468,7 +478,7 @@ mod tests {
     #[tokio::test]
     async fn test_aggregate_without_connection_returns_connection_error() {
         let adapter = MongoAdapter::new();
-        match adapter.aggregate("db", "c", Vec::new(), None).await {
+        match adapter.aggregate("db", "c", Vec::new(), None, None).await {
             Err(AppError::Connection(msg)) => {
                 assert!(msg.contains("not established"), "unexpected message: {msg}");
             }
@@ -479,13 +489,13 @@ mod tests {
     #[tokio::test]
     async fn test_aggregate_rejects_empty_namespace() {
         let adapter = MongoAdapter::new();
-        match adapter.aggregate("", "c", Vec::new(), None).await {
+        match adapter.aggregate("", "c", Vec::new(), None, None).await {
             Err(AppError::Validation(msg)) => {
                 assert!(msg.contains("Database name"), "unexpected message: {msg}");
             }
             other => panic!("expected Validation error, got ok? {}", other.is_ok()),
         }
-        match adapter.aggregate("db", "   ", Vec::new(), None).await {
+        match adapter.aggregate("db", "   ", Vec::new(), None, None).await {
             Err(AppError::Validation(msg)) => {
                 assert!(msg.contains("Collection name"), "unexpected message: {msg}");
             }

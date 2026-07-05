@@ -367,6 +367,7 @@ describe("useQueryExecution — issue #737 characterization matrix", () => {
       "table_view_test",
       "users",
       { filter: { active: true } },
+      expect.any(String),
     );
     const [history] = await waitForHistoryRows(1);
     expect(history).toMatchObject({
