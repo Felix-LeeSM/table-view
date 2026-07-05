@@ -203,6 +203,7 @@ fn query_table_data_uncancelled(
         .map_err(|e| AppError::Database(e.to_string()))?;
 
     let order_clause = build_order_clause(order_by, &columns);
+    let page_size = crate::db::clamp_page_size(page_size);
     let offset = (page - 1).max(0) * page_size;
     let executed_query = format!(
         "SELECT * FROM {table_ident}{where_clause}{order_clause} LIMIT {page_size} OFFSET {offset}"
@@ -336,15 +337,8 @@ fn build_filter_clause(
             FilterOperator::IsNull => conditions.push(format!("{column} IS NULL")),
             FilterOperator::IsNotNull => conditions.push(format!("{column} IS NOT NULL")),
             _ => {
-                let op = match &filter.operator {
-                    FilterOperator::Eq => "=",
-                    FilterOperator::Neq => "<>",
-                    FilterOperator::Gt => ">",
-                    FilterOperator::Lt => "<",
-                    FilterOperator::Gte => ">=",
-                    FilterOperator::Lte => "<=",
-                    FilterOperator::Like => "LIKE",
-                    _ => unreachable!(),
+                let Some(op) = filter.operator.comparison_sql() else {
+                    continue;
                 };
                 if let Some(value) = &filter.value {
                     conditions.push(format!("{column} {op} ?"));
@@ -372,9 +366,10 @@ fn build_order_clause(order_by: Option<&str>, columns: &[crate::models::ColumnIn
         for part in order_by.split(',') {
             let parts = part.split_whitespace().collect::<Vec<&str>>();
             let (column, direction) = match parts.as_slice() {
-                [column, direction] if *direction == "ASC" || *direction == "DESC" => {
-                    (*column, *direction)
-                }
+                [column, direction] => match crate::db::parse_order_direction(direction) {
+                    Some(d) => (*column, d),
+                    None => continue,
+                },
                 [column] => (*column, "ASC"),
                 _ => continue,
             };
@@ -388,5 +383,44 @@ fn build_order_clause(order_by: Option<&str>, columns: &[crate::models::ColumnIn
         String::new()
     } else {
         format!(" ORDER BY {}", order_parts.join(", "))
+    }
+}
+
+#[cfg(test)]
+mod order_clause_tests {
+    use super::build_order_clause;
+    use crate::models::{ColumnCategory, ColumnInfo};
+
+    fn col(name: &str) -> ColumnInfo {
+        ColumnInfo {
+            name: name.into(),
+            data_type: "VARCHAR".into(),
+            nullable: true,
+            default_value: None,
+            is_primary_key: false,
+            is_foreign_key: false,
+            fk_reference: None,
+            comment: None,
+            check_clauses: Vec::new(),
+            category: ColumnCategory::Unknown,
+        }
+    }
+
+    #[test]
+    fn lowercase_direction_is_honored_not_dropped() {
+        let columns = vec![col("id"), col("name")];
+        // #1354 regression — duckdb previously matched only exact-case
+        // `"ASC"`/`"DESC"` and silently dropped `asc`/`desc`, producing an
+        // empty ORDER BY. Now folded to the canonical uppercase.
+        assert_eq!(
+            build_order_clause(Some("id asc, name desc"), &columns),
+            r#" ORDER BY "id" ASC, "name" DESC"#
+        );
+    }
+
+    #[test]
+    fn invalid_direction_token_skips_the_part() {
+        let columns = vec![col("id")];
+        assert_eq!(build_order_clause(Some("id sideways"), &columns), "");
     }
 }
