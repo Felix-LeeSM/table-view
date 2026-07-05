@@ -3,26 +3,13 @@ import { safeStringifyCell } from "@lib/jsonCell";
 import { sqlIdentifier, type SqlDialect } from "./sqlLiteral";
 
 /**
- * Quote a SQL identifier with double quotes, escaping internal `"`.
- * The backend uses the same convention for identifiers in generated SQL.
- */
-function quoteIdent(name: string): string {
-  return `"${name.replace(/"/g, '""')}"`;
-}
-
-/**
  * Dialect-aware identifier quoting for raw-edit SQL (issue #1299). Raw-edit
- * identifiers are ALWAYS quoted so case + special chars survive: Postgres /
- * SQLite / Oracle use double quotes, MySQL backticks, MSSQL brackets. We do
- * NOT route Postgres through `sqlLiteral.sqlIdentifier` because that helper
- * leaves Postgres idents bare (case-folding + special-char unsafe here); the
- * structured grid can afford that, a user-typed raw result needs the exact
- * cached name preserved.
+ * identifiers are ALWAYS quoted so case + special chars survive the cached
+ * result's exact name. `quotePostgres: true` opts Postgres into ANSI quoting
+ * (the canonical default leaves it bare for the structured grid path). #1357.
  */
 function ident(name: string, dialect: SqlDialect): string {
-  return dialect === "mysql" || dialect === "mssql"
-    ? sqlIdentifier(name, dialect)
-    : quoteIdent(name);
+  return sqlIdentifier(name, dialect, { quotePostgres: true });
 }
 
 /** Escape a single-quoted SQL string literal. */

@@ -145,12 +145,32 @@ function quoteMssqlIdentifier(value: string): string {
   return `[${value.replace(/]/g, "]]")}]`;
 }
 
-export function sqlIdentifier(value: string, dialect: SqlDialect): string {
+export interface SqlIdentifierOptions {
+  /**
+   * ANSI-quote PostgreSQL identifiers (`"Name"`) instead of leaving them bare.
+   * Default `false`: the structured grid path tolerates Postgres case-folding.
+   * DDL / raw-edit / DuckDB / completion set `true` so mixed-case + special
+   * chars survive the round-trip. No effect on other dialects (already quoted).
+   */
+  quotePostgres?: boolean;
+}
+
+/**
+ * Canonical SQL identifier quoter (#1357). Single source of truth for the
+ * per-dialect quote character and escape rule — a security boundary, so it
+ * lives in exactly one place. Postgres is bare by default; pass
+ * `{ quotePostgres: true }` for callers that must preserve the exact name.
+ */
+export function sqlIdentifier(
+  value: string,
+  dialect: SqlDialect,
+  opts?: SqlIdentifierOptions,
+): string {
   if (dialect === "mysql") return quoteMysqlIdentifier(value);
   if (dialect === "sqlite") return quoteDoubleSqlIdentifier(value);
   if (dialect === "mssql") return quoteMssqlIdentifier(value);
   if (dialect === "oracle") return quoteDoubleSqlIdentifier(value);
-  return value;
+  return opts?.quotePostgres ? quoteDoubleSqlIdentifier(value) : value;
 }
 
 export function qualifiedTableName(

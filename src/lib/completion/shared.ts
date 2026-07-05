@@ -34,26 +34,9 @@ export function prefixMatch(prefix: string, candidate: string): boolean {
   );
 }
 
-// ── identifier quoting ─────────────────────────────────────────────────────
-
-/**
- * Identifier-quoting flavour. `"ansi"` and `"postgres"` and `"sqlite"` all
- * use ANSI double-quote semantics; MySQL uses backticks.
- */
-export type QuoteFlavour = "ansi" | "postgres" | "mysql" | "sqlite";
-
-/**
- * Wrap `name` in the dialect's identifier quote character and double any
- * embedded occurrence of that character per SQL standards. Used by the
- * QueryEditor's "preserve mixed-case identifiers" path so generated DDL
- * round-trips through the server intact.
- */
-export function escapeIdentifier(name: string, flavour: QuoteFlavour): string {
-  if (flavour === "mysql") {
-    return "`" + name.replace(/`/g, "``") + "`";
-  }
-  return '"' + name.replace(/"/g, '""') + '"';
-}
+// Identifier quoting lives in the canonical `sqlIdentifier` (@lib/sql/sqlLiteral,
+// #1357). The former `escapeIdentifier`/`QuoteFlavour` here had no runtime
+// caller and was removed rather than re-pointed.
 
 // ── FROM-context parser ────────────────────────────────────────────────────
 

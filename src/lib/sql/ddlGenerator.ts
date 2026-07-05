@@ -10,6 +10,7 @@
 // `column.data_type` and DEFAULT values are emitted verbatim from the
 // backend — no normalisation.
 import type { ColumnInfo, IndexInfo, ConstraintInfo } from "@/types/schema";
+import { sqlIdentifier, type SqlDialect } from "./sqlLiteral";
 
 export type DdlDialect = "postgresql" | "mysql" | "mariadb" | "sqlite";
 
@@ -274,12 +275,10 @@ function buildAddForeignKey(
 // ── Identifier / qualified name helpers ───────────────────────────────
 
 function quoteIdent(dialect: DdlDialect, raw: string): string {
-  if (dialect === "mysql" || dialect === "mariadb") {
-    // MySQL-family: backtick quoting, embedded backtick은 두 개로 escape.
-    return "`" + raw.replace(/`/g, "``") + "`";
-  }
-  // PG / SQLite: ANSI double quotes, embedded double-quote 두 개로.
-  return '"' + raw.replace(/"/g, '""') + '"';
+  // Route through the canonical quoter (#1357). DDL always quotes, so Postgres
+  // takes `quotePostgres: true`; `mariadb` shares MySQL backtick semantics.
+  const canonical: SqlDialect = dialect === "mariadb" ? "mysql" : dialect;
+  return sqlIdentifier(raw, canonical, { quotePostgres: true });
 }
 
 function qualifiedName(

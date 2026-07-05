@@ -30,6 +30,24 @@ describe("sqlIdentifier — canonical per-dialect quoting", () => {
     expect(sqlIdentifier("Users", "postgresql")).toBe("Users");
     expect(sqlIdentifier("weird name", "postgresql")).toBe("weird name");
   });
+
+  it("quotePostgres option ANSI-quotes postgres identifiers (#1357)", () => {
+    expect(sqlIdentifier("Users", "postgresql", { quotePostgres: true })).toBe(
+      '"Users"',
+    );
+    expect(
+      sqlIdentifier('weird"name', "postgresql", { quotePostgres: true }),
+    ).toBe('"weird""name"');
+  });
+
+  it("quotePostgres is a no-op for non-postgres dialects", () => {
+    expect(sqlIdentifier("Users", "mysql", { quotePostgres: true })).toBe(
+      "`Users`",
+    );
+    expect(sqlIdentifier("col", "mssql", { quotePostgres: true })).toBe(
+      "[col]",
+    );
+  });
 });
 
 describe("qualifiedTableName", () => {
