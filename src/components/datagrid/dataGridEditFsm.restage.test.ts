@@ -144,6 +144,43 @@ describe("buildRestageSnapshot (#1126 Phase 1)", () => {
     expect(buildRestageSnapshot(src, noPk)!.restageBlocked).toBe(true);
   });
 
+  // Composite PK — `pkIdx.every(i => row[i] != null)` is the wrong-row-DELETE
+  // defense boundary: a partial identity can't safely target the inserted row.
+  const COMPOSITE_PK = [
+    { is_primary_key: true },
+    { is_primary_key: true },
+    { is_primary_key: false },
+  ] as const;
+
+  it("committed INSERT on a composite-PK table with a partial PK (one null) → blocked", () => {
+    const src = emptySource();
+    src.pendingNewRows = [[7, null, "New"]]; // second PK column is null
+
+    expect(buildRestageSnapshot(src, COMPOSITE_PK)!.restageBlocked).toBe(true);
+  });
+
+  it("committed INSERT on a composite-PK table with all PK values present → reverse DELETE", () => {
+    const src = emptySource();
+    src.pendingNewRows = [[7, 8, "New"]];
+
+    const snap = buildRestageSnapshot(src, COMPOSITE_PK);
+
+    expect(snap!.restageBlocked).toBeFalsy();
+    expect(snap!.pendingDeletedRowKeys.size).toBe(1);
+    const key = [...snap!.pendingDeletedRowKeys][0]!;
+    expect(snap!.pendingDeletedRowSnapshots.get(key)).toEqual([7, 8, "New"]);
+  });
+
+  it("mixed reproducible + partial-composite-PK INSERT in one commit → whole commit blocked", () => {
+    const src = emptySource();
+    src.pendingNewRows = [
+      [7, 8, "Ok"],
+      [9, null, "Bad"], // partial PK poisons the whole batch
+    ];
+
+    expect(buildRestageSnapshot(src, COMPOSITE_PK)!.restageBlocked).toBe(true);
+  });
+
   it("mixed UPDATE + DELETE commit → reversal edits and re-INSERT combine", () => {
     const src = emptySource();
     src.pendingEdits.set("0-1", "Bob");

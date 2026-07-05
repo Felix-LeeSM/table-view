@@ -11,6 +11,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import { setupTauriMock } from "@/test-utils/tauriMock";
+import { useToastStore } from "@stores/toastStore";
+import i18n from "@lib/i18n";
 import { useDataGridEdit, UNDO_STACK_MAX } from "./useDataGridEdit";
 import type { TableData } from "@/types/schema";
 
@@ -350,6 +352,50 @@ describe("useDataGridEdit — undo stack (Sprint 249, ADR 0022 Phase 5)", () => 
     });
     expect(result.current.pendingDeletedRowKeys.size).toBe(1);
     expect(mockExecuteQueryBatch).toHaveBeenCalledTimes(1);
+  });
+
+  it("[#1126 Phase 2] non-reproducible commit → undo() toasts and stages nothing", async () => {
+    const { result } = renderEditHook();
+
+    // Add an empty row: its auto-increment PK stays null, so the committed
+    // INSERT can't be reversed to a safe DELETE.
+    act(() => {
+      result.current.handleAddRow();
+    });
+    expect(result.current.pendingNewRows.length).toBe(1);
+
+    act(() => {
+      result.current.handleCommit();
+    });
+    await act(async () => {
+      await result.current.handleExecuteCommit();
+    });
+    if (result.current.pendingConfirm) {
+      await act(async () => {
+        await result.current.confirmDangerous();
+      });
+    }
+    expect(result.current.pendingNewRows.length).toBe(0);
+    expect(mockExecuteQueryBatch).toHaveBeenCalledTimes(1);
+    // The undo stack survived the commit with a blocked marker.
+    expect(result.current.canUndo).toBe(true);
+    const toastsBefore = useToastStore.getState().toasts.length;
+
+    // Undo the non-reproducible commit → a toast fires and NOTHING is staged;
+    // no DB write, and the (single-entry) stack drains.
+    act(() => {
+      result.current.undo();
+    });
+    expect(result.current.pendingEdits.size).toBe(0);
+    expect(result.current.pendingNewRows.length).toBe(0);
+    expect(result.current.pendingDeletedRowKeys.size).toBe(0);
+    expect(result.current.canUndo).toBe(false);
+    expect(mockExecuteQueryBatch).toHaveBeenCalledTimes(1);
+    const toasts = useToastStore.getState().toasts;
+    expect(toasts).toHaveLength(toastsBefore + 1);
+    expect(toasts[toasts.length - 1]!.message).toBe(
+      i18n.t("datagrid:undoRestageBlocked"),
+    );
   });
 
   it("[AC-249-U9] consecutive actions → undo restores LIFO (most recent first)", () => {
