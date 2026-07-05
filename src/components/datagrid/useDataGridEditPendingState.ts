@@ -198,14 +198,19 @@ export function useDataGridEditPendingState({
   // leave it empty when there was nothing restageable). Reads the current
   // store entry BEFORE clearing so the committed edits + row anchors are still
   // present.
-  const restageAfterCommit = useCallback(() => {
-    const current = useDataGridEditStore.getState().getEntry(storeKey);
-    const restage = buildRestageSnapshot(current);
-    storeClearEntry(storeKey);
-    if (restage) {
-      storeSetSlice(storeKey, "undoStack", [restage]);
-    }
-  }, [storeKey, storeClearEntry, storeSetSlice]);
+  const restageAfterCommit = useCallback(
+    (columns?: ReadonlyArray<{ is_primary_key: boolean }>) => {
+      const current = useDataGridEditStore.getState().getEntry(storeKey);
+      // #1126 Phase 2 — columns let `buildRestageSnapshot` verify an INSERT
+      // is reversible (PK reproducible) before staging a reverse DELETE.
+      const restage = buildRestageSnapshot(current, columns);
+      storeClearEntry(storeKey);
+      if (restage) {
+        storeSetSlice(storeKey, "undoStack", [restage]);
+      }
+    },
+    [storeKey, storeClearEntry, storeSetSlice],
+  );
 
   const pushSnapshot = useCallback(() => {
     setUndoStack((prev) => {
@@ -235,9 +240,9 @@ export function useDataGridEditPendingState({
     if (stack.length === 0) return;
     const last = stack[stack.length - 1]!;
     const rest = stack.slice(0, -1);
-    // #1126 Phase 1 — a post-commit snapshot flagged `restageBlocked` covered a
-    // commit that added/deleted rows; Phase 1 can't re-stage those, so drop it
-    // and tell the user instead of a silent no-op.
+    // #1126 — a post-commit snapshot flagged `restageBlocked` covered a commit
+    // whose INSERT/DELETE can't be reproduced (auto-increment PK / missing row
+    // snapshot); drop it and tell the user instead of a silent no-op.
     if (last.restageBlocked) {
       setUndoStack(rest);
       toast.info(i18n.t("datagrid:undoRestageBlocked"));
