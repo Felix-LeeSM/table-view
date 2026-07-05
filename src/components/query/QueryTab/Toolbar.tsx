@@ -11,6 +11,7 @@ import {
   FlaskConical,
   FileSearch,
   SearchCode,
+  Upload,
 } from "lucide-react";
 import FavoritesPanel from "../FavoritesPanel";
 import TabDbChip from "./TabDbChip";
@@ -59,6 +60,12 @@ export interface QueryTabToolbarProps {
   onExplain?: () => void;
   canExplain?: boolean;
   onFormat: () => void;
+  /**
+   * Stage 1 (#1077) import — open a `.sql` file and load it into the editor.
+   * The user then runs it through the normal Run path, so destructive
+   * statements still hit the Safe Mode confirm gate. RDB paradigm only.
+   */
+  onImportSqlFile?: () => void;
   showFileAnalytics?: boolean;
   onOpenFileAnalytics?: () => void;
   favorites: QueryFavoritesState;
@@ -73,6 +80,7 @@ export default function QueryTabToolbar({
   onExplain,
   canExplain = false,
   onFormat,
+  onImportSqlFile,
   showFileAnalytics = false,
   onOpenFileAnalytics,
   favorites,
@@ -215,6 +223,19 @@ export default function QueryTabToolbar({
         >
           <Paintbrush />
           <span>{t("toolbar.format")}</span>
+        </Button>
+      )}
+      {isRdbTab && onImportSqlFile && (
+        <Button
+          variant="ghost"
+          size="xs"
+          onClick={onImportSqlFile}
+          disabled={tab.queryState.status === "running"}
+          aria-label={t("toolbar.importSqlFileAria")}
+          title={t("toolbar.importSqlFileAria")}
+        >
+          <Upload />
+          <span>{t("toolbar.importSqlFile")}</span>
         </Button>
       )}
       {showFileAnalytics && (

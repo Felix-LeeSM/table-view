@@ -7,6 +7,7 @@ pub mod file_analytics;
 pub mod groups_collapsed;
 pub mod guard;
 pub mod history;
+pub mod import_file;
 pub mod import_legacy;
 pub mod keyring;
 pub mod kv;

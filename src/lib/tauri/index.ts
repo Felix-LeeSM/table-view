@@ -14,6 +14,7 @@ export * from "./document";
 export * from "./kv";
 export * from "./search";
 export * from "./export";
+export * from "./import";
 export * from "./fileAnalytics";
 export * from "./favorites";
 export * from "./mru";

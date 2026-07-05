@@ -155,6 +155,12 @@ export const en = {
     noData: "No data",
   },
 
+  // ── SQL file import (Stage 1, #1077) ──────────────────────────────────────
+  importSqlFile: {
+    loaded: "Loaded SQL file into the editor — review, then Run.",
+    failed: "Could not open SQL file: {{message}}",
+  },
+
   // ── Toolbar ───────────────────────────────────────────────────────────────
   toolbar: {
     cancelQueryAria: "Cancel query",
@@ -169,6 +175,8 @@ export const en = {
     explain: "Explain",
     formatAria: "Format SQL",
     format: "Format",
+    importSqlFileAria: "Open SQL file into the editor",
+    importSqlFile: "Open SQL File",
     localFileAria: "Preview local file",
     localFile: "Local File",
     saveToFavoritesAria: "Save to favorites",
@@ -381,6 +389,11 @@ export const ko = {
     noData: "데이터 없음",
   },
 
+  importSqlFile: {
+    loaded: "SQL 파일을 에디터로 불러왔습니다 — 확인 후 실행하세요.",
+    failed: "SQL 파일을 열 수 없습니다: {{message}}",
+  },
+
   toolbar: {
     cancelQueryAria: "쿼리 취소",
     cancel: "취소",
@@ -394,6 +407,8 @@ export const ko = {
     explain: "실행 계획",
     formatAria: "SQL 포맷",
     format: "포맷",
+    importSqlFileAria: "SQL 파일을 에디터로 열기",
+    importSqlFile: "SQL 파일 열기",
     localFileAria: "로컬 파일 미리보기",
     localFile: "로컬 파일",
     saveToFavoritesAria: "즐겨찾기에 저장",
