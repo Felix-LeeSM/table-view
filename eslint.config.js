@@ -484,4 +484,32 @@ export default tseslint.config(
       ],
     },
   },
+  // #1365 (2026-07-06) — 컴포넌트/pages/hooks 에서 @tauri-apps/api 직접 import
+  // 금지. IPC 경계 규율(src/lib/tauri·src/lib/api·src/lib/events 계약 레이어
+  // 경유)을 관례가 아닌 lint 로 고정한다. 계약 레이어는 이 scope 밖이므로 자동
+  // 허용. type-only import(예: UnlistenFn)는 빌드 시 사라져 런타임 IPC 우회를
+  // 만들지 않으므로 allowTypeImports 로 허용.
+  {
+    files: [
+      "src/components/**/*.{ts,tsx}",
+      "src/pages/**/*.{ts,tsx}",
+      "src/hooks/**/*.{ts,tsx}",
+    ],
+    ignores: ["**/*.test.{ts,tsx}", "**/__tests__/**"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["@tauri-apps/api", "@tauri-apps/api/*"],
+              message:
+                "컴포넌트/pages/hooks 에서 @tauri-apps/api 직접 import 금지. IPC 호출은 src/lib/tauri/* (또는 src/lib/api, src/lib/events) 계약 레이어 경유.",
+              allowTypeImports: true,
+            },
+          ],
+        },
+      ],
+    },
+  },
 );

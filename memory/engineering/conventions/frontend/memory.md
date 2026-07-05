@@ -54,7 +54,9 @@ backend contract 를 통해서만 다룬다.
 ## Contract 경계
 
 - Tauri IPC 는 domain wrapper (`src/lib/tauri/**`, 필요 시 `src/lib/api/**`) 로
-  감싼다. component 가 raw `invoke()` 를 직접 소유하지 않는다.
+  감싼다. component 가 raw `invoke()` 를 직접 소유하지 않는다. `eslint.config.js`
+  의 `no-restricted-imports` 가 `src/components|pages|hooks/**` 의 `@tauri-apps/api`
+  직접 import 를 차단 (type-only 는 `allowTypeImports` 로 허용, #1365).
 - Frontend import boundary 는 domain-first 다. 새 consumer 는 file-kind root
   (`src/components/**`, `src/hooks/**`, `src/stores/**`, `src/pages/**`) 내부 구현을
   직접 당겨 쓰지 않고 `src/features/<domain>/index.ts` public API 를 통한다.
