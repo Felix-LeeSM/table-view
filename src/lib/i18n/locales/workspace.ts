@@ -41,6 +41,7 @@ export const en = {
       noTab: "Open a connection to switch databases.",
       searchParadigm:
         "Search scope is selected by index, alias, or data stream.",
+      documentParadigm: "MongoDB selects its database per query tab.",
       sqlite: "SQLite uses one database file per connection.",
       notConnected: "Connect to switch databases.",
       unavailable: "Database switching isn't available right now.",
@@ -262,6 +263,7 @@ export const ko = {
       noTab: "데이터베이스를 전환하려면 연결을 여세요.",
       searchParadigm:
         "검색 범위는 인덱스, 별칭 또는 데이터 스트림으로 선택됩니다.",
+      documentParadigm: "MongoDB는 쿼리 탭별로 데이터베이스를 선택합니다.",
       sqlite: "SQLite는 연결당 하나의 데이터베이스 파일을 사용합니다.",
       notConnected: "데이터베이스를 전환하려면 연결하세요.",
       unavailable: "현재 데이터베이스 전환을 사용할 수 없습니다.",
