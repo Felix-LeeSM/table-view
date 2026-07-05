@@ -1,16 +1,25 @@
 import { useShallow } from "zustand/react/shallow";
 import { useCurrentWindowConnectionId } from "@hooks/useCurrentWindowConnectionId";
+// Same-store internal leaf: the store instance lives in `./store`, not the root
+// barrel, so selectors no longer import back through `../workspaceStore` (the
+// old runtime cycle — #1361). Still flagged by the store-boundary rule because
+// its path sits under the `workspaceStore` dir, so keep a justified line disable.
+// eslint-disable-next-line no-restricted-imports -- same-store internal: store instance leaf, no cycle (#1361)
+import { useWorkspaceStore } from "./store";
 import type { Tab, WorkspaceState } from "./types";
 
-// Selector hooks are the intentional read seam between connectionStore and
-// workspaceStore. They stay co-located with workspaceStore to keep ADR 0027's
-// `(connId, db)` key derivation visible.
-/* eslint-disable no-restricted-imports */
+// Selector hooks are the intentional read seam between workspaceStore and the
+// sibling stores below. They stay co-located with workspaceStore to keep ADR
+// 0027's `(connId, db)` key derivation visible. The store-boundary rule
+// (`no-restricted-imports`, eslint.config.js) is disabled per-line only for
+// these deliberate cross-store reads — the guardrail stays live for anything
+// else (a new, unjustified cross-store import re-triggers the error).
+// eslint-disable-next-line no-restricted-imports -- read seam: derive workspace key from connectionStore
 import { useConnectionStore } from "../connectionStore";
-import { useWorkspaceStore } from "../workspaceStore";
+// eslint-disable-next-line no-restricted-imports -- read seam: OR table-grid pending edits into connection dirtiness
 import { useDataGridEditStore } from "../dataGridEditStore";
+// eslint-disable-next-line no-restricted-imports -- read seam: OR raw-query grid pending edits into connection dirtiness
 import { useRawQueryGridEditStore } from "../rawQueryGridEditStore";
-/* eslint-enable no-restricted-imports */
 
 export type WorkspaceKey = { connId: string; db: string };
 
