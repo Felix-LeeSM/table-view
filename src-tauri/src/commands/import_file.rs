@@ -50,10 +50,11 @@ pub fn read_text_file(source_path: &Path) -> Result<String, AppError> {
 }
 
 fn read_text_file_capped(source_path: &Path, max_bytes: u64) -> Result<String, AppError> {
-    // ponytail: reuse the export path guard — absolute + rejects internal
-    // app-state files. The same trust boundary applies to reads: never hand
-    // the credential DB (or any internal state file) back to the webview.
-    crate::storage::local::validate_export_target_path(source_path)?;
+    if !source_path.is_absolute() {
+        return Err(AppError::Validation(
+            "Import source path must be absolute".into(),
+        ));
+    }
 
     let meta = std::fs::metadata(source_path).map_err(AppError::from)?;
     if !meta.is_file() {
@@ -69,9 +70,19 @@ fn read_text_file_capped(source_path: &Path, max_bytes: u64) -> Result<String, A
         )));
     }
 
+    // Import is a read-exfil threat (not the write-overwrite threat export
+    // guards against): a direct IPC call with an absolute path could otherwise
+    // read `<app_data_dir>/connections.json` (encrypted password blob) or
+    // `.key` (master key) straight into the webview. `validate_export_target_
+    // path` only blocks the single `state.db` file, so confine reads out of the
+    // whole app data dir on the *canonical* path — a symlink cannot smuggle the
+    // target back in. Mirrors DuckDB file analytics (#1106).
+    let canonical = std::fs::canonicalize(source_path).map_err(AppError::from)?;
+    crate::storage::local::reject_internal_app_data_path(&canonical)?;
+
     // `read_to_string` fails with `InvalidData` on non-UTF-8 content, which is
     // the correct rejection for a text-file import.
-    std::fs::read_to_string(source_path).map_err(AppError::from)
+    std::fs::read_to_string(&canonical).map_err(AppError::from)
 }
 
 #[cfg(test)]
@@ -81,7 +92,10 @@ mod tests {
     //!   - 빈 입력: empty file → empty string (still Ok).
     //!   - 에러 복구: oversized file rejected before allocation.
     //!   - 상태/경로 검증: non-absolute path rejected; directory rejected.
+    //!   - 보안: a file inside the app data dir (connections.json / .key /
+    //!     state.db) is refused — read-exfil confinement (#1106).
     use super::*;
+    use serial_test::serial;
     use std::io::Write;
     use tempfile::TempDir;
 
@@ -136,5 +150,30 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let err = read_text_file(dir.path()).unwrap_err();
         assert!(matches!(err, AppError::Validation(_)), "got {err:?}");
+    }
+
+    // Security: a `.sql`-or-anything file that resolves inside the app data
+    // dir must be refused. `connections.json` (encrypted password blob) and
+    // `.key` (master key) otherwise read straight into the webview via a
+    // direct IPC call with an absolute path (read-exfil, #1106).
+    #[test]
+    #[serial]
+    fn internal_app_data_file_is_rejected() {
+        let dir = TempDir::new().unwrap();
+        std::env::set_var("TABLE_VIEW_TEST_DATA_DIR", dir.path());
+
+        let secret = dir.path().join("connections.json");
+        std::fs::File::create(&secret)
+            .unwrap()
+            .write_all(b"[]")
+            .unwrap();
+
+        let result = read_text_file(&secret);
+        std::env::remove_var("TABLE_VIEW_TEST_DATA_DIR");
+
+        assert!(
+            matches!(result, Err(AppError::Validation(_))),
+            "app-data-dir file must be refused, got {result:?}"
+        );
     }
 }
