@@ -506,7 +506,7 @@ function KvValuePreview({
   return (
     <div className="border-t border-border px-3 py-3">
       <div className="mb-2 flex items-center justify-between gap-2">
-        <span className="min-w-0 truncate font-medium text-secondary-foreground">
+        <span className="min-w-0 truncate text-sm font-medium text-secondary-foreground">
           {value.key}
         </span>
         <span className="inline-flex items-center gap-1 text-3xs text-muted-foreground">
