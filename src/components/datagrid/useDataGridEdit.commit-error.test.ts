@@ -193,6 +193,11 @@ describe("useDataGridEdit — Sprint 93 commit error surfacing", () => {
     expect(result.current.sqlPreview).not.toBeNull();
     expect(result.current.sqlPreview?.length).toBe(1);
 
+    // Issue #1358 — pending edit is retained on failure (rolled back, not
+    // dropped). A stray clear on the failure branch would lose the user's
+    // edit silently.
+    expect(result.current.pendingEdits.size).toBe(1);
+
     // (c) failed cell key flagged in pendingEditErrors.
     expect(result.current.pendingEditErrors.has("0-1")).toBe(true);
     expect(result.current.pendingEditErrors.get("0-1")).toContain(
@@ -281,6 +286,9 @@ describe("useDataGridEdit — Sprint 93 commit error surfacing", () => {
 
     // sqlPreview still has all 3 statements (modal stays open with full batch).
     expect(result.current.sqlPreview?.length).toBe(3);
+
+    // Issue #1358 — all three pending UPDATEs retained on rollback.
+    expect(result.current.pendingEdits.size).toBe(3);
 
     // fetchData NOT called — batch was rolled back.
     expect(mockFetchData).not.toHaveBeenCalled();
