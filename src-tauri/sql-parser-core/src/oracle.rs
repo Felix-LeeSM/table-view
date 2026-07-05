@@ -34,14 +34,93 @@
 //! warn-tier permission changes across all dialects, so the shared
 //! classifier's `Warn` is the correct parity verdict.
 
+use crate::safety::{split_statements, strip_comments_collapse};
+
 /// True when any statement in `sql` is an Oracle-specific danger the shared
 /// dialect-agnostic classifier misses. The caller (`execute_query` gate)
 /// ORs this with [`crate::safety::is_danger`] only for Oracle connections.
 ///
-/// RED-evidence stub (issue #1351): returns `false` so the danger cases in
-/// the tests below fail, documenting the fail-open hole before the fix.
-pub fn is_oracle_danger(_sql: &str) -> bool {
-    false
+/// Statements are split on literal/comment-aware semicolon boundaries (a
+/// trailing `DROP USER` can't hide behind a leading `SELECT`); a PL/SQL
+/// block's internal semicolons still leave the leading `BEGIN` / `DECLARE`
+/// fragment, which the anchor check catches.
+pub fn is_oracle_danger(sql: &str) -> bool {
+    split_statements(sql)
+        .iter()
+        .any(|stmt| statement_is_oracle_danger(stmt))
+}
+
+fn statement_is_oracle_danger(stmt: &str) -> bool {
+    let normalized = normalize(stmt);
+    let words: Vec<&str> = normalized.split(' ').filter(|w| !w.is_empty()).collect();
+    let Some(&head) = words.first() else {
+        return false;
+    };
+    let rest = &words[1..];
+    match head {
+        // PL/SQL block / routine execution paths.
+        "DECLARE" | "BEGIN" | "EXEC" | "EXECUTE" | "CALL" => true,
+        // Admin maintenance verbs (no object gating — the verb alone is admin).
+        "AUDIT" | "NOAUDIT" | "ANALYZE" | "FLASHBACK" | "PURGE" => true,
+        // Admin ALTER targets. `ALTER TABLE …` is left to the shared
+        // classifier (ALTER TABLE DROP COLUMN is already danger there).
+        "ALTER" => is_admin_object(rest),
+        // Admin DROP targets. `DROP TABLE|INDEX|VIEW|…` is already danger in
+        // the shared classifier; this only adds the admin objects it misses.
+        "DROP" => is_admin_object(rest),
+        // Any CREATE outside the bounded supported slice is danger — this one
+        // rule covers CREATE PACKAGE/PROCEDURE/FUNCTION/TRIGGER/TYPE/USER/
+        // ROLE/SEQUENCE/SYNONYM/MATERIALIZED VIEW/DATABASE LINK/DIRECTORY/…
+        "CREATE" => !is_supported_create(rest),
+        _ => false,
+    }
+}
+
+/// Normalize a statement the way the frontend `normalizeOracleSql` does:
+/// strip comments, collapse all whitespace to single spaces, uppercase,
+/// trim. Keyword matching then works on a stable token stream.
+fn normalize(stmt: &str) -> String {
+    strip_comments_collapse(stmt)
+        .to_uppercase()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// Admin object detected right after `ALTER` / `DROP`. Mirrors the frontend
+/// admin regex object lists (union of the ALTER and DROP admin targets).
+fn is_admin_object(rest: &[&str]) -> bool {
+    match rest.first().copied() {
+        Some(
+            "SYSTEM" | "SESSION" | "DATABASE" | "USER" | "ROLE" | "TABLESPACE" | "PROFILE"
+            | "DISKGROUP" | "DIRECTORY",
+        ) => {
+            // `DATABASE` alone is admin (ALTER DATABASE); `DATABASE LINK` is a
+            // distinct admin object handled the same way — both are danger.
+            true
+        }
+        Some("PLUGGABLE") => rest.get(1).copied() == Some("DATABASE"),
+        Some("PUBLIC") => {
+            rest.get(1).copied() == Some("DATABASE") && rest.get(2).copied() == Some("LINK")
+        }
+        _ => false,
+    }
+}
+
+/// The bounded supported-CREATE slice (mirror of `isSupportedOracleCreate`):
+/// `CREATE [GLOBAL TEMPORARY] TABLE`, `CREATE [UNIQUE|BITMAP] INDEX`,
+/// `CREATE [OR REPLACE] VIEW`. Everything else CREATE is danger.
+fn is_supported_create(rest: &[&str]) -> bool {
+    matches!(
+        rest,
+        ["TABLE", ..]
+            | ["GLOBAL", "TEMPORARY", "TABLE", ..]
+            | ["INDEX", ..]
+            | ["UNIQUE", "INDEX", ..]
+            | ["BITMAP", "INDEX", ..]
+            | ["VIEW", ..]
+            | ["OR", "REPLACE", "VIEW", ..]
+    )
 }
 
 #[cfg(test)]

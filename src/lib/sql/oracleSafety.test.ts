@@ -217,6 +217,62 @@ describe("oracleSafety", () => {
     });
   });
 
+  // Issue #1351 — parity lock with the backend Safe Mode gate. Before the
+  // fix, the Tauri backend classified all of these as `Info` (the shared
+  // dialect-agnostic `sql_parser_core::safety`), so a direct IPC `invoke` on
+  // an Oracle connection ran them unconfirmed even in strict + production —
+  // the frontend was the only defense despite `sqlSafety.ts` declaring the
+  // backend gate the final one. The backend now mirrors this exact danger set
+  // in `src-tauri/sql-parser-core/src/oracle.rs::is_oracle_danger`. This test
+  // is the frontend side of that mirror: a change to the Oracle danger set
+  // here must be reflected in the Rust classifier (and its unit tests), or the
+  // two drift and the fail-open hole reopens.
+  it("[#1351] pins the Oracle PL/SQL & admin danger set the backend gate mirrors", () => {
+    const dangerSet = [
+      // PL/SQL blocks & routine execution.
+      "BEGIN EXECUTE IMMEDIATE 'DROP TABLE payroll'; END;",
+      "DECLARE v NUMBER; BEGIN NULL; END;",
+      "EXEC payroll_pkg.wipe()",
+      "EXECUTE my_proc",
+      "CALL my_proc()",
+      "CREATE OR REPLACE PACKAGE app_pkg AS END app_pkg;",
+      "CREATE OR REPLACE PROCEDURE p AS BEGIN NULL; END;",
+      "CREATE FUNCTION f RETURN NUMBER AS BEGIN RETURN 1; END;",
+      "CREATE OR REPLACE TRIGGER trg BEFORE INSERT ON t BEGIN NULL; END;",
+      // Admin DDL.
+      "ALTER SYSTEM SET processes = 300",
+      "ALTER SESSION SET CURRENT_SCHEMA = HR",
+      "ALTER USER app ACCOUNT LOCK",
+      "CREATE USER app IDENTIFIED BY secret",
+      "DROP USER hr CASCADE",
+      "CREATE TABLESPACE app_data DATAFILE 'app.dbf' SIZE 10M",
+      "AUDIT SELECT ON app.orders",
+      "PURGE DBA_RECYCLEBIN",
+      // Bounded-CREATE slice (non table/index/view).
+      "CREATE SEQUENCE account_seq START WITH 1",
+      "CREATE MATERIALIZED VIEW account_mv AS SELECT * FROM accounts",
+    ];
+    for (const sql of dangerSet) {
+      expect(analyzeOracleStatement(sql).severity, sql).toBe("danger");
+    }
+
+    // False-positive guards — supported Oracle SQL must NOT be danger, so the
+    // backend mirror does not over-gate legitimate reads / DML / DDL.
+    const notDanger = [
+      "SELECT * FROM dual",
+      "SELECT 'BEGIN' AS note FROM dual",
+      "UPDATE accounts SET status = 'closed' WHERE id = 1",
+      "INSERT INTO audit_log (id) VALUES (1)",
+      "CREATE TABLE accounts (id NUMBER(10))",
+      "CREATE OR REPLACE VIEW v AS SELECT * FROM accounts",
+      "GRANT DBA TO app",
+      "REVOKE SELECT ON t FROM app",
+    ];
+    for (const sql of notDanger) {
+      expect(analyzeOracleStatement(sql).severity, sql).not.toBe("danger");
+    }
+  });
+
   it("feeds supported destructive Oracle DDL into the current confirmation matrix", () => {
     const analysis = analyzeOracleStatement("DROP TABLE accounts");
     const decision = decideOracleSafeModeAction("warn", "production", analysis);
