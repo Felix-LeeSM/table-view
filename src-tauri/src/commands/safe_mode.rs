@@ -247,6 +247,56 @@ mod tests {
         }
     }
 
+    // Issue #1351 — the dialect-aware danger for Oracle PL/SQL / admin DDL
+    // (classified by `sql_parser_core::oracle`) must drive the SAME gate the
+    // generic danger set does: strict + production → ConfirmRequired. This
+    // binds the classifier verdict to the gate outcome the `execute_query`
+    // path (`rdb_sql_is_danger` → `enforce_rdb_danger` → `decide`) produces,
+    // so a direct IPC call cannot run these unconfirmed.
+    #[test]
+    fn oracle_plsql_and_admin_ddl_confirm_in_strict_production() {
+        use sql_parser_core::oracle::is_oracle_danger;
+        for sql in [
+            // The exact #1351 repro — the shared classifier calls this Info.
+            "BEGIN EXECUTE IMMEDIATE 'DROP TABLE payroll'; END;",
+            "DECLARE v NUMBER; BEGIN NULL; END;",
+            "EXEC payroll_pkg.wipe()",
+            "ALTER SYSTEM SET processes = 300",
+            "DROP USER hr CASCADE",
+            "AUDIT SELECT ON app.orders",
+            "CREATE OR REPLACE PROCEDURE p AS BEGIN NULL; END;",
+        ] {
+            assert!(is_oracle_danger(sql), "{sql} must classify Oracle-danger");
+            assert!(
+                is_confirm(decide(
+                    SafeMode::Strict,
+                    Some("production"),
+                    is_oracle_danger(sql)
+                )),
+                "{sql} must gate in strict+production"
+            );
+            // Production reversal: even `off` cannot bypass these.
+            assert!(
+                is_confirm(decide(
+                    SafeMode::Off,
+                    Some("production"),
+                    is_oracle_danger(sql)
+                )),
+                "{sql} must gate on production even with Safe Mode off"
+            );
+        }
+        // A supported Oracle read stays Allow — no over-gating.
+        assert!(!is_oracle_danger("SELECT * FROM dual"));
+        assert!(matches!(
+            decide(
+                SafeMode::Strict,
+                Some("production"),
+                is_oracle_danger("SELECT * FROM dual"),
+            ),
+            GateOutcome::Allow
+        ));
+    }
+
     #[test]
     fn untagged_environment_is_non_production() {
         // `None` behaves like the frontend `environment === null` → non-prod.
