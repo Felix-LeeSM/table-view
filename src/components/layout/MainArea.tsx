@@ -31,6 +31,7 @@ import { LogoWordmark } from "@components/shared/Logo";
 import ErrorBoundary from "@components/shared/ErrorBoundary";
 import SearchIndexDetailPanel from "@components/search/SearchIndexDetailPanel";
 import { assertNever, type Paradigm } from "@/lib/paradigm";
+import { getDataSourceProfile } from "@/types/dataSource";
 import WorkspaceToolbar from "@components/workspace/WorkspaceToolbar";
 import { useTablistRoving } from "@components/shared/tablist/useTablistRoving";
 
@@ -53,14 +54,28 @@ function TableTabView({ tab, onSubViewChange }: TableTabProps) {
   const [mongoStructureSubTab, setMongoStructureSubTab] =
     useState<MongoStructureSubTab>("indexes");
 
+  // #1042 — the ERD sub-tab is gated on the `intelligence.erd` capability
+  // (single source of truth), not on `paradigm === "rdb"`. DuckDB is an rdb
+  // paradigm but a read-only file-analytics engine that declares
+  // `intelligence.erd = false`, so it must not carry an ERD tab.
+  // ponytail: no-connection fallback keeps the paradigm default — a live
+  // table tab always carries a connection, so this only guards test/edge
+  // states where the connection isn't in the store.
+  const connection = useConnectionStore((s) =>
+    s.connections.find((c) => c.id === tab.connectionId),
+  );
+  const erdCapable = connection
+    ? getDataSourceProfile(connection.dbType).capabilities.intelligence.erd
+    : paradigm === "rdb";
+
   // Shared roving nav for whichever sub-tab bar this paradigm renders. Only
-  // rdb carries the ERD tab; mongo/kv are records/structure only. One
-  // unconditional hook call drives the single tablist the active branch mounts.
+  // ERD-capable rdb sources carry the ERD tab; mongo/kv are records/structure
+  // only. One unconditional hook call drives the single tablist the active
+  // branch mounts.
   const subTabBarRef = useRef<HTMLDivElement>(null);
-  const subViewValues: TabSubView[] =
-    paradigm === "rdb"
-      ? ["records", "structure", "erd"]
-      : ["records", "structure"];
+  const subViewValues: TabSubView[] = erdCapable
+    ? ["records", "structure", "erd"]
+    : ["records", "structure"];
   const subTabRoving = useTablistRoving(
     subViewValues,
     tab.subView,
@@ -203,7 +218,7 @@ function TableTabView({ tab, onSubViewChange }: TableTabProps) {
             >
               {t("mainArea.structure")}
             </button>
-            {paradigm === "rdb" && (
+            {erdCapable && (
               <button
                 role="tab"
                 id="tab-rdb-erd"
@@ -234,7 +249,7 @@ function TableTabView({ tab, onSubViewChange }: TableTabProps) {
             tabIndex={0}
             className="flex flex-1 flex-col overflow-hidden"
           >
-            {tab.subView === "erd" && paradigm === "rdb" ? (
+            {tab.subView === "erd" && erdCapable ? (
               <SchemaErdPanel
                 connectionId={tab.connectionId}
                 database={tab.database ?? ""}
