@@ -16,6 +16,8 @@ import {
 import { parseMongoshExpression } from "@features/query";
 import type { ExplainMongoFindArgs } from "@/lib/api/explain";
 import { toast } from "@lib/runtime/toast";
+import { open } from "@tauri-apps/plugin-dialog";
+import { readTextFileImport } from "@lib/tauri";
 import { useSqlAutocomplete } from "@hooks/useSqlAutocomplete";
 import { useRedisKeySuggestions } from "@hooks/useRedisKeySuggestions";
 import { useSearchAutocomplete } from "@hooks/useSearchAutocomplete";
@@ -381,6 +383,31 @@ export default function QueryTab({ tab }: QueryTabProps) {
     handleDryRun();
   }, [handleDryRun]);
 
+  // Stage 1 (#1077) import — open a `.sql` file and load it into the editor.
+  // Deliberately does NOT auto-run: the user reviews the loaded SQL and runs
+  // it through the normal Run path, so destructive statements still hit the
+  // Safe Mode confirm gate. Symmetric inverse of the SQL export.
+  const handleImportSqlFile = useCallback(async () => {
+    try {
+      const picked = await open({
+        multiple: false,
+        directory: false,
+        filters: [{ name: "SQL", extensions: ["sql"] }],
+      });
+      const path = Array.isArray(picked) ? picked[0] : picked;
+      if (!path) return;
+      const content = await readTextFileImport(path);
+      updateQuerySql(tab.id, content);
+      toast.success(t("importSqlFile.loaded"));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      toast.error(t("importSqlFile.failed", { message }));
+    }
+    // updateQuerySql is re-created each render but closes over the stable
+    // workspace key; tab.id is the only value that changes the target tab.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab.id, t]);
+
   const handleExplain = useCallback(() => {
     const sql = tab.sql.trim();
     if (!sql || tab.queryState.status === "running" || !canExplainQuery) {
@@ -488,6 +515,7 @@ export default function QueryTab({ tab }: QueryTabProps) {
         onExplain={handleExplain}
         canExplain={canExplainQuery}
         onFormat={handleFormat}
+        onImportSqlFile={handleImportSqlFile}
         showFileAnalytics={canPreviewLocalFile}
         onOpenFileAnalytics={() => setShowFileAnalytics(true)}
         favorites={favorites}

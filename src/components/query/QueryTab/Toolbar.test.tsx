@@ -156,6 +156,46 @@ describe("QueryTabToolbar — sprint-381 Mongo db-contract α", () => {
     expect(runBtn).toBeDisabled();
   });
 
+  it("renders an Open SQL File action for RDB tabs and forwards clicks", () => {
+    // Stage 1 (#1077) import — the SQL-file loader is the inverse of the
+    // existing SQL export and lives on the RDB query toolbar.
+    const tab = makeMongoTab({
+      paradigm: "rdb",
+      sql: "",
+      database: "main",
+    });
+    const onImportSqlFile = vi.fn();
+    render(
+      <QueryTabToolbar
+        tab={tab}
+        isDocument={false}
+        onExecute={vi.fn()}
+        onDryRun={vi.fn()}
+        onFormat={vi.fn()}
+        onImportSqlFile={onImportSqlFile}
+        favorites={makeFavorites()}
+      />,
+    );
+    screen.getByRole("button", { name: /open sql file/i }).click();
+    expect(onImportSqlFile).toHaveBeenCalledTimes(1);
+  });
+
+  it("hides the Open SQL File action for non-RDB (document) tabs", () => {
+    const tab = makeMongoTab({ paradigm: "document", sql: "db.x.find({})" });
+    render(
+      <QueryTabToolbar
+        tab={tab}
+        isDocument={true}
+        onExecute={vi.fn()}
+        onDryRun={vi.fn()}
+        onFormat={vi.fn()}
+        onImportSqlFile={vi.fn()}
+        favorites={makeFavorites()}
+      />,
+    );
+    expect(screen.queryByRole("button", { name: /open sql file/i })).toBeNull();
+  });
+
   it("renders DuckDB local file preview action only when enabled", () => {
     const tab = makeMongoTab({
       paradigm: "rdb",
