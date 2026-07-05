@@ -18,6 +18,7 @@ import {
   registerFileAnalyticsSource,
 } from "@lib/tauri/fileAnalytics";
 import { recordHistoryEntry } from "@lib/runtime/history/recordHistoryEntry";
+import { sqlIdentifier } from "@lib/sql/sqlLiteral";
 import { useSchemaStore } from "@stores/schemaStore";
 import type {
   FileAnalyticsPreview,
@@ -69,12 +70,14 @@ function pickedPath(value: string | string[] | null): string | null {
   return value;
 }
 
-function quoteIdentifier(value: string): string {
-  return `"${value.replace(/"/g, '""')}"`;
-}
-
 function defaultSourceSql(source: FileAnalyticsSource): string {
-  return `SELECT * FROM ${quoteIdentifier(source.alias)} LIMIT 100`;
+  // DuckDB uses ANSI double-quote identifiers; the canonical quoter's
+  // postgres + quotePostgres path emits exactly that (#1357).
+  // ponytail: no "duckdb" dialect in SqlDialect — reuse the ANSI-quote path.
+  const alias = sqlIdentifier(source.alias, "postgresql", {
+    quotePostgres: true,
+  });
+  return `SELECT * FROM ${alias} LIMIT 100`;
 }
 
 type AnalyticsResult = FileAnalyticsPreview["result"];

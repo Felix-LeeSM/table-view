@@ -2,7 +2,6 @@
 import { describe, it, expect } from "vitest";
 import {
   prefixMatch,
-  escapeIdentifier,
   parseFromContext,
   splitSqlStatements,
   tokenizeSql,
@@ -28,23 +27,6 @@ describe("shared.prefixMatch", () => {
 
   it("longer prefix than candidate fails", () => {
     expect(prefixMatch("SELECTED", "SELECT")).toBe(false);
-  });
-});
-
-describe("shared.escapeIdentifier", () => {
-  it("wraps with double quotes for ansi/postgres/sqlite", () => {
-    expect(escapeIdentifier("My Table", "ansi")).toBe('"My Table"');
-    expect(escapeIdentifier("Users", "postgres")).toBe('"Users"');
-    expect(escapeIdentifier("col", "sqlite")).toBe('"col"');
-  });
-
-  it("wraps with backticks for mysql", () => {
-    expect(escapeIdentifier("Users", "mysql")).toBe("`Users`");
-  });
-
-  it("doubles embedded quote characters", () => {
-    expect(escapeIdentifier('weird"name', "postgres")).toBe('"weird""name"');
-    expect(escapeIdentifier("back`tick", "mysql")).toBe("`back``tick`");
   });
 });
 
