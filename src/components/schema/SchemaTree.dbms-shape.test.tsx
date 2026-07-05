@@ -11,7 +11,7 @@ import { useSchemaStore } from "@stores/schemaStore";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useWorkspaceStore } from "@stores/workspaceStore";
 import type { ConnectionConfig, DatabaseType } from "@/types/connection";
-import { resolveRdbTreeShape } from "./treeShape";
+import { resolveRdbTreeProfile, resolveRdbTreeShape } from "./treeShape";
 
 /**
  * Sprint 135 — AC-S135-02 / 03 / 04 / 07: SchemaTree must render at
@@ -718,6 +718,50 @@ describe("SchemaTree — DBMS-shape-aware tree depth (Sprint 135)", () => {
     expect(resolveRdbTreeShape("sqlite")).toBe("flat");
     expect(resolveRdbTreeShape("mssql")).toBe("with-schema");
     expect(resolveRdbTreeShape("oracle")).toBe("with-schema");
+  });
+
+  // #1363 — SchemaTree used to re-branch on `dbType` for auxiliary-catalog
+  // eager-load, DuckDB file sources, and the SQLite flat create-table schema.
+  // Those now come from `resolveRdbTreeProfile`; this pins the derived flags so
+  // a future edit can't silently drift them from the shape.
+  it("resolveRdbTreeProfile derives auxiliary-catalog / file-source / implicit-schema flags per DBMS (#1363)", () => {
+    expect(resolveRdbTreeProfile("postgresql")).toEqual({
+      shape: "with-schema",
+      autoLoadsAuxiliaryCatalog: false,
+      isFileAnalyticsSource: false,
+      hasImplicitSingleSchema: false,
+    });
+    // MSSQL/Oracle are with-schema but still eager-load their (narrow) catalog.
+    for (const dbType of ["mssql", "oracle"] as const) {
+      expect(resolveRdbTreeProfile(dbType)).toEqual({
+        shape: "with-schema",
+        autoLoadsAuxiliaryCatalog: true,
+        isFileAnalyticsSource: false,
+        hasImplicitSingleSchema: false,
+      });
+    }
+    for (const dbType of ["mysql", "mariadb"] as const) {
+      expect(resolveRdbTreeProfile(dbType)).toEqual({
+        shape: "no-schema",
+        autoLoadsAuxiliaryCatalog: true,
+        isFileAnalyticsSource: false,
+        hasImplicitSingleSchema: false,
+      });
+    }
+    // Both SQLite and DuckDB are flat, but only SQLite offers the implicit
+    // single-schema create-table entry; DuckDB is the file-analytics source.
+    expect(resolveRdbTreeProfile("sqlite")).toEqual({
+      shape: "flat",
+      autoLoadsAuxiliaryCatalog: false,
+      isFileAnalyticsSource: false,
+      hasImplicitSingleSchema: true,
+    });
+    expect(resolveRdbTreeProfile("duckdb")).toEqual({
+      shape: "flat",
+      autoLoadsAuxiliaryCatalog: false,
+      isFileAnalyticsSource: true,
+      hasImplicitSingleSchema: false,
+    });
   });
 
   it("resolveRdbTreeShape falls back to with-schema for non-relational db_types so a misrouted Mongo/Redis connection doesn't crash", () => {
