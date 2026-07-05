@@ -831,6 +831,18 @@ pub(crate) struct StubDocumentAdapter {
                 + Sync,
         >,
     >,
+
+    // Issue #1269 — capture slot for `aggregate`'s cancel-tag `comment`.
+    // Closure receives the pipeline + the resolved comment so tests can assert
+    // the native-cancel tag is threaded through to the driver.
+    #[allow(clippy::type_complexity)]
+    pub aggregate_fn: Option<
+        Box<
+            dyn Fn(Vec<bson::Document>, Option<String>) -> Result<DocumentQueryResult, AppError>
+                + Send
+                + Sync,
+        >,
+    >,
 }
 
 impl Default for StubDocumentAdapter {
@@ -867,6 +879,7 @@ impl Default for StubDocumentAdapter {
             server_info_fn: None,
             slow_queries_fn: None,
             run_command_fn: None,
+            aggregate_fn: None,
         }
     }
 }
@@ -951,19 +964,24 @@ impl DocumentAdapter for StubDocumentAdapter {
         &'a self,
         _: &'a str,
         _: &'a str,
-        _: Vec<bson::Document>,
+        pipeline: Vec<bson::Document>,
+        comment: Option<String>,
         _: Option<&'a CancellationToken>,
     ) -> BoxFuture<'a, Result<DocumentQueryResult, AppError>> {
-        Box::pin(async {
-            Ok(DocumentQueryResult {
-                truncated: false,
-                columns: Vec::new(),
-                rows: Vec::new(),
-                raw_documents: Vec::new(),
-                total_count: 0,
-                execution_time_ms: 0,
-            })
-        })
+        let r = self.aggregate_fn.as_ref().map_or_else(
+            || {
+                Ok(DocumentQueryResult {
+                    truncated: false,
+                    columns: Vec::new(),
+                    rows: Vec::new(),
+                    raw_documents: Vec::new(),
+                    total_count: 0,
+                    execution_time_ms: 0,
+                })
+            },
+            |f| f(pipeline, comment),
+        );
+        Box::pin(async move { r })
     }
     fn insert_document<'a>(
         &'a self,

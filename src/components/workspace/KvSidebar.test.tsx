@@ -150,7 +150,7 @@ describe("KvSidebar", () => {
     expect(screen.getAllByText(/persistent/)).toHaveLength(2);
   });
 
-  it("labels Valkey key browsing and hides non-string mutation controls", async () => {
+  it("labels Valkey key browsing and surfaces collection mutation controls (parity #1075)", async () => {
     useConnectionStore.setState({
       connections: [valkeyConnection()],
       activeStatuses: { "valkey-1": { type: "connected", activeDb: "0" } },
@@ -164,7 +164,10 @@ describe("KvSidebar", () => {
     );
 
     expect(await screen.findByText(/name: Ada/)).toBeInTheDocument();
-    expect(screen.queryByText("Mutation")).not.toBeInTheDocument();
+    expect(screen.getByText("Mutation")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /preview hset/i }),
+    ).toBeInTheDocument();
   });
 
   it("uses the toolbar active database for key scans", async () => {

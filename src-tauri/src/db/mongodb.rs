@@ -159,10 +159,11 @@ impl DocumentAdapter for MongoAdapter {
         db: &'a str,
         collection: &'a str,
         pipeline: Vec<Document>,
+        comment: Option<String>,
         cancel: Option<&'a tokio_util::sync::CancellationToken>,
     ) -> BoxFuture<'a, Result<DocumentQueryResult, AppError>> {
         Box::pin(async move {
-            let work = self.aggregate_impl(db, collection, pipeline);
+            let work = self.aggregate_impl(db, collection, pipeline, comment);
             match cancel {
                 Some(token) => tokio::select! {
                     result = work => result,

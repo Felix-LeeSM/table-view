@@ -10,6 +10,9 @@
 // (covered in `DataGridToolbar.test.tsx`).
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
+import { setupTauriMock } from "@/test-utils/tauriMock";
+import { useToastStore } from "@stores/toastStore";
+import i18n from "@lib/i18n";
 import { useDataGridEdit, UNDO_STACK_MAX } from "./useDataGridEdit";
 import type { TableData } from "@/types/schema";
 
@@ -95,6 +98,14 @@ describe("useDataGridEdit — undo stack (Sprint 249, ADR 0022 Phase 5)", () => 
         query_type: "dml" as const,
       },
     ]);
+    // The RDB commit path calls `@lib/tauri.executeQueryBatch` (not the
+    // schemaStore pass-through), so the commit-span tests below wire the
+    // tauri mock to the same spy they assert on.
+    setupTauriMock({
+      get executeQueryBatch() {
+        return mockExecuteQueryBatch;
+      },
+    });
   });
 
   it("[AC-249-U1] undo() on an empty stack is a no-op (no panic, state unchanged)", () => {
@@ -265,6 +276,126 @@ describe("useDataGridEdit — undo stack (Sprint 249, ADR 0022 Phase 5)", () => 
     // the snapshot taken before push #6, which captured 5 rows already
     // present.
     expect(result.current.pendingNewRows.length).toBe(5);
+  });
+
+  it("[#1126 Phase 2] commit a DELETE → undo re-stages it as a pending re-INSERT", async () => {
+    const { result } = renderEditHook();
+
+    // Delete row 0 (Alice) and commit it to the DB.
+    act(() => {
+      result.current.handleSelectRow(0, false, false);
+    });
+    act(() => {
+      result.current.handleDeleteRow();
+    });
+    expect(result.current.pendingDeletedRowKeys.size).toBe(1);
+
+    act(() => {
+      result.current.handleCommit();
+    });
+    await act(async () => {
+      await result.current.handleExecuteCommit();
+    });
+    // A warn-tier Safe Mode prompt (if any) is confirmed so the write lands.
+    if (result.current.pendingConfirm) {
+      await act(async () => {
+        await result.current.confirmDangerous();
+      });
+    }
+
+    // Commit cleared the pending delete and wrote exactly once.
+    expect(result.current.pendingDeletedRowKeys.size).toBe(0);
+    expect(mockExecuteQueryBatch).toHaveBeenCalledTimes(1);
+
+    // ADR 0048 Phase 2 — the undo stack survives the commit; Cmd+Z re-stages
+    // the deleted row as a pending re-INSERT (no DB write until re-commit).
+    act(() => {
+      result.current.undo();
+    });
+    expect(result.current.pendingNewRows.length).toBe(1);
+    expect(result.current.pendingNewRows[0]).toEqual([1, "Alice"]);
+    expect(mockExecuteQueryBatch).toHaveBeenCalledTimes(1);
+  });
+
+  it("[#1126 Phase 2] commit an INSERT (with PK) → undo re-stages a pending DELETE", async () => {
+    const { result } = renderEditHook();
+
+    // Duplicate row 1 (id=2, Bob) → a new row that carries a full PK, so the
+    // committed INSERT is reversible.
+    act(() => {
+      result.current.handleSelectRow(1, false, false);
+    });
+    act(() => {
+      result.current.handleDuplicateRow();
+    });
+    expect(result.current.pendingNewRows.length).toBe(1);
+    expect(result.current.pendingNewRows[0]).toEqual([2, "Bob"]);
+
+    act(() => {
+      result.current.handleCommit();
+    });
+    await act(async () => {
+      await result.current.handleExecuteCommit();
+    });
+    if (result.current.pendingConfirm) {
+      await act(async () => {
+        await result.current.confirmDangerous();
+      });
+    }
+
+    expect(result.current.pendingNewRows.length).toBe(0);
+    expect(mockExecuteQueryBatch).toHaveBeenCalledTimes(1);
+
+    // Undo re-stages a pending DELETE of the inserted row (no DB write).
+    act(() => {
+      result.current.undo();
+    });
+    expect(result.current.pendingDeletedRowKeys.size).toBe(1);
+    expect(mockExecuteQueryBatch).toHaveBeenCalledTimes(1);
+  });
+
+  it("[#1126 Phase 2] non-reproducible commit → undo() toasts and stages nothing", async () => {
+    const { result } = renderEditHook();
+
+    // Add an empty row: its auto-increment PK stays null, so the committed
+    // INSERT can't be reversed to a safe DELETE.
+    act(() => {
+      result.current.handleAddRow();
+    });
+    expect(result.current.pendingNewRows.length).toBe(1);
+
+    act(() => {
+      result.current.handleCommit();
+    });
+    await act(async () => {
+      await result.current.handleExecuteCommit();
+    });
+    if (result.current.pendingConfirm) {
+      await act(async () => {
+        await result.current.confirmDangerous();
+      });
+    }
+    expect(result.current.pendingNewRows.length).toBe(0);
+    expect(mockExecuteQueryBatch).toHaveBeenCalledTimes(1);
+    // The undo stack survived the commit with a blocked marker.
+    expect(result.current.canUndo).toBe(true);
+    const toastsBefore = useToastStore.getState().toasts.length;
+
+    // Undo the non-reproducible commit → a toast fires and NOTHING is staged;
+    // no DB write, and the (single-entry) stack drains.
+    act(() => {
+      result.current.undo();
+    });
+    expect(result.current.pendingEdits.size).toBe(0);
+    expect(result.current.pendingNewRows.length).toBe(0);
+    expect(result.current.pendingDeletedRowKeys.size).toBe(0);
+    expect(result.current.canUndo).toBe(false);
+    expect(mockExecuteQueryBatch).toHaveBeenCalledTimes(1);
+    const toasts = useToastStore.getState().toasts;
+    expect(toasts).toHaveLength(toastsBefore + 1);
+    expect(toasts[toasts.length - 1]!.message).toBe(
+      i18n.t("datagrid:undoRestageBlocked"),
+    );
   });
 
   it("[AC-249-U9] consecutive actions → undo restores LIFO (most recent first)", () => {

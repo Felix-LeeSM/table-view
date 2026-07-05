@@ -880,11 +880,17 @@ pub trait DocumentAdapter: DbAdapter {
     ) -> BoxFuture<'a, Result<DocumentQueryResult, AppError>>;
 
     /// Sprint 180 (AC-180-04): cancel-token cooperation as above.
+    ///
+    /// Issue #1269 (P1): `comment` stamps the running op with the cancel tag
+    /// (mirrors `FindBody.comment`) so native cancel (`cancel_query_by_tag`)
+    /// can resolve the opid via `$currentOp` matched on `command.comment`.
+    /// Adapters without a `$currentOp` cancel path ignore it.
     fn aggregate<'a>(
         &'a self,
         db: &'a str,
         collection: &'a str,
         pipeline: Vec<bson::Document>,
+        comment: Option<String>,
         cancel: Option<&'a CancellationToken>,
     ) -> BoxFuture<'a, Result<DocumentQueryResult, AppError>>;
 

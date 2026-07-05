@@ -211,50 +211,74 @@ export type EditSnapshot = {
   // three diff slices. Must mirror `dataGridEditStore.EditSnapshot`.
   pendingEditRowSnapshots: ReadonlyMap<string, ReadonlyArray<unknown>>;
   pendingDeletedRowSnapshots: ReadonlyMap<string, ReadonlyArray<unknown>>;
-  // #1126 Phase 1 (ADR 0048) — set on a post-commit snapshot whose commit
-  // included INSERT/DELETE rows, which can't be re-staged (auto-increment /
-  // server defaults aren't reproducible). `undo()` pops it with a toast
-  // instead of staging anything. Must mirror `dataGridEditStore.EditSnapshot`.
+  // #1126 (ADR 0048) — set on a post-commit snapshot whose committed
+  // INSERT/DELETE can't be reproduced: an auto-increment / server-default PK
+  // (INSERT reversal) or a deleted row with no captured snapshot (DELETE
+  // reversal). `undo()` pops it with a toast instead of staging a wrong-row
+  // write. Must mirror `dataGridEditStore.EditSnapshot`.
   restageBlocked?: boolean;
 };
 
 export const UNDO_STACK_MAX = 50;
 
 /**
- * #1126 Phase 1 (ADR 0048) — collapse the just-committed pending state into a
- * single reversal snapshot for the undo stack, so a post-commit Cmd+Z
- * re-stages the pre-commit values as a NEW pending edit (DB writes stay
- * commit-only). Pure Map/Set rebuild — no IPC, no DB write.
+ * #1126 (ADR 0048) — collapse the just-committed pending state into a single
+ * reversal snapshot for the undo stack, so a post-commit Cmd+Z re-stages the
+ * inverse of what was committed as NEW pending edits (DB writes stay
+ * commit-only). Pure Map/Set rebuild — no IPC, no DB write. The reversal's own
+ * commit rides the normal preview / Safe Mode pipeline, so an unreproducible
+ * reversal is rejected there rather than punched through here.
  *
- * - UPDATE-only commit → reversal edits keyed by the base cell key
+ * - UPDATE reversal (Phase 1) → edits keyed by the base cell key
  *   (`${rowIdx}-${colIdx}`), value = the ORIGINAL cell from the row-identity
  *   anchor (`pendingEditRowSnapshots`). Nested JSON-path keys collapse to one
- *   whole-cell reversal. The anchor is carried so the reversal's own commit
- *   builds its WHERE from the row the user touched.
- * - Commit that added or deleted rows → a `restageBlocked` marker: Phase 1
- *   does not reproduce auto-increment / server defaults, so the whole commit
- *   (even a mixed batch) is non-restageable. `undo()` skips it with a toast.
- * - Nothing pending (or no anchored edit) → `null`; the stack ends up empty.
+ *   whole-cell reversal; the anchor is carried so the reversal's WHERE targets
+ *   the row the user touched.
+ * - DELETE reversal (Phase 2) → re-INSERT each committed-deleted row from its
+ *   `pendingDeletedRowSnapshots` value. Needs the snapshot; a deleted key
+ *   without one can't be reproduced → whole commit `restageBlocked`.
+ * - INSERT reversal (Phase 2) → DELETE each committed-inserted row, anchored on
+ *   the typed new-row values. Reversible only when the table has PK column(s)
+ *   AND every new row carries all PK values (auto-increment / server-default PKs
+ *   aren't reproducible) → otherwise whole commit `restageBlocked`, so undo pops
+ *   it with a toast instead of staging a wrong-row DELETE.
+ * - Nothing reversible → `null`; the stack ends up empty.
  */
-export function buildRestageSnapshot(source: {
-  pendingEdits: ReadonlyMap<string, string | null>;
-  pendingNewRows: ReadonlyArray<ReadonlyArray<unknown>>;
-  pendingDeletedRowKeys: ReadonlySet<string>;
-  pendingEditRowSnapshots: ReadonlyMap<string, ReadonlyArray<unknown>>;
-}): EditSnapshot | null {
-  if (
-    source.pendingNewRows.length > 0 ||
-    source.pendingDeletedRowKeys.size > 0
-  ) {
-    return {
-      pendingEdits: new Map(),
-      pendingNewRows: [],
-      pendingDeletedRowKeys: new Set(),
-      pendingEditRowSnapshots: new Map(),
-      pendingDeletedRowSnapshots: new Map(),
-      restageBlocked: true,
-    };
+export function buildRestageSnapshot(
+  source: {
+    pendingEdits: ReadonlyMap<string, string | null>;
+    pendingNewRows: ReadonlyArray<ReadonlyArray<unknown>>;
+    pendingDeletedRowKeys: ReadonlySet<string>;
+    pendingEditRowSnapshots: ReadonlyMap<string, ReadonlyArray<unknown>>;
+    pendingDeletedRowSnapshots?: ReadonlyMap<string, ReadonlyArray<unknown>>;
+  },
+  columns?: ReadonlyArray<{ is_primary_key: boolean }>,
+): EditSnapshot | null {
+  const hasInsert = source.pendingNewRows.length > 0;
+  const hasDelete = source.pendingDeletedRowKeys.size > 0;
+
+  // Reproducibility gates. If any add/delete in the commit can't be reversed
+  // safely, the whole commit is blocked (matches Phase 1's all-or-nothing).
+  const pkIdx: number[] = [];
+  if (columns) {
+    columns.forEach((c, i) => {
+      if (c.is_primary_key) pkIdx.push(i);
+    });
   }
+  if (hasInsert) {
+    const reproducible =
+      pkIdx.length > 0 &&
+      source.pendingNewRows.every((row) => pkIdx.every((i) => row[i] != null));
+    if (!reproducible) return blockedSnapshot();
+  }
+  if (hasDelete) {
+    const snaps = source.pendingDeletedRowSnapshots;
+    const reproducible =
+      !!snaps && [...source.pendingDeletedRowKeys].every((k) => snaps.has(k));
+    if (!reproducible) return blockedSnapshot();
+  }
+
+  // UPDATE reversal — restore the anchor's original cell value.
   const reversalEdits = new Map<string, string | null>();
   const reversalAnchors = new Map<string, ReadonlyArray<unknown>>();
   for (const key of source.pendingEdits.keys()) {
@@ -266,12 +290,46 @@ export function buildRestageSnapshot(source: {
     reversalEdits.set(baseKey, cellToEditValue(anchor[colIdx]));
     reversalAnchors.set(baseKey, anchor);
   }
-  if (reversalEdits.size === 0) return null;
+
+  // DELETE reversal — re-INSERT each deleted row from its snapshot.
+  const snaps = source.pendingDeletedRowSnapshots;
+  const reversalNewRows: unknown[][] = hasDelete
+    ? [...source.pendingDeletedRowKeys].map((k) => [...snaps!.get(k)!])
+    : [];
+
+  // INSERT reversal — DELETE each inserted row, snapshot = the typed values so
+  // the reversal's WHERE builds from its own PK. Synthetic, self-unique keys.
+  const reversalDeletes = new Set<string>();
+  const reversalDeleteSnaps = new Map<string, ReadonlyArray<unknown>>();
+  source.pendingNewRows.forEach((row, i) => {
+    const key = `row-restage-${i}`;
+    reversalDeletes.add(key);
+    reversalDeleteSnaps.set(key, [...row]);
+  });
+
+  if (
+    reversalEdits.size === 0 &&
+    reversalNewRows.length === 0 &&
+    reversalDeletes.size === 0
+  ) {
+    return null;
+  }
   return {
     pendingEdits: reversalEdits,
+    pendingNewRows: reversalNewRows,
+    pendingDeletedRowKeys: reversalDeletes,
+    pendingEditRowSnapshots: reversalAnchors,
+    pendingDeletedRowSnapshots: reversalDeleteSnaps,
+  };
+}
+
+function blockedSnapshot(): EditSnapshot {
+  return {
+    pendingEdits: new Map(),
     pendingNewRows: [],
     pendingDeletedRowKeys: new Set(),
-    pendingEditRowSnapshots: reversalAnchors,
+    pendingEditRowSnapshots: new Map(),
     pendingDeletedRowSnapshots: new Map(),
+    restageBlocked: true,
   };
 }
