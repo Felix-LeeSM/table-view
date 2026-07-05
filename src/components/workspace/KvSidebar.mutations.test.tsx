@@ -19,6 +19,48 @@ vi.mock("@tauri-apps/api/core", () => ({
   invoke: (...args: unknown[]) => invokeMock(...args),
 }));
 
+// Redis and Valkey share the same bounded collection-write surface (#1075).
+const COLLECTION_EDIT_CASES = [
+  {
+    name: "hash",
+    envelope: () => defaultValueEnvelope(),
+    fills: [
+      ["Hash field", "email"],
+      ["Hash value", "ada@example.com"],
+    ],
+    preview: /preview hset/i,
+    confirm: /confirm hset/i,
+    command: "HSET user:1 email ada@example.com",
+  },
+  {
+    name: "list",
+    envelope: () => listValueEnvelope(),
+    fills: [["List value", "queued"]],
+    preview: /preview rpush/i,
+    confirm: /confirm rpush/i,
+    command: "RPUSH user:1 queued",
+  },
+  {
+    name: "set",
+    envelope: () => setValueEnvelope(),
+    fills: [["Set member", "beta"]],
+    preview: /preview sadd/i,
+    confirm: /confirm sadd/i,
+    command: "SADD user:1 beta",
+  },
+  {
+    name: "zset",
+    envelope: () => zSetValueEnvelope(),
+    fills: [
+      ["ZSet score", "9.5"],
+      ["ZSet member", "ada"],
+    ],
+    preview: /preview zadd/i,
+    confirm: /confirm zadd/i,
+    command: "ZADD user:1 9.5 ada",
+  },
+];
+
 describe("KvSidebar mutations", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -259,46 +301,7 @@ describe("KvSidebar mutations", () => {
     });
   });
 
-  it.each([
-    {
-      name: "hash",
-      envelope: () => defaultValueEnvelope(),
-      fills: [
-        ["Hash field", "email"],
-        ["Hash value", "ada@example.com"],
-      ],
-      preview: /preview hset/i,
-      confirm: /confirm hset/i,
-      command: "HSET user:1 email ada@example.com",
-    },
-    {
-      name: "list",
-      envelope: () => listValueEnvelope(),
-      fills: [["List value", "queued"]],
-      preview: /preview rpush/i,
-      confirm: /confirm rpush/i,
-      command: "RPUSH user:1 queued",
-    },
-    {
-      name: "set",
-      envelope: () => setValueEnvelope(),
-      fills: [["Set member", "beta"]],
-      preview: /preview sadd/i,
-      confirm: /confirm sadd/i,
-      command: "SADD user:1 beta",
-    },
-    {
-      name: "zset",
-      envelope: () => zSetValueEnvelope(),
-      fills: [
-        ["ZSet score", "9.5"],
-        ["ZSet member", "ada"],
-      ],
-      preview: /preview zadd/i,
-      confirm: /confirm zadd/i,
-      command: "ZADD user:1 9.5 ada",
-    },
-  ])(
+  it.each(COLLECTION_EDIT_CASES)(
     "previews and confirms $name edits through bounded Redis commands",
     async ({ envelope, fills, preview, confirm, command }) => {
       mockRedisRuntime(envelope, {
@@ -330,46 +333,7 @@ describe("KvSidebar mutations", () => {
     },
   );
 
-  it.each([
-    {
-      name: "hash",
-      envelope: () => defaultValueEnvelope(),
-      fills: [
-        ["Hash field", "email"],
-        ["Hash value", "ada@example.com"],
-      ],
-      preview: /preview hset/i,
-      confirm: /confirm hset/i,
-      command: "HSET user:1 email ada@example.com",
-    },
-    {
-      name: "list",
-      envelope: () => listValueEnvelope(),
-      fills: [["List value", "queued"]],
-      preview: /preview rpush/i,
-      confirm: /confirm rpush/i,
-      command: "RPUSH user:1 queued",
-    },
-    {
-      name: "set",
-      envelope: () => setValueEnvelope(),
-      fills: [["Set member", "beta"]],
-      preview: /preview sadd/i,
-      confirm: /confirm sadd/i,
-      command: "SADD user:1 beta",
-    },
-    {
-      name: "zset",
-      envelope: () => zSetValueEnvelope(),
-      fills: [
-        ["ZSet score", "9.5"],
-        ["ZSet member", "ada"],
-      ],
-      preview: /preview zadd/i,
-      confirm: /confirm zadd/i,
-      command: "ZADD user:1 9.5 ada",
-    },
-  ])(
+  it.each(COLLECTION_EDIT_CASES)(
     "previews and confirms Valkey $name edits through bounded commands (parity #1075)",
     async ({ envelope, fills, preview, confirm, command }) => {
       useConnectionStore.setState({

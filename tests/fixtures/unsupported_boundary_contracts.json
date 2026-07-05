@@ -89,13 +89,13 @@
     },
     {
       "id": "valkey-non-string-mutation-full-redis-nonclaim",
-      "minimumRow": "Valkey non-string mutation/full Redis compatibility non-claim",
+      "minimumRow": "Valkey full Redis compatibility/collection-write smoke non-claim",
       "products": ["valkey"],
-      "claimBoundary": "Valkey direct mutation evidence is limited to UTF-8 string-key controls; hash/list/set/zset writes and full Redis compatibility stay deferred.",
+      "claimBoundary": "Valkey shares the Redis string plus hash/list/set/zset KvMutationPanel write surface (#1075); full Redis compatibility and Valkey collection-write smoke coverage stay deferred.",
       "docs": [
         {
           "path": "docs/product/known-limitations.md",
-          "mustContain": "Hash/list/set/zset writes, full Redis compatibility, CLI/admin parity, cluster/pubsub/modules, and consumer-group flows remain out of scope."
+          "mustContain": "Full Redis compatibility, CLI/admin parity, cluster/pubsub/modules, and consumer-group flows remain out of scope."
         }
       ],
       "fixtureEvidence": [

@@ -126,8 +126,6 @@ export const en = {
       typeExactBeforePreview: "Type the exact key before previewing {{kind}}.",
     },
     unsupported: {
-      valkeyNonString:
-        "Valkey direct mutation controls are only enabled for UTF-8 string keys.",
       binaryString: "Binary string mutation is unsupported in this panel.",
       partialHash: "Partial hash previews cannot be mutated from this panel.",
       partialSet: "Partial set previews cannot be mutated from this panel.",
@@ -346,8 +344,6 @@ export const ko = {
       typeExactBeforePreview: "{{kind}} 미리보기 전에 정확한 키를 입력하세요.",
     },
     unsupported: {
-      valkeyNonString:
-        "Valkey 직접 뮤테이션 컨트롤은 UTF-8 문자열 키에만 활성화됩니다.",
       binaryString:
         "이 패널에서는 바이너리 문자열 뮤테이션을 지원하지 않습니다.",
       partialHash: "부분 해시 미리보기는 이 패널에서 변경할 수 없습니다.",
