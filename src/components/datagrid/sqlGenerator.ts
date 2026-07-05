@@ -1,4 +1,5 @@
 import type { ColumnInfo, TableData } from "@/types/schema";
+import { dialectRequiresPrimaryKeyForEdit } from "@/types/dataSource";
 import { safeStringifyCell } from "@lib/jsonCell";
 import {
   coerceToSqlLiteral,
@@ -43,9 +44,10 @@ function rowValueToCoerceInput(
 
 /**
  * Build a SQL WHERE clause that identifies a specific row.
- * Uses primary key columns when available. PostgreSQL/MySQL/SQLite keep the
- * legacy all-column fallback; MSSQL/Oracle writes are blocked without a primary
- * key.
+ * Uses primary key columns when available. Dialects whose profile sets
+ * `requiresPrimaryKeyForEdit` (SQLite/MSSQL/Oracle) block writes without a
+ * primary key; the rest keep the legacy all-column fallback. Either way, a
+ * clause is never emitted without a row-identifying predicate (issue #1356).
  */
 function buildWhereClause(
   row: unknown[],
@@ -89,7 +91,10 @@ function buildWhereClause(
     }
     return { kind: "sql", sql: clauses.join(" AND ") };
   }
-  if (dialect === "mssql" || dialect === "oracle") return null;
+  // Safety invariant (issue #1356): when the dialect requires a primary key,
+  // never fall back to an all-column WHERE — return null so the caller reports
+  // the edit as blocked instead of emitting a whole-table statement.
+  if (dialectRequiresPrimaryKeyForEdit(dialect)) return null;
   return {
     kind: "sql",
     sql: columns
@@ -109,6 +114,7 @@ function primaryKeyRequiredMessage(dialect: SqlDialect): string {
 function dialectLabel(dialect: SqlDialect): string {
   if (dialect === "mssql") return "MSSQL";
   if (dialect === "oracle") return "Oracle";
+  if (dialect === "sqlite") return "SQLite";
   return "SQL";
 }
 
@@ -276,7 +282,7 @@ export function generateSqlWithKeys(
   const statements: GeneratedSqlStatement[] = [];
   const dialect = options.dialect ?? "postgresql";
   const qualifiedTable = qualifiedTableName(schema, table, dialect);
-  const requiresPrimaryKey = dialect === "mssql" || dialect === "oracle";
+  const requiresPrimaryKey = dialectRequiresPrimaryKeyForEdit(dialect);
   const primaryKeyMessage = primaryKeyRequiredMessage(dialect);
 
   if (requiresPrimaryKey && pkCols.length === 0) {

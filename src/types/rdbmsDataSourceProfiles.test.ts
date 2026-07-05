@@ -43,7 +43,7 @@ const expectedMssqlRuntimeCapabilities = expectedCapabilities({
     constraints: true,
     relationships: true,
   },
-  edit: { editRows: true },
+  edit: { editRows: true, requiresPrimaryKeyForEdit: true },
   intelligence: { erd: true },
 });
 
@@ -57,7 +57,7 @@ const expectedOracleRuntimeCapabilities = expectedCapabilities({
     constraints: true,
     relationships: true,
   },
-  edit: { editRows: true },
+  edit: { editRows: true, requiresPrimaryKeyForEdit: true },
   intelligence: { erd: true },
 });
 

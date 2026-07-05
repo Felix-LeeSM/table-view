@@ -1,5 +1,6 @@
 import type { DatabaseType, Paradigm } from "./connection";
 import { paradigmOf } from "./connection";
+import type { SqlDialect } from "@lib/sql/sqlLiteral";
 import {
   DUCKDB_FILE_CONNECTION,
   SQLITE_FILE_CONNECTION,
@@ -93,6 +94,15 @@ export interface DataSourceCapabilities {
     readonly editDocuments: boolean;
     readonly editKeys: boolean;
     readonly bulkWrite: boolean;
+    /**
+     * Issue #1356 — single source of truth for "this DBMS requires a primary
+     * key to edit a row; the all-column WHERE fallback is disabled". The UI
+     * edit gate and the SQL builder both read this flag instead of each
+     * re-encoding the DBMS roster (drift previously risked a whole-table
+     * UPDATE). Independent of `editRows`: a source may support row edits yet
+     * still require a PK to identify the target row safely.
+     */
+    readonly requiresPrimaryKeyForEdit: boolean;
   };
   readonly ddl: {
     readonly createTable: boolean;
@@ -163,6 +173,7 @@ export function createEmptyDataSourceCapabilities(): DataSourceCapabilities {
       editDocuments: false,
       editKeys: false,
       bulkWrite: false,
+      requiresPrimaryKeyForEdit: false,
     },
     ddl: {
       createTable: false,
@@ -249,6 +260,7 @@ export const ORACLE_CAPABILITIES = capabilities({
   },
   edit: {
     editRows: true,
+    requiresPrimaryKeyForEdit: true,
   },
   intelligence: {
     erd: true,
@@ -341,6 +353,7 @@ export const SQLITE_CAPABILITIES = capabilities({
   },
   edit: {
     editRows: true,
+    requiresPrimaryKeyForEdit: true,
   },
   intelligence: {
     erd: true,
@@ -380,6 +393,7 @@ export const MSSQL_CAPABILITIES = capabilities({
   },
   edit: {
     editRows: true,
+    requiresPrimaryKeyForEdit: true,
   },
   intelligence: {
     erd: true,
@@ -663,4 +677,16 @@ export function getDataSourceProfile(dbType: DatabaseType): DataSourceProfile {
     throw new Error(`Unknown data source profile: ${dbType}`);
   }
   return profile;
+}
+
+/**
+ * Issue #1356 — resolve `requiresPrimaryKeyForEdit` from a `SqlDialect`. The
+ * SQL builder only carries a dialect (not a dbType), so this keeps the
+ * PK-required roster living solely in the capability profiles. Every
+ * `SqlDialect` literal is also a valid `DatabaseType`, so the dialect doubles
+ * as the profile key.
+ */
+export function dialectRequiresPrimaryKeyForEdit(dialect: SqlDialect): boolean {
+  return getDataSourceProfile(dialect).capabilities.edit
+    .requiresPrimaryKeyForEdit;
 }

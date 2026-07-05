@@ -80,10 +80,13 @@ export default function DataGrid({
       appliedFilters: filters.appliedFilters,
       appliedRawSql: filters.appliedRawSql,
     });
+  // Issue #1356 — single source: whether this DBMS requires a primary key to
+  // edit a row (all-column WHERE fallback disabled) comes from the capability
+  // profile, not a dbType roster duplicated against the SQL builder.
   const rowEditRequiresPrimaryKey =
-    rowEditConnection?.dbType === "sqlite" ||
-    rowEditConnection?.dbType === "mssql" ||
-    rowEditConnection?.dbType === "oracle";
+    rowEditConnection !== undefined &&
+    getDataSourceProfile(rowEditConnection.dbType).capabilities.edit
+      .requiresPrimaryKeyForEdit;
   const tableWithoutRequiredPrimaryKey =
     rowEditRequiresPrimaryKey &&
     data !== null &&
