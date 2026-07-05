@@ -216,6 +216,7 @@ describe("useQueryExecution — Sprint 311 parser-driven document dispatch", () 
       "table_view_test",
       "users",
       { filter: { active: true }, sort: { name: 1 }, limit: 10, skip: 5 },
+      expect.any(String),
     );
     expect(aggregateDocumentsMock).not.toHaveBeenCalled();
   });
@@ -246,6 +247,7 @@ describe("useQueryExecution — Sprint 311 parser-driven document dispatch", () 
         sort: { name: 1 },
         limit: 2,
       },
+      expect.any(String),
     );
   });
 
@@ -268,6 +270,7 @@ describe("useQueryExecution — Sprint 311 parser-driven document dispatch", () 
       "table_view_test",
       "users",
       {},
+      expect.any(String),
     );
   });
 
@@ -292,6 +295,7 @@ describe("useQueryExecution — Sprint 311 parser-driven document dispatch", () 
       "table_view_test",
       "users",
       [{ $match: { active: true } }, { $limit: 10 }],
+      expect.any(String),
     );
   });
 
@@ -321,6 +325,7 @@ describe("useQueryExecution — Sprint 311 parser-driven document dispatch", () 
         { $skip: 5 },
         { $limit: 10 },
       ],
+      expect.any(String),
     );
   });
 
@@ -343,6 +348,7 @@ describe("useQueryExecution — Sprint 311 parser-driven document dispatch", () 
       "table_view_test",
       "users",
       [{ $match: {} }],
+      expect.any(String),
     );
   });
 
@@ -466,6 +472,7 @@ describe("useQueryExecution — Sprint 311 parser-driven document dispatch", () 
       "table_view_test",
       "orders",
       { filter: {} },
+      expect.any(String),
     );
   });
 
@@ -487,6 +494,7 @@ describe("useQueryExecution — Sprint 311 parser-driven document dispatch", () 
       "table_view_test",
       "users",
       { active: true },
+      expect.any(String),
     );
 
     await waitFor(() => {
@@ -524,6 +532,7 @@ describe("useQueryExecution — Sprint 311 parser-driven document dispatch", () 
       "conn-mongo",
       "table_view_test",
       "users",
+      expect.any(String),
     );
 
     await waitFor(() => {
@@ -559,6 +568,7 @@ describe("useQueryExecution — Sprint 311 parser-driven document dispatch", () 
       "users",
       "country",
       undefined,
+      expect.any(String),
     );
 
     await waitFor(() => {
@@ -598,6 +608,7 @@ describe("useQueryExecution — Sprint 311 parser-driven document dispatch", () 
       "users",
       "country",
       { active: true },
+      expect.any(String),
     );
   });
 
@@ -619,6 +630,7 @@ describe("useQueryExecution — Sprint 311 parser-driven document dispatch", () 
       "table_view_test",
       "users",
       { _id: 1 },
+      expect.any(String),
     );
 
     await waitFor(() => {
@@ -719,6 +731,7 @@ describe("useQueryExecution — Sprint 311 parser-driven document dispatch", () 
       "table_view_test",
       "users",
       [{ $match: {} }, { $out: "snapshot" }],
+      expect.any(String),
     );
   });
 

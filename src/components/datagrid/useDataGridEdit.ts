@@ -152,12 +152,14 @@ export function useDataGridEdit({
   // re-stages the old values as a new pending edit (DB writes stay commit-only).
   // Everything else mirrors `clearAllPending` (drop editor / selection / errors).
   const clearPendingAfterCommit = useCallback(() => {
-    restageAfterCommit();
+    // #1126 Phase 2 — pass the columns so a committed INSERT can be reversed
+    // only when its primary key is reproducible from the typed row values.
+    restageAfterCommit(data?.columns);
     setPendingEditErrors(new Map());
     clearSelection();
     setEditingCell(null);
     setEditValue("");
-  }, [restageAfterCommit, clearSelection]);
+  }, [restageAfterCommit, clearSelection, data]);
 
   const {
     sqlPreview,
