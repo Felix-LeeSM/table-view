@@ -65,11 +65,17 @@ pub async fn persist_connection_inner(
 ) -> Result<(), AppError> {
     guard_legacy_import_done(pool).await?;
 
+    // Reject unknown/typo db_type instead of silently falling back to Postgresql
+    // (#1355). A single normalized value feeds both the file SOT and the SQLite
+    // mirror so the two stores can never diverge.
+    let db_type = DatabaseType::from_str(&req.db_type)
+        .map_err(|_| AppError::Validation(format!("unknown db_type: {}", req.db_type)))?;
+
     // file SOT write — password = None preserves existing ciphertext.
     let config = ConnectionConfig {
         id: req.id.clone(),
         name: req.name.clone(),
-        db_type: DatabaseType::from_str(&req.db_type).unwrap_or_default(),
+        db_type: db_type.clone(),
         host: req.host.clone(),
         port: req.port,
         user: req.user.clone(),
@@ -88,20 +94,35 @@ pub async fn persist_connection_inner(
     };
     crate::storage::save_connection(config, None)?;
 
+    // Canonical wire tag from the same serde repr the file SOT persisted, so the
+    // mirror stores an identical normalized value (not the raw alias/typo input).
+    let db_type_tag = db_type_tag(&db_type);
+
     // SQLite mirror — silent failure path 로 처리.
     let sqlite_result = if is_force_failure_for_tests() {
         Err(AppError::Storage("forced failure for tests".into()))
     } else {
-        write_sqlite_mirror(pool, &req).await
+        write_sqlite_mirror(pool, &req, &db_type_tag).await
     };
     record_sqlite_result("connections", sqlite_result);
 
     Ok(())
 }
 
+/// Canonical lowercase wire tag for a `DatabaseType`, taken from serde so it is
+/// guaranteed identical to what `save_connection` wrote to the file SOT. Unit
+/// enum variants always serialize to a JSON string, so the fallback is dead code.
+fn db_type_tag(db_type: &DatabaseType) -> String {
+    serde_json::to_value(db_type)
+        .ok()
+        .and_then(|v| v.as_str().map(str::to_owned))
+        .unwrap_or_default()
+}
+
 async fn write_sqlite_mirror(
     pool: &SqlitePool,
     req: &PersistConnectionRequest,
+    db_type_tag: &str,
 ) -> Result<(), AppError> {
     let now_ms = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -128,7 +149,7 @@ async fn write_sqlite_mirror(
     )
     .bind(&req.id)
     .bind(&req.name)
-    .bind(&req.db_type)
+    .bind(db_type_tag)
     .bind(&req.host)
     .bind(req.port as i64)
     .bind(&req.user)
@@ -279,6 +300,68 @@ mod tests {
         assert_eq!(count, 1);
         let data = crate::storage::load_storage_redacted().unwrap();
         assert_eq!(data.connections.len(), 1);
+        cleanup();
+    }
+
+    /// #1355 regression: an unrecognized/typo db_type must be rejected as a
+    /// validation error and must persist nothing to either store.
+    #[tokio::test]
+    #[serial]
+    async fn unknown_db_type_rejected_and_persists_nothing() {
+        cleanup();
+        let (_dir, pool) = setup().await;
+        let mut req = sample_req("c-bad");
+        req.db_type = "postgres-typo".into();
+
+        let err = persist_connection_inner(&pool, req).await.unwrap_err();
+        assert!(
+            matches!(err, AppError::Validation(ref m) if m.contains("postgres-typo")),
+            "expected Validation carrying the received value, got {err:?}"
+        );
+
+        let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM connections")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(count, 0, "SQLite mirror must stay empty on rejection");
+        let data = crate::storage::load_storage_redacted().unwrap();
+        assert_eq!(
+            data.connections.len(),
+            0,
+            "file SOT must stay empty on rejection"
+        );
+        cleanup();
+    }
+
+    /// #1355 regression: a valid db_type (here an alias) is normalized once and
+    /// the file SOT + SQLite mirror store the identical canonical tag.
+    #[tokio::test]
+    #[serial]
+    async fn valid_db_type_stored_identically_in_file_and_mirror() {
+        cleanup();
+        let (_dir, pool) = setup().await;
+        let mut req = sample_req("c-alias");
+        req.db_type = "sqlserver".into(); // alias → canonical "mssql"
+
+        persist_connection_inner(&pool, req).await.unwrap();
+
+        let mirror_tag: String =
+            sqlx::query_scalar("SELECT db_type FROM connections WHERE id = 'c-alias'")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        let data = crate::storage::load_storage_redacted().unwrap();
+        let file_tag = serde_json::to_value(&data.connections[0].db_type)
+            .unwrap()
+            .as_str()
+            .unwrap()
+            .to_owned();
+
+        assert_eq!(mirror_tag, "mssql");
+        assert_eq!(
+            file_tag, mirror_tag,
+            "file SOT and SQLite mirror must match"
+        );
         cleanup();
     }
 }
