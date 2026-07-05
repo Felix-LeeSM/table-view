@@ -48,6 +48,7 @@ export async function executeMongoAggregate({
       resolvedDatabase,
       resolvedCollection,
       pipeline,
+      queryId,
     );
     const queryResult = requireCompatibleQueryResult(
       createDocumentResultEnvelope(docResult),
@@ -94,6 +95,7 @@ export async function runDocumentFind(
       database,
       collection,
       body,
+      queryId,
     );
     const queryResult = requireCompatibleQueryResult(
       createDocumentResultEnvelope(docResult),
@@ -140,6 +142,7 @@ export async function runDocumentFindOne(
       database,
       collection,
       filter,
+      queryId,
     );
     const queryResult: QueryResult =
       docRow === null
@@ -201,6 +204,7 @@ export async function runDocumentCount(
       database,
       collection,
       filter,
+      queryId,
     );
     const queryResult: QueryResult = {
       columns: [{ name: "count", dataType: "Int64", category: "int" }],
@@ -250,6 +254,7 @@ export async function runDocumentEstimatedCount(
       connectionId,
       database,
       collection,
+      queryId,
     );
     const queryResult: QueryResult = {
       columns: [{ name: "count", dataType: "Int64", category: "int" }],
@@ -303,6 +308,7 @@ export async function runDocumentDistinct(
       collection,
       field,
       filter,
+      queryId,
     );
     const queryResult: QueryResult = {
       columns: [{ name: "value", dataType: "string", category: "text" }],

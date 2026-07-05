@@ -369,7 +369,13 @@ async fn test_mongo_adapter_aggregate_match_sort() {
     ];
 
     let result = adapter
-        .aggregate("table_view_test", "users_agg_match_sort", pipeline, None)
+        .aggregate(
+            "table_view_test",
+            "users_agg_match_sort",
+            pipeline,
+            None,
+            None,
+        )
         .await
         .expect("aggregate should succeed");
 
@@ -458,7 +464,13 @@ async fn test_mongo_adapter_aggregate_group_count() {
     }];
 
     let result = adapter
-        .aggregate("table_view_test", "users_agg_group_count", pipeline, None)
+        .aggregate(
+            "table_view_test",
+            "users_agg_group_count",
+            pipeline,
+            None,
+            None,
+        )
         .await
         .expect("aggregate should succeed");
 

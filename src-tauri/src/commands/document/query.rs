@@ -108,6 +108,9 @@ async fn aggregate_documents_inner(
                 database,
                 collection,
                 pipeline,
+                // Issue #1269 (P1) — stamp the cancel tag so native cancel
+                // (`killOp`) can resolve this op's opid via `$currentOp`.
+                query_id.map(str::to_string),
                 cancel_handle.as_ref().map(|(_, tok)| tok),
             )
             .await
@@ -510,14 +513,24 @@ async fn run_mongo_command_inner(
     database: Option<&str>,
     command: serde_json::Value,
     safety_confirmed: bool,
+    query_id: Option<&str>,
 ) -> Result<serde_json::Value, AppError> {
-    let command = extjson_to_bson_document(command)?;
+    let mut command = extjson_to_bson_document(command)?;
     let active = state
         .active_adapter(connection_id)
         .await
         .ok_or_else(|| not_connected(connection_id))?;
     let adapter = active.as_document()?;
     require_run_command_safety(&command, safety_confirmed)?;
+    // Issue #1269 (P1) — stamp the cancel tag so the running op carries
+    // `command.comment == query_id`, letting native cancel
+    // (`cancel_query_by_tag`) resolve the opid via `$currentOp`. A caller
+    // that already set an explicit `comment` keeps it (their intent wins).
+    if let Some(qid) = query_id {
+        command
+            .entry("comment".to_string())
+            .or_insert_with(|| bson::Bson::String(qid.to_string()));
+    }
     adapter.run_command(database, command).await
 }
 
@@ -550,6 +563,9 @@ pub async fn run_mongo_command(
     database: Option<String>,
     command: serde_json::Value,
     safety_confirmed: Option<bool>,
+    // Issue #1269 (P1) — optional cancel-token id. Stamped as the op's
+    // `comment` so native cancel (`cancel_query_by_tag`) can `killOp` it.
+    query_id: Option<String>,
 ) -> Result<serde_json::Value, AppError> {
     run_mongo_command_inner(
         state.inner(),
@@ -557,6 +573,7 @@ pub async fn run_mongo_command(
         database.as_deref(),
         command,
         safety_confirmed.unwrap_or(false),
+        query_id.as_deref(),
     )
     .await
 }
@@ -644,6 +661,37 @@ mod tests {
         let state = state_with("d", document_default()).await;
         let _ = aggregate_documents_inner(&state, "d", "db", "c", Vec::new(), Some("q-agg")).await;
         assert!(!state.query_tokens.lock().await.contains_key("q-agg"));
+    }
+
+    #[tokio::test]
+    async fn aggregate_stamps_comment_with_query_id() {
+        // Issue #1269 (P1) — the query-tab aggregate runner forwards its
+        // queryId as the op's `comment` so native cancel
+        // (`cancel_query_by_tag`) can resolve the opid via `$currentOp`.
+        use crate::db::testing::StubDocumentAdapter;
+        use crate::db::ActiveAdapter;
+        use std::sync::{Arc, Mutex};
+
+        let captured: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
+        let captured_for_closure = captured.clone();
+        let mut s = StubDocumentAdapter::default();
+        s.aggregate_fn = Some(Box::new(move |_pipeline, comment| {
+            *captured_for_closure.lock().unwrap() = comment;
+            Ok(DocumentQueryResult {
+                truncated: false,
+                columns: Vec::new(),
+                rows: Vec::new(),
+                raw_documents: Vec::new(),
+                total_count: 0,
+                execution_time_ms: 0,
+            })
+        }));
+        let state = state_with("d", ActiveAdapter::Document(Box::new(s))).await;
+
+        aggregate_documents_inner(&state, "d", "db", "c", Vec::new(), Some("q-agg"))
+            .await
+            .expect("aggregate should succeed");
+        assert_eq!(captured.lock().unwrap().clone(), Some("q-agg".to_string()));
     }
 
     // ── Sprint 308 (2026-05-14) — 4 new read commands ──────────────────
@@ -976,7 +1024,7 @@ mod tests {
     async fn run_mongo_command_unknown_connection_returns_notfound() {
         let state = AppState::new();
         let cmd = serde_json::json!({ "ping": 1 });
-        match run_mongo_command_inner(&state, "absent", None, cmd, false).await {
+        match run_mongo_command_inner(&state, "absent", None, cmd, false, None).await {
             Err(AppError::NotFound(msg)) => assert!(msg.contains("absent")),
             other => panic!("Expected NotFound, got: {:?}", other),
         }
@@ -987,7 +1035,7 @@ mod tests {
         let state = state_with("rdb", rdb_default()).await;
         let cmd = serde_json::json!({ "ping": 1 });
         assert!(matches!(
-            run_mongo_command_inner(&state, "rdb", None, cmd, false).await,
+            run_mongo_command_inner(&state, "rdb", None, cmd, false, None).await,
             Err(AppError::Unsupported(_))
         ));
     }
@@ -1013,7 +1061,7 @@ mod tests {
         let state = state_with("d", ActiveAdapter::Document(Box::new(s))).await;
 
         let cmd = serde_json::json!({ "serverStatus": 1 });
-        let r = run_mongo_command_inner(&state, "d", None, cmd, false)
+        let r = run_mongo_command_inner(&state, "d", None, cmd, false, None)
             .await
             .expect("should succeed");
         assert_eq!(r["ok"], serde_json::Value::from(1));
@@ -1042,7 +1090,7 @@ mod tests {
         let state = state_with("d", ActiveAdapter::Document(Box::new(s))).await;
 
         let cmd = serde_json::json!({ "dbStats": 1 });
-        let r = run_mongo_command_inner(&state, "d", Some("myapp"), cmd, false)
+        let r = run_mongo_command_inner(&state, "d", Some("myapp"), cmd, false, None)
             .await
             .expect("should succeed");
         assert_eq!(r["db"], serde_json::Value::from("myapp"));
@@ -1052,6 +1100,33 @@ mod tests {
             Some(Some("myapp".to_string())),
             "expected database=Some(\"myapp\") routing"
         );
+    }
+
+    #[tokio::test]
+    async fn run_mongo_command_stamps_comment_with_query_id() {
+        // Issue #1269 (P1) — the query-tab runCommand runner forwards its
+        // queryId so the op carries `command.comment == query_id`, letting
+        // native cancel (`cancel_query_by_tag`) resolve the opid via
+        // `$currentOp`. `serverStatus` is read-only ⇒ no safety ack needed.
+        use crate::db::testing::StubDocumentAdapter;
+        use crate::db::ActiveAdapter;
+        use std::sync::{Arc, Mutex};
+
+        let captured: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
+        let captured_for_closure = captured.clone();
+        let mut s = StubDocumentAdapter::default();
+        s.run_command_fn = Some(Box::new(move |_database, command| {
+            *captured_for_closure.lock().unwrap() =
+                command.get_str("comment").ok().map(str::to_string);
+            Ok(serde_json::json!({ "ok": 1 }))
+        }));
+        let state = state_with("d", ActiveAdapter::Document(Box::new(s))).await;
+
+        let cmd = serde_json::json!({ "serverStatus": 1 });
+        run_mongo_command_inner(&state, "d", None, cmd, false, Some("q-cmd"))
+            .await
+            .expect("runCommand should succeed");
+        assert_eq!(captured.lock().unwrap().clone(), Some("q-cmd".to_string()));
     }
 
     #[test]
@@ -1068,7 +1143,7 @@ mod tests {
     async fn run_mongo_command_destructive_without_safety_ack_is_validation_error() {
         let state = state_with("d", document_default()).await;
         let body = serde_json::json!({ "drop": "users" });
-        match run_mongo_command_inner(&state, "d", Some("myapp"), body, false).await {
+        match run_mongo_command_inner(&state, "d", Some("myapp"), body, false, None).await {
             Err(AppError::Validation(msg)) => {
                 assert!(
                     msg.contains("safety confirmation"),
@@ -1087,7 +1162,7 @@ mod tests {
             serde_json::json!({ "update": "users", "updates": [{ "q": { "active": false }, "u": { "$set": { "reviewed": true } }, "multi": true }] }),
             serde_json::json!({ "findAndModify": "users", "query": { "_id": 1 }, "update": { "$set": { "reviewed": true } } }),
         ] {
-            match run_mongo_command_inner(&state, "d", Some("myapp"), body, false).await {
+            match run_mongo_command_inner(&state, "d", Some("myapp"), body, false, None).await {
                 Err(AppError::Validation(msg)) => {
                     assert!(
                         msg.contains("safety confirmation"),
@@ -1103,7 +1178,7 @@ mod tests {
     async fn run_mongo_command_unknown_command_without_safety_ack_is_validation_error() {
         let state = state_with("d", document_default()).await;
         let body = serde_json::json!({ "customWriteCapableCommand": 1 });
-        match run_mongo_command_inner(&state, "d", Some("myapp"), body, false).await {
+        match run_mongo_command_inner(&state, "d", Some("myapp"), body, false, None).await {
             Err(AppError::Validation(msg)) => {
                 assert!(
                     msg.contains("safety confirmation"),
@@ -1145,7 +1220,7 @@ mod tests {
             Ok(serde_json::json!({ "ok": 1 }))
         }));
         let state = state_with("d", ActiveAdapter::Document(Box::new(s))).await;
-        let r = run_mongo_command_inner(&state, "d", None, body, true).await;
+        let r = run_mongo_command_inner(&state, "d", None, body, true, None).await;
         let captured = captured.lock().unwrap().clone();
         (r, captured)
     }
@@ -1239,6 +1314,7 @@ mod tests {
             None,
             serde_json::json!({ "ping": 1, "host": "example.com" }),
             false,
+            None,
         )
         .await
         .expect("ok");
@@ -1259,7 +1335,7 @@ mod tests {
         // AppError::Validation, not a panic, not a Database error.
         let state = state_with("d", document_default()).await;
         let body = serde_json::json!({ "_id": {"$oid": "not-24-hex"} });
-        match run_mongo_command_inner(&state, "d", None, body, false).await {
+        match run_mongo_command_inner(&state, "d", None, body, false, None).await {
             Err(AppError::Validation(msg)) => {
                 assert!(
                     msg.contains("extended-JSON") || msg.contains("oid") || msg.contains("hex"),
@@ -1278,7 +1354,7 @@ mod tests {
         // smuggle a primitive past the type system.
         let state = state_with("d", document_default()).await;
         let body = serde_json::json!([{ "ping": 1 }]);
-        match run_mongo_command_inner(&state, "d", None, body, false).await {
+        match run_mongo_command_inner(&state, "d", None, body, false, None).await {
             Err(AppError::Validation(msg)) => {
                 assert!(
                     msg.contains("JSON object") || msg.contains("array"),

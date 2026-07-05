@@ -48,9 +48,9 @@ export interface EditSnapshot {
   // orphan snapshot outlives the pending edit/delete it anchored.
   pendingEditRowSnapshots: ReadonlyMap<string, ReadonlyArray<unknown>>;
   pendingDeletedRowSnapshots: ReadonlyMap<string, ReadonlyArray<unknown>>;
-  // #1126 Phase 1 (ADR 0048) — marks a post-commit snapshot whose commit
-  // included INSERT/DELETE rows as non-restageable. Mirrors the type in
-  // `dataGridEditFsm.ts` exactly.
+  // #1126 (ADR 0048) — marks a post-commit snapshot whose committed
+  // INSERT/DELETE can't be reproduced (auto-increment PK / missing row
+  // snapshot) as non-restageable. Mirrors the type in `dataGridEditFsm.ts`.
   restageBlocked?: boolean;
 }
 

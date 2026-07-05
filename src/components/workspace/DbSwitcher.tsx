@@ -70,6 +70,9 @@ function readOnlyTooltipCopy(
   if (args.paradigm === "search") {
     return t("dbSwitcher.tooltip.searchParadigm");
   }
+  if (args.paradigm === "document") {
+    return t("dbSwitcher.tooltip.documentParadigm");
+  }
   if (args.dbType === "sqlite") {
     return t("dbSwitcher.tooltip.sqlite");
   }
@@ -289,15 +292,13 @@ export default function DbSwitcher() {
     ],
   );
 
-  // Sprint 328 — Mongo (document) paradigm no longer surfaces a global
-  // switcher in the toolbar. DataGrip-style tab-local DB chip (Sprint 329)
-  // replaces this role; sidebar selection is for browsing only and does
-  // not mutate connection-level state. RDB stays on the toolbar because
-  // PG's strong database isolation makes a global active-sub-pool chip
-  // meaningful. See `docs/explorations/mongo-db-scope-patterns.html`.
-  if (paradigm === "document") {
-    return null;
-  }
+  // #1047 — Mongo (document) paradigm keeps DB scope tab-local (ADR 0030,
+  // surfaced by `TabDbChip`), so it never gets an interactive toolbar
+  // switcher. It falls through to the read-only chip below (document has no
+  // `switchDatabase` capability → `enabled` is false) with a tab-local
+  // tooltip, instead of the former `return null` that violated the
+  // ui-parity gate (same action = same entry point, unsupported shown with
+  // a reason). See `docs/explorations/mongo-db-scope-patterns.html`.
 
   // Read-only fallback — fixed-scope profiles, no connection, or disconnected
   // tab. KV profiles do not belong here when connected; Redis/Valkey expose the

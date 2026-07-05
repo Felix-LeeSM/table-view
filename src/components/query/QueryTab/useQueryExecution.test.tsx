@@ -613,6 +613,7 @@ describe("useQueryExecution scaffold", () => {
       "table_view_test",
       "users",
       { filter: { active: true }, sort: { name: 1 }, limit: 5 },
+      expect.any(String),
     );
     await waitFor(() => {
       expect(getSeededMongoTab().queryState.status).toBe("completed");
