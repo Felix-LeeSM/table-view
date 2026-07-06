@@ -1,10 +1,10 @@
 ---
 id: 0037
 title: Auto-update — notification only, no in-app download/install
-status: Accepted
+status: Superseded
 date: 2026-05-17
 supersedes: null
-superseded_by: null
+superseded_by: 0049
 ---
 
 **결정**: Auto-update 는 **notification-only** 정책. 앱이 GitHub releases
