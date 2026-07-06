@@ -10,6 +10,7 @@ import {
   DATABASE_DEFAULTS,
   DATABASE_DEFAULT_FIELDS,
   exposesTlsToggle,
+  isSearchFamily,
   paradigmOf,
 } from "../../model";
 
@@ -106,8 +107,7 @@ export function useConnectionDraftForm(
   // on Mongo (default DB landing field, not connection-required) so the
   // Save validator skips the "Database is required" branch when true.
   const isMongo = form.dbType === "mongodb";
-  const isSearch =
-    form.dbType === "elasticsearch" || form.dbType === "opensearch";
+  const isSearch = isSearchFamily(form.dbType);
 
   /**
    * Sprint 138 — when the user changes `dbType`, reset the DBMS-specific

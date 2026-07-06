@@ -236,6 +236,17 @@ export function paradigmOf(dbType: DatabaseType): Paradigm {
   }
 }
 
+/** True for KV-paradigm engines (redis/valkey). Derives from `paradigmOf` so a
+ *  future KV adapter converges here without touching call sites. Prefer over
+ *  ad-hoc `dbType === "redis" || dbType === "valkey"` disjunctions. */
+export const isKvFamily = (dbType: DatabaseType): boolean =>
+  paradigmOf(dbType) === "kv";
+
+/** True for search-paradigm engines (elasticsearch/opensearch). Prefer over
+ *  ad-hoc `dbType === "elasticsearch" || dbType === "opensearch"`. */
+export const isSearchFamily = (dbType: DatabaseType): boolean =>
+  paradigmOf(dbType) === "search";
+
 /**
  * DBMS forms that render a TLS/encryption toggle (`MssqlFormFields`,
  * `MongoFormFields`, `RedisFormFields` for redis+valkey, `SearchFormFields`
@@ -410,10 +421,7 @@ export function parseConnectionUrl(
       port: parsed.port ? parseInt(parsed.port, 10) : DATABASE_DEFAULTS[dbType],
       user: decodeURIComponent(parsed.username),
       password: decodeURIComponent(parsed.password),
-      database:
-        (dbType === "redis" || dbType === "valkey") && database === ""
-          ? "0"
-          : database,
+      database: isKvFamily(dbType) && database === "" ? "0" : database,
       ...(parsed.protocol === "rediss:" ? { tlsEnabled: true } : {}),
       ...(dbType === "mssql"
         ? {
