@@ -189,7 +189,7 @@ impl MssqlAdapter {
         let config = self.connected_config().await?;
         let columns = self.get_table_columns(schema, table).await?;
         let qualified = qualified_mssql_table(schema, table);
-        let page_size = page_size.max(1);
+        let page_size = crate::db::clamp_page_size(page_size);
         let offset = (page - 1).max(0) * page_size;
 
         if columns.is_empty() {
@@ -374,7 +374,7 @@ fn build_mssql_where_clause(
                 let Some(value) = &filter.value else {
                     continue;
                 };
-                let Some(operator) = mssql_filter_operator(&filter.operator) else {
+                let Some(operator) = filter.operator.comparison_sql() else {
                     continue;
                 };
                 let placeholder = format!("@P{}", param_values.len() + 1);
@@ -391,19 +391,6 @@ fn build_mssql_where_clause(
     }
 }
 
-fn mssql_filter_operator(operator: &FilterOperator) -> Option<&'static str> {
-    match operator {
-        FilterOperator::Eq => Some("="),
-        FilterOperator::Neq => Some("<>"),
-        FilterOperator::Gt => Some(">"),
-        FilterOperator::Lt => Some("<"),
-        FilterOperator::Gte => Some(">="),
-        FilterOperator::Lte => Some("<="),
-        FilterOperator::Like => Some("LIKE"),
-        FilterOperator::IsNull | FilterOperator::IsNotNull => None,
-    }
-}
-
 fn build_mssql_order_clause(
     columns: &[crate::models::ColumnInfo],
     order_by: Option<&str>,
@@ -416,13 +403,11 @@ fn build_mssql_order_clause(
         for part in order_by.split(',') {
             let parts: Vec<&str> = part.split_whitespace().collect();
             let (column, direction) = match parts.as_slice() {
-                [column, direction]
-                    if direction.eq_ignore_ascii_case("ASC")
-                        || direction.eq_ignore_ascii_case("DESC") =>
-                {
-                    (*column, direction.to_ascii_uppercase())
-                }
-                [column] => (*column, "ASC".to_string()),
+                [column, direction] => match crate::db::parse_order_direction(direction) {
+                    Some(d) => (*column, d),
+                    None => continue,
+                },
+                [column] => (*column, "ASC"),
                 _ => continue,
             };
             if valid_columns.contains(column) {
