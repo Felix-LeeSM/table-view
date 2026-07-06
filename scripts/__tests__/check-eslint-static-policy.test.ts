@@ -39,7 +39,7 @@ function connectionPublicApiFixture(extraLines: readonly string[] = []) {
     "export { CONNECTION_COLOR_PALETTE, getConnectionColor } from './color';",
     "export { DUCKDB_FILE_CONNECTION, SQLITE_FILE_CONNECTION } from './fileConnection';",
     "export type { FileConnectionContract, FileConnectionInputContract, FileConnectionInputKind, FileConnectionInputStatus, FileConnectionPermissionScope, FileConnectionPrivacyPolicyId } from './fileConnection';",
-    "export { DATABASE_DEFAULTS, DATABASE_DEFAULT_FIELDS, DATABASE_TYPE_LABELS, ENVIRONMENT_META, ENVIRONMENT_OPTIONS, SUPPORTED_DATABASE_TYPES, createEmptyDraft, draftFromConnection, isSupportedDatabaseType, paradigmOf, parseConnectionUrl, parseFileConnectionPath, parseSqliteFilePath } from './model';",
+    "export { DATABASE_DEFAULTS, DATABASE_DEFAULT_FIELDS, DATABASE_TYPE_LABELS, ENVIRONMENT_META, ENVIRONMENT_OPTIONS, SUPPORTED_DATABASE_TYPES, createEmptyDraft, draftFromConnection, isKvFamily, isSearchFamily, isSupportedDatabaseType, paradigmOf, parseConnectionUrl, parseFileConnectionPath, parseSqliteFilePath } from './model';",
     "export type { ConnectionConfig, ConnectionDefaultFields, ConnectionDraft, ConnectionGroup as ConnectionGroupModel, ConnectionStatus, DatabaseType, EnvironmentTag, FileConnectionDatabaseType, Paradigm } from './model';",
     ...extraLines,
   ].join("\n");
@@ -183,6 +183,8 @@ describe("check-eslint-static-policy", () => {
       "SUPPORTED_DATABASE_TYPES",
       "createEmptyDraft",
       "draftFromConnection",
+      "isKvFamily",
+      "isSearchFamily",
       "isSupportedDatabaseType",
       "paradigmOf",
       "parseConnectionUrl",
