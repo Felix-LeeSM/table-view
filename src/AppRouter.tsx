@@ -14,6 +14,7 @@ import { useMruStore } from "./stores/mruStore";
 import { getCurrentWindowLabel, parseWorkspaceLabel } from "@lib/window-label";
 import { markBootMilestone } from "@lib/perf/bootInstrumentation";
 import { installGlobalErrorToast } from "@lib/runtime/globalErrorToast";
+import { checkForUpdatesOnLaunch } from "@lib/runtime/autoUpdate";
 import { logger } from "@lib/logger";
 
 /**
@@ -153,6 +154,14 @@ function LauncherShell() {
   const loadPersistedMru = useMruStore((s) => s.loadPersistedMru);
 
   useMenuNewConnectionBridge();
+
+  // #1400 — auto-update. Fired once, fire-and-forget, off the boot critical
+  // path: `checkForUpdatesOnLaunch` guards on `isTauri()`, lazy-loads the
+  // updater IPC, and swallows every failure, so it never blocks or delays the
+  // launcher's first paint.
+  useEffect(() => {
+    void checkForUpdatesOnLaunch();
+  }, []);
 
   useEffect(() => {
     loadConnections();

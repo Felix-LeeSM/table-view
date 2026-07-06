@@ -133,6 +133,17 @@ pub fn run() {
     let builder = builder.plugin(tauri_plugin_dialog::init());
     record_phase(&mut cursor, "plugin-dialog-init");
 
+    // #1400 — auto-update. The updater plugin exposes the `check` /
+    // `downloadAndInstall` IPC used by the launcher's boot-time check; the
+    // process plugin exposes `relaunch` to restart into the freshly
+    // installed bundle. Both are pure IPC surfaces — no setup work runs on
+    // the cold-boot critical path.
+    let builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
+    record_phase(&mut cursor, "plugin-updater-init");
+
+    let builder = builder.plugin(tauri_plugin_process::init());
+    record_phase(&mut cursor, "plugin-process-init");
+
     // Sprint 362 (Phase 3, Q3) — single-instance plugin. The plugin's
     // `setup` (see tauri-plugin-single-instance 2.4.2) runs on every
     // launch: if a sibling process already owns the Unix socket / named

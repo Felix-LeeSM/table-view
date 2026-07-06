@@ -43,7 +43,6 @@ be read from `docs/product/README.md` and `docs/ROADMAP.md` first.
 | [0034](./0034-per-tab-connection-affinity-and-native-cancel/memory.md)               | Per-tab connection affinity + native cancel (Q5.x 통합)                                       | Accepted | 2026-05-17 | —          |
 | [0035](./0035-corrupt-recovery-silent-quarantine/memory.md)                          | Corrupt 영속 recovery — silent quarantine + fresh start                                       | Accepted | 2026-05-17 | —          |
 | [0036](./0036-telemetry-zero-collection/memory.md)                                   | Telemetry — 수집 0 명문화 (privacy contract)                                                  | Accepted | 2026-05-17 | —          |
-| [0037](./0037-auto-update-notification-only/memory.md)                               | Auto-update — notification only, no in-app download/install                                   | Accepted | 2026-05-17 | —          |
 | [0038](./0038-theme-safemode-sqlite-sot-ls-fouc-cache/memory.md)                     | Theme/SafeMode SOT — SQLite truth + theme-only LS FOUC cache                                  | Accepted | 2026-05-17 | —          |
 | [0039](./0039-workspace-window-per-connection/memory.md)                             | Workspace window per-connection — TablePlus 패턴 + idempotent open                            | Accepted | 2026-05-17 | —          |
 | [0040](./0040-file-key-os-keyring/memory.md)                                         | File-key OS keyring + 2-phase migration with Linux fallback                                   | Accepted | 2026-05-17 | —          |
@@ -55,6 +54,7 @@ be read from `docs/product/README.md` and `docs/ROADMAP.md` first.
 | [0046](./0046-data-source-profile-capability-architecture/memory.md)                 | data source extension — profile, capability, language, result envelope                        | Accepted | 2026-05-22 | —          |
 | [0047](./0047-keep-duckdb-defer-removal/memory.md)                                   | DuckDB 지원 유지 (제거 보류)                                                                  | Accepted | 2026-07-03 | —          |
 | [0048](./0048-undo-stack-survives-commit-restage-pending/memory.md)                  | undo 스택 commit 생존 — Cmd+Z 는 복원값을 pending 편집으로 재스테이징 (보상 commit 폐기)      | Accepted | 2026-07-05 | 0022       |
+| [0049](./0049-auto-update-full-tauri-updater/memory.md)                              | Auto-update — full in-app tauri-plugin-updater (minisign only, ad-hoc OS signing 유지)        | Accepted | 2026-07-06 | 0037       |
 
 ## 역사 (Superseded / Deprecated)
 
@@ -66,6 +66,7 @@ be read from `docs/product/README.md` and `docs/ROADMAP.md` first.
 | [0020](./0020-e2e-pre-push-host-docker/memory.md)                  | ADR 0019 후속 — pre-push e2e는 host docker로 한정 (tauri-driver macOS 미지원)                                   | Superseded | 2026-05-01 | [0044](./0044-e2e-smoke-remote-required/memory.md)       |
 | [0029](./0029-mongosh-parser-strategy/memory.md)                   | mongosh expression parser — handwritten whitelist (WASM sidecar 미채택)                                         | Superseded | 2026-05-14 | [0043](./0043-mongosh-parser-rust-wasm-sot/memory.md)    |
 | [0022](./0022-safe-mode-destructive-only-confirm-with-dry-run/memory.md) | Safe Mode — destructive 만 confirm + dry-run preview, safe write 는 Cmd+Z 보호 | Superseded | 2026-05-09 | [0048](./0048-undo-stack-survives-commit-restage-pending/memory.md) |
+| [0037](./0037-auto-update-notification-only/memory.md)             | Auto-update — notification only, no in-app download/install                                                     | Superseded | 2026-05-17 | [0049](./0049-auto-update-full-tauri-updater/memory.md)  |
 
 형식:
 

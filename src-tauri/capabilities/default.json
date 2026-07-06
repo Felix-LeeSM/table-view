@@ -7,6 +7,8 @@
     "core:default",
     "core:event:allow-listen",
     "core:event:allow-emit",
-    "dialog:default"
+    "dialog:default",
+    "updater:default",
+    "process:allow-restart"
   ]
 }
