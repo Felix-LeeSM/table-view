@@ -13,18 +13,46 @@
 //! Linux Secret Service 호환은 production `OsKeyringBackend` 의 unit 테스트
 //! 가 별도로 (CI matrix 에서) 다룬다.
 
+use std::ffi::{OsStr, OsString};
 use std::fs;
 use tempfile::TempDir;
 
 use table_view_lib::storage::crypto::{InMemoryKeyringBackend, KeyringBackend, KEYRING_ENTRY_NAME};
 use table_view_lib::storage::key_migration::{migrate_or_initialize, KeySource};
 
+/// RAII env-var guard — restores the prior value (or removes it) on drop so an
+/// assertion panic below can't leak `TABLE_VIEW_TEST_DATA_DIR` into sibling
+/// tests. Mirrors the guard in `key_migration.rs`'s `#[cfg(test)]` module,
+/// which this integration-test binary cannot reach. (#1367)
+struct EnvVarGuard {
+    key: &'static str,
+    prior: Option<OsString>,
+}
+
+impl EnvVarGuard {
+    fn set(key: &'static str, value: impl AsRef<OsStr>) -> Self {
+        let prior = std::env::var_os(key);
+        std::env::set_var(key, value);
+        Self { key, prior }
+    }
+}
+
+impl Drop for EnvVarGuard {
+    fn drop(&mut self) {
+        match &self.prior {
+            Some(value) => std::env::set_var(self.key, value),
+            None => std::env::remove_var(self.key),
+        }
+    }
+}
+
 #[test]
 fn ac_356_01_path_a_new_user_creates_keyring_entry_only() {
     // 격리된 user-data dir — TABLE_VIEW_TEST_DATA_DIR env 로 storage 가
-    // 보는 디렉토리를 override.
+    // 보는 디렉토리를 override. Guard restores the prior value on scope exit
+    // (including panic) so the env var never leaks to sibling tests.
     let dir = TempDir::new().unwrap();
-    std::env::set_var("TABLE_VIEW_TEST_DATA_DIR", dir.path());
+    let _env = EnvVarGuard::set("TABLE_VIEW_TEST_DATA_DIR", dir.path());
 
     let backend = InMemoryKeyringBackend::new_available();
 
@@ -75,7 +103,8 @@ fn ac_356_01_path_a_new_user_creates_keyring_entry_only() {
         "no migration-failed sidecar on Path A"
     );
 
-    // Cleanup
-    std::env::remove_var("TABLE_VIEW_TEST_DATA_DIR");
+    // Cleanup — env var is restored by `_env`'s Drop; TempDir removes the
+    // directory on its own Drop, but do it eagerly so a leftover on failure
+    // is unambiguous.
     let _ = fs::remove_dir_all(dir.path());
 }

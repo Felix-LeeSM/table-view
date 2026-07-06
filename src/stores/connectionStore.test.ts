@@ -130,6 +130,9 @@ beforeEach(() => {
   });
 });
 
+// Purpose: connectionStore CRUD + cross-window sync (SYNCED_KEYS) contract —
+// connection/group lifecycle, activeStatuses, focus fallback (P7 header
+// backfill 2026-07-06, #1367)
 describe("connectionStore", () => {
   beforeEach(() => {
     // Reset store state
@@ -227,11 +230,14 @@ describe("connectionStore", () => {
       paradigm: existing.paradigm,
     });
 
-    // updateConnection replaces with the value returned by saveConnection,
-    // which is mocked to echo the new id. The tauri mock returns "new-id"
-    // for any save, so the local state ends up with "new-id" rather than
-    // the original c1. We just assert the array shape stayed reasonable.
-    expect(useConnectionStore.getState().connections.length).toBeGreaterThan(0);
+    // saveConnection is mocked to echo the draft unchanged when isNew=false
+    // (only inserts get "new-id"). updateConnection maps the matching id to
+    // that echoed value, so the single row keeps id "c1" and picks up the
+    // new name — assert both exactly rather than a "length > 0" shape check.
+    const connections = useConnectionStore.getState().connections;
+    expect(connections).toHaveLength(1);
+    expect(connections[0]!.id).toBe("c1");
+    expect(connections[0]!.name).toBe("Updated");
   });
 
   it("removes connection", async () => {

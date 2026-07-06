@@ -8,7 +8,11 @@ import {
   act,
 } from "@testing-library/react";
 import ConnectionGroup from "./ConnectionGroup";
-import { useConnectionStore } from "@stores/connectionStore";
+import {
+  useConnectionStore,
+  type ConnectionState,
+} from "@stores/connectionStore";
+import { resetStore } from "@/test-utils";
 import type {
   ConnectionConfig,
   ConnectionGroup as ConnectionGroupType,
@@ -184,17 +188,26 @@ const mockUpdateGroup = vi.fn().mockResolvedValue(undefined);
 const mockMoveConnectionToGroup = vi.fn().mockResolvedValue(undefined);
 
 function setStoreState() {
-  useConnectionStore.setState({
+  // Route through the shared resetStore helper so no key leaks between tests.
+  // Seed connections/activeStatuses/groups too — the store's subscribe reads
+  // those on every setState, so they must never be left undefined (#1367).
+  resetStore(useConnectionStore, {
+    connections: [],
+    activeStatuses: {},
+    groups: [],
     removeGroup: mockRemoveGroup,
     updateGroup: mockUpdateGroup,
     moveConnectionToGroup: mockMoveConnectionToGroup,
-  } as Partial<Parameters<typeof useConnectionStore.setState>[0]>);
+  } as Partial<ConnectionState>);
 }
 
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
+// Purpose: ConnectionGroup header (name + count), collapse toggle, rename/
+// remove group, and drag-drop move-connection-to-group affordances (P7
+// header backfill 2026-07-06, #1367)
 describe("ConnectionGroup", () => {
   beforeEach(() => {
     vi.clearAllMocks();

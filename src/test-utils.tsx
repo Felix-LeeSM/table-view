@@ -1,44 +1,5 @@
 import { render, type RenderOptions } from "@testing-library/react";
-import { vi } from "vitest";
 import type { ReactElement } from "react";
-
-/**
- * Create a reusable Tauri IPC mock factory.
- * Each mock function starts as vi.fn() resolving to a sensible default.
- * Override individual functions via the `overrides` parameter.
- */
-export function createTauriMock(
-  overrides: Record<string, ReturnType<typeof vi.fn>> = {},
-) {
-  const defaults: Record<string, ReturnType<typeof vi.fn>> = {
-    listConnections: vi.fn(() => Promise.resolve([])),
-    saveConnection: vi.fn((conn: unknown) => Promise.resolve(conn)),
-    deleteConnection: vi.fn(() => Promise.resolve()),
-    testConnection: vi.fn(() => Promise.resolve("Connection successful")),
-    connectToDatabase: vi.fn(() => Promise.resolve()),
-    disconnectFromDatabase: vi.fn(() => Promise.resolve()),
-    listGroups: vi.fn(() => Promise.resolve([])),
-    saveGroup: vi.fn((group: unknown) => Promise.resolve(group)),
-    deleteGroup: vi.fn(() => Promise.resolve()),
-    moveConnectionToGroup: vi.fn(() => Promise.resolve()),
-    listSchemas: vi.fn(() => Promise.resolve([])),
-    listTables: vi.fn(() => Promise.resolve([])),
-    getTableColumns: vi.fn(() => Promise.resolve([])),
-    queryTableData: vi.fn(() =>
-      Promise.resolve({
-        columns: [],
-        rows: [],
-        total_count: 0,
-        page: 1,
-        page_size: 100,
-        executed_query: "SELECT * FROM test",
-      }),
-    ),
-    getTableIndexes: vi.fn(() => Promise.resolve([])),
-    getTableConstraints: vi.fn(() => Promise.resolve([])),
-  };
-  return { ...defaults, ...overrides };
-}
 
 /**
  * Reset a Zustand store to its initial blank state.
