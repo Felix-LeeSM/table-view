@@ -1,0 +1,4 @@
+# #1368 — `unwrap_used` is a crate-level warn (lib.rs), promoted to a hard error
+# by the `-D warnings` CI/clippy gate. Test code legitimately uses `.unwrap()`
+# for terse assertions, so allow it inside `#[cfg(test)]` / `#[test]` contexts.
+allow-unwrap-in-tests = true

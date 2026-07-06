@@ -1,4 +1,9 @@
 #![deny(unsafe_code)]
+// #1368 — block new `.unwrap()` in production paths. `-D warnings` (CI + local
+// clippy gate) turns this into a hard error; `allow-unwrap-in-tests = true`
+// (clippy.toml) keeps test-code unwraps legal. Existing production violations
+// are either fixed or carry a scoped `#[allow(clippy::unwrap_used)]` + reason.
+#![warn(clippy::unwrap_used)]
 
 pub mod commands;
 pub mod db;
