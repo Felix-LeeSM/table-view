@@ -48,6 +48,8 @@ export const en = {
     tsv: "TSV",
     sql: "SQL INSERT",
     json: "JSON",
+    cancelAria: "Cancel export",
+    cancelTooltip: "Stop export",
   },
 
   // Logo
@@ -196,6 +198,8 @@ export const ko = {
     tsv: "TSV",
     sql: "SQL INSERT",
     json: "JSON",
+    cancelAria: "내보내기 취소",
+    cancelTooltip: "내보내기 중지",
   },
 
   // Logo

@@ -9,10 +9,15 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const explainRdbMock = vi.fn();
 const explainMongoMock = vi.fn();
+const cancelQueryMock = vi.fn();
 
 vi.mock("@/lib/api/explain", () => ({
   explainRdbQuery: (...args: unknown[]) => explainRdbMock(...args),
   explainMongoFind: (...args: unknown[]) => explainMongoMock(...args),
+}));
+
+vi.mock("@/lib/tauri", () => ({
+  cancelQuery: (...args: unknown[]) => cancelQueryMock(...args),
 }));
 
 import { ExplainViewer } from "./ExplainViewer";
@@ -21,6 +26,8 @@ describe("ExplainViewer (Sprint 337 U2 live wire)", () => {
   beforeEach(() => {
     explainRdbMock.mockReset();
     explainMongoMock.mockReset();
+    cancelQueryMock.mockReset();
+    cancelQueryMock.mockResolvedValue("cancelled");
   });
 
   it("renders a readable PostgreSQL plan after explain_rdb_query resolves", async () => {
@@ -62,7 +69,12 @@ describe("ExplainViewer (Sprint 337 U2 live wire)", () => {
     await waitFor(() =>
       expect(screen.getByTestId("explain-plan")).toBeInTheDocument(),
     );
-    expect(explainRdbMock).toHaveBeenCalledWith("conn-pg", "SELECT 1", "app");
+    expect(explainRdbMock).toHaveBeenCalledWith(
+      "conn-pg",
+      "SELECT 1",
+      "app",
+      expect.stringMatching(/^explain-/),
+    );
     expect(screen.getByTestId("explain-plan-summary")).toHaveTextContent(
       "Plan Summary",
     );
@@ -112,12 +124,16 @@ describe("ExplainViewer (Sprint 337 U2 live wire)", () => {
     await waitFor(() =>
       expect(screen.getByTestId("explain-plan")).toBeInTheDocument(),
     );
-    expect(explainMongoMock).toHaveBeenCalledWith("conn-m", {
-      database: "mydb",
-      collection: "mycoll",
-      filter: { x: 1 },
-      verbosity: "executionStats",
-    });
+    expect(explainMongoMock).toHaveBeenCalledWith(
+      "conn-m",
+      {
+        database: "mydb",
+        collection: "mycoll",
+        filter: { x: 1 },
+        verbosity: "executionStats",
+      },
+      expect.stringMatching(/^explain-/),
+    );
     expect(screen.queryByTestId("explain-plan-summary")).toBeNull();
     expect(screen.getByTestId("explain-plan")).toHaveTextContent("winningPlan");
   });
@@ -229,6 +245,42 @@ describe("ExplainViewer (Sprint 337 U2 live wire)", () => {
         executedAt: expect.any(Number),
       }),
     );
+  });
+
+  // #1269 — while a plan is in flight the Refresh control becomes a Stop
+  // button that fires the same cooperative `cancelQuery` the query tab uses,
+  // keyed by the id threaded into the explain call. A cancel-induced rejection
+  // is swallowed (no error alert).
+  it("shows a Stop button while loading and fires cancelQuery on click", async () => {
+    let rejectExplain: (reason: unknown) => void = () => {};
+    explainRdbMock.mockReturnValueOnce(
+      new Promise((_resolve, reject) => {
+        rejectExplain = reject;
+      }),
+    );
+    const user = userEvent.setup();
+    render(
+      <ExplainViewer
+        connectionId="conn-pg"
+        dbType="postgresql"
+        rdbSql="SELECT 1"
+      />,
+    );
+
+    const stop = await screen.findByTestId("explain-cancel");
+    expect(screen.queryByTestId("explain-refresh")).toBeNull();
+
+    await user.click(stop);
+    expect(cancelQueryMock).toHaveBeenCalledTimes(1);
+    expect(cancelQueryMock.mock.calls[0]![0]).toMatch(/^explain-/);
+
+    // The backend aborts the awaited plan; the viewer must return to idle
+    // without surfacing an error alert.
+    rejectExplain(new Error("Database error: Operation cancelled"));
+    await waitFor(() =>
+      expect(screen.getByTestId("explain-refresh")).toBeInTheDocument(),
+    );
+    expect(screen.queryByRole("alert")).toBeNull();
   });
 
   it("re-fetches when Refresh is clicked", async () => {

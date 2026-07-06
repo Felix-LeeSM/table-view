@@ -9,11 +9,14 @@ export async function explainRdbQuery(
   connectionId: string,
   sql: string,
   expectedDatabase?: string,
+  // #1269 — cooperative cancel id; `cancelQuery(queryId)` aborts a slow plan.
+  queryId?: string,
 ): Promise<unknown> {
   return invoke<unknown>("explain_rdb_query", {
     connectionId,
     sql,
     expectedDatabase: expectedDatabase ?? null,
+    queryId: queryId ?? null,
   });
 }
 
@@ -27,6 +30,8 @@ export interface ExplainMongoFindArgs {
 export async function explainMongoFind(
   connectionId: string,
   args: ExplainMongoFindArgs,
+  // #1269 — cooperative cancel id; `cancelQuery(queryId)` aborts a slow plan.
+  queryId?: string,
 ): Promise<unknown> {
   return invoke<unknown>("explain_mongo_find", {
     connectionId,
@@ -34,5 +39,6 @@ export async function explainMongoFind(
     collection: args.collection,
     filter: args.filter ?? {},
     verbosity: args.verbosity ?? "queryPlanner",
+    queryId: queryId ?? null,
   });
 }

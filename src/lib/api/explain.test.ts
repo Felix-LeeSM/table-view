@@ -22,6 +22,20 @@ describe("Explain Tauri wrappers", () => {
       connectionId: "conn-1",
       sql: "SELECT 1",
       expectedDatabase: "app",
+      queryId: null,
+    });
+  });
+
+  it("threads the cooperative cancel queryId through PostgreSQL explain IPC", async () => {
+    invokeMock.mockResolvedValueOnce([{ Plan: { "Node Type": "Seq Scan" } }]);
+
+    await explainRdbQuery("conn-1", "SELECT 1", "app", "explain-42");
+
+    expect(invokeMock).toHaveBeenCalledWith("explain_rdb_query", {
+      connectionId: "conn-1",
+      sql: "SELECT 1",
+      expectedDatabase: "app",
+      queryId: "explain-42",
     });
   });
 
@@ -34,6 +48,7 @@ describe("Explain Tauri wrappers", () => {
       connectionId: "conn-1",
       sql: "SELECT 1",
       expectedDatabase: null,
+      queryId: null,
     });
   });
 
@@ -53,6 +68,26 @@ describe("Explain Tauri wrappers", () => {
       collection: "users",
       filter: { active: true },
       verbosity: "executionStats",
+      queryId: null,
+    });
+  });
+
+  it("threads the cooperative cancel queryId through Mongo explain IPC", async () => {
+    invokeMock.mockResolvedValueOnce({ ok: 1 });
+
+    await explainMongoFind(
+      "conn-m",
+      { database: "db", collection: "users" },
+      "explain-7",
+    );
+
+    expect(invokeMock).toHaveBeenCalledWith("explain_mongo_find", {
+      connectionId: "conn-m",
+      database: "db",
+      collection: "users",
+      filter: {},
+      verbosity: "queryPlanner",
+      queryId: "explain-7",
     });
   });
 });

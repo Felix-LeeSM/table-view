@@ -573,7 +573,9 @@ describe("QueryResultGrid", () => {
         [2, null],
       ],
       { kind: "query", source_table: null },
-      null,
+      // #1269 — ExportButton now mints a cancel-token id per run so the Stop
+      // button can abort the export.
+      expect.stringMatching(/^export-/),
     );
   });
 

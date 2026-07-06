@@ -391,20 +391,37 @@ async fn explain_mongo_find_inner(
     collection: &str,
     filter: bson::Document,
     verbosity: &str,
+    // Issue #1269 — optional cooperative cancel id (see `explain_rdb_query`).
+    // Cooperative only: `cancel_query(query_id)` drops the client-side await;
+    // the server op is not natively killed.
+    query_id: Option<&str>,
 ) -> Result<serde_json::Value, AppError> {
     if collection.trim().is_empty() {
         return Err(AppError::Validation(
             "Collection name must not be empty".into(),
         ));
     }
-    let active = state
-        .active_adapter(connection_id)
-        .await
-        .ok_or_else(|| not_connected(connection_id))?;
-    active
-        .as_document()?
-        .explain_query(database, collection, filter, verbosity)
-        .await
+    let cancel_handle = register_cancel_token(state, query_id).await;
+    let result = async {
+        let active = state
+            .active_adapter(connection_id)
+            .await
+            .ok_or_else(|| not_connected(connection_id))?;
+        let doc = active.as_document()?;
+        match cancel_handle.as_ref().map(|(_, tok)| tok) {
+            Some(token) => tokio::select! {
+                r = doc.explain_query(database, collection, filter, verbosity) => r,
+                _ = token.cancelled() => Err(AppError::Database("Operation cancelled".into())),
+            },
+            None => {
+                doc.explain_query(database, collection, filter, verbosity)
+                    .await
+            }
+        }
+    }
+    .await;
+    release_cancel_token(state, &cancel_handle).await;
+    result
 }
 
 /// Sprint 337 (U2 live wire) — Mongo `runCommand({explain: {find, filter},
@@ -418,6 +435,7 @@ pub async fn explain_mongo_find(
     collection: String,
     filter: Option<bson::Document>,
     verbosity: Option<String>,
+    query_id: Option<String>,
 ) -> Result<serde_json::Value, AppError> {
     explain_mongo_find_inner(
         state.inner(),
@@ -426,6 +444,7 @@ pub async fn explain_mongo_find(
         &collection,
         filter.unwrap_or_default(),
         verbosity.as_deref().unwrap_or("queryPlanner"),
+        query_id.as_deref(),
     )
     .await
 }
@@ -939,6 +958,7 @@ mod tests {
             "  ",
             bson::Document::new(),
             "queryPlanner",
+            None,
         )
         .await
         {
@@ -959,6 +979,7 @@ mod tests {
             "c",
             bson::Document::new(),
             "queryPlanner",
+            None,
         )
         .await
         {
@@ -977,7 +998,8 @@ mod tests {
                 "db",
                 "c",
                 bson::Document::new(),
-                "queryPlanner"
+                "queryPlanner",
+                None
             )
             .await,
             Err(AppError::Unsupported(_))
@@ -1006,6 +1028,7 @@ mod tests {
             "mycoll",
             bson::Document::new(),
             "executionStats",
+            None,
         )
         .await
         .unwrap();

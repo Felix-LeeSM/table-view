@@ -3,10 +3,11 @@
 // component. PostgreSQL plans render a compact summary/tree, with raw JSON
 // retained for fallback and troubleshooting.
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Loader2, RefreshCw } from "lucide-react";
+import { Loader2, RefreshCw, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { cancelQuery } from "@/lib/tauri";
 import {
   describePostgresPlanNode,
   describePostgresPlanTiming,
@@ -65,8 +66,14 @@ export function ExplainViewer({
   const [plan, setPlan] = useState<unknown>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // #1269 — id of the in-flight plan so the Stop button can fire the same
+  // cooperative `cancelQuery` the query tab uses. Held in a ref (not state) so
+  // cancelling never re-renders and the id survives the refresh closure.
+  const queryIdRef = useRef<string | null>(null);
 
   const refresh = useCallback(async () => {
+    const queryId = `explain-${crypto.randomUUID()}`;
+    queryIdRef.current = queryId;
     const startedAt = Date.now();
     setLoading(true);
     setError(null);
@@ -79,8 +86,14 @@ export function ExplainViewer({
                 database: "",
                 collection: "",
               },
+              queryId,
             )
-          : await explainRdbQuery(connectionId, rdbSql ?? "", expectedDatabase);
+          : await explainRdbQuery(
+              connectionId,
+              rdbSql ?? "",
+              expectedDatabase,
+              queryId,
+            );
       setPlan(next);
       await onPlanSettled?.({
         status: "success",
@@ -89,6 +102,11 @@ export function ExplainViewer({
       });
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
+      // #1269 — a user-initiated cancel is not an error: swallow it so the
+      // viewer just returns to idle (no red alert, no error-logged plan).
+      if (/cancel/i.test(message)) {
+        return;
+      }
       setError(message);
       await onPlanSettled?.({
         status: "error",
@@ -98,6 +116,7 @@ export function ExplainViewer({
       });
     } finally {
       setLoading(false);
+      queryIdRef.current = null;
     }
   }, [
     connectionId,
@@ -107,6 +126,14 @@ export function ExplainViewer({
     mongoSpec,
     onPlanSettled,
   ]);
+
+  const cancel = useCallback(() => {
+    const id = queryIdRef.current;
+    if (id === null) return;
+    void cancelQuery(id).catch(() => {
+      // Best-effort — a plan that already settled has no token to fire.
+    });
+  }, []);
 
   useEffect(() => {
     void refresh();
@@ -132,20 +159,33 @@ export function ExplainViewer({
         <span>
           {t("explain.header", { paradigm: DATABASE_TYPE_LABELS[dbType] })}
         </span>
-        <Button
-          variant="ghost"
-          size="sm"
-          data-testid="explain-refresh"
-          onClick={() => void refresh()}
-          disabled={loading}
-        >
-          {loading ? (
+        {loading ? (
+          // #1269 — same Stop affordance as the query tab. Cooperative-only:
+          // the client stops awaiting the plan (see tooltip); the server op is
+          // not natively killed.
+          <Button
+            variant="ghost"
+            size="sm"
+            data-testid="explain-cancel"
+            onClick={cancel}
+            aria-label={t("explain.cancelAria")}
+            title={t("explain.cancelTooltip")}
+          >
+            <Square className="text-destructive" size={12} aria-hidden />
             <Loader2 className="animate-spin" size={12} aria-hidden />
-          ) : (
+            {t("explain.cancel")}
+          </Button>
+        ) : (
+          <Button
+            variant="ghost"
+            size="sm"
+            data-testid="explain-refresh"
+            onClick={() => void refresh()}
+          >
             <RefreshCw size={12} aria-hidden />
-          )}
-          {t("explain.refresh")}
-        </Button>
+            {t("explain.refresh")}
+          </Button>
+        )}
       </header>
 
       {paradigm === "document" && mongoHasIgnoredClauses && (

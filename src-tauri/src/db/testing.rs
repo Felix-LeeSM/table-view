@@ -148,6 +148,11 @@ pub(crate) struct StubRdbAdapter {
     pub explain_query_fn:
         Option<Box<dyn Fn(&str) -> Result<serde_json::Value, AppError> + Send + Sync>>,
 
+    // Issue #1269 — optional (entered, release) gate for `explain_query`, so a
+    // test can park the trait future and assert cooperative cancel mid-flight.
+    // Mirrors `execute_sql_gate`.
+    pub explain_query_gate: Option<(Arc<Notify>, Arc<Notify>)>,
+
     // Sprint 338 — override slot for RDB collection_stats.
     pub collection_stats_fn: Option<FnTwo<str, str, crate::models::CollectionStatsRow>>,
 
@@ -206,6 +211,7 @@ impl Default for StubRdbAdapter {
             list_server_activity_fn: None,
             kill_session_fn: None,
             explain_query_fn: None,
+            explain_query_gate: None,
             collection_stats_fn: None,
             server_info_fn: None,
             slow_queries_fn: None,
@@ -659,7 +665,14 @@ impl RdbAdapter for StubRdbAdapter {
             .explain_query_fn
             .as_ref()
             .map_or_else(|| Ok(serde_json::Value::Null), |f| f(sql));
-        Box::pin(async move { r })
+        let gate = self.explain_query_gate.clone();
+        Box::pin(async move {
+            if let Some((entered, release)) = gate {
+                entered.notify_one();
+                release.notified().await;
+            }
+            r
+        })
     }
 
     // Sprint 338 — collection_stats stub.
