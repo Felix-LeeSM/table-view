@@ -28,6 +28,7 @@ import {
 import { viewTableHighlightStyle } from "@lib/editor/highlightStyle";
 import { autocompleteTooltipTheme } from "@lib/editor/autocompleteTheme";
 import { editorContentAria } from "@lib/editor/editorContentAria";
+import { hideGutterFromA11y } from "@lib/editor/hideGutterFromA11y";
 import { setForwardedRef } from "@lib/editor/setForwardedRef";
 import { syncEditorDocument } from "./editorDocumentSync";
 
@@ -244,6 +245,8 @@ const SqlQueryEditor = forwardRef<EditorView | null, SqlQueryEditorProps>(
       });
 
       viewRef.current = view;
+      // #1142 — line-number gutter is decorative; hide it from the a11y tree.
+      hideGutterFromA11y(view);
       // Expose the live EditorView to the parent's forwarded ref. Assigned
       // here (not via useImperativeHandle) so the parent sees the real view;
       // the layout-phase handle would snapshot null before this effect (#1248).

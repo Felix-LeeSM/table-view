@@ -20,6 +20,7 @@ import { autocompletion, acceptCompletion } from "@codemirror/autocomplete";
 import { viewTableHighlightStyle } from "@lib/editor/highlightStyle";
 import { autocompleteTooltipTheme } from "@lib/editor/autocompleteTheme";
 import { editorContentAria } from "@lib/editor/editorContentAria";
+import { hideGutterFromA11y } from "@lib/editor/hideGutterFromA11y";
 import { setForwardedRef } from "@lib/editor/setForwardedRef";
 import { syncEditorDocument } from "./editorDocumentSync";
 
@@ -200,6 +201,8 @@ const MongoQueryEditor = forwardRef<EditorView | null, MongoQueryEditorProps>(
       });
 
       viewRef.current = view;
+      // #1142 — line-number gutter is decorative; hide it from the a11y tree.
+      hideGutterFromA11y(view);
       // Expose the live EditorView to the parent's forwarded ref (#1248).
       setForwardedRef(ref, view);
       // #1133 — unified mount focus across all four query editors so a freshly

@@ -13,6 +13,7 @@ import {
 } from "@codemirror/language";
 import { acceptCompletion } from "@codemirror/autocomplete";
 import { autocompleteTooltipTheme } from "@lib/editor/autocompleteTheme";
+import { hideGutterFromA11y } from "@lib/editor/hideGutterFromA11y";
 import { Button } from "@components/ui/button";
 import { Input } from "@components/ui/input";
 import { ToggleGroup, ToggleGroupItem } from "@components/ui/toggle-group";
@@ -545,6 +546,8 @@ function RawMqlEditor({
 
     const view = new EditorView({ state, parent: containerEl });
     viewRef.current = view;
+    // #1142 — line-number gutter is decorative; hide it from the a11y tree.
+    hideGutterFromA11y(view);
 
     return () => {
       view.destroy();

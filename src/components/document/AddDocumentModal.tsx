@@ -16,6 +16,7 @@ import FormDialog from "@components/ui/dialog/FormDialog";
 import { useMongoAutocomplete } from "@features/completion";
 import { useDocumentCatalogStore } from "@stores/documentCatalogStore";
 import { autocompleteTooltipTheme } from "@lib/editor/autocompleteTheme";
+import { hideGutterFromA11y } from "@lib/editor/hideGutterFromA11y";
 
 /**
  * Lightweight JSON editor for inserting a single document. Parses on
@@ -207,6 +208,8 @@ export default function AddDocumentModal({
       parent: containerEl,
     });
     viewRef.current = view;
+    // #1142 — line-number gutter is decorative; hide it from the a11y tree.
+    hideGutterFromA11y(view);
 
     // Focus the editor on mount so users can start typing immediately — the
     // same affordance the textarea offered via autoFocus. jsdom does not
