@@ -57,6 +57,12 @@ export interface RawQueryGridEditStore {
     slice: K,
     value: RawPendingEntry[K],
   ) => void;
+  /**
+   * #1364 — does any entry keyed under `keyPrefix` hold real pending content?
+   * Owns the raw-grid dirty predicate (edits / deletes — no INSERT slice) so
+   * whole-connection close gates call it instead of re-deriving it.
+   */
+  hasDirtyEntries: (keyPrefix: string) => boolean;
   purgeKey: (key: string) => void;
   purgeForConnection: (connectionId: string) => void;
 }
@@ -66,6 +72,19 @@ export const useRawQueryGridEditStore = create<RawQueryGridEditStore>(
     entries: new Map<string, RawPendingEntry>(),
 
     getEntry: (key) => get().entries.get(key) ?? EMPTY_RAW_ENTRY,
+
+    hasDirtyEntries: (keyPrefix) => {
+      for (const [key, entry] of get().entries) {
+        if (!key.startsWith(keyPrefix)) continue;
+        if (
+          entry.pendingEdits.size > 0 ||
+          entry.pendingDeletedRowKeys.size > 0
+        ) {
+          return true;
+        }
+      }
+      return false;
+    },
 
     setSlice: (key, slice, value) =>
       set((state) => {
