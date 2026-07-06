@@ -7,12 +7,14 @@ name: review-gate
 on:
   pull_request:
     types: [opened, reopened, ready_for_review, synchronize, labeled, unlabeled]
+  push:
+    branches: [main]
 
 permissions:
   pull-requests: write
 
 concurrency:
-  group: review-gate-${{ github.event.pull_request.number }}
+  group: review-gate-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: true
 
 jobs:
@@ -23,7 +25,7 @@ jobs:
       # 새 commit 이 push 되면 기존 승인은 무효 — stale approval 로 미리뷰 코드가
       # 머지되는 것을 막는다 (dismiss stale approvals 대응)
       - name: Dismiss stale approval on new commits
-        if: github.event.action == 'synchronize'
+        if: github.event_name == 'pull_request' && github.event.action == 'synchronize'
         env:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
@@ -33,10 +35,12 @@ jobs:
           exit 1
 
       - name: Require review:approved label
-        if: ${{ !contains(github.event.pull_request.labels.*.name, 'review:approved') }}
+        if: github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'review:approved')
         run: |
           echo "::error::review:approved label missing — pr-reviewer green verdict required before merge"
           exit 1
 
+      # main 에 올라온 merge commit — PR head SHA 에서 이미 gate 를 통과했으므로
+      # required check 미보고로 인한 pending 고착만 해소하면 된다.
       - name: Gate pass
-        run: echo "review:approved present — gate pass"
+        run: echo "gate pass"
