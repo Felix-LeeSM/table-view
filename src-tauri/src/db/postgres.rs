@@ -539,6 +539,14 @@ impl RdbAdapter for PostgresAdapter {
     {
         Box::pin(async move { self.server_info().await })
     }
+
+    fn list_database_users<'a>(
+        &'a self,
+    ) -> Pin<
+        Box<dyn Future<Output = Result<Vec<crate::models::DatabaseUserRow>, AppError>> + Send + 'a>,
+    > {
+        Box::pin(async move { self.list_database_users().await })
+    }
 }
 
 #[cfg(test)]

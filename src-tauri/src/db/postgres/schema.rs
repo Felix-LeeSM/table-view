@@ -123,6 +123,22 @@ pub(crate) const TRIGGER_TYPE_UPDATE: i16 = 0x10;
 pub(crate) const TRIGGER_TYPE_TRUNCATE: i16 = 0x20;
 pub(crate) const TRIGGER_TYPE_INSTEAD: i16 = 0x40;
 
+/// Issue #1077 Stage 2 — read-only users/roles listing. Sourced from the
+/// `pg_roles` catalog VIEW, which masks `rolpassword` as `********` and never
+/// exposes the password hash. `pg_authid` / `pg_shadow` (which DO carry the
+/// hash) are intentionally NOT referenced — see the `pg_users_query_*` guard
+/// tests that fail if this string ever reaches for a secret catalog.
+pub(crate) const PG_USERS_QUERY: &str = "SELECT r.rolname, r.rolcanlogin, r.rolsuper, \
+            r.rolcreatedb, r.rolcreaterole, r.rolreplication, \
+            r.rolconnlimit::bigint, \
+            to_char(r.rolvaliduntil AT TIME ZONE 'UTC', \
+                    'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"') AS valid_until, \
+            COALESCE(ARRAY(SELECT b.rolname FROM pg_auth_members m \
+                          JOIN pg_roles b ON m.roleid = b.oid \
+                          WHERE m.member = r.oid ORDER BY b.rolname), '{}') AS member_of \
+     FROM pg_roles r \
+     ORDER BY r.rolname";
+
 /// Decoded view of one `pg_trigger.tgtype` int2 bitmask. `timing` and
 /// `orientation` are static keywords; `events` carries the user-facing
 /// subset of `["INSERT", "UPDATE", "DELETE"]` (TRUNCATE intentionally
@@ -1378,6 +1394,61 @@ impl PostgresAdapter {
         })
     }
 
+    /// Issue #1077 Stage 2 — read-only users/roles listing from `pg_roles`.
+    /// `pg_roles` masks passwords (`rolpassword` shows `********`), so no
+    /// secret column crosses the IPC boundary. `rolvaliduntil` is rendered to
+    /// ISO-8601 text server-side (`to_char`) to avoid a `chrono` dependency,
+    /// mirroring `list_server_activity`. `member_of` aggregates the role's
+    /// group memberships via `pg_auth_members`.
+    pub async fn list_database_users(
+        &self,
+    ) -> Result<Vec<crate::models::DatabaseUserRow>, AppError> {
+        #[allow(clippy::type_complexity)]
+        type Row = (
+            String,
+            bool,
+            bool,
+            bool,
+            bool,
+            bool,
+            i64,
+            Option<String>,
+            Vec<String>,
+        );
+        let pool = self.active_pool().await?;
+        let rows: Vec<Row> = sqlx::query_as(PG_USERS_QUERY)
+            .fetch_all(&pool)
+            .await
+            .map_err(|e| AppError::Database(format!("pg_roles listing failed: {e}")))?;
+
+        Ok(rows
+            .into_iter()
+            .map(
+                |(
+                    name,
+                    can_login,
+                    is_superuser,
+                    can_create_db,
+                    can_create_role,
+                    replication,
+                    conn_limit,
+                    valid_until,
+                    member_of,
+                )| crate::models::DatabaseUserRow {
+                    name,
+                    can_login,
+                    is_superuser,
+                    can_create_db,
+                    can_create_role,
+                    replication,
+                    conn_limit,
+                    valid_until,
+                    member_of,
+                },
+            )
+            .collect())
+    }
+
     /// Sprint 338 (U3 live wire) — table stats from
     /// `pg_stat_user_tables` + `pg_total_relation_size`. Identifiers
     /// are validated by the shared `validate_identifier` helper before
@@ -1745,6 +1816,45 @@ mod tests {
             }
             other => panic!("expected Connection, got ok? {}", other.is_ok()),
         }
+    }
+
+    // Issue #1077 Stage 2 — list_database_users takes no parameters, so only
+    // the no-connection path is unit-reachable; the real pg_roles shape is
+    // covered by integration tests.
+    #[tokio::test]
+    async fn list_database_users_without_connection_fails() {
+        let adapter = PostgresAdapter::new();
+        match adapter.list_database_users().await {
+            Err(AppError::Connection(msg)) => {
+                assert!(msg.contains("Not connected"), "unexpected: {msg}");
+            }
+            other => panic!("expected Connection, got ok? {}", other.is_ok()),
+        }
+    }
+
+    // Issue #1077 Stage 2 SECURITY — the users/roles query must read from the
+    // `pg_roles` VIEW (which masks `rolpassword` as `********`) and must NEVER
+    // reach for `pg_authid` / `pg_shadow` or select a raw `rolpassword`, which
+    // carry the password hash. This fixture fails if the query ever regresses
+    // toward a secret catalog.
+    #[test]
+    fn pg_users_query_never_reads_secret_catalog() {
+        assert!(
+            PG_USERS_QUERY.contains("pg_roles"),
+            "must source the password-masked pg_roles view"
+        );
+        assert!(
+            !PG_USERS_QUERY.contains("pg_authid"),
+            "pg_authid carries the password hash — must not be referenced"
+        );
+        assert!(
+            !PG_USERS_QUERY.contains("pg_shadow"),
+            "pg_shadow carries the password hash — must not be referenced"
+        );
+        assert!(
+            !PG_USERS_QUERY.contains("rolpassword"),
+            "rolpassword is the credential column — must not be selected"
+        );
     }
     // ── Sprint 230 — list_types SQL builder fixture ────────────────────
 

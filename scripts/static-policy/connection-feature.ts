@@ -15,6 +15,7 @@ export const CONNECTION_FEATURE_PUBLIC_API_EXPORTS = [
   "KeyringFallbackToast",
   "ServerActivityPanel",
   "ServerInfoPanel",
+  "DatabaseUsersPanel",
   "useConnectionMutations",
   "useConnectionStore",
   "SYNCED_KEYS",

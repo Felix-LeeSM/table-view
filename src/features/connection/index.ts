@@ -15,6 +15,7 @@ export { DbLifecycleDialog } from "./components/DbLifecycleDialog";
 export { KeyringFallbackToast } from "./components/KeyringFallbackToast";
 export { ServerActivityPanel } from "./components/ServerActivityPanel";
 export { ServerInfoPanel } from "./components/ServerInfoPanel";
+export { DatabaseUsersPanel } from "./components/DatabaseUsersPanel";
 export { useConnectionMutations } from "@lib/runtime/connection/useConnectionMutations";
 export { useConnectionStore, SYNCED_KEYS } from "./store";
 export type { ConnectionState } from "./store";

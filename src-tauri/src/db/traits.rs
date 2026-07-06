@@ -818,6 +818,21 @@ pub trait RdbAdapter: DbAdapter {
             ))
         })
     }
+
+    /// Issue #1077 Stage 2 — read-only accounts/permissions listing. PG
+    /// override queries the `pg_roles` catalog view (which masks passwords);
+    /// non-PG RDB adapters inherit `Unsupported` (PG-first parity lane). This
+    /// default is the backend capability gate — an engine without an override
+    /// cannot serve the panel even if the frontend forgot to hide it.
+    fn list_database_users<'a>(
+        &'a self,
+    ) -> BoxFuture<'a, Result<Vec<crate::models::DatabaseUserRow>, AppError>> {
+        Box::pin(async {
+            Err(AppError::Unsupported(
+                "This adapter does not support users/roles introspection".into(),
+            ))
+        })
+    }
 }
 
 // ── DocumentAdapter (Phase 6 placeholder — signatures only) ───────────────

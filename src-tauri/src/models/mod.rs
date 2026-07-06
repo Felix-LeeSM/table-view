@@ -25,8 +25,8 @@ pub use file_analytics::{
     FileAnalyticsSourceMetadata,
 };
 pub use query::{
-    CollectionStatsRow, ColumnCategory, QueryColumn, QueryResult, QueryType, ServerActivityRow,
-    ServerInfoRow, SlowQueryRow,
+    CollectionStatsRow, ColumnCategory, DatabaseUserRow, QueryColumn, QueryResult, QueryType,
+    ServerActivityRow, ServerInfoRow, SlowQueryRow,
 };
 pub use rdbms_data_sources::{
     FILE_RDBMS_DATABASE_TYPES, RDBMS_DATABASE_TYPES, RUNTIME_RDBMS_DATABASE_TYPES,
