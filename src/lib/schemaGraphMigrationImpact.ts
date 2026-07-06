@@ -10,7 +10,7 @@ import type {
   SchemaGraphForeignKeySelection,
   SchemaGraphIntelligenceSelectors,
   SchemaGraphTableMetadataReadiness,
-} from "./schemaGraphSelectors";
+} from "./schemaGraphSelectorTypes";
 
 export type SchemaGraphMigrationRemovalTarget =
   | { readonly kind: "table"; readonly tableId: string }

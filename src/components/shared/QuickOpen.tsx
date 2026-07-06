@@ -9,7 +9,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@components/ui/dialog";
-import type { UnlistenFn } from "@tauri-apps/api/event";
+import { useTauriListener } from "@hooks/useTauriListener";
 import { useSchemaStore } from "@stores/schemaStore";
 import { useConnectionStore } from "@stores/connectionStore";
 import { resolveRdbTreeShape } from "@components/schema/treeShape";
@@ -214,28 +214,14 @@ export default function QuickOpen() {
   // #1235 — cross-window receiver: a Quick Open pick in another window that
   // targets THIS window's connection arrives as a Tauri event; convert it back
   // into the local DOM CustomEvent the in-window handlers already consume.
-  useEffect(() => {
-    if (sidebarConnId === null) return;
-    let unlisten: UnlistenFn | undefined;
-    // #1261 — `listen()` is async; a Back navigation can tear the window down
-    // before it resolves. Without this guard the cleanup runs while `unlisten`
-    // is still undefined, leaking a live intent listener onto a destroyed
-    // webview (the `no such window` e2e crash). If teardown already happened,
-    // unlisten the moment the pending listen resolves.
-    let cancelled = false;
-    void subscribeIntents(sidebarConnId)
-      .then((fn) => {
-        if (cancelled) fn();
-        else unlisten = fn;
-      })
-      .catch(() => {
-        // Tauri runtime unavailable (jsdom) — no cross-window delivery to wire.
-      });
-    return () => {
-      cancelled = true;
-      unlisten?.();
-    };
-  }, [sidebarConnId]);
+  // #1261/#1370 — `listen()` is async; a Back navigation can tear the window
+  // down before it resolves, leaking a live intent listener onto a destroyed
+  // webview (the `no such window` e2e crash). useTauriListener owns that
+  // cancel-safe teardown; `null` when there is no connection to subscribe for.
+  useTauriListener(
+    sidebarConnId === null ? null : () => subscribeIntents(sidebarConnId),
+    [sidebarConnId],
+  );
 
   // Deterministic ranking + subsequence fuzzy + `schema.name` scoping. Empty
   // query returns the inventory unchanged. See quickOpenRanking.ts.

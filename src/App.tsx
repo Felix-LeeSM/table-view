@@ -27,6 +27,7 @@ import { useActiveTabConnection } from "./hooks/useActiveTabConnection";
 import { destroyCurrentWindow } from "./lib/window-controls";
 import { getCurrentWindowLabel, parseWorkspaceLabel } from "./lib/window-label";
 import { listen } from "@tauri-apps/api/event";
+import { useTauriListener } from "./hooks/useTauriListener";
 
 export default function App() {
   const loadConnections = useConnectionStore((s) => s.loadConnections);
@@ -130,23 +131,15 @@ export default function App() {
   // intercept via `win.close()`. Here we run the shared discard
   // confirmation over the whole window's dirty tabs, then destroy on
   // confirm (`destroyCurrentWindow` → backend `workspace_close`).
-  useEffect(() => {
-    let unlisten: (() => void) | null = null;
-    let cancelled = false;
-    void (async () => {
-      const fn = await listen("window:close-requested", () => {
+  useTauriListener(
+    () =>
+      listen("window:close-requested", () => {
         confirmDiscard(windowHasDirtyRef.current, () => {
           void destroyCurrentWindow();
         });
-      });
-      if (cancelled) fn();
-      else unlisten = fn;
-    })();
-    return () => {
-      cancelled = true;
-      if (unlisten) unlisten();
-    };
-  }, [confirmDiscard]);
+      }),
+    [confirmDiscard],
+  );
 
   // Cmd+T / Ctrl+T — new query tab
   useEffect(() => {
@@ -263,11 +256,9 @@ export default function App() {
   // 발사하는 `menu:new-query-tab` 수신. user journey: workspace focused +
   // Cmd+N → backend dispatcher 가 이 window 에 emit → raw query tab 열림.
   // 빈 탭 상태에서도 동작 — workspace label 의 conn id 를 추출해 addQueryTab.
-  useEffect(() => {
-    let unlisten: (() => void) | null = null;
-    let cancelled = false;
-    void (async () => {
-      const fn = await listen("menu:new-query-tab", () => {
+  useTauriListener(
+    () =>
+      listen("menu:new-query-tab", () => {
         const activeTab = activeTabId
           ? tabs.find((t) => t.id === activeTabId)
           : null;
@@ -281,15 +272,9 @@ export default function App() {
         const db = resolveActiveDb(connectionId);
         addQueryTab(connectionId, db);
         markConnectionUsed(connectionId);
-      });
-      if (cancelled) fn();
-      else unlisten = fn;
-    })();
-    return () => {
-      cancelled = true;
-      if (unlisten) unlisten();
-    };
-  }, [activeTabId, tabs, addQueryTab, markConnectionUsed, focusedConnId]);
+      }),
+    [activeTabId, tabs, addQueryTab, markConnectionUsed, focusedConnId],
+  );
 
   // Cmd+1..9 / Ctrl+1..9 — switch to the N-th workspace tab (1-indexed).
   // Top-row digits only; `Numpad1`.. are intentionally NOT matched.

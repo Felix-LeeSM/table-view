@@ -62,6 +62,8 @@ export {
   SUPPORTED_DATABASE_TYPES,
   createEmptyDraft,
   draftFromConnection,
+  isKvFamily,
+  isSearchFamily,
   isSupportedDatabaseType,
   paradigmOf,
   parseConnectionUrl,
