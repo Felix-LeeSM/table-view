@@ -9,7 +9,7 @@ import {
   rowIdentityKey,
   type DataGridEditState,
 } from "@components/datagrid";
-import { safeStringifyCell } from "@lib/jsonCell";
+import { safeStringifyCell, renderCellValue } from "@lib/jsonCell";
 import { cn } from "@lib/utils";
 import { DocumentTreePanel } from "@components/document/DocumentTreePanel";
 
@@ -71,12 +71,6 @@ function getCellTitle(cell: unknown): string {
   if (cell == null) return "null";
   if (cell instanceof Decimal) return cell.toString();
   if (typeof cell === "bigint") return cell.toString();
-  if (typeof cell === "object") return safeStringifyCell(cell);
-  return String(cell);
-}
-
-function renderCellValue(cell: unknown) {
-  if (cell instanceof Decimal) return cell.toString();
   if (typeof cell === "object") return safeStringifyCell(cell);
   return String(cell);
 }

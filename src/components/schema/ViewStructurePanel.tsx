@@ -5,6 +5,7 @@ import { useSchemaStore } from "@stores/schemaStore";
 import type { ColumnInfo } from "@/types/schema";
 import { Tabs, TabsList, TabsTrigger } from "@components/ui/tabs";
 import { Button } from "@components/ui/button";
+import { useCopyToClipboard } from "@lib/runtime/useCopyToClipboard";
 
 interface ViewStructurePanelProps {
   connectionId: string;
@@ -194,7 +195,7 @@ function ViewColumnsTable({ columns }: { columns: ColumnInfo[] }) {
 
 function ViewDefinition({ sql }: { sql: string }) {
   const { t } = useTranslation("schema");
-  const [copied, setCopied] = useState(false);
+  const { copied, copy } = useCopyToClipboard();
 
   const stats = useMemo(
     () => ({
@@ -204,17 +205,7 @@ function ViewDefinition({ sql }: { sql: string }) {
     [sql],
   );
 
-  const handleCopy = () => {
-    navigator.clipboard
-      .writeText(sql)
-      .then(() => {
-        setCopied(true);
-        window.setTimeout(() => setCopied(false), 1500);
-      })
-      .catch(() => {
-        // Clipboard API may fail in some environments; silently ignore
-      });
-  };
+  const handleCopy = () => void copy(sql);
 
   if (!sql.trim()) {
     return (

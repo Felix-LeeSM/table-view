@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Check, Copy, Download, Upload, AlertTriangle } from "lucide-react";
 import { useConnectionStore } from "../store";
 import { Button } from "@components/ui/button";
+import { useCopyToClipboard } from "@lib/runtime/useCopyToClipboard";
 import TabsDialog from "@components/ui/dialog/TabsDialog";
 import {
   exportConnectionsEncrypted,
@@ -100,9 +101,9 @@ function ExportPanel() {
   const [json, setJson] = useState<string>("");
   const [acknowledged, setAcknowledged] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [copiedTarget, setCopiedTarget] = useState<"password" | "json" | null>(
-    null,
-  );
+  const { copiedKey: copiedTarget, copy } = useCopyToClipboard<
+    "password" | "json"
+  >();
   const [running, setRunning] = useState(false);
 
   // Wipe the generated mnemonic when the panel unmounts (dialog close).
@@ -133,18 +134,8 @@ function ExportPanel() {
     setRunning(false);
   };
 
-  const handleCopy = (text: string, target: "password" | "json") => {
-    navigator.clipboard
-      .writeText(text)
-      .then(() => {
-        setCopiedTarget(target);
-        window.setTimeout(() => setCopiedTarget(null), 1500);
-      })
-      .catch(() => {
-        // Clipboard may be unavailable in some contexts (e.g. test env);
-        // failure here is benign and intentionally swallowed.
-      });
-  };
+  const handleCopy = (text: string, target: "password" | "json") =>
+    void copy(text, target);
 
   return (
     <div className="space-y-3">
