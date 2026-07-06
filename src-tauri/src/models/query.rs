@@ -139,6 +139,38 @@ pub struct ServerInfoRow {
     pub extras: std::collections::HashMap<String, Value>,
 }
 
+/// Issue #1077 Stage 2 — users/roles read-only wire shape. A PG `pg_roles`
+/// row flattened for the read-only accounts/permissions panel. `pg_roles`
+/// is deliberately the source (NOT `pg_authid` / `pg_shadow`): it masks
+/// `rolpassword` as `********` and never exposes the password hash, so this
+/// struct carries no secret column. `member_of` lists the roles this role is
+/// a member of (the "permissions" surface). Non-PG RDB engines and non-RDB
+/// paradigms are unsupported for now (PG-first parity lane).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DatabaseUserRow {
+    /// Role name (`rolname`). Both login "users" and non-login "roles"
+    /// appear — PG unifies them, so this panel is genuinely users + roles.
+    pub name: String,
+    /// `rolcanlogin` — true for a login-capable account, false for a group role.
+    pub can_login: bool,
+    /// `rolsuper` — superuser flag.
+    pub is_superuser: bool,
+    /// `rolcreatedb` — may create databases.
+    pub can_create_db: bool,
+    /// `rolcreaterole` — may create/alter other roles.
+    pub can_create_role: bool,
+    /// `rolreplication` — replication privilege.
+    pub replication: bool,
+    /// `rolconnlimit` — max concurrent connections (-1 = unlimited).
+    pub conn_limit: i64,
+    /// `rolvaliduntil` — password expiry as ISO-8601 UTC text, or None if
+    /// no expiry set. This is an expiry timestamp, NOT a credential.
+    pub valid_until: Option<String>,
+    /// Roles this role is a member of (`pg_auth_members`), sorted by name.
+    pub member_of: Vec<String>,
+}
+
 /// Result of an arbitrary SQL query execution
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

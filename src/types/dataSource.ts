@@ -122,6 +122,8 @@ export interface DataSourceCapabilities {
     readonly slowQueries: boolean;
     readonly stats: boolean;
     readonly serverInfo: boolean;
+    // Issue #1077 Stage 2 — read-only users/roles listing (PG-first).
+    readonly users: boolean;
   };
   readonly paradigmSpecific: {
     readonly keyBrowser: boolean;
@@ -193,6 +195,7 @@ export function createEmptyDataSourceCapabilities(): DataSourceCapabilities {
       slowQueries: false,
       stats: false,
       serverInfo: false,
+      users: false,
     },
     paradigmSpecific: {
       keyBrowser: false,
@@ -302,6 +305,7 @@ export const POSTGRESQL_CAPABILITIES = capabilities({
     slowQueries: true,
     stats: true,
     serverInfo: true,
+    users: true,
   },
 });
 

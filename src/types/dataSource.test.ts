@@ -96,6 +96,7 @@ describe("DataSourceProfile registry", () => {
         slowQueries: true,
         stats: true,
         serverInfo: true,
+        users: true,
       },
     }),
     mysql: mysqlFamilyCapabilities,

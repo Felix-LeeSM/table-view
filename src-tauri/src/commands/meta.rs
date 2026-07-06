@@ -17,7 +17,7 @@ use crate::commands::document::browse::DatabaseInfo;
 use crate::commands::not_connected;
 use crate::db::ActiveAdapter;
 use crate::error::AppError;
-use crate::models::ServerActivityRow;
+use crate::models::{DatabaseUserRow, ServerActivityRow};
 
 /// Paradigm-aware database list for the active connection.
 ///
@@ -358,6 +358,43 @@ pub async fn slow_queries(
     slow_queries_inner(state.inner(), &connection_id, limit).await
 }
 
+async fn list_database_users_inner(
+    state: &AppState,
+    connection_id: &str,
+) -> Result<Vec<DatabaseUserRow>, AppError> {
+    let active = state
+        .active_adapter(connection_id)
+        .await
+        .ok_or_else(|| not_connected(connection_id))?;
+    // Read-only accounts/permissions surface. Only the RDB arm serves it, and
+    // only for engines whose adapter overrides the trait default (PG-first
+    // parity lane) — the non-PG default and the non-RDB arms below are the
+    // backend capability gate, so a missing frontend guard cannot leak data.
+    match active.as_ref() {
+        ActiveAdapter::Rdb(adapter) => adapter.list_database_users().await,
+        ActiveAdapter::Document(_) => Err(AppError::Unsupported(
+            "list_database_users not supported for Document paradigm".into(),
+        )),
+        ActiveAdapter::Search(_) => Err(AppError::Unsupported(
+            "list_database_users not supported for Search paradigm".into(),
+        )),
+        ActiveAdapter::Kv(_) => Err(AppError::Unsupported(
+            "list_database_users not supported for key-value paradigm".into(),
+        )),
+    }
+}
+
+/// Issue #1077 Stage 2 — read-only users/roles listing for the active
+/// connection. PG queries `pg_roles` (password-masked); other engines return
+/// `Unsupported` until their parity slice ships.
+#[tauri::command]
+pub async fn list_database_users(
+    state: tauri::State<'_, AppState>,
+    connection_id: String,
+) -> Result<Vec<DatabaseUserRow>, AppError> {
+    list_database_users_inner(state.inner(), &connection_id).await
+}
+
 #[cfg(test)]
 #[allow(clippy::field_reassign_with_default)]
 mod tests {
@@ -472,6 +509,28 @@ mod tests {
             )),
             ActiveAdapter::Kv(_) => Err(AppError::Unsupported(
                 "list_server_activity not supported for key-value paradigm".into(),
+            )),
+        }
+    }
+
+    // Issue #1077 Stage 2 — mirror of `list_database_users_inner`.
+    async fn dispatch_list_database_users(
+        connections: &ConnMap,
+        connection_id: &str,
+    ) -> Result<Vec<DatabaseUserRow>, AppError> {
+        let active = connections
+            .get(connection_id)
+            .ok_or_else(|| not_connected(connection_id))?;
+        match active.as_ref() {
+            ActiveAdapter::Rdb(a) => a.list_database_users().await,
+            ActiveAdapter::Document(_) => Err(AppError::Unsupported(
+                "list_database_users not supported for Document paradigm".into(),
+            )),
+            ActiveAdapter::Search(_) => Err(AppError::Unsupported(
+                "list_database_users not supported for Search paradigm".into(),
+            )),
+            ActiveAdapter::Kv(_) => Err(AppError::Unsupported(
+                "list_database_users not supported for key-value paradigm".into(),
             )),
         }
     }
@@ -904,6 +963,79 @@ mod tests {
         let connections = map_with("c", kv_default());
         assert!(matches!(
             dispatch_list_server_activity(&connections, "c").await,
+            Err(AppError::Unsupported(_))
+        ));
+    }
+
+    // ── Issue #1077 Stage 2 — list_database_users dispatch matrix ────────
+
+    #[tokio::test]
+    async fn list_database_users_unknown_connection_returns_notfound() {
+        assert!(matches!(
+            dispatch_list_database_users(&ConnMap::new(), "absent").await,
+            Err(AppError::NotFound(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn list_database_users_rdb_arm_propagates_rows() {
+        let mut s = StubRdbAdapter::default();
+        s.list_database_users_fn = Some(Box::new(|| {
+            Ok(vec![crate::models::DatabaseUserRow {
+                name: "alice".into(),
+                can_login: true,
+                is_superuser: false,
+                can_create_db: false,
+                can_create_role: false,
+                replication: false,
+                conn_limit: -1,
+                valid_until: None,
+                member_of: vec!["readonly".into()],
+            }])
+        }));
+        let connections = map_with("c", ActiveAdapter::Rdb(Box::new(s)));
+        let r = dispatch_list_database_users(&connections, "c")
+            .await
+            .unwrap();
+        assert_eq!(r.len(), 1);
+        assert_eq!(r[0].name, "alice");
+        assert_eq!(r[0].member_of, vec!["readonly".to_string()]);
+    }
+
+    // Backend capability gate: an RDB engine without a `list_database_users`
+    // override (non-PG parity lane) must be refused, not served an empty list.
+    #[tokio::test]
+    async fn list_database_users_rdb_without_override_is_gated() {
+        let connections = map_with("c", rdb_default());
+        assert!(matches!(
+            dispatch_list_database_users(&connections, "c").await,
+            Err(AppError::Unsupported(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn list_database_users_document_arm_returns_unsupported() {
+        let connections = map_with("c", document_default());
+        assert!(matches!(
+            dispatch_list_database_users(&connections, "c").await,
+            Err(AppError::Unsupported(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn list_database_users_search_arm_returns_unsupported() {
+        let connections = map_with("c", search_default());
+        assert!(matches!(
+            dispatch_list_database_users(&connections, "c").await,
+            Err(AppError::Unsupported(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn list_database_users_kv_arm_returns_unsupported() {
+        let connections = map_with("c", kv_default());
+        assert!(matches!(
+            dispatch_list_database_users(&connections, "c").await,
             Err(AppError::Unsupported(_))
         ));
     }

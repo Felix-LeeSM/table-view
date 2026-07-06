@@ -156,6 +156,11 @@ pub(crate) struct StubRdbAdapter {
 
     // Sprint 340 — override slot for RDB slow_queries.
     pub slow_queries_fn: Option<FnOne<i64, Vec<crate::models::SlowQueryRow>>>,
+
+    // Issue #1077 Stage 2 — override slot for RDB list_database_users. When
+    // unset the stub returns `Unsupported`, mirroring a non-PG RDB engine
+    // (the backend capability gate) rather than a silent empty list.
+    pub list_database_users_fn: Option<FnZero<Vec<crate::models::DatabaseUserRow>>>,
 }
 
 impl Default for StubRdbAdapter {
@@ -209,6 +214,7 @@ impl Default for StubRdbAdapter {
             collection_stats_fn: None,
             server_info_fn: None,
             slow_queries_fn: None,
+            list_database_users_fn: None,
         }
     }
 }
@@ -713,6 +719,23 @@ impl RdbAdapter for StubRdbAdapter {
             .slow_queries_fn
             .as_ref()
             .map_or_else(|| Ok(Vec::new()), |f| f(&limit));
+        Box::pin(async move { r })
+    }
+
+    // Issue #1077 Stage 2 — list_database_users stub. Default arm returns
+    // `Unsupported` (an un-overridden RDB engine is gated at the backend),
+    // not an empty list.
+    fn list_database_users<'a>(
+        &'a self,
+    ) -> BoxFuture<'a, Result<Vec<crate::models::DatabaseUserRow>, AppError>> {
+        let r = self.list_database_users_fn.as_ref().map_or_else(
+            || {
+                Err(AppError::Unsupported(
+                    "stub RDB adapter does not support users/roles".into(),
+                ))
+            },
+            |f| f(),
+        );
         Box::pin(async move { r })
     }
 }
