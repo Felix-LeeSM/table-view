@@ -713,172 +713,55 @@ mod tests {
     }
 
     // ----------------------------------------------------------------------
-    // Parity mirror — these cases are ported verbatim from the frontend
-    // classifier test suite (`src/lib/sql/sqlSafety.test.ts`). They lock the
-    // backend danger set to the frontend so a change on one side that drifts
-    // the other trips a test. If the frontend cases move, mirror them here.
+    // Parity mirror (issue #1352) — the FE<->BE parity cases used to live here
+    // as a hand-copied block ("Parity mirror", ported verbatim from
+    // `src/lib/sql/sqlSafety.test.ts`). Manual copy-paste was the only safety
+    // net, so drift like the #1350 multi-CTE hole passed green. They now come
+    // from the SHARED `tests/fixtures/classifier-parity.json`, which the
+    // frontend `sqlSafety.parity-fixture.test.ts` consumes too — a classifier
+    // change on either side that drifts the other trips a test on that side.
     // ----------------------------------------------------------------------
 
-    #[test]
-    fn data_modifying_cte_parity() {
-        // Mirror sqlSafety.test.ts AC-254-04a..e / AC-403-01b. A WITH whose
-        // first CTE body modifies data inherits that statement's tier — the
-        // parser rejects the CTE (SELECT-only bodies), so this rides the
-        // keyword fallback. WHERE-less DELETE/UPDATE inside a CTE is danger.
-        // AC-254-04a — UPDATE WHERE → warn (bounded).
-        assert_eq!(
-            classify(
-                "WITH x AS (UPDATE users SET active = false WHERE id = 1 RETURNING id) SELECT * FROM x"
-            ),
-            Severity::Warn
-        );
-        // AC-254-04b — DELETE WHERE → warn (bounded).
-        assert_eq!(
-            classify("WITH x AS (DELETE FROM users WHERE id = 1 RETURNING id) SELECT * FROM x"),
-            Severity::Warn
-        );
-        // AC-254-04c — DELETE without WHERE → danger (B1 security hole).
-        assert_eq!(
-            classify("WITH x AS (DELETE FROM users RETURNING id) SELECT * FROM x"),
-            Severity::Danger
-        );
-        // UPDATE without WHERE inside a CTE → danger.
-        assert!(is_danger(
-            "WITH x AS (UPDATE users SET active = false RETURNING id) SELECT * FROM x"
-        ));
-        // AC-403-01b — INSERT CTE → info.
-        assert_eq!(
-            classify("WITH x AS (INSERT INTO users (id) VALUES (1) RETURNING id) SELECT * FROM x"),
-            Severity::Info
-        );
-        // AC-254-04e — pure read CTE → info (regression).
-        assert_eq!(
-            classify("WITH x AS (SELECT 1 AS n) SELECT n FROM x"),
-            Severity::Info
-        );
-        // RECURSIVE + column-list forms still detect the modifying body.
-        assert!(is_danger(
-            "WITH RECURSIVE x (id) AS (DELETE FROM users RETURNING id) SELECT * FROM x"
-        ));
+    #[derive(serde::Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct ParityCase {
+        name: String,
+        sql: String,
+        expected_severity: String,
     }
 
-    #[test]
-    fn multi_cte_parity() {
-        // Mirror sqlSafety.test.ts AC-1350-01..08. Issue #1350: a destructive
-        // body in the 2nd+ CTE must not hide behind a leading read CTE. The
-        // classifier scans every `AS ( … )` body and merges the worst tier.
-        // AC-1350-01 — 2nd CTE DELETE without WHERE → danger.
-        assert_eq!(
-            classify("WITH a AS (SELECT 1), b AS (DELETE FROM users) SELECT * FROM b"),
-            Severity::Danger
-        );
-        // AC-1350-02 — 2nd CTE UPDATE without WHERE → danger.
-        assert_eq!(
-            classify("WITH a AS (SELECT 1), b AS (UPDATE users SET active = false) SELECT * FROM b"),
-            Severity::Danger
-        );
-        // AC-1350-03 — middle CTE (of 3) destructive → danger.
-        assert_eq!(
-            classify(
-                "WITH a AS (SELECT 1), b AS (DELETE FROM users), c AS (SELECT 2) SELECT * FROM c"
-            ),
-            Severity::Danger
-        );
-        // AC-1350-04 — 2nd CTE TRUNCATE → danger.
-        assert_eq!(
-            classify("WITH a AS (SELECT 1), b AS (TRUNCATE users) SELECT * FROM a"),
-            Severity::Danger
-        );
-        // AC-1350-05 — nested subquery parens in read CTE, destructive 2nd → danger.
-        assert_eq!(
-            classify("WITH a AS (SELECT (SELECT 1)), b AS (DELETE FROM users) SELECT * FROM b"),
-            Severity::Danger
-        );
-        // AC-1350-06 — bounded DELETE WHERE with nested subquery → warn (not over-escalated).
-        assert_eq!(
-            classify(
-                "WITH a AS (SELECT 1), b AS (DELETE FROM users WHERE id IN (SELECT id FROM stale)) SELECT * FROM b"
-            ),
-            Severity::Warn
-        );
-        // AC-1350-07 — 'DELETE' text inside a string literal → info (no false positive).
-        assert_eq!(
-            classify(
-                "WITH a AS (SELECT 'DELETE FROM users' AS note), b AS (SELECT 2) SELECT * FROM a"
-            ),
-            Severity::Info
-        );
-        // AC-1350-08 — 2nd CTE INSERT → info (not escalated).
-        assert_eq!(
-            classify(
-                "WITH a AS (SELECT 1), b AS (INSERT INTO users (id) VALUES (1) RETURNING id) SELECT * FROM a"
-            ),
-            Severity::Info
-        );
+    #[derive(serde::Deserialize)]
+    struct ParityFixture {
+        cases: Vec<ParityCase>,
     }
 
-    #[test]
-    fn multi_cte_literal_paren_parity() {
-        // Mirror sqlSafety.test.ts AC-1350-09..14 (review #1374). A `(` / `)`
-        // inside a string literal, quoted identifier, or dollar-quote must not
-        // skew the balanced-paren depth, or the destructive CTE is swallowed /
-        // early-closed and reads as info. AC-1350-09 — '(' in string literal.
-        assert_eq!(
-            classify("WITH a AS (SELECT '(' ), b AS (DELETE FROM users) SELECT * FROM b"),
-            Severity::Danger
-        );
-        // AC-1350-10 — '(' in dollar-quote.
-        assert_eq!(
-            classify("WITH a AS (SELECT $$($$), b AS (DELETE FROM users) SELECT * FROM b"),
-            Severity::Danger
-        );
-        // AC-1350-11 — '(' in quoted identifier.
-        assert_eq!(
-            classify("WITH a AS (SELECT 1 AS \"x(\"), b AS (DELETE FROM users) SELECT * FROM b"),
-            Severity::Danger
-        );
-        // AC-1350-12 — '(' in string on the destructive body, UPDATE no WHERE.
-        assert_eq!(
-            classify("WITH a AS (SELECT 1), b AS (UPDATE users SET note = '(') SELECT * FROM b"),
-            Severity::Danger
-        );
-        // AC-1350-13 — ')' in string literal.
-        assert_eq!(
-            classify("WITH a AS (SELECT ')' ), b AS (DELETE FROM users) SELECT * FROM b"),
-            Severity::Danger
-        );
-        // AC-1350-14 — ')' in dollar-quote.
-        assert_eq!(
-            classify("WITH a AS (SELECT $$)$$), b AS (DELETE FROM users) SELECT * FROM b"),
-            Severity::Danger
-        );
-    }
-
-    #[test]
-    fn drop_object_parity_danger_vs_warn() {
-        // Mirror sqlSafety.ts:656 (danger objects) vs :759 (`ddl-other`
-        // warn). B2: only these object kinds are danger.
-        for danger in [
-            "DROP TABLE users",
-            "DROP DATABASE app",
-            "DROP SCHEMA s",
-            "DROP INDEX i",
-            "DROP VIEW v",
-            "DROP TRIGGER t ON users",
-        ] {
-            assert_eq!(classify(danger), Severity::Danger, "{danger}");
+    fn severity_from_fixture(tier: &str) -> Severity {
+        match tier {
+            "info" => Severity::Info,
+            "warn" => Severity::Warn,
+            "danger" => Severity::Danger,
+            other => panic!("unknown expectedSeverity `{other}` in classifier-parity.json"),
         }
-        // DROP FUNCTION / PROCEDURE / ROLE / EXTENSION / MATERIALIZED VIEW are
-        // `ddl-other` warn on the frontend (no confirm dialog) — gating them
-        // hard-rejects legitimate DDL (B2 regression).
-        for allowed in [
-            "DROP FUNCTION f()",
-            "DROP PROCEDURE p",
-            "DROP ROLE r",
-            "DROP EXTENSION postgis",
-            "DROP MATERIALIZED VIEW mv",
-        ] {
-            assert!(!is_danger(allowed), "{allowed} must not be gated");
+    }
+
+    #[test]
+    fn classifier_parity_fixture() {
+        const RAW: &str = include_str!("../../../tests/fixtures/classifier-parity.json");
+        let fixture: ParityFixture =
+            serde_json::from_str(RAW).expect("classifier-parity.json must be valid JSON");
+        assert!(
+            !fixture.cases.is_empty(),
+            "classifier-parity.json has no cases (silently emptied?)"
+        );
+        for case in &fixture.cases {
+            let expected = severity_from_fixture(&case.expected_severity);
+            assert_eq!(
+                classify(&case.sql),
+                expected,
+                "parity case `{}`: {}",
+                case.name,
+                case.sql
+            );
         }
     }
 }

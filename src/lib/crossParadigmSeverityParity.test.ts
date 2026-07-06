@@ -1,5 +1,14 @@
 // Cross-paradigm Safe Mode severity parity lock (issue #1120).
 //
+// Scope (issue #1352 rename): this file compares the FRONTEND paradigm
+// classifiers AGAINST EACH OTHER (generic SQL / Oracle / Mongo pipeline /
+// Mongo op / Redis KV) on one impact×loss axis — it is NOT an FE↔BE parity
+// check (it imports zero Rust). Its old name `safeModeParity.test.ts` implied
+// FE↔BE coverage it never had. The real FE↔BE SQL-classifier parity lives in
+// `sql/sqlSafety.parity-fixture.test.ts`, which shares
+// `tests/fixtures/classifier-parity.json` with the Rust
+// `classifier_parity_fixture` test.
+//
 // The 5 paradigm classifiers (generic SQL / Oracle / Mongo pipeline / Mongo
 // op / Redis KV) evolved their `info`/`warn`/`danger` tiers independently,
 // producing asymmetries where the same *concept* got a different tier per
