@@ -29,6 +29,7 @@ import {
   type BySchema,
   type ByTable,
 } from "./schemaStoreMaps";
+import { createRequestGuard } from "./requestGuard";
 
 /**
  * Sprint 263 (ADR 0027 extension) — schemaStore 의 캐시 차원을
@@ -226,40 +227,27 @@ function handleDbMismatch(connId: string, err: unknown): void {
 // still in flight, the late resolve would re-populate the slot that was just
 // cleared — and because several fetchers are cache-first, a reconnect then
 // short-circuits to that stale list. A per-connection generation counter,
-// bumped by `clearForConnection`, lets the shared `writeIfCurrent` wrapper drop
-// any write whose generation was superseded across the await. Mirrors
-// `documentQueryStore`'s request counter (issue reference).
+// bumped by `clearForConnection` (via `schemaGuard.bump`), lets the shared
+// `writeIfCurrent` wrapper drop any write whose generation was superseded
+// across the await. Shared with documentCatalogStore / documentQueryStore
+// through `createRequestGuard` (issue #1362); this store keys the guard by
+// `connId` and bumps only on teardown.
 // ---------------------------------------------------------------------------
-const connectionGenerations = new Map<string, number>();
-
-function connectionGeneration(connId: string): number {
-  return connectionGenerations.get(connId) ?? 0;
-}
-
-function bumpConnectionGeneration(connId: string): void {
-  connectionGenerations.set(connId, connectionGeneration(connId) + 1);
-}
+const schemaGuard = createRequestGuard();
 
 /**
  * Run an introspection IPC and apply its store write only if the connection's
- * generation is unchanged across the `await`. Returns the fetched value either
- * way so callers keep their existing return contract (cache-first fetchers
- * still hand the fresh list back to the caller that triggered the fetch).
+ * generation is unchanged across the `await`. Alias of the shared guard's
+ * `writeIfCurrent` so the fetchers below stay terse. Returns the fetched value
+ * either way so callers keep their existing return contract (cache-first
+ * fetchers still hand the fresh list back to the caller that triggered the
+ * fetch).
  */
-async function writeIfCurrent<T>(
-  connId: string,
-  fetch: () => Promise<T>,
-  commit: (result: T) => void,
-): Promise<T> {
-  const generation = connectionGeneration(connId);
-  const result = await fetch();
-  if (connectionGeneration(connId) === generation) commit(result);
-  return result;
-}
+const writeIfCurrent = schemaGuard.writeIfCurrent;
 
 /** Test-only: reset the generation map so counters don't leak across specs. */
 export function __resetSchemaGenerationsForTests(): void {
-  connectionGenerations.clear();
+  schemaGuard.reset();
 }
 
 // ---------------------------------------------------------------------------
@@ -684,7 +672,7 @@ export const useSchemaStore = create<SchemaState>((set, get) => ({
     // #1099 — invalidate any introspection IPC already in flight for this
     // connection so its late resolve can't re-pollute the caches we clear here
     // (and a cache-first reconnect can't short-circuit to that stale list).
-    bumpConnectionGeneration(connId);
+    schemaGuard.bump(connId);
     set((state) => ({
       databases: (() => {
         const next = { ...state.databases };
