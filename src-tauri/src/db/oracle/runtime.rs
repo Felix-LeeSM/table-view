@@ -75,7 +75,14 @@ impl OracleAdapter {
                     }
                 }
                 QueryType::Ddl => {
-                    unreachable!("Oracle DDL is rejected before opening a connection")
+                    // Defensive: DDL is already rejected up-front (see the
+                    // `matches!(query_type, QueryType::Ddl)` guard before the
+                    // connection is opened). Return the same Unsupported error
+                    // instead of panicking so a future refactor that reorders
+                    // the guard degrades to an error rather than a crash.
+                    Err(AppError::Unsupported(
+                        "Oracle raw DDL/admin execution is outside issue #905; supported runtime is limited to SELECT and DML batch".into(),
+                    ))
                 }
             };
 
