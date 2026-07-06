@@ -39,11 +39,6 @@ pub trait KeyringBackend {
     /// Write the entry (overwrite-on-set semantics). Caller verifies
     /// readback equality (AC-356-07).
     fn set(&self, name: &str, value: &[u8]) -> Result<(), AppError>;
-
-    /// Best-effort delete of an entry. Errors are bubbled so the migration
-    /// path can leave a sentinel rather than silently mismatching state.
-    #[allow(dead_code)] // reserved for future revoke path; AC-356-04 only writes
-    fn delete(&self, name: &str) -> Result<(), AppError>;
 }
 
 /// Sprint 356 (Q22) — production keyring backend. Delegates to the
@@ -98,14 +93,6 @@ impl KeyringBackend for OsKeyringBackend {
         entry
             .set_secret(value)
             .map_err(|e| AppError::Encryption(format!("Keyring write failed: {e}")))
-    }
-
-    fn delete(&self, name: &str) -> Result<(), AppError> {
-        let entry = self.entry(name)?;
-        match entry.delete_credential() {
-            Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
-            Err(e) => Err(AppError::Encryption(format!("Keyring delete failed: {e}"))),
-        }
     }
 }
 
@@ -174,7 +161,7 @@ impl KeyringBackend for InMemoryKeyringBackend {
         Ok(self
             .inner
             .lock()
-            .expect("mutex poisoned")
+            .map_err(|e| AppError::Encryption(format!("Keyring backend lock error: {e}")))?
             .get(name)
             .cloned())
     }
@@ -185,25 +172,19 @@ impl KeyringBackend for InMemoryKeyringBackend {
                 "Keyring backend unavailable".to_string(),
             ));
         }
-        if *self.set_should_fail.lock().expect("mutex poisoned") {
+        if *self
+            .set_should_fail
+            .lock()
+            .map_err(|e| AppError::Encryption(format!("Keyring backend lock error: {e}")))?
+        {
             return Err(AppError::Encryption(
                 "simulated keyring write failure".into(),
             ));
         }
         self.inner
             .lock()
-            .expect("mutex poisoned")
+            .map_err(|e| AppError::Encryption(format!("Keyring backend lock error: {e}")))?
             .insert(name.to_string(), value.to_vec());
-        Ok(())
-    }
-
-    fn delete(&self, name: &str) -> Result<(), AppError> {
-        if !self.available {
-            return Err(AppError::Encryption(
-                "Keyring backend unavailable".to_string(),
-            ));
-        }
-        self.inner.lock().expect("mutex poisoned").remove(name);
         Ok(())
     }
 }

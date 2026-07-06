@@ -81,7 +81,11 @@ pub fn sql_redact(sql: &str) -> String {
         let re = redact_regex();
         re.replace_all(sql, |caps: &regex::Captures<'_>| {
             if let Some(num) = caps.name("num") {
-                let leading = &caps[0][..num.start() - caps.get(0).unwrap().start()];
+                // Group 0 (the whole match) always exists here, so this is the
+                // match's own start; `map_or` avoids an unwrap while keeping the
+                // real-case offset unchanged.
+                let match_start = caps.get(0).map_or(num.start(), |m| m.start());
+                let leading = &caps[0][..num.start() - match_start];
                 format!("{leading}?")
             } else {
                 "?".to_string()

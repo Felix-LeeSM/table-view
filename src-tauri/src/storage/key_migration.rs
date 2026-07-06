@@ -387,12 +387,22 @@ fn secure_delete(path: &Path) -> Result<(), AppError> {
     if let Ok(meta) = fs::metadata(path) {
         let len = meta.len() as usize;
         let zeros = vec![0u8; len];
-        // Best effort — if write fails we still try the rest of the cleanup.
-        let _ = fs::write(path, &zeros);
+        // Best effort — if write fails we still try the rest of the cleanup,
+        // but a residual-plaintext window is worth a log line.
+        if let Err(e) = fs::write(path, &zeros) {
+            warn!(target: "keyring", "secure_delete: zero-overwrite failed for {}: {e}", path.display());
+        }
         // Sync the overwrite to disk so the unlink doesn't race a delayed
         // page flush.
-        if let Ok(f) = std::fs::OpenOptions::new().write(true).open(path) {
-            let _ = f.sync_all();
+        match std::fs::OpenOptions::new().write(true).open(path) {
+            Ok(f) => {
+                if let Err(e) = f.sync_all() {
+                    warn!(target: "keyring", "secure_delete: fsync after overwrite failed for {}: {e}", path.display());
+                }
+            }
+            Err(e) => {
+                warn!(target: "keyring", "secure_delete: reopen for fsync failed for {}: {e}", path.display());
+            }
         }
     }
 
@@ -400,7 +410,9 @@ fn secure_delete(path: &Path) -> Result<(), AppError> {
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        let _ = fs::set_permissions(path, fs::Permissions::from_mode(0o000));
+        if let Err(e) = fs::set_permissions(path, fs::Permissions::from_mode(0o000)) {
+            warn!(target: "keyring", "secure_delete: chmod 0o000 marker failed for {}: {e}", path.display());
+        }
     }
 
     // 3. unlink.

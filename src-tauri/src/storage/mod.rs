@@ -31,8 +31,11 @@ static MASTER_KEY: Mutex<Option<Vec<u8>>> = Mutex::new(None);
 /// #1103 — seed the process master key from the boot-time keyring migration
 /// ([`key_migration::migrate_or_initialize`]). Called once from `lib.rs::run()`
 /// before any IPC handler can fire.
-pub fn seed_master_key(key: Vec<u8>) {
-    *MASTER_KEY.lock().expect("master key mutex poisoned") = Some(key);
+pub fn seed_master_key(key: Vec<u8>) -> Result<(), AppError> {
+    *MASTER_KEY
+        .lock()
+        .map_err(|e| AppError::Storage(format!("Master key lock error: {}", e)))? = Some(key);
+    Ok(())
 }
 
 /// Resolve the AES master key for encrypt/decrypt. Returns the boot-seeded
@@ -43,7 +46,7 @@ pub fn seed_master_key(key: Vec<u8>) {
 fn master_key() -> Result<Vec<u8>, AppError> {
     if let Some(key) = MASTER_KEY
         .lock()
-        .expect("master key mutex poisoned")
+        .map_err(|e| AppError::Storage(format!("Master key lock error: {}", e)))?
         .as_ref()
     {
         return Ok(key.clone());
@@ -70,7 +73,7 @@ pub fn boot_wire_master_key() -> Result<key_migration::KeyOutcome, AppError> {
              entering safe mode (decrypt disabled until the key is restored)"
         );
     } else {
-        seed_master_key(outcome.key.clone());
+        seed_master_key(outcome.key.clone())?;
     }
     Ok(outcome)
 }
@@ -887,7 +890,7 @@ mod tests {
     #[serial]
     fn seeded_master_key_is_used_and_no_disk_key_written() {
         let dir = setup_test_env();
-        seed_master_key((7..39u8).collect());
+        seed_master_key((7..39u8).collect()).unwrap();
         // Use whatever is actually seeded (robust to global state ordering).
         let effective = master_key().unwrap();
 
