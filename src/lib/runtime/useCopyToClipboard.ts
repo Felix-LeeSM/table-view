@@ -13,8 +13,9 @@ interface UseCopyToClipboardOptions {
 // ---------------------------------------------------------------------------
 // Issue #1369 — unmount-safe clipboard copy with transient feedback.
 //
-// Lives under @lib/runtime (not @hooks) so both feature code and legacy
-// components can import it across the staged src/features boundary.
+// Lives under @lib/runtime (not @hooks) so both feature modules and the
+// non-feature component tree can import it across the src/features import
+// boundary (the @hooks alias is off-limits to src/features).
 //
 // Extracted from PreviewCopyButton (sprint-252) so CellDetailDialog,
 // ViewStructurePanel, and ImportExportDialog stop re-implementing the same
