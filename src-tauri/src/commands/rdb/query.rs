@@ -694,17 +694,35 @@ async fn explain_rdb_query_inner(
     connection_id: &str,
     sql: &str,
     expected_database: Option<&str>,
+    // Issue #1269 — optional cooperative cancel id. When provided the command
+    // registers a `CancellationToken` under this id so the existing
+    // `cancel_query(query_id)` command can abort a slow EXPLAIN. The guarantee
+    // is cooperative: the client stops awaiting and the plan future is dropped,
+    // but the server-side operation is not natively killed (no pid capture).
+    query_id: Option<&str>,
 ) -> Result<serde_json::Value, AppError> {
     if sql.trim().is_empty() {
         return Err(AppError::Validation("SQL must not be empty".into()));
     }
-    let active = state
-        .active_adapter(connection_id)
-        .await
-        .ok_or_else(|| not_connected(connection_id))?;
-    let adapter = active.as_rdb()?;
-    ensure_expected_db(adapter, expected_database).await?;
-    adapter.explain_query(sql).await
+    let cancel_handle = register_cancel_token(state, query_id).await;
+    let result = async {
+        let active = state
+            .active_adapter(connection_id)
+            .await
+            .ok_or_else(|| not_connected(connection_id))?;
+        let adapter = active.as_rdb()?;
+        ensure_expected_db(adapter, expected_database).await?;
+        match cancel_handle.as_ref().map(|(_, tok)| tok) {
+            Some(token) => tokio::select! {
+                r = adapter.explain_query(sql) => r,
+                _ = token.cancelled() => Err(AppError::Database("Operation cancelled".into())),
+            },
+            None => adapter.explain_query(sql).await,
+        }
+    }
+    .await;
+    release_cancel_token(state, &cancel_handle).await;
+    result
 }
 
 /// Sprint 337 (U2 live wire) — RDB `EXPLAIN (FORMAT JSON)` for the given
@@ -715,12 +733,14 @@ pub async fn explain_rdb_query(
     connection_id: String,
     sql: String,
     expected_database: Option<String>,
+    query_id: Option<String>,
 ) -> Result<serde_json::Value, AppError> {
     explain_rdb_query_inner(
         state.inner(),
         &connection_id,
         &sql,
         expected_database.as_deref(),
+        query_id.as_deref(),
     )
     .await
 }
@@ -2063,7 +2083,7 @@ mod tests {
     #[tokio::test]
     async fn explain_rdb_query_rejects_empty_sql() {
         let state = AppState::new();
-        match explain_rdb_query_inner(&state, "c", "  ", None).await {
+        match explain_rdb_query_inner(&state, "c", "  ", None, None).await {
             Err(AppError::Validation(msg)) => assert!(msg.contains("must not be empty")),
             other => panic!("Expected Validation, got: {:?}", other),
         }
@@ -2072,7 +2092,7 @@ mod tests {
     #[tokio::test]
     async fn explain_rdb_query_unknown_connection_returns_notfound() {
         let state = AppState::new();
-        match explain_rdb_query_inner(&state, "absent", "SELECT 1", None).await {
+        match explain_rdb_query_inner(&state, "absent", "SELECT 1", None, None).await {
             Err(AppError::NotFound(msg)) => assert!(msg.contains("absent")),
             other => panic!("Expected NotFound, got: {:?}", other),
         }
@@ -2082,7 +2102,7 @@ mod tests {
     async fn explain_rdb_query_document_paradigm_returns_unsupported() {
         let state = state_with("doc", document_default()).await;
         assert!(matches!(
-            explain_rdb_query_inner(&state, "doc", "SELECT 1", None).await,
+            explain_rdb_query_inner(&state, "doc", "SELECT 1", None, None).await,
             Err(AppError::Unsupported(_))
         ));
     }
@@ -2094,7 +2114,7 @@ mod tests {
             Ok(serde_json::json!([{ "Plan": { "Node Type": "Seq Scan", "echo": sql } }]))
         }));
         let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
-        let r = explain_rdb_query_inner(&state, "c", "SELECT 42", None)
+        let r = explain_rdb_query_inner(&state, "c", "SELECT 42", None, None)
             .await
             .unwrap();
         assert_eq!(
@@ -2111,7 +2131,7 @@ mod tests {
             panic!("explain_query must not run on db mismatch")
         }));
         let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
-        match explain_rdb_query_inner(&state, "c", "SELECT 1", Some("db2")).await {
+        match explain_rdb_query_inner(&state, "c", "SELECT 1", Some("db2"), None).await {
             Err(AppError::DbMismatch { expected, actual }) => {
                 assert_eq!(expected, "db2");
                 assert_eq!(actual, "db1");
@@ -2128,12 +2148,52 @@ mod tests {
             Ok(serde_json::json!([{ "Plan": { "Node Type": "Seq Scan", "echo": sql } }]))
         }));
         let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
-        let r = explain_rdb_query_inner(&state, "c", "SELECT 42", Some("db1"))
+        let r = explain_rdb_query_inner(&state, "c", "SELECT 42", Some("db1"), None)
             .await
             .unwrap();
         assert_eq!(
             r[0]["Plan"]["echo"],
             serde_json::Value::String("SELECT 42".into())
         );
+    }
+
+    #[tokio::test]
+    async fn explain_rdb_query_cancel_via_registry_aborts_1269() {
+        use std::sync::Arc;
+        use tokio::sync::Notify;
+        use tokio::time::{timeout, Duration};
+
+        // Gate the stub explain inside the trait future so the cancel lands
+        // while the command is parked in its `tokio::select!`.
+        let entered = Arc::new(Notify::new());
+        let release = Arc::new(Notify::new());
+        let mut s = StubRdbAdapter {
+            explain_query_gate: Some((entered.clone(), release.clone())),
+            ..StubRdbAdapter::default()
+        };
+        s.explain_query_fn = Some(Box::new(|_| Ok(serde_json::json!([]))));
+        let state = Arc::new(state_with("c", ActiveAdapter::Rdb(Box::new(s))).await);
+
+        let explain_state = Arc::clone(&state);
+        let task = tokio::spawn(async move {
+            explain_rdb_query_inner(&explain_state, "c", "SELECT 1", None, Some("exp-1")).await
+        });
+
+        // Wait until the explain future is parked, then fire the cooperative
+        // cancel the same way the frontend Stop button does.
+        entered.notified().await;
+        cancel_query_inner(&state, "exp-1").await.unwrap();
+
+        let outcome = timeout(Duration::from_secs(5), task)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(
+            matches!(outcome, Err(AppError::Database(ref m)) if m.contains("cancelled")),
+            "expected cooperative cancel, got: {outcome:?}"
+        );
+        // Token must be released so a retry can re-register the same id.
+        assert!(state.query_tokens.lock().await.get("exp-1").is_none());
+        release.notify_one();
     }
 }

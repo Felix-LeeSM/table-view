@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { DropdownMenu } from "radix-ui";
-import { Download } from "lucide-react";
+import { Download, Loader2, Square } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { runExport } from "@/lib/runtime/export";
+import { cancelQuery } from "@/lib/tauri";
 import type { ExportContext, ExportFormat } from "@/lib/tauri";
 import { cn } from "@/lib/utils";
 
@@ -59,18 +60,61 @@ export function ExportButton({
   const DEFAULT_DISABLED_REASON = t("export.singleTableOnly");
   const [running, setRunning] = useState(false);
   const formats = FORMATS_BY_KIND[context.kind];
+  // #1269 — id of the in-flight export so the Stop button can fire the same
+  // cooperative `cancelQuery` the query tab uses. A caller-supplied `exportId`
+  // wins; otherwise we mint one per run so cancellation always has a token.
+  const activeExportIdRef = useRef<string | null>(null);
 
   async function handleSelect(format: ExportFormat) {
     if (disabled || disabledFormats.includes(format) || running) return;
+    const runExportId = exportId ?? `export-${crypto.randomUUID()}`;
+    activeExportIdRef.current = runExportId;
     setRunning(true);
     try {
       const rows = await Promise.resolve(getRows());
-      await runExport({ format, context, headers, rows, exportId });
+      await runExport({
+        format,
+        context,
+        headers,
+        rows,
+        exportId: runExportId,
+      });
     } catch {
       // toast surfaced inside runExport; swallow so the button can re-enable.
     } finally {
       setRunning(false);
+      activeExportIdRef.current = null;
     }
+  }
+
+  function handleCancel() {
+    const id = activeExportIdRef.current;
+    if (id === null) return;
+    void cancelQuery(id).catch(() => {
+      // Best-effort — an export that already finished has no token to fire.
+    });
+  }
+
+  // #1269 — while an export streams, swap the trigger for the same Stop
+  // affordance the query tab uses (Square + spinner). Cooperative cancel: the
+  // in-process write loop checks the token between rows, so the abort is
+  // effective (no server round-trip needed).
+  if (running) {
+    return (
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-xs"
+        onClick={handleCancel}
+        aria-label={t("export.cancelAria")}
+        title={t("export.cancelTooltip")}
+        data-testid="export-cancel"
+        className={cn("text-muted-foreground", className)}
+      >
+        <Square className="text-destructive" size={12} aria-hidden />
+        <Loader2 className="animate-spin" size={12} aria-hidden />
+      </Button>
+    );
   }
 
   // Radix DropdownMenu (already bundled via the unified `radix-ui` package)

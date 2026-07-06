@@ -23,6 +23,7 @@ export const en = {
   tableMetadataNotFound:
     'Export: table "{{schema}}.{{table}}" 의 metadata 를 찾을 수 없음',
   failed: "Export failed: {{message}}",
+  cancelled: "Export cancelled",
   exported: "Exported {{label}} ({{detail}})",
   gridRowsExported_one: "Exported {{formatted}} row",
   gridRowsExported_other: "Exported {{formatted}} rows",
@@ -43,6 +44,7 @@ export const ko = {
   tableMetadataNotFound:
     '내보내기: 테이블 "{{schema}}.{{table}}"의 메타데이터를 찾을 수 없습니다',
   failed: "내보내기 실패: {{message}}",
+  cancelled: "내보내기 취소됨",
   exported: "{{label}} 내보냄 ({{detail}})",
   gridRowsExported_one: "{{formatted}}행 내보냄",
   gridRowsExported_other: "{{formatted}}행 내보냄",

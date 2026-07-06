@@ -65,6 +65,7 @@ beforeEach(() => {
         context,
         exportId,
       }),
+    cancelQuery: (queryId: string) => mockInvoke("cancel_query", { queryId }),
   });
   useToastStore.getState().clear();
 });
@@ -237,6 +238,52 @@ describe("ExportButton", () => {
     expect(toasts).toHaveLength(1);
     expect(toasts[0]?.variant).toBe("error");
     expect(toasts[0]?.message).toMatch(/disk full/);
+  });
+
+  // #1269 — while an export streams, the trigger becomes a Stop button that
+  // fires the cooperative `cancelQuery` keyed by the export's own token id.
+  it("shows a cancel button while exporting and fires cooperative cancel", async () => {
+    const user = userEvent.setup();
+    mockSave.mockResolvedValueOnce("/tmp/out.csv");
+    let rejectExport: (reason: unknown) => void = () => {};
+    mockInvoke.mockImplementation((cmd: string) => {
+      if (cmd === "export_grid_rows") {
+        return new Promise((_resolve, reject) => {
+          rejectExport = reject;
+        });
+      }
+      return Promise.resolve("cancelled");
+    });
+    render(
+      <ExportButton
+        context={tableContext()}
+        headers={HEADERS}
+        getRows={() => ROWS}
+      />,
+    );
+    await openMenu(user);
+    await user.click(await screen.findByRole("menuitem", { name: /CSV/i }));
+
+    // The Stop affordance replaces the dropdown trigger mid-export.
+    const cancelButton = await screen.findByTestId("export-cancel");
+    await act(async () => {
+      await user.click(cancelButton);
+    });
+
+    const cancelCall = mockInvoke.mock.calls.find(
+      ([c]) => c === "cancel_query",
+    );
+    expect(cancelCall).toBeDefined();
+    expect((cancelCall![1] as { queryId: string }).queryId).toMatch(/^export-/);
+
+    // Backend aborts the write loop → cancel error. It must resolve as a
+    // cancellation (info toast), never a destructive failure toast.
+    await act(async () => {
+      rejectExport(new Error("Export cancelled"));
+    });
+    const toasts = useToastStore.getState().toasts;
+    expect(toasts.some((toast) => toast.variant === "error")).toBe(false);
+    expect(toasts.some((toast) => toast.variant === "info")).toBe(true);
   });
 
   // [Invariant — Sprint 181] ExportButton's IPC payload never includes

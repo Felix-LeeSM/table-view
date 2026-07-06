@@ -39,6 +39,11 @@ export type RunExportResult =
  * surface success / error toast. Dialog cancel is silent (returns
  * `{ kind: "cancelled" }` with no toast). I/O errors raise a destructive
  * toast carrying the backend message.
+ *
+ * #1269 — a Stop-button cancel (fired via `cancelQuery(exportId)`) makes the
+ * backend abort its write loop with a "cancelled" error. That is user intent,
+ * not a failure, so we recognise it and return `{ kind: "cancelled" }` with an
+ * informational toast instead of the destructive I/O-failure toast.
  */
 export async function runExport(args: RunExportArgs): Promise<RunExportResult> {
   const { format, context, headers, rows, exportId = null, now } = args;
@@ -72,6 +77,10 @@ export async function runExport(args: RunExportArgs): Promise<RunExportResult> {
     return { kind: "ok", path: target, summary };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+    if (/cancel/i.test(message)) {
+      toast.info(i18n.t("export:cancelled"));
+      return { kind: "cancelled" };
+    }
     toast.error(i18n.t("export:failed", { message }));
     throw err;
   }

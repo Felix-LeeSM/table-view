@@ -363,6 +363,7 @@ describe("QueryTab — toolbar", () => {
       "conn1",
       "SELECT 1",
       "db1",
+      expect.stringMatching(/^explain-/),
     );
     expect(screen.queryByTestId("mock-result")).not.toBeInTheDocument();
   });
@@ -390,6 +391,7 @@ describe("QueryTab — toolbar", () => {
       "conn1",
       "SELECT 1",
       "db1",
+      expect.stringMatching(/^explain-/),
     );
   });
 
@@ -432,11 +434,15 @@ describe("QueryTab — toolbar", () => {
       "data-paradigm",
       "document",
     );
-    expect(mockExplainMongoFind).toHaveBeenCalledWith("conn-mongo", {
-      database: "table_view_test",
-      collection: "users",
-      filter: { status: "active" },
-    });
+    expect(mockExplainMongoFind).toHaveBeenCalledWith(
+      "conn-mongo",
+      {
+        database: "table_view_test",
+        collection: "users",
+        filter: { status: "active" },
+      },
+      expect.stringMatching(/^explain-/),
+    );
     expect(mockExplainRdbQuery).not.toHaveBeenCalled();
     expect(screen.queryByTestId("mock-result")).not.toBeInTheDocument();
   });
@@ -469,11 +475,15 @@ describe("QueryTab — toolbar", () => {
       await screen.findByTestId("explain-filter-only-hint"),
     ).toBeInTheDocument();
     // filter still reaches the backend unchanged — only the notice is added.
-    expect(mockExplainMongoFind).toHaveBeenCalledWith("conn-mongo", {
-      database: "table_view_test",
-      collection: "users",
-      filter: { status: "active" },
-    });
+    expect(mockExplainMongoFind).toHaveBeenCalledWith(
+      "conn-mongo",
+      {
+        database: "table_view_test",
+        collection: "users",
+        filter: { status: "active" },
+      },
+      expect.stringMatching(/^explain-/),
+    );
   });
 
   it("[#1041] does not run Explain for a non-find MongoDB statement", async () => {

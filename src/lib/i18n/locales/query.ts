@@ -57,6 +57,9 @@ export const en = {
     viewerAria: "Explain viewer",
     header: "Explain ({{paradigm}})",
     refresh: "Refresh",
+    cancel: "Cancel",
+    cancelAria: "Cancel explain",
+    cancelTooltip: "Stop explain",
     planSummary: "Plan Summary",
     rawJson: "Raw JSON",
     // #1210 — Mongo explain sends filter only; sort/limit/projection are not
@@ -302,6 +305,9 @@ export const ko = {
     viewerAria: "실행 계획 뷰어",
     header: "실행 계획 ({{paradigm}})",
     refresh: "새로고침",
+    cancel: "취소",
+    cancelAria: "실행 계획 취소",
+    cancelTooltip: "실행 계획 중지",
     planSummary: "계획 요약",
     rawJson: "원본 JSON",
     mongoFilterOnlyHint:
