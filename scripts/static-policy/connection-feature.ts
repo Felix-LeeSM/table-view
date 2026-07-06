@@ -55,6 +55,8 @@ export const CONNECTION_FEATURE_PUBLIC_API_EXPORTS = [
   "SUPPORTED_DATABASE_TYPES",
   "createEmptyDraft",
   "draftFromConnection",
+  "isKvFamily",
+  "isSearchFamily",
   "isSupportedDatabaseType",
   "paradigmOf",
   "parseConnectionUrl",
