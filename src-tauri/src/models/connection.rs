@@ -20,22 +20,6 @@ pub enum DatabaseType {
 }
 
 impl DatabaseType {
-    #[allow(dead_code)]
-    pub fn default_port(&self) -> u16 {
-        match self {
-            DatabaseType::Postgresql => 5432,
-            DatabaseType::Mysql => 3306,
-            DatabaseType::Mariadb => 3306,
-            DatabaseType::Sqlite => 0,
-            DatabaseType::Duckdb => 0,
-            DatabaseType::Mssql => 1433,
-            DatabaseType::Oracle => 1521,
-            DatabaseType::Mongodb => 27017,
-            DatabaseType::Redis | DatabaseType::Valkey => 6379,
-            DatabaseType::Elasticsearch | DatabaseType::Opensearch => 9200,
-        }
-    }
-
     /// Paradigm tag exposed to the frontend. Sprint 65 promotes this from the
     /// previous `&'static str` return type to a typed `Paradigm` enum so the
     /// wire format is a validated discriminated tag rather than a free-form
@@ -292,20 +276,6 @@ mod tests {
     #[test]
     fn database_type_default_is_postgresql() {
         assert!(matches!(DatabaseType::default(), DatabaseType::Postgresql));
-    }
-
-    #[test]
-    fn default_port_returns_correct_values() {
-        assert_eq!(DatabaseType::Postgresql.default_port(), 5432);
-        assert_eq!(DatabaseType::Mysql.default_port(), 3306);
-        assert_eq!(DatabaseType::Mariadb.default_port(), 3306);
-        assert_eq!(DatabaseType::Sqlite.default_port(), 0);
-        assert_eq!(DatabaseType::Duckdb.default_port(), 0);
-        assert_eq!(DatabaseType::Mssql.default_port(), 1433);
-        assert_eq!(DatabaseType::Oracle.default_port(), 1521);
-        assert_eq!(DatabaseType::Mongodb.default_port(), 27017);
-        assert_eq!(DatabaseType::Redis.default_port(), 6379);
-        assert_eq!(DatabaseType::Valkey.default_port(), 6379);
     }
 
     #[test]
