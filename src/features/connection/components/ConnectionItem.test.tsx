@@ -1,7 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, within, act } from "@testing-library/react";
 import ConnectionItem from "./ConnectionItem";
-import { useConnectionStore } from "@stores/connectionStore";
+import {
+  useConnectionStore,
+  type ConnectionState,
+} from "@stores/connectionStore";
+import { resetStore } from "@/test-utils";
 import { toast } from "@lib/runtime/toast";
 import type { ConnectionConfig } from "@/types/connection";
 
@@ -166,7 +170,10 @@ function setStoreState(overrides: {
   }>;
   moveConnectionToGroup?: (id: string, g: string | null) => Promise<void>;
 }) {
-  useConnectionStore.setState({
+  // Route through the shared resetStore helper so every store key is wiped
+  // to undefined before seeding — a plain setState merge would leak keys a
+  // prior test set (e.g. focusedConnId, error) into the next one (#1367).
+  resetStore(useConnectionStore, {
     connections: [],
     activeStatuses: {},
     groups: [],
@@ -175,13 +182,16 @@ function setStoreState(overrides: {
     removeConnection: vi.fn().mockResolvedValue(undefined),
     moveConnectionToGroup: vi.fn().mockResolvedValue(undefined),
     ...overrides,
-  } as Partial<Parameters<typeof useConnectionStore.setState>[0]>);
+  } as Partial<ConnectionState>);
 }
 
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
+// Purpose: ConnectionItem rendering + context-menu actions (connect,
+// disconnect, remove, move-to-group) and DB-type badge/status affordances
+// (P7 header backfill 2026-07-06, #1367)
 describe("ConnectionItem", () => {
   beforeEach(() => {
     vi.clearAllMocks();
