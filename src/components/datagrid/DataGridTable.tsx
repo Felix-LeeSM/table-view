@@ -442,6 +442,10 @@ const DataGridTable = forwardRef<DataGridTableHandle, DataGridTableProps>(
     useEffect(() => {
       if (!shouldVirtualize) return;
       rowVirtualizer.scrollToIndex(0, { align: "start" });
+      // Issue #1369 — deps intentionally track only the result-set identity
+      // (executed_query + sorts) and the virtualization toggle. `rowVirtualizer`
+      // is a fresh object each render, so adding it would re-scroll to the top
+      // on every render instead of only when a new query / sort loads.
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [data.executed_query, sorts, shouldVirtualize]);
 

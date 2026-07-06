@@ -24,6 +24,10 @@ export function useRdbColumnOrder({
     if (data) {
       setColumnOrder(data.columns.map((_, i) => i));
     }
+    // Issue #1369 — key off `data.columns` identity only. Depending on the
+    // whole `data` object would reset the user's column order on every
+    // unrelated data change (row refetch, pagination), not just when the
+    // column set itself changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data?.columns]);
 
