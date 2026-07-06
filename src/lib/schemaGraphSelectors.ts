@@ -21,98 +21,30 @@ export {
   type SchemaGraphMigrationImpactSummary,
   type SchemaGraphMigrationRemovalTarget,
 } from "./schemaGraphMigrationImpact";
-
-export type SchemaGraphMetadataField = "columns" | "indexes" | "constraints";
-export type SchemaGraphMetadataFieldState = "available" | "missing" | "unknown";
-export type SchemaGraphMetadataStatus =
-  | "ready"
-  | "partial"
-  | "missing"
-  | "unknown";
-
-export interface SchemaGraphNodeMaps {
-  readonly schemasById: ReadonlyMap<string, SchemaGraphSchemaNode>;
-  readonly tablesById: ReadonlyMap<string, SchemaGraphTableNode>;
-  readonly columnsById: ReadonlyMap<string, SchemaGraphColumnNode>;
-  readonly indexesById: ReadonlyMap<string, SchemaGraphIndexNode>;
-  readonly constraintsById: ReadonlyMap<string, SchemaGraphConstraintNode>;
-  readonly columnsByTableId: ReadonlyMap<
-    string,
-    readonly SchemaGraphColumnNode[]
-  >;
-  readonly indexesByTableId: ReadonlyMap<
-    string,
-    readonly SchemaGraphIndexNode[]
-  >;
-  readonly constraintsByTableId: ReadonlyMap<
-    string,
-    readonly SchemaGraphConstraintNode[]
-  >;
-}
-
-export interface SchemaGraphForeignKeySelection {
-  readonly edgeId: string;
-  readonly constraintId: string;
-  readonly relationship: SchemaGraphForeignKeyRelationship;
-  readonly sourceTableId: string;
-  readonly targetTableId: string;
-  readonly sourceColumnIds: readonly string[];
-  readonly targetColumnIds: readonly string[];
-}
-
-export interface SchemaGraphTableForeignKeys {
-  readonly tableId: string;
-  readonly incomingForeignKeys: readonly SchemaGraphForeignKeySelection[];
-  readonly outgoingForeignKeys: readonly SchemaGraphForeignKeySelection[];
-}
-
-export interface SchemaGraphForeignKeySelectors {
-  readonly foreignKeys: readonly SchemaGraphForeignKeySelection[];
-  readonly foreignKeysByConstraintId: ReadonlyMap<
-    string,
-    SchemaGraphForeignKeySelection
-  >;
-  readonly foreignKeysByTableId: ReadonlyMap<
-    string,
-    SchemaGraphTableForeignKeys
-  >;
-}
-
-export interface SchemaGraphTableMetadataReadiness {
-  readonly tableId: string;
-  readonly schema: string;
-  readonly table: string;
-  readonly source: "catalog-snapshot" | "schema-graph";
-  readonly status: SchemaGraphMetadataStatus;
-  readonly ready: boolean;
-  readonly columns: SchemaGraphMetadataFieldState;
-  readonly indexes: SchemaGraphMetadataFieldState;
-  readonly constraints: SchemaGraphMetadataFieldState;
-  readonly missing: readonly SchemaGraphMetadataField[];
-  readonly diagnostics: readonly SchemaGraphDiagnostic[];
-}
-
-export interface SchemaGraphIntelligenceSelectors extends SchemaGraphNodeMaps {
-  readonly graph: SchemaGraph;
-  readonly diagnostics: readonly SchemaGraphDiagnostic[];
-  readonly diagnosticsBySubjectId: ReadonlyMap<
-    string,
-    readonly SchemaGraphDiagnostic[]
-  >;
-  readonly foreignKeys: readonly SchemaGraphForeignKeySelection[];
-  readonly foreignKeysByConstraintId: ReadonlyMap<
-    string,
-    SchemaGraphForeignKeySelection
-  >;
-  readonly foreignKeysByTableId: ReadonlyMap<
-    string,
-    SchemaGraphTableForeignKeys
-  >;
-  readonly metadataReadinessByTableId: ReadonlyMap<
-    string,
-    SchemaGraphTableMetadataReadiness
-  >;
-}
+// #1370 — selector types live in the leaf module so migrationImpact can import
+// them without a cross-import back into this value-bearing facade. Re-exported
+// here for back-compat (many consumers import these off schemaGraphSelectors).
+import type {
+  SchemaGraphForeignKeySelection,
+  SchemaGraphForeignKeySelectors,
+  SchemaGraphIntelligenceSelectors,
+  SchemaGraphMetadataField,
+  SchemaGraphMetadataFieldState,
+  SchemaGraphMetadataStatus,
+  SchemaGraphNodeMaps,
+  SchemaGraphTableMetadataReadiness,
+} from "./schemaGraphSelectorTypes";
+export type {
+  SchemaGraphForeignKeySelection,
+  SchemaGraphForeignKeySelectors,
+  SchemaGraphIntelligenceSelectors,
+  SchemaGraphMetadataField,
+  SchemaGraphMetadataFieldState,
+  SchemaGraphMetadataStatus,
+  SchemaGraphNodeMaps,
+  SchemaGraphTableForeignKeys,
+  SchemaGraphTableMetadataReadiness,
+} from "./schemaGraphSelectorTypes";
 
 type SchemaGraphSelectorInput = SchemaGraph | SchemaGraphCatalogSnapshot;
 
