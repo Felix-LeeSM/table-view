@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import Decimal from "decimal.js";
 import { Binary, ArrowUpRight } from "lucide-react";
 import { Button } from "@components/ui/button";
-import { safeStringifyCell } from "@lib/jsonCell";
+import { safeStringifyCell, renderCellValue } from "@lib/jsonCell";
 import { isArrayColumn, isJsonbColumn } from "@lib/sql/structuralSqlEdit";
 import { getTextAlign, type ColumnCategory } from "@/lib/columnCategory";
 import type { TableData } from "@/types/schema";
@@ -20,20 +20,7 @@ import { isBlobColumn, parseFkReference } from "./columnUtils";
 import type { CellNavigationDirection } from "./useCellNavigation";
 
 /**
- * Sprint 261 (ADR 0026) — render a cell that may carry BigInt / Decimal
- * precision wrappers. Decimal is `typeof === "object"` so it must be
- * detected before the generic object branch (which would call
- * `safeStringifyCell` and emit a quoted JSON string). BigInt is
- * `typeof === "bigint"` and routes through `String(cell)` losslessly.
- */
-function renderCell(cell: unknown): string {
-  if (cell instanceof Decimal) return cell.toString();
-  if (typeof cell === "object" && cell !== null) return safeStringifyCell(cell);
-  return String(cell);
-}
-
-/**
- * Sprint 261 (ADR 0026) — title (tooltip) rendering matches `renderCell`
+ * Sprint 261 (ADR 0026) — title (tooltip) rendering matches `renderCellValue`
  * but uses pretty-printed JSON for generic objects so the multi-line
  * inspector view stays intact for nested documents.
  */
@@ -552,7 +539,7 @@ export default function DataRow({ rowIdx, ctx, rowStyle }: DataRowProps) {
                   dir="auto"
                   className="block min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap [unicode-bidi:isolate]"
                 >
-                  {renderCell(cell)}
+                  {renderCellValue(cell)}
                 </span>
                 {fkRef && onNavigateToFk && (
                   <Button

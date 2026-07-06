@@ -26,6 +26,20 @@ export function safeStringifyCell(value: unknown, indent?: number): string {
 }
 
 /**
+ * Issue #1369 (ADR 0026) — render a grid cell's value as its display string.
+ * Previously duplicated as `renderCell` (DataRow) and `renderCellValue`
+ * (DocumentGridRows). Decimal is `typeof === "object"` so it must be detected
+ * before the generic object branch (which would emit quoted JSON); BigInt
+ * routes through `String(cell)` losslessly. Callers already guard NULL before
+ * calling — a stray null would fall through to `String(null)` → "null".
+ */
+export function renderCellValue(cell: unknown): string {
+  if (cell instanceof Decimal) return cell.toString();
+  if (typeof cell === "object" && cell !== null) return safeStringifyCell(cell);
+  return String(cell);
+}
+
+/**
  * Convert BigInt / Decimal cells back to their wire-string form before an
  * argument crosses the Tauri IPC boundary. Tauri serializes invoke args with
  * native `JSON.stringify`, which throws `TypeError: Do not know how to

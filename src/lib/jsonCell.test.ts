@@ -7,7 +7,7 @@
 import Decimal from "decimal.js";
 import { describe, it, expect } from "vitest";
 
-import { safeStringifyCell } from "./jsonCell";
+import { safeStringifyCell, renderCellValue } from "./jsonCell";
 
 describe("safeStringifyCell", () => {
   it("serializes a flat object as compact JSON", () => {
@@ -83,5 +83,33 @@ describe("safeStringifyCell", () => {
     expect(safeStringifyCell({ id: BigInt("123"), name: "x" }, 2)).toBe(
       ["{", '  "id": "123",', '  "name": "x"', "}"].join("\n"),
     );
+  });
+});
+
+// Issue #1369 — shared cell-value renderer, extracted from DataRow.renderCell
+// and DocumentGridRows.renderCellValue (identical logic before this).
+describe("renderCellValue", () => {
+  it("renders a Decimal via toString (before the object branch)", () => {
+    expect(renderCellValue(new Decimal("0.10"))).toBe("0.1");
+  });
+
+  it("renders a BigInt losslessly via String", () => {
+    expect(renderCellValue(BigInt("9223372036854775807"))).toBe(
+      "9223372036854775807",
+    );
+  });
+
+  it("renders a plain object as compact JSON", () => {
+    expect(renderCellValue({ a: 1 })).toBe('{"a":1}');
+  });
+
+  it("renders nested BigInt inside an object without throwing", () => {
+    expect(renderCellValue({ id: BigInt("123") })).toBe('{"id":"123"}');
+  });
+
+  it("renders primitives via String", () => {
+    expect(renderCellValue("hi")).toBe("hi");
+    expect(renderCellValue(42)).toBe("42");
+    expect(renderCellValue(true)).toBe("true");
   });
 });
