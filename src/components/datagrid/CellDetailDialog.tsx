@@ -1,10 +1,11 @@
-import { useState, useMemo } from "react";
+import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import Decimal from "decimal.js";
 import { Copy, Check } from "lucide-react";
 import { Button } from "@components/ui/button";
 import PreviewDialog from "@components/ui/dialog/PreviewDialog";
 import { safeStringifyCell } from "@lib/jsonCell";
+import { useCopyToClipboard } from "@lib/runtime/useCopyToClipboard";
 
 export interface CellDetailDialogProps {
   open: boolean;
@@ -46,23 +47,13 @@ export default function CellDetailDialog({
   dataType,
 }: CellDetailDialogProps) {
   const { t } = useTranslation("datagrid");
-  const [copied, setCopied] = useState(false);
+  const { copied, copy } = useCopyToClipboard();
 
   const text = useMemo(() => renderCellText(data), [data]);
   const charCount = text.length;
   const lineCount = text === "" ? 0 : text.split("\n").length;
 
-  const handleCopy = () => {
-    navigator.clipboard
-      .writeText(text)
-      .then(() => {
-        setCopied(true);
-        window.setTimeout(() => setCopied(false), 1500);
-      })
-      .catch(() => {
-        // Clipboard API may fail in some environments; silently ignore
-      });
-  };
+  const handleCopy = () => void copy(text);
 
   if (!open) return null;
 
