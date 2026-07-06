@@ -10,6 +10,7 @@ import {
   type ByConn,
   type ByDb,
 } from "./documentStoreMaps";
+import { createRequestGuard } from "./requestGuard";
 
 export interface DocumentQueryState {
   queryResults: ByConn<ByDb<ByCollection<DocumentQueryResult>>>;
@@ -35,28 +36,14 @@ export interface DocumentQueryState {
   clearConnection: (connectionId: string) => void;
 }
 
-const queryRequestCounters = new Map<string, number>();
-
-function nextRequestId(key: string): number {
-  const current = queryRequestCounters.get(key) ?? 0;
-  const next = current + 1;
-  queryRequestCounters.set(key, next);
-  return next;
-}
-
-function isLatestRequest(key: string, requestId: number): boolean {
-  return queryRequestCounters.get(key) === requestId;
-}
+const queryGuard = createRequestGuard();
 
 function clearQueryCounters(connectionId: string): void {
-  for (const key of [...queryRequestCounters.keys()]) {
-    if (
+  queryGuard.clear(
+    (key) =>
       key.startsWith(`find:${connectionId}:`) ||
-      key.startsWith(`aggregate:${connectionId}:`)
-    ) {
-      queryRequestCounters.delete(key);
-    }
-  }
+      key.startsWith(`aggregate:${connectionId}:`),
+  );
 }
 
 export const useDocumentQueryStore = create<DocumentQueryState>((set) => ({
@@ -65,7 +52,7 @@ export const useDocumentQueryStore = create<DocumentQueryState>((set) => ({
 
   runFind: async (connectionId, database, collection, body, queryId) => {
     const key = `find:${connectionId}:${database}:${collection}`;
-    const reqId = nextRequestId(key);
+    const reqId = queryGuard.next(key);
     const result = normalizeDocumentQueryResult(
       await tauri.findDocuments(
         connectionId,
@@ -75,7 +62,7 @@ export const useDocumentQueryStore = create<DocumentQueryState>((set) => ({
         queryId,
       ),
     );
-    if (isLatestRequest(key, reqId)) {
+    if (queryGuard.isCurrent(key, reqId)) {
       set((state) => ({
         queryResults: setNested3(
           state.queryResults,
@@ -92,7 +79,7 @@ export const useDocumentQueryStore = create<DocumentQueryState>((set) => ({
   runAggregate: async (connectionId, database, collection, pipeline) => {
     const pipelineKey = JSON.stringify(pipeline);
     const key = `aggregate:${connectionId}:${database}:${collection}:${pipelineKey}`;
-    const reqId = nextRequestId(key);
+    const reqId = queryGuard.next(key);
     const result = normalizeDocumentQueryResult(
       await tauri.aggregateDocuments(
         connectionId,
@@ -101,7 +88,7 @@ export const useDocumentQueryStore = create<DocumentQueryState>((set) => ({
         pipeline,
       ),
     );
-    if (isLatestRequest(key, reqId)) {
+    if (queryGuard.isCurrent(key, reqId)) {
       set((state) => ({
         aggregateResults: setNested4(
           state.aggregateResults,
@@ -126,7 +113,7 @@ export const useDocumentQueryStore = create<DocumentQueryState>((set) => ({
 }));
 
 export function __resetDocumentQueryStoreForTests(): void {
-  queryRequestCounters.clear();
+  queryGuard.reset();
   useDocumentQueryStore.setState({
     queryResults: {},
     aggregateResults: {},

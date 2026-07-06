@@ -1,10 +1,4 @@
-import {
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
@@ -32,7 +26,7 @@ import {
   PopoverContent,
 } from "@components/ui/popover";
 import { Button } from "@components/ui/button";
-import { resolveRdbTreeShape, type RdbTreeShape } from "./treeShape";
+import { resolveRdbTreeProfile, type RdbTreeShape } from "./treeShape";
 import {
   applyGlobalFilter,
   getVisibleRows,
@@ -77,23 +71,23 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
   const connectionName = useConnectionStore(
     (s) => s.connections.find((c) => c.id === connectionId)?.name,
   );
-  // DBMS-shape-aware tree depth. Driven off `dbType` because the shape
-  // difference (with-schema / no-schema / flat) is *within* the rdb
-  // paradigm. Defaults to `with-schema` (PG) on first render so the
+  // DBMS-shape-aware tree profile. The shape (with-schema / no-schema / flat)
+  // *and* its derived behavior flags come from one central resolver
+  // (`resolveRdbTreeProfile`, #1363) so SchemaTree never re-branches on
+  // `dbType` and drifts from `treeShape.ts`. Falls back to the PostgreSQL
+  // profile (with-schema, all flags off) before `dbType` has loaded so the
   // initial paint matches the most explicit shape.
   const dbType = useConnectionStore(
     (s) => s.connections.find((c) => c.id === connectionId)?.dbType,
   );
-  const treeShape: RdbTreeShape = dbType
-    ? resolveRdbTreeShape(dbType)
-    : "with-schema";
+  const profile = resolveRdbTreeProfile(dbType ?? "postgresql");
+  const treeShape: RdbTreeShape = profile.shape;
 
   const actions = useSchemaTreeActions({
     connectionId,
-    autoLoadAuxiliaryCatalog:
-      treeShape === "no-schema" || dbType === "mssql" || dbType === "oracle",
-    autoLoadFileAnalyticsSources: dbType === "duckdb",
-    clearFileAnalyticsSourcesOnRefresh: dbType === "duckdb",
+    autoLoadAuxiliaryCatalog: profile.autoLoadsAuxiliaryCatalog,
+    autoLoadFileAnalyticsSources: profile.isFileAnalyticsSource,
+    clearFileAnalyticsSourcesOnRefresh: profile.isFileAnalyticsSource,
   });
   // Destructure the fields effects depend on. Using the whole `actions`
   // object as a dep would re-run effects every render.
@@ -123,8 +117,9 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
   // showing the control there would be an error-on-click (#1048). Also hidden
   // on Mongo/Redis and before dbType has loaded.
   const canExportMigration = supportsMigrationExport(dbType);
-  const flatCreateTableSchema =
-    dbType === "sqlite" ? (actions.schemas[0]?.name ?? null) : null;
+  const flatCreateTableSchema = profile.hasImplicitSingleSchema
+    ? (actions.schemas[0]?.name ?? null)
+    : null;
   const {
     exportSchema: exportSchemaWithInclude,
     exportDatabase: exportDatabaseWithInclude,
@@ -357,245 +352,249 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
             because schema == database in their model. Action buttons row
             stays visible for all RDB shapes. */}
         <div className="flex items-center justify-between px-3 py-1">
-        {treeShape === "with-schema" ? (
-          <span className="text-3xs font-medium uppercase tracking-wider text-muted-foreground">
-            {t("schemasHeader")}
-          </span>
-        ) : (
-          <span />
-        )}
-        <div className="flex items-center gap-0.5">
-          {flatCreateTableSchema && (
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              onClick={() => actions.handleCreateTable(flatCreateTableSchema)}
-              aria-label={t("createTableInAria", {
-                schema: flatCreateTableSchema,
-              })}
-              title={t("createTableTitle")}
-            >
-              <Plus size={12} />
-            </Button>
+          {treeShape === "with-schema" ? (
+            <span className="text-3xs font-medium uppercase tracking-wider text-muted-foreground">
+              {t("schemasHeader")}
+            </span>
+          ) : (
+            <span />
           )}
-          {/* RDB export Popover — three modes (DDL / DML / Full) ×
+          <div className="flex items-center gap-0.5">
+            {flatCreateTableSchema && (
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                onClick={() => actions.handleCreateTable(flatCreateTableSchema)}
+                aria-label={t("createTableInAria", {
+                  schema: flatCreateTableSchema,
+                })}
+                title={t("createTableTitle")}
+              >
+                <Plus size={12} />
+              </Button>
+            )}
+            {/* RDB export Popover — three modes (DDL / DML / Full) ×
               two scopes (single schema / all schemas). Gated to engines with
               a real `stream_table_rows` backend (PG / MySQL / MariaDB) via
               `supportsMigrationExport` so unsupported engines don't surface an
               error-on-click control (#1048). */}
-          {canExportMigration && actions.schemas.length > 0 && (
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  disabled={isMigrationExporting}
-                  aria-label={t("exportAria")}
-                  title={t("exportTitle")}
+            {canExportMigration && actions.schemas.length > 0 && (
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    disabled={isMigrationExporting}
+                    aria-label={t("exportAria")}
+                    title={t("exportTitle")}
+                  >
+                    <Download size={12} />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent
+                  align="start"
+                  sideOffset={4}
+                  className="w-56 p-1"
                 >
-                  <Download size={12} />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent align="start" sideOffset={4} className="w-56 p-1">
-                {actions.schemas.length > 1 && (
-                  <>
-                    <div className="flex items-center justify-between rounded-sm py-0.5 hover:bg-muted/50">
-                      <span className="truncate flex-1 px-2 text-xs italic text-muted-foreground">
-                        {t("allSchemas")}
-                      </span>
-                      <div className="flex items-center gap-0.5 pr-1">
-                        <Button
-                          variant="ghost"
-                          size="icon-xs"
-                          disabled={isMigrationExporting}
-                          aria-label={t("exportAllDdlAria")}
-                          title={t("ddlTitle")}
-                          onClick={() =>
-                            exportDatabaseWithInclude(
-                              connectionId,
-                              db,
-                              actions.schemas.map((s) => s.name),
-                              "ddl",
-                            )
-                          }
-                        >
-                          <FileText size={12} />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon-xs"
-                          disabled={isMigrationExporting}
-                          aria-label={t("exportAllDataAria")}
-                          title={t("dmlTitle")}
-                          onClick={() =>
-                            exportDatabaseWithInclude(
-                              connectionId,
-                              db,
-                              actions.schemas.map((s) => s.name),
-                              "dml",
-                            )
-                          }
-                        >
-                          <Rows3 size={12} />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon-xs"
-                          disabled={isMigrationExporting}
-                          aria-label={t("exportAllFullAria")}
-                          title={t("fullDumpTitle")}
-                          onClick={() =>
-                            exportDatabaseWithInclude(
-                              connectionId,
-                              db,
-                              actions.schemas.map((s) => s.name),
-                              "both",
-                            )
-                          }
-                        >
-                          <Database size={12} />
-                        </Button>
+                  {actions.schemas.length > 1 && (
+                    <>
+                      <div className="flex items-center justify-between rounded-sm py-0.5 hover:bg-muted/50">
+                        <span className="truncate flex-1 px-2 text-xs italic text-muted-foreground">
+                          {t("allSchemas")}
+                        </span>
+                        <div className="flex items-center gap-0.5 pr-1">
+                          <Button
+                            variant="ghost"
+                            size="icon-xs"
+                            disabled={isMigrationExporting}
+                            aria-label={t("exportAllDdlAria")}
+                            title={t("ddlTitle")}
+                            onClick={() =>
+                              exportDatabaseWithInclude(
+                                connectionId,
+                                db,
+                                actions.schemas.map((s) => s.name),
+                                "ddl",
+                              )
+                            }
+                          >
+                            <FileText size={12} />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon-xs"
+                            disabled={isMigrationExporting}
+                            aria-label={t("exportAllDataAria")}
+                            title={t("dmlTitle")}
+                            onClick={() =>
+                              exportDatabaseWithInclude(
+                                connectionId,
+                                db,
+                                actions.schemas.map((s) => s.name),
+                                "dml",
+                              )
+                            }
+                          >
+                            <Rows3 size={12} />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon-xs"
+                            disabled={isMigrationExporting}
+                            aria-label={t("exportAllFullAria")}
+                            title={t("fullDumpTitle")}
+                            onClick={() =>
+                              exportDatabaseWithInclude(
+                                connectionId,
+                                db,
+                                actions.schemas.map((s) => s.name),
+                                "both",
+                              )
+                            }
+                          >
+                            <Database size={12} />
+                          </Button>
+                        </div>
                       </div>
-                    </div>
-                    <div className="my-1 h-px bg-border" />
-                  </>
-                )}
-                <div className="px-2 py-1 text-3xs uppercase tracking-wider text-muted-foreground">
-                  {t("schemasPopoverLabel")}
-                </div>
-                <div className="flex flex-col">
-                  {actions.schemas.map((s) => (
-                    <div
-                      key={s.name}
-                      className="flex items-center justify-between rounded-sm py-0.5 hover:bg-muted/50"
-                    >
-                      <span className="truncate flex-1 px-2 text-xs">
-                        {s.name}
-                      </span>
-                      <div className="flex items-center gap-0.5 pr-1">
-                        <Button
-                          variant="ghost"
-                          size="icon-xs"
-                          disabled={isMigrationExporting}
-                          aria-label={t("exportSchemaDdlAria", {
-                            schema: s.name,
-                          })}
-                          title={t("ddlTitle")}
-                          onClick={() =>
-                            exportSchemaWithInclude(
-                              connectionId,
-                              db,
-                              s.name,
-                              "ddl",
-                            )
-                          }
-                        >
-                          <FileText size={12} />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon-xs"
-                          disabled={isMigrationExporting}
-                          aria-label={t("exportSchemaDataAria", {
-                            schema: s.name,
-                          })}
-                          title={t("dmlTitle")}
-                          onClick={() =>
-                            exportSchemaWithInclude(
-                              connectionId,
-                              db,
-                              s.name,
-                              "dml",
-                            )
-                          }
-                        >
-                          <Rows3 size={12} />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon-xs"
-                          disabled={isMigrationExporting}
-                          aria-label={t("exportSchemaFullAria", {
-                            schema: s.name,
-                          })}
-                          title={t("fullDumpTitle")}
-                          onClick={() =>
-                            exportSchemaWithInclude(
-                              connectionId,
-                              db,
-                              s.name,
-                              "both",
-                            )
-                          }
-                        >
-                          <Database size={12} />
-                        </Button>
+                      <div className="my-1 h-px bg-border" />
+                    </>
+                  )}
+                  <div className="px-2 py-1 text-3xs uppercase tracking-wider text-muted-foreground">
+                    {t("schemasPopoverLabel")}
+                  </div>
+                  <div className="flex flex-col">
+                    {actions.schemas.map((s) => (
+                      <div
+                        key={s.name}
+                        className="flex items-center justify-between rounded-sm py-0.5 hover:bg-muted/50"
+                      >
+                        <span className="truncate flex-1 px-2 text-xs">
+                          {s.name}
+                        </span>
+                        <div className="flex items-center gap-0.5 pr-1">
+                          <Button
+                            variant="ghost"
+                            size="icon-xs"
+                            disabled={isMigrationExporting}
+                            aria-label={t("exportSchemaDdlAria", {
+                              schema: s.name,
+                            })}
+                            title={t("ddlTitle")}
+                            onClick={() =>
+                              exportSchemaWithInclude(
+                                connectionId,
+                                db,
+                                s.name,
+                                "ddl",
+                              )
+                            }
+                          >
+                            <FileText size={12} />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon-xs"
+                            disabled={isMigrationExporting}
+                            aria-label={t("exportSchemaDataAria", {
+                              schema: s.name,
+                            })}
+                            title={t("dmlTitle")}
+                            onClick={() =>
+                              exportSchemaWithInclude(
+                                connectionId,
+                                db,
+                                s.name,
+                                "dml",
+                              )
+                            }
+                          >
+                            <Rows3 size={12} />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon-xs"
+                            disabled={isMigrationExporting}
+                            aria-label={t("exportSchemaFullAria", {
+                              schema: s.name,
+                            })}
+                            title={t("fullDumpTitle")}
+                            onClick={() =>
+                              exportSchemaWithInclude(
+                                connectionId,
+                                db,
+                                s.name,
+                                "both",
+                              )
+                            }
+                          >
+                            <Database size={12} />
+                          </Button>
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              </PopoverContent>
-            </Popover>
-          )}
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            onClick={actions.handleRefresh}
-            disabled={actions.loadingSchemas}
-            aria-label={t("refreshSchemasAria")}
-            title={t("refreshSchemasTitle")}
-          >
-            {actions.loadingSchemas ? (
-              <Loader2 className="animate-spin" size={12} />
-            ) : (
-              <RefreshCw size={12} />
+                    ))}
+                  </div>
+                </PopoverContent>
+              </Popover>
             )}
-          </Button>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              onClick={actions.handleRefresh}
+              disabled={actions.loadingSchemas}
+              aria-label={t("refreshSchemasAria")}
+              title={t("refreshSchemasTitle")}
+            >
+              {actions.loadingSchemas ? (
+                <Loader2 className="animate-spin" size={12} />
+              ) : (
+                <RefreshCw size={12} />
+              )}
+            </Button>
+          </div>
         </div>
-      </div>
 
-      {/* #1217 — top-level global filter. Lives outside `role="tree"` (like
+        {/* #1217 — top-level global filter. Lives outside `role="tree"` (like
           the Pinned/Recent sections) so its input never enters the tree's
           roving-tabindex model (#1129). Matches across every schema and
           object; matching schemas auto-expand so the collapse-by-default
           rule is overridden while filtering. */}
-      {actions.schemas.length > 0 && (
-        <div className="flex items-center gap-1 px-3 py-1">
-          <Search size={12} className="shrink-0 text-muted-foreground" />
-          <input
-            type="text"
-            className="min-w-0 flex-1 rounded border border-border bg-background px-1.5 py-0.5 text-2xs text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
-            placeholder={t("filterAllPlaceholder")}
-            value={actions.globalFilter}
-            onChange={(e) => actions.setGlobalFilter(e.target.value)}
-            aria-label={t("filterAllAria")}
-          />
-          {actions.globalFilter && (
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              onClick={() => actions.setGlobalFilter("")}
-              aria-label={t("clearFilterAllAria")}
-            >
-              <X />
-            </Button>
-          )}
-        </div>
-      )}
+        {actions.schemas.length > 0 && (
+          <div className="flex items-center gap-1 px-3 py-1">
+            <Search size={12} className="shrink-0 text-muted-foreground" />
+            <input
+              type="text"
+              className="min-w-0 flex-1 rounded border border-border bg-background px-1.5 py-0.5 text-2xs text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
+              placeholder={t("filterAllPlaceholder")}
+              value={actions.globalFilter}
+              onChange={(e) => actions.setGlobalFilter(e.target.value)}
+              aria-label={t("filterAllAria")}
+            />
+            {actions.globalFilter && (
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                onClick={() => actions.setGlobalFilter("")}
+                aria-label={t("clearFilterAllAria")}
+              >
+                <X />
+              </Button>
+            )}
+          </div>
+        )}
 
-      {/* #1218 — Pinned + Recent table sections. Rendered above the tree and
+        {/* #1218 — Pinned + Recent table sections. Rendered above the tree and
           outside `role="tree"` so their native <button> rows stay
           keyboard-reachable without touching the tree's roving-tabindex
           model (#1129). Clicking a row reuses `handleTableClick` — the same
           entry point as a tree node click. */}
-      {db && (
-        <PinnedRecentSections
-          connectionId={connectionId}
-          db={db}
-          treeShape={treeShape}
-          onOpenTable={actions.handleTableClick}
-        />
-      )}
+        {db && (
+          <PinnedRecentSections
+            connectionId={connectionId}
+            db={db}
+            treeShape={treeShape}
+            onOpenTable={actions.handleTableClick}
+          />
+        )}
       </div>
 
       <div
