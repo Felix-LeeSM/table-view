@@ -115,6 +115,56 @@ pub(crate) fn enforce_single_row_effect(
     )))
 }
 
+/// Parse an ORDER BY direction token case-insensitively, normalizing to the
+/// canonical uppercase `ASC`/`DESC`. Returns `None` for anything else so
+/// callers skip malformed input. #1354 — postgres/mysql/duckdb previously
+/// matched only the exact-case `"ASC"`/`"DESC"` literals and silently dropped a
+/// valid lowercase `asc`, while oracle/mssql already folded case; this is the
+/// single entry point that makes every adapter agree.
+pub(crate) fn parse_order_direction(token: &str) -> Option<&'static str> {
+    if token.eq_ignore_ascii_case("ASC") {
+        Some("ASC")
+    } else if token.eq_ignore_ascii_case("DESC") {
+        Some("DESC")
+    } else {
+        None
+    }
+}
+
+/// Clamp a caller-supplied `page_size` to at least 1. #1354 — only mssql/oracle
+/// guarded this; a 0 (or negative) page size otherwise built an empty/invalid
+/// `LIMIT`/`FETCH NEXT` clause per adapter. Shared entry point so every adapter
+/// clamps identically.
+pub(crate) fn clamp_page_size(page_size: i32) -> i32 {
+    page_size.max(1)
+}
+
+#[cfg(test)]
+mod query_param_tests {
+    use super::{clamp_page_size, parse_order_direction};
+
+    #[test]
+    fn order_direction_folds_case_and_rejects_junk() {
+        for token in ["ASC", "asc", "Asc", "aSc"] {
+            assert_eq!(parse_order_direction(token), Some("ASC"), "{token}");
+        }
+        for token in ["DESC", "desc", "Desc"] {
+            assert_eq!(parse_order_direction(token), Some("DESC"), "{token}");
+        }
+        for token in ["", "ascending", "DROP", "asc;"] {
+            assert_eq!(parse_order_direction(token), None, "{token}");
+        }
+    }
+
+    #[test]
+    fn page_size_clamps_to_at_least_one() {
+        assert_eq!(clamp_page_size(0), 1);
+        assert_eq!(clamp_page_size(-5), 1);
+        assert_eq!(clamp_page_size(1), 1);
+        assert_eq!(clamp_page_size(100), 100);
+    }
+}
+
 #[cfg(test)]
 mod single_row_guard_tests {
     use super::enforce_single_row_effect;

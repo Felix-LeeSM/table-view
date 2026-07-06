@@ -970,15 +970,8 @@ impl PostgresAdapter {
                                 conditions.push(format!("{} IS NOT NULL", quoted_col));
                             }
                             _ => {
-                                let op = match f.operator {
-                                    FilterOperator::Eq => "=",
-                                    FilterOperator::Neq => "<>",
-                                    FilterOperator::Gt => ">",
-                                    FilterOperator::Lt => "<",
-                                    FilterOperator::Gte => ">=",
-                                    FilterOperator::Lte => "<=",
-                                    FilterOperator::Like => "LIKE",
-                                    _ => unreachable!(),
+                                let Some(op) = f.operator.comparison_sql() else {
+                                    continue;
                                 };
                                 if let Some(val) = &f.value {
                                     let param_idx = param_values.len() + 1;
@@ -1016,6 +1009,7 @@ impl PostgresAdapter {
             .map_err(|e| AppError::Connection(e.to_string()))?;
 
         // Build data query using row_to_json for type-safe conversion
+        let page_size = crate::db::clamp_page_size(page_size);
         let offset = (page - 1).max(0) * page_size;
 
         let mut order_clause = String::new();
@@ -1030,7 +1024,10 @@ impl PostgresAdapter {
                 let part_trimmed = part.trim();
                 let parts: Vec<&str> = part_trimmed.split_whitespace().collect();
                 let (col_name, direction) = match parts.as_slice() {
-                    [col, dir] if *dir == "ASC" || *dir == "DESC" => (*col, *dir),
+                    [col, dir] => match crate::db::parse_order_direction(dir) {
+                        Some(d) => (*col, d),
+                        None => continue, // Skip invalid direction
+                    },
                     [col] => (*col, "ASC"),
                     _ => continue, // Skip invalid format
                 };
@@ -1154,6 +1151,11 @@ impl PostgresAdapter {
                 "stream_table_rows: column_names must not be empty".into(),
             ));
         }
+        // #1354 — mirror the mysql stream: defang schema/table before they land
+        // in the un-parameterizable cursor DDL (`qualified_table` quotes, this
+        // rejects outright), matching the write path's identifier contract.
+        validate_identifier(schema, "Schema name")?;
+        validate_identifier(table, "Table name")?;
 
         let pool = self.active_pool().await?;
 

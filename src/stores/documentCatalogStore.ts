@@ -10,6 +10,7 @@ import {
   type ByConn,
   type ByDb,
 } from "./documentStoreMaps";
+import { createRequestGuard } from "./requestGuard";
 
 export interface DocumentCatalogState {
   databases: ByConn<DatabaseInfo[]>;
@@ -39,30 +40,16 @@ export interface DocumentCatalogState {
   clearConnection: (connectionId: string) => void;
 }
 
-const catalogRequestCounters = new Map<string, number>();
-
-function nextRequestId(key: string): number {
-  const current = catalogRequestCounters.get(key) ?? 0;
-  const next = current + 1;
-  catalogRequestCounters.set(key, next);
-  return next;
-}
-
-function isLatestRequest(key: string, requestId: number): boolean {
-  return catalogRequestCounters.get(key) === requestId;
-}
+const catalogGuard = createRequestGuard();
 
 function clearCatalogCounters(connectionId: string): void {
-  for (const key of [...catalogRequestCounters.keys()]) {
-    if (
+  catalogGuard.clear(
+    (key) =>
       key === `databases:${connectionId}` ||
       key.startsWith(`collections:${connectionId}:`) ||
       key.startsWith(`fields:${connectionId}:`) ||
-      key.startsWith(`indexes:${connectionId}:`)
-    ) {
-      catalogRequestCounters.delete(key);
-    }
-  }
+      key.startsWith(`indexes:${connectionId}:`),
+  );
 }
 
 export const useDocumentCatalogStore: UseBoundStore<
@@ -77,18 +64,18 @@ export const useDocumentCatalogStore: UseBoundStore<
 
   loadDatabases: async (connectionId) => {
     const key = `databases:${connectionId}`;
-    const reqId = nextRequestId(key);
+    const reqId = catalogGuard.next(key);
     set({ loading: true, error: null });
     try {
       const databases = await tauri.listMongoDatabases(connectionId);
-      if (!isLatestRequest(key, reqId)) return null;
+      if (!catalogGuard.isCurrent(key, reqId)) return null;
       set((state) => ({
         databases: { ...state.databases, [connectionId]: databases },
         loading: false,
       }));
       return null;
     } catch (e) {
-      if (!isLatestRequest(key, reqId)) return null;
+      if (!catalogGuard.isCurrent(key, reqId)) return null;
       const error = String(e);
       set({ error, loading: false });
       return error;
@@ -97,14 +84,14 @@ export const useDocumentCatalogStore: UseBoundStore<
 
   loadCollections: async (connectionId, database) => {
     const key = `collections:${connectionId}:${database}`;
-    const reqId = nextRequestId(key);
+    const reqId = catalogGuard.next(key);
     set({ loading: true, error: null });
     try {
       const collections = await tauri.listMongoCollections(
         connectionId,
         database,
       );
-      if (!isLatestRequest(key, reqId)) return null;
+      if (!catalogGuard.isCurrent(key, reqId)) return null;
       set((state) => ({
         collections: setNested2(
           state.collections,
@@ -116,7 +103,7 @@ export const useDocumentCatalogStore: UseBoundStore<
       }));
       return null;
     } catch (e) {
-      if (!isLatestRequest(key, reqId)) return null;
+      if (!catalogGuard.isCurrent(key, reqId)) return null;
       const error = String(e);
       set({ error, loading: false });
       return error;
@@ -125,14 +112,14 @@ export const useDocumentCatalogStore: UseBoundStore<
 
   inferFields: async (connectionId, database, collection, sampleSize) => {
     const key = `fields:${connectionId}:${database}:${collection}`;
-    const reqId = nextRequestId(key);
+    const reqId = catalogGuard.next(key);
     const columns = await tauri.inferCollectionFields(
       connectionId,
       database,
       collection,
       sampleSize,
     );
-    if (isLatestRequest(key, reqId)) {
+    if (catalogGuard.isCurrent(key, reqId)) {
       set((state) => ({
         fieldsCache: setNested3(
           state.fieldsCache,
@@ -160,13 +147,13 @@ export const useDocumentCatalogStore: UseBoundStore<
       return cached;
     }
     const key = `indexes:${connectionId}:${database}:${collection}`;
-    const reqId = nextRequestId(key);
+    const reqId = catalogGuard.next(key);
     const indexes = await tauri.listMongoIndexes(
       connectionId,
       database,
       collection,
     );
-    if (isLatestRequest(key, reqId)) {
+    if (catalogGuard.isCurrent(key, reqId)) {
       set((state) => ({
         indexesCache: setNested3(
           state.indexesCache,
@@ -192,7 +179,7 @@ export const useDocumentCatalogStore: UseBoundStore<
 }));
 
 export function __resetDocumentCatalogStoreForTests(): void {
-  catalogRequestCounters.clear();
+  catalogGuard.reset();
   useDocumentCatalogStore.setState({
     databases: {},
     collections: {},

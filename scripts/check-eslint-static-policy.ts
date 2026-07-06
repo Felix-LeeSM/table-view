@@ -35,7 +35,6 @@ export const MAX_LINES_ALLOWLIST = [
   "src/components/layout/MainArea.test.tsx",
   "src/components/layout/TabBar.test.tsx",
   "src/components/rdb/DataGrid.editing.test.tsx",
-  "src/components/schema/CreateTableDialog.tsx",
   "src/components/schema/SchemaTree.actions.test.tsx",
   "src/components/shared/QuickLookPanel.test.tsx",
   "src/hooks/useSqlAutocomplete.test.ts",
