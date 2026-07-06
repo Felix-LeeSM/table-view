@@ -1,7 +1,7 @@
 ---
 title: React / TypeScript 컨벤션
 type: convention
-updated: 2026-06-12
+updated: 2026-07-06
 surface: src/**/*.ts, src/**/*.tsx
 task: react-impl, refactor, frontend
 trigger:
@@ -37,6 +37,11 @@ export function ConnectionPanel({ connections, onSelect }: ConnectionPanelProps)
 - 지역: `useState`, `useReducer`
 - 서버: 필요 시 TanStack Query
 - Zustand 스토어는 관심사별로 분리 (connection, query, ui 등)
+- Module-scope 카운터/세션 id/타이머 등 store 바깥 mutable 상태는 테스트가
+  결정적이도록 `__reset<Name>ForTests()` reset 함수를 함께 export 한다. 이름은
+  `__` prefix (의도 flag) + `ForTests` suffix 고정 — `__resetCountersForTests`,
+  `__resetSessionIdForTests` 참고. request-race 카운터처럼 공유 helper 로 묶을
+  수 있으면 helper 안에 `clear`/`reset` 를 두어 site 별 재구현을 피한다.
 
 ## TypeScript 규칙
 
