@@ -199,6 +199,7 @@ const SEED_TARGETS_BY_SPEC_KEY: Record<string, readonly SeedTarget[]> = {
   mongodb: ["mongodb"],
   "phase-28-slice-A": ["mongodb"],
   redis: ["redis"],
+  "redis-key-detail-panel": ["redis"],
   valkey: ["valkey"],
   elasticsearch: ["elasticsearch"],
   opensearch: ["opensearch"],
