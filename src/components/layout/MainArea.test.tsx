@@ -13,6 +13,10 @@ import {
 } from "@stores/workspaceStore";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useMruStore, __resetMruStoreForTests } from "@stores/mruStore";
+import {
+  setFakeWindowConnectionId,
+  resetFakeWindowConnectionId,
+} from "@stores/__tests__/fakeWindowConnectionId";
 import type { ConnectionConfig, ConnectionStatus } from "@/types/connection";
 
 // Sprint 142 (AC-147-4) — mount counter so tests can assert that
@@ -289,6 +293,12 @@ describe("MainArea", () => {
     // Sprint 142 (AC-147-4) — clear the mount log so each test asserts a
     // clean lifecycle.
     datagridMountLog.length = 0;
+    // #bug — EmptyState now targets the window-pinned connection. Reset the
+    // fake Tauri window label to null so a connId set by one test can't leak
+    // into the next; `seedWorkspace(...)` re-points it per test where a tab
+    // is seeded, and EmptyState tests set it explicitly.
+    resetFakeWindowConnectionId();
+    setFakeWindowConnectionId(null);
   });
 
   // AC-05: empty state placeholder
@@ -957,6 +967,7 @@ describe("MainArea", () => {
         connections: [makeConnection("c1")],
         active: ["c1"],
       });
+      setFakeWindowConnectionId("c1");
 
       render(<MainArea />);
 
@@ -981,6 +992,7 @@ describe("MainArea", () => {
       useConnectionStore.setState({
         activeStatuses: { "redis-1": { type: "connected", activeDb: "2" } },
       });
+      setFakeWindowConnectionId("redis-1");
 
       render(<MainArea />);
 
@@ -990,11 +1002,12 @@ describe("MainArea", () => {
       expect(screen.queryByText(/start writing SQL against/i)).toBeNull();
     });
 
-    it("clicking New Query opens a query tab against the connected DB", () => {
+    it("clicking New Query opens a query tab against the connected DB and marks it MRU", () => {
       setConnections({
         connections: [makeConnection("c1")],
         active: ["c1"],
       });
+      setFakeWindowConnectionId("c1");
 
       render(<MainArea />);
 
@@ -1007,6 +1020,10 @@ describe("MainArea", () => {
       expect(state.tabs).toHaveLength(1);
       expect(state.tabs[0]!.type).toBe("query");
       expect(state.tabs[0]!.connectionId).toBe("c1");
+      // The CTA still records the window connection as MRU (carry-over of
+      // the retired sprint-119 AC-04 signal; MRU marking survives even
+      // though target selection no longer reads MRU).
+      expect(useMruStore.getState().lastUsedConnectionId).toBe("c1");
     });
 
     it("clicking New Query on Mongo uses the configured database when activeDb is not selected", () => {
@@ -1023,6 +1040,7 @@ describe("MainArea", () => {
       useConnectionStore.setState({
         activeStatuses: { m1: { type: "connected" } },
       });
+      setFakeWindowConnectionId("m1");
 
       render(<MainArea />);
 
@@ -1053,108 +1071,6 @@ describe("MainArea", () => {
       expect(
         screen.getByText(/select a connection from the sidebar/i),
       ).toBeInTheDocument();
-    });
-
-    it("falls back to first-connected when MRU is empty (multiple actives)", () => {
-      // Sprint 119 (#SHELL-1) — without an MRU seed the policy reverts to
-      // the legacy "first connected wins" behavior, so the order in the
-      // list (c1 inactive, c2 first connected) decides the target.
-      setConnections({
-        connections: [
-          makeConnection("c1"),
-          makeConnection("c2"),
-          makeConnection("c3"),
-        ],
-        active: ["c2", "c3"],
-      });
-
-      render(<MainArea />);
-
-      act(() => {
-        fireEvent.click(screen.getByRole("button", { name: /new query/i }));
-      });
-
-      const state = getTestWorkspace("c2", "db1");
-      expect(state.tabs[0]!.connectionId).toBe("c2");
-    });
-  });
-
-  // Sprint 119 (#SHELL-1) — MRU policy specifics. These tests pin (a) the
-  // MRU-wins case, (b) the stale-MRU fallback, and (c) tab creation as the
-  // MRU signal source.
-  describe("Empty state MRU policy (sprint 119)", () => {
-    it("AC-01 — picks the MRU connection over first-connected when both are connected", () => {
-      setConnections({
-        connections: [
-          makeConnection("c1"),
-          makeConnection("c2"),
-          makeConnection("c3"),
-        ],
-        active: ["c2", "c3"],
-      });
-      // Seed MRU=c3 directly (the persistence path is exercised by
-      // mruStore.test.ts; here we only care about MainArea's read).
-      useMruStore.setState({ lastUsedConnectionId: "c3" });
-
-      render(<MainArea />);
-
-      // The CTA's contextual hint shows the target connection's name.
-      expect(screen.getByText(/c3 DB/)).toBeInTheDocument();
-      // first-connected (c2) must NOT be referenced.
-      expect(screen.queryByText(/c2 DB/)).toBeNull();
-
-      act(() => {
-        fireEvent.click(screen.getByRole("button", { name: /new query/i }));
-      });
-
-      const state = getTestWorkspace("c3", "db1");
-      expect(state.tabs[0]!.connectionId).toBe("c3");
-    });
-
-    it("AC-03 — falls back to first-connected when MRU connection is currently disconnected", () => {
-      setConnections({
-        connections: [makeConnection("c1"), makeConnection("c2")],
-        // c2 (the previous MRU) is NOT in the active set anymore.
-        active: ["c1"],
-      });
-      useMruStore.setState({ lastUsedConnectionId: "c2" });
-
-      render(<MainArea />);
-
-      // CTA points at c1, NOT the stale MRU c2.
-      expect(screen.getByText(/c1 DB/)).toBeInTheDocument();
-      expect(screen.queryByText(/c2 DB/)).toBeNull();
-    });
-
-    it("AC-03 — falls back to first-connected when MRU id no longer exists in the connection list", () => {
-      // Edge case: the previously-used connection was deleted between
-      // sessions. We must not crash and must defer to first-connected.
-      setConnections({
-        connections: [makeConnection("c1")],
-        active: ["c1"],
-      });
-      useMruStore.setState({ lastUsedConnectionId: "c-deleted" });
-
-      render(<MainArea />);
-
-      expect(screen.getByText(/c1 DB/)).toBeInTheDocument();
-    });
-
-    it("AC-01/AC-04 — opening a query tab via the CTA marks that connection as MRU", () => {
-      setConnections({
-        connections: [makeConnection("c1"), makeConnection("c2")],
-        active: ["c1", "c2"],
-      });
-
-      render(<MainArea />);
-
-      act(() => {
-        fireEvent.click(screen.getByRole("button", { name: /new query/i }));
-      });
-
-      // First-connected fallback fired (c1) → tab open against c1 →
-      // tabStore.addQueryTab dispatches markConnectionUsed("c1").
-      expect(useMruStore.getState().lastUsedConnectionId).toBe("c1");
     });
   });
 
@@ -1290,6 +1206,88 @@ describe("MainArea", () => {
       expect(screen.queryByTestId("mock-document-datagrid")).toBeNull();
       // RDB grid still mounts via its mocked stand-in.
       expect(screen.getByTestId("mock-datagrid")).toBeInTheDocument();
+    });
+  });
+
+  // ------------------------------------------------------------------
+  // #bug — EmptyState must target the connection this workspace window is
+  // pinned to (via the Tauri window label), NOT a global MRU/first-connected
+  // pick. Regression: a Redis(KV) window that also has a connected + MRU
+  // DuckDB(rdb) connection mislabeled its empty state "SQL against <DuckDB>"
+  // and opened its New Query tab in the DuckDB workspace slot — invisible to
+  // the Redis window ("New Query does nothing").
+  // ------------------------------------------------------------------
+  describe("Empty state targets the pinned window connection (#bug)", () => {
+    const redisConn: ConnectionConfig = {
+      ...makeConnection("redis-1"),
+      name: "cache",
+      dbType: "redis",
+      paradigm: "kv",
+    };
+    const duckConn: ConnectionConfig = {
+      ...makeConnection("duck-1"),
+      name: "dev",
+      dbType: "duckdb",
+      paradigm: "rdb",
+    };
+
+    // Redis + DuckDB both connected; DuckDB is the global MRU (the pre-fix
+    // target). THIS window is pinned to Redis via the window label.
+    function seedRedisWindowWithDuckMru() {
+      setConnections({
+        connections: [duckConn, redisConn],
+        active: ["duck-1", "redis-1"],
+      });
+      useMruStore.setState({ lastUsedConnectionId: "duck-1" });
+      setFakeWindowConnectionId("redis-1");
+    }
+
+    it("shows the KV command lead (not SQL) even when DuckDB is MRU", () => {
+      seedRedisWindowWithDuckMru();
+
+      render(<MainArea />);
+
+      expect(
+        screen.getByText(/start writing Redis commands against/i),
+      ).toBeInTheDocument();
+      // The wrong-paradigm SQL lead and the DuckDB name must not leak in.
+      expect(screen.queryByText(/start writing SQL against/i)).toBeNull();
+      expect(screen.queryByText("dev")).toBeNull();
+    });
+
+    it("opens New Query against the Redis window connection, not DuckDB", () => {
+      seedRedisWindowWithDuckMru();
+
+      render(<MainArea />);
+
+      act(() => {
+        fireEvent.click(screen.getByRole("button", { name: /new query/i }));
+      });
+
+      // Tab lands in the Redis workspace this window renders...
+      const redisWs = getTestWorkspace("redis-1", "db1");
+      expect(redisWs.tabs).toHaveLength(1);
+      expect(redisWs.tabs[0]!.connectionId).toBe("redis-1");
+      // ...and NOT in the DuckDB (MRU) workspace slot.
+      expect(getTestWorkspace("duck-1", "db1").tabs).toHaveLength(0);
+    });
+
+    it("shows the SQL lead for a DuckDB-pinned window (opposite case)", () => {
+      setConnections({
+        connections: [duckConn, redisConn],
+        active: ["duck-1", "redis-1"],
+      });
+      setFakeWindowConnectionId("duck-1");
+
+      render(<MainArea />);
+
+      expect(
+        screen.getByText(/start writing SQL against/i),
+      ).toBeInTheDocument();
+      expect(screen.getByText("dev")).toBeInTheDocument();
+      expect(
+        screen.queryByText(/start writing Redis commands against/i),
+      ).toBeNull();
     });
   });
 });
