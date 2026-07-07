@@ -96,6 +96,10 @@ describe("Redis smoke", () => {
         "Redis expire preview did not appear",
       );
       await clickButton("Confirm Expire");
+      // The detail panel and the query editor share the main-area tab slot, so
+      // opening the panel above replaced the earlier query tab. Open a fresh
+      // query tab to verify the applied TTL through a bounded command.
+      await openNewQueryTab();
       await setCodeMirrorText("TTL tv:string");
       await runQuery();
       await waitForRedisTtlCommandResult(30000);
