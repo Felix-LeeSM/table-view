@@ -25,12 +25,8 @@ export {
 export { FEATURE_IMPORT_BOUNDARY_SCOPE } from "./static-policy/feature-import-boundary";
 
 export const MAX_LINES_ALLOWLIST = [
-  "e2e/smoke/_helpers.ts",
-  // Enumerative fixture seeder: one seeder per DBMS + a spec_key -> seedTargets
-  // map. Crossed 700 lines when the duckdb/mssql schema-filter smoke specs were
-  // wired (their spec_key mappings are required by e2e-smoke-routing-decisions).
-  // Not cleanly splittable; accepted as measured debt.
   "e2e/fixtures/seed-smoke.ts",
+  "e2e/smoke/_helpers.ts",
   "src/features/connection/components/ConnectionDialog.test.tsx",
   "src/features/connection/components/ConnectionGroup.test.tsx",
   "src/features/connection/components/ConnectionItem.test.tsx",

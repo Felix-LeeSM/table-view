@@ -70,8 +70,12 @@ describe("smoke-routing-decisions.json", () => {
       specKey: "mssql-schema-filter",
       spec: "e2e/smoke/mssql-schema-filter.spec.ts",
     });
+    expect(result.blockingDecisionMatrix).toContainEqual({
+      specKey: "redis-empty-state-window",
+      spec: "e2e/smoke/redis-empty-state-window.spec.ts",
+    });
     expect(result.blockingDecisionMatrix).toEqual(collectSmokeScriptMatrix());
     expect(result.blockingDecisionMatrix).toEqual(collectWorkflowMatrix());
-    expect(result.blockingDecisionMatrix).toHaveLength(22);
+    expect(result.blockingDecisionMatrix).toHaveLength(23);
   });
 });

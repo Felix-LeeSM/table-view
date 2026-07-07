@@ -321,6 +321,21 @@
       "action": "keep blocking E2E"
     },
     {
+      "id": "redis-empty-state-window-smoke",
+      "fixture": "e2e/smoke/duckdb-fixture.ts",
+      "specs": ["e2e/smoke/redis-empty-state-window.spec.ts"],
+      "specKeys": ["redis-empty-state-window"],
+      "seedTargets": [],
+      "tier": "blocking E2E",
+      "wiredInSmokeScript": true,
+      "runtimeCost": "New service-backed matrix leg (#1407) starts the shared redis:7-alpine container for the redis-empty-state-window spec only; reuses the shared prepared Tauri binary and Rust target cache. Job timeout remains 40 minutes.",
+      "flakeRisk": "Low; the spec drives an embedded DuckDB file plus one live Redis connection and asserts empty-state text and a New Query tab, with an isolated app data directory per leg.",
+      "cacheImpact": "Uses shared prepared Tauri binary and Rust target cache.",
+      "failureArtifacts": "wdio report uploaded as e2e-smoke-artifacts-redis-empty-state-window.",
+      "supportClaimImpact": "Runtime Happy Path evidence that a workspace window's EmptyState targets its own pinned connection (KV command lead plus New Query routed to this window) while a different connection is first-connected; no Redis key fixture is seeded because the empty state is key-independent.",
+      "action": "promote as blocking E2E for the per-window EmptyState targeting slice"
+    },
+    {
       "id": "valkey-runtime-smoke-seed",
       "fixture": "e2e/fixtures/valkey/kv/seed.json",
       "specs": ["e2e/smoke/valkey.spec.ts"],
