@@ -120,6 +120,81 @@ async fn test_list_tables_empty() {
     adapter.disconnect_pool().await.unwrap();
 }
 
+/// PG parity (사용자 리포트 2026-07-07) — SchemaTree 에 `public` 은 뜨는데
+/// 테이블이 0개였다. 근본 원인: `list_tables` 가 `information_schema.tables`
+/// 를 소스로 써서 *접속 role 이 권한을 가진* 테이블만 노출했다. 타 role 이
+/// 소유하고 접속 role 에 grant 가 없는 테이블은 psql `\dt` / TablePlus 에선
+/// 보여도 앱 목록에선 사라졌다. 여기서는 admin 이 테이블을 만들고, 그 테이블에
+/// **아무 권한도 없는** login role 을 만든 뒤 그 role 로 재접속해도 테이블이
+/// 목록에 뜨는지 가드한다 — catalog(`pg_catalog.pg_class`) 기반 쿼리는 권한
+/// 무관. 구 information_schema 쿼리에선 이 목록이 비어 RED, 신 쿼리에선 GREEN.
+#[tokio::test]
+async fn test_list_tables_visible_without_table_privilege() {
+    let admin = match common::setup_adapter(DatabaseType::Postgresql).await {
+        Some(a) => a,
+        None => return,
+    };
+    let base = common::pg_test_config()
+        .await
+        .expect("endpoint present when setup_adapter succeeded");
+
+    let table = unique_table_name("noperm");
+    let role = unique_table_name("restricted"); // valid identifier (test_<...>_<nanos>)
+    let role_pw = "restricted_pw_1";
+
+    // admin 이 테이블 + 그 테이블에 아무 grant 없는 login role 생성.
+    admin
+        .execute(&format!("CREATE TABLE \"{table}\" (id INT)"))
+        .await
+        .expect("admin create table");
+    admin
+        .execute(&format!(
+            "CREATE ROLE \"{role}\" LOGIN PASSWORD '{role_pw}'"
+        ))
+        .await
+        .expect("create restricted role");
+    // 스키마 USAGE 만 부여 — 실제 "타 소유 테이블" 상황(스키마엔 접근되나
+    // 테이블 권한은 없음)을 재현. 테이블 자체엔 어떤 grant 도 주지 않는다.
+    admin
+        .execute(&format!("GRANT USAGE ON SCHEMA public TO \"{role}\""))
+        .await
+        .expect("grant schema usage");
+
+    // 제한 role 로 재접속.
+    let mut restricted_cfg = base.clone();
+    restricted_cfg.user = role.clone();
+    restricted_cfg.password = role_pw.to_string();
+    let restricted = PostgresAdapter::new();
+    restricted
+        .connect_pool(&restricted_cfg)
+        .await
+        .expect("restricted role connect");
+
+    let tables = restricted
+        .list_tables("public")
+        .await
+        .expect("list_tables as restricted role");
+    let names: Vec<&str> = tables.iter().map(|t| t.name.as_str()).collect();
+    let saw_table = names.contains(&table.as_str());
+
+    // cleanup (assert 전에 정리해 role 이 남아 후속 테스트를 방해하지 않도록).
+    restricted.disconnect_pool().await.ok();
+    admin
+        .execute(&format!("DROP TABLE IF EXISTS \"{table}\""))
+        .await
+        .ok();
+    admin
+        .execute(&format!("DROP ROLE IF EXISTS \"{role}\""))
+        .await
+        .ok();
+    admin.disconnect_pool().await.ok();
+
+    assert!(
+        saw_table,
+        "catalog-based list_tables must surface a table the role has no privilege on, got: {names:?}"
+    );
+}
+
 #[tokio::test]
 async fn test_create_table_and_list() {
     let adapter = match common::setup_adapter(DatabaseType::Postgresql).await {
