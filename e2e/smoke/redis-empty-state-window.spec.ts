@@ -14,7 +14,7 @@ import {
 } from "./_helpers";
 import { prepareDuckdbFixture } from "./duckdb-fixture";
 
-// #D — EmptyState must target the connection this workspace window is pinned
+// #1407 — EmptyState must target the connection this workspace window is pinned
 // to (its Tauri window label), NOT a global MRU/first-connected pick. The
 // pre-fix `EmptyState` picked `mruConnection ?? firstConnected` across ALL
 // connections, so a Redis(KV) window that also had a connected DuckDB(rdb)
@@ -30,7 +30,7 @@ import { prepareDuckdbFixture } from "./duckdb-fixture";
 const DUCK_CONNECTION = "E2E DuckDB EmptyState";
 const REDIS_CONNECTION = "E2E Redis EmptyState";
 
-describe("Empty state targets the pinned window connection (#D)", () => {
+describe("Empty state targets the pinned window connection (#1407)", () => {
   it("Redis window shows the KV lead and routes New Query to itself while DuckDB is the first-connected connection", async () => {
     const duckdbPath = resolve(
       tmpdir(),

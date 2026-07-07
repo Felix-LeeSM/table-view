@@ -148,6 +148,7 @@ else
   run_wdio "$BASE_DATA_DIR/duckdb-file-analytics" "e2e/smoke/duckdb-file-analytics.spec.ts"
   run_wdio "$BASE_DATA_DIR/mongodb" "e2e/smoke/mongodb.spec.ts"
   run_wdio "$BASE_DATA_DIR/redis" "e2e/smoke/redis.spec.ts"
+  run_wdio "$BASE_DATA_DIR/redis-empty-state-window" "e2e/smoke/redis-empty-state-window.spec.ts"
   run_wdio "$BASE_DATA_DIR/valkey" "e2e/smoke/valkey.spec.ts"
   run_wdio "$BASE_DATA_DIR/elasticsearch" "e2e/smoke/elasticsearch.spec.ts"
   run_wdio "$BASE_DATA_DIR/opensearch" "e2e/smoke/opensearch.spec.ts"

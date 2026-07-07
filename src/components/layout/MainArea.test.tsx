@@ -293,7 +293,7 @@ describe("MainArea", () => {
     // Sprint 142 (AC-147-4) — clear the mount log so each test asserts a
     // clean lifecycle.
     datagridMountLog.length = 0;
-    // #bug — EmptyState now targets the window-pinned connection. Reset the
+    // #1407 — EmptyState now targets the window-pinned connection. Reset the
     // fake Tauri window label to null so a connId set by one test can't leak
     // into the next; `seedWorkspace(...)` re-points it per test where a tab
     // is seeded, and EmptyState tests set it explicitly.
@@ -1210,14 +1210,14 @@ describe("MainArea", () => {
   });
 
   // ------------------------------------------------------------------
-  // #bug — EmptyState must target the connection this workspace window is
+  // #1407 — EmptyState must target the connection this workspace window is
   // pinned to (via the Tauri window label), NOT a global MRU/first-connected
   // pick. Regression: a Redis(KV) window that also has a connected + MRU
   // DuckDB(rdb) connection mislabeled its empty state "SQL against <DuckDB>"
   // and opened its New Query tab in the DuckDB workspace slot — invisible to
   // the Redis window ("New Query does nothing").
   // ------------------------------------------------------------------
-  describe("Empty state targets the pinned window connection (#bug)", () => {
+  describe("Empty state targets the pinned window connection (#1407)", () => {
     const redisConn: ConnectionConfig = {
       ...makeConnection("redis-1"),
       name: "cache",
