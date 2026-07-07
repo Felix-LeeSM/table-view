@@ -18,6 +18,21 @@ use super::NamespaceInfo;
 
 pub(super) const DUCKDB_DEFAULT_SCHEMA: &str = "main";
 
+/// Schemas a DuckDB connection exposes to the sidebar. `information_schema.schemata`
+/// spans every attached catalog, so the internal `system` and `temp` catalogs each
+/// contribute their own `main` schema (empty → renders as a duplicate "No Tables"
+/// sibling in the flat tree). Blacklist the internal catalogs and the two catalog
+/// schemas so only the user database's schemas (`main` + user `CREATE SCHEMA`) show.
+// ponytail: filename edge — a user db file literally named `system`/`temp` would be
+// hidden. Swap `catalog_name NOT IN (...)` for `catalog_name = current_database()`
+// if that ever matters.
+pub(super) const LIST_NAMESPACES_SQL: &str = "\
+SELECT schema_name
+FROM information_schema.schemata
+WHERE catalog_name NOT IN ('system', 'temp')
+  AND schema_name NOT IN ('information_schema', 'pg_catalog')
+ORDER BY schema_name";
+
 #[derive(Clone, Debug)]
 pub(super) struct DuckdbConnectionSettings {
     pub path: String,
@@ -259,12 +274,7 @@ impl DuckdbAdapter {
     pub async fn list_namespaces(&self) -> Result<Vec<NamespaceInfo>, AppError> {
         self.with_connection(|conn| {
             let mut stmt = conn
-                .prepare(
-                    "SELECT schema_name
-                     FROM information_schema.schemata
-                     WHERE schema_name NOT IN ('information_schema', 'pg_catalog')
-                     ORDER BY schema_name",
-                )
+                .prepare(LIST_NAMESPACES_SQL)
                 .map_err(|e| AppError::Database(e.to_string()))?;
             let rows = stmt
                 .query_map([], |row| row.get::<_, String>(0))
@@ -579,6 +589,48 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn run_list_namespaces_sql(conn: &Connection) -> Vec<String> {
+        let mut stmt = conn.prepare(LIST_NAMESPACES_SQL).unwrap();
+        stmt.query_map([], |row| row.get::<_, String>(0))
+            .unwrap()
+            .map(Result::unwrap)
+            .collect()
+    }
+
+    // Bug: `information_schema.schemata` spans the internal `system` and `temp`
+    // catalogs, each of which owns a `main` schema. The old filter only excluded
+    // `information_schema`/`pg_catalog` by name, so `main` came back three times —
+    // the two empty internal copies rendered as duplicate "No Tables" siblings next
+    // to the real one in the flat (header-less) tree.
+    #[test]
+    fn list_namespaces_sql_hides_internal_catalog_duplicates() {
+        let conn = Connection::open_in_memory().unwrap();
+        // `analytics` stands in for a user `CREATE SCHEMA` that must survive.
+        conn.execute_batch("CREATE SCHEMA analytics;").unwrap();
+
+        let names = run_list_namespaces_sql(&conn);
+
+        // Exactly the user database's schemas, each once — no internal duplicates.
+        assert_eq!(names, vec!["analytics".to_string(), "main".to_string()]);
+        assert_eq!(
+            names.iter().filter(|n| n.as_str() == "main").count(),
+            1,
+            "internal system/temp catalogs must not leak extra `main` namespaces"
+        );
+    }
+
+    #[test]
+    fn list_namespaces_sql_blacklists_internal_namespaces() {
+        // Catalog-level internals live in the FROM/WHERE; schema-level internals are
+        // excluded by name. Guards the query text against silent drift.
+        assert!(LIST_NAMESPACES_SQL.contains("'system'"));
+        assert!(LIST_NAMESPACES_SQL.contains("'temp'"));
+        assert!(LIST_NAMESPACES_SQL.contains("'information_schema'"));
+        assert!(LIST_NAMESPACES_SQL.contains("'pg_catalog'"));
+        // User-facing `main` is never hardcoded into an exclusion.
+        assert!(!LIST_NAMESPACES_SQL.contains("'main'"));
+    }
 
     #[test]
     fn validate_user_database_path_hides_missing_absolute_path() {

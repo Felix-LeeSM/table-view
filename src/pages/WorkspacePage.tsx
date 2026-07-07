@@ -17,6 +17,7 @@ import { useThemeStore } from "@stores/themeStore";
 import { THEME_CATALOG } from "@lib/themeCatalog";
 import { logger } from "@lib/logger";
 import { useWindowFocusHydration } from "@hooks/useWindowFocusHydration";
+import { useAutoResolveActiveDb } from "@hooks/useAutoResolveActiveDb";
 import { destroyCurrentWindow, focusWindow } from "@lib/window-controls";
 
 /**
@@ -88,6 +89,12 @@ export default function WorkspacePage() {
   // Re-hydrate from session storage on mount and window focus so the
   // workspace picks up the latest connection state from the launcher.
   useWindowFocusHydration();
+
+  // Heal a connected switch-capable RDB window that hydrated (or connected)
+  // with no activeDb — auto-selects the first database so the schema tree /
+  // grid stop resolving to `db=""`. State-reactive, so it also runs after a
+  // webview reload. No-op for non-RDB / already-resolved windows.
+  useAutoResolveActiveDb();
 
   // #1134 — the workspace window's landmark heading. `useCurrentWindowConnectionId`
   // derives the connection from the Tauri label; the store lookup resolves its

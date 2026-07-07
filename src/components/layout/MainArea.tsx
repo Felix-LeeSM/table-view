@@ -11,6 +11,7 @@ import {
 } from "@stores/workspaceStore";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useMruStore } from "@stores/mruStore";
+import { useCurrentWindowConnectionId } from "@hooks/useCurrentWindowConnectionId";
 import { Plus } from "lucide-react";
 import DataGrid from "@components/rdb/DataGrid";
 import DocumentDataGrid from "@components/document/DocumentDataGrid";
@@ -325,31 +326,26 @@ function MainAreaSkeleton() {
 
 function EmptyState() {
   const { t } = useTranslation("layout");
+  // This workspace window is pinned to one connection via its Tauri window
+  // label (sprint-366). The empty-state target must be *that* connection —
+  // not a global MRU/first-connected pick — so the lead paradigm and the
+  // "New Query" CTA both act on the connection this window actually renders.
+  // The old MRU/first-connected target let a Redis window mislabel itself
+  // "SQL against <DuckDB>" and open its New Query tab in the DuckDB workspace
+  // slot, which this window never reads (invisible = "New Query does nothing").
+  const connId = useCurrentWindowConnectionId();
   const connections = useConnectionStore((s) => s.connections);
   const activeStatuses = useConnectionStore((s) => s.activeStatuses);
-  const lastUsedConnectionId = useMruStore((s) => s.lastUsedConnectionId);
   // MRU marking lives on each caller (not inside tabStore.addQueryTab) so
   // the CTA's single-action observable transition (click → new tab + MRU
   // shift) is preserved.
   const markConnectionUsed = useMruStore((s) => s.markConnectionUsed);
   const addQueryTab = useWorkspaceStore((s) => s.addQueryTab);
 
-  // MRU-first policy with first-connected fallback. The MRU id is null on
-  // first run (or after a reset); stale-MRU (the previously-used connection
-  // is currently disconnected) also falls back to first-connected so the
-  // CTA never points at a connection the user can't actually query.
-  const mruConnection =
-    lastUsedConnectionId !== null
-      ? connections.find(
-          (c) =>
-            c.id === lastUsedConnectionId &&
-            activeStatuses[c.id]?.type === "connected",
-        )
+  const target =
+    connId !== null && activeStatuses[connId]?.type === "connected"
+      ? connections.find((c) => c.id === connId)
       : undefined;
-  const firstConnected = connections.find(
-    (c) => activeStatuses[c.id]?.type === "connected",
-  );
-  const target = mruConnection ?? firstConnected;
   const emptyStateLead =
     target?.paradigm === "kv"
       ? t("mainArea.emptyKvLead", {

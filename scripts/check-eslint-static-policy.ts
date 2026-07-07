@@ -25,8 +25,8 @@ export {
 export { FEATURE_IMPORT_BOUNDARY_SCOPE } from "./static-policy/feature-import-boundary";
 
 export const MAX_LINES_ALLOWLIST = [
-  "e2e/smoke/_helpers.ts",
   "e2e/fixtures/seed-smoke.ts",
+  "e2e/smoke/_helpers.ts",
   "src/features/connection/components/ConnectionDialog.test.tsx",
   "src/features/connection/components/ConnectionGroup.test.tsx",
   "src/features/connection/components/ConnectionItem.test.tsx",
