@@ -69,7 +69,7 @@ function completionPublicApiFixture(extraLines: readonly string[] = []) {
 
 describe("check-eslint-static-policy", () => {
   it("keeps the measured max-lines allowlist explicit", () => {
-    expect(MAX_LINES_ALLOWLIST).toHaveLength(18);
+    expect(MAX_LINES_ALLOWLIST).toHaveLength(17);
     expect(MAX_LINES_ALLOWLIST).not.toContain(
       "src/components/datagrid/sqlGenerator.test.ts",
     );
@@ -85,8 +85,6 @@ describe("check-eslint-static-policy", () => {
       "src/components/query/QueryTab/useQueryExecution.ts",
     );
     expect(MAX_LINES_ALLOWLIST).toContain("e2e/smoke/_helpers.ts");
-    // Append-only seed-target registry grows one line per blocking E2E spec.
-    expect(MAX_LINES_ALLOWLIST).toContain("e2e/fixtures/seed-smoke.ts");
   });
 
   it("allows only generated wasm lint ignores", () => {

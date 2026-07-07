@@ -156,21 +156,6 @@
       "action": "keep blocking E2E"
     },
     {
-      "id": "postgres-empty-database-runtime-smoke",
-      "fixture": "e2e/fixtures/postgresql/query/seed.sql",
-      "specs": ["e2e/smoke/postgres-empty-database.spec.ts"],
-      "specKeys": ["postgres-empty-database"],
-      "seedTargets": [],
-      "tier": "blocking E2E",
-      "wiredInSmokeScript": true,
-      "runtimeCost": "Reuses the shared PostgreSQL service container and prepared Tauri binary; adds one short matrix leg. No seed script runs (empty-database scenario), so it only pays connect + auto-resolve + schema introspection. Job timeout remains 40 minutes.",
-      "flakeRisk": "Existing Postgres container startup risk only; the spec seeds nothing and asserts a single schema-tree node, so it carries no cross-spec state bleed.",
-      "cacheImpact": "Uses shared prepared Tauri binary and Rust target cache; belongs to the postgresql fixture family.",
-      "failureArtifacts": "wdio report uploaded as e2e-smoke-artifacts-postgres-empty-database.",
-      "supportClaimImpact": "Runtime Happy Path evidence for the no-default-database auto-resolve regression only (a connection created with an empty database field still renders its schema tree); it does not claim any query/edit/DDL slice.",
-      "action": "keep blocking E2E"
-    },
-    {
       "id": "mysql-runtime-smoke-seed",
       "fixture": "e2e/fixtures/mysql/query/seed.sql",
       "specs": ["e2e/smoke/mysql.spec.ts"],

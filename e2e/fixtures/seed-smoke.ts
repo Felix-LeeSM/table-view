@@ -185,7 +185,6 @@ const ALL_SEED_TARGETS = [
 
 const SEED_TARGETS_BY_SPEC_KEY: Record<string, readonly SeedTarget[]> = {
   postgres: ["postgres"],
-  "postgres-empty-database": [],
   "postgres-safe-mode": ["postgres"],
   "postgres-safe-mode-matrix": ["postgres"],
   "postgres-explain": ["postgres"],

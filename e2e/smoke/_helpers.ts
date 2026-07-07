@@ -321,7 +321,6 @@ export async function selectConnectionEnvironment(
 export async function createPostgresConnection(
   name = "E2E Postgres",
   environment?: ConnectionEnvironment,
-  opts: { database?: string } = {},
 ) {
   const dialog = await openNewConnectionDialog();
   await selectDatabaseType("postgresql");
@@ -337,11 +336,7 @@ export async function createPostgresConnection(
   );
   await setInput("#conn-user", process.env.PGUSER ?? "testuser");
   await setInput("#conn-password", process.env.PGPASSWORD ?? "testpass");
-  // `opts.database: ""` clears the seeded db field (no-default-db repro).
-  await setInput(
-    "#conn-database",
-    opts.database ?? process.env.PGDATABASE ?? "table_view_test",
-  );
+  await setInput("#conn-database", process.env.PGDATABASE ?? "table_view_test");
 
   await saveConnectionDialog(dialog);
   await expectConnectionVisible(name);
