@@ -17,18 +17,12 @@ import {
 } from "@components/shared/tree/useTreeRoving";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useSafeModeStore } from "@stores/safeModeStore";
-import { currentKvDatabase, getKvValue, scanKvKeys } from "@lib/tauri/kv";
-import type { KvKeyMetadata, KvValueEnvelope } from "@/types/kv";
+import { useWorkspaceStore } from "@stores/workspaceStore";
+import { currentKvDatabase, scanKvKeys } from "@lib/tauri/kv";
+import type { KvKeyMetadata } from "@/types/kv";
 import { formatKvTtl } from "@/types/kv";
 import { DATABASE_TYPE_LABELS } from "@/types/connection";
-import { getDataSourceProfile } from "@/types/dataSource";
-import {
-  canRenderKvMutationPanel,
-  KvMutationPanel,
-  type KvMutationActionIntent,
-} from "./KvMutationPanel";
-import { KvKeyActions } from "./KvKeyActions";
-import { KvStreamReaderPanel } from "./KvStreamReaderPanel";
+import { formatBytes, formatCount } from "./kvValueFormat";
 
 const KEY_SCAN_LIMIT = 100;
 
@@ -42,14 +36,13 @@ export default function KvSidebar({ connectionId }: KvSidebarProps) {
     s.connections.find((c) => c.id === connectionId),
   );
   const status = useConnectionStore((s) => s.activeStatuses[connectionId]);
+  const setActiveDb = useConnectionStore((s) => s.setActiveDb);
+  const addTab = useWorkspaceStore((s) => s.addTab);
   const safeMode = useSafeModeStore((s) => s.mode);
   const autoScanAllowed = safeMode === "off";
   const productLabel = connection
     ? DATABASE_TYPE_LABELS[connection.dbType]
     : "Redis";
-  const mutationEnabled = connection
-    ? getDataSourceProfile(connection.dbType).capabilities.edit.editKeys
-    : true;
   const initialDatabase = useMemo(() => {
     const activeDb = status?.type === "connected" ? status.activeDb : undefined;
     const raw = activeDb ?? connection?.database ?? "0";
@@ -65,16 +58,11 @@ export default function KvSidebar({ connectionId }: KvSidebarProps) {
   const [hasScannedKeys, setHasScannedKeys] = useState(false);
   const [loadingCatalog, setLoadingCatalog] = useState(false);
   const [loadingKeys, setLoadingKeys] = useState(false);
-  const [loadingValue, setLoadingValue] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
-  const [value, setValue] = useState<KvValueEnvelope | null>(null);
-  const [mutationActionIntent, setMutationActionIntent] =
-    useState<KvMutationActionIntent | null>(null);
   const autoScanRef = useRef(false);
   const rootScanInFlightRef = useRef<string | null>(null);
   const latestKeyScanRef = useRef(0);
-  const mutationActionRequestRef = useRef(0);
 
   const loadCatalog = useCallback(async () => {
     setLoadingCatalog(true);
@@ -133,33 +121,30 @@ export default function KvSidebar({ connectionId }: KvSidebarProps) {
     [connectionId, database, pattern],
   );
 
-  const loadValue = useCallback(
-    async (key: string) => {
+  // Open the selected key in a right-hand detail tab (kv paradigm), mirroring
+  // the search sidebar → SearchIndexDetailPanel navigation. The sidebar owns
+  // scan + selection only; the tab hosts value inspection and mutation.
+  const openKeyDetail = useCallback(
+    (key: string) => {
       setSelectedKey(key);
-      setLoadingValue(true);
-      setError(null);
-      try {
-        const envelope = await getKvValue(connectionId, {
-          database,
-          key,
-          limit: KEY_SCAN_LIMIT,
-        });
-        setValue(envelope);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : String(err));
-      } finally {
-        setLoadingValue(false);
-      }
+      const db = String(database);
+      // Align the connection's active DB with the tab's workspace bucket so
+      // MainArea's (connId, activeDb) key resolves to where the tab lives
+      // (same guarantee SearchSidebar makes with SEARCH_WORKSPACE_DB).
+      setActiveDb(connectionId, db);
+      addTab(connectionId, {
+        title: key,
+        connectionId,
+        type: "table",
+        closable: true,
+        database: db,
+        schema: db,
+        table: key,
+        subView: "structure",
+        paradigm: "kv",
+      });
     },
-    [connectionId, database],
-  );
-
-  const refreshAfterMutation = useCallback(
-    async (key: string) => {
-      await loadKeys("0");
-      await loadValue(key);
-    },
-    [loadKeys, loadValue],
+    [addTab, connectionId, database, setActiveDb],
   );
 
   useEffect(() => {
@@ -170,8 +155,6 @@ export default function KvSidebar({ connectionId }: KvSidebarProps) {
     setKeys([]);
     setNextCursor("0");
     setSelectedKey(null);
-    setValue(null);
-    setMutationActionIntent(null);
     setHasScannedKeys(false);
   }, [connectionId]);
 
@@ -188,8 +171,6 @@ export default function KvSidebar({ connectionId }: KvSidebarProps) {
     setKeys([]);
     setNextCursor("0");
     setSelectedKey(null);
-    setValue(null);
-    setMutationActionIntent(null);
     setHasScannedKeys(false);
   }, [connectionId, database]);
 
@@ -207,21 +188,6 @@ export default function KvSidebar({ connectionId }: KvSidebarProps) {
     : safeMode === "off"
       ? t("kvSidebar.scanPending")
       : t("kvSidebar.scanPaused");
-  const selectedValueReady = value?.key === selectedKey && !loadingValue;
-  const selectedMutationReady = Boolean(
-    selectedValueReady &&
-    value &&
-    canRenderKvMutationPanel(value, mutationEnabled),
-  );
-  const requestMutationAction = (kind: KvMutationActionIntent["kind"]) => {
-    if (!value || !selectedMutationReady) return;
-    mutationActionRequestRef.current += 1;
-    setMutationActionIntent({
-      kind,
-      key: value.key,
-      requestId: mutationActionRequestRef.current,
-    });
-  };
 
   // WAI-ARIA tree roving over the flat key list — one tab stop, arrow-key nav.
   // Single level, so every row is a leaf (no expand/collapse) and toggle is a
@@ -305,12 +271,6 @@ export default function KvSidebar({ connectionId }: KvSidebarProps) {
         <span>{scanStatusText}</span>
       </div>
 
-      <KvKeyActions
-        productLabel={productLabel}
-        selectedMutationReady={selectedMutationReady}
-        onMutationAction={requestMutationAction}
-      />
-
       {error && (
         <div
           role="alert"
@@ -342,7 +302,7 @@ export default function KvSidebar({ connectionId }: KvSidebarProps) {
               tabIndex={activeKey === item.key ? 0 : -1}
               onFocus={() => roving.setFocusKey(item.key)}
               className="grid min-h-8 w-full grid-cols-[minmax(0,1fr)_auto] gap-x-2 px-3 py-1.5 text-left hover:bg-accent hover:text-accent-foreground data-[selected]:bg-accent data-[selected]:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-              onClick={() => void loadValue(item.key)}
+              onClick={() => openKeyDetail(item.key)}
             >
               <div className="flex min-w-0 items-center gap-2">
                 {iconForKeyType(item.keyType)}
@@ -401,16 +361,6 @@ export default function KvSidebar({ connectionId }: KvSidebarProps) {
             </Button>
           </div>
         )}
-
-        <KvValuePreview
-          value={value}
-          loading={loadingValue}
-          connectionId={connectionId}
-          database={database}
-          mutationEnabled={mutationEnabled}
-          mutationActionIntent={mutationActionIntent}
-          onMutationSuccess={refreshAfterMutation}
-        />
       </div>
     </div>
   );
@@ -443,131 +393,4 @@ function iconForKeyType(type: KvKeyMetadata["keyType"]) {
   return (
     <Icon size={12} className="shrink-0 text-muted-foreground" aria-hidden />
   );
-}
-
-function formatCount(value: number): string {
-  return new Intl.NumberFormat("en", { notation: "compact" }).format(value);
-}
-
-function formatBytes(value: number): string {
-  if (value < 1024) return `${value} B`;
-  const kib = value / 1024;
-  if (kib < 1024) return `${kib.toFixed(1)} KiB`;
-  return `${(kib / 1024).toFixed(1)} MiB`;
-}
-
-function KvValuePreview({
-  value,
-  loading,
-  connectionId,
-  database,
-  mutationEnabled,
-  mutationActionIntent,
-  onMutationSuccess,
-}: {
-  value: KvValueEnvelope | null;
-  loading: boolean;
-  connectionId: string;
-  database: number;
-  mutationEnabled: boolean;
-  mutationActionIntent: KvMutationActionIntent | null;
-  onMutationSuccess: (key: string) => Promise<void>;
-}) {
-  const { t } = useTranslation("workspace");
-  if (loading) {
-    return (
-      <div
-        role="status"
-        className="border-t border-border px-3 py-3 text-muted-foreground"
-      >
-        {t("kvSidebar.loadingValue")}
-      </div>
-    );
-  }
-  if (!value) return null;
-  const valueBody =
-    value.value.type === "stream" ? (
-      <KvStreamReaderPanel
-        connectionId={connectionId}
-        database={database}
-        stream={value.value}
-      />
-    ) : (
-      <pre className="max-h-48 overflow-auto rounded border border-border bg-muted/40 p-2 text-3xs text-foreground">
-        {renderValueText(value)}
-      </pre>
-    );
-  return (
-    <div className="border-t border-border px-3 py-3">
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <span className="min-w-0 truncate text-sm font-medium text-secondary-foreground">
-          {value.key}
-        </span>
-        <span className="inline-flex items-center gap-1 text-3xs text-muted-foreground">
-          <Timer size={11} aria-hidden />
-          {formatKvTtl(value.metadata.ttl)}
-        </span>
-      </div>
-      <div className="mb-2 flex flex-wrap items-center gap-1.5 text-3xs text-muted-foreground">
-        <span className="rounded bg-muted px-1.5 py-0.5">
-          {value.metadata.keyType}
-        </span>
-        {typeof value.metadata.length === "number" && (
-          <span>
-            {t("kvSidebar.itemCount", {
-              count: formatCount(value.metadata.length),
-            })}
-          </span>
-        )}
-        {typeof value.metadata.memoryBytes === "number" && (
-          <span>{formatBytes(value.metadata.memoryBytes)}</span>
-        )}
-      </div>
-      {valueBody}
-      {canRenderKvMutationPanel(value, mutationEnabled) && (
-        <KvMutationPanel
-          value={value}
-          connectionId={connectionId}
-          database={database}
-          actionIntent={mutationActionIntent}
-          onMutationSuccess={onMutationSuccess}
-        />
-      )}
-    </div>
-  );
-}
-
-function renderValueText(envelope: KvValueEnvelope): string {
-  const { value } = envelope;
-  switch (value.type) {
-    case "string":
-      return value.text ?? value.hex ?? "";
-    case "hash":
-      return value.fields
-        .map((field) => `${field.field}: ${field.value}`)
-        .join("\n");
-    case "list":
-      return value.entries
-        .map((entry) => `${entry.index}: ${entry.value}`)
-        .join("\n");
-    case "set":
-      return value.members.join("\n");
-    case "zSet":
-      return value.entries
-        .map((entry) => `${entry.member}: ${entry.score}`)
-        .join("\n");
-    case "stream":
-      return value.entries
-        .map(
-          (entry) =>
-            `${entry.id} ${entry.fields.map((f) => `${f.field}=${f.value}`).join(" ")}`,
-        )
-        .join("\n");
-    case "json":
-      return JSON.stringify(value.value, null, 2);
-    case "missing":
-      return "(missing)";
-    case "unsupported":
-      return value.message;
-  }
 }

@@ -119,6 +119,28 @@ vi.mock("@components/search/SearchIndexDetailPanel", () => ({
   ),
 }));
 
+// KV UX redesign (2026-07-07) — kv key tabs render a dedicated right-hand
+// detail panel (mirrors search). Mocked so this suite pins routing, not the
+// panel body.
+vi.mock("@components/workspace/KvKeyDetailPanel", () => ({
+  default: ({
+    connectionId,
+    database,
+    keyName,
+  }: {
+    connectionId: string;
+    database: number;
+    keyName: string;
+  }) => (
+    <div
+      data-testid="mock-kv-key-detail"
+      data-connection={connectionId}
+      data-database={database}
+      data-key={keyName}
+    />
+  ),
+}));
+
 // Sprint 350 (2026-05-15) — Mongo document-paradigm branch now renders a
 // Records/Structure sub-tab bar that mounts `DocumentDataGrid` (Records)
 // or `MongoStructurePanel` (Structure). Both are mocked so this suite
@@ -427,6 +449,33 @@ describe("MainArea", () => {
       "data-index",
       "logs-elastic-2026.05.24",
     );
+    expect(screen.queryByTestId("mock-datagrid")).toBeNull();
+    expect(
+      screen.queryByRole("tablist", { name: "Table view" }),
+    ).not.toBeInTheDocument();
+  });
+
+  // KV UX redesign (2026-07-07) — a kv key tab must render the KvKeyDetailPanel
+  // (right-hand detail), never the RDB Table-view sub-tab bar / DataGrid.
+  it("renders KvKeyDetailPanel for kv key tabs", () => {
+    const tab = makeTableTab({
+      id: "kv-tab-1",
+      title: "user:1",
+      connectionId: "redis-1",
+      database: "0",
+      schema: "0",
+      table: "user:1",
+      subView: "structure",
+      paradigm: "kv",
+    });
+    useWorkspaceStore.setState(seedWorkspace([tab], tab.id));
+
+    render(<MainArea />);
+
+    const panel = screen.getByTestId("mock-kv-key-detail");
+    expect(panel).toHaveAttribute("data-connection", "redis-1");
+    expect(panel).toHaveAttribute("data-database", "0");
+    expect(panel).toHaveAttribute("data-key", "user:1");
     expect(screen.queryByTestId("mock-datagrid")).toBeNull();
     expect(
       screen.queryByRole("tablist", { name: "Table view" }),

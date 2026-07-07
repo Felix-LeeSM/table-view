@@ -30,6 +30,7 @@ import { Skeleton } from "@components/ui/skeleton";
 import { LogoWordmark } from "@components/shared/Logo";
 import ErrorBoundary from "@components/shared/ErrorBoundary";
 import SearchIndexDetailPanel from "@components/search/SearchIndexDetailPanel";
+import KvKeyDetailPanel from "@components/workspace/KvKeyDetailPanel";
 import { assertNever, type Paradigm } from "@/lib/paradigm";
 import { getDataSourceProfile } from "@/types/dataSource";
 import WorkspaceToolbar from "@components/workspace/WorkspaceToolbar";
@@ -174,8 +175,19 @@ function TableTabView({ tab, onSubViewChange }: TableTabProps) {
         <SearchIndexDetailPanel connectionId={tab.connectionId} index={index} />
       );
     }
+    case "kv": {
+      // KV key tabs carry the numeric Redis DB index in `database` (its string
+      // form; also mirrored to `schema` so the MainArea render gate passes).
+      const database = Number.parseInt(tab.database ?? tab.schema ?? "0", 10);
+      return (
+        <KvKeyDetailPanel
+          connectionId={tab.connectionId}
+          database={Number.isFinite(database) ? database : 0}
+          keyName={tab.table ?? ""}
+        />
+      );
+    }
     case "rdb":
-    case "kv":
       return (
         <div className="flex flex-1 flex-col overflow-hidden">
           {/* Sub-tab bar */}
