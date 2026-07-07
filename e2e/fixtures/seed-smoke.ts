@@ -195,6 +195,7 @@ const SEED_TARGETS_BY_SPEC_KEY: Record<string, readonly SeedTarget[]> = {
   mysql: ["mysql"],
   mariadb: ["mariadb"],
   mssql: ["mssql"],
+  "mssql-schema-filter": ["mssql"],
   oracle: ["oracle"],
   mongodb: ["mongodb"],
   "phase-28-slice-A": ["mongodb"],
@@ -206,6 +207,7 @@ const SEED_TARGETS_BY_SPEC_KEY: Record<string, readonly SeedTarget[]> = {
   "history-source-5": ["postgres", "mongodb"],
   sqlite: [],
   duckdb: [],
+  "duckdb-schema-filter": [],
   "duckdb-file-analytics": [],
 };
 

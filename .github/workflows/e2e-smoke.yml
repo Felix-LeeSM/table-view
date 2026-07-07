@@ -207,6 +207,8 @@ jobs:
             needs_mariadb: true
           - spec_key: duckdb
             spec: e2e/smoke/duckdb.spec.ts
+          - spec_key: duckdb-schema-filter
+            spec: e2e/smoke/duckdb-schema-filter.spec.ts
           - spec_key: mongodb
             spec: e2e/smoke/mongodb.spec.ts
             needs_mongodb: true
@@ -628,6 +630,8 @@ jobs:
         include:
           - spec_key: mssql
             spec: e2e/smoke/mssql.spec.ts
+          - spec_key: mssql-schema-filter
+            spec: e2e/smoke/mssql-schema-filter.spec.ts
           - spec_key: oracle
             spec: e2e/smoke/oracle.spec.ts
 
@@ -721,7 +725,7 @@ jobs:
           esac
 
       - name: Start MSSQL service
-        if: matrix.spec_key == 'mssql'
+        if: matrix.spec_key == 'mssql' || matrix.spec_key == 'mssql-schema-filter'
         run: |
           docker run -d \
             --name table-view-mssql \
@@ -784,7 +788,7 @@ jobs:
         run: bash scripts/e2e-smoke-ci.sh
 
       - name: Stop MSSQL service
-        if: always() && matrix.spec_key == 'mssql'
+        if: always() && (matrix.spec_key == 'mssql' || matrix.spec_key == 'mssql-schema-filter')
         run: docker rm --force table-view-mssql || true
 
       - name: Stop Oracle service
