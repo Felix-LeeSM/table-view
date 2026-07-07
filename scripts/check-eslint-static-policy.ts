@@ -26,6 +26,11 @@ export { FEATURE_IMPORT_BOUNDARY_SCOPE } from "./static-policy/feature-import-bo
 
 export const MAX_LINES_ALLOWLIST = [
   "e2e/smoke/_helpers.ts",
+  // Append-only seed-target registry: the smoke routing contract requires one
+  // SEED_TARGETS_BY_SPEC_KEY entry per blocking E2E spec, so this file grows by
+  // a line with every new smoke spec. The 700-line god-file cap does not fit a
+  // required registry; allowlist it instead of shrink-hacking on each new spec.
+  "e2e/fixtures/seed-smoke.ts",
   "src/features/connection/components/ConnectionDialog.test.tsx",
   "src/features/connection/components/ConnectionGroup.test.tsx",
   "src/features/connection/components/ConnectionItem.test.tsx",

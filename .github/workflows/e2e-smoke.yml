@@ -178,6 +178,9 @@ jobs:
           - spec_key: postgres
             spec: e2e/smoke/postgres.spec.ts
             needs_postgres: true
+          - spec_key: postgres-empty-database
+            spec: e2e/smoke/postgres-empty-database.spec.ts
+            needs_postgres: true
           - spec_key: postgres-safe-mode
             spec: e2e/smoke/postgres-safe-mode.spec.ts
             needs_postgres: true

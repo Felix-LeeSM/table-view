@@ -132,6 +132,7 @@ if [[ -n "$SPEC_TO_RUN" ]]; then
   run_wdio "$BASE_DATA_DIR/$SAFE_SPEC_NAME" "$SPEC_TO_RUN"
 else
   run_wdio "$BASE_DATA_DIR/postgres" "e2e/smoke/postgres.spec.ts"
+  run_wdio "$BASE_DATA_DIR/postgres-empty-database" "e2e/smoke/postgres-empty-database.spec.ts"
   run_wdio "$BASE_DATA_DIR/postgres-safe-mode" "e2e/smoke/postgres-safe-mode.spec.ts"
   run_wdio "$BASE_DATA_DIR/postgres-safe-mode-matrix" "e2e/smoke/postgres-safe-mode-matrix.spec.ts"
   run_wdio "$BASE_DATA_DIR/postgres-explain" "e2e/smoke/postgres-explain.spec.ts"
