@@ -5,15 +5,15 @@ import duckdb, {
 import { mkdirSync, readFileSync, rmSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 
-export async function prepareDuckdbFixture(path: string) {
+export async function prepareDuckdbFixture(
+  path: string,
+  seedRelativePath = "e2e/fixtures/duckdb/query/seed.sql",
+) {
   mkdirSync(dirname(path), { recursive: true });
   rmSync(path, { force: true });
   rmSync(`${path}.wal`, { force: true });
 
-  const sql = readFileSync(
-    resolve("e2e/fixtures/duckdb/query/seed.sql"),
-    "utf-8",
-  );
+  const sql = readFileSync(resolve(seedRelativePath), "utf-8");
   const database = new duckdb.Database(path);
   const connection = database.connect();
 
