@@ -215,6 +215,9 @@ jobs:
           - spec_key: redis
             spec: e2e/smoke/redis.spec.ts
             needs_redis: true
+          - spec_key: redis-key-detail-panel
+            spec: e2e/smoke/redis-key-detail-panel.spec.ts
+            needs_redis: true
           - spec_key: redis-empty-state-window
             spec: e2e/smoke/redis-empty-state-window.spec.ts
             needs_redis: true

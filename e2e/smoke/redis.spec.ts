@@ -5,6 +5,7 @@ import {
   openNewQueryTab,
   runQuery,
   step,
+  switchToWorkspaceWindow,
   waitForGridTextAll,
   waitForLauncher,
   waitForWorkspaceTextAll,
@@ -12,11 +13,13 @@ import {
 
 const CONNECTION_NAME = "E2E Redis";
 const INITIAL_VALUE = "hello";
+// KV UX redesign (2026-07-07, #E): value inspection + mutation moved out of the
+// left KvSidebar into a right-hand KvKeyDetailPanel tab. aria-label comes from
+// `kvKeyDetail.sectionAria` = "{{key}} key detail".
+const DETAIL_PANEL_SELECTOR = '[aria-label="tv:string key detail"]';
 
 describe("Redis smoke", () => {
-  it("connects, scans keys, previews values, runs commands, and gates mutations", async () => {
-    const editedValue = `smoke-${Date.now()}`;
-
+  it("connects, scans keys, opens the detail tab, runs commands, and gates TTL/delete mutations", async () => {
     await step("create Redis connection and open workspace", async () => {
       await waitForLauncher();
       await createRedisConnection(CONNECTION_NAME);
@@ -38,21 +41,30 @@ describe("Redis smoke", () => {
       );
     });
 
-    await step("scan and preview a seeded string key", async () => {
-      await setField("Redis key pattern", "tv:string");
-      await browser.keys("Enter");
-      await waitForWorkspaceTextAll(
-        ["1 key", "tv:string"],
-        15000,
-        "Redis filtered key scan did not render tv:string",
-      );
-      await clickRedisKey("tv:string");
-      await waitForWorkspaceTextAll(
-        ["tv:string", INITIAL_VALUE, "string", "Mutation"],
-        15000,
-        "Redis value preview did not render seeded string value",
-      );
-    });
+    await step(
+      "filtered scan then open the key in the detail tab",
+      async () => {
+        await setField("Redis key pattern", "tv:string");
+        await browser.keys("Enter");
+        await waitForWorkspaceTextAll(
+          ["1 key", "tv:string"],
+          15000,
+          "Redis filtered key scan did not render tv:string",
+        );
+        // Selecting a key now opens the right-hand KvKeyDetailPanel tab (the
+        // sidebar no longer renders an inline value/mutation surface).
+        await clickRedisKey("tv:string");
+        await switchToWorkspaceWindow();
+        await (
+          await $(DETAIL_PANEL_SELECTOR)
+        ).waitForDisplayed({ timeout: 15000 });
+        await waitForWorkspaceTextAll(
+          ["tv:string", INITIAL_VALUE, "string", "Mutation"],
+          15000,
+          "KvKeyDetailPanel did not render the seeded string value",
+        );
+      },
+    );
 
     await step("run a bounded Redis command in the query tab", async () => {
       await openNewQueryTab();
@@ -65,24 +77,17 @@ describe("Redis smoke", () => {
       );
     });
 
-    await step("guard and apply a string overwrite", async () => {
+    // String-overwrite coverage moved to redis-key-detail-panel.spec.ts (the
+    // dedicated new-UX spec) to avoid duplication. TTL + delete stay here
+    // because that spec does not cover them.
+    await step("guard and apply a TTL update from the detail tab", async () => {
+      // Re-open the detail tab: the query tab above is now the active editor,
+      // so re-select the key to bring the panel back into the main area.
       await clickRedisKey("tv:string");
-      await setField("String value", editedValue);
-      await clickButton("Preview string set");
-      await waitForWorkspaceTextAll(
-        ["Preview: SET tv:string"],
-        10000,
-        "Redis string set preview did not appear",
-      );
-      await clickButton("Confirm String set");
-      await waitForWorkspaceTextAll(
-        [editedValue],
-        15000,
-        "Redis string set did not refresh the preview",
-      );
-    });
-
-    await step("guard and apply a TTL update", async () => {
+      await switchToWorkspaceWindow();
+      await (
+        await $(DETAIL_PANEL_SELECTOR)
+      ).waitForDisplayed({ timeout: 15000 });
       await setField("Expire seconds", "120");
       await clickButton("Preview expire");
       await waitForWorkspaceTextAll(
@@ -91,12 +96,23 @@ describe("Redis smoke", () => {
         "Redis expire preview did not appear",
       );
       await clickButton("Confirm Expire");
+      // The detail panel and the query editor share the main-area tab slot, so
+      // opening the panel above replaced the earlier query tab. Open a fresh
+      // query tab to verify the applied TTL through a bounded command.
+      await openNewQueryTab();
       await setCodeMirrorText("TTL tv:string");
       await runQuery();
       await waitForRedisTtlCommandResult(30000);
     });
 
     await step("require exact key confirmation before delete", async () => {
+      // TTL step ran a query, so re-select the key to restore the detail tab.
+      await clickRedisKey("tv:string");
+      await switchToWorkspaceWindow();
+      await (
+        await $(DETAIL_PANEL_SELECTOR)
+      ).waitForDisplayed({ timeout: 15000 });
+
       await setField("Delete confirm key", "wrong");
       await clickButton("Preview delete");
       await waitForWorkspaceTextAll(
@@ -113,10 +129,20 @@ describe("Redis smoke", () => {
         "Redis delete preview did not appear",
       );
       await clickButton("Confirm Delete");
+      // The panel reloads its own value after a mutation → "(missing)". The
+      // sidebar list is NOT auto-rescanned in the new UX (separate columns),
+      // so assert the panel first, then run a manual re-scan to confirm the
+      // key is gone from the sidebar.
       await waitForWorkspaceTextAll(
-        ["0 keys", "No keys match pattern tv:string.", "missing"],
+        ["missing"],
         15000,
-        "Redis delete mutation did not refresh key scan",
+        "KvKeyDetailPanel did not reflect the deleted key as missing",
+      );
+      await triggerKvKeyScan();
+      await waitForWorkspaceTextAll(
+        ["0 keys", "No keys match pattern tv:string."],
+        15000,
+        "Manual re-scan did not show the deleted key removed from the sidebar",
       );
     });
   });

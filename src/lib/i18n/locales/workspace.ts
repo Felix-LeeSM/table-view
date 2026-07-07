@@ -97,6 +97,9 @@ export const en = {
       label: "Delete",
     },
   },
+  kvKeyDetail: {
+    sectionAria: "{{key}} key detail",
+  },
   kvMutation: {
     sectionHeader: "Mutation",
     stringValue: "String value",
@@ -315,6 +318,9 @@ export const ko = {
       title: "선택한 키 삭제",
       label: "삭제",
     },
+  },
+  kvKeyDetail: {
+    sectionAria: "{{key}} 키 상세",
   },
   kvMutation: {
     sectionHeader: "뮤테이션",

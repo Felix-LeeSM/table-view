@@ -63,6 +63,10 @@ describe("smoke-routing-decisions.json", () => {
       spec: "e2e/smoke/oracle.spec.ts",
     });
     expect(result.blockingDecisionMatrix).toContainEqual({
+      specKey: "redis-key-detail-panel",
+      spec: "e2e/smoke/redis-key-detail-panel.spec.ts",
+    });
+    expect(result.blockingDecisionMatrix).toContainEqual({
       specKey: "duckdb-schema-filter",
       spec: "e2e/smoke/duckdb-schema-filter.spec.ts",
     });
@@ -76,6 +80,6 @@ describe("smoke-routing-decisions.json", () => {
     });
     expect(result.blockingDecisionMatrix).toEqual(collectSmokeScriptMatrix());
     expect(result.blockingDecisionMatrix).toEqual(collectWorkflowMatrix());
-    expect(result.blockingDecisionMatrix).toHaveLength(23);
+    expect(result.blockingDecisionMatrix).toHaveLength(24);
   });
 });

@@ -321,6 +321,21 @@
       "action": "keep blocking E2E"
     },
     {
+      "id": "redis-key-detail-panel-runtime-smoke-seed",
+      "fixture": "e2e/fixtures/redis/kv/seed.json",
+      "specs": ["e2e/smoke/redis-key-detail-panel.spec.ts"],
+      "specKeys": ["redis-key-detail-panel"],
+      "seedTargets": ["redis"],
+      "tier": "blocking E2E",
+      "wiredInSmokeScript": true,
+      "runtimeCost": "Reuses the existing redis:7-alpine service and Redis KV seed fixture; adds one 40-minute-budget matrix leg for the right-hand KvKeyDetailPanel UX.",
+      "flakeRisk": "Low service startup risk; shares the redis seed that selects isolated DB 2 and flushes before recreating keys.",
+      "cacheImpact": "Uses shared prepared Tauri binary and Rust target cache.",
+      "failureArtifacts": "wdio report uploaded as e2e-smoke-artifacts-redis-key-detail-panel.",
+      "supportClaimImpact": "Runtime Happy Path evidence that KV key selection opens the right-hand detail panel and mutates from it (KV UX redesign).",
+      "action": "keep blocking E2E"
+    },
+    {
       "id": "redis-empty-state-window-smoke",
       "fixture": "e2e/smoke/duckdb-fixture.ts",
       "specs": ["e2e/smoke/redis-empty-state-window.spec.ts"],
