@@ -69,7 +69,10 @@ function completionPublicApiFixture(extraLines: readonly string[] = []) {
 
 describe("check-eslint-static-policy", () => {
   it("keeps the measured max-lines allowlist explicit", () => {
-    expect(MAX_LINES_ALLOWLIST).toHaveLength(17);
+    expect(MAX_LINES_ALLOWLIST).toHaveLength(18);
+    // #1407 — the redis-empty-state-window seed mapping pushed
+    // e2e/fixtures/seed-smoke.ts past the 700-line cap.
+    expect(MAX_LINES_ALLOWLIST).toContain("e2e/fixtures/seed-smoke.ts");
     expect(MAX_LINES_ALLOWLIST).not.toContain(
       "src/components/datagrid/sqlGenerator.test.ts",
     );
