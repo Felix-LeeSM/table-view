@@ -380,4 +380,62 @@ describe("workspaceStore — lifecycle", () => {
     expect(reopened.queryState).toEqual({ status: "idle" });
     expect(reopened.sql).toBe("SELECT 1"); // SQL text preserved.
   });
+
+  // Issue #1057 — updateQueryState stamps `startedAt` (ms epoch) the moment a
+  // query enters the running state, giving the elapsed timer an anchor that
+  // survives tab switches. setRunningQueryServerPid must preserve it when the
+  // native pid arrives a beat later.
+  describe("#1057 — running-state startedAt stamping", () => {
+    function addRunningTab() {
+      const store = useWorkspaceStore.getState();
+      store.addQueryTab("conn1", "dbA", { title: "run", sql: "SELECT 1" });
+      const ws = useWorkspaceStore.getState().workspaces["conn1"]!["dbA"]!;
+      return ws.tabs[0]!.id;
+    }
+
+    it("stamps startedAt when entering running via updateQueryState", () => {
+      const tabId = addRunningTab();
+      const before = Date.now();
+      useWorkspaceStore.getState().updateQueryState("conn1", "dbA", tabId, {
+        status: "running",
+        queryId: "q-1057",
+      });
+      const after = Date.now();
+      const state = (
+        useWorkspaceStore.getState().workspaces["conn1"]!["dbA"]!
+          .tabs[0] as QueryTab
+      ).queryState;
+      expect(state.status).toBe("running");
+      if (state.status !== "running") throw new Error("expected running");
+      expect(state.startedAt).toBeGreaterThanOrEqual(before);
+      expect(state.startedAt).toBeLessThanOrEqual(after);
+    });
+
+    it("preserves startedAt across setRunningQueryServerPid", () => {
+      const tabId = addRunningTab();
+      useWorkspaceStore.getState().updateQueryState("conn1", "dbA", tabId, {
+        status: "running",
+        queryId: "q-1057",
+      });
+      const stamped = (
+        useWorkspaceStore.getState().workspaces["conn1"]!["dbA"]!
+          .tabs[0] as QueryTab
+      ).queryState;
+      if (stamped.status !== "running") throw new Error("expected running");
+      const anchor = stamped.startedAt;
+
+      useWorkspaceStore
+        .getState()
+        .setRunningQueryServerPid("conn1", "dbA", tabId, "q-1057", 4242);
+
+      const after = (
+        useWorkspaceStore.getState().workspaces["conn1"]!["dbA"]!
+          .tabs[0] as QueryTab
+      ).queryState;
+      expect(after.status).toBe("running");
+      if (after.status !== "running") throw new Error("expected running");
+      expect(after.serverPid).toBe(4242);
+      expect(after.startedAt).toBe(anchor); // not reset
+    });
+  });
 });

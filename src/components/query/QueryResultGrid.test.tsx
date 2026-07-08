@@ -119,8 +119,37 @@ describe("QueryResultGrid", () => {
     render(
       <QueryResultGrid queryState={{ status: "running", queryId: "q1" }} />,
     );
-    expect(screen.getByText("Executing query...")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        (_content, el) =>
+          el?.tagName === "P" &&
+          (el.textContent?.startsWith("Executing query...") ?? false),
+      ),
+    ).toBeInTheDocument();
     expect(document.querySelector(".animate-spin")).toBeInTheDocument();
+  });
+
+  it("running state shows live elapsed time anchored to startedAt", () => {
+    vi.useFakeTimers();
+    const startedAt = Date.now();
+    vi.setSystemTime(startedAt);
+    render(
+      <QueryResultGrid
+        queryState={{
+          status: "running",
+          queryId: "q1",
+          startedAt,
+        }}
+      />,
+    );
+    // Initial render: ~0.0s elapsed.
+    expect(screen.getByText(/Executing query\.\.\. 0\.0s/)).toBeInTheDocument();
+    // After 5s the timer text reflects the elapsed duration.
+    act(() => {
+      vi.advanceTimersByTime(5_000);
+    });
+    expect(screen.getByText(/Executing query\.\.\. 5\.0s/)).toBeInTheDocument();
+    vi.useRealTimers();
   });
 
   it("shows error message when status is error", () => {
