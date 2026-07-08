@@ -16,11 +16,20 @@ import { DATABASE_TYPE_LABELS, paradigmOf, type DatabaseType } from "../model";
 export interface ServerActivityPanelProps {
   connectionId: string;
   dbType: DatabaseType;
+  /**
+   * #1054 — kill_session is a destructive server action. The workspace
+   * layer (which owns `ConfirmDestructiveDialog`) passes this gate so the
+   * feature module stays free of workspace/store imports. The callback
+   * resolves `true` to proceed with the kill, `false` to cancel. When
+   * omitted the kill runs directly (standalone/test usage).
+   */
+  confirmKill?: (row: ServerActivityRow) => Promise<boolean>;
 }
 
 export function ServerActivityPanel({
   connectionId,
   dbType,
+  confirmKill,
 }: ServerActivityPanelProps) {
   const { t } = useTranslation("featuresConnection");
   const paradigm = paradigmOf(dbType);
@@ -47,10 +56,11 @@ export function ServerActivityPanel({
   }, [refresh]);
 
   const handleKill = useCallback(
-    async (id: number) => {
-      setKillingId(id);
+    async (row: ServerActivityRow) => {
+      if (confirmKill && !(await confirmKill(row))) return;
+      setKillingId(row.id);
       try {
-        await killServerActivity(connectionId, id);
+        await killServerActivity(connectionId, row.id);
         await refresh();
       } catch (e) {
         setError(e instanceof Error ? e.message : String(e));
@@ -58,7 +68,7 @@ export function ServerActivityPanel({
         setKillingId(null);
       }
     },
-    [connectionId, refresh],
+    [connectionId, refresh, confirmKill],
   );
 
   return (
@@ -165,7 +175,7 @@ export function ServerActivityPanel({
                     variant="ghost"
                     size="sm"
                     data-testid={`server-activity-kill-${r.id}`}
-                    onClick={() => void handleKill(r.id)}
+                    onClick={() => void handleKill(r)}
                     disabled={killingId === r.id}
                   >
                     {killingId === r.id

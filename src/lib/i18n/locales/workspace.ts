@@ -13,6 +13,19 @@ export const en = {
       title: "Query history (Cmd/Ctrl+Shift+C)",
       label: "History",
     },
+    operations: {
+      ariaLabel: "Toggle server operations panel",
+      title: "Server activity, info, and slow queries",
+      label: "Operations",
+    },
+  },
+  operations: {
+    title: "Server operations",
+    tabActivity: "Activity",
+    tabServerInfo: "Server info",
+    tabSlowQueries: "Slow queries",
+    closeAria: "Close operations panel",
+    killReason: "Kill session {{id}} ({{db}})",
   },
   sidebar: {
     noConnections: {
@@ -236,6 +249,19 @@ export const ko = {
       title: "쿼리 기록 (Cmd/Ctrl+Shift+C)",
       label: "기록",
     },
+    operations: {
+      ariaLabel: "서버 운영 패널 토글",
+      title: "서버 활동, 정보, 슬로우 쿼리",
+      label: "운영",
+    },
+  },
+  operations: {
+    title: "서버 운영",
+    tabActivity: "활동",
+    tabServerInfo: "서버 정보",
+    tabSlowQueries: "슬로우 쿼리",
+    closeAria: "운영 패널 닫기",
+    killReason: "세션 {{id}} 종료 ({{db}})",
   },
   sidebar: {
     noConnections: {

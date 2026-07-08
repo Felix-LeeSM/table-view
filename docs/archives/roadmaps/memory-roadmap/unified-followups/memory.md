@@ -44,6 +44,26 @@ phase 로 묶는다. Phase 28 (Mongo Full Support) 종료 후 phase 29 후보.
 2. 본 묶음 phase 착수 — U3+U4 (정보) 와 U1+U2+U5 (대화형) 둘로 2 sprint 또는 5 sprint 분해
 3. paradigm-shared UI shell 재사용 부담 한 곳에 모음
 
+## 상태 (2026-07-09, #1054)
+
+- **U1 Server activity / U4 Server info / U5 Slow query** — 표면화 완료.
+  백엔드 IPC + 프론트 패널은 Sprint 336/339/340 (2026-05-15) 에 이미 live
+  wire 됐고, #1054 가 workspace 진입점을 연결. 진입점 = 상단 툴바 `Operations`
+  버튼 → `OperationsPanel` flyout (ui-parity §2 기준 진입점으로 등록).
+  원안의 "connection 우클릭" 대신 툴바 flyout 을 쓴 이유: 같은 작업 = 같은
+  진입점 원칙에 부합하고 `GlobalQueryLogPanel` 토글 패턴을 재사용. 게이팅은
+  `operations.*` capability 소비. kill_session 은 `ConfirmDestructiveDialog`
+  경유 (feature layer → workspace layer `confirmKill` callback).
+- **U2 Explain** — #1041 별도 처리.
+- **U3 Collection/Table Stats** — 패널(`CollectionStatsPanel`) + IPC 는 완성.
+  마운트(StructurePanel 의 `Stats` sub-tab)는 별도 PR 로 분리. 본 #1054 PR 은
+  connection-level 3종(U1/U4/U5) 표면화에 집중.
+- **IndexesPanel (schema)** — 감사에서 5종째로 집계됐으나 실제로는 사장된
+  중복 자산. Mongo indexes 는 `MongoIndexesPanel`(`MongoStructurePanel` 에
+  마운트), RDB indexes 는 `IndexesEditor`(`StructurePanel`) 가 이미 서비스.
+  별도 진입점 마운트 = ui-parity §1 위반이므로 표면화에서 제외, 별도 cleanup
+  권장.
+
 ## 관련 방
 
 - [roadmap](../memory.md)

@@ -57,7 +57,77 @@ describe("ServerActivityPanel (Sprint 336 — U1 live wire)", () => {
     ).toHaveTextContent(/no active sessions/i);
   });
 
-  it("dispatches Kill and refreshes the grid", async () => {
+  it("proceeds with kill and refreshes when confirmKill resolves true", async () => {
+    // #1054 — kill_session is destructive. The workspace layer passes a
+    // `confirmKill` gate; only when it resolves true does the IPC fire.
+    listServerActivityMock
+      .mockResolvedValueOnce([
+        {
+          id: 42,
+          db: "analytics",
+          user: "alice",
+          state: "active",
+          query: "SELECT 1",
+          waitEvent: null,
+          startedAt: null,
+        },
+      ])
+      .mockResolvedValueOnce([]);
+    killServerActivityMock.mockResolvedValueOnce(undefined);
+    const user = userEvent.setup();
+
+    render(
+      <ServerActivityPanel
+        connectionId="conn-pg"
+        dbType="postgresql"
+        confirmKill={() => Promise.resolve(true)}
+      />,
+    );
+
+    await user.click(await screen.findByTestId("server-activity-kill-42"));
+
+    await waitFor(() => {
+      expect(killServerActivityMock).toHaveBeenCalledWith("conn-pg", 42);
+    });
+    expect(listServerActivityMock).toHaveBeenCalledTimes(2);
+    expect(
+      await screen.findByTestId("server-activity-empty"),
+    ).toBeInTheDocument();
+  });
+
+  it("does not fire the kill IPC when confirmKill resolves false", async () => {
+    listServerActivityMock.mockResolvedValueOnce([
+      {
+        id: 42,
+        db: "analytics",
+        user: "alice",
+        state: "active",
+        query: "SELECT 1",
+        waitEvent: null,
+        startedAt: null,
+      },
+    ]);
+    const user = userEvent.setup();
+
+    render(
+      <ServerActivityPanel
+        connectionId="conn-pg"
+        dbType="postgresql"
+        confirmKill={() => Promise.resolve(false)}
+      />,
+    );
+
+    await user.click(await screen.findByTestId("server-activity-kill-42"));
+
+    // Give the async gate a tick to settle.
+    await waitFor(() => {
+      expect(killServerActivityMock).not.toHaveBeenCalled();
+    });
+  });
+
+  it("kills directly when no confirmKill gate is provided (standalone)", async () => {
+    // #1054 — confirmKill is optional. Standalone/test usage without the
+    // workspace layer still terminates immediately (backward compatible).
     listServerActivityMock
       .mockResolvedValueOnce([
         {
@@ -81,10 +151,6 @@ describe("ServerActivityPanel (Sprint 336 — U1 live wire)", () => {
     await waitFor(() => {
       expect(killServerActivityMock).toHaveBeenCalledWith("conn-pg", 42);
     });
-    expect(listServerActivityMock).toHaveBeenCalledTimes(2);
-    expect(
-      await screen.findByTestId("server-activity-empty"),
-    ).toBeInTheDocument();
   });
 
   it("re-fetches when Refresh is clicked", async () => {
