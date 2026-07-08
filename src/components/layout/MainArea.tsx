@@ -32,6 +32,7 @@ import { LogoWordmark } from "@components/shared/Logo";
 import ErrorBoundary from "@components/shared/ErrorBoundary";
 import SearchIndexDetailPanel from "@components/search/SearchIndexDetailPanel";
 import KvKeyDetailPanel from "@components/workspace/KvKeyDetailPanel";
+import OperationsPanel from "@components/workspace/OperationsPanel";
 import { assertNever, type Paradigm } from "@/lib/paradigm";
 import { getDataSourceProfile } from "@/types/dataSource";
 import WorkspaceToolbar from "@components/workspace/WorkspaceToolbar";
@@ -394,6 +395,10 @@ export default function MainArea() {
   // skeleton never re-renders for the remainder of the session.
   const hasLoadedOnce = useConnectionStore((s) => s.hasLoadedOnce);
   const [showGlobalLog, setShowGlobalLog] = useState(false);
+  // #1054 — workspace operations flyout (U1/U4/U5). Toggled from the
+  // toolbar via the same custom-event channel as the query log so both
+  // workspace-level flyouts share one discovery pattern.
+  const [showOperations, setShowOperations] = useState(false);
 
   const activeTab = tabs.find((t) => t.id === activeTabId);
 
@@ -404,6 +409,15 @@ export default function MainArea() {
     };
     window.addEventListener("toggle-global-query-log", handler);
     return () => window.removeEventListener("toggle-global-query-log", handler);
+  }, []);
+
+  // Listen for toggle-operations-panel custom event
+  useEffect(() => {
+    const handler = () => {
+      setShowOperations((prev) => !prev);
+    };
+    window.addEventListener("toggle-operations-panel", handler);
+    return () => window.removeEventListener("toggle-operations-panel", handler);
   }, []);
 
   return (
@@ -471,6 +485,10 @@ export default function MainArea() {
       <GlobalQueryLogPanel
         visible={showGlobalLog}
         onClose={() => setShowGlobalLog(false)}
+      />
+      <OperationsPanel
+        visible={showOperations}
+        onClose={() => setShowOperations(false)}
       />
     </main>
   );
