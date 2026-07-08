@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { AlertTriangle, Info, Loader2, Pencil } from "lucide-react";
+import { AlertTriangle, Info, Pencil } from "lucide-react";
 import type {
   QueryResult,
   QueryState,
@@ -31,6 +31,7 @@ import EditableQueryResultGrid from "./EditableQueryResultGrid";
 import { QueryResultTable } from "./QueryResultTable";
 import ScalarOrListPanel from "./ScalarOrListPanel";
 import WriteSummaryPanel from "./WriteSummaryPanel";
+import { QueryRunningState } from "./QueryRunningState";
 import { resolveQueryExportBoundary } from "./queryExportBoundary";
 
 const NON_GRID_SQL_EXPORT_REASON =
@@ -695,24 +696,9 @@ export default function QueryResultGrid({
   isDryRun: isDryRunProp,
 }: QueryResultGridProps) {
   const { t } = useTranslation("query");
-  // Running state
+  // Running state — Issue #1057 elapsed timer lives in <QueryRunningState>.
   if (queryState.status === "running") {
-    return (
-      <div
-        role="status"
-        aria-busy="true"
-        className="flex flex-1 flex-col items-center justify-center"
-      >
-        <Loader2
-          className="mb-2 animate-spin text-muted-foreground"
-          size={24}
-          aria-hidden="true"
-        />
-        <p className="text-sm text-muted-foreground">
-          {t("resultGrid.executing")}
-        </p>
-      </div>
-    );
+    return <QueryRunningState startedAt={queryState.startedAt} />;
   }
 
   // Error state

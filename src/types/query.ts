@@ -280,7 +280,16 @@ export type QueryState =
   // query starts) only for native-cancel DBMS, so it stays optional; the
   // Cancel button reads it to fire `cancelQueryNative` and abort long
   // server-side queries the cooperative token can't touch.
-  | { status: "running"; queryId: string; serverPid?: number }
+  // Issue #1057 — `startedAt` (ms epoch) stamped once when the query enters
+  // the running state so the elapsed timer in QueryResultGrid has an anchor
+  // that survives tab switches / component remounts. Stamped in the store
+  // action; optional only because tests construct the state directly.
+  | {
+      status: "running";
+      queryId: string;
+      serverPid?: number;
+      startedAt?: number;
+    }
   | { status: "cancelled"; message?: string }
   | {
       status: "completed";
