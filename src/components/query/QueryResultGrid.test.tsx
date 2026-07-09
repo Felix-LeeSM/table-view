@@ -168,6 +168,35 @@ describe("QueryResultGrid", () => {
     expect(screen.queryByRole("grid")).not.toBeInTheDocument();
   });
 
+  // #1060 — permission-denied errors get a dedicated centered state (title +
+  // "ask your DBA" guidance) sharing #1056's classifyDriverError mapping.
+  it.each([
+    ["pg 42501", "permission denied for table users (42501)"],
+    [
+      "mysql 1142",
+      "ERROR 1142: SELECT command denied to user 'app'@'%' for table 'users'",
+    ],
+  ])("renders dedicated permission-denied state for %s", (_label, error) => {
+    render(<QueryResultGrid queryState={{ status: "error", error }} />);
+    const state = screen.getByTestId("query-permission-denied-state");
+    expect(state).toHaveTextContent(/Permission denied/i);
+    expect(state).toHaveTextContent(/database administrator/i);
+    expect(state).toHaveTextContent(error);
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("does NOT render permission-denied state for a generic error", () => {
+    render(
+      <QueryResultGrid
+        queryState={{ status: "error", error: "syntax error near 'FROM'" }}
+      />,
+    );
+    expect(
+      screen.queryByTestId("query-permission-denied-state"),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent("syntax error");
+  });
+
   it("renders SELECT result with column headers and rows", () => {
     render(
       <QueryResultGrid

@@ -704,6 +704,26 @@ export default function QueryResultGrid({
   // Error state
   if (queryState.status === "error") {
     const hint = classifyDriverError(queryState.error);
+    // Issue #1060 — permission-denied gets a dedicated centered state panel
+    // (title + "ask your DBA" action guidance) instead of the generic alert
+    // banner, mirroring the cancelled/empty state pattern (consistency-first).
+    // Detection is shared with #1056's classifyDriverError so the DBMS matrix
+    // (PG 42501 / MySQL 1142·1044 / Mongo 13 / Oracle ORA-01031 / ...) lives
+    // in one SOT — no duplicate mapping here.
+    if (hint?.category === "permissionDenied") {
+      return (
+        <div
+          role="status"
+          data-testid="query-permission-denied-state"
+          className="flex flex-1 flex-col items-center justify-center gap-2 px-6 py-8 text-center"
+        >
+          <DriverErrorHint hint={hint} />
+          <p className="text-xs text-muted-foreground opacity-80">
+            {queryState.error}
+          </p>
+        </div>
+      );
+    }
     return (
       <div className="flex flex-1 flex-col">
         <div
