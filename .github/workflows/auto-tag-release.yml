@@ -18,7 +18,7 @@ name: Auto Tag Release
 # release.yml would never fire and Option B would be inert. We push the tag with
 # a PAT (secrets.RELEASE_PAT) whose push events DO trigger downstream workflows.
 # RELEASE_PAT must be a repo secret — a fine-grained/classic PAT with
-# `contents: write` (and workflow) scope. Without it this job fails fast (the
+# `contents: write` scope. Without it this job fails fast (the
 # "Verify RELEASE_PAT" step) rather than silently pushing a tag that ships
 # nothing.
 
@@ -48,7 +48,7 @@ jobs:
           RELEASE_PAT: ${{ secrets.RELEASE_PAT }}
         run: |
           if [ -z "$RELEASE_PAT" ]; then
-            echo "::error::RELEASE_PAT secret is not set. Option B needs a PAT to push the vX.Y.Z tag so release.yml triggers — GITHUB_TOKEN-pushed tags do not trigger workflows. Register RELEASE_PAT (contents:write + workflow scope)." >&2
+            echo "::error::RELEASE_PAT secret is not set. Option B needs a PAT to push the vX.Y.Z tag so release.yml triggers — GITHUB_TOKEN-pushed tags do not trigger workflows. Register RELEASE_PAT (contents: write scope)." >&2
             exit 1
           fi
 
