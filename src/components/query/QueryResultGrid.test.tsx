@@ -119,8 +119,37 @@ describe("QueryResultGrid", () => {
     render(
       <QueryResultGrid queryState={{ status: "running", queryId: "q1" }} />,
     );
-    expect(screen.getByText("Executing query...")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        (_content, el) =>
+          el?.tagName === "P" &&
+          (el.textContent?.startsWith("Executing query...") ?? false),
+      ),
+    ).toBeInTheDocument();
     expect(document.querySelector(".animate-spin")).toBeInTheDocument();
+  });
+
+  it("running state shows live elapsed time anchored to startedAt", () => {
+    vi.useFakeTimers();
+    const startedAt = Date.now();
+    vi.setSystemTime(startedAt);
+    render(
+      <QueryResultGrid
+        queryState={{
+          status: "running",
+          queryId: "q1",
+          startedAt,
+        }}
+      />,
+    );
+    // Initial render: ~0.0s elapsed.
+    expect(screen.getByText(/Executing query\.\.\. 0\.0s/)).toBeInTheDocument();
+    // After 5s the timer text reflects the elapsed duration.
+    act(() => {
+      vi.advanceTimersByTime(5_000);
+    });
+    expect(screen.getByText(/Executing query\.\.\. 5\.0s/)).toBeInTheDocument();
+    vi.useRealTimers();
   });
 
   it("shows error message when status is error", () => {
@@ -137,6 +166,51 @@ describe("QueryResultGrid", () => {
 
     expect(screen.getByRole("status")).toHaveTextContent("Query cancelled");
     expect(screen.queryByRole("grid")).not.toBeInTheDocument();
+  });
+
+  // #1059 — the row-editing-not-supported banner must surface the friendly
+  // DBMS label ("DuckDB"), not the raw profile id ("duckdb"). DuckDB's
+  // capabilities leave `editRows` at the empty base (false), so once the
+  // AST gate flips a single-table SELECT to `editability.editable` the
+  // banner surfaces `rowEditBlockReason` ("DuckDB row editing is not
+  // supported.") instead of the single-table reason.
+  it("uses the friendly DBMS name in the row-editing-not-supported banner (#1059)", async () => {
+    useConnectionStore.setState({
+      connections: [
+        {
+          id: "conn-duck",
+          name: "DuckDB",
+          dbType: "duckdb",
+          host: "",
+          port: 0,
+          user: "",
+          database: "analytics.duckdb",
+          groupId: null,
+          color: null,
+          hasPassword: false,
+          paradigm: "rdb",
+        },
+      ],
+    });
+
+    render(
+      <QueryResultGrid
+        queryState={{ status: "completed", result: SELECT_RESULT }}
+        connectionId="conn-duck"
+        database="analytics.duckdb"
+        sql="SELECT id, name FROM users"
+      />,
+    );
+
+    // Wait for the AST gate to flip and the row-edit block reason to land.
+    await waitFor(() => {
+      expect(
+        screen.getByText(/DuckDB row editing is not supported/i),
+      ).toBeInTheDocument();
+    });
+    // The raw lowercase profile id must not leak into the user-facing
+    // banner. (Case-sensitive match — "DuckDB" is the friendly label.)
+    expect(screen.queryByText("duckdb row editing")).not.toBeInTheDocument();
   });
 
   it("renders SELECT result with column headers and rows", () => {

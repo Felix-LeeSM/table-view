@@ -64,7 +64,7 @@ import { useSafeModeStore } from "@stores/safeModeStore";
 import { useSchemaStore } from "@stores/schemaStore";
 
 const DB_MISMATCH_ERROR =
-  "Database mismatch: expected 'db-1', backend pool has 'db-2'";
+  "Database mismatch: expected 'db-1', but found 'db-2'";
 const TYPED_DB_MISMATCH_ERROR = {
   type: "DbMismatch",
   message: DB_MISMATCH_ERROR,

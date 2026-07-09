@@ -145,13 +145,21 @@ export function createQuerySlice(
     },
 
     updateQueryState: (connId, db, tabId, queryState) => {
+      // Issue #1057 — stamp startedAt once at the single funnel every
+      // execution path (rdb / mongo / kv / search) routes through, so the
+      // elapsed timer has an accurate anchor without each call site
+      // repeating `Date.now()`.
+      const stamped =
+        queryState.status === "running" && queryState.startedAt === undefined
+          ? { ...queryState, startedAt: Date.now() }
+          : queryState;
       set((state) => {
         const next = patchExistingWorkspace(state, connId, db, (ws) => {
           let changed = false;
           const tabs = ws.tabs.map((t) => {
             if (t.id !== tabId || t.type !== "query") return t;
             changed = true;
-            return { ...t, queryState };
+            return { ...t, queryState: stamped };
           });
           return changed ? { ...ws, tabs } : ws;
         });
@@ -169,7 +177,13 @@ export function createQuerySlice(
         const next = patchExistingWorkspace(state, connId, db, (ws) => {
           return patchRunningQueryTab(ws, tabId, queryId, (tab) => ({
             ...tab,
-            queryState: { status: "running" as const, queryId, serverPid },
+            // Issue #1057 — spread existing running state so `startedAt`
+            // (and any future field) survives the late pid arrival instead
+            // of being reconstructed from scratch (which resets the timer).
+            queryState: {
+              ...(tab.queryState as Extract<QueryState, { status: "running" }>),
+              serverPid,
+            },
           }));
         });
         return next ? { workspaces: next } : state;

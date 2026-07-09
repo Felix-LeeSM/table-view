@@ -126,31 +126,12 @@ describe("KvSidebar", () => {
     expect(screen.queryByText(/loading value/i)).not.toBeInTheDocument();
   });
 
-  it("renders a typed value envelope when a Redis key is selected", async () => {
-    await renderAndScan();
-    const tree = await screen.findByRole("tree", { name: /redis keys/i });
-    const userKey = await within(tree).findByRole("treeitem", {
-      name: /user:1/i,
-    });
+  // Value inspection / stream reader / mutation coverage moved to the
+  // right-hand detail panel (KvKeyDetailPanel*.test.tsx) in the 2026-07-07 KV
+  // UX redesign — clicking a key here now opens a detail tab (asserted in
+  // KvSidebar.detailTab.test.tsx). The sidebar owns scan + selection only.
 
-    fireEvent.click(userKey);
-
-    await waitFor(() => {
-      expect(invokeMock).toHaveBeenCalledWith("get_kv_value", {
-        connectionId: "redis-1",
-        queryId: undefined,
-        request: {
-          database: 0,
-          key: "user:1",
-          limit: 100,
-        },
-      });
-    });
-    expect(screen.getByText(/name: Ada/)).toBeInTheDocument();
-    expect(screen.getAllByText(/persistent/)).toHaveLength(2);
-  });
-
-  it("labels Valkey key browsing and surfaces collection mutation controls (parity #1075)", async () => {
+  it("labels Valkey key browsing (parity #1075)", async () => {
     useConnectionStore.setState({
       connections: [valkeyConnection()],
       activeStatuses: { "valkey-1": { type: "connected", activeDb: "0" } },
@@ -158,15 +139,8 @@ describe("KvSidebar", () => {
     await renderAndScan("valkey-1");
 
     const tree = await screen.findByRole("tree", { name: /valkey keys/i });
-
-    fireEvent.click(
-      await within(tree).findByRole("treeitem", { name: /user:1/i }),
-    );
-
-    expect(await screen.findByText(/name: Ada/)).toBeInTheDocument();
-    expect(screen.getByText("Mutation")).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /preview hset/i }),
+      await within(tree).findByRole("treeitem", { name: /user:1/i }),
     ).toBeInTheDocument();
   });
 
@@ -332,165 +306,6 @@ describe("KvSidebar", () => {
     expect(screen.getByText("user:1")).toBeInTheDocument();
   });
 
-  it("renders stream metadata in the key row and value preview", async () => {
-    invokeMock.mockImplementation((command: string) => {
-      if (command === "list_kv_databases") {
-        return Promise.resolve([{ name: "0", index: 0, keyCount: 1 }]);
-      }
-      if (command === "current_kv_database") return Promise.resolve(0);
-      if (command === "scan_kv_keys") {
-        return Promise.resolve({
-          ...defaultKeyPage(),
-          keys: [
-            {
-              key: "stream:events",
-              keyType: "stream",
-              ttl: { state: "expires", seconds: 60 },
-              length: 2,
-              memoryBytes: 256,
-            },
-          ],
-        });
-      }
-      if (command === "get_kv_value") {
-        return Promise.resolve(streamValueEnvelope());
-      }
-      return Promise.reject(new Error(`Unhandled command: ${command}`));
-    });
-
-    await renderAndScan();
-    const tree = await screen.findByRole("tree", { name: /redis keys/i });
-
-    fireEvent.click(
-      await within(tree).findByRole("treeitem", { name: /stream:events/i }),
-    );
-
-    expect(await screen.findByText("1-0")).toBeInTheDocument();
-    expect(screen.getByText("type=login")).toBeInTheDocument();
-    expect(screen.getByLabelText("Stream start")).toHaveValue("0-0");
-    expect(screen.getByLabelText("Stream end")).toHaveValue("+");
-    expect(screen.getByLabelText("Stream count")).toHaveValue(100);
-    expect(
-      screen.getByRole("table", { name: /stream:events stream entries/i }),
-    ).toBeInTheDocument();
-    expect(screen.getAllByText("stream")).toHaveLength(2);
-    expect(screen.getByText("2 item(s)")).toBeInTheDocument();
-    expect(screen.getAllByText("256 B")).toHaveLength(2);
-  });
-
-  it("refreshes selected stream entries with bounded range controls", async () => {
-    let resolveStreamRead: (value: unknown) => void = () => {};
-    invokeMock.mockImplementation((command: string, payload?: unknown) => {
-      if (command === "list_kv_databases") {
-        return Promise.resolve([{ name: "0", index: 0, keyCount: 1 }]);
-      }
-      if (command === "current_kv_database") return Promise.resolve(0);
-      if (command === "scan_kv_keys") {
-        return Promise.resolve({
-          ...defaultKeyPage(),
-          keys: [streamValueEnvelope().metadata],
-        });
-      }
-      if (command === "get_kv_value") {
-        return Promise.resolve(streamValueEnvelope());
-      }
-      if (command === "read_kv_stream") {
-        expect(payload).toEqual({
-          connectionId: "redis-1",
-          queryId: undefined,
-          request: {
-            database: 0,
-            key: "stream:events",
-            start: "1-0",
-            end: "+",
-            limit: 25,
-          },
-        });
-        return new Promise((resolve) => {
-          resolveStreamRead = resolve;
-        });
-      }
-      return Promise.reject(new Error(`Unhandled command: ${command}`));
-    });
-
-    await renderAndScan();
-    const tree = await screen.findByRole("tree", { name: /redis keys/i });
-
-    fireEvent.click(
-      await within(tree).findByRole("treeitem", { name: /stream:events/i }),
-    );
-    await screen.findByText("type=login");
-
-    fireEvent.change(screen.getByLabelText("Stream start"), {
-      target: { value: "1-0" },
-    });
-    fireEvent.change(screen.getByLabelText("Stream count"), {
-      target: { value: "25" },
-    });
-    fireEvent.click(
-      screen.getByRole("button", { name: /refresh stream entries/i }),
-    );
-
-    expect(await screen.findByRole("status")).toHaveTextContent(
-      /loading stream entries/i,
-    );
-    resolveStreamRead({
-      key: "stream:events",
-      entries: [
-        {
-          id: "2-0",
-          fields: [{ field: "type", value: "logout" }],
-        },
-      ],
-      start: "1-0",
-      end: "+",
-      limit: 25,
-    });
-
-    expect(await screen.findByText("2-0")).toBeInTheDocument();
-    expect(screen.getByText("type=logout")).toBeInTheDocument();
-    expect(commandCalls("read_kv_stream")).toHaveLength(1);
-    expect(commandCalls("execute_kv_command")).toHaveLength(0);
-  });
-
-  it("surfaces stream refresh errors without clearing the selected entries", async () => {
-    invokeMock.mockImplementation((command: string) => {
-      if (command === "list_kv_databases") {
-        return Promise.resolve([{ name: "0", index: 0, keyCount: 1 }]);
-      }
-      if (command === "current_kv_database") return Promise.resolve(0);
-      if (command === "scan_kv_keys") {
-        return Promise.resolve({
-          ...defaultKeyPage(),
-          keys: [streamValueEnvelope().metadata],
-        });
-      }
-      if (command === "get_kv_value") {
-        return Promise.resolve(streamValueEnvelope());
-      }
-      if (command === "read_kv_stream") {
-        return Promise.reject(new Error("XRANGE failed"));
-      }
-      return Promise.reject(new Error(`Unhandled command: ${command}`));
-    });
-
-    await renderAndScan();
-    const tree = await screen.findByRole("tree", { name: /redis keys/i });
-
-    fireEvent.click(
-      await within(tree).findByRole("treeitem", { name: /stream:events/i }),
-    );
-    expect(await screen.findByText("type=login")).toBeInTheDocument();
-
-    fireEvent.click(
-      screen.getByRole("button", { name: /refresh stream entries/i }),
-    );
-
-    expect(await screen.findByText("XRANGE failed")).toBeInTheDocument();
-    expect(screen.getByText("1-0")).toBeInTheDocument();
-    expect(screen.getByText("type=login")).toBeInTheDocument();
-  });
-
   it("surfaces key scan refresh errors", async () => {
     invokeMock.mockImplementation((command: string) => {
       if (command === "list_kv_databases") {
@@ -583,32 +398,6 @@ function defaultValueEnvelope(): KvValueEnvelope {
       nextCursor: "0",
       done: true,
       total: 1,
-    },
-  };
-}
-
-function streamValueEnvelope(): KvValueEnvelope {
-  return {
-    key: "stream:events",
-    metadata: {
-      key: "stream:events",
-      keyType: "stream",
-      ttl: { state: "expires", seconds: 60 },
-      length: 2,
-      memoryBytes: 256,
-    },
-    value: {
-      type: "stream",
-      key: "stream:events",
-      entries: [
-        {
-          id: "1-0",
-          fields: [{ field: "type", value: "login" }],
-        },
-      ],
-      start: "0-0",
-      end: "+",
-      limit: 100,
     },
   };
 }

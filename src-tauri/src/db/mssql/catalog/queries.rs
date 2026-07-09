@@ -1,7 +1,15 @@
+// Exclude the built-in `sys`/`INFORMATION_SCHEMA` schemas plus every fixed
+// database-role schema and `guest`, which SQL Server auto-creates in each database.
+// User schemas (`dbo`, custom) are kept.
 pub(super) const USER_SCHEMAS_SQL: &str = "\
 SELECT s.name
 FROM sys.schemas AS s
-WHERE s.name NOT IN (N'sys', N'INFORMATION_SCHEMA')
+WHERE s.name NOT IN (
+        N'sys', N'INFORMATION_SCHEMA', N'guest',
+        N'db_accessadmin', N'db_backupoperator', N'db_datareader', N'db_datawriter',
+        N'db_ddladmin', N'db_denydatareader', N'db_denydatawriter', N'db_owner',
+        N'db_securityadmin'
+      )
 ORDER BY s.name";
 
 pub(super) const USER_DATABASES_SQL: &str = "\
@@ -346,6 +354,41 @@ mod tests {
         assert!(CONSTRAINTS_SQL.contains("constraint_type"));
         assert!(INDEXES_SQL.contains("index_name"));
         assert!(INDEXES_SQL.contains("key_ordinal"));
+    }
+
+    // Bug: SQL Server auto-creates one schema per fixed database role
+    // (`db_datareader`, `db_owner`, …) plus a `guest` schema. The old filter only
+    // hid `sys`/`INFORMATION_SCHEMA`, so those role/`guest` schemas leaked into the
+    // sidebar. They must be excluded while real user schemas (`dbo`, custom) stay.
+    #[test]
+    fn user_schemas_query_hides_fixed_role_and_guest_schemas() {
+        const HIDDEN: &[&str] = &[
+            "sys",
+            "INFORMATION_SCHEMA",
+            "db_accessadmin",
+            "db_backupoperator",
+            "db_datareader",
+            "db_datawriter",
+            "db_ddladmin",
+            "db_denydatareader",
+            "db_denydatawriter",
+            "db_owner",
+            "db_securityadmin",
+            "guest",
+        ];
+        for name in HIDDEN {
+            assert!(
+                USER_SCHEMAS_SQL.contains(&format!("N'{name}'")),
+                "USER_SCHEMAS_SQL must exclude system/role schema `{name}`"
+            );
+        }
+        // User schemas are never hardcoded into the exclusion list.
+        for name in ["dbo", "sales", "hr"] {
+            assert!(
+                !USER_SCHEMAS_SQL.contains(&format!("N'{name}'")),
+                "USER_SCHEMAS_SQL must not exclude user schema `{name}`"
+            );
+        }
     }
 
     #[test]

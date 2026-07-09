@@ -33,8 +33,7 @@ vi.mock("@lib/api/verifyActiveDb", () => ({
   verifyActiveDb: verifyActiveDbMock,
 }));
 
-const DB_MISMATCH_ERROR =
-  "Database mismatch: expected 'dbA', backend pool has 'dbB'";
+const DB_MISMATCH_ERROR = "Database mismatch: expected 'dbA', but found 'dbB'";
 const TYPED_DB_MISMATCH_ERROR = {
   type: "DbMismatch",
   message: DB_MISMATCH_ERROR,

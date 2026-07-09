@@ -207,6 +207,10 @@ disabled 유지한다. `Edit` 과 `Delete` 는 selected key 가 로드되고 mut
 지원하는 type 일 때만 enable 되며, 각각 기존 value mutation preview 와 Safe Mode
 delete confirmation path 로 포커스를 보낸다. 따라서 delete 는 local panel input 만의
 숨은 기능이 아니라 workbench action 에서 출발해 milestone Safe Mode gate 를 통과한다.
+이 key action/value 편집 surface 는 sidebar 하단 inline 이 아니라, key 선택 시 열리는
+오른쪽 `kv` paradigm detail tab (`KvKeyDetailPanel`) 이 호스팅한다 — search paradigm
+(`SearchIndexDetailPanel`) 과 동일한 구조. sidebar (`KvSidebar`) 는 scan + key 선택만
+담당하며, panel mutation (특히 delete) 뒤 list 자동 rescan 은 아직 없어 수동 Scan 이 필요하다.
 
 ## Result Copy/Export Semantics
 

@@ -1,5 +1,5 @@
 import { useRef } from "react";
-import { History } from "lucide-react";
+import { History, Activity } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@components/ui/button";
 import DbSwitcher from "./DbSwitcher";
@@ -7,6 +7,7 @@ import DisconnectButton from "./DisconnectButton";
 import SafeModeToggle from "./SafeModeToggle";
 import RowCapSetting from "@components/settings/RowCapSetting";
 import { useToolbarRoving } from "./useToolbarRoving";
+import { useOperationsConnection } from "./useOperationsConnection";
 
 /**
  * Workspace toolbar — top-of-pane container that hosts the `[DB ▼]` chip
@@ -49,6 +50,35 @@ function HistoryButton() {
   );
 }
 
+/**
+ * #1054 — Operations flyout toggle. Mirrors `HistoryButton`'s event
+ * channel: dispatches `toggle-operations-panel`, which `MainArea`
+ * listens for and mounts `<OperationsPanel>`. Hidden entirely when the
+ * driving connection has no `operations.*` capability so the toolbar
+ * never offers a dead button (ui-parity §3: no disabled-only entry).
+ */
+function OperationsButton() {
+  const { t } = useTranslation("workspace");
+  const drv = useOperationsConnection();
+  if (!drv) return null;
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      type="button"
+      aria-label={t("toolbar.operations.ariaLabel")}
+      title={t("toolbar.operations.title")}
+      data-testid="workspace-operations-toggle"
+      onClick={() =>
+        window.dispatchEvent(new CustomEvent("toggle-operations-panel"))
+      }
+    >
+      <Activity className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+      <span className="ml-1 text-xs">{t("toolbar.operations.label")}</span>
+    </Button>
+  );
+}
+
 export default function WorkspaceToolbar() {
   const { t } = useTranslation("workspace");
   const toolbarRef = useRef<HTMLDivElement>(null);
@@ -69,6 +99,7 @@ export default function WorkspaceToolbar() {
           connection is not currently connected, so it never silently
           no-ops. */}
       <div className="ml-auto flex items-center gap-2">
+        <OperationsButton />
         <HistoryButton />
         <RowCapSetting />
         <SafeModeToggle />

@@ -89,6 +89,35 @@ pub(crate) const LIST_SCHEMAS_SQL: &str = "SELECT schema_name FROM information_s
        AND schema_name NOT LIKE 'pg\\_toast\\_temp\\_%' ESCAPE '\\' \
      ORDER BY schema_name";
 
+/// PG parity (2026-07-07 user report) — canonical SQL for
+/// `PostgresAdapter::list_tables`.
+///
+/// Sourced from `pg_catalog.pg_class` (like psql `\dt` / TablePlus), NOT
+/// `information_schema.tables`. `information_schema.tables` only surfaces
+/// relations the *connected role* holds a privilege on, so a table owned by
+/// another role with no grant to the connecting role vanished from the sidebar
+/// even though the schema (`public`) still rendered — the reported
+/// "public shows, tables empty" symptom. `pg_class` is privilege-independent:
+/// the schema's tables list regardless of grants, matching what psql /
+/// TablePlus show.
+///
+/// `relkind IN ('r', 'p')` = ordinary + partitioned tables, the catalog
+/// equivalent of the prior `table_type = 'BASE TABLE'` filter. Partition child
+/// tables (`relkind = 'r'`, `relispartition = true`) are intentionally NOT
+/// excluded: `information_schema.tables` surfaced them as `BASE TABLE` too, so
+/// keeping them preserves the prior behavior. `n_live_tup` (row estimate) is
+/// LEFT JOINed via `pg_stat_user_tables.relid`, so a partitioned parent (no own
+/// storage → no stat row) falls back to `NULL` row_count exactly as before.
+///
+/// ponytail: PG parity — catalog-based, privilege-independent; other RDBMS
+/// (MySQL/MSSQL/Oracle/DuckDB) are a separate consistency follow-up.
+pub(crate) const LIST_TABLES_SQL: &str = "SELECT c.relname, s.n_live_tup \
+     FROM pg_catalog.pg_class c \
+     JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace \
+     LEFT JOIN pg_stat_user_tables s ON s.relid = c.oid \
+     WHERE n.nspname = $1 AND c.relkind IN ('r', 'p') \
+     ORDER BY c.relname";
+
 /// Serialize a foreign-key reference into the canonical
 /// `<schema>.<table>(<column>)` string consumed by the frontend
 /// (`parseFkReference` in `DataGridTable.tsx`).
@@ -249,17 +278,11 @@ impl PostgresAdapter {
     pub async fn list_tables(&self, schema: &str) -> Result<Vec<TableInfo>, AppError> {
         let pool = self.active_pool().await?;
 
-        let rows: Vec<(String, Option<i64>)> = sqlx::query_as(
-            "SELECT t.table_name, s.n_live_tup \
-             FROM information_schema.tables t \
-             LEFT JOIN pg_stat_user_tables s ON s.relname = t.table_name AND s.schemaname = t.table_schema \
-             WHERE t.table_schema = $1 AND t.table_type = 'BASE TABLE' \
-             ORDER BY t.table_name",
-        )
-        .bind(schema)
-        .fetch_all(&pool)
-        .await
-        .map_err(|e| AppError::Connection(e.to_string()))?;
+        let rows: Vec<(String, Option<i64>)> = sqlx::query_as(LIST_TABLES_SQL)
+            .bind(schema)
+            .fetch_all(&pool)
+            .await
+            .map_err(|e| AppError::Connection(e.to_string()))?;
 
         Ok(rows
             .into_iter()
@@ -1945,6 +1968,55 @@ mod tests {
         assert!(
             !LIST_SCHEMAS_SQL.contains("LIKE 'pg\\_%'"),
             "must not blanket-exclude all pg_-prefixed schemas"
+        );
+    }
+
+    // ── PG parity (2026-07-07 user report) — list_tables must be catalog-based ──
+    //
+    // 작성 이유: 사용자가 TablePlus / psql 로는 보이는 public 테이블이 앱
+    // SchemaTree 에는 0개로 떴다. 근본 원인은 `list_tables` 가
+    // `information_schema.tables` 를 소스로 써서 *접속 role 이 권한을 가진*
+    // 테이블만 노출한 것 — 타 role 소유 + 무권한 테이블이 목록에서 사라졌다.
+    // psql `\dt` / TablePlus 처럼 `pg_catalog.pg_class` 로 바꿔 권한 무관 나열.
+    // 실 제한-role 회귀는 docker 통합 테스트
+    // (`schema_integration.rs::test_list_tables_visible_without_table_privilege`)
+    // 가 가드하지만 docker 없는 CI/로컬에선 silent-skip 되므로, 소스 카탈로그를
+    // byte-level 로 고정하는 docker-free 가드를 여기 둔다.
+    #[test]
+    fn list_tables_sql_is_catalog_based_and_privilege_independent() {
+        // 카탈로그 기반이어야 한다 — pg_class + pg_namespace.
+        assert!(
+            LIST_TABLES_SQL.contains("pg_catalog.pg_class c"),
+            "list_tables must read pg_catalog.pg_class (privilege-independent), got: {LIST_TABLES_SQL}"
+        );
+        assert!(
+            LIST_TABLES_SQL.contains("pg_catalog.pg_namespace n ON n.oid = c.relnamespace"),
+            "must join pg_namespace to scope by schema"
+        );
+        // 스키마 인자는 $1 바인딩 유지 — FE 파싱/렌더 무변경.
+        assert!(
+            LIST_TABLES_SQL.contains("n.nspname = $1"),
+            "schema must stay bound as $1"
+        );
+        // ordinary + partitioned table 만 — 기존 `table_type = 'BASE TABLE'` 대응.
+        assert!(
+            LIST_TABLES_SQL.contains("c.relkind IN ('r', 'p')"),
+            "must restrict relkind to ordinary + partitioned tables"
+        );
+        // 권한 필터가 절대 없어야 한다 — information_schema 는 role 권한으로
+        // 목록을 거른다(버그의 근본 원인). explicit privilege 함수도 금지.
+        assert!(
+            !LIST_TABLES_SQL.contains("information_schema"),
+            "must NOT source information_schema (privilege-filtered), got: {LIST_TABLES_SQL}"
+        );
+        assert!(
+            !LIST_TABLES_SQL.contains("has_table_privilege"),
+            "must NOT apply an explicit privilege filter"
+        );
+        // ORDER BY 유지 — 사이드바 렌더 순서 불변.
+        assert!(
+            LIST_TABLES_SQL.contains("ORDER BY c.relname"),
+            "must keep alphabetical ORDER BY the table name"
         );
     }
 

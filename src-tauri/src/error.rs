@@ -87,7 +87,7 @@ pub enum AppError {
     /// 상태에서 RDB 실행 명령이 도착했을 때. `execute_query` /
     /// `execute_query_batch` 의 사전 검증이 throw. UI 는 `expected` / `actual`
     /// 을 모두 표시해 race 의 양쪽을 보여줘야 함.
-    #[error("Database mismatch: expected '{expected}', backend pool has '{actual}'")]
+    #[error("Database mismatch: expected '{expected}', but found '{actual}'")]
     DbMismatch { expected: String, actual: String },
 
     #[error("Window error: {0}")]
@@ -250,7 +250,7 @@ mod tests {
         assert_eq!(json["type"], "DbMismatch");
         assert_eq!(
             json["message"],
-            "Database mismatch: expected 'db1', backend pool has 'db2'"
+            "Database mismatch: expected 'db1', but found 'db2'"
         );
         assert_eq!(json["payload"]["expected"], "db1");
         assert_eq!(json["payload"]["actual"], "db2");

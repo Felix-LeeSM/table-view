@@ -201,6 +201,21 @@
       "action": "promote as blocking E2E for the bounded SQL Server runtime/edit slice"
     },
     {
+      "id": "mssql-schema-filter-smoke-seed",
+      "fixture": "e2e/fixtures/seed.mssql.sql",
+      "specs": ["e2e/smoke/mssql-schema-filter.spec.ts"],
+      "specKeys": ["mssql-schema-filter"],
+      "seedTargets": ["mssql"],
+      "tier": "blocking E2E",
+      "wiredInSmokeScript": true,
+      "runtimeCost": "Reuses the enterprise RDBMS SQL Server 2022 container and canonical dbo seed from the mssql route (max-parallel 1, shared prepared Tauri binary, 40-minute job timeout); adds one more matrix leg on the same on-demand container.",
+      "flakeRisk": "Same SQL Server container startup/runtime risk as the mssql route; the spec only reads the schema tree so it adds no write/state-bleed risk.",
+      "cacheImpact": "Uses shared prepared Tauri binary and Rust target cache; no extra service beyond the mssql enterprise container.",
+      "failureArtifacts": "wdio report uploaded as e2e-smoke-artifacts-mssql-schema-filter; MSSQL service startup logs print before failure.",
+      "supportClaimImpact": "Runtime Happy Path evidence that USER_SCHEMAS_SQL hides fixed database-role and guest schemas while dbo still renders; no other MSSQL capability is claimed.",
+      "action": "keep blocking E2E for the schema-list filter regression"
+    },
+    {
       "id": "oracle-runtime-smoke-seed",
       "fixture": "e2e/fixtures/seed.oracle.sql",
       "specs": ["e2e/smoke/oracle.spec.ts"],
@@ -246,6 +261,21 @@
       "action": "keep blocking E2E"
     },
     {
+      "id": "duckdb-schema-filter-smoke-seed",
+      "fixture": "e2e/fixtures/duckdb/schema-filter/seed.sql",
+      "specs": ["e2e/smoke/duckdb-schema-filter.spec.ts"],
+      "specKeys": ["duckdb-schema-filter"],
+      "seedTargets": [],
+      "tier": "blocking E2E",
+      "wiredInSmokeScript": true,
+      "runtimeCost": "Existing embedded DuckDB matrix route; no external service startup. The spec seeds its own file from e2e/fixtures/duckdb/schema-filter/seed.sql via prepareDuckdbFixture (core.users populated, main left empty), so no seed-smoke external target is used. Job timeout remains 40 minutes.",
+      "flakeRisk": "Lower than service-backed rows; isolated local DuckDB file. The flat DuckDB tree has no per-namespace label DOM, so the spec verifies the fix by counting the single 'No tables' placeholder; the pre-fix duplicate-main key reconcile is a known observation point on first integrated run.",
+      "cacheImpact": "Uses shared prepared Tauri binary and Rust target cache.",
+      "failureArtifacts": "wdio report uploaded as e2e-smoke-artifacts-duckdb-schema-filter.",
+      "supportClaimImpact": "Runtime Happy Path evidence that list_namespaces hides the internal system/temp catalogs so the empty main renders once, while a real user schema still renders its table; no other DuckDB capability is claimed.",
+      "action": "keep blocking E2E for the schema-list filter regression"
+    },
+    {
       "id": "duckdb-file-analytics-smoke-fixture",
       "fixture": "e2e/fixtures/duckdb/file-analytics/sales.csv",
       "specs": ["e2e/smoke/duckdb-file-analytics.spec.ts"],
@@ -289,6 +319,36 @@
       "failureArtifacts": "wdio report uploaded as e2e-smoke-artifacts-redis.",
       "supportClaimImpact": "Runtime Happy Path evidence for bounded Redis KV workflow only.",
       "action": "keep blocking E2E"
+    },
+    {
+      "id": "redis-key-detail-panel-runtime-smoke-seed",
+      "fixture": "e2e/fixtures/redis/kv/seed.json",
+      "specs": ["e2e/smoke/redis-key-detail-panel.spec.ts"],
+      "specKeys": ["redis-key-detail-panel"],
+      "seedTargets": ["redis"],
+      "tier": "blocking E2E",
+      "wiredInSmokeScript": true,
+      "runtimeCost": "Reuses the existing redis:7-alpine service and Redis KV seed fixture; adds one 40-minute-budget matrix leg for the right-hand KvKeyDetailPanel UX.",
+      "flakeRisk": "Low service startup risk; shares the redis seed that selects isolated DB 2 and flushes before recreating keys.",
+      "cacheImpact": "Uses shared prepared Tauri binary and Rust target cache.",
+      "failureArtifacts": "wdio report uploaded as e2e-smoke-artifacts-redis-key-detail-panel.",
+      "supportClaimImpact": "Runtime Happy Path evidence that KV key selection opens the right-hand detail panel and mutates from it (KV UX redesign).",
+      "action": "keep blocking E2E"
+    },
+    {
+      "id": "redis-empty-state-window-smoke",
+      "fixture": "e2e/smoke/duckdb-fixture.ts",
+      "specs": ["e2e/smoke/redis-empty-state-window.spec.ts"],
+      "specKeys": ["redis-empty-state-window"],
+      "seedTargets": [],
+      "tier": "blocking E2E",
+      "wiredInSmokeScript": true,
+      "runtimeCost": "New service-backed matrix leg (#1407) starts the shared redis:7-alpine container for the redis-empty-state-window spec only; reuses the shared prepared Tauri binary and Rust target cache. Job timeout remains 40 minutes.",
+      "flakeRisk": "Low; the spec drives an embedded DuckDB file plus one live Redis connection and asserts empty-state text and a New Query tab, with an isolated app data directory per leg.",
+      "cacheImpact": "Uses shared prepared Tauri binary and Rust target cache.",
+      "failureArtifacts": "wdio report uploaded as e2e-smoke-artifacts-redis-empty-state-window.",
+      "supportClaimImpact": "Runtime Happy Path evidence that a workspace window's EmptyState targets its own pinned connection (KV command lead plus New Query routed to this window) while a different connection is first-connected; no Redis key fixture is seeded because the empty state is key-independent.",
+      "action": "promote as blocking E2E for the per-window EmptyState targeting slice"
     },
     {
       "id": "valkey-runtime-smoke-seed",

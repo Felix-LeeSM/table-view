@@ -62,8 +62,24 @@ describe("smoke-routing-decisions.json", () => {
       specKey: "oracle",
       spec: "e2e/smoke/oracle.spec.ts",
     });
+    expect(result.blockingDecisionMatrix).toContainEqual({
+      specKey: "redis-key-detail-panel",
+      spec: "e2e/smoke/redis-key-detail-panel.spec.ts",
+    });
+    expect(result.blockingDecisionMatrix).toContainEqual({
+      specKey: "duckdb-schema-filter",
+      spec: "e2e/smoke/duckdb-schema-filter.spec.ts",
+    });
+    expect(result.blockingDecisionMatrix).toContainEqual({
+      specKey: "mssql-schema-filter",
+      spec: "e2e/smoke/mssql-schema-filter.spec.ts",
+    });
+    expect(result.blockingDecisionMatrix).toContainEqual({
+      specKey: "redis-empty-state-window",
+      spec: "e2e/smoke/redis-empty-state-window.spec.ts",
+    });
     expect(result.blockingDecisionMatrix).toEqual(collectSmokeScriptMatrix());
     expect(result.blockingDecisionMatrix).toEqual(collectWorkflowMatrix());
-    expect(result.blockingDecisionMatrix).toHaveLength(20);
+    expect(result.blockingDecisionMatrix).toHaveLength(24);
   });
 });

@@ -11,6 +11,7 @@ import {
 } from "@stores/workspaceStore";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useMruStore } from "@stores/mruStore";
+import { useCurrentWindowConnectionId } from "@hooks/useCurrentWindowConnectionId";
 import { Plus } from "lucide-react";
 import DataGrid from "@components/rdb/DataGrid";
 import DocumentDataGrid from "@components/document/DocumentDataGrid";
@@ -30,6 +31,8 @@ import { Skeleton } from "@components/ui/skeleton";
 import { LogoWordmark } from "@components/shared/Logo";
 import ErrorBoundary from "@components/shared/ErrorBoundary";
 import SearchIndexDetailPanel from "@components/search/SearchIndexDetailPanel";
+import KvKeyDetailPanel from "@components/workspace/KvKeyDetailPanel";
+import OperationsPanel from "@components/workspace/OperationsPanel";
 import { assertNever, type Paradigm } from "@/lib/paradigm";
 import { getDataSourceProfile } from "@/types/dataSource";
 import WorkspaceToolbar from "@components/workspace/WorkspaceToolbar";
@@ -174,8 +177,19 @@ function TableTabView({ tab, onSubViewChange }: TableTabProps) {
         <SearchIndexDetailPanel connectionId={tab.connectionId} index={index} />
       );
     }
+    case "kv": {
+      // KV key tabs carry the numeric Redis DB index in `database` (its string
+      // form; also mirrored to `schema` so the MainArea render gate passes).
+      const database = Number.parseInt(tab.database ?? tab.schema ?? "0", 10);
+      return (
+        <KvKeyDetailPanel
+          connectionId={tab.connectionId}
+          database={Number.isFinite(database) ? database : 0}
+          keyName={tab.table ?? ""}
+        />
+      );
+    }
     case "rdb":
-    case "kv":
       return (
         <div className="flex flex-1 flex-col overflow-hidden">
           {/* Sub-tab bar */}
@@ -313,31 +327,26 @@ function MainAreaSkeleton() {
 
 function EmptyState() {
   const { t } = useTranslation("layout");
+  // This workspace window is pinned to one connection via its Tauri window
+  // label (sprint-366). The empty-state target must be *that* connection —
+  // not a global MRU/first-connected pick — so the lead paradigm and the
+  // "New Query" CTA both act on the connection this window actually renders.
+  // The old MRU/first-connected target let a Redis window mislabel itself
+  // "SQL against <DuckDB>" and open its New Query tab in the DuckDB workspace
+  // slot, which this window never reads (invisible = "New Query does nothing").
+  const connId = useCurrentWindowConnectionId();
   const connections = useConnectionStore((s) => s.connections);
   const activeStatuses = useConnectionStore((s) => s.activeStatuses);
-  const lastUsedConnectionId = useMruStore((s) => s.lastUsedConnectionId);
   // MRU marking lives on each caller (not inside tabStore.addQueryTab) so
   // the CTA's single-action observable transition (click → new tab + MRU
   // shift) is preserved.
   const markConnectionUsed = useMruStore((s) => s.markConnectionUsed);
   const addQueryTab = useWorkspaceStore((s) => s.addQueryTab);
 
-  // MRU-first policy with first-connected fallback. The MRU id is null on
-  // first run (or after a reset); stale-MRU (the previously-used connection
-  // is currently disconnected) also falls back to first-connected so the
-  // CTA never points at a connection the user can't actually query.
-  const mruConnection =
-    lastUsedConnectionId !== null
-      ? connections.find(
-          (c) =>
-            c.id === lastUsedConnectionId &&
-            activeStatuses[c.id]?.type === "connected",
-        )
+  const target =
+    connId !== null && activeStatuses[connId]?.type === "connected"
+      ? connections.find((c) => c.id === connId)
       : undefined;
-  const firstConnected = connections.find(
-    (c) => activeStatuses[c.id]?.type === "connected",
-  );
-  const target = mruConnection ?? firstConnected;
   const emptyStateLead =
     target?.paradigm === "kv"
       ? t("mainArea.emptyKvLead", {
@@ -386,6 +395,10 @@ export default function MainArea() {
   // skeleton never re-renders for the remainder of the session.
   const hasLoadedOnce = useConnectionStore((s) => s.hasLoadedOnce);
   const [showGlobalLog, setShowGlobalLog] = useState(false);
+  // #1054 — workspace operations flyout (U1/U4/U5). Toggled from the
+  // toolbar via the same custom-event channel as the query log so both
+  // workspace-level flyouts share one discovery pattern.
+  const [showOperations, setShowOperations] = useState(false);
 
   const activeTab = tabs.find((t) => t.id === activeTabId);
 
@@ -396,6 +409,15 @@ export default function MainArea() {
     };
     window.addEventListener("toggle-global-query-log", handler);
     return () => window.removeEventListener("toggle-global-query-log", handler);
+  }, []);
+
+  // Listen for toggle-operations-panel custom event
+  useEffect(() => {
+    const handler = () => {
+      setShowOperations((prev) => !prev);
+    };
+    window.addEventListener("toggle-operations-panel", handler);
+    return () => window.removeEventListener("toggle-operations-panel", handler);
   }, []);
 
   return (
@@ -463,6 +485,10 @@ export default function MainArea() {
       <GlobalQueryLogPanel
         visible={showGlobalLog}
         onClose={() => setShowGlobalLog(false)}
+      />
+      <OperationsPanel
+        visible={showOperations}
+        onClose={() => setShowOperations(false)}
       />
     </main>
   );

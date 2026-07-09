@@ -6,12 +6,17 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
-import KvSidebar from "./KvSidebar";
+import KvKeyDetailPanel from "./KvKeyDetailPanel";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useSafeModeStore } from "@stores/safeModeStore";
 import type { ConnectionConfig } from "@/types/connection";
 import type { KvValueEnvelope } from "@/types/kv";
 import { KvMutationPanel } from "./KvMutationPanel";
+
+// Purpose: KV mutation surface now lives in the right-hand KvKeyDetailPanel
+// (moved out of KvSidebar in the 2026-07-07 KV UX redesign). These cases
+// migrate the sidebar's mutation coverage to the panel: preview → confirm →
+// bounded IPC, Safe Mode gating, and unsupported-surface messaging.
 
 const invokeMock = vi.fn();
 
@@ -61,7 +66,7 @@ const COLLECTION_EDIT_CASES = [
   },
 ];
 
-describe("KvSidebar mutations", () => {
+describe("KvKeyDetailPanel mutations", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     useConnectionStore.setState({
@@ -80,8 +85,8 @@ describe("KvSidebar mutations", () => {
       },
     });
 
-    render(<KvSidebar connectionId="redis-1" />);
-    await selectRenderedKey();
+    renderPanel();
+    await waitForValue();
 
     fireEvent.change(screen.getByLabelText("String value"), {
       target: { value: "Grace Hopper" },
@@ -127,8 +132,8 @@ describe("KvSidebar mutations", () => {
       },
     });
 
-    render(<KvSidebar connectionId="valkey-1" />);
-    await selectRenderedKey(/valkey keys/i);
+    renderPanel("valkey-1");
+    await waitForValue();
 
     expect(screen.getByText("Mutation")).toBeInTheDocument();
     expect(
@@ -221,14 +226,14 @@ describe("KvSidebar mutations", () => {
   it("surfaces selected-key workbench actions and keeps create-key unsupported", async () => {
     mockRedisRuntime(stringValueEnvelope("Ada"));
 
-    render(<KvSidebar connectionId="redis-1" />);
+    renderPanel();
 
     const newKeyAction = screen.getByRole("button", {
       name: /new key \(unsupported\)/i,
     });
     expect(newKeyAction).toBeDisabled();
 
-    await selectRenderedKey();
+    await waitForValue();
 
     const editAction = screen.getByRole("button", {
       name: /edit selected key/i,
@@ -308,8 +313,8 @@ describe("KvSidebar mutations", () => {
         execute_kv_command: () => mutationQueryResult(),
       });
 
-      render(<KvSidebar connectionId="redis-1" />);
-      await selectRenderedKey();
+      renderPanel();
+      await waitForValue();
 
       for (const [label, value] of fills as [string, string][]) {
         fireEvent.change(screen.getByLabelText(label), { target: { value } });
@@ -328,7 +333,8 @@ describe("KvSidebar mutations", () => {
           request: { database: 0, command },
         });
       });
-      expect(commandCalls("scan_kv_keys").length).toBeGreaterThan(1);
+      // Panel reloads its own value after a successful mutation (the sidebar
+      // list refresh is a separate, user-driven Scan).
       expect(commandCalls("get_kv_value").length).toBeGreaterThan(1);
     },
   );
@@ -344,8 +350,8 @@ describe("KvSidebar mutations", () => {
         execute_kv_command: () => mutationQueryResult(),
       });
 
-      render(<KvSidebar connectionId="valkey-1" />);
-      await selectRenderedKey(/valkey keys/i);
+      renderPanel("valkey-1");
+      await waitForValue();
 
       expect(screen.getByText("Mutation")).toBeInTheDocument();
       for (const [label, value] of fills as [string, string][]) {
@@ -372,8 +378,8 @@ describe("KvSidebar mutations", () => {
     useSafeModeStore.setState({ mode: "warn" });
     mockRedisRuntime(defaultValueEnvelope());
 
-    render(<KvSidebar connectionId="redis-1" />);
-    await selectRenderedKey();
+    renderPanel();
+    await waitForValue();
 
     fireEvent.change(screen.getByLabelText("Expire seconds"), {
       target: { value: "60" },
@@ -444,8 +450,8 @@ describe("KvSidebar mutations", () => {
       });
       mockRedisRuntime(defaultValueEnvelope());
 
-      render(<KvSidebar connectionId="redis-1" />);
-      await selectRenderedKey();
+      renderPanel();
+      await waitForValue();
 
       fireEvent.change(screen.getByLabelText("Delete confirm key"), {
         target: { value: "user:1" },
@@ -490,8 +496,8 @@ describe("KvSidebar mutations", () => {
       },
     });
 
-    render(<KvSidebar connectionId="redis-1" />);
-    await selectRenderedKey();
+    renderPanel();
+    await waitForValue();
 
     fireEvent.change(screen.getByLabelText("String value"), {
       target: { value: "Grace Hopper" },
@@ -518,20 +524,26 @@ describe("KvSidebar mutations", () => {
   });
 
   it.each([
-    [() => streamValueEnvelope(), /stream value mutation is unsupported/i],
+    [
+      () => streamValueEnvelope(),
+      "stream:events",
+      /stream value mutation is unsupported/i,
+    ],
     [
       () => partialHashValueEnvelope(),
+      "user:1",
       /partial hash previews cannot be mutated/i,
     ],
   ])(
     "fails unsupported or partial mutation surfaces clearly",
-    async (envelope, message) => {
+    async (envelope, keyName, message) => {
       mockRedisRuntime(envelope);
 
-      render(<KvSidebar connectionId="redis-1" />);
-      await selectRenderedKey();
+      renderPanel("redis-1", keyName as string);
 
-      expect(screen.getByRole("alert")).toHaveTextContent(message);
+      expect(await screen.findByRole("alert")).toHaveTextContent(
+        message as RegExp,
+      );
       expect(
         screen.queryByRole("button", { name: /preview delete/i }),
       ).not.toBeInTheDocument();
@@ -545,6 +557,20 @@ type MutatingCommand =
   | "execute_kv_command"
   | "delete_kv_key"
   | "update_kv_ttl";
+
+function renderPanel(connectionId = "redis-1", keyName = "user:1") {
+  render(
+    <KvKeyDetailPanel
+      connectionId={connectionId}
+      database={0}
+      keyName={keyName}
+    />,
+  );
+}
+
+async function waitForValue() {
+  await screen.findByText("Mutation");
+}
 
 function redisConnection(): ConnectionConfig {
   return {
@@ -580,16 +606,6 @@ function mockRedisRuntime(
   const currentEnvelope = () =>
     typeof envelope === "function" ? envelope() : envelope;
   invokeMock.mockImplementation((command: string, payload?: unknown) => {
-    if (command === "list_kv_databases") {
-      return Promise.resolve([{ name: "0", index: 0, keyCount: 1 }]);
-    }
-    if (command === "current_kv_database") return Promise.resolve(0);
-    if (command === "scan_kv_keys") {
-      return Promise.resolve({
-        ...defaultKeyPage(),
-        keys: [currentEnvelope().metadata],
-      });
-    }
     if (command === "get_kv_value") return Promise.resolve(currentEnvelope());
     if (command in handlers) {
       return Promise.resolve(handlers[command as MutatingCommand]?.(payload));
@@ -610,38 +626,6 @@ function mockRedisRuntime(
     }
     return Promise.reject(new Error(`Unhandled command: ${command}`));
   });
-}
-
-async function selectRenderedKey(treeName: RegExp = /redis keys/i) {
-  const scanButton = await screen.findByRole("button", {
-    name: /scan 100 keys/i,
-  });
-  await waitFor(() => expect(scanButton).toBeEnabled());
-  fireEvent.click(scanButton);
-  const tree = await screen.findByRole("tree", { name: treeName });
-  fireEvent.click((await within(tree).findAllByRole("treeitem"))[0]!);
-  await waitFor(() =>
-    expect(screen.queryByText("Loading value")).not.toBeInTheDocument(),
-  );
-}
-
-function defaultKeyPage() {
-  return {
-    database: 0,
-    cursor: "0",
-    nextCursor: "0",
-    done: true,
-    limit: 100,
-    keys: [
-      {
-        key: "user:1",
-        keyType: "hash",
-        ttl: { state: "persistent" },
-        length: 2,
-        memoryBytes: 128,
-      },
-    ],
-  };
 }
 
 function defaultValueEnvelope(): KvValueEnvelope {

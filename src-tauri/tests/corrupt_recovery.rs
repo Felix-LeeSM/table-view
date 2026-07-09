@@ -58,14 +58,21 @@ async fn test_corrupt_header_triggers_quarantine_and_fresh_db() {
         files
     );
 
-    // 3. Fresh DB is queryable — migrations applied → 9 tables exist.
-    let count: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name != '_sqlx_migrations'",
+    // 3. Fresh DB is queryable — migrations applied. Assert a core table
+    // exists instead of a hardcoded table count: the count drifts whenever a
+    // migration adds/removes a table (e.g. #1232 added `table_activity`,
+    // bumping 9 → 10), making a numeric assertion brittle and unrelated to
+    // what this test actually verifies (recovery → queryable schema).
+    let connections_exists: i64 = sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='connections')",
     )
     .fetch_one(&pool)
     .await
     .unwrap();
-    assert_eq!(count, 9);
+    assert_eq!(
+        connections_exists, 1,
+        "core 'connections' table must exist after fresh migration"
+    );
 
     cleanup_env();
 }
