@@ -90,7 +90,7 @@ fn app_error_db_mismatch_serialises_as_typed_envelope_with_message() {
         value,
         serde_json::json!({
             "type": "DbMismatch",
-            "message": "Database mismatch: expected 'db1', backend pool has 'db2'",
+            "message": "Database mismatch: expected 'db1', but found 'db2'",
             "payload": { "expected": "db1", "actual": "db2" },
         })
     );

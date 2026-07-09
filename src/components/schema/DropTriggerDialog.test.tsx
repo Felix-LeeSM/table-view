@@ -49,7 +49,7 @@ import { useConnectionStore } from "@stores/connectionStore";
 import { useSafeModeStore } from "@stores/safeModeStore";
 
 const DB_MISMATCH_ERROR =
-  "Database mismatch: expected 'db-1', backend pool has 'db-2'";
+  "Database mismatch: expected 'db-1', but found 'db-2'";
 
 function setDevConnection() {
   useConnectionStore.setState({

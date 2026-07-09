@@ -124,11 +124,14 @@ function BulkWriteSummary({ summary }: BulkWriteSummaryProps) {
   const { result } = summary;
   // Render every numeric counter unconditionally — users want to see
   // "0 across the board" in the trivial case rather than a blank table.
+  // Labels use the same verbs as the single-op headlines above
+  // (insert / update / delete) instead of the driver's snake_case field
+  // names — issue #1059.
   const rows: { label: string; value: string }[] = [
-    { label: "inserted_count", value: String(result.inserted_count) },
-    { label: "matched_count", value: String(result.matched_count) },
-    { label: "modified_count", value: String(result.modified_count) },
-    { label: "deleted_count", value: String(result.deleted_count) },
+    { label: "Inserted", value: String(result.inserted_count) },
+    { label: "Matched", value: String(result.matched_count) },
+    { label: "Modified", value: String(result.modified_count) },
+    { label: "Deleted", value: String(result.deleted_count) },
   ];
   return (
     <div className="flex flex-1 flex-col gap-3 p-4 text-sm">
@@ -141,7 +144,7 @@ function BulkWriteSummary({ summary }: BulkWriteSummaryProps) {
             <tr key={r.label} className="border-b border-border">
               <th
                 scope="row"
-                className="px-3 py-1.5 font-mono text-xs text-muted-foreground"
+                className="px-3 py-1.5 text-xs text-muted-foreground"
               >
                 {r.label}
               </th>
@@ -154,9 +157,9 @@ function BulkWriteSummary({ summary }: BulkWriteSummaryProps) {
             <tr className="border-b border-border">
               <th
                 scope="row"
-                className="px-3 py-1.5 align-top font-mono text-xs text-muted-foreground"
+                className="px-3 py-1.5 align-top text-xs text-muted-foreground"
               >
-                upserted_ids
+                Upserted
               </th>
               <td className="px-3 py-1.5 font-mono text-xs text-foreground">
                 <ul className="flex flex-col gap-0.5">

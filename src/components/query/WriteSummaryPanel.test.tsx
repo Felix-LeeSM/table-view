@@ -115,24 +115,25 @@ describe("WriteSummaryPanel — bulkWrite variant", () => {
     };
     render(<WriteSummaryPanel summary={summary} />);
 
-    // Each labelled cell appears with the matching counter.
+    // #1059 — labels are the same human verbs the single-op headlines use
+    // (Inserted / Matched / Modified / Deleted / Upserted), NOT the
+    // driver's snake_case field names.
     const table = screen.getByRole("table", { name: /bulkwrite/i });
     expect(table).toBeInTheDocument();
-    expect(screen.getByText(/inserted_count/i).closest("tr")).toHaveTextContent(
-      "3",
-    );
-    expect(screen.getByText(/matched_count/i).closest("tr")).toHaveTextContent(
-      "4",
-    );
-    expect(screen.getByText(/modified_count/i).closest("tr")).toHaveTextContent(
-      "2",
-    );
-    expect(screen.getByText(/deleted_count/i).closest("tr")).toHaveTextContent(
-      "1",
-    );
-    expect(screen.getByText(/upserted_ids/i).closest("tr")).toHaveTextContent(
+    expect(screen.getByText("Inserted").closest("tr")).toHaveTextContent("3");
+    expect(screen.getByText("Matched").closest("tr")).toHaveTextContent("4");
+    expect(screen.getByText("Modified").closest("tr")).toHaveTextContent("2");
+    expect(screen.getByText("Deleted").closest("tr")).toHaveTextContent("1");
+    expect(screen.getByText("Upserted").closest("tr")).toHaveTextContent(
       /507f1f77bcf86cd799439011/,
     );
+
+    // The driver's raw field names must not surface in the UI.
+    expect(screen.queryByText(/inserted_count/i)).toBeNull();
+    expect(screen.queryByText(/matched_count/i)).toBeNull();
+    expect(screen.queryByText(/modified_count/i)).toBeNull();
+    expect(screen.queryByText(/deleted_count/i)).toBeNull();
+    expect(screen.queryByText(/upserted_ids/i)).toBeNull();
   });
 
   it("renders an empty BulkWriteResult as all-zero counters with no upserted_ids row", () => {
@@ -153,6 +154,6 @@ describe("WriteSummaryPanel — bulkWrite variant", () => {
     expect(
       screen.getByRole("table", { name: /bulkwrite/i }),
     ).toBeInTheDocument();
-    expect(screen.queryByText(/upserted_ids/i)).toBeNull();
+    expect(screen.queryByText("Upserted")).toBeNull();
   });
 });

@@ -996,9 +996,7 @@ describe("schemaStore", () => {
   it("getTableTriggers triggers silent syncMismatchedActiveDb on DbMismatch (no toast)", async () => {
     const { listTriggers } = await import("@lib/tauri");
     (listTriggers as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
-      new Error(
-        "Database mismatch: expected 'db1', backend pool has 'other_db'",
-      ),
+      new Error("Database mismatch: expected 'db1', but found 'other_db'"),
     );
     await expect(
       useSchemaStore
