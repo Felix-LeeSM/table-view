@@ -140,7 +140,7 @@ function typedDbMismatch(
 ): Record<string, unknown> {
   return {
     type: "DbMismatch",
-    message: `Database mismatch: expected '${expected}', backend pool has '${actual}'`,
+    message: `Database mismatch: expected '${expected}', but found '${actual}'`,
     payload: { expected, actual },
   };
 }
@@ -179,14 +179,10 @@ describe("QueryTab — DbMismatch auto-sync (Sprint 267)", () => {
     seedConn1WithActiveDb("db1");
     mockExecuteQuery
       .mockRejectedValueOnce(
-        new Error(
-          "Database mismatch: expected 'db1', backend pool has 'db_actual'",
-        ),
+        new Error("Database mismatch: expected 'db1', but found 'db_actual'"),
       )
       .mockRejectedValueOnce(
-        new Error(
-          "Database mismatch: expected 'db1', backend pool has 'db_actual'",
-        ),
+        new Error("Database mismatch: expected 'db1', but found 'db_actual'"),
       );
     mockVerifyActiveDb.mockResolvedValue("db_actual");
 
@@ -277,9 +273,7 @@ describe("QueryTab — DbMismatch auto-sync (Sprint 267)", () => {
     // First call: mismatch. Second call (after Retry): success.
     mockExecuteQuery
       .mockRejectedValueOnce(
-        new Error(
-          "Database mismatch: expected 'db1', backend pool has 'db_actual'",
-        ),
+        new Error("Database mismatch: expected 'db1', but found 'db_actual'"),
       )
       .mockResolvedValueOnce({
         columns: [],
@@ -325,9 +319,7 @@ describe("QueryTab — DbMismatch auto-sync (Sprint 267)", () => {
     // from scratch and both statements succeed (2 calls).
     mockExecuteQuery
       .mockRejectedValueOnce(
-        new Error(
-          "Database mismatch: expected 'db1', backend pool has 'db_actual'",
-        ),
+        new Error("Database mismatch: expected 'db1', but found 'db_actual'"),
       )
       .mockResolvedValueOnce({
         columns: [],
@@ -375,9 +367,7 @@ describe("QueryTab — DbMismatch auto-sync (Sprint 267)", () => {
     const user = userEvent.setup();
     seedConn1WithActiveDb("db1");
     mockExecuteQuery.mockRejectedValueOnce(
-      new Error(
-        "Database mismatch: expected 'db1', backend pool has 'db_actual'",
-      ),
+      new Error("Database mismatch: expected 'db1', but found 'db_actual'"),
     );
     mockVerifyActiveDb.mockResolvedValueOnce("db_actual");
 
@@ -415,9 +405,7 @@ describe("QueryTab — DbMismatch auto-sync (Sprint 267)", () => {
     const user = userEvent.setup();
     seedConn1WithActiveDb("db1");
     mockExecuteQuery.mockRejectedValueOnce(
-      new Error(
-        "Database mismatch: expected 'db1', backend pool has 'db_actual'",
-      ),
+      new Error("Database mismatch: expected 'db1', but found 'db_actual'"),
     );
     mockVerifyActiveDb.mockResolvedValueOnce("db_actual");
 
@@ -479,9 +467,7 @@ describe("QueryTab — DbMismatch auto-sync (Sprint 267)", () => {
   it("Sprint 269: verifyActiveDb rejection keeps the catch silent — no Retry toast surfaces", async () => {
     seedConn1WithActiveDb("db1");
     mockExecuteQuery.mockRejectedValueOnce(
-      new Error(
-        "Database mismatch: expected 'db1', backend pool has 'db_actual'",
-      ),
+      new Error("Database mismatch: expected 'db1', but found 'db_actual'"),
     );
     // Sprint 267 best-effort invariant: verify rejection ⇒ silent path.
     mockVerifyActiveDb.mockRejectedValueOnce(new Error("verify failed"));

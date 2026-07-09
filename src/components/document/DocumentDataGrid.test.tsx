@@ -155,7 +155,9 @@ describe("DocumentDataGrid", () => {
     // loads, it falls back to "{schema}.{table}". Bob still renders in the
     // body. Sprint 118 (#PAR-2) — DocumentDataGrid passes the document
     // wording overrides so the row label says "documents", not "rows".
-    expect(screen.getByText(/2 documents/)).toBeInTheDocument();
+    // Anchored: #1061 also renders "1–2 of 2 documents" inside the pagination
+    // range, so the bare plural needs `^...$` to stay a single match.
+    expect(screen.getByText(/^2 documents$/)).toBeInTheDocument();
     expect(screen.getByText("Bob")).toBeInTheDocument();
     // [AC-181-10] Sprint 181 ExportButton mounted into the toolbar.
     // 2026-05-01 — regression guard so future toolbar refactors don't drop it.

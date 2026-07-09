@@ -180,7 +180,7 @@ describe("DataGrid — DbMismatch routing (Sprint 271b)", () => {
   it("syncs activeDb + surfaces Retry toast on DbMismatch error", async () => {
     mockQueryTableData.mockRejectedValueOnce({
       type: "DbMismatch",
-      message: "Database mismatch: expected 'db1', backend pool has 'db2'",
+      message: "Database mismatch: expected 'db1', but found 'db2'",
       payload: { expected: "db1", actual: "db2" },
     });
     verifyActiveDbMock.mockResolvedValueOnce("db2");

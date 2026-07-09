@@ -259,6 +259,30 @@ describe("DataGridTable — NULL vs empty string distinction", () => {
     expect(tds[1]!.className).toMatch(/bg-highlight/);
   });
 
+  // Issue #1061 — committed "" cell (no pending edit) used to render as a
+  // fully blank cell, indistinguishable from a render glitch. ADR 0009
+  // tri-state must stay legible: NULL = italic "NULL"; "" = "(empty string)"
+  // non-italic + dimmer, so the two never blur.
+  it("committed empty-string cell renders '(empty string)' marker (distinct from NULL)", () => {
+    const { container } = render(
+      <DataGridTable
+        {...makeProps({
+          data: { ...MOCK_DATA, rows: [[1, ""]] },
+        })}
+      />,
+    );
+
+    const cell = container.querySelector(
+      '[role="row"][aria-rowindex="2"] [role="gridcell"]:nth-child(2)',
+    ) as HTMLElement;
+
+    // The marker matches CellDetailDialog's `emptyString` wording so the grid
+    // and the detail viewer speak the same language.
+    expect(cell.textContent).toBe("(empty string)");
+    // Non-italic — the key visual differentiator from the italic NULL chip.
+    expect(cell.querySelector("span")!.className).not.toMatch(/italic/);
+  });
+
   it("focuses the <input> when a string-valued edit begins", () => {
     render(
       <DataGridTable

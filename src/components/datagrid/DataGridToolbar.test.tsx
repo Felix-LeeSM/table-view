@@ -237,8 +237,9 @@ describe("DataGridToolbar — Sprint 179 paradigm-aware labels (AC-179-03)", () 
   it("[AC-179-03b] default RDB labels render legacy 'rows' / 'Add row' vocabulary", () => {
     renderToolbar();
 
-    // Inline count label.
-    expect(screen.getByText(/2 rows/)).toBeInTheDocument();
+    // Inline count label. Anchored: the pagination range added in #1061 also
+    // contains "2 rows" ("1–2 of 2 rows"); the bare total stays its own node.
+    expect(screen.getByText(/^2 rows$/)).toBeInTheDocument();
     // Action button accessible names — these are what the existing
     // RDB-default Sprint 79/93/98 tests assert.
     expect(screen.getByRole("button", { name: "Add row" })).toBeInTheDocument();
@@ -256,8 +257,9 @@ describe("DataGridToolbar — Sprint 179 paradigm-aware labels (AC-179-03)", () 
       selectedRowIdsCount: 1,
     });
 
-    // Inline count label uses lower-cased plural.
-    expect(screen.getByText(/2 documents/)).toBeInTheDocument();
+    // Inline count label uses lower-cased plural. Anchored: the pagination
+    // range added in #1061 also embeds "2 documents" inside "1–2 of 2".
+    expect(screen.getByText(/^2 documents$/)).toBeInTheDocument();
     // Action buttons use sentence-case action copy.
     expect(
       screen.getByRole("button", { name: "Add document" }),
@@ -465,5 +467,57 @@ describe("DataGridToolbar — Issue #6 Discard confirmation", () => {
 
     expect(onDiscard).not.toHaveBeenCalled();
     expect(onDiscardConfirmOpenChange).toHaveBeenCalledWith(false);
+  });
+});
+
+// Issue #1061 — 툴바가 page 번호 + "/ totalPages" 만 표시하던 것을
+// "X–Y of Z rows" 행 절대 범위로 확장. page×pageSize 산술 없이 현재 보는 행의
+// 절대 위치를 알 수 있어야 한다. range 상한은 data.rows.length 기반 → 마지막
+// 페이지가 일부분만 있어도 정확.
+describe("DataGridToolbar — Issue #1061 row range summary", () => {
+  it("renders '1–2 of 2 rows' on the first (and only) page", () => {
+    renderToolbar();
+    expect(screen.getByText("1–2 of 2 rows")).toBeInTheDocument();
+  });
+
+  it("computes range from page + pageSize on a multi-page dataset", () => {
+    // 100 rows on page 2 of a 1234-row, 100-per-page dataset.
+    const pageRows = Array.from({ length: 100 }, (_, i) => [i + 101, `r${i}`]);
+    renderToolbar({
+      page: 2,
+      pageSize: 100,
+      totalPages: 13,
+      data: {
+        ...MOCK_DATA,
+        rows: pageRows,
+        total_count: 1234,
+        page: 2,
+        page_size: 100,
+      },
+    });
+    expect(screen.getByText("101–200 of 1,234 rows")).toBeInTheDocument();
+  });
+
+  it("clamps the upper bound on a partial last page", () => {
+    // 34 rows on the final page (1234 = 12*100 + 34).
+    const pageRows = Array.from({ length: 34 }, (_, i) => [i + 1201, `r${i}`]);
+    renderToolbar({
+      page: 13,
+      pageSize: 100,
+      totalPages: 13,
+      data: {
+        ...MOCK_DATA,
+        rows: pageRows,
+        total_count: 1234,
+        page: 13,
+        page_size: 100,
+      },
+    });
+    expect(screen.getByText("1,201–1,234 of 1,234 rows")).toBeInTheDocument();
+  });
+
+  it("honors the rowCountLabel override for document paradigm", () => {
+    renderToolbar({ ...DOCUMENT_LABELS });
+    expect(screen.getByText("1–2 of 2 documents")).toBeInTheDocument();
   });
 });

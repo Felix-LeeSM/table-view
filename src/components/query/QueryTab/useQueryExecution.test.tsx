@@ -729,9 +729,7 @@ describe("useQueryExecution scaffold", () => {
 
   it("syncs activeDb and surfaces a retry toast on DbMismatch", async () => {
     executeQueryMock.mockRejectedValueOnce(
-      new Error(
-        "Database mismatch: expected 'db1', backend pool has 'db_actual'",
-      ),
+      new Error("Database mismatch: expected 'db1', but found 'db_actual'"),
     );
     verifyActiveDbMock.mockResolvedValueOnce("db_actual");
     const tab = seedRdbTab("SELECT * FROM users");

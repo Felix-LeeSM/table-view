@@ -24,6 +24,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@components/ui/tabs";
 import { CopyTextButton } from "@components/shared/CopyTextButton";
 import { ExportButton } from "@components/shared/ExportButton";
 import { getDataSourceProfile } from "@/types/dataSource";
+import { DB_TYPE_META } from "@lib/db-meta";
 import { SearchResultView } from "@components/search/SearchResultView";
 import { DriverErrorHint } from "@components/errors/DriverErrorHint";
 import { classifyDriverError } from "@lib/errors/driverErrorHints";
@@ -286,7 +287,10 @@ function SelectResultArea({
     if (!connection) return null;
     const profile = getDataSourceProfile(connection.dbType);
     if (!profile.capabilities.edit.editRows) {
-      return `${profile.id} row editing is not supported.`;
+      // #1059 — surface the friendly DBMS name (e.g. "PostgreSQL") rather
+      // than the raw profile id ("postgresql") so the banner reads like
+      // the rest of the UI.
+      return `${DB_TYPE_META[profile.id].label} row editing is not supported.`;
     }
     if (connection.dbType === "sqlite" && connection.readOnly) {
       return "read-only SQLite connection";
