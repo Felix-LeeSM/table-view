@@ -481,6 +481,27 @@ export function DocumentTreePanel({
     setDraft(renderLeafValue(node));
   }, []);
 
+  // #1140 — return focus to the edited node's treeitem after the inline leaf
+  // editor unmounts (commit OR cancel). The editor lives inside the treeitem
+  // div, which is focusable via the roving tabindex; restoring there keeps
+  // arrow navigation anchored instead of dropping focus on <body>. Centralized
+  // on the editingPath transition so every commit/cancel site is covered once.
+  const editedPathRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (editingPath !== null) {
+      editedPathRef.current = editingPath;
+      return;
+    }
+    const edited = editedPathRef.current;
+    editedPathRef.current = null;
+    if (edited === null) return;
+    const key = edited || "__root";
+    const el = listRef.current?.querySelector<HTMLElement>(
+      `[data-tree-key="${CSS.escape(key)}"]`,
+    );
+    el?.focus();
+  }, [editingPath]);
+
   const commitDraft = useCallback(() => {
     if (editingPath === null) return;
     // Sprint 341 feedback (1) — only fire onCommitEdit when the draft

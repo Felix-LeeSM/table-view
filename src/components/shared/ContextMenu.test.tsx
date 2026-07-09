@@ -274,4 +274,32 @@ describe("ContextMenu", () => {
     const separator = screen.getByRole("separator");
     expect(separator.className).toContain("border-t");
   });
+
+  // -----------------------------------------------------------------------
+  // #1140 — focus restore on close (parity with Radix menus).
+  // -----------------------------------------------------------------------
+  it("restores focus to the trigger when the menu is closed (#1140)", async () => {
+    const trigger = document.createElement("button");
+    trigger.textContent = "Trigger";
+    document.body.appendChild(trigger);
+    trigger.focus();
+    expect(trigger).toHaveFocus();
+
+    const { unmount } = render(
+      <ContextMenu x={100} y={100} items={items} onClose={onClose} />,
+    );
+
+    // Menu opened — first menuitem takes focus.
+    await vi.waitFor(() => {
+      expect(screen.getByRole("menuitem", { name: "Edit" })).toHaveFocus();
+    });
+
+    // Close path: Escape fires onClose; the consumer unmounts the menu.
+    fireEvent.keyDown(document, { key: "Escape" });
+    unmount();
+
+    // Focus returns to the trigger instead of falling to <body>.
+    expect(trigger).toHaveFocus();
+    document.body.removeChild(trigger);
+  });
 });

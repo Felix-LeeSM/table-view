@@ -282,7 +282,12 @@ describe("SearchSidebar", () => {
     expect(screen.queryByText(".kibana_8.12.2")).not.toBeInTheDocument();
     expect(screen.queryByText(".fleet-actions")).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("checkbox", { name: /show system/i }));
+    // #1140 — the checkbox name now comes from the visible label text
+    // ("Show hidden/system entries") instead of a mismatched aria-label, so
+    // Label-in-Name (WCAG 2.5.3) holds.
+    fireEvent.click(
+      screen.getByRole("checkbox", { name: /show hidden\/system entries/i }),
+    );
 
     expect(screen.getByText(".kibana_8.12.2")).toBeInTheDocument();
     expect(screen.getByText(".fleet-actions")).toBeInTheDocument();
