@@ -53,6 +53,10 @@ export const en = {
   lastPage: "Last page",
   pageSizeAria: "Page size",
   jumpToPage: "Jump to page",
+  // Issue #1061 — absolute row range of the current page. `rowsLabel` is the
+  // paradigm noun ("rows" / "documents") so the phrase stays consistent with
+  // the existing count summary on the left.
+  rowRange: "{{from}}–{{to}} of {{total}} {{rowsLabel}}",
 
   // BlobViewerDialog
   blobViewerPrefix: "BLOB Viewer —",
@@ -187,6 +191,9 @@ export const ko = {
   lastPage: "마지막 페이지",
   pageSizeAria: "페이지 크기",
   jumpToPage: "페이지로 이동",
+  // Issue #1061 — 현재 페이지의 절대 행 범위. `rowsLabel` 은 paradigm 명사
+  // ("행" / "문서") 로 좌측 count summary 와 문맥을 맞춘다.
+  rowRange: "{{total}} {{rowsLabel}} 중 {{from}}–{{to}}",
 
   // BlobViewerDialog
   blobViewerPrefix: "BLOB 뷰어 —",
