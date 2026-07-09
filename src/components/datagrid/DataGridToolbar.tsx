@@ -353,6 +353,25 @@ export default function DataGridToolbar({
         </Button>
         {data && (
           <div className="flex items-center gap-2">
+            {/* Issue #1061 — absolute row range of the current page so the
+                user can locate "where am I" without doing page×pageSize math.
+                `firstRow` is 0 when the page loaded no rows (empty filter). */}
+            <span
+              className="whitespace-nowrap text-xs text-muted-foreground"
+              aria-live="polite"
+            >
+              {(() => {
+                const rowsOnPage = data.rows.length;
+                const firstRow = rowsOnPage > 0 ? (page - 1) * pageSize + 1 : 0;
+                const lastRow = (page - 1) * pageSize + rowsOnPage;
+                return t("rowRange", {
+                  from: firstRow.toLocaleString(),
+                  to: lastRow.toLocaleString(),
+                  total: data.total_count.toLocaleString(),
+                  rowsLabel: rowCountLabel,
+                });
+              })()}
+            </span>
             <Button
               variant="ghost"
               size="icon-xs"

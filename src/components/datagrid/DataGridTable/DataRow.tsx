@@ -531,6 +531,15 @@ export default function DataRow({ rowIdx, ctx, rowStyle }: DataRowProps) {
                 <Binary />
                 <span>(BLOB)</span>
               </Button>
+            ) : cell === "" ? (
+              // Issue #1061 — distinguish "" from NULL. ADR 0009 keeps NULL as
+              // italic muted "NULL"; empty string uses the SAME wording as
+              // CellDetailDialog (`emptyString` = "(empty string)") but is
+              // non-italic and slightly dimmer so the two tri-state values
+              // never blur together.
+              <span className="text-muted-foreground/70">
+                {t("emptyString")}
+              </span>
             ) : cell == null ? (
               <span className="italic text-muted-foreground">NULL</span>
             ) : (
