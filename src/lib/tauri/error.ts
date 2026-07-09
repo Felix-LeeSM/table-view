@@ -23,7 +23,7 @@ export interface NormalizedTauriError {
 
 const UNKNOWN_ERROR_TYPE = "Unknown";
 const DB_MISMATCH_RE =
-  /^Database mismatch: expected '([^']*)', backend pool has '([^']*)'$/;
+  /^Database mismatch: expected '([^']*)', but found '([^']*)'$/;
 
 export function normalizeTauriError(err: unknown): NormalizedTauriError {
   const direct = parseEnvelope(err);
@@ -123,7 +123,7 @@ function parseCancelPayload(payload: unknown): CancelError | null {
 }
 
 function formatDbMismatchMessage(info: DbMismatchInfo): string {
-  return `Database mismatch: expected '${info.expected}', backend pool has '${info.actual}'`;
+  return `Database mismatch: expected '${info.expected}', but found '${info.actual}'`;
 }
 
 function formatCancelMessage(error: CancelError): string {

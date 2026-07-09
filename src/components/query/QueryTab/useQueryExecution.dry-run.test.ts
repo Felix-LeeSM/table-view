@@ -381,7 +381,7 @@ describe("useQueryExecution — handleDryRun (Sprint 248)", () => {
   it("routes DbMismatch through syncMismatchedActiveDb + Retry toast", async () => {
     executeQueryDryRunMock.mockRejectedValueOnce({
       type: "DbMismatch",
-      message: "Database mismatch: expected 'db1', backend pool has 'otherDb'",
+      message: "Database mismatch: expected 'db1', but found 'otherDb'",
       payload: { expected: "db1", actual: "otherDb" },
     });
     verifyActiveDbMock.mockResolvedValueOnce("otherDb");
