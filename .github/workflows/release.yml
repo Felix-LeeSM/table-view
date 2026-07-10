@@ -213,3 +213,36 @@ jobs:
             (cd "$(dirname "$f")" && shasum -a 256 "$base") > "${f}.sha256"
             gh release upload "$TAG" "${f}.sha256" --clobber
           done
+
+  # #1429 — latest.json platform completeness gate. The build matrix runs with
+  # `fail-fast: false`, and tauri-action merges each leg's updater entry into
+  # the draft release's latest.json via read-merge-write. A failed leg (v0.3.1:
+  # the Windows leg) — or a lost concurrent merge — leaves that platform's key
+  # out of the manifest; publishing it makes `check()` on that OS report
+  # "up to date" forever, swallowed silently client-side (ADR 0036, no
+  # telemetry). Verify the merged manifest lists every matrix platform after
+  # all legs finish, so an incomplete draft fails this run before a maintainer
+  # can publish it. Expected keys are derived from this workflow's matrix
+  # `target:` triples, so adding a leg automatically extends the gate.
+  verify-latest-json:
+    name: Verify latest.json platform completeness
+    needs: build
+    # Run even when a build leg failed — that is exactly the case that
+    # produces an incomplete latest.json worth failing loudly on.
+    if: always()
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      # Fails if the draft has no latest.json at all (e.g. every leg died
+      # before upload) — fail-closed, same as an incomplete manifest.
+      - name: Download merged latest.json from draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_type == 'tag' && github.ref_name || format('manual-{0}', github.sha) }}
+        run: gh release download "$TAG" --pattern latest.json --output latest.json
+
+      - name: Verify platform keys against the build matrix
+        run: node scripts/release/verify-latest-json.mjs latest.json

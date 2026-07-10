@@ -73,4 +73,16 @@ assert_contains "$workflow_text" "Verify updater signatures against committed pu
 assert_contains "$workflow_text" "scripts/release/verify-updater-sigs.mjs" "updater signature gate script"
 assert_contains "$workflow_text" 'ARTIFACT_PATHS: ${{ steps.tauri.outputs.artifactPaths }}' "updater signature gate artifact input"
 
+# Regression (#1429): the build matrix runs with fail-fast: false, and
+# tauri-action merges each leg's updater entry into the draft's latest.json
+# via read-merge-write. A failed leg (v0.3.1: Windows) or a lost concurrent
+# merge drops that platform's key; publishing it makes that OS's clients
+# silently report "up to date" forever. release.yml must verify the merged
+# manifest's platform completeness after all legs, even when one failed.
+assert_contains "$workflow_text" "verify-latest-json:" "latest.json completeness gate job"
+assert_contains "$workflow_text" "needs: build" "latest.json gate ordered after all build legs"
+assert_contains "$workflow_text" "if: always()" "latest.json gate runs even when a build leg failed"
+assert_contains "$workflow_text" "scripts/release/verify-latest-json.mjs" "latest.json completeness gate script"
+assert_contains "$workflow_text" "gh release download" "latest.json fetched from the draft release"
+
 echo "PASS: Release workflow check"
