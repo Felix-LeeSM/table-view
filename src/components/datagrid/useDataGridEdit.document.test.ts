@@ -287,7 +287,13 @@ describe("useDataGridEdit — document paradigm (Sprint 86)", () => {
     expect(mockFetchData).not.toHaveBeenCalled();
   });
 
-  it("handleExecuteCommit preserves every pending document write after ordered bulk failure", async () => {
+  it("handleExecuteCommit prunes the applied op after ordered bulk failure; retry resumes from the failed op (#1440)", async () => {
+    // Reason: issue #1440 — rewritten from the pre-#1440 contract that kept
+    // EVERY pending write and re-sent the identical batch on retry: that
+    // re-applied the already-committed op 0 (duplicate write). New contract:
+    // the applied op's pending origin is pruned, the banner reports how far
+    // the batch got, and the retry dispatches only the ops from the failed
+    // index. Date 2026-07-10.
     mockBulkWriteDocuments.mockRejectedValueOnce(
       new Error("bulk_write op 1 delete_one failed"),
     );
@@ -319,17 +325,17 @@ describe("useDataGridEdit — document paradigm (Sprint 86)", () => {
       await result.current.handleExecuteCommit();
     });
 
-    const firstDispatchArgs = mockBulkWriteDocuments.mock.calls[0];
     expect(result.current.mqlPreview).toBe(previewBeforeFailure);
     expect(result.current.commitError?.statementIndex).toBe(1);
     expect(result.current.commitError?.statementCount).toBe(2);
-    expect(result.current.commitError?.message).toMatch(/not transactional/);
     expect(result.current.commitError?.message).toMatch(
-      /earlier document writes may already be committed/,
+      /first 1 of 2 operations/,
     );
-    expect(result.current.commitError?.message).toMatch(/retry/);
+    expect(result.current.commitError?.message).toMatch(/removed from pending/);
     expect(result.current.commitError?.message).not.toMatch(/rolled back/i);
-    expect(result.current.pendingEdits.size).toBe(1);
+    // op 0 (updateOne from edit "0-1") applied → pruned; the failed delete
+    // stays pending.
+    expect(result.current.pendingEdits.size).toBe(0);
     expect(result.current.pendingDeletedRowKeys.size).toBe(1);
     expect(mockFetchData).not.toHaveBeenCalled();
 
@@ -338,7 +344,12 @@ describe("useDataGridEdit — document paradigm (Sprint 86)", () => {
     });
 
     expect(mockBulkWriteDocuments).toHaveBeenCalledTimes(2);
-    expect(mockBulkWriteDocuments.mock.calls[1]).toEqual(firstDispatchArgs);
+    // Retry resumes at the failed op — only the deleteOne goes out.
+    const retryOps = mockBulkWriteDocuments.mock.calls[1]![3] as Array<{
+      op: string;
+    }>;
+    expect(retryOps).toHaveLength(1);
+    expect(retryOps[0]!.op).toBe("deleteOne");
     expect(result.current.mqlPreview).toBeNull();
     expect(result.current.commitError).toBeNull();
     expect(result.current.pendingEdits.size).toBe(0);

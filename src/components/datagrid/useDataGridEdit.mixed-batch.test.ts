@@ -888,6 +888,263 @@ describe("useDataGridEdit — Sprint 184 mixed-batch + perf smoke", () => {
     expect(mockFetchData).not.toHaveBeenCalled();
   });
 
+  it("[#1440] Mongo partial bulk failure prunes applied inserts and in-modal retry sends only the remaining op", async () => {
+    // Reason: issue #1440 — mongo bulk commit is ordered but non-transactional.
+    // Scenario from the issue: 3 pending inserts, ops 0-1 applied, op 2 failed.
+    // The applied inserts must leave pendingNewRows (AC1), the banner must say
+    // how far the batch got (AC3), and a retry must dispatch ONLY the failed
+    // op — previously the whole batch was re-sent, duplicating the applied
+    // inserts (AC2). (2026-07-10)
+    const { result } = renderDocHook();
+    for (let i = 0; i < 3; i += 1) {
+      act(() => {
+        result.current.handleSelectRow(1, false, false);
+      });
+      act(() => {
+        result.current.handleDuplicateRow();
+      });
+    }
+    expect(result.current.pendingNewRows).toHaveLength(3);
+
+    act(() => {
+      result.current.handleCommit();
+    });
+    expect(result.current.mqlPreview!.commands).toHaveLength(3);
+
+    mockBulkWriteDocuments.mockRejectedValueOnce(
+      new Error("bulk_write op 2 insert_one failed: E11000 duplicate key"),
+    );
+    await act(async () => {
+      await result.current.handleExecuteCommit();
+    });
+
+    // AC1 — ops 0,1 applied → pruned from pending; only the failed op stays.
+    expect(result.current.pendingNewRows).toHaveLength(1);
+    // AC3 — banner points at the failed op and says the applied ops left
+    // the pending list.
+    expect(result.current.commitError).not.toBeNull();
+    expect(result.current.commitError!.statementIndex).toBe(2);
+    expect(result.current.commitError!.statementCount).toBe(3);
+    expect(result.current.commitError!.message).toMatch(
+      /first 2 of 3 operations/,
+    );
+    expect(result.current.commitError!.message).toMatch(/removed from pending/);
+    // Preview stays open as the retry affordance.
+    expect(result.current.mqlPreview).not.toBeNull();
+    expect(mockFetchData).not.toHaveBeenCalled();
+
+    // AC2 — in-modal retry resumes at the failed op: exactly 1 op dispatched,
+    // no duplicate insert of the already-applied documents.
+    mockBulkWriteDocuments.mockResolvedValueOnce({
+      inserted_count: 1,
+      matched_count: 0,
+      modified_count: 0,
+      deleted_count: 0,
+      upserted_ids: [],
+    });
+    await act(async () => {
+      await result.current.handleExecuteCommit();
+    });
+    expect(mockBulkWriteDocuments).toHaveBeenCalledTimes(2);
+    const retryOps = mockBulkWriteDocuments.mock.calls[1]![3] as Array<{
+      op: string;
+    }>;
+    expect(retryOps).toHaveLength(1);
+    expect(retryOps[0]!.op).toBe("insertOne");
+    // Success path — cleanup + refetch as usual.
+    expect(result.current.pendingNewRows).toHaveLength(0);
+    expect(result.current.mqlPreview).toBeNull();
+    expect(mockFetchData).toHaveBeenCalledTimes(1);
+  });
+
+  it("[#1440] Mongo partial failure prunes applied edit/insert namespaces; re-opened preview holds only the remaining delete", async () => {
+    // Reason: issue #1440 AC1 across all three pending namespaces (edits /
+    // new rows / deletes) + the cancel-then-recommit path: a NEW preview
+    // regenerated from the pruned pending state must contain only the ops
+    // that never applied. (2026-07-10)
+    const { result } = renderDocHook();
+    // UPDATE row 0 → edit key "0-1".
+    act(() => {
+      result.current.handleStartEdit(0, 1, "Ada");
+    });
+    act(() => {
+      result.current.setEditValue("Ada Lovelace");
+    });
+    act(() => {
+      result.current.saveCurrentEdit();
+    });
+    // INSERT — duplicate row 1 ("Grace").
+    act(() => {
+      result.current.handleSelectRow(1, false, false);
+    });
+    act(() => {
+      result.current.handleDuplicateRow();
+    });
+    // DELETE row 2 → delete key "row-1-2".
+    act(() => {
+      result.current.handleSelectRow(2, false, false);
+    });
+    act(() => {
+      result.current.handleDeleteRow();
+    });
+    act(() => {
+      result.current.handleCommit();
+    });
+    // Generator contract: insert → update → delete.
+    expect(result.current.mqlPreview!.commands.map((c) => c.kind)).toEqual([
+      "insertOne",
+      "updateOne",
+      "deleteOne",
+    ]);
+
+    // insert + update applied, delete (op 2) failed.
+    mockBulkWriteDocuments.mockRejectedValueOnce(
+      new Error("bulk_write op 2 delete_one failed: write concern timeout"),
+    );
+    await act(async () => {
+      await result.current.handleExecuteCommit();
+    });
+
+    expect(result.current.pendingEdits.size).toBe(0);
+    expect(result.current.pendingNewRows).toHaveLength(0);
+    expect(result.current.pendingDeletedRowKeys.size).toBe(1);
+
+    // Cancel the stale preview and re-commit — only the failed delete remains.
+    act(() => {
+      result.current.setMqlPreview(null);
+    });
+    act(() => {
+      result.current.handleCommit();
+    });
+    expect(result.current.mqlPreview!.commands).toHaveLength(1);
+    expect(result.current.mqlPreview!.commands[0]!.kind).toBe("deleteOne");
+  });
+
+  it("[#1483/B1] second partial failure in the same session prunes the newly applied insert, not a later survivor", async () => {
+    // Reason: PR #1483 review B1 — the adapter reports applied inserts from
+    // preview-time sources, but after the FIRST prune the live pendingNewRows
+    // array has shifted left. A positional index from preview time then
+    // deletes the wrong row: staged [A,B,C], round 1 applies A (pruned),
+    // round 2 applies B but the stale index pointed at C — losing C (never
+    // applied) and keeping B (already applied → duplicate on re-commit).
+    // Applied inserts must be identified by row identity. (2026-07-10)
+    const { result } = renderDocHook();
+    for (const rowIdx of [0, 1, 2]) {
+      act(() => {
+        result.current.handleSelectRow(rowIdx, false, false);
+      });
+      act(() => {
+        result.current.handleDuplicateRow();
+      });
+    }
+    // Distinct staged inserts: Ada / Grace / Edsger duplicates.
+    const stagedNames = () =>
+      result.current.pendingNewRows.map((r) => (r as unknown[])[1]);
+    expect(stagedNames()).toEqual(["Ada", "Grace", "Edsger"]);
+
+    act(() => {
+      result.current.handleCommit();
+    });
+    expect(result.current.mqlPreview!.commands).toHaveLength(3);
+
+    // Round 1 — op 0 (Ada) applied, op 1 failed.
+    mockBulkWriteDocuments.mockRejectedValueOnce(
+      new Error("bulk_write op 1 insert_one failed: E11000 duplicate key"),
+    );
+    await act(async () => {
+      await result.current.handleExecuteCommit();
+    });
+    expect(stagedNames()).toEqual(["Grace", "Edsger"]);
+
+    // Round 2 — in-modal retry resumes at [Grace, Edsger]; Grace (relative
+    // op 0) applied, Edsger (relative op 1) failed. The pruned row must be
+    // Grace (applied), NOT Edsger (never applied).
+    mockBulkWriteDocuments.mockRejectedValueOnce(
+      new Error("bulk_write op 1 insert_one failed: E11000 duplicate key"),
+    );
+    await act(async () => {
+      await result.current.handleExecuteCommit();
+    });
+    expect(result.current.commitError!.message).toMatch(
+      /first 2 of 3 operations/,
+    );
+    expect(stagedNames()).toEqual(["Edsger"]);
+
+    // Round 3 — retry succeeds with exactly the one never-applied insert.
+    mockBulkWriteDocuments.mockResolvedValueOnce({
+      inserted_count: 1,
+      matched_count: 0,
+      modified_count: 0,
+      deleted_count: 0,
+      upserted_ids: [],
+    });
+    await act(async () => {
+      await result.current.handleExecuteCommit();
+    });
+    expect(mockBulkWriteDocuments).toHaveBeenCalledTimes(3);
+    const round3Ops = mockBulkWriteDocuments.mock.calls[2]![3] as Array<{
+      op: string;
+    }>;
+    expect(round3Ops).toHaveLength(1);
+    expect(round3Ops[0]!.op).toBe("insertOne");
+    expect(result.current.pendingNewRows).toHaveLength(0);
+    expect(result.current.mqlPreview).toBeNull();
+  });
+
+  it("[#1483/B2] undo after a partial-failure prune cannot resurrect the applied op", async () => {
+    // Reason: PR #1483 review B2 — pushSnapshot captured the pending state
+    // BEFORE the partial-failure prune; restoring it via undo re-staged the
+    // already-applied op, so a re-commit duplicated the server write. The
+    // prune must invalidate the pre-prune undo history. (2026-07-10)
+    const { result } = renderDocHook();
+    // Two snapshot-pushing gestures: duplicate Ada, then Grace.
+    for (const rowIdx of [0, 1]) {
+      act(() => {
+        result.current.handleSelectRow(rowIdx, false, false);
+      });
+      act(() => {
+        result.current.handleDuplicateRow();
+      });
+    }
+    const stagedNames = () =>
+      result.current.pendingNewRows.map((r) => (r as unknown[])[1]);
+    expect(stagedNames()).toEqual(["Ada", "Grace"]);
+    expect(result.current.canUndo).toBe(true);
+
+    act(() => {
+      result.current.handleCommit();
+    });
+    expect(result.current.mqlPreview!.commands).toHaveLength(2);
+
+    // op 0 (Ada) applied, op 1 (Grace) failed → Ada pruned.
+    mockBulkWriteDocuments.mockRejectedValueOnce(
+      new Error("bulk_write op 1 insert_one failed: E11000 duplicate key"),
+    );
+    await act(async () => {
+      await result.current.handleExecuteCommit();
+    });
+    expect(stagedNames()).toEqual(["Grace"]);
+
+    // Cancel the modal, then undo — the pre-prune snapshot held [Ada].
+    act(() => {
+      result.current.setMqlPreview(null);
+    });
+    act(() => {
+      result.current.undo();
+    });
+
+    // The applied insert must NOT come back; the never-applied one stays.
+    expect(stagedNames()).toEqual(["Grace"]);
+    expect(result.current.canUndo).toBe(false);
+
+    // Re-commit generates only the never-applied insert.
+    act(() => {
+      result.current.handleCommit();
+    });
+    expect(result.current.mqlPreview!.commands).toHaveLength(1);
+    expect(result.current.mqlPreview!.previewLines[0]).toContain("Grace");
+  });
+
   it("[AC-184-03] RDB 100-edit handleCommit completes under 1000ms with 100 UPDATE statements", () => {
     // AC-184-03 — perf smoke. Crude wall-clock budget guards against an
     // O(N²) regression in generateSqlWithKeys; on a healthy machine this

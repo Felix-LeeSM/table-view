@@ -135,6 +135,39 @@ describe("generateMqlPreview — happy paths", () => {
       "deleteOne",
     ]);
   });
+
+  it("emits sources index-aligned with commands for partial-commit pruning (#1440)", () => {
+    // Reason: issue #1440 — a partially-applied bulk commit must map each
+    // applied command back to its pending-state origin (edit keys / delete
+    // key / new-row index) so the facade can prune exactly those entries
+    // before a re-commit. Date 2026-07-10.
+    const { commands, sources } = generateMqlPreview(
+      makeInput({
+        pendingEdits: new Map<string, unknown>([
+          ["0-1", "Ada L."],
+          ["0-2", 37],
+        ]),
+        pendingDeletedRowKeys: new Set(["row-1-1"]),
+        pendingNewRows: [{ name: "Marie" }],
+      }),
+    );
+    expect(sources).toHaveLength(commands.length);
+    expect(sources[0]).toEqual({ kind: "insert", newRowIndex: 0 });
+    expect(sources[1]).toEqual({ kind: "update", editKeys: ["0-1", "0-2"] });
+    expect(sources[2]).toEqual({ kind: "delete", deleteKey: "row-1-1" });
+  });
+
+  it("sources skip errored rows so alignment with commands survives (#1440)", () => {
+    // Reason: issue #1440 — an errored (skipped) new row must not shift the
+    // source index of the rows that DID emit commands; pruning the wrong
+    // pendingNewRows index would drop a live edit. Date 2026-07-10.
+    const { commands, sources, errors } = generateMqlPreview(
+      makeInput({ pendingNewRows: [{}, { name: "Marie" }] }),
+    );
+    expect(errors).toHaveLength(1);
+    expect(commands).toHaveLength(1);
+    expect(sources).toEqual([{ kind: "insert", newRowIndex: 1 }]);
+  });
 });
 
 describe("generateMqlPreview — error guards", () => {

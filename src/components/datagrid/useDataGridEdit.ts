@@ -99,6 +99,7 @@ export function useDataGridEdit({
     setPendingDeletedRowKeys,
     clearPendingEntry,
     restageAfterCommit,
+    prunePartiallyCommitted,
     pushSnapshot,
     undo,
     canUndo,
@@ -161,6 +162,10 @@ export function useDataGridEdit({
     setEditValue("");
   }, [restageAfterCommit, clearSelection, data]);
 
+  // Issue #1440 — partial-commit prune lives in `useDataGridEditPendingState`
+  // (it must also invalidate the undo stack it owns — PR #1483 review B2);
+  // the facade just forwards it to the commit hook below.
+
   const {
     sqlPreview,
     setSqlPreview: setSqlPreviewExposed,
@@ -191,6 +196,7 @@ export function useDataGridEdit({
     canEditRows,
     setPendingEditErrors,
     onCommitCleanup: clearPendingAfterCommit,
+    onPartialCommit: prunePartiallyCommitted,
     beginCommitFlash,
   });
 

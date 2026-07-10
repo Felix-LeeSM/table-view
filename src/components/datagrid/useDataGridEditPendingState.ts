@@ -6,6 +6,7 @@ import {
 } from "@stores/dataGridEditStore";
 import { toast } from "@/lib/runtime/toast";
 import i18n from "@lib/i18n";
+import type { AppliedPendingOps } from "@/lib/datagrid/paradigmEditAdapter";
 import {
   UNDO_STACK_MAX,
   buildRestageSnapshot,
@@ -212,6 +213,54 @@ export function useDataGridEditPendingState({
     [storeKey, storeClearEntry, storeSetSlice],
   );
 
+  // Issue #1440 — Mongo bulk commits are ordered but non-transactional: on a
+  // partial failure the ops BEFORE the failed one are already applied on the
+  // server. Drop exactly those entries from the pending slices so a re-commit
+  // (in-modal retry or a regenerated preview) cannot duplicate them. Inserts
+  // are matched by row identity (PR #1483 review B1) — the applied `newRows`
+  // are the very references still sitting in `pendingNewRows`, so the prune
+  // stays exact across the same session's 2nd+ partial failure.
+  // ponytail: row-anchor snapshot entries for pruned keys stay behind — they
+  // are keyed lookups and unused keys are ignored; prune them if the snapshot
+  // maps ever grow visible semantics.
+  const prunePartiallyCommitted = useCallback(
+    (applied: AppliedPendingOps) => {
+      if (applied.editKeys.length > 0) {
+        setPendingEdits((prev) => {
+          const next = new Map(prev);
+          for (const key of applied.editKeys) next.delete(key);
+          return next;
+        });
+      }
+      if (applied.deleteKeys.length > 0) {
+        setPendingDeletedRowKeys((prev) => {
+          const next = new Set(prev);
+          for (const key of applied.deleteKeys) next.delete(key);
+          return next;
+        });
+      }
+      if (applied.newRows.length > 0) {
+        const drop = new Set<unknown>(applied.newRows);
+        setPendingNewRows((prev) => prev.filter((row) => !drop.has(row)));
+      }
+      // PR #1483 review B2 — every snapshot pushed BEFORE this prune still
+      // contains the applied ops; restoring one via undo would re-stage an
+      // op the server already executed (duplicate write on re-commit).
+      // Snapshot new-rows are deep copies, so identity-pruning the stack is
+      // impossible for inserts — invalidate the whole stack instead.
+      // ponytail: full-stack invalidation; per-snapshot pruning needs a
+      // stable insert identity (row token) if undo retention after a partial
+      // failure ever matters.
+      setUndoStack([]);
+    },
+    [
+      setPendingEdits,
+      setPendingDeletedRowKeys,
+      setPendingNewRows,
+      setUndoStack,
+    ],
+  );
+
   const pushSnapshot = useCallback(() => {
     setUndoStack((prev) => {
       const snap: EditSnapshot = {
@@ -276,6 +325,7 @@ export function useDataGridEditPendingState({
     setPendingDeletedRowKeys,
     clearPendingEntry,
     restageAfterCommit,
+    prunePartiallyCommitted,
     pushSnapshot,
     undo,
     canUndo: undoStack.length > 0,
