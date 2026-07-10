@@ -237,6 +237,17 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
         // opened a pool against that DB). Omit the field when the
         // connection has no default database so the DbSwitcher renders
         // "(default)" rather than an empty string.
+        //
+        // #1414 (decision A, 2026-07-10): this seed is the authority for the
+        // active db after a full restart. The active db is derived only from
+        // `activeStatuses[id].activeDb`, so seeding the configured default on
+        // every connect resets a cold boot to `connection.database` — the
+        // previous session's last-viewed db is never restored. Restored tabs
+        // for other dbs stay on disk (they key their own `(connId, db)` cell);
+        // only this seeded value governs which cell is surfaced. Do not
+        // re-introduce a durable last-db restore here (retired Sprint 143,
+        // AC-148-4) — regression-locked by
+        // `connectionStore.activeDb-cold-boot.test.ts`.
         const conn = state.connections.find((c) => c.id === id);
         const activeDb =
           conn?.database && conn.database.length > 0
