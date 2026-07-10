@@ -36,7 +36,9 @@
 //! `DELETE … WHERE` stays `Warn` (allow) here, exactly as the frontend's
 //! *static* `analyzeStatement` classifies it.
 
-use crate::ast::{AlterAction, DeleteStatement, ExplainInner, ParseResult, UpdateStatement, WithInner};
+use crate::ast::{
+    AlterAction, DeleteStatement, ExplainInner, ParseResult, UpdateStatement, WithInner,
+};
 use crate::parser::parse;
 
 /// Safe Mode severity tier. `Ord` so a multi-statement batch can take the
@@ -48,22 +50,64 @@ pub enum Severity {
     Danger,
 }
 
+/// PR #1473 — comment/literal scanning rules the keyword fallback needs vary
+/// by dialect, so the stripper is dialect-gated instead of one-size-fits-all:
+///
+/// - **block-comment nesting**: only PostgreSQL nests `/* /* */ */`. Every
+///   other dialect (MySQL/MariaDB/SQLite/Oracle/MSSQL) ends the comment at the
+///   FIRST `*/`, so depth-counting there fails *open*: `/* /* */ DROP TABLE t`
+///   would be consumed whole → `""` → `Info`, while the real server executes
+///   the trailing DROP (the #1473 review F1 regression).
+/// - **`#` line comments**: MySQL/MariaDB only (issue #1450).
+/// - **backslash string escapes**: MySQL/MariaDB treat `\'` as an escaped
+///   quote inside a literal; standard-SQL dialects treat `\` as a plain
+///   character. A backslash-unaware scan ends a MySQL literal early and can
+///   mis-read quoted text (e.g. a `WHERE`) as real syntax (review N1).
+///
+/// `Other` is the conservative default for an unknown/unresolved dialect:
+/// first-close block comments, no `#`, no backslash escapes — the fail-closed
+/// combination (it restores the pre-#1473 main behavior).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SqlDialect {
+    /// Unknown or any dialect without special rules — conservative scanning.
+    #[default]
+    Other,
+    /// MySQL / MariaDB — `#` line comments + backslash string escapes;
+    /// block comments do NOT nest.
+    MysqlFamily,
+    /// PostgreSQL — nested block comments; no `#`, no backslash escapes in
+    /// standard (non-`E''`) strings.
+    Postgres,
+}
+
+impl SqlDialect {
+    fn hash_line_comments(self) -> bool {
+        matches!(self, Self::MysqlFamily)
+    }
+    fn backslash_escapes(self) -> bool {
+        matches!(self, Self::MysqlFamily)
+    }
+    fn nested_block_comments(self) -> bool {
+        matches!(self, Self::Postgres)
+    }
+}
+
 /// Classify a SQL string for Safe Mode. A joined batch is split
 /// (literal/comment-aware, mirroring the frontend `splitSqlStatements`)
 /// and the worst tier wins, so a trailing `DROP` can never hide behind a
 /// leading `SELECT` (issue #1118 defense, backend side).
 pub fn classify(sql: &str) -> Severity {
-    classify_with_dialect(sql, false)
+    classify_with_dialect(sql, SqlDialect::Other)
 }
 
-/// Issue #1450 — dialect-aware classify. `hash_line_comments` enables
-/// MySQL/MariaDB `#` line-comment stripping so `#x\nDROP TABLE users` on a
-/// MySQL connection is gated instead of fail-open. All other behavior matches
-/// [`classify`]; non-MySQL callers pass `false`.
-pub fn classify_with_dialect(sql: &str, hash_line_comments: bool) -> Severity {
+/// Issue #1450 / PR #1473 — dialect-aware classify. The dialect gates `#`
+/// line-comment stripping, backslash literal escapes (MySQL/MariaDB), and
+/// block-comment nesting (PostgreSQL). Callers that cannot resolve a dialect
+/// pass [`SqlDialect::Other`] (fail-closed first-close scanning).
+pub fn classify_with_dialect(sql: &str, dialect: SqlDialect) -> Severity {
     split_statements(sql)
         .iter()
-        .map(|stmt| classify_single(stmt, hash_line_comments))
+        .map(|stmt| classify_single(stmt, dialect))
         .max()
         .unwrap_or(Severity::Info)
 }
@@ -74,18 +118,18 @@ pub fn is_danger(sql: &str) -> bool {
 }
 
 /// Dialect-aware [`is_danger`] (issue #1450). The enforce path resolves the
-/// connection dialect and passes `hash_line_comments = true` for MySQL/MariaDB.
-pub fn is_danger_with_dialect(sql: &str, hash_line_comments: bool) -> bool {
-    classify_with_dialect(sql, hash_line_comments) == Severity::Danger
+/// connection dialect ([`SqlDialect`]) once and passes it through.
+pub fn is_danger_with_dialect(sql: &str, dialect: SqlDialect) -> bool {
+    classify_with_dialect(sql, dialect) == Severity::Danger
 }
 
-fn classify_single(stmt: &str, hash_line_comments: bool) -> Severity {
+fn classify_single(stmt: &str, dialect: SqlDialect) -> Severity {
     match parse(stmt) {
         // `parse` covers DROP / TRUNCATE / ALTER / UPDATE / DELETE etc. in
         // grammar; the `error` variant (unsupported / syntax) falls through
         // to the keyword scan so REPLACE / RESTORE and dialect DROP variants
         // the AST rejects are still gated.
-        ParseResult::Error(_) => classify_by_keyword(stmt, hash_line_comments),
+        ParseResult::Error(_) => classify_by_keyword(stmt, dialect),
         parsed => severity_from_ast(&parsed),
     }
 }
@@ -155,8 +199,8 @@ fn delete_severity(delete: &DeleteStatement) -> Severity {
 /// frontend regex fallback recognises are checked; anything else is
 /// `Info` (fail-open — unrecognised statements are not gated, issue #1112
 /// decision 5).
-fn classify_by_keyword(stmt: &str, hash_line_comments: bool) -> Severity {
-    let normalized = strip_comments_collapse_opts(stmt, hash_line_comments);
+fn classify_by_keyword(stmt: &str, dialect: SqlDialect) -> Severity {
+    let normalized = strip_comments_collapse_opts(stmt, dialect);
     let upper = normalized.to_uppercase();
     let upper = upper.trim_start();
 
@@ -166,7 +210,7 @@ fn classify_by_keyword(stmt: &str, hash_line_comments: bool) -> Severity {
     // fallback. The wrapped statement's tier decides — a WHERE-less DELETE /
     // UPDATE inside a CTE is danger even though the outer form is a SELECT.
     if starts_with_keyword(upper, "WITH") {
-        if let Some(severity) = classify_dml_cte(upper, hash_line_comments) {
+        if let Some(severity) = classify_dml_cte(upper, dialect) {
             return severity;
         }
     }
@@ -185,10 +229,10 @@ fn classify_by_keyword(stmt: &str, hash_line_comments: bool) -> Severity {
     if starts_with_keyword(upper, "DROP") {
         return drop_keyword_severity(upper);
     }
-    if starts_with_keyword(upper, "DELETE") && !has_where(upper) {
+    if starts_with_keyword(upper, "DELETE") && !has_where(upper, dialect.backslash_escapes()) {
         return Severity::Danger;
     }
-    if starts_with_keyword(upper, "UPDATE") && !has_where(upper) {
+    if starts_with_keyword(upper, "UPDATE") && !has_where(upper, dialect.backslash_escapes()) {
         return Severity::Danger;
     }
     if starts_with_keyword(upper, "ALTER") && upper.contains("ALTER TABLE") {
@@ -228,17 +272,17 @@ fn drop_keyword_severity(upper: &str) -> Severity {
 /// no `AS (` body is present (the caller then treats the WITH as a read).
 /// After each body the scan resumes past its closing paren, so nested `AS (`
 /// subqueries and `'DELETE …'` string literals never register as body openers.
-fn classify_dml_cte(upper: &str, hash_line_comments: bool) -> Option<Severity> {
+fn classify_dml_cte(upper: &str, dialect: SqlDialect) -> Option<Severity> {
     let mut worst: Option<Severity> = None;
     let mut from = 0;
     while let Some(open) = find_cte_body_open_paren(upper, from) {
-        let body = match balanced_paren_slice(upper, open) {
+        let body = match balanced_paren_slice(upper, open, dialect.backslash_escapes()) {
             Some(b) => b,
             None => break,
         };
         // Strip the enclosing parens; `body` is `(…)`, both ASCII.
         let inner = body[1..body.len() - 1].trim();
-        let sev = classify_single(inner, hash_line_comments);
+        let sev = classify_single(inner, dialect);
         worst = Some(worst.map_or(sev, |w| w.max(sev)));
         from = open + body.len();
     }
@@ -277,7 +321,7 @@ fn find_cte_body_open_paren(upper: &str, from: usize) -> Option<usize> {
 /// identifier, or dollar-quote must NOT move the depth, or a payload like
 /// `(SELECT '(')` skews the count and swallows the following CTE. The skip
 /// rules mirror the frontend `skipQuotedLiteral` / `scanDollarQuoteEnd`.
-fn balanced_paren_slice(upper: &str, open: usize) -> Option<String> {
+fn balanced_paren_slice(upper: &str, open: usize, backslash_escapes: bool) -> Option<String> {
     let bytes = upper.as_bytes();
     if bytes.get(open) != Some(&b'(') {
         return None;
@@ -287,7 +331,7 @@ fn balanced_paren_slice(upper: &str, open: usize) -> Option<String> {
     while i < bytes.len() {
         let c = bytes[i];
         if c == b'\'' || c == b'"' || c == b'`' {
-            i = skip_quoted_literal(bytes, i, c);
+            i = skip_quoted_literal(bytes, i, c, backslash_escapes);
             continue;
         }
         if c == b'$' {
@@ -315,10 +359,21 @@ fn balanced_paren_slice(upper: &str, open: usize) -> Option<String> {
 /// `` ` ``). `'` and `` ` `` treat a doubled quote as an escape; `"` does not
 /// (mirrors the frontend `skipQuotedLiteral` / `splitSqlStatements`).
 /// Unterminated → EOF.
-fn skip_quoted_literal(bytes: &[u8], start: usize, q: u8) -> usize {
+///
+/// Review #1473 N1 — `backslash_escapes` (MySQL/MariaDB): `\<any>` inside a
+/// `'` / `"` literal is an escape sequence, so `'a\' WHERE …'` stays ONE
+/// literal instead of ending at the escaped quote (a backslash-unaware scan
+/// exposed the quoted `WHERE` and degraded an unbounded UPDATE to Warn).
+/// Backtick identifiers never use backslash escapes (doubling only).
+fn skip_quoted_literal(bytes: &[u8], start: usize, q: u8, backslash_escapes: bool) -> usize {
     let escapes_by_doubling = q == b'\'' || q == b'`';
+    let backslash = backslash_escapes && q != b'`';
     let mut i = start + 1;
     while i < bytes.len() {
+        if backslash && bytes[i] == b'\\' {
+            i += 2;
+            continue;
+        }
         if bytes[i] == q {
             if escapes_by_doubling && bytes.get(i + 1) == Some(&q) {
                 i += 2;
@@ -328,7 +383,7 @@ fn skip_quoted_literal(bytes: &[u8], start: usize, q: u8) -> usize {
         }
         i += 1;
     }
-    i
+    i.min(bytes.len())
 }
 
 /// Byte index just past a PostgreSQL dollar-quote (`$$…$$` / `$tag$…$tag$`)
@@ -397,14 +452,14 @@ fn starts_with_keyword(upper: &str, keyword: &str) -> bool {
 /// UPDATE/DELETE was mis-read as bounded and degraded to `Warn`. Skip rules
 /// mirror the frontend `hasOuterWhere` and the shared `skip_quoted_literal` /
 /// `scan_dollar_quote_end` helpers.
-fn has_where(upper: &str) -> bool {
+fn has_where(upper: &str, backslash_escapes: bool) -> bool {
     let bytes = upper.as_bytes();
     let needle = b"WHERE";
     let mut i = 0;
     while i < bytes.len() {
         let c = bytes[i];
         if c == b'\'' || c == b'"' || c == b'`' {
-            i = skip_quoted_literal(bytes, i, c);
+            i = skip_quoted_literal(bytes, i, c, backslash_escapes);
             continue;
         }
         if c == b'$' {
@@ -433,21 +488,28 @@ fn is_word_byte(b: u8) -> bool {
 /// Collapse comments to spaces so keyword detection ignores commented-out
 /// tokens (mirrors the frontend `stripComments`). `pub(crate)` so the
 /// dialect classifiers (e.g. `oracle`) share the exact comment stripping.
+/// Uses [`SqlDialect::Other`] — first-close block comments (correct for
+/// Oracle), no `#`, no backslash escapes.
 pub(crate) fn strip_comments_collapse(sql: &str) -> String {
-    strip_comments_collapse_opts(sql, false)
+    strip_comments_collapse_opts(sql, SqlDialect::Other)
 }
 
-/// Issue #1450 — literal/nesting-aware comment stripper. Fixes three
-/// classifier bypasses vs the old first-`*/`-wins scan: (a) block comments now
-/// depth-count so a PostgreSQL nested comment (`/* /* */ */ DROP`) is fully
-/// removed instead of leaking the DROP behind stray `*/`; (b) MySQL `#` line
-/// comments are stripped when `hash_line_comments`; and string literals /
-/// quoted identifiers / dollar-quotes are copied verbatim so a `/*` or `#`
-/// inside a literal is never mistaken for a comment (no false-positive
-/// escalation of a benign write). Over-stripping a non-nesting dialect's
-/// trailing `*/` only ever fails *closed* (a stripped statement that dialect
-/// would reject anyway). Mirrors the frontend `stripComments`.
-fn strip_comments_collapse_opts(sql: &str, hash_line_comments: bool) -> String {
+/// Issue #1450 / PR #1473 — literal-aware, dialect-gated comment stripper.
+/// String literals / quoted identifiers / dollar-quotes are copied verbatim so
+/// a `/*` or `#` inside a literal is never mistaken for a comment. The
+/// dialect gates the three scanning rules ([`SqlDialect`] docs):
+///
+/// - Block comments depth-count ONLY for PostgreSQL (the one dialect that
+///   nests). Everywhere else the FIRST `*/` closes the comment — exactly what
+///   MySQL/MariaDB/SQLite/Oracle servers do. Review #1473 F1: depth-counting
+///   a non-nesting dialect fails *open* on an unbalanced open
+///   (`/* /* */ DROP TABLE t` was consumed whole → `""` → `Info`, while the
+///   real server ends the comment at the first `*/` and executes the DROP).
+/// - `#` starts a line comment only for MySQL/MariaDB (issue #1450).
+/// - Backslash literal escapes only for MySQL/MariaDB (review N1).
+///
+/// Mirrors the frontend `stripComments`.
+fn strip_comments_collapse_opts(sql: &str, dialect: SqlDialect) -> String {
     let bytes = sql.as_bytes();
     let mut out = String::with_capacity(sql.len());
     let mut i = 0;
@@ -455,7 +517,7 @@ fn strip_comments_collapse_opts(sql: &str, hash_line_comments: bool) -> String {
         let c = bytes[i];
         // String literal / quoted identifier — copy verbatim (skip contents).
         if c == b'\'' || c == b'"' || c == b'`' {
-            let end = skip_quoted_literal(bytes, i, c);
+            let end = skip_quoted_literal(bytes, i, c, dialect.backslash_escapes());
             out.push_str(&sql[i..end]);
             i = end;
             continue;
@@ -469,7 +531,9 @@ fn strip_comments_collapse_opts(sql: &str, hash_line_comments: bool) -> String {
             }
         }
         // Line comment: `--` (all dialects) or `#` (MySQL only) → one space.
-        if (c == b'-' && bytes.get(i + 1) == Some(&b'-')) || (hash_line_comments && c == b'#') {
+        if (c == b'-' && bytes.get(i + 1) == Some(&b'-'))
+            || (dialect.hash_line_comments() && c == b'#')
+        {
             i += if c == b'#' { 1 } else { 2 };
             while i < bytes.len() && bytes[i] != b'\n' {
                 i += 1;
@@ -477,12 +541,14 @@ fn strip_comments_collapse_opts(sql: &str, hash_line_comments: bool) -> String {
             out.push(' ');
             continue;
         }
-        // Block comment `/* … */`, PostgreSQL-style nesting via a depth counter.
+        // Block comment `/* … */`. Depth-counted for PostgreSQL (nesting);
+        // first `*/` closes it for every other dialect (fail-closed default).
         if c == b'/' && bytes.get(i + 1) == Some(&b'*') {
+            let nested = dialect.nested_block_comments();
             let mut depth = 1u32;
             i += 2;
             while i < bytes.len() && depth > 0 {
-                if bytes[i] == b'/' && bytes.get(i + 1) == Some(&b'*') {
+                if nested && bytes[i] == b'/' && bytes.get(i + 1) == Some(&b'*') {
                     depth += 1;
                     i += 2;
                 } else if bytes[i] == b'*' && bytes.get(i + 1) == Some(&b'/') {
@@ -654,7 +720,10 @@ mod tests {
     #[test]
     fn danger_via_ast_drop_truncate() {
         assert_eq!(classify("DROP TABLE users"), Severity::Danger);
-        assert_eq!(classify("DROP TABLE IF EXISTS users CASCADE"), Severity::Danger);
+        assert_eq!(
+            classify("DROP TABLE IF EXISTS users CASCADE"),
+            Severity::Danger
+        );
         assert_eq!(classify("TRUNCATE TABLE events"), Severity::Danger);
         assert!(is_danger("DROP SCHEMA public CASCADE"));
     }
@@ -690,13 +759,13 @@ mod tests {
     #[test]
     fn update_delete_where_gates_only_when_unbounded() {
         assert_eq!(classify("DELETE FROM users"), Severity::Danger);
-        assert_eq!(classify("UPDATE users SET active = false"), Severity::Danger);
+        assert_eq!(
+            classify("UPDATE users SET active = false"),
+            Severity::Danger
+        );
         // Bounded write — WARN (allow at the decision layer, mirrors the
         // frontend static classification; dry-run escalation is UI-only).
-        assert_eq!(
-            classify("DELETE FROM users WHERE id = 1"),
-            Severity::Warn
-        );
+        assert_eq!(classify("DELETE FROM users WHERE id = 1"), Severity::Warn);
         assert_eq!(
             classify("UPDATE users SET active = false WHERE id = 1"),
             Severity::Warn
@@ -707,10 +776,7 @@ mod tests {
     fn reads_and_additive_are_not_danger() {
         assert_eq!(classify("SELECT * FROM users"), Severity::Info);
         assert_eq!(classify("INSERT INTO users VALUES (1)"), Severity::Info);
-        assert_eq!(
-            classify("CREATE TABLE t (id int)"),
-            Severity::Info
-        );
+        assert_eq!(classify("CREATE TABLE t (id int)"), Severity::Info);
         assert!(!is_danger("SELECT 1"));
     }
 
@@ -719,10 +785,7 @@ mod tests {
         // `parse` returns unsupported-statement for REPLACE — the keyword
         // fallback is the sole classifier (parity with frontend #1115).
         assert_eq!(classify("REPLACE INTO users VALUES (1)"), Severity::Danger);
-        assert_eq!(
-            classify("REPLACE INTO users SET id = 1"),
-            Severity::Danger
-        );
+        assert_eq!(classify("REPLACE INTO users SET id = 1"), Severity::Danger);
         assert_eq!(
             classify("RESTORE DATABASE shop FROM DISK = 'x.bak'"),
             Severity::Danger
@@ -738,28 +801,19 @@ mod tests {
     #[test]
     fn multi_statement_takes_worst_tier() {
         // A trailing DROP must not hide behind a leading SELECT.
-        assert_eq!(
-            classify("SELECT 1; DROP TABLE users"),
-            Severity::Danger
-        );
+        assert_eq!(classify("SELECT 1; DROP TABLE users"), Severity::Danger);
         // Semicolon inside a string literal is not a separator.
         assert_eq!(
             classify("SELECT ';DROP TABLE users' AS note"),
             Severity::Info
         );
         // Semicolon inside a line comment is not a separator.
-        assert_eq!(
-            classify("SELECT 1 -- ; DROP TABLE users\n"),
-            Severity::Info
-        );
+        assert_eq!(classify("SELECT 1 -- ; DROP TABLE users\n"), Severity::Info);
     }
 
     #[test]
     fn commented_out_danger_keyword_is_ignored() {
-        assert_eq!(
-            classify("/* DROP TABLE users */ SELECT 1"),
-            Severity::Info
-        );
+        assert_eq!(classify("/* DROP TABLE users */ SELECT 1"), Severity::Info);
     }
 
     #[test]
@@ -781,15 +835,21 @@ mod tests {
     }
 
     #[test]
-    fn issue_1450_nested_block_comment_does_not_hide_danger() {
-        // PostgreSQL nests block comments; the classifier now depth-counts so
+    fn issue_1450_nested_block_comment_does_not_hide_danger_on_postgres() {
+        // PostgreSQL nests block comments; the stripper depth-counts there so
         // the trailing DROP is not leaked behind a stray close marker.
         assert_eq!(
-            classify("/* outer /* inner */ still-outer */ DROP TABLE users"),
+            classify_with_dialect(
+                "/* outer /* inner */ still-outer */ DROP TABLE users",
+                SqlDialect::Postgres
+            ),
             Severity::Danger
         );
         assert_eq!(
-            classify("/* a /* b /* c */ d */ e */ TRUNCATE users"),
+            classify_with_dialect(
+                "/* a /* b /* c */ d */ e */ TRUNCATE users",
+                SqlDialect::Postgres
+            ),
             Severity::Danger
         );
         // A comment marker inside a string literal is NOT a comment (no
@@ -801,15 +861,84 @@ mod tests {
     }
 
     #[test]
+    fn pr_1473_unbalanced_open_comment_fails_closed_on_non_nesting_dialects() {
+        // Review #1473 F1 (RED→GREEN): MySQL/MariaDB/SQLite/Oracle end a block
+        // comment at the FIRST `*/`, so the real server executes the trailing
+        // DROP. The depth-counting stripper consumed the whole input as one
+        // comment → "" → Info → the Safe Mode gate never fired (fail-open).
+        assert_eq!(
+            classify_with_dialect("/* /* */ DROP TABLE t", SqlDialect::MysqlFamily),
+            Severity::Danger
+        );
+        // Unknown dialect defaults to first-close — fail-closed (pre-#1473
+        // main behavior restored).
+        assert_eq!(
+            classify_with_dialect("/* /* */ DROP TABLE t", SqlDialect::Other),
+            Severity::Danger
+        );
+        assert_eq!(classify("/* /* */ DROP TABLE t"), Severity::Danger);
+        // PostgreSQL keeps nesting semantics: `/* /*` is an unterminated
+        // comment the server rejects — nothing executes, Info is safe.
+        assert_eq!(
+            classify_with_dialect("/* /* */ DROP TABLE t", SqlDialect::Postgres),
+            Severity::Info
+        );
+    }
+
+    #[test]
+    fn pr_1473_backslash_escape_bounds_mysql_literals() {
+        // Review #1473 N1 (RED→GREEN): on MySQL `\'` stays inside the literal,
+        // so the WHERE is quoted text and the UPDATE is unbounded (danger).
+        // The backslash-unaware scan ended the literal at the escaped quote,
+        // saw the quoted WHERE as real syntax, and degraded to Warn.
+        assert_eq!(
+            classify_with_dialect(
+                "UPDATE accounts SET note='a\\' WHERE id=1'",
+                SqlDialect::MysqlFamily
+            ),
+            Severity::Danger
+        );
+        // Standard-SQL dialects treat `\` as a plain character — the literal
+        // ends at the second quote, the trailing WHERE bounds the update, and
+        // the statement must NOT be gated (the keyword fallback only promises
+        // Danger precision; Warn/Info collapse best-effort).
+        assert_ne!(
+            classify_with_dialect(
+                "UPDATE accounts SET note='a\\' WHERE id=1'",
+                SqlDialect::Other
+            ),
+            Severity::Danger
+        );
+        // Backtick identifiers never take backslash escapes, even on MySQL —
+        // the real WHERE after the identifier still bounds the update.
+        assert_ne!(
+            classify_with_dialect("UPDATE `t\\` SET a=1 WHERE id=1", SqlDialect::MysqlFamily),
+            Severity::Danger
+        );
+    }
+
+    #[test]
     fn issue_1450_hash_line_comment_is_mysql_only() {
-        // MySQL connection (`hash_line_comments = true`): `#` leads a line
-        // comment, so the real statement after it is classified.
-        assert!(is_danger_with_dialect("#x\nDROP TABLE users", true));
-        assert!(is_danger_with_dialect("# note \nDELETE FROM users", true));
+        // MySQL connection: `#` leads a line comment, so the real statement
+        // after it is classified.
+        assert!(is_danger_with_dialect(
+            "#x\nDROP TABLE users",
+            SqlDialect::MysqlFamily
+        ));
+        assert!(is_danger_with_dialect(
+            "# note \nDELETE FROM users",
+            SqlDialect::MysqlFamily
+        ));
         // `#` inside a string literal stays literal even for MySQL.
-        assert!(!is_danger_with_dialect("SELECT 'a # b' AS note", true));
+        assert!(!is_danger_with_dialect(
+            "SELECT 'a # b' AS note",
+            SqlDialect::MysqlFamily
+        ));
         // A commented-out DROP is not executed → the real statement is a read.
-        assert!(!is_danger_with_dialect("#DROP TABLE users\nSELECT 1", true));
+        assert!(!is_danger_with_dialect(
+            "#DROP TABLE users\nSELECT 1",
+            SqlDialect::MysqlFamily
+        ));
         // Non-MySQL: `#` is an operator, not a comment — the malformed input
         // stays fail-open (dialect-conditional, mirrors the frontend).
         assert!(!is_danger("#x\nDROP TABLE users"));
@@ -850,9 +979,10 @@ mod tests {
         name: String,
         sql: String,
         expected_severity: String,
-        // Issue #1450 — optional per-case dialect. Only MySQL/MariaDB change a
-        // verdict (they enable `#` line-comment stripping); every other case
-        // omits the field and classifies dialect-agnostically.
+        // Issue #1450 / PR #1473 — optional per-case dialect. MySQL/MariaDB
+        // enable `#` line comments + backslash escapes; PostgreSQL enables
+        // nested block comments; an absent field classifies with the
+        // conservative `SqlDialect::Other` scanning rules.
         #[serde(default)]
         dialect: Option<String>,
     }
@@ -882,12 +1012,17 @@ mod tests {
         );
         for case in &fixture.cases {
             let expected = severity_from_fixture(&case.expected_severity);
-            // MySQL/MariaDB enable `#` line comments (issue #1450); every other
-            // dialect (or an absent field) classifies dialect-agnostically.
-            let hash_line_comments =
-                matches!(case.dialect.as_deref(), Some("mysql") | Some("mariadb"));
+            // Mirror of the frontend `Dialect` string → scanning-rule mapping
+            // (`sqlSafety.ts` stripComments): MySQL/MariaDB → `#` comments +
+            // backslash escapes; PostgreSQL → nested block comments; anything
+            // else (or an absent field) → conservative `Other`.
+            let dialect = match case.dialect.as_deref() {
+                Some("mysql") | Some("mariadb") => SqlDialect::MysqlFamily,
+                Some("postgresql") => SqlDialect::Postgres,
+                _ => SqlDialect::Other,
+            };
             assert_eq!(
-                classify_with_dialect(&case.sql, hash_line_comments),
+                classify_with_dialect(&case.sql, dialect),
                 expected,
                 "parity case `{}` (dialect {:?}): {}",
                 case.name,

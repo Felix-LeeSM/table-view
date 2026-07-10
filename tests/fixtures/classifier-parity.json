@@ -68,9 +68,17 @@
     { "name": "multi_semicolon_in_string", "sql": "SELECT ';DROP TABLE users' AS note", "expectedSeverity": "info" },
     { "name": "commented_danger_keyword", "sql": "/* DROP TABLE users */ SELECT 1", "expectedSeverity": "info" },
 
-    { "name": "nested_block_comment_drop", "sql": "/* outer /* inner */ still-outer */ DROP TABLE users", "expectedSeverity": "danger" },
-    { "name": "nested_block_comment_3level", "sql": "/* a /* b /* c */ d */ e */ DROP TABLE users", "expectedSeverity": "danger" },
+    { "name": "nested_block_comment_drop", "sql": "/* outer /* inner */ still-outer */ DROP TABLE users", "expectedSeverity": "danger", "dialect": "postgresql" },
+    { "name": "nested_block_comment_3level", "sql": "/* a /* b /* c */ d */ e */ DROP TABLE users", "expectedSeverity": "danger", "dialect": "postgresql" },
     { "name": "block_comment_open_in_string_read", "sql": "SELECT '/* not a comment */' AS note", "expectedSeverity": "info" },
+
+    { "name": "unbalanced_open_comment_drop_mysql", "sql": "/* /* */ DROP TABLE t", "expectedSeverity": "danger", "dialect": "mysql" },
+    { "name": "unbalanced_open_comment_drop_sqlite", "sql": "/* /* */ DROP TABLE t", "expectedSeverity": "danger", "dialect": "sqlite" },
+    { "name": "unbalanced_open_comment_drop_oracle", "sql": "/* /* */ DROP TABLE t", "expectedSeverity": "danger", "dialect": "oracle" },
+    { "name": "unbalanced_open_comment_drop_agnostic", "sql": "/* /* */ DROP TABLE t", "expectedSeverity": "danger" },
+    { "name": "unbalanced_open_comment_postgres_consumed", "sql": "/* /* */ DROP TABLE t", "expectedSeverity": "info", "dialect": "postgresql" },
+
+    { "name": "backslash_literal_unbounded_update_mysql", "sql": "UPDATE accounts SET note='a\\' WHERE id=1'", "expectedSeverity": "danger", "dialect": "mysql" },
 
     { "name": "hash_comment_drop_mysql", "sql": "#x\nDROP TABLE users", "expectedSeverity": "danger", "dialect": "mysql" },
     { "name": "hash_comments_out_drop_mysql", "sql": "#DROP TABLE users\nSELECT 1", "expectedSeverity": "info", "dialect": "mysql" },

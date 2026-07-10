@@ -20,19 +20,20 @@ use crate::models::{DatabaseType, FilterCondition, QueryResult, TableData};
 
 use super::{ensure_expected_db, not_connected, register_cancel_token, release_cancel_token};
 
-/// Issue #1351 / #1450 — the Safe Mode danger check that respects the
-/// connection dialect. The shared classifier is dialect-agnostic by default and
-/// (a) misses Oracle PL/SQL blocks (`BEGIN … END;`), routine execution (`EXEC`
-/// / `EXECUTE IMMEDIATE` / `CALL`), and admin DDL (`ALTER SYSTEM`, `DROP USER`,
-/// `AUDIT`, non table/index/view `CREATE`, …), which `oracle::is_oracle_danger`
-/// widens to danger on Oracle connections, and (b) treats `#` as an operator,
-/// not a line comment — so `#x\nDROP TABLE users` on a MySQL/MariaDB connection
-/// would fail open (#1450). Resolving the adapter kind once lets the shared
-/// classifier strip `#` line comments for MySQL-family connections and lets the
-/// Oracle widening run only for Oracle, so other dialects pay nothing.
+/// Issue #1351 / #1450 / PR #1473 — the Safe Mode danger check that respects
+/// the connection dialect. The shared classifier is dialect-agnostic by default
+/// and (a) misses Oracle PL/SQL blocks (`BEGIN … END;`), routine execution
+/// (`EXEC` / `EXECUTE IMMEDIATE` / `CALL`), and admin DDL (`ALTER SYSTEM`,
+/// `DROP USER`, `AUDIT`, non table/index/view `CREATE`, …), which
+/// `oracle::is_oracle_danger` widens to danger on Oracle connections, and
+/// (b) needs the dialect's comment/literal scanning rules: `#` line comments
+/// and backslash literal escapes exist only on MySQL/MariaDB, and block
+/// comments nest only on PostgreSQL (#1450 / #1473). Resolving the adapter
+/// kind once maps it to the classifier's [`SqlDialect`] and lets the Oracle
+/// widening run only for Oracle, so other dialects pay nothing.
 async fn rdb_sql_is_danger(state: &AppState, connection_id: &str, sql: &str) -> bool {
     let kind = connection_kind(state, connection_id).await;
-    sql_parser_core::safety::is_danger_with_dialect(sql, is_mysql_family(kind.as_ref()))
+    sql_parser_core::safety::is_danger_with_dialect(sql, safety_dialect(kind.as_ref()))
         || (matches!(kind.as_ref(), Some(DatabaseType::Oracle))
             && sql_parser_core::oracle::is_oracle_danger(sql))
 }
@@ -42,10 +43,10 @@ async fn rdb_sql_is_danger(state: &AppState, connection_id: &str, sql: &str) -> 
 /// batch. The dialect is resolved once, not per statement.
 async fn rdb_batch_is_danger(state: &AppState, connection_id: &str, statements: &[String]) -> bool {
     let kind = connection_kind(state, connection_id).await;
-    let hash_line_comments = is_mysql_family(kind.as_ref());
+    let dialect = safety_dialect(kind.as_ref());
     if statements
         .iter()
-        .any(|sql| sql_parser_core::safety::is_danger_with_dialect(sql, hash_line_comments))
+        .any(|sql| sql_parser_core::safety::is_danger_with_dialect(sql, dialect))
     {
         return true;
     }
@@ -65,10 +66,17 @@ async fn connection_kind(state: &AppState, connection_id: &str) -> Option<Databa
         .map(|adapter| adapter.kind())
 }
 
-/// MySQL/MariaDB lead a line comment with `#`; enable dialect-aware `#`
-/// stripping in the shared classifier so `#x\nDROP TABLE t` is gated (#1450).
-fn is_mysql_family(kind: Option<&DatabaseType>) -> bool {
-    matches!(kind, Some(DatabaseType::Mysql | DatabaseType::Mariadb))
+/// Adapter kind → classifier scanning rules (#1450 / #1473). MySQL/MariaDB
+/// lead line comments with `#` and escape literals with `\`; PostgreSQL nests
+/// block comments. Everything else — including a missing / non-RDB connection —
+/// maps to the conservative `Other` (first-close comments, fail-closed).
+fn safety_dialect(kind: Option<&DatabaseType>) -> sql_parser_core::safety::SqlDialect {
+    use sql_parser_core::safety::SqlDialect;
+    match kind {
+        Some(DatabaseType::Mysql | DatabaseType::Mariadb) => SqlDialect::MysqlFamily,
+        Some(DatabaseType::Postgresql) => SqlDialect::Postgres,
+        _ => SqlDialect::Other,
+    }
 }
 
 /// Validate query execution inputs.
@@ -842,15 +850,36 @@ mod tests {
     use super::*;
 
     #[test]
-    fn is_mysql_family_covers_mysql_and_mariadb_only() {
-        // #1450 — only MySQL/MariaDB enable `#` line-comment stripping; every
-        // other dialect (and a missing connection) leaves `#` as an operator.
-        assert!(is_mysql_family(Some(&DatabaseType::Mysql)));
-        assert!(is_mysql_family(Some(&DatabaseType::Mariadb)));
-        assert!(!is_mysql_family(Some(&DatabaseType::Postgresql)));
-        assert!(!is_mysql_family(Some(&DatabaseType::Mssql)));
-        assert!(!is_mysql_family(Some(&DatabaseType::Oracle)));
-        assert!(!is_mysql_family(None));
+    fn safety_dialect_maps_scanning_rules_per_kind() {
+        use sql_parser_core::safety::SqlDialect;
+        // #1450 / #1473 — MySQL/MariaDB get `#` comments + backslash escapes;
+        // PostgreSQL gets nested block comments; every other kind (and a
+        // missing connection) gets the conservative fail-closed `Other`.
+        assert_eq!(
+            safety_dialect(Some(&DatabaseType::Mysql)),
+            SqlDialect::MysqlFamily
+        );
+        assert_eq!(
+            safety_dialect(Some(&DatabaseType::Mariadb)),
+            SqlDialect::MysqlFamily
+        );
+        assert_eq!(
+            safety_dialect(Some(&DatabaseType::Postgresql)),
+            SqlDialect::Postgres
+        );
+        assert_eq!(
+            safety_dialect(Some(&DatabaseType::Sqlite)),
+            SqlDialect::Other
+        );
+        assert_eq!(
+            safety_dialect(Some(&DatabaseType::Mssql)),
+            SqlDialect::Other
+        );
+        assert_eq!(
+            safety_dialect(Some(&DatabaseType::Oracle)),
+            SqlDialect::Other
+        );
+        assert_eq!(safety_dialect(None), SqlDialect::Other);
     }
 
     #[test]
