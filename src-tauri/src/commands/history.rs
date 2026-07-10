@@ -26,7 +26,7 @@ use crate::commands::connection::AppState;
 use crate::commands::guard::guard_legacy_import_done;
 use crate::error::AppError;
 use crate::events::{emit_state_changed, EmitArgs, EventDomain, EventOp, EventVersionRegistry};
-use crate::storage::sql_redact::sql_redact;
+use crate::storage::sql_redact::{redact_credentials, sql_redact};
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 use std::path::Path;
@@ -309,7 +309,14 @@ pub async fn add_history_entry_inner(
         req.executed_at
     };
 
-    let sql_redacted = sql_redact(&req.sql);
+    // Issue #1451 — strip plaintext credentials from a DDL statement before it
+    // is persisted, so the stored `sql` column (returned verbatim by
+    // `get_history_detail`) never holds a password. `sql_redacted` derives from
+    // the already-masked text so the list view is safe from Oracle bareword
+    // passwords too (which `sql_redact` alone leaves untouched — they carry no
+    // quotes).
+    let stored_sql = redact_credentials(&req.sql);
+    let sql_redacted = sql_redact(&stored_sql);
     let paradigm = req.mode.paradigm_str();
     let query_mode = req.mode.query_mode_str();
 
@@ -329,7 +336,7 @@ pub async fn add_history_entry_inner(
     .bind(&req.database)
     .bind(&req.collection)
     .bind(&req.source)
-    .bind(&req.sql)
+    .bind(&stored_sql)
     .bind(&sql_redacted)
     .bind(&req.status)
     .bind(&req.error_message)
