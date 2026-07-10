@@ -219,6 +219,31 @@ impl RdbAdapter for PostgresAdapter {
         })
     }
 
+    /// Issue #1269 — capture `pg_backend_pid()` on the connection running the
+    /// browse so the grid Stop button can fire `pg_cancel_backend` against a
+    /// long table scan. Concrete signature is `(table, schema)`; trait passes
+    /// `(namespace, table)`.
+    #[allow(clippy::too_many_arguments)]
+    fn query_table_data_tracked<'a>(
+        &'a self,
+        namespace: &'a str,
+        table: &'a str,
+        page: i32,
+        page_size: i32,
+        order_by: Option<&'a str>,
+        filters: Option<&'a [FilterCondition]>,
+        raw_where: Option<&'a str>,
+        cancel: Option<&'a tokio_util::sync::CancellationToken>,
+        pid_tx: tokio::sync::oneshot::Sender<i64>,
+    ) -> Pin<Box<dyn Future<Output = Result<TableData, AppError>> + Send + 'a>> {
+        Box::pin(async move {
+            self.query_table_data_tracked(
+                table, namespace, page, page_size, order_by, filters, raw_where, cancel, pid_tx,
+            )
+            .await
+        })
+    }
+
     fn drop_table<'a>(
         &'a self,
         req: &'a DropTableRequest,

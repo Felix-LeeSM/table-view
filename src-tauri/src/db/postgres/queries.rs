@@ -905,7 +905,46 @@ impl PostgresAdapter {
             return Err(AppError::Database("Operation cancelled".into()));
         }
         let work = self.query_table_data_uncancelled(
-            table, schema, page, page_size, order_by, filters, raw_where,
+            table, schema, page, page_size, order_by, filters, raw_where, None,
+        );
+        match cancel_token {
+            Some(token) => tokio::select! {
+                result = work => result,
+                _ = token.cancelled() => Err(AppError::Database("Operation cancelled".into())),
+            },
+            None => work.await,
+        }
+    }
+
+    /// Issue #1269 — `query_table_data` variant that reports the executing
+    /// connection's `pg_backend_pid()` through `pid_tx` so a grid browse can be
+    /// natively cancelled (`pg_cancel_backend`) mid-scan. Otherwise identical
+    /// to `query_table_data` (same cooperative-token cooperation).
+    #[allow(clippy::too_many_arguments)]
+    pub async fn query_table_data_tracked(
+        &self,
+        table: &str,
+        schema: &str,
+        page: i32,
+        page_size: i32,
+        order_by: Option<&str>,
+        filters: Option<&[FilterCondition]>,
+        raw_where: Option<&str>,
+        cancel_token: Option<&CancellationToken>,
+        pid_tx: tokio::sync::oneshot::Sender<i64>,
+    ) -> Result<TableData, AppError> {
+        if cancel_token.is_some_and(CancellationToken::is_cancelled) {
+            return Err(AppError::Database("Operation cancelled".into()));
+        }
+        let work = self.query_table_data_uncancelled(
+            table,
+            schema,
+            page,
+            page_size,
+            order_by,
+            filters,
+            raw_where,
+            Some(pid_tx),
         );
         match cancel_token {
             Some(token) => tokio::select! {
@@ -926,11 +965,36 @@ impl PostgresAdapter {
         order_by: Option<&str>,
         filters: Option<&[FilterCondition]>,
         raw_where: Option<&str>,
+        // Issue #1269 — when `Some`, pin ONE connection and send its
+        // `pg_backend_pid()` before the COUNT + data scan so native cancel can
+        // reach the backend actually running the browse. `None` keeps the
+        // pre-#1269 pooled behaviour.
+        pid_tx: Option<tokio::sync::oneshot::Sender<i64>>,
     ) -> Result<TableData, AppError> {
         let pool = self.active_pool().await?;
 
-        // Get columns first
+        // Get columns first (fast metadata — stays on the pool; native cancel
+        // only needs to reach the COUNT + data scan below).
         let columns = self.get_table_columns_inner(&pool, table, schema).await?;
+
+        // Issue #1269 — pin ONE connection so the COUNT + data queries (the
+        // potentially long ones) run on the same backend whose pid we report.
+        // Acquiring a fresh pool connection per query would let the reported
+        // pid point at a different session, and `pg_cancel_backend` would miss.
+        let mut conn = pool
+            .acquire()
+            .await
+            .map_err(|e| AppError::Connection(e.to_string()))?;
+        if let Some(pid_tx) = pid_tx {
+            // Best-effort: a probe failure simply skips native cancel (pid_tx
+            // drops → Err on rx) and the cooperative token still applies.
+            if let Ok(pid) = sqlx::query_scalar::<_, i32>("SELECT pg_backend_pid()")
+                .fetch_one(&mut *conn)
+                .await
+            {
+                let _ = pid_tx.send(pid as i64);
+            }
+        }
 
         // Build safe query — table/schema are validated identifiers
         let qualified_table = qualified_table(schema, table);
@@ -1004,7 +1068,7 @@ impl PostgresAdapter {
             count_query = count_query.bind(val);
         }
         let (total,) = count_query
-            .fetch_one(&pool)
+            .fetch_one(&mut *conn)
             .await
             .map_err(|e| AppError::Connection(e.to_string()))?;
 
@@ -1090,7 +1154,7 @@ impl PostgresAdapter {
             data_query = data_query.bind(val);
         }
         let json_rows: Vec<(String,)> = data_query
-            .fetch_all(&pool)
+            .fetch_all(&mut *conn)
             .await
             .map_err(|e| AppError::Connection(e.to_string()))?;
 

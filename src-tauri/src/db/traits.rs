@@ -279,6 +279,38 @@ pub trait RdbAdapter: DbAdapter {
         cancel: Option<&'a CancellationToken>,
     ) -> BoxFuture<'a, Result<TableData, AppError>>;
 
+    /// Issue #1269 — like `query_table_data`, but the adapter pins ONE
+    /// connection and sends that connection's native server pid through
+    /// `pid_tx` before the (possibly long) COUNT + data scan runs, so the grid
+    /// browse gets the same native cancel (`pg_cancel_backend` / `KILL QUERY`)
+    /// the SQL tab has. The pid MUST be captured on the *same* connection the
+    /// scan runs on — see `execute_sql_tracked` for why a separate pooled probe
+    /// would target the wrong backend.
+    ///
+    /// The default drops `pid_tx` (the `oneshot::Receiver` resolves to `Err`,
+    /// so the caller records no pid) and delegates to `query_table_data` —
+    /// adapters without native cancel (SQLite / DuckDB / MSSQL / Oracle, and
+    /// MySQL until its adapter overrides this) keep cooperative-token-only
+    /// browse cancel.
+    #[allow(clippy::too_many_arguments)]
+    fn query_table_data_tracked<'a>(
+        &'a self,
+        namespace: &'a str,
+        table: &'a str,
+        page: i32,
+        page_size: i32,
+        order_by: Option<&'a str>,
+        filters: Option<&'a [FilterCondition]>,
+        raw_where: Option<&'a str>,
+        cancel: Option<&'a CancellationToken>,
+        pid_tx: tokio::sync::oneshot::Sender<i64>,
+    ) -> BoxFuture<'a, Result<TableData, AppError>> {
+        drop(pid_tx);
+        self.query_table_data(
+            namespace, table, page, page_size, order_by, filters, raw_where, cancel,
+        )
+    }
+
     fn register_file_analytics_source<'a>(
         &'a self,
         _path: &'a str,

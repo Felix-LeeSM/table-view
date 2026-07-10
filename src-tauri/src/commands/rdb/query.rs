@@ -598,24 +598,68 @@ async fn query_table_data_inner(
                 });
             }
         }
-        adapter
-            .query_table_data(
-                schema,
-                table,
-                page.unwrap_or(1),
-                page_size.unwrap_or(100),
-                order_by,
-                filters,
-                raw_where,
-                cancel_handle.as_ref().map(|(_, tok)| tok),
-            )
-            .await
+        let cancel_tok = cancel_handle.as_ref().map(|(_, tok)| tok);
+        match query_id {
+            // Issue #1269 — a browse with a cancel id runs through the
+            // pid-tracked path so the grid Stop button can fire native cancel
+            // (pg_cancel_backend / KILL QUERY) against a long scan. The adapter
+            // sends its server pid the moment it pins a connection; we record it
+            // under `query_id` so `get_query_server_pid` can hand it to the
+            // frontend while the browse is still running. Adapters without
+            // native cancel drop the sender, so `pid_rx` resolves to `Err` and
+            // nothing is recorded (the grid then keeps cooperative-token
+            // cancel). Mirrors `execute_query_inner`.
+            Some(qid) => {
+                let (pid_tx, pid_rx) = tokio::sync::oneshot::channel();
+                let browse_fut = adapter.query_table_data_tracked(
+                    schema,
+                    table,
+                    page.unwrap_or(1),
+                    page_size.unwrap_or(100),
+                    order_by,
+                    filters,
+                    raw_where,
+                    cancel_tok,
+                    pid_tx,
+                );
+                let record_fut = async {
+                    if let Ok(pid) = pid_rx.await {
+                        state
+                            .query_server_pids
+                            .lock()
+                            .await
+                            .insert(qid.to_string(), pid);
+                    }
+                };
+                let (result, ()) = tokio::join!(browse_fut, record_fut);
+                result
+            }
+            None => {
+                adapter
+                    .query_table_data(
+                        schema,
+                        table,
+                        page.unwrap_or(1),
+                        page_size.unwrap_or(100),
+                        order_by,
+                        filters,
+                        raw_where,
+                        cancel_tok,
+                    )
+                    .await
+            }
+        }
     };
 
     // Always remove the token after the call completes (success, error,
     // or cancelled) so the registry stays clean for the next attempt
     // (AC-180-05 retry contract).
     release_cancel_token(state, &cancel_handle).await;
+    // Issue #1269 — browse is no longer in flight; drop its pid record so a
+    // late native cancel for this query_id can't target a stale backend.
+    if let Some(qid) = query_id {
+        state.query_server_pids.lock().await.remove(qid);
+    }
 
     result
 }
@@ -1940,6 +1984,117 @@ mod tests {
         .await
         .unwrap();
         assert_eq!(r.executed_query, "SELECT FROM public.users");
+    }
+
+    // ── Issue #1269 — grid browse native cancel pid capture ──────────────
+    //
+    // 작성 이유 (2026-07-10): SQL 탭은 execute_query 가 실행 커넥션의 server
+    // pid 를 적재해 native cancel (pg_cancel_backend / KILL QUERY) 을 태우지만,
+    // 그리드 브라우징(query_table_data)은 pid 를 적재하지 않아 프론트의
+    // getQueryServerPid 가 항상 null → native 분기가 dormant 였다. 아래는
+    // browse 가 pid-tracked 경로를 타고, 실행 중 pid 가 등록되며, 종료 후
+    // 제거됨을 동결한다.
+
+    #[tokio::test]
+    async fn query_table_data_records_server_pid_for_native_adapter_1269() {
+        use std::sync::Arc;
+        use tokio::sync::Notify;
+        use tokio::time::{timeout, Duration};
+
+        let entered = Arc::new(Notify::new());
+        let release = Arc::new(Notify::new());
+        let mut stub = StubRdbAdapter {
+            query_table_data_pid: Some(9191),
+            query_table_data_gate: Some((entered.clone(), release.clone())),
+            ..StubRdbAdapter::default()
+        };
+        stub.query_table_data_fn = Some(Box::new(|ns: &str, tbl: &str| {
+            Ok(TableData {
+                columns: Vec::new(),
+                rows: Vec::new(),
+                total_count: 0,
+                page: 1,
+                page_size: 100,
+                executed_query: format!("SELECT FROM {ns}.{tbl}"),
+            })
+        }));
+        let state = Arc::new(state_with("c", ActiveAdapter::Rdb(Box::new(stub))).await);
+
+        let browse_state = Arc::clone(&state);
+        let browse = tokio::spawn(async move {
+            query_table_data_inner(
+                &browse_state,
+                "c",
+                "t",
+                "public",
+                Some(1),
+                Some(100),
+                None,
+                None,
+                None,
+                Some("qid-grid"),
+                None,
+            )
+            .await
+        });
+
+        // 그리드 browse 가 pid-tracked 경로에 진입해야 gate 가 fire. 기존
+        // (untracked) 경로면 gate 미발화 → timeout → RED.
+        let reached = timeout(Duration::from_secs(5), entered.notified()).await;
+        assert!(
+            reached.is_ok(),
+            "browse did not route through the pid-tracked path (#1269)"
+        );
+
+        assert_eq!(
+            super::get_query_server_pid_inner(&state, "qid-grid").await,
+            Some(9191),
+            "server pid must be recorded while the browse is in flight"
+        );
+
+        release.notify_one();
+        let _ = browse.await;
+
+        assert!(
+            state.query_server_pids.lock().await.is_empty(),
+            "pid record must be dropped after the browse completes"
+        );
+    }
+
+    #[tokio::test]
+    async fn query_table_data_records_no_pid_for_non_native_adapter_1269() {
+        // pid 미보고 adapter(default tracked → pid_tx drop)는 아무것도 적재하지
+        // 않아야 그리드가 협조 토큰 취소로 fallback 한다.
+        let mut stub = StubRdbAdapter::default();
+        stub.query_table_data_fn = Some(Box::new(|_ns: &str, _tbl: &str| {
+            Ok(TableData {
+                columns: Vec::new(),
+                rows: Vec::new(),
+                total_count: 0,
+                page: 1,
+                page_size: 100,
+                executed_query: String::new(),
+            })
+        }));
+        let state = state_with("c", ActiveAdapter::Rdb(Box::new(stub))).await;
+        let _ = query_table_data_inner(
+            &state,
+            "c",
+            "t",
+            "public",
+            Some(1),
+            Some(100),
+            None,
+            None,
+            None,
+            Some("qid-nopid"),
+            None,
+        )
+        .await;
+        assert!(
+            state.query_server_pids.lock().await.is_empty(),
+            "non-native adapter must not record a server pid for a browse"
+        );
     }
 
     // ── cancel_query — dispatch contract + token registry side effect ────
