@@ -13,7 +13,8 @@ import {
   X,
 } from "lucide-react";
 import { useSchemaStore } from "@stores/schemaStore";
-import { useActiveTab } from "@stores/workspaceStore";
+// #1447 — sql-free active-tab read (type / schema / table for highlight).
+import { useActiveTabSansSql } from "@stores/workspaceStore";
 import { useConnectionStore } from "@stores/connectionStore";
 import {
   useMigrationExport,
@@ -132,7 +133,7 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
   } = useMigrationExport();
 
   // Track active tab for highlight & auto-expand
-  const activeTab = useActiveTab();
+  const activeTab = useActiveTabSansSql();
   const activeSchema = activeTab?.type === "table" ? activeTab.schema : null;
   const activeTable = activeTab?.type === "table" ? activeTab.table : null;
 

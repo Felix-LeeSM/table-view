@@ -1,7 +1,8 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { ChevronDown, Database, Loader2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { useActiveTab } from "@stores/workspaceStore";
+// #1447 — sql-free active-tab read (connectionId / type / database / schema).
+import { useActiveTabSansSql } from "@stores/workspaceStore";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useDocumentCatalogStore } from "@stores/documentCatalogStore";
 import { useDocumentQueryStore } from "@stores/documentQueryStore";
@@ -84,7 +85,7 @@ function readOnlyTooltipCopy(
 
 export default function DbSwitcher() {
   const { t } = useTranslation("workspace");
-  const activeTab = useActiveTab();
+  const activeTab = useActiveTabSansSql();
   const connections = useConnectionStore((s) => s.connections);
   const activeStatuses = useConnectionStore((s) => s.activeStatuses);
   const setActiveDb = useConnectionStore((s) => s.setActiveDb);

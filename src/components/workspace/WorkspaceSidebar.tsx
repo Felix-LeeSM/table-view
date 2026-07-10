@@ -4,7 +4,8 @@ import { useTranslation } from "react-i18next";
 import { Button } from "@components/ui/button";
 import { Skeleton } from "@components/ui/skeleton";
 import { useConnectionStore } from "@stores/connectionStore";
-import { useActiveTab } from "@stores/workspaceStore";
+// #1447 — sql-free active-tab read (only `connectionId` is consumed).
+import { useActiveTabSansSql } from "@stores/workspaceStore";
 import { useConnectionLifecycle } from "@/hooks/useConnectionLifecycle";
 import { assertNever } from "@lib/paradigm";
 import DocumentSidebar from "./DocumentSidebar";
@@ -47,7 +48,7 @@ export default function WorkspaceSidebar({
   const activeStatuses = useConnectionStore((s) => s.activeStatuses);
   const hasLoadedOnce = useConnectionStore((s) => s.hasLoadedOnce);
   const { connect: connectToDatabase } = useConnectionLifecycle();
-  const activeTab = useActiveTab();
+  const activeTab = useActiveTabSansSql();
   const activeTabConnId = activeTab?.connectionId ?? null;
 
   if (connections.length === 0) {
