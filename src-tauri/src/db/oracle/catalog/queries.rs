@@ -60,7 +60,8 @@ SELECT c.column_name,
        c.data_type,
        c.nullable,
        c.data_default,
-       cc.comments
+       cc.comments,
+       c.identity_column
 FROM all_tab_cols c
 LEFT JOIN all_col_comments cc
   ON cc.owner = c.owner
@@ -92,7 +93,8 @@ SELECT c.table_name,
        c.data_type,
        c.nullable,
        c.data_default,
-       cc.comments
+       cc.comments,
+       c.identity_column
 FROM all_tab_cols c
 LEFT JOIN all_col_comments cc
   ON cc.owner = c.owner

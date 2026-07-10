@@ -15,6 +15,14 @@ export interface ColumnInfo {
   data_type: string;
   nullable: boolean;
   default_value: string | null;
+  /**
+   * #1433 — auto-increment/identity flag (PG `attidentity`, MySQL
+   * `auto_increment` EXTRA, MSSQL `sys.columns.is_identity`). These
+   * catalogs expose no `default_value` for identity columns, so the
+   * INSERT generator needs this flag to omit untouched identity cells.
+   * Backend-optional (`#[serde(default)]`) — read with `?? false`.
+   */
+  is_identity?: boolean;
   is_primary_key: boolean;
   is_foreign_key: boolean;
   fk_reference: string | null;

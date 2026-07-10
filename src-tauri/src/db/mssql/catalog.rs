@@ -164,6 +164,7 @@ impl MssqlAdapter {
                     nullable: row_bool(&row, 4, "column nullability")?,
                     default_value: row_optional_string(&row, 5, "column default")?,
                     comment: row_optional_string(&row, 6, "column comment")?,
+                    is_identity: row_bool(&row, 7, "column identity")?,
                 })
             })
             .collect::<Result<Vec<_>, AppError>>()?;
@@ -203,6 +204,7 @@ impl MssqlAdapter {
                         nullable: row_bool(&row, 4, "column nullability")?,
                         default_value: row_optional_string(&row, 5, "column default")?,
                         comment: row_optional_string(&row, 6, "column comment")?,
+                        is_identity: row_bool(&row, 7, "column identity")?,
                     },
                 })
             })

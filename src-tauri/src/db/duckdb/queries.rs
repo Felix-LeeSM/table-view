@@ -260,6 +260,9 @@ fn get_table_columns_for_query(
                     data_type: data_type.clone(),
                     nullable: is_nullable.eq_ignore_ascii_case("YES"),
                     default_value,
+                    // DuckDB sequences arrive as `default_value` (omitted by
+                    // the INSERT generator); no dedicated identity flag.
+                    is_identity: false,
                     is_primary_key: false,
                     is_foreign_key: false,
                     fk_reference: None,
@@ -397,6 +400,7 @@ mod order_clause_tests {
             data_type: "VARCHAR".into(),
             nullable: true,
             default_value: None,
+            is_identity: false,
             is_primary_key: false,
             is_foreign_key: false,
             fk_reference: None,
