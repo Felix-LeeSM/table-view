@@ -12,6 +12,7 @@ import {
   KvMutationPanel,
   type KvMutationActionIntent,
 } from "./KvMutationPanel";
+import { KvCollectionValueTable } from "./KvCollectionValueTable";
 import { KvKeyActions } from "./KvKeyActions";
 import { KvStreamReaderPanel } from "./KvStreamReaderPanel";
 import { formatBytes, formatCount, renderValueText } from "./kvValueFormat";
@@ -158,6 +159,11 @@ export default function KvKeyDetailPanel({
                 database={database}
                 stream={value.value}
               />
+            ) : value.value.type === "hash" ||
+              value.value.type === "list" ||
+              value.value.type === "set" ||
+              value.value.type === "zSet" ? (
+              <KvCollectionValueTable keyName={value.key} value={value.value} />
             ) : (
               <pre className="max-h-96 overflow-auto rounded border border-border bg-muted/40 p-2 text-3xs text-foreground">
                 {renderValueText(value)}
