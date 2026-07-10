@@ -1,5 +1,6 @@
 use super::*;
 use crate::models::DatabaseType;
+use serial_test::serial;
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 
 fn sqlite_config(path: &str) -> ConnectionConfig {
@@ -120,6 +121,51 @@ async fn test_sqlite_create_database_file_requires_absolute_path() {
         Err(AppError::Validation(message)) => assert!(message.contains("absolute")),
         other => panic!("Expected absolute path validation error, got: {:?}", other),
     }
+}
+
+// [#1449] wave 27 보안 2차 P1-1. connect / create 가드가 `state.db`
+// exact-match 만 막아, `state.db.bak`(유효 SQLite 포맷) 를 열어 내부 상태를
+// read 하거나 `.key` / `connections.json` 을 create target 으로 덮어쓸 수
+// 있었다. 가드를 app_data_dir 전체 confine 으로 넓혀 fix. fix 전 아래 reject
+// assertion 은 RED — 모든 인접 파일이 connect/create 를 통과했다.
+#[tokio::test]
+#[serial]
+async fn test_sqlite_rejects_internal_app_data_paths() {
+    let dir = tempfile::tempdir().unwrap();
+    std::env::set_var("TABLE_VIEW_TEST_DATA_DIR", dir.path());
+
+    for name in [
+        ".key",
+        "connections.json",
+        "state.db",
+        "state.db.bak",
+        "state.db-wal",
+    ] {
+        let target = dir.path().join(name);
+        let target_str = target.to_str().unwrap();
+
+        // connect 가드 — 존재하는 `state.db.bak` 도 read 대상으로 열 수 없다.
+        match SqliteAdapter::validate_user_database_path(target_str) {
+            Err(AppError::Validation(_)) => {}
+            other => panic!("connect {name} must be rejected, got: {:?}", other),
+        }
+        // create 가드 — 인접 credential 을 create target 으로 줄 수 없다.
+        match SqliteAdapter::create_database_file(target_str).await {
+            Err(AppError::Validation(_)) => {}
+            other => panic!("create {name} must be rejected, got: {:?}", other),
+        }
+        assert!(!target.exists(), "{name} must not be created");
+    }
+
+    // 정상 회귀: app_data_dir 밖의 파일은 계속 connect/create 허용.
+    let outside = tempfile::tempdir().unwrap();
+    let ok_db = outside.path().join("user.sqlite");
+    SqliteAdapter::create_database_file(ok_db.to_str().unwrap())
+        .await
+        .unwrap();
+    assert!(ok_db.exists(), "external db must still be created");
+
+    std::env::remove_var("TABLE_VIEW_TEST_DATA_DIR");
 }
 
 #[tokio::test]

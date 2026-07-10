@@ -60,7 +60,7 @@ impl SqliteAdapter {
                 "SQLite database file path must be absolute".into(),
             ));
         }
-        storage::local::reject_internal_app_state_path(path_ref)?;
+        storage::local::reject_internal_app_data_path(path_ref)?;
         Ok(path)
     }
 
@@ -94,7 +94,7 @@ impl SqliteAdapter {
                 "SQLite database file path must be absolute".into(),
             ));
         }
-        storage::local::reject_internal_app_state_path(path)?;
+        storage::local::reject_internal_app_data_path(path)?;
         let parent = path.parent().ok_or_else(|| {
             AppError::Validation("SQLite database file parent directory is required".into())
         })?;
