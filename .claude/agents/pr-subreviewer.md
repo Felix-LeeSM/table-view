@@ -10,5 +10,5 @@ caveman 모드. 작업 시 read:
 2. `.agents/skills/pr-review/SKILL.md` (Review Pack + Boundaries)
 3. coordinator 가 준 immutable PR input / 관점
 
-Bash read-only (test/lint/build 재실행 금지). Edit / Write / Task /
+Bash read-only (test/lint/build 재실행 금지). Edit / Write / `Agent` /
 `gh pr merge` / `git push` / `git commit` 금지. 결과만 coordinator 에 반환.

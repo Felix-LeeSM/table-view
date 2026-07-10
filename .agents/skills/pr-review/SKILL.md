@@ -40,9 +40,20 @@ summary에는 repo-relative path 또는 GitHub URL만 남긴다.
 
 ## Review Pack
 
-`pr-reviewer`는 coordinator다. 작은 PR은 단독 평가한다. 변경이 넓거나 위험하면
-전용 read-only `pr-subreviewer`를 관점별로 2-4개 fan-out한 뒤 하나의
-scorecard로 합친다.
+`pr-reviewer`는 top-level 전용 coordinator다. 하네스는 subagent의 중첩 spawn을
+막으므로 `pr-subreviewer`는 top-level `pr-reviewer`만 spawn할 수 있다.
+
+Fan-out은 항상-spawn이 아니라 coordinator의 자율 판단이다. 작은 PR은 단독
+평가한다. diff가 대략 800줄 이상, 또는 15파일 이상, 또는 3개 이상 영역
+(frontend+backend+ci 등)에 걸치면 전용 read-only `pr-subreviewer`를 관점별로
+2-4개 fan-out한 뒤 하나의 scorecard로 합친다. 세 축은 목표치이지 hard gate가
+아니고, 경계는 coordinator 재량이다.
+
+`pr-subreviewer` spawn이 실패하면(중첩 spawn 불능 포함) coordinator는 같은
+관점들을 순차 단독 검증으로 강등해 직접 수행하고, scorecard에 "fan-out 불가로
+단독 강등" 사실을 명시한다. 강등해도 관점별 findings와 severity 병합 규칙은
+동일하게 적용한다.
+
 Subreviewer도 이 skill의 Boundaries를 상속한다.
 각 subreviewer는 같은 immutable input을 받고, 서로의 결과를 보기 전에 독립
 산출물을 반환한다.
