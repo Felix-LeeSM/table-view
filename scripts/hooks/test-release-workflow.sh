@@ -73,6 +73,16 @@ assert_contains "$workflow_text" "Verify updater signatures against committed pu
 assert_contains "$workflow_text" "scripts/release/verify-updater-sigs.mjs" "updater signature gate script"
 assert_contains "$workflow_text" 'ARTIFACT_PATHS: ${{ steps.tauri.outputs.artifactPaths }}' "updater signature gate artifact input"
 
+# Regression (#1431): auto-tag-release.yml verifies tag ↔ tauri.conf.json
+# version before creating its tag, but a manually pushed tag (`git push origin
+# v0.5.0`) bypasses that check entirely — release.yml itself must verify the
+# tag against the checked-out conf before building, or a 0.4.2 bundle ships
+# under a v0.5.0 release. workflow_dispatch dry-runs run on a branch ref (no
+# tag), so the gate is tag-conditional.
+assert_contains "$workflow_text" "Verify tag matches tauri.conf.json version" "tag-version gate step"
+assert_contains "$workflow_text" "scripts/release/verify-tag-version.mjs" "tag-version gate script"
+assert_contains "$workflow_text" "if: github.ref_type == 'tag'" "tag-version gate tag-only condition"
+
 # Regression (#1429): the build matrix runs with fail-fast: false, and
 # tauri-action merges each leg's updater entry into the draft's latest.json
 # via read-merge-write. A failed leg (v0.3.1: Windows) or a lost concurrent
