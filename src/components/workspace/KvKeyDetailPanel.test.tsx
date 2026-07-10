@@ -98,6 +98,7 @@ describe("KvKeyDetailPanel", () => {
 
   // Reason: opening a hash key must fetch its value and show the decoded body
   // + type/ttl metadata (the user-visible outcome of selecting the key).
+  // Collections render structured tables since #1465.
   it("loads and renders the selected hash key value", async () => {
     invokeMock.mockResolvedValue(hashEnvelope());
 
@@ -105,7 +106,11 @@ describe("KvKeyDetailPanel", () => {
       <KvKeyDetailPanel connectionId="redis-1" database={0} keyName="user:1" />,
     );
 
-    expect(await screen.findByText(/name: Ada/)).toBeInTheDocument();
+    expect(
+      await screen.findByRole("table", { name: /user:1 hash entries/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("cell", { name: "name" })).toBeInTheDocument();
+    expect(screen.getByRole("cell", { name: "Ada" })).toBeInTheDocument();
     await waitFor(() => {
       expect(invokeMock).toHaveBeenCalledWith("get_kv_value", {
         connectionId: "redis-1",

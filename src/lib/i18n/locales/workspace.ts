@@ -174,6 +174,16 @@ export const en = {
     emptyNoMatch: "No keys match pattern {{pattern}}.",
     itemCount: "{{count}} item(s)",
   },
+  kvCollection: {
+    tableAria: "{{key}} {{type}} entries",
+    colField: "Field",
+    colValue: "Value",
+    colIndex: "Index",
+    colMember: "Member",
+    colScore: "Score",
+    noEntries: "No entries.",
+    truncated: "Showing first {{shown}} of {{total}} entries",
+  },
   kvStream: {
     startLabel: "Stream start",
     endLabel: "Stream end",
@@ -409,6 +419,16 @@ export const ko = {
     emptyNoKeys: "키가 없습니다.",
     emptyNoMatch: "패턴 {{pattern}}에 일치하는 키가 없습니다.",
     itemCount: "{{count}}개 항목",
+  },
+  kvCollection: {
+    tableAria: "{{key}} {{type}} 항목",
+    colField: "필드",
+    colValue: "값",
+    colIndex: "인덱스",
+    colMember: "멤버",
+    colScore: "점수",
+    noEntries: "항목이 없습니다.",
+    truncated: "전체 {{total}}개 중 처음 {{shown}}개 표시",
   },
   kvStream: {
     startLabel: "스트림 시작",
