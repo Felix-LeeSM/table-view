@@ -56,6 +56,7 @@ const defaultProps = {
   pendingDeletedRowKeys: new Set<string>(),
   pendingNewRows: [] as unknown[][],
   canEditRows: true,
+  rowEditingSupported: true,
   page: 1,
   schema: "public",
   table: "users",
@@ -238,6 +239,34 @@ describe("DataGridTable — context menu", () => {
     expect(defaultProps.onStartEdit).not.toHaveBeenCalled();
     expect(defaultProps.onDeleteRow).not.toHaveBeenCalled();
     expect(defaultProps.onDuplicateRow).not.toHaveBeenCalled();
+  });
+
+  // #1052 — a statically read-only engine (DuckDB: edit.editRows false) HIDES
+  // the row-write actions entirely (ui-parity §4: static unsupported = hide),
+  // unlike the stateful `canEditRows: false` case above which keeps them
+  // visible-but-disabled. Read actions (details / copy) stay.
+  it("hides row-write context menu actions when row editing is statically unsupported (#1052)", () => {
+    renderTable({ rowEditingSupported: false });
+
+    contextClickFirstDataRow();
+
+    for (const label of [
+      "Edit Cell",
+      "Set to NULL",
+      "Delete Row",
+      "Duplicate Row",
+    ]) {
+      expect(
+        screen.queryByRole("menuitem", { name: label }),
+      ).not.toBeInTheDocument();
+    }
+
+    expect(
+      screen.getByRole("menuitem", { name: "Show Cell Details" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("menuitem", { name: "Copy as JSON" }),
+    ).toBeInTheDocument();
   });
 
   // AC-06: Copy as Plain Text

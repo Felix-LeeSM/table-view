@@ -77,6 +77,11 @@ const EXPORT_MODES: ReadonlyArray<{
 export interface SchemaTreeRowsContext {
   t: (key: string, options?: Record<string, unknown>) => string;
   dbType: string | undefined;
+  // #1052 — false for a statically read-only engine (DuckDB): its DDL entries
+  // (Create / Rename / Drop table) are HIDDEN, not shown-then-erroring
+  // (ui-parity §4 static unsupported = hide). True while dbType is still
+  // loading so entries aren't stripped early.
+  canMutateSchema: boolean;
   // Roving tabindex (WAI-ARIA tree): the row whose `key` matches owns
   // `tabIndex=0`; all others are `-1`. `onFocusRow` keeps mouse focus in
   // sync so a click moves the roving anchor.
@@ -216,10 +221,14 @@ export function renderSchemaRow(
         </button>
       </ContextMenuTrigger>
       <ContextMenuContent>
-        <ContextMenuItem onClick={() => ctx.handleCreateTable(row.schemaName)}>
-          <Plus size={14} />
-          {ctx.t("createTableMenu")}
-        </ContextMenuItem>
+        {ctx.canMutateSchema && (
+          <ContextMenuItem
+            onClick={() => ctx.handleCreateTable(row.schemaName)}
+          >
+            <Plus size={14} />
+            {ctx.t("createTableMenu")}
+          </ContextMenuItem>
+        )}
         {supportsMigrationExport(ctx.dbType) && (
           <ContextMenuSub>
             <ContextMenuSubTrigger>
@@ -298,7 +307,7 @@ export function renderCategoryRow(
         <span>{ctx.t(cat.labelKey)}</span>
       </button>
       <div className="ml-auto flex shrink-0 items-center gap-1 pr-2">
-        {isTables && (
+        {isTables && ctx.canMutateSchema && (
           <button
             type="button"
             onClick={(e) => {
@@ -556,7 +565,11 @@ export function renderItemRow(
             if (e.key === "Enter" || e.key === " ") {
               e.preventDefault();
               handleClick();
-            } else if (e.key === "F2" && isTableItem) {
+            } else if (e.key === "F2" && isTableItem && ctx.canMutateSchema) {
+              // #1052 — F2 rename is a DDL entry point too: gate it with the
+              // same `canMutateSchema` as the context-menu Rename item, else a
+              // read-only DuckDB table opens RenameTableDialog then errors on
+              // the backend (deprecated click-then-error pattern).
               e.preventDefault();
               ctx.handleStartRename(item.name, row.schemaName);
             }
@@ -645,17 +658,23 @@ export function renderItemRow(
                 </>
               )}
             </ContextMenuItem>
-            <ContextMenuItem
-              onClick={() => ctx.handleStartRename(item.name, row.schemaName)}
-            >
-              <Pencil size={14} /> {ctx.t("rename")}
-            </ContextMenuItem>
-            <ContextMenuItem
-              danger
-              onClick={() => ctx.handleDropTable(item.name, row.schemaName)}
-            >
-              <Trash2 size={14} /> {ctx.t("drop")}
-            </ContextMenuItem>
+            {ctx.canMutateSchema && (
+              <>
+                <ContextMenuItem
+                  onClick={() =>
+                    ctx.handleStartRename(item.name, row.schemaName)
+                  }
+                >
+                  <Pencil size={14} /> {ctx.t("rename")}
+                </ContextMenuItem>
+                <ContextMenuItem
+                  danger
+                  onClick={() => ctx.handleDropTable(item.name, row.schemaName)}
+                >
+                  <Trash2 size={14} /> {ctx.t("drop")}
+                </ContextMenuItem>
+              </>
+            )}
           </>
         ) : isView ? (
           <>

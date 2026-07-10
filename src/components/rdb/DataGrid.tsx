@@ -20,7 +20,7 @@ import { useRdbDataGridShortcuts } from "./DataGrid/useRdbDataGridShortcuts";
 import { useRdbDataGridSortHandlers } from "./DataGrid/useRdbDataGridSortHandlers";
 import { useRdbDataGridSorts } from "./DataGrid/useRdbDataGridSorts";
 import { useRdbTableData } from "./DataGrid/useRdbTableData";
-import { getDataSourceProfile } from "@/types/dataSource";
+import { getDataSourceProfile, supportsRowEditing } from "@/types/dataSource";
 
 interface DataGridProps {
   connectionId: string;
@@ -96,6 +96,9 @@ export default function DataGrid({
     getDataSourceProfile(rowEditConnection.dbType).capabilities.edit.editRows &&
     !(rowEditConnection.dbType === "sqlite" && rowEditConnection.readOnly) &&
     !tableWithoutRequiredPrimaryKey;
+  // #1052 — statically read-only engine (DuckDB) HIDES the row-write context
+  // menu items; `canEditRows` above only *disables* them for stateful blocks.
+  const rowEditingSupported = supportsRowEditing(rowEditConnection?.dbType);
 
   const columnOrder = useRdbColumnOrder({
     connectionId,
@@ -263,6 +266,7 @@ export default function DataGrid({
         columnOrder={columnOrder}
         editState={editState}
         canEditRows={canEditRows}
+        rowEditingSupported={rowEditingSupported}
         page={page}
         hiddenColumnNames={hiddenColumns.hidden}
         activeFilterCount={filters.activeFilterCount}

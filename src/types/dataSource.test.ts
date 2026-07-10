@@ -14,6 +14,7 @@ import {
   getDataSourceProfile,
   hasConnectionCapability,
   isConnectionSupportedDatabaseType,
+  supportsRowEditing,
 } from "./dataSource";
 import {
   getActiveQueryLanguages,
@@ -612,5 +613,29 @@ describe("DataSourceProfile registry", () => {
       id: "duckdb-database",
       extensions: [".duckdb"],
     });
+  });
+});
+
+describe("supportsRowEditing — #1052 read-only-engine gate", () => {
+  it("is false for DuckDB (the only RDB with edit.editRows false)", () => {
+    expect(supportsRowEditing("duckdb")).toBe(false);
+  });
+
+  it("is true for engines that can edit rows", () => {
+    for (const dbType of [
+      "postgresql",
+      "mysql",
+      "mariadb",
+      "sqlite",
+      "mssql",
+      "oracle",
+    ] as const) {
+      expect(supportsRowEditing(dbType)).toBe(true);
+    }
+  });
+
+  it("defaults to true for an unknown / still-loading dbType so affordances are not stripped early", () => {
+    expect(supportsRowEditing(undefined)).toBe(true);
+    expect(supportsRowEditing(null)).toBe(true);
   });
 });

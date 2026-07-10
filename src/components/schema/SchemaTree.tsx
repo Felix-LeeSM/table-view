@@ -20,6 +20,7 @@ import {
   supportsMigrationExport,
 } from "@/hooks/useMigrationExport";
 import { useSidebarScrollPersistence } from "@/hooks/useSidebarScrollPersistence";
+import { supportsRowEditing } from "@/types/dataSource";
 import {
   Popover,
   PopoverTrigger,
@@ -117,6 +118,10 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
   // showing the control there would be an error-on-click (#1048). Also hidden
   // on Mongo/Redis and before dbType has loaded.
   const canExportMigration = supportsMigrationExport(dbType);
+  // #1052 — DuckDB's backend adapter has no write/DDL path, so its DDL entries
+  // (Create / Rename / Drop table) are hidden. `supportsRowEditing` is the
+  // reliable read-only discriminator among RDB engines (see its doc comment).
+  const canMutateSchema = supportsRowEditing(dbType);
   const flatCreateTableSchema = profile.hasImplicitSingleSchema
     ? (actions.schemas[0]?.name ?? null)
     : null;
@@ -306,6 +311,7 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
   const ctx: SchemaTreeRowsContext = {
     t: (key, options) => t(key, options as Record<string, unknown>),
     dbType,
+    canMutateSchema,
     treeShape,
     globalFilterActive,
     rovingFocusKey: roving.focusKey ?? firstFocusableKey,
@@ -360,7 +366,7 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
             <span />
           )}
           <div className="flex items-center gap-0.5">
-            {flatCreateTableSchema && (
+            {flatCreateTableSchema && canMutateSchema && (
               <Button
                 variant="ghost"
                 size="icon-xs"

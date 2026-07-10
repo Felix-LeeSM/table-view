@@ -667,6 +667,27 @@ export function hasConnectionCapability(
   );
 }
 
+/**
+ * Issue #1052 — whether this engine supports row-level data editing. DuckDB is
+ * read-only because its backend adapter implements no write/DDL path (the
+ * `AccessMode::ReadOnly` connection reflects that, it is not the cause), and it
+ * is the ONLY RDB engine with `edit.editRows: false`, so this flag also gates
+ * the schema-tree DDL entries
+ * (Create / Rename / Drop): an engine that cannot edit a row cannot run DDL
+ * either, and the `ddl.*` capability group is under-populated (SQLite / MSSQL /
+ * Oracle leave it false yet support table DDL), which makes `editRows` the
+ * reliable read-only discriminator. Per ui-parity §4 the affordances are
+ * HIDDEN (not disabled) when this returns false. An unknown / still-loading
+ * dbType returns true so affordances aren't stripped before the connection
+ * resolves.
+ */
+export function supportsRowEditing(
+  dbType: DatabaseType | null | undefined,
+): boolean {
+  const profile = maybeGetDataSourceProfile(dbType);
+  return profile === null || profile.capabilities.edit.editRows;
+}
+
 export function getConnectionSupportedDatabaseTypes(): readonly DatabaseType[] {
   return (Object.keys(DATA_SOURCE_PROFILES) as DatabaseType[]).filter(
     (dbType) => hasConnectionCapability(dbType, "test"),
