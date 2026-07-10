@@ -27,11 +27,14 @@
  * secret-literal pass above cannot cover it. Both patterns mirror the Rust
  * backend's `redact_connection_message` (`storage/sql_redact.rs`):
  *  - URI userinfo `://user:secret@` (user part may be empty — Redis URLs).
- *  - key=value `password=...` / `pwd=...` (ADO / libpq style; value stops at
- *    separators or quotes).
+ *  - key=value `password=...` / `pwd=...` (ADO / libpq style). An unquoted
+ *    value stops at separators; a single-/double-quoted value (libpq
+ *    conninfo `password='x y'`, review #1490 B2) is masked whole, quotes
+ *    included, so spaces inside the quotes can't split the secret.
  */
 const URI_USERINFO_RE = /(:\/\/[^/?#\s:@']*:)[^@\s/']+@/g;
-const KV_CREDENTIAL_RE = /\b((?:password|pwd)\s*=\s*)[^;&\s'"]+/gi;
+const KV_CREDENTIAL_RE =
+  /\b((?:password|pwd)\s*=\s*)('[^']*'|"[^"]*"|[^;&\s'"]+)/gi;
 
 export function sanitizeMessage(
   raw: string,

@@ -42,6 +42,21 @@ describe("sanitizeMessage", () => {
     ).toBe("cannot open: host=h Password=***;user=u pwd=***");
   });
 
+  // Reason: review #1490 B2 — libpq conninfo quotes its values
+  // (`password='x'` / `pwd="x"`, spaces allowed inside); the pre-fix value
+  // class stopped at the leading quote and leaked the secret (2026-07-11)
+  it("masks quoted key=value credentials (libpq conninfo style)", () => {
+    expect(sanitizeMessage("FATAL: host=h password='S3cretPw1' user=u")).toBe(
+      "FATAL: host=h password=*** user=u",
+    );
+    expect(sanitizeMessage('cannot open: pwd="S3cretPw1";host=h')).toBe(
+      "cannot open: pwd=***;host=h",
+    );
+    const spaced = sanitizeMessage("FATAL: password='S3cret Pw1' user=u");
+    expect(spaced).toBe("FATAL: password=*** user=u");
+    expect(spaced).not.toContain("S3cret");
+  });
+
   // Reason: issue #1453 — non-secret error copy (host/port, os error) must
   // survive byte-identical so the error stays actionable (2026-07-10)
   it("leaves non-credential text untouched", () => {

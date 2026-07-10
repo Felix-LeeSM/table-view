@@ -402,6 +402,20 @@ fn conn_string_regex() -> &'static Regex {
     })
 }
 
+/// Key=value credential in a *plain-text* driver message (review #1490 B2).
+/// Unlike [`conn_string_regex`] — which runs inside SQL string literals and
+/// must never cross the literal's own quotes — a driver message has no
+/// escape structure, so a single-/double-quoted value (libpq conninfo
+/// `password='x y'`, spaces allowed inside the quotes) is masked whole,
+/// quotes included. Unquoted values keep the same separator-stop behavior.
+fn conn_string_message_regex() -> &'static Regex {
+    static R: OnceLock<Regex> = OnceLock::new();
+    R.get_or_init(|| {
+        Regex::new(r#"(?i)\b(?:password|pwd)\s*=\s*('[^']*'|"[^"]*"|[^;&\s'"]+)"#)
+            .expect("conn-string message redact regex must compile")
+    })
+}
+
 /// URI userinfo `://user:secret@` inside a string literal. The user part is
 /// `*` (may be empty) — Redis URLs commonly carry a password with no user
 /// (`redis://:secret@host`, issue #1453).
@@ -546,14 +560,14 @@ fn credential_replacements(sql: &str, toks: &[Tok]) -> Vec<(usize, usize, &'stat
 }
 
 /// Issue #1453 — mask credential values in a *plain-text* connection error
-/// message (driver output, not SQL). Reuses the in-literal patterns from
-/// [`redact_credentials`], applied to the whole message: key=value
-/// `password=...` / `pwd=...` and URI userinfo `://user:secret@`. Host /
-/// port / database / user survive so the error stays actionable. Callers
-/// route through [`crate::error::AppError::connection_redacted`].
+/// message (driver output, not SQL): key=value `password=...` / `pwd=...`
+/// (quoted or unquoted — [`conn_string_message_regex`]) and URI userinfo
+/// `://user:secret@`. Host / port / database / user survive so the error
+/// stays actionable. Callers route through
+/// [`crate::error::AppError::connection_redacted`].
 pub fn redact_connection_message(message: &str) -> String {
     let mut spans: Vec<(usize, usize)> = Vec::new();
-    for re in [conn_string_regex(), uri_userinfo_regex()] {
+    for re in [conn_string_message_regex(), uri_userinfo_regex()] {
         for caps in re.captures_iter(message) {
             if let Some(g) = caps.get(1) {
                 spans.push((g.start(), g.end()));
@@ -638,6 +652,34 @@ mod tests {
         ];
         for (input, expected) in cases {
             assert_eq!(redact_connection_message(input), expected, "for `{input}`");
+        }
+    }
+
+    // Reason: review #1490 B2 — libpq conninfo quotes its values
+    // (`password='x'` / `pwd="x"`, spaces allowed inside the quotes); the
+    // pre-fix value class stopped at the leading quote and leaked the
+    // secret whole (2026-07-11).
+    #[test]
+    fn connection_message_quoted_credentials_masked() {
+        let cases = [
+            (
+                "FATAL: host=h password='S3cretPw1' user=u",
+                "FATAL: host=h password=*** user=u",
+            ),
+            (
+                r#"cannot open: pwd="S3cretPw1";host=h"#,
+                "cannot open: pwd=***;host=h",
+            ),
+            // Spaces inside the quotes must not split the secret.
+            (
+                "FATAL: password='S3cret Pw1' user=u",
+                "FATAL: password=*** user=u",
+            ),
+        ];
+        for (input, expected) in cases {
+            let out = redact_connection_message(input);
+            assert_eq!(out, expected, "for `{input}`");
+            assert!(!out.contains("S3cret"), "secret leaked in `{out}`");
         }
     }
 
