@@ -192,8 +192,38 @@ async fn open_pool_inner(path: &Path) -> Result<SqlitePool, AppError> {
         let _ = pool.close().await;
         return Err(e);
     }
+    // sqlx 가 state.db 와 WAL/SHM sidecar 를 process umask (umask 022 → 0644) 로
+    // 만들고 sidecar 는 생성 시점 db mode 를 복사한다 — 셋 다 0600 으로 좁힌다.
+    // 다른 credential 파일 (connections.json / .key) 과 동일 정책 (Issue #1452).
+    restrict_state_db_permissions(path);
     Ok(pool)
 }
+
+/// state.db 와 WAL/SHM sidecar 를 Unix 0600 으로 제한한다. sqlx 는 파일 mode 를
+/// 지정할 수 없어 생성 후 좁히며, 기존 0644 파일도 재부팅 시 교정된다. chmod 실패는
+/// boot 를 막지 않고 경고만 남긴다 (DB 자체는 정상 동작).
+#[cfg(unix)]
+fn restrict_state_db_permissions(path: &Path) {
+    use std::os::unix::fs::PermissionsExt;
+    for suffix in ["", "-wal", "-shm"] {
+        let mut os = path.as_os_str().to_os_string();
+        os.push(suffix);
+        let target = PathBuf::from(os);
+        match std::fs::set_permissions(&target, std::fs::Permissions::from_mode(0o600)) {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => warn!(
+                target: "storage",
+                error = %e,
+                path = %target.display(),
+                "failed to restrict state.db permissions to 0600"
+            ),
+        }
+    }
+}
+
+#[cfg(not(unix))]
+fn restrict_state_db_permissions(_path: &Path) {}
 
 /// Boot health check — `get_initial_app_state_inner` 가 실행하는 read path 와
 /// 동일한 트랜잭션(`BEGIN IMMEDIATE` + read)을 돌려, boot 시점에 실패할 손상
@@ -272,6 +302,46 @@ mod tests {
         let pool = open_pool().await.unwrap();
         // Calling again must not error.
         run_migrations(&pool).await.unwrap();
+        cleanup_env();
+    }
+
+    /// state.db 는 credential 성 데이터를 담는 SQLite SOT 다. 다른 credential
+    /// 파일 (connections.json / .key) 과 동일하게 Unix 0600 이어야 한다 (Issue
+    /// #1452). WAL journal mode 라 sqlite 가 만드는 `-wal` / `-shm` sidecar 도
+    /// 검증한다 — 존재하면 함께 0600 이어야 한다.
+    #[cfg(unix)]
+    #[tokio::test]
+    #[serial]
+    async fn test_state_db_files_are_0600() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let _dir = setup_env();
+        let path = db_path().unwrap();
+
+        let pool = open_pool().await.unwrap();
+        // 쓰기를 강제해 WAL/SHM sidecar 를 확실히 만든다.
+        sqlx::query("CREATE TABLE IF NOT EXISTS _perm_probe (id INTEGER PRIMARY KEY)")
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        for suffix in ["", "-wal", "-shm"] {
+            let mut os = path.as_os_str().to_os_string();
+            os.push(suffix);
+            let target = PathBuf::from(os);
+            if !target.exists() {
+                continue;
+            }
+            let mode = std::fs::metadata(&target).unwrap().permissions().mode() & 0o777;
+            assert_eq!(
+                mode,
+                0o600,
+                "{} must be 0600, got {:o}",
+                target.display(),
+                mode
+            );
+        }
+
         cleanup_env();
     }
 }
