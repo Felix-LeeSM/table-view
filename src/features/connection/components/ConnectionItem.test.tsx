@@ -254,6 +254,28 @@ describe("ConnectionItem", () => {
     expect(indicator).toHaveAttribute("title", "Connection refused");
   });
 
+  // Reason: issue #1453 — last line of defense: statuses hydrated from an
+  // old localStorage session bypass the store's masking, so the sidebar
+  // render path (indicator title/aria-label + detail body) must mask
+  // credentials itself (2026-07-10)
+  it("masks credentials in the error tooltip and detail render path", () => {
+    setStoreState({
+      activeStatuses: {
+        "conn-1": {
+          type: "error",
+          message: "connect failed: postgres://app:S3cretPw1@db:5432/x",
+        },
+      },
+    });
+
+    render(<ConnectionItem connection={makeConnection()} />);
+
+    const masked = "connect failed: postgres://app:***@db:5432/x";
+    const indicator = screen.getByLabelText(`Error: ${masked}`);
+    expect(indicator).toHaveAttribute("title", masked);
+    expect(document.body.textContent).not.toContain("S3cretPw1");
+  });
+
   it("renders gray indicator when disconnected", () => {
     setStoreState({
       activeStatuses: { "conn-1": { type: "disconnected" } },

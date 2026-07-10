@@ -498,8 +498,10 @@ fn connection_timeout_secs(config: &ConnectionConfig) -> u64 {
         .min(ORACLE_CONNECT_TIMEOUT_MAX_SECS)
 }
 
+/// Issue #1453 — Oracle connect/ping errors can echo a DSN / URL with
+/// credentials; route through the redacting constructor.
 fn map_oracle_connection_error(error: oracle_rs::Error) -> AppError {
-    AppError::Connection(error.to_string())
+    AppError::connection_redacted(error.to_string())
 }
 
 fn has_non_empty(value: &Option<String>) -> bool {

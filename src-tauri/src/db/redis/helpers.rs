@@ -53,8 +53,10 @@ pub(super) fn ensure_not_cancelled(cancel: Option<&CancellationToken>) -> Result
     Ok(())
 }
 
+/// Issue #1453 — the Redis URL embeds the password (`redis://:pw@host`);
+/// driver errors that echo it must go through the redacting constructor.
 pub(super) fn redis_connection_error(err: ::redis::RedisError) -> AppError {
-    AppError::Connection(err.to_string())
+    AppError::connection_redacted(err.to_string())
 }
 
 pub(super) fn redis_database_error(err: ::redis::RedisError) -> AppError {

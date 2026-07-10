@@ -402,11 +402,13 @@ fn conn_string_regex() -> &'static Regex {
     })
 }
 
-/// URI userinfo `://user:secret@` inside a string literal.
+/// URI userinfo `://user:secret@` inside a string literal. The user part is
+/// `*` (may be empty) — Redis URLs commonly carry a password with no user
+/// (`redis://:secret@host`, issue #1453).
 fn uri_userinfo_regex() -> &'static Regex {
     static R: OnceLock<Regex> = OnceLock::new();
     R.get_or_init(|| {
-        Regex::new(r#"://[^/?#\s:@']+:([^@\s/']+)@"#)
+        Regex::new(r#"://[^/?#\s:@']*:([^@\s/']+)@"#)
             .expect("uri userinfo redact regex must compile")
     })
 }
@@ -543,6 +545,36 @@ fn credential_replacements(sql: &str, toks: &[Tok]) -> Vec<(usize, usize, &'stat
     repl
 }
 
+/// Issue #1453 — mask credential values in a *plain-text* connection error
+/// message (driver output, not SQL). Reuses the in-literal patterns from
+/// [`redact_credentials`], applied to the whole message: key=value
+/// `password=...` / `pwd=...` and URI userinfo `://user:secret@`. Host /
+/// port / database / user survive so the error stays actionable. Callers
+/// route through [`crate::error::AppError::connection_redacted`].
+pub fn redact_connection_message(message: &str) -> String {
+    let mut spans: Vec<(usize, usize)> = Vec::new();
+    for re in [conn_string_regex(), uri_userinfo_regex()] {
+        for caps in re.captures_iter(message) {
+            if let Some(g) = caps.get(1) {
+                spans.push((g.start(), g.end()));
+            }
+        }
+    }
+    spans.sort_unstable();
+    let mut out = String::with_capacity(message.len());
+    let mut pos = 0usize;
+    for (s, e) in spans {
+        if s < pos {
+            continue; // overlap guard — parity with redact_credentials
+        }
+        out.push_str(&message[pos..s]);
+        out.push_str("***");
+        pos = e;
+    }
+    out.push_str(&message[pos..]);
+    out
+}
+
 /// Mask the credential value in every credential clause of `sql`,
 /// preserving the surrounding keyword/structure and all non-credential
 /// literals. See the module notes above for covered shapes and residuals.
@@ -576,7 +608,38 @@ mod tests {
     //! literal shapes) live in `tests/sql_redact.rs` and use this module
     //! via `table_view_lib::storage::sql_redact::sql_redact`.
 
-    use super::{redact_credentials, sql_redact};
+    use super::{redact_connection_message, redact_credentials, sql_redact};
+
+    // Reason: issue #1453 — connection errors are plain text (not SQL);
+    // `redact_connection_message` must mask URI userinfo / key=value
+    // credentials while preserving host/port/user (2026-07-10).
+    #[test]
+    fn connection_message_credentials_masked() {
+        let cases = [
+            (
+                "could not connect to postgres://app:S3cretPw1@db:5432/x",
+                "could not connect to postgres://app:***@db:5432/x",
+            ),
+            // Empty-user URI — the common Redis shape.
+            (
+                "IO error: redis://:S3cretPw1@redis.local:6379/0",
+                "IO error: redis://:***@redis.local:6379/0",
+            ),
+            // ADO / libpq key=value pairs; value stops at separators.
+            (
+                "cannot open host=h Password=S3cretPw1;user=u pwd=Oth3r",
+                "cannot open host=h Password=***;user=u pwd=***",
+            ),
+            // Non-secret error copy survives byte-identical.
+            (
+                "Connection refused (os error 61) at localhost:5432",
+                "Connection refused (os error 61) at localhost:5432",
+            ),
+        ];
+        for (input, expected) in cases {
+            assert_eq!(redact_connection_message(input), expected, "for `{input}`");
+        }
+    }
 
     #[test]
     fn credentials_masked_across_dialects() {

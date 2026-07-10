@@ -16,6 +16,7 @@ import {
 } from "@lib/scopedLocalStorage";
 import { normalizeActiveStatuses } from "@lib/wireCamelCase";
 import { cleanupConnectionFrontendState } from "@lib/runtime/connection/cleanup";
+import { sanitizeMessage } from "./components/ConnectionDialog/sanitize";
 
 export interface ConnectionState {
   connections: ConnectionConfig[];
@@ -266,10 +267,14 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
       // the workspace can hydrate on boot.
       persistActiveStatuses(get().activeStatuses);
     } catch (e) {
+      // Issue #1453 — mask credential echoes (conn-string / URI userinfo)
+      // before the message hits activeStatuses: it is rendered by
+      // ConnectionItem AND persisted to localStorage via the
+      // connection-status-changed listener below.
       set((state) => ({
         activeStatuses: {
           ...state.activeStatuses,
-          [id]: { type: "error" as const, message: String(e) },
+          [id]: { type: "error" as const, message: sanitizeMessage(String(e)) },
         },
       }));
     }
@@ -380,8 +385,15 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
         "connection-status-changed",
         (event) => {
           const { id, status } = event.payload;
+          // Issue #1453 — reconnect failures (backend keep-alive loop)
+          // arrive here with raw driver text; mask credentials before the
+          // status is stored/persisted.
+          const safeStatus =
+            status.type === "error"
+              ? { ...status, message: sanitizeMessage(status.message) }
+              : status;
           set((state) => ({
-            activeStatuses: { ...state.activeStatuses, [id]: status },
+            activeStatuses: { ...state.activeStatuses, [id]: safeStatus },
           }));
           persistActiveStatuses(get().activeStatuses);
         },

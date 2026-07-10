@@ -108,6 +108,20 @@ pub enum AppError {
     Serde(#[from] serde_json::Error),
 }
 
+impl AppError {
+    /// Issue #1453 — forced constructor for connection errors that embed
+    /// driver/config text. Masks URI userinfo (`://user:secret@`) and
+    /// key=value (`password=` / `pwd=`) credential values before the
+    /// message can reach status events, the sidebar, or logs. Adapters
+    /// must route driver connect/ping errors through this instead of
+    /// `AppError::Connection` directly (static messages are exempt).
+    pub fn connection_redacted(message: impl Into<String>) -> Self {
+        AppError::Connection(crate::storage::sql_redact::redact_connection_message(
+            &message.into(),
+        ))
+    }
+}
+
 impl serde::Serialize for AppError {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -230,6 +244,25 @@ mod tests {
         assert_eq!(
             AppError::Window("launcher build failed".into()).to_string(),
             "Window error: launcher build failed"
+        );
+    }
+
+    // Reason: issue #1453 — the forced connection-error constructor must
+    // mask credential echoes (URI userinfo + key=value) while keeping the
+    // `Connection error:` envelope and non-secret context (2026-07-10).
+    #[test]
+    fn connection_redacted_masks_uri_and_kv_credentials() {
+        let err = AppError::connection_redacted(
+            "could not connect to mysql://root:S3cretPw1@db:3306/app password=S3cretPw1",
+        );
+        let message = err.to_string();
+        assert!(
+            !message.contains("S3cretPw1"),
+            "leaked plaintext credential: {message}"
+        );
+        assert_eq!(
+            message,
+            "Connection error: could not connect to mysql://root:***@db:3306/app password=***"
         );
     }
 

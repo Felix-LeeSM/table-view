@@ -119,12 +119,12 @@ impl MongoAdapter {
     pub async fn test(config: &ConnectionConfig) -> Result<(), AppError> {
         let opts = Self::build_options(config)?;
         let client = Client::with_options(opts)
-            .map_err(|e| AppError::Connection(format!("MongoDB client build failed: {e}")))?;
+            .map_err(|e| mongo_connection_error("MongoDB client build failed", e))?;
         client
             .database("admin")
             .run_command(doc! { "ping": 1 })
             .await
-            .map_err(|e| AppError::Connection(format!("MongoDB ping failed: {e}")))?;
+            .map_err(|e| mongo_connection_error("MongoDB ping failed", e))?;
         Ok(())
     }
 
@@ -261,7 +261,7 @@ impl DbAdapter for MongoAdapter {
         Box::pin(async move {
             let opts = Self::build_options(config)?;
             let client = Client::with_options(opts)
-                .map_err(|e| AppError::Connection(format!("MongoDB client build failed: {e}")))?;
+                .map_err(|e| mongo_connection_error("MongoDB client build failed", e))?;
 
             // Probe the server once so connect() actually fails fast when the
             // host is unreachable. MongoDB's driver is lazy otherwise and
@@ -270,7 +270,7 @@ impl DbAdapter for MongoAdapter {
                 .database("admin")
                 .run_command(doc! { "ping": 1 })
                 .await
-                .map_err(|e| AppError::Connection(format!("MongoDB ping failed: {e}")))?;
+                .map_err(|e| mongo_connection_error("MongoDB ping failed", e))?;
 
             {
                 let mut guard = self.client.lock().await;
@@ -323,7 +323,7 @@ impl DbAdapter for MongoAdapter {
                 .run_command(doc! { "ping": 1 })
                 .await
                 .map(|_| ())
-                .map_err(|e| AppError::Connection(format!("MongoDB ping failed: {e}")))
+                .map_err(|e| mongo_connection_error("MongoDB ping failed", e))
         })
     }
 
@@ -356,6 +356,13 @@ impl DbAdapter for MongoAdapter {
     }
 }
 
+/// Issue #1453 — mongodb driver errors can echo the connection URI
+/// (`mongodb://user:pw@host`); route connect/ping errors through the
+/// redacting constructor. mssql `mssql_connection_error` 패턴 답습.
+fn mongo_connection_error(context: &'static str, err: impl std::fmt::Display) -> AppError {
+    AppError::connection_redacted(format!("{context}: {err}"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -370,6 +377,24 @@ mod tests {
     fn default_is_equivalent_to_new() {
         let a = MongoAdapter::default();
         assert!(matches!(a.kind(), DatabaseType::Mongodb));
+    }
+
+    // Reason: issue #1453 — mongodb driver errors echo the connection URI
+    // (SRV lookup / handshake failures include it); the shared mapper must
+    // mask the password while keeping context + host (2026-07-10).
+    #[test]
+    fn mongo_connection_error_masks_credential_echo() {
+        let message = mongo_connection_error(
+            "MongoDB ping failed",
+            "server selection error: mongodb://app:S3cretPw1@mongo.local:27017/?authSource=admin",
+        )
+        .to_string();
+        assert!(
+            !message.contains("S3cretPw1"),
+            "leaked plaintext credential: {message}"
+        );
+        assert!(message.contains("MongoDB ping failed"));
+        assert!(message.contains("mongo.local:27017"));
     }
 
     /// Issue #1269 (P1) — the native cancel IPC

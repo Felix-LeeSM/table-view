@@ -113,12 +113,12 @@ impl MysqlAdapter {
             .acquire_timeout(std::time::Duration::from_secs(5))
             .connect_with(options)
             .await
-            .map_err(|e| AppError::Connection(e.to_string()))?;
+            .map_err(mysql_connection_error)?;
 
         let result = sqlx::query("SELECT 1")
             .execute(&pool)
             .await
-            .map_err(|e| AppError::Connection(e.to_string()));
+            .map_err(mysql_connection_error);
 
         pool.close().await;
         result?;
@@ -138,7 +138,7 @@ impl MysqlAdapter {
             ))
             .connect_with(options)
             .await
-            .map_err(|e| AppError::Connection(e.to_string()))?;
+            .map_err(mysql_connection_error)?;
 
         let server_version = detect_server_version(&pool, &self.kind).await;
 
@@ -241,9 +241,8 @@ impl MysqlAdapter {
                     .connect_with(options)
                     .await
                     .map_err(|e| {
-                        AppError::Connection(format!(
-                            "Failed to open sub-pool for db {}: {}",
-                            db_name, e
+                        mysql_connection_error(format!(
+                            "Failed to open sub-pool for db {db_name}: {e}"
                         ))
                     })?;
 
@@ -307,7 +306,7 @@ impl MysqlAdapter {
         sqlx::query("SELECT 1")
             .execute(&pool)
             .await
-            .map_err(|e| AppError::Connection(e.to_string()))?;
+            .map_err(mysql_connection_error)?;
         Ok(())
     }
 
@@ -373,6 +372,13 @@ impl MysqlAdapter {
             }
         }
     }
+}
+
+/// Issue #1453 — every driver-sourced connect/ping error routes through the
+/// redacting constructor so a conn-string / URI echo in the driver text can
+/// never surface a plaintext password. PG `pg_connection_error` 패턴 답습.
+fn mysql_connection_error(err: impl std::fmt::Display) -> AppError {
+    AppError::connection_redacted(err.to_string())
 }
 
 async fn detect_server_version(
@@ -577,5 +583,22 @@ mod tests {
         lru.push_back("solo".to_string());
         // current 만 있으면 eviction 후보 없음 (PG 와 동일 정책).
         assert_eq!(select_eviction_target(&lru, "solo"), None);
+    }
+
+    // Reason: issue #1453 — sqlx/driver error text can echo the connection
+    // URI or `password=` pair; the shared connection-error mapper must mask
+    // the secret while keeping the host so the error stays actionable
+    // (2026-07-10).
+    #[test]
+    fn mysql_connection_error_masks_credential_echo() {
+        let message = mysql_connection_error(
+            "cannot connect to mysql://root:S3cretPw1@db.local:3306/app password=S3cretPw1",
+        )
+        .to_string();
+        assert!(
+            !message.contains("S3cretPw1"),
+            "leaked plaintext credential: {message}"
+        );
+        assert!(message.contains("db.local:3306"));
     }
 }
