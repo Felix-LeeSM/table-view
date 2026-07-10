@@ -12,6 +12,7 @@ import {
   openNewQueryTab,
   runQuery,
   selectDatabaseType,
+  smokeFixtureRoot,
   step,
   switchToLauncherWindow,
   switchToWorkspaceWindow,
@@ -28,8 +29,7 @@ describe("SQLite file workflow smoke", () => {
   it("covers file create/open, browse, read query, DML, row edit, and guardrail rejection", async () => {
     const dataDir = testDataDir();
     const sqlitePath = resolve(
-      dataDir,
-      "fixtures",
+      smokeFixtureRoot(dataDir),
       "sqlite",
       "table_view_e2e.sqlite",
     );
@@ -195,9 +195,9 @@ describe("SQLite file workflow smoke", () => {
       await (await $("button=Test Connection")).click();
       await waitForElementTextAll(
         dialog,
-        ["internal app SQLite state"],
+        ["internal app data"],
         15000,
-        "internal app SQLite state rejection did not appear",
+        "internal app data path rejection did not appear",
       );
       await (await $("button=Cancel")).click();
       await dialog.waitForDisplayed({ timeout: 10000, reverse: true });

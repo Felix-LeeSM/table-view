@@ -60,6 +60,13 @@ function searchSmokeEnv(value: string | undefined, fallback: string): string {
   return value && value.trim() !== "" ? value : fallback;
 }
 
+// #1449: SQLite connect/create, export/import, and DuckDB file analytics
+// reject any path inside the app data dir, so local-file DB fixtures must
+// live in a sibling `<dataDir>-fixtures` directory, never `<dataDir>/fixtures`.
+export function smokeFixtureRoot(dataDir: string): string {
+  return `${dataDir}-fixtures`;
+}
+
 export async function step<T>(label: string, action: () => Promise<T>) {
   console.log(`[e2e smoke] step: ${label}`);
   return await action();

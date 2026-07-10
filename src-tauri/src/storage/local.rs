@@ -46,49 +46,32 @@ pub fn db_path() -> Result<PathBuf, AppError> {
 }
 
 /// 렌더러가 지정한, Tauri command 가 파일로 쓸 대상 경로를 검증한다. 상대경로
-/// (must be absolute) 와 내부 app SQLite state DB 로 resolve 되는 경로를 거부 —
-/// 침해된 렌더러가 export target 을 빌미로 내부 state 를 overwrite/삭제하지
-/// 못하게 막는다. Issue #1094. sqlite `create_database_file` 가 쓰는
-/// `reject_internal_app_state_path` 와 같은 가드를 재사용한다.
+/// (must be absolute) 와 내부 app 데이터 디렉토리(`app_data_dir()`) 안으로
+/// resolve 되는 경로를 거부 — 침해된 렌더러가 export target 을 빌미로 `.key`
+/// (마스터키) / `connections.json` (암호화 password blob) / `state.db`(+`.bak`·
+/// `-wal` sidecar) 등 내부 credential 을 overwrite/삭제하지 못하게 막는다.
+/// Issue #1094, #1449. sqlite connect/create 와 같은 `reject_internal_app_data_path`
+/// 가드를 재사용한다.
 pub fn validate_export_target_path(path: &Path) -> Result<(), AppError> {
     if !path.is_absolute() {
         return Err(AppError::Validation(
             "Export target path must be absolute".into(),
         ));
     }
-    reject_internal_app_state_path(path)
-}
-
-/// 인자 경로가 내부 app SQLite state DB (`db_path()`) 로 resolve 되면 거부.
-/// direct / normalized (`..`·`.` 정리) / canonical (symlink 해소) 세 방식으로
-/// 비교한다. sqlite connection.rs 와 commands/export 가 공유.
-pub fn reject_internal_app_state_path(path: &Path) -> Result<(), AppError> {
-    let internal = db_path()?;
-    let direct_match = path == internal.as_path();
-    let normalized_match = normalize_absolute_path(path) == normalize_absolute_path(&internal);
-    let canonical_match = match (
-        std::fs::canonicalize(path),
-        std::fs::canonicalize(&internal),
-    ) {
-        (Ok(candidate), Ok(internal)) => candidate == internal,
-        _ => false,
-    };
-
-    if direct_match || normalized_match || canonical_match {
-        return Err(AppError::Validation(
-            "Path cannot target internal app SQLite state".into(),
-        ));
-    }
-    Ok(())
+    reject_internal_app_data_path(path)
 }
 
 /// 인자 경로가 내부 app 데이터 디렉토리(`app_data_dir()`) 안으로 resolve 되면
-/// 거부. `reject_internal_app_state_path` 가 `state.db` 단일 파일만 막는 것과
-/// 달리, 이 가드는 디렉토리 전체를 confinement 한다 — `connections.json`(암호화
-/// 비밀번호 blob) / `.key` / `state.db` 등 지원 확장자를 가진 앱 내부 state 가
-/// DuckDB file analytics source 로 등록돼 exfil 되는 것을 막는다 (Issue #1106).
-/// normalized (`..`·`.` 정리) 와 canonical (symlink 해소) 두 방식으로 디렉토리
-/// 포함 여부를 비교한다 — 호출자는 canonicalize 후 경로를 넘기는 것을 권장.
+/// 거부. `state.db` 단일 파일이 아니라 디렉토리 전체를 confinement 한다 —
+/// `connections.json`(암호화 비밀번호 blob) / `.key`(마스터키) / `state.db`
+/// (+`.bak`·`-wal` sidecar) 등 앱 내부 state 를 export/import/connect/create
+/// target 이나 DuckDB file analytics source 로 삼아 overwrite 하거나 read-exfil
+/// 하는 것을 막는다 (Issue #1106, #1449). export/import/connect/create·file
+/// analytics 가 공유하는 단일 가드. normalized (`..`·`.` 정리) 와 canonical
+/// (symlink 해소) 두 방식으로 디렉토리 포함 여부를 비교한다 — 미존재 target
+/// (신규 export/create) 은 canonicalize 가 실패하므로 normalized 비교가 잡고,
+/// 존재 파일·symlink 는 canonical 비교가 잡는다. 호출자가 미리 canonicalize 해
+/// 넘겨도 무방하다.
 pub fn reject_internal_app_data_path(path: &Path) -> Result<(), AppError> {
     let data_dir = app_data_dir()?;
     let normalized_within =

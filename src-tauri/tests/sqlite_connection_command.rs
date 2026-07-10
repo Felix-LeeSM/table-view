@@ -57,6 +57,12 @@ fn setup() -> TempDir {
     dir
 }
 
+/// #1449 — connect/create 가드가 app data dir 전체를 거부하므로, user DB
+/// 파일 fixture 는 data dir (`setup()` 의 TempDir) 밖의 별도 TempDir 에 둔다.
+fn user_db_dir() -> TempDir {
+    TempDir::new().unwrap()
+}
+
 fn cleanup() {
     std::env::remove_var("TABLE_VIEW_TEST_DATA_DIR");
 }
@@ -89,8 +95,9 @@ fn sqlite_public_wire_preserves_read_only() {
 #[test]
 #[serial]
 fn save_connection_accepts_sqlite_without_host() {
-    let dir = setup();
-    let db_path = dir.path().join("app.sqlite");
+    let _dir = setup();
+    let user_dir = user_db_dir();
+    let db_path = user_dir.path().join("app.sqlite");
     std::fs::File::create(&db_path).unwrap();
 
     let saved = save_connection(SaveConnectionRequest {
@@ -160,10 +167,10 @@ fn save_connection_rejects_internal_app_state_db_path() {
 
     match result {
         Err(AppError::Validation(message)) => {
-            assert!(message.contains("internal app SQLite state"))
+            assert!(message.contains("internal app data directory"))
         }
         other => panic!(
-            "Expected internal app SQLite state validation error, got: {:?}",
+            "Expected internal app data directory validation error, got: {:?}",
             other
         ),
     }
@@ -187,10 +194,10 @@ fn save_connection_rejects_normalized_internal_app_state_db_path_before_file_exi
 
     match result {
         Err(AppError::Validation(message)) => {
-            assert!(message.contains("internal app SQLite state"))
+            assert!(message.contains("internal app data directory"))
         }
         other => panic!(
-            "Expected normalized internal app SQLite state validation error, got: {:?}",
+            "Expected normalized internal app data directory validation error, got: {:?}",
             other
         ),
     }
@@ -201,8 +208,9 @@ fn save_connection_rejects_normalized_internal_app_state_db_path_before_file_exi
 #[tokio::test]
 #[serial]
 async fn test_connection_routes_sqlite_to_adapter() {
-    let dir = setup();
-    let db_path = dir.path().join("app.sqlite");
+    let _dir = setup();
+    let user_dir = user_db_dir();
+    let db_path = user_dir.path().join("app.sqlite");
     create_sqlite_file(&db_path).await;
 
     let result = test_connection(TestConnectionRequest {
@@ -236,10 +244,10 @@ async fn test_connection_rejects_internal_app_state_db_path() {
 
     match result {
         Err(AppError::Validation(message)) => {
-            assert!(message.contains("internal app SQLite state"))
+            assert!(message.contains("internal app data directory"))
         }
         other => panic!(
-            "Expected internal app SQLite state validation error, got: {:?}",
+            "Expected internal app data directory validation error, got: {:?}",
             other
         ),
     }
@@ -250,8 +258,9 @@ async fn test_connection_rejects_internal_app_state_db_path() {
 #[tokio::test]
 #[serial]
 async fn create_sqlite_database_file_creates_new_valid_database() {
-    let dir = setup();
-    let db_path = dir.path().join("created.sqlite");
+    let _dir = setup();
+    let user_dir = user_db_dir();
+    let db_path = user_dir.path().join("created.sqlite");
 
     let created = create_sqlite_database_file(db_path.to_str().unwrap().to_string())
         .await
@@ -275,8 +284,9 @@ async fn create_sqlite_database_file_creates_new_valid_database() {
 #[tokio::test]
 #[serial]
 async fn create_sqlite_database_file_rejects_existing_file() {
-    let dir = setup();
-    let db_path = dir.path().join("existing.sqlite");
+    let _dir = setup();
+    let user_dir = user_db_dir();
+    let db_path = user_dir.path().join("existing.sqlite");
     create_sqlite_file(&db_path).await;
 
     let result = create_sqlite_database_file(db_path.to_str().unwrap().to_string()).await;
@@ -292,8 +302,9 @@ async fn create_sqlite_database_file_rejects_existing_file() {
 #[tokio::test]
 #[serial]
 async fn create_sqlite_database_file_rejects_missing_parent() {
-    let dir = setup();
-    let db_path = dir.path().join("missing").join("app.sqlite");
+    let _dir = setup();
+    let user_dir = user_db_dir();
+    let db_path = user_dir.path().join("missing").join("app.sqlite");
 
     let result = create_sqlite_database_file(db_path.to_str().unwrap().to_string()).await;
 

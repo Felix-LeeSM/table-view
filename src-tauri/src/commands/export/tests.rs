@@ -1166,7 +1166,7 @@ async fn write_text_file_export_inner_invalid_path_cleans_up_and_propagates_io_e
 // 작성 이유 (2026-07-03): export 가 `File::create(target)` 로 기존 파일을
 // 즉시 truncate 하고 실패/취소 시 그 경로를 remove_file → 원본 파괴. 아울러
 // 렌더러 지정 target_path 에 경로 검증이 없어 XSS 시 내부 state DB overwrite
-// 가능. temp+rename atomic write + is_absolute/reject_internal_app_state_path
+// 가능. temp+rename atomic write + is_absolute/reject_internal_app_data_path
 // 가드로 fix. 아래 3 test 는 fix 전 RED.
 
 use serial_test::serial;
@@ -1243,6 +1243,53 @@ fn write_export_rejects_relative_and_internal_state_paths() {
         !state_db.exists(),
         "guard must reject before creating state.db"
     );
+
+    std::env::remove_var("TABLE_VIEW_TEST_DATA_DIR");
+}
+
+// [#1449] wave 27 보안 2차 P1-1. export target 가드가 `state.db` exact-match 만
+// 막아 인접 credential 파일을 덮어쓸 수 있었다 (`.key` 교체 = 마스터키 탈취
+// 동등, `connections.json` = 암호화 password blob). 가드를 app_data_dir 전체
+// confine (`reject_internal_app_data_path`) 으로 넓혀 fix. fix 전 아래 reject
+// assertion 은 RED — 네 경로 모두 export 가 통과했다.
+#[test]
+#[serial]
+fn write_export_rejects_internal_app_data_paths() {
+    let dir = TempDir::new().unwrap();
+    std::env::set_var("TABLE_VIEW_TEST_DATA_DIR", dir.path());
+
+    for name in [".key", "connections.json", "state.db.bak", "state.db-wal"] {
+        let target = dir.path().join(name);
+        let err = write_export(
+            ExportFormat::Csv,
+            &target,
+            &["i".into()],
+            &[vec![json!(1)]],
+            &table_ctx(),
+            None,
+        )
+        .unwrap_err();
+        assert!(
+            matches!(err, AppError::Validation(_)),
+            "{name} must be rejected, got: {err:?}"
+        );
+        assert!(!target.exists(), "{name} must not be written");
+    }
+
+    // 정상 회귀: app_data_dir 밖의 target 은 계속 허용돼야 한다 (confine 은
+    // 내부 디렉토리 차단이지 외부 차단이 아님).
+    let outside = TempDir::new().unwrap();
+    let ok_target = outside.path().join("report.csv");
+    write_export(
+        ExportFormat::Csv,
+        &ok_target,
+        &["i".into()],
+        &[vec![json!(1)]],
+        &table_ctx(),
+        None,
+    )
+    .unwrap();
+    assert!(ok_target.exists(), "external target must still be written");
 
     std::env::remove_var("TABLE_VIEW_TEST_DATA_DIR");
 }

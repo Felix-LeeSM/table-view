@@ -43,6 +43,7 @@ afterEach(() => {
   if (originalEnv === undefined) delete process.env.TABLE_VIEW_TEST_DATA_DIR;
   else process.env.TABLE_VIEW_TEST_DATA_DIR = originalEnv;
   rmSync(tempDir, { recursive: true, force: true });
+  rmSync(`${tempDir}-fixtures`, { recursive: true, force: true });
 });
 
 // Replicate Rust `crypto::decrypt` (AES-256-GCM, 12-byte nonce
@@ -143,9 +144,10 @@ describe("connections — storage envelope contract (Rust crypto::decrypt compat
         port: 0,
         user: "",
         password: "",
+        // #1449: fixture DB files must resolve OUTSIDE the app data dir
+        // (tempDir) — the backend rejects internal paths on connect.
         database: resolve(
-          tempDir,
-          "fixtures",
+          `${tempDir}-fixtures`,
           "sqlite",
           "table_view_e2e.sqlite",
         ),

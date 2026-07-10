@@ -2,6 +2,8 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { upsertConnections } from "./fixtures/connections.js";
+import { duckdbEnvPath } from "./fixtures/duckdb.js";
+import { sqliteEnvPath } from "./fixtures/sqlite.js";
 import { loadSpec } from "./fixtures/spec.js";
 import { isSupportedDatabaseType } from "../src/types/connection.js";
 import {
@@ -68,16 +70,16 @@ async function verifyProfile(profile: "development" | "e2e"): Promise<void> {
     const oracle = fixtureConnections.find(
       (connection) => connection.db_type === "oracle",
     );
+    // #1449: SQLite/DuckDB fixtures live in a `<dataDir>-fixtures` sibling
+    // (outside the app data dir the connect guard rejects). Reuse the exact
+    // env-path helpers `upsertConnections` writes with (connections.ts), so
+    // the gate can never drift from where fixtures actually land.
     const sqlitePath = resolve(
-      dataDir,
-      "fixtures",
-      "sqlite",
+      sqliteEnvPath().directory,
       spec.profileSpec.database.sqlite!,
     );
     const duckdbPath = resolve(
-      dataDir,
-      "fixtures",
-      "duckdb",
+      duckdbEnvPath().directory,
       spec.profileSpec.database.duckdb!,
     );
 
