@@ -145,6 +145,21 @@ export function CollectionRow({
   const hasOptions = Object.keys(collection.options).length > 0;
   const hasIdIndex = collection.id_index !== null;
   const showType = collection.collection_type !== "collection";
+  // #1140 — expose every badge (type / read-only / options / _id-index / doc
+  // count) to SR via aria-describedby so they are announced after the name,
+  // instead of being masked by the button's aria-label override. The
+  // identifying aria-label stays (203 test queries + stable SR name depend on
+  // it); the badges live in the description, which is the right semantic home
+  // for per-row metadata. Decorative FileText icon is aria-hidden.
+  const describedBy = [
+    showType ? `${treeKey}-type` : null,
+    collection.read_only ? `${treeKey}-ro` : null,
+    hasOptions ? `${treeKey}-opt` : null,
+    hasIdIndex ? `${treeKey}-idx` : null,
+    collection.document_count != null ? `${treeKey}-docs` : null,
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   return (
     <ContextMenu>
@@ -163,6 +178,7 @@ export function CollectionRow({
           aria-setsize={setSize}
           aria-posinset={posInSet}
           aria-label={t("collectionRowAria", { name: collection.name })}
+          aria-describedby={describedBy || undefined}
           data-tree-key={treeKey}
           tabIndex={tabIndex}
           onFocus={onFocus}
@@ -177,13 +193,18 @@ export function CollectionRow({
             if (e.key === "Enter") onOpen();
           }}
         >
-          <FileText size={12} className="shrink-0 text-muted-foreground" />
+          <FileText
+            size={12}
+            className="shrink-0 text-muted-foreground"
+            aria-hidden
+          />
           <span className="min-w-0 truncate text-sm leading-5">
             {collection.name}
           </span>
           <span className="ml-auto flex shrink-0 items-center gap-1 text-3xs text-muted-foreground">
             {showType && (
               <span
+                id={`${treeKey}-type`}
                 aria-label={t("collectionTypeAria", {
                   name: collection.name,
                   type: collection.collection_type,
@@ -198,6 +219,7 @@ export function CollectionRow({
             )}
             {collection.read_only && (
               <span
+                id={`${treeKey}-ro`}
                 aria-label={t("collectionReadOnlyAria", {
                   name: collection.name,
                 })}
@@ -209,6 +231,7 @@ export function CollectionRow({
             )}
             {hasOptions && (
               <span
+                id={`${treeKey}-opt`}
                 aria-label={t("collectionOptionsAria", {
                   name: collection.name,
                 })}
@@ -220,6 +243,7 @@ export function CollectionRow({
             )}
             {hasIdIndex && (
               <span
+                id={`${treeKey}-idx`}
                 aria-label={t("collectionIdIndexAria", {
                   name: collection.name,
                 })}
@@ -231,6 +255,7 @@ export function CollectionRow({
             )}
             {collection.document_count != null && (
               <span
+                id={`${treeKey}-docs`}
                 aria-label={t("collectionDocCountAria", {
                   name: collection.name,
                   count: collection.document_count,

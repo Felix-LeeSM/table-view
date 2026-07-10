@@ -41,6 +41,30 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
     }
   }, [measured, items, focusItem]);
 
+  // #1140 — capture the trigger (whatever owned focus before the menu opened)
+  // and return focus to it on close. Without this, Escape / outside-click /
+  // item-select drops focus on <body>; Radix menus restore by default, this
+  // hand-rolled menu did not. Guard: only restore when focus is still inside
+  // the unmounting menu or has already hit <body> — never steal focus from an
+  // item onClick that legitimately moved it (e.g. an edit input). The refs
+  // are snapshotted into locals at open so the cleanup never reads `.current`
+  // (react-hooks/exhaustive-deps).
+  const triggerRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    const trigger = document.activeElement as HTMLElement | null;
+    triggerRef.current = trigger;
+    const menu = ref.current;
+    return () => {
+      const active = document.activeElement;
+      const stillOnMenu =
+        active != null && menu != null && menu.contains(active);
+      if (stillOnMenu || active === document.body) {
+        trigger?.focus();
+      }
+    };
+    // ponytail: mount/unmount only — refs/activeElement are read live.
+  }, []);
+
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) {
