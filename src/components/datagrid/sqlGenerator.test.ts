@@ -93,12 +93,16 @@ describe("generateSql — UPDATE tri-state (null vs empty string vs text)", () =
 });
 
 describe("generateSql — INSERT null vs empty string", () => {
-  // Reason: #1433 잠금 갱신 — default/identity 메타가 없는 컬럼은 미입력이어도
-  // 기존 계약(명시 NULL) 유지. 생략은 default/identity 컬럼에만 적용 (2026-07-10)
-  it("emits NULL for null cells and '' for empty-string cells in new rows", () => {
+  // Reason: #1433 잠금 갱신 — default/identity 메타가 없는 컬럼은 미입력
+  // (undefined sentinel)이어도 기존 계약(명시 NULL) 유지. 생략은
+  // default/identity 컬럼에만 적용 (2026-07-10)
+  it("emits NULL for null/untouched cells and '' for empty-string cells in new rows", () => {
     const newRows = [
       [null, ""],
       [3, "x"],
+      // add-row seed — untouched cells are `undefined`; plain columns
+      // (no default, not identity) still emit explicit NULL.
+      [undefined, undefined],
     ];
     const statements = generateSql(
       BASE_DATA,
@@ -109,12 +113,15 @@ describe("generateSql — INSERT null vs empty string", () => {
       newRows,
     );
 
-    expect(statements).toHaveLength(2);
+    expect(statements).toHaveLength(3);
     expect(statements[0]).toBe(
       "INSERT INTO public.users (id, name) VALUES (NULL, '');",
     );
     expect(statements[1]).toBe(
       "INSERT INTO public.users (id, name) VALUES (3, 'x');",
+    );
+    expect(statements[2]).toBe(
+      "INSERT INTO public.users (id, name) VALUES (NULL, NULL);",
     );
   });
 });
@@ -164,7 +171,8 @@ describe("generateSql — INSERT omits untouched default/identity columns (#1433
   };
 
   // Reason: #1433 시나리오 B — serial/identity PK 미입력 시 명시 NULL이
-  // NOT NULL 위반을 일으켜 행 추가 전면 불가. 컬럼 자체를 생략해야 한다 (2026-07-10)
+  // NOT NULL 위반을 일으켜 행 추가 전면 불가. 컬럼 자체를 생략해야 한다.
+  // 미입력 = add-row seed 의 `undefined` sentinel (2026-07-10)
   it("omits an untouched identity column so the sequence assigns the value", () => {
     const statements = generateSql(
       IDENTITY_DEFAULT_DATA,
@@ -172,7 +180,7 @@ describe("generateSql — INSERT omits untouched default/identity columns (#1433
       "users",
       new Map(),
       new Set(),
-      [[null, "pending", "Alice"]],
+      [[undefined, "pending", "Alice"]],
     );
 
     expect(statements).toEqual([
@@ -189,13 +197,53 @@ describe("generateSql — INSERT omits untouched default/identity columns (#1433
       "users",
       new Map(),
       new Set(),
-      [[7, null, null]],
+      [[7, undefined, undefined]],
     );
 
     // id는 입력됨 → 유지. status는 default 있음 + 미입력 → 생략.
     // name은 default/identity 없음 + 미입력 → 기존 계약대로 명시 NULL.
     expect(statements).toEqual([
       "INSERT INTO public.users (id, name) VALUES (7, NULL);",
+    ]);
+  });
+
+  // Reason: #1433 리뷰 B1 — Duplicate Row(useDataGridEdit.handleDuplicateRow)와
+  // undo 재-INSERT(buildRestageSnapshot의 DELETE reversal)는 원본 행을 verbatim
+  // 복사하므로 실제 NULL 값이 `null`로 유입된다. 이 NULL은 "미입력"이 아니라
+  // 데이터다 — 생략하면 server default('active')로 silent 치환되는 데이터
+  // 유실 회귀. 명시 NULL로 emit해야 한다 (2026-07-10)
+  it("keeps a real NULL (duplicate row / undo re-INSERT) as explicit NULL on a default column", () => {
+    const statements = generateSql(
+      IDENTITY_DEFAULT_DATA,
+      "public",
+      "users",
+      new Map(),
+      new Set(),
+      // Duplicate/restage shape: identity PK carries the source row's real
+      // value, the default column carries a real NULL.
+      [[42, null, "Bob"]],
+    );
+
+    expect(statements).toEqual([
+      "INSERT INTO public.users (id, status, name) VALUES (42, NULL, 'Bob');",
+    ]);
+  });
+
+  // Reason: #1433 리뷰 B1 — identity 컬럼의 실 NULL도 미입력과 구분되어야
+  // 한다. 생략이 아니라 명시 NULL emit — DB가 NOT NULL 위반을 표면화해서
+  // 사용자가 알 수 있게 (silent 치환 금지) (2026-07-10)
+  it("keeps a real NULL on an identity column as explicit NULL (no silent omission)", () => {
+    const statements = generateSql(
+      IDENTITY_DEFAULT_DATA,
+      "public",
+      "users",
+      new Map(),
+      new Set(),
+      [[null, "archived", "Carol"]],
+    );
+
+    expect(statements).toEqual([
+      "INSERT INTO public.users (id, status, name) VALUES (NULL, 'archived', 'Carol');",
     ]);
   });
 
@@ -206,7 +254,7 @@ describe("generateSql — INSERT omits untouched default/identity columns (#1433
       ...IDENTITY_DEFAULT_DATA,
       columns: IDENTITY_DEFAULT_DATA.columns.slice(0, 2),
     };
-    const newRows = [[null, null]];
+    const newRows = [[undefined, undefined]];
 
     const pg = generateSql(
       allDefaultData,

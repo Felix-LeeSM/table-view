@@ -339,7 +339,10 @@ export function useDataGridEdit({
     if (!data) return;
     // Sprint 249: deliberate user action — always snapshot.
     pushSnapshot();
-    const emptyRow = data.columns.map(() => null);
+    // #1433 — `undefined` is the "untouched" sentinel: the SQL generator
+    // omits untouched cells on default/identity columns. `null` would be
+    // indistinguishable from a real NULL (Duplicate Row / undo re-INSERT).
+    const emptyRow = data.columns.map(() => undefined);
     setPendingNewRows((prev) => [...prev, emptyRow]);
     // Promote preview tab on row add
     if (activeTabId) promoteTab(activeTabId);
@@ -389,7 +392,10 @@ export function useDataGridEdit({
     const sortedIds = [...selectedRowIds].sort((a, b) => a - b);
     const newRows = sortedIds.map((rowIdx) => {
       const row = data.rows[rowIdx];
-      return row ? [...(row as unknown[])] : data.columns.map(() => null);
+      // #1433 — verbatim copy keeps real NULLs as `null` (emitted as explicit
+      // NULL); the missing-row fallback seeds `undefined` (untouched) like
+      // handleAddRow.
+      return row ? [...(row as unknown[])] : data.columns.map(() => undefined);
     });
     setPendingNewRows((prev) => [...prev, ...newRows]);
     clearSelection();

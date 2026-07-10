@@ -562,12 +562,17 @@ export function generateSqlWithKeys(
   // row, which is enough for the user to locate the failed insert. Per-cell
   // coercion errors keep their own granular keys.
   //
-  // #1433 — untouched cells (`null`/`undefined`, i.e. never edited) on a
-  // column that carries a server default or is identity/auto-increment are
-  // OMITTED from the column list so the server assigns the value. Emitting
-  // an explicit NULL there either violates NOT NULL (serial/identity PK) or
-  // silently overrides the default. Cells the user actually filled — and
-  // untouched cells on plain columns — keep the existing explicit emit.
+  // #1433 — untouched cells on a column that carries a server default or is
+  // identity/auto-increment are OMITTED from the column list so the server
+  // assigns the value. Emitting an explicit NULL there either violates
+  // NOT NULL (serial/identity PK) or silently overrides the default.
+  //
+  // "Untouched" is strictly `undefined` (the add-row seed sentinel). A `null`
+  // cell is REAL data — Duplicate Row and the undo re-INSERT (delete restage)
+  // copy source rows verbatim, so their NULLs must stay explicit NULL or a
+  // restored row would be silently rewritten by the server default. Cells the
+  // user actually filled — and untouched cells on plain columns — keep the
+  // existing explicit emit.
   pendingNewRows.forEach((newRow, newRowIdx) => {
     const cells = newRow as unknown[];
     const colNames: string[] = [];
@@ -575,7 +580,7 @@ export function generateSqlWithKeys(
     let rowHasError = false;
     data.columns.forEach((col, colIdx) => {
       const raw = cells[colIdx];
-      if (raw == null && (col.default_value != null || col.is_identity)) {
+      if (raw === undefined && (col.default_value != null || col.is_identity)) {
         return;
       }
       const normalized = normalizeNewRowCell(raw);
