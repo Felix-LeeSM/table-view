@@ -230,6 +230,7 @@ run_ci_workflow_gates() {
 	run_step "platform-smoke-canary-workflow-cache" bash scripts/hooks/test-platform-smoke-canary-workflow.sh
 	run_step "homebrew-cask-workflow" bash scripts/hooks/test-homebrew-cask-workflow.sh
 	run_step "release-workflow" bash scripts/hooks/test-release-workflow.sh
+	run_step "updater-sig-verify-tests" bash scripts/hooks/test-verify-updater-sigs.sh
 	run_step "auto-tag-release-workflow" bash scripts/hooks/test-auto-tag-release-workflow.sh
 }
 

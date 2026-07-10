@@ -66,4 +66,11 @@ assert_contains "$(cat "$TAURI_CONF")" '"signingIdentity": "-"' "macOS ad-hoc bu
 # instead of shipping a "damaged" bundle to users.
 assert_contains "$workflow_text" "Verify macOS bundle signature" "macOS bundle signature verification step"
 
+# Regression (#1430): release.yml must verify every updater .sig against the
+# pubkey committed in tauri.conf.json, so a private-key/pubkey drift fails the
+# release run instead of silently breaking auto-update for every client.
+assert_contains "$workflow_text" "Verify updater signatures against committed pubkey" "updater signature gate step"
+assert_contains "$workflow_text" "scripts/release/verify-updater-sigs.mjs" "updater signature gate script"
+assert_contains "$workflow_text" 'ARTIFACT_PATHS: ${{ steps.tauri.outputs.artifactPaths }}' "updater signature gate artifact input"
+
 echo "PASS: Release workflow check"
