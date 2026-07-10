@@ -9,6 +9,7 @@ vi.mock("@tauri-apps/api/core", () => ({
 }));
 
 import {
+  EXPORT_IPC_CHUNK_ROWS,
   exportGridRows,
   exportSchemaDump,
   writeTextFileExport,
@@ -115,6 +116,114 @@ describe("export Tauri wrappers", () => {
       targetPath: "/tmp/schema.sql",
       content: "CREATE TABLE users(id int);",
     });
+  });
+
+  it("keeps exports at the chunk threshold on the single-shot command (#1443)", async () => {
+    const context: ExportContext = { kind: "table", schema: "main", name: "t" };
+    const rows = Array.from({ length: EXPORT_IPC_CHUNK_ROWS }, (_, i) => [i]);
+    invokeMock.mockResolvedValueOnce({
+      rows_written: rows.length,
+      bytes_written: 1,
+    });
+
+    await exportGridRows("csv", "/tmp/t.csv", ["id"], rows, context);
+
+    expect(invokeMock).toHaveBeenCalledTimes(1);
+    expect(invokeMock.mock.calls[0]?.[0]).toBe("export_grid_rows");
+  });
+
+  it("streams large exports through begin/chunk/finish sessions (#1443)", async () => {
+    const context: ExportContext = { kind: "table", schema: "main", name: "t" };
+    const rows = Array.from(
+      { length: EXPORT_IPC_CHUNK_ROWS * 2 + 1 },
+      (_, i) => [i, "v"],
+    );
+    invokeMock.mockImplementation(async (cmd: unknown) => {
+      if (cmd === "export_grid_begin") return "sess-1";
+      if (cmd === "export_grid_finish")
+        return { rows_written: rows.length, bytes_written: 42 };
+      return undefined;
+    });
+
+    const summary = await exportGridRows(
+      "csv",
+      "/tmp/big.csv",
+      ["id", "v"],
+      rows,
+      context,
+      "exp-9",
+    );
+
+    expect(invokeMock.mock.calls.map((c) => c[0])).toEqual([
+      "export_grid_begin",
+      "export_grid_chunk",
+      "export_grid_chunk",
+      "export_grid_chunk",
+      "export_grid_finish",
+    ]);
+    expect(invokeMock.mock.calls[0]?.[1]).toEqual({
+      format: "csv",
+      targetPath: "/tmp/big.csv",
+      headers: ["id", "v"],
+      context,
+      exportId: "exp-9",
+    });
+    const chunkArgs = (i: number) =>
+      invokeMock.mock.calls[i]?.[1] as { sessionId: string; rows: unknown[][] };
+    expect(chunkArgs(1).sessionId).toBe("sess-1");
+    expect(chunkArgs(1).rows).toHaveLength(EXPORT_IPC_CHUNK_ROWS);
+    expect(chunkArgs(2).rows).toHaveLength(EXPORT_IPC_CHUNK_ROWS);
+    expect(chunkArgs(3).rows).toHaveLength(1);
+    expect(invokeMock.mock.calls[4]?.[1]).toEqual({ sessionId: "sess-1" });
+    expect(summary.rows_written).toBe(rows.length);
+  });
+
+  it("serializes BigInt / Decimal cells per chunk so late rows stay IPC-safe (#1443)", async () => {
+    const context: ExportContext = { kind: "table", schema: "main", name: "t" };
+    const rows: unknown[][] = Array.from(
+      { length: EXPORT_IPC_CHUNK_ROWS + 1 },
+      (_, i) => [i],
+    );
+    rows[rows.length - 1] = [9223372036854775807n, new Decimal("0.10")];
+    invokeMock.mockImplementation(async (cmd: unknown) => {
+      if (cmd === "export_grid_begin") return "sess-2";
+      if (cmd === "export_grid_finish")
+        return { rows_written: rows.length, bytes_written: 1 };
+      return undefined;
+    });
+
+    await exportGridRows("csv", "/tmp/big.csv", ["id"], rows, context);
+
+    const lastChunk = invokeMock.mock.calls[2]?.[1] as { rows: unknown[][] };
+    expect(lastChunk.rows).toEqual([["9223372036854775807", "0.1"]]);
+    // Every chunk arg must survive the real IPC codec path.
+    for (const call of invokeMock.mock.calls) {
+      expect(() => JSON.stringify(call[1])).not.toThrow();
+    }
+  });
+
+  it("aborts the session and rethrows when a chunk write fails (#1443)", async () => {
+    const context: ExportContext = { kind: "table", schema: "main", name: "t" };
+    const rows = Array.from({ length: EXPORT_IPC_CHUNK_ROWS + 1 }, (_, i) => [
+      i,
+    ]);
+    invokeMock.mockImplementation(async (cmd: unknown) => {
+      if (cmd === "export_grid_begin") return "sess-3";
+      if (cmd === "export_grid_chunk")
+        throw new Error("Validation error: Export cancelled");
+      return undefined;
+    });
+
+    await expect(
+      exportGridRows("csv", "/tmp/big.csv", ["id"], rows, context, "exp-c"),
+    ).rejects.toThrow(/cancelled/i);
+
+    expect(invokeMock.mock.calls.map((c) => c[0])).toEqual([
+      "export_grid_begin",
+      "export_grid_chunk",
+      "export_grid_abort",
+    ]);
+    expect(invokeMock.mock.calls[2]?.[1]).toEqual({ sessionId: "sess-3" });
   });
 
   it("exports schema dumps with ordered table metadata and null exportId default", async () => {

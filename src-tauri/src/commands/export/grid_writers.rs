@@ -12,7 +12,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::error::AppError;
 
-use super::ExportContext;
+use super::{ExportContext, ExportFormat};
 
 pub(super) fn require_sql_source_table(context: &ExportContext) -> Result<(), AppError> {
     match context {
@@ -38,71 +38,191 @@ pub(super) fn check_cancel(cancel: Option<&CancellationToken>) -> Result<(), App
     Ok(())
 }
 
-// ---------------------------------------------------------------- CSV
+// ------------------------------------------------------ streaming state
 
-pub(super) fn write_csv<W: Write>(
-    writer: &mut W,
-    headers: &[String],
-    rows: &[Vec<JsonValue>],
-    cancel: Option<&CancellationToken>,
-) -> Result<u64, AppError> {
-    // UTF-8 BOM prefix (Excel compatibility). The `csv` crate does not
-    // emit a BOM itself, so write it directly before handing the writer
-    // off to the CSV serializer.
-    let mut counting = ByteCounter::new(writer);
-    counting
-        .write_all(b"\xEF\xBB\xBF")
-        .map_err(AppError::from)?;
-
-    {
-        let mut csv_w = csv::WriterBuilder::new()
-            .terminator(csv::Terminator::CRLF)
-            .from_writer(&mut counting);
-        csv_w.write_record(headers).map_err(csv_to_app)?;
-        for row in rows {
-            check_cancel(cancel)?;
-            let cells: Vec<String> = row.iter().map(json_to_cell_string).collect();
-            csv_w.write_record(cells.iter()).map_err(csv_to_app)?;
-        }
-        csv_w.flush().map_err(AppError::from)?;
-    }
-
-    Ok(counting.bytes())
+/// Issue #1443 — per-format streaming writer state shared by the single-shot
+/// `write_export` path and the chunked-session IPC path (`export/session.rs`).
+/// Both compose `begin` → `write_rows`* → `finish`, so the two entry points
+/// emit byte-identical output by construction.
+pub(super) struct GridStreamState {
+    format: ExportFormat,
+    /// Precomputed `INSERT INTO … VALUES ` prefix (SQL format only).
+    sql_prefix: String,
+    /// JSON array separator state — true until the first row is written.
+    json_first: bool,
 }
 
-// ---------------------------------------------------------------- TSV
-
-pub(super) fn write_tsv<W: Write>(
-    writer: &mut W,
-    headers: &[String],
-    rows: &[Vec<JsonValue>],
-    cancel: Option<&CancellationToken>,
-) -> Result<u64, AppError> {
-    let mut counting = ByteCounter::new(writer);
-    let header_line = headers
-        .iter()
-        .map(|h| sanitize_tsv_cell(h))
-        .collect::<Vec<_>>()
-        .join("\t");
-    counting
-        .write_all(header_line.as_bytes())
-        .map_err(AppError::from)?;
-    counting.write_all(b"\n").map_err(AppError::from)?;
-
-    for row in rows {
-        check_cancel(cancel)?;
-        let line = row
-            .iter()
-            .map(|v| sanitize_tsv_cell(&json_to_cell_string(v)))
-            .collect::<Vec<_>>()
-            .join("\t");
-        counting
-            .write_all(line.as_bytes())
-            .map_err(AppError::from)?;
-        counting.write_all(b"\n").map_err(AppError::from)?;
+impl GridStreamState {
+    /// Write the format preamble (CSV BOM + header record / TSV header line /
+    /// JSON `[`) and capture per-format state. Returns bytes written.
+    pub(super) fn begin<W: Write>(
+        writer: &mut W,
+        format: ExportFormat,
+        headers: &[String],
+        context: &ExportContext,
+    ) -> Result<(Self, u64), AppError> {
+        let mut counting = ByteCounter::new(writer);
+        let mut sql_prefix = String::new();
+        match format {
+            ExportFormat::Csv => {
+                // UTF-8 BOM prefix (Excel compatibility). The `csv` crate does
+                // not emit a BOM itself, so write it directly before handing
+                // the writer off to the CSV serializer.
+                counting
+                    .write_all(b"\xEF\xBB\xBF")
+                    .map_err(AppError::from)?;
+                let mut csv_w = csv::WriterBuilder::new()
+                    .terminator(csv::Terminator::CRLF)
+                    .from_writer(&mut counting);
+                csv_w.write_record(headers).map_err(csv_to_app)?;
+                csv_w.flush().map_err(AppError::from)?;
+            }
+            ExportFormat::Tsv => {
+                let header_line = headers
+                    .iter()
+                    .map(|h| sanitize_tsv_cell(h))
+                    .collect::<Vec<_>>()
+                    .join("\t");
+                counting
+                    .write_all(header_line.as_bytes())
+                    .map_err(AppError::from)?;
+                counting.write_all(b"\n").map_err(AppError::from)?;
+            }
+            ExportFormat::Sql => {
+                let (schema, table) = match context {
+                    ExportContext::Table { schema, name } => (schema.as_str(), name.as_str()),
+                    ExportContext::Query {
+                        source_table: Some(src),
+                    } => (src.schema.as_str(), src.name.as_str()),
+                    // `require_sql_source_table` preflight already rejected
+                    // these; keep a defensive error instead of unreachable!()
+                    // since the session path calls `begin` from a command.
+                    _ => {
+                        return Err(AppError::Validation(
+                            "SQL export requires a single-table SELECT (source_table missing)"
+                                .into(),
+                        ))
+                    }
+                };
+                let cols = headers
+                    .iter()
+                    .map(|h| quote_sql_identifier(h))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                sql_prefix = format!(
+                    "INSERT INTO {}.{} ({}) VALUES ",
+                    quote_sql_identifier(schema),
+                    quote_sql_identifier(table),
+                    cols
+                );
+            }
+            ExportFormat::Json => {
+                counting.write_all(b"[").map_err(AppError::from)?;
+            }
+        }
+        Ok((
+            Self {
+                format,
+                sql_prefix,
+                json_first: true,
+            },
+            counting.bytes(),
+        ))
     }
 
-    Ok(counting.bytes())
+    /// Append a batch of rows in the session's format. Returns bytes written.
+    /// Checks `cancel` per row, mirroring the pre-#1443 single-shot writers.
+    pub(super) fn write_rows<W: Write>(
+        &mut self,
+        writer: &mut W,
+        rows: &[Vec<JsonValue>],
+        cancel: Option<&CancellationToken>,
+    ) -> Result<u64, AppError> {
+        let mut counting = ByteCounter::new(writer);
+        match self.format {
+            ExportFormat::Csv => {
+                let mut csv_w = csv::WriterBuilder::new()
+                    .terminator(csv::Terminator::CRLF)
+                    .from_writer(&mut counting);
+                for row in rows {
+                    check_cancel(cancel)?;
+                    let cells: Vec<String> = row.iter().map(json_to_cell_string).collect();
+                    csv_w.write_record(cells.iter()).map_err(csv_to_app)?;
+                }
+                csv_w.flush().map_err(AppError::from)?;
+            }
+            ExportFormat::Tsv => {
+                for row in rows {
+                    check_cancel(cancel)?;
+                    let line = row
+                        .iter()
+                        .map(|v| sanitize_tsv_cell(&json_to_cell_string(v)))
+                        .collect::<Vec<_>>()
+                        .join("\t");
+                    counting
+                        .write_all(line.as_bytes())
+                        .map_err(AppError::from)?;
+                    counting.write_all(b"\n").map_err(AppError::from)?;
+                }
+            }
+            ExportFormat::Sql => {
+                for row in rows {
+                    check_cancel(cancel)?;
+                    let values = row
+                        .iter()
+                        .map(json_to_sql_literal)
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    counting
+                        .write_all(self.sql_prefix.as_bytes())
+                        .map_err(AppError::from)?;
+                    counting
+                        .write_all(b"(")
+                        .and_then(|_| counting.write_all(values.as_bytes()))
+                        .and_then(|_| counting.write_all(b");\n"))
+                        .map_err(AppError::from)?;
+                }
+            }
+            ExportFormat::Json => {
+                // Mongo collection rows arrive as a single-cell row carrying
+                // the document's JSON (Extended JSON v2 Relaxed already from
+                // the BSON layer in `db/mongodb.rs`); pretty-print pass-through.
+                for row in rows {
+                    check_cancel(cancel)?;
+                    if !self.json_first {
+                        counting.write_all(b",\n").map_err(AppError::from)?;
+                    } else {
+                        counting.write_all(b"\n").map_err(AppError::from)?;
+                        self.json_first = false;
+                    }
+                    let doc = row.first().cloned().unwrap_or(JsonValue::Null);
+                    let pretty = serde_json::to_string_pretty(&relax_extended_json(doc))
+                        .map_err(AppError::from)?;
+                    // indent two spaces — to_string_pretty already uses
+                    // two-space indent.
+                    for line in pretty.lines() {
+                        counting.write_all(b"  ").map_err(AppError::from)?;
+                        counting
+                            .write_all(line.as_bytes())
+                            .map_err(AppError::from)?;
+                        counting.write_all(b"\n").map_err(AppError::from)?;
+                    }
+                }
+            }
+        }
+        Ok(counting.bytes())
+    }
+
+    /// Write the format epilogue (JSON `]`). Returns bytes written.
+    pub(super) fn finish<W: Write>(&mut self, writer: &mut W) -> Result<u64, AppError> {
+        match self.format {
+            ExportFormat::Json => {
+                writer.write_all(b"]\n").map_err(AppError::from)?;
+                Ok(2)
+            }
+            _ => Ok(0),
+        }
+    }
 }
 
 pub(super) fn sanitize_tsv_cell(s: &str) -> String {
@@ -111,54 +231,6 @@ pub(super) fn sanitize_tsv_cell(s: &str) -> String {
 }
 
 // ------------------------------------------------------------ SQL INSERT
-
-pub(super) fn write_sql_insert<W: Write>(
-    writer: &mut W,
-    headers: &[String],
-    rows: &[Vec<JsonValue>],
-    context: &ExportContext,
-    cancel: Option<&CancellationToken>,
-) -> Result<u64, AppError> {
-    let (schema, table) = match context {
-        ExportContext::Table { schema, name } => (schema.as_str(), name.as_str()),
-        ExportContext::Query {
-            source_table: Some(src),
-        } => (src.schema.as_str(), src.name.as_str()),
-        _ => unreachable!("require_sql_source_table guard already ran"),
-    };
-
-    let mut counting = ByteCounter::new(writer);
-    let cols = headers
-        .iter()
-        .map(|h| quote_sql_identifier(h))
-        .collect::<Vec<_>>()
-        .join(", ");
-    let prefix = format!(
-        "INSERT INTO {}.{} ({}) VALUES ",
-        quote_sql_identifier(schema),
-        quote_sql_identifier(table),
-        cols
-    );
-
-    for row in rows {
-        check_cancel(cancel)?;
-        let values = row
-            .iter()
-            .map(json_to_sql_literal)
-            .collect::<Vec<_>>()
-            .join(", ");
-        counting
-            .write_all(prefix.as_bytes())
-            .map_err(AppError::from)?;
-        counting
-            .write_all(b"(")
-            .and_then(|_| counting.write_all(values.as_bytes()))
-            .and_then(|_| counting.write_all(b");\n"))
-            .map_err(AppError::from)?;
-    }
-
-    Ok(counting.bytes())
-}
 
 pub(super) fn quote_sql_identifier(ident: &str) -> String {
     let mut out = String::with_capacity(ident.len() + 2);
@@ -207,44 +279,6 @@ pub(super) fn json_to_sql_literal(value: &JsonValue) -> String {
 }
 
 // ---------------------------------------------------------------- JSON
-
-pub(super) fn write_json_array<W: Write>(
-    writer: &mut W,
-    _headers: &[String],
-    rows: &[Vec<JsonValue>],
-    cancel: Option<&CancellationToken>,
-) -> Result<u64, AppError> {
-    // Mongo collection rows arrive as a single-cell row carrying the
-    // document's JSON (Extended JSON v2 Relaxed already from the BSON
-    // layer in `db/mongodb.rs`). We pass the value through pretty-print.
-    let mut counting = ByteCounter::new(writer);
-    counting.write_all(b"[").map_err(AppError::from)?;
-
-    let mut first = true;
-    for row in rows {
-        check_cancel(cancel)?;
-        if !first {
-            counting.write_all(b",\n").map_err(AppError::from)?;
-        } else {
-            counting.write_all(b"\n").map_err(AppError::from)?;
-            first = false;
-        }
-        let doc = row.first().cloned().unwrap_or(JsonValue::Null);
-        let pretty =
-            serde_json::to_string_pretty(&relax_extended_json(doc)).map_err(AppError::from)?;
-        // indent two spaces — to_string_pretty already uses two-space indent.
-        for line in pretty.lines() {
-            counting.write_all(b"  ").map_err(AppError::from)?;
-            counting
-                .write_all(line.as_bytes())
-                .map_err(AppError::from)?;
-            counting.write_all(b"\n").map_err(AppError::from)?;
-        }
-    }
-
-    counting.write_all(b"]\n").map_err(AppError::from)?;
-    Ok(counting.bytes())
-}
 
 /// Walk a JSON value and ensure MongoDB Extended JSON v2 Relaxed shape.
 /// The mongo db layer (`db/mongodb.rs`) already serializes BSON via the

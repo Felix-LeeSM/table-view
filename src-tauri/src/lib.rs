@@ -175,6 +175,8 @@ pub fn run() {
     // 가 commands 에서 inject 받을 수 있도록 `EventVersionRegistry` 도 process
     // singleton 으로 manage. 호출 site (`persist_setting` 등) 가 `State` 로 받음.
     let builder = builder.manage(events::EventVersionRegistry::default());
+    // Issue #1443 — chunked grid-export sessions (begin/chunk/finish/abort).
+    let builder = builder.manage(commands::export::ExportSessionRegistry::default());
     record_phase(&mut cursor, "app-state-new");
 
     let builder = commands::registry::register_all(builder);

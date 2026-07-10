@@ -20,11 +20,26 @@ export interface ExportSummary {
 }
 
 /**
+ * Issue #1443 — rows at or below this count go through the single-shot
+ * `export_grid_rows` command (one IPC payload). Above it, the export streams
+ * through begin/chunk/finish sessions so only one chunk (this many rows) ever
+ * crosses the IPC boundary at a time — the whole result never gets serialized
+ * into a single ~500MB string that freezes the webview main thread.
+ */
+export const EXPORT_IPC_CHUNK_ROWS = 25_000;
+
+/**
  * Stream the supplied rows to `targetPath` in the requested `format`. All
  * encoding decisions (CSV escape / SQL identifier quoting / Mongo Extended
  * JSON shape) live in the Rust handler so output is deterministic across
  * platforms. Pass `exportId` to register a cooperative cancel token in the
  * query-token registry.
+ *
+ * Above `EXPORT_IPC_CHUNK_ROWS` the call fans out into a chunked backend
+ * session (#1443); the output is byte-identical to the single-shot path. A
+ * mid-stream failure (including a #1269 Stop-button cancel) aborts the
+ * session so the temp file is cleaned up and any pre-existing target is left
+ * untouched.
  */
 export async function exportGridRows(
   format: ExportFormat,
@@ -34,6 +49,16 @@ export async function exportGridRows(
   context: ExportContext,
   exportId: string | null = null,
 ): Promise<ExportSummary> {
+  if (rows.length > EXPORT_IPC_CHUNK_ROWS) {
+    return exportGridRowsChunked(
+      format,
+      targetPath,
+      headers,
+      rows,
+      context,
+      exportId,
+    );
+  }
   return invoke<ExportSummary>("export_grid_rows", {
     format,
     targetPath,
@@ -44,6 +69,43 @@ export async function exportGridRows(
     context,
     exportId,
   });
+}
+
+async function exportGridRowsChunked(
+  format: ExportFormat,
+  targetPath: string,
+  headers: string[],
+  rows: unknown[][],
+  context: ExportContext,
+  exportId: string | null,
+): Promise<ExportSummary> {
+  const sessionId = await invoke<string>("export_grid_begin", {
+    format,
+    targetPath,
+    headers,
+    context,
+    exportId,
+  });
+  try {
+    for (let i = 0; i < rows.length; i += EXPORT_IPC_CHUNK_ROWS) {
+      await invoke("export_grid_chunk", {
+        sessionId,
+        // Per-chunk IPC-safe conversion — BigInt / Decimal cells anywhere in
+        // the result must not reach Tauri's native JSON.stringify (#1082).
+        rows: toIpcSafeRows(rows.slice(i, i + EXPORT_IPC_CHUNK_ROWS)),
+      });
+    }
+    return await invoke<ExportSummary>("export_grid_finish", { sessionId });
+  } catch (err) {
+    // Best-effort teardown: drop the temp file + cancel token backend-side.
+    // The original error (I/O or #1269 cancel) is what the caller must see.
+    try {
+      await invoke("export_grid_abort", { sessionId });
+    } catch {
+      /* abort is fire-and-forget; surface the real failure below */
+    }
+    throw err;
+  }
 }
 
 /**
