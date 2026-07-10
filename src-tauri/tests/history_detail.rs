@@ -120,6 +120,93 @@ async fn file_analytics_detail_does_not_return_absolute_path_sql() {
     cleanup();
 }
 
+/// Issue #1451 — a credential-setting DDL statement must not leave the
+/// plaintext password in the stored `sql` column or the detail response.
+/// The masking runs at store time (irreversible for old rows, safe for new).
+#[tokio::test]
+#[serial]
+async fn detail_masks_password_literals_across_dialects() {
+    let (_dir, pool) = setup().await;
+
+    // Low-entropy fake secrets (shape avoids the no-secrets scanner).
+    let cases = [
+        // PostgreSQL — WITH PASSWORD '...'
+        ("ALTER USER app WITH PASSWORD 'pw@1ZZ'", "pw@1ZZ"),
+        // MySQL — IDENTIFIED BY '...'
+        ("CREATE USER app@'%' IDENTIFIED BY 'pw@2ZZ'", "pw@2ZZ"),
+        // MSSQL — WITH PASSWORD = '...'
+        ("ALTER LOGIN app WITH PASSWORD = 'pw@3ZZ'", "pw@3ZZ"),
+        // Oracle — bareword after IDENTIFIED BY (no quotes)
+        ("ALTER USER app IDENTIFIED BY pw4ZZ", "pw4ZZ"),
+    ];
+
+    for (sql, secret) in cases {
+        let add_req: AddHistoryEntryRequest = serde_json::from_value(json!({
+            "connectionId": "c-1",
+            "paradigm": "rdb",
+            "queryMode": "sql",
+            "source": "raw",
+            "sql": sql,
+            "status": "success",
+            "durationMs": 3,
+            "executedAt": now_ms(),
+        }))
+        .unwrap();
+        let added = add_history_entry_inner(&pool, add_req).await.unwrap();
+
+        let detail = get_history_detail_inner(&pool, GetHistoryDetailRequest { id: added.id })
+            .await
+            .unwrap();
+        assert!(
+            !detail.sql.contains(secret),
+            "detail.sql leaked plaintext secret for `{sql}`: {}",
+            detail.sql
+        );
+        assert!(
+            !detail.sql_redacted.contains(secret),
+            "sql_redacted leaked plaintext secret for `{sql}`: {}",
+            detail.sql_redacted
+        );
+        // Statement structure is preserved (the keyword survives, only the
+        // value is masked) so history stays useful.
+        assert!(
+            detail.sql.contains("IDENTIFIED BY") || detail.sql.contains("PASSWORD"),
+            "keyword must be preserved for `{sql}`: {}",
+            detail.sql
+        );
+    }
+
+    cleanup();
+}
+
+/// A column merely named `password` in an ordinary read must NOT be mangled —
+/// only quoted/bareword values adjacent to credential keywords are masked.
+#[tokio::test]
+#[serial]
+async fn detail_preserves_non_credential_password_column() {
+    let (_dir, pool) = setup().await;
+
+    let add_req: AddHistoryEntryRequest = serde_json::from_value(json!({
+        "connectionId": "c-1",
+        "paradigm": "rdb",
+        "queryMode": "sql",
+        "source": "raw",
+        "sql": "SELECT id, password FROM users WHERE id = 1",
+        "status": "success",
+        "durationMs": 3,
+        "executedAt": now_ms(),
+    }))
+    .unwrap();
+    let added = add_history_entry_inner(&pool, add_req).await.unwrap();
+
+    let detail = get_history_detail_inner(&pool, GetHistoryDetailRequest { id: added.id })
+        .await
+        .unwrap();
+    assert_eq!(detail.sql, "SELECT id, password FROM users WHERE id = 1");
+
+    cleanup();
+}
+
 #[tokio::test]
 #[serial]
 async fn detail_returns_not_found_for_missing_id() {

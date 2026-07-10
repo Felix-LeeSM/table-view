@@ -99,6 +99,69 @@ pub fn sql_redact(sql: &str) -> String {
     }
 }
 
+/// Issue #1451 — credential-literal masking for the `query_history.sql`
+/// column. `sql_redact` masks *every* literal (used for the list view); this
+/// pass masks *only* the value in a credential clause so the detail view keeps
+/// its structure but never stores a plaintext password.
+///
+/// Covered dialect shapes (case-insensitive):
+///   - `PASSWORD 'x'` / `PASSWORD = 'x'` / `PASSWORD = N'x'` — PostgreSQL,
+///     MSSQL (`N'..'` national-string prefix), MySQL.
+///   - `IDENTIFIED BY 'x'` — MySQL. `IDENTIFIED BY PASSWORD 'hash'` /
+///     `IDENTIFIED BY VALUES 'hash'` keep the sub-keyword and mask the hash.
+///   - `IDENTIFIED BY x` — Oracle bareword (unquoted) password.
+///   - any identifier containing `password`/`pwd` directly assigned a quoted
+///     literal (`password_hash = 'x'`, `passwd = 'x'`) — value masked, the
+///     column and clause preserved.
+///
+/// A plain `SELECT password FROM users` carries no value and is left intact.
+/// The masked value is a fixed sentinel so the result is deterministic and
+/// carries zero entropy. Same `catch_unwind` fallback discipline as
+/// `sql_redact` — a regex panic degrades to the original string.
+fn credential_regex() -> &'static Regex {
+    static R: OnceLock<Regex> = OnceLock::new();
+    R.get_or_init(|| {
+        Regex::new(
+            r#"(?ix)
+            (?P<pkw>                                  # PASSWORD / PWD-family assignment
+                \b \w* (?: password | pwd ) \w* \b
+                (?: \s+ for \s+ [^=]*? )?              # MySQL `SET PASSWORD FOR user = ...`
+                \s* =? \s*
+            )
+            (?P<pval> [A-Za-z]? ' (?: '' | [^'] )* ' )
+            |
+            (?P<ikw>                                  # IDENTIFIED BY [PASSWORD|VALUES]
+                \b identified \s+ by \s+ (?: password \s+ | values \s+ )?
+            )
+            (?P<ival>
+                [A-Za-z]? ' (?: '' | [^'] )* '        # quoted value
+                | [A-Za-z0-9_\#$]+                    # Oracle bareword
+            )
+            "#,
+        )
+        .expect("credential redact regex must compile")
+    })
+}
+
+/// Mask the credential value in every `PASSWORD` / `IDENTIFIED BY` clause of
+/// `sql`, preserving the surrounding keyword/structure. See
+/// [`credential_regex`] for the covered shapes. Returns the original string
+/// unchanged if the regex engine panics (parity with [`sql_redact`]).
+pub fn redact_credentials(sql: &str) -> String {
+    let result = catch_unwind(AssertUnwindSafe(|| {
+        credential_regex()
+            .replace_all(sql, |caps: &regex::Captures<'_>| {
+                let keyword = caps
+                    .name("pkw")
+                    .or_else(|| caps.name("ikw"))
+                    .map_or("", |m| m.as_str());
+                format!("{keyword}'***'")
+            })
+            .into_owned()
+    }));
+    result.unwrap_or_else(|_| sql.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     //! 작성 2026-05-17 (Phase 5 sprint-371) — module-local smoke for the
@@ -106,7 +169,58 @@ mod tests {
     //! literal shapes) live in `tests/sql_redact.rs` and use this module
     //! via `table_view_lib::storage::sql_redact::sql_redact`.
 
-    use super::sql_redact;
+    use super::{redact_credentials, sql_redact};
+
+    #[test]
+    fn credentials_masked_across_dialects() {
+        // (input, must-not-contain)
+        let cases = [
+            ("ALTER USER app WITH PASSWORD 'pw@1ZZ'", "pw@1ZZ"),
+            ("ALTER LOGIN app WITH PASSWORD = 'pw@2ZZ'", "pw@2ZZ"),
+            ("ALTER LOGIN app WITH PASSWORD = N'pw@3ZZ'", "pw@3ZZ"),
+            ("CREATE USER app@'%' IDENTIFIED BY 'pw@4ZZ'", "pw@4ZZ"),
+            ("ALTER USER app IDENTIFIED BY pw5ZZ", "pw5ZZ"),
+            ("SET PASSWORD FOR app = 'pw@6ZZ'", "pw@6ZZ"),
+            (
+                "UPDATE users SET password_hash = 'pw@7ZZ' WHERE id = 1",
+                "pw@7ZZ",
+            ),
+        ];
+        for (sql, secret) in cases {
+            let out = redact_credentials(sql);
+            assert!(!out.contains(secret), "leaked secret for `{sql}`: {out}");
+            assert!(out.contains("'***'"), "no sentinel for `{sql}`: {out}");
+        }
+    }
+
+    #[test]
+    fn credential_masking_preserves_structure() {
+        assert_eq!(
+            redact_credentials("ALTER USER app WITH PASSWORD 'pw@1ZZ'"),
+            "ALTER USER app WITH PASSWORD '***'"
+        );
+        assert_eq!(
+            redact_credentials("UPDATE users SET password_hash = 'pw@7ZZ' WHERE id = 1"),
+            "UPDATE users SET password_hash = '***' WHERE id = 1"
+        );
+        assert_eq!(
+            redact_credentials("ALTER USER app IDENTIFIED BY VALUES 'pw@8ZZ'"),
+            "ALTER USER app IDENTIFIED BY VALUES '***'"
+        );
+    }
+
+    #[test]
+    fn non_credential_statements_are_untouched() {
+        // Column named `password` in a read → no value → no change.
+        let read = "SELECT id, password FROM users WHERE id = 1";
+        assert_eq!(redact_credentials(read), read);
+        // MySQL `PASSWORD EXPIRE` has no value literal → must survive.
+        let expire = "ALTER USER app PASSWORD EXPIRE";
+        assert_eq!(redact_credentials(expire), expire);
+        // Ordinary predicate literal is not a credential → left for sql_redact.
+        let ordinary = "SELECT * FROM t WHERE age = 18";
+        assert_eq!(redact_credentials(ordinary), ordinary);
+    }
 
     #[test]
     fn masks_single_quoted_literal() {
