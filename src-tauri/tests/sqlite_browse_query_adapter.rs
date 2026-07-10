@@ -829,10 +829,10 @@ async fn sqlite_contract_rejects_internal_app_state_file_as_user_connection() {
 
     match result {
         Err(AppError::Validation(message)) => {
-            assert!(message.contains("internal app SQLite state"))
+            assert!(message.contains("internal app data directory"))
         }
         other => panic!(
-            "Expected internal app SQLite state validation error, got: {:?}",
+            "Expected internal app data directory validation error, got: {:?}",
             other
         ),
     }

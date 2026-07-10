@@ -195,9 +195,9 @@ describe("SQLite file workflow smoke", () => {
       await (await $("button=Test Connection")).click();
       await waitForElementTextAll(
         dialog,
-        ["internal app SQLite state"],
+        ["internal app data"],
         15000,
-        "internal app SQLite state rejection did not appear",
+        "internal app data path rejection did not appear",
       );
       await (await $("button=Cancel")).click();
       await dialog.waitForDisplayed({ timeout: 10000, reverse: true });
