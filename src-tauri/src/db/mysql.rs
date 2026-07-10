@@ -426,6 +426,28 @@ impl RdbAdapter for MysqlAdapter {
             ))
         })
     }
+
+    // ── Refs #1067 — DB lifecycle + EXPLAIN parity (PG 와 동일 delegate) ──
+    fn create_database<'a>(
+        &'a self,
+        name: &'a str,
+    ) -> Pin<Box<dyn Future<Output = Result<(), AppError>> + Send + 'a>> {
+        Box::pin(async move { self.create_database(name).await })
+    }
+
+    fn drop_database<'a>(
+        &'a self,
+        name: &'a str,
+    ) -> Pin<Box<dyn Future<Output = Result<(), AppError>> + Send + 'a>> {
+        Box::pin(async move { self.drop_database(name).await })
+    }
+
+    fn explain_query<'a>(
+        &'a self,
+        sql: &'a str,
+    ) -> Pin<Box<dyn Future<Output = Result<serde_json::Value, AppError>> + Send + 'a>> {
+        Box::pin(async move { self.explain_query(sql).await })
+    }
 }
 
 #[cfg(test)]

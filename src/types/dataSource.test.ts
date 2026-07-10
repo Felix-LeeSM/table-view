@@ -46,7 +46,7 @@ describe("DataSourceProfile registry", () => {
 
   const mysqlFamilyCapabilities = expectedCapabilities({
     connection: { test: true, switchDatabase: true },
-    query: { query: true, multiStatement: true, cancel: true },
+    query: { query: true, multiStatement: true, cancel: true, explain: true },
     catalog: {
       browse: true,
       schema: true,
