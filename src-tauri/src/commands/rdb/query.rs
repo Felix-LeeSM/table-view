@@ -20,46 +20,55 @@ use crate::models::{DatabaseType, FilterCondition, QueryResult, TableData};
 
 use super::{ensure_expected_db, not_connected, register_cancel_token, release_cancel_token};
 
-/// Issue #1351 — the Safe Mode danger check that respects the connection
-/// dialect. The shared `safety::is_danger` is dialect-agnostic and misses
-/// Oracle PL/SQL blocks (`BEGIN … END;`), routine execution (`EXEC` /
-/// `EXECUTE IMMEDIATE` / `CALL`), and admin DDL (`ALTER SYSTEM`, `DROP USER`,
-/// `AUDIT`, non table/index/view `CREATE`, …). On an Oracle connection those
-/// are widened to danger so the backend gate reaches the SAME verdict as the
-/// frontend `oracleSafety.ts` (same risk = same judgment). The Oracle scan
-/// only runs when the shared classifier did not already flag danger and the
-/// connection is Oracle, so non-Oracle paths pay nothing.
+/// Issue #1351 / #1450 — the Safe Mode danger check that respects the
+/// connection dialect. The shared classifier is dialect-agnostic by default and
+/// (a) misses Oracle PL/SQL blocks (`BEGIN … END;`), routine execution (`EXEC`
+/// / `EXECUTE IMMEDIATE` / `CALL`), and admin DDL (`ALTER SYSTEM`, `DROP USER`,
+/// `AUDIT`, non table/index/view `CREATE`, …), which `oracle::is_oracle_danger`
+/// widens to danger on Oracle connections, and (b) treats `#` as an operator,
+/// not a line comment — so `#x\nDROP TABLE users` on a MySQL/MariaDB connection
+/// would fail open (#1450). Resolving the adapter kind once lets the shared
+/// classifier strip `#` line comments for MySQL-family connections and lets the
+/// Oracle widening run only for Oracle, so other dialects pay nothing.
 async fn rdb_sql_is_danger(state: &AppState, connection_id: &str, sql: &str) -> bool {
-    sql_parser_core::safety::is_danger(sql)
-        || (is_oracle_connection(state, connection_id).await
+    let kind = connection_kind(state, connection_id).await;
+    sql_parser_core::safety::is_danger_with_dialect(sql, is_mysql_family(kind.as_ref()))
+        || (matches!(kind.as_ref(), Some(DatabaseType::Oracle))
             && sql_parser_core::oracle::is_oracle_danger(sql))
 }
 
-/// Batch form of [`rdb_sql_is_danger`]. Worst tier wins — a single Oracle
-/// PL/SQL / admin statement anywhere in the atomic batch gates the whole
+/// Batch form of [`rdb_sql_is_danger`]. Worst tier wins — a single dialect-
+/// specific danger statement anywhere in the atomic batch gates the whole
 /// batch. The dialect is resolved once, not per statement.
 async fn rdb_batch_is_danger(state: &AppState, connection_id: &str, statements: &[String]) -> bool {
+    let kind = connection_kind(state, connection_id).await;
+    let hash_line_comments = is_mysql_family(kind.as_ref());
     if statements
         .iter()
-        .any(|sql| sql_parser_core::safety::is_danger(sql))
+        .any(|sql| sql_parser_core::safety::is_danger_with_dialect(sql, hash_line_comments))
     {
         return true;
     }
-    is_oracle_connection(state, connection_id).await
+    matches!(kind.as_ref(), Some(DatabaseType::Oracle))
         && statements
             .iter()
             .any(|sql| sql_parser_core::oracle::is_oracle_danger(sql))
 }
 
-/// True when `connection_id` currently resolves to an Oracle adapter. A
-/// missing / non-RDB connection returns `false` — the generic classifier has
-/// already run and the connection error surfaces downstream in dispatch.
-async fn is_oracle_connection(state: &AppState, connection_id: &str) -> bool {
+/// Current adapter kind for `connection_id`, or `None` for a missing / non-RDB
+/// connection (the generic classifier has already run and the connection error
+/// surfaces downstream in dispatch).
+async fn connection_kind(state: &AppState, connection_id: &str) -> Option<DatabaseType> {
     state
         .active_adapter(connection_id)
         .await
-        .map(|adapter| matches!(adapter.kind(), DatabaseType::Oracle))
-        .unwrap_or(false)
+        .map(|adapter| adapter.kind())
+}
+
+/// MySQL/MariaDB lead a line comment with `#`; enable dialect-aware `#`
+/// stripping in the shared classifier so `#x\nDROP TABLE t` is gated (#1450).
+fn is_mysql_family(kind: Option<&DatabaseType>) -> bool {
+    matches!(kind, Some(DatabaseType::Mysql | DatabaseType::Mariadb))
 }
 
 /// Validate query execution inputs.
@@ -831,6 +840,18 @@ pub async fn query_table_data(
 #[allow(clippy::field_reassign_with_default)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn is_mysql_family_covers_mysql_and_mariadb_only() {
+        // #1450 — only MySQL/MariaDB enable `#` line-comment stripping; every
+        // other dialect (and a missing connection) leaves `#` as an operator.
+        assert!(is_mysql_family(Some(&DatabaseType::Mysql)));
+        assert!(is_mysql_family(Some(&DatabaseType::Mariadb)));
+        assert!(!is_mysql_family(Some(&DatabaseType::Postgresql)));
+        assert!(!is_mysql_family(Some(&DatabaseType::Mssql)));
+        assert!(!is_mysql_family(Some(&DatabaseType::Oracle)));
+        assert!(!is_mysql_family(None));
+    }
 
     #[test]
     fn validate_query_inputs_rejects_empty_sql() {

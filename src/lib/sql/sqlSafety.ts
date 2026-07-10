@@ -166,10 +166,9 @@ const INTEGRITY_SWITCH_OFF_RES: RegExp[] = [
 const KNOWN_SAFE_RE =
   /^(BEGIN|START\s+TRANSACTION|COMMIT|END\s+TRANSACTION|ROLLBACK|SAVEPOINT|RELEASE|VACUUM|ANALYZE|REINDEX|CHECKPOINT|PRAGMA)\b/;
 
-const LINE_COMMENT_RE = /--[^\n\r]*/g;
-const BLOCK_COMMENT_RE = /\/\*[\s\S]*?\*\//g;
 const WHITESPACE_RE = /\s+/g;
-const WORD_BOUNDARY_WHERE_RE = /\bWHERE\b/i;
+
+type Dialect = NonNullable<StatementAnalysisOptions["dialect"]>;
 
 /**
  * Sprint 391 — DDL destructive classifier callsite migration.
@@ -426,12 +425,77 @@ function statementAnalysisFromAst(
   }
 }
 
-function stripComments(sql: string): string {
-  return sql.replace(BLOCK_COMMENT_RE, " ").replace(LINE_COMMENT_RE, " ");
+/**
+ * Issue #1450 — literal/nesting-aware comment stripper. Replaces the old
+ * two-regex (BLOCK_COMMENT_RE / LINE_COMMENT_RE) pass that had three
+ * classifier-bypass holes:
+ *   (a) a nested block comment stopped at the FIRST close marker (PostgreSQL
+ *       nests, so a nested-open comment leaked the trailing DROP behind stray
+ *       close-marker garbage, fail-open);
+ *   (b) MySQL '#' line comments were never recognised ("#x\nDROP", fail-open);
+ *   and it stripped line/block comment markers even inside string literals,
+ *       which could false-positive-escalate a benign write.
+ * One pass so string literals, quoted identifiers, and dollar-quotes are copied
+ * verbatim (a comment marker inside them is NOT a comment). Block comments
+ * depth-count to the matching close (PostgreSQL nesting; over-stripping a
+ * non-nesting dialect's trailing close-marker only ever fails closed). '#' is a
+ * comment only for MySQL/MariaDB (dialect === "mysql"); elsewhere it is an
+ * operator (PostgreSQL XOR) or a temp-table prefix (MSSQL #t).
+ */
+function stripComments(sql: string, dialect?: Dialect): string {
+  const hashComments = dialect === "mysql";
+  let out = "";
+  let i = 0;
+  const n = sql.length;
+  while (i < n) {
+    const ch = sql[i];
+    if (ch === "'" || ch === '"' || ch === "`") {
+      const end = skipQuotedLiteral(sql, i, ch);
+      out += sql.slice(i, end);
+      i = end;
+      continue;
+    }
+    if (ch === "$") {
+      const end = scanDollarQuoteEnd(sql, i);
+      if (end !== null) {
+        out += sql.slice(i, end);
+        i = end;
+        continue;
+      }
+    }
+    // Line comment: `--` (all dialects) or `#` (MySQL only) → one space.
+    if ((ch === "-" && sql[i + 1] === "-") || (hashComments && ch === "#")) {
+      i += ch === "#" ? 1 : 2;
+      while (i < n && sql[i] !== "\n") i++;
+      out += " ";
+      continue;
+    }
+    // Block comment `/* … */`, PostgreSQL-style nesting via a depth counter.
+    if (ch === "/" && sql[i + 1] === "*") {
+      let depth = 1;
+      i += 2;
+      while (i < n && depth > 0) {
+        if (sql[i] === "/" && sql[i + 1] === "*") {
+          depth++;
+          i += 2;
+        } else if (sql[i] === "*" && sql[i + 1] === "/") {
+          depth--;
+          i += 2;
+        } else {
+          i++;
+        }
+      }
+      out += " ";
+      continue;
+    }
+    out += ch;
+    i++;
+  }
+  return out;
 }
 
-function normalize(sql: string): string {
-  return stripComments(sql).replace(WHITESPACE_RE, " ").trim();
+function normalize(sql: string, dialect?: Dialect): string {
+  return stripComments(sql, dialect).replace(WHITESPACE_RE, " ").trim();
 }
 
 function hasMssqlBatchSeparator(sql: string): boolean {
@@ -453,8 +517,43 @@ function isMssqlSafetyContext(options?: StatementAnalysisOptions): boolean {
   return options?.dialect === "mssql";
 }
 
+/**
+ * Issue #1450 — word-boundary `WHERE` presence that skips string literals,
+ * quoted identifiers, and dollar-quotes. The old `/\bWHERE\b/i` matched a
+ * `WHERE` inside a string literal (`SET note = 'ask WHERE money'`), so an
+ * unbounded UPDATE/DELETE was mis-read as bounded and degraded to `warn`.
+ * `stripped` is upper-cased at every callsite, so the needle is upper only.
+ */
 function hasOuterWhere(stripped: string): boolean {
-  return WORD_BOUNDARY_WHERE_RE.test(stripped);
+  let i = 0;
+  const n = stripped.length;
+  while (i < n) {
+    const ch = stripped[i];
+    if (ch === "'" || ch === '"' || ch === "`") {
+      i = skipQuotedLiteral(stripped, i, ch);
+      continue;
+    }
+    if (ch === "$") {
+      const end = scanDollarQuoteEnd(stripped, i);
+      if (end !== null) {
+        i = end;
+        continue;
+      }
+    }
+    if (
+      stripped.startsWith("WHERE", i) &&
+      !isWordChar(stripped[i - 1]) &&
+      !isWordChar(stripped[i + 5])
+    ) {
+      return true;
+    }
+    i++;
+  }
+  return false;
+}
+
+function isWordChar(ch: string | undefined): boolean {
+  return ch !== undefined && /[A-Za-z0-9_]/.test(ch);
 }
 
 /**
@@ -574,7 +673,7 @@ export function analyzeStatement(
   sql: string,
   options?: StatementAnalysisOptions,
 ): StatementAnalysis {
-  const normalized = normalize(sql);
+  const normalized = normalize(sql, options?.dialect);
   if (normalized.length === 0) {
     // Sprint 254 — empty / unrecognised input defaults to INFO so the
     // SafeMode matrix never escalates a benign no-op buffer. WARN is

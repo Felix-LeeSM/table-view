@@ -1,7 +1,7 @@
 {
   "$schema": "classifier-parity@1",
   "issue": 1352,
-  "description": "Shared FE<->BE SQL Safe Mode severity parity fixture. Consumed by both vitest (src/lib/sql/sqlSafety.parity-fixture.test.ts, `analyzeStatement(sql).severity`) and cargo test (src-tauri/sql-parser-core/src/safety.rs `classifier_parity_fixture`, `classify(sql)`). Replaces the hand-copied 'Parity mirror' block so a classifier change on one side that drifts the other trips a test. Only cases whose FE regex-fallback (jsdom, no WASM) equals the BE native parse are listed here; EXPLAIN inner-inheritance and `ALTER … DROP INDEX` depend on the WASM AST and diverge in the vitest jsdom env, so they stay in each side's own unit tests.",
+  "description": "Shared FE<->BE SQL Safe Mode severity parity fixture. Consumed by both vitest (src/lib/sql/sqlSafety.parity-fixture.test.ts, `analyzeStatement(sql, {dialect}).severity`) and cargo test (src-tauri/sql-parser-core/src/safety.rs `classifier_parity_fixture`, `classify_with_dialect(sql, hash)`). Replaces the hand-copied 'Parity mirror' block so a classifier change on one side that drifts the other trips a test. Only cases whose FE regex-fallback (jsdom, no WASM) equals the BE native parse are listed here; EXPLAIN inner-inheritance and `ALTER … DROP INDEX` depend on the WASM AST and diverge in the vitest jsdom env, so they stay in each side's own unit tests. Issue #1450 added an optional per-case `dialect` field (MySQL/MariaDB enable `#` line-comment stripping); absent means dialect-agnostic.",
   "severities": ["info", "warn", "danger"],
   "consumedBy": [
     "src/lib/sql/sqlSafety.parity-fixture.test.ts",
@@ -66,6 +66,19 @@
 
     { "name": "multi_trailing_drop", "sql": "SELECT 1; DROP TABLE users", "expectedSeverity": "danger" },
     { "name": "multi_semicolon_in_string", "sql": "SELECT ';DROP TABLE users' AS note", "expectedSeverity": "info" },
-    { "name": "commented_danger_keyword", "sql": "/* DROP TABLE users */ SELECT 1", "expectedSeverity": "info" }
+    { "name": "commented_danger_keyword", "sql": "/* DROP TABLE users */ SELECT 1", "expectedSeverity": "info" },
+
+    { "name": "nested_block_comment_drop", "sql": "/* outer /* inner */ still-outer */ DROP TABLE users", "expectedSeverity": "danger" },
+    { "name": "nested_block_comment_3level", "sql": "/* a /* b /* c */ d */ e */ DROP TABLE users", "expectedSeverity": "danger" },
+    { "name": "block_comment_open_in_string_read", "sql": "SELECT '/* not a comment */' AS note", "expectedSeverity": "info" },
+
+    { "name": "hash_comment_drop_mysql", "sql": "#x\nDROP TABLE users", "expectedSeverity": "danger", "dialect": "mysql" },
+    { "name": "hash_comments_out_drop_mysql", "sql": "#DROP TABLE users\nSELECT 1", "expectedSeverity": "info", "dialect": "mysql" },
+    { "name": "hash_in_string_mysql", "sql": "SELECT 'a # b' AS note", "expectedSeverity": "info", "dialect": "mysql" },
+    { "name": "hash_not_a_comment_without_mysql", "sql": "#x\nDROP TABLE users", "expectedSeverity": "info" },
+
+    { "name": "literal_where_unbounded_update", "sql": "UPDATE accounts SET balance=balance+1, note='ask WHERE money'", "expectedSeverity": "danger" },
+    { "name": "literal_where_escaped_quote_update", "sql": "UPDATE accounts SET note='it''s ok WHERE now'", "expectedSeverity": "danger" },
+    { "name": "literal_where_bounded_still_warn", "sql": "UPDATE users SET note='reset WHERE flag' WHERE id = 1", "expectedSeverity": "warn" }
   ]
 }
