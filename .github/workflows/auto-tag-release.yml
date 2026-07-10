@@ -1,0 +1,95 @@
+name: Auto Tag Release
+
+# Option B (issue #1405): when a version-bump PR (`chore/release-X.Y.Z`) merges
+# to main, read the version from src-tauri/tauri.conf.json and, if the matching
+# `vX.Y.Z` tag does not already exist, create and push it. That tag push triggers
+# release.yml (tag `v*.*.*`), which builds a *draft* GitHub Release.
+#
+# Publishing stays MANUAL. This workflow never publishes — the draft gate is the
+# human check that stops a bad release from auto-installing to every user via the
+# #1400 auto-updater. Automating the tag removes step 2 of the manual release,
+# not the maintainer's final publish click.
+#
+# Idempotent: a plain main push re-touching tauri.conf.json (e.g. an unrelated
+# edit at the same version) finds the tag already present and no-ops.
+#
+# GITHUB_TOKEN trigger constraint: a tag pushed with the default GITHUB_TOKEN
+# does NOT trigger other workflows (GitHub's loop-prevention policy), so
+# release.yml would never fire and Option B would be inert. We push the tag with
+# a PAT (secrets.RELEASE_PAT) whose push events DO trigger downstream workflows.
+# RELEASE_PAT must be a repo secret — a fine-grained/classic PAT with
+# `contents: write` scope. Without it this job fails fast (the
+# "Verify RELEASE_PAT" step) rather than silently pushing a tag that ships
+# nothing.
+
+on:
+  push:
+    branches: [main]
+    paths: ["src-tauri/tauri.conf.json"]
+
+permissions:
+  contents: write
+
+# A version bump lands once; still, serialize to avoid two runs racing the same
+# tag if main gets rapid pushes.
+concurrency:
+  group: auto-tag-release
+  cancel-in-progress: false
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # Fail fast with an actionable message if the PAT is missing, instead of
+      # letting checkout auth fail cryptically on an empty token.
+      - name: Verify RELEASE_PAT is configured
+        env:
+          RELEASE_PAT: ${{ secrets.RELEASE_PAT }}
+        run: |
+          if [ -z "$RELEASE_PAT" ]; then
+            echo "::error::RELEASE_PAT secret is not set. Option B needs a PAT to push the vX.Y.Z tag so release.yml triggers — GITHUB_TOKEN-pushed tags do not trigger workflows. Register RELEASE_PAT (contents: write scope)." >&2
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          # PAT (not GITHUB_TOKEN) so the tag push below triggers release.yml.
+          token: ${{ secrets.RELEASE_PAT }}
+          fetch-depth: 0
+
+      - name: Tag release if version bumped
+        run: |
+          set -euo pipefail
+
+          version="$(jq -r .version src-tauri/tauri.conf.json)"
+
+          # Release builds only: reject anything that is not plain X.Y.Z semver
+          # (no pre-release/build metadata), matching release.yml's `v*.*.*`.
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::tauri.conf.json version '$version' is not X.Y.Z semver" >&2
+            exit 1
+          fi
+
+          # Cargo.toml must agree with tauri.conf.json — a half-done bump would
+          # otherwise ship a tag whose crate version disagrees with the app.
+          cargo_version="$(grep -m1 '^version' src-tauri/Cargo.toml | sed -E 's/.*"([^"]+)".*/\1/')"
+          if [ "$version" != "$cargo_version" ]; then
+            echo "::error::version mismatch: tauri.conf.json=$version Cargo.toml=$cargo_version" >&2
+            exit 1
+          fi
+
+          tag="v$version"
+
+          # Idempotent no-op: tag already published for this version.
+          if [ -n "$(git ls-remote --tags origin "$tag")" ]; then
+            echo "Tag $tag already exists on origin — no-op."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$tag" -m "Release $tag"
+          git push origin "$tag"
+          echo "Pushed $tag — release.yml will build the draft release (manual publish)."
