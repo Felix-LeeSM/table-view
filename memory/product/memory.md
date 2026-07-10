@@ -1,8 +1,8 @@
 ---
 title: Product 머지 기준
 type: product-rule
-updated: 2026-07-02
-task: ux-review, persistence-reset, merge-gate, safe-mode-severity
+updated: 2026-07-03
+task: ux-review, persistence-reset, merge-gate, safe-mode-severity, collapse-default
 ---
 
 # Product 머지 기준
@@ -56,6 +56,25 @@ State-management reset gate 는
 ### Why
 
 사용자 원칙 "같은 위험 = 같은 경고" (일관된 UX). tier 가 방언·패러다임별로 다르면 사용자 멘탈 모델이 깨지고, danger 남발은 confirm 피로로 보호 효과를 죽인다.
+
+## 3. 접힘 가능 항목 다수 = 첫번째만 펼침
+
+접힐 수 있는 섹션/노드가 여러 개 나열되는 UI 의 **신규 시드 기본값**은 가장 첫번째
+항목만 펼치고 나머지는 전부 접는다 (2026-07-03 사용자 확정). 사용자가 바꾼 펼침
+상태는 보존 — 원칙은 첫 방문 시드에만 적용되고, 영속된 상태가 있으면 그것이 이긴다.
+
+적용 예: 사이드바 스키마 트리 (#1217 — 첫 스키마만 펼침), 다중 섹션 패널 일반.
+
+### Why
+
+대량 항목에서 전부 펼치면 조망이 사라진다 ("스키마/테이블 많을 때 보기 어렵다"
+2026-07-03 피드백의 일반화). 전부 접으면 첫 진입 시 빈 화면 — 첫번째만 펼쳐 내용
+힌트를 준다.
+
+### How to apply
+
+접힘 가능 목록을 새로 만들거나 시드 로직을 만지는 PR 에서 기본값을 이 원칙에 맞춘다.
+§1 에 따라 collapse 상태가 영속되면 reset affordance 도 함께.
 
 ## 관련
 
