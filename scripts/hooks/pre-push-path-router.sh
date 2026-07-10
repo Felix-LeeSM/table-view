@@ -231,6 +231,7 @@ run_ci_workflow_gates() {
 	run_step "homebrew-cask-workflow" bash scripts/hooks/test-homebrew-cask-workflow.sh
 	run_step "release-workflow" bash scripts/hooks/test-release-workflow.sh
 	run_step "updater-sig-verify-tests" bash scripts/hooks/test-verify-updater-sigs.sh
+	run_step "latest-json-verify-tests" bash scripts/hooks/test-verify-latest-json.sh
 	run_step "auto-tag-release-workflow" bash scripts/hooks/test-auto-tag-release-workflow.sh
 }
 
