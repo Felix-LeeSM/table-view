@@ -314,6 +314,7 @@ assert_contains "$ci_workflow_output" "RUN e2e-smoke-workflow-cache:" "ci workfl
 assert_contains "$ci_workflow_output" "RUN platform-smoke-canary-workflow-cache:" "ci workflow"
 assert_contains "$ci_workflow_output" "RUN updater-sig-verify-tests:" "ci workflow"
 assert_contains "$ci_workflow_output" "RUN latest-json-verify-tests:" "ci workflow"
+assert_contains "$ci_workflow_output" "RUN tag-version-verify-tests:" "ci workflow"
 assert_contains "$ci_workflow_output" "RUN auto-tag-release-workflow:" "ci workflow"
 assert_not_contains "$ci_workflow_output" "RUN ts-test:" "ci workflow"
 assert_not_contains "$ci_workflow_output" "RUN rust-test-and-coverage:" "ci workflow"

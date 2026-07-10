@@ -59,6 +59,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      # #1431 — tag ↔ conf version gate. The header above claims
+      # "tag = tauri.conf.json version", but only auto-tag-release.yml checks
+      # that before *creating* a tag — a manually pushed tag
+      # (`git push origin v0.5.0`) bypasses it entirely, and this workflow
+      # would publish the checked-out 0.4.2 bundle under a v0.5.0 release.
+      # Fail every leg before any build work when the tag disagrees with the
+      # checked-out conf. Runs before setup-node on purpose (first step after
+      # checkout; runner-preinstalled Node suffices for fs+JSON).
+      # workflow_dispatch dry-runs run on a branch ref (no tag) and skip this.
+      - name: Verify tag matches tauri.conf.json version
+        if: github.ref_type == 'tag'
+        shell: bash
+        run: node scripts/release/verify-tag-version.mjs
+
       # Linux Tauri bundles depend on webkit2gtk + librsvg + patchelf. macOS &
       # Windows runners come with everything Tauri needs preinstalled (libwebview2
       # on Windows, WKWebView on macOS).
