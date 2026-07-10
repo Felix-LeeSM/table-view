@@ -1,9 +1,9 @@
 ---
 title: Cross-paradigm UI Parity 머지 기준
 type: product-rule
-updated: 2026-06-17
+updated: 2026-07-10
 surface: src/components/workspace/**, src/components/query/**
-task: ui-parity, review, merge-gate
+task: ui-parity, review, merge-gate, unsupported-convention
 ---
 
 # Cross-paradigm UI Parity 머지 기준
@@ -29,8 +29,8 @@ task: ui-parity, review, merge-gate
 **문서화된 예외 없이 paradigm 간 다른 진입점/모델을 도입 = PR 머지 보류.**
 
 분기가 불가피하면 아래 §3 "예외 등록" 에 사유·범위를 명시한다. 예외는 "이 paradigm
-은 이 작업을 달리 둔다, 왜냐하면 ~" 형태로 존재해야 하고, 음소거/숨김으로 끝나면
-안 된다.
+은 이 작업을 달리 둔다, 왜냐하면 ~" 형태로 존재해야 한다. 이 작업이 해당 paradigm
+에서도 가능한데 단순 숨김으로 끝내면 안 된다 — 진짜 미지원의 숨김 표현은 §4 를 따른다.
 
 ## 2. 기준 진입점 (reference, 예외로 덮을 수 있음)
 
@@ -62,6 +62,27 @@ type-aware 패널) 예외로 등록한다. 형식:
 
 등록된 예외 없이 분기하면 머지 보류.
 
+## 4. Unsupported 표현 규약 (2026-07-10 소유자 결정)
+
+미지원을 UI 로 표현하는 방식은 **숨김 우선 + 상태성 예외** 단일 규약을 따른다.
+
+- **정적 미지원** — 해당 DBMS/paradigm 에서 영구적으로 안 되는 것(개념 부재 포함)
+  → **숨김** (`return null`). 회복 경로 없음 = 진입점 없음.
+- **상태성/일시적 불가** — 실행 중이라 취소 불가, 권한 부족, 연결 상태 등 회복
+  경로가 있는 것 → **disabled + Radix 툴팁(사유 명시)**. 레이아웃 널뛰기 방지.
+- **폐기 패턴 3종** — ① disabled + native `title` ② 클릭 후 백엔드 에러 ③ toast
+  차단 — 전부 위 둘 중 하나로 수렴시킨다.
+- **capability flag 유지** — 숨김 판정에도 프론트가 미지원 여부를 알아야 하므로
+  capability flag 의 UI 소비 필요성은 유지. #1043 flag 정리와 결속.
+
+정적 미지원 숨김이 §1 parity 를 은폐하면 안 된다: "다른 paradigm 엔 있는 작업인데
+여기선 개념이 진짜 없는가?" 를 먼저 묻는다. 개념이 있는데 안 만든 것 = parity
+부채(숨김 금지, §3 예외 등록), 개념이 없는 것 = 정적 미지원(숨김).
+
+**개정 이력**: 종전 ui-parity 문구 "미지원이면 숨기지 말고 사유와 함께 표시" 는 이
+결정으로 뒤집혔다 — discoverability 보다 깔끔한 UI 우선(트레이드오프 인지 하 결정,
+2026-07-10 소유자). 후속 22.10 계열(#1052 등)은 이 규약 기준으로 처리한다.
+
 ## Why
 
 2026-06-17 UI 일관성 감사에서 paradigm 간 불일치를 발견했다. 메타 분석
@@ -84,7 +105,9 @@ document(상단 미렌더, tab-local chip) · kv(상단 활성 `DbSwitcher` *와
    UI 위치를 정하지 말 것. 위치는 §2 표 또는 예외 기준.
 3. **비활성 UI 추적** — `disabled` / `aria-disabled` / `return null` / read-only
    fallback 이 나오면, "그 기능이 다른 곳에 숨어있나?" 를 먼저 묻는다. 비활성 UI는
-   흔히 다른 곳에 중복 구현됐다는 신호다. 숨김으로 끝내면 머지 보류.
+   흔히 다른 곳에 중복 구현됐다는 신호다. 미지원 표현 자체는 §4 규약(정적=숨김,
+   상태성=disabled+툴팁)을 따르되, parity 위반(다른 paradigm 엔 있는 작업)을
+   숨김으로 은폐하면 머지 보류.
 4. **분기 시 예외 등록** — §3 형식으로 이 파일에 추가. 사유 없는 분기 = 보류.
 
 ## Known debt (2026-06-17 감사 — 예외 미등록 부채)
