@@ -6,7 +6,12 @@ import { useCurrentWindowConnectionId } from "@hooks/useCurrentWindowConnectionI
 // its path sits under the `workspaceStore` dir, so keep a justified line disable.
 // eslint-disable-next-line no-restricted-imports -- same-store internal: store instance leaf, no cycle (#1361)
 import { useWorkspaceStore } from "./store";
-import type { Tab, WorkspaceState } from "./types";
+import type {
+  QueryTab,
+  Tab,
+  WorkspaceState,
+  WorkspaceStoreState,
+} from "./types";
 
 // Selector hooks are the intentional read seam between workspaceStore and the
 // sibling stores below. They stay co-located with workspaceStore to keep ADR
@@ -86,28 +91,93 @@ export function useWorkspaceFor(
   });
 }
 
+// #1447 — the derived hooks below subscribe to their narrow slice directly
+// instead of composing `useCurrentWorkspace()`. The whole-`WorkspaceState`
+// subscription made every keystroke (`updateQuerySql` → new `ws` identity)
+// re-render all consumers, even those reading keystroke-stable fields
+// (`activeTabId`, `dirtyTabIds`, `closedTabHistory`). `updateQuerySql` only
+// replaces the edited tab + the `tabs` array, so narrow selections keep
+// their identity and skip the re-render.
+
+function selectWorkspace(
+  state: { workspaces: WorkspaceStoreState["workspaces"] },
+  key: WorkspaceKey | null,
+): WorkspaceState | null {
+  if (!key) return null;
+  return state.workspaces[key.connId]?.[key.db] ?? null;
+}
+
 export function useActiveTab(): Tab | null {
-  const ws = useCurrentWorkspace();
-  if (!ws || !ws.activeTabId) return null;
-  return ws.tabs.find((t) => t.id === ws.activeTabId) ?? null;
+  const key = useCurrentWorkspaceKey();
+  return useWorkspaceStore((state) => {
+    const ws = selectWorkspace(state, key);
+    if (!ws?.activeTabId) return null;
+    return ws.tabs.find((t) => t.id === ws.activeTabId) ?? null;
+  });
+}
+
+/**
+ * #1447 — the active tab minus the per-keystroke `sql` field. `useActiveTab`
+ * consumers that never read the query text (App chrome, SchemaTree
+ * highlight, DbSwitcher, WorkspaceSidebar) re-rendered on every SQL editor
+ * keystroke because the edited tab object is replaced wholesale. All other
+ * tab fields keep their identity across an sql edit, so the `useShallow`
+ * projection returns the previous object and skips the re-render.
+ */
+export type ActiveTabSansSql = Exclude<Tab, QueryTab> | Omit<QueryTab, "sql">;
+
+export function useActiveTabSansSql(): ActiveTabSansSql | null {
+  const key = useCurrentWorkspaceKey();
+  return useWorkspaceStore(
+    useShallow((state): ActiveTabSansSql | null => {
+      const ws = selectWorkspace(state, key);
+      if (!ws?.activeTabId) return null;
+      const tab = ws.tabs.find((t) => t.id === ws.activeTabId) ?? null;
+      if (!tab || tab.type !== "query") return tab;
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars -- rest-omit drops the per-keystroke `sql` field
+      const { sql: _sql, ...sansSql } = tab;
+      return sansSql;
+    }),
+  );
 }
 
 const EMPTY_TABS: readonly Tab[] = Object.freeze([]);
 const EMPTY_STRINGS: readonly string[] = Object.freeze([]);
 
 export function useCurrentTabs(): readonly Tab[] {
-  const ws = useCurrentWorkspace();
-  return ws?.tabs ?? EMPTY_TABS;
+  const key = useCurrentWorkspaceKey();
+  return useWorkspaceStore(
+    (state) => selectWorkspace(state, key)?.tabs ?? EMPTY_TABS,
+  );
+}
+
+/**
+ * #1447 — open tab ids in strip order. Keystroke-stable alternative to
+ * `useCurrentTabs` for consumers that only need identity/order (e.g. the
+ * App Cmd+1..9 switcher).
+ */
+export function useCurrentTabIds(): readonly string[] {
+  const key = useCurrentWorkspaceKey();
+  return useWorkspaceStore(
+    useShallow(
+      (state) =>
+        selectWorkspace(state, key)?.tabs.map((t) => t.id) ?? EMPTY_STRINGS,
+    ),
+  );
 }
 
 export function useActiveTabId(): string | null {
-  const ws = useCurrentWorkspace();
-  return ws?.activeTabId ?? null;
+  const key = useCurrentWorkspaceKey();
+  return useWorkspaceStore(
+    (state) => selectWorkspace(state, key)?.activeTabId ?? null,
+  );
 }
 
 export function useDirtyTabIds(): readonly string[] {
-  const ws = useCurrentWorkspace();
-  return ws?.dirtyTabIds ?? EMPTY_STRINGS;
+  const key = useCurrentWorkspaceKey();
+  return useWorkspaceStore(
+    (state) => selectWorkspace(state, key)?.dirtyTabIds ?? EMPTY_STRINGS,
+  );
 }
 
 /**
@@ -151,6 +221,8 @@ export function useConnectionHasDirtyTabs(connId: string | null): boolean {
 }
 
 export function useClosedTabHistory(): readonly Tab[] {
-  const ws = useCurrentWorkspace();
-  return ws?.closedTabHistory ?? EMPTY_TABS;
+  const key = useCurrentWorkspaceKey();
+  return useWorkspaceStore(
+    (state) => selectWorkspace(state, key)?.closedTabHistory ?? EMPTY_TABS,
+  );
 }

@@ -9,8 +9,9 @@ import { useConnectionStore } from "@features/connection";
 import {
   resolveActiveDb,
   useActiveTabId,
+  useActiveTabSansSql,
   useConnectionHasDirtyTabs,
-  useCurrentTabs,
+  useCurrentTabIds,
   useCurrentWorkspaceKey,
   useDirtyTabIds,
   useWorkspaceStore,
@@ -45,7 +46,11 @@ export default function App() {
   const markConnectionUsed = useMruStore((s) => s.markConnectionUsed);
 
   const activeTabId = useActiveTabId();
-  const tabs = useCurrentTabs();
+  // #1447 — App consumes only sql-free tab data (active-tab fields for the
+  // shortcut handlers, ordered ids for Cmd+1..9). Subscribing to the full
+  // `tabs` array re-rendered the entire App tree on every editor keystroke.
+  const activeTab = useActiveTabSansSql();
+  const tabIds = useCurrentTabIds();
   const workspaceKey = useCurrentWorkspaceKey();
   // Wave 9.5 회귀 5 — Cmd+N + menu:new-query-tab 의 fallback path 에서 사용.
   // 컴포넌트에서 `store.getState()` 직접 호출은 룰 (no-restricted-syntax) 위반
@@ -147,9 +152,6 @@ export default function App() {
       if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key === "t") {
         if (isEditableTarget(e.target)) return;
         e.preventDefault();
-        const activeTab = activeTabId
-          ? tabs.find((t) => t.id === activeTabId)
-          : null;
         const connectionId = activeTab?.connectionId ?? "";
         if (connectionId) {
           const db = resolveActiveDb(connectionId);
@@ -160,7 +162,7 @@ export default function App() {
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [activeTabId, tabs, addQueryTab, markConnectionUsed]);
+  }, [activeTab, addQueryTab, markConnectionUsed]);
 
   // Cmd+. / Ctrl+. — cancel running query
   useEffect(() => {
@@ -168,9 +170,6 @@ export default function App() {
       if ((e.metaKey || e.ctrlKey) && e.key === ".") {
         if (isEditableTarget(e.target)) return;
         e.preventDefault();
-        const activeTab = activeTabId
-          ? tabs.find((t) => t.id === activeTabId)
-          : null;
         if (
           activeTab &&
           activeTab.type === "query" &&
@@ -187,7 +186,7 @@ export default function App() {
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [activeTabId, tabs]);
+  }, [activeTab]);
 
   // Sprint 291 + Wave 9.5 회귀 5 (2026-05-16) — workspace 윈도우에서의 Cmd+N
   // 은 connection-create dialog 가 아니라 raw query tab 을 연다 (Cmd+T 와
@@ -212,9 +211,6 @@ export default function App() {
       if (key === "n") {
         if (isEditableTarget(e.target)) return;
         e.preventDefault();
-        const activeTab = activeTabId
-          ? tabs.find((t) => t.id === activeTabId)
-          : null;
         let connectionId = activeTab?.connectionId ?? "";
         if (!connectionId) {
           // 회귀 5 fallback A — 현재 window 라벨에서 conn 추출 (workspace
@@ -250,7 +246,7 @@ export default function App() {
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [activeTabId, tabs, addQueryTab, markConnectionUsed, focusedConnId]);
+  }, [activeTab, addQueryTab, markConnectionUsed, focusedConnId]);
 
   // Wave 9.5 회귀 5 (2026-05-16) — backend NSMenu Cmd+N 가 workspace 라벨로
   // 발사하는 `menu:new-query-tab` 수신. user journey: workspace focused +
@@ -259,9 +255,6 @@ export default function App() {
   useTauriListener(
     () =>
       listen("menu:new-query-tab", () => {
-        const activeTab = activeTabId
-          ? tabs.find((t) => t.id === activeTabId)
-          : null;
         let connectionId = activeTab?.connectionId ?? "";
         if (!connectionId) {
           const label = getCurrentWindowLabel();
@@ -273,7 +266,7 @@ export default function App() {
         addQueryTab(connectionId, db);
         markConnectionUsed(connectionId);
       }),
-    [activeTabId, tabs, addQueryTab, markConnectionUsed, focusedConnId],
+    [activeTab, addQueryTab, markConnectionUsed, focusedConnId],
   );
 
   // Cmd+1..9 / Ctrl+1..9 — switch to the N-th workspace tab (1-indexed).
@@ -290,15 +283,15 @@ export default function App() {
       const digit = e.key;
       if (digit < "1" || digit > "9") return;
       const index = Number(digit) - 1;
-      const tab = tabs[index];
-      if (!tab) return;
+      const tabId = tabIds[index];
+      if (!tabId) return;
       e.preventDefault();
       if (!workspaceKey) return;
-      setActiveTab(workspaceKey.connId, workspaceKey.db, tab.id);
+      setActiveTab(workspaceKey.connId, workspaceKey.db, tabId);
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [tabs, workspaceKey, setActiveTab]);
+  }, [tabIds, workspaceKey, setActiveTab]);
 
   // Cmd+R / Ctrl+R / F5 — context-aware refresh.
   // Cmd+Shift+R / Ctrl+Shift+R — Sprint 258 (AC-258-08): broadcasts a
@@ -324,10 +317,6 @@ export default function App() {
         return;
       }
 
-      const activeTab = activeTabId
-        ? tabs.find((t) => t.id === activeTabId)
-        : null;
-
       if (activeTab && activeTab.type === "table") {
         // Table tab active — dispatch based on subview
         if (activeTab.subView === "records") {
@@ -342,7 +331,7 @@ export default function App() {
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [activeTabId, tabs]);
+  }, [activeTab]);
 
   // Cmd+I / Ctrl+I — format SQL
   useEffect(() => {

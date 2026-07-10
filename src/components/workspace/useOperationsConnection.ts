@@ -10,7 +10,8 @@
 // looking at, never a stale MRU pick.
 
 import { useConnectionStore } from "@stores/connectionStore";
-import { useActiveTab } from "@stores/workspaceStore";
+// #1447 — sql-free active-tab read (only `connectionId` is consumed).
+import { useActiveTabSansSql } from "@stores/workspaceStore";
 import { getDataSourceProfile } from "@/types/dataSource";
 import type {
   ConnectionConfig,
@@ -30,7 +31,7 @@ export interface OperationsConnection {
 }
 
 export function useOperationsConnection(): OperationsConnection | null {
-  const activeTab = useActiveTab();
+  const activeTab = useActiveTabSansSql();
   const connections = useConnectionStore((s) => s.connections);
   const activeStatuses = useConnectionStore((s) => s.activeStatuses);
   const focusedConnId = useConnectionStore((s) => s.focusedConnId);
