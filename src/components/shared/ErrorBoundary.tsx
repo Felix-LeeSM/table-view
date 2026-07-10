@@ -37,11 +37,17 @@ export default class ErrorBoundary extends Component<
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     logger.error("ErrorBoundary caught an error:", error, errorInfo);
+    // #1140 — move focus into the fallback so keyboard / SR users land on the
+    // alert instead of being stranded on the element that threw. Runs after
+    // commit, so the ref is attached to whichever fallback variant rendered.
+    this.fallbackRef?.focus();
   }
 
   handleReload = () => {
     this.setState({ hasError: false, error: null });
   };
+
+  private fallbackRef: HTMLDivElement | null = null;
 
   render() {
     if (!this.state.hasError) {
@@ -53,7 +59,11 @@ export default class ErrorBoundary extends Component<
     if (this.props.variant === "panel") {
       return (
         <div
+          ref={(el) => {
+            this.fallbackRef = el;
+          }}
           role="alert"
+          tabIndex={-1}
           className="flex h-full w-full flex-col items-center justify-center gap-3 bg-background p-6"
         >
           <h2 className="text-sm font-semibold text-foreground">
@@ -70,7 +80,14 @@ export default class ErrorBoundary extends Component<
     }
 
     return (
-      <div className="flex h-screen w-screen flex-col items-center justify-center gap-4 bg-background p-8">
+      <div
+        ref={(el) => {
+          this.fallbackRef = el;
+        }}
+        role="alert"
+        tabIndex={-1}
+        className="flex h-screen w-screen flex-col items-center justify-center gap-4 bg-background p-8"
+      >
         <h1 className="text-lg font-semibold text-foreground">
           {i18n.t("shared:errorTitle")}
         </h1>

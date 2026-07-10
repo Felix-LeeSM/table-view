@@ -243,8 +243,10 @@ export default function SearchSidebar({ connectionId }: SearchSidebarProps) {
       </div>
 
       <label className="flex items-center gap-2 border-b border-border px-3 py-2 text-3xs text-muted-foreground">
+        {/* #1140 — the wrapping <label> text already names the checkbox, so no
+            aria-label override (which previously mismatched the visible text
+            "Show hidden/system entries" — WCAG 2.5.3 Label-in-Name). */}
         <Checkbox
-          aria-label={t("search.showSystemAria")}
           checked={showSystem}
           onCheckedChange={(checked) => setShowSystem(checked === true)}
         />

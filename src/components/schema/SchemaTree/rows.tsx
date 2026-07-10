@@ -150,6 +150,9 @@ export function renderSchemaRow(
           aria-level={1}
           aria-expanded={row.isExpanded}
           aria-label={`${row.schemaName} schema`}
+          aria-describedby={
+            row.tableCount > 0 ? `${schemaId}-count` : undefined
+          }
           aria-selected={row.isSelected}
           {...rovingProps(ctx, schemaId)}
           onClick={() => {
@@ -164,21 +167,35 @@ export function renderSchemaRow(
             }
           }}
         >
+          {/* #1140 — keep the identifying aria-label (203 test queries + stable
+              SR name depend on it) but expose the row-count badge to SR via
+              aria-describedby so it is announced after the name instead of
+              being masked by the override. Decorative chevron/folder icons are
+              aria-hidden. */}
           {row.isExpanded ? (
-            <ChevronDown size={12} className="shrink-0" />
+            <ChevronDown size={12} className="shrink-0" aria-hidden />
           ) : (
-            <ChevronRight size={12} className="shrink-0" />
+            <ChevronRight size={12} className="shrink-0" aria-hidden />
           )}
           {row.isExpanded ? (
-            <FolderOpen size={13} className="shrink-0 text-muted-foreground" />
+            <FolderOpen
+              size={13}
+              className="shrink-0 text-muted-foreground"
+              aria-hidden
+            />
           ) : (
-            <Folder size={13} className="shrink-0 text-muted-foreground" />
+            <Folder
+              size={13}
+              className="shrink-0 text-muted-foreground"
+              aria-hidden
+            />
           )}
           <span className="truncate text-sm">{row.schemaName}</span>
           {/* #1217 — table-count badge; readable at a glance even while the
               schema is collapsed. */}
           {row.tableCount > 0 && (
             <span
+              id={`${schemaId}-count`}
               className="ml-auto shrink-0 text-3xs tabular-nums text-muted-foreground"
               aria-label={ctx.t("schemaTableCountAria", {
                 count: row.tableCount,
@@ -459,15 +476,19 @@ export function renderItemRow(
   const isHighlighted = isFunc || isMetadata ? row.isSelected : row.isActive;
   const ariaLevel = flat ? 1 : ctx.treeShape === "no-schema" ? 2 : 3;
   const icon = isView ? (
-    <Eye size={12} className="shrink-0 text-muted-foreground" />
+    <Eye size={12} className="shrink-0 text-muted-foreground" aria-hidden />
   ) : isFunc ? (
-    <Code2 size={12} className="shrink-0 text-muted-foreground" />
+    <Code2 size={12} className="shrink-0 text-muted-foreground" aria-hidden />
   ) : isSequence ? (
-    <ListOrdered size={12} className="shrink-0 text-muted-foreground" />
+    <ListOrdered
+      size={12}
+      className="shrink-0 text-muted-foreground"
+      aria-hidden
+    />
   ) : isMetadata ? (
-    <Link2 size={12} className="shrink-0 text-muted-foreground" />
+    <Link2 size={12} className="shrink-0 text-muted-foreground" aria-hidden />
   ) : (
-    <Table2 size={12} className="shrink-0 text-muted-foreground" />
+    <Table2 size={12} className="shrink-0 text-muted-foreground" aria-hidden />
   );
 
   if (isMetadata) {
@@ -521,6 +542,11 @@ export function renderItemRow(
           role="treeitem"
           aria-level={ariaLevel}
           aria-label={`${item.name} ${itemLabel}`}
+          aria-describedby={
+            isTableItem && "row_count" in item
+              ? `${row.key}-rowcount`
+              : undefined
+          }
           aria-selected={isHighlighted}
           {...rovingProps(ctx, row.key)}
           onClick={handleClick}
@@ -536,10 +562,15 @@ export function renderItemRow(
             }
           }}
         >
+          {/* #1140 — keep the identifying aria-label (203 test queries depend on
+              it) but expose the row-count to SR via aria-describedby so it is
+              announced after the name instead of being masked by the override.
+              Decorative type icon is aria-hidden. */}
           {icon}
           <span className="truncate text-sm">{item.name}</span>
           {isTableItem && "row_count" in item && (
             <span
+              id={`${row.key}-rowcount`}
               className="ml-auto text-3xs text-muted-foreground"
               data-row-count="true"
               aria-label={rowCountLabel(
