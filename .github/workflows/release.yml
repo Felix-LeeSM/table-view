@@ -178,6 +178,22 @@ jobs:
           grep -q "Sealed Resources version=2" /tmp/cs.txt || { echo "FAIL: no Sealed Resources — bundle not signed, would be 'damaged'"; cat /tmp/cs.txt; exit 1; }
           echo "OK: macOS bundle carries Sealed Resources (proper ad-hoc signature)"
 
+      # #1430 — updater signature gate. tauri-action signs each updater bundle
+      # with TAURI_SIGNING_PRIVATE_KEY (a CI secret); shipped clients verify
+      # with the pubkey committed in src-tauri/tauri.conf.json. If the two
+      # drift (e.g. a key rotation updates only one side), every client's
+      # auto-update fails silently — updater errors are DEV-log-only and there
+      # is no telemetry (ADR 0036). Verify every produced `.sig` against the
+      # committed pubkey and fail the run before the draft is published.
+      # Pure-Node minisign verification (Ed25519 + BLAKE2b in node:crypto):
+      # needs no minisign binary, no private key, no new secret. The script
+      # fails closed if the leg produced zero updater signatures.
+      - name: Verify updater signatures against committed pubkey
+        shell: bash
+        env:
+          ARTIFACT_PATHS: ${{ steps.tauri.outputs.artifactPaths }}
+        run: node scripts/release/verify-updater-sigs.mjs
+
       # tauri-action exposes `artifactPaths` — the JSON array of bundles it just
       # uploaded as release assets. We hash each one with sha256 and upload the
       # sidecar `.sha256` file (single-line `<hash>  <filename>` so the standard
