@@ -105,7 +105,9 @@ describe("DataSourceProfile registry", () => {
     sqlite: expectedCapabilities({
       connection: { test: true, filePicker: true, readOnly: true },
       query: { query: true, multiStatement: true, cancel: true },
-      catalog: { browse: true, schema: true },
+      // Issue #1459 — SQLite claims catalog.indexes (PRAGMA index_list
+      // introspection is live); constraints remains a stub → false.
+      catalog: { browse: true, schema: true, indexes: true },
       edit: { editRows: true, requiresPrimaryKeyForEdit: true },
       intelligence: { erd: true },
     }),

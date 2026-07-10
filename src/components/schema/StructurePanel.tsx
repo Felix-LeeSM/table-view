@@ -26,6 +26,7 @@ import { Button } from "@components/ui/button";
 import CreateTriggerDialog from "./CreateTriggerDialog";
 import DropTriggerDialog from "./DropTriggerDialog";
 import { useConnectionStore } from "@stores/connectionStore";
+import { supportsCatalogFeature } from "@/types/dataSource";
 
 interface StructurePanelProps {
   connectionId: string;
@@ -105,6 +106,19 @@ export default function StructurePanel({
   );
   const supportsStructuredTriggerCrud =
     dbType !== "mysql" && dbType !== "mariadb";
+  // Issue #1459 — Indexes/Constraints sub-tabs read the catalog capability
+  // flags instead of rendering unconditionally. Engines whose adapter has no
+  // structured introspection (DuckDB both, SQLite constraints) hide the tab.
+  const showIndexesTab = supportsCatalogFeature(dbType, "indexes");
+  const showConstraintsTab = supportsCatalogFeature(dbType, "constraints");
+  // Clamp a sub-tab that the capability gate hides (e.g. a persisted
+  // `initialSubTab="indexes"` on DuckDB) back to Columns so the render
+  // branches AND the fetch effect never target a gated tab.
+  const effectiveSubTab: SubTab =
+    (activeSubTab === "indexes" && !showIndexesTab) ||
+    (activeSubTab === "constraints" && !showConstraintsTab)
+      ? "columns"
+      : activeSubTab;
   // fetchId guards against stale resolves overwriting state after a
   // Cancel-then-retry. The in-flight `query_id` is plumbed through the
   // Tauri command so the Cancel button can drive `cancel_query`.
@@ -116,7 +130,7 @@ export default function StructurePanel({
     setLoading(true);
     setError(null);
     try {
-      if (activeSubTab === "columns") {
+      if (effectiveSubTab === "columns") {
         const cols = await getTableColumns(
           connectionId,
           database,
@@ -126,7 +140,7 @@ export default function StructurePanel({
         if (fetchIdRef.current !== fetchId) return;
         setColumns(cols);
         setHasFetchedColumns(true);
-      } else if (activeSubTab === "indexes") {
+      } else if (effectiveSubTab === "indexes") {
         const idx = await getTableIndexes(
           connectionId,
           database,
@@ -136,7 +150,7 @@ export default function StructurePanel({
         if (fetchIdRef.current !== fetchId) return;
         setIndexes(idx);
         setHasFetchedIndexes(true);
-      } else if (activeSubTab === "constraints") {
+      } else if (effectiveSubTab === "constraints") {
         const cons = await getTableConstraints(
           connectionId,
           database,
@@ -165,9 +179,10 @@ export default function StructurePanel({
       setError(String(e));
       // Mark the tab as fetched even on failure so a subsequent retry
       // that succeeds with an empty list can reach the empty-state copy.
-      if (activeSubTab === "columns") setHasFetchedColumns(true);
-      else if (activeSubTab === "indexes") setHasFetchedIndexes(true);
-      else if (activeSubTab === "constraints") setHasFetchedConstraints(true);
+      if (effectiveSubTab === "columns") setHasFetchedColumns(true);
+      else if (effectiveSubTab === "indexes") setHasFetchedIndexes(true);
+      else if (effectiveSubTab === "constraints")
+        setHasFetchedConstraints(true);
       else setHasFetchedTriggers(true);
     }
     if (fetchIdRef.current === fetchId) {
@@ -179,7 +194,7 @@ export default function StructurePanel({
     database,
     table,
     schema,
-    activeSubTab,
+    effectiveSubTab,
     getTableColumns,
     getTableIndexes,
     getTableConstraints,
@@ -217,11 +232,16 @@ export default function StructurePanel({
 
   // `key` is the stable internal identifier; only `label` flows through
   // the paradigm dictionary. Indexes/Constraints stay paradigm-fixed —
-  // no Mongo/kv equivalent in scope yet.
+  // no Mongo/kv equivalent in scope yet. Issue #1459 — both are gated on
+  // the engine's `catalog.indexes` / `catalog.constraints` capability.
   const subTabs: { key: SubTab; label: string }[] = [
     { key: "columns", label: vocab.units },
-    { key: "indexes", label: t("indexesTab") },
-    { key: "constraints", label: t("constraintsTab") },
+    ...(showIndexesTab
+      ? [{ key: "indexes" as const, label: t("indexesTab") }]
+      : []),
+    ...(showConstraintsTab
+      ? [{ key: "constraints" as const, label: t("constraintsTab") }]
+      : []),
     // Sprint 272 — read-only Triggers tab. Order is fixed (after
     // Constraints) per master spec § 2 and contract § In Scope.
     { key: "triggers", label: t("triggersTab") },
@@ -231,7 +251,7 @@ export default function StructurePanel({
     <div className="flex flex-1 flex-col overflow-hidden">
       {/* Sub-tab bar */}
       <Tabs
-        value={activeSubTab}
+        value={effectiveSubTab}
         onValueChange={(v) => setActiveSubTab(v as SubTab)}
       >
         <TabsList className="w-full justify-start rounded-none border-b border-border bg-secondary gap-0">
@@ -278,7 +298,7 @@ export default function StructurePanel({
           the "No X found" empty state with an empty array. */}
       {!loading &&
         !error &&
-        activeSubTab === "columns" &&
+        effectiveSubTab === "columns" &&
         hasFetchedColumns && (
           <ColumnsEditor
             key={`${connectionId}-${table}-${schema}`}
@@ -293,7 +313,7 @@ export default function StructurePanel({
         )}
       {!loading &&
         !error &&
-        activeSubTab === "indexes" &&
+        effectiveSubTab === "indexes" &&
         hasFetchedIndexes && (
           <IndexesEditor
             connectionId={connectionId}
@@ -308,7 +328,7 @@ export default function StructurePanel({
         )}
       {!loading &&
         !error &&
-        activeSubTab === "constraints" &&
+        effectiveSubTab === "constraints" &&
         hasFetchedConstraints && (
           <ConstraintsEditor
             connectionId={connectionId}
@@ -330,7 +350,7 @@ export default function StructurePanel({
           "No triggers" flash on first paint. */}
       {!loading &&
         !error &&
-        activeSubTab === "triggers" &&
+        effectiveSubTab === "triggers" &&
         hasFetchedTriggers && (
           <TriggersList
             triggers={triggers}
