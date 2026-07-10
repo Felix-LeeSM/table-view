@@ -25,7 +25,12 @@ caveman 모드. 작업 시 read:
 
 - 본문 **9-15줄 cap**. 50줄 넘으면 lazy 위반 — source 로 옮기고 redirect.
 - main read (해당 agent 본인 룰) 는 강제, 조건부 read 만 진짜 lazy.
-- frontmatter `name` / `description` / `tools` / `model` 필수.
+- frontmatter `name` / `description` / `tools` / `model` 필수. subagent spawn
+  도구명은 `Agent` (구세대 별칭 `Task` 금지 — drift 소스).
+- **중첩 spawn 불가**: subagent 는 또 다른 subagent 를 spawn 못 한다 (top-level
+  세션만 `Agent` tool 사용). fan-out coordinator (`pr-reviewer`) 는 top-level
+  전용이고, spawn 실패 시 관점-순차 단독 검증으로 강등한다 — 기준·fallback SOT 는
+  `.agents/skills/pr-review/SKILL.md` Review Pack.
 - 각 wrapper 본문 첫 줄은 `caveman 모드.` 로 시작 (delivery / security-handoff 는 조건부 변형 `caveman 모드 (단 …)`). agent 파일 간 상속 메커니즘은 없음 — 아래 "caveman/ponytail 주입" 참조.
 
 ## caveman/ponytail 주입 (상속 아님)
