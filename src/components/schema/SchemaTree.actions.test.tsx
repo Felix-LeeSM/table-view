@@ -192,8 +192,33 @@ describe("SchemaTree — actions", () => {
     });
   }
 
+  // Seed conn1 as a real writable engine so the DDL-exposure assertions lock
+  // the `canMutateSchema === true` path with an actual dbType (#1052), not the
+  // undefined-dbType fallback.
+  function seedPostgresConnection() {
+    useConnectionStore.setState({
+      connections: [
+        {
+          id: "conn1",
+          name: "pg",
+          dbType: "postgresql",
+          host: "localhost",
+          port: 5432,
+          user: "postgres",
+          hasPassword: false,
+          database: "test",
+          groupId: null,
+          color: null,
+          environment: null,
+          paradigm: "rdb",
+        },
+      ],
+    });
+  }
+
   // AC-CM-01: Right-clicking a table node shows context menu with correct items
-  it("shows context menu with Structure/Data/Rename/Drop on table right-click", async () => {
+  it("shows context menu with Structure/Data/Rename/Drop on table right-click (writable postgres)", async () => {
+    seedPostgresConnection();
     await expandSchemaWithTables();
 
     const tableItem = screen.getByLabelText("users table");
@@ -211,11 +236,25 @@ describe("SchemaTree — actions", () => {
     expect(screen.getByText("Drop")).toBeInTheDocument();
   });
 
-  // #1052 — DuckDB opens read-only (AccessMode::ReadOnly). Its DDL entries
-  // (Rename / Drop) are HIDDEN (ui-parity §4: static unsupported = hide);
-  // the read affordances Structure / Data stay. The writable-engine path is
-  // locked by the postgres case above (Rename/Drop still shown).
-  it("hides Rename/Drop on a read-only DuckDB table but keeps Structure/Data (#1052)", async () => {
+  // #1052 — F2 is a DDL entry point too. On a writable engine it opens the
+  // rename dialog; the DuckDB counterpart below asserts it does NOT.
+  it("F2 opens rename on a writable postgres table (#1052)", async () => {
+    seedPostgresConnection();
+    await expandSchemaWithTables();
+
+    await act(async () => {
+      fireEvent.keyDown(screen.getByLabelText("users table"), { key: "F2" });
+    });
+
+    expect(screen.getByText("Rename Table")).toBeInTheDocument();
+  });
+
+  // #1052 — DuckDB is read-only (only RDB with edit.editRows false). Its DDL
+  // entries (Rename / Drop context items AND the F2 rename shortcut) are HIDDEN
+  // / inert (ui-parity §4: static unsupported = hide); the read affordances
+  // Structure / Data stay. The writable-engine path is locked by the explicit
+  // postgres cases above (Rename/Drop shown, F2 opens rename).
+  it("hides Rename/Drop and inerts F2 on a read-only DuckDB table but keeps Structure/Data (#1052)", async () => {
     useConnectionStore.setState({
       connections: [
         {
@@ -257,6 +296,13 @@ describe("SchemaTree — actions", () => {
     expect(screen.getByText("Data")).toBeInTheDocument();
     expect(screen.queryByText("Rename")).toBeNull();
     expect(screen.queryByText("Drop")).toBeNull();
+
+    // F2 must not open the rename dialog on a read-only engine (regression for
+    // the click-then-error DDL path).
+    await act(async () => {
+      fireEvent.keyDown(tableItem, { key: "F2" });
+    });
+    expect(screen.queryByText("Rename Table")).toBeNull();
   });
 
   // AC-CM-02: Context menu closes when onClose is called (click outside)

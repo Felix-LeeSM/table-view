@@ -664,9 +664,11 @@ export function hasConnectionCapability(
 }
 
 /**
- * Issue #1052 — whether this engine supports row-level data editing. DuckDB
- * opens read-only (`AccessMode::ReadOnly`) and is the ONLY RDB engine with
- * `edit.editRows: false`, so this flag also gates the schema-tree DDL entries
+ * Issue #1052 — whether this engine supports row-level data editing. DuckDB is
+ * read-only because its backend adapter implements no write/DDL path (the
+ * `AccessMode::ReadOnly` connection reflects that, it is not the cause), and it
+ * is the ONLY RDB engine with `edit.editRows: false`, so this flag also gates
+ * the schema-tree DDL entries
  * (Create / Rename / Drop): an engine that cannot edit a row cannot run DDL
  * either, and the `ddl.*` capability group is under-populated (SQLite / MSSQL /
  * Oracle leave it false yet support table DDL), which makes `editRows` the

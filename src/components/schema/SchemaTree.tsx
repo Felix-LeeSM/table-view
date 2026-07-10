@@ -118,7 +118,7 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
   // showing the control there would be an error-on-click (#1048). Also hidden
   // on Mongo/Redis and before dbType has loaded.
   const canExportMigration = supportsMigrationExport(dbType);
-  // #1052 — DuckDB is read-only (AccessMode::ReadOnly), so its DDL entries
+  // #1052 — DuckDB's backend adapter has no write/DDL path, so its DDL entries
   // (Create / Rename / Drop table) are hidden. `supportsRowEditing` is the
   // reliable read-only discriminator among RDB engines (see its doc comment).
   const canMutateSchema = supportsRowEditing(dbType);

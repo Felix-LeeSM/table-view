@@ -565,7 +565,11 @@ export function renderItemRow(
             if (e.key === "Enter" || e.key === " ") {
               e.preventDefault();
               handleClick();
-            } else if (e.key === "F2" && isTableItem) {
+            } else if (e.key === "F2" && isTableItem && ctx.canMutateSchema) {
+              // #1052 — F2 rename is a DDL entry point too: gate it with the
+              // same `canMutateSchema` as the context-menu Rename item, else a
+              // read-only DuckDB table opens RenameTableDialog then errors on
+              // the backend (deprecated click-then-error pattern).
               e.preventDefault();
               ctx.handleStartRename(item.name, row.schemaName);
             }
