@@ -13,12 +13,18 @@
 // stay in each side's own unit tests, not this shared fixture.
 import { describe, expect, it } from "vitest";
 import fixtureRaw from "../../../tests/fixtures/classifier-parity.json?raw";
-import { analyzeStatement, type Severity } from "./sqlSafety";
+import {
+  analyzeStatement,
+  type Severity,
+  type StatementAnalysisOptions,
+} from "./sqlSafety";
 
 interface ParityCase {
   name: string;
   sql: string;
   expectedSeverity: Severity;
+  // Issue #1450 — optional per-case dialect (only MySQL changes a verdict).
+  dialect?: StatementAnalysisOptions["dialect"];
 }
 interface ParityFixture {
   cases: ParityCase[];
@@ -33,7 +39,10 @@ describe("[#1352] FE<->BE classifier parity — shared fixture", () => {
 
   for (const c of fixture.cases) {
     it(`${c.name}: ${c.sql}`, () => {
-      expect(analyzeStatement(c.sql).severity).toBe(c.expectedSeverity);
+      const options = c.dialect ? { dialect: c.dialect } : undefined;
+      expect(analyzeStatement(c.sql, options).severity).toBe(
+        c.expectedSeverity,
+      );
     });
   }
 });

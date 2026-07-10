@@ -17,6 +17,9 @@ pub(super) struct MssqlColumnCatalogRow {
     pub(super) data_type_base: String,
     pub(super) nullable: bool,
     pub(super) default_value: Option<String>,
+    /// #1433 — `sys.columns.is_identity`. IDENTITY columns carry no
+    /// default constraint, so this flag is the only catalog signal.
+    pub(super) is_identity: bool,
     pub(super) comment: Option<String>,
 }
 
@@ -129,6 +132,7 @@ fn build_column_info(
         data_type: row.data_type,
         nullable: row.nullable,
         default_value: row.default_value,
+        is_identity: row.is_identity,
         is_primary_key,
         is_foreign_key: fk_reference.is_some(),
         fk_reference,
@@ -253,6 +257,7 @@ mod tests {
             data_type_base: base.into(),
             nullable: true,
             default_value: None,
+            is_identity: false,
             comment: None,
         }
     }

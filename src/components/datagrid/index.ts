@@ -13,6 +13,13 @@ export type { DataGridToolbarProps } from "./DataGridToolbar";
 export { default as DataGridHeaderRow } from "./DataGridTable/HeaderRow";
 export type { HeaderRowProps as DataGridHeaderRowProps } from "./DataGridTable/HeaderRow";
 
+// Issue #1442 — 결과 그리드(read-only / editable raw query)가 DataGridTable
+// 과 같은 가상화 경계/행높이를 재사용하도록 barrel 로 노출.
+export {
+  VIRTUALIZE_THRESHOLD,
+  ROW_HEIGHT_ESTIMATE,
+} from "./DataGridTable/columnUtils";
+
 export { useColumnResize } from "./DataGridTable/useColumnResize";
 export type {
   ColumnResize,

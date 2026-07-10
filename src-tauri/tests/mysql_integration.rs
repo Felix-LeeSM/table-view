@@ -1794,6 +1794,13 @@ async fn test_mysql_get_table_columns() {
     assert!(!id_col.nullable);
     assert!(id_col.is_primary_key);
     assert!(!id_col.is_foreign_key);
+    // #1433 — AUTO_INCREMENT 는 column_default 가 NULL 이라 `extra` 파싱이
+    // is_identity 의 유일한 신호. 여기서 실 MySQL 로 wiring 을 검증한다
+    // (틀리면 datagrid INSERT 생략 fix 가 조용히 no-op).
+    assert!(
+        id_col.is_identity,
+        "AUTO_INCREMENT column must report is_identity=true, got {id_col:?}"
+    );
 
     let name_col = columns
         .iter()
@@ -1802,6 +1809,7 @@ async fn test_mysql_get_table_columns() {
     assert_eq!(name_col.data_type, "varchar(100)");
     assert!(!name_col.nullable);
     assert!(!name_col.is_primary_key);
+    assert!(!name_col.is_identity, "plain column must not be identity");
 
     let created_col = columns
         .iter()
@@ -1817,6 +1825,8 @@ async fn test_mysql_get_table_columns() {
         created_col.default_value.is_some(),
         "created_at should have default"
     );
+    // #1433 — default 가 있어도 identity 는 아니다 (생략 사유가 다름).
+    assert!(!created_col.is_identity, "defaulted column is not identity");
 
     adapter
         .execute_query(

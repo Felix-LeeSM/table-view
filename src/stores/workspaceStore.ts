@@ -39,13 +39,16 @@ export {
 export {
   useActiveTab,
   useActiveTabId,
+  useActiveTabSansSql,
   useClosedTabHistory,
   useConnectionHasDirtyTabs,
+  useCurrentTabIds,
   useCurrentTabs,
   useCurrentWorkspace,
   useCurrentWorkspaceKey,
   useDirtyTabIds,
   useWorkspaceFor,
   useWorkspaceKeyForConnection,
+  type ActiveTabSansSql,
   type WorkspaceKey,
 } from "./workspaceStore/selectors";

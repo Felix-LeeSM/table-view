@@ -166,10 +166,9 @@ const INTEGRITY_SWITCH_OFF_RES: RegExp[] = [
 const KNOWN_SAFE_RE =
   /^(BEGIN|START\s+TRANSACTION|COMMIT|END\s+TRANSACTION|ROLLBACK|SAVEPOINT|RELEASE|VACUUM|ANALYZE|REINDEX|CHECKPOINT|PRAGMA)\b/;
 
-const LINE_COMMENT_RE = /--[^\n\r]*/g;
-const BLOCK_COMMENT_RE = /\/\*[\s\S]*?\*\//g;
 const WHITESPACE_RE = /\s+/g;
-const WORD_BOUNDARY_WHERE_RE = /\bWHERE\b/i;
+
+type Dialect = NonNullable<StatementAnalysisOptions["dialect"]>;
 
 /**
  * Sprint 391 — DDL destructive classifier callsite migration.
@@ -426,12 +425,84 @@ function statementAnalysisFromAst(
   }
 }
 
-function stripComments(sql: string): string {
-  return sql.replace(BLOCK_COMMENT_RE, " ").replace(LINE_COMMENT_RE, " ");
+/**
+ * Issue #1450 / PR #1473 — literal-aware, dialect-gated comment stripper.
+ * Replaces the old two-regex (BLOCK_COMMENT_RE / LINE_COMMENT_RE) pass. One
+ * pass so string literals, quoted identifiers, and dollar-quotes are copied
+ * verbatim (a comment marker inside them is NOT a comment). The dialect gates
+ * three scanning rules:
+ *   - Block comments depth-count ONLY for PostgreSQL — the one dialect that
+ *     nests `/* /* *\/ *\/`. Every other dialect (MySQL/MariaDB/SQLite/
+ *     Oracle/MSSQL) ends the comment at the FIRST close marker, exactly what
+ *     the real server does. Review #1473 F1: depth-counting a non-nesting
+ *     dialect fails OPEN on an unbalanced open — `/* /* *\/ DROP TABLE t` was
+ *     consumed whole → "" → info, while MySQL ends the comment at the first
+ *     close and executes the DROP. An unknown dialect defaults to first-close
+ *     (fail-closed, restores the pre-#1473 behavior).
+ *   - '#' is a line comment only for MySQL/MariaDB (dialect === "mysql");
+ *     elsewhere it is an operator (PostgreSQL XOR) or a temp-table prefix
+ *     (MSSQL #t).
+ *   - Backslash literal escapes only for MySQL/MariaDB (review #1473 N1) —
+ *     `\'` stays inside the literal there; standard SQL treats `\` as a plain
+ *     character.
+ */
+function stripComments(sql: string, dialect?: Dialect): string {
+  const hashComments = dialect === "mysql";
+  const backslashEscapes = dialect === "mysql";
+  const nestedBlockComments = dialect === "postgresql";
+  let out = "";
+  let i = 0;
+  const n = sql.length;
+  while (i < n) {
+    const ch = sql[i];
+    if (ch === "'" || ch === '"' || ch === "`") {
+      const end = skipQuotedLiteral(sql, i, ch, backslashEscapes);
+      out += sql.slice(i, end);
+      i = end;
+      continue;
+    }
+    if (ch === "$") {
+      const end = scanDollarQuoteEnd(sql, i);
+      if (end !== null) {
+        out += sql.slice(i, end);
+        i = end;
+        continue;
+      }
+    }
+    // Line comment: `--` (all dialects) or `#` (MySQL only) → one space.
+    if ((ch === "-" && sql[i + 1] === "-") || (hashComments && ch === "#")) {
+      i += ch === "#" ? 1 : 2;
+      while (i < n && sql[i] !== "\n") i++;
+      out += " ";
+      continue;
+    }
+    // Block comment `/* … */` — depth-counted for PostgreSQL (nesting);
+    // first close marker ends it for every other dialect (fail-closed).
+    if (ch === "/" && sql[i + 1] === "*") {
+      let depth = 1;
+      i += 2;
+      while (i < n && depth > 0) {
+        if (nestedBlockComments && sql[i] === "/" && sql[i + 1] === "*") {
+          depth++;
+          i += 2;
+        } else if (sql[i] === "*" && sql[i + 1] === "/") {
+          depth--;
+          i += 2;
+        } else {
+          i++;
+        }
+      }
+      out += " ";
+      continue;
+    }
+    out += ch;
+    i++;
+  }
+  return out;
 }
 
-function normalize(sql: string): string {
-  return stripComments(sql).replace(WHITESPACE_RE, " ").trim();
+function normalize(sql: string, dialect?: Dialect): string {
+  return stripComments(sql, dialect).replace(WHITESPACE_RE, " ").trim();
 }
 
 function hasMssqlBatchSeparator(sql: string): boolean {
@@ -453,8 +524,45 @@ function isMssqlSafetyContext(options?: StatementAnalysisOptions): boolean {
   return options?.dialect === "mssql";
 }
 
-function hasOuterWhere(stripped: string): boolean {
-  return WORD_BOUNDARY_WHERE_RE.test(stripped);
+/**
+ * Issue #1450 — word-boundary `WHERE` presence that skips string literals,
+ * quoted identifiers, and dollar-quotes. The old `/\bWHERE\b/i` matched a
+ * `WHERE` inside a string literal (`SET note = 'ask WHERE money'`), so an
+ * unbounded UPDATE/DELETE was mis-read as bounded and degraded to `warn`.
+ * `stripped` is upper-cased at every callsite, so the needle is upper only.
+ * `backslashEscapes` mirrors `stripComments` (MySQL/MariaDB, review #1473 N1)
+ * so both scanners agree on literal boundaries.
+ */
+function hasOuterWhere(stripped: string, backslashEscapes: boolean): boolean {
+  let i = 0;
+  const n = stripped.length;
+  while (i < n) {
+    const ch = stripped[i];
+    if (ch === "'" || ch === '"' || ch === "`") {
+      i = skipQuotedLiteral(stripped, i, ch, backslashEscapes);
+      continue;
+    }
+    if (ch === "$") {
+      const end = scanDollarQuoteEnd(stripped, i);
+      if (end !== null) {
+        i = end;
+        continue;
+      }
+    }
+    if (
+      stripped.startsWith("WHERE", i) &&
+      !isWordChar(stripped[i - 1]) &&
+      !isWordChar(stripped[i + 5])
+    ) {
+      return true;
+    }
+    i++;
+  }
+  return false;
+}
+
+function isWordChar(ch: string | undefined): boolean {
+  return ch !== undefined && /[A-Za-z0-9_]/.test(ch);
 }
 
 /**
@@ -487,7 +595,7 @@ function analyzeDmlCte(
     const m = asRe.exec(upper);
     if (m === null) break;
     const openIdx = asRe.lastIndex - 1; // index of the `(`
-    const body = extractBalanced(upper, openIdx);
+    const body = extractBalanced(upper, openIdx, options?.dialect === "mysql");
     if (body == null) break;
     // `body` includes surrounding parens; strip them and re-analyse. The
     // inner *severity* flows through; `worstAnalysis` keeps the dominant
@@ -509,14 +617,18 @@ function analyzeDmlCte(
  * `(SELECT '(')` skews the count and swallows the following CTE. Skip logic
  * mirrors `splitSqlStatements` (sqlUtils.ts) so the two agree.
  */
-function extractBalanced(s: string, idx: number): string | null {
+function extractBalanced(
+  s: string,
+  idx: number,
+  backslashEscapes = false,
+): string | null {
   if (s[idx] !== "(") return null;
   let depth = 0;
   let i = idx;
   while (i < s.length) {
     const ch = s[i];
     if (ch === "'" || ch === '"' || ch === "`") {
-      i = skipQuotedLiteral(s, i, ch);
+      i = skipQuotedLiteral(s, i, ch, backslashEscapes);
       continue;
     }
     if (ch === "$") {
@@ -540,11 +652,27 @@ function extractBalanced(s: string, idx: number): string | null {
  * Skip a quoted literal opened at `start` (`q` ∈ `'` `"` `` ` ``), returning the
  * index just past the closing quote. `'` and `` ` `` treat a doubled quote as
  * an escape; `"` does not (mirrors `splitSqlStatements`). Unterminated → EOF.
+ *
+ * Review #1473 N1 — `backslashEscapes` (MySQL/MariaDB): `\<any>` inside a
+ * `'` / `"` literal is an escape sequence, so `'a\' WHERE …'` stays ONE
+ * literal instead of ending at the escaped quote (a backslash-unaware scan
+ * exposed the quoted WHERE and degraded an unbounded UPDATE to warn).
+ * Backtick identifiers never use backslash escapes (doubling only).
  */
-function skipQuotedLiteral(s: string, start: number, q: string): number {
+function skipQuotedLiteral(
+  s: string,
+  start: number,
+  q: string,
+  backslashEscapes = false,
+): number {
   const escapesByDoubling = q === "'" || q === "`";
+  const backslash = backslashEscapes && q !== "`";
   let i = start + 1;
   while (i < s.length) {
+    if (backslash && s[i] === "\\") {
+      i += 2;
+      continue;
+    }
     if (s[i] === q) {
       if (escapesByDoubling && s[i + 1] === q) {
         i += 2;
@@ -554,7 +682,7 @@ function skipQuotedLiteral(s: string, start: number, q: string): number {
     }
     i++;
   }
-  return i;
+  return Math.min(i, s.length);
 }
 
 /**
@@ -574,7 +702,7 @@ export function analyzeStatement(
   sql: string,
   options?: StatementAnalysisOptions,
 ): StatementAnalysis {
-  const normalized = normalize(sql);
+  const normalized = normalize(sql, options?.dialect);
   if (normalized.length === 0) {
     // Sprint 254 — empty / unrecognised input defaults to INFO so the
     // SafeMode matrix never escalates a benign no-op buffer. WARN is
@@ -680,7 +808,7 @@ export function analyzeStatement(
   }
 
   if (/^DELETE\s+FROM\b/.test(upper)) {
-    if (!hasOuterWhere(upper)) {
+    if (!hasOuterWhere(upper, options?.dialect === "mysql")) {
       return {
         kind: "dml-delete",
         severity: "danger",
@@ -697,7 +825,7 @@ export function analyzeStatement(
   }
 
   if (/^UPDATE\s+\S/.test(upper)) {
-    if (!hasOuterWhere(upper)) {
+    if (!hasOuterWhere(upper, options?.dialect === "mysql")) {
       return {
         kind: "dml-update",
         severity: "danger",

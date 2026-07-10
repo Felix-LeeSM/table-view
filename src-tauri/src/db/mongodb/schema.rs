@@ -1171,6 +1171,7 @@ pub(super) fn infer_columns_from_samples(samples: &[Document]) -> Vec<ColumnInfo
             data_type: data_type.to_string(),
             nullable,
             default_value: None,
+            is_identity: false,
             is_primary_key: true,
             is_foreign_key: false,
             fk_reference: None,
@@ -1186,6 +1187,7 @@ pub(super) fn infer_columns_from_samples(samples: &[Document]) -> Vec<ColumnInfo
             // nullable because MongoDB will auto-assign one on write.
             nullable: false,
             default_value: None,
+            is_identity: false,
             is_primary_key: true,
             is_foreign_key: false,
             fk_reference: None,
@@ -1208,6 +1210,7 @@ pub(super) fn infer_columns_from_samples(samples: &[Document]) -> Vec<ColumnInfo
             data_type: data_type.to_string(),
             nullable,
             default_value: None,
+            is_identity: false,
             is_primary_key: false,
             is_foreign_key: false,
             fk_reference: None,

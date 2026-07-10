@@ -32,7 +32,9 @@ export {
   resolveActiveDb,
   useActiveTab,
   useActiveTabId,
+  useActiveTabSansSql,
   useClosedTabHistory,
+  useCurrentTabIds,
   useCurrentTabs,
   useCurrentWorkspace,
   useCurrentWorkspaceKey,
@@ -42,6 +44,7 @@ export {
   useWorkspaceStore,
 } from "@stores/workspaceStore";
 export type {
+  ActiveTabSansSql,
   QueryTab,
   SidebarState,
   Tab,

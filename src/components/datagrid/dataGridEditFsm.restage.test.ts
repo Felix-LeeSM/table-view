@@ -113,6 +113,20 @@ describe("buildRestageSnapshot (#1126 Phase 1)", () => {
     expect(snap!.pendingDeletedRowKeys.size).toBe(0);
   });
 
+  // Reason: #1433 리뷰 B1 — 삭제 undo 재-INSERT snapshot 의 실 NULL 은
+  // verbatim 보존되어야 한다. sqlGenerator 가 이 null 을 명시 NULL 로 emit
+  // 하는 계약과 짝 — 미입력(undefined)과 달리 생략 대상이 아니다 (2026-07-10)
+  it("committed DELETE reversal preserves real NULL cells verbatim", () => {
+    const src = emptySource();
+    src.pendingDeletedRowKeys.add("row-1-0");
+    src.pendingDeletedRowSnapshots.set("row-1-0", [1, null]);
+
+    const snap = buildRestageSnapshot(src, COLUMNS);
+
+    expect(snap).not.toBeNull();
+    expect(snap!.pendingNewRows).toStrictEqual([[1, null]]);
+  });
+
   it("committed INSERT with a reproducible PK → reverse DELETE", () => {
     const src = emptySource();
     src.pendingNewRows = [[7, "New"]];

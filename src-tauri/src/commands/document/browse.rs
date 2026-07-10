@@ -722,6 +722,7 @@ mod tests {
                 data_type: "string".into(),
                 nullable: true,
                 default_value: None,
+                is_identity: false,
                 is_primary_key: false,
                 is_foreign_key: false,
                 fk_reference: None,
