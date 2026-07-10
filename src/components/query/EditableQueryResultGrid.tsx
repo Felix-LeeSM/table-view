@@ -1,5 +1,6 @@
 import {
   useCallback,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -8,6 +9,7 @@ import {
 import { useTranslation } from "react-i18next";
 import Decimal from "decimal.js";
 import { X, Save, Trash2, Maximize2, Pencil } from "lucide-react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { Button } from "@components/ui/button";
 import { safeStringifyCell } from "@lib/jsonCell";
 import type { QueryResult } from "@/types/query";
@@ -17,8 +19,10 @@ import {
   cellToEditString,
   editKey,
   getInputTypeForColumn,
+  ROW_HEIGHT_ESTIMATE,
   useColumnResize,
   useGridRoving,
+  VIRTUALIZE_THRESHOLD,
 } from "@components/datagrid";
 import { getDefaultRem } from "@/lib/columnCategory";
 import {
@@ -174,13 +178,42 @@ export default function EditableQueryResultGrid({
     onCommitWidth: setWidth,
   });
 
-  // issue #1130 AC1/AC2 — 공유 data-cell roving. raw editable grid 는 모든 row
-  // 를 렌더(가상화 없음)라 scrollRowIntoView 불필요. 좌표계: reorder 없어
-  // visualCol == colIdx.
+  // Issue #1442 — 대용량 SQL 결과 DOM 폭증 방어. DataGridTable 과 같은
+  // threshold/행높이/overscan 으로 가상화. threshold 이하는 기존 전량 렌더
+  // 경로 유지. 편집 중인 행이 window 밖으로 스크롤되면 unmount 되지만 편집
+  // 상태는 hook 에 남아 스크롤 복귀 시 그대로 복원된다 (DataGridTable 동일).
+  const shouldVirtualize = result.rows.length > VIRTUALIZE_THRESHOLD;
+  const rowVirtualizer = useVirtualizer({
+    count: shouldVirtualize ? result.rows.length : 0,
+    getScrollElement: () => scrollContainerRef.current,
+    estimateSize: () => ROW_HEIGHT_ESTIMATE,
+    // DataGridTable 과 동일 근거(#1295) — 빠른 scrollbar drag 의 blank flash 방지.
+    overscan: 24,
+  });
+
+  useEffect(() => {
+    if (!shouldVirtualize) return;
+    rowVirtualizer.scrollToIndex(0, { align: "start" });
+    // 새 결과(객체 identity 교체) 로드 시에만 최상단으로 리셋.
+    // `rowVirtualizer` 는 매 렌더 새 객체라 deps 에 넣으면 매 렌더 리셋된다
+    // (DataGridTable #1369 와 동일 근거).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [result, shouldVirtualize]);
+
+  // issue #1130 AC1/AC2 — 공유 data-cell roving. 좌표계: reorder 없어
+  // visualCol == colIdx. 가상화 시 window 밖 행은 scrollToIndex 로 스크롤-인
+  // 후 hook 이 재시도해 focus 한다 (useGridRoving 의 bounded rAF retry).
   const roving = useGridRoving(
     result.rows.length,
     result.columns.length,
     scrollContainerRef,
+    {
+      scrollRowIntoView: (row) => {
+        if (shouldVirtualize) {
+          rowVirtualizer.scrollToIndex(row, { align: "auto" });
+        }
+      },
+    },
   );
 
   const contextMenuItems: ContextMenuItem[] = contextMenu
@@ -341,8 +374,14 @@ export default function EditableQueryResultGrid({
             })}
           </div>
         </div>
-        <div role="rowgroup">
-          {result.rows.map((row, rowIdx) => {
+        {(() => {
+          // 가상/비가상 branch 가 같은 행 JSX 를 공유한다. 가상 branch 는
+          // DataGridTable 패턴 그대로 absolute-position + 고정 높이 행.
+          const renderRow = (
+            row: (typeof result.rows)[number],
+            rowIdx: number,
+            rowStyle?: CSSProperties,
+          ) => {
             const rk = rowKeyFn(rowIdx);
             const isDeleted = grid.pendingDeletedRowKeys.has(rk);
             return (
@@ -357,6 +396,7 @@ export default function EditableQueryResultGrid({
                   display: "grid",
                   gridTemplateColumns: "var(--cols)",
                   minWidth: "max-content",
+                  ...rowStyle,
                 }}
               >
                 {row.map((cell, colIdx) => {
@@ -480,24 +520,52 @@ export default function EditableQueryResultGrid({
                 })}
               </div>
             );
-          })}
-          {result.rows.length === 0 && (
-            <div
-              role="row"
-              className="border-b border-border"
-              style={{ minWidth: "max-content" }}
-            >
+          };
+
+          if (shouldVirtualize) {
+            return (
               <div
-                role="gridcell"
-                aria-colindex={1}
-                style={{ gridColumn: "1 / -1" }}
-                className="px-3 py-4 text-center text-xs text-muted-foreground"
+                role="rowgroup"
+                style={{
+                  position: "relative",
+                  height: rowVirtualizer.getTotalSize(),
+                  width: "100%",
+                }}
               >
-                {t("editableGrid.noData")}
+                {rowVirtualizer.getVirtualItems().map((virtualRow) =>
+                  renderRow(result.rows[virtualRow.index]!, virtualRow.index, {
+                    position: "absolute",
+                    top: virtualRow.start,
+                    left: 0,
+                    right: 0,
+                    height: virtualRow.size,
+                  }),
+                )}
               </div>
+            );
+          }
+          return (
+            <div role="rowgroup">
+              {result.rows.map((row, rowIdx) => renderRow(row, rowIdx))}
+              {result.rows.length === 0 && (
+                <div
+                  role="row"
+                  className="border-b border-border"
+                  style={{ minWidth: "max-content" }}
+                >
+                  <div
+                    role="gridcell"
+                    aria-colindex={1}
+                    style={{ gridColumn: "1 / -1" }}
+                    className="px-3 py-4 text-center text-xs text-muted-foreground"
+                  >
+                    {t("editableGrid.noData")}
+                  </div>
+                </div>
+              )}
             </div>
-          )}
-        </div>
+          );
+        })()}
         {contextMenu && (
           <ContextMenu
             x={contextMenu.x}
