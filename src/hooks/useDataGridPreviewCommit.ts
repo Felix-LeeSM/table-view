@@ -21,6 +21,7 @@ import {
   buildRdbSession,
   documentEditAdapter,
   rdbEditAdapter,
+  type AppliedPendingOps,
   type Paradigm,
   type PreviewSession,
   type RdbAdapterDeps,
@@ -59,6 +60,14 @@ export interface UseDataGridPreviewCommitParams {
    * Called on the RDB / MQL success branch only.
    */
   onCommitCleanup: () => void;
+  /**
+   * Issue #1440 — Mongo bulk commits are ordered but non-transactional. On a
+   * partial failure the adapter reports the pending origins of the ops the
+   * server already applied; the facade must drop exactly those entries from
+   * the pending slices so a re-commit cannot duplicate them. Document
+   * paradigm only — RDB batches roll back fully and never report this.
+   */
+  onPartialCommit?: (applied: AppliedPendingOps) => void;
   /**
    * 커밋 시도 중 surface 한 cell-level coercion error map. preview 생성
    * 시 reset (adapter 가 채운 `coerceErrors`), batch 실패 시 실패
@@ -138,6 +147,7 @@ export function useDataGridPreviewCommit(
     pendingDeletedRowSnapshots,
     canEditRows = true,
     onCommitCleanup,
+    onPartialCommit,
     setPendingEditErrors,
     beginCommitFlash,
   } = params;
@@ -350,6 +360,12 @@ export function useDataGridPreviewCommit(
       // the backend's `"statement N of M failed"` error. Mongo surfaces
       // `failedIndex` when the adapter error includes `bulk_write op N`;
       // otherwise the banner falls back to the first item.
+      // Issue #1440 — Mongo partial failure: the ops before `failedIndex`
+      // are applied on the server; prune their pending origins so the next
+      // commit (retry OR regenerated preview) can't duplicate them.
+      if (result.appliedPending) {
+        onPartialCommit?.(result.appliedPending);
+      }
       const failedIndex = result.failedIndex ?? 0;
       const failedItem = sess.items[failedIndex];
       setCommitError({
@@ -374,7 +390,7 @@ export function useDataGridPreviewCommit(
         });
       }
     },
-    [onCommitCleanup, fetchData, setPendingEditErrors],
+    [onCommitCleanup, onPartialCommit, fetchData, setPendingEditErrors],
   );
 
   const handleCommit = useCallback(

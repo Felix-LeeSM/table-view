@@ -495,9 +495,68 @@ describe("documentEditAdapter.preparePreview + execute", () => {
     const result = await session!.execute();
     expect(result.ok).toBe(false);
     expect(result.failedIndex).toBe(1);
+    // Issue #1440 — ops before the failed index were applied by the backend;
+    // their pending-state origins must surface so the facade can prune them,
+    // and the user copy must say the applied ops left the pending list.
+    expect(result.appliedPending).toEqual({
+      editKeys: ["0-1"],
+      deleteKeys: [],
+      newRowIndexes: [],
+    });
     expect(result.errorMessage).toMatch(/bulk_write op 1 delete_one failed/);
-    expect(result.errorMessage).toMatch(/not transactional/);
+    expect(result.errorMessage).toMatch(/first 1 of 2 operations/);
+    expect(result.errorMessage).toMatch(/removed from pending/);
     expect(result.errorMessage).not.toMatch(/rolled back/i);
     expect(history.recordError).toHaveBeenCalledTimes(1);
+  });
+
+  it("retry after a partial failure resumes from the failed op — applied ops are not re-sent (#1440)", async () => {
+    // Reason: issue #1440 — the SAME session's execute() must not re-dispatch
+    // ops the backend already applied. A second execute (in-modal retry)
+    // resumes at the failed op, so a duplicate insert/update can't happen.
+    // Date 2026-07-10.
+    bulkWriteDocuments.mockRejectedValueOnce(
+      new Error("bulk_write op 1 delete_one failed: write timeout"),
+    );
+    bulkWriteDocuments.mockResolvedValueOnce({
+      inserted_count: 0,
+      matched_count: 0,
+      modified_count: 0,
+      deleted_count: 1,
+      upserted_ids: [],
+    });
+    const adapter = documentEditAdapter({
+      connectionId: "conn-mongo",
+      history,
+    });
+    const { session } = adapter.preparePreview({
+      data: {
+        ...docData,
+        rows: [
+          ["507f1f77bcf86cd799439011", "alice"],
+          ["507f1f77bcf86cd799439022", "grace"],
+        ],
+        total_count: 2,
+      },
+      schema: "mydb",
+      table: "users",
+      page: 1,
+      pendingEdits: new Map([["0-1", "bob"]]),
+      pendingNewRows: [],
+      pendingDeletedRowKeys: new Set(["row-1-1"]),
+    });
+    const first = await session!.execute();
+    expect(first.ok).toBe(false);
+    expect(first.failedIndex).toBe(1);
+
+    const second = await session!.execute();
+    expect(second.ok).toBe(true);
+    expect(bulkWriteDocuments).toHaveBeenCalledTimes(2);
+    const retryOps = bulkWriteDocuments.mock.calls[1]![3] as Array<{
+      op: string;
+    }>;
+    expect(retryOps).toHaveLength(1);
+    expect(retryOps[0]!.op).toBe("deleteOne");
+    expect(toastSuccess).toHaveBeenCalledWith("1 document change committed.");
   });
 });

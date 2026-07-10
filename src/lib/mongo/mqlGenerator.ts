@@ -105,9 +105,26 @@ export type MqlGenerationError =
   | { kind: "sentinel-edit"; rowIdx: number; column: string }
   | { kind: "invalid-new-row"; rowIdx: number; reason: string };
 
+/**
+ * Issue #1440 — pending-state origin of `commands[i]` (index-aligned, same
+ * contract as `previewLines`). A partially-applied bulk commit uses this to
+ * prune exactly the applied ops from the pending slices so a re-commit
+ * cannot duplicate them:
+ *   - `insert` — index into the caller's `pendingNewRows`.
+ *   - `update` — the full `pendingEdits` keys (incl. nested `:path` suffix)
+ *     merged into that document's single updateOne.
+ *   - `delete` — the `pendingDeletedRowKeys` entry.
+ */
+export type MqlCommandSource =
+  | { kind: "insert"; newRowIndex: number }
+  | { kind: "update"; editKeys: string[] }
+  | { kind: "delete"; deleteKey: string };
+
 export interface MqlPreview {
   previewLines: string[];
   commands: MqlCommand[];
+  /** Issue #1440 — `sources[i]` describes the pending origin of `commands[i]`. */
+  sources: MqlCommandSource[];
   errors: MqlGenerationError[];
 }
 
@@ -268,10 +285,13 @@ export function generateMqlPreview(input: MqlGenerateInput): MqlPreview {
   const errors: MqlGenerationError[] = [];
   const insertLines: string[] = [];
   const insertCommands: MqlCommand[] = [];
+  const insertSources: MqlCommandSource[] = [];
   const updateLines: string[] = [];
   const updateCommands: MqlCommand[] = [];
+  const updateSources: MqlCommandSource[] = [];
   const deleteLines: string[] = [];
   const deleteCommands: MqlCommand[] = [];
+  const deleteSources: MqlCommandSource[] = [];
 
   // ── Update path ─────────────────────────────────────────────────────────
   // Issue #1081 — group pending edits by the row-identity ANCHOR captured at
@@ -289,7 +309,14 @@ export function generateMqlPreview(input: MqlGenerateInput): MqlPreview {
   interface DocEditGroup {
     rowIdx: number;
     row: readonly unknown[] | undefined;
-    cells: Array<{ column: string; value: unknown; nested: boolean }>;
+    // `key` — the full pendingEdits key (issue #1440: partial-commit prune
+    // maps an applied updateOne back to the pending entries it consumed).
+    cells: Array<{
+      key: string;
+      column: string;
+      value: unknown;
+      nested: boolean;
+    }>;
   }
   const editsByDoc = new Map<string, DocEditGroup>();
   pendingEdits.forEach((value, key) => {
@@ -313,7 +340,7 @@ export function generateMqlPreview(input: MqlGenerateInput): MqlPreview {
         : `__noid-${rowIdx}`;
     }
     const fieldPath = path !== null ? `${col.name}.${path}` : col.name;
-    const entry = { column: fieldPath, value, nested: path !== null };
+    const entry = { key, column: fieldPath, value, nested: path !== null };
     const existing = editsByDoc.get(groupKey);
     if (existing) {
       existing.cells.push(entry);
@@ -429,6 +456,7 @@ export function generateMqlPreview(input: MqlGenerateInput): MqlPreview {
       documentId: id,
       patch,
     });
+    updateSources.push({ kind: "update", editKeys: cells.map((c) => c.key) });
   });
 
   // ── Delete path ─────────────────────────────────────────────────────────
@@ -456,6 +484,7 @@ export function generateMqlPreview(input: MqlGenerateInput): MqlPreview {
       collection,
       documentId: id,
     });
+    deleteSources.push({ kind: "delete", deleteKey: delKey });
   });
 
   // ── Insert path ─────────────────────────────────────────────────────────
@@ -495,11 +524,13 @@ export function generateMqlPreview(input: MqlGenerateInput): MqlPreview {
       collection,
       document: cleaned,
     });
+    insertSources.push({ kind: "insert", newRowIndex: rowIdx });
   });
 
   return {
     previewLines: [...insertLines, ...updateLines, ...deleteLines],
     commands: [...insertCommands, ...updateCommands, ...deleteCommands],
+    sources: [...insertSources, ...updateSources, ...deleteSources],
     errors,
   };
 }

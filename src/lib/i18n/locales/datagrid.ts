@@ -134,6 +134,10 @@ export const en = {
     rolledBack: "Commit failed — all changes rolled back: {{message}}",
     commitFailedDoc:
       "Commit failed. MongoDB bulk writes are ordered but not transactional in this app. If a later command fails, earlier document writes may already be committed; pending edits stay available for retry. {{message}}",
+    // Issue #1440 — partial bulk failure with a known applied prefix: the
+    // applied ops are pruned from pending so a re-commit can't duplicate them.
+    partialAppliedDoc:
+      "Commit failed — the first {{applied}} of {{total}} operations were already applied and removed from pending edits. Retrying runs only the remaining operations. {{message}}",
     defaultCommitFailed: "Commit failed.",
     blockedBySafeMode: "Blocked by Safe Mode",
     confirmationRequired: "Confirmation required",
@@ -271,6 +275,9 @@ export const ko = {
     rolledBack: "커밋 실패 — 모든 변경사항이 롤백되었습니다: {{message}}",
     commitFailedDoc:
       "커밋 실패. MongoDB 대량 쓰기는 이 앱에서 순서대로 처리되지만 트랜잭션은 아닙니다. 이후 명령이 실패하면 앞서 기록된 문서 쓰기는 이미 커밋되었을 수 있습니다. 보류 중인 편집은 재시도할 수 있도록 유지됩니다. {{message}}",
+    // Issue #1440 — 부분 실패 시 적용된 앞부분 op 는 보류 목록에서 제거됨.
+    partialAppliedDoc:
+      "커밋 실패 — 전체 {{total}}건 중 앞의 {{applied}}건은 이미 적용되어 보류 편집에서 제거되었습니다. 재시도는 남은 작업만 실행합니다. {{message}}",
     defaultCommitFailed: "커밋 실패.",
     blockedBySafeMode: "세이프 모드에 의해 차단됨",
     confirmationRequired: "확인 필요",

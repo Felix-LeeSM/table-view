@@ -7,6 +7,7 @@ import {
 import {
   generateMqlPreview,
   type MqlCommand,
+  type MqlCommandSource,
   type MqlPreview,
 } from "@/lib/mongo/mqlGenerator";
 import {
@@ -51,12 +52,29 @@ export interface PreviewItem {
   key?: string;
 }
 
+/**
+ * Issue #1440 — pending-state origins of the ops the backend APPLIED before
+ * the failing op of a non-transactional Mongo bulk commit. The facade prunes
+ * exactly these entries so a re-commit cannot duplicate the applied writes.
+ */
+export interface AppliedPendingOps {
+  /** Full `pendingEdits` keys (incl. nested `:path` suffix). */
+  editKeys: string[];
+  /** `pendingDeletedRowKeys` entries. */
+  deleteKeys: string[];
+  /** Indexes into `pendingNewRows`. */
+  newRowIndexes: number[];
+}
+
 export interface BatchResult {
   ok: boolean;
   /** 0-based index into `session.items` of the failing item. */
   failedIndex?: number;
   failedKey?: string;
   errorMessage?: string;
+  /** Issue #1440 — document paradigm only; set when a partial failure left
+   *  ops before `failedIndex` already applied on the server. */
+  appliedPending?: AppliedPendingOps;
 }
 
 export interface BasePreviewSession {
@@ -175,6 +193,28 @@ function parseMongoBulkWriteFailedIndex(message: string): number | undefined {
   if (!indexMatch) return undefined;
   const index = Number(indexMatch[1]);
   return Number.isInteger(index) && index >= 0 ? index : undefined;
+}
+
+/** Issue #1440 — aggregate the pending origins of applied commands so the
+ *  facade can prune them in one pass. */
+function collectAppliedSources(
+  sources: ReadonlyArray<MqlCommandSource>,
+): AppliedPendingOps {
+  const applied: AppliedPendingOps = {
+    editKeys: [],
+    deleteKeys: [],
+    newRowIndexes: [],
+  };
+  for (const source of sources) {
+    if (source.kind === "insert") {
+      applied.newRowIndexes.push(source.newRowIndex);
+    } else if (source.kind === "update") {
+      applied.editKeys.push(...source.editKeys);
+    } else {
+      applied.deleteKeys.push(source.deleteKey);
+    }
+  }
+  return applied;
 }
 
 /** Build an RDB session directly from raw SQL strings. Used by the hook's
@@ -356,16 +396,26 @@ export function documentEditAdapter(
         risk: "safe",
       }));
       const commands = mqlPreview.commands;
+      // Issue #1440 — resume cursor. Mongo bulk writes are ordered but
+      // non-transactional: on a partial failure the ops before the failed
+      // index are already applied. The cursor advances to the failed op so
+      // an in-modal retry of the SAME session re-sends only the remainder,
+      // never duplicating applied inserts/updates.
+      let cursor = 0;
       const session: DocumentPreviewSession = {
         kind: "document",
         items,
         mqlPreview,
         execute: async () => {
           const startedAt = Date.now();
-          const joinedMql = mqlPreview.previewLines.join("\n");
-          const count = commands.length;
+          const batchStart = cursor;
+          const remaining = commands.slice(batchStart);
+          const joinedMql = mqlPreview.previewLines
+            .slice(batchStart)
+            .join("\n");
+          const count = remaining.length;
           try {
-            await dispatchMqlBatch(deps.connectionId, commands);
+            await dispatchMqlBatch(deps.connectionId, remaining);
             toast.success(
               i18n.t("datagrid:commitFlow.committedDoc", { count }),
             );
@@ -382,21 +432,42 @@ export function documentEditAdapter(
                 : typeof err === "string"
                   ? err
                   : i18n.t("datagrid:commitFlow.failedDoc");
-            const failedIndex = parseMongoBulkWriteFailedIndex(message);
-            const errorMessage = i18n.t("datagrid:commitFlow.commitFailedDoc", {
-              message,
-            });
+            // The backend preserves ordered short-circuit position in
+            // `bulk_write op N ...` errors (0-based within the dispatched
+            // slice). Map back to the absolute items index for the banner.
+            const relativeIndex = parseMongoBulkWriteFailedIndex(message);
+            const failedIndex =
+              relativeIndex === undefined
+                ? undefined
+                : batchStart + relativeIndex;
+            // Issue #1440 — ops in [batchStart, failedIndex) were applied by
+            // the server. Report their pending origins so the facade prunes
+            // them, tell the user how far the batch got, and advance the
+            // resume cursor. An unparseable error (e.g. connection loss
+            // before dispatch) prunes nothing — safe fallback.
+            let appliedPending: AppliedPendingOps | undefined;
+            if (failedIndex !== undefined) {
+              if (failedIndex > batchStart) {
+                appliedPending = collectAppliedSources(
+                  mqlPreview.sources.slice(batchStart, failedIndex),
+                );
+              }
+              cursor = failedIndex;
+            }
+            const errorMessage = appliedPending
+              ? i18n.t("datagrid:commitFlow.partialAppliedDoc", {
+                  applied: failedIndex,
+                  total: commands.length,
+                  message,
+                })
+              : i18n.t("datagrid:commitFlow.commitFailedDoc", { message });
             toast.error(errorMessage);
             deps.history.recordError({
               sql: joinedMql,
               startedAt,
               duration: Date.now() - startedAt,
             });
-            // The backend preserves ordered short-circuit position in
-            // `bulk_write op N ...` errors. Surface it when present so the
-            // preview banner highlights the failed MQL line without implying
-            // that earlier document writes rolled back.
-            return { ok: false, failedIndex, errorMessage };
+            return { ok: false, failedIndex, errorMessage, appliedPending };
           }
         },
       };
