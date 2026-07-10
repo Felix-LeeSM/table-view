@@ -20,46 +20,63 @@ use crate::models::{DatabaseType, FilterCondition, QueryResult, TableData};
 
 use super::{ensure_expected_db, not_connected, register_cancel_token, release_cancel_token};
 
-/// Issue #1351 — the Safe Mode danger check that respects the connection
-/// dialect. The shared `safety::is_danger` is dialect-agnostic and misses
-/// Oracle PL/SQL blocks (`BEGIN … END;`), routine execution (`EXEC` /
-/// `EXECUTE IMMEDIATE` / `CALL`), and admin DDL (`ALTER SYSTEM`, `DROP USER`,
-/// `AUDIT`, non table/index/view `CREATE`, …). On an Oracle connection those
-/// are widened to danger so the backend gate reaches the SAME verdict as the
-/// frontend `oracleSafety.ts` (same risk = same judgment). The Oracle scan
-/// only runs when the shared classifier did not already flag danger and the
-/// connection is Oracle, so non-Oracle paths pay nothing.
+/// Issue #1351 / #1450 / PR #1473 — the Safe Mode danger check that respects
+/// the connection dialect. The shared classifier is dialect-agnostic by default
+/// and (a) misses Oracle PL/SQL blocks (`BEGIN … END;`), routine execution
+/// (`EXEC` / `EXECUTE IMMEDIATE` / `CALL`), and admin DDL (`ALTER SYSTEM`,
+/// `DROP USER`, `AUDIT`, non table/index/view `CREATE`, …), which
+/// `oracle::is_oracle_danger` widens to danger on Oracle connections, and
+/// (b) needs the dialect's comment/literal scanning rules: `#` line comments
+/// and backslash literal escapes exist only on MySQL/MariaDB, and block
+/// comments nest only on PostgreSQL (#1450 / #1473). Resolving the adapter
+/// kind once maps it to the classifier's [`SqlDialect`] and lets the Oracle
+/// widening run only for Oracle, so other dialects pay nothing.
 async fn rdb_sql_is_danger(state: &AppState, connection_id: &str, sql: &str) -> bool {
-    sql_parser_core::safety::is_danger(sql)
-        || (is_oracle_connection(state, connection_id).await
+    let kind = connection_kind(state, connection_id).await;
+    sql_parser_core::safety::is_danger_with_dialect(sql, safety_dialect(kind.as_ref()))
+        || (matches!(kind.as_ref(), Some(DatabaseType::Oracle))
             && sql_parser_core::oracle::is_oracle_danger(sql))
 }
 
-/// Batch form of [`rdb_sql_is_danger`]. Worst tier wins — a single Oracle
-/// PL/SQL / admin statement anywhere in the atomic batch gates the whole
+/// Batch form of [`rdb_sql_is_danger`]. Worst tier wins — a single dialect-
+/// specific danger statement anywhere in the atomic batch gates the whole
 /// batch. The dialect is resolved once, not per statement.
 async fn rdb_batch_is_danger(state: &AppState, connection_id: &str, statements: &[String]) -> bool {
+    let kind = connection_kind(state, connection_id).await;
+    let dialect = safety_dialect(kind.as_ref());
     if statements
         .iter()
-        .any(|sql| sql_parser_core::safety::is_danger(sql))
+        .any(|sql| sql_parser_core::safety::is_danger_with_dialect(sql, dialect))
     {
         return true;
     }
-    is_oracle_connection(state, connection_id).await
+    matches!(kind.as_ref(), Some(DatabaseType::Oracle))
         && statements
             .iter()
             .any(|sql| sql_parser_core::oracle::is_oracle_danger(sql))
 }
 
-/// True when `connection_id` currently resolves to an Oracle adapter. A
-/// missing / non-RDB connection returns `false` — the generic classifier has
-/// already run and the connection error surfaces downstream in dispatch.
-async fn is_oracle_connection(state: &AppState, connection_id: &str) -> bool {
+/// Current adapter kind for `connection_id`, or `None` for a missing / non-RDB
+/// connection (the generic classifier has already run and the connection error
+/// surfaces downstream in dispatch).
+async fn connection_kind(state: &AppState, connection_id: &str) -> Option<DatabaseType> {
     state
         .active_adapter(connection_id)
         .await
-        .map(|adapter| matches!(adapter.kind(), DatabaseType::Oracle))
-        .unwrap_or(false)
+        .map(|adapter| adapter.kind())
+}
+
+/// Adapter kind → classifier scanning rules (#1450 / #1473). MySQL/MariaDB
+/// lead line comments with `#` and escape literals with `\`; PostgreSQL nests
+/// block comments. Everything else — including a missing / non-RDB connection —
+/// maps to the conservative `Other` (first-close comments, fail-closed).
+fn safety_dialect(kind: Option<&DatabaseType>) -> sql_parser_core::safety::SqlDialect {
+    use sql_parser_core::safety::SqlDialect;
+    match kind {
+        Some(DatabaseType::Mysql | DatabaseType::Mariadb) => SqlDialect::MysqlFamily,
+        Some(DatabaseType::Postgresql) => SqlDialect::Postgres,
+        _ => SqlDialect::Other,
+    }
 }
 
 /// Validate query execution inputs.
@@ -831,6 +848,39 @@ pub async fn query_table_data(
 #[allow(clippy::field_reassign_with_default)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn safety_dialect_maps_scanning_rules_per_kind() {
+        use sql_parser_core::safety::SqlDialect;
+        // #1450 / #1473 — MySQL/MariaDB get `#` comments + backslash escapes;
+        // PostgreSQL gets nested block comments; every other kind (and a
+        // missing connection) gets the conservative fail-closed `Other`.
+        assert_eq!(
+            safety_dialect(Some(&DatabaseType::Mysql)),
+            SqlDialect::MysqlFamily
+        );
+        assert_eq!(
+            safety_dialect(Some(&DatabaseType::Mariadb)),
+            SqlDialect::MysqlFamily
+        );
+        assert_eq!(
+            safety_dialect(Some(&DatabaseType::Postgresql)),
+            SqlDialect::Postgres
+        );
+        assert_eq!(
+            safety_dialect(Some(&DatabaseType::Sqlite)),
+            SqlDialect::Other
+        );
+        assert_eq!(
+            safety_dialect(Some(&DatabaseType::Mssql)),
+            SqlDialect::Other
+        );
+        assert_eq!(
+            safety_dialect(Some(&DatabaseType::Oracle)),
+            SqlDialect::Other
+        );
+        assert_eq!(safety_dialect(None), SqlDialect::Other);
+    }
 
     #[test]
     fn validate_query_inputs_rejects_empty_sql() {
