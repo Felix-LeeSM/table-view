@@ -14,10 +14,12 @@
  */
 import type { ConnectionConfig } from "@/types/connection";
 import { useConnectionStore } from "@stores/connectionStore";
-import { useActiveTab } from "@stores/workspaceStore";
+// #1447 — sql-free read: only `connectionId` is consumed, so App (the
+// subscriber driving the prod border) must not re-render per keystroke.
+import { useActiveTabSansSql } from "@stores/workspaceStore";
 
 export function useActiveTabConnection(): ConnectionConfig | null {
-  const activeTab = useActiveTab();
+  const activeTab = useActiveTabSansSql();
   const tabConnectionId = activeTab?.connectionId ?? null;
   const connection = useConnectionStore((s) =>
     tabConnectionId

@@ -171,12 +171,14 @@ export default function Sidebar() {
   // Sprint 379 — sidebar.expanded 의 현 상태로 토글 라벨 / 클릭 핸들러를
   // 분기. 안전한 read path 만 사용 (focusedConnId 없으면 비어 있는 워크
   // 스페이스로 간주 → "Expand" 라벨 + disabled).
-  const workspacesById = useWorkspaceStore((s) => s.workspaces);
-  const expandedCount = useMemo(() => {
+  // #1447 — select the primitive count (not the whole `workspaces` map): a
+  // whole-map subscription re-rendered the entire sidebar tree on every
+  // editor keystroke (`updateQuerySql` replaces the map identity).
+  const expandedCount = useWorkspaceStore((s) => {
     if (!focusedConnId) return 0;
     const db = resolveActiveDb(focusedConnId);
-    return workspacesById[focusedConnId]?.[db]?.sidebar.expanded?.length ?? 0;
-  }, [focusedConnId, workspacesById]);
+    return s.workspaces[focusedConnId]?.[db]?.sidebar.expanded?.length ?? 0;
+  });
   const focusedDbType = useMemo(() => {
     if (!focusedConnId) return null;
     return connections.find((c) => c.id === focusedConnId)?.dbType ?? null;

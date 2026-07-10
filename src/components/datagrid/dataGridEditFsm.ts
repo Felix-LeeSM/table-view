@@ -278,7 +278,32 @@ export function buildRestageSnapshot(
     if (!reproducible) return blockedSnapshot();
   }
 
-  // UPDATE reversal — restore the anchor's original cell value.
+  // UPDATE reversal — restore the anchor's original cell value. The carried
+  // anchor must describe the POST-commit row (#1438): a committed PK edit
+  // means the DB row now holds the NEW PK, so a WHERE built from the pre-edit
+  // anchor would match 0 rows (a silent no-op on dialects without the
+  // single-row guard). Overlay every committed top-level value onto the
+  // anchor, matched by row identity so a cross-page edit that shares a visual
+  // index can't leak its values into another row's anchor (wrong-row write).
+  // Nested `:path` fragments are skipped — they can't reconstruct the whole
+  // cell, and the untouched PK keeps their WHERE correct.
+  const identityCols = columns ?? [];
+  const committedTopLevel: Array<{
+    colIdx: number;
+    value: string | null;
+    identity: string;
+  }> = [];
+  for (const [key, value] of source.pendingEdits) {
+    if (key.includes(":")) continue;
+    const anchor = source.pendingEditRowSnapshots.get(key);
+    if (!anchor) continue;
+    committedTopLevel.push({
+      colIdx: Number.parseInt(key.split("-")[1]!, 10),
+      value,
+      identity: rowIdentityKey(anchor, identityCols),
+    });
+  }
+
   const reversalEdits = new Map<string, string | null>();
   const reversalAnchors = new Map<string, ReadonlyArray<unknown>>();
   for (const key of source.pendingEdits.keys()) {
@@ -288,7 +313,13 @@ export function buildRestageSnapshot(
     if (!anchor) continue; // no row identity → can't rebuild the reversal
     const colIdx = Number.parseInt(baseKey.split("-")[1]!, 10);
     reversalEdits.set(baseKey, cellToEditValue(anchor[colIdx]));
-    reversalAnchors.set(baseKey, anchor);
+    // ponytail: O(edits²) identity scan — pending batches are tiny.
+    const identity = rowIdentityKey(anchor, identityCols);
+    const committedRow = [...anchor];
+    for (const edit of committedTopLevel) {
+      if (edit.identity === identity) committedRow[edit.colIdx] = edit.value;
+    }
+    reversalAnchors.set(baseKey, committedRow);
   }
 
   // DELETE reversal — re-INSERT each deleted row from its snapshot.
