@@ -143,10 +143,31 @@ impl OracleAdapter {
             for (idx, statement) in normalized.iter().enumerate() {
                 let start = std::time::Instant::now();
                 match connection.execute(statement, &[]).await {
-                    Ok(result) => results.push(normalize_dml_result(
-                        result.rows_affected,
-                        start.elapsed().as_millis() as u64,
-                    )),
+                    Ok(result) => {
+                        // Issue #1432 — enforce the #1079 single-row commit guard
+                        // Oracle previously skipped. A committed statement that
+                        // affects != 1 rows (target row vanished -> 0, or a
+                        // PK-less all-column WHERE matching duplicates -> N) rolls
+                        // the whole transaction back instead of a phantom success
+                        // or partial commit. Oracle's SQL%ROWCOUNT reports matched
+                        // rows, so a 0 is a genuine no-match. Dry-run reports
+                        // N-row impact as a preview, matching SQLite.
+                        if matches!(mode, BatchMode::Commit) {
+                            if let Err(err) = crate::db::enforce_single_row_effect(
+                                idx,
+                                total,
+                                result.rows_affected,
+                            ) {
+                                let _ = connection.rollback().await;
+                                let _ = connection.close().await;
+                                return Err(err);
+                            }
+                        }
+                        results.push(normalize_dml_result(
+                            result.rows_affected,
+                            start.elapsed().as_millis() as u64,
+                        ));
+                    }
                     Err(error) => {
                         let _ = connection.rollback().await;
                         let _ = connection.close().await;

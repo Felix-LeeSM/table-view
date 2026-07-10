@@ -2,6 +2,7 @@ use oracle_rs::{Config as OracleDriverConfig, Value};
 use serial_test::serial;
 use table_view_lib::{
     db::{DbAdapter, OracleAdapter, RdbAdapter},
+    error::AppError,
     models::{ConnectionConfig, DatabaseType, QueryType},
 };
 
@@ -168,6 +169,49 @@ async fn oracle_table_data_returns_rows_columns_and_pk_metadata() {
         .iter()
         .any(|c| c.name == "ID" && c.is_primary_key));
     assert!(table_data.columns.iter().any(|c| c.name == "EMAIL"));
+    disconnect_adapter(&adapter).await;
+}
+
+#[tokio::test]
+#[serial]
+#[ignore = "requires local Oracle container plus e2e/fixtures/seed.oracle.sql"]
+async fn oracle_commit_batch_rolls_back_zero_row_update_1432() {
+    // Issue #1432 — Oracle's commit batch must enforce the same single-row guard
+    // as PG/MySQL/SQLite: a statement matching zero rows (the target row was
+    // changed/removed since load, or a PK-less all-column WHERE matched nothing)
+    // rolls the whole transaction back with the shared `statement K of N failed`
+    // error instead of silently committing a phantom success. Oracle's
+    // SQL%ROWCOUNT reports matched rows, so a 0 is a genuine no-match, not a
+    // MySQL-style unchanged-value read.
+    let (_config, _schema, adapter) = connected_adapter().await;
+    let before = scalar_count(
+        &adapter,
+        "SELECT COUNT(*) FROM users WHERE name = 'Phantom1432'",
+    )
+    .await;
+    assert_eq!(
+        before, 0,
+        "precondition: no Phantom1432 row before the batch"
+    );
+
+    let zero_row_batch = vec!["UPDATE users SET name = 'Phantom1432' WHERE id = 9999".to_string()];
+    let guard_err = RdbAdapter::execute_sql_batch(&adapter, &zero_row_batch, None)
+        .await
+        .expect_err("zero-row Oracle commit must roll back, not silently succeed");
+    assert!(
+        matches!(&guard_err, AppError::Database(message)
+            if message.contains("statement 1 of 1 failed")
+                && message.contains("affected 0")
+                && !message.contains("add a primary key")),
+        "expected single-row guard rollback, got {guard_err:?}"
+    );
+
+    let after = scalar_count(
+        &adapter,
+        "SELECT COUNT(*) FROM users WHERE name = 'Phantom1432'",
+    )
+    .await;
+    assert_eq!(after, 0, "zero-row guard must not persist a phantom write");
     disconnect_adapter(&adapter).await;
 }
 

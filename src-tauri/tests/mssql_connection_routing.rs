@@ -401,6 +401,35 @@ async fn run_mssql_runtime_assertions(
         .iter()
         .all(|result| matches!(result.query_type, QueryType::Dml { rows_affected: 1 })));
 
+    // Issue #1432 — a committed batch statement that matches zero rows (the
+    // target row was changed/removed since load, or a PK-less all-column WHERE
+    // matched nothing) must roll the whole transaction back with the shared
+    // `statement K of N failed` guard error instead of silently committing a
+    // phantom success. Mirrors the SQLite/PG `matches_no_rows` regression so all
+    // five adapters behave uniformly.
+    let zero_row_batch =
+        vec!["UPDATE vt902.books SET title = N'Phantom1432' WHERE id = 9999".to_string()];
+    let guard_err = RdbAdapter::execute_sql_batch(adapter, &zero_row_batch, None)
+        .await
+        .expect_err("zero-row MSSQL commit must roll back, not silently succeed");
+    assert!(
+        matches!(&guard_err, AppError::Database(message)
+            if message.contains("statement 1 of 1 failed")
+                && message.contains("affected 0")
+                && !message.contains("add a primary key")),
+        "expected single-row guard rollback, got {guard_err:?}"
+    );
+    let phantom = RdbAdapter::execute_sql(
+        adapter,
+        "SELECT id FROM vt902.books WHERE title = N'Phantom1432'",
+        None,
+    )
+    .await?;
+    assert!(
+        phantom.rows.is_empty(),
+        "zero-row guard must not persist a phantom write"
+    );
+
     let drop = DropTableRequest {
         connection_id: "mssql".into(),
         schema: "vt902".into(),
