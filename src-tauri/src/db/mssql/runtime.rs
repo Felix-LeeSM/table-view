@@ -313,6 +313,22 @@ impl MssqlAdapter {
                 match client.execute(statement, &[]).await {
                     Ok(result) => {
                         let rows_affected = result.total();
+                        // Issue #1432 — enforce the #1079 single-row commit guard
+                        // MSSQL previously skipped. A committed statement that
+                        // affects != 1 rows (target row vanished -> 0, or a
+                        // PK-less all-column WHERE matching duplicates -> N) rolls
+                        // the whole transaction back instead of a phantom success
+                        // or partial commit. `@@ROWCOUNT` reports matched rows, so
+                        // a 0 is a genuine no-match. Dry-run reports N-row impact
+                        // as a preview, matching SQLite.
+                        if matches!(mode, BatchMode::Commit) {
+                            if let Err(err) =
+                                crate::db::enforce_single_row_effect(idx, total, rows_affected)
+                            {
+                                let _ = run_statement(&mut client, "ROLLBACK TRANSACTION").await;
+                                return Err(err);
+                            }
+                        }
                         results.push(QueryResult {
                             truncated: false,
                             columns: Vec::new(),
