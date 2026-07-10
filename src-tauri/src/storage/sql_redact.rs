@@ -122,13 +122,17 @@ pub fn sql_redact(sql: &str) -> String {
 // tokens allowed):
 //   - `PASSWORD 'x'` / `PASSWORD = 'x'` / `PASSWORD = N'x'` / `PASSWORD "x"`
 //     / `PASSWORD $$x$$` / `PASSWORD $tag$x$tag$` — PG / MSSQL / MySQL,
-//     including any identifier containing `password`/`pwd` assigned a
-//     quoted literal (`password_hash = 'x'`).
+//     including any identifier containing `password`/`pwd`/`secret`
+//     assigned a quoted literal (`password_hash = 'x'`, MSSQL
+//     `SCOPED CREDENTIAL ... SECRET = 'x'`; `IDENTITY = 'x'` survives).
+//   - colon assignment `pwd: "x"` / `"password": "x"` — mongo shell / ES
+//     raw text stored in history via the mongo error path.
 //   - `SET PASSWORD FOR <user> = 'x'` — masks the value after `=`, the
 //     user spec (`'app'@'%'`) survives.
 //   - `PASSWORD('x')` / `OLD_PASSWORD('x')` — literal arguments masked.
-//   - `IDENTIFIED [WITH <plugin>] BY|AS [PASSWORD|VALUES] <value>` —
-//     MySQL/Oracle family, quoted value or Oracle bareword.
+//   - `IDENTIFIED [WITH <plugin>] BY|AS [PASSWORD|VALUES] <value>
+//     [REPLACE <value>]` — MySQL/Oracle family, quoted value or Oracle
+//     bareword; the REPLACE literal is the current password.
 //   - inside string literals only: connection-string `password=secret` and
 //     URI userinfo `://user:secret@` (dblink / FDW / COPY targets).
 //
@@ -170,8 +174,11 @@ struct Tok {
 
 /// Lossless, infallible scanner. Unterminated literals extend to the end of
 /// input (fail-closed: their content is invisible to the clause matcher and
-/// still gets the in-literal pass). All token boundaries fall on ASCII
-/// bytes, so span slicing is always UTF-8 safe.
+/// still gets the in-literal pass). Token spans always fall on char
+/// boundaries: quote/comment scans only stop on ASCII bytes (UTF-8
+/// continuation bytes never collide with ASCII), and the catch-all consumes
+/// whole UTF-8 sequences — so span slicing never panics into the fail-open
+/// `catch_unwind` path (2nd review B4).
 fn tokenize(sql: &str) -> Vec<Tok> {
     let b = sql.as_bytes();
     let n = b.len();
@@ -322,18 +329,29 @@ fn tokenize(sql: &str) -> Vec<Tok> {
             });
             continue;
         }
+        // Punctuation / any other byte. Non-ASCII: consume the full UTF-8
+        // sequence (continuation bytes are 0b10xxxxxx) so every token
+        // boundary stays a char boundary — a byte-wise `i + 1` here ended a
+        // token mid-char, later slicing panicked, and `catch_unwind`
+        // fail-opened to the plaintext original (2nd review B4).
+        i += 1;
+        while i < n && (b[i] & 0xC0) == 0x80 {
+            i += 1;
+        }
         toks.push(Tok {
             kind: TokKind::Other,
             start,
-            end: i + 1,
+            end: i,
         });
-        i += 1;
     }
     toks
 }
 
 fn tok_text<'a>(sql: &'a str, t: &Tok) -> &'a str {
-    &sql[t.start..t.end]
+    // Defense in depth for B4: `tokenize` keeps every span on a char
+    // boundary, but a mid-char span must degrade to "no match" — never
+    // panic into the fail-open `catch_unwind` path.
+    sql.get(t.start..t.end).unwrap_or("")
 }
 
 fn is_word(sql: &str, t: &Tok, w: &str) -> bool {
@@ -353,9 +371,12 @@ fn is_value(t: &Tok) -> bool {
 }
 
 /// Subject token of a credential assignment: a bareword or quoted
-/// *identifier* whose text contains `password`/`pwd`. Single-quoted /
-/// dollar-quoted tokens are values, never subjects — that asymmetry is what
-/// keeps `SELECT 'my password'` and JSON literals untouched.
+/// *identifier* whose text contains `password`/`pwd`/`secret` (the latter
+/// covers MSSQL `CREATE DATABASE SCOPED CREDENTIAL ... SECRET = '...'` —
+/// 2nd review B1; `IDENTITY = '...'` is not a subject and survives).
+/// Single-quoted / dollar-quoted tokens are values, never subjects — that
+/// asymmetry is what keeps `SELECT 'my password'` and JSON literals
+/// untouched.
 fn is_pw_subject(sql: &str, t: &Tok) -> bool {
     if !matches!(
         t.kind,
@@ -364,7 +385,7 @@ fn is_pw_subject(sql: &str, t: &Tok) -> bool {
         return false;
     }
     let lower = tok_text(sql, t).to_ascii_lowercase();
-    lower.contains("password") || lower.contains("pwd")
+    lower.contains("password") || lower.contains("pwd") || lower.contains("secret")
 }
 
 /// Fixed sentinel — deterministic, zero entropy, quote-balanced.
@@ -416,7 +437,18 @@ fn credential_replacements(sql: &str, toks: &[Tok]) -> Vec<(usize, usize, &'stat
                 }
                 if k < toks.len() && (is_value(&toks[k]) || toks[k].kind == TokKind::Word) {
                     repl.push((toks[k].start, toks[k].end, SENTINEL));
-                    i = k + 1;
+                    let mut next = k + 1;
+                    // MySQL `IDENTIFIED BY 'new' REPLACE 'current'` — the
+                    // REPLACE literal is the *current* password (2nd
+                    // review B3), mask it too.
+                    if next + 1 < toks.len()
+                        && is_word(sql, &toks[next], "replace")
+                        && is_value(&toks[next + 1])
+                    {
+                        repl.push((toks[next + 1].start, toks[next + 1].end, SENTINEL));
+                        next += 2;
+                    }
+                    i = next;
                     continue;
                 }
             }
@@ -426,8 +458,10 @@ fn credential_replacements(sql: &str, toks: &[Tok]) -> Vec<(usize, usize, &'stat
         if is_pw_subject(sql, &toks[i]) {
             let exact_password = is_word(sql, &toks[i], "password");
             if let Some(t1) = toks.get(i + 1) {
-                // `password = 'x'` / `password_hash = "x"`
-                if is_char(sql, t1, '=') {
+                // `password = 'x'` / `password_hash = "x"` — and the colon
+                // form `pwd: "x"` / `"password": "x"` (mongo shell / ES raw
+                // text stored via the mongo error path, 2nd review B2).
+                if is_char(sql, t1, '=') || is_char(sql, t1, ':') {
                     if let Some(t2) = toks.get(i + 2) {
                         if is_value(t2) {
                             repl.push((t2.start, t2.end, SENTINEL));
@@ -670,6 +704,57 @@ mod tests {
         assert_eq!(
             redact_credentials("ALTER ROLE app PASSWORD $tag$pwEZZ$tag$"),
             "ALTER ROLE app PASSWORD '***'"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // PR #1470 second review — blocking findings B1–B4. Inputs are the
+    // reviewer's own reproduction cases.
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn mssql_scoped_credential_secret_masked_identity_untouched() {
+        // B1 — `SECRET = '...'` is a credential value; `IDENTITY = '...'`
+        // is not and must survive (over-masking was a 1st-review defect).
+        assert_eq!(
+            redact_credentials(
+                "CREATE DATABASE SCOPED CREDENTIAL c WITH IDENTITY='u', SECRET='topsecretS2'"
+            ),
+            "CREATE DATABASE SCOPED CREDENTIAL c WITH IDENTITY='u', SECRET='***'"
+        );
+    }
+
+    #[test]
+    fn colon_assignment_password_masked() {
+        // B2 — mongo shell / ES raw text reaches history via the mongo
+        // error path; colon assignment must mask like `=` does.
+        assert_eq!(
+            redact_credentials(r#"db.createUser({user: "u", pwd: "secretS3", roles: []})"#),
+            r#"db.createUser({user: "u", pwd: '***', roles: []})"#
+        );
+        assert_eq!(
+            redact_credentials(r#"{"password":"esSecretX2"}"#),
+            r#"{"password":'***'}"#
+        );
+    }
+
+    #[test]
+    fn identified_by_replace_masks_current_password() {
+        // B3 — the REPLACE literal is the *current* password.
+        assert_eq!(
+            redact_credentials("ALTER USER u IDENTIFIED BY 'newC6' REPLACE 'oldC6'"),
+            "ALTER USER u IDENTIFIED BY '***' REPLACE '***'"
+        );
+    }
+
+    #[test]
+    fn non_ascii_input_does_not_fail_open() {
+        // B4 — 'и' is 2 bytes in UTF-8; the byte-wise catch-all used to
+        // emit a token ending mid-char, later slicing panicked, and
+        // catch_unwind fail-opened to the plaintext original.
+        assert_eq!(
+            redact_credentials("SET PASSWORD FOR имя = 's3cret'"),
+            "SET PASSWORD FOR имя = '***'"
         );
     }
 
