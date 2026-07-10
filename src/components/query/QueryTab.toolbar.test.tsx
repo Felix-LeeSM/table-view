@@ -516,9 +516,11 @@ describe("QueryTab — toolbar", () => {
   });
 
   it("[#1041] hides Explain for a dbType whose capability declares explain=false", () => {
-    const tab = makeQueryTab({ connectionId: "mysql-conn" });
+    // #1067 flipped MySQL/MariaDB explain to true, so this gate case uses
+    // MSSQL — a server RDB whose capability still declares explain=false.
+    const tab = makeQueryTab({ connectionId: "mssql-conn" });
     useConnectionStore.setState({
-      connections: [makeConn({ id: "mysql-conn", dbType: "mysql" })],
+      connections: [makeConn({ id: "mssql-conn", dbType: "mssql" })],
     });
     render(<QueryTab tab={tab} />);
 

@@ -318,6 +318,10 @@ export const MYSQL_FAMILY_CAPABILITIES = capabilities({
     query: true,
     multiStatement: true,
     cancel: true,
+    // Issue #1067 — MySQL/MariaDB `EXPLAIN FORMAT=JSON` plan surfaces the
+    // shared Explain button; ExplainViewer renders the JSON via its raw
+    // fallback (no PG-shaped plan tree).
+    explain: true,
   },
   catalog: {
     browse: true,

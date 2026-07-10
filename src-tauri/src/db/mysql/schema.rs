@@ -883,6 +883,63 @@ impl MysqlAdapter {
             ))),
         }
     }
+
+    /// Refs #1067 — `CREATE DATABASE \`<name>\``.
+    ///
+    /// MySQL 은 CREATE/DROP DATABASE 를 명시적 transaction block 안에서
+    /// 허용하지 않으므로 active pool 에 single statement 로 보낸다 (sqlx 가
+    /// transaction 으로 감싸지 않은 단문을 auto-commit). PG
+    /// `create_database` 와 동일 contract — identifier 를 ASCII sub-set 으로
+    /// 검증한 뒤 backtick 으로 quote 해 injection 을 막는다.
+    pub async fn create_database(&self, name: &str) -> Result<(), AppError> {
+        use super::mutations::{quote_ident, validate_identifier};
+        validate_identifier(name, "Database name")?;
+        let pool = self.active_pool().await?;
+        let sql = format!("CREATE DATABASE {}", quote_ident(name.trim()));
+        sqlx::query(&sql)
+            .execute(&pool)
+            .await
+            .map_err(|e| AppError::Database(format!("CREATE DATABASE failed: {e}")))?;
+        Ok(())
+    }
+
+    /// Refs #1067 — `DROP DATABASE \`<name>\``. `create_database` 와 대칭.
+    /// 대상 DB 에 붙어있는 session 이 없어야 한다 — 남아있으면 server 가
+    /// 에러를 그대로 surface 한다.
+    pub async fn drop_database(&self, name: &str) -> Result<(), AppError> {
+        use super::mutations::{quote_ident, validate_identifier};
+        validate_identifier(name, "Database name")?;
+        let pool = self.active_pool().await?;
+        let sql = format!("DROP DATABASE {}", quote_ident(name.trim()));
+        sqlx::query(&sql)
+            .execute(&pool)
+            .await
+            .map_err(|e| AppError::Database(format!("DROP DATABASE failed: {e}")))?;
+        Ok(())
+    }
+
+    /// Refs #1067 — `EXPLAIN FORMAT=JSON <sql>`.
+    ///
+    /// MySQL 은 plan tree 를 single-row / single-column 의 JSON **문자열**
+    /// (column `EXPLAIN`, LONGTEXT) 로 반환한다 — PG 의 native `JSON` 타입과
+    /// 달라 String 으로 decode 한 뒤 `serde_json` 으로 파싱한다. `ANALYZE` 는
+    /// 쓰지 않는다: Explain UI 는 plan inspection 이지 실행 profiler 가 아니다
+    /// (PG override 와 동일 정책). ExplainViewer 는 PG 가 아닌 payload 를 raw
+    /// JSON 뷰로 fall-through 하므로 dialect 별 tree 파서 없이도 렌더된다.
+    pub async fn explain_query(&self, sql: &str) -> Result<serde_json::Value, AppError> {
+        let trimmed = sql.trim();
+        if trimmed.is_empty() {
+            return Err(AppError::Validation("SQL must not be empty".into()));
+        }
+        let pool = self.active_pool().await?;
+        let wrapped = format!("EXPLAIN FORMAT=JSON {trimmed}");
+        let row: (String,) = sqlx::query_as(&wrapped)
+            .fetch_one(&pool)
+            .await
+            .map_err(|e| AppError::Database(format!("EXPLAIN failed: {e}")))?;
+        serde_json::from_str(&row.0)
+            .map_err(|e| AppError::Database(format!("EXPLAIN JSON parse failed: {e}")))
+    }
 }
 
 #[cfg(test)]
@@ -924,5 +981,92 @@ mod tests {
             format_fk_reference("app", "orders", "user_id"),
             "app.orders(user_id)"
         );
+    }
+
+    // Refs #1067 — DB lifecycle + EXPLAIN parity. PG (`postgres/schema.rs`)
+    // 의 동명 유닛 케이스와 1:1. identifier / empty-SQL guard 는 pool 없이
+    // 검증 가능한 branch 라 실 MySQL 없이 회귀 가드한다.
+    #[tokio::test]
+    async fn create_database_rejects_empty_name() {
+        let adapter = MysqlAdapter::new();
+        match adapter.create_database("   ").await {
+            Err(AppError::Validation(msg)) => {
+                assert!(msg.contains("Database name"), "unexpected: {msg}");
+            }
+            other => panic!("expected Validation, got ok? {}", other.is_ok()),
+        }
+    }
+
+    #[tokio::test]
+    async fn create_database_rejects_invalid_identifier() {
+        let adapter = MysqlAdapter::new();
+        match adapter.create_database("1bad-name").await {
+            Err(AppError::Validation(_)) => {}
+            other => panic!("expected Validation, got ok? {}", other.is_ok()),
+        }
+    }
+
+    #[tokio::test]
+    async fn create_database_without_connection_fails() {
+        let adapter = MysqlAdapter::new();
+        match adapter.create_database("analytics").await {
+            Err(AppError::Connection(msg)) => {
+                assert!(msg.contains("Not connected"), "unexpected: {msg}");
+            }
+            other => panic!("expected Connection, got ok? {}", other.is_ok()),
+        }
+    }
+
+    #[tokio::test]
+    async fn drop_database_rejects_empty_name() {
+        let adapter = MysqlAdapter::new();
+        match adapter.drop_database("   ").await {
+            Err(AppError::Validation(msg)) => {
+                assert!(msg.contains("Database name"), "unexpected: {msg}");
+            }
+            other => panic!("expected Validation, got ok? {}", other.is_ok()),
+        }
+    }
+
+    #[tokio::test]
+    async fn drop_database_without_connection_fails() {
+        let adapter = MysqlAdapter::new();
+        match adapter.drop_database("analytics").await {
+            Err(AppError::Connection(msg)) => {
+                assert!(msg.contains("Not connected"), "unexpected: {msg}");
+            }
+            other => panic!("expected Connection, got ok? {}", other.is_ok()),
+        }
+    }
+
+    #[tokio::test]
+    async fn explain_query_rejects_empty_sql() {
+        let adapter = MysqlAdapter::new();
+        match adapter.explain_query("").await {
+            Err(AppError::Validation(msg)) => {
+                assert!(msg.contains("must not be empty"), "unexpected: {msg}");
+            }
+            other => panic!("expected Validation, got ok? {}", other.is_ok()),
+        }
+    }
+
+    #[tokio::test]
+    async fn explain_query_rejects_whitespace_sql() {
+        let adapter = MysqlAdapter::new();
+        match adapter.explain_query("   \n\t").await {
+            Err(AppError::Validation(_)) => {}
+            other => panic!("expected Validation, got ok? {}", other.is_ok()),
+        }
+    }
+
+    #[tokio::test]
+    async fn explain_query_without_connection_fails() {
+        let adapter = MysqlAdapter::new();
+        match adapter.explain_query("SELECT 1").await {
+            Err(AppError::Connection(msg)) => {
+                assert!(msg.contains("Not connected"), "unexpected: {msg}");
+            }
+            other => panic!("expected Connection, got ok? {}", other.is_ok()),
+        }
     }
 }
