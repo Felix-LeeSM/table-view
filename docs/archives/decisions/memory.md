@@ -55,6 +55,9 @@ be read from `docs/product/README.md` and `docs/ROADMAP.md` first.
 | [0047](./0047-keep-duckdb-defer-removal/memory.md)                                   | DuckDB 지원 유지 (제거 보류)                                                                  | Accepted | 2026-07-03 | —          |
 | [0048](./0048-undo-stack-survives-commit-restage-pending/memory.md)                  | undo 스택 commit 생존 — Cmd+Z 는 복원값을 pending 편집으로 재스테이징 (보상 commit 폐기)      | Accepted | 2026-07-05 | 0022       |
 | [0049](./0049-auto-update-full-tauri-updater/memory.md)                              | Auto-update — full in-app tauri-plugin-updater (minisign only, ad-hoc OS signing 유지)        | Accepted | 2026-07-06 | 0037       |
+| [0050](./0050-redo-full-symmetry-baseline-normalized/memory.md)                      | redo (Cmd+Shift+Z) 의미론 — 완전 대칭 + baseline 정규화 (ADR 0048 보완)                       | Accepted | 2026-07-10 | —          |
+| [0051](./0051-duckdb-write-ddl-staged/memory.md)                                     | DuckDB write/DDL 개방 — RDB parity 완전체를 PR 단위로 스테이징 (ADR 0046 보완)                | Accepted | 2026-07-10 | —          |
+| [0052](./0052-ssh-tunnel-connection-scoped-tofu/memory.md)                           | SSH 터널 지원 — 연결별 터널 + TOFU host key 핀 + keyring 봉투 재사용                          | Accepted | 2026-07-10 | —          |
 
 ## 역사 (Superseded / Deprecated)
 
