@@ -109,6 +109,15 @@ pub(crate) struct StubRdbAdapter {
     pub dry_run_sql_batch_fn:
         Option<Box<dyn Fn(&[String]) -> Result<Vec<RdbQueryResult>, AppError> + Send + Sync>>,
     pub query_table_data_fn: Option<FnTwo<str, str, TableData>>,
+    /// Issue #1269 — when `Some`, the tracked browse path sends this pid through
+    /// `pid_tx`, so a dispatch test can assert the command records the grid's
+    /// native-cancel server pid. Default (`None`) drops the sender (non-native
+    /// adapter).
+    pub query_table_data_pid: Option<i64>,
+    /// Issue #1269 — optional `(entered, release)` gate for
+    /// `query_table_data_tracked`, letting a test park the browse in flight and
+    /// assert the recorded pid is visible mid-scan. Mirrors `execute_sql_gate`.
+    pub query_table_data_gate: Option<(Arc<Notify>, Arc<Notify>)>,
 
     pub drop_table_fn: Option<FnOne<DropTableRequest, SchemaChangeResult>>,
     pub rename_table_fn: Option<FnOne<RenameTableRequest, SchemaChangeResult>>,
@@ -200,6 +209,8 @@ impl Default for StubRdbAdapter {
             execute_sql_batch_fn: None,
             dry_run_sql_batch_fn: None,
             query_table_data_fn: None,
+            query_table_data_pid: None,
+            query_table_data_gate: None,
             drop_table_fn: None,
             rename_table_fn: None,
             alter_table_fn: None,
@@ -355,6 +366,47 @@ impl RdbAdapter for StubRdbAdapter {
             |f| f(ns, table),
         );
         Box::pin(async move { r })
+    }
+    // Issue #1269 — tracked browse override. Sends `query_table_data_pid`
+    // through `pid_tx` (or drops it), then delegates to the same
+    // `query_table_data_fn` as the plain path so existing dispatch tests are
+    // unaffected. The optional gate parks the future so a test can observe the
+    // recorded pid mid-flight.
+    #[allow(clippy::too_many_arguments)]
+    fn query_table_data_tracked<'a>(
+        &'a self,
+        ns: &'a str,
+        table: &'a str,
+        _: i32,
+        _: i32,
+        _: Option<&'a str>,
+        _: Option<&'a [FilterCondition]>,
+        _: Option<&'a str>,
+        _: Option<&'a CancellationToken>,
+        pid_tx: tokio::sync::oneshot::Sender<i64>,
+    ) -> BoxFuture<'a, Result<TableData, AppError>> {
+        match self.query_table_data_pid {
+            Some(pid) => {
+                let _ = pid_tx.send(pid);
+            }
+            None => drop(pid_tx),
+        }
+        let r = self.query_table_data_fn.as_ref().map_or_else(
+            || {
+                Err(AppError::Unsupported(
+                    "stub default query_table_data".into(),
+                ))
+            },
+            |f| f(ns, table),
+        );
+        let gate = self.query_table_data_gate.clone();
+        Box::pin(async move {
+            if let Some((entered, release)) = gate {
+                entered.notify_one();
+                release.notified().await;
+            }
+            r
+        })
     }
     fn drop_table<'a>(
         &'a self,
