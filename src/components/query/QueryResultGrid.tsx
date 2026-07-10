@@ -349,6 +349,7 @@ function SelectResultArea({
           plan={editablePlan}
           tabId={tabId}
           onAfterCommit={onAfterCommit}
+          sql={sql}
         />
       </>
     );
@@ -375,7 +376,7 @@ function SelectResultArea({
           {exportButton}
         </div>
       )}
-      <QueryResultTable result={result} />
+      <QueryResultTable result={result} sql={sql} />
     </>
   );
 }

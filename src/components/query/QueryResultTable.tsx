@@ -31,7 +31,19 @@ function formatCell(cell: unknown): string {
   return String(cell);
 }
 
-export function QueryResultTable({ result }: { result: QueryResult }) {
+export function QueryResultTable({
+  result,
+  sql,
+}: {
+  result: QueryResult;
+  /**
+   * #1477 review B2 — executed SQL snapshot used as the scroll-reset
+   * identity: a same-SQL refetch (new `result` object) preserves the
+   * virtualized scroll position; a different SQL resets to the top.
+   * Optional: when omitted, every new `result` identity resets (legacy).
+   */
+  sql?: string;
+}) {
   const { t } = useTranslation("query");
   const [cellDetail, setCellDetail] = useState<{
     data: unknown;
@@ -104,12 +116,18 @@ export function QueryResultTable({ result }: { result: QueryResult }) {
     overscan: 24,
   });
 
+  // #1477 review B2 — 스크롤 리셋은 "새 쿼리" 에만. 같은 SQL 재조회(예:
+  // editable 경로의 commit 후 재실행과 대칭)는 result identity 만 바뀌므로
+  // 위치를 보존한다 (DataGridTable #1369 의 executed_query deps 와 같은
+  // 근거). `sql` 을 deps 에 넣지 않는 이유: document 결과의 fallback 은 live
+  // editor 텍스트라 타이핑마다 바뀐다 — result 교체 시점에만 비교한다.
+  // `rowVirtualizer` 는 매 렌더 새 객체라 deps 에 넣으면 매 렌더 리셋된다.
+  const lastResetSqlRef = useRef(sql);
   useEffect(() => {
-    if (!shouldVirtualize) return;
+    const isNewQuery = sql === undefined || lastResetSqlRef.current !== sql;
+    lastResetSqlRef.current = sql;
+    if (!shouldVirtualize || !isNewQuery) return;
     rowVirtualizer.scrollToIndex(0, { align: "start" });
-    // 새 결과(객체 identity 교체) 로드 시에만 최상단으로 리셋.
-    // `rowVirtualizer` 는 매 렌더 새 객체라 deps 에 넣으면 매 렌더 리셋된다
-    // (DataGridTable #1369 와 동일 근거).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [result, shouldVirtualize]);
 

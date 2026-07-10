@@ -59,6 +59,14 @@ export interface EditableQueryResultGridProps {
   tabId?: string;
   /** Called after a successful commit so the parent can re-run the query. */
   onAfterCommit?: () => void;
+  /**
+   * #1477 review B2 — executed SQL snapshot used as the scroll-reset
+   * identity. A same-SQL refetch (commit → `onAfterCommit` re-run) swaps the
+   * `result` object but keeps this string, so the virtualized scroll position
+   * is preserved; a different SQL resets to the top. Optional: when omitted,
+   * every new `result` identity resets (legacy behavior, test-only callers).
+   */
+  sql?: string;
 }
 
 function formatCellDisplay(cell: unknown): string {
@@ -90,6 +98,7 @@ export default function EditableQueryResultGrid({
   plan,
   tabId,
   onAfterCommit,
+  sql,
 }: EditableQueryResultGridProps) {
   const { t } = useTranslation("query");
   const grid = useRawQueryGridEdit({
@@ -99,6 +108,17 @@ export default function EditableQueryResultGrid({
     tabId,
     onAfterCommit,
   });
+
+  // #1477 review B1 — 가상화로 편집 행이 window 밖 unmount 후 remount 될 때
+  // `autoFocus` 는 focus 를 다시 훔치며 스크롤을 편집 셀로 점프시킨다.
+  // DataGridTable (editorFocusRef, L222) 과 동일하게 edit-start 시점에만
+  // effect 로 focus 한다 — remount 는 deps 를 안 바꾸므로 재focus 없음.
+  const editorFocusRef = useRef<HTMLInputElement | null>(null);
+  useEffect(() => {
+    if (grid.editingCell && editorFocusRef.current) {
+      editorFocusRef.current.focus();
+    }
+  }, [grid.editingCell]);
 
   // UI-only environment selector for the production stripe banner. The
   // Safe Mode gate is wired through the hook above; this is purely a
@@ -191,12 +211,18 @@ export default function EditableQueryResultGrid({
     overscan: 24,
   });
 
+  // #1477 review B2 — 스크롤 리셋은 "새 쿼리" 에만. commit 후 재조회
+  // (onAfterCommit) 는 같은 SQL 로 result identity 만 바뀌므로 위치를 보존한다
+  // (DataGridTable #1369 의 executed_query deps 와 같은 근거). `sql` 을 deps
+  // 에 넣지 않는 이유: document 결과의 fallback 은 live editor 텍스트라
+  // 타이핑마다 바뀐다 — result 교체 시점에만 비교한다. `rowVirtualizer` 는
+  // 매 렌더 새 객체라 deps 에 넣으면 매 렌더 리셋된다.
+  const lastResetSqlRef = useRef(sql);
   useEffect(() => {
-    if (!shouldVirtualize) return;
+    const isNewQuery = sql === undefined || lastResetSqlRef.current !== sql;
+    lastResetSqlRef.current = sql;
+    if (!shouldVirtualize || !isNewQuery) return;
     rowVirtualizer.scrollToIndex(0, { align: "start" });
-    // 새 결과(객체 identity 교체) 로드 시에만 최상단으로 리셋.
-    // `rowVirtualizer` 는 매 렌더 새 객체라 deps 에 넣으면 매 렌더 리셋된다
-    // (DataGridTable #1369 와 동일 근거).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [result, shouldVirtualize]);
 
@@ -477,10 +503,10 @@ export default function EditableQueryResultGrid({
                     >
                       {isEditing ? (
                         <input
+                          ref={editorFocusRef}
                           type={getInputTypeForColumn(col.dataType)}
                           className="w-full rounded-sm border-none bg-background px-1 py-0 text-xs text-foreground shadow-sm outline-none"
                           value={grid.editValue}
-                          autoFocus
                           aria-label={t("editableGrid.editingCellAria", {
                             colName: col.name,
                           })}
