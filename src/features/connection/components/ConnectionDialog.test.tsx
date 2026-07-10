@@ -8,7 +8,11 @@ import {
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import ConnectionDialog from "./ConnectionDialog";
-import { useConnectionStore } from "@stores/connectionStore";
+import {
+  useConnectionStore,
+  type ConnectionState,
+} from "@stores/connectionStore";
+import { resetStore } from "@/test-utils";
 import type { ConnectionConfig, ConnectionDraft } from "@/types/connection";
 import * as dataSourceProfiles from "@/types/dataSource";
 import type { DataSourceProfile } from "@/types/dataSource";
@@ -54,13 +58,20 @@ const mockAddConnection = vi
 const mockUpdateConnection = vi.fn().mockResolvedValue(undefined);
 const mockTestConnection = vi.fn().mockResolvedValue("Connection successful");
 
-function setStoreState(overrides: Record<string, unknown> = {}) {
-  useConnectionStore.setState({
+function setStoreState(overrides: Partial<ConnectionState> = {}) {
+  // Route through the shared resetStore helper so every store key is wiped
+  // to undefined before seeding — a plain setState merge would leak keys a
+  // prior test set (e.g. connections, activeStatuses, focusedConnId) into
+  // the next one (#1367). Seed the array/object keys the store's setState
+  // subscriber reads on every update; undefined would crash collectConnectionCleanupIds.
+  resetStore(useConnectionStore, {
+    connections: [],
+    activeStatuses: {},
     addConnection: mockAddConnection,
     updateConnection: mockUpdateConnection,
     testConnection: mockTestConnection,
     ...overrides,
-  } as Partial<Parameters<typeof useConnectionStore.setState>[0]>);
+  });
 }
 
 function renderDialog(
@@ -77,6 +88,9 @@ function renderDialog(
 // Tests
 // ---------------------------------------------------------------------------
 
+// Purpose: ConnectionDialog create/edit form — field rendering, validation,
+// save/update/test-connection flows, URL parsing, DBMS-aware form shape, and
+// test-feedback slot stability (P7 header backfill 2026-07-06, #1367)
 describe("ConnectionDialog", () => {
   beforeEach(() => {
     vi.clearAllMocks();
