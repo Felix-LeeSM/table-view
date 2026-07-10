@@ -138,6 +138,22 @@ async fn detail_masks_password_literals_across_dialects() {
         ("ALTER LOGIN app WITH PASSWORD = 'pw@3ZZ'", "pw@3ZZ"),
         // Oracle — bareword after IDENTIFIED BY (no quotes)
         ("ALTER USER app IDENTIFIED BY pw4ZZ", "pw4ZZ"),
+        // MySQL 8 — plugin auth clause between IDENTIFIED and BY.
+        (
+            "CREATE USER app@'%' IDENTIFIED WITH caching_sha2_password BY 'pw@5ZZ'",
+            "pw@5ZZ",
+        ),
+        // MySQL — plugin + pre-hashed value (WITH plugin AS 'hash').
+        (
+            "CREATE USER app@'%' IDENTIFIED WITH mysql_native_password AS 'pw@6ZZ'",
+            "pw@6ZZ",
+        ),
+        // Double-quoted value (MySQL default string).
+        ("ALTER USER app IDENTIFIED BY \"pw@7ZZ\"", "pw@7ZZ"),
+        // PostgreSQL dollar-quoted value (empty tag).
+        ("ALTER ROLE app PASSWORD $$pw8ZZ$$", "pw8ZZ"),
+        // C-comment injected between keyword and value.
+        ("ALTER USER app WITH PASSWORD/**/'pw@9ZZ'", "pw@9ZZ"),
     ];
 
     for (sql, secret) in cases {
@@ -169,9 +185,11 @@ async fn detail_masks_password_literals_across_dialects() {
         );
         // Statement structure is preserved (the keyword survives, only the
         // value is masked) so history stays useful.
+        let upper = detail.sql.to_uppercase();
         assert!(
-            detail.sql.contains("IDENTIFIED BY") || detail.sql.contains("PASSWORD"),
-            "keyword must be preserved for `{sql}`: {}",
+            (upper.contains("IDENTIFIED") || upper.contains("PASSWORD"))
+                && detail.sql.contains("'***'"),
+            "keyword/sentinel must be preserved for `{sql}`: {}",
             detail.sql
         );
     }

@@ -107,8 +107,14 @@ pub fn sql_redact(sql: &str) -> String {
 /// Covered dialect shapes (case-insensitive):
 ///   - `PASSWORD 'x'` / `PASSWORD = 'x'` / `PASSWORD = N'x'` — PostgreSQL,
 ///     MSSQL (`N'..'` national-string prefix), MySQL.
+///   - `PASSWORD "x"` — double-quoted value (MySQL default string).
+///   - `PASSWORD $$x$$` — PostgreSQL dollar-quoted value (empty tag only; see
+///     the residual note below).
+///   - `PASSWORD/**/'x'` — C-style comment injected between keyword and value.
 ///   - `IDENTIFIED BY 'x'` — MySQL. `IDENTIFIED BY PASSWORD 'hash'` /
 ///     `IDENTIFIED BY VALUES 'hash'` keep the sub-keyword and mask the hash.
+///   - `IDENTIFIED WITH <plugin> BY 'x'` / `IDENTIFIED WITH <plugin> AS 'hash'`
+///     — MySQL 8 plugin auth clause between `IDENTIFIED` and the value.
 ///   - `IDENTIFIED BY x` — Oracle bareword (unquoted) password.
 ///   - any identifier containing `password`/`pwd` directly assigned a quoted
 ///     literal (`password_hash = 'x'`, `passwd = 'x'`) — value masked, the
@@ -118,23 +124,40 @@ pub fn sql_redact(sql: &str) -> String {
 /// The masked value is a fixed sentinel so the result is deterministic and
 /// carries zero entropy. Same `catch_unwind` fallback discipline as
 /// `sql_redact` — a regex panic degrades to the original string.
+///
+/// Residual: a PostgreSQL dollar-quote with a *named* tag (`$tag$secret$tag$`)
+/// is not masked — the `regex` crate has no backreference, so the closing tag
+/// cannot be matched to the opening one. Named-tag passwords are exceedingly
+/// rare; tracked on the issue.
 fn credential_regex() -> &'static Regex {
     static R: OnceLock<Regex> = OnceLock::new();
     R.get_or_init(|| {
+        // Shared value shapes: quoted (single/double, with optional 1-char
+        // string prefix like MSSQL `N'..'`) or an empty-tag dollar-quote.
+        // `[\s\S]` inside the dollar-quote stands in for dotall without a
+        // global flag.
         Regex::new(
             r#"(?ix)
             (?P<pkw>                                  # PASSWORD / PWD-family assignment
                 \b \w* (?: password | pwd ) \w* \b
                 (?: \s+ for \s+ [^=]*? )?              # MySQL `SET PASSWORD FOR user = ...`
-                \s* =? \s*
+                (?: \s | /\* .*? \*/ )* =? (?: \s | /\* .*? \*/ )*  # ws / C-comment / optional '='
             )
-            (?P<pval> [A-Za-z]? ' (?: '' | [^'] )* ' )
+            (?P<pval>
+                  [A-Za-z]? ' (?: '' | [^'] )* '
+                | [A-Za-z]? " (?: "" | [^"] )* "
+                | \$\$ [\s\S]*? \$\$
+            )
             |
-            (?P<ikw>                                  # IDENTIFIED BY [PASSWORD|VALUES]
-                \b identified \s+ by \s+ (?: password \s+ | values \s+ )?
+            (?P<ikw>                                  # IDENTIFIED [WITH plugin] BY|AS [PASSWORD|VALUES]
+                \b identified \s+
+                (?: with \s+ \S+ \s+ (?: by \s+ | as \s+ ) | by \s+ )
+                (?: password \s+ | values \s+ )?
             )
             (?P<ival>
-                [A-Za-z]? ' (?: '' | [^'] )* '        # quoted value
+                  [A-Za-z]? ' (?: '' | [^'] )* '
+                | [A-Za-z]? " (?: "" | [^"] )* "
+                | \$\$ [\s\S]*? \$\$
                 | [A-Za-z0-9_\#$]+                    # Oracle bareword
             )
             "#,
@@ -185,6 +208,23 @@ mod tests {
                 "UPDATE users SET password_hash = 'pw@7ZZ' WHERE id = 1",
                 "pw@7ZZ",
             ),
+            // MySQL 8 — plugin auth clause between IDENTIFIED and BY.
+            (
+                "CREATE USER app@'%' IDENTIFIED WITH caching_sha2_password BY 'pw@8ZZ'",
+                "pw@8ZZ",
+            ),
+            // MySQL — plugin + pre-hashed value (WITH plugin AS 'hash').
+            (
+                "CREATE USER app@'%' IDENTIFIED WITH mysql_native_password AS 'pw@9ZZ'",
+                "pw@9ZZ",
+            ),
+            // Double-quoted value (MySQL default string).
+            ("ALTER USER app IDENTIFIED BY \"pw@aZZ\"", "pw@aZZ"),
+            ("ALTER LOGIN app WITH PASSWORD \"pw@bZZ\"", "pw@bZZ"),
+            // PostgreSQL dollar-quoted value (empty tag).
+            ("ALTER ROLE app PASSWORD $$pwcZZ$$", "pwcZZ"),
+            // C-comment injected between keyword and value.
+            ("ALTER USER app WITH PASSWORD/**/'pw@dZZ'", "pw@dZZ"),
         ];
         for (sql, secret) in cases {
             let out = redact_credentials(sql);
