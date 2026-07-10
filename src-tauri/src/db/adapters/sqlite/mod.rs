@@ -26,7 +26,7 @@ use crate::models::{
     ConstraintInfo, CreateIndexRequest, CreateTablePlanRequest, CreateTableRequest,
     DropColumnRequest, DropConstraintRequest, DropIndexRequest, DropTableRequest, FilterCondition,
     IndexInfo, RenameTableRequest, SchemaChangeResult, SqliteCapabilityInventory, TableData,
-    TableInfo, ViewInfo,
+    TableInfo, TriggerInfo, ViewInfo,
 };
 
 use crate::db::{DbAdapter, NamespaceInfo, NamespaceLabel, RdbAdapter, RdbQueryResult};
@@ -298,11 +298,39 @@ impl RdbAdapter for SqliteAdapter {
         Box::pin(async move { self.list_schema_columns(namespace).await })
     }
 
+    fn list_triggers<'a>(
+        &'a self,
+        namespace: &'a str,
+        table: &'a str,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<TriggerInfo>, AppError>> + Send + 'a>> {
+        Box::pin(async move { SqliteAdapter::list_triggers(self, namespace, table).await })
+    }
+
+    fn get_trigger_source<'a>(
+        &'a self,
+        namespace: &'a str,
+        table: &'a str,
+        trigger_name: &'a str,
+    ) -> Pin<Box<dyn Future<Output = Result<String, AppError>> + Send + 'a>> {
+        Box::pin(async move {
+            SqliteAdapter::get_trigger_source(self, namespace, table, trigger_name).await
+        })
+    }
+
     fn get_function_source<'a>(
         &'a self,
         _namespace: &'a str,
         _function: &'a str,
     ) -> Pin<Box<dyn Future<Output = Result<String, AppError>> + Send + 'a>> {
-        Box::pin(async { Err(sqlite_unsupported("function source introspection")) })
+        // Not a deferred stub: SQLite has no stored functions. The functions
+        // it exposes are built-in or extension-provided and carry no
+        // introspectable source, so the Functions node stays empty (trait
+        // default) and this surfaces an honest capability boundary.
+        Box::pin(async {
+            Err(AppError::Unsupported(
+                "SQLite has no stored functions; built-in and extension functions expose no source"
+                    .into(),
+            ))
+        })
     }
 }

@@ -466,13 +466,20 @@ function TriggersList({
                   )}
                 </header>
                 <dl className="grid grid-cols-[max-content_1fr] gap-x-3 gap-y-1 text-2xs">
-                  <dt className="text-muted-foreground">
-                    {t("functionLabel")}
-                  </dt>
-                  <dd className="font-mono text-foreground">
-                    {trigger.functionSchema}.{trigger.functionName}
-                    {trigger.arguments ? `(${trigger.arguments})` : "()"}
-                  </dd>
+                  {/* SQLite/MySQL triggers carry an inline body, not a named
+                      function — hide the function row when the adapter leaves
+                      it empty rather than render a bare ".()". */}
+                  {trigger.functionName && (
+                    <>
+                      <dt className="text-muted-foreground">
+                        {t("functionLabel")}
+                      </dt>
+                      <dd className="font-mono text-foreground">
+                        {trigger.functionSchema}.{trigger.functionName}
+                        {trigger.arguments ? `(${trigger.arguments})` : "()"}
+                      </dd>
+                    </>
+                  )}
                   {trigger.whenExpression && (
                     <>
                       <dt className="text-muted-foreground">

@@ -12,7 +12,7 @@ use tokio::sync::Mutex;
 use crate::error::AppError;
 use crate::models::{
     ColumnCategory, ColumnInfo, ConnectionConfig, IndexInfo, SqliteCapabilityInventory, TableInfo,
-    ViewInfo,
+    TriggerInfo, ViewInfo,
 };
 use crate::storage;
 
@@ -456,6 +456,80 @@ impl SqliteAdapter {
         }
         Ok(result)
     }
+
+    /// List triggers attached to `table`, sourced from
+    /// `sqlite_schema` (type = 'trigger'). SQLite triggers carry an inline
+    /// body rather than a named function, so `definition` holds the full
+    /// `CREATE TRIGGER` statement and the PG-shaped `function_*` fields stay
+    /// empty. `timing` / `events` are parsed best-effort from the SQL for the
+    /// Structure header; `orientation` is always `ROW` (SQLite has no
+    /// statement-level triggers).
+    pub async fn list_triggers(
+        &self,
+        namespace: &str,
+        table: &str,
+    ) -> Result<Vec<TriggerInfo>, AppError> {
+        validate_namespace(namespace)?;
+        let pool = self.active_pool().await?;
+        let rows: Vec<(String, Option<String>)> = sqlx::query_as(
+            "SELECT name, sql FROM sqlite_schema \
+             WHERE type = 'trigger' AND tbl_name = ? \
+             ORDER BY name",
+        )
+        .bind(table)
+        .fetch_all(&pool)
+        .await
+        .map_err(|e| AppError::Database(e.to_string()))?;
+
+        Ok(rows
+            .into_iter()
+            .map(|(name, sql)| {
+                let definition = sql.unwrap_or_default();
+                let header = parse_sqlite_trigger_header(&definition);
+                TriggerInfo {
+                    name,
+                    schema: SQLITE_NAMESPACE.to_string(),
+                    table: table.to_string(),
+                    timing: header.timing.to_string(),
+                    events: header.events.iter().map(|e| e.to_string()).collect(),
+                    orientation: "ROW".to_string(),
+                    function_schema: String::new(),
+                    function_name: String::new(),
+                    arguments: None,
+                    when_expression: None,
+                    definition,
+                }
+            })
+            .collect())
+    }
+
+    /// Return the `CREATE TRIGGER` SQL for one trigger from `sqlite_schema`.
+    pub async fn get_trigger_source(
+        &self,
+        namespace: &str,
+        table: &str,
+        trigger_name: &str,
+    ) -> Result<String, AppError> {
+        validate_namespace(namespace)?;
+        let pool = self.active_pool().await?;
+        let row: Option<(Option<String>,)> = sqlx::query_as(
+            "SELECT sql FROM sqlite_schema \
+             WHERE type = 'trigger' AND tbl_name = ? AND name = ?",
+        )
+        .bind(table)
+        .bind(trigger_name)
+        .fetch_optional(&pool)
+        .await
+        .map_err(|e| AppError::Database(e.to_string()))?;
+
+        match row {
+            Some((Some(sql),)) => Ok(sql),
+            Some((None,)) => Ok(String::new()),
+            None => Err(AppError::NotFound(format!(
+                "Trigger {namespace}.{table}.{trigger_name} not found"
+            ))),
+        }
+    }
 }
 
 async fn probe_sqlite_capabilities(pool: &SqlitePool) -> SqliteCapabilityInventory {
@@ -523,6 +597,48 @@ pub(super) fn validate_namespace(namespace: &str) -> Result<(), AppError> {
 
 pub(super) fn quote_identifier(ident: &str) -> String {
     format!("\"{}\"", ident.replace('"', "\"\""))
+}
+
+struct SqliteTriggerHeader {
+    timing: &'static str,
+    events: Vec<&'static str>,
+}
+
+/// Best-effort extraction of `timing` and the fired `event` from a
+/// `CREATE TRIGGER` statement. In valid SQLite the timing keyword always
+/// precedes the single event, which precedes the body, so scanning tokens up
+/// to the first event keyword avoids matching identifiers inside the body.
+///
+// ponytail: naive uppercase token scan; the full `definition` is the
+// authoritative source rendered in the UI, so a header mis-parse is cosmetic.
+// Upgrade to a real tokenizer only if quoted keyword identifiers show up.
+fn parse_sqlite_trigger_header(sql: &str) -> SqliteTriggerHeader {
+    // SQLite defaults to BEFORE when the timing keyword is omitted.
+    let mut timing = "BEFORE";
+    let mut events = Vec::new();
+    let upper = sql.to_uppercase();
+    let mut tokens = upper.split_whitespace().peekable();
+    while let Some(tok) = tokens.next() {
+        match tok {
+            "INSTEAD" if tokens.peek() == Some(&"OF") => timing = "INSTEAD OF",
+            "BEFORE" => timing = "BEFORE",
+            "AFTER" => timing = "AFTER",
+            "INSERT" => {
+                events.push("INSERT");
+                break;
+            }
+            "UPDATE" => {
+                events.push("UPDATE");
+                break;
+            }
+            "DELETE" => {
+                events.push("DELETE");
+                break;
+            }
+            _ => {}
+        }
+    }
+    SqliteTriggerHeader { timing, events }
 }
 
 async fn sqlite_foreign_keys(
