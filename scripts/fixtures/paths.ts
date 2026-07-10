@@ -3,7 +3,9 @@ import { resolve } from "node:path";
 
 export function defaultFileFixtureDir(kind: "sqlite" | "duckdb"): string {
   if (process.env.TABLE_VIEW_TEST_DATA_DIR) {
-    return resolve(process.env.TABLE_VIEW_TEST_DATA_DIR, "fixtures", kind);
+    // #1449: the backend rejects SQLite/DuckDB file paths inside the app data
+    // dir (credential confinement), so fixtures live in a sibling directory.
+    return resolve(`${process.env.TABLE_VIEW_TEST_DATA_DIR}-fixtures`, kind);
   }
 
   return resolve(primaryWorktreeRoot(), "tmp", "fixtures", kind);

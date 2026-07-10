@@ -6,6 +6,7 @@ import {
   openConnection,
   openNewQueryTab,
   runQuery,
+  smokeFixtureRoot,
   step,
   switchToLauncherWindow,
   switchToWorkspaceWindow,
@@ -24,8 +25,7 @@ describe("DuckDB file workflow smoke", () => {
   it("covers .duckdb open, catalog browse, SELECT/DML, history, and read-only write rejection", async () => {
     const dataDir = testDataDir();
     const duckdbPath = resolve(
-      dataDir,
-      "fixtures",
+      smokeFixtureRoot(dataDir),
       "duckdb",
       "table_view_e2e.duckdb",
     );

@@ -12,6 +12,7 @@ import {
   openNewQueryTab,
   runQuery,
   selectDatabaseType,
+  smokeFixtureRoot,
   step,
   switchToLauncherWindow,
   switchToWorkspaceWindow,
@@ -28,8 +29,7 @@ describe("SQLite file workflow smoke", () => {
   it("covers file create/open, browse, read query, DML, row edit, and guardrail rejection", async () => {
     const dataDir = testDataDir();
     const sqlitePath = resolve(
-      dataDir,
-      "fixtures",
+      smokeFixtureRoot(dataDir),
       "sqlite",
       "table_view_e2e.sqlite",
     );

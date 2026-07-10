@@ -165,6 +165,15 @@ async fn test_sqlite_rejects_internal_app_data_paths() {
         .unwrap();
     assert!(ok_db.exists(), "external db must still be created");
 
+    // 정상 회귀: `<data_dir>-fixtures` 처럼 data_dir 와 문자열 prefix 만
+    // 공유하는 sibling 은 내부가 아니다 (`Path::starts_with` 는 component
+    // 단위) — e2e smoke fixture 배치가 이 속성에 기댄다 (#1472 회귀).
+    let mut sibling = dir.path().as_os_str().to_owned();
+    sibling.push("-fixtures");
+    let sibling_db = std::path::PathBuf::from(sibling).join("fixture.sqlite");
+    SqliteAdapter::validate_user_database_path(sibling_db.to_str().unwrap())
+        .expect("sibling -fixtures dir must not be treated as internal");
+
     std::env::remove_var("TABLE_VIEW_TEST_DATA_DIR");
 }
 

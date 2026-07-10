@@ -7,6 +7,7 @@ import {
   openConnection,
   openNewQueryTab,
   runQuery,
+  smokeFixtureRoot,
   step,
   switchToLauncherWindow,
   switchToWorkspaceWindow,
@@ -43,8 +44,7 @@ type FileAnalyticsSourceMetadata = {
 describe("DuckDB file analytics smoke", () => {
   it("registers a local CSV source, queries the alias, records FILE history, and hides absolute paths", async () => {
     const duckdbPath = resolve(
-      testDataDir(),
-      "fixtures",
+      smokeFixtureRoot(testDataDir()),
       "duckdb",
       "file_analytics_e2e.duckdb",
     );

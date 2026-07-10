@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import {
   createDuckdbConnection,
   openConnection,
+  smokeFixtureRoot,
   step,
   waitForGridTextAll,
   waitForLauncher,
@@ -30,8 +31,7 @@ const SEED = "e2e/fixtures/duckdb/schema-filter/seed.sql";
 describe("DuckDB schema filter smoke", () => {
   it("hides internal system/temp catalogs so empty `main` renders once, not thrice", async () => {
     const duckdbPath = resolve(
-      testDataDir(),
-      "fixtures",
+      smokeFixtureRoot(testDataDir()),
       "duckdb",
       "table_view_schema_filter.duckdb",
     );
