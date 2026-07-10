@@ -167,6 +167,7 @@ impl OracleAdapter {
                         nullable: row_bool_yn(&row, 3, "column nullability")?,
                         default_value: row_optional_string(&row, 4, "column default")?,
                         comment: row_optional_string(&row, 5, "column comment")?,
+                        is_identity: row_bool_yn(&row, 6, "column identity")?,
                     })
                 })
                 .collect::<Result<Vec<_>, AppError>>()?;
@@ -211,6 +212,7 @@ impl OracleAdapter {
                             nullable: row_bool_yn(&row, 4, "column nullability")?,
                             default_value: row_optional_string(&row, 5, "column default")?,
                             comment: row_optional_string(&row, 6, "column comment")?,
+                            is_identity: row_bool_yn(&row, 7, "column identity")?,
                         },
                     })
                 })

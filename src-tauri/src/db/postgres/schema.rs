@@ -313,11 +313,16 @@ impl PostgresAdapter {
         // 명 ("character varying") 만 노출. `pg_catalog.format_type` 으로
         // 길이/정밀도/배열 표기 (`varchar(200)`, `numeric(10,2)`,
         // `text[]`) 까지 DDL-level 그대로 가져온다.
-        let rows: Vec<(String, String, String, Option<String>)> = sqlx::query_as(
+        // #1433 — `attidentity` ('a'/'d') marks GENERATED … AS IDENTITY
+        // columns, which have NO `pg_attrdef` row (unlike serial's
+        // `nextval(...)` default). The frontend INSERT generator needs the
+        // flag to omit untouched identity cells.
+        let rows: Vec<(String, String, String, Option<String>, bool)> = sqlx::query_as(
             "SELECT a.attname, \
                     pg_catalog.format_type(a.atttypid, a.atttypmod), \
                     CASE WHEN a.attnotnull THEN 'NO' ELSE 'YES' END, \
-                    pg_get_expr(d.adbin, d.adrelid) \
+                    pg_get_expr(d.adbin, d.adrelid), \
+                    a.attidentity IN ('a', 'd') \
              FROM pg_catalog.pg_attribute a \
              JOIN pg_catalog.pg_class c ON c.oid = a.attrelid \
              JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace \
@@ -425,34 +430,37 @@ impl PostgresAdapter {
 
         Ok(rows
             .into_iter()
-            .map(|(name, data_type, is_nullable, default_value)| {
-                let is_pk = pk_columns.contains(&name);
-                let (is_fk, fk_reference) = match fk_map.get(&name) {
-                    Some(ref_str) => (true, Some(ref_str.clone())),
-                    None => (false, None),
-                };
-                let comment = comment_map.get(&name).and_then(Option::clone);
-                let check_clauses = check_map.remove(&name).unwrap_or_default();
-                // Sprint 258 — category 매핑은 raw format_type 결과 (parameter
-                // 표기 포함) 에서 base 만 추출하므로 정규화 전후 무관. 사용자
-                // 표시용 data_type 은 단축형으로 정규화.
-                // Sprint 259 — nextval(...) default 패턴 검출 시 정수 → serial.
-                let category = map_pg_data_type(&data_type);
-                let data_type = normalize_pg_type(&data_type);
-                let data_type = restore_serial(data_type, default_value.as_deref());
-                ColumnInfo {
-                    name,
-                    data_type,
-                    nullable: is_nullable == "YES",
-                    default_value,
-                    is_primary_key: is_pk,
-                    is_foreign_key: is_fk,
-                    fk_reference,
-                    comment,
-                    check_clauses,
-                    category,
-                }
-            })
+            .map(
+                |(name, data_type, is_nullable, default_value, is_identity)| {
+                    let is_pk = pk_columns.contains(&name);
+                    let (is_fk, fk_reference) = match fk_map.get(&name) {
+                        Some(ref_str) => (true, Some(ref_str.clone())),
+                        None => (false, None),
+                    };
+                    let comment = comment_map.get(&name).and_then(Option::clone);
+                    let check_clauses = check_map.remove(&name).unwrap_or_default();
+                    // Sprint 258 — category 매핑은 raw format_type 결과 (parameter
+                    // 표기 포함) 에서 base 만 추출하므로 정규화 전후 무관. 사용자
+                    // 표시용 data_type 은 단축형으로 정규화.
+                    // Sprint 259 — nextval(...) default 패턴 검출 시 정수 → serial.
+                    let category = map_pg_data_type(&data_type);
+                    let data_type = normalize_pg_type(&data_type);
+                    let data_type = restore_serial(data_type, default_value.as_deref());
+                    ColumnInfo {
+                        name,
+                        data_type,
+                        nullable: is_nullable == "YES",
+                        default_value,
+                        is_identity,
+                        is_primary_key: is_pk,
+                        is_foreign_key: is_fk,
+                        fk_reference,
+                        comment,
+                        check_clauses,
+                        category,
+                    }
+                },
+            )
             .collect())
     }
     /// Fetches columns for every table in `schema` in one round-trip.
@@ -465,11 +473,14 @@ impl PostgresAdapter {
 
         // Sprint 258 — DDL-level type 노출용 `pg_catalog.format_type`
         // 사용 (information_schema.columns.data_type 는 generic 명만 노출).
-        let col_rows: Vec<(String, String, String, String, Option<String>)> = sqlx::query_as(
+        // #1433 — attidentity: GENERATED … AS IDENTITY 컬럼은 pg_attrdef
+        // row 가 없어 default 만으로는 식별 불가 (per-table 쿼리와 동일).
+        let col_rows: Vec<(String, String, String, String, Option<String>, bool)> = sqlx::query_as(
             "SELECT c.relname, a.attname, \
                     pg_catalog.format_type(a.atttypid, a.atttypmod), \
                     CASE WHEN a.attnotnull THEN 'NO' ELSE 'YES' END, \
-                    pg_get_expr(d.adbin, d.adrelid) \
+                    pg_get_expr(d.adbin, d.adrelid), \
+                    a.attidentity IN ('a', 'd') \
              FROM pg_catalog.pg_attribute a \
              JOIN pg_catalog.pg_class c ON c.oid = a.attrelid \
              JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace \
@@ -578,7 +589,7 @@ impl PostgresAdapter {
         let mut result: std::collections::HashMap<String, Vec<ColumnInfo>> =
             std::collections::HashMap::new();
 
-        for (table_name, col_name, data_type, is_nullable, default_value) in col_rows {
+        for (table_name, col_name, data_type, is_nullable, default_value, is_identity) in col_rows {
             let is_pk = pk_set.contains(&(table_name.clone(), col_name.clone()));
             let (is_fk, fk_reference) = match fk_map.get(&(table_name.clone(), col_name.clone())) {
                 Some(r) => (true, Some(r.clone())),
@@ -599,6 +610,7 @@ impl PostgresAdapter {
                 data_type,
                 nullable: is_nullable == "YES",
                 default_value,
+                is_identity,
                 is_primary_key: is_pk,
                 is_foreign_key: is_fk,
                 fk_reference,
@@ -944,6 +956,8 @@ impl PostgresAdapter {
                     data_type,
                     nullable: is_nullable.eq_ignore_ascii_case("yes"),
                     default_value,
+                    // View/materialized-view columns can't be identity.
+                    is_identity: false,
                     is_primary_key: false,
                     is_foreign_key: false,
                     fk_reference: None,

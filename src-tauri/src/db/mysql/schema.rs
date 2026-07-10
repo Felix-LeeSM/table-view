@@ -150,13 +150,26 @@ impl MysqlAdapter {
         // (length/precision 없이) — category 매핑용.
         // 모든 식별자 컬럼을 `CONVERT(... USING utf8mb4)` 로 wrap — MySQL 8.0
         // 의 information_schema 가 VARBINARY 로 노출하는 경우 회피.
-        let rows: Vec<(String, String, String, String, Option<String>, String)> = sqlx::query_as(
+        // #1433 — extra: `auto_increment` 컬럼은 column_default 가 NULL 이라
+        // default 만으로는 식별 불가. frontend INSERT generator 가 미입력
+        // auto-increment 셀을 생략하려면 is_identity flag 가 필요하다.
+        #[allow(clippy::type_complexity)]
+        let rows: Vec<(
+            String,
+            String,
+            String,
+            String,
+            Option<String>,
+            String,
+            String,
+        )> = sqlx::query_as(
             "SELECT CONVERT(column_name USING utf8mb4), \
                     CONVERT(column_type USING utf8mb4), \
                     CONVERT(data_type USING utf8mb4), \
                     CONVERT(is_nullable USING utf8mb4), \
                     CONVERT(column_default USING utf8mb4), \
-                    CONVERT(column_comment USING utf8mb4) \
+                    CONVERT(column_comment USING utf8mb4), \
+                    CONVERT(extra USING utf8mb4) \
              FROM information_schema.columns \
              WHERE table_schema = ? AND table_name = ? \
              ORDER BY ordinal_position",
@@ -236,7 +249,15 @@ impl MysqlAdapter {
         Ok(rows
             .into_iter()
             .map(
-                |(name, column_type, data_type, is_nullable, default_value, column_comment)| {
+                |(
+                    name,
+                    column_type,
+                    data_type,
+                    is_nullable,
+                    default_value,
+                    column_comment,
+                    extra,
+                )| {
                     let is_pk = pk_columns.contains(&name);
                     let (is_fk, fk_reference) = match fk_map.get(&name) {
                         Some(s) => (true, Some(s.clone())),
@@ -254,6 +275,7 @@ impl MysqlAdapter {
                         data_type: column_type,
                         nullable: is_nullable.eq_ignore_ascii_case("YES"),
                         default_value,
+                        is_identity: extra.to_ascii_lowercase().contains("auto_increment"),
                         is_primary_key: is_pk,
                         is_foreign_key: is_fk,
                         fk_reference,
@@ -420,6 +442,9 @@ impl MysqlAdapter {
                 data_type: column_type,
                 nullable: is_nullable.eq_ignore_ascii_case("YES"),
                 default_value,
+                // ponytail: schema-overview 경로 — INSERT generator 는
+                // get_table_columns_inner 결과만 소비. 필요 시 extra 조인.
+                is_identity: false,
                 is_primary_key: is_pk,
                 is_foreign_key: is_fk,
                 fk_reference,
@@ -644,6 +669,8 @@ impl MysqlAdapter {
                         data_type: column_type,
                         nullable: is_nullable.eq_ignore_ascii_case("YES"),
                         default_value,
+                        // View columns can't be auto_increment.
+                        is_identity: false,
                         is_primary_key: false,
                         is_foreign_key: false,
                         fk_reference: None,

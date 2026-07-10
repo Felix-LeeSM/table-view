@@ -44,6 +44,7 @@ fn column_info_full_fields() {
         data_type: "integer".to_string(),
         nullable: false,
         default_value: Some("nextval('seq')".to_string()),
+        is_identity: true,
         is_primary_key: true,
         is_foreign_key: false,
         fk_reference: None,
@@ -60,6 +61,8 @@ fn column_info_full_fields() {
         deserialized.default_value,
         Some("nextval('seq')".to_string())
     );
+    // #1433 — identity flag round-trips (2026-07-10).
+    assert!(deserialized.is_identity);
     assert!(deserialized.is_primary_key);
     assert!(!deserialized.is_foreign_key);
     assert!(deserialized.fk_reference.is_none());
@@ -77,6 +80,7 @@ fn column_info_minimal_fields() {
         data_type: "text".to_string(),
         nullable: true,
         default_value: None,
+        is_identity: false,
         is_primary_key: false,
         is_foreign_key: false,
         fk_reference: None,
@@ -90,19 +94,20 @@ fn column_info_minimal_fields() {
     assert!(deserialized.nullable);
     assert!(!deserialized.is_primary_key);
     assert!(!deserialized.is_foreign_key);
+    assert!(!deserialized.is_identity);
     assert!(deserialized.default_value.is_none());
     assert!(deserialized.fk_reference.is_none());
     assert!(deserialized.comment.is_none());
     assert!(deserialized.check_clauses.is_empty());
 }
 
-/// Back-compat: payloads that omit `check_clauses` (older callers,
-/// non-PG adapters) deserialize to an empty vector via
-/// `#[serde(default)]`.
+/// Back-compat: payloads that omit `check_clauses` / `is_identity`
+/// (older callers, non-PG adapters) deserialize to the field default via
+/// `#[serde(default)]` (#1433 added `is_identity`, 2026-07-10).
 #[test]
 fn column_info_serde_back_compat_missing_check_clauses() {
     let json = r#"{
-            "name": "legacy",
+            "name": "prior",
             "data_type": "text",
             "nullable": true,
             "default_value": null,
@@ -113,6 +118,7 @@ fn column_info_serde_back_compat_missing_check_clauses() {
         }"#;
     let parsed: ColumnInfo = serde_json::from_str(json).unwrap();
     assert!(parsed.check_clauses.is_empty());
+    assert!(!parsed.is_identity);
 }
 
 #[test]
@@ -124,6 +130,7 @@ fn table_data_serde_roundtrip() {
                 data_type: "integer".to_string(),
                 nullable: false,
                 default_value: None,
+                is_identity: false,
                 is_primary_key: true,
                 is_foreign_key: false,
                 fk_reference: None,
@@ -136,6 +143,7 @@ fn table_data_serde_roundtrip() {
                 data_type: "text".to_string(),
                 nullable: true,
                 default_value: None,
+                is_identity: false,
                 is_primary_key: false,
                 is_foreign_key: false,
                 fk_reference: None,

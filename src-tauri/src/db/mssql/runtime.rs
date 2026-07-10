@@ -1548,6 +1548,7 @@ mod tests {
             data_type: "nvarchar".into(),
             nullable: true,
             default_value: None,
+            is_identity: false,
             is_primary_key,
             is_foreign_key: false,
             fk_reference: None,

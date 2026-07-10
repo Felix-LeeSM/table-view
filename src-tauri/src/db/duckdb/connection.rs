@@ -566,6 +566,9 @@ fn get_columns_uncancelled(
                 data_type: data_type.clone(),
                 nullable: is_nullable.eq_ignore_ascii_case("YES"),
                 default_value,
+                // DuckDB sequences surface as a `default_value`, which the
+                // INSERT generator already omits — no separate flag needed.
+                is_identity: false,
                 is_primary_key: false,
                 is_foreign_key: false,
                 fk_reference: None,

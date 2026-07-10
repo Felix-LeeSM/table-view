@@ -20,6 +20,14 @@ pub struct ColumnInfo {
     pub data_type: String,
     pub nullable: bool,
     pub default_value: Option<String>,
+    /// #1433 — auto-increment/identity flag (PG `attidentity`, MySQL
+    /// `auto_increment` EXTRA, MSSQL `sys.columns.is_identity`). Those
+    /// catalogs expose no default expression for identity columns, so the
+    /// frontend INSERT generator needs this flag to omit untouched identity
+    /// cells. `#[serde(default)]` keeps older payloads / non-enriching
+    /// adapters parsing as `false`.
+    #[serde(default)]
+    pub is_identity: bool,
     pub is_primary_key: bool,
     pub is_foreign_key: bool,
     pub fk_reference: Option<String>,

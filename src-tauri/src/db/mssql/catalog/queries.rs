@@ -66,7 +66,8 @@ SELECT o.name AS object_name,
        ty.name AS data_type,
        c.is_nullable,
        dc.definition AS default_value,
-       CONVERT(NVARCHAR(MAX), ep.value) AS comment
+       CONVERT(NVARCHAR(MAX), ep.value) AS comment,
+       c.is_identity
 FROM sys.objects AS o
 JOIN sys.schemas AS s ON s.schema_id = o.schema_id
 JOIN sys.columns AS c ON c.object_id = o.object_id
@@ -98,7 +99,8 @@ SELECT o.name AS object_name,
        ty.name AS data_type,
        c.is_nullable,
        dc.definition AS default_value,
-       CONVERT(NVARCHAR(MAX), ep.value) AS comment
+       CONVERT(NVARCHAR(MAX), ep.value) AS comment,
+       c.is_identity
 FROM sys.objects AS o
 JOIN sys.schemas AS s ON s.schema_id = o.schema_id
 JOIN sys.columns AS c ON c.object_id = o.object_id

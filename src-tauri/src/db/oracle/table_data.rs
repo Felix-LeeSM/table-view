@@ -374,6 +374,9 @@ fn query_result_columns_to_table_columns(
             data_type: oracle_type_name(column),
             nullable: column.nullable,
             default_value: None,
+            // Query-result column shape carries no catalog identity flag;
+            // the datagrid enriches from get_table_columns for INSERT.
+            is_identity: false,
             is_primary_key: pk_columns.contains(&column.name),
             is_foreign_key: false,
             fk_reference: None,
@@ -432,6 +435,7 @@ mod tests {
             data_type: data_type.into(),
             nullable: !primary_key,
             default_value: None,
+            is_identity: false,
             is_primary_key: primary_key,
             is_foreign_key: false,
             fk_reference: None,

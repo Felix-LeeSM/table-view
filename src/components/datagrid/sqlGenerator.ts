@@ -163,6 +163,29 @@ function normalizeNewRowCell(value: unknown): string | null {
   return String(value);
 }
 
+/**
+ * #1433 — INSERT form for a new row whose every column was omitted (all
+ * columns are server-default/identity and untouched). `INSERT INTO t ()
+ * VALUES ()` is invalid on most engines, so each dialect gets its
+ * all-defaults spelling. Oracle has no `DEFAULT VALUES` clause — emit the
+ * `DEFAULT` keyword per column instead (valid for defaults and for both
+ * identity flavors).
+ */
+function allDefaultsInsert(
+  qualifiedTable: string,
+  columns: ColumnInfo[],
+  dialect: SqlDialect,
+): string {
+  if (dialect === "mysql") return `INSERT INTO ${qualifiedTable} () VALUES ();`;
+  if (dialect === "oracle") {
+    const names = columns.map((c) => sqlIdentifier(c.name, dialect));
+    const defaults = columns.map(() => "DEFAULT");
+    return `INSERT INTO ${qualifiedTable} (${names.join(", ")}) VALUES (${defaults.join(", ")});`;
+  }
+  // postgresql / sqlite / mssql all accept the SQL-standard form.
+  return `INSERT INTO ${qualifiedTable} DEFAULT VALUES;`;
+}
+
 export interface GenerateSqlOptions {
   /**
    * Called once per failed pending edit. Invoked synchronously during
@@ -534,16 +557,28 @@ export function generateSqlWithKeys(
     });
   });
 
-  // INSERT statements for new rows. INSERT touches every column, so we pick
-  // `new-${newRowIdx}-0` as the canonical cell key — the UI can highlight the
-  // first cell of the offending row, which is enough for the user to locate
-  // the failed insert. Per-cell coercion errors keep their own granular keys.
+  // INSERT statements for new rows. We pick `new-${newRowIdx}-0` as the
+  // canonical cell key — the UI can highlight the first cell of the offending
+  // row, which is enough for the user to locate the failed insert. Per-cell
+  // coercion errors keep their own granular keys.
+  //
+  // #1433 — untouched cells (`null`/`undefined`, i.e. never edited) on a
+  // column that carries a server default or is identity/auto-increment are
+  // OMITTED from the column list so the server assigns the value. Emitting
+  // an explicit NULL there either violates NOT NULL (serial/identity PK) or
+  // silently overrides the default. Cells the user actually filled — and
+  // untouched cells on plain columns — keep the existing explicit emit.
   pendingNewRows.forEach((newRow, newRowIdx) => {
     const cells = newRow as unknown[];
+    const colNames: string[] = [];
     const literals: string[] = [];
     let rowHasError = false;
     data.columns.forEach((col, colIdx) => {
-      const normalized = normalizeNewRowCell(cells[colIdx]);
+      const raw = cells[colIdx];
+      if (raw == null && (col.default_value != null || col.is_identity)) {
+        return;
+      }
+      const normalized = normalizeNewRowCell(raw);
       const coerced = coerceToSqlLiteral(normalized, col.data_type, dialect);
       if (coerced.kind === "error") {
         rowHasError = true;
@@ -555,14 +590,15 @@ export function generateSqlWithKeys(
         });
         return;
       }
+      colNames.push(sqlIdentifier(col.name, dialect));
       literals.push(coerced.sql);
     });
     if (rowHasError) return;
-    const colList = data.columns
-      .map((c) => sqlIdentifier(c.name, dialect))
-      .join(", ");
     statements.push({
-      sql: `INSERT INTO ${qualifiedTable} (${colList}) VALUES (${literals.join(", ")});`,
+      sql:
+        colNames.length > 0
+          ? `INSERT INTO ${qualifiedTable} (${colNames.join(", ")}) VALUES (${literals.join(", ")});`
+          : allDefaultsInsert(qualifiedTable, data.columns, dialect),
       key: `new-${newRowIdx}-0`,
     });
   });

@@ -326,6 +326,9 @@ impl SqliteAdapter {
                 data_type: data_type.clone(),
                 nullable: not_null == 0 && pk == 0,
                 default_value,
+                // SQLite auto-assigns on explicit NULL for INTEGER PRIMARY KEY
+                // (rowid alias), so INSERT isn't broken and no flag is needed.
+                is_identity: false,
                 is_primary_key: pk > 0,
                 is_foreign_key: fk_reference.is_some(),
                 fk_reference,
