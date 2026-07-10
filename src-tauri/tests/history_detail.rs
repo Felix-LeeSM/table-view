@@ -154,6 +154,9 @@ async fn detail_masks_password_literals_across_dialects() {
         ("ALTER ROLE app PASSWORD $$pw8ZZ$$", "pw8ZZ"),
         // C-comment injected between keyword and value.
         ("ALTER USER app WITH PASSWORD/**/'pw@9ZZ'", "pw@9ZZ"),
+        // MySQL — SET PASSWORD FOR quoted user: value masked, user survives
+        // (PR #1470 review false-negative case).
+        ("SET PASSWORD FOR 'app'@'%' = 'pw@AZZ'", "pw@AZZ"),
     ];
 
     for (sql, secret) in cases {
