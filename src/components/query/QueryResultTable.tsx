@@ -40,7 +40,8 @@ export function QueryResultTable({
    * #1477 review B2 — executed SQL snapshot used as the scroll-reset
    * identity: a same-SQL refetch (new `result` object) preserves the
    * virtualized scroll position; a different SQL resets to the top.
-   * Optional: when omitted, every new `result` identity resets (legacy).
+   * Optional: when omitted, every new `result` identity resets (pre-#1477
+   * behavior).
    */
   sql?: string;
 }) {

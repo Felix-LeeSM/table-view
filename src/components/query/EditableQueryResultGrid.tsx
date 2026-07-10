@@ -64,7 +64,8 @@ export interface EditableQueryResultGridProps {
    * identity. A same-SQL refetch (commit → `onAfterCommit` re-run) swaps the
    * `result` object but keeps this string, so the virtualized scroll position
    * is preserved; a different SQL resets to the top. Optional: when omitted,
-   * every new `result` identity resets (legacy behavior, test-only callers).
+   * every new `result` identity resets (pre-#1477 behavior, test-only
+   * callers).
    */
   sql?: string;
 }
