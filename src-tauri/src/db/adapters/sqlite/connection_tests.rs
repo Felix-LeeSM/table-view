@@ -266,3 +266,92 @@ async fn test_sqlite_adapter_reads_columns_and_foreign_keys() {
     assert_eq!(user_id.fk_reference.as_deref(), Some("users(id)"));
     assert_eq!(user_id.category, ColumnCategory::Int);
 }
+
+async fn seed_trigger(path: &std::path::Path, create_sql: &str) {
+    let pool = SqlitePoolOptions::new()
+        .max_connections(1)
+        .connect_with(SqliteConnectOptions::new().filename(path))
+        .await
+        .unwrap();
+    sqlx::query(create_sql).execute(&pool).await.unwrap();
+    pool.close().await;
+}
+
+#[tokio::test]
+async fn test_sqlite_adapter_lists_triggers_scoped_to_table() {
+    let dir = tempfile::tempdir().unwrap();
+    let db_path = dir.path().join("app.sqlite");
+    seed_sqlite(&db_path).await;
+    seed_trigger(
+        &db_path,
+        "CREATE TRIGGER z_after_upd AFTER UPDATE ON users \
+         BEGIN UPDATE orders SET total_cents = total_cents WHERE user_id = NEW.id; END",
+    )
+    .await;
+    seed_trigger(
+        &db_path,
+        "CREATE TRIGGER a_before_ins BEFORE INSERT ON users \
+         BEGIN SELECT RAISE(IGNORE) WHERE NEW.email IS NULL; END",
+    )
+    .await;
+    let adapter = SqliteAdapter::new();
+    adapter
+        .connect_pool(&sqlite_config(db_path.to_str().unwrap()))
+        .await
+        .unwrap();
+
+    let triggers = adapter.list_triggers("main", "users").await.unwrap();
+    // Ordered by name; parsed timing/event header + inline definition.
+    assert_eq!(
+        triggers.iter().map(|t| t.name.as_str()).collect::<Vec<_>>(),
+        vec!["a_before_ins", "z_after_upd"]
+    );
+    let before = &triggers[0];
+    assert_eq!(before.timing, "BEFORE");
+    assert_eq!(before.events, vec!["INSERT".to_string()]);
+    assert_eq!(before.orientation, "ROW");
+    // SQLite triggers have an inline body, not a named function.
+    assert!(before.function_name.is_empty());
+    assert!(before.definition.contains("CREATE TRIGGER"));
+
+    let after = &triggers[1];
+    assert_eq!(after.timing, "AFTER");
+    assert_eq!(after.events, vec!["UPDATE".to_string()]);
+
+    // Triggers on a different table are not returned.
+    assert!(adapter
+        .list_triggers("main", "orders")
+        .await
+        .unwrap()
+        .is_empty());
+}
+
+#[tokio::test]
+async fn test_sqlite_adapter_reads_and_misses_trigger_source() {
+    let dir = tempfile::tempdir().unwrap();
+    let db_path = dir.path().join("app.sqlite");
+    seed_sqlite(&db_path).await;
+    seed_trigger(
+        &db_path,
+        "CREATE TRIGGER users_guard AFTER DELETE ON users \
+         BEGIN SELECT 1; END",
+    )
+    .await;
+    let adapter = SqliteAdapter::new();
+    adapter
+        .connect_pool(&sqlite_config(db_path.to_str().unwrap()))
+        .await
+        .unwrap();
+
+    let source = adapter
+        .get_trigger_source("main", "users", "users_guard")
+        .await
+        .unwrap();
+    assert!(source.contains("AFTER DELETE"));
+
+    // Unknown trigger surfaces NotFound rather than a misleading empty string.
+    assert!(matches!(
+        adapter.get_trigger_source("main", "users", "absent").await,
+        Err(AppError::NotFound(_))
+    ));
+}
