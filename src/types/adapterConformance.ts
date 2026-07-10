@@ -172,11 +172,9 @@ const DEFERRED_FEATURES = Object.freeze({
   },
   sqlite: {
     connection: [],
-    catalog: [
-      "catalog.indexes",
-      "catalog.constraints",
-      "catalog.relationships",
-    ],
+    // Issue #1459 — `catalog.indexes` left the deferred list: the adapter's
+    // PRAGMA index_list introspection is live and the profile now claims it.
+    catalog: ["catalog.constraints", "catalog.relationships"],
     query: ["query.explain"],
     edit: [],
     ddl: [],

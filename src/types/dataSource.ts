@@ -358,6 +358,11 @@ export const SQLITE_CAPABILITIES = capabilities({
   catalog: {
     browse: true,
     schema: true,
+    // Issue #1459 — the SQLite adapter has a real `PRAGMA index_list`
+    // introspection path (src-tauri/src/db/adapters/sqlite/connection.rs),
+    // so the Indexes claim is true. Constraints stays false: the adapter's
+    // structured constraint listing is a stub that always returns [].
+    indexes: true,
   },
   edit: {
     editRows: true,
@@ -686,6 +691,28 @@ export function supportsRowEditing(
 ): boolean {
   const profile = maybeGetDataSourceProfile(dbType);
   return profile === null || profile.capabilities.edit.editRows;
+}
+
+/**
+ * Issue #1459 — whether the Structure surface should offer the Indexes /
+ * Constraints catalog sub-tab for this engine. Reads the
+ * `capabilities.catalog.*` flag (single source of truth) instead of
+ * hard-rendering every tab per dbType. An unknown / still-loading dbType
+ * returns true so affordances aren't stripped before the connection
+ * resolves (same fallback as `supportsRowEditing`).
+ *
+ * Boundary decision (#1459): `catalog.browse` / `catalog.schema` are NOT
+ * consumed here — browse stays with the paradigm routing (every profile
+ * declares it true, so the flag has no discriminating power) and schema
+ * stays with `resolveRdbTreeProfile`'s 3-way tree shape, which a boolean
+ * cannot express. Whether those two flags are deleted is #1464's call.
+ */
+export function supportsCatalogFeature(
+  dbType: DatabaseType | null | undefined,
+  feature: "indexes" | "constraints",
+): boolean {
+  const profile = maybeGetDataSourceProfile(dbType);
+  return profile === null || profile.capabilities.catalog[feature];
 }
 
 export function getConnectionSupportedDatabaseTypes(): readonly DatabaseType[] {
