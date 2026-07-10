@@ -1,7 +1,7 @@
 ---
 title: By-task 인덱스
 type: index
-generated: 2026-07-02
+generated: 2026-07-10
 generator: scripts/regenerate-indexes.sh
 ---
 
@@ -32,9 +32,17 @@ generator: scripts/regenerate-indexes.sh
 
 - [Data Source Architecture](../../memory/engineering/architecture/data-source/memory.md)
 
+### audit
+
+- [감사 wave — 이력 + 다음 후보](../../memory/product/audit-waves/memory.md)
+
 ### backend
 
 - [Backend Guidance](../../memory/engineering/conventions/backend/memory.md)
+
+### blocked
+
+- [PR merge 게이트 진단 / 처리](../../memory/runbook/pr-merge-gates/memory.md)
 
 ### bug-fix
 
@@ -45,9 +53,17 @@ generator: scripts/regenerate-indexes.sh
 
 - [Data Source Architecture](../../memory/engineering/architecture/data-source/memory.md)
 
+### ci
+
+- [PR merge 게이트 진단 / 처리](../../memory/runbook/pr-merge-gates/memory.md)
+
 ### code-writing
 
 - [Implementation — agent 자율성 + noise 차단](../../memory/workflow/implementation/memory.md)
+
+### collapse-default
+
+- [Product 머지 기준](../../memory/product/memory.md)
 
 ### comment-cleanup
 
@@ -94,6 +110,10 @@ generator: scripts/regenerate-indexes.sh
 
 - [Documentation Impact Gate](../../memory/workflow/documentation/memory.md)
 
+### e2e
+
+- [PR merge 게이트 진단 / 처리](../../memory/runbook/pr-merge-gates/memory.md)
+
 ### fixture
 
 - [Adding A Data Source](../../memory/engineering/architecture/data-source/adding/memory.md)
@@ -132,12 +152,17 @@ generator: scripts/regenerate-indexes.sh
 
 ### merge
 
+- [PR merge 게이트 진단 / 처리](../../memory/runbook/pr-merge-gates/memory.md)
 - [Delivery — commit → push → PR → review → merge 전체 자율](../../memory/workflow/delivery/memory.md)
 
 ### merge-gate
 
 - [Product 머지 기준](../../memory/product/memory.md)
 - [Cross-paradigm UI Parity 머지 기준](../../memory/product/ui-parity/memory.md)
+
+### milestone
+
+- [감사 wave — 이력 + 다음 후보](../../memory/product/audit-waves/memory.md)
 
 ### mock-scope
 
@@ -165,6 +190,7 @@ generator: scripts/regenerate-indexes.sh
 
 ### pr
 
+- [PR merge 게이트 진단 / 처리](../../memory/runbook/pr-merge-gates/memory.md)
 - [Delivery — commit → push → PR → review → merge 전체 자율](../../memory/workflow/delivery/memory.md)
 - [Documentation Impact Gate](../../memory/workflow/documentation/memory.md)
 
@@ -231,6 +257,18 @@ generator: scripts/regenerate-indexes.sh
 - [Documentation Impact Gate](../../memory/workflow/documentation/memory.md)
 - [PR Review Behavior](../../memory/workflow/review/memory.md)
 
+### review-gate
+
+- [PR merge 게이트 진단 / 처리](../../memory/runbook/pr-merge-gates/memory.md)
+
+### roadmap
+
+- [감사 wave — 이력 + 다음 후보](../../memory/product/audit-waves/memory.md)
+
+### ruleset
+
+- [PR merge 게이트 진단 / 처리](../../memory/runbook/pr-merge-gates/memory.md)
+
 ### rust-impl
 
 - [Backend Guidance](../../memory/engineering/conventions/backend/memory.md)
@@ -286,6 +324,10 @@ generator: scripts/regenerate-indexes.sh
 
 - [Cross-paradigm UI Parity 머지 기준](../../memory/product/ui-parity/memory.md)
 
+### unsupported-convention
+
+- [Cross-paradigm UI Parity 머지 기준](../../memory/product/ui-parity/memory.md)
+
 ### user-report
 
 - [버그 fix — Red test 먼저](../../memory/workflow/bug-fix/memory.md)
@@ -297,6 +339,10 @@ generator: scripts/regenerate-indexes.sh
 ### verification-gate
 
 - [Hook taxonomy — git hooks vs agent hooks](../../memory/workflow/hooks/memory.md)
+
+### wave
+
+- [감사 wave — 이력 + 다음 후보](../../memory/product/audit-waves/memory.md)
 
 ### worktree
 

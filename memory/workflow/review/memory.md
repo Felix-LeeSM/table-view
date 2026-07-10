@@ -27,6 +27,9 @@ agent가 반드시 취해야 할 행동 계약만 둔다. 평가 차원, profile
   통합 scorecard와 action items를 repo-relative evidence로 comment한다.
 - Review verdict는 `8/10` 기준이다. 적용 차원 중 하나라도 8 미만이면
   red/blocking, 모두 8 이상이면 green/pass다.
+- Scorecard의 차원별 `N/10` 표는 **어떤 경우에도 생략 금지** — 요청자가 반환
+  형식을 GREEN/RED 등으로 좁게 지정해도, delta 재검증이어도 표를 출력한다.
+  (2026-07-04 실제 회귀: 요청 프롬프트의 반환 형식 지정이 rubric을 밀어냄.)
 - Verdict는 label로 공표한다: green이면 `gh pr edit <N> --add-label
   review:approved --remove-label review:changes-requested`, red면
   `--add-label review:changes-requested`. reviewer의 write는 scorecard

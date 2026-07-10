@@ -23,6 +23,7 @@ updated: 2026-06-12
 ## 방 지도
 
 - [worktree](./worktree/memory.md) — 다중 agent / brain 병렬 작업용 git worktree 사용 룰
+- [pr-merge-gates](./pr-merge-gates/memory.md) — PR merge BLOCKED/UNSTABLE 진단 (review-gate + E2E ruleset 이중 게이트, 트리거 함정)
 
 ## 진입 규칙
 

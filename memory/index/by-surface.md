@@ -1,7 +1,7 @@
 ---
 title: By-surface 인덱스
 type: index
-generated: 2026-07-02
+generated: 2026-07-10
 generator: scripts/regenerate-indexes.sh
 ---
 
