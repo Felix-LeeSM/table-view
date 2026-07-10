@@ -93,6 +93,13 @@ export interface BuildContextMenuItemsArgs {
   data: TableData;
   selectedRowIds: Set<number>;
   canEditRows?: boolean;
+  /**
+   * Issue #1052 — false for a statically read-only engine (DuckDB). Unlike
+   * `canEditRows` (stateful: read-only SQLite connection / no-PK table →
+   * disabled), an engine that can never edit rows HIDES the row-write items
+   * outright (ui-parity §4: static unsupported = hide). Defaults to true.
+   */
+  rowEditingSupported?: boolean;
   schema: string;
   table: string;
   setCellDetail: (
@@ -117,6 +124,7 @@ export function buildContextMenuItems(
     data,
     selectedRowIds,
     canEditRows = true,
+    rowEditingSupported = true,
     schema,
     table,
     setCellDetail,
@@ -136,6 +144,46 @@ export function buildContextMenuItems(
 
   const t = (key: string) => i18n.t(`datagrid:${key}`);
 
+  // #1052 — a statically read-only engine (DuckDB) omits the row-write items
+  // entirely; a stateful block (read-only SQLite / no-PK table) keeps them
+  // visible-but-disabled via `canEditRows`.
+  const editItems: ContextMenuItem[] = rowEditingSupported
+    ? [
+        {
+          label: t("editCell"),
+          icon: <Pencil size={14} />,
+          disabled: !canEditRows,
+          onClick: () => {
+            const cell = data.rows[contextMenu.rowIdx]?.[contextMenu.colIdx];
+            const editVal = cellToEditValue(cell);
+            onStartEdit(contextMenu.rowIdx, contextMenu.colIdx, editVal);
+          },
+        },
+        {
+          label: t("setToNull"),
+          icon: <CircleSlash size={14} />,
+          disabled: !canEditRows,
+          onClick: () => {
+            onStartEdit(contextMenu.rowIdx, contextMenu.colIdx, null);
+            onSetEditNull();
+          },
+        },
+        {
+          label: t("deleteRow"),
+          icon: <Trash2 size={14} />,
+          danger: true,
+          disabled: !canEditRows,
+          onClick: onDeleteRow,
+        },
+        {
+          label: t("duplicateRow"),
+          icon: <Copy size={14} />,
+          disabled: !canEditRows,
+          onClick: onDuplicateRow,
+        },
+      ]
+    : [];
+
   return [
     {
       label: t("showCellDetails"),
@@ -152,38 +200,7 @@ export function buildContextMenuItems(
         }
       },
     },
-    {
-      label: t("editCell"),
-      icon: <Pencil size={14} />,
-      disabled: !canEditRows,
-      onClick: () => {
-        const cell = data.rows[contextMenu.rowIdx]?.[contextMenu.colIdx];
-        const editVal = cellToEditValue(cell);
-        onStartEdit(contextMenu.rowIdx, contextMenu.colIdx, editVal);
-      },
-    },
-    {
-      label: t("setToNull"),
-      icon: <CircleSlash size={14} />,
-      disabled: !canEditRows,
-      onClick: () => {
-        onStartEdit(contextMenu.rowIdx, contextMenu.colIdx, null);
-        onSetEditNull();
-      },
-    },
-    {
-      label: t("deleteRow"),
-      icon: <Trash2 size={14} />,
-      danger: true,
-      disabled: !canEditRows,
-      onClick: onDeleteRow,
-    },
-    {
-      label: t("duplicateRow"),
-      icon: <Copy size={14} />,
-      disabled: !canEditRows,
-      onClick: onDuplicateRow,
-    },
+    ...editItems,
     {
       label: "",
       separator: true,

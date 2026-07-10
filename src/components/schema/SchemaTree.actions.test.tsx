@@ -211,6 +211,54 @@ describe("SchemaTree — actions", () => {
     expect(screen.getByText("Drop")).toBeInTheDocument();
   });
 
+  // #1052 — DuckDB opens read-only (AccessMode::ReadOnly). Its DDL entries
+  // (Rename / Drop) are HIDDEN (ui-parity §4: static unsupported = hide);
+  // the read affordances Structure / Data stay. The writable-engine path is
+  // locked by the postgres case above (Rename/Drop still shown).
+  it("hides Rename/Drop on a read-only DuckDB table but keeps Structure/Data (#1052)", async () => {
+    useConnectionStore.setState({
+      connections: [
+        {
+          id: "conn1",
+          name: "duck",
+          dbType: "duckdb",
+          host: "",
+          port: 0,
+          user: "",
+          hasPassword: false,
+          database: "analytics.duckdb",
+          groupId: null,
+          color: null,
+          environment: null,
+          paradigm: "rdb",
+        },
+      ],
+    });
+    setSchemaStoreState({
+      schemas: { conn1: [{ name: "main" }] },
+      tables: {
+        "conn1:main": [{ name: "events", schema: "main", row_count: 2 }],
+      },
+      fileAnalyticsSources: { conn1: [] },
+      loadFileAnalyticsSources: vi.fn().mockResolvedValue([]),
+      clearFileAnalyticsSources: vi.fn().mockResolvedValue(undefined),
+    });
+
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
+
+    const tableItem = screen.getByLabelText("events table");
+    await act(async () => {
+      fireEvent.contextMenu(tableItem, { clientX: 100, clientY: 200 });
+    });
+
+    expect(screen.getByText("Structure")).toBeInTheDocument();
+    expect(screen.getByText("Data")).toBeInTheDocument();
+    expect(screen.queryByText("Rename")).toBeNull();
+    expect(screen.queryByText("Drop")).toBeNull();
+  });
+
   // AC-CM-02: Context menu closes when onClose is called (click outside)
   it("closes table context menu when close handler fires", async () => {
     await expandSchemaWithTables();

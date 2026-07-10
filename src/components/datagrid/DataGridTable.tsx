@@ -70,6 +70,12 @@ export interface DataGridTableProps {
   pendingDeletedRowKeys: Set<string>;
   pendingNewRows: unknown[][];
   canEditRows?: boolean;
+  /**
+   * Issue #1052 — false only for a statically read-only engine (DuckDB), which
+   * HIDES the row-write context-menu items outright. Distinct from
+   * `canEditRows` (stateful disable). Defaults to true.
+   */
+  rowEditingSupported?: boolean;
   page: number;
   schema: string;
   table: string;
@@ -181,6 +187,7 @@ const DataGridTable = forwardRef<DataGridTableHandle, DataGridTableProps>(
       pendingDeletedRowKeys,
       pendingNewRows,
       canEditRows = true,
+      rowEditingSupported = true,
       page,
       schema,
       table,
@@ -771,6 +778,7 @@ const DataGridTable = forwardRef<DataGridTableHandle, DataGridTableProps>(
               data,
               selectedRowIds,
               canEditRows,
+              rowEditingSupported,
               schema,
               table,
               setCellDetail,
