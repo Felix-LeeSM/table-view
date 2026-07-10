@@ -22,11 +22,15 @@ use crate::error::AppError;
 
 mod dump_writers;
 mod grid_writers;
+// Issue #1443 — `pub` so `commands::export::session::export_grid_*` resolve
+// for `generate_handler!` (the `#[tauri::command]` hidden `__cmd__*` macro
+// items don't follow a `pub use` re-export).
+pub mod session;
 
 use dump_writers::{pg_value_to_sql_literal, qualified_pg_table, quote_pg_identifier};
-use grid_writers::{
-    require_sql_source_table, write_csv, write_json_array, write_sql_insert, write_tsv,
-};
+use grid_writers::{require_sql_source_table, GridStreamState};
+
+pub use session::ExportSessionRegistry;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -155,9 +159,27 @@ pub fn write_export(
     // Issue #1094 — reject relative / internal-state target paths before any
     // filesystem work.
     crate::storage::local::validate_export_target_path(target_path)?;
+    preflight_format(format, context)?;
 
-    // Pre-flight: SQL format requires a single-table source. Reject
-    // before opening the file so no partial artifact is created.
+    // Issue #1443 — single-shot path composes the same streaming pieces the
+    // chunked-session IPC path uses, so both emit byte-identical output.
+    let bytes_written = atomic_write(target_path, |writer| {
+        let (mut stream, mut bytes) = GridStreamState::begin(writer, format, headers, context)?;
+        bytes += stream.write_rows(writer, rows, cancel)?;
+        bytes += stream.finish(writer)?;
+        Ok(bytes)
+    })?;
+
+    Ok(ExportSummary {
+        rows_written: rows.len() as u64,
+        bytes_written,
+    })
+}
+
+/// Pre-flight format/context compatibility, shared by the single-shot
+/// `write_export` path and the chunked-session `export_grid_begin` (#1443).
+/// Rejects before opening the file so no partial artifact is created.
+fn preflight_format(format: ExportFormat, context: &ExportContext) -> Result<(), AppError> {
     if matches!(format, ExportFormat::Sql) {
         require_sql_source_table(context)?;
     }
@@ -167,18 +189,7 @@ pub fn write_export(
             "JSON export is only supported for collections".into(),
         ));
     }
-
-    let bytes_written = atomic_write(target_path, |writer| match format {
-        ExportFormat::Csv => write_csv(writer, headers, rows, cancel),
-        ExportFormat::Tsv => write_tsv(writer, headers, rows, cancel),
-        ExportFormat::Sql => write_sql_insert(writer, headers, rows, context, cancel),
-        ExportFormat::Json => write_json_array(writer, headers, rows, cancel),
-    })?;
-
-    Ok(ExportSummary {
-        rows_written: rows.len() as u64,
-        bytes_written,
-    })
+    Ok(())
 }
 
 /// Issue #1094 — atomic file replace. Writes the body to a temp sibling in the
