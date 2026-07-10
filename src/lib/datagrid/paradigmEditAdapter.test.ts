@@ -501,7 +501,7 @@ describe("documentEditAdapter.preparePreview + execute", () => {
     expect(result.appliedPending).toEqual({
       editKeys: ["0-1"],
       deleteKeys: [],
-      newRowIndexes: [],
+      newRows: [],
     });
     expect(result.errorMessage).toMatch(/bulk_write op 1 delete_one failed/);
     expect(result.errorMessage).toMatch(/first 1 of 2 operations/);
@@ -510,11 +510,85 @@ describe("documentEditAdapter.preparePreview + execute", () => {
     expect(history.recordError).toHaveBeenCalledTimes(1);
   });
 
+  it("reports applied inserts by row reference across repeated partial failures (#1483 review B1)", async () => {
+    // Reason: PR #1483 review B1 — `newRowIndexes` were preview-time
+    // positions, but the facade prunes against the CURRENT pendingNewRows
+    // array, which shifts after the first prune. The adapter must hand back
+    // the row references themselves so the prune is position-independent.
+    // (2026-07-10)
+    const rowA = ["507f1f77bcf86cd799439031", "adam"];
+    const rowB = ["507f1f77bcf86cd799439032", "bella"];
+    const rowC = ["507f1f77bcf86cd799439033", "cara"];
+    bulkWriteDocuments.mockRejectedValueOnce(
+      new Error("bulk_write op 1 insert_one failed: duplicate key"),
+    );
+    bulkWriteDocuments.mockRejectedValueOnce(
+      new Error("bulk_write op 1 insert_one failed: duplicate key"),
+    );
+    const adapter = documentEditAdapter({
+      connectionId: "conn-mongo",
+      history,
+    });
+    const { session } = adapter.preparePreview({
+      data: docData,
+      schema: "mydb",
+      table: "users",
+      page: 1,
+      pendingEdits: new Map(),
+      pendingNewRows: [rowA, rowB, rowC],
+      pendingDeletedRowKeys: new Set(),
+    });
+    // Round 1: op 0 (rowA) applied, op 1 failed.
+    const first = await session!.execute();
+    expect(first.ok).toBe(false);
+    expect(first.failedIndex).toBe(1);
+    expect(first.appliedPending!.newRows).toHaveLength(1);
+    expect(first.appliedPending!.newRows[0]).toBe(rowA);
+
+    // Round 2: retry resumes at [rowB, rowC]; relative op 1 fails, so rowB
+    // applied. The report must identify rowB itself.
+    const second = await session!.execute();
+    expect(second.ok).toBe(false);
+    expect(second.failedIndex).toBe(2);
+    expect(second.appliedPending!.newRows).toHaveLength(1);
+    expect(second.appliedPending!.newRows[0]).toBe(rowB);
+  });
+
+  it("out-of-range bulk_write op index prunes nothing (#1483 review F1)", async () => {
+    // Reason: PR #1483 review F1 — a garbled/stale op index past the
+    // dispatched slice must not claim the whole remainder was applied;
+    // treat it like an unparseable error (keep-all fallback), never prune.
+    // (2026-07-10)
+    bulkWriteDocuments.mockRejectedValueOnce(
+      new Error("bulk_write op 7 insert_one failed: ???"),
+    );
+    const adapter = documentEditAdapter({
+      connectionId: "conn-mongo",
+      history,
+    });
+    const { session } = adapter.preparePreview({
+      data: docData,
+      schema: "mydb",
+      table: "users",
+      page: 1,
+      pendingEdits: new Map(),
+      pendingNewRows: [
+        ["507f1f77bcf86cd799439031", "adam"],
+        ["507f1f77bcf86cd799439032", "bella"],
+      ],
+      pendingDeletedRowKeys: new Set(),
+    });
+    const result = await session!.execute();
+    expect(result.ok).toBe(false);
+    expect(result.failedIndex).toBeUndefined();
+    expect(result.appliedPending).toBeUndefined();
+  });
+
   it("retry after a partial failure resumes from the failed op — applied ops are not re-sent (#1440)", async () => {
     // Reason: issue #1440 — the SAME session's execute() must not re-dispatch
     // ops the backend already applied. A second execute (in-modal retry)
     // resumes at the failed op, so a duplicate insert/update can't happen.
-    // Date 2026-07-10.
+    // (2026-07-10)
     bulkWriteDocuments.mockRejectedValueOnce(
       new Error("bulk_write op 1 delete_one failed: write timeout"),
     );

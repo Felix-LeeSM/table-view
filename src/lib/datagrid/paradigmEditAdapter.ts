@@ -62,8 +62,14 @@ export interface AppliedPendingOps {
   editKeys: string[];
   /** `pendingDeletedRowKeys` entries. */
   deleteKeys: string[];
-  /** Indexes into `pendingNewRows`. */
-  newRowIndexes: number[];
+  /**
+   * The exact `pendingNewRows` row references captured at preview time.
+   * Identity, not index — the live pending array shifts left as earlier
+   * partial failures prune it, so a preview-time position would point at
+   * the wrong row on the same session's 2nd+ failure (PR #1483 review B1).
+   * Edit/delete keys are stable, so only the insert namespace needs this.
+   */
+  newRows: unknown[][];
 }
 
 export interface BatchResult {
@@ -196,18 +202,22 @@ function parseMongoBulkWriteFailedIndex(message: string): number | undefined {
 }
 
 /** Issue #1440 — aggregate the pending origins of applied commands so the
- *  facade can prune them in one pass. */
+ *  facade can prune them in one pass. `previewNewRows` is the preview-time
+ *  `pendingNewRows` array; insert sources resolve their index against it so
+ *  the report carries the row itself (see {@link AppliedPendingOps}). */
 function collectAppliedSources(
   sources: ReadonlyArray<MqlCommandSource>,
+  previewNewRows: ReadonlyArray<unknown[]>,
 ): AppliedPendingOps {
   const applied: AppliedPendingOps = {
     editKeys: [],
     deleteKeys: [],
-    newRowIndexes: [],
+    newRows: [],
   };
   for (const source of sources) {
     if (source.kind === "insert") {
-      applied.newRowIndexes.push(source.newRowIndex);
+      const row = previewNewRows[source.newRowIndex];
+      if (row !== undefined) applied.newRows.push(row);
     } else if (source.kind === "update") {
       applied.editKeys.push(...source.editKeys);
     } else {
@@ -435,9 +445,13 @@ export function documentEditAdapter(
             // The backend preserves ordered short-circuit position in
             // `bulk_write op N ...` errors (0-based within the dispatched
             // slice). Map back to the absolute items index for the banner.
+            // PR #1483 review F1 — an index past the dispatched slice is a
+            // garbled/stale message; claiming the whole remainder was applied
+            // would prune never-applied ops (data loss). Treat it like an
+            // unparseable error instead (keep-all fallback).
             const relativeIndex = parseMongoBulkWriteFailedIndex(message);
             const failedIndex =
-              relativeIndex === undefined
+              relativeIndex === undefined || relativeIndex >= remaining.length
                 ? undefined
                 : batchStart + relativeIndex;
             // Issue #1440 — ops in [batchStart, failedIndex) were applied by
@@ -450,6 +464,7 @@ export function documentEditAdapter(
               if (failedIndex > batchStart) {
                 appliedPending = collectAppliedSources(
                   mqlPreview.sources.slice(batchStart, failedIndex),
+                  input.pendingNewRows,
                 );
               }
               cursor = failedIndex;

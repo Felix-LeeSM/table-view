@@ -9,7 +9,6 @@ import { useCommitFlash } from "@/hooks/useCommitFlash";
 import { useDataGridSelection } from "@/hooks/useDataGridSelection";
 import { useDataGridPreviewCommit } from "@/hooks/useDataGridPreviewCommit";
 import { toast } from "@/lib/runtime/toast";
-import type { AppliedPendingOps } from "@/lib/datagrid/paradigmEditAdapter";
 import { useDataGridEditPendingState } from "./useDataGridEditPendingState";
 import type {
   DataGridEditState,
@@ -100,6 +99,7 @@ export function useDataGridEdit({
     setPendingDeletedRowKeys,
     clearPendingEntry,
     restageAfterCommit,
+    prunePartiallyCommitted,
     pushSnapshot,
     undo,
     canUndo,
@@ -162,36 +162,9 @@ export function useDataGridEdit({
     setEditValue("");
   }, [restageAfterCommit, clearSelection, data]);
 
-  // Issue #1440 — Mongo bulk commits are ordered but non-transactional: on a
-  // partial failure the ops BEFORE the failed one are already applied on the
-  // server. Drop exactly those entries from the pending slices so a re-commit
-  // (in-modal retry or a regenerated preview) cannot duplicate them.
-  // ponytail: row-anchor snapshot entries for pruned keys stay behind — they
-  // are keyed lookups and unused keys are ignored; prune them if the snapshot
-  // maps ever grow visible semantics.
-  const prunePartiallyCommitted = useCallback(
-    (applied: AppliedPendingOps) => {
-      if (applied.editKeys.length > 0) {
-        setPendingEdits((prev) => {
-          const next = new Map(prev);
-          for (const key of applied.editKeys) next.delete(key);
-          return next;
-        });
-      }
-      if (applied.deleteKeys.length > 0) {
-        setPendingDeletedRowKeys((prev) => {
-          const next = new Set(prev);
-          for (const key of applied.deleteKeys) next.delete(key);
-          return next;
-        });
-      }
-      if (applied.newRowIndexes.length > 0) {
-        const drop = new Set(applied.newRowIndexes);
-        setPendingNewRows((prev) => prev.filter((_, idx) => !drop.has(idx)));
-      }
-    },
-    [setPendingEdits, setPendingDeletedRowKeys, setPendingNewRows],
-  );
+  // Issue #1440 — partial-commit prune lives in `useDataGridEditPendingState`
+  // (it must also invalidate the undo stack it owns — PR #1483 review B2);
+  // the facade just forwards it to the commit hook below.
 
   const {
     sqlPreview,
