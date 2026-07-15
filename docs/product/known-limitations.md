@@ -44,7 +44,19 @@ smoke or measurement gates:
 - Full 72-theme light/dark WCAG AA measurement.
 - SchemaTree 1k/10k table scroll FPS remains ungated. Current evidence is
   deterministic component fixtures plus advisory render p50/p95/env and
-  virtualization DOM bounds only.
+  virtualization DOM bounds only. SchemaTree now virtualizes by visible-row
+  count for every shape (PostgreSQL `with-schema`, MySQL `no-schema`, and
+  SQLite/DuckDB `flat`), not only `with-schema`; the shared BSON document
+  tree (`BsonTreeViewer`) and the Mongo database/collection tree
+  (`DocumentDatabaseTree`) are virtualized too. FPS/latency gates for these
+  surfaces remain future work.
+- The inline document tree (`DocumentTreePanel` / `jsonTree`) caps a single
+  cell's nested value at `MAX_TREE_DEPTH = 200` levels and `MAX_TREE_NODES =
+  50,000` nodes — a defense against a hostile/malfunctioning DB server
+  returning pathologically deep nesting (stack overflow) or an oversized
+  document (main-thread freeze). Beyond either cap the tree renders a visible
+  "…truncated" indicator instead of the full subtree. Legitimate documents
+  are far under both caps (MongoDB's own BSON nesting limit is 100).
 - DataGrid page-size 1000 wheel-to-paint latency remains ungated. Current
   evidence is a deterministic page-size 1000 fixture plus advisory render
   p50/p95/env and virtualization DOM bounds only.
