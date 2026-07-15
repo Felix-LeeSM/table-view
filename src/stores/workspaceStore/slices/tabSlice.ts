@@ -1,3 +1,4 @@
+import type { ConnectionId } from "@/types/branded";
 import type { QueryTab, Tab, TableTab, WorkspaceStoreState } from "../types";
 import {
   nextQueryId,
@@ -194,7 +195,12 @@ export function createTabSlice(set: WorkspaceSet, get: WorkspaceGet): TabSlice {
       if (closingTab.type === "query") {
         useRawQueryGridEditStore
           .getState()
-          .purgeKey(makeRawQueryGridEditKey(closingTab.connectionId, tabId));
+          .purgeKey(
+            makeRawQueryGridEditKey(
+              closingTab.connectionId as ConnectionId,
+              closingTab.id,
+            ),
+          );
       }
     },
 

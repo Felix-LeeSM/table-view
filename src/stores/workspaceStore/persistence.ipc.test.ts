@@ -12,6 +12,7 @@
  * fails here (guards the #1190-class shape mismatch).
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { TabId } from "@/types/branded";
 import { invoke } from "@tauri-apps/api/core";
 import { toast } from "@lib/runtime/toast";
 import { persistWorkspaces, type WorkspacesShape } from "./persistence";
@@ -56,7 +57,7 @@ describe("persistWorkspaces — persist_workspace IPC (#1091)", () => {
           tabs: [
             {
               type: "table",
-              id: "tab-1",
+              id: "tab-1" as TabId,
               title: "users",
               connectionId: "conn1",
               closable: true,
@@ -119,7 +120,7 @@ describe("persistWorkspaces — persist_workspace IPC (#1091)", () => {
           tabs: [
             {
               type: "query",
-              id: "query-1",
+              id: "query-1" as TabId,
               title: "Query 1",
               connectionId: "conn1",
               closable: true,

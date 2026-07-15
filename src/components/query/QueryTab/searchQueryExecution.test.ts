@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { SearchResultEnvelope } from "@/types/search";
+import type { TabId } from "@/types/branded";
 import {
   executeSearchDslQuery,
   parseSearchDslRequest,
@@ -28,7 +29,7 @@ const SEARCH_RESULT: SearchResultEnvelope = {
 };
 
 const tab = {
-  id: "query-search",
+  id: "query-search" as TabId,
   connectionId: "conn-search",
 };
 

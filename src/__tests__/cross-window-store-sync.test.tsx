@@ -38,6 +38,7 @@ import {
   afterEach,
   type Mock,
 } from "vitest";
+import type { TabId } from "@/types/branded";
 import {
   doMockTauriModule,
   doUnmockTauriModule,
@@ -237,7 +238,7 @@ describe("cross-window store sync (Sprint 153)", () => {
           [
             {
               type: "table",
-              id: "tab-A",
+              id: "tab-A" as TabId,
               title: "users",
               connectionId: "c1",
               closable: true,
@@ -303,7 +304,7 @@ describe("cross-window store sync (Sprint 153)", () => {
           [
             {
               type: "table",
-              id: "tab-C",
+              id: "tab-C" as TabId,
               title: "c",
               connectionId: "c1",
               closable: true,
@@ -340,7 +341,7 @@ describe("cross-window store sync (Sprint 153)", () => {
           [
             {
               type: "table",
-              id: "tab-keep",
+              id: "tab-keep" as TabId,
               title: "users",
               connectionId: "c1",
               closable: true,
@@ -471,7 +472,7 @@ describe("cross-window store sync (Sprint 153)", () => {
           [
             {
               type: "table",
-              id: "tab-1097",
+              id: "tab-1097" as TabId,
               title: "users",
               connectionId: "c1",
               closable: true,
@@ -539,7 +540,7 @@ describe("cross-window store sync (Sprint 153)", () => {
           [
             {
               type: "table",
-              id: "tab-bare",
+              id: "tab-bare" as TabId,
               title: "bare",
               connectionId: "c1",
               closable: true,
@@ -858,7 +859,7 @@ describe("cross-window store sync (Sprint 153)", () => {
           [
             {
               type: "table",
-              id: "tab-driver",
+              id: "tab-driver" as TabId,
               title: "drv",
               connectionId: "c1",
               closable: true,

@@ -2,6 +2,7 @@
  * `workspaceStore` types. Per-workspace state keyed by (connId, db) —
  * ADR 0027.
  */
+import type { TabId } from "@/types/branded";
 import type { Paradigm } from "@/types/connection";
 import type { QueryLanguageId } from "@/types/dataSource";
 import type {
@@ -47,7 +48,7 @@ export type TabObjectKind = "table" | "view";
 /** A tab that shows table data / structure. */
 export interface TableTab {
   type: "table";
-  id: string;
+  id: TabId;
   title: string;
   connectionId: string;
   closable: boolean;
@@ -81,7 +82,7 @@ export interface TableTab {
 /** A tab that hosts the SQL / document query editor. */
 export interface QueryTab {
   type: "query";
-  id: string;
+  id: TabId;
   title: string;
   connectionId: string;
   closable: boolean;

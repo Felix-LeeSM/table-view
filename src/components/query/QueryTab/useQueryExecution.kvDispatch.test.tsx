@@ -1,5 +1,6 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { TabId } from "@/types/branded";
 import { setupTauriMock } from "@/test-utils/tauriMock";
 import {
   getTestWorkspace,
@@ -47,7 +48,7 @@ function seedRedisTab(
   environment = "development",
 ) {
   const tab = makeQueryTab({
-    id: "query-redis",
+    id: "query-redis" as TabId,
     connectionId: "conn-redis",
     paradigm: "kv",
     queryLanguage: "redis-command",
@@ -73,7 +74,7 @@ function seedRedisTab(
 
 function seedValkeyTab(sql: string, database = "2") {
   const tab = makeQueryTab({
-    id: "query-valkey",
+    id: "query-valkey" as TabId,
     connectionId: "conn-valkey",
     paradigm: "kv",
     queryLanguage: "redis-command",

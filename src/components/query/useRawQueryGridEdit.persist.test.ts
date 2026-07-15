@@ -10,6 +10,7 @@
 //   (b) edit present → tab registered dirty (`setTabDirty(..., true)`).
 //   (c) discard / successful commit → dirty cleared (`setTabDirty(..., false)`).
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import type { ConnectionId, TabId } from "@/types/branded";
 import { renderHook, act } from "@testing-library/react";
 import { useRawQueryGridEdit } from "./useRawQueryGridEdit";
 import {
@@ -163,7 +164,7 @@ describe("useRawQueryGridEdit — Issue #1102 cross-mount persistence + dirty", 
     // Store entry gone → a fresh mount sees empty.
     const entry = useRawQueryGridEditStore
       .getState()
-      .getEntry(rawEntryKey("conn1", "tab-1"));
+      .getEntry(rawEntryKey("conn1" as ConnectionId, "tab-1" as TabId));
     expect(entry.pendingEdits.size).toBe(0);
   });
 
@@ -189,7 +190,7 @@ describe("useRawQueryGridEdit — Issue #1102 cross-mount persistence + dirty", 
     );
     const entry = useRawQueryGridEditStore
       .getState()
-      .getEntry(rawEntryKey("conn1", "tab-1"));
+      .getEntry(rawEntryKey("conn1" as ConnectionId, "tab-1" as TabId));
     expect(entry.pendingEdits.size).toBe(0);
   });
 });

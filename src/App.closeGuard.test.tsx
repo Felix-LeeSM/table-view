@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import type { TabId } from "@/types/branded";
 import { render, fireEvent, act, screen } from "@testing-library/react";
 import App from "./App";
 import {
@@ -49,7 +50,7 @@ vi.mock("@tauri-apps/api/core", () => ({
 function makeTableTab(overrides: Partial<TableTab> = {}): TableTab {
   return {
     type: "table",
-    id: "tab-1",
+    id: "tab-1" as TabId,
     title: "users",
     connectionId: "conn1",
     closable: true,

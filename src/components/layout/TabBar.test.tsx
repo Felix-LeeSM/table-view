@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
+import type { TabId } from "@/types/branded";
 import {
   getTestWorkspace,
   seedConnection,
@@ -166,7 +167,7 @@ describe("TabBar", () => {
   // single roving tab stop.
   it("#1131 arrow keys rove tab activation with a single tab stop", () => {
     const mkTab = (id: string, table: string): TableTab => ({
-      id,
+      id: id as TabId,
       type: "table",
       title: table,
       connectionId: "conn1",
@@ -431,7 +432,7 @@ describe("TabBar", () => {
       seedWorkspace(
         [
           {
-            id: "t1",
+            id: "t1" as TabId,
             type: "table",
             title: "users",
             connectionId: "conn1",
@@ -442,7 +443,7 @@ describe("TabBar", () => {
             table: "users",
           },
           {
-            id: "t2",
+            id: "t2" as TabId,
             type: "table",
             title: "orders",
             connectionId: "conn1",
@@ -453,7 +454,7 @@ describe("TabBar", () => {
             table: "orders",
           },
           {
-            id: "t3",
+            id: "t3" as TabId,
             type: "table",
             title: "products",
             connectionId: "conn1",
@@ -1111,7 +1112,7 @@ describe("TabBar", () => {
       seedWorkspace(
         [
           {
-            id: "q1",
+            id: "q1" as TabId,
             type: "query",
             title: "find()",
             connectionId: "conn1",

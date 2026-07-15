@@ -1,3 +1,4 @@
+import type { TabId } from "@/types/branded";
 import { paradigmOf, type Paradigm } from "@/types/connection";
 import type { WorkspaceState, WorkspaceStoreState } from "./types";
 
@@ -71,17 +72,19 @@ export function __resetCountersForTests(): void {
   queryCounter = 0;
 }
 
-export function nextTabId(): string {
+// #1493 — tab-id mint boundary: brand once at the single allocation point so
+// every tab constructed from these carries a `TabId`.
+export function nextTabId(): TabId {
   tabCounter += 1;
-  return `tab-${tabCounter}`;
+  return `tab-${tabCounter}` as TabId;
 }
 
-export function nextQueryId(): string {
+export function nextQueryId(): TabId {
   queryCounter += 1;
-  return `query-${queryCounter}`;
+  return `query-${queryCounter}` as TabId;
 }
 
-export function nextQueryTabIdentity(): { id: string; title: string } {
+export function nextQueryTabIdentity(): { id: TabId; title: string } {
   const id = nextQueryId();
   return { id, title: `Query ${queryCounter}` };
 }

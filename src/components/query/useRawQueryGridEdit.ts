@@ -20,6 +20,7 @@ import {
   useWorkspaceStore,
 } from "@stores/workspaceStore";
 import type { QueryResult } from "@/types/query";
+import type { ConnectionId, TabId } from "@/types/branded";
 
 /**
  * Raw-query result grid edit state machine + commit lifecycle hook. 8
@@ -124,7 +125,11 @@ export function useRawQueryGridEdit({
   }
   const storeKey =
     connectionId && tabId
-      ? rawEntryKey(connectionId, tabId)
+      ? // #1493 — `connectionId` / `tabId` arrive here as plain component-prop
+        // strings; brand them at this single composition boundary. Their
+        // canonical `(connectionId, tabId)` order is locked by `rawEntryKey`'s
+        // branded signature (see rawQueryGridEditStore + branded.test.ts).
+        rawEntryKey(connectionId as ConnectionId, tabId as TabId)
       : fallbackKeyRef.current;
 
   const entry =

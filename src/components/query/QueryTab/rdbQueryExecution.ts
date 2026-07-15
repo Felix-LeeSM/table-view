@@ -16,6 +16,7 @@ import {
 import { toast } from "@lib/runtime/toast";
 import { dispatchDbMutationHint } from "./queryHelpers";
 import type { SafeModeGate } from "@hooks/useSafeModeGate";
+import type { ConnectionId, TabId } from "@/types/branded";
 import type { DatabaseType } from "@/types/connection";
 import type { FileAnalyticsSourceMetadata } from "@/types/fileAnalytics";
 import type {
@@ -118,7 +119,10 @@ export interface ExecuteRdbSingleStatementRequest extends RdbSingleLifecycleActi
   stmt: string;
   history?: RdbHistoryOverrides;
   workspaceDb: string | null | undefined;
-  findLiveIdleTab: (tabId: string, connectionId: string) => QueryTab | null;
+  findLiveIdleTab: (
+    connectionId: ConnectionId,
+    tabId: TabId,
+  ) => QueryTab | null;
   runRdbSingleRef: RdbRunnerRef<RdbSingleRunner>;
   // Issue #1112 — proof the destructive-statement confirm dialog was
   // satisfied. Forwarded verbatim to the backend Safe Mode gate.
@@ -130,7 +134,10 @@ export interface ExecuteRdbStatementBatchRequest extends RdbBatchLifecycleAction
   statements: string[];
   joinedSql: string;
   workspaceDb: string | null | undefined;
-  findLiveIdleTab: (tabId: string, connectionId: string) => QueryTab | null;
+  findLiveIdleTab: (
+    connectionId: ConnectionId,
+    tabId: TabId,
+  ) => QueryTab | null;
   runRdbBatchRef: RdbRunnerRef<RdbBatchRunner>;
   // Issue #1112 — see `ExecuteRdbSingleStatementRequest`.
   safetyConfirmed?: boolean;
@@ -301,8 +308,8 @@ export async function executeRdbSingleStatement({
               label: "Retry",
               onClick: () => {
                 const live = findLiveIdleTab(
+                  capturedConnectionId as ConnectionId,
                   capturedTabId,
-                  capturedConnectionId,
                 );
                 if (!live) return;
                 const fn = runRdbSingleRef.current;
@@ -404,8 +411,8 @@ export async function executeRdbStatementBatch({
                 label: "Retry",
                 onClick: () => {
                   const live = findLiveIdleTab(
+                    capturedConnectionId as ConnectionId,
                     capturedTabId,
-                    capturedConnectionId,
                   );
                   if (!live) return;
                   const fn = runRdbBatchRef.current;
