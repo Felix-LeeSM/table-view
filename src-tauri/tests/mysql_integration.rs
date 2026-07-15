@@ -3225,7 +3225,8 @@ async fn test_mysql_get_table_columns_populates_fk_reference_in_child() {
 // - BIGINT (i64/u64): JSON string — 프론트가 BigInt 로 승격 (정밀도 보존).
 // - DECIMAL/NEWDECIMAL: JSON string (line 145).
 // - INT/SMALLINT/MEDIUMINT/INTEGER/YEAR/TINYINT: JSON number (i64) — ≤32bit
-//   라 f64 (±2^53-1) 무손실이므로 그대로 Number.
+//   라 f64 (±2^53-1) 무손실이므로 그대로 Number. TINYINT 세 변형("TINYINT",
+//   "TINYINT UNSIGNED", TINYINT(1) 의 "BOOLEAN") 전부 Number (issue #1484).
 
 #[tokio::test]
 #[serial_test::serial]
@@ -3438,6 +3439,91 @@ async fn test_mysql_query_table_data_int_value_remains_number_wire() {
         "MySQL int cell must be JSON number, got: {cell:?}"
     );
     assert_eq!(cell.as_i64(), Some(42));
+
+    adapter
+        .execute_query(
+            &format!("DROP TABLE {table}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
+        .await
+        .ok();
+    adapter.disconnect_pool().await.ok();
+}
+
+/// issue #1484 — TINYINT 정수 컬럼이 그리드에서 true/false bool 로 붕괴하는
+/// 회귀 가드. sqlx-mysql 의 type_info().name() 은 ColumnType::Tiny 를 폭에 따라
+/// 세 keyword 로 report 한다 (vendored column.rs L175-181): TINYINT(1) → "BOOLEAN",
+/// unsigned → "TINYINT UNSIGNED", 나머지 → "TINYINT". sqlx bool decode 는
+/// byte != 0 이면 성공하므로 non-zero TINYINT 값(2, 127, -5)이 전부
+/// Ok(Some(true)) 로 붕괴했다. 세 변형 모두 JSON number 로 wire 되어야 한다
+/// (line 3227 계약).
+#[tokio::test]
+#[serial_test::serial]
+async fn test_mysql_query_table_data_tinyint_value_is_number_not_bool() {
+    let adapter = match common::setup_mysql_adapter().await {
+        Some(a) => a,
+        None => return,
+    };
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis();
+    let table = format!("test_wire_tinyint_{ts}");
+
+    // `flag` 는 폭 없는 TINYINT (sqlx name "TINYINT"), `narrow` 는 TINYINT(1)
+    // (sqlx name "BOOLEAN"). 두 keyword 모두 non-zero 값이 bool 로 붕괴하지
+    // 않고 number 로 wire 되는지 검증.
+    adapter
+        .execute_query(
+            &format!("CREATE TABLE {table} (id INT PRIMARY KEY, flag TINYINT, narrow TINYINT(1))"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
+        .await
+        .expect("CREATE TABLE");
+    adapter
+        .execute_query(
+            &format!(
+                "INSERT INTO {table} (id, flag, narrow) VALUES (1, 2, 1), (2, 127, 0), (3, -5, 1)"
+            ),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
+        .await
+        .expect("INSERT");
+
+    let data = adapter
+        .query_table_data(&table, MYSQL_SCHEMA, 1, 50, None, None, None, None)
+        .await
+        .expect("query_table_data");
+    assert_eq!(data.rows.len(), 3);
+
+    // 순서 무관하게 flag(idx 1) 컬럼 값을 수집 — 각 셀은 bool 이 아닌 number.
+    let mut flags: Vec<i64> = data
+        .rows
+        .iter()
+        .map(|r| {
+            let cell = &r[1];
+            assert!(
+                cell.is_number(),
+                "TINYINT flag must be JSON number, not bool (issue #1484), got: {cell:?}"
+            );
+            cell.as_i64().expect("TINYINT flag as i64")
+        })
+        .collect();
+    flags.sort_unstable();
+    assert_eq!(flags, vec![-5, 2, 127]);
+
+    // TINYINT(1) 도 폭이 지워져 number 로 wire — TINYINT(1) 을 bool 로
+    // 추정하던 기존 동작을 의도적으로 폐기 (issue #1484 tradeoff).
+    for r in &data.rows {
+        let cell = &r[2];
+        assert!(
+            cell.is_number(),
+            "TINYINT(1) must also be JSON number, not bool (issue #1484), got: {cell:?}"
+        );
+    }
 
     adapter
         .execute_query(

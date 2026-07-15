@@ -111,14 +111,6 @@ fn cell_to_json(row: &sqlx::mysql::MySqlRow, idx: usize) -> serde_json::Value {
     // type-name 기반 분기. MySQL TypeInfo 의 name() 은 대문자 keyword
     // (`"INT"`, `"VARCHAR"`, `"DATETIME"`, `"JSON"`, `"BLOB"` 등).
     match type_name.as_str() {
-        "TINYINT" | "BOOLEAN" => {
-            // TINYINT(1) 는 BOOLEAN 의 fingerprint — bool 로 decode 시도,
-            // 실패 시 i64.
-            if let Ok(Some(v)) = row.try_get::<Option<bool>, _>(idx) {
-                return serde_json::Value::Bool(v);
-            }
-            try_decode!(i64, |v: i64| serde_json::Value::Number(v.into()));
-        }
         "BIGINT" | "BIGINT UNSIGNED" => {
             // ADR 0026 (issue #1082) — BIGINT (i64) 및 BIGINT UNSIGNED (u64) 는
             // ±(2^53-1) 을 넘을 수 있어 raw JSON number 로 wire 하면 프론트의
@@ -132,13 +124,19 @@ fn cell_to_json(row: &sqlx::mysql::MySqlRow, idx: usize) -> serde_json::Value {
             try_decode!(i64, |v: i64| serde_json::Value::String(v.to_string()));
             try_decode!(u64, |v: u64| serde_json::Value::String(v.to_string()));
         }
-        "SMALLINT" | "SMALLINT UNSIGNED" | "MEDIUMINT" | "MEDIUMINT UNSIGNED" | "INT"
-        | "INT UNSIGNED" | "INTEGER" | "YEAR" | "TINYINT UNSIGNED" => {
+        "TINYINT" | "BOOLEAN" | "SMALLINT" | "SMALLINT UNSIGNED" | "MEDIUMINT"
+        | "MEDIUMINT UNSIGNED" | "INT" | "INT UNSIGNED" | "INTEGER" | "YEAR"
+        | "TINYINT UNSIGNED" => {
             // 전부 ≤32bit (u32 max 4_294_967_295 < 2^53) 라 f64 로 무손실 round-
-            // trip — raw Number 유지. unsigned 변형은 sqlx-mysql 이 별도 keyword
-            // (`"INT UNSIGNED"` 등, vendored column.rs L176-179) 로 report 하므로
-            // 명시 매치해야 wildcard 로 떨어져 Null 값 소실되는 것을 막는다.
-            // signed 우선 (i64) → 실패 시 u64.
+            // trip — raw Number 유지. TINYINT 계열은 전부 정수 (issue #1484):
+            // vendored sqlx column.rs L175-181 은 ColumnType::Tiny 를 폭에 따라
+            // 세 keyword 로 report 한다 — TINYINT(1) 은 `"BOOLEAN"`, unsigned 는
+            // `"TINYINT UNSIGNED"`, 나머지는 `"TINYINT"`. bool 로 decode 하면
+            // sqlx bool 은 byte != 0 이면 성공이라 non-zero TINYINT (2, 127, -5)
+            // 가 전부 true 로 붕괴하므로, TINYINT(1) 의 1/0 을 Number 로 노출하는
+            // 손실을 감수하고 세 변형 모두 정수로 decode 한다. 다른 unsigned
+            // 변형(`"INT UNSIGNED"` 등)도 명시 매치해야 wildcard 로 떨어져 Null
+            // 값 소실되는 것을 막는다. signed 우선 (i64) → 실패 시 u64.
             try_decode!(i64, |v: i64| serde_json::Value::Number(v.into()));
             try_decode!(u64, |v: u64| serde_json::Value::Number(v.into()));
         }
