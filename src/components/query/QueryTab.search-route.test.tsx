@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { TabId } from "@/types/branded";
 import { seedWorkspace } from "@/stores/__tests__/workspaceStoreTestHelpers";
 import { useConnectionStore } from "@stores/connectionStore";
 import {
@@ -57,7 +58,7 @@ function makeOpenSearchConnection(): ConnectionConfig {
 function makeSearchTab(): QueryTabType {
   return {
     type: "query",
-    id: "query-search",
+    id: "query-search" as TabId,
     title: "Search Query",
     connectionId: "search-1",
     closable: true,

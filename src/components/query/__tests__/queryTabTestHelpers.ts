@@ -11,6 +11,7 @@
 // pulls them above any import; each axis file declares the 7 factories at
 // its module top-level instead.
 import { vi } from "vitest";
+import type { TabId } from "@/types/branded";
 import {
   useWorkspaceStore,
   type QueryTab as QueryTabType,
@@ -108,12 +109,13 @@ export const mockEditorProps: {
 // Fixture builders
 // ---------------------------------------------------------------------------
 
-export function makeQueryTab(
-  overrides: Partial<QueryTabType> = {},
-): QueryTabType {
+export function makeQueryTab({
+  id = "query-1",
+  ...overrides
+}: Partial<Omit<QueryTabType, "id">> & { id?: string } = {}): QueryTabType {
   return {
     type: "query",
-    id: "query-1",
+    id: id as TabId,
     title: "Query 1",
     connectionId: "conn1",
     closable: true,

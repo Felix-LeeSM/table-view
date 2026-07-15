@@ -3,6 +3,7 @@ import { useWorkspaceStore } from "@stores/workspaceStore";
 import { cancelQuery, cancelQueryNative, getQueryServerPid } from "@lib/tauri";
 import { toast } from "@lib/runtime/toast";
 import type { QueryTab } from "@stores/workspaceStore";
+import type { ConnectionId, TabId } from "@/types/branded";
 import { createMongoWriteDispatchers } from "@features/query";
 import {
   executeKvCommandNow,
@@ -238,7 +239,7 @@ export function useQueryExecution({
   // Walks every (connId, db) slot for the connection because the tab may
   // have moved if the active db flipped mid-flight.
   const findLiveIdleTab = useCallback(
-    (tabId: string, connectionId: string): QueryTab | null => {
+    (connectionId: ConnectionId, tabId: TabId): QueryTab | null => {
       const conns = useWorkspaceStore.getState().workspaces[connectionId];
       if (!conns) return null;
       for (const ws of Object.values(conns)) {

@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import type { ConnectionId, TabId } from "@/types/branded";
 import {
   render,
   screen,
@@ -93,7 +94,7 @@ function seedInactiveRawPendingEdit(connId: string): void {
   useRawQueryGridEditStore
     .getState()
     .setSlice(
-      rawEntryKey(connId, "t-raw"),
+      rawEntryKey(connId as ConnectionId, "t-raw" as TabId),
       "pendingEdits",
       new Map([["0-0", "edited"]]),
     );

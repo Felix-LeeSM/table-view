@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import type { TabId } from "@/types/branded";
 import {
   seedWorkspace,
   getTestWorkspace,
@@ -214,10 +215,13 @@ vi.mock("@components/document/MongoStructurePanel", () => ({
   ),
 }));
 
-function makeTableTab(overrides: Partial<TableTab> = {}): TableTab {
+function makeTableTab({
+  id = "tab-1",
+  ...overrides
+}: Partial<Omit<TableTab, "id">> & { id?: string } = {}): TableTab {
   return {
     type: "table",
-    id: "tab-1",
+    id: id as TabId,
     title: "users",
     connectionId: "conn1",
     closable: true,
@@ -231,10 +235,13 @@ function makeTableTab(overrides: Partial<TableTab> = {}): TableTab {
 // Sprint 350 (2026-05-15) — document-paradigm tab fixture. The document
 // branch keys on `database` / `collection` (mongo names) rather than
 // `schema` / `table`.
-function makeDocumentTab(overrides: Partial<TableTab> = {}): TableTab {
+function makeDocumentTab({
+  id = "doc-tab-1",
+  ...overrides
+}: Partial<Omit<TableTab, "id">> & { id?: string } = {}): TableTab {
   return {
     type: "table",
-    id: "doc-tab-1",
+    id: id as TabId,
     title: "users",
     connectionId: "mongo1",
     closable: true,
@@ -246,10 +253,13 @@ function makeDocumentTab(overrides: Partial<TableTab> = {}): TableTab {
   };
 }
 
-function makeQueryTab(overrides: Partial<QueryTabType> = {}): QueryTabType {
+function makeQueryTab({
+  id = "query-1",
+  ...overrides
+}: Partial<Omit<QueryTabType, "id">> & { id?: string } = {}): QueryTabType {
   return {
     type: "query",
-    id: "query-1",
+    id: id as TabId,
     title: "Query 1",
     connectionId: "conn1",
     closable: true,

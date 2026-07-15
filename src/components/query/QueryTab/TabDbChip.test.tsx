@@ -12,6 +12,7 @@
 //   4. 항목 선택 → `setQueryTabDatabase(connId, db, tabId, target)` 호출.
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import type { TabId } from "@/types/branded";
 import {
   render,
   screen,
@@ -126,7 +127,7 @@ describe("TabDbChip — interactive database selector", () => {
             tabs: [
               {
                 type: "query",
-                id: "query-1",
+                id: "query-1" as TabId,
                 title: "Query 1",
                 connectionId: "conn-mongo",
                 closable: true,

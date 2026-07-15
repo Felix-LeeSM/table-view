@@ -78,6 +78,13 @@ export type Paradigm = "rdb" | "document" | "search" | "kv";
  * whether the user has set one.
  */
 export interface ConnectionConfig {
+  // #1493 — kept as `string` in Phase 1: the swap-prone functions
+  // (`rawEntryKey` / `findLiveIdleTab`) read `tab.connectionId`, never
+  // `ConnectionConfig.id`, so branding this field buys no call-site
+  // protection while forcing ~90 construction sites to re-brand. The
+  // `ConnectionId` brand still guards those functions (connectionId is
+  // asserted at each call boundary). Field branding is deferred to a
+  // later phase where a value-level ingress can absorb the blast.
   id: string;
   name: string;
   dbType: DatabaseType;

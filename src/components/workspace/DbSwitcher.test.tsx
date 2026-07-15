@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import type { TabId } from "@/types/branded";
 import { seedWorkspace } from "@/stores/__tests__/workspaceStoreTestHelpers";
 import {
   render,
@@ -40,7 +41,7 @@ import { useToastStore } from "@/stores/toastStore";
 function makeTableTab(overrides: Partial<TableTab> = {}): TableTab {
   return {
     type: "table",
-    id: "tab-1",
+    id: "tab-1" as TabId,
     title: "users",
     connectionId: "c1",
     closable: true,
@@ -54,7 +55,7 @@ function makeTableTab(overrides: Partial<TableTab> = {}): TableTab {
 function makeQueryTab(overrides: Partial<QueryTab> = {}): QueryTab {
   return {
     type: "query",
-    id: "query-1",
+    id: "query-1" as TabId,
     title: "Query 1",
     connectionId: "c1",
     closable: true,

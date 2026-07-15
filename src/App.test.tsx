@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import type { TabId } from "@/types/branded";
 import {
   seedWorkspace,
   getTestWorkspace,
@@ -60,10 +61,13 @@ vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(() => Promise.resolve()),
 }));
 
-function makeTableTab(overrides: Partial<TableTab> = {}): TableTab {
+function makeTableTab({
+  id = "tab-1",
+  ...overrides
+}: Partial<Omit<TableTab, "id">> & { id?: string } = {}): TableTab {
   return {
     type: "table",
-    id: "tab-1",
+    id: id as TabId,
     title: "users",
     connectionId: "conn1",
     closable: true,
@@ -74,10 +78,13 @@ function makeTableTab(overrides: Partial<TableTab> = {}): TableTab {
   };
 }
 
-function makeQueryTab(overrides: Partial<QueryTab> = {}): QueryTab {
+function makeQueryTab({
+  id = "query-1",
+  ...overrides
+}: Partial<Omit<QueryTab, "id">> & { id?: string } = {}): QueryTab {
   return {
     type: "query",
-    id: "query-1",
+    id: id as TabId,
     title: "Query 1",
     connectionId: "conn1",
     closable: true,

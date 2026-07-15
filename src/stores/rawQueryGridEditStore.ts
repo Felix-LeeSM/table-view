@@ -25,6 +25,7 @@
  *   entry (connection dropped via `cleanupConnectionFrontendState`).
  */
 import { create } from "zustand";
+import type { ConnectionId, TabId } from "@/types/branded";
 
 export interface RawPendingEntry {
   pendingEdits: ReadonlyMap<string, string>;
@@ -45,7 +46,7 @@ export const EMPTY_RAW_ENTRY: RawPendingEntry = Object.freeze({
 
 /** Compose the canonical entry key. Centralised so producers and the
  *  `tabStore` purge path agree on the shape verbatim. */
-export function rawEntryKey(connectionId: string, tabId: string): string {
+export function rawEntryKey(connectionId: ConnectionId, tabId: TabId): string {
   return `${connectionId}::${tabId}`;
 }
 

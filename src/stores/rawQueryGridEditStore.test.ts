@@ -8,10 +8,11 @@ import {
   rawEntryKey,
   EMPTY_RAW_ENTRY,
 } from "./rawQueryGridEditStore";
+import type { ConnectionId, TabId } from "@/types/branded";
 
-const KEY_A = rawEntryKey("conn1", "tab-1");
-const KEY_B = rawEntryKey("conn1", "tab-2");
-const KEY_OTHER_CONN = rawEntryKey("conn2", "tab-9");
+const KEY_A = rawEntryKey("conn1" as ConnectionId, "tab-1" as TabId);
+const KEY_B = rawEntryKey("conn1" as ConnectionId, "tab-2" as TabId);
+const KEY_OTHER_CONN = rawEntryKey("conn2" as ConnectionId, "tab-9" as TabId);
 
 describe("rawQueryGridEditStore", () => {
   beforeEach(() => {

@@ -14,11 +14,15 @@ import {
   EMPTY_RAW_ENTRY,
 } from "@stores/rawQueryGridEditStore";
 import type { QueryTab, WorkspaceState } from "../types";
+import type { ConnectionId, TabId } from "@/types/branded";
 
-function makeQueryTab(overrides: Partial<QueryTab> = {}): QueryTab {
+function makeQueryTab({
+  id = "q1",
+  ...overrides
+}: Partial<Omit<QueryTab, "id">> & { id?: string } = {}): QueryTab {
   return {
     type: "query",
-    id: "q1",
+    id: id as TabId,
     title: "Query 1",
     connectionId: "conn1",
     closable: true,
@@ -46,7 +50,7 @@ function seedRawPending(connId: string, tabId: string): void {
   useRawQueryGridEditStore
     .getState()
     .setSlice(
-      rawEntryKey(connId, tabId),
+      rawEntryKey(connId as ConnectionId, tabId as TabId),
       "pendingEdits",
       new Map([["0-1", "x"]]),
     );
@@ -67,14 +71,18 @@ describe("tabSlice — Issue #1102 rawQueryGridEditStore purge wiring", () => {
     });
     seedRawPending("conn1", "q1");
     expect(
-      useRawQueryGridEditStore.getState().getEntry(rawEntryKey("conn1", "q1"))
+      useRawQueryGridEditStore
+        .getState()
+        .getEntry(rawEntryKey("conn1" as ConnectionId, "q1" as TabId))
         .pendingEdits.size,
     ).toBe(1);
 
     useWorkspaceStore.getState().removeTab("conn1", "db1", "q1");
 
     expect(
-      useRawQueryGridEditStore.getState().getEntry(rawEntryKey("conn1", "q1")),
+      useRawQueryGridEditStore
+        .getState()
+        .getEntry(rawEntryKey("conn1" as ConnectionId, "q1" as TabId)),
     ).toBe(EMPTY_RAW_ENTRY);
   });
 
@@ -96,8 +104,15 @@ describe("tabSlice — Issue #1102 rawQueryGridEditStore purge wiring", () => {
     useWorkspaceStore.getState().clearForConnection("conn1");
 
     const raw = useRawQueryGridEditStore.getState();
-    expect(raw.getEntry(rawEntryKey("conn1", "q1"))).toBe(EMPTY_RAW_ENTRY);
-    expect(raw.getEntry(rawEntryKey("conn1", "q2"))).toBe(EMPTY_RAW_ENTRY);
-    expect(raw.getEntry(rawEntryKey("conn2", "q9")).pendingEdits.size).toBe(1);
+    expect(
+      raw.getEntry(rawEntryKey("conn1" as ConnectionId, "q1" as TabId)),
+    ).toBe(EMPTY_RAW_ENTRY);
+    expect(
+      raw.getEntry(rawEntryKey("conn1" as ConnectionId, "q2" as TabId)),
+    ).toBe(EMPTY_RAW_ENTRY);
+    expect(
+      raw.getEntry(rawEntryKey("conn2" as ConnectionId, "q9" as TabId))
+        .pendingEdits.size,
+    ).toBe(1);
   });
 });

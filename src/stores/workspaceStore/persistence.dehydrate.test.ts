@@ -24,11 +24,15 @@ import {
   STORAGE_KEY,
 } from "./persistence";
 import type { QueryTab, WorkspaceState } from "./types";
+import type { TabId } from "@/types/branded";
 
-function makeQueryTab(overrides: Partial<QueryTab> = {}): QueryTab {
+function makeQueryTab({
+  id = "q1",
+  ...overrides
+}: Partial<Omit<QueryTab, "id">> & { id?: string } = {}): QueryTab {
   return {
     type: "query",
-    id: "q1",
+    id: id as TabId,
     title: "Query 1",
     connectionId: "conn1",
     closable: true,

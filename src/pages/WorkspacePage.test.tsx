@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import type { TabId } from "@/types/branded";
 import {
   seedWorkspace,
   getTestWorkspace,
@@ -136,7 +137,7 @@ describe("WorkspacePage", () => {
         [
           {
             type: "table",
-            id: "tab-1",
+            id: "tab-1" as TabId,
             title: "users",
             connectionId: "c1",
             closable: true,

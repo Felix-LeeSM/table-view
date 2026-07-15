@@ -18,11 +18,12 @@ import {
 } from "./__tests__/workspaceStoreTestHelpers";
 import { STORAGE_KEY } from "./workspaceStore/persistence";
 import type { TableTab, QueryTab } from "./workspaceStore/types";
+import type { TabId } from "@/types/branded";
 
 function makeTableTab(id: string): TableTab {
   return {
     type: "table",
-    id,
+    id: id as TabId,
     title: id,
     connectionId: "conn1",
     closable: true,
@@ -36,7 +37,7 @@ function makeTableTab(id: string): TableTab {
 function makeQueryTab(id: string): QueryTab {
   return {
     type: "query",
-    id,
+    id: id as TabId,
     title: id,
     connectionId: "conn1",
     closable: true,

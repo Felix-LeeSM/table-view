@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import type { TabId } from "@/types/branded";
 import { seedWorkspace } from "@/stores/__tests__/workspaceStoreTestHelpers";
 import { render, screen, fireEvent } from "@testing-library/react";
 import WorkspaceSidebar from "./WorkspaceSidebar";
@@ -51,7 +52,7 @@ function makeConn(
 function makeTableTab(id: string, connectionId: string): TableTab {
   return {
     type: "table",
-    id,
+    id: id as TabId,
     title: id,
     connectionId,
     closable: true,

@@ -13,6 +13,7 @@
  */
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { TabId } from "@/types/branded";
 import { setupTauriMock } from "@/test-utils/tauriMock";
 import {
   getTestWorkspace,
@@ -141,7 +142,7 @@ function seedMongoTab(sql: string) {
 
 function seedRedisTab(sql: string) {
   const tab = makeQueryTab({
-    id: "query-redis",
+    id: "query-redis" as TabId,
     connectionId: "conn-redis",
     paradigm: "kv",
     queryLanguage: "redis-command",
@@ -165,7 +166,7 @@ function seedRedisTab(sql: string) {
 
 function seedSearchTab(sql: string) {
   const tab = makeQueryTab({
-    id: "query-search",
+    id: "query-search" as TabId,
     connectionId: "conn-search",
     paradigm: "search",
     queryLanguage: "search-dsl",

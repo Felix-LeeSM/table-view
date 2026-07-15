@@ -9,6 +9,7 @@
 // localStorage + safe-mode reset). Cases are byte-equivalent to the
 // originals — no behaviour change.
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import type { TabId } from "@/types/branded";
 import { setupTauriMock } from "@/test-utils/tauriMock";
 import {
   seedWorkspace,
@@ -314,7 +315,7 @@ describe("QueryTab — document", () => {
       screen.queryByRole("group", { name: /Mongo query mode/i }),
     ).toBeNull();
 
-    const docTab = makeDocTab({ id: "query-1" });
+    const docTab = makeDocTab({ id: "query-1" as TabId });
     useWorkspaceStore.setState(seedWorkspace([docTab], "query-1"));
     rerender(<QueryTab tab={docTab} />);
     expect(
@@ -579,7 +580,7 @@ describe("QueryTab — document", () => {
 
     const docTab: QueryTabType = {
       type: "query",
-      id: "query-doc",
+      id: "query-doc" as TabId,
       title: "Mongo",
       connectionId: "conn1",
       closable: true,
