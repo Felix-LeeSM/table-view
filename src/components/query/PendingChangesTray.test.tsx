@@ -29,6 +29,7 @@ const PLAN: RawEditPlan = {
   table: "users",
   pkColumns: ["id"],
   resultColumnNames: ["id", "name", "email"],
+  resultColumnTypes: ["integer", "text", "varchar"],
 };
 
 function renderTray(
@@ -122,11 +123,22 @@ describe("PendingChangesTray", () => {
     expect(onRevertDelete).toHaveBeenCalledWith("row-1-0");
   });
 
-  // [AC-182-04a] Empty new value is shown as italic NULL with a
-  // tooltip. 2026-05-01 — pins the historical "" → SQL NULL convention
-  // visibly so the user does not mistake an empty cell for a no-op.
-  it("renders italic NULL with a tooltip when the new value is empty", () => {
+  // [AC-182-04a] Issue #1436 — an empty value on a textual column is saved
+  // as `''`, so the tray shows italic `''` (not NULL) to match the emitted
+  // SQL. `name` (col 1) is a text column here.
+  it("renders italic '' with a tooltip when an empty value hits a textual column", () => {
     const edits = new Map<string, string>([["0-1", ""]]);
+    renderTray({ pendingEdits: edits });
+    const emptySpan = screen.getByText("''");
+    expect(emptySpan).toHaveClass("italic");
+    expect(emptySpan.getAttribute("title")).toMatch(/empty string/i);
+  });
+
+  // [AC-182-04c] Issue #1436 — an empty value on a non-textual column still
+  // collapses to SQL NULL, so the tray shows italic NULL. `id` (col 0) is an
+  // integer column here.
+  it("renders italic NULL with a tooltip when an empty value hits a non-textual column", () => {
+    const edits = new Map<string, string>([["0-0", ""]]);
     renderTray({ pendingEdits: edits });
     const nullSpan = screen.getByText("NULL");
     expect(nullSpan).toHaveClass("italic");

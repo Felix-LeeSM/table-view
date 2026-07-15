@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import type { QueryResult } from "@/types/query";
 import { cellToEditString, editKey } from "@components/datagrid";
 import { buildRawEditSql, type RawEditPlan } from "@lib/sql/rawQuerySqlBuilder";
+import { coerceToSqlLiteral } from "@lib/sql/sqlLiteral";
 
 export interface PendingChangesTrayProps {
   result: QueryResult;
@@ -19,6 +20,13 @@ interface EditEntry {
   column: string;
   oldDisplay: string;
   newValue: string;
+  /**
+   * For an empty `newValue`, whether the generated SQL collapses it to NULL
+   * (non-textual column) or preserves it as `''` (textual column, issue #1436).
+   * Lets the tray label match the emitted literal instead of always showing
+   * NULL.
+   */
+  emptyAsNull: boolean;
   sql: string;
 }
 
@@ -49,12 +57,18 @@ function buildEntries(
     const oldCell = row[colIdx];
     const single = new Map<string, string>([[key, newValue]]);
     const [sql] = buildRawEditSql(result.rows, single, new Set(), plan);
+    const coerced = coerceToSqlLiteral(
+      newValue,
+      plan.resultColumnTypes?.[colIdx] ?? "",
+      plan.dialect,
+    );
     entries.push({
       kind: "edit",
       key,
       column: colName,
       oldDisplay: oldCell == null ? "NULL" : cellToEditString(oldCell),
       newValue,
+      emptyAsNull: coerced.kind === "sql" && coerced.sql === "NULL",
       sql: sql ?? "",
     });
   });
@@ -142,9 +156,13 @@ export default function PendingChangesTray({
                     {entry.newValue === "" ? (
                       <span
                         className="italic text-muted-foreground"
-                        title={t("pendingChanges.nullInputTitle")}
+                        title={t(
+                          entry.emptyAsNull
+                            ? "pendingChanges.nullInputTitle"
+                            : "pendingChanges.emptyStringInputTitle",
+                        )}
                       >
-                        NULL
+                        {entry.emptyAsNull ? "NULL" : "''"}
                       </span>
                     ) : (
                       entry.newValue
