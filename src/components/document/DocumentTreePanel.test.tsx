@@ -37,6 +37,19 @@ describe("DocumentTreePanel", () => {
     expect(screen.getByTestId("tree-node-glossary")).toBeInTheDocument();
   });
 
+  // #1445 — hostile/deeply-nested server data must render a visible
+  // "…truncated" indicator (the DoS caps live in jsonTree; this locks that
+  // the panel surfaces the cut instead of hanging or silently clipping).
+  // The oversized (node-count) cap is unit-tested in jsonTree.test.ts; a
+  // deep input exercises the same panel render branch without materialising
+  // tens of thousands of DOM rows.
+  it("shows a truncated indicator for a pathologically deep document", () => {
+    let deep: Record<string, unknown> = { leaf: 1 };
+    for (let i = 0; i < 1000; i += 1) deep = { nested: deep };
+    render(<DocumentTreePanel value={deep} fieldName="deep" />);
+    expect(screen.getByTestId("tree-truncated")).toBeInTheDocument();
+  });
+
   it("hides descendants when an ancestor is collapsed", async () => {
     const user = userEvent.setup();
     render(<DocumentTreePanel value={VALUE} fieldName="profile" />);

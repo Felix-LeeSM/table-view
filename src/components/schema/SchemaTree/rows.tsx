@@ -726,6 +726,17 @@ export function renderVisibleRow(
     case "empty":
       return renderEmptyRow(row, ctx);
     case "item":
-      return renderItemRow(row, ctx);
+      // #1445 — SQLite/DuckDB (flat) render tables at the root indent with
+      // the table-only context menu, matching the eager `FlatTableList`.
+      return renderItemRow(row, ctx, ctx.treeShape === "flat");
+    // #1445 — DuckDB file sources in the flat virtualized path.
+    case "file-source-header":
+      return (
+        <div className="px-3 pt-2 pb-0.5 text-3xs font-medium uppercase text-muted-foreground">
+          {ctx.t("localSources")}
+        </div>
+      );
+    case "file-source":
+      return renderFileAnalyticsSourceRow(row.metadata);
   }
 }

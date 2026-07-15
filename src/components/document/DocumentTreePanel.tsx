@@ -537,7 +537,8 @@ export function DocumentTreePanel({
     key: n.path || "__root",
     depth: n.depth,
     expanded: n.kind === "leaf" ? null : !collapsed.has(n.path),
-    focusable: true,
+    // #1445 — a "…truncated" indicator is a status row, not a tab stop.
+    focusable: !n.truncated,
   }));
   const roving = useTreeRoving(
     rovingRows,
@@ -719,6 +720,26 @@ export function DocumentTreePanel({
             return trailing.length > 0 ? (
               <Fragment key={`__hidden-trailing-${idx}`}>{trailing}</Fragment>
             ) : null;
+          }
+          // #1445 — the jsonTree walk stopped here to enforce the depth /
+          // node-count DoS caps. Render a plain "…truncated" indicator
+          // instead of the normal node UI so hostile/oversized server data
+          // is surfaced rather than silently clipped. No affordances /
+          // editor for a truncated node.
+          if (node.truncated) {
+            return (
+              <div
+                key={node.path || "__truncated"}
+                data-testid="tree-truncated"
+                role="treeitem"
+                aria-level={node.depth + 1}
+                tabIndex={-1}
+                className="px-1 py-0.5 text-3xs italic text-warning"
+                style={{ paddingLeft: `${node.depth * 16}px` }}
+              >
+                {t("treePanel.truncated")}
+              </div>
+            );
           }
           const isCollapsed = collapsed.has(node.path);
           const pending = pendingByPath?.get(node.path);

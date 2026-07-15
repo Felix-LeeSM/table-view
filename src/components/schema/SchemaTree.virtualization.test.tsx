@@ -567,6 +567,77 @@ describe("SchemaTree virtualization (sprint-115)", () => {
     expect(screen.queryByLabelText("drop_249 table")).toBeNull();
   });
 
+  // ---------------------------------------------------------------------
+  // #1445 — flat (SQLite) / no-schema (MySQL) now virtualize by count. The
+  // old `treeShape === "with-schema"` gate left them permanently eager, so a
+  // SQLite/MySQL database with thousands of tables hung the tab.
+  // ---------------------------------------------------------------------
+  function seedConnection(id: string, dbType: "sqlite" | "mysql") {
+    useConnectionStore.setState((s) => ({
+      connections: [
+        {
+          id,
+          name: `${id} DB`,
+          dbType,
+          host: "localhost",
+          port: 3306,
+          user: "u",
+          hasPassword: false,
+          database: "test",
+          groupId: null,
+          color: null,
+          environment: null,
+          paradigm: "rdb" as const,
+        },
+      ],
+      focusedConnId: id,
+      activeStatuses: {
+        ...s.activeStatuses,
+        [id]: { type: "connected", activeDb: "db1" },
+      },
+    }));
+  }
+
+  it("#1445 — SQLite (flat) windows a 1000-table root list, no schema/category rows", async () => {
+    seedConnection("conn1", "sqlite");
+    setSchemaStoreState({
+      schemas: { conn1: [{ name: "main" }] },
+      tables: { "conn1:main": makeTables(1000) },
+    });
+
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
+
+    // Flat shape: no schema row, no category header — tables render directly.
+    expect(screen.queryByLabelText("main schema")).toBeNull();
+    expect(screen.queryByLabelText(/Tables in main/i)).toBeNull();
+    // Windowed: only a viewport-sized slice of the 1000 tables is in the DOM.
+    const tableButtons = screen.getAllByLabelText(/^table_\d+ table$/);
+    expect(tableButtons.length).toBeGreaterThan(0);
+    expect(tableButtons.length).toBeLessThanOrEqual(100);
+    expect(screen.queryByLabelText("table_0999 table")).toBeNull();
+  });
+
+  it("#1445 — MySQL (no-schema) windows a 1000-table list, keeps the category header, hides the schema row", async () => {
+    seedConnection("conn1", "mysql");
+    setSchemaStoreState({
+      schemas: { conn1: [{ name: "appdb" }] },
+      tables: { "conn1:appdb": makeTables(1000) },
+    });
+
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
+
+    // No-schema shape: schema row hidden, but the category header stays.
+    expect(screen.queryByLabelText("appdb schema")).toBeNull();
+    expect(screen.getByLabelText("Tables in appdb")).toBeInTheDocument();
+    const tableButtons = screen.getAllByLabelText(/^table_\d+ table$/);
+    expect(tableButtons.length).toBeGreaterThan(0);
+    expect(tableButtons.length).toBeLessThanOrEqual(100);
+  });
+
   // Document the assumed row height so a future contributor changing
   // `ROW_HEIGHT_ESTIMATE` knows to revisit these test thresholds.
   void ROW_HEIGHT_ESTIMATE;

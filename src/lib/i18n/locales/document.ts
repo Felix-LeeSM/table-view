@@ -205,6 +205,8 @@ export const en = {
     addItemInputAriaLabel: "{{parent}} — value",
     addKeyButton: "+ key",
     addItemButton: "+ item",
+    truncated:
+      "…truncated (document too large / deeply nested to render fully)",
   },
   gridRows: {
     editingAriaLabel: "Editing {{colName}}",
@@ -490,6 +492,7 @@ export const ko = {
     addItemInputAriaLabel: "{{parent}} — 값",
     addKeyButton: "+ 키",
     addItemButton: "+ 항목",
+    truncated: "…잘림 (문서가 너무 크거나 깊게 중첩되어 전부 렌더링 불가)",
   },
   gridRows: {
     editingAriaLabel: "{{colName}} 편집 중",

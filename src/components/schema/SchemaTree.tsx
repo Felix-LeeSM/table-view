@@ -195,6 +195,8 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
   // comparison and the virtualized/eager branches index the same data.
   const visibleRows = getVisibleRows({
     schemas: filtered.schemas,
+    treeShape,
+    fileAnalyticsSources,
     expandedSchemas: effectiveExpandedSchemas,
     expandedCategories: actions.expandedCategories,
     loadingTables: actions.loadingTables,
@@ -209,11 +211,12 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
     globalFilterActive,
   });
 
-  // Only `with-schema` fans out far enough to need virtualization
-  // (schemas × categories × items). Flat/no-schema rarely cross the
-  // threshold, so they stay on the eager path.
-  const shouldVirtualize =
-    treeShape === "with-schema" && visibleRows.length > VIRTUALIZE_THRESHOLD;
+  // #1445 — virtualize by count for ALL shapes. The flat-row list now mirrors
+  // the shape-specific eager render (getVisibleRows is treeShape-aware), so
+  // SQLite (flat) / MySQL (no-schema) trees with thousands of tables window
+  // instead of mounting every row. The old `treeShape === "with-schema"` gate
+  // left flat/no-schema permanently un-virtualized.
+  const shouldVirtualize = visibleRows.length > VIRTUALIZE_THRESHOLD;
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLDivElement>(null);
