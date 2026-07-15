@@ -318,6 +318,7 @@ function SelectResultArea({
           table: editability.table,
           pkColumns: editability.pkColumns,
           resultColumnNames: editability.resultToColumnName,
+          resultColumnTypes: result.columns.map((c) => c.dataType),
           dialect,
         }
       : multiEditability?.editable &&
@@ -328,6 +329,7 @@ function SelectResultArea({
             table: "",
             pkColumns: [],
             resultColumnNames: result.columns.map((c) => c.name),
+            resultColumnTypes: result.columns.map((c) => c.dataType),
             dialect,
             multi: multiEditability.plan,
           }

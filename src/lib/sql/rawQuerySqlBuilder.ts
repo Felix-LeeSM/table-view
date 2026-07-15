@@ -1,6 +1,10 @@
 import type { ColumnInfo } from "@/types/schema";
 import { safeStringifyCell } from "@lib/jsonCell";
-import { sqlIdentifier, type SqlDialect } from "./sqlLiteral";
+import {
+  coerceToSqlLiteral,
+  sqlIdentifier,
+  type SqlDialect,
+} from "./sqlLiteral";
 
 /**
  * Dialect-aware identifier quoting for raw-edit SQL (issue #1299). Raw-edit
@@ -36,6 +40,28 @@ function literal(value: unknown): string {
   if (typeof value === "object") return quoteString(safeStringifyCell(value));
   if (typeof value === "bigint") return String(value);
   return quoteString(String(value));
+}
+
+/**
+ * Coerce a raw-edit cell value to a SQL literal using the column's declared
+ * data type (issue #1436). Routes through the same `coerceToSqlLiteral` the
+ * structured grid uses, so both grids emit identical literals: a textual
+ * column's empty string is preserved as `''`, while numeric/date/etc. clears
+ * collapse to `NULL`. Unknown types keep the plain quoted-string path.
+ *
+ * On a strict-validation error (e.g. `"abc"` for an integer column) the raw
+ * builder stays lenient by design — it falls back to a quoted string literal so
+ * the value still round-trips via implicit cast instead of dropping the edit.
+ */
+function editLiteral(
+  newValue: string,
+  dataType: string | undefined,
+  dialect: SqlDialect,
+): string {
+  const coerced = coerceToSqlLiteral(newValue, dataType ?? "", dialect);
+  if (coerced.kind === "sql") return coerced.sql;
+  // ponytail: raw-edit is lenient — quote the rejected input rather than drop it.
+  return quoteString(newValue);
 }
 
 /** A `(pkColumnName, resultRowIndex)` pair used to build a PK WHERE clause. */
@@ -115,6 +141,14 @@ export interface RawEditPlan {
   pkColumns: string[];
   /** Result column index → underlying column name (aliases resolved). */
   resultColumnNames: string[];
+  /**
+   * Result column index → declared SQL data type, aligned 1:1 with
+   * `resultColumnNames`. Drives type-aware literal coercion (issue #1436) so a
+   * textual column's empty string is preserved as `''` instead of being forced
+   * to `NULL`. Absent (or absent entries) fall back to the plain quoted-string
+   * path.
+   */
+  resultColumnTypes?: string[];
   /** DBMS dialect for identifier quoting. Defaults to `"postgresql"`. */
   dialect?: SqlDialect;
   /**
@@ -186,6 +220,7 @@ function buildMultiTableEditSql(
   rows: unknown[][],
   pendingEdits: Map<string, string>,
   multi: MultiTablePlan,
+  resultColumnTypes: string[] | undefined,
   dialect: SqlDialect,
 ): string[] {
   const statements: string[] = [];
@@ -213,7 +248,11 @@ function buildMultiTableEditSql(
     const where = buildPkWhereByPositions(row, entries, dialect);
     if (where === null) return; // locked / unmatched row
     const qualified = `${ident(inst.schema, dialect)}.${ident(inst.table, dialect)}`;
-    const valueLiteral = newValue === "" ? "NULL" : quoteString(newValue);
+    const valueLiteral = editLiteral(
+      newValue,
+      resultColumnTypes?.[colIdx],
+      dialect,
+    );
     statements.push(
       `UPDATE ${qualified} SET ${ident(colPlan.sourceColumn, dialect)} = ${valueLiteral} WHERE ${where};`,
     );
@@ -238,7 +277,13 @@ export function buildRawEditSql(
 ): string[] {
   const dialect = plan.dialect ?? "postgresql";
   if (plan.multi) {
-    return buildMultiTableEditSql(rows, pendingEdits, plan.multi, dialect);
+    return buildMultiTableEditSql(
+      rows,
+      pendingEdits,
+      plan.multi,
+      plan.resultColumnTypes,
+      dialect,
+    );
   }
 
   const qualifiedTable = `${ident(plan.schema, dialect)}.${ident(plan.table, dialect)}`;
@@ -257,7 +302,11 @@ export function buildRawEditSql(
     if (!colName || !row) return;
     const where = buildPkWhereByPositions(row, pkEntries, dialect);
     if (where === null) return;
-    const valueLiteral = newValue === "" ? "NULL" : quoteString(newValue);
+    const valueLiteral = editLiteral(
+      newValue,
+      plan.resultColumnTypes?.[colIdx],
+      dialect,
+    );
     statements.push(
       `UPDATE ${qualifiedTable} SET ${ident(colName, dialect)} = ${valueLiteral} WHERE ${where};`,
     );
