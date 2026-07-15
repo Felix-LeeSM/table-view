@@ -1,3 +1,4 @@
+use ::redis::{ConnectionAddr, ConnectionInfo, RedisConnectionInfo};
 use tokio_util::sync::CancellationToken;
 
 use crate::error::AppError;
@@ -53,8 +54,10 @@ pub(super) fn ensure_not_cancelled(cancel: Option<&CancellationToken>) -> Result
     Ok(())
 }
 
-/// Issue #1453 — the Redis URL embeds the password (`redis://:pw@host`);
-/// driver errors that echo it must go through the redacting constructor.
+/// Issue #1453 — defense in depth: since #1454 we build a structured
+/// `ConnectionInfo` rather than a `redis://:pw@host` URL, so the driver no longer
+/// has a credential-bearing URL to echo. Any RedisError still routes through the
+/// redacting constructor in case a message ever carries one.
 pub(super) fn redis_connection_error(err: ::redis::RedisError) -> AppError {
     AppError::connection_redacted(err.to_string())
 }
@@ -63,24 +66,46 @@ pub(super) fn redis_database_error(err: ::redis::RedisError) -> AppError {
     AppError::Database(err.to_string())
 }
 
-pub(super) fn connection_url(config: &ConnectionConfig) -> Result<(String, u16), AppError> {
-    connection_url_for("Redis", config)
+pub(super) fn connection_info(
+    config: &ConnectionConfig,
+) -> Result<(ConnectionInfo, u16), AppError> {
+    connection_info_for("Redis", config)
 }
 
-pub(super) fn connection_url_for(
+/// Issue #1454 (P2-4) — build a `ConnectionInfo` directly instead of assembling
+/// a `redis://user:pw@host` URL string. PostgreSQL/MySQL use option builders;
+/// Redis was the only adapter concatenating the password into a `String`, where
+/// one debug log (or a driver error echoing the URL) leaks it. Here the password
+/// lives only in `RedisConnectionInfo.password` (never percent-encoded, which was
+/// purely a URL artifact) and the connect target is a structured `ConnectionAddr`
+/// whose Display is `host:port` — no credential ever enters a URL string.
+pub(super) fn connection_info_for(
     product_label: &'static str,
     config: &ConnectionConfig,
-) -> Result<(String, u16), AppError> {
+) -> Result<(ConnectionInfo, u16), AppError> {
     let database = parse_database_index(product_label, &config.database)?;
-    let scheme = if config.tls_enabled.unwrap_or(false) {
-        "rediss"
+    let host = tcp_host(&config.host);
+    let addr = if config.tls_enabled.unwrap_or(false) {
+        ConnectionAddr::TcpTls {
+            host,
+            port: config.port,
+            insecure: false,
+            tls_params: None,
+        }
     } else {
-        "redis"
+        ConnectionAddr::Tcp(host, config.port)
     };
-    let host = format_host(&config.host);
-    let auth = format_auth(&config.user, &config.password);
+    let (username, password) = credentials(&config.user, &config.password);
     Ok((
-        format!("{scheme}://{auth}{host}:{}/{database}", config.port),
+        ConnectionInfo {
+            addr,
+            redis: RedisConnectionInfo {
+                db: i64::from(database),
+                username,
+                password,
+                ..Default::default()
+            },
+        },
         database,
     ))
 }
@@ -96,33 +121,31 @@ fn parse_database_index(product_label: &'static str, raw: &str) -> Result<u16, A
     })
 }
 
-fn format_host(host: &str) -> String {
+/// The redis driver resolves `ConnectionAddr::Tcp` host via `to_socket_addrs`,
+/// which rejects bracketed IPv6 (`[::1]`) — strip surrounding brackets so both
+/// bare and bracketed literals connect. (URL assembly needed the brackets; the
+/// structured form needs them gone.)
+fn tcp_host(host: &str) -> String {
     let trimmed = host.trim();
-    if trimmed.contains(':') && !trimmed.starts_with('[') {
-        format!("[{trimmed}]")
+    trimmed
+        .strip_prefix('[')
+        .and_then(|h| h.strip_suffix(']'))
+        .unwrap_or(trimmed)
+        .to_string()
+}
+
+/// Map user/password to `RedisConnectionInfo` fields, preserving the prior
+/// URL-auth semantics: empty username → `None`; a username with an empty
+/// password still authenticates with an empty password (`Some("")`, matching the
+/// old `user:@` URL); no username and no password → no auth at all.
+fn credentials(user: &str, password: &str) -> (Option<String>, Option<String>) {
+    let username = (!user.is_empty()).then(|| user.to_string());
+    let password = if !password.is_empty() {
+        Some(password.to_string())
+    } else if !user.is_empty() {
+        Some(String::new())
     } else {
-        trimmed.to_string()
-    }
-}
-
-fn format_auth(user: &str, password: &str) -> String {
-    match (user.is_empty(), password.is_empty()) {
-        (true, true) => String::new(),
-        (true, false) => format!(":{}@", percent_encode(password)),
-        (false, true) => format!("{}:@", percent_encode(user)),
-        (false, false) => format!("{}:{}@", percent_encode(user), percent_encode(password)),
-    }
-}
-
-fn percent_encode(value: &str) -> String {
-    let mut out = String::new();
-    for byte in value.as_bytes() {
-        match *byte {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' => {
-                out.push(*byte as char)
-            }
-            _ => out.push_str(&format!("%{byte:02X}")),
-        }
-    }
-    out
+        None
+    };
+    (username, password)
 }
