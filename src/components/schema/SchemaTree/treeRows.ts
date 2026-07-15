@@ -1,4 +1,6 @@
 import type { TableInfo, ViewInfo, FunctionInfo } from "@/types/schema";
+import type { FileAnalyticsSourceMetadata } from "@/types/fileAnalytics";
+import type { RdbTreeShape } from "../treeShape";
 import {
   LayoutGrid,
   Eye,
@@ -242,10 +244,29 @@ export type VisibleRow =
       itemKind: "table" | "view" | "function" | "metadata";
       isSelected: boolean;
       isActive: boolean;
+    }
+  // #1445 — DuckDB (flat shape) registered file sources, so the flat
+  // virtualized path surfaces them like the eager `FlatTableList` does.
+  | { kind: "file-source-header"; key: string }
+  | {
+      kind: "file-source";
+      key: string;
+      metadata: FileAnalyticsSourceMetadata;
     };
 
 export interface BuildVisibleRowsArgs {
   schemas: ReadonlyArray<{ name: string }>;
+  // #1445 — the flat row list must mirror the shape-specific eager render so
+  // flat (SQLite/DuckDB) and no-schema (MySQL) trees virtualize by count too.
+  // `with-schema` keeps the schema row + separator; `no-schema` suppresses
+  // both and force-expands its single implicit schema; `flat` additionally
+  // drops the category cascade, rendering tables (and DuckDB file sources)
+  // directly. Defaults to `with-schema` so existing callers/tests are
+  // unaffected.
+  treeShape?: RdbTreeShape;
+  // #1445 — DuckDB registered file sources, appended after the flat table
+  // list (mirrors `FlatTableList`). Ignored for non-flat shapes.
+  fileAnalyticsSources?: ReadonlyArray<FileAnalyticsSourceMetadata>;
   expandedSchemas: Set<string>;
   expandedCategories: Record<string, Set<CategoryKey>>;
   loadingTables: ReadonlySet<string>;
@@ -277,6 +298,8 @@ export interface BuildVisibleRowsArgs {
  */
 export function getVisibleRows({
   schemas,
+  treeShape = "with-schema",
+  fileAnalyticsSources = [],
   expandedSchemas,
   expandedCategories,
   loadingTables,
@@ -292,25 +315,81 @@ export function getVisibleRows({
   const rows: VisibleRow[] = [];
 
   schemas.forEach((schema, schemaIndex) => {
-    if (schemaIndex > 0) {
-      rows.push({ kind: "schema-separator", key: `sep:${schema.name}` });
+    const schemaTables: TableInfo[] = tables[schema.name] ?? [];
+    const isLoadingTables = loadingTables.has(schema.name);
+
+    // #1445 flat (SQLite/DuckDB) — no schema row, no categories; tables
+    // render directly under the root, followed by DuckDB file sources.
+    // Mirrors the eager `FlatTableList`.
+    if (treeShape === "flat") {
+      if (isLoadingTables && schemaTables.length === 0) {
+        rows.push({
+          kind: "loading",
+          key: `loading:${schema.name}`,
+          schemaName: schema.name,
+        });
+        return;
+      }
+      if (schemaTables.length === 0) {
+        rows.push({
+          kind: "empty",
+          key: `empty:${schema.name}:tables`,
+          schemaName: schema.name,
+          category: CATEGORIES[0],
+          hasActiveSearch: false,
+        });
+      }
+      for (const item of schemaTables) {
+        const itemId = nodeIdToString({
+          type: "table",
+          schema: schema.name,
+          table: item.name,
+        });
+        rows.push({
+          kind: "item",
+          key: `flat-${item.name}`,
+          schemaName: schema.name,
+          categoryKey: "tables",
+          item,
+          itemKind: "table",
+          isSelected: selectedNodeId === itemId,
+          isActive: activeSchema === schema.name && activeTable === item.name,
+        });
+      }
+      if (fileAnalyticsSources.length > 0) {
+        rows.push({ kind: "file-source-header", key: "file-sources-header" });
+        for (const metadata of fileAnalyticsSources) {
+          rows.push({
+            kind: "file-source",
+            key: `file-source-${metadata.source.id}`,
+            metadata,
+          });
+        }
+      }
+      return;
     }
 
-    const schemaId = nodeIdToString({ type: "schema", schema: schema.name });
-    const isExpanded = expandedSchemas.has(schema.name);
-    const isLoadingTables = loadingTables.has(schema.name);
-    const schemaTables: TableInfo[] = tables[schema.name] ?? [];
+    // #1445 no-schema (MySQL/MariaDB) — suppress the schema row + separator
+    // and force the single implicit schema expanded; the category cascade
+    // below is otherwise identical to with-schema.
+    const isNoSchema = treeShape === "no-schema";
+    if (!isNoSchema) {
+      if (schemaIndex > 0) {
+        rows.push({ kind: "schema-separator", key: `sep:${schema.name}` });
+      }
+      const schemaId = nodeIdToString({ type: "schema", schema: schema.name });
+      rows.push({
+        kind: "schema",
+        key: schemaId,
+        schemaName: schema.name,
+        isExpanded: expandedSchemas.has(schema.name),
+        isLoadingTables,
+        isSelected: selectedNodeId === schemaId,
+        tableCount: schemaTables.length,
+      });
+    }
 
-    rows.push({
-      kind: "schema",
-      key: schemaId,
-      schemaName: schema.name,
-      isExpanded,
-      isLoadingTables,
-      isSelected: selectedNodeId === schemaId,
-      tableCount: schemaTables.length,
-    });
-
+    const isExpanded = isNoSchema ? true : expandedSchemas.has(schema.name);
     if (!isExpanded) return;
 
     if (isLoadingTables && schemaTables.length === 0) {

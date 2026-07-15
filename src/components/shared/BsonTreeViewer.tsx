@@ -1,12 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronRight, ChevronDown, Copy } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { cn } from "@lib/utils";
 import { safeStringifyCell } from "@lib/jsonCell";
 import {
   useTreeRoving,
   type TreeRovingRow,
 } from "@components/shared/tree/useTreeRoving";
+import {
+  TREE_ROW_HEIGHT_ESTIMATE,
+  TREE_VIRTUALIZE_THRESHOLD,
+} from "@components/shared/tree/virtualize";
 
 // ── BSON wrapper whitelist ──────────────────────────────────────────────
 
@@ -184,13 +189,22 @@ function classify(value: unknown) {
 }
 
 /** Root auto-expands; containers at depth <= 1 default to expanded (matching
- *  the pre-refactor per-node `defaultExpanded={depth + 1 <= 1}` behaviour). */
+ *  the pre-refactor per-node `defaultExpanded={depth + 1 <= 1}` behaviour).
+ *
+ *  #1445 — only depth 0 and 1 are ever added, and a container's children live
+ *  one level deeper, so we stop recursing at depth 1. This yields the exact
+ *  same set as a full walk while bounding the recursion to two levels — a
+ *  hostile server returning a 100k-deep BSON document can no longer overflow
+ *  this walk's call stack (the trust boundary is the DB server). */
 function defaultExpandedPaths(root: unknown): Set<string> {
   const set = new Set<string>();
   const walk = (path: string, value: unknown, depth: number) => {
     const { hasChildren, isArray } = classify(value);
     if (!hasChildren) return;
     if (depth <= 1) set.add(path === "" ? "$" : path);
+    // Nodes below depth 1 are never added, so descending further is dead
+    // work — and an unbounded stack risk on pathological nesting.
+    if (depth >= 1) return;
     if (isArray) {
       (value as unknown[]).forEach((c, i) =>
         walk(joinArrayPath(path, i), c, depth + 1),
@@ -567,13 +581,35 @@ export default function BsonTreeViewer({
     });
   }, []);
 
+  // #1445 — hand off to the virtualizer once the visible node list grows
+  // past the threshold so expanding a 10k-element array only mounts a
+  // viewport-sized window instead of the whole flat list (which hangs the
+  // tab). The `role="tree"` div is itself the scroll element.
+  const shouldVirtualize = flat.length > TREE_VIRTUALIZE_THRESHOLD;
+  const rowVirtualizer = useVirtualizer({
+    count: shouldVirtualize ? flat.length : 0,
+    getScrollElement: () => treeRef.current,
+    estimateSize: () => TREE_ROW_HEIGHT_ESTIMATE,
+    overscan: 8,
+  });
+
   const rovingRows: TreeRovingRow[] = flat.map((n) => ({
     key: n.key,
     depth: n.depth,
     expanded: n.hasChildren ? n.expanded : null,
     focusable: true,
   }));
-  const roving = useTreeRoving(rovingRows, toggle, treeRef);
+  // When virtualized, an arrow/Home/End jump can target a row outside the
+  // rendered window; scroll its index into view first so `focusByKey` finds
+  // the mounted node (same contract SchemaTree uses).
+  const roving = useTreeRoving(
+    rovingRows,
+    toggle,
+    treeRef,
+    shouldVirtualize
+      ? (index) => rowVirtualizer.scrollToIndex(index)
+      : undefined,
+  );
   const activeKey = roving.focusKey ?? flat[0]?.key ?? null;
 
   if (value === null || value === undefined) {
@@ -588,6 +624,16 @@ export default function BsonTreeViewer({
     );
   }
 
+  const renderRow = (node: FlatNode) => (
+    <BsonRow
+      key={node.key}
+      node={node}
+      isActive={activeKey === node.key}
+      onToggle={() => toggle(node.key)}
+      onFocus={() => roving.setFocusKey(node.key)}
+    />
+  );
+
   return (
     <div
       ref={treeRef}
@@ -596,15 +642,57 @@ export default function BsonTreeViewer({
       className="overflow-auto p-2"
       onKeyDown={roving.onKeyDown}
     >
-      {flat.map((node) => (
-        <BsonRow
-          key={node.key}
-          node={node}
-          isActive={activeKey === node.key}
-          onToggle={() => toggle(node.key)}
-          onFocus={() => roving.setFocusKey(node.key)}
-        />
-      ))}
+      {shouldVirtualize ? (
+        <VirtualBsonRows flat={flat} virtualizer={rowVirtualizer}>
+          {renderRow}
+        </VirtualBsonRows>
+      ) : (
+        flat.map(renderRow)
+      )}
+    </div>
+  );
+}
+
+// #1445 — windowed row list with top/bottom `aria-hidden` spacers that
+// preserve scroll height while only the visible slice lives in the DOM.
+// Mirrors `SchemaTree/body.tsx`'s `VirtualizedBranch` (no `scrollMargin`
+// here — the `role="tree"` div is itself the scroll container with no
+// header above the list).
+function VirtualBsonRows({
+  flat,
+  virtualizer,
+  children,
+}: {
+  flat: FlatNode[];
+  virtualizer: ReturnType<typeof useVirtualizer<HTMLDivElement, Element>>;
+  children: (node: FlatNode) => React.ReactNode;
+}) {
+  const virtualItems = virtualizer.getVirtualItems();
+  const totalSize = virtualizer.getTotalSize();
+  const paddingTop = virtualItems.length ? virtualItems[0]!.start : 0;
+  const paddingBottom = virtualItems.length
+    ? totalSize - virtualItems[virtualItems.length - 1]!.end
+    : 0;
+  return (
+    <div style={{ position: "relative" }}>
+      {paddingTop > 0 && (
+        <div aria-hidden="true" style={{ height: paddingTop }} />
+      )}
+      {virtualItems.map((virtualRow) => {
+        const node = flat[virtualRow.index]!;
+        return (
+          <div
+            key={node.key}
+            data-index={virtualRow.index}
+            ref={virtualizer.measureElement}
+          >
+            {children(node)}
+          </div>
+        );
+      })}
+      {paddingBottom > 0 && (
+        <div aria-hidden="true" style={{ height: paddingBottom }} />
+      )}
     </div>
   );
 }

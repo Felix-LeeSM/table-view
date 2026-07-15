@@ -44,7 +44,31 @@ export interface TreeNode {
    * users can distinguish ghost adds from `● edited` leaf updates.
    */
   isGhost?: boolean;
+  /**
+   * #1445 — the walk stopped here to enforce {@link MAX_TREE_DEPTH} /
+   * {@link MAX_TREE_NODES}. Set on the deepest emitted container when the
+   * depth cap is hit, or on a terminal marker leaf when the node cap is
+   * hit. The subtree below is intentionally NOT rendered — a DoS guard
+   * against hostile server data (extreme nesting / oversized documents).
+   * DocumentTreePanel renders these rows as a "…truncated" indicator.
+   */
+  truncated?: boolean;
 }
+
+/**
+ * #1445 — DoS caps for the tree walk. Tree data comes from the DB server
+ * (outside the trust boundary), so a hostile or malfunctioning server can
+ * return a pathologically deep structure (which would overflow the
+ * recursive walk's call stack) or an oversized document (which would
+ * freeze the tab building millions of nodes). Both walks below stop at
+ * these caps and flag the cut with a `truncated` node.
+ *
+ * `MAX_TREE_DEPTH` sits well above any legitimate document (MongoDB's own
+ * BSON nesting limit is 100) and far below the JS call-stack ceiling.
+ * `MAX_TREE_NODES` bounds the flat list the panel materialises.
+ */
+export const MAX_TREE_DEPTH = 200;
+export const MAX_TREE_NODES = 50_000;
 
 export interface TreeStats {
   nodes: number;
@@ -102,28 +126,40 @@ export function buildTreeNodes(value: unknown, basePath = ""): TreeNode[] {
   const out: TreeNode[] = [];
 
   const walk = (v: unknown, path: string, label: string, depth: number) => {
+    // #1445 node cap — stop emitting once the flat list is full; a single
+    // terminal marker is appended after the root walk returns.
+    if (out.length >= MAX_TREE_NODES) return;
+    // #1445 depth cap — a container at the cap is emitted but NOT descended
+    // into, so the recursion depth (and stack) stays bounded.
+    const atDepthCap = depth >= MAX_TREE_DEPTH;
     if (isPlainObject(v)) {
       const keys = Object.keys(v);
-      out.push({
+      const node: TreeNode = {
         path,
         depth,
         label,
         kind: "obj",
         childCount: keys.length,
-      });
+      };
+      if (atDepthCap) node.truncated = true;
+      out.push(node);
+      if (atDepthCap) return;
       for (const k of keys) {
         walk(v[k], joinPath(path, k), k, depth + 1);
       }
       return;
     }
     if (Array.isArray(v)) {
-      out.push({
+      const node: TreeNode = {
         path,
         depth,
         label,
         kind: "arr",
         childCount: v.length,
-      });
+      };
+      if (atDepthCap) node.truncated = true;
+      out.push(node);
+      if (atDepthCap) return;
       v.forEach((item, idx) => {
         walk(item, joinPath(path, `[${idx}]`), `[${idx}]`, depth + 1);
       });
@@ -141,6 +177,18 @@ export function buildTreeNodes(value: unknown, basePath = ""): TreeNode[] {
   };
 
   walk(value, basePath, basePath === "" ? "root" : basePath, 0);
+  // #1445 — node-count truncation: append one terminal marker so the panel
+  // shows "…truncated" rather than a silently-clipped tree.
+  if (out.length >= MAX_TREE_NODES) {
+    out.push({
+      path: `${basePath}…truncated`,
+      depth: 0,
+      label: "…",
+      kind: "leaf",
+      leafType: "unknown",
+      truncated: true,
+    });
+  }
   return out;
 }
 
@@ -198,30 +246,40 @@ export function buildTreeNodesWithGhosts(
     depth: number,
     out: TreeNode[],
   ) => {
+    // #1445 — a user can paste a deeply nested JSON blob into a `+ key`
+    // value; cap the ghost recursion at the same depth so it can't
+    // overflow the stack. The container is emitted, its children are not.
+    const atDepthCap = depth >= MAX_TREE_DEPTH;
     if (isPlainObject(v)) {
       const keys = Object.keys(v);
-      out.push({
+      const node: TreeNode = {
         path,
         depth,
         label,
         kind: "obj",
         childCount: keys.length,
         isGhost: true,
-      });
+      };
+      if (atDepthCap) node.truncated = true;
+      out.push(node);
+      if (atDepthCap) return;
       for (const k of keys) {
         ghostWalk(v[k], joinPath(path, k), k, depth + 1, out);
       }
       return;
     }
     if (Array.isArray(v)) {
-      out.push({
+      const node: TreeNode = {
         path,
         depth,
         label,
         kind: "arr",
         childCount: v.length,
         isGhost: true,
-      });
+      };
+      if (atDepthCap) node.truncated = true;
+      out.push(node);
+      if (atDepthCap) return;
       v.forEach((item, idx) => {
         ghostWalk(item, joinPath(path, `[${idx}]`), `[${idx}]`, depth + 1, out);
       });
@@ -406,19 +464,27 @@ export function computeTreeStats(value: unknown): TreeStats {
   let maxArray = 0;
 
   const walk = (v: unknown, currentDepth: number) => {
+    // #1445 — same DoS caps as `buildTreeNodes`: bound total visits and
+    // recursion depth so a hostile document can't hang / overflow the
+    // stats walk (the panel calls this alongside `buildTreeNodes`). Stats
+    // become approximate at the extreme, which is fine for hostile input.
+    if (nodes >= MAX_TREE_NODES) return;
     nodes += 1;
     if (currentDepth > depth) depth = currentDepth;
+    const atDepthCap = currentDepth >= MAX_TREE_DEPTH;
 
     if (isPlainObject(v)) {
       objects += 1;
       const entries = Object.entries(v);
       keys += entries.length;
+      if (atDepthCap) return;
       for (const [, child] of entries) walk(child, currentDepth + 1);
       return;
     }
     if (Array.isArray(v)) {
       arrays += 1;
       if (v.length > maxArray) maxArray = v.length;
+      if (atDepthCap) return;
       for (const child of v) walk(child, currentDepth + 1);
       return;
     }

@@ -11,6 +11,8 @@ import {
   computeTreeStats,
   renderLeafValue,
   filterTreeNodes,
+  MAX_TREE_DEPTH,
+  MAX_TREE_NODES,
 } from "./jsonTree";
 
 const GLOSSARY = {
@@ -360,6 +362,73 @@ describe("buildTreeNodesWithGhosts", () => {
     const pending = new Map<string, string>([["name", "__op__:unset"]]);
     const nodes = buildTreeNodesWithGhosts(value, pending);
     expect(nodes.find((n) => n.path === "name")?.isGhost).toBeFalsy();
+  });
+});
+
+// #1445 (2026-07-15) — DoS defense layer. Tree data crosses the trust
+// boundary (DB server), so a hostile/malfunctioning server can return
+// pathologically deep nesting (stack-overflows the recursive walk) or an
+// oversized document (freezes the tab building millions of nodes).
+// `buildTreeNodes` / `computeTreeStats` cap BOTH depth and node count and
+// flag the cut with a `truncated` marker so the panel shows "…truncated"
+// instead of hanging. These tests use counts above the caps but well under
+// the JS call-stack limit, so the assertions fail cleanly (not via crash)
+// before the guards exist.
+describe("tree DoS guards (#1445)", () => {
+  const makeDeep = (levels: number): Record<string, unknown> => {
+    let node: Record<string, unknown> = { leaf: 1 };
+    for (let i = 0; i < levels; i += 1) node = { nested: node };
+    return node;
+  };
+  const makeWide = (count: number): Record<string, number> => {
+    const obj: Record<string, number> = {};
+    for (let i = 0; i < count; i += 1) obj[`k${i}`] = i;
+    return obj;
+  };
+
+  it("exposes MAX_TREE_DEPTH / MAX_TREE_NODES as positive constants", () => {
+    expect(MAX_TREE_DEPTH).toBeGreaterThan(0);
+    expect(MAX_TREE_NODES).toBeGreaterThan(0);
+  });
+
+  it("caps deeply nested input at MAX_TREE_DEPTH and flags truncation", () => {
+    // 1000-deep (5x the cap) — the current unbounded walk still returns
+    // (RED: no truncation, depth 1000), the guarded walk stops at the cap.
+    const nodes = buildTreeNodes(makeDeep(1000));
+    expect(nodes.some((n) => n.truncated)).toBe(true);
+    expect(nodes.every((n) => n.depth <= MAX_TREE_DEPTH)).toBe(true);
+  });
+
+  it("caps oversized documents at MAX_TREE_NODES and flags truncation", () => {
+    // 60k flat keys (> the node cap) — a fast build, no recursion depth.
+    const nodes = buildTreeNodes(makeWide(60_000));
+    expect(nodes.length).toBeLessThanOrEqual(MAX_TREE_NODES + 1);
+    expect(nodes.some((n) => n.truncated)).toBe(true);
+  });
+
+  it("keeps computeTreeStats bounded on deep + wide hostile input", () => {
+    expect(computeTreeStats(makeDeep(1000)).depth).toBeLessThanOrEqual(
+      MAX_TREE_DEPTH,
+    );
+    expect(computeTreeStats(makeWide(60_000)).nodes).toBeLessThanOrEqual(
+      MAX_TREE_NODES,
+    );
+  });
+
+  it("does not truncate ordinary documents (regression-zero)", () => {
+    const nodes = buildTreeNodes(GLOSSARY);
+    expect(nodes.some((n) => n.truncated)).toBe(false);
+  });
+
+  it("guards buildTreeNodesWithGhosts against a deep ghost paste", () => {
+    // A user pasting a deeply nested JSON blob into a `+ key` value must
+    // not stack-overflow the ghost walk either.
+    const pending = new Map<string, string>([
+      ["blob", JSON.stringify(makeDeep(1000))],
+    ]);
+    expect(() => buildTreeNodesWithGhosts({}, pending)).not.toThrow();
+    const nodes = buildTreeNodesWithGhosts({}, pending);
+    expect(nodes.every((n) => n.depth <= MAX_TREE_DEPTH)).toBe(true);
   });
 });
 
