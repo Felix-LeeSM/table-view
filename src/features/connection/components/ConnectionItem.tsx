@@ -22,6 +22,7 @@ import {
   ContextMenuSeparator,
 } from "@components/ui/context-menu";
 import ConnectionDialog from "./ConnectionDialog";
+import { sanitizeMessage } from "./ConnectionDialog/sanitize";
 import { classifyDriverError } from "@lib/errors/driverErrorHints";
 import { DB_TYPE_META } from "@lib/db-meta";
 import {
@@ -95,12 +96,16 @@ function StatusIndicator({ status }: { status: ConnectionStatus }) {
     );
   }
   if (status.type === "error") {
+    // Issue #1453 — statuses hydrated from an old localStorage session
+    // bypass the store's masking; the render path is the last line of
+    // defense against a credential echo in the driver error.
+    const message = sanitizeMessage(status.message);
     return (
       <span
         className="inline-flex shrink-0 text-destructive"
         role="img"
-        title={status.message}
-        aria-label={t("item.statusError", { message: status.message })}
+        title={message}
+        aria-label={t("item.statusError", { message })}
       >
         <CircleAlert size={10} aria-hidden="true" />
       </span>
@@ -142,7 +147,11 @@ export default function ConnectionItem({
   const status = activeStatuses[connection.id] ?? { type: "disconnected" };
   const isConnected = status.type === "connected";
   const isConnecting = status.type === "connecting";
-  const errorMessage = status.type === "error" ? status.message : null;
+  // Issue #1453 — sanitize here too (not only in the store): hydrated /
+  // cross-window statuses reach this component without passing the store's
+  // masking entry points.
+  const errorMessage =
+    status.type === "error" ? sanitizeMessage(status.message) : null;
   // #1056 — 드라이버 원문을 사람 문장 + 행동 힌트로 분류. 미분류면 null 이라
   // 기존처럼 원문만 보여준다 (fail-open).
   const errorHint = errorMessage ? classifyDriverError(errorMessage) : null;

@@ -502,3 +502,35 @@ async fn read_value(adapter: &RedisAdapter, key: &str) -> crate::db::KvValueEnve
         .await
         .unwrap()
 }
+
+// Reason: issue #1453 — the Redis/Valkey connection URL embeds the password
+// (`redis://user:pw@host` / empty-user `redis://:pw@host`); driver errors
+// that echo it must be masked by the connection-error mappers (2026-07-10).
+#[test]
+fn redis_and_valkey_connection_errors_mask_credential_echo() {
+    let redis_err = ::redis::RedisError::from((
+        ::redis::ErrorKind::IoError,
+        "failed to connect",
+        "redis://:S3cretPw1@redis.local:6379/0".to_string(),
+    ));
+    let message = redis_connection_error(redis_err).to_string();
+    assert!(
+        !message.contains("S3cretPw1"),
+        "leaked plaintext credential: {message}"
+    );
+    assert!(message.contains("redis.local"));
+
+    let valkey_err = ::redis::RedisError::from((
+        ::redis::ErrorKind::IoError,
+        "failed to connect",
+        "rediss://acl:S3cretPw1@valkey.local:6380/0".to_string(),
+    ));
+    let message = super::RedisProtocolProduct::Valkey
+        .connection_error(valkey_err)
+        .to_string();
+    assert!(
+        !message.contains("S3cretPw1"),
+        "leaked plaintext credential: {message}"
+    );
+    assert!(message.contains("valkey.local"));
+}

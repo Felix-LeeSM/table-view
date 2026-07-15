@@ -438,3 +438,22 @@ async fn table_data_and_structured_ddl_execute_paths_require_open_connection() {
 fn assert_not_open<T>(result: Result<T, AppError>) {
     assert!(matches!(result, Err(AppError::Connection(message)) if message.contains("not open")));
 }
+
+// Reason: issue #1453 — driver/network text can echo the connection string;
+// the shared connection-error mapper must mask URI userinfo and
+// `Password=...` key=value credentials while keeping host/context so the
+// error stays actionable (2026-07-10).
+#[test]
+fn mssql_connection_error_masks_credential_echo() {
+    let err = mssql_connection_error(
+        "SQL Server network connection failed",
+        "cannot open mssql://sa:S3cretPw1@db.local:1433 with Password=S3cretPw1;Server=db.local",
+    );
+    let message = err.to_string();
+    assert!(
+        !message.contains("S3cretPw1"),
+        "leaked plaintext credential: {message}"
+    );
+    assert!(message.contains("SQL Server network connection failed"));
+    assert!(message.contains("db.local"));
+}

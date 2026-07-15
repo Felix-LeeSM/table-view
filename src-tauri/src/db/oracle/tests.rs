@@ -533,3 +533,25 @@ async fn table_data_and_structured_ddl_execute_paths_require_open_connection() {
     assert_oracle_not_open(adapter.add_constraint(&add_constraint).await);
     assert_oracle_not_open(adapter.drop_constraint(&drop_constraint).await);
 }
+
+// Reason: issue #1453 — Oracle connect errors can echo a URL / DSN with
+// credentials; `map_oracle_connection_error` must mask the secret while
+// preserving the ORA code and host (2026-07-10).
+#[test]
+fn oracle_connection_error_masks_credential_echo() {
+    let error = map_oracle_connection_error(oracle_rs::Error::oracle(
+        12154,
+        "cannot resolve oracle://app:S3cretPw1@dbhost:1521/XEPDB1 password=S3cretPw1",
+    ));
+    match error {
+        AppError::Connection(message) => {
+            assert!(
+                !message.contains("S3cretPw1"),
+                "leaked plaintext credential: {message}"
+            );
+            assert!(message.contains("ORA-12154"));
+            assert!(message.contains("dbhost:1521"));
+        }
+        other => panic!("expected Connection error, got {other:?}"),
+    }
+}

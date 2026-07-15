@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { normalizeConnectionConfig } from "./wireCamelCase";
+import {
+  normalizeActiveStatuses,
+  normalizeConnectionConfig,
+  normalizeConnectionStatus,
+} from "./wireCamelCase";
 
 // Purpose: backend wire payload camelCase normalization for connection fields (2026-06-17)
 describe("normalizeConnectionConfig", () => {
@@ -65,5 +69,37 @@ describe("normalizeConnectionConfig", () => {
     });
 
     expect(connection.trustServerCertificate).toBeUndefined();
+  });
+});
+
+// Purpose: review #1490 B1 — normalizeConnectionStatus is the single hydrate
+// ingress (store hydrateFromSession + runtime/snapshot/loadAll); a credential
+// echo persisted by a pre-fix session must be masked HERE so every render
+// surface (ConnectionItem, WorkspaceSidebar, SchemaPanel) is covered by one
+// guard (2026-07-11)
+describe("normalizeConnectionStatus credential masking", () => {
+  it("masks URI userinfo and key=value credentials in hydrated error messages", () => {
+    expect(
+      normalizeConnectionStatus({
+        type: "error",
+        message:
+          "connect failed: postgres://app:S3cretPw1@db:5432/x password='S3cretPw1'",
+      }),
+    ).toEqual({
+      type: "error",
+      message: "connect failed: postgres://app:***@db:5432/x password=***",
+    });
+  });
+
+  it("masks every status in a hydrated activeStatuses record", () => {
+    const out = normalizeActiveStatuses({
+      c1: { type: "error", message: "IO error: redis://:S3cretPw1@r:6379/0" },
+      c2: { type: "connected", activeDb: "prod" },
+    });
+    expect(out).toEqual({
+      c1: { type: "error", message: "IO error: redis://:***@r:6379/0" },
+      c2: { type: "connected", activeDb: "prod" },
+    });
+    expect(JSON.stringify(out)).not.toContain("S3cretPw1");
   });
 });

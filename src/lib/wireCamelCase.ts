@@ -1,5 +1,6 @@
 import type { ConnectionConfig, ConnectionStatus } from "@/types/connection";
 import { canonicalEnvironmentTag } from "@/features/connection/model";
+import { sanitizeMessage } from "@/features/connection/components/ConnectionDialog/sanitize";
 import { logger } from "@/lib/logger";
 import type {
   DocumentColumn,
@@ -286,7 +287,12 @@ export function normalizeConnectionStatus(value: unknown): ConnectionStatus {
   }
   if (r.type === "connecting") return { type: "connecting" };
   if (r.type === "error")
-    return { type: "error", message: stringOr(r.message) };
+    // Issue #1453 (review B1) — single ingress guard: every persisted /
+    // snapshot status routes through here (store hydrateFromSession +
+    // runtime/snapshot/loadAll), so a credential echo persisted by a
+    // pre-fix session is masked before ANY render surface
+    // (ConnectionItem, WorkspaceSidebar, SchemaPanel) can paint it.
+    return { type: "error", message: sanitizeMessage(stringOr(r.message)) };
   return { type: "disconnected" };
 }
 

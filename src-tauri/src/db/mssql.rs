@@ -751,11 +751,14 @@ where
     })
 }
 
+/// Issue #1453 — driver/network error text can echo the connection string,
+/// so every SQL Server connection error routes through the redacting
+/// constructor before it reaches status events or the sidebar.
 pub(super) fn mssql_connection_error(
     context: &'static str,
     err: impl std::fmt::Display,
 ) -> AppError {
-    AppError::Connection(format!("{context}: {err}"))
+    AppError::connection_redacted(format!("{context}: {err}"))
 }
 
 async fn with_timeout<T, E>(

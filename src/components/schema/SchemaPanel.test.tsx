@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import SchemaPanel from "./SchemaPanel";
 import { useConnectionStore } from "@stores/connectionStore";
+import { normalizeActiveStatuses } from "@lib/wireCamelCase";
 import type { ConnectionConfig, ConnectionStatus } from "@/types/connection";
 
 vi.mock("./SchemaTree", () => ({
@@ -127,6 +128,27 @@ describe("SchemaPanel", () => {
     });
     render(<SchemaPanel selectedId="c1" />);
     expect(screen.getByText(/auth failed/i)).toBeInTheDocument();
+  });
+
+  // Reason: review #1490 B1 — this role="status" area renders
+  // status.message raw; a credential echo persisted by a pre-fix session
+  // must be masked by the hydrate ingress (normalizeConnectionStatus)
+  // before it can paint here (2026-07-11)
+  it("renders a hydrated credential-echo error masked, never the secret", () => {
+    setupStore({ connections: [makeConn("c1")] });
+    useConnectionStore.setState({
+      activeStatuses: normalizeActiveStatuses({
+        c1: {
+          type: "error",
+          message: "FATAL: postgres://app:S3cretPw1@db:5432/x pwd='S3cretPw1'",
+        },
+      }),
+    });
+    render(<SchemaPanel selectedId="c1" />);
+    expect(screen.queryByText(/S3cretPw1/)).toBeNull();
+    expect(
+      screen.getByText(/postgres:\/\/app:\*\*\*@db:5432\/x pwd=\*\*\*/),
+    ).toBeInTheDocument();
   });
 
   it("renders SchemaTree when the selected connection is connected", () => {

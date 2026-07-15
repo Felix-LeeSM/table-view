@@ -61,7 +61,10 @@ impl RedisProtocolProduct {
     fn connection_error(self, err: ::redis::RedisError) -> AppError {
         match self {
             Self::Redis => redis_connection_error(err),
-            Self::Valkey => AppError::Connection(format!("Valkey connection failed: {err}")),
+            // Issue #1453 — redact: the URL echo can carry the password.
+            Self::Valkey => {
+                AppError::connection_redacted(format!("Valkey connection failed: {err}"))
+            }
         }
     }
 

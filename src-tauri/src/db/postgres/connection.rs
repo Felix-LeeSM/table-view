@@ -125,13 +125,13 @@ impl PostgresAdapter {
             .acquire_timeout(std::time::Duration::from_secs(5))
             .connect_with(options)
             .await
-            .map_err(|e| AppError::Connection(e.to_string()))?;
+            .map_err(pg_connection_error)?;
 
         // Use defer pattern: close pool in all code paths
         let result = sqlx::query("SELECT 1")
             .execute(&pool)
             .await
-            .map_err(|e| AppError::Connection(e.to_string()));
+            .map_err(pg_connection_error);
 
         pool.close().await;
         result?;
@@ -151,7 +151,7 @@ impl PostgresAdapter {
             ))
             .connect_with(options)
             .await
-            .map_err(|e| AppError::Connection(e.to_string()))?;
+            .map_err(pg_connection_error)?;
 
         info!("Connected to PostgreSQL at {}:{}", config.host, config.port);
 
@@ -275,9 +275,8 @@ impl PostgresAdapter {
                     .connect_with(options)
                     .await
                     .map_err(|e| {
-                        AppError::Connection(format!(
-                            "Failed to open sub-pool for db {}: {}",
-                            db_name, e
+                        pg_connection_error(format!(
+                            "Failed to open sub-pool for db {db_name}: {e}"
                         ))
                     })?;
 
@@ -345,7 +344,7 @@ impl PostgresAdapter {
         sqlx::query("SELECT 1")
             .execute(&pool)
             .await
-            .map_err(|e| AppError::Connection(e.to_string()))?;
+            .map_err(pg_connection_error)?;
         Ok(())
     }
 
@@ -408,6 +407,14 @@ impl PostgresAdapter {
     }
 }
 
+/// Issue #1453 — every driver-sourced connect/ping error routes through the
+/// redacting constructor so a conn-string / URI echo in the driver text can
+/// never surface a plaintext password. Named (vs. inline closures) so the
+/// masking is unit-testable without a live server.
+fn pg_connection_error(err: impl std::fmt::Display) -> AppError {
+    AppError::connection_redacted(err.to_string())
+}
+
 pub(super) fn is_pg_database_permission_denied(err: &sqlx::Error) -> bool {
     if let sqlx::Error::Database(db_err) = err {
         if let Some(code) = db_err.code() {
@@ -451,6 +458,23 @@ mod tests {
             tls_enabled: None,
             trust_server_certificate: None,
         }
+    }
+
+    // Reason: issue #1453 — sqlx/libpq error text can echo the connection
+    // URI or `password=` pair; the shared connection-error mapper must mask
+    // the secret while keeping the host so the error stays actionable
+    // (2026-07-10).
+    #[test]
+    fn pg_connection_error_masks_credential_echo() {
+        let message = pg_connection_error(
+            "could not connect to postgres://app:S3cretPw1@db.local:5432/x password=S3cretPw1",
+        )
+        .to_string();
+        assert!(
+            !message.contains("S3cretPw1"),
+            "leaked plaintext credential: {message}"
+        );
+        assert!(message.contains("db.local:5432"));
     }
 
     #[tokio::test]

@@ -313,6 +313,58 @@ describe("connectionStore", () => {
     });
   });
 
+  // Reason: issue #1453 — sidebar path (#1389 covered ConnectionDialog only).
+  // A failed connect can echo the connection URI / password= pair in the
+  // driver error; the store must mask it before it reaches activeStatuses
+  // (rendered by ConnectionItem AND persisted to localStorage) (2026-07-10)
+  it("masks credentials in the error status message on failed connect", async () => {
+    const { connectToDatabase } = await import("@lib/tauri");
+    (connectToDatabase as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      "Connection error: could not connect to postgres://app:S3cretPw1@db:5432/x password=S3cretPw1",
+    );
+
+    await useConnectionStore.getState().connectToDatabase("c1");
+
+    expect(useConnectionStore.getState().activeStatuses["c1"]).toEqual({
+      type: "error",
+      message:
+        "Connection error: could not connect to postgres://app:***@db:5432/x password=***",
+    });
+  });
+
+  // Reason: issue #1453 — reconnect failures (session.rs keep-alive loop)
+  // arrive via the connection-status-changed event; that entry point must
+  // mask credentials too, not just the connectToDatabase catch (2026-07-10)
+  it("masks credentials in error statuses arriving via connection-status-changed", async () => {
+    const { listen } = await import("@tauri-apps/api/event");
+    type StatusEvent = {
+      payload: { id: string; status: { type: string; message?: string } };
+    };
+    let handler: ((event: StatusEvent) => void) | undefined;
+    (listen as ReturnType<typeof vi.fn>).mockImplementationOnce(
+      (_event: string, cb: (event: StatusEvent) => void) => {
+        handler = cb;
+        return Promise.resolve(() => {});
+      },
+    );
+
+    await useConnectionStore.getState().initEventListeners();
+    handler?.({
+      payload: {
+        id: "c1",
+        status: {
+          type: "error",
+          message: "Reconnection failed: mongodb://app:S3cretPw1@mongo:27017",
+        },
+      },
+    });
+
+    expect(useConnectionStore.getState().activeStatuses["c1"]).toEqual({
+      type: "error",
+      message: "Reconnection failed: mongodb://app:***@mongo:27017",
+    });
+  });
+
   it("sets disconnected status on disconnect", async () => {
     useConnectionStore.setState({
       activeStatuses: { c1: { type: "connected" } },
