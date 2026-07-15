@@ -3225,7 +3225,8 @@ async fn test_mysql_get_table_columns_populates_fk_reference_in_child() {
 // - BIGINT (i64/u64): JSON string — 프론트가 BigInt 로 승격 (정밀도 보존).
 // - DECIMAL/NEWDECIMAL: JSON string (line 145).
 // - INT/SMALLINT/MEDIUMINT/INTEGER/YEAR/TINYINT: JSON number (i64) — ≤32bit
-//   라 f64 (±2^53-1) 무손실이므로 그대로 Number.
+//   라 f64 (±2^53-1) 무손실이므로 그대로 Number. 폭 넓은 TINYINT("TINYINT")
+//   와 "TINYINT UNSIGNED" 는 Number, TINYINT(1)("BOOLEAN") 은 bool (issue #1484).
 
 #[tokio::test]
 #[serial_test::serial]
@@ -3438,6 +3439,90 @@ async fn test_mysql_query_table_data_int_value_remains_number_wire() {
         "MySQL int cell must be JSON number, got: {cell:?}"
     );
     assert_eq!(cell.as_i64(), Some(42));
+
+    adapter
+        .execute_query(
+            &format!("DROP TABLE {table}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
+        .await
+        .ok();
+    adapter.disconnect_pool().await.ok();
+}
+
+/// issue #1484 — 폭 넓은 TINYINT 정수 컬럼이 그리드에서 true/false bool 로
+/// 붕괴하던 회귀 가드. sqlx-mysql 의 type_info().name() 은 ColumnType::Tiny 를
+/// 폭에 따라 세 keyword 로 report 한다 (vendored column.rs L175-181):
+/// TINYINT(1) → "BOOLEAN", unsigned → "TINYINT UNSIGNED", 나머지 → "TINYINT".
+/// sqlx bool decode 는 byte != 0 이면 성공하므로 예전 `"TINYINT" | "BOOLEAN"`
+/// 공통 bool-우선 분기가 non-zero TINYINT (2, 127, -5)를 전부 Ok(Some(true)) 로
+/// 붕괴시켰다. 폭 넓은 TINYINT 는 JSON number 로, TINYINT(1)(="BOOLEAN") 은
+/// MySQL boolean 관례대로 JSON bool 로 렌더돼야 한다 (line 3227 계약).
+#[tokio::test]
+#[serial_test::serial]
+async fn test_mysql_query_table_data_tinyint_value_is_number_not_bool() {
+    let adapter = match common::setup_mysql_adapter().await {
+        Some(a) => a,
+        None => return,
+    };
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis();
+    let table = format!("test_wire_tinyint_{ts}");
+
+    // `flag` 는 폭 넓은 TINYINT (sqlx name "TINYINT") — 정수로 렌더돼야 한다.
+    // `narrow` 는 TINYINT(1) (sqlx name "BOOLEAN") — bool 렌더 보존 검증.
+    adapter
+        .execute_query(
+            &format!("CREATE TABLE {table} (id INT PRIMARY KEY, flag TINYINT, narrow TINYINT(1))"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
+        .await
+        .expect("CREATE TABLE");
+    adapter
+        .execute_query(
+            &format!(
+                "INSERT INTO {table} (id, flag, narrow) VALUES (1, 2, 1), (2, 127, 0), (3, -5, 1)"
+            ),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
+        .await
+        .expect("INSERT");
+
+    let data = adapter
+        .query_table_data(&table, MYSQL_SCHEMA, 1, 50, None, None, None, None)
+        .await
+        .expect("query_table_data");
+    assert_eq!(data.rows.len(), 3);
+
+    // id -> (flag, narrow) 매핑으로 순서 무관하게 두 케이스를 잠근다.
+    for r in &data.rows {
+        let id = r[0].as_i64().expect("id");
+        let flag = &r[1];
+        let narrow = &r[2];
+        // 폭 넓은 TINYINT: 정수 (issue #1484 버그 fix — 예전엔 Bool 로 붕괴).
+        assert!(
+            flag.is_number(),
+            "wide TINYINT must be JSON number, not bool (issue #1484), got: {flag:?}"
+        );
+        // TINYINT(1): MySQL boolean 관례 — bool 렌더 보존.
+        assert!(
+            narrow.is_boolean(),
+            "TINYINT(1) must render as JSON bool (MySQL boolean idiom), got: {narrow:?}"
+        );
+        let (expected_flag, expected_narrow) = match id {
+            1 => (2, true),
+            2 => (127, false),
+            3 => (-5, true),
+            other => panic!("unexpected id {other}"),
+        };
+        assert_eq!(flag.as_i64(), Some(expected_flag));
+        assert_eq!(narrow.as_bool(), Some(expected_narrow));
+    }
 
     adapter
         .execute_query(
