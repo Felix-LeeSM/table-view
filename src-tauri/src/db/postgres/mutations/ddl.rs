@@ -240,9 +240,9 @@ pub(super) fn build_drop_index_sql(req: &DropIndexRequest) -> Result<String, App
 
     let if_exists = if req.if_exists { "IF EXISTS " } else { "" };
     Ok(format!(
-        "DROP INDEX {}.{}{}",
-        quote_identifier(&req.schema),
+        "DROP INDEX {}{}.{}",
         if_exists,
+        quote_identifier(&req.schema),
         quote_identifier(&req.index_name)
     ))
 }
