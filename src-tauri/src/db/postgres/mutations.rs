@@ -1990,7 +1990,7 @@ mod tests {
         assert!(result.is_ok());
         assert_eq!(
             result.unwrap().sql,
-            "DROP INDEX \"public\".IF EXISTS \"idx_users_email\""
+            "DROP INDEX IF EXISTS \"public\".\"idx_users_email\""
         );
     }
 
