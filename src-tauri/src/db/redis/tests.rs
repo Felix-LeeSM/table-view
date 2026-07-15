@@ -1,5 +1,5 @@
 use super::helpers::{
-    bounded_limit, connection_url, ensure_not_cancelled, redis_connection_error,
+    bounded_limit, connection_info, ensure_not_cancelled, redis_connection_error,
     redis_database_error, require_confirm_key, validate_key, DEFAULT_SCAN_LIMIT, MAX_SCAN_LIMIT,
 };
 use super::test_support::{runtime_config, spawn_redis_catalog_stub};
@@ -121,22 +121,49 @@ async fn valkey_direct_mutations_validate_requests_without_unsupported_gate() {
     ));
 }
 
+// Issue #1454 (P2-4) — the connection info must carry host/port/db/user/password
+// as structured fields, never as an assembled `redis://user:pw@host` URL string
+// (a single debug log of that string leaks the credential). Credentials are the
+// raw values (no percent-encoding, which was only a URL artifact) and the
+// loggable connect target (`ConnectionAddr` Display, which the driver echoes on
+// error) carries no password.
 #[test]
-fn connection_url_percent_encodes_auth_and_database() {
-    let (url, db) = connection_url(&config("2")).unwrap();
+fn connection_info_keeps_credentials_in_structured_fields_not_a_url() {
+    let (info, db) = connection_info(&config("2")).unwrap();
     assert_eq!(db, 2);
-    assert_eq!(url, "redis://acl%20user:p%40ss@redis.local:6379/2");
+    assert_eq!(info.redis.db, 2);
+    assert_eq!(info.redis.username.as_deref(), Some("acl user"));
+    assert_eq!(info.redis.password.as_deref(), Some("p@ss"));
+    assert_eq!(
+        info.addr,
+        ::redis::ConnectionAddr::Tcp("redis.local".into(), 6379)
+    );
+    let target = format!("{}", info.addr);
+    assert_eq!(target, "redis.local:6379");
+    assert!(
+        !target.contains("p@ss"),
+        "credential leaked into loggable connect target: {target}"
+    );
 }
 
 #[test]
-fn connection_url_uses_rediss_when_tls_is_enabled() {
+fn connection_info_uses_tcp_tls_target_when_tls_is_enabled() {
     let mut config = config("5");
     config.tls_enabled = Some(true);
 
-    let (url, db) = connection_url(&config).unwrap();
+    let (info, db) = connection_info(&config).unwrap();
 
     assert_eq!(db, 5);
-    assert_eq!(url, "rediss://acl%20user:p%40ss@redis.local:6379/5");
+    assert_eq!(
+        info.addr,
+        ::redis::ConnectionAddr::TcpTls {
+            host: "redis.local".into(),
+            port: 6379,
+            insecure: false,
+            tls_params: None,
+        }
+    );
+    assert_eq!(info.redis.password.as_deref(), Some("p@ss"));
 }
 
 #[test]

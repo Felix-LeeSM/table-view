@@ -39,8 +39,8 @@ pub fn disk_key_path(data_dir: &Path) -> PathBuf {
 /// env 가 set 돼 있으면 그 값을 우선 사용 (테스트 격리). storage::local 의
 /// 정책과 동일.
 pub fn app_data_dir_for_keyring() -> Result<PathBuf, AppError> {
-    if let Ok(dir) = std::env::var("TABLE_VIEW_TEST_DATA_DIR") {
-        let dir = PathBuf::from(dir);
+    // #1454 (P2-6) — override honored in debug only; release ignores env.
+    if let Some(dir) = crate::storage::data_dir_override() {
         fs::create_dir_all(&dir)?;
         return Ok(dir);
     }

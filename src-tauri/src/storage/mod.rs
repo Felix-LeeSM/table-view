@@ -85,10 +85,24 @@ pub(crate) fn reset_master_key_for_test() {
     *MASTER_KEY.lock().expect("master key mutex poisoned") = None;
 }
 
+/// #1454 (P2-6) — test-only data-directory override. Honored ONLY in debug
+/// builds; in release it is compiled out (`None`), so a shipped binary can never
+/// be redirected to an attacker-chosen data dir via `TABLE_VIEW_TEST_DATA_DIR`
+/// (bypassing app-data confinement, the master `.key`, and connections.json).
+/// Every data-dir resolver (`storage::app_data_dir`, `storage::local::app_data_dir`,
+/// `key_migration::app_data_dir_for_keyring`) routes through this one gate.
+#[cfg(debug_assertions)]
+pub(crate) fn data_dir_override() -> Option<PathBuf> {
+    std::env::var_os("TABLE_VIEW_TEST_DATA_DIR").map(PathBuf::from)
+}
+
+#[cfg(not(debug_assertions))]
+pub(crate) fn data_dir_override() -> Option<PathBuf> {
+    None
+}
+
 fn app_data_dir() -> Result<PathBuf, AppError> {
-    // Allow tests to override data directory via env var
-    if let Ok(dir) = std::env::var("TABLE_VIEW_TEST_DATA_DIR") {
-        let dir = PathBuf::from(dir);
+    if let Some(dir) = data_dir_override() {
         fs::create_dir_all(&dir)?;
         return Ok(dir);
     }
@@ -420,6 +434,22 @@ mod tests {
     }
 
     fn cleanup_test_env() {
+        std::env::remove_var("TABLE_VIEW_TEST_DATA_DIR");
+    }
+
+    // Issue #1454 (P2-6) — the `TABLE_VIEW_TEST_DATA_DIR` override is honored in
+    // debug builds (test isolation) but must be compiled out in release so a
+    // shipped binary can never be redirected to an attacker-chosen data dir.
+    // The release branch (`None`) is guaranteed at compile time by
+    // `cfg(debug_assertions)`; a debug-mode `cargo test` cannot observe it, so
+    // we only assert the debug behavior here.
+    #[cfg(debug_assertions)]
+    #[test]
+    #[serial]
+    fn data_dir_override_honors_env_in_debug() {
+        let dir = TempDir::new().unwrap();
+        std::env::set_var("TABLE_VIEW_TEST_DATA_DIR", dir.path());
+        assert_eq!(data_dir_override(), Some(dir.path().to_path_buf()));
         std::env::remove_var("TABLE_VIEW_TEST_DATA_DIR");
     }
 

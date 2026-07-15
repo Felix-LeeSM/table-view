@@ -27,8 +27,8 @@ use tracing::{info, warn};
 /// env 우선). 분리해서 두는 이유: storage/mod.rs 는 file-based connections.json
 /// 영역, 이 파일은 SQLite 영역. 디렉토리는 공유.
 pub fn app_data_dir() -> Result<PathBuf, AppError> {
-    if let Ok(dir) = std::env::var("TABLE_VIEW_TEST_DATA_DIR") {
-        let dir = PathBuf::from(dir);
+    // #1454 (P2-6) — override honored in debug only; release ignores env.
+    if let Some(dir) = crate::storage::data_dir_override() {
         std::fs::create_dir_all(&dir)?;
         return Ok(dir);
     }

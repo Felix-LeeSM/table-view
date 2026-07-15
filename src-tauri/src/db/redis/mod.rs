@@ -19,7 +19,7 @@ use crate::error::AppError;
 use crate::models::{ConnectionConfig, DatabaseType};
 
 use helpers::{
-    bounded_limit, connection_url, connection_url_for, ensure_not_cancelled,
+    bounded_limit, connection_info, connection_info_for, ensure_not_cancelled,
     redis_connection_error, redis_database_error, require_confirm_key, validate_key,
     RedisConnection, DEFAULT_REDIS_DATABASES,
 };
@@ -51,10 +51,13 @@ impl RedisProtocolProduct {
         }
     }
 
-    fn connection_url(self, config: &ConnectionConfig) -> Result<(String, u16), AppError> {
+    fn connection_info(
+        self,
+        config: &ConnectionConfig,
+    ) -> Result<(::redis::ConnectionInfo, u16), AppError> {
         match self {
-            Self::Redis => connection_url(config),
-            Self::Valkey => connection_url_for(self.label(), config),
+            Self::Redis => connection_info(config),
+            Self::Valkey => connection_info_for(self.label(), config),
         }
     }
 
@@ -118,8 +121,8 @@ impl RedisAdapter {
         product: RedisProtocolProduct,
         config: &ConnectionConfig,
     ) -> Result<(), AppError> {
-        let (url, _) = product.connection_url(config)?;
-        let client = ::redis::Client::open(url).map_err(|err| product.connection_error(err))?;
+        let (info, _) = product.connection_info(config)?;
+        let client = ::redis::Client::open(info).map_err(|err| product.connection_error(err))?;
         let mut connection = client
             .get_multiplexed_async_connection()
             .await
@@ -194,9 +197,9 @@ impl DbAdapter for RedisAdapter {
 
     fn connect<'a>(&'a self, config: &'a ConnectionConfig) -> BoxFuture<'a, Result<(), AppError>> {
         Box::pin(async move {
-            let (url, database) = self.product.connection_url(config)?;
+            let (info, database) = self.product.connection_info(config)?;
             let client =
-                ::redis::Client::open(url).map_err(|err| self.product.connection_error(err))?;
+                ::redis::Client::open(info).map_err(|err| self.product.connection_error(err))?;
             let mut connection = client
                 .get_multiplexed_async_connection()
                 .await
