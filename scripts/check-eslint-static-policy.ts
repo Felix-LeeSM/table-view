@@ -344,8 +344,23 @@ function isFrontendCompatScopeModule(repoPath: string): boolean {
   );
 }
 
+// eslint-disable / eslint-enable directives are tooling metadata, never
+// compatibility-shim descriptions. Since #1403 enabled
+// `@typescript-eslint/no-deprecated`, production consumers of a deliberately
+// deprecated symbol carry `// eslint-disable-next-line
+// @typescript-eslint/no-deprecated` — whose rule id contains the word
+// "deprecated" and would otherwise trip the marker scan. Strip the whole
+// directive comment (rule ids and `--` description) before matching.
+function stripEslintDirectiveComments(source: string): string {
+  return source
+    .replace(/\/\*\s*eslint-(?:disable|enable)[\s\S]*?\*\//g, "")
+    .replace(/\/\/\s*eslint-(?:disable|enable)[^\n]*/g, "");
+}
+
 function hasFrontendCompatMarker(source: string): boolean {
-  return FRONTEND_COMPAT_MARKER_PATTERN.test(source);
+  return FRONTEND_COMPAT_MARKER_PATTERN.test(
+    stripEslintDirectiveComments(source),
+  );
 }
 
 function collectIssueRefs(text: string): string[] {

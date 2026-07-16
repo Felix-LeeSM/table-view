@@ -62,10 +62,10 @@ describe("expectNodeStable", () => {
     second.dataset.testid = "swap";
     host.appendChild(second);
 
-    expect(() => stable.assertStillSame("editor")).toThrowError(
+    expect(() => stable.assertStillSame("editor")).toThrow(
       /DOM node identity changed/,
     );
-    expect(() => stable.assertStillSame("editor")).toThrowError(/editor/);
+    expect(() => stable.assertStillSame("editor")).toThrow(/editor/);
   });
 
   it("fails clearly when the node disappears entirely", () => {
@@ -84,13 +84,13 @@ describe("expectNodeStable", () => {
 
     node.remove();
 
-    expect(() => stable.assertStillSame()).toThrowError(/unmounted/);
+    expect(() => stable.assertStillSame()).toThrow(/unmounted/);
   });
 
   it("throws synchronously when the getter returns a falsy value at capture time", () => {
     setupHost();
-    expect(() =>
-      expectNodeStable(() => null as unknown as Element),
-    ).toThrowError(/falsy value at capture time/);
+    expect(() => expectNodeStable(() => null as unknown as Element)).toThrow(
+      /falsy value at capture time/,
+    );
   });
 });

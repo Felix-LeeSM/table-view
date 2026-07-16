@@ -493,8 +493,9 @@ describe("DataSourceProfile registry", () => {
   });
 
   it("fails deterministically for an unknown DatabaseType", () => {
-    expect(() =>
-      getDataSourceProfile("unknown-db" as DatabaseType),
+    expect(
+      () => getDataSourceProfile("unknown-db" as DatabaseType),
+      // eslint-disable-next-line @typescript-eslint/no-deprecated -- in-flight PR #1536 also edits this file; leave the `toThrowError`->`toThrow` cleanup as a follow-up to avoid a merge conflict
     ).toThrowError(/Unknown data source profile/);
   });
 

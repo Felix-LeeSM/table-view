@@ -167,7 +167,10 @@ export async function checkForUpdatesOnLaunch(
     logger.warn("[autoUpdate] update check failed", err);
     return;
   }
-  if (!update?.available) return;
+  // #1400 / #1403 — `check()` returns `null` when there is no newer release.
+  // Gate on that null return rather than the `Update.available` field (which
+  // the updater plugin marks always-`true`); behaviour is identical.
+  if (!update) return;
 
   // #1437 P2-4 — a deb/rpm Linux install can't self-update. Don't prompt into
   // a silent no-op every boot; point the user at their package manager once.
