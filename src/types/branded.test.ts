@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { rawEntryKey } from "@stores/rawQueryGridEditStore";
 import { entryKey } from "@stores/dataGridEditStore";
 import type { ExecuteRdbSingleStatementRequest } from "@components/query/QueryTab/rdbQueryExecution";
+import type { InlineFkPopoverProps } from "@components/schema/CreateTableDialog/InlineFkPopover";
 import type {
   ConnectionId,
   DatabaseName,
@@ -74,5 +75,30 @@ describe("branded DatabaseName / SchemaName / TableName entryKey order safety", 
     expect(entryKey(connectionId, database, table, schema)).toBe(
       "conn-1::app::users::public",
     );
+  });
+});
+
+/**
+ * Type-level regression for issue #1495 (branded Phase 3). The inline FK
+ * reference picker's `onTablePicked(schema, table)` collided with the schema
+ * catalog's table-last argument order: a swapped call searched "orders.public"
+ * instead of "public.orders" and silently found nothing. Same live-directive
+ * discipline — before `SchemaName` / `TableName` were applied to the callback
+ * both args were plain `string`, so the swapped call type-checked and the
+ * `@ts-expect-error` was unused (`tsc --noEmit` fails, the RED). After
+ * branding, the swap is a genuine compile error and the directive is live.
+ */
+describe("branded SchemaName / TableName FK picker order safety", () => {
+  const schema = "public" as SchemaName;
+  const table = "orders" as TableName;
+
+  it("rejects a swapped InlineFkPopover onTablePicked call at compile time", () => {
+    type OnTablePicked = InlineFkPopoverProps["onTablePicked"];
+    const onTablePicked = ((): void => {}) as OnTablePicked;
+    // Canonical order is (schema, table).
+    onTablePicked(schema, table);
+    // @ts-expect-error swapped (table, schema) order must not compile
+    onTablePicked(table, schema);
+    expect(true).toBe(true);
   });
 });

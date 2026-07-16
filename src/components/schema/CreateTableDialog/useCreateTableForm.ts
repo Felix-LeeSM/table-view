@@ -27,6 +27,7 @@ import {
   computeDeclaredConstraints,
   type DeclaredConstraint,
 } from "./planBuilders";
+import type { SchemaName, TableName } from "@/types/branded";
 
 export interface UseCreateTableFormArgs {
   /** Connection id used by the Safe Mode gate + history record. */
@@ -276,7 +277,7 @@ export function useCreateTableForm({
     );
     // Lazy load tables when ref_schema changes and the cache is empty.
     if (nextRefSchema) {
-      void fkPicker.ensureTablesLoaded(nextRefSchema);
+      void fkPicker.ensureTablesLoaded(nextRefSchema as SchemaName);
     }
     // Lazy load reference columns when ref_table changes.
     if (
@@ -285,8 +286,8 @@ export function useCreateTableForm({
       snapshotRefSchema &&
       snapshotRefSchema.trim().length > 0
     ) {
-      const refTable = nextRefTable.trim();
-      const refSchema = snapshotRefSchema;
+      const refTable = nextRefTable.trim() as TableName;
+      const refSchema = snapshotRefSchema as SchemaName;
       setFkRefColumnsLoadingByTrackingId((prev) => ({
         ...prev,
         [trackingId]: true,

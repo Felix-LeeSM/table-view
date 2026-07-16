@@ -1,6 +1,7 @@
 import { useCallback } from "react";
 
 import { useSchemaStore } from "@stores/schemaStore";
+import type { SchemaName, TableName } from "@/types/branded";
 
 /**
  * Sprint 229 — small lifecycle hook for the FK reference table /
@@ -24,8 +25,8 @@ import { useSchemaStore } from "@stores/schemaStore";
  */
 export function useFkReferencePicker(connectionId: string, database: string) {
   const ensureTablesLoaded = useCallback(
-    (refSchema: string): Promise<void> => {
-      const trimmed = refSchema.trim();
+    (refSchema: SchemaName): Promise<void> => {
+      const trimmed = refSchema.trim() as SchemaName;
       if (trimmed.length === 0) return Promise.resolve();
       const cached =
         useSchemaStore.getState().tables[connectionId]?.[database]?.[trimmed];
@@ -38,9 +39,9 @@ export function useFkReferencePicker(connectionId: string, database: string) {
   );
 
   const loadColumnsIfMissing = useCallback(
-    async (refSchema: string, refTable: string): Promise<boolean> => {
-      const schema = refSchema.trim();
-      const table = refTable.trim();
+    async (refSchema: SchemaName, refTable: TableName): Promise<boolean> => {
+      const schema = refSchema.trim() as SchemaName;
+      const table = refTable.trim() as TableName;
       if (schema.length === 0 || table.length === 0) return false;
       const cached =
         useSchemaStore.getState().tableColumnsCache[connectionId]?.[database]?.[
@@ -48,6 +49,11 @@ export function useFkReferencePicker(connectionId: string, database: string) {
         ]?.[table];
       if (cached && cached.length > 0) return false;
       try {
+        // ponytail: schemaStore's `getTableColumns(connId, db, table, schema)`
+        // still takes schema LAST — reordering its signature would force
+        // touching every catalog caller (QueryResultGrid, StructurePanel, …),
+        // deferred with the store-wide reorder (issue #1495 Refs). The branded
+        // `(schema, table)` axes above already block a swap at this boundary.
         await useSchemaStore
           .getState()
           .getTableColumns(connectionId, database, table, schema);
