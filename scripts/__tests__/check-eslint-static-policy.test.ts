@@ -69,9 +69,18 @@ function completionPublicApiFixture(extraLines: readonly string[] = []) {
 
 describe("check-eslint-static-policy", () => {
   it("keeps the measured max-lines allowlist explicit", () => {
-    expect(MAX_LINES_ALLOWLIST).toHaveLength(19);
+    expect(MAX_LINES_ALLOWLIST).toHaveLength(18);
     expect(MAX_LINES_ALLOWLIST).not.toContain(
       "src/components/datagrid/sqlGenerator.test.ts",
+    );
+    // #1360 — DocumentTreePanel.tsx dropped below 700 lines after the
+    // types/rows/hooks split, so its allowlist entry was removed; the
+    // still-oversized DocumentTreePanel.test.tsx stays exempt.
+    expect(MAX_LINES_ALLOWLIST).not.toContain(
+      "src/components/document/DocumentTreePanel.tsx",
+    );
+    expect(MAX_LINES_ALLOWLIST).toContain(
+      "src/components/document/DocumentTreePanel.test.tsx",
     );
     // #1060 — the #1421-into-#1060 reconciliation kept both the #1059 banner
     // test and the permission-denied tests in one file, pushing it past 700
