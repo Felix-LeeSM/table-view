@@ -704,6 +704,40 @@ export function supportsRowEditing(
   return profile === null || profile.capabilities.edit.editRows;
 }
 
+/**
+ * Issue #1461 — whether this engine supports editing documents in the grid.
+ * The document-paradigm mirror of {@link supportsRowEditing}: the DocumentDataGrid
+ * reads `edit.editDocuments` (single source of truth) instead of assuming the
+ * document paradigm is always editable, so a read-only document source hides the
+ * cell editor + Add/Delete affordances rather than click-then-error. MongoDB is
+ * the sole profile declaring it today. An unknown / still-loading dbType returns
+ * true so affordances aren't stripped before the connection resolves (same
+ * fallback as `supportsRowEditing`).
+ */
+export function supportsDocumentEditing(
+  dbType: DatabaseType | null | undefined,
+): boolean {
+  const profile = maybeGetDataSourceProfile(dbType);
+  return profile === null || profile.capabilities.edit.editDocuments;
+}
+
+/**
+ * Issue #1461 — whether this engine's document grid exposes the bulk
+ * update-many / delete-many affordances. Reads `edit.bulkWrite` (single source
+ * of truth). Kept as a flag distinct from `editDocuments` (rather than folded
+ * into it): bulk ops act on a filter matching an unbounded document set — a
+ * higher-risk write than a single-cell edit — and map to the backend
+ * `bulk_write_documents` path that the conformance matrix enumerates
+ * independently (redis/valkey defer `edit.bulkWrite` without `editDocuments`).
+ * Same DBMS-unknown fallback (true) as `supportsDocumentEditing`.
+ */
+export function supportsBulkWrite(
+  dbType: DatabaseType | null | undefined,
+): boolean {
+  const profile = maybeGetDataSourceProfile(dbType);
+  return profile === null || profile.capabilities.edit.bulkWrite;
+}
+
 export type DdlCapabilityName = keyof DataSourceCapabilities["ddl"];
 
 /**

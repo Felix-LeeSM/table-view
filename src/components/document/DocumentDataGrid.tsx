@@ -7,6 +7,8 @@ import {
   type CSSProperties,
 } from "react";
 import { useDocumentCatalogStore } from "@stores/documentCatalogStore";
+import { useConnectionStore } from "@stores/connectionStore";
+import { supportsBulkWrite, supportsDocumentEditing } from "@/types/dataSource";
 import { recordHistoryEntry } from "@lib/runtime/history/recordHistoryEntry";
 import { isDocumentSentinel } from "@/types/document";
 import { safeStringifyCell } from "@lib/jsonCell";
@@ -55,6 +57,17 @@ export default function DocumentDataGrid({
   const fieldsCacheEntry = useDocumentCatalogStore(
     (s) => s.fieldsCache[connectionId]?.[database]?.[collection],
   );
+
+  // #1461 — edit gating reads the connection's capability flags instead of
+  // assuming the document paradigm is always editable. `editDocuments` gates
+  // the cell editor + row affordances; `bulkWrite` gates the bulk
+  // update-many / delete-many controls. An unresolved connection falls back to
+  // "supported" so affordances aren't stripped before the store loads.
+  const dbType = useConnectionStore(
+    (s) => s.connections.find((c) => c.id === connectionId)?.dbType,
+  );
+  const canEditDocuments = supportsDocumentEditing(dbType);
+  const canBulkWrite = supportsBulkWrite(dbType);
 
   const safeModeGate = useSafeModeGate(connectionId);
 
@@ -228,6 +241,7 @@ export default function DocumentDataGrid({
     connectionId,
     page,
     fetchData,
+    canEditRows: canEditDocuments,
   });
 
   const totalPages = data
@@ -569,6 +583,8 @@ export default function DocumentDataGrid({
         showFilters={showFilters}
         showQuickLook={showQuickLook}
         editState={editState}
+        editEnabled={canEditDocuments}
+        bulkOpsEnabled={canBulkWrite}
         hiddenColumnCount={hiddenColumns.hidden.size}
         projection={projection}
         loading={loading}

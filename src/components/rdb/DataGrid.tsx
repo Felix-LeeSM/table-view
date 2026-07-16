@@ -20,7 +20,11 @@ import { useRdbDataGridShortcuts } from "./DataGrid/useRdbDataGridShortcuts";
 import { useRdbDataGridSortHandlers } from "./DataGrid/useRdbDataGridSortHandlers";
 import { useRdbDataGridSorts } from "./DataGrid/useRdbDataGridSorts";
 import { useRdbTableData } from "./DataGrid/useRdbTableData";
-import { getDataSourceProfile, supportsRowEditing } from "@/types/dataSource";
+import {
+  getDataSourceProfile,
+  hasConnectionCapability,
+  supportsRowEditing,
+} from "@/types/dataSource";
 
 interface DataGridProps {
   connectionId: string;
@@ -91,10 +95,17 @@ export default function DataGrid({
     rowEditRequiresPrimaryKey &&
     data !== null &&
     !data.columns.some((column) => column.is_primary_key);
+  // #1461 — the read-only block reads the `connection.readOnly` *capability*
+  // ("this DBMS supports a read-only connection mode") gated by the
+  // per-connection `readOnly` runtime value the user picked, instead of a
+  // `dbType === "sqlite"` roster the capability flag now owns.
   const canEditRows =
     rowEditConnection !== undefined &&
     getDataSourceProfile(rowEditConnection.dbType).capabilities.edit.editRows &&
-    !(rowEditConnection.dbType === "sqlite" && rowEditConnection.readOnly) &&
+    !(
+      hasConnectionCapability(rowEditConnection.dbType, "readOnly") &&
+      rowEditConnection.readOnly
+    ) &&
     !tableWithoutRequiredPrimaryKey;
   // #1052 — statically read-only engine (DuckDB) HIDES the row-write context
   // menu items; `canEditRows` above only *disables* them for stateful blocks.

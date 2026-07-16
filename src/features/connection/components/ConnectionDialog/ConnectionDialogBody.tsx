@@ -211,6 +211,10 @@ export default function ConnectionDialogBody({
                   form.dbType,
                   "filePicker",
                 )}
+                readOnlyEnabled={hasConnectionCapability(
+                  form.dbType,
+                  "readOnly",
+                )}
                 inputClass={inputClass}
                 labelClass={labelClass}
                 invalidField={invalidField}
@@ -224,6 +228,10 @@ export default function ConnectionDialogBody({
                 filePickerEnabled={hasConnectionCapability(
                   form.dbType,
                   "filePicker",
+                )}
+                readOnlyEnabled={hasConnectionCapability(
+                  form.dbType,
+                  "readOnly",
                 )}
                 inputClass={inputClass}
                 labelClass={labelClass}

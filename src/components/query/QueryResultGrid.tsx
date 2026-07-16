@@ -292,7 +292,11 @@ function SelectResultArea({
       // the rest of the UI.
       return `${DB_TYPE_META[profile.id].label} row editing is not supported.`;
     }
-    if (connection.dbType === "sqlite" && connection.readOnly) {
+    // #1461 — gate the read-only block on the `connection.readOnly` capability
+    // (declared per DBMS) AND the per-connection runtime `readOnly` value,
+    // instead of a `dbType === "sqlite"` hardcode. SQLite is the only editable
+    // engine that also declares the capability, so the message stays accurate.
+    if (profile.capabilities.connection.readOnly && connection.readOnly) {
       return "read-only SQLite connection";
     }
     return null;
