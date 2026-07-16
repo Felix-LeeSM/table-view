@@ -956,6 +956,54 @@ async fn opensearch_live_search_honors_in_flight_cancel_token() {
 }
 
 #[tokio::test]
+async fn elasticsearch_cancel_closes_the_http_connection_server_side() {
+    // #1269 gap #7 — the Search-tab Stop button's only cancellation lever is
+    // dropping the in-flight `send()` future. That is a *real* server-side abort
+    // only if it closes the HTTP connection: ES>=7 / OS>=1 cancel the search
+    // task when the REST channel closes (RestCancellableNodeClient), so no
+    // `_tasks/{id}/_cancel` round-trip is needed. The two `honors_in_flight_*`
+    // tests above assert the client returns Cancel; this one asserts the other
+    // half — that the socket actually closes, which is the signal the cluster
+    // needs to stop the search.
+    let (port, server) = spawn_search_cancel_watch_server(
+        r#"{ "cluster_name": "elastic-dev", "version": { "number": "8.12.2" } }"#,
+    )
+    .await;
+    let adapter = SearchEngineAdapter::new_elasticsearch();
+    let config = search_config(port);
+    adapter.connect(&config).await.unwrap();
+
+    let token = CancellationToken::new();
+    let request = SearchQueryRequest {
+        index: "logs-elastic-2026.05.24".into(),
+        body: json!({ "query": { "match_all": {} } }),
+        from: None,
+        size: None,
+        track_total_hits: None,
+    };
+
+    // Deterministic mid-flight cancel: the mock withholds the response forever
+    // and the 50ms cancel fires while send() is still waiting for headers, so
+    // the biased select! resolves to Cancel and drops the request future.
+    let cancel_window = Duration::from_millis(50);
+    let search_result = tokio::join!(
+        async {
+            sleep(cancel_window).await;
+            token.cancel();
+        },
+        adapter.search(&request, Some(&token)),
+    )
+    .1;
+    assert!(matches!(search_result, Err(AppError::Cancel(_))));
+
+    let observed_close = server.await.unwrap();
+    assert!(
+        observed_close,
+        "cancel must close the HTTP connection so ES/OS abort the search task"
+    );
+}
+
+#[tokio::test]
 async fn elasticsearch_live_search_blocks_raw_or_destructive_paths() {
     let (port, server) = spawn_search_http_server(vec![route(
         "/ ",

@@ -304,6 +304,21 @@ impl SearchHttpConnection {
     }
 }
 
+/// Send `request`, aborting the instant `cancel` fires. The abort lever is a
+/// biased `select!` that drops the in-flight `send()` future — reqwest cannot
+/// pool a half-finished request, so the drop closes the HTTP connection.
+///
+/// #1269 gap #7 — that connection close IS a real server-side abort, not just a
+/// client that stopped waiting: Elasticsearch (>= 7) and OpenSearch (>= 1)
+/// cancel the running search task when the REST channel closes
+/// (`RestCancellableNodeClient`, default-on). So the Search-tab Stop button
+/// needs no `_tasks/{id}/_cancel` round-trip — issuing one would only duplicate
+/// what the cluster already does on close. The single cancellation window is
+/// the header-wait phase, but that is exactly when the server is doing the
+/// search work (it flushes response headers only once the query completes), so
+/// closing during that phase is what actually stops the cluster.
+/// `elasticsearch_cancel_closes_the_http_connection_server_side` locks the
+/// client half of this contract: cancel must close the socket, not pool it.
 async fn send_with_cancel(
     request: RequestBuilder,
     cancel: Option<&CancellationToken>,
