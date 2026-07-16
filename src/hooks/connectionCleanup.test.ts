@@ -25,7 +25,8 @@ import { cleanupConnectionFrontendState } from "./connectionCleanup";
 import { useSchemaStore } from "@stores/schemaStore";
 import { useDocumentCatalogStore } from "@stores/documentCatalogStore";
 import { useDocumentQueryStore } from "@stores/documentQueryStore";
-import { entryKey, useDataGridEditStore } from "@stores/dataGridEditStore";
+import { useDataGridEditStore } from "@stores/dataGridEditStore";
+import { makeEntryKey } from "@/test-utils/brandedKeys";
 import { useWorkspaceStore } from "@stores/workspaceStore";
 
 const RESULT: DocumentQueryResult = {
@@ -119,9 +120,9 @@ describe("connection cleanup orchestrator", () => {
     seedTableWorkspace("conn1", "dbA");
     seedTableWorkspace("conn2", "dbA");
 
-    const conn1Key = entryKey("conn1", "dbA", "public", "users");
-    const conn2Key = entryKey("conn2", "dbA", "public", "users");
-    const orphanKey = entryKey("conn1", "dbB", "public", "orders");
+    const conn1Key = makeEntryKey("conn1", "dbA", "public", "users");
+    const conn2Key = makeEntryKey("conn2", "dbA", "public", "users");
+    const orphanKey = makeEntryKey("conn1", "dbB", "public", "orders");
     useDataGridEditStore
       .getState()
       .setSlice(conn1Key, "pendingEdits", new Map([["0-1", "a"]]));
@@ -151,7 +152,7 @@ describe("connection cleanup orchestrator", () => {
 
   it("[RISK-040] repeated cleanup is idempotent", () => {
     seedTableWorkspace("conn1", "dbA");
-    const key = entryKey("conn1", "dbA", "public", "users");
+    const key = makeEntryKey("conn1", "dbA", "public", "users");
     useDataGridEditStore
       .getState()
       .setSlice(key, "pendingEdits", new Map([["0-1", "a"]]));

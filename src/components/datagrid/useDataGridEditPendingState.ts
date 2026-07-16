@@ -6,6 +6,12 @@ import {
 } from "@stores/dataGridEditStore";
 import { toast } from "@/lib/runtime/toast";
 import i18n from "@lib/i18n";
+import type {
+  ConnectionId,
+  DatabaseName,
+  SchemaName,
+  TableName,
+} from "@/types/branded";
 import type { AppliedPendingOps } from "@/lib/datagrid/paradigmEditAdapter";
 import {
   UNDO_STACK_MAX,
@@ -56,7 +62,14 @@ export function useDataGridEditPendingState({
     if (!connectionId || !database || !schema || !table) {
       return fallbackInstanceKeyRef.current!;
     }
-    return makeStoreEntryKey(connectionId, database, schema, table);
+    // Brand each axis once at this boundary (params arrive as plain `string`
+    // from the grid); `entryKey`'s branded params then reject a positional swap.
+    return makeStoreEntryKey(
+      connectionId as ConnectionId,
+      database as DatabaseName,
+      schema as SchemaName,
+      table as TableName,
+    );
   }, [connectionId, database, schema, table]);
 
   const entry =

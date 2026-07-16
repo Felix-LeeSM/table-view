@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { rawEntryKey } from "@stores/rawQueryGridEditStore";
+import { entryKey } from "@stores/dataGridEditStore";
 import type { ExecuteRdbSingleStatementRequest } from "@components/query/QueryTab/rdbQueryExecution";
-import type { ConnectionId, TabId } from "./branded";
+import type {
+  ConnectionId,
+  DatabaseName,
+  SchemaName,
+  TableName,
+  TabId,
+} from "./branded";
 
 /**
  * Type-level regression for issue #1493. The real assertion runs under
@@ -32,5 +39,40 @@ describe("branded ConnectionId / TabId argument-order safety", () => {
     expect(findLiveIdleTab(connectionId, tabId)).toBeNull();
     // @ts-expect-error swapped (tabId, connectionId) order must not compile
     expect(findLiveIdleTab(tabId, connectionId)).toBeNull();
+  });
+});
+
+/**
+ * Type-level regression for issue #1494 (branded Phase 2). Same live-directive
+ * discipline as above: before `entryKey`'s four positional args carried
+ * distinct brands they were all plain `string`, so the swapped call below
+ * type-checked and the `@ts-expect-error` was unused — `tsc --noEmit` fails.
+ * That is the RED. After branding, the schema/table (and database) swaps are
+ * genuine compile errors, the directives become live, and `tsc` passes.
+ */
+describe("branded DatabaseName / SchemaName / TableName entryKey order safety", () => {
+  const connectionId = "conn-1" as ConnectionId;
+  const database = "app" as DatabaseName;
+  const schema = "public" as SchemaName;
+  const table = "users" as TableName;
+
+  it("composes the entry key from (connectionId, database, schema, table)", () => {
+    expect(entryKey(connectionId, database, schema, table)).toBe(
+      "conn-1::app::public::users",
+    );
+  });
+
+  it("rejects a swapped (schema, database) entryKey call at compile time", () => {
+    // @ts-expect-error swapped database/schema args must not compile
+    expect(entryKey(connectionId, schema, database, table)).toBe(
+      "conn-1::public::app::users",
+    );
+  });
+
+  it("rejects a swapped (schema, table) entryKey call at compile time", () => {
+    // @ts-expect-error swapped schema/table args must not compile
+    expect(entryKey(connectionId, database, table, schema)).toBe(
+      "conn-1::app::users::public",
+    );
   });
 });

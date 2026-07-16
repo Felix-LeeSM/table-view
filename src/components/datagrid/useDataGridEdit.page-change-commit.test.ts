@@ -17,7 +17,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { setupTauriMock } from "@/test-utils/tauriMock";
 import { renderHook, act } from "@testing-library/react";
 import { useDataGridEdit } from "./useDataGridEdit";
-import { useDataGridEditStore, entryKey } from "@stores/dataGridEditStore";
+import { useDataGridEditStore } from "@stores/dataGridEditStore";
+import { makeEntryKey } from "@/test-utils/brandedKeys";
 import type { TableData } from "@/types/schema";
 
 const { mockExecuteQuery, mockExecuteQueryBatch } = vi.hoisted(() => ({
@@ -369,7 +370,7 @@ describe("useDataGridEdit — issue #1081 page-change commit targets original ro
   // Blocking 2 — undo must restore the row-identity snapshots too, otherwise
   // an orphan snapshot outlives the pending edit it anchored.
   it("[undo] restores the row-identity snapshot alongside the pending edit", () => {
-    const key = entryKey("conn1", "db1", "public", "users");
+    const key = makeEntryKey("conn1", "db1", "public", "users");
     const { result } = renderRdb(RDB_PAGE1, 1);
 
     act(() => result.current.handleStartEdit(2, 1, "Carol"));
@@ -438,7 +439,7 @@ describe("useDataGridEdit — issue #1081 page-change commit targets original ro
   });
 
   it("[discard] clears the row-identity snapshots", () => {
-    const key = entryKey("conn1", "db1", "public", "users");
+    const key = makeEntryKey("conn1", "db1", "public", "users");
     const { result } = renderRdb(RDB_PAGE1, 1);
 
     act(() => result.current.handleStartEdit(2, 1, "Carol"));

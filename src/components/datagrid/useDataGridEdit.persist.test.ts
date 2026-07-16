@@ -17,7 +17,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import { useDataGridEdit } from "./useDataGridEdit";
-import { useDataGridEditStore, entryKey } from "@stores/dataGridEditStore";
+import { useDataGridEditStore } from "@stores/dataGridEditStore";
+import { makeEntryKey } from "@/test-utils/brandedKeys";
 import type { TableData } from "@/types/schema";
 
 const mockExecuteQuery = vi.fn();
@@ -224,7 +225,7 @@ describe("useDataGridEdit — Sprint 251 store-backed persistence", () => {
 
     // Store entry should be either purged or cleared — either way the
     // re-mount must observe empty slices.
-    const key = entryKey("conn1", "db1", "public", "users");
+    const key = makeEntryKey("conn1", "db1", "public", "users");
     const entry = useDataGridEditStore.getState().getEntry(key);
     expect(entry.pendingEdits.size).toBe(0);
     expect(entry.pendingNewRows.length).toBe(0);

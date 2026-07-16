@@ -11,10 +11,11 @@
 // covered by `useDataGridEdit.undo.test.ts` — unchanged by this refactor.
 import { describe, it, expect, beforeEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
-import { useDataGridEditStore, entryKey } from "@stores/dataGridEditStore";
+import { useDataGridEditStore } from "@stores/dataGridEditStore";
+import { makeEntryKey } from "@/test-utils/brandedKeys";
 import { useDataGridEditPendingState } from "./useDataGridEditPendingState";
 
-const KEY = entryKey("conn1", "db1", "public", "users");
+const KEY = makeEntryKey("conn1", "db1", "public", "users");
 const ROWS: unknown[][] = [
   [1, "Alice"],
   [2, "Bob"],

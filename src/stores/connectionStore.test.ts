@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { setupTauriMock } from "@/test-utils/tauriMock";
 import { useConnectionStore, SYNCED_KEYS } from "./connectionStore";
-import { entryKey, useDataGridEditStore } from "./dataGridEditStore";
+import { useDataGridEditStore } from "./dataGridEditStore";
+import { makeEntryKey } from "@/test-utils/brandedKeys";
 import { useWorkspaceStore } from "./workspaceStore";
 
 // Mock @tauri-apps/api/event. The Sprint 152 bridge attach inside
@@ -83,7 +84,7 @@ function seedWorkspaceAndPendingEdit(connectionId: string): string {
     database: "db",
     permanent: true,
   });
-  const key = entryKey(connectionId, "db", "public", "users");
+  const key = makeEntryKey(connectionId, "db", "public", "users");
   useDataGridEditStore
     .getState()
     .setSlice(key, "pendingEdits", new Map([["0-1", "dirty"]]));

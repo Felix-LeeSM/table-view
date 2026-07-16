@@ -13,13 +13,25 @@
  * - `TabId` — asserted once where a tab id is minted (`nextTabId` /
  *   `nextQueryId`). Rust `String` wire types stay unchanged; TS→Rust
  *   serialisation is automatic and needs no unwrap.
+ * - `DatabaseName` / `SchemaName` / `TableName` — Phase 2 (issue #1494).
+ *   The four positional args of `entryKey(connectionId, database, schema,
+ *   table)` were all plain `string`, so a schema/table swap silently keyed a
+ *   different table's pending edits (wrong-table update, edit loss). Each axis
+ *   now carries a distinct brand, so a positional swap is a compile error.
+ *   Asserted once at the `entryKey` call boundary (the tab-close purge and the
+ *   grid pending-state hook), where the axes are read off a `TableTab`.
  *
  * Scope is deliberately narrow (issue #1493 과설계 경계): only identifiers
- * with a real swap-confusion history are branded. Do not brand SQL strings,
- * UI labels, or db/schema/table names here — those are Phase 2/3.
+ * with a real swap-confusion history are branded. Do not brand SQL strings or
+ * UI labels here. The `schemaStore` cache-layer key access
+ * (`tableColumnsCache[conn][db][schema][table]`) shares the same swap risk but
+ * is a much wider Record-typing surface — deferred to a follow-up.
  */
 
 export type Brand<T, B extends string> = T & { readonly __brand: B };
 
 export type ConnectionId = Brand<string, "ConnectionId">;
 export type TabId = Brand<string, "TabId">;
+export type DatabaseName = Brand<string, "DatabaseName">;
+export type SchemaName = Brand<string, "SchemaName">;
+export type TableName = Brand<string, "TableName">;
