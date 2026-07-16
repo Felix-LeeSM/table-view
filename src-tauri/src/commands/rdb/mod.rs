@@ -29,6 +29,7 @@
 pub mod ddl;
 pub mod query;
 pub mod schema;
+pub mod value_search;
 
 pub(super) use crate::commands::{not_connected, register_cancel_token, release_cancel_token};
 

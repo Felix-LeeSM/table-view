@@ -105,6 +105,24 @@ export const en = {
     closeAria: "Close quick open",
   },
 
+  // PgValueSearch (#1525) — read-only cross-table value search (PostgreSQL)
+  valueSearch: {
+    title: "Search Data",
+    description:
+      "Find a value across the text columns of a PostgreSQL schema (read-only)",
+    placeholder: "Value to find...",
+    run: "Search",
+    cancel: "Cancel",
+    pgOnly: "Data search is available for PostgreSQL connections.",
+    noConnection: "Open a PostgreSQL connection first.",
+    noResults: "No matches found.",
+    running: "Searching...",
+    truncated: "Results limited by the row cap — refine the term for more.",
+    resultCount_one: "{{count}} match",
+    resultCount_other: "{{count}} matches",
+    closeAria: "Close data search",
+  },
+
   // ShortcutCheatsheet
   shortcuts: {
     title: "Keyboard shortcuts",
@@ -125,6 +143,7 @@ export const en = {
     formatSql: "Format SQL",
     uglifySql: "Uglify SQL",
     quickOpen: "Quick open",
+    searchData: "Search data (PostgreSQL)",
     refresh: "Refresh",
     cancelQuery: "Cancel running query",
     toggleHomeWorkspace: "Toggle Home/Workspace",
@@ -254,6 +273,24 @@ export const ko = {
     closeAria: "빠른 열기 닫기",
   },
 
+  // PgValueSearch (#1525) — 읽기 전용 테이블 값 전역 검색 (PostgreSQL)
+  valueSearch: {
+    title: "데이터 검색",
+    description:
+      "PostgreSQL 스키마의 텍스트 컬럼 전체에서 값을 찾습니다 (읽기 전용)",
+    placeholder: "찾을 값...",
+    run: "검색",
+    cancel: "취소",
+    pgOnly: "데이터 검색은 PostgreSQL 연결에서 사용할 수 있습니다.",
+    noConnection: "먼저 PostgreSQL 연결을 열어주세요.",
+    noResults: "일치하는 결과 없음.",
+    running: "검색 중...",
+    truncated: "행 제한으로 결과가 잘렸습니다 — 검색어를 좁혀보세요.",
+    resultCount_one: "{{count}}건 일치",
+    resultCount_other: "{{count}}건 일치",
+    closeAria: "데이터 검색 닫기",
+  },
+
   // ShortcutCheatsheet
   shortcuts: {
     title: "키보드 단축키",
@@ -274,6 +311,7 @@ export const ko = {
     formatSql: "SQL 포매팅",
     uglifySql: "SQL 최소화",
     quickOpen: "빠른 열기",
+    searchData: "데이터 검색 (PostgreSQL)",
     refresh: "새로 고침",
     cancelQuery: "실행 중인 쿼리 취소",
     toggleHomeWorkspace: "홈/워크스페이스 전환",
