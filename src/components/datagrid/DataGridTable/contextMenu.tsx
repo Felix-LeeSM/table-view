@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import {
   Pencil,
   Trash2,
@@ -72,17 +72,23 @@ export function useContextMenu({
 }: UseContextMenuArgs): UseContextMenuResult {
   const [contextMenu, setContextMenu] = useState<ContextMenuPos | null>(null);
 
+  // Issue #1446 — read selection from a ref so `handleContextMenu` keeps a
+  // stable identity across selection changes (it lives in the memoized
+  // rowCtx). It's only read on a right-click, so latest-value is correct.
+  const selectedRowIdsRef = useRef(selectedRowIds);
+  selectedRowIdsRef.current = selectedRowIds;
+
   const handleContextMenu = useCallback(
     (e: React.MouseEvent, rowIdx: number, colIdx: number) => {
       e.preventDefault();
       if (data.rows.length === 0) return;
       // If right-clicked row is not selected, select it first
-      if (!selectedRowIds.has(rowIdx)) {
+      if (!selectedRowIdsRef.current.has(rowIdx)) {
         onSelectRow(rowIdx, false, false);
       }
       setContextMenu({ x: e.clientX, y: e.clientY, rowIdx, colIdx });
     },
-    [data.rows.length, selectedRowIds, onSelectRow],
+    [data.rows.length, onSelectRow],
   );
 
   return { contextMenu, setContextMenu, handleContextMenu };

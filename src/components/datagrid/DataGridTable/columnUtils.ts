@@ -27,6 +27,55 @@ export const VIRTUALIZE_THRESHOLD = 200;
 export const ROW_HEIGHT_ESTIMATE = 32;
 
 /**
+ * Issue #1446 — above this visible-column count a row renders only the
+ * horizontally-visible slice of columns (column virtualization). Below it
+ * every column renders eagerly so narrow grids (and their DOM-shape tests)
+ * are byte-identical to the pre-#1446 behavior.
+ */
+export const COLUMN_VIRTUALIZE_THRESHOLD = 30;
+
+/**
+ * Extra columns rendered on each side of the visible window so a fast
+ * horizontal scroll doesn't flash empty cells. Small (unlike the row
+ * overscan of 24) because column jumps are bounded by viewport width.
+ */
+export const COLUMN_OVERSCAN = 3;
+
+/**
+ * Issue #1446 — pure column-window math. Given per-visual-column widths
+ * (px), the current horizontal `scrollLeft` and the viewport width,
+ * return the `[start, end]` inclusive visual-column range to render
+ * (overscan applied). No React/DOM deps so it's unit-testable.
+ */
+export function computeColumnWindow(
+  widths: number[],
+  scrollLeft: number,
+  viewportWidth: number,
+  overscan = COLUMN_OVERSCAN,
+): { start: number; end: number } {
+  const total = widths.length;
+  const viewRight = scrollLeft + viewportWidth;
+  let start = total;
+  let end = -1;
+  let left = 0;
+  for (let i = 0; i < total; i++) {
+    const right = left + widths[i]!;
+    if (start === total && right > scrollLeft) start = i;
+    if (left < viewRight) end = i;
+    left = right;
+  }
+  // Degenerate (zero viewport / empty) → render everything to stay safe.
+  if (start > end) {
+    start = 0;
+    end = total - 1;
+  }
+  return {
+    start: Math.max(0, start - overscan),
+    end: Math.min(total - 1, end + overscan),
+  };
+}
+
+/**
  * Parse `"<schema>.<table>(<column>)"`. Returns `null` on the legacy
  * bare-`"<table>.<column>"` shape or empty input. The production grid
  * and the contract test both consume this single implementation.

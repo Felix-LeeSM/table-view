@@ -26,6 +26,8 @@ import CellDetailDialog from "./CellDetailDialog";
 import {
   VIRTUALIZE_THRESHOLD,
   ROW_HEIGHT_ESTIMATE,
+  COLUMN_VIRTUALIZE_THRESHOLD,
+  computeColumnWindow,
 } from "./DataGridTable/columnUtils";
 import { useCellNavigation } from "./DataGridTable/useCellNavigation";
 import { useColumnResize } from "./DataGridTable/useColumnResize";
@@ -35,6 +37,7 @@ import {
 } from "./DataGridTable/contextMenu";
 import HeaderRow from "./DataGridTable/HeaderRow";
 import DataRow, { type DataGridRowContext } from "./DataGridTable/DataRow";
+import { useRowPending } from "./DataGridTable/useRowPending";
 import { useGridRoving } from "./useGridRoving";
 
 /**
@@ -334,6 +337,11 @@ const DataGridTable = forwardRef<DataGridTableHandle, DataGridTableProps>(
       return () => obs.disconnect();
     }, [data]);
 
+    // Issue #1446 — horizontal scroll offset drives the column window. Setting
+    // the same value is a no-op (React bails on Object.is equality), so
+    // vertical scroll on the shared container doesn't churn renders here.
+    const [scrollLeft, setScrollLeft] = useState(0);
+
     // Sprint 343 — pendingByPath helper for DocumentTreePanel. Filters
     // the cell-keyed pendingEdits map down to the (rowIdx, colIdx)
     // entries that carry a `:dot.path` suffix.
@@ -478,18 +486,52 @@ const DataGridTable = forwardRef<DataGridTableHandle, DataGridTableProps>(
       },
     );
 
+    // Issue #1446 (F13) — per-row pending-edit slices with stable identity so
+    // the memoized `DataRow` only re-renders the row whose edit changed.
+    const pendingByRow = useRowPending(
+      pendingEdits,
+      pendingEditErrors,
+      pendingEditRowSnapshots,
+    );
+
+    // Issue #1446 (F6) — column window. Only virtualize wide grids so narrow
+    // grids (and their DOM-shape tests) render every column exactly as before.
+    const shouldVirtualizeColumns =
+      order.length > COLUMN_VIRTUALIZE_THRESHOLD && scrollContainerWidth > 0;
+    const colWindow = useMemo(() => {
+      if (!shouldVirtualizeColumns) return null;
+      return computeColumnWindow(
+        visualWidthsPx,
+        scrollLeft,
+        scrollContainerWidth,
+      );
+    }, [
+      shouldVirtualizeColumns,
+      visualWidthsPx,
+      scrollLeft,
+      scrollContainerWidth,
+    ]);
+
+    // Force-keep the editing column and the roving-focus column in the window
+    // so a horizontally-scrolled editor never unmounts (edit state / focus
+    // preserved) and keyboard nav to an off-window column still finds a cell.
+    const editVisualCol = editingCell ? order.indexOf(editingCell.col) : -1;
+    const focusVisualCol = roving.focusedCell.col;
+    const visibleColIdxs = useMemo(() => {
+      if (!colWindow) return null;
+      const set = new Set<number>();
+      for (let i = colWindow.start; i <= colWindow.end; i++) set.add(i);
+      if (editVisualCol >= 0) set.add(editVisualCol);
+      if (focusVisualCol >= 0 && focusVisualCol < order.length)
+        set.add(focusVisualCol);
+      return [...set].sort((a, b) => a - b);
+    }, [colWindow, editVisualCol, focusVisualCol, order.length]);
+
     const rowCtx: DataGridRowContext = useMemo(
       () => ({
         data,
-        page,
         order,
-        editingCell,
-        editValue,
-        pendingEdits,
-        pendingEditRowSnapshots,
-        pendingEditErrors,
-        pendingDeletedRowKeys,
-        selectedRowIds,
+        canEditRows,
         editorFocusRef,
         moveEditCursor,
         handleContextMenu,
@@ -501,23 +543,13 @@ const DataGridTable = forwardRef<DataGridTableHandle, DataGridTableProps>(
         onSaveCurrentEdit,
         onCancelEdit,
         onNavigateToFk,
-        expandedNested,
         onToggleNested: handleToggleNested,
-        canEditRows,
-        cellTabIndex: roving.cellTabIndex,
         onFocusCell: roving.syncFocus,
       }),
       [
         data,
-        page,
         order,
-        editingCell,
-        editValue,
-        pendingEdits,
-        pendingEditRowSnapshots,
-        pendingEditErrors,
-        pendingDeletedRowKeys,
-        selectedRowIds,
+        canEditRows,
         moveEditCursor,
         handleContextMenu,
         onSelectRow,
@@ -527,13 +559,26 @@ const DataGridTable = forwardRef<DataGridTableHandle, DataGridTableProps>(
         onSaveCurrentEdit,
         onCancelEdit,
         onNavigateToFk,
-        expandedNested,
         handleToggleNested,
-        canEditRows,
-        roving.cellTabIndex,
         roving.syncFocus,
       ],
     );
+
+    // Issue #1446 — per-row reactive props. Cheap primitives (plus a
+    // reference-stable pending slice) computed inline for each rendered row.
+    const focusRow = roving.focusedCell.row;
+    const focusCol = roving.focusedCell.col;
+    const rowReactiveProps = (rowIdx: number) => ({
+      editCol: editingCell?.row === rowIdx ? editingCell.col : null,
+      editValue: editingCell?.row === rowIdx ? editValue : null,
+      isSelected: selectedRowIds.has(rowIdx),
+      isDeleted: pendingDeletedRowKeys.has(`row-${page}-${rowIdx}`),
+      tabCol: focusRow === rowIdx ? focusCol : null,
+      expandedCol:
+        expandedNested?.rowIdx === rowIdx ? expandedNested.colIdx : null,
+      rowPending: pendingByRow.get(rowIdx),
+      visibleColIdxs,
+    });
 
     const colCount = order.length;
     const gridStyle = {
@@ -553,6 +598,7 @@ const DataGridTable = forwardRef<DataGridTableHandle, DataGridTableProps>(
         aria-colcount={colCount}
         style={gridStyle}
         onKeyDown={roving.onKeyDown}
+        onScroll={(e) => setScrollLeft(e.currentTarget.scrollLeft)}
       >
         <AsyncProgressOverlay
           visible={overlayVisible}
@@ -595,13 +641,9 @@ const DataGridTable = forwardRef<DataGridTableHandle, DataGridTableProps>(
                 key={`row-${page}-${virtualRow.index}`}
                 rowIdx={virtualRow.index}
                 ctx={rowCtx}
-                rowStyle={{
-                  position: "absolute",
-                  top: virtualRow.start,
-                  left: 0,
-                  right: 0,
-                  height: virtualRow.size,
-                }}
+                rowTop={virtualRow.start}
+                rowHeight={virtualRow.size}
+                {...rowReactiveProps(virtualRow.index)}
               />
             ))}
           </div>
@@ -617,7 +659,11 @@ const DataGridTable = forwardRef<DataGridTableHandle, DataGridTableProps>(
                 : undefined;
               return (
                 <Fragment key={`row-${page}-${rowIdx}`}>
-                  <DataRow rowIdx={rowIdx} ctx={rowCtx} />
+                  <DataRow
+                    rowIdx={rowIdx}
+                    ctx={rowCtx}
+                    {...rowReactiveProps(rowIdx)}
+                  />
                   {/*
                     Sprint 343 (2026-05-15) — inline JSON tree master/
                     detail row for jsonb / Postgres ARRAY cells. Same
@@ -743,7 +789,8 @@ const DataGridTable = forwardRef<DataGridTableHandle, DataGridTableProps>(
                   minWidth: "max-content",
                 }}
               >
-                {order.map((dIdx, visualIdx) => {
+                {(visibleColIdxs ?? order.map((_, i) => i)).map((visualIdx) => {
+                  const dIdx = order[visualIdx]!;
                   const cell = (newRow as unknown[])[dIdx];
                   // #1127 AC3 — pending row 의 roving index 는 data rows 뒤에
                   // 이어 붙는다 (rowCount = totalBodyRowCount). 셀에 data-grid-*
@@ -756,6 +803,11 @@ const DataGridTable = forwardRef<DataGridTableHandle, DataGridTableProps>(
                       aria-colindex={visualIdx + 1}
                       data-grid-row={pendingRowIdx}
                       data-grid-col={visualIdx}
+                      style={
+                        visibleColIdxs
+                          ? { gridColumn: visualIdx + 1 }
+                          : undefined
+                      }
                       tabIndex={roving.cellTabIndex(pendingRowIdx, visualIdx)}
                       onFocus={() => roving.syncFocus(pendingRowIdx, visualIdx)}
                       className="overflow-hidden border-r border-border px-3 py-1 text-xs italic text-muted-foreground whitespace-nowrap text-ellipsis focus-visible:outline-1 focus-visible:-outline-offset-1 focus-visible:outline-ring"

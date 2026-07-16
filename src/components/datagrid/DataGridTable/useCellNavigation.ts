@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useRef } from "react";
 import type { TableData } from "@/types/schema";
 import { editKey, cellToEditValue } from "../dataGridEditFsm";
 
@@ -53,6 +53,11 @@ export function useCellNavigation({
   onSaveCurrentEdit,
   onStartEdit,
 }: UseCellNavigationArgs): CellNavigation {
+  // Issue #1446 — read pendingEdits from a ref so `moveEditCursor` keeps a
+  // stable identity across edit commits. It's only invoked on a user Tab/
+  // Enter, which always wants the latest pending value — no staleness risk.
+  const pendingEditsRef = useRef(pendingEdits);
+  pendingEditsRef.current = pendingEdits;
   const moveEditCursor = useCallback(
     (
       currentRow: number,
@@ -97,7 +102,7 @@ export function useCellNavigation({
       const nextDataCol = order[nextVisualCol]!;
       const nextCell = (data.rows[nextRow] as unknown[])[nextDataCol];
       const editKeyStr = editKey(nextRow, nextDataCol);
-      const pendingValue = pendingEdits.get(editKeyStr);
+      const pendingValue = pendingEditsRef.current.get(editKeyStr);
       const startValue =
         pendingValue !== undefined ? pendingValue : cellToEditValue(nextCell);
 
@@ -105,7 +110,7 @@ export function useCellNavigation({
       // the next cell, so callers don't need to call onSaveCurrentEdit.
       onStartEdit(nextRow, nextDataCol, startValue);
     },
-    [data.rows, order, pendingEdits, onSaveCurrentEdit, onStartEdit],
+    [data.rows, order, onSaveCurrentEdit, onStartEdit],
   );
 
   return { moveEditCursor };
