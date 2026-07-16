@@ -389,7 +389,7 @@ async fn explain_mongo_find_inner(
     connection_id: &str,
     database: &str,
     collection: &str,
-    filter: bson::Document,
+    body: FindBody,
     verbosity: &str,
     // Issue #1269 — optional cooperative cancel id (see `explain_rdb_query`).
     // Cooperative only: `cancel_query(query_id)` drops the client-side await;
@@ -410,11 +410,11 @@ async fn explain_mongo_find_inner(
         let doc = active.as_document()?;
         match cancel_handle.as_ref().map(|(_, tok)| tok) {
             Some(token) => tokio::select! {
-                r = doc.explain_query(database, collection, filter, verbosity) => r,
+                r = doc.explain_query(database, collection, body, verbosity) => r,
                 _ = token.cancelled() => Err(AppError::Database("Operation cancelled".into())),
             },
             None => {
-                doc.explain_query(database, collection, filter, verbosity)
+                doc.explain_query(database, collection, body, verbosity)
                     .await
             }
         }
@@ -424,8 +424,10 @@ async fn explain_mongo_find_inner(
     result
 }
 
-/// Sprint 337 (U2 live wire) — Mongo `runCommand({explain: {find, filter},
-/// verbosity})`. Returns the raw explain response as
+/// Sprint 337 (U2 live wire) — Mongo `runCommand({explain: {find, filter,
+/// ...}, verbosity})`. Issue #1210 — `body` carries the same
+/// filter/sort/projection/skip/limit the real `find` executes so the plan
+/// matches actual execution. Returns the raw explain response as
 /// `serde_json::Value`.
 #[tauri::command]
 pub async fn explain_mongo_find(
@@ -433,7 +435,7 @@ pub async fn explain_mongo_find(
     connection_id: String,
     database: String,
     collection: String,
-    filter: Option<bson::Document>,
+    body: Option<FindBody>,
     verbosity: Option<String>,
     query_id: Option<String>,
 ) -> Result<serde_json::Value, AppError> {
@@ -442,7 +444,7 @@ pub async fn explain_mongo_find(
         &connection_id,
         &database,
         &collection,
-        filter.unwrap_or_default(),
+        body.unwrap_or_default(),
         verbosity.as_deref().unwrap_or("queryPlanner"),
         query_id.as_deref(),
     )
@@ -956,7 +958,7 @@ mod tests {
             "d",
             "db",
             "  ",
-            bson::Document::new(),
+            FindBody::default(),
             "queryPlanner",
             None,
         )
@@ -977,7 +979,7 @@ mod tests {
             "absent",
             "db",
             "c",
-            bson::Document::new(),
+            FindBody::default(),
             "queryPlanner",
             None,
         )
@@ -997,7 +999,7 @@ mod tests {
                 "rdb",
                 "db",
                 "c",
-                bson::Document::new(),
+                FindBody::default(),
                 "queryPlanner",
                 None
             )
@@ -1006,6 +1008,8 @@ mod tests {
         ));
     }
 
+    // Issue #1210 — the command must thread the full find body (not just the
+    // filter) to the adapter so the plan reflects sort/limit/projection.
     #[tokio::test]
     async fn explain_mongo_find_routes_to_trait_method_with_args() {
         use std::sync::atomic::{AtomicBool, Ordering};
@@ -1013,10 +1017,13 @@ mod tests {
         let called = Arc::new(AtomicBool::new(false));
         let called_for_closure = called.clone();
         let mut s = StubDocumentAdapter::default();
-        s.explain_query_fn = Some(Box::new(move |db, coll, _filter, verbosity| {
+        s.explain_query_fn = Some(Box::new(move |db, coll, body, verbosity| {
             assert_eq!(db, "mydb");
             assert_eq!(coll, "mycoll");
             assert_eq!(verbosity, "executionStats");
+            assert_eq!(body.filter, bson::doc! { "status": "active" });
+            assert_eq!(body.sort, Some(bson::doc! { "name": -1 }));
+            assert_eq!(body.limit, 10);
             called_for_closure.store(true, Ordering::SeqCst);
             Ok(serde_json::json!({ "ok": 1 }))
         }));
@@ -1026,7 +1033,12 @@ mod tests {
             "d",
             "mydb",
             "mycoll",
-            bson::Document::new(),
+            FindBody {
+                filter: bson::doc! { "status": "active" },
+                sort: Some(bson::doc! { "name": -1 }),
+                limit: 10,
+                ..Default::default()
+            },
             "executionStats",
             None,
         )

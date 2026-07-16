@@ -107,7 +107,7 @@ describe("ExplainViewer (Sprint 337 U2 live wire)", () => {
     expect(header).not.toHaveTextContent(/\bPG\b/);
   });
 
-  it("dispatches Mongo explain with the spec on paradigm=document", async () => {
+  it("dispatches Mongo explain with the full find body on paradigm=document", async () => {
     explainMongoMock.mockResolvedValueOnce({ ok: 1, winningPlan: {} });
     render(
       <ExplainViewer
@@ -116,7 +116,7 @@ describe("ExplainViewer (Sprint 337 U2 live wire)", () => {
         mongoSpec={{
           database: "mydb",
           collection: "mycoll",
-          filter: { x: 1 },
+          body: { filter: { x: 1 }, sort: { x: -1 }, limit: 5 },
           verbosity: "executionStats",
         }}
       />,
@@ -129,58 +129,13 @@ describe("ExplainViewer (Sprint 337 U2 live wire)", () => {
       {
         database: "mydb",
         collection: "mycoll",
-        filter: { x: 1 },
+        body: { filter: { x: 1 }, sort: { x: -1 }, limit: 5 },
         verbosity: "executionStats",
       },
       expect.stringMatching(/^explain-/),
     );
     expect(screen.queryByTestId("explain-plan-summary")).toBeNull();
     expect(screen.getByTestId("explain-plan")).toHaveTextContent("winningPlan");
-  });
-
-  // #1210 — Mongo explain sends filter only; when the query also sets
-  // sort/limit/skip/projection the plan diverges from the real execution, so
-  // the caller passes mongoHasIgnoredClauses to surface a non-silent hint.
-  it("shows the filter-only hint when mongoHasIgnoredClauses is set", async () => {
-    explainMongoMock.mockResolvedValueOnce({ ok: 1, winningPlan: {} });
-    render(
-      <ExplainViewer
-        connectionId="conn-m"
-        dbType="mongodb"
-        mongoSpec={{ database: "d", collection: "c", filter: { x: 1 } }}
-        mongoHasIgnoredClauses
-      />,
-    );
-    const hint = await screen.findByTestId("explain-filter-only-hint");
-    expect(hint).toHaveTextContent(/sort\/limit\/projection/);
-    expect(hint).toHaveAttribute("role", "status");
-  });
-
-  it("hides the filter-only hint when no ignored clauses are present", async () => {
-    explainMongoMock.mockResolvedValueOnce({ ok: 1, winningPlan: {} });
-    render(
-      <ExplainViewer
-        connectionId="conn-m"
-        dbType="mongodb"
-        mongoSpec={{ database: "d", collection: "c", filter: { x: 1 } }}
-      />,
-    );
-    await screen.findByTestId("explain-plan");
-    expect(screen.queryByTestId("explain-filter-only-hint")).toBeNull();
-  });
-
-  it("never shows the Mongo hint on an RDB paradigm even if the flag is set", async () => {
-    explainRdbMock.mockResolvedValueOnce({ ok: 1, plan: "custom" });
-    render(
-      <ExplainViewer
-        connectionId="conn-pg"
-        dbType="postgresql"
-        rdbSql="SELECT 1"
-        mongoHasIgnoredClauses
-      />,
-    );
-    await screen.findByTestId("explain-plan");
-    expect(screen.queryByTestId("explain-filter-only-hint")).toBeNull();
   });
 
   it("falls back to raw JSON for unknown RDB explain payloads", async () => {

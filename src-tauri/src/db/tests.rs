@@ -298,7 +298,7 @@ fn active_adapter_as_rdb_rejects_non_rdb_with_unsupported() {
             &'a self,
             _db: &'a str,
             _collection: &'a str,
-            _filter: bson::Document,
+            _body: FindBody,
             _verbosity: &'a str,
         ) -> BoxFuture<'a, Result<serde_json::Value, AppError>> {
             Box::pin(async { Ok(serde_json::Value::Null) })
@@ -970,7 +970,7 @@ impl DocumentAdapter for FakeCancellableDocument {
         &'a self,
         _db: &'a str,
         _collection: &'a str,
-        _filter: bson::Document,
+        _body: FindBody,
         _verbosity: &'a str,
     ) -> BoxFuture<'a, Result<serde_json::Value, AppError>> {
         Box::pin(async { Ok(serde_json::Value::Null) })

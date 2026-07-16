@@ -424,11 +424,11 @@ impl DocumentAdapter for MongoAdapter {
         &'a self,
         db: &'a str,
         collection: &'a str,
-        filter: bson::Document,
+        body: FindBody,
         verbosity: &'a str,
     ) -> BoxFuture<'a, Result<serde_json::Value, AppError>> {
         Box::pin(async move {
-            self.explain_query_impl(db, collection, filter, verbosity)
+            self.explain_query_impl(db, collection, body, verbosity)
                 .await
         })
     }

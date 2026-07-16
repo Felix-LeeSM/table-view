@@ -15,6 +15,8 @@ import {
 } from "@features/completion";
 import { parseMongoshExpression } from "@features/query";
 import type { ExplainMongoFindArgs } from "@/lib/api/explain";
+import type { FindBody } from "@/types/document";
+import { applyFindCursorChain, isRecord } from "./QueryTab/queryHelpers";
 import { toast } from "@lib/runtime/toast";
 import { open } from "@tauri-apps/plugin-dialog";
 import { readTextFileImport } from "@lib/tauri";
@@ -67,46 +69,32 @@ interface QueryTabProps {
   tab: QueryTab;
 }
 
-// #1041 — Mongo explain is backed by `runCommand({explain:{find,filter}})`,
-// so it only applies to a `db.<coll>.find(<filter>)` statement. Parse the
-// frozen mongosh text into the `{database, collection, filter}` spec the
-// ExplainViewer document branch expects; aggregate / write / admin
-// statements have no find spec and return `null`.
-interface MongoExplainDerivation {
-  readonly spec: ExplainMongoFindArgs;
-  // #1210 — true when sort/limit/skip (cursor chain) or projection (args[1])
-  // are set. The backend explain only receives the filter, so these clauses
-  // are absent from the plan and the ExplainViewer surfaces a hint.
-  readonly hasIgnoredClauses: boolean;
-}
-
+// #1041 — Mongo explain is backed by `runCommand({explain:{find,...}})`, so
+// it only applies to a `db.<coll>.find(<filter>, <projection>)` statement.
+// #1210 — the spec now carries the same find body (filter/projection + the
+// sort/limit/skip cursor chain) the real execution builds via
+// `applyFindCursorChain`, so the plan reflects actual execution instead of a
+// silently filter-only plan. aggregate / write / admin statements have no find
+// spec and return `null`.
 function deriveMongoExplainSpec(
   sql: string,
   database: string | undefined,
-): MongoExplainDerivation | null {
+): ExplainMongoFindArgs | null {
   const parsed = parseMongoshExpression(sql);
   if (parsed.kind !== "success" || parsed.method !== "find") return null;
-  const filter = parsed.args[0];
-  const projection = parsed.args[1];
-  const hasProjection =
-    projection !== null &&
-    typeof projection === "object" &&
-    !Array.isArray(projection) &&
-    Object.keys(projection).length > 0;
-  const hasCursorClause = parsed.cursorChain.some(
-    (step) =>
-      step.name === "sort" || step.name === "limit" || step.name === "skip",
-  );
+  const filterArg = parsed.args[0];
+  const projectionArg = parsed.args[1];
+  const body: FindBody = {};
+  if (isRecord(filterArg)) body.filter = filterArg;
+  if (isRecord(projectionArg)) body.projection = projectionArg;
+  // Same cursor chain the real find executes. A malformed cursor arg would
+  // also fail real execution, so fall back to the filter/projection body
+  // rather than block the plan.
+  const withCursor = applyFindCursorChain(body, parsed.cursorChain);
   return {
-    spec: {
-      database: database ?? "",
-      collection: parsed.collection,
-      filter:
-        filter !== null && typeof filter === "object" && !Array.isArray(filter)
-          ? (filter as Record<string, unknown>)
-          : {},
-    },
-    hasIgnoredClauses: hasProjection || hasCursorClause,
+    database: database ?? "",
+    collection: parsed.collection,
+    body: withCursor.ok ? withCursor.value : body,
   };
 }
 
@@ -613,8 +601,7 @@ export default function QueryTab({ tab }: QueryTabProps) {
           <ExplainViewer
             connectionId={tab.connectionId}
             dbType={connection.dbType}
-            mongoSpec={explainMongo.spec}
-            mongoHasIgnoredClauses={explainMongo.hasIgnoredClauses}
+            mongoSpec={explainMongo}
             onPlanSettled={handleExplainSettled}
           />
         ) : connection && explainSql && canExplainQuery && !isDocument ? (
