@@ -32,7 +32,6 @@ export const MAX_LINES_ALLOWLIST = [
   "src/features/connection/components/ConnectionItem.test.tsx",
   "src/components/datagrid/useDataGridEdit.mixed-batch.test.ts",
   "src/components/document/DocumentTreePanel.test.tsx",
-  "src/components/document/DocumentTreePanel.tsx",
   "src/components/layout/MainArea.test.tsx",
   "src/components/layout/TabBar.test.tsx",
   "src/components/query/QueryResultGrid.test.tsx",
