@@ -4,6 +4,7 @@ use duckdb::{params_from_iter, Connection};
 use tokio_util::sync::CancellationToken;
 
 use crate::db::raw_where::{validate_raw_where_clause, RawWhereDialect};
+use crate::db::traits::finalize_cancelled;
 use crate::error::AppError;
 use crate::models::{
     FilterCondition, FilterOperator, QueryColumn, QueryResult, QueryType, TableData,
@@ -49,10 +50,18 @@ impl DuckdbAdapter {
             return Ok(result);
         }
 
-        self.with_connection(move |conn| {
-            execute_query_uncancelled(conn, &query, query_type, start, row_cap)
-        })
-        .await
+        // Issue #1269 (gap #5) — run on a connection whose in-flight statement
+        // the cancel token can interrupt (`Connection::interrupt_handle`), the
+        // DuckDB analogue of the SQLite progress-handler cancel. A raced
+        // interrupt surfaces as an opaque INTERRUPT DB error, so converge it to
+        // the canonical "Query cancelled" whenever the token fired (mirrors
+        // sqlite/mysql/pg).
+        let result = self
+            .with_connection_cancellable(cancel_token, move |conn| {
+                execute_query_uncancelled(conn, &query, query_type, start, row_cap)
+            })
+            .await;
+        finalize_cancelled(result, cancel_token)
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -426,5 +435,122 @@ mod order_clause_tests {
     fn invalid_direction_token_skips_the_part() {
         let columns = vec![col("id")];
         assert_eq!(build_order_clause(Some("id sideways"), &columns), "");
+    }
+}
+
+#[cfg(test)]
+mod interrupt_tests {
+    use super::DuckdbAdapter;
+    use crate::db::row_cap::DEFAULT_ROW_CAP;
+    use crate::error::AppError;
+    use crate::models::{ConnectionConfig, DatabaseType};
+    use std::time::Duration;
+    use tokio_util::sync::CancellationToken;
+
+    fn duckdb_config(path: &str) -> ConnectionConfig {
+        ConnectionConfig {
+            id: "duckdb-query".to_string(),
+            name: "DuckDB query".to_string(),
+            db_type: DatabaseType::Duckdb,
+            host: String::new(),
+            port: 0,
+            user: String::new(),
+            password: String::new(),
+            database: path.to_string(),
+            read_only: false,
+            group_id: None,
+            color: None,
+            connection_timeout: None,
+            keep_alive_interval: None,
+            environment: None,
+            auth_source: None,
+            replica_set: None,
+            tls_enabled: None,
+            trust_server_certificate: None,
+        }
+    }
+
+    async fn connected_adapter() -> (tempfile::TempDir, DuckdbAdapter) {
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("app.duckdb");
+        // Seed via a direct connection so the file exists for `connect_file`;
+        // it is dropped (closed) before the adapter opens its own connections.
+        {
+            let conn = duckdb::Connection::open(&db_path).unwrap();
+            conn.execute_batch(
+                "CREATE TABLE users(id INTEGER, name VARCHAR);
+                 INSERT INTO users VALUES (1, 'Ada'), (2, 'Bob'), (3, 'Ann');",
+            )
+            .unwrap();
+        }
+        let adapter = DuckdbAdapter::new();
+        adapter
+            .connect_file(&duckdb_config(db_path.to_str().unwrap()))
+            .await
+            .unwrap();
+        (dir, adapter)
+    }
+
+    // Issue #1269 (gap #5) — a running DuckDB statement must abort when the
+    // cancel token fires. The cross join runs for many seconds if never
+    // interrupted (same shape as the duckdb crate's own `test_interrupt`), so a
+    // ~300ms cancel returning well within the generous 20s bound proves the
+    // interrupt reached the in-flight statement. Before this wiring the token
+    // was only pre-checked and the scan ran to completion.
+    #[tokio::test]
+    async fn cancel_interrupts_running_query_1269() {
+        let (_dir, adapter) = connected_adapter().await;
+        let token = CancellationToken::new();
+        let canceller = {
+            let token = token.clone();
+            tokio::spawn(async move {
+                tokio::time::sleep(Duration::from_millis(300)).await;
+                token.cancel();
+            })
+        };
+
+        let long = "SELECT count(*) FROM range(10000000) t1, range(1000000) t2";
+        let result = tokio::time::timeout(
+            Duration::from_secs(20),
+            adapter.execute_query(long, Some(&token), DEFAULT_ROW_CAP),
+        )
+        .await
+        .expect("interrupt must abort the query far before its natural runtime");
+        canceller.await.unwrap();
+
+        match result {
+            Err(AppError::Database(message)) => assert!(
+                message.contains("cancelled"),
+                "raced interrupt must converge to the canonical message, got: {message}"
+            ),
+            other => panic!("expected cancellation error, got: {other:?}"),
+        }
+
+        // Each query opens its own connection, so the adapter must still serve a
+        // follow-up after an interrupt — a stale/leaked interrupt would break it.
+        let reuse = adapter
+            .execute_query("SELECT count(*) FROM users", None, DEFAULT_ROW_CAP)
+            .await;
+        assert!(
+            reuse.is_ok(),
+            "adapter must stay usable after interrupt, got: {reuse:?}"
+        );
+    }
+
+    // A live token that never fires must not disturb a normal run.
+    #[tokio::test]
+    async fn uncancelled_token_runs_query_to_completion_1269() {
+        let (_dir, adapter) = connected_adapter().await;
+        let token = CancellationToken::new();
+        let result = adapter
+            .execute_query(
+                "SELECT id FROM users ORDER BY id",
+                Some(&token),
+                DEFAULT_ROW_CAP,
+            )
+            .await
+            .expect("a live-but-unfired token must not block execution");
+        assert_eq!(result.rows.len(), 3);
+        assert_eq!(result.total_count, 3);
     }
 }

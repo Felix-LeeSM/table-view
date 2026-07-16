@@ -4,8 +4,9 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
 
-use duckdb::{params, AccessMode, Config, Connection};
+use duckdb::{params, AccessMode, Config, Connection, InterruptHandle};
 use tokio::sync::Mutex;
+use tokio_util::sync::CancellationToken;
 
 use crate::error::AppError;
 use crate::models::{
@@ -277,6 +278,57 @@ impl DuckdbAdapter {
             work(&conn)
         })
         .await
+    }
+
+    /// Issue #1269 (gap #5) — run `work` on a fresh connection, interrupting the
+    /// in-flight statement when `cancel_token` fires. DuckDB is in-process, so
+    /// `execute_query` blocks a worker thread; without this the cooperative
+    /// token only pre-checks and a long scan runs to completion (the SQL-tab
+    /// Cancel button was inert). `Connection::interrupt_handle` returns a
+    /// `Send + Sync` handle whose `interrupt()` raises INTERRUPT on the
+    /// statement running on that exact connection — the DuckDB analogue of the
+    /// SQLite progress-handler interrupt (PR #1514). The handle is handed to a
+    /// watcher the moment the connection opens; `interrupt()` after the
+    /// connection drops is a documented noop (the handle nulls its pointer under
+    /// its own mutex on close), so the non-cancel path just aborts the watcher
+    /// once the work returns. A per-call token pins to this call's connection,
+    /// so a stale token can never abort a later query.
+    pub(super) async fn with_connection_cancellable<T, F>(
+        &self,
+        cancel_token: Option<&CancellationToken>,
+        work: F,
+    ) -> Result<T, AppError>
+    where
+        T: Send + 'static,
+        F: FnOnce(&Connection) -> Result<T, AppError> + Send + 'static,
+    {
+        let Some(token) = cancel_token else {
+            return self.with_connection(work).await;
+        };
+        let settings = self.active_settings().await?;
+        let token = token.clone();
+        let (handle_tx, handle_rx) = tokio::sync::oneshot::channel::<Arc<InterruptHandle>>();
+
+        let join = tokio::task::spawn_blocking(move || {
+            let conn = open_connection(&settings)?;
+            // Hand the interrupt handle to the watcher before the blocking run.
+            // A dropped receiver (watcher already gone) just means uninterruptible.
+            let _ = handle_tx.send(conn.interrupt_handle());
+            work(&conn)
+        });
+
+        let watcher = tokio::spawn(async move {
+            if let Ok(handle) = handle_rx.await {
+                token.cancelled().await;
+                handle.interrupt();
+            }
+        });
+
+        let result = join
+            .await
+            .map_err(|e| AppError::Database(format!("DuckDB worker failed: {e}")))?;
+        watcher.abort();
+        result
     }
 
     pub async fn list_namespaces(&self) -> Result<Vec<NamespaceInfo>, AppError> {
