@@ -110,6 +110,35 @@ describe("OperationsPanel (#1054)", () => {
     ).toBeInTheDocument();
   });
 
+  it("shows the users tab for a connected postgresql (operations.users gate — #1462)", () => {
+    seed([makeConnection("conn-pg")], { "conn-pg": CONNECTED }, "conn-pg");
+    render(<OperationsPanel visible onClose={() => {}} />);
+
+    expect(screen.getByTestId("operations-panel")).toBeInTheDocument();
+    expect(screen.getByTestId("operations-tab-users")).toBeInTheDocument();
+  });
+
+  it("hides the users tab for an ops-capable connection without operations.users (mongodb — #1462/#1046)", () => {
+    // MongoDB declares activity/serverInfo/slowQueries but NOT operations.users,
+    // so the flyout still opens yet the Users tab is hidden (#1046 convention).
+    seed(
+      [
+        makeConnection("conn-mongo", {
+          dbType: "mongodb",
+          paradigm: "document",
+        }),
+      ],
+      { "conn-mongo": CONNECTED },
+      "conn-mongo",
+    );
+    render(<OperationsPanel visible onClose={() => {}} />);
+
+    expect(screen.getByTestId("operations-panel")).toBeInTheDocument();
+    expect(
+      screen.queryByTestId("operations-tab-users"),
+    ).not.toBeInTheDocument();
+  });
+
   it("mounts the Server Activity panel on the Activity tab and shows the driving connection name", () => {
     seed(
       [makeConnection("conn-pg", { name: "Analytics PG" })],
