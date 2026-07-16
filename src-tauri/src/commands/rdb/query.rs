@@ -536,6 +536,17 @@ pub async fn execute_query_dry_run(
     query_id: String,
     expected_database: Option<String>,
 ) -> Result<Vec<QueryResult>, AppError> {
+    // Issue #1529 — read-only gate (dry-run). A dry-run is BEGIN → execute →
+    // ROLLBACK: the write statement ACTUALLY runs on the server before the
+    // rollback, and on MySQL/MariaDB/Oracle a DDL statement implicit-commits so
+    // the rollback is a no-op and the write persists. So a write dry-run on a
+    // read-only connection must be rejected, not just the eventual commit. The
+    // frontend confirm flow (useDryRun) auto-fires this for warn/danger tiers;
+    // the rejection surfaces there as the batch/commit path already does.
+    if rdb_batch_is_write(state.inner(), &connection_id, &statements).await {
+        let pool = crate::commands::sqlite_pool::get_or_init_pool().await?;
+        crate::commands::safe_mode::enforce_read_only(&pool, &connection_id, true).await?;
+    }
     execute_query_dry_run_inner(
         state.inner(),
         &connection_id,
@@ -955,6 +966,33 @@ mod tests {
             )
             .await
         );
+    }
+
+    // Issue #1529 — the dry-run gate. `execute_query_dry_run` classifies its
+    // batch with `rdb_batch_is_write` and, on a write, calls
+    // `safe_mode::enforce_read_only` BEFORE the BEGIN/execute/ROLLBACK — a
+    // read-only dry-run of an implicit-commit DDL (CREATE/DROP on MySQL/Oracle,
+    // where the ROLLBACK cannot undo the write) is rejected up front. This locks
+    // the classification link; `enforce_read_only`'s rejection is covered by
+    // `commands::safe_mode::tests::read_only_connection_blocks_a_write`.
+    #[tokio::test]
+    async fn dry_run_write_classification_covers_implicit_commit_ddl() {
+        use crate::commands::test_util::state_with;
+        use crate::db::testing::StubRdbAdapter;
+        use crate::db::ActiveAdapter;
+        let state = state_with("c", ActiveAdapter::Rdb(Box::new(StubRdbAdapter::default()))).await;
+        for stmt in [
+            "CREATE TABLE t (id int)",
+            "DROP TABLE t",
+            "INSERT INTO t VALUES (1)",
+        ] {
+            assert!(
+                rdb_batch_is_write(&state, "c", &[stmt.to_string()]).await,
+                "dry-run must gate a write statement: {stmt}"
+            );
+        }
+        // A read-only dry-run of a pure read is still allowed.
+        assert!(!rdb_batch_is_write(&state, "c", &["SELECT * FROM t".to_string()]).await);
     }
 
     #[test]

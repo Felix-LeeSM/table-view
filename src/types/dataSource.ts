@@ -250,6 +250,10 @@ export const UNSUPPORTED_CAPABILITIES = capabilities();
 export const ORACLE_CAPABILITIES = capabilities({
   connection: {
     test: true,
+    // Issue #1529 — the backend read-only gate is engine-agnostic, so every
+    // server RDB that can write exposes the toggle (same protection = same
+    // control). Prevents a stuck read-only connection with no UI to clear it.
+    readOnly: true,
   },
   query: {
     query: true,
@@ -313,6 +317,11 @@ export const MYSQL_FAMILY_CAPABILITIES = capabilities({
   connection: {
     test: true,
     switchDatabase: true,
+    // Issue #1529 — see ORACLE_CAPABILITIES: engine-agnostic backend gate.
+    // NOTE: MySQL/MariaDB implicit-commit DDL means a dry-run cannot roll a
+    // schema write back, so the read-only gate (incl. dry-run) is the real
+    // protection here.
+    readOnly: true,
   },
   query: {
     query: true,
@@ -419,6 +428,8 @@ export const DUCKDB_CAPABILITIES = capabilities({
 export const MSSQL_CAPABILITIES = capabilities({
   connection: {
     test: true,
+    // Issue #1529 — see ORACLE_CAPABILITIES: engine-agnostic backend gate.
+    readOnly: true,
   },
   query: {
     query: true,

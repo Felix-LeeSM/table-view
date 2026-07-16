@@ -192,10 +192,15 @@ fn leading_keyword_is_write(stmt: &str, dialect: SqlDialect) -> bool {
     let normalized = strip_comments_collapse_opts(stmt, dialect);
     let upper = normalized.to_uppercase();
     let upper = upper.trim_start();
+    // Superset of the danger classifier's keyword fallback (REPLACE / RESTORE /
+    // TRUNCATE / DROP / DELETE / UPDATE): read-only blocks ALL writes, not just
+    // the destructive tier, so it also lists INSERT / CREATE / MERGE / GRANT /
+    // CALL / … . Keep RESTORE in sync with the danger set (safety.rs keyword
+    // fallback) so a SQL Server database overwrite is not read as a read.
     const WRITE_KEYWORDS: &[&str] = &[
-        "INSERT", "UPDATE", "DELETE", "DROP", "CREATE", "ALTER", "TRUNCATE", "REPLACE", "MERGE",
-        "UPSERT", "RENAME", "GRANT", "REVOKE", "COMMENT", "CALL", "EXEC", "EXECUTE", "REFRESH",
-        "VACUUM", "REINDEX", "CLUSTER", "ANALYZE", "LOAD", "IMPORT", "COPY",
+        "INSERT", "UPDATE", "DELETE", "DROP", "CREATE", "ALTER", "TRUNCATE", "REPLACE", "RESTORE",
+        "MERGE", "UPSERT", "RENAME", "GRANT", "REVOKE", "COMMENT", "CALL", "EXEC", "EXECUTE",
+        "REFRESH", "VACUUM", "REINDEX", "CLUSTER", "ANALYZE", "LOAD", "IMPORT", "COPY",
     ];
     WRITE_KEYWORDS
         .iter()
@@ -1374,6 +1379,13 @@ mod tests {
             "MERGE INTO t USING s ON t.id = s.id WHEN MATCHED THEN UPDATE SET x = 1",
             "REPLACE INTO users VALUES (1)",
             "COMMENT ON TABLE t IS 'x'",
+            // AST variants that reach the `_ => false` catch-all.
+            "CREATE VIEW v AS SELECT 1",
+            "CALL do_writes()",
+            "COPY t TO '/tmp/out.csv'",
+            // Keyword fallback — RESTORE parses as an error and must stay in
+            // sync with the danger classifier's keyword set.
+            "RESTORE DATABASE shop FROM DISK = 'x.bak'",
         ] {
             assert!(
                 !is_read_only_safe_with_dialect(sql, SqlDialect::Other),
@@ -1430,6 +1442,9 @@ mod tests {
             "ROLLBACK",
             "START TRANSACTION",
             "SAVEPOINT sp1",
+            // `USE db` (MySQL) is session navigation, not a write — the grammar
+            // slice rejects it and it leads with no write verb, so it passes.
+            "USE analytics",
             // A vendor SELECT shape the grammar slice rejects still leads with
             // a read verb, so it stays allowed.
             "SELECT ';DROP TABLE users' AS note",
