@@ -125,7 +125,8 @@ R2 (전면 자동 derive) 는 sprint-386 의 deferred work. 본 단계에서는 
   `memory/product`, `memory/engineering`, `memory/workflow`, `memory/runbook` 에
   반영하고, 이력 보존 가치가 있을 때만 archive 에 기록한다.
 - ADR 본문 동결 — 수정 금지. 메타 필드 (`status`, `superseded_by`) 만 갱신.
-- auto-memory 와 중복 저장 금지 — repo 가 source of truth.
+- auto-memory (Claude Code 사용자별 저장소 `~/.claude/projects/<project>/memory/`) 와
+  중복 저장 금지 — repo 가 source of truth.
 
 ## 관련
 
