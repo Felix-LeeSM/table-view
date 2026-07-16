@@ -230,20 +230,30 @@ impl RdbAdapter for DuckdbAdapter {
 
     fn get_table_indexes<'a>(
         &'a self,
-        _namespace: &'a str,
-        _table: &'a str,
-        _cancel: Option<&'a tokio_util::sync::CancellationToken>,
+        namespace: &'a str,
+        table: &'a str,
+        cancel: Option<&'a tokio_util::sync::CancellationToken>,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<IndexInfo>, AppError>> + Send + 'a>> {
-        Box::pin(async { Ok(Vec::new()) })
+        Box::pin(async move {
+            if cancel.is_some_and(tokio_util::sync::CancellationToken::is_cancelled) {
+                return Err(AppError::Database("Operation cancelled".into()));
+            }
+            DuckdbAdapter::get_table_indexes(self, namespace, table).await
+        })
     }
 
     fn get_table_constraints<'a>(
         &'a self,
-        _namespace: &'a str,
-        _table: &'a str,
-        _cancel: Option<&'a tokio_util::sync::CancellationToken>,
+        namespace: &'a str,
+        table: &'a str,
+        cancel: Option<&'a tokio_util::sync::CancellationToken>,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<ConstraintInfo>, AppError>> + Send + 'a>> {
-        Box::pin(async { Ok(Vec::new()) })
+        Box::pin(async move {
+            if cancel.is_some_and(tokio_util::sync::CancellationToken::is_cancelled) {
+                return Err(AppError::Database("Operation cancelled".into()));
+            }
+            DuckdbAdapter::get_table_constraints(self, namespace, table).await
+        })
     }
 
     fn list_views<'a>(
@@ -497,5 +507,95 @@ mod tests {
         let (_dir, adapter) = connected_fixture(false).await;
         let result = adapter.cancel_query(1).await;
         assert!(matches!(result, Err(AppError::Unsupported(_))));
+    }
+
+    // Issue #1070 — before this fix, `get_table_indexes`/`get_table_constraints`
+    // were silent `Ok(vec![])` stubs, so a DuckDB table with real indexes and
+    // constraints rendered as "none" in Structure (no error to tip the user off).
+    // This seeds explicit indexes + PK/UNIQUE/FK/CHECK and asserts they surface.
+    async fn introspection_fixture() -> (TempDir, DuckdbAdapter) {
+        let dir = TempDir::new().unwrap();
+        let db_path = dir.path().join("introspection.duckdb");
+        {
+            let conn = duckdb::Connection::open(&db_path).unwrap();
+            conn.execute_batch(
+                "CREATE SCHEMA app;
+                 CREATE TABLE app.users (
+                     id INTEGER PRIMARY KEY,
+                     email VARCHAR UNIQUE NOT NULL,
+                     age INTEGER CHECK (age >= 0)
+                 );
+                 CREATE TABLE app.orders (
+                     id INTEGER PRIMARY KEY,
+                     user_id INTEGER NOT NULL,
+                     FOREIGN KEY (user_id) REFERENCES app.users(id)
+                 );
+                 CREATE INDEX idx_orders_user ON app.orders(user_id);",
+            )
+            .unwrap();
+        }
+        let adapter = DuckdbAdapter::new();
+        adapter
+            .connect(&duckdb_config(db_path.to_str().unwrap(), false))
+            .await
+            .unwrap();
+        (dir, adapter)
+    }
+
+    #[tokio::test]
+    async fn duckdb_get_table_indexes_returns_real_indexes_1070() {
+        let (_dir, adapter) = introspection_fixture().await;
+
+        let indexes =
+            <DuckdbAdapter as RdbAdapter>::get_table_indexes(&adapter, "app", "orders", None)
+                .await
+                .unwrap();
+
+        // The explicit CREATE INDEX must surface (stub returned []); PK-backed
+        // indexes stay out of duckdb_indexes() and belong to constraints.
+        let idx = indexes
+            .iter()
+            .find(|i| i.name == "idx_orders_user")
+            .expect("explicit index must be listed");
+        assert_eq!(idx.columns, vec!["user_id".to_string()]);
+        assert!(!idx.is_primary);
+        assert!(!idx.is_unique);
+        assert_eq!(idx.index_type, "ART");
+    }
+
+    #[tokio::test]
+    async fn duckdb_get_table_constraints_maps_pk_unique_check_fk_1070() {
+        let (_dir, adapter) = introspection_fixture().await;
+
+        let users =
+            <DuckdbAdapter as RdbAdapter>::get_table_constraints(&adapter, "app", "users", None)
+                .await
+                .unwrap();
+        // NOT NULL is a column property and must not leak in as a constraint row.
+        assert!(
+            users.iter().all(|c| c.constraint_type != "NOT NULL"),
+            "NOT NULL must be filtered: {users:?}"
+        );
+        let types: Vec<&str> = users.iter().map(|c| c.constraint_type.as_str()).collect();
+        assert!(types.contains(&"PRIMARY KEY"), "{users:?}");
+        assert!(types.contains(&"UNIQUE"), "{users:?}");
+        assert!(types.contains(&"CHECK"), "{users:?}");
+        let pk = users
+            .iter()
+            .find(|c| c.constraint_type == "PRIMARY KEY")
+            .unwrap();
+        assert_eq!(pk.columns, vec!["id".to_string()]);
+
+        let orders =
+            <DuckdbAdapter as RdbAdapter>::get_table_constraints(&adapter, "app", "orders", None)
+                .await
+                .unwrap();
+        let fk = orders
+            .iter()
+            .find(|c| c.constraint_type == "FOREIGN KEY")
+            .expect("FK must surface with its reference");
+        assert_eq!(fk.columns, vec!["user_id".to_string()]);
+        assert_eq!(fk.reference_table.as_deref(), Some("users"));
+        assert_eq!(fk.reference_columns, Some(vec!["id".to_string()]));
     }
 }
