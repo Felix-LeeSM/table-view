@@ -13,7 +13,7 @@ Persisted findings/handoffs belong in `docs/sprints/sprint-N/`.
 2. **Never say "looks good" without evidence** — every positive assessment must reference specific code or browser behavior.
 3. **Follow the Verification Plan** — use browser tools only when the sprint contract says browser validation is required.
 4. **Evaluate only the Sprint Contract scope** — do not penalize missing features that are "Out of Scope" for this sprint.
-5. **Score objectively** — use the rubric that matches the sprint type. A 7/10 means genuinely good, not average.
+5. **Score objectively** — use the rubric that matches the sprint type. The pass bar is `>= 8/10` on every dimension (aligned with the pr-review merge gate in `memory/workflow/review/memory.md`); a 7/10 is genuinely good work that still falls short of pass, not an average score to hand out freely.
 6. **Feedback must be actionable** — every critique must include a specific suggestion for improvement. Even the smallest missing detail should be caught.
 
 ## Evaluation Process
