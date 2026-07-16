@@ -145,6 +145,11 @@ export const en = {
     typeExactKey: "type exact key",
     applying: "Applying",
     confirmLabel: "Confirm {{label}}",
+    note: {
+      lastEntryGc: "This removes the last entry, so Redis deletes the key.",
+      lremFirstMatch:
+        "LREM removes the first matching value from the head; a duplicated value can change which element goes.",
+    },
     error: {
       fieldRequired: "{{field}} is required.",
       expireNotPositive: "Expire seconds must be a positive integer.",
@@ -193,6 +198,9 @@ export const en = {
     colIndex: "Index",
     colMember: "Member",
     colScore: "Score",
+    colActions: "Actions",
+    editEntry: "Edit {{label}}",
+    deleteEntry: "Delete {{label}}",
     noEntries: "No entries.",
     truncated: "Showing first {{shown}} of {{total}} entries",
   },
@@ -402,6 +410,11 @@ export const ko = {
     typeExactKey: "정확한 키 입력",
     applying: "적용 중",
     confirmLabel: "{{label}} 확인",
+    note: {
+      lastEntryGc: "마지막 항목을 제거하므로 Redis가 키를 삭제합니다.",
+      lremFirstMatch:
+        "LREM은 머리부터 일치하는 첫 값을 제거합니다. 값이 중복되면 제거 대상이 달라질 수 있습니다.",
+    },
     error: {
       fieldRequired: "{{field}}은(는) 필수입니다.",
       expireNotPositive: "만료 시간은 양의 정수여야 합니다.",
@@ -451,6 +464,9 @@ export const ko = {
     colIndex: "인덱스",
     colMember: "멤버",
     colScore: "점수",
+    colActions: "작업",
+    editEntry: "{{label}} 편집",
+    deleteEntry: "{{label}} 삭제",
     noEntries: "항목이 없습니다.",
     truncated: "전체 {{total}}개 중 처음 {{shown}}개 표시",
   },
