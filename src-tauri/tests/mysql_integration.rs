@@ -4489,19 +4489,63 @@ async fn test_mysql_server_info_reports_version_and_uptime_1073() {
 #[tokio::test]
 #[serial_test::serial]
 async fn test_mysql_list_server_activity_excludes_self_1073() {
-    let adapter = match common::setup_mysql_adapter().await {
-        Some(a) => a,
+    let config = match common::mysql_test_config().await {
+        Some(c) => c,
         None => return,
     };
+    let adapter = MysqlAdapter::new();
+    adapter
+        .connect_pool(&config)
+        .await
+        .expect("connect mysql adapter");
 
-    // The querying connection is filtered by CONNECTION_ID(); every returned
-    // row is therefore some *other* backend session. We cannot assert a fixed
-    // count (pools/other clients vary), only that the query decodes cleanly
-    // (ID CAST, DATE_FORMAT) and yields well-formed rows.
+    // The querying connection is filtered by CONNECTION_ID(), so without a
+    // *second* live session the result is empty and the field asserts below run
+    // zero times (a vacuous pass — PR #1536 review). Open a background session
+    // running SLEEP so at least one row is guaranteed, then assert non-empty
+    // FIRST so the decode path (ID CAST, INFO -> query, DATE_FORMAT ->
+    // started_at) is actually exercised on real values.
+    let bg_pool = MySqlPoolOptions::new()
+        .max_connections(1)
+        .acquire_timeout(Duration::from_secs(5))
+        .connect_with(
+            MySqlConnectOptions::new()
+                .host(&config.host)
+                .port(config.port)
+                .username(&config.user)
+                .password(&config.password)
+                .database(&config.database),
+        )
+        .await
+        .expect("background session pool");
+    let bg = bg_pool.clone();
+    let sleeper = tokio::spawn(async move {
+        // Cancelled on abort below; the error is expected and ignored.
+        let _ = sqlx::query("SELECT SLEEP(3)").execute(&bg).await;
+    });
+    // Give the SLEEP statement time to register in the processlist.
+    sleep(Duration::from_millis(300)).await;
+
     let rows = adapter
         .list_server_activity()
         .await
         .expect("list_server_activity should succeed");
+
+    assert!(
+        !rows.is_empty(),
+        "the background SLEEP session must surface at least one row"
+    );
+    assert!(
+        rows.iter().any(|r| r
+            .query
+            .as_deref()
+            .is_some_and(|q| q.to_uppercase().contains("SLEEP"))),
+        "the SLEEP statement text must decode through the INFO column"
+    );
+    assert!(
+        rows.iter().any(|r| r.started_at.is_some()),
+        "DATE_FORMAT(started_at) must decode to a non-null ISO string"
+    );
     for row in &rows {
         assert!(row.id > 0, "processlist id must be a positive integer");
         assert!(
@@ -4510,6 +4554,9 @@ async fn test_mysql_list_server_activity_excludes_self_1073() {
         );
     }
 
+    // Tear down the background session so it cannot pollute a later test.
+    sleeper.abort();
+    bg_pool.close().await;
     adapter.disconnect_pool().await.ok();
 }
 
