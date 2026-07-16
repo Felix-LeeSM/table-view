@@ -123,7 +123,7 @@ export interface StatementAnalysisOptions {
 }
 
 import { parseSqlPreloaded, type SqlParseResult } from "./sqlAst";
-import { scanDollarQuoteEnd } from "./sqlTokenize";
+import { scanDollarQuoteEnd, skipQuotedLiteral } from "./sqlTokenize";
 import { splitSqlStatements } from "./sqlUtils";
 
 const SEVERITY_RANK: Record<Severity, number> = {
@@ -450,13 +450,14 @@ function stripComments(sql: string, dialect?: Dialect): string {
   const hashComments = dialect === "mysql";
   const backslashEscapes = dialect === "mysql";
   const nestedBlockComments = dialect === "postgresql";
+  const oracleQuotes = dialect === "oracle";
   let out = "";
   let i = 0;
   const n = sql.length;
   while (i < n) {
     const ch = sql[i];
     if (ch === "'" || ch === '"' || ch === "`") {
-      const end = skipQuotedLiteral(sql, i, ch, backslashEscapes);
+      const end = skipQuotedLiteral(sql, i, ch, backslashEscapes, oracleQuotes);
       out += sql.slice(i, end);
       i = end;
       continue;
@@ -533,13 +534,17 @@ function isMssqlSafetyContext(options?: StatementAnalysisOptions): boolean {
  * `backslashEscapes` mirrors `stripComments` (MySQL/MariaDB, review #1473 N1)
  * so both scanners agree on literal boundaries.
  */
-function hasOuterWhere(stripped: string, backslashEscapes: boolean): boolean {
+function hasOuterWhere(
+  stripped: string,
+  backslashEscapes: boolean,
+  oracleQuotes: boolean,
+): boolean {
   let i = 0;
   const n = stripped.length;
   while (i < n) {
     const ch = stripped[i];
     if (ch === "'" || ch === '"' || ch === "`") {
-      i = skipQuotedLiteral(stripped, i, ch, backslashEscapes);
+      i = skipQuotedLiteral(stripped, i, ch, backslashEscapes, oracleQuotes);
       continue;
     }
     if (ch === "$") {
@@ -595,7 +600,12 @@ function analyzeDmlCte(
     const m = asRe.exec(upper);
     if (m === null) break;
     const openIdx = asRe.lastIndex - 1; // index of the `(`
-    const body = extractBalanced(upper, openIdx, options?.dialect === "mysql");
+    const body = extractBalanced(
+      upper,
+      openIdx,
+      options?.dialect === "mysql",
+      options?.dialect === "oracle",
+    );
     if (body == null) break;
     // `body` includes surrounding parens; strip them and re-analyse. The
     // inner *severity* flows through; `worstAnalysis` keeps the dominant
@@ -621,6 +631,7 @@ function extractBalanced(
   s: string,
   idx: number,
   backslashEscapes = false,
+  oracleQuotes = false,
 ): string | null {
   if (s[idx] !== "(") return null;
   let depth = 0;
@@ -628,7 +639,7 @@ function extractBalanced(
   while (i < s.length) {
     const ch = s[i];
     if (ch === "'" || ch === '"' || ch === "`") {
-      i = skipQuotedLiteral(s, i, ch, backslashEscapes);
+      i = skipQuotedLiteral(s, i, ch, backslashEscapes, oracleQuotes);
       continue;
     }
     if (ch === "$") {
@@ -646,43 +657,6 @@ function extractBalanced(
     i++;
   }
   return null;
-}
-
-/**
- * Skip a quoted literal opened at `start` (`q` ∈ `'` `"` `` ` ``), returning the
- * index just past the closing quote. `'` and `` ` `` treat a doubled quote as
- * an escape; `"` does not (mirrors `splitSqlStatements`). Unterminated → EOF.
- *
- * Review #1473 N1 — `backslashEscapes` (MySQL/MariaDB): `\<any>` inside a
- * `'` / `"` literal is an escape sequence, so `'a\' WHERE …'` stays ONE
- * literal instead of ending at the escaped quote (a backslash-unaware scan
- * exposed the quoted WHERE and degraded an unbounded UPDATE to warn).
- * Backtick identifiers never use backslash escapes (doubling only).
- */
-function skipQuotedLiteral(
-  s: string,
-  start: number,
-  q: string,
-  backslashEscapes = false,
-): number {
-  const escapesByDoubling = q === "'" || q === "`";
-  const backslash = backslashEscapes && q !== "`";
-  let i = start + 1;
-  while (i < s.length) {
-    if (backslash && s[i] === "\\") {
-      i += 2;
-      continue;
-    }
-    if (s[i] === q) {
-      if (escapesByDoubling && s[i + 1] === q) {
-        i += 2;
-        continue;
-      }
-      return i + 1;
-    }
-    i++;
-  }
-  return Math.min(i, s.length);
 }
 
 /**
@@ -737,7 +711,7 @@ export function analyzeStatement(
   // batch is split with the literal/comment-aware splitter and each statement
   // is re-analyzed; the worst severity wins. Single-statement input (length
   // <= 1) skips this and takes the fast path below unchanged.
-  const parts = splitSqlStatements(sql);
+  const parts = splitSqlStatements(sql, options?.dialect === "oracle");
   if (parts.length > 1) {
     return worstAnalysis(parts.map((part) => analyzeStatement(part, options)));
   }
@@ -808,7 +782,13 @@ export function analyzeStatement(
   }
 
   if (/^DELETE\s+FROM\b/.test(upper)) {
-    if (!hasOuterWhere(upper, options?.dialect === "mysql")) {
+    if (
+      !hasOuterWhere(
+        upper,
+        options?.dialect === "mysql",
+        options?.dialect === "oracle",
+      )
+    ) {
       return {
         kind: "dml-delete",
         severity: "danger",
@@ -825,7 +805,13 @@ export function analyzeStatement(
   }
 
   if (/^UPDATE\s+\S/.test(upper)) {
-    if (!hasOuterWhere(upper, options?.dialect === "mysql")) {
+    if (
+      !hasOuterWhere(
+        upper,
+        options?.dialect === "mysql",
+        options?.dialect === "oracle",
+      )
+    ) {
       return {
         kind: "dml-update",
         severity: "danger",

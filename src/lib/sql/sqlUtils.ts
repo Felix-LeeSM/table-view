@@ -1,12 +1,21 @@
-import { scanDollarQuoteEnd } from "./sqlTokenize";
+import { scanDollarQuoteEnd, scanOracleQQuoteEnd } from "./sqlTokenize";
 
 /**
  * Splits a SQL string into individual statements by semicolons,
  * correctly handling semicolons inside string literals, quoted identifiers,
  * line comments (--), block comments (/* *\/), and PostgreSQL dollar-quoted
  * strings ($$…$$ / $tag$…$tag$).
+ *
+ * #1455 P3-4 / B2 — `oracleQuotes` (Oracle dialect only) additionally treats
+ * `q'X…X'` / `nq'X…X'` alternate-quote literals as opaque, so a `;` inside one
+ * no longer splits the statement (which merged writes and downgraded a trailing
+ * WHERE-less UPDATE out of Danger). Off by default; execution callers that
+ * cannot resolve the dialect keep the prior behavior.
  */
-export function splitSqlStatements(sql: string): string[] {
+export function splitSqlStatements(
+  sql: string,
+  oracleQuotes = false,
+): string[] {
   const statements: string[] = [];
   let current = "";
   let i = 0;
@@ -14,6 +23,16 @@ export function splitSqlStatements(sql: string): string[] {
 
   while (i < len) {
     const ch = sql[i];
+
+    // Oracle alternate quoting — opaque (see doc above).
+    if (oracleQuotes && ch === "'") {
+      const end = scanOracleQQuoteEnd(sql, i);
+      if (end !== null) {
+        current += sql.slice(i, end);
+        i = end;
+        continue;
+      }
+    }
 
     // Single-quoted string literal
     if (ch === "'") {

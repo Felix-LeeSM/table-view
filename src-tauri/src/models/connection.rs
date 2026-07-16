@@ -77,7 +77,7 @@ pub enum Paradigm {
     Kv,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct ConnectionConfig {
     pub id: String,
     pub name: String,
@@ -116,6 +116,37 @@ pub struct ConnectionConfig {
     /// an explicit value.
     #[serde(default)]
     pub trust_server_certificate: Option<bool>,
+}
+
+/// P3-2 (#1455) — manual `Debug` so an accidental `{:?}` (log line, error
+/// context, `#[derive(Debug)]` on an enclosing struct) never prints the
+/// plaintext `password`. Every other field is rendered as-is; `password` is
+/// masked to a fixed `"***"` regardless of length so the debug output leaks
+/// neither the value nor whether one is set. The derived `Debug` printed the
+/// password verbatim.
+impl std::fmt::Debug for ConnectionConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ConnectionConfig")
+            .field("id", &self.id)
+            .field("name", &self.name)
+            .field("db_type", &self.db_type)
+            .field("host", &self.host)
+            .field("port", &self.port)
+            .field("user", &self.user)
+            .field("password", &"***")
+            .field("database", &self.database)
+            .field("read_only", &self.read_only)
+            .field("group_id", &self.group_id)
+            .field("color", &self.color)
+            .field("connection_timeout", &self.connection_timeout)
+            .field("keep_alive_interval", &self.keep_alive_interval)
+            .field("environment", &self.environment)
+            .field("auth_source", &self.auth_source)
+            .field("replica_set", &self.replica_set)
+            .field("tls_enabled", &self.tls_enabled)
+            .field("trust_server_certificate", &self.trust_server_certificate)
+            .finish()
+    }
 }
 
 /// Public-facing connection shape returned to the frontend and exported to
@@ -276,6 +307,44 @@ mod tests {
     #[test]
     fn database_type_default_is_postgresql() {
         assert!(matches!(DatabaseType::default(), DatabaseType::Postgresql));
+    }
+
+    /// P3-2 (#1455) — `{:?}` on a `ConnectionConfig` must never leak the
+    /// plaintext password. Low-entropy fake password keeps the no-secrets gate
+    /// quiet while still proving the mask fires.
+    #[test]
+    fn debug_masks_password() {
+        let conn = ConnectionConfig {
+            id: "c1".into(),
+            name: "DB".into(),
+            db_type: DatabaseType::Postgresql,
+            host: "h".into(),
+            port: 5432,
+            user: "u".into(),
+            password: "pass@789ZZ".into(),
+            database: "d".into(),
+            read_only: false,
+            group_id: None,
+            color: None,
+            connection_timeout: None,
+            keep_alive_interval: None,
+            environment: None,
+            auth_source: None,
+            replica_set: None,
+            tls_enabled: None,
+            trust_server_certificate: None,
+        };
+        let debug = format!("{conn:?}");
+        assert!(
+            !debug.contains("pass@789ZZ"),
+            "debug output leaked the password: {debug}"
+        );
+        assert!(
+            debug.contains("password: \"***\""),
+            "debug output missing the password mask: {debug}"
+        );
+        // The rest of the struct still renders so debug stays useful.
+        assert!(debug.contains("host: \"h\""));
     }
 
     #[test]

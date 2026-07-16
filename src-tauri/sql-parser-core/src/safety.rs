@@ -78,6 +78,10 @@ pub enum SqlDialect {
     /// PostgreSQL — nested block comments; no `#`, no backslash escapes in
     /// standard (non-`E''`) strings.
     Postgres,
+    /// Oracle — recognizes the alternate quoting mechanism `q'X…X'` (issue
+    /// #1455 P3-4). Same comment/block/backslash rules as `Other`; only the
+    /// q-quote lexer differs.
+    Oracle,
 }
 
 impl SqlDialect {
@@ -89,6 +93,12 @@ impl SqlDialect {
     }
     fn nested_block_comments(self) -> bool {
         matches!(self, Self::Postgres)
+    }
+    /// #1455 P3-4 — Oracle alternate quoting `q'[…]'` / `q'{…}'` / `q'(…)'` /
+    /// `q'<…>'` / `q'!…!'`. Only Oracle uses it, so recognizing it elsewhere
+    /// would mis-lex a bare `q` identifier followed by a string.
+    fn oracle_quotes(self) -> bool {
+        matches!(self, Self::Oracle)
     }
 }
 
@@ -105,7 +115,7 @@ pub fn classify(sql: &str) -> Severity {
 /// block-comment nesting (PostgreSQL). Callers that cannot resolve a dialect
 /// pass [`SqlDialect::Other`] (fail-closed first-close scanning).
 pub fn classify_with_dialect(sql: &str, dialect: SqlDialect) -> Severity {
-    split_statements(sql)
+    split_statements(sql, dialect.oracle_quotes())
         .iter()
         .map(|stmt| classify_single(stmt, dialect))
         .max()
@@ -229,10 +239,10 @@ fn classify_by_keyword(stmt: &str, dialect: SqlDialect) -> Severity {
     if starts_with_keyword(upper, "DROP") {
         return drop_keyword_severity(upper);
     }
-    if starts_with_keyword(upper, "DELETE") && !has_where(upper, dialect.backslash_escapes()) {
+    if starts_with_keyword(upper, "DELETE") && !has_where(upper, dialect) {
         return Severity::Danger;
     }
-    if starts_with_keyword(upper, "UPDATE") && !has_where(upper, dialect.backslash_escapes()) {
+    if starts_with_keyword(upper, "UPDATE") && !has_where(upper, dialect) {
         return Severity::Danger;
     }
     if starts_with_keyword(upper, "ALTER") && upper.contains("ALTER TABLE") {
@@ -276,7 +286,7 @@ fn classify_dml_cte(upper: &str, dialect: SqlDialect) -> Option<Severity> {
     let mut worst: Option<Severity> = None;
     let mut from = 0;
     while let Some(open) = find_cte_body_open_paren(upper, from) {
-        let body = match balanced_paren_slice(upper, open, dialect.backslash_escapes()) {
+        let body = match balanced_paren_slice(upper, open, dialect) {
             Some(b) => b,
             None => break,
         };
@@ -321,7 +331,7 @@ fn find_cte_body_open_paren(upper: &str, from: usize) -> Option<usize> {
 /// identifier, or dollar-quote must NOT move the depth, or a payload like
 /// `(SELECT '(')` skews the count and swallows the following CTE. The skip
 /// rules mirror the frontend `skipQuotedLiteral` / `scanDollarQuoteEnd`.
-fn balanced_paren_slice(upper: &str, open: usize, backslash_escapes: bool) -> Option<String> {
+fn balanced_paren_slice(upper: &str, open: usize, dialect: SqlDialect) -> Option<String> {
     let bytes = upper.as_bytes();
     if bytes.get(open) != Some(&b'(') {
         return None;
@@ -331,7 +341,13 @@ fn balanced_paren_slice(upper: &str, open: usize, backslash_escapes: bool) -> Op
     while i < bytes.len() {
         let c = bytes[i];
         if c == b'\'' || c == b'"' || c == b'`' {
-            i = skip_quoted_literal(bytes, i, c, backslash_escapes);
+            i = skip_quoted_literal(
+                bytes,
+                i,
+                c,
+                dialect.backslash_escapes(),
+                dialect.oracle_quotes(),
+            );
             continue;
         }
         if c == b'$' {
@@ -365,7 +381,24 @@ fn balanced_paren_slice(upper: &str, open: usize, backslash_escapes: bool) -> Op
 /// literal instead of ending at the escaped quote (a backslash-unaware scan
 /// exposed the quoted `WHERE` and degraded an unbounded UPDATE to Warn).
 /// Backtick identifiers never use backslash escapes (doubling only).
-fn skip_quoted_literal(bytes: &[u8], start: usize, q: u8, backslash_escapes: bool) -> usize {
+fn skip_quoted_literal(
+    bytes: &[u8],
+    start: usize,
+    q: u8,
+    backslash_escapes: bool,
+    oracle_quotes: bool,
+) -> usize {
+    // #1455 P3-4 — Oracle alternate quoting `q'X…X'` (and the national
+    // `nq'X…X'`): the `'` is preceded by a `q`/`Q` opener at a word boundary,
+    // and the char after the `'` is the opening delimiter. Its content is fully
+    // literal (a raw `'` inside does NOT close it), so a plain single-quote scan
+    // terminates early and leaks the tail (`q'{don't WHERE}'` exposed a fake
+    // `WHERE`, downgrading a WHERE-less UPDATE from Danger to Info).
+    if oracle_quotes && q == b'\'' && is_oracle_qquote_opener(bytes, start) {
+        if let Some(end) = skip_oracle_q_quote(bytes, start) {
+            return end;
+        }
+    }
     let escapes_by_doubling = q == b'\'' || q == b'`';
     let backslash = backslash_escapes && q != b'`';
     let mut i = start + 1;
@@ -384,6 +417,53 @@ fn skip_quoted_literal(bytes: &[u8], start: usize, q: u8, backslash_escapes: boo
         i += 1;
     }
     i.min(bytes.len())
+}
+
+/// #1455 P3-4 / B1 — is the `'` at `quote_idx` an Oracle alternate-quote opener:
+/// `q'`/`Q'`, optionally with the national prefix `nq'`/`Nq'`/`nQ'`/`NQ'`? The
+/// opener (national prefix included) must sit at a word boundary so a plain
+/// identifier ending in `q` (e.g. `seq'x'`) is not misread. Shared by the
+/// byte-domain literal skip and the char-domain statement splitter.
+fn is_oracle_qquote_opener(bytes: &[u8], quote_idx: usize) -> bool {
+    if quote_idx == 0 || !matches!(bytes[quote_idx - 1], b'q' | b'Q') {
+        return false;
+    }
+    let has_national = quote_idx >= 2 && matches!(bytes[quote_idx - 2], b'n' | b'N');
+    let prefix_start = if has_national {
+        quote_idx - 2
+    } else {
+        quote_idx - 1
+    };
+    prefix_start == 0 || !is_word_byte(bytes[prefix_start - 1])
+}
+
+/// #1455 P3-4 — byte index just past an Oracle `q'X…X'` literal opened at the
+/// `'` (`start`). The char at `start + 1` is the opening delimiter; the closer
+/// is its mirror (`[`→`]`, `{`→`}`, `(`→`)`, `<`→`>`) or the same char for any
+/// other delimiter. Returns `None` when the char after `'` cannot be a valid
+/// q-quote delimiter (whitespace or another quote) so the caller falls back to
+/// a normal single-quote scan. Unterminated → EOF.
+fn skip_oracle_q_quote(bytes: &[u8], start: usize) -> Option<usize> {
+    let open = *bytes.get(start + 1)?;
+    // Oracle forbids whitespace and the quote itself as the delimiter.
+    if open.is_ascii_whitespace() || open == b'\'' || open == b'"' {
+        return None;
+    }
+    let close = match open {
+        b'[' => b']',
+        b'{' => b'}',
+        b'(' => b')',
+        b'<' => b'>',
+        other => other,
+    };
+    let mut i = start + 2;
+    while i < bytes.len() {
+        if bytes[i] == close && bytes.get(i + 1) == Some(&b'\'') {
+            return Some(i + 2);
+        }
+        i += 1;
+    }
+    Some(bytes.len())
 }
 
 /// Byte index just past a PostgreSQL dollar-quote (`$$…$$` / `$tag$…$tag$`)
@@ -452,14 +532,20 @@ fn starts_with_keyword(upper: &str, keyword: &str) -> bool {
 /// UPDATE/DELETE was mis-read as bounded and degraded to `Warn`. Skip rules
 /// mirror the frontend `hasOuterWhere` and the shared `skip_quoted_literal` /
 /// `scan_dollar_quote_end` helpers.
-fn has_where(upper: &str, backslash_escapes: bool) -> bool {
+fn has_where(upper: &str, dialect: SqlDialect) -> bool {
     let bytes = upper.as_bytes();
     let needle = b"WHERE";
     let mut i = 0;
     while i < bytes.len() {
         let c = bytes[i];
         if c == b'\'' || c == b'"' || c == b'`' {
-            i = skip_quoted_literal(bytes, i, c, backslash_escapes);
+            i = skip_quoted_literal(
+                bytes,
+                i,
+                c,
+                dialect.backslash_escapes(),
+                dialect.oracle_quotes(),
+            );
             continue;
         }
         if c == b'$' {
@@ -517,7 +603,13 @@ fn strip_comments_collapse_opts(sql: &str, dialect: SqlDialect) -> String {
         let c = bytes[i];
         // String literal / quoted identifier — copy verbatim (skip contents).
         if c == b'\'' || c == b'"' || c == b'`' {
-            let end = skip_quoted_literal(bytes, i, c, dialect.backslash_escapes());
+            let end = skip_quoted_literal(
+                bytes,
+                i,
+                c,
+                dialect.backslash_escapes(),
+                dialect.oracle_quotes(),
+            );
             out.push_str(&sql[i..end]);
             i = end;
             continue;
@@ -573,7 +665,7 @@ fn strip_comments_collapse_opts(sql: &str, dialect: SqlDialect) -> String {
 /// classified independently and the worst tier wins). `pub(crate)` so the
 /// dialect classifiers (e.g. `oracle`) split on the same literal/comment
 /// boundaries — a trailing admin DDL can't hide behind a leading SELECT.
-pub(crate) fn split_statements(sql: &str) -> Vec<String> {
+pub(crate) fn split_statements(sql: &str, oracle_quotes: bool) -> Vec<String> {
     let s: Vec<char> = sql.chars().collect();
     let len = s.len();
     let mut statements: Vec<String> = Vec::new();
@@ -581,6 +673,20 @@ pub(crate) fn split_statements(sql: &str) -> Vec<String> {
     let mut i = 0;
     while i < len {
         let ch = s[i];
+        // #1455 P3-4 / B2 — Oracle `q'X…X'` / `nq'X…X'` is opaque like the other
+        // quote handlers: a raw `'`, `;`, or `WHERE` inside it is literal text.
+        // Without this the splitter's plain `'` scan terminates early on an
+        // inner `'` and swallows a following `;`, so a trailing WHERE-less write
+        // hid behind a leading bounded one (Danger → Info regression).
+        if oracle_quotes && ch == '\'' && is_oracle_qquote_opener_chars(&s, i) {
+            if let Some(end) = oracle_qquote_end_chars(&s, i) {
+                for &c in &s[i..end] {
+                    current.push(c);
+                }
+                i = end;
+                continue;
+            }
+        }
         // Single-quoted string literal (`''` escapes).
         if ch == '\'' {
             current.push(ch);
@@ -711,6 +817,52 @@ pub(crate) fn split_statements(sql: &str) -> Vec<String> {
         statements.push(trimmed.to_string());
     }
     statements
+}
+
+/// Char-domain twin of [`is_oracle_qquote_opener`] for the statement splitter
+/// (which scans `Vec<char>`, not bytes). The opener chars (`n`/`N`/`q`/`Q`) are
+/// ASCII, so the boundary logic matches the byte version exactly.
+fn is_oracle_qquote_opener_chars(chars: &[char], quote_idx: usize) -> bool {
+    if quote_idx == 0 || !matches!(chars[quote_idx - 1], 'q' | 'Q') {
+        return false;
+    }
+    let has_national = quote_idx >= 2 && matches!(chars[quote_idx - 2], 'n' | 'N');
+    let prefix_start = if has_national {
+        quote_idx - 2
+    } else {
+        quote_idx - 1
+    };
+    prefix_start == 0 || !is_word_char(chars[prefix_start - 1])
+}
+
+/// Char index just past an Oracle `q'X…X'` literal opened at the `'` (`start`),
+/// mirroring [`skip_oracle_q_quote`] in the char domain. `None` when the char
+/// after `'` cannot be a valid delimiter (caller resumes a normal `'` scan).
+/// Unterminated → EOF.
+fn oracle_qquote_end_chars(chars: &[char], start: usize) -> Option<usize> {
+    let &open = chars.get(start + 1)?;
+    if open.is_whitespace() || open == '\'' || open == '"' {
+        return None;
+    }
+    let close = match open {
+        '[' => ']',
+        '{' => '}',
+        '(' => ')',
+        '<' => '>',
+        other => other,
+    };
+    let mut i = start + 2;
+    while i < chars.len() {
+        if chars[i] == close && chars.get(i + 1) == Some(&'\'') {
+            return Some(i + 2);
+        }
+        i += 1;
+    }
+    Some(chars.len())
+}
+
+fn is_word_char(c: char) -> bool {
+    c.is_ascii_alphanumeric() || c == '_'
 }
 
 #[cfg(test)]
@@ -963,6 +1115,98 @@ mod tests {
         );
     }
 
+    #[test]
+    fn issue_1455_oracle_q_quote_hides_fake_where() {
+        // #1455 P3-4 — an Oracle `q'{…}'` literal that contains a raw `'` and a
+        // fake `WHERE` used to leak the tail (`don't WHERE}'`), so a WHERE-less
+        // UPDATE/DELETE read as bounded (Info/Warn). With the q-quote lexer the
+        // whole literal is skipped → the write is correctly Danger.
+        for sql in [
+            "UPDATE accounts SET note = q'{don't WHERE it}'",
+            "UPDATE accounts SET note = q'[a'b WHERE c]'",
+            "UPDATE accounts SET note = q'<a'b WHERE c>'",
+        ] {
+            assert_eq!(
+                classify_with_dialect(sql, SqlDialect::Oracle),
+                Severity::Danger,
+                "{sql}"
+            );
+        }
+        // A real bounding WHERE outside the q-quote must NOT be gated — the
+        // q-quote skip does not swallow the trailing real WHERE. (Keyword
+        // fallback under-classifies a parse-failing bounded UPDATE to Info,
+        // which is non-danger and passes the Safe Mode gate — the security
+        // property that matters is "not Danger".)
+        assert_ne!(
+            classify_with_dialect(
+                "UPDATE accounts SET note = q'{don't}' WHERE id = 1",
+                SqlDialect::Oracle
+            ),
+            Severity::Danger
+        );
+        // Non-Oracle dialects must NOT treat `q'…'` as an alternate quote — a
+        // bare `q` identifier followed by a string stays a normal literal.
+        // (Here the leaked `WHERE` reads as bounding, exactly as before #1455;
+        // this locks the gating so PG/MySQL classification is untouched.)
+        assert_eq!(
+            classify_with_dialect(
+                "UPDATE accounts SET note = q'{don't WHERE it}'",
+                SqlDialect::Other
+            ),
+            Severity::Info
+        );
+    }
+
+    #[test]
+    fn issue_1455_b1_national_q_quote_hides_fake_where() {
+        // B1 — national `nq'…'` must be recognized too; the `n` national prefix
+        // used to fail the word-boundary gate and expose a fake WHERE.
+        assert_eq!(
+            classify_with_dialect("UPDATE t SET x = nq'{a'b WHERE c}'", SqlDialect::Oracle),
+            Severity::Danger
+        );
+        assert_eq!(
+            classify_with_dialect(
+                "DELETE FROM t WHERE_x = NQ'<a'b WHERE c>'",
+                SqlDialect::Oracle
+            ),
+            Severity::Danger
+        );
+        // A plain identifier ending in `q` (e.g. `seq'x'`) is NOT a q-quote —
+        // the boundary check keeps it a normal `'` literal, so the real
+        // trailing WHERE still bounds the write (not gated).
+        assert_ne!(
+            classify_with_dialect("UPDATE t SET x = seq'y' WHERE id = 1", SqlDialect::Oracle),
+            Severity::Danger
+        );
+    }
+
+    #[test]
+    fn issue_1455_b2_qquote_semicolon_split_keeps_trailing_danger() {
+        // B2 — the splitter must treat `q'{…}'` as opaque so the top-level `;`
+        // still separates statements. Otherwise the inner `'` swallowed the `;`,
+        // merged both writes, and the leading bounded WHERE masked the trailing
+        // WHERE-less UPDATE (Danger → Info regression).
+        assert_eq!(
+            classify_with_dialect(
+                "UPDATE accounts SET note = q'{it's ok}' WHERE id=1; UPDATE accounts SET x=1",
+                SqlDialect::Oracle
+            ),
+            Severity::Danger
+        );
+        // Splitter is dialect-gated: split still produces the two statements.
+        assert_eq!(
+            split_statements(
+                "UPDATE a SET n = q'{it's ok}' WHERE id=1; DELETE FROM a",
+                true
+            )
+            .len(),
+            2
+        );
+        // Non-Oracle split is unchanged (q-quote not recognized).
+        assert_eq!(split_statements("SELECT 1; SELECT 2", false).len(), 2);
+    }
+
     // ----------------------------------------------------------------------
     // Parity mirror (issue #1352) — the FE<->BE parity cases used to live here
     // as a hand-copied block ("Parity mirror", ported verbatim from
@@ -1019,6 +1263,7 @@ mod tests {
             let dialect = match case.dialect.as_deref() {
                 Some("mysql") | Some("mariadb") => SqlDialect::MysqlFamily,
                 Some("postgresql") => SqlDialect::Postgres,
+                Some("oracle") => SqlDialect::Oracle,
                 _ => SqlDialect::Other,
             };
             assert_eq!(

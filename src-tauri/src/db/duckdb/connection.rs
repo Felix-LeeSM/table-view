@@ -104,6 +104,14 @@ impl DuckdbAdapter {
             ));
         }
 
+        // P3-1 (#1455) — same confinement the SQLite connect path and DuckDB
+        // file-analytics source already enforce: a user database file must not
+        // resolve into the app's own data directory, so a crafted
+        // `<data_dir>/state.duckdb` can't be opened to read/overwrite internal
+        // state (`.key`, `connections.json`, `state.db`). Same risk = same
+        // guard.
+        crate::storage::local::reject_internal_app_data_path(path_ref)?;
+
         Ok(path)
     }
 
@@ -643,6 +651,35 @@ mod tests {
         let message = err.to_string();
         assert!(message.contains("DuckDB database file does not exist"));
         assert!(!message.contains(path));
+    }
+
+    // P3-1 (#1455) — a `.duckdb` file that lives inside the app data dir must
+    // be rejected before connect, mirroring the SQLite connect guard. Before
+    // the guard, an existing `<data_dir>/state.duckdb` passed every check
+    // (absolute + exists + is_file + `.duckdb`) and would open the file.
+    #[test]
+    #[serial_test::serial]
+    fn validate_user_database_path_rejects_internal_app_data_dir() {
+        let dir = tempfile::tempdir().unwrap();
+        std::env::set_var("TABLE_VIEW_TEST_DATA_DIR", dir.path());
+
+        let internal = dir.path().join("state.duckdb");
+        std::fs::write(&internal, b"").unwrap();
+        let err =
+            DuckdbAdapter::validate_user_database_path(internal.to_str().unwrap()).unwrap_err();
+        assert!(
+            matches!(err, AppError::Validation(_)),
+            "internal .duckdb must be rejected, got: {err:?}"
+        );
+
+        // Regression: a `.duckdb` file outside the data dir still validates.
+        let outside = tempfile::tempdir().unwrap();
+        let external = outside.path().join("user.duckdb");
+        std::fs::write(&external, b"").unwrap();
+        DuckdbAdapter::validate_user_database_path(external.to_str().unwrap())
+            .expect("external .duckdb must still validate");
+
+        std::env::remove_var("TABLE_VIEW_TEST_DATA_DIR");
     }
 
     #[test]
