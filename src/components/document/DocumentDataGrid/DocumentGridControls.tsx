@@ -1,10 +1,14 @@
-import { Loader2, Filter } from "lucide-react";
+import { Filter } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { ExportButton } from "@components/shared/ExportButton";
 import DocumentFilterBar from "@components/document/DocumentFilterBar";
 import { Button } from "@components/ui/button";
 import { DOCUMENT_LABELS } from "@/lib/strings/document";
-import { DataGridToolbar, type DataGridEditState } from "@components/datagrid";
+import {
+  DataGridToolbar,
+  DataGridSkeleton,
+  type DataGridEditState,
+} from "@components/datagrid";
 import type { SafeModeGate } from "@hooks/useSafeModeGate";
 import type { SortInfo, TableData } from "@/types/schema";
 import DocumentBulkOps from "./DocumentBulkOps";
@@ -200,11 +204,7 @@ export default function DocumentGridControls({
         </div>
       )}
 
-      {loading && !data && (
-        <div className="flex flex-1 items-center justify-center">
-          <Loader2 className="animate-spin text-muted-foreground" size={24} />
-        </div>
-      )}
+      {loading && !data && <DataGridSkeleton />}
     </>
   );
 }

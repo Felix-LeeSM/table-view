@@ -37,6 +37,14 @@ backend contract 를 통해서만 다룬다.
 - viewport 기반 font scaling 금지. compact surface 안의 heading 은 작고 조밀하게.
 - palette 는 단일 hue 로 밀지 않음. 기존 token 우선, 새 색은 contrast 검증.
 - 텍스트가 버튼/칩/카드 안에서 넘치거나 겹치면 layout bug 로 본다.
+- 로딩 표현 규약 (#1058): **skeleton** = 구조를 미리 아는 목록/그리드/앱 chrome
+  의 초기 로드(데이터 아직 없음) — 채워질 shape 를 미리 보여 flicker 를 줄인다
+  (`Skeleton` 프리미티브, 그리드는 공유 `DataGridSkeleton`). **spinner** = 소요
+  불확정 작업(쿼리 실행 `QueryRunningState`), 컨트롤/버튼 busy(`DbSwitcher`,
+  `DataGridToolbar` 저장), 이미 렌더된 데이터 위 refetch 오버레이
+  (`AsyncProgressOverlay`) — shape 이 없거나 기존 데이터를 지우면 안 될 때
+  (`Loader2 animate-spin`). RDB/Document 그리드 초기 로드는 `DataGridSkeleton`
+  공유로 두 paradigm 이 동일하게 로드된다.
 - Dialog 수정은 기존 component contract/test 를 먼저 보며 close button,
   feedback slot, alert role, toast hookup 같은 테스트된 invariant 를 깨지 않는다.
   preset/layout source-order 강제 규칙은 retired 상태다.

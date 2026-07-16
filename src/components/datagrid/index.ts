@@ -7,6 +7,8 @@ export type { CellDetailDialogProps } from "./CellDetailDialog";
 export { default as DataGridTable } from "./DataGridTable";
 export type { DataGridTableHandle, DataGridTableProps } from "./DataGridTable";
 
+export { default as DataGridSkeleton } from "./DataGridSkeleton";
+
 export { default as DataGridToolbar } from "./DataGridToolbar";
 export type { DataGridToolbarProps } from "./DataGridToolbar";
 
