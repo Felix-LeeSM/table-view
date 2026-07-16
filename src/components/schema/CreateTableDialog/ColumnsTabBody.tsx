@@ -5,6 +5,7 @@ import CreateTableTypeCombobox from "../CreateTableTypeCombobox";
 import InlineFkPopover from "./InlineFkPopover";
 import type { ColumnDraft } from "./types";
 import type { usePostgresTypes } from "@hooks/usePostgresTypes";
+import type { SchemaName, TableName } from "@/types/branded";
 
 type PgTypes = ReturnType<typeof usePostgresTypes>["types"];
 type PgTypesByName = ReturnType<typeof usePostgresTypes>["typesByName"];
@@ -20,9 +21,10 @@ export interface ColumnsTabBodyProps {
   schemaOptions: string[];
   refTablesByKey: Record<string, string[]>;
   refColumnsByKey: Record<string, string[]>;
-  /** Lazy-load hooks for the inline FK popover. */
-  onSchemaPicked: (schema: string) => void;
-  onTablePicked: (schema: string, table: string) => void;
+  /** Lazy-load hooks for the inline FK popover. Branded `(schema, table)`
+   * order — issue #1495. */
+  onSchemaPicked: (schema: SchemaName) => void;
+  onTablePicked: (schema: SchemaName, table: TableName) => void;
   onAddColumn: () => void;
   onRemoveColumn: (trackingId: string) => void;
   onUpdateColumn: (trackingId: string, updates: Partial<ColumnDraft>) => void;

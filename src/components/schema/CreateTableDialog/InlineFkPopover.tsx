@@ -36,6 +36,7 @@ import {
 } from "@components/ui/select";
 import { Button } from "@components/ui/button";
 import { X } from "lucide-react";
+import type { SchemaName, TableName } from "@/types/branded";
 
 const REFERENTIAL_ACTIONS = [
   "NO ACTION",
@@ -77,9 +78,14 @@ export interface InlineFkPopoverProps {
    */
   refColumnsByKey: Record<string, string[]>;
   /** Lazy-loader: parent calls when ref_schema changes. */
-  onSchemaPicked: (schema: string) => void;
-  /** Lazy-loader: parent calls when ref_table changes. */
-  onTablePicked: (schema: string, table: string) => void;
+  onSchemaPicked: (schema: SchemaName) => void;
+  /**
+   * Lazy-loader: parent calls when ref_table changes. Args are branded
+   * `(schema, table)` so a positional swap (which searched "orders.public"
+   * instead of "public.orders" and silently found nothing) is a compile
+   * error — issue #1495.
+   */
+  onTablePicked: (schema: SchemaName, table: TableName) => void;
   /** Updates the column's FK fields. */
   onChange: (updates: Partial<InlineFkValue>) => void;
   /**
@@ -109,8 +115,9 @@ export default function InlineFkPopover({
   onClear,
 }: InlineFkPopoverProps) {
   const { t } = useTranslation("schemaDialogs");
-  const refSchema =
-    value.ref_schema.trim().length > 0 ? value.ref_schema : defaultSchema;
+  const refSchema = (
+    value.ref_schema.trim().length > 0 ? value.ref_schema : defaultSchema
+  ) as SchemaName;
   const tablesForSchema = refTablesByKey[refSchema] ?? [];
   const refColsKey = `${refSchema}:${value.ref_table}`;
   const colsForTable = refColumnsByKey[refColsKey] ?? [];
@@ -167,7 +174,7 @@ export default function InlineFkPopover({
             value={refSchema}
             onValueChange={(next) => {
               onChange({ ref_schema: next, ref_table: "", ref_column: "" });
-              onSchemaPicked(next);
+              onSchemaPicked(next as SchemaName);
             }}
           >
             <SelectTrigger
@@ -196,7 +203,7 @@ export default function InlineFkPopover({
               value={value.ref_table}
               onValueChange={(next) => {
                 onChange({ ref_table: next, ref_column: "" });
-                onTablePicked(refSchema, next);
+                onTablePicked(refSchema, next as TableName);
               }}
             >
               <SelectTrigger
