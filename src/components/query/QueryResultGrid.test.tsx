@@ -9,6 +9,7 @@ import {
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import QueryResultGrid from "./QueryResultGrid";
+import * as queryResultCopy from "./queryResultCopy";
 import type { QueryResult } from "@/types/query";
 import { useSchemaStore } from "@stores/schemaStore";
 import { useConnectionStore } from "@stores/connectionStore";
@@ -359,6 +360,54 @@ describe("QueryResultGrid", () => {
     ).toHaveAttribute("aria-disabled", "true");
   });
 
+  // #1448 F12 — the non-grid copy text is derived through a memo keyed on
+  // `result`, so a parent re-render that leaves the result untouched must not
+  // re-map + re-join every row. Spying on the formatter is the direct probe:
+  // the call count only climbs when `result` actually changes.
+  it("memoizes non-grid copy text across re-renders with an unchanged result (#1448 F12)", () => {
+    const spy = vi.spyOn(queryResultCopy, "formatNonGridCopyText");
+    const listResult: QueryResult = {
+      columns: [{ name: "value", dataType: "text", category: "unknown" }],
+      rows: [["a"], ["b"], ["c"]],
+      totalCount: 3,
+      executionTimeMs: 4,
+      queryType: "select",
+      resultKind: "list",
+    };
+
+    const { rerender } = render(
+      <QueryResultGrid
+        queryState={{ status: "completed", result: listResult }}
+      />,
+    );
+    const afterFirst = spy.mock.calls.length;
+    expect(afterFirst).toBeGreaterThan(0);
+
+    // Same `result` reference, only an unrelated prop changes: memo holds, so
+    // no additional formatting work runs.
+    rerender(
+      <QueryResultGrid
+        queryState={{ status: "completed", result: listResult }}
+        sql="SELECT 1"
+      />,
+    );
+    expect(spy.mock.calls.length).toBe(afterFirst);
+
+    // A new result object busts the memo and recomputes.
+    rerender(
+      <QueryResultGrid
+        queryState={{
+          status: "completed",
+          result: { ...listResult, rows: [["a"], ["b"]] },
+        }}
+        sql="SELECT 1"
+      />,
+    );
+    expect(spy.mock.calls.length).toBeGreaterThan(afterFirst);
+
+    spy.mockRestore();
+  });
+
   it("disables copy and export for empty findOne scalar results", () => {
     const emptyResult: QueryResult = {
       columns: [],
@@ -679,6 +728,8 @@ describe("QueryResultGrid", () => {
       // #1269 — ExportButton now mints a cancel-token id per run so the Stop
       // button can abort the export.
       expect.stringMatching(/^export-/),
+      // #1448 F15 — the export button also forwards a progress callback.
+      expect.any(Function),
     );
   });
 

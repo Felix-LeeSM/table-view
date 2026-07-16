@@ -40,6 +40,11 @@ export const EXPORT_IPC_CHUNK_ROWS = 25_000;
  * mid-stream failure (including a #1269 Stop-button cancel) aborts the
  * session so the temp file is cleaned up and any pre-existing target is left
  * untouched.
+ *
+ * #1448 F15 — `onProgress` reports the cumulative rows written after each
+ * chunk of the streamed (>`EXPORT_IPC_CHUNK_ROWS`) path, so a large export can
+ * surface a live count. The single-shot path completes in one IPC call and
+ * reports no interim progress (nothing to show for an instant write).
  */
 export async function exportGridRows(
   format: ExportFormat,
@@ -48,6 +53,7 @@ export async function exportGridRows(
   rows: unknown[][],
   context: ExportContext,
   exportId: string | null = null,
+  onProgress?: (rowsWritten: number) => void,
 ): Promise<ExportSummary> {
   if (rows.length > EXPORT_IPC_CHUNK_ROWS) {
     return exportGridRowsChunked(
@@ -57,6 +63,7 @@ export async function exportGridRows(
       rows,
       context,
       exportId,
+      onProgress,
     );
   }
   return invoke<ExportSummary>("export_grid_rows", {
@@ -78,6 +85,7 @@ async function exportGridRowsChunked(
   rows: unknown[][],
   context: ExportContext,
   exportId: string | null,
+  onProgress?: (rowsWritten: number) => void,
 ): Promise<ExportSummary> {
   const sessionId = await invoke<string>("export_grid_begin", {
     format,
@@ -94,6 +102,9 @@ async function exportGridRowsChunked(
         // the result must not reach Tauri's native JSON.stringify (#1082).
         rows: toIpcSafeRows(rows.slice(i, i + EXPORT_IPC_CHUNK_ROWS)),
       });
+      // #1448 F15 — cumulative rows persisted so far (clamped to the total for
+      // the final short chunk).
+      onProgress?.(Math.min(i + EXPORT_IPC_CHUNK_ROWS, rows.length));
     }
     return await invoke<ExportSummary>("export_grid_finish", { sessionId });
   } catch (err) {

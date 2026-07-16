@@ -59,6 +59,9 @@ export function ExportButton({
   };
   const DEFAULT_DISABLED_REASON = t("export.singleTableOnly");
   const [running, setRunning] = useState(false);
+  // #1448 F15 — cumulative rows written, shown next to the Stop affordance while
+  // a large (>25k-row) export streams; null for the instant single-shot path.
+  const [progress, setProgress] = useState<number | null>(null);
   const formats = FORMATS_BY_KIND[context.kind];
   // #1269 — id of the in-flight export so the Stop button can fire the same
   // cooperative `cancelQuery` the query tab uses. A caller-supplied `exportId`
@@ -78,11 +81,13 @@ export function ExportButton({
         headers,
         rows,
         exportId: runExportId,
+        onProgress: setProgress,
       });
     } catch {
       // toast surfaced inside runExport; swallow so the button can re-enable.
     } finally {
       setRunning(false);
+      setProgress(null);
       activeExportIdRef.current = null;
     }
   }
@@ -101,19 +106,33 @@ export function ExportButton({
   // effective (no server round-trip needed).
   if (running) {
     return (
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-xs"
-        onClick={handleCancel}
-        aria-label={t("export.cancelAria")}
-        title={t("export.cancelTooltip")}
-        data-testid="export-cancel"
-        className={cn("text-muted-foreground", className)}
-      >
-        <Square className="text-destructive" size={12} aria-hidden />
-        <Loader2 className="animate-spin" size={12} aria-hidden />
-      </Button>
+      <span className="flex items-center gap-1">
+        {/* #1448 F15 — live row count for a streamed large export. Decorative
+            (aria-hidden): the Stop button already carries the export/cancel
+            label, and the surrounding status region announces completion. */}
+        {progress !== null && (
+          <span
+            className="text-3xs tabular-nums text-muted-foreground"
+            data-testid="export-progress"
+            aria-hidden
+          >
+            {progress.toLocaleString()}
+          </span>
+        )}
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-xs"
+          onClick={handleCancel}
+          aria-label={t("export.cancelAria")}
+          title={t("export.cancelTooltip")}
+          data-testid="export-cancel"
+          className={cn("text-muted-foreground", className)}
+        >
+          <Square className="text-destructive" size={12} aria-hidden />
+          <Loader2 className="animate-spin" size={12} aria-hidden />
+        </Button>
+      </span>
     );
   }
 
