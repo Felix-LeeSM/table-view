@@ -98,6 +98,28 @@ GREEN: 통과시킬 최소 코드 → 통과
 
 **RED인 동안 절대 리팩터하지 마.** GREEN에 먼저 도달.
 
+## RED evidence commit (pre-push gate)
+
+이 repo 의 `review-profile: code` sprint 는 push 전에 RED commit 을 evidence 로
+요구한다. pre-push `scripts/hooks/check-tdd-cycle.sh` 가 `merge-base..HEAD` 의
+commit subject 를 검사하고, RED 표식이 없으면 push 를 차단한다. 방법론만 지키고
+commit history 에 RED 흔적을 남기지 않으면 pre-push 에서 막힌다.
+
+적용 조건: branch 가 `sprint-N/...` 이고 `docs/sprints/sprint-N/contract.md` 의
+`review-profile` 이 `code`. 그 외 profile(docs/infra/security) 은 이 gate 를 건너뛴다.
+
+허용 subject 표식:
+
+- `[RED] ...`
+- `RED: ...`
+- `test: RED ...`
+- `test ... failing`
+
+세로 슬라이스대로 RED 커밋 → GREEN 커밋 순서를 유지하면 자연히 충족된다. hook
+실패 시 `SKIP_TDD_CYCLE=1` 같은 skip 은 사용자 명시 승인 없이 쓰지 마라.
+
+계약 SOT (적용 조건 / 예외 전체): [`memory/workflow/tdd/memory.md`](../../../memory/workflow/tdd/memory.md).
+
 ## 사이클별 체크리스트
 
 ```

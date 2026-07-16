@@ -113,6 +113,11 @@ R2 (전면 자동 derive) 는 sprint-386 의 deferred work. 본 단계에서는 
 - Workflow memory 는 행동 계약만 저장한다. 긴 절차, 평가 매트릭스, 대화 방식,
   구현 방법론은 `.agents/skills/<name>/SKILL.md` 로 이관하고 workflow 에서는
   해당 skill 을 링크만 한다.
+- 상호 포인터 (양방향). skill 을 생성/수정할 때, 그 skill 로 작업하는 agent 를
+  구속하는 workflow memory 의 행동 계약 (pre-push hook 등 강제 규칙) 이 있으면
+  skill 본문에 그 계약을 요약 + SOT 링크로 되참조한다. skill 만 보고도 gate 에
+  막히지 않도록. (예: `tdd` skill → `memory/workflow/tdd/memory.md` 의 RED
+  evidence 계약.)
 - 과거 사건/결정은 기본 memory 가 아니다. 먼저 적용 가능한 원칙을
   `memory/product`, `memory/engineering`, `memory/workflow`, `memory/runbook` 에
   반영하고, 이력 보존 가치가 있을 때만 archive 에 기록한다.
