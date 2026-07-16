@@ -146,6 +146,21 @@ collect_paths() {
 	done | sort -u >"$PATHS_FILE"
 }
 
+detect_deletions() {
+	# Any deletion (D) or rename (R) removes an old path, which can leave a
+	# memory citation pointing at a path that no longer exists (issue #1032).
+	local commit
+	has_deletion=0
+	while read -r commit; do
+		[ -n "$commit" ] || continue
+		if git diff-tree --root -m --no-commit-id --name-status -M -r "$commit" |
+			grep -qE '^(D|R)'; then
+			has_deletion=1
+			return 0
+		fi
+	done <"$COMMITS_FILE"
+}
+
 run_step() {
 	local label="$1"
 	shift
@@ -301,6 +316,7 @@ run_frontend_and_rust_gates() {
 
 collect_commits
 collect_paths
+detect_deletions
 
 has_paths=0
 docs_only=1
@@ -376,6 +392,12 @@ fi
 
 run_step "signed-commits" bash scripts/hooks/check-signed-commits.sh <"$REFS_FILE"
 run_step "coverage-ratchet" npx tsx scripts/check-coverage-ratchet.ts
+
+# Reverse code->memory gate: run when memory changed or any path was removed,
+# since a deletion/rename can stale a memory path citation (issue #1032).
+if [ "$needs_memory" = "1" ] || [ "$has_deletion" = "1" ]; then
+	run_step "memory-paths" npx tsx scripts/check-memory-paths.ts
+fi
 
 if [ "$has_paths" = "0" ]; then
 	echo "[pre-push-route] route: no outgoing path changes; skipping TS/Rust gates"

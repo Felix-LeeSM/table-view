@@ -53,7 +53,7 @@ Worktree: runtime wrapper 는 사본의 `scripts/hooks/*.sh` 호출. PreToolUse 
 - 포맷 실패 → `cargo fmt` / `npx prettier --write`.
 - 린트 실패 → 경고 수정. `eslint-disable` 은 사유 코멘트와 함께만.
 - 테스트 실패 → 코드 수정 또는 (테스트가 틀렸으면) 테스트 + ADR 수정.
-- e2e timeout → `e2e/_helpers.ts` + `wdio.conf.ts` timeout, docker daemon 확인.
+- e2e timeout → `e2e/smoke/_helpers.ts` + `wdio.smoke.conf.ts` timeout, docker daemon 확인.
 - GPG pinentry timeout → 즉시 중단. 사용자에게 signing cache warm-up 필요를
   보고하고 unsigned commit 으로 진행하지 않음.
 
