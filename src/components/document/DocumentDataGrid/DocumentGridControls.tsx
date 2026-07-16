@@ -24,6 +24,13 @@ export interface DocumentGridControlsProps {
   showFilters: boolean;
   showQuickLook: boolean;
   editState: DataGridEditState;
+  /** #1461 — gates the cell-edit / add / delete / commit affordances on the
+   *  connection's `edit.editDocuments` capability. Mirrors the RDB grid, which
+   *  forwards its `canEditRows` to the shared toolbar. */
+  editEnabled: boolean;
+  /** #1461 — gates the bulk update-many / delete-many affordances on the
+   *  connection's `edit.bulkWrite` capability. */
+  bulkOpsEnabled: boolean;
   hiddenColumnCount: number;
   projection: Record<string, 0 | 1> | null;
   loading: boolean;
@@ -57,6 +64,8 @@ export default function DocumentGridControls({
   showFilters,
   showQuickLook,
   editState,
+  editEnabled,
+  bulkOpsEnabled,
   hiddenColumnCount,
   projection,
   loading,
@@ -81,6 +90,7 @@ export default function DocumentGridControls({
         data={data}
         schema={database}
         table={collection}
+        canEditRows={editEnabled}
         page={page}
         pageSize={pageSize}
         totalPages={totalPages}
@@ -105,15 +115,17 @@ export default function DocumentGridControls({
         }
         bulkOpsSlot={
           <>
-            <DocumentBulkOps
-              connectionId={connectionId}
-              database={database}
-              collection={collection}
-              activeFilter={activeFilter}
-              activeFilterCount={activeFilterCount}
-              safeModeGate={safeModeGate}
-              fetchData={fetchData}
-            />
+            {bulkOpsEnabled && (
+              <DocumentBulkOps
+                connectionId={connectionId}
+                database={database}
+                collection={collection}
+                activeFilter={activeFilter}
+                activeFilterCount={activeFilterCount}
+                safeModeGate={safeModeGate}
+                fetchData={fetchData}
+              />
+            )}
             <Button
               variant="ghost"
               size="icon-xs"

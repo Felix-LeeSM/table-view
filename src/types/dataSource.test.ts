@@ -14,6 +14,8 @@ import {
   getDataSourceProfile,
   hasConnectionCapability,
   isConnectionSupportedDatabaseType,
+  supportsBulkWrite,
+  supportsDocumentEditing,
   supportsRowEditing,
 } from "./dataSource";
 import {
@@ -644,5 +646,49 @@ describe("supportsRowEditing — #1052 read-only-engine gate", () => {
   it("defaults to true for an unknown / still-loading dbType so affordances are not stripped early", () => {
     expect(supportsRowEditing(undefined)).toBe(true);
     expect(supportsRowEditing(null)).toBe(true);
+  });
+});
+
+describe("supportsDocumentEditing — #1461 edit.editDocuments gate", () => {
+  it("is true only for MongoDB (the sole profile with edit.editDocuments)", () => {
+    expect(supportsDocumentEditing("mongodb")).toBe(true);
+  });
+
+  it("is false for engines that declare no document-edit capability", () => {
+    for (const dbType of [
+      "postgresql",
+      "sqlite",
+      "redis",
+      "elasticsearch",
+    ] as const) {
+      expect(supportsDocumentEditing(dbType)).toBe(false);
+    }
+  });
+
+  it("defaults to true for an unknown / still-loading dbType (affordance-preserving, same as supportsRowEditing)", () => {
+    expect(supportsDocumentEditing(undefined)).toBe(true);
+    expect(supportsDocumentEditing(null)).toBe(true);
+  });
+});
+
+describe("supportsBulkWrite — #1461 edit.bulkWrite gate", () => {
+  it("is true only for MongoDB (the sole profile with edit.bulkWrite)", () => {
+    expect(supportsBulkWrite("mongodb")).toBe(true);
+  });
+
+  it("is false for engines that declare no bulk-write capability", () => {
+    for (const dbType of [
+      "postgresql",
+      "sqlite",
+      "redis",
+      "elasticsearch",
+    ] as const) {
+      expect(supportsBulkWrite(dbType)).toBe(false);
+    }
+  });
+
+  it("defaults to true for an unknown / still-loading dbType (affordance-preserving)", () => {
+    expect(supportsBulkWrite(undefined)).toBe(true);
+    expect(supportsBulkWrite(null)).toBe(true);
   });
 });

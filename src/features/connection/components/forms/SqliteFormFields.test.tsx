@@ -136,6 +136,25 @@ describe("SqliteFormFields", () => {
     expect(onChange).toHaveBeenCalledWith({ readOnly: true });
   });
 
+  // #1461 — the Open read-only checkbox is gated on the `connection.readOnly`
+  // capability (declared per DBMS), distinct from the per-connection
+  // `draft.readOnly` runtime value the checkbox toggles.
+  it("hides the Open read-only checkbox when the readOnly capability is disabled", () => {
+    render(
+      <SqliteFormFields
+        draft={makeDraft()}
+        onChange={vi.fn()}
+        inputClass={inputClass}
+        labelClass={labelClass}
+        filePickerEnabled={true}
+        readOnlyEnabled={false}
+      />,
+    );
+    expect(
+      screen.queryByRole("checkbox", { name: "Open read-only" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("hides file picker buttons when the profile capability is disabled", () => {
     render(
       <SqliteFormFields

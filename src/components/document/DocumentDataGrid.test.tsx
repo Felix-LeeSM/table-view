@@ -14,6 +14,8 @@ import {
   useDocumentStore,
   __resetDocumentStoreForTests,
 } from "@/test-utils/documentStore";
+import { useConnectionStore } from "@stores/connectionStore";
+import type { DatabaseType } from "@/types/connection";
 import type { DocumentQueryResult } from "@/types/document";
 
 // Canned results used by the mocked store. Shaped to mirror the backend's
@@ -118,6 +120,14 @@ beforeEach(() => {
     deleteDocument: (...args: unknown[]) => deleteDocumentMock(...args),
     bulkWriteDocuments: (...args: unknown[]) => bulkWriteDocumentsMock(...args),
   });
+});
+
+// #1461 — the document grid's edit + bulk affordances read the connection's
+// `edit.editDocuments` / `edit.bulkWrite` capability. Reset to empty so the
+// existing (connection-agnostic) tests keep the affordance-preserving fallback
+// (`supportsDocumentEditing(undefined) === true`).
+beforeEach(() => {
+  useConnectionStore.setState({ connections: [] });
 });
 
 beforeEach(() => {
@@ -588,5 +598,68 @@ describe("DocumentDataGrid", () => {
     // tree, which has the [0]/[1]/[2] index leaves.
     expect(screen.getByTestId("nested-detail-row-0")).toBeInTheDocument();
     expect(screen.getByTestId("tree-node-[0]")).toBeInTheDocument();
+  });
+});
+
+// #1461 — document-grid edit gating reads the connection's capability flags
+// (`edit.editDocuments` for cell editing, `edit.bulkWrite` for the bulk
+// update-many / delete-many affordances) instead of assuming the document
+// paradigm is always editable. `dbType` picks here exercise the capability
+// value, not a realistic pairing: MongoDB is the only profile declaring both
+// true; a non-mongo dbType (both false) is a synthetic stand-in for a
+// read-only document source.
+function setDocumentConnection(dbType: DatabaseType) {
+  useConnectionStore.setState({
+    connections: [
+      {
+        id: "conn-mongo",
+        name: dbType,
+        dbType,
+        host: "localhost",
+        port: 27017,
+        user: "",
+        database: "table_view_test",
+        readOnly: false,
+        groupId: null,
+        color: null,
+        hasPassword: false,
+        paradigm: "document",
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any,
+    ],
+  });
+}
+
+describe("DocumentDataGrid — #1461 edit capability gate", () => {
+  it("keeps edit + bulk affordances for a MongoDB connection (editDocuments + bulkWrite true)", async () => {
+    setDocumentConnection("mongodb");
+    renderGrid();
+    await waitFor(() => expect(screen.getByText("Alice")).toBeInTheDocument());
+
+    expect(
+      screen.getByRole("button", { name: "Add document" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Delete matching documents" }),
+    ).toBeInTheDocument();
+  });
+
+  it("hides edit + bulk affordances when the connection declares no document-edit capability", async () => {
+    setDocumentConnection("postgresql");
+    renderGrid();
+    await waitFor(() => expect(screen.getByText("Alice")).toBeInTheDocument());
+
+    // editDocuments false → cell-edit + Add document gone.
+    expect(
+      screen.queryByRole("button", { name: "Add document" }),
+    ).not.toBeInTheDocument();
+    // bulkWrite false → bulk delete/update affordances gone.
+    expect(
+      screen.queryByRole("button", { name: "Delete matching documents" }),
+    ).not.toBeInTheDocument();
+    // Read-only projection control stays (it is not an edit affordance).
+    expect(
+      screen.getByRole("button", { name: /projection/i }),
+    ).toBeInTheDocument();
   });
 });

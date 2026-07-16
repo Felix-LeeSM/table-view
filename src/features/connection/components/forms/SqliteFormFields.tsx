@@ -17,6 +17,14 @@ export interface SqliteFormFieldsProps {
   draft: ConnectionDraft;
   onChange: (patch: Partial<ConnectionDraft>) => void;
   filePickerEnabled: boolean;
+  /**
+   * #1461 — whether this DBMS declares the `connection.readOnly` capability
+   * (i.e. it supports opening the file read-only). Gates the checkbox's
+   * presence — distinct from the per-connection `draft.readOnly` runtime value
+   * the checkbox toggles. Defaults to true so callers that predate the flag
+   * keep the affordance (same fallback direction as the capability helpers).
+   */
+  readOnlyEnabled?: boolean;
   inputClass: string;
   labelClass: string;
   invalidField?: ConnFieldKey | null;
@@ -30,6 +38,7 @@ export default function SqliteFormFields({
   draft,
   onChange,
   filePickerEnabled,
+  readOnlyEnabled = true,
   inputClass,
   labelClass,
   invalidField,
@@ -126,19 +135,21 @@ export default function SqliteFormFields({
       <p className="mt-1 text-2xs text-muted-foreground">
         {t("form.absolutePathHint", { databaseLabel })}
       </p>
-      <label className="mt-3 flex items-center gap-2 text-xs text-secondary-foreground">
-        <input
-          type="checkbox"
-          checked={draft.readOnly === true}
-          onChange={(e) => onChange({ readOnly: e.target.checked })}
-          className="h-3.5 w-3.5 rounded border-border"
-        />
-        <LockKeyhole
-          className="h-3.5 w-3.5 text-muted-foreground"
-          aria-hidden="true"
-        />
-        {t("form.openReadOnly")}
-      </label>
+      {readOnlyEnabled && (
+        <label className="mt-3 flex items-center gap-2 text-xs text-secondary-foreground">
+          <input
+            type="checkbox"
+            checked={draft.readOnly === true}
+            onChange={(e) => onChange({ readOnly: e.target.checked })}
+            className="h-3.5 w-3.5 rounded border-border"
+          />
+          <LockKeyhole
+            className="h-3.5 w-3.5 text-muted-foreground"
+            aria-hidden="true"
+          />
+          {t("form.openReadOnly")}
+        </label>
+      )}
       {createError && (
         <p className="mt-1 text-xs text-destructive" role="alert">
           {createError}
