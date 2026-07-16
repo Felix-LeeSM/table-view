@@ -2,12 +2,12 @@ use std::collections::BTreeMap;
 
 use serde::Deserialize;
 use table_view_lib::models::{
-    get_data_source_profile, BackendAdapterCapabilitySource, BackendAdapterContractKind,
-    BackendAdapterId, CatalogModelKind, ConnectionKind, DataSourceDialectFamily,
-    DataSourceDialectId, DataSourceProfile, DatabaseType, FileConnectionContract,
-    FileConnectionInputContract, FileConnectionInputKind, FileConnectionInputStatus,
-    FileConnectionPermissionScope, FileConnectionPrivacyPolicyId, Paradigm, QueryLanguageId,
-    ResultEnvelopeKind, SafetyPolicyId, ServerVersionProbeId,
+    get_data_source_profile, BackendAdapterCapability, BackendAdapterCapabilitySource,
+    BackendAdapterContractKind, BackendAdapterId, CatalogModelKind, ConnectionKind,
+    DataSourceDialectFamily, DataSourceDialectId, DataSourceProfile, DatabaseType,
+    FileConnectionContract, FileConnectionInputContract, FileConnectionInputKind,
+    FileConnectionInputStatus, FileConnectionPermissionScope, FileConnectionPrivacyPolicyId,
+    Paradigm, QueryLanguageId, ResultEnvelopeKind, SafetyPolicyId, ServerVersionProbeId,
 };
 
 const PROFILE_PARITY_REPORT: &str =
@@ -18,7 +18,21 @@ const PROFILE_PARITY_REPORT: &str =
 struct ProfileParityReport {
     report_version: u8,
     runtime_claim_boundary: RuntimeClaimBoundary,
+    capability_posture: BTreeMap<String, CapabilityPosture>,
     profiles: BTreeMap<String, ComparableProfile>,
+}
+
+// Coarse write posture derived from the raw capability declarations on each
+// side (#1045). The raw vocabularies diverge per paradigm (Rust
+// adapter_contract capabilities vs TS fine-grained UI flags), so only this
+// derived posture is cross-checked, not the raw flags. `schemaMutation` mirrors
+// Rust `RelationalSchemaMutation` (the #1044 SQLite-DDL drift class);
+// `dataMutation` mirrors Rust `DocumentMutation`/`KeyValueMutation`.
+#[derive(Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+struct CapabilityPosture {
+    schema_mutation: bool,
+    data_mutation: bool,
 }
 
 #[derive(Debug, Deserialize, PartialEq, Eq)]
@@ -94,9 +108,29 @@ fn profile_registry_matches_ts_rust_strict_parity_report() {
         })
         .collect::<BTreeMap<_, _>>();
 
+    let actual_posture = all_database_types()
+        .into_iter()
+        .map(|db_type| {
+            (
+                database_type_label(&db_type).to_string(),
+                capability_posture(&get_data_source_profile(&db_type)),
+            )
+        })
+        .collect::<BTreeMap<_, _>>();
+
     assert_eq!(report.report_version, 1);
     assert_eq!(report.runtime_claim_boundary, runtime_claim_boundary());
     assert_eq!(actual_profiles, report.profiles);
+    assert_eq!(actual_posture, report.capability_posture);
+}
+
+fn capability_posture(profile: &DataSourceProfile) -> CapabilityPosture {
+    CapabilityPosture {
+        schema_mutation: profile
+            .has_backend_capability(BackendAdapterCapability::RelationalSchemaMutation),
+        data_mutation: profile.has_backend_capability(BackendAdapterCapability::DocumentMutation)
+            || profile.has_backend_capability(BackendAdapterCapability::KeyValueMutation),
+    }
 }
 
 fn load_profile_parity_report() -> ProfileParityReport {

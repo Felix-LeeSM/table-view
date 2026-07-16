@@ -1,10 +1,24 @@
 {
   "reportVersion": 1,
-  "contract": "TS DATA_SOURCE_PROFILES and Rust DataSourceProfile strict comparable profile fields must match. TS capabilities and Rust adapter_contract are runtime/support posture inputs, not strict parity fields.",
+  "contract": "TS DATA_SOURCE_PROFILES and Rust DataSourceProfile strict comparable profile fields must match. TS capabilities and Rust adapter_contract raw flags are runtime/support posture inputs, not strict parity fields; only the coarse write posture derived from them (capabilityPosture) is cross-checked, because the two vocabularies diverge per paradigm.",
   "runtimeClaimBoundary": {
     "profilePresenceIsRuntimeSupportClaim": false,
     "runtimeSupportGate": "TS capabilities.connection.test plus adapter conformance claims; Rust adapter_contract remains backend runtime posture evidence.",
     "excludedFromStrictParity": ["ts.capabilities", "rust.adapter_contract"]
+  },
+  "capabilityPosture": {
+    "duckdb": { "schemaMutation": false, "dataMutation": false },
+    "elasticsearch": { "schemaMutation": false, "dataMutation": false },
+    "mariadb": { "schemaMutation": true, "dataMutation": false },
+    "mongodb": { "schemaMutation": false, "dataMutation": true },
+    "mssql": { "schemaMutation": false, "dataMutation": false },
+    "mysql": { "schemaMutation": true, "dataMutation": false },
+    "opensearch": { "schemaMutation": false, "dataMutation": false },
+    "oracle": { "schemaMutation": false, "dataMutation": false },
+    "postgresql": { "schemaMutation": true, "dataMutation": false },
+    "redis": { "schemaMutation": false, "dataMutation": true },
+    "sqlite": { "schemaMutation": true, "dataMutation": false },
+    "valkey": { "schemaMutation": false, "dataMutation": true }
   },
   "profiles": {
     "duckdb": {
