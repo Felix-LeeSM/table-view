@@ -82,4 +82,90 @@ describe("PgFormFields", () => {
     });
     expect(onChange).toHaveBeenCalledWith({ host: "db.example.com" });
   });
+
+  // #1526 / #1062 — PG routes through the same `resolve_tls_decision` trust
+  // boundary as MSSQL: enabling TLS with `trust=None` is hard-rejected by the
+  // backend. These lock that the form can never emit that invalid combo.
+  describe("TLS toggles (#1526)", () => {
+    function renderPg(draft: Partial<ConnectionDraft>, onChange = vi.fn()) {
+      render(
+        <PgFormFields
+          draft={makeDraft(draft)}
+          onChange={onChange}
+          passwordInput=""
+          setPasswordInput={vi.fn()}
+          isEditing={false}
+          hadPassword={false}
+          clearPassword={false}
+          setClearPassword={vi.fn()}
+          inputClass={inputClass}
+          labelClass={labelClass}
+        />,
+      );
+      return onChange;
+    }
+
+    it("renders both toggles off by default (localhost dev keeps plaintext)", () => {
+      renderPg({});
+      const tls = screen.getByLabelText(
+        "Enable encryption (TLS)",
+      ) as HTMLInputElement;
+      const trust = screen.getByLabelText(
+        "Trust server certificate",
+      ) as HTMLInputElement;
+      expect(tls.checked).toBe(false);
+      expect(trust.checked).toBe(false);
+      // Trust is meaningless without encryption — disabled while TLS is off.
+      expect(trust.disabled).toBe(true);
+    });
+
+    it("enabling TLS also seeds trust=false so the combo is valid (verify-full)", () => {
+      const onChange = renderPg({});
+      act(() => {
+        fireEvent.click(screen.getByLabelText("Enable encryption (TLS)"));
+      });
+      // NOT `{ tlsEnabled: true }` alone — that would leave trust=None and the
+      // backend would reject the connection with no in-form way to recover.
+      expect(onChange).toHaveBeenCalledWith({
+        tlsEnabled: true,
+        trustServerCertificate: false,
+      });
+    });
+
+    it("disabling TLS clears trust back to null (driver default)", () => {
+      const onChange = renderPg({
+        tlsEnabled: true,
+        trustServerCertificate: false,
+      });
+      act(() => {
+        fireEvent.click(screen.getByLabelText("Enable encryption (TLS)"));
+      });
+      expect(onChange).toHaveBeenCalledWith({
+        tlsEnabled: false,
+        trustServerCertificate: null,
+      });
+    });
+
+    it("toggling trust while TLS is on skips verification (Require)", () => {
+      const onChange = renderPg({
+        tlsEnabled: true,
+        trustServerCertificate: false,
+      });
+      const trust = screen.getByLabelText(
+        "Trust server certificate",
+      ) as HTMLInputElement;
+      expect(trust.disabled).toBe(false);
+      act(() => {
+        fireEvent.click(trust);
+      });
+      expect(onChange).toHaveBeenCalledWith({ trustServerCertificate: true });
+    });
+
+    it("surfaces the downgrade hint so leaving TLS off is an explicit choice", () => {
+      renderPg({});
+      // #1062 core: the silent `sslmode=prefer` downgrade is made explicit in
+      // the form copy rather than a runtime backend event.
+      expect(screen.getByText(/sslmode=prefer/)).toBeInTheDocument();
+    });
+  });
 });

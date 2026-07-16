@@ -255,12 +255,21 @@ export const isSearchFamily = (dbType: DatabaseType): boolean =>
   paradigmOf(dbType) === "search";
 
 /**
- * DBMS forms that render a TLS/encryption toggle (`MssqlFormFields`,
- * `MongoFormFields`, `RedisFormFields` for redis+valkey, `SearchFormFields`
- * for elasticsearch+opensearch). Every other type has no TLS control in the
- * connection form, so `tlsEnabled` must not be carried onto — or persisted for
- * — those drafts: doing so can silently create the `tls_enabled=true,
- * trust=None` combination that the backend now hard-rejects (issue #1062).
+ * DBMS forms whose TLS toggle is a plain on/off with **no trust dependency**
+ * (`MongoFormFields`, `RedisFormFields` for redis+valkey, `SearchFormFields`
+ * for elasticsearch+opensearch): their `tlsEnabled` is preserved/carried
+ * verbatim and `tls_enabled=true, trust=None` is a legitimate stored state.
+ *
+ * Deliberately EXCLUDES `mssql` and `postgresql` even though both render a TLS
+ * toggle (#1526): they route through the trust-dependent `resolve_tls_decision`
+ * boundary where `tls_enabled=true, trust=None` is a backend hard-reject
+ * (issue #1062), so they are handled by dedicated branches — MSSQL seeds
+ * `trust=true`; PG seeds `trust=false` on enable and resets to null on
+ * `dbType` switch (see `applyDbTypeChange` / `resolveDraftTlsEnabled`). Adding
+ * either here would re-introduce the stuck reject-residue combo.
+ *
+ * The no-TLS-control types (mysql/mariadb/oracle/sqlite/duckdb) also stay out:
+ * `tlsEnabled` must not be carried onto — or persisted for — those drafts.
  */
 export const TLS_TOGGLE_DATABASE_TYPES: readonly DatabaseType[] = [
   "mssql",
