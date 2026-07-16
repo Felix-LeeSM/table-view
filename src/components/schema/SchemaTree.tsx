@@ -1,4 +1,11 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  useDeferredValue,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useTranslation } from "react-i18next";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
@@ -173,17 +180,23 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
   // schema so an empty match still shows a placeholder rather than a blank
   // pane. The matching schemas are force-expanded (filter visibility beats
   // the collapse rule); non-`with-schema` shapes are always expanded anyway.
-  const globalFilterActive = actions.globalFilter.trim().length > 0;
+  // #1448 — the search box stays bound to the immediate `globalFilter` (typing
+  // feels instant), but the expensive tree re-filter + flat visible-row walk +
+  // virtualizer relayout run off a deferred copy so a fast typist on a large
+  // schema isn't blocked frame-to-frame. `useDeferredValue` is React's native
+  // hint for exactly this — no debounce timer to own or tune.
+  const deferredGlobalFilter = useDeferredValue(actions.globalFilter);
+  const globalFilterActive = deferredGlobalFilter.trim().length > 0;
   const filtered = useMemo(
     () =>
-      applyGlobalFilter(actions.globalFilter, treeShape !== "with-schema", {
+      applyGlobalFilter(deferredGlobalFilter, treeShape !== "with-schema", {
         schemas: actions.schemas,
         tables,
         views,
         functions,
       }),
     [
-      actions.globalFilter,
+      deferredGlobalFilter,
       treeShape,
       actions.schemas,
       tables,
