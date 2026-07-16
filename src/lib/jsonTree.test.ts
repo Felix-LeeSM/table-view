@@ -430,6 +430,25 @@ describe("tree DoS guards (#1445)", () => {
     const nodes = buildTreeNodesWithGhosts({}, pending);
     expect(nodes.every((n) => n.depth <= MAX_TREE_DEPTH)).toBe(true);
   });
+
+  // #1500 (2026-07-16) — the ghost walk had a depth cap but NO node cap,
+  // so an oversized `+ key` paste expanded unbounded (the module JSDoc
+  // claimed both walks stop at both caps — an overclaim). RED before the
+  // guard: 60k ghost rows, no `truncated` marker. After: capped + flagged,
+  // mirroring `buildTreeNodes`.
+  it("caps a wide ghost paste at MAX_TREE_NODES and flags truncation (#1500)", () => {
+    const pending = new Map<string, string>([
+      ["blob", JSON.stringify(makeWide(60_000))],
+    ]);
+    const nodes = buildTreeNodesWithGhosts({}, pending);
+    // base root (1) + capped ghost block (MAX_TREE_NODES) + marker (1).
+    expect(nodes.length).toBeLessThanOrEqual(MAX_TREE_NODES + 2);
+    const marker = nodes.find((n) => n.truncated);
+    expect(marker).toBeDefined();
+    // The marker is a leaf status row — DocumentTreePanel renders it with
+    // `focusable: !n.truncated`, so it stays out of the roving tab order.
+    expect(marker?.kind).toBe("leaf");
+  });
 });
 
 // Sprint 344 Slice D (2026-05-15) — `coerceTreeAddValue` turns a user-
