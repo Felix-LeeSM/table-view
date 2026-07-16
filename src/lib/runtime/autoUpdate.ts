@@ -30,6 +30,52 @@ import { toast } from "@lib/runtime/toast";
  *  instead of stacking. */
 const UPDATE_TOAST_ID = "auto-update";
 
+/**
+ * #1439 P3-10 — re-prompt throttle. ADR 0049 shipped the boot-time check
+ * without a throttle, so declining "Later" re-opened the same modal on every
+ * launch. Persist the last-declined version + time in plain `localStorage`
+ * (not the session-scoped store, which clears each process — the throttle must
+ * outlive a restart) and stay silent for that same version within the window.
+ * A *newer* version always re-prompts immediately, so a security patch is
+ * never throttled behind an older decline.
+ */
+const UPDATE_DECLINE_KEY = "table-view:update-declined";
+const RE_PROMPT_THROTTLE_MS = 24 * 60 * 60 * 1000; // 24h (ADR 0049 §2)
+
+type DeclineRecord = { version: string; declinedAt: number };
+
+function readDecline(): DeclineRecord | null {
+  try {
+    const raw = window.localStorage.getItem(UPDATE_DECLINE_KEY);
+    if (!raw) return null;
+    const rec = JSON.parse(raw) as DeclineRecord;
+    if (
+      typeof rec?.version === "string" &&
+      typeof rec?.declinedAt === "number"
+    ) {
+      return rec;
+    }
+    return null;
+  } catch {
+    // Malformed JSON or localStorage unavailable — degrade to prompting.
+    return null;
+  }
+}
+
+function recordDecline(version: string): void {
+  try {
+    window.localStorage.setItem(
+      UPDATE_DECLINE_KEY,
+      JSON.stringify({
+        version,
+        declinedAt: Date.now(),
+      } satisfies DeclineRecord),
+    );
+  } catch {
+    // localStorage unavailable — degrade to prompting every boot.
+  }
+}
+
 /** Ask the user whether to install `version` now. Native OS dialog. */
 async function defaultConfirmInstall(version: string): Promise<boolean> {
   const { ask } = await import("@tauri-apps/plugin-dialog");
@@ -132,7 +178,23 @@ export async function checkForUpdatesOnLaunch(
     return;
   }
 
-  if (!(await confirmInstall(update.version))) return;
+  // #1439 P3-10 — skip the prompt if the user declined this exact version
+  // within the throttle window. Runs after the self-install gate so a deb/rpm
+  // install still gets its manual hint, and before the prompt so we never
+  // re-nag for an already-declined version.
+  const decline = readDecline();
+  if (
+    decline &&
+    decline.version === update.version &&
+    Date.now() - decline.declinedAt < RE_PROMPT_THROTTLE_MS
+  ) {
+    return;
+  }
+
+  if (!(await confirmInstall(update.version))) {
+    recordDecline(update.version);
+    return;
+  }
 
   // #1437 P2-8 — the user confirmed and is now waiting. Show download progress
   // and, critically, make a mid-download failure visible instead of hanging.

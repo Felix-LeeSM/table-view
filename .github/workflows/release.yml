@@ -9,7 +9,13 @@ name: Release
 #   publishes manually so an accidental tag push doesn't ship to users.
 # - `workflow_dispatch`: manual trigger from the Actions UI for dry-runs. Still
 #   produces a draft release using the dispatched ref's commit SHA as the tag,
-#   so you can rehearse the pipeline without pushing a real version tag.
+#   so you can rehearse the pipeline without pushing a real version tag. #1439
+#   P3-12: the dispatch draft is also flagged `prerelease: true`, so that even
+#   if a maintainer accidentally publishes it, GitHub's `/releases/latest`
+#   (which excludes drafts *and* prereleases) can never resolve to it — the
+#   updater endpoint `releases/latest/download/latest.json` therefore cannot
+#   serve a dry-run to clients. The dry-run still signs and runs every gate, so
+#   it remains a faithful rehearsal.
 on:
   push:
     tags: ["v*.*.*"]
@@ -172,7 +178,11 @@ jobs:
 
             See the commit log for changes.
           releaseDraft: true
-          prerelease: false
+          # #1439 P3-12 — a real tag release is a normal release; a
+          # workflow_dispatch dry-run is marked prerelease so it is excluded from
+          # `/releases/latest` (and thus the updater's `latest.json` endpoint)
+          # even if it is published by mistake.
+          prerelease: ${{ github.ref_type != 'tag' }}
           args: ${{ matrix.args }}
 
       # Regression guard: confirm the macOS bundle carries a proper ad-hoc

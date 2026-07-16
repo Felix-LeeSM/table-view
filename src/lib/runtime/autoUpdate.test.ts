@@ -30,13 +30,19 @@ function fakeUpdate(
   downloadAndInstall: (
     onEvent?: (e: DownloadEvent) => void,
   ) => Promise<void> = vi.fn(() => Promise.resolve()),
+  version = "9.9.9",
 ) {
-  return { available: true, version: "9.9.9", downloadAndInstall };
+  return { available: true, version, downloadAndInstall };
 }
+
+// #1439 P3-10 — must match UPDATE_DECLINE_KEY in autoUpdate.ts.
+const DECLINE_KEY = "table-view:update-declined";
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 describe("checkForUpdatesOnLaunch", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    window.localStorage.clear();
     isTauri.mockReturnValue(true);
     invoke.mockResolvedValue(true);
   });
@@ -71,6 +77,53 @@ describe("checkForUpdatesOnLaunch", () => {
     await checkForUpdatesOnLaunch(vi.fn(() => Promise.resolve(false)));
     expect(update.downloadAndInstall).not.toHaveBeenCalled();
     expect(relaunch).not.toHaveBeenCalled();
+  });
+
+  // #1439 P3-10 — re-prompt throttle. Declining "Later" every boot re-opened
+  // the same modal on the next launch; record the declined version + time and
+  // stay silent for the same version within the throttle window.
+  it("records the declined version + timestamp when the user picks Later", async () => {
+    check.mockResolvedValue(fakeUpdate(undefined, "9.9.9"));
+    await checkForUpdatesOnLaunch(vi.fn(() => Promise.resolve(false)));
+    const raw = window.localStorage.getItem(DECLINE_KEY);
+    expect(raw).toBeTruthy();
+    const rec = JSON.parse(raw as string);
+    expect(rec.version).toBe("9.9.9");
+    expect(typeof rec.declinedAt).toBe("number");
+  });
+
+  it("does not re-prompt the same version within the throttle window", async () => {
+    window.localStorage.setItem(
+      DECLINE_KEY,
+      JSON.stringify({ version: "9.9.9", declinedAt: Date.now() }),
+    );
+    check.mockResolvedValue(fakeUpdate(undefined, "9.9.9"));
+    const confirm = vi.fn(() => Promise.resolve(true));
+    await checkForUpdatesOnLaunch(confirm);
+    expect(confirm).not.toHaveBeenCalled();
+    expect(relaunch).not.toHaveBeenCalled();
+  });
+
+  it("re-prompts the same version once the throttle window has passed", async () => {
+    window.localStorage.setItem(
+      DECLINE_KEY,
+      JSON.stringify({ version: "9.9.9", declinedAt: Date.now() - DAY_MS - 1 }),
+    );
+    check.mockResolvedValue(fakeUpdate(undefined, "9.9.9"));
+    const confirm = vi.fn(() => Promise.resolve(true));
+    await checkForUpdatesOnLaunch(confirm);
+    expect(confirm).toHaveBeenCalledOnce();
+  });
+
+  it("re-prompts immediately for a newer version despite a recent decline", async () => {
+    window.localStorage.setItem(
+      DECLINE_KEY,
+      JSON.stringify({ version: "9.9.8", declinedAt: Date.now() }),
+    );
+    check.mockResolvedValue(fakeUpdate(undefined, "9.9.9"));
+    const confirm = vi.fn(() => Promise.resolve(true));
+    await checkForUpdatesOnLaunch(confirm);
+    expect(confirm).toHaveBeenCalledOnce();
   });
 
   it("swallows check failures without throwing OR toasting (silent background)", async () => {

@@ -41,15 +41,50 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      # Fail fast with an actionable message if the PAT is missing, instead of
-      # letting checkout auth fail cryptically on an empty token.
-      - name: Verify RELEASE_PAT is configured
+      # Fail fast with an actionable message if the PAT is missing or no longer
+      # valid, instead of letting checkout auth fail cryptically. #1439 P2-7: an
+      # *expired* PAT is a non-empty secret, so the old empty-string check passed
+      # and the tag push later failed with a cryptic auth error — the version
+      # bump merged but no tag shipped, silently stalling the release. Probe the
+      # token against the API up front: HTTP 401 means expired/revoked (fail loud
+      # with rotation guidance), and the token-expiration response header lets us
+      # warn before an imminent expiry silently breaks the next release.
+      - name: Verify RELEASE_PAT is present and valid
         env:
           RELEASE_PAT: ${{ secrets.RELEASE_PAT }}
         run: |
           if [ -z "$RELEASE_PAT" ]; then
             echo "::error::RELEASE_PAT secret is not set. Option B needs a PAT to push the vX.Y.Z tag so release.yml triggers — GITHUB_TOKEN-pushed tags do not trigger workflows. Register RELEASE_PAT (contents: write scope)." >&2
             exit 1
+          fi
+
+          hdr="$(mktemp)"
+          status="$(curl -sS -o /dev/null -D "$hdr" -w '%{http_code}' \
+            -H "Authorization: Bearer $RELEASE_PAT" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}" || echo 000)"
+
+          if [ "$status" = "401" ]; then
+            echo "::error::RELEASE_PAT is set but rejected by GitHub (HTTP 401 — expired or revoked). The version-bump PR merged but no vX.Y.Z tag will be created, silently stalling the release. Rotate RELEASE_PAT (a token with contents: write) and re-run this workflow, or push the tag by hand." >&2
+            exit 1
+          fi
+          if [ "$status" != "200" ]; then
+            # A transient API blip should not block a legitimate release; the
+            # checkout/push steps below remain the hard gate on a bad token.
+            echo "::warning::RELEASE_PAT preflight got HTTP $status from the GitHub API (not a definitive 401). Continuing — checkout/push will still fail loudly if the token is bad." >&2
+          else
+            exp="$(tr -d '\r' < "$hdr" | sed -n 's/^[Gg]it[Hh]ub-[Aa]uthentication-[Tt]oken-[Ee]xpiration:[[:space:]]*//p')"
+            if [ -n "$exp" ]; then
+              exp_epoch="$(date -u -d "$exp" +%s 2>/dev/null || echo 0)"
+              if [ "$exp_epoch" -gt 0 ]; then
+                days_left=$(( (exp_epoch - $(date -u +%s)) / 86400 ))
+                if [ "$days_left" -le 14 ]; then
+                  echo "::warning::RELEASE_PAT expires in ${days_left} day(s) (on ${exp}). Rotate it before it expires or the next release tag will silently fail to push (#1439 P2-7)." >&2
+                fi
+              fi
+            else
+              echo "::notice::RELEASE_PAT has no expiration header (a classic PAT set to never expire, or one whose expiry GitHub did not report). A never-expiring classic PAT also carries broad account-wide scope. Prefer a fine-grained PAT or GitHub App with least-privilege contents: write and a tracked expiry (#1439 P2-7 — infra migration is maintainer-owned)." >&2
+            fi
           fi
 
       - name: Checkout
@@ -77,6 +112,16 @@ jobs:
           cargo_version="$(grep -m1 '^version' src-tauri/Cargo.toml | sed -E 's/.*"([^"]+)".*/\1/')"
           if [ "$version" != "$cargo_version" ]; then
             echo "::error::version mismatch: tauri.conf.json=$version Cargo.toml=$cargo_version" >&2
+            exit 1
+          fi
+
+          # #1439 P3-11 — package.json is the third source-of-truth version file
+          # (versioning-and-artifacts.md). This workflow only fires on a
+          # tauri.conf.json change, so a bump that forgot package.json would tag
+          # a release whose npm/package version disagrees with the app.
+          pkg_version="$(jq -r .version package.json)"
+          if [ "$version" != "$pkg_version" ]; then
+            echo "::error::version mismatch: tauri.conf.json=$version package.json=$pkg_version" >&2
             exit 1
           fi
 

@@ -98,6 +98,25 @@ smoke or measurement gates:
   typed into the editor streams through the cap like any other SELECT (its plan
   output is well under the default).
 
+## Auto-Update Platform Coverage
+
+In-app auto-update (ADR 0049) reaches only the platforms present in the release
+`latest.json` manifest — currently `darwin-aarch64`, `windows-x86_64`, and
+`linux-x86_64` (see
+[`docs/contributor-guide/release/versioning-and-artifacts.md`](../contributor-guide/release/versioning-and-artifacts.md)).
+Installs outside those keys do not auto-update:
+
+- **Intel Macs (`darwin-x86_64`)**: the macOS release is Apple Silicon (arm64)
+  only; there is no Intel bundle built. An Intel Mac is therefore not a supported
+  install or auto-update target. If an arm64 build is run through translation,
+  the updater finds no `darwin-x86_64` key in `latest.json`, so `check()` reports
+  "up to date" and the update silently no-ops (updater errors are DEV-log-only,
+  ADR 0036, no telemetry). Intel Mac users must install and upgrade manually from
+  the GitHub Release assets.
+- **Linux `.deb`/`.rpm` installs**: cannot self-update (no writable in-place
+  target); the app shows a package-manager hint instead of an install prompt
+  (#1437). Only the Linux AppImage bundle self-updates.
+
 ## Related
 
 - [`docs/product/README.md`](README.md) — current support snapshot

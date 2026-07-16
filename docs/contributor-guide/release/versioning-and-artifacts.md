@@ -37,11 +37,13 @@ Two workflows drive a release:
 
 - [`.github/workflows/auto-tag-release.yml`](../../../.github/workflows/auto-tag-release.yml)
   (Option B): when a version-bump PR merges to `main` and changes
-  `src-tauri/tauri.conf.json`, it reads the version, checks `Cargo.toml` agrees,
-  and — if the `vX.Y.Z` tag does not already exist — creates and pushes it. The
-  tag is pushed with the `RELEASE_PAT` secret, because a `GITHUB_TOKEN`-pushed
-  tag would not trigger downstream workflows. This is the normal way a release
-  tag is born; you rarely push tags by hand.
+  `src-tauri/tauri.conf.json`, it reads the version, checks that `Cargo.toml`
+  and `package.json` both agree (all three source-of-truth files must match), and
+  — if the `vX.Y.Z` tag does not already exist — creates and pushes it. The tag
+  is pushed with the `RELEASE_PAT` secret, because a `GITHUB_TOKEN`-pushed tag
+  would not trigger downstream workflows. This is the normal way a release tag is
+  born; you rarely push tags by hand. See the `RELEASE_PAT` note below for how
+  the workflow guards against an expired token silently stalling this step.
 - [`.github/workflows/release.yml`](../../../.github/workflows/release.yml): the
   build pipeline.
   - A `v*.*.*` tag push (from auto-tag, or a deliberate manual push) starts the
@@ -57,6 +59,29 @@ Two workflows drive a release:
   build from auto-installing to every user via the updater.
 - Draft release creation is packaging evidence only. It does not replace CI,
   Runtime Happy Path, or product support evidence.
+
+### `RELEASE_PAT` — health and least privilege
+
+`auto-tag-release.yml` pushes the tag with the `RELEASE_PAT` secret because a
+`GITHUB_TOKEN`-pushed tag does not trigger `release.yml`. Two operational
+concerns follow from that:
+
+- **Silent stall on expiry.** An *expired* PAT is still a non-empty secret, so a
+  bare "is it set" check passes and the tag push then fails with a cryptic auth
+  error — the version bump merged but no tag ships, and nobody notices unless
+  they watch the Actions tab. The workflow now runs a preflight that probes the
+  token against the GitHub API: a `401` fails the run loudly with rotation
+  guidance, and it emits a warning annotation when the token's reported
+  expiration is within 14 days so a maintainer can rotate ahead of the break.
+  GitHub still emails the run's actor on a failed run; any richer external alert
+  (Slack, PagerDuty) needs a webhook secret and is a maintainer-owned follow-up.
+- **Broad scope of a classic PAT.** A classic PAT — especially a never-expiring
+  one — carries account-wide scope far beyond the `contents: write` this
+  workflow needs. The preferred posture is a fine-grained PAT scoped to this repo
+  with `contents: write` only, or a GitHub App installation token. Choosing and
+  provisioning that (App creation, secret registration) is an infrastructure
+  decision that requires a maintainer action and is **not** made by this doc or
+  the workflow — see issue #1439 P2-7.
 
 ## Artifact Expectations
 
@@ -133,12 +158,47 @@ After publishing:
 - Bad tag before publish: do not publish the draft. Prefer a new fixed patch tag
   over retargeting a tag after the workflow has produced artifacts. Any tag
   deletion or retargeting is maintainer-owned.
-- Bad published release: publish a superseding patch release, mark the previous
-  release notes as superseded, and close or revert any Homebrew tap PR that
-  points at the bad assets.
+- Bad published release: publish a superseding patch release (procedure below),
+  mark the previous release notes as superseded, and close or revert any Homebrew
+  tap PR that points at the bad assets.
 - Do not silently replace published assets under the same tag. Users and
   downstream checksums need a new version or a clearly documented superseding
   release.
 - Lost or leaked updater signing key: this is not a tag rollback — follow
   [`updater-signing-key.md`](updater-signing-key.md), which covers the bridge
   release needed to move already-installed clients onto a new public key.
+
+### Superseding patch release (auto-update only moves forward)
+
+There is **no downgrade path** for a bad *published* release. The in-app updater
+(ADR 0049) offers a client an update only when the manifest version is *newer*
+than what it runs, so re-publishing the previous good version as `latest` does
+nothing — every client already on the bad version sees an older `latest` and
+stays put. The only way to move users off a bad published release is to ship a
+**higher** version that fixes (or reverts) it. That is the superseding patch.
+
+1. **Fix or revert on `main`.** Land the fix — or a straight revert of the bad
+   change — on `main`, and rerun CI + Runtime Happy Path on the merge commit.
+   If the fix is a pure revert, it can be small and fast; correctness still
+   gates it.
+2. **Bump to the next patch.** In one `chore/release-X.Y.Z+1` PR, bump
+   `package.json`, `src-tauri/tauri.conf.json`, and `src-tauri/Cargo.toml`
+   together to the next patch version (a bad `0.4.2` is superseded by `0.4.3`,
+   never by re-releasing `0.4.2`). This is the normal release flow, just
+   prioritized: merging it drives auto-tag → draft build → the gates above.
+3. **Publish the patch draft** after the normal Post-Release Verification. On
+   publish it becomes `latest`, and every install on the bad version auto-updates
+   forward to it on next launch + user approval.
+4. **Mark the bad release superseded.** Edit the bad release's notes to point at
+   the patch, and close or revert any Homebrew tap PR that referenced the bad
+   assets so downstream installs pick up the patch.
+5. **Announce — there is no telemetry (ADR 0036).** Auto-update reaches a client
+   only when it launches and the user approves, and nothing reports adoption. If
+   the bad release is severe (data loss, security), also add a
+   [`docs/product/known-limitations.md`](../../product/known-limitations.md) note
+   for the affected version range, and consider unpublishing/replacing the bad
+   assets so *new* installs cannot land on it while the patch propagates.
+
+Clients that cannot self-update (`.deb`/`.rpm`, and Intel Macs — see
+known-limitations) will not receive the patch automatically; the announcement in
+step 5 is their only signal to upgrade by hand.
