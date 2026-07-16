@@ -1097,7 +1097,7 @@ fn delete_by_query_request(
 }
 
 #[tokio::test]
-async fn fixture_delete_by_query_preview_estimates_and_marks_execution_unsupported() {
+async fn fixture_delete_by_query_preview_estimates_and_requires_confirmation() {
     let adapter = SearchEngineAdapter::fixture_elasticsearch();
 
     let plan = adapter
@@ -1108,12 +1108,36 @@ async fn fixture_delete_by_query_preview_estimates_and_marks_execution_unsupport
     assert_eq!(plan.operation, "deleteByQuery");
     assert_eq!(plan.target, "logs-elastic-2026.05.24");
     assert!(plan.preview_only);
-    assert!(!plan.requires_confirmation);
+    // #1076 — live execution is now supported behind the Safe Mode confirm
+    // gate, so the plan requests confirmation and warns the count is a
+    // point-in-time estimate that may drift before the live delete runs.
+    assert!(plan.requires_confirmation);
     assert_eq!(plan.estimated_document_count, Some(1));
     assert!(plan
         .warnings
         .iter()
-        .any(|warning| warning.contains("execution is unsupported")));
+        .any(|warning| warning.contains("cannot be undone")));
+    assert!(plan
+        .warnings
+        .iter()
+        .any(|warning| warning.contains("point-in-time estimate")));
+}
+
+#[tokio::test]
+async fn fixture_delete_by_query_execution_reports_deleted_count() {
+    // #1076 — the adapter execute path returns the matched estimate as the
+    // deleted count for the read-only fixture (real removal is the live path).
+    let adapter = SearchEngineAdapter::fixture_elasticsearch();
+
+    let result = adapter
+        .execute_delete_by_query(&delete_by_query_request(false, true, None))
+        .await
+        .unwrap();
+
+    assert_eq!(result.target, "logs-elastic-2026.05.24");
+    assert_eq!(result.deleted, 1);
+    assert_eq!(result.total, 1);
+    assert!(result.failures.is_empty());
 }
 
 #[tokio::test]

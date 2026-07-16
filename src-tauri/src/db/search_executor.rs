@@ -10,8 +10,9 @@ use crate::db::search_destructive::{
 use crate::db::search_dsl::{search_body_object, validate_search_dsl_request};
 use crate::error::AppError;
 use crate::models::{
-    SearchAggregationEnvelope, SearchDeleteByQueryRequest, SearchHitEnvelope, SearchQueryRequest,
-    SearchResultEnvelope, SearchTermsBucket, SearchTotalHits, SearchTotalHitsRelation,
+    SearchAggregationEnvelope, SearchDeleteByQueryRequest, SearchDeleteByQueryResult,
+    SearchHitEnvelope, SearchQueryRequest, SearchResultEnvelope, SearchTermsBucket,
+    SearchTotalHits, SearchTotalHitsRelation,
 };
 
 pub(crate) fn execute_fixture_search(
@@ -64,6 +65,28 @@ pub(crate) fn estimate_fixture_delete_by_query(
         delete_by_query_body_object(request)?.get("query"),
     )?
     .len() as u64)
+}
+
+/// Fixture-backed live delete (#1076). The read-only fixture cannot mutate
+/// (`&self`), so it reports the matched estimate as the `deleted` count with no
+/// failures — enough for demo/tests to see a coherent execution result. Real
+/// deletes go through the live HTTP path.
+// ponytail: synthetic result, no mutation; real removal is the live path.
+pub(crate) fn execute_fixture_delete_by_query(
+    fixture: &SearchCatalogFixture,
+    request: &SearchDeleteByQueryRequest,
+) -> Result<SearchDeleteByQueryResult, AppError> {
+    let deleted = estimate_fixture_delete_by_query(fixture, request)?;
+    Ok(SearchDeleteByQueryResult {
+        target: delete_by_query_target(request).to_string(),
+        took_ms: 0,
+        timed_out: false,
+        total: deleted,
+        deleted,
+        version_conflicts: 0,
+        batches: u64::from(deleted > 0),
+        failures: Vec::new(),
+    })
 }
 
 fn validate_fixture_search_request(
@@ -439,6 +462,30 @@ mod tests {
             size: Some(10),
             track_total_hits: Some(true),
         }
+    }
+
+    #[test]
+    fn fixture_delete_by_query_reports_matched_as_deleted() {
+        // #1076 — the fixture "delete" reports the matched estimate as the
+        // deleted count (it cannot mutate) with no failures.
+        let request = SearchDeleteByQueryRequest {
+            index_pattern: "logs-elastic-2026.05.24".into(),
+            body: json!({ "query": { "term": { "status.keyword": "ok" } } }),
+            preview_only: false,
+            safety: crate::models::SearchDestructiveSafety {
+                acknowledged_risk: true,
+                allow_wildcard: false,
+                expected_target: None,
+            },
+        };
+
+        let result = execute_fixture_delete_by_query(&fixture(), &request).unwrap();
+
+        assert_eq!(result.target, "logs-elastic-2026.05.24");
+        assert_eq!(result.deleted, 1);
+        assert_eq!(result.total, 1);
+        assert_eq!(result.batches, 1);
+        assert!(result.failures.is_empty());
     }
 
     #[test]

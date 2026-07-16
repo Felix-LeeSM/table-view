@@ -73,9 +73,11 @@ export interface ConfirmDestructiveDialogProps {
   statements: string[];
   /**
    * Sprint 247 — paradigm gate. Non-RDB skips IPC entirely; `"rdb"`
-   * invokes `execute_query_dry_run` while the dialog is open.
+   * invokes `execute_query_dry_run` while the dialog is open. `"search"`
+   * (#1076) is non-RDB: the delete-by-query preview plan already supplied the
+   * matched-count estimate, so the dry-run pane stays `unsupported`.
    */
-  paradigm: "rdb" | "document" | "kv";
+  paradigm: "rdb" | "document" | "kv" | "search";
   /**
    * Sprint 256 (ADR 0023, AC-256-05) — connection display name for the
    * env-aware footer ExecuteButton ("Execute on <conn>"). Optional;

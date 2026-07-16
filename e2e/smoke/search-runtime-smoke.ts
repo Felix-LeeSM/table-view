@@ -24,6 +24,17 @@ type SearchDestructiveOperationPlan = {
   estimatedDocumentCount?: number;
 };
 
+type SearchDeleteByQueryResult = {
+  target: string;
+  tookMs: number;
+  timedOut: boolean;
+  total: number;
+  deleted: number;
+  versionConflicts: number;
+  batches: number;
+  failures: unknown[];
+};
+
 type SearchDbType = "elasticsearch" | "opensearch";
 
 type SearchProbeConfig = {
@@ -265,9 +276,49 @@ export function runSearchRuntimeSmoke(options: SearchRuntimeSmokeOptions) {
           expect(plan.operation).toBe("deleteByQuery");
           expect(plan.target).toBe(index);
           expect(plan.previewOnly).toBe(true);
-          expect(plan.requiresConfirmation).toBe(false);
+          expect(plan.requiresConfirmation).toBe(true);
           expect(plan.estimatedDocumentCount).toBe(1);
-          expect(plan.warnings.join(" ")).toContain("execution is unsupported");
+          expect(plan.warnings.join(" ")).toContain("cannot be undone");
+        },
+      );
+
+      await step(
+        "execute the live delete-by-query and confirm the match is removed",
+        async () => {
+          const connection = await findConnectionByName(connectionName);
+          const request = {
+            indexPattern: index,
+            body: { query: { term: { "status.keyword": "error" } } },
+            previewOnly: false,
+            safety: {
+              acknowledgedRisk: true,
+              allowWildcard: false,
+              expectedTarget: index,
+            },
+          };
+          const result = await invokeTauri<SearchDeleteByQueryResult>(
+            "execute_search_delete_by_query",
+            {
+              connectionId: connection.id,
+              request,
+              safetyConfirmed: true,
+            },
+          );
+
+          expect(result.target).toBe(index);
+          expect(result.deleted).toBe(1);
+          expect(result.failures).toHaveLength(0);
+
+          // Re-plan (refresh=true made the delete visible) — the estimate is
+          // now 0, proving the documents were actually removed.
+          const afterPlan = await invokeTauri<SearchDestructiveOperationPlan>(
+            "plan_search_delete_by_query",
+            {
+              connectionId: connection.id,
+              request: { ...request, previewOnly: true },
+            },
+          );
+          expect(afterPlan.estimatedDocumentCount).toBe(0);
         },
       );
     });

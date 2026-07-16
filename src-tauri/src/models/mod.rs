@@ -47,11 +47,11 @@ pub use schema::{
 pub use search::{
     validate_search_destructive_request, SearchAggregationEnvelope, SearchAliasInfo,
     SearchAnalyzerInfo, SearchCatalogSummary, SearchClusterCapabilities, SearchClusterIdentity,
-    SearchDataStreamInfo, SearchDeleteByQueryRequest, SearchDestructiveOperationPlan,
-    SearchDestructiveSafety, SearchFieldStatsEnvelope, SearchFieldStatsInfo, SearchHitEnvelope,
-    SearchIndexHealth, SearchIndexInfo, SearchIndexMapping, SearchIndexSettings,
-    SearchIndexTemplateInfo, SearchMappingField, SearchProductDelta, SearchProductKind,
-    SearchQueryRequest, SearchResultEnvelope, SearchShardFailure, SearchShardSummary,
-    SearchTemplateEndpointKind, SearchTermsBucket, SearchTotalHits, SearchTotalHitsRelation,
-    SearchVersionInfo,
+    SearchDataStreamInfo, SearchDeleteByQueryRequest, SearchDeleteByQueryResult,
+    SearchDestructiveOperationPlan, SearchDestructiveSafety, SearchFieldStatsEnvelope,
+    SearchFieldStatsInfo, SearchHitEnvelope, SearchIndexHealth, SearchIndexInfo,
+    SearchIndexMapping, SearchIndexSettings, SearchIndexTemplateInfo, SearchMappingField,
+    SearchProductDelta, SearchProductKind, SearchQueryRequest, SearchResultEnvelope,
+    SearchShardFailure, SearchShardSummary, SearchTemplateEndpointKind, SearchTermsBucket,
+    SearchTotalHits, SearchTotalHitsRelation, SearchVersionInfo, SearchWriteFailure,
 };

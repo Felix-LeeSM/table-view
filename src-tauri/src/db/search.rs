@@ -7,15 +7,18 @@ use crate::error::{AppError, CancelError};
 use crate::models::{
     ConnectionConfig, DatabaseType, SearchAliasInfo, SearchAnalyzerInfo, SearchCatalogSummary,
     SearchClusterCapabilities, SearchClusterIdentity, SearchDataStreamInfo,
-    SearchDeleteByQueryRequest, SearchDestructiveOperationPlan, SearchFieldStatsEnvelope,
-    SearchFieldStatsInfo, SearchHitEnvelope, SearchIndexHealth, SearchIndexInfo,
-    SearchIndexMapping, SearchIndexSettings, SearchIndexTemplateInfo, SearchMappingField,
-    SearchProductDelta, SearchProductKind, SearchQueryRequest, SearchResultEnvelope,
-    SearchTemplateEndpointKind, SearchTotalHits, SearchTotalHitsRelation, SearchVersionInfo,
+    SearchDeleteByQueryRequest, SearchDeleteByQueryResult, SearchDestructiveOperationPlan,
+    SearchFieldStatsEnvelope, SearchFieldStatsInfo, SearchHitEnvelope, SearchIndexHealth,
+    SearchIndexInfo, SearchIndexMapping, SearchIndexSettings, SearchIndexTemplateInfo,
+    SearchMappingField, SearchProductDelta, SearchProductKind, SearchQueryRequest,
+    SearchResultEnvelope, SearchTemplateEndpointKind, SearchTotalHits, SearchTotalHitsRelation,
+    SearchVersionInfo,
 };
 
 use super::search_destructive::{build_delete_by_query_plan, validate_delete_by_query_request};
-use super::search_executor::{estimate_fixture_delete_by_query, execute_fixture_search};
+use super::search_executor::{
+    estimate_fixture_delete_by_query, execute_fixture_delete_by_query, execute_fixture_search,
+};
 use super::search_http::{
     open_elasticsearch_connection, open_opensearch_connection, SearchHttpConnection,
 };
@@ -380,6 +383,22 @@ impl SearchAdapter for SearchEngineAdapter {
             self.live_connection()
                 .await?
                 .plan_delete_by_query(request)
+                .await
+        })
+    }
+
+    fn execute_delete_by_query<'a>(
+        &'a self,
+        request: &'a SearchDeleteByQueryRequest,
+    ) -> BoxFuture<'a, Result<SearchDeleteByQueryResult, AppError>> {
+        Box::pin(async move {
+            validate_delete_by_query_request(request)?;
+            if let Some(fixture) = self.fixture.as_ref() {
+                return execute_fixture_delete_by_query(fixture, request);
+            }
+            self.live_connection()
+                .await?
+                .execute_delete_by_query(request)
                 .await
         })
     }

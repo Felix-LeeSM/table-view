@@ -122,6 +122,21 @@ pub async fn enforce_rdb_danger(
     enforce(pool, connection_id, true, safety_confirmed).await
 }
 
+/// Gate a Search (Elasticsearch / OpenSearch) live `_delete_by_query`
+/// execution (#1076). Delete-by-query is unconditionally destructive, so this
+/// forces the danger tier through the SAME [`decide`] matrix the RDB paths
+/// use: a direct IPC `invoke` cannot run a live delete unconfirmed in a
+/// confirm-required context (strict non-production, or any production-tagged
+/// connection). Sibling of [`enforce_rdb_danger`] — identical policy, named
+/// per paradigm so call sites read honestly.
+pub async fn enforce_search_danger(
+    pool: &SqlitePool,
+    connection_id: &str,
+    safety_confirmed: bool,
+) -> Result<(), AppError> {
+    enforce(pool, connection_id, true, safety_confirmed).await
+}
+
 /// Shared core — reads the persisted Safe Mode + connection environment and
 /// applies [`decide`]. Reads are skipped entirely for non-danger inputs so
 /// the common (read / additive) path adds no SQLite round-trip.
@@ -449,6 +464,38 @@ mod tests {
         enforce_rdb_danger(&pool, "c-prod", true)
             .await
             .expect("confirmed DDL must pass");
+        pool_cleanup();
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn search_delete_by_query_danger_gate_on_prod() {
+        // #1076 — the Search live `_delete_by_query` chokepoint reuses the same
+        // matrix: an unconfirmed live delete on a production connection is
+        // rejected, and the confirmed one passes. This is the backend proof
+        // that a direct IPC `invoke` cannot bypass the frontend confirm.
+        let (_dir, pool) = pool_setup().await;
+        seed_connection(&pool, "c-prod", Some("production")).await;
+        let err = enforce_search_danger(&pool, "c-prod", false)
+            .await
+            .unwrap_err();
+        assert!(matches!(err, AppError::Validation(_)));
+        enforce_search_danger(&pool, "c-prod", true)
+            .await
+            .expect("confirmed search delete-by-query must pass");
+        pool_cleanup();
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn search_delete_by_query_non_prod_strict_rejects_unconfirmed() {
+        let (_dir, pool) = pool_setup().await;
+        seed_connection(&pool, "c-dev", Some("development")).await;
+        set_safe_mode(&pool, r#""strict""#).await;
+        let err = enforce_search_danger(&pool, "c-dev", false)
+            .await
+            .unwrap_err();
+        assert!(matches!(err, AppError::Validation(_)));
         pool_cleanup();
     }
 
