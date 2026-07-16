@@ -46,6 +46,30 @@ pub struct QueryColumn {
     pub category: ColumnCategory,
 }
 
+/// Issue #1525 — one matched cell from the PostgreSQL cross-table value
+/// search. `value` is the (display-truncated) text cell that contained the
+/// search term; `schema`/`table`/`column` locate it.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ValueSearchMatch {
+    pub schema: String,
+    pub table: String,
+    pub column: String,
+    pub value: String,
+}
+
+/// Issue #1525 — result envelope for the read-only cross-table ILIKE search.
+/// `truncated` is set when the global row cap stopped result collection
+/// before every table/row was scanned.
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ValueSearchResult {
+    pub matches: Vec<ValueSearchMatch>,
+    pub truncated: bool,
+    /// Number of tables actually scanned (bounded by cap / cancel).
+    pub scanned_tables: usize,
+}
+
 /// Sprint 336 — U1 wire shape. PG `pg_stat_activity` row / Mongo
 /// `currentOp` op are flattened into the same struct so the activity
 /// grid renders both paradigms with the same component. Optional

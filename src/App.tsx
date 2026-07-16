@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import ErrorBoundary from "./components/shared/ErrorBoundary";
 import WorkspacePage from "./pages/WorkspacePage";
 import QuickOpen from "./components/shared/QuickOpen";
+import PgValueSearch from "./components/shared/PgValueSearch";
 import ShortcutCheatsheet from "./components/shared/ShortcutCheatsheet";
 import QueryLog from "./components/query/QueryLog";
 import { Toaster } from "./components/ui/toaster";
@@ -386,6 +387,21 @@ export default function App() {
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, []);
 
+  // Cmd+Shift+P / Ctrl+Shift+P — #1525 read-only data value search (PG).
+  // Sibling of Quick Open (Cmd+P, which navigates to an object): Shift finds
+  // the object *contents*. The dialog self-gates to PostgreSQL connections.
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "P") {
+        if (isEditableTarget(e.target)) return;
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent("pg-value-search"));
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
   // Cmd+Shift+C / Ctrl+Shift+C — toggle global query log panel
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -501,6 +517,7 @@ export default function App() {
           <WorkspacePage />
         </div>
         <QuickOpen />
+        <PgValueSearch />
         <ShortcutCheatsheet />
         <QueryLog />
         {/* #1101 — discard confirmation for Cmd+W / native window close. */}
