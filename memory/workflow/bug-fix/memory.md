@@ -41,6 +41,7 @@ trigger:
 
 ## 관련
 
+- [diagnose skill](../../../.agents/skills/diagnose/SKILL.md) — 재현/원인 어려운 버그·성능 회귀는 진단 루프 (피드백 신호 구축 → 이분법 → 계측 → 회귀 test) 진입점.
 - `grill-with-memory` skill — 사용자 보고가 명확하지 않으면 먼저 증상 lock
 - [implementation](../implementation/memory.md) — Red 작성 후 Green 단계 narration / noise 룰
 - [delivery](../delivery/memory.md) — fix 끝나면 자율 commit/push

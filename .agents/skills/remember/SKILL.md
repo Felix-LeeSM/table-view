@@ -118,6 +118,9 @@ R2 (전면 자동 derive) 는 sprint-386 의 deferred work. 본 단계에서는 
   skill 본문에 그 계약을 요약 + SOT 링크로 되참조한다. skill 만 보고도 gate 에
   막히지 않도록. (예: `tdd` skill → `memory/workflow/tdd/memory.md` 의 RED
   evidence 계약.)
+- 진입점 배선. 새 skill 은 "어떤 작업 type 에서 진입하는가" 를 AGENTS.md 매트릭스
+  또는 해당 workflow/convention memory 의 발견 경로에 한 줄 기록한다. 미배선 =
+  고아 skill (agent 발견 경로 없음, #1038).
 - 과거 사건/결정은 기본 memory 가 아니다. 먼저 적용 가능한 원칙을
   `memory/product`, `memory/engineering`, `memory/workflow`, `memory/runbook` 에
   반영하고, 이력 보존 가치가 있을 때만 archive 에 기록한다.
