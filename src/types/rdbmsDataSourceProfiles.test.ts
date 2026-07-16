@@ -41,6 +41,13 @@ const expectedMssqlRuntimeCapabilities = expectedCapabilities({
     constraints: true,
   },
   edit: { editRows: true, requiresPrimaryKeyForEdit: true },
+  // Issue #1071 — MssqlAdapter wires all structured DDL trait methods.
+  ddl: {
+    createTable: true,
+    alterTable: true,
+    createIndex: true,
+    dropObject: true,
+  },
   intelligence: { erd: true },
 });
 
@@ -85,7 +92,11 @@ describe("RDBMS data source profiles", () => {
     expect(mssql.capabilities.catalog.indexes).toBe(true);
     expect(mssql.capabilities.catalog.constraints).toBe(true);
     expect(mssql.capabilities.edit.editRows).toBe(true);
-    expect(mssql.capabilities.ddl.createTable).toBe(false);
+    // Issue #1071 — structured DDL is now wired (create/alter/index/drop).
+    expect(mssql.capabilities.ddl.createTable).toBe(true);
+    expect(mssql.capabilities.ddl.alterTable).toBe(true);
+    expect(mssql.capabilities.ddl.createIndex).toBe(true);
+    expect(mssql.capabilities.ddl.dropObject).toBe(true);
     expect(isConnectionSupportedDatabaseType("mssql")).toBe(true);
 
     const oracle = getDataSourceProfile("oracle");
@@ -176,7 +187,8 @@ describe("RDBMS data source profiles", () => {
     expect(mssql.capabilities.catalog.indexes).toBe(true);
     expect(mssql.capabilities.catalog.constraints).toBe(true);
     expect(mssql.capabilities.edit.editRows).toBe(true);
-    expect(mssql.capabilities.ddl.createTable).toBe(false);
+    // Issue #1071 — structured DDL is now wired.
+    expect(mssql.capabilities.ddl.createTable).toBe(true);
 
     const oracle = getDataSourceProfile("oracle");
     expect(oracle.paradigm).toBe("rdb");
