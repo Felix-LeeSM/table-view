@@ -492,7 +492,47 @@ impl MysqlAdapter {
             return Err(AppError::Database("Operation cancelled".into()));
         }
         let work = self.query_table_data_uncancelled(
-            table, schema, page, page_size, order_by, filters, raw_where,
+            table, schema, page, page_size, order_by, filters, raw_where, None,
+        );
+        match cancel_token {
+            Some(token) => tokio::select! {
+                result = work => result,
+                _ = token.cancelled() => Err(AppError::Database("Operation cancelled".into())),
+            },
+            None => work.await,
+        }
+    }
+
+    /// Issue #1269 — `query_table_data` variant that pins ONE connection and
+    /// reports its `CONNECTION_ID()` thread id through `pid_tx` so a grid browse
+    /// can be natively cancelled (`KILL QUERY`) mid-scan. Otherwise identical to
+    /// `query_table_data` (same cooperative-token cooperation). Mirrors PG's
+    /// `query_table_data_tracked`.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn query_table_data_tracked(
+        &self,
+        table: &str,
+        schema: &str,
+        page: i32,
+        page_size: i32,
+        order_by: Option<&str>,
+        filters: Option<&[FilterCondition]>,
+        raw_where: Option<&str>,
+        cancel_token: Option<&CancellationToken>,
+        pid_tx: tokio::sync::oneshot::Sender<i64>,
+    ) -> Result<TableData, AppError> {
+        if cancel_token.is_some_and(CancellationToken::is_cancelled) {
+            return Err(AppError::Database("Operation cancelled".into()));
+        }
+        let work = self.query_table_data_uncancelled(
+            table,
+            schema,
+            page,
+            page_size,
+            order_by,
+            filters,
+            raw_where,
+            Some(pid_tx),
         );
         match cancel_token {
             Some(token) => tokio::select! {
@@ -513,10 +553,36 @@ impl MysqlAdapter {
         order_by: Option<&str>,
         filters: Option<&[FilterCondition]>,
         raw_where: Option<&str>,
+        // Issue #1269 — when `Some`, pin ONE connection and send its
+        // `CONNECTION_ID()` thread id before the COUNT + data scan so native
+        // cancel (`KILL QUERY`) reaches the backend actually running the browse.
+        // `None` keeps the pre-#1269 pooled behaviour.
+        pid_tx: Option<tokio::sync::oneshot::Sender<i64>>,
     ) -> Result<TableData, AppError> {
         let pool = self.active_pool().await?;
 
+        // Fast metadata stays on the pool; native cancel only needs to reach the
+        // COUNT + data scan below.
         let columns = self.get_table_columns_inner(&pool, table, schema).await?;
+
+        // Issue #1269 — pin ONE connection so the COUNT + data queries (the
+        // potentially long ones) run on the same backend whose thread id we
+        // report. Acquiring a fresh pool connection per query would let the
+        // reported id point at a different session, and `KILL QUERY` would miss.
+        let mut conn = pool
+            .acquire()
+            .await
+            .map_err(|e| AppError::Connection(e.to_string()))?;
+        if let Some(pid_tx) = pid_tx {
+            // Best-effort: a probe failure simply skips native cancel (pid_tx
+            // drops → Err on rx) and the cooperative token still applies.
+            if let Ok(thread_id) = sqlx::query_scalar::<_, u64>("SELECT CONNECTION_ID()")
+                .fetch_one(&mut *conn)
+                .await
+            {
+                let _ = pid_tx.send(thread_id as i64);
+            }
+        }
 
         let qualified = qualified_table(schema, table);
 
@@ -588,7 +654,7 @@ impl MysqlAdapter {
             count_query = count_query.bind(val);
         }
         let (total,) = count_query
-            .fetch_one(&pool)
+            .fetch_one(&mut *conn)
             .await
             .map_err(|e| AppError::Connection(e.to_string()))?;
 
@@ -653,7 +719,7 @@ impl MysqlAdapter {
             data_query = data_query.bind(val);
         }
         let rows = data_query
-            .fetch_all(&pool)
+            .fetch_all(&mut *conn)
             .await
             .map_err(|e| AppError::Connection(e.to_string()))?;
 
@@ -1067,6 +1133,42 @@ mod tests {
             Err(AppError::Database(msg)) => assert_eq!(msg, "Operation cancelled"),
             other => panic!("expected Operation cancelled, got {other:?}"),
         }
+    }
+
+    #[tokio::test]
+    async fn query_table_data_tracked_pre_cancel_short_circuits_and_drops_pid() {
+        // Issue #1269 — the pid-tracked browse variant (grid native cancel via
+        // `KILL QUERY`) must short-circuit a pre-cancelled token before the pool
+        // lookup, like the untracked path, and drop `pid_tx` so no stale thread
+        // id is recorded (rx resolves to Err → the frontend keeps cooperative
+        // cancel).
+        let adapter = MysqlAdapter::new();
+        let token = CancellationToken::new();
+        token.cancel();
+        let (pid_tx, pid_rx) = tokio::sync::oneshot::channel::<i64>();
+
+        let result = adapter
+            .query_table_data_tracked(
+                "users",
+                "app",
+                1,
+                10,
+                None,
+                None,
+                None,
+                Some(&token),
+                pid_tx,
+            )
+            .await;
+
+        match result {
+            Err(AppError::Database(msg)) => assert_eq!(msg, "Operation cancelled"),
+            other => panic!("expected Operation cancelled, got {other:?}"),
+        }
+        assert!(
+            pid_rx.await.is_err(),
+            "pre-cancel must drop pid_tx without sending a thread id"
+        );
     }
 
     #[test]
