@@ -17,7 +17,13 @@ import { createEmptyDataSourceCapabilities } from "./dataSource";
 // `createEmptyDataSourceCapabilities()` at runtime, so it auto-adapts when a
 // flag is added or removed.
 
-const SRC_ROOT = resolve(process.cwd(), "src");
+const PROJECT_ROOT = process.cwd();
+const SRC_ROOT = resolve(PROJECT_ROOT, "src");
+// Scan `src/` AND `scripts/`: a capability flag can be consumed by a build/CI
+// script too (#1464 review found `scripts/e2e-pre-smoke-release-gate.ts` reads
+// the profile flags), so a `src`-only scan would miss those consumers and let a
+// still-referenced flag look dead.
+const SCAN_ROOTS = [SRC_ROOT, resolve(PROJECT_ROOT, "scripts")];
 
 // Reflective/self-describe files read EVERY flag via `Object.entries` /
 // group spreads (adapterConformance's ADAPTER_CONFORMANCE_MATRIX,
@@ -27,11 +33,17 @@ const SRC_ROOT = resolve(process.cwd(), "src");
 // use the `flag:` colon form (never matched below), while its capability
 // helpers (`supportsRowEditing`, `dialectRequiresPrimaryKeyForEdit`, ...) hold
 // the real accessor reads for flags the UI consumes only indirectly.
-const EXCLUDED_FILES = new Set(
-  ["types/adapterConformance.ts", "types/dataSourceVersionCapabilities.ts"].map(
-    (rel) => resolve(SRC_ROOT, rel),
-  ),
-);
+const EXCLUDED_FILES = new Set([
+  resolve(SRC_ROOT, "types/adapterConformance.ts"),
+  resolve(SRC_ROOT, "types/dataSourceVersionCapabilities.ts"),
+  // #1464 — the CI release gate asserts the *declared* capability shape of the
+  // mssql/oracle/search release slices (a self-describe smoke-lock on the
+  // profile constants), it does not branch runtime behavior on a flag. Counting
+  // it as a consumer would let a dead flag masquerade as live purely by being
+  // smoke-locked — same reflexive-read exclusion rationale as the two files
+  // above.
+  resolve(PROJECT_ROOT, "scripts/e2e-pre-smoke-release-gate.ts"),
+]);
 
 // Groups whose flags are consumed by extracting the whole group object and
 // reading each flag off it (e.g. `useOperationsConnection` does
@@ -108,7 +120,9 @@ function isConsumed(
 
 describe("DataSourceCapabilities flag consumption (#1464)", () => {
   it("declares no capability flag that lacks a production consumer", () => {
-    const normalizedSources = collectSourceFiles(SRC_ROOT)
+    const normalizedSources = SCAN_ROOTS.flatMap((root) =>
+      collectSourceFiles(root),
+    )
       .filter((path) => !EXCLUDED_FILES.has(path))
       .map((path) => normalize(readFileSync(path, "utf8")));
 
