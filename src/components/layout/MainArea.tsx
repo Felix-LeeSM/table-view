@@ -163,6 +163,10 @@ function TableTabView({ tab, onSubViewChange }: TableTabProps) {
                 connectionId={tab.connectionId}
                 database={database}
                 collection={collection}
+                // #1054 — dbType drives CollectionStatsPanel's RDB/Mongo API
+                // dispatch. ponytail: document tabs always carry a live
+                // connection, so the fallback only guards test/edge states.
+                dbType={connection?.dbType ?? "mongodb"}
                 active={mongoStructureSubTab}
                 onActiveChange={setMongoStructureSubTab}
               />
