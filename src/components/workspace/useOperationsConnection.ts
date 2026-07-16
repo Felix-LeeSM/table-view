@@ -27,6 +27,8 @@ export interface OperationsConnection {
     activity: boolean;
     serverInfo: boolean;
     slowQueries: boolean;
+    // #1462 — read-only users/roles listing (DatabaseUsersPanel), PG-only today.
+    users: boolean;
   };
 }
 
@@ -54,7 +56,8 @@ export function useOperationsConnection(): OperationsConnection | null {
   if (
     !capabilities.activity &&
     !capabilities.serverInfo &&
-    !capabilities.slowQueries
+    !capabilities.slowQueries &&
+    !capabilities.users
   ) {
     return null;
   }
@@ -68,6 +71,7 @@ export function useOperationsConnection(): OperationsConnection | null {
       activity: capabilities.activity,
       serverInfo: capabilities.serverInfo,
       slowQueries: capabilities.slowQueries,
+      users: capabilities.users,
     },
   };
 }

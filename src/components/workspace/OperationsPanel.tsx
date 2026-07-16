@@ -1,6 +1,7 @@
-// Issue #1054 — workspace operations flyout. Mounts the three
-// connection-level ops panels (U1 ServerActivity / U4 ServerInfo /
-// U5 SlowQuery) behind `operations.*` capability gates. Entry point =
+// Issue #1054 — workspace operations flyout. Mounts the connection-level
+// ops panels (U1 ServerActivity / U4 ServerInfo / U5 SlowQuery, plus the
+// #1462 Users tab = the previously-orphan DatabaseUsersPanel) behind
+// `operations.*` capability gates. Entry point =
 // the workspace toolbar "Operations" button (see WorkspaceToolbar),
 // which dispatches the same `toggle-operations-panel` custom event this
 // component's parent (`MainArea`) listens for — mirroring the
@@ -24,13 +25,17 @@ import { X } from "lucide-react";
 import { Button } from "@components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@components/ui/tabs";
 import ConfirmDestructiveDialog from "./ConfirmDestructiveDialog";
-import { ServerActivityPanel, ServerInfoPanel } from "@features/connection";
+import {
+  DatabaseUsersPanel,
+  ServerActivityPanel,
+  ServerInfoPanel,
+} from "@features/connection";
 import type { ServerActivityRow } from "@/lib/api/serverActivity";
 import { SlowQueryPanel } from "@components/query/SlowQueryPanel";
 import { useOperationsConnection } from "./useOperationsConnection";
 import { paradigmOf } from "@/features/connection/model";
 
-type OpsTab = "activity" | "serverInfo" | "slowQueries";
+type OpsTab = "activity" | "serverInfo" | "slowQueries" | "users";
 
 export interface OperationsPanelProps {
   visible: boolean;
@@ -73,7 +78,7 @@ export default function OperationsPanel({
   // current connection cannot serve.
   useEffect(() => {
     if (!visible || !drv) return;
-    const order: OpsTab[] = ["activity", "serverInfo", "slowQueries"];
+    const order: OpsTab[] = ["activity", "serverInfo", "slowQueries", "users"];
     if (!drv.ops[active]) {
       const first = order.find((k) => drv.ops[k]);
       if (first) setActive(first);
@@ -100,6 +105,9 @@ export default function OperationsPanel({
   }
   if (drv.ops.slowQueries) {
     tabs.push({ key: "slowQueries", label: t("operations.tabSlowQueries") });
+  }
+  if (drv.ops.users) {
+    tabs.push({ key: "users", label: t("operations.tabUsers") });
   }
 
   return (
@@ -154,6 +162,11 @@ export default function OperationsPanel({
           />
         ) : active === "slowQueries" && drv.ops.slowQueries ? (
           <SlowQueryPanel connectionId={drv.connectionId} dbType={drv.dbType} />
+        ) : active === "users" && drv.ops.users ? (
+          <DatabaseUsersPanel
+            connectionId={drv.connectionId}
+            dbType={drv.dbType}
+          />
         ) : null}
       </div>
       <ConfirmDestructiveDialog

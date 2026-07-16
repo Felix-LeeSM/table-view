@@ -97,7 +97,6 @@ describe("DataSourceProfile registry", () => {
       operations: {
         activity: true,
         slowQueries: true,
-        stats: true,
         serverInfo: true,
         users: true,
       },
@@ -156,7 +155,6 @@ describe("DataSourceProfile registry", () => {
       operations: {
         activity: true,
         slowQueries: true,
-        stats: true,
         serverInfo: true,
       },
     }),

@@ -112,7 +112,10 @@ export interface DataSourceCapabilities {
   };
   readonly intelligence: {
     readonly erd: boolean;
-    readonly schemaDiff: boolean;
+    // Issue #1462 — `schemaDiff` was deleted here: the schema-diff surface
+    // (SchemaGraphDiffPanel) renders only inside the ERD panel, transitively
+    // gated by `erd`, and no profile ever declared it true. Re-add only if a
+    // standalone schema-diff surface is promoted (breadth-first depth step).
     readonly dataCompare: boolean;
     readonly columnProfile: boolean;
   };
@@ -120,9 +123,13 @@ export interface DataSourceCapabilities {
     readonly activity: boolean;
     readonly locks: boolean;
     readonly slowQueries: boolean;
-    readonly stats: boolean;
+    // Issue #1462 — `stats` was deleted here: no server-stats panel, backend
+    // command, or consumer exists (CollectionStatsPanel is Mongo collection
+    // stats, unrelated). Re-declare when the #1077 profiler dashboard promotes
+    // a server-stats surface.
     readonly serverInfo: boolean;
     // Issue #1077 Stage 2 — read-only users/roles listing (PG-first).
+    // #1462 — consumed by the OperationsPanel flyout's Users tab.
     readonly users: boolean;
   };
   readonly paradigmSpecific: {
@@ -185,7 +192,6 @@ export function createEmptyDataSourceCapabilities(): DataSourceCapabilities {
     },
     intelligence: {
       erd: false,
-      schemaDiff: false,
       dataCompare: false,
       columnProfile: false,
     },
@@ -193,7 +199,6 @@ export function createEmptyDataSourceCapabilities(): DataSourceCapabilities {
       activity: false,
       locks: false,
       slowQueries: false,
-      stats: false,
       serverInfo: false,
       users: false,
     },
@@ -303,7 +308,6 @@ export const POSTGRESQL_CAPABILITIES = capabilities({
   operations: {
     activity: true,
     slowQueries: true,
-    stats: true,
     serverInfo: true,
     users: true,
   },
@@ -449,7 +453,6 @@ export const MONGODB_CAPABILITIES = capabilities({
   operations: {
     activity: true,
     slowQueries: true,
-    stats: true,
     serverInfo: true,
   },
 });
