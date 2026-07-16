@@ -79,6 +79,21 @@ export const en = {
     deleteAria: "Delete favorite: {{name}}",
   },
 
+  // ── SnippetsPanel (#1528) ─────────────────────────────────────────────────
+  snippets: {
+    title: "Snippets",
+    closeAria: "Close snippets",
+    backAria: "Back to snippet list",
+    empty: "No snippets yet",
+    namePlaceholder: "Snippet name...",
+    saveAria: "Save current query as snippet",
+    insert: "Insert",
+    insertAria: "Insert snippet: {{name}}",
+    deleteAria: "Delete snippet: {{name}}",
+    fillTitle: "Fill in {{name}}",
+    variableAria: "Value for {{name}}",
+  },
+
   // ── GlobalQueryLogPanel / QueryLog ────────────────────────────────────────
   queryLog: {
     title: "Query Log",
@@ -187,6 +202,9 @@ export const en = {
     favoritePlaceholder: "Favorite name...",
     confirmSaveAria: "Confirm save",
     cancelSaveAria: "Cancel save",
+    openSnippetsAria: "Open snippets",
+    snippets: "Snippets",
+    snippetsCount: "Snippets ({{count}})",
   },
 
   // ── TabDbChip ─────────────────────────────────────────────────────────────
@@ -323,6 +341,20 @@ export const ko = {
     deleteAria: "즐겨찾기 삭제: {{name}}",
   },
 
+  snippets: {
+    title: "스니펫",
+    closeAria: "스니펫 닫기",
+    backAria: "스니펫 목록으로",
+    empty: "스니펫이 없습니다",
+    namePlaceholder: "스니펫 이름...",
+    saveAria: "현재 쿼리를 스니펫으로 저장",
+    insert: "삽입",
+    insertAria: "스니펫 삽입: {{name}}",
+    deleteAria: "스니펫 삭제: {{name}}",
+    fillTitle: "{{name}} 값 입력",
+    variableAria: "{{name}} 값",
+  },
+
   queryLog: {
     title: "쿼리 로그",
     searchPlaceholder: "쿼리 검색...",
@@ -421,6 +453,9 @@ export const ko = {
     favoritePlaceholder: "즐겨찾기 이름...",
     confirmSaveAria: "저장 확인",
     cancelSaveAria: "저장 취소",
+    openSnippetsAria: "스니펫 열기",
+    snippets: "스니펫",
+    snippetsCount: "스니펫 ({{count}})",
   },
 
   tabDbChip: {

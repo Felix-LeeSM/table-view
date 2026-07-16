@@ -361,6 +361,20 @@ export default function QueryTab({ tab }: QueryTabProps) {
     canCancelQuery,
   });
 
+  // #1528 — snippet panel toggle + insert-at-cursor. `replaceSelection`
+  // inserts at the caret (replacing any selection) and lands on the undo
+  // stack; the editor's updateListener syncs the new text back to the store.
+  const [showSnippets, setShowSnippets] = useState(false);
+  const handleInsertSnippet = useCallback(
+    (text: string) => {
+      const view = editorRef.current;
+      if (!view) return;
+      view.dispatch(view.state.replaceSelection(text));
+      view.focus();
+    },
+    [editorRef],
+  );
+
   const handleExecuteAndShowResults = useCallback(() => {
     setExplainSql(null);
     handleExecute();
@@ -507,6 +521,9 @@ export default function QueryTab({ tab }: QueryTabProps) {
         showFileAnalytics={canPreviewLocalFile}
         onOpenFileAnalytics={() => setShowFileAnalytics(true)}
         favorites={favorites}
+        showSnippets={showSnippets}
+        setShowSnippets={setShowSnippets}
+        onInsertSnippet={handleInsertSnippet}
       />
 
       {/* Paradigm router lives inline (not in a wrapper) so the

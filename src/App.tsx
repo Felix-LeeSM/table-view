@@ -19,6 +19,7 @@ import {
 import { useCurrentWindowConnectionId } from "./hooks/useCurrentWindowConnectionId";
 import { useDiscardConfirm } from "./hooks/useDiscardConfirm";
 import { useFavoritesStore } from "./stores/favoritesStore";
+import { useSnippetsStore } from "./stores/snippetsStore";
 import { useMruStore } from "./stores/mruStore";
 import { useTableActivityStore } from "./stores/tableActivityStore";
 import { isEditableTarget } from "./lib/keyboard/isEditableTarget";
@@ -36,6 +37,9 @@ export default function App() {
   const initEventListeners = useConnectionStore((s) => s.initEventListeners);
   const loadPersistedFavorites = useFavoritesStore(
     (s) => s.loadPersistedFavorites,
+  );
+  const loadPersistedSnippets = useSnippetsStore(
+    (s) => s.loadPersistedSnippets,
   );
   const loadPersistedMru = useMruStore((s) => s.loadPersistedMru);
   const loadPersistedTableActivity = useTableActivityStore(
@@ -82,16 +86,18 @@ export default function App() {
     loadGroups();
     initEventListeners();
     loadPersistedFavorites();
+    loadPersistedSnippets();
     loadPersistedMru();
     loadPersistedTableActivity();
-    // Workspace-side anchor for cold-boot tracing — fires after the five
-    // IPC dispatches above have been kicked off (not awaited).
+    // Workspace-side anchor for cold-boot tracing — fires after the IPC
+    // dispatches above have been kicked off (not awaited).
     markBootMilestone("app:effects-fired");
   }, [
     loadConnections,
     loadGroups,
     initEventListeners,
     loadPersistedFavorites,
+    loadPersistedSnippets,
     loadPersistedMru,
     loadPersistedTableActivity,
   ]);

@@ -22,10 +22,13 @@ fn cleanup_env() {
     std::env::remove_var("TABLE_VIEW_TEST_DATA_DIR");
 }
 
-// AC-355-02: 9 tables exist after migration — 8 domain + meta.
+// AC-355-02 (updated): 11 tables exist after migration — 10 domain + meta.
+// History: 0001 seeded 8 domain + meta, 0004 added `table_activity`, 0005
+// (#1528) added `snippets`. The expected list is exhaustive so a future
+// migration that adds/drops a table is forced to update it here.
 #[tokio::test]
 #[serial]
-async fn test_migration_creates_nine_tables() {
+async fn test_migration_creates_eleven_tables() {
     let (_dir, pool) = setup_with_migrations().await;
 
     let rows = sqlx::query("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name != '_sqlx_migrations' ORDER BY name")
@@ -44,6 +47,8 @@ async fn test_migration_creates_nine_tables() {
         "mru",
         "query_history",
         "settings",
+        "snippets",
+        "table_activity",
         "workspaces",
     ];
     for t in expected.iter() {
@@ -55,9 +60,10 @@ async fn test_migration_creates_nine_tables() {
         );
     }
     assert_eq!(
-        expected.len(),
-        9,
-        "spec mandates exactly 9 tables (8 domain + meta)"
+        names.len(),
+        11,
+        "spec mandates exactly 11 tables (10 domain + meta), found: {:?}",
+        names
     );
 
     cleanup_env();
@@ -234,7 +240,7 @@ async fn test_migration_runner_is_idempotent() {
             .fetch_one(&pool)
             .await
             .unwrap();
-    assert_eq!(count, 9, "9 user tables expected after idempotent run");
+    assert_eq!(count, 11, "11 user tables expected after idempotent run");
 
     cleanup_env();
 }
