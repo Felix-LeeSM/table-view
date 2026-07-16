@@ -60,8 +60,14 @@ export interface TreeNode {
  * (outside the trust boundary), so a hostile or malfunctioning server can
  * return a pathologically deep structure (which would overflow the
  * recursive walk's call stack) or an oversized document (which would
- * freeze the tab building millions of nodes). Both walks below stop at
- * these caps and flag the cut with a `truncated` node.
+ * freeze the tab building millions of nodes).
+ *
+ * All three walks below honour both caps. `buildTreeNodes` and the ghost-
+ * paste walk in `buildTreeNodesWithGhosts` (#1500) stop at the caps and
+ * flag the cut with a `truncated` marker node so the panel shows
+ * "…truncated". `computeTreeStats` also stops at the caps but emits no
+ * marker (it has no nodes — its stats just go approximate at the extreme,
+ * which is fine for hostile input).
  *
  * `MAX_TREE_DEPTH` sits well above any legitimate document (MongoDB's own
  * BSON nesting limit is 100) and far below the JS call-stack ceiling.
@@ -246,9 +252,15 @@ export function buildTreeNodesWithGhosts(
     depth: number,
     out: TreeNode[],
   ) => {
-    // #1445 — a user can paste a deeply nested JSON blob into a `+ key`
-    // value; cap the ghost recursion at the same depth so it can't
-    // overflow the stack. The container is emitted, its children are not.
+    // #1500 node cap — a user can paste an oversized JSON blob into a
+    // `+ key` value; stop emitting once this block-local list is full so it
+    // can't freeze the panel materialising millions of ghost rows. The
+    // caller appends one terminal marker after this walk returns (mirrors
+    // `buildTreeNodes`). O(1) per node, no hot-path cost.
+    if (out.length >= MAX_TREE_NODES) return;
+    // #1445 depth cap — cap the ghost recursion at the same depth so a
+    // deeply nested blob can't overflow the stack. The container is
+    // emitted, its children are not.
     const atDepthCap = depth >= MAX_TREE_DEPTH;
     if (isPlainObject(v)) {
       const keys = Object.keys(v);
@@ -343,6 +355,22 @@ export function buildTreeNodesWithGhosts(
     const expanded = expandedGhostValue(entry.raw);
     const block: TreeNode[] = [];
     ghostWalk(expanded, entry.path, label, depth, block);
+    // #1500 node-count truncation — mirror `buildTreeNodes`: when the
+    // ghost walk hit the node cap, append one terminal marker so an
+    // oversized paste shows "…truncated" instead of a silently-clipped
+    // subtree. The marker is a leaf status row; DocumentTreePanel renders
+    // it with `focusable: !n.truncated`, keeping it out of the roving order.
+    if (block.length >= MAX_TREE_NODES) {
+      block.push({
+        path: `${entry.path}…truncated`,
+        depth,
+        label: "…",
+        kind: "leaf",
+        leafType: "unknown",
+        isGhost: true,
+        truncated: true,
+      });
+    }
     for (const node of block) emitted.add(node.path);
     const bucket = childrenByParent.get(parent);
     if (bucket) bucket.push(...block);
