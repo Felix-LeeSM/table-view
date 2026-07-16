@@ -55,6 +55,11 @@ export const en = {
   triggerCount_other: "{{count}} triggers",
   createTriggerAria: "Create trigger",
   noTriggers: "No triggers",
+  // Issue #1067 — engines whose triggers carry an inline body (MySQL/MariaDB)
+  // hide the structured create/drop controls; surface the raw-SQL path so the
+  // absence is explained instead of silently missing (#1046 parity gate).
+  triggerRawSqlHint:
+    "This engine builds triggers from an inline body — create and drop them with raw SQL in a query tab (CREATE TRIGGER … FOR EACH ROW <body> / DROP TRIGGER <name>).",
   functionLabel: "Function",
   whenLabel: "When",
   dropTriggerAria: "Drop trigger {{name}}",
@@ -300,6 +305,8 @@ export const ko = {
   triggerCount_other: "트리거 {{count}}개",
   createTriggerAria: "트리거 생성",
   noTriggers: "트리거 없음",
+  triggerRawSqlHint:
+    "이 엔진의 트리거는 inline body 방식입니다. 쿼리 탭에서 raw SQL 로 생성/삭제하세요 (CREATE TRIGGER … FOR EACH ROW <body> / DROP TRIGGER <name>).",
   functionLabel: "함수",
   whenLabel: "조건",
   dropTriggerAria: "트리거 {{name}} 삭제",
