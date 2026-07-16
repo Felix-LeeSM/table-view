@@ -31,7 +31,7 @@ use super::types::{
     CreateMongoIndexResult, DocumentCollectionInfo, DocumentId, DocumentQueryResult, DocumentRow,
     FindBody, NamespaceInfo, NamespaceLabel, RdbQueryResult,
 };
-use super::{KvAdapter, KvDatabaseInfo};
+use super::{KvAdapter, KvDatabaseInfo, KvKeyScanPage, KvKeyScanRequest};
 use crate::error::AppError;
 use crate::models::{
     AddColumnRequest, AddConstraintRequest, AlterTableRequest, ColumnInfo, ConnectionConfig,
@@ -1452,6 +1452,11 @@ pub(crate) struct StubKvAdapter {
     pub list_databases_fn: Option<FnZero<Vec<KvDatabaseInfo>>>,
     pub current_database_fn: Option<FnZero<Option<u16>>>,
     pub switch_database_fn: Option<FnOne<u16, ()>>,
+    // Issue #1269 (gap #6) — optional (entered, release) gate for `scan_keys` so
+    // a test can park a scan in-flight, fire `cancel_query` on the registered
+    // token, and assert the cooperative check aborts mid-scan. Mirrors
+    // `StubRdbAdapter::execute_sql_gate`.
+    pub scan_keys_gate: Option<(Arc<Notify>, Arc<Notify>)>,
 }
 
 impl Default for StubKvAdapter {
@@ -1461,6 +1466,7 @@ impl Default for StubKvAdapter {
             list_databases_fn: None,
             current_database_fn: None,
             switch_database_fn: None,
+            scan_keys_gate: None,
         }
     }
 }
@@ -1511,6 +1517,31 @@ impl KvAdapter for StubKvAdapter {
             .as_ref()
             .map_or_else(|| Ok(None), |f| f());
         Box::pin(async move { r })
+    }
+
+    // Issue #1269 (gap #6) — park on the gate (if set) so a test can fire the
+    // registered cancel token mid-scan, then observe the cooperative token the
+    // same way the real Redis adapter's between-keys `ensure_not_cancelled`
+    // does. A fired token aborts with a `Database` error; otherwise falls back
+    // to the trait-default `Unsupported`.
+    fn scan_keys<'a>(
+        &'a self,
+        _request: KvKeyScanRequest,
+        cancel: Option<&'a CancellationToken>,
+    ) -> BoxFuture<'a, Result<KvKeyScanPage, AppError>> {
+        let gate = self.scan_keys_gate.clone();
+        Box::pin(async move {
+            if let Some((entered, release)) = gate {
+                entered.notify_one();
+                release.notified().await;
+            }
+            if cancel.is_some_and(CancellationToken::is_cancelled) {
+                return Err(AppError::Database("Operation cancelled".into()));
+            }
+            Err(AppError::Unsupported(
+                "This key-value adapter does not support bounded key scan".into(),
+            ))
+        })
     }
 }
 

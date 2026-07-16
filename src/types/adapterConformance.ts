@@ -198,14 +198,18 @@ const DEFERRED_FEATURES = Object.freeze({
   redis: {
     connection: [],
     catalog: ["catalog.indexes"],
-    query: ["query.query", "query.cancel", "query.explain"],
+    // Issue #1269 (gap #6) — `query.cancel` left the deferred list: the KV scan
+    // and redis-command query tab now register a live cooperative token, so the
+    // profile claims it and it is a live check, not a deferral.
+    query: ["query.query", "query.explain"],
     edit: ["edit.bulkWrite"],
     ddl: [],
   },
   valkey: {
     connection: [],
     catalog: ["catalog.indexes"],
-    query: ["query.cancel", "query.explain"],
+    // Issue #1269 (gap #6) — see redis: `query.cancel` is now a live claim.
+    query: ["query.explain"],
     edit: ["edit.bulkWrite"],
     ddl: [],
   },
