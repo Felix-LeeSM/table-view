@@ -104,6 +104,42 @@ export async function cancelQuery(queryId: string): Promise<string> {
   return invoke<string>("cancel_query", { queryId });
 }
 
+// Issue #1525 — one matched cell from the read-only cross-table value search.
+export interface ValueSearchMatch {
+  schema: string;
+  table: string;
+  column: string;
+  value: string;
+}
+
+// Issue #1525 — result envelope. `truncated` is set when the row cap stopped
+// collection before every table/row was scanned.
+export interface ValueSearchResult {
+  matches: ValueSearchMatch[];
+  truncated: boolean;
+  scannedTables: number;
+}
+
+// Issue #1525 — read-only cross-table ILIKE search over the TEXT columns of
+// base tables in the selected schemas. PostgreSQL-only; other adapters reject
+// with `Unsupported`. `queryId` registers a cooperative cancel token that
+// `cancelQuery` can fire; `expectedDatabase` is the shared db-mismatch guard.
+export async function pgSearchValues(
+  connectionId: string,
+  schemas: string[],
+  term: string,
+  queryId: string,
+  expectedDatabase?: string,
+): Promise<ValueSearchResult> {
+  return invoke<ValueSearchResult>("pg_search_values", {
+    connectionId,
+    schemas,
+    term,
+    queryId,
+    expectedDatabase: expectedDatabase ?? null,
+  });
+}
+
 // Execute a list of SQL statements inside a single transaction
 // (BEGIN/COMMIT/ROLLBACK). All-or-nothing: a failure on statement K rolls
 // back statements 1..K-1 and surfaces the original error with

@@ -473,6 +473,41 @@ impl RdbAdapter for MysqlAdapter {
     ) -> Pin<Box<dyn Future<Output = Result<serde_json::Value, AppError>> + Send + 'a>> {
         Box::pin(async move { self.explain_query(sql).await })
     }
+
+    // ── Issue #1073 — admin ops (activity/kill/slow/info) MySQL parity ──
+    fn list_server_activity<'a>(
+        &'a self,
+    ) -> Pin<
+        Box<
+            dyn Future<Output = Result<Vec<crate::models::ServerActivityRow>, AppError>>
+                + Send
+                + 'a,
+        >,
+    > {
+        Box::pin(async move { self.list_server_activity().await })
+    }
+
+    fn kill_session<'a>(
+        &'a self,
+        id: i64,
+    ) -> Pin<Box<dyn Future<Output = Result<(), AppError>> + Send + 'a>> {
+        Box::pin(async move { self.kill_session(id).await })
+    }
+
+    fn slow_queries<'a>(
+        &'a self,
+        limit: i64,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<crate::models::SlowQueryRow>, AppError>> + Send + 'a>>
+    {
+        Box::pin(async move { self.slow_queries(limit).await })
+    }
+
+    fn server_info<'a>(
+        &'a self,
+    ) -> Pin<Box<dyn Future<Output = Result<crate::models::ServerInfoRow, AppError>> + Send + 'a>>
+    {
+        Box::pin(async move { self.server_info().await })
+    }
 }
 
 #[cfg(test)]

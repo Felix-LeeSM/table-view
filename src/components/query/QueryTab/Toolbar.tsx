@@ -12,11 +12,14 @@ import {
   FileSearch,
   SearchCode,
   Upload,
+  Code2,
 } from "lucide-react";
 import FavoritesPanel from "../FavoritesPanel";
+import SnippetsPanel from "../SnippetsPanel";
 import TabDbChip from "./TabDbChip";
 import { supportsNativeCancel } from "./useQueryContext";
 import { useConnectionStore } from "@stores/connectionStore";
+import { useSnippetsStore } from "@stores/snippetsStore";
 import type { QueryTab } from "@stores/workspaceStore";
 import type { QueryFavoritesState } from "./useQueryFavorites";
 import {
@@ -69,6 +72,10 @@ export interface QueryTabToolbarProps {
   showFileAnalytics?: boolean;
   onOpenFileAnalytics?: () => void;
   favorites: QueryFavoritesState;
+  /** #1528 — snippet panel visibility + editor-cursor insert callback. */
+  showSnippets: boolean;
+  setShowSnippets: (open: boolean) => void;
+  onInsertSnippet: (text: string) => void;
 }
 
 export default function QueryTabToolbar({
@@ -84,6 +91,9 @@ export default function QueryTabToolbar({
   showFileAnalytics = false,
   onOpenFileAnalytics,
   favorites,
+  showSnippets,
+  setShowSnippets,
+  onInsertSnippet,
 }: QueryTabToolbarProps) {
   const { t } = useTranslation("query");
   const {
@@ -97,6 +107,7 @@ export default function QueryTabToolbar({
     handleSaveFavorite,
     handleLoadFavoriteSql,
   } = favorites;
+  const snippetCount = useSnippetsStore((s) => s.snippets.length);
 
   // Sprint 381 (2026-05-17) — Mongo db-contract α. The Run button used
   // to be disabled whenever Mongo's `tab.database` was empty, which
@@ -258,6 +269,7 @@ export default function QueryTabToolbar({
           onClick={() => {
             setShowSaveForm(!showSaveForm);
             setShowFavorites(false);
+            setShowSnippets(false);
           }}
           disabled={!tab.sql.trim()}
           aria-label={t("toolbar.saveToFavoritesAria")}
@@ -272,6 +284,7 @@ export default function QueryTabToolbar({
           onClick={() => {
             setShowFavorites(!showFavorites);
             setShowSaveForm(false);
+            setShowSnippets(false);
           }}
           aria-label={t("toolbar.openFavoritesAria")}
           title="Favorites (Cmd+Shift+F)"
@@ -281,6 +294,24 @@ export default function QueryTabToolbar({
             {favoritesList.length > 0
               ? t("toolbar.favoritesCount", { count: favoritesList.length })
               : t("toolbar.favorites")}
+          </span>
+        </Button>
+        <Button
+          variant="ghost"
+          size="xs"
+          onClick={() => {
+            setShowSnippets(!showSnippets);
+            setShowSaveForm(false);
+            setShowFavorites(false);
+          }}
+          aria-label={t("toolbar.openSnippetsAria")}
+          title="Snippets"
+        >
+          <Code2 className="text-primary" />
+          <span>
+            {snippetCount > 0
+              ? t("toolbar.snippetsCount", { count: snippetCount })
+              : t("toolbar.snippets")}
           </span>
         </Button>
         {showSaveForm && (
@@ -325,6 +356,15 @@ export default function QueryTabToolbar({
               connectionId={tab.connectionId}
               onLoadSql={handleLoadFavoriteSql}
               onClose={() => setShowFavorites(false)}
+            />
+          </div>
+        )}
+        {showSnippets && (
+          <div className="absolute right-0 top-full mt-1 z-50">
+            <SnippetsPanel
+              currentSql={tab.sql}
+              onInsert={onInsertSnippet}
+              onClose={() => setShowSnippets(false)}
             />
           </div>
         )}

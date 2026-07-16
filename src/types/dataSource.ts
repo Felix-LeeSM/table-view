@@ -338,6 +338,18 @@ export const MYSQL_FAMILY_CAPABILITIES = capabilities({
   intelligence: {
     erd: true,
   },
+  // Issue #1073 — MySQL/MariaDB admin ops parity. Backed by the shared
+  // MysqlAdapter (information_schema.processlist / KILL /
+  // performance_schema.events_statements_summary_by_digest / SHOW GLOBAL
+  // STATUS+VARIABLES). `users` stays false (that is #1077 Stage 2, PG-first);
+  // `locks` has no adapter override on any engine. Same shape as MongoDB, so
+  // the OperationsPanel flyout surfaces the activity/serverInfo/slowQueries
+  // tabs without a panel change.
+  operations: {
+    activity: true,
+    slowQueries: true,
+    serverInfo: true,
+  },
 });
 
 export const SQLITE_CAPABILITIES = capabilities({
