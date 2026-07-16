@@ -385,6 +385,16 @@ export const DUCKDB_CAPABILITIES = capabilities({
     // `supportsNativeCancel` (in-process interrupt, no server pid).
     cancel: true,
   },
+  catalog: {
+    // Issue #1070 — the adapter's `get_table_indexes` / `get_table_constraints`
+    // were silent `Ok(vec![])` stubs that mislabelled every DuckDB table as
+    // index/constraint-free. They now introspect `duckdb_indexes()` /
+    // `duckdb_constraints()`, so the Structure Indexes/Constraints tabs are a
+    // truthful claim (mirrors the SQLite #1459 flip).
+    // (`browse` / `schema` keys were deleted repo-wide by #1464.)
+    indexes: true,
+    constraints: true,
+  },
 });
 
 export const MSSQL_CAPABILITIES = capabilities({

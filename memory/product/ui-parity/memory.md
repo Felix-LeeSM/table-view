@@ -43,6 +43,7 @@ task: ui-parity, review, merge-gate, unsupported-convention
 | 위험 write 확인 | `ConfirmDestructiveDialog` (Safe Mode 게이트) |
 | 결과 export     | 결과 액션바                              |
 | 서버 운영 뷰 (U1/U4/U5: activity / server info / slow query) | 상단 툴바 `Operations` 버튼 → flyout (`OperationsPanel`, #1054) — `operations.*` capability 게이트 |
+| 컬렉션 통계 (U3: collection stats) | document 테이블 `Structure` 탭 → `Stats` 서브탭 (`CollectionStatsPanel`, #1054) — §3 예외: 컬렉션 컨텍스트 필요라 connection-level flyout 부적합, paradigm 게이트 |
 
 기준은 rdb/document 의 현 구현에서 온다. 다른 paradigm 이 같은 작업을 다른 곳에
 둘 때, capability 게이트(`switchDatabase` 등)만으로 위치를 정하면 안 된다 — 위치는

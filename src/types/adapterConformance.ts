@@ -173,7 +173,12 @@ const DEFERRED_FEATURES = Object.freeze({
   },
   duckdb: {
     connection: [],
-    catalog: ["catalog.indexes", "catalog.constraints"],
+    // Issue #1070 — `catalog.indexes` / `catalog.constraints` left the deferred
+    // list: the adapter's `duckdb_indexes()` / `duckdb_constraints()`
+    // introspection is live (was a silent `Ok(vec![])` stub) and the profile now
+    // claims both. (`catalog.relationships` was deleted as a flag by #1464, so
+    // nothing remains deferred here.)
+    catalog: [],
     // Issue #1269 (gap #5) — `query.cancel` left the deferred list: the adapter
     // now interrupts a running statement (`Connection::interrupt_handle`), so
     // the profile claims it and it is a live check, not a deferral.

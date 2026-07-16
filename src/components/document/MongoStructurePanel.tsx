@@ -2,13 +2,16 @@ import { useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { MongoIndexesPanel } from "./MongoIndexesPanel";
 import { ValidatorPanel } from "./ValidatorPanel";
+import { CollectionStatsPanel } from "./CollectionStatsPanel";
+import { type DatabaseType } from "@/types/connection";
 
-export type MongoStructureSubTab = "indexes" | "validator";
+export type MongoStructureSubTab = "indexes" | "validator" | "stats";
 
 export interface MongoStructurePanelProps {
   connectionId: string;
   database: string;
   collection: string;
+  dbType: DatabaseType;
   /**
    * When provided, the Indexes/Validator sub-sub-tab selection is
    * controlled by the caller. The owner holds the state so the inner
@@ -23,6 +26,11 @@ export interface MongoStructurePanelProps {
 const SUB_SUB_TABS: readonly MongoStructureSubTab[] = [
   "indexes",
   "validator",
+  // #1054 — U3 collection stats. CollectionStatsPanel was authored + tested
+  // (Sprint 338) but never mounted; this is its collection-context home
+  // (it needs (database, collection), so the connection-level Operations
+  // flyout is the wrong entry point — ui-parity §3 exception).
+  "stats",
 ] as const;
 
 /**
@@ -40,6 +48,7 @@ export function MongoStructurePanel({
   connectionId,
   database,
   collection,
+  dbType,
   active: activeProp,
   onActiveChange,
 }: MongoStructurePanelProps) {
@@ -58,18 +67,20 @@ export function MongoStructurePanel({
     [onActiveChange],
   );
 
-  const toggle = useCallback(() => {
-    setActive(active === "indexes" ? "validator" : "indexes");
-  }, [active, setActive]);
-
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLButtonElement>) => {
-      if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
-        event.preventDefault();
-        toggle();
-      }
+      const dir =
+        event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
+      if (dir === 0) return;
+      event.preventDefault();
+      const i = SUB_SUB_TABS.indexOf(active);
+      const len = SUB_SUB_TABS.length;
+      // Modulo keeps the index in range; the guard only satisfies
+      // noUncheckedIndexedAccess (next is never undefined here).
+      const next = SUB_SUB_TABS[(i + dir + len) % len];
+      if (next) setActive(next);
     },
-    [toggle],
+    [active, setActive],
   );
 
   return (
@@ -85,7 +96,9 @@ export function MongoStructurePanel({
           const label =
             key === "indexes"
               ? t("structurePanel.tabIndexes")
-              : t("structurePanel.tabValidator");
+              : key === "validator"
+                ? t("structurePanel.tabValidator")
+                : t("structurePanel.tabStats");
           return (
             <button
               key={key}
@@ -122,11 +135,18 @@ export function MongoStructurePanel({
             database={database}
             collection={collection}
           />
-        ) : (
+        ) : active === "validator" ? (
           <ValidatorPanel
             connectionId={connectionId}
             database={database}
             collection={collection}
+          />
+        ) : (
+          <CollectionStatsPanel
+            connectionId={connectionId}
+            database={database}
+            collection={collection}
+            dbType={dbType}
           />
         )}
       </div>

@@ -10,8 +10,8 @@ use tokio_util::sync::CancellationToken;
 
 use crate::error::AppError;
 use crate::models::{
-    ColumnCategory, ColumnInfo, ConnectionConfig, FileAnalyticsSource, FileAnalyticsSourceKind,
-    TableInfo, ViewInfo,
+    ColumnCategory, ColumnInfo, ConnectionConfig, ConstraintInfo, FileAnalyticsSource,
+    FileAnalyticsSourceKind, IndexInfo, TableInfo, ViewInfo,
 };
 
 use super::sql_text::quote_identifier;
@@ -414,6 +414,112 @@ impl DuckdbAdapter {
         .await
     }
 
+    /// Issue #1070 — real index introspection (was a silent `Ok(vec![])` stub
+    /// that mislabelled every DuckDB table as index-free). DuckDB lists only
+    /// explicit `CREATE INDEX` objects here; PK/UNIQUE constraints surface via
+    /// `get_table_constraints`. `expressions` is the indexed column/expression
+    /// list, joined on the unit separator (never present in identifiers) so it
+    /// round-trips to `Vec<String>` without a list `FromSql` impl.
+    pub async fn get_table_indexes(
+        &self,
+        namespace: &str,
+        table: &str,
+    ) -> Result<Vec<IndexInfo>, AppError> {
+        let namespace = normalize_namespace(namespace).to_string();
+        let table = table.to_string();
+        self.with_connection(move |conn| {
+            let mut stmt = conn
+                .prepare(
+                    "SELECT index_name, is_unique, is_primary,
+                            array_to_string(expressions, chr(31))
+                     FROM duckdb_indexes()
+                     WHERE schema_name = ? AND table_name = ?
+                     ORDER BY index_name",
+                )
+                .map_err(|e| AppError::Database(e.to_string()))?;
+            let rows = stmt
+                .query_map(params![namespace, table], |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, bool>(1)?,
+                        row.get::<_, bool>(2)?,
+                        row.get::<_, Option<String>>(3)?,
+                    ))
+                })
+                .map_err(|e| AppError::Database(e.to_string()))?;
+            collect_duckdb_rows(rows).map(|rows| {
+                rows.into_iter()
+                    .map(|(name, is_unique, is_primary, cols)| IndexInfo {
+                        name,
+                        columns: split_duckdb_list(cols.as_deref()),
+                        // ART is DuckDB's only index type.
+                        index_type: "ART".to_string(),
+                        is_unique,
+                        is_primary,
+                    })
+                    .collect()
+            })
+        })
+        .await
+    }
+
+    /// Issue #1070 — real constraint introspection (was a silent `Ok(vec![])`
+    /// stub). NOT NULL is a column property, not surfaced as a constraint row
+    /// (mirrors the pg/sqlite shape); the type strings match pg's
+    /// `information_schema` so the wire contract is identical. FK reference
+    /// table/columns come straight from the catalog.
+    pub async fn get_table_constraints(
+        &self,
+        namespace: &str,
+        table: &str,
+    ) -> Result<Vec<ConstraintInfo>, AppError> {
+        let namespace = normalize_namespace(namespace).to_string();
+        let table = table.to_string();
+        self.with_connection(move |conn| {
+            let mut stmt = conn
+                .prepare(
+                    "SELECT constraint_name, constraint_type,
+                            array_to_string(constraint_column_names, chr(31)),
+                            referenced_table,
+                            array_to_string(referenced_column_names, chr(31))
+                     FROM duckdb_constraints()
+                     WHERE schema_name = ? AND table_name = ?
+                       AND constraint_type IN ('PRIMARY KEY', 'UNIQUE', 'FOREIGN KEY', 'CHECK')
+                     ORDER BY constraint_type, constraint_name",
+                )
+                .map_err(|e| AppError::Database(e.to_string()))?;
+            let rows = stmt
+                .query_map(params![namespace, table], |row| {
+                    Ok((
+                        row.get::<_, Option<String>>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, Option<String>>(2)?,
+                        row.get::<_, Option<String>>(3)?,
+                        row.get::<_, Option<String>>(4)?,
+                    ))
+                })
+                .map_err(|e| AppError::Database(e.to_string()))?;
+            collect_duckdb_rows(rows).map(|rows| {
+                rows.into_iter()
+                    .map(|(name, constraint_type, cols, ref_table, ref_cols)| {
+                        let reference_columns = split_duckdb_list(ref_cols.as_deref());
+                        ConstraintInfo {
+                            // DuckDB auto-names constraints; fall back to the
+                            // type label if a row ever lacks one.
+                            name: name.unwrap_or_else(|| constraint_type.clone()),
+                            constraint_type,
+                            columns: split_duckdb_list(cols.as_deref()),
+                            reference_table: ref_table,
+                            reference_columns: (!reference_columns.is_empty())
+                                .then_some(reference_columns),
+                        }
+                    })
+                    .collect()
+            })
+        })
+        .await
+    }
+
     pub async fn get_view_definition(
         &self,
         namespace: &str,
@@ -638,6 +744,22 @@ fn get_columns_uncancelled(
             })
             .collect()
     })
+}
+
+/// Split a `chr(31)`-joined catalog list back into its elements. DuckDB list
+/// columns (index expressions, constraint columns) are flattened on the unit
+/// separator in SQL so they round-trip as plain `VARCHAR` without a list
+/// `FromSql` impl; an empty list arrives as `""` and yields `vec![]`.
+fn split_duckdb_list(joined: Option<&str>) -> Vec<String> {
+    joined
+        .map(|value| {
+            value
+                .split('\u{1f}')
+                .filter(|part| !part.is_empty())
+                .map(str::to_string)
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 pub(super) fn collect_duckdb_rows<T, I>(rows: I) -> Result<Vec<T>, AppError>

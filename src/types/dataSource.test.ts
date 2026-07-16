@@ -112,6 +112,9 @@ describe("DataSourceProfile registry", () => {
       connection: { test: true, filePicker: true, readOnly: true },
       // Issue #1269 (gap #5) — cancel now backed by `execute_query` interrupt.
       query: { query: true, cancel: true },
+      // Issue #1070 — indexes/constraints backed by real duckdb_indexes() /
+      // duckdb_constraints() introspection (was a silent Ok(vec![]) stub).
+      catalog: { indexes: true, constraints: true },
     }),
     mssql: expectedCapabilities({
       connection: { test: true },

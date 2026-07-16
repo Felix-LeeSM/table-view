@@ -347,15 +347,24 @@ describe("adapter conformance matrix", () => {
   it("keeps engines runtime via query after #1464 emptied their catalog claim", () => {
     // #1464 — deleting the non-discriminating `catalog.browse` / `catalog.schema`
     // flags empties the catalog claim for the engines that declared only those
-    // two (redis/valkey: browse; duckdb: browse+schema). The entry `level` must
-    // stay `runtime` because it is driven by the query workflow, not the catalog
-    // claim — this locks that the flag cleanup causes no conformance regression.
-    for (const dbType of ["redis", "valkey", "duckdb"] as const) {
+    // two (redis/valkey: browse). The entry `level` must stay `runtime` because
+    // it is driven by the query workflow, not the catalog claim — this locks
+    // that the flag cleanup causes no conformance regression.
+    // (duckdb left this group when #1070 landed real `catalog.indexes` /
+    // `catalog.constraints` claims — asserted separately below.)
+    for (const dbType of ["redis", "valkey"] as const) {
       const entry = ADAPTER_CONFORMANCE_MATRIX[dbType];
       expect(entry.level).toBe("runtime");
       expect(entry.areas.catalog.checks).toEqual([]);
       expect(entry.areas.query.checks).toContain("query.query");
     }
+    const duckdb = ADAPTER_CONFORMANCE_MATRIX.duckdb;
+    expect(duckdb.level).toBe("runtime");
+    expect(duckdb.areas.catalog.checks).toEqual([
+      "catalog.indexes",
+      "catalog.constraints",
+    ]);
+    expect(duckdb.areas.query.checks).toContain("query.query");
   });
 });
 
