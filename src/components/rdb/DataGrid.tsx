@@ -212,12 +212,14 @@ export default function DataGrid({
   useRdbDataGridShortcuts({
     editingCell: editState.editingCell,
     canUndo: editState.canUndo,
+    canRedo: editState.canRedo,
     hasPendingChanges: editState.hasPendingChanges,
     onToggleFilters: filters.toggleFilters,
     onToggleQuickLook: toggleQuickLook,
     onCancelEdit: editState.cancelEdit,
     onRequestDiscard: () => setShowDiscardConfirm(true),
     onUndo: editState.undo,
+    onRedo: editState.redo,
   });
 
   return (
