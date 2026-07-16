@@ -117,7 +117,8 @@ describe("DataSourceProfile registry", () => {
     }),
     duckdb: expectedCapabilities({
       connection: { test: true, filePicker: true, readOnly: true },
-      query: { query: true },
+      // Issue #1269 (gap #5) — cancel now backed by `execute_query` interrupt.
+      query: { query: true, cancel: true },
       catalog: { browse: true, schema: true },
     }),
     mssql: expectedCapabilities({
