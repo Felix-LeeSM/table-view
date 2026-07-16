@@ -368,6 +368,17 @@ export const SQLITE_CAPABILITIES = capabilities({
     editRows: true,
     requiresPrimaryKeyForEdit: true,
   },
+  ddl: {
+    // Issue #1460 — the wired production `SqliteAdapter` implements only
+    // `create_table` / `create_table_plan`
+    // (src-tauri/src/db/adapters/sqlite/mod.rs delegates `create_table` to a
+    // real BEGIN/execute/COMMIT path; ddl.rs). Every other structured DDL
+    // trait method (`drop_table`, `rename_table`, `alter_table`, `add_column`,
+    // `create_index`, `drop_index`) returns `sqlite_unsupported(...)`, so only
+    // `createTable` is claimed — the alter/index/drop flags stay false and the
+    // matching UI entry points are hidden (#1046) rather than click-then-error.
+    createTable: true,
+  },
   intelligence: {
     erd: true,
   },
@@ -676,21 +687,41 @@ export function hasConnectionCapability(
  * Issue #1052 — whether this engine supports row-level data editing. DuckDB is
  * read-only because its backend adapter implements no write/DDL path (the
  * `AccessMode::ReadOnly` connection reflects that, it is not the cause), and it
- * is the ONLY RDB engine with `edit.editRows: false`, so this flag also gates
- * the schema-tree DDL entries
- * (Create / Rename / Drop): an engine that cannot edit a row cannot run DDL
- * either, and the `ddl.*` capability group is under-populated (SQLite / MSSQL /
- * Oracle leave it false yet support table DDL), which makes `editRows` the
- * reliable read-only discriminator. Per ui-parity §4 the affordances are
- * HIDDEN (not disabled) when this returns false. An unknown / still-loading
- * dbType returns true so affordances aren't stripped before the connection
- * resolves.
+ * is the ONLY RDB engine with `edit.editRows: false`. Per ui-parity §4 the
+ * affordances are HIDDEN (not disabled) when this returns false. An unknown /
+ * still-loading dbType returns true so affordances aren't stripped before the
+ * connection resolves.
+ *
+ * Issue #1460 — schema-tree DDL entries (Create / Rename / Drop) no longer ride
+ * on this flag; they read the per-action `ddl.*` capability via `supportsDdl`
+ * (each grounded on whether the wired adapter's DDL trait method executes vs.
+ * returns `Unsupported`). This flag now gates only the DataGrid row editor.
  */
 export function supportsRowEditing(
   dbType: DatabaseType | null | undefined,
 ): boolean {
   const profile = maybeGetDataSourceProfile(dbType);
   return profile === null || profile.capabilities.edit.editRows;
+}
+
+export type DdlCapabilityName = keyof DataSourceCapabilities["ddl"];
+
+/**
+ * Issue #1460 — whether the engine's wired backend adapter can actually execute
+ * a given structured DDL action. Reads the per-action `capabilities.ddl.*` flag
+ * (single source of truth) instead of the coarse `editRows` proxy, so a partial
+ * roster (e.g. SQLite: `createTable` true, alter/index/drop false) surfaces only
+ * the entry points the adapter really supports. Unsupported actions are HIDDEN,
+ * not shown-then-erroring (#1046). An unknown / still-loading dbType returns
+ * true so affordances aren't stripped before the connection resolves (same
+ * fallback as `supportsRowEditing` / `supportsCatalogFeature`).
+ */
+export function supportsDdl(
+  dbType: DatabaseType | null | undefined,
+  action: DdlCapabilityName,
+): boolean {
+  const profile = maybeGetDataSourceProfile(dbType);
+  return profile === null || profile.capabilities.ddl[action];
 }
 
 /**

@@ -305,6 +305,61 @@ describe("SchemaTree — actions", () => {
     expect(screen.queryByText("Rename Table")).toBeNull();
   });
 
+  // #1460 — SQLite has PARTIAL DDL: the wired adapter runs `create_table` but
+  // rejects rename / drop (`sqlite_unsupported`). So the table context menu must
+  // hide Rename (alterTable) + Drop (dropObject) and inert F2, while the flat
+  // "+" Create Table entry (createTable) stays. This locks per-action gating,
+  // not the coarse all-or-nothing `editRows` proxy the entries used to ride on.
+  it("[#1460] SQLite hides table Rename/Drop + inerts F2 but keeps the Create Table entry (partial DDL)", async () => {
+    useConnectionStore.setState({
+      connections: [
+        {
+          id: "conn1",
+          name: "SQLite",
+          dbType: "sqlite",
+          host: "localhost",
+          port: 0,
+          user: "",
+          hasPassword: false,
+          database: "test.sqlite",
+          groupId: null,
+          color: null,
+          environment: null,
+          paradigm: "rdb",
+        },
+      ],
+    });
+    setSchemaStoreState({
+      schemas: { conn1: [{ name: "main" }] },
+      tables: {
+        "conn1:main": [{ name: "users", schema: "main", row_count: null }],
+      },
+    });
+
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
+
+    // createTable is claimed → the flat root "+" Create Table entry stays.
+    expect(screen.getByLabelText("Create table in main")).toBeInTheDocument();
+
+    const tableItem = screen.getByLabelText("users table");
+    await act(async () => {
+      fireEvent.contextMenu(tableItem, { clientX: 100, clientY: 200 });
+    });
+
+    expect(screen.getByText("Structure")).toBeInTheDocument();
+    expect(screen.getByText("Data")).toBeInTheDocument();
+    // alterTable / dropObject are false → Rename + Drop are hidden.
+    expect(screen.queryByText("Rename")).toBeNull();
+    expect(screen.queryByText("Drop")).toBeNull();
+
+    await act(async () => {
+      fireEvent.keyDown(tableItem, { key: "F2" });
+    });
+    expect(screen.queryByText("Rename Table")).toBeNull();
+  });
+
   // AC-CM-02: Context menu closes when onClose is called (click outside)
   it("closes table context menu when close handler fires", async () => {
     await expandSchemaWithTables();

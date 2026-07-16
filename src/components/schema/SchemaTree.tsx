@@ -21,7 +21,7 @@ import {
   supportsMigrationExport,
 } from "@/hooks/useMigrationExport";
 import { useSidebarScrollPersistence } from "@/hooks/useSidebarScrollPersistence";
-import { supportsRowEditing } from "@/types/dataSource";
+import { supportsDdl } from "@/types/dataSource";
 import {
   Popover,
   PopoverTrigger,
@@ -119,10 +119,16 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
   // showing the control there would be an error-on-click (#1048). Also hidden
   // on Mongo/Redis and before dbType has loaded.
   const canExportMigration = supportsMigrationExport(dbType);
-  // #1052 — DuckDB's backend adapter has no write/DDL path, so its DDL entries
-  // (Create / Rename / Drop table) are hidden. `supportsRowEditing` is the
-  // reliable read-only discriminator among RDB engines (see its doc comment).
-  const canMutateSchema = supportsRowEditing(dbType);
+  // #1460 — each schema-tree DDL entry reads its own `ddl.*` capability so the
+  // affordance matches what the wired adapter can execute: Create Table →
+  // `createTable`, Rename (ALTER TABLE RENAME) → `alterTable`, Drop →
+  // `dropObject`. SQLite claims only `createTable`, so its Rename/Drop entries
+  // are hidden while Create Table stays; DuckDB/MSSQL/Oracle claim none (all
+  // hidden). Unsupported = HIDDEN, not click-then-error (#1046). An unknown /
+  // still-loading dbType returns true for each so entries aren't stripped early.
+  const canCreateTable = supportsDdl(dbType, "createTable");
+  const canAlterTable = supportsDdl(dbType, "alterTable");
+  const canDropObject = supportsDdl(dbType, "dropObject");
   const flatCreateTableSchema = profile.hasImplicitSingleSchema
     ? (actions.schemas[0]?.name ?? null)
     : null;
@@ -315,7 +321,9 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
   const ctx: SchemaTreeRowsContext = {
     t: (key, options) => t(key, options as Record<string, unknown>),
     dbType,
-    canMutateSchema,
+    canCreateTable,
+    canAlterTable,
+    canDropObject,
     treeShape,
     globalFilterActive,
     rovingFocusKey: roving.focusKey ?? firstFocusableKey,
@@ -370,7 +378,7 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
             <span />
           )}
           <div className="flex items-center gap-0.5">
-            {flatCreateTableSchema && canMutateSchema && (
+            {flatCreateTableSchema && canCreateTable && (
               <Button
                 variant="ghost"
                 size="icon-xs"
