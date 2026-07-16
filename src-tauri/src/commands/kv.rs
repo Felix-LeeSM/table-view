@@ -402,6 +402,70 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn scan_kv_keys_aborts_in_flight_on_registered_token_cancel() {
+        // Issue #1269 (gap #6) — revive the KV cooperative-cancel wiring: a scan
+        // that registers a query_id under `query_tokens` must abort when the
+        // frontend fires `cancel_query(query_id)` while the enrichment loop is
+        // still running. Park the scan in-flight, flip the registered token the
+        // way `cancel_query` does, then assert the adapter observes it and the
+        // command surfaces a cancelled error (not a completed page). Mirrors the
+        // RDB `long_query_does_not_serialize_other_commands_or_native_cancel`
+        // gate idiom.
+        use std::sync::Arc;
+        use tokio::sync::Notify;
+        use tokio::time::{timeout, Duration};
+
+        let entered = Arc::new(Notify::new());
+        let release = Arc::new(Notify::new());
+
+        let state = Arc::new(AppState::new());
+        state.active_connections.lock().await.insert(
+            "kv".into(),
+            Arc::new(ActiveAdapter::Kv(Box::new(StubKvAdapter {
+                kind_value: DatabaseType::Redis,
+                scan_keys_gate: Some((entered.clone(), release.clone())),
+                ..Default::default()
+            }))),
+        );
+
+        // Spawn the scan — it registers the cancel token under "q-scan" and
+        // parks inside the adapter's scan_keys.
+        let scan_state = Arc::clone(&state);
+        let scan = tokio::spawn(async move {
+            scan_kv_keys_inner(&scan_state, "kv", scan_request(), Some("q-scan")).await
+        });
+
+        // Wait until the scan is in-flight (token registered, parked mid-scan).
+        entered.notified().await;
+        assert!(
+            state.query_tokens.lock().await.contains_key("q-scan"),
+            "scan must register its cooperative cancel token while running"
+        );
+
+        // Fire the token the way `cancel_query` does — flip the registered entry.
+        state
+            .query_tokens
+            .lock()
+            .await
+            .get("q-scan")
+            .expect("registered token missing")
+            .cancel();
+
+        // Release the park; the adapter observes the fired token and aborts.
+        release.notify_one();
+        let result = timeout(Duration::from_secs(5), scan)
+            .await
+            .expect("scan did not settle after cancel")
+            .expect("scan task panicked");
+        assert!(
+            matches!(result, Err(AppError::Database(_))),
+            "cancelled scan should surface a Database(cancelled) error, got {result:?}"
+        );
+        // Token is released once the command settles.
+        assert!(state.query_tokens.lock().await.is_empty());
+    }
+
+    #[tokio::test]
     async fn unknown_kv_connection_returns_not_found() {
         let state = AppState::new();
         assert!(matches!(
