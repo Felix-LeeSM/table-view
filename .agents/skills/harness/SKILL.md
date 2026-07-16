@@ -228,3 +228,4 @@ Also persist or summarize `contract.md`, `execution-brief.md`, `findings.md`, an
 7. **Context discipline** — Pass only the sprint contract, execution brief, evidence packet, and relevant feedback to agents. Do not dump entire conversation history.
 8. **No worktree assumption** — Worktree isolation may be used by the caller, but the harness must not require it or assume a dedicated worktree command exists.
 9. **Artifact location** — Sprint artifacts belong in `docs/sprints/sprint-{{N}}/`.
+10. **Delivery handoff** — The harness builds and evaluates; it does not ship. After a PASS Final Report, route the result through the delivery pipeline (commit → push → PR → review → merge): `memory/workflow/delivery/memory.md` (T0~T7).

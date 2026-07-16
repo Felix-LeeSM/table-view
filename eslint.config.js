@@ -512,4 +512,30 @@ export default tseslint.config(
       ],
     },
   },
+  // #1403 (2026-07-16) — `@deprecated` JSDoc 심볼 사용을 pre-push + CI 에서
+  // 자동 차단. deprecated API 는 에디터 취소선으로만 보이고 tsc/CI 어디서도
+  // 안 잡히다가, upstream 이 심볼을 실제 제거하는 순간 한꺼번에 tsc 에러로
+  // 터진다. type-aware 룰이므로 projectService(typed lint) 를 켠다. scope 는
+  // tsconfig.json 의 include: ["src"] 에 맞춰 src 로 한정 — e2e/scripts/wdio 등
+  // tsconfig 밖 파일에 projectService 를 걸면 "not found by the project
+  // service" 로 실패한다.
+  {
+    files: ["src/**/*.{ts,tsx}"],
+    // scripts/check-eslint-static-policy.ts validates the feature-import rule
+    // with a synthetic `lintText` on the non-existent path
+    // `src/features/demo/Feature.tsx`. projectService parses against tsconfig,
+    // which `include: ["src"]` would match, so a file that is not on disk
+    // becomes a fatal parse error. Exclude that scratch path from typed lint so
+    // the self-test keeps using the syntactic parser.
+    ignores: ["src/features/demo/**"],
+    languageOptions: {
+      parserOptions: {
+        projectService: true,
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
+    rules: {
+      "@typescript-eslint/no-deprecated": "error",
+    },
+  },
 );

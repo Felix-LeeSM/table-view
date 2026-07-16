@@ -18,10 +18,10 @@ use crate::models::{
     FileAnalyticsSource, FileAnalyticsSourceMetadata, FilterCondition, FunctionInfo, IndexInfo,
     PostgresExtensionInfo, PostgresTypeInfo, RenameTableRequest, SchemaChangeResult,
     SearchAliasInfo, SearchCatalogSummary, SearchClusterIdentity, SearchDataStreamInfo,
-    SearchDeleteByQueryRequest, SearchDestructiveOperationPlan, SearchFieldStatsEnvelope,
-    SearchIndexInfo, SearchIndexMapping, SearchIndexSettings, SearchIndexTemplateInfo,
-    SearchQueryRequest, SearchResultEnvelope, SqliteCapabilityInventory, TableData, TableInfo,
-    TriggerInfo, ValueSearchResult, ViewInfo,
+    SearchDeleteByQueryRequest, SearchDeleteByQueryResult, SearchDestructiveOperationPlan,
+    SearchFieldStatsEnvelope, SearchIndexInfo, SearchIndexMapping, SearchIndexSettings,
+    SearchIndexTemplateInfo, SearchQueryRequest, SearchResultEnvelope, SqliteCapabilityInventory,
+    TableData, TableInfo, TriggerInfo, ValueSearchResult, ViewInfo,
 };
 
 use super::types::{
@@ -1408,6 +1408,17 @@ pub trait SearchAdapter: DbAdapter {
         Box::pin(async {
             Err(AppError::Unsupported(
                 "Delete-by-query safety planning is not wired for this adapter".into(),
+            ))
+        })
+    }
+
+    fn execute_delete_by_query<'a>(
+        &'a self,
+        _request: &'a SearchDeleteByQueryRequest,
+    ) -> BoxFuture<'a, Result<SearchDeleteByQueryResult, AppError>> {
+        Box::pin(async {
+            Err(AppError::Unsupported(
+                "Delete-by-query execution is not wired for this adapter".into(),
             ))
         })
     }

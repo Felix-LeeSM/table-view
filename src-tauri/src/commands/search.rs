@@ -2,9 +2,9 @@ use crate::commands::connection::AppState;
 use crate::commands::{not_connected, register_cancel_token, release_cancel_token};
 use crate::error::AppError;
 use crate::models::{
-    SearchCatalogSummary, SearchDeleteByQueryRequest, SearchDestructiveOperationPlan,
-    SearchFieldStatsEnvelope, SearchIndexMapping, SearchIndexSettings, SearchIndexTemplateInfo,
-    SearchQueryRequest, SearchResultEnvelope,
+    SearchCatalogSummary, SearchDeleteByQueryRequest, SearchDeleteByQueryResult,
+    SearchDestructiveOperationPlan, SearchFieldStatsEnvelope, SearchIndexMapping,
+    SearchIndexSettings, SearchIndexTemplateInfo, SearchQueryRequest, SearchResultEnvelope,
 };
 
 async fn list_search_catalog_summary_inner(
@@ -187,6 +187,47 @@ pub async fn plan_search_delete_by_query(
     plan_search_delete_by_query_inner(state.inner(), &connection_id, request).await
 }
 
+async fn execute_search_delete_by_query_inner(
+    state: &AppState,
+    connection_id: &str,
+    request: SearchDeleteByQueryRequest,
+    safety_confirmed: bool,
+) -> Result<SearchDeleteByQueryResult, AppError> {
+    // #1076 — Safe Mode backend gate (chokepoint). Delete-by-query is
+    // unconditionally destructive, so this runs the SAME danger-tier matrix as
+    // the RDB paths BEFORE any live dispatch, reading Safe Mode + the target
+    // connection's `environment` from the backend's own SQLite store. A direct
+    // IPC `invoke` or a tampered webview cannot run a live delete unconfirmed
+    // in a confirm-required context.
+    let pool = crate::commands::sqlite_pool::get_or_init_pool().await?;
+    crate::commands::safe_mode::enforce_search_danger(&pool, connection_id, safety_confirmed)
+        .await?;
+    let active = state
+        .active_adapter(connection_id)
+        .await
+        .ok_or_else(|| not_connected(connection_id))?;
+    active.as_search()?.execute_delete_by_query(&request).await
+}
+
+#[tauri::command]
+pub async fn execute_search_delete_by_query(
+    state: tauri::State<'_, AppState>,
+    connection_id: String,
+    request: SearchDeleteByQueryRequest,
+    // Set by the frontend only after its Safe Mode confirm dialog is satisfied.
+    // `None` / `false` = unconfirmed; the backend gate rejects a destructive
+    // delete in a confirm-required context.
+    safety_confirmed: Option<bool>,
+) -> Result<SearchDeleteByQueryResult, AppError> {
+    execute_search_delete_by_query_inner(
+        state.inner(),
+        &connection_id,
+        request,
+        safety_confirmed.unwrap_or(false),
+    )
+    .await
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -272,7 +313,7 @@ mod tests {
 
         assert_eq!(plan.operation, "deleteByQuery");
         assert_eq!(plan.estimated_document_count, Some(1));
-        assert!(!plan.requires_confirmation);
+        assert!(plan.requires_confirmation);
     }
 
     #[tokio::test]

@@ -22,6 +22,7 @@
  * label and so deleting the deprecation in a later sprint is a single
  * file delete instead of a scatter-edit.
  */
+/* eslint-disable @typescript-eslint/no-deprecated -- #1403: this whole suite exercises the deliberately-deprecated QueryTab.queryMode contract; it is deleted wholesale when sprint-311 A5 lands */
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { useWorkspaceStore } from "./workspaceStore";
 import {

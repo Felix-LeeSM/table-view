@@ -162,6 +162,7 @@ function migrateTab(t: Tab, workspaceDb: string): Tab {
   if (t.type === "query") {
     const paradigm: Paradigm = t.paradigm ?? "rdb";
     const queryMode: WorkspaceQueryMode | undefined =
+      // eslint-disable-next-line @typescript-eslint/no-deprecated -- #1403: QueryTab.queryMode is intentional migration debt, removed when sprint-311 A5 lands
       sanitizeWorkspaceQueryMode(paradigm, t.queryMode);
     const queryLanguage = toWorkspaceQueryLanguage({
       paradigm,
