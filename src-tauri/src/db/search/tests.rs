@@ -1168,6 +1168,48 @@ async fn spawn_root_probe_server(
     (port, handle)
 }
 
+/// #1269 gap #7 — a mock cluster that, instead of answering the search POST,
+/// watches whether the client closes the socket. A cancelled Search-tab query
+/// drops the in-flight `send()` future, which reqwest closes; ES/OS abort the
+/// search task on that channel close. Resolves to `true` iff the client closed
+/// the connection within the watch window (the real server-side-abort signal).
+async fn spawn_search_cancel_watch_server(root_body: &'static str) -> (u16, JoinHandle<bool>) {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let handle = tokio::spawn(async move {
+        // Connection 1: root probe. Answer, then drop the socket so the client
+        // opens a fresh connection for the search (mirrors spawn_search_http_server,
+        // whose per-route handlers each drop their socket after responding).
+        let (mut probe, _) = listener.accept().await.unwrap();
+        let mut buf = [0u8; 4096];
+        let _ = probe.read(&mut buf).await.unwrap();
+        let response = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+            root_body.len(),
+            root_body,
+        );
+        probe.write_all(response.as_bytes()).await.unwrap();
+        drop(probe);
+
+        // Connection 2: the search POST. Read it, then withhold the response
+        // (a long-running search) and watch for the client to close. A clean
+        // cancel yields EOF (`Ok(0)`); a reset counts too. The 5s watch window
+        // sits below the 10s client timeout, so a NON-closing cancel (the
+        // regression) is distinguishable — it would only close at the 10s
+        // timeout, well past this window.
+        let (mut search, _) = listener.accept().await.unwrap();
+        loop {
+            match tokio::time::timeout(Duration::from_secs(5), search.read(&mut buf)).await {
+                Ok(Ok(0)) => break true,  // EOF: client closed the socket
+                Ok(Ok(_)) => continue,    // request bytes still arriving
+                Ok(Err(_)) => break true, // reset also closes the channel
+                Err(_) => break false,    // timed out: connection stayed open
+            }
+        }
+    });
+    (port, handle)
+}
+
 async fn spawn_plain_tcp_server() -> (u16, JoinHandle<()>) {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let port = listener.local_addr().unwrap().port();
