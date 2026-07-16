@@ -1866,8 +1866,8 @@ describe("ConnectionDialog", () => {
         dataSourceProfiles.getDataSourceProfile("mssql").capabilities,
       ).toMatchObject({
         connection: { test: true },
-        query: { query: true, multiStatement: true, cancel: true },
-        catalog: { browse: true, schema: true, indexes: true },
+        query: { query: true, cancel: true },
+        catalog: { indexes: true },
         edit: { editRows: true },
       });
     });

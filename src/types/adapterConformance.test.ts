@@ -191,12 +191,7 @@ describe("adapter conformance matrix", () => {
     });
 
     expect(mariadbWithoutVersion?.areas.catalog?.checks).toEqual(
-      expect.arrayContaining([
-        "catalog.browse",
-        "catalog.schema",
-        "catalog.indexes",
-        "catalog.relationships",
-      ]),
+      expect.arrayContaining(["catalog.indexes"]),
     );
     expect(mariadbWithoutVersion?.areas.catalog?.deferred).toContain(
       "catalog.constraints",
@@ -211,13 +206,7 @@ describe("adapter conformance matrix", () => {
     });
 
     expect(mariadbWithVersion?.areas.catalog?.checks).toEqual(
-      expect.arrayContaining([
-        "catalog.browse",
-        "catalog.schema",
-        "catalog.indexes",
-        "catalog.relationships",
-        "catalog.constraints",
-      ]),
+      expect.arrayContaining(["catalog.indexes", "catalog.constraints"]),
     );
   });
 
@@ -245,11 +234,7 @@ describe("adapter conformance matrix", () => {
 
     expect(mongo.level).toBe("runtime");
     expect(mongo.areas.connection.checks).toEqual(["connection.test"]);
-    expect(mongo.areas.catalog.checks).toEqual([
-      "catalog.browse",
-      "catalog.schema",
-      "catalog.indexes",
-    ]);
+    expect(mongo.areas.catalog.checks).toEqual(["catalog.indexes"]);
     expect(mongo.areas.query.checks).toEqual([
       "query.query",
       "query.cancel",
@@ -261,7 +246,7 @@ describe("adapter conformance matrix", () => {
       "edit.bulkWrite",
     ]);
     expect(mongo.areas.safety.checks).toEqual(["safety.policy"]);
-    expect(mongo.areas.query.deferred).toEqual(["query.multiStatement"]);
+    expect(mongo.areas.query.deferred).toEqual([]);
     expect(mongo.areas.edit.deferred).toEqual([
       "edit.editRows",
       "edit.editKeys",
@@ -281,12 +266,8 @@ describe("adapter conformance matrix", () => {
       "connection.readOnly",
       "connection.filePicker",
     ]);
-    expect(valkey.areas.catalog.checks).toEqual(["catalog.browse"]);
-    expect(valkey.areas.catalog.deferred).toEqual([
-      "catalog.schema",
-      "catalog.indexes",
-      "catalog.relationships",
-    ]);
+    expect(valkey.areas.catalog.checks).toEqual([]);
+    expect(valkey.areas.catalog.deferred).toEqual(["catalog.indexes"]);
     expect(valkey.areas.query.checks).toEqual(["query.query"]);
     expect(valkey.areas.query.deferred).toEqual([
       "query.cancel",
@@ -302,17 +283,10 @@ describe("adapter conformance matrix", () => {
     expect(mssql.level).toBe("runtime");
     expect(mssql.areas.connection.checks).toEqual(["connection.test"]);
     expect(mssql.areas.catalog.checks).toEqual([
-      "catalog.browse",
-      "catalog.schema",
       "catalog.indexes",
       "catalog.constraints",
-      "catalog.relationships",
     ]);
-    expect(mssql.areas.query.checks).toEqual([
-      "query.query",
-      "query.multiStatement",
-      "query.cancel",
-    ]);
+    expect(mssql.areas.query.checks).toEqual(["query.query", "query.cancel"]);
     expect(mssql.areas.edit.checks).toEqual(["edit.editRows"]);
     expect(mssql.areas.ddl.checks).toEqual([]);
     expect(mssql.areas.connection.unsupported).toEqual([
@@ -342,17 +316,10 @@ describe("adapter conformance matrix", () => {
     expect(oracle.level).toBe("runtime");
     expect(oracle.areas.connection.checks).toEqual(["connection.test"]);
     expect(oracle.areas.catalog.checks).toEqual([
-      "catalog.browse",
-      "catalog.schema",
       "catalog.indexes",
       "catalog.constraints",
-      "catalog.relationships",
     ]);
-    expect(oracle.areas.query.checks).toEqual([
-      "query.query",
-      "query.multiStatement",
-      "query.cancel",
-    ]);
+    expect(oracle.areas.query.checks).toEqual(["query.query", "query.cancel"]);
     expect(oracle.areas.edit.checks).toEqual(["edit.editRows"]);
     expect(oracle.areas.ddl.checks).toEqual([]);
     expect(oracle.areas.connection.deferred).toEqual([]);
@@ -375,6 +342,20 @@ describe("adapter conformance matrix", () => {
       "ddl.createIndex",
       "ddl.dropObject",
     ]);
+  });
+
+  it("keeps engines runtime via query after #1464 emptied their catalog claim", () => {
+    // #1464 — deleting the non-discriminating `catalog.browse` / `catalog.schema`
+    // flags empties the catalog claim for the engines that declared only those
+    // two (redis/valkey: browse; duckdb: browse+schema). The entry `level` must
+    // stay `runtime` because it is driven by the query workflow, not the catalog
+    // claim — this locks that the flag cleanup causes no conformance regression.
+    for (const dbType of ["redis", "valkey", "duckdb"] as const) {
+      const entry = ADAPTER_CONFORMANCE_MATRIX[dbType];
+      expect(entry.level).toBe("runtime");
+      expect(entry.areas.catalog.checks).toEqual([]);
+      expect(entry.areas.query.checks).toContain("query.query");
+    }
   });
 });
 
