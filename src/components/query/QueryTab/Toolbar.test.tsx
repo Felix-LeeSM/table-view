@@ -77,6 +77,9 @@ describe("QueryTabToolbar — sprint-381 Mongo db-contract α", () => {
         onDryRun={vi.fn()}
         onFormat={vi.fn()}
         favorites={makeFavorites()}
+        showSnippets={false}
+        setShowSnippets={vi.fn()}
+        onInsertSnippet={vi.fn()}
       />,
     );
     const runBtn = screen.getByRole("button", { name: /run query/i });
@@ -96,6 +99,9 @@ describe("QueryTabToolbar — sprint-381 Mongo db-contract α", () => {
         onDryRun={vi.fn()}
         onFormat={vi.fn()}
         favorites={makeFavorites()}
+        showSnippets={false}
+        setShowSnippets={vi.fn()}
+        onInsertSnippet={vi.fn()}
       />,
     );
     const runBtn = screen.getByRole("button", { name: /run query/i });
@@ -116,6 +122,9 @@ describe("QueryTabToolbar — sprint-381 Mongo db-contract α", () => {
         onDryRun={vi.fn()}
         onFormat={vi.fn()}
         favorites={makeFavorites()}
+        showSnippets={false}
+        setShowSnippets={vi.fn()}
+        onInsertSnippet={vi.fn()}
       />,
     );
     const runBtn = screen.getByRole("button", { name: /run query/i });
@@ -135,6 +144,9 @@ describe("QueryTabToolbar — sprint-381 Mongo db-contract α", () => {
         onDryRun={vi.fn()}
         onFormat={vi.fn()}
         favorites={makeFavorites()}
+        showSnippets={false}
+        setShowSnippets={vi.fn()}
+        onInsertSnippet={vi.fn()}
       />,
     );
     const runBtn = screen.getByRole("button", { name: /run query/i });
@@ -151,6 +163,9 @@ describe("QueryTabToolbar — sprint-381 Mongo db-contract α", () => {
         onDryRun={vi.fn()}
         onFormat={vi.fn()}
         favorites={makeFavorites()}
+        showSnippets={false}
+        setShowSnippets={vi.fn()}
+        onInsertSnippet={vi.fn()}
       />,
     );
     const runBtn = screen.getByRole("button", { name: /run query/i });
@@ -175,6 +190,9 @@ describe("QueryTabToolbar — sprint-381 Mongo db-contract α", () => {
         onFormat={vi.fn()}
         onImportSqlFile={onImportSqlFile}
         favorites={makeFavorites()}
+        showSnippets={false}
+        setShowSnippets={vi.fn()}
+        onInsertSnippet={vi.fn()}
       />,
     );
     screen.getByRole("button", { name: /open sql file/i }).click();
@@ -192,6 +210,9 @@ describe("QueryTabToolbar — sprint-381 Mongo db-contract α", () => {
         onFormat={vi.fn()}
         onImportSqlFile={vi.fn()}
         favorites={makeFavorites()}
+        showSnippets={false}
+        setShowSnippets={vi.fn()}
+        onInsertSnippet={vi.fn()}
       />,
     );
     expect(screen.queryByRole("button", { name: /open sql file/i })).toBeNull();
@@ -214,6 +235,9 @@ describe("QueryTabToolbar — sprint-381 Mongo db-contract α", () => {
         onDryRun={vi.fn()}
         onFormat={vi.fn()}
         favorites={makeFavorites()}
+        showSnippets={false}
+        setShowSnippets={vi.fn()}
+        onInsertSnippet={vi.fn()}
       />,
     );
 

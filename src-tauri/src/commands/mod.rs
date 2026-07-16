@@ -18,6 +18,7 @@ pub mod persist_connections;
 pub mod persist_favorites;
 pub mod persist_mru;
 pub mod persist_settings;
+pub mod persist_snippets;
 pub mod persist_table_activity;
 pub mod persist_workspace;
 pub mod query;
