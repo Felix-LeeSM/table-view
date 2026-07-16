@@ -163,13 +163,14 @@ describe("DataSourceProfile registry", () => {
     }),
     redis: expectedCapabilities({
       connection: { test: true, switchDatabase: true },
-      query: { query: true },
+      // Issue #1269 (gap #6) — cooperative scan/command cancel now backed.
+      query: { query: true, cancel: true },
       catalog: { browse: true },
       edit: { editKeys: true },
     }),
     valkey: expectedCapabilities({
       connection: { test: true, switchDatabase: true },
-      query: { query: true },
+      query: { query: true, cancel: true },
       catalog: { browse: true },
       edit: { editKeys: true },
     }),

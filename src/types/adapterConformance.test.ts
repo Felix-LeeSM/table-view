@@ -287,11 +287,9 @@ describe("adapter conformance matrix", () => {
       "catalog.indexes",
       "catalog.relationships",
     ]);
-    expect(valkey.areas.query.checks).toEqual(["query.query"]);
-    expect(valkey.areas.query.deferred).toEqual([
-      "query.cancel",
-      "query.explain",
-    ]);
+    // Issue #1269 (gap #6) — cooperative cancel is a live claim, not deferred.
+    expect(valkey.areas.query.checks).toEqual(["query.query", "query.cancel"]);
+    expect(valkey.areas.query.deferred).toEqual(["query.explain"]);
     expect(valkey.areas.edit.checks).toEqual(["edit.editKeys"]);
     expect(valkey.areas.edit.deferred).toEqual(["edit.bulkWrite"]);
   });

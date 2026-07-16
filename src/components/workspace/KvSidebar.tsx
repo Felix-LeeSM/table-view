@@ -8,6 +8,7 @@ import {
   Loader2,
   RefreshCw,
   Search,
+  Square,
   Timer,
 } from "lucide-react";
 import { Button } from "@components/ui/button";
@@ -18,6 +19,7 @@ import {
 import { useConnectionStore } from "@stores/connectionStore";
 import { useSafeModeStore } from "@stores/safeModeStore";
 import { useWorkspaceStore } from "@stores/workspaceStore";
+import { cancelQuery } from "@lib/tauri/query";
 import { currentKvDatabase, scanKvKeys } from "@lib/tauri/kv";
 import type { KvKeyMetadata } from "@/types/kv";
 import { formatKvTtl } from "@/types/kv";
@@ -63,6 +65,9 @@ export default function KvSidebar({ connectionId }: KvSidebarProps) {
   const autoScanRef = useRef(false);
   const rootScanInFlightRef = useRef<string | null>(null);
   const latestKeyScanRef = useRef(0);
+  // Issue #1269 (gap #6) — id of the in-flight scan's cancel token so the Stop
+  // button can fire the same cooperative `cancelQuery` the SQL query tab uses.
+  const scanQueryIdRef = useRef<string | null>(null);
 
   const loadCatalog = useCallback(async () => {
     setLoadingCatalog(true);
@@ -91,16 +96,22 @@ export default function KvSidebar({ connectionId }: KvSidebarProps) {
       if (rootScanKey) rootScanInFlightRef.current = rootScanKey;
       const scanId = latestKeyScanRef.current + 1;
       latestKeyScanRef.current = scanId;
+      const queryId = crypto.randomUUID();
+      scanQueryIdRef.current = queryId;
       if (cursor === "0") setHasScannedKeys(true);
       setLoadingKeys(true);
       setError(null);
       try {
-        const page = await scanKvKeys(connectionId, {
-          database,
-          cursor,
-          pattern: normalizedPattern,
-          limit: KEY_SCAN_LIMIT,
-        });
+        const page = await scanKvKeys(
+          connectionId,
+          {
+            database,
+            cursor,
+            pattern: normalizedPattern,
+            limit: KEY_SCAN_LIMIT,
+          },
+          queryId,
+        );
         if (latestKeyScanRef.current !== scanId) return;
         setKeys((prev) =>
           cursor === "0" ? page.keys : [...prev, ...page.keys],
@@ -112,6 +123,7 @@ export default function KvSidebar({ connectionId }: KvSidebarProps) {
       } finally {
         if (latestKeyScanRef.current === scanId) {
           setLoadingKeys(false);
+          scanQueryIdRef.current = null;
         }
         if (rootScanKey && rootScanInFlightRef.current === rootScanKey) {
           rootScanInFlightRef.current = null;
@@ -120,6 +132,23 @@ export default function KvSidebar({ connectionId }: KvSidebarProps) {
     },
     [connectionId, database, pattern],
   );
+
+  // Issue #1269 (gap #6) — abort the in-flight scan. Supersede it (drop the
+  // late resolve), clear the overlay synchronously, then fire the cooperative
+  // token. Guarantee: cooperative-only — the backend checks the token between
+  // keys during metadata enrichment, so a long SCAN/KEYS enrichment loop stops;
+  // Redis is not in-process, so a single in-flight command is not server-killed.
+  const cancelScan = useCallback(() => {
+    latestKeyScanRef.current += 1;
+    setLoadingKeys(false);
+    rootScanInFlightRef.current = null;
+    const queryId = scanQueryIdRef.current;
+    scanQueryIdRef.current = null;
+    if (!queryId) return;
+    void cancelQuery(queryId).catch(() => {
+      // Best-effort — a scan that already settled has no token to fire.
+    });
+  }, []);
 
   // Open the selected key in a right-hand detail tab (kv paradigm), mirroring
   // the search sidebar → SearchIndexDetailPanel navigation. The sidebar owns
@@ -241,20 +270,32 @@ export default function KvSidebar({ connectionId }: KvSidebarProps) {
           }}
           placeholder="*"
         />
-        <Button
-          variant="secondary"
-          size="xs"
-          className="shrink-0"
-          disabled={!canScanKeys}
-          onClick={() => void loadKeys("0")}
-        >
-          {loadingKeys ? (
-            <Loader2 size={12} className="animate-spin" />
-          ) : (
+        {loadingKeys ? (
+          <Button
+            variant="secondary"
+            size="xs"
+            className="shrink-0"
+            onClick={cancelScan}
+            aria-label={t("kvSidebar.stopScanAria", { productLabel })}
+            title={t("kvSidebar.stopScanTitle")}
+            data-testid="kv-scan-cancel"
+          >
+            <Square size={12} className="text-destructive" aria-hidden />
+            <Loader2 size={12} className="animate-spin" aria-hidden />
+            {t("kvSidebar.stopScanButton")}
+          </Button>
+        ) : (
+          <Button
+            variant="secondary"
+            size="xs"
+            className="shrink-0"
+            disabled={!canScanKeys}
+            onClick={() => void loadKeys("0")}
+          >
             <Search size={12} />
-          )}
-          {t("kvSidebar.scanButton", { limit: KEY_SCAN_LIMIT })}
-        </Button>
+            {t("kvSidebar.scanButton", { limit: KEY_SCAN_LIMIT })}
+          </Button>
+        )}
       </div>
 
       <div
