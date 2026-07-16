@@ -186,7 +186,10 @@ const DEFERRED_FEATURES = Object.freeze({
       "catalog.constraints",
       "catalog.relationships",
     ],
-    query: ["query.multiStatement", "query.cancel", "query.explain"],
+    // Issue #1269 (gap #5) — `query.cancel` left the deferred list: the adapter
+    // now interrupts a running statement (`Connection::interrupt_handle`), so
+    // the profile claims it and it is a live check, not a deferral.
+    query: ["query.multiStatement", "query.explain"],
     edit: [],
     ddl: [],
   },

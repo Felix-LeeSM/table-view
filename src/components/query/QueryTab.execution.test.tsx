@@ -434,7 +434,11 @@ describe("QueryTab — execution", () => {
     expect(mockCancelQuery).toHaveBeenCalledWith("query-1-1234");
   });
 
-  it("ignores cancel-query event for DuckDB because cancel is unsupported", async () => {
+  // Issue #1269 (gap #5) — DuckDB now interrupts a running statement, so
+  // `query.cancel` is true and the cancel-query event routes through the
+  // cooperative `cancelQuery` path (not native — no server pid).
+  it("dispatches cooperative cancel-query event for DuckDB (#1269)", async () => {
+    mockCancelQuery.mockResolvedValueOnce("Cancelled");
     const tab = makeQueryTab({
       connectionId: "duckdb-conn",
       queryState: { status: "running", queryId: "query-1-1234" },
@@ -453,7 +457,7 @@ describe("QueryTab — execution", () => {
       );
     });
 
-    expect(mockCancelQuery).not.toHaveBeenCalled();
+    expect(mockCancelQuery).toHaveBeenCalledWith("query-1-1234");
   });
 
   // ── Multi-statement history recording ──

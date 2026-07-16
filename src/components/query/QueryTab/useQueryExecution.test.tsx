@@ -712,7 +712,10 @@ describe("useQueryExecution scaffold", () => {
     });
   });
 
-  it("does not cancel a running DuckDB query because cancel is unsupported", async () => {
+  // Issue #1269 (gap #5) — DuckDB's `execute_query` now interrupts a running
+  // statement, so `query.cancel` is true and handleExecute on a running tab
+  // cancels through the cooperative token (not native — no server pid).
+  it("cancels a running DuckDB query via cooperative token (#1269)", async () => {
     const tab = seedRdbTab(
       "SELECT 1",
       { queryState: { status: "running", queryId: "query-1-1234" } },
@@ -724,7 +727,7 @@ describe("useQueryExecution scaffold", () => {
       await result.current.handleExecute();
     });
 
-    expect(cancelQueryMock).not.toHaveBeenCalled();
+    expect(cancelQueryMock).toHaveBeenCalledWith("query-1-1234");
   });
 
   it("syncs activeDb and surfaces a retry toast on DbMismatch", async () => {

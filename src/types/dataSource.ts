@@ -390,6 +390,12 @@ export const DUCKDB_CAPABILITIES = capabilities({
   },
   query: {
     query: true,
+    // Issue #1269 (gap #5) — the adapter's `execute_query` now interrupts a
+    // running statement via `Connection::interrupt_handle` (the DuckDB analogue
+    // of the SQLite progress-handler cancel), so the SQL-tab Cancel button is a
+    // truthful claim. Cooperative-token path like SQLite — not in
+    // `supportsNativeCancel` (in-process interrupt, no server pid).
+    cancel: true,
   },
   catalog: {
     browse: true,
