@@ -127,14 +127,10 @@ function verifyEnterpriseRdbmsPromotionBoundary(): void {
   );
   assert(
     mssql.capabilities.query.query &&
-      mssql.capabilities.query.multiStatement &&
       mssql.capabilities.query.cancel &&
       !mssql.capabilities.query.explain &&
-      mssql.capabilities.catalog.browse &&
-      mssql.capabilities.catalog.schema &&
       mssql.capabilities.catalog.indexes &&
       mssql.capabilities.catalog.constraints &&
-      mssql.capabilities.catalog.relationships &&
       mssql.capabilities.edit.editRows &&
       !mssql.capabilities.ddl.createTable,
     "mssql: runtime support is limited to catalog/query/cancel/tabular plus PK-projected editRows; DDL/admin/import/export/full workbench stay unsupported",
@@ -150,14 +146,10 @@ function verifyEnterpriseRdbmsPromotionBoundary(): void {
   );
   assert(
     oracle.capabilities.query.query &&
-      oracle.capabilities.query.multiStatement &&
       oracle.capabilities.query.cancel &&
       !oracle.capabilities.query.explain &&
-      oracle.capabilities.catalog.browse &&
-      oracle.capabilities.catalog.schema &&
       oracle.capabilities.catalog.indexes &&
       oracle.capabilities.catalog.constraints &&
-      oracle.capabilities.catalog.relationships &&
       oracle.capabilities.edit.editRows &&
       !oracle.capabilities.ddl.createTable,
     "oracle: runtime support is limited to service-name catalog/query/cancel/tabular plus PK-projected editRows; DDL/admin/import/export/full workbench stay unsupported",
@@ -183,9 +175,8 @@ function verifySearchConnectionPromotionBoundary(): void {
     "elasticsearch: live smoke contract should stay server/search/searchHits scoped",
   );
   assert(
-    elasticsearch.capabilities.catalog.browse &&
-      elasticsearch.capabilities.catalog.indexes,
-    "elasticsearch: live catalog browse/index capability should be exposed",
+    elasticsearch.capabilities.catalog.indexes,
+    "elasticsearch: live catalog index capability should be exposed",
   );
   assert(
     elasticsearch.capabilities.query.query &&
@@ -215,9 +206,8 @@ function verifySearchConnectionPromotionBoundary(): void {
     "opensearch: live smoke contract should stay server/search/searchHits scoped",
   );
   assert(
-    opensearch.capabilities.catalog.browse &&
-      opensearch.capabilities.catalog.indexes,
-    "opensearch: live catalog browse/index capability should be exposed",
+    opensearch.capabilities.catalog.indexes,
+    "opensearch: live catalog index capability should be exposed",
   );
   assert(
     opensearch.capabilities.query.query &&

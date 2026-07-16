@@ -49,13 +49,10 @@ describe("DataSourceProfile registry", () => {
 
   const mysqlFamilyCapabilities = expectedCapabilities({
     connection: { test: true, switchDatabase: true },
-    query: { query: true, multiStatement: true, cancel: true, explain: true },
+    query: { query: true, cancel: true, explain: true },
     catalog: {
-      browse: true,
-      schema: true,
       indexes: true,
       constraints: true,
-      relationships: true,
     },
     edit: { editRows: true },
     ddl: {
@@ -75,16 +72,12 @@ describe("DataSourceProfile registry", () => {
       connection: { test: true, switchDatabase: true },
       query: {
         query: true,
-        multiStatement: true,
         cancel: true,
         explain: true,
       },
       catalog: {
-        browse: true,
-        schema: true,
         indexes: true,
         constraints: true,
-        relationships: true,
       },
       edit: { editRows: true },
       ddl: {
@@ -105,10 +98,10 @@ describe("DataSourceProfile registry", () => {
     mariadb: mysqlFamilyCapabilities,
     sqlite: expectedCapabilities({
       connection: { test: true, filePicker: true, readOnly: true },
-      query: { query: true, multiStatement: true, cancel: true },
+      query: { query: true, cancel: true },
       // Issue #1459 — SQLite claims catalog.indexes (PRAGMA index_list
       // introspection is live); constraints remains a stub → false.
-      catalog: { browse: true, schema: true, indexes: true },
+      catalog: { indexes: true },
       edit: { editRows: true, requiresPrimaryKeyForEdit: true },
       // Issue #1460 — wired SqliteAdapter executes only create_table; other DDL
       // trait methods return Unsupported, so createTable is the sole claim.
@@ -121,30 +114,24 @@ describe("DataSourceProfile registry", () => {
       query: { query: true, cancel: true },
       // Issue #1070 — indexes/constraints backed by real duckdb_indexes() /
       // duckdb_constraints() introspection (was a silent Ok(vec![]) stub).
-      catalog: { browse: true, schema: true, indexes: true, constraints: true },
+      catalog: { indexes: true, constraints: true },
     }),
     mssql: expectedCapabilities({
       connection: { test: true },
-      query: { query: true, multiStatement: true, cancel: true },
+      query: { query: true, cancel: true },
       catalog: {
-        browse: true,
-        schema: true,
         indexes: true,
         constraints: true,
-        relationships: true,
       },
       edit: { editRows: true, requiresPrimaryKeyForEdit: true },
       intelligence: { erd: true },
     }),
     oracle: expectedCapabilities({
       connection: { test: true },
-      query: { query: true, multiStatement: true, cancel: true },
+      query: { query: true, cancel: true },
       catalog: {
-        browse: true,
-        schema: true,
         indexes: true,
         constraints: true,
-        relationships: true,
       },
       edit: { editRows: true, requiresPrimaryKeyForEdit: true },
       intelligence: { erd: true },
@@ -152,7 +139,7 @@ describe("DataSourceProfile registry", () => {
     mongodb: expectedCapabilities({
       connection: { test: true },
       query: { query: true, cancel: true, explain: true },
-      catalog: { browse: true, schema: true, indexes: true },
+      catalog: { indexes: true },
       edit: { editDocuments: true, bulkWrite: true },
       ddl: { createIndex: true, dropObject: true },
       operations: {
@@ -165,24 +152,22 @@ describe("DataSourceProfile registry", () => {
       connection: { test: true, switchDatabase: true },
       // Issue #1269 (gap #6) — cooperative scan/command cancel now backed.
       query: { query: true, cancel: true },
-      catalog: { browse: true },
       edit: { editKeys: true },
     }),
     valkey: expectedCapabilities({
       connection: { test: true, switchDatabase: true },
       query: { query: true, cancel: true },
-      catalog: { browse: true },
       edit: { editKeys: true },
     }),
     elasticsearch: expectedCapabilities({
       connection: { test: true },
       query: { query: true, cancel: true },
-      catalog: { browse: true, indexes: true },
+      catalog: { indexes: true },
     }),
     opensearch: expectedCapabilities({
       connection: { test: true },
       query: { query: true, cancel: true },
-      catalog: { browse: true, indexes: true },
+      catalog: { indexes: true },
     }),
   };
 
@@ -312,10 +297,7 @@ describe("DataSourceProfile registry", () => {
     expect(mongo.capabilities.query.query).toBe(true);
     expect(mongo.capabilities.query.cancel).toBe(true);
     expect(mongo.capabilities.query.explain).toBe(true);
-    expect(mongo.capabilities.catalog.browse).toBe(true);
-    expect(mongo.capabilities.catalog.schema).toBe(true);
     expect(mongo.capabilities.catalog.indexes).toBe(true);
-    expect(mongo.capabilities.catalog.relationships).toBe(false);
     expect(mongo.capabilities.edit.editDocuments).toBe(true);
     expect(mongo.capabilities.edit.editRows).toBe(false);
     expect(mongo.capabilities.edit.bulkWrite).toBe(true);
@@ -399,7 +381,6 @@ describe("DataSourceProfile registry", () => {
     const profile = getDataSourceProfile("elasticsearch");
 
     expect(profile.capabilities.connection.test).toBe(true);
-    expect(profile.capabilities.catalog.browse).toBe(true);
     expect(profile.capabilities.query.query).toBe(true);
     expect(profile.capabilities.query.cancel).toBe(true);
     expect(profile.capabilities.query.explain).toBe(false);
@@ -409,7 +390,6 @@ describe("DataSourceProfile registry", () => {
     const profile = getDataSourceProfile("opensearch");
 
     expect(profile.capabilities.connection.test).toBe(true);
-    expect(profile.capabilities.catalog.browse).toBe(true);
     expect(profile.capabilities.catalog.indexes).toBe(true);
     expect(profile.capabilities.query.query).toBe(true);
     expect(profile.capabilities.query.cancel).toBe(true);
@@ -537,8 +517,6 @@ describe("DataSourceProfile registry", () => {
       filePicker: true,
     });
     expect(duckdb.capabilities.query.query).toBe(true);
-    expect(duckdb.capabilities.catalog.browse).toBe(true);
-    expect(duckdb.capabilities.catalog.schema).toBe(true);
     expect(duckdb.capabilities.edit.editRows).toBe(false);
     expect(duckdb.capabilities.ddl.createTable).toBe(false);
     expect(duckdb.backendAdapter).toEqual({
