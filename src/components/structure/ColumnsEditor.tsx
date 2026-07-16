@@ -73,6 +73,12 @@ interface EditableColumnRowProps {
   database?: string;
   schema?: string;
   tableName?: string;
+  /**
+   * Issue #1460 — when false (engine's adapter cannot run ALTER TABLE) the
+   * per-row Edit / Delete affordances are hidden; the row stays a read-only
+   * view of the column. Unsupported = hidden, not click-then-error (#1046).
+   */
+  canAlterTable: boolean;
 }
 
 function EditableColumnRow({
@@ -86,6 +92,7 @@ function EditableColumnRow({
   database,
   schema,
   tableName,
+  canAlterTable,
 }: EditableColumnRowProps) {
   const { t } = useTranslation("structure");
   const [dataType, setDataType] = useState(col.data_type);
@@ -330,53 +337,57 @@ function EditableColumnRow({
         {col.comment ?? "\u2014"}
       </td>
       <td className={STRUCTURE_TD_ACTIONS}>
-        <div className="flex items-center justify-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-          {isEditing ? (
-            <>
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                className="text-success"
-                onClick={handleSave}
-                aria-label={t("col.saveAria", { name: col.name })}
-                title={t("col.saveTitle")}
-              >
-                <Check />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                onClick={onCancelEdit}
-                aria-label={t("col.cancelEditAria", { name: col.name })}
-                title={t("col.cancelTitle")}
-              >
-                <X />
-              </Button>
-            </>
-          ) : (
-            <>
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                onClick={onStartEdit}
-                aria-label={t("col.editAria", { name: col.name })}
-                title={t("col.editTitle")}
-              >
-                <Pencil />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                className="hover:text-destructive"
-                onClick={onDelete}
-                aria-label={t("col.deleteAria", { name: col.name })}
-                title={t("col.deleteTitle")}
-              >
-                <Trash2 />
-              </Button>
-            </>
-          )}
-        </div>
+        {/* #1460 — Edit / Delete are ALTER TABLE operations; hidden when the
+            engine's adapter cannot run them so the row stays read-only. */}
+        {canAlterTable && (
+          <div className="flex items-center justify-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+            {isEditing ? (
+              <>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  className="text-success"
+                  onClick={handleSave}
+                  aria-label={t("col.saveAria", { name: col.name })}
+                  title={t("col.saveTitle")}
+                >
+                  <Check />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  onClick={onCancelEdit}
+                  aria-label={t("col.cancelEditAria", { name: col.name })}
+                  title={t("col.cancelTitle")}
+                >
+                  <X />
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  onClick={onStartEdit}
+                  aria-label={t("col.editAria", { name: col.name })}
+                  title={t("col.editTitle")}
+                >
+                  <Pencil />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  className="hover:text-destructive"
+                  onClick={onDelete}
+                  aria-label={t("col.deleteAria", { name: col.name })}
+                  title={t("col.deleteTitle")}
+                >
+                  <Trash2 />
+                </Button>
+              </>
+            )}
+          </div>
+        )}
       </td>
     </tr>
   );
@@ -416,6 +427,14 @@ interface ColumnsEditorProps {
    * render "Add Field" / "No fields found".
    */
   paradigm?: Paradigm;
+  /**
+   * Issue #1460 — whether the engine's adapter can run ALTER TABLE. Gates the
+   * `+ Column` toolbar button and the per-row Edit / Delete actions. Defaults
+   * to `true` so callers that don't gate (and the loading fallback in
+   * `StructurePanel`) keep the pre-#1460 editable surface; the sole production
+   * caller passes `supportsDdl(dbType, "alterTable")`.
+   */
+  canAlterTable?: boolean;
 }
 
 export default function ColumnsEditor({
@@ -426,6 +445,7 @@ export default function ColumnsEditor({
   columns,
   onRefresh,
   paradigm,
+  canAlterTable = true,
 }: ColumnsEditorProps) {
   const { t } = useTranslation("structure");
   // `getParadigmVocabulary` enforces the `undefined → rdb` fallback in
@@ -574,15 +594,19 @@ export default function ColumnsEditor({
         count={`${visibleColumns.length} ${vocab.units.toLowerCase()}`}
         actions={
           <>
-            <Button
-              variant="ghost"
-              size="xs"
-              onClick={handleAddColumn}
-              aria-label={ariaAddUnit}
-            >
-              <Plus />
-              {vocab.addUnit}
-            </Button>
+            {/* #1460 — `+ Column` is an ALTER TABLE ADD COLUMN entry point;
+                hidden when the engine's adapter cannot run it. */}
+            {canAlterTable && (
+              <Button
+                variant="ghost"
+                size="xs"
+                onClick={handleAddColumn}
+                aria-label={ariaAddUnit}
+              >
+                <Plus />
+                {vocab.addUnit}
+              </Button>
+            )}
             {pendingCount > 0 && (
               <Button
                 size="xs"
@@ -641,6 +665,7 @@ export default function ColumnsEditor({
                 database={database}
                 schema={schema}
                 tableName={table}
+                canAlterTable={canAlterTable}
               />
             ))}
             {/* Sprint 236 \u2014 inline `NewColumnRow` + pending-add row

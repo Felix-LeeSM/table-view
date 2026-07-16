@@ -77,11 +77,14 @@ const EXPORT_MODES: ReadonlyArray<{
 export interface SchemaTreeRowsContext {
   t: (key: string, options?: Record<string, unknown>) => string;
   dbType: string | undefined;
-  // #1052 — false for a statically read-only engine (DuckDB): its DDL entries
-  // (Create / Rename / Drop table) are HIDDEN, not shown-then-erroring
-  // (ui-parity §4 static unsupported = hide). True while dbType is still
-  // loading so entries aren't stripped early.
-  canMutateSchema: boolean;
+  // #1460 — per-action DDL capability gates. Each entry point reads the flag
+  // for the SQL it emits (`createTable` → Create Table, `alterTable` → Rename,
+  // `dropObject` → Drop) so an engine that supports only some DDL surfaces only
+  // those affordances. Unsupported = HIDDEN, not shown-then-erroring (#1046).
+  // All true while dbType is still loading so entries aren't stripped early.
+  canCreateTable: boolean;
+  canAlterTable: boolean;
+  canDropObject: boolean;
   // Roving tabindex (WAI-ARIA tree): the row whose `key` matches owns
   // `tabIndex=0`; all others are `-1`. `onFocusRow` keeps mouse focus in
   // sync so a click moves the roving anchor.
@@ -221,7 +224,7 @@ export function renderSchemaRow(
         </button>
       </ContextMenuTrigger>
       <ContextMenuContent>
-        {ctx.canMutateSchema && (
+        {ctx.canCreateTable && (
           <ContextMenuItem
             onClick={() => ctx.handleCreateTable(row.schemaName)}
           >
@@ -307,7 +310,7 @@ export function renderCategoryRow(
         <span>{ctx.t(cat.labelKey)}</span>
       </button>
       <div className="ml-auto flex shrink-0 items-center gap-1 pr-2">
-        {isTables && ctx.canMutateSchema && (
+        {isTables && ctx.canCreateTable && (
           <button
             type="button"
             onClick={(e) => {
@@ -565,11 +568,11 @@ export function renderItemRow(
             if (e.key === "Enter" || e.key === " ") {
               e.preventDefault();
               handleClick();
-            } else if (e.key === "F2" && isTableItem && ctx.canMutateSchema) {
-              // #1052 — F2 rename is a DDL entry point too: gate it with the
-              // same `canMutateSchema` as the context-menu Rename item, else a
-              // read-only DuckDB table opens RenameTableDialog then errors on
-              // the backend (deprecated click-then-error pattern).
+            } else if (e.key === "F2" && isTableItem && ctx.canAlterTable) {
+              // #1460 — F2 rename is an ALTER TABLE RENAME entry point: gate it
+              // on `canAlterTable` (same flag as the context-menu Rename item),
+              // else an engine whose adapter rejects rename opens
+              // RenameTableDialog then errors on the backend (click-then-error).
               e.preventDefault();
               ctx.handleStartRename(item.name, row.schemaName);
             }
@@ -658,22 +661,23 @@ export function renderItemRow(
                 </>
               )}
             </ContextMenuItem>
-            {ctx.canMutateSchema && (
-              <>
-                <ContextMenuItem
-                  onClick={() =>
-                    ctx.handleStartRename(item.name, row.schemaName)
-                  }
-                >
-                  <Pencil size={14} /> {ctx.t("rename")}
-                </ContextMenuItem>
-                <ContextMenuItem
-                  danger
-                  onClick={() => ctx.handleDropTable(item.name, row.schemaName)}
-                >
-                  <Trash2 size={14} /> {ctx.t("drop")}
-                </ContextMenuItem>
-              </>
+            {/* #1460 — Rename is ALTER TABLE RENAME (`alterTable`); Drop is
+                `dropObject`. Split so an engine that supports one but not the
+                other (or neither) surfaces only the affordances it can run. */}
+            {ctx.canAlterTable && (
+              <ContextMenuItem
+                onClick={() => ctx.handleStartRename(item.name, row.schemaName)}
+              >
+                <Pencil size={14} /> {ctx.t("rename")}
+              </ContextMenuItem>
+            )}
+            {ctx.canDropObject && (
+              <ContextMenuItem
+                danger
+                onClick={() => ctx.handleDropTable(item.name, row.schemaName)}
+              >
+                <Trash2 size={14} /> {ctx.t("drop")}
+              </ContextMenuItem>
             )}
           </>
         ) : isView ? (

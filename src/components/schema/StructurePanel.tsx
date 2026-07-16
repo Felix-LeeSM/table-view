@@ -26,7 +26,7 @@ import { Button } from "@components/ui/button";
 import CreateTriggerDialog from "./CreateTriggerDialog";
 import DropTriggerDialog from "./DropTriggerDialog";
 import { useConnectionStore } from "@stores/connectionStore";
-import { supportsCatalogFeature } from "@/types/dataSource";
+import { supportsCatalogFeature, supportsDdl } from "@/types/dataSource";
 
 interface StructurePanelProps {
   connectionId: string;
@@ -111,6 +111,15 @@ export default function StructurePanel({
   // structured introspection (DuckDB both, SQLite constraints) hide the tab.
   const showIndexesTab = supportsCatalogFeature(dbType, "indexes");
   const showConstraintsTab = supportsCatalogFeature(dbType, "constraints");
+  // Issue #1460 — the Columns / Indexes editors keep rendering their read-only
+  // listing for every RDB engine, but their mutation affordances (Add/Edit/Drop
+  // column, Create Index, Drop index) read the per-action DDL capability so an
+  // engine whose adapter rejects the write hides the control instead of
+  // click-then-error (#1046). SQLite claims only `createTable`, so its column /
+  // index editors are view-only; DuckDB/MSSQL/Oracle claim no DDL at all.
+  const canAlterTable = supportsDdl(dbType, "alterTable");
+  const canCreateIndex = supportsDdl(dbType, "createIndex");
+  const canDropObject = supportsDdl(dbType, "dropObject");
   // Clamp a sub-tab that the capability gate hides (e.g. a persisted
   // `initialSubTab="indexes"` on DuckDB) back to Columns so the render
   // branches AND the fetch effect never target a gated tab.
@@ -309,6 +318,7 @@ export default function StructurePanel({
             columns={columns}
             onRefresh={fetchData}
             paradigm={paradigm}
+            canAlterTable={canAlterTable}
           />
         )}
       {!loading &&
@@ -324,6 +334,8 @@ export default function StructurePanel({
             columns={columns}
             onColumnsChange={setColumns}
             onRefresh={fetchData}
+            canCreateIndex={canCreateIndex}
+            canDropObject={canDropObject}
           />
         )}
       {!loading &&

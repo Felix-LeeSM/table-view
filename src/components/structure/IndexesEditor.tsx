@@ -245,6 +245,18 @@ interface IndexesEditorProps {
   onColumnsChange: (columns: ColumnInfo[]) => void;
   /** Called after a successful execute to trigger data refresh */
   onRefresh: () => Promise<void>;
+  /**
+   * Issue #1460 — whether the engine's adapter can run CREATE INDEX. Gates the
+   * `Create Index` button. Defaults to `true` so non-gating callers keep the
+   * pre-#1460 surface; production passes `supportsDdl(dbType, "createIndex")`.
+   */
+  canCreateIndex?: boolean;
+  /**
+   * Issue #1460 — whether the engine's adapter can run DROP INDEX (a
+   * `dropObject` action). Gates the per-row drop-index trash icon. Defaults to
+   * `true`; production passes `supportsDdl(dbType, "dropObject")`.
+   */
+  canDropObject?: boolean;
 }
 
 export default function IndexesEditor({
@@ -256,6 +268,8 @@ export default function IndexesEditor({
   columns,
   onColumnsChange,
   onRefresh,
+  canCreateIndex = true,
+  canDropObject = true,
 }: IndexesEditorProps) {
   const { t } = useTranslation("structure");
   const [showCreateIndexModal, setShowCreateIndexModal] = useState(false);
@@ -392,15 +406,18 @@ export default function IndexesEditor({
       <StructureActionBar
         count={`${indexes.length} ${indexes.length === 1 ? t("index.countSingular") : t("index.countPlural")}`}
         actions={
-          <Button
-            variant="ghost"
-            size="xs"
-            onClick={handleOpenCreateIndex}
-            aria-label={t("index.createAria")}
-          >
-            <Plus />
-            {t("index.createLabel")}
-          </Button>
+          // #1460 — Create Index hidden when the engine's adapter can't run it.
+          canCreateIndex ? (
+            <Button
+              variant="ghost"
+              size="xs"
+              onClick={handleOpenCreateIndex}
+              aria-label={t("index.createAria")}
+            >
+              <Plus />
+              {t("index.createLabel")}
+            </Button>
+          ) : null
         }
       />
 
@@ -454,7 +471,10 @@ export default function IndexesEditor({
                 </td>
                 <td className={STRUCTURE_TD_ACTIONS}>
                   <div className="flex items-center justify-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                    {!idx.is_primary && (
+                    {/* #1460 — drop-index is a DROP object action; hidden when
+                        the engine's adapter cannot run it. PK indexes are never
+                        droppable regardless. */}
+                    {!idx.is_primary && canDropObject && (
                       <Button
                         variant="ghost"
                         size="icon-xs"

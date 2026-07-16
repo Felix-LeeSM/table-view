@@ -109,6 +109,9 @@ describe("DataSourceProfile registry", () => {
       // introspection is live); constraints remains a stub → false.
       catalog: { browse: true, schema: true, indexes: true },
       edit: { editRows: true, requiresPrimaryKeyForEdit: true },
+      // Issue #1460 — wired SqliteAdapter executes only create_table; other DDL
+      // trait methods return Unsupported, so createTable is the sole claim.
+      ddl: { createTable: true },
       intelligence: { erd: true },
     }),
     duckdb: expectedCapabilities({
@@ -276,13 +279,15 @@ describe("DataSourceProfile registry", () => {
     expect(getDataSourceProfile("duckdb").connectionKind).toBe("file");
   });
 
-  it("describes SQLite as a file RDBMS with scoped row-edit but no switch-db or DDL parity", () => {
+  it("describes SQLite as a file RDBMS with scoped row-edit and create-table-only DDL", () => {
     const sqlite = getDataSourceProfile("sqlite");
 
     expect(sqlite.connectionKind).toBe("file");
     expect(sqlite.capabilities).toEqual(expectedCapabilitiesByType.sqlite);
     expect(sqlite.capabilities.edit.editRows).toBe(true);
-    expect(sqlite.capabilities.ddl.createTable).toBe(false);
+    // Issue #1460 — only create_table is wired in the adapter; alter/index/drop
+    // return Unsupported, so their flags stay false and the UI hides them.
+    expect(sqlite.capabilities.ddl.createTable).toBe(true);
     expect(sqlite.capabilities.ddl.alterTable).toBe(false);
     expect(sqlite.capabilities.ddl.createIndex).toBe(false);
     expect(sqlite.capabilities.ddl.dropObject).toBe(false);
