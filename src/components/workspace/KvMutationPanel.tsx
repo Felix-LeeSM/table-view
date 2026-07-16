@@ -44,6 +44,9 @@ interface PendingMutation {
   command?: string;
   confirmKey?: string;
   seconds?: number;
+  // #1466 — element removals (HDEL/LREM/SREM/ZREM) are destructive: routed to
+  // the danger Safe Mode tier so they hit the same confirm dialog as key delete.
+  destructive?: boolean;
 }
 
 interface SafeModePendingMutation {
@@ -56,6 +59,8 @@ type MutationField =
   | "field"
   | "entry"
   | "score"
+  | "index"
+  | "count"
   | "expire"
   | "deleteKey"
   | "persistKey";
@@ -66,6 +71,8 @@ const EMPTY_MUTATION_FORM: MutationForm = {
   field: "",
   entry: "",
   score: "",
+  index: "",
+  count: "",
   expire: "",
   deleteKey: "",
   persistKey: "",
@@ -170,13 +177,95 @@ export function KvMutationPanel({
     setSafeModeConfirm(null);
   };
 
-  const previewCommand = (label: string, summary: string, command: string) =>
-    preview({ kind: "command", label, summary, command });
+  const previewCommand = (
+    label: string,
+    summary: string,
+    command: string,
+    destructive = false,
+  ) => preview({ kind: "command", label, summary, command, destructive });
 
   const requireText = (raw: string, field: string) => {
     const trimmed = raw.trim();
     if (!trimmed) preview(null, t("kvMutation.error.fieldRequired", { field }));
     return trimmed;
+  };
+
+  const requireInteger = (raw: string, errorKey: string) => {
+    const trimmed = raw.trim();
+    // Match the backend `parse_i64` grammar exactly so "1e3" / "0x1" never
+    // reach the bounded command as a look-alike integer.
+    if (!/^-?\d+$/.test(trimmed)) {
+      preview(null, t(errorKey));
+      return null;
+    }
+    return trimmed;
+  };
+
+  // #1466 element removals + list edit. Read the field/index/member to target
+  // from the structured table above, then preview → confirm through the same
+  // gate as the add axis. `redisToken` quotes only the value operands; numeric
+  // index/count are emitted raw so the bounded parser reads them as integers.
+  const previewHdel = () => {
+    const field = requireText(form.field, "Hash field");
+    if (!field) return;
+    previewCommand(
+      "HDEL",
+      `Preview: HDEL ${value.key} ${field}`,
+      `HDEL ${redisToken(value.key)} ${redisToken(field)}`,
+      true,
+    );
+  };
+
+  const previewLpush = () => {
+    const nextValue = requireText(form.entry, "List value");
+    if (!nextValue) return;
+    previewCommand(
+      "LPUSH",
+      `Preview: LPUSH ${value.key} ${nextValue}`,
+      `LPUSH ${redisToken(value.key)} ${redisToken(nextValue)}`,
+    );
+  };
+
+  const previewLset = () => {
+    const index = requireInteger(
+      form.index,
+      "kvMutation.error.listIndexNotInteger",
+    );
+    if (index === null) return;
+    const nextValue = requireText(form.entry, "List value");
+    if (!nextValue) return;
+    previewCommand(
+      "LSET",
+      `Preview: LSET ${value.key} ${index} ${nextValue}`,
+      `LSET ${redisToken(value.key)} ${index} ${redisToken(nextValue)}`,
+    );
+  };
+
+  const previewLrem = () => {
+    const count = requireInteger(
+      form.count,
+      "kvMutation.error.listCountNotInteger",
+    );
+    if (count === null) return;
+    const nextValue = requireText(form.entry, "List value");
+    if (!nextValue) return;
+    previewCommand(
+      "LREM",
+      `Preview: LREM ${value.key} ${count} ${nextValue}`,
+      `LREM ${redisToken(value.key)} ${count} ${redisToken(nextValue)}`,
+      true,
+    );
+  };
+
+  const previewMemberRemoval = (verb: "SREM" | "ZREM", field: string) => {
+    const member = requireText(form.entry, field);
+    if (!member) return;
+    previewCommand(
+      verb,
+      `Preview: ${verb} ${value.key} ${member}`,
+      `${verb} ${redisToken(value.key)} ${redisToken(member)}`,
+      true,
+    );
   };
 
   const previewCollectionMutation = (
@@ -351,6 +440,7 @@ export function KvMutationPanel({
           {action(t("kvMutation.previewHset"), () =>
             previewCollectionMutation("HSET"),
           )}
+          {action(t("kvMutation.previewHdel"), previewHdel)}
         </div>
       )}
       {value.value.type === "list" && (
@@ -364,6 +454,11 @@ export function KvMutationPanel({
           {action(t("kvMutation.previewRpush"), () =>
             previewCollectionMutation("RPUSH"),
           )}
+          {action(t("kvMutation.previewLpush"), previewLpush)}
+          {input(t("kvMutation.listIndex"), "index", "index")}
+          {action(t("kvMutation.previewLset"), previewLset)}
+          {input(t("kvMutation.listRemoveCount"), "count", "1")}
+          {action(t("kvMutation.previewLrem"), previewLrem)}
         </div>
       )}
       {value.value.type === "set" && (
@@ -376,6 +471,9 @@ export function KvMutationPanel({
           )}
           {action(t("kvMutation.previewSadd"), () =>
             previewCollectionMutation("SADD"),
+          )}
+          {action(t("kvMutation.previewSrem"), () =>
+            previewMemberRemoval("SREM", "Set member"),
           )}
         </div>
       )}
@@ -390,6 +488,9 @@ export function KvMutationPanel({
           {input(t("kvMutation.zsetMember"), "entry")}
           {action(t("kvMutation.previewZadd"), () =>
             previewCollectionMutation("ZADD"),
+          )}
+          {action(t("kvMutation.previewZrem"), () =>
+            previewMemberRemoval("ZREM", "ZSet member"),
           )}
         </div>
       )}
@@ -498,6 +599,15 @@ function analyzeKvMutationSafety(
       kind: "other",
       severity: "warn",
       reasons: [`KV persist key ${key}`],
+    };
+  }
+  if (mutation.destructive) {
+    // #1466 — element removal loses data: same danger tier as key delete so
+    // the strict / production Safe Mode confirm dialog gates it identically.
+    return {
+      kind: "other",
+      severity: "danger",
+      reasons: [`KV remove element via ${mutation.label} on ${key}`],
     };
   }
   return {

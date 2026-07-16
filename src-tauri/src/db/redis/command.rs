@@ -76,15 +76,26 @@ async fn dispatch_command(
             ttl_seconds,
         } => set_command(adapter, key, value, ttl_seconds).await,
         RedisCommand::HSet { key, field, value } => hset_command(adapter, key, field, value).await,
+        RedisCommand::HDel { key, fields } => {
+            member_removal_command(adapter, "HDEL", "hdel", key, fields).await
+        }
         RedisCommand::LPush { key, values } => {
             list_push_command(adapter, "LPUSH", key, values).await
         }
         RedisCommand::RPush { key, values } => {
             list_push_command(adapter, "RPUSH", key, values).await
         }
+        RedisCommand::LSet { key, index, value } => lset_command(adapter, key, index, value).await,
+        RedisCommand::LRem { key, count, value } => lrem_command(adapter, key, count, value).await,
         RedisCommand::SAdd { key, members } => sadd_command(adapter, key, members).await,
+        RedisCommand::SRem { key, members } => {
+            member_removal_command(adapter, "SREM", "srem", key, members).await
+        }
         RedisCommand::ZAdd { key, score, member } => {
             zadd_command(adapter, key, score, member).await
+        }
+        RedisCommand::ZRem { key, members } => {
+            member_removal_command(adapter, "ZREM", "zrem", key, members).await
         }
         RedisCommand::Expire { key, seconds } => expire_command(adapter, key, seconds).await,
         RedisCommand::Persist { key } => persist_command(adapter, key).await,
@@ -428,6 +439,72 @@ async fn hset_command(
     Ok(mutation_result(&key, "hset", changed))
 }
 
+/// Shared runtime for `<VERB> key member [member...]` removals (HDEL / SREM /
+/// ZREM). The driver returns the number of elements actually removed. (#1466)
+async fn member_removal_command(
+    adapter: &RedisAdapter,
+    verb: &str,
+    result_name: &str,
+    key: String,
+    members: Vec<String>,
+) -> Result<RdbQueryResult, AppError> {
+    let removed: u64 = adapter
+        .with_connection(async |connection| {
+            let mut cmd = ::redis::cmd(verb);
+            cmd.arg(&key);
+            for member in &members {
+                cmd.arg(member);
+            }
+            cmd.query_async(connection)
+                .await
+                .map_err(|err| adapter.database_error(err))
+        })
+        .await?;
+    Ok(mutation_result(&key, result_name, removed))
+}
+
+async fn lset_command(
+    adapter: &RedisAdapter,
+    key: String,
+    index: i64,
+    value: String,
+) -> Result<RdbQueryResult, AppError> {
+    adapter
+        .with_connection(async |connection| {
+            // LSET on an out-of-range index errors in Redis; surfaced as-is.
+            let _: String = ::redis::cmd("LSET")
+                .arg(&key)
+                .arg(index)
+                .arg(&value)
+                .query_async(connection)
+                .await
+                .map_err(|err| adapter.database_error(err))?;
+            Ok(())
+        })
+        .await?;
+    Ok(mutation_result(&key, "lset", 1))
+}
+
+async fn lrem_command(
+    adapter: &RedisAdapter,
+    key: String,
+    count: i64,
+    value: String,
+) -> Result<RdbQueryResult, AppError> {
+    let removed: u64 = adapter
+        .with_connection(async |connection| {
+            ::redis::cmd("LREM")
+                .arg(&key)
+                .arg(count)
+                .arg(&value)
+                .query_async(connection)
+                .await
+                .map_err(|err| adapter.database_error(err))
+        })
+        .await?;
+    Ok(mutation_result(&key, "lrem", removed))
+}
+
 async fn list_push_command(
     adapter: &RedisAdapter,
     verb: &str,
@@ -640,6 +717,30 @@ mod tests {
             ("SADD set a", "sadd"),
             ("ZADD zset 1 a", "zadd"),
             ("EXPIRE alpha 30", "expire"),
+        ] {
+            let result = execute_command(&adapter, request(command), None)
+                .await
+                .unwrap();
+            assert_eq!(result.rows[0][1], json!(expected_name));
+            assert!(matches!(
+                result.query_type,
+                crate::models::QueryType::Dml { .. }
+            ));
+        }
+    }
+
+    #[tokio::test]
+    async fn command_runtime_projects_element_crud_results() {
+        // #1466 — per-element hash/list/set/zSet CRUD dispatches without a
+        // typed key confirmation (element removals do not drop the key).
+        let adapter = connected_adapter().await;
+
+        for (command, expected_name) in [
+            ("HDEL beta name", "hdel"),
+            ("LSET list 0 fixed", "lset"),
+            ("LREM list 1 a", "lrem"),
+            ("SREM set a", "srem"),
+            ("ZREM zset a", "zrem"),
         ] {
             let result = execute_command(&adapter, request(command), None)
                 .await

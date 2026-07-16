@@ -57,6 +57,10 @@ pub(super) enum RedisCommand {
         field: String,
         value: String,
     },
+    HDel {
+        key: String,
+        fields: Vec<String>,
+    },
     LPush {
         key: String,
         values: Vec<String>,
@@ -65,7 +69,21 @@ pub(super) enum RedisCommand {
         key: String,
         values: Vec<String>,
     },
+    LSet {
+        key: String,
+        index: i64,
+        value: String,
+    },
+    LRem {
+        key: String,
+        count: i64,
+        value: String,
+    },
     SAdd {
+        key: String,
+        members: Vec<String>,
+    },
+    SRem {
         key: String,
         members: Vec<String>,
     },
@@ -73,6 +91,10 @@ pub(super) enum RedisCommand {
         key: String,
         score: f64,
         member: String,
+    },
+    ZRem {
+        key: String,
+        members: Vec<String>,
     },
     Expire {
         key: String,
@@ -111,13 +133,20 @@ impl RedisCommand {
             | RedisCommand::HSet { .. }
             | RedisCommand::LPush { .. }
             | RedisCommand::RPush { .. }
+            | RedisCommand::LSet { .. }
             | RedisCommand::SAdd { .. }
             | RedisCommand::ZAdd { .. } => RedisCommandEffect::Write,
             RedisCommand::Ttl { .. }
             | RedisCommand::Expire { .. }
             | RedisCommand::Persist { .. } => RedisCommandEffect::Ttl,
             RedisCommand::XRange { .. } => RedisCommandEffect::Stream,
-            RedisCommand::Del { .. } => RedisCommandEffect::Destructive,
+            // Element removals lose data but never drop the key itself, so they
+            // are destructive without a typed key-confirmation gate (#1466).
+            RedisCommand::Del { .. }
+            | RedisCommand::HDel { .. }
+            | RedisCommand::LRem { .. }
+            | RedisCommand::SRem { .. }
+            | RedisCommand::ZRem { .. } => RedisCommandEffect::Destructive,
         }
     }
 
@@ -160,9 +189,23 @@ pub(super) fn parse_redis_command(input: &str) -> Result<RedisCommand, AppError>
         "EXISTS" => parse_exists(args),
         "SET" => parse_set(args),
         "HSET" => parse_hset(args),
+        "HDEL" => parse_members(args, "HDEL", |key, fields| RedisCommand::HDel {
+            key,
+            fields,
+        }),
         "LPUSH" | "RPUSH" => parse_list_push(&upper, args),
+        "LSET" => parse_lset(args),
+        "LREM" => parse_lrem(args),
         "SADD" => parse_sadd(args),
+        "SREM" => parse_members(args, "SREM", |key, members| RedisCommand::SRem {
+            key,
+            members,
+        }),
         "ZADD" => parse_zadd(args),
+        "ZREM" => parse_members(args, "ZREM", |key, members| RedisCommand::ZRem {
+            key,
+            members,
+        }),
         "EXPIRE" => parse_expire(args),
         "PERSIST" => Ok(RedisCommand::Persist {
             key: one_key(args, "PERSIST")?,
@@ -340,6 +383,40 @@ fn parse_hset(args: &[String]) -> Result<RedisCommand, AppError> {
     Ok(RedisCommand::HSet {
         key: checked_key(&args[0])?,
         field: args[1].clone(),
+        value: args[2].clone(),
+    })
+}
+
+/// Shared parser for `<VERB> key member [member...]` (HDEL / SREM / ZREM):
+/// at least one target member after the key.
+fn parse_members(
+    args: &[String],
+    command: &str,
+    build: impl Fn(String, Vec<String>) -> RedisCommand,
+) -> Result<RedisCommand, AppError> {
+    if args.len() < 2 {
+        return Err(AppError::Validation(format!(
+            "{command} requires key and member(s)"
+        )));
+    }
+    Ok(build(checked_key(&args[0])?, args[1..].to_vec()))
+}
+
+fn parse_lset(args: &[String]) -> Result<RedisCommand, AppError> {
+    require_arg_count(args, 3, "LSET")?;
+    Ok(RedisCommand::LSet {
+        key: checked_key(&args[0])?,
+        index: parse_i64(&args[1], "LSET index")?,
+        value: args[2].clone(),
+    })
+}
+
+fn parse_lrem(args: &[String]) -> Result<RedisCommand, AppError> {
+    require_arg_count(args, 3, "LREM")?;
+    Ok(RedisCommand::LRem {
+        key: checked_key(&args[0])?,
+        // count sign is meaningful: 0 = all, >0 head→tail, <0 tail→head.
+        count: parse_i64(&args[1], "LREM count")?,
         value: args[2].clone(),
     })
 }
@@ -576,6 +653,74 @@ mod tests {
             RedisCommand::Keys { ref pattern } if pattern == "*"
         ));
         assert_eq!(keys.effect(), RedisCommandEffect::Read);
+    }
+
+    #[test]
+    fn parser_accepts_element_crud_commands() {
+        // #1466 — per-element hash/list/set/zSet write + removal verbs.
+        let hdel = parse_redis_command("HDEL profile:1 email name").unwrap();
+        assert_eq!(
+            hdel,
+            RedisCommand::HDel {
+                key: "profile:1".into(),
+                fields: vec!["email".into(), "name".into()],
+            }
+        );
+
+        let lset = parse_redis_command("LSET queue -1 done").unwrap();
+        assert_eq!(
+            lset,
+            RedisCommand::LSet {
+                key: "queue".into(),
+                index: -1,
+                value: "done".into(),
+            }
+        );
+        assert_eq!(lset.effect(), RedisCommandEffect::Write);
+
+        let lrem = parse_redis_command("LREM queue 0 stale").unwrap();
+        assert_eq!(
+            lrem,
+            RedisCommand::LRem {
+                key: "queue".into(),
+                count: 0,
+                value: "stale".into(),
+            }
+        );
+
+        assert!(matches!(
+            parse_redis_command("SREM tags beta").unwrap(),
+            RedisCommand::SRem { .. }
+        ));
+        assert!(matches!(
+            parse_redis_command("ZREM board ada").unwrap(),
+            RedisCommand::ZRem { .. }
+        ));
+
+        // Element removals are destructive but never require a typed key
+        // confirmation (they do not drop the key).
+        for command in ["HDEL h f", "LREM l 1 v", "SREM s m", "ZREM z m"] {
+            let parsed = parse_redis_command(command).unwrap();
+            assert_eq!(parsed.effect(), RedisCommandEffect::Destructive);
+            assert_eq!(parsed.required_confirmation_key(), None);
+        }
+    }
+
+    #[test]
+    fn parser_rejects_malformed_element_crud_commands() {
+        for command in [
+            "HDEL onlykey",
+            "SREM onlykey",
+            "ZREM onlykey",
+            "LSET key notanint value",
+            "LREM key notanint value",
+            "LSET key 0",
+        ] {
+            assert!(
+                matches!(parse_redis_command(command), Err(AppError::Validation(_))),
+                "expected validation error for {command}"
+            );
+        }
     }
 
     #[test]
