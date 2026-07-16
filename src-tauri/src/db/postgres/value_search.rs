@@ -301,11 +301,19 @@ mod tests {
     }
 
     #[test]
-    fn build_sql_binds_term_never_interpolates() {
-        // The generated SQL contains only the `$1` placeholder — no literal
-        // search text — proving the term travels as a bound parameter.
+    fn build_sql_matches_via_bound_placeholder_only() {
+        // The predicate matches against the `$1` bound placeholder and the SQL
+        // carries no literal `%`/`_` pattern — the term is bound at execution,
+        // never interpolated into the statement. (The builder has no term
+        // parameter, so interpolation is structurally impossible; this locks
+        // the placeholder + LIMIT $2 shape against a future edit.)
         let sql = build_table_search_sql("public", "t", &["c".to_string()]);
         assert!(sql.contains("ILIKE $1"));
+        assert!(sql.contains("LIMIT $2"));
+        assert!(
+            !sql.contains('%'),
+            "no literal ILIKE pattern in the SQL: {sql}"
+        );
     }
 
     // ── clip_value — oversized cell snippet ──────────────────────────────

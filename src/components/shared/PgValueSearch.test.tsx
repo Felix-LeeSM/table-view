@@ -29,10 +29,9 @@ vi.mock("@lib/tauri", () => ({
   cancelQuery: (...args: unknown[]) => mockCancel(...args),
 }));
 
-const mockDispatchIntent = vi.fn();
-vi.mock("@lib/quickOpenIntent", () => ({
-  dispatchLocalIntent: (...args: unknown[]) => mockDispatchIntent(...args),
-}));
+// `@lib/quickOpenIntent` is an own util, not a boundary — `dispatchLocalIntent`
+// is a pure `window.dispatchEvent` wrapper. Observe the real `navigate-table`
+// event instead of mocking it.
 
 vi.mock("@lib/logger", () => ({
   logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn(), debug: vi.fn() },
@@ -142,7 +141,7 @@ describe("PgValueSearch", () => {
     );
   });
 
-  it("clicking a match dispatches a navigate-table intent", async () => {
+  it("clicking a match fires the real navigate-table event", async () => {
     setupStore("postgresql");
     mockSearch.mockResolvedValue({
       matches: [
@@ -151,19 +150,58 @@ describe("PgValueSearch", () => {
       truncated: false,
       scannedTables: 1,
     });
+    const navSpy = vi.fn();
+    window.addEventListener("navigate-table", navSpy);
+    try {
+      render(<PgValueSearch />);
+      open();
+      fireEvent.change(screen.getByRole("searchbox"), {
+        target: { value: "x" },
+      });
+      fireEvent.keyDown(screen.getByRole("searchbox"), { key: "Enter" });
+      const match = await screen.findByText("public.users");
+
+      fireEvent.click(match);
+      expect(navSpy).toHaveBeenCalledTimes(1);
+      const detail = (navSpy.mock.calls[0]![0] as CustomEvent).detail;
+      expect(detail).toMatchObject({
+        connectionId: "c1",
+        schema: "public",
+        table: "users",
+        objectKind: "table",
+      });
+    } finally {
+      window.removeEventListener("navigate-table", navSpy);
+    }
+  });
+
+  it("renders an error state when the search rejects", async () => {
+    setupStore("postgresql");
+    mockSearch.mockRejectedValue(new Error("relation does not exist"));
     render(<PgValueSearch />);
     open();
     fireEvent.change(screen.getByRole("searchbox"), { target: { value: "x" } });
     fireEvent.keyDown(screen.getByRole("searchbox"), { key: "Enter" });
-    const match = await screen.findByText("public.users");
 
-    fireEvent.click(match);
-    expect(mockDispatchIntent).toHaveBeenCalledWith({
-      kind: "table",
-      connectionId: "c1",
-      schema: "public",
-      table: "users",
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("relation does not exist");
+  });
+
+  it("shows a no-results message when nothing matches", async () => {
+    setupStore("postgresql");
+    mockSearch.mockResolvedValue({
+      matches: [],
+      truncated: false,
+      scannedTables: 2,
     });
+    render(<PgValueSearch />);
+    open();
+    fireEvent.change(screen.getByRole("searchbox"), {
+      target: { value: "zzz" },
+    });
+    fireEvent.keyDown(screen.getByRole("searchbox"), { key: "Enter" });
+
+    expect(await screen.findByText(/No matches found/i)).toBeInTheDocument();
   });
 
   it("cancel button aborts the in-flight scan via cancelQuery", async () => {
