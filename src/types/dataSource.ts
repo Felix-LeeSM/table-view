@@ -132,14 +132,17 @@ export interface DataSourceCapabilities {
     // #1462 — consumed by the OperationsPanel flyout's Users tab.
     readonly users: boolean;
   };
-  readonly paradigmSpecific: {
-    readonly keyBrowser: boolean;
-    readonly searchDocuments: boolean;
-    readonly vectorSearch: boolean;
-    readonly accessPatternModeler: boolean;
-    readonly graphExplorer: boolean;
-    readonly streamConsumer: boolean;
-  };
+  // Issue #1463 — the entire `paradigmSpecific` group was deleted here. Every
+  // flag was dead or 1:1 redundant with `paradigm`, and none was ever read:
+  //   - `keyBrowser` was true iff `paradigmOf === "kv"` (redis/valkey); the
+  //     sidebar routes on `pickSidebar(paradigm)` → `case "kv"`, never the flag.
+  //   - `searchDocuments` (search paradigm), `streamConsumer`, `vectorSearch`,
+  //     `accessPatternModeler`, `graphExplorer` were declared false in every
+  //     profile with no UI consumer (KvStreamReaderPanel gates on the runtime
+  //     `value.value.type === "stream"`, not a capability flag).
+  // Re-declare a specific flag only when a paradigm sprouts a surface that a
+  // sibling engine in the same paradigm can withhold (i.e. the flag carries
+  // information `paradigm` cannot).
 }
 
 export interface DataSourceProfile {
@@ -202,14 +205,6 @@ export function createEmptyDataSourceCapabilities(): DataSourceCapabilities {
       serverInfo: false,
       users: false,
     },
-    paradigmSpecific: {
-      keyBrowser: false,
-      searchDocuments: false,
-      vectorSearch: false,
-      accessPatternModeler: false,
-      graphExplorer: false,
-      streamConsumer: false,
-    },
   };
 }
 
@@ -223,7 +218,6 @@ function freezeCapabilities(
   Object.freeze(capabilities.ddl);
   Object.freeze(capabilities.intelligence);
   Object.freeze(capabilities.operations);
-  Object.freeze(capabilities.paradigmSpecific);
   return Object.freeze(capabilities);
 }
 
@@ -471,10 +465,6 @@ export const REDIS_CAPABILITIES = capabilities({
   edit: {
     editKeys: true,
   },
-  paradigmSpecific: {
-    keyBrowser: true,
-    streamConsumer: false,
-  },
 });
 
 export const VALKEY_CAPABILITIES = capabilities({
@@ -490,9 +480,6 @@ export const VALKEY_CAPABILITIES = capabilities({
   },
   edit: {
     editKeys: true,
-  },
-  paradigmSpecific: {
-    keyBrowser: true,
   },
 });
 

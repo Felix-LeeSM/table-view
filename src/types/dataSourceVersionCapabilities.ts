@@ -139,7 +139,6 @@ function cloneCapabilities(
     ddl: { ...capabilities.ddl },
     intelligence: { ...capabilities.intelligence },
     operations: { ...capabilities.operations },
-    paradigmSpecific: { ...capabilities.paradigmSpecific },
   };
 }
 
@@ -153,6 +152,5 @@ function freezeCapabilities(
   Object.freeze(capabilities.ddl);
   Object.freeze(capabilities.intelligence);
   Object.freeze(capabilities.operations);
-  Object.freeze(capabilities.paradigmSpecific);
   return Object.freeze(capabilities);
 }

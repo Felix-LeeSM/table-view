@@ -163,14 +163,12 @@ describe("DataSourceProfile registry", () => {
       query: { query: true },
       catalog: { browse: true },
       edit: { editKeys: true },
-      paradigmSpecific: { keyBrowser: true },
     }),
     valkey: expectedCapabilities({
       connection: { test: true, switchDatabase: true },
       query: { query: true },
       catalog: { browse: true },
       edit: { editKeys: true },
-      paradigmSpecific: { keyBrowser: true },
     }),
     elasticsearch: expectedCapabilities({
       connection: { test: true },
@@ -332,11 +330,14 @@ describe("DataSourceProfile registry", () => {
       kind: "kv",
       capabilitySource: "redis",
     });
-    expect(redis.capabilities.paradigmSpecific.keyBrowser).toBe(true);
+    // #1463 — KV routing now rides solely on `paradigm === "kv"`
+    // (WorkspaceSidebar → pickSidebar → `case "kv"`); the redundant
+    // `paradigmSpecific.keyBrowser` flag was deleted. `streamRecords` in
+    // resultKinds is the real stream signal (KvStreamReaderPanel gates on the
+    // runtime `value.value.type === "stream"`, never a capability flag).
     expect(redis.resultKinds).toEqual(["keyValue", "streamRecords", "tabular"]);
     expect(redis.capabilities.connection.switchDatabase).toBe(true);
     expect(redis.capabilities.edit.editKeys).toBe(true);
-    expect(redis.capabilities.paradigmSpecific.streamConsumer).toBe(false);
   });
 
   it("exposes Valkey as a KV key-browser runtime with bounded command query", () => {
@@ -359,7 +360,8 @@ describe("DataSourceProfile registry", () => {
     expect(valkey.capabilities).toEqual(expectedCapabilitiesByType.valkey);
     expect(valkey.capabilities.query.query).toBe(true);
     expect(valkey.capabilities.edit.editKeys).toBe(true);
-    expect(valkey.capabilities.paradigmSpecific.keyBrowser).toBe(true);
+    // #1463 — see redis test: KV sidebar routing rides on `paradigm === "kv"`,
+    // asserted above; the redundant keyBrowser flag was deleted.
     expect(isConnectionSupportedDatabaseType("valkey")).toBe(true);
   });
 
@@ -397,7 +399,6 @@ describe("DataSourceProfile registry", () => {
     expect(profile.capabilities.query.query).toBe(true);
     expect(profile.capabilities.query.cancel).toBe(true);
     expect(profile.capabilities.query.explain).toBe(false);
-    expect(profile.capabilities.paradigmSpecific.searchDocuments).toBe(false);
   });
 
   it("exposes OpenSearch live connection, catalog, and bounded query while keeping explain/admin deferred", () => {
@@ -409,7 +410,6 @@ describe("DataSourceProfile registry", () => {
     expect(profile.capabilities.query.query).toBe(true);
     expect(profile.capabilities.query.cancel).toBe(true);
     expect(profile.capabilities.query.explain).toBe(false);
-    expect(profile.capabilities.paradigmSpecific.searchDocuments).toBe(false);
   });
 
   it("keeps legacy URL supported DBMS list aligned with profile-supported DBMS", () => {
