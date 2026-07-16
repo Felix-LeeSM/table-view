@@ -1,11 +1,13 @@
 //! SQLite free-form query execution and table preview.
 
 use futures_util::TryStreamExt;
-use sqlx::sqlite::SqliteRow;
+use sqlx::sqlite::{SqliteConnection, SqliteRow};
 use sqlx::{Column, Row, TypeInfo};
 use tokio_util::sync::CancellationToken;
+use tracing::warn;
 
 use crate::db::raw_where::{validate_raw_where_clause, RawWhereDialect};
+use crate::db::traits::finalize_cancelled;
 use crate::error::AppError;
 use crate::models::{
     FilterCondition, FilterOperator, QueryColumn, QueryResult, QueryType, TableData,
@@ -151,83 +153,33 @@ impl SqliteAdapter {
         let query_type = sqlite_query_type(query);
         validate_sqlite_execution_guardrails(query, &query_type, read_only)?;
 
-        let work = async {
-            match query_type {
-                QueryType::Select => {
-                    // Issue #1231 — stream rows and stop at cap+1 (the extra
-                    // row only sets `truncated`, it is never buffered) so a
-                    // no-LIMIT JOIN cannot blow up the heap.
-                    let mut stream = sqlx::query(query).fetch(&pool);
-                    let mut columns: Vec<QueryColumn> = Vec::new();
-                    let mut json_rows: Vec<Vec<serde_json::Value>> = Vec::new();
-                    let mut truncated = false;
-                    while let Some(row) = stream
-                        .try_next()
-                        .await
-                        .map_err(|e| AppError::Database(e.to_string()))?
-                    {
-                        if columns.is_empty() {
-                            columns = sqlite_query_columns(&row);
-                        }
-                        if json_rows.len() >= row_cap {
-                            truncated = true;
-                            break;
-                        }
-                        json_rows.push(
-                            (0..row.columns().len())
-                                .map(|idx| cell_to_json(&row, idx))
-                                .collect(),
-                        );
-                    }
-                    let total_count = json_rows.len() as i64;
-                    Ok(QueryResult {
-                        truncated,
-                        columns,
-                        rows: json_rows,
-                        total_count,
-                        execution_time_ms: start.elapsed().as_millis() as u64,
-                        query_type: QueryType::Select,
-                    })
-                }
-                QueryType::Dml { .. } => {
-                    let result = sqlx::query(query)
-                        .execute(&pool)
-                        .await
-                        .map_err(|e| AppError::Database(e.to_string()))?;
-                    let rows_affected = result.rows_affected();
-                    Ok(QueryResult {
-                        truncated: false,
-                        columns: Vec::new(),
-                        rows: Vec::new(),
-                        total_count: rows_affected as i64,
-                        execution_time_ms: start.elapsed().as_millis() as u64,
-                        query_type: QueryType::Dml { rows_affected },
-                    })
-                }
-                QueryType::Ddl => {
-                    sqlx::query(query)
-                        .execute(&pool)
-                        .await
-                        .map_err(|e| AppError::Database(e.to_string()))?;
-                    Ok(QueryResult {
-                        truncated: false,
-                        columns: Vec::new(),
-                        rows: Vec::new(),
-                        total_count: 0,
-                        execution_time_ms: start.elapsed().as_millis() as u64,
-                        query_type: QueryType::Ddl,
-                    })
-                }
-            }
-        };
-
-        match cancel_token {
-            Some(token) => tokio::select! {
-                result = work => result,
-                _ = token.cancelled() => Err(AppError::Database("Query cancelled".into())),
-            },
-            None => work.await,
+        // Issue #1068 — pin one connection so a cancel token can install a
+        // SQLite progress handler that raises SQLITE_INTERRUPT mid-statement.
+        // Unlike dropping the query future (which leaves the worker stepping to
+        // completion), the handler actually aborts a running statement and frees
+        // the connection. sqlite3_interrupt does not close the connection, so it
+        // returns to the pool reusable once the handler is cleared.
+        let mut conn = pool
+            .acquire()
+            .await
+            .map_err(|e| AppError::Connection(e.to_string()))?;
+        if let Some(token) = cancel_token {
+            install_cancel_interrupt(&mut conn, token).await?;
         }
+
+        let result = run_sqlite_statement(&mut conn, query, &query_type, row_cap, start).await;
+
+        if cancel_token.is_some() {
+            // Always clear the handler before the connection returns to the pool
+            // so a later query on this connection is not aborted by a stale
+            // token. The interrupt test exercises exactly this reuse path.
+            clear_cancel_interrupt(&mut conn).await;
+        }
+
+        // Converge a raced cancel to the canonical message (mirrors mysql/pg):
+        // a SQLITE_INTERRUPT surfaces here as an opaque DB error, so map it back
+        // to "Query cancelled" whenever the token fired.
+        finalize_cancelled(result, cancel_token)
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -335,6 +287,221 @@ impl SqliteAdapter {
             page_size,
             executed_query,
         })
+    }
+
+    /// Issue #1068 — export row streaming, the SQLite counterpart of the
+    /// PG/MySQL `stream_table_rows`. The caller passes `column_names` in source
+    /// order; each row is emitted as a `Vec<Value>` in that order and batched
+    /// (`batch_size`) to `sender`. Returns the total rows streamed.
+    ///
+    /// The scan runs inside a read transaction so a long export sees one
+    /// consistent snapshot (matches the PG/MySQL contract). Between batches it
+    /// checks the cancel token and a dropped receiver, rolling back and aborting
+    /// on either. Cell serialization reuses the wire `cell_to_json`, so the
+    /// dump's value shape is identical to the grid (same as mysql.rs).
+    pub async fn stream_table_rows(
+        &self,
+        namespace: &str,
+        table: &str,
+        batch_size: u32,
+        column_names: &[String],
+        sender: tokio::sync::mpsc::Sender<Vec<Vec<serde_json::Value>>>,
+        cancel: Option<&CancellationToken>,
+    ) -> Result<u64, AppError> {
+        if batch_size == 0 {
+            return Err(AppError::Validation(
+                "stream_table_rows: batch_size must be > 0".into(),
+            ));
+        }
+        if column_names.is_empty() {
+            return Err(AppError::Validation(
+                "stream_table_rows: column_names must not be empty".into(),
+            ));
+        }
+        validate_namespace(namespace)?;
+
+        let pool = self.active_pool().await?;
+        let mut tx = pool
+            .begin()
+            .await
+            .map_err(|e| AppError::Database(format!("BEGIN failed: {e}")))?;
+
+        // Columns are selected in `column_names` order — the caller owns source
+        // order. SQLite resolves the unqualified table against `main`, the only
+        // namespace this adapter exposes.
+        let cols_clause: Vec<String> = column_names.iter().map(|c| quote_identifier(c)).collect();
+        let select_sql = format!(
+            "SELECT {} FROM {}",
+            cols_clause.join(", "),
+            quote_identifier(table)
+        );
+
+        let mut stream = sqlx::query(&select_sql).fetch(&mut *tx);
+        let mut total: u64 = 0;
+        let mut batch: Vec<Vec<serde_json::Value>> = Vec::with_capacity(batch_size as usize);
+
+        loop {
+            if let Some(t) = cancel {
+                if t.is_cancelled() {
+                    drop(stream);
+                    if let Err(e) = tx.rollback().await {
+                        warn!("ROLLBACK after cancellation failed: {e}");
+                    }
+                    return Err(AppError::Database("Operation cancelled".into()));
+                }
+            }
+            let next = stream
+                .try_next()
+                .await
+                .map_err(|e| AppError::Database(format!("FETCH failed: {e}")))?;
+            match next {
+                Some(row) => {
+                    let values: Vec<serde_json::Value> = (0..row.columns().len())
+                        .map(|idx| cell_to_json(&row, idx))
+                        .collect();
+                    batch.push(values);
+                    if batch.len() as u32 >= batch_size {
+                        let count = batch.len() as u64;
+                        let send_batch = std::mem::take(&mut batch);
+                        if sender.send(send_batch).await.is_err() {
+                            drop(stream);
+                            if let Err(e) = tx.rollback().await {
+                                warn!("ROLLBACK after receiver drop failed: {e}");
+                            }
+                            return Err(AppError::Database(
+                                "Receiver dropped — export aborted".into(),
+                            ));
+                        }
+                        total += count;
+                    }
+                }
+                None => break,
+            }
+        }
+        // Tail flush — the final sub-batch_size remainder.
+        if !batch.is_empty() {
+            let count = batch.len() as u64;
+            if sender.send(batch).await.is_err() {
+                drop(stream);
+                if let Err(e) = tx.rollback().await {
+                    warn!("ROLLBACK after receiver drop (tail) failed: {e}");
+                }
+                return Err(AppError::Database(
+                    "Receiver dropped — export aborted".into(),
+                ));
+            }
+            total += count;
+        }
+
+        drop(stream);
+        tx.commit()
+            .await
+            .map_err(|e| AppError::Database(format!("COMMIT failed: {e}")))?;
+        Ok(total)
+    }
+}
+
+/// Run one classified statement on a pinned connection. Split out of
+/// `execute_query` so the cancel-interrupt handler can be installed/cleared on
+/// the same connection around the run.
+async fn run_sqlite_statement(
+    conn: &mut SqliteConnection,
+    query: &str,
+    query_type: &QueryType,
+    row_cap: usize,
+    start: std::time::Instant,
+) -> Result<QueryResult, AppError> {
+    match query_type {
+        QueryType::Select => {
+            // Issue #1231 — stream rows and stop at cap+1 (the extra row only
+            // sets `truncated`, it is never buffered) so a no-LIMIT JOIN cannot
+            // blow up the heap.
+            let mut stream = sqlx::query(query).fetch(&mut *conn);
+            let mut columns: Vec<QueryColumn> = Vec::new();
+            let mut json_rows: Vec<Vec<serde_json::Value>> = Vec::new();
+            let mut truncated = false;
+            while let Some(row) = stream
+                .try_next()
+                .await
+                .map_err(|e| AppError::Database(e.to_string()))?
+            {
+                if columns.is_empty() {
+                    columns = sqlite_query_columns(&row);
+                }
+                if json_rows.len() >= row_cap {
+                    truncated = true;
+                    break;
+                }
+                json_rows.push(
+                    (0..row.columns().len())
+                        .map(|idx| cell_to_json(&row, idx))
+                        .collect(),
+                );
+            }
+            let total_count = json_rows.len() as i64;
+            Ok(QueryResult {
+                truncated,
+                columns,
+                rows: json_rows,
+                total_count,
+                execution_time_ms: start.elapsed().as_millis() as u64,
+                query_type: QueryType::Select,
+            })
+        }
+        QueryType::Dml { .. } => {
+            let result = sqlx::query(query)
+                .execute(&mut *conn)
+                .await
+                .map_err(|e| AppError::Database(e.to_string()))?;
+            let rows_affected = result.rows_affected();
+            Ok(QueryResult {
+                truncated: false,
+                columns: Vec::new(),
+                rows: Vec::new(),
+                total_count: rows_affected as i64,
+                execution_time_ms: start.elapsed().as_millis() as u64,
+                query_type: QueryType::Dml { rows_affected },
+            })
+        }
+        QueryType::Ddl => {
+            sqlx::query(query)
+                .execute(&mut *conn)
+                .await
+                .map_err(|e| AppError::Database(e.to_string()))?;
+            Ok(QueryResult {
+                truncated: false,
+                columns: Vec::new(),
+                rows: Vec::new(),
+                total_count: 0,
+                execution_time_ms: start.elapsed().as_millis() as u64,
+                query_type: QueryType::Ddl,
+            })
+        }
+    }
+}
+
+/// Bind a SQLite progress handler to `token`: when the callback returns `false`
+/// SQLite raises SQLITE_INTERRUPT and the running statement aborts. The
+/// handler is checked roughly every 1024 VM opcodes, so cancel latency stays
+/// sub-millisecond on a busy statement with no measurable overhead otherwise.
+async fn install_cancel_interrupt(
+    conn: &mut SqliteConnection,
+    token: &CancellationToken,
+) -> Result<(), AppError> {
+    let token = token.clone();
+    conn.lock_handle()
+        .await
+        .map_err(|e| AppError::Database(e.to_string()))?
+        .set_progress_handler(1024, move || !token.is_cancelled());
+    Ok(())
+}
+
+/// Remove the progress handler so the connection can return to the pool without
+/// a stale token aborting the next query on it. Best-effort: a worker that
+/// crashed can no longer run queries anyway.
+async fn clear_cancel_interrupt(conn: &mut SqliteConnection) {
+    if let Ok(mut handle) = conn.lock_handle().await {
+        handle.remove_progress_handler();
     }
 }
 

@@ -506,6 +506,30 @@ impl SqliteAdapter {
             .collect())
     }
 
+    /// Test-only: connect with a single-connection pool so a cancel test can
+    /// observe worker liveness. On a `max_connections(1)` pool a follow-up
+    /// query can only run promptly if a cancel actually interrupted (freed)
+    /// the one worker rather than leaving it stepping the previous statement
+    /// to completion. Issue #1068.
+    #[cfg(test)]
+    pub(crate) async fn connect_single_connection_for_test(
+        &self,
+        config: &ConnectionConfig,
+    ) -> Result<(), AppError> {
+        let options = Self::connect_options(config)?;
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .acquire_timeout(std::time::Duration::from_secs(5))
+            .connect_with(options)
+            .await
+            .map_err(|e| AppError::Connection(e.to_string()))?;
+        let mut guard = self.inner.lock().await;
+        guard.pool = Some(pool);
+        guard.database_path = Some(Self::database_path(config)?.to_string());
+        guard.read_only = config.read_only;
+        Ok(())
+    }
+
     /// Return the `CREATE TRIGGER` SQL for one trigger from `sqlite_schema`.
     pub async fn get_trigger_source(
         &self,

@@ -13,10 +13,10 @@
 // invoke branch, the save() dialog (silent on cancel), and toasts.
 //
 // Data path (`RdbAdapter::stream_table_rows`) is implemented for PostgreSQL
-// (postgres.rs) and MySQL/MariaDB (mysql.rs, shared adapter). Every other
-// engine — SQLite, DuckDB, MSSQL, Oracle — rejects DML/Full dumps as
-// `Unsupported`, so callers gate the export UI via `supportsMigrationExport`.
-// SQLite backend impl tracked in #1068.
+// (postgres.rs), MySQL/MariaDB (mysql.rs, shared adapter), and SQLite
+// (adapters/sqlite, #1068). Every other engine — DuckDB, MSSQL, Oracle —
+// rejects DML/Full dumps as `Unsupported`, so callers gate the export UI via
+// `supportsMigrationExport`.
 import { useCallback, useState } from "react";
 import { save } from "@tauri-apps/plugin-dialog";
 import { useSchemaStore } from "@stores/schemaStore";
@@ -71,11 +71,16 @@ const DBMS_TO_DIALECT: Partial<Record<string, DdlDialect>> = {
 };
 
 // Engines whose `stream_table_rows` backend is implemented (postgres.rs /
-// mysql.rs; MariaDB shares the MySQL adapter). Any other engine rejects
-// DML/Full dumps as `Unsupported`, so the schema-tree export controls (header
-// popover + row context menus) surface only for these — surfacing elsewhere
-// would be an error-on-click (#1048). SQLite backend is tracked in #1068.
-const MIGRATION_EXPORT_DBTYPES = new Set(["postgresql", "mysql", "mariadb"]);
+// mysql.rs; MariaDB shares the MySQL adapter; sqlite adapter, #1068). Any other
+// engine rejects DML/Full dumps as `Unsupported`, so the schema-tree export
+// controls (header popover + row context menus) surface only for these —
+// surfacing elsewhere would be an error-on-click (#1048).
+const MIGRATION_EXPORT_DBTYPES = new Set([
+  "postgresql",
+  "mysql",
+  "mariadb",
+  "sqlite",
+]);
 
 export function supportsMigrationExport(dbType: string | undefined): boolean {
   return dbType !== undefined && MIGRATION_EXPORT_DBTYPES.has(dbType);

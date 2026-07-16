@@ -1102,11 +1102,11 @@ describe("SchemaTree — actions", () => {
 
   // =========================================================================
   // Issue #1048 — export surface must match the real `stream_table_rows`
-  // backend, implemented only for PostgreSQL / MySQL / MariaDB. SQLite (and
-  // DuckDB/MSSQL/Oracle) reject DML/Full dumps as `Unsupported`, so a visible
-  // export control there is an error-on-click. SQLite backend impl → #1068.
+  // backend, implemented for PostgreSQL / MySQL / MariaDB and SQLite (#1068).
+  // DuckDB/MSSQL/Oracle still reject DML/Full dumps as `Unsupported`, so a
+  // visible export control there would be an error-on-click.
   // =========================================================================
-  it("[#1048] header Export trigger is hidden for SQLite (backend unsupported)", async () => {
+  it("[#1068] header Export trigger is visible for SQLite (backend supported)", async () => {
     useConnectionStore.setState({
       connections: [
         {
@@ -1136,9 +1136,10 @@ describe("SchemaTree — actions", () => {
       render(<SchemaTree connectionId="conn1" />);
     });
 
-    // Refresh button proves the header action row rendered; Export must not.
+    // Refresh button proves the header action row rendered; Export is now
+    // available because the SQLite streaming backend is implemented (#1068).
     expect(screen.getByLabelText("Refresh schemas")).toBeInTheDocument();
-    expect(screen.queryByLabelText("Export")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Export")).toBeInTheDocument();
   });
 
   it("[#1048] header Export trigger stays visible for MySQL (backend supported)", async () => {
@@ -1174,7 +1175,7 @@ describe("SchemaTree — actions", () => {
     expect(screen.getByLabelText("Export")).toBeInTheDocument();
   });
 
-  it("[#1048] SQLite table-row context menu omits 'Export Table…'", async () => {
+  it("[#1068] SQLite table-row context menu surfaces 'Export Table…'", async () => {
     useConnectionStore.setState({
       connections: [
         {
@@ -1209,9 +1210,9 @@ describe("SchemaTree — actions", () => {
       fireEvent.contextMenu(tableItem, { clientX: 100, clientY: 200 });
     });
 
-    // Menu opened (Structure present) but the export sub-trigger is gated out.
+    // Menu opened and the export sub-trigger is now available (#1068).
     expect(screen.getByText("Structure")).toBeInTheDocument();
-    expect(screen.queryByText("Export Table…")).not.toBeInTheDocument();
+    expect(screen.getByText("Export Table…")).toBeInTheDocument();
   });
 
   // =========================================================================
