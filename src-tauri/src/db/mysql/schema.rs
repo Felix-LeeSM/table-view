@@ -967,6 +967,206 @@ impl MysqlAdapter {
         serde_json::from_str(&row.0)
             .map_err(|e| AppError::Database(format!("EXPLAIN JSON parse failed: {e}")))
     }
+
+    /// Issue #1073 (U1 MySQL parity) — list backend sessions from
+    /// `information_schema.processlist`. Chosen over `performance_schema.threads`
+    /// / `SHOW PROCESSLIST` because `information_schema.processlist` exists on
+    /// every supported MySQL (5.1+) and MariaDB (5.1+) build regardless of the
+    /// `performance_schema` compile/runtime flag — the widest-compat source, and
+    /// the only one that decodes cleanly as a typed result set. `ID` is
+    /// `BIGINT UNSIGNED`, so it is `CAST(... AS SIGNED)` to fit the wire's i64
+    /// (connection ids never approach the signed ceiling). The adapter's own
+    /// session is excluded via `CONNECTION_ID()`, mirroring the PG
+    /// `pg_backend_pid()` filter. `wait_event` has no processlist analogue, so it
+    /// stays `None`; `started_at` is derived as `now - TIME` seconds (processlist
+    /// only exposes elapsed `TIME`, not an absolute start), rendered UTC ISO-8601
+    /// server-side to avoid a `chrono` dependency (mirrors the PG override).
+    pub async fn list_server_activity(
+        &self,
+    ) -> Result<Vec<crate::models::ServerActivityRow>, AppError> {
+        #[allow(clippy::type_complexity)]
+        type Row = (
+            i64,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+        );
+        let pool = self.active_pool().await?;
+        let rows: Vec<Row> = sqlx::query_as(
+            "SELECT CAST(ID AS SIGNED) AS id, DB, USER, STATE, INFO, \
+                    DATE_FORMAT(UTC_TIMESTAMP() - INTERVAL TIME SECOND, \
+                                '%Y-%m-%dT%H:%i:%sZ') AS started_at \
+             FROM information_schema.processlist \
+             WHERE ID <> CONNECTION_ID() \
+             ORDER BY TIME DESC",
+        )
+        .fetch_all(&pool)
+        .await
+        .map_err(|e| AppError::Database(format!("information_schema.processlist failed: {e}")))?;
+
+        Ok(rows
+            .into_iter()
+            .map(
+                |(id, db, user, state, query, started_at)| crate::models::ServerActivityRow {
+                    id,
+                    db,
+                    user,
+                    state,
+                    query,
+                    wait_event: None,
+                    started_at,
+                },
+            )
+            .collect())
+    }
+
+    /// Issue #1073 (U1 MySQL parity) — terminate a backend session by id.
+    /// MySQL/MariaDB `KILL` is not accepted in the prepared-statement protocol,
+    /// so the id cannot be a bind parameter; it is interpolated directly. This
+    /// is injection-safe because `id: i64` is a typed integer — no string can
+    /// reach the SQL. Parity with the PG `pg_terminate_backend` no-op contract:
+    /// killing an already-gone session raises `ER_NO_SUCH_THREAD` (1094), which
+    /// is swallowed as a successful no-op so the activity panel behaves the same
+    /// across engines. Any other driver error surfaces verbatim.
+    pub async fn kill_session(&self, id: i64) -> Result<(), AppError> {
+        let pool = self.active_pool().await?;
+        let sql = format!("KILL {id}");
+        match sqlx::query(&sql).execute(&pool).await {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                let msg = e.to_string();
+                if msg.contains("Unknown thread id") || msg.contains("1094") {
+                    Ok(())
+                } else {
+                    Err(AppError::Database(format!("KILL failed: {msg}")))
+                }
+            }
+        }
+    }
+
+    /// Issue #1073 (U5 MySQL parity) — top-N slow queries from
+    /// `performance_schema.events_statements_summary_by_digest`. The digest table
+    /// is only populated when `performance_schema` is enabled, and when it is
+    /// **off** the table exists but returns zero rows — a silent empty list that
+    /// would masquerade as "no slow queries". To avoid that, the runtime flag is
+    /// checked first (`@@performance_schema`) and a disabled instance raises an
+    /// explicit, actionable error instead of an empty result. `DIGEST_TEXT` is
+    /// the normalised statement (literals already collapsed to `?`), so no raw
+    /// user data / secrets leak through the query text. Timer columns are
+    /// picoseconds — divided by 1e9 to milliseconds to match the PG `_ms` wire
+    /// fields. `limit` is trusted here (the caller clamps it, same as PG).
+    pub async fn slow_queries(
+        &self,
+        limit: i64,
+    ) -> Result<Vec<crate::models::SlowQueryRow>, AppError> {
+        let pool = self.active_pool().await?;
+
+        let enabled: i64 = sqlx::query_scalar("SELECT @@performance_schema")
+            .fetch_one(&pool)
+            .await
+            .map_err(|e| AppError::Database(format!("performance_schema probe failed: {e}")))?;
+        if enabled == 0 {
+            return Err(AppError::Database(
+                "performance_schema is disabled — slow query digests are \
+                 unavailable. Set `performance_schema = ON` in the server config \
+                 and restart to enable statement digest collection."
+                    .into(),
+            ));
+        }
+
+        #[allow(clippy::type_complexity)]
+        type Row = (Option<String>, i64, Option<f64>, Option<f64>, i64);
+        let rows: Vec<Row> = sqlx::query_as(
+            "SELECT DIGEST_TEXT, \
+                    CAST(COUNT_STAR AS SIGNED), \
+                    SUM_TIMER_WAIT / 1e9, \
+                    AVG_TIMER_WAIT / 1e9, \
+                    CAST(SUM_ROWS_SENT AS SIGNED) \
+             FROM performance_schema.events_statements_summary_by_digest \
+             WHERE DIGEST_TEXT IS NOT NULL \
+             ORDER BY AVG_TIMER_WAIT DESC \
+             LIMIT ?",
+        )
+        .bind(limit)
+        .fetch_all(&pool)
+        .await
+        .map_err(|e| {
+            AppError::Database(format!("events_statements_summary_by_digest failed: {e}"))
+        })?;
+
+        Ok(rows
+            .into_iter()
+            .map(
+                |(query, calls, total, mean, rows)| crate::models::SlowQueryRow {
+                    query: query.unwrap_or_default(),
+                    calls,
+                    total_exec_time_ms: total.unwrap_or(0.0),
+                    mean_exec_time_ms: mean.unwrap_or(0.0),
+                    rows,
+                    extras: std::collections::HashMap::new(),
+                },
+            )
+            .collect())
+    }
+
+    /// Issue #1073 (U4 MySQL parity) — server identity (`VERSION()` +
+    /// `@@hostname`) plus uptime / active connections from `SHOW GLOBAL STATUS`
+    /// and a whitelist of tuning knobs from `SHOW GLOBAL VARIABLES`. `SHOW`
+    /// commands are used over `performance_schema.global_status` so the panel
+    /// works even when `performance_schema` is disabled. `extras` mirrors the PG
+    /// `{ name: { setting } }` shape so the UI's raw subsection renders both
+    /// engines with one code path.
+    pub async fn server_info(&self) -> Result<crate::models::ServerInfoRow, AppError> {
+        let pool = self.active_pool().await?;
+
+        let (version, host): (String, Option<String>) =
+            sqlx::query_as("SELECT VERSION(), @@hostname")
+                .fetch_one(&pool)
+                .await
+                .map_err(|e| AppError::Database(format!("VERSION()/@@hostname failed: {e}")))?;
+
+        // Value column is a string for both status and variables; parse numerics
+        // in Rust rather than casting server-side (SHOW has no typed projection).
+        let status: Vec<(String, String)> = sqlx::query_as(
+            "SHOW GLOBAL STATUS WHERE Variable_name IN ('Uptime', 'Threads_connected')",
+        )
+        .fetch_all(&pool)
+        .await
+        .map_err(|e| AppError::Database(format!("SHOW GLOBAL STATUS failed: {e}")))?;
+        let mut uptime_sec = None;
+        let mut connections_active = None;
+        for (name, value) in status {
+            match name.as_str() {
+                "Uptime" => uptime_sec = value.parse::<i64>().ok(),
+                "Threads_connected" => connections_active = value.parse::<i64>().ok(),
+                _ => {}
+            }
+        }
+
+        let variables: Vec<(String, String)> = sqlx::query_as(
+            "SHOW GLOBAL VARIABLES WHERE Variable_name IN \
+             ('version_comment', 'max_connections', 'innodb_buffer_pool_size', \
+              'max_allowed_packet', 'time_zone')",
+        )
+        .fetch_all(&pool)
+        .await
+        .map_err(|e| AppError::Database(format!("SHOW GLOBAL VARIABLES failed: {e}")))?;
+        let mut extras: std::collections::HashMap<String, serde_json::Value> =
+            std::collections::HashMap::new();
+        for (name, value) in variables {
+            extras.insert(name, serde_json::json!({ "setting": value }));
+        }
+
+        Ok(crate::models::ServerInfoRow {
+            version,
+            host,
+            uptime_sec,
+            connections_active,
+            extras,
+        })
+    }
 }
 
 #[cfg(test)]
@@ -1090,6 +1290,55 @@ mod tests {
     async fn explain_query_without_connection_fails() {
         let adapter = MysqlAdapter::new();
         match adapter.explain_query("SELECT 1").await {
+            Err(AppError::Connection(msg)) => {
+                assert!(msg.contains("Not connected"), "unexpected: {msg}");
+            }
+            other => panic!("expected Connection, got ok? {}", other.is_ok()),
+        }
+    }
+
+    // Issue #1073 — admin ops. The SQL bodies need a live MySQL (covered by
+    // mysql_integration.rs); the pool-acquisition guard is the branch that is
+    // reachable without a server, mirroring the PG `*_without_connection_fails`
+    // unit cases. kill_session takes a typed i64 (no identifier validation to
+    // assert) — its guard here also documents that no string reaches the SQL.
+    #[tokio::test]
+    async fn list_server_activity_without_connection_fails() {
+        let adapter = MysqlAdapter::new();
+        match adapter.list_server_activity().await {
+            Err(AppError::Connection(msg)) => {
+                assert!(msg.contains("Not connected"), "unexpected: {msg}");
+            }
+            other => panic!("expected Connection, got ok? {}", other.is_ok()),
+        }
+    }
+
+    #[tokio::test]
+    async fn kill_session_without_connection_fails() {
+        let adapter = MysqlAdapter::new();
+        match adapter.kill_session(42).await {
+            Err(AppError::Connection(msg)) => {
+                assert!(msg.contains("Not connected"), "unexpected: {msg}");
+            }
+            other => panic!("expected Connection, got ok? {}", other.is_ok()),
+        }
+    }
+
+    #[tokio::test]
+    async fn slow_queries_without_connection_fails() {
+        let adapter = MysqlAdapter::new();
+        match adapter.slow_queries(10).await {
+            Err(AppError::Connection(msg)) => {
+                assert!(msg.contains("Not connected"), "unexpected: {msg}");
+            }
+            other => panic!("expected Connection, got ok? {}", other.is_ok()),
+        }
+    }
+
+    #[tokio::test]
+    async fn server_info_without_connection_fails() {
+        let adapter = MysqlAdapter::new();
+        match adapter.server_info().await {
             Err(AppError::Connection(msg)) => {
                 assert!(msg.contains("Not connected"), "unexpected: {msg}");
             }

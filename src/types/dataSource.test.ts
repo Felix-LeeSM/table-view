@@ -62,6 +62,8 @@ describe("DataSourceProfile registry", () => {
       dropObject: true,
     },
     intelligence: { erd: true },
+    // Issue #1073 — MySQL/MariaDB admin ops parity (no users: #1077 PG-first).
+    operations: { activity: true, slowQueries: true, serverInfo: true },
   });
 
   const expectedCapabilitiesByType: Record<
