@@ -10,15 +10,9 @@
 // diff view toggle (shows original vs pending side-by-side), structural
 // edits (add key on objects, push item on arrays, delete leaf).
 
-import {
-  Fragment,
-  useMemo,
-  useState,
-  useCallback,
-  useRef,
-  useEffect,
-} from "react";
+import { useMemo, useState, useCallback, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   ChevronRight,
   ChevronDown,
@@ -28,6 +22,10 @@ import {
   Plus,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  TREE_ROW_HEIGHT_ESTIMATE,
+  TREE_VIRTUALIZE_THRESHOLD,
+} from "@/components/shared/tree/virtualize";
 import {
   buildTreeNodesWithGhosts,
   coerceTreeAddValue,
@@ -157,6 +155,20 @@ function leafTypeTag(node: TreeNode): string {
     default:
       return "?";
   }
+}
+
+// #1448 — one visible-order render row: a tree node, or a trailing `+ key` /
+// `+ item` affordance. The flat list drives both the roving hook and the
+// virtualizer.
+type RenderRow =
+  | { type: "node"; node: TreeNode }
+  | { type: "objAff"; path: string; depth: number }
+  | { type: "arrAff"; path: string; depth: number; baseLength: number };
+
+function renderRowKey(row: RenderRow): string {
+  if (row.type === "node") return row.node.path || "__root";
+  if (row.type === "objAff") return `__add-key-${row.path || "__root"}`;
+  return `__add-item-${row.path}`;
 }
 
 export function DocumentTreePanel({
@@ -327,65 +339,71 @@ export function DocumentTreePanel({
     forbiddenRootKeys,
   ]);
 
-  // Sprint 344 Slice B (2026-05-15) — precompute, for each obj node
-  // index, the index right after its subtree ends. We splice the
-  // `+ key` affordance (or its input pair, when active) at that point
-  // so the row renders at the END of the object's children, matching
-  // Slice A's ghost-row insertion order.
-  const objAffordanceAfter = useMemo(() => {
-    // Map<base node index `i`, list of obj paths whose subtree ends at i+1>
-    const map = new Map<number, Array<{ path: string; depth: number }>>();
-    for (let i = 0; i < nodes.length; i += 1) {
-      const node = nodes[i];
-      if (node === undefined) continue;
-      if (node.kind !== "obj") continue;
-      // Find the last index j such that nodes[k].depth > node.depth for
-      // k in (i, j]. The subtree ends at the first k where depth ≤ node.depth.
-      let endIdx = i; // exclusive: end-of-subtree index = endIdx
-      for (let j = i + 1; j < nodes.length; j += 1) {
-        const inner = nodes[j];
-        if (inner === undefined) break;
-        if (inner.depth <= node.depth) break;
-        endIdx = j;
-      }
-      // Affordance renders AFTER endIdx, so we attach it to map[endIdx].
-      const entries = map.get(endIdx) ?? [];
-      entries.push({ path: node.path, depth: node.depth });
-      map.set(endIdx, entries);
-    }
-    return map;
-  }, [nodes]);
-
-  // Sprint 344 Slice C (2026-05-15) — same end-of-subtree index map,
-  // but keyed on `arr` nodes so the `+ item` row renders at the END
-  // of the array's children. Each entry also carries `childCount` so
-  // the auto-derived index label can be computed without re-walking
-  // the tree at render time.
-  const arrAffordanceAfter = useMemo(() => {
-    const map = new Map<
+  // Sprint 344 Slice B/C (2026-05-15) — for each obj / arr node, the flat-list
+  // index right after its subtree ends, so the trailing `+ key` / `+ item`
+  // affordance renders at the END of that container's children (matching Slice
+  // A's ghost-row insertion order).
+  //
+  // #1448 — one O(n) pre-order stack pass replaces the previous per-node O(n²)
+  // inner subtree scan (which, on a 50k-node capped tree, quadratically blew
+  // up). A container is popped — its subtree ended at the prior index — the
+  // moment a node at its own depth-or-shallower appears. Both maps come from
+  // the single pass; the arr map also carries `baseLength` for the auto-index
+  // label.
+  const { objAffordanceAfter, arrAffordanceAfter } = useMemo(() => {
+    const objMap = new Map<number, Array<{ path: string; depth: number }>>();
+    const arrMap = new Map<
       number,
       Array<{ path: string; depth: number; baseLength: number }>
     >();
+    const attach = (containerIdx: number, endIdx: number) => {
+      const node = nodes[containerIdx];
+      if (node === undefined) return;
+      if (node.kind === "obj") {
+        const entries = objMap.get(endIdx) ?? [];
+        entries.push({ path: node.path, depth: node.depth });
+        objMap.set(endIdx, entries);
+      } else if (node.kind === "arr") {
+        const entries = arrMap.get(endIdx) ?? [];
+        entries.push({
+          path: node.path,
+          depth: node.depth,
+          baseLength: node.childCount ?? 0,
+        });
+        arrMap.set(endIdx, entries);
+      }
+    };
+    // Open containers awaiting their subtree end, innermost on top.
+    const stack: Array<{ index: number; depth: number }> = [];
     for (let i = 0; i < nodes.length; i += 1) {
       const node = nodes[i];
       if (node === undefined) continue;
-      if (node.kind !== "arr") continue;
-      let endIdx = i;
-      for (let j = i + 1; j < nodes.length; j += 1) {
-        const inner = nodes[j];
-        if (inner === undefined) break;
-        if (inner.depth <= node.depth) break;
-        endIdx = j;
+      // Every open container at this node's depth-or-shallower has no further
+      // children — its subtree ended at i - 1.
+      while (
+        stack.length > 0 &&
+        node.depth <= (stack[stack.length - 1]?.depth ?? -1)
+      ) {
+        const container = stack.pop();
+        if (container !== undefined) attach(container.index, i - 1);
       }
-      const entries = map.get(endIdx) ?? [];
-      entries.push({
-        path: node.path,
-        depth: node.depth,
-        baseLength: node.childCount ?? 0,
-      });
-      map.set(endIdx, entries);
+      if (node.kind === "obj" || node.kind === "arr") {
+        stack.push({ index: i, depth: node.depth });
+      }
     }
-    return map;
+    // Trailing open containers close at the last node.
+    while (stack.length > 0) {
+      const container = stack.pop();
+      if (container !== undefined) attach(container.index, nodes.length - 1);
+    }
+    // Nested containers sharing an end index were popped innermost-first; the
+    // original outer-loop order was outermost-first (shallower depth), so sort
+    // each bucket by depth to keep the affordance stacking order identical.
+    for (const entries of objMap.values())
+      entries.sort((a, b) => a.depth - b.depth);
+    for (const entries of arrMap.values())
+      entries.sort((a, b) => a.depth - b.depth);
+    return { objAffordanceAfter: objMap, arrAffordanceAfter: arrMap };
   }, [nodes]);
 
   // Sprint 344 Slice C (2026-05-15) — auto-index for the `+ item` row.
@@ -525,27 +543,399 @@ export function DocumentTreePanel({
 
   const pendingCount = pendingByPath?.size ?? 0;
 
-  // WAI-ARIA tree roving (#1128) — a single tab stop over the *visible* rows
-  // (collapsed / filtered nodes drop out), with arrow-key nav + expand/collapse.
-  // The root path is "" so it uses the `__root` sentinel as its tree key, kept
-  // consistent with the existing `data-testid` naming.
-  const visibleNodes = useMemo(
-    () => nodes.filter((n) => !isHidden(n.path)),
-    [nodes, isHidden],
+  // #1448 — one flat, visible-order list of everything the tree renders: each
+  // node row plus the trailing `+ key` / `+ item` affordance rows (only when
+  // `onCommitEdit` is provided). Pulling the per-index `isHidden` +
+  // collapsed-ancestor filtering out of the render into this memo lets both the
+  // roving hook and the virtualizer share one index space, and lets a large
+  // document hand rendering off to `@tanstack/react-virtual` below.
+  const renderRows = useMemo(() => {
+    const rows: RenderRow[] = [];
+    const collapsedList = Array.from(collapsed);
+    // An affordance whose container IS collapsed (or sits under a collapsed
+    // ancestor) renders at the end of hidden children, so drop it. `isHidden`
+    // treats a collapsed container as still-visible, so this equality check is
+    // the extra guard the original inline filter applied.
+    const underCollapsed = (path: string) =>
+      collapsedList.some(
+        (cp) =>
+          path === cp || path.startsWith(cp + ".") || path.startsWith(cp + "["),
+      );
+    for (let idx = 0; idx < nodes.length; idx += 1) {
+      const node = nodes[idx];
+      if (node === undefined) continue;
+      if (!isHidden(node.path)) rows.push({ type: "node", node });
+      if (!onCommitEdit) continue;
+      for (const aff of objAffordanceAfter.get(idx) ?? []) {
+        if (!isHidden(aff.path) && !underCollapsed(aff.path)) {
+          rows.push({ type: "objAff", path: aff.path, depth: aff.depth });
+        }
+      }
+      for (const aff of arrAffordanceAfter.get(idx) ?? []) {
+        if (!isHidden(aff.path) && !underCollapsed(aff.path)) {
+          rows.push({
+            type: "arrAff",
+            path: aff.path,
+            depth: aff.depth,
+            baseLength: aff.baseLength,
+          });
+        }
+      }
+    }
+    return rows;
+  }, [
+    nodes,
+    objAffordanceAfter,
+    arrAffordanceAfter,
+    isHidden,
+    collapsed,
+    onCommitEdit,
+  ]);
+
+  // WAI-ARIA tree roving (#1128) — a single tab stop over the visible node
+  // rows; affordance rows are `focusable: false` so arrow-nav skips them but
+  // they still occupy the shared index space (`useTreeRoving` keeps the full
+  // list so a virtualized `scrollToIndex` gets the correct full-list index).
+  const rovingRows: TreeRovingRow[] = renderRows.map((row) =>
+    row.type === "node"
+      ? {
+          key: row.node.path || "__root",
+          depth: row.node.depth,
+          expanded:
+            row.node.kind === "leaf" ? null : !collapsed.has(row.node.path),
+          // #1445 — a "…truncated" indicator is a status row, not a tab stop.
+          focusable: !row.node.truncated,
+        }
+      : {
+          key:
+            row.type === "objAff"
+              ? `__add-key-${row.path || "__root"}`
+              : `__add-item-${row.path}`,
+          depth: row.depth,
+          expanded: null,
+          focusable: false,
+        },
   );
-  const rovingRows: TreeRovingRow[] = visibleNodes.map((n) => ({
-    key: n.path || "__root",
-    depth: n.depth,
-    expanded: n.kind === "leaf" ? null : !collapsed.has(n.path),
-    // #1445 — a "…truncated" indicator is a status row, not a tab stop.
-    focusable: !n.truncated,
-  }));
+
+  // #1448 — hand rendering off to the virtualizer once the visible row list
+  // grows past the shared threshold so a 50k-node cell only mounts a
+  // viewport-sized window instead of the whole flat list (which freezes the
+  // tab). The `role="tree"` div (`listRef`) is itself the scroll element.
+  const shouldVirtualize = renderRows.length > TREE_VIRTUALIZE_THRESHOLD;
+  const rowVirtualizer = useVirtualizer({
+    count: shouldVirtualize ? renderRows.length : 0,
+    getScrollElement: () => listRef.current,
+    estimateSize: () => TREE_ROW_HEIGHT_ESTIMATE,
+    overscan: 8,
+  });
+
   const roving = useTreeRoving(
     rovingRows,
     (key) => toggleCollapsed(key === "__root" ? "" : key),
     listRef,
+    shouldVirtualize
+      ? (index) => rowVirtualizer.scrollToIndex(index)
+      : undefined,
   );
   const activeKey = roving.focusKey ?? rovingRows[0]?.key ?? null;
+
+  // #1448 — render one flat row (node or trailing affordance). Called by both
+  // the plain map and the virtualized window so the two paths render
+  // identically; the affordance branches replace the old per-node `trailing`
+  // arrays now that each affordance is its own `renderRows` entry.
+  const renderRow = (row: RenderRow): React.ReactNode => {
+    if (row.type === "objAff") {
+      return (
+        <AddKeyRow
+          key={`__add-key-${row.path || "__root"}`}
+          parentPath={row.path}
+          parentDepth={row.depth}
+          isOpen={addingPath === row.path && addingKind === "obj"}
+          keyDraft={keyDraft}
+          valueDraft={valueDraft}
+          addError={addError}
+          onStart={() => startAddKey(row.path)}
+          onKeyDraftChange={(v) => {
+            setKeyDraft(v);
+            if (addError) setAddError(null);
+          }}
+          onValueDraftChange={setValueDraft}
+          onCommit={commitAddKey}
+          onCancel={cancelAddKey}
+          keyInputRef={keyInputRef}
+          valueInputRef={valueInputRef}
+        />
+      );
+    }
+    if (row.type === "arrAff") {
+      return (
+        <AddItemRow
+          key={`__add-item-${row.path}`}
+          arrayPath={row.path}
+          parentDepth={row.depth}
+          isOpen={addingPath === row.path && addingKind === "arr"}
+          valueDraft={valueDraft}
+          nextIndex={nextItemIndex(row.path, row.baseLength)}
+          onStart={() => startAddItem(row.path)}
+          onValueDraftChange={setValueDraft}
+          onCommit={commitAddItem}
+          onCancel={cancelAddKey}
+          valueInputRef={itemValueInputRef}
+        />
+      );
+    }
+    const node = row.node;
+    // #1445 — the jsonTree walk stopped here to enforce the depth / node-count
+    // DoS caps. Render a plain "…truncated" indicator instead of the normal
+    // node UI so hostile/oversized server data is surfaced rather than silently
+    // clipped. No affordances / editor for a truncated node.
+    if (node.truncated) {
+      return (
+        <div
+          key={node.path || "__truncated"}
+          data-testid="tree-truncated"
+          role="treeitem"
+          aria-level={node.depth + 1}
+          tabIndex={-1}
+          className="px-1 py-0.5 text-3xs italic text-warning"
+          style={{ paddingLeft: `${node.depth * 16}px` }}
+        >
+          {t("treePanel.truncated")}
+        </div>
+      );
+    }
+    const isCollapsed = collapsed.has(node.path);
+    const pending = pendingByPath?.get(node.path);
+    const isEditing = editingPath === node.path;
+    const treeKey = node.path || "__root";
+    const isContainer = node.kind === "obj" || node.kind === "arr";
+    return (
+      <div
+        key={node.path || "__root"}
+        data-testid={`tree-node-${node.path || "__root"}`}
+        // WAI-ARIA tree roving (#1128) — every visible node is a
+        // treeitem; the container owns one tab stop and arrow-key nav.
+        // Enter/Space toggles a container; Enter opens a leaf's editor.
+        // Editing inputs are skipped by the roving handler (it ignores
+        // INPUT/TEXTAREA targets) so typing is never hijacked.
+        role="treeitem"
+        aria-level={node.depth + 1}
+        aria-expanded={isContainer ? !isCollapsed : undefined}
+        aria-label={node.label || fieldName}
+        data-tree-key={treeKey}
+        tabIndex={activeKey === treeKey ? 0 : -1}
+        onFocus={() => roving.setFocusKey(treeKey)}
+        onKeyDown={(e) => {
+          if (e.target !== e.currentTarget) return;
+          if (isContainer && (e.key === "Enter" || e.key === " ")) {
+            e.preventDefault();
+            toggleCollapsed(node.path);
+          } else if (
+            node.kind === "leaf" &&
+            e.key === "Enter" &&
+            !isPendingUnset(pending)
+          ) {
+            e.preventDefault();
+            startEdit(node);
+          }
+        }}
+        className={
+          node.isGhost
+            ? "rounded border border-warning/30 bg-warning/10 px-1 py-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+            : pending !== undefined
+              ? "rounded bg-warning/10 px-1 py-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+              : "px-1 py-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+        }
+        style={{ paddingLeft: `${node.depth * 16}px` }}
+      >
+        {(node.kind === "obj" || node.kind === "arr") && (
+          <button
+            type="button"
+            tabIndex={-1}
+            onClick={() => toggleCollapsed(node.path)}
+            className="inline-flex items-center align-middle text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+            data-testid={`tree-twist-${node.path || "__root"}`}
+            aria-label={t("treePanel.toggleAriaLabel", {
+              label: node.label,
+            })}
+          >
+            {isCollapsed ? (
+              <ChevronRight size={12} aria-hidden />
+            ) : (
+              <ChevronDown size={12} aria-hidden />
+            )}
+          </button>
+        )}
+        <span className="ml-1 text-value-key">{node.label}</span>
+        {node.kind === "obj" && (
+          <span className="ml-1 text-muted-foreground">
+            : {"{"}
+            {node.childCount} item{node.childCount === 1 ? "" : "s"}
+            {"}"}
+          </span>
+        )}
+        {node.kind === "arr" && (
+          <span className="ml-1 text-muted-foreground">
+            : [{node.childCount} item{node.childCount === 1 ? "" : "s"}]
+          </span>
+        )}
+        {node.kind !== "leaf" && KIND_TAG[node.kind] && (
+          <TagBadge>{KIND_TAG[node.kind]}</TagBadge>
+        )}
+        {/* Sprint 344 Slice A — NEW badge on ghost (`+ key` / `+
+          item` adds). Rendered on obj/arr ghost containers too
+          so a brand-new nested object shows the badge on the
+          parent row, distinct from the per-leaf `● edited`. */}
+        {node.isGhost && node.kind !== "leaf" && <NewBadge />}
+
+        {node.kind === "leaf" && !isEditing && (
+          <>
+            <span className="ml-1 text-muted-foreground">:</span>
+            {/* Sprint 342 V2 — two render branches for leaves with
+              a pending edit:
+               1. pending = __op__:unset → strike-through original,
+                  "● will delete" badge.
+               2. otherwise → pending (or original) as the
+                  clickable editor entry-point. */}
+            {isPendingUnset(pending) ? (
+              <span
+                data-testid={`tree-unset-${node.path}`}
+                className="ml-1 align-middle text-emerald-700/60 line-through decoration-value-delete dark:text-emerald-300/50"
+              >
+                {renderLeafValue(node)}
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={() => startEdit(node)}
+                data-testid={`tree-leaf-${node.path}`}
+                className="ml-1 align-middle text-value-leaf hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+              >
+                {pending !== undefined
+                  ? renderPendingText(pending)
+                  : renderLeafValue(node)}
+              </button>
+            )}
+            <TagBadge>{leafTypeTag(node)}</TagBadge>
+            {/* Sprint 344 Slice A — distinct visual states:
+               - ghost (add): "NEW" badge, no "● edited".
+               - existing leaf with pending unset: strike +
+                 "● will delete".
+               - existing leaf with pending edit: "● edited".
+              Ghost takes priority because a ghost path also
+              has a `pending` entry (the new value lives there). */}
+            {node.isGhost ? (
+              <NewBadge />
+            ) : isPendingUnset(pending) ? (
+              <span className="ml-2 text-3xs text-value-delete">
+                {t("treePanel.willDelete")}
+              </span>
+            ) : (
+              pending !== undefined && (
+                <span className="ml-2 text-3xs text-warning">
+                  {t("treePanel.edited")}
+                </span>
+              )
+            )}
+            {/* Sprint 342 V2 — leaf delete entry-point. `_id`
+              cannot be unset (MongoDB rejects it; mqlGenerator's
+              id-in-patch guard would drop the row anyway), so
+              hide the trash for those leaves to keep the UI
+              honest. */}
+            {onCommitEdit &&
+              node.path !== "_id" &&
+              !isPendingUnset(pending) && (
+                <button
+                  type="button"
+                  data-testid={`tree-delete-${node.path}`}
+                  aria-label={t("treePanel.deleteFieldAriaLabel", {
+                    path: node.path,
+                  })}
+                  title={t("treePanel.deleteFieldTitle")}
+                  onClick={() => onCommitEdit(node.path, UNSET_OP)}
+                  className="ml-2 inline-flex items-center align-middle text-muted-foreground transition-colors hover:text-value-delete focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                >
+                  <Trash2 size={12} aria-hidden />
+                </button>
+              )}
+          </>
+        )}
+
+        {/* Sprint 342 V2 — BSON wrappers (ObjectId / Date /
+          Decimal128 / binData) get the type-aware
+          BsonTypeEditor instead of the plain string input.
+          The editor commits an EJSON wrapper object; the
+          parent's onCommitEdit -> tagBsonWrapper round-trip
+          keeps the pendingEdits Map shape unchanged. */}
+        {node.kind === "leaf" &&
+          isEditing &&
+          node.isBson &&
+          (() => {
+            const parsed = parseBsonLeaf(node);
+            if (parsed === null) {
+              // Unknown BSON wrapper shape — fall back to a plain
+              // string editor against the raw EJSON payload.
+              return (
+                <PlainLeafInput
+                  draft={draft}
+                  onDraftChange={setDraft}
+                  onCommit={commitDraft}
+                  onCancel={() => {
+                    setEditingPath(null);
+                    setDraft("");
+                  }}
+                  testId={`tree-edit-${node.path}`}
+                  typeTag={leafTypeTag(node)}
+                />
+              );
+            }
+            return (
+              <div
+                data-testid={`tree-edit-bson-${node.path}`}
+                className="mt-1 flex w-full items-center gap-2 rounded border border-primary bg-background p-1.5"
+              >
+                <span className="text-3xs uppercase tracking-wider text-muted-foreground">
+                  {parsed.type}
+                </span>
+                <div className="flex-1">
+                  <BsonTypeEditor
+                    type={parsed.type}
+                    initialValue={parsed.ejson}
+                    ariaLabel={t("treePanel.editingAriaLabel", {
+                      path: node.path,
+                      type: parsed.type,
+                    })}
+                    onCommit={(v) => {
+                      if (onCommitEdit) onCommitEdit(node.path, v);
+                      setEditingPath(null);
+                      setDraft("");
+                    }}
+                    onCancel={() => {
+                      setEditingPath(null);
+                      setDraft("");
+                    }}
+                  />
+                </div>
+              </div>
+            );
+          })()}
+
+        {node.kind === "leaf" && isEditing && !node.isBson && (
+          <PlainLeafInput
+            draft={draft}
+            onDraftChange={setDraft}
+            onCommit={commitDraft}
+            onCancel={() => {
+              setEditingPath(null);
+              setDraft("");
+            }}
+            testId={`tree-edit-${node.path}`}
+            typeTag={leafTypeTag(node)}
+          />
+        )}
+      </div>
+    );
+  };
 
   return (
     <section
@@ -636,347 +1026,58 @@ export function DocumentTreePanel({
         className="max-h-96 overflow-auto rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
         onKeyDown={roving.onKeyDown}
       >
-        {nodes.map((node, idx) => {
-          const objAffsAfter = onCommitEdit
-            ? (objAffordanceAfter.get(idx) ?? [])
-            : [];
-          const arrAffsAfter = onCommitEdit
-            ? (arrAffordanceAfter.get(idx) ?? [])
-            : [];
-          // Build the trailing `+ key` / `+ item` affordance(s) once
-          // per index so both the visible-row and hidden-row branches
-          // reuse them. We only emit affordances whose container is
-          // itself visible (collapsed/filtered ancestors hide their
-          // entire subtree including the add row, matching the leaf-
-          // row behaviour).
-          const visibleObjAffs = objAffsAfter
-            .filter((aff) => !isHidden(aff.path))
-            .filter(
-              (aff) =>
-                !Array.from(collapsed).some((cp) => {
-                  if (aff.path === cp) return true;
-                  return (
-                    aff.path.startsWith(cp + ".") ||
-                    aff.path.startsWith(cp + "[")
-                  );
-                }),
-            );
-          const visibleArrAffs = arrAffsAfter
-            .filter((aff) => !isHidden(aff.path))
-            .filter(
-              (aff) =>
-                !Array.from(collapsed).some((cp) => {
-                  if (aff.path === cp) return true;
-                  return (
-                    aff.path.startsWith(cp + ".") ||
-                    aff.path.startsWith(cp + "[")
-                  );
-                }),
-            );
-          const trailingObj = visibleObjAffs.map((aff) => (
-            <AddKeyRow
-              key={`__add-key-${aff.path || "__root"}`}
-              parentPath={aff.path}
-              parentDepth={aff.depth}
-              isOpen={addingPath === aff.path && addingKind === "obj"}
-              keyDraft={keyDraft}
-              valueDraft={valueDraft}
-              addError={addError}
-              onStart={() => startAddKey(aff.path)}
-              onKeyDraftChange={(v) => {
-                setKeyDraft(v);
-                if (addError) setAddError(null);
-              }}
-              onValueDraftChange={setValueDraft}
-              onCommit={commitAddKey}
-              onCancel={cancelAddKey}
-              keyInputRef={keyInputRef}
-              valueInputRef={valueInputRef}
-            />
-          ));
-          const trailingArr = visibleArrAffs.map((aff) => (
-            <AddItemRow
-              key={`__add-item-${aff.path}`}
-              arrayPath={aff.path}
-              parentDepth={aff.depth}
-              isOpen={addingPath === aff.path && addingKind === "arr"}
-              valueDraft={valueDraft}
-              nextIndex={nextItemIndex(aff.path, aff.baseLength)}
-              onStart={() => startAddItem(aff.path)}
-              onValueDraftChange={setValueDraft}
-              onCommit={commitAddItem}
-              onCancel={cancelAddKey}
-              valueInputRef={itemValueInputRef}
-            />
-          ));
-          const trailing = [...trailingObj, ...trailingArr];
-          if (isHidden(node.path)) {
-            // Hidden row — still surface the trailing affordances if
-            // the parent obj is otherwise visible at this index. In
-            // practice the filter-ancestor rule keeps obj parents
-            // visible while leaves get hidden, so this branch only
-            // fires for fully-collapsed subtrees where `trailing`
-            // is already empty by the filter above.
-            return trailing.length > 0 ? (
-              <Fragment key={`__hidden-trailing-${idx}`}>{trailing}</Fragment>
-            ) : null;
-          }
-          // #1445 — the jsonTree walk stopped here to enforce the depth /
-          // node-count DoS caps. Render a plain "…truncated" indicator
-          // instead of the normal node UI so hostile/oversized server data
-          // is surfaced rather than silently clipped. No affordances /
-          // editor for a truncated node.
-          if (node.truncated) {
-            return (
-              <div
-                key={node.path || "__truncated"}
-                data-testid="tree-truncated"
-                role="treeitem"
-                aria-level={node.depth + 1}
-                tabIndex={-1}
-                className="px-1 py-0.5 text-3xs italic text-warning"
-                style={{ paddingLeft: `${node.depth * 16}px` }}
-              >
-                {t("treePanel.truncated")}
-              </div>
-            );
-          }
-          const isCollapsed = collapsed.has(node.path);
-          const pending = pendingByPath?.get(node.path);
-          const isEditing = editingPath === node.path;
-          const treeKey = node.path || "__root";
-          const isContainer = node.kind === "obj" || node.kind === "arr";
-          return (
-            <Fragment key={node.path || "__root"}>
-              <div
-                data-testid={`tree-node-${node.path || "__root"}`}
-                // WAI-ARIA tree roving (#1128) — every visible node is a
-                // treeitem; the container owns one tab stop and arrow-key nav.
-                // Enter/Space toggles a container; Enter opens a leaf's editor.
-                // Editing inputs are skipped by the roving handler (it ignores
-                // INPUT/TEXTAREA targets) so typing is never hijacked.
-                role="treeitem"
-                aria-level={node.depth + 1}
-                aria-expanded={isContainer ? !isCollapsed : undefined}
-                aria-label={node.label || fieldName}
-                data-tree-key={treeKey}
-                tabIndex={activeKey === treeKey ? 0 : -1}
-                onFocus={() => roving.setFocusKey(treeKey)}
-                onKeyDown={(e) => {
-                  if (e.target !== e.currentTarget) return;
-                  if (isContainer && (e.key === "Enter" || e.key === " ")) {
-                    e.preventDefault();
-                    toggleCollapsed(node.path);
-                  } else if (
-                    node.kind === "leaf" &&
-                    e.key === "Enter" &&
-                    !isPendingUnset(pending)
-                  ) {
-                    e.preventDefault();
-                    startEdit(node);
-                  }
-                }}
-                className={
-                  node.isGhost
-                    ? "rounded border border-warning/30 bg-warning/10 px-1 py-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-                    : pending !== undefined
-                      ? "rounded bg-warning/10 px-1 py-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-                      : "px-1 py-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-                }
-                style={{ paddingLeft: `${node.depth * 16}px` }}
-              >
-                {(node.kind === "obj" || node.kind === "arr") && (
-                  <button
-                    type="button"
-                    tabIndex={-1}
-                    onClick={() => toggleCollapsed(node.path)}
-                    className="inline-flex items-center align-middle text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-                    data-testid={`tree-twist-${node.path || "__root"}`}
-                    aria-label={t("treePanel.toggleAriaLabel", {
-                      label: node.label,
-                    })}
-                  >
-                    {isCollapsed ? (
-                      <ChevronRight size={12} aria-hidden />
-                    ) : (
-                      <ChevronDown size={12} aria-hidden />
-                    )}
-                  </button>
-                )}
-                <span className="ml-1 text-value-key">{node.label}</span>
-                {node.kind === "obj" && (
-                  <span className="ml-1 text-muted-foreground">
-                    : {"{"}
-                    {node.childCount} item{node.childCount === 1 ? "" : "s"}
-                    {"}"}
-                  </span>
-                )}
-                {node.kind === "arr" && (
-                  <span className="ml-1 text-muted-foreground">
-                    : [{node.childCount} item{node.childCount === 1 ? "" : "s"}]
-                  </span>
-                )}
-                {node.kind !== "leaf" && KIND_TAG[node.kind] && (
-                  <TagBadge>{KIND_TAG[node.kind]}</TagBadge>
-                )}
-                {/* Sprint 344 Slice A — NEW badge on ghost (`+ key` / `+
-                  item` adds). Rendered on obj/arr ghost containers too
-                  so a brand-new nested object shows the badge on the
-                  parent row, distinct from the per-leaf `● edited`. */}
-                {node.isGhost && node.kind !== "leaf" && <NewBadge />}
-
-                {node.kind === "leaf" && !isEditing && (
-                  <>
-                    <span className="ml-1 text-muted-foreground">:</span>
-                    {/* Sprint 342 V2 — two render branches for leaves with
-                      a pending edit:
-                       1. pending = __op__:unset → strike-through original,
-                          "● will delete" badge.
-                       2. otherwise → pending (or original) as the
-                          clickable editor entry-point. */}
-                    {isPendingUnset(pending) ? (
-                      <span
-                        data-testid={`tree-unset-${node.path}`}
-                        className="ml-1 align-middle text-emerald-700/60 line-through decoration-value-delete dark:text-emerald-300/50"
-                      >
-                        {renderLeafValue(node)}
-                      </span>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => startEdit(node)}
-                        data-testid={`tree-leaf-${node.path}`}
-                        className="ml-1 align-middle text-value-leaf hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-                      >
-                        {pending !== undefined
-                          ? renderPendingText(pending)
-                          : renderLeafValue(node)}
-                      </button>
-                    )}
-                    <TagBadge>{leafTypeTag(node)}</TagBadge>
-                    {/* Sprint 344 Slice A — distinct visual states:
-                       - ghost (add): "NEW" badge, no "● edited".
-                       - existing leaf with pending unset: strike +
-                         "● will delete".
-                       - existing leaf with pending edit: "● edited".
-                      Ghost takes priority because a ghost path also
-                      has a `pending` entry (the new value lives there). */}
-                    {node.isGhost ? (
-                      <NewBadge />
-                    ) : isPendingUnset(pending) ? (
-                      <span className="ml-2 text-3xs text-value-delete">
-                        {t("treePanel.willDelete")}
-                      </span>
-                    ) : (
-                      pending !== undefined && (
-                        <span className="ml-2 text-3xs text-warning">
-                          {t("treePanel.edited")}
-                        </span>
-                      )
-                    )}
-                    {/* Sprint 342 V2 — leaf delete entry-point. `_id`
-                      cannot be unset (MongoDB rejects it; mqlGenerator's
-                      id-in-patch guard would drop the row anyway), so
-                      hide the trash for those leaves to keep the UI
-                      honest. */}
-                    {onCommitEdit &&
-                      node.path !== "_id" &&
-                      !isPendingUnset(pending) && (
-                        <button
-                          type="button"
-                          data-testid={`tree-delete-${node.path}`}
-                          aria-label={t("treePanel.deleteFieldAriaLabel", {
-                            path: node.path,
-                          })}
-                          title={t("treePanel.deleteFieldTitle")}
-                          onClick={() => onCommitEdit(node.path, UNSET_OP)}
-                          className="ml-2 inline-flex items-center align-middle text-muted-foreground transition-colors hover:text-value-delete focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-                        >
-                          <Trash2 size={12} aria-hidden />
-                        </button>
-                      )}
-                  </>
-                )}
-
-                {/* Sprint 342 V2 — BSON wrappers (ObjectId / Date /
-                  Decimal128 / binData) get the type-aware
-                  BsonTypeEditor instead of the plain string input.
-                  The editor commits an EJSON wrapper object; the
-                  parent's onCommitEdit -> tagBsonWrapper round-trip
-                  keeps the pendingEdits Map shape unchanged. */}
-                {node.kind === "leaf" &&
-                  isEditing &&
-                  node.isBson &&
-                  (() => {
-                    const parsed = parseBsonLeaf(node);
-                    if (parsed === null) {
-                      // Unknown BSON wrapper shape — fall back to a plain
-                      // string editor against the raw EJSON payload.
-                      return (
-                        <PlainLeafInput
-                          draft={draft}
-                          onDraftChange={setDraft}
-                          onCommit={commitDraft}
-                          onCancel={() => {
-                            setEditingPath(null);
-                            setDraft("");
-                          }}
-                          testId={`tree-edit-${node.path}`}
-                          typeTag={leafTypeTag(node)}
-                        />
-                      );
-                    }
-                    return (
-                      <div
-                        data-testid={`tree-edit-bson-${node.path}`}
-                        className="mt-1 flex w-full items-center gap-2 rounded border border-primary bg-background p-1.5"
-                      >
-                        <span className="text-3xs uppercase tracking-wider text-muted-foreground">
-                          {parsed.type}
-                        </span>
-                        <div className="flex-1">
-                          <BsonTypeEditor
-                            type={parsed.type}
-                            initialValue={parsed.ejson}
-                            ariaLabel={t("treePanel.editingAriaLabel", {
-                              path: node.path,
-                              type: parsed.type,
-                            })}
-                            onCommit={(v) => {
-                              if (onCommitEdit) onCommitEdit(node.path, v);
-                              setEditingPath(null);
-                              setDraft("");
-                            }}
-                            onCancel={() => {
-                              setEditingPath(null);
-                              setDraft("");
-                            }}
-                          />
-                        </div>
-                      </div>
-                    );
-                  })()}
-
-                {node.kind === "leaf" && isEditing && !node.isBson && (
-                  <PlainLeafInput
-                    draft={draft}
-                    onDraftChange={setDraft}
-                    onCommit={commitDraft}
-                    onCancel={() => {
-                      setEditingPath(null);
-                      setDraft("");
-                    }}
-                    testId={`tree-edit-${node.path}`}
-                    typeTag={leafTypeTag(node)}
-                  />
-                )}
-              </div>
-              {trailing}
-            </Fragment>
-          );
-        })}
+        {shouldVirtualize ? (
+          <VirtualTreeRows renderRows={renderRows} virtualizer={rowVirtualizer}>
+            {renderRow}
+          </VirtualTreeRows>
+        ) : (
+          renderRows.map(renderRow)
+        )}
       </div>
     </section>
+  );
+}
+
+// #1448 — windowed row list with top/bottom `aria-hidden` spacers that keep the
+// scroll height while only the visible slice lives in the DOM. Mirrors
+// `BsonTreeViewer`'s `VirtualBsonRows` (no `scrollMargin` — the `role="tree"`
+// div is itself the scroll container with no header above the list).
+function VirtualTreeRows({
+  renderRows,
+  virtualizer,
+  children,
+}: {
+  renderRows: RenderRow[];
+  virtualizer: ReturnType<typeof useVirtualizer<HTMLDivElement, Element>>;
+  children: (row: RenderRow) => React.ReactNode;
+}) {
+  const virtualItems = virtualizer.getVirtualItems();
+  const totalSize = virtualizer.getTotalSize();
+  const paddingTop = virtualItems.length ? virtualItems[0]!.start : 0;
+  const paddingBottom = virtualItems.length
+    ? totalSize - virtualItems[virtualItems.length - 1]!.end
+    : 0;
+  return (
+    <div style={{ position: "relative" }}>
+      {paddingTop > 0 && (
+        <div aria-hidden="true" style={{ height: paddingTop }} />
+      )}
+      {virtualItems.map((virtualRow) => {
+        const row = renderRows[virtualRow.index]!;
+        return (
+          <div
+            key={renderRowKey(row)}
+            data-index={virtualRow.index}
+            ref={virtualizer.measureElement}
+          >
+            {children(row)}
+          </div>
+        );
+      })}
+      {paddingBottom > 0 && (
+        <div aria-hidden="true" style={{ height: paddingBottom }} />
+      )}
+    </div>
   );
 }
 

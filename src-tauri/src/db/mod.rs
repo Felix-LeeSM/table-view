@@ -131,17 +131,28 @@ pub(crate) fn parse_order_direction(token: &str) -> Option<&'static str> {
     }
 }
 
-/// Clamp a caller-supplied `page_size` to at least 1. #1354 — only mssql/oracle
-/// guarded this; a 0 (or negative) page size otherwise built an empty/invalid
-/// `LIMIT`/`FETCH NEXT` clause per adapter. Shared entry point so every adapter
+/// Clamp a caller-supplied `page_size` into `[1, row_cap]`. #1354 gave the
+/// lower bound (only mssql/oracle guarded a 0/negative page size that otherwise
+/// built an empty/invalid `LIMIT`/`FETCH NEXT` clause per adapter). #1448 adds
+/// the upper bound: a page size above the process-global row cap would build a
+/// `LIMIT` that materialises more rows than the grid will ever display, so the
+/// browse path reuses the same ceiling every adapter's raw-query fetch loop
+/// already respects ([`row_cap::current`]). Shared entry point so every adapter
 /// clamps identically.
 pub(crate) fn clamp_page_size(page_size: i32) -> i32 {
-    page_size.max(1)
+    clamp_page_size_to(page_size, row_cap::current())
+}
+
+/// Pure clamp used by [`clamp_page_size`] and its tests — takes the cap as an
+/// argument so the range logic is verifiable without mutating the global cell.
+fn clamp_page_size_to(page_size: i32, row_cap: usize) -> i32 {
+    let cap = i32::try_from(row_cap).unwrap_or(i32::MAX).max(1);
+    page_size.clamp(1, cap)
 }
 
 #[cfg(test)]
 mod query_param_tests {
-    use super::{clamp_page_size, parse_order_direction};
+    use super::{clamp_page_size_to, parse_order_direction};
 
     #[test]
     fn order_direction_folds_case_and_rejects_junk() {
@@ -157,11 +168,20 @@ mod query_param_tests {
     }
 
     #[test]
-    fn page_size_clamps_to_at_least_one() {
-        assert_eq!(clamp_page_size(0), 1);
-        assert_eq!(clamp_page_size(-5), 1);
-        assert_eq!(clamp_page_size(1), 1);
-        assert_eq!(clamp_page_size(100), 100);
+    fn page_size_clamps_into_range() {
+        // Tests the pure helper with an explicit cap so it never races the
+        // process-global row cap that other tests mutate.
+        // Lower bound: 0/negative → 1.
+        assert_eq!(clamp_page_size_to(0, 10_000), 1);
+        assert_eq!(clamp_page_size_to(-5, 10_000), 1);
+        assert_eq!(clamp_page_size_to(1, 10_000), 1);
+        // In-range values pass through.
+        assert_eq!(clamp_page_size_to(100, 10_000), 100);
+        // Upper bound: a page size above the row cap clamps down to the cap.
+        assert_eq!(clamp_page_size_to(50_000, 10_000), 10_000);
+        assert_eq!(clamp_page_size_to(10_001, 10_000), 10_000);
+        // A degenerate zero cap still yields at least 1.
+        assert_eq!(clamp_page_size_to(100, 0), 1);
     }
 }
 
