@@ -33,6 +33,12 @@
  *   keeping it on the store is harmless (entry stays empty).
  */
 import { create } from "zustand";
+import type {
+  ConnectionId,
+  DatabaseName,
+  SchemaName,
+  TableName,
+} from "@/types/branded";
 
 /**
  * Snapshot of the three diff slices captured BEFORE a mutating handler
@@ -189,12 +195,16 @@ export interface DataGridEditStore {
 /**
  * Compose the canonical entry key. Centralised so `tabStore` and
  * `useDataGridEdit` agree on the shape verbatim.
+ *
+ * Issue #1494 — the four axes are branded so a positional swap (most often
+ * schema/table, whose values are interchangeable `string`s) is a compile
+ * error instead of a silent cross-table pending-edit miskey.
  */
 export function entryKey(
-  connectionId: string,
-  database: string,
-  schema: string,
-  table: string,
+  connectionId: ConnectionId,
+  database: DatabaseName,
+  schema: SchemaName,
+  table: TableName,
 ): string {
   return `${connectionId}::${database}::${schema}::${table}`;
 }

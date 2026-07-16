@@ -6,7 +6,8 @@ import {
 } from "@/stores/__tests__/workspaceStoreTestHelpers";
 import { renderHook, act } from "@testing-library/react";
 import { useConnectionStore } from "@stores/connectionStore";
-import { entryKey, useDataGridEditStore } from "@stores/dataGridEditStore";
+import { useDataGridEditStore } from "@stores/dataGridEditStore";
+import { makeEntryKey } from "@/test-utils/brandedKeys";
 import { useWorkspaceStore } from "@stores/workspaceStore";
 import { hydrateConnectionSession } from "@lib/runtime/connection/hydrateConnectionSession";
 import { useWindowFocusHydration } from "./useWindowFocusHydration";
@@ -469,7 +470,7 @@ describe("useWindowFocusHydration", () => {
         "db1",
       ),
     );
-    const pendingKey = entryKey("c1", "db1", "public", "users");
+    const pendingKey = makeEntryKey("c1", "db1", "public", "users");
     useDataGridEditStore
       .getState()
       .setSlice(pendingKey, "pendingEdits", new Map([["0-1", "dirty"]]));

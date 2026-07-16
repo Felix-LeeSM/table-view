@@ -11,7 +11,8 @@ import DisconnectButton from "./DisconnectButton";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useToastStore } from "@stores/toastStore";
 import { useWorkspaceStore } from "@stores/workspaceStore";
-import { useDataGridEditStore, entryKey } from "@stores/dataGridEditStore";
+import { useDataGridEditStore } from "@stores/dataGridEditStore";
+import { makeEntryKey } from "@/test-utils/brandedKeys";
 import {
   useRawQueryGridEditStore,
   rawEntryKey,
@@ -77,7 +78,7 @@ function seedInactivePendingEdit(connId: string): void {
   useDataGridEditStore
     .getState()
     .setSlice(
-      entryKey(connId, "db1", "public", "users"),
+      makeEntryKey(connId, "db1", "public", "users"),
       "pendingEdits",
       new Map([["0-0", "edited"]]),
     );

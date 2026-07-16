@@ -12,7 +12,8 @@
  * code → next test. No batch test authoring.
  */
 import { describe, it, expect, beforeEach } from "vitest";
-import { entryKey, useDataGridEditStore } from "./dataGridEditStore";
+import { useDataGridEditStore } from "./dataGridEditStore";
+import { makeEntryKey } from "@/test-utils/brandedKeys";
 import { useWorkspaceStore } from "./workspaceStore";
 import type { QueryTab, TableTabInit } from "./workspaceStore/types";
 
@@ -291,8 +292,8 @@ describe("workspaceStore — lifecycle", () => {
 
     const dbATabId =
       useWorkspaceStore.getState().workspaces["conn1"]!["dbA"]!.tabs[0]!.id;
-    const dbAKey = entryKey("conn1", "dbA", "public", "users");
-    const dbBKey = entryKey("conn1", "dbB", "public", "users");
+    const dbAKey = makeEntryKey("conn1", "dbA", "public", "users");
+    const dbBKey = makeEntryKey("conn1", "dbB", "public", "users");
     useDataGridEditStore
       .getState()
       .setSlice(dbAKey, "pendingEdits", new Map([["0-1", "dbA edit"]]));

@@ -1,4 +1,9 @@
-import type { ConnectionId } from "@/types/branded";
+import type {
+  ConnectionId,
+  DatabaseName,
+  SchemaName,
+  TableName,
+} from "@/types/branded";
 import type { QueryTab, Tab, TableTab, WorkspaceStoreState } from "../types";
 import {
   nextQueryId,
@@ -168,11 +173,13 @@ export function createTabSlice(set: WorkspaceSet, get: WorkspaceGet): TabSlice {
         const closingSchema = closingTab.schema;
         const closingTable = closingTab.table;
         if (closingDatabase && closingSchema && closingTable) {
+          // Brand each axis once here (values were read off a `TableTab`, all
+          // plain `string`); `entryKey`'s branded params then reject a swap.
           const key = makeDataGridEditKey(
-            closingTab.connectionId,
-            closingDatabase,
-            closingSchema,
-            closingTable,
+            closingTab.connectionId as ConnectionId,
+            closingDatabase as DatabaseName,
+            closingSchema as SchemaName,
+            closingTable as TableName,
           );
           const stillUsed = survivors.some(
             (t) =>

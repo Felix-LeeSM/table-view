@@ -17,15 +17,22 @@ import {
   EMPTY_ENTRY,
   type EditSnapshot,
 } from "./dataGridEditStore";
+import { makeEntryKey } from "@/test-utils/brandedKeys";
+import type {
+  ConnectionId,
+  DatabaseName,
+  SchemaName,
+  TableName,
+} from "@/types/branded";
 
 function resetStore(): void {
   useDataGridEditStore.setState({ entries: new Map() });
 }
 
-const KEY_A = entryKey("conn1", "db1", "public", "users");
-const KEY_B = entryKey("conn1", "db1", "public", "orders");
-const KEY_OTHER_DB = entryKey("conn1", "db2", "public", "users");
-const KEY_OTHER_CONN = entryKey("conn2", "db1", "public", "users");
+const KEY_A = makeEntryKey("conn1", "db1", "public", "users");
+const KEY_B = makeEntryKey("conn1", "db1", "public", "orders");
+const KEY_OTHER_DB = makeEntryKey("conn1", "db2", "public", "users");
+const KEY_OTHER_CONN = makeEntryKey("conn2", "db1", "public", "users");
 
 describe("dataGridEditStore — Sprint 251 in-memory pending-edit lift", () => {
   beforeEach(() => {
@@ -236,9 +243,21 @@ describe("dataGridEditStore — Sprint 251 in-memory pending-edit lift", () => {
   });
 
   it("entryKey helper composes the canonical `${cid}::${database}::${schema}::${table}` shape", () => {
-    expect(entryKey("conn1", "db1", "public", "users")).toBe(
-      "conn1::db1::public::users",
-    );
-    expect(entryKey("c", "d", "s", "t")).toBe("c::d::s::t");
+    expect(
+      entryKey(
+        "conn1" as ConnectionId,
+        "db1" as DatabaseName,
+        "public" as SchemaName,
+        "users" as TableName,
+      ),
+    ).toBe("conn1::db1::public::users");
+    expect(
+      entryKey(
+        "c" as ConnectionId,
+        "d" as DatabaseName,
+        "s" as SchemaName,
+        "t" as TableName,
+      ),
+    ).toBe("c::d::s::t");
   });
 });
