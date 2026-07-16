@@ -7,6 +7,8 @@ description: >
 
 # Code Simplification
 
+> **진입점**: Codex 용. Claude Code 는 내장 `/simplify` 가 우선이므로 이 skill 을 별도 배선하지 않는다 (issue #1038 결정).
+
 > Inspired by the [Claude Code Simplifier plugin](https://github.com/anthropics/claude-plugins-official/blob/main/plugins/code-simplifier/agents/code-simplifier.md). Adapted here as a model-agnostic, process-driven skill for any AI coding agent.
 
 ## Overview
