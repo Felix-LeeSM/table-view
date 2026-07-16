@@ -261,15 +261,29 @@ export function useDataGridEditPendingState({
     ],
   );
 
+  // #1444 — structural sharing (ADR 0050 redo substrate). The five pending
+  // slices are immutable: every setter (`setPendingEdits` etc. and the store's
+  // `setSlice`) REPLACES the whole slice with a freshly-allocated Map/Set/Array
+  // and never mutates one in place, and new-row cells render read-only. So the
+  // undo snapshot retains the CURRENT slice references instead of deep-cloning
+  // them each edit. This drops `pushSnapshot` from O(pending size) to O(1) — N
+  // edits go from O(N^2) to O(N) clone work — and lets consecutive snapshots
+  // share the slices a mutation left untouched (a pure-edit run keeps ONE
+  // `pendingNewRows`/`pendingDeletedRowKeys` reference across all 50 levels
+  // instead of 50 redundant clones). `undo()` still copies out of the snapshot
+  // (rare, one action), so the restored live state stays isolated from the
+  // retained history. Redo (ADR 0050, #1126) layers on unchanged: each entry is
+  // already a full pre-mutation state, so a symmetric `redoStack` just captures
+  // the current state before an undo restores.
   const pushSnapshot = useCallback(() => {
     setUndoStack((prev) => {
       const snap: EditSnapshot = {
-        pendingEdits: new Map(pendingEdits),
-        pendingNewRows: pendingNewRows.map((row) => [...row]),
-        pendingDeletedRowKeys: new Set(pendingDeletedRowKeys),
-        // Issue #1081 — snapshot the anchors so undo restores them too.
-        pendingEditRowSnapshots: new Map(pendingEditRowSnapshots),
-        pendingDeletedRowSnapshots: new Map(pendingDeletedRowSnapshots),
+        pendingEdits,
+        pendingNewRows,
+        pendingDeletedRowKeys,
+        // Issue #1081 — anchors ride along so undo restores them too.
+        pendingEditRowSnapshots,
+        pendingDeletedRowSnapshots,
       };
       const next = [...prev, snap];
       if (next.length > UNDO_STACK_MAX) next.shift();
