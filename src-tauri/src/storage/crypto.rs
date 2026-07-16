@@ -9,6 +9,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 #[cfg(any(test, debug_assertions))]
 use std::sync::Mutex;
+use std::time::Duration;
+use tracing::warn;
 use zeroize::Zeroizing;
 
 use crate::error::AppError;
@@ -70,13 +72,45 @@ impl Default for OsKeyringBackend {
     }
 }
 
+/// P2-5 (#1455) — bounded retry around a keyring availability probe. On Linux
+/// the Secret Service (libsecret / gnome-keyring / kwallet) can lose its D-Bus
+/// name transiently right after login or during a service restart; a single
+/// failed probe would then permanently downgrade this boot to the 0600 disk
+/// fallback (no OS ACL protection — the key sits in a plain file). Retrying a
+/// few times with a short delay rides out that transient window; a genuinely
+/// absent Secret Service still returns `false` after the last attempt (bounded
+/// cost: `(attempts - 1) * delay`). Extracted as a pure function so the retry
+/// logic is unit-tested without a live keyring.
+fn probe_available_with_retry(probe: impl Fn() -> bool, attempts: u32, delay: Duration) -> bool {
+    for attempt in 1..=attempts.max(1) {
+        if probe() {
+            return true;
+        }
+        if attempt < attempts {
+            warn!(
+                target: "keyring",
+                "availability probe failed (attempt {attempt}/{attempts}); retrying in {}ms",
+                delay.as_millis()
+            );
+            std::thread::sleep(delay);
+        }
+    }
+    false
+}
+
 impl KeyringBackend for OsKeyringBackend {
     fn is_available(&self) -> bool {
         // Cheap probe: ask the backend to construct an Entry for a
         // sentinel name. If `Entry::new` itself errors (no Secret Service
         // on Linux, missing Keychain on hardened sandbox) we treat the
         // backend as unavailable and the migration path falls back to disk.
-        self.entry("__availability_probe__").is_ok()
+        // P2-5 (#1455) — retry so a transient Secret Service hiccup doesn't
+        // silently drop us to the weaker disk fallback.
+        probe_available_with_retry(
+            || self.entry("__availability_probe__").is_ok(),
+            3,
+            Duration::from_millis(50),
+        )
     }
 
     fn get(&self, name: &str) -> Result<Option<Vec<u8>>, AppError> {
@@ -514,6 +548,44 @@ mod tests {
     /// Generate a deterministic 32-byte key for testing.
     fn test_key() -> Vec<u8> {
         vec![42u8; 32]
+    }
+
+    // -----------------------------------------------------------------
+    // P2-5 (#1455) — keyring availability retry
+    // -----------------------------------------------------------------
+
+    /// A transient probe failure is ridden out: fail twice, then succeed → the
+    /// backend is reported available instead of downgrading to disk.
+    #[test]
+    fn probe_retry_recovers_after_transient_failures() {
+        let calls = std::cell::Cell::new(0u32);
+        let available = probe_available_with_retry(
+            || {
+                calls.set(calls.get() + 1);
+                calls.get() >= 3
+            },
+            3,
+            Duration::from_millis(0),
+        );
+        assert!(available, "3rd probe succeeds → available");
+        assert_eq!(calls.get(), 3, "stops probing once it succeeds");
+    }
+
+    /// A genuinely absent keyring stays unavailable after exhausting attempts,
+    /// and the probe is called exactly `attempts` times (bounded cost).
+    #[test]
+    fn probe_retry_gives_up_when_always_failing() {
+        let calls = std::cell::Cell::new(0u32);
+        let available = probe_available_with_retry(
+            || {
+                calls.set(calls.get() + 1);
+                false
+            },
+            3,
+            Duration::from_millis(0),
+        );
+        assert!(!available, "never-available keyring → false");
+        assert_eq!(calls.get(), 3, "bounded to `attempts` probes");
     }
 
     // -----------------------------------------------------------------

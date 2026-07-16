@@ -87,6 +87,10 @@
 
     { "name": "literal_where_unbounded_update", "sql": "UPDATE accounts SET balance=balance+1, note='ask WHERE money'", "expectedSeverity": "danger" },
     { "name": "literal_where_escaped_quote_update", "sql": "UPDATE accounts SET note='it''s ok WHERE now'", "expectedSeverity": "danger" },
-    { "name": "literal_where_bounded_still_warn", "sql": "UPDATE users SET note='reset WHERE flag' WHERE id = 1", "expectedSeverity": "warn" }
+    { "name": "literal_where_bounded_still_warn", "sql": "UPDATE users SET note='reset WHERE flag' WHERE id = 1", "expectedSeverity": "warn" },
+
+    { "name": "oracle_qquote_hides_fake_where_brace", "sql": "UPDATE accounts SET note = q'{don't WHERE it}'", "expectedSeverity": "danger", "dialect": "oracle" },
+    { "name": "oracle_qquote_hides_fake_where_bracket", "sql": "UPDATE accounts SET note = q'[a'b WHERE c]'", "expectedSeverity": "danger", "dialect": "oracle" },
+    { "name": "ansi_unicode_string_hides_fake_where", "sql": "UPDATE accounts SET note = U&'stop WHERE it'", "expectedSeverity": "danger" }
   ]
 }

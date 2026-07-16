@@ -17,6 +17,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::sync::{LazyLock, Mutex};
 use tracing::{debug, error, info, warn};
+use zeroize::Zeroizing;
 
 /// In-process lock to prevent TOCTOU race conditions between concurrent Tauri commands.
 /// Storage operations are all synchronous (blocking file I/O), so std::sync::Mutex is correct.
@@ -26,7 +27,11 @@ static STORAGE_LOCK: LazyLock<std::sync::Mutex<()>> = LazyLock::new(|| std::sync
 /// [`boot_wire_master_key`] (which runs the keyring migration) and read by
 /// every storage secret path. `None` until boot seeds it; the sole in-process
 /// writer is boot, so the seeded key is effectively immutable at runtime.
-static MASTER_KEY: Mutex<Option<Vec<u8>>> = Mutex::new(None);
+/// P3-3 (#1455) — the raw AES key lives in a [`Zeroizing`] buffer so the
+/// static and every per-decrypt clone are wiped on drop, matching the envelope
+/// key path (`crypto::derive_envelope_key`). The derived `Vec<u8>` used to
+/// linger in freed heap until overwritten.
+static MASTER_KEY: Mutex<Option<Zeroizing<Vec<u8>>>> = Mutex::new(None);
 
 /// #1103 — seed the process master key from the boot-time keyring migration
 /// ([`key_migration::migrate_or_initialize`]). Called once from `lib.rs::run()`
@@ -34,7 +39,8 @@ static MASTER_KEY: Mutex<Option<Vec<u8>>> = Mutex::new(None);
 pub fn seed_master_key(key: Vec<u8>) -> Result<(), AppError> {
     *MASTER_KEY
         .lock()
-        .map_err(|e| AppError::Storage(format!("Master key lock error: {}", e)))? = Some(key);
+        .map_err(|e| AppError::Storage(format!("Master key lock error: {}", e)))? =
+        Some(Zeroizing::new(key));
     Ok(())
 }
 
@@ -43,7 +49,7 @@ pub fn seed_master_key(key: Vec<u8>) -> Result<(), AppError> {
 /// wiring runs) falls back to the on-disk `.key` via
 /// [`crypto::get_or_create_key`], preserving the pre-#1103 behavior and its
 /// #1093 orphan guard.
-fn master_key() -> Result<Vec<u8>, AppError> {
+fn master_key() -> Result<Zeroizing<Vec<u8>>, AppError> {
     if let Some(key) = MASTER_KEY
         .lock()
         .map_err(|e| AppError::Storage(format!("Master key lock error: {}", e)))?
@@ -51,7 +57,7 @@ fn master_key() -> Result<Vec<u8>, AppError> {
     {
         return Ok(key.clone());
     }
-    crypto::get_or_create_key()
+    Ok(Zeroizing::new(crypto::get_or_create_key()?))
 }
 
 /// #1103 — boot-time master-key resolution. Runs the Sprint 356 keyring
@@ -939,6 +945,25 @@ mod tests {
         let parsed: serde_json::Value = serde_json::from_str(&raw).unwrap();
         let enc = parsed["connections"][0]["password"].as_str().unwrap();
         assert_eq!(crypto::decrypt(enc, &effective).unwrap(), "sekret");
+
+        reset_master_key_for_test();
+        cleanup_test_env();
+    }
+
+    /// P3-3 (#1455) — `master_key()` hands back a [`Zeroizing`] buffer (so the
+    /// clone is wiped on drop) that still round-trips the seeded key value.
+    #[test]
+    #[serial]
+    fn master_key_is_zeroizing_and_round_trips_seed() {
+        let _dir = setup_test_env();
+        let seed: Vec<u8> = (7..39u8).collect();
+        seed_master_key(seed.clone()).unwrap();
+
+        let key: Zeroizing<Vec<u8>> = master_key().unwrap();
+        assert_eq!(
+            &*key, &seed,
+            "seeded key must survive the Zeroizing wrapper"
+        );
 
         reset_master_key_for_test();
         cleanup_test_env();

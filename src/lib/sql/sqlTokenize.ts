@@ -190,6 +190,87 @@ export function scanDollarQuoteEnd(sql: string, start: number): number | null {
 }
 
 /**
+ * Skip a quoted literal opened at `start` (`q` ∈ `'` `"` `` ` ``), returning the
+ * index just past the closing quote. `'` and `` ` `` treat a doubled quote as
+ * an escape; `"` does not (mirrors `splitSqlStatements`). Unterminated → EOF.
+ *
+ * Review #1473 N1 — `backslashEscapes` (MySQL/MariaDB): `\<any>` inside a
+ * `'` / `"` literal is an escape sequence, so `'a\' WHERE …'` stays ONE
+ * literal instead of ending at the escaped quote. Backtick identifiers never
+ * use backslash escapes (doubling only).
+ *
+ * #1455 P3-4 — `oracleQuotes` enables Oracle alternate quoting `q'X…X'` (see
+ * [`skipOracleQQuote`]); the shared `sqlSafety` classifier passes it for the
+ * Oracle dialect so a fake `WHERE` inside `q'{…}'` can't downgrade a write.
+ */
+export function skipQuotedLiteral(
+  s: string,
+  start: number,
+  q: string,
+  backslashEscapes = false,
+  oracleQuotes = false,
+): number {
+  if (oracleQuotes && q === "'" && start >= 1) {
+    const prev = s[start - 1];
+    const wordBoundaryBefore =
+      start < 2 || !/[A-Za-z0-9_]/.test(s[start - 2] ?? "");
+    if ((prev === "q" || prev === "Q") && wordBoundaryBefore) {
+      const end = skipOracleQQuote(s, start);
+      if (end !== null) return end;
+    }
+  }
+  const escapesByDoubling = q === "'" || q === "`";
+  const backslash = backslashEscapes && q !== "`";
+  let i = start + 1;
+  while (i < s.length) {
+    if (backslash && s[i] === "\\") {
+      i += 2;
+      continue;
+    }
+    if (s[i] === q) {
+      if (escapesByDoubling && s[i + 1] === q) {
+        i += 2;
+        continue;
+      }
+      return i + 1;
+    }
+    i++;
+  }
+  return Math.min(i, s.length);
+}
+
+/**
+ * #1455 P3-4 — index just past an Oracle `q'X…X'` literal opened at the `'`
+ * (`start`). The char at `start + 1` is the opening delimiter; the closer is
+ * its mirror (`[`→`]`, `{`→`}`, `(`→`)`, `<`→`>`) or the same char otherwise.
+ * Returns null when the char after `'` cannot be a valid delimiter (whitespace
+ * or another quote) so the caller falls back to a normal scan. Unterminated →
+ * EOF. Mirrors the Rust `skip_oracle_q_quote`.
+ */
+function skipOracleQQuote(s: string, start: number): number | null {
+  const open = s[start + 1];
+  if (open === undefined || /\s/.test(open) || open === "'" || open === '"') {
+    return null;
+  }
+  const close =
+    open === "["
+      ? "]"
+      : open === "{"
+        ? "}"
+        : open === "("
+          ? ")"
+          : open === "<"
+            ? ">"
+            : open;
+  let i = start + 2;
+  while (i < s.length) {
+    if (s[i] === close && s[i + 1] === "'") return i + 2;
+    i++;
+  }
+  return s.length;
+}
+
+/**
  * Tokenize a SQL source string into a flat list of tokens suitable for
  * rendering inline. The tokenizer is deliberately simple — it recognises
  * enough structure for history/favourite previews (keywords, strings,

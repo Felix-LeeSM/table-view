@@ -112,6 +112,15 @@ pub fn migrate_or_initialize<B: KeyringBackend>(
 
     // ---------------- Path C 진단 (가장 먼저) ----------------
     if !backend.is_available() {
+        // P2-5 (#1455) — the disk fallback is a security downgrade (0600 file,
+        // no OS ACL/keyring protection). `is_available()` already retried, so a
+        // false here means the keyring is genuinely unreachable; log it at WARN
+        // so the downgrade is observable in boot logs (the caller also raises a
+        // one-time frontend toast via `fallback_to_disk`).
+        warn!(
+            target: "boot",
+            "key_migration: keyring unavailable after retries — falling back to 0600 disk key (no OS ACL protection)"
+        );
         return path_c_disk_fallback(data_dir);
     }
 

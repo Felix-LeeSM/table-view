@@ -33,6 +33,37 @@ describe("sqlSafety.analyzeStatement — fallback and severity contracts", () =>
     expect(a.severity).toBe("warn");
   });
 
+  it("[#1455 P3-4] Oracle q'…' hiding a fake WHERE → danger", () => {
+    // The `WHERE` lives inside an Oracle alternate-quote literal (raw `'`
+    // allowed), so the UPDATE/DELETE is actually unbounded.
+    for (const sql of [
+      "UPDATE accounts SET note = q'{don't WHERE it}'",
+      "UPDATE accounts SET note = q'[a'b WHERE c]'",
+      "DELETE FROM accounts WHERE_x = q'<a'b WHERE c>'",
+    ]) {
+      expect(analyzeStatement(sql, { dialect: "oracle" }).severity).toBe(
+        "danger",
+      );
+    }
+    // A real trailing WHERE outside the q-quote still bounds the write.
+    expect(
+      analyzeStatement("UPDATE accounts SET note = q'{don't}' WHERE id = 1", {
+        dialect: "oracle",
+      }).severity,
+    ).toBe("warn");
+    // Gating: non-Oracle dialects must NOT treat `q'…'` as an alternate quote.
+    expect(
+      analyzeStatement("UPDATE accounts SET note = q'{don't WHERE it}'")
+        .severity,
+    ).not.toBe("danger");
+  });
+
+  it("[#1455 P3-4] ANSI U&'…' hiding a fake WHERE → danger", () => {
+    expect(
+      analyzeStatement("UPDATE accounts SET note = U&'stop WHERE it'").severity,
+    ).toBe("danger");
+  });
+
   it("[AC-185-01e] DROP TABLE → danger", () => {
     const a = analyzeStatement("DROP TABLE users");
     expect(a.kind).toBe("ddl-drop");

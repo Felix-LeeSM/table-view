@@ -75,6 +75,10 @@ fn safety_dialect(kind: Option<&DatabaseType>) -> sql_parser_core::safety::SqlDi
     match kind {
         Some(DatabaseType::Mysql | DatabaseType::Mariadb) => SqlDialect::MysqlFamily,
         Some(DatabaseType::Postgresql) => SqlDialect::Postgres,
+        // #1455 P3-4 — Oracle so the shared classifier recognizes `q'[…]'`
+        // alternate quoting; a fake `WHERE` inside one no longer downgrades a
+        // WHERE-less UPDATE/DELETE.
+        Some(DatabaseType::Oracle) => SqlDialect::Oracle,
         _ => SqlDialect::Other,
     }
 }
@@ -875,9 +879,10 @@ mod tests {
             safety_dialect(Some(&DatabaseType::Mssql)),
             SqlDialect::Other
         );
+        // #1455 P3-4 — Oracle maps to its own dialect (q-quote lexer).
         assert_eq!(
             safety_dialect(Some(&DatabaseType::Oracle)),
-            SqlDialect::Other
+            SqlDialect::Oracle
         );
         assert_eq!(safety_dialect(None), SqlDialect::Other);
     }
