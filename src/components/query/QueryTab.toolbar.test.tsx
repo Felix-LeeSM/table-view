@@ -178,7 +178,10 @@ describe("QueryTab — toolbar", () => {
     expect(cancelBtn).toBeInTheDocument();
   });
 
-  it("renders non-cancellable running state for DuckDB", () => {
+  // Issue #1269 (gap #5) — DuckDB's `execute_query` now interrupts a running
+  // statement, so `query.cancel` flipped true and the running state is
+  // cancellable (was previously a disabled "Query running" placeholder).
+  it("renders cancellable running state for DuckDB (#1269)", () => {
     const tab = makeQueryTab({
       connectionId: "duckdb-conn",
       queryState: { status: "running", queryId: "query-1-1234" },
@@ -188,8 +191,8 @@ describe("QueryTab — toolbar", () => {
     });
     render(<QueryTab tab={tab} />);
 
-    expect(screen.queryByLabelText("Cancel query")).not.toBeInTheDocument();
-    expect(screen.getByLabelText("Query running")).toBeDisabled();
+    expect(screen.getByLabelText("Cancel query")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Query running")).not.toBeInTheDocument();
   });
 
   it("derives local file preview visibility from file analytics profile inputs", () => {
