@@ -34,7 +34,8 @@ function expectedCapabilities(
 }
 
 const expectedMssqlRuntimeCapabilities = expectedCapabilities({
-  connection: { test: true },
+  // Issue #1529 — read-only toggle for every write-capable server RDB.
+  connection: { test: true, readOnly: true },
   query: { query: true, cancel: true },
   catalog: {
     indexes: true,
@@ -45,7 +46,7 @@ const expectedMssqlRuntimeCapabilities = expectedCapabilities({
 });
 
 const expectedOracleRuntimeCapabilities = expectedCapabilities({
-  connection: { test: true },
+  connection: { test: true, readOnly: true },
   query: { query: true, cancel: true },
   catalog: {
     indexes: true,

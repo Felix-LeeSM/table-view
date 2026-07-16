@@ -279,7 +279,11 @@ describe("adapter conformance matrix", () => {
     const mssql = ADAPTER_CONFORMANCE_MATRIX.mssql;
 
     expect(mssql.level).toBe("runtime");
-    expect(mssql.areas.connection.checks).toEqual(["connection.test"]);
+    // Issue #1529 — read-only is a live claim (engine-agnostic backend gate).
+    expect(mssql.areas.connection.checks).toEqual([
+      "connection.test",
+      "connection.readOnly",
+    ]);
     expect(mssql.areas.catalog.checks).toEqual([
       "catalog.indexes",
       "catalog.constraints",
@@ -289,7 +293,6 @@ describe("adapter conformance matrix", () => {
     expect(mssql.areas.ddl.checks).toEqual([]);
     expect(mssql.areas.connection.unsupported).toEqual([
       "connection.switchDatabase",
-      "connection.readOnly",
       "connection.filePicker",
     ]);
     expect(mssql.areas.catalog.unsupported).toEqual([]);
@@ -312,7 +315,11 @@ describe("adapter conformance matrix", () => {
     const oracle = ADAPTER_CONFORMANCE_MATRIX.oracle;
 
     expect(oracle.level).toBe("runtime");
-    expect(oracle.areas.connection.checks).toEqual(["connection.test"]);
+    // Issue #1529 — read-only is a live claim (engine-agnostic backend gate).
+    expect(oracle.areas.connection.checks).toEqual([
+      "connection.test",
+      "connection.readOnly",
+    ]);
     expect(oracle.areas.catalog.checks).toEqual([
       "catalog.indexes",
       "catalog.constraints",
@@ -323,7 +330,6 @@ describe("adapter conformance matrix", () => {
     expect(oracle.areas.connection.deferred).toEqual([]);
     expect(oracle.areas.connection.unsupported).toEqual([
       "connection.switchDatabase",
-      "connection.readOnly",
       "connection.filePicker",
     ]);
     expect(oracle.areas.catalog.unsupported).toEqual([]);

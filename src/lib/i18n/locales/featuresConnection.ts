@@ -38,6 +38,9 @@ export const en = {
     labelEnvironment: "Environment",
     ariaEnvironment: "Environment",
     envNone: "None",
+    readOnlyConnection: "Read-only (block writes)",
+    readOnlyConnectionHint:
+      "Blocks INSERT, UPDATE, DELETE, and schema changes on this connection. Enforced by the backend.",
     detectedScheme: "Detected {{scheme}} URL — fields populated.",
     advancedSettings: "Advanced Settings",
     labelConnectionTimeout: "Connection Timeout (seconds)",
@@ -362,6 +365,9 @@ export const ko = {
     labelEnvironment: "환경",
     ariaEnvironment: "환경",
     envNone: "없음",
+    readOnlyConnection: "읽기 전용 (쓰기 차단)",
+    readOnlyConnectionHint:
+      "이 연결에서 INSERT, UPDATE, DELETE 및 스키마 변경을 차단합니다. 백엔드에서 강제됩니다.",
     detectedScheme: "{{scheme}} URL 감지됨 — 필드가 채워졌습니다.",
     advancedSettings: "고급 설정",
     labelConnectionTimeout: "연결 타임아웃 (초)",

@@ -18,6 +18,9 @@ pub(super) enum DatabaseCommand {
 pub(super) trait DdlSchemaChangeRequest {
     fn connection_id(&self) -> &str;
     fn expected_database(&self) -> Option<&str>;
+    /// Issue #1529 — a preview (`preview_only`) only emits SQL text and never
+    /// executes, so it is exempt from the read-only write gate.
+    fn preview_only(&self) -> bool;
     fn dispatch<'a>(
         &'a self,
         adapter: &'a dyn RdbAdapter,
@@ -31,6 +34,14 @@ pub(super) async fn run_schema_change<R>(
 where
     R: DdlSchemaChangeRequest + ?Sized,
 {
+    // Issue #1529 — read-only connection gate. Structured DDL is always a write
+    // and bypasses the `execute_query` chokepoint, so it needs its own gate.
+    // Previews are exempt (they only emit SQL). Uses the backend store's own
+    // `read_only` flag so a direct IPC cannot bypass it.
+    if !request.preview_only() {
+        let pool = crate::commands::sqlite_pool::get_or_init_pool().await?;
+        crate::commands::safe_mode::enforce_read_only(&pool, request.connection_id(), true).await?;
+    }
     let active = state
         .active_adapter(request.connection_id())
         .await
@@ -46,6 +57,10 @@ pub(super) async fn run_database_change(
     name: &str,
     command: DatabaseCommand,
 ) -> Result<(), AppError> {
+    // Issue #1529 — the read-only gate for CREATE / DROP DATABASE lives in the
+    // command wrappers (`create_rdb_database` / `drop_rdb_database`), mirroring
+    // where `gate_destructive_ddl` sits, so the `_inner` unit tests stay
+    // hermetic (no global pool init).
     let active = state
         .active_adapter(connection_id)
         .await
@@ -67,6 +82,10 @@ macro_rules! impl_schema_change_request {
 
             fn expected_database(&self) -> Option<&str> {
                 self.expected_database.as_deref()
+            }
+
+            fn preview_only(&self) -> bool {
+                self.preview_only
             }
 
             fn dispatch<'a>(
