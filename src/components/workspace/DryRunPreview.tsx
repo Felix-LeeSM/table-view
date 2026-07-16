@@ -28,7 +28,7 @@ import { useDryRun } from "@hooks/useDryRun";
 export interface DryRunPreviewProps {
   connectionId: string;
   statements: string[];
-  paradigm: "rdb" | "document" | "kv";
+  paradigm: "rdb" | "document" | "kv" | "search";
   /** Mirror the dialog's `open` so the hook gates IPC on dialog mount. */
   open: boolean;
 }

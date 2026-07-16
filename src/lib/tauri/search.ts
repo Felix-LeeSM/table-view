@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type {
   SearchCatalogSummary,
   SearchDeleteByQueryRequest,
+  SearchDeleteByQueryResult,
   SearchDestructiveOperationPlan,
   SearchFieldStatsEnvelope,
   SearchIndexMapping,
@@ -88,5 +89,20 @@ export async function planSearchDeleteByQuery(
   return invoke<SearchDestructiveOperationPlan>("plan_search_delete_by_query", {
     connectionId,
     request,
+  });
+}
+
+export async function executeSearchDeleteByQuery(
+  connectionId: string,
+  request: SearchDeleteByQueryRequest,
+  // Set true only after the Safe Mode confirm dialog is satisfied. The backend
+  // gate re-decides against its own store and rejects an unconfirmed delete in
+  // a confirm-required context (#1076).
+  safetyConfirmed: boolean,
+): Promise<SearchDeleteByQueryResult> {
+  return invoke<SearchDeleteByQueryResult>("execute_search_delete_by_query", {
+    connectionId,
+    request,
+    safetyConfirmed,
   });
 }

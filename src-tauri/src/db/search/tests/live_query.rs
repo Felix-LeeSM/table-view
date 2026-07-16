@@ -471,12 +471,12 @@ async fn elasticsearch_live_delete_by_query_preview_uses_safe_search_estimate() 
     server.await.unwrap();
 
     assert_eq!(plan.estimated_document_count, Some(7));
-    assert!(!plan.requires_confirmation);
+    assert!(plan.requires_confirmation);
     assert!(plan.preview_only);
     assert!(plan
         .warnings
         .iter()
-        .any(|warning| warning.contains("execution is unsupported")));
+        .any(|warning| warning.contains("cannot be undone")));
 }
 
 #[tokio::test]

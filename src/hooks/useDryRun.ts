@@ -49,7 +49,7 @@ export interface DryRunState {
 export interface UseDryRunArgs {
   connectionId: string;
   statements: string[];
-  paradigm: "rdb" | "document" | "kv";
+  paradigm: "rdb" | "document" | "kv" | "search";
   enabled: boolean;
 }
 

@@ -7,7 +7,8 @@ export type SearchErrorScope =
   | "samples"
   | "fieldStats"
   | "query"
-  | "deletePreview";
+  | "deletePreview"
+  | "deleteExecute";
 
 import {
   classifyDriverError,
@@ -34,6 +35,7 @@ const ERROR_LABELS: Record<SearchErrorScope, string> = {
   fieldStats: "Search field stats failed",
   query: "Search query failed",
   deletePreview: "Delete-by-query preview failed",
+  deleteExecute: "Delete-by-query execution failed",
 };
 
 const URL_RE = /\bhttps?:\/\/[^\s"'<>]+/gi;

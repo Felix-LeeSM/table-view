@@ -24,7 +24,22 @@ interface DataSourceProfileParityReport {
   readonly reportVersion: 1;
   readonly contract: string;
   readonly runtimeClaimBoundary: typeof PROFILE_PARITY_RUNTIME_CLAIM_BOUNDARY;
+  readonly capabilityPosture: Readonly<Record<DatabaseType, CapabilityPosture>>;
   readonly profiles: Readonly<Record<DatabaseType, ComparableProfile>>;
+}
+
+// #1045 — coarse write posture derived from the raw capability declarations on
+// each side. Rust `adapter_contract` capabilities and TS fine-grained UI flags
+// use different per-paradigm vocabularies (so the raw flags stay out of strict
+// parity), but their write posture maps 1:1: `schemaMutation` mirrors Rust
+// `RelationalSchemaMutation` (the #1044 SQLite-DDL drift class), `dataMutation`
+// mirrors Rust `DocumentMutation`/`KeyValueMutation`. Both sides derive this
+// from their own source and assert it against the shared fixture, so a one-sided
+// capability change fails that side's test until the fixture — and thus the
+// other side — is reconciled.
+interface CapabilityPosture {
+  readonly schemaMutation: boolean;
+  readonly dataMutation: boolean;
 }
 
 interface ComparableProfile {
@@ -82,7 +97,28 @@ describe("TS/Rust data-source profile parity", () => {
     );
     expect(comparableProfiles).toEqual(report.profiles);
   });
+
+  it("matches the coarse Rust/TS write-capability posture", () => {
+    const report = loadProfileParityReport();
+    const actualPosture = Object.fromEntries(
+      (Object.keys(DATA_SOURCE_PROFILES) as DatabaseType[]).map((dbType) => [
+        dbType,
+        capabilityPosture(getDataSourceProfile(dbType)),
+      ]),
+    ) as Record<DatabaseType, CapabilityPosture>;
+
+    expect(actualPosture).toEqual(report.capabilityPosture);
+  });
 });
+
+function capabilityPosture(profile: DataSourceProfile): CapabilityPosture {
+  const { ddl, edit } = profile.capabilities;
+  return {
+    schemaMutation:
+      profile.paradigm === "rdb" && Object.values(ddl).some(Boolean),
+    dataMutation: edit.editDocuments || edit.bulkWrite || edit.editKeys,
+  };
+}
 
 function loadProfileParityReport(): DataSourceProfileParityReport {
   return JSON.parse(

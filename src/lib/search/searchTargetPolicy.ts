@@ -31,8 +31,7 @@ export function getDeleteByQueryPreviewTargetError(
 ): string | null {
   return searchTargetPolicyError(rawTarget, {
     empty: "delete-by-query requires an index target",
-    wildcard:
-      "delete-by-query wildcard targets are unsupported for preview-only planning",
+    wildcard: "delete-by-query wildcard targets are unsupported",
     rawPath: DELETE_BY_QUERY_RAW_PATH_TARGET_ERROR,
     adminPrefix: true,
   });

@@ -427,6 +427,40 @@ pub struct SearchDestructiveOperationPlan {
     pub estimated_document_count: Option<u64>,
 }
 
+/// A single document-level failure reported by a live `_delete_by_query`
+/// (#1076). ES/OS return these under `failures[]` when a document could not be
+/// deleted (e.g. version conflict, mapping error); a non-empty list means the
+/// delete only partially succeeded and the UI must surface it honestly.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchWriteFailure {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub index: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub status: Option<u64>,
+    pub cause: Value,
+}
+
+/// Result of a live `_delete_by_query` execution (#1076). `deleted` is the
+/// authoritative count of documents actually removed; `total` is how many the
+/// query matched. `deleted < total` (or a non-empty `failures`) means a
+/// partial delete — surfaced verbatim to the user rather than swallowed.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchDeleteByQueryResult {
+    pub target: String,
+    pub took_ms: u64,
+    pub timed_out: bool,
+    pub total: u64,
+    pub deleted: u64,
+    pub version_conflicts: u64,
+    pub batches: u64,
+    #[serde(default)]
+    pub failures: Vec<SearchWriteFailure>,
+}
+
 pub fn validate_search_destructive_request(
     request: &SearchDeleteByQueryRequest,
 ) -> Result<(), AppError> {
@@ -439,15 +473,11 @@ pub fn validate_search_destructive_request(
 
     let wildcard_target = target == "_all" || target.contains('*');
     if wildcard_target {
+        // #1076 — live execution is now supported, but only against a single
+        // concrete index/alias target. Wildcard / `_all` fan-out deletes stay
+        // rejected (broader blast radius is a separate, deferred scope).
         return Err(AppError::Validation(
-            "delete-by-query wildcard targets are unsupported for preview-only planning".into(),
-        ));
-    }
-
-    if !request.preview_only {
-        return Err(AppError::Unsupported(
-            "delete-by-query execution is unsupported in this milestone; only preview plans are available"
-                .into(),
+            "delete-by-query wildcard targets are unsupported".into(),
         ));
     }
 
