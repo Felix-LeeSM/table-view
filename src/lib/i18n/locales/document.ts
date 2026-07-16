@@ -243,6 +243,7 @@ export const en = {
     ariaLabel: "Mongo structure view",
     tabIndexes: "Indexes",
     tabValidator: "Validator",
+    tabStats: "Stats",
   },
   mqlPreview: {
     title: "MQL Preview",
@@ -529,6 +530,7 @@ export const ko = {
     ariaLabel: "Mongo 구조 뷰",
     tabIndexes: "인덱스",
     tabValidator: "유효성 검사기",
+    tabStats: "통계",
   },
   mqlPreview: {
     title: "MQL 미리보기",

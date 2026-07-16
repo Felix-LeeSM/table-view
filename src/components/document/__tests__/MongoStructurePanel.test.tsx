@@ -46,6 +46,7 @@ describe("MongoStructurePanel (Sprint 350 — tracer Indexes/Validator shell)", 
         connectionId="conn-mongo"
         database="app"
         collection="users"
+        dbType="mongodb"
       />,
     );
 
@@ -68,6 +69,7 @@ describe("MongoStructurePanel (Sprint 350 — tracer Indexes/Validator shell)", 
         connectionId="conn-mongo"
         database="app"
         collection="users"
+        dbType="mongodb"
       />,
     );
 
@@ -93,6 +95,7 @@ describe("MongoStructurePanel (Sprint 350 — tracer Indexes/Validator shell)", 
         connectionId="conn-mongo"
         database="app"
         collection="users"
+        dbType="mongodb"
       />,
     );
 
@@ -122,6 +125,7 @@ describe("MongoStructurePanel (Sprint 350 — tracer Indexes/Validator shell)", 
         connectionId="conn-mongo"
         database="app"
         collection="users"
+        dbType="mongodb"
       />,
     );
 
@@ -143,12 +147,42 @@ describe("MongoStructurePanel (Sprint 350 — tracer Indexes/Validator shell)", 
     expect(validatorTab).toHaveAttribute("aria-controls", validatorPanel.id);
   });
 
+  // #1054 — U3 collection stats mount. The Stats sub-sub-tab is the
+  // collection-context home for the previously-orphan CollectionStatsPanel
+  // (needs (database, collection) so the connection-level Operations flyout
+  // does not fit). Gate is the document paradigm — this panel only renders
+  // inside the Mongo-only MongoStructurePanel.
+  it("mounts CollectionStatsPanel on the Stats sub-sub-tab", () => {
+    render(
+      <MongoStructurePanel
+        connectionId="conn-mongo"
+        database="app"
+        collection="users"
+        dbType="mongodb"
+      />,
+    );
+
+    const statsTab = screen.getByRole("tab", { name: "Stats" });
+    expect(statsTab).toHaveAttribute("aria-selected", "false");
+    expect(screen.queryByTestId("collection-stats-panel")).toBeNull();
+
+    act(() => {
+      fireEvent.click(statsTab);
+    });
+
+    expect(statsTab).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByTestId("collection-stats-panel")).toBeInTheDocument();
+    expect(screen.queryByTestId("mongo-indexes-panel")).toBeNull();
+    expect(screen.queryByTestId("validator-panel")).toBeNull();
+  });
+
   it("manages roving tabindex so only the active tab is focusable", () => {
     render(
       <MongoStructurePanel
         connectionId="conn-mongo"
         database="app"
         collection="users"
+        dbType="mongodb"
       />,
     );
 
