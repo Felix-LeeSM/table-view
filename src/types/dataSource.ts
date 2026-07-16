@@ -464,6 +464,12 @@ export const REDIS_CAPABILITIES = capabilities({
   },
   query: {
     query: true,
+    // Issue #1269 (gap #6) — the KV sidebar scan and the redis-command query
+    // tab both register a cooperative cancel token; the backend checks it
+    // between keys during metadata enrichment (SCAN/KEYS), so the Stop button
+    // is a truthful claim. Cooperative-only (Redis is not in-process, no server
+    // pid) — not in `supportsNativeCancel`, tooltip stays "Stop query".
+    cancel: true,
   },
   catalog: {
     browse: true,
@@ -480,6 +486,9 @@ export const VALKEY_CAPABILITIES = capabilities({
   },
   query: {
     query: true,
+    // Issue #1269 (gap #6) — see REDIS_CAPABILITIES: same cooperative token
+    // backing (Valkey shares the Redis KV adapter path).
+    cancel: true,
   },
   catalog: {
     browse: true,
