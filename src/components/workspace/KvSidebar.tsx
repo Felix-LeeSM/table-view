@@ -45,14 +45,20 @@ export default function KvSidebar({ connectionId }: KvSidebarProps) {
   const productLabel = connection
     ? DATABASE_TYPE_LABELS[connection.dbType]
     : "Redis";
-  const initialDatabase = useMemo(() => {
+  // #1051 — DB scope is single-sourced from the connection store's activeDb
+  // (the same value DbSwitcher writes). `loadCatalog` reconciles it from the
+  // backend adapter on mount/refresh, so the toolbar switcher and this sidebar
+  // can never disagree about which Redis/Valkey DB index is active.
+  const database = useMemo(() => {
     const activeDb = status?.type === "connected" ? status.activeDb : undefined;
     const raw = activeDb ?? connection?.database ?? "0";
     const parsed = Number.parseInt(raw, 10);
     return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
   }, [connection?.database, status]);
-
-  const [database, setDatabase] = useState(initialDatabase);
+  // Latest derived scope, readable inside async callbacks without widening
+  // their deps — lets `loadCatalog` detect a toolbar switch mid-load.
+  const databaseRef = useRef(database);
+  databaseRef.current = database;
   const [pattern, setPattern] = useState("*");
   const [keys, setKeys] = useState<KvKeyMetadata[]>([]);
   const [nextCursor, setNextCursor] = useState("0");
@@ -73,17 +79,24 @@ export default function KvSidebar({ connectionId }: KvSidebarProps) {
     setLoadingCatalog(true);
     setCatalogLoaded(false);
     setError(null);
+    const scopeBefore = databaseRef.current;
     try {
       const currentDatabase = await currentKvDatabase(connectionId);
-      setDatabase(currentDatabase);
+      // Reconcile the shared store scope from the backend adapter's real
+      // selection instead of keeping a private mirror — DbSwitcher reads the
+      // same `activeDb`, so a stale seed can't leave the two out of sync.
+      // Skip the write if a toolbar switch landed while the catalog loaded,
+      // so a slow backend read never clobbers the user's newer selection.
+      if (databaseRef.current === scopeBefore) {
+        setActiveDb(connectionId, String(currentDatabase));
+      }
     } catch (err) {
-      setDatabase(initialDatabase);
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setLoadingCatalog(false);
       setCatalogLoaded(true);
     }
-  }, [connectionId, initialDatabase]);
+  }, [connectionId, setActiveDb]);
 
   const loadKeys = useCallback(
     async (cursor: string) => {
@@ -190,10 +203,6 @@ export default function KvSidebar({ connectionId }: KvSidebarProps) {
   useEffect(() => {
     void loadCatalog();
   }, [loadCatalog]);
-
-  useEffect(() => {
-    setDatabase(initialDatabase);
-  }, [initialDatabase]);
 
   useEffect(() => {
     latestKeyScanRef.current += 1;
