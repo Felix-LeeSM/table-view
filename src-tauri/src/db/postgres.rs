@@ -39,6 +39,7 @@ mod connection;
 mod mutations;
 mod queries;
 mod schema;
+mod value_search;
 
 pub use connection::PostgresAdapter;
 // Sprint 237 — `validate_identifier` is the shared SQL-identifier guard
@@ -59,7 +60,7 @@ use crate::models::{
     DropColumnRequest, DropConstraintRequest, DropIndexRequest, DropTableRequest,
     DropTriggerRequest, FilterCondition, FunctionInfo, IndexInfo, PostgresExtensionInfo,
     PostgresTypeInfo, RenameTableRequest, SchemaChangeResult, TableData, TableInfo, TriggerInfo,
-    ViewInfo,
+    ValueSearchResult, ViewInfo,
 };
 
 use super::{DbAdapter, NamespaceInfo, NamespaceLabel, RdbAdapter, RdbQueryResult};
@@ -405,6 +406,17 @@ impl RdbAdapter for PostgresAdapter {
         column: &'a str,
     ) -> Pin<Box<dyn Future<Output = Result<i64, AppError>> + Send + 'a>> {
         Box::pin(async move { self.count_null_rows(namespace, table, column).await })
+    }
+
+    // Issue #1525 — read-only cross-table value search (PG-only feature).
+    fn search_values<'a>(
+        &'a self,
+        schemas: &'a [String],
+        term: &'a str,
+        cancel: Option<&'a tokio_util::sync::CancellationToken>,
+        row_cap: usize,
+    ) -> Pin<Box<dyn Future<Output = Result<ValueSearchResult, AppError>> + Send + 'a>> {
+        Box::pin(async move { self.search_values(schemas, term, cancel, row_cap).await })
     }
 
     fn list_views<'a>(

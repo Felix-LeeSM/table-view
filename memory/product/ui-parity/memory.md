@@ -1,7 +1,7 @@
 ---
 title: Cross-paradigm UI Parity 머지 기준
 type: product-rule
-updated: 2026-07-10
+updated: 2026-07-17
 surface: src/components/workspace/**, src/components/query/**
 task: ui-parity, review, merge-gate, unsupported-convention
 ---
@@ -63,6 +63,13 @@ type-aware 패널) 예외로 등록한다. 형식:
 
 등록된 예외 없이 분기하면 머지 보류.
 
+### 등록된 예외 (#1051, 2026-07-17)
+
+- **값 편집 / kv / 우측 detail 탭의 type-aware `KvMutationPanel` (string=SET,
+  hash·list·set·zSet=행 편집, stream=reader) / 사유**: KV 값은 형(type)마다 구조가
+  달라 단일 그리드 셀 inline 편집이 성립하지 않는다 — 형별 패널이 사용자에게 더
+  명확하다. 생성·삭제 진입점은 예외가 아니라 기준 정합이다(아래 Known debt 참조).
+
 ## 4. Unsupported 표현 규약 (2026-07-10 소유자 결정)
 
 미지원을 UI 로 표현하는 방식은 **숨김 우선 + 상태성 예외** 단일 규약을 따른다.
@@ -111,38 +118,25 @@ document(상단 미렌더, tab-local chip) · kv(상단 활성 `DbSwitcher` *와
    숨김으로 은폐하면 머지 보류.
 4. **분기 시 예외 등록** — §3 형식으로 이 파일에 추가. 사유 없는 분기 = 보류.
 
-## Known debt (2026-06-17 감사 — 예외 미등록 부채)
+## Known debt (2026-06-17 감사 — 진행 상황)
 
-아래는 이 rule 이 있기 전 누적된 위반으로, 향후 예외 등록 또는 기준 진입점으로
-정렬해야 한다. 본 rule PR 시점엔 부채로 기록만 한다. (file:line 은 직접 재검증.)
+KV 진입점 3건은 #1050(파괴 게이트) · #1415/#1466(CRUD UI) · #1051(db scope 단일화)
+으로 대부분 해소. 현행 상태 (file:line 은 직접 재검증):
 
-- **db scope 선택 4-way 분기** — 같은 작업이 네 진입점:
-  - rdb: 상단 활성 `DbSwitcher` (`DbSwitcher.tsx:107` `enabled` + `:295` Popover)
-  - document: 상단 미렌더 (`DbSwitcher.tsx:245` `return null`) → tab-local chip
-  - kv: **이중 진입점** — 상단 활성 `DbSwitcher` (kv 는 `switchDatabase:true`,
-    `dataSource.test.ts:461` → `enabled` true) *와* 사이드바 자체 database state
-    (`KvSidebar.tsx:65`). 동기화는 `loadCatalog` (`KvSidebar.tsx:81`) 재호출에만
-    의존 → 상단에서 바꾼 db 가 사이드바 scan/preview 에 즉시 반영 안 됨.
-  - search: 상단 read-only + "지원 안 함" (`DbSwitcher.tsx:65` search 분기) +
-    `_search` 하드코드
-  - **사유**: capability 게이트(`switchDatabase`)만으로 위치가 결정돼 paradigm 마다
-    제각각. kv 의 이중 진입점은 "거짓"이 아니라 "중복·불일치" — 어느 쪽이 진짜
-    SOT 인지 사용자가 모름.
-- **값 편집 진입** — rdb/document 그리드 셀 vs kv type-aware 패널
-  (`KvMutationPanel.tsx:72`; string SET `:208`). 사유: KV 값은 그리드보다 type-aware
-  패널이 의미있음 → 예외 후보.
-- **새 항목 생성** — rdb/document 툴바 `[+]` vs kv 패널 inline collection
-  preview actions (`KvMutationPanel.tsx:285` HSET / `:291` RPUSH / `:297` SADD /
-  `:304` ZADD). 사유: KV collection 명령어마다 전용 폼.
-- **삭제** — rdb/document `ConfirmDestructiveDialog` 게이트
-  (`DropTableDialog.tsx:307`, `RdbDataGridDialogs.tsx:26`) vs kv 패널 typing-confirm
-  (`KvMutationPanel.tsx:330` delete-key input + `:331` preview + `:222` dispatch).
-  사유: KV key 이름 확인은 typing-confirm 이 의미있음 → 예외 후보.
-- **Safe Mode 게이트 우회 (안전, ⚠ 가중치 높음)** — rdb/document 는
-  `ConfirmDestructiveDialog` (공통 게이트) vs kv 는 inline confirm
-  (`KvMutationPanel.tsx:201` `confirmPendingMutation` + `:212`
-  `safety:"allowOverwrite"`). 이건 UI 일관성을 넘어 **안전 정책 회피 가능성** —
-  별도 가중치 평가 필요. 단순 parity 부채와 동급 취급 금지.
+- **db scope 4-way 분기** — rdb=상단 활성 `DbSwitcher`, document=상단 read-only
+  chip → tab-local `TabDbChip`, search=상단 read-only + `_search` 하드코드,
+  kv=상단 활성 `DbSwitcher`. **kv 이중 진입점 해소 (#1051)**: 사이드바 자체
+  db-selector 제거(dead `switchKvDatabase`/`listKvDatabases` 폐기), db scope 를
+  store `activeDb` 단일 파생 + `loadCatalog` 이 backend `current_kv_database` 로
+  reconcile(toolbar 전환 mid-load 는 clobber 방지 가드) — DbSwitcher 와 동일 소스.
+  네 paradigm 이 여전히 다른 model(connection-active / tab-local / synthetic)이나
+  이는 의미상 별개 scope 라 억지 수렴 대상 아님(§3 예외/정합으로 대체).
+- **값 편집** — kv type-aware 패널(`KvMutationPanel`) → **§3 예외 등록 완료 (#1051)**.
+- **새 항목 생성** — kv `KvKeyActions` [+ New key] 툴바 버튼으로 기준표(`[+]`) 위치·
+  모델 정합; 생성 폼은 #1075 개방 대기(현재 disabled).
+- **삭제 / Safe Mode 게이트** — #1050 으로 `ConfirmDestructiveDialog` +
+  `safeModeGate.decide` 경유(`KvMutationPanel.tsx` `confirmPendingMutation`)로 정합.
+  종전 inline typing-confirm / `allowOverwrite` 우회 폐기 — 안전 게이트 정상 적용.
 
 ## 관련
 

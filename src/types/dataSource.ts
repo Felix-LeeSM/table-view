@@ -78,16 +78,23 @@ export interface DataSourceCapabilities {
   };
   readonly query: {
     readonly query: boolean;
-    readonly multiStatement: boolean;
+    // Issue #1464 — `multiStatement` was deleted here: no UI surface reads it
+    // (it is a pure execution trait with no toggle/button), so every profile
+    // that set it true was a dead claim. Re-declare when a multi-statement
+    // runner surface (batch/script editor) actually gates on it.
     readonly cancel: boolean;
     readonly explain: boolean;
   };
   readonly catalog: {
-    readonly browse: boolean;
-    readonly schema: boolean;
+    // Issue #1464 — `browse`, `schema`, `relationships` were deleted here: none
+    // had a UI consumer. `browse` was true in every profile (no discriminating
+    // power; paradigm routing owns catalog visibility), `schema` was superseded
+    // by `resolveRdbTreeProfile`'s 3-way tree shape (a boolean cannot express
+    // it), and relationship display rides `intelligence.erd` (#1372), never a
+    // catalog flag. Re-declare a specific one when a distinct surface gates on
+    // it (breadth-first depth step).
     readonly indexes: boolean;
     readonly constraints: boolean;
-    readonly relationships: boolean;
   };
   readonly edit: {
     readonly editRows: boolean;
@@ -116,12 +123,15 @@ export interface DataSourceCapabilities {
     // (SchemaGraphDiffPanel) renders only inside the ERD panel, transitively
     // gated by `erd`, and no profile ever declared it true. Re-add only if a
     // standalone schema-diff surface is promoted (breadth-first depth step).
-    readonly dataCompare: boolean;
-    readonly columnProfile: boolean;
+    // Issue #1464 — `dataCompare`, `columnProfile` were deleted here too: no UI
+    // surface, backend command, or consumer exists. Re-declare when a data-diff
+    // or column-profiler panel is promoted.
   };
   readonly operations: {
     readonly activity: boolean;
-    readonly locks: boolean;
+    // Issue #1464 — `locks` was deleted here: no lock-inspector UI, no consumer,
+    // and no profile ever set it true. Re-declare when a locks/blocking-session
+    // panel is promoted.
     readonly slowQueries: boolean;
     // Issue #1462 — `stats` was deleted here: no server-stats panel, backend
     // command, or consumer exists (CollectionStatsPanel is Mongo collection
@@ -169,16 +179,12 @@ export function createEmptyDataSourceCapabilities(): DataSourceCapabilities {
     },
     query: {
       query: false,
-      multiStatement: false,
       cancel: false,
       explain: false,
     },
     catalog: {
-      browse: false,
-      schema: false,
       indexes: false,
       constraints: false,
-      relationships: false,
     },
     edit: {
       editRows: false,
@@ -195,12 +201,9 @@ export function createEmptyDataSourceCapabilities(): DataSourceCapabilities {
     },
     intelligence: {
       erd: false,
-      dataCompare: false,
-      columnProfile: false,
     },
     operations: {
       activity: false,
-      locks: false,
       slowQueries: false,
       serverInfo: false,
       users: false,
@@ -250,15 +253,11 @@ export const ORACLE_CAPABILITIES = capabilities({
   },
   query: {
     query: true,
-    multiStatement: true,
     cancel: true,
   },
   catalog: {
-    browse: true,
-    schema: true,
     indexes: true,
     constraints: true,
-    relationships: true,
   },
   edit: {
     editRows: true,
@@ -276,16 +275,12 @@ export const POSTGRESQL_CAPABILITIES = capabilities({
   },
   query: {
     query: true,
-    multiStatement: true,
     cancel: true,
     explain: true,
   },
   catalog: {
-    browse: true,
-    schema: true,
     indexes: true,
     constraints: true,
-    relationships: true,
   },
   edit: {
     editRows: true,
@@ -314,7 +309,6 @@ export const MYSQL_FAMILY_CAPABILITIES = capabilities({
   },
   query: {
     query: true,
-    multiStatement: true,
     cancel: true,
     // Issue #1067 — MySQL/MariaDB `EXPLAIN FORMAT=JSON` plan surfaces the
     // shared Explain button; ExplainViewer renders the JSON via its raw
@@ -322,11 +316,8 @@ export const MYSQL_FAMILY_CAPABILITIES = capabilities({
     explain: true,
   },
   catalog: {
-    browse: true,
-    schema: true,
     indexes: true,
     constraints: true,
-    relationships: true,
   },
   edit: {
     editRows: true,
@@ -340,6 +331,18 @@ export const MYSQL_FAMILY_CAPABILITIES = capabilities({
   intelligence: {
     erd: true,
   },
+  // Issue #1073 — MySQL/MariaDB admin ops parity. Backed by the shared
+  // MysqlAdapter (information_schema.processlist / KILL /
+  // performance_schema.events_statements_summary_by_digest / SHOW GLOBAL
+  // STATUS+VARIABLES). `users` stays false (that is #1077 Stage 2, PG-first);
+  // `locks` has no adapter override on any engine. Same shape as MongoDB, so
+  // the OperationsPanel flyout surfaces the activity/serverInfo/slowQueries
+  // tabs without a panel change.
+  operations: {
+    activity: true,
+    slowQueries: true,
+    serverInfo: true,
+  },
 });
 
 export const SQLITE_CAPABILITIES = capabilities({
@@ -350,12 +353,9 @@ export const SQLITE_CAPABILITIES = capabilities({
   },
   query: {
     query: true,
-    multiStatement: true,
     cancel: true,
   },
   catalog: {
-    browse: true,
-    schema: true,
     // Issue #1459 — the SQLite adapter has a real `PRAGMA index_list`
     // introspection path (src-tauri/src/db/adapters/sqlite/connection.rs),
     // so the Indexes claim is true. Constraints stays false: the adapter's
@@ -398,13 +398,12 @@ export const DUCKDB_CAPABILITIES = capabilities({
     cancel: true,
   },
   catalog: {
-    browse: true,
-    schema: true,
     // Issue #1070 — the adapter's `get_table_indexes` / `get_table_constraints`
     // were silent `Ok(vec![])` stubs that mislabelled every DuckDB table as
     // index/constraint-free. They now introspect `duckdb_indexes()` /
     // `duckdb_constraints()`, so the Structure Indexes/Constraints tabs are a
     // truthful claim (mirrors the SQLite #1459 flip).
+    // (`browse` / `schema` keys were deleted repo-wide by #1464.)
     indexes: true,
     constraints: true,
   },
@@ -416,15 +415,11 @@ export const MSSQL_CAPABILITIES = capabilities({
   },
   query: {
     query: true,
-    multiStatement: true,
     cancel: true,
   },
   catalog: {
-    browse: true,
-    schema: true,
     indexes: true,
     constraints: true,
-    relationships: true,
   },
   edit: {
     editRows: true,
@@ -445,8 +440,6 @@ export const MONGODB_CAPABILITIES = capabilities({
     explain: true,
   },
   catalog: {
-    browse: true,
-    schema: true,
     indexes: true,
   },
   edit: {
@@ -478,9 +471,6 @@ export const REDIS_CAPABILITIES = capabilities({
     // pid) — not in `supportsNativeCancel`, tooltip stays "Stop query".
     cancel: true,
   },
-  catalog: {
-    browse: true,
-  },
   edit: {
     editKeys: true,
   },
@@ -497,9 +487,6 @@ export const VALKEY_CAPABILITIES = capabilities({
     // backing (Valkey shares the Redis KV adapter path).
     cancel: true,
   },
-  catalog: {
-    browse: true,
-  },
   edit: {
     editKeys: true,
   },
@@ -514,7 +501,6 @@ export const ELASTICSEARCH_CAPABILITIES = capabilities({
     cancel: true,
   },
   catalog: {
-    browse: true,
     indexes: true,
   },
 });
@@ -528,7 +514,6 @@ export const OPENSEARCH_CAPABILITIES = capabilities({
     cancel: true,
   },
   catalog: {
-    browse: true,
     indexes: true,
   },
 });
@@ -778,11 +763,11 @@ export function supportsDdl(
  * returns true so affordances aren't stripped before the connection
  * resolves (same fallback as `supportsRowEditing`).
  *
- * Boundary decision (#1459): `catalog.browse` / `catalog.schema` are NOT
- * consumed here — browse stays with the paradigm routing (every profile
- * declares it true, so the flag has no discriminating power) and schema
- * stays with `resolveRdbTreeProfile`'s 3-way tree shape, which a boolean
- * cannot express. Whether those two flags are deleted is #1464's call.
+ * Boundary decision (#1459 → resolved by #1464): `catalog.browse` /
+ * `catalog.schema` were deleted — browse carried no discriminating power (every
+ * profile declared it true) and paradigm routing owns catalog visibility, while
+ * schema is superseded by `resolveRdbTreeProfile`'s 3-way tree shape (a boolean
+ * cannot express it). Only `indexes` / `constraints` remain as catalog flags.
  */
 export function supportsCatalogFeature(
   dbType: DatabaseType | null | undefined,

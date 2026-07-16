@@ -102,21 +102,13 @@ export const CONFORMANCE_CHECKS = Object.freeze([
     "connection",
     "File-picker connection claim is enabled.",
   ),
-  check("catalog.browse", "catalog", "Catalog browse claim is enabled."),
-  check("catalog.schema", "catalog", "Schema catalog claim is enabled."),
   check("catalog.indexes", "catalog", "Index catalog claim is enabled."),
   check(
     "catalog.constraints",
     "catalog",
     "Constraint catalog claim is enabled.",
   ),
-  check(
-    "catalog.relationships",
-    "catalog",
-    "Relationship catalog claim is enabled.",
-  ),
   check("query.query", "query", "Query execution claim is enabled."),
-  check("query.multiStatement", "query", "Multi-statement claim is enabled."),
   check("query.cancel", "query", "Query cancellation claim is enabled."),
   check("query.explain", "query", "Explain-plan claim is enabled."),
   check("result.envelope", "result", "Result envelope kinds are declared."),
@@ -174,7 +166,7 @@ const DEFERRED_FEATURES = Object.freeze({
     connection: [],
     // Issue #1459 — `catalog.indexes` left the deferred list: the adapter's
     // PRAGMA index_list introspection is live and the profile now claims it.
-    catalog: ["catalog.constraints", "catalog.relationships"],
+    catalog: ["catalog.constraints"],
     query: ["query.explain"],
     edit: [],
     ddl: [],
@@ -184,12 +176,13 @@ const DEFERRED_FEATURES = Object.freeze({
     // Issue #1070 — `catalog.indexes` / `catalog.constraints` left the deferred
     // list: the adapter's `duckdb_indexes()` / `duckdb_constraints()`
     // introspection is live (was a silent `Ok(vec![])` stub) and the profile now
-    // claims both. `catalog.relationships` (ERD graph wiring) stays deferred.
-    catalog: ["catalog.relationships"],
+    // claims both. (`catalog.relationships` was deleted as a flag by #1464, so
+    // nothing remains deferred here.)
+    catalog: [],
     // Issue #1269 (gap #5) — `query.cancel` left the deferred list: the adapter
     // now interrupts a running statement (`Connection::interrupt_handle`), so
     // the profile claims it and it is a live check, not a deferral.
-    query: ["query.multiStatement", "query.explain"],
+    query: ["query.explain"],
     edit: [],
     ddl: [],
   },
@@ -197,14 +190,14 @@ const DEFERRED_FEATURES = Object.freeze({
   oracle: noneDeferred(),
   mongodb: {
     connection: ["connection.switchDatabase"],
-    catalog: ["catalog.constraints", "catalog.relationships"],
-    query: ["query.multiStatement"],
+    catalog: ["catalog.constraints"],
+    query: [],
     edit: ["edit.editRows", "edit.editKeys"],
     ddl: [],
   },
   redis: {
     connection: [],
-    catalog: ["catalog.schema", "catalog.indexes", "catalog.relationships"],
+    catalog: ["catalog.indexes"],
     // Issue #1269 (gap #6) — `query.cancel` left the deferred list: the KV scan
     // and redis-command query tab now register a live cooperative token, so the
     // profile claims it and it is a live check, not a deferral.
@@ -214,7 +207,7 @@ const DEFERRED_FEATURES = Object.freeze({
   },
   valkey: {
     connection: [],
-    catalog: ["catalog.schema", "catalog.indexes", "catalog.relationships"],
+    catalog: ["catalog.indexes"],
     // Issue #1269 (gap #6) — see redis: `query.cancel` is now a live claim.
     query: ["query.explain"],
     edit: ["edit.bulkWrite"],
@@ -222,14 +215,14 @@ const DEFERRED_FEATURES = Object.freeze({
   },
   elasticsearch: {
     connection: ["connection.switchDatabase"],
-    catalog: ["catalog.schema"],
+    catalog: [],
     query: ["query.explain"],
     edit: ["edit.editDocuments", "edit.bulkWrite"],
     ddl: [],
   },
   opensearch: {
     connection: ["connection.switchDatabase"],
-    catalog: ["catalog.browse", "catalog.schema", "catalog.indexes"],
+    catalog: ["catalog.indexes"],
     query: ["query.query", "query.explain"],
     edit: ["edit.editDocuments", "edit.bulkWrite"],
     ddl: [],

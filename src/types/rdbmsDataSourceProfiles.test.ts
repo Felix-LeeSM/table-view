@@ -35,13 +35,10 @@ function expectedCapabilities(
 
 const expectedMssqlRuntimeCapabilities = expectedCapabilities({
   connection: { test: true },
-  query: { query: true, multiStatement: true, cancel: true },
+  query: { query: true, cancel: true },
   catalog: {
-    browse: true,
-    schema: true,
     indexes: true,
     constraints: true,
-    relationships: true,
   },
   edit: { editRows: true, requiresPrimaryKeyForEdit: true },
   intelligence: { erd: true },
@@ -49,13 +46,10 @@ const expectedMssqlRuntimeCapabilities = expectedCapabilities({
 
 const expectedOracleRuntimeCapabilities = expectedCapabilities({
   connection: { test: true },
-  query: { query: true, multiStatement: true, cancel: true },
+  query: { query: true, cancel: true },
   catalog: {
-    browse: true,
-    schema: true,
     indexes: true,
     constraints: true,
-    relationships: true,
   },
   edit: { editRows: true, requiresPrimaryKeyForEdit: true },
   intelligence: { erd: true },
@@ -86,14 +80,10 @@ describe("RDBMS data source profiles", () => {
     expect(mssql.capabilities).toEqual(expectedMssqlRuntimeCapabilities);
     expect(mssql.capabilities.connection.test).toBe(true);
     expect(mssql.capabilities.query.query).toBe(true);
-    expect(mssql.capabilities.query.multiStatement).toBe(true);
     expect(mssql.capabilities.query.cancel).toBe(true);
     expect(mssql.capabilities.query.explain).toBe(false);
-    expect(mssql.capabilities.catalog.browse).toBe(true);
-    expect(mssql.capabilities.catalog.schema).toBe(true);
     expect(mssql.capabilities.catalog.indexes).toBe(true);
     expect(mssql.capabilities.catalog.constraints).toBe(true);
-    expect(mssql.capabilities.catalog.relationships).toBe(true);
     expect(mssql.capabilities.edit.editRows).toBe(true);
     expect(mssql.capabilities.ddl.createTable).toBe(false);
     expect(isConnectionSupportedDatabaseType("mssql")).toBe(true);
@@ -122,14 +112,10 @@ describe("RDBMS data source profiles", () => {
     expect(oracle.capabilities.connection.test).toBe(true);
     expect(oracle.capabilities.connection.switchDatabase).toBe(false);
     expect(oracle.capabilities.query.query).toBe(true);
-    expect(oracle.capabilities.query.multiStatement).toBe(true);
     expect(oracle.capabilities.query.cancel).toBe(true);
     expect(oracle.capabilities.query.explain).toBe(false);
-    expect(oracle.capabilities.catalog.browse).toBe(true);
-    expect(oracle.capabilities.catalog.schema).toBe(true);
     expect(oracle.capabilities.catalog.indexes).toBe(true);
     expect(oracle.capabilities.catalog.constraints).toBe(true);
-    expect(oracle.capabilities.catalog.relationships).toBe(true);
     expect(oracle.capabilities.edit.editRows).toBe(true);
     expect(oracle.capabilities.ddl.createTable).toBe(false);
     expect(isConnectionSupportedDatabaseType("oracle")).toBe(true);
@@ -174,8 +160,6 @@ describe("RDBMS data source profiles", () => {
       expect(profile.backendAdapter.kind).toBe("rdb");
       expect(profile.capabilities.connection.test).toBe(true);
       expect(profile.capabilities.query.query).toBe(true);
-      expect(profile.capabilities.catalog.browse).toBe(true);
-      expect(profile.capabilities.catalog.schema).toBe(true);
     }
 
     const mssql = getDataSourceProfile("mssql");
@@ -187,14 +171,10 @@ describe("RDBMS data source profiles", () => {
     expect(mssql.capabilities).toEqual(expectedMssqlRuntimeCapabilities);
     expect(mssql.capabilities.connection.test).toBe(true);
     expect(mssql.capabilities.query.query).toBe(true);
-    expect(mssql.capabilities.query.multiStatement).toBe(true);
     expect(mssql.capabilities.query.cancel).toBe(true);
     expect(mssql.capabilities.query.explain).toBe(false);
-    expect(mssql.capabilities.catalog.browse).toBe(true);
-    expect(mssql.capabilities.catalog.schema).toBe(true);
     expect(mssql.capabilities.catalog.indexes).toBe(true);
     expect(mssql.capabilities.catalog.constraints).toBe(true);
-    expect(mssql.capabilities.catalog.relationships).toBe(true);
     expect(mssql.capabilities.edit.editRows).toBe(true);
     expect(mssql.capabilities.ddl.createTable).toBe(false);
 
@@ -208,14 +188,10 @@ describe("RDBMS data source profiles", () => {
     expect(oracle.capabilities).toEqual(expectedOracleRuntimeCapabilities);
     expect(oracle.capabilities.connection.test).toBe(true);
     expect(oracle.capabilities.query.query).toBe(true);
-    expect(oracle.capabilities.query.multiStatement).toBe(true);
     expect(oracle.capabilities.query.cancel).toBe(true);
     expect(oracle.capabilities.query.explain).toBe(false);
-    expect(oracle.capabilities.catalog.browse).toBe(true);
-    expect(oracle.capabilities.catalog.schema).toBe(true);
     expect(oracle.capabilities.catalog.indexes).toBe(true);
     expect(oracle.capabilities.catalog.constraints).toBe(true);
-    expect(oracle.capabilities.catalog.relationships).toBe(true);
     expect(oracle.capabilities.edit.editRows).toBe(true);
     expect(oracle.capabilities.ddl.createTable).toBe(false);
     expect(isConnectionSupportedDatabaseType("oracle")).toBe(true);

@@ -21,7 +21,7 @@ use crate::models::{
     SearchDeleteByQueryRequest, SearchDeleteByQueryResult, SearchDestructiveOperationPlan,
     SearchFieldStatsEnvelope, SearchIndexInfo, SearchIndexMapping, SearchIndexSettings,
     SearchIndexTemplateInfo, SearchQueryRequest, SearchResultEnvelope, SqliteCapabilityInventory,
-    TableData, TableInfo, TriggerInfo, ViewInfo,
+    TableData, TableInfo, TriggerInfo, ValueSearchResult, ViewInfo,
 };
 
 use super::types::{
@@ -545,6 +545,36 @@ pub trait RdbAdapter: DbAdapter {
         Box::pin(async {
             Err(AppError::Unsupported(
                 "This adapter does not support NULL row counting".into(),
+            ))
+        })
+    }
+
+    /// Issue #1525 — read-only cross-table value search. Scans the TEXT
+    /// columns of every base table in the given `schemas` for cells matching
+    /// `term` (case-insensitive substring, ILIKE) and returns the matched
+    /// schema/table/column/value tuples.
+    ///
+    /// Safety contract (PG override): identifiers (schema/table/column) come
+    /// from `information_schema` and are ANSI-quoted with `quote_identifier`;
+    /// the term is passed ONLY as a bound `$1` ILIKE pattern with its `%`/`_`/
+    /// `\` metacharacters escaped — never string-interpolated. The generated
+    /// SQL is SELECT-only. `row_cap` bounds the total matches collected and
+    /// `cancel` aborts a long scan cooperatively between/within tables.
+    ///
+    /// The default returns `Unsupported` so non-PG adapters (MySQL/SQLite/
+    /// Oracle) compile until/unless their dialect implementation lands; the
+    /// `pg_search_values` command surfaces that to the frontend as a clear
+    /// "PostgreSQL only" state.
+    fn search_values<'a>(
+        &'a self,
+        _schemas: &'a [String],
+        _term: &'a str,
+        _cancel: Option<&'a CancellationToken>,
+        _row_cap: usize,
+    ) -> BoxFuture<'a, Result<ValueSearchResult, AppError>> {
+        Box::pin(async {
+            Err(AppError::Unsupported(
+                "Cross-table value search is not supported by this adapter".into(),
             ))
         })
     }

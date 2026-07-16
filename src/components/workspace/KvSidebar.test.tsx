@@ -161,6 +161,28 @@ describe("KvSidebar", () => {
     expect(commandCalls("switch_kv_database")).toHaveLength(0);
   });
 
+  it("reconciles the toolbar active database from the backend adapter (single db-scope source) — #1051", async () => {
+    // activeDb seed is stale at "0"; the backend adapter is really on DB 2.
+    // The sidebar must push the real index back into the shared connection
+    // store so DbSwitcher and the sidebar never disagree about the active DB.
+    useConnectionStore.setState({
+      connections: [redisConnection()],
+      activeStatuses: { "redis-1": { type: "connected", activeDb: "0" } },
+    });
+    invokeMock.mockImplementation((command: string) => {
+      if (command === "current_kv_database") return Promise.resolve(2);
+      if (command === "scan_kv_keys") return Promise.resolve(defaultKeyPage());
+      return Promise.reject(new Error(`Unhandled command: ${command}`));
+    });
+
+    render(<KvSidebar connectionId="redis-1" />);
+
+    await waitFor(() => {
+      const status = useConnectionStore.getState().activeStatuses["redis-1"];
+      expect(status?.type === "connected" ? status.activeDb : null).toBe("2");
+    });
+  });
+
   it("waits for catalog before the Safe Mode off entry scan", async () => {
     useSafeModeStore.setState({ mode: "off" });
     invokeMock.mockImplementation((command: string, payload?: unknown) => {

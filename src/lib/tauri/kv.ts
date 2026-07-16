@@ -6,7 +6,6 @@ import {
 } from "@/types/query";
 import type {
   KvCommandRequest,
-  KvDatabaseInfo,
   KvDeleteRequest,
   KvKeyScanPage,
   KvKeyScanRequest,
@@ -22,21 +21,8 @@ import { normalizeQueryResult } from "@lib/wireCamelCase";
 
 import { wrapNumericCells } from "./numericWrap";
 
-export async function listKvDatabases(
-  connectionId: string,
-): Promise<KvDatabaseInfo[]> {
-  return invoke<KvDatabaseInfo[]>("list_kv_databases", { connectionId });
-}
-
 export async function currentKvDatabase(connectionId: string): Promise<number> {
   return invoke<number>("current_kv_database", { connectionId });
-}
-
-export async function switchKvDatabase(
-  connectionId: string,
-  database: number,
-): Promise<number> {
-  return invoke<number>("switch_kv_database", { connectionId, database });
 }
 
 export async function scanKvKeys(
