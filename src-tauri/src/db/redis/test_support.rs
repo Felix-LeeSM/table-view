@@ -137,6 +137,8 @@ fn redis_stub_response(command: &[String]) -> Vec<u8> {
         Some("HSET") => ":1\r\n",
         Some("LPUSH") | Some("RPUSH") => ":2\r\n",
         Some("SADD") | Some("ZADD") => ":1\r\n",
+        Some("LSET") => "+OK\r\n",
+        Some("HDEL") | Some("LREM") | Some("SREM") | Some("ZREM") => ":1\r\n",
         Some("SET")
             if command.get(1).is_some_and(|key| key == "alpha")
                 && command.iter().any(|part| part.eq_ignore_ascii_case("NX")) =>
