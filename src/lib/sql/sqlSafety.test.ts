@@ -64,6 +64,35 @@ describe("sqlSafety.analyzeStatement — fallback and severity contracts", () =>
     ).toBe("danger");
   });
 
+  it("[#1455 B1] Oracle national nq'…' hiding a fake WHERE → danger", () => {
+    for (const sql of [
+      "UPDATE t SET x = nq'{a'b WHERE c}'",
+      "DELETE FROM t WHERE_x = NQ'<a'b WHERE c>'",
+    ]) {
+      expect(analyzeStatement(sql, { dialect: "oracle" }).severity).toBe(
+        "danger",
+      );
+    }
+    // A plain identifier ending in `q` (e.g. `seq'x'`) is NOT a q-quote, so a
+    // real trailing WHERE still bounds the write.
+    expect(
+      analyzeStatement("UPDATE t SET x = seq'y' WHERE id = 1", {
+        dialect: "oracle",
+      }).severity,
+    ).not.toBe("danger");
+  });
+
+  it("[#1455 B2] Oracle q'…' with inner `;` keeps trailing unbounded write → danger", () => {
+    // The splitter must treat `q'{…}'` as opaque so the top-level `;` still
+    // separates the two writes; the trailing WHERE-less UPDATE stays danger.
+    expect(
+      analyzeStatement(
+        "UPDATE accounts SET note = q'{it's ok}' WHERE id=1; UPDATE accounts SET x=1",
+        { dialect: "oracle" },
+      ).severity,
+    ).toBe("danger");
+  });
+
   it("[AC-185-01e] DROP TABLE → danger", () => {
     const a = analyzeStatement("DROP TABLE users");
     expect(a.kind).toBe("ddl-drop");

@@ -711,7 +711,7 @@ export function analyzeStatement(
   // batch is split with the literal/comment-aware splitter and each statement
   // is re-analyzed; the worst severity wins. Single-statement input (length
   // <= 1) skips this and takes the fast path below unchanged.
-  const parts = splitSqlStatements(sql);
+  const parts = splitSqlStatements(sql, options?.dialect === "oracle");
   if (parts.length > 1) {
     return worstAnalysis(parts.map((part) => analyzeStatement(part, options)));
   }

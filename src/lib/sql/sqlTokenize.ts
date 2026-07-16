@@ -199,9 +199,10 @@ export function scanDollarQuoteEnd(sql: string, start: number): number | null {
  * literal instead of ending at the escaped quote. Backtick identifiers never
  * use backslash escapes (doubling only).
  *
- * #1455 P3-4 — `oracleQuotes` enables Oracle alternate quoting `q'X…X'` (see
- * [`skipOracleQQuote`]); the shared `sqlSafety` classifier passes it for the
- * Oracle dialect so a fake `WHERE` inside `q'{…}'` can't downgrade a write.
+ * #1455 P3-4 — `oracleQuotes` enables Oracle alternate quoting `q'X…X'` /
+ * `nq'X…X'` (see [`skipOracleQQuote`] / [`isOracleQQuoteOpener`]); the shared
+ * `sqlSafety` classifier passes it for the Oracle dialect so a fake `WHERE`
+ * inside `q'{…}'` can't downgrade a write.
  */
 export function skipQuotedLiteral(
   s: string,
@@ -210,14 +211,9 @@ export function skipQuotedLiteral(
   backslashEscapes = false,
   oracleQuotes = false,
 ): number {
-  if (oracleQuotes && q === "'" && start >= 1) {
-    const prev = s[start - 1];
-    const wordBoundaryBefore =
-      start < 2 || !/[A-Za-z0-9_]/.test(s[start - 2] ?? "");
-    if ((prev === "q" || prev === "Q") && wordBoundaryBefore) {
-      const end = skipOracleQQuote(s, start);
-      if (end !== null) return end;
-    }
+  if (oracleQuotes && q === "'" && isOracleQQuoteOpener(s, start)) {
+    const end = skipOracleQQuote(s, start);
+    if (end !== null) return end;
   }
   const escapesByDoubling = q === "'" || q === "`";
   const backslash = backslashEscapes && q !== "`";
@@ -268,6 +264,35 @@ function skipOracleQQuote(s: string, start: number): number | null {
     i++;
   }
   return s.length;
+}
+
+/**
+ * #1455 P3-4 / B1 — is the `'` at `quoteIdx` an Oracle alternate-quote opener:
+ * `q'`/`Q'`, optionally with the national prefix `nq'`/`Nq'`/`nQ'`/`NQ'`? The
+ * opener (national prefix included) must sit at a word boundary so a plain
+ * identifier ending in `q` (e.g. `seq'x'`) is not misread. Exported so both the
+ * literal skip and the statement splitter (`splitSqlStatements`) share it.
+ */
+export function isOracleQQuoteOpener(s: string, quoteIdx: number): boolean {
+  if (quoteIdx < 1) return false;
+  const prev = s[quoteIdx - 1];
+  if (prev !== "q" && prev !== "Q") return false;
+  const two = s[quoteIdx - 2];
+  const hasNational = two === "n" || two === "N";
+  const prefixStart = hasNational ? quoteIdx - 2 : quoteIdx - 1;
+  return prefixStart === 0 || !/[A-Za-z0-9_]/.test(s[prefixStart - 1] ?? "");
+}
+
+/**
+ * #1455 P3-4 / B2 — index just past an Oracle `q'X…X'` / `nq'X…X'` literal that
+ * opens at `start` (the `'`), or `null` when `start` is not such an opener.
+ * Combines [`isOracleQQuoteOpener`] + [`skipOracleQQuote`] so the statement
+ * splitter can treat the literal as opaque. Only meaningful for the Oracle
+ * dialect; callers gate on it.
+ */
+export function scanOracleQQuoteEnd(s: string, start: number): number | null {
+  if (!isOracleQQuoteOpener(s, start)) return null;
+  return skipOracleQQuote(s, start);
 }
 
 /**

@@ -45,7 +45,9 @@ use crate::safety::{split_statements, strip_comments_collapse};
 /// block's internal semicolons still leave the leading `BEGIN` / `DECLARE`
 /// fragment, which the anchor check catches.
 pub fn is_oracle_danger(sql: &str) -> bool {
-    split_statements(sql)
+    // #1455 B2 — Oracle context, so the splitter treats `q'X…X'` / `nq'X…X'` as
+    // opaque and won't split inside one (a `;` there is literal text).
+    split_statements(sql, true)
         .iter()
         .any(|stmt| statement_is_oracle_danger(stmt))
 }
