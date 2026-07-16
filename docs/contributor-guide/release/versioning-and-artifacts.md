@@ -89,3 +89,6 @@ After publishing:
 - Do not silently replace published assets under the same tag. Users and
   downstream checksums need a new version or a clearly documented superseding
   release.
+- Lost or leaked updater signing key: this is not a tag rollback — follow
+  [`updater-signing-key.md`](updater-signing-key.md), which covers the bridge
+  release needed to move already-installed clients onto a new public key.

@@ -24,6 +24,9 @@ decision logs.
   version/tag decision, artifact expectations, post-release verification, and
   rollback notes.
 - [`release/homebrew-cask.md`](release/homebrew-cask.md) — Homebrew cask automation.
+- [`release/updater-signing-key.md`](release/updater-signing-key.md) — minisign
+  updater signing key: backup/escrow, rotation (with the bridge release for
+  old installs), and loss/compromise response.
 - [`memory/engineering/architecture/data-source/adding/memory.md`](../../memory/engineering/architecture/data-source/adding/memory.md) — checklist for adding or promoting a data source.
 
 ## Boundary
