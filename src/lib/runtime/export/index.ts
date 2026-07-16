@@ -26,6 +26,11 @@ export interface RunExportArgs {
   rows: unknown[][];
   /** Optional id for cooperative cancellation via the query-token registry. */
   exportId?: string | null;
+  /**
+   * #1448 F15 — cumulative rows written, reported after each streamed chunk of
+   * a large (>25k-row) export so callers can surface a live count.
+   */
+  onProgress?: (rowsWritten: number) => void;
   /** Injected for tests so file-name timestamps stay deterministic. */
   now?: Date;
 }
@@ -46,7 +51,15 @@ export type RunExportResult =
  * informational toast instead of the destructive I/O-failure toast.
  */
 export async function runExport(args: RunExportArgs): Promise<RunExportResult> {
-  const { format, context, headers, rows, exportId = null, now } = args;
+  const {
+    format,
+    context,
+    headers,
+    rows,
+    exportId = null,
+    onProgress,
+    now,
+  } = args;
   const defaultPath = buildExportFilename(context, format, now ?? new Date());
   const filter = FILTERS[format];
 
@@ -67,6 +80,7 @@ export async function runExport(args: RunExportArgs): Promise<RunExportResult> {
       rows,
       context,
       exportId,
+      onProgress,
     );
     toast.success(
       i18n.t("export:gridRowsExported", {

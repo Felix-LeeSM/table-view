@@ -408,6 +408,27 @@ function CompletedSingleResult({
   onAfterCommit?: () => void;
 }) {
   const { t } = useTranslation("query");
+
+  // #1448 F12 — memoize the non-grid (count / list / findOne) copy text so a
+  // parent re-render with an unchanged `result` doesn't re-map + re-join every
+  // row. Hoisted above the early returns to satisfy the rules of hooks; stays
+  // null (doing no work) for grid / writeSummary results.
+  const nonGridCopy = useMemo(() => {
+    if (result.resultKind !== "scalar" && result.resultKind !== "list") {
+      return null;
+    }
+    // count    → 1-row 1-col `count` column
+    // distinct → 1-col `value` (or whatever name was projected)
+    // findOne(null) → empty columns + empty rows (D-12)
+    const mode: "count" | "list" | "findOne-empty" =
+      result.resultKind === "list"
+        ? "list"
+        : result.columns[0]?.name === "count"
+          ? "count"
+          : "findOne-empty";
+    return { mode, text: formatNonGridCopyText(result, mode) };
+  }, [result]);
+
   // Sprint 312 (Phase 28 Slice A6, 2026-05-14) — `resultKind` discriminator
   // router. Mongo paradigms set `"scalar"` / `"list"` / `"writeSummary"`;
   // RDB + Mongo find / aggregate / findOne(matched) leave it undefined or
@@ -442,18 +463,9 @@ function CompletedSingleResult({
       </div>
     );
   }
-  if (result.resultKind === "scalar" || result.resultKind === "list") {
-    // count   → 1-row 1-col `count` column
-    // distinct → 1-col `value` (or whatever name was projected)
-    // findOne(null) → empty columns + empty rows (D-12)
-    const mode: "count" | "list" | "findOne-empty" =
-      result.resultKind === "list"
-        ? "list"
-        : result.columns[0]?.name === "count"
-          ? "count"
-          : "findOne-empty";
+  if (nonGridCopy) {
+    const { mode, text: copyText } = nonGridCopy;
     const canExportValues = mode !== "findOne-empty" && result.rows.length > 0;
-    const copyText = formatNonGridCopyText(result, mode);
     return (
       <div className="flex flex-1 flex-col overflow-hidden">
         <div className="flex items-center justify-between border-b border-border px-3 py-1.5 text-xs text-secondary-foreground">
