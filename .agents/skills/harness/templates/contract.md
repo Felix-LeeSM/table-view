@@ -53,8 +53,10 @@
 - 에러/예외 케이스 최소 1개 테스트 작성
 
 ### Coverage Target
-- 신규/수정 코드: 라인 70% 이상 권장
-- CI 전체 기준: 라인 40%, 함수 40%, 브랜치 35%
+- 커버리지 임계값을 하드코딩하지 않는다. SOT는 `scripts/coverage-ratchet-targets.json`
+  (frontend / Rust tier별 statements·lines·functions·branches 목표). ratchet으로
+  계속 상승하므로 숫자를 복사하지 말고 SOT를 직접 참조한다.
+- 신규/수정 코드는 해당 tier의 ratchet 목표를 회귀시키지 않는다.
 
 ### Scenario Tests (필수)
 - [ ] Happy path
