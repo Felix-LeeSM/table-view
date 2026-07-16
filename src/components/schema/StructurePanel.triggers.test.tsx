@@ -308,6 +308,9 @@ describe("StructurePanel Triggers tab (Sprint 272)", () => {
     expect(
       screen.queryByRole("button", { name: `Drop trigger ${fixture.name}` }),
     ).not.toBeInTheDocument();
+    // Issue #1067 — the missing structured controls are explained via the
+    // raw-SQL hint (#1046 parity gate) rather than silently absent.
+    expect(screen.getByTestId("trigger-raw-sql-hint")).toBeInTheDocument();
   });
 
   it("[AC-870] MariaDB trigger tab is read-only: metadata renders but structured create/drop controls stay hidden", async () => {
@@ -341,6 +344,22 @@ describe("StructurePanel Triggers tab (Sprint 272)", () => {
     ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: `Drop trigger ${fixture.name}` }),
+    ).not.toBeInTheDocument();
+    // Issue #1067 — raw-SQL hint explains the hidden structured controls.
+    expect(screen.getByTestId("trigger-raw-sql-hint")).toBeInTheDocument();
+  });
+
+  it("[AC-1067] PostgreSQL (structured trigger CRUD) shows no raw-SQL hint", async () => {
+    // The hint is exclusive to inline-body engines; PG keeps its structured
+    // Create/Drop controls, so the raw-SQL escape hatch must not appear.
+    await act(async () => {
+      renderPanel({ initialSubTab: "triggers" });
+    });
+    expect(
+      screen.getByRole("button", { name: "Create trigger" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByTestId("trigger-raw-sql-hint"),
     ).not.toBeInTheDocument();
   });
 });

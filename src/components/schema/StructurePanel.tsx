@@ -465,6 +465,18 @@ function TriggersList({
           ) : null
         }
       />
+      {/* Issue #1067 — engines with inline-body triggers (MySQL/MariaDB) hide
+          the structured create/drop controls; point the user at the raw-SQL
+          path so the missing buttons are explained, not silently absent
+          (#1046 parity gate). */}
+      {!supportsStructuredCrud && (
+        <p
+          data-testid="trigger-raw-sql-hint"
+          className="mx-3 mt-3 rounded-md border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground"
+        >
+          {t("triggerRawSqlHint")}
+        </p>
+      )}
       {triggers.length === 0 ? (
         <StructureEmpty>{t("noTriggers")}</StructureEmpty>
       ) : (
