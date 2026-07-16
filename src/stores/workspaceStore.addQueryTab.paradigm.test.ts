@@ -83,6 +83,7 @@ describe("workspaceStore.addQueryTab — paradigm auto-detection", () => {
     expect(tab.paradigm).toBe("document");
     // Document tabs must not carry the legacy `sql` queryMode — the
     // editor surface is mongosh-flavoured (Sprint 309 lock).
+    // eslint-disable-next-line @typescript-eslint/no-deprecated -- #1403: QueryTab.queryMode is intentional migration debt, removed when sprint-311 A5 lands
     expect(tab.queryMode).toBeUndefined();
     expect(tab.queryLanguage).toBe("mongosh");
     expect(tab.database).toBe("appdb");
@@ -97,6 +98,7 @@ describe("workspaceStore.addQueryTab — paradigm auto-detection", () => {
 
     const tab = getQueryTab(getTestWorkspace("conn-pg", "appdb"), 0);
     expect(tab.paradigm).toBe("rdb");
+    // eslint-disable-next-line @typescript-eslint/no-deprecated -- #1403: QueryTab.queryMode is intentional migration debt, removed when sprint-311 A5 lands
     expect(tab.queryMode).toBe("sql");
     expect(tab.queryLanguage).toBe("sql");
   });
