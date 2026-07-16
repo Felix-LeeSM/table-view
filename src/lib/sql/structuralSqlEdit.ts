@@ -193,6 +193,19 @@ export function emitJsonbUpdate(
   return { kind: "expr", expr };
 }
 
+/**
+ * #1441 P3-2 — ponytail: whole-array reassign is the known ceiling here. Every
+ * element edit/delete/append re-emits the ENTIRE array
+ * (`col = ARRAY[...]::type[]`), so a concurrent change another session made to
+ * an *untouched* element is clobbered, and arbitrary-precision `numeric[]`
+ * elements round-trip through a JS number. Postgres-only element-level
+ * assignment (`SET col[i] = v` for edits, subscript slicing for delete/append)
+ * would remove the untouched-element clobber but needs a caller SET-fragment
+ * contract change and still reshapes on delete/append; not worth it at P3.
+ * Instead the generator raises `onArrayWholeReassign` so the commit surfaces a
+ * user-visible warning. Upgrade path: element-level SET fragment if
+ * concurrent-array editing becomes a real workload.
+ */
 export function emitArrayUpdate(
   colName: string,
   dataType: string,

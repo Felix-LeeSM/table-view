@@ -3,7 +3,6 @@ import { dialectRequiresPrimaryKeyForEdit } from "@/types/dataSource";
 import { safeStringifyCell } from "@lib/jsonCell";
 import {
   coerceToSqlLiteral,
-  escapeSqlString,
   qualifiedTableName,
   sqlIdentifier,
   type SqlDialect,
@@ -55,17 +54,6 @@ function buildWhereClause(
   pkCols: ColumnInfo[],
   dialect: SqlDialect,
 ): WhereClauseResult | null {
-  // Sprint 305 — pk / 비-pk 값이 Decimal 인 경우 `String(decimal)` → `[object
-  // Object]` 가 되는 회귀 가드. BigInt 는 String() 으로 digit 보존되지만
-  // Decimal 은 명시 분기 필요.
-  const literal = (v: unknown): string => {
-    if (v == null) return "NULL";
-    if (dialect === "mssql" && typeof v === "boolean") return v ? "1" : "0";
-    if (typeof v === "string") return escapeSqlString(v);
-    if (typeof v === "object" && "toString" in (v as object))
-      return (v as { toString(): string }).toString();
-    return String(v);
-  };
   if (pkCols.length > 0) {
     const clauses: string[] = [];
     for (const pk of pkCols) {
@@ -95,16 +83,33 @@ function buildWhereClause(
   // never fall back to an all-column WHERE — return null so the caller reports
   // the edit as blocked instead of emitting a whole-table statement.
   if (dialectRequiresPrimaryKeyForEdit(dialect)) return null;
-  return {
-    kind: "sql",
-    sql: columns
-      .map((c, i) =>
-        row[i] == null
-          ? `${sqlIdentifier(c.name, dialect)} IS NULL`
-          : `${sqlIdentifier(c.name, dialect)} = ${literal(row[i])}`,
-      )
-      .join(" AND "),
-  };
+  // #1441 P3-1 — route every fallback value through `coerceToSqlLiteral` (like
+  // the PK path above) instead of a bespoke `String()`/`.toString()` helper.
+  // The old helper emitted a `Date` as an unquoted locale string
+  // (`ts = Wed Jul 16 2026 …`) that fails to parse or matches the wrong row;
+  // coercion emits a quoted, type-correct literal and preserves the Decimal/
+  // BigInt digit fidelity the old Sprint 305 guard cared about.
+  const clauses: string[] = [];
+  for (let i = 0; i < columns.length; i++) {
+    const c = columns[i]!;
+    if (row[i] == null) {
+      clauses.push(`${sqlIdentifier(c.name, dialect)} IS NULL`);
+      continue;
+    }
+    const coerced = coerceToSqlLiteral(
+      rowValueToCoerceInput(row[i], c.data_type),
+      c.data_type,
+      dialect,
+    );
+    if (coerced.kind === "error") {
+      return {
+        kind: "error",
+        message: `Column "${c.name}" ${coerced.message}`,
+      };
+    }
+    clauses.push(`${sqlIdentifier(c.name, dialect)} = ${coerced.sql}`);
+  }
+  return { kind: "sql", sql: clauses.join(" AND ") };
 }
 
 function primaryKeyRequiredMessage(dialect: SqlDialect): string {
@@ -193,6 +198,14 @@ export interface GenerateSqlOptions {
    * Valid edits in the same batch are unaffected (independent validation).
    */
   onCoerceError?: (err: CoerceError) => void;
+  /**
+   * #1441 P3-2 — invoked once per emitted Postgres ARRAY element edit, which is
+   * generated as a whole-array reassign (`col = ARRAY[...]::type[]`). Lets the
+   * commit layer surface a warning that concurrent changes to untouched
+   * elements of that array can be overwritten. Fired per statement; the adapter
+   * dedupes into a single toast.
+   */
+  onArrayWholeReassign?: () => void;
   /**
    * Sprint 347 — DBMS dialect tag. Postgres remains the default for
    * back-compat with callers that haven't been plumbed yet (the legacy
@@ -509,6 +522,9 @@ export function generateSqlWithKeys(
         sql: `UPDATE ${qualifiedTable} SET ${columnName} = ${emitted.expr} WHERE ${whereClause.sql};`,
         key: nested[0]!.key,
       });
+      // #1441 P3-2 — this UPDATE reassigns the whole array; warn that a
+      // concurrent change to an untouched element can be clobbered.
+      options.onArrayWholeReassign?.();
       return;
     }
 

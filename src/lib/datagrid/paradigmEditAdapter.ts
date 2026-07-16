@@ -16,6 +16,7 @@ import {
 } from "@/lib/sql/oracleSafety";
 import { bulkWriteDocuments } from "@/lib/tauri";
 import { mqlCommandsToBulkOps } from "@/lib/mongo/mqlToBulk";
+import { detectBatchRowsAffectedMismatch } from "@/lib/datagrid/batchRowsAffected";
 import { toast } from "@/lib/runtime/toast";
 import i18n from "@lib/i18n";
 import type { SafeModeGate } from "@/hooks/useSafeModeGate";
@@ -259,7 +260,7 @@ async function executeRdbBatch(
   const joinedSql = sqls.join(";\n");
   const count = sqls.length;
   try {
-    await deps.executeQueryBatch(
+    const results = await deps.executeQueryBatch(
       deps.connectionId,
       sqls,
       `edit-${Date.now()}`,
@@ -269,7 +270,17 @@ async function executeRdbBatch(
       // so the backend Safe Mode gate accepts any destructive statement.
       true,
     );
-    toast.success(i18n.t("datagrid:commitFlow.committed", { count }));
+    // #1441 P3-3 — cross-check the per-statement rows_affected against the
+    // one-row-per-statement intent so a 0-row / partial write surfaces instead
+    // of a plain success toast.
+    const mismatch = detectBatchRowsAffectedMismatch(results);
+    if (mismatch) {
+      toast.warning(
+        i18n.t("datagrid:commitFlow.rowsAffectedMismatch", mismatch),
+      );
+    } else {
+      toast.success(i18n.t("datagrid:commitFlow.committed", { count }));
+    }
     deps.history.recordSuccess({
       sql: joinedSql,
       startedAt,
@@ -309,6 +320,9 @@ export function rdbEditAdapter(deps: RdbAdapterDeps): ParadigmEditAdapter {
   return {
     preparePreview(input): PreparePreviewResult {
       const coerceErrors = new Map<string, string>();
+      // #1441 P3-2 — set when any emitted statement reassigns a whole Postgres
+      // ARRAY column; deduped into a single warning toast below.
+      let arrayWholeReassign = false;
       const statements: GeneratedSqlStatement[] = generateSqlWithKeys(
         input.data,
         input.schema,
@@ -320,6 +334,9 @@ export function rdbEditAdapter(deps: RdbAdapterDeps): ParadigmEditAdapter {
           onCoerceError: (e: CoerceError) => {
             coerceErrors.set(e.key, e.message);
           },
+          onArrayWholeReassign: () => {
+            arrayWholeReassign = true;
+          },
           // Sprint 347 — forward the dialect so JSON dispatch knows which
           // emit (jsonb_set / JSON_SET) to use. Undefined falls back to
           // postgresql inside the generator for Sprint 343/344 callers.
@@ -330,6 +347,9 @@ export function rdbEditAdapter(deps: RdbAdapterDeps): ParadigmEditAdapter {
           deletedRowSnapshots: input.pendingDeletedRowSnapshots,
         },
       );
+      if (arrayWholeReassign) {
+        toast.warning(i18n.t("datagrid:commitFlow.arrayReassignWarning"));
+      }
       if (statements.length === 0) {
         return { session: null, coerceErrors };
       }
