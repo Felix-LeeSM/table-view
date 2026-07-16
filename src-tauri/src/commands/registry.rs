@@ -164,6 +164,7 @@ pub fn register_all(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<tauri
         launcher::workspace_ensure,
         launcher::workspace_close,
         launcher::app_exit,
+        launcher::updater_can_self_install,
         commands::open_workspace_window::open_workspace_window,
         // Preferences and app-local state
         commands::datagrid_prefs::set_datagrid_prefs,
