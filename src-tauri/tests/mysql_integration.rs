@@ -4442,3 +4442,134 @@ async fn test_mysql_geometry_decode_failure_surfaces_marker_not_null_1083() {
         .ok();
     adapter.disconnect_pool().await.ok();
 }
+
+// ── Issue #1073 — admin ops (activity/kill/slow/info) MySQL parity ──
+// PG has no integration coverage for these (unit without-connection guards
+// only); MySQL adds live smoke here because the SQL bodies (information_schema
+// / performance_schema / SHOW) are exactly the untested IO surface. Silent-skip
+// without a live MySQL, mirroring the sibling cases in this file.
+
+#[tokio::test]
+#[serial_test::serial]
+async fn test_mysql_server_info_reports_version_and_uptime_1073() {
+    let adapter = match common::setup_mysql_adapter().await {
+        Some(a) => a,
+        None => return,
+    };
+
+    let info = adapter
+        .server_info()
+        .await
+        .expect("server_info should succeed");
+
+    assert!(
+        info.version.chars().any(|c| c.is_ascii_digit()),
+        "version must carry a numeric server version, got {:?}",
+        info.version
+    );
+    assert!(
+        info.uptime_sec.is_some_and(|u| u >= 0),
+        "Uptime status var must parse to a non-negative integer, got {:?}",
+        info.uptime_sec
+    );
+    assert!(
+        info.connections_active.is_some_and(|c| c >= 1),
+        "Threads_connected must count at least our own session, got {:?}",
+        info.connections_active
+    );
+    assert!(
+        info.extras.contains_key("max_connections"),
+        "extras must whitelist max_connections, got keys {:?}",
+        info.extras.keys().collect::<Vec<_>>()
+    );
+
+    adapter.disconnect_pool().await.ok();
+}
+
+#[tokio::test]
+#[serial_test::serial]
+async fn test_mysql_list_server_activity_excludes_self_1073() {
+    let adapter = match common::setup_mysql_adapter().await {
+        Some(a) => a,
+        None => return,
+    };
+
+    // The querying connection is filtered by CONNECTION_ID(); every returned
+    // row is therefore some *other* backend session. We cannot assert a fixed
+    // count (pools/other clients vary), only that the query decodes cleanly
+    // (ID CAST, DATE_FORMAT) and yields well-formed rows.
+    let rows = adapter
+        .list_server_activity()
+        .await
+        .expect("list_server_activity should succeed");
+    for row in &rows {
+        assert!(row.id > 0, "processlist id must be a positive integer");
+        assert!(
+            row.wait_event.is_none(),
+            "MySQL processlist has no wait_event analogue"
+        );
+    }
+
+    adapter.disconnect_pool().await.ok();
+}
+
+#[tokio::test]
+#[serial_test::serial]
+async fn test_mysql_slow_queries_decode_and_digest_1073() {
+    let adapter = match common::setup_mysql_adapter().await {
+        Some(a) => a,
+        None => return,
+    };
+
+    // Run a distinctive statement so the digest table has at least one entry
+    // (performance_schema is ON by default in the test image).
+    adapter
+        .execute_query(
+            "SELECT 1073 AS slow_probe_1073",
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
+        .await
+        .expect("probe SELECT should succeed");
+
+    match adapter.slow_queries(20).await {
+        Ok(rows) => {
+            for row in &rows {
+                assert!(
+                    row.total_exec_time_ms >= 0.0 && row.mean_exec_time_ms >= 0.0,
+                    "timer columns must be non-negative ms"
+                );
+            }
+        }
+        // A build with performance_schema disabled must fail loud, never return
+        // a silent empty list.
+        Err(AppError::Database(msg)) => {
+            assert!(
+                msg.contains("performance_schema"),
+                "the only tolerated error is a disabled performance_schema, got {msg}"
+            );
+        }
+        Err(other) => panic!("unexpected error class: {other:?}"),
+    }
+
+    adapter.disconnect_pool().await.ok();
+}
+
+#[tokio::test]
+#[serial_test::serial]
+async fn test_mysql_kill_unknown_session_is_noop_1073() {
+    let adapter = match common::setup_mysql_adapter().await {
+        Some(a) => a,
+        None => return,
+    };
+
+    // A thread id this large is not live, so the server raises
+    // ER_NO_SUCH_THREAD (1094). The adapter swallows it as a successful no-op
+    // for parity with PG pg_terminate_backend. Exercises the real 1094 branch.
+    adapter
+        .kill_session(2_000_000_000)
+        .await
+        .expect("killing an absent session must be a no-op, not an error");
+
+    adapter.disconnect_pool().await.ok();
+}
