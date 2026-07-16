@@ -1,16 +1,20 @@
+import { Pencil, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { Button } from "@components/ui/button";
 import type {
   KvHashValue,
   KvListValue,
   KvSetValue,
   KvZSetValue,
 } from "@/types/kv";
+import type { KvEntryPayload } from "./kvMutationCommands";
 import { formatCount } from "./kvValueFormat";
 
-// Read-only structured render for Redis collection values (#1465). The
-// envelope arrives pre-bounded by the backend read limit, so this table only
-// ever renders one bounded page; truncation is disclosed in the footer.
-// Mutation stays in KvMutationPanel (#1466).
+// Structured render for Redis collection values (#1465). The envelope arrives
+// pre-bounded by the backend read limit, so this table only ever renders one
+// bounded page; truncation is disclosed in the footer. When `onEntryAction` is
+// supplied (mutation enabled + fully loaded, #1415) each row gains inline edit/
+// delete that ride the KvMutationPanel gate. Command building stays in the panel.
 
 export type KvCollectionValue =
   | KvHashValue
@@ -21,12 +25,22 @@ export type KvCollectionValue =
 export interface KvCollectionValueTableProps {
   keyName: string;
   value: KvCollectionValue;
+  onEntryAction?: (op: "edit" | "delete", payload: KvEntryPayload) => void;
+}
+
+interface CollectionRow {
+  key: string;
+  /** First cell doubles as the row's action label (field / index / member). */
+  cells: string[];
+  payload: KvEntryPayload;
 }
 
 interface CollectionRows {
   /** i18n column-label keys under workspace:kvCollection. */
   columns: string[];
-  rows: { key: string; cells: string[] }[];
+  rows: CollectionRow[];
+  /** Set members are immutable strings — delete only, no edit. */
+  editable: boolean;
 }
 
 function toRows(value: KvCollectionValue): CollectionRows {
@@ -34,33 +48,41 @@ function toRows(value: KvCollectionValue): CollectionRows {
     case "hash":
       return {
         columns: ["colField", "colValue"],
+        editable: true,
         rows: value.fields.map((field, index) => ({
           key: `${index}:${field.field}`,
           cells: [field.field, field.value],
+          payload: { kind: "hash", field: field.field, value: field.value },
         })),
       };
     case "list":
       return {
         columns: ["colIndex", "colValue"],
+        editable: true,
         rows: value.entries.map((entry) => ({
           key: String(entry.index),
           cells: [String(entry.index), entry.value],
+          payload: { kind: "list", index: entry.index, value: entry.value },
         })),
       };
     case "set":
       return {
         columns: ["colMember"],
+        editable: false,
         rows: value.members.map((member, index) => ({
           key: `${index}:${member}`,
           cells: [member],
+          payload: { kind: "set", member },
         })),
       };
     case "zSet":
       return {
         columns: ["colMember", "colScore"],
+        editable: true,
         rows: value.entries.map((entry, index) => ({
           key: `${index}:${entry.member}`,
           cells: [entry.member, String(entry.score)],
+          payload: { kind: "zSet", member: entry.member, score: entry.score },
         })),
       };
   }
@@ -69,9 +91,12 @@ function toRows(value: KvCollectionValue): CollectionRows {
 export function KvCollectionValueTable({
   keyName,
   value,
+  onEntryAction,
 }: KvCollectionValueTableProps) {
   const { t } = useTranslation("workspace");
-  const { columns, rows } = toRows(value);
+  const { columns, rows, editable } = toRows(value);
+  const showActions = Boolean(onEntryAction);
+  const colSpan = columns.length + (showActions ? 1 : 0);
 
   return (
     <div className="rounded border border-border bg-muted/20">
@@ -90,6 +115,11 @@ export function KvCollectionValueTable({
                   {t(`kvCollection.${column}`)}
                 </th>
               ))}
+              {showActions && (
+                <th className="w-16 px-2 py-1 text-right font-medium">
+                  {t("kvCollection.colActions")}
+                </th>
+              )}
             </tr>
           </thead>
           <tbody>
@@ -103,12 +133,39 @@ export function KvCollectionValueTable({
                     {cell}
                   </td>
                 ))}
+                {showActions && onEntryAction && (
+                  <td className="px-2 py-1 text-right align-top whitespace-nowrap">
+                    {editable && (
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        aria-label={t("kvCollection.editEntry", {
+                          label: row.cells[0],
+                        })}
+                        onClick={() => onEntryAction("edit", row.payload)}
+                      >
+                        <Pencil aria-hidden />
+                      </Button>
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      className="text-destructive"
+                      aria-label={t("kvCollection.deleteEntry", {
+                        label: row.cells[0],
+                      })}
+                      onClick={() => onEntryAction("delete", row.payload)}
+                    >
+                      <Trash2 aria-hidden />
+                    </Button>
+                  </td>
+                )}
               </tr>
             ))}
             {rows.length === 0 && (
               <tr>
                 <td
-                  colSpan={columns.length}
+                  colSpan={colSpan}
                   className="border-t border-border px-2 py-3 text-muted-foreground"
                 >
                   {t("kvCollection.noEntries")}
