@@ -81,6 +81,7 @@ export function useDataGridEditPendingState({
   const pendingDeletedRowKeys =
     entry.pendingDeletedRowKeys as PendingDeletedRowKeys;
   const undoStack = entry.undoStack as UndoStack;
+  const redoStack = entry.redoStack as UndoStack;
   // Issue #1081 — row-identity anchors so a page/sort/refetch reorder can't
   // point a pending edit/delete at the wrong row on commit.
   const pendingEditRowSnapshots = entry.pendingEditRowSnapshots;
@@ -187,6 +188,21 @@ export function useDataGridEditPendingState({
     [storeKey, storeSetSlice],
   );
 
+  // Issue #1527 (ADR 0050) — the redo stack's setter. Mirrors `setUndoStack`
+  // but no-ops on an identical value so `pushSnapshot`'s clear-on-edit doesn't
+  // churn the store on the common (empty redo stack) path.
+  const setRedoStack = useCallback(
+    (next: UndoStack | ((prev: StoredUndoStack) => StoredUndoStack)) => {
+      const current = useDataGridEditStore
+        .getState()
+        .getEntry(storeKey).redoStack;
+      const value = typeof next === "function" ? next(current) : next;
+      if (value === current) return;
+      storeSetSlice(storeKey, "redoStack", value);
+    },
+    [storeKey, storeSetSlice],
+  );
+
   const setPendingEditRowSnapshots = useCallback(
     (value: Map<string, ReadonlyArray<unknown>>) => {
       storeSetSlice(storeKey, "pendingEditRowSnapshots", value);
@@ -265,12 +281,17 @@ export function useDataGridEditPendingState({
       // stable insert identity (row token) if undo retention after a partial
       // failure ever matters.
       setUndoStack([]);
+      // Issue #1527 — the redo stack holds pre-undo states that likewise
+      // predate this prune, so redoing one would re-stage an already-applied
+      // op (duplicate write on re-commit). Invalidate it in lockstep.
+      setRedoStack([]);
     },
     [
       setPendingEdits,
       setPendingDeletedRowKeys,
       setPendingNewRows,
       setUndoStack,
+      setRedoStack,
     ],
   );
 
@@ -302,44 +323,106 @@ export function useDataGridEditPendingState({
       if (next.length > UNDO_STACK_MAX) next.shift();
       return next;
     });
+    // Issue #1527 (ADR 0050) — a new edit invalidates the redo stack (standard
+    // undo/redo semantics). Guard the common empty case so a pure-edit run
+    // doesn't churn the store on every keystroke.
+    if (
+      useDataGridEditStore.getState().getEntry(storeKey).redoStack.length > 0
+    ) {
+      setRedoStack([]);
+    }
   }, [
+    storeKey,
     pendingEdits,
     pendingNewRows,
     pendingDeletedRowKeys,
     pendingEditRowSnapshots,
     pendingDeletedRowSnapshots,
     setUndoStack,
+    setRedoStack,
   ]);
 
+  // Issue #1527 (ADR 0050) — restore a captured snapshot into the five live
+  // pending slices. Shared by `undo` (from `undoStack`) and `redo` (from
+  // `redoStack`); each setter copies out so the retained history stays
+  // isolated from the live state (matches the original `undo` behavior).
+  const restoreSnapshot = useCallback(
+    (snap: EditSnapshot) => {
+      setPendingEdits(new Map(snap.pendingEdits));
+      setPendingNewRows(snap.pendingNewRows.map((row) => [...row]));
+      setPendingDeletedRowKeys(new Set(snap.pendingDeletedRowKeys));
+      // Issue #1081 — restore the row-identity anchors in lockstep.
+      setPendingEditRowSnapshots(new Map(snap.pendingEditRowSnapshots));
+      setPendingDeletedRowSnapshots(new Map(snap.pendingDeletedRowSnapshots));
+    },
+    [
+      setPendingEdits,
+      setPendingNewRows,
+      setPendingDeletedRowKeys,
+      setPendingEditRowSnapshots,
+      setPendingDeletedRowSnapshots,
+    ],
+  );
+
   const undo = useCallback(() => {
-    const stack = useDataGridEditStore.getState().getEntry(storeKey).undoStack;
+    const current = useDataGridEditStore.getState().getEntry(storeKey);
+    const stack = current.undoStack;
     if (stack.length === 0) return;
     const last = stack[stack.length - 1]!;
     const rest = stack.slice(0, -1);
     // #1126 — a post-commit snapshot flagged `restageBlocked` covered a commit
     // whose INSERT/DELETE can't be reproduced (auto-increment PK / missing row
-    // snapshot); drop it and tell the user instead of a silent no-op.
+    // snapshot); drop it and tell the user instead of a silent no-op. No state
+    // changes, so nothing is pushed onto the redo stack.
     if (last.restageBlocked) {
       setUndoStack(rest);
       toast.info(i18n.t("datagrid:undoRestageBlocked"));
       return;
     }
-    setPendingEdits(new Map(last.pendingEdits));
-    setPendingNewRows(last.pendingNewRows.map((row) => [...row]));
-    setPendingDeletedRowKeys(new Set(last.pendingDeletedRowKeys));
-    // Issue #1081 — restore the row-identity anchors in lockstep.
-    setPendingEditRowSnapshots(new Map(last.pendingEditRowSnapshots));
-    setPendingDeletedRowSnapshots(new Map(last.pendingDeletedRowSnapshots));
+    // Issue #1527 — capture the pre-undo state so `redo()` can return to it.
+    // The five slices are immutable (structural sharing, #1444), so retaining
+    // the current references is safe without cloning.
+    setRedoStack((prev) => {
+      const snap: EditSnapshot = {
+        pendingEdits: current.pendingEdits,
+        pendingNewRows: current.pendingNewRows,
+        pendingDeletedRowKeys: current.pendingDeletedRowKeys,
+        pendingEditRowSnapshots: current.pendingEditRowSnapshots,
+        pendingDeletedRowSnapshots: current.pendingDeletedRowSnapshots,
+      };
+      const next = [...prev, snap];
+      if (next.length > UNDO_STACK_MAX) next.shift();
+      return next;
+    });
+    restoreSnapshot(last);
     setUndoStack(rest);
-  }, [
-    storeKey,
-    setPendingEdits,
-    setPendingNewRows,
-    setPendingDeletedRowKeys,
-    setPendingEditRowSnapshots,
-    setPendingDeletedRowSnapshots,
-    setUndoStack,
-  ]);
+  }, [storeKey, setUndoStack, setRedoStack, restoreSnapshot]);
+
+  // Issue #1527 (ADR 0050) — the mirror of `undo`: pop `redoStack`, push the
+  // pre-redo state onto `undoStack` (so the redo is itself undoable), and
+  // restore the snapshot. Redo entries are always real states pushed by
+  // `undo`, never a `restageBlocked` marker, so no blocked-branch handling.
+  const redo = useCallback(() => {
+    const current = useDataGridEditStore.getState().getEntry(storeKey);
+    const stack = current.redoStack;
+    if (stack.length === 0) return;
+    const last = stack[stack.length - 1]!;
+    const rest = stack.slice(0, -1);
+    setUndoStack((prev) => {
+      const snap: EditSnapshot = {
+        pendingEdits: current.pendingEdits,
+        pendingNewRows: current.pendingNewRows,
+        pendingDeletedRowKeys: current.pendingDeletedRowKeys,
+        pendingEditRowSnapshots: current.pendingEditRowSnapshots,
+        pendingDeletedRowSnapshots: current.pendingDeletedRowSnapshots,
+      };
+      const next = [...prev, snap];
+      if (next.length > UNDO_STACK_MAX) next.shift();
+      return next;
+    });
+    restoreSnapshot(last);
+    setRedoStack(rest);
+  }, [storeKey, setUndoStack, setRedoStack, restoreSnapshot]);
 
   return {
     pendingEdits,
@@ -356,5 +439,7 @@ export function useDataGridEditPendingState({
     pushSnapshot,
     undo,
     canUndo: undoStack.length > 0,
+    redo,
+    canRedo: redoStack.length > 0,
   };
 }

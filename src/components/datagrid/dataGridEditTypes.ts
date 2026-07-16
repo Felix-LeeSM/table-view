@@ -73,4 +73,7 @@ export interface DataGridEditState {
   handleDuplicateRow: () => void;
   undo: () => void;
   canUndo: boolean;
+  // Issue #1527 (ADR 0050) — symmetric redo of a pending-edit undo.
+  redo: () => void;
+  canRedo: boolean;
 }

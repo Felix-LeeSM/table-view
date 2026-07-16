@@ -3,6 +3,7 @@ import { useEffect } from "react";
 interface UseRdbDataGridShortcutsParams {
   editingCell: { row: number; col: number } | null;
   canUndo: boolean;
+  canRedo: boolean;
   /**
    * Pending/dirty state. Escape only opens the discard confirm when there is
    * something to discard — with nothing pending it stays a no-op, preserving
@@ -19,17 +20,20 @@ interface UseRdbDataGridShortcutsParams {
    */
   onRequestDiscard: () => void;
   onUndo: () => void;
+  onRedo: () => void;
 }
 
 export function useRdbDataGridShortcuts({
   editingCell,
   canUndo,
+  canRedo,
   hasPendingChanges,
   onToggleFilters,
   onToggleQuickLook,
   onCancelEdit,
   onRequestDiscard,
   onUndo,
+  onRedo,
 }: UseRdbDataGridShortcutsParams): void {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -108,4 +112,32 @@ export function useRdbDataGridShortcuts({
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [canUndo, onUndo]);
+
+  // Issue #1527 (ADR 0050) — Cmd/Ctrl+Shift+Z redoes a pending-edit undo,
+  // mirroring the Cmd+Z binding above (same input-focus deferral so the
+  // browser's native redo wins inside a field). ponytail: skipped the
+  // Windows Ctrl+Y alias — add if requested; ADR 0050 specifies Cmd+Shift+Z.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (
+        !((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z" && e.shiftKey)
+      ) {
+        return;
+      }
+      const target = e.target;
+      if (
+        target instanceof HTMLElement &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+      if (!canRedo) return;
+      e.preventDefault();
+      onRedo();
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [canRedo, onRedo]);
 }

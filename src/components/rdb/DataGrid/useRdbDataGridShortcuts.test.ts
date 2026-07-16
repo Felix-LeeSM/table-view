@@ -17,12 +17,14 @@ function setup(overrides: Overrides = {}) {
   const params = {
     editingCell: null,
     canUndo: false,
+    canRedo: false,
     hasPendingChanges: true,
     onToggleFilters: vi.fn(),
     onToggleQuickLook: vi.fn(),
     onCancelEdit: vi.fn(),
     onRequestDiscard,
     onUndo: vi.fn(),
+    onRedo: vi.fn(),
     ...overrides,
   };
   const view = renderHook((p: typeof params) => useRdbDataGridShortcuts(p), {
