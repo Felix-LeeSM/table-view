@@ -5,8 +5,9 @@
 //! cut 이후 file 분기는 제거되고 SQLite-only path 가 된다:
 //!
 //!   1. guard_legacy_import_done — pending/importing/failed reject.
-//!   2. SQLite write — INSERT OR REPLACE 로 본 호출의 모든 entry 를 덮어쓰기.
-//!      실패 시 reconcile counter 증가 (silent — 외부 시그니처는 Ok).
+//!   2. SQLite write — tx 안에서 DELETE FROM favorites 후 본 호출의 모든 entry
+//!      재삽입 (full replace). #1547 — INSERT OR REPLACE 만 하면 삭제된 favorite
+//!      row 가 잔존해 다음 boot 의 list 경로가 부활시킨다.
 //!
 //! W3 진입의 invariant: file SOT 와 LS write 사이트 0. `list_favorites` 가
 //! 추가되어 frontend 는 boot 시점에 SQLite 에서 직접 hydrate.
@@ -105,6 +106,14 @@ async fn write_sqlite_mirror(
     favorites: &[PersistFavoriteRequest],
 ) -> Result<(), AppError> {
     let mut tx = pool.begin().await?;
+    // #1547 full replace — wipe the table then re-insert the caller's canonical
+    // list so a removed favorite is actually dropped. The frontend ships the
+    // entire (unscoped) favorites list on every mutate, so an INSERT OR REPLACE
+    // alone would leave deleted rows behind for `list_favorites` to resurrect on
+    // the next boot (mirrors persist_snippets / persist_table_activity).
+    sqlx::query("DELETE FROM favorites")
+        .execute(&mut *tx)
+        .await?;
     for (idx, f) in favorites.iter().enumerate() {
         sqlx::query(
             "INSERT OR REPLACE INTO favorites \
@@ -311,6 +320,44 @@ mod tests {
         assert_eq!(rows.len(), 2);
         assert_eq!(rows[0].id, "fav-first");
         assert_eq!(rows[1].id, "fav-second");
+        cleanup();
+    }
+
+    // Regression (#1547, mirrors persist_snippets `full_replace_drops_removed_snippets`)
+    // — a persist of a shrunken list must actually DROP the removed favorite.
+    // Before the DELETE-then-insert fix the mirror only ran INSERT OR REPLACE,
+    // so a removed row survived and `list_favorites` resurrected it on the next
+    // boot, making the delete a no-op after restart.
+    #[tokio::test]
+    #[serial]
+    async fn full_replace_drops_removed_favorites() {
+        cleanup();
+        let (_dir, pool) = setup().await;
+        fn req(id: &str) -> PersistFavoriteRequest {
+            PersistFavoriteRequest {
+                id: id.into(),
+                name: id.into(),
+                sql: "SELECT 1".into(),
+                connection_id: None,
+                sort_order: 0,
+                created_at: 1,
+                updated_at: 1,
+            }
+        }
+        persist_favorite_inner(&pool, vec![req("fav-1"), req("fav-2")])
+            .await
+            .unwrap();
+        // Second persist omits fav-2 (the user deleted it).
+        persist_favorite_inner(&pool, vec![req("fav-1")])
+            .await
+            .unwrap();
+        let rows = list_favorites_inner(&pool).await.unwrap();
+        assert_eq!(
+            rows.len(),
+            1,
+            "deleted favorite must not survive the replace"
+        );
+        assert_eq!(rows[0].id, "fav-1");
         cleanup();
     }
 
