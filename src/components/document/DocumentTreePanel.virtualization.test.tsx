@@ -1,6 +1,28 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { render, screen, cleanup } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import { DocumentTreePanel } from "./DocumentTreePanel";
+
+// A 1,000-deep object is depth-capped by jsonTree to `MAX_TREE_DEPTH = 200`
+// levels; the deepest emitted container is flagged `truncated` and its children
+// are cut from the walk. Each level's path is one more `nested` segment, so the
+// truncated container sits at 200 segments and the last surviving container at
+// 199.
+function deepDoc(): Record<string, unknown> {
+  let deep: Record<string, unknown> = { leaf: 1 };
+  for (let i = 0; i < 1000; i += 1) deep = { nested: deep };
+  return deep;
+}
+const TRUNCATED_PATH = Array(200).fill("nested").join(".");
+const SURVIVING_PATH = Array(199).fill("nested").join(".");
+
+function scrollToBottom() {
+  const list = screen.getByTestId("document-tree-list");
+  Object.defineProperty(list, "scrollTop", {
+    configurable: true,
+    get: () => 10_000_000,
+  });
+  fireEvent.scroll(list);
+}
 
 /**
  * #1448 — DocumentTreePanel used to render its whole flat node list
@@ -126,5 +148,40 @@ describe("DocumentTreePanel virtualization (#1448)", () => {
     render(<DocumentTreePanel value={small} fieldName="small" />);
     // root + 10 leaves = 11 rows, all present (no windowing).
     expect(screen.getAllByRole("treeitem")).toHaveLength(11);
+  });
+
+  // #1448 review B2 — the "…truncated" marker must still surface. Without
+  // onCommitEdit the flat row list is nodes-only, so the marker is the last
+  // row; scrolling the windowed list to the bottom brings it into view.
+  it("still surfaces the truncated marker for a depth-capped document", () => {
+    render(<DocumentTreePanel value={deepDoc()} fieldName="deep" />);
+    scrollToBottom();
+    expect(screen.getByTestId("tree-truncated")).toBeInTheDocument();
+  });
+
+  // #1448 review B1 (data integrity) — a depth-capped truncated container had
+  // its real children cut from the walk, so it must NOT get a trailing `+ key`
+  // affordance: commitAddKey's duplicate check only scans the truncated node
+  // list and would silently overwrite a cut child (the hostile-data path
+  // #1445/#1508 defends). The next-shallower container still gets its affordance.
+  it("does not emit an add-key affordance under a truncated container", () => {
+    render(
+      <DocumentTreePanel
+        value={deepDoc()}
+        fieldName="deep"
+        onCommitEdit={() => {}}
+      />,
+    );
+    scrollToBottom();
+    expect(
+      document.querySelector(
+        `[data-testid="tree-add-key-row-${SURVIVING_PATH}"]`,
+      ),
+    ).not.toBeNull();
+    expect(
+      document.querySelector(
+        `[data-testid="tree-add-key-row-${TRUNCATED_PATH}"]`,
+      ),
+    ).toBeNull();
   });
 });

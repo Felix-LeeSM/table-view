@@ -359,6 +359,14 @@ export function DocumentTreePanel({
     const attach = (containerIdx: number, endIdx: number) => {
       const node = nodes[containerIdx];
       if (node === undefined) return;
+      // #1448 review — a depth-capped `truncated` container had its children cut
+      // from the walk, so `nodes` holds no real subtree to append a `+ key` /
+      // `+ item` row after. Emitting one would let `commitAddKey`'s duplicate
+      // check (which only scans the truncated `nodes`) silently overwrite a real
+      // cut child — the hostile-data path #1445/#1508 defends. Original main
+      // dropped trailing affordances via the `if (node.truncated) return`
+      // node-render gate; the flat render-row model reinstates it here.
+      if (node.truncated) return;
       if (node.kind === "obj") {
         const entries = objMap.get(endIdx) ?? [];
         entries.push({ path: node.path, depth: node.depth });
