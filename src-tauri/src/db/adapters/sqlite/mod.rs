@@ -157,6 +157,21 @@ impl RdbAdapter for SqliteAdapter {
         })
     }
 
+    fn stream_table_rows<'a>(
+        &'a self,
+        namespace: &'a str,
+        table: &'a str,
+        batch_size: u32,
+        column_names: &'a [String],
+        sender: tokio::sync::mpsc::Sender<Vec<Vec<serde_json::Value>>>,
+        cancel: Option<&'a tokio_util::sync::CancellationToken>,
+    ) -> Pin<Box<dyn Future<Output = Result<u64, AppError>> + Send + 'a>> {
+        Box::pin(async move {
+            self.stream_table_rows(namespace, table, batch_size, column_names, sender, cancel)
+                .await
+        })
+    }
+
     fn drop_table<'a>(
         &'a self,
         _req: &'a DropTableRequest,

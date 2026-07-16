@@ -375,3 +375,158 @@ async fn query_table_data_pre_cancel_short_circuits_before_pool_lookup() {
         other => panic!("Expected cancellation error, got: {:?}", other),
     }
 }
+
+// Issue #1068 — export row streaming. The seeded `users` table has 3 rows; a
+// batch_size below the row count must still stream every row (batch + tail
+// flush) and report the total. Mirrors the PG/MySQL `stream_table_rows`
+// contract: values are ordered by `column_names` and use the same
+// `cell_to_json` wire shape (id is INTEGER → precision-preserving string token,
+// ADR 0026).
+#[tokio::test]
+async fn stream_table_rows_streams_seeded_rows_across_batches_1068() {
+    let (_dir, adapter) = connected_adapter().await;
+    let (tx, mut rx) = tokio::sync::mpsc::channel::<Vec<Vec<serde_json::Value>>>(4);
+    let cols = vec!["id".to_string(), "email".to_string(), "name".to_string()];
+
+    let drain = tokio::spawn(async move {
+        let mut rows = Vec::new();
+        while let Some(batch) = rx.recv().await {
+            rows.extend(batch);
+        }
+        rows
+    });
+
+    let total = <SqliteAdapter as RdbAdapter>::stream_table_rows(
+        &adapter, "main", "users", 2, &cols, tx, None,
+    )
+    .await
+    .expect("stream_table_rows must stream the seeded rows");
+
+    let mut rows = drain.await.unwrap();
+    rows.sort_by_key(|r| r[0].as_str().unwrap_or_default().to_string());
+
+    assert_eq!(total, 3, "every seeded row is streamed");
+    assert_eq!(rows.len(), 3);
+    assert_eq!(rows[0][0], serde_json::json!("1"));
+    assert_eq!(rows[0][1], serde_json::json!("ada@example.test"));
+    assert_eq!(rows[0][2], serde_json::json!("Ada"));
+}
+
+#[tokio::test]
+async fn stream_table_rows_rejects_zero_batch_and_empty_columns_1068() {
+    let (_dir, adapter) = connected_adapter().await;
+    let (tx, _rx) = tokio::sync::mpsc::channel::<Vec<Vec<serde_json::Value>>>(1);
+    let cols = vec!["id".to_string()];
+    let zero = <SqliteAdapter as RdbAdapter>::stream_table_rows(
+        &adapter, "main", "users", 0, &cols, tx, None,
+    )
+    .await;
+    assert!(
+        matches!(zero, Err(AppError::Validation(_))),
+        "got: {zero:?}"
+    );
+
+    let (tx, _rx) = tokio::sync::mpsc::channel::<Vec<Vec<serde_json::Value>>>(1);
+    let empty: Vec<String> = Vec::new();
+    let no_cols = <SqliteAdapter as RdbAdapter>::stream_table_rows(
+        &adapter, "main", "users", 10, &empty, tx, None,
+    )
+    .await;
+    assert!(
+        matches!(no_cols, Err(AppError::Validation(_))),
+        "got: {no_cols:?}"
+    );
+}
+
+#[tokio::test]
+async fn stream_table_rows_aborts_on_cancelled_token_1068() {
+    let (_dir, adapter) = connected_adapter().await;
+    let (tx, _rx) = tokio::sync::mpsc::channel::<Vec<Vec<serde_json::Value>>>(4);
+    let cols = vec!["id".to_string()];
+    let token = CancellationToken::new();
+    token.cancel();
+    let result = <SqliteAdapter as RdbAdapter>::stream_table_rows(
+        &adapter,
+        "main",
+        "users",
+        2,
+        &cols,
+        tx,
+        Some(&token),
+    )
+    .await;
+    match result {
+        Err(AppError::Database(message)) => assert!(message.contains("cancelled")),
+        other => panic!("Expected cancellation error, got: {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn stream_table_rows_aborts_when_receiver_dropped_1068() {
+    let (_dir, adapter) = connected_adapter().await;
+    let (tx, rx) = tokio::sync::mpsc::channel::<Vec<Vec<serde_json::Value>>>(1);
+    drop(rx);
+    let cols = vec!["id".to_string()];
+    // batch_size 1 flushes on the first row → the send fails against the dropped
+    // receiver → the stream rolls back and aborts.
+    let result = <SqliteAdapter as RdbAdapter>::stream_table_rows(
+        &adapter, "main", "users", 1, &cols, tx, None,
+    )
+    .await;
+    match result {
+        Err(AppError::Database(message)) => assert!(message.contains("Receiver dropped")),
+        other => panic!("Expected receiver-drop abort, got: {other:?}"),
+    }
+}
+
+// Issue #1068 — `interrupt()` cancel. On a single-connection pool the follow-up
+// query can only complete promptly if the cancel actually interrupted the
+// running statement (via the SQLite progress handler) and freed the worker.
+// Without a real interrupt the dropped future leaves the worker stepping the
+// billion-row CTE to completion, so `SELECT 1` queues behind it and the
+// timeout guard trips. Proves both clauses of the AC: the running query aborts,
+// and the connection is reusable afterward.
+#[tokio::test]
+async fn cancel_interrupts_running_query_and_frees_connection_for_reuse_1068() {
+    let dir = tempfile::tempdir().unwrap();
+    let db_path = dir.path().join("app.sqlite");
+    seed_sqlite(&db_path).await;
+    let adapter = SqliteAdapter::new();
+    adapter
+        .connect_single_connection_for_test(&sqlite_config(db_path.to_str().unwrap()))
+        .await
+        .unwrap();
+
+    let token = CancellationToken::new();
+    let canceller = {
+        let token = token.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+            token.cancel();
+        })
+    };
+
+    // A CPU-bound statement that runs for many seconds if never interrupted.
+    let long = "WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM c WHERE x < 2000000000) SELECT count(*) FROM c";
+    let result = adapter
+        .execute_query(long, Some(&token), crate::db::row_cap::DEFAULT_ROW_CAP)
+        .await;
+    canceller.await.unwrap();
+    assert!(
+        result.is_err(),
+        "cancelled long-running query must return an error, got: {result:?}"
+    );
+
+    // The one worker must be free — a stale interrupt handler bound to the
+    // cancelled token would instead abort this follow-up too.
+    let reuse = tokio::time::timeout(
+        std::time::Duration::from_secs(3),
+        adapter.execute_query("SELECT 1", None, crate::db::row_cap::DEFAULT_ROW_CAP),
+    )
+    .await;
+    let reuse = reuse.expect("follow-up query must not block behind an interrupted statement");
+    assert!(
+        reuse.is_ok(),
+        "connection must be reusable after interrupt, got: {reuse:?}"
+    );
+}
