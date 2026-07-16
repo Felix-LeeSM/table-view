@@ -2,21 +2,22 @@
 // `catalog.indexes` / `catalog.constraints` capability flags
 // (`getDataSourceProfile(dbType).capabilities.catalog.*`) instead of
 // rendering unconditionally for every RDB engine. Asserts:
-//   - DuckDB (both flags false) hides both tabs; Columns/Triggers stay.
+//   - DuckDB (#1070 — both flags now true after real duckdb_indexes() /
+//     duckdb_constraints() introspection) keeps both tabs.
 //   - SQLite (real PRAGMA index_list impl → indexes true; constraints
 //     stub returns [] → false) keeps Indexes, hides Constraints.
 //   - PostgreSQL (both true) keeps both tabs — regression guard.
 //   - Unknown / still-loading connection keeps both tabs (same
 //     affordance-preserving fallback as `supportsRowEditing`).
 //   - `initialSubTab` pointing at a gated tab falls back to Columns and
-//     never fires the gated fetch.
+//     never fires the gated fetch (SQLite constraints is still gated).
 import { describe, it, expect, beforeEach } from "vitest";
 import { screen, act } from "@testing-library/react";
 import { useConnectionStore } from "@stores/connectionStore";
 import type { DatabaseType } from "@/types/connection";
 import {
   mockGetTableColumns,
-  mockGetTableIndexes,
+  mockGetTableConstraints,
   renderPanel,
   resetStructurePanelMocks,
 } from "./__tests__/structurePanelTestHelpers";
@@ -46,17 +47,15 @@ describe("StructurePanel catalog capability gate (#1459)", () => {
     useConnectionStore.setState({ connections: [] });
   });
 
-  it("hides Indexes and Constraints for DuckDB (both catalog flags false)", async () => {
+  it("keeps Indexes and Constraints for DuckDB (#1070 — both catalog flags now true)", async () => {
     setConnection("duckdb");
     await act(async () => {
       renderPanel();
     });
+    expect(screen.getByRole("tab", { name: "Indexes" })).toBeInTheDocument();
     expect(
-      screen.queryByRole("tab", { name: "Indexes" }),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole("tab", { name: "Constraints" }),
-    ).not.toBeInTheDocument();
+      screen.getByRole("tab", { name: "Constraints" }),
+    ).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Columns" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Triggers" })).toBeInTheDocument();
   });
@@ -95,11 +94,13 @@ describe("StructurePanel catalog capability gate (#1459)", () => {
   });
 
   it("falls back to Columns when initialSubTab targets a gated tab", async () => {
-    setConnection("duckdb");
+    // SQLite still gates Constraints (stub returns [] → capability false), so
+    // it is the standing case for the clamp after DuckDB's #1070 flip.
+    setConnection("sqlite");
     await act(async () => {
-      renderPanel({ initialSubTab: "indexes" });
+      renderPanel({ initialSubTab: "constraints" });
     });
-    expect(mockGetTableIndexes).not.toHaveBeenCalled();
+    expect(mockGetTableConstraints).not.toHaveBeenCalled();
     expect(mockGetTableColumns).toHaveBeenCalled();
     expect(screen.getByRole("tab", { name: "Columns" })).toHaveAttribute(
       "aria-selected",
