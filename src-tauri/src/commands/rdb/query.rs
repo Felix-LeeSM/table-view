@@ -56,6 +56,25 @@ async fn rdb_batch_is_danger(state: &AppState, connection_id: &str, statements: 
             .any(|sql| sql_parser_core::oracle::is_oracle_danger(sql))
 }
 
+/// Issue #1529 — is this SQL a write for the read-only connection gate? The
+/// inverse of the fail-closed-on-parse / fail-open-on-keyword read classifier.
+/// Resolves the dialect once (same as the danger path) for the literal/comment-
+/// aware statement split, so a trailing write cannot hide behind a leading read.
+async fn rdb_sql_is_write(state: &AppState, connection_id: &str, sql: &str) -> bool {
+    let kind = connection_kind(state, connection_id).await;
+    !sql_parser_core::safety::is_read_only_safe_with_dialect(sql, safety_dialect(kind.as_ref()))
+}
+
+/// Batch form of [`rdb_sql_is_write`] — any write statement anywhere in the
+/// batch makes the whole (atomic) batch a write.
+async fn rdb_batch_is_write(state: &AppState, connection_id: &str, statements: &[String]) -> bool {
+    let kind = connection_kind(state, connection_id).await;
+    let dialect = safety_dialect(kind.as_ref());
+    statements
+        .iter()
+        .any(|sql| !sql_parser_core::safety::is_read_only_safe_with_dialect(sql, dialect))
+}
+
 /// Current adapter kind for `connection_id`, or `None` for a missing / non-RDB
 /// connection (the generic classifier has already run and the connection error
 /// surfaces downstream in dispatch).
@@ -269,6 +288,17 @@ pub async fn execute_query(
     // rejects a destructive statement in a confirm-required context.
     safety_confirmed: Option<bool>,
 ) -> Result<QueryResult, AppError> {
+    // Issue #1529 — read-only connection gate (chokepoint). Blocks ANY write
+    // (broader than the Safe Mode danger set: also INSERT / bounded UPDATE /
+    // CREATE …) on a connection the user flagged read-only, re-reading the flag
+    // from the backend's own store so a frontend bypass can't clear it. A read
+    // short-circuits before the store read. Runs before the Safe Mode gate and
+    // independent of it (no `safety_confirmed` bypass — read-only is a hard
+    // block).
+    if rdb_sql_is_write(state.inner(), &connection_id, &sql).await {
+        let pool = crate::commands::sqlite_pool::get_or_init_pool().await?;
+        crate::commands::safe_mode::enforce_read_only(&pool, &connection_id, true).await?;
+    }
     // Issue #1112 — Safe Mode backend gate (chokepoint). Classify cheaply
     // first (pure, reuses `sql-parser-core`); only a destructive statement
     // pays the settings/environment SQLite read. Runs before dispatch, using
@@ -382,6 +412,13 @@ pub async fn execute_query_batch(
     // Issue #1112 — see `execute_query`.
     safety_confirmed: Option<bool>,
 ) -> Result<Vec<QueryResult>, AppError> {
+    // Issue #1529 — read-only connection gate (batch). Any write statement
+    // anywhere in the atomic batch is rejected on a read-only connection. This
+    // covers the inline-edit commit pipeline, which routes through this command.
+    if rdb_batch_is_write(state.inner(), &connection_id, &statements).await {
+        let pool = crate::commands::sqlite_pool::get_or_init_pool().await?;
+        crate::commands::safe_mode::enforce_read_only(&pool, &connection_id, true).await?;
+    }
     // Issue #1112 — Safe Mode backend gate (batch). Worst tier wins: a
     // single destructive statement anywhere in the atomic batch requires
     // confirmation for the whole batch. Non-destructive batches never touch
@@ -885,6 +922,39 @@ mod tests {
             SqlDialect::Oracle
         );
         assert_eq!(safety_dialect(None), SqlDialect::Other);
+    }
+
+    // Issue #1529 — the read-only gate's write classifier wiring: a write is
+    // reported as a write and a read is not, with the connection dialect
+    // resolved from the active adapter.
+    #[tokio::test]
+    async fn rdb_sql_is_write_flags_writes_not_reads() {
+        use crate::commands::test_util::state_with;
+        use crate::db::testing::StubRdbAdapter;
+        use crate::db::ActiveAdapter;
+        let state = state_with("c", ActiveAdapter::Rdb(Box::new(StubRdbAdapter::default()))).await;
+        assert!(rdb_sql_is_write(&state, "c", "INSERT INTO t VALUES (1)").await);
+        assert!(rdb_sql_is_write(&state, "c", "DROP TABLE t").await);
+        assert!(rdb_sql_is_write(&state, "c", "UPDATE t SET x = 1 WHERE id = 1").await);
+        assert!(!rdb_sql_is_write(&state, "c", "SELECT * FROM t").await);
+        assert!(!rdb_sql_is_write(&state, "c", "EXPLAIN SELECT * FROM t").await);
+        // Batch: any write flips the whole batch.
+        assert!(
+            rdb_batch_is_write(
+                &state,
+                "c",
+                &["SELECT 1".to_string(), "DELETE FROM t".to_string()],
+            )
+            .await
+        );
+        assert!(
+            !rdb_batch_is_write(
+                &state,
+                "c",
+                &["SELECT 1".to_string(), "SELECT 2".to_string()],
+            )
+            .await
+        );
     }
 
     #[test]

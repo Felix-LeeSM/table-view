@@ -69,7 +69,8 @@ describe("DataSourceProfile registry", () => {
     DataSourceCapabilities
   > = {
     postgresql: expectedCapabilities({
-      connection: { test: true, switchDatabase: true },
+      // Issue #1529 — PostgreSQL exposes the read-only connection toggle.
+      connection: { test: true, switchDatabase: true, readOnly: true },
       query: {
         query: true,
         cancel: true,
@@ -467,7 +468,8 @@ describe("DataSourceProfile registry", () => {
     expect(hasConnectionCapability("duckdb", "filePicker")).toBe(true);
     expect(hasConnectionCapability("duckdb", "readOnly")).toBe(true);
     expect(hasConnectionCapability("postgresql", "filePicker")).toBe(false);
-    expect(hasConnectionCapability("postgresql", "readOnly")).toBe(false);
+    // Issue #1529 — PostgreSQL now exposes the read-only connection toggle.
+    expect(hasConnectionCapability("postgresql", "readOnly")).toBe(true);
     expect(
       hasConnectionCapability("unknown-db" as DatabaseType, "filePicker"),
     ).toBe(false);

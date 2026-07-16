@@ -22,7 +22,7 @@ import {
   SelectValue,
 } from "@components/ui/select";
 import { assertNever } from "@/lib/paradigm";
-import { Link, List } from "lucide-react";
+import { Link, List, LockKeyhole } from "lucide-react";
 import PgFormFields from "../forms/PgFormFields";
 import MysqlFormFields from "../forms/MysqlFormFields";
 import MssqlFormFields from "../forms/MssqlFormFields";
@@ -436,6 +436,35 @@ export default function ConnectionDialogBody({
 
           {/* DBMS-aware fields (Sprint 138) */}
           {renderDbmsFields()}
+
+          {/* Issue #1529 — read-only toggle for server RDB connections. File
+              forms (sqlite/duckdb) render their own driver-level toggle inside
+              SqliteFormFields, so this is gated to server connections that
+              declare the `connection.readOnly` capability. The backend
+              `enforce_read_only` chokepoint is what actually blocks writes. */}
+          {getDataSourceProfile(form.dbType).connectionKind === "server" &&
+            hasConnectionCapability(form.dbType, "readOnly") && (
+              <div>
+                <label className="flex items-center gap-2 text-xs text-secondary-foreground">
+                  <input
+                    type="checkbox"
+                    checked={form.readOnly === true}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, readOnly: e.target.checked }))
+                    }
+                    className="h-3.5 w-3.5 rounded border-border"
+                  />
+                  <LockKeyhole
+                    className="h-3.5 w-3.5 text-muted-foreground"
+                    aria-hidden="true"
+                  />
+                  {t("body.readOnlyConnection")}
+                </label>
+                <p className="mt-1 text-2xs text-muted-foreground">
+                  {t("body.readOnlyConnectionHint")}
+                </p>
+              </div>
+            )}
 
           {/* Sprint 178 (AC-178-01) — non-modal "detected" affordance.
               This is a calm, advisory inline note shown after a

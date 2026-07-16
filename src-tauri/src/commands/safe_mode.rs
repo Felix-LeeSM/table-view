@@ -193,6 +193,45 @@ async fn read_connection_environment(pool: &SqlitePool, connection_id: &str) -> 
         .filter(|env| !env.trim().is_empty())
 }
 
+/// Issue #1529 — read-only connection gate. A connection the user flagged
+/// `read_only` rejects any write statement. The `read_only` flag is re-read
+/// from the backend's own store (like [`read_connection_environment`]) so a
+/// tampered / out-of-sync frontend cannot clear it and a direct IPC `invoke`
+/// cannot bypass it. Independent of Safe Mode — there is no `safety_confirmed`
+/// bypass; read-only is a hard block, not a confirm-and-proceed. Callers pass
+/// `is_write` (classified via `sql_parser_core::safety::is_read_only_safe_*`)
+/// so a read short-circuits before the store read.
+pub async fn enforce_read_only(
+    pool: &SqlitePool,
+    connection_id: &str,
+    is_write: bool,
+) -> Result<(), AppError> {
+    if !is_write {
+        return Ok(());
+    }
+    if read_connection_read_only(pool, connection_id).await {
+        return Err(AppError::Validation(
+            "Read-only connection: writes are blocked. Turn off read-only mode in the \
+             connection settings to make changes."
+                .into(),
+        ));
+    }
+    Ok(())
+}
+
+/// Read the target connection's persisted `read_only` flag. Missing row /
+/// unreadable store → `false` (writable) so a lookup failure never blocks a
+/// write on a connection the user never marked read-only.
+async fn read_connection_read_only(pool: &SqlitePool, connection_id: &str) -> bool {
+    let row: Option<(i64,)> = sqlx::query_as("SELECT read_only FROM connections WHERE id = ?")
+        .bind(connection_id)
+        .fetch_optional(pool)
+        .await
+        .ok()
+        .flatten();
+    matches!(row, Some((flag,)) if flag != 0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -348,6 +387,20 @@ mod tests {
         .unwrap();
     }
 
+    async fn seed_connection_read_only(pool: &SqlitePool, id: &str, read_only: bool) {
+        sqlx::query(
+            "INSERT INTO connections(id, name, db_type, host, port, user, password_enc, database, \
+             sort_order, created_at, updated_at, read_only) \
+             VALUES (?, ?, 'postgresql', 'localhost', 5432, 'u', '', 'db', 0, 1, 1, ?)",
+        )
+        .bind(id)
+        .bind(id)
+        .bind(if read_only { 1i64 } else { 0i64 })
+        .execute(pool)
+        .await
+        .unwrap();
+    }
+
     async fn set_safe_mode(pool: &SqlitePool, value_json: &str) {
         sqlx::query(
             "INSERT INTO settings(key, value_json, updated_at) VALUES ('safe_mode', ?, 1) \
@@ -449,6 +502,60 @@ mod tests {
         enforce_rdb_danger(&pool, "c-prod", true)
             .await
             .expect("confirmed DDL must pass");
+        pool_cleanup();
+    }
+
+    // ---- Issue #1529 — read-only connection gate ---------------------------
+
+    #[tokio::test]
+    #[serial]
+    async fn read_only_connection_blocks_a_write() {
+        // The gate re-reads the persisted `read_only` flag from the backend's
+        // own store, so this is exactly the check a direct IPC `invoke`
+        // (bypassing the frontend) hits — a write is rejected regardless of any
+        // frontend state.
+        let (_dir, pool) = pool_setup().await;
+        seed_connection_read_only(&pool, "c-ro", true).await;
+        let err = enforce_read_only(&pool, "c-ro", true).await.unwrap_err();
+        assert!(matches!(err, AppError::Validation(_)));
+        pool_cleanup();
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn read_only_connection_allows_a_read() {
+        // A non-write short-circuits before the store read (missing row is
+        // fine) and always passes.
+        let (_dir, pool) = pool_setup().await;
+        seed_connection_read_only(&pool, "c-ro", true).await;
+        enforce_read_only(&pool, "c-ro", false)
+            .await
+            .expect("a read must pass on a read-only connection");
+        pool_cleanup();
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn writable_connection_allows_a_write() {
+        let (_dir, pool) = pool_setup().await;
+        seed_connection_read_only(&pool, "c-rw", false).await;
+        enforce_read_only(&pool, "c-rw", true)
+            .await
+            .expect("a write must pass on a writable connection");
+        pool_cleanup();
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn read_only_gate_is_independent_of_safe_mode_confirmation() {
+        // read-only is a hard block, not a confirm-and-proceed: there is no
+        // `safety_confirmed` bypass. Even with Safe Mode off, the write is
+        // rejected on a read-only connection.
+        let (_dir, pool) = pool_setup().await;
+        seed_connection_read_only(&pool, "c-ro", true).await;
+        set_safe_mode(&pool, r#""off""#).await;
+        let err = enforce_read_only(&pool, "c-ro", true).await.unwrap_err();
+        assert!(matches!(err, AppError::Validation(_)));
         pool_cleanup();
     }
 

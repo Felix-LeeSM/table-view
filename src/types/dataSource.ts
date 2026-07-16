@@ -272,6 +272,13 @@ export const POSTGRESQL_CAPABILITIES = capabilities({
   connection: {
     test: true,
     switchDatabase: true,
+    // Issue #1529 — PostgreSQL exposes the read-only connection toggle. The
+    // backend `safe_mode::enforce_read_only` chokepoint blocks writes on any
+    // RDB connection flagged read-only regardless of this flag; this capability
+    // gates the UI (the connection-form toggle + the grid editor hide, which
+    // already reads `connection.readOnly`). PG-first rollout — extend to the
+    // other server RDB engines by flipping their `connection.readOnly` here.
+    readOnly: true,
   },
   query: {
     query: true,

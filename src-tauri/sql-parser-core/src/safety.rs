@@ -133,6 +133,90 @@ pub fn is_danger_with_dialect(sql: &str, dialect: SqlDialect) -> bool {
     classify_with_dialect(sql, dialect) == Severity::Danger
 }
 
+/// Issue #1529 — read-only connection gate classifier. `true` iff EVERY
+/// statement in `sql` is safe to run on a connection the user flagged
+/// read-only. The gate blocks a write when this returns `false`.
+///
+/// Broader than [`is_danger`]: it must catch ALL writes (also `INSERT`, a
+/// bounded `UPDATE … WHERE`, `CREATE TABLE`), not just the destructive tier.
+/// Where `parse` recognizes the statement the AST gives a precise verdict; a
+/// `SELECT` / `SHOW` / `SET` / `SELECT`-bodied CTE / read-`EXPLAIN` is a read,
+/// every other variant is a write. Where `parse` fails (vendor syntax the
+/// grammar slice does not cover) the leading keyword decides, failing OPEN —
+/// see [`stmt_is_read`] for why (blocking unparseable reads would break normal
+/// browsing). Consequences: an exotic write verb the deny-list omits, and a
+/// read that side-effects through a called function (`SELECT nextval(...)`),
+/// both slip through — the documented gray zone; the server-side
+/// `default_transaction_read_only` mode is the precise upgrade.
+///
+/// The dialect drives the literal/comment-aware statement split (so a trailing
+/// write cannot hide behind a leading read) and the comment stripping in the
+/// keyword fallback.
+pub fn is_read_only_safe_with_dialect(sql: &str, dialect: SqlDialect) -> bool {
+    split_statements(sql, dialect.oracle_quotes())
+        .iter()
+        .all(|stmt| stmt_is_read(stmt, dialect))
+}
+
+/// A single statement's read/write verdict for [`is_read_only_safe_with_dialect`].
+///
+/// Two-stage, mirroring the danger classifier's parse→keyword structure:
+/// where `parse` recognizes the statement the AST gives a precise verdict
+/// (a `SELECT` / `SHOW` / `SET` / `SELECT`-CTE / read-`EXPLAIN` is a read,
+/// every other variant is a write and is blocked); where `parse` fails
+/// (unsupported vendor syntax the grammar slice does not cover) the leading
+/// keyword decides, failing OPEN. Failing open on the fallback is deliberate:
+/// the grammar slice rejects many legitimate reads (complex joins, vendor
+/// functions), and blocking those would break normal browsing on a read-only
+/// connection — a far worse outcome than letting an unrecognized exotic write
+/// verb slip through (documented gray zone).
+fn stmt_is_read(stmt: &str, dialect: SqlDialect) -> bool {
+    match parse(stmt) {
+        // Parse failed → keyword heuristic (fail-open unless a known write verb).
+        ParseResult::Error(_) => !leading_keyword_is_write(stmt, dialect),
+        ParseResult::Select(_) | ParseResult::Show(_) | ParseResult::SetStmt(_) => true,
+        ParseResult::With(with) => matches!(with.inner_statement.as_ref(), WithInner::Select(_)),
+        ParseResult::Explain(explain) => explain_inner_is_read(explain.inner_statement.as_ref()),
+        // Every other recognized variant is a write / DDL / permission change /
+        // routine call.
+        _ => false,
+    }
+}
+
+/// Leading-keyword write detection for statements `parse` rejects. Only a known
+/// mutation verb blocks; anything else (an unparseable read, a vendor `SELECT`
+/// the grammar rejects, transaction control such as `BEGIN` / `COMMIT`) is
+/// allowed so the read-only gate never breaks normal browsing. An exotic write
+/// whose verb is not listed slips through — the documented gray zone.
+fn leading_keyword_is_write(stmt: &str, dialect: SqlDialect) -> bool {
+    let normalized = strip_comments_collapse_opts(stmt, dialect);
+    let upper = normalized.to_uppercase();
+    let upper = upper.trim_start();
+    const WRITE_KEYWORDS: &[&str] = &[
+        "INSERT", "UPDATE", "DELETE", "DROP", "CREATE", "ALTER", "TRUNCATE", "REPLACE", "MERGE",
+        "UPSERT", "RENAME", "GRANT", "REVOKE", "COMMENT", "CALL", "EXEC", "EXECUTE", "REFRESH",
+        "VACUUM", "REINDEX", "CLUSTER", "ANALYZE", "LOAD", "IMPORT", "COPY",
+    ];
+    WRITE_KEYWORDS
+        .iter()
+        .any(|kw| starts_with_keyword(upper, kw))
+}
+
+/// `EXPLAIN ANALYZE` executes the wrapped statement, so an `EXPLAIN` is
+/// read-only-safe only when its inner statement is itself a read. A bare
+/// `EXPLAIN <write>` never executes, but is conservatively blocked too
+/// (rare; avoids depending on the `ANALYZE` flag).
+fn explain_inner_is_read(inner: &ExplainInner) -> bool {
+    match inner {
+        ExplainInner::Select(_) => true,
+        ExplainInner::With(with) => matches!(with.inner_statement.as_ref(), WithInner::Select(_)),
+        ExplainInner::Insert(_)
+        | ExplainInner::Update(_)
+        | ExplainInner::Delete(_)
+        | ExplainInner::Merge(_) => false,
+    }
+}
+
 fn classify_single(stmt: &str, dialect: SqlDialect) -> Severity {
     match parse(stmt) {
         // `parse` covers DROP / TRUNCATE / ALTER / UPDATE / DELETE etc. in
@@ -1243,6 +1327,142 @@ mod tests {
             "danger" => Severity::Danger,
             other => panic!("unknown expectedSeverity `{other}` in classifier-parity.json"),
         }
+    }
+
+    // ----------------------------------------------------------------------
+    // Issue #1529 — read-only connection gate classifier. Fail-CLOSED: only
+    // statements the parser positively identifies as reads are safe; any
+    // write / DDL / permission change / routine call / unparseable statement
+    // is a potential write and must be blocked.
+    // ----------------------------------------------------------------------
+
+    #[test]
+    fn read_only_safe_allows_pure_reads() {
+        for sql in [
+            "SELECT * FROM users",
+            "SELECT 1",
+            "  select id from t where x = 1  ",
+            "SHOW TABLES",
+            "SET search_path TO app",
+            "WITH a AS (SELECT 1) SELECT * FROM a",
+            "EXPLAIN SELECT * FROM users",
+            "EXPLAIN ANALYZE SELECT * FROM users",
+            "EXPLAIN (FORMAT JSON) WITH a AS (SELECT 1) SELECT * FROM a",
+        ] {
+            assert!(
+                is_read_only_safe_with_dialect(sql, SqlDialect::Other),
+                "expected read-only-safe: {sql}"
+            );
+        }
+    }
+
+    #[test]
+    fn read_only_safe_blocks_every_write_class() {
+        for sql in [
+            "INSERT INTO users VALUES (1)",
+            "UPDATE users SET active = false WHERE id = 1",
+            "UPDATE users SET active = false",
+            "DELETE FROM users WHERE id = 1",
+            "DELETE FROM users",
+            "DROP TABLE users",
+            "TRUNCATE TABLE events",
+            "CREATE TABLE t (id int)",
+            "CREATE INDEX idx ON t (id)",
+            "ALTER TABLE users ADD COLUMN age integer",
+            "GRANT SELECT ON t TO bob",
+            "REVOKE SELECT ON t FROM bob",
+            "MERGE INTO t USING s ON t.id = s.id WHEN MATCHED THEN UPDATE SET x = 1",
+            "REPLACE INTO users VALUES (1)",
+            "COMMENT ON TABLE t IS 'x'",
+        ] {
+            assert!(
+                !is_read_only_safe_with_dialect(sql, SqlDialect::Other),
+                "expected NOT read-only-safe (write): {sql}"
+            );
+        }
+    }
+
+    #[test]
+    fn read_only_safe_blocks_explain_analyze_of_a_write() {
+        // EXPLAIN ANALYZE executes the wrapped statement, so an inner write is
+        // a real mutation and must be blocked; a bare EXPLAIN of a write is
+        // conservatively blocked too.
+        for sql in [
+            "EXPLAIN ANALYZE DELETE FROM users",
+            "EXPLAIN ANALYZE INSERT INTO users VALUES (1)",
+            "EXPLAIN ANALYZE UPDATE users SET x = 1 WHERE id = 1",
+            "EXPLAIN INSERT INTO users VALUES (1)",
+            "EXPLAIN ANALYZE WITH a AS (SELECT 1) INSERT INTO t SELECT * FROM a",
+        ] {
+            assert!(
+                !is_read_only_safe_with_dialect(sql, SqlDialect::Other),
+                "expected NOT read-only-safe (explain-write): {sql}"
+            );
+        }
+    }
+
+    #[test]
+    fn read_only_safe_blocks_unparseable_writes_by_keyword() {
+        // Writes the grammar slice does not fully parse are still caught by the
+        // leading-keyword deny-list.
+        for sql in [
+            "CREATE FUNCTION f() RETURNS int AS $$ SELECT 1 $$ LANGUAGE sql",
+            "CREATE OR REPLACE PROCEDURE p AS BEGIN NULL; END;",
+            "REFRESH MATERIALIZED VIEW mv",
+            "VACUUM ANALYZE users",
+            "REINDEX TABLE users",
+            "ALTER SYSTEM SET work_mem = '256MB'",
+        ] {
+            assert!(
+                !is_read_only_safe_with_dialect(sql, SqlDialect::Other),
+                "expected NOT read-only-safe (keyword write): {sql}"
+            );
+        }
+    }
+
+    #[test]
+    fn read_only_safe_allows_unparseable_non_writes_fail_open() {
+        // Transaction control and reads the grammar slice cannot parse must
+        // NOT be blocked — fail-open keeps normal read-only browsing working.
+        for sql in [
+            "BEGIN",
+            "COMMIT",
+            "ROLLBACK",
+            "START TRANSACTION",
+            "SAVEPOINT sp1",
+            // A vendor SELECT shape the grammar slice rejects still leads with
+            // a read verb, so it stays allowed.
+            "SELECT ';DROP TABLE users' AS note",
+        ] {
+            assert!(
+                is_read_only_safe_with_dialect(sql, SqlDialect::Other),
+                "expected read-only-safe (fail-open non-write): {sql}"
+            );
+        }
+    }
+
+    #[test]
+    fn read_only_safe_batch_blocks_when_any_statement_writes() {
+        // A leading read must not mask a trailing write (worst wins).
+        assert!(!is_read_only_safe_with_dialect(
+            "SELECT 1; DROP TABLE users",
+            SqlDialect::Other
+        ));
+        assert!(!is_read_only_safe_with_dialect(
+            "SELECT 1; INSERT INTO t VALUES (1)",
+            SqlDialect::Other
+        ));
+        // An all-read batch stays safe.
+        assert!(is_read_only_safe_with_dialect(
+            "SELECT 1; SHOW TABLES; SELECT 2",
+            SqlDialect::Other
+        ));
+        // A semicolon inside a string literal is not a separator, so this is
+        // a single read.
+        assert!(is_read_only_safe_with_dialect(
+            "SELECT ';DROP TABLE users' AS note",
+            SqlDialect::Other
+        ));
     }
 
     #[test]

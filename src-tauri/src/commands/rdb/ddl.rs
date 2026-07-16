@@ -60,6 +60,15 @@ async fn gate_destructive_ddl(
     .await
 }
 
+/// Issue #1529 — read-only connection gate for CREATE / DROP DATABASE. Both
+/// always execute (no preview), so this is unconditional. Kept in the command
+/// wrappers (not `run_database_change`) so the `_inner` unit tests never touch
+/// the global pool, mirroring [`gate_destructive_ddl`].
+async fn gate_read_only_database(connection_id: &str) -> Result<(), AppError> {
+    let pool = crate::commands::sqlite_pool::get_or_init_pool().await?;
+    crate::commands::safe_mode::enforce_read_only(&pool, connection_id, true).await
+}
+
 async fn drop_table_inner(
     state: &AppState,
     request: &DropTableRequest,
@@ -355,6 +364,7 @@ pub async fn create_rdb_database(
     connection_id: String,
     name: String,
 ) -> Result<(), AppError> {
+    gate_read_only_database(&connection_id).await?;
     create_rdb_database_inner(state.inner(), &connection_id, &name).await
 }
 
@@ -377,6 +387,7 @@ pub async fn drop_rdb_database(
 ) -> Result<(), AppError> {
     // `DROP DATABASE` always executes (no preview mode) and is unconditionally
     // destructive.
+    gate_read_only_database(&connection_id).await?;
     gate_destructive_ddl(&connection_id, true, false, safety_confirmed).await?;
     drop_rdb_database_inner(state.inner(), &connection_id, &name).await
 }
