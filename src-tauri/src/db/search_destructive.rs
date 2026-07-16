@@ -2,7 +2,8 @@ use serde_json::{json, Map, Value};
 
 use crate::error::AppError;
 use crate::models::{
-    validate_search_destructive_request, SearchDeleteByQueryRequest, SearchDestructiveOperationPlan,
+    validate_search_destructive_request, SearchDeleteByQueryRequest, SearchDeleteByQueryResult,
+    SearchDestructiveOperationPlan, SearchWriteFailure,
 };
 
 use super::search_dsl::validate_query_clause;
@@ -62,12 +63,15 @@ pub(crate) fn build_delete_by_query_plan(
     estimated_document_count: Option<u64>,
 ) -> SearchDestructiveOperationPlan {
     let target = delete_by_query_target(request).to_string();
-    let mut warnings =
-        vec!["Delete-by-query is destructive; execution is unsupported in this milestone".into()];
-    if target == "_all" || target.contains('*') {
-        warnings
-            .push("Target uses a wildcard; confirm the expanded target before execution".into());
-    }
+    // #1076 — execution is now live behind the Safe Mode confirm gate, so the
+    // plan always requests confirmation and warns that the count is a
+    // point-in-time estimate that may drift before the live delete runs.
+    let mut warnings = vec![
+        "Delete-by-query permanently removes every matched document and cannot be undone".into(),
+        "The matched count is a point-in-time estimate from a live _search; the number actually \
+         deleted may differ if documents change between preview and execution"
+            .into(),
+    ];
     if estimated_document_count.is_none() {
         warnings.push("Document estimate is unavailable for this target".into());
     }
@@ -76,10 +80,71 @@ pub(crate) fn build_delete_by_query_plan(
         operation: "deleteByQuery".into(),
         target,
         preview_only: request.preview_only,
-        requires_confirmation: false,
+        requires_confirmation: true,
         warnings,
         estimated_document_count,
     }
+}
+
+/// Body for the live `_delete_by_query` request — just the user's `query`
+/// clause (already `validate_query_clause`-checked by
+/// [`validate_delete_by_query_request`]). Unlike [`delete_by_query_estimate_body`]
+/// this carries no `size` / `track_total_hits`; the delete endpoint owns those.
+pub(crate) fn delete_by_query_execute_body(
+    request: &SearchDeleteByQueryRequest,
+) -> Result<Value, AppError> {
+    let query = delete_by_query_body_object(request)?
+        .get("query")
+        .cloned()
+        .ok_or_else(|| AppError::Validation("delete-by-query requires a query body".into()))?;
+    Ok(json!({ "query": query }))
+}
+
+/// Parse an ES/OS `_delete_by_query` response into the typed result envelope.
+/// `deleted < total` or a non-empty `failures[]` is a partial success — kept
+/// as data (not an error) so the caller surfaces "deleted N, failed M" instead
+/// of hiding that documents were already removed (#1076).
+pub(crate) fn parse_delete_by_query_response(
+    payload: &Value,
+    target: &str,
+) -> SearchDeleteByQueryResult {
+    let u64_at = |key: &str| payload.get(key).and_then(value_as_u64).unwrap_or(0);
+    let failures = payload
+        .get("failures")
+        .and_then(Value::as_array)
+        .map(|items| items.iter().map(parse_write_failure).collect())
+        .unwrap_or_default();
+    SearchDeleteByQueryResult {
+        target: target.to_string(),
+        took_ms: u64_at("took"),
+        timed_out: payload
+            .get("timed_out")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+        total: u64_at("total"),
+        deleted: u64_at("deleted"),
+        version_conflicts: u64_at("version_conflicts"),
+        batches: u64_at("batches"),
+        failures,
+    }
+}
+
+fn parse_write_failure(value: &Value) -> SearchWriteFailure {
+    SearchWriteFailure {
+        index: value
+            .get("index")
+            .and_then(Value::as_str)
+            .map(str::to_string),
+        id: value.get("id").and_then(Value::as_str).map(str::to_string),
+        status: value.get("status").and_then(value_as_u64),
+        cause: value.get("cause").cloned().unwrap_or(Value::Null),
+    }
+}
+
+fn value_as_u64(value: &Value) -> Option<u64> {
+    value
+        .as_u64()
+        .or_else(|| value.as_str().and_then(|text| text.parse().ok()))
 }
 
 pub(crate) fn target_pattern_matches(pattern: &str, value: &str) -> bool {
@@ -118,7 +183,7 @@ fn validate_delete_by_query_target(target: &str) -> Result<(), AppError> {
     }
     if target == "_all" || target.contains('*') {
         return Err(AppError::Validation(
-            "delete-by-query wildcard targets are unsupported for preview-only planning".into(),
+            "delete-by-query wildcard targets are unsupported".into(),
         ));
     }
     Ok(())
@@ -171,6 +236,58 @@ fn wildcard_match(pattern: &[u8], value: &[u8]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn parses_partial_delete_by_query_response_with_failures() {
+        // #1076 — a partial delete (some deleted, some conflicted) must stay
+        // data, not an error: deleted + failure detail both survive so the UI
+        // can tell the user documents were removed AND some failed.
+        let payload = json!({
+            "took": 42,
+            "timed_out": false,
+            "total": 5,
+            "deleted": 3,
+            "version_conflicts": 2,
+            "batches": 1,
+            "failures": [
+                {
+                    "index": "logs-elastic-2026.05.24",
+                    "id": "doc-9",
+                    "status": 409,
+                    "cause": { "type": "version_conflict_engine_exception", "reason": "stale" }
+                }
+            ]
+        });
+
+        let result = parse_delete_by_query_response(&payload, "logs-elastic-2026.05.24");
+
+        assert_eq!(result.target, "logs-elastic-2026.05.24");
+        assert_eq!(result.total, 5);
+        assert_eq!(result.deleted, 3);
+        assert_eq!(result.version_conflicts, 2);
+        assert_eq!(result.failures.len(), 1);
+        assert_eq!(result.failures[0].status, Some(409));
+        assert_eq!(result.failures[0].id.as_deref(), Some("doc-9"));
+    }
+
+    #[test]
+    fn delete_by_query_execute_body_carries_only_query() {
+        let request = SearchDeleteByQueryRequest {
+            index_pattern: "logs-elastic-2026.05.24".into(),
+            body: json!({ "query": { "term": { "status.keyword": "ok" } } }),
+            preview_only: false,
+            safety: crate::models::SearchDestructiveSafety {
+                acknowledged_risk: true,
+                allow_wildcard: false,
+                expected_target: None,
+            },
+        };
+        let body = delete_by_query_execute_body(&request).unwrap();
+        assert_eq!(
+            body,
+            json!({ "query": { "term": { "status.keyword": "ok" } } })
+        );
+    }
 
     #[test]
     fn delete_by_query_target_rejects_dot_segments() {

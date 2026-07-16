@@ -8,6 +8,7 @@ vi.mock("@tauri-apps/api/core", () => ({
 }));
 
 import {
+  executeSearchDeleteByQuery,
   executeSearchQuery,
   getSearchIndexFieldStats,
   getSearchIndexMapping,
@@ -148,5 +149,38 @@ describe("Search Tauri wrappers", () => {
       connectionId: "search-1",
       request,
     });
+  });
+
+  it("forwards live delete-by-query execution with the confirm flag", async () => {
+    const request = {
+      indexPattern: "logs-2026.05.24",
+      body: { query: { term: { "status.keyword": "error" } } },
+      previewOnly: false,
+      safety: {
+        acknowledgedRisk: true,
+        allowWildcard: false,
+      },
+    };
+    invokeMock.mockResolvedValueOnce({
+      target: "logs-2026.05.24",
+      tookMs: 12,
+      timedOut: false,
+      total: 7,
+      deleted: 7,
+      versionConflicts: 0,
+      batches: 1,
+      failures: [],
+    });
+
+    await executeSearchDeleteByQuery("search-1", request, true);
+
+    expect(invokeMock).toHaveBeenLastCalledWith(
+      "execute_search_delete_by_query",
+      {
+        connectionId: "search-1",
+        request,
+        safetyConfirmed: true,
+      },
+    );
   });
 });

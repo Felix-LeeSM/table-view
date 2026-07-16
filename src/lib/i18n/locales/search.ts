@@ -80,9 +80,9 @@ export const en = {
   indexNotInCatalog: "Index {{index}} is not in the catalog.",
   indexSummaryJson: "Index summary JSON",
   destructivePolicyPreviewOnly:
-    "Admin and destructive execution are unsupported in this milestone. Delete-by-query is preview only.",
+    "Delete-by-query runs live against this index behind a Safe Mode confirmation. Index and settings admin remain unsupported in this milestone.",
   destructivePolicyUnsupported:
-    "Delete-by-query preview is unsupported by this connection. Admin and destructive execution are unsupported in this milestone.",
+    "Delete-by-query is unsupported by this connection. Index and settings admin remain unsupported in this milestone.",
 
   /** SearchIndexDetailPanel — Mapping */
   noMappingFields: "No mapping fields.",
@@ -108,22 +108,21 @@ export const en = {
 
   /** SearchDeleteByQueryPreviewDialog */
   deletePreview: {
-    title: "Delete-by-query preview",
+    title: "Delete-by-query",
     description:
-      "Admin and destructive execution are unsupported in this milestone. This dialog only builds a preview plan.",
+      "Preview the matched document count, then run a live _delete_by_query. Index and settings admin remain unsupported in this milestone.",
     labelTarget: "Target",
     labelCatalogDocs: "Catalog docs",
     unknownDocs: "unknown",
-    labelQueryBody: "Preview query body",
+    labelQueryBody: "Query body",
     closeButton: "Close",
     generateButton: "Generate plan",
-    errorUnsupported:
-      "Delete-by-query planning is unsupported by this connection.",
+    errorUnsupported: "Delete-by-query is unsupported by this connection.",
     errorNotObject: "delete-by-query body must be a JSON object.",
     policyUnsupported:
-      "Delete-by-query preview is unsupported by this Search connection.",
-    policyPreviewOnly:
-      "Preview only. No delete-by-query execution path is available.",
+      "Delete-by-query is unsupported by this Search connection.",
+    policyLive:
+      "Runs a live delete-by-query against this index. Deleted documents cannot be recovered.",
     planOutputIdle: "Plan output appears here.",
     planLoading: "Planning delete-by-query preview",
     planSectionAria: "Delete-by-query preview plan",
@@ -131,7 +130,21 @@ export const en = {
     planLabelTarget: "Target",
     planLabelEstimatedDocs: "Estimated documents",
     planLabelExecution: "Execution",
-    planExecutionUnsupported: "Unsupported in this milestone",
+    planExecutionLive: "Live (Safe Mode confirmation)",
+    deleteButton_one: "Delete {{count}} document",
+    deleteButton_other: "Delete {{count}} documents",
+    deleteButtonUnknown: "Delete matched documents",
+    confirmReason:
+      "Delete-by-query will permanently remove {{count}} matched document(s) from {{target}}",
+    confirmPreview:
+      "_delete_by_query on {{target}} — {{count}} matched document(s)",
+    executing: "Running delete-by-query",
+    resultSectionAria: "Delete-by-query result",
+    resultDeleted: "Deleted {{deleted}} of {{total}} matched document(s).",
+    resultConflicts_one: "{{count}} version conflict.",
+    resultConflicts_other: "{{count}} version conflicts.",
+    resultFailures_one: "{{count}} document failed to delete.",
+    resultFailures_other: "{{count}} documents failed to delete.",
   },
 } as const;
 
@@ -211,9 +224,9 @@ export const ko = {
   indexNotInCatalog: "카탈로그에 {{index}} 인덱스가 없습니다.",
   indexSummaryJson: "인덱스 요약 JSON",
   destructivePolicyPreviewOnly:
-    "이 마일스톤에서는 관리자 및 파괴적 실행이 지원되지 않습니다. Delete-by-query는 미리보기 전용입니다.",
+    "Delete-by-query는 Safe Mode 확인을 거쳐 이 인덱스에 실제로 실행됩니다. 인덱스/설정 관리자는 이 마일스톤에서 지원되지 않습니다.",
   destructivePolicyUnsupported:
-    "이 연결은 delete-by-query 미리보기를 지원하지 않습니다. 관리자 및 파괴적 실행은 이 마일스톤에서 지원되지 않습니다.",
+    "이 연결은 delete-by-query를 지원하지 않습니다. 인덱스/설정 관리자는 이 마일스톤에서 지원되지 않습니다.",
 
   /** SearchIndexDetailPanel — Mapping */
   noMappingFields: "매핑 필드 없음.",
@@ -239,21 +252,20 @@ export const ko = {
 
   /** SearchDeleteByQueryPreviewDialog */
   deletePreview: {
-    title: "Delete-by-query 미리보기",
+    title: "Delete-by-query",
     description:
-      "이 마일스톤에서는 관리자 및 파괴적 실행이 지원되지 않습니다. 이 다이얼로그는 미리보기 플랜만 생성합니다.",
+      "일치 문서 수를 미리 확인한 뒤 live _delete_by_query를 실행합니다. 인덱스/설정 관리자는 이 마일스톤에서 지원되지 않습니다.",
     labelTarget: "대상",
     labelCatalogDocs: "카탈로그 문서",
     unknownDocs: "알 수 없음",
-    labelQueryBody: "쿼리 본문 미리보기",
+    labelQueryBody: "쿼리 본문",
     closeButton: "닫기",
     generateButton: "플랜 생성",
-    errorUnsupported: "이 연결은 delete-by-query 플랜을 지원하지 않습니다.",
+    errorUnsupported: "이 연결은 delete-by-query를 지원하지 않습니다.",
     errorNotObject: "delete-by-query 본문은 JSON 객체여야 합니다.",
-    policyUnsupported:
-      "이 Search 연결은 delete-by-query 미리보기를 지원하지 않습니다.",
-    policyPreviewOnly:
-      "미리보기 전용입니다. delete-by-query 실행 경로는 제공되지 않습니다.",
+    policyUnsupported: "이 Search 연결은 delete-by-query를 지원하지 않습니다.",
+    policyLive:
+      "이 인덱스에 live delete-by-query를 실행합니다. 삭제된 문서는 복구할 수 없습니다.",
     planOutputIdle: "플랜 출력이 여기 표시됩니다.",
     planLoading: "delete-by-query 미리보기 플랜 생성 중",
     planSectionAria: "Delete-by-query 미리보기 플랜",
@@ -261,6 +273,19 @@ export const ko = {
     planLabelTarget: "대상",
     planLabelEstimatedDocs: "예상 문서 수",
     planLabelExecution: "실행",
-    planExecutionUnsupported: "이 마일스톤에서 지원되지 않음",
+    planExecutionLive: "실제 실행 (Safe Mode 확인)",
+    deleteButton_one: "{{count}}개 문서 삭제",
+    deleteButton_other: "{{count}}개 문서 삭제",
+    deleteButtonUnknown: "일치 문서 삭제",
+    confirmReason:
+      "Delete-by-query가 {{target}}에서 일치하는 {{count}}개 문서를 영구 삭제합니다",
+    confirmPreview: "{{target}}에 _delete_by_query — 일치 {{count}}개 문서",
+    executing: "delete-by-query 실행 중",
+    resultSectionAria: "Delete-by-query 결과",
+    resultDeleted: "일치 {{total}}개 중 {{deleted}}개 문서를 삭제했습니다.",
+    resultConflicts_one: "버전 충돌 {{count}}건.",
+    resultConflicts_other: "버전 충돌 {{count}}건.",
+    resultFailures_one: "{{count}}개 문서 삭제 실패.",
+    resultFailures_other: "{{count}}개 문서 삭제 실패.",
   },
 } as const;

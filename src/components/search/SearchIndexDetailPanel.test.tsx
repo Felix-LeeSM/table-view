@@ -306,7 +306,7 @@ describe("SearchIndexDetailPanel", () => {
     expect(screen.getAllByText("elasticsearch").length).toBeGreaterThan(0);
     expect(screen.getByText("composableIndexTemplate")).toBeInTheDocument();
     expect(
-      screen.getByText(/Admin and destructive execution are unsupported/),
+      screen.getByText(/Delete-by-query runs live against this index/),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: /preview delete-by-query plan/i }),
@@ -395,15 +395,15 @@ describe("SearchIndexDetailPanel", () => {
     );
   });
 
-  it("opens a preview-only delete-by-query plan from the index header", async () => {
+  it("opens a delete-by-query plan from the index header", async () => {
     installInvokeMock({
       plan_search_delete_by_query: {
         operation: "deleteByQuery",
         target: "logs-elastic-2026.05.24",
         previewOnly: true,
-        requiresConfirmation: false,
+        requiresConfirmation: true,
         warnings: [
-          "Delete-by-query is destructive; execution is unsupported in this milestone",
+          "Delete-by-query permanently removes every matched document and cannot be undone",
         ],
         estimatedDocumentCount: 7,
       },
@@ -440,10 +440,10 @@ describe("SearchIndexDetailPanel", () => {
     ).toHaveTextContent("Estimated documents7");
     expect(
       screen.getByLabelText("Delete-by-query preview plan"),
-    ).toHaveTextContent("Unsupported in this milestone");
+    ).toHaveTextContent("Live (Safe Mode confirmation)");
   });
 
-  it("states delete-by-query preview is unsupported when the Search connection lacks capability", async () => {
+  it("states delete-by-query is unsupported when the Search connection lacks capability", async () => {
     installInvokeMock({
       list_search_catalog_summary: opensearchCatalog,
     });
@@ -456,7 +456,7 @@ describe("SearchIndexDetailPanel", () => {
 
     expect(await screen.findByText(/OpenSearch dev/)).toBeInTheDocument();
     expect(
-      screen.getByText(/Delete-by-query preview is unsupported/),
+      screen.getByText(/Delete-by-query is unsupported by this connection/),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: /preview delete-by-query plan/i }),

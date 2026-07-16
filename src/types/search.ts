@@ -150,6 +150,24 @@ export interface SearchDestructiveOperationPlan {
   estimatedDocumentCount?: number;
 }
 
+export interface SearchWriteFailure {
+  index?: string;
+  id?: string;
+  status?: number;
+  cause: unknown;
+}
+
+export interface SearchDeleteByQueryResult {
+  target: string;
+  tookMs: number;
+  timedOut: boolean;
+  total: number;
+  deleted: number;
+  versionConflicts: number;
+  batches: number;
+  failures: SearchWriteFailure[];
+}
+
 export interface SearchHitEnvelope {
   index: string;
   id: string;
