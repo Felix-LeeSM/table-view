@@ -213,6 +213,28 @@ pub async fn app_exit<R: Runtime>(app: AppHandle<R>) -> Result<(), AppError> {
     Ok(())
 }
 
+/// #1437 P2-4 — whether the running install can self-update via the Tauri
+/// updater.
+///
+/// The updater rewrites the running binary in place only on macOS / Windows
+/// and on Linux **AppImage** bundles. The AppImage runtime injects the
+/// `APPIMAGE` env var (absolute path to the mounted `.AppImage`); a `.deb` /
+/// `.rpm` install has no such target, so `downloadAndInstall` is a silent
+/// no-op there. The frontend calls this before prompting so deb/rpm users get
+/// a "update via your package manager" hint instead of an install prompt that
+/// no-ops and re-appears every boot.
+#[tauri::command]
+pub fn updater_can_self_install() -> bool {
+    can_self_install_impl(cfg!(target_os = "linux"), std::env::var_os("APPIMAGE"))
+}
+
+/// Pure decision core, split out so the branch is unit-testable without
+/// mutating the process environment. Linux can self-update only inside an
+/// AppImage (identified by the `APPIMAGE` env var); every other OS always can.
+fn can_self_install_impl(is_linux: bool, appimage_env: Option<std::ffi::OsString>) -> bool {
+    !is_linux || appimage_env.is_some()
+}
+
 /// Sprint 363 (Phase 3, Q13 / strategy line 773) — launcher close-request
 /// handler. The launcher window's `tauri://close-requested` event is wired
 /// in `lib.rs` `on_window_event` to call this function and `prevent_close()`
@@ -747,6 +769,28 @@ mod tests {
     /// is the lazy-creation event; verify it both builds and shows the
     /// window in one call so frontend ensure→show retry chains stay
     /// optional. (2026-04-30)
+    /// #1437 P2-4 — self-install capability decision core. Non-Linux always
+    /// self-updates; Linux only inside an AppImage (APPIMAGE env present). A
+    /// deb/rpm install (Linux, no APPIMAGE) must report `false` so the frontend
+    /// suppresses the no-op install prompt.
+    #[test]
+    fn updater_can_self_install_decision_core() {
+        use std::ffi::OsString;
+        // macOS / Windows: always capable regardless of APPIMAGE.
+        assert!(can_self_install_impl(false, None));
+        assert!(can_self_install_impl(
+            false,
+            Some(OsString::from("/x.AppImage"))
+        ));
+        // Linux AppImage: capable.
+        assert!(can_self_install_impl(
+            true,
+            Some(OsString::from("/tmp/table-view.AppImage"))
+        ));
+        // Linux deb/rpm: NOT capable — this is the #1437 no-op case.
+        assert!(!can_self_install_impl(true, None));
+    }
+
     #[tokio::test]
     async fn workspace_show_lazy_creates_when_missing() {
         let app = mock_builder()
