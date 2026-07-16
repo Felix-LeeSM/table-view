@@ -181,11 +181,11 @@ const DEFERRED_FEATURES = Object.freeze({
   },
   duckdb: {
     connection: [],
-    catalog: [
-      "catalog.indexes",
-      "catalog.constraints",
-      "catalog.relationships",
-    ],
+    // Issue #1070 — `catalog.indexes` / `catalog.constraints` left the deferred
+    // list: the adapter's `duckdb_indexes()` / `duckdb_constraints()`
+    // introspection is live (was a silent `Ok(vec![])` stub) and the profile now
+    // claims both. `catalog.relationships` (ERD graph wiring) stays deferred.
+    catalog: ["catalog.relationships"],
     // Issue #1269 (gap #5) — `query.cancel` left the deferred list: the adapter
     // now interrupts a running statement (`Connection::interrupt_handle`), so
     // the profile claims it and it is a live check, not a deferral.
@@ -205,14 +205,18 @@ const DEFERRED_FEATURES = Object.freeze({
   redis: {
     connection: [],
     catalog: ["catalog.schema", "catalog.indexes", "catalog.relationships"],
-    query: ["query.query", "query.cancel", "query.explain"],
+    // Issue #1269 (gap #6) — `query.cancel` left the deferred list: the KV scan
+    // and redis-command query tab now register a live cooperative token, so the
+    // profile claims it and it is a live check, not a deferral.
+    query: ["query.query", "query.explain"],
     edit: ["edit.bulkWrite"],
     ddl: [],
   },
   valkey: {
     connection: [],
     catalog: ["catalog.schema", "catalog.indexes", "catalog.relationships"],
-    query: ["query.cancel", "query.explain"],
+    // Issue #1269 (gap #6) — see redis: `query.cancel` is now a live claim.
+    query: ["query.explain"],
     edit: ["edit.bulkWrite"],
     ddl: [],
   },

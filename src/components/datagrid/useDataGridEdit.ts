@@ -103,6 +103,8 @@ export function useDataGridEdit({
     pushSnapshot,
     undo,
     canUndo,
+    redo,
+    canRedo,
   } = useDataGridEditPendingState({
     connectionId,
     database,
@@ -556,5 +558,7 @@ export function useDataGridEdit({
     handleDuplicateRow,
     undo,
     canUndo,
+    redo,
+    canRedo,
   };
 }

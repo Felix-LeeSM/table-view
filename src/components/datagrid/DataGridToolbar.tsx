@@ -13,6 +13,7 @@ import {
   Filter,
   Eye,
   Undo2,
+  Redo2,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -113,6 +114,13 @@ export interface DataGridToolbarProps {
   onUndo?: () => void;
   canUndo?: boolean;
   /**
+   * Issue #1527 (ADR 0050) — pending-edit redo, the symmetric counterpart of
+   * `onUndo`. Same wiring contract: callers that don't surface it (Document
+   * grid) omit the prop so the button stays absent + `canRedo=false`.
+   */
+  onRedo?: () => void;
+  canRedo?: boolean;
+  /**
    * Sprint 238 AC-238-12 — `useColumnWidths.reset()` 트리거. callback 이
    * 제공된 grid (records / document) 에서만 toolbar 버튼이 렌더된다 —
    * structure 뷰 등 (c) 산식 적용 대상이 아닌 곳은 prop 을 omit.
@@ -157,6 +165,8 @@ export default function DataGridToolbar({
   onDuplicateRow,
   onUndo,
   canUndo = false,
+  onRedo,
+  canRedo = false,
   onResetColumnWidths,
 }: DataGridToolbarProps) {
   const { t } = useTranslation("datagrid");
@@ -261,6 +271,22 @@ export default function DataGridToolbar({
               >
                 <Undo2 />
                 {t("undo")}
+              </Button>
+            )}
+            {canEditRows && onRedo && (
+              // Issue #1527 (ADR 0050) — discoverable Redo mirroring Undo, for
+              // users who don't know the Cmd+Shift+Z binding. Disabled when the
+              // redo stack is empty so a click never silently no-ops.
+              <Button
+                variant="ghost"
+                size="xs"
+                onClick={onRedo}
+                disabled={!canRedo}
+                aria-label={t("redoAria")}
+                title={t("redoTitle")}
+              >
+                <Redo2 />
+                {t("redo")}
               </Button>
             )}
           </>

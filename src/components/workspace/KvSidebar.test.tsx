@@ -107,7 +107,7 @@ describe("KvSidebar", () => {
     await waitFor(() => {
       expect(invokeMock).toHaveBeenCalledWith("scan_kv_keys", {
         connectionId: "redis-1",
-        queryId: undefined,
+        queryId: expect.any(String),
         request: {
           database: 0,
           cursor: "0",
@@ -304,6 +304,52 @@ describe("KvSidebar", () => {
       limit: 100,
     });
     expect(screen.getByText("user:1")).toBeInTheDocument();
+  });
+
+  it("stops an in-flight key scan via the cooperative cancel token", async () => {
+    // Issue #1269 (gap #6) — a long metadata-enrichment scan must be
+    // abortable. The sidebar mints a per-scan queryId, threads it into
+    // scan_kv_keys, and the Stop button fires cancel_query(queryId) so the
+    // backend's cooperative token stops the between-keys enrichment loop.
+    let resolveScan: (page: unknown) => void = () => {};
+    invokeMock.mockImplementation((command: string) => {
+      if (command === "list_kv_databases") {
+        return Promise.resolve([{ name: "0", index: 0, keyCount: 1 }]);
+      }
+      if (command === "current_kv_database") return Promise.resolve(0);
+      if (command === "scan_kv_keys") {
+        return new Promise((resolve) => {
+          resolveScan = resolve;
+        });
+      }
+      if (command === "cancel_query") return Promise.resolve("cancelled");
+      return Promise.reject(new Error(`Unhandled command: ${command}`));
+    });
+
+    render(<KvSidebar connectionId="redis-1" />);
+    await clickScanButton();
+
+    const stop = await screen.findByTestId("kv-scan-cancel");
+    fireEvent.click(stop);
+
+    await waitFor(() => {
+      const scanCall = invokeMock.mock.calls.find(
+        ([command]) => command === "scan_kv_keys",
+      );
+      const cancelCall = invokeMock.mock.calls.find(
+        ([command]) => command === "cancel_query",
+      );
+      expect(scanCall).toBeTruthy();
+      expect(cancelCall).toBeTruthy();
+      const scanQueryId = (scanCall?.[1] as { queryId?: string }).queryId;
+      expect(scanQueryId).toEqual(expect.any(String));
+      expect((cancelCall?.[1] as { queryId?: string }).queryId).toBe(
+        scanQueryId,
+      );
+    });
+
+    // Cancel drops the busy overlay synchronously; a late resolve is ignored.
+    resolveScan(defaultKeyPage());
   });
 
   it("surfaces key scan refresh errors", async () => {

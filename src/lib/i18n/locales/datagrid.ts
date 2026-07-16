@@ -28,6 +28,10 @@ export const en = {
   undoAria: "Undo a pending edit, or re-stage the last commit's values",
   undoTitle:
     "Undo (Cmd+Z) — steps back pending edits; after a commit, re-stages the previous values as a new pending edit (commit again to apply)",
+  redo: "Redo",
+  redoAria: "Redo a pending edit that was undone",
+  redoTitle:
+    "Redo (Cmd+Shift+Z) — re-applies a pending edit you undid; a new edit clears the redo history",
 
   // DataGridToolbar — discard confirmation
   discardConfirmTitle: "Discard all changes?",
@@ -176,6 +180,10 @@ export const ko = {
   undoAria: "대기 편집을 되돌리거나 직전 커밋 값을 다시 스테이징",
   undoTitle:
     "실행 취소 (Cmd+Z) — 대기 편집을 되돌리고, 커밋 후에는 이전 값을 새 대기 편집으로 다시 올립니다 (다시 커밋해야 반영)",
+  redo: "다시 실행",
+  redoAria: "되돌린 대기 편집을 다시 적용",
+  redoTitle:
+    "다시 실행 (Cmd+Shift+Z) — 되돌린 대기 편집을 다시 적용합니다. 새 편집이 발생하면 다시 실행 기록은 지워집니다",
 
   // DataGridToolbar — discard confirmation
   discardConfirmTitle: "모든 변경사항을 취소할까요?",

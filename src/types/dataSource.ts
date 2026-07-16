@@ -412,6 +412,13 @@ export const DUCKDB_CAPABILITIES = capabilities({
   catalog: {
     browse: true,
     schema: true,
+    // Issue #1070 — the adapter's `get_table_indexes` / `get_table_constraints`
+    // were silent `Ok(vec![])` stubs that mislabelled every DuckDB table as
+    // index/constraint-free. They now introspect `duckdb_indexes()` /
+    // `duckdb_constraints()`, so the Structure Indexes/Constraints tabs are a
+    // truthful claim (mirrors the SQLite #1459 flip).
+    indexes: true,
+    constraints: true,
   },
 });
 
@@ -476,6 +483,12 @@ export const REDIS_CAPABILITIES = capabilities({
   },
   query: {
     query: true,
+    // Issue #1269 (gap #6) — the KV sidebar scan and the redis-command query
+    // tab both register a cooperative cancel token; the backend checks it
+    // between keys during metadata enrichment (SCAN/KEYS), so the Stop button
+    // is a truthful claim. Cooperative-only (Redis is not in-process, no server
+    // pid) — not in `supportsNativeCancel`, tooltip stays "Stop query".
+    cancel: true,
   },
   catalog: {
     browse: true,
@@ -492,6 +505,9 @@ export const VALKEY_CAPABILITIES = capabilities({
   },
   query: {
     query: true,
+    // Issue #1269 (gap #6) — see REDIS_CAPABILITIES: same cooperative token
+    // backing (Valkey shares the Redis KV adapter path).
+    cancel: true,
   },
   catalog: {
     browse: true,

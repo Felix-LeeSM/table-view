@@ -85,6 +85,8 @@ export function RdbDataGridToolbar({
       onDuplicateRow={editState.handleDuplicateRow}
       onUndo={editState.undo}
       canUndo={editState.canUndo}
+      onRedo={editState.redo}
+      canRedo={editState.canRedo}
       onResetColumnWidths={onResetColumnWidths}
     />
   );

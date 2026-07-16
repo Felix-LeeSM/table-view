@@ -121,7 +121,9 @@ describe("DataSourceProfile registry", () => {
       connection: { test: true, filePicker: true, readOnly: true },
       // Issue #1269 (gap #5) — cancel now backed by `execute_query` interrupt.
       query: { query: true, cancel: true },
-      catalog: { browse: true, schema: true },
+      // Issue #1070 — indexes/constraints backed by real duckdb_indexes() /
+      // duckdb_constraints() introspection (was a silent Ok(vec![]) stub).
+      catalog: { browse: true, schema: true, indexes: true, constraints: true },
     }),
     mssql: expectedCapabilities({
       connection: { test: true },
@@ -163,13 +165,14 @@ describe("DataSourceProfile registry", () => {
     }),
     redis: expectedCapabilities({
       connection: { test: true, switchDatabase: true },
-      query: { query: true },
+      // Issue #1269 (gap #6) — cooperative scan/command cancel now backed.
+      query: { query: true, cancel: true },
       catalog: { browse: true },
       edit: { editKeys: true },
     }),
     valkey: expectedCapabilities({
       connection: { test: true, switchDatabase: true },
-      query: { query: true },
+      query: { query: true, cancel: true },
       catalog: { browse: true },
       edit: { editKeys: true },
     }),

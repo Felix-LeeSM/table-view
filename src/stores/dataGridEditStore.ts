@@ -65,6 +65,11 @@ export interface PendingEntry {
   pendingNewRows: ReadonlyArray<ReadonlyArray<unknown>>;
   pendingDeletedRowKeys: ReadonlySet<string>;
   undoStack: ReadonlyArray<EditSnapshot>;
+  // Issue #1527 (ADR 0050) — the symmetric redo stack. `undo()` pushes the
+  // pre-undo state here; `redo()` pops it back; any new edit clears it.
+  // Pending-edit symmetry only — commit-span redo survival (ADR 0050 point 1)
+  // stays deferred to #1126, so `clearEntry` (post-commit / discard) wipes it.
+  redoStack: ReadonlyArray<EditSnapshot>;
   /**
    * Issue #1081 — row-identity anchors captured at edit/delete time so a
    * commit builds its WHERE / `_id` from the row the user actually touched,
@@ -91,6 +96,7 @@ type MutablePendingEntry = {
   pendingNewRows: unknown[][];
   pendingDeletedRowKeys: Set<string>;
   undoStack: EditSnapshot[];
+  redoStack: EditSnapshot[];
   pendingEditRowSnapshots: Map<string, ReadonlyArray<unknown>>;
   pendingDeletedRowSnapshots: Map<string, ReadonlyArray<unknown>>;
 };
@@ -142,6 +148,7 @@ export const EMPTY_ENTRY: PendingEntry = Object.freeze({
     "EMPTY_ENTRY.pendingDeletedRowKeys",
   ),
   undoStack: Object.freeze([]) as ReadonlyArray<EditSnapshot>,
+  redoStack: Object.freeze([]) as ReadonlyArray<EditSnapshot>,
   pendingEditRowSnapshots: readonlyEmptyMap<string, ReadonlyArray<unknown>>(
     "EMPTY_ENTRY.pendingEditRowSnapshots",
   ),
@@ -216,6 +223,7 @@ function freshEntry(): MutablePendingEntry {
     pendingNewRows: [],
     pendingDeletedRowKeys: new Set(),
     undoStack: [],
+    redoStack: [],
     pendingEditRowSnapshots: new Map(),
     pendingDeletedRowSnapshots: new Map(),
   };
