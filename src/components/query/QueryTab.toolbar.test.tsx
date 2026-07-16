@@ -439,7 +439,7 @@ describe("QueryTab — toolbar", () => {
       {
         database: "table_view_test",
         collection: "users",
-        filter: { status: "active" },
+        body: { filter: { status: "active" } },
       },
       expect.stringMatching(/^explain-/),
     );
@@ -447,7 +447,7 @@ describe("QueryTab — toolbar", () => {
     expect(screen.queryByTestId("mock-result")).not.toBeInTheDocument();
   });
 
-  it("[#1210] surfaces the filter-only hint when the find sets sort/limit", async () => {
+  it("[#1210] forwards sort/limit to the backend so the plan matches execution", async () => {
     mockExplainMongoFind.mockResolvedValueOnce({
       queryPlanner: { winningPlan: { stage: "COLLSCAN" } },
     });
@@ -458,7 +458,7 @@ describe("QueryTab — toolbar", () => {
       queryMode: "find",
       database: "table_view_test",
       collection: "users",
-      sql: 'db.users.find({ status: "active" }).sort({ name: 1 }).limit(10)',
+      sql: 'db.users.find({ status: "active" }, { name: 1 }).sort({ name: 1 }).limit(10)',
     });
     useConnectionStore.setState({
       connections: [
@@ -471,16 +471,21 @@ describe("QueryTab — toolbar", () => {
       screen.getByRole("button", { name: /explain query/i }).click();
     });
 
-    expect(
-      await screen.findByTestId("explain-filter-only-hint"),
-    ).toBeInTheDocument();
-    // filter still reaches the backend unchanged — only the notice is added.
+    // The plan is generated with the SAME options the real find executes,
+    // so no divergence hint is needed.
+    await screen.findByTestId("explain-viewer");
+    expect(screen.queryByTestId("explain-filter-only-hint")).toBeNull();
     expect(mockExplainMongoFind).toHaveBeenCalledWith(
       "conn-mongo",
       {
         database: "table_view_test",
         collection: "users",
-        filter: { status: "active" },
+        body: {
+          filter: { status: "active" },
+          projection: { name: 1 },
+          sort: { name: 1 },
+          limit: 10,
+        },
       },
       expect.stringMatching(/^explain-/),
     );

@@ -4,6 +4,7 @@
 // `ExplainViewer` can render a paradigm-neutral tree.
 
 import { invoke } from "@tauri-apps/api/core";
+import type { FindBody } from "@/types/document";
 
 export async function explainRdbQuery(
   connectionId: string,
@@ -23,7 +24,10 @@ export async function explainRdbQuery(
 export interface ExplainMongoFindArgs {
   database: string;
   collection: string;
-  filter?: Record<string, unknown>;
+  // #1210 — the same find body (filter/sort/projection/skip/limit) the real
+  // find executes, so the plan reflects sort/limit/projection instead of a
+  // silently filter-only plan that diverges from actual execution.
+  body?: FindBody;
   verbosity?: "queryPlanner" | "executionStats" | "allPlansExecution";
 }
 
@@ -37,7 +41,7 @@ export async function explainMongoFind(
     connectionId,
     database: args.database,
     collection: args.collection,
-    filter: args.filter ?? {},
+    body: args.body ?? {},
     verbosity: args.verbosity ?? "queryPlanner",
     queryId: queryId ?? null,
   });

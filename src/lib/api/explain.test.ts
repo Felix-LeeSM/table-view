@@ -52,13 +52,19 @@ describe("Explain Tauri wrappers", () => {
     });
   });
 
-  it("keeps Mongo explain payload unchanged", async () => {
+  it("[#1210] forwards the full find body (filter/sort/limit/projection) so the plan matches execution", async () => {
     invokeMock.mockResolvedValueOnce({ ok: 1 });
 
     await explainMongoFind("conn-m", {
       database: "db",
       collection: "users",
-      filter: { active: true },
+      body: {
+        filter: { active: true },
+        sort: { name: -1 },
+        projection: { name: 1 },
+        limit: 10,
+        skip: 5,
+      },
       verbosity: "executionStats",
     });
 
@@ -66,7 +72,13 @@ describe("Explain Tauri wrappers", () => {
       connectionId: "conn-m",
       database: "db",
       collection: "users",
-      filter: { active: true },
+      body: {
+        filter: { active: true },
+        sort: { name: -1 },
+        projection: { name: 1 },
+        limit: 10,
+        skip: 5,
+      },
       verbosity: "executionStats",
       queryId: null,
     });
@@ -85,7 +97,7 @@ describe("Explain Tauri wrappers", () => {
       connectionId: "conn-m",
       database: "db",
       collection: "users",
-      filter: {},
+      body: {},
       verbosity: "queryPlanner",
       queryId: "explain-7",
     });

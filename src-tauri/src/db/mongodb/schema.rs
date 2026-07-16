@@ -17,8 +17,8 @@ use crate::models::{ColumnInfo, IndexInfo};
 
 use super::super::{
     CollectionValidatorRead, CreateMongoIndexRequest, CreateMongoIndexResult,
-    DocumentCollectionInfo, DocumentCollectionType, MongoIndexCollation, MongoIndexDirection,
-    NamespaceInfo,
+    DocumentCollectionInfo, DocumentCollectionType, FindBody, MongoIndexCollation,
+    MongoIndexDirection, NamespaceInfo,
 };
 use super::category::map_mongo_data_type;
 use super::queries::{bson_type_name, validate_ns};
@@ -785,16 +785,19 @@ impl MongoAdapter {
 
     /// Sprint 337 (U2 live wire) — Mongo `find` query plan.
     ///
-    /// `runCommand({explain: {find, filter}, verbosity})` 를 target DB 에
-    /// dispatch. verbosity 는 `"queryPlanner"`, `"executionStats"`,
-    /// `"allPlansExecution"` 중 하나 — 비어 있으면 `"queryPlanner"` 로
-    /// fallback. 응답 Document 를 raw `serde_json::Value` 로 변환 —
-    /// frontend tree viewer 가 paradigm-neutral shape 으로 렌더.
+    /// `runCommand({explain: {find, filter, sort, projection, skip, limit},
+    /// verbosity})` 를 target DB 에 dispatch. verbosity 는 `"queryPlanner"`,
+    /// `"executionStats"`, `"allPlansExecution"` 중 하나 — 비어 있으면
+    /// `"queryPlanner"` 로 fallback. Issue #1210 — sort/projection/skip/limit
+    /// 을 `find_impl` 과 동일한 semantics 로 explain command 에 실어, 표시
+    /// 계획이 실제 실행과 일치하도록 한다. 응답 Document 를 raw
+    /// `serde_json::Value` 로 변환 — frontend tree viewer 가 paradigm-neutral
+    /// shape 으로 렌더.
     pub(super) async fn explain_query_impl(
         &self,
         db: &str,
         collection: &str,
-        filter: bson::Document,
+        body: FindBody,
         verbosity: &str,
     ) -> Result<serde_json::Value, AppError> {
         let requested = if db.trim().is_empty() { None } else { Some(db) };
@@ -813,13 +816,7 @@ impl MongoAdapter {
             verbosity
         };
         let client = self.current_client().await?;
-        let cmd = doc! {
-            "explain": {
-                "find": collection,
-                "filter": filter,
-            },
-            "verbosity": v,
-        };
+        let cmd = build_explain_find_command(collection, body, v);
         let resp = client
             .database(&resolved)
             .run_command(cmd)
@@ -1255,6 +1252,46 @@ pub(super) fn extract_opid(op: &Document) -> Option<Bson> {
     }
 }
 
+/// Issue #1210 — assemble the `runCommand({explain: {find, ...}, verbosity})`
+/// document. sort/projection/skip/limit are applied with the SAME semantics as
+/// `MongoAdapter::find_impl` so the displayed plan matches the query the user
+/// actually runs: `sort`/`projection` are included only when present, `skip`
+/// only when `> 0`, and `limit` only when `> 0` (`0` = no explicit limit; a
+/// negative `limit` is dropped, matching the execution path). `comment` (the
+/// cancel tag) is intentionally omitted — explain cancels cooperatively, not
+/// via `killOp`.
+fn build_explain_find_command(collection: &str, body: FindBody, verbosity: &str) -> Document {
+    let FindBody {
+        filter,
+        sort,
+        projection,
+        skip,
+        limit,
+        ..
+    } = body;
+    let mut find_spec = doc! {
+        "find": collection,
+        "filter": filter,
+    };
+    if let Some(sort) = sort {
+        find_spec.insert("sort", sort);
+    }
+    if let Some(projection) = projection {
+        find_spec.insert("projection", projection);
+    }
+    if skip > 0 {
+        // The find command's `skip` is an i64; clamp the u64 to stay in range.
+        find_spec.insert("skip", i64::try_from(skip).unwrap_or(i64::MAX));
+    }
+    if limit > 0 {
+        find_spec.insert("limit", limit);
+    }
+    doc! {
+        "explain": find_spec,
+        "verbosity": verbosity,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1596,7 +1633,7 @@ mod tests {
         // 떨어지는데 active 가 없으므로 Validation 으로 reject.
         let adapter = MongoAdapter::new();
         match adapter
-            .explain_query("", "c", bson::Document::new(), "queryPlanner")
+            .explain_query("", "c", FindBody::default(), "queryPlanner")
             .await
         {
             Err(AppError::Validation(msg)) => {
@@ -1610,7 +1647,7 @@ mod tests {
     async fn explain_query_rejects_empty_collection() {
         let adapter = MongoAdapter::new();
         match adapter
-            .explain_query("db", "   ", bson::Document::new(), "queryPlanner")
+            .explain_query("db", "   ", FindBody::default(), "queryPlanner")
             .await
         {
             Err(AppError::Validation(msg)) => {
@@ -1624,7 +1661,7 @@ mod tests {
     async fn explain_query_without_connection_returns_connection_error() {
         let adapter = MongoAdapter::new();
         match adapter
-            .explain_query("db", "c", bson::Document::new(), "queryPlanner")
+            .explain_query("db", "c", FindBody::default(), "queryPlanner")
             .await
         {
             Err(AppError::Connection(msg)) => {
@@ -1632,6 +1669,79 @@ mod tests {
             }
             other => panic!("expected Connection, got ok? {}", other.is_ok()),
         }
+    }
+
+    // Issue #1210 — the explain command must carry the same
+    // filter/sort/projection/skip/limit the real find executes so the plan
+    // matches actual execution instead of a silently filter-only plan.
+    fn explain_find_spec(cmd: &Document) -> &Document {
+        cmd.get_document("explain")
+            .expect("explain command must wrap a `find` spec")
+    }
+
+    #[test]
+    fn build_explain_find_command_filter_only_omits_cursor_options() {
+        let body = FindBody {
+            filter: doc! { "a": 1 },
+            ..Default::default()
+        };
+        let cmd = build_explain_find_command("users", body, "queryPlanner");
+        let spec = explain_find_spec(&cmd);
+        assert_eq!(spec.get_str("find").unwrap(), "users");
+        assert_eq!(spec.get_document("filter").unwrap(), &doc! { "a": 1 });
+        assert!(!spec.contains_key("sort"));
+        assert!(!spec.contains_key("projection"));
+        assert!(!spec.contains_key("skip"));
+        assert!(!spec.contains_key("limit"));
+        assert_eq!(cmd.get_str("verbosity").unwrap(), "queryPlanner");
+    }
+
+    #[test]
+    fn build_explain_find_command_includes_sort_projection_skip_limit() {
+        let body = FindBody {
+            filter: doc! { "a": 1 },
+            sort: Some(doc! { "b": -1 }),
+            projection: Some(doc! { "b": 1 }),
+            skip: 5,
+            limit: 10,
+            ..Default::default()
+        };
+        let cmd = build_explain_find_command("users", body, "executionStats");
+        let spec = explain_find_spec(&cmd);
+        assert_eq!(spec.get_document("sort").unwrap(), &doc! { "b": -1 });
+        assert_eq!(spec.get_document("projection").unwrap(), &doc! { "b": 1 });
+        assert_eq!(spec.get_i64("skip").unwrap(), 5);
+        assert_eq!(spec.get_i64("limit").unwrap(), 10);
+        assert_eq!(cmd.get_str("verbosity").unwrap(), "executionStats");
+    }
+
+    #[test]
+    fn build_explain_find_command_drops_zero_skip_and_nonpositive_limit() {
+        // Mirrors `find_impl`: skip 0 and limit <= 0 mean "no explicit bound",
+        // so they must not appear in the plan the user is shown.
+        let body = FindBody {
+            skip: 0,
+            limit: -5,
+            ..Default::default()
+        };
+        let cmd = build_explain_find_command("users", body, "");
+        let spec = explain_find_spec(&cmd);
+        assert!(!spec.contains_key("skip"));
+        assert!(!spec.contains_key("limit"));
+    }
+
+    #[test]
+    fn build_explain_find_command_keeps_empty_projection() {
+        // An empty `{}` projection is still forwarded (matching `find_impl`,
+        // where MongoDB treats it as "all fields"); the builder never drops a
+        // present `Some(_)`.
+        let body = FindBody {
+            projection: Some(Document::new()),
+            ..Default::default()
+        };
+        let cmd = build_explain_find_command("users", body, "queryPlanner");
+        let spec = explain_find_spec(&cmd);
+        assert_eq!(spec.get_document("projection").unwrap(), &Document::new());
     }
 
     // Sprint 338 (U3 live wire) — collection_stats unit cases.

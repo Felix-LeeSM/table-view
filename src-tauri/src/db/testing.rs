@@ -889,13 +889,13 @@ pub(crate) struct StubDocumentAdapter {
     pub current_op_fn: Option<FnZero<Vec<crate::models::ServerActivityRow>>>,
     pub kill_op_fn: Option<Box<dyn Fn(i64) -> Result<(), AppError> + Send + Sync>>,
 
-    // Sprint 337 — override slot for Mongo explain (find).
+    // Sprint 337 — override slot for Mongo explain (find). Issue #1210 — the
+    // closure now receives the full `FindBody` so tests can assert
+    // sort/projection/skip/limit are threaded into the plan.
     #[allow(clippy::type_complexity)]
     pub explain_query_fn: Option<
         Box<
-            dyn Fn(&str, &str, bson::Document, &str) -> Result<serde_json::Value, AppError>
-                + Send
-                + Sync,
+            dyn Fn(&str, &str, FindBody, &str) -> Result<serde_json::Value, AppError> + Send + Sync,
         >,
     >,
 
@@ -1334,12 +1334,12 @@ impl DocumentAdapter for StubDocumentAdapter {
         &'a self,
         db: &'a str,
         collection: &'a str,
-        filter: bson::Document,
+        body: FindBody,
         verbosity: &'a str,
     ) -> BoxFuture<'a, Result<serde_json::Value, AppError>> {
         let r = self.explain_query_fn.as_ref().map_or_else(
             || Ok(serde_json::Value::Null),
-            |f| f(db, collection, filter, verbosity),
+            |f| f(db, collection, body, verbosity),
         );
         Box::pin(async move { r })
     }

@@ -1197,15 +1197,17 @@ pub trait DocumentAdapter: DbAdapter {
     /// Sprint 337 — explain a `find` against `(db, collection)`.
     ///
     /// 작성 이유 (2026-05-15): Slice U2 live wire. Mongo `explain` 은
-    /// `runCommand({explain: {find, filter}, verbosity})` 형태로 호출된다.
+    /// `runCommand({explain: {find, filter, ...}, verbosity})` 형태로 호출된다.
     /// verbosity 는 `"queryPlanner"`, `"executionStats"`, `"allPlansExecution"`
-    /// 셋 중 하나. 결과는 raw `serde_json::Value` 로 반환 — frontend tree
+    /// 셋 중 하나. Issue #1210 — `body` 로 filter 뿐 아니라
+    /// sort/projection/skip/limit 을 받아 `find` 실행과 동일한 옵션으로 plan
+    /// 을 생성한다. 결과는 raw `serde_json::Value` 로 반환 — frontend tree
     /// viewer 가 paradigm 차이 없이 같은 shape 으로 렌더.
     fn explain_query<'a>(
         &'a self,
         db: &'a str,
         collection: &'a str,
-        filter: bson::Document,
+        body: FindBody,
         verbosity: &'a str,
     ) -> BoxFuture<'a, Result<serde_json::Value, AppError>>;
 
