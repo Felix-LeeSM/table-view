@@ -8,8 +8,11 @@ import { formatKvTtl } from "@/types/kv";
 import { DATABASE_TYPE_LABELS } from "@/types/connection";
 import { getDataSourceProfile } from "@/types/dataSource";
 import {
+  canMutateKvEntries,
   canRenderKvMutationPanel,
   KvMutationPanel,
+  type KvEntryActionIntent,
+  type KvEntryPayload,
   type KvMutationActionIntent,
 } from "./KvMutationPanel";
 import { KvCollectionValueTable } from "./KvCollectionValueTable";
@@ -46,10 +49,13 @@ export default function KvKeyDetailPanel({
   const [error, setError] = useState<string | null>(null);
   const [mutationActionIntent, setMutationActionIntent] =
     useState<KvMutationActionIntent | null>(null);
+  const [entryActionIntent, setEntryActionIntent] =
+    useState<KvEntryActionIntent | null>(null);
   // Stale-response guard: a slow value fetch for a previous key must not
   // overwrite the current one (P5 — race determinism).
   const latestLoadRef = useRef(0);
   const mutationActionRequestRef = useRef(0);
+  const entryActionRequestRef = useRef(0);
 
   const loadValue = useCallback(async () => {
     const loadId = latestLoadRef.current + 1;
@@ -75,6 +81,7 @@ export default function KvKeyDetailPanel({
   useEffect(() => {
     setValue(null);
     setMutationActionIntent(null);
+    setEntryActionIntent(null);
     void loadValue();
   }, [loadValue]);
 
@@ -88,6 +95,22 @@ export default function KvKeyDetailPanel({
       kind,
       key: value.key,
       requestId: mutationActionRequestRef.current,
+    });
+  };
+  // #1415 — inline row edit/delete is offered only when the whole collection is
+  // mutable through the panel (fully loaded, mutation enabled).
+  const entriesMutable = Boolean(
+    value && !loading && canMutateKvEntries(value, mutationEnabled, t),
+  );
+  const requestEntryAction = (
+    op: "edit" | "delete",
+    payload: KvEntryPayload,
+  ) => {
+    entryActionRequestRef.current += 1;
+    setEntryActionIntent({
+      op,
+      payload,
+      requestId: entryActionRequestRef.current,
     });
   };
 
@@ -163,7 +186,11 @@ export default function KvKeyDetailPanel({
               value.value.type === "list" ||
               value.value.type === "set" ||
               value.value.type === "zSet" ? (
-              <KvCollectionValueTable keyName={value.key} value={value.value} />
+              <KvCollectionValueTable
+                keyName={value.key}
+                value={value.value}
+                onEntryAction={entriesMutable ? requestEntryAction : undefined}
+              />
             ) : (
               <pre className="max-h-96 overflow-auto rounded border border-border bg-muted/40 p-2 text-3xs text-foreground">
                 {renderValueText(value)}
@@ -175,6 +202,7 @@ export default function KvKeyDetailPanel({
                 connectionId={connectionId}
                 database={database}
                 actionIntent={mutationActionIntent}
+                entryActionIntent={entryActionIntent}
                 // Panel is pinned to one key: reload our own value after a
                 // mutation (delete surfaces "(missing)"). The sidebar list is
                 // refreshed independently by its own Scan control.

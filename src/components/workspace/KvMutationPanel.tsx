@@ -9,15 +9,36 @@ import {
   updateKvTtl,
 } from "@lib/tauri/kv";
 import { useConnectionStore } from "@stores/connectionStore";
-import type { StatementAnalysis } from "@lib/sql/sqlSafety";
 import type { KvValueEnvelope } from "@/types/kv";
 import ConfirmDestructiveDialog from "./ConfirmDestructiveDialog";
+import {
+  analyzeKvMutationSafety,
+  entryDeletePending,
+  entryEditForm,
+  type KvEntryActionIntent,
+  type MutationField,
+  type MutationForm,
+  mutationFormForValue,
+  type PendingMutation,
+  redisToken,
+  unsupportedMutationMessage,
+} from "./kvMutationCommands";
+
+// Pure command/gate logic lives in ./kvMutationCommands (shared with the inline
+// row CRUD on KvCollectionValueTable, #1415). This file is the panel view only.
+export {
+  canMutateKvEntries,
+  canRenderKvMutationPanel,
+  type KvEntryActionIntent,
+  type KvEntryPayload,
+} from "./kvMutationCommands";
 
 interface KvMutationPanelProps {
   value: KvValueEnvelope;
   connectionId: string;
   database: number;
   actionIntent?: KvMutationActionIntent | null;
+  entryActionIntent?: KvEntryActionIntent | null;
   onMutationSuccess: (key: string) => Promise<void>;
 }
 
@@ -27,62 +48,9 @@ export interface KvMutationActionIntent {
   requestId: number;
 }
 
-export function canRenderKvMutationPanel(
-  _value: KvValueEnvelope,
-  mutationEnabled: boolean,
-): boolean {
-  // #1075 — Redis/Valkey share one mutation surface; per-type support is
-  // decided by unsupportedMutationMessage, not by product.
-  return mutationEnabled;
-}
-
-interface PendingMutation {
-  kind: "string" | "command" | "delete" | "expire" | "persist";
-  label: string;
-  summary: string;
-  value?: string;
-  command?: string;
-  confirmKey?: string;
-  seconds?: number;
-  // #1466 — element removals (HDEL/LREM/SREM/ZREM) are destructive: routed to
-  // the danger Safe Mode tier so they hit the same confirm dialog as key delete.
-  destructive?: boolean;
-}
-
 interface SafeModePendingMutation {
   mutation: PendingMutation;
   reason: string;
-}
-
-type MutationField =
-  | "text"
-  | "field"
-  | "entry"
-  | "score"
-  | "index"
-  | "count"
-  | "expire"
-  | "deleteKey"
-  | "persistKey";
-type MutationForm = Record<MutationField, string>;
-
-const EMPTY_MUTATION_FORM: MutationForm = {
-  text: "",
-  field: "",
-  entry: "",
-  score: "",
-  index: "",
-  count: "",
-  expire: "",
-  deleteKey: "",
-  persistKey: "",
-};
-
-function mutationFormForValue(value: KvValueEnvelope): MutationForm {
-  return {
-    ...EMPTY_MUTATION_FORM,
-    text: value.value.type === "string" ? (value.value.text ?? "") : "",
-  };
 }
 
 export function KvMutationPanel({
@@ -90,6 +58,7 @@ export function KvMutationPanel({
   connectionId,
   database,
   actionIntent = null,
+  entryActionIntent = null,
   onMutationSuccess,
 }: KvMutationPanelProps) {
   const { t } = useTranslation("workspace");
@@ -139,6 +108,28 @@ export function KvMutationPanel({
     target?.scrollIntoView?.({ block: "nearest" });
     target?.focus();
   }, [actionIntent, value.key]);
+
+  // #1415 — a row Delete builds the destructive command directly (one click ->
+  // preview -> the same danger-tier confirm). A row Edit prefills the add form's
+  // fields so the user tweaks the value and confirms via the existing verb
+  // button. Guarded by requestId so a post-mutation value reload never replays.
+  const handledEntryRequestRef = useRef(0);
+  useEffect(() => {
+    if (!entryActionIntent) return;
+    if (entryActionIntent.requestId === handledEntryRequestRef.current) return;
+    handledEntryRequestRef.current = entryActionIntent.requestId;
+    const { op, payload } = entryActionIntent;
+    setMutationError(null);
+    setSafeModeConfirm(null);
+    if (op === "delete") {
+      setPending(entryDeletePending(payload, value, t));
+      return;
+    }
+    formDirtyRef.current = true;
+    setForm((current) => ({ ...current, ...entryEditForm(payload) }));
+    setPending(null);
+    firstEditInputRef.current?.focus();
+  }, [entryActionIntent, value, t]);
 
   const bind =
     (field: MutationField) =>
@@ -567,94 +558,4 @@ export function KvMutationPanel({
       />
     </div>
   );
-}
-
-function analyzeKvMutationSafety(
-  mutation: PendingMutation,
-  key: string,
-): StatementAnalysis {
-  if (mutation.kind === "delete") {
-    return {
-      kind: "other",
-      severity: "danger",
-      reasons: [`KV delete key ${key}`],
-    };
-  }
-  if (mutation.kind === "string") {
-    return {
-      kind: "other",
-      severity: "warn",
-      reasons: [`KV overwrite string key ${key}`],
-    };
-  }
-  if (mutation.kind === "expire") {
-    return {
-      kind: "other",
-      severity: "warn",
-      reasons: [`KV expire key ${key}`],
-    };
-  }
-  if (mutation.kind === "persist") {
-    return {
-      kind: "other",
-      severity: "warn",
-      reasons: [`KV persist key ${key}`],
-    };
-  }
-  if (mutation.destructive) {
-    // #1466 — element removal loses data: same danger tier as key delete so
-    // the strict / production Safe Mode confirm dialog gates it identically.
-    return {
-      kind: "other",
-      severity: "danger",
-      reasons: [`KV remove element via ${mutation.label} on ${key}`],
-    };
-  }
-  return {
-    kind: "other",
-    severity: "warn",
-    reasons: [`KV mutation command ${mutation.label}`],
-  };
-}
-
-function unsupportedMutationMessage(
-  envelope: KvValueEnvelope,
-  t: (key: string) => string,
-): string | null {
-  const { value } = envelope;
-  switch (value.type) {
-    case "string":
-      return value.encoding === "utf8" && value.text !== undefined
-        ? null
-        : t("kvMutation.unsupported.binaryString");
-    case "hash":
-      return value.done && value.nextCursor === "0"
-        ? null
-        : t("kvMutation.unsupported.partialHash");
-    case "set":
-      return value.done && value.nextCursor === "0"
-        ? null
-        : t("kvMutation.unsupported.partialSet");
-    case "list":
-      return value.entries.length >= value.total
-        ? null
-        : t("kvMutation.unsupported.partialList");
-    case "zSet":
-      return value.entries.length >= value.total
-        ? null
-        : t("kvMutation.unsupported.partialZset");
-    case "stream":
-      return t("kvMutation.unsupported.stream");
-    case "json":
-      return t("kvMutation.unsupported.json");
-    case "missing":
-      return t("kvMutation.unsupported.missing");
-    case "unsupported":
-      return value.message || t("kvMutation.unsupported.unsupportedKeyType");
-  }
-}
-
-function redisToken(value: string): string {
-  if (/^[^\s'"\\]+$/.test(value)) return value;
-  return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
 }
