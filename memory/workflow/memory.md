@@ -1,7 +1,7 @@
 ---
 title: Workflow
 type: index
-updated: 2026-06-12
+updated: 2026-07-17
 ---
 
 # Workflow
@@ -29,6 +29,7 @@ updated: 2026-06-12
 
 | 신호                                      | phase          | 진입 룰                                                                               |
 | ----------------------------------------- | -------------- | ------------------------------------------------------------------------------------- |
+| 사용자가 새 기능/sprint 빌드 지시         | feature-build  | 표준 진입점 `harness` skill (`.agents/skills/harness/SKILL.md`) — planner→generator→evaluator, PASS 후 [delivery](./delivery/memory.md) 로 배송 |
 | 사용자가 버그/회귀/UX 이슈 보고           | bug-fix        | 즉시 [bug-fix](./bug-fix/memory.md) 본문 읽고 Red test 부터                           |
 | 사용자가 코드 작성/구현 지시              | implementation | [implementation](./implementation/memory.md) — narration 최소, tool output noise 차단 |
 | code-profile sprint 에서 테스트/기능 변경 | tdd            | [tdd](./tdd/memory.md) — 작업 방식 강제가 아니라 delivery evidence 사전 확인          |
@@ -40,6 +41,8 @@ updated: 2026-06-12
 
 - [engineering/conventions](../engineering/conventions/memory.md) — 코드 룰 (Rust/TS/테스트/주석)
 - [product](../product/memory.md) — 제품 UX 머지 기준
+- 기능 빌드(planner→generator→evaluator) 표준 진입점은 workflow memory 가 아니라
+  `.agents/skills/harness/SKILL.md` 가 source. (sprint-build 2026-07-02 폐기 후 일원화.)
 - 결정 / grill 은 workflow memory 가 아니라
   `.agents/skills/grill-with-memory/SKILL.md` 가 source.
 - PR review 방법론은 workflow memory 가 아니라 `.agents/skills/pr-review/SKILL.md`
