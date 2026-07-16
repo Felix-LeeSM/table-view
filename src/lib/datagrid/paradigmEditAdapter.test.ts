@@ -30,11 +30,13 @@ import {
 const toastSuccess = vi.fn();
 const toastError = vi.fn();
 const toastInfo = vi.fn();
+const toastWarning = vi.fn();
 vi.mock("@/lib/runtime/toast", () => ({
   toast: {
     success: (msg: string) => toastSuccess(msg),
     error: (msg: string) => toastError(msg),
     info: (msg: string) => toastInfo(msg),
+    warning: (msg: string) => toastWarning(msg),
     warn: vi.fn(),
   },
 }));
@@ -240,6 +242,35 @@ describe("buildRdbSession + execute", () => {
       reason: expect.stringMatching(/Oracle PL\/SQL package\/routine DDL/),
     });
   });
+
+  it("rows_affected mismatch (0-row) → toast.warning instead of success (#1441 P3-3)", async () => {
+    const executeQueryBatch = vi.fn().mockResolvedValue([
+      {
+        columns: [],
+        rows: [],
+        totalCount: 0,
+        executionTimeMs: 1,
+        // Backend committed but reported 0 rows for a one-row intent — the
+        // single-row guard did not fire on this (hypothetical) path.
+        queryType: { dml: { rows_affected: 0 } },
+      },
+    ]);
+    const session = buildRdbSession(
+      ["UPDATE users SET name='bob' WHERE id=1"],
+      ["0-1"],
+      {
+        connectionId: "conn-1",
+        safeModeGate: gateAllowAll(),
+        executeQueryBatch,
+        history,
+      },
+    );
+    const result = await session.execute();
+    expect(result.ok).toBe(true);
+    expect(toastWarning).toHaveBeenCalledTimes(1);
+    expect(toastWarning).toHaveBeenCalledWith(expect.stringContaining("0 row"));
+    expect(toastSuccess).not.toHaveBeenCalled();
+  });
 });
 
 describe("rdbEditAdapter.preparePreview", () => {
@@ -328,6 +359,47 @@ describe("rdbEditAdapter.preparePreview", () => {
     // DELETE WHERE pk = "warn" 으로 분류되는데, 우리 gate 는 danger 만 block.
     // bounded DELETE WHERE 는 severity:"warn" 이고 gate 가 allow → safe.
     expect(session!.items[0]!.risk).toBe("safe");
+  });
+
+  it("Postgres ARRAY element edit → whole-reassign warning toast (#1441 P3-2)", () => {
+    const data = makeRdbData();
+    data.columns.push({
+      name: "tags",
+      data_type: "text[]",
+      nullable: true,
+      default_value: null,
+      is_primary_key: false,
+      is_foreign_key: false,
+      fk_reference: null,
+      comment: null,
+    });
+    data.rows = [[1, "alice", ["a", "b"]]];
+    const adapter = rdbEditAdapter({
+      connectionId: "conn-1",
+      safeModeGate: gateAllowAll(),
+      executeQueryBatch: vi.fn(),
+      history,
+      dialect: "postgresql",
+    });
+    const { session } = adapter.preparePreview({
+      data,
+      schema: "public",
+      table: "users",
+      page: 1,
+      // Nested edit on the ARRAY column's element [0].
+      pendingEdits: new Map([["0-2:[0]", "z"]]),
+      pendingNewRows: [],
+      pendingDeletedRowKeys: new Set(),
+    });
+    // The statement is still emitted as a whole-array reassign...
+    expect(session!.items[0]!.text).toMatch(
+      /tags = ARRAY\['z', 'b'\]::text\[\]/,
+    );
+    // ...and the clobber risk is surfaced to the user once.
+    expect(toastWarning).toHaveBeenCalledTimes(1);
+    expect(toastWarning).toHaveBeenCalledWith(
+      expect.stringMatching(/whole array/),
+    );
   });
 });
 

@@ -143,6 +143,12 @@ export const en = {
     confirmationRequired: "Confirmation required",
     warnCancelled:
       "Safe Mode (warn): confirmation cancelled — no changes committed",
+    // #1441 P3-2 — array element edits reassign the whole array.
+    arrayReassignWarning:
+      "An array column was edited by replacing the whole array. Concurrent changes to other elements of that array may be overwritten.",
+    // #1441 P3-3 — committed batch affected an unexpected number of rows.
+    rowsAffectedMismatch:
+      "Committed, but {{affected}} row(s) were affected for {{expected}} staged change(s). Some rows may no longer match — refresh to verify.",
   },
 } as const;
 
@@ -283,5 +289,11 @@ export const ko = {
     confirmationRequired: "확인 필요",
     warnCancelled:
       "세이프 모드(경고): 확인이 취소됨 — 변경사항이 커밋되지 않았습니다",
+    // #1441 P3-2 — 배열 원소 편집은 배열 전체를 재대입합니다.
+    arrayReassignWarning:
+      "배열 컬럼을 전체 배열 재대입 방식으로 편집했습니다. 다른 세션이 그 배열의 다른 원소를 변경했다면 덮어쓸 수 있습니다.",
+    // #1441 P3-3 — 커밋된 배치가 예상과 다른 행 수에 영향을 주었습니다.
+    rowsAffectedMismatch:
+      "커밋됨. 다만 스테이징한 {{expected}}건에 대해 {{affected}}행이 반영되었습니다. 일부 행이 더 이상 일치하지 않을 수 있으니 새로고침해 확인하세요.",
   },
 } as const;

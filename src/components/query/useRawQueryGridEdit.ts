@@ -6,6 +6,7 @@ import {
   type RawEditPlan,
 } from "@lib/sql/rawQuerySqlBuilder";
 import { executeQueryBatch } from "@lib/tauri";
+import { detectBatchRowsAffectedMismatch } from "@lib/datagrid/batchRowsAffected";
 import { analyzeStatement } from "@lib/sql/sqlSafety";
 import { recordHistoryEntry } from "@lib/runtime/history/recordHistoryEntry";
 import { useSafeModeGate } from "@/hooks/useSafeModeGate";
@@ -372,13 +373,22 @@ export function useRawQueryGridEdit({
       try {
         // Issue #1112 — committed only after the user confirms the raw-edit
         // SQL preview; forward the Safe Mode confirmation proof.
-        await executeQueryBatch(
+        const results = await executeQueryBatch(
           connectionId,
           sqls,
           `raw-edit-${Date.now()}`,
           undefined,
           true,
         );
+        // #1441 P3-3 — each raw-edit statement targets one row by PK; warn if
+        // the committed batch affected an unexpected number of rows instead of
+        // letting a 0-row / partial write pass silently.
+        const mismatch = detectBatchRowsAffectedMismatch(results);
+        if (mismatch) {
+          toast.warning(
+            `Committed, but ${mismatch.affected} row(s) were affected for ${mismatch.expected} staged change(s). Some rows may no longer match — refresh to verify.`,
+          );
+        }
         setSqlPreview(null);
         // Commit succeeded — clear both pending slices (drops dirty).
         purgeStoreKey(storeKey);
