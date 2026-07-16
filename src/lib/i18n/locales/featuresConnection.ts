@@ -268,6 +268,8 @@ export const en = {
       "Windows authentication and Azure AD are unsupported in this connection slice.",
     enableTls: "Enable encryption (TLS)",
     trustServerCert: "Trust server certificate",
+    tlsHintPg:
+      "Off uses PostgreSQL's driver default (sslmode=prefer) and may connect without encryption. On requires TLS — a server that cannot negotiate it fails to connect instead of silently downgrading. Leave 'Trust server certificate' off to verify the certificate chain.",
     // MongoDB-specific
     labelUserOptional: "User (optional)",
     labelPasswordOptional: "Password (optional)",
@@ -573,6 +575,8 @@ export const ko = {
       "Windows 인증과 Azure AD는 이 연결 슬라이스에서 지원되지 않습니다.",
     enableTls: "암호화 활성화 (TLS)",
     trustServerCert: "서버 인증서 신뢰",
+    tlsHintPg:
+      "끄면 PostgreSQL 드라이버 기본값(sslmode=prefer)을 사용하여 암호화 없이 연결될 수 있습니다. 켜면 TLS가 필수이며, 협상하지 못하는 서버는 무음 다운그레이드 없이 연결에 실패합니다. 인증서 체인을 검증하려면 '서버 인증서 신뢰'를 꺼 두세요.",
     labelUserOptional: "사용자 (선택)",
     labelPasswordOptional: "비밀번호 (선택)",
     labelDatabaseOptional: "데이터베이스 (선택)",

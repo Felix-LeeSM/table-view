@@ -255,12 +255,29 @@ export const isSearchFamily = (dbType: DatabaseType): boolean =>
   paradigmOf(dbType) === "search";
 
 /**
- * DBMS forms that render a TLS/encryption toggle (`MssqlFormFields`,
- * `MongoFormFields`, `RedisFormFields` for redis+valkey, `SearchFormFields`
- * for elasticsearch+opensearch). Every other type has no TLS control in the
- * connection form, so `tlsEnabled` must not be carried onto — or persisted for
- * — those drafts: doing so can silently create the `tls_enabled=true,
- * trust=None` combination that the backend now hard-rejects (issue #1062).
+ * Membership gate for `tlsEnabled` carry (`applyDbTypeChange`) and verbatim
+ * preservation (`resolveDraftTlsEnabled`). Members: `mssql`, `mongodb`,
+ * `redis`, `valkey`, `elasticsearch`, `opensearch`.
+ *
+ * `mssql` is a member but its behavior never depends on the membership: both
+ * consumers special-case `dbType === "mssql"` first (seed `trust=true` /
+ * `tlsEnabled ?? true`), so those branches win before `exposesTlsToggle` is
+ * ever consulted. Its presence here is therefore inert. mongo/redis/valkey/
+ * search are the types that genuinely rely on membership — their TLS toggle is
+ * a plain on/off with no trust dependency, so `tls_enabled=true, trust=None`
+ * is a legitimate stored state that must be carried/preserved verbatim.
+ *
+ * `postgresql` renders a TLS toggle (#1526) but is deliberately kept OUT.
+ * Unlike mongo/redis it routes through the trust-dependent
+ * `resolve_tls_decision` boundary where `tls_enabled=true, trust=None` is a
+ * backend hard-reject (#1062). Staying out of the set keeps its two required
+ * behaviors: `resolveDraftTlsEnabled` heals that reject-residue instead of
+ * preserving it, and `applyDbTypeChange` resets TLS to null on `dbType` switch
+ * instead of carrying a `true` that would leave `trust=None`. The PG form
+ * itself seeds `trust=false` on enable so the invalid combo is never authored.
+ *
+ * The no-TLS-control types (mysql/mariadb/oracle/sqlite/duckdb) also stay out:
+ * `tlsEnabled` must not be carried onto — or persisted for — those drafts.
  */
 export const TLS_TOGGLE_DATABASE_TYPES: readonly DatabaseType[] = [
   "mssql",

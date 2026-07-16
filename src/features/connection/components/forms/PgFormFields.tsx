@@ -156,6 +156,49 @@ export default function PgFormFields({
           {...fieldValidationProps("database", true, invalidField)}
         />
       </div>
+
+      {/* TLS — mirrors MssqlFormFields' two-toggle pattern (kept inline per
+          #1526 scope: no shared extraction that would touch MSSQL). PG routes
+          through the same `resolve_tls_decision` trust boundary (#1062), so
+          enabling TLS must always carry an explicit trust decision — leaving
+          `trust=None` while TLS is on is a backend hard-reject. Enabling seeds
+          `trust=false` (full CA + hostname verification, the secure default);
+          disabling clears it to null so the driver default resumes. TLS is off
+          by default so localhost dev connects without friction. */}
+      <div className="grid grid-cols-1 gap-2 text-xs text-secondary-foreground sm:grid-cols-2">
+        <label className="flex items-center gap-2">
+          <input
+            id="conn-tls-enabled"
+            type="checkbox"
+            className="cursor-pointer"
+            checked={!!draft.tlsEnabled}
+            onChange={(e) => {
+              const tlsEnabled = e.target.checked;
+              onChange({
+                tlsEnabled,
+                trustServerCertificate: tlsEnabled
+                  ? (draft.trustServerCertificate ?? false)
+                  : null,
+              });
+            }}
+          />
+          {t("form.enableTls")}
+        </label>
+        <label className="flex items-center gap-2">
+          <input
+            id="conn-trust-server-certificate"
+            type="checkbox"
+            className="cursor-pointer"
+            checked={draft.trustServerCertificate === true}
+            disabled={!draft.tlsEnabled}
+            onChange={(e) =>
+              onChange({ trustServerCertificate: e.target.checked })
+            }
+          />
+          {t("form.trustServerCert")}
+        </label>
+      </div>
+      <p className="text-2xs text-muted-foreground">{t("form.tlsHintPg")}</p>
     </>
   );
 }
