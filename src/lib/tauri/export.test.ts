@@ -178,6 +178,56 @@ describe("export Tauri wrappers", () => {
     expect(summary.rows_written).toBe(rows.length);
   });
 
+  it("reports cumulative chunk progress via onProgress for streamed exports (#1448 F15)", async () => {
+    const context: ExportContext = { kind: "table", schema: "main", name: "t" };
+    const rows = Array.from(
+      { length: EXPORT_IPC_CHUNK_ROWS * 2 + 1 },
+      (_, i) => [i],
+    );
+    invokeMock.mockImplementation(async (cmd: unknown) => {
+      if (cmd === "export_grid_begin") return "sess-p";
+      if (cmd === "export_grid_finish")
+        return { rows_written: rows.length, bytes_written: 1 };
+      return undefined;
+    });
+    const onProgress = vi.fn();
+
+    await exportGridRows(
+      "csv",
+      "/tmp/big.csv",
+      ["id"],
+      rows,
+      context,
+      null,
+      onProgress,
+    );
+
+    // One cumulative report per chunk; the final short chunk clamps to the total.
+    expect(onProgress.mock.calls.map((c) => c[0])).toEqual([
+      EXPORT_IPC_CHUNK_ROWS,
+      EXPORT_IPC_CHUNK_ROWS * 2,
+      EXPORT_IPC_CHUNK_ROWS * 2 + 1,
+    ]);
+  });
+
+  it("does not report progress for the instant single-shot path (#1448 F15)", async () => {
+    const context: ExportContext = { kind: "table", schema: "main", name: "t" };
+    invokeMock.mockResolvedValueOnce({ rows_written: 1, bytes_written: 8 });
+    const onProgress = vi.fn();
+
+    await exportGridRows(
+      "csv",
+      "/tmp/t.csv",
+      ["id"],
+      [[1]],
+      context,
+      null,
+      onProgress,
+    );
+
+    expect(onProgress).not.toHaveBeenCalled();
+  });
+
   it("serializes BigInt / Decimal cells per chunk so late rows stay IPC-safe (#1443)", async () => {
     const context: ExportContext = { kind: "table", schema: "main", name: "t" };
     const rows: unknown[][] = Array.from(

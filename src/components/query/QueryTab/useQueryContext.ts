@@ -221,6 +221,7 @@ export function useQueryContext(tab: QueryTab) {
           paradigm: "document",
           queryMode:
             payload.queryMode ??
+            // eslint-disable-next-line @typescript-eslint/no-deprecated -- #1403: QueryTab.queryMode is intentional migration debt, removed when sprint-311 A5 lands
             (tab.queryMode === "aggregate" ? "aggregate" : "find"),
         });
         return;
@@ -232,6 +233,7 @@ export function useQueryContext(tab: QueryTab) {
     [
       tab.connectionId,
       tab.paradigm,
+      // eslint-disable-next-line @typescript-eslint/no-deprecated -- #1403: QueryTab.queryMode is intentional migration debt, removed when sprint-311 A5 lands
       tab.queryMode,
       tab.database,
       tab.collection,

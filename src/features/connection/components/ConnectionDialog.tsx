@@ -300,6 +300,7 @@ export default function ConnectionDialog({
   // inputs; visible buttons stay `type="button"` so their click semantics are
   // unchanged. `noValidate` keeps our custom banner/focus in charge instead of
   // native constraint bubbles.
+  // eslint-disable-next-line @typescript-eslint/no-deprecated -- in-flight #1529 (connection-form rework) owns this file; leave the React.FormEvent<HTMLFormElement> fix as a follow-up to avoid a merge conflict
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (inputMode === "url") {
