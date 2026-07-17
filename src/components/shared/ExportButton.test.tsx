@@ -71,9 +71,10 @@ beforeEach(() => {
 });
 
 describe("ExportButton", () => {
-  // [AC-181-01a] RDB table surface lists CSV / TSV / SQL INSERT.
-  // 2026-05-01 — JSON is omitted on RDB because BSON shape doesn't apply.
-  it("renders CSV / TSV / SQL menu items for table context", async () => {
+  // [AC-181-01a / #1638] RDB table surface lists CSV / TSV / SQL INSERT / JSON.
+  // 2026-07-17 — #1638 opened tabular JSON export (headers-as-keys array of
+  // objects), so JSON now appears on the table surface too.
+  it("renders CSV / TSV / SQL / JSON menu items for table context", async () => {
     const user = userEvent.setup();
     render(
       <ExportButton
@@ -90,7 +91,26 @@ describe("ExportButton", () => {
     expect(
       screen.getByRole("menuitem", { name: /SQL INSERT/i }),
     ).toBeInTheDocument();
-    expect(screen.queryByRole("menuitem", { name: /^JSON/i })).toBeNull();
+    expect(
+      screen.getByRole("menuitem", { name: /^JSON/i }),
+    ).toBeInTheDocument();
+  });
+
+  // [#1638] Arbitrary SELECT (query) surface also exposes tabular JSON. Guards
+  // that the query kind maps to the same JSON-enabled format list as table.
+  it("renders a JSON menu item for query context", async () => {
+    const user = userEvent.setup();
+    render(
+      <ExportButton
+        context={queryContext()}
+        headers={HEADERS}
+        getRows={() => ROWS}
+      />,
+    );
+    await openMenu(user);
+    expect(
+      await screen.findByRole("menuitem", { name: /^JSON/i }),
+    ).toBeInTheDocument();
   });
 
   // [AC-181-01b] Mongo collection surface lists JSON / CSV / TSV.

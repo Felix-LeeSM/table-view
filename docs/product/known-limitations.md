@@ -6,10 +6,13 @@ in [`docs/archives/risks/active-risk-register-2026-05-27.md`](../archives/risks/
 
 The PostgreSQL and MySQL/MariaDB import/export boundary rows below stay at their
 current unshipped wording until each Stage 1 implementation sub-issue ships and
-updates its own row: #1638 (tabular JSON export), #1639/#1640 (CSV row-level
-import), and #1641 (MySQL restorable dump). This page is not edited ahead of the
-feature; the forward-looking Stage 1 scope boundary is owned by the Current
-Boundaries section of [`docs/product/README.md`](README.md).
+updates its own row: #1639/#1640 (CSV row-level import) and #1641 (MySQL
+restorable dump). #1638 (tabular JSON export) has shipped — grid JSON export is
+engine-agnostic (no capability gate) and now serves table/query surfaces as an
+array of objects keyed by headers, so no boundary row claims it as unsupported.
+This page is not edited ahead of the feature; the forward-looking Stage 1 scope
+boundary is owned by the Current Boundaries section of
+[`docs/product/README.md`](README.md).
 
 ## Data Source Support
 
