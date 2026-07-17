@@ -4,6 +4,13 @@ This page records current product-visible support boundaries. Future work and
 sequencing live in [`docs/ROADMAP.md`](../ROADMAP.md). Historical risk IDs live
 in [`docs/archives/risks/active-risk-register-2026-05-27.md`](../archives/risks/active-risk-register-2026-05-27.md).
 
+The PostgreSQL and MySQL/MariaDB import/export boundary rows below stay at their
+current unshipped wording until each Stage 1 implementation sub-issue ships and
+updates its own row: #1638 (tabular JSON export), #1639/#1640 (CSV row-level
+import), and #1641 (MySQL restorable dump). This page is not edited ahead of the
+feature; the forward-looking Stage 1 scope boundary is owned by the Current
+Boundaries section of [`docs/product/README.md`](README.md).
+
 ## Data Source Support
 
 | Area | Current limitation |
