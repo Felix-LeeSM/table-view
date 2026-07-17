@@ -7,6 +7,7 @@
 
 pub mod commands;
 pub mod db;
+pub mod diagnostics;
 pub mod error;
 pub mod events;
 pub mod launcher;
@@ -33,6 +34,12 @@ use tracing::info;
 /// invocations of `run()` (which `tauri` does not actually do, but we are
 /// defensive) keep the original `Instant`.
 pub static BOOT_T0: OnceLock<Instant> = OnceLock::new();
+
+/// #1564 — the file-log writer's `WorkerGuard`. Dropping it stops the
+/// background writer thread and silently drops all later log lines, so we
+/// park it in a `OnceLock` that outlives `run()`'s stack frame (the process
+/// lifetime). Set once during subscriber init; never read again.
+static LOG_GUARD: OnceLock<tracing_appender::non_blocking::WorkerGuard> = OnceLock::new();
 
 /// Sprint 175 Sprint 2 — phase-breakdown helper. Emits a single
 /// structured `info!` line on `target: "boot"` so the measurement
@@ -67,17 +74,45 @@ pub fn run() {
     let entry = Instant::now();
     let _ = BOOT_T0.set(entry);
 
-    // Without an explicit subscriber, every `tracing::info!` is dropped
-    // on the floor. Default to RUST_LOG semantics ("info" minimum); honor
-    // an env override so debugging-heavy sessions can opt into "debug" or
-    // "trace" without a recompile. `try_init` so a re-entry (e.g. an
-    // integration test that already installed a subscriber) is a no-op.
-    let _ = tracing_subscriber::fmt()
-        .with_env_filter(
+    // Without an explicit subscriber, every `tracing::info!` is dropped on
+    // the floor. Default to RUST_LOG semantics ("info" minimum); honor an env
+    // override so debugging-heavy sessions can opt into "debug"/"trace"
+    // without a recompile. `try_init` so a re-entry (e.g. an integration test
+    // that already installed a subscriber) is a no-op.
+    //
+    // #1564 — compose TWO fmt layers on a shared `EnvFilter`: the stdout
+    // layer keeps `cargo tauri dev` output, and the file layer tees the same
+    // lines to a rotating file under `diagnostics::log_dir()`. Packaged
+    // builds have no console (macOS `.app` from Finder → /dev/null; Windows
+    // `windows_subsystem = "windows"`), so the file is the only place
+    // `key_migration failed` / build+run failures / callback warnings survive
+    // for a post-hoc bug report. No remote telemetry — logs stay local
+    // (ADR 0036). The `dirs`-based path lets init stay here on the pre-builder
+    // critical path instead of waiting for `app.path()`.
+    use tracing_subscriber::prelude::*;
+    let file_layer = match diagnostics::file_writer(&diagnostics::log_dir()) {
+        Ok((writer, guard)) => {
+            // Keep the writer worker alive for the whole process (see LOG_GUARD).
+            let _ = LOG_GUARD.set(guard);
+            Some(
+                tracing_subscriber::fmt::layer()
+                    .with_ansi(false)
+                    .with_target(true)
+                    .with_writer(writer),
+            )
+        }
+        Err(e) => {
+            eprintln!("[table-view] file log sink unavailable, stdout only: {e}");
+            None
+        }
+    };
+    let _ = tracing_subscriber::registry()
+        .with(
             tracing_subscriber::EnvFilter::try_from_default_env()
                 .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
         )
-        .with_target(true)
+        .with(tracing_subscriber::fmt::layer().with_target(true))
+        .with(file_layer)
         .try_init();
 
     // `info!` (NOT `debug!`) so the message survives a release build's
