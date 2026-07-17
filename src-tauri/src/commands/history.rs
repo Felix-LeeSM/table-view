@@ -26,7 +26,7 @@ use crate::commands::connection::AppState;
 use crate::commands::guard::guard_legacy_import_done;
 use crate::error::AppError;
 use crate::events::{emit_state_changed, EmitArgs, EventDomain, EventOp, EventVersionRegistry};
-use crate::storage::sql_redact::{redact_credentials, sql_redact};
+use crate::storage::sql_redact::{redact_connection_message, redact_credentials, sql_redact};
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 use std::path::Path;
@@ -317,6 +317,11 @@ pub async fn add_history_entry_inner(
     // quotes).
     let stored_sql = redact_credentials(&req.sql);
     let sql_redacted = sql_redact(&stored_sql);
+    // Issue #1553 — a query error can echo the SQL's embedded conninfo, so mask
+    // `password=...` / URI userinfo in the error message before persisting,
+    // symmetric with the sql column above (the list/detail return paths only
+    // strip local paths).
+    let error_message = req.error_message.as_deref().map(redact_connection_message);
     let paradigm = req.mode.paradigm_str();
     let query_mode = req.mode.query_mode_str();
 
@@ -339,7 +344,7 @@ pub async fn add_history_entry_inner(
     .bind(&stored_sql)
     .bind(&sql_redacted)
     .bind(&req.status)
-    .bind(&req.error_message)
+    .bind(&error_message)
     .bind(req.rows_affected)
     .bind(req.duration_ms)
     .bind(executed_at)
@@ -996,6 +1001,68 @@ mod tests {
                 .unwrap();
         assert_eq!(row.0, "document");
         assert_eq!(row.1, "aggregate");
+        cleanup();
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn add_inner_redacts_credentials_in_error_message() {
+        // Issue #1553 — a query error can echo the SQL's embedded conninfo, so
+        // `password=...` must be masked before the error_message is persisted
+        // (parity with the sql column), not just the local-path pass on return.
+        let (_dir, pool) = setup().await;
+        let req: AddHistoryEntryRequest = serde_json::from_value(serde_json::json!({
+            "connectionId": "c-1",
+            "paradigm": "rdb",
+            "queryMode": "sql",
+            "source": "raw",
+            "sql": "SELECT 1",
+            "status": "error",
+            "errorMessage": "connect failed: mysql://root:S3cretPw1@db:3306/app password=S3cretPw1",
+            "durationMs": 1,
+            "executedAt": now_ms(),
+        }))
+        .unwrap();
+        add_history_entry_inner(&pool, req).await.unwrap();
+
+        let resp = list_history_inner(&pool, empty_list_request())
+            .await
+            .unwrap();
+        let msg = resp.rows.first().unwrap().error_message.as_deref().unwrap();
+        assert!(
+            !msg.contains("S3cretPw1"),
+            "credential must not survive in stored error_message: {msg}"
+        );
+        assert!(msg.contains("***"), "credential must be masked: {msg}");
+        cleanup();
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn add_inner_preserves_credential_free_error_message() {
+        // Control — an ordinary error (no credentials) must round-trip verbatim.
+        let (_dir, pool) = setup().await;
+        let req: AddHistoryEntryRequest = serde_json::from_value(serde_json::json!({
+            "connectionId": "c-1",
+            "paradigm": "rdb",
+            "queryMode": "sql",
+            "source": "raw",
+            "sql": "SELECT 1",
+            "status": "error",
+            "errorMessage": "syntax error near 'FROM'",
+            "durationMs": 1,
+            "executedAt": now_ms(),
+        }))
+        .unwrap();
+        add_history_entry_inner(&pool, req).await.unwrap();
+
+        let resp = list_history_inner(&pool, empty_list_request())
+            .await
+            .unwrap();
+        assert_eq!(
+            resp.rows.first().unwrap().error_message.as_deref(),
+            Some("syntax error near 'FROM'")
+        );
         cleanup();
     }
 
