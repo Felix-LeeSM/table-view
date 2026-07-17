@@ -22,7 +22,7 @@ export type { WorkspaceQueryMode } from "./queryMode";
 // Tab types — discriminated union so consumers can narrow on `tab.type`
 // ---------------------------------------------------------------------------
 
-export type TabSubView = "records" | "structure" | "erd";
+export type TabSubView = "records" | "structure";
 
 /**
  * Sprint 272 — sub-tab of the Structure pane. Extends the
@@ -109,7 +109,23 @@ export interface QueryTab {
   collection?: string;
 }
 
-export type Tab = TableTab | QueryTab;
+/**
+ * A database-level ERD tab. The entity-relationship diagram is a whole-
+ * database concept, so this tab is keyed by `(connectionId, database)`
+ * only — it carries no schema/table. Opened from the schema-tree header
+ * (`openErdTab`), rendered by `SchemaErdPanel`.
+ */
+export interface ErdTab {
+  type: "erd";
+  id: TabId;
+  title: string;
+  connectionId: ConnectionId;
+  closable: boolean;
+  /** Database whose schema graph the ERD renders. */
+  database: string;
+}
+
+export type Tab = TableTab | QueryTab | ErdTab;
 
 export type SidebarState = {
   selectedNode: string | null;
@@ -188,6 +204,12 @@ export interface WorkspaceStoreState {
     subView: TabSubView,
   ) => void;
   promoteTab: (connId: string, db: string, tabId: string) => void;
+  /**
+   * Open (or re-focus) the database-level ERD tab for `(connId, db)`.
+   * Dedups on the workspace bucket: an existing erd tab there already
+   * targets this same database, so it is reactivated instead of duplicated.
+   */
+  openErdTab: (connId: string, db: string) => void;
   updateTabSorts: (
     connId: string,
     db: string,

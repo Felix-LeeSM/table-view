@@ -28,7 +28,12 @@ import {
   type PersistWorkspaceRequest,
 } from "@lib/tauri/workspaces";
 import type { Paradigm } from "@/types/connection";
-import type { Tab, WorkspaceQueryMode, WorkspaceState } from "./types";
+import type {
+  Tab,
+  TabSubView,
+  WorkspaceQueryMode,
+  WorkspaceState,
+} from "./types";
 import {
   sanitizeWorkspaceQueryMode,
   toWorkspaceQueryLanguage,
@@ -236,6 +241,12 @@ function migrateTab(t: Tab, workspaceDb: string): Tab {
       ? (t.database ?? t.schema ?? workspaceDb)
       : (t.database ?? workspaceDb);
     const collection = isDocument ? (t.collection ?? t.table) : t.collection;
+    // The table-level ERD sub-view was removed (ERD is now a database-level
+    // tab). A workspace persisted before that change may carry a stale
+    // `subView: "erd"` — fall back to "records" so the tab rehydrates to a
+    // live view instead of an empty/crashing panel.
+    const subView: TabSubView =
+      (t.subView as TabSubView | "erd") === "erd" ? "records" : t.subView;
     return {
       ...t,
       isPreview: false,
@@ -243,8 +254,11 @@ function migrateTab(t: Tab, workspaceDb: string): Tab {
       sorts: t.sorts ?? [],
       database,
       collection,
+      subView,
     };
   }
+  // erd tabs (and any future variant) carry no migration-only fields; return
+  // them as-is so a refresh restores the database-level ERD tab.
   return t;
 }
 

@@ -11,6 +11,7 @@ import {
   useWorkspaceStore,
   type TableTab,
   type QueryTab as QueryTabType,
+  type ErdTab as ErdTabType,
 } from "@stores/workspaceStore";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useMruStore, __resetMruStoreForTests } from "@stores/mruStore";
@@ -283,6 +284,25 @@ function makeQueryTab({
   };
 }
 
+function makeErdTab({
+  id = "erd-tab-1",
+  connectionId = "conn1",
+  ...overrides
+}: Partial<Omit<ErdTabType, "id" | "connectionId">> & {
+  id?: string;
+  connectionId?: string;
+} = {}): ErdTabType {
+  return {
+    type: "erd",
+    id: id as TabId,
+    title: "ERD: app",
+    connectionId: connectionId as ConnectionId,
+    closable: true,
+    database: "app",
+    ...overrides,
+  };
+}
+
 function makeConnection(id: string): ConnectionConfig {
   return {
     id,
@@ -514,22 +534,22 @@ describe("MainArea", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("renders sub-tab bar with Records, Structure, and ERD tabs for table tab", () => {
+  it("renders sub-tab bar with Records and Structure tabs for table tab", () => {
     const tab = makeTableTab({ subView: "records" });
     useWorkspaceStore.setState(seedWorkspace([tab], tab.id));
 
     render(<MainArea />);
 
-    // The sub-tab list
     const tablist = screen.getByRole("tablist", { name: "Table view" });
     expect(tablist).toBeInTheDocument();
 
-    // Get tabs within the sub-tab list specifically (TabBar also has tabs)
+    // ERD is no longer a table sub-view (it is a database-level tab), so the
+    // sub-tab bar carries exactly Records + Structure.
     const tabs = tablist.querySelectorAll("[role='tab']");
-    expect(tabs).toHaveLength(3);
+    expect(tabs).toHaveLength(2);
     expect(tabs[0]).toHaveTextContent("Records");
     expect(tabs[1]).toHaveTextContent("Structure");
-    expect(tabs[2]).toHaveTextContent("ERD");
+    expect(screen.queryByRole("tab", { name: "ERD" })).toBeNull();
   });
 
   it("marks Records tab as selected when subView is records", () => {
@@ -540,10 +560,8 @@ describe("MainArea", () => {
 
     const recordsTab = screen.getByRole("tab", { name: "Records" });
     const structureTab = screen.getByRole("tab", { name: "Structure" });
-    const erdTab = screen.getByRole("tab", { name: "ERD" });
     expect(recordsTab).toHaveAttribute("aria-selected", "true");
     expect(structureTab).toHaveAttribute("aria-selected", "false");
-    expect(erdTab).toHaveAttribute("aria-selected", "false");
   });
 
   it("marks Structure tab as selected when subView is structure", () => {
@@ -554,14 +572,15 @@ describe("MainArea", () => {
 
     const recordsTab = screen.getByRole("tab", { name: "Records" });
     const structureTab = screen.getByRole("tab", { name: "Structure" });
-    const erdTab = screen.getByRole("tab", { name: "ERD" });
     expect(recordsTab).toHaveAttribute("aria-selected", "false");
     expect(structureTab).toHaveAttribute("aria-selected", "true");
-    expect(erdTab).toHaveAttribute("aria-selected", "false");
   });
 
-  it("renders SchemaErdPanel for a table tab with erd subView", () => {
-    const tab = makeTableTab({ subView: "erd", database: "app" });
+  // ERD moved from a table sub-view to a database-level tab (`type: "erd"`).
+  // A `type: "erd"` active tab renders `SchemaErdPanel` scoped to its
+  // (connectionId, database) and carries no Records/Structure sub-tab bar.
+  it("renders SchemaErdPanel for a database-level erd tab", () => {
+    const tab = makeErdTab({ database: "app" });
     useWorkspaceStore.setState(seedWorkspace([tab], tab.id));
 
     render(<MainArea />);
@@ -574,74 +593,15 @@ describe("MainArea", () => {
       "data-database",
       "app",
     );
+    expect(
+      screen.queryByRole("tablist", { name: "Table view" }),
+    ).not.toBeInTheDocument();
   });
 
-  // #1042 — the ERD sub-tab must be gated on the `intelligence.erd`
-  // capability, not on `paradigm === "rdb"`. DuckDB is an rdb paradigm but a
-  // read-only file-analytics engine that declares `intelligence.erd = false`,
-  // so its ERD tab must not render (avoids a permanently-empty tab). #1046
-  // (unsupported-표현 규약) is unconfirmed, so the conservative default is
-  // "flag false = tab hidden".
-  it("#1042 — hides ERD sub-tab for DuckDB (intelligence.erd = false)", () => {
-    const duckConn: ConnectionConfig = {
-      ...makeConnection("duck1"),
-      dbType: "duckdb",
-      paradigm: "rdb",
-    };
-    setConnections({ connections: [duckConn], active: ["duck1"] });
-    const tab = makeTableTab({ connectionId: "duck1", subView: "records" });
-    useWorkspaceStore.setState(seedWorkspace([tab], tab.id));
-
-    render(<MainArea />);
-
-    const tablist = screen.getByRole("tablist", { name: "Table view" });
-    const tabs = tablist.querySelectorAll("[role='tab']");
-    expect(tabs).toHaveLength(2);
-    expect(tabs[0]).toHaveTextContent("Records");
-    expect(tabs[1]).toHaveTextContent("Structure");
-    expect(screen.queryByRole("tab", { name: "ERD" })).toBeNull();
-  });
-
-  // #1042 — the capability path is the single source of truth: a PostgreSQL
-  // connection declares `intelligence.erd = true`, so the ERD tab renders.
-  it("#1042 — shows ERD sub-tab for PostgreSQL (intelligence.erd = true)", () => {
-    setConnections({
-      connections: [makeConnection("conn1")],
-      active: ["conn1"],
-    });
-    const tab = makeTableTab({ connectionId: "conn1", subView: "records" });
-    useWorkspaceStore.setState(seedWorkspace([tab], tab.id));
-
-    render(<MainArea />);
-
-    const tablist = screen.getByRole("tablist", { name: "Table view" });
-    expect(tablist.querySelectorAll("[role='tab']")).toHaveLength(3);
-    expect(screen.getByRole("tab", { name: "ERD" })).toBeInTheDocument();
-  });
-
-  it("switches to erd subView when ERD tab is clicked", () => {
-    const tab = makeTableTab({ subView: "records" });
-    useWorkspaceStore.setState(seedWorkspace([tab], tab.id));
-
-    render(<MainArea />);
-
-    const erdTab = screen.getByRole("tab", { name: "ERD" });
-    act(() => {
-      fireEvent.click(erdTab);
-    });
-
-    const state = getTestWorkspace();
-    const updatedTab = state.tabs.find((t) => t.id === tab.id);
-    expect(updatedTab).toBeDefined();
-    if (updatedTab && updatedTab.type === "table") {
-      expect(updatedTab.subView).toBe("erd");
-    }
-  });
-
-  // #1131 — ArrowRight roving reaches the ERD sub-tab (previously the ERD
-  // tab's ArrowRight always jumped back to Records, so it was keyboard-
-  // unreachable). Records → Structure → ERD, one step per key.
-  it("#1131 ArrowRight roves Records → Structure → ERD (ERD keyboard-reachable)", () => {
+  // #1131 — ArrowRight roving moves one step (Records → Structure) and Home
+  // rolls back to Records with exactly one tab stop. ERD is no longer part of
+  // this bar.
+  it("#1131 ArrowRight roves Records → Structure (single step)", () => {
     const tab = makeTableTab({ subView: "records" });
     useWorkspaceStore.setState(seedWorkspace([tab], tab.id));
 
@@ -657,12 +617,7 @@ describe("MainArea", () => {
       fireEvent.keyDown(tablist, { key: "ArrowRight" });
     });
     expect(subView()).toBe("structure");
-
-    act(() => {
-      fireEvent.keyDown(tablist, { key: "ArrowRight" });
-    });
-    expect(subView()).toBe("erd");
-    expect(screen.getByRole("tab", { name: "ERD" })).toHaveAttribute(
+    expect(screen.getByRole("tab", { name: "Structure" })).toHaveAttribute(
       "aria-selected",
       "true",
     );

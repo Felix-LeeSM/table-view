@@ -34,7 +34,6 @@ import SearchIndexDetailPanel from "@components/search/SearchIndexDetailPanel";
 import KvKeyDetailPanel from "@components/workspace/KvKeyDetailPanel";
 import OperationsPanel from "@components/workspace/OperationsPanel";
 import { assertNever, type Paradigm } from "@/lib/paradigm";
-import { getDataSourceProfile } from "@/types/dataSource";
 import WorkspaceToolbar from "@components/workspace/WorkspaceToolbar";
 import { useTablistRoving } from "@components/shared/tablist/useTablistRoving";
 
@@ -57,28 +56,19 @@ function TableTabView({ tab, onSubViewChange }: TableTabProps) {
   const [mongoStructureSubTab, setMongoStructureSubTab] =
     useState<MongoStructureSubTab>("indexes");
 
-  // #1042 — the ERD sub-tab is gated on the `intelligence.erd` capability
-  // (single source of truth), not on `paradigm === "rdb"`. DuckDB is an rdb
-  // paradigm but a read-only file-analytics engine that declares
-  // `intelligence.erd = false`, so it must not carry an ERD tab.
-  // ponytail: no-connection fallback keeps the paradigm default — a live
-  // table tab always carries a connection, so this only guards test/edge
-  // states where the connection isn't in the store.
+  // The connection powers the Mongo Structure panel's `dbType` dispatch
+  // below. ponytail: a live table tab always carries a connection, so the
+  // fallback only guards test/edge states where it isn't in the store.
   const connection = useConnectionStore((s) =>
     s.connections.find((c) => c.id === tab.connectionId),
   );
-  const erdCapable = connection
-    ? getDataSourceProfile(connection.dbType).capabilities.intelligence.erd
-    : paradigm === "rdb";
 
-  // Shared roving nav for whichever sub-tab bar this paradigm renders. Only
-  // ERD-capable rdb sources carry the ERD tab; mongo/kv are records/structure
-  // only. One unconditional hook call drives the single tablist the active
-  // branch mounts.
+  // Shared roving nav for the Records/Structure sub-tab bar. ERD is now a
+  // database-level tab (opened from the schema-tree header), not a table
+  // sub-view. One unconditional hook call drives the single tablist the
+  // active branch mounts.
   const subTabBarRef = useRef<HTMLDivElement>(null);
-  const subViewValues: TabSubView[] = erdCapable
-    ? ["records", "structure", "erd"]
-    : ["records", "structure"];
+  const subViewValues: TabSubView[] = ["records", "structure"];
   const subTabRoving = useTablistRoving(
     subViewValues,
     tab.subView,
@@ -236,29 +226,11 @@ function TableTabView({ tab, onSubViewChange }: TableTabProps) {
             >
               {t("mainArea.structure")}
             </button>
-            {erdCapable && (
-              <button
-                role="tab"
-                id="tab-rdb-erd"
-                data-tab-value="erd"
-                aria-controls="tabpanel-rdb-erd"
-                aria-selected={tab.subView === "erd"}
-                tabIndex={tab.subView === "erd" ? 0 : -1}
-                className={`px-4 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${
-                  tab.subView === "erd"
-                    ? "border-b-2 border-primary text-foreground"
-                    : "text-muted-foreground hover:text-secondary-foreground"
-                }`}
-                onClick={() => onSubViewChange("erd")}
-              >
-                {t("mainArea.erd")}
-              </button>
-            )}
           </div>
 
           {/* Content — one tabpanel per active subView, wired to the tab of
-              the same name (records / structure / erd). `structure` covers
-              both the view and table branches; both are the Structure tab's
+              the same name (records / structure). `structure` covers both
+              the view and table branches; both are the Structure tab's
               panel. */}
           <div
             role="tabpanel"
@@ -267,12 +239,7 @@ function TableTabView({ tab, onSubViewChange }: TableTabProps) {
             tabIndex={0}
             className="flex flex-1 flex-col overflow-hidden"
           >
-            {tab.subView === "erd" && erdCapable ? (
-              <SchemaErdPanel
-                connectionId={tab.connectionId}
-                database={tab.database ?? ""}
-              />
-            ) : tab.subView === "records" ? (
+            {tab.subView === "records" ? (
               <DataGrid
                 connectionId={tab.connectionId}
                 database={tab.database ?? ""}
@@ -476,6 +443,11 @@ export default function MainArea() {
                   subView,
                 );
               }}
+            />
+          ) : activeTab?.type === "erd" ? (
+            <SchemaErdPanel
+              connectionId={activeTab.connectionId}
+              database={activeTab.database}
             />
           ) : activeTab?.type === "query" ? (
             <QueryTab tab={activeTab} />

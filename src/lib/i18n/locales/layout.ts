@@ -41,6 +41,7 @@ export const en = {
   },
   tabBar: {
     openConnectionsAria: "Open connections",
+    erdTab: "ERD: {{db}}",
     discardTitle: "Discard unsaved changes?",
     discardMessage:
       '"{{title}}" has unsaved changes. Closing the tab will discard them.',
@@ -92,6 +93,7 @@ export const ko = {
   },
   tabBar: {
     openConnectionsAria: "열린 연결",
+    erdTab: "ERD: {{db}}",
     discardTitle: "저장하지 않은 변경사항을 버리겠습니까?",
     discardMessage:
       '"{{title}}"에 저장하지 않은 변경사항이 있습니다. 탭을 닫으면 삭제됩니다.',

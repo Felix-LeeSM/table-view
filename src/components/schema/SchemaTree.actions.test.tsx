@@ -249,6 +249,75 @@ describe("SchemaTree — actions", () => {
     expect(screen.getByText("Rename Table")).toBeInTheDocument();
   });
 
+  // =========================================================================
+  // Database-level ERD entry point (moved from the table sub-tab). The
+  // schema-tree header exposes an "Open ERD" action gated on the engine's
+  // `intelligence.erd` capability; clicking it opens a `type: "erd"` tab
+  // scoped to the tree's `(connectionId, db)`.
+  // =========================================================================
+
+  it("shows the ERD header action for an ERD-capable engine (postgres)", async () => {
+    seedPostgresConnection();
+
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
+
+    expect(screen.getByLabelText("Open ERD diagram")).toBeInTheDocument();
+  });
+
+  it("opens a database-level erd tab when the ERD header action is clicked", async () => {
+    seedPostgresConnection();
+
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText("Open ERD diagram"));
+    });
+
+    const state = getTestWorkspace();
+    const erd = state.tabs.find((t) => t.type === "erd");
+    expect(erd).toBeDefined();
+    if (erd && erd.type === "erd") {
+      expect(erd.connectionId).toBe("conn1");
+      expect(erd.database).toBe("db1");
+      expect(erd.closable).toBe(true);
+    }
+    expect(state.activeTabId).toBe(erd?.id);
+  });
+
+  // #1042 — the ERD entry is gated on `intelligence.erd`, not the paradigm.
+  // DuckDB is an rdb engine that declares `erd = false`, so the action is
+  // HIDDEN (parity with the DDL-entry hide rule above).
+  it("hides the ERD header action for DuckDB (intelligence.erd = false)", async () => {
+    useConnectionStore.setState({
+      connections: [
+        {
+          id: "conn1",
+          name: "duck",
+          dbType: "duckdb",
+          host: "",
+          port: 0,
+          user: "",
+          hasPassword: false,
+          database: "analytics.duckdb",
+          groupId: null,
+          color: null,
+          environment: null,
+          paradigm: "rdb",
+        },
+      ],
+    });
+
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
+
+    expect(screen.queryByLabelText("Open ERD diagram")).toBeNull();
+  });
+
   // #1052 — DuckDB is read-only (only RDB with edit.editRows false). Its DDL
   // entries (Rename / Drop context items AND the F2 rename shortcut) are HIDDEN
   // / inert (ui-parity §4: static unsupported = hide); the read affordances
