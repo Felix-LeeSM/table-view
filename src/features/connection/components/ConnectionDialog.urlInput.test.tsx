@@ -345,7 +345,7 @@ describe("[AC-178-01] form-mode host paste detection", () => {
       // and renders the file-path field in their place — assert that.
       if (c.expected.dbType === "sqlite" || c.expected.dbType === "duckdb") {
         // Database file field renders; host/port/user/password absent.
-        expect(screen.getByLabelText("Database file")).toHaveValue(
+        expect(screen.getByLabelText("Database File")).toHaveValue(
           c.expected.database!,
         );
         expect(screen.queryByLabelText("Host")).not.toBeInTheDocument();

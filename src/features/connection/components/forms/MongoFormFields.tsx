@@ -85,7 +85,7 @@ export default function MongoFormFields({
           className={inputClass}
           value={draft.user}
           onChange={(e) => onChange({ user: e.target.value })}
-          placeholder="leave blank for unauthenticated"
+          placeholder={t("form.placeholderMongoUserBlank")}
         />
       </div>
 
@@ -152,7 +152,7 @@ export default function MongoFormFields({
           className={inputClass}
           value={draft.database}
           onChange={(e) => onChange({ database: e.target.value })}
-          placeholder="leave blank to pick per-tab"
+          placeholder={t("form.placeholderMongoDatabaseBlank")}
         />
       </div>
 

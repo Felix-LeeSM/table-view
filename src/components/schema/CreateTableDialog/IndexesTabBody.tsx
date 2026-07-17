@@ -193,8 +193,8 @@ export default function IndexesTabBody({
                     onChange={(next) =>
                       onUpdate(idx.trackingId, { columns: next })
                     }
-                    ariaLabelPrefix="Index column"
-                    emptyMessage="Add named columns in the Columns tab to use this picker."
+                    ariaLabelPrefix={t("indexesTab.columnPickerPrefix")}
+                    emptyMessage={t("createTable.primaryKeyEmptyHint")}
                   />
                   {dedupe && (
                     <p className="text-xs italic text-muted-foreground">

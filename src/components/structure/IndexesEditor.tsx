@@ -154,8 +154,7 @@ function CreateIndexModal({
                   return found ? `${found.name} (${found.data_type})` : name;
                 }}
                 onChange={setSelectedColumns}
-                ariaLabelPrefix="Index column"
-                emptyMessage="No columns available"
+                ariaLabelPrefix={t("index.columnPickerPrefix")}
               />
             </div>
 

@@ -123,6 +123,7 @@ export const en = {
     ok: "OK",
     drop: "Drop",
     create: "Create",
+    closeAria: "Close database lifecycle dialog",
   },
   // GroupDialog
   groupDialog: {
@@ -140,6 +141,7 @@ export const en = {
     ariaNoColor: "No color",
     titleNoColor: "No color",
     ariaColorSwatch: "Color {{swatch}}",
+    ariaColorGroup: "Group color",
   },
   // ImportExportDialog
   importExport: {
@@ -277,12 +279,15 @@ export const en = {
     labelUserOptional: "User (optional)",
     labelPasswordOptional: "Password (optional)",
     labelDatabaseOptional: "Database (optional)",
+    placeholderMongoUserBlank: "leave blank for unauthenticated",
+    placeholderMongoDatabaseBlank: "leave blank to pick per-tab",
     mongoOptionsTitle: "MongoDB Options",
     labelAuthSource: "Auth Source",
     labelReplicaSet: "Replica Set",
     enableTlsMongo: "Enable TLS",
     // Redis/Search
     labelUsernameOptional: "Username (optional)",
+    placeholderRedisUserBlank: "leave blank for default ACL",
     labelDatabaseIndex: "Database Index",
     redisDbIndexHint:
       "{{productLabel}} numeric DB index. Default is 0; valid range 0–15.",
@@ -445,6 +450,7 @@ export const ko = {
     ok: "확인",
     drop: "삭제",
     create: "생성",
+    closeAria: "데이터베이스 수명주기 다이얼로그 닫기",
   },
   groupDialog: {
     titleEdit: "그룹 편집",
@@ -461,6 +467,7 @@ export const ko = {
     ariaNoColor: "색상 없음",
     titleNoColor: "색상 없음",
     ariaColorSwatch: "색상 {{swatch}}",
+    ariaColorGroup: "그룹 색상",
   },
   importExport: {
     title: "연결 가져오기 / 내보내기",
@@ -586,11 +593,14 @@ export const ko = {
     labelUserOptional: "사용자 (선택)",
     labelPasswordOptional: "비밀번호 (선택)",
     labelDatabaseOptional: "데이터베이스 (선택)",
+    placeholderMongoUserBlank: "인증 없이 연결하려면 비워 두세요",
+    placeholderMongoDatabaseBlank: "탭별로 선택하려면 비워 두세요",
     mongoOptionsTitle: "MongoDB 옵션",
     labelAuthSource: "인증 소스",
     labelReplicaSet: "레플리카 셋",
     enableTlsMongo: "TLS 활성화",
     labelUsernameOptional: "사용자 이름 (선택)",
+    placeholderRedisUserBlank: "기본 ACL을 사용하려면 비워 두세요",
     labelDatabaseIndex: "데이터베이스 인덱스",
     redisDbIndexHint:
       "{{productLabel}} 숫자형 DB 인덱스. 기본값은 0이며 유효 범위는 0–15입니다.",

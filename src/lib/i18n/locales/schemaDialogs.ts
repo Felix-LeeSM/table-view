@@ -200,6 +200,9 @@ export const en = {
     moveDownTitle: "Move index down",
     removeAria: "Remove index",
     removeTitle: "Remove index",
+    // OrderedColumnPicker aria-label prefix (interpolated into the shared
+    // orderedColumnPicker.* templates below).
+    columnPickerPrefix: "Index column",
   },
 
   // ── ForeignKeysTabBody ────────────────────────────────────────
@@ -273,6 +276,12 @@ export const en = {
     moveUniqueDownTitle: "Move unique down",
     removeUniqueAria: "Remove unique",
     removeUniqueTitle: "Remove unique",
+
+    // OrderedColumnPicker aria-label prefixes (interpolated into the shared
+    // orderedColumnPicker.* templates).
+    fkLocalColumnPickerPrefix: "Foreign key local column",
+    fkRefColumnPickerPrefix: "Foreign key reference column",
+    uniqueColumnPickerPrefix: "Unique column",
   },
 
   // ── InlineFkPopover ───────────────────────────────────────────
@@ -304,6 +313,22 @@ export const en = {
     defaultPlaceholder: "varchar(255)",
     showTypesAria: "Show types",
     listboxAria: "PostgreSQL types",
+  },
+
+  // ── OrderedColumnPicker (shared: index / FK / unique pickers) ──
+  // {{prefix}} is a caller-provided, already-localized noun (e.g. the
+  // *.columnPickerPrefix keys above); {{name}} is the column name.
+  orderedColumnPicker: {
+    pickerAria: "{{prefix}} picker",
+    optionsAria: "Available {{prefix}} options",
+    moveEarlierAria: "Move {{prefix}} {{name}} earlier",
+    moveLaterAria: "Move {{prefix}} {{name}} later",
+    removeAria: "Remove {{prefix}}: {{name}}",
+    addAria: "{{prefix}}: {{name}}",
+    moveEarlierTitle: "Move earlier",
+    moveLaterTitle: "Move later",
+    removeTitle: "Remove",
+    emptyDefault: "No columns available",
   },
 } as const;
 
@@ -503,6 +528,7 @@ export const ko = {
     moveDownTitle: "인덱스 아래로 이동",
     removeAria: "인덱스 제거",
     removeTitle: "인덱스 제거",
+    columnPickerPrefix: "인덱스 컬럼",
   },
 
   // ── ForeignKeysTabBody ────────────────────────────────────────
@@ -577,6 +603,10 @@ export const ko = {
     moveUniqueDownTitle: "고유 제약조건 아래로 이동",
     removeUniqueAria: "고유 제약조건 제거",
     removeUniqueTitle: "고유 제약조건 제거",
+
+    fkLocalColumnPickerPrefix: "외래 키 로컬 컬럼",
+    fkRefColumnPickerPrefix: "외래 키 참조 컬럼",
+    uniqueColumnPickerPrefix: "고유 컬럼",
   },
 
   // ── InlineFkPopover ───────────────────────────────────────────
@@ -608,5 +638,19 @@ export const ko = {
     defaultPlaceholder: "varchar(255)",
     showTypesAria: "타입 보기",
     listboxAria: "PostgreSQL 타입",
+  },
+
+  // ── OrderedColumnPicker (공용: 인덱스 / FK / 고유 선택기) ──
+  orderedColumnPicker: {
+    pickerAria: "{{prefix}} 선택기",
+    optionsAria: "사용 가능한 {{prefix}} 옵션",
+    moveEarlierAria: "{{prefix}} {{name}} 앞으로 이동",
+    moveLaterAria: "{{prefix}} {{name}} 뒤로 이동",
+    removeAria: "{{prefix}} 제거: {{name}}",
+    addAria: "{{prefix}}: {{name}}",
+    moveEarlierTitle: "앞으로 이동",
+    moveLaterTitle: "뒤로 이동",
+    removeTitle: "제거",
+    emptyDefault: "사용 가능한 컬럼 없음",
   },
 } as const;

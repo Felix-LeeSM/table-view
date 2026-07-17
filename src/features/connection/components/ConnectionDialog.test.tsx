@@ -510,7 +510,7 @@ describe("ConnectionDialog", () => {
       fireEvent.click(screen.getByText("Parse & Continue"));
     });
 
-    expect(screen.getByLabelText("Database file")).toHaveValue(
+    expect(screen.getByLabelText("Database File")).toHaveValue(
       "/data/app.sqlite",
     );
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
@@ -530,7 +530,7 @@ describe("ConnectionDialog", () => {
       fireEvent.click(screen.getByText("Parse & Continue"));
     });
 
-    expect(screen.getByLabelText("Database file")).toHaveValue(
+    expect(screen.getByLabelText("Database File")).toHaveValue(
       "/data/warehouse.duckdb",
     );
     expect(
@@ -1501,7 +1501,7 @@ describe("ConnectionDialog", () => {
       // SQLite form: Port field is absent.
       expect(screen.queryByLabelText("Port")).not.toBeInTheDocument();
       // Database file picker is present in its place.
-      expect(screen.getByLabelText("Database file")).toBeInTheDocument();
+      expect(screen.getByLabelText("Database File")).toBeInTheDocument();
 
       // Now switch sqlite → mysql; port must auto-update without modal.
       await user.click(trigger);
@@ -1748,7 +1748,7 @@ describe("ConnectionDialog", () => {
       await user.click(screen.getByRole("option", { name: "SQLite" }));
 
       // File path field is the sole DBMS-specific input.
-      expect(screen.getByLabelText("Database file")).toBeInTheDocument();
+      expect(screen.getByLabelText("Database File")).toBeInTheDocument();
       expect(
         screen.getByLabelText("Create SQLite database file"),
       ).toBeInTheDocument();
@@ -1767,7 +1767,7 @@ describe("ConnectionDialog", () => {
       await user.click(trigger);
       await user.click(screen.getByRole("option", { name: "DuckDB" }));
 
-      expect(screen.getByLabelText("Database file")).toBeInTheDocument();
+      expect(screen.getByLabelText("Database File")).toBeInTheDocument();
       expect(
         screen.getByLabelText("Browse for database file"),
       ).toBeInTheDocument();
@@ -2083,7 +2083,7 @@ describe("ConnectionDialog", () => {
         }
 
         expect(
-          screen.queryByLabelText("Database file"),
+          screen.queryByLabelText("Database File"),
         ).not.toBeInTheDocument();
         unmount();
       }
@@ -2099,7 +2099,7 @@ describe("ConnectionDialog", () => {
       await user.click(screen.getByLabelText("Database Type"));
       await user.click(screen.getByRole("option", { name: "SQLite" }));
 
-      expect(screen.getByLabelText("Database file")).toBeInTheDocument();
+      expect(screen.getByLabelText("Database File")).toBeInTheDocument();
       expect(
         screen.getByLabelText("Browse for database file"),
       ).toBeInTheDocument();

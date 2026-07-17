@@ -143,7 +143,7 @@ export default function GroupDialog({ group, onClose }: GroupDialogProps) {
         <div
           ref={paletteRef}
           role="radiogroup"
-          aria-label="Group color"
+          aria-label={t("groupDialog.ariaColorGroup")}
           onKeyDown={handlePaletteKeyDown}
           className="flex flex-wrap items-center gap-2"
         >

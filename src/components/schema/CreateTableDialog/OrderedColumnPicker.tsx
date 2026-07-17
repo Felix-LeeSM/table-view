@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { ChevronLeft, ChevronRight, Plus, X } from "lucide-react";
 
 /**
@@ -31,11 +32,17 @@ export interface OrderedColumnPickerProps {
   /** Called with the next ordered selection on every mutation. */
   onChange: (next: string[]) => void;
   /**
-   * Used to scope `aria-label` for the buttons. E.g. `"Index column"`
-   * yields `"Index column: email"` for the add button.
+   * Already-localized noun used to scope the buttons' `aria-label`. E.g.
+   * `"Index column"` yields `"Index column: email"` for the add button.
+   * Callers pass a translated string (the `*.columnPickerPrefix` keys);
+   * the component interpolates it into the `orderedColumnPicker.*`
+   * templates so screen-reader labels follow the active locale.
    */
   ariaLabelPrefix: string;
-  /** Empty-state copy shown when `available` is empty. */
+  /**
+   * Empty-state copy shown when `available` is empty. Defaults to the
+   * localized `orderedColumnPicker.emptyDefault` when omitted.
+   */
   emptyMessage?: string;
 }
 
@@ -45,17 +52,19 @@ export default function OrderedColumnPicker({
   labelOf,
   onChange,
   ariaLabelPrefix,
-  emptyMessage = "No columns available",
+  emptyMessage,
 }: OrderedColumnPickerProps) {
+  const { t } = useTranslation("schemaDialogs");
+  const empty = emptyMessage ?? t("orderedColumnPicker.emptyDefault");
   if (available.length === 0) {
     return (
       <div
         className="rounded border border-dashed border-border bg-background p-3 text-center"
-        aria-label={`${ariaLabelPrefix} picker`}
+        aria-label={t("orderedColumnPicker.pickerAria", {
+          prefix: ariaLabelPrefix,
+        })}
       >
-        <span className="text-xs italic text-muted-foreground">
-          {emptyMessage}
-        </span>
+        <span className="text-xs italic text-muted-foreground">{empty}</span>
       </div>
     );
   }
@@ -85,7 +94,9 @@ export default function OrderedColumnPicker({
   return (
     <div
       className="space-y-2 rounded border border-border bg-background p-2"
-      aria-label={`${ariaLabelPrefix} picker`}
+      aria-label={t("orderedColumnPicker.pickerAria", {
+        prefix: ariaLabelPrefix,
+      })}
     >
       {/* Selected pills with order index + reorder + remove */}
       {selected.length > 0 && (
@@ -106,8 +117,11 @@ export default function OrderedColumnPicker({
                   type="button"
                   onClick={() => moveAt(i, -1)}
                   disabled={isFirst}
-                  aria-label={`Move ${ariaLabelPrefix} ${name} earlier`}
-                  title="Move earlier"
+                  aria-label={t("orderedColumnPicker.moveEarlierAria", {
+                    prefix: ariaLabelPrefix,
+                    name,
+                  })}
+                  title={t("orderedColumnPicker.moveEarlierTitle")}
                   className="flex size-4 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
                 >
                   <ChevronLeft className="size-3" />
@@ -116,8 +130,11 @@ export default function OrderedColumnPicker({
                   type="button"
                   onClick={() => moveAt(i, 1)}
                   disabled={isLast}
-                  aria-label={`Move ${ariaLabelPrefix} ${name} later`}
-                  title="Move later"
+                  aria-label={t("orderedColumnPicker.moveLaterAria", {
+                    prefix: ariaLabelPrefix,
+                    name,
+                  })}
+                  title={t("orderedColumnPicker.moveLaterTitle")}
                   className="flex size-4 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
                 >
                   <ChevronRight className="size-3" />
@@ -125,8 +142,11 @@ export default function OrderedColumnPicker({
                 <button
                   type="button"
                   onClick={() => removeAt(i)}
-                  aria-label={`Remove ${ariaLabelPrefix}: ${name}`}
-                  title="Remove"
+                  aria-label={t("orderedColumnPicker.removeAria", {
+                    prefix: ariaLabelPrefix,
+                    name,
+                  })}
+                  title={t("orderedColumnPicker.removeTitle")}
                   className="flex size-4 items-center justify-center rounded text-muted-foreground hover:bg-destructive/20 hover:text-destructive"
                 >
                   <X className="size-3" />
@@ -141,14 +161,19 @@ export default function OrderedColumnPicker({
       {unselected.length > 0 ? (
         <div
           className="flex flex-wrap gap-1.5"
-          aria-label={`Available ${ariaLabelPrefix} options`}
+          aria-label={t("orderedColumnPicker.optionsAria", {
+            prefix: ariaLabelPrefix,
+          })}
         >
           {unselected.map((name) => (
             <button
               key={name}
               type="button"
               onClick={() => addColumn(name)}
-              aria-label={`${ariaLabelPrefix}: ${name}`}
+              aria-label={t("orderedColumnPicker.addAria", {
+                prefix: ariaLabelPrefix,
+                name,
+              })}
               className="flex items-center gap-1 rounded border border-dashed border-border bg-background px-1.5 py-0.5 text-xs text-muted-foreground hover:border-primary hover:bg-primary/5 hover:text-foreground"
             >
               <Plus className="size-3" />
@@ -157,9 +182,7 @@ export default function OrderedColumnPicker({
           ))}
         </div>
       ) : selected.length === 0 ? (
-        <span className="text-xs italic text-muted-foreground">
-          {emptyMessage}
-        </span>
+        <span className="text-xs italic text-muted-foreground">{empty}</span>
       ) : null}
     </div>
   );

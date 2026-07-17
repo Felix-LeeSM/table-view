@@ -205,6 +205,19 @@ export const en = {
     openSnippetsAria: "Open snippets",
     snippets: "Snippets",
     snippetsCount: "Snippets ({{count}})",
+    // Native tooltip (title) strings — hover copy, distinct from the aria
+    // labels above (which name the control for screen readers).
+    stopQueryNativeTitle:
+      "Stop query — cancels the running statement on the server",
+    stopQueryTitle: "Stop query",
+    cancellationUnsupportedTitle:
+      "Query cancellation is not supported for this database.",
+    runDisabledDbHint:
+      "Pick a database from the toolbar chip to run collection commands. Admin commands (`db.runCommand({...})`) work without one.",
+    dryRunTitle: "Dry run (Cmd+Shift+Enter) — BEGIN; ... ROLLBACK",
+    explainTitle: "Explain query plan",
+    formatTitle: "Format SQL (Cmd+I)",
+    openFavoritesTitle: "Favorites (Cmd+Shift+F)",
   },
 
   // ── TabDbChip ─────────────────────────────────────────────────────────────
@@ -456,6 +469,16 @@ export const ko = {
     openSnippetsAria: "스니펫 열기",
     snippets: "스니펫",
     snippetsCount: "스니펫 ({{count}})",
+    stopQueryNativeTitle: "쿼리 중지 — 서버에서 실행 중인 문장을 취소합니다",
+    stopQueryTitle: "쿼리 중지",
+    cancellationUnsupportedTitle:
+      "이 데이터베이스는 쿼리 취소를 지원하지 않습니다.",
+    runDisabledDbHint:
+      "컬렉션 명령을 실행하려면 툴바 칩에서 데이터베이스를 선택하세요. 관리자 명령(`db.runCommand({...})`)은 데이터베이스 없이도 동작합니다.",
+    dryRunTitle: "드라이 런 (Cmd+Shift+Enter) — BEGIN; ... ROLLBACK",
+    explainTitle: "쿼리 실행 계획",
+    formatTitle: "SQL 포맷 (Cmd+I)",
+    openFavoritesTitle: "즐겨찾기 (Cmd+Shift+F)",
   },
 
   tabDbChip: {
