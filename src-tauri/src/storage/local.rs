@@ -357,4 +357,45 @@ mod tests {
 
         cleanup_env();
     }
+
+    /// #1653 회귀 — `reject_internal_app_data_path` 가 symlink 우회를 canonical
+    /// 비교(:74)로 막는지 검증한다. 침해된 렌더러가 app_data_dir **밖**에
+    /// 심볼릭 링크를 두고 그 링크가 내부 credential (`connections.json` /
+    /// `.key` / `state.db`) 를 가리키게 해도, canonicalize 로 링크가 해소돼
+    /// 내부 디렉토리 포함이 드러나 거부(Err)돼야 한다. normalized 비교만으로는
+    /// 링크가 밖에 있어 통과처럼 보이므로 canonical arm 이 필수다. 정직하게
+    /// 밖을 가리키는 정상 경로는 통과(Ok)해 대조한다.
+    #[cfg(unix)]
+    #[tokio::test]
+    #[serial]
+    async fn test_reject_internal_app_data_path_rejects_symlink_escape() {
+        use std::os::unix::fs::symlink;
+
+        let _dir = setup_env();
+        let data_dir = app_data_dir().unwrap();
+
+        // 내부 credential 파일을 흉내내는 실제 파일 (symlink canonicalize 성공 조건).
+        let internal_secret = data_dir.join("connections.json");
+        std::fs::write(&internal_secret, b"secret").unwrap();
+
+        // app_data_dir 밖의 별도 디렉토리에 내부 파일을 가리키는 symlink 생성.
+        let outside = TempDir::new().unwrap();
+        let link = outside.path().join("escape_link");
+        symlink(&internal_secret, &link).unwrap();
+
+        // 우회 시도: 링크는 밖에 있지만 canonicalize 하면 내부를 가리킨다 → 거부.
+        assert!(
+            reject_internal_app_data_path(&link).is_err(),
+            "symlink resolving into app data dir must be rejected"
+        );
+
+        // 대조: 정직하게 밖을 가리키는 정상 경로는 통과.
+        let outside_file = outside.path().join("legit_export.csv");
+        assert!(
+            reject_internal_app_data_path(&outside_file).is_ok(),
+            "path outside app data dir must be allowed"
+        );
+
+        cleanup_env();
+    }
 }
