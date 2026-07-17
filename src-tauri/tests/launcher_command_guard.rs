@@ -207,6 +207,11 @@ const LAUNCHER_ALLOWLIST: &[&str] = &[
     "estimated_document_count",
     "distinct_documents",
     "parse_sql_backend",
+    // Diagnostics — reveal the local rotating log folder in the OS file
+    // explorer (#1566). Non-destructive (opens a read-only support artifact,
+    // no DB access / exfil) and invoked from the launcher's HomePage footer,
+    // so it MUST be allow-listed — the guard is fail-closed for the launcher.
+    "open_log_dir",
 ];
 
 fn src_dir() -> PathBuf {
