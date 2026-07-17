@@ -13,6 +13,7 @@ import {
   type DatabaseUserRow,
 } from "@/lib/api/databaseUsers";
 import { DATABASE_TYPE_LABELS, paradigmOf, type DatabaseType } from "../model";
+import { PanelLoadingSkeleton } from "./PanelLoadingSkeleton";
 
 export interface DatabaseUsersPanelProps {
   connectionId: string;
@@ -87,6 +88,8 @@ export function DatabaseUsersPanel({
           {error}
         </div>
       )}
+
+      {loading && rows.length === 0 && <PanelLoadingSkeleton />}
 
       {!loading && error === null && rows.length === 0 && (
         <p

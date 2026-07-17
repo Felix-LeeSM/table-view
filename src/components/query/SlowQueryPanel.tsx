@@ -8,6 +8,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { DataGridSkeleton } from "@components/datagrid";
 import { slowQueries, type SlowQueryRow } from "@/lib/api/slowQueries";
 import { safeStringifyCell } from "@/lib/jsonCell";
 import {
@@ -83,6 +84,8 @@ export function SlowQueryPanel({ connectionId, dbType }: SlowQueryPanelProps) {
           {error}
         </div>
       )}
+
+      {loading && rows === null && <DataGridSkeleton />}
 
       {!loading && error === null && rows !== null && rows.length === 0 && (
         <div

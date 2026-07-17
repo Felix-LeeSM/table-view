@@ -35,6 +35,7 @@ import {
   PopoverContent,
 } from "@components/ui/popover";
 import { Button } from "@components/ui/button";
+import { Skeleton } from "@components/ui/skeleton";
 import { resolveRdbTreeProfile, type RdbTreeShape } from "./treeShape";
 import {
   applyGlobalFilter,
@@ -77,6 +78,9 @@ const EMPTY_FILE_SOURCES: ReadonlyArray<FileAnalyticsSourceMetadata> =
 
 export default function SchemaTree({ connectionId }: SchemaTreeProps) {
   const { t } = useTranslation("schema");
+  // #1587 — the loading announcement reuses the shared `feedback:loading`
+  // label so the initial-load tree skeleton stays consistent with the grids.
+  const { t: tf } = useTranslation("feedback");
   const connectionName = useConnectionStore(
     (s) => s.connections.find((c) => c.id === connectionId)?.name,
   );
@@ -627,6 +631,30 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
           />
         )}
       </div>
+
+      {/* #1587 — initial-load skeleton. Before any schema resolves the tree
+          body renders nothing (blank pane) while the header shows only the
+          refresh spinner. Preview the known tree shape with an inline
+          skeleton (a few indented rows) so the wait is visible; kept
+          self-contained here rather than sharing #1586's tree skeleton
+          primitive. Only on first load (`schemas.length === 0`) — a refresh
+          keeps the rendered tree and spins the header button instead. */}
+      {actions.loadingSchemas && actions.schemas.length === 0 && (
+        <div
+          role="status"
+          aria-busy="true"
+          aria-label={tf("loading")}
+          data-testid="schema-tree-skeleton"
+          className="flex flex-col gap-1.5 px-3 py-2"
+        >
+          <Skeleton className="h-5 w-32" />
+          <Skeleton className="ml-3 h-4 w-40" />
+          <Skeleton className="ml-3 h-4 w-28" />
+          <Skeleton className="ml-3 h-4 w-36" />
+          <Skeleton className="h-5 w-24" />
+          <Skeleton className="ml-3 h-4 w-32" />
+        </div>
+      )}
 
       <div
         ref={treeRef}

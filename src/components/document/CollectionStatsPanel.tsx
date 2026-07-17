@@ -6,6 +6,7 @@ import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { DataGridSkeleton } from "@components/datagrid";
 import {
   collectionStatsMongo,
   collectionStatsRdb,
@@ -94,6 +95,8 @@ export function CollectionStatsPanel({
           {error}
         </div>
       )}
+
+      {loading && stats === null && <DataGridSkeleton />}
 
       {!loading && error === null && stats !== null && (
         <dl

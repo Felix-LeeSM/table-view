@@ -40,6 +40,14 @@ describe("ServerInfoPanel (Sprint 339 U4 live wire)", () => {
     infoMock.mockReset();
   });
 
+  it("shows a loading skeleton while the initial fetch is pending (#1587)", () => {
+    infoMock.mockReturnValueOnce(new Promise(() => {}));
+    render(<ServerInfoPanel connectionId="conn-pg" dbType="postgresql" />);
+    const status = screen.getByRole("status");
+    expect(status).toHaveAttribute("aria-busy", "true");
+    expect(screen.queryByTestId("server-info-grid")).toBeNull();
+  });
+
   it("renders RDB server identity grid after server_info resolves", async () => {
     infoMock.mockResolvedValueOnce(pgStub);
     render(<ServerInfoPanel connectionId="conn-pg" dbType="postgresql" />);
