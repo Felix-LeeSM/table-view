@@ -51,6 +51,12 @@ vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(() => Promise.resolve()),
 }));
 
+// #1580 — test-setup globally mocks `@lib/tauri/workspaces` (no-op resolve) so
+// stray background persists don't toast. The F1 close-flush test below asserts
+// the REAL `flushPersistWorkspaces` → `persist_workspace` invoke, so opt back
+// into the actual `persistWorkspace` and let it drive the mocked core invoke.
+vi.unmock("@lib/tauri/workspaces");
+
 function makeTableTab(overrides: Partial<TableTab> = {}): TableTab {
   return {
     type: "table",
