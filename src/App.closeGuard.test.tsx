@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { ConnectionId, TabId } from "@/types/branded";
 import { render, fireEvent, act, screen } from "@testing-library/react";
-import App from "./App";
+import App, { PERSIST_FLUSH_TIMEOUT_MS } from "./App";
 import {
   seedWorkspace,
   getTestWorkspace,
@@ -260,5 +260,69 @@ describe("App close-path unsaved-changes guard (#1101)", () => {
     expect(persistCall).toBeDefined();
     const req = (persistCall![1] as { req: { tabsJson: string } }).req;
     expect(req.tabsJson).toContain("SELECT pasted_sql");
+  });
+
+  // #1621 G3a — the close flush awaits `persist_workspace`, a Tauri IPC that can
+  // hang (backend stall / lost reply). A bare `.finally(destroy)` would then
+  // trap the window open forever. The bounded race must still destroy the
+  // window once the timeout elapses, even though the persist never settles.
+  it("native window:close-requested still destroys the window when the persist flush hangs (#1621 G3a)", async () => {
+    vi.useFakeTimers();
+    try {
+      const getHandler = await captureCloseHandler();
+      const { invoke } = await import("@tauri-apps/api/core");
+      const invokeMock = invoke as ReturnType<typeof vi.fn>;
+
+      const tab: QueryTab = {
+        type: "query",
+        id: "q-1" as TabId,
+        title: "Query 1",
+        connectionId: "conn1" as ConnectionId,
+        closable: true,
+        sql: "",
+        queryState: { status: "idle" },
+        paradigm: "rdb",
+        queryMode: "sql",
+        database: "db1",
+      };
+      useWorkspaceStore.setState(seedWorkspace([tab], "q-1", "conn1", "db1"));
+      render(<App />);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+
+      // A pending edit schedules the debounced persist (sets `pendingWorkspaces`
+      // so the close flush has a snapshot to write).
+      act(() => {
+        useWorkspaceStore
+          .getState()
+          .updateQuerySql("conn1", "db1", "q-1", "SELECT hang");
+      });
+
+      // Make the persist IPC hang forever; `workspace_close` (destroy) still
+      // resolves so we can observe the window actually closing.
+      invokeMock.mockImplementation((cmd: string) =>
+        cmd === "persist_workspace"
+          ? new Promise<void>(() => {})
+          : Promise.resolve(),
+      );
+      invokeMock.mockClear();
+
+      const closeHandler = getHandler();
+      await act(async () => {
+        closeHandler?.();
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      // Persist is hung — before the timeout the window must NOT be destroyed.
+      expect(invokeMock).not.toHaveBeenCalledWith("workspace_close");
+
+      // Advance past the bounded timeout — the race resolves and destroy fires.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(PERSIST_FLUSH_TIMEOUT_MS);
+      });
+      expect(invokeMock).toHaveBeenCalledWith("workspace_close");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

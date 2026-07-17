@@ -175,6 +175,15 @@ export function persistWorkspaces(workspaces: WorkspacesShape): Promise<void> {
  * (#1580 F2). Clearing both timers means the flushed snapshot is never
  * re-persisted by a stale trailing/maxWait timer. No pending snapshot (nothing
  * edited since the last flush) resolves immediately.
+ *
+ * #1621 G3b — this joins only the snapshot IT starts, NOT a persist already
+ * in flight from an earlier fired timer. If a debounce/maxWait flush is mid-IPC
+ * and nothing changed since (`pendingWorkspaces === null`), this returns an
+ * already-resolved Promise while that write is still settling. Acceptable: the
+ * pending snapshot always carries the newest state, so the returned Promise
+ * covers the latest edit; an earlier in-flight write, if slower, may outlive the
+ * caller's await. The close path (#1621 G3a) bounds its wait anyway, so a
+ * still-settling earlier write can't strand the window.
  */
 export function flushPersistWorkspaces(): Promise<void> {
   if (persistTimer) {
