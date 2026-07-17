@@ -50,6 +50,8 @@ const expectedMssqlRuntimeCapabilities = expectedCapabilities({
     dropObject: true,
   },
   intelligence: { erd: true },
+  // Issue #1073 — SQL Server admin ops parity (no users: #1077 PG-first).
+  operations: { activity: true, slowQueries: true, serverInfo: true },
 });
 
 const expectedOracleRuntimeCapabilities = expectedCapabilities({
@@ -68,6 +70,8 @@ const expectedOracleRuntimeCapabilities = expectedCapabilities({
     dropObject: true,
   },
   intelligence: { erd: true },
+  // Issue #1073 — Oracle admin ops parity (no users: #1077 PG-first).
+  operations: { activity: true, slowQueries: true, serverInfo: true },
 });
 
 describe("RDBMS data source profiles", () => {

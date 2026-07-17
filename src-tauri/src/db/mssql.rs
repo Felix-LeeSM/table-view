@@ -1,3 +1,4 @@
+mod admin;
 mod catalog;
 mod ddl;
 #[cfg(test)]
@@ -724,6 +725,28 @@ impl RdbAdapter for MssqlAdapter {
         namespace: &'a str,
     ) -> BoxFuture<'a, Result<Vec<FunctionInfo>, AppError>> {
         Box::pin(async move { MssqlAdapter::list_functions(self, namespace).await })
+    }
+
+    // ── Issue #1073 — admin ops (activity/kill/slow/info) SQL Server parity ──
+    fn list_server_activity<'a>(
+        &'a self,
+    ) -> BoxFuture<'a, Result<Vec<crate::models::ServerActivityRow>, AppError>> {
+        Box::pin(async move { MssqlAdapter::list_server_activity(self).await })
+    }
+
+    fn kill_session<'a>(&'a self, id: i64) -> BoxFuture<'a, Result<(), AppError>> {
+        Box::pin(async move { MssqlAdapter::kill_session(self, id).await })
+    }
+
+    fn slow_queries<'a>(
+        &'a self,
+        limit: i64,
+    ) -> BoxFuture<'a, Result<Vec<crate::models::SlowQueryRow>, AppError>> {
+        Box::pin(async move { MssqlAdapter::slow_queries(self, limit).await })
+    }
+
+    fn server_info<'a>(&'a self) -> BoxFuture<'a, Result<crate::models::ServerInfoRow, AppError>> {
+        Box::pin(async move { MssqlAdapter::server_info(self).await })
     }
 }
 

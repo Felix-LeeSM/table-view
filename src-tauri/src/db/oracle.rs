@@ -7,6 +7,7 @@
 //! execution, switch-database, trigger introspection (deferred, empty list),
 //! SID/TNS/wallet/TLS, and advanced auth remain unsupported or unclaimed.
 
+mod admin;
 mod catalog;
 mod ddl;
 #[cfg(test)]
@@ -464,6 +465,28 @@ impl RdbAdapter for OracleAdapter {
 
     // `list_triggers` inherits the RdbAdapter default `Ok(Vec::new())` — Oracle
     // trigger introspection is deferred like MySQL/SQLite, not a live claim.
+
+    // ── Issue #1073 — admin ops (activity/kill/slow/info) Oracle parity ──
+    fn list_server_activity<'a>(
+        &'a self,
+    ) -> BoxFuture<'a, Result<Vec<crate::models::ServerActivityRow>, AppError>> {
+        Box::pin(async move { OracleAdapter::list_server_activity(self).await })
+    }
+
+    fn kill_session<'a>(&'a self, id: i64) -> BoxFuture<'a, Result<(), AppError>> {
+        Box::pin(async move { OracleAdapter::kill_session(self, id).await })
+    }
+
+    fn slow_queries<'a>(
+        &'a self,
+        limit: i64,
+    ) -> BoxFuture<'a, Result<Vec<crate::models::SlowQueryRow>, AppError>> {
+        Box::pin(async move { OracleAdapter::slow_queries(self, limit).await })
+    }
+
+    fn server_info<'a>(&'a self) -> BoxFuture<'a, Result<crate::models::ServerInfoRow, AppError>> {
+        Box::pin(async move { OracleAdapter::server_info(self).await })
+    }
 }
 
 fn cancellable_metadata<'a, T>(
