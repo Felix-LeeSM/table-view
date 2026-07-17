@@ -54,7 +54,8 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 # /dev/null; Windows `windows_subsystem = "windows"` → detached console) drop
 # every `tracing` line; this crate's non-blocking, daily-rotating appender
 # tees them to a local file (ADR 0036 — logs stay on the user's machine, no
-# remote telemetry). Small crate, pulls only `time` + `crossbeam-channel`.
+# remote telemetry). Small crate; transitively pulls `time`,
+# `crossbeam-channel`, and `symlink 0.1.0` (all MIT/Apache, cargo-deny ok).
 tracing-appender = "0.2"
 uuid = { version = "1", features = ["v4"] }
 dirs = "6"

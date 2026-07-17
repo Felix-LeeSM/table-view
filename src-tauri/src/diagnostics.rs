@@ -48,9 +48,30 @@ pub fn log_dir() -> PathBuf {
 /// stderr). Acceptable ceiling for a diagnostics sink; a synchronous
 /// pre-exit flush is the upgrade path if those lines prove load-bearing.
 /// Rotation is daily with no built-in file-count cap — see PR follow-up.
+///
+/// Every failure path returns `Err` (no panic): `run()` routes that to a
+/// stdout-only degrade so a read-only fs / disk-full / ENFILE never aborts
+/// boot. This is why we drive the rolling appender via `Builder::build`
+/// (which returns a `Result`) instead of `rolling::daily`, whose internal
+/// `.expect` would panic on the same failures.
 pub fn file_writer(dir: &Path) -> std::io::Result<(NonBlocking, WorkerGuard)> {
     std::fs::create_dir_all(dir)?;
-    let appender = tracing_appender::rolling::daily(dir, "table-view.log");
+    // Logs persist host:port / schema names / paths / error fragments, so the
+    // directory must not be world-readable. Match the project's 0o600-file /
+    // 0o700-dir convention (storage/crypto.rs, local.rs, key_migration.rs).
+    // The daily appender re-creates files without a hook, so a per-file 0o600
+    // would miss tomorrow's file — a 0o700 dir gates every file inside it and
+    // is rotation-proof.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700))?;
+    }
+    let appender = tracing_appender::rolling::Builder::new()
+        .rotation(tracing_appender::rolling::Rotation::DAILY)
+        .filename_prefix("table-view.log")
+        .build(dir)
+        .map_err(std::io::Error::other)?;
     Ok(tracing_appender::non_blocking(appender))
 }
 
@@ -110,5 +131,38 @@ mod tests {
     fn test_log_dir_is_under_table_view_logs() {
         let dir = log_dir();
         assert!(dir.ends_with("table-view/logs"), "got {dir:?}");
+    }
+
+    // Reason (review B1) — logs persist host:port / schema names / paths /
+    // error fragments, so the dir must be owner-only (0o700), matching the
+    // project's 0o600-file / 0o700-dir convention. Rotation re-creates files
+    // without a hook, so gating the *dir* is the rotation-proof control
+    // (2026-07-17).
+    #[cfg(unix)]
+    #[test]
+    fn test_file_writer_makes_log_dir_owner_only_0o700() {
+        use std::os::unix::fs::PermissionsExt;
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let dir = tmp.path().join("logs");
+        let (_writer, _guard) = file_writer(&dir).expect("file_writer");
+        let mode = std::fs::metadata(&dir)
+            .expect("metadata")
+            .permissions()
+            .mode()
+            & 0o777;
+        assert_eq!(mode, 0o700, "log dir must be owner-only, got {mode:o}");
+    }
+
+    // Reason (review B2) — a file-open failure must surface as `Err` (routed
+    // to the stdout-only degrade path in `run()`), never a panic that aborts
+    // boot. Point the writer at a dir nested under a regular file so the
+    // create step fails deterministically (2026-07-17).
+    #[test]
+    fn test_file_writer_returns_err_not_panic_when_dir_unusable() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let occupied = tmp.path().join("occupied");
+        std::fs::write(&occupied, b"x").expect("write file");
+        // `occupied` is a file, so creating `occupied/logs` under it fails.
+        assert!(file_writer(&occupied.join("logs")).is_err());
     }
 }
