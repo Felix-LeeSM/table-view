@@ -224,6 +224,10 @@ export default function EditableQueryResultGrid({
     lastResetSqlRef.current = sql;
     if (!shouldVirtualize || !isNewQuery) return;
     rowVirtualizer.scrollToIndex(0, { align: "start" });
+    // Deps intentionally track only the result-set identity + the
+    // virtualization toggle. `rowVirtualizer` is a fresh object each render, so
+    // listing it would re-scroll to the top on every render (cf. DataGridTable,
+    // #1369).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [result, shouldVirtualize]);
 
