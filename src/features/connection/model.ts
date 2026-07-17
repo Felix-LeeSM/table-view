@@ -121,6 +121,16 @@ export interface ConnectionConfig {
   authSource?: string | null;
   /** MongoDB replica set name. */
   replicaSet?: string | null;
+
+  // ── Oracle-specific optional fields (#1065) ───────────────────────
+  /** Oracle: connect via SID instead of a service name. */
+  oracleUseSid?: boolean | null;
+  /** Oracle: filesystem path to the wallet directory (`ewallet.pem`) for
+   *  mTLS. A path reference only — stripped from exports. */
+  walletPath?: string | null;
+  /** Whether an Oracle wallet password is stored on disk. Like
+   *  `hasPassword`, the plaintext never reaches the renderer. */
+  hasWalletPassword?: boolean;
 }
 
 /**
@@ -131,8 +141,16 @@ export interface ConnectionConfig {
  * - `""`       → explicitly clear the stored password
  * - non-empty  → set/replace the stored password
  */
-export interface ConnectionDraft extends Omit<ConnectionConfig, "hasPassword"> {
+export interface ConnectionDraft extends Omit<
+  ConnectionConfig,
+  "hasPassword" | "hasWalletPassword"
+> {
   password: string | null;
+  /** Oracle wallet password (#1065). Same three-way save semantics as
+   * `password`: `null` keep / `""` clear / non-empty set. Optional so the
+   * many non-Oracle draft fixtures/consumers need not carry it; the dialog
+   * injects the resolved value at save/test time. */
+  walletPassword?: string | null;
 }
 
 export function getMssqlConnectionUnsupportedMessage(
@@ -330,6 +348,7 @@ export function createEmptyDraft(): ConnectionDraft {
     groupId: null,
     color: null,
     paradigm: "rdb",
+    walletPassword: "",
   };
 }
 
@@ -380,7 +399,11 @@ export function draftFromConnection(conn: ConnectionConfig): ConnectionDraft {
     replicaSet: conn.replicaSet,
     tlsEnabled: resolveDraftTlsEnabled(conn),
     trustServerCertificate: conn.trustServerCertificate,
+    oracleUseSid: conn.oracleUseSid,
+    walletPath: conn.walletPath,
     password: null,
+    // null = keep the stored wallet password unchanged on save (#1065).
+    walletPassword: null,
   };
 }
 

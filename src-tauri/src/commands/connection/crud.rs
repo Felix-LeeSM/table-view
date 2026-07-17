@@ -31,6 +31,7 @@ use crate::storage;
 pub fn list_connections() -> Result<Vec<ConnectionConfigPublic>, AppError> {
     let data = storage::load_storage_redacted()?;
     let presence = storage::password_presence_map()?;
+    let wallet_presence = storage::wallet_password_presence_map()?;
     Ok(data
         .connections
         .iter()
@@ -39,6 +40,7 @@ pub fn list_connections() -> Result<Vec<ConnectionConfigPublic>, AppError> {
             // load_storage_redacted clears passwords, so derive has_password
             // from the presence map instead of the (now-empty) field.
             p.has_password = *presence.get(&c.id).unwrap_or(&false);
+            p.has_wallet_password = *wallet_presence.get(&c.id).unwrap_or(&false);
             p
         })
         .collect())
@@ -72,11 +74,14 @@ pub fn save_connection(req: SaveConnectionRequest) -> Result<ConnectionConfigPub
     }
 
     let new_password = req.password.clone();
-    storage::save_connection(conn.clone(), new_password)?;
+    let new_wallet_password = req.wallet_password.clone();
+    storage::save_connection_with_wallet(conn.clone(), new_password, new_wallet_password)?;
 
     let presence = storage::password_presence_map()?;
+    let wallet_presence = storage::wallet_password_presence_map()?;
     let mut public = ConnectionConfigPublic::from(&conn);
     public.has_password = *presence.get(&conn.id).unwrap_or(&false);
+    public.has_wallet_password = *wallet_presence.get(&conn.id).unwrap_or(&false);
     Ok(public)
 }
 
@@ -90,6 +95,7 @@ pub async fn test_connection(req: TestConnectionRequest) -> Result<String, AppEr
     let TestConnectionRequest {
         config,
         password,
+        wallet_password,
         existing_id,
     } = req;
 
@@ -102,8 +108,19 @@ pub async fn test_connection(req: TestConnectionRequest) -> Result<String, AppEr
         },
     };
 
+    // #1065 — same 3-state resolution for the Oracle wallet password so a
+    // test on an existing connection can reuse the stored value.
+    let resolved_wallet_password: String = match wallet_password {
+        Some(s) => s,
+        None => match existing_id.as_deref() {
+            Some(id) => storage::get_decrypted_wallet_password(id)?.unwrap_or_default(),
+            None => String::new(),
+        },
+    };
+
     let mut full = config.into_config_with_empty_password();
     full.password = resolved_password;
+    full.wallet_password = resolved_wallet_password;
 
     match full.db_type {
         DatabaseType::Postgresql => {
@@ -428,6 +445,7 @@ mod tests {
         let req = SaveConnectionRequest {
             connection: ConnectionConfigPublic::from(&updated),
             password: None,
+            wallet_password: None,
             is_new: Some(false),
         };
         save_connection(req).unwrap();
@@ -453,6 +471,7 @@ mod tests {
         let req = SaveConnectionRequest {
             connection: ConnectionConfigPublic::from(&stub),
             password: Some(String::new()),
+            wallet_password: None,
             is_new: Some(false),
         };
         save_connection(req).unwrap();
@@ -480,6 +499,7 @@ mod tests {
         let req = SaveConnectionRequest {
             connection: ConnectionConfigPublic::from(&stub),
             password: Some("brand-new".into()),
+            wallet_password: None,
             is_new: Some(false),
         };
         save_connection(req).unwrap();
@@ -511,6 +531,7 @@ mod tests {
         let req = TestConnectionRequest {
             config: ConnectionConfigPublic::from(&conn),
             password: None,
+            wallet_password: None,
             existing_id: Some("c1".into()),
         };
         let result = test_connection(req).await;
@@ -558,6 +579,7 @@ mod tests {
         let req = TestConnectionRequest {
             config: ConnectionConfigPublic::from(&conn),
             password: Some(String::new()),
+            wallet_password: None,
             existing_id: None,
         };
         let result = test_connection(req).await;
@@ -590,6 +612,7 @@ mod tests {
         let req = TestConnectionRequest {
             config: ConnectionConfigPublic::from(&conn),
             password: Some(String::new()),
+            wallet_password: None,
             existing_id: None,
         };
         let result = test_connection(req).await;
@@ -629,6 +652,7 @@ mod tests {
         let req = TestConnectionRequest {
             config: ConnectionConfigPublic::from(&conn),
             password: Some(String::new()),
+            wallet_password: None,
             existing_id: None,
         };
         let result = test_connection(req).await;
@@ -662,6 +686,7 @@ mod tests {
         let req = TestConnectionRequest {
             config: ConnectionConfigPublic::from(&conn),
             password: Some(String::new()),
+            wallet_password: None,
             existing_id: None,
         };
         let result = test_connection(req).await;

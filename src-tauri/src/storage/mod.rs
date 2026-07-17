@@ -254,6 +254,10 @@ pub fn load_storage_redacted() -> Result<StorageData, AppError> {
         let mut data = load_storage_raw()?;
         for conn in &mut data.connections {
             conn.password.clear();
+            // #1065 — the Oracle wallet password is a secret with the same
+            // IPC contract as `password`; never let its ciphertext reach a
+            // frontend-bound payload.
+            conn.wallet_password.clear();
         }
         Ok(data)
     })
@@ -268,6 +272,11 @@ pub fn load_storage_with_secrets() -> Result<StorageData, AppError> {
         for conn in &mut data.connections {
             if !conn.password.is_empty() {
                 conn.password = crypto::decrypt(&conn.password, &key)?;
+            }
+            // #1065 — decrypt the Oracle wallet password on the same connect
+            // path so the adapter can hand it to the driver.
+            if !conn.wallet_password.is_empty() {
+                conn.wallet_password = crypto::decrypt(&conn.wallet_password, &key)?;
             }
         }
         Ok(data)
@@ -306,13 +315,59 @@ pub fn get_decrypted_password(id: &str) -> Result<Option<String>, AppError> {
     })
 }
 
+/// #1065 — decrypt the Oracle wallet password for a single connection, same
+/// 3-value contract as [`get_decrypted_password`]. Used by `test_connection`
+/// to substitute the stored wallet password when the dialog omits it.
+pub fn get_decrypted_wallet_password(id: &str) -> Result<Option<String>, AppError> {
+    with_lock(|| {
+        let data = load_storage_raw()?;
+        let conn = data.connections.iter().find(|c| c.id == id);
+        match conn {
+            None => Ok(None),
+            Some(c) if c.wallet_password.is_empty() => Ok(Some(String::new())),
+            Some(c) => {
+                let key = master_key()?;
+                Ok(Some(crypto::decrypt(&c.wallet_password, &key)?))
+            }
+        }
+    })
+}
+
+/// #1065 — whether each connection currently has a stored wallet password,
+/// indexed by id. Cheap (no decryption). Mirrors [`password_presence_map`].
+pub fn wallet_password_presence_map() -> Result<std::collections::HashMap<String, bool>, AppError> {
+    with_lock(|| {
+        let data = load_storage_raw()?;
+        Ok(data
+            .connections
+            .into_iter()
+            .map(|c| (c.id, !c.wallet_password.is_empty()))
+            .collect())
+    })
+}
+
 /// Save a connection. `new_password` semantics:
 /// - `None`     → preserve the existing ciphertext (or empty for new ids)
 /// - `Some("")` → explicitly clear the password
 /// - `Some(s)`  → encrypt `s` and store
+///
+/// The Oracle wallet password is preserved unchanged (`None`); use
+/// [`save_connection_with_wallet`] to update it.
 pub fn save_connection(
+    conn: ConnectionConfig,
+    new_password: Option<String>,
+) -> Result<(), AppError> {
+    save_connection_with_wallet(conn, new_password, None)
+}
+
+/// #1065 — save a connection resolving both the DB password and the Oracle
+/// wallet password with identical 3-state semantics (`None` preserve /
+/// `Some("")` clear / `Some(s)` encrypt+store). Split from [`save_connection`]
+/// so the ~20 non-Oracle callers keep the 2-arg signature.
+pub fn save_connection_with_wallet(
     mut conn: ConnectionConfig,
     new_password: Option<String>,
+    new_wallet_password: Option<String>,
 ) -> Result<(), AppError> {
     with_lock(|| {
         let mut data = load_storage_raw()?;
@@ -329,21 +384,19 @@ pub fn save_connection(
             )));
         }
 
-        // Resolve the encrypted password to persist
-        let encrypted = match new_password {
-            Some(s) if !s.is_empty() => {
-                let key = master_key()?;
-                crypto::encrypt(&s, &key)?
+        let existing = data.connections.iter().find(|c| c.id == conn.id);
+        let resolve = |new: Option<String>, current: Option<&String>| -> Result<String, AppError> {
+            match new {
+                Some(s) if !s.is_empty() => {
+                    let key = master_key()?;
+                    crypto::encrypt(&s, &key)
+                }
+                Some(_) => Ok(String::new()),
+                None => Ok(current.cloned().unwrap_or_default()),
             }
-            Some(_) => String::new(),
-            None => data
-                .connections
-                .iter()
-                .find(|c| c.id == conn.id)
-                .map(|c| c.password.clone())
-                .unwrap_or_default(),
         };
-        conn.password = encrypted;
+        conn.password = resolve(new_password, existing.map(|c| &c.password))?;
+        conn.wallet_password = resolve(new_wallet_password, existing.map(|c| &c.wallet_password))?;
 
         if let Some(existing) = data.connections.iter_mut().find(|c| c.id == conn.id) {
             *existing = conn;
@@ -491,6 +544,9 @@ mod tests {
             replica_set: None,
             tls_enabled: None,
             trust_server_certificate: None,
+            oracle_use_sid: None,
+            wallet_path: None,
+            wallet_password: String::new(),
         }
     }
 
@@ -1021,6 +1077,90 @@ mod tests {
                 .any(|n| n.starts_with("connections.json.corrupt-")),
             "quarantined backup not found in {entries:?}"
         );
+
+        cleanup_test_env();
+    }
+
+    // -------------------------------------------------------------------
+    // #1065 — Oracle wallet password: same at-rest / redact / 3-state
+    // contract as the DB password.
+    // -------------------------------------------------------------------
+
+    /// The wallet password is encrypted on disk (never plaintext), decrypts on
+    /// the secrets path, and is cleared on the redacted path.
+    #[test]
+    #[serial]
+    fn wallet_password_encrypted_at_rest_and_redacted() {
+        let _dir = setup_test_env();
+
+        let mut conn = sample_connection("c1", "Oracle");
+        conn.wallet_password = "wsecret".into();
+        save_connection_with_wallet(conn, Some(String::new()), Some("wsecret".into())).unwrap();
+
+        let data_dir = std::env::var("TABLE_VIEW_TEST_DATA_DIR").unwrap();
+        let raw =
+            fs::read_to_string(std::path::Path::new(&data_dir).join("connections.json")).unwrap();
+        assert!(
+            !raw.contains("wsecret"),
+            "wallet password must not be stored in plaintext"
+        );
+
+        let secrets = load_storage_with_secrets().unwrap();
+        assert_eq!(secrets.connections[0].wallet_password, "wsecret");
+
+        let redacted = load_storage_redacted().unwrap();
+        assert!(redacted.connections[0].wallet_password.is_empty());
+
+        cleanup_test_env();
+    }
+
+    /// 3-state: `None` preserves, `Some(s)` replaces, `Some("")` clears —
+    /// independently of the DB password.
+    #[test]
+    #[serial]
+    fn wallet_password_three_state_update() {
+        let _dir = setup_test_env();
+
+        let mut conn = sample_connection("c1", "Oracle");
+        conn.password = "dbpw".into();
+        conn.wallet_password = "w1".into();
+        save_connection_with_wallet(conn, Some("dbpw".into()), Some("w1".into())).unwrap();
+
+        // None wallet + None password → both preserved.
+        let stub = sample_connection("c1", "Oracle");
+        save_connection_with_wallet(stub, None, None).unwrap();
+        assert_eq!(
+            get_decrypted_wallet_password("c1").unwrap(),
+            Some("w1".into())
+        );
+        assert_eq!(get_decrypted_password("c1").unwrap(), Some("dbpw".into()));
+
+        // Replace wallet only.
+        let stub = sample_connection("c1", "Oracle");
+        save_connection_with_wallet(stub, None, Some("w2".into())).unwrap();
+        assert_eq!(
+            get_decrypted_wallet_password("c1").unwrap(),
+            Some("w2".into())
+        );
+        assert_eq!(get_decrypted_password("c1").unwrap(), Some("dbpw".into()));
+        assert_eq!(
+            wallet_password_presence_map().unwrap().get("c1"),
+            Some(&true)
+        );
+
+        // Clear wallet only.
+        let stub = sample_connection("c1", "Oracle");
+        save_connection_with_wallet(stub, None, Some(String::new())).unwrap();
+        assert_eq!(
+            get_decrypted_wallet_password("c1").unwrap(),
+            Some(String::new())
+        );
+        assert_eq!(
+            wallet_password_presence_map().unwrap().get("c1"),
+            Some(&false)
+        );
+        // DB password untouched throughout.
+        assert_eq!(get_decrypted_password("c1").unwrap(), Some("dbpw".into()));
 
         cleanup_test_env();
     }

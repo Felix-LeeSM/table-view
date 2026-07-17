@@ -23,6 +23,9 @@ fn oracle_config() -> ConnectionConfig {
         replica_set: None,
         tls_enabled: None,
         trust_server_certificate: None,
+        oracle_use_sid: None,
+        wallet_path: None,
+        wallet_password: String::new(),
     }
 }
 
@@ -91,23 +94,10 @@ fn connect_config_rejects_empty_required_fields() {
 }
 
 #[test]
-fn connect_config_rejects_sid_tns_wallet_and_advanced_auth_modes() {
-    let mut sid = oracle_config();
-    sid.database = "SID=ORCL".into();
-    assert!(matches!(
-        OracleAdapter::connect_config(&sid, 5),
-        Err(AppError::Validation(message))
-            if message.contains("SID") && message.contains("service name")
-    ));
-
-    let mut tns = oracle_config();
-    tns.database = "(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)))".into();
-    assert!(matches!(
-        OracleAdapter::connect_config(&tns, 5),
-        Err(AppError::Validation(message))
-            if message.contains("TNS") && message.contains("service name")
-    ));
-
+fn connect_config_still_rejects_advanced_auth_and_mssql_tls_toggles() {
+    // Reason: #1065 opens SID + wallet but keeps rejecting password-less
+    // external auth and the MSSQL-only tls/trust toggles (Oracle exposes
+    // neither; the wallet field is the only Oracle TLS trigger). (2026-07-17)
     let mut advanced = oracle_config();
     advanced.password.clear();
     assert!(matches!(
@@ -120,33 +110,128 @@ fn connect_config_rejects_sid_tns_wallet_and_advanced_auth_modes() {
     auth_field.auth_source = Some("kerberos".into());
     assert!(matches!(
         OracleAdapter::connect_config(&auth_field, 5),
-        Err(AppError::Validation(message))
-            if message.contains("advanced auth") && message.contains("service-name")
+        Err(AppError::Validation(message)) if message.contains("advanced auth")
     ));
 
-    let mut tns_field = oracle_config();
-    tns_field.replica_set = Some("tnsnames-alias".into());
+    let mut replica_field = oracle_config();
+    replica_field.replica_set = Some("tnsnames-alias".into());
     assert!(matches!(
-        OracleAdapter::connect_config(&tns_field, 5),
-        Err(AppError::Validation(message))
-            if message.contains("TNS") && message.contains("wallet")
+        OracleAdapter::connect_config(&replica_field, 5),
+        Err(AppError::Validation(_))
     ));
 
-    let mut wallet = oracle_config();
-    wallet.tls_enabled = Some(true);
+    let mut tls = oracle_config();
+    tls.tls_enabled = Some(true);
     assert!(matches!(
-        OracleAdapter::connect_config(&wallet, 5),
-        Err(AppError::Validation(message))
-            if message.contains("wallet/TLS") && message.contains("issue #904")
+        OracleAdapter::connect_config(&tls, 5),
+        Err(AppError::Validation(message)) if message.contains("wallet")
     ));
 
     let mut trust = oracle_config();
     trust.trust_server_certificate = Some(true);
     assert!(matches!(
         OracleAdapter::connect_config(&trust, 5),
-        Err(AppError::Validation(message))
-            if message.contains("wallet/TLS") && message.contains("issue #904")
+        Err(AppError::Validation(message)) if message.contains("wallet")
     ));
+}
+
+#[test]
+fn connect_config_rejects_descriptor_injection_in_identifiers() {
+    // Reason: #1065 — the driver's `build_connect_string` interpolates
+    // host/service/SID into a TNS descriptor with zero escaping, so a `)(`
+    // value could inject descriptor clauses (real trigger: an imported export
+    // envelope, threat model §2.1). The character whitelist at this trust
+    // boundary is the mitigation; injection strings must be rejected, never
+    // passed to the driver. (2026-07-17)
+    let injections = [
+        "X)(SERVER=DEDICATED))(ADDRESS=(HOST=evil",
+        "svc/../other",
+        "svc name",
+        "(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)))",
+        "svc);DROP",
+    ];
+    for bad in injections {
+        let mut svc = oracle_config();
+        svc.database = bad.into();
+        assert!(
+            matches!(
+                OracleAdapter::connect_config(&svc, 5),
+                Err(AppError::Validation(_))
+            ),
+            "service name injection not rejected: {bad}"
+        );
+
+        let mut host = oracle_config();
+        host.host = bad.into();
+        assert!(
+            matches!(
+                OracleAdapter::connect_config(&host, 5),
+                Err(AppError::Validation(_))
+            ),
+            "host injection not rejected: {bad}"
+        );
+    }
+
+    // A legitimate ADB-style dotted/underscored service name survives.
+    let mut adb = oracle_config();
+    adb.database = "g1a2b3_myadb_high.adb.oraclecloud.com".into();
+    OracleAdapter::connect_config(&adb, 5)
+        .expect("ADB service name with dots/underscores must be accepted");
+}
+
+#[test]
+fn connect_config_uses_sid_method_when_flagged() {
+    // Reason: #1065 — `oracle_use_sid = Some(true)` selects the driver's
+    // native `Config::with_sid`; without it the identifier is a service name.
+    // (2026-07-17)
+    let mut sid = oracle_config();
+    sid.oracle_use_sid = Some(true);
+    sid.database = " ORCL ".into();
+    let config = OracleAdapter::connect_config(&sid, 5).unwrap();
+    assert!(matches!(
+        config.service,
+        ServiceMethod::Sid(ref s) if s == "ORCL"
+    ));
+    assert!(!config.is_tls_enabled());
+
+    let mut empty_sid = oracle_config();
+    empty_sid.oracle_use_sid = Some(true);
+    empty_sid.database = "  ".into();
+    assert!(matches!(
+        OracleAdapter::connect_config(&empty_sid, 5),
+        Err(AppError::Validation(message)) if message.contains("SID")
+    ));
+}
+
+#[test]
+fn connect_config_wallet_missing_dir_errors_without_leaking_path() {
+    // Reason: #1065 — a wallet path that can't be loaded (no ewallet.pem) must
+    // fail closed, and the error must NOT echo the wallet path (leaks the home
+    // dir username / topology; redact contract §2.5 / #1453). (2026-07-17)
+    let dir = tempfile::tempdir().unwrap();
+    let wallet_path = dir.path().join("nope-oracle-wallet");
+    let mut wallet = oracle_config();
+    wallet.wallet_path = Some(wallet_path.to_string_lossy().into_owned());
+
+    match OracleAdapter::connect_config(&wallet, 5) {
+        Err(AppError::Connection(message)) => {
+            assert!(
+                !message.contains(&*wallet_path.to_string_lossy()),
+                "wallet path leaked into error: {message}"
+            );
+        }
+        other => panic!("expected redacted Connection error, got {other:?}"),
+    }
+}
+
+#[test]
+fn connect_config_without_wallet_leaves_tls_disabled() {
+    // Reason: #1065 — no wallet path means plain TCP; the wallet field is the
+    // only Oracle TLS trigger (1-way TLS / trust toggles are out of scope).
+    // (2026-07-17)
+    let config = OracleAdapter::connect_config(&oracle_config(), 5).unwrap();
+    assert!(!config.is_tls_enabled());
+    assert!(config.tls_config.is_none());
 }
 
 #[test]

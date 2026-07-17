@@ -91,6 +91,9 @@ pub async fn persist_connection_inner(
         replica_set: req.replica_set.clone(),
         tls_enabled: req.tls_enabled,
         trust_server_certificate: req.trust_server_certificate,
+        oracle_use_sid: None,
+        wallet_path: None,
+        wallet_password: String::new(),
     };
     crate::storage::save_connection(config, None)?;
 

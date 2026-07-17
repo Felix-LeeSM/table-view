@@ -45,6 +45,13 @@ export interface UseConnectionDraftFormReturn {
   setPasswordInput: React.Dispatch<React.SetStateAction<string>>;
   clearPassword: boolean;
   setClearPassword: React.Dispatch<React.SetStateAction<boolean>>;
+  /** #1065 — Oracle wallet password input, mirroring `passwordInput`. */
+  walletPasswordInput: string;
+  setWalletPasswordInput: React.Dispatch<React.SetStateAction<string>>;
+  clearWalletPassword: boolean;
+  setClearWalletPassword: React.Dispatch<React.SetStateAction<boolean>>;
+  hadWalletPassword: boolean;
+  resolveWalletPassword: () => string | null;
   isEditing: boolean;
   hadPassword: boolean;
   isFileConnection: boolean;
@@ -86,6 +93,7 @@ export function useConnectionDraftForm(
 ): UseConnectionDraftFormReturn {
   const isEditing = !!connection;
   const hadPassword = !!connection?.hasPassword;
+  const hadWalletPassword = !!connection?.hasWalletPassword;
 
   const [form, setForm] = useState<ConnectionDraft>(
     connection ? draftFromConnection(connection) : createEmptyDraft(),
@@ -95,6 +103,10 @@ export function useConnectionDraftForm(
   // explicitly checks "Clear password".
   const [passwordInput, setPasswordInput] = useState("");
   const [clearPassword, setClearPassword] = useState(false);
+  // #1065 — Oracle wallet password: the same keep/clear/set UI state as the
+  // DB password, kept out of the draft until save (ADR 0005).
+  const [walletPasswordInput, setWalletPasswordInput] = useState("");
+  const [clearWalletPassword, setClearWalletPassword] = useState(false);
   // Sprint-108 (#CONN-DIALOG-2): when the user changes DB type with a custom
   // port set, defer the swap until they confirm port replacement. The form
   // mutation only applies on confirm; cancel leaves dbType + port untouched.
@@ -182,6 +194,14 @@ export function useConnectionDraftForm(
     return null;
   };
 
+  /** #1065 — resolve the Oracle wallet password (same 3-state as password). */
+  const resolveWalletPassword = (): string | null => {
+    if (!isEditing) return walletPasswordInput;
+    if (clearWalletPassword) return "";
+    if (walletPasswordInput.length > 0) return walletPasswordInput;
+    return null;
+  };
+
   // Sprint 178 (AC-178-02): trim user-pasteable string fields at the
   // save/test boundary, NEVER on keystroke. The list is narrowly scoped:
   // `password` is excluded per ADR-0005 (some legacy systems require
@@ -242,6 +262,12 @@ export function useConnectionDraftForm(
     setPasswordInput,
     clearPassword,
     setClearPassword,
+    walletPasswordInput,
+    setWalletPasswordInput,
+    clearWalletPassword,
+    setClearWalletPassword,
+    hadWalletPassword,
+    resolveWalletPassword,
     isEditing,
     hadPassword,
     isFileConnection,
