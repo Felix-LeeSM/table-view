@@ -389,9 +389,12 @@ mod tests {
             (ExportFormat::Tsv, table_ctx(), sample_rows(7)),
             (ExportFormat::Sql, table_ctx(), sample_rows(7)),
             (ExportFormat::Json, collection_ctx(), doc_rows(7)),
+            // #1638 — tabular JSON (table ctx) must also match single-shot.
+            (ExportFormat::Json, table_ctx(), sample_rows(7)),
             // zero-row boundary — header/`[]` only.
             (ExportFormat::Csv, table_ctx(), vec![]),
             (ExportFormat::Json, collection_ctx(), vec![]),
+            (ExportFormat::Json, table_ctx(), vec![]),
         ];
         for (format, ctx, rows) in cases {
             let dir = TempDir::new().unwrap();
@@ -579,24 +582,34 @@ mod tests {
         assert!(registry.sessions.lock().await.is_empty());
     }
 
-    // [#1443] JSON + Table ctx preflight 는 단발 경로와 동일하게 reject.
+    // [#1638] JSON + Table ctx 는 이제 세션 경로에서도 허용 — begin 이
+    // 세션을 열고 tabular writer 를 준비한다 (구 collection-only reject 폐기).
     #[tokio::test]
-    async fn begin_rejects_json_with_table_context() {
+    async fn begin_accepts_json_with_table_context_and_writes_tabular() {
         let state = AppState::new();
         let registry = ExportSessionRegistry::default();
         let dir = TempDir::new().unwrap();
-        let res = export_grid_begin_inner(
+        let target = dir.path().join("out.json");
+        let summary = drive_session(
             &state,
             &registry,
             ExportFormat::Json,
-            dir.path().join("out.json"),
-            vec!["id".into()],
+            target.clone(),
+            vec!["id".into(), "name".into()],
+            vec![sample_rows(2)],
             table_ctx(),
             None,
         )
-        .await;
-        assert!(matches!(res, Err(AppError::Validation(_))));
-        assert!(dir_file_names(dir.path()).is_empty());
+        .await
+        .unwrap();
+        assert_eq!(summary.rows_written, 2);
+        let body = std::fs::read_to_string(&target).unwrap();
+        assert!(
+            body.starts_with("[\n  {\n    \"id\": 0,"),
+            "tabular JSON: {body}"
+        );
+        // no temp siblings — only the renamed target remains.
+        assert_eq!(dir_file_names(dir.path()), vec!["out.json".to_string()]);
     }
 
     // [#1443] 미지 session id — chunk/finish 는 Validation 에러.

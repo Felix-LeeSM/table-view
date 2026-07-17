@@ -81,6 +81,16 @@ DBMS delta 가 아니며, delta 는 DBMS/version/dialect/paradigm/capability/evi
 Capability 가 없으면 UI 는 hide/disable + fallback 을 보여준다. Runtime optimistic
 failure 를 기본 동작으로 만들지 않는다.
 
+Capability gate 는 UI 단층이다 (#1618 threat model): command layer (예:
+`document/mutate.rs`) 는 `edit.*` capability 를 재검증하지 않고 paradigm
+(`as_*()?`) + safety 만 강제한다. Mutation 진입점은 button hide 만 믿지 않고
+defense-in-depth 로컬 가드를 한 겹 둔다. Document-edit gate
+(`supportsDocumentEditing`/`supportsBulkWrite`) 의 unknown-dbType 기본값은
+fail-closed (false); RDB trio (`supportsRowEditing`/`supportsDdl`/
+`supportsCatalogFeature`) 는 schema-tree load 중 affordance flicker 회피 위해
+fail-open 유지 (분리는 의도된 결정). `edit.bulkWrite` 는 `editDocuments` 와 분리
+유지 (fold 아님) — editDocuments-지원 + bulkWrite-미지원 DBMS 등장 시 재논의.
+
 Current posture summary and per-source active/deferred boundaries live in
 [runtime posture](posture/memory.md). Product wording and evidence detail live in
 product/contributor docs.

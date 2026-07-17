@@ -31,6 +31,13 @@ vi.mock("@/lib/tauri", async () => {
 // (`persistence.ipc` / `persistence.flush`) `vi.unmock` it and drive their own
 // `@tauri-apps/api/core` mock. `persistence.ts` is the only importer, and no
 // spec spies on `persistWorkspace`, so the blast radius is the persist path.
+//
+// #1621 G3c FOOTGUN — this mock is process-global: EVERY spec gets the no-op
+// resolve, so a persist failure / hang is invisible by default. A spec that
+// needs the real IPC wiring, a rejecting write, or a never-settling flush (e.g.
+// the #1621 G3a close-hang test) MUST `vi.unmock("@lib/tauri/workspaces")` and
+// drive its own `persistWorkspace` / `@tauri-apps/api/core` mock — otherwise the
+// scenario silently resolves and the assertion tests nothing.
 vi.mock("@lib/tauri/workspaces", () => ({
   persistWorkspace: vi.fn(() => Promise.resolve()),
 }));

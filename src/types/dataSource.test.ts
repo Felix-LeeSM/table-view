@@ -669,9 +669,12 @@ describe("supportsDocumentEditing — #1461 edit.editDocuments gate", () => {
     }
   });
 
-  it("defaults to true for an unknown / still-loading dbType (affordance-preserving, same as supportsRowEditing)", () => {
-    expect(supportsDocumentEditing(undefined)).toBe(true);
-    expect(supportsDocumentEditing(null)).toBe(true);
+  // #1618 (D3) — flipped to fail-closed: an unknown / still-loading dbType now
+  // returns false. The document grid only mounts for a resolved connection, so
+  // this strips no real affordance while giving a mutation gate a safe default.
+  it("defaults to false for an unknown / still-loading dbType (fail-closed, #1618 D3)", () => {
+    expect(supportsDocumentEditing(undefined)).toBe(false);
+    expect(supportsDocumentEditing(null)).toBe(false);
   });
 });
 
@@ -691,8 +694,9 @@ describe("supportsBulkWrite — #1461 edit.bulkWrite gate", () => {
     }
   });
 
-  it("defaults to true for an unknown / still-loading dbType (affordance-preserving)", () => {
-    expect(supportsBulkWrite(undefined)).toBe(true);
-    expect(supportsBulkWrite(null)).toBe(true);
+  // #1618 (D3) — fail-closed default for an unknown / still-loading dbType.
+  it("defaults to false for an unknown / still-loading dbType (fail-closed, #1618 D3)", () => {
+    expect(supportsBulkWrite(undefined)).toBe(false);
+    expect(supportsBulkWrite(null)).toBe(false);
   });
 });

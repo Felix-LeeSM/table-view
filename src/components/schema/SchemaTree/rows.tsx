@@ -23,6 +23,7 @@ import {
   Database,
   ListOrdered,
   Link2,
+  Upload,
 } from "lucide-react";
 import {
   ContextMenu,
@@ -40,6 +41,7 @@ import {
   supportsMigrationExport,
   type ExportInclude,
 } from "@/hooks/useMigrationExport";
+import { supportsCsvImport } from "../csvImportSupport";
 import { cn } from "@lib/utils";
 import {
   nodeIdToString,
@@ -109,6 +111,8 @@ export interface SchemaTreeRowsContext {
   handleOpenStructure: (tableName: string, schemaName: string) => void;
   handleDropTable: (tableName: string, schemaName: string) => void;
   handleStartRename: (tableName: string, schemaName: string) => void;
+  // #1639 — open the read-only CSV import wizard for a table.
+  handleImportCsv: (tableName: string, schemaName: string) => void;
   // #1218 — pin/unpin a table + its current pin state (menu label toggle).
   handleTogglePin: (tableName: string, schemaName: string) => void;
   isTablePinned: (tableName: string, schemaName: string) => boolean;
@@ -647,6 +651,15 @@ export function renderItemRow(
                   ))}
                 </ContextMenuSubContent>
               </ContextMenuSub>
+            )}
+            {/* #1639 — read-only CSV import wizard. PG-first gate
+                (`supportsCsvImport`); the commit path lands in #1640. */}
+            {supportsCsvImport(ctx.dbType) && (
+              <ContextMenuItem
+                onClick={() => ctx.handleImportCsv(item.name, row.schemaName)}
+              >
+                <Upload size={14} /> {ctx.t("importCsvMenu")}
+              </ContextMenuItem>
             )}
             <ContextMenuItem
               onClick={() => ctx.handleTogglePin(item.name, row.schemaName)}

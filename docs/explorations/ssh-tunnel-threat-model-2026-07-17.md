@@ -3,7 +3,7 @@ title: SSH 터널 지원 (#1064) — Threat-Model Handoff
 type: threat-model-handoff
 issue: "#1064"
 updated: 2026-07-17
-status: pre-grill informed consent (임시 산출물 — decision lock 후 SOT 흡수)
+status: decisions locked 2026-07-17
 related:
   - issue #1064 (SSH 터널 tracker)
   - issue #1453 (연결 에러 마스킹 갭)
@@ -232,3 +232,33 @@ related:
 9. 터널 mid-session drop 시 상태 전이: 기존 keep-alive/재연결 경로에 태우는가, SSH 전용 재시도 없이 hard-fail 인가?
 10. SSH connect 타임아웃: 기존 connection timeout clamp (mssql 선례) 를 재사용하는가?
 11. 다단 hop (ProxyJump chain) 1차 명시 제외를 known-limitations 에 기록하는가?
+
+## 결정 (2026-07-17 grill)
+
+**ADR 0052 (Accepted 2026-07-10) 의 6축 (Q1~Q6) 은 이미 lock — 재기록 불요.**
+아래는 §0 이 열어둔 **잔여 축**만 잠근다. #1064 결정은 ADR 대상이 아니며 (방향은
+ADR 0052 가 이미 동결), 본 threat-model 기록으로 충분. 본문 §1~6 분석은 무수정.
+
+1. **터널 + DB TLS 조합 (§5.5 파생)** — 드라이버가 `127.0.0.1` 로 접속해도 **원
+   호스트명 기준으로 인증서 검증 (hostname override)**. 드라이버가 hostname override
+   미지원인 엔진은 **경고 + trust fallback** (질문 3 — 조합 차단/무조건 override 대신
+   지원 편차를 경고로 노출).
+2. **host key 핀 export envelope 미포함 (1차)** — 신뢰 이식 위험 회피, 새 머신은
+   TOFU 재확인 (질문 8).
+
+**파생 결정** (열린 축 나머지):
+
+- 터널→드라이버 배선: **전 엔진 균일 `127.0.0.1` ephemeral listener** (mssql stream
+  직결 예외 없음 — 분기 폭발 회피, 질문 1).
+- listener 완화: **연결 active 동안만 listen + pool max accept 상한**, disconnect 시
+  즉시 close (질문 2).
+- russh crate/버전: **Terrapin (CVE-2023-48795) strict-kex 대응 릴리스 이상 + cargo-deny
+  advisory clean** 을 채택 기준으로 잠금 (질문 4).
+- key 포맷: **OpenSSH (신형) + PEM, Ed25519/ECDSA/RSA** 한정, **PuTTY PPK 명시 제외**
+  (질문 5).
+- fingerprint 표기: **OpenSSH 동형 SHA-256 base64 단일 표기** (질문 6).
+- host key 불일치: hard-fail 후 **"핀 삭제 → 재확인" 명시 액션** (질문 7).
+- mid-session drop: **기존 keep-alive/재연결 경로 재사용** (SSH 전용 재시도 미신설,
+  질문 9).
+- SSH connect 타임아웃: **기존 connection timeout clamp (mssql 선례) 재사용** (질문 10).
+- 다단 hop (ProxyJump chain): **1차 명시 제외 → known-limitations 기록** (질문 11).

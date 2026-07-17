@@ -50,6 +50,12 @@ pub(super) struct GridStreamState {
     sql_prefix: String,
     /// JSON array separator state — true until the first row is written.
     json_first: bool,
+    /// Issue #1638 — headers for the tabular JSON branch (table/query
+    /// context). `Some` selects the array-of-objects writer that keys each
+    /// row by `headers`; `None` keeps the Mongo collection writer that
+    /// treats `row.first()` as the whole document. Non-JSON formats leave
+    /// this `None`.
+    json_headers: Option<Vec<String>>,
 }
 
 impl GridStreamState {
@@ -120,11 +126,22 @@ impl GridStreamState {
                 counting.write_all(b"[").map_err(AppError::from)?;
             }
         }
+        // Issue #1638 — table/query JSON exports the tabular array-of-objects
+        // shape (headers as keys); collection JSON keeps the document
+        // passthrough. Captured here since `write_rows` has no `context`.
+        let json_headers = if matches!(format, ExportFormat::Json)
+            && !matches!(context, ExportContext::Collection { .. })
+        {
+            Some(headers.to_vec())
+        } else {
+            None
+        };
         Ok((
             Self {
                 format,
                 sql_prefix,
                 json_first: true,
+                json_headers,
             },
             counting.bytes(),
         ))
@@ -184,9 +201,15 @@ impl GridStreamState {
                 }
             }
             ExportFormat::Json => {
-                // Mongo collection rows arrive as a single-cell row carrying
-                // the document's JSON (Extended JSON v2 Relaxed already from
-                // the BSON layer in `db/mongodb.rs`); pretty-print pass-through.
+                // Collection rows arrive as a single-cell row carrying the
+                // document's JSON (Extended JSON v2 Relaxed already from the
+                // BSON layer in `db/mongodb.rs`); pretty-print pass-through.
+                // Issue #1638 — table/query rows instead become an object
+                // keyed by `json_headers` (source order preserved via
+                // serde_json's `preserve_order` feature). Both share the same
+                // `[`/`]\n` framing + 2-space indent so the two shapes stay
+                // visually consistent and byte-identical across the
+                // single-shot and chunked paths.
                 for row in rows {
                     check_cancel(cancel)?;
                     if !self.json_first {
@@ -195,9 +218,13 @@ impl GridStreamState {
                         counting.write_all(b"\n").map_err(AppError::from)?;
                         self.json_first = false;
                     }
-                    let doc = row.first().cloned().unwrap_or(JsonValue::Null);
-                    let pretty = serde_json::to_string_pretty(&relax_extended_json(doc))
-                        .map_err(AppError::from)?;
+                    let value = match &self.json_headers {
+                        Some(headers) => tabular_json_object(headers, row),
+                        None => {
+                            relax_extended_json(row.first().cloned().unwrap_or(JsonValue::Null))
+                        }
+                    };
+                    let pretty = serde_json::to_string_pretty(&value).map_err(AppError::from)?;
                     // indent two spaces — to_string_pretty already uses
                     // two-space indent.
                     for line in pretty.lines() {
@@ -279,6 +306,22 @@ pub(super) fn json_to_sql_literal(value: &JsonValue) -> String {
 }
 
 // ---------------------------------------------------------------- JSON
+
+/// Issue #1638 — build one tabular export row as a JSON object keyed by
+/// `headers`. serde_json is compiled with `preserve_order`, so the
+/// resulting `Map` keeps header (source) order rather than alphabetizing.
+/// A short row is padded with `null` for the missing trailing columns;
+/// extra cells beyond `headers` are dropped (headers define the schema).
+fn tabular_json_object(headers: &[String], row: &[JsonValue]) -> JsonValue {
+    let mut obj = serde_json::Map::with_capacity(headers.len());
+    for (i, header) in headers.iter().enumerate() {
+        obj.insert(
+            header.clone(),
+            row.get(i).cloned().unwrap_or(JsonValue::Null),
+        );
+    }
+    JsonValue::Object(obj)
+}
 
 /// Walk a JSON value and ensure MongoDB Extended JSON v2 Relaxed shape.
 /// The mongo db layer (`db/mongodb.rs`) already serializes BSON via the

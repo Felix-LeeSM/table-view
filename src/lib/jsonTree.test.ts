@@ -449,6 +449,26 @@ describe("tree DoS guards (#1445)", () => {
     // `focusable: !n.truncated`, so it stays out of the roving tab order.
     expect(marker?.kind).toBe("leaf");
   });
+
+  // #1619 (2026-07-17) — the ghost walk capped each block's OWN `out.length`,
+  // so N separate `+ key` pastes could each reach MAX_TREE_NODES. Two 30k
+  // blocks materialised ~60k ghost rows (2 × the cap) with no truncation.
+  // RED before the shared counter; GREEN after: the COMBINED ghost total is
+  // bounded and a single terminal marker flags the cut.
+  it("caps the COMBINED ghost node total across multiple blocks (#1619)", () => {
+    const pending = new Map<string, string>([
+      ["blobA", JSON.stringify(makeWide(30_000))],
+      ["blobB", JSON.stringify(makeWide(30_000))],
+    ]);
+    const nodes = buildTreeNodesWithGhosts({}, pending);
+    // Shared cap: base root (1) + MAX_TREE_NODES ghost nodes + one marker (1).
+    expect(nodes.length).toBeLessThanOrEqual(MAX_TREE_NODES + 2);
+    expect(
+      nodes.filter((n) => n.isGhost && !n.truncated).length,
+    ).toBeLessThanOrEqual(MAX_TREE_NODES);
+    // Exactly one truncation marker for the whole set, not one per block.
+    expect(nodes.filter((n) => n.truncated).length).toBe(1);
+  });
 });
 
 // Sprint 344 Slice D (2026-05-15) — `coerceTreeAddValue` turns a user-

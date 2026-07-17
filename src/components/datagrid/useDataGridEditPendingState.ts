@@ -1,17 +1,11 @@
 import { useCallback, useMemo, useRef } from "react";
 import {
   useDataGridEditStore,
-  entryKey as makeStoreEntryKey,
+  entryKeyFromStrings,
   EMPTY_ENTRY,
 } from "@stores/dataGridEditStore";
 import { toast } from "@/lib/runtime/toast";
 import i18n from "@lib/i18n";
-import type {
-  ConnectionId,
-  DatabaseName,
-  SchemaName,
-  TableName,
-} from "@/types/branded";
 import type { AppliedPendingOps } from "@/lib/datagrid/paradigmEditAdapter";
 import {
   UNDO_STACK_MAX,
@@ -62,14 +56,9 @@ export function useDataGridEditPendingState({
     if (!connectionId || !database || !schema || !table) {
       return fallbackInstanceKeyRef.current!;
     }
-    // Brand each axis once at this boundary (params arrive as plain `string`
-    // from the grid); `entryKey`'s branded params then reject a positional swap.
-    return makeStoreEntryKey(
-      connectionId as ConnectionId,
-      database as DatabaseName,
-      schema as SchemaName,
-      table as TableName,
-    );
+    // #1621 G1 — brand the four axes at this boundary (params arrive as plain
+    // `string` from the grid); the helper's keyed fields reject a positional swap.
+    return entryKeyFromStrings({ connectionId, database, schema, table });
   }, [connectionId, database, schema, table]);
 
   const entry =

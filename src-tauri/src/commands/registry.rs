@@ -158,6 +158,7 @@ pub fn register_all(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<tauri
         commands::export::write_text_file_export,
         commands::export::export_schema_dump,
         commands::import_file::read_text_file_import,
+        commands::import_csv::preview_csv_import,
         // Window commands
         launcher::launcher_show,
         launcher::launcher_hide,

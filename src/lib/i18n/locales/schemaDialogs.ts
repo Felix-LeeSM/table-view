@@ -144,7 +144,6 @@ export const en = {
     typingConfirmAria: "Type the table name to confirm",
     cascadeAria: "CASCADE",
     cascadeLabel: "CASCADE — drop dependent objects (default: off)",
-    applyAria: "Apply",
   },
 
   // ── DropColumnDialog ──────────────────────────────────────────
@@ -156,7 +155,6 @@ export const en = {
     typingConfirmAria: "Type the column name to confirm",
     cascadeAria: "CASCADE",
     cascadeLabel: "Drop dependent objects (CASCADE)",
-    applyAria: "Apply",
   },
 
   // ── DropTriggerDialog ─────────────────────────────────────────
@@ -168,7 +166,6 @@ export const en = {
     typingConfirmAria: "Type the trigger name to confirm",
     cascadeAria: "CASCADE",
     cascadeLabel: "CASCADE — drop dependent objects (default: off)",
-    applyAria: "Apply",
   },
 
   // ── RenameTableDialog ─────────────────────────────────────────
@@ -178,7 +175,6 @@ export const en = {
     newNamePlaceholder: "new_table_name",
     newNameAria: "New table name",
     identifierErrorAria: "Identifier validation error",
-    applyAria: "Apply",
   },
 
   // ── IndexesTabBody ────────────────────────────────────────────
@@ -472,7 +468,6 @@ export const ko = {
     typingConfirmAria: "확인을 위해 테이블 이름을 입력하세요",
     cascadeAria: "CASCADE",
     cascadeLabel: "CASCADE — 종속 객체 삭제 (기본값: 끄기)",
-    applyAria: "적용",
   },
 
   // ── DropColumnDialog ──────────────────────────────────────────
@@ -484,7 +479,6 @@ export const ko = {
     typingConfirmAria: "확인을 위해 컬럼 이름을 입력하세요",
     cascadeAria: "CASCADE",
     cascadeLabel: "종속 객체 삭제 (CASCADE)",
-    applyAria: "적용",
   },
 
   // ── DropTriggerDialog ─────────────────────────────────────────
@@ -496,7 +490,6 @@ export const ko = {
     typingConfirmAria: "확인을 위해 트리거 이름을 입력하세요",
     cascadeAria: "CASCADE",
     cascadeLabel: "CASCADE — 종속 객체 삭제 (기본값: 끄기)",
-    applyAria: "적용",
   },
 
   // ── RenameTableDialog ─────────────────────────────────────────
@@ -506,7 +499,6 @@ export const ko = {
     newNamePlaceholder: "new_table_name",
     newNameAria: "새 테이블 이름",
     identifierErrorAria: "식별자 유효성 오류",
-    applyAria: "적용",
   },
 
   // ── IndexesTabBody ────────────────────────────────────────────
