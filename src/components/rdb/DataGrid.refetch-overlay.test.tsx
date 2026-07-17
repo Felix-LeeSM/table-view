@@ -135,15 +135,18 @@ describe("DataGrid", () => {
 
   // ── Regression: loading flicker fix ──
 
-  // 15. Initial load (no data) shows centered spinner, not overlay
-  it("shows centered spinner during initial load when no data exists", () => {
+  // 15. Initial load (no data) shows an inline skeleton, not the refetch
+  // overlay. Issue #1058 swapped the former centered spinner for a
+  // known-structure grid skeleton; the flicker-gate invariant (initial
+  // load is NOT the absolute overlay, table not yet mounted) is unchanged.
+  it("shows inline skeleton during initial load when no data exists", () => {
     mockQueryTableData.mockReturnValue(new Promise(() => {}));
     renderDataGrid();
-    const spinners = document.querySelectorAll(".animate-spin");
-    expect(spinners.length).toBe(1);
-    // The spinner should NOT be inside an overlay (no absolute positioning)
-    const spinnerParent = spinners[0]!.parentElement!;
-    expect(spinnerParent.className).not.toContain("absolute");
+    const skeletons = document.querySelectorAll(".animate-pulse");
+    expect(skeletons.length).toBeGreaterThan(0);
+    // No spinner and no absolute overlay during the initial load.
+    expect(document.querySelector(".animate-spin")).not.toBeInTheDocument();
+    expect(skeletons[0]!.closest('[class*="absolute"]')).toBeNull();
     // Table should not be rendered yet
     expect(document.querySelector('[role="grid"]')).not.toBeInTheDocument();
   });

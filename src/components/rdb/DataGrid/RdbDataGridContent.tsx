@@ -1,9 +1,9 @@
 import { forwardRef } from "react";
-import { Loader2 } from "lucide-react";
 import type { DataGridEditState } from "@components/datagrid/useDataGridEdit";
 import DataGridTable, {
   type DataGridTableHandle,
 } from "@components/datagrid/DataGridTable";
+import DataGridSkeleton from "@components/datagrid/DataGridSkeleton";
 import type { SortInfo, TableData } from "@/types/schema";
 
 interface RdbDataGridContentProps {
@@ -85,11 +85,7 @@ export const RdbDataGridContent = forwardRef<
         </div>
       )}
 
-      {loading && !data && (
-        <div className="flex items-center justify-center py-8">
-          <Loader2 className="animate-spin text-muted-foreground" size={24} />
-        </div>
-      )}
+      {loading && !data && <DataGridSkeleton />}
 
       {data && (
         <DataGridTable
