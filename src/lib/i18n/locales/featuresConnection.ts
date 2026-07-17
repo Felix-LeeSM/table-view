@@ -42,6 +42,8 @@ export const en = {
     readOnlyConnectionHint:
       "Blocks INSERT, UPDATE, DELETE, and schema changes on this connection. Enforced by the backend.",
     detectedScheme: "Detected {{scheme}} URL — fields populated.",
+    tlsParamNotice:
+      "The connection string's TLS parameter ({{param}}) was not applied — set encryption manually below.",
     advancedSettings: "Advanced Settings",
     labelConnectionTimeout: "Connection Timeout (seconds)",
     labelKeepAliveInterval: "Keep-Alive Interval (seconds)",
@@ -286,8 +288,16 @@ export const en = {
       "Windows authentication and Azure AD are unsupported in this connection slice.",
     enableTls: "Enable encryption (TLS)",
     trustServerCert: "Trust server certificate",
-    tlsHintPg:
-      "Off uses PostgreSQL's driver default (sslmode=prefer) and may connect without encryption. On requires TLS — a server that cannot negotiate it fails to connect instead of silently downgrading. Leave 'Trust server certificate' off to verify the certificate chain.",
+    trustWarning:
+      "Certificate verification is skipped — an attacker able to intercept the connection can present any certificate. Use only on trusted networks.",
+    // sslmode dropdown (pg/mysql/mariadb) — #1063
+    labelSslMode: "SSL mode",
+    sslModeDisable: "Disable (no encryption)",
+    sslModePrefer: "Prefer (opportunistic)",
+    sslModeRequire: "Require (encrypt, skip verification)",
+    sslModeVerifyFull: "Verify full (encrypt + verify)",
+    tlsHintSslMode:
+      "Prefer keeps the driver's opportunistic default and may connect without encryption. Require forces TLS but skips certificate verification (exposed to a man-in-the-middle). Verify full forces TLS and validates the certificate chain and hostname. Disable forces plaintext.",
     // MongoDB-specific
     labelUserOptional: "User (optional)",
     labelPasswordOptional: "Password (optional)",
@@ -387,6 +397,8 @@ export const ko = {
     readOnlyConnectionHint:
       "이 연결에서 INSERT, UPDATE, DELETE 및 스키마 변경을 차단합니다. 백엔드에서 강제됩니다.",
     detectedScheme: "{{scheme}} URL 감지됨 — 필드가 채워졌습니다.",
+    tlsParamNotice:
+      "연결 문자열의 TLS 파라미터({{param}})는 반영되지 않았습니다 — 아래에서 암호화를 직접 설정하세요.",
     advancedSettings: "고급 설정",
     labelConnectionTimeout: "연결 타임아웃 (초)",
     labelKeepAliveInterval: "연결 유지 간격 (초)",
@@ -614,8 +626,16 @@ export const ko = {
       "Windows 인증과 Azure AD는 이 연결 슬라이스에서 지원되지 않습니다.",
     enableTls: "암호화 활성화 (TLS)",
     trustServerCert: "서버 인증서 신뢰",
-    tlsHintPg:
-      "끄면 PostgreSQL 드라이버 기본값(sslmode=prefer)을 사용하여 암호화 없이 연결될 수 있습니다. 켜면 TLS가 필수이며, 협상하지 못하는 서버는 무음 다운그레이드 없이 연결에 실패합니다. 인증서 체인을 검증하려면 '서버 인증서 신뢰'를 꺼 두세요.",
+    trustWarning:
+      "인증서 검증을 건너뜁니다 — 연결을 가로챌 수 있는 공격자가 임의의 인증서를 제시할 수 있습니다. 신뢰할 수 있는 네트워크에서만 사용하세요.",
+    // sslmode 드롭다운 (pg/mysql/mariadb) — #1063
+    labelSslMode: "SSL 모드",
+    sslModeDisable: "Disable (암호화 없음)",
+    sslModePrefer: "Prefer (기회적)",
+    sslModeRequire: "Require (암호화, 검증 생략)",
+    sslModeVerifyFull: "Verify full (암호화 + 검증)",
+    tlsHintSslMode:
+      "Prefer는 드라이버 기본값(기회적 암호화)을 유지하여 암호화 없이 연결될 수 있습니다. Require는 TLS를 강제하지만 인증서 검증을 건너뜁니다(중간자 공격에 노출). Verify full은 TLS를 강제하고 인증서 체인과 호스트명을 검증합니다. Disable은 평문을 강제합니다.",
     labelUserOptional: "사용자 (선택)",
     labelPasswordOptional: "비밀번호 (선택)",
     labelDatabaseOptional: "데이터베이스 (선택)",

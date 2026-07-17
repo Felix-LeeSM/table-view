@@ -170,6 +170,29 @@ fn connection_info_uses_tcp_tls_target_when_tls_is_enabled() {
 }
 
 #[test]
+fn connection_info_trust_maps_to_insecure_tls_target() {
+    // Reason: #1063 — redis/valkey gain the shared skip-verify opt-in; a
+    // `trust_server_certificate = true` draft must set `insecure: true` on the
+    // TcpTls target, while the default (trust absent) keeps verification.
+    // (2026-07-17)
+    let mut config = config("5");
+    config.tls_enabled = Some(true);
+    config.trust_server_certificate = Some(true);
+
+    let (info, _db) = connection_info(&config).unwrap();
+
+    assert_eq!(
+        info.addr,
+        ::redis::ConnectionAddr::TcpTls {
+            host: "redis.local".into(),
+            port: 6379,
+            insecure: true,
+            tls_params: None,
+        }
+    );
+}
+
+#[test]
 fn bounded_limit_clamps_large_keyspace_scan_count() {
     assert_eq!(bounded_limit(None), DEFAULT_SCAN_LIMIT);
     assert_eq!(bounded_limit(Some(0)), 1);

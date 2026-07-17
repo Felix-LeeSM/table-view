@@ -4,6 +4,7 @@ import {
   DATABASE_TYPE_LABELS,
   parseFileConnectionPath,
   parseConnectionUrl,
+  unreflectedTlsParam,
 } from "../../model";
 import * as dataSourceProfiles from "@/types/dataSource";
 
@@ -99,6 +100,13 @@ export interface UseConnectionUrlImportReturn {
   detectedScheme: string | null;
   setDetectedScheme: React.Dispatch<React.SetStateAction<string | null>>;
   /**
+   * #1063 — the raw `key=value` of a TLS parameter in the pasted/parsed URL
+   * that could not be reflected onto the form (e.g. `sslmode=verify-ca`), or
+   * `null`. Surfaced as a non-blocking advisory so a dropped security
+   * parameter is visible rather than silently lost.
+   */
+  tlsNotice: string | null;
+  /**
    * URL-mode `Parse & Continue` handler. Returns `true` on success
    * (caller should switch `inputMode` to `"form"`) and `false` on
    * failure (`urlError` is already populated).
@@ -122,6 +130,8 @@ export function useConnectionUrlImport({
   // (silent on malformed pastes) and AC-178-05 (no password leak via
   // alert regions).
   const [detectedScheme, setDetectedScheme] = useState<string | null>(null);
+  // #1063 — advisory when a TLS parameter in the URL could not be mapped.
+  const [tlsNotice, setTlsNotice] = useState<string | null>(null);
 
   const parseAndApply = (): boolean => {
     // Sprint 138 — try URL parse first; if a file-backed DBMS is currently
@@ -149,6 +159,7 @@ export function useConnectionUrlImport({
       return false;
     }
     applyParsedConnection(parsed, "url");
+    setTlsNotice(unreflectedTlsParam(urlValue));
     return true;
   };
 
@@ -186,6 +197,7 @@ export function useConnectionUrlImport({
     e.preventDefault();
     applyParsedConnection(parsed, "paste");
     setDetectedScheme(parsed.dbType ?? null);
+    setTlsNotice(unreflectedTlsParam(pasted.trim()));
   };
 
   const handleHostBlur = (e: React.FocusEvent<HTMLDivElement>) => {
@@ -209,6 +221,7 @@ export function useConnectionUrlImport({
     setUrlError,
     detectedScheme,
     setDetectedScheme,
+    tlsNotice,
     parseAndApply,
     handleHostPaste,
     handleHostBlur,

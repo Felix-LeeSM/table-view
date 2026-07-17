@@ -89,7 +89,10 @@ pub(super) fn connection_info_for(
         ConnectionAddr::TcpTls {
             host,
             port: config.port,
-            insecure: false,
+            // #1063 — `trust_server_certificate = true` opts into skip-verify;
+            // for redis-rs this is the `insecure` flag on the TLS address.
+            // Absent/false trust keeps full certificate verification.
+            insecure: config.trust_server_certificate.unwrap_or(false),
             tls_params: None,
         }
     } else {

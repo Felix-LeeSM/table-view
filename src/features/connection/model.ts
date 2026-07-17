@@ -310,6 +310,63 @@ export function exposesTlsToggle(dbType: DatabaseType): boolean {
   return TLS_TOGGLE_DATABASE_TYPES.includes(dbType);
 }
 
+/**
+ * #1063 — the sslmode dropdown vocabulary for the trust-dependent RDB engines
+ * (pg/mysql/mariadb). This is a *view* over the stored `(tlsEnabled,
+ * trustServerCertificate)` pair, not a new persisted field, so existing
+ * connections reinterpret without a migration:
+ *
+ * | mode          | tlsEnabled | trust  | backend decision  |
+ * |---------------|------------|--------|-------------------|
+ * | `disable`     | false      | false  | force plaintext   |
+ * | `prefer`      | null       | null   | driver default    |
+ * | `require`     | true       | true   | encrypt, skip verify |
+ * | `verify-full` | true       | false  | encrypt + verify  |
+ *
+ * `verify-ca` is intentionally omitted (needs a CA file — follow-up).
+ */
+export type SslMode = "disable" | "prefer" | "require" | "verify-full";
+
+export const SSL_MODE_OPTIONS: readonly SslMode[] = [
+  "disable",
+  "prefer",
+  "require",
+  "verify-full",
+];
+
+/** True for the engines that render the sslmode dropdown (pg/mysql/mariadb). */
+export function usesSslModeSelect(dbType: DatabaseType): boolean {
+  return dbType === "postgresql" || dbType === "mysql" || dbType === "mariadb";
+}
+
+/** Derive the dropdown value from the stored TLS fields. The invalid residue
+ *  `(tls=true, trust=null)` collapses to the secure `verify-full` rather than
+ *  skip-verify. */
+export function sslModeFromFields(
+  tlsEnabled: boolean | null | undefined,
+  trust: boolean | null | undefined,
+): SslMode {
+  if (tlsEnabled === true) return trust === true ? "require" : "verify-full";
+  if (tlsEnabled === false && trust === false) return "disable";
+  return "prefer";
+}
+
+/** Map a dropdown selection back onto the stored TLS fields. */
+export function sslModeFields(
+  mode: SslMode,
+): Pick<ConnectionDraft, "tlsEnabled" | "trustServerCertificate"> {
+  switch (mode) {
+    case "disable":
+      return { tlsEnabled: false, trustServerCertificate: false };
+    case "prefer":
+      return { tlsEnabled: null, trustServerCertificate: null };
+    case "require":
+      return { tlsEnabled: true, trustServerCertificate: true };
+    case "verify-full":
+      return { tlsEnabled: true, trustServerCertificate: false };
+  }
+}
+
 export type FileConnectionDatabaseType = Extract<
   DatabaseType,
   "sqlite" | "duckdb"
@@ -407,6 +464,120 @@ export function draftFromConnection(conn: ConnectionConfig): ConnectionDraft {
   };
 }
 
+// URL-scheme aliases. `postgres` is legacy shorthand for `postgresql`;
+// SQL Server clients use several scheme names; `mongodb+srv` is the
+// SRV-record variant and the backend resolves SRV at connect time.
+const URL_SCHEME_DB_TYPES: Record<string, DatabaseType> = {
+  postgresql: "postgresql",
+  postgres: "postgresql",
+  mysql: "mysql",
+  mariadb: "mariadb",
+  mssql: "mssql",
+  sqlserver: "mssql",
+  sqlsrv: "mssql",
+  oracle: "oracle",
+  mongodb: "mongodb",
+  "mongodb+srv": "mongodb",
+  redis: "redis",
+  rediss: "redis",
+  valkey: "valkey",
+  elasticsearch: "elasticsearch",
+  elastic: "elasticsearch",
+  es: "elasticsearch",
+  opensearch: "opensearch",
+};
+
+// #1063 — connection-string TLS parameters we honor on paste. `sslmode`
+// (pg) / `ssl-mode` (mysql connectors) / `ssl_mode` for the sslmode-select
+// engines; a plain boolean `tls` / `ssl` for the on/off engines.
+const SSLMODE_PARAM_KEYS = ["sslmode", "ssl-mode", "ssl_mode"];
+const TLS_BOOL_PARAM_KEYS = ["tls", "ssl"];
+
+function findParamCaseInsensitive(
+  searchParams: URLSearchParams,
+  keys: readonly string[],
+): [string, string] | null {
+  for (const [key, value] of searchParams.entries()) {
+    if (keys.includes(key.toLowerCase())) return [key, value];
+  }
+  return null;
+}
+
+interface UrlTlsResolution {
+  fields: Pick<ConnectionDraft, "tlsEnabled" | "trustServerCertificate">;
+  /** Raw `key=value` of a TLS parameter that could not be reflected onto the
+   *  form (e.g. `sslmode=verify-ca`), or `null` when nothing was dropped. */
+  unreflected: string | null;
+}
+
+/**
+ * #1063 — resolve a pasted URL's TLS parameter onto the draft's
+ * `(tlsEnabled, trust)` fields. `prefer`/`preferred` is treated as "unset"
+ * (same posture as no parameter) so it is neither applied nor flagged.
+ * Values we cannot represent (verify-ca, allow, garbage) leave the fields
+ * untouched and are surfaced via `unreflected` so the paste handler can warn.
+ */
+function resolveUrlTls(
+  dbType: DatabaseType,
+  searchParams: URLSearchParams,
+): UrlTlsResolution {
+  if (usesSslModeSelect(dbType)) {
+    const found = findParamCaseInsensitive(searchParams, SSLMODE_PARAM_KEYS);
+    if (!found) return { fields: {}, unreflected: null };
+    const [key, rawValue] = found;
+    switch (rawValue.toLowerCase()) {
+      case "disable":
+      case "disabled":
+        return { fields: sslModeFields("disable"), unreflected: null };
+      case "prefer":
+      case "preferred":
+        return { fields: {}, unreflected: null };
+      case "require":
+      case "required":
+        return { fields: sslModeFields("require"), unreflected: null };
+      case "verify-full":
+      case "verify_full":
+      case "verify-identity":
+      case "verify_identity":
+        return { fields: sslModeFields("verify-full"), unreflected: null };
+      default:
+        // verify-ca, allow, and any unknown value are not representable.
+        return { fields: {}, unreflected: `${key}=${rawValue}` };
+    }
+  }
+  // Boolean tls/ssl engines (mongo/redis/valkey/search).
+  const found = findParamCaseInsensitive(searchParams, TLS_BOOL_PARAM_KEYS);
+  if (!found) return { fields: {}, unreflected: null };
+  const [key, rawValue] = found;
+  const value = rawValue.toLowerCase();
+  if (["true", "1", "yes"].includes(value)) {
+    return { fields: { tlsEnabled: true }, unreflected: null };
+  }
+  if (["false", "0", "no"].includes(value)) {
+    return { fields: { tlsEnabled: false }, unreflected: null };
+  }
+  return { fields: {}, unreflected: `${key}=${rawValue}` };
+}
+
+/**
+ * #1063 — report a `key=value` TLS parameter from `url` that `parseConnectionUrl`
+ * could not reflect onto the form (e.g. `sslmode=verify-ca`), else `null`.
+ * The paste/import UI surfaces this so a dropped security parameter is visible
+ * rather than silently lost.
+ */
+export function unreflectedTlsParam(url: string): string | null {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return null;
+  }
+  const dbType = URL_SCHEME_DB_TYPES[parsed.protocol.replace(":", "")];
+  // mssql already honors its own encrypt/trustServerCertificate params.
+  if (!dbType || dbType === "mssql") return null;
+  return resolveUrlTls(dbType, parsed.searchParams).unreflected;
+}
+
 export function parseConnectionUrl(
   url: string,
 ): Partial<ConnectionDraft> | null {
@@ -421,29 +592,7 @@ export function parseConnectionUrl(
       const path = `${parsed.pathname}${parsed.search}${parsed.hash}`;
       return parseFileConnectionPath(dbType, path);
     }
-    // URL-scheme aliases. `postgres` is legacy shorthand for `postgresql`;
-    // SQL Server clients use several scheme names; `mongodb+srv` is the
-    // SRV-record variant and the backend resolves SRV at connect time.
-    const dbTypeMap: Record<string, DatabaseType> = {
-      postgresql: "postgresql",
-      postgres: "postgresql",
-      mysql: "mysql",
-      mariadb: "mariadb",
-      mssql: "mssql",
-      sqlserver: "mssql",
-      sqlsrv: "mssql",
-      oracle: "oracle",
-      mongodb: "mongodb",
-      "mongodb+srv": "mongodb",
-      redis: "redis",
-      rediss: "redis",
-      valkey: "valkey",
-      elasticsearch: "elasticsearch",
-      elastic: "elasticsearch",
-      es: "elasticsearch",
-      opensearch: "opensearch",
-    };
-    const dbType = dbTypeMap[parsed.protocol.replace(":", "")];
+    const dbType = URL_SCHEME_DB_TYPES[parsed.protocol.replace(":", "")];
     if (!dbType) return null;
     // Empty host (`postgres://`, `mysql://@`, `mongodb+srv://`) is too
     // malformed to infer a target. Returning `null` lets the paste
@@ -462,6 +611,10 @@ export function parseConnectionUrl(
       "trustServerCertificate",
       true,
     );
+    // #1063 — honor sslmode/tls parameters for the non-mssql engines. The
+    // `rediss:` scheme keeps precedence (it always means TLS on).
+    const urlTls =
+      dbType === "mssql" ? { fields: {} } : resolveUrlTls(dbType, searchParams);
     return {
       dbType,
       host: parsed.hostname,
@@ -469,6 +622,7 @@ export function parseConnectionUrl(
       user: decodeURIComponent(parsed.username),
       password: decodeURIComponent(parsed.password),
       database: isKvFamily(dbType) && database === "" ? "0" : database,
+      ...urlTls.fields,
       ...(parsed.protocol === "rediss:" ? { tlsEnabled: true } : {}),
       ...(dbType === "mssql"
         ? {

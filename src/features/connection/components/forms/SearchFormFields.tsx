@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next";
 import type { ConnectionDraft } from "../../model";
 import { fieldValidationProps, type ConnFieldKey } from "./fieldValidation";
+import TlsSkipVerifyToggle from "./TlsSkipVerifyToggle";
 
 export interface SearchFormFieldsProps {
   draft: ConnectionDraft;
@@ -128,10 +129,18 @@ export default function SearchFormFields({
           type="checkbox"
           className="cursor-pointer"
           checked={!!draft.tlsEnabled}
-          onChange={(e) => onChange({ tlsEnabled: e.target.checked })}
+          onChange={(e) => {
+            const tlsEnabled = e.target.checked;
+            onChange({
+              tlsEnabled,
+              // #1063 — clear a stale skip-verify choice when TLS is turned off.
+              ...(tlsEnabled ? {} : { trustServerCertificate: null }),
+            });
+          }}
         />
         {t("form.enableTlsSearch")}
       </label>
+      <TlsSkipVerifyToggle draft={draft} onChange={onChange} />
     </>
   );
 }

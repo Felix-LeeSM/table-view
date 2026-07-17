@@ -88,6 +88,31 @@ export interface UseConnectionDraftFormReturn {
   ) => void;
 }
 
+/**
+ * #1062/#1063 — the TLS sanitize rule shared by the dbType dropdown
+ * (`applyDbTypeChange`) and the URL-paste path (`applyParsedConnection`).
+ * MSSQL forces encryption on with trust seeded; the other TLS-toggle engines
+ * (mongo/redis/valkey/search) may carry the prior encryption flag but never a
+ * skip-verify choice; the trust-boundary engines (pg/mysql/mariadb) and the
+ * no-TLS engines reset both. This keeps two invariants on any engine switch:
+ * no `tls_enabled=true, trust=None` residue the backend hard-rejects (#1062),
+ * and no leaked skip-verify (`trust=true`) onto the new engine (#1063).
+ */
+function tlsFieldsForDbType(
+  dbType: DatabaseType,
+  prevTlsEnabled: ConnectionDraft["tlsEnabled"],
+): Pick<ConnectionDraft, "tlsEnabled" | "trustServerCertificate"> {
+  return {
+    tlsEnabled:
+      dbType === "mssql"
+        ? true
+        : exposesTlsToggle(dbType)
+          ? prevTlsEnabled
+          : null,
+    trustServerCertificate: dbType === "mssql" ? true : null,
+  };
+}
+
 export function useConnectionDraftForm(
   connection?: ConnectionConfig,
 ): UseConnectionDraftFormReturn {
@@ -139,19 +164,7 @@ export function useConnectionDraftForm(
         user: defaults.user,
         database: defaults.database,
         readOnly: false,
-        // #1062 — MSSQL forces encryption on; other TLS-toggle forms
-        // (mongo/redis/valkey/search) may carry the prior value. Types with
-        // no TLS toggle (pg/mysql/mariadb/oracle/sqlite/duckdb) must reset to
-        // null, otherwise a carried-over `tlsEnabled=true` produces the
-        // `tls_enabled=true, trust=None` combo the backend hard-rejects with
-        // no in-form way to recover.
-        tlsEnabled:
-          dbType === "mssql"
-            ? true
-            : exposesTlsToggle(dbType)
-              ? f.tlsEnabled
-              : null,
-        trustServerCertificate: dbType === "mssql" ? true : null,
+        ...tlsFieldsForDbType(dbType, f.tlsEnabled),
         paradigm: paradigmOf(dbType),
       };
     });
@@ -236,14 +249,27 @@ export function useConnectionDraftForm(
     mode: "url" | "paste",
   ) => {
     const { password, ...rest } = parsed;
-    setForm((f) => ({
-      ...f,
-      ...rest,
-      name:
-        mode === "url"
-          ? f.name || parsed.database || ""
-          : f.name || parsed.database || f.name,
-    }));
+    setForm((f) => {
+      // #1063 B1 — a pasted URL that changes the engine must run the same TLS
+      // sanitize as the dropdown path (`applyDbTypeChange`), or a prior
+      // engine's skip-verify (`trust=true`) leaks onto the new engine via the
+      // raw spread. Explicit TLS params the parser put on `rest` (e.g.
+      // `?sslmode=require` -> tls/trust) are spread AFTER the sanitize so they
+      // still win.
+      const tlsSanitize =
+        rest.dbType != null && rest.dbType !== f.dbType
+          ? tlsFieldsForDbType(rest.dbType, f.tlsEnabled)
+          : {};
+      return {
+        ...f,
+        ...tlsSanitize,
+        ...rest,
+        name:
+          mode === "url"
+            ? f.name || parsed.database || ""
+            : f.name || parsed.database || f.name,
+      };
+    });
     if (mode === "url") {
       if (typeof password === "string") {
         setPasswordInput(password);

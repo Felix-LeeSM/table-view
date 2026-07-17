@@ -96,7 +96,18 @@ impl MongoAdapter {
         }
 
         if matches!(config.tls_enabled, Some(true)) {
-            opts.tls = Some(Tls::Enabled(TlsOptions::default()));
+            // #1063 — `trust_server_certificate = true` is the shared skip-verify
+            // opt-in; for MongoDB it maps onto `allow_invalid_certificates`, so a
+            // self-signed cluster is reachable without turning TLS off entirely.
+            // Absent/false trust keeps the driver's full CA + hostname check.
+            let tls_options = if matches!(config.trust_server_certificate, Some(true)) {
+                TlsOptions::builder()
+                    .allow_invalid_certificates(true)
+                    .build()
+            } else {
+                TlsOptions::default()
+            };
+            opts.tls = Some(Tls::Enabled(tls_options));
         }
 
         if let Some(timeout_secs) = config.connection_timeout {
@@ -487,6 +498,32 @@ mod tests {
             opts.connect_timeout,
             Some(std::time::Duration::from_secs(5))
         );
+    }
+
+    #[test]
+    fn build_options_trust_maps_to_allow_invalid_certificates() {
+        // Reason: #1063 — MongoDB gains the shared skip-verify opt-in; a
+        // `trust_server_certificate = true` draft must surface as
+        // `allow_invalid_certificates` on the driver TlsOptions, while the
+        // default (trust absent) keeps full verification. (2026-07-17)
+        let mut cfg = sample_config();
+        cfg.trust_server_certificate = Some(true);
+        let opts = MongoAdapter::build_options(&cfg).expect("build_options should succeed");
+        match &opts.tls {
+            Some(Tls::Enabled(t)) => assert_eq!(
+                t.allow_invalid_certificates,
+                Some(true),
+                "trust=true must skip certificate verification"
+            ),
+            other => panic!("expected TLS enabled, got {other:?}"),
+        }
+
+        // Trust absent keeps the driver's full verification (no skip flag set).
+        let opts = MongoAdapter::build_options(&sample_config()).expect("build_options ok");
+        match &opts.tls {
+            Some(Tls::Enabled(t)) => assert_ne!(t.allow_invalid_certificates, Some(true)),
+            other => panic!("expected TLS enabled, got {other:?}"),
+        }
     }
 
     #[test]
