@@ -310,8 +310,10 @@ describe("DocumentDatabaseTree", () => {
     const { container } = render(
       <DocumentDatabaseTree connectionId="conn-loading" />,
     );
-    // The "Loading databases..." status shows while loadingRoot is true.
+    // #1058 — the initial DB-list load previews the tree shape with a labelled
+    // skeleton (`role="status"` + `animate-pulse` bars) instead of a spinner.
     expect(container.querySelector('[role="status"]')).not.toBeNull();
+    expect(container.querySelector(".animate-pulse")).not.toBeNull();
     // Eventually the databases appear.
     await waitFor(() =>
       expect(screen.getByLabelText("admin database")).toBeInTheDocument(),

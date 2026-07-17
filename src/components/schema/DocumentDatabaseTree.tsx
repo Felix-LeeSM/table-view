@@ -14,6 +14,7 @@ import {
   TREE_ROW_HEIGHT_ESTIMATE,
   TREE_VIRTUALIZE_THRESHOLD,
 } from "@components/shared/tree/virtualize";
+import TreeSkeleton from "@components/shared/tree/TreeSkeleton";
 import type { CollectionInfo, DatabaseInfo } from "@/types/document";
 import { useDocumentDatabaseTreeData } from "./DocumentDatabaseTree/useDocumentDatabaseTreeData";
 import { useDocumentDatabaseDrop } from "./DocumentDatabaseTree/useDocumentDatabaseDrop";
@@ -422,15 +423,10 @@ export default function DocumentDatabaseTree({
           />
         </div>
 
-        {loadingRoot && databases.length === 0 && (
-          <div
-            className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground"
-            role="status"
-          >
-            <Loader2 className="animate-spin" size={12} />
-            <span>{t("loadingDatabases")}</span>
-          </div>
-        )}
+        {/* #1058 — initial DB-list load previews the tree shape with a
+            skeleton instead of a spinner. On-expand collection fetches and the
+            refresh control keep their spinners (partial / control-busy). */}
+        {loadingRoot && databases.length === 0 && <TreeSkeleton />}
 
         {!loadingRoot && rootError && (
           <div

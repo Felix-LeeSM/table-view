@@ -43,10 +43,11 @@ backend contract 를 통해서만 다룬다.
   불확정 작업(쿼리 실행 `QueryRunningState`), 컨트롤/버튼 busy(`DbSwitcher`,
   `DataGridToolbar` 저장), 이미 렌더된 데이터 위 refetch 오버레이
   (`AsyncProgressOverlay`) — shape 이 없거나 기존 데이터를 지우면 안 될 때
-  (`Loader2 animate-spin`). RDB/Document/View 그리드·목록 초기 로드는
-  `DataGridSkeleton` 공유로 동일하게 로드된다. 전환 잔여(follow-up): 트리/사이드바
-  초기 로드 스피너 (`DocumentDatabaseTree.tsx`, `KvSidebar.tsx`) 는 아직 스피너 —
-  known-structure 로 판단되면 같은 규약으로 승격 대상.
+  (`Loader2 animate-spin`). RDB/Document/View 그리드·목록 초기 로드는 공유
+  `DataGridSkeleton`, 트리/사이드바 초기 로드(`DocumentDatabaseTree`, `KvSidebar`)는
+  공유 `TreeSkeleton` (`@components/shared/tree`) 으로 동일하게 로드된다 (#1586).
+  refetch/부분 로드(pagination "load more", on-expand fetch)·control-busy(refresh)
+  는 스피너 유지.
 - Dialog 수정은 기존 component contract/test 를 먼저 보며 close button,
   feedback slot, alert role, toast hookup 같은 테스트된 invariant 를 깨지 않는다.
   preset/layout source-order 강제 규칙은 retired 상태다.
