@@ -15,6 +15,27 @@ export function formatBytes(value: number): string {
   return `${(kib / 1024).toFixed(1)} MiB`;
 }
 
+// KV JSON tree Phase 1 (2026-07-17) — a value renders as an interactive JSON
+// tree only when it is a JSON object or array (Mongo `isNestedCapable`
+// parity). Bare scalars — `42`, `"foo"`, `true`, `null` — stay as raw text so
+// a one-value string isn't inflated into a single-node tree.
+export function isJsonTreeCapable(value: unknown): boolean {
+  return value !== null && typeof value === "object";
+}
+
+// Parse `text` as JSON and return the parsed value only when it is
+// tree-capable (object/array); otherwise null. Never throws — malformed /
+// empty / scalar input all fall back to null so the caller renders raw text.
+export function jsonTreeValue(text: string): unknown | null {
+  try {
+    const parsed = JSON.parse(text) as unknown;
+    if (isJsonTreeCapable(parsed)) return parsed;
+  } catch {
+    // not JSON — raw text.
+  }
+  return null;
+}
+
 export function renderValueText(envelope: KvValueEnvelope): string {
   const { value } = envelope;
   switch (value.type) {

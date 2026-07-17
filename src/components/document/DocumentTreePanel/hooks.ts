@@ -253,11 +253,21 @@ export function useTreeEditing({
   const [editingPath, setEditingPath] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
 
-  const startEdit = useCallback((node: TreeNode) => {
-    if (node.kind !== "leaf") return;
-    setEditingPath(node.path);
-    setDraft(renderLeafValue(node));
-  }, []);
+  const startEdit = useCallback(
+    (node: TreeNode) => {
+      // #1445 KV JSON tree Phase 1 (2026-07-17) — read-only gate. Without a
+      // commit handler the panel has no write path, so opening the leaf editor
+      // only to no-op the commit is a dead-end. Gate the shared entry point
+      // (both the leaf click and the Enter keydown route through here) so the
+      // editor never opens read-only. Mongo always passes onCommitEdit → no
+      // behavior change there.
+      if (!onCommitEdit) return;
+      if (node.kind !== "leaf") return;
+      setEditingPath(node.path);
+      setDraft(renderLeafValue(node));
+    },
+    [onCommitEdit],
+  );
 
   // #1140 — return focus to the edited node's treeitem after the inline leaf
   // editor unmounts (commit OR cancel). The editor lives inside the treeitem

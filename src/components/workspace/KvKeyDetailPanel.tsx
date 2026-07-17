@@ -18,7 +18,8 @@ import {
 import { KvCollectionValueTable } from "./KvCollectionValueTable";
 import { KvKeyActions } from "./KvKeyActions";
 import { KvStreamReaderPanel } from "./KvStreamReaderPanel";
-import { formatBytes, formatCount, renderValueText } from "./kvValueFormat";
+import { KvValueBody } from "./KvValueBody";
+import { formatBytes, formatCount } from "./kvValueFormat";
 
 const VALUE_READ_LIMIT = 100;
 
@@ -192,9 +193,7 @@ export default function KvKeyDetailPanel({
                 onEntryAction={entriesMutable ? requestEntryAction : undefined}
               />
             ) : (
-              <pre className="max-h-96 overflow-auto rounded border border-border bg-muted/40 p-2 text-3xs text-foreground">
-                {renderValueText(value)}
-              </pre>
+              <KvValueBody envelope={value} />
             )}
             {canRenderKvMutationPanel(value, mutationEnabled) && (
               <KvMutationPanel
