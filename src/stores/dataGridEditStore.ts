@@ -65,10 +65,15 @@ export interface PendingEntry {
   pendingNewRows: ReadonlyArray<ReadonlyArray<unknown>>;
   pendingDeletedRowKeys: ReadonlySet<string>;
   undoStack: ReadonlyArray<EditSnapshot>;
-  // Issue #1527 (ADR 0050) — the symmetric redo stack. `undo()` pushes the
-  // pre-undo state here; `redo()` pops it back; any new edit clears it.
+  // Issue #1527 (ADR 0050) — the symmetric redo stack. Lifecycle (all in
+  // `useDataGridEditPendingState`):
+  //   populate: `undo()` pushes the pre-undo state here before restoring.
+  //   consume:  `redo()` pops the top back and re-pushes it onto `undoStack`.
+  //   clear:    (a) `pushSnapshot` on any NEW edit (standard redo invalidation),
+  //             (b) `prunePartiallyCommitted` after a partial-commit prune,
+  //             (c) `clearEntry` on post-commit / discard.
   // Pending-edit symmetry only — commit-span redo survival (ADR 0050 point 1)
-  // stays deferred to #1126, so `clearEntry` (post-commit / discard) wipes it.
+  // stays deferred to #1126, which is why (c) wipes it rather than restaging.
   redoStack: ReadonlyArray<EditSnapshot>;
   /**
    * Issue #1081 — row-identity anchors captured at edit/delete time so a
@@ -251,7 +256,21 @@ export const useDataGridEditStore = create<DataGridEditStore>((set, get) => ({
     return false;
   },
 
-  setSlice: (key, slice, value) =>
+  setSlice: (key, slice, value) => {
+    // #1616 (B4, PR #1503) — "slice 통째 교체만 허용" invariant. The undo/redo
+    // snapshots retain the live slice references (structural sharing, #1444),
+    // so a slice MUST be replaced with a freshly-allocated Map/Set/Array, never
+    // mutated in place. Receiving back the reference already stored means a
+    // caller mutated it in place and re-set it — that silently corrupts every
+    // snapshot sharing it AND the reference-compare selectors miss the change.
+    // Reject instead of writing the poisoned reference.
+    const current = get().entries.get(key);
+    if (current && current[slice] === value) {
+      throw new TypeError(
+        `setSlice(${String(slice)}) received the slice reference already stored; ` +
+          `slices must be replaced with a fresh Map/Set/Array, not mutated in place`,
+      );
+    }
     set((state) => {
       const existing = state.entries.get(key);
       // Lazy entry construction: missing key → start from a fresh entry
@@ -261,7 +280,8 @@ export const useDataGridEditStore = create<DataGridEditStore>((set, get) => ({
       const nextEntries = new Map(state.entries);
       nextEntries.set(key, nextEntry);
       return { entries: nextEntries };
-    }),
+    });
+  },
 
   clearEntry: (key) =>
     set((state) => {

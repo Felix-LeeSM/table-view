@@ -99,6 +99,12 @@ export function useDataGridEditPendingState({
       const state = useDataGridEditStore.getState();
       const prev = state.getEntry(storeKey).pendingEdits;
       const value = typeof next === "function" ? next(prev) : next;
+      // #1616 (B4) — an unchanged result (e.g. `applyEditOrClear` returning the
+      // same Map when the edit matches the original and isn't yet pending) is a
+      // no-op. Re-setting the stored reference is rejected by the store's
+      // slice-replacement invariant guard, so skip it here (mirrors
+      // `setRedoStack`). No new keys means the anchor capture below is a no-op too.
+      if (value === prev) return;
       // Issue #1081 — anchor any NEW edit key (top-level `${rowIdx}-${colIdx}`
       // OR nested `${rowIdx}-${colIdx}:${path}`) to its row's identity, keyed
       // by the base CELL key. Runs for EVERY setPendingEdits caller, so the
@@ -138,6 +144,7 @@ export function useDataGridEditPendingState({
         .getState()
         .getEntry(storeKey).pendingNewRows;
       const value = typeof next === "function" ? next(current) : next;
+      if (value === current) return; // #1616 (B4) — same-ref no-op; see setPendingEdits.
       storeSetSlice(storeKey, "pendingNewRows", value);
     },
     [storeKey, storeSetSlice],
@@ -152,6 +159,7 @@ export function useDataGridEditPendingState({
       const state = useDataGridEditStore.getState();
       const prev = state.getEntry(storeKey).pendingDeletedRowKeys;
       const value = typeof next === "function" ? next(prev) : next;
+      if (value === prev) return; // #1616 (B4) — same-ref no-op; see setPendingEdits.
       // Issue #1081 — anchor any NEW delete key (`row-${page}-${rowIdx}`) to
       // its row's identity, keyed by the full page-distinct delete key.
       const rows = rowsRef.current;
@@ -183,6 +191,7 @@ export function useDataGridEditPendingState({
         .getState()
         .getEntry(storeKey).undoStack;
       const value = typeof next === "function" ? next(current) : next;
+      if (value === current) return; // #1616 (B4) — same-ref no-op; see setPendingEdits.
       storeSetSlice(storeKey, "undoStack", value);
     },
     [storeKey, storeSetSlice],

@@ -23,7 +23,7 @@ import {
   DataGridHeaderRow as HeaderRow,
   cellToEditValue,
   editKey,
-  pendingEditAnchorMatches,
+  isPendingEditActive,
   rowIdentityKey,
   useColumnResize,
   useDocumentDataGridEdit,
@@ -458,14 +458,13 @@ export default function DocumentDataGrid({
       // this index still matches the edit-time anchor; otherwise this is a
       // different row (paginated / sorted / filtered in) so seed its real
       // cell value, matching what the overlay shows.
-      const anchored =
-        editState.pendingEdits.has(key) &&
-        pendingEditAnchorMatches(
-          key,
-          rowIdentityKey(data.rows[rowIdx] as unknown[], data.columns),
-          data.columns,
-          editState.pendingEditRowSnapshots,
-        );
+      const anchored = isPendingEditActive(
+        key,
+        rowIdentityKey(data.rows[rowIdx] as unknown[], data.columns),
+        data.columns,
+        editState.pendingEdits,
+        editState.pendingEditRowSnapshots,
+      );
       const pendingValue = anchored
         ? (editState.pendingEdits.get(key) as string | null)
         : cellToEditValue(cell);

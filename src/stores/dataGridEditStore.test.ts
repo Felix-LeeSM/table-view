@@ -79,6 +79,31 @@ describe("dataGridEditStore — Sprint 251 in-memory pending-edit lift", () => {
     expect(EMPTY_ENTRY.undoStack.length).toBe(0);
   });
 
+  it("[#1616 B4] setSlice rejects re-setting the existing slice reference (in-place mutation guard)", () => {
+    // Reason: PR #1503 — undo/redo snapshots share slice references with the
+    // live entry (structural sharing, #1444), so a slice must be replaced
+    // wholesale. Re-setting the SAME reference means a caller mutated the
+    // stored slice in place, which silently corrupts every snapshot sharing it
+    // AND defeats the reference-compare React selectors. (2026-07-17)
+    const edits = new Map<string, string | null>([["0-1", "x"]]);
+    useDataGridEditStore.getState().setSlice(KEY_A, "pendingEdits", edits);
+    const stored = useDataGridEditStore.getState().getEntry(KEY_A).pendingEdits;
+    expect(stored).toBe(edits); // stored by reference, not cloned
+
+    expect(() =>
+      useDataGridEditStore
+        .getState()
+        .setSlice(KEY_A, "pendingEdits", stored as Map<string, string | null>),
+    ).toThrow(/in place|fresh|replace/i);
+
+    // A freshly-allocated slice (the documented contract) is still accepted.
+    expect(() =>
+      useDataGridEditStore
+        .getState()
+        .setSlice(KEY_A, "pendingEdits", new Map(stored)),
+    ).not.toThrow();
+  });
+
   it("[AC-251-S1] two different keys are isolated — getEntry returns the slice set on its own key only", () => {
     const editsA = new Map<string, string | null>([["0-1", "Alice'"]]);
     const editsB = new Map<string, string | null>([["0-1", "Bob'"]]);
