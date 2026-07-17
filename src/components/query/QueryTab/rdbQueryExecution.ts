@@ -15,6 +15,7 @@ import {
 } from "@lib/sql/escalateWarnIfLargeImpact";
 import { toast } from "@lib/runtime/toast";
 import { dispatchDbMutationHint } from "./queryHelpers";
+import { isQueryCancellationMessage } from "./queryCancellation";
 import type { SafeModeGate } from "@hooks/useSafeModeGate";
 import type { ConnectionId, TabId } from "@/types/branded";
 import type { DatabaseType } from "@/types/connection";
@@ -182,25 +183,6 @@ function prepareRdbStatements(
     statements,
     scriptingViolationMessage: scriptingViolation?.message ?? null,
   };
-}
-
-function isQueryCancellationMessage(message: string): boolean {
-  const normalized = message.toLowerCase();
-  return (
-    normalized.startsWith("cancel:") ||
-    normalized.includes("query cancelled") ||
-    normalized.includes("query canceled") ||
-    normalized.includes("operation cancelled") ||
-    normalized.includes("operation canceled") ||
-    normalized.includes("canceling statement due to user request") ||
-    normalized.includes("cancelling statement due to user request") ||
-    // Issue #1230 (PR #1241 review) — MySQL/MariaDB surface a native KILL
-    // QUERY as ER_QUERY_INTERRUPTED (1317). Backend `finalize_cancelled`
-    // normally rewrites this to "Query cancelled", but keep a frontend
-    // backstop so an interrupt reaching here still lands on cancelled and no
-    // DBMS-specific asymmetry survives.
-    normalized.includes("query execution was interrupted")
-  );
 }
 
 function firstMeaningfulToken(sql: string): string | null {

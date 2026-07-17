@@ -196,10 +196,18 @@ export function useQueryExecution({
         updateQueryState,
         completeQuery,
         failQuery,
+        cancelRunningQuery,
         recordHistory,
       });
     },
-    [tab, recordHistory, completeQuery, failQuery, updateQueryState],
+    [
+      tab,
+      recordHistory,
+      completeQuery,
+      failQuery,
+      cancelRunningQuery,
+      updateQueryState,
+    ],
   );
 
   const confirmMongoDangerous = useCallback(async () => {
@@ -554,6 +562,7 @@ export function useQueryExecution({
         updateQueryState,
         completeQuery,
         failQuery,
+        cancelRunningQuery,
         recordHistory,
         setPendingMongoConfirm,
         setPendingMongoWarn,

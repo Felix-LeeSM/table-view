@@ -6,6 +6,8 @@ import {
   findDocuments,
   findOneDocument,
 } from "@lib/tauri";
+import { getTauriErrorMessage } from "@lib/tauri/error";
+import type { DocumentRecordHistoryQueryMode } from "@lib/runtime/history/recordHistoryEntry";
 import type { FindBody } from "@/types/document";
 import {
   createDocumentResultEnvelope,
@@ -17,6 +19,45 @@ import type {
   MongoLifecycleActions,
   MongoTabContext,
 } from "./mongoQueryExecution";
+import { isQueryCancellationMessage } from "./queryCancellation";
+
+/**
+ * Issue #1561 — shared catch handler for every mongo query runner (find /
+ * findOne / count / estimatedCount / distinct / aggregate + admin runCommand).
+ * A user cancel returns `AppError::Database("Operation cancelled")`; routing it
+ * to `cancelRunningQuery` + history "cancelled" (instead of `failQuery` +
+ * "error") keeps the document paradigm consistent with RDB/Search — the user's
+ * own cancel is never surfaced as a red error banner.
+ */
+export function handleMongoRunnerError(
+  actions: Pick<
+    MongoLifecycleActions,
+    "failQuery" | "cancelRunningQuery" | "recordHistory"
+  >,
+  err: unknown,
+  ctx: {
+    tabId: string;
+    queryId: string;
+    sql: string;
+    startTime: number;
+    queryMode?: DocumentRecordHistoryQueryMode;
+  },
+): void {
+  const message = getTauriErrorMessage(err);
+  const wasCancelled = isQueryCancellationMessage(message);
+  if (wasCancelled) {
+    actions.cancelRunningQuery(ctx.tabId, ctx.queryId, "Query cancelled");
+  } else {
+    actions.failQuery(ctx.tabId, ctx.queryId, message);
+  }
+  actions.recordHistory({
+    sql: ctx.sql,
+    executedAt: Date.now(),
+    duration: Date.now() - ctx.startTime,
+    status: wasCancelled ? "cancelled" : "error",
+    queryMode: ctx.queryMode,
+  });
+}
 
 export async function executeMongoAggregate({
   tab,
@@ -25,6 +66,7 @@ export async function executeMongoAggregate({
   updateQueryState,
   completeQuery,
   failQuery,
+  cancelRunningQuery,
   recordHistory,
 }: ExecuteMongoAggregateRequest): Promise<void> {
   const resolvedDatabase = tab.database;
@@ -62,18 +104,17 @@ export async function executeMongoAggregate({
       queryMode: "aggregate",
     });
   } catch (err) {
-    failQuery(
-      tab.id,
-      queryId,
-      err instanceof Error ? err.message : String(err),
+    handleMongoRunnerError(
+      { failQuery, cancelRunningQuery, recordHistory },
+      err,
+      {
+        tabId: tab.id,
+        queryId,
+        sql: tab.sql,
+        startTime,
+        queryMode: "aggregate",
+      },
     );
-    recordHistory({
-      sql: tab.sql,
-      executedAt: Date.now(),
-      duration: Date.now() - startTime,
-      status: "error",
-      queryMode: "aggregate",
-    });
   }
 }
 
@@ -109,16 +150,11 @@ export async function runDocumentFind(
       queryMode: "find",
     });
   } catch (err) {
-    actions.failQuery(
-      tab.id,
+    handleMongoRunnerError(actions, err, {
+      tabId: tab.id,
       queryId,
-      err instanceof Error ? err.message : String(err),
-    );
-    actions.recordHistory({
       sql: rawSql,
-      executedAt: Date.now(),
-      duration: Date.now() - startTime,
-      status: "error",
+      startTime,
       queryMode: "find",
     });
   }
@@ -171,16 +207,11 @@ export async function runDocumentFindOne(
       queryMode: "findOne",
     });
   } catch (err) {
-    actions.failQuery(
-      tab.id,
+    handleMongoRunnerError(actions, err, {
+      tabId: tab.id,
       queryId,
-      err instanceof Error ? err.message : String(err),
-    );
-    actions.recordHistory({
       sql: rawSql,
-      executedAt: Date.now(),
-      duration: Date.now() - startTime,
-      status: "error",
+      startTime,
       queryMode: "findOne",
     });
   }
@@ -223,16 +254,11 @@ export async function runDocumentCount(
       queryMode: "countDocuments",
     });
   } catch (err) {
-    actions.failQuery(
-      tab.id,
+    handleMongoRunnerError(actions, err, {
+      tabId: tab.id,
       queryId,
-      err instanceof Error ? err.message : String(err),
-    );
-    actions.recordHistory({
       sql: rawSql,
-      executedAt: Date.now(),
-      duration: Date.now() - startTime,
-      status: "error",
+      startTime,
       queryMode: "countDocuments",
     });
   }
@@ -273,16 +299,11 @@ export async function runDocumentEstimatedCount(
       queryMode: "estimatedDocumentCount",
     });
   } catch (err) {
-    actions.failQuery(
-      tab.id,
+    handleMongoRunnerError(actions, err, {
+      tabId: tab.id,
       queryId,
-      err instanceof Error ? err.message : String(err),
-    );
-    actions.recordHistory({
       sql: rawSql,
-      executedAt: Date.now(),
-      duration: Date.now() - startTime,
-      status: "error",
+      startTime,
       queryMode: "estimatedDocumentCount",
     });
   }
@@ -327,16 +348,11 @@ export async function runDocumentDistinct(
       queryMode: "distinct",
     });
   } catch (err) {
-    actions.failQuery(
-      tab.id,
+    handleMongoRunnerError(actions, err, {
+      tabId: tab.id,
       queryId,
-      err instanceof Error ? err.message : String(err),
-    );
-    actions.recordHistory({
       sql: rawSql,
-      executedAt: Date.now(),
-      duration: Date.now() - startTime,
-      status: "error",
+      startTime,
       queryMode: "distinct",
     });
   }

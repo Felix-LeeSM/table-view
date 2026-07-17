@@ -162,6 +162,29 @@ describe("useQueryExecution — sprint-381 runCommand dispatch", () => {
     });
   });
 
+  // Issue #1561 — a cancelled admin runCommand must land on cancelled-state
+  // (no red alert), not `error`. Backend returns "Operation cancelled".
+  it("[#1561] cancelled db.runCommand routes to cancelled state, not error", async () => {
+    runMongoCommandMock.mockRejectedValueOnce(new Error("Operation cancelled"));
+    const tab = seedDocTab("db.runCommand({ping: 1})", {
+      database: undefined,
+      collection: undefined,
+    });
+    const { result } = renderHook(() => useQueryExecution({ tab }));
+
+    await act(async () => {
+      await result.current.handleExecute();
+    });
+
+    await waitFor(() => {
+      const ws = getTestWorkspace("conn-mongo", "db1");
+      const t = ws.tabs.find((x) => x.id === tab.id);
+      expect(t && t.type === "query" ? t.queryState.status : null).toBe(
+        "cancelled",
+      );
+    });
+  });
+
   // AC-381-07: chip = "myapp" 상태에서 `db.adminCommand({serverStatus: 1})`
   // → adminCommand 는 항상 admin DB context 라 backend 가 받는 database
   // arg 는 `null` 이어야 한다 (chip 값 무시).
