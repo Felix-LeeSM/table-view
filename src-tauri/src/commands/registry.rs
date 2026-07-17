@@ -182,5 +182,7 @@ pub fn register_all(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<tauri
         commands::history::get_history_detail,
         commands::history::clear_history,
         commands::sql_parser::parse_sql_backend,
+        // Diagnostics
+        commands::open_log_dir::open_log_dir,
     ])
 }

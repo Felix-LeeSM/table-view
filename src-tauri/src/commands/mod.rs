@@ -13,6 +13,7 @@ pub mod keyring;
 pub mod kv;
 pub mod meta;
 pub mod meta_sentinel;
+pub mod open_log_dir;
 pub mod open_workspace_window;
 pub mod persist_connections;
 pub mod persist_favorites;

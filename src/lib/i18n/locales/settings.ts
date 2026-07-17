@@ -31,6 +31,10 @@ export const en = {
     reset: "Reset",
     range: "Allowed range: {{min}}–{{max}}",
   },
+  revealLogs: {
+    label: "Reveal logs",
+    errorPrefix: "Failed to open logs folder: {{msg}}",
+  },
 } as const;
 
 export const ko = {
@@ -59,5 +63,9 @@ export const ko = {
     help: "이보다 큰 결과는 메모리 보호를 위해 fetch 단계에서 잘립니다. 정밀한 제어는 LIMIT을 사용하세요.",
     reset: "기본값",
     range: "허용 범위: {{min}}–{{max}}",
+  },
+  revealLogs: {
+    label: "로그 폴더 열기",
+    errorPrefix: "로그 폴더 열기 실패: {{msg}}",
   },
 } as const;
