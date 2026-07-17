@@ -392,14 +392,24 @@ fn read_disk_key(path: &Path) -> Result<Vec<u8>, AppError> {
     Ok(key)
 }
 
+/// Write the base64 master key to `path`, creating it with 0600 in a single
+/// syscall on Unix (#1554). Mirrors `crypto::create_key_file`'s create-time
+/// `mode(0o600)`: the old `fs::write` + `set_permissions` pair left the key
+/// group/world-readable (0644 under a default 022 umask) in the window between
+/// the two syscalls. Setting the mode at `open(2)` time closes that window.
+/// Non-Unix keeps the plain-create default (no POSIX mode).
 fn write_disk_key(path: &Path, key: &[u8]) -> Result<(), AppError> {
+    use std::io::Write;
     let key_base64 = BASE64.encode(key);
-    fs::write(path, key_base64)?;
+    let mut opts = fs::OpenOptions::new();
+    opts.create(true).truncate(true).write(true);
     #[cfg(unix)]
     {
-        use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(path, fs::Permissions::from_mode(0o600))?;
+        use std::os::unix::fs::OpenOptionsExt;
+        opts.mode(0o600);
     }
+    let mut f = opts.open(path)?;
+    f.write_all(key_base64.as_bytes())?;
     Ok(())
 }
 
@@ -622,6 +632,9 @@ mod tests {
         assert_eq!(got, key);
     }
 
+    /// #1554 — the disk key must be 0600. The fix creates the file with
+    /// `mode(0o600)` at `open(2)` time (no `fs::write` + `set_permissions`
+    /// two-step), so it is never group/world-readable (0644) in between.
     #[cfg(unix)]
     #[test]
     fn write_disk_key_sets_mode_0o600() {
