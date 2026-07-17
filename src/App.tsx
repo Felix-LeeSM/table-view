@@ -75,6 +75,12 @@ export default function App() {
   // paths App owns: Cmd+W (JS fallback) and the native window-close signal.
   const dirtyTabIds = useDirtyTabIds();
   const currentConnId = useCurrentWindowConnectionId();
+  // #1583 — this workspace window self-closes when its own connection id
+  // disappears from the (cross-window synced) connection list, e.g. the
+  // launcher deleted it. `hasLoadedOnce` gates the check so an in-flight
+  // initial load can't be mistaken for "connection gone".
+  const connections = useConnectionStore((s) => s.connections);
+  const connectionsLoadedOnce = useConnectionStore((s) => s.hasLoadedOnce);
   const windowHasDirtyTabs = useConnectionHasDirtyTabs(currentConnId);
   const { guard: confirmDiscard, dialog: discardDialog } = useDiscardConfirm();
   // Keep the latest dirty snapshot in a ref so the one-shot native-close
@@ -160,6 +166,25 @@ export default function App() {
       }),
     [confirmDiscard],
   );
+
+  // #1583 — deleting a connection (from the launcher) removes it from the
+  // synced `connections` list and the connection-sync bridge purges this
+  // window's tabs/schema/grid, but nothing closed the now-empty
+  // `workspace-{id}` window — it lingered as a blank orphan. When this
+  // window's own connection id is gone from the loaded list, self-close it
+  // through the same discard-confirm + persist-flush + destroy path the
+  // native window close uses. Guards: `connectionsLoadedOnce` (never fire
+  // mid-load), and `currentConnId === null` (launcher / non-workspace
+  // windows, where the label has no connection id).
+  useEffect(() => {
+    if (!connectionsLoadedOnce || currentConnId === null) return;
+    if (connections.some((c) => c.id === currentConnId)) return;
+    confirmDiscard(windowHasDirtyRef.current, () => {
+      void flushPersistWorkspaces().finally(() => {
+        void destroyCurrentWindow();
+      });
+    });
+  }, [connectionsLoadedOnce, currentConnId, connections, confirmDiscard]);
 
   // #1580 F2 — flush the debounced workspace persist when the webview is
   // backgrounded/hidden, so a crash or SIGKILL while hidden doesn't lose the
