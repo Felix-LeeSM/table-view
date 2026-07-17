@@ -8,6 +8,9 @@ use super::dump_writers::quote_pg_string;
 use super::grid_writers::{
     json_to_cell_string, json_to_sql_literal, quote_sql_identifier, quote_sql_string,
 };
+use super::mssql_dump::{
+    mssql_value_to_sql_literal, qualified_mssql_table, quote_mssql_identifier, quote_mssql_string,
+};
 use super::mysql_dump::{
     mysql_value_to_sql_literal, qualified_mysql_table, quote_mysql_identifier, quote_mysql_string,
 };
@@ -701,6 +704,69 @@ fn test_mysql_value_to_sql_literal_json_has_no_jsonb_cast() {
     assert_eq!(esc, r#"'{"p":"c:\\\\x"}'"#);
 }
 
+// Issue #1642 — the T-SQL `mssql_dump` writer sibling. Same contract as the
+// pure-function mysql tests above: bracket-quoted identifiers, backslash-neutral
+// T-SQL string escaping, bool → BIT `1`/`0`, and no jsonb/backtick leak. The
+// live cursor round-trip lives in `tests/mssql_integration.rs`.
+
+// [AC-1642-02] Identifier: bracket-quoted, embedded `]` doubled.
+#[test]
+fn test_quote_mssql_identifier_doubles_embedded_bracket() {
+    assert_eq!(quote_mssql_identifier("plain"), "[plain]");
+    assert_eq!(quote_mssql_identifier("odd]col"), "[odd]]col]");
+    // Bracket dialect leaves an embedded double-quote / backtick untouched.
+    assert_eq!(quote_mssql_identifier(r#"a"b"#), r#"[a"b]"#);
+    assert_eq!(quote_mssql_identifier("a`b"), "[a`b]");
+}
+
+// [AC-1642-02] Qualified: `[schema].[table]`, both bracket-escaped.
+#[test]
+fn test_qualified_mssql_table_builds_bracket_dot_form() {
+    assert_eq!(qualified_mssql_table("dbo", "users"), "[dbo].[users]");
+    assert_eq!(qualified_mssql_table("od]d", "t]b"), "[od]]d].[t]]b]");
+}
+
+// [AC-1642-02] String: only single quote doubled; backslash is a literal
+// (unlike MySQL, which would double it).
+#[test]
+fn test_quote_mssql_string_doubles_quote_and_keeps_backslash() {
+    assert_eq!(quote_mssql_string("O'Reilly"), "'O''Reilly'");
+    assert_eq!(quote_mssql_string(""), "''");
+    assert_eq!(quote_mssql_string(r"a\b"), r"'a\b'");
+    assert_eq!(quote_mssql_string(r"c:\'x"), r"'c:\''x'");
+    assert_eq!(quote_mssql_string("a\nb"), "'a\nb'");
+}
+
+// [AC-1642-02] Scalars: bool → BIT `1`/`0` (T-SQL has no TRUE/FALSE).
+#[test]
+fn test_mssql_value_to_sql_literal_scalars() {
+    assert_eq!(mssql_value_to_sql_literal(&JsonValue::Null), "NULL");
+    assert_eq!(mssql_value_to_sql_literal(&json!(true)), "1");
+    assert_eq!(mssql_value_to_sql_literal(&json!(false)), "0");
+    assert_eq!(mssql_value_to_sql_literal(&json!(42)), "42");
+    assert_eq!(mssql_value_to_sql_literal(&json!(-7)), "-7");
+    assert_eq!(mssql_value_to_sql_literal(&json!(2.5)), "2.5");
+    assert_eq!(
+        mssql_value_to_sql_literal(&json!("O'Reilly")),
+        "'O''Reilly'"
+    );
+}
+
+// [AC-1642-02] Array / Object → plain quoted JSON string, no PG `::jsonb` cast
+// and no MySQL backslash doubling (SQL Server stores JSON in nvarchar).
+#[test]
+fn test_mssql_value_to_sql_literal_json_has_no_cast_or_backslash_escape() {
+    let obj = mssql_value_to_sql_literal(&json!({"k": "v"}));
+    assert_eq!(obj, "'{\"k\":\"v\"}'");
+    assert!(!obj.contains("::jsonb"), "lit: {}", obj);
+    let arr = mssql_value_to_sql_literal(&json!([1, 2, "a"]));
+    assert_eq!(arr, "'[1,2,\"a\"]'");
+    // A backslash inside the JSON stays single (T-SQL literal), where MySQL
+    // would double it.
+    let esc = mssql_value_to_sql_literal(&json!({"p": "c:\\x"}));
+    assert_eq!(esc, r#"'{"p":"c:\\x"}'"#);
+}
+
 // ── run_schema_dump direct tests (Sprint 237 P5) ─────────────────────
 //
 // 작성 이유 (2026-05-08): export/mod.rs 의 `run_schema_dump` body 가
@@ -1225,6 +1291,36 @@ async fn run_schema_dump_writes_insert_lines_for_streamed_rows() {
     assert!(
         !mysql_body.contains(r#""public"."users""#),
         "mysql body leaked ANSI identifier: {mysql_body}"
+    );
+
+    // [AC-1642-02] Same streamed rows, `dialect = mssql` → `[bracket]`
+    // identifiers. RED before the fn-pointer dispatch grew an mssql arm; GREEN
+    // after. The default-Postgresql run above stays the byte-identical PG guard.
+    let mssql_path = dir.path().join("inserts_mssql.sql");
+    let mssql_summary = super::run_schema_dump(
+        &state,
+        "rdb-conn",
+        &mssql_path,
+        "",
+        "",
+        &[dump_table("dbo", "users", vec!["id", "name"])],
+        &dump_opts_dialect(ExportInclude::Dml, 2, DatabaseType::Mssql),
+        None,
+    )
+    .await
+    .unwrap();
+    assert_eq!(mssql_summary.rows_written, 3);
+    let mssql_body = std::fs::read_to_string(&mssql_path).unwrap();
+    assert!(
+        mssql_body.contains("INSERT INTO [dbo].[users] ([id], [name]) VALUES (1, 'alice');"),
+        "mssql body: {mssql_body}"
+    );
+    assert!(mssql_body.contains("VALUES (NULL, 'carol');"));
+    assert!(mssql_body.contains("Data: [dbo].[users]"));
+    // Neither ANSI double quotes nor MySQL backticks may leak into the T-SQL dump.
+    assert!(
+        !mssql_body.contains(r#""dbo"."users""#) && !mssql_body.contains("`dbo`.`users`"),
+        "mssql body leaked non-bracket identifier: {mssql_body}"
     );
 }
 

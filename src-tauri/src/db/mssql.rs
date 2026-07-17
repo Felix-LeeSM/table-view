@@ -583,6 +583,24 @@ impl RdbAdapter for MssqlAdapter {
         })
     }
 
+    // Issue #1642 — T-SQL row streaming powers the DML/Full schema dump. Same
+    // contract as the pg/mysql/sqlite siblings; `mssql/runtime.rs` owns the
+    // batching + cancellation body.
+    fn stream_table_rows<'a>(
+        &'a self,
+        namespace: &'a str,
+        table: &'a str,
+        batch_size: u32,
+        column_names: &'a [String],
+        sender: tokio::sync::mpsc::Sender<Vec<Vec<serde_json::Value>>>,
+        cancel: Option<&'a CancellationToken>,
+    ) -> BoxFuture<'a, Result<u64, AppError>> {
+        Box::pin(async move {
+            self.stream_table_rows(namespace, table, batch_size, column_names, sender, cancel)
+                .await
+        })
+    }
+
     // Issue #1071 — structured table/index/constraint DDL is wired to the
     // bounded T-SQL builder in `mssql/ddl.rs`, so these route through the same
     // plan/preview/execute dispatch as pg/mysql. `create_table_plan` inherits

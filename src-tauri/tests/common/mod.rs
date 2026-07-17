@@ -20,6 +20,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use table_view_lib::db::mongodb::MongoAdapter;
+use table_view_lib::db::mssql::MssqlAdapter;
 use table_view_lib::db::mysql::MysqlAdapter;
 use table_view_lib::db::postgres::PostgresAdapter;
 use table_view_lib::db::DbAdapter;
@@ -28,6 +29,7 @@ use testcontainers::core::ImageExt;
 use testcontainers::runners::AsyncRunner;
 use testcontainers::ContainerAsync;
 use testcontainers_modules::mongo::Mongo as MongoImage;
+use testcontainers_modules::mssql_server::MssqlServer as MssqlImage;
 use testcontainers_modules::mysql::Mysql as MysqlImage;
 use testcontainers_modules::postgres::Postgres as PostgresImage;
 use tokio::sync::OnceCell;
@@ -79,6 +81,17 @@ struct MysqlEndpoint {
     database: String,
 }
 
+/// Issue #1642 — SQL Server endpoint resolver. Mirrors the MySQL two-stage
+/// pattern (external reuse via `MSSQL_HOST`, else lazy testcontainer spawn).
+#[derive(Clone, Debug)]
+struct MssqlEndpoint {
+    host: String,
+    port: u16,
+    user: String,
+    password: String,
+    database: String,
+}
+
 /// 컨테이너 핸들을 process 종료까지 살려두기 위해 `Arc<...>` 로 보관.
 /// static 은 Drop 되지 않으므로 testcontainers 기본 Drop 에 기대지 않고,
 /// owner-pid 라벨 + 시작 시 dead-owner sweep + process-exit `rm -f -v` 로
@@ -86,6 +99,7 @@ struct MysqlEndpoint {
 static PG_CONTAINER: OnceCell<Option<Arc<ContainerAsync<PostgresImage>>>> = OnceCell::const_new();
 static MONGO_CONTAINER: OnceCell<Option<Arc<ContainerAsync<MongoImage>>>> = OnceCell::const_new();
 static MYSQL_CONTAINER: OnceCell<Option<Arc<ContainerAsync<MysqlImage>>>> = OnceCell::const_new();
+static MSSQL_CONTAINER: OnceCell<Option<Arc<ContainerAsync<MssqlImage>>>> = OnceCell::const_new();
 
 async fn pg_endpoint() -> Option<PgEndpoint> {
     // 1) 외부 PG 재사용 — `PGHOST`/`PGPORT`/... 가 모두 있으면 그 값을 그대로.
@@ -327,6 +341,84 @@ async fn mysql_endpoint() -> Option<MysqlEndpoint> {
         user: "root".to_string(),
         password: "testpass".to_string(),
         database: "test".to_string(),
+    })
+}
+
+/// Issue #1642 — SQL Server endpoint resolver. Two-stage like MySQL:
+///   1) `MSSQL_HOST` set → reuse an external SQL Server (host-native or
+///      compose). PORT/USER/PASSWORD/DATABASE override the container defaults.
+///   2) else, unless `MSSQL_DISABLE=1`, lazily spawn the official
+///      `mcr.microsoft.com/mssql/server` testcontainer (amd64-only; on Apple
+///      silicon it needs Rosetta and otherwise fails → silent-skip).
+#[allow(dead_code)]
+async fn mssql_endpoint() -> Option<MssqlEndpoint> {
+    if std::env::var("MSSQL_DISABLE")
+        .ok()
+        .filter(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .is_some()
+    {
+        return None;
+    }
+
+    if let Ok(host) = std::env::var("MSSQL_HOST") {
+        let port = std::env::var("MSSQL_PORT")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(1433);
+        return Some(MssqlEndpoint {
+            host,
+            port,
+            user: std::env::var("MSSQL_USER").unwrap_or_else(|_| "sa".into()),
+            password: std::env::var("MSSQL_PASSWORD")
+                .unwrap_or_else(|_| MssqlImage::DEFAULT_SA_PASSWORD.into()),
+            database: std::env::var("MSSQL_DATABASE").unwrap_or_else(|_| "master".into()),
+        });
+    }
+
+    ensure_sweep_once().await;
+    let pid = current_pid_label();
+    let cell = MSSQL_CONTAINER
+        .get_or_init(|| async {
+            match MssqlImage::default()
+                .with_accept_eula()
+                .with_label(OWNED_LABEL, "1")
+                .with_label(OWNER_PID_LABEL, &pid)
+                .start()
+                .await
+            {
+                Ok(c) => {
+                    register_container_for_process_cleanup(c.id().to_string());
+                    Some(Arc::new(c))
+                }
+                Err(e) => {
+                    println!(
+                        "SKIP: SQL Server testcontainer 시작 실패 ({}). \
+                         Docker daemon (amd64/Rosetta) 확인 또는 \
+                         MSSQL_HOST/MSSQL_PORT/MSSQL_USER/MSSQL_PASSWORD 로 \
+                         외부 SQL Server 를 지정하세요.",
+                        e
+                    );
+                    None
+                }
+            }
+        })
+        .await
+        .as_ref()?;
+
+    let port = match cell.get_host_port_ipv4(1433).await {
+        Ok(p) => p,
+        Err(e) => {
+            println!("SKIP: SQL Server container 포트 매핑 실패 ({})", e);
+            return None;
+        }
+    };
+
+    Some(MssqlEndpoint {
+        host: "127.0.0.1".to_string(),
+        port,
+        user: "sa".to_string(),
+        password: MssqlImage::DEFAULT_SA_PASSWORD.to_string(),
+        database: "master".to_string(),
     })
 }
 
@@ -580,6 +672,52 @@ pub async fn setup_mysql_adapter() -> Option<MysqlAdapter> {
             }
             Err(e) => {
                 println!("SKIP: MySQL connect_pool failed after retries ({})", e);
+                return None;
+            }
+        }
+    }
+    None
+}
+
+/// Issue #1642 — SQL Server lifecycle helper. `MssqlAdapter` has no sqlx pool;
+/// `connect` runs a version probe and stores the config, so each connected
+/// adapter opens fresh tiberius clients per query (two adapters over the same
+/// container are independent — the round-trip test uses that to keep one for
+/// seed/readback and hand another to `AppState`). TLS is required + trusted to
+/// match the container's self-signed cert. Silent-skip (`None`) preserved.
+#[allow(dead_code)]
+pub async fn setup_mssql_adapter() -> Option<MssqlAdapter> {
+    let endpoint = mssql_endpoint().await?;
+    let config = ConnectionConfig {
+        id: "test-conn".to_string(),
+        name: "TestMssql".to_string(),
+        db_type: DatabaseType::Mssql,
+        host: endpoint.host,
+        port: endpoint.port,
+        user: endpoint.user,
+        password: endpoint.password,
+        database: endpoint.database,
+        read_only: false,
+        group_id: None,
+        color: None,
+        connection_timeout: Some(20),
+        keep_alive_interval: None,
+        environment: None,
+        auth_source: None,
+        replica_set: None,
+        tls_enabled: Some(true),
+        trust_server_certificate: Some(true),
+    };
+
+    let adapter = MssqlAdapter::new();
+    for attempt in 0..5 {
+        match adapter.connect(&config).await {
+            Ok(()) => return Some(adapter),
+            Err(_) if attempt < 4 => {
+                tokio::time::sleep(Duration::from_millis(500 * (attempt + 1))).await;
+            }
+            Err(e) => {
+                println!("SKIP: SQL Server connect failed after retries ({})", e);
                 return None;
             }
         }

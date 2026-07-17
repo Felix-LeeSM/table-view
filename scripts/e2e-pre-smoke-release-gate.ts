@@ -136,7 +136,7 @@ function verifyEnterpriseRdbmsPromotionBoundary(): void {
       mssql.capabilities.ddl.alterTable &&
       mssql.capabilities.ddl.createIndex &&
       mssql.capabilities.ddl.dropObject,
-    "mssql: runtime support covers catalog/query/cancel/tabular plus PK-projected editRows and #1071 structured table/index/constraint DDL; admin/import/export/full workbench stay unsupported",
+    "mssql: runtime support covers catalog/query/cancel/tabular plus PK-projected editRows, #1071 structured table/index/constraint DDL, and #1642 vendor-restorable schema-dump export; admin/import/backup-restore/full workbench stay unsupported",
   );
 
   assert(

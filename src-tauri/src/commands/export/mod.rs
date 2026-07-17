@@ -23,6 +23,7 @@ use crate::models::DatabaseType;
 
 mod dump_writers;
 mod grid_writers;
+mod mssql_dump;
 mod mysql_dump;
 // Issue #1443 — `pub` so `commands::export::session::export_grid_*` resolve
 // for `generate_handler!` (the `#[tauri::command]` hidden `__cmd__*` macro
@@ -31,6 +32,7 @@ pub mod session;
 
 use dump_writers::{pg_value_to_sql_literal, qualified_pg_table, quote_pg_identifier};
 use grid_writers::{require_sql_source_table, GridStreamState};
+use mssql_dump::{mssql_value_to_sql_literal, qualified_mssql_table, quote_mssql_identifier};
 use mysql_dump::{mysql_value_to_sql_literal, qualified_mysql_table, quote_mysql_identifier};
 
 pub use session::ExportSessionRegistry;
@@ -343,12 +345,14 @@ pub struct ExportSchemaDumpOptions {
     /// trade-off — 너무 작으면 cursor RTT, 너무 크면 batch 한 묶음이
     /// receiver 에서 tied up).
     pub batch_size: u32,
-    /// Issue #1641 — INSERT-writer dialect. `mysql`/`mariadb` emit backtick
-    /// identifiers + backslash-aware MySQL string escaping; everything else
-    /// (`postgresql`, `sqlite`, and any unspecified value) uses the ANSI
-    /// double-quote PG writer. `#[serde(default)]` → old payloads without the
-    /// field keep byte-identical PG output. DDL is dialect-shaped upstream in
-    /// the frontend `generateMigrationDDL`, so this only steers the DML body.
+    /// Issue #1641/#1642 — INSERT-writer dialect. `mysql`/`mariadb` emit
+    /// backtick identifiers + backslash-aware MySQL string escaping; `mssql`
+    /// emits `[bracket]` identifiers + T-SQL string escaping (bool → `1`/`0`);
+    /// everything else (`postgresql`, `sqlite`, and any unspecified value) uses
+    /// the ANSI double-quote PG writer. `#[serde(default)]` → old payloads
+    /// without the field keep byte-identical PG output. DDL is dialect-shaped
+    /// upstream in the frontend `generateMigrationDDL`, so this only steers the
+    /// DML body.
     #[serde(default)]
     pub dialect: DatabaseType,
 }
@@ -564,10 +568,11 @@ async fn stream_schema_dump(
         })?;
         let rdb: &dyn RdbAdapter = adapter.as_rdb()?;
 
-        // Issue #1641 — pick the INSERT-writer dialect once for the whole
+        // Issue #1641/#1642 — pick the INSERT-writer dialect once for the whole
         // dump. fn pointers keep the per-row/per-identifier hot loop
         // branch-free. `mysql`/`mariadb` → backtick + MySQL escaping;
-        // everything else (`postgresql`/`sqlite`) → ANSI double-quote PG.
+        // `mssql` → `[bracket]` + T-SQL escaping (bool → 1/0); everything else
+        // (`postgresql`/`sqlite`) → ANSI double-quote PG.
         type QualifyFn = fn(&str, &str) -> String;
         type QuoteIdentFn = fn(&str) -> String;
         type LiteralFn = fn(&JsonValue) -> String;
@@ -577,6 +582,11 @@ async fn stream_schema_dump(
                     qualified_mysql_table,
                     quote_mysql_identifier,
                     mysql_value_to_sql_literal,
+                ),
+                DatabaseType::Mssql => (
+                    qualified_mssql_table,
+                    quote_mssql_identifier,
+                    mssql_value_to_sql_literal,
                 ),
                 _ => (
                     qualified_pg_table,

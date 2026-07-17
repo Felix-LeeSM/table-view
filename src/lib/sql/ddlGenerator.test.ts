@@ -386,6 +386,41 @@ describe("generateMigrationDDL", () => {
     expect(sql).not.toContain('"main"."notes"');
   });
 
+  // [#1642] MSSQL uses `[bracket]` identifier quoting with `[schema].[table]`
+  // qualification; embedded `]` is doubled. T-SQL types pass through verbatim
+  // from the catalog. No ANSI double quotes or MySQL backticks may leak.
+  it("[#1642] MSSQL uses bracket quoting", () => {
+    const sql = generateMigrationDDL({
+      dialect: "mssql",
+      schema: "dbo",
+      tables: [
+        table("orders", [
+          col({
+            name: "id",
+            data_type: "int",
+            nullable: false,
+            is_primary_key: true,
+          }),
+          col({
+            name: "customer name",
+            data_type: "nvarchar(255)",
+            nullable: false,
+          }),
+        ]),
+        table("we]ird", [col({ name: "ok", data_type: "int" })]),
+      ],
+      generatedAt: FIXED_DATE,
+    });
+    expect(sql).toContain("-- dialect: mssql");
+    expect(sql).toContain("CREATE TABLE [dbo].[orders]");
+    expect(sql).toContain("[id] int NOT NULL PRIMARY KEY");
+    expect(sql).toContain("[customer name] nvarchar(255) NOT NULL");
+    // embedded `]` doubled.
+    expect(sql).toContain("[we]]ird]");
+    expect(sql).not.toContain('"dbo"."orders"');
+    expect(sql).not.toContain("`dbo`.`orders`");
+  });
+
   // [AC-192-01-8] embedded quote 가 들어간 identifier 도 안전하게 escape.
   // " 는 "" 로, ` 는 `` 로. SQL injection 회귀 방지 가드.
   // date 2026-05-02
