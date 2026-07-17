@@ -76,6 +76,31 @@ function recordDecline(version: string): void {
   }
 }
 
+/**
+ * #1617 C2 — the deb/rpm manual-update hint is version-scoped (not a
+ * throttle): once shown for a version it never repeats, but a *newer* version
+ * surfaces again. Same plain `localStorage` storage as the decline throttle so
+ * the notice outlives a restart. Stores just the last-hinted version string.
+ */
+const UPDATE_HINTED_KEY = "table-view:update-hinted";
+
+function readHintedVersion(): string | null {
+  try {
+    return window.localStorage.getItem(UPDATE_HINTED_KEY);
+  } catch {
+    // localStorage unavailable — degrade to hinting every boot.
+    return null;
+  }
+}
+
+function recordHintedVersion(version: string): void {
+  try {
+    window.localStorage.setItem(UPDATE_HINTED_KEY, version);
+  } catch {
+    // localStorage unavailable — degrade to hinting every boot.
+  }
+}
+
 /** Ask the user whether to install `version` now. Native OS dialog. */
 async function defaultConfirmInstall(version: string): Promise<boolean> {
   const { ask } = await import("@tauri-apps/plugin-dialog");
@@ -113,25 +138,30 @@ async function defaultCanSelfInstall(): Promise<boolean> {
 function makeProgressHandler(version: string): (e: DownloadEvent) => void {
   let total = 0;
   let downloaded = 0;
+  // #1617 C3 — when total is unknown (updater emitted Progress without a
+  // Started event, or Started carried no contentLength) a computed percent is
+  // always 0, which reads as a stalled download. Show an indeterminate message
+  // instead of a stuck "0%".
+  const showProgress = () => {
+    const message =
+      total > 0
+        ? i18n.t("app:update.downloading", {
+            version,
+            percent: Math.min(100, Math.round((downloaded / total) * 100)),
+          })
+        : i18n.t("app:update.downloadingUnknown", { version });
+    toast.info(message, { id: UPDATE_TOAST_ID, durationMs: null });
+  };
   return (e) => {
     switch (e.event) {
       case "Started":
         total = e.data.contentLength ?? 0;
-        toast.info(i18n.t("app:update.downloading", { version, percent: 0 }), {
-          id: UPDATE_TOAST_ID,
-          durationMs: null,
-        });
+        showProgress();
         break;
-      case "Progress": {
+      case "Progress":
         downloaded += e.data.chunkLength;
-        const percent =
-          total > 0 ? Math.min(100, Math.round((downloaded / total) * 100)) : 0;
-        toast.info(i18n.t("app:update.downloading", { version, percent }), {
-          id: UPDATE_TOAST_ID,
-          durationMs: null,
-        });
+        showProgress();
         break;
-      }
       case "Finished":
         toast.success(i18n.t("app:update.restarting"), { id: UPDATE_TOAST_ID });
         break;
@@ -174,10 +204,15 @@ export async function checkForUpdatesOnLaunch(
 
   // #1437 P2-4 — a deb/rpm Linux install can't self-update. Don't prompt into
   // a silent no-op every boot; point the user at their package manager once.
+  // #1617 C2 — show that hint only once per version so the same release doesn't
+  // re-toast on every boot; a newer version still surfaces a fresh hint.
   if (!(await canSelfInstall())) {
-    toast.info(i18n.t("app:update.manualHint", { version: update.version }), {
-      id: UPDATE_TOAST_ID,
-    });
+    if (readHintedVersion() !== update.version) {
+      toast.info(i18n.t("app:update.manualHint", { version: update.version }), {
+        id: UPDATE_TOAST_ID,
+      });
+      recordHintedVersion(update.version);
+    }
     return;
   }
 
@@ -194,7 +229,17 @@ export async function checkForUpdatesOnLaunch(
     return;
   }
 
-  if (!(await confirmInstall(update.version))) {
+  // #1617 C1 — this runs fire-and-forget from boot. A prompt rejection (dialog
+  // IPC error) was previously uncaught. The user hasn't confirmed yet, so treat
+  // a failed prompt like a failed check: stay silent, don't toast, don't throw.
+  let confirmed: boolean;
+  try {
+    confirmed = await confirmInstall(update.version);
+  } catch (err) {
+    logger.warn("[autoUpdate] update prompt failed", err);
+    return;
+  }
+  if (!confirmed) {
     recordDecline(update.version);
     return;
   }
