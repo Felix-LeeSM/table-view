@@ -16,6 +16,7 @@
  * disable — the guardrail stays live for genuine sibling-store imports.
  */
 export type {
+  ErdTab,
   QueryTab,
   SidebarState,
   Tab,

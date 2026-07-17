@@ -12,7 +12,6 @@ export const en = {
     records: "Records",
     structure: "Structure",
     tableViewAria: "Table view",
-    erd: "ERD",
     loadingWorkspaceAria: "Loading workspace",
     emptyTableLead:
       "Open a table from the sidebar, or start writing SQL against ",
@@ -41,6 +40,7 @@ export const en = {
   },
   tabBar: {
     openConnectionsAria: "Open connections",
+    erdTab: "ERD: {{db}}",
     discardTitle: "Discard unsaved changes?",
     discardMessage:
       '"{{title}}" has unsaved changes. Closing the tab will discard them.',
@@ -63,7 +63,6 @@ export const ko = {
     records: "레코드",
     structure: "구조",
     tableViewAria: "테이블 뷰",
-    erd: "ERD",
     loadingWorkspaceAria: "워크스페이스 불러오는 중",
     emptyTableLead:
       "사이드바에서 테이블을 열거나, 아래 연결에 SQL을 작성하세요 ",
@@ -92,6 +91,7 @@ export const ko = {
   },
   tabBar: {
     openConnectionsAria: "열린 연결",
+    erdTab: "ERD: {{db}}",
     discardTitle: "저장하지 않은 변경사항을 버리겠습니까?",
     discardMessage:
       '"{{title}}"에 저장하지 않은 변경사항이 있습니다. 탭을 닫으면 삭제됩니다.',

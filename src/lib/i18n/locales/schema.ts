@@ -36,6 +36,8 @@ export const en = {
   exportSchemaFullAria: "Export {{schema}} full",
   refreshSchemasAria: "Refresh schemas",
   refreshSchemasTitle: "Refresh schemas",
+  openErdAria: "Open ERD diagram",
+  openErdTitle: "Open ERD (database diagram)",
   schemaTreeAria: "{{name}} schema tree",
 
   // #1218 — pinned / recent table sections
@@ -275,6 +277,8 @@ export const ko = {
   exportSchemaFullAria: "{{schema}} 전체 내보내기",
   refreshSchemasAria: "스키마 새로고침",
   refreshSchemasTitle: "스키마 새로고침",
+  openErdAria: "ERD 다이어그램 열기",
+  openErdTitle: "ERD 열기 (데이터베이스 다이어그램)",
   schemaTreeAria: "{{name}} 스키마 트리",
 
   // #1218 — 고정 / 최근 테이블 섹션

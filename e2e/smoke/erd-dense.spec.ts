@@ -37,15 +37,20 @@ describe("Dense ERD smoke", () => {
       await openConnection(CONNECTION_NAME);
     });
 
-    await step("open the dense seeded table in the ERD tab", async () => {
+    await step("open the database-level ERD tab", async () => {
       await expandIfCollapsed('[aria-label="public schema"]', 30000);
       await expandIfCollapsed('[aria-label="Tables in public"]');
 
+      // Warm the schema/table cache by opening a seeded table first.
       const ordersTable = await $('[aria-label="erd_orders table"]');
       await ordersTable.waitForDisplayed({ timeout: 15000 });
       await ordersTable.click();
 
-      await activateVisibleTab("ERD");
+      // ERD moved from a table sub-tab to a database-level entry point: the
+      // schema-tree header "Open ERD" action opens (and activates) a
+      // top-level ERD tab for the current (connection, database).
+      await switchToWorkspaceWindow();
+      await clickButton("Open ERD diagram");
     });
 
     await step(
@@ -244,87 +249,6 @@ async function clickButton(ariaLabel: string) {
   const button = await $(`[aria-label="${ariaLabel}"]`);
   await button.waitForDisplayed({ timeout: 5000 });
   await button.click();
-}
-
-async function activateVisibleTab(label: string) {
-  await switchToWorkspaceWindow();
-  await browser.waitUntil(
-    async () =>
-      await browser.execute((expectedLabel) => {
-        return Array.from(
-          document.querySelectorAll<HTMLElement>('[role="tab"]'),
-        ).some(
-          (candidate) =>
-            candidate.offsetParent !== null &&
-            candidate.textContent?.trim() === expectedLabel,
-        );
-      }, label),
-    {
-      timeout: 10000,
-      timeoutMsg: `${label} tab did not appear in the workspace`,
-    },
-  );
-
-  await browser.execute((expectedLabel) => {
-    const tab = Array.from(
-      document.querySelectorAll<HTMLElement>('[role="tab"]'),
-    ).find(
-      (candidate) =>
-        candidate.offsetParent !== null &&
-        candidate.textContent?.trim() === expectedLabel,
-    );
-    if (!tab) throw new Error(`${expectedLabel} tab did not appear`);
-
-    tab.focus();
-
-    const pointerInit = {
-      bubbles: true,
-      cancelable: true,
-      pointerType: "mouse",
-      button: 0,
-    };
-    if (typeof PointerEvent === "function") {
-      tab.dispatchEvent(
-        new PointerEvent("pointerdown", { ...pointerInit, buttons: 1 }),
-      );
-      tab.dispatchEvent(new PointerEvent("pointerup", pointerInit));
-    }
-
-    tab.dispatchEvent(
-      new MouseEvent("mousedown", {
-        bubbles: true,
-        cancelable: true,
-        button: 0,
-        buttons: 1,
-      }),
-    );
-    tab.dispatchEvent(
-      new MouseEvent("mouseup", {
-        bubbles: true,
-        cancelable: true,
-        button: 0,
-      }),
-    );
-    tab.click();
-  }, label);
-
-  await browser.waitUntil(
-    async () =>
-      await browser.execute((expectedLabel) => {
-        const tab = Array.from(
-          document.querySelectorAll<HTMLElement>('[role="tab"]'),
-        ).find(
-          (candidate) =>
-            candidate.offsetParent !== null &&
-            candidate.textContent?.trim() === expectedLabel,
-        );
-        return tab?.getAttribute("aria-selected") === "true";
-      }, label),
-    {
-      timeout: 10000,
-      timeoutMsg: `${label} tab did not become active in the workspace`,
-    },
-  );
 }
 
 async function waitForZoomPercent(viewportName: string): Promise<number> {

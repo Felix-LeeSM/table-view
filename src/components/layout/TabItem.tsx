@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { X, Table2, Code2, Leaf } from "lucide-react";
+import { X, Table2, Code2, Leaf, Network } from "lucide-react";
 import { type Tab, type TableTab } from "@stores/workspaceStore";
 import { Button } from "@components/ui/button";
 import type { TabDragHandlers } from "./useTabDrag";
@@ -81,10 +81,12 @@ export default function TabItem({
     >
       {tab.type === "query" ? (
         <Code2 size={12} className="shrink-0 text-muted-foreground" />
+      ) : tab.type === "erd" ? (
+        <Network size={12} className="shrink-0 text-muted-foreground" />
       ) : (
         <Table2 size={12} className="shrink-0 text-muted-foreground" />
       )}
-      {tab.paradigm === "document" && (
+      {"paradigm" in tab && tab.paradigm === "document" && (
         <Leaf
           size={10}
           className="shrink-0 text-muted-foreground"

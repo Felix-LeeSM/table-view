@@ -18,17 +18,18 @@ import {
   Plus,
   Search,
   X,
+  Network,
 } from "lucide-react";
 import { useSchemaStore } from "@stores/schemaStore";
 // #1447 — sql-free active-tab read (type / schema / table for highlight).
-import { useActiveTabSansSql } from "@stores/workspaceStore";
+import { useActiveTabSansSql, useWorkspaceStore } from "@stores/workspaceStore";
 import { useConnectionStore } from "@stores/connectionStore";
 import {
   useMigrationExport,
   supportsMigrationExport,
 } from "@/hooks/useMigrationExport";
 import { useSidebarScrollPersistence } from "@/hooks/useSidebarScrollPersistence";
-import { supportsDdl } from "@/types/dataSource";
+import { getDataSourceProfile, supportsDdl } from "@/types/dataSource";
 import {
   Popover,
   PopoverTrigger,
@@ -141,6 +142,14 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
   const canCreateTable = supportsDdl(dbType, "createTable");
   const canAlterTable = supportsDdl(dbType, "alterTable");
   const canDropObject = supportsDdl(dbType, "dropObject");
+  // #1042 — the database-level ERD entry is gated on the `intelligence.erd`
+  // capability (single source of truth), not `paradigm === "rdb"`: DuckDB is
+  // an rdb engine that declares `erd = false`, so it shows no ERD action.
+  // Hidden until dbType loads (undefined) since ERD needs a known engine.
+  const canErd = dbType
+    ? getDataSourceProfile(dbType).capabilities.intelligence.erd
+    : false;
+  const openErdTab = useWorkspaceStore((s) => s.openErdTab);
   const flatCreateTableSchema = profile.hasImplicitSingleSchema
     ? (actions.schemas[0]?.name ?? null)
     : null;
@@ -572,6 +581,19 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
                   </div>
                 </PopoverContent>
               </Popover>
+            )}
+            {canErd && (
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                onClick={() => {
+                  if (db) openErdTab(connectionId, db);
+                }}
+                aria-label={t("openErdAria")}
+                title={t("openErdTitle")}
+              >
+                <Network size={12} />
+              </Button>
             )}
             <Button
               variant="ghost"

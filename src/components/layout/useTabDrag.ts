@@ -21,7 +21,7 @@ export interface GhostStyle {
   y: number;
   width: number;
   title: string;
-  type: "table" | "query";
+  type: Tab["type"];
 }
 
 export interface TabDragHandlers {
@@ -60,7 +60,7 @@ interface DragState {
   tabWidth: number;
   tabHeight: number;
   tabTitle: string;
-  tabType: "table" | "query";
+  tabType: Tab["type"];
 }
 
 /**

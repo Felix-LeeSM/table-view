@@ -4,7 +4,7 @@ import type {
   SchemaName,
   TableName,
 } from "@/types/branded";
-import type { QueryTab, Tab, TableTab, WorkspaceStoreState } from "../types";
+import type { ErdTab, Tab, TableTab, WorkspaceStoreState } from "../types";
 import {
   nextQueryId,
   nextTabId,
@@ -36,6 +36,7 @@ type TabSlice = Pick<
   | "setActiveTab"
   | "setSubView"
   | "promoteTab"
+  | "openErdTab"
   | "updateTabSorts"
   | "setTabDirty"
   | "moveTab"
@@ -241,6 +242,35 @@ export function createTabSlice(set: WorkspaceSet, get: WorkspaceGet): TabSlice {
       });
     },
 
+    openErdTab: (connId, db) => {
+      set((state) => {
+        const next = withWorkspace(state, connId, db, (ws) => {
+          // The workspace bucket is already keyed by (connId, db), so any
+          // existing erd tab here targets this same database — dedup =
+          // reactivate it rather than opening a duplicate.
+          const existing = ws.tabs.find((t): t is ErdTab => t.type === "erd");
+          if (existing) {
+            return ws.activeTabId === existing.id
+              ? ws
+              : { ...ws, activeTabId: existing.id };
+          }
+          const id = nextTabId();
+          const newTab: ErdTab = {
+            type: "erd",
+            id,
+            title: `ERD: ${db}`,
+            // Mint `ConnectionId` once at this tab-creation boundary
+            // (`connId` arrives as a plain-`string` action arg).
+            connectionId: connId as ConnectionId,
+            closable: true,
+            database: db,
+          };
+          return { ...ws, tabs: [...ws.tabs, newTab], activeTabId: id };
+        });
+        return next ? { workspaces: next } : state;
+      });
+    },
+
     promoteTab: (connId, db, tabId) => {
       set((state) => {
         const next = patchExistingWorkspace(state, connId, db, (ws) => {
@@ -310,12 +340,11 @@ export function createTabSlice(set: WorkspaceSet, get: WorkspaceGet): TabSlice {
         const next = patchExistingWorkspace(state, connId, db, (ws) => {
           if (ws.closedTabHistory.length === 0) return ws;
           const [restored, ...rest] = ws.closedTabHistory;
+          // Query tabs mint a `query-` id; table + erd tabs share the `tab-`
+          // counter (both seeded by `seedCountersFromWorkspaces`).
           const newId =
-            restored!.type === "table" ? nextTabId() : nextQueryId();
-          const reopened: Tab =
-            restored!.type === "table"
-              ? { ...(restored as TableTab), id: newId }
-              : { ...(restored as QueryTab), id: newId };
+            restored!.type === "query" ? nextQueryId() : nextTabId();
+          const reopened: Tab = { ...restored!, id: newId };
           return {
             ...ws,
             tabs: [...ws.tabs, reopened],

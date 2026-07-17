@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Table2, Code2 } from "lucide-react";
+import { Table2, Code2, Network } from "lucide-react";
 import {
   useActiveTabId,
   useCurrentTabs,
@@ -104,11 +104,13 @@ export default function TabBar() {
       >
         {tabs.map((tab) => {
           const displayTitle =
-            tab.type === "table" &&
-            tab.table &&
-            !ambiguousTableNames.has(tab.table)
-              ? tab.table
-              : tab.title;
+            tab.type === "erd"
+              ? t("tabBar.erdTab", { db: tab.database })
+              : tab.type === "table" &&
+                  tab.table &&
+                  !ambiguousTableNames.has(tab.table)
+                ? tab.table
+                : tab.title;
           return (
             <TabItem
               key={tab.id}
@@ -171,6 +173,8 @@ export default function TabBar() {
         >
           {ghostStyle.type === "query" ? (
             <Code2 size={12} className="shrink-0 text-muted-foreground" />
+          ) : ghostStyle.type === "erd" ? (
+            <Network size={12} className="shrink-0 text-muted-foreground" />
           ) : (
             <Table2 size={12} className="shrink-0 text-muted-foreground" />
           )}
