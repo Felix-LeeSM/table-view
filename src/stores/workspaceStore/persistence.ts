@@ -10,7 +10,12 @@
  *     through the `persist_workspace` IPC (#1091, sprint-365). It no longer
  *     touches localStorage; callers continue to invoke it from the same hooks.
  *   - `debouncePersistWorkspaces` honors the 200ms coalescing window so a burst
- *     of edits (e.g. typing in a query tab) collapses into one IPC flush.
+ *     of edits (e.g. typing in a query tab) collapses into one IPC flush, with
+ *     a 1000ms maxWait cap so continuous typing can't starve the write (#1580).
+ *   - `flushPersistWorkspaces` cancels the pending debounce and persists the
+ *     latest snapshot immediately, returning the settle Promise. App's window
+ *     close handler awaits it before destroy, and it also fires on
+ *     `visibilitychange === "hidden"` (#1580: paste-then-close / crash loss).
  *   - `migrateLoadedWorkspaces` rehydration step: collapses in-flight
  *     `QueryTab.queryState` to idle and backfills `sidebar` defaults so
  *     downstream consumers can drop guards.
@@ -56,25 +61,37 @@ export function dehydrate(state: WorkspaceState): WorkspaceState {
 }
 
 let persistTimer: ReturnType<typeof setTimeout> | null = null;
+// #1580 — maxWait cap handle + the latest snapshot pending a flush. A pure
+// trailing debounce never bounds latency under continuous typing, so a crash
+// mid-burst lost everything since the last pause; the maxWait timer forces a
+// flush at most 1000ms after the first pending edit. `pendingWorkspaces` holds
+// the newest snapshot so `flushPersistWorkspaces` (fired from the window-close
+// path) writes the last keystroke even inside the debounce window.
+let maxWaitTimer: ReturnType<typeof setTimeout> | null = null;
+let pendingWorkspaces: WorkspacesShape | null = null;
 
 /**
  * Sprint 375 (Phase 6 cleanup, 2026-05-17) — test-only escape hatch for
- * the module-scope `persistTimer`. The 200ms debounce handle is kept in
- * a module variable (not Zustand state) so the timer survives across
- * store mutations without being treated as React-driving state; that means
- * a test that mounts the store, fires a `debouncePersistWorkspaces` call,
- * and tears down without awaiting the timeout will leak a pending
- * `setTimeout` into the next test. The helper drains the handle without
- * running the callback, so the next test starts from a clean ledger.
- * Mirrors `__resetCountersForTests` in `workspaceStore.ts` (sprint-354)
- * and `__resetFavoriteCounterForTests` in `favoritesStore.ts`. Namespaced
- * `__` to flag intent.
+ * the module-scope persist timers. The debounce handles are kept in module
+ * variables (not Zustand state) so the timer survives across store mutations
+ * without being treated as React-driving state; that means a test that mounts
+ * the store, fires a `debouncePersistWorkspaces` call, and tears down without
+ * awaiting the timeout will leak a pending `setTimeout` into the next test. The
+ * helper drains the handles without running the callback, so the next test
+ * starts from a clean ledger. Mirrors `__resetCountersForTests` in
+ * `workspaceStore.ts` (sprint-354) and `__resetFavoriteCounterForTests` in
+ * `favoritesStore.ts`. Namespaced `__` to flag intent.
  */
 export function __resetPersistTimerForTests(): void {
   if (persistTimer) {
     clearTimeout(persistTimer);
     persistTimer = null;
   }
+  if (maxWaitTimer) {
+    clearTimeout(maxWaitTimer);
+    maxWaitTimer = null;
+  }
+  pendingWorkspaces = null;
 }
 
 export type WorkspacesShape = Record<string, Record<string, WorkspaceState>>;
@@ -110,8 +127,8 @@ function toPersistRequest(
   };
 }
 
-export function persistWorkspaces(workspaces: WorkspacesShape): void {
-  if (typeof window === "undefined") return;
+export function persistWorkspaces(workspaces: WorkspacesShape): Promise<void> {
+  if (typeof window === "undefined") return Promise.resolve();
   // Sprint 358 (Phase 1 W1) — workspaces 는 codex 6차 #5 결정에 따라 SQLite-only.
   // #1091 (sprint-365) — dehydrate every `(connId, db)` cell and UPSERT it
   // through the `persist_workspace` IPC. sprint-358 left this a no-op
@@ -129,13 +146,14 @@ export function persistWorkspaces(workspaces: WorkspacesShape): void {
       pending.push(persistWorkspace(toPersistRequest(connId, db, ws)));
     }
   }
-  if (pending.length === 0) return;
-  // Fire-and-forget mirror of the mru/favorites contract (#1092): SQLite is
-  // the single SOT with no boot reconcile, so a swallowed write is lost on the
-  // next restart — the exact silent-loss #1091 fixes. Surface a dev log + one
-  // `storageWriteFailed` toast, deduped to a single toast per debounced flush
-  // so a multi-workspace failure never stacks N toasts.
-  void Promise.allSettled(pending).then((results) => {
+  if (pending.length === 0) return Promise.resolve();
+  // Mirror of the mru/favorites contract (#1092): SQLite is the single SOT
+  // with no boot reconcile, so a swallowed write is lost on the next restart —
+  // the exact silent-loss #1091 fixes. Surface a dev log + one
+  // `storageWriteFailed` toast, deduped to a single toast per flush so a
+  // multi-workspace failure never stacks N toasts. The returned Promise lets
+  // `flushPersistWorkspaces` await the settle before the window is destroyed.
+  return Promise.allSettled(pending).then((results) => {
     const failed = results.filter(
       (r): r is PromiseRejectedResult => r.status === "rejected",
     );
@@ -150,12 +168,38 @@ export function persistWorkspaces(workspaces: WorkspacesShape): void {
   });
 }
 
-export function debouncePersistWorkspaces(workspaces: WorkspacesShape): void {
-  if (persistTimer) clearTimeout(persistTimer);
-  persistTimer = setTimeout(() => {
-    persistWorkspaces(workspaces);
+/**
+ * Cancel any pending debounce and persist the newest snapshot right now,
+ * returning the settle Promise. Called from the window-close path (#1580 F1:
+ * awaited before `destroyCurrentWindow`) and on `visibilitychange === "hidden"`
+ * (#1580 F2). Clearing both timers means the flushed snapshot is never
+ * re-persisted by a stale trailing/maxWait timer. No pending snapshot (nothing
+ * edited since the last flush) resolves immediately.
+ */
+export function flushPersistWorkspaces(): Promise<void> {
+  if (persistTimer) {
+    clearTimeout(persistTimer);
     persistTimer = null;
-  }, 200);
+  }
+  if (maxWaitTimer) {
+    clearTimeout(maxWaitTimer);
+    maxWaitTimer = null;
+  }
+  const snapshot = pendingWorkspaces;
+  pendingWorkspaces = null;
+  return snapshot ? persistWorkspaces(snapshot) : Promise.resolve();
+}
+
+export function debouncePersistWorkspaces(workspaces: WorkspacesShape): void {
+  pendingWorkspaces = workspaces;
+  if (persistTimer) clearTimeout(persistTimer);
+  persistTimer = setTimeout(() => void flushPersistWorkspaces(), 200);
+  // #1580 — maxWait cap: the trailing timer resets on every keystroke, so a
+  // fast typist could delay the write indefinitely. Anchor one flush at most
+  // 1000ms after the first pending edit; `flushPersistWorkspaces` clears it.
+  if (!maxWaitTimer) {
+    maxWaitTimer = setTimeout(() => void flushPersistWorkspaces(), 1000);
+  }
 }
 
 function migrateTab(t: Tab, workspaceDb: string): Tab {

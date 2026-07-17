@@ -6,7 +6,11 @@ import {
   seedWorkspace,
   getTestWorkspace,
 } from "@/stores/__tests__/workspaceStoreTestHelpers";
-import { useWorkspaceStore, type TableTab } from "./stores/workspaceStore";
+import {
+  useWorkspaceStore,
+  type QueryTab,
+  type TableTab,
+} from "./stores/workspaceStore";
 
 // #1101 — the unsaved-changes ("dirty tab") guard used to live only on the
 // TabBar X button. Cmd+W (JS fallback) and the native window-close signal
@@ -196,5 +200,59 @@ describe("App close-path unsaved-changes guard (#1101)", () => {
     });
 
     expect(invokeMock).toHaveBeenCalledWith("workspace_close");
+  });
+
+  // #1580 F1 — SQL edits go through `updateQuerySql` and never set a dirty
+  // marker, so a SQL-only window took the no-confirm branch above and destroyed
+  // immediately. With a pure trailing 200ms debounce, an edit made within that
+  // window was lost. The close handler now flushes the pending persist before
+  // destroying, so the just-typed SQL reaches `persist_workspace`.
+  it("native window:close-requested flushes the latest SQL edit before destroying the window", async () => {
+    const getHandler = await captureCloseHandler();
+    const { invoke } = await import("@tauri-apps/api/core");
+    const invokeMock = invoke as ReturnType<typeof vi.fn>;
+
+    const tab: QueryTab = {
+      type: "query",
+      id: "q-1" as TabId,
+      title: "Query 1",
+      connectionId: "conn1" as ConnectionId,
+      closable: true,
+      sql: "",
+      queryState: { status: "idle" },
+      paradigm: "rdb",
+      queryMode: "sql",
+      database: "db1",
+    };
+    useWorkspaceStore.setState(seedWorkspace([tab], "q-1", "conn1", "db1"));
+    render(<App />);
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    // Paste SQL — fires within the 200ms debounce window (no timer advance),
+    // so the trailing persist has NOT run yet.
+    act(() => {
+      useWorkspaceStore
+        .getState()
+        .updateQuerySql("conn1", "db1", "q-1", "SELECT pasted_sql");
+    });
+    invokeMock.mockClear();
+
+    const closeHandler = getHandler();
+    await act(async () => {
+      closeHandler?.();
+    });
+    // The window is destroyed only after the flush settles.
+    await vi.waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith("workspace_close");
+    });
+
+    const persistCall = invokeMock.mock.calls.find(
+      ([cmd]) => cmd === "persist_workspace",
+    );
+    expect(persistCall).toBeDefined();
+    const req = (persistCall![1] as { req: { tabsJson: string } }).req;
+    expect(req.tabsJson).toContain("SELECT pasted_sql");
   });
 });
