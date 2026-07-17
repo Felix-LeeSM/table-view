@@ -47,7 +47,7 @@ Two workflows drive a release:
 - [`.github/workflows/release.yml`](../../../.github/workflows/release.yml): the
   build pipeline.
   - A `v*.*.*` tag push (from auto-tag, or a deliberate manual push) starts the
-    real release build. Its first step
+    real release build. Its first gate step (after the boilerplate checkout)
     ([`verify-tag-version.mjs`](../../../scripts/release/verify-tag-version.mjs))
     fails every build leg if the tag disagrees with the checked-out
     `tauri.conf.json` version, so a hand-pushed tag cannot ship a mismatched

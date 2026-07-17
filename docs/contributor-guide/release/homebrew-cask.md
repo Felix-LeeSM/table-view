@@ -36,6 +36,12 @@ brew tap Felix-LeeSM/table-view
 brew install --cask table-view
 ```
 
+이미 설치한 사용자는 새 릴리스가 tap에 반영된 뒤 다음으로 갱신합니다.
+
+```bash
+brew upgrade --cask table-view
+```
+
 ## 운영상 주의
 
 - GitHub Release를 `Publish`하기 전에는

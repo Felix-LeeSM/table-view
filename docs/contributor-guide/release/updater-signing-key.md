@@ -133,9 +133,13 @@ Order matters — do not skip a step:
    intentionally disagree, so the `verify-updater-sigs.mjs` drift gate will go
    red for it — that red is expected. Handle the bridge deliberately: run it,
    confirm the signature is the old key over the new-pubkey binary, and note the
-   expected-red gate in the release PR. Do **not** turn the gate off for normal
-   releases; it exists to catch the *accidental* version of exactly this
-   mismatch.
+   expected-red gate in the release PR. To actually ship it: the build/upload
+   step runs before the drift gate, so the signed bundle is already attached to
+   the draft release when the gate goes red — publish that draft by hand for this
+   one release (`gh release edit <tag> --draft=false`, or the GitHub Release
+   **Publish** button) rather than turning the gate off. Do **not** turn the gate
+   off for normal releases; it exists to catch the *accidental* version of exactly
+   this mismatch.
 4. **Give clients time to install the bridge.** Auto-update reaches a client
    only when it launches and the user approves, and there is no telemetry to
    confirm adoption. Leave the bridge as the `latest` release long enough for
