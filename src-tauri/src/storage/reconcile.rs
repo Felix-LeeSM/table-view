@@ -491,6 +491,9 @@ mod tests {
             replica_set: None,
             tls_enabled: None,
             trust_server_certificate: None,
+            oracle_use_sid: None,
+            wallet_path: None,
+            wallet_password: String::new(),
         };
         crate::storage::save_connection(conn, None).unwrap();
         mismatch_counter::increment();

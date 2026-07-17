@@ -355,6 +355,9 @@ impl ConnectionRow {
             replica_set: self.replica_set,
             tls_enabled: self.tls_enabled.map(|v| v != 0),
             trust_server_certificate: self.trust_server_certificate.map(|v| v != 0),
+            oracle_use_sid: None,
+            wallet_path: None,
+            has_wallet_password: false,
         }
     }
 }

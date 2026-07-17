@@ -116,14 +116,31 @@ pub struct ConnectionConfig {
     /// an explicit value.
     #[serde(default)]
     pub trust_server_certificate: Option<bool>,
+    /// Oracle-only (#1065): connect using a SID instead of a service name.
+    /// `Some(true)` selects the driver's `Config::with_sid`; `None` /
+    /// `Some(false)` use a service name. Ignored by non-Oracle adapters.
+    #[serde(default)]
+    pub oracle_use_sid: Option<bool>,
+    /// Oracle-only (#1065): filesystem path to an Oracle wallet directory
+    /// (containing `ewallet.pem`) enabling mTLS. A path *reference* only —
+    /// never the wallet contents (ADR 0052 Q5 file-credential precedent).
+    /// Stripped from export envelopes. Ignored by non-Oracle adapters.
+    #[serde(default)]
+    pub wallet_path: Option<String>,
+    /// Oracle-only (#1065): wallet password that decrypts the wallet's
+    /// encrypted private key. Encrypted at rest under the same keyring
+    /// envelope as `password` (ADR 0040) and, like `password`, never crosses
+    /// the IPC boundary in plaintext (ADR 0005). Empty means "none stored".
+    #[serde(default)]
+    pub wallet_password: String,
 }
 
 /// P3-2 (#1455) — manual `Debug` so an accidental `{:?}` (log line, error
 /// context, `#[derive(Debug)]` on an enclosing struct) never prints the
-/// plaintext `password`. Every other field is rendered as-is; `password` is
-/// masked to a fixed `"***"` regardless of length so the debug output leaks
-/// neither the value nor whether one is set. The derived `Debug` printed the
-/// password verbatim.
+/// plaintext `password`. Every other field is rendered as-is; `password` and
+/// `wallet_password` (#1065) are masked to a fixed `"***"` regardless of
+/// length so the debug output leaks neither the value nor whether one is set.
+/// The derived `Debug` printed both secrets verbatim.
 impl std::fmt::Debug for ConnectionConfig {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ConnectionConfig")
@@ -145,6 +162,9 @@ impl std::fmt::Debug for ConnectionConfig {
             .field("replica_set", &self.replica_set)
             .field("tls_enabled", &self.tls_enabled)
             .field("trust_server_certificate", &self.trust_server_certificate)
+            .field("oracle_use_sid", &self.oracle_use_sid)
+            .field("wallet_path", &self.wallet_path)
+            .field("wallet_password", &"***")
             .finish()
     }
 }
@@ -194,6 +214,14 @@ pub struct ConnectionConfigPublic {
     pub tls_enabled: Option<bool>,
     #[serde(default, alias = "trust_server_certificate")]
     pub trust_server_certificate: Option<bool>,
+    #[serde(default, alias = "oracle_use_sid")]
+    pub oracle_use_sid: Option<bool>,
+    #[serde(default, alias = "wallet_path")]
+    pub wallet_path: Option<String>,
+    /// Whether a wallet password is stored on disk. Derived, never persisted —
+    /// the plaintext wallet password never leaves the backend (#1065, ADR 0005).
+    #[serde(default, alias = "has_wallet_password")]
+    pub has_wallet_password: bool,
 }
 
 impl From<&ConnectionConfig> for ConnectionConfigPublic {
@@ -218,6 +246,9 @@ impl From<&ConnectionConfig> for ConnectionConfigPublic {
             replica_set: c.replica_set.clone(),
             tls_enabled: c.tls_enabled,
             trust_server_certificate: c.trust_server_certificate,
+            oracle_use_sid: c.oracle_use_sid,
+            wallet_path: c.wallet_path.clone(),
+            has_wallet_password: !c.wallet_password.is_empty(),
         }
     }
 }
@@ -247,6 +278,11 @@ impl ConnectionConfigPublic {
             replica_set: self.replica_set,
             tls_enabled: self.tls_enabled,
             trust_server_certificate: self.trust_server_certificate,
+            oracle_use_sid: self.oracle_use_sid,
+            wallet_path: self.wallet_path,
+            // Wallet password, like the DB password, never crosses IPC — the
+            // storage layer separately receives the optional new value.
+            wallet_password: String::new(),
         }
     }
 }
@@ -328,6 +364,9 @@ mod tests {
             replica_set: None,
             tls_enabled: None,
             trust_server_certificate: None,
+            oracle_use_sid: None,
+            wallet_path: None,
+            wallet_password: String::new(),
         };
         let debug = format!("{conn:?}");
         assert!(
@@ -340,6 +379,94 @@ mod tests {
         );
         // The rest of the struct still renders so debug stays useful.
         assert!(debug.contains("host: \"h\""));
+    }
+
+    /// #1065 — the crate's `Config`/`TlsConfig` derive Debug prints wallet
+    /// passwords verbatim (threat model §2.5); our manual `Debug` must mask
+    /// `wallet_password` the same way it masks `password` so an accidental
+    /// `{:?}` on our `ConnectionConfig` never leaks it.
+    #[test]
+    fn debug_masks_wallet_password() {
+        let conn = ConnectionConfig {
+            id: "c1".into(),
+            name: "Oracle".into(),
+            db_type: DatabaseType::Oracle,
+            host: "h".into(),
+            port: 1521,
+            user: "u".into(),
+            password: String::new(),
+            database: "XEPDB1".into(),
+            read_only: false,
+            group_id: None,
+            color: None,
+            connection_timeout: None,
+            keep_alive_interval: None,
+            environment: None,
+            auth_source: None,
+            replica_set: None,
+            tls_enabled: None,
+            trust_server_certificate: None,
+            oracle_use_sid: Some(true),
+            wallet_path: Some("/home/u/wallet".into()),
+            wallet_password: "wpass@42XY".into(),
+        };
+        let debug = format!("{conn:?}");
+        assert!(
+            !debug.contains("wpass@42XY"),
+            "debug leaked the wallet password: {debug}"
+        );
+        assert!(
+            debug.contains("wallet_password: \"***\""),
+            "debug missing the wallet-password mask: {debug}"
+        );
+        // Non-secret Oracle fields still render.
+        assert!(debug.contains("wallet_path: Some(\"/home/u/wallet\")"));
+        assert!(debug.contains("oracle_use_sid: Some(true)"));
+    }
+
+    /// #1065 — the public/exported shape derives `has_wallet_password` from
+    /// presence and carries the non-secret `oracle_use_sid` / `wallet_path`,
+    /// but never a wallet-password value.
+    #[test]
+    fn public_derives_wallet_flags_without_leaking_secret() {
+        let mut conn = ConnectionConfig {
+            id: "c1".into(),
+            name: "Oracle".into(),
+            db_type: DatabaseType::Oracle,
+            host: "h".into(),
+            port: 1521,
+            user: "u".into(),
+            password: String::new(),
+            database: "XEPDB1".into(),
+            read_only: false,
+            group_id: None,
+            color: None,
+            connection_timeout: None,
+            keep_alive_interval: None,
+            environment: None,
+            auth_source: None,
+            replica_set: None,
+            tls_enabled: None,
+            trust_server_certificate: None,
+            oracle_use_sid: Some(true),
+            wallet_path: Some("/home/u/wallet".into()),
+            wallet_password: "wpass@42XY".into(),
+        };
+        let public = ConnectionConfigPublic::from(&conn);
+        assert!(public.has_wallet_password);
+        assert_eq!(public.oracle_use_sid, Some(true));
+        assert_eq!(public.wallet_path.as_deref(), Some("/home/u/wallet"));
+
+        let json = serde_json::to_string(&public).unwrap();
+        assert!(
+            !json.contains("wpass@42XY") && !json.contains("walletPassword"),
+            "public payload leaked the wallet password: {json}"
+        );
+        assert!(json.contains("\"hasWalletPassword\":true"));
+        assert!(json.contains("\"oracleUseSid\":true"));
+
+        conn.wallet_password = String::new();
+        assert!(!ConnectionConfigPublic::from(&conn).has_wallet_password);
     }
 
     #[test]
@@ -413,6 +540,9 @@ mod tests {
             replica_set: None,
             tls_enabled: None,
             trust_server_certificate: None,
+            oracle_use_sid: None,
+            wallet_path: None,
+            wallet_password: String::new(),
         };
         let public = ConnectionConfigPublic::from(&conn);
         assert_eq!(public.paradigm, Paradigm::Rdb);
@@ -461,6 +591,9 @@ mod tests {
             replica_set: Some("rs0".into()),
             tls_enabled: Some(true),
             trust_server_certificate: None,
+            oracle_use_sid: None,
+            wallet_path: None,
+            wallet_password: String::new(),
         };
         let public = ConnectionConfigPublic::from(&conn);
         assert_eq!(public.paradigm, Paradigm::Document);
@@ -673,6 +806,9 @@ mod tests {
             replica_set: Some("rs0".into()),
             tls_enabled: Some(true),
             trust_server_certificate: None,
+            oracle_use_sid: None,
+            wallet_path: None,
+            wallet_password: String::new(),
         };
         let json = serde_json::to_string(&config).unwrap();
         let deserialized: ConnectionConfig = serde_json::from_str(&json).unwrap();
@@ -736,6 +872,9 @@ mod tests {
             replica_set: Some("rs0".into()),
             tls_enabled: Some(true),
             trust_server_certificate: Some(false),
+            oracle_use_sid: None,
+            wallet_path: None,
+            has_wallet_password: false,
         };
         let config = public.into_config_with_empty_password();
         assert_eq!(config.password, "", "password slot must be cleared");

@@ -440,6 +440,30 @@ fn uri_userinfo_regex() -> &'static Regex {
     })
 }
 
+/// #1065 — filesystem path masking for connection-error messages. The Oracle
+/// wallet path (and any driver error that echoes a path) leaks the home
+/// directory username / internal topology. Matches a whitespace/`(`/`=`-
+/// preceded absolute path with **at least two** segments (Unix `/a/b`,
+/// Windows `C:\a\b`) so URL paths like `/db` are never touched. Only the path
+/// (group 1) is masked; the delimiter is preserved.
+fn fs_path_regex() -> &'static Regex {
+    static R: OnceLock<Regex> = OnceLock::new();
+    R.get_or_init(|| {
+        Regex::new(r#"(?:^|[\s(=])((?:/[\w.\-]+){2,}/?|[A-Za-z]:\\(?:[\w.\-]+\\?){2,})"#)
+            .expect("fs path redact regex must compile")
+    })
+}
+
+/// #1065 — certificate Distinguished Name masking (`CN=<host/DN>`). TLS/wallet
+/// verification errors echo the peer DN, which exposes internal hostnames.
+/// Masks the value (group 1) after `CN=`, stopping at a comma / whitespace.
+fn cert_dn_regex() -> &'static Regex {
+    static R: OnceLock<Regex> = OnceLock::new();
+    R.get_or_init(|| {
+        Regex::new(r#"(?i)\bCN=([^,\s/]+)"#).expect("cert DN redact regex must compile")
+    })
+}
+
 /// Walk the token stream and collect `(start, end, replacement)` spans for
 /// every credential value. Never touches subjects, user specs, or ordinary
 /// literals.
@@ -593,11 +617,37 @@ pub fn redact_connection_message(message: &str) -> String {
         }
     }
     spans.sort_unstable();
+    mask_spans(message, spans)
+}
+
+/// #1065 — extend the #1453 connection-error redact contract to Oracle wallet
+/// leaks: filesystem paths ([`fs_path_regex`], home-dir username / topology)
+/// and certificate DNs ([`cert_dn_regex`], internal hostnames). Kept SEPARATE
+/// from [`redact_connection_message`] so the DuckDB history layer's own
+/// `<local-file>` path token (`commands::history::redact_visible_local_paths`)
+/// still runs on the un-`***`-ed path. Applied only on the Oracle
+/// connect/ping/wallet error surface (`db::oracle` mappers).
+pub fn redact_paths_and_dn(message: &str) -> String {
+    let mut spans: Vec<(usize, usize)> = Vec::new();
+    for re in [fs_path_regex(), cert_dn_regex()] {
+        for caps in re.captures_iter(message) {
+            if let Some(g) = caps.get(1) {
+                spans.push((g.start(), g.end()));
+            }
+        }
+    }
+    spans.sort_unstable();
+    mask_spans(message, spans)
+}
+
+/// Replace each `(start, end)` span with `***`, skipping overlaps (first span
+/// wins — parity with [`redact_credentials`]). Spans must be pre-sorted.
+fn mask_spans(message: &str, spans: Vec<(usize, usize)>) -> String {
     let mut out = String::with_capacity(message.len());
     let mut pos = 0usize;
     for (s, e) in spans {
         if s < pos {
-            continue; // overlap guard — parity with redact_credentials
+            continue; // overlap guard
         }
         out.push_str(&message[pos..s]);
         out.push_str("***");
@@ -640,7 +690,7 @@ mod tests {
     //! literal shapes) live in `tests/sql_redact.rs` and use this module
     //! via `table_view_lib::storage::sql_redact::sql_redact`.
 
-    use super::{redact_connection_message, redact_credentials, sql_redact};
+    use super::{redact_connection_message, redact_credentials, redact_paths_and_dn, sql_redact};
 
     // Reason: issue #1453 — connection errors are plain text (not SQL);
     // `redact_connection_message` must mask URI userinfo / key=value
@@ -670,6 +720,38 @@ mod tests {
         ];
         for (input, expected) in cases {
             assert_eq!(redact_connection_message(input), expected, "for `{input}`");
+        }
+    }
+
+    // Reason: #1065 — `redact_paths_and_dn` extends the connection-error
+    // redact contract to Oracle wallet paths (home-dir username / topology
+    // leak) and cert DNs (internal hostname leak), while leaving URL database
+    // paths and non-path copy byte-identical. Kept separate from
+    // `redact_connection_message` so the DuckDB history `<local-file>` layer is
+    // unaffected. (2026-07-17)
+    #[test]
+    fn paths_and_dn_masked_for_wallet_errors() {
+        let cases = [
+            (
+                "Failed to open cert file /Users/felix/secrets/wallet/ewallet.pem",
+                "Failed to open cert file ***",
+            ),
+            (
+                r"wallet load error at C:\Users\felix\wallet\ewallet.pem",
+                "wallet load error at ***",
+            ),
+            (
+                "invalid peer certificate: CN=db.internal.corp not trusted",
+                "invalid peer certificate: CN=*** not trusted",
+            ),
+            // URL database path (single segment) must survive — not a fs path.
+            (
+                "could not connect to postgres://app:x@db:5432/analytics",
+                "could not connect to postgres://app:x@db:5432/analytics",
+            ),
+        ];
+        for (input, expected) in cases {
+            assert_eq!(redact_paths_and_dn(input), expected, "for `{input}`");
         }
     }
 

@@ -44,6 +44,9 @@ async fn setup_mariadb_runtime() -> Option<MariaDbRuntime> {
         replica_set: None,
         tls_enabled: None,
         trust_server_certificate: None,
+        oracle_use_sid: None,
+        wallet_path: None,
+        wallet_password: String::new(),
     };
 
     let adapter = MysqlAdapter::new_mariadb();
