@@ -280,7 +280,12 @@ function varcharOrClob(
   defaultLength: number,
 ): string {
   const length = maxLength ?? defaultLength;
-  return length > 4000 ? "CLOB" : `VARCHAR2(${length})`;
+  // CHAR semantics so the limit counts characters, matching the generator's
+  // char-length validation. With the default (byte) semantics a multi-byte
+  // locale_aware value (e.g. CJK) can be <= max_length chars yet exceed the
+  // byte cap → ORA-12899. Physical cap is still 4000 bytes, so short generated
+  // values are safe; genuinely large text (> 4000) maps to CLOB.
+  return length > 4000 ? "CLOB" : `VARCHAR2(${length} CHAR)`;
 }
 
 async function insertEntity(
