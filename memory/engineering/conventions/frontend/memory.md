@@ -91,6 +91,12 @@ backend contract 를 통해서만 다룬다.
   backend typed `AppError::DbMismatch` envelope 로 감지한다. Frontend 분기는
   `src/lib/tauri/error.ts` normalizer 를 통하고, legacy Display string 파싱은
   boundary fallback 으로만 둔다.
+- 서버측 capability(확장/권한) 부재는 backend typed
+  `AppError::CapabilityNotEnabled { code, message }` envelope 로 분류하고, FE 는
+  `getCapabilityNotEnabledInfo` (`src/lib/tauri/error.ts`) 로 `code` 를 읽어
+  빨간 `role="alert"` 대신 passive 안내(예: SlowQueryPanel 의
+  `slow-query-unavailable`)를 `slowQuery.unavailable.<code>` i18n 으로 렌더한다.
+  문자열 매칭이 아닌 typed `code` 가 SOT — 프런트가 문자열로 재분류하지 않는다.
 - Query/table result 는 wrapper 에서 numeric post-processing 을 끝낸 뒤 UI 로
   넘긴다. cell-domain stringify 는 `safeStringifyCell` 을 사용한다.
 - Frontend canonical IPC/store-facing types use camelCase. Legacy snake_case
