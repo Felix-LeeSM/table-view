@@ -1,7 +1,7 @@
 ---
 title: 비-E2E 테스트 시나리오 설계 원칙 (Rust unit/integration · React component · Zustand store · Hook · Async)
 type: memory
-updated: 2026-06-12
+updated: 2026-07-17
 ---
 
 # 비-E2E 테스트 시나리오 설계 원칙
@@ -51,6 +51,10 @@ E2E 원칙([e2e-scenarios](../e2e-scenarios/memory.md))과 같은 P-시리즈
   `Sequence` / `tokio::time::pause` 로 명시 검증.
 - "가끔 빠르면 통과" 식 flake 의존 금지. 결정론화하지 못하면 그 시나리오는
   *상위 레이어*에서 검증해야 한다는 신호 (P1).
+- **real 타이머 drain 불변식**: `src/test-setup.ts` 가 real 타이머를 wrap 하고
+  `afterEach` 에서 미해제 타이머를 취소(drain) — @tanstack/virtual-core cleanup
+  미해제 타이머가 jsdom teardown 후 발화하던 flake 의 근본 fix (PR #1611).
+  test-setup 의 timer wrap 은 제거 금지.
 
 ### P6. mock은 boundary에만
 - mock 대상: DB, 네트워크, 파일시스템, OS 호출, Tauri command (frontend 시점).
