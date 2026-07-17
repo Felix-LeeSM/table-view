@@ -140,6 +140,33 @@ fn rejects_subqueries_hidden_in_function_sibling_expressions() {
     }
 }
 
+// Reason (#1620 F1) — the `TRIM(x, chars...)` comma axis (`trim_characters`)
+// and the `OVERLAY(... FOR n)` axis (`overlay_for`) had no subquery-rejection
+// coverage, unlike the FROM/PLACING axes above. Current code already validates
+// them, so these are regression guards that stay GREEN — they pin the axes so a
+// future sqlparser bump that reshapes `Expr::Trim` / `Expr::Overlay` can't
+// silently reopen the injection hole (2026-07-17).
+#[test]
+fn rejects_subqueries_in_trim_characters_and_overlay_for_axes() {
+    for (dialect, clause) in [
+        // `trim_characters`: SQLite's comma-separated `TRIM(str, chars...)` form.
+        (
+            RawWhereDialect::Sqlite,
+            "TRIM(name, (SELECT secret FROM vault LIMIT 1)) = 'x'",
+        ),
+        // `overlay_for`: the trailing `FOR <expr>` length argument.
+        (
+            RawWhereDialect::Postgres,
+            "OVERLAY(name PLACING 'x' FROM 1 FOR (SELECT n FROM t LIMIT 1)) = 'y'",
+        ),
+    ] {
+        assert!(
+            validate_raw_where_clause(dialect, clause).is_err(),
+            "{clause}"
+        );
+    }
+}
+
 #[test]
 fn accepts_function_sibling_expressions_without_subqueries() {
     for clause in [

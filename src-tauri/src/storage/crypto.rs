@@ -332,7 +332,7 @@ fn read_key_file(path: &Path) -> Result<Vec<u8>, AppError> {
 /// orphan any ciphertext already encrypted under it). If the final path already
 /// exists, another instance won the race — that is success, and the caller
 /// re-reads the winning key.
-fn create_key_file(path: &Path, key_bytes: &[u8]) -> Result<(), AppError> {
+pub(crate) fn create_key_file(path: &Path, key_bytes: &[u8]) -> Result<(), AppError> {
     let parent = path
         .parent()
         .ok_or_else(|| AppError::Storage("Key path has no parent directory".into()))?;

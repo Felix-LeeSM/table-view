@@ -71,6 +71,12 @@ fn get_user(id: u64) -> Result<User, AppError> {
 - SQL injection 방지: 파라미터화된 쿼리
 - 민감 정보 (비밀번호 등) 로그 출력 금지
 - 안전한 직렬화/역직렬화
+- **`sqlparser` 범프 시 `db/raw_where.rs` 재감사 필수** (#1620 F1). `is_safe_value_expr`
+  / `is_predicate` 의 allowlist 는 `Expr` variant + child field 를 열거하는데,
+  `..` rest 패턴과 `_ => false` 때문에 범프로 기존 variant 에 새 subquery-bearing
+  field 가 추가되면 검사 없이 조용히 흡수됨 (#1549 류 우회 재발). Cargo.lock
+  `sqlparser` 버전 변경 PR 은 `Expr` diff 후 매칭된 variant 의 미검증 child 부재를
+  재확인. 코드 주석(SECURITY RE-AUDIT ON sqlparser BUMP)이 대응 지점.
 
 ## 관련
 

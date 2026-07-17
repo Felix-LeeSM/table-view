@@ -35,12 +35,6 @@ use tracing::info;
 /// defensive) keep the original `Instant`.
 pub static BOOT_T0: OnceLock<Instant> = OnceLock::new();
 
-/// #1564 — the file-log writer's `WorkerGuard`. Dropping it stops the
-/// background writer thread and silently drops all later log lines, so we
-/// park it in a `OnceLock` that outlives `run()`'s stack frame (the process
-/// lifetime). Set once during subscriber init; never read again.
-static LOG_GUARD: OnceLock<tracing_appender::non_blocking::WorkerGuard> = OnceLock::new();
-
 /// Sprint 175 Sprint 2 — phase-breakdown helper. Emits a single
 /// structured `info!` line on `target: "boot"` so the measurement
 /// protocol (`memory/runbook/cold-boot/memory.md`) can grep
@@ -90,10 +84,17 @@ pub fn run() {
     // (ADR 0036). The `dirs`-based path lets init stay here on the pre-builder
     // critical path instead of waiting for `app.path()`.
     use tracing_subscriber::prelude::*;
+    // #1620 F2 — hold the writer's `WorkerGuard` in a local (not a `static`
+    // `OnceLock`) that lives for `run()`'s whole body. Dropping it flushes the
+    // non-blocking writer's backlog and shuts the worker thread down; keeping it
+    // in scope keeps logging alive for the process lifetime (`run()` blocks in
+    // `.run()` below), while a local lets the two fatal `process::exit(1)` paths
+    // explicitly `drop` it first so their last line reaches the file sink (a
+    // `static` guard would never drop, losing that line).
+    let mut log_guard: Option<tracing_appender::non_blocking::WorkerGuard> = None;
     let file_layer = match diagnostics::file_writer(&diagnostics::log_dir()) {
         Ok((writer, guard)) => {
-            // Keep the writer worker alive for the whole process (see LOG_GUARD).
-            let _ = LOG_GUARD.set(guard);
+            log_guard = Some(guard);
             Some(
                 tracing_subscriber::fmt::layer()
                     .with_ansi(false)
@@ -485,6 +486,10 @@ pub fn run() {
             Err(e) => {
                 tracing::error!(target: "boot", "failed to build Tauri application: {e}");
                 eprintln!("[table-view] Failed to start: {e}");
+                // #1620 F2 — flush the error line to the file sink before the
+                // hard exit; `process::exit` would otherwise skip the guard's
+                // drop and lose it.
+                drop(log_guard.take());
                 std::process::exit(1);
             }
         };
@@ -515,6 +520,8 @@ pub fn run() {
     if let Err(e) = builder.run(context) {
         tracing::error!(target: "boot", "failed to run Tauri application: {e}");
         eprintln!("[table-view] Failed to run: {e}");
+        // #1620 F2 — flush the error line before the hard exit (see above).
+        drop(log_guard.take());
         std::process::exit(1);
     }
 }

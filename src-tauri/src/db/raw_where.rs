@@ -225,6 +225,17 @@ fn binary_operator_is_safe(op: &BinaryOperator) -> bool {
     !matches!(op, BinaryOperator::Assignment)
 }
 
+// SECURITY RE-AUDIT ON sqlparser BUMP (#1620 F1).
+// This allowlist enumerates `Expr` variants and their child fields explicitly;
+// the `..` rest patterns and the trailing `_ => false` here (and in
+// `is_predicate`) mean a sqlparser upgrade that adds a NEW subquery-bearing
+// field to an already-listed variant is absorbed silently — the new field
+// escapes validation and could smuggle a `(SELECT ...)` past the allowlist
+// (the exact class of bug #1549 / #1620 F1 fixed for Convert/Trim/Overlay/...).
+// So on any Cargo.lock `sqlparser` version bump: diff `sqlparser::ast::Expr`
+// and re-confirm every variant matched here still carries no unvalidated
+// `Expr`/`Query` child. Rule mirrored in
+// `memory/engineering/conventions/rust/memory.md` (보안).
 fn is_safe_value_expr(expr: &Expr) -> bool {
     match expr {
         Expr::InSubquery { .. }
