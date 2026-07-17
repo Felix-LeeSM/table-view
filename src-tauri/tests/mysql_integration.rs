@@ -4620,3 +4620,149 @@ async fn test_mysql_kill_unknown_session_is_noop_1073() {
 
     adapter.disconnect_pool().await.ok();
 }
+
+// =============================================================================
+// Refs #1067 — EXPLAIN + DB create/drop parity (live-server evidence for the
+// #1456 adapter overrides). Mirror of PG `query_integration` explain plan-only
+// semantics; asserts the MySQL FORMAT=JSON structural difference the shared
+// ExplainViewer raw-JSON fallback exists to absorb (PG returns a JSON array,
+// MySQL a `{ "query_block": ... }` object).
+// =============================================================================
+
+/// MySQL `EXPLAIN FORMAT=JSON` is plan inspection, not profiler execution:
+/// explaining an `UPDATE` returns a JSON object plan and never mutates the row.
+#[tokio::test]
+#[serial_test::serial]
+async fn test_mysql_explain_query_returns_json_plan_without_mutation_1067() {
+    let adapter = match common::setup_mysql_adapter().await {
+        Some(a) => a,
+        None => return,
+    };
+
+    let table_name = format!(
+        "test_mysql_explain_{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis()
+    );
+
+    adapter
+        .execute_query(
+            &format!("CREATE TABLE {table_name} (id INT)"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
+        .await
+        .expect("CREATE TABLE should succeed");
+    adapter
+        .execute_query(
+            &format!("INSERT INTO {table_name} VALUES (1)"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
+        .await
+        .expect("INSERT should succeed");
+
+    let plan = adapter
+        .explain_query(&format!("UPDATE {table_name} SET id = 2"))
+        .await
+        .expect("EXPLAIN should return a JSON plan");
+    // Unlike PG (which returns a top-level JSON array), MySQL FORMAT=JSON
+    // returns a `{ "query_block": ... }` object — the raw-JSON fallback in
+    // ExplainViewer renders both without a dialect-specific plan-tree parser.
+    assert!(
+        plan.is_object(),
+        "MySQL EXPLAIN FORMAT=JSON must return a JSON object, got: {plan}"
+    );
+    assert!(
+        plan.get("query_block").is_some(),
+        "MySQL FORMAT=JSON plan must expose a `query_block` root, got: {plan}"
+    );
+
+    // Plan-only: the explained UPDATE must not have executed.
+    let rows = adapter
+        .execute_query(
+            &format!("SELECT id FROM {table_name}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
+        .await
+        .expect("SELECT should succeed");
+    assert_eq!(
+        rows.rows[0][0].as_i64(),
+        Some(1),
+        "EXPLAIN must not execute the UPDATE"
+    );
+
+    adapter
+        .execute_query(
+            &format!("DROP TABLE {table_name}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
+        .await
+        .ok();
+    adapter.disconnect_pool().await.ok();
+}
+
+/// `create_database` / `drop_database` round-trip against a live server —
+/// PG (Sprint 335) parity. The destructive `DROP DATABASE` command gate
+/// (`gate_read_only_database` + `gate_destructive_ddl`) lives in the shared
+/// dialect-agnostic wrapper, so the adapter method itself is exercised here.
+#[tokio::test]
+#[serial_test::serial]
+async fn test_mysql_create_drop_database_round_trip_1067() {
+    let adapter = match common::setup_mysql_adapter().await {
+        Some(a) => a,
+        None => return,
+    };
+
+    let db_name = format!(
+        "test_mysql_db_1067_{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis()
+    );
+
+    // Probe via row count (not a decoded COUNT(*) cell — MySQL BIGINT UNSIGNED
+    // does not decode cleanly through `as_i64`).
+    async fn schemata_rows(adapter: &MysqlAdapter, name: &str) -> usize {
+        adapter
+            .execute_query(
+                &format!(
+                    "SELECT schema_name FROM information_schema.schemata \
+                     WHERE schema_name = '{name}'"
+                ),
+                None,
+                table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+            )
+            .await
+            .expect("schemata probe should succeed")
+            .rows
+            .len()
+    }
+
+    adapter
+        .create_database(&db_name)
+        .await
+        .expect("CREATE DATABASE should succeed");
+    assert_eq!(
+        schemata_rows(&adapter, &db_name).await,
+        1,
+        "database must exist after create_database"
+    );
+
+    adapter
+        .drop_database(&db_name)
+        .await
+        .expect("DROP DATABASE should succeed");
+    assert_eq!(
+        schemata_rows(&adapter, &db_name).await,
+        0,
+        "database must be gone after drop_database"
+    );
+
+    adapter.disconnect_pool().await.ok();
+}
