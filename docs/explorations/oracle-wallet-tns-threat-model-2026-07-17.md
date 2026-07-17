@@ -273,7 +273,9 @@ status: decisions locked 2026-07-17
    파서)·A3 (자유 descriptor) 는 파서 attack surface·silent downgrade 로 미채택
    (질문 1·2).
 2. **1-way TLS (TCPS + CA cert) 1차 미포함 (§5-D, §2.3)** — advanced TLS 의 CA 지원과
-   묶어 후속 #1650 으로 분리 (질문 10). wallet 기반 mTLS 도 이번 breadth 범위 밖.
+   묶어 후속 #1650 으로 분리 (질문 10). wallet **기반** mTLS(`with_wallet`)는 이번
+   breadth 에 포함되고, wallet **없는** cert 기반 mTLS(`with_client_cert`, §0.1)만
+   범위 밖이다.
 3. **검증 인프라 (§6-1)** — **로컬 TCPS docker 컨테이너**로 mTLS/TLS 경로 검증,
    출하 전 실 ADB 수동 1회 (질문 12 — 상시 ADB 계정 미확보).
 

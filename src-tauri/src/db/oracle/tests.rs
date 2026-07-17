@@ -225,6 +225,47 @@ fn connect_config_wallet_missing_dir_errors_without_leaking_path() {
 }
 
 #[test]
+fn connect_config_wallet_password_without_path_fails_closed() {
+    // Reason: #1669 review — a non-empty wallet_password with no wallet_path
+    // skipped the mTLS block entirely and connected over plaintext TCP,
+    // silently dropping the user's wallet intent. Must fail closed with a
+    // Validation error, and the error must never echo the secret. (2026-07-17)
+    let wallet_pw = "wallet-secret-9x";
+
+    let mut missing = oracle_config();
+    missing.wallet_password = wallet_pw.into();
+    missing.wallet_path = None;
+    match OracleAdapter::connect_config(&missing, 5) {
+        Err(AppError::Validation(message)) => {
+            assert!(
+                message.contains("wallet path"),
+                "expected wallet-path guidance, got: {message}"
+            );
+            assert!(
+                !message.contains(wallet_pw),
+                "wallet password leaked into error: {message}"
+            );
+        }
+        other => panic!("expected fail-closed Validation error, got {other:?}"),
+    }
+
+    // A blank/whitespace wallet_path is treated the same as absent.
+    let mut blank = oracle_config();
+    blank.wallet_password = wallet_pw.into();
+    blank.wallet_path = Some("   ".into());
+    assert!(matches!(
+        OracleAdapter::connect_config(&blank, 5),
+        Err(AppError::Validation(message)) if message.contains("wallet path")
+    ));
+
+    // An empty wallet_password with no wallet_path stays a valid plaintext
+    // connection — the guard only trips when a wallet secret is present.
+    let no_wallet = oracle_config();
+    OracleAdapter::connect_config(&no_wallet, 5)
+        .expect("no wallet password and no wallet path is a valid plaintext config");
+}
+
+#[test]
 fn connect_config_without_wallet_leaves_tls_disabled() {
     // Reason: #1065 — no wallet path means plain TCP; the wallet field is the
     // only Oracle TLS trigger (1-way TLS / trust toggles are out of scope).
