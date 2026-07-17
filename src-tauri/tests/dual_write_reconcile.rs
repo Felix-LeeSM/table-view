@@ -23,6 +23,7 @@ use serial_test::serial;
 use sqlx::SqlitePool;
 use table_view_lib::commands::persist_mru::{persist_mru_inner, PersistMruRequest};
 use table_view_lib::storage::local;
+use table_view_lib::storage::local_files::{save_mru_file, MruRecord};
 use table_view_lib::storage::meta::{set_legacy_import_state, LegacyImportState};
 use table_view_lib::storage::reconcile::{
     mismatch_counter, reconcile_pending_domains, set_force_failure_for_tests,
@@ -92,38 +93,35 @@ async fn ac_358_07_reconcile_gives_up_after_three_persistent_failures() {
     cleanup();
     let (_dir, pool) = setup().await;
 
-    // 우선 normal write 1회 — file SOT 에 entry 가 있어야 reconcile 가 의미가 있음.
-    persist_mru_inner(
-        &pool,
-        vec![PersistMruRequest {
-            connection_id: "conn-X".into(),
-            last_used: 42,
-        }],
-    )
-    .await
+    // file SOT 에 mru entry 를 seed — reconcile 가 실제로 재투영을 시도해야
+    // force-failure 의 give-up 이 발동한다. W3(sprint-370) 이후 persist_* 는
+    // SQLite-only 라 mru 파일이 비면 reconcile 은 아무 일도 안 하고 Ok 로 끝나,
+    // issue #1559 fix (전 도메인 Ok 일 때만 reset) 아래에서는 counter 가 정상
+    // reset 된다 — 이 give-up 시나리오를 성립시키려면 파일 SOT 데이터가 필요.
+    save_mru_file(&[MruRecord {
+        connection_id: "conn-X".into(),
+        last_used: 42,
+    }])
     .unwrap();
-    assert_eq!(mismatch_counter::current(), 0);
 
-    // SQLite row 를 강제로 삭제 → file SOT 와 mirror 가 불일치.
-    sqlx::query("DELETE FROM mru").execute(&pool).await.unwrap();
-    // mismatch counter 를 수동 += 1 — file SOT vs SQLite mirror 의 diff 발견을
-    // boot 시 simulate.
+    // boot 시 file SOT vs SQLite mirror diff 발견을 simulate.
     mismatch_counter::increment();
 
     // 영속 실패 모드 — reconcile 의 3회 시도가 모두 실패.
     set_force_failure_for_tests(true);
 
-    // reconcile 호출은 Ok — 3회 retry 시 stop 하고 dev console error 만.
+    // reconcile 호출은 Ok — 3회 retry 후 stop 하고 dev console error 만.
     reconcile_pending_domains(&pool).await.unwrap();
 
-    // SQLite row 0 (실패 지속).
+    // SQLite row 0 (실패 지속 — forced failure 가 write 를 막음).
     let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM mru")
         .fetch_one(&pool)
         .await
         .unwrap();
     assert_eq!(count, 0);
 
-    // counter 는 reset 되지 않음 — 실패 후 stop.
+    // counter 는 reset 되지 않음 — mru 도메인이 give-up 하면 all_ok=false 라
+    // 다음 boot 가 재시도한다 (issue #1559).
     assert!(mismatch_counter::current() >= 1);
 
     cleanup();
