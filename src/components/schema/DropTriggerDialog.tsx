@@ -115,6 +115,8 @@ export default function DropTriggerDialog({
       setShowDdl(true);
       ddl.cancelPreview();
     }
+    // Intentional narrow deps — the open flag + name seeds re-run the form
+    // reset on (re)open; the setters + ddl.cancelPreview are stable per render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, triggerName, tableName, schemaName]);
 
@@ -159,6 +161,8 @@ export default function DropTriggerDialog({
       );
     }, 250);
     return () => window.clearTimeout(handle);
+    // ddl.loadPreview + the tauri request builder are stable per render; keep
+    // deps to the inputs that actually drive the previewed SQL.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     open,

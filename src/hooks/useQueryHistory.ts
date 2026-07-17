@@ -178,6 +178,9 @@ export function useQueryHistory(
   useEffect(() => {
     if (!enabled) return;
     void refresh();
+    // `refresh` is omitted intentionally — fire only on the enabled transition
+    // (panel open), not on every `refresh` identity change, which would
+    // re-issue the list IPC on each dependency churn.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled]);
 

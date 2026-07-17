@@ -216,6 +216,8 @@ export default function AddColumnDialog({
       );
     }, 250);
     return () => window.clearTimeout(handle);
+    // ddl.loadPreview + the tauri request builder are stable per render; keep
+    // deps to the inputs that actually drive the previewed SQL.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     open,
