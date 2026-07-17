@@ -280,6 +280,22 @@ fn path_c_disk_fallback(data_dir: &Path) -> Result<KeyOutcome, AppError> {
             fallback_to_disk: true,
         })
     } else {
+        // #1555 — keyring-only 프로필이 keyring 없는 환경으로 이전/소실되면
+        // 디스크 `.key` 도, keyring 도 없다. 여기서 새 key 를 생성하면 기존
+        // ciphertext 가 orphan 이 되어 저장 password 전량 복호화 불가.
+        // Path A(l.154-160) 및 crypto #1093 가드와 동형으로 Fatal 진입
+        // (호출자가 safe mode). AC-356-09.
+        if data_has_password_ciphertext(data_dir)? {
+            warn!(
+                target: "boot",
+                "key_migration: Path C — keyring unavailable and disk .key missing but ciphertext present; entering safe mode instead of minting an orphan key"
+            );
+            return Ok(KeyOutcome {
+                key: Vec::new(),
+                source: KeySource::Fatal,
+                fallback_to_disk: false,
+            });
+        }
         // 신규 사용자 + Linux fallback — 디스크에 새 key.
         let key = Aes256Gcm::generate_key(aes_gcm::aead::OsRng);
         let key_bytes = key.as_slice().to_vec();
@@ -901,6 +917,37 @@ mod tests {
         assert!(outcome.fallback_to_disk);
         assert_eq!(outcome.key.len(), 32);
         assert!(disk_key_path(dir.path()).exists());
+    }
+
+    /// #1555 — Path C (keyring unavailable) + no disk key + ciphertext present
+    /// must be Fatal, never mint an orphan key. Regression: a keyring-only
+    /// profile carried to a keyring-less host has ciphertext but no `.key` and
+    /// no keyring; generating a fresh key here would strand every stored
+    /// password permanently.
+    #[test]
+    fn migrate_path_c_no_disk_but_ciphertext_present_is_fatal() {
+        let dir = TempDir::new().unwrap();
+        let lost_key: Vec<u8> = (0..32u8).rev().collect();
+        let enc = encrypt("secret", &lost_key).unwrap();
+        fs::write(
+            dir.path().join("connections.json"),
+            serde_json::json!({"connections":[{"id":"c1","password":enc}]}).to_string(),
+        )
+        .unwrap();
+        let backend = InMemoryKeyringBackend::new_unavailable();
+
+        let outcome = migrate_or_initialize(&backend, dir.path()).unwrap();
+        assert!(
+            outcome.is_fatal(),
+            "must refuse to orphan existing ciphertext"
+        );
+        assert_eq!(outcome.source, KeySource::Fatal);
+        assert!(outcome.key.is_empty(), "fatal must not carry a key");
+        assert!(!outcome.fallback_to_disk);
+        assert!(
+            !disk_key_path(dir.path()).exists(),
+            "must not write an orphan disk key"
+        );
     }
 
     /// Fatal — keyring + disk both missing, but ciphertext present.
