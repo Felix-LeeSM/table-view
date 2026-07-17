@@ -1,7 +1,7 @@
 ---
 title: ADR 인덱스
 type: index
-updated: 2026-05-28
+updated: 2026-07-17
 ---
 
 # ADR 인덱스
@@ -58,6 +58,7 @@ be read from `docs/product/README.md` and `docs/ROADMAP.md` first.
 | [0050](./0050-redo-full-symmetry-baseline-normalized/memory.md)                      | redo (Cmd+Shift+Z) 의미론 — 완전 대칭 + baseline 정규화 (ADR 0048 보완)                       | Accepted | 2026-07-10 | —          |
 | [0051](./0051-duckdb-write-ddl-staged/memory.md)                                     | DuckDB write/DDL 개방 — RDB parity 완전체를 PR 단위로 스테이징 (ADR 0046 보완)                | Accepted | 2026-07-10 | —          |
 | [0052](./0052-ssh-tunnel-connection-scoped-tofu/memory.md)                           | SSH 터널 지원 — 연결별 터널 + TOFU host key 핀 + keyring 봉투 재사용                          | Accepted | 2026-07-10 | —          |
+| [0053](./0053-connection-tls-core-vocabulary-warning-first-defaults/memory.md)       | connection TLS core vocabulary + warning-first defaults                                        | Accepted | 2026-07-17 | —          |
 
 ## 역사 (Superseded / Deprecated)
 

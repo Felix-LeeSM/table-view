@@ -3,6 +3,7 @@ title: Oracle wallet/TLS + SID/TNS 접속 옵션 — threat-model handoff (#1065
 type: threat-model-handoff
 issue: "#1065"
 updated: 2026-07-17
+status: decisions locked 2026-07-17
 ---
 
 # Oracle wallet/TLS + SID/TNS 접속 옵션 — Threat-model handoff (issue #1065)
@@ -260,3 +261,36 @@ updated: 2026-07-17
 11. 에러 redact 확장: wallet 경로·descriptor·DN 마스킹을 #1453/ADR 0052 Q6 표면과 병행 처리하는가?
 12. 검증 인프라: 실 Oracle Cloud ADB 계정을 확보하는가, 로컬 TCPS 컨테이너로 mTLS 검증을 대체하는가?
 13. 배포 묶음: 이슈 권고대로 #1072(full adapter 승격) 와 같은 버전대로 확정하는가?
+
+## 결정 (2026-07-17 grill)
+
+오너 grill 에서 아래를 lock 했다. #1065 결정은 ADR 대상이 아니며 (breadth-first
+접속 옵션 확장, 지속 아키텍처 결정 아님) 본 threat-model + 이슈 기록으로 충분.
+본문 §0~6 분석은 무수정.
+
+1. **접속 방식 1차 (§5-A)** — **A1: Service name + SID 만** (crate 네이티브
+   `with_sid`). TNS descriptor 는 미지원 명문화 + 후속. A2 (tnsnames.ora alias
+   파서)·A3 (자유 descriptor) 는 파서 attack surface·silent downgrade 로 미채택
+   (질문 1·2).
+2. **1-way TLS (TCPS + CA cert) 1차 미포함 (§5-D, §2.3)** — advanced TLS 의 CA 지원과
+   묶어 후속 #1650 으로 분리 (질문 10). wallet 기반 mTLS 도 이번 breadth 범위 밖.
+3. **검증 인프라 (§6-1)** — **로컬 TCPS docker 컨테이너**로 mTLS/TLS 경로 검증,
+   출하 전 실 ADB 수동 1회 (질문 12 — 상시 ADB 계정 미확보).
+
+**파생 결정**:
+
+- host/service/SID 문자 whitelist 를 `connect_config()` trust boundary 불변식으로
+  강제 (질문 3, §2.1 주입 완화).
+- wallet 저장 = **경로 참조만** (B1, ADR 0052 SSH key 선례) — 복제 미채택 (질문 4).
+- wallet password = **`password_enc` 계약** (ADR 0005/0040) + IPC 마스킹 + 3-state
+  (질문 5).
+- wallet 디렉토리 권한 느슨 시 **경고** (hard-fail 아님, 질문 6).
+- export envelope 에서 **wallet 경로 strip** (DuckDB `io.rs` 선례, 질문 7).
+- wallet 형식 = **`ewallet.pem` 단독** + openssl 변환 가이드 (경고 문구 필수, 질문 8).
+- `trust_server_certificate` 류 "검증 끄기" **Oracle 미노출** (crate `verify_server`
+  no-op → D1, 질문 9).
+- 에러 redact 확장 (wallet 경로·descriptor·DN) — #1453 병행 (질문 11, §5-E).
+- 배포 묶음: **#1072 (full adapter 승격) 와 같은 버전대** (질문 13).
+
+**후속 이슈**: #1650 (Oracle 1-way TLS — TCPS + CA cert, advanced TLS #1649 CA 지원과
+묶음).
