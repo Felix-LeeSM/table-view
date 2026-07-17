@@ -1,8 +1,8 @@
 ---
 title: Product 머지 기준
 type: product-rule
-updated: 2026-07-03
-task: ux-review, persistence-reset, merge-gate, safe-mode-severity, collapse-default
+updated: 2026-07-16
+task: ux-review, persistence-reset, merge-gate, safe-mode-severity, collapse-default, telemetry-local-only
 ---
 
 # Product 머지 기준
@@ -75,6 +75,21 @@ State-management reset gate 는
 
 접힘 가능 목록을 새로 만들거나 시드 로직을 만지는 PR 에서 기본값을 이 원칙에 맞춘다.
 §1 에 따라 collapse 상태가 영속되면 reset affordance 도 함께.
+
+## 4. 진단/로그 출력은 로컬 전용 (ADR 0036 재확인)
+
+로그·진단 번들은 기계를 떠나지 않는다. **원격 crash reporter / 텔레메트리 도입 PR = 머지 보류** (ADR 0036 zero external collection 재확인, 2026-07-16 사용자 재확정).
+
+로컬 진단만 허용: 파일 로그 + `panic::set_hook` + Reveal Logs 버튼 (#1564~1566). 사용자가 버그 리포트에 **수동 첨부**한다.
+
+### Why
+
+1. ROADMAP 전략제약 "credentials/history/settings/app state 는 명시적 export 없인 로컬에 남긴다" 직접 충족 + "주장하는 보호 = 실제 보호" 일관성.
+2. **로그 번들 = 크레덴셜 벡터**: wave 28 감사가 로그/히스토리 내 평문 자격증명 유출 확인 (#1550 Oracle REPLACE, #1551 MSSQL HASHED, #1553 error_message). redaction 미완 상태의 원격 업로드 = 크레덴셜 exfiltration.
+
+### How to apply
+
+원격 진단을 정말 도입하려면 조건부 게이트 3개를 **먼저** 통과: (1) opt-in only (기본 off + 명시 동의 UX), (2) sql_redact 3건(#1550/1551/1553) 선행 머지, (3) `security-handoff`→grill threat-model 후 **ADR 0036 superseding 새 ADR**. 이 셋 없이 원격 송신 코드 = 머지 보류.
 
 ## 관련
 

@@ -49,6 +49,10 @@ generator: scripts/regenerate-indexes.sh
 - [Engineering](../../memory/engineering/memory.md)
 - [버그 fix — Red test 먼저](../../memory/workflow/bug-fix/memory.md)
 
+### cancelled-rollup
+
+- [PR merge 게이트 진단 / 처리](../../memory/runbook/pr-merge-gates/memory.md)
+
 ### capability
 
 - [Data Source Architecture](../../memory/engineering/architecture/data-source/memory.md)
@@ -315,6 +319,10 @@ generator: scripts/regenerate-indexes.sh
 - [Data Source Runtime Posture](../../memory/engineering/architecture/data-source/posture/memory.md)
 - [Fixture strategy — support claims need local evidence](../../memory/engineering/conventions/testing-scenarios/fixtures/memory.md)
 
+### synchronize-rerun
+
+- [PR merge 게이트 진단 / 처리](../../memory/runbook/pr-merge-gates/memory.md)
+
 ### tauri
 
 - [Backend Guidance](../../memory/engineering/conventions/backend/memory.md)
@@ -322,6 +330,10 @@ generator: scripts/regenerate-indexes.sh
 ### tdd
 
 - [TDD Evidence](../../memory/workflow/tdd/memory.md)
+
+### telemetry-local-only
+
+- [Product 머지 기준](../../memory/product/memory.md)
 
 ### test-writing
 
