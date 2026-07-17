@@ -76,6 +76,6 @@ it("Back triggers the workspace_close IPC (path step)", () => {
 
 ## 관련
 
-- [testing-scenarios](../memory.md) — 8 원칙. P2 (사용자 가시 행동), P6 (mock = boundary)
+- [testing-scenarios](../memory.md) — 9 원칙. P2 (사용자 가시 행동), P6 (mock = boundary)
 - [workflow/bug-fix](../../../../workflow/bug-fix/memory.md) — Red test 의 단언 형식
 - [docs/archives/incidents/ui-patterns/2026-05-16-theme-selection-silent-fail](../../../../../docs/archives/incidents/ui-patterns/2026-05-16-theme-selection-silent-fail/memory.md) — 회귀 사례

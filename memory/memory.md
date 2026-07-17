@@ -45,7 +45,7 @@ updated: 2026-06-12
 - [engineering/architecture](./engineering/architecture/memory.md) — 기술 스택, 디렉토리 구조, Tauri IPC, Rust 모듈, React 상태 흐름
 - [engineering/conventions](./engineering/conventions/memory.md) — Rust/TS 컨벤션, 테스트 규칙, 커밋, 금지 사항
   - [engineering/conventions/refactoring](./engineering/conventions/refactoring/memory.md) — 리팩토링 코드 작성 기준 (B/D/C/A 4 카테고리, god-file 시퀀스)
-  - [engineering/conventions/testing-scenarios](./engineering/conventions/testing-scenarios/memory.md) — 비-E2E 시나리오 8원칙 (mock-scope sub-room 포함)
+  - [engineering/conventions/testing-scenarios](./engineering/conventions/testing-scenarios/memory.md) — 비-E2E 시나리오 9원칙 (mock-scope sub-room 포함)
   - [engineering/conventions/e2e-scenarios](./engineering/conventions/e2e-scenarios/memory.md) — E2E 시나리오 설계
   - [engineering/conventions/rust](./engineering/conventions/rust/memory.md) — Rust 컨벤션 전체 (`.claude/rules/rust-conventions.md` source)
   - [engineering/conventions/react](./engineering/conventions/react/memory.md) — React/TS 컨벤션 전체 (`.claude/rules/react-conventions.md` source)
