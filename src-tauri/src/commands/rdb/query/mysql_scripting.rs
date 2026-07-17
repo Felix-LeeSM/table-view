@@ -8,7 +8,16 @@ enum MysqlScriptingFeature {
     StoredRoutine,
     ControlFlow,
     Call,
+    NestedComment,
 }
+
+/// Cap the mutual recursion between `mysql_scripting_feature` and
+/// `leading_executable_comment_feature`. MySQL executable comments
+/// (`/*! ... */`) do not nest, so every real query resolves within a couple of
+/// levels; a `/*!`-repeated payload otherwise adds one level per 3 bytes and
+/// overflows the worker stack (#1557). At the cap we fail closed (treat the
+/// input as an unsupported scripting feature) rather than pass it to execution.
+const MAX_COMMENT_DEPTH: usize = 16;
 
 pub(super) fn validate_mysql_scripting_boundary(
     sql: &str,
@@ -36,6 +45,9 @@ pub(super) fn validate_mysql_scripting_boundary(
         Some(MysqlScriptingFeature::Call) => Err(AppError::Unsupported(
             "MySQL-family CALL support is limited to a narrow routine name plus scalar literal, DEFAULT, NULL, boolean, or user-variable arguments. Function calls, expressions, subqueries, system variables, and routine body authoring are not supported in the query editor.".into(),
         )),
+        Some(MysqlScriptingFeature::NestedComment) => Err(AppError::Unsupported(
+            "MySQL executable comment nesting is too deep to analyze safely and is not supported in the query editor. Remove nested /*! ... */ comment layers and submit a single server SQL statement.".into(),
+        )),
         None => Ok(()),
     }
 }
@@ -51,7 +63,16 @@ pub(super) fn validate_mysql_scripting_boundary_batch(
 }
 
 fn mysql_scripting_feature(sql: &str) -> Option<MysqlScriptingFeature> {
-    if let Some(feature) = leading_executable_comment_feature(sql) {
+    mysql_scripting_feature_at(sql, 0)
+}
+
+fn mysql_scripting_feature_at(sql: &str, depth: usize) -> Option<MysqlScriptingFeature> {
+    if depth >= MAX_COMMENT_DEPTH {
+        // Fail closed: refuse to keep unwinding a pathologically nested comment.
+        return Some(MysqlScriptingFeature::NestedComment);
+    }
+
+    if let Some(feature) = leading_executable_comment_feature(sql, depth) {
         return Some(feature);
     }
 
@@ -114,7 +135,7 @@ fn is_narrow_call_statement(sql: &str) -> bool {
     index >= bytes.len()
 }
 
-fn leading_executable_comment_feature(sql: &str) -> Option<MysqlScriptingFeature> {
+fn leading_executable_comment_feature(sql: &str, depth: usize) -> Option<MysqlScriptingFeature> {
     let bytes = sql.as_bytes();
     let mut index = 0;
 
@@ -146,7 +167,9 @@ fn leading_executable_comment_feature(sql: &str) -> Option<MysqlScriptingFeature
                     body_start += 1;
                 }
                 let body_end = close.unwrap_or(bytes.len());
-                if let Some(feature) = mysql_scripting_feature(&sql[body_start..body_end]) {
+                if let Some(feature) =
+                    mysql_scripting_feature_at(&sql[body_start..body_end], depth + 1)
+                {
                     return Some(feature);
                 }
             }
@@ -542,6 +565,30 @@ mod tests {
                 other => panic!("Expected unsupported CALL argument form, got: {other:?}"),
             }
         }
+    }
+
+    #[test]
+    fn rejects_pathological_nested_executable_comment_without_overflow() {
+        // Regression for #1557: a `/*!`-repeated payload drove unbounded mutual
+        // recursion between `mysql_scripting_feature` and
+        // `leading_executable_comment_feature` (one level per 3 bytes), which
+        // overflowed the worker stack (SIGABRT, whole-app crash). Run on a
+        // deliberately small stack so a regression re-aborts the test process
+        // here instead of only in production.
+        let handle = std::thread::Builder::new()
+            .stack_size(512 * 1024)
+            .spawn(|| {
+                let sql = "/*!".repeat(40_000);
+                validate_mysql_scripting_boundary(&sql, &DatabaseType::Mysql)
+            })
+            .expect("spawn worker");
+        let result = handle
+            .join()
+            .expect("worker must not overflow the stack on deeply nested comments");
+        assert!(
+            matches!(result, Err(AppError::Unsupported(_))),
+            "deeply nested executable comment must be rejected fail-closed, got: {result:?}",
+        );
     }
 
     #[test]
