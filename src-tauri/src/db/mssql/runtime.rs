@@ -360,6 +360,100 @@ impl MssqlAdapter {
 
         cancellable(work, cancel_token).await
     }
+
+    /// Issue #1642 — server-side row streaming for SQL Server, the T-SQL
+    /// sibling of the PG/MySQL/SQLite `stream_table_rows`. SQL Server has no
+    /// client-cursor analogue of PG's `DECLARE … FETCH FORWARD`, so this streams
+    /// the TDS result set through tiberius' async `QueryStream`, batching rows
+    /// into the mpsc `sender`. Same contract as the siblings: `batch_size` /
+    /// `column_names` validation up front, cooperative cancellation, and a
+    /// receiver-drop abort. Returns the total rows sent.
+    ///
+    /// ponytail: a single streaming SELECT is already a consistent read under
+    /// the default READ COMMITTED isolation, so no explicit `BEGIN`/`COMMIT`
+    /// wraps it (the tiberius stream borrows the client for its whole lifetime,
+    /// which would block a mid-stream `COMMIT` anyway). Wrap in SNAPSHOT
+    /// isolation if a long export must be insulated from concurrent writes.
+    pub async fn stream_table_rows(
+        &self,
+        schema: &str,
+        table: &str,
+        batch_size: u32,
+        column_names: &[String],
+        sender: tokio::sync::mpsc::Sender<Vec<Vec<serde_json::Value>>>,
+        cancel: Option<&CancellationToken>,
+    ) -> Result<u64, AppError> {
+        if batch_size == 0 {
+            return Err(AppError::Validation(
+                "stream_table_rows: batch_size must be > 0".into(),
+            ));
+        }
+        if column_names.is_empty() {
+            return Err(AppError::Validation(
+                "stream_table_rows: column_names must not be empty".into(),
+            ));
+        }
+        super::ddl::validate_identifier(schema, "Schema name")?;
+        super::ddl::validate_identifier(table, "Table name")?;
+
+        let config = self.connected_config().await?;
+        let qualified = qualified_mssql_table(schema, table);
+        // Column selection follows `column_names` order — the caller owns the
+        // source order so the dump INSERT columns line up with the values.
+        let select_list = column_names
+            .iter()
+            .map(|name| quote_mssql_identifier(name))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let select_sql = format!("SELECT {select_list} FROM {qualified}");
+
+        let work = async {
+            let mut client = Self::connect_client(&config).await?;
+            let mut stream = client
+                .simple_query(&select_sql)
+                .await
+                .map_err(|err| mssql_query_error("SQL Server row stream failed", err))?;
+            let mut total: u64 = 0;
+            let mut batch: Vec<Vec<serde_json::Value>> = Vec::with_capacity(batch_size as usize);
+
+            while let Some(item) = stream
+                .try_next()
+                .await
+                .map_err(|err| mssql_query_error("SQL Server row stream failed", err))?
+            {
+                let QueryItem::Row(row) = item else {
+                    continue;
+                };
+                let values: Vec<serde_json::Value> = (0..row.len())
+                    .map(|idx| mssql_cell_to_json(&row, idx))
+                    .collect();
+                batch.push(values);
+                if batch.len() as u32 >= batch_size {
+                    let count = batch.len() as u64;
+                    let send_batch = std::mem::take(&mut batch);
+                    if sender.send(send_batch).await.is_err() {
+                        return Err(AppError::Database(
+                            "Receiver dropped — export aborted".into(),
+                        ));
+                    }
+                    total += count;
+                }
+            }
+            // tail flush — the final sub-`batch_size` remainder.
+            if !batch.is_empty() {
+                let count = batch.len() as u64;
+                if sender.send(batch).await.is_err() {
+                    return Err(AppError::Database(
+                        "Receiver dropped — export aborted".into(),
+                    ));
+                }
+                total += count;
+            }
+            Ok(total)
+        };
+
+        cancellable(work, cancel).await
+    }
 }
 
 fn build_mssql_where_clause(
@@ -1205,6 +1299,44 @@ mod tests {
             .await
             .unwrap_err();
         assert!(matches!(err, AppError::Database(msg) if msg == "Query cancelled"));
+    }
+
+    #[tokio::test]
+    async fn stream_table_rows_validation_short_circuits_before_connection_lookup() {
+        // Issue #1642 — batch_size / column_names validation must reject before
+        // any connection lookup, mirroring the pg/mysql/sqlite siblings.
+        let adapter = MssqlAdapter::new();
+        let cols = vec!["id".to_string()];
+
+        let (tx, _rx) = tokio::sync::mpsc::channel(1);
+        let err = adapter
+            .stream_table_rows("dbo", "users", 0, &cols, tx, None)
+            .await
+            .unwrap_err();
+        assert!(matches!(err, AppError::Validation(msg) if msg.contains("batch_size")));
+
+        let (tx, _rx) = tokio::sync::mpsc::channel(1);
+        let err = adapter
+            .stream_table_rows("dbo", "users", 100, &[], tx, None)
+            .await
+            .unwrap_err();
+        assert!(matches!(err, AppError::Validation(msg) if msg.contains("column_names")));
+
+        // Identifier validation also fires before connection lookup.
+        let (tx, _rx) = tokio::sync::mpsc::channel(1);
+        let err = adapter
+            .stream_table_rows("1bad", "users", 100, &cols, tx, None)
+            .await
+            .unwrap_err();
+        assert!(matches!(err, AppError::Validation(_)));
+
+        // A valid request with no open connection reaches the connection gate.
+        let (tx, _rx) = tokio::sync::mpsc::channel(1);
+        let err = adapter
+            .stream_table_rows("dbo", "users", 100, &cols, tx, None)
+            .await
+            .unwrap_err();
+        assert!(matches!(err, AppError::Connection(msg) if msg.contains("not open")));
     }
 
     #[tokio::test]

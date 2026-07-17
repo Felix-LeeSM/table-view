@@ -12,7 +12,12 @@
 import type { ColumnInfo, IndexInfo, ConstraintInfo } from "@/types/schema";
 import { sqlIdentifier, type SqlDialect } from "./sqlLiteral";
 
-export type DdlDialect = "postgresql" | "mysql" | "mariadb" | "sqlite";
+export type DdlDialect =
+  | "postgresql"
+  | "mysql"
+  | "mariadb"
+  | "sqlite"
+  | "mssql";
 
 export interface DdlExportTable {
   name: string;
