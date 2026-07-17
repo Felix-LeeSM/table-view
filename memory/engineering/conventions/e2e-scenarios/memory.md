@@ -1,7 +1,9 @@
 ---
 title: E2E 시나리오 설계 원칙
 type: memory
-updated: 2026-04-30
+updated: 2026-07-17
+surface: e2e/**
+task: e2e, testing, scenario
 ---
 
 # E2E 시나리오 설계 원칙

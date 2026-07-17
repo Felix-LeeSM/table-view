@@ -1,7 +1,7 @@
 ---
 title: By-surface 인덱스
 type: index
-generated: 2026-07-10
+generated: 2026-07-17
 generator: scripts/regenerate-indexes.sh
 ---
 
@@ -33,6 +33,10 @@ generator: scripts/regenerate-indexes.sh
 
 - [God file 시퀀스](../../memory/engineering/conventions/refactoring/god-file/memory.md)
 
+### `e2e/**`
+
+- [E2E 시나리오 설계 원칙](../../memory/engineering/conventions/e2e-scenarios/memory.md)
+
 ### `e2e/fixtures`
 
 - [Fixture strategy — support claims need local evidence](../../memory/engineering/conventions/testing-scenarios/fixtures/memory.md)
@@ -50,6 +54,7 @@ generator: scripts/regenerate-indexes.sh
 
 - [Adding A Data Source](../../memory/engineering/architecture/data-source/adding/memory.md)
 - [Data Source Architecture](../../memory/engineering/architecture/data-source/memory.md)
+- [Data Source Runtime Posture](../../memory/engineering/architecture/data-source/posture/memory.md)
 
 ### `src-tauri/src/db/fixtures.rs`
 
