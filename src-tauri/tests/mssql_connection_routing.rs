@@ -430,17 +430,38 @@ async fn run_mssql_runtime_assertions(
         "zero-row guard must not persist a phantom write"
     );
 
-    let drop = DropTableRequest {
+    // Issue #1071 — structured DDL is now wired: the drop_table trait method
+    // executes a real DROP TABLE against the live container (previously the
+    // #903 boundary returned Unsupported). Raw DDL through execute_sql /
+    // execute_sql_batch stays blocked below, so the runtime slice still rejects
+    // ad-hoc DDL typed into the query editor.
+    let drop_preview = DropTableRequest {
         connection_id: "mssql".into(),
         schema: "vt902".into(),
         table: "books".into(),
         cascade: false,
-        preview_only: false,
+        preview_only: true,
         expected_database: Some(database.to_string()),
     };
-    let ddl = RdbAdapter::drop_table(adapter, &drop).await;
+    let previewed = RdbAdapter::drop_table(adapter, &drop_preview)
+        .await
+        .expect("structured DROP TABLE preview must build the T-SQL after #1071");
+    assert_eq!(previewed.sql, "DROP TABLE [vt902].[books]");
+
+    let drop = DropTableRequest {
+        preview_only: false,
+        ..drop_preview
+    };
+    let dropped = RdbAdapter::drop_table(adapter, &drop)
+        .await
+        .expect("structured DROP TABLE must execute after #1071");
+    assert_eq!(dropped.sql, "DROP TABLE [vt902].[books]");
+    let missing = RdbAdapter::execute_sql(adapter, "SELECT id FROM vt902.books", None)
+        .await
+        .expect_err("books must be gone after the structured drop executes");
     assert!(
-        matches!(ddl, Err(AppError::Unsupported(message)) if message.contains("outside issue #903"))
+        matches!(missing, AppError::Database(_)),
+        "expected an invalid-object database error for the dropped table, got {missing:?}"
     );
 
     for sql in [
