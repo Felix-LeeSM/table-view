@@ -12,6 +12,7 @@ import {
   type ServerActivityRow,
 } from "@/lib/api/serverActivity";
 import { DATABASE_TYPE_LABELS, paradigmOf, type DatabaseType } from "../model";
+import { PanelLoadingSkeleton } from "./PanelLoadingSkeleton";
 
 export interface ServerActivityPanelProps {
   connectionId: string;
@@ -109,6 +110,8 @@ export function ServerActivityPanel({
           {error}
         </div>
       )}
+
+      {loading && rows.length === 0 && <PanelLoadingSkeleton />}
 
       {!loading && error === null && rows.length === 0 && (
         <p

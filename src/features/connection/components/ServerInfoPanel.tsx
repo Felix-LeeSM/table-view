@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { serverInfo, type ServerInfoRow } from "@/lib/api/serverInfo";
 import { safeStringifyCell } from "@/lib/jsonCell";
 import { DATABASE_TYPE_LABELS, paradigmOf, type DatabaseType } from "../model";
+import { PanelLoadingSkeleton } from "./PanelLoadingSkeleton";
 
 export interface ServerInfoPanelProps {
   connectionId: string;
@@ -80,6 +81,8 @@ export function ServerInfoPanel({
           {error}
         </div>
       )}
+
+      {loading && info === null && <PanelLoadingSkeleton />}
 
       {!loading && error === null && info !== null && (
         <dl

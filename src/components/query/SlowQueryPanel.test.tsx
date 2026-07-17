@@ -41,6 +41,14 @@ describe("SlowQueryPanel (Sprint 340 U5 live wire)", () => {
     sqMock.mockReset();
   });
 
+  it("shows a loading skeleton while the initial fetch is pending (#1587)", () => {
+    sqMock.mockReturnValueOnce(new Promise(() => {}));
+    render(<SlowQueryPanel connectionId="conn-pg" dbType="postgresql" />);
+    const status = screen.getByRole("status");
+    expect(status).toHaveAttribute("aria-busy", "true");
+    expect(screen.queryByTestId("slow-query-table")).toBeNull();
+  });
+
   it("renders RDB slow query table after slow_queries resolves", async () => {
     sqMock.mockResolvedValueOnce(pgStub);
     render(<SlowQueryPanel connectionId="conn-pg" dbType="postgresql" />);
