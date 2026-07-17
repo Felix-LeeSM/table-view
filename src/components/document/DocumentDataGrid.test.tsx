@@ -123,11 +123,14 @@ beforeEach(() => {
 });
 
 // #1461 — the document grid's edit + bulk affordances read the connection's
-// `edit.editDocuments` / `edit.bulkWrite` capability. Reset to empty so the
-// existing (connection-agnostic) tests keep the affordance-preserving fallback
-// (`supportsDocumentEditing(undefined) === true`).
+// `edit.editDocuments` / `edit.bulkWrite` capability.
+// #1618 (D3) — `supportsDocumentEditing`/`supportsBulkWrite` are now fail-closed
+// for an unknown dbType, so the existing edit tests can no longer lean on the
+// old `undefined === true` fallback. Seed a real MongoDB connection (the sole
+// profile declaring both true) so those tests keep their affordances via the
+// actual capability. Per-test overrides (`setDocumentConnection(...)`) still win.
 beforeEach(() => {
-  useConnectionStore.setState({ connections: [] });
+  setDocumentConnection("mongodb");
 });
 
 beforeEach(() => {
@@ -142,6 +145,17 @@ beforeEach(() => {
   updateDocumentMock.mockResolvedValue(undefined);
   deleteDocumentMock.mockReset();
   deleteDocumentMock.mockResolvedValue(undefined);
+  // #1618 (D5) — bulkWriteDocumentsMock was previously not reset between tests,
+  // so its call count leaked (the commit-path tests left it at 2). Reset it so
+  // the read-only-source assertion (`not.toHaveBeenCalled`) is deterministic.
+  bulkWriteDocumentsMock.mockReset();
+  bulkWriteDocumentsMock.mockResolvedValue({
+    inserted_count: 0,
+    matched_count: 0,
+    modified_count: 0,
+    deleted_count: 0,
+    upserted_ids: [],
+  });
 });
 
 function renderGrid() {
@@ -661,5 +675,13 @@ describe("DocumentDataGrid — #1461 edit capability gate", () => {
     expect(
       screen.getByRole("button", { name: /projection/i }),
     ).toBeInTheDocument();
+
+    // #1618 (D5) — no write IPC is reachable for a read-only document source:
+    // the affordances are hidden AND the insert entry point is guarded
+    // (#1618 D4), so none of the mutation mocks fire.
+    expect(insertDocumentMock).not.toHaveBeenCalled();
+    expect(updateDocumentMock).not.toHaveBeenCalled();
+    expect(deleteDocumentMock).not.toHaveBeenCalled();
+    expect(bulkWriteDocumentsMock).not.toHaveBeenCalled();
   });
 });

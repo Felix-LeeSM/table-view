@@ -433,13 +433,19 @@ async fn explain_mongo_find_inner(
 /// filter/sort/projection/skip/limit the real `find` executes so the plan
 /// matches actual execution. Returns the raw explain response as
 /// `serde_json::Value`.
+///
+/// Issue #1619 (E4) — `body` is taken by value, not `Option<FindBody>`: the
+/// sole caller (`explainMongoFind` in `src/lib/api/explain.ts`) always sends
+/// `body: args.body ?? {}`, so the `None` arm of the old `Option` was dead.
+/// An empty `{}` still deserialises to `FindBody::default()` via each field's
+/// `#[serde(default)]`, so the no-body case keeps working without the wrapper.
 #[tauri::command]
 pub async fn explain_mongo_find(
     state: tauri::State<'_, AppState>,
     connection_id: String,
     database: String,
     collection: String,
-    body: Option<FindBody>,
+    body: FindBody,
     verbosity: Option<String>,
     query_id: Option<String>,
 ) -> Result<serde_json::Value, AppError> {
@@ -448,7 +454,7 @@ pub async fn explain_mongo_find(
         &connection_id,
         &database,
         &collection,
-        body.unwrap_or_default(),
+        body,
         verbosity.as_deref().unwrap_or("queryPlanner"),
         query_id.as_deref(),
     )

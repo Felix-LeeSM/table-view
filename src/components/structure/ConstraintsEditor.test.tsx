@@ -280,3 +280,59 @@ describe("ConstraintsEditor — Sprint 187 Safe Mode gate", () => {
     ).toBeInTheDocument();
   });
 });
+
+// #1618 (D1) — DuckDB shows the Constraints tab (catalog.constraints true) but
+// its adapter returns Unsupported for ALTER TABLE ADD/DROP CONSTRAINT, so both
+// the Add Constraint button and the per-row drop-constraint trash must be
+// hidden (disable-at-source, #1046) instead of click-then-error. Both are
+// ALTER TABLE forms, so a single `canAlterTable` gate covers them. (2026-07-17)
+describe("ConstraintsEditor — #1618 D1 alterTable gate", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useConnectionStore.setState({ connections: [] });
+  });
+
+  function renderEditor(canAlterTable?: boolean) {
+    render(
+      <ConstraintsEditor
+        connectionId="conn-1"
+        database="db-1"
+        table="users"
+        schema="public"
+        constraints={[SAMPLE_CONSTRAINT]}
+        columns={[]}
+        onColumnsChange={vi.fn()}
+        onRefresh={vi.fn().mockResolvedValue(undefined)}
+        {...(canAlterTable === undefined ? {} : { canAlterTable })}
+      />,
+    );
+  }
+
+  // Reason: default (no prop) keeps the pre-#1618 surface for gating-agnostic
+  // callers. (2026-07-17)
+  it("shows Add Constraint + drop-constraint controls by default", () => {
+    renderEditor();
+    expect(
+      screen.getByRole("button", { name: "Add constraint" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", {
+        name: `Delete constraint ${SAMPLE_CONSTRAINT.name}`,
+      }),
+    ).toBeInTheDocument();
+  });
+
+  // Reason: an adapter that cannot run ALTER TABLE ADD/DROP CONSTRAINT (DuckDB)
+  // must not surface the click-then-error controls. (2026-07-17)
+  it("hides Add Constraint + drop-constraint controls when canAlterTable is false", () => {
+    renderEditor(false);
+    expect(
+      screen.queryByRole("button", { name: "Add constraint" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", {
+        name: `Delete constraint ${SAMPLE_CONSTRAINT.name}`,
+      }),
+    ).not.toBeInTheDocument();
+  });
+});

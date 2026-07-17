@@ -13,10 +13,7 @@ import {
   buildSqlCompletionContext,
   useMongoAutocomplete,
 } from "@features/completion";
-import { parseMongoshExpression } from "@features/query";
-import type { ExplainMongoFindArgs } from "@/lib/api/explain";
-import type { FindBody } from "@/types/document";
-import { applyFindCursorChain, isRecord } from "./QueryTab/queryHelpers";
+import { deriveMongoExplainSpec } from "./QueryTab/queryHelpers";
 import { toast } from "@lib/runtime/toast";
 import { open } from "@tauri-apps/plugin-dialog";
 import { readTextFileImport } from "@lib/tauri";
@@ -67,35 +64,6 @@ import { resolveSafeModeEnvironment } from "@hooks/useSafeModeGate";
 
 interface QueryTabProps {
   tab: QueryTab;
-}
-
-// #1041 — Mongo explain is backed by `runCommand({explain:{find,...}})`, so
-// it only applies to a `db.<coll>.find(<filter>, <projection>)` statement.
-// #1210 — the spec now carries the same find body (filter/projection + the
-// sort/limit/skip cursor chain) the real execution builds via
-// `applyFindCursorChain`, so the plan reflects actual execution instead of a
-// silently filter-only plan. aggregate / write / admin statements have no find
-// spec and return `null`.
-function deriveMongoExplainSpec(
-  sql: string,
-  database: string | undefined,
-): ExplainMongoFindArgs | null {
-  const parsed = parseMongoshExpression(sql);
-  if (parsed.kind !== "success" || parsed.method !== "find") return null;
-  const filterArg = parsed.args[0];
-  const projectionArg = parsed.args[1];
-  const body: FindBody = {};
-  if (isRecord(filterArg)) body.filter = filterArg;
-  if (isRecord(projectionArg)) body.projection = projectionArg;
-  // Same cursor chain the real find executes. A malformed cursor arg would
-  // also fail real execution, so fall back to the filter/projection body
-  // rather than block the plan.
-  const withCursor = applyFindCursorChain(body, parsed.cursorChain);
-  return {
-    database: database ?? "",
-    collection: parsed.collection,
-    body: withCursor.ok ? withCursor.value : body,
-  };
 }
 
 export default function QueryTab({ tab }: QueryTabProps) {
