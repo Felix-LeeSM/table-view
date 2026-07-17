@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import type { TabId } from "@/types/branded";
+import type { ConnectionId, TabId } from "@/types/branded";
 import {
   getTestWorkspace,
   seedConnection,
@@ -11,7 +11,11 @@ import { useWorkspaceStore, type TableTab } from "@stores/workspaceStore";
 import { useConnectionStore } from "@stores/connectionStore";
 import type { ConnectionConfig } from "@/types/connection";
 
-function addTableTab(overrides: Partial<Omit<TableTab, "id">> = {}) {
+function addTableTab(
+  overrides: Partial<Omit<TableTab, "id" | "connectionId">> & {
+    connectionId?: string;
+  } = {},
+) {
   // Workspace key is hardcoded to conn1/db1 so legacy tests that mixed
   // tabs from different connections (via `connectionId` overrides on the
   // init payload) still surface every tab through `useCurrentTabs()`.
@@ -19,7 +23,7 @@ function addTableTab(overrides: Partial<Omit<TableTab, "id">> = {}) {
   // / `addTab(connId, ...)` directly.
   useWorkspaceStore.getState().addTab("conn1", {
     title: "Test Tab",
-    connectionId: "conn1",
+    connectionId: "conn1" as ConnectionId,
     type: "table",
     closable: true,
     schema: "public",
@@ -58,7 +62,7 @@ describe("TabBar", () => {
     addTableTab({
       title: "public.users",
       table: "users",
-      connectionId: "conn1",
+      connectionId: "conn1" as ConnectionId,
     });
     addTableTab({
       title: "public.orders",
@@ -78,7 +82,7 @@ describe("TabBar", () => {
       title: "public.users",
       schema: "public",
       table: "users",
-      connectionId: "conn1",
+      connectionId: "conn1" as ConnectionId,
     });
     addTableTab({
       title: "public.users",
@@ -96,7 +100,7 @@ describe("TabBar", () => {
     addTableTab({
       title: "public.users",
       table: "users",
-      connectionId: "conn1",
+      connectionId: "conn1" as ConnectionId,
     });
     addTableTab({
       title: "public.orders",
@@ -120,7 +124,7 @@ describe("TabBar", () => {
     addTableTab({
       title: "public.users",
       table: "users",
-      connectionId: "conn1",
+      connectionId: "conn1" as ConnectionId,
     });
     addTableTab({
       title: "public.orders",
@@ -140,7 +144,7 @@ describe("TabBar", () => {
     addTableTab({
       title: "public.users",
       table: "users",
-      connectionId: "conn1",
+      connectionId: "conn1" as ConnectionId,
     });
     addTableTab({
       title: "public.orders",
@@ -170,7 +174,7 @@ describe("TabBar", () => {
       id: id as TabId,
       type: "table",
       title: table,
-      connectionId: "conn1",
+      connectionId: "conn1" as ConnectionId,
       closable: true,
       subView: "records",
       isPreview: false,
@@ -435,7 +439,7 @@ describe("TabBar", () => {
             id: "t1" as TabId,
             type: "table",
             title: "users",
-            connectionId: "conn1",
+            connectionId: "conn1" as ConnectionId,
             closable: true,
             subView: "records" as const,
             isPreview: false,
@@ -446,7 +450,7 @@ describe("TabBar", () => {
             id: "t2" as TabId,
             type: "table",
             title: "orders",
-            connectionId: "conn1",
+            connectionId: "conn1" as ConnectionId,
             closable: true,
             subView: "records" as const,
             isPreview: false,
@@ -457,7 +461,7 @@ describe("TabBar", () => {
             id: "t3" as TabId,
             type: "table",
             title: "products",
-            connectionId: "conn1",
+            connectionId: "conn1" as ConnectionId,
             closable: true,
             subView: "records" as const,
             isPreview: false,
@@ -864,7 +868,7 @@ describe("TabBar", () => {
     addTableTab({
       title: "users",
       table: "users",
-      connectionId: "conn1",
+      connectionId: "conn1" as ConnectionId,
     });
     addTableTab({
       title: "orders",
@@ -894,7 +898,7 @@ describe("TabBar", () => {
     addTableTab({
       title: "users",
       table: "users",
-      connectionId: "conn1",
+      connectionId: "conn1" as ConnectionId,
     });
     addTableTab({
       title: "orders",
@@ -945,7 +949,7 @@ describe("TabBar", () => {
     addTableTab({
       title: "users",
       table: "users",
-      connectionId: "conn1",
+      connectionId: "conn1" as ConnectionId,
     });
     addTableTab({
       title: "orders",
@@ -1085,7 +1089,7 @@ describe("TabBar", () => {
       title: "users",
       table: "users",
       database: "db1",
-      connectionId: "conn1",
+      connectionId: "conn1" as ConnectionId,
       paradigm: "document",
     });
 
@@ -1098,7 +1102,7 @@ describe("TabBar", () => {
     addTableTab({
       title: "users",
       table: "users",
-      connectionId: "conn1",
+      connectionId: "conn1" as ConnectionId,
       // paradigm omitted → legacy "rdb" path
     });
 
@@ -1115,7 +1119,7 @@ describe("TabBar", () => {
             id: "q1" as TabId,
             type: "query",
             title: "find()",
-            connectionId: "conn1",
+            connectionId: "conn1" as ConnectionId,
             closable: true,
             sql: "{ }",
             queryState: { status: "idle" },

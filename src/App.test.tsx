@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { TabId } from "@/types/branded";
+import type { ConnectionId, TabId } from "@/types/branded";
 import {
   seedWorkspace,
   getTestWorkspace,
@@ -69,7 +69,7 @@ function makeTableTab({
     type: "table",
     id: id as TabId,
     title: "users",
-    connectionId: "conn1",
+    connectionId: "conn1" as ConnectionId,
     closable: true,
     schema: "public",
     table: "users",
@@ -86,7 +86,7 @@ function makeQueryTab({
     type: "query",
     id: id as TabId,
     title: "Query 1",
-    connectionId: "conn1",
+    connectionId: "conn1" as ConnectionId,
     closable: true,
     sql: "SELECT 1",
     queryState: { status: "idle" },
@@ -845,7 +845,7 @@ describe("App global shortcuts", () => {
         makeTableTab({
           id: `tab-${i + 1}`,
           table: `t${i + 1}`,
-          connectionId: `conn${i + 1}`,
+          connectionId: `conn${i + 1}` as ConnectionId,
         }),
       );
       useWorkspaceStore.setState(seedWorkspace(fillerTabs, "tab-5"));

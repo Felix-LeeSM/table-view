@@ -26,7 +26,7 @@ updated: 2026-05-02
   `useDataGridEditDocument`. callsite 가 이미 paradigm 알고 있어 façade
   비용 > 가치.
 - **공통 분리 단위**: `PendingChange` / `commit()` / `rollback()` 등 공통
-  인터페이스 type 은 `src/types/dataGridEdit.ts` 로 추출. 두 hook 이 같은
+  인터페이스 type 은 `src/components/datagrid/dataGridEditTypes.ts` 로 추출. 두 hook 이 같은
   shape 노출.
 
 ## A-3. Sub-component 추출 임계 — 2-of-3

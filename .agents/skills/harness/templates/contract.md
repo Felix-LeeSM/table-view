@@ -48,21 +48,16 @@
 
 ## Test Requirements
 
-### Unit Tests (필수)
-- 각 AC 항목에 대응하는 최소 1개 테스트 작성
-- 에러/예외 케이스 최소 1개 테스트 작성
+계약은 test 방식(unit/integration/component)을 강제하지 않는다 — scope/profile 만
+선언한다. Evidence 기준은 sprint 의 `review-profile` 을 따른다. SOT:
+`memory/workflow/tdd/memory.md` (예: `review-profile: code` 는 push 전 RED commit
+evidence 를 요구, non-code profile 은 불요).
 
 ### Coverage Target
 - 커버리지 임계값을 하드코딩하지 않는다. SOT는 `scripts/coverage-ratchet-targets.json`
   (frontend / Rust tier별 statements·lines·functions·branches 목표). ratchet으로
   계속 상승하므로 숫자를 복사하지 말고 SOT를 직접 참조한다.
 - 신규/수정 코드는 해당 tier의 ratchet 목표를 회귀시키지 않는다.
-
-### Scenario Tests (필수)
-- [ ] Happy path
-- [ ] 에러/예외 상황
-- [ ] 경계 조건 (빈 입력, 동시성, 대용량)
-- [ ] 기존 기능 회귀 없음
 
 ## Test Script / Repro Script
 

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { TabId } from "@/types/branded";
+import type { ConnectionId, TabId } from "@/types/branded";
 import {
   getTestWorkspace,
   seedWorkspace,
@@ -295,7 +295,7 @@ describe("useWindowFocusHydration", () => {
         [
           {
             id: "tab-pg-1" as TabId,
-            connectionId: "conn-pg",
+            connectionId: "conn-pg" as ConnectionId,
             title: "public.users",
             type: "table",
             closable: true,
@@ -348,7 +348,7 @@ describe("useWindowFocusHydration", () => {
         [
           {
             id: "tab-pg-1" as TabId,
-            connectionId: "conn-pg",
+            connectionId: "conn-pg" as ConnectionId,
             title: "public.users",
             type: "table",
             closable: true,
@@ -391,7 +391,7 @@ describe("useWindowFocusHydration", () => {
         [
           {
             id: "tab-pg-1" as TabId,
-            connectionId: "conn-pg",
+            connectionId: "conn-pg" as ConnectionId,
             title: "public.users",
             type: "table",
             closable: true,
@@ -453,7 +453,7 @@ describe("useWindowFocusHydration", () => {
         [
           {
             id: "tab-c1" as TabId,
-            connectionId: "c1",
+            connectionId: "c1" as ConnectionId,
             title: "public.users",
             type: "table",
             closable: true,

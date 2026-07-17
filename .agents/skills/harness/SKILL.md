@@ -59,34 +59,7 @@ Spawn a **general-purpose Agent** with the contract task:
 - **Task**: "Given the master spec and sprint {{N}} scope, produce a **Sprint Contract** and **Verification Plan** — a concrete, testable agreement between the Generator and Evaluator for this sprint. Use `.agents/skills/harness/templates/contract.md` as the output shape."
 - **Input**: The sprint scope from the spec (which acceptance criteria belong to this sprint)
 
-The Sprint Contract must contain:
-```markdown
-## Sprint {{N}} Contract
-
-### Scope
-[Which acceptance criteria from the master spec this sprint covers]
-
-### Done Criteria (완료 기준)
-Both Generator and Evaluator agree that this sprint is DONE when:
-1. [Specific, testable criterion]
-2. [Specific, testable criterion]
-...
-
-### Out of Scope
-[What is explicitly NOT part of this sprint — deferred to later sprints]
-
-### Invariants
-[What must not regress or be altered while implementing this sprint]
-
-### Verification Plan
-- Profile: `browser` | `command` | `api` | `static` | `mixed`
-- Required checks:
-  1. [Concrete check]
-  2. [Concrete check]
-- Required evidence:
-  - [What the Generator must return]
-  - [What the Evaluator must cite]
-```
+The Sprint Contract structure is the single source in `.agents/skills/harness/templates/contract.md` — do not restate its section shapes here. It captures: Summary (Goal, Verification Profile), In/Out of Scope, Invariants, **Acceptance Criteria** (testable criteria the Generator and Evaluator agree DONE means), Verification Plan (required checks + evidence), Test Requirements (evidence keyed to the sprint's `review-profile`, not a fixed test recipe), and Exit Criteria.
 
 Select the Verification Plan using this decision order:
 1. Use `browser` when the sprint's acceptance criteria are primarily visible through UI behavior in a running app.
@@ -95,38 +68,7 @@ Select the Verification Plan using this decision order:
 4. Use `static` when the sprint is documentation, configuration, schema, or other non-executable change.
 5. Use `mixed` when no single profile is sufficient. In that case, list browser and non-browser checks separately.
 
-After the contract is written, the orchestrator must normalize it into a **Sprint Execution Brief** for downstream agents using `.agents/skills/harness/templates/execution-brief.md`:
-
-```markdown
-## Sprint Execution Brief
-
-### Objective
-[What to build in this sprint]
-
-### Task Why
-[Why this sprint matters right now]
-
-### Scope Boundary
-[Hard stop lines; what must not change]
-
-### Invariants
-[Preserved behaviors/contracts]
-
-### Done Criteria
-1. [Testable criterion]
-2. [Testable criterion]
-
-### Verification Plan
-- Profile:
-- Required checks:
-- Required evidence:
-
-### Evidence To Return
-- Changed files with purpose
-- Commands/checks run and outcomes
-- Acceptance criteria coverage with evidence
-- Assumptions, risks, unresolved gaps
-```
+After the contract is written, the orchestrator must normalize it into a **Sprint Execution Brief** for downstream agents. Its structure is the single source in `.agents/skills/harness/templates/execution-brief.md` — do not restate it here. It carries: Objective, Task Why, Scope Boundary, Invariants, Done Criteria (the contract's Acceptance Criteria normalized for the Generator/Evaluator), Verification Plan, Evidence To Return, and References.
 
 Persist the contract as `docs/sprints/sprint-{{N}}/contract.md` and the brief as `docs/sprints/sprint-{{N}}/execution-brief.md`.
 

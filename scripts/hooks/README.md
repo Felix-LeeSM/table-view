@@ -43,7 +43,9 @@ Current dispatchers:
 - `check-worktree-bootstrap.sh` — linked-worktree Rust cache guard before Cargo
   pre-commit gates.
 - `check-signed-commits.sh` — pre-push outgoing signed-commit gate.
-- `pre-push-path-router.sh` — path-sensitive pre-push TS/Rust gate router.
+- `pre-push-path-router.sh` — path-sensitive pre-push TS/Rust gate router. Also
+  runs `scripts/check-memory-paths.ts` (reverse code->memory path-citation gate)
+  when memory changes or a push drops/renames a path.
 - `post-tool-use.sh` — post-edit formatter/check dispatcher.
 - `pr-create-reminder.sh` — PostToolUse(Bash) soft 넛지: 명령이 `gh pr create` 를
   포함하면 델리버리 T4(pr-reviewer read-only) 리뷰를 잊지 않도록 additionalContext

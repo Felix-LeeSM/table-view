@@ -164,6 +164,8 @@ assert_contains "$frontend_output" "RUN ts-typecheck:" "frontend-only"
 assert_contains "$frontend_output" "RUN ts-lint:" "frontend-only"
 assert_contains "$frontend_output" "RUN ts-test:" "frontend-only"
 assert_not_contains "$frontend_output" "rust-test-and-coverage" "frontend-only"
+# A pure add with no memory change and no deletion skips the memory-paths gate.
+assert_not_contains "$frontend_output" "RUN memory-paths:" "frontend-only"
 
 fixture_tooling_output="$(run_case fixture-tooling normal scripts/fixtures/dbms-seeds.test.ts)"
 assert_contains "$fixture_tooling_output" "route: frontend=1 rust=0" "fixture tooling"
@@ -344,6 +346,7 @@ memory_output="$(run_case memory normal memory/workflow/example/memory.md)"
 assert_contains "$memory_output" "route: frontend=0 rust=0 hook=0 memory=1 agent=0" "memory"
 assert_contains "$memory_output" "RUN memory-structure:" "memory"
 assert_contains "$memory_output" "RUN memory-size:" "memory"
+assert_contains "$memory_output" "RUN memory-paths:" "memory"
 assert_not_contains "$memory_output" "RUN ts-test:" "memory"
 assert_not_contains "$memory_output" "RUN rust-test-and-coverage:" "memory"
 
@@ -369,5 +372,7 @@ assert_contains "$rename_output" "RUN ts-test:" "rename frontend to docs"
 delete_output="$(run_delete_case delete-frontend public/fixture.txt)"
 assert_contains "$delete_output" "route: frontend=1 rust=0" "delete frontend"
 assert_contains "$delete_output" "RUN ts-test:" "delete frontend"
+# Deleting a path triggers the reverse code->memory citation gate (issue #1032).
+assert_contains "$delete_output" "RUN memory-paths:" "delete frontend"
 
 echo "PASS: pre-push path router smoke check"

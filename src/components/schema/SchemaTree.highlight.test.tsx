@@ -7,7 +7,7 @@
 // (AC-ICON-02..04), and the views/functions count badge mix. Cases are
 // byte-equivalent to the originals.
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { TabId } from "@/types/branded";
+import type { ConnectionId, TabId } from "@/types/branded";
 import {
   seedWorkspace,
   getTestWorkspace,
@@ -332,7 +332,7 @@ describe("SchemaTree — highlight", () => {
             type: "table",
             id: "tab-1" as TabId,
             title: "public.users",
-            connectionId: "conn1",
+            connectionId: "conn1" as ConnectionId,
             closable: true,
             schema: "public",
             table: "users",
@@ -380,7 +380,7 @@ describe("SchemaTree — highlight", () => {
             type: "query",
             id: "query-1" as TabId,
             title: "Query 1",
-            connectionId: "conn1",
+            connectionId: "conn1" as ConnectionId,
             closable: true,
             sql: "SELECT 1",
             queryState: { status: "idle" },
@@ -482,7 +482,7 @@ describe("SchemaTree — highlight", () => {
             type: "table",
             id: "tab-1" as TabId,
             title: "public.users",
-            connectionId: "conn1",
+            connectionId: "conn1" as ConnectionId,
             closable: true,
             schema: "public",
             table: "users",
@@ -509,7 +509,7 @@ describe("SchemaTree — highlight", () => {
               type: "table",
               id: "tab-1" as TabId,
               title: "public.users",
-              connectionId: "conn1",
+              connectionId: "conn1" as ConnectionId,
               closable: true,
               schema: "public",
               table: "users",
@@ -519,7 +519,7 @@ describe("SchemaTree — highlight", () => {
               type: "table",
               id: "tab-2" as TabId,
               title: "public.orders",
-              connectionId: "conn1",
+              connectionId: "conn1" as ConnectionId,
               closable: true,
               schema: "public",
               table: "orders",

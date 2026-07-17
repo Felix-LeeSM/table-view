@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Check, Copy, Loader2 } from "lucide-react";
+import { Check, Copy } from "lucide-react";
 import { useSchemaStore } from "@stores/schemaStore";
 import type { ColumnInfo } from "@/types/schema";
+import { DataGridSkeleton } from "@components/datagrid";
 import { Tabs, TabsList, TabsTrigger } from "@components/ui/tabs";
 import { Button } from "@components/ui/button";
 import { useCopyToClipboard } from "@lib/runtime/useCopyToClipboard";
@@ -111,11 +112,7 @@ export default function ViewStructurePanel({
       )}
 
       {/* Loading */}
-      {loading && (
-        <div className="flex items-center justify-center py-8">
-          <Loader2 className="animate-spin text-muted-foreground" size={24} />
-        </div>
-      )}
+      {loading && <DataGridSkeleton />}
 
       {/* Content */}
       {!loading && !error && activeSubTab === "columns" && (

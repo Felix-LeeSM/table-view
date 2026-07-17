@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import type { TabId } from "@/types/branded";
+import type { ConnectionId, TabId } from "@/types/branded";
 import {
   seedWorkspace,
   getTestWorkspace,
@@ -223,7 +223,7 @@ describe("Sidebar (schemas-only)", () => {
               type: "table",
               id: "tab-x" as TabId,
               title: "x",
-              connectionId: "c2",
+              connectionId: "c2" as ConnectionId,
               closable: true,
               schema: "public",
               table: "users",

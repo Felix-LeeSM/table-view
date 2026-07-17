@@ -11,7 +11,7 @@
 // activation on tab switch).
 
 import { describe, it, expect, beforeEach } from "vitest";
-import type { TabId } from "@/types/branded";
+import type { ConnectionId, TabId } from "@/types/branded";
 import { seedWorkspace } from "@/stores/__tests__/workspaceStoreTestHelpers";
 import { renderHook, act } from "@testing-library/react";
 import { useActiveTabConnection } from "./useActiveTabConnection";
@@ -46,7 +46,7 @@ function makeQueryTab(id: string, connectionId: string): Tab {
   return {
     id: id as TabId,
     type: "query",
-    connectionId,
+    connectionId: connectionId as ConnectionId,
     title: "untitled",
     closable: true,
     sql: "",

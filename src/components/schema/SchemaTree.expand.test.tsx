@@ -4,7 +4,7 @@
 // spinners, auto-expand on mount, and rendering of view/function/
 // procedure rows. Cases are byte-equivalent to the originals.
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { TabId } from "@/types/branded";
+import type { ConnectionId, TabId } from "@/types/branded";
 import {
   seedWorkspace,
   getTestWorkspace,
@@ -554,7 +554,7 @@ describe("SchemaTree — expand", () => {
             type: "table",
             id: "tab-1" as TabId,
             title: "public.users",
-            connectionId: "conn1",
+            connectionId: "conn1" as ConnectionId,
             closable: true,
             schema: "public",
             table: "users",
@@ -597,7 +597,7 @@ describe("SchemaTree — expand", () => {
             type: "table",
             id: "tab-1" as TabId,
             title: "public.users",
-            connectionId: "conn1",
+            connectionId: "conn1" as ConnectionId,
             closable: true,
             schema: "public",
             table: "users",

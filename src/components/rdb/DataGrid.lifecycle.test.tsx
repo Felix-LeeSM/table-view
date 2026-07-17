@@ -157,12 +157,14 @@ describe("DataGrid", () => {
     );
   });
 
-  // 2. Loading state — spinner
-  it("shows spinner while loading", () => {
+  // 2. Loading state — Issue #1058: known-structure grid initial load
+  // (no data yet) previews its shape with a skeleton, not a spinner.
+  it("shows skeleton while loading initial data", () => {
     // Never resolve to keep loading state
     mockQueryTableData.mockReturnValue(new Promise(() => {}));
     renderDataGrid();
-    expect(document.querySelector(".animate-spin")).toBeInTheDocument();
+    expect(document.querySelector(".animate-pulse")).toBeInTheDocument();
+    expect(document.querySelector(".animate-spin")).not.toBeInTheDocument();
   });
 
   // 3. Error state

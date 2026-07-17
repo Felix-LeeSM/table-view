@@ -10,7 +10,7 @@
  * Each `it(...)` name embeds the AC label (AC-142-N) for grep-ability.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { TabId } from "@/types/branded";
+import type { ConnectionId, TabId } from "@/types/branded";
 import { setupTauriMock } from "@/test-utils/tauriMock";
 import {
   seedWorkspace,
@@ -147,7 +147,7 @@ describe("AC-142-*: Connection SoT + Disconnect regression locks", () => {
             type: "table",
             id: "tab-1" as TabId,
             title: "users",
-            connectionId: "c1",
+            connectionId: "c1" as ConnectionId,
             closable: true,
             schema: "public",
             table: "users",
@@ -158,7 +158,7 @@ describe("AC-142-*: Connection SoT + Disconnect regression locks", () => {
             type: "query",
             id: "query-1" as TabId,
             title: "Query 1",
-            connectionId: "c1",
+            connectionId: "c1" as ConnectionId,
             closable: true,
             sql: "SELECT 1",
             queryState: { status: "idle" },
@@ -212,7 +212,7 @@ describe("AC-142-*: Connection SoT + Disconnect regression locks", () => {
             type: "query",
             id: "query-1" as TabId,
             title: "Query 1",
-            connectionId: "c1",
+            connectionId: "c1" as ConnectionId,
             closable: true,
             sql: "SELECT 1",
             queryState: { status: "idle" },

@@ -1,4 +1,5 @@
 import { vi } from "vitest";
+import type { ConnectionId } from "@/types/branded";
 import { formatWorkspaceLabel, getCurrentWindowLabel } from "@lib/window-label";
 import { useConnectionStore } from "../connectionStore";
 import {
@@ -42,20 +43,22 @@ export const DEFAULT_TEST_CONN = "conn1";
 export const DEFAULT_TEST_DB = "db1";
 
 export function makeTableTab(
-  overrides: Partial<Omit<TableTab, "id" | "isPreview">> & {
+  overrides: Partial<Omit<TableTab, "id" | "isPreview" | "connectionId">> & {
     id?: string;
+    connectionId?: string;
     permanent?: boolean;
   },
 ): Omit<TableTab, "id" | "isPreview"> & { permanent?: boolean } {
+  const { connectionId = "conn1", ...rest } = overrides;
   return {
     title: "Test Tab",
-    connectionId: "conn1",
     type: "table",
     closable: true,
     schema: "public",
     table: "users",
     subView: "records" as const,
-    ...overrides,
+    ...rest,
+    connectionId: connectionId as ConnectionId,
   };
 }
 
@@ -275,7 +278,7 @@ export function buildRunningQueryWorkspaceState(
     type: "query",
     id: tabId,
     title: "Query 1",
-    connectionId: connId,
+    connectionId: connId as ConnectionId,
     closable: true,
     sql: "SELECT 1",
     queryState: { status: "running", queryId },

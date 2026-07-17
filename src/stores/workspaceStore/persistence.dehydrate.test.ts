@@ -24,7 +24,7 @@ import {
   STORAGE_KEY,
 } from "./persistence";
 import type { QueryTab, WorkspaceState } from "./types";
-import type { TabId } from "@/types/branded";
+import type { ConnectionId, TabId } from "@/types/branded";
 
 function makeQueryTab({
   id = "q1",
@@ -34,7 +34,7 @@ function makeQueryTab({
     type: "query",
     id: id as TabId,
     title: "Query 1",
-    connectionId: "conn1",
+    connectionId: "conn1" as ConnectionId,
     closable: true,
     sql: "SELECT * FROM users",
     queryState: { status: "idle" },

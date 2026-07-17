@@ -9,7 +9,7 @@
 // localStorage + safe-mode reset). Cases are byte-equivalent to the
 // originals — no behaviour change.
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { TabId } from "@/types/branded";
+import type { ConnectionId, TabId } from "@/types/branded";
 import { setupTauriMock } from "@/test-utils/tauriMock";
 import {
   seedWorkspace,
@@ -582,7 +582,7 @@ describe("QueryTab — document", () => {
       type: "query",
       id: "query-doc" as TabId,
       title: "Mongo",
-      connectionId: "conn1",
+      connectionId: "conn1" as ConnectionId,
       closable: true,
       // Sprint 311 — document Run is parser-driven; the editor must
       // carry a mongosh expression, not a bare JSON literal.

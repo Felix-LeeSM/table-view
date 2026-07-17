@@ -9,7 +9,12 @@
  *
  * Values enter branded types by assertion at their trust boundary only:
  * - `ConnectionId` — asserted once where a connection first materialises in
- *   the renderer (`normalizeConnectionConfig`, the Rust→TS IPC boundary).
+ *   the renderer (`normalizeConnectionConfig`, the Rust→TS IPC boundary) and
+ *   again at the tab-creation boundary (`addTab` / `addQueryTab`), where a
+ *   plain-`string` connection id off component props / DOM events is minted
+ *   into `TableTab.connectionId` / `QueryTab.connectionId`. Every downstream
+ *   tab read (the tab-close purge, the RDB retry path) then flows the brand
+ *   un-cast instead of re-asserting it (issue #1494 follow-up).
  * - `TabId` — asserted once where a tab id is minted (`nextTabId` /
  *   `nextQueryId`). Rust `String` wire types stay unchanged; TS→Rust
  *   serialisation is automatic and needs no unwrap.
