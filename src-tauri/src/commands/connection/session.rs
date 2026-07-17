@@ -15,6 +15,7 @@ use tauri::{Emitter, Manager};
 use tracing::{info, warn};
 
 use super::{make_adapter, AppState};
+use crate::db::ActiveAdapter;
 use crate::error::AppError;
 use crate::models::{ConnectionConfig, ConnectionStatus};
 
@@ -94,6 +95,67 @@ pub async fn get_session_id(state: tauri::State<'_, AppState>) -> Result<String,
         );
     }
     Ok(state.session_id.clone())
+}
+
+/// Issue #1560 — install a freshly *reconnected* adapter for `conn_id` under
+/// the per-connection lifecycle guard, WITHOUT touching `keep_alive_handles`.
+///
+/// The caller is the keep-alive task itself, so aborting/replacing its own
+/// handle would be suicide. Instead the handle's presence is read purely as a
+/// liveness signal: `disconnect` removes it (under the same guard) as the first
+/// step of tearing a connection down. So if the handle is gone by the time we
+/// hold the guard, a concurrent `disconnect` already won — installing now would
+/// resurrect an orphan live adapter under a `Disconnected` status (session
+/// leak + the reconnect↔disconnect race in #1560). In that case the freshly
+/// built `adapter` is `disconnect()`-ed and `false` is returned so the caller
+/// stops instead of emitting `Connected`.
+///
+/// Otherwise the adapter is swapped in, any displaced predecessor is
+/// `disconnect()`-ed (the #1100 leak class the raw `insert` reintroduced on the
+/// reconnect path), the `Connected` status is recorded atomically under the
+/// guard, and `true` is returned. Mirrors `connect`/`install_connection`
+/// (guard held across the map swaps + status transition).
+async fn reconnect_swap(
+    state: &AppState,
+    conn_id: &str,
+    adapter: Arc<ActiveAdapter>,
+    connected_status: ConnectionStatus,
+) -> bool {
+    let _guard = state.connection_guard(conn_id).await;
+
+    let still_registered = state.keep_alive_handles.lock().await.contains_key(conn_id);
+    if !still_registered {
+        if let Err(e) = adapter.lifecycle().disconnect().await {
+            warn!(
+                conn_id = %conn_id,
+                error = %e,
+                "Failed to disconnect reconnect adapter after concurrent disconnect"
+            );
+        }
+        return false;
+    }
+
+    let displaced = state
+        .active_connections
+        .lock()
+        .await
+        .insert(conn_id.to_string(), adapter);
+    if let Some(old) = displaced {
+        if let Err(e) = old.lifecycle().disconnect().await {
+            warn!(
+                conn_id = %conn_id,
+                error = %e,
+                "Failed to disconnect displaced adapter during reconnect"
+            );
+        }
+    }
+
+    state
+        .connection_status
+        .lock()
+        .await
+        .insert(conn_id.to_string(), connected_status);
+    true
 }
 
 /// Background task: periodically ping the connection and auto-reconnect on failure.
@@ -176,10 +238,6 @@ pub(super) async fn keep_alive_loop(
             Ok(()) => {
                 info!(conn_id = %conn_id, "Reconnected successfully");
                 let state = app.state::<AppState>();
-                {
-                    let mut connections = state.active_connections.lock().await;
-                    connections.insert(conn_id.clone(), Arc::new(new_adapter));
-                }
                 // Sprint 364 — reconnect 도 connect 와 동일하게 active_db 를
                 // config.database 로 seed. 빈 문자열일 때만 None.
                 let active_db = if config.database.is_empty() {
@@ -188,9 +246,15 @@ pub(super) async fn keep_alive_loop(
                     Some(config.database.clone())
                 };
                 let connected = ConnectionStatus::Connected { active_db };
+                // Issue #1560 — swap under `connection_guard` so the reconnect
+                // never interleaves with connect/disconnect, and bail out if a
+                // concurrent disconnect already tore this connection down (a
+                // raw `insert` here resurrected an orphan live adapter with a
+                // `Disconnected` status). `reconnect_swap` records the
+                // `Connected` status atomically under the same guard.
+                if !reconnect_swap(&state, &conn_id, Arc::new(new_adapter), connected.clone()).await
                 {
-                    let mut status = state.connection_status.lock().await;
-                    status.insert(conn_id.clone(), connected.clone());
+                    return;
                 }
                 emit_status_change(&app, &conn_id, connected);
                 consecutive_failures = 0;
@@ -313,5 +377,136 @@ mod tests {
         };
         assert_eq!(a, b);
         assert_eq!(a, session);
+    }
+
+    // ---------------------------------------------------------------------
+    // Issue #1560 — keep-alive reconnect must go through `connection_guard`
+    // and never resurrect a torn-down connection. Uses the shared
+    // `StubRdbAdapter` fake to count teardowns without a real DB (same
+    // pattern as `crud::tests::connect_race`).
+    // ---------------------------------------------------------------------
+    mod reconnect_race {
+        use super::*;
+        use crate::db::testing::StubRdbAdapter;
+        use crate::db::ActiveAdapter;
+        use crate::models::ConnectionStatus;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::sync::Arc;
+
+        /// Fake adapter whose `disconnect()` bumps `counter` — lets a test
+        /// assert an adapter was actually torn down (no leaked session).
+        fn counting_adapter(counter: Arc<AtomicUsize>) -> Arc<ActiveAdapter> {
+            let stub = StubRdbAdapter {
+                disconnect_fn: Some(Box::new(move || {
+                    counter.fetch_add(1, Ordering::SeqCst);
+                    Ok(())
+                })),
+                ..StubRdbAdapter::default()
+            };
+            Arc::new(ActiveAdapter::Rdb(Box::new(stub)))
+        }
+
+        fn plain_adapter() -> Arc<ActiveAdapter> {
+            Arc::new(ActiveAdapter::Rdb(Box::new(StubRdbAdapter::default())))
+        }
+
+        fn connected() -> ConnectionStatus {
+            ConnectionStatus::Connected { active_db: None }
+        }
+
+        /// A reconnect that completes *after* `disconnect` already removed the
+        /// keep-alive handle must NOT resurrect the connection: no adapter is
+        /// inserted (no orphan live session) and the freshly built adapter is
+        /// torn down. RED against the pre-fix raw `insert`, which left an
+        /// orphan `active_connections` entry marked `Connected`.
+        #[tokio::test]
+        async fn reconnect_after_disconnect_leaves_no_orphan() {
+            let state = AppState::new();
+            let disconnects = Arc::new(AtomicUsize::new(0));
+
+            // Simulate `disconnect` having already run: under `connection_guard`
+            // it removed the keep-alive handle (the liveness signal) and the
+            // adapter, so both maps are empty for c1.
+            let installed = reconnect_swap(
+                &state,
+                "c1",
+                counting_adapter(disconnects.clone()),
+                connected(),
+            )
+            .await;
+
+            assert!(
+                !installed,
+                "must skip install once the connection was torn down"
+            );
+            assert!(
+                state.active_connections.lock().await.is_empty(),
+                "no orphan live adapter may be resurrected"
+            );
+            assert_eq!(
+                disconnects.load(Ordering::SeqCst),
+                1,
+                "the freshly built reconnect adapter must be disconnect()-ed"
+            );
+            assert!(
+                state.connection_status.lock().await.get("c1").is_none(),
+                "a torn-down connection must not be flipped back to Connected"
+            );
+        }
+
+        /// A normal reconnect (handle still registered) swaps the adapter in,
+        /// `disconnect()`s the displaced predecessor (no session leak), and
+        /// records `Connected` — all under the guard. RED against the raw
+        /// `insert`, which dropped the predecessor without `disconnect()`
+        /// (`disconnects == 0`).
+        #[tokio::test]
+        async fn reconnect_swaps_and_tears_down_predecessor() {
+            let state = AppState::new();
+            let disconnects = Arc::new(AtomicUsize::new(0));
+
+            // A live keep-alive handle for c1 = the connection is still up.
+            let handle = tokio::spawn(std::future::pending::<()>());
+            state
+                .keep_alive_handles
+                .lock()
+                .await
+                .insert("c1".into(), handle);
+            // A live predecessor adapter (whose ping just failed).
+            state
+                .active_connections
+                .lock()
+                .await
+                .insert("c1".into(), counting_adapter(disconnects.clone()));
+
+            let installed = reconnect_swap(&state, "c1", plain_adapter(), connected()).await;
+
+            assert!(
+                installed,
+                "a live connection must accept the reconnected adapter"
+            );
+            assert_eq!(
+                state.active_connections.lock().await.len(),
+                1,
+                "exactly one adapter remains after the swap"
+            );
+            assert_eq!(
+                disconnects.load(Ordering::SeqCst),
+                1,
+                "the displaced predecessor adapter must be disconnect()-ed once"
+            );
+            assert!(
+                matches!(
+                    state.connection_status.lock().await.get("c1"),
+                    Some(ConnectionStatus::Connected { .. })
+                ),
+                "reconnect must record Connected under the guard"
+            );
+
+            // Clean up the pending keep-alive handle spawned above.
+            let leftover = state.keep_alive_handles.lock().await.remove("c1");
+            if let Some(h) = leftover {
+                h.abort();
+            }
+        }
     }
 }
