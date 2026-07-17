@@ -370,6 +370,19 @@ fn is_value(t: &Tok) -> bool {
     )
 }
 
+/// MSSQL pre-hashed password blob: `CREATE LOGIN x WITH PASSWORD = 0x0200AB...
+/// HASHED` stores a SHA-512 hash as a `0x` hex literal, which the tokenizer
+/// classifies as a bareword (digit start) so `is_value` is false (issue
+/// #1551). Restricted to the `0x`/`0X` prefix so an ordinary bareword
+/// right-hand side (`password = column_ref`) is never over-masked.
+fn is_hex_literal(sql: &str, t: &Tok) -> bool {
+    if t.kind != TokKind::Word {
+        return false;
+    }
+    let s = tok_text(sql, t);
+    s.len() >= 3 && (s.starts_with("0x") || s.starts_with("0X"))
+}
+
 /// Subject token of a credential assignment: a bareword or quoted
 /// *identifier* whose text contains `password`/`pwd`/`secret` (the latter
 /// covers MSSQL `CREATE DATABASE SCOPED CREDENTIAL ... SECRET = '...'` —
@@ -481,7 +494,10 @@ fn credential_replacements(sql: &str, toks: &[Tok]) -> Vec<(usize, usize, &'stat
                 // text stored via the mongo error path, 2nd review B2).
                 if is_char(sql, t1, '=') || is_char(sql, t1, ':') {
                     if let Some(t2) = toks.get(i + 2) {
-                        if is_value(t2) {
+                        // `is_hex_literal` covers MSSQL `PASSWORD = 0x... HASHED`
+                        // (issue #1551): a `0x` hex blob the tokenizer sees as a
+                        // bareword. Bare column refs stay unmasked.
+                        if is_value(t2) || is_hex_literal(sql, t2) {
                             repl.push((t2.start, t2.end, SENTINEL));
                             i += 3;
                             continue;
@@ -859,6 +875,37 @@ mod tests {
             redact_credentials("ALTER USER u IDENTIFIED BY newC6 REPLACE oldC6"),
             "ALTER USER u IDENTIFIED BY '***' REPLACE '***'"
         );
+    }
+
+    // Reason: issue #1551 — MSSQL `CREATE LOGIN ... WITH PASSWORD = 0x... HASHED`
+    // stores a pre-hashed SHA-512 password as a `0x` hex blob. The tokenizer
+    // classifies it as a bareword (digit start) so `is_value` was false → the
+    // hash leaked in the `sql` column; the numeric regex's `\b` fails on the
+    // `x` so it leaked in `sql_redacted` too. Both stored columns derive from
+    // `redact_credentials` then `sql_redact`, so masking at the credential
+    // clause closes both paths (2026-07-17).
+    #[test]
+    fn mssql_hashed_hex_password_masked_both_columns() {
+        let sql = "CREATE LOGIN app WITH PASSWORD = 0x0200AB12CD HASHED";
+        // `sql` column path (redact_credentials).
+        let stored = redact_credentials(sql);
+        assert_eq!(stored, "CREATE LOGIN app WITH PASSWORD = '***' HASHED");
+        // `sql_redacted` column path — production chains sql_redact after.
+        let redacted = sql_redact(&stored);
+        assert!(
+            !redacted.contains("0x0200AB12CD"),
+            "hash leaked: {redacted}"
+        );
+        assert!(!redacted.contains("0200AB12CD"), "hash leaked: {redacted}");
+    }
+
+    // Reason: issue #1551 guard — a bareword right-hand side that is a column
+    // reference (`password = other_column`) must NOT be masked; only the `0x`
+    // hex prefix is accepted as a value.
+    #[test]
+    fn password_equals_column_reference_not_masked() {
+        let sql = "UPDATE t SET password = other_column WHERE flag = other_flag";
+        assert_eq!(redact_credentials(sql), sql);
     }
 
     #[test]
