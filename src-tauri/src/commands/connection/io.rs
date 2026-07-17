@@ -82,6 +82,10 @@ pub fn export_connections(ids: Vec<String>) -> Result<String, AppError> {
             let mut p: ConnectionConfigPublic = c.into();
             p.has_password = *presence.get(&c.id).unwrap_or(&false);
             p.database = export_database_name(&p.db_type, &p.database);
+            // #1065 — strip the Oracle wallet path (leaks the home-directory
+            // username / internal topology), mirroring the DuckDB absolute-path
+            // strip above. Import forces the user to re-select the wallet.
+            p.wallet_path = None;
             p
         })
         .collect();
@@ -268,10 +272,18 @@ pub fn import_connections(json: String) -> Result<ImportResult, AppError> {
             replica_set: conn.replica_set.clone(),
             tls_enabled: conn.tls_enabled,
             trust_server_certificate: conn.trust_server_certificate,
+            // #1065 — the connect mode is not a secret, so it round-trips.
+            oracle_use_sid: conn.oracle_use_sid,
+            // Wallet path is stripped on export and never imported — the user
+            // re-selects the wallet after import (parity with the password
+            // re-entry contract). The wallet password is likewise never carried.
+            wallet_path: None,
+            wallet_password: String::new(),
         };
 
-        // Save with explicit empty password (no preserve / no encrypt)
-        storage::save_connection(stored, Some(String::new()))?;
+        // Save with explicit empty password + empty wallet password (no
+        // preserve / no encrypt).
+        storage::save_connection_with_wallet(stored, Some(String::new()), Some(String::new()))?;
         result.imported.push(new_id);
     }
 
@@ -496,6 +508,9 @@ mod tests {
                 replica_set: None,
                 tls_enabled: None,
                 trust_server_certificate: None,
+                oracle_use_sid: None,
+                wallet_path: None,
+                has_wallet_password: false,
             }],
             groups: vec![],
         };
@@ -672,6 +687,9 @@ mod tests {
                 replica_set: None,
                 tls_enabled: None,
                 trust_server_certificate: None,
+                oracle_use_sid: None,
+                wallet_path: None,
+                has_wallet_password: false,
             }],
             groups: vec![],
         };
@@ -714,6 +732,9 @@ mod tests {
                 replica_set: None,
                 tls_enabled: None,
                 trust_server_certificate: None,
+                oracle_use_sid: None,
+                wallet_path: None,
+                has_wallet_password: false,
             }],
             groups: vec![], // group_id refers to nothing
         };
@@ -758,6 +779,9 @@ mod tests {
                 replica_set: None,
                 tls_enabled: None,
                 trust_server_certificate: None,
+                oracle_use_sid: None,
+                wallet_path: None,
+                has_wallet_password: false,
             }],
             groups: vec![ConnectionGroup {
                 id: "g-new".into(),
@@ -843,6 +867,9 @@ mod tests {
                 replica_set: None,
                 tls_enabled: None,
                 trust_server_certificate: None,
+                oracle_use_sid: None,
+                wallet_path: None,
+                has_wallet_password: false,
             }],
             groups: vec![],
         };
@@ -999,6 +1026,9 @@ mod tests {
                 replica_set: None,
                 tls_enabled: None,
                 trust_server_certificate: None,
+                oracle_use_sid: None,
+                wallet_path: None,
+                has_wallet_password: false,
             }],
             groups: vec![],
         };

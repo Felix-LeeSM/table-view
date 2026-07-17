@@ -449,6 +449,9 @@ mod tests {
             replica_set: Some("rs0".into()),
             tls_enabled: Some(true),
             trust_server_certificate: None,
+            oracle_use_sid: None,
+            wallet_path: None,
+            wallet_password: String::new(),
         }
     }
 
@@ -507,6 +510,9 @@ mod tests {
             replica_set: None,
             tls_enabled: None,
             trust_server_certificate: None,
+            oracle_use_sid: None,
+            wallet_path: None,
+            wallet_password: String::new(),
         };
         let opts = MongoAdapter::build_options(&cfg).expect("build_options should succeed");
         assert!(opts.credential.is_none());

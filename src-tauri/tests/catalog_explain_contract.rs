@@ -33,6 +33,9 @@ fn sqlite_config(path: &str) -> ConnectionConfig {
         replica_set: None,
         tls_enabled: None,
         trust_server_certificate: None,
+        oracle_use_sid: None,
+        wallet_path: None,
+        wallet_password: String::new(),
     }
 }
 
@@ -56,6 +59,9 @@ fn duckdb_config(path: &str) -> ConnectionConfig {
         replica_set: None,
         tls_enabled: None,
         trust_server_certificate: None,
+        oracle_use_sid: None,
+        wallet_path: None,
+        wallet_password: String::new(),
     }
 }
 

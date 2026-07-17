@@ -1162,6 +1162,159 @@ async fn test_mysql_stream_table_rows_aborts_when_receiver_drops() {
     adapter.disconnect_pool().await.ok();
 }
 
+/// [AC-1641-04] Vendor-restorable dump round-trip — issue #1641 / #1077
+/// Stage 1. Written 2026-07-17: `export_schema_dump` used to emit ANSI
+/// double-quote identifiers + `::jsonb` casts that a default-`sql_mode`
+/// MySQL rejects, so a MySQL dump was not restorable. This drives the REAL
+/// dump path (`run_schema_dump` → cursor stream → mpsc drain → MySQL INSERT
+/// writer) against live MySQL, restores the emitted SQL back into the same
+/// (emptied) table, and asserts the restored rows equal the source rows
+/// (backslash / single-quote / embedded double-quote / NULL / JSON survive).
+/// A leftover `::jsonb` cast or ANSI identifier would make the restore SQL
+/// fail outright, so a green restore is itself the dialect proof.
+#[tokio::test]
+#[serial_test::serial]
+async fn test_mysql_dump_round_trip_restores_into_mysql() {
+    use std::sync::Arc;
+    use table_view_lib::commands::connection::AppState;
+    use table_view_lib::commands::export::{
+        run_schema_dump, ExportDumpTable, ExportInclude, ExportSchemaDumpOptions,
+    };
+    use table_view_lib::db::row_cap::DEFAULT_ROW_CAP;
+    use table_view_lib::db::ActiveAdapter;
+    use table_view_lib::models::DatabaseType;
+
+    let adapter = match common::setup_mysql_adapter().await {
+        Some(a) => a,
+        None => return,
+    };
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis();
+    let table = format!("test_dump_round_trip_{ts}");
+
+    adapter
+        .execute_query(
+            &format!(
+                "CREATE TABLE {table} \
+                 (id INT PRIMARY KEY, name VARCHAR(255), note TEXT, payload JSON)"
+            ),
+            None,
+            DEFAULT_ROW_CAP,
+        )
+        .await
+        .expect("CREATE");
+
+    // Seed tricky values. Built without `format!` on the value list so the
+    // JSON braces aren't read as format placeholders; `\\\\` in Rust source
+    // is a doubled MySQL backslash → one stored backslash.
+    let mut seed = format!("INSERT INTO {table} (id, name, note, payload) VALUES ");
+    seed.push_str(
+        "(1, 'O''Reilly', 'C:\\\\Users\\\\me', '{\"k\": 1}'), \
+         (2, 'plain', 'has,comma and space', '{\"a\": [1, 2]}'), \
+         (3, 'q\"and\\\\slash', NULL, '{}')",
+    );
+    adapter
+        .execute_query(&seed, None, DEFAULT_ROW_CAP)
+        .await
+        .expect("seed INSERT");
+
+    // Read the source rows (post-MySQL normalization) as JSON-stringified
+    // cells so String/NULL/JSON compare uniformly on both sides.
+    async fn read_all(adapter: &MysqlAdapter, table: &str) -> Vec<Vec<String>> {
+        let result = adapter
+            .execute_query(
+                &format!("SELECT id, name, note, payload FROM {table} ORDER BY id"),
+                None,
+                DEFAULT_ROW_CAP,
+            )
+            .await
+            .expect("SELECT readback");
+        result
+            .rows
+            .iter()
+            .map(|row| row.iter().map(|cell| cell.to_string()).collect())
+            .collect()
+    }
+    let source_rows = read_all(&adapter, &table).await;
+    assert_eq!(source_rows.len(), 3, "seed should have 3 rows");
+
+    // Drive the real dump through AppState with a MySQL dialect.
+    let state = AppState::new();
+    {
+        let mut active = state.active_connections.lock().await;
+        active.insert(
+            "dump-conn".into(),
+            Arc::new(ActiveAdapter::Rdb(Box::new(adapter.clone()))),
+        );
+    }
+    let dir = tempfile::TempDir::new().unwrap();
+    let dump_path = dir.path().join("mysql_dump.sql");
+    let summary = run_schema_dump(
+        &state,
+        "dump-conn",
+        &dump_path,
+        "",
+        "",
+        &[ExportDumpTable {
+            schema: MYSQL_SCHEMA.to_string(),
+            table: table.clone(),
+            column_names: vec!["id".into(), "name".into(), "note".into(), "payload".into()],
+        }],
+        &ExportSchemaDumpOptions {
+            include: ExportInclude::Dml,
+            batch_size: 100,
+            dialect: DatabaseType::Mysql,
+        },
+        None,
+    )
+    .await
+    .expect("dump");
+    assert_eq!(summary.rows_written, 3);
+
+    let dump_sql = std::fs::read_to_string(&dump_path).unwrap();
+    // Dialect proof: backtick identifiers, no ANSI quotes, no PG jsonb cast.
+    assert!(
+        dump_sql.contains(&format!("INSERT INTO `{MYSQL_SCHEMA}`.`{table}`")),
+        "dump missing backtick INSERT: {dump_sql}"
+    );
+    assert!(!dump_sql.contains("::jsonb"), "dump leaked PG jsonb cast");
+    assert!(
+        !dump_sql.contains(&format!(r#""{table}""#)),
+        "dump leaked ANSI double-quote identifier"
+    );
+
+    // Restore: empty the table, replay each dumped INSERT statement.
+    adapter
+        .execute_query(&format!("DELETE FROM {table}"), None, DEFAULT_ROW_CAP)
+        .await
+        .expect("DELETE");
+    let mut restored = 0_u64;
+    for line in dump_sql.lines() {
+        if line.starts_with("INSERT INTO") {
+            adapter
+                .execute_query(line, None, DEFAULT_ROW_CAP)
+                .await
+                .unwrap_or_else(|e| panic!("restore failed on `{line}`: {e:?}"));
+            restored += 1;
+        }
+    }
+    assert_eq!(restored, 3, "should replay 3 INSERT statements");
+
+    let restored_rows = read_all(&adapter, &table).await;
+    assert_eq!(
+        restored_rows, source_rows,
+        "restored rows must byte-match source after MySQL round-trip"
+    );
+
+    adapter
+        .execute_query(&format!("DROP TABLE {table}"), None, DEFAULT_ROW_CAP)
+        .await
+        .ok();
+    adapter.disconnect_pool().await.ok();
+}
+
 // =============================================================================
 // Batch 3 (Slice B-2) — query_table_data filter / raw_where / pagination
 // =============================================================================

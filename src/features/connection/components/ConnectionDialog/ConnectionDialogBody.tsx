@@ -65,6 +65,12 @@ export interface ConnectionDialogBodyProps {
   hadPassword: boolean;
   clearPassword: boolean;
   setClearPassword: React.Dispatch<React.SetStateAction<boolean>>;
+  // #1065 — Oracle wallet password (consumed only by OracleFormFields).
+  walletPasswordInput: string;
+  setWalletPasswordInput: React.Dispatch<React.SetStateAction<string>>;
+  hadWalletPassword: boolean;
+  clearWalletPassword: boolean;
+  setClearWalletPassword: React.Dispatch<React.SetStateAction<boolean>>;
   inputClass: string;
   labelClass: string;
   /** Issue #1135 — field flagged by the last failed save, or `null`. */
@@ -102,6 +108,11 @@ export default function ConnectionDialogBody({
   hadPassword,
   clearPassword,
   setClearPassword,
+  walletPasswordInput,
+  setWalletPasswordInput,
+  hadWalletPassword,
+  clearWalletPassword,
+  setClearWalletPassword,
   inputClass,
   labelClass,
   invalidField,
@@ -159,6 +170,11 @@ export default function ConnectionDialogBody({
                 draft={form}
                 onChange={onChange}
                 {...sharedAuth}
+                walletPasswordInput={walletPasswordInput}
+                setWalletPasswordInput={setWalletPasswordInput}
+                hadWalletPassword={hadWalletPassword}
+                clearWalletPassword={clearWalletPassword}
+                setClearWalletPassword={setClearWalletPassword}
               />
             );
           case "elasticsearch":

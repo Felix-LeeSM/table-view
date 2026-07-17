@@ -20,11 +20,15 @@ export async function saveConnection(
   draft: ConnectionDraft,
   isNew: boolean,
 ): Promise<ConnectionConfig> {
-  const { password, ...connection } = draft;
+  // `walletPassword` (#1065) has its own three-way semantics like `password`
+  // and, like it, is split out of the connection body so the plaintext is
+  // never folded into the persisted config shape.
+  const { password, walletPassword, ...connection } = draft;
   const saved = await invoke<unknown>("save_connection", {
     req: {
       connection: { ...connection, hasPassword: false },
       password,
+      wallet_password: walletPassword,
       is_new: isNew,
     },
   });
@@ -44,11 +48,12 @@ export async function testConnection(
   draft: ConnectionDraft,
   existingId: string | null = null,
 ): Promise<string> {
-  const { password, ...rest } = draft;
+  const { password, walletPassword, ...rest } = draft;
   return invoke<string>("test_connection", {
     req: {
       config: { ...rest, hasPassword: false },
       password,
+      wallet_password: walletPassword,
       existing_id: existingId,
     },
   });
