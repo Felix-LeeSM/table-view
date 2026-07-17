@@ -143,7 +143,10 @@ export default function DocumentGridRows({
                   editState.editingCell?.row === rowIdx &&
                   editState.editingCell?.col === colIdx;
                 // Issue #1174 — index-keyed hit only counts when the row now
-                // at this index still matches the edit-time anchor.
+                // at this index still matches the edit-time anchor. The raw
+                // `anchorMatches` is broken out (not folded into
+                // `isPendingEditActive`) because `NestedCellToggle` below
+                // consumes it directly as the nested-edit anchor gate.
                 const anchorMatches = pendingEditAnchorMatches(
                   key,
                   currentRowIdentity,

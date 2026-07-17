@@ -38,6 +38,7 @@ export {
   deriveEditorSeed,
   editKey,
   getInputTypeForColumn,
+  isPendingEditActive,
   pendingEditAnchorMatches,
   rowIdentityKey,
   rowKeyFn,

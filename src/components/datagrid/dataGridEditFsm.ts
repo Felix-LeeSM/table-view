@@ -59,6 +59,35 @@ export function pendingEditAnchorMatches(
 }
 
 /**
+ * Issue #1616 (B3) — "is there a top-level pending edit ACTIVE at `cellKey`
+ * for the row now at this visual index?" Combines the two-part check that was
+ * copy-pasted across every grid cell renderer (RDB `DataRow`, Mongo
+ * `DocumentGridRows`, and `DocumentDataGrid`'s edit-seed path): a pending entry
+ * must EXIST for the key AND its edit-time row anchor must still match the
+ * current row (else pagination / sort / filter drifted a different row into
+ * this index and the overlay would light up the wrong cell — #1174). Centralised
+ * so the existence probe and the anchor gate can never fall out of step between
+ * the two grid implementations.
+ */
+export function isPendingEditActive(
+  cellKey: string,
+  currentRowIdentity: string,
+  columns: ReadonlyArray<{ is_primary_key: boolean }>,
+  pendingEdits: ReadonlyMap<string, string | null> | undefined,
+  editRowSnapshots: ReadonlyMap<string, ReadonlyArray<unknown>> | undefined,
+): boolean {
+  return (
+    !!pendingEdits?.has(cellKey) &&
+    pendingEditAnchorMatches(
+      cellKey,
+      currentRowIdentity,
+      columns,
+      editRowSnapshots,
+    )
+  );
+}
+
+/**
  * Determine the HTML input type for a given column data type.
  */
 export function getInputTypeForColumn(dataType: string): string {

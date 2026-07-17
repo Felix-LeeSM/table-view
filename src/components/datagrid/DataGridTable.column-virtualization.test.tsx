@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import DataGridTable from "./DataGridTable";
 import type { TableData } from "@/types/schema";
 
@@ -152,6 +152,39 @@ describe("DataGridTable column virtualization (#1446 AC1)", () => {
     );
     expect(editingCell).not.toBeNull();
     expect(editingCell!.getAttribute("data-editing")).toBe("true");
+  });
+
+  // Reason: #1616 B2 — the editing-column force-include is pinned above, but
+  // the roving-focus force-include (`set.add(focusVisualCol)`) had NO test, so
+  // keyboard nav to an off-window column could silently stop rendering a cell
+  // there and drop the arrow-key landing target. This exercises that branch
+  // directly: End moves roving focus to the last column, which lives far
+  // outside the horizontal scroll window. (2026-07-17)
+  it("force-includes the roving-focus column when keyboard nav lands outside the window (#1616 B2)", () => {
+    render(<DataGridTable {...makeProps()} />);
+    const initialRow = screen.getAllByRole("row")[1]!;
+    // Precondition: the last column is NOT in the initial scroll window.
+    expect(
+      initialRow.querySelector('[role="gridcell"][aria-colindex="200"]'),
+    ).toBeNull();
+
+    // The initial roving anchor (row 0, col 0) is the grid's sole tab stop.
+    const anchor = initialRow.querySelector<HTMLElement>(
+      '[data-grid-row="0"][data-grid-col="0"]',
+    );
+    expect(anchor).not.toBeNull();
+    anchor!.focus();
+    // End -> roving focus jumps to the last visual column (col 199). The
+    // force-include must keep that cell mounted even though the horizontal
+    // scroll window still shows only the left-most columns.
+    fireEvent.keyDown(anchor!, { key: "End" });
+
+    const lastCell = screen
+      .getAllByRole("row")[1]!
+      .querySelector('[role="gridcell"][aria-colindex="200"]');
+    expect(lastCell).not.toBeNull();
+    // And it carries the roving tab stop so arrow-key nav has a real target.
+    expect(lastCell!.getAttribute("tabindex")).toBe("0");
   });
 });
 

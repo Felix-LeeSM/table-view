@@ -12,6 +12,7 @@ import {
   cellToEditValue,
   deriveEditorSeed,
   getInputTypeForColumn,
+  isPendingEditActive,
   pendingEditAnchorMatches,
   rowIdentityKey,
 } from "../dataGridEditFsm";
@@ -227,15 +228,15 @@ function DataRow({
     const isEditing = editCol === dIdx;
     // Issue #1174 — index-keyed hit must also pass the row-identity
     // anchor so a pending edit doesn't paint on a different row that
-    // paginated / sorted / filtered into this index.
-    const hasPendingEdit =
-      !!pendingEdits?.has(key) &&
-      pendingEditAnchorMatches(
-        key,
-        currentRowIdentity,
-        data.columns,
-        pendingEditRowSnapshots,
-      );
+    // paginated / sorted / filtered into this index. #1616 (B3) — the
+    // existence + anchor pairing is centralised in `isPendingEditActive`.
+    const hasPendingEdit = isPendingEditActive(
+      key,
+      currentRowIdentity,
+      data.columns,
+      pendingEdits,
+      pendingEditRowSnapshots,
+    );
     const cellEditValue = cellToEditValue(cell);
     const pendingValue: string | null = hasPendingEdit
       ? (pendingEdits!.get(key) as string | null)
