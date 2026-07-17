@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { DocumentTreePanel } from "./DocumentTreePanel";
 
@@ -79,7 +79,17 @@ describe("DocumentTreePanel roving tabindex", () => {
   });
 
   it("Enter on a leaf row opens its inline editor", async () => {
-    renderPanel();
+    // #1445 (2026-07-17) — the inline editor is edit-mode only, so this
+    // roving-Enter→editor invariant requires a commit handler after the
+    // read-only gate. Read-only leaf-edit gating lives in
+    // DocumentTreePanel.test.tsx.
+    render(
+      <DocumentTreePanel
+        value={VALUE}
+        fieldName="profile"
+        onCommitEdit={vi.fn()}
+      />,
+    );
     const leaf = screen.getByTestId("tree-node-glossary.title");
     act(() => leaf.focus());
 

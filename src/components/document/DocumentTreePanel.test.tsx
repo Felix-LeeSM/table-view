@@ -163,6 +163,49 @@ describe("DocumentTreePanel", () => {
     ).not.toBeInTheDocument();
   });
 
+  // #1445 KV JSON tree Phase 1 (2026-07-17) — read-only gate. When the panel is
+  // reused as a read-only viewer (no onCommitEdit — the KV JSON tree case), a
+  // leaf click must NOT open the inline editor: the editor's commit is a no-op
+  // there, so an input that opens only to swallow edits is a dead-end. The
+  // shared startEdit entry point is gated on onCommitEdit.
+  it("does not open a leaf editor when onCommitEdit is absent (read-only)", async () => {
+    const user = userEvent.setup();
+    render(<DocumentTreePanel value={VALUE} fieldName="profile" />);
+    // Baseline: the search box is the only textbox before any interaction.
+    expect(screen.getAllByRole("textbox")).toHaveLength(1);
+    await user.click(
+      screen.getByTestId("tree-leaf-glossary.GlossDiv.GlossList.GlossEntry.ID"),
+    );
+    // No editor opened → still just the search box, no `tree-edit-*` input.
+    expect(screen.getAllByRole("textbox")).toHaveLength(1);
+    expect(
+      screen.queryByTestId(
+        "tree-edit-glossary.GlossDiv.GlossList.GlossEntry.ID",
+      ),
+    ).not.toBeInTheDocument();
+  });
+
+  // #1445 (2026-07-17) — Mongo regression guard: with onCommitEdit the editor
+  // still opens on a leaf click (the invariant the read-only gate must not break).
+  it("opens the leaf editor when onCommitEdit is provided", async () => {
+    const user = userEvent.setup();
+    render(
+      <DocumentTreePanel
+        value={VALUE}
+        fieldName="profile"
+        onCommitEdit={vi.fn()}
+      />,
+    );
+    await user.click(
+      screen.getByTestId("tree-leaf-glossary.GlossDiv.GlossList.GlossEntry.ID"),
+    );
+    // The leaf editor input mounts alongside the search box.
+    expect(screen.getAllByRole("textbox")).toHaveLength(2);
+    expect(
+      screen.getByTestId("tree-edit-glossary.GlossDiv.GlossList.GlossEntry.ID"),
+    ).toBeInTheDocument();
+  });
+
   // Sprint 342 V2 (2026-05-15) — BSON wrappers now open the type-aware
   // BsonTypeEditor instead of being read-only. Commits are normalized
   // back to a __bson__: wrapper at the grid layer (tagBsonWrapper round-

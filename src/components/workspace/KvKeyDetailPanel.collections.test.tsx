@@ -8,8 +8,9 @@ import type { KvKeyType, KvValue, KvValueEnvelope } from "@/types/kv";
 
 // Purpose: Redis collection types (hash/list/set/zSet) render as structured
 // tables in the KV key detail panel instead of the degraded flattened <pre>
-// body (#1465, read-only axis of #1415, 2026-07-11). string/json keep the raw
-// body.
+// body (#1465, read-only axis of #1415, 2026-07-11). Non-JSON strings keep the
+// raw body; JSON objects/arrays (native json + JSON-in-string) render as an
+// interactive tree (KV JSON tree Phase 1, 2026-07-17).
 
 const invokeMock = vi.fn();
 
@@ -248,15 +249,20 @@ describe("KvKeyDetailPanel collection rendering", () => {
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
   });
 
-  // Reason: json keys must keep the pretty-printed body (regression guard).
-  it("keeps the pretty-printed body render for json values", async () => {
+  // Reason: json object keys render as an interactive JSON tree, not the raw
+  // <pre> body — the routing bug that leaked native ReJSON to raw text is fixed
+  // (KV JSON tree Phase 1, 2026-07-17). Branch coverage: KvValueBody.test.tsx.
+  it("renders a json object value as a JSON tree", async () => {
     invokeMock.mockResolvedValue(
       envelope("json", { type: "json", value: { plan: "pro" } }),
     );
 
     renderPanel();
 
-    expect(await screen.findByText(/"plan": "pro"/)).toBeInTheDocument();
+    expect(
+      await screen.findByTestId("document-tree-panel"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("plan")).toBeInTheDocument();
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
   });
 });
