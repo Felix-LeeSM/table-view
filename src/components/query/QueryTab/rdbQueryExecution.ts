@@ -308,7 +308,7 @@ export async function executeRdbSingleStatement({
               label: "Retry",
               onClick: () => {
                 const live = findLiveIdleTab(
-                  capturedConnectionId as ConnectionId,
+                  capturedConnectionId,
                   capturedTabId,
                 );
                 if (!live) return;
@@ -411,7 +411,7 @@ export async function executeRdbStatementBatch({
                 label: "Retry",
                 onClick: () => {
                   const live = findLiveIdleTab(
-                    capturedConnectionId as ConnectionId,
+                    capturedConnectionId,
                     capturedTabId,
                   );
                   if (!live) return;

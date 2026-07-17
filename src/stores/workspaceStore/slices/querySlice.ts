@@ -1,3 +1,4 @@
+import type { ConnectionId } from "@/types/branded";
 import type { Paradigm } from "@/types/connection";
 import type { QueryState } from "@/types/query";
 import type {
@@ -106,7 +107,10 @@ export function createQuerySlice(
             type: "query" as const,
             id,
             title: opts.title ?? title,
-            connectionId: connId,
+            // Mint `ConnectionId` once at this tab-creation boundary (`connId`
+            // arrives as a plain-`string` action arg); every downstream
+            // `QueryTab` read then flows the brand un-cast.
+            connectionId: connId as ConnectionId,
             closable: true,
             sql: opts.sql ?? "",
             queryState: { status: "idle" } as QueryState,

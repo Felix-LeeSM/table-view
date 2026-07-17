@@ -3,6 +3,7 @@ import { rawEntryKey } from "@stores/rawQueryGridEditStore";
 import { entryKey } from "@stores/dataGridEditStore";
 import type { ExecuteRdbSingleStatementRequest } from "@components/query/QueryTab/rdbQueryExecution";
 import type { InlineFkPopoverProps } from "@components/schema/CreateTableDialog/InlineFkPopover";
+import type { QueryTab, TableTab } from "@stores/workspaceStore";
 import type {
   ConnectionId,
   DatabaseName,
@@ -100,5 +101,45 @@ describe("branded SchemaName / TableName FK picker order safety", () => {
     // @ts-expect-error swapped (table, schema) order must not compile
     onTablePicked(table, schema);
     expect(true).toBe(true);
+  });
+});
+
+/**
+ * Type-level regression for issue #1494 follow-up (PR #1498/#1511 review).
+ * `TableTab.connectionId` / `QueryTab.connectionId` are now `ConnectionId`, so
+ * a plain `string` can no longer be written into a tab's connection id — the
+ * value must be minted at the tab-creation boundary. Same live-directive
+ * discipline as above: before branding these fields were plain `string`, so the
+ * literals below type-checked and the `@ts-expect-error` directives were unused
+ * (`tsc --noEmit` fails, the RED). After branding they are genuine compile
+ * errors and the directives become live.
+ */
+describe("branded ConnectionId TableTab/QueryTab.connectionId safety", () => {
+  it("rejects a plain-string connectionId on a TableTab", () => {
+    const tab: TableTab = {
+      type: "table",
+      id: "t1" as TabId,
+      title: "public.users",
+      // @ts-expect-error plain string is not assignable to branded ConnectionId
+      connectionId: "conn-1",
+      closable: true,
+      subView: "records",
+    };
+    expect(tab.connectionId).toBe("conn-1");
+  });
+
+  it("rejects a plain-string connectionId on a QueryTab", () => {
+    const tab: QueryTab = {
+      type: "query",
+      id: "q1" as TabId,
+      title: "Query",
+      // @ts-expect-error plain string is not assignable to branded ConnectionId
+      connectionId: "conn-1",
+      closable: true,
+      sql: "",
+      queryState: { status: "idle" },
+      paradigm: "rdb",
+    };
+    expect(tab.connectionId).toBe("conn-1");
   });
 });

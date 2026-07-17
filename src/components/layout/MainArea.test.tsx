@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { TabId } from "@/types/branded";
+import type { ConnectionId, TabId } from "@/types/branded";
 import {
   seedWorkspace,
   getTestWorkspace,
@@ -217,13 +217,17 @@ vi.mock("@components/document/MongoStructurePanel", () => ({
 
 function makeTableTab({
   id = "tab-1",
+  connectionId = "conn1",
   ...overrides
-}: Partial<Omit<TableTab, "id">> & { id?: string } = {}): TableTab {
+}: Partial<Omit<TableTab, "id" | "connectionId">> & {
+  id?: string;
+  connectionId?: string;
+} = {}): TableTab {
   return {
     type: "table",
     id: id as TabId,
     title: "users",
-    connectionId: "conn1",
+    connectionId: connectionId as ConnectionId,
     closable: true,
     schema: "public",
     table: "users",
@@ -237,13 +241,17 @@ function makeTableTab({
 // `schema` / `table`.
 function makeDocumentTab({
   id = "doc-tab-1",
+  connectionId = "mongo1",
   ...overrides
-}: Partial<Omit<TableTab, "id">> & { id?: string } = {}): TableTab {
+}: Partial<Omit<TableTab, "id" | "connectionId">> & {
+  id?: string;
+  connectionId?: string;
+} = {}): TableTab {
   return {
     type: "table",
     id: id as TabId,
     title: "users",
-    connectionId: "mongo1",
+    connectionId: connectionId as ConnectionId,
     closable: true,
     database: "app",
     collection: "users",
@@ -255,13 +263,17 @@ function makeDocumentTab({
 
 function makeQueryTab({
   id = "query-1",
+  connectionId = "conn1",
   ...overrides
-}: Partial<Omit<QueryTabType, "id">> & { id?: string } = {}): QueryTabType {
+}: Partial<Omit<QueryTabType, "id" | "connectionId">> & {
+  id?: string;
+  connectionId?: string;
+} = {}): QueryTabType {
   return {
     type: "query",
     id: id as TabId,
     title: "Query 1",
-    connectionId: "conn1",
+    connectionId: connectionId as ConnectionId,
     closable: true,
     sql: "SELECT 1",
     queryState: { status: "idle" },

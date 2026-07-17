@@ -54,7 +54,14 @@ export function createTabSlice(set: WorkspaceSet, get: WorkspaceGet): TabSlice {
       const isRdb = (init.paradigm ?? "rdb") === "rdb";
       const db = init.database ?? (isRdb ? resolveActiveDb(connId) : "");
       const { permanent, ...rest } = init;
-      const tabFields = { ...rest, database: db };
+      // Mint `ConnectionId` once here (callers pass a plain-`string` id off
+      // component props / DOM events); every downstream `TableTab` read then
+      // flows the brand un-cast — no re-assertion at the tab-close purge.
+      const tabFields = {
+        ...rest,
+        connectionId: rest.connectionId as ConnectionId,
+        database: db,
+      };
       set((state) => {
         const next = withWorkspace(state, connId, db, (ws) => {
           // Issue #1096 — dedup on the same 4-axis key removeTab uses
@@ -173,10 +180,11 @@ export function createTabSlice(set: WorkspaceSet, get: WorkspaceGet): TabSlice {
         const closingSchema = closingTab.schema;
         const closingTable = closingTab.table;
         if (closingDatabase && closingSchema && closingTable) {
-          // Brand each axis once here (values were read off a `TableTab`, all
-          // plain `string`); `entryKey`'s branded params then reject a swap.
+          // `closingTab.connectionId` is already `ConnectionId` (minted at
+          // tab creation); brand only the db/schema/table axes here so
+          // `entryKey`'s branded params reject a positional swap.
           const key = makeDataGridEditKey(
-            closingTab.connectionId as ConnectionId,
+            closingTab.connectionId,
             closingDatabase as DatabaseName,
             closingSchema as SchemaName,
             closingTable as TableName,
@@ -203,10 +211,7 @@ export function createTabSlice(set: WorkspaceSet, get: WorkspaceGet): TabSlice {
         useRawQueryGridEditStore
           .getState()
           .purgeKey(
-            makeRawQueryGridEditKey(
-              closingTab.connectionId as ConnectionId,
-              closingTab.id,
-            ),
+            makeRawQueryGridEditKey(closingTab.connectionId, closingTab.id),
           );
       }
     },

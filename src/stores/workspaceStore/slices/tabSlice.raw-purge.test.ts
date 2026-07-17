@@ -24,7 +24,7 @@ function makeQueryTab({
     type: "query",
     id: id as TabId,
     title: "Query 1",
-    connectionId: "conn1",
+    connectionId: "conn1" as ConnectionId,
     closable: true,
     sql: "SELECT 1",
     queryState: { status: "idle" },
@@ -63,7 +63,10 @@ describe("tabSlice — Issue #1102 rawQueryGridEditStore purge wiring", () => {
   });
 
   it("removeTab purges the closing query tab's raw pending entry", () => {
-    const tab = makeQueryTab({ id: "q1", connectionId: "conn1" });
+    const tab = makeQueryTab({
+      id: "q1",
+      connectionId: "conn1" as ConnectionId,
+    });
     useWorkspaceStore.setState({
       workspaces: {
         conn1: { db1: makeWorkspace({ tabs: [tab], activeTabId: "q1" }) },

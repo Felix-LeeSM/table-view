@@ -12,7 +12,7 @@
  * fails here (guards the #1190-class shape mismatch).
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { TabId } from "@/types/branded";
+import type { ConnectionId, TabId } from "@/types/branded";
 import { invoke } from "@tauri-apps/api/core";
 import { toast } from "@lib/runtime/toast";
 import { persistWorkspaces, type WorkspacesShape } from "./persistence";
@@ -59,7 +59,7 @@ describe("persistWorkspaces — persist_workspace IPC (#1091)", () => {
               type: "table",
               id: "tab-1" as TabId,
               title: "users",
-              connectionId: "conn1",
+              connectionId: "conn1" as ConnectionId,
               closable: true,
               schema: "public",
               table: "users",
@@ -88,7 +88,7 @@ describe("persistWorkspaces — persist_workspace IPC (#1091)", () => {
     const req = firstReq();
     // camelCase keys mirroring PersistWorkspaceRequest (serde rename_all).
     expect(req).toMatchObject({
-      connectionId: "conn1",
+      connectionId: "conn1" as ConnectionId,
       dbName: "dbA",
       activeTabId: "tab-1",
     });
@@ -122,7 +122,7 @@ describe("persistWorkspaces — persist_workspace IPC (#1091)", () => {
               type: "query",
               id: "query-1" as TabId,
               title: "Query 1",
-              connectionId: "conn1",
+              connectionId: "conn1" as ConnectionId,
               closable: true,
               sql: "SELECT 1",
               queryState: { status: "running", queryId: "q-run" },

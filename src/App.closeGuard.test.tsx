@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import type { TabId } from "@/types/branded";
+import type { ConnectionId, TabId } from "@/types/branded";
 import { render, fireEvent, act, screen } from "@testing-library/react";
 import App from "./App";
 import {
@@ -52,7 +52,7 @@ function makeTableTab(overrides: Partial<TableTab> = {}): TableTab {
     type: "table",
     id: "tab-1" as TabId,
     title: "users",
-    connectionId: "conn1",
+    connectionId: "conn1" as ConnectionId,
     closable: true,
     schema: "public",
     table: "users",

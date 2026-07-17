@@ -5,7 +5,7 @@ import {
   executeRdbStatementBatch,
 } from "./rdbQueryExecution";
 import type { SafeModeDecision } from "@/lib/safeMode";
-import type { TabId } from "@/types/branded";
+import type { ConnectionId, TabId } from "@/types/branded";
 
 const executeQueryMock = vi.hoisted(() => vi.fn());
 const executeQueryDryRunMock = vi.hoisted(() => vi.fn());
@@ -31,7 +31,7 @@ vi.mock("./queryHelpers", () => ({
 
 const tab = {
   id: "query-rdb" as TabId,
-  connectionId: "conn-rdb",
+  connectionId: "conn-rdb" as ConnectionId,
   paradigm: "rdb" as const,
   sql: "SELECT 1",
   queryState: { status: "idle" as const },

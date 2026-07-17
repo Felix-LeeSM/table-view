@@ -25,7 +25,7 @@ import {
   afterEach,
   type Mock,
 } from "vitest";
-import type { TabId } from "@/types/branded";
+import type { ConnectionId, TabId } from "@/types/branded";
 import { setupTauriMock } from "@/test-utils/tauriMock";
 import {
   seedWorkspace,
@@ -313,7 +313,7 @@ describe("AC-156-*: Connection activation diagnostic", () => {
           {
             id: "tab-a1" as TabId,
             title: "public.users",
-            connectionId: "c1",
+            connectionId: "c1" as ConnectionId,
             type: "table",
             closable: true,
             schema: "public",

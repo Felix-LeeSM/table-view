@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { QueryResult } from "@/types/query";
-import type { TabId } from "@/types/branded";
+import type { ConnectionId, TabId } from "@/types/branded";
 import {
   analyzeKvCommandSafety,
   executeKvCommandNow,
@@ -23,7 +23,7 @@ const REDIS_RESULT: QueryResult = {
 
 const tab = {
   id: "query-redis" as TabId,
-  connectionId: "conn-redis",
+  connectionId: "conn-redis" as ConnectionId,
 };
 
 function createActions() {

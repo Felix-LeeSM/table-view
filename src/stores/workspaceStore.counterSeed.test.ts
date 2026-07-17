@@ -18,14 +18,14 @@ import {
 } from "./__tests__/workspaceStoreTestHelpers";
 import { STORAGE_KEY } from "./workspaceStore/persistence";
 import type { TableTab, QueryTab } from "./workspaceStore/types";
-import type { TabId } from "@/types/branded";
+import type { ConnectionId, TabId } from "@/types/branded";
 
 function makeTableTab(id: string): TableTab {
   return {
     type: "table",
     id: id as TabId,
     title: id,
-    connectionId: "conn1",
+    connectionId: "conn1" as ConnectionId,
     closable: true,
     schema: "public",
     table: "users",
@@ -39,7 +39,7 @@ function makeQueryTab(id: string): QueryTab {
     type: "query",
     id: id as TabId,
     title: id,
-    connectionId: "conn1",
+    connectionId: "conn1" as ConnectionId,
     closable: true,
     sql: "SELECT 1",
     queryState: { status: "idle" as const },
@@ -91,7 +91,7 @@ describe("workspaceStore — counter seed (M-2 fix)", () => {
     useWorkspaceStore.getState().addTab("conn1", {
       type: "table",
       title: "fresh",
-      connectionId: "conn1",
+      connectionId: "conn1" as ConnectionId,
       closable: true,
       schema: "public",
       table: "fresh",
@@ -114,7 +114,7 @@ describe("workspaceStore — counter seed (M-2 fix)", () => {
     useWorkspaceStore.getState().addTab("conn1", {
       type: "table",
       title: "users",
-      connectionId: "conn1",
+      connectionId: "conn1" as ConnectionId,
       closable: true,
       schema: "public",
       table: "users",
@@ -165,7 +165,7 @@ describe("workspaceStore — counter seed (M-2 fix)", () => {
     useWorkspaceStore.getState().addTab("conn1", {
       type: "table",
       title: "fresh",
-      connectionId: "conn1",
+      connectionId: "conn1" as ConnectionId,
       closable: true,
       schema: "public",
       table: "fresh",
