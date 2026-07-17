@@ -180,10 +180,12 @@ async fn plan_search_delete_by_query_inner(
 
 #[tauri::command]
 pub async fn plan_search_delete_by_query(
+    window: tauri::Window,
     state: tauri::State<'_, AppState>,
     connection_id: String,
     request: SearchDeleteByQueryRequest,
 ) -> Result<SearchDestructiveOperationPlan, AppError> {
+    crate::commands::guard::guard_not_launcher(window.label())?;
     plan_search_delete_by_query_inner(state.inner(), &connection_id, request).await
 }
 
@@ -211,6 +213,7 @@ async fn execute_search_delete_by_query_inner(
 
 #[tauri::command]
 pub async fn execute_search_delete_by_query(
+    window: tauri::Window,
     state: tauri::State<'_, AppState>,
     connection_id: String,
     request: SearchDeleteByQueryRequest,
@@ -219,6 +222,7 @@ pub async fn execute_search_delete_by_query(
     // delete in a confirm-required context.
     safety_confirmed: Option<bool>,
 ) -> Result<SearchDeleteByQueryResult, AppError> {
+    crate::commands::guard::guard_not_launcher(window.label())?;
     execute_search_delete_by_query_inner(
         state.inner(),
         &connection_id,

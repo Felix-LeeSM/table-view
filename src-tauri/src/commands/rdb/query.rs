@@ -278,6 +278,7 @@ async fn execute_query_inner(
 /// fast-path (no current_database probe).
 #[tauri::command]
 pub async fn execute_query(
+    window: tauri::Window,
     state: State<'_, AppState>,
     connection_id: String,
     sql: String,
@@ -288,6 +289,7 @@ pub async fn execute_query(
     // rejects a destructive statement in a confirm-required context.
     safety_confirmed: Option<bool>,
 ) -> Result<QueryResult, AppError> {
+    crate::commands::guard::guard_not_launcher(window.label())?;
     // Issue #1529 — read-only connection gate (chokepoint). Blocks ANY write
     // (broader than the Safe Mode danger set: also INSERT / bounded UPDATE /
     // CREATE …) on a connection the user flagged read-only, re-reading the flag
@@ -404,6 +406,7 @@ async fn execute_query_batch_inner(
 /// Sprint 266 — see `execute_query` doc on `expected_database`.
 #[tauri::command]
 pub async fn execute_query_batch(
+    window: tauri::Window,
     state: State<'_, AppState>,
     connection_id: String,
     statements: Vec<String>,
@@ -412,6 +415,7 @@ pub async fn execute_query_batch(
     // Issue #1112 — see `execute_query`.
     safety_confirmed: Option<bool>,
 ) -> Result<Vec<QueryResult>, AppError> {
+    crate::commands::guard::guard_not_launcher(window.label())?;
     // Issue #1529 — read-only connection gate (batch). Any write statement
     // anywhere in the atomic batch is rejected on a read-only connection. This
     // covers the inline-edit commit pipeline, which routes through this command.
@@ -530,12 +534,14 @@ async fn execute_query_dry_run_inner(
 /// dry-run dispatch on the adapter's active database.
 #[tauri::command]
 pub async fn execute_query_dry_run(
+    window: tauri::Window,
     state: State<'_, AppState>,
     connection_id: String,
     statements: Vec<String>,
     query_id: String,
     expected_database: Option<String>,
 ) -> Result<Vec<QueryResult>, AppError> {
+    crate::commands::guard::guard_not_launcher(window.label())?;
     // Issue #1529 — read-only gate (dry-run). A dry-run is BEGIN → execute →
     // ROLLBACK: the write statement ACTUALLY runs on the server before the
     // rollback, and on MySQL/MariaDB/Oracle a DDL statement implicit-commits so

@@ -128,10 +128,12 @@ pub(crate) async fn execute_file_analytics_query_inner(
 
 #[tauri::command]
 pub async fn duckdb_register_file_analytics_source(
+    window: tauri::Window,
     state: State<'_, AppState>,
     connection_id: String,
     path: String,
 ) -> Result<FileAnalyticsSource, AppError> {
+    crate::commands::guard::guard_not_launcher(window.label())?;
     register_file_analytics_source_inner(state.inner(), &connection_id, &path).await
 }
 
@@ -155,19 +157,23 @@ pub async fn duckdb_list_file_analytics_source_metadata(
 
 #[tauri::command]
 pub async fn duckdb_clear_file_analytics_sources(
+    window: tauri::Window,
     state: State<'_, AppState>,
     connection_id: String,
 ) -> Result<(), AppError> {
+    crate::commands::guard::guard_not_launcher(window.label())?;
     clear_file_analytics_sources_inner(state.inner(), &connection_id).await
 }
 
 #[tauri::command]
 pub async fn duckdb_execute_file_analytics_query(
+    window: tauri::Window,
     state: State<'_, AppState>,
     connection_id: String,
     source_id: String,
     sql: String,
 ) -> Result<FileAnalyticsQueryResponse, AppError> {
+    crate::commands::guard::guard_not_launcher(window.label())?;
     execute_file_analytics_query_inner(state.inner(), &connection_id, &source_id, &sql).await
 }
 

@@ -136,6 +136,7 @@ async fn aggregate_documents_inner(
 /// revisit preview / safety guards.
 #[tauri::command]
 pub async fn aggregate_documents(
+    window: tauri::Window,
     state: tauri::State<'_, AppState>,
     connection_id: String,
     database: String,
@@ -144,6 +145,9 @@ pub async fn aggregate_documents(
     // Sprint 180 (AC-180-04): optional cancel-token id, mirrors find_documents.
     query_id: Option<String>,
 ) -> Result<DocumentQueryResult, AppError> {
+    // Issue #1584 — pipeline stages `$out` / `$merge` write to a collection, so
+    // treat aggregate as a destructive command: reject the launcher webview.
+    crate::commands::guard::guard_not_launcher(window.label())?;
     // Issue #1231 — publish the persisted row cap for the cursor drain loop.
     crate::commands::sqlite_pool::publish_row_cap().await;
     aggregate_documents_inner(
@@ -579,6 +583,7 @@ fn require_run_command_safety(command: &bson::Document, confirmed: bool) -> Resu
 /// driver 에 전달한다. plain JSON 은 동일한 BSON Document 로 변환됨.
 #[tauri::command]
 pub async fn run_mongo_command(
+    window: tauri::Window,
     state: tauri::State<'_, AppState>,
     connection_id: String,
     database: Option<String>,
@@ -588,6 +593,7 @@ pub async fn run_mongo_command(
     // `comment` so native cancel (`cancel_query_by_tag`) can `killOp` it.
     query_id: Option<String>,
 ) -> Result<serde_json::Value, AppError> {
+    crate::commands::guard::guard_not_launcher(window.label())?;
     run_mongo_command_inner(
         state.inner(),
         &connection_id,

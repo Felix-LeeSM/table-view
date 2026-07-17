@@ -62,7 +62,9 @@ pub struct ExportSummary {
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)] // IPC boundary + #1584 injected window guard param
 pub async fn export_grid_rows(
+    window: tauri::Window,
     state: State<'_, AppState>,
     format: ExportFormat,
     target_path: PathBuf,
@@ -71,6 +73,7 @@ pub async fn export_grid_rows(
     context: ExportContext,
     export_id: Option<String>,
 ) -> Result<ExportSummary, AppError> {
+    crate::commands::guard::guard_not_launcher(window.label())?;
     export_grid_rows_inner(
         state.inner(),
         format,
@@ -258,9 +261,11 @@ fn temp_sibling_path(target: &Path) -> Result<PathBuf, AppError> {
 /// rows_written 은 row-단위가 아니므로 0 sentinel.
 #[tauri::command]
 pub async fn write_text_file_export(
+    window: tauri::Window,
     target_path: PathBuf,
     content: String,
 ) -> Result<ExportSummary, AppError> {
+    crate::commands::guard::guard_not_launcher(window.label())?;
     write_text_file_export_inner(target_path, content).await
 }
 
@@ -370,6 +375,7 @@ pub struct ExportDumpTable {
 #[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub async fn export_schema_dump(
+    window: tauri::Window,
     state: State<'_, AppState>,
     connection_id: String,
     target_path: PathBuf,
@@ -379,6 +385,7 @@ pub async fn export_schema_dump(
     options: ExportSchemaDumpOptions,
     export_id: Option<String>,
 ) -> Result<ExportSummary, AppError> {
+    crate::commands::guard::guard_not_launcher(window.label())?;
     export_schema_dump_inner(
         state.inner(),
         &connection_id,
