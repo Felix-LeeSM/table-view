@@ -19,17 +19,24 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@components/ui/select";
-import { previewCsvImport, type CsvPreview } from "@lib/tauri/import";
+import {
+  buildCsvImportStatements,
+  previewCsvImport,
+  type CsvPreview,
+} from "@lib/tauri/import";
+import { cancelQuery, executeQueryBatch } from "@lib/tauri";
 import { useSchemaStore } from "@stores/schemaStore";
 import type { DatabaseName, SchemaName, TableName } from "@/types/branded";
 import type { ColumnInfo } from "@/types/schema";
 
 /**
- * `ImportCsvDialog` — issue #1639 Stage 1. A **read-only** CSV import wizard:
+ * `ImportCsvDialog` — issue #1639 preview + #1640 commit. A CSV import wizard:
  * pick a file, preview its parsed headers + sample rows (streamed backend
- * command `preview_csv_import`), and map target-table columns to CSV headers.
- * This stage performs **zero DB writes** — there is deliberately no commit
- * button; the INSERT commit path is a follow-up sub-issue (#1640). The engine
+ * command `preview_csv_import`), map target-table columns to CSV headers, then
+ * commit. The commit builds one single-row INSERT per row
+ * (`build_csv_import_statements`) and runs the whole list through the existing
+ * `executeQueryBatch` command in one atomic transaction (all-or-nothing
+ * rollback, reusing Safe Mode / read-only gates + history + cancel). The engine
  * gate lives in `csvImportSupport.ts` (PG-first).
  */
 interface ImportCsvDialogProps {
@@ -78,10 +85,20 @@ export default function ImportCsvDialog({
   const [columns, setColumns] = useState<ColumnInfo[]>([]);
   const [filePath, setFilePath] = useState<string | null>(null);
   const [hasHeader, setHasHeader] = useState(true);
+  const [emptyAsNull, setEmptyAsNull] = useState(true);
   const [preview, setPreview] = useState<CsvPreview | null>(null);
   const [mapping, setMapping] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Commit lifecycle. `confirming` shows the pre-write confirmation summary;
+  // `committing` holds the in-flight import's cancel-token id + row total;
+  // `imported` is the success count. Only one is non-null at a time.
+  const [confirming, setConfirming] = useState(false);
+  const [committing, setCommitting] = useState<{
+    queryId: string;
+    total: number;
+  } | null>(null);
+  const [imported, setImported] = useState<number | null>(null);
 
   // Load the target table's columns once — the mapping wizard renders one row
   // per column. schemaStore is cache-first, so this is a no-op after warm-up.
@@ -108,10 +125,10 @@ export default function ImportCsvDialog({
   const runPreview = async (path: string, header: boolean) => {
     setLoading(true);
     setError(null);
+    setImported(null);
     try {
       const next = await previewCsvImport(path, { hasHeader: header });
       setPreview(next);
-      setMapping(autoMapColumns(columns, next.headers));
     } catch (err) {
       setPreview(null);
       setError(err instanceof Error ? err.message : String(err));
@@ -119,6 +136,17 @@ export default function ImportCsvDialog({
       setLoading(false);
     }
   };
+
+  // Auto-map columns to CSV headers reactively. Deriving the mapping here (not
+  // inside `runPreview`) fixes a stale-capture race: `runPreview` captured
+  // `columns`, so a preview that resolved before the async column load left the
+  // mapping empty and never recomputed. Keyed on both, it re-runs when the
+  // target columns arrive AND resets to a fresh auto-map on each new preview
+  // (new file / header toggle). `columns` is loaded once and then stable, so a
+  // user's manual mapping edits (which touch neither dep) are preserved.
+  useEffect(() => {
+    if (preview) setMapping(autoMapColumns(columns, preview.headers));
+  }, [columns, preview]);
 
   const chooseFile = async () => {
     const path = pickedPath(
@@ -138,12 +166,74 @@ export default function ImportCsvDialog({
     if (filePath) await runPreview(filePath, next);
   };
 
-  const headers = preview?.headers ?? [];
+  const headers = useMemo(() => preview?.headers ?? [], [preview]);
   const previewRows = preview?.preview_rows ?? [];
-  const mappedCount = useMemo(
-    () => Object.values(mapping).filter((h) => h !== SKIP).length,
-    [mapping],
+  const rowCount = preview?.row_count ?? 0;
+
+  // Target-column order, only mapped columns, resolved to a CSV record index.
+  const mappedColumns = useMemo(
+    () =>
+      columns
+        .map((col) => ({ column: col.name, header: mapping[col.name] }))
+        .filter((m) => m.header !== undefined && m.header !== SKIP)
+        .map((m) => ({
+          column: m.column,
+          sourceIndex: headers.indexOf(m.header as string),
+        }))
+        .filter((m) => m.sourceIndex >= 0),
+    [columns, mapping, headers],
   );
+  const mappedCount = mappedColumns.length;
+  const canImport =
+    !!filePath &&
+    !!preview &&
+    rowCount > 0 &&
+    mappedCount > 0 &&
+    !loading &&
+    committing === null;
+
+  const runImport = async () => {
+    if (!filePath || !canImport) return;
+    setConfirming(false);
+    setError(null);
+    setImported(null);
+    const queryId = crypto.randomUUID();
+    setCommitting({ queryId, total: rowCount });
+    try {
+      const statements = await buildCsvImportStatements(
+        connectionId,
+        filePath,
+        schemaName,
+        tableName,
+        mappedColumns,
+        { hasHeader, emptyAsNull },
+      );
+      if (statements.length === 0) {
+        setImported(0);
+        return;
+      }
+      // One atomic `executeQueryBatch` call — BEGIN/…/COMMIT with all-or-nothing
+      // rollback. `safetyConfirmed: true` records the user's confirm; INSERT is
+      // classified Info so the backend Safe Mode gate does not fire regardless,
+      // while the #1529 read-only gate still hard-blocks a read-only connection.
+      await executeQueryBatch(
+        connectionId,
+        statements,
+        queryId,
+        database,
+        true,
+      );
+      setImported(statements.length);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setCommitting(null);
+    }
+  };
+
+  const cancelImport = async () => {
+    if (committing) await cancelQuery(committing.queryId);
+  };
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
@@ -183,8 +273,19 @@ export default function ImportCsvDialog({
                 checked={hasHeader}
                 onChange={(e) => void toggleHeader(e.target.checked)}
                 aria-label={t("hasHeaderAria")}
+                disabled={committing !== null}
               />
               {t("hasHeader")}
+            </label>
+            <label className="flex items-center gap-1.5 text-xs text-foreground">
+              <input
+                type="checkbox"
+                checked={emptyAsNull}
+                onChange={(e) => setEmptyAsNull(e.target.checked)}
+                aria-label={t("emptyAsNullAria")}
+                disabled={committing !== null}
+              />
+              {t("emptyAsNull")}
             </label>
             {preview && (
               <span className="text-xs text-muted-foreground">
@@ -192,6 +293,33 @@ export default function ImportCsvDialog({
               </span>
             )}
           </div>
+
+          {imported !== null && (
+            <div
+              role="status"
+              className="rounded border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-700 dark:text-emerald-300"
+            >
+              {t("importSuccess", { count: imported })}
+            </div>
+          )}
+
+          {confirming && (
+            <div
+              role="region"
+              aria-label={t("confirmRegionAria")}
+              className="space-y-1 rounded border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-foreground"
+            >
+              <div className="font-medium">
+                {t("confirmTitle", {
+                  schema: schemaName,
+                  table: tableName,
+                  rows: rowCount,
+                  columns: mappedCount,
+                })}
+              </div>
+              <div className="text-muted-foreground">{t("confirmPolicy")}</div>
+            </div>
+          )}
 
           {error && (
             <div
@@ -302,14 +430,55 @@ export default function ImportCsvDialog({
 
         <DialogShell.Footer>
           <DialogFooter className="px-4 py-3">
-            {/* Stage 1 is read-only — no commit button. The INSERT commit path
-                (and its Import button) lands in #1640. */}
-            <span className="mr-auto text-2xs italic text-muted-foreground">
-              {t("commitPending")}
-            </span>
-            <Button variant="outline" size="sm" onClick={onClose}>
-              {t("close")}
-            </Button>
+            {preview && (
+              <span className="mr-auto text-2xs text-muted-foreground">
+                {t("mappingLabel", {
+                  mapped: mappedCount,
+                  total: columns.length,
+                })}
+              </span>
+            )}
+            {committing !== null ? (
+              <>
+                <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <Loader2 className="size-3.5 animate-spin" />
+                  {t("importing", { count: committing.total })}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void cancelImport()}
+                >
+                  {t("cancelImport")}
+                </Button>
+              </>
+            ) : confirming ? (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setConfirming(false)}
+                >
+                  {t("back")}
+                </Button>
+                <Button size="sm" onClick={() => void runImport()}>
+                  {t("confirmImport")}
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button
+                  size="sm"
+                  onClick={() => setConfirming(true)}
+                  disabled={!canImport}
+                >
+                  {t("import")}
+                </Button>
+                <Button variant="outline" size="sm" onClick={onClose}>
+                  {t("close")}
+                </Button>
+              </>
+            )}
           </DialogFooter>
         </DialogShell.Footer>
       </DialogShell>

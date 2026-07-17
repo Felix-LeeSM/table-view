@@ -110,6 +110,18 @@ export interface DataSourceCapabilities {
      * still require a PK to identify the target row safely.
      */
     readonly requiresPrimaryKeyForEdit: boolean;
+    /**
+     * Issue #1640 — whether the schema-tree "Import CSV…" entry point is
+     * surfaced. The commit path builds single-row INSERTs and runs them through
+     * the shared `execute_query_batch` command (frontend SQL batch), so it adds
+     * no new backend adapter capability; the coarse `dataMutation` posture in
+     * the profile-parity report therefore stays unchanged. PG-first (the
+     * statement builder emits PostgreSQL-dialect SQL); other engines return
+     * `Unsupported` from `build_csv_import_statements`. Consumed by
+     * `supportsCsvImport` (csvImportSupport.ts) — a real UI consumer, satisfying
+     * the #1462/#1464 "capabilities need a consumer" principle.
+     */
+    readonly csvRowImport: boolean;
   };
   readonly ddl: {
     readonly createTable: boolean;
@@ -192,6 +204,7 @@ export function createEmptyDataSourceCapabilities(): DataSourceCapabilities {
       editKeys: false,
       bulkWrite: false,
       requiresPrimaryKeyForEdit: false,
+      csvRowImport: false,
     },
     ddl: {
       createTable: false,
@@ -316,6 +329,9 @@ export const POSTGRESQL_CAPABILITIES = capabilities({
   },
   edit: {
     editRows: true,
+    // Issue #1640 — PG-first CSV row import commit path (gates the schema-tree
+    // "Import CSV…" entry point via `supportsCsvImport`).
+    csvRowImport: true,
   },
   ddl: {
     createTable: true,

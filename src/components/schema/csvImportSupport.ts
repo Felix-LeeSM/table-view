@@ -1,11 +1,21 @@
-// Issue #1639 Stage 1 — engine gate for the "Import CSV…" table entry point.
-// Mirrors `supportsMigrationExport` (useMigrationExport.ts): a frontend Set so
-// the menu only surfaces where the (future) commit path is implemented.
-// PG-first — the row INSERT commit path (#1640) starts on PostgreSQL; other
-// engines are added as their commit adapters land. Surfacing the entry point on
-// an unsupported engine would be an error-on-click once commit ships (#1048).
-const CSV_IMPORT_DBTYPES = new Set(["postgresql"]);
+// Issue #1639 preview + #1640 commit — engine gate for the "Import CSV…" table
+// entry point. Now that the commit path (single-row INSERTs through
+// `execute_query_batch`) ships, the gate reads the `edit.csvRowImport`
+// capability (single source of truth) instead of a local Set — a real UI
+// consumer, satisfying the #1462/#1464 "capabilities need a consumer" principle.
+// PG-first: `build_csv_import_statements` returns `Unsupported` for other
+// engines, so surfacing the entry point there would be error-on-click (#1640).
+import type { DatabaseType } from "@/types/connection";
+import { DATA_SOURCE_PROFILES } from "@/types/dataSource";
 
 export function supportsCsvImport(dbType: string | undefined): boolean {
-  return dbType !== undefined && CSV_IMPORT_DBTYPES.has(dbType);
+  if (!dbType) return false;
+  // Index with an arbitrary string returns `undefined` for unknown engines
+  // (fail-closed — this gates a write surface).
+  const profile = (
+    DATA_SOURCE_PROFILES as Partial<
+      Record<DatabaseType, (typeof DATA_SOURCE_PROFILES)[DatabaseType]>
+    >
+  )[dbType as DatabaseType];
+  return profile?.capabilities.edit.csvRowImport === true;
 }

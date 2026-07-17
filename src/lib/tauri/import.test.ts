@@ -5,7 +5,11 @@ vi.mock("@tauri-apps/api/core", () => ({
   invoke: (...a: unknown[]) => invoke(...a),
 }));
 
-import { previewCsvImport, readTextFileImport } from "./import";
+import {
+  buildCsvImportStatements,
+  previewCsvImport,
+  readTextFileImport,
+} from "./import";
 
 describe("readTextFileImport", () => {
   beforeEach(() => invoke.mockReset());
@@ -66,5 +70,47 @@ describe("previewCsvImport", () => {
     await expect(previewCsvImport("/tmp/secret.csv")).rejects.toThrow(
       /internal app data directory/,
     );
+  });
+});
+
+// Reason: #1640 — the commit-stage wrapper forwards the connection, path,
+// target, mapping, and tri-state options and returns the built INSERT list
+// (2026-07-17).
+describe("buildCsvImportStatements", () => {
+  beforeEach(() => invoke.mockReset());
+
+  it("invokes build_csv_import_statements with the mapping + options", async () => {
+    const stmts = ['INSERT INTO "public"."people" ("id") VALUES (\'1\')'];
+    invoke.mockResolvedValue(stmts);
+    const result = await buildCsvImportStatements(
+      "c1",
+      "/tmp/people.csv",
+      "public",
+      "people",
+      [{ column: "id", sourceIndex: 0 }],
+      { hasHeader: true, emptyAsNull: false },
+    );
+    expect(invoke).toHaveBeenCalledWith("build_csv_import_statements", {
+      connectionId: "c1",
+      sourcePath: "/tmp/people.csv",
+      schema: "public",
+      table: "people",
+      mapping: [{ column: "id", sourceIndex: 0 }],
+      options: { hasHeader: true, emptyAsNull: false },
+    });
+    expect(result).toEqual(stmts);
+  });
+
+  it("propagates the PG-only Unsupported rejection", async () => {
+    invoke.mockImplementationOnce(() =>
+      Promise.reject(
+        new Error(
+          "CSV row import commit is PostgreSQL-only; Mysql is not supported",
+        ),
+      ),
+    );
+    await expect(
+      buildCsvImportStatements("c1", "/tmp/x.csv", "s", "t", [], undefined),
+    ).rejects.toThrow(/PostgreSQL-only/);
   });
 });

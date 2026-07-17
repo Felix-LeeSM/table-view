@@ -259,7 +259,7 @@ pub(super) fn sanitize_tsv_cell(s: &str) -> String {
 
 // ------------------------------------------------------------ SQL INSERT
 
-pub(super) fn quote_sql_identifier(ident: &str) -> String {
+pub(crate) fn quote_sql_identifier(ident: &str) -> String {
     let mut out = String::with_capacity(ident.len() + 2);
     out.push('"');
     for ch in ident.chars() {
@@ -272,7 +272,7 @@ pub(super) fn quote_sql_identifier(ident: &str) -> String {
     out
 }
 
-pub(super) fn quote_sql_string(s: &str) -> String {
+pub(crate) fn quote_sql_string(s: &str) -> String {
     let mut out = String::with_capacity(s.len() + 2);
     out.push('\'');
     for ch in s.chars() {

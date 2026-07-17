@@ -75,6 +75,7 @@ const GUARDED: &[&str] = &[
     "export_grid_finish",
     "export_grid_rows",
     "export_schema_dump",
+    "build_csv_import_statements",
     "preview_csv_import",
     "read_text_file_import",
     "write_text_file_export",

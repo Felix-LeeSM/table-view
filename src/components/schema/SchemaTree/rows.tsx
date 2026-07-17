@@ -652,8 +652,8 @@ export function renderItemRow(
                 </ContextMenuSubContent>
               </ContextMenuSub>
             )}
-            {/* #1639 — read-only CSV import wizard. PG-first gate
-                (`supportsCsvImport`); the commit path lands in #1640. */}
+            {/* #1639 preview + #1640 commit — CSV import wizard. PG-first gate
+                via the `edit.csvRowImport` capability (`supportsCsvImport`). */}
             {supportsCsvImport(ctx.dbType) && (
               <ContextMenuItem
                 onClick={() => ctx.handleImportCsv(item.name, row.schemaName)}

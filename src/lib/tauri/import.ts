@@ -38,3 +38,49 @@ export async function previewCsvImport(
 ): Promise<CsvPreview> {
   return invoke<CsvPreview>("preview_csv_import", { sourcePath, options });
 }
+
+/**
+ * Stage 2 CSV import commit (issue #1640) — build the batched INSERT
+ * statements for the confirmed column mapping. Read-only itself (it parses the
+ * CSV and returns SQL strings); the caller feeds the result to
+ * `executeQueryBatch` in a single call so the whole import runs in one atomic
+ * transaction (all-or-nothing rollback), reusing the Safe Mode / read-only
+ * gates + history + cancel. PostgreSQL-only; other engines reject with
+ * `Unsupported`.
+ */
+export interface CsvColumnMapping {
+  /** Target table column name. */
+  column: string;
+  /** Zero-based index into each parsed CSV record for the mapped source. */
+  sourceIndex: number;
+}
+
+export interface CsvImportOptions {
+  /** Treat the first row as a header. Defaults to `true` backend-side. */
+  hasHeader?: boolean;
+  /** Single-char field delimiter. Defaults to `,` backend-side. */
+  delimiter?: string;
+  /**
+   * Tri-state NULL policy (ADR 0009): map an empty CSV field to SQL `NULL`
+   * (`true`, default) or to an empty string literal `''` (`false`).
+   */
+  emptyAsNull?: boolean;
+}
+
+export async function buildCsvImportStatements(
+  connectionId: string,
+  sourcePath: string,
+  schema: string,
+  table: string,
+  mapping: CsvColumnMapping[],
+  options?: CsvImportOptions,
+): Promise<string[]> {
+  return invoke<string[]>("build_csv_import_statements", {
+    connectionId,
+    sourcePath,
+    schema,
+    table,
+    mapping,
+    options,
+  });
+}

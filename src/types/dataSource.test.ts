@@ -83,7 +83,8 @@ describe("DataSourceProfile registry", () => {
         indexes: true,
         constraints: true,
       },
-      edit: { editRows: true },
+      // Issue #1640 — PG-first CSV row import commit path.
+      edit: { editRows: true, csvRowImport: true },
       ddl: {
         createTable: true,
         alterTable: true,

@@ -4774,6 +4774,27 @@ async fn test_mysql_kill_unknown_session_is_noop_1073() {
     adapter.disconnect_pool().await.ok();
 }
 
+// Issue #1640 — CSV import commit is PostgreSQL-only. A live MySQL adapter
+// reports `DatabaseType::Mysql`, so the engine gate must refuse it with
+// `Unsupported` before any statement is built (the non-PG boundary that the TS
+// `supportsCsvImport` capability gate mirrors on the frontend).
+#[tokio::test]
+#[serial_test::serial]
+async fn test_csv_import_commit_rejects_mysql() {
+    let adapter = match common::setup_mysql_adapter().await {
+        Some(a) => a,
+        None => return,
+    };
+
+    let result = table_view_lib::commands::import_csv::ensure_pg_for_csv_import(adapter.kind());
+    assert!(
+        matches!(result, Err(AppError::Unsupported(_))),
+        "MySQL CSV import commit must be Unsupported, got: {result:?}"
+    );
+
+    adapter.disconnect_pool().await.ok();
+}
+
 // =============================================================================
 // Refs #1067 — EXPLAIN + DB create/drop parity (live-server evidence for the
 // #1456 adapter overrides). Mirror of PG `query_integration` explain plan-only
