@@ -33,6 +33,24 @@ import { getCurrentWindowLabel, parseWorkspaceLabel } from "./lib/window-label";
 import { listen } from "@tauri-apps/api/event";
 import { useTauriListener } from "./hooks/useTauriListener";
 
+// #1621 G3a — the window-close flush persists the last edit before destroy, but
+// `persist_workspace` is a Tauri IPC that can hang (backend stall / lost reply).
+// A bare `flushPersistWorkspaces().finally(destroy)` would then trap the window
+// open forever. Cap the wait: destroy once the flush settles OR this timeout
+// elapses, whichever comes first. A lost last-edit beats an unclosable window.
+export const PERSIST_FLUSH_TIMEOUT_MS = 3000;
+
+function flushThenDestroy() {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<void>((resolve) => {
+    timer = setTimeout(resolve, PERSIST_FLUSH_TIMEOUT_MS);
+  });
+  void Promise.race([flushPersistWorkspaces(), timeout]).finally(() => {
+    clearTimeout(timer);
+    void destroyCurrentWindow();
+  });
+}
+
 export default function App() {
   const loadConnections = useConnectionStore((s) => s.loadConnections);
   const loadGroups = useConnectionStore((s) => s.loadGroups);
@@ -157,11 +175,9 @@ export default function App() {
           // #1580 F1 — a pure trailing 200ms debounce has no flush point, so an
           // SQL edit made within 200ms of closing (SQL-only edits never mark a
           // tab dirty, so this takes the no-confirm branch) was destroyed before
-          // it persisted. Flush the pending snapshot, then destroy — `.finally`
-          // so a persist failure still closes the window rather than trapping it.
-          void flushPersistWorkspaces().finally(() => {
-            void destroyCurrentWindow();
-          });
+          // it persisted. Flush the pending snapshot, then destroy — bounded so a
+          // hung persist still closes the window (#1621 G3a).
+          flushThenDestroy();
         });
       }),
     [confirmDiscard],
@@ -192,9 +208,9 @@ export default function App() {
     }
     if (!sawConnectionRef.current) return;
     confirmDiscard(windowHasDirtyRef.current, () => {
-      void flushPersistWorkspaces().finally(() => {
-        void destroyCurrentWindow();
-      });
+      // #1621 G3a — bounded flush so a hung persist can't strand this orphan
+      // self-close (same trap as the native window-close path above).
+      flushThenDestroy();
     });
   }, [connectionsLoadedOnce, currentConnId, connections, confirmDiscard]);
 

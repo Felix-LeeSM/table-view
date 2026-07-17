@@ -216,6 +216,27 @@ export function entryKey(
   return `${connectionId}::${database}::${schema}::${table}`;
 }
 
+/**
+ * Boundary helper (issue #1621 G1) — brand the four plain-string axes (they
+ * arrive as `string` off grid props / DOM events) and compose the entry key in
+ * ONE place, replacing four consecutive `as` casts at each call site. Named
+ * fields keep the positional-swap protection `entryKey`'s branded params give
+ * (issue #1494): you can't line up schema/table wrong when they're keyed.
+ */
+export function entryKeyFromStrings(axes: {
+  connectionId: string;
+  database: string;
+  schema: string;
+  table: string;
+}): string {
+  return entryKey(
+    axes.connectionId as ConnectionId,
+    axes.database as DatabaseName,
+    axes.schema as SchemaName,
+    axes.table as TableName,
+  );
+}
+
 /** Build a fresh empty entry — used by `clearEntry` so the entry is not the frozen default. */
 function freshEntry(): MutablePendingEntry {
   return {
