@@ -269,3 +269,63 @@ describe("DataGridTable roving tabindex (Design-swarm #4 Phase 2)", () => {
     expect(pendingCell).toHaveFocus();
   });
 });
+
+// Purpose: roving-focus visual affordance — user reported the focused row/cell
+// was invisible so right-click quick-look targeted an unknown cell. The data
+// cell now carries the same `focus-visible:outline-*` as its header/pending
+// siblings, and the focus row (the one holding the roving anchor) gets an inset
+// box-shadow bar that coexists with the selection background. jsdom does not
+// compute Tailwind `:focus-visible` styles, so class presence is the only
+// observable channel here; E2E owns the pixel verification. (2026-07-17)
+const FOCUS_BAR = "shadow-[inset_2px_0_0_0_var(--color-ring)]";
+function rowOf(rowIdx: number): HTMLElement {
+  return cell(rowIdx, 0).closest('[role="row"]') as HTMLElement;
+}
+
+describe("DataGridTable roving-focus visual affordance", () => {
+  // Reason: bug — data cell was the only grid cell missing the focus-visible
+  // outline its header sibling already has; assert both carry it. (2026-07-17)
+  it("data cells carry the same focus-visible outline as header cells", () => {
+    render(<DataGridTable {...makeProps()} />);
+    const header = screen.getAllByRole("columnheader")[0]!;
+    expect(header.className).toContain("focus-visible:outline-ring");
+    expect(cell(0, 0).className).toContain("focus-visible:outline-ring");
+  });
+
+  // Reason: the focus-row affordance must follow the roving anchor — the row
+  // holding the tab stop shows the bar, other rows don't, and it moves on nav.
+  // Guards the `tabCol !== null` branch. (2026-07-17)
+  it("only the roving-focus row shows the affordance, and it follows nav", async () => {
+    render(<DataGridTable {...makeProps()} />);
+    // initial anchor is (0,0) → row 0 is the focus row.
+    expect(rowOf(0).className).toContain(FOCUS_BAR);
+    expect(rowOf(1).className).not.toContain(FOCUS_BAR);
+
+    act(() => cell(0, 0).focus());
+    fireEvent.keyDown(cell(0, 0), { key: "ArrowDown" });
+    await flushRaf();
+    expect(rowOf(1).className).toContain(FOCUS_BAR);
+    expect(rowOf(0).className).not.toContain(FOCUS_BAR);
+  });
+
+  // Reason: selection + focus use different paint channels so a row that is
+  // both selected and focused must read both (bug fix must not clobber the
+  // pre-existing `bg-accent/20` selection highlight). (2026-07-17)
+  it("a selected + focused row keeps both the selection bg and the focus bar", () => {
+    render(<DataGridTable {...makeProps({ selectedRowIds: new Set([0]) })} />);
+    const row0 = rowOf(0);
+    expect(row0.className).toContain("bg-accent/20"); // selection channel
+    expect(row0.className).toContain(FOCUS_BAR); // focus channel (row 0 anchor)
+  });
+
+  // Reason: regression — the editing cell's `ring-primary` highlight must
+  // survive alongside the newly added focus-visible outline. (2026-07-17)
+  it("the editing cell keeps its ring-primary highlight", () => {
+    render(
+      <DataGridTable
+        {...makeProps({ editingCell: { row: 0, col: 0 }, editValue: "1" })}
+      />,
+    );
+    expect(cell(0, 0).className).toContain("ring-primary");
+  });
+});
