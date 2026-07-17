@@ -29,15 +29,6 @@ function loadedRustVocabulary(): MongoshCompletionVocabulary {
   return vocabulary;
 }
 
-function expectContainsAll(
-  values: readonly string[],
-  expected: readonly string[],
-): void {
-  for (const value of expected) {
-    expect(values).toContain(value);
-  }
-}
-
 describe("MongoDB completion vocabulary", () => {
   it("keeps the TypeScript fallback mirror aligned with Rust/WASM", () => {
     const rustVocabulary = loadedRustVocabulary();
@@ -67,43 +58,5 @@ describe("MongoDB completion vocabulary", () => {
       MONGO_ADMIN_COMMANDS.map((command) => command.label),
     );
     expect(getMongoCompletionVocabulary()).toEqual(rustVocabulary);
-  });
-
-  it("covers official-reference sentinel operators, methods, and commands", () => {
-    const vocabulary = getMongoCompletionVocabulary();
-
-    expectContainsAll(vocabulary.queryOperators, [
-      "$jsonSchema",
-      "$bitsAllSet",
-      "$geoWithin",
-      "$expr",
-    ]);
-    expectContainsAll(vocabulary.projectionOperators, ["$meta", "$slice"]);
-    expectContainsAll(vocabulary.updateOperators, [
-      "$setOnInsert",
-      "$[]",
-      "$[<identifier>]",
-    ]);
-    expectContainsAll(vocabulary.aggregateStages, [
-      "$vectorSearch",
-      "$setWindowFields",
-      "$queryStats",
-      "$searchMeta",
-    ]);
-    expectContainsAll(vocabulary.accumulators, [
-      "$topN",
-      "$median",
-      "$percentile",
-    ]);
-    expectContainsAll(vocabulary.expressionOperators, [
-      "$dateTrunc",
-      "$toObjectId",
-      "$regexFindAll",
-      "$setField",
-    ]);
-    expectContainsAll(vocabulary.typeTags, ["$uuid"]);
-    expectContainsAll(vocabulary.mongoshCollectionMethods, ["find"]);
-    expectContainsAll(vocabulary.mongoshDbMethods, ["runCommand"]);
-    expectContainsAll(vocabulary.mongoAdminCommands, ["serverStatus", "hello"]);
   });
 });

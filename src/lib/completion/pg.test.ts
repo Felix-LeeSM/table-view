@@ -3,11 +3,6 @@ import { describe, it, expect } from "vitest";
 import { keywords, createCompletionSource } from "./pg";
 
 describe("pg.keywords", () => {
-  it("is a non-empty array", () => {
-    expect(Array.isArray(keywords)).toBe(true);
-    expect(keywords.length).toBeGreaterThan(0);
-  });
-
   it("contains PG-only RETURNING", () => {
     expect(keywords).toContain("RETURNING");
   });

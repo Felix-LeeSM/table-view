@@ -189,6 +189,34 @@ describe("analyzeMongoPipeline", () => {
     ]);
     expect(a.severity).toBe("info");
   });
+
+  // Reason: MAX_PIPELINE_DEPTH=50 is the recursion cap in scanPipeline
+  // (mongoSafety.ts). A destructive stage nested exactly at the cap must still
+  // surface danger; one level past the cap falls through to the read-only
+  // default — the cap is a DoS backstop, not a correctness bound, so this pins
+  // that a deep write is not silently downgraded until the cap is exceeded.
+  // (2026-07-17)
+  it("nested $out/$merge at MAX_PIPELINE_DEPTH=50 → danger, depth 51 → info", () => {
+    const nestFacet = (times: number, inner: unknown[]): unknown[] => {
+      let p = inner;
+      for (let i = 0; i < times; i++) p = [{ $facet: { a: p } }];
+      return p;
+    };
+
+    const outAtCap = analyzeMongoPipeline(nestFacet(50, [{ $out: "z" }]));
+    expect(outAtCap.severity).toBe("danger");
+    expect(outAtCap.kind).toBe("mongo-out");
+
+    const mergeAtCap = analyzeMongoPipeline(
+      nestFacet(50, [{ $merge: { into: "z" } }]),
+    );
+    expect(mergeAtCap.severity).toBe("danger");
+    expect(mergeAtCap.kind).toBe("mongo-merge");
+
+    const overCap = analyzeMongoPipeline(nestFacet(51, [{ $out: "z" }]));
+    expect(overCap.severity).toBe("info");
+    expect(overCap.kind).toBe("mongo-other");
+  });
 });
 
 // AC-198-03 — `analyzeMongoOperation` unit tests. date 2026-05-02.
@@ -324,6 +352,21 @@ describe("analyzeMongoOperation", () => {
     const a = analyzeMongoOperation({ kind: "bulkWrite", ops: [] });
     expect(a.severity).toBe("info");
   });
+
+  // Reason: replaceOne is a single-document bulk sub-op (mongoSafety.ts
+  // analyzeBulkSubOp `case "replaceOne"`) and must stay INFO so an all-info
+  // batch that includes a replaceOne is not spuriously escalated. (2026-07-17)
+  it("bulkWrite with a replaceOne sub-op stays info", () => {
+    const a = analyzeMongoOperation({
+      kind: "bulkWrite",
+      ops: [
+        { op: "insertOne", document: { x: 1 } },
+        { op: "replaceOne", filter: { _id: "y" }, replacement: { x: 2 } },
+      ],
+    });
+    expect(a.severity).toBe("info");
+    expect(a.kind).toBe("mongo-other");
+  });
 });
 
 // Sprint 255 (2026-05-09) — `isInfoMongoOperation` 휴리스틱은 raw editor 의
@@ -432,19 +475,6 @@ describe("analyzeMongoRunCommand (sprint-381)", () => {
     });
     expect(a.severity).toBe("danger");
     expect(a.kind).toBe("mongo-drop");
-  });
-
-  it("[AC-381-S7] ping / serverStatus / dbStats → info (read-only)", () => {
-    for (const body of [
-      { ping: 1 },
-      { serverStatus: 1 },
-      { dbStats: 1 },
-      { currentOp: 1 },
-    ]) {
-      const a = analyzeMongoRunCommand(body);
-      expect(a.severity).toBe("info");
-      expect(a.kind).toBe("mongo-other");
-    }
   });
 
   it("[AC-886-S1] read-only runCommand allowlist is table-covered as info", () => {

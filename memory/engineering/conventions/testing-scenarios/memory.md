@@ -19,7 +19,7 @@ E2E 원칙([e2e-scenarios](../e2e-scenarios/memory.md))과 같은 P-시리즈
 
 ---
 
-## 8 가지 원칙
+## 9 가지 원칙
 
 ### P1. 레이어 분리 — 가장 낮은 레이어로 잡힐 수 있는 사실은 거기에 둔다
 - unit → component → integration → e2e 순으로 점검.
@@ -91,6 +91,41 @@ describe('ConnectionActivation', () => {
 - 테스트 약화로 결정해야 할 때는 PR 본문에 사유와 그 테스트가 다음에 어떻게
   복원될지 적는다.
 
+### P9. 무의미 테스트 금지 — 테스트는 프로덕션 코드를 실행하고, *실패할 수 있어야* 한다
+테스트는 "프로덕션 코드가 깨졌을 때 fail" 할 때만 자리값을 한다. 아래 냄새는
+새 커버리지 0 이면서 리팩터에 취약하므로 *삭제하거나 behavioral 로 재작성*한다
+(2026-07-17 전면 테스트 감사에서 반복 검출; 일반론: change-detector /
+tautological / assertion-roulette, testsmells.org).
+
+- **자기 재단언(tautology)**: 테스트가 만든 fixture·mock 반환·passthrough
+  wrapper·`JSON.parse`/serde 왕복을 그대로 재단언. 프로덕션 함수를 호출하지
+  않으면 무의미. (P2·P6)
+- **항상 참 / 무단언**: `expect(true).toBe(true)`, 이미 dedup 된 배열의
+  `new Set(x).size===x.length`, 단조증가 count `>=`, "no crash" 무단언 —
+  최소 하나의 *실패 가능한* 단언을 둔다.
+- **소스/표현 결합(change-detector)**: `readFileSync`+문자열 grep, CSS util
+  class(`toHaveClass("px-3")`)·아이콘 class(`svg.lucide-*`)·DOM 위치
+  (`nth-child`) 단언. 사용자 가시 결과(role/aria/텍스트/동작)로 대체. (P2 강화)
+- **타입 재단언(type-only-at-runtime)**: 컴파일러가 이미 보장하는 사실
+  (`Record<K>` 키 존재, union 리터럴 개수, `as T` 캐스트 후 필드 확인)을 런타임
+  재확인. 런타임 guard/parser/변환을 *실제 실행*할 때만 유지.
+- **라이브러리 재검증(framework)**: serde derive roundtrip, `#[default]`,
+  `twMerge`/`clsx`, Radix/shadcn primitive 동작 — 우리 코드가 라이브러리를
+  *어떻게 쓰는지의 계약*만 검증한다.
+- **약한 중복(subset)**: 더 강한 단언에 포함되는 약한 subset 은 제거. 입력/방언
+  만 다른 반복은 table-driven(`it.each` / `for (input,expected)`) 하나로. (P1 강화)
+
+**단, 지울지 애매하면 KEEP**: 표면상 중복이라도 *다른 프로덕션 코드경로*
+(예: AST 경로 vs regex fallback)거나 *cross-boundary SOT 미러*(FE↔Rust fixture
+parity, redact/injection allowlist)면 유지 — 삭제 시 계약이 조용히 깨진다.
+
+**정리 규율(cleanup = refactor)**: 무의미 테스트 제거는 리팩터로 다룬다 —
+(a) 제거 라인이 다른 테스트로 이미 커버되어 coverage ratchet
+(`docs/quality/coverage-ratchet.md`)이 유지되는지 확인(중립 제거), (b) 배치마다
+suite green, (c) 보안·데이터무결성 테스트(redact/injection/escape/crypto)는
+절대 얇게 만들지 않는다(P8), (d) 완전성/불변식 가드는 삭제가 아니라 behavioral
+재작성으로 대체(예: source-grep 라우팅 완전성 → 각 domain dispatch 실행 검증).
+
 ---
 
 ## 레이어별 부록
@@ -139,6 +174,7 @@ describe('ConnectionActivation', () => {
 - [ ] mock이 internal 모듈을 가리지 않는가? (P6)
 - [ ] 작성 이유 + 날짜 코멘트 있는가? (P7)
 - [ ] 깨진 테스트를 약화시키지 않았는가? (P8)
+- [ ] 프로덕션 코드가 깨지면 이 테스트가 fail 하는가? tautology/source-grep/type-only/framework/subset 아닌가? (P9)
 
 ---
 

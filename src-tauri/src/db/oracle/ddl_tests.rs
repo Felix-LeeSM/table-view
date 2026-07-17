@@ -442,3 +442,22 @@ async fn non_preview_requires_open_connection_after_sql_build() {
         "expected not-open connection error, got {err:?}"
     );
 }
+
+#[tokio::test]
+async fn test_add_column_data_type_with_statement_separator_returns_err() {
+    // Reason: raw `data_type` is interpolated verbatim into the ADD COLUMN
+    // DDL, so a `;`-carrying value must be rejected by validate_ddl_fragment
+    // before it can append a second statement (DDL injection). PG guards this
+    // in mutations.rs; the Oracle add_column path had no direct breakout test.
+    // (2026-07-17)
+    let req = AddColumnRequest {
+        connection_id: "conn".into(),
+        schema: "APP".into(),
+        table: "users".into(),
+        column: column("active", "NUMBER(1); DROP TABLE x"),
+        check_expression: None,
+        preview_only: true,
+        expected_database: None,
+    };
+    assert_validation(OracleAdapter::new().add_column(&req).await, "Data type");
+}

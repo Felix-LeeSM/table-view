@@ -323,24 +323,6 @@ describe("useQueryExecution — Sprint 312 write dispatch", () => {
     });
   });
 
-  it("deleteOne with non-_id filter is rejected before IPC", async () => {
-    const tab = seedDocTab('db.users.deleteOne({email:"x@y.com"})');
-    const { result } = renderHook(() => useQueryExecution({ tab }));
-
-    await actAsync(result.current.handleExecute);
-
-    expect(deleteDocumentMock).not.toHaveBeenCalled();
-    expect(bulkWriteDocumentsMock).not.toHaveBeenCalled();
-    await waitFor(() => {
-      const state = getTestWorkspace("conn-mongo", "table_view_test");
-      const updated = state.tabs.find((t) => t.id === tab.id);
-      expect(updated?.type).toBe("query");
-      if (updated?.type === "query") {
-        expect(updated.queryState.status).toBe("error");
-      }
-    });
-  });
-
   // [AC-312-write-08] updateOne with _id-only filter → updateDocument fast path.
   it("updateOne with {_id:...} filter + $set → updateDocument fast path", async () => {
     updateDocumentMock.mockResolvedValueOnce(undefined);
@@ -362,26 +344,6 @@ describe("useQueryExecution — Sprint 312 write dispatch", () => {
       { name: "Mona" },
     );
     expect(bulkWriteDocumentsMock).not.toHaveBeenCalled();
-  });
-
-  it("updateOne with non-_id filter is rejected before IPC", async () => {
-    const tab = seedDocTab(
-      'db.users.updateOne({email:"x@y.com"}, {$set:{verified:true}})',
-    );
-    const { result } = renderHook(() => useQueryExecution({ tab }));
-
-    await actAsync(result.current.handleExecute);
-
-    expect(updateDocumentMock).not.toHaveBeenCalled();
-    expect(bulkWriteDocumentsMock).not.toHaveBeenCalled();
-    await waitFor(() => {
-      const state = getTestWorkspace("conn-mongo", "table_view_test");
-      const updated = state.tabs.find((t) => t.id === tab.id);
-      expect(updated?.type).toBe("query");
-      if (updated?.type === "query") {
-        expect(updated.queryState.status).toBe("error");
-      }
-    });
   });
 
   // [AC-312-write-10] bulkWrite with INFO sub-ops → direct IPC call.

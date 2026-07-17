@@ -8,7 +8,6 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, act } from "@testing-library/react";
 import StructurePanel from "./StructurePanel";
 import {
-  MOCK_COLUMNS,
   mockGetTableColumns,
   mockGetTableIndexes,
   mockGetTableConstraints,
@@ -416,19 +415,6 @@ describe("StructurePanel", () => {
     const cellTexts = cells.map((c) => c.textContent);
     const emDashCount = cellTexts.filter((t) => t === "—").length;
     expect(emDashCount).toBeGreaterThanOrEqual(1);
-  });
-
-  // -----------------------------------------------------------------------
-  // Column with no default shows em-dash
-  // -----------------------------------------------------------------------
-  it("renders null fk_reference as em-dash", async () => {
-    await act(async () => {
-      renderPanel();
-    });
-
-    // id and name columns have fk_reference: null
-    const rows = screen.getAllByRole("row");
-    expect(rows.length).toBe(MOCK_COLUMNS.length + 1); // +1 for header
   });
 
   // -----------------------------------------------------------------------

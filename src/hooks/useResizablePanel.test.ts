@@ -20,19 +20,6 @@ describe("useResizablePanel", () => {
     expect(result.current.size).toBe(250);
   });
 
-  it("returns a panelRef and handleMouseDown", () => {
-    const { result } = renderHook(() =>
-      useResizablePanel({
-        axis: "horizontal",
-        min: 100,
-        max: 500,
-        initial: 250,
-      }),
-    );
-    expect(result.current.panelRef).toBeDefined();
-    expect(typeof result.current.handleMouseDown).toBe("function");
-  });
-
   // --- Horizontal (pixel) mode ---
 
   it("sets cursor and userSelect on mousedown in horizontal mode", () => {

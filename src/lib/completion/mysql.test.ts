@@ -3,10 +3,6 @@ import { describe, it, expect } from "vitest";
 import { keywords, createCompletionSource, LIMIT_HINTS } from "./mysql";
 
 describe("mysql.keywords", () => {
-  it("is a non-empty array", () => {
-    expect(keywords.length).toBeGreaterThan(0);
-  });
-
   it("contains MySQL-only AUTO_INCREMENT", () => {
     expect(keywords).toContain("AUTO_INCREMENT");
   });

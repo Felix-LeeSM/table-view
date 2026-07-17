@@ -18,20 +18,6 @@ describe("DB_TYPE_META", () => {
     "opensearch",
   ];
 
-  it("contains metadata for every DatabaseType", () => {
-    for (const dbType of expectedTypes) {
-      expect(DB_TYPE_META).toHaveProperty(dbType);
-    }
-  });
-
-  it("has no extra keys beyond known DatabaseType values", () => {
-    const keys = Object.keys(DB_TYPE_META);
-    expect(keys).toHaveLength(expectedTypes.length);
-    for (const key of keys) {
-      expect(expectedTypes).toContain(key);
-    }
-  });
-
   it("has label, short, and color for every entry", () => {
     for (const dbType of expectedTypes) {
       const meta = DB_TYPE_META[dbType];

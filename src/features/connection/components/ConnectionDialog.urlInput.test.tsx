@@ -516,18 +516,6 @@ describe("[AC-178-02] save-time trim of non-password string fields", () => {
     // Password verbatim.
     expect(draft.password).toBe("  p  ");
   });
-
-  // Reason: the trim helper must not include `password` so a user with
-  // a deliberately whitespace-padded password never has it stripped.
-  // The check is a literal-substring search of the source-of-truth
-  // module to catch a future "let's just trim everything" refactor.
-  // Date 2026-04-30.
-  it("ConnectionDialog source does NOT trim password (regression guard)", async () => {
-    // Read the dialog source via vite-style import.meta.glob if
-    // available; otherwise rely on the runtime assertion above. The
-    // runtime assertion is the strict gate.
-    expect(true).toBe(true);
-  });
 });
 
 // ===========================================================================

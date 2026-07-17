@@ -11,15 +11,7 @@ import {
   type OpaqueResultEnvelope,
   type QueryResult,
 } from "./query";
-import type { SearchAggregationEnvelope, SearchResultEnvelope } from "./search";
-
-const rawAggregationEnvelope: SearchAggregationEnvelope = {
-  kind: "raw",
-  name: "opaque",
-  aggregationType: "unsupported",
-  raw: { opaque: true },
-};
-void rawAggregationEnvelope;
+import type { SearchResultEnvelope } from "./search";
 
 const tabularResult: QueryResult = {
   columns: [{ name: "id", dataType: "integer", category: "int" }],

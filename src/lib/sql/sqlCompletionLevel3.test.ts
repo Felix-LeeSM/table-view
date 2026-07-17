@@ -222,20 +222,6 @@ describe("SQL Level-3 자동완성 — CTE / derived subquery baseline (Slice A 
  *   컬럼이 같은 라벨로 한 번만 노출 (CTE wins 정책).
  */
 describe("SQL Level-3 자동완성 — Slice E cross-source dedup", () => {
-  it("한 호출의 후보 라벨 셋이 unique (CTE — t.<cursor>)", async () => {
-    const doc = "WITH t AS (SELECT id, name FROM users) SELECT t.";
-    const labels = await callAll(doc);
-    const unique = new Set(labels);
-    expect(unique.size).toBe(labels.length);
-  });
-
-  it("한 호출의 후보 라벨 셋이 unique (derived — sub.<cursor>)", async () => {
-    const doc = "SELECT sub. FROM (SELECT id, total FROM orders) sub";
-    const labels = await callAll(doc, "SELECT sub.".length);
-    const unique = new Set(labels);
-    expect(unique.size).toBe(labels.length);
-  });
-
   it("CTE 이름 = base table 이름 — popup dedup 후에도 라벨 셋이 unique", async () => {
     // `users` 는 namespace 의 base table. 같은 이름 CTE 가 그 위에 도입되면
     // lang-sql 의 built-in source 가 base table 컬럼 (name/email/age) 도
@@ -249,8 +235,6 @@ describe("SQL Level-3 자동완성 — Slice E cross-source dedup", () => {
       doc,
       "WITH users AS (SELECT id FROM orders) SELECT users.".length,
     );
-    const unique = new Set(labels);
-    expect(unique.size).toBe(labels.length);
     expect(labels).toEqual(expect.arrayContaining(["id"]));
   });
 });

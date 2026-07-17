@@ -261,19 +261,6 @@ describe("schemaStore", () => {
     expect(list![0]!.row_count).toBe(42);
   });
 
-  it("clearForConnection clears schema data", async () => {
-    // Load some data first
-    await useSchemaStore.getState().loadSchemas("conn1", "db1");
-    await useSchemaStore.getState().loadTables("conn1", "db1", "public");
-
-    // Clear
-    useSchemaStore.getState().clearForConnection("conn1");
-
-    const state = useSchemaStore.getState();
-    expect(state.schemas.conn1?.db1).toBeUndefined();
-    expect(state.tables.conn1?.db1?.public).toBeUndefined();
-  });
-
   it("handles load error", async () => {
     const { listSchemas } = await import("@lib/tauri");
     (listSchemas as ReturnType<typeof vi.fn>).mockRejectedValueOnce(

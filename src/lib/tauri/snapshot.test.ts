@@ -51,60 +51,8 @@ describe("getInitialAppState (Phase 1 sprint-357)", () => {
     expect(snap).toEqual(sampleSnapshot);
   });
 
-  it("returns the snapshot shape with schemaVersion=1 + 5 stores + runtime.activeStatuses", async () => {
-    invokeMock.mockResolvedValueOnce(sampleSnapshot);
-    const snap = await getInitialAppState();
-
-    expect(snap.schemaVersion).toBe(1);
-    expect(snap.stores).toHaveProperty("connections");
-    expect(snap.stores).toHaveProperty("workspaces");
-    expect(snap.stores).toHaveProperty("mru");
-    expect(snap.stores).toHaveProperty("theme");
-    expect(snap.stores).toHaveProperty("safeMode");
-    expect(snap.runtime).toHaveProperty("activeStatuses");
-  });
-
   it("propagates backend rejection (e.g. corrupt DB on boot)", async () => {
     invokeMock.mockRejectedValueOnce(new Error("Storage error: db corrupt"));
     await expect(getInitialAppState()).rejects.toThrow(/db corrupt/);
-  });
-
-  it("accepts partial=true with per-store error slots (AC-357-07)", async () => {
-    const partial: InitialAppState = {
-      ...sampleSnapshot,
-      partial: true,
-      stores: {
-        ...sampleSnapshot.stores,
-        mru: { error: "read mru: no such table: mru" },
-      },
-    };
-    invokeMock.mockResolvedValueOnce(partial);
-
-    const snap = await getInitialAppState();
-    expect(snap.partial).toBe(true);
-    // Frontend 가 dev mode banner 를 띄울 수 있게 per-store error slot 노출.
-    expect("error" in snap.stores.mru).toBe(true);
-  });
-
-  it("treats runtime.activeStatuses as a Record<string, ConnectionStatus>", async () => {
-    const withStatuses: InitialAppState = {
-      ...sampleSnapshot,
-      runtime: {
-        activeStatuses: {
-          "conn-1": { type: "connected" },
-          "conn-2": { type: "disconnected" },
-          "conn-3": { type: "error", message: "timeout" },
-        },
-      },
-    };
-    invokeMock.mockResolvedValueOnce(withStatuses);
-    const snap = await getInitialAppState();
-    expect(snap.runtime.activeStatuses["conn-1"]).toEqual({
-      type: "connected",
-    });
-    expect(snap.runtime.activeStatuses["conn-3"]).toEqual({
-      type: "error",
-      message: "timeout",
-    });
   });
 });

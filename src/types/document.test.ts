@@ -9,20 +9,15 @@ import { describe, it, expect } from "vitest";
 import { type DocumentRow, isDocumentSentinel } from "./document";
 
 describe("DocumentRow wire shape (Sprint 308)", () => {
-  it("parses a typical findOne wire payload", () => {
-    const wire = JSON.stringify({
-      columns: [
-        { name: "_id", dataType: "ObjectId", category: "unknown" },
-        { name: "name", dataType: "String", category: "unknown" },
-      ],
-      row: [{ $oid: "507f1f77bcf86cd799439011" }, "alice"],
-      raw: { _id: { $oid: "507f1f77bcf86cd799439011" }, name: "alice" },
-    });
-    const parsed = JSON.parse(wire) as DocumentRow;
-    expect(parsed.columns).toHaveLength(2);
-    expect(parsed.columns[0]?.name).toBe("_id");
-    expect(parsed.row).toHaveLength(2);
-    expect(parsed.raw["name"]).toBe("alice");
+  // Reason: P4 에러분기 — isDocumentSentinel 의 false 경로(non-string /
+  // 비-sentinel 문자열 / 잘못된 "[N items]" 형태)와 "[0 items]" 경계가
+  // 미검증이었다. JSON.parse 왕복만 확인하던 tautology 를 대체 (2026-07-17).
+  it("classifies non-sentinels as false and accepts the [0 items] boundary", () => {
+    expect(isDocumentSentinel(42)).toBe(false);
+    expect(isDocumentSentinel("plain")).toBe(false);
+    expect(isDocumentSentinel("[abc items]")).toBe(false);
+    expect(isDocumentSentinel("")).toBe(false);
+    expect(isDocumentSentinel("[0 items]")).toBe(true);
   });
 
   it("preserves composite-cell sentinel strings end-to-end", () => {

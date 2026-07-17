@@ -180,16 +180,6 @@ describe("BulkWriteOp wire shape (Sprint 308)", () => {
       expect(parsed.upsert).toBe(false);
     }
   });
-
-  it("round-trips through JSON.stringify without losing the discriminator", () => {
-    const op: BulkWriteOp = {
-      op: "updateOne",
-      filter: { _id: 1 },
-      update: { $set: { x: 2 } },
-    };
-    const roundtripped = JSON.parse(JSON.stringify(op)) as BulkWriteOp;
-    expect(roundtripped).toEqual(op);
-  });
 });
 
 describe("BulkWriteResult wire shape (Sprint 308)", () => {

@@ -188,29 +188,3 @@ describe("releaseTabConnection", () => {
     );
   });
 });
-
-describe("AC-359-08 unmount cleanup contract", () => {
-  beforeEach(() => {
-    invokeMock.mockReset();
-  });
-
-  it("simulates a useEffect cleanup invoking releaseTabConnection on unmount", async () => {
-    // RTL 없이도 cleanup 의 *contract* 는 단언 가능: useEffect 가 unmount
-    // 시 호출하는 함수가 release_tab_connection IPC 를 한 번 firing
-    // 한다는 것. queryTab hook 본체는 sprint-360+ 에서 도착하므로 여기
-    // 선 wrapper-shaped contract 만 박는다.
-    invokeMock.mockResolvedValueOnce(true);
-
-    // cleanup factory — production 의 useQueryTab cleanup 이 이 shape
-    // 를 직접 반환할 수 있어야 한다.
-    const cleanup = () => releaseTabConnection("c-42", "t-42");
-
-    await cleanup();
-
-    expect(invokeMock).toHaveBeenCalledTimes(1);
-    expect(invokeMock).toHaveBeenCalledWith("release_tab_connection", {
-      connectionId: "c-42",
-      tabId: "t-42",
-    });
-  });
-});

@@ -25,33 +25,10 @@ describe("switchActiveDb (Sprint 130 wrapper)", () => {
     });
   });
 
-  it("resolves with void when the backend successfully flipped the active pool", async () => {
-    invokeMock.mockResolvedValueOnce(undefined);
-    await expect(
-      switchActiveDb("conn-1", "analytics"),
-    ).resolves.toBeUndefined();
-  });
-
-  it("propagates Validation rejection when the backend rejects an empty db name", async () => {
+  it("propagates backend rejection unchanged (Validation / Unsupported / NotFound)", async () => {
     invokeMock.mockRejectedValueOnce(
       new Error("Validation: Database name must not be empty"),
     );
     await expect(switchActiveDb("conn-1", "")).rejects.toThrow(/Validation/);
-  });
-
-  it("propagates Unsupported rejection for paradigms that do not support switching", async () => {
-    invokeMock.mockRejectedValueOnce(
-      new Error(
-        "Unsupported operation: Search paradigm has no per-connection database concept",
-      ),
-    );
-    await expect(switchActiveDb("conn-search", "anything")).rejects.toThrow(
-      /Unsupported/,
-    );
-  });
-
-  it("propagates NotFound when the connection id has no live adapter", async () => {
-    invokeMock.mockRejectedValueOnce(new Error("Not found: Connection 'x'"));
-    await expect(switchActiveDb("x", "any")).rejects.toThrow(/Not found/);
   });
 });

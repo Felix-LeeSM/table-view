@@ -79,15 +79,5 @@ describe("makeLogger", () => {
       log.info("[boot]", "phase=ready");
       expect(infoSpy).not.toHaveBeenCalled();
     });
-
-    it("does not forward to other channels by mistake", () => {
-      const log = makeLogger(false);
-      log.warn("warn-arg");
-      log.error("error-arg");
-      log.info("info-arg");
-      expect(warnSpy).not.toHaveBeenCalled();
-      expect(errorSpy).not.toHaveBeenCalled();
-      expect(infoSpy).not.toHaveBeenCalled();
-    });
   });
 });

@@ -84,22 +84,6 @@ describe("useSafeModeGate (store wiring)", () => {
     expect(result.current.decide(DANGER).action).toBe("allow");
   });
 
-  // Reason: #1114 (2026-07-04) — environment 미확정 = allow 로 통일. The old
-  // per-call-site `missingConnectionEnvironment: "production"` fail-closed
-  // fallback is removed; a missing connection resolves to null → env-unset →
-  // allow at EVERY entry point (raw query / KV / grid / DDL / Mongo). No
-  // option can make a missing connection fail closed anymore.
-  it("[#1114] missing connection metadata is always allowed (fail-closed fallback removed)", () => {
-    useConnectionStore.setState({ connections: [] });
-    useSafeModeStore.setState({ mode: "off" });
-    // The divergent call sites (raw query / KV) used to pass
-    // `missingConnectionEnvironment: "production"` to fail closed. That option
-    // is gone (the signature no longer accepts it); a missing connection
-    // resolves to null → env-unset → allow at every entry point.
-    const { result } = renderHook(() => useSafeModeGate("missing"));
-    expect(result.current.decide(DANGER).action).toBe("allow");
-  });
-
   // Reason: #1125 (2026-07-04) — a non-canonical stored tag ("Production",
   // "prod", "production ") must NOT masquerade as production. It is
   // canonicalized to null at the gate → env-unset → allow (#1114 policy);
