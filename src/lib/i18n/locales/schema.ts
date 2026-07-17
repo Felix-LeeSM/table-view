@@ -150,25 +150,12 @@ export const en = {
   noDependentForeignKeys: "No dependent foreign keys.",
   diagnostics: "Diagnostics",
 
-  // IndexesPanel
-  loadingEllipsis: "Loading…",
-  indexesHeader: "Indexes — {{db}}.{{collection}}",
-  noIndexesOnCollection: "No indexes on this collection.",
-  collectionIndexesAria: "Collection indexes",
-  colNameIndex: "Name",
-  colFields: "Fields",
-  colIndexType: "Type",
-  colUnique: "Unique",
-  primaryBadge: "primary",
-  uniqueYes: "Yes",
-
   // DocumentDatabaseTree
   databasesHeader: "Databases",
   refreshDatabasesAria: "Refresh databases",
   refreshDatabasesTitle: "Refresh databases",
   filterDatabasesPlaceholder: "Filter databases and collections",
   filterDatabasesAria: "Filter databases and collections",
-  loadingDatabases: "Loading databases...",
   databaseMetadataUnavailable: "Database metadata unavailable: {{error}}",
   noDatabasesVisible: "No databases visible to this connection",
   noDatabasesMatch: 'No databases match "{{query}}"',
@@ -399,25 +386,12 @@ export const ko = {
   noDependentForeignKeys: "의존하는 외래 키 없음.",
   diagnostics: "진단",
 
-  // IndexesPanel
-  loadingEllipsis: "로딩 중…",
-  indexesHeader: "인덱스 — {{db}}.{{collection}}",
-  noIndexesOnCollection: "이 컬렉션에 인덱스 없음.",
-  collectionIndexesAria: "컬렉션 인덱스",
-  colNameIndex: "이름",
-  colFields: "필드",
-  colIndexType: "타입",
-  colUnique: "고유",
-  primaryBadge: "기본",
-  uniqueYes: "예",
-
   // DocumentDatabaseTree
   databasesHeader: "데이터베이스",
   refreshDatabasesAria: "데이터베이스 새로고침",
   refreshDatabasesTitle: "데이터베이스 새로고침",
   filterDatabasesPlaceholder: "데이터베이스 및 컬렉션 필터",
   filterDatabasesAria: "데이터베이스 및 컬렉션 필터",
-  loadingDatabases: "데이터베이스 로딩 중...",
   databaseMetadataUnavailable: "데이터베이스 메타데이터 사용 불가: {{error}}",
   noDatabasesVisible: "이 연결에서 볼 수 있는 데이터베이스 없음",
   noDatabasesMatch: "“{{query}}”와 일치하는 데이터베이스 없음",

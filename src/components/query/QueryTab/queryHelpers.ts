@@ -10,7 +10,8 @@ import type { Paradigm } from "@/types/connection";
 import type { QueryTab } from "@stores/workspaceStore";
 import type { FindBody } from "@/types/document";
 import type { CreateMongoIndexRequest, MongoIndexDirection } from "@lib/tauri";
-import type { CursorChainStep } from "@features/query";
+import { parseMongoshExpression, type CursorChainStep } from "@features/query";
+import type { ExplainMongoFindArgs } from "@/lib/api/explain";
 
 /**
  * `QueryTab` module-top helpers:
@@ -146,6 +147,40 @@ function readCursorNoArg(
     return { ok: false, error: `${step.name}() does not accept arguments.` };
   }
   return { ok: true, value: undefined };
+}
+
+// #1041 — Mongo explain is backed by `runCommand({explain:{find,...}})`, so it
+// only applies to a `db.<coll>.find(<filter>, <projection>)` statement.
+// #1210 — the spec carries the same find body (filter/projection + the
+// sort/limit/skip cursor chain) the real execution builds via
+// `applyFindCursorChain`, so the plan reflects actual execution instead of a
+// silently filter-only plan. aggregate / write / admin statements have no find
+// spec and return `null`.
+//
+// #1619 (E3) — fallback narrowed: when `applyFindCursorChain` rejects a cursor
+// argument, the REAL find dispatch (`mongoQueryExecution`) errors out and never
+// runs, so a filter-only fallback plan would diverge from execution. Return
+// `null` (explain unavailable) instead of a misleading plan. Unsupported cursor
+// METHODS are already rejected upstream by `parseMongoshExpression`, so only
+// malformed args to supported methods (sort/limit/skip/toArray) reach here.
+export function deriveMongoExplainSpec(
+  sql: string,
+  database: string | undefined,
+): ExplainMongoFindArgs | null {
+  const parsed = parseMongoshExpression(sql);
+  if (parsed.kind !== "success" || parsed.method !== "find") return null;
+  const filterArg = parsed.args[0];
+  const projectionArg = parsed.args[1];
+  const body: FindBody = {};
+  if (isRecord(filterArg)) body.filter = filterArg;
+  if (isRecord(projectionArg)) body.projection = projectionArg;
+  const withCursor = applyFindCursorChain(body, parsed.cursorChain);
+  if (!withCursor.ok) return null;
+  return {
+    database: database ?? "",
+    collection: parsed.collection,
+    body: withCursor.value,
+  };
 }
 
 type BuildCreateMongoIndexRequestResult =

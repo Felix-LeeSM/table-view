@@ -767,15 +767,24 @@ export function supportsRowEditing(
  * reads `edit.editDocuments` (single source of truth) instead of assuming the
  * document paradigm is always editable, so a read-only document source hides the
  * cell editor + Add/Delete affordances rather than click-then-error. MongoDB is
- * the sole profile declaring it today. An unknown / still-loading dbType returns
- * true so affordances aren't stripped before the connection resolves (same
- * fallback as `supportsRowEditing`).
+ * the sole profile declaring it today.
+ *
+ * Issue #1618 (D3) — an unknown / still-loading dbType now returns FALSE
+ * (fail-closed). The document grid only mounts for an already-resolved document
+ * connection, so the unknown-dbType branch is effectively dead in practice and
+ * fail-closed strips no real affordance; a write path defaulting to "enabled"
+ * before the capability is known is the wrong default for a mutation gate. This
+ * differs on purpose from the RDB trio (`supportsRowEditing` / `supportsDdl` /
+ * `supportsCatalogFeature`), which keep the affordance-preserving fail-open
+ * fallback because their surfaces (StructurePanel / DataGrid) can legitimately
+ * render mid-resolve during the schema-tree load; flipping those is a separate
+ * pass (Refs #1618).
  */
 export function supportsDocumentEditing(
   dbType: DatabaseType | null | undefined,
 ): boolean {
   const profile = maybeGetDataSourceProfile(dbType);
-  return profile === null || profile.capabilities.edit.editDocuments;
+  return profile !== null && profile.capabilities.edit.editDocuments;
 }
 
 /**
@@ -786,13 +795,18 @@ export function supportsDocumentEditing(
  * higher-risk write than a single-cell edit — and map to the backend
  * `bulk_write_documents` path that the conformance matrix enumerates
  * independently (redis/valkey defer `edit.bulkWrite` without `editDocuments`).
- * Same DBMS-unknown fallback (true) as `supportsDocumentEditing`.
+ *
+ * Issue #1618 (D6) — the fold-vs-split decision: bulkWrite stays a SEPARATE flag
+ * from editDocuments (not folded). Revisit only if a counter-example DBMS
+ * appears that supports `editDocuments` but not `bulkWrite` (or vice versa) and
+ * the split stops earning its keep. Same fail-closed unknown-dbType default as
+ * `supportsDocumentEditing` (#1618 D3).
  */
 export function supportsBulkWrite(
   dbType: DatabaseType | null | undefined,
 ): boolean {
   const profile = maybeGetDataSourceProfile(dbType);
-  return profile === null || profile.capabilities.edit.bulkWrite;
+  return profile !== null && profile.capabilities.edit.bulkWrite;
 }
 
 export type DdlCapabilityName = keyof DataSourceCapabilities["ddl"];
