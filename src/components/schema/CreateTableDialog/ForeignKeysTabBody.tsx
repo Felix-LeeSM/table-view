@@ -294,8 +294,10 @@ export default function ForeignKeysTabBody({
                           onChange={(next) =>
                             onUpdateFk(fk.trackingId, { columns: next })
                           }
-                          ariaLabelPrefix="Foreign key local column"
-                          emptyMessage="Add named columns in the Columns tab to use this picker."
+                          ariaLabelPrefix={t(
+                            "constraintsTab.fkLocalColumnPickerPrefix",
+                          )}
+                          emptyMessage={t("createTable.primaryKeyEmptyHint")}
                         />
 
                         {/* Reference schema + table */}
@@ -424,7 +426,9 @@ export default function ForeignKeysTabBody({
                             onChange={(next) =>
                               onUpdateFk(fk.trackingId, { ref_columns: next })
                             }
-                            ariaLabelPrefix="Foreign key reference column"
+                            ariaLabelPrefix={t(
+                              "constraintsTab.fkRefColumnPickerPrefix",
+                            )}
                             emptyMessage={t(
                               "constraintsTab.fkRefColumnsNoAvailable",
                             )}
@@ -692,8 +696,10 @@ export default function ForeignKeysTabBody({
                           onChange={(next) =>
                             onUpdateUnique(u.trackingId, { columns: next })
                           }
-                          ariaLabelPrefix="Unique column"
-                          emptyMessage="Add named columns in the Columns tab to use this picker."
+                          ariaLabelPrefix={t(
+                            "constraintsTab.uniqueColumnPickerPrefix",
+                          )}
+                          emptyMessage={t("createTable.primaryKeyEmptyHint")}
                         />
                       </div>
                       {/* Sprint 234 — ↑ / ↓ reorder buttons (left of `−`). */}

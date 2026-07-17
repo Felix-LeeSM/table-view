@@ -101,7 +101,7 @@ export default function RedisFormFields({
           className={inputClass}
           value={draft.user}
           onChange={(e) => onChange({ user: e.target.value })}
-          placeholder="leave blank for default ACL"
+          placeholder={t("form.placeholderRedisUserBlank")}
         />
       </div>
 

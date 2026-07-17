@@ -49,8 +49,10 @@ describe("SqliteFormFields", () => {
     mockCreateSqliteDatabaseFile.mockReset();
   });
 
-  // AC-143-3 — file path input is labelled "Database file" verbatim.
-  it("renders the file path field with aria-label='Database file' and OMITS host/port/user/password", () => {
+  // AC-143-3 — file path input's accessible name comes from its associated
+  // <label> ("Database File"); the redundant English aria-label was removed
+  // (#1581) so the localized label is the single source of the name.
+  it("renders the file path field labelled by its <label> and OMITS host/port/user/password", () => {
     render(
       <SqliteFormFields
         draft={makeDraft()}
@@ -60,7 +62,7 @@ describe("SqliteFormFields", () => {
         filePickerEnabled={true}
       />,
     );
-    expect(screen.getByLabelText("Database file")).toBeInTheDocument();
+    expect(screen.getByLabelText("Database File")).toBeInTheDocument();
     // Network/auth fields are absent.
     expect(screen.queryByLabelText("Host")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Port")).not.toBeInTheDocument();
@@ -81,7 +83,7 @@ describe("SqliteFormFields", () => {
     );
     act(() => {
       fireEvent.change(
-        screen.getByLabelText("Database file") as HTMLInputElement,
+        screen.getByLabelText("Database File") as HTMLInputElement,
         { target: { value: "/data/app.sqlite" } },
       );
     });
@@ -165,7 +167,7 @@ describe("SqliteFormFields", () => {
         filePickerEnabled={false}
       />,
     );
-    expect(screen.getByLabelText("Database file")).toBeInTheDocument();
+    expect(screen.getByLabelText("Database File")).toBeInTheDocument();
     expect(
       screen.queryByLabelText("Browse for database file"),
     ).not.toBeInTheDocument();
@@ -189,7 +191,7 @@ describe("SqliteFormFields", () => {
       />,
     );
 
-    expect(screen.getByLabelText("Database file")).toHaveAttribute(
+    expect(screen.getByLabelText("Database File")).toHaveAttribute(
       "placeholder",
       "/absolute/path/to/database.duckdb",
     );

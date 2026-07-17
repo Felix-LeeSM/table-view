@@ -128,8 +128,8 @@ export default function QueryTabToolbar({
     (s) => s.connections.find((c) => c.id === tab.connectionId)?.dbType,
   );
   const cancelTitle = supportsNativeCancel(cancelDbType)
-    ? "Stop query — cancels the running statement on the server"
-    : "Stop query";
+    ? t("toolbar.stopQueryNativeTitle")
+    : t("toolbar.stopQueryTitle");
   const isDocumentTab = isDocument;
   const mongoStatementKind = isDocumentTab
     ? classifyMongoStatement(tab.sql)
@@ -140,7 +140,7 @@ export default function QueryTabToolbar({
     !statementAllowsMissingDatabase(mongoStatementKind);
   const runDisabled = !tab.sql.trim() || documentNeedsDb;
   const runDisabledTooltip = documentNeedsDb
-    ? "Pick a database from the toolbar chip to run collection commands. Admin commands (`db.runCommand({...})`) work without one."
+    ? t("toolbar.runDisabledDbHint")
     : undefined;
   const isRdbTab = tab.paradigm === "rdb";
 
@@ -174,7 +174,7 @@ export default function QueryTabToolbar({
           size="xs"
           disabled
           aria-label={t("toolbar.queryRunningAria")}
-          title="Query cancellation is not supported for this database."
+          title={t("toolbar.cancellationUnsupportedTitle")}
         >
           <Loader2 className="animate-spin" />
           <span>{t("toolbar.running")}</span>
@@ -200,7 +200,7 @@ export default function QueryTabToolbar({
           onClick={onDryRun}
           disabled={tab.queryState.status === "running" || !tab.sql.trim()}
           aria-label={t("toolbar.dryRunAria")}
-          title="Dry run (Cmd+Shift+Enter) — BEGIN; ... ROLLBACK"
+          title={t("toolbar.dryRunTitle")}
         >
           <FlaskConical />
           <span>{t("toolbar.dryRun")}</span>
@@ -217,7 +217,7 @@ export default function QueryTabToolbar({
           onClick={onExplain}
           disabled={tab.queryState.status === "running" || !tab.sql.trim()}
           aria-label={t("toolbar.explainAria")}
-          title="Explain query plan"
+          title={t("toolbar.explainTitle")}
         >
           <SearchCode />
           <span>{t("toolbar.explain")}</span>
@@ -230,7 +230,7 @@ export default function QueryTabToolbar({
           onClick={onFormat}
           disabled={!tab.sql.trim()}
           aria-label={t("toolbar.formatAria")}
-          title="Format SQL (Cmd+I)"
+          title={t("toolbar.formatTitle")}
         >
           <Paintbrush />
           <span>{t("toolbar.format")}</span>
@@ -256,7 +256,7 @@ export default function QueryTabToolbar({
           onClick={onOpenFileAnalytics}
           disabled={tab.queryState.status === "running"}
           aria-label={t("toolbar.localFileAria")}
-          title="Preview local file"
+          title={t("toolbar.localFileAria")}
         >
           <FileSearch />
           <span>{t("toolbar.localFile")}</span>
@@ -273,7 +273,7 @@ export default function QueryTabToolbar({
           }}
           disabled={!tab.sql.trim()}
           aria-label={t("toolbar.saveToFavoritesAria")}
-          title="Save to favorites"
+          title={t("toolbar.saveToFavoritesAria")}
         >
           <Star />
           <span>{t("toolbar.save")}</span>
@@ -287,7 +287,7 @@ export default function QueryTabToolbar({
             setShowSnippets(false);
           }}
           aria-label={t("toolbar.openFavoritesAria")}
-          title="Favorites (Cmd+Shift+F)"
+          title={t("toolbar.openFavoritesTitle")}
         >
           <Star className="text-primary" />
           <span>
@@ -305,7 +305,7 @@ export default function QueryTabToolbar({
             setShowFavorites(false);
           }}
           aria-label={t("toolbar.openSnippetsAria")}
-          title="Snippets"
+          title={t("toolbar.snippets")}
         >
           <Code2 className="text-primary" />
           <span>

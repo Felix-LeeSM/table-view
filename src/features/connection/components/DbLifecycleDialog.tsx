@@ -113,7 +113,7 @@ export function DbLifecycleDialog({
     // focus-trap belongs here only once it is actually mounted as a dialog.
     <div
       role={isDrop ? "alertdialog" : "dialog"}
-      aria-label={`Database ${mode}`}
+      aria-label={t("lifecycle.headerMode", { mode })}
       data-testid="db-lifecycle-dialog"
       data-paradigm={paradigm}
       className="flex flex-col gap-3 rounded-md border border-border bg-background p-4 text-sm"
@@ -167,7 +167,7 @@ export function DbLifecycleDialog({
         <Button
           variant="ghost"
           size="sm"
-          aria-label="Close database lifecycle dialog"
+          aria-label={t("lifecycle.closeAria")}
           onClick={onClose}
           disabled={saving}
           autoFocus={isDrop}

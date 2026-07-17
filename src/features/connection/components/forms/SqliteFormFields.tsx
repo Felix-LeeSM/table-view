@@ -103,7 +103,6 @@ export default function SqliteFormFields({
           value={draft.database}
           onChange={(e) => onChange({ database: e.target.value })}
           placeholder={`/absolute/path/to/${defaultPath}`}
-          aria-label="Database file"
           {...fieldValidationProps("database", true, invalidField)}
         />
         {filePickerEnabled && (

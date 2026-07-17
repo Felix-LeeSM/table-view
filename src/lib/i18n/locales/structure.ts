@@ -91,6 +91,8 @@ export const en = {
     deleteAria: "Delete index {{name}}",
     deleteTitle: "Delete",
     emptyState: "No indexes found",
+    // OrderedColumnPicker aria-label prefix.
+    columnPickerPrefix: "Index column",
   },
   sqlPreview: {
     title: "Review SQL Changes",
@@ -194,6 +196,7 @@ export const ko = {
     deleteAria: "{{name}} 인덱스 삭제",
     deleteTitle: "삭제",
     emptyState: "인덱스가 없습니다",
+    columnPickerPrefix: "인덱스 컬럼",
   },
   sqlPreview: {
     title: "SQL 변경 사항 검토",
