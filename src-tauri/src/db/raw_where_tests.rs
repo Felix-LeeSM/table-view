@@ -101,6 +101,62 @@ fn rejects_value_expressions_with_embedded_subqueries() {
 }
 
 #[test]
+fn rejects_subqueries_hidden_in_function_sibling_expressions() {
+    for (dialect, clause) in [
+        (
+            RawWhereDialect::Postgres,
+            "SUBSTRING(name FROM (SELECT password FROM users LIMIT 1)) = 'x'",
+        ),
+        (
+            RawWhereDialect::Postgres,
+            "SUBSTRING(name FROM 1 FOR (SELECT id FROM users LIMIT 1)) = 'x'",
+        ),
+        (
+            RawWhereDialect::Postgres,
+            "POSITION(name IN (SELECT token FROM sessions LIMIT 1)) > 0",
+        ),
+        (
+            RawWhereDialect::Postgres,
+            "created_at AT TIME ZONE (SELECT zone FROM cfg LIMIT 1) IS NOT NULL",
+        ),
+        (
+            RawWhereDialect::Postgres,
+            "TRIM((SELECT secret FROM vault LIMIT 1) FROM name) = 'x'",
+        ),
+        (
+            RawWhereDialect::Postgres,
+            "OVERLAY(name PLACING (SELECT secret FROM vault LIMIT 1) FROM 1) = 'x'",
+        ),
+        (
+            RawWhereDialect::Postgres,
+            "OVERLAY(name PLACING 'x' FROM (SELECT n FROM t LIMIT 1)) = 'y'",
+        ),
+        (RawWhereDialect::Mssql, "CONVERT(INT, name, (SELECT 1)) = 1"),
+    ] {
+        assert!(
+            validate_raw_where_clause(dialect, clause).is_err(),
+            "{clause}"
+        );
+    }
+}
+
+#[test]
+fn accepts_function_sibling_expressions_without_subqueries() {
+    for clause in [
+        "SUBSTRING(name FROM 1 FOR 3) = 'abc'",
+        "POSITION('a' IN name) > 0",
+        "created_at AT TIME ZONE 'UTC' IS NOT NULL",
+        "TRIM(' ' FROM name) = 'x'",
+        "OVERLAY(name PLACING 'x' FROM 1 FOR 2) = 'y'",
+    ] {
+        assert!(
+            validate_raw_where_clause(RawWhereDialect::Postgres, clause).is_ok(),
+            "{clause}"
+        );
+    }
+}
+
+#[test]
 fn accepts_comment_marker_inside_string_literal() {
     assert!(validate_raw_where_clause(RawWhereDialect::Sqlite, "note = '--literal'").is_ok());
 }

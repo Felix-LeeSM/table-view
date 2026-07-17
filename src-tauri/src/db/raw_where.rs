@@ -283,20 +283,58 @@ fn is_safe_value_expr(expr: &Expr) -> bool {
                 })
                 && else_result.as_deref().is_none_or(is_safe_value_expr)
         }
+        // Single value child; the remaining fields carry no `Expr` (only
+        // DataType / CastFormat-value / DateTimeField / CeilFloorKind /
+        // ObjectName / Ident), so no sibling can smuggle a subquery.
         Expr::Cast { expr, .. }
-        | Expr::Convert { expr, .. }
-        | Expr::AtTimeZone {
-            timestamp: expr, ..
-        }
         | Expr::Extract { expr, .. }
         | Expr::Ceil { expr, .. }
         | Expr::Floor { expr, .. }
-        | Expr::Substring { expr, .. }
-        | Expr::Trim { expr, .. }
-        | Expr::Overlay { expr, .. }
         | Expr::Collate { expr, .. }
-        | Expr::Prefixed { value: expr, .. }
-        | Expr::Position { expr, .. } => is_safe_value_expr(expr),
+        | Expr::Prefixed { value: expr, .. } => is_safe_value_expr(expr),
+        // The arms below carry sibling `Expr` fields that must be validated too
+        // — otherwise `(SELECT ...)` in a sibling bypasses this allowlist (#1549).
+        Expr::Convert { expr, styles, .. } => {
+            is_safe_value_expr(expr) && styles.iter().all(is_safe_value_expr)
+        }
+        Expr::AtTimeZone {
+            timestamp,
+            time_zone,
+        } => is_safe_value_expr(timestamp) && is_safe_value_expr(time_zone),
+        Expr::Substring {
+            expr,
+            substring_from,
+            substring_for,
+            ..
+        } => {
+            is_safe_value_expr(expr)
+                && substring_from.as_deref().is_none_or(is_safe_value_expr)
+                && substring_for.as_deref().is_none_or(is_safe_value_expr)
+        }
+        Expr::Trim {
+            expr,
+            trim_what,
+            trim_characters,
+            ..
+        } => {
+            is_safe_value_expr(expr)
+                && trim_what.as_deref().is_none_or(is_safe_value_expr)
+                && trim_characters
+                    .as_ref()
+                    .is_none_or(|chars| chars.iter().all(is_safe_value_expr))
+        }
+        Expr::Overlay {
+            expr,
+            overlay_what,
+            overlay_from,
+            overlay_for,
+        } => {
+            is_safe_value_expr(expr)
+                && is_safe_value_expr(overlay_what)
+                && is_safe_value_expr(overlay_from)
+                && overlay_for.as_deref().is_none_or(is_safe_value_expr)
+        }
+        Expr::Position { expr, r#in } => is_safe_value_expr(expr) && is_safe_value_expr(r#in),
         Expr::Identifier(_)
         | Expr::CompoundIdentifier(_)
         | Expr::Value(_)
