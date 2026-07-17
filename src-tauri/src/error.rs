@@ -65,6 +65,16 @@ pub enum AppError {
     #[error("Storage error: {0}")]
     Storage(String),
 
+    /// Issue #1558 — a migration failed for a *logical* reason (version
+    /// downgrade / dirty marker / checksum mismatch / broken migration SQL)
+    /// rather than storage corruption. The on-disk bytes are intact, so boot
+    /// must fail loudly and PRESERVE `state.db` — never quarantine it (which
+    /// would silently drop connections/favorites/query_history/settings).
+    /// Kept distinct from `Storage` so `open_pool`'s corrupt-recovery arm can
+    /// skip quarantine for this case (`local::is_migration_error`).
+    #[error("Migration failed: {0}")]
+    Migration(String),
+
     #[error("Encryption error: {0}")]
     Encryption(String),
 
