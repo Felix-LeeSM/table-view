@@ -12,8 +12,8 @@
 //      SHOWCASE_ROWS) so the tables have realistic volume for paging/sorting.
 //
 // Each table is applied as an isolated statement batch: an environment missing
-// an optional feature (e.g. libxml for the `xml` column) drops only that one
-// table, not the whole gallery.
+// an optional feature (e.g. libxml for the `xml` column) fails and skips only
+// that one table (its batch rolls back), while the rest of the gallery lands.
 //
 // Idempotent: every block DROPs before CREATE, so it is safe to re-run on each
 // `fixtures:load` / `db:reset`.
@@ -34,8 +34,12 @@ const BLOBS = JSON.parse(
 ) as Record<string, string>;
 
 // Bulk row count per showcase table. Env override keeps the "pass it in" knob
-// consistent with the rest of the fixture CLI.
-const BULK_ROWS = Math.max(0, Number(process.env.SHOWCASE_ROWS ?? 1000));
+// consistent with the rest of the fixture CLI. A non-numeric SHOWCASE_ROWS
+// falls back to the default instead of poisoning every generate_series with NaN.
+const parsedShowcaseRows = Number(process.env.SHOWCASE_ROWS ?? 1000);
+const BULK_ROWS = Number.isFinite(parsedShowcaseRows)
+  ? Math.max(0, Math.floor(parsedShowcaseRows))
+  : 1000;
 
 interface ShowcaseBlock {
   name: string;
