@@ -186,12 +186,10 @@ fn preflight_format(format: ExportFormat, context: &ExportContext) -> Result<(),
     if matches!(format, ExportFormat::Sql) {
         require_sql_source_table(context)?;
     }
-    if matches!(format, ExportFormat::Json) && !matches!(context, ExportContext::Collection { .. })
-    {
-        return Err(AppError::Validation(
-            "JSON export is only supported for collections".into(),
-        ));
-    }
+    // Issue #1638 — JSON is now valid for every context: table/query rows
+    // export as a tabular array of objects, collection rows as documents
+    // (the writer branches on context via `GridStreamState::begin`). SQL is
+    // the only format that still constrains its context (above).
     Ok(())
 }
 

@@ -242,6 +242,96 @@ fn test_extended_json_binary_preserved() {
     assert!(body.contains("aGVsbG8="));
 }
 
+// ── Issue #1638: tabular JSON export (table/query context) ───────────
+//
+// 작성 이유 (2026-07-17): #1077 Stage 1 은 table/query 결과의 JSON export 를
+// 약속하지만 기존 JSON writer 는 Mongo collection 전용 (row.first() = 문서
+// 전체). preflight 도 collection 만 허용했다. 아래는 tabular array-of-objects
+// writer 계약 — headers 를 key 로 하는 object 배열, header 순서 보존,
+// NULL/중첩 JSON cell/wire-string(#1082) 직렬화. writer 분기 GREEN 전에는
+// preflight reject 로 RED.
+
+fn tabular_json_string(headers: &[&str], rows: &[Vec<JsonValue>], ctx: &ExportContext) -> String {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("out.json");
+    let hv: Vec<String> = headers.iter().map(|s| s.to_string()).collect();
+    write_export(ExportFormat::Json, &path, &hv, rows, ctx, None).unwrap();
+    read_to_string(&path)
+}
+
+// [AC-1638-01] table context JSON = array of objects keyed by headers,
+// framed identically to the collection writer (`[`/`]\n`, 2-space indent).
+#[test]
+fn test_tabular_json_table_ctx_array_of_objects() {
+    let body = tabular_json_string(
+        &["id", "name"],
+        &[vec![json!(1), json!("alice")], vec![json!(2), json!("bob")]],
+        &table_ctx(),
+    );
+    assert_eq!(
+        body,
+        "[\n  {\n    \"id\": 1,\n    \"name\": \"alice\"\n  }\n,\n  {\n    \"id\": 2,\n    \"name\": \"bob\"\n  }\n]\n"
+    );
+}
+
+// [AC-1638-01] header order is preserved verbatim, not alphabetized —
+// `zeta` before `alpha` proves the writer does not lean on a sorted map.
+#[test]
+fn test_tabular_json_preserves_header_order_not_alphabetical() {
+    let body = tabular_json_string(
+        &["zeta", "alpha"],
+        &[vec![json!(1), json!(2)]],
+        &table_ctx(),
+    );
+    let zi = body.find("zeta").unwrap();
+    let ai = body.find("alpha").unwrap();
+    assert!(zi < ai, "header order must be preserved: {body}");
+}
+
+// [AC-1638-05] NULL → json null, nested JSON cell preserved, BigInt/Decimal
+// wire string (#1082) stays a JSON string (never coerced to a bare number).
+// Uses Query { source_table: None } — JSON must be allowed there too.
+#[test]
+fn test_tabular_json_null_nested_and_wire_string() {
+    let body = tabular_json_string(
+        &["big", "meta", "maybe"],
+        &[vec![
+            json!("123456789012345678901234567890"),
+            json!({"k": [1, 2]}),
+            JsonValue::Null,
+        ]],
+        &ExportContext::Query { source_table: None },
+    );
+    assert!(
+        body.contains("\"big\": \"123456789012345678901234567890\""),
+        "wire string must stay quoted: {body}"
+    );
+    assert!(body.contains("\"maybe\": null"), "null cell: {body}");
+    assert!(body.contains("\"meta\": {"), "nested object cell: {body}");
+    assert!(body.contains("\"k\": ["), "nested array preserved: {body}");
+}
+
+// [AC-1638-01] regression guard: adding the tabular branch must NOT change
+// the existing Mongo collection JSON output. Byte-exact fixture pins the
+// collection path (row.first() = document, relax_extended_json passthrough).
+#[test]
+fn test_collection_json_output_byte_exact_regression() {
+    let body = tabular_json_string(
+        &["_doc"],
+        &[
+            vec![json!({"_id": {"$oid": "5099803df3f4948bd2f98391"}, "n": 1})],
+            vec![json!({"_id": {"$oid": "5099803df3f4948bd2f98392"}, "n": 2})],
+        ],
+        &ExportContext::Collection {
+            name: "users".into(),
+        },
+    );
+    assert_eq!(
+        body,
+        "[\n  {\n    \"_id\": {\n      \"$oid\": \"5099803df3f4948bd2f98391\"\n    },\n    \"n\": 1\n  }\n,\n  {\n    \"_id\": {\n      \"$oid\": \"5099803df3f4948bd2f98392\"\n    },\n    \"n\": 2\n  }\n]\n"
+    );
+}
+
 // [AC-181-07] Streaming 100k rows — file line count + bytes_written.
 // 2026-05-01 — proves we don't load all rows into memory at once
 // (BufWriter sized at default 8 KiB writes incrementally).
@@ -1047,26 +1137,36 @@ async fn export_grid_rows_inner_csv_round_trip_releases_token() {
 }
 
 #[tokio::test]
-async fn export_grid_rows_inner_json_with_table_ctx_returns_validation_err_and_cleans_partial_file()
-{
-    // JSON export 는 Collection ctx 만 허용 — Table ctx 면 Validation
-    // 에러. 실패 시 partial file 도 cleanup 되어야 한다.
+async fn export_grid_rows_inner_json_with_table_ctx_writes_tabular_array() {
+    // Issue #1638 — JSON + Table ctx used to be rejected (collection-only);
+    // it now writes the tabular array-of-objects shape end-to-end through
+    // the command _inner (register token → spawn_blocking → release).
     let state = AppState::new();
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("grid.json");
-    let res = super::export_grid_rows_inner(
+    let summary = super::export_grid_rows_inner(
         &state,
         ExportFormat::Json,
         path.clone(),
-        vec!["id".into()],
-        vec![vec![json!(1)]],
+        vec!["id".into(), "name".into()],
+        vec![vec![json!(1), json!("alice")]],
         table_ctx(),
-        None,
+        Some("export-json-table"),
     )
-    .await;
-    assert!(matches!(res, Err(AppError::Validation(_))));
-    // Validation 은 file 생성 전에 reject — 파일이 만들어지지 않았어야.
-    assert!(!path.exists());
+    .await
+    .unwrap();
+    assert_eq!(summary.rows_written, 1);
+    let body = read_to_string(&path);
+    assert_eq!(
+        body,
+        "[\n  {\n    \"id\": 1,\n    \"name\": \"alice\"\n  }\n]\n"
+    );
+    // token released regardless of success (register/release contract).
+    assert!(!state
+        .query_tokens
+        .lock()
+        .await
+        .contains_key("export-json-table"));
 }
 
 #[tokio::test]

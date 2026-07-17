@@ -10,11 +10,13 @@ import { cn } from "@/lib/utils";
 
 const FORMATS_BY_KIND: Record<ExportContext["kind"], ExportFormat[]> = {
   // RDB table view: row data is structured + has full schema/table context.
-  table: ["csv", "tsv", "sql"],
+  // #1638 — JSON exports the tabular array-of-objects shape (headers as keys).
+  table: ["csv", "tsv", "sql", "json"],
   // Mongo collection view: BSON-aware JSON is the lossless export.
   collection: ["json", "csv", "tsv"],
-  // Arbitrary SELECT: SQL only when source_table inference succeeds.
-  query: ["csv", "tsv", "sql"],
+  // Arbitrary SELECT: SQL only when source_table inference succeeds; JSON is
+  // always available (tabular, like the table surface — #1638).
+  query: ["csv", "tsv", "sql", "json"],
 };
 
 export interface ExportButtonProps {
