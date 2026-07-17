@@ -15,6 +15,12 @@
 use std::path::{Path, PathBuf};
 use tracing_appender::non_blocking::{NonBlocking, WorkerGuard};
 
+/// Newest N daily log files to retain (#1620 F2). Daily rotation with no cap
+/// grows unbounded; the appender prunes older files past this count on each
+/// rotation. 14 days is enough history for a post-hoc bug report while bounding
+/// disk use.
+const MAX_LOG_FILES: usize = 14;
+
 /// Directory that holds the rotating diagnostic log files.
 ///
 /// Rooted under the same `table-view` folder the rest of storage uses
@@ -42,12 +48,11 @@ pub fn log_dir() -> PathBuf {
 /// it flushes and shuts down the background writer thread, after which every
 /// later log line is silently dropped.
 ///
-/// ponytail: default `non_blocking` is lossy once its buffer fills, and a
-/// `std::process::exit` skips the guard's flush — so the two fatal
-/// build/run-failure lines in `run()` may not reach the file (they still hit
-/// stderr). Acceptable ceiling for a diagnostics sink; a synchronous
-/// pre-exit flush is the upgrade path if those lines prove load-bearing.
-/// Rotation is daily with no built-in file-count cap — see PR follow-up.
+/// ponytail: default `non_blocking` is lossy once its buffer fills. The two
+/// fatal build/run-failure `process::exit(1)` paths in `run()` now drop the
+/// `WorkerGuard` before exiting so their last line is flushed (#1620 F2).
+/// Rotation is daily and capped at `MAX_LOG_FILES` newest files (#1620 F2), so
+/// the sink no longer grows unbounded.
 ///
 /// Every failure path returns `Err` (no panic): `run()` routes that to a
 /// stdout-only degrade so a read-only fs / disk-full / ENFILE never aborts
@@ -70,6 +75,7 @@ pub fn file_writer(dir: &Path) -> std::io::Result<(NonBlocking, WorkerGuard)> {
     let appender = tracing_appender::rolling::Builder::new()
         .rotation(tracing_appender::rolling::Rotation::DAILY)
         .filename_prefix("table-view.log")
+        .max_log_files(MAX_LOG_FILES)
         .build(dir)
         .map_err(std::io::Error::other)?;
     Ok(tracing_appender::non_blocking(appender))
