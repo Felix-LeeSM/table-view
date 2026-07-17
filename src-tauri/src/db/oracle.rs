@@ -238,12 +238,21 @@ impl OracleAdapter {
         // #1065 — Oracle wallet (mTLS): reference the user's wallet directory.
         // NOTE: never `{:?}` `oracle_config` — the crate's derived `Debug`
         // prints `password`/`wallet_password` verbatim (threat model §0.1/§2.5).
-        if let Some(wallet_path) = config
+        let wallet_path = config
             .wallet_path
             .as_deref()
             .map(str::trim)
-            .filter(|path| !path.is_empty())
-        {
+            .filter(|path| !path.is_empty());
+        // #1669 — a wallet password with no wallet path would skip the mTLS
+        // block below and connect over plaintext TCP, silently discarding the
+        // user's wallet intent. Fail closed. Never interpolate the secret into
+        // the message.
+        if wallet_path.is_none() && !config.wallet_password.is_empty() {
+            return Err(AppError::Validation(
+                "Oracle wallet password requires a wallet directory path; set the wallet path or clear the wallet password (#1065)".into(),
+            ));
+        }
+        if let Some(wallet_path) = wallet_path {
             warn_on_loose_wallet_permissions(wallet_path);
             let wallet_password = if config.wallet_password.is_empty() {
                 None
@@ -600,14 +609,35 @@ fn is_oracle_identifier_safe(value: &str) -> bool {
 #[cfg(unix)]
 fn warn_on_loose_wallet_permissions(wallet_path: &str) {
     use std::os::unix::fs::PermissionsExt;
-    if let Ok(meta) = std::fs::metadata(wallet_path) {
-        let mode = meta.permissions().mode();
+
+    // Only the octal mode is logged, never a filesystem path (leak avoidance);
+    // the generic wallet filenames below carry no user-identifying info.
+    fn warn_if_loose(mode: u32, what: &str) {
         if mode & 0o077 != 0 {
             tracing::warn!(
-                "Oracle wallet directory is group/other-accessible (mode {:o}); \
-                 restrict it to 0700 to protect the client private key",
+                "Oracle wallet {} is group/other-accessible (mode {:o}); \
+                 restrict it to 0700/0600 to protect the client private key",
+                what,
                 mode & 0o7777
             );
+        }
+    }
+
+    let Ok(meta) = std::fs::metadata(wallet_path) else {
+        return;
+    };
+    warn_if_loose(meta.permissions().mode(), "directory");
+
+    // #1669 — a locked-down wallet directory still leaks the private key if the
+    // key files themselves are world/group-readable (e.g. a 0644 `ewallet.pem`).
+    // The directory mode alone does not catch that, so check the sensitive
+    // wallet files too.
+    if meta.is_dir() {
+        let dir = std::path::Path::new(wallet_path);
+        for name in ["ewallet.pem", "cwallet.sso", "ewallet.p12", "ewallet.sso"] {
+            if let Ok(file_meta) = std::fs::metadata(dir.join(name)) {
+                warn_if_loose(file_meta.permissions().mode(), name);
+            }
         }
     }
 }
