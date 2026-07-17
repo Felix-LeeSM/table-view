@@ -13,6 +13,7 @@ import type {
 } from "@/types/schema";
 import type { FileAnalyticsSourceMetadata } from "@/types/fileAnalytics";
 import type { DatabaseInfo } from "@/types/document";
+import type { DatabaseName, SchemaName, TableName } from "@/types/branded";
 import * as tauri from "@lib/tauri";
 import { getTauriErrorMessage } from "@lib/tauri/error";
 import {
@@ -74,7 +75,7 @@ export function registerSchemaDbMismatchRecoveryHandler(
   dbMismatchRecoveryHandler = handler;
 }
 
-interface SchemaState {
+export interface SchemaState {
   databases: Record<string, DatabaseInfo[]>;
   schemas: ByConn<SchemaInfo[]>;
   tables: ByConn<BySchema<TableInfo[]>>;
@@ -134,21 +135,21 @@ interface SchemaState {
   clearFileAnalyticsSources: (connId: string) => Promise<void>;
   getTableColumns: (
     connId: string,
-    db: string,
-    table: string,
-    schema: string,
+    db: DatabaseName,
+    schema: SchemaName,
+    table: TableName,
   ) => Promise<ColumnInfo[]>;
   getTableIndexes: (
     connId: string,
-    db: string,
-    table: string,
-    schema: string,
+    db: DatabaseName,
+    schema: SchemaName,
+    table: TableName,
   ) => Promise<IndexInfo[]>;
   getTableConstraints: (
     connId: string,
-    db: string,
-    table: string,
-    schema: string,
+    db: DatabaseName,
+    schema: SchemaName,
+    table: TableName,
   ) => Promise<ConstraintInfo[]>;
   /**
    * List triggers for `(connId, db, schema, table)`.
@@ -158,9 +159,9 @@ interface SchemaState {
    */
   getTableTriggers: (
     connId: string,
-    db: string,
-    table: string,
-    schema: string,
+    db: DatabaseName,
+    schema: SchemaName,
+    table: TableName,
   ) => Promise<TriggerInfo[]>;
   /**
    * Sprint 273 — invalidate the cached entry for `(connId, db, schema,
@@ -172,9 +173,9 @@ interface SchemaState {
    */
   refreshTableTriggers: (
     connId: string,
-    db: string,
-    table: string,
-    schema: string,
+    db: DatabaseName,
+    schema: SchemaName,
+    table: TableName,
   ) => Promise<TriggerInfo[]>;
   getViewColumns: (
     connId: string,
@@ -522,7 +523,7 @@ export const useSchemaStore = create<SchemaState>((set, get) => ({
     });
   },
 
-  getTableColumns: async (connId, db, table, schema) => {
+  getTableColumns: async (connId, db, schema, table) => {
     try {
       return await writeIfCurrent(
         connId,
@@ -548,7 +549,7 @@ export const useSchemaStore = create<SchemaState>((set, get) => ({
   // Sprint 263 — frontend cache key takes `(connId, db, schema, table)`.
   // Sprint 271a — forwards `db` as `expectedDatabase` so the backend guard
   // rejects a swapped pool BEFORE the trait dispatches.
-  getTableIndexes: async (connId, db, table, schema) => {
+  getTableIndexes: async (connId, db, schema, table) => {
     try {
       return await writeIfCurrent(
         connId,
@@ -571,7 +572,7 @@ export const useSchemaStore = create<SchemaState>((set, get) => ({
     }
   },
 
-  getTableConstraints: async (connId, db, table, schema) => {
+  getTableConstraints: async (connId, db, schema, table) => {
     try {
       return await writeIfCurrent(
         connId,
@@ -598,7 +599,7 @@ export const useSchemaStore = create<SchemaState>((set, get) => ({
   // shape (`(connId, db, schema, table)` → `TriggerInfo[]`). Second call
   // with identical key short-circuits to the cached array without hitting
   // IPC. Mismatch path is silent (passive prefetch — no toast).
-  getTableTriggers: async (connId, db, table, schema) => {
+  getTableTriggers: async (connId, db, schema, table) => {
     const cached = get().triggers[connId]?.[db]?.[schema]?.[table];
     if (cached) return cached;
     try {
@@ -627,7 +628,7 @@ export const useSchemaStore = create<SchemaState>((set, get) => ({
   // `setConnDbSchemaTable` write as `getTableTriggers` but skips the
   // cache short-circuit so the dialog's commit-success path sees the
   // new trigger. Throws on IPC error.
-  refreshTableTriggers: async (connId, db, table, schema) => {
+  refreshTableTriggers: async (connId, db, schema, table) => {
     try {
       return await writeIfCurrent(
         connId,

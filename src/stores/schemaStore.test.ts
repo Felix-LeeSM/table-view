@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { setupTauriMock } from "@/test-utils/tauriMock";
+import type { DatabaseName, SchemaName, TableName } from "@/types/branded";
 import { useSchemaStore } from "./schemaStore";
 beforeEach(() => {
   setupTauriMock({
@@ -288,7 +289,12 @@ describe("schemaStore", () => {
     const { getTableColumns } = await import("@lib/tauri");
     const columns = await useSchemaStore
       .getState()
-      .getTableColumns("conn1", "db1", "users", "public");
+      .getTableColumns(
+        "conn1",
+        "db1" as DatabaseName,
+        "public" as SchemaName,
+        "users" as TableName,
+      );
 
     // Sprint 271a — forwards `db` as expectedDatabase (4th positional).
     expect(getTableColumns).toHaveBeenCalledWith(
@@ -305,7 +311,12 @@ describe("schemaStore", () => {
   it("getTableColumns populates tableColumnsCache for autocomplete", async () => {
     await useSchemaStore
       .getState()
-      .getTableColumns("conn1", "db1", "users", "public");
+      .getTableColumns(
+        "conn1",
+        "db1" as DatabaseName,
+        "public" as SchemaName,
+        "users" as TableName,
+      );
     const state = useSchemaStore.getState();
     expect(state.tableColumnsCache.conn1?.db1?.public?.users).toBeDefined();
     expect(state.tableColumnsCache.conn1?.db1?.public?.users).toHaveLength(1);
@@ -405,7 +416,12 @@ describe("schemaStore", () => {
     const { getTableIndexes } = await import("@lib/tauri");
     const indexes = await useSchemaStore
       .getState()
-      .getTableIndexes("conn1", "db1", "users", "public");
+      .getTableIndexes(
+        "conn1",
+        "db1" as DatabaseName,
+        "public" as SchemaName,
+        "users" as TableName,
+      );
 
     // Sprint 271a — forwards `db` as expectedDatabase (4th positional).
     expect(getTableIndexes).toHaveBeenCalledWith(
@@ -423,7 +439,12 @@ describe("schemaStore", () => {
     const { getTableConstraints } = await import("@lib/tauri");
     const constraints = await useSchemaStore
       .getState()
-      .getTableConstraints("conn1", "db1", "users", "public");
+      .getTableConstraints(
+        "conn1",
+        "db1" as DatabaseName,
+        "public" as SchemaName,
+        "users" as TableName,
+      );
 
     // Sprint 271a — forwards `db` as expectedDatabase (4th positional).
     expect(getTableConstraints).toHaveBeenCalledWith(
@@ -912,7 +933,12 @@ describe("schemaStore", () => {
     const { listTriggers } = await import("@lib/tauri");
     const first = await useSchemaStore
       .getState()
-      .getTableTriggers("conn1", "db1", "users", "public");
+      .getTableTriggers(
+        "conn1",
+        "db1" as DatabaseName,
+        "public" as SchemaName,
+        "users" as TableName,
+      );
     expect(first).toHaveLength(1);
     expect(first[0]!.name).toBe("audit_users_insert");
     // Sprint 271a — `db` is forwarded as `expectedDatabase` (the 4th
@@ -928,7 +954,12 @@ describe("schemaStore", () => {
     // Cache hit — second call with identical key MUST NOT re-invoke IPC.
     const second = await useSchemaStore
       .getState()
-      .getTableTriggers("conn1", "db1", "users", "public");
+      .getTableTriggers(
+        "conn1",
+        "db1" as DatabaseName,
+        "public" as SchemaName,
+        "users" as TableName,
+      );
     expect(second).toEqual(first);
     expect(listTriggers).toHaveBeenCalledTimes(1);
 
@@ -940,10 +971,20 @@ describe("schemaStore", () => {
     const { listTriggers } = await import("@lib/tauri");
     await useSchemaStore
       .getState()
-      .getTableTriggers("conn1", "db1", "users", "public");
+      .getTableTriggers(
+        "conn1",
+        "db1" as DatabaseName,
+        "public" as SchemaName,
+        "users" as TableName,
+      );
     await useSchemaStore
       .getState()
-      .getTableTriggers("conn1", "db1", "orders", "public");
+      .getTableTriggers(
+        "conn1",
+        "db1" as DatabaseName,
+        "public" as SchemaName,
+        "orders" as TableName,
+      );
     expect(listTriggers).toHaveBeenCalledTimes(2);
   });
 
@@ -1001,7 +1042,12 @@ describe("schemaStore", () => {
     await expect(
       useSchemaStore
         .getState()
-        .getTableTriggers("conn1", "db1", "users", "public"),
+        .getTableTriggers(
+          "conn1",
+          "db1" as DatabaseName,
+          "public" as SchemaName,
+          "users" as TableName,
+        ),
     ).rejects.toThrow(/Database mismatch/);
     // The store's mismatch handler is silent for background paths. The
     // registered verifyActiveDb / setActiveDb side-effects are covered by

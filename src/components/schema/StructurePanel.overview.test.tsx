@@ -40,8 +40,8 @@ describe("StructurePanel", () => {
     expect(mockGetTableColumns).toHaveBeenCalledWith(
       "conn-1",
       "db-1",
-      "users",
       "public",
+      "users",
     );
   });
 
@@ -104,8 +104,8 @@ describe("StructurePanel", () => {
     expect(mockGetTableIndexes).toHaveBeenCalledWith(
       "conn-1",
       "db-1",
-      "users",
       "public",
+      "users",
     );
   });
 
@@ -151,8 +151,8 @@ describe("StructurePanel", () => {
     expect(mockGetTableConstraints).toHaveBeenCalledWith(
       "conn-1",
       "db-1",
-      "users",
       "public",
+      "users",
     );
   });
 

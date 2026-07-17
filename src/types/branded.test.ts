@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { rawEntryKey } from "@stores/rawQueryGridEditStore";
 import { entryKey } from "@stores/dataGridEditStore";
+import type { SchemaState } from "@stores/schemaStore";
 import type { ExecuteRdbSingleStatementRequest } from "@components/query/QueryTab/rdbQueryExecution";
 import type { InlineFkPopoverProps } from "@components/schema/CreateTableDialog/InlineFkPopover";
 import type { QueryTab, TableTab } from "@stores/workspaceStore";
@@ -101,6 +102,34 @@ describe("branded SchemaName / TableName FK picker order safety", () => {
     // @ts-expect-error swapped (table, schema) order must not compile
     onTablePicked(table, schema);
     expect(true).toBe(true);
+  });
+});
+
+/**
+ * Type-level regression for issue #1495 (branded Phase 3, deferred slice
+ * of #1517). The schema catalog methods took `schema` LAST
+ * (`getTableColumns(connId, db, table, schema)`), out of step with the
+ * `(database, schema, table)` convention, so a schema/table swap searched the
+ * wrong key. The signature is now `(connId, database, schema, table)` with
+ * each name axis branded. Same live-directive discipline: before the brands
+ * every axis was plain `string`, so the swapped call type-checked and the
+ * `@ts-expect-error` was unused (`tsc --noEmit` fails, the RED). After
+ * branding + reorder the swap is a genuine compile error and the directive is
+ * live.
+ */
+describe("branded schemaStore catalog argument-order safety", () => {
+  const connectionId = "conn-1";
+  const database = "app" as DatabaseName;
+  const schema = "public" as SchemaName;
+  const table = "users" as TableName;
+
+  it("rejects a swapped (table, schema) getTableColumns call at compile time", () => {
+    const getTableColumns = ((): Promise<never[]> =>
+      Promise.resolve([])) as unknown as SchemaState["getTableColumns"];
+    // Canonical order is (connectionId, database, schema, table).
+    void getTableColumns(connectionId, database, schema, table);
+    // @ts-expect-error swapped (table, schema) order must not compile
+    void getTableColumns(connectionId, database, table, schema);
   });
 });
 

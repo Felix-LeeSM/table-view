@@ -10,6 +10,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { setupTauriMock } from "@/test-utils/tauriMock";
+import type { DatabaseName, SchemaName, TableName } from "@/types/branded";
 import {
   registerSchemaStoreDbMismatchRecovery,
   resetSchemaStoreDbMismatchRecoveryForTests,
@@ -134,7 +135,14 @@ describe("schemaStore — DbMismatch silent sync (Sprint 271a)", () => {
 
   it("getTableColumns mismatch rethrows AND triggers silent sync", async () => {
     await expect(
-      useSchemaStore.getState().getTableColumns("conn1", "dbA", "t", "s"),
+      useSchemaStore
+        .getState()
+        .getTableColumns(
+          "conn1",
+          "dbA" as DatabaseName,
+          "s" as SchemaName,
+          "t" as TableName,
+        ),
     ).rejects.toThrow(/Database mismatch/);
 
     await flushMicrotasks();
@@ -154,7 +162,14 @@ describe("schemaStore — DbMismatch silent sync (Sprint 271a)", () => {
 
   it("getTableIndexes mismatch rethrows AND triggers silent sync", async () => {
     await expect(
-      useSchemaStore.getState().getTableIndexes("conn1", "dbA", "t", "s"),
+      useSchemaStore
+        .getState()
+        .getTableIndexes(
+          "conn1",
+          "dbA" as DatabaseName,
+          "s" as SchemaName,
+          "t" as TableName,
+        ),
     ).rejects.toThrow(/Database mismatch/);
 
     await flushMicrotasks();

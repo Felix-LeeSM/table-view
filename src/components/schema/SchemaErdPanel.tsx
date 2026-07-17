@@ -18,6 +18,7 @@ import {
   type RuntimeRdbmsDatabaseType,
 } from "@/types/rdbmsDataSources";
 import type { SchemaGraphCatalogSnapshot } from "@/types/schemaGraph";
+import type { DatabaseName, SchemaName, TableName } from "@/types/branded";
 import SchemaGraphDiffPanel from "./SchemaGraphDiffPanel";
 import SchemaErdRenderer from "./SchemaErdRenderer";
 
@@ -136,7 +137,12 @@ export default function SchemaErdPanel({
             tableName,
             "indexes",
             () =>
-              getTableIndexes(connectionId, database, tableName, tableSchema),
+              getTableIndexes(
+                connectionId,
+                database as DatabaseName,
+                tableSchema as SchemaName,
+                tableName as TableName,
+              ),
           );
         }
 
@@ -151,9 +157,9 @@ export default function SchemaErdPanel({
             () =>
               getTableConstraints(
                 connectionId,
-                database,
-                tableName,
-                tableSchema,
+                database as DatabaseName,
+                tableSchema as SchemaName,
+                tableName as TableName,
               ),
           );
         }

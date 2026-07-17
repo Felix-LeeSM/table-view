@@ -27,6 +27,7 @@ import SqlPreviewDialog from "./SqlPreviewDialog";
 import { useDdlPreviewExecution } from "./useDdlPreviewExecution";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useSchemaStore } from "@stores/schemaStore";
+import type { DatabaseName, SchemaName, TableName } from "@/types/branded";
 import { ConfirmDestructiveDialog } from "@features/workspace";
 import { useSchemaGraphIntelligence } from "@/hooks/useSchemaGraphIntelligence";
 import {
@@ -490,7 +491,12 @@ export default function ConstraintsEditor({
 
   const handleOpenAddConstraint = async () => {
     if (columns.length === 0) {
-      const cols = await getTableColumns(connectionId, database, table, schema);
+      const cols = await getTableColumns(
+        connectionId,
+        database as DatabaseName,
+        schema as SchemaName,
+        table as TableName,
+      );
       onColumnsChange(cols);
     }
     setShowAddConstraintModal(true);

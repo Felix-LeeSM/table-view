@@ -64,8 +64,8 @@ describe("StructurePanel Triggers tab (Sprint 272)", () => {
     expect(mockGetTableTriggers).toHaveBeenCalledWith(
       "conn-1",
       "db-1",
-      "users",
       "public",
+      "users",
     );
     expect(mockGetTableTriggers).toHaveBeenCalledTimes(1);
   });

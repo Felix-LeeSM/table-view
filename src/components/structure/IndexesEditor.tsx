@@ -20,6 +20,7 @@ import {
 import type { ColumnInfo, IndexInfo } from "@/types/schema";
 import * as tauri from "@lib/tauri";
 import { useSchemaStore } from "@stores/schemaStore";
+import type { DatabaseName, SchemaName, TableName } from "@/types/branded";
 import SqlPreviewDialog from "./SqlPreviewDialog";
 import { useDdlPreviewExecution } from "./useDdlPreviewExecution";
 import { useConnectionStore } from "@stores/connectionStore";
@@ -395,7 +396,12 @@ export default function IndexesEditor({
 
   const handleOpenCreateIndex = async () => {
     if (columns.length === 0) {
-      const cols = await getTableColumns(connectionId, database, table, schema);
+      const cols = await getTableColumns(
+        connectionId,
+        database as DatabaseName,
+        schema as SchemaName,
+        table as TableName,
+      );
       onColumnsChange(cols);
     }
     setShowCreateIndexModal(true);
