@@ -3,6 +3,7 @@ import { useSchemaStore } from "@stores/schemaStore";
 import CreateTableDialog from "../CreateTableDialog";
 import RenameTableDialog from "../RenameTableDialog";
 import DropTableDialog from "../DropTableDialog";
+import ImportCsvDialog from "../ImportCsvDialog";
 
 /**
  * Dialog mount slots for `SchemaTree`. Sprint 235 collapses the legacy
@@ -121,6 +122,35 @@ export function DropTableDialogSlot({
       schemaName={dropTableDialog.schemaName}
       tableName={dropTableDialog.tableName}
       open
+      onClose={onClose}
+    />
+  );
+}
+
+/**
+ * #1639 — `ImportCsvDialog` mount slot (read-only CSV import wizard). Same
+ * open/close shape as the rename/drop slots.
+ */
+interface ImportCsvDialogSlotProps {
+  connectionId: string;
+  database: string;
+  importCsvDialog: { schemaName: string; tableName: string } | null;
+  onClose: () => void;
+}
+
+export function ImportCsvDialogSlot({
+  connectionId,
+  database,
+  importCsvDialog,
+  onClose,
+}: ImportCsvDialogSlotProps) {
+  if (!importCsvDialog) return null;
+  return (
+    <ImportCsvDialog
+      connectionId={connectionId}
+      database={database}
+      schemaName={importCsvDialog.schemaName}
+      tableName={importCsvDialog.tableName}
       onClose={onClose}
     />
   );
