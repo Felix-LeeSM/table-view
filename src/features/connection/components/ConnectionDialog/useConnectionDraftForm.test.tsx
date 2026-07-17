@@ -112,4 +112,71 @@ describe("useConnectionDraftForm — skip-verify never carries across dbType swi
     expect(result.current.form.tlsEnabled).toBe(true);
     expect(result.current.form.trustServerCertificate).toBeNull();
   });
+
+  // Reason: B1 review finding — the paste path (`applyParsedConnection`) bypassed
+  // the dropdown's `applyDbTypeChange` sanitize, so a stored MSSQL draft's
+  // trust=true survived a `redis://` paste and reached the backend as
+  // redis `insecure=true`. (2026-07-17)
+  it("drops a carried skip-verify choice when a pasted URL changes the engine (#1063 B1)", () => {
+    const conn = storedConnection({
+      dbType: "mssql",
+      tlsEnabled: true,
+      trustServerCertificate: true,
+    });
+    const { result } = renderHook(() => useConnectionDraftForm(conn));
+    expect(result.current.form.trustServerCertificate).toBe(true);
+
+    // Paste a redis URL that carries no TLS parameter (the B1 repro).
+    act(() =>
+      result.current.applyParsedConnection(
+        {
+          dbType: "redis",
+          host: "prod-host",
+          port: 6379,
+          user: "",
+          database: "0",
+          paradigm: "kv",
+        },
+        "paste",
+      ),
+    );
+
+    expect(result.current.form.dbType).toBe("redis");
+    // Encryption may carry; the skip-verify choice must not.
+    expect(result.current.form.trustServerCertificate).toBeNull();
+  });
+
+  // Reason: the sanitize must not clobber a TLS posture the pasted URL states
+  // explicitly (e.g. `?sslmode=require`). Order matters: sanitize first, then
+  // the parsed fields override. (2026-07-17)
+  it("still applies explicit TLS params carried by the pasted URL", () => {
+    const conn = storedConnection({
+      dbType: "mssql",
+      tlsEnabled: true,
+      trustServerCertificate: true,
+    });
+    const { result } = renderHook(() => useConnectionDraftForm(conn));
+
+    // postgresql://...?sslmode=require → the parser emits tls=true, trust=true.
+    act(() =>
+      result.current.applyParsedConnection(
+        {
+          dbType: "postgresql",
+          host: "h",
+          port: 5432,
+          user: "u",
+          database: "db",
+          tlsEnabled: true,
+          trustServerCertificate: true,
+          paradigm: "rdb",
+        },
+        "paste",
+      ),
+    );
+
+    expect(result.current.form.dbType).toBe("postgresql");
+    // The explicit sslmode=require (skip-verify) survives the sanitize.
+    expect(result.current.form.tlsEnabled).toBe(true);
+    expect(result.current.form.trustServerCertificate).toBe(true);
+  });
 });
