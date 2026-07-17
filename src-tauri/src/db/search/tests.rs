@@ -1207,8 +1207,11 @@ async fn spawn_search_cancel_watch_server(root_body: &'static str) -> (u16, Join
         let (mut probe, _) = listener.accept().await.unwrap();
         let mut buf = [0u8; 4096];
         let _ = probe.read(&mut buf).await.unwrap();
+        // `Connection: close` so reqwest does not pool the probe socket and
+        // reuse it for the search POST -- this server relies on the client
+        // opening a fresh connection for connection 2 (issue #1293 flake).
         let response = format!(
-            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{}",
             root_body.len(),
             root_body,
         );
@@ -1347,8 +1350,14 @@ async fn spawn_search_http_server(routes: Vec<SearchHttpRoute>) -> (u16, JoinHan
                 if route.delay_ms > 0 {
                     sleep(Duration::from_millis(route.delay_ms)).await;
                 }
+                // The handler serves exactly one request per accepted socket
+                // and then closes it, so it must advertise `Connection: close`.
+                // Without it reqwest treats the socket as HTTP/1.1 keep-alive,
+                // pools it, and races to reuse it for the next request before
+                // the server's FIN lands -- the reused send hits the already
+                // closed socket and fails (issue #1293 flake).
                 let response = format!(
-                    "HTTP/1.1 {} Test\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+                    "HTTP/1.1 {} Test\r\nContent-Type: application/json\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{}",
                     route.status,
                     route.body.len(),
                     route.body
