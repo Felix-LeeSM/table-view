@@ -33,6 +33,30 @@
 //! These flow to the frontend via the standard Tauri error-serialisation
 //! pathway (`AppError: Serialize` in `src-tauri/src/error.rs`).
 //!
+//! ## Threat model — capability re-check (Issue #1618, D7)
+//!
+//! This command layer does NOT re-verify the TS-side `edit.editDocuments` /
+//! `edit.bulkWrite` capability flags. Those flags are a UI-only affordance gate
+//! (`supportsDocumentEditing` / `supportsBulkWrite` in `src/types/dataSource.ts`):
+//! they decide whether the button renders, not whether the write is allowed. The
+//! backend trust boundary here is deliberately narrower and enforces only:
+//!   1. Paradigm — `ActiveAdapter::as_document()?` rejects a non-document
+//!      connection id with `AppError::Unsupported` before any mutate runs.
+//!   2. Safety — destructive bulk ops (`update_many` / `delete_many` /
+//!      `bulk_write` with a many-op) require an explicit `safety_confirmed`.
+//!   3. Deterministic identity — single-target bulk ops require an `_id`-only
+//!      filter (`validate_bulk_write_identity`).
+//!
+//! So the capability gate is single-layer (UI). This is acceptable because a
+//! wired document adapter that reaches this layer inherently supports the
+//! document write path (there is no wired document engine that exposes
+//! `insert/update/delete` yet withholds `edit.editDocuments`), and a direct-IPC
+//! caller that bypasses the UI still hits the paradigm + safety gates above. If a
+//! future document engine can connect as `document` yet must forbid writes (a
+//! read-only document source), promote the capability check into this layer
+//! (resolve the connection's profile and reject `!edit.editDocuments` /
+//! `!edit.bulkWrite` before dispatch) rather than relying on the UI alone.
+//!
 //! Sprint 237 P5 (2026-05-08) — handler bodies hoisted into
 //! `_inner(&AppState)` shape so unit tests can drive prod code directly.
 

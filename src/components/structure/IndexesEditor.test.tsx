@@ -329,3 +329,76 @@ describe("IndexesEditor — Sprint 187 Safe Mode gate", () => {
     ).toBeInTheDocument();
   });
 });
+
+// #1618 (D2) — createIndex / dropObject must be gated SYMMETRICALLY: the earlier
+// concern was that one action was verified while the other stayed live. Lock
+// both gates so a regression that drops either flag is caught. Create Index
+// reads `canCreateIndex`; the per-row drop-index trash reads `canDropObject`.
+// (2026-07-17)
+describe("IndexesEditor — #1618 D2 createIndex/dropObject symmetry", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useConnectionStore.setState({ connections: [] });
+  });
+
+  function renderEditor(props: {
+    canCreateIndex?: boolean;
+    canDropObject?: boolean;
+  }) {
+    render(
+      <IndexesEditor
+        connectionId="conn-1"
+        database="db-1"
+        table="users"
+        schema="public"
+        indexes={[SAMPLE_INDEX]}
+        columns={[]}
+        onColumnsChange={vi.fn()}
+        onRefresh={vi.fn().mockResolvedValue(undefined)}
+        {...props}
+      />,
+    );
+  }
+
+  // Reason: defaults keep both controls for gating-agnostic callers. (2026-07-17)
+  it("shows Create Index + drop-index controls by default", () => {
+    renderEditor({});
+    expect(
+      screen.getByRole("button", { name: "Create index" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", {
+        name: `Delete index ${SAMPLE_INDEX.name}`,
+      }),
+    ).toBeInTheDocument();
+  });
+
+  // Reason: createIndex false hides only Create; the drop control stays visible
+  // when dropObject is still allowed (proves the gates are independent, not a
+  // single coarse flag). (2026-07-17)
+  it("hides only Create Index when canCreateIndex is false", () => {
+    renderEditor({ canCreateIndex: false, canDropObject: true });
+    expect(
+      screen.queryByRole("button", { name: "Create index" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", {
+        name: `Delete index ${SAMPLE_INDEX.name}`,
+      }),
+    ).toBeInTheDocument();
+  });
+
+  // Reason: dropObject false hides only the drop-index trash; Create stays.
+  // (2026-07-17)
+  it("hides only the drop-index control when canDropObject is false", () => {
+    renderEditor({ canCreateIndex: true, canDropObject: false });
+    expect(
+      screen.getByRole("button", { name: "Create index" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", {
+        name: `Delete index ${SAMPLE_INDEX.name}`,
+      }),
+    ).not.toBeInTheDocument();
+  });
+});

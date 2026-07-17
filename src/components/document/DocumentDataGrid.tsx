@@ -481,6 +481,15 @@ export default function DocumentDataGrid({
 
   const handleAddSubmit = useCallback(
     async (record: Record<string, unknown>) => {
+      // #1618 (D4) — defense-in-depth: the toolbar already hides Add when the
+      // source can't edit documents, but guard the mutation entry point itself
+      // so a bypassed UI gate (or a future refactor that un-hides the button)
+      // can't leak an insert to a read-only document source. The cell-edit /
+      // commit paths route through `useDataGridEdit`, which already short-
+      // circuits on `!canEditRows`; this covers the one direct `insertDocument`
+      // call that does not. Backend capability re-check is a separate layer
+      // (#1618 D7 threat model).
+      if (!canEditDocuments) return;
       setAddLoading(true);
       setAddError(null);
       // Synthesise a user-readable MQL line for the history row,
@@ -521,7 +530,7 @@ export default function DocumentDataGrid({
         setAddLoading(false);
       }
     },
-    [connectionId, database, collection, fetchData],
+    [connectionId, database, collection, fetchData, canEditDocuments],
   );
 
   const handleExecuteMql = useCallback(async () => {

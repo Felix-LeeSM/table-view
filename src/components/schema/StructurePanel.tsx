@@ -352,6 +352,7 @@ export default function StructurePanel({
             columns={columns}
             onColumnsChange={setColumns}
             onRefresh={fetchData}
+            canAlterTable={canAlterTable}
           />
         )}
 
