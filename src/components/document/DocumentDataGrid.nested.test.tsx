@@ -14,6 +14,7 @@ import { setupTauriMock } from "@/test-utils/tauriMock";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import DocumentDataGrid from "./DocumentDataGrid";
 import { __resetDocumentStoreForTests } from "@/test-utils/documentStore";
+import { useConnectionStore } from "@stores/connectionStore";
 import type { DocumentQueryResult } from "@/types/document";
 
 function buildResult(): DocumentQueryResult {
@@ -64,6 +65,13 @@ beforeEach(() => {
   window.localStorage.clear();
   findMock.mockReset();
   findMock.mockResolvedValue(buildResult());
+  // #1618 (D3) — supportsDocumentEditing is now fail-closed for an unknown
+  // dbType, so seed the MongoDB connection this grid renders against to keep
+  // nested cell editing enabled via the real capability.
+  useConnectionStore.setState({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    connections: [{ id: "conn-mongo", dbType: "mongodb" } as any],
+  });
 });
 
 function renderGrid() {

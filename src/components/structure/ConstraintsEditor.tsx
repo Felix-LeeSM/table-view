@@ -354,6 +354,18 @@ interface ConstraintsEditorProps {
   onColumnsChange: (columns: ColumnInfo[]) => void;
   /** Called after a successful execute to trigger data refresh */
   onRefresh: () => Promise<void>;
+  /**
+   * Issue #1618 (D1) — whether the engine's adapter can run the ALTER TABLE
+   * ADD/DROP CONSTRAINT path. Both add + drop constraint are ALTER TABLE forms
+   * (mirroring ColumnsEditor's add/drop column), so a single `alterTable` gate
+   * hides the Add Constraint button AND the per-row drop-constraint trash when
+   * the adapter rejects the write. Defaults to `true` so non-gating callers keep
+   * the prior surface; production passes `supportsDdl(dbType, "alterTable")`.
+   * Fixes the DuckDB fail-open (catalog.constraints true, so the Constraints tab
+   * shows, but the adapter returns Unsupported for add/drop) where the controls
+   * were click-then-error instead of hidden (#1046 disable-at-source).
+   */
+  canAlterTable?: boolean;
 }
 
 export default function ConstraintsEditor({
@@ -365,6 +377,7 @@ export default function ConstraintsEditor({
   columns,
   onColumnsChange,
   onRefresh,
+  canAlterTable = true,
 }: ConstraintsEditorProps) {
   const { t } = useTranslation("structure");
   const [showAddConstraintModal, setShowAddConstraintModal] = useState(false);
@@ -507,15 +520,19 @@ export default function ConstraintsEditor({
       <StructureActionBar
         count={`${constraints.length} ${constraints.length === 1 ? t("constraint.countSingular") : t("constraint.countPlural")}`}
         actions={
-          <Button
-            variant="ghost"
-            size="xs"
-            onClick={handleOpenAddConstraint}
-            aria-label={t("constraint.addAria")}
-          >
-            <Plus />
-            {t("constraint.addLabel")}
-          </Button>
+          // #1618 (D1) — Add Constraint hidden when the engine's adapter can't
+          // run ALTER TABLE ADD CONSTRAINT.
+          canAlterTable ? (
+            <Button
+              variant="ghost"
+              size="xs"
+              onClick={handleOpenAddConstraint}
+              aria-label={t("constraint.addAria")}
+            >
+              <Plus />
+              {t("constraint.addLabel")}
+            </Button>
+          ) : null
         }
       />
 
@@ -557,16 +574,23 @@ export default function ConstraintsEditor({
                 </td>
                 <td className={STRUCTURE_TD_ACTIONS}>
                   <div className="flex items-center justify-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Button
-                      variant="ghost"
-                      size="icon-xs"
-                      className="hover:text-destructive"
-                      onClick={() => handleDropConstraint(c.name)}
-                      aria-label={t("constraint.deleteAria", { name: c.name })}
-                      title={t("constraint.deleteTitle")}
-                    >
-                      <Trash2 />
-                    </Button>
+                    {/* #1618 (D1) — drop-constraint is an ALTER TABLE DROP
+                        CONSTRAINT action; hidden when the adapter cannot run
+                        it (disable-at-source, not click-then-error). */}
+                    {canAlterTable && (
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        className="hover:text-destructive"
+                        onClick={() => handleDropConstraint(c.name)}
+                        aria-label={t("constraint.deleteAria", {
+                          name: c.name,
+                        })}
+                        title={t("constraint.deleteTitle")}
+                      >
+                        <Trash2 />
+                      </Button>
+                    )}
                   </div>
                 </td>
               </tr>

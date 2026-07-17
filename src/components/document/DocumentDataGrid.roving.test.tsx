@@ -15,6 +15,7 @@ import {
 } from "@testing-library/react";
 import DocumentDataGrid from "./DocumentDataGrid";
 import { __resetDocumentStoreForTests } from "@/test-utils/documentStore";
+import { useConnectionStore } from "@stores/connectionStore";
 import type { DocumentQueryResult } from "@/types/document";
 
 const findMock =
@@ -61,6 +62,13 @@ beforeEach(() => {
   __resetDocumentStoreForTests();
   findMock.mockReset();
   findMock.mockResolvedValue(buildResult());
+  // #1618 (D3) — supportsDocumentEditing is now fail-closed for an unknown
+  // dbType, so seed the MongoDB connection this grid renders against to keep
+  // cell editing enabled via the real capability.
+  useConnectionStore.setState({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    connections: [{ id: "conn-mongo", dbType: "mongodb" } as any],
+  });
 });
 
 // rAF flush — useGridRoving.onKeyDown 이 `.focus()` 를 한 프레임 defer 한다.
