@@ -50,5 +50,3 @@ active `DatabaseType`/profile/runtime 으로 추가하지 않는다.
 
 - [data source architecture](../memory.md)
 - [adding data source](../adding/memory.md)
-</content>
-</invoke>
