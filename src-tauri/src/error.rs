@@ -108,6 +108,13 @@ pub enum AppError {
     #[error("Database mismatch: expected '{expected}', but found '{actual}'")]
     DbMismatch { expected: String, actual: String },
 
+    /// slow-query 등 관측 기능이 서버측 capability(확장/권한)를 요구하는데
+    /// 이 연결에 설치/허용되지 않은 경우. `Database`와 구분해 UI가 빨간
+    /// 에러 대신 passive "활성화 안내"를 렌더하게 한다. `code`는 안정적인
+    /// 머신 키(프런트가 localized 안내로 매핑), `message`는 영어 fallback.
+    #[error("{message}")]
+    CapabilityNotEnabled { code: String, message: String },
+
     #[error("Window error: {0}")]
     Window(String),
 
@@ -179,6 +186,27 @@ impl serde::Serialize for AppError {
                     kind: "DbMismatch",
                     message: self.to_string(),
                     payload: DbMismatchPayload { expected, actual },
+                }
+                .serialize(serializer)
+            }
+            AppError::CapabilityNotEnabled { code, message } => {
+                #[derive(Serialize)]
+                struct CapabilityPayload<'a> {
+                    code: &'a str,
+                }
+
+                #[derive(Serialize)]
+                struct CapabilityEnvelope<'a> {
+                    #[serde(rename = "type")]
+                    kind: &'static str,
+                    message: &'a str,
+                    payload: CapabilityPayload<'a>,
+                }
+
+                CapabilityEnvelope {
+                    kind: "CapabilityNotEnabled",
+                    message,
+                    payload: CapabilityPayload { code },
                 }
                 .serialize(serializer)
             }
@@ -309,6 +337,22 @@ mod tests {
         );
         assert_eq!(json["payload"]["expected"], "db1");
         assert_eq!(json["payload"]["actual"], "db2");
+    }
+
+    // Reason: slow-query capability gaps (missing extension / catalog grant)
+    // must reach the frontend as a typed `CapabilityNotEnabled` envelope so the
+    // panel can render a passive enablement hint keyed by `code` instead of a
+    // red error box (2026-07-17, no tracking issue — slow-query UX refinement).
+    #[test]
+    fn capability_not_enabled_serializes_to_typed_envelope() {
+        let err = AppError::CapabilityNotEnabled {
+            code: "pg_stat_statements".into(),
+            message: "pg_stat_statements extension not enabled.".into(),
+        };
+        let json = serde_json::to_value(&err).unwrap();
+        assert_eq!(json["type"], "CapabilityNotEnabled");
+        assert_eq!(json["payload"]["code"], "pg_stat_statements");
+        assert_eq!(json["message"], "pg_stat_statements extension not enabled.");
     }
 
     #[test]

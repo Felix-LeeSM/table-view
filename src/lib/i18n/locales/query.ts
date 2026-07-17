@@ -262,6 +262,28 @@ export const en = {
     colTotalMs: "Total (ms)",
     colRows: "Rows",
     rawExtras: "Raw extras (first row)",
+    unavailable: {
+      pg_stat_statements: {
+        title: "pg_stat_statements extension is not installed",
+        body: "An administrator must enable the extension to view slow query statistics on this server: register it in shared_preload_libraries, restart, then run the command below as a superuser.",
+        sql: "CREATE EXTENSION pg_stat_statements;",
+      },
+      mysql_performance_schema: {
+        title: "performance_schema is disabled",
+        body: "Set performance_schema = ON in the server config (e.g. my.cnf) and restart to enable statement digest collection.",
+        sql: "",
+      },
+      mssql_view_server_state: {
+        title: "VIEW SERVER STATE permission is required",
+        body: "Slow query statistics come from server-scoped dynamic management views. Ask an administrator to grant VIEW SERVER STATE to your login.",
+        sql: "GRANT VIEW SERVER STATE TO [<login>];",
+      },
+      oracle_catalog_role: {
+        title: "Access to dynamic performance views (v$) is required",
+        body: "Slow query statistics come from the v$ catalog views. Ask a DBA to grant catalog read access to your user.",
+        sql: "GRANT SELECT_CATALOG_ROLE TO <user>;",
+      },
+    },
   },
 
   // ── SqlQueryEditor ────────────────────────────────────────────────────────
@@ -519,6 +541,28 @@ export const ko = {
     colTotalMs: "합계 (ms)",
     colRows: "행",
     rawExtras: "원본 추가 정보 (첫 번째 행)",
+    unavailable: {
+      pg_stat_statements: {
+        title: "pg_stat_statements 확장이 설치되어 있지 않습니다",
+        body: "이 서버에서 느린 쿼리 통계를 보려면 관리자가 확장을 설치해야 합니다. shared_preload_libraries에 등록하고 재시작한 뒤 superuser로 아래 명령을 실행하세요.",
+        sql: "CREATE EXTENSION pg_stat_statements;",
+      },
+      mysql_performance_schema: {
+        title: "performance_schema가 비활성화되어 있습니다",
+        body: "서버 설정(예: my.cnf)에서 performance_schema = ON으로 바꾸고 재시작하면 구문 다이제스트 수집이 활성화됩니다.",
+        sql: "",
+      },
+      mssql_view_server_state: {
+        title: "VIEW SERVER STATE 권한이 필요합니다",
+        body: "느린 쿼리 통계는 서버 범위 동적 관리 뷰(DMV)에서 가져옵니다. 관리자에게 로그인 계정에 VIEW SERVER STATE 권한을 부여해 달라고 요청하세요.",
+        sql: "GRANT VIEW SERVER STATE TO [<login>];",
+      },
+      oracle_catalog_role: {
+        title: "동적 성능 뷰(v$) 조회 권한이 필요합니다",
+        body: "느린 쿼리 통계는 v$ 카탈로그 뷰에서 가져옵니다. DBA에게 카탈로그 읽기 권한을 부여해 달라고 요청하세요.",
+        sql: "GRANT SELECT_CATALOG_ROLE TO <user>;",
+      },
+    },
   },
 
   sql: {

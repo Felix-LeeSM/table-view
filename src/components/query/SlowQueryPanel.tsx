@@ -10,6 +10,7 @@ import { Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DataGridSkeleton } from "@components/datagrid";
 import { slowQueries, type SlowQueryRow } from "@/lib/api/slowQueries";
+import { getCapabilityNotEnabledInfo } from "@/lib/tauri/error";
 import { safeStringifyCell } from "@/lib/jsonCell";
 import {
   DATABASE_TYPE_LABELS,
@@ -30,15 +31,24 @@ export function SlowQueryPanel({ connectionId, dbType }: SlowQueryPanelProps) {
   const [rows, setRows] = useState<SlowQueryRow[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Server-side capability gap (extension/permission missing) — rendered as a
+  // passive enablement hint keyed by `code`, not a red error box.
+  const [unavailableCode, setUnavailableCode] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setUnavailableCode(null);
     try {
       const next = await slowQueries(connectionId, DEFAULT_LIMIT);
       setRows(next);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      const capability = getCapabilityNotEnabledInfo(e);
+      if (capability) {
+        setUnavailableCode(capability.code);
+      } else {
+        setError(e instanceof Error ? e.message : String(e));
+      }
     } finally {
       setLoading(false);
     }
@@ -84,6 +94,29 @@ export function SlowQueryPanel({ connectionId, dbType }: SlowQueryPanelProps) {
           {error}
         </div>
       )}
+
+      {unavailableCode !== null &&
+        (() => {
+          const sql = t(`slowQuery.unavailable.${unavailableCode}.sql`);
+          return (
+            <div
+              data-testid="slow-query-unavailable"
+              className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground"
+            >
+              <p className="font-medium text-foreground">
+                {t(`slowQuery.unavailable.${unavailableCode}.title`)}
+              </p>
+              <p className="mt-1">
+                {t(`slowQuery.unavailable.${unavailableCode}.body`)}
+              </p>
+              {sql !== "" && (
+                <pre className="mt-2 overflow-auto rounded border border-border bg-secondary/30 p-2 font-mono text-foreground">
+                  {sql}
+                </pre>
+              )}
+            </div>
+          );
+        })()}
 
       {loading && rows === null && <DataGridSkeleton />}
 

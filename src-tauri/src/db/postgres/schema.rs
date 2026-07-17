@@ -1347,15 +1347,15 @@ impl PostgresAdapter {
         .await
         .map_err(|e| {
             let msg = e.to_string();
-            if msg.contains("pg_stat_statements") && msg.contains("does not exist") {
-                AppError::Database(
-                    "pg_stat_statements extension not enabled. Run \
-                     `CREATE EXTENSION pg_stat_statements;` as a superuser \
-                     and add the library to shared_preload_libraries."
+            match classify_pg_stat_statements_error(&msg) {
+                Some(code) => AppError::CapabilityNotEnabled {
+                    code: code.into(),
+                    message: "pg_stat_statements extension not enabled. Run \
+                              `CREATE EXTENSION pg_stat_statements;` as a superuser \
+                              and add the library to shared_preload_libraries."
                         .into(),
-                )
-            } else {
-                AppError::Database(format!("pg_stat_statements failed: {msg}"))
+                },
+                None => AppError::Database(format!("pg_stat_statements failed: {msg}")),
             }
         })?;
 
@@ -1557,6 +1557,18 @@ impl PostgresAdapter {
             n_dead: stat.1,
             extras: std::collections::HashMap::new(),
         })
+    }
+}
+
+/// Classify a `pg_stat_statements` query failure: `Some("pg_stat_statements")`
+/// when the extension is not installed (relation missing), `None` for any other
+/// DB error (kept as `AppError::Database`). Pure so the not-enabled → capability
+/// mapping is unit-testable without a live server.
+fn classify_pg_stat_statements_error(msg: &str) -> Option<&'static str> {
+    if msg.contains("pg_stat_statements") && msg.contains("does not exist") {
+        Some("pg_stat_statements")
+    } else {
+        None
     }
 }
 
@@ -1853,6 +1865,25 @@ mod tests {
             }
             other => panic!("expected Connection, got ok? {}", other.is_ok()),
         }
+    }
+
+    // Reason: a missing pg_stat_statements extension is a server-config gap,
+    // not a bug — it must classify as CapabilityNotEnabled (passive UI hint)
+    // while unrelated query failures stay Database (2026-07-17, slow-query UX).
+    #[test]
+    fn classify_pg_stat_statements_maps_missing_extension_only() {
+        assert_eq!(
+            classify_pg_stat_statements_error("relation \"pg_stat_statements\" does not exist"),
+            Some("pg_stat_statements")
+        );
+        assert_eq!(
+            classify_pg_stat_statements_error("connection reset by peer"),
+            None
+        );
+        assert_eq!(
+            classify_pg_stat_statements_error("pg_stat_statements: permission denied"),
+            None
+        );
     }
 
     // Issue #1077 Stage 2 — list_database_users takes no parameters, so only

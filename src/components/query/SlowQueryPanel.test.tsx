@@ -84,14 +84,34 @@ describe("SlowQueryPanel (Sprint 340 U5 live wire)", () => {
     expect(screen.getByText(/setProfilingLevel/)).toBeInTheDocument();
   });
 
-  it("renders error alert when fetch rejects", async () => {
-    sqMock.mockRejectedValueOnce(
-      new Error("pg_stat_statements extension not enabled."),
-    );
+  // Reason: a missing pg_stat_statements extension is a server-config gap, not
+  // a bug — the typed CapabilityNotEnabled envelope must render as a passive
+  // enablement hint (with a copy-paste SQL snippet), never a red role="alert"
+  // box (2026-07-17, slow-query UX refinement).
+  it("renders a passive enablement hint for CapabilityNotEnabled rejections", async () => {
+    sqMock.mockRejectedValueOnce({
+      type: "CapabilityNotEnabled",
+      message: "pg_stat_statements extension not enabled.",
+      payload: { code: "pg_stat_statements" },
+    });
+    render(<SlowQueryPanel connectionId="conn-pg" dbType="postgresql" />);
+    const hint = await screen.findByTestId("slow-query-unavailable");
+    expect(hint.textContent).toMatch(/pg_stat_statements/);
+    expect(
+      screen.getByText("CREATE EXTENSION pg_stat_statements;"),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.queryByTestId("slow-query-table")).toBeNull();
+  });
+
+  // Reason: a genuine failure (not a capability gap) must still surface as the
+  // red role="alert" box so real errors stay visible (2026-07-17).
+  it("renders the error alert for a genuine failure", async () => {
+    sqMock.mockRejectedValueOnce(new Error("connection reset by peer"));
     render(<SlowQueryPanel connectionId="conn-pg" dbType="postgresql" />);
     const alert = await screen.findByRole("alert");
-    expect(alert.textContent).toMatch(/pg_stat_statements/);
-    expect(screen.queryByTestId("slow-query-table")).toBeNull();
+    expect(alert.textContent).toMatch(/connection reset/);
+    expect(screen.queryByTestId("slow-query-unavailable")).toBeNull();
   });
 
   it("re-fetches when Refresh is clicked", async () => {

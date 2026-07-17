@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  getCapabilityNotEnabledInfo,
   getDbMismatchInfo,
   getTauriErrorMessage,
   normalizeTauriError,
@@ -62,6 +63,51 @@ describe("normalizeTauriError", () => {
       message: "Cancel: permission denied (role cannot kill)",
     });
     expect(getDbMismatchInfo(raw)).toBeNull();
+  });
+
+  // Reason: slow-query capability gaps arrive as a typed CapabilityNotEnabled
+  // envelope so the panel can render a passive enablement hint keyed by `code`
+  // instead of a red error box (2026-07-17, slow-query UX refinement).
+  it("normalizes typed CapabilityNotEnabled envelopes", () => {
+    const raw = {
+      type: "CapabilityNotEnabled",
+      message: "pg_stat_statements extension not enabled.",
+      payload: { code: "pg_stat_statements" },
+    };
+
+    expect(normalizeTauriError(raw)).toMatchObject({
+      type: "CapabilityNotEnabled",
+      message: "pg_stat_statements extension not enabled.",
+      payload: { code: "pg_stat_statements" },
+    });
+    expect(getCapabilityNotEnabledInfo(raw)).toEqual({
+      code: "pg_stat_statements",
+      message: "pg_stat_statements extension not enabled.",
+    });
+  });
+
+  it("normalizes JSON-stringified CapabilityNotEnabled envelopes", () => {
+    const raw = JSON.stringify({
+      type: "CapabilityNotEnabled",
+      payload: { code: "mssql_view_server_state" },
+    });
+
+    expect(getCapabilityNotEnabledInfo(raw)).toEqual({
+      code: "mssql_view_server_state",
+      message: "Capability not enabled: mssql_view_server_state",
+    });
+  });
+
+  it("returns null CapabilityNotEnabled info for non-matching errors", () => {
+    expect(
+      getCapabilityNotEnabledInfo(new Error("connection reset")),
+    ).toBeNull();
+    expect(
+      getCapabilityNotEnabledInfo({
+        type: "DbMismatch",
+        payload: { expected: "db1", actual: "db2" },
+      }),
+    ).toBeNull();
   });
 
   it("falls back to ordinary Error messages", () => {

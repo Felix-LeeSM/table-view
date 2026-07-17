@@ -3,6 +3,11 @@ export interface DbMismatchInfo {
   actual: string;
 }
 
+export interface CapabilityNotEnabledInfo {
+  code: string;
+  message: string;
+}
+
 export type CancelError =
   | { type: "AlreadyCompleted" }
   | { type: "PermissionDenied"; message: string }
@@ -56,6 +61,16 @@ export function getDbMismatchInfo(err: unknown): DbMismatchInfo | null {
   return { expected: m[1]!, actual: m[2]! };
 }
 
+export function getCapabilityNotEnabledInfo(
+  err: unknown,
+): CapabilityNotEnabledInfo | null {
+  const normalized = normalizeTauriError(err);
+  if (normalized.type !== "CapabilityNotEnabled") return null;
+  const info = parseCapabilityPayload(normalized.payload);
+  if (!info) return null;
+  return { code: info.code, message: normalized.message };
+}
+
 function normalizeEnvelope(
   envelope: TauriErrorEnvelope,
   raw: unknown,
@@ -83,6 +98,10 @@ function messageFromEnvelope(envelope: TauriErrorEnvelope): string | null {
     if (!cancel) return null;
     return formatCancelMessage(cancel);
   }
+  if (envelope.type === "CapabilityNotEnabled") {
+    const info = parseCapabilityPayload(envelope.payload);
+    return info ? `Capability not enabled: ${info.code}` : null;
+  }
   if (typeof envelope.payload === "string") return envelope.payload;
   return null;
 }
@@ -102,6 +121,12 @@ function parseDbMismatchPayload(payload: unknown): DbMismatchInfo | null {
   if (typeof payload.expected !== "string") return null;
   if (typeof payload.actual !== "string") return null;
   return { expected: payload.expected, actual: payload.actual };
+}
+
+function parseCapabilityPayload(payload: unknown): { code: string } | null {
+  if (!isRecord(payload)) return null;
+  if (typeof payload.code !== "string") return null;
+  return { code: payload.code };
 }
 
 function parseCancelPayload(payload: unknown): CancelError | null {
