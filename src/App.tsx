@@ -16,6 +16,7 @@ import {
   useCurrentWorkspaceKey,
   useDirtyTabIds,
   useWorkspaceStore,
+  flushPersistWorkspaces,
 } from "./stores/workspaceStore";
 import { useCurrentWindowConnectionId } from "./hooks/useCurrentWindowConnectionId";
 import { useDiscardConfirm } from "./hooks/useDiscardConfirm";
@@ -147,11 +148,29 @@ export default function App() {
     () =>
       listen("window:close-requested", () => {
         confirmDiscard(windowHasDirtyRef.current, () => {
-          void destroyCurrentWindow();
+          // #1580 F1 — a pure trailing 200ms debounce has no flush point, so an
+          // SQL edit made within 200ms of closing (SQL-only edits never mark a
+          // tab dirty, so this takes the no-confirm branch) was destroyed before
+          // it persisted. Flush the pending snapshot, then destroy — `.finally`
+          // so a persist failure still closes the window rather than trapping it.
+          void flushPersistWorkspaces().finally(() => {
+            void destroyCurrentWindow();
+          });
         });
       }),
     [confirmDiscard],
   );
+
+  // #1580 F2 — flush the debounced workspace persist when the webview is
+  // backgrounded/hidden, so a crash or SIGKILL while hidden doesn't lose the
+  // last edit that the trailing debounce hadn't written yet.
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") void flushPersistWorkspaces();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, []);
 
   // Cmd+T / Ctrl+T — new query tab
   useEffect(() => {

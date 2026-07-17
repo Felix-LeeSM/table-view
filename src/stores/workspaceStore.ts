@@ -30,6 +30,8 @@ export type {
 
 // eslint-disable-next-line no-restricted-imports -- same-store internal: store instance leaf
 export { SYNCED_KEYS, useWorkspaceStore } from "./workspaceStore/store";
+// eslint-disable-next-line no-restricted-imports -- same-store internal: persistence flush (#1580)
+export { flushPersistWorkspaces } from "./workspaceStore/persistence";
 // eslint-disable-next-line no-restricted-imports -- same-store internal: shared helpers
 export {
   __resetCountersForTests,
