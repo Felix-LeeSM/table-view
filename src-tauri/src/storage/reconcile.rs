@@ -98,23 +98,29 @@ pub async fn reconcile_pending_domains(pool: &SqlitePool) -> Result<(), AppError
     // file/LS SOT 가 모두 SQLite mirror 보다 우위. 각 도메인 helper 를 순서
     // 그대로 호출. workspace 는 SQLite-only 라 reconcile target 에서 제외.
 
+    // 한 도메인이라도 재투영에 실패하면 counter 를 보존해 다음 boot 가 다시
+    // 시도하게 한다. Err 는 로깅만 하고 삼키되, all_ok 로 reset 여부를 결정.
+    let mut all_ok = true;
     if let Err(e) = reconcile_mru(pool).await {
         error!(target: "dual_write", error = %e, "reconcile mru gave up after retries");
+        all_ok = false;
     }
     if let Err(e) = reconcile_favorites(pool).await {
         error!(target: "dual_write", error = %e, "reconcile favorites gave up after retries");
+        all_ok = false;
     }
     if let Err(e) = reconcile_connections(pool).await {
         error!(target: "dual_write", error = %e, "reconcile connections gave up after retries");
+        all_ok = false;
     }
     if let Err(e) = reconcile_settings(pool).await {
         error!(target: "dual_write", error = %e, "reconcile settings gave up after retries");
+        all_ok = false;
     }
 
-    // 모두 성공이면 counter reset. 일부 실패면 counter 유지 — 다음 boot 가
-    // 다시 시도.
-    if !is_force_failure_for_tests() {
-        // Best-effort full reset only if no domain forced failure (test signal).
+    // 4개 도메인이 전부 Ok 일 때만 reset. 일부/전부 실패면 counter 유지 →
+    // 다음 boot 의 `counter != 0` 이 재시도를 재개한다. (issue #1559)
+    if all_ok {
         mismatch_counter::reset();
     }
     Ok(())
@@ -518,6 +524,51 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(count, 0);
+        pool_cleanup();
+    }
+
+    // Reason: 회귀 — issue #1559. mismatch counter reset 이 `is_force_failure_for_tests()`
+    // (테스트 전용 게이트) 에만 걸려 있어, prod 에서 `reconcile_*` 가 실제 Err 를
+    // 반환해도 counter 가 무조건 0 으로 reset 됐다. reset 되면 다음 boot 의
+    // `counter == 0` 조기 return 이 재시도를 영구 skip 한다. force flag 없이 실제
+    // 실패(pool close)를 주입해 counter 보존 + 다음 boot 재시도를 잠근다. (2026-07-17)
+    #[tokio::test]
+    #[serial]
+    async fn reconcile_preserves_counter_on_real_failure_then_retries_next_boot() {
+        let (_dir, pool) = pool_setup().await;
+        save_mru_file(&[MruRecord {
+            connection_id: "c-1559".into(),
+            last_used: 7,
+        }])
+        .unwrap();
+        mismatch_counter::increment();
+
+        // 실제 실패 주입 — 테스트 게이트가 아니라 prod 와 동일한 Err 경로.
+        // closed pool 의 execute 는 PoolClosed 로 실패한다.
+        pool.close().await;
+        reconcile_pending_domains(&pool).await.unwrap();
+
+        // BUG(old): prod 경로에서 무조건 reset → 0 → 다음 boot skip.
+        // FIX: 일부 도메인 실패 시 counter 보존.
+        assert!(
+            mismatch_counter::current() >= 1,
+            "counter must survive a real reconcile failure so next boot retries"
+        );
+
+        // 다음 boot 재시도 실증 — fresh(working) pool 로 다시 reconcile 하면
+        // counter > 0 이라 조기 return 안 하고, file SOT 를 SQLite 로 재투영한다.
+        let pool2 = local::open_pool().await.unwrap();
+        reconcile_pending_domains(&pool2).await.unwrap();
+        let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM mru")
+            .fetch_one(&pool2)
+            .await
+            .unwrap();
+        assert_eq!(count, 1, "next boot must replay the pending mru row");
+        assert_eq!(
+            mismatch_counter::current(),
+            0,
+            "counter resets once every domain reconciles cleanly"
+        );
         pool_cleanup();
     }
 }
