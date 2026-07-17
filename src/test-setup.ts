@@ -103,6 +103,16 @@ beforeEach(async () => {
   // that mock and drop the persist assertions.
   const { useTableActivityStore } = await import("@stores/tableActivityStore");
   useTableActivityStore.setState({ entries: [] });
+  // #1580 — the workspace persist debounce keeps its timers in module scope
+  // (a process singleton like the stores above). A leaked trailing/maxWait
+  // timer fires `persistWorkspaces` mid-test; `persist_workspace` is unmocked
+  // in most component specs and its `@tauri-apps/api/core` invoke rejects in
+  // jsdom, queuing a stray `storageWriteFailed` error toast that flakes a
+  // sibling test's `toHaveLength` toast assertion. Drain the timers so a
+  // persist scheduled by one test can't fire during the next.
+  const { __resetPersistTimerForTests } =
+    await import("@stores/workspaceStore/persistence");
+  __resetPersistTimerForTests();
 });
 
 // crypto.randomUUID polyfill for jsdom (used by FilterBar)
