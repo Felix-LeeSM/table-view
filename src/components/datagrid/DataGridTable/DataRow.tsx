@@ -324,7 +324,13 @@ function DataRow({
           e.stopPropagation();
           onStartEdit(rowIdx, dIdx, editStartValue);
         }}
-        className={`group/cell flex min-w-0 items-center overflow-hidden border-r border-border px-3 py-1 text-xs text-foreground${alignClass}${
+        // UX (2026-07-17, no tracking issue) — the roving-focused data cell had
+        // NO focus marker (only the editing cell showed `ring-primary`), so the
+        // right-click quick-look targeted an invisible cell. Give the data cell
+        // the SAME `focus-visible:outline-*` its header (`HeaderRow`) and
+        // pending-row (`DataGridTable`) siblings already carry — coexists with
+        // the editing ring since it's a different property (outline vs ring).
+        className={`group/cell flex min-w-0 items-center overflow-hidden border-r border-border px-3 py-1 text-xs text-foreground focus-visible:outline-1 focus-visible:-outline-offset-1 focus-visible:outline-ring${alignClass}${
           isEditing
             ? " bg-primary/10 ring-2 ring-inset ring-primary"
             : hasPendingEdit || nestedPendingCount > 0
@@ -612,7 +618,17 @@ function DataRow({
       role="row"
       aria-rowindex={rowIdx + 2}
       aria-selected={isSelected}
-      className={`min-h-8 border-b border-border hover:bg-muted${isSelected ? " bg-accent/20" : ""}${isDeleted ? " line-through opacity-50" : ""}`}
+      // UX (2026-07-17, no tracking issue) — highlight the roving-focus row so
+      // the right-click quick-look target is obvious. `tabCol !== null` means
+      // this row holds the roving anchor. Uses an inset box-shadow left bar
+      // (ring token) rather than a left border: a border would push body cells
+      // 2px out of alignment with the header, whereas the shadow is a separate
+      // paint channel from the selection `bg-accent/20`, so a selected+focused
+      // row reads both. Distinct tokens per state: ring=focus, accent=select,
+      // primary=edit.
+      className={`min-h-8 border-b border-border hover:bg-muted${
+        tabCol !== null ? " shadow-[inset_2px_0_0_0_var(--color-ring)]" : ""
+      }${isSelected ? " bg-accent/20" : ""}${isDeleted ? " line-through opacity-50" : ""}`}
       style={mergedStyle}
       onClick={(e) => onSelectRow(rowIdx, e.metaKey || e.ctrlKey, e.shiftKey)}
       onContextMenu={(e) => {
