@@ -373,7 +373,7 @@ async fn oracle_structured_ddl_creates_and_drops_a_probe_table_after_1072() {
     .expect_err("probe table must be gone after the structured drop executes");
     println!("ORACLE_PROBE E drop_verify err={missing:?}");
     assert!(
-        matches!(missing, AppError::Database(_)),
+        matches!(missing, AppError::Database(ref message) if message.contains("ORA-00942")),
         "expected an ORA-00942 invalid-object database error, got {missing:?}"
     );
     disconnect_adapter(&adapter).await;

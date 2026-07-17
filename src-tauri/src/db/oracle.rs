@@ -3,9 +3,9 @@
 //! Issue #1072 dissolves the bounded #905/#906 runtime slice and wires the full
 //! `OracleAdapter` into production: service-name lifecycle, catalog metadata,
 //! SELECT/DML batch, cooperative cancel, tabular table-data queries, structured
-//! table/index/constraint DDL, PL/SQL body/package source, and trigger listing.
-//! Raw DDL/admin execution, switch-database, SID/TNS/wallet/TLS, and advanced
-//! auth remain unsupported.
+//! table/index/constraint DDL, and PL/SQL body/package source. Raw DDL/admin
+//! execution, switch-database, trigger introspection (deferred, empty list),
+//! SID/TNS/wallet/TLS, and advanced auth remain unsupported or unclaimed.
 
 mod catalog;
 mod ddl;
@@ -30,7 +30,7 @@ use crate::models::{
     AddColumnRequest, AddConstraintRequest, AlterTableRequest, ColumnInfo, ConnectionConfig,
     ConstraintInfo, CreateIndexRequest, CreateTableRequest, DatabaseType, DropColumnRequest,
     DropConstraintRequest, DropIndexRequest, DropTableRequest, FunctionInfo, IndexInfo,
-    RenameTableRequest, SchemaChangeResult, TableData, TableInfo, TriggerInfo, ViewInfo,
+    RenameTableRequest, SchemaChangeResult, TableData, TableInfo, ViewInfo,
 };
 
 use super::{BoxFuture, DbAdapter, NamespaceInfo, NamespaceLabel, RdbAdapter, RdbQueryResult};
@@ -462,13 +462,8 @@ impl RdbAdapter for OracleAdapter {
         Box::pin(async move { OracleAdapter::get_function_source(self, namespace, function).await })
     }
 
-    fn list_triggers<'a>(
-        &'a self,
-        _namespace: &'a str,
-        _table: &'a str,
-    ) -> BoxFuture<'a, Result<Vec<TriggerInfo>, AppError>> {
-        Box::pin(async { Ok(Vec::new()) })
-    }
+    // `list_triggers` inherits the RdbAdapter default `Ok(Vec::new())` — Oracle
+    // trigger introspection is deferred like MySQL/SQLite, not a live claim.
 }
 
 fn cancellable_metadata<'a, T>(

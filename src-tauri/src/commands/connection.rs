@@ -70,9 +70,9 @@ pub use sqlite_file::create_sqlite_database_file;
 /// cooperative cancel. Oracle wires the full `OracleAdapter` (#1072 dissolves
 /// the #905/#906 runtime slice): service-name lifecycle, catalog metadata,
 /// SELECT/DML batch, cooperative cancel, tabular table-data queries, frontend
-/// SQL-batch row edits, structured table/index/constraint DDL, PL/SQL
-/// body/package source, and trigger listing are live, while switch-database and
-/// raw DDL/admin surfaces stay Unsupported.
+/// SQL-batch row edits, structured table/index/constraint DDL, and PL/SQL
+/// body/package source are live, while switch-database and raw DDL/admin
+/// surfaces stay Unsupported (trigger introspection stays deferred / empty).
 pub(crate) fn make_adapter(db_type: &DatabaseType) -> Result<ActiveAdapter, AppError> {
     match db_type {
         DatabaseType::Postgresql => Ok(ActiveAdapter::Rdb(Box::new(PostgresAdapter::new()))),
