@@ -48,18 +48,26 @@ pub const LAUNCHER_WINDOW_LABEL: &str = "launcher";
 /// CSP `script-src 'self'` means there is no active exploit path today; this is
 /// a hardening backstop. Sensitive command handlers take the injected
 /// `window: tauri::Window` param (persist_settings.rs pattern) and call this on
-/// the first line — a `launcher` label rejects with [`AppError::Forbidden`].
+/// the first line — anything but a workspace window rejects with
+/// [`AppError::Forbidden`].
+///
+/// **Allow-list, fail-closed**: only `workspace` / `workspace-{conn_id}` labels
+/// pass (mirroring the matching in `launcher.rs`). The launcher AND any unknown
+/// or future window label are rejected, so a new window kind cannot silently
+/// gain the sensitive-command surface.
 ///
 /// The `src-tauri/tests/launcher_command_guard.rs` grep guard enforces that
 /// every `#[tauri::command]` is either in the guarded set (and calls this) or
 /// on the launcher allowlist, so a new sensitive command cannot ship unguarded.
 pub fn guard_not_launcher(window_label: &str) -> Result<(), AppError> {
-    if window_label == LAUNCHER_WINDOW_LABEL {
-        return Err(AppError::Forbidden(format!(
-            "command not permitted from the '{LAUNCHER_WINDOW_LABEL}' window"
-        )));
+    let is_workspace = window_label == "workspace" || window_label.starts_with("workspace-");
+    if is_workspace {
+        Ok(())
+    } else {
+        Err(AppError::Forbidden(format!(
+            "command not permitted from the '{window_label}' window"
+        )))
     }
-    Ok(())
 }
 
 #[cfg(test)]
@@ -146,6 +154,19 @@ mod tests {
         for label in ["workspace", "workspace-42", "workspace-abc123"] {
             guard_not_launcher(label)
                 .unwrap_or_else(|e| panic!("workspace label {label:?} must pass, got {e:?}"));
+        }
+    }
+
+    // Fail-closed allow-list: the launcher and any unknown/future window label
+    // are rejected, not just the literal `launcher`.
+    #[test]
+    fn guard_not_launcher_rejects_non_workspace_labels() {
+        for label in [LAUNCHER_WINDOW_LABEL, "settings", "db-42", "workspacex", ""] {
+            let err = guard_not_launcher(label).unwrap_err();
+            assert!(
+                matches!(err, AppError::Forbidden(_)),
+                "label {label:?} must reject with Forbidden, got {err:?}"
+            );
         }
     }
 }

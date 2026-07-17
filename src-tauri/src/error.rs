@@ -246,6 +246,10 @@ mod tests {
             "Not found: id-123"
         );
         assert_eq!(
+            AppError::Forbidden("launcher window".into()).to_string(),
+            "Forbidden: launcher window"
+        );
+        assert_eq!(
             AppError::Unsupported("mysql".into()).to_string(),
             "Unsupported operation: mysql"
         );

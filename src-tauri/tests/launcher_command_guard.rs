@@ -44,6 +44,7 @@ const GUARDED: &[&str] = &[
     "execute_query_batch",
     "execute_query_dry_run",
     // Document mutation + schema
+    "aggregate_documents", // pipeline stages `$out` / `$merge` write to a collection
     "bulk_write_documents",
     "create_collection",
     "create_mongo_index",
@@ -201,7 +202,6 @@ const LAUNCHER_ALLOWLIST: &[&str] = &[
     "list_mongo_indexes",
     "get_mongo_validator",
     "find_documents",
-    "aggregate_documents",
     "find_one_document",
     "count_documents",
     "estimated_document_count",
@@ -256,10 +256,14 @@ fn collect_commands() -> Vec<Command> {
             Err(_) => continue,
         };
         let lines: Vec<&str> = content.lines().collect();
+        // `starts_with` (not exact `==`) so an argument-form attribute like
+        // `#[tauri::command(rename_all = ...)]` is still counted, not silently
+        // skipped. A doc comment mentioning the macro trims to `//! ...`, so it
+        // never matches.
         let marker_lines: Vec<usize> = lines
             .iter()
             .enumerate()
-            .filter(|(_, l)| l.trim() == "#[tauri::command]")
+            .filter(|(_, l)| l.trim_start().starts_with("#[tauri::command"))
             .map(|(i, _)| i)
             .collect();
 
