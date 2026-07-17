@@ -16,15 +16,25 @@ use crate::models::ConnectionConfig;
 /// Driver-neutral outcome of the `tls_enabled` / `trust_server_certificate`
 /// decision. Each sqlx adapter maps this onto its own `SslMode`:
 ///
-/// | decision            | `PgSslMode`  | `MySqlSslMode`   |
-/// |---------------------|--------------|------------------|
-/// | `Default`           | (unset)      | (unset)          |
-/// | `RequireSkipVerify` | `Require`    | `Required`       |
-/// | `RequireVerifyFull` | `VerifyFull` | `VerifyIdentity` |
+/// | decision            | `PgSslMode`  | `MySqlSslMode`   | sslmode UI    |
+/// |---------------------|--------------|------------------|---------------|
+/// | `Disable`           | `Disable`    | `Disabled`       | `disable`     |
+/// | `Default`           | (unset)      | (unset)          | `prefer`      |
+/// | `RequireSkipVerify` | `Require`    | `Required`       | `require`     |
+/// | `RequireVerifyFull` | `VerifyFull` | `VerifyIdentity` | `verify-full` |
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum TlsDecision {
-    /// TLS not requested — leave the driver default untouched. Preserves the
-    /// pre-#1062 behavior for existing connections (`tls_enabled` unset).
+    /// #1063 — explicitly force plaintext (`sslmode=disable`). Distinct from
+    /// `Default`: the driver default (`prefer`) opportunistically encrypts and
+    /// an active attacker can strip it, whereas `Disable` is the operator's
+    /// deliberate choice to never negotiate TLS. Encoded as the otherwise-inert
+    /// `(tls_enabled=false, trust_server_certificate=false)` combo (existing
+    /// pg/mysql connections never authored it — the PG form clears trust to
+    /// `None` when TLS is off — so reinterpreting it is a no-op for real data).
+    Disable,
+    /// TLS not requested — leave the driver default (`prefer`) untouched.
+    /// Preserves the pre-#1062 behavior for existing connections
+    /// (`tls_enabled` unset / `false` with no explicit trust decision).
     Default,
     /// Force encryption but skip certificate verification
     /// (`trust_server_certificate = true`).
@@ -56,7 +66,11 @@ pub(crate) fn resolve_tls_decision(config: &ConnectionConfig) -> Result<TlsDecis
         (false, Some(true)) => Err(AppError::Validation(
             "trustServerCertificate requires TLS to be enabled".into(),
         )),
-        (false, _) => Ok(TlsDecision::Default),
+        // #1063 — `sslmode=disable`: TLS off + an explicit trust=false marker
+        // means the operator deliberately forced plaintext, not the legacy
+        // opportunistic default.
+        (false, Some(false)) => Ok(TlsDecision::Disable),
+        (false, None) => Ok(TlsDecision::Default),
     }
 }
 
@@ -91,7 +105,7 @@ mod tests {
     #[test]
     fn tls_off_by_default_leaves_driver_default() {
         // Legacy connections carry neither field — must not force TLS so the
-        // pre-#1062 behavior is preserved.
+        // pre-#1062 behavior (driver `prefer`) is preserved.
         assert_eq!(
             resolve_tls_decision(&config(None, None)).unwrap(),
             TlsDecision::Default
@@ -100,9 +114,22 @@ mod tests {
             resolve_tls_decision(&config(Some(false), None)).unwrap(),
             TlsDecision::Default
         );
+    }
+
+    #[test]
+    fn tls_off_with_explicit_trust_false_is_disable() {
+        // Reason: #1063 — the sslmode dropdown's `disable` option must reach a
+        // distinct forced-plaintext decision, encoded as (tls=false,
+        // trust=false). Previously this combo collapsed to Default (prefer);
+        // the two postures differ (prefer opportunistically encrypts, disable
+        // never does), so `disable` needs its own decision. (2026-07-17)
         assert_eq!(
             resolve_tls_decision(&config(Some(false), Some(false))).unwrap(),
-            TlsDecision::Default
+            TlsDecision::Disable
+        );
+        assert_eq!(
+            resolve_tls_decision(&config(None, Some(false))).unwrap(),
+            TlsDecision::Disable
         );
     }
 

@@ -77,6 +77,11 @@ async fn open_search_connection(
     let timeout_secs = config.connection_timeout.unwrap_or(10).clamp(1, 300);
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(timeout_secs.into()))
+        // #1063 — `trust_server_certificate = true` opts into skip-verify; for
+        // the reqwest-backed search adapters this is `danger_accept_invalid_certs`
+        // (applies only over https, which the `https` scheme selects when TLS is
+        // on). Absent/false trust keeps reqwest's default full verification.
+        .danger_accept_invalid_certs(config.trust_server_certificate.unwrap_or(false))
         .build()
         .map_err(|err| AppError::Connection(format!("{label} HTTP client error: {err}")))?;
     let base_url = base_url(config);

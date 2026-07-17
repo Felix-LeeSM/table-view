@@ -112,6 +112,7 @@ impl PostgresAdapter {
             .password(&config.password)
             .database(&config.database);
         Ok(match resolve_tls_decision(config)? {
+            TlsDecision::Disable => options.ssl_mode(PgSslMode::Disable),
             TlsDecision::Default => options,
             TlsDecision::RequireSkipVerify => options.ssl_mode(PgSslMode::Require),
             TlsDecision::RequireVerifyFull => options.ssl_mode(PgSslMode::VerifyFull),
@@ -724,6 +725,21 @@ mod tests {
         config.trust_server_certificate = None;
         let err = PostgresAdapter::connect_options(&config).unwrap_err();
         assert!(matches!(err, AppError::Validation(_)));
+    }
+
+    #[test]
+    fn connect_options_disable_forces_plaintext() {
+        // Reason: #1063 — the sslmode `disable` selection (tls=false,
+        // trust=false) must reach `PgSslMode::Disable`, distinct from the
+        // opportunistic Prefer default that an unset config keeps. (2026-07-17)
+        let mut config = sample_config();
+        config.tls_enabled = Some(false);
+        config.trust_server_certificate = Some(false);
+        let opts = PostgresAdapter::connect_options(&config).unwrap();
+        assert!(
+            matches!(opts.get_ssl_mode(), PgSslMode::Disable),
+            "sslmode=disable must force plaintext, not opportunistic Prefer"
+        );
     }
     /// Stub `DatabaseError` so the SQLSTATE / message matchers can be
     /// exercised without a live Postgres server. Sprint 128 tests for
