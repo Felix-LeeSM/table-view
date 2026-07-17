@@ -8,6 +8,7 @@
 entities:
   customers:
     targets: [pg, mongo, mysql, sqlite, duckdb, mariadb, mssql, oracle, redis]
+    domain: commerce
     pg: { schema: core, table: customers }
     mongo: { collection: core_customers }
     mysql: { table: customers }
@@ -26,6 +27,7 @@ entities:
 
   products:
     targets: [pg, mongo, mysql, sqlite, duckdb, mariadb, mssql, oracle, redis]
+    domain: commerce
     pg: { schema: catalog, table: products }
     mongo: { collection: catalog_products }
     mysql: { table: products }
@@ -44,6 +46,7 @@ entities:
 
   orders:
     targets: [pg, mongo, mysql, sqlite, duckdb, mariadb, mssql, oracle, redis]
+    domain: commerce
     pg: { schema: sales, table: orders }
     mongo:
       collection: sales_orders
@@ -66,6 +69,7 @@ entities:
 
   order_items:
     targets: [pg, mysql, sqlite, duckdb, mariadb, mssql, oracle]
+    domain: commerce
     # mongo: embedded inside orders.items
     # redis: embedded inside order hash
     pg: { schema: sales, table: order_items }
@@ -84,6 +88,7 @@ entities:
 
   support_tickets:
     targets: [pg, mongo, mysql, sqlite, duckdb, mariadb, mssql, oracle, redis]
+    domain: commerce
     pg: { schema: support, table: tickets }
     mongo: { collection: support_tickets }
     mysql: { table: tickets }
@@ -100,3 +105,239 @@ entities:
       body: { type: text, locale_aware: true, max_length: 5000, nullable: true }
       status: { type: enum, values: [open, pending, resolved, closed] }
       created_at: { type: timestamp, range: [-180d, 0d] }
+
+  # ── commerce domain (extends the 5 above) ────────────────────────────────
+  categories:
+    targets: [pg, mysql, sqlite, duckdb, mariadb, mssql, oracle]
+    domain: commerce
+    pg: { schema: catalog, table: categories }
+    mysql: { table: categories }
+    sqlite: { table: categories }
+    duckdb: { schema: catalog, table: categories }
+    mariadb: { table: categories }
+    mssql: { schema: dbo, table: categories }
+    oracle: { table: categories }
+    columns:
+      id: { type: uuid, primary: true }
+      name: { type: product_name, locale_aware: true, max_length: 120 }
+      slug: { type: sku, unique: true }
+      parent_id: { type: ref, to: categories.id, nullable: true }
+      created_at: { type: timestamp, range: [-540d, 0d] }
+
+  addresses:
+    targets: [pg, mysql, sqlite, duckdb, mariadb, mssql, oracle]
+    domain: commerce
+    pg: { schema: core, table: addresses }
+    mysql: { table: addresses }
+    sqlite: { table: addresses }
+    duckdb: { schema: core, table: addresses }
+    mariadb: { table: addresses }
+    mssql: { schema: dbo, table: addresses }
+    oracle: { table: addresses }
+    columns:
+      id: { type: uuid, primary: true }
+      customer_id: { type: ref, to: customers.id }
+      kind: { type: enum, values: [billing, shipping] }
+      line1: { type: address, max_length: 200 }
+      city: { type: text, locale_aware: true, max_length: 120 }
+      country: { type: enum, values: [US, GB, DE, JP, KR, FR, CA, AU] }
+      postal: { type: sku, max_length: 12 }
+
+  payments:
+    targets: [pg, mysql, sqlite, duckdb, mariadb, mssql, oracle]
+    domain: commerce
+    pg: { schema: sales, table: payments }
+    mysql: { table: payments }
+    sqlite: { table: payments }
+    duckdb: { schema: sales, table: payments }
+    mariadb: { table: payments }
+    mssql: { schema: dbo, table: payments }
+    oracle: { table: payments }
+    columns:
+      id: { type: uuid, primary: true }
+      order_id: { type: ref, to: orders.id }
+      amount: { type: decimal, range: [0.99, 9999.99] }
+      method: { type: enum, values: [card, paypal, bank_transfer, cash] }
+      status: { type: enum, values: [pending, captured, refunded, failed] }
+      paid_at: { type: timestamp, range: [-90d, 0d], nullable: true }
+
+  shipments:
+    targets: [pg, mysql, sqlite, duckdb, mariadb, mssql, oracle]
+    domain: commerce
+    pg: { schema: sales, table: shipments }
+    mysql: { table: shipments }
+    sqlite: { table: shipments }
+    duckdb: { schema: sales, table: shipments }
+    mariadb: { table: shipments }
+    mssql: { schema: dbo, table: shipments }
+    oracle: { table: shipments }
+    columns:
+      id: { type: uuid, primary: true }
+      order_id: { type: ref, to: orders.id }
+      carrier: { type: enum, values: [ups, fedex, dhl, usps] }
+      tracking: { type: sku, max_length: 32 }
+      status:
+        { type: enum, values: [label_created, in_transit, delivered, returned] }
+      shipped_at: { type: timestamp, range: [-60d, 0d], nullable: true }
+
+  reviews:
+    targets: [pg, mysql, sqlite, duckdb, mariadb, mssql, oracle]
+    domain: commerce
+    pg: { schema: catalog, table: reviews }
+    mysql: { table: reviews }
+    sqlite: { table: reviews }
+    duckdb: { schema: catalog, table: reviews }
+    mariadb: { table: reviews }
+    mssql: { schema: dbo, table: reviews }
+    oracle: { table: reviews }
+    columns:
+      id: { type: uuid, primary: true }
+      product_id: { type: ref, to: products.id }
+      customer_id: { type: ref, to: customers.id, nullable: true }
+      rating: { type: int, range: [1, 5] }
+      title: { type: text, locale_aware: true, max_length: 200 }
+      body: { type: text, locale_aware: true, max_length: 4000, nullable: true }
+      created_at: { type: timestamp, range: [-365d, 0d] }
+
+  # ── iot domain ───────────────────────────────────────────────────────────
+  device_zones:
+    targets: [pg, mysql, sqlite, duckdb, mariadb, mssql, oracle]
+    domain: iot
+    pg: { schema: iot, table: device_zones }
+    mysql: { table: device_zones }
+    sqlite: { table: device_zones }
+    duckdb: { schema: iot, table: device_zones }
+    mariadb: { table: device_zones }
+    mssql: { schema: dbo, table: device_zones }
+    oracle: { table: device_zones }
+    columns:
+      id: { type: uuid, primary: true }
+      name: { type: text, locale_aware: true, max_length: 120 }
+      code: { type: sku, unique: true }
+      description: { type: text, max_length: 500, nullable: true }
+
+  devices:
+    targets: [pg, mysql, sqlite, duckdb, mariadb, mssql, oracle]
+    domain: iot
+    pg: { schema: iot, table: devices }
+    mysql: { table: devices }
+    sqlite: { table: devices }
+    duckdb: { schema: iot, table: devices }
+    mariadb: { table: devices }
+    mssql: { schema: dbo, table: devices }
+    oracle: { table: devices }
+    columns:
+      id: { type: uuid, primary: true }
+      zone_id: { type: ref, to: device_zones.id, nullable: true }
+      name: { type: text, max_length: 120 }
+      model: { type: text, max_length: 80 }
+      firmware: { type: sku, max_length: 16 }
+      registered_at: { type: timestamp, range: [-720d, 0d] }
+      active: { type: boolean }
+
+  sensor_readings:
+    targets: [pg, mysql, sqlite, duckdb, mariadb, mssql, oracle]
+    domain: iot
+    pg: { schema: iot, table: sensor_readings }
+    mysql: { table: sensor_readings }
+    sqlite: { table: sensor_readings }
+    duckdb: { schema: iot, table: sensor_readings }
+    mariadb: { table: sensor_readings }
+    mssql: { schema: dbo, table: sensor_readings }
+    oracle: { table: sensor_readings }
+    columns:
+      id: { type: uuid, primary: true }
+      device_id: { type: ref, to: devices.id }
+      metric:
+        { type: enum, values: [temperature, humidity, pressure, voltage, co2] }
+      value: { type: decimal, range: [-50, 1000] }
+      recorded_at: { type: timestamp, range: [-30d, 0d] }
+      meta: { type: json, nullable: true }
+
+  # ── social domain ────────────────────────────────────────────────────────
+  users:
+    targets: [pg, mysql, sqlite, duckdb, mariadb, mssql, oracle]
+    domain: social
+    pg: { schema: social, table: users }
+    mysql: { table: users }
+    sqlite: { table: users }
+    duckdb: { schema: social, table: users }
+    mariadb: { table: users }
+    mssql: { schema: dbo, table: users }
+    oracle: { table: app_users }
+    columns:
+      id: { type: uuid, primary: true }
+      handle: { type: sku, unique: true }
+      display_name: { type: full_name, locale_aware: true, max_length: 120 }
+      bio: { type: text, locale_aware: true, max_length: 400, nullable: true }
+      verified: { type: boolean }
+      joined_at: { type: timestamp, range: [-900d, 0d] }
+
+  posts:
+    targets: [pg, mysql, sqlite, duckdb, mariadb, mssql, oracle]
+    domain: social
+    pg: { schema: social, table: posts }
+    mysql: { table: posts }
+    sqlite: { table: posts }
+    duckdb: { schema: social, table: posts }
+    mariadb: { table: posts }
+    mssql: { schema: dbo, table: posts }
+    oracle: { table: posts }
+    columns:
+      id: { type: uuid, primary: true }
+      author_id: { type: ref, to: users.id }
+      body: { type: text, locale_aware: true, max_length: 2000 }
+      tags: { type: array_of, item: string, count: [0, 5] }
+      likes: { type: int, range: [0, 5000] }
+      posted_at: { type: timestamp, range: [-365d, 0d] }
+
+  reactions:
+    targets: [pg, mysql, sqlite, duckdb, mariadb, mssql, oracle]
+    domain: social
+    pg: { schema: social, table: reactions }
+    mysql: { table: reactions }
+    sqlite: { table: reactions }
+    duckdb: { schema: social, table: reactions }
+    mariadb: { table: reactions }
+    mssql: { schema: dbo, table: reactions }
+    oracle: { table: reactions }
+    columns:
+      id: { type: uuid, primary: true }
+      post_id: { type: ref, to: posts.id }
+      user_id: { type: ref, to: users.id }
+      kind: { type: enum, values: [like, love, laugh, wow, sad, angry] }
+      reacted_at: { type: timestamp, range: [-365d, 0d] }
+
+  follows:
+    targets: [pg, mysql, sqlite, duckdb, mariadb, mssql, oracle]
+    domain: social
+    pg: { schema: social, table: follows }
+    mysql: { table: follows }
+    sqlite: { table: follows }
+    duckdb: { schema: social, table: follows }
+    mariadb: { table: follows }
+    mssql: { schema: dbo, table: follows }
+    oracle: { table: follows }
+    columns:
+      id: { type: uuid, primary: true }
+      follower_id: { type: ref, to: users.id }
+      followee_id: { type: ref, to: users.id }
+      since: { type: timestamp, range: [-800d, 0d] }
+
+  media:
+    targets: [pg, mysql, sqlite, duckdb, mariadb, mssql, oracle]
+    domain: social
+    pg: { schema: social, table: media }
+    mysql: { table: media }
+    sqlite: { table: media }
+    duckdb: { schema: social, table: media }
+    mariadb: { table: media }
+    mssql: { schema: dbo, table: media }
+    oracle: { table: media }
+    columns:
+      id: { type: uuid, primary: true }
+      owner_id: { type: ref, to: users.id }
+      url: { type: text, max_length: 300 }
+      kind: { type: enum, values: [image, video, audio] }
+      meta: { type: json, nullable: true }
+      created_at: { type: timestamp, range: [-365d, 0d] }

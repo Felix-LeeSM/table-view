@@ -5,6 +5,7 @@ import { Client } from "pg";
 import type { BaseSpec, Column, ResolvedSpec } from "./spec.js";
 import type { EntityRows } from "./generator.js";
 import { entityOrder } from "./spec.js";
+import { applyPgShowcase } from "./pg-showcase.js";
 
 export interface PgConnection {
   host: string;
@@ -107,6 +108,11 @@ export async function applyPostgres(
       const start = Date.now();
       await insertEntity(c, entity, data);
       log(entityName, data.length, Date.now() - start);
+    }
+    // PG-only exotic-type showcase (bytea/geometry/range/inet/hstore/tsvector/
+    // native enum). Dev-profile only so e2e/CI seed shapes stay unchanged.
+    if (spec.profile === "development") {
+      await applyPgShowcase(c, log);
     }
   });
 }
