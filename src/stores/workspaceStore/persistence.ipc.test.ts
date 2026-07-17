@@ -18,6 +18,12 @@ import { toast } from "@lib/runtime/toast";
 import { persistWorkspaces, type WorkspacesShape } from "./persistence";
 import type { WorkspaceState } from "./types";
 
+// #1580 — test-setup globally mocks `@lib/tauri/workspaces` (no-op resolve) so
+// stray background persists don't toast in component specs. This spec asserts
+// the REAL `persistWorkspaces` → `persist_workspace` invoke wiring, so opt back
+// into the actual `persistWorkspace` and drive the mocked core invoke below.
+vi.unmock("@lib/tauri/workspaces");
+
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(() => Promise.resolve()),
 }));

@@ -27,6 +27,12 @@ import {
 } from "./persistence";
 import type { WorkspaceState } from "./types";
 
+// #1580 — test-setup globally mocks `@lib/tauri/workspaces` (no-op resolve) so
+// stray background persists don't toast in component specs. This spec asserts
+// the REAL flush → `persist_workspace` invoke path, so opt back into the actual
+// `persistWorkspace` and drive the mocked core invoke below.
+vi.unmock("@lib/tauri/workspaces");
+
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(() => Promise.resolve()),
 }));

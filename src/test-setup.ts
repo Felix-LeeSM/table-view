@@ -20,6 +20,21 @@ vi.mock("@/lib/tauri", async () => {
   return getTauriMockModule();
 });
 
+// #1580 — `persistWorkspace` is the workspace persist IPC boundary, called by
+// the debounced background write that every workspace mutation schedules. It
+// lives in the `@lib/tauri/workspaces` submodule (not the `@lib/tauri` barrel
+// mocked above), so component/store specs that seed a workspace hit the REAL
+// `@tauri-apps/api/core` invoke, which rejects in jsdom and queues a stray
+// `storageWriteFailed` toast — flaking sibling toast-length assertions under
+// parallel-suite load. Mock the boundary to a no-op resolve, matching the
+// tauriMock philosophy. The two specs that assert the real IPC wiring
+// (`persistence.ipc` / `persistence.flush`) `vi.unmock` it and drive their own
+// `@tauri-apps/api/core` mock. `persistence.ts` is the only importer, and no
+// spec spies on `persistWorkspace`, so the blast radius is the persist path.
+vi.mock("@lib/tauri/workspaces", () => ({
+  persistWorkspace: vi.fn(() => Promise.resolve()),
+}));
+
 // Sprint 401 (2026-05-17) — eager WASM bootstrap for the mongosh parser.
 // `parseMongoshStatement` 의 *모든* 호출부 (Toolbar render, useQueryExecution
 // dispatch, runCommandParser classify) 가 sync 시그니처를 기대하므로,
