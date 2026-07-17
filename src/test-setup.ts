@@ -6,7 +6,7 @@ import "@testing-library/jest-dom/vitest";
 // i18n 전역 인스턴스를 테스트 프로세스 시작 시 1회 init — useTranslation 을
 // 쓰는 컴포넌트(ThemePicker / LanguageSwitcher 등)가 provider 없이도 동작.
 import "@lib/i18n";
-import { beforeAll, beforeEach, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, vi } from "vitest";
 import { useDataGridEditStore } from "@stores/dataGridEditStore";
 import { useToastStore } from "@stores/toastStore";
 import { resetTauriMock } from "./test-utils/tauriMock";
@@ -165,6 +165,59 @@ if (typeof Element !== "undefined") {
   if (!Element.prototype.scrollIntoView) {
     Element.prototype.scrollIntoView = () => {};
   }
+}
+
+// #1293 — teardown-race flake in `pnpm vitest run`. `@tanstack/virtual-core`
+// (via react-virtual `useVirtualizer`) schedules an `isScrollingResetDelay`
+// (150ms) *debounce* through `window.setTimeout` whenever a virtualized
+// container receives a `scroll` event (`observeElementOffset`). Its
+// `Virtualizer.cleanup()` (run by RTL's auto-unmount) removes the scroll
+// listeners and cancels its `rafId` but does NOT clear that pending debounce.
+// In the jsdom worker `window.setTimeout === globalThis.setTimeout`, so the
+// timer is a plain Node timer that can outlive the jsdom `window`. If it fires
+// after the run tears the window down, its callback drives react-virtual's
+// `onChange` -> React `rerender`, reaching react-dom `resolveUpdatePriority`,
+// which reads the now-undefined global `window` and throws
+// `ReferenceError: window is not defined` — a run-ending unhandled error
+// (Frontend Checks flake; GH Actions runs 29550334891 / 29550826076). Track
+// live timers and clear any still pending at the end of each test so none can
+// outlive the environment. `vi.useFakeTimers()` swaps `setTimeout` for the
+// duration of a test (vitest manages + resets those), so fake timers never
+// enter this set; only real timers pass through the wrapper.
+{
+  const liveTimers = new Set<ReturnType<typeof setTimeout>>();
+  const realSetTimeout = globalThis.setTimeout;
+  const realClearTimeout = globalThis.clearTimeout;
+  globalThis.setTimeout = ((
+    handler: Parameters<typeof setTimeout>[0],
+    timeout?: number,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ...args: any[]
+  ) => {
+    if (typeof handler !== "function") {
+      return realSetTimeout(handler, timeout, ...args);
+    }
+    const id: ReturnType<typeof setTimeout> = realSetTimeout(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (...cbArgs: any[]) => {
+        liveTimers.delete(id);
+        handler(...cbArgs);
+      },
+      timeout,
+      ...args,
+    );
+    liveTimers.add(id);
+    return id;
+  }) as typeof setTimeout;
+  globalThis.clearTimeout = ((id: Parameters<typeof clearTimeout>[0]) => {
+    if (id !== undefined)
+      liveTimers.delete(id as ReturnType<typeof setTimeout>);
+    realClearTimeout(id);
+  }) as typeof clearTimeout;
+  afterEach(() => {
+    for (const id of liveTimers) realClearTimeout(id);
+    liveTimers.clear();
+  });
 }
 
 // Sprint-114: `@tanstack/react-virtual` reads a ResizeObserver from the
