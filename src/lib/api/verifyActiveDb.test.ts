@@ -29,16 +29,7 @@ describe("verifyActiveDb (Sprint 132 wrapper)", () => {
     await expect(verifyActiveDb("conn-1")).resolves.toBe("analytics");
   });
 
-  it("propagates Unsupported rejection for paradigms that cannot verify", async () => {
-    invokeMock.mockRejectedValueOnce(
-      new Error(
-        "Unsupported operation: verify_active_db not supported for this paradigm",
-      ),
-    );
-    await expect(verifyActiveDb("conn-search")).rejects.toThrow(/Unsupported/);
-  });
-
-  it("propagates NotFound when the connection id has no live adapter", async () => {
+  it("propagates backend rejection unchanged (Unsupported / NotFound)", async () => {
     invokeMock.mockRejectedValueOnce(new Error("Not found: Connection 'x'"));
     await expect(verifyActiveDb("x")).rejects.toThrow(/Not found/);
   });

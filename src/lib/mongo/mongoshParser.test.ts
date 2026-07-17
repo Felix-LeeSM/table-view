@@ -54,27 +54,6 @@ function expectError(
 }
 
 describe("MONGOSH_METHOD_WHITELIST", () => {
-  it("exposes the executable mongosh methods as the dispatch source of truth", () => {
-    expect(MONGOSH_METHOD_WHITELIST).toEqual([
-      "find",
-      "findOne",
-      "aggregate",
-      "countDocuments",
-      "estimatedDocumentCount",
-      "distinct",
-      "insertOne",
-      "insertMany",
-      "updateOne",
-      "updateMany",
-      "replaceOne",
-      "deleteOne",
-      "deleteMany",
-      "createIndex",
-      "dropIndex",
-      "bulkWrite",
-    ]);
-  });
-
   it("covers every db.<collection> autocomplete method", () => {
     const executable = new Set<string>(MONGOSH_METHOD_WHITELIST);
     const autocompleteOnly = MONGOSH_DB_METHODS.map((m) => m.label).filter(

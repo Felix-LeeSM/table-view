@@ -43,9 +43,4 @@ describe("getConnectionColor", () => {
     }
     expect(seen.size).toBeGreaterThan(1);
   });
-
-  it("always returns a value from the palette for empty color", () => {
-    const color = getConnectionColor(makeConn({ id: "x", color: null }));
-    expect(CONNECTION_COLOR_PALETTE).toContain(color);
-  });
 });

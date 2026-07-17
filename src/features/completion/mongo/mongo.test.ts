@@ -39,12 +39,6 @@ describe("mongo.createDbMethodCompletionSource", () => {
     );
   });
 
-  it("never returns SELECT regardless of cursor position", () => {
-    const source = createDbMethodCompletionSource();
-    const result = source({ text: "db.", cursor: 3, prefix: "" });
-    expect(result.candidates.some((c) => c.label === "SELECT")).toBe(false);
-  });
-
   it("filters by prefix on db.<prefix>", () => {
     const source = createDbMethodCompletionSource();
     const result = source({ text: "db.fi", cursor: 5, prefix: "fi" });

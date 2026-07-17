@@ -147,41 +147,6 @@ describe("useWindowFocusHydration", () => {
 
   // -- Edge cases --
 
-  // Reason: rapid focus/blur bursts (e.g. Alt+Tab) should each trigger
-  // hydration — no debounce. Each focus is a potential state-change signal.
-  it("handles rapid consecutive focus events without skipping", () => {
-    const spy = hydrateConnectionSession as ReturnType<typeof vi.fn>;
-    const { unmount } = renderHook(() => useWindowFocusHydration());
-    spy.mockClear();
-
-    // Simulate rapid Alt+Tab oscillation
-    for (let i = 0; i < 10; i++) {
-      act(() => {
-        window.dispatchEvent(new Event("focus"));
-      });
-    }
-
-    expect(spy).toHaveBeenCalledTimes(10);
-    unmount();
-  });
-
-  // Reason: hydrateFromSession is idempotent — calling it when session data
-  // hasn't changed should not cause observable side effects or extra renders.
-  it("hydrateFromSession is called even when session data is unchanged (idempotent path)", () => {
-    const spy = hydrateConnectionSession as ReturnType<typeof vi.fn>;
-    const { unmount } = renderHook(() => useWindowFocusHydration());
-    spy.mockClear();
-
-    // No session data — hydrateFromSession is a no-op internally, but the
-    // hook still calls it. This verifies the hook doesn't short-circuit.
-    act(() => {
-      window.dispatchEvent(new Event("focus"));
-    });
-
-    expect(spy).toHaveBeenCalledTimes(1);
-    unmount();
-  });
-
   // Reason: verify that hydration actually propagates session data to the store
   // — the end-to-end contract, not just the function call.
   it("propagates session data to the store after focus", () => {

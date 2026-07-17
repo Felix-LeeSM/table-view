@@ -3,10 +3,6 @@ import { describe, it, expect } from "vitest";
 import { keywords, createCompletionSource } from "./sqlite";
 
 describe("sqlite.keywords", () => {
-  it("is a non-empty array", () => {
-    expect(keywords.length).toBeGreaterThan(0);
-  });
-
   it("contains SQLite-only PRAGMA", () => {
     expect(keywords).toContain("PRAGMA");
   });

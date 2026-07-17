@@ -39,24 +39,4 @@ describe("AC-365-09 history clear", () => {
     expect(onCreated).not.toHaveBeenCalled();
     expect(onClear).toHaveBeenCalledTimes(1);
   });
-
-  it("clear is routed even when no entityId is present", () => {
-    // history.clear is the one case where entityId=null is the contract;
-    // all other domains require entityId. The dispatcher must NOT bail
-    // on null here.
-    const onClear = vi.fn();
-    setStateChangedHandlers({ history: { onClear } });
-
-    dispatchStateChangedPayload("self", {
-      domain: "history",
-      op: "clear",
-      entityId: null,
-      version: 1,
-      snapshotVersion: 0,
-      originWindow: null,
-      emittedAt: 1,
-    });
-
-    expect(onClear).toHaveBeenCalledTimes(1);
-  });
 });

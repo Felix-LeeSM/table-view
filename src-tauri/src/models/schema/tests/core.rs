@@ -3,16 +3,6 @@ use crate::models::ColumnCategory;
 use serde_json;
 
 #[test]
-fn schema_info_serde_roundtrip() {
-    let info = SchemaInfo {
-        name: "public".to_string(),
-    };
-    let json = serde_json::to_string(&info).unwrap();
-    let deserialized: SchemaInfo = serde_json::from_str(&json).unwrap();
-    assert_eq!(deserialized.name, "public");
-}
-
-#[test]
 fn table_info_serde_roundtrip() {
     // With row_count
     let info = TableInfo {

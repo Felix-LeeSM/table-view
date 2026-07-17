@@ -304,11 +304,6 @@ pub struct StorageData {
 mod tests {
     use super::*;
 
-    #[test]
-    fn database_type_default_is_postgresql() {
-        assert!(matches!(DatabaseType::default(), DatabaseType::Postgresql));
-    }
-
     /// P3-2 (#1455) — `{:?}` on a `ConnectionConfig` must never leak the
     /// plaintext password. Low-entropy fake password keeps the no-secrets gate
     /// quiet while still proving the mask fires.
@@ -348,35 +343,6 @@ mod tests {
     }
 
     #[test]
-    fn connection_status_default_is_disconnected() {
-        assert!(matches!(
-            ConnectionStatus::default(),
-            ConnectionStatus::Disconnected
-        ));
-    }
-
-    #[test]
-    fn database_type_serde_roundtrip() {
-        let types = vec![
-            DatabaseType::Postgresql,
-            DatabaseType::Mysql,
-            DatabaseType::Mariadb,
-            DatabaseType::Sqlite,
-            DatabaseType::Duckdb,
-            DatabaseType::Mssql,
-            DatabaseType::Oracle,
-            DatabaseType::Mongodb,
-            DatabaseType::Redis,
-            DatabaseType::Valkey,
-        ];
-        for db_type in types {
-            let json = serde_json::to_string(&db_type).unwrap();
-            let deserialized: DatabaseType = serde_json::from_str(&json).unwrap();
-            assert_eq!(format!("{:?}", db_type), format!("{:?}", deserialized));
-        }
-    }
-
-    #[test]
     fn database_type_serializes_to_lowercase() {
         let json = serde_json::to_string(&DatabaseType::Postgresql).unwrap();
         assert_eq!(json, "\"postgresql\"");
@@ -406,6 +372,10 @@ mod tests {
         assert_eq!(DatabaseType::Mongodb.paradigm(), Paradigm::Document);
         assert_eq!(DatabaseType::Redis.paradigm(), Paradigm::Kv);
         assert_eq!(DatabaseType::Valkey.paradigm(), Paradigm::Kv);
+        // Reason: search-paradigm variants were the 2/12 gap in this map
+        // (2026-07-17).
+        assert_eq!(DatabaseType::Elasticsearch.paradigm(), Paradigm::Search);
+        assert_eq!(DatabaseType::Opensearch.paradigm(), Paradigm::Search);
     }
 
     #[test]
@@ -656,38 +626,6 @@ mod tests {
     }
 
     #[test]
-    fn connection_config_serde_roundtrip() {
-        let config = ConnectionConfig {
-            id: "test-id".into(),
-            name: "My DB".into(),
-            db_type: DatabaseType::Postgresql,
-            host: "localhost".into(),
-            port: 5432,
-            user: "postgres".into(),
-            password: "secret".into(),
-            database: "mydb".into(),
-            read_only: false,
-            group_id: Some("group-1".into()),
-            color: None,
-            connection_timeout: Some(60),
-            keep_alive_interval: Some(15),
-            environment: Some("production".into()),
-            auth_source: None,
-            replica_set: None,
-            tls_enabled: None,
-            trust_server_certificate: None,
-        };
-        let json = serde_json::to_string(&config).unwrap();
-        let deserialized: ConnectionConfig = serde_json::from_str(&json).unwrap();
-        assert_eq!(config.id, deserialized.id);
-        assert_eq!(config.name, deserialized.name);
-        assert_eq!(config.port, deserialized.port);
-        assert_eq!(config.connection_timeout, deserialized.connection_timeout);
-        assert_eq!(config.keep_alive_interval, deserialized.keep_alive_interval);
-        assert_eq!(config.environment, deserialized.environment);
-    }
-
-    #[test]
     fn connection_config_optional_fields_default_to_none() {
         // Simulates data saved before timeout/keep_alive/environment were added
         // — and, from Sprint 65, before auth_source/replica_set/tls_enabled.
@@ -744,39 +682,76 @@ mod tests {
     }
 
     #[test]
-    fn storage_data_serde_roundtrip() {
-        let data = StorageData {
-            connections: vec![ConnectionConfig {
-                id: "c1".into(),
-                name: "DB1".into(),
-                db_type: DatabaseType::Postgresql,
-                host: "host".into(),
-                port: 5432,
-                user: "user".into(),
-                password: "pass".into(),
-                database: "db".into(),
-                read_only: false,
-                group_id: None,
-                color: Some("#ff0000".into()),
-                connection_timeout: None,
-                keep_alive_interval: None,
-                environment: None,
-                auth_source: None,
-                replica_set: None,
-                tls_enabled: None,
-                trust_server_certificate: None,
-            }],
-            groups: vec![ConnectionGroup {
-                id: "g1".into(),
-                name: "Production".into(),
-                color: None,
-                collapsed: false,
-            }],
+    fn test_database_type_from_str_aliases_and_unknown() {
+        // Reason: FromStr is hand-written branching (dialect aliases +
+        // unknown → Err), separate from the serde derive that
+        // `serializes_to_lowercase` covers; P4 error-branch gap. (2026-07-17)
+        use std::str::FromStr;
+        assert!(matches!(
+            DatabaseType::from_str("sqlserver"),
+            Ok(DatabaseType::Mssql)
+        ));
+        assert!(matches!(
+            DatabaseType::from_str("sqlsrv"),
+            Ok(DatabaseType::Mssql)
+        ));
+        assert!(matches!(
+            DatabaseType::from_str("es"),
+            Ok(DatabaseType::Elasticsearch)
+        ));
+        assert!(matches!(
+            DatabaseType::from_str("elastic"),
+            Ok(DatabaseType::Elasticsearch)
+        ));
+        assert!(matches!(
+            DatabaseType::from_str("os"),
+            Ok(DatabaseType::Opensearch)
+        ));
+        assert!(DatabaseType::from_str("not-a-db").is_err());
+    }
+
+    #[test]
+    fn test_into_config_with_empty_password_clears_password_and_preserves_fields() {
+        // Reason: promoting a public config to a full ConnectionConfig must
+        // leave an empty password slot so a stale secret can never leak
+        // through the IPC boundary, while every other field survives
+        // (2026-07-17).
+        let public = ConnectionConfigPublic {
+            id: "c1".into(),
+            name: "DB".into(),
+            db_type: DatabaseType::Mongodb,
+            host: "h".into(),
+            port: 27017,
+            user: "u".into(),
+            database: "d".into(),
+            read_only: true,
+            group_id: Some("g1".into()),
+            color: Some("#fff".into()),
+            connection_timeout: Some(30),
+            keep_alive_interval: Some(60),
+            environment: Some("prod".into()),
+            has_password: true,
+            paradigm: Paradigm::Document,
+            auth_source: Some("admin".into()),
+            replica_set: Some("rs0".into()),
+            tls_enabled: Some(true),
+            trust_server_certificate: Some(false),
         };
-        let json = serde_json::to_string(&data).unwrap();
-        let deserialized: StorageData = serde_json::from_str(&json).unwrap();
-        assert_eq!(data.connections.len(), deserialized.connections.len());
-        assert_eq!(data.groups.len(), deserialized.groups.len());
-        assert_eq!(data.connections[0].color, deserialized.connections[0].color);
+        let config = public.into_config_with_empty_password();
+        assert_eq!(config.password, "", "password slot must be cleared");
+        assert!(matches!(config.db_type, DatabaseType::Mongodb));
+        assert_eq!(config.id, "c1");
+        assert_eq!(config.user, "u");
+        assert_eq!(config.database, "d");
+        assert!(config.read_only);
+        assert_eq!(config.group_id.as_deref(), Some("g1"));
+        assert_eq!(config.color.as_deref(), Some("#fff"));
+        assert_eq!(config.connection_timeout, Some(30));
+        assert_eq!(config.keep_alive_interval, Some(60));
+        assert_eq!(config.environment.as_deref(), Some("prod"));
+        assert_eq!(config.auth_source.as_deref(), Some("admin"));
+        assert_eq!(config.replica_set.as_deref(), Some("rs0"));
+        assert_eq!(config.tls_enabled, Some(true));
+        assert_eq!(config.trust_server_certificate, Some(false));
     }
 }

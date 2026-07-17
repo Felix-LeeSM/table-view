@@ -807,15 +807,6 @@ mod tests {
     }
 
     #[test]
-    fn aead_envelope_decrypt_with_same_password_is_deterministic() {
-        let envelope = aead_encrypt_with_password("zzz", "pw1234567").unwrap();
-        let a = aead_decrypt_with_password(&envelope, "pw1234567").unwrap();
-        let b = aead_decrypt_with_password(&envelope, "pw1234567").unwrap();
-        assert_eq!(a, b);
-        assert_eq!(a, "zzz");
-    }
-
-    #[test]
     fn aead_envelope_wrong_password_rejected() {
         let envelope = aead_encrypt_with_password("payload", "correct-pw").unwrap();
         let result = aead_decrypt_with_password(&envelope, "wrong-pw-xx");

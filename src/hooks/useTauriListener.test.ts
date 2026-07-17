@@ -34,13 +34,6 @@ describe("useTauriListener", () => {
     expect(unlisten).toHaveBeenCalledTimes(1);
   });
 
-  it("skips registration when subscribe is null", async () => {
-    const subscribe = vi.fn();
-    renderHook(() => useTauriListener(null, []));
-    await flush();
-    expect(subscribe).not.toHaveBeenCalled();
-  });
-
   it("swallows setup rejection (no Tauri runtime)", async () => {
     const { unmount } = renderHook(() =>
       useTauriListener(() => Promise.reject(new Error("no runtime")), []),

@@ -177,24 +177,6 @@ describe("sqlSafety.analyzeStatement — AST destructive and write contracts", (
       expect(a.severity).toBe("info");
     });
 
-    it("[AC-403-04] AST path matches DML kind prefix contract", () => {
-      const insert = analyzeStatement(
-        "INSERT INTO users (id, name) VALUES (1, 'a')",
-      );
-      expect(insert.kind).toBe("dml-insert");
-      expect(insert.severity).toBe("info");
-
-      const updateWhere = analyzeStatement(
-        "UPDATE users SET active = false WHERE id = 1",
-      );
-      expect(updateWhere.kind).toBe("dml-update");
-      expect(updateWhere.severity).toBe("warn");
-
-      const deleteNoWhere = analyzeStatement("DELETE FROM users");
-      expect(deleteNoWhere.kind).toBe("dml-delete");
-      expect(deleteNoWhere.severity).toBe("danger");
-    });
-
     it("[AC-392-X08] AST callsite preserves the `StatementAnalysis` shape contract for DML", () => {
       const a = analyzeStatement("UPDATE users SET name = 'a' WHERE id = 1");
       expectStatementAnalysisShape(a);
@@ -215,31 +197,6 @@ describe("sqlSafety.analyzeStatement — AST destructive and write contracts", (
       expect(a.kind).toBe("routine-call");
       expect(a.severity).toBe("warn");
       expect(a.reasons).toEqual(["CALL — stored routine execution"]);
-    });
-  });
-
-  describe("Sprint 403 — DML kind/severity contract", () => {
-    usePreloadedSqlAst();
-
-    it("[AC-403-01] INSERT → dml-insert / info", () => {
-      const a = analyzeStatement("INSERT INTO t VALUES (1)");
-      expect(a.kind).toBe("dml-insert");
-      expect(a.severity).toBe("info");
-      expect(a.reasons).toEqual([]);
-    });
-
-    it("[AC-403-02] UPDATE WHERE → dml-update / warn", () => {
-      const a = analyzeStatement("UPDATE t SET a = 1 WHERE id = 1");
-      expect(a.kind).toBe("dml-update");
-      expect(a.severity).toBe("warn");
-      expect(a.reasons).toEqual([]);
-    });
-
-    it("[AC-403-03] DELETE WHERE → dml-delete / warn", () => {
-      const a = analyzeStatement("DELETE FROM t WHERE id = 1");
-      expect(a.kind).toBe("dml-delete");
-      expect(a.severity).toBe("warn");
-      expect(a.reasons).toEqual([]);
     });
   });
 

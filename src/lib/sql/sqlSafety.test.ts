@@ -702,3 +702,32 @@ describe("sqlSafety.analyzeStatement — fallback and severity contracts", () =>
     });
   });
 });
+
+describe("sqlSafety — security-boundary classification (2026-07-17 audit)", () => {
+  // Reason: an always-true predicate (WHERE 1=1) still classifies as warn,
+  // not danger — the static classifier only checks WHERE *presence*; danger
+  // promotion is deferred to the dynamic dry-run (sqlSafetyClassifier.ts
+  // ~538-542). Pin so a future "evaluate the predicate" refactor does not
+  // silently over-escalate. (2026-07-17)
+  it("DELETE / UPDATE with a WHERE 1=1 predicate stay warn (not danger)", () => {
+    const del = analyzeStatement("DELETE FROM t WHERE 1=1");
+    expect(del.kind).toBe("dml-delete");
+    expect(del.severity).toBe("warn");
+    expect(isDangerous(del)).toBe(false);
+
+    const upd = analyzeStatement("UPDATE t SET x = 1 WHERE 1=1");
+    expect(upd.kind).toBe("dml-update");
+    expect(upd.severity).toBe("warn");
+    expect(isDangerous(upd)).toBe(false);
+  });
+
+  // Reason: `session_replication_role = local` disables FK/trigger firing the
+  // same as `replica`; the integrity-switch-off regex covers both
+  // (sqlSafetyClassifier.ts ~44 `REPLICA|LOCAL`). Existing tests pin only the
+  // `replica` variant. (2026-07-17)
+  it("SET session_replication_role = local → warn (integrity switch off)", () => {
+    const a = analyzeStatement("SET session_replication_role = local");
+    expect(a.kind).toBe("config-write");
+    expect(a.severity).toBe("warn");
+  });
+});

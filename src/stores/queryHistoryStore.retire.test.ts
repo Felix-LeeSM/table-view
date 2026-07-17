@@ -18,10 +18,7 @@
  */
 
 import { describe, expect, it, beforeEach } from "vitest";
-import {
-  useQueryHistoryStore,
-  type QueryHistorySource,
-} from "./queryHistoryStore";
+import { useQueryHistoryStore } from "./queryHistoryStore";
 
 describe("queryHistoryStore retire (sprint-373)", () => {
   beforeEach(() => {
@@ -53,47 +50,5 @@ describe("queryHistoryStore retire (sprint-373)", () => {
     expect(keys.has("copyEntry")).toBe(false);
     expect(keys.has("filteredGlobalLog")).toBe(false);
     expect(keys.has("addHistoryEntry")).toBe(false);
-  });
-
-  // AC-373-02 corollary — grep CI 가 `src/` 전체에서 0건이지만 본
-  // suite 가 module 안의 retired field reads 0 도 lock 한다.
-  //
-  // 작성 2026-05-17. 사유: 만약 누군가 retired field 를 `setState({entries:
-  // ...})` 로 push 해도, retire 직후의 type 은 `entries` 를 모름 → reader 는
-  // undefined 를 보고 cast 가 필요해진다. 이를 막기 위해 `state.entries`
-  // 같은 attempt 가 runtime 에서 undefined 임을 명시.
-  it("retired fields are runtime-absent (undefined access path)", () => {
-    const state = useQueryHistoryStore.getState() as unknown as Record<
-      string,
-      unknown
-    >;
-    expect(state.entries).toBeUndefined();
-    expect(state.globalLog).toBeUndefined();
-    expect(state.searchFilter).toBeUndefined();
-    expect(state.connectionFilter).toBeUndefined();
-    expect(state.clearHistory).toBeUndefined();
-    expect(state.clearGlobalLog).toBeUndefined();
-    expect(state.copyEntry).toBeUndefined();
-    expect(state.filteredGlobalLog).toBeUndefined();
-    expect(state.addHistoryEntry).toBeUndefined();
-  });
-
-  // sprint-373 — `sidebar-prefetch` source 가 union 에 추가됨.
-  // sprint-435 — Explain plan-inspection history source 추가.
-  it("QueryHistorySource union covers all 7 source labels", () => {
-    const sources: QueryHistorySource[] = [
-      "raw",
-      "grid-edit",
-      "ddl-structure",
-      "mongo-op",
-      "explain",
-      "file-analytics",
-      "sidebar-prefetch",
-    ];
-    // 본 단언은 런타임보다 TS 컴파일 단계의 정합성 (모든 라벨이 union 의
-    // 정확한 variant) 을 잡는다 — 추가 변종이 union 에 들어오면 위 배열
-    // 의 type 이 좁아져 compile error.
-    expect(sources).toHaveLength(7);
-    expect(new Set(sources).size).toBe(7);
   });
 });

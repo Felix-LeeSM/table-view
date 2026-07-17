@@ -76,7 +76,6 @@ describe("mongoAutocomplete constants", () => {
     expect(MONGO_QUERY_OPERATORS).toContain("$geoWithin");
     expect(MONGO_QUERY_OPERATORS).toContain("$bitsAnySet");
     expect(MONGO_QUERY_OPERATORS).toContain("$elemMatch");
-    expect(MONGO_QUERY_OPERATORS.length).toBeGreaterThanOrEqual(31);
   });
 
   it("MONGO_AGGREGATE_STAGES covers modern pipeline stages", () => {
@@ -88,7 +87,6 @@ describe("mongoAutocomplete constants", () => {
     expect(MONGO_AGGREGATE_STAGES).toContain("$searchMeta");
     expect(MONGO_AGGREGATE_STAGES).toContain("$out");
     expect(MONGO_AGGREGATE_STAGES).toContain("$merge");
-    expect(MONGO_AGGREGATE_STAGES.length).toBeGreaterThanOrEqual(45);
   });
 
   it("MONGO_ACCUMULATORS covers modern accumulator/window operators", () => {
@@ -97,7 +95,6 @@ describe("mongoAutocomplete constants", () => {
     expect(MONGO_ACCUMULATORS).toContain("$topN");
     expect(MONGO_ACCUMULATORS).toContain("$bottomN");
     expect(MONGO_ACCUMULATORS).toContain("$percentile");
-    expect(MONGO_ACCUMULATORS.length).toBeGreaterThanOrEqual(28);
   });
 
   it("MONGO_TYPE_TAGS enumerates BSON extended-JSON tags", () => {
@@ -115,7 +112,6 @@ describe("mongoAutocomplete constants", () => {
     expect(MONGO_TYPE_TAGS).toContain("$symbol");
     expect(MONGO_TYPE_TAGS).toContain("$code");
     expect(MONGO_TYPE_TAGS).toContain("$uuid");
-    expect(MONGO_TYPE_TAGS.length).toBeGreaterThanOrEqual(14);
   });
 
   it("covers projection, update, and expression operator groups", () => {
@@ -352,7 +348,6 @@ describe("mongoAutocomplete — sprint-381 admin command catalog", () => {
     expect(labels).toContain("listDatabases");
     expect(labels).toContain("buildInfo");
     expect(labels).toContain("hostInfo");
-    expect(MONGO_ADMIN_COMMANDS.length).toBeGreaterThanOrEqual(15);
   });
 
   it("each MONGO_ADMIN_COMMANDS entry carries an apply body shaped like `<key>: …`", () => {

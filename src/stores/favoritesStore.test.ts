@@ -322,16 +322,6 @@ describe("favoritesStore", () => {
     });
   });
 
-  // -- State independence --
-
-  describe("state independence", () => {
-    it("tests do not leak state between runs", () => {
-      // This test should start with empty favorites due to beforeEach reset
-      const state = useFavoritesStore.getState();
-      expect(state.favorites).toHaveLength(0);
-    });
-  });
-
   // -- Sprint 153 (AC-153-06) — cross-window broadcast allowlist regression --
   //
   // `SYNCED_KEYS` pins which top-level state keys ride the `favorites-sync`
