@@ -88,3 +88,28 @@ describe("useConnectionDraftForm — edit-form normalization of stored residue (
     expect(result.current.form.tlsEnabled).toBe(true);
   });
 });
+
+// Issue #1063 — the on/off TLS engines (mongo/redis/valkey/search) gained a
+// meaningful `trustServerCertificate` (skip-verify). Switching between them
+// must NOT carry a skip-verify choice onto the next engine, or a dev cluster's
+// trust=true silently follows a prod connection. Encryption (tlsEnabled) may
+// carry; trust must reset.
+describe("useConnectionDraftForm — skip-verify never carries across dbType switch (#1063)", () => {
+  it("resets trust to null when switching a trusted MongoDB draft to Redis", () => {
+    const conn = storedConnection({
+      dbType: "mongodb",
+      paradigm: "document",
+      port: 27017, // mongo default → switch applies without the confirm gate
+      tlsEnabled: true,
+      trustServerCertificate: true,
+    });
+    const { result } = renderHook(() => useConnectionDraftForm(conn));
+    expect(result.current.form.trustServerCertificate).toBe(true);
+
+    act(() => result.current.handleDbTypeChange("redis"));
+
+    // Encryption carries, but the skip-verify decision is dropped.
+    expect(result.current.form.tlsEnabled).toBe(true);
+    expect(result.current.form.trustServerCertificate).toBeNull();
+  });
+});

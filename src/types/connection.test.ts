@@ -4,6 +4,9 @@ import {
   parseSqliteFilePath,
   createEmptyDraft,
   isSupportedDatabaseType,
+  sslModeFields,
+  sslModeFromFields,
+  unreflectedTlsParam,
   DATABASE_DEFAULTS,
   DATABASE_DEFAULT_FIELDS,
   DATABASE_TYPE_LABELS,
@@ -502,5 +505,122 @@ describe("DuckDB file connection metadata (Sprint 455)", () => {
       readOnly: false,
       paradigm: "rdb",
     });
+  });
+});
+
+// Purpose: #1063 — the sslmode dropdown is a pure view over the stored
+// (tlsEnabled, trust) pair, so legacy connections reinterpret without a
+// migration. These lock the round-trip and the legacy-combo mapping. (2026-07-17)
+describe("sslMode field mapping (#1063)", () => {
+  it("maps each dropdown option to a valid (tlsEnabled, trust) combo", () => {
+    expect(sslModeFields("disable")).toEqual({
+      tlsEnabled: false,
+      trustServerCertificate: false,
+    });
+    expect(sslModeFields("prefer")).toEqual({
+      tlsEnabled: null,
+      trustServerCertificate: null,
+    });
+    expect(sslModeFields("require")).toEqual({
+      tlsEnabled: true,
+      trustServerCertificate: true,
+    });
+    expect(sslModeFields("verify-full")).toEqual({
+      tlsEnabled: true,
+      trustServerCertificate: false,
+    });
+  });
+
+  it("reinterprets stored legacy combos as the matching dropdown value", () => {
+    // Unset / legacy prefer.
+    expect(sslModeFromFields(null, null)).toBe("prefer");
+    expect(sslModeFromFields(undefined, undefined)).toBe("prefer");
+    // #1062 boolean combos authored by the pre-#1063 two-checkbox PG form.
+    expect(sslModeFromFields(true, true)).toBe("require");
+    expect(sslModeFromFields(true, false)).toBe("verify-full");
+    // Explicit forced-plaintext.
+    expect(sslModeFromFields(false, false)).toBe("disable");
+  });
+
+  it("collapses the invalid (tls=true, trust=null) residue to the secure verify-full", () => {
+    // The #1062 hard-reject residue must never surface as skip-verify.
+    expect(sslModeFromFields(true, null)).toBe("verify-full");
+  });
+});
+
+// Purpose: #1063 — a pasted connection string's sslmode/tls parameter is
+// honored, and an unmappable one (verify-ca) is reported rather than silently
+// dropped. (2026-07-17)
+describe("parseConnectionUrl TLS parameters (#1063)", () => {
+  it("maps pg sslmode=verify-full onto encrypt + verify", () => {
+    const result = parseConnectionUrl(
+      "postgresql://u:p@h:5432/db?sslmode=verify-full",
+    );
+    expect(result).toMatchObject({
+      tlsEnabled: true,
+      trustServerCertificate: false,
+    });
+  });
+
+  it("maps pg sslmode=require onto encrypt + skip-verify", () => {
+    const result = parseConnectionUrl("postgresql://u:p@h/db?sslmode=require");
+    expect(result).toMatchObject({
+      tlsEnabled: true,
+      trustServerCertificate: true,
+    });
+  });
+
+  it("maps sslmode=disable onto forced plaintext", () => {
+    const result = parseConnectionUrl("postgresql://u:p@h/db?sslmode=disable");
+    expect(result).toMatchObject({
+      tlsEnabled: false,
+      trustServerCertificate: false,
+    });
+  });
+
+  it("treats sslmode=prefer as unset (no TLS fields, no notice)", () => {
+    const result = parseConnectionUrl("postgresql://u:p@h/db?sslmode=prefer");
+    expect(result).not.toHaveProperty("tlsEnabled");
+    expect(result).not.toHaveProperty("trustServerCertificate");
+    expect(
+      unreflectedTlsParam("postgresql://u:p@h/db?sslmode=prefer"),
+    ).toBeNull();
+  });
+
+  it("maps mysql ssl-mode=REQUIRED (case-insensitive key + value)", () => {
+    const result = parseConnectionUrl(
+      "mysql://root:pw@h:3306/app?ssl-mode=REQUIRED",
+    );
+    expect(result).toMatchObject({
+      tlsEnabled: true,
+      trustServerCertificate: true,
+    });
+  });
+
+  it("maps mongodb tls=true onto TLS on (verify-full, trust untouched)", () => {
+    const result = parseConnectionUrl("mongodb://u:p@h:27017/db?tls=true");
+    expect(result).toMatchObject({ tlsEnabled: true });
+    expect(result).not.toHaveProperty("trustServerCertificate");
+  });
+
+  it("reports an unmappable sslmode=verify-ca instead of dropping it silently", () => {
+    const url = "postgresql://u:p@h/db?sslmode=verify-ca";
+    const result = parseConnectionUrl(url);
+    // Fields left unset — verify-ca needs a CA file (follow-up scope).
+    expect(result).not.toHaveProperty("tlsEnabled");
+    expect(unreflectedTlsParam(url)).toBe("sslmode=verify-ca");
+  });
+
+  it("returns null from unreflectedTlsParam for a mappable or absent param", () => {
+    expect(
+      unreflectedTlsParam("postgresql://u:p@h/db?sslmode=verify-full"),
+    ).toBeNull();
+    expect(unreflectedTlsParam("postgresql://u:p@h/db")).toBeNull();
+    expect(unreflectedTlsParam("not-a-url")).toBeNull();
+  });
+
+  it("keeps the rediss:// scheme meaning TLS on regardless of params", () => {
+    const result = parseConnectionUrl("rediss://h:6379");
+    expect(result).toMatchObject({ tlsEnabled: true });
   });
 });

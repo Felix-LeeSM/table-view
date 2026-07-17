@@ -3,13 +3,16 @@
  * Shape parity with PG (host/port/user/password/database) but defaults to
  * `root` user and port `3306`, and database starts empty (MySQL has no
  * convention of a `mysql` super-database the user actually wants to land
- * on). SSL toggle is reserved for a future extension; the contract for
- * Sprint 138 only requires the field shape, not active SSL semantics in
- * the connection_test command.
+ * on).
+ *
+ * #1063 — the sslmode dropdown is now exposed. MySQL/MariaDB's TLS backend was
+ * already wired (#1062) but the form had no control, so the posture was
+ * unreachable; it now mirrors PG via the shared `SslModeField`.
  */
 import { useTranslation } from "react-i18next";
 import type { ConnectionDraft } from "../../model";
 import { fieldValidationProps, type ConnFieldKey } from "./fieldValidation";
+import SslModeField from "./SslModeField";
 
 export interface MysqlFormFieldsProps {
   draft: ConnectionDraft;
@@ -148,6 +151,14 @@ export default function MysqlFormFields({
           {...fieldValidationProps("database", true, invalidField)}
         />
       </div>
+
+      {/* TLS (#1063) — same sslmode dropdown as PG. */}
+      <SslModeField
+        draft={draft}
+        onChange={onChange}
+        inputClass={inputClass}
+        labelClass={labelClass}
+      />
     </>
   );
 }

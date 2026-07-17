@@ -661,6 +661,34 @@ describe("[Sprint 447] URL import support follows data-source profiles", () => {
   });
 });
 
+// ===========================================================================
+// #1063 — a pasted connection string carrying a TLS parameter we cannot map
+// (e.g. `sslmode=verify-ca`, which needs a CA file — follow-up scope) must not
+// silently drop it. The dialog surfaces a non-blocking notice naming the
+// dropped parameter so the user sets the posture manually.
+// ===========================================================================
+describe("[#1063] unmappable TLS URL parameter notice", () => {
+  it("surfaces a notice naming a dropped sslmode=verify-ca on paste", async () => {
+    renderDialog();
+    await act(async () => {
+      pasteIntoHost("postgresql://u:p@h:5432/db?sslmode=verify-ca");
+    });
+    const notice = screen.getByTestId("connection-url-tls-notice");
+    expect(notice).toBeInTheDocument();
+    expect(notice.textContent).toContain("sslmode=verify-ca");
+  });
+
+  it("shows no notice when the sslmode parameter maps cleanly", async () => {
+    renderDialog();
+    await act(async () => {
+      pasteIntoHost("postgresql://u:p@h:5432/db?sslmode=verify-full");
+    });
+    expect(
+      screen.queryByTestId("connection-url-tls-notice"),
+    ).not.toBeInTheDocument();
+  });
+});
+
 describe("[AC-178-04] malformed URL paste is silent", () => {
   const malformed = ["postgres://", "mysql://@", "mongodb://", "mariadb://"];
 

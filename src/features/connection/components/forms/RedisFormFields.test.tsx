@@ -87,4 +87,55 @@ describe("RedisFormFields", () => {
     });
     expect(onChange).toHaveBeenCalledWith({ database: "5" });
   });
+
+  // Issue #1063 — redis/valkey gain the skip-verify opt-in. Guard the
+  // redis-specific wiring: the trust checkbox appears only with TLS on, and
+  // toggling TLS off clears a stale trust choice.
+  describe("skip-verify opt-in (#1063)", () => {
+    function renderRedis(
+      overrides: Partial<ConnectionDraft>,
+      onChange = vi.fn(),
+    ) {
+      render(
+        <RedisFormFields
+          draft={makeDraft(overrides)}
+          onChange={onChange}
+          passwordInput=""
+          setPasswordInput={vi.fn()}
+          isEditing={false}
+          hadPassword={false}
+          clearPassword={false}
+          setClearPassword={vi.fn()}
+          inputClass={inputClass}
+          labelClass={labelClass}
+        />,
+      );
+      return onChange;
+    }
+
+    it("reveals the trust checkbox only once TLS is on", () => {
+      renderRedis({ tlsEnabled: false });
+      expect(
+        screen.queryByLabelText("Trust server certificate"),
+      ).not.toBeInTheDocument();
+      renderRedis({ tlsEnabled: true });
+      expect(
+        screen.getByLabelText("Trust server certificate"),
+      ).toBeInTheDocument();
+    });
+
+    it("clears a stale trust choice when TLS is turned off", () => {
+      const onChange = renderRedis({
+        tlsEnabled: true,
+        trustServerCertificate: true,
+      });
+      act(() => {
+        fireEvent.click(screen.getByLabelText("Enable TLS"));
+      });
+      expect(onChange).toHaveBeenCalledWith({
+        tlsEnabled: false,
+        trustServerCertificate: null,
+      });
+    });
+  });
 });

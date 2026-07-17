@@ -59,6 +59,8 @@ export interface ConnectionDialogBodyProps {
   handleHostPaste: (e: React.ClipboardEvent<HTMLDivElement>) => void;
   handleHostBlur: (e: React.FocusEvent<HTMLDivElement>) => void;
   detectedScheme: string | null;
+  /** #1063 — dropped TLS URL parameter (`key=value`) to surface, or `null`. */
+  tlsNotice: string | null;
   // Shared-auth bundle for DBMS-aware form sub-components
   passwordInput: string;
   setPasswordInput: React.Dispatch<React.SetStateAction<string>>;
@@ -97,6 +99,7 @@ export default function ConnectionDialogBody({
   handleHostPaste,
   handleHostBlur,
   detectedScheme,
+  tlsNotice,
   passwordInput,
   setPasswordInput,
   hadPassword,
@@ -483,6 +486,20 @@ export default function ConnectionDialogBody({
               data-testid="connection-url-detected"
             >
               {t("body.detectedScheme", { scheme: detectedScheme })}
+            </p>
+          )}
+
+          {/* #1063 — a TLS parameter in the pasted URL could not be mapped
+              (e.g. `sslmode=verify-ca`). Advisory, role="alert" so it is
+              announced but non-blocking; the user sets the posture manually via
+              the TLS control below. */}
+          {tlsNotice && (
+            <p
+              role="alert"
+              className="text-2xs text-destructive"
+              data-testid="connection-url-tls-notice"
+            >
+              {t("body.tlsParamNotice", { param: tlsNotice })}
             </p>
           )}
 

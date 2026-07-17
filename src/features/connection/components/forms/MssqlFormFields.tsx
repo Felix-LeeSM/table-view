@@ -222,6 +222,15 @@ export default function MssqlFormFields({
         </label>
       </div>
 
+      {/* #1063 — SQL Server defaults to trust=true (encrypt-by-default UX), so
+          the encrypted-but-unverified posture is easy to keep by accident.
+          Surface the MITM exposure when it is active. Persistent advisory copy
+          (not a live alert region, which is reserved for the auth-combo error
+          below). */}
+      {(draft.tlsEnabled ?? true) && draft.trustServerCertificate === true && (
+        <p className="text-2xs text-destructive">{t("form.trustWarning")}</p>
+      )}
+
       {unsupportedMessage && (
         <div
           id="mssql-auth-error"

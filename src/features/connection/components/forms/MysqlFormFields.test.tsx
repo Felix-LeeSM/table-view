@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent, act } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import MysqlFormFields from "./MysqlFormFields";
 import type { ConnectionDraft } from "@/types/connection";
 
@@ -68,5 +69,47 @@ describe("MysqlFormFields", () => {
       });
     });
     expect(onChange).toHaveBeenCalledWith({ database: "myapp" });
+  });
+
+  // Issue #1063 — MySQL/MariaDB's TLS backend was wired in #1062 but the form
+  // had no control, so the posture was unreachable. It now exposes the same
+  // sslmode dropdown as PG.
+  describe("sslmode dropdown (#1063)", () => {
+    function renderMysql(
+      overrides: Partial<ConnectionDraft>,
+      onChange = vi.fn(),
+    ) {
+      render(
+        <MysqlFormFields
+          draft={makeDraft(overrides)}
+          onChange={onChange}
+          passwordInput=""
+          setPasswordInput={vi.fn()}
+          isEditing={false}
+          hadPassword={false}
+          clearPassword={false}
+          setClearPassword={vi.fn()}
+          inputClass={inputClass}
+          labelClass={labelClass}
+        />,
+      );
+      return onChange;
+    }
+
+    it("renders the sslmode dropdown defaulting to Prefer", () => {
+      renderMysql({});
+      expect(screen.getByLabelText("SSL mode")).toHaveTextContent(/Prefer/);
+    });
+
+    it("maps a Verify full selection onto encrypt + verify", async () => {
+      const user = userEvent.setup();
+      const onChange = renderMysql({});
+      await user.click(screen.getByLabelText("SSL mode"));
+      await user.click(screen.getByRole("option", { name: /Verify full/ }));
+      expect(onChange).toHaveBeenCalledWith({
+        tlsEnabled: true,
+        trustServerCertificate: false,
+      });
+    });
   });
 });

@@ -361,6 +361,7 @@ export default function ConnectionDialog({
             handleHostPaste={urlImport.handleHostPaste}
             handleHostBlur={urlImport.handleHostBlur}
             detectedScheme={urlImport.detectedScheme}
+            tlsNotice={urlImport.tlsNotice}
             passwordInput={passwordInput}
             setPasswordInput={setPasswordInput}
             hadPassword={hadPassword}

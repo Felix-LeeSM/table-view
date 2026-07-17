@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent, act } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import PgFormFields from "./PgFormFields";
 import type { ConnectionDraft } from "@/types/connection";
 
@@ -83,10 +84,12 @@ describe("PgFormFields", () => {
     expect(onChange).toHaveBeenCalledWith({ host: "db.example.com" });
   });
 
-  // #1526 / #1062 — PG routes through the same `resolve_tls_decision` trust
-  // boundary as MSSQL: enabling TLS with `trust=None` is hard-rejected by the
-  // backend. These lock that the form can never emit that invalid combo.
-  describe("TLS toggles (#1526)", () => {
+  // #1063 — PG's TLS control is the sslmode dropdown (disable/prefer/require/
+  // verify-full), a pure view over the stored (tlsEnabled, trust) pair. It
+  // routes through the same `resolve_tls_decision` boundary as MSSQL, so every
+  // selectable option maps to a valid combo — the invalid `trust=None` while
+  // TLS is on can never be authored.
+  describe("sslmode dropdown (#1063)", () => {
     function renderPg(draft: Partial<ConnectionDraft>, onChange = vi.fn()) {
       render(
         <PgFormFields
@@ -105,67 +108,54 @@ describe("PgFormFields", () => {
       return onChange;
     }
 
-    it("renders both toggles off by default (localhost dev keeps plaintext)", () => {
+    it("defaults an unset draft to Prefer (localhost dev keeps the driver default)", () => {
       renderPg({});
-      const tls = screen.getByLabelText(
-        "Enable encryption (TLS)",
-      ) as HTMLInputElement;
-      const trust = screen.getByLabelText(
-        "Trust server certificate",
-      ) as HTMLInputElement;
-      expect(tls.checked).toBe(false);
-      expect(trust.checked).toBe(false);
-      // Trust is meaningless without encryption — disabled while TLS is off.
-      expect(trust.disabled).toBe(true);
+      expect(screen.getByLabelText("SSL mode")).toHaveTextContent(/Prefer/);
     });
 
-    it("enabling TLS also seeds trust=false so the combo is valid (verify-full)", () => {
+    it("reflects a stored verify-full posture", () => {
+      renderPg({ tlsEnabled: true, trustServerCertificate: false });
+      expect(screen.getByLabelText("SSL mode")).toHaveTextContent(
+        /Verify full/,
+      );
+    });
+
+    it("selecting Disable maps to the forced-plaintext combo (tls=false, trust=false)", async () => {
+      const user = userEvent.setup();
       const onChange = renderPg({});
-      act(() => {
-        fireEvent.click(screen.getByLabelText("Enable encryption (TLS)"));
-      });
-      // NOT `{ tlsEnabled: true }` alone — that would leave trust=None and the
-      // backend would reject the connection with no in-form way to recover.
-      expect(onChange).toHaveBeenCalledWith({
-        tlsEnabled: true,
-        trustServerCertificate: false,
-      });
-    });
-
-    it("disabling TLS clears trust back to null (driver default)", () => {
-      const onChange = renderPg({
-        tlsEnabled: true,
-        trustServerCertificate: false,
-      });
-      act(() => {
-        fireEvent.click(screen.getByLabelText("Enable encryption (TLS)"));
-      });
+      await user.click(screen.getByLabelText("SSL mode"));
+      await user.click(screen.getByRole("option", { name: /Disable/ }));
       expect(onChange).toHaveBeenCalledWith({
         tlsEnabled: false,
-        trustServerCertificate: null,
-      });
-    });
-
-    it("toggling trust while TLS is on skips verification (Require)", () => {
-      const onChange = renderPg({
-        tlsEnabled: true,
         trustServerCertificate: false,
       });
-      const trust = screen.getByLabelText(
-        "Trust server certificate",
-      ) as HTMLInputElement;
-      expect(trust.disabled).toBe(false);
-      act(() => {
-        fireEvent.click(trust);
-      });
-      expect(onChange).toHaveBeenCalledWith({ trustServerCertificate: true });
     });
 
-    it("surfaces the downgrade hint so leaving TLS off is an explicit choice", () => {
-      renderPg({});
-      // #1062 core: the silent `sslmode=prefer` downgrade is made explicit in
-      // the form copy rather than a runtime backend event.
-      expect(screen.getByText(/sslmode=prefer/)).toBeInTheDocument();
+    it("selecting Require maps to encrypt-but-skip-verify (tls=true, trust=true)", async () => {
+      const user = userEvent.setup();
+      const onChange = renderPg({});
+      await user.click(screen.getByLabelText("SSL mode"));
+      await user.click(screen.getByRole("option", { name: /Require/ }));
+      expect(onChange).toHaveBeenCalledWith({
+        tlsEnabled: true,
+        trustServerCertificate: true,
+      });
+    });
+
+    it("warns about skipped verification while Require is selected", () => {
+      renderPg({ tlsEnabled: true, trustServerCertificate: true });
+      // Require = skip-verify: the MITM exposure is surfaced as an alert so the
+      // choice is deliberate, not silent.
+      expect(
+        screen.getByText(/Certificate verification is skipped/),
+      ).toBeInTheDocument();
+    });
+
+    it("does not warn for Verify full", () => {
+      renderPg({ tlsEnabled: true, trustServerCertificate: false });
+      expect(
+        screen.queryByText(/Certificate verification is skipped/),
+      ).not.toBeInTheDocument();
     });
   });
 });

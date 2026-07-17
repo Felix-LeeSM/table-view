@@ -84,4 +84,66 @@ describe("MongoFormFields", () => {
     });
     expect(onChange).toHaveBeenCalledWith({ tlsEnabled: true });
   });
+
+  // Issue #1063 — the skip-verify opt-in (`trust server certificate`) only
+  // appears once TLS is on, warns while active, and never lingers when TLS is
+  // switched back off.
+  describe("skip-verify opt-in (#1063)", () => {
+    function renderMongo(
+      overrides: Partial<ConnectionDraft>,
+      onChange = vi.fn(),
+    ) {
+      render(
+        <MongoFormFields
+          draft={makeDraft(overrides)}
+          onChange={onChange}
+          passwordInput=""
+          setPasswordInput={vi.fn()}
+          isEditing={false}
+          hadPassword={false}
+          clearPassword={false}
+          setClearPassword={vi.fn()}
+          inputClass={inputClass}
+          labelClass={labelClass}
+        />,
+      );
+      return onChange;
+    }
+
+    it("hides the trust checkbox while TLS is off", () => {
+      renderMongo({ tlsEnabled: false });
+      expect(
+        screen.queryByLabelText("Trust server certificate"),
+      ).not.toBeInTheDocument();
+    });
+
+    it("reveals the trust checkbox once TLS is on and opts into skip-verify on click", () => {
+      const onChange = renderMongo({ tlsEnabled: true });
+      act(() => {
+        fireEvent.click(screen.getByLabelText("Trust server certificate"));
+      });
+      expect(onChange).toHaveBeenCalledWith({ trustServerCertificate: true });
+    });
+
+    it("warns while trust is active", () => {
+      renderMongo({ tlsEnabled: true, trustServerCertificate: true });
+      expect(
+        screen.getByText(/Certificate verification is skipped/),
+      ).toBeInTheDocument();
+    });
+
+    it("clears a stale trust choice when TLS is turned off", () => {
+      const onChange = renderMongo({
+        tlsEnabled: true,
+        trustServerCertificate: true,
+      });
+      act(() => {
+        fireEvent.click(screen.getByLabelText("Enable TLS"));
+      });
+      expect(onChange).toHaveBeenCalledWith({
+        tlsEnabled: false,
+        trustServerCertificate: null,
+      });
+    });
+  });
 });
