@@ -129,10 +129,15 @@ pub async fn open_pool() -> Result<SqlitePool, AppError> {
     // (probe 는 통과하지만 read path 가 죽는 손상) 은 이 단계에서 잡힌다.
     let pool = match open_pool_inner(&path).await {
         Ok(p) => p,
-        Err(e) if is_lock_error(&e) => {
-            // Lock (이중 실행 등) — quarantine+fresh 해봤자 같은 파일 lock 으로
-            // 재실행도 실패하고 데이터만 유실시킨다. 근본 fix 는 single-instance
-            // 보장 (별도 PR) 이므로 여기서는 그대로 에러 반환.
+        Err(e) if is_lock_error(&e) || is_migration_error(&e) => {
+            // Recovery(quarantine+fresh)를 read-path 손상으로만 한정한다. 두 경우는
+            // corruption 이 아니므로 quarantine 하면 데이터만 유실된다:
+            // - Lock (이중 실행 등): quarantine+fresh 해봤자 같은 파일 lock 으로
+            //   재실행도 실패. 근본 fix 는 single-instance 보장 (별도 PR).
+            // - Migration 실패 (downgrade VersionMissing / dirty / version mismatch
+            //   / broken SQL): DB 바이트는 정상인데 quarantine 하면 connections/
+            //   favorites/query_history/settings 가 조용히 사라진다 (#1558).
+            // 둘 다 그대로 전파해 명확한 부팅 에러로 실패시키고 데이터를 보존한다.
             return Err(e);
         }
         Err(e) => {
@@ -167,6 +172,9 @@ async fn open_pool_inner(path: &Path) -> Result<SqlitePool, AppError> {
         .connect_with(options)
         .await?;
 
+    // Migration 실패는 `run_migrations` 가 corruption(→ `Storage`, quarantine 대상)
+    // 과 논리 실패(downgrade/dirty/broken SQL → `Migration`, 전파)로 구분해 반환한다
+    // (#1558). health_check 는 page body corruption 을 read path 로 한 번 더 잡는다.
     if let Err(e) = run_migrations(&pool).await {
         let _ = pool.close().await;
         return Err(e);
@@ -234,13 +242,35 @@ fn is_lock_error(e: &AppError) -> bool {
     msg.contains("locked") || msg.contains("busy")
 }
 
+/// 논리적 migration 실패 (downgrade `VersionMissing` / dirty / version mismatch
+/// / broken migration SQL) 인지 판정. 이 경우 DB 바이트는 정상이므로 quarantine
+/// 하면 사용자 데이터가 조용히 사라진다 (#1558) — recovery 를 skip 하고 에러를
+/// 전파한다. 진짜 read-path 손상은 `run_migrations` 가 `Storage` 로 남겨 (아래
+/// `_ => quarantine` arm) 정상적으로 복구된다.
+fn is_migration_error(e: &AppError) -> bool {
+    matches!(e, AppError::Migration(_))
+}
+
 /// Migration runner — `sqlx::migrate!()` 로 `src-tauri/migrations/*.sql` 적용.
 /// 재실행 안전 (sqlx 가 `_sqlx_migrations` table 로 적용 이력 관리).
 pub async fn run_migrations(pool: &SqlitePool) -> Result<(), AppError> {
+    use sqlx::migrate::MigrateError;
     sqlx::migrate!("./migrations")
         .run(pool)
         .await
-        .map_err(|e| AppError::Storage(format!("Migration failed: {}", e)))?;
+        .map_err(|e| match &e {
+            // `Execute` = migrator 부트키핑(`_sqlx_migrations` 조회/생성 등)이
+            // 터진 경우. read-path 손상(page body corrupt)일 때 여기로 오므로
+            // 기존 corruption recovery(quarantine) 대상으로 남긴다
+            // (`tests/corrupt_body_recovery.rs` 회귀).
+            MigrateError::Execute(_) => AppError::Storage(format!("Migration failed: {}", e)),
+            // 나머지는 DB 바이트가 정상인 논리 실패다: downgrade(`VersionMissing`)
+            // / checksum `VersionMismatch` / `Dirty` / 특정 마이그레이션 SQL 실패
+            // (`ExecuteMigration`) 등. quarantine 하면 connections/favorites/
+            // query_history/settings 가 조용히 사라지므로(#1558) 보존하고 명확한
+            // 부팅 에러로 전파한다.
+            _ => AppError::Migration(e.to_string()),
+        })?;
     Ok(())
 }
 
