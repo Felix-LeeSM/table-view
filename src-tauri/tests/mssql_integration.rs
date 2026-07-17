@@ -112,14 +112,17 @@ async fn test_mssql_dump_round_trip_restores_into_mssql() {
         .await
         .expect("CREATE TABLE");
 
-    // Seed tricky ASCII values: single quote (→ `''`), backslash (a T-SQL
-    // literal, NOT escaped — the opposite of MySQL), embedded double quote,
-    // NULL, and a BIT column (proves bool → `1`/`0`).
+    // Seed tricky values: single quote (→ `''`), backslash (a T-SQL literal,
+    // NOT escaped — the opposite of MySQL), embedded double quote, NULL, a BIT
+    // column (proves bool → `1`/`0`), and (#1642 B1) non-ASCII Unicode that a
+    // non-`N` restore literal would code-page-fold to `?`. Seed literals carry
+    // their own `N` prefix so the source rows store the true Unicode.
     let seed = format!(
         "INSERT INTO {MSSQL_SCHEMA}.{table} (id, name, note, flag) VALUES \
-         (1, 'O''Reilly', 'C:\\path\\file', 1), \
-         (2, 'plain', 'has,comma and space', 0), \
-         (3, 'quote\"and\\slash', NULL, 1)"
+         (1, N'O''Reilly', N'C:\\path\\file', 1), \
+         (2, N'plain', N'has,comma and space', 0), \
+         (3, N'quote\"and\\slash', NULL, 1), \
+         (4, N'안녕세계', N'日本語 emoji 💡', 0)"
     );
     adapter
         .execute_query(&seed, None, DEFAULT_ROW_CAP)
@@ -142,7 +145,7 @@ async fn test_mssql_dump_round_trip_restores_into_mssql() {
             .collect()
     }
     let source_rows = read_all(&adapter, &table).await;
-    assert_eq!(source_rows.len(), 3, "seed should have 3 rows");
+    assert_eq!(source_rows.len(), 4, "seed should have 4 rows");
 
     // Drive the real dump through AppState with an MSSQL dialect.
     let state = AppState::new();
@@ -175,11 +178,12 @@ async fn test_mssql_dump_round_trip_restores_into_mssql() {
     )
     .await
     .expect("dump");
-    assert_eq!(summary.rows_written, 3);
+    assert_eq!(summary.rows_written, 4);
 
     let dump_sql = std::fs::read_to_string(&dump_path).unwrap();
     // Dialect proof: bracket identifiers; no ANSI/backtick identifier, no PG
-    // jsonb cast, no non-T-SQL boolean literal, and backslash stays single.
+    // jsonb cast, no non-T-SQL boolean literal, backslash stays single, and
+    // (#1642 B1) every string literal is `N'...'` so Unicode survives restore.
     assert!(
         dump_sql.contains(&format!("INSERT INTO [{MSSQL_SCHEMA}].[{table}]")),
         "dump missing bracket INSERT: {dump_sql}"
@@ -198,8 +202,12 @@ async fn test_mssql_dump_round_trip_restores_into_mssql() {
         "dump leaked non-T-SQL boolean literal: {dump_sql}"
     );
     assert!(
-        dump_sql.contains(r"'C:\path\file'"),
-        "T-SQL literal must keep a single backslash: {dump_sql}"
+        dump_sql.contains(r"N'C:\path\file'"),
+        "T-SQL literal must keep a single backslash under N-prefix: {dump_sql}"
+    );
+    assert!(
+        dump_sql.contains("N'안녕세계'"),
+        "Unicode literal must be N-prefixed to survive restore: {dump_sql}"
     );
 
     // Restore: empty the table, replay each dumped INSERT statement.
@@ -221,12 +229,12 @@ async fn test_mssql_dump_round_trip_restores_into_mssql() {
             restored += 1;
         }
     }
-    assert_eq!(restored, 3, "should replay 3 INSERT statements");
+    assert_eq!(restored, 4, "should replay 4 INSERT statements");
 
     let restored_rows = read_all(&adapter, &table).await;
     assert_eq!(
         restored_rows, source_rows,
-        "restored rows must match source after T-SQL round-trip"
+        "restored rows must match source after T-SQL round-trip (incl. Unicode)"
     );
 
     adapter.drop_table(&drop_req(&table)).await.ok();

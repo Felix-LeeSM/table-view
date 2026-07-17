@@ -27,12 +27,20 @@ pub(super) fn qualified_mssql_table(schema: &str, table: &str) -> String {
     )
 }
 
-/// Single-quoted T-SQL string literal. T-SQL is not backslash-aware, so only the
-/// single quote is doubled; a literal backslash passes through unchanged.
-/// Newlines/tabs are legal inside a T-SQL string literal and pass through.
+/// Unicode-safe T-SQL string literal `N'...'`. T-SQL is not backslash-aware, so
+/// only the single quote is doubled; a literal backslash passes through
+/// unchanged. Newlines/tabs are legal inside the literal and pass through.
+///
+/// The `N` prefix is load-bearing: a non-`N` literal is parsed in the server's
+/// default (varchar) code page *before* it reaches an nvarchar column, so any
+/// character outside that code page (Korean/Japanese/emoji) is silently coerced
+/// to `?` on restore. `N'...'` is an nvarchar literal, so the round-trip stays
+/// lossless. Emitting `N'...'` for a plain varchar column is harmless — SQL
+/// Server implicitly down-converts, and any character a varchar column can hold
+/// survives that conversion.
 pub(super) fn quote_mssql_string(s: &str) -> String {
-    let mut out = String::with_capacity(s.len() + 2);
-    out.push('\'');
+    let mut out = String::with_capacity(s.len() + 3);
+    out.push_str("N'");
     for ch in s.chars() {
         if ch == '\'' {
             out.push('\'');

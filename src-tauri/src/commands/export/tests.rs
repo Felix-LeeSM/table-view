@@ -726,15 +726,20 @@ fn test_qualified_mssql_table_builds_bracket_dot_form() {
     assert_eq!(qualified_mssql_table("od]d", "t]b"), "[od]]d].[t]]b]");
 }
 
-// [AC-1642-02] String: only single quote doubled; backslash is a literal
-// (unlike MySQL, which would double it).
+// [AC-1642-02] String: `N'...'` (Unicode-safe) with only the single quote
+// doubled; backslash is a literal (unlike MySQL, which would double it).
 #[test]
-fn test_quote_mssql_string_doubles_quote_and_keeps_backslash() {
-    assert_eq!(quote_mssql_string("O'Reilly"), "'O''Reilly'");
-    assert_eq!(quote_mssql_string(""), "''");
-    assert_eq!(quote_mssql_string(r"a\b"), r"'a\b'");
-    assert_eq!(quote_mssql_string(r"c:\'x"), r"'c:\''x'");
-    assert_eq!(quote_mssql_string("a\nb"), "'a\nb'");
+fn test_quote_mssql_string_uses_n_prefix_doubles_quote_keeps_backslash() {
+    assert_eq!(quote_mssql_string("O'Reilly"), "N'O''Reilly'");
+    assert_eq!(quote_mssql_string(""), "N''");
+    assert_eq!(quote_mssql_string(r"a\b"), r"N'a\b'");
+    assert_eq!(quote_mssql_string(r"c:\'x"), r"N'c:\''x'");
+    assert_eq!(quote_mssql_string("a\nb"), "N'a\nb'");
+    // #1642 B1 — non-ASCII must ride an `N'...'` literal so a restore into an
+    // nvarchar column does not code-page-fold Korean/Japanese/emoji to `?`.
+    assert_eq!(quote_mssql_string("안녕"), "N'안녕'");
+    assert_eq!(quote_mssql_string("café☕"), "N'café☕'");
+    assert_eq!(quote_mssql_string("O'네일"), "N'O''네일'");
 }
 
 // [AC-1642-02] Scalars: bool → BIT `1`/`0` (T-SQL has no TRUE/FALSE).
@@ -748,8 +753,9 @@ fn test_mssql_value_to_sql_literal_scalars() {
     assert_eq!(mssql_value_to_sql_literal(&json!(2.5)), "2.5");
     assert_eq!(
         mssql_value_to_sql_literal(&json!("O'Reilly")),
-        "'O''Reilly'"
+        "N'O''Reilly'"
     );
+    assert_eq!(mssql_value_to_sql_literal(&json!("안녕")), "N'안녕'");
 }
 
 // [AC-1642-02] Array / Object → plain quoted JSON string, no PG `::jsonb` cast
@@ -757,14 +763,14 @@ fn test_mssql_value_to_sql_literal_scalars() {
 #[test]
 fn test_mssql_value_to_sql_literal_json_has_no_cast_or_backslash_escape() {
     let obj = mssql_value_to_sql_literal(&json!({"k": "v"}));
-    assert_eq!(obj, "'{\"k\":\"v\"}'");
+    assert_eq!(obj, "N'{\"k\":\"v\"}'");
     assert!(!obj.contains("::jsonb"), "lit: {}", obj);
     let arr = mssql_value_to_sql_literal(&json!([1, 2, "a"]));
-    assert_eq!(arr, "'[1,2,\"a\"]'");
+    assert_eq!(arr, "N'[1,2,\"a\"]'");
     // A backslash inside the JSON stays single (T-SQL literal), where MySQL
     // would double it.
     let esc = mssql_value_to_sql_literal(&json!({"p": "c:\\x"}));
-    assert_eq!(esc, r#"'{"p":"c:\\x"}'"#);
+    assert_eq!(esc, r#"N'{"p":"c:\\x"}'"#);
 }
 
 // ── run_schema_dump direct tests (Sprint 237 P5) ─────────────────────
@@ -1312,10 +1318,10 @@ async fn run_schema_dump_writes_insert_lines_for_streamed_rows() {
     assert_eq!(mssql_summary.rows_written, 3);
     let mssql_body = std::fs::read_to_string(&mssql_path).unwrap();
     assert!(
-        mssql_body.contains("INSERT INTO [dbo].[users] ([id], [name]) VALUES (1, 'alice');"),
+        mssql_body.contains("INSERT INTO [dbo].[users] ([id], [name]) VALUES (1, N'alice');"),
         "mssql body: {mssql_body}"
     );
-    assert!(mssql_body.contains("VALUES (NULL, 'carol');"));
+    assert!(mssql_body.contains("VALUES (NULL, N'carol');"));
     assert!(mssql_body.contains("Data: [dbo].[users]"));
     // Neither ANSI double quotes nor MySQL backticks may leak into the T-SQL dump.
     assert!(
@@ -1681,4 +1687,9 @@ fn test_export_schema_dump_options_dialect_default_and_parse() {
     let maria: ExportSchemaDumpOptions =
         serde_json::from_str(r#"{"include":"both","batchSize":50,"dialect":"mariadb"}"#).unwrap();
     assert!(matches!(maria.dialect, DatabaseType::Mariadb));
+
+    // #1642 — `"mssql"` steers the T-SQL `[bracket]` INSERT writer.
+    let mssql: ExportSchemaDumpOptions =
+        serde_json::from_str(r#"{"include":"dml","batchSize":50,"dialect":"mssql"}"#).unwrap();
+    assert!(matches!(mssql.dialect, DatabaseType::Mssql));
 }
