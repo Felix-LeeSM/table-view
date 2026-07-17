@@ -230,11 +230,39 @@ function verifySearchConnectionPromotionBoundary(): void {
   );
 }
 
+// Issue #1640 — the CSV row import commit path is PG-first. The `edit.csvRowImport`
+// capability gates the schema-tree "Import CSV…" entry point; PostgreSQL claims
+// it and every other engine withholds it, mirroring the backend
+// `build_csv_import_statements` PG-only gate. Because the commit rides the
+// shared `execute_query_batch` (frontend SQL batch), it declares no new backend
+// adapter capability, so the coarse `dataMutation` write posture stays false for
+// PostgreSQL (asserted in the profile-parity test).
+function verifyCsvImportPromotionBoundary(): void {
+  const postgres = getDataSourceProfile("postgresql");
+  assert(
+    postgres.capabilities.edit.csvRowImport,
+    "postgresql: edit.csvRowImport must be exposed for the PG-first CSV row import commit path (#1640)",
+  );
+  for (const engine of [
+    "mysql",
+    "mariadb",
+    "sqlite",
+    "mssql",
+    "oracle",
+  ] as const) {
+    assert(
+      !getDataSourceProfile(engine).capabilities.edit.csvRowImport,
+      `${engine}: CSV row import stays unsupported until its commit adapter lands; edit.csvRowImport must be false`,
+    );
+  }
+}
+
 await verifyProfile("development");
 await verifyProfile("e2e");
 verifyEnterpriseRdbmsPromotionBoundary();
 verifySearchConnectionPromotionBoundary();
+verifyCsvImportPromotionBoundary();
 
 console.log(
-  "[e2e:pre-smoke] release gate MSSQL runtime catalog/query/editRows, Oracle service-name catalog/query/cancel/tabular/editRows, and live Search contract assertions passed.",
+  "[e2e:pre-smoke] release gate MSSQL runtime catalog/query/editRows, Oracle service-name catalog/query/cancel/tabular/editRows, live Search contract, and PG-first CSV row import boundary assertions passed.",
 );

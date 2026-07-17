@@ -29,6 +29,9 @@ pub mod session;
 
 use dump_writers::{pg_value_to_sql_literal, qualified_pg_table, quote_pg_identifier};
 use grid_writers::{require_sql_source_table, GridStreamState};
+// Issue #1640 — CSV import commit reuses the same identifier/string-literal
+// quoting as the SQL INSERT export writer so the two never drift.
+pub(crate) use grid_writers::{quote_sql_identifier, quote_sql_string};
 
 pub use session::ExportSessionRegistry;
 

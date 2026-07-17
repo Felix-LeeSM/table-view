@@ -132,8 +132,15 @@ type AreaCapabilityGroup = Exclude<
 // not a feature the adapter claims to support, so it stays out of the
 // support/unsupported conformance enumeration (a `false` value is a relaxed
 // policy, not a missing capability).
+// Issue #1640 — `edit.csvRowImport` is a UI-surface gate for the "Import CSV…"
+// entry point, not a distinct adapter conformance surface: the commit rides the
+// existing `execute_query_batch` (RelationalQuery) path, so it adds no new
+// backend adapter claim (same posture as the Rust adapter_contract note). It is
+// therefore enumerated only through the TS profile/capability tests, not the
+// adapter conformance matrix.
 const NON_CLAIM_CAPABILITY_KEYS: ReadonlySet<string> = new Set([
   "edit.requiresPrimaryKeyForEdit",
+  "edit.csvRowImport",
 ]);
 
 const AREA_CAPABILITY_GROUP = Object.freeze({

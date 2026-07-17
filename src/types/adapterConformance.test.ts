@@ -112,8 +112,14 @@ describe("adapter conformance matrix", () => {
 
           // Issue #1356 — `edit.requiresPrimaryKeyForEdit` is a write-safety
           // constraint, not a support claim, so it is intentionally absent from
-          // the conformance buckets.
-          if (checkId === "edit.requiresPrimaryKeyForEdit") continue;
+          // the conformance buckets. Issue #1640 — `edit.csvRowImport` rides the
+          // existing execute_query_batch path (no distinct adapter surface), so
+          // it too stays out of the conformance enumeration.
+          if (
+            checkId === "edit.requiresPrimaryKeyForEdit" ||
+            checkId === "edit.csvRowImport"
+          )
+            continue;
 
           if (supported) {
             expect(claim.checks, `${dbType}:${checkId}`).toContain(checkId);

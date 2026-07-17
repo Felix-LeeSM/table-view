@@ -1957,3 +1957,161 @@ async fn test_stream_table_rows_aborts_when_receiver_drops() {
         .ok();
     adapter.disconnect_pool().await.ok();
 }
+
+// ── CSV import commit round-trip (#1640) ──────────────────────────────────
+// The pure `build_csv_insert_statements` + `execute_query_batch` together give
+// the CSV import its atomicity: a temp CSV -> one single-row INSERT per row ->
+// one atomic batch. These hit the real BEGIN/COMMIT/ROLLBACK that unit tests
+// cannot reach.
+//   1. round-trip — n CSV rows land as COUNT(*) == n.
+//   2. rollback — a NOT NULL violation on one row (empty -> NULL, tri-state)
+//      rolls the whole import back, leaving 0 rows (no partial import).
+
+fn csv_import_mapping() -> Vec<table_view_lib::commands::import_csv::CsvColumnMapping> {
+    use table_view_lib::commands::import_csv::CsvColumnMapping;
+    vec![
+        CsvColumnMapping {
+            column: "id".into(),
+            source_index: 0,
+        },
+        CsvColumnMapping {
+            column: "name".into(),
+            source_index: 1,
+        },
+    ]
+}
+
+#[tokio::test]
+#[serial_test::serial]
+async fn test_csv_import_round_trip_counts_all_rows() {
+    use table_view_lib::commands::import_csv::{
+        build_csv_insert_statements, read_csv_records, CsvImportOptions,
+    };
+
+    let adapter = match common::setup_adapter(DatabaseType::Postgresql).await {
+        Some(a) => a,
+        None => return,
+    };
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis();
+    let table = format!("test_csv_import_{ts}");
+    adapter
+        .execute_query(
+            &format!("CREATE TABLE {table} (id INT, name TEXT)"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
+        .await
+        .expect("CREATE TABLE");
+
+    let dir = tempfile::TempDir::new().unwrap();
+    let path = dir.path().join("people.csv");
+    std::fs::write(&path, b"id,name\n1,ada\n2,alan\n3,grace\n").unwrap();
+    let records = read_csv_records(&path, &CsvImportOptions::default()).expect("read CSV");
+    let stmts =
+        build_csv_insert_statements("public", &table, &csv_import_mapping(), &records, true)
+            .expect("build INSERTs");
+    assert_eq!(stmts.len(), 3, "one single-row INSERT per CSV data row");
+
+    adapter
+        .execute_query_batch(&stmts, None)
+        .await
+        .expect("CSV import batch should commit atomically");
+
+    let count = adapter
+        .execute_query(
+            &format!("SELECT COUNT(*) AS n FROM {table}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
+        .await
+        .expect("count");
+    let n: i64 = count.rows[0][0]
+        .as_str()
+        .expect("COUNT(*) must be wire-encoded as string")
+        .parse()
+        .expect("count string must parse as i64");
+    assert_eq!(n, 3, "COUNT(*) must equal the CSV data-row count");
+
+    adapter
+        .execute_query(
+            &format!("DROP TABLE {table}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
+        .await
+        .ok();
+    adapter.disconnect_pool().await.ok();
+}
+
+#[tokio::test]
+#[serial_test::serial]
+async fn test_csv_import_rolls_back_on_row_failure() {
+    use table_view_lib::commands::import_csv::{
+        build_csv_insert_statements, read_csv_records, CsvImportOptions,
+    };
+
+    let adapter = match common::setup_adapter(DatabaseType::Postgresql).await {
+        Some(a) => a,
+        None => return,
+    };
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis();
+    let table = format!("test_csv_import_rollback_{ts}");
+    adapter
+        .execute_query(
+            &format!("CREATE TABLE {table} (id INT, name TEXT NOT NULL)"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
+        .await
+        .expect("CREATE TABLE");
+
+    // Row 2 has an empty name; with the default tri-state toggle (empty -> NULL)
+    // it violates NOT NULL, so the whole import must roll back.
+    let dir = tempfile::TempDir::new().unwrap();
+    let path = dir.path().join("people.csv");
+    std::fs::write(&path, b"id,name\n1,ada\n2,\n3,grace\n").unwrap();
+    let records = read_csv_records(&path, &CsvImportOptions::default()).expect("read CSV");
+    let stmts =
+        build_csv_insert_statements("public", &table, &csv_import_mapping(), &records, true)
+            .expect("build INSERTs");
+
+    let err = adapter
+        .execute_query_batch(&stmts, None)
+        .await
+        .expect_err("NOT NULL violation must fail the batch");
+    assert!(
+        err.to_string().contains("statement 2 of 3 failed"),
+        "expected the failing row to be cited, got: {err}"
+    );
+
+    let count = adapter
+        .execute_query(
+            &format!("SELECT COUNT(*) AS n FROM {table}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
+        .await
+        .expect("count");
+    let n: i64 = count.rows[0][0]
+        .as_str()
+        .expect("COUNT(*) must be wire-encoded as string")
+        .parse()
+        .expect("count string must parse as i64");
+    assert_eq!(n, 0, "a failed import must leave no partial rows");
+
+    adapter
+        .execute_query(
+            &format!("DROP TABLE {table}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
+        .await
+        .ok();
+    adapter.disconnect_pool().await.ok();
+}

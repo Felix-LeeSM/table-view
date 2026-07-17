@@ -278,6 +278,13 @@ const KV_RESULTS: &[ResultEnvelopeKind] = &[
 ];
 const SEARCH_RESULTS: &[ResultEnvelopeKind] = &[ResultEnvelopeKind::SearchHits];
 
+// Issue #1640 posture note — CSV row import (PG lane) declares NO new backend
+// adapter capability here. The commit path builds INSERT statements
+// (`commands::import_csv::build_csv_import_statements`) and runs them through the
+// existing `execute_query_batch` command, i.e. it rides `RelationalQuery`. The
+// coarse cross-check `dataMutation` posture (parity report) therefore stays
+// unchanged; the new UI-facing `edit.csvRowImport` capability lives only on the
+// TS side because it gates a frontend surface, not a distinct backend contract.
 const RDB_CAPABILITIES: &[BackendAdapterCapability] = &[
     BackendAdapterCapability::Lifecycle,
     BackendAdapterCapability::RelationalCatalog,
