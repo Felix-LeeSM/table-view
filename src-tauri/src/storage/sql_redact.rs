@@ -454,12 +454,14 @@ fn credential_replacements(sql: &str, toks: &[Tok]) -> Vec<(usize, usize, &'stat
                 if k < toks.len() && (is_value(&toks[k]) || toks[k].kind == TokKind::Word) {
                     repl.push((toks[k].start, toks[k].end, SENTINEL));
                     let mut next = k + 1;
-                    // MySQL `IDENTIFIED BY 'new' REPLACE 'current'` — the
-                    // REPLACE literal is the *current* password (2nd
-                    // review B3), mask it too.
+                    // MySQL/Oracle `IDENTIFIED BY <new> REPLACE <current>` —
+                    // the REPLACE literal is the *current* password (2nd
+                    // review B3), mask it too. Oracle allows a bareword here
+                    // (issue #1550), so mask Word tokens like the new-value
+                    // branch above, not just quoted values.
                     if next + 1 < toks.len()
                         && is_word(sql, &toks[next], "replace")
-                        && is_value(&toks[next + 1])
+                        && (is_value(&toks[next + 1]) || toks[next + 1].kind == TokKind::Word)
                     {
                         repl.push((toks[next + 1].start, toks[next + 1].end, SENTINEL));
                         next += 2;
@@ -848,6 +850,13 @@ mod tests {
         // B3 — the REPLACE literal is the *current* password.
         assert_eq!(
             redact_credentials("ALTER USER u IDENTIFIED BY 'newC6' REPLACE 'oldC6'"),
+            "ALTER USER u IDENTIFIED BY '***' REPLACE '***'"
+        );
+        // Reason: issue #1550 — Oracle bareword REPLACE literal (the *current*
+        // password) leaked plaintext; only quoted REPLACE values were masked
+        // while the new-value branch already masked barewords (2026-07-17).
+        assert_eq!(
+            redact_credentials("ALTER USER u IDENTIFIED BY newC6 REPLACE oldC6"),
             "ALTER USER u IDENTIFIED BY '***' REPLACE '***'"
         );
     }
