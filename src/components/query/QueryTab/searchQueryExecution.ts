@@ -5,6 +5,7 @@ import type { QueryState } from "@/types/query";
 import type { SearchQueryRequest, SearchResultEnvelope } from "@/types/search";
 import type { QueryTab } from "@stores/workspaceStore";
 import { isRecord } from "./queryHelpers";
+import { isQueryCancellationMessage } from "./queryCancellation";
 
 type SearchTabContext = Pick<QueryTab, "id" | "connectionId" | "searchTarget">;
 
@@ -109,7 +110,7 @@ export async function executeSearchDslQuery({
     });
   } catch (err) {
     const message = getTauriErrorMessage(err);
-    if (isSearchCancellationMessage(message)) {
+    if (isQueryCancellationMessage(message)) {
       cancelRunningQuery(tab.id, queryId, "Search query cancelled");
       recordHistory({
         sql,
@@ -133,15 +134,4 @@ function numberField(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value)
     ? value
     : undefined;
-}
-
-function isSearchCancellationMessage(message: string): boolean {
-  const normalized = message.toLowerCase();
-  return (
-    normalized.startsWith("cancel:") ||
-    normalized.includes("query cancelled") ||
-    normalized.includes("query canceled") ||
-    normalized.includes("operation cancelled") ||
-    normalized.includes("operation canceled")
-  );
 }

@@ -24,6 +24,7 @@ import {
   isRecord,
 } from "./queryHelpers";
 import {
+  handleMongoRunnerError,
   runDocumentCount,
   runDocumentDistinct,
   runDocumentEstimatedCount,
@@ -62,6 +63,9 @@ export interface MongoLifecycleActions {
   updateQueryState: (tabId: string, state: QueryState) => void;
   completeQuery: (tabId: string, queryId: string, result: QueryResult) => void;
   failQuery: (tabId: string, queryId: string, errorMessage: string) => void;
+  // Issue #1561 — mongo cancel routes here (parity with RDB/Search) so a user
+  // cancel lands on cancelled-state instead of the red `failQuery` banner.
+  cancelRunningQuery: (tabId: string, queryId: string, message: string) => void;
   recordHistory: (payload: MongoHistoryPayload) => void;
 }
 
@@ -98,6 +102,7 @@ async function executeMongoRunCommandIfPresent(
     updateQueryState,
     completeQuery,
     failQuery,
+    cancelRunningQuery,
     recordHistory,
     setPendingMongoConfirm,
     pendingWriteRunnerRef,
@@ -172,17 +177,11 @@ async function executeMongoRunCommandIfPresent(
         status: "success",
       });
     } catch (err) {
-      failQuery(
-        tab.id,
-        queryId,
-        err instanceof Error ? err.message : String(err),
+      handleMongoRunnerError(
+        { failQuery, cancelRunningQuery, recordHistory },
+        err,
+        { tabId: tab.id, queryId, sql, startTime },
       );
-      recordHistory({
-        sql,
-        executedAt: Date.now(),
-        duration: Date.now() - startTime,
-        status: "error",
-      });
     }
   };
 
