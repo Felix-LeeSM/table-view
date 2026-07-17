@@ -8,8 +8,11 @@
 // over every schema in a connection.
 //
 // DDL synthesis lives in the pure `generateMigrationDDL`; DML row
-// streaming runs in Rust (`export_schema_dump`). This hook handles
-// connection→dialect mapping, schemaStore metadata gathering, the
+// streaming runs in Rust (`export_schema_dump`). Both are dialect-aware:
+// the resolved dialect shapes the DDL and is forwarded to the backend so
+// the DML INSERTs use the matching identifier/string quoting (#1641 —
+// MySQL/MariaDB backtick + backslash escape, PG/SQLite ANSI). This hook
+// handles connection→dialect mapping, schemaStore metadata gathering, the
 // invoke branch, the save() dialog (silent on cancel), and toasts.
 //
 // Data path (`RdbAdapter::stream_table_rows`) is implemented for PostgreSQL
@@ -248,7 +251,7 @@ export function useMigrationExport(): UseMigrationExportReturn {
           ddlHeader,
           ddlFooter,
           dumpTables,
-          { include, batchSize: STREAM_BATCH_SIZE },
+          { include, batchSize: STREAM_BATCH_SIZE, dialect: resolved.dialect },
         );
         toast.success(
           i18n.t("export:exported", {
@@ -346,7 +349,7 @@ export function useMigrationExport(): UseMigrationExportReturn {
           ddlHeader,
           ddlFooter,
           dumpTables,
-          { include, batchSize: STREAM_BATCH_SIZE },
+          { include, batchSize: STREAM_BATCH_SIZE, dialect: resolved.dialect },
         );
         toast.success(
           i18n.t("export:exported", {
@@ -433,7 +436,7 @@ export function useMigrationExport(): UseMigrationExportReturn {
           ddlHeader,
           ddlFooter,
           dumpTables,
-          { include, batchSize: STREAM_BATCH_SIZE },
+          { include, batchSize: STREAM_BATCH_SIZE, dialect: resolved.dialect },
         );
         toast.success(
           i18n.t("export:exported", {

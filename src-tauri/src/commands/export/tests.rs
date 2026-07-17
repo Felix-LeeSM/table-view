@@ -8,6 +8,9 @@ use super::dump_writers::quote_pg_string;
 use super::grid_writers::{
     json_to_cell_string, json_to_sql_literal, quote_sql_identifier, quote_sql_string,
 };
+use super::mysql_dump::{
+    mysql_value_to_sql_literal, qualified_mysql_table, quote_mysql_identifier, quote_mysql_string,
+};
 use super::*;
 use serde_json::json;
 use std::path::Path;
@@ -535,6 +538,79 @@ fn test_pg_value_to_sql_literal_array_casts_jsonb() {
     assert!(lit.contains("'[1,2,\"a\"]'"), "lit: {}", lit);
 }
 
+// ── MySQL dump writer (Sprint #1641 / #1077 Stage 1) ──────────────────
+//
+// Reason (2026-07-17): `export_schema_dump` hardcoded PG quoting, so MySQL
+// dumps went out as ANSI double-quote identifiers + `::jsonb` casts that a
+// default-sql_mode MySQL rejects (not vendor-restorable). These lock the
+// backtick-identifier + backslash-aware string-escape contract of the new
+// `mysql_dump` sibling. Pure functions isolated; the real cursor round-trip
+// lives in `tests/mysql_integration.rs`.
+
+// [AC-1641-02] Identifier: backtick-quoted, embedded backtick doubled.
+#[test]
+fn test_quote_mysql_identifier_doubles_embedded_backtick() {
+    assert_eq!(quote_mysql_identifier("plain"), "`plain`");
+    assert_eq!(quote_mysql_identifier("weird`col"), "`weird``col`");
+    // Backtick dialect leaves an embedded double-quote untouched (unlike PG).
+    assert_eq!(quote_mysql_identifier(r#"a"b"#), "`a\"b`");
+}
+
+// [AC-1641-02] qualified table builds `schema`.`table` (schema == database).
+#[test]
+fn test_qualified_mysql_table_builds_backtick_dot_form() {
+    assert_eq!(qualified_mysql_table("test", "users"), "`test`.`users`");
+    assert_eq!(qualified_mysql_table("we`ird", "t`b"), "`we``ird`.`t``b`");
+}
+
+// [AC-1641-02] String literal: single-quote doubled AND backslash doubled —
+// the critical divergence from PG (default sql_mode treats `\` as an escape).
+#[test]
+fn test_quote_mysql_string_escapes_backslash_and_quote() {
+    assert_eq!(quote_mysql_string("O'Reilly"), "'O''Reilly'");
+    assert_eq!(quote_mysql_string(""), "''");
+    // Lone backslash must be doubled or MySQL eats the closing quote.
+    assert_eq!(quote_mysql_string(r"a\b"), r"'a\\b'");
+    // Backslash + quote together: each escaped independently.
+    assert_eq!(quote_mysql_string(r"c:\'x"), r"'c:\\''x'");
+    // Newlines/tabs are legal inside a MySQL literal — passed through.
+    assert_eq!(quote_mysql_string("a\nb"), "'a\nb'");
+}
+
+// [AC-1641-02] Value literals mirror PG scalars but Array/Object drops the
+// PG `::jsonb` cast (MySQL casts a string literal into a JSON column).
+#[test]
+fn test_mysql_value_to_sql_literal_scalars() {
+    assert_eq!(mysql_value_to_sql_literal(&JsonValue::Null), "NULL");
+    assert_eq!(mysql_value_to_sql_literal(&json!(true)), "TRUE");
+    assert_eq!(mysql_value_to_sql_literal(&json!(false)), "FALSE");
+    assert_eq!(mysql_value_to_sql_literal(&json!(42)), "42");
+    assert_eq!(mysql_value_to_sql_literal(&json!(-7)), "-7");
+    assert_eq!(mysql_value_to_sql_literal(&json!(2.5)), "2.5");
+    assert_eq!(
+        mysql_value_to_sql_literal(&json!("O'Reilly")),
+        "'O''Reilly'"
+    );
+    // BIGINT/DECIMAL arrive as precision-preserving JSON strings — quoted,
+    // MySQL casts them back into the numeric column on restore.
+    assert_eq!(
+        mysql_value_to_sql_literal(&json!("9223372036854775807")),
+        "'9223372036854775807'"
+    );
+}
+
+#[test]
+fn test_mysql_value_to_sql_literal_json_has_no_jsonb_cast() {
+    let obj = mysql_value_to_sql_literal(&json!({"k": "v"}));
+    assert_eq!(obj, "'{\"k\":\"v\"}'");
+    assert!(!obj.contains("::jsonb"), "lit: {}", obj);
+    let arr = mysql_value_to_sql_literal(&json!([1, 2, "a"]));
+    assert_eq!(arr, "'[1,2,\"a\"]'");
+    // JSON containing a backslash escape must survive the MySQL escape layer.
+    let esc = mysql_value_to_sql_literal(&json!({"p": "c:\\x"}));
+    assert_eq!(esc, r#"'{"p":"c:\\\\x"}'"#);
+}
+
 // ── run_schema_dump direct tests (Sprint 237 P5) ─────────────────────
 //
 // 작성 이유 (2026-05-08): export/mod.rs 의 `run_schema_dump` body 가
@@ -548,6 +624,7 @@ use crate::commands::connection::AppState;
 use crate::db::testing::StubRdbAdapter;
 use crate::db::ActiveAdapter;
 use crate::error::AppError;
+use crate::models::DatabaseType;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
@@ -561,9 +638,20 @@ fn dump_table(schema: &str, table: &str, cols: Vec<&str>) -> ExportDumpTable {
 }
 
 fn dump_opts(include: ExportInclude, batch_size: u32) -> ExportSchemaDumpOptions {
+    // Default dialect (Postgresql) — every existing dump test asserts the PG
+    // ANSI output, so this keeps them the byte-identical PG regression guard.
+    dump_opts_dialect(include, batch_size, DatabaseType::Postgresql)
+}
+
+fn dump_opts_dialect(
+    include: ExportInclude,
+    batch_size: u32,
+    dialect: DatabaseType,
+) -> ExportSchemaDumpOptions {
     ExportSchemaDumpOptions {
         include,
         batch_size,
+        dialect,
     }
 }
 
@@ -1016,6 +1104,38 @@ async fn run_schema_dump_writes_insert_lines_for_streamed_rows() {
     assert!(body.contains(r#"INSERT INTO "public"."users" ("id", "name") VALUES (1, 'alice');"#));
     assert!(body.contains(r#"VALUES (NULL, 'carol');"#));
     assert!(body.contains("Data: \"public\".\"users\""));
+
+    // [AC-1641-02] Same streamed rows, `dialect = mysql` → backtick
+    // identifiers instead of ANSI double quotes. Pre-dispatch this asserted
+    // the still-PG output (RED); the fn-pointer dialect dispatch turns it
+    // GREEN. The default-Postgresql run above stays the byte-identical PG
+    // regression guard.
+    let mysql_path = dir.path().join("inserts_mysql.sql");
+    let mysql_summary = super::run_schema_dump(
+        &state,
+        "rdb-conn",
+        &mysql_path,
+        "",
+        "",
+        &[dump_table("public", "users", vec!["id", "name"])],
+        &dump_opts_dialect(ExportInclude::Dml, 2, DatabaseType::Mysql),
+        None,
+    )
+    .await
+    .unwrap();
+    assert_eq!(mysql_summary.rows_written, 3);
+    let mysql_body = std::fs::read_to_string(&mysql_path).unwrap();
+    assert!(
+        mysql_body.contains("INSERT INTO `public`.`users` (`id`, `name`) VALUES (1, 'alice');"),
+        "mysql body: {mysql_body}"
+    );
+    assert!(mysql_body.contains("VALUES (NULL, 'carol');"));
+    assert!(mysql_body.contains("Data: `public`.`users`"));
+    // No ANSI double-quoted identifier must leak into the MySQL dump.
+    assert!(
+        !mysql_body.contains(r#""public"."users""#),
+        "mysql body leaked ANSI identifier: {mysql_body}"
+    );
 }
 
 // ── _inner dispatchers (Sprint 237 P5, 2026-05-08) ─────────────────
@@ -1345,4 +1465,24 @@ fn test_export_include_serde_lowercase() {
     );
     let parsed: ExportInclude = serde_json::from_str("\"both\"").unwrap();
     assert_eq!(parsed, ExportInclude::Both);
+}
+
+// [AC-1641-01] dialect wires through `ExportSchemaDumpOptions`. A payload
+// without the field defaults to Postgresql (old frontend / byte-identical PG
+// guard); `"mysql"`/`"mariadb"` deserialize to the MySQL-family variants that
+// steer the backtick INSERT writer.
+// 2026-07-17.
+#[test]
+fn test_export_schema_dump_options_dialect_default_and_parse() {
+    let without: ExportSchemaDumpOptions =
+        serde_json::from_str(r#"{"include":"dml","batchSize":10}"#).unwrap();
+    assert!(matches!(without.dialect, DatabaseType::Postgresql));
+
+    let mysql: ExportSchemaDumpOptions =
+        serde_json::from_str(r#"{"include":"both","batchSize":50,"dialect":"mysql"}"#).unwrap();
+    assert!(matches!(mysql.dialect, DatabaseType::Mysql));
+
+    let maria: ExportSchemaDumpOptions =
+        serde_json::from_str(r#"{"include":"both","batchSize":50,"dialect":"mariadb"}"#).unwrap();
+    assert!(matches!(maria.dialect, DatabaseType::Mariadb));
 }
