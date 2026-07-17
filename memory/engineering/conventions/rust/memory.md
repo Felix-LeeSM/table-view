@@ -82,4 +82,4 @@ fn get_user(id: u64) -> Result<User, AppError> {
 
 - [conventions](../memory.md) — 상위 컨벤션 룸
 - [refactoring](../refactoring/memory.md) — refactor 4 카테고리
-- [testing-scenarios](../testing-scenarios/memory.md) — 시나리오 설계 8원칙
+- [testing-scenarios](../testing-scenarios/memory.md) — 시나리오 설계 9원칙
