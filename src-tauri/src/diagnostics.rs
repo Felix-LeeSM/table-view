@@ -75,6 +75,40 @@ pub fn file_writer(dir: &Path) -> std::io::Result<(NonBlocking, WorkerGuard)> {
     Ok(tracing_appender::non_blocking(appender))
 }
 
+/// Route every process panic through `tracing` (`target: "panic"`) with a
+/// forced backtrace, then chain the previously-installed hook so dev stderr
+/// output is preserved.
+///
+/// Why (#1565): the default panic handler writes to stderr only. A macOS
+/// `.app` launched from Finder wires stderr to /dev/null and Windows'
+/// `windows_subsystem = "windows"` detaches the console, so a panic in one of
+/// `run()`'s detached boot tasks (lib.rs `tauri::async_runtime::spawn` — no
+/// join) vanishes with no trace. Teeing panics into the `tracing` pipeline
+/// lands them in the #1564 rotating file sink, the only post-hoc channel with
+/// no remote telemetry (ADR 0036).
+///
+/// `Backtrace::force_capture` ignores `RUST_BACKTRACE`, so frames are present
+/// even in a release build that never set the env var — no forced env needed.
+///
+/// ponytail: an *unwind* panic (default profile — Cargo.toml sets no
+/// `panic="abort"`) keeps the process alive, so the non-blocking file writer's
+/// worker thread drains this line normally; only a panic that terminates the
+/// process before the async worker flushes (same class as the `run()`
+/// `process::exit` edge) can lose it. Not worth a synchronous flush here.
+pub fn install_panic_hook() {
+    let default_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        tracing::error!(
+            target: "panic",
+            "{info}\n{}",
+            std::backtrace::Backtrace::force_capture()
+        );
+        // Chain the prior hook so `cargo tauri dev` still prints the panic to
+        // stderr and the process's normal abort/unwind message is unchanged.
+        default_hook(info);
+    }));
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -151,6 +185,67 @@ mod tests {
             .mode()
             & 0o777;
         assert_eq!(mode, 0o700, "log dir must be owner-only, got {mode:o}");
+    }
+
+    // A `MakeWriter` sink into a shared buffer so a *local* subscriber can read
+    // back exactly what the panic hook emitted, without touching the
+    // process-global subscriber other tests may own.
+    #[derive(Clone)]
+    struct SharedBuf(std::sync::Arc<std::sync::Mutex<Vec<u8>>>);
+    impl std::io::Write for SharedBuf {
+        fn write(&mut self, data: &[u8]) -> std::io::Result<usize> {
+            self.0.lock().expect("buf lock").extend_from_slice(data);
+            Ok(data.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    // Purpose: prove `install_panic_hook` routes a real panic into the
+    // `tracing` pipeline under `target: "panic"` — the #1565 regression is
+    // "a panic in a detached boot task reaches only stderr (→ /dev/null in a
+    // packaged app) and vanishes". The single load-bearing fact: after the
+    // hook is installed, a panic's message + panic target land on a subscriber
+    // (hence, via #1564's file layer, on disk).
+    //
+    // The panic is triggered on THIS thread inside `catch_unwind`, so the hook
+    // fires while the thread-local `with_default` subscriber is still active —
+    // a spawned thread would not see a thread-local subscriber (tracing's
+    // dispatcher is thread-local unless set globally), which is why we keep it
+    // on-thread and deterministic instead of racing a background thread (P5).
+    #[test]
+    fn test_install_panic_hook_routes_panic_to_tracing_target() {
+        install_panic_hook();
+
+        let buf = std::sync::Arc::new(std::sync::Mutex::new(Vec::<u8>::new()));
+        let writer = SharedBuf(buf.clone());
+        let subscriber = tracing_subscriber::registry().with(
+            tracing_subscriber::fmt::layer()
+                .with_ansi(false)
+                .with_target(true)
+                .with_writer(move || writer.clone()),
+        );
+
+        tracing::subscriber::with_default(subscriber, || {
+            // catch_unwind swallows the unwind so the test process survives;
+            // the hook has already run (synchronously, on this thread) by the
+            // time catch_unwind returns.
+            let _ = std::panic::catch_unwind(|| panic!("diag-boom-marker-1565"));
+        });
+
+        let out = String::from_utf8(buf.lock().expect("buf lock").clone()).expect("utf8");
+        // Message routed through the hook into tracing.
+        assert!(
+            out.contains("diag-boom-marker-1565"),
+            "panic message never reached the tracing subscriber; got: {out:?}"
+        );
+        // Emitted at ERROR under `target: "panic"` (the marker itself contains
+        // no "panic", so this token can only come from the event's target).
+        assert!(
+            out.contains("ERROR panic"),
+            "expected an ERROR event with target=panic; got: {out:?}"
+        );
     }
 
     // Reason (review B2) — a file-open failure must surface as `Err` (routed

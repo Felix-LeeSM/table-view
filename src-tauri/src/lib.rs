@@ -115,6 +115,15 @@ pub fn run() {
         .with(file_layer)
         .try_init();
 
+    // #1565 — route panics through `tracing` so they reach the file sink
+    // above. MUST run AFTER `try_init`: the default handler only writes to
+    // stderr, which a Finder-launched macOS `.app` (→ /dev/null) or Windows'
+    // `windows_subsystem = "windows"` discards, so a panic in one of the
+    // detached boot tasks spawned below (`tauri::async_runtime::spawn`, no
+    // join) would otherwise vanish with no trace. The hook chains the prior
+    // handler, so `cargo tauri dev` still prints the panic to stderr.
+    diagnostics::install_panic_hook();
+
     // `info!` (NOT `debug!`) so the message survives a release build's
     // default log filter; `target: "boot"` so the protocol script can grep
     // for the literal token regardless of binary name.
