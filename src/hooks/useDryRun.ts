@@ -166,6 +166,9 @@ export function useDryRun(args: UseDryRunArgs): DryRunState {
         /* best-effort */
       }
     };
+    // `statements` is excluded on purpose — it is a fresh array each render, so
+    // the stable `statementsKey` string stands in for its identity. The dry-run
+    // + cancelQuery fns are module-stable.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [connectionId, statementsKey, paradigm, enabled]);
 

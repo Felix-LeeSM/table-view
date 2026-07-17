@@ -214,6 +214,9 @@ const MongoQueryEditor = forwardRef<EditorView | null, MongoQueryEditorProps>(
         viewRef.current = null;
         setForwardedRef(ref, null);
       };
+      // Mount-once: create the EditorView a single time. Completion/theme
+      // props reconfigure via the Compartment effect below; remounting here
+      // would drop cursor + undo history (cf. RedisCommandEditor).
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 

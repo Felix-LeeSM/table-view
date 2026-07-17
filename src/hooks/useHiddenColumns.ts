@@ -55,6 +55,9 @@ export function useHiddenColumns(pk?: ColumnPrefsPk): UseHiddenColumnsResult {
     return () => {
       cancelled = true;
     };
+    // Key off the stable `pkKey` string, not the `pk` object — `pk` is a fresh
+    // reference each render, so depending on it would re-hydrate every render.
+    // `setHidden` is a stable setter (cf. useColumnWidths).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pkKey]);
 
