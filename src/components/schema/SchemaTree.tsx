@@ -52,6 +52,7 @@ import type { FileAnalyticsSourceMetadata } from "@/types/fileAnalytics";
 import {
   CreateTableDialogSlot,
   DropTableDialogSlot,
+  ImportCsvDialogSlot,
   RenameTableDialogSlot,
 } from "./SchemaTree/dialogs";
 import { useSchemaTreeActions } from "./SchemaTree/useSchemaTreeActions";
@@ -356,6 +357,7 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
     handleOpenStructure: actions.handleOpenStructure,
     handleDropTable: actions.handleDropTable,
     handleStartRename: actions.handleStartRename,
+    handleImportCsv: actions.handleImportCsv,
     handleTogglePin: actions.handleTogglePin,
     isTablePinned: actions.isTablePinned,
     handleViewClick: actions.handleViewClick,
@@ -716,6 +718,15 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
         onRefresh={async (schemaName) => {
           actions.refreshSchema(schemaName);
         }}
+      />
+
+      {/* #1639 — read-only CSV import wizard slot (opened from the table
+          context menu, PG-first gate). Stage 1 performs no DB writes. */}
+      <ImportCsvDialogSlot
+        connectionId={connectionId}
+        database={db}
+        importCsvDialog={actions.importCsvDialog}
+        onClose={() => actions.setImportCsvDialog(null)}
       />
     </div>
   );
