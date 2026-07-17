@@ -382,8 +382,9 @@ async fn create_rdb_database_inner(
     run_database_change(state, connection_id, name, DatabaseCommand::Create).await
 }
 
-/// Sprint 335 (Slice M live wire) — `CREATE DATABASE "<name>"`. PG only
-/// for now; MySQL/SQLite inherit the trait default `Unsupported`.
+/// Sprint 335 (Slice M live wire) — `CREATE DATABASE "<name>"`. PG and, since
+/// #1067, MySQL/MariaDB override this; other engines inherit the trait default
+/// `Unsupported`.
 #[tauri::command]
 pub async fn create_rdb_database(
     window: tauri::Window,
@@ -404,8 +405,9 @@ async fn drop_rdb_database_inner(
     run_database_change(state, connection_id, name, DatabaseCommand::Drop).await
 }
 
-/// Sprint 335 (Slice M live wire) — `DROP DATABASE "<name>"`. PG only;
-/// the user is responsible for evicting active sessions first.
+/// Sprint 335 (Slice M live wire) — `DROP DATABASE "<name>"`. PG and, since
+/// #1067, MySQL/MariaDB; the user is responsible for evicting active sessions
+/// first. The read-only + destructive-confirm gates below are dialect-agnostic.
 #[tauri::command]
 pub async fn drop_rdb_database(
     window: tauri::Window,
