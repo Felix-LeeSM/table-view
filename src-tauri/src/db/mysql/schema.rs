@@ -1068,12 +1068,13 @@ impl MysqlAdapter {
             .await
             .map_err(|e| AppError::Database(format!("performance_schema probe failed: {e}")))?;
         if enabled == 0 {
-            return Err(AppError::Database(
-                "performance_schema is disabled — slow query digests are \
-                 unavailable. Set `performance_schema = ON` in the server config \
-                 and restart to enable statement digest collection."
+            return Err(AppError::CapabilityNotEnabled {
+                code: "mysql_performance_schema".into(),
+                message: "performance_schema is disabled — slow query digests are \
+                          unavailable. Set `performance_schema = ON` in the server config \
+                          and restart to enable statement digest collection."
                     .into(),
-            ));
+            });
         }
 
         #[allow(clippy::type_complexity)]
@@ -1093,7 +1094,19 @@ impl MysqlAdapter {
         .fetch_all(&pool)
         .await
         .map_err(|e| {
-            AppError::Database(format!("events_statements_summary_by_digest failed: {e}"))
+            let msg = e.to_string();
+            match classify_performance_schema_error(&msg) {
+                Some(code) => AppError::CapabilityNotEnabled {
+                    code: code.into(),
+                    message: "performance_schema statement digests are unavailable on \
+                              this connection. Enable `performance_schema` (server config) \
+                              and grant SELECT on it to view slow query digests."
+                        .into(),
+                },
+                None => {
+                    AppError::Database(format!("events_statements_summary_by_digest failed: {msg}"))
+                }
+            }
         })?;
 
         Ok(rows
@@ -1166,6 +1179,26 @@ impl MysqlAdapter {
             connections_active,
             extras,
         })
+    }
+}
+
+/// Classify a `performance_schema` digest-query failure:
+/// `Some("mysql_performance_schema")` when the digest table is unavailable
+/// (missing / disabled / access denied), `None` for any other DB error (kept as
+/// `AppError::Database`). Pure so the not-enabled → capability mapping is
+/// unit-testable without a live server. Conservative — an ambiguous error that
+/// does not name performance_schema stays `Database`.
+fn classify_performance_schema_error(msg: &str) -> Option<&'static str> {
+    let lower = msg.to_ascii_lowercase();
+    if lower.contains("performance_schema")
+        && (lower.contains("doesn't exist")
+            || lower.contains("does not exist")
+            || lower.contains("disabled")
+            || lower.contains("access denied"))
+    {
+        Some("mysql_performance_schema")
+    } else {
+        None
     }
 }
 
@@ -1333,6 +1366,29 @@ mod tests {
             }
             other => panic!("expected Connection, got ok? {}", other.is_ok()),
         }
+    }
+
+    // Reason: a disabled/inaccessible performance_schema is a server-config gap,
+    // not a bug — it must classify as CapabilityNotEnabled (passive UI hint)
+    // while unrelated digest-query failures stay Database (2026-07-17, slow-query UX).
+    #[test]
+    fn classify_performance_schema_maps_unavailable_only() {
+        assert_eq!(
+            classify_performance_schema_error(
+                "Table 'performance_schema.events_statements_summary_by_digest' doesn't exist"
+            ),
+            Some("mysql_performance_schema")
+        );
+        assert_eq!(
+            classify_performance_schema_error(
+                "Access denied for user 'app'@'%' to performance_schema"
+            ),
+            Some("mysql_performance_schema")
+        );
+        assert_eq!(
+            classify_performance_schema_error("Lost connection to MySQL server"),
+            None
+        );
     }
 
     #[tokio::test]

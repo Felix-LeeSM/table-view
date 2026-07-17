@@ -137,7 +137,11 @@ impl OracleAdapter {
         close_connection(connection, result).await
     }
 
-    /// Issue #1073 — top-N slow statements from `v$sql`.
+    /// Issue #1073 — top-N slow statements from `v$sql`. A missing catalog grant
+    /// (`ORA-00942` view-not-found / `ORA-01031` insufficient privileges) is
+    /// elevated to `CapabilityNotEnabled` so the panel renders a passive grant
+    /// hint instead of a red error (2026-07-17, slow-query UX). The fail-loud
+    /// contract is preserved — the error is never swallowed into an empty list.
     pub async fn slow_queries(&self, limit: i64) -> Result<Vec<SlowQueryRow>, AppError> {
         let rows = self
             .admin_query(
@@ -145,7 +149,8 @@ impl OracleAdapter {
                 SLOW_QUERIES_SQL,
                 &[Value::Integer(limit)],
             )
-            .await?;
+            .await
+            .map_err(elevate_catalog_denied)?;
         Ok(rows
             .iter()
             .map(|row| SlowQueryRow {
@@ -299,6 +304,32 @@ fn row_f64(row: &Row, idx: usize) -> Option<f64> {
     }
 }
 
+/// `Some("oracle_catalog_role")` when the error names a missing catalog grant
+/// (`ORA-00942` v$ view not found / `ORA-01031` insufficient privileges),
+/// `None` otherwise. Pure for unit testing.
+fn classify_oracle_catalog_error(msg: &str) -> Option<&'static str> {
+    let upper = msg.to_ascii_uppercase();
+    if upper.contains("ORA-00942") || upper.contains("ORA-01031") {
+        Some("oracle_catalog_role")
+    } else {
+        None
+    }
+}
+
+/// Elevate a catalog-grant denial reported as `AppError::Database` to
+/// `CapabilityNotEnabled` (passive grant hint); any other error passes through.
+fn elevate_catalog_denied(err: AppError) -> AppError {
+    if let AppError::Database(msg) = &err {
+        if let Some(code) = classify_oracle_catalog_error(msg) {
+            return AppError::CapabilityNotEnabled {
+                code: code.into(),
+                message: msg.clone(),
+            };
+        }
+    }
+    err
+}
+
 #[cfg(test)]
 mod tests {
     //! The SQL bodies need a live Oracle (covered by the ignored smoke in
@@ -343,6 +374,40 @@ mod tests {
         assert!(matches!(
             adapter.server_info().await,
             Err(AppError::Connection(_))
+        ));
+    }
+
+    // Reason: a login without SELECT_CATALOG_ROLE hits ORA-00942/ORA-01031 on
+    // the v$ views — a permission gap, not a bug. slow_queries must elevate it to
+    // CapabilityNotEnabled (passive UI grant hint) while unrelated Database errors
+    // pass through unchanged (2026-07-17, slow-query UX).
+    #[test]
+    fn elevate_catalog_denied_maps_missing_grant_only() {
+        assert_eq!(
+            classify_oracle_catalog_error("ORA-00942: table or view does not exist"),
+            Some("oracle_catalog_role")
+        );
+        assert_eq!(
+            classify_oracle_catalog_error("ORA-01031: insufficient privileges"),
+            Some("oracle_catalog_role")
+        );
+        assert_eq!(
+            classify_oracle_catalog_error("ORA-12541: no listener"),
+            None
+        );
+
+        match elevate_catalog_denied(AppError::Database(
+            "Oracle v$sql query failed: ORA-00942: table or view does not exist".into(),
+        )) {
+            AppError::CapabilityNotEnabled { code, .. } => {
+                assert_eq!(code, "oracle_catalog_role");
+            }
+            other => panic!("expected CapabilityNotEnabled, got {other:?}"),
+        }
+        // An unrelated Database error is left untouched.
+        assert!(matches!(
+            elevate_catalog_denied(AppError::Database("ORA-12541: no listener".into())),
+            AppError::Database(_)
         ));
     }
 

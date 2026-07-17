@@ -157,20 +157,46 @@ impl MssqlAdapter {
     }
 
     /// Open a fresh client (same as the catalog surface) and return the first
-    /// result set. Errors surface verbatim — a `VIEW SERVER STATE`-denied login
-    /// fails loud rather than returning a silently empty list.
+    /// result set. A `VIEW SERVER STATE`-denied login is classified as
+    /// `CapabilityNotEnabled` so the panel renders a passive grant hint; any
+    /// other error fails loud as `Database` rather than a silently empty list.
     async fn admin_query(&self, context: &'static str, sql: &str) -> Result<Vec<Row>, AppError> {
         let config = self.connected_config().await?;
         let mut client = Self::connect_client(&config).await?;
         let stream = client
             .simple_query(sql)
             .await
-            .map_err(|err| AppError::Database(format!("{context}: {err}")))?;
+            .map_err(|err| admin_query_error(context, err))?;
         let rows = stream
             .into_first_result()
             .await
-            .map_err(|err| AppError::Database(format!("{context}: {err}")))?;
+            .map_err(|err| admin_query_error(context, err))?;
         Ok(rows)
+    }
+}
+
+/// Map a DMV query error to `CapabilityNotEnabled` when the login lacks
+/// `VIEW SERVER STATE`, else `Database`. Kept separate from `admin_query` so the
+/// classification is unit-testable without a live server.
+fn admin_query_error(context: &'static str, err: tiberius::error::Error) -> AppError {
+    let msg = err.to_string();
+    match classify_view_server_state_error(err.code(), &msg) {
+        Some(code) => AppError::CapabilityNotEnabled {
+            code: code.into(),
+            message: format!("{context}: {msg}"),
+        },
+        None => AppError::Database(format!("{context}: {msg}")),
+    }
+}
+
+/// `Some("mssql_view_server_state")` when the error is a `VIEW SERVER STATE`
+/// permission denial (error 300 / the generic permission error 297, or the
+/// message text), `None` otherwise. Pure for unit testing.
+fn classify_view_server_state_error(code: Option<u32>, msg: &str) -> Option<&'static str> {
+    if matches!(code, Some(300) | Some(297)) || msg.contains("VIEW SERVER STATE") {
+        Some("mssql_view_server_state")
+    } else {
+        None
     }
 }
 
@@ -290,5 +316,31 @@ mod tests {
             None,
             "some unrelated driver error"
         ));
+    }
+
+    // Reason: a login without VIEW SERVER STATE is a permission gap, not a bug —
+    // the DMV admin queries must classify it as CapabilityNotEnabled (passive UI
+    // grant hint) while unrelated errors stay Database (2026-07-17, slow-query UX).
+    #[test]
+    fn classify_view_server_state_maps_permission_denial_only() {
+        assert_eq!(
+            classify_view_server_state_error(Some(300), "irrelevant"),
+            Some("mssql_view_server_state")
+        );
+        assert_eq!(
+            classify_view_server_state_error(Some(297), "irrelevant"),
+            Some("mssql_view_server_state")
+        );
+        assert_eq!(
+            classify_view_server_state_error(
+                None,
+                "VIEW SERVER STATE permission was denied on object 'server'"
+            ),
+            Some("mssql_view_server_state")
+        );
+        assert_eq!(
+            classify_view_server_state_error(Some(208), "Invalid object name"),
+            None
+        );
     }
 }
