@@ -83,10 +83,12 @@ async fn drop_table_inner(
 /// to `{ request: { connectionId, schema, table, cascade?, previewOnly? } }`.
 #[tauri::command]
 pub async fn drop_table(
+    window: tauri::Window,
     state: tauri::State<'_, AppState>,
     request: DropTableRequest,
     safety_confirmed: Option<bool>,
 ) -> Result<SchemaChangeResult, AppError> {
+    crate::commands::guard::guard_not_launcher(window.label())?;
     gate_destructive_ddl(
         &request.connection_id,
         true,
@@ -108,9 +110,11 @@ async fn rename_table_inner(
 /// `drop_table` / `create_table`.
 #[tauri::command]
 pub async fn rename_table(
+    window: tauri::Window,
     state: tauri::State<'_, AppState>,
     request: RenameTableRequest,
 ) -> Result<SchemaChangeResult, AppError> {
+    crate::commands::guard::guard_not_launcher(window.label())?;
     rename_table_inner(state.inner(), &request).await
 }
 
@@ -123,10 +127,12 @@ async fn alter_table_inner(
 
 #[tauri::command]
 pub async fn alter_table(
+    window: tauri::Window,
     state: tauri::State<'_, AppState>,
     request: AlterTableRequest,
     safety_confirmed: Option<bool>,
 ) -> Result<SchemaChangeResult, AppError> {
+    crate::commands::guard::guard_not_launcher(window.label())?;
     // Destructive only when a change drops a column (data loss). Additive
     // ALTERs (ADD / MODIFY) are not gated, mirroring the frontend
     // `ddl-alter-add` (warn) vs `ddl-alter-drop` (danger) split.
@@ -156,9 +162,11 @@ async fn add_column_inner(
 /// through `as_rdb()`, delegate to the trait method.
 #[tauri::command]
 pub async fn add_column(
+    window: tauri::Window,
     state: tauri::State<'_, AppState>,
     request: AddColumnRequest,
 ) -> Result<SchemaChangeResult, AppError> {
+    crate::commands::guard::guard_not_launcher(window.label())?;
     add_column_inner(state.inner(), &request).await
 }
 
@@ -173,10 +181,12 @@ async fn drop_column_inner(
 /// `add_column`.
 #[tauri::command]
 pub async fn drop_column(
+    window: tauri::Window,
     state: tauri::State<'_, AppState>,
     request: DropColumnRequest,
     safety_confirmed: Option<bool>,
 ) -> Result<SchemaChangeResult, AppError> {
+    crate::commands::guard::guard_not_launcher(window.label())?;
     gate_destructive_ddl(
         &request.connection_id,
         true,
@@ -196,9 +206,11 @@ async fn create_table_inner(
 
 #[tauri::command]
 pub async fn create_table(
+    window: tauri::Window,
     state: tauri::State<'_, AppState>,
     request: CreateTableRequest,
 ) -> Result<SchemaChangeResult, AppError> {
+    crate::commands::guard::guard_not_launcher(window.label())?;
     create_table_inner(state.inner(), &request).await
 }
 
@@ -214,9 +226,11 @@ async fn create_table_plan_inner(
 /// 1+N+M IPC calls per dialog refresh pre-Sprint-240).
 #[tauri::command]
 pub async fn create_table_plan(
+    window: tauri::Window,
     state: tauri::State<'_, AppState>,
     request: CreateTablePlanRequest,
 ) -> Result<SchemaChangeResult, AppError> {
+    crate::commands::guard::guard_not_launcher(window.label())?;
     create_table_plan_inner(state.inner(), &request).await
 }
 
@@ -229,9 +243,11 @@ async fn create_index_inner(
 
 #[tauri::command]
 pub async fn create_index(
+    window: tauri::Window,
     state: tauri::State<'_, AppState>,
     request: CreateIndexRequest,
 ) -> Result<SchemaChangeResult, AppError> {
+    crate::commands::guard::guard_not_launcher(window.label())?;
     create_index_inner(state.inner(), &request).await
 }
 
@@ -244,10 +260,12 @@ async fn drop_index_inner(
 
 #[tauri::command]
 pub async fn drop_index(
+    window: tauri::Window,
     state: tauri::State<'_, AppState>,
     request: DropIndexRequest,
     safety_confirmed: Option<bool>,
 ) -> Result<SchemaChangeResult, AppError> {
+    crate::commands::guard::guard_not_launcher(window.label())?;
     gate_destructive_ddl(
         &request.connection_id,
         true,
@@ -267,9 +285,11 @@ async fn add_constraint_inner(
 
 #[tauri::command]
 pub async fn add_constraint(
+    window: tauri::Window,
     state: tauri::State<'_, AppState>,
     request: AddConstraintRequest,
 ) -> Result<SchemaChangeResult, AppError> {
+    crate::commands::guard::guard_not_launcher(window.label())?;
     add_constraint_inner(state.inner(), &request).await
 }
 
@@ -282,10 +302,12 @@ async fn drop_constraint_inner(
 
 #[tauri::command]
 pub async fn drop_constraint(
+    window: tauri::Window,
     state: tauri::State<'_, AppState>,
     request: DropConstraintRequest,
     safety_confirmed: Option<bool>,
 ) -> Result<SchemaChangeResult, AppError> {
+    crate::commands::guard::guard_not_launcher(window.label())?;
     gate_destructive_ddl(
         &request.connection_id,
         true,
@@ -312,9 +334,11 @@ async fn create_trigger_inner(
 /// trait default.
 #[tauri::command]
 pub async fn create_trigger(
+    window: tauri::Window,
     state: tauri::State<'_, AppState>,
     request: CreateTriggerRequest,
 ) -> Result<SchemaChangeResult, AppError> {
+    crate::commands::guard::guard_not_launcher(window.label())?;
     create_trigger_inner(state.inner(), &request).await
 }
 
@@ -334,10 +358,12 @@ async fn drop_trigger_inner(
 /// adapters surface `Unsupported` via the trait default.
 #[tauri::command]
 pub async fn drop_trigger(
+    window: tauri::Window,
     state: tauri::State<'_, AppState>,
     request: DropTriggerRequest,
     safety_confirmed: Option<bool>,
 ) -> Result<SchemaChangeResult, AppError> {
+    crate::commands::guard::guard_not_launcher(window.label())?;
     gate_destructive_ddl(
         &request.connection_id,
         true,
@@ -360,10 +386,12 @@ async fn create_rdb_database_inner(
 /// for now; MySQL/SQLite inherit the trait default `Unsupported`.
 #[tauri::command]
 pub async fn create_rdb_database(
+    window: tauri::Window,
     state: tauri::State<'_, AppState>,
     connection_id: String,
     name: String,
 ) -> Result<(), AppError> {
+    crate::commands::guard::guard_not_launcher(window.label())?;
     gate_read_only_database(&connection_id).await?;
     create_rdb_database_inner(state.inner(), &connection_id, &name).await
 }
@@ -380,11 +408,13 @@ async fn drop_rdb_database_inner(
 /// the user is responsible for evicting active sessions first.
 #[tauri::command]
 pub async fn drop_rdb_database(
+    window: tauri::Window,
     state: tauri::State<'_, AppState>,
     connection_id: String,
     name: String,
     safety_confirmed: Option<bool>,
 ) -> Result<(), AppError> {
+    crate::commands::guard::guard_not_launcher(window.label())?;
     // `DROP DATABASE` always executes (no preview mode) and is unconditionally
     // destructive.
     gate_read_only_database(&connection_id).await?;

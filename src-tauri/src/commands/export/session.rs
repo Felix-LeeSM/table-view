@@ -55,7 +55,9 @@ struct GridExportSession {
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)] // IPC boundary + #1584 injected window guard param
 pub async fn export_grid_begin(
+    window: tauri::Window,
     state: State<'_, AppState>,
     registry: State<'_, ExportSessionRegistry>,
     format: ExportFormat,
@@ -64,6 +66,7 @@ pub async fn export_grid_begin(
     context: ExportContext,
     export_id: Option<String>,
 ) -> Result<String, AppError> {
+    crate::commands::guard::guard_not_launcher(window.label())?;
     export_grid_begin_inner(
         state.inner(),
         registry.inner(),
@@ -78,29 +81,35 @@ pub async fn export_grid_begin(
 
 #[tauri::command]
 pub async fn export_grid_chunk(
+    window: tauri::Window,
     state: State<'_, AppState>,
     registry: State<'_, ExportSessionRegistry>,
     session_id: String,
     rows: Vec<Vec<JsonValue>>,
 ) -> Result<(), AppError> {
+    crate::commands::guard::guard_not_launcher(window.label())?;
     export_grid_chunk_inner(state.inner(), registry.inner(), &session_id, rows).await
 }
 
 #[tauri::command]
 pub async fn export_grid_finish(
+    window: tauri::Window,
     state: State<'_, AppState>,
     registry: State<'_, ExportSessionRegistry>,
     session_id: String,
 ) -> Result<ExportSummary, AppError> {
+    crate::commands::guard::guard_not_launcher(window.label())?;
     export_grid_finish_inner(state.inner(), registry.inner(), &session_id).await
 }
 
 #[tauri::command]
 pub async fn export_grid_abort(
+    window: tauri::Window,
     state: State<'_, AppState>,
     registry: State<'_, ExportSessionRegistry>,
     session_id: String,
 ) -> Result<(), AppError> {
+    crate::commands::guard::guard_not_launcher(window.label())?;
     export_grid_abort_inner(state.inner(), registry.inner(), &session_id).await
 }
 

@@ -164,11 +164,13 @@ async fn execute_kv_command_inner(
 
 #[tauri::command]
 pub async fn execute_kv_command(
+    window: tauri::Window,
     state: tauri::State<'_, AppState>,
     connection_id: String,
     request: KvCommandRequest,
     query_id: Option<String>,
 ) -> Result<RdbQueryResult, AppError> {
+    crate::commands::guard::guard_not_launcher(window.label())?;
     execute_kv_command_inner(state.inner(), &connection_id, request, query_id.as_deref()).await
 }
 
@@ -186,10 +188,12 @@ async fn set_kv_string_value_inner(
 
 #[tauri::command]
 pub async fn set_kv_string_value(
+    window: tauri::Window,
     state: tauri::State<'_, AppState>,
     connection_id: String,
     request: KvSetStringRequest,
 ) -> Result<KvMutationResult, AppError> {
+    crate::commands::guard::guard_not_launcher(window.label())?;
     set_kv_string_value_inner(state.inner(), &connection_id, request).await
 }
 
@@ -207,10 +211,12 @@ async fn delete_kv_key_inner(
 
 #[tauri::command]
 pub async fn delete_kv_key(
+    window: tauri::Window,
     state: tauri::State<'_, AppState>,
     connection_id: String,
     request: KvDeleteRequest,
 ) -> Result<KvMutationResult, AppError> {
+    crate::commands::guard::guard_not_launcher(window.label())?;
     delete_kv_key_inner(state.inner(), &connection_id, request).await
 }
 
@@ -228,10 +234,12 @@ async fn update_kv_ttl_inner(
 
 #[tauri::command]
 pub async fn update_kv_ttl(
+    window: tauri::Window,
     state: tauri::State<'_, AppState>,
     connection_id: String,
     request: KvTtlUpdateRequest,
 ) -> Result<KvMutationResult, AppError> {
+    crate::commands::guard::guard_not_launcher(window.label())?;
     update_kv_ttl_inner(state.inner(), &connection_id, request).await
 }
 

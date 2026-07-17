@@ -237,10 +237,12 @@ async fn kill_server_activity_inner(
 /// `pg_terminate_backend(pid)`, Mongo → `adminCommand({killOp, op: id})`.
 #[tauri::command]
 pub async fn kill_server_activity(
+    window: tauri::Window,
     state: tauri::State<'_, AppState>,
     connection_id: String,
     id: i64,
 ) -> Result<(), AppError> {
+    crate::commands::guard::guard_not_launcher(window.label())?;
     kill_server_activity_inner(state.inner(), &connection_id, id).await
 }
 

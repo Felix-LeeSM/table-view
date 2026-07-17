@@ -35,6 +35,33 @@ pub async fn guard_legacy_import_done(pool: &SqlitePool) -> Result<(), AppError>
     }
 }
 
+/// The window label of the launcher webview (connection manager). Workspace
+/// windows use `workspace` / `workspace-{conn_id}` (launcher.rs).
+pub const LAUNCHER_WINDOW_LABEL: &str = "launcher";
+
+/// Issue #1584 — defense-in-depth window-label guard.
+///
+/// launcher and workspace webviews load the same SPA bundle and Tauri v2 ACL
+/// does **not** gate app-defined commands (`capabilities/default.json` only
+/// lists core/plugin defaults), so the frontend `AppRouter` label split is the
+/// only thing keeping the launcher context away from destructive DB commands.
+/// CSP `script-src 'self'` means there is no active exploit path today; this is
+/// a hardening backstop. Sensitive command handlers take the injected
+/// `window: tauri::Window` param (persist_settings.rs pattern) and call this on
+/// the first line — a `launcher` label rejects with [`AppError::Forbidden`].
+///
+/// The `src-tauri/tests/launcher_command_guard.rs` grep guard enforces that
+/// every `#[tauri::command]` is either in the guarded set (and calls this) or
+/// on the launcher allowlist, so a new sensitive command cannot ship unguarded.
+pub fn guard_not_launcher(window_label: &str) -> Result<(), AppError> {
+    if window_label == LAUNCHER_WINDOW_LABEL {
+        return Err(AppError::Forbidden(format!(
+            "command not permitted from the '{LAUNCHER_WINDOW_LABEL}' window"
+        )));
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     //! 작성 2026-05-16 (Phase 1 sprint-355) — guard 의 4 state 응답 검증.
@@ -100,5 +127,25 @@ mod tests {
             .unwrap();
         guard_legacy_import_done(&pool).await.unwrap();
         cleanup();
+    }
+
+    // Issue #1584 — window-label guard. Sensitive commands must reject the
+    // launcher webview and pass every workspace window.
+    #[test]
+    fn guard_not_launcher_rejects_launcher_label() {
+        let err = guard_not_launcher(LAUNCHER_WINDOW_LABEL).unwrap_err();
+        assert!(
+            matches!(err, AppError::Forbidden(_)),
+            "launcher label must reject with Forbidden, got {err:?}"
+        );
+    }
+
+    #[test]
+    fn guard_not_launcher_accepts_workspace_labels() {
+        // legacy single label + sprint-361 per-connection labels.
+        for label in ["workspace", "workspace-42", "workspace-abc123"] {
+            guard_not_launcher(label)
+                .unwrap_or_else(|e| panic!("workspace label {label:?} must pass, got {e:?}"));
+        }
     }
 }
