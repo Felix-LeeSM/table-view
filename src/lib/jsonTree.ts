@@ -245,6 +245,14 @@ export function buildTreeNodesWithGhosts(
   // each parent's child block in insertion order.
   const childrenByParent = new Map<string, TreeNode[]>();
 
+  // #1619 — node cap shared across EVERY ghost block. The walk used to cap
+  // each block's own `out.length`, so N separate `+ key` pastes could each
+  // reach MAX_TREE_NODES (N × 50k combined). One shared counter bounds the
+  // COMBINED ghost total instead; `ghostTruncated` guarantees exactly one
+  // terminal marker for the whole set, not one per block.
+  let ghostNodeCount = 0;
+  let ghostTruncated = false;
+
   const ghostWalk = (
     v: unknown,
     path: string,
@@ -252,12 +260,13 @@ export function buildTreeNodesWithGhosts(
     depth: number,
     out: TreeNode[],
   ) => {
-    // #1500 node cap — a user can paste an oversized JSON blob into a
-    // `+ key` value; stop emitting once this block-local list is full so it
-    // can't freeze the panel materialising millions of ghost rows. The
-    // caller appends one terminal marker after this walk returns (mirrors
-    // `buildTreeNodes`). O(1) per node, no hot-path cost.
-    if (out.length >= MAX_TREE_NODES) return;
+    // #1500 / #1619 node cap — a user can paste an oversized JSON blob into a
+    // `+ key` value; stop emitting once the SHARED ghost total is full so
+    // neither a single blob nor many blocks in aggregate freeze the panel
+    // materialising millions of ghost rows. The caller appends one terminal
+    // marker after the cap is hit (mirrors `buildTreeNodes`). O(1) per node.
+    if (ghostNodeCount >= MAX_TREE_NODES) return;
+    ghostNodeCount += 1;
     // #1445 depth cap — cap the ghost recursion at the same depth so a
     // deeply nested blob can't overflow the stack. The container is
     // emitted, its children are not.
@@ -355,12 +364,15 @@ export function buildTreeNodesWithGhosts(
     const expanded = expandedGhostValue(entry.raw);
     const block: TreeNode[] = [];
     ghostWalk(expanded, entry.path, label, depth, block);
-    // #1500 node-count truncation — mirror `buildTreeNodes`: when the
-    // ghost walk hit the node cap, append one terminal marker so an
-    // oversized paste shows "…truncated" instead of a silently-clipped
-    // subtree. The marker is a leaf status row; DocumentTreePanel renders
-    // it with `focusable: !n.truncated`, keeping it out of the roving order.
-    if (block.length >= MAX_TREE_NODES) {
+    // #1500 / #1619 node-count truncation — mirror `buildTreeNodes`, but key
+    // off the SHARED counter: append exactly one terminal marker (not one per
+    // block) at the block where the combined ghost total first hits the cap,
+    // so an oversized paste — or many blocks in aggregate — shows a truncation
+    // indicator instead of a silently-clipped subtree. The marker is a leaf
+    // status row; DocumentTreePanel renders it with `focusable: !n.truncated`,
+    // keeping it out of the roving order.
+    if (ghostNodeCount >= MAX_TREE_NODES && !ghostTruncated) {
+      ghostTruncated = true;
       block.push({
         path: `${entry.path}…truncated`,
         depth,
