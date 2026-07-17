@@ -88,6 +88,12 @@ export interface SchemaTreeActions {
   setDropTableDialog: (
     state: { schemaName: string; tableName: string } | null,
   ) => void;
+  // #1639 — read-only CSV import wizard slot. Same open/close shape as the
+  // rename/drop slots; opened from the table context menu (PG-first gate).
+  importCsvDialog: { schemaName: string; tableName: string } | null;
+  setImportCsvDialog: (
+    state: { schemaName: string; tableName: string } | null,
+  ) => void;
   // Sprint 226 — create-table modal state (unchanged).
   createTableDialog: { schemaName: string } | null;
   setCreateTableDialog: (state: { schemaName: string } | null) => void;
@@ -112,6 +118,8 @@ export interface SchemaTreeActions {
   // modal (delegated to `useDdlPreviewExecution`).
   handleDropTable: (tableName: string, schemaName: string) => void;
   handleStartRename: (tableName: string, schemaName: string) => void;
+  // #1639 — open the read-only CSV import wizard for a table.
+  handleImportCsv: (tableName: string, schemaName: string) => void;
   // #1218 — pin/unpin a table + current pin state (for the menu label).
   handleTogglePin: (tableName: string, schemaName: string) => void;
   isTablePinned: (tableName: string, schemaName: string) => boolean;
@@ -282,6 +290,10 @@ export function useSchemaTreeActions({
     tableName: string;
   } | null>(null);
   const [dropTableDialog, setDropTableDialog] = useState<{
+    schemaName: string;
+    tableName: string;
+  } | null>(null);
+  const [importCsvDialog, setImportCsvDialog] = useState<{
     schemaName: string;
     tableName: string;
   } | null>(null);
@@ -466,6 +478,15 @@ export function useSchemaTreeActions({
     [],
   );
 
+  // #1639 — opener for the read-only CSV import wizard. Same shape as the
+  // rename/drop openers; the slot mounts `ImportCsvDialog`.
+  const handleImportCsv = useCallback(
+    (tableName: string, schemaName: string) => {
+      setImportCsvDialog({ schemaName, tableName });
+    },
+    [],
+  );
+
   const handleViewClick = useCallback(
     (viewName: string, schemaName: string) => {
       setSelectedNodeId(null);
@@ -617,6 +638,8 @@ export function useSchemaTreeActions({
     setRenameTableDialog,
     dropTableDialog,
     setDropTableDialog,
+    importCsvDialog,
+    setImportCsvDialog,
     createTableDialog,
     setCreateTableDialog,
 
@@ -636,6 +659,7 @@ export function useSchemaTreeActions({
     handleOpenStructure,
     handleDropTable,
     handleStartRename,
+    handleImportCsv,
     handleTogglePin,
     isTablePinned,
     handleViewClick,
