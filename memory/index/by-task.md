@@ -1,7 +1,7 @@
 ---
 title: By-task 인덱스
 type: index
-generated: 2026-07-10
+generated: 2026-07-17
 generator: scripts/regenerate-indexes.sh
 ---
 
@@ -52,6 +52,7 @@ generator: scripts/regenerate-indexes.sh
 ### capability
 
 - [Data Source Architecture](../../memory/engineering/architecture/data-source/memory.md)
+- [Data Source Runtime Posture](../../memory/engineering/architecture/data-source/posture/memory.md)
 
 ### ci
 
@@ -86,6 +87,7 @@ generator: scripts/regenerate-indexes.sh
 
 - [Adding A Data Source](../../memory/engineering/architecture/data-source/adding/memory.md)
 - [Data Source Architecture](../../memory/engineering/architecture/data-source/memory.md)
+- [Data Source Runtime Posture](../../memory/engineering/architecture/data-source/posture/memory.md)
 
 ### data-source-promotion
 
@@ -112,6 +114,7 @@ generator: scripts/regenerate-indexes.sh
 
 ### e2e
 
+- [E2E 시나리오 설계 원칙](../../memory/engineering/conventions/e2e-scenarios/memory.md)
 - [PR merge 게이트 진단 / 처리](../../memory/runbook/pr-merge-gates/memory.md)
 
 ### fixture
@@ -187,6 +190,10 @@ generator: scripts/regenerate-indexes.sh
 ### persistence-reset
 
 - [Product 머지 기준](../../memory/product/memory.md)
+
+### posture
+
+- [Data Source Runtime Posture](../../memory/engineering/architecture/data-source/posture/memory.md)
 
 ### pr
 
@@ -282,6 +289,10 @@ generator: scripts/regenerate-indexes.sh
 
 - [Product 머지 기준](../../memory/product/memory.md)
 
+### scenario
+
+- [E2E 시나리오 설계 원칙](../../memory/engineering/conventions/e2e-scenarios/memory.md)
+
 ### spawn-verify
 
 - [Multi-agent worktree](../../memory/runbook/worktree/memory.md)
@@ -301,6 +312,7 @@ generator: scripts/regenerate-indexes.sh
 ### support-claim
 
 - [Adding A Data Source](../../memory/engineering/architecture/data-source/adding/memory.md)
+- [Data Source Runtime Posture](../../memory/engineering/architecture/data-source/posture/memory.md)
 - [Fixture strategy — support claims need local evidence](../../memory/engineering/conventions/testing-scenarios/fixtures/memory.md)
 
 ### tauri
@@ -315,6 +327,10 @@ generator: scripts/regenerate-indexes.sh
 
 - [Fixture strategy — support claims need local evidence](../../memory/engineering/conventions/testing-scenarios/fixtures/memory.md)
 - [Mock 범위 — boundary stub, user-facing invariant 단언](../../memory/engineering/conventions/testing-scenarios/mock-scope/memory.md)
+
+### testing
+
+- [E2E 시나리오 설계 원칙](../../memory/engineering/conventions/e2e-scenarios/memory.md)
 
 ### ui
 
