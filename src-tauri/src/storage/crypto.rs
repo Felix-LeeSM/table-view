@@ -231,6 +231,15 @@ impl KeyringBackend for InMemoryKeyringBackend {
 const ENVELOPE_ARGON2_M_COST: u32 = 65_536; // 64 MiB
 const ENVELOPE_ARGON2_T_COST: u32 = 3;
 const ENVELOPE_ARGON2_P_COST: u32 = 4;
+// #1556 — upper bounds on KDF cost read from an *untrusted* import envelope.
+// `argon2` caps m_cost/t_cost at u32::MAX, so without our own ceiling a crafted
+// `m_cost` makes `hash_password_into` allocate up to m_cost KiB of Argon2 blocks
+// (u32::MAX ≈ 4 TiB) → OOM abort. Production envelopes use 65_536/3/4, so these
+// caps leave wide headroom while refusing the pathological values before Argon2
+// allocates anything.
+const ENVELOPE_ARGON2_MAX_M_COST: u32 = 1_048_576; // 1 GiB of Argon2 blocks
+const ENVELOPE_ARGON2_MAX_T_COST: u32 = 16;
+const ENVELOPE_ARGON2_MAX_P_COST: u32 = 16;
 const ENVELOPE_SALT_SIZE: usize = 16;
 const ENVELOPE_KEY_SIZE: usize = 32;
 const ENVELOPE_VERSION: u8 = 1;
@@ -416,6 +425,20 @@ fn derive_envelope_key(
     t_cost: u32,
     p_cost: u32,
 ) -> Result<Zeroizing<[u8; ENVELOPE_KEY_SIZE]>, AppError> {
+    // #1556 — reject hostile cost parameters from an untrusted envelope BEFORE
+    // Argon2 allocates. `Params::new` alone accepts up to u32::MAX, so a crafted
+    // m_cost would drive `hash_password_into` into a multi-TiB allocation → OOM.
+    // The decrypt path folds this Err into the constant wrong-password message
+    // (no format oracle); the encrypt path only ever passes in-range constants.
+    if m_cost > ENVELOPE_ARGON2_MAX_M_COST
+        || t_cost > ENVELOPE_ARGON2_MAX_T_COST
+        || p_cost > ENVELOPE_ARGON2_MAX_P_COST
+    {
+        return Err(AppError::Encryption(
+            "Argon2 cost parameters exceed allowed limits".into(),
+        ));
+    }
+
     let params = Params::new(m_cost, t_cost, p_cost, Some(ENVELOPE_KEY_SIZE))
         .map_err(|e| AppError::Encryption(format!("Invalid Argon2 params: {}", e)))?;
     let argon = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
@@ -961,6 +984,65 @@ mod tests {
         assert_eq!(decrypted, "payload");
         let other = generate_export_password().unwrap();
         assert!(aead_decrypt_with_password(&envelope, &other).is_err());
+    }
+
+    // -----------------------------------------------------------------
+    // #1556 — untrusted-envelope KDF cost ceiling (import OOM DoS)
+    // -----------------------------------------------------------------
+
+    /// The cost guard refuses pathological `m_cost`/`t_cost`/`p_cost` values at
+    /// the derive layer, returning Err *before* Argon2 allocates. Asserted here
+    /// (rather than by feeding u32::MAX to a real hash) precisely so the test
+    /// runner never attempts the multi-TiB allocation a crafted envelope wants.
+    #[test]
+    fn derive_envelope_key_rejects_oversized_cost_params() {
+        let salt = [0u8; ENVELOPE_SALT_SIZE];
+        assert!(
+            derive_envelope_key(
+                "pw",
+                &salt,
+                u32::MAX,
+                ENVELOPE_ARGON2_T_COST,
+                ENVELOPE_ARGON2_P_COST
+            )
+            .is_err(),
+            "hostile m_cost must be refused before Argon2 allocates"
+        );
+        assert!(
+            derive_envelope_key(
+                "pw",
+                &salt,
+                ENVELOPE_ARGON2_M_COST,
+                u32::MAX,
+                ENVELOPE_ARGON2_P_COST
+            )
+            .is_err(),
+            "hostile t_cost shares the guard"
+        );
+        assert!(
+            derive_envelope_key(
+                "pw",
+                &salt,
+                ENVELOPE_ARGON2_M_COST,
+                ENVELOPE_ARGON2_T_COST,
+                u32::MAX
+            )
+            .is_err(),
+            "hostile p_cost shares the guard"
+        );
+    }
+
+    /// End-to-end: a decrypt request carrying a hostile `m_cost` returns the
+    /// constant wrong-password message (no format oracle) instead of OOM-ing the
+    /// process. Safe to run because the guard short-circuits before allocation.
+    #[test]
+    fn aead_envelope_oversized_m_cost_rejected_with_constant_message() {
+        let mut envelope = aead_encrypt_with_password("payload", "correct-pw").unwrap();
+        envelope.m_cost = u32::MAX;
+        match aead_decrypt_with_password(&envelope, "correct-pw") {
+            Err(AppError::Encryption(msg)) => assert_eq!(msg, INCORRECT_MASTER_PASSWORD_MESSAGE),
+            other => panic!("Expected Encryption error, got: {:?}", other),
+        }
     }
 
     #[test]
