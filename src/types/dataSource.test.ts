@@ -136,6 +136,8 @@ describe("DataSourceProfile registry", () => {
         dropObject: true,
       },
       intelligence: { erd: true },
+      // Issue #1073 — SQL Server admin ops parity (no users: #1077 PG-first).
+      operations: { activity: true, slowQueries: true, serverInfo: true },
     }),
     oracle: expectedCapabilities({
       connection: { test: true, readOnly: true },
@@ -153,6 +155,8 @@ describe("DataSourceProfile registry", () => {
         dropObject: true,
       },
       intelligence: { erd: true },
+      // Issue #1073 — Oracle admin ops parity (no users: #1077 PG-first).
+      operations: { activity: true, slowQueries: true, serverInfo: true },
     }),
     mongodb: expectedCapabilities({
       connection: { test: true },

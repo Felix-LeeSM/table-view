@@ -280,6 +280,17 @@ export const ORACLE_CAPABILITIES = capabilities({
   intelligence: {
     erd: true,
   },
+  // Issue #1073 — Oracle admin ops parity. Backed by the OracleAdapter v$
+  // sources (v$session / v$sql / v$instance; ALTER SYSTEM KILL SESSION). The
+  // v$ reads fail loud when the login lacks catalog-read privilege rather than
+  // returning a silent empty list. `users` stays false (#1077 Stage 2 is
+  // PG-first); `locks` has no adapter override on any engine. Same shape as
+  // MySQL/MongoDB, so the OperationsPanel flyout surfaces the tabs unchanged.
+  operations: {
+    activity: true,
+    slowQueries: true,
+    serverInfo: true,
+  },
 });
 
 export const POSTGRESQL_CAPABILITIES = capabilities({
@@ -465,6 +476,17 @@ export const MSSQL_CAPABILITIES = capabilities({
   },
   intelligence: {
     erd: true,
+  },
+  // Issue #1073 — SQL Server admin ops parity. Backed by the MssqlAdapter
+  // sys.dm_exec_* DMVs (dm_exec_sessions / dm_exec_query_stats / dm_os_sys_info;
+  // KILL). The server-scoped DMVs fail loud without VIEW SERVER STATE rather
+  // than returning a silent empty list. `users` stays false (#1077 Stage 2 is
+  // PG-first); `locks` has no adapter override on any engine. Same shape as
+  // MySQL/MongoDB, so the OperationsPanel flyout surfaces the tabs unchanged.
+  operations: {
+    activity: true,
+    slowQueries: true,
+    serverInfo: true,
   },
 });
 

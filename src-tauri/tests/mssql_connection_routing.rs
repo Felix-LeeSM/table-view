@@ -486,6 +486,51 @@ async fn run_mssql_runtime_assertions(
         matches!(err, AppError::Unsupported(message) if message.contains("batch supports INSERT/UPDATE/DELETE/MERGE"))
     );
 
+    // Issue #1073 — admin ops (activity/kill/slow/info) parity. The sa login
+    // has VIEW SERVER STATE, so the sys.dm_exec_* DMV bodies decode against the
+    // live container (the untested IO surface); the without-connection guards
+    // live in the mssql/admin.rs unit module.
+    let info = RdbAdapter::server_info(adapter).await?;
+    assert!(
+        info.version.chars().any(|c| c.is_ascii_digit()),
+        "ProductVersion must carry a numeric server version, got {:?}",
+        info.version
+    );
+    assert!(
+        info.uptime_sec.is_some_and(|u| u >= 0),
+        "sqlserver_start_time must yield a non-negative uptime, got {:?}",
+        info.uptime_sec
+    );
+    assert!(
+        info.connections_active.is_some_and(|c| c >= 1),
+        "must count at least our own user session, got {:?}",
+        info.connections_active
+    );
+    assert!(
+        info.extras.contains_key("edition"),
+        "extras must whitelist the SERVERPROPERTY edition, got keys {:?}",
+        info.extras.keys().collect::<Vec<_>>()
+    );
+
+    // A distinctive probe so dm_exec_query_stats has at least one digest entry.
+    RdbAdapter::execute_sql(adapter, "SELECT 1073 AS slow_probe_1073", None).await?;
+    for row in &RdbAdapter::slow_queries(adapter, 20).await? {
+        assert!(
+            row.total_exec_time_ms >= 0.0 && row.mean_exec_time_ms >= 0.0,
+            "timer columns must be non-negative ms"
+        );
+    }
+
+    for row in &RdbAdapter::list_server_activity(adapter).await? {
+        assert!(row.id > 0, "session id must be a positive integer");
+    }
+
+    // Killing an id that is not an active SPID (6106) is a no-op for parity with
+    // PG pg_terminate_backend, not an error.
+    RdbAdapter::kill_session(adapter, 2_000_000_000)
+        .await
+        .expect("killing an absent SPID must be a no-op, not an error");
+
     let pre_cancel = CancellationToken::new();
     pre_cancel.cancel();
     let err = RdbAdapter::execute_sql(adapter, "SELECT 1", Some(&pre_cancel))

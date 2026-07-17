@@ -378,3 +378,90 @@ async fn oracle_structured_ddl_creates_and_drops_a_probe_table_after_1072() {
     );
     disconnect_adapter(&adapter).await;
 }
+
+/// The `v$` views require a catalog-read grant (`SELECT_CATALOG_ROLE` /
+/// `SELECT ANY DICTIONARY`). The gvenzl `APP_USER` (testuser) is not granted it
+/// by default, so a denial is the honest, expected outcome — the adapter must
+/// fail loud with `ORA-00942` / insufficient-privileges rather than a silent
+/// empty list. When the connected user does hold the grant the SQL bodies must
+/// decode cleanly instead. This helper accepts exactly those two shapes and
+/// rejects any other error class.
+fn accept_admin<T>(label: &str, result: Result<T, AppError>) -> Option<T> {
+    match result {
+        Ok(value) => Some(value),
+        Err(AppError::Database(message)) if admin_privilege_denied(&message) => {
+            println!("ORACLE_PROBE F {label} privilege-denied (expected without SELECT_CATALOG_ROLE): {message}");
+            None
+        }
+        Err(other) => panic!("{label} returned an unexpected error class: {other:?}"),
+    }
+}
+
+fn admin_privilege_denied(message: &str) -> bool {
+    let lower = message.to_ascii_lowercase();
+    lower.contains("ora-00942")
+        || lower.contains("ora-01031")
+        || lower.contains("insufficient privileges")
+        || lower.contains("table or view does not exist")
+}
+
+#[tokio::test]
+#[serial]
+#[ignore = "requires local Oracle container plus e2e/fixtures/seed.oracle.sql"]
+async fn oracle_admin_ops_serve_or_fail_loud_1073() {
+    // Issue #1073 — admin ops (activity/kill/slow/info) parity via the v$
+    // dynamic performance views. With a catalog-read grant the SQL bodies decode
+    // against the live container; without it the adapter fails loud (never a
+    // silent empty list). The without-connection guards live in the
+    // oracle/admin.rs unit module.
+    let (_config, _schema, adapter) = connected_adapter().await;
+
+    if let Some(info) = accept_admin("server_info", RdbAdapter::server_info(&adapter).await) {
+        assert!(
+            !info.version.is_empty(),
+            "v$instance.version must carry a server version"
+        );
+        assert!(
+            info.uptime_sec.is_some_and(|u| u >= 0),
+            "uptime must derive a non-negative second count, got {:?}",
+            info.uptime_sec
+        );
+        assert!(
+            info.connections_active.is_some_and(|c| c >= 1),
+            "must count at least our own user session, got {:?}",
+            info.connections_active
+        );
+    }
+
+    // A distinctive probe so v$sql has at least one owned statement entry.
+    RdbAdapter::execute_sql(&adapter, "SELECT 1073 AS slow_probe_1073 FROM dual", None)
+        .await
+        .expect("slow-query probe SELECT should run");
+    if let Some(rows) = accept_admin("slow_queries", RdbAdapter::slow_queries(&adapter, 20).await) {
+        for row in &rows {
+            assert!(
+                row.total_exec_time_ms >= 0.0 && row.mean_exec_time_ms >= 0.0,
+                "timer columns must be non-negative ms"
+            );
+        }
+    }
+
+    if let Some(rows) = accept_admin(
+        "list_server_activity",
+        RdbAdapter::list_server_activity(&adapter).await,
+    ) {
+        for row in &rows {
+            assert!(row.id > 0, "session sid must be a positive integer");
+        }
+    }
+
+    // Killing a sid with no live session is a no-op (the serial# lookup finds no
+    // row) for parity with PG pg_terminate_backend — unless the lookup itself is
+    // privilege-denied, which fails loud.
+    accept_admin(
+        "kill_session",
+        RdbAdapter::kill_session(&adapter, 2_000_000_000).await,
+    );
+
+    disconnect_adapter(&adapter).await;
+}
