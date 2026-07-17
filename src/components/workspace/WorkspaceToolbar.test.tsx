@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import type { TabId } from "@/types/branded";
+import type { ConnectionId, TabId } from "@/types/branded";
 import { seedWorkspace } from "@/stores/__tests__/workspaceStoreTestHelpers";
 import { render, screen, fireEvent } from "@testing-library/react";
 import WorkspaceToolbar from "./WorkspaceToolbar";
@@ -40,7 +40,7 @@ function makeTableTab({
     type: "table",
     id: id as TabId,
     title: "users",
-    connectionId: "c1",
+    connectionId: "c1" as ConnectionId,
     closable: true,
     schema: "public",
     table: "users",
@@ -57,7 +57,7 @@ function makeQueryTab({
     type: "query",
     id: id as TabId,
     title: "Query 1",
-    connectionId: "c1",
+    connectionId: "c1" as ConnectionId,
     closable: true,
     sql: "SELECT 1",
     queryState: { status: "idle" },
@@ -146,7 +146,7 @@ describe("WorkspaceToolbar", () => {
 
     const tab = makeTableTab({
       id: "tab-1",
-      connectionId: "c1",
+      connectionId: "c1" as ConnectionId,
       schema: "analytics",
       table: "events",
     });
@@ -176,7 +176,7 @@ describe("WorkspaceToolbar", () => {
 
     const tab = makeQueryTab({
       id: "q1",
-      connectionId: "m1",
+      connectionId: "m1" as ConnectionId,
       paradigm: "document",
       queryMode: "find",
       database: "analytics",

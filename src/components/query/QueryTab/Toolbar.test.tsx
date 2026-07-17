@@ -6,7 +6,7 @@
 // 시 Run 을 enabled 해야 하므로 statement-kind 분기를 toolbar 가 어떻게
 // 반영하는지 lock 한다. AST 는 sprint-382 — 본 sprint 는 정규식 기반.
 import { describe, it, expect, vi } from "vitest";
-import type { TabId } from "@/types/branded";
+import type { ConnectionId, TabId } from "@/types/branded";
 import { render, screen } from "@testing-library/react";
 import QueryTabToolbar from "./Toolbar";
 import type { QueryTab } from "@stores/workspaceStore";
@@ -37,7 +37,7 @@ function makeMongoTab(overrides: Partial<QueryTab> = {}): QueryTab {
     type: "query",
     id: "tab-1" as TabId,
     title: "Mongo Query",
-    connectionId: "conn-mongo",
+    connectionId: "conn-mongo" as ConnectionId,
     closable: true,
     sql: "",
     queryState: { status: "idle" },

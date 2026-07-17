@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { TabId } from "@/types/branded";
+import type { ConnectionId, TabId } from "@/types/branded";
 import {
   seedWorkspace,
   getTestWorkspace,
@@ -139,7 +139,7 @@ describe("WorkspacePage", () => {
             type: "table",
             id: "tab-1" as TabId,
             title: "users",
-            connectionId: "c1",
+            connectionId: "c1" as ConnectionId,
             closable: true,
             schema: "public",
             table: "users",

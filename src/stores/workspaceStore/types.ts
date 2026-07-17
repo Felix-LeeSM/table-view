@@ -2,7 +2,7 @@
  * `workspaceStore` types. Per-workspace state keyed by (connId, db) —
  * ADR 0027.
  */
-import type { TabId } from "@/types/branded";
+import type { ConnectionId, TabId } from "@/types/branded";
 import type { Paradigm } from "@/types/connection";
 import type { QueryLanguageId } from "@/types/dataSource";
 import type {
@@ -50,7 +50,7 @@ export interface TableTab {
   type: "table";
   id: TabId;
   title: string;
-  connectionId: string;
+  connectionId: ConnectionId;
   closable: boolean;
   schema?: string;
   table?: string;
@@ -84,7 +84,7 @@ export interface QueryTab {
   type: "query";
   id: TabId;
   title: string;
-  connectionId: string;
+  connectionId: ConnectionId;
   closable: boolean;
   sql: string;
   queryState: QueryState;
@@ -130,7 +130,14 @@ export type WorkspaceState = {
   sidebar: SidebarState;
 };
 
-export type TableTabInit = Omit<TableTab, "id" | "isPreview"> & {
+// `connectionId` is accepted as a plain `string` here (call sites read it off
+// component props / DOM CustomEvent details, not an already-branded source) and
+// minted to `ConnectionId` once inside `addTab` at the tab-creation boundary.
+export type TableTabInit = Omit<
+  TableTab,
+  "id" | "isPreview" | "connectionId"
+> & {
+  connectionId: string;
   permanent?: boolean;
 };
 

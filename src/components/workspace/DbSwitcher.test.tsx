@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { TabId } from "@/types/branded";
+import type { ConnectionId, TabId } from "@/types/branded";
 import { seedWorkspace } from "@/stores/__tests__/workspaceStoreTestHelpers";
 import {
   render,
@@ -43,7 +43,7 @@ function makeTableTab(overrides: Partial<TableTab> = {}): TableTab {
     type: "table",
     id: "tab-1" as TabId,
     title: "users",
-    connectionId: "c1",
+    connectionId: "c1" as ConnectionId,
     closable: true,
     schema: "public",
     table: "users",
@@ -57,7 +57,7 @@ function makeQueryTab(overrides: Partial<QueryTab> = {}): QueryTab {
     type: "query",
     id: "query-1" as TabId,
     title: "Query 1",
-    connectionId: "c1",
+    connectionId: "c1" as ConnectionId,
     closable: true,
     sql: "",
     queryState: { status: "idle" },
