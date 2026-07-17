@@ -2,7 +2,9 @@
 //!
 //! Scans the TEXT columns of every base table in the selected schemas for
 //! cells matching a search term (case-insensitive substring, ILIKE) and
-//! returns the matched schema/table/column/value tuples.
+//! returns the matched schema/table/column/value tuples. Coverage is the
+//! built-in `text` / `character varying` / `character` types plus `citext`
+//! (a case-insensitive text extension); see `TEXT_COLUMNS_SQL`.
 //!
 //! Security contract (matches the DDL family's injection floor):
 //!   - Schema names arrive from the frontend and are bound as a `text[]`
@@ -31,13 +33,24 @@ use super::PostgresAdapter;
 /// `$1` is bound as `text[]` (schema names) — never interpolated. The
 /// `ORDER BY` groups columns of one table contiguously so the caller can
 /// group with a single linear pass.
+///
+/// Text-type coverage (#1525): the built-in `text` / `character varying` /
+/// `character` types plus `citext`, a contrib **extension** type that
+/// `information_schema` reports as `data_type = 'USER-DEFINED'` with
+/// `udt_name = 'citext'`. citext is a drop-in case-insensitive text type, so
+/// ILIKE applies unchanged (its value casts to `text` for the predicate and
+/// decodes as `String`). The `udt_name` branch is inert on databases without
+/// the extension — it simply matches no columns. Types that need an explicit
+/// cast to be searchable (`uuid` / `json` / `jsonb` / `xml`) stay out of the
+/// "TEXT column" contract.
 const TEXT_COLUMNS_SQL: &str = "SELECT c.table_schema, c.table_name, c.column_name \
      FROM information_schema.columns c \
      JOIN information_schema.tables t \
        ON t.table_schema = c.table_schema AND t.table_name = c.table_name \
      WHERE c.table_schema = ANY($1) \
        AND t.table_type = 'BASE TABLE' \
-       AND c.data_type IN ('text', 'character varying', 'character') \
+       AND (c.data_type IN ('text', 'character varying', 'character') \
+            OR (c.data_type = 'USER-DEFINED' AND c.udt_name = 'citext')) \
      ORDER BY c.table_schema, c.table_name, c.ordinal_position";
 
 /// Longest matched-cell value returned to the UI. A single scanned cell can
@@ -314,6 +327,21 @@ mod tests {
             !sql.contains('%'),
             "no literal ILIKE pattern in the SQL: {sql}"
         );
+    }
+
+    // ── TEXT_COLUMNS_SQL — text-type coverage (#1525) ────────────────────
+    // The integration test (`value_search_integration.rs`) proves the citext
+    // path end-to-end but silent-skips without Docker. This cheap guard locks
+    // the enumeration filter so a regression edit dropping either the built-in
+    // types or the citext extension branch fails everywhere.
+
+    #[test]
+    fn text_columns_sql_covers_builtin_and_citext_types() {
+        assert!(
+            TEXT_COLUMNS_SQL.contains("c.data_type IN ('text', 'character varying', 'character')")
+        );
+        // citext is an extension type: data_type='USER-DEFINED', udt_name='citext'.
+        assert!(TEXT_COLUMNS_SQL.contains("c.data_type = 'USER-DEFINED' AND c.udt_name = 'citext'"));
     }
 
     // ── clip_value — oversized cell snippet ──────────────────────────────
