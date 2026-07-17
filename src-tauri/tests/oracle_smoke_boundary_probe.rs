@@ -3,7 +3,10 @@ use serial_test::serial;
 use table_view_lib::{
     db::{DbAdapter, OracleAdapter, RdbAdapter},
     error::AppError,
-    models::{ConnectionConfig, DatabaseType, QueryType},
+    models::{
+        ColumnDefinition, ConnectionConfig, CreateTableRequest, DatabaseType, DropTableRequest,
+        QueryType,
+    },
 };
 
 fn oracle_env(name: &str, fallback: &str) -> String {
@@ -279,5 +282,99 @@ async fn oracle_free_form_select_returns_rows_columns_and_allows_complete_cursor
         .close()
         .await
         .expect("Oracle direct cursor probe should close");
+    disconnect_adapter(&adapter).await;
+}
+
+#[tokio::test]
+#[serial]
+#[ignore = "requires local Oracle container plus e2e/fixtures/seed.oracle.sql"]
+async fn oracle_structured_ddl_creates_and_drops_a_probe_table_after_1072() {
+    // Issue #1072 — dissolving the runtime slice wires the full OracleAdapter, so
+    // structured table/index/constraint DDL now executes against the live
+    // container (previously the #905 slice returned Unsupported). This probe
+    // proves the promoted posture end to end: the preview path builds the SQL,
+    // the execute path runs CREATE then DROP, and a follow-up SELECT surfaces an
+    // ORA-00942 invalid-object database error proving the table is gone. Raw DDL
+    // through execute_sql stays blocked by `runtime.rs` (asserted in the lib
+    // unit tests), so ad-hoc DDL typed into the query editor is still rejected.
+    let (_config, schema, adapter) = connected_adapter().await;
+    let probe_table = "VT1072_DDL_PROBE";
+
+    let create = CreateTableRequest {
+        connection_id: "oracle-boundary-probe".into(),
+        schema: schema.clone(),
+        name: probe_table.into(),
+        columns: vec![ColumnDefinition {
+            name: "ID".into(),
+            data_type: "NUMBER".into(),
+            nullable: false,
+            default_value: None,
+            comment: None,
+            is_identity: false,
+        }],
+        primary_key: Some(vec!["ID".into()]),
+        preview_only: true,
+        table_comment: None,
+        expected_database: None,
+    };
+    let created_preview = adapter
+        .create_table(&create)
+        .await
+        .expect("structured CREATE TABLE preview must build the SQL after #1072");
+    println!("ORACLE_PROBE E create_preview sql={}", created_preview.sql);
+    assert!(created_preview
+        .sql
+        .contains(&format!("CREATE TABLE \"{schema}\".\"{probe_table}\"")));
+
+    adapter
+        .create_table(&CreateTableRequest {
+            preview_only: false,
+            ..create
+        })
+        .await
+        .expect("structured CREATE TABLE must execute after #1072");
+    let present = scalar_count(
+        &adapter,
+        &format!("SELECT COUNT(*) FROM \"{schema}\".\"{probe_table}\""),
+    )
+    .await;
+    assert_eq!(present, 0, "freshly created probe table should be empty");
+
+    let drop = DropTableRequest {
+        connection_id: "oracle-boundary-probe".into(),
+        schema: schema.clone(),
+        table: probe_table.into(),
+        cascade: false,
+        preview_only: true,
+        expected_database: None,
+    };
+    let dropped_preview = adapter
+        .drop_table(&drop)
+        .await
+        .expect("structured DROP TABLE preview must build the SQL after #1072");
+    assert_eq!(
+        dropped_preview.sql,
+        format!("DROP TABLE \"{schema}\".\"{probe_table}\"")
+    );
+
+    adapter
+        .drop_table(&DropTableRequest {
+            preview_only: false,
+            ..drop
+        })
+        .await
+        .expect("structured DROP TABLE must execute after #1072");
+    let missing = RdbAdapter::execute_sql(
+        &adapter,
+        &format!("SELECT COUNT(*) FROM \"{schema}\".\"{probe_table}\""),
+        None,
+    )
+    .await
+    .expect_err("probe table must be gone after the structured drop executes");
+    println!("ORACLE_PROBE E drop_verify err={missing:?}");
+    assert!(
+        matches!(missing, AppError::Database(ref message) if message.contains("ORA-00942")),
+        "expected an ORA-00942 invalid-object database error, got {missing:?}"
+    );
     disconnect_adapter(&adapter).await;
 }

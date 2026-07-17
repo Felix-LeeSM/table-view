@@ -60,11 +60,18 @@ const expectedOracleRuntimeCapabilities = expectedCapabilities({
     constraints: true,
   },
   edit: { editRows: true, requiresPrimaryKeyForEdit: true },
+  // Issue #1072 — the full OracleAdapter wires all structured DDL trait methods.
+  ddl: {
+    createTable: true,
+    alterTable: true,
+    createIndex: true,
+    dropObject: true,
+  },
   intelligence: { erd: true },
 });
 
 describe("RDBMS data source profiles", () => {
-  it("promotes MSSQL and Oracle runtime/edit while keeping Oracle DDL unclaimed", () => {
+  it("promotes MSSQL and Oracle runtime/edit including structured DDL", () => {
     const mssql = getDataSourceProfile("mssql");
     expect(mssql).toMatchObject({
       id: "mssql",
@@ -129,7 +136,11 @@ describe("RDBMS data source profiles", () => {
     expect(oracle.capabilities.catalog.indexes).toBe(true);
     expect(oracle.capabilities.catalog.constraints).toBe(true);
     expect(oracle.capabilities.edit.editRows).toBe(true);
-    expect(oracle.capabilities.ddl.createTable).toBe(false);
+    // Issue #1072 — structured DDL is now wired (create/alter/index/drop).
+    expect(oracle.capabilities.ddl.createTable).toBe(true);
+    expect(oracle.capabilities.ddl.alterTable).toBe(true);
+    expect(oracle.capabilities.ddl.createIndex).toBe(true);
+    expect(oracle.capabilities.ddl.dropObject).toBe(true);
     expect(isConnectionSupportedDatabaseType("oracle")).toBe(true);
   });
 
@@ -206,7 +217,11 @@ describe("RDBMS data source profiles", () => {
     expect(oracle.capabilities.catalog.indexes).toBe(true);
     expect(oracle.capabilities.catalog.constraints).toBe(true);
     expect(oracle.capabilities.edit.editRows).toBe(true);
-    expect(oracle.capabilities.ddl.createTable).toBe(false);
+    // Issue #1072 — structured DDL is now wired (create/alter/index/drop).
+    expect(oracle.capabilities.ddl.createTable).toBe(true);
+    expect(oracle.capabilities.ddl.alterTable).toBe(true);
+    expect(oracle.capabilities.ddl.createIndex).toBe(true);
+    expect(oracle.capabilities.ddl.dropObject).toBe(true);
     expect(isConnectionSupportedDatabaseType("oracle")).toBe(true);
   });
 });

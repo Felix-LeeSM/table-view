@@ -144,12 +144,14 @@ fn backend_profiles_encode_current_database_type_contracts() {
             BackendAdapterCapability::Lifecycle,
             BackendAdapterCapability::RelationalCatalog,
             BackendAdapterCapability::RelationalQuery,
+            BackendAdapterCapability::RelationalSchemaMutation,
         ]
     );
     assert!(oracle.has_backend_capability(BackendAdapterCapability::Lifecycle));
     assert!(oracle.has_backend_capability(BackendAdapterCapability::RelationalCatalog));
     assert!(oracle.has_backend_capability(BackendAdapterCapability::RelationalQuery));
-    assert!(!oracle.has_backend_capability(BackendAdapterCapability::RelationalSchemaMutation));
+    // #1072 — the full OracleAdapter wires structured table/index/constraint DDL.
+    assert!(oracle.has_backend_capability(BackendAdapterCapability::RelationalSchemaMutation));
 
     let mongodb = get_data_source_profile(&DatabaseType::Mongodb);
     assert_eq!(mongodb.paradigm, Paradigm::Document);
@@ -433,12 +435,14 @@ fn rdbms_integration_gate_profiles_are_coherent() {
             BackendAdapterCapability::Lifecycle,
             BackendAdapterCapability::RelationalCatalog,
             BackendAdapterCapability::RelationalQuery,
+            BackendAdapterCapability::RelationalSchemaMutation,
         ]
     );
     assert!(oracle.has_backend_capability(BackendAdapterCapability::Lifecycle));
     assert!(oracle.has_backend_capability(BackendAdapterCapability::RelationalCatalog));
     assert!(oracle.has_backend_capability(BackendAdapterCapability::RelationalQuery));
-    assert!(!oracle.has_backend_capability(BackendAdapterCapability::RelationalSchemaMutation));
+    // #1072 — the full OracleAdapter wires structured table/index/constraint DDL.
+    assert!(oracle.has_backend_capability(BackendAdapterCapability::RelationalSchemaMutation));
 }
 
 #[test]

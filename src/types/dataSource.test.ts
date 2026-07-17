@@ -145,6 +145,13 @@ describe("DataSourceProfile registry", () => {
         constraints: true,
       },
       edit: { editRows: true, requiresPrimaryKeyForEdit: true },
+      // Issue #1072 — the full OracleAdapter wires all structured DDL trait methods.
+      ddl: {
+        createTable: true,
+        alterTable: true,
+        createIndex: true,
+        dropObject: true,
+      },
       intelligence: { erd: true },
     }),
     mongodb: expectedCapabilities({

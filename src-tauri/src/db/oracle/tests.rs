@@ -33,20 +33,6 @@ fn assert_oracle_not_open<T>(result: Result<T, AppError>) {
     ));
 }
 
-fn assert_oracle_runtime_slice_unsupported<T: std::fmt::Debug>(
-    result: Result<T, AppError>,
-    surface: &str,
-) {
-    assert!(
-        matches!(
-            result,
-            Err(AppError::Unsupported(ref message))
-                if message.contains("issue #905") && message.contains(surface)
-        ),
-        "expected Oracle #905 runtime-slice rejection for {surface}, got {result:?}"
-    );
-}
-
 #[test]
 fn connect_config_uses_service_name_without_sid_wallet_or_tls() {
     let config = OracleAdapter::connect_config(&oracle_config(), 30).unwrap();
@@ -245,54 +231,6 @@ async fn db_adapter_lifecycle_fails_closed_without_connection() {
     assert!(<OracleAdapter as DbAdapter>::disconnect(&adapter)
         .await
         .is_ok());
-}
-
-#[tokio::test]
-async fn runtime_adapter_delegates_catalog_query_and_blocks_out_of_slice_surfaces() {
-    let adapter = OracleRuntimeAdapter::new();
-    assert!(matches!(adapter.kind(), DatabaseType::Oracle));
-    assert!(matches!(adapter.namespace_label(), NamespaceLabel::Schema));
-
-    assert_eq!(adapter.current_database().await.unwrap(), None);
-    assert_oracle_not_open(adapter.list_namespaces().await);
-    assert_oracle_not_open(adapter.list_functions("SYSTEM").await);
-    assert_oracle_not_open(
-        RdbAdapter::query_table_data(&adapter, "SYSTEM", "T", 1, 10, None, None, None, None).await,
-    );
-
-    let token = CancellationToken::new();
-    token.cancel();
-    let cancelled = RdbAdapter::execute_sql(&adapter, "SELECT 1 FROM DUAL", Some(&token)).await;
-    assert!(matches!(
-        cancelled,
-        Err(AppError::Database(message)) if message == "Query cancelled"
-    ));
-
-    assert!(matches!(
-        RdbAdapter::execute_sql(&adapter, "ALTER SESSION SET CURRENT_SCHEMA = HR", None).await,
-        Err(AppError::Unsupported(message)) if message.contains("raw DDL/admin") && message.contains("issue #905")
-    ));
-    assert_oracle_runtime_slice_unsupported(
-        adapter.get_function_source("SYSTEM", "F").await,
-        "PL/SQL body/package source",
-    );
-    assert_oracle_runtime_slice_unsupported(
-        adapter.list_triggers("SYSTEM", "T").await,
-        "trigger catalog",
-    );
-
-    let drop_table = DropTableRequest {
-        connection_id: "oracle-1".into(),
-        schema: "SYSTEM".into(),
-        table: "T".into(),
-        cascade: false,
-        preview_only: false,
-        expected_database: None,
-    };
-    assert_oracle_runtime_slice_unsupported(
-        adapter.drop_table(&drop_table).await,
-        "structured DDL",
-    );
 }
 
 #[tokio::test]
