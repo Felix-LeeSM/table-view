@@ -84,6 +84,14 @@ pub enum AppError {
     #[error("Not found: {0}")]
     NotFound(String),
 
+    /// Issue #1584 — defense-in-depth: a sensitive command was invoked from a
+    /// window whose label is not permitted to run it (the launcher webview).
+    /// launcher/workspace share one SPA bundle and Tauri v2 ACL does not gate
+    /// app-defined commands, so this runtime label guard is the backend
+    /// enforcement point. Serializes via the catch-all as its Display string.
+    #[error("Forbidden: {0}")]
+    Forbidden(String),
+
     #[error("Database error: {0}")]
     Database(String),
 
@@ -246,6 +254,10 @@ mod tests {
         assert_eq!(
             AppError::NotFound("id-123".into()).to_string(),
             "Not found: id-123"
+        );
+        assert_eq!(
+            AppError::Forbidden("launcher window".into()).to_string(),
+            "Forbidden: launcher window"
         );
         assert_eq!(
             AppError::Unsupported("mysql".into()).to_string(),

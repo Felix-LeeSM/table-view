@@ -18,7 +18,11 @@ use crate::error::AppError;
 const MAX_IMPORT_BYTES: u64 = 16 * 1024 * 1024;
 
 #[tauri::command]
-pub async fn read_text_file_import(source_path: PathBuf) -> Result<String, AppError> {
+pub async fn read_text_file_import(
+    window: tauri::Window,
+    source_path: PathBuf,
+) -> Result<String, AppError> {
+    crate::commands::guard::guard_not_launcher(window.label())?;
     read_text_file_import_inner(source_path).await
 }
 

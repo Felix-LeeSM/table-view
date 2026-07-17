@@ -108,12 +108,14 @@ async fn insert_document_inner(
 /// so the UI can update its local row cache without a re-fetch.
 #[tauri::command]
 pub async fn insert_document(
+    window: tauri::Window,
     state: tauri::State<'_, AppState>,
     connection_id: String,
     database: String,
     collection: String,
     document: bson::Document,
 ) -> Result<DocumentId, AppError> {
+    crate::commands::guard::guard_not_launcher(window.label())?;
     insert_document_inner(
         state.inner(),
         &connection_id,
@@ -151,6 +153,7 @@ async fn update_document_inner(
 /// layer — Sprint 87 will revisit that guard at the UI level.
 #[tauri::command]
 pub async fn update_document(
+    window: tauri::Window,
     state: tauri::State<'_, AppState>,
     connection_id: String,
     database: String,
@@ -158,6 +161,7 @@ pub async fn update_document(
     document_id: DocumentId,
     patch: bson::Document,
 ) -> Result<(), AppError> {
+    crate::commands::guard::guard_not_launcher(window.label())?;
     update_document_inner(
         state.inner(),
         &connection_id,
@@ -194,12 +198,14 @@ async fn delete_document_inner(
 /// feedback.
 #[tauri::command]
 pub async fn delete_document(
+    window: tauri::Window,
     state: tauri::State<'_, AppState>,
     connection_id: String,
     database: String,
     collection: String,
     document_id: DocumentId,
 ) -> Result<(), AppError> {
+    crate::commands::guard::guard_not_launcher(window.label())?;
     delete_document_inner(
         state.inner(),
         &connection_id,
@@ -236,6 +242,7 @@ async fn delete_many_inner(
 /// as the same trust boundary as the underlying driver.
 #[tauri::command]
 pub async fn delete_many(
+    window: tauri::Window,
     state: tauri::State<'_, AppState>,
     connection_id: String,
     database: String,
@@ -243,6 +250,7 @@ pub async fn delete_many(
     filter: bson::Document,
     safety_confirmed: Option<bool>,
 ) -> Result<u64, AppError> {
+    crate::commands::guard::guard_not_launcher(window.label())?;
     delete_many_inner(
         state.inner(),
         &connection_id,
@@ -278,7 +286,9 @@ async fn update_many_inner(
 /// Returns `modified_count`. The adapter rejects `_id` in patch (identity
 /// mutation) — same contract as `update_document`.
 #[tauri::command]
+#[allow(clippy::too_many_arguments)] // IPC boundary + #1584 injected window guard param
 pub async fn update_many(
+    window: tauri::Window,
     state: tauri::State<'_, AppState>,
     connection_id: String,
     database: String,
@@ -287,6 +297,7 @@ pub async fn update_many(
     patch: bson::Document,
     safety_confirmed: Option<bool>,
 ) -> Result<u64, AppError> {
+    crate::commands::guard::guard_not_launcher(window.label())?;
     update_many_inner(
         state.inner(),
         &connection_id,
@@ -319,12 +330,14 @@ async fn drop_collection_inner(
 /// `dropTable`; Safe Mode always classifies this as `danger`.
 #[tauri::command]
 pub async fn drop_collection(
+    window: tauri::Window,
     state: tauri::State<'_, AppState>,
     connection_id: String,
     database: String,
     collection: String,
     safety_confirmed: Option<bool>,
 ) -> Result<(), AppError> {
+    crate::commands::guard::guard_not_launcher(window.label())?;
     drop_collection_inner(
         state.inner(),
         &connection_id,
@@ -366,12 +379,14 @@ async fn insert_many_documents_inner(
 /// without a driver call.
 #[tauri::command]
 pub async fn insert_many_documents(
+    window: tauri::Window,
     state: tauri::State<'_, AppState>,
     connection_id: String,
     database: String,
     collection: String,
     documents: Vec<bson::Document>,
 ) -> Result<Vec<DocumentId>, AppError> {
+    crate::commands::guard::guard_not_launcher(window.label())?;
     insert_many_documents_inner(
         state.inner(),
         &connection_id,
@@ -413,6 +428,7 @@ async fn bulk_write_documents_inner(
 /// `Ok(BulkWriteResult::default())`.
 #[tauri::command]
 pub async fn bulk_write_documents(
+    window: tauri::Window,
     state: tauri::State<'_, AppState>,
     connection_id: String,
     database: String,
@@ -420,6 +436,7 @@ pub async fn bulk_write_documents(
     operations: Vec<serde_json::Value>,
     safety_confirmed: Option<bool>,
 ) -> Result<BulkWriteResult, AppError> {
+    crate::commands::guard::guard_not_launcher(window.label())?;
     let operations = parse_bulk_write_operations(operations)?;
     bulk_write_documents_inner(
         state.inner(),

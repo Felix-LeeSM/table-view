@@ -259,12 +259,14 @@ async fn create_mongo_index_inner(
 /// UI can render the verbatim message in the dialog alert.
 #[tauri::command]
 pub async fn create_mongo_index(
+    window: tauri::Window,
     state: tauri::State<'_, AppState>,
     connection_id: String,
     database: String,
     collection: String,
     request: CreateMongoIndexRequest,
 ) -> Result<CreateMongoIndexResult, AppError> {
+    crate::commands::guard::guard_not_launcher(window.label())?;
     create_mongo_index_inner(
         state.inner(),
         &connection_id,
@@ -309,6 +311,7 @@ async fn drop_mongo_index_inner(
 /// trash button.
 #[tauri::command]
 pub async fn drop_mongo_index(
+    window: tauri::Window,
     state: tauri::State<'_, AppState>,
     connection_id: String,
     database: String,
@@ -316,6 +319,7 @@ pub async fn drop_mongo_index(
     name: String,
     safety_confirmed: Option<bool>,
 ) -> Result<(), AppError> {
+    crate::commands::guard::guard_not_launcher(window.label())?;
     drop_mongo_index_inner(
         state.inner(),
         &connection_id,
@@ -423,7 +427,9 @@ async fn set_mongo_validator_inner(
 /// payloads. Unknown values are rejected with `AppError::Validation`
 /// before the adapter is invoked.
 #[tauri::command]
+#[allow(clippy::too_many_arguments)] // IPC boundary + #1584 injected window guard param
 pub async fn set_mongo_validator(
+    window: tauri::Window,
     state: tauri::State<'_, AppState>,
     connection_id: String,
     database: String,
@@ -432,6 +438,7 @@ pub async fn set_mongo_validator(
     validation_level: Option<String>,
     validation_action: Option<String>,
 ) -> Result<(), AppError> {
+    crate::commands::guard::guard_not_launcher(window.label())?;
     set_mongo_validator_inner(
         state.inner(),
         &connection_id,
@@ -466,12 +473,14 @@ async fn create_collection_inner(
 /// the driver's `create` command.
 #[tauri::command]
 pub async fn create_collection(
+    window: tauri::Window,
     state: tauri::State<'_, AppState>,
     connection_id: String,
     database: String,
     collection: String,
     options: Option<serde_json::Value>,
 ) -> Result<(), AppError> {
+    crate::commands::guard::guard_not_launcher(window.label())?;
     create_collection_inner(
         state.inner(),
         &connection_id,
@@ -504,12 +513,14 @@ async fn rename_collection_inner(
 /// renames are out of scope for this slice.
 #[tauri::command]
 pub async fn rename_collection(
+    window: tauri::Window,
     state: tauri::State<'_, AppState>,
     connection_id: String,
     database: String,
     from: String,
     to: String,
 ) -> Result<(), AppError> {
+    crate::commands::guard::guard_not_launcher(window.label())?;
     rename_collection_inner(state.inner(), &connection_id, &database, &from, &to).await
 }
 
@@ -533,11 +544,13 @@ async fn drop_mongo_database_inner(
 /// non-existent DB succeeds.
 #[tauri::command]
 pub async fn drop_mongo_database(
+    window: tauri::Window,
     state: tauri::State<'_, AppState>,
     connection_id: String,
     name: String,
     safety_confirmed: Option<bool>,
 ) -> Result<(), AppError> {
+    crate::commands::guard::guard_not_launcher(window.label())?;
     drop_mongo_database_inner(
         state.inner(),
         &connection_id,

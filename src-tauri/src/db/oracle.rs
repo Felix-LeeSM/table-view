@@ -1,13 +1,13 @@
 //! Oracle adapter internals.
 //!
-//! Issue #905 promotes the bounded Oracle runtime slice through
-//! `OracleRuntimeAdapter`: service-name lifecycle, catalog metadata, SELECT/DML
-//! batch, cooperative cancel, and tabular table-data queries. Structured DDL,
-//! PL/SQL body/package source, triggers, admin, SID/TNS/wallet/TLS, and
-//! advanced auth remain unsupported.
+//! Issue #1072 dissolves the bounded #905/#906 runtime slice and wires the full
+//! `OracleAdapter` into production: service-name lifecycle, catalog metadata,
+//! SELECT/DML batch, cooperative cancel, tabular table-data queries, structured
+//! table/index/constraint DDL, and PL/SQL body/package source. Raw DDL/admin
+//! execution, switch-database, trigger introspection (deferred, empty list),
+//! SID/TNS/wallet/TLS, and advanced auth remain unsupported or unclaimed.
 
 mod catalog;
-mod connection_only;
 mod ddl;
 #[cfg(test)]
 mod ddl_tests;
@@ -15,8 +15,6 @@ mod runtime;
 mod table_data;
 #[cfg(test)]
 mod tests;
-
-pub use connection_only::OracleRuntimeAdapter;
 
 use std::collections::HashMap;
 use std::future::Future;
@@ -32,7 +30,7 @@ use crate::models::{
     AddColumnRequest, AddConstraintRequest, AlterTableRequest, ColumnInfo, ConnectionConfig,
     ConstraintInfo, CreateIndexRequest, CreateTableRequest, DatabaseType, DropColumnRequest,
     DropConstraintRequest, DropIndexRequest, DropTableRequest, FunctionInfo, IndexInfo,
-    RenameTableRequest, SchemaChangeResult, TableData, TableInfo, TriggerInfo, ViewInfo,
+    RenameTableRequest, SchemaChangeResult, TableData, TableInfo, ViewInfo,
 };
 
 use super::{BoxFuture, DbAdapter, NamespaceInfo, NamespaceLabel, RdbAdapter, RdbQueryResult};
@@ -464,13 +462,8 @@ impl RdbAdapter for OracleAdapter {
         Box::pin(async move { OracleAdapter::get_function_source(self, namespace, function).await })
     }
 
-    fn list_triggers<'a>(
-        &'a self,
-        _namespace: &'a str,
-        _table: &'a str,
-    ) -> BoxFuture<'a, Result<Vec<TriggerInfo>, AppError>> {
-        Box::pin(async { Ok(Vec::new()) })
-    }
+    // `list_triggers` inherits the RdbAdapter default `Ok(Vec::new())` — Oracle
+    // trigger introspection is deferred like MySQL/SQLite, not a live claim.
 }
 
 fn cancellable_metadata<'a, T>(
