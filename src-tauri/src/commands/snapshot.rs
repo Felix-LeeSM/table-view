@@ -282,9 +282,18 @@ async fn read_connections(
     .await
     .map_err(|e| AppError::Storage(format!("read connections: {}", e)))?;
 
+    // #1669 — the SQLite mirror never stores the Oracle wallet password (it
+    // lives only in the connections.json SOT), so derive has_wallet_password
+    // from the same presence map `list_connections` uses instead of hardcoding
+    // false — otherwise a wallet-secured connection reads as unset on boot.
+    let wallet_presence = crate::storage::wallet_password_presence_map()?;
     let items: Vec<ConnectionConfigPublic> = conn_rows
         .into_iter()
-        .map(ConnectionRow::into_public)
+        .map(|row| {
+            let mut p = row.into_public();
+            p.has_wallet_password = *wallet_presence.get(&p.id).unwrap_or(&false);
+            p
+        })
         .collect();
 
     let group_rows = sqlx::query_as::<_, GroupRow>(
@@ -357,6 +366,8 @@ impl ConnectionRow {
             trust_server_certificate: self.trust_server_certificate.map(|v| v != 0),
             oracle_use_sid: None,
             wallet_path: None,
+            // Default; `read_connections` overrides from the file-SOT presence
+            // map since the SQLite mirror does not store the wallet password.
             has_wallet_password: false,
         }
     }
@@ -992,6 +1003,96 @@ mod tests {
                 assert!(
                     c.items[0].has_password,
                     "non-empty password_enc → has_password = true"
+                );
+            }
+            StoreSlot::Err { error } => panic!("connections must read OK, got error={}", error),
+        }
+        pool_cleanup();
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn inner_derives_has_wallet_password_from_file_sot() {
+        // Reason: #1669 review — the SQLite mirror never carries the Oracle
+        // wallet password (it lives only in the connections.json SOT), so the
+        // boot snapshot must derive has_wallet_password from that SOT (like
+        // list_connections) rather than hardcode false. Previously a
+        // wallet-secured connection read as unset on boot. (2026-07-17)
+        use crate::models::{ConnectionConfig, DatabaseType};
+        let (_dir, pool) = pool_setup().await;
+
+        // File SOT: one connection with a wallet password, one without.
+        let with_wallet = ConnectionConfig {
+            id: "c-wallet".into(),
+            name: "WalletConn".into(),
+            db_type: DatabaseType::Oracle,
+            host: "localhost".into(),
+            port: 1521,
+            user: "u".into(),
+            password: String::new(),
+            database: "XEPDB1".into(),
+            read_only: false,
+            group_id: None,
+            color: None,
+            connection_timeout: None,
+            keep_alive_interval: None,
+            environment: None,
+            auth_source: None,
+            replica_set: None,
+            tls_enabled: None,
+            trust_server_certificate: None,
+            oracle_use_sid: None,
+            wallet_path: None,
+            wallet_password: String::new(),
+        };
+        crate::storage::save_connection_with_wallet(
+            with_wallet.clone(),
+            None,
+            Some("wallet-secret".into()),
+        )
+        .unwrap();
+        let mut no_wallet = with_wallet;
+        no_wallet.id = "c-plain".into();
+        no_wallet.name = "PlainConn".into();
+        crate::storage::save_connection_with_wallet(no_wallet, None, None).unwrap();
+
+        // Mirror both ids into the SQLite snapshot store.
+        for (idx, id) in ["c-wallet", "c-plain"].into_iter().enumerate() {
+            sqlx::query(
+                "INSERT INTO connections(id, name, db_type, host, port, user, password_enc, database, \
+                 sort_order, created_at, updated_at) \
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            )
+            .bind(id)
+            .bind(id)
+            .bind("oracle")
+            .bind("localhost")
+            .bind(1521i64)
+            .bind("u")
+            .bind("")
+            .bind("XEPDB1")
+            .bind(idx as i64)
+            .bind(1i64)
+            .bind(1i64)
+            .execute(&pool)
+            .await
+            .unwrap();
+        }
+
+        let snap = get_initial_app_state_inner(&pool, "launcher", &HashMap::new())
+            .await
+            .unwrap();
+        match &snap.stores.connections {
+            StoreSlot::Ok(c) => {
+                let wallet = c.items.iter().find(|i| i.id == "c-wallet").unwrap();
+                let plain = c.items.iter().find(|i| i.id == "c-plain").unwrap();
+                assert!(
+                    wallet.has_wallet_password,
+                    "wallet-secured connection must report has_wallet_password = true"
+                );
+                assert!(
+                    !plain.has_wallet_password,
+                    "connection without a wallet password must report false"
                 );
             }
             StoreSlot::Err { error } => panic!("connections must read OK, got error={}", error),
