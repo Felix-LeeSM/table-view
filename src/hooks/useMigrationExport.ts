@@ -21,6 +21,7 @@ import { useCallback, useState } from "react";
 import { save } from "@tauri-apps/plugin-dialog";
 import { useSchemaStore } from "@stores/schemaStore";
 import { useConnectionStore } from "@stores/connectionStore";
+import type { DatabaseName, SchemaName, TableName } from "@/types/branded";
 import {
   generateMigrationDDL,
   buildSequenceResets,
@@ -112,9 +113,24 @@ async function loadSchemaMetadata(
   return Promise.all(
     tables.map(async (t): Promise<DdlExportTable> => {
       const [columns, indexes, constraints] = await Promise.all([
-        store.getTableColumns(connectionId, database, t.name, schema),
-        store.getTableIndexes(connectionId, database, t.name, schema),
-        store.getTableConstraints(connectionId, database, t.name, schema),
+        store.getTableColumns(
+          connectionId,
+          database as DatabaseName,
+          schema as SchemaName,
+          t.name as TableName,
+        ),
+        store.getTableIndexes(
+          connectionId,
+          database as DatabaseName,
+          schema as SchemaName,
+          t.name as TableName,
+        ),
+        store.getTableConstraints(
+          connectionId,
+          database as DatabaseName,
+          schema as SchemaName,
+          t.name as TableName,
+        ),
       ]);
       return { name: t.name, columns, indexes, constraints };
     }),

@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 
 import { useSchemaStore } from "@stores/schemaStore";
-import type { SchemaName, TableName } from "@/types/branded";
+import type { DatabaseName, SchemaName, TableName } from "@/types/branded";
 
 /**
  * Sprint 229 — small lifecycle hook for the FK reference table /
@@ -49,14 +49,14 @@ export function useFkReferencePicker(connectionId: string, database: string) {
         ]?.[table];
       if (cached && cached.length > 0) return false;
       try {
-        // ponytail: schemaStore's `getTableColumns(connId, db, table, schema)`
-        // still takes schema LAST — reordering its signature would force
-        // touching every catalog caller (QueryResultGrid, StructurePanel, …),
-        // deferred with the store-wide reorder (issue #1495 Refs). The branded
-        // `(schema, table)` axes above already block a swap at this boundary.
         await useSchemaStore
           .getState()
-          .getTableColumns(connectionId, database, table, schema);
+          .getTableColumns(
+            connectionId,
+            database as DatabaseName,
+            schema,
+            table,
+          );
         return true;
       } catch {
         // Best-effort lazy load — failures fall through to the body's

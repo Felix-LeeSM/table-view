@@ -9,6 +9,7 @@ import type {
   TriggerInfo,
 } from "@/types/schema";
 import type { Paradigm } from "@/types/connection";
+import type { DatabaseName, SchemaName, TableName } from "@/types/branded";
 import { getParadigmVocabulary } from "@/lib/strings/paradigm-vocabulary";
 import ColumnsEditor from "@components/structure/ColumnsEditor";
 import IndexesEditor from "@components/structure/IndexesEditor";
@@ -142,9 +143,9 @@ export default function StructurePanel({
       if (effectiveSubTab === "columns") {
         const cols = await getTableColumns(
           connectionId,
-          database,
-          table,
-          schema,
+          database as DatabaseName,
+          schema as SchemaName,
+          table as TableName,
         );
         if (fetchIdRef.current !== fetchId) return;
         setColumns(cols);
@@ -152,9 +153,9 @@ export default function StructurePanel({
       } else if (effectiveSubTab === "indexes") {
         const idx = await getTableIndexes(
           connectionId,
-          database,
-          table,
-          schema,
+          database as DatabaseName,
+          schema as SchemaName,
+          table as TableName,
         );
         if (fetchIdRef.current !== fetchId) return;
         setIndexes(idx);
@@ -162,9 +163,9 @@ export default function StructurePanel({
       } else if (effectiveSubTab === "constraints") {
         const cons = await getTableConstraints(
           connectionId,
-          database,
-          table,
-          schema,
+          database as DatabaseName,
+          schema as SchemaName,
+          table as TableName,
         );
         if (fetchIdRef.current !== fetchId) return;
         setConstraints(cons);
@@ -175,9 +176,9 @@ export default function StructurePanel({
         // cached array without re-invoking the IPC.
         const trigs = await getTableTriggers(
           connectionId,
-          database,
-          table,
-          schema,
+          database as DatabaseName,
+          schema as SchemaName,
+          table as TableName,
         );
         if (fetchIdRef.current !== fetchId) return;
         setTriggers(trigs);
@@ -386,7 +387,12 @@ export default function StructurePanel({
           open
           onClose={() => setCreateTriggerDialog(false)}
           onRefresh={async () => {
-            await refreshTableTriggers(connectionId, database, table, schema);
+            await refreshTableTriggers(
+              connectionId,
+              database as DatabaseName,
+              schema as SchemaName,
+              table as TableName,
+            );
             // Pull fresh list into local state so the row count + cards
             // update immediately; the cache invalidate above ensures the
             // re-render is consistent with the store.
@@ -408,7 +414,12 @@ export default function StructurePanel({
           open
           onClose={() => setDropTriggerDialog(null)}
           onRefresh={async () => {
-            await refreshTableTriggers(connectionId, database, table, schema);
+            await refreshTableTriggers(
+              connectionId,
+              database as DatabaseName,
+              schema as SchemaName,
+              table as TableName,
+            );
             await fetchData();
           }}
         />

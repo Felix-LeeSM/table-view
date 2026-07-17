@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { setupTauriMock } from "@/test-utils/tauriMock";
+import type { DatabaseName, SchemaName, TableName } from "@/types/branded";
 import { useSchemaStore } from "./schemaStore";
 
 const INDEXES = [
@@ -50,10 +51,20 @@ describe("schemaStore table metadata caches", () => {
 
     const firstIndexes = await useSchemaStore
       .getState()
-      .getTableIndexes("conn1", "db1", "users", "public");
+      .getTableIndexes(
+        "conn1",
+        "db1" as DatabaseName,
+        "public" as SchemaName,
+        "users" as TableName,
+      );
     const firstConstraints = await useSchemaStore
       .getState()
-      .getTableConstraints("conn1", "db1", "users", "public");
+      .getTableConstraints(
+        "conn1",
+        "db1" as DatabaseName,
+        "public" as SchemaName,
+        "users" as TableName,
+      );
 
     expect(firstIndexes).toEqual(INDEXES);
     expect(firstConstraints).toEqual(CONSTRAINTS);
@@ -72,10 +83,20 @@ describe("schemaStore table metadata caches", () => {
 
     await useSchemaStore
       .getState()
-      .getTableIndexes("conn1", "db1", "users", "public");
+      .getTableIndexes(
+        "conn1",
+        "db1" as DatabaseName,
+        "public" as SchemaName,
+        "users" as TableName,
+      );
     await useSchemaStore
       .getState()
-      .getTableConstraints("conn1", "db1", "users", "public");
+      .getTableConstraints(
+        "conn1",
+        "db1" as DatabaseName,
+        "public" as SchemaName,
+        "users" as TableName,
+      );
 
     expect(tauri.getTableIndexes).toHaveBeenCalledTimes(2);
     expect(tauri.getTableConstraints).toHaveBeenCalledTimes(2);

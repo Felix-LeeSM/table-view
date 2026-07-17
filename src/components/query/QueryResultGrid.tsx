@@ -7,6 +7,7 @@ import type {
   QueryStatementResult,
   QueryType,
 } from "@/types/query";
+import type { DatabaseName, SchemaName, TableName } from "@/types/branded";
 import {
   analyzeResultEditability,
   parseSingleTableSelect,
@@ -196,9 +197,9 @@ function SelectResultArea({
     if (!cached) {
       getTableColumns(
         connectionId,
-        database,
-        parsed.table,
-        parsed.schema,
+        database as DatabaseName,
+        parsed.schema as SchemaName,
+        parsed.table as TableName,
       ).catch(() => {
         // If the lookup fails we leave the cache empty; the editability
         // analyser surfaces this as "Loading column metadata…".

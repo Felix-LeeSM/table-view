@@ -7,6 +7,7 @@ import {
 import type { SchemaColumnLookup } from "@lib/sql/multiTableResolver";
 import { useSchemaStore } from "@stores/schemaStore";
 import type { QueryColumn } from "@/types/query";
+import type { DatabaseName, SchemaName, TableName } from "@/types/branded";
 
 interface UseMultiTableResultEditabilityParams {
   /** When true the multi-table path is skipped entirely (document result,
@@ -53,11 +54,14 @@ export function useMultiTableResultEditability({
       const cached =
         tableColumnsCache[connectionId]?.[database]?.[schema]?.[inst.table];
       if (!cached) {
-        getTableColumns(connectionId, database, inst.table, schema).catch(
-          () => {
-            // Missing metadata keeps the affected instance's columns read-only.
-          },
-        );
+        getTableColumns(
+          connectionId,
+          database as DatabaseName,
+          schema as SchemaName,
+          inst.table as TableName,
+        ).catch(() => {
+          // Missing metadata keeps the affected instance's columns read-only.
+        });
       }
     }
   }, [
