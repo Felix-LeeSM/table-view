@@ -59,6 +59,10 @@ be read from `docs/product/README.md` and `docs/ROADMAP.md` first.
 | [0051](./0051-duckdb-write-ddl-staged/memory.md)                                     | DuckDB write/DDL 개방 — RDB parity 완전체를 PR 단위로 스테이징 (ADR 0046 보완)                | Accepted | 2026-07-10 | —          |
 | [0052](./0052-ssh-tunnel-connection-scoped-tofu/memory.md)                           | SSH 터널 지원 — 연결별 터널 + TOFU host key 핀 + keyring 봉투 재사용                          | Accepted | 2026-07-10 | —          |
 | [0053](./0053-connection-tls-core-vocabulary-warning-first-defaults/memory.md)       | connection TLS core vocabulary + warning-first defaults                                        | Accepted | 2026-07-17 | —          |
+| [0054](./0054-erd-canvas-reactflow-elkjs-layered/memory.md)                          | ERD 캔버스 — React Flow + elkjs layered 채택, 수제 렌더러 대체                                | Accepted | 2026-07-17 | —          |
+| [0055](./0055-erd-virtual-fk-polymorphic-targets/memory.md)                          | ERD 수동 링크 — 가상 FK 1급 모델 (polymorphic targets + discriminator 옵션)                  | Accepted | 2026-07-17 | —          |
+| [0056](./0056-erd-layout-persistence-reconcile-undo/memory.md)                       | ERD 레이아웃 상태 계약 — connection별 persist + 명시적 자동정렬 + reconcile + undo            | Accepted | 2026-07-17 | —          |
+| [0057](./0057-erd-focus-filter-facet-chips/memory.md)                                | ERD 포커스 필터 — facet 칩 (facet 내 OR / facet 간 AND)                                       | Accepted | 2026-07-17 | —          |
 
 ## 역사 (Superseded / Deprecated)
 
