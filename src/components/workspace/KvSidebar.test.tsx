@@ -126,6 +126,37 @@ describe("KvSidebar", () => {
     expect(screen.queryByText(/loading value/i)).not.toBeInTheDocument();
   });
 
+  it("previews the initial key scan with a skeleton, not a spinner (#1058)", async () => {
+    useSafeModeStore.setState({ mode: "off" });
+    let releaseScan: (page: unknown) => void = () => {};
+    invokeMock.mockImplementation((command: string) => {
+      if (command === "list_kv_databases") {
+        return Promise.resolve([{ name: "0", index: 0, keyCount: 1 }]);
+      }
+      if (command === "current_kv_database") return Promise.resolve(0);
+      if (command === "scan_kv_keys") {
+        // Hang the scan so `loadingKeys && keys.length === 0` holds.
+        return new Promise((resolve) => {
+          releaseScan = resolve;
+        });
+      }
+      return Promise.reject(new Error(`Unhandled command: ${command}`));
+    });
+
+    const { container } = render(<KvSidebar connectionId="redis-1" />);
+
+    // Catalog resolves -> auto-scan fires and hangs -> skeleton bars show.
+    await waitFor(() => {
+      expect(container.querySelector(".animate-pulse")).not.toBeNull();
+    });
+
+    // Settling the scan with an empty page clears the skeleton.
+    releaseScan({ keys: [], nextCursor: "0" });
+    await waitFor(() => {
+      expect(container.querySelector(".animate-pulse")).toBeNull();
+    });
+  });
+
   // Value inspection / stream reader / mutation coverage moved to the
   // right-hand detail panel (KvKeyDetailPanel*.test.tsx) in the 2026-07-07 KV
   // UX redesign — clicking a key here now opens a detail tab (asserted in

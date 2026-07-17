@@ -16,6 +16,7 @@ import {
   useTreeRoving,
   type TreeRovingRow,
 } from "@components/shared/tree/useTreeRoving";
+import TreeSkeleton from "@components/shared/tree/TreeSkeleton";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useSafeModeStore } from "@stores/safeModeStore";
 import { useWorkspaceStore } from "@stores/workspaceStore";
@@ -379,15 +380,10 @@ export default function KvSidebar({ connectionId }: KvSidebarProps) {
           ))}
         </div>
 
-        {loadingKeys && keys.length === 0 && (
-          <div
-            role="status"
-            className="flex items-center gap-2 px-3 py-3 text-muted-foreground"
-          >
-            <Loader2 size={12} className="animate-spin" aria-hidden />
-            {t("kvSidebar.loadingKeys")}
-          </div>
-        )}
+        {/* #1058 — initial key scan (no data yet) previews the list shape with
+            a skeleton. The Stop button, "load more" pagination, and catalog
+            refresh keep their spinners (control-busy / partial load). */}
+        {loadingKeys && keys.length === 0 && <TreeSkeleton />}
 
         {keys.length === 0 && !loadingKeys && !error && (
           <div role="status" className="px-3 py-3 text-muted-foreground">
