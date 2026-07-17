@@ -1,13 +1,13 @@
 //! Oracle adapter internals.
 //!
-//! Issue #905 promotes the bounded Oracle runtime slice through
-//! `OracleRuntimeAdapter`: service-name lifecycle, catalog metadata, SELECT/DML
-//! batch, cooperative cancel, and tabular table-data queries. Structured DDL,
-//! PL/SQL body/package source, triggers, admin, SID/TNS/wallet/TLS, and
-//! advanced auth remain unsupported.
+//! Issue #1072 dissolves the bounded #905/#906 runtime slice and wires the full
+//! `OracleAdapter` into production: service-name lifecycle, catalog metadata,
+//! SELECT/DML batch, cooperative cancel, tabular table-data queries, structured
+//! table/index/constraint DDL, PL/SQL body/package source, and trigger listing.
+//! Raw DDL/admin execution, switch-database, SID/TNS/wallet/TLS, and advanced
+//! auth remain unsupported.
 
 mod catalog;
-mod connection_only;
 mod ddl;
 #[cfg(test)]
 mod ddl_tests;
@@ -15,8 +15,6 @@ mod runtime;
 mod table_data;
 #[cfg(test)]
 mod tests;
-
-pub use connection_only::OracleRuntimeAdapter;
 
 use std::collections::HashMap;
 use std::future::Future;

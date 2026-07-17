@@ -35,7 +35,7 @@ use crate::db::sqlite::SqliteAdapter;
 use crate::db::ActiveAdapter;
 use crate::db::DuckdbAdapter;
 use crate::db::MssqlAdapter;
-use crate::db::OracleRuntimeAdapter;
+use crate::db::OracleAdapter;
 use crate::error::AppError;
 use crate::models::{ConnectionConfigPublic, ConnectionStatus, DatabaseType};
 use crate::state::introspection_pool::IntrospectionPool;
@@ -67,11 +67,12 @@ pub use sqlite_file::create_sqlite_database_file;
 /// `DatabaseType` on the active adapter. SQLite and DuckDB have file-backed
 /// adapters. SQL Server uses the bounded MSSQL runtime slice: lifecycle,
 /// catalog/table/view/routine browse, tabular query, batch DML, and
-/// cooperative cancel. Oracle uses the #905/#906 bounded runtime RDB wrapper:
-/// service-name lifecycle, catalog metadata, SELECT/DML batch, cooperative
-/// cancel, tabular table-data queries, and frontend SQL-batch row edits are
-/// live, while switch-database, structured DDL, source/body, trigger, and admin
-/// surfaces return Unsupported.
+/// cooperative cancel. Oracle wires the full `OracleAdapter` (#1072 dissolves
+/// the #905/#906 runtime slice): service-name lifecycle, catalog metadata,
+/// SELECT/DML batch, cooperative cancel, tabular table-data queries, frontend
+/// SQL-batch row edits, structured table/index/constraint DDL, PL/SQL
+/// body/package source, and trigger listing are live, while switch-database and
+/// raw DDL/admin surfaces stay Unsupported.
 pub(crate) fn make_adapter(db_type: &DatabaseType) -> Result<ActiveAdapter, AppError> {
     match db_type {
         DatabaseType::Postgresql => Ok(ActiveAdapter::Rdb(Box::new(PostgresAdapter::new()))),
@@ -80,7 +81,7 @@ pub(crate) fn make_adapter(db_type: &DatabaseType) -> Result<ActiveAdapter, AppE
         DatabaseType::Sqlite => Ok(ActiveAdapter::Rdb(Box::new(SqliteAdapter::new()))),
         DatabaseType::Duckdb => Ok(ActiveAdapter::Rdb(Box::new(DuckdbAdapter::new()))),
         DatabaseType::Mssql => Ok(ActiveAdapter::Rdb(Box::new(MssqlAdapter::new()))),
-        DatabaseType::Oracle => Ok(ActiveAdapter::Rdb(Box::new(OracleRuntimeAdapter::new()))),
+        DatabaseType::Oracle => Ok(ActiveAdapter::Rdb(Box::new(OracleAdapter::new()))),
         DatabaseType::Mongodb => Ok(ActiveAdapter::Document(Box::new(MongoAdapter::new()))),
         DatabaseType::Redis => Ok(ActiveAdapter::Kv(Box::new(RedisAdapter::new()))),
         DatabaseType::Valkey => Ok(ActiveAdapter::Kv(Box::new(RedisAdapter::new_valkey()))),
@@ -481,7 +482,11 @@ mod tests {
             preview_only: false,
             expected_database: None,
         };
-        assert_oracle_runtime_slice_unsupported(rdb.drop_table(&drop).await, "structured DDL");
+        // #1072 — the Oracle runtime slice is dissolved: make_adapter now wires
+        // the full OracleAdapter, so structured DDL builds the SQL through the
+        // shared dispatch and then surfaces the runtime open-connection error
+        // (not the old #905 slice Unsupported boundary).
+        assert_oracle_runtime_requires_open_connection(rdb.drop_table(&drop).await);
     }
 
     #[test]
@@ -526,16 +531,6 @@ mod tests {
         assert!(
             matches!(result, Err(AppError::Database(ref message)) if message == "Query cancelled"),
             "expected Oracle cooperative cancellation, got {result:?}"
-        );
-    }
-
-    fn assert_oracle_runtime_slice_unsupported<T: std::fmt::Debug>(
-        result: Result<T, AppError>,
-        surface: &str,
-    ) {
-        assert!(
-            matches!(result, Err(AppError::Unsupported(ref message)) if message.contains("issue #905") && message.contains(surface)),
-            "expected Oracle #905 runtime-slice Unsupported for {surface}, got {result:?}"
         );
     }
 

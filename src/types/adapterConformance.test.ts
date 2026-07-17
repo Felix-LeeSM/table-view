@@ -311,7 +311,7 @@ describe("adapter conformance matrix", () => {
     expect(mssql.areas.ddl.unsupported).toEqual([]);
   });
 
-  it("keeps Oracle scoped to catalog/query/edit runtime without DDL claims", () => {
+  it("claims Oracle structured DDL after #1072 alongside catalog/query/edit", () => {
     const oracle = ADAPTER_CONFORMANCE_MATRIX.oracle;
 
     expect(oracle.level).toBe("runtime");
@@ -326,7 +326,12 @@ describe("adapter conformance matrix", () => {
     ]);
     expect(oracle.areas.query.checks).toEqual(["query.query", "query.cancel"]);
     expect(oracle.areas.edit.checks).toEqual(["edit.editRows"]);
-    expect(oracle.areas.ddl.checks).toEqual([]);
+    expect(oracle.areas.ddl.checks).toEqual([
+      "ddl.createTable",
+      "ddl.alterTable",
+      "ddl.createIndex",
+      "ddl.dropObject",
+    ]);
     expect(oracle.areas.connection.deferred).toEqual([]);
     expect(oracle.areas.connection.unsupported).toEqual([
       "connection.switchDatabase",
@@ -340,12 +345,7 @@ describe("adapter conformance matrix", () => {
       "edit.editKeys",
       "edit.bulkWrite",
     ]);
-    expect(oracle.areas.ddl.unsupported).toEqual([
-      "ddl.createTable",
-      "ddl.alterTable",
-      "ddl.createIndex",
-      "ddl.dropObject",
-    ]);
+    expect(oracle.areas.ddl.unsupported).toEqual([]);
   });
 
   it("keeps engines runtime via query after #1464 emptied their catalog claim", () => {

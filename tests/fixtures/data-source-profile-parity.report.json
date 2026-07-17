@@ -14,7 +14,7 @@
     "mssql": { "schemaMutation": true, "dataMutation": false },
     "mysql": { "schemaMutation": true, "dataMutation": false },
     "opensearch": { "schemaMutation": false, "dataMutation": false },
-    "oracle": { "schemaMutation": false, "dataMutation": false },
+    "oracle": { "schemaMutation": true, "dataMutation": false },
     "postgresql": { "schemaMutation": true, "dataMutation": false },
     "redis": { "schemaMutation": false, "dataMutation": true },
     "sqlite": { "schemaMutation": true, "dataMutation": false },

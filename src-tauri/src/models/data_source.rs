@@ -310,10 +310,16 @@ const MSSQL_RDB_CAPABILITIES: &[BackendAdapterCapability] = &[
     BackendAdapterCapability::RelationalQuery,
     BackendAdapterCapability::RelationalSchemaMutation,
 ];
+// Issue #1072 — dissolving the runtime slice wires the full OracleAdapter,
+// which routes structured table/index/constraint DDL to the bounded builder
+// (`oracle/ddl.rs`), so the declaration claims `RelationalSchemaMutation` to
+// match the wired path. Raw DDL/admin, switch-database, and wallet/TNS surfaces
+// stay unsupported; the flag reflects support, not full DDL parity.
 const ORACLE_RDB_CAPABILITIES: &[BackendAdapterCapability] = &[
     BackendAdapterCapability::Lifecycle,
     BackendAdapterCapability::RelationalCatalog,
     BackendAdapterCapability::RelationalQuery,
+    BackendAdapterCapability::RelationalSchemaMutation,
 ];
 const DOCUMENT_CAPABILITIES: &[BackendAdapterCapability] = &[
     BackendAdapterCapability::Lifecycle,

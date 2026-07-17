@@ -56,7 +56,7 @@
       "id": "mssql-runtime-oracle-runtime-slice-boundaries",
       "minimumRow": "MSSQL and Oracle bounded Runtime Happy Path smoke slices",
       "products": ["mssql", "oracle"],
-      "claimBoundary": "Issue #907 wires representative Runtime Happy Path smoke for the already-promoted SQL Server and Oracle runtime slices. SQL Server stays bounded to catalog/query/cancel/tabular support plus editRows through frontend SQL batch with primary-key projection, and #1071 promotes bounded structured table/index/constraint DDL through the shared StructurePanel dispatch, while admin, import/export, full T-SQL parity, and full workbench parity remain unsupported. Oracle stays bounded to service-name lifecycle, catalog/query/cancel/tabular runtime, key-projected editRows through frontend SQL batch, tested SELECT/DML/DDL Safe Mode classification, bounded editor assistance, and the #907 smoke path; SID, TNS, wallet, TLS, advanced auth, switch database, structured DDL, raw DDL/admin, full parser/completion promotion, triggers beyond the bounded catalog smoke path, and PL/SQL body/package authoring/source work remain unsupported or unclaimed.",
+      "claimBoundary": "Issue #907 wires representative Runtime Happy Path smoke for the already-promoted SQL Server and Oracle runtime slices. SQL Server stays bounded to catalog/query/cancel/tabular support plus editRows through frontend SQL batch with primary-key projection, and #1071 promotes bounded structured table/index/constraint DDL through the shared StructurePanel dispatch, while admin, import/export, full T-SQL parity, and full workbench parity remain unsupported. Oracle dissolves the runtime slice and wires the full adapter (#1072): catalog/query/cancel/tabular runtime, key-projected editRows through frontend SQL batch, tested SELECT/DML/DDL Safe Mode classification, bounded editor assistance, the #907 smoke path, and bounded structured table/index/constraint DDL through the shared StructurePanel dispatch are supported, while SID, TNS, wallet, TLS, advanced auth, switch database, raw DDL/admin, full parser/completion promotion, trigger DDL, and PL/SQL body/package authoring work remain unsupported or unclaimed.",
       "docs": [
         {
           "path": "docs/product/known-limitations.md",
@@ -73,6 +73,10 @@
         {
           "path": "docs/product/known-limitations.md",
           "mustContain": "Oracle supports service-name lifecycle plus a bounded #905/#906 catalog/query/cancel/tabular/edit-row runtime slice."
+        },
+        {
+          "path": "docs/product/known-limitations.md",
+          "mustContain": "Bounded structured table/index/constraint DDL is now wired through the shared StructurePanel path (#1072)."
         },
         {
           "path": "docs/product/README.md",
