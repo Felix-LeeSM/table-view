@@ -2,7 +2,7 @@
 // Fixture CLI entry — `tsx scripts/fixtures/index.ts <subcommand> [args]`.
 // Preferred subcommands: load | rebuild | preview | register-connections | clear-connections.
 // Legacy subcommands remain: seed | reset | generate | connections.
-import { entityOrder, loadSpec } from "./spec.js";
+import { entityOrder, filterByDomain, loadSpec } from "./spec.js";
 import { generateAll } from "./generator.js";
 import {
   applyPostgres,
@@ -107,16 +107,35 @@ function quiet(options: Record<string, string | boolean>): boolean {
   return options.quiet === true || options.quiet === "true";
 }
 
+/**
+ * `--scenario <domain[,domain...]>` → domain filter for the base spec.
+ * Absent or `all` → null (every entity kept). Comma-separated otherwise.
+ */
+function scenarioOf(
+  options: Record<string, string | boolean>,
+): string[] | null {
+  const v = options.scenario;
+  if (typeof v !== "string" || v === "" || v === "all") return null;
+  return v
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
 type Counts = Record<string, number>;
 
 async function cmdSeed(
   profile: string,
   target: Target,
   isQuiet: boolean,
+  scenario: string[] | null,
   label = "fixtures:load",
 ): Promise<void> {
   const spec = loadSpec(profile);
-  console.log(`${label} ${profile} (target=${target})`);
+  filterByDomain(spec.base, scenario);
+  console.log(
+    `${label} ${profile} (target=${target}${scenario ? `, scenario=${scenario.join(",")}` : ""})`,
+  );
 
   const counts: Counts = {};
   const t0 = Date.now();
@@ -313,10 +332,14 @@ async function cmdReset(
   profile: string,
   target: Target,
   isQuiet: boolean,
+  scenario: string[] | null,
   label = "fixtures:rebuild",
 ): Promise<void> {
   const spec = loadSpec(profile);
-  console.log(`${label} ${profile} (target=${target})`);
+  filterByDomain(spec.base, scenario);
+  console.log(
+    `${label} ${profile} (target=${target}${scenario ? `, scenario=${scenario.join(",")}` : ""})`,
+  );
 
   const counts: Counts = {};
   const t0 = Date.now();
@@ -518,11 +541,15 @@ async function cmdConnections(
 function cmdGenerate(
   profile: string,
   target: Target,
+  scenario: string[] | null,
   label = "fixtures:preview",
 ): void {
   const spec = loadSpec(profile);
+  filterByDomain(spec.base, scenario);
   const rows = generateAll(spec);
-  console.log(`# ${label} ${profile} (target=${target})`);
+  console.log(
+    `# ${label} ${profile} (target=${target}${scenario ? `, scenario=${scenario.join(",")}` : ""})`,
+  );
   for (const entityName of entityOrder(spec.base)) {
     const entity = spec.base.entities[entityName];
     if (!entity) continue;
@@ -579,6 +606,9 @@ function usage(): string {
     "  pnpm db:generate <profile> [--target <db>]",
     "",
     "Targets: all/default (pg + mongo + mysql + sqlite + duckdb + mariadb + mssql + oracle + redis) | pg | mongo | mysql | sqlite | duckdb | mariadb | mssql | oracle | redis",
+    "",
+    "Scenario (load/rebuild/preview): --scenario all (default) | commerce | iot | social | comma-separated",
+    "  Prunes the base spec to the selected domain(s) before generating rows.",
   ].join("\n");
 }
 
@@ -586,6 +616,7 @@ async function main(): Promise<void> {
   const { subcommand, positional, options } = parse(process.argv.slice(2));
   const target = targetMode(options);
   const isQuiet = quiet(options);
+  const scenario = scenarioOf(options);
 
   switch (subcommand) {
     case "load":
@@ -593,7 +624,7 @@ async function main(): Promise<void> {
       const profile = positional[0];
       if (!profile)
         throw new Error(`'${subcommand}' requires a profile name.\n${usage()}`);
-      await cmdSeed(profile, target, isQuiet);
+      await cmdSeed(profile, target, isQuiet, scenario);
       break;
     }
     case "rebuild":
@@ -601,7 +632,7 @@ async function main(): Promise<void> {
       const profile = positional[0];
       if (!profile)
         throw new Error(`'${subcommand}' requires a profile name.\n${usage()}`);
-      await cmdReset(profile, target, isQuiet);
+      await cmdReset(profile, target, isQuiet, scenario);
       break;
     }
     case "connections": {
@@ -632,7 +663,7 @@ async function main(): Promise<void> {
       const profile = positional[0];
       if (!profile)
         throw new Error(`'${subcommand}' requires a profile name.\n${usage()}`);
-      cmdGenerate(profile, target);
+      cmdGenerate(profile, target, scenario);
       break;
     }
     default:

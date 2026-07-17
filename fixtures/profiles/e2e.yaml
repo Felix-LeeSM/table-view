@@ -19,11 +19,27 @@ locale_mix:
   zh: 0.01
   edge: 0.01
 rows:
+  # commerce
   customers: 200
   products: 80
   orders: 500
   order_items: 1500
   support_tickets: 100
+  categories: 20
+  addresses: 300
+  payments: 450
+  shipments: 400
+  reviews: 600
+  # iot
+  device_zones: 8
+  devices: 40
+  sensor_readings: 1200
+  # social
+  users: 150
+  posts: 800
+  reactions: 2000
+  follows: 900
+  media: 250
 connections:
   pg:
     - id: fixture-e2e-pg

@@ -18,11 +18,27 @@ locale_mix:
   zh: 0.05
   edge: 0.08
 rows:
+  # commerce
   customers: 5000
   products: 800
   orders: 12000
   order_items: 36000
   support_tickets: 2400
+  categories: 60
+  addresses: 6000
+  payments: 11000
+  shipments: 10000
+  reviews: 14000
+  # iot
+  device_zones: 25
+  devices: 600
+  sensor_readings: 40000
+  # social
+  users: 3000
+  posts: 18000
+  reactions: 50000
+  follows: 20000
+  media: 5000
 connections:
   pg:
     - id: fixture-dev-pg

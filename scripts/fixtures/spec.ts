@@ -41,6 +41,11 @@ const STRING_TYPES = new Set([
 export type ColumnType = (typeof PRIMITIVE_TYPES)[number];
 export const isStringType = (t: ColumnType) => STRING_TYPES.has(t);
 
+// Scenario domains — an entity belongs to exactly one. `--scenario` prunes the
+// base spec to a subset of these (see filterByDomain).
+export const ENTITY_DOMAINS = ["commerce", "iot", "social"] as const;
+export type EntityDomain = (typeof ENTITY_DOMAINS)[number];
+
 const ColumnSchema = z
   .object({
     type: z.enum(PRIMITIVE_TYPES),
@@ -83,6 +88,7 @@ const EntityTargetSchema = z.enum([
 const EntitySchema = z
   .object({
     targets: z.array(EntityTargetSchema).nonempty(),
+    domain: z.enum(ENTITY_DOMAINS).optional(),
     pg: z.object({ schema: z.string(), table: z.string() }).optional(),
     mongo: z
       .object({
@@ -280,6 +286,47 @@ export function entityOrder(base: BaseSpec): string[] {
 
   for (const name of Object.keys(base.entities)) visit(name, []);
   return order;
+}
+
+/**
+ * Prune `base.entities` in place to those in the selected domains (the
+ * `--scenario` knob). `domains` null/empty → no-op (all entities kept).
+ * Throws if the selection is empty or if a kept entity references a pruned one
+ * (a cross-domain FK), so a scenario can never silently lose referential
+ * integrity. Cross-domain refs are a spec bug — domains are self-contained.
+ */
+export function filterByDomain(base: BaseSpec, domains: string[] | null): void {
+  if (!domains || domains.length === 0) return;
+  const unknown = domains.filter(
+    (d) => !(ENTITY_DOMAINS as readonly string[]).includes(d),
+  );
+  if (unknown.length > 0) {
+    throw new Error(
+      `--scenario unknown domain(s): ${unknown.join(", ")}. Known: ${ENTITY_DOMAINS.join(", ")}.`,
+    );
+  }
+  const want = new Set(domains);
+  const kept = Object.fromEntries(
+    Object.entries(base.entities).filter(
+      ([, e]) => e.domain !== undefined && want.has(e.domain),
+    ),
+  );
+  if (Object.keys(kept).length === 0) {
+    throw new Error(`--scenario '${domains.join(",")}' matched no entities.`);
+  }
+  for (const [name, entity] of Object.entries(kept)) {
+    for (const [colName, col] of Object.entries(entity.columns)) {
+      if (col.type === "ref" && col.to) {
+        const refEntity = col.to.split(".")[0];
+        if (refEntity && !(refEntity in kept)) {
+          throw new Error(
+            `--scenario '${domains.join(",")}' would break FK ${name}.${colName} → ${col.to} (target '${refEntity}' is in another domain).`,
+          );
+        }
+      }
+    }
+  }
+  base.entities = kept;
 }
 
 export function effectiveColumnConstraints(col: Column) {
