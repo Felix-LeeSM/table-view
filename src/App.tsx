@@ -173,12 +173,24 @@ export default function App() {
   // `workspace-{id}` window — it lingered as a blank orphan. When this
   // window's own connection id is gone from the loaded list, self-close it
   // through the same discard-confirm + persist-flush + destroy path the
-  // native window close uses. Guards: `connectionsLoadedOnce` (never fire
-  // mid-load), and `currentConnId === null` (launcher / non-workspace
-  // windows, where the label has no connection id).
+  // native window close uses.
+  //
+  // Presence latch: only treat an *absence* as a deletion once we've seen
+  // this window's connection id present in the loaded list. At boot the
+  // snapshot (`hydrateConnectionsFromSnapshot`) flips `hasLoadedOnce=true`
+  // and may not yet contain a just-created connection — the very one this
+  // window is for — until `loadConnections` catches up. Without the latch
+  // that transient absence self-closes the window the instant it opens
+  // (the CI E2E boot race). Guards: `connectionsLoadedOnce` (never fire
+  // mid-load), `currentConnId === null` (launcher / non-workspace windows).
+  const sawConnectionRef = useRef(false);
   useEffect(() => {
     if (!connectionsLoadedOnce || currentConnId === null) return;
-    if (connections.some((c) => c.id === currentConnId)) return;
+    if (connections.some((c) => c.id === currentConnId)) {
+      sawConnectionRef.current = true;
+      return;
+    }
+    if (!sawConnectionRef.current) return;
     confirmDiscard(windowHasDirtyRef.current, () => {
       void flushPersistWorkspaces().finally(() => {
         void destroyCurrentWindow();

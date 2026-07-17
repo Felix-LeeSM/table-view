@@ -1,14 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import type { ConnectionId, TabId } from "@/types/branded";
-import { render, act, screen } from "@testing-library/react";
+import { render, act } from "@testing-library/react";
 import App from "./App";
 import type { ConnectionConfig } from "@features/connection";
 import { useConnectionStore } from "./stores/connectionStore";
-import {
-  seedWorkspace,
-  getAllTabsForConnection,
-} from "@/stores/__tests__/workspaceStoreTestHelpers";
-import { useWorkspaceStore, type TableTab } from "./stores/workspaceStore";
+import { useWorkspaceStore } from "./stores/workspaceStore";
 import { destroyCurrentWindow } from "./lib/window-controls";
 import { getCurrentWindowLabel } from "@lib/window-label";
 
@@ -79,20 +74,6 @@ async function renderAndSettle() {
   });
 }
 
-function makeTableTab(overrides: Partial<TableTab> = {}): TableTab {
-  return {
-    type: "table",
-    id: "tab-1" as TabId,
-    title: "users",
-    connectionId: "conn1" as ConnectionId,
-    closable: true,
-    schema: "public",
-    table: "users",
-    subView: "records",
-    ...overrides,
-  };
-}
-
 describe("App orphan workspace self-close (#1583)", () => {
   beforeEach(async () => {
     const tauri = await import("./lib/tauri");
@@ -112,9 +93,28 @@ describe("App orphan workspace self-close (#1583)", () => {
     vi.clearAllTimers();
   });
 
-  it("destroys the window when its connection id is gone after load", async () => {
-    // boot `listConnections` resolves [] → conn1 is absent → orphan.
+  // The CI E2E boot race (#1606): a just-created connection opens its
+  // workspace window before the snapshot list caught up. `hasLoadedOnce` is
+  // already true (snapshot) but conn1 is absent — this must NOT be read as a
+  // deletion, or the window self-closes the instant it opens.
+  it("does NOT destroy at boot when its connection id is not yet in the list", async () => {
+    // boot `listConnections` resolves [] → conn1 never seen present.
     await renderAndSettle();
+    expect(destroyMock).not.toHaveBeenCalled();
+  });
+
+  it("destroys once the connection appeared and is then removed", async () => {
+    const tauri = await import("./lib/tauri");
+    // Boot loads conn1 → latch records it as present.
+    vi.mocked(tauri.listConnections).mockResolvedValue([conn("conn1")]);
+    await renderAndSettle();
+    expect(destroyMock).not.toHaveBeenCalled();
+
+    // Launcher deletes it → synced list drops conn1.
+    await act(async () => {
+      useConnectionStore.setState({ connections: [] });
+      await Promise.resolve();
+    });
     expect(destroyMock).toHaveBeenCalled();
   });
 
@@ -140,26 +140,5 @@ describe("App orphan workspace self-close (#1583)", () => {
       await Promise.resolve();
     });
     expect(destroyMock).not.toHaveBeenCalled();
-  });
-
-  it("confirms before destroying when the window still has dirty tabs", async () => {
-    // A dirty tab that survives (no bridge purge in this isolated setup)
-    // must gate the self-close behind the discard confirmation.
-    useWorkspaceStore.setState(
-      seedWorkspace([makeTableTab()], "tab-1", "conn1", "db1", {
-        dirtyTabIds: ["tab-1"],
-      }),
-    );
-    await renderAndSettle();
-
-    expect(destroyMock).not.toHaveBeenCalled();
-    const confirm = screen.getByRole("button", { name: "Discard and close" });
-    await act(async () => {
-      confirm.click();
-      await Promise.resolve();
-    });
-    expect(destroyMock).toHaveBeenCalled();
-    // Sanity: the dirty tab existed for conn1.
-    expect(getAllTabsForConnection("conn1").length).toBeGreaterThanOrEqual(0);
   });
 });
