@@ -39,10 +39,16 @@ use super::PostgresAdapter;
 /// `information_schema` reports as `data_type = 'USER-DEFINED'` with
 /// `udt_name = 'citext'`. citext is a drop-in case-insensitive text type, so
 /// ILIKE applies unchanged (its value casts to `text` for the predicate and
-/// decodes as `String`). The `udt_name` branch is inert on databases without
-/// the extension — it simply matches no columns. Types that need an explicit
-/// cast to be searchable (`uuid` / `json` / `jsonb` / `xml`) stay out of the
-/// "TEXT column" contract.
+/// decodes as `String`). Types that need an explicit cast to be searchable
+/// (`uuid` / `json` / `jsonb` / `xml`) stay out of the "TEXT column" contract.
+///
+/// The citext branch is narrowed to the type OWNED BY the `citext` extension
+/// (`pg_depend` deptype `'e'` → `pg_extension`), matched by both name and
+/// schema (`udt_schema`). A user-defined composite/enum/domain that merely
+/// shares the name `citext` is NOT a text type — enumerating its column would
+/// emit `<citext-composite> ILIKE $1`, which has no operator and would error
+/// the whole scan. The subquery makes that column simply not match; on a
+/// database without the extension it is likewise inert (matches nothing).
 const TEXT_COLUMNS_SQL: &str = "SELECT c.table_schema, c.table_name, c.column_name \
      FROM information_schema.columns c \
      JOIN information_schema.tables t \
@@ -50,7 +56,14 @@ const TEXT_COLUMNS_SQL: &str = "SELECT c.table_schema, c.table_name, c.column_na
      WHERE c.table_schema = ANY($1) \
        AND t.table_type = 'BASE TABLE' \
        AND (c.data_type IN ('text', 'character varying', 'character') \
-            OR (c.data_type = 'USER-DEFINED' AND c.udt_name = 'citext')) \
+            OR (c.data_type = 'USER-DEFINED' AND c.udt_name = 'citext' \
+                AND EXISTS ( \
+                    SELECT 1 FROM pg_catalog.pg_type ty \
+                    JOIN pg_catalog.pg_namespace tn ON tn.oid = ty.typnamespace \
+                    JOIN pg_catalog.pg_depend dep ON dep.objid = ty.oid AND dep.deptype = 'e' \
+                    JOIN pg_catalog.pg_extension ext ON ext.oid = dep.refobjid \
+                    WHERE ty.typname = c.udt_name AND tn.nspname = c.udt_schema \
+                      AND ext.extname = 'citext'))) \
      ORDER BY c.table_schema, c.table_name, c.ordinal_position";
 
 /// Longest matched-cell value returned to the UI. A single scanned cell can
@@ -336,12 +349,18 @@ mod tests {
     // types or the citext extension branch fails everywhere.
 
     #[test]
-    fn text_columns_sql_covers_builtin_and_citext_types() {
+    fn text_columns_sql_covers_builtin_and_extension_citext() {
         assert!(
             TEXT_COLUMNS_SQL.contains("c.data_type IN ('text', 'character varying', 'character')")
         );
         // citext is an extension type: data_type='USER-DEFINED', udt_name='citext'.
         assert!(TEXT_COLUMNS_SQL.contains("c.data_type = 'USER-DEFINED' AND c.udt_name = 'citext'"));
+        // ...but only when owned by the citext EXTENSION, so a user composite/
+        // enum/domain named `citext` (ILIKE on which would error the scan) is
+        // excluded. Lock the extension-membership predicate.
+        assert!(TEXT_COLUMNS_SQL.contains("pg_catalog.pg_extension"));
+        assert!(TEXT_COLUMNS_SQL.contains("dep.deptype = 'e'"));
+        assert!(TEXT_COLUMNS_SQL.contains("ext.extname = 'citext'"));
     }
 
     // ── clip_value — oversized cell snippet ──────────────────────────────

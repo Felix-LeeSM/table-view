@@ -94,3 +94,66 @@ async fn test_search_values_matches_citext_column() {
     );
     assert_eq!(matched.unwrap().value, "CaseSensitiveNeedle");
 }
+
+/// #1525 remaining-matrix — the citext branch must match ONLY the extension's
+/// type, not a user-defined type that merely shares the name `citext`. Such a
+/// type is not text; enumerating its column would emit
+/// `<citext-composite> ILIKE $1`, which has no operator and would error the
+/// entire scan. This creates a composite type named `citext` in a private
+/// schema and asserts `search_values` returns cleanly with no match (the
+/// column is skipped, not scanned).
+#[tokio::test]
+#[serial_test::serial]
+async fn test_search_values_skips_non_extension_citext_type() {
+    let adapter = match common::setup_adapter(DatabaseType::Postgresql).await {
+        Some(a) => a,
+        None => return,
+    };
+
+    let schema = unique_schema("fakecitext");
+    let table = "rows";
+
+    adapter
+        .execute(&format!("CREATE SCHEMA \"{schema}\""))
+        .await
+        .expect("create schema");
+    // A user composite type named `citext` — NOT the extension's type. Its
+    // schema-qualified name avoids colliding with a possibly-installed
+    // public.citext from a sibling test.
+    adapter
+        .execute(&format!(
+            "CREATE TYPE \"{schema}\".citext AS (payload text)"
+        ))
+        .await
+        .expect("create composite type named citext");
+    adapter
+        .execute(&format!(
+            "CREATE TABLE \"{schema}\".\"{table}\" (id INT PRIMARY KEY, blob \"{schema}\".citext)"
+        ))
+        .await
+        .expect("create table with a fake-citext column");
+    adapter
+        .execute(&format!(
+            "INSERT INTO \"{schema}\".\"{table}\" (id, blob) VALUES (1, ROW('needle'))"
+        ))
+        .await
+        .expect("insert composite value");
+
+    let result = adapter
+        .search_values(std::slice::from_ref(&schema), "needle", None, 10_000)
+        .await;
+
+    adapter
+        .execute(&format!("DROP SCHEMA \"{schema}\" CASCADE"))
+        .await
+        .expect("drop schema");
+    adapter.disconnect_pool().await.unwrap();
+
+    // Must not error (the composite column is not enumerated) and match nothing.
+    let result = result.expect("search_values must not error on a non-extension citext type");
+    assert!(
+        result.matches.is_empty(),
+        "a user composite named citext must be skipped, not scanned; got: {:?}",
+        result.matches
+    );
+}
