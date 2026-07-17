@@ -116,7 +116,8 @@ fn dbms_specific_unsupported_capability_deltas_are_declared() {
     assert!(mssql.has_backend_capability(BackendAdapterCapability::Lifecycle));
     assert!(mssql.has_backend_capability(BackendAdapterCapability::RelationalCatalog));
     assert!(mssql.has_backend_capability(BackendAdapterCapability::RelationalQuery));
-    assert!(!mssql.has_backend_capability(BackendAdapterCapability::RelationalSchemaMutation));
+    // #1071 — MssqlAdapter wires structured table/index/constraint DDL.
+    assert!(mssql.has_backend_capability(BackendAdapterCapability::RelationalSchemaMutation));
 
     let oracle = get_data_source_profile(&DatabaseType::Oracle);
     assert!(oracle.has_backend_capability(BackendAdapterCapability::Lifecycle));

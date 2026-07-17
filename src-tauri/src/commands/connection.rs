@@ -450,7 +450,10 @@ mod tests {
             preview_only: false,
             expected_database: None,
         };
-        assert_mssql_runtime_ddl_unsupported(rdb.drop_table(&drop).await);
+        // #1071 — structured DDL is now wired through the shared dispatch path,
+        // so the trait method builds the T-SQL and then surfaces the runtime
+        // open-connection error (not the old #903 Unsupported boundary).
+        assert_mssql_runtime_requires_open_connection(rdb.drop_table(&drop).await);
     }
 
     #[tokio::test]
@@ -507,13 +510,6 @@ mod tests {
         assert!(
             matches!(result, Err(AppError::Connection(ref message)) if message.contains("SQL Server connection is not open")),
             "expected MSSQL runtime open-connection error, got {result:?}"
-        );
-    }
-
-    fn assert_mssql_runtime_ddl_unsupported<T: std::fmt::Debug>(result: Result<T, AppError>) {
-        assert!(
-            matches!(result, Err(AppError::Unsupported(ref message)) if message.contains("SQL Server structured DDL is outside issue #903")),
-            "expected MSSQL #903 DDL Unsupported, got {result:?}"
         );
     }
 

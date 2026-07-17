@@ -11,7 +11,7 @@
     "elasticsearch": { "schemaMutation": false, "dataMutation": false },
     "mariadb": { "schemaMutation": true, "dataMutation": false },
     "mongodb": { "schemaMutation": false, "dataMutation": true },
-    "mssql": { "schemaMutation": false, "dataMutation": false },
+    "mssql": { "schemaMutation": true, "dataMutation": false },
     "mysql": { "schemaMutation": true, "dataMutation": false },
     "opensearch": { "schemaMutation": false, "dataMutation": false },
     "oracle": { "schemaMutation": false, "dataMutation": false },

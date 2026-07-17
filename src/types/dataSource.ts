@@ -443,6 +443,16 @@ export const MSSQL_CAPABILITIES = capabilities({
     editRows: true,
     requiresPrimaryKeyForEdit: true,
   },
+  // Issue #1071 — the wired MssqlAdapter routes every structured DDL trait
+  // method (create/alter/drop table, create/drop index, add/drop constraint)
+  // to the bounded T-SQL builder (ddl.rs), matching the pg/mysql full-DDL
+  // posture, so all four StructurePanel entry points are truthful claims.
+  ddl: {
+    createTable: true,
+    alterTable: true,
+    createIndex: true,
+    dropObject: true,
+  },
   intelligence: {
     erd: true,
   },

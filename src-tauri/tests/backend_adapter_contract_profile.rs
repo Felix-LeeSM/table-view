@@ -118,12 +118,14 @@ fn backend_profiles_encode_current_database_type_contracts() {
             BackendAdapterCapability::Lifecycle,
             BackendAdapterCapability::RelationalCatalog,
             BackendAdapterCapability::RelationalQuery,
+            BackendAdapterCapability::RelationalSchemaMutation,
         ]
     );
     assert!(mssql.has_backend_capability(BackendAdapterCapability::Lifecycle));
     assert!(mssql.has_backend_capability(BackendAdapterCapability::RelationalCatalog));
     assert!(mssql.has_backend_capability(BackendAdapterCapability::RelationalQuery));
-    assert!(!mssql.has_backend_capability(BackendAdapterCapability::RelationalSchemaMutation));
+    // #1071 — MssqlAdapter wires structured table/index/constraint DDL.
+    assert!(mssql.has_backend_capability(BackendAdapterCapability::RelationalSchemaMutation));
 
     let oracle = get_data_source_profile(&DatabaseType::Oracle);
     assert_eq!(oracle.paradigm, Paradigm::Rdb);
@@ -405,12 +407,14 @@ fn rdbms_integration_gate_profiles_are_coherent() {
             BackendAdapterCapability::Lifecycle,
             BackendAdapterCapability::RelationalCatalog,
             BackendAdapterCapability::RelationalQuery,
+            BackendAdapterCapability::RelationalSchemaMutation,
         ]
     );
     assert!(mssql.has_backend_capability(BackendAdapterCapability::Lifecycle));
     assert!(mssql.has_backend_capability(BackendAdapterCapability::RelationalCatalog));
     assert!(mssql.has_backend_capability(BackendAdapterCapability::RelationalQuery));
-    assert!(!mssql.has_backend_capability(BackendAdapterCapability::RelationalSchemaMutation));
+    // #1071 — MssqlAdapter wires structured table/index/constraint DDL.
+    assert!(mssql.has_backend_capability(BackendAdapterCapability::RelationalSchemaMutation));
 
     let oracle = get_data_source_profile(&DatabaseType::Oracle);
     assert_eq!(oracle.paradigm, Paradigm::Rdb);
