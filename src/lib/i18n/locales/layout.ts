@@ -12,7 +12,6 @@ export const en = {
     records: "Records",
     structure: "Structure",
     tableViewAria: "Table view",
-    erd: "ERD",
     loadingWorkspaceAria: "Loading workspace",
     emptyTableLead:
       "Open a table from the sidebar, or start writing SQL against ",
@@ -64,7 +63,6 @@ export const ko = {
     records: "레코드",
     structure: "구조",
     tableViewAria: "테이블 뷰",
-    erd: "ERD",
     loadingWorkspaceAria: "워크스페이스 불러오는 중",
     emptyTableLead:
       "사이드바에서 테이블을 열거나, 아래 연결에 SQL을 작성하세요 ",

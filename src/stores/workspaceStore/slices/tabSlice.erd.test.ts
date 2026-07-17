@@ -60,4 +60,35 @@ describe("tabSlice — openErdTab (database-level ERD tab)", () => {
     expect(wsA.tabs.filter((t) => t.type === "erd")).toHaveLength(1);
     expect(wsB.tabs.filter((t) => t.type === "erd")).toHaveLength(1);
   });
+
+  // P7 (2026-07-17) — reopen reducer routes non-query tabs (table + erd)
+  // through the `tab-` counter (`type === "query" ? nextQueryId() :
+  // nextTabId()`, tabSlice.reopenLastClosedTab). Without this case, a
+  // regression to `type === "table" ? nextTabId() : nextQueryId()` would give
+  // a reopened erd tab a `query-` id (colliding with the query counter's id
+  // space) and go uncaught.
+  it("reopens a closed erd tab with a fresh 'tab-' id", () => {
+    const store = useWorkspaceStore.getState();
+    store.openErdTab("conn1", "mydb");
+    const closedId =
+      useWorkspaceStore.getState().workspaces.conn1!.mydb!.activeTabId!;
+
+    store.removeTab("conn1", "mydb", closedId);
+    expect(
+      useWorkspaceStore.getState().workspaces.conn1!.mydb!.tabs,
+    ).toHaveLength(0);
+
+    store.reopenLastClosedTab("conn1", "mydb");
+
+    const ws = useWorkspaceStore.getState().workspaces.conn1!.mydb!;
+    expect(ws.tabs).toHaveLength(1);
+    const reopened = ws.tabs[0]!;
+    expect(reopened.type).toBe("erd");
+    expect(reopened.id.startsWith("tab-")).toBe(true);
+    expect(reopened.id.startsWith("query-")).toBe(false);
+    if (reopened.type === "erd") {
+      expect(reopened.database).toBe("mydb");
+    }
+    expect(ws.activeTabId).toBe(reopened.id);
+  });
 });
