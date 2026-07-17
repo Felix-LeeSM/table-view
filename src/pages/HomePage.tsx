@@ -32,6 +32,7 @@ import {
   useConnectionStore,
 } from "@features/connection";
 import ThemePicker from "@components/theme/ThemePicker";
+import RevealLogsButton from "@components/settings/RevealLogsButton";
 import { resetSetting } from "@lib/tauri/settings";
 import { useMruStore } from "@stores/mruStore";
 import { logger } from "@lib/logger";
@@ -325,6 +326,16 @@ export default function HomePage() {
           버튼 strip 제거. 사용자 직접 요청; Q21 9 affordance contract
           의 #1 / #3-b 는 sidebar handle 우클릭 (#3-a) + home-recent
           footer reset (#2) + 다른 7 affordance 로 충분. */}
+
+      {/* Diagnostics footer — reveal the rotating log folder (#1566 / #1599)
+          so a user can attach logs to a bug report without hunting the
+          platform data dir. The launcher footer is the app-level settings
+          surface (theme picker lives here) and is always visible, so support
+          can reliably direct users to it; no dedicated About/Settings screen
+          exists. */}
+      <div className="border-t border-border px-3 py-2">
+        <RevealLogsButton className="w-full justify-start text-muted-foreground" />
+      </div>
 
       {/* Theme picker footer — same control as the legacy Sidebar so the
           user can change themes without leaving Home. */}
