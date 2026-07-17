@@ -5,12 +5,12 @@
 # 외부 인스턴스 재사용 (개발 중 빠른 iteration).
 #
 # 호출 예:
-#   cargo pg-test                 — PG 통합 테스트 (query/schema/fixture)
+#   cargo pg-test                 — PG 통합 테스트 (query/schema/value-search/fixture)
 #   cargo mongo-test              — Mongo 통합 테스트
 #   cargo mysql-test              — MySQL 통합 테스트 (Sprint 296)
 #   cargo db-test                 — PG + Mongo + MySQL 전부
 #   PGHOST=... cargo pg-test      — 외부 PG 재사용
-pg-test = "test --test query_integration --test schema_integration --test fixture_loading"
+pg-test = "test --test query_integration --test schema_integration --test value_search_integration --test fixture_loading"
 mongo-test = "test --test mongo_integration"
 mysql-test = "test --test mysql_integration"
-db-test = "test --test query_integration --test schema_integration --test fixture_loading --test mongo_integration --test mysql_integration"
+db-test = "test --test query_integration --test schema_integration --test value_search_integration --test fixture_loading --test mongo_integration --test mysql_integration"

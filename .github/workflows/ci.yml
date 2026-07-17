@@ -525,6 +525,7 @@ jobs:
             --test storage_integration \
             --test query_integration \
             --test schema_integration \
+            --test value_search_integration \
             --test fixture_loading \
             --test mongo_integration \
             --test mysql_integration \
