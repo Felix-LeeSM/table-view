@@ -732,7 +732,8 @@ mod tests {
     #[tokio::test]
     async fn command_runtime_projects_element_crud_results() {
         // #1466 — per-element hash/list/set/zSet CRUD dispatches without a
-        // typed key confirmation (element removals do not drop the key).
+        // typed key confirmation, even though removing the last element drops
+        // the key (Redis GCs the now-empty collection).
         let adapter = connected_adapter().await;
 
         for (command, expected_name) in [
