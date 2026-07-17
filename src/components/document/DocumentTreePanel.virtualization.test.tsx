@@ -1,6 +1,18 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { render, screen, cleanup, fireEvent } from "@testing-library/react";
+import {
+  act,
+  render,
+  screen,
+  cleanup,
+  fireEvent,
+} from "@testing-library/react";
 import { DocumentTreePanel } from "./DocumentTreePanel";
+
+function flushRaf() {
+  return act(async () => {
+    await new Promise((r) => requestAnimationFrame(() => r(null)));
+  });
+}
 
 // A 1,000-deep object is depth-capped by jsonTree to `MAX_TREE_DEPTH = 200`
 // levels; the deepest emitted container is flagged `truncated` and its children
@@ -157,6 +169,35 @@ describe("DocumentTreePanel virtualization (#1448)", () => {
     render(<DocumentTreePanel value={deepDoc()} fieldName="deep" />);
     scrollToBottom();
     expect(screen.getByTestId("tree-truncated")).toBeInTheDocument();
+  });
+
+  // Issue #1619 E2 — a "…truncated" status row is `focusable: false` in the
+  // roving map (rovingRows sets `focusable: !node.truncated`), so it must stay
+  // OUT of the keyboard tab order. Pressing End (jump to last focusable row)
+  // must land the single tab stop on the deepest SURVIVING container, never on
+  // the truncated marker. Regression guard: if the marker became focusable, End
+  // would anchor a key with no matching tab-stop element and the tree would
+  // lose its only tab stop (zero rows with tabindex=0). (2026-07-17)
+  it("keeps the truncated marker out of the roving tab order (End skips it)", async () => {
+    render(<DocumentTreePanel value={deepDoc()} fieldName="deep" />);
+    scrollToBottom();
+    expect(screen.getByTestId("tree-truncated")).toHaveAttribute(
+      "tabindex",
+      "-1",
+    );
+
+    const list = screen.getByTestId("document-tree-list");
+    fireEvent.keyDown(list, { key: "End" });
+    await flushRaf();
+
+    // The single tab stop survives and sits on the deepest surviving container
+    // (depth 199), not on the truncated marker (depth 200).
+    const surviving = screen.getByTestId(`tree-node-${SURVIVING_PATH}`);
+    expect(surviving).toHaveAttribute("tabindex", "0");
+    const tabbable = screen
+      .getAllByRole("treeitem")
+      .filter((el) => el.getAttribute("tabindex") === "0");
+    expect(tabbable).toEqual([surviving]);
   });
 
   // #1448 review B1 (data integrity) — a depth-capped truncated container had
