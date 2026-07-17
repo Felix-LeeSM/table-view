@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import KvKeyDetailPanel from "./KvKeyDetailPanel";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useSafeModeStore } from "@stores/safeModeStore";
@@ -234,15 +240,21 @@ describe("KvKeyDetailPanel", () => {
     expect(await screen.findByRole("status")).toHaveTextContent(
       /loading stream entries/i,
     );
-    resolveStreamRead({
-      key: "stream:events",
-      entries: [{ id: "2-0", fields: [{ field: "type", value: "logout" }] }],
-      start: "1-0",
-      end: "+",
-      limit: 25,
+    // The read resolves out of band, so flush its re-render inside `act` — this
+    // waits on the vitest testTimeout budget rather than racing RTL's poll-based
+    // findBy default (1000ms), which CI CPU starvation can exhaust before the
+    // entry commits (#1293 flake: "Unable to find an element with the text: 2-0").
+    await act(async () => {
+      resolveStreamRead({
+        key: "stream:events",
+        entries: [{ id: "2-0", fields: [{ field: "type", value: "logout" }] }],
+        start: "1-0",
+        end: "+",
+        limit: 25,
+      });
     });
 
-    expect(await screen.findByText("2-0")).toBeInTheDocument();
+    expect(screen.getByText("2-0")).toBeInTheDocument();
     expect(screen.getByText("type=logout")).toBeInTheDocument();
   });
 
