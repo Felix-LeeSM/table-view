@@ -37,6 +37,8 @@ function fakeUpdate(
 
 // #1439 P3-10 — must match UPDATE_DECLINE_KEY in autoUpdate.ts.
 const DECLINE_KEY = "table-view:update-declined";
+// #1617 C2 — must match UPDATE_HINTED_KEY in autoUpdate.ts.
+const HINTED_KEY = "table-view:update-hinted";
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 describe("checkForUpdatesOnLaunch", () => {
@@ -177,5 +179,59 @@ describe("checkForUpdatesOnLaunch", () => {
     expect(dl).toHaveBeenCalledOnce();
     expect(relaunch).not.toHaveBeenCalled();
     expect(toastError).toHaveBeenCalledOnce();
+  });
+
+  // #1617 C1 — the confirm prompt (native dialog) is awaited on a fire-and-forget
+  // boot path; a dialog IPC rejection was uncaught. It is pre-confirmation, so it
+  // must stay silent like a failed check — not throw, not toast.
+  it("swallows a confirm-prompt rejection without throwing or toasting", async () => {
+    check.mockResolvedValue(fakeUpdate());
+    const confirm = vi.fn(() => Promise.reject(new Error("dialog IPC failed")));
+    await expect(checkForUpdatesOnLaunch(confirm)).resolves.toBeUndefined();
+    expect(confirm).toHaveBeenCalledOnce();
+    expect(toastError).not.toHaveBeenCalled();
+    expect(relaunch).not.toHaveBeenCalled();
+  });
+
+  // #1617 C2 — the deb/rpm manual-update hint must show once per version, not
+  // re-toast the same version on every boot.
+  it("shows the manual-update hint only once for the same version", async () => {
+    invoke.mockResolvedValue(false); // updater_can_self_install => false
+    check.mockResolvedValue(fakeUpdate(undefined, "9.9.9"));
+    await checkForUpdatesOnLaunch(vi.fn());
+    expect(toastInfo).toHaveBeenCalledOnce();
+
+    toastInfo.mockClear();
+    check.mockResolvedValue(fakeUpdate(undefined, "9.9.9"));
+    await checkForUpdatesOnLaunch(vi.fn());
+    expect(toastInfo).not.toHaveBeenCalled();
+  });
+
+  // #1617 C2 — a newer version is a fresh fact worth surfacing again.
+  it("re-shows the manual-update hint for a newer version", async () => {
+    invoke.mockResolvedValue(false);
+    window.localStorage.setItem(HINTED_KEY, "9.9.8");
+    check.mockResolvedValue(fakeUpdate(undefined, "9.9.9"));
+    await checkForUpdatesOnLaunch(vi.fn());
+    expect(toastInfo).toHaveBeenCalledOnce();
+  });
+
+  // #1617 C3 — some updater backends emit Progress without a preceding Started,
+  // leaving total unknown. A stuck "0%" is misleading; fall back to an
+  // indeterminate downloading message with no bogus percent.
+  it("shows an indeterminate message when Progress arrives without Started", async () => {
+    let captured: ((e: DownloadEvent) => void) | undefined;
+    const dl = vi.fn((onEvent?: (e: DownloadEvent) => void) => {
+      captured = onEvent;
+      return Promise.resolve();
+    });
+    check.mockResolvedValue(fakeUpdate(dl));
+    await checkForUpdatesOnLaunch(vi.fn(() => Promise.resolve(true)));
+    toastInfo.mockClear();
+    captured?.({ event: "Progress", data: { chunkLength: 50 } });
+    expect(toastInfo).toHaveBeenCalledOnce();
+    const [message] = toastInfo.mock.calls[0] as [string];
+    expect(message).toContain("9.9.9");
+    expect(message).not.toContain("0%");
   });
 });

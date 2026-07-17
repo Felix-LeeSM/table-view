@@ -20,6 +20,8 @@ export const en = {
       "Version {{version}} is available. Update via your package manager (apt/dnf).",
     // #1437 P2-8 — download progress + explicit failure feedback.
     downloading: "Downloading update {{version}}… {{percent}}%",
+    // #1617 C3 — no Started event => unknown total; indeterminate, no percent.
+    downloadingUnknown: "Downloading update {{version}}…",
     restarting: "Update downloaded — restarting…",
     failed: "Update failed. Please try again later.",
   },
@@ -39,6 +41,7 @@ export const ko = {
     manualHint:
       "버전 {{version}} 사용 가능. 패키지 매니저(apt/dnf)로 업데이트하세요.",
     downloading: "업데이트 {{version}} 다운로드 중… {{percent}}%",
+    downloadingUnknown: "업데이트 {{version}} 다운로드 중…",
     restarting: "업데이트 완료 — 재시작 중…",
     failed: "업데이트 실패. 나중에 다시 시도하세요.",
   },
