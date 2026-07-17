@@ -280,7 +280,11 @@ describe("export Tauri wrappers", () => {
     const tables: SchemaDumpTable[] = [
       { schema: "public", table: "users", columnNames: ["id", "email"] },
     ];
-    const options: SchemaDumpOptions = { include: "both", batchSize: 500 };
+    const options: SchemaDumpOptions = {
+      include: "both",
+      batchSize: 500,
+      dialect: "mysql",
+    };
     invokeMock.mockResolvedValueOnce({ rows_written: 10, bytes_written: 4096 });
 
     await exportSchemaDump(

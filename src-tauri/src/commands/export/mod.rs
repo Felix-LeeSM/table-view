@@ -19,9 +19,11 @@ use crate::commands::connection::AppState;
 use crate::commands::{register_cancel_token, release_cancel_token};
 use crate::db::RdbAdapter;
 use crate::error::AppError;
+use crate::models::DatabaseType;
 
 mod dump_writers;
 mod grid_writers;
+mod mysql_dump;
 // Issue #1443 — `pub` so `commands::export::session::export_grid_*` resolve
 // for `generate_handler!` (the `#[tauri::command]` hidden `__cmd__*` macro
 // items don't follow a `pub use` re-export).
@@ -29,6 +31,7 @@ pub mod session;
 
 use dump_writers::{pg_value_to_sql_literal, qualified_pg_table, quote_pg_identifier};
 use grid_writers::{require_sql_source_table, GridStreamState};
+use mysql_dump::{mysql_value_to_sql_literal, qualified_mysql_table, quote_mysql_identifier};
 
 pub use session::ExportSessionRegistry;
 
@@ -340,6 +343,14 @@ pub struct ExportSchemaDumpOptions {
     /// trade-off — 너무 작으면 cursor RTT, 너무 크면 batch 한 묶음이
     /// receiver 에서 tied up).
     pub batch_size: u32,
+    /// Issue #1641 — INSERT-writer dialect. `mysql`/`mariadb` emit backtick
+    /// identifiers + backslash-aware MySQL string escaping; everything else
+    /// (`postgresql`, `sqlite`, and any unspecified value) uses the ANSI
+    /// double-quote PG writer. `#[serde(default)]` → old payloads without the
+    /// field keep byte-identical PG output. DDL is dialect-shaped upstream in
+    /// the frontend `generateMigrationDDL`, so this only steers the DML body.
+    #[serde(default)]
+    pub dialect: DatabaseType,
 }
 
 /// 호출자가 미리 결정한 (schema, table, column_names) entry. column_names
@@ -354,9 +365,10 @@ pub struct ExportDumpTable {
 }
 
 /// AC-192-05 — Sprint 192 통합. Schema/Database dump (DDL + DML) 을
-/// 한 .sql 파일로 streaming 출력. PG only — MySQL/SQLite adapter 는 Phase
-/// 9 합류 시 `RdbAdapter::stream_table_rows` 의 default `Unsupported` 가
-/// 자동 reject.
+/// 한 .sql 파일로 streaming 출력. INSERT 직렬화는 `options.dialect` 로
+/// 방언화 (#1641): `mysql`/`mariadb` 는 backtick identifier + MySQL string
+/// escape, 그 외 (`postgresql`/`sqlite`) 는 ANSI 더블쿼트. RDB 가 아닌
+/// adapter 는 `stream_table_rows` default `Unsupported` 로 자동 reject.
 ///
 /// Flow:
 ///  1. `query_tokens` 에 `export_id` 등록 (Sprint 180 패턴 reuse).
@@ -449,8 +461,11 @@ async fn export_schema_dump_inner(
     result
 }
 
+/// `pub` so the docker-backed `mysql_integration` round-trip (#1641) can drive
+/// the real dump (cursor stream → mpsc drain → dialect INSERT formatting) via
+/// `&AppState` without going through the Tauri command `Window`/`State`.
 #[allow(clippy::too_many_arguments)]
-async fn run_schema_dump(
+pub async fn run_schema_dump(
     state: &AppState,
     connection_id: &str,
     target_path: &Path,
@@ -549,6 +564,27 @@ async fn stream_schema_dump(
         })?;
         let rdb: &dyn RdbAdapter = adapter.as_rdb()?;
 
+        // Issue #1641 — pick the INSERT-writer dialect once for the whole
+        // dump. fn pointers keep the per-row/per-identifier hot loop
+        // branch-free. `mysql`/`mariadb` → backtick + MySQL escaping;
+        // everything else (`postgresql`/`sqlite`) → ANSI double-quote PG.
+        type QualifyFn = fn(&str, &str) -> String;
+        type QuoteIdentFn = fn(&str) -> String;
+        type LiteralFn = fn(&JsonValue) -> String;
+        let (qualify, quote_ident, to_literal): (QualifyFn, QuoteIdentFn, LiteralFn) =
+            match options.dialect {
+                DatabaseType::Mysql | DatabaseType::Mariadb => (
+                    qualified_mysql_table,
+                    quote_mysql_identifier,
+                    mysql_value_to_sql_literal,
+                ),
+                _ => (
+                    qualified_pg_table,
+                    quote_pg_identifier,
+                    pg_value_to_sql_literal,
+                ),
+            };
+
         for entry in tables {
             if let Some(t) = cancel {
                 if t.is_cancelled() {
@@ -560,11 +596,11 @@ async fn stream_schema_dump(
                 continue;
             }
 
-            let qualified = qualified_pg_table(&entry.schema, &entry.table);
+            let qualified = qualify(&entry.schema, &entry.table);
             let column_list = entry
                 .column_names
                 .iter()
-                .map(|n| quote_pg_identifier(n))
+                .map(|n| quote_ident(n))
                 .collect::<Vec<_>>()
                 .join(", ");
 
@@ -597,11 +633,7 @@ async fn stream_schema_dump(
                         }
                     }
                     for row in &batch {
-                        let values = row
-                            .iter()
-                            .map(pg_value_to_sql_literal)
-                            .collect::<Vec<_>>()
-                            .join(", ");
+                        let values = row.iter().map(&to_literal).collect::<Vec<_>>().join(", ");
                         let line =
                             format!("INSERT INTO {qualified} ({column_list}) VALUES ({values});\n");
                         writer

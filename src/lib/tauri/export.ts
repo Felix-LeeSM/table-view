@@ -3,6 +3,7 @@
 import { invoke } from "@tauri-apps/api/core";
 
 import { toIpcSafeRows } from "@/lib/jsonCell";
+import type { DdlDialect } from "@/lib/sql/ddlGenerator";
 
 export type ExportFormat = "csv" | "tsv" | "sql" | "json";
 
@@ -136,8 +137,10 @@ export async function writeTextFileExport(
 
 /**
  * 통합 schema/database dump. DDL header + DML INSERT 본체를 한 .sql 파일로
- * streaming. PG only — backend 가 MySQL/SQLite 를 만나면 `Unsupported` 로
- * reject.
+ * streaming. INSERT 직렬화는 `options.dialect` 로 방언화 (#1641): `mysql`/
+ * `mariadb` 는 backtick identifier + MySQL string escape, 그 외 (`postgresql`/
+ * `sqlite`) 는 ANSI 더블쿼트. RDB 가 아닌 adapter 는 backend 가 `Unsupported`
+ * 로 reject.
  *
  * `tables[].columnNames` 는 source order 로 호출자가 결정 — backend 의
  * `serde_json::Map` lookup 이 이 순서로 row 를 직렬화한다. `ddlHeader` 가
@@ -154,6 +157,8 @@ export interface SchemaDumpTable {
 export interface SchemaDumpOptions {
   include: SchemaDumpInclude;
   batchSize: number;
+  /** #1641 — INSERT-writer dialect (matches the DDL dialect). */
+  dialect: DdlDialect;
 }
 
 export async function exportSchemaDump(
