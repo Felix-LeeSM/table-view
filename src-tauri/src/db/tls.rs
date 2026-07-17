@@ -85,6 +85,9 @@ mod tests {
             replica_set: None,
             tls_enabled,
             trust_server_certificate: trust,
+            oracle_use_sid: None,
+            wallet_path: None,
+            wallet_password: String::new(),
         }
     }
 

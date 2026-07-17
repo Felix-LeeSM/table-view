@@ -140,7 +140,8 @@ impl RedisCommand {
             | RedisCommand::Expire { .. }
             | RedisCommand::Persist { .. } => RedisCommandEffect::Ttl,
             RedisCommand::XRange { .. } => RedisCommandEffect::Stream,
-            // Element removals lose data but never drop the key itself, so they
+            // Element removals lose data and can drop the key itself once the
+            // last element is gone (Redis GCs the now-empty collection), so they
             // are destructive without a typed key-confirmation gate (#1466).
             RedisCommand::Del { .. }
             | RedisCommand::HDel { .. }
@@ -698,7 +699,8 @@ mod tests {
         ));
 
         // Element removals are destructive but never require a typed key
-        // confirmation (they do not drop the key).
+        // confirmation, even though removing the last element drops the key
+        // (Redis GCs the now-empty collection).
         for command in ["HDEL h f", "LREM l 1 v", "SREM s m", "ZREM z m"] {
             let parsed = parse_redis_command(command).unwrap();
             assert_eq!(parsed.effect(), RedisCommandEffect::Destructive);

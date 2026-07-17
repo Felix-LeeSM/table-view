@@ -30,6 +30,9 @@ fn sqlite_public(path: &str) -> ConnectionConfigPublic {
         replica_set: None,
         tls_enabled: None,
         trust_server_certificate: None,
+        oracle_use_sid: None,
+        wallet_path: None,
+        has_wallet_password: false,
     }
 }
 
@@ -103,6 +106,7 @@ fn save_connection_accepts_sqlite_without_host() {
     let saved = save_connection(SaveConnectionRequest {
         connection: sqlite_public(db_path.to_str().unwrap()),
         password: Some(String::new()),
+        wallet_password: None,
         is_new: Some(false),
     })
     .unwrap();
@@ -121,6 +125,7 @@ fn save_connection_rejects_sqlite_without_file_path() {
     let result = save_connection(SaveConnectionRequest {
         connection: sqlite_public("   "),
         password: Some(String::new()),
+        wallet_password: None,
         is_new: Some(false),
     });
 
@@ -139,6 +144,7 @@ fn save_connection_rejects_sqlite_relative_file_path() {
     let result = save_connection(SaveConnectionRequest {
         connection: sqlite_public("relative.sqlite"),
         password: Some(String::new()),
+        wallet_password: None,
         is_new: Some(false),
     });
 
@@ -162,6 +168,7 @@ fn save_connection_rejects_internal_app_state_db_path() {
     let result = save_connection(SaveConnectionRequest {
         connection: sqlite_public(state_path.to_str().unwrap()),
         password: Some(String::new()),
+        wallet_password: None,
         is_new: Some(false),
     });
 
@@ -189,6 +196,7 @@ fn save_connection_rejects_normalized_internal_app_state_db_path_before_file_exi
     let result = save_connection(SaveConnectionRequest {
         connection: sqlite_public(&normalized_equivalent),
         password: Some(String::new()),
+        wallet_password: None,
         is_new: Some(false),
     });
 
@@ -216,6 +224,7 @@ async fn test_connection_routes_sqlite_to_adapter() {
     let result = test_connection(TestConnectionRequest {
         config: sqlite_public(db_path.to_str().unwrap()),
         password: Some(String::new()),
+        wallet_password: None,
         existing_id: None,
     })
     .await
@@ -236,6 +245,7 @@ async fn test_connection_rejects_internal_app_state_db_path() {
     let result = test_connection(TestConnectionRequest {
         config: sqlite_public(state_path.to_str().unwrap()),
         password: Some(String::new()),
+        wallet_password: None,
         existing_id: None,
     })
     .await;
@@ -272,6 +282,7 @@ async fn create_sqlite_database_file_creates_new_valid_database() {
     let result = test_connection(TestConnectionRequest {
         config: sqlite_public(&created),
         password: Some(String::new()),
+        wallet_password: None,
         existing_id: None,
     })
     .await

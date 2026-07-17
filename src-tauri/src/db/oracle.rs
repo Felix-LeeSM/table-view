@@ -3,9 +3,12 @@
 //! Issue #1072 dissolves the bounded #905/#906 runtime slice and wires the full
 //! `OracleAdapter` into production: service-name lifecycle, catalog metadata,
 //! SELECT/DML batch, cooperative cancel, tabular table-data queries, structured
-//! table/index/constraint DDL, and PL/SQL body/package source. Raw DDL/admin
-//! execution, switch-database, trigger introspection (deferred, empty list),
-//! SID/TNS/wallet/TLS, and advanced auth remain unsupported or unclaimed.
+//! table/index/constraint DDL, and PL/SQL body/package source. Issue #1065
+//! adds SID connections (`Config::with_sid`) and Oracle wallet mTLS
+//! (`Config::with_wallet`, `ewallet.pem`) with a host/service/SID injection
+//! whitelist. Raw DDL/admin execution, switch-database, trigger introspection
+//! (deferred, empty list), TNS descriptors, 1-way TLS (TCPS+CA), and advanced
+//! auth remain unsupported or unclaimed.
 
 mod admin;
 mod catalog;
@@ -143,9 +146,10 @@ impl OracleAdapter {
         timeout_secs: u64,
     ) -> Result<OracleConfig, AppError> {
         let host = config.host.trim();
-        let service_name = config.database.trim();
+        // `database` carries the service name, or the SID when `oracle_use_sid`.
+        let service = config.database.trim();
         let username = config.user.trim();
-        let service_name_upper = service_name.to_ascii_uppercase();
+        let use_sid = config.oracle_use_sid.unwrap_or(false);
 
         if host.is_empty() {
             return Err(AppError::Validation("Oracle host is required".into()));
@@ -153,23 +157,14 @@ impl OracleAdapter {
         if config.port == 0 {
             return Err(AppError::Validation("Oracle port is required".into()));
         }
-        if service_name.is_empty() {
+        if service.is_empty() {
             return Err(AppError::Validation(
-                "Oracle service name is required".into(),
-            ));
-        }
-        if service_name_upper.contains("SID=") {
-            return Err(AppError::Validation(
-                "Oracle SID connections are unsupported in issue #904; use a service name".into(),
-            ));
-        }
-        if service_name_upper.contains("DESCRIPTION=")
-            || service_name_upper.contains("CONNECT_DATA=")
-            || service_name.starts_with("//")
-            || service_name.contains('/')
-        {
-            return Err(AppError::Validation(
-                "Oracle TNS/easy-connect descriptors are unsupported in issue #904; use host, port, and service name fields".into(),
+                if use_sid {
+                    "Oracle SID is required"
+                } else {
+                    "Oracle service name is required"
+                }
+                .into(),
             ));
         }
         if username.is_empty() {
@@ -177,33 +172,90 @@ impl OracleAdapter {
         }
         if config.password.is_empty() {
             return Err(AppError::Validation(
-                "Oracle password authentication is required; advanced/external auth is unsupported in issue #904".into(),
+                "Oracle password authentication is required; advanced/external auth is unsupported (#1065)".into(),
             ));
         }
+        // #1065 — character whitelist at the trust boundary. The driver's
+        // `build_connect_string` interpolates host/service/SID verbatim into a
+        // TNS descriptor with zero escaping, so a `)(` value could inject
+        // descriptor clauses (real trigger: an imported export envelope,
+        // threat model §2.1). This also subsumes the old TNS/`//` substring
+        // rejections. Oracle identifiers are `[A-Za-z0-9_$#.-]` in practice
+        // (service names carry `.`/`-`, e.g. ADB `..._high.adb.oraclecloud.com`).
+        if !is_oracle_identifier_safe(host) {
+            return Err(AppError::Validation(
+                "Oracle host contains unsupported characters; use a plain hostname or IP".into(),
+            ));
+        }
+        if !is_oracle_identifier_safe(service) {
+            return Err(AppError::Validation(
+                format!(
+                    "Oracle {} contains unsupported characters; TNS/easy-connect descriptors are not supported (#1065)",
+                    if use_sid { "SID" } else { "service name" }
+                ),
+            ));
+        }
+        // Mongo-only fields stay rejected — Oracle never reads them.
         if has_non_empty(&config.auth_source) {
             return Err(AppError::Validation(
-                "Oracle SID/TNS/advanced auth fields are unsupported in issue #904; use service-name username/password auth".into(),
+                "Oracle advanced auth fields are unsupported; use service-name username/password auth (#1065)".into(),
             ));
         }
         if has_non_empty(&config.replica_set) {
             return Err(AppError::Validation(
-                "Oracle TNS/wallet routing fields are unsupported in issue #904; use host, port, and service name".into(),
+                "Oracle routing fields are unsupported; use host, port, and service name (#1065)"
+                    .into(),
             ));
         }
+        // The MSSQL-only trust/tls toggles are never exposed for Oracle — the
+        // driver's `danger_accept_invalid_certs` is a no-op (threat model
+        // §0.1/D1), so honoring them would be a lie. The wallet field is the
+        // only Oracle TLS trigger.
         if config.tls_enabled.unwrap_or(false) || config.trust_server_certificate.unwrap_or(false) {
             return Err(AppError::Validation(
-                "Oracle wallet/TLS modes are unsupported in issue #904; use service-name username/password without wallet options".into(),
+                "Oracle uses an mTLS wallet, not the trust-server-certificate toggle; leave those MSSQL options unset (#1065)".into(),
             ));
         }
 
-        Ok(OracleConfig::new(
-            host,
-            config.port,
-            service_name,
-            username,
-            config.password.as_str(),
-        )
-        .connect_timeout(Duration::from_secs(timeout_secs)))
+        let mut oracle_config = if use_sid {
+            OracleConfig::with_sid(
+                host,
+                config.port,
+                service,
+                username,
+                config.password.as_str(),
+            )
+        } else {
+            OracleConfig::new(
+                host,
+                config.port,
+                service,
+                username,
+                config.password.as_str(),
+            )
+        };
+
+        // #1065 — Oracle wallet (mTLS): reference the user's wallet directory.
+        // NOTE: never `{:?}` `oracle_config` — the crate's derived `Debug`
+        // prints `password`/`wallet_password` verbatim (threat model §0.1/§2.5).
+        if let Some(wallet_path) = config
+            .wallet_path
+            .as_deref()
+            .map(str::trim)
+            .filter(|path| !path.is_empty())
+        {
+            warn_on_loose_wallet_permissions(wallet_path);
+            let wallet_password = if config.wallet_password.is_empty() {
+                None
+            } else {
+                Some(config.wallet_password.as_str())
+            };
+            oracle_config = oracle_config
+                .with_wallet(wallet_path, wallet_password)
+                .map_err(|error| map_oracle_wallet_error(wallet_path, error))?;
+        }
+
+        Ok(oracle_config.connect_timeout(Duration::from_secs(timeout_secs)))
     }
 
     async fn open_connection(
@@ -515,10 +567,53 @@ fn connection_timeout_secs(config: &ConnectionConfig) -> u64 {
 }
 
 /// Issue #1453 — Oracle connect/ping errors can echo a DSN / URL with
-/// credentials; route through the redacting constructor.
+/// credentials; route through the redacting constructor. #1065 extends the
+/// redact contract to also mask filesystem paths / cert DNs (wallet + TLS DN
+/// leaks) via `redact_paths_and_dn`.
 fn map_oracle_connection_error(error: oracle_rs::Error) -> AppError {
-    AppError::connection_redacted(error.to_string())
+    let masked = crate::storage::sql_redact::redact_paths_and_dn(&error.to_string());
+    AppError::connection_redacted(masked)
 }
+
+/// #1065 — wallet-load failures from the driver echo the wallet path (leaks
+/// the home-directory username / internal topology). Mask the exact path plus
+/// any residual path/DN before routing through the redacting constructor.
+fn map_oracle_wallet_error(wallet_path: &str, error: oracle_rs::Error) -> AppError {
+    let masked = error.to_string().replace(wallet_path, "***");
+    let masked = crate::storage::sql_redact::redact_paths_and_dn(&masked);
+    AppError::connection_redacted(masked)
+}
+
+/// #1065 — character whitelist for Oracle host / service name / SID at the
+/// `connect_config` trust boundary. See the injection note in `connect_config`.
+fn is_oracle_identifier_safe(value: &str) -> bool {
+    !value.is_empty()
+        && value
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '$' | '#' | '.' | '-'))
+}
+
+/// #1065 — warn (do not fail) when the wallet directory is group/other
+/// accessible. The wallet holds the client private key; loose permissions
+/// expose it to other local users / sync agents. The path is deliberately
+/// omitted from the log line (leak avoidance); only the octal mode is shown.
+#[cfg(unix)]
+fn warn_on_loose_wallet_permissions(wallet_path: &str) {
+    use std::os::unix::fs::PermissionsExt;
+    if let Ok(meta) = std::fs::metadata(wallet_path) {
+        let mode = meta.permissions().mode();
+        if mode & 0o077 != 0 {
+            tracing::warn!(
+                "Oracle wallet directory is group/other-accessible (mode {:o}); \
+                 restrict it to 0700 to protect the client private key",
+                mode & 0o7777
+            );
+        }
+    }
+}
+
+#[cfg(not(unix))]
+fn warn_on_loose_wallet_permissions(_wallet_path: &str) {}
 
 fn has_non_empty(value: &Option<String>) -> bool {
     value

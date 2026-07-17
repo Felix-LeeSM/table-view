@@ -23,6 +23,9 @@ fn oracle_public() -> ConnectionConfigPublic {
         replica_set: None,
         tls_enabled: None,
         trust_server_certificate: None,
+        oracle_use_sid: None,
+        wallet_path: None,
+        has_wallet_password: false,
     }
 }
 
@@ -31,6 +34,7 @@ async fn test_connection_dispatches_oracle_validation_instead_of_declared_only_r
     let result = test_connection(TestConnectionRequest {
         config: oracle_public(),
         password: Some("pw".into()),
+        wallet_password: None,
         existing_id: None,
     })
     .await;

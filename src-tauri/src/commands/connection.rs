@@ -105,6 +105,10 @@ pub struct SaveConnectionRequest {
     pub connection: ConnectionConfigPublic,
     #[serde(default)]
     pub password: Option<String>,
+    /// #1065 — Oracle wallet password, same three-way semantics as `password`
+    /// (`None` keep / `Some("")` clear / `Some(s)` set). Absent for non-Oracle.
+    #[serde(default)]
+    pub wallet_password: Option<String>,
     #[serde(default)]
     pub is_new: Option<bool>,
 }
@@ -118,6 +122,11 @@ pub struct TestConnectionRequest {
     pub config: ConnectionConfigPublic,
     #[serde(default)]
     pub password: Option<String>,
+    /// #1065 — Oracle wallet password; same three-way semantics as `password`.
+    /// When `None` and `existing_id` is set, the backend substitutes the
+    /// stored wallet password without exposing it.
+    #[serde(default)]
+    pub wallet_password: Option<String>,
     #[serde(default)]
     pub existing_id: Option<String>,
 }
@@ -333,6 +342,9 @@ pub(super) mod test_helpers {
             replica_set: None,
             tls_enabled: None,
             trust_server_certificate: None,
+            oracle_use_sid: None,
+            wallet_path: None,
+            wallet_password: String::new(),
         }
     }
 
@@ -347,6 +359,7 @@ pub(super) mod test_helpers {
         let req = SaveConnectionRequest {
             connection: ConnectionConfigPublic::from(&conn),
             password,
+            wallet_password: None,
             is_new,
         };
         super::save_connection(req)

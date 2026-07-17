@@ -446,6 +446,9 @@ pub async fn mysql_test_config() -> Option<ConnectionConfig> {
         replica_set: None,
         tls_enabled: None,
         trust_server_certificate: None,
+        oracle_use_sid: None,
+        wallet_path: None,
+        wallet_password: String::new(),
     })
 }
 
@@ -478,6 +481,9 @@ pub fn test_config(db_type: DatabaseType) -> ConnectionConfig {
             replica_set: None,
             tls_enabled: None,
             trust_server_certificate: None,
+            oracle_use_sid: None,
+            wallet_path: None,
+            wallet_password: String::new(),
         },
         DatabaseType::Mysql => ConnectionConfig {
             id: "test-conn".to_string(),
@@ -498,6 +504,9 @@ pub fn test_config(db_type: DatabaseType) -> ConnectionConfig {
             replica_set: None,
             tls_enabled: None,
             trust_server_certificate: None,
+            oracle_use_sid: None,
+            wallet_path: None,
+            wallet_password: String::new(),
         },
         DatabaseType::Mongodb => ConnectionConfig {
             id: "test-conn".to_string(),
@@ -518,6 +527,9 @@ pub fn test_config(db_type: DatabaseType) -> ConnectionConfig {
             replica_set: None,
             tls_enabled: None,
             trust_server_certificate: None,
+            oracle_use_sid: None,
+            wallet_path: None,
+            wallet_password: String::new(),
         },
         other => panic!("test_config: unsupported DatabaseType {:?}", other),
     }
@@ -552,6 +564,9 @@ pub async fn pg_test_config() -> Option<ConnectionConfig> {
         replica_set: None,
         tls_enabled: None,
         trust_server_certificate: None,
+        oracle_use_sid: None,
+        wallet_path: None,
+        wallet_password: String::new(),
     })
 }
 
@@ -580,6 +595,9 @@ pub async fn mongo_test_config() -> Option<ConnectionConfig> {
         replica_set: None,
         tls_enabled: None,
         trust_server_certificate: None,
+        oracle_use_sid: None,
+        wallet_path: None,
+        wallet_password: String::new(),
     })
 }
 
@@ -616,6 +634,9 @@ pub async fn setup_adapter(db_type: DatabaseType) -> Option<PostgresAdapter> {
         replica_set: None,
         tls_enabled: None,
         trust_server_certificate: None,
+        oracle_use_sid: None,
+        wallet_path: None,
+        wallet_password: String::new(),
     };
 
     let adapter = PostgresAdapter::new();
@@ -661,6 +682,9 @@ pub async fn setup_mysql_adapter() -> Option<MysqlAdapter> {
         replica_set: None,
         tls_enabled: None,
         trust_server_certificate: None,
+        oracle_use_sid: None,
+        wallet_path: None,
+        wallet_password: String::new(),
     };
 
     let adapter = MysqlAdapter::new();
@@ -707,6 +731,9 @@ pub async fn setup_mssql_adapter() -> Option<MssqlAdapter> {
         replica_set: None,
         tls_enabled: Some(true),
         trust_server_certificate: Some(true),
+        oracle_use_sid: None,
+        wallet_path: None,
+        wallet_password: String::new(),
     };
 
     let adapter = MssqlAdapter::new();
@@ -748,6 +775,9 @@ pub async fn setup_mongo_adapter() -> Option<MongoAdapter> {
         replica_set: None,
         tls_enabled: None,
         trust_server_certificate: None,
+        oracle_use_sid: None,
+        wallet_path: None,
+        wallet_password: String::new(),
     };
 
     let adapter = MongoAdapter::new();

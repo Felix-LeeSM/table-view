@@ -46,6 +46,9 @@ fn mssql_public(
         replica_set: None,
         tls_enabled,
         trust_server_certificate,
+        oracle_use_sid: None,
+        wallet_path: None,
+        has_wallet_password: false,
     }
 }
 
@@ -75,6 +78,9 @@ fn mssql_config(
         replica_set: None,
         tls_enabled,
         trust_server_certificate,
+        oracle_use_sid: None,
+        wallet_path: None,
+        wallet_password: String::new(),
     }
 }
 
@@ -180,6 +186,7 @@ async fn test_connection_dispatches_mssql_validation_instead_of_declared_only_re
     let result = test_connection(TestConnectionRequest {
         config: mssql_public("localhost\\SQLEXPRESS", port, Some(1), Some(false), None),
         password: Some("pw".into()),
+        wallet_password: None,
         existing_id: None,
     })
     .await;
@@ -199,6 +206,7 @@ async fn test_connection_requires_tls_trust_decision_before_network() {
     let result = test_connection(TestConnectionRequest {
         config: mssql_public("127.0.0.1", port, Some(1), Some(true), None),
         password: Some("pw".into()),
+        wallet_password: None,
         existing_id: None,
     })
     .await;

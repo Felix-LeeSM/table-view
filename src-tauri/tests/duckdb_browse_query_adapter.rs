@@ -29,6 +29,9 @@ fn duckdb_config(path: &str, read_only: bool) -> ConnectionConfig {
         replica_set: None,
         tls_enabled: None,
         trust_server_certificate: None,
+        oracle_use_sid: None,
+        wallet_path: None,
+        wallet_password: String::new(),
     }
 }
 

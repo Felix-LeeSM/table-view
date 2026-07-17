@@ -276,6 +276,10 @@ export function normalizeConnectionConfig(value: unknown): ConnectionConfig {
     trustServerCertificate: optionalBool(
       pick(r, "trustServerCertificate", "trust_server_certificate"),
     ),
+    oracleUseSid: optionalBool(pick(r, "oracleUseSid", "oracle_use_sid")),
+    walletPath: optionalString(pick(r, "walletPath", "wallet_path")),
+    hasWalletPassword:
+      r.hasWalletPassword === true || r.has_wallet_password === true,
   };
 }
 

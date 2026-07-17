@@ -660,6 +660,9 @@ fn valkey_config(port: u16, database: &str) -> ConnectionConfig {
         replica_set: None,
         tls_enabled: None,
         trust_server_certificate: None,
+        oracle_use_sid: None,
+        wallet_path: None,
+        wallet_password: String::new(),
     }
 }
 
@@ -683,5 +686,8 @@ fn redis_config(port: u16, database: &str) -> ConnectionConfig {
         replica_set: None,
         tls_enabled: None,
         trust_server_certificate: None,
+        oracle_use_sid: None,
+        wallet_path: None,
+        wallet_password: String::new(),
     }
 }

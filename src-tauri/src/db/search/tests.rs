@@ -1074,6 +1074,9 @@ fn search_config_for(port: u16, db_type: DatabaseType) -> ConnectionConfig {
         replica_set: None,
         tls_enabled: Some(false),
         trust_server_certificate: None,
+        oracle_use_sid: None,
+        wallet_path: None,
+        wallet_password: String::new(),
     }
 }
 

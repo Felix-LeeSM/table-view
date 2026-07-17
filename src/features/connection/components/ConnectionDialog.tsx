@@ -128,6 +128,12 @@ export default function ConnectionDialog({
     setPasswordInput,
     clearPassword,
     setClearPassword,
+    walletPasswordInput,
+    setWalletPasswordInput,
+    clearWalletPassword,
+    setClearWalletPassword,
+    hadWalletPassword,
+    resolveWalletPassword,
     isEditing,
     hadPassword,
     isFileConnection,
@@ -172,6 +178,7 @@ export default function ConnectionDialog({
       const draft: ConnectionDraft = trimDraft({
         ...form,
         password: resolvePassword(),
+        walletPassword: resolveWalletPassword(),
       });
       const unsupportedMessage = getMssqlConnectionUnsupportedMessage(draft);
       if (unsupportedMessage) {
@@ -220,7 +227,11 @@ export default function ConnectionDialog({
     // whitespace into Name/Host gets the same "required" error they'd
     // get from a blank input. The existing `.trim()` checks already
     // covered Name; the trim helper centralises the policy.
-    const trimmed = trimDraft({ ...form, password: resolvePassword() });
+    const trimmed = trimDraft({
+      ...form,
+      password: resolvePassword(),
+      walletPassword: resolveWalletPassword(),
+    });
     if (!trimmed.name) {
       failValidation("name", t("dialog.errorNameRequired"));
       return;
@@ -366,6 +377,11 @@ export default function ConnectionDialog({
             hadPassword={hadPassword}
             clearPassword={clearPassword}
             setClearPassword={setClearPassword}
+            walletPasswordInput={walletPasswordInput}
+            setWalletPasswordInput={setWalletPasswordInput}
+            hadWalletPassword={hadWalletPassword}
+            clearWalletPassword={clearWalletPassword}
+            setClearWalletPassword={setClearWalletPassword}
             inputClass={inputClass}
             labelClass={labelClass}
             invalidField={invalidField}
