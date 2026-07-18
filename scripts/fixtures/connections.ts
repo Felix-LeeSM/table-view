@@ -8,12 +8,14 @@
 // moment the user clicks Connect), so the fixture re-implements the same
 // envelope (12-byte nonce + ciphertext + 16-byte GCM tag, base64) in Node.
 // The AES key MUST be the one the app decrypts with, and its home moved in
-// Sprint 356: the app now keeps the file-key in the OS keyring (macOS Keychain
-// entry `com.tableview.app.file-key`) and secure-deletes the disk `.key` after
-// migration. So once the app has run on macOS the key lives ONLY in the
-// Keychain — the fixture reads it from there (see loadOrCreateAppKey). Minting
-// a fresh disk key while the app already holds a keyring key is exactly what
-// produced `error: aead::Error` at Connect (key divergence).
+// Sprint 356: the app now keeps the file-key in the OS keyring — macOS
+// Keychain, Windows Credential Manager, Linux Secret Service (see
+// src-tauri/Cargo.toml keyring backends) — under `com.tableview.app.file-key`,
+// and secure-deletes the disk `.key` after migration. So once the app has run,
+// the key lives in the keyring, not on disk; the fixture reads it from there on
+// every platform (see loadOrCreateAppKey / keyringLookupArgs). Minting a fresh
+// disk key while the app already holds a keyring key is exactly what produced
+// `error: aead::Error` at Connect (key divergence).
 import {
   readFileSync,
   writeFileSync,
@@ -110,14 +112,22 @@ function keyFilePath(): string {
 }
 
 // OS keyring entry the app stores the file-key under — matches
-// `KEYRING_ENTRY_NAME` in src-tauri/src/storage/crypto.rs. Both the Keychain
-// service and account are this string; the stored value is the raw 32-byte key.
+// `KEYRING_ENTRY_NAME` in src-tauri/src/storage/crypto.rs. The app builds its
+// keyring `Entry::new(service, username)` with this string for BOTH the service
+// and the username; the stored value is the raw 32-byte key.
 const KEYRING_ENTRY = "com.tableview.app.file-key";
 
-// `security find-generic-password -w` prints the app's raw key as 64 lowercase
-// hex chars (+ trailing newline). Accept hex first, then defensively base64 or
-// raw bytes, but only ever return exactly 32 bytes. Exported for unit coverage
-// (the `security` shell-out around it can't run in headless CI).
+// Windows Credential Manager target name for the entry. keyring v3
+// (windows.rs: `target_name: format!("{user}.{service}")`) derives it from the
+// username and service, which are both KEYRING_ENTRY here. Exported for the
+// schema-guard unit test.
+export const WIN_CRED_TARGET = `${KEYRING_ENTRY}.${KEYRING_ENTRY}`;
+
+// Normalize the key bytes printed by the per-OS keyring reader to exactly 32
+// bytes: macOS `security -w` emits 64 lowercase hex chars (+ newline), the
+// Windows PowerShell reader emits base64, Linux `secret-tool` emits the raw
+// bytes. Try hex → base64 → raw, and only ever return a 32-byte key. Exported
+// for unit coverage (the shell-outs around it can't run in headless CI).
 export function decodeKeyringSecret(raw: Buffer): Buffer | null {
   const text = raw.toString("utf8").trim();
   if (/^[0-9a-fA-F]{64}$/.test(text)) return Buffer.from(text, "hex");
@@ -128,37 +138,132 @@ export function decodeKeyringSecret(raw: Buffer): Buffer | null {
   return null;
 }
 
-// macOS: read the app's file-key straight from the Keychain so the fixture
-// encrypts with the SAME key the app decrypts with. Returns null off macOS,
-// when the entry is absent (exit 44, no prompt), or when the Keychain is
-// locked/denied. First access triggers a one-time Keychain prompt (the item
-// was created by the app, not this process) — approve with "Always Allow".
-function readMacKeyringKey(): Buffer | null {
-  if (platform() !== "darwin") return null;
-  try {
-    const out = execFileSync(
-      "security",
-      ["find-generic-password", "-s", KEYRING_ENTRY, "-a", KEYRING_ENTRY, "-w"],
-      { stdio: ["ignore", "pipe", "ignore"] },
-    );
-    return decodeKeyringSecret(out);
-  } catch {
-    return null;
+// PowerShell that P/Invokes advapi32!CredReadW for the generic credential and
+// prints its raw CredentialBlob (the 32-byte key) as base64. There is no CLI
+// that reveals a Credential Manager blob, so this is the stdlib path. Exits 44
+// (matching `security`'s not-found) when the credential is absent.
+function winCredReadScript(): string {
+  return [
+    "$ErrorActionPreference='Stop'",
+    "$sig=@'",
+    "using System;",
+    "using System.Runtime.InteropServices;",
+    "public static class Cred {",
+    "  [StructLayout(LayoutKind.Sequential)]",
+    "  public struct CREDENTIAL {",
+    "    public uint Flags; public uint Type; public IntPtr TargetName; public IntPtr Comment;",
+    "    public long LastWritten;",
+    "    public uint CredentialBlobSize; public IntPtr CredentialBlob; public uint Persist;",
+    "    public uint AttributeCount; public IntPtr Attributes; public IntPtr TargetAlias; public IntPtr UserName;",
+    "  }",
+    '  [DllImport("advapi32.dll", CharSet=CharSet.Unicode, SetLastError=true)]',
+    "  public static extern bool CredReadW(string t, uint ty, uint f, out IntPtr c);",
+    '  [DllImport("advapi32.dll")] public static extern void CredFree(IntPtr c);',
+    "}",
+    "'@",
+    "Add-Type $sig",
+    "$p=[IntPtr]::Zero",
+    `if(-not [Cred]::CredReadW('${WIN_CRED_TARGET}',1,0,[ref]$p)){ exit 44 }`,
+    "try {",
+    "  $c=[Runtime.InteropServices.Marshal]::PtrToStructure($p,[type]([Cred+CREDENTIAL]))",
+    "  $n=$c.CredentialBlobSize",
+    "  $b=New-Object byte[] $n",
+    "  [Runtime.InteropServices.Marshal]::Copy($c.CredentialBlob,$b,0,$n)",
+    "  [Console]::Out.Write([Convert]::ToBase64String($b))",
+    "} finally { [Cred]::CredFree($p) }",
+  ].join("\n");
+}
+
+// Per-OS argv that prints the app's file-key to stdout. `plat` is injected so
+// the mapping is unit-testable without spawning anything. Each schema mirrors
+// the keyring v3 backend the app compiles per platform (src-tauri/Cargo.toml):
+//   darwin → apple-native: Keychain generic-password; `-w` prints 64-char hex.
+//   linux  → sync-secret-service: item attrs {service, username, target,
+//            application} (keyring-3.6.3 secret_service.rs); service+username
+//            uniquely identify ours; secret-tool prints the raw secret bytes.
+//   win32  → windows-native: Credential Manager generic cred at WIN_CRED_TARGET
+//            with the raw key in the blob; PowerShell CredReadW → base64.
+export function keyringLookupArgs(
+  plat: NodeJS.Platform,
+): { cmd: string; args: string[] } | null {
+  switch (plat) {
+    case "darwin":
+      return {
+        cmd: "security",
+        args: [
+          "find-generic-password",
+          "-s",
+          KEYRING_ENTRY,
+          "-a",
+          KEYRING_ENTRY,
+          "-w",
+        ],
+      };
+    case "linux":
+      return {
+        cmd: "secret-tool",
+        args: ["lookup", "service", KEYRING_ENTRY, "username", KEYRING_ENTRY],
+      };
+    case "win32":
+      return {
+        cmd: "powershell",
+        args: [
+          "-NoProfile",
+          "-NonInteractive",
+          "-Command",
+          winCredReadScript(),
+        ],
+      };
+    default:
+      return null;
   }
 }
 
-// Resolve the AES key the Rust app will decrypt with. Precedence mirrors
-// `key_migration::migrate_or_initialize`: OS keyring (post-Sprint-356 macOS,
-// where the app prefers the Keychain over any disk file) → disk `.key`
-// (Linux/Path C, or a pre-first-launch machine) → mint a fresh disk key (truly
-// new machine; the app's Path B adopts that same key on next boot). The
-// keyring is a single global OS entry that can't be sandboxed, so under
-// TABLE_VIEW_TEST_DATA_DIR (test isolation) we skip it and behave as a fresh
-// machine — never touching the developer's real Keychain.
+// Read the app's file-key from the OS keyring so the fixture encrypts with the
+// SAME key the app decrypts with, on every platform the app has a keyring
+// backend for. Returns null when the entry is absent or the tool/keyring is
+// unavailable (fall through to disk/mint); throws when the entry EXISTS but its
+// value isn't a 32-byte key, rather than silently minting a divergent key. On
+// macOS the first access raises a one-time Keychain prompt (the item was
+// created by the app, not this process) — approve with "Always Allow".
+function readOsKeyringKey(): Buffer | null {
+  const spec = keyringLookupArgs(platform());
+  if (!spec) return null; // no reader for this platform
+  let out: Buffer;
+  try {
+    out = execFileSync(spec.cmd, spec.args, {
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+  } catch {
+    // Non-zero exit = entry absent (security 44 / secret-tool 1 / our PS 44) or
+    // the tool/keyring is unavailable. Fall through to disk/mint.
+    return null;
+  }
+  if (out.length === 0) return null; // present-but-empty ≡ absent
+  const key = decodeKeyringSecret(out);
+  if (!key) {
+    throw new Error(
+      `OS keyring entry ${KEYRING_ENTRY} is present but its value (${out.length} ` +
+        `bytes) is not a 32-byte AES key. Inspect the entry — refusing to mint a ` +
+        `divergent key on top of it.`,
+    );
+  }
+  return key;
+}
+
+// Resolve the AES key the Rust app will decrypt with. Mirrors the precedence in
+// `key_migration::migrate_or_initialize` on every platform the app ships a
+// keyring backend for: OS keyring (the app prefers it and secure-deletes the
+// disk `.key` after migrating) → disk `.key` (Linux when the Secret Service is
+// unavailable → the app's Path C fallback, or a pre-first-launch machine) →
+// mint a fresh disk key (truly new machine; the app's Path B adopts it on next
+// boot). The keyring is a single global OS entry that can't be sandboxed, so
+// under TABLE_VIEW_TEST_DATA_DIR (test isolation) we skip it and behave as a
+// fresh machine — never touching the developer's real keyring.
 function loadOrCreateAppKey(): Buffer {
   const path = keyFilePath();
   if (!process.env.TABLE_VIEW_TEST_DATA_DIR) {
-    const fromKeyring = readMacKeyringKey();
+    const fromKeyring = readOsKeyringKey();
     if (fromKeyring) return fromKeyring;
   }
   if (existsSync(path)) {

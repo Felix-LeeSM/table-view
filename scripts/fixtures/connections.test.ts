@@ -28,6 +28,8 @@ import {
   upsertConnections,
   clearConnections,
   decodeKeyringSecret,
+  keyringLookupArgs,
+  WIN_CRED_TARGET,
 } from "./connections.js";
 import { loadSpec } from "./spec.js";
 
@@ -335,14 +337,23 @@ describe("connections — storage envelope contract (Rust crypto::decrypt compat
   });
 });
 
-// Sprint 356 regression guard — the fixture must encrypt with the SAME key the
-// app holds in the OS keyring, or Connect throws `error: aead::Error`. The
-// `security` shell-out can't run headless, so we cover the decoder that turns
-// its `-w` output into the 32-byte key.
-describe("decodeKeyringSecret — Keychain `-w` output → 32-byte AES key", () => {
+// 작성 일자: 2026-07-18. Sprint 356 regression guard — the fixture must encrypt
+// with the SAME key the app holds in the OS keyring, or Connect throws
+// `error: aead::Error`.
+// Reason: the per-OS keyring shell-outs (security / secret-tool / PowerShell)
+// can't run in headless CI, so we cover the two platform-independent pieces
+// they hinge on: the decoder that turns each tool's output into the 32-byte
+// key, and the argv/target schema derived from the keyring v3 backends.
+describe("decodeKeyringSecret — keyring reader output → 32-byte AES key", () => {
   it("decodes 64 lowercase hex chars (the real `security -w` shape)", () => {
     const key = nodeRandomBytes(32);
     const out = Buffer.from(key.toString("hex"), "utf8");
+    expect(decodeKeyringSecret(out)?.equals(key)).toBe(true);
+  });
+
+  it("decodes uppercase hex too", () => {
+    const key = nodeRandomBytes(32);
+    const out = Buffer.from(key.toString("hex").toUpperCase(), "utf8");
     expect(decodeKeyringSecret(out)?.equals(key)).toBe(true);
   });
 
@@ -352,13 +363,13 @@ describe("decodeKeyringSecret — Keychain `-w` output → 32-byte AES key", () 
     expect(decodeKeyringSecret(out)?.equals(key)).toBe(true);
   });
 
-  it("falls back to base64 text when the key is 32 bytes", () => {
+  it("decodes base64 text (the Windows PowerShell reader shape)", () => {
     const key = nodeRandomBytes(32);
     const out = Buffer.from(key.toString("base64"), "utf8");
     expect(decodeKeyringSecret(out)?.equals(key)).toBe(true);
   });
 
-  it("accepts raw 32 bytes, stripping a single trailing newline", () => {
+  it("accepts raw 32 bytes (the Linux secret-tool shape), stripping one \\n", () => {
     const key = Buffer.alloc(32, 7); // non-hex, non-newline last byte
     expect(decodeKeyringSecret(key)?.equals(key)).toBe(true);
     expect(
@@ -372,5 +383,40 @@ describe("decodeKeyringSecret — Keychain `-w` output → 32-byte AES key", () 
     expect(decodeKeyringSecret(Buffer.from("hello\n", "utf8"))).toBeNull();
     expect(decodeKeyringSecret(Buffer.from("abcd", "utf8"))).toBeNull(); // short hex
     expect(decodeKeyringSecret(Buffer.alloc(0))).toBeNull();
+  });
+});
+
+// Schema guard — the per-OS lookup argv/target must stay pinned to the keyring
+// v3 backends the app compiles (src-tauri/Cargo.toml + keyring-3.6.3 source).
+// A silent drift here (renamed attribute, flipped Windows target order) would
+// re-introduce the exact key divergence this PR removes, on that platform only.
+describe("keyringLookupArgs — per-OS lookup schema matches keyring v3", () => {
+  const ENTRY = "com.tableview.app.file-key";
+
+  it("macOS: security generic-password, service+account = entry, -w", () => {
+    expect(keyringLookupArgs("darwin")).toEqual({
+      cmd: "security",
+      args: ["find-generic-password", "-s", ENTRY, "-a", ENTRY, "-w"],
+    });
+  });
+
+  it("Linux: secret-tool lookup on the service+username attributes", () => {
+    expect(keyringLookupArgs("linux")).toEqual({
+      cmd: "secret-tool",
+      args: ["lookup", "service", ENTRY, "username", ENTRY],
+    });
+  });
+
+  it("Windows: PowerShell CredReadW at target `{user}.{service}`", () => {
+    expect(WIN_CRED_TARGET).toBe(`${ENTRY}.${ENTRY}`);
+    const spec = keyringLookupArgs("win32");
+    expect(spec?.cmd).toBe("powershell");
+    const script = spec?.args.at(-1) ?? "";
+    expect(script).toContain(`'${ENTRY}.${ENTRY}'`); // the exact target read
+    expect(script).toContain("CredReadW");
+  });
+
+  it("returns null for a platform with no keyring reader", () => {
+    expect(keyringLookupArgs("aix")).toBeNull();
   });
 });
