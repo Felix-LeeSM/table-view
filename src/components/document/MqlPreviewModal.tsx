@@ -77,7 +77,9 @@ export default function MqlPreviewModal({
       }
       preview={
         <div
-          className="flex flex-col gap-3"
+          // min-w-0: lets the <pre> below actually honor its wrap classes
+          // instead of expanding the flex/grid track past the dialog edge.
+          className="flex min-w-0 flex-col gap-3"
           onKeyDown={(e) => {
             // Enter → Execute, unless focus is inside a text input/area or the
             // button is disabled.

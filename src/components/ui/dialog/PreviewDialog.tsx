@@ -147,7 +147,13 @@ export default function PreviewDialog({
           </div>
         </DialogHeader>
 
-        <div className="flex flex-col gap-3">
+        {/* min-w-0 + max-w-full: DialogContent is a grid; without min-w-0 this
+            grid item's min-width:auto lets an unbreakable child (long query /
+            hex dump) expand the track past the dialog edge (which also shoves
+            the header Copy button off-screen) instead of wrapping. max-w-full
+            pins the wrapper to the track so content wraps/scrolls, never grows
+            the dialog. */}
+        <div className="flex min-w-0 max-w-full flex-col gap-3">
           {preview}
           {children}
 
@@ -176,7 +182,12 @@ export default function PreviewDialog({
                   statementCount: commitError.statementCount,
                 })}
               </div>
-              <div className="mt-1 break-words">{commitError.message}</div>
+              {/* break-all (not break-words): DB errors embed KB-scale
+                  space-free hex dumps with no break opportunity, which
+                  overflow-wrap:break-word cannot wrap. */}
+              <div className="mt-1 min-w-0 break-all">
+                {commitError.message}
+              </div>
               <pre className="mt-2 max-h-32 overflow-auto whitespace-pre-wrap rounded border border-destructive/30 bg-background/40 p-2 text-xs font-mono">
                 {commitError.sql}
               </pre>
