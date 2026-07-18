@@ -76,7 +76,14 @@ function DialogContent({
         data-slot="dialog-content"
         data-tone={tone}
         className={cn(
-          "fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-lg border bg-background p-6 shadow-lg duration-200 outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 sm:max-w-lg",
+          // `[&>*]:min-w-0`: DialogContent is a grid, and grid items default to
+          // min-width:auto — an unbreakable child (long single-line query, a
+          // space-free hex dump) would otherwise stretch its track to that
+          // child's min-content width and blow horizontally past the max-w cap,
+          // clipping content and shoving header rows sideways. Flooring every
+          // direct child at min-width:0 lets text children honor their own wrap
+          // rules and keeps the box inside `max-w-[calc(100%-2rem)]`.
+          "fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-lg border bg-background p-6 shadow-lg duration-200 outline-none [&>*]:min-w-0 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 sm:max-w-lg",
           dialogToneClasses[tone],
           className,
         )}

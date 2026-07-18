@@ -455,6 +455,44 @@ describe("DialogFeedback (sprint-95 AC-03)", () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// Purpose: primitive-level horizontal-overflow guard — fix/mql-preview-overflow
+// (2026-07-18). User report: a long single-line MQL query / a space-free hex
+// dump in a Mongo commit error blew the preview dialog out sideways, clipping
+// content and shoving the header Copy button off-screen. Root cause lives in
+// the shared DialogContent grid (grid items default to min-width:auto), so the
+// guard is pinned here rather than per-preset. jsdom cannot measure layout, so
+// the regression is the class contract.
+// ---------------------------------------------------------------------------
+describe("DialogContent horizontal-overflow guard (fix/mql-preview-overflow)", () => {
+  // Reason: [&>*]:min-w-0 floors every direct grid child so an unbreakable
+  // child cannot stretch its track past the max-w cap; without it, wrap
+  // classes on descendants are inert (2026-07-18).
+  it("floors direct grid children at min-width:0 and keeps a viewport-relative max-w cap", () => {
+    render(
+      <Dialog open onOpenChange={() => {}}>
+        {/* Caller pins a fixed width, mirroring the MQL/SQL preview presets. */}
+        <DialogContent className="w-dialog-xl">
+          <DialogHeader>
+            <DialogTitle>Guard</DialogTitle>
+          </DialogHeader>
+          {/* A single unbreakable token with no wrap opportunity. */}
+          <div data-testid="long-child">{"a".repeat(4000)}</div>
+        </DialogContent>
+      </Dialog>,
+    );
+
+    const content = screen.getByRole("dialog");
+    expect(content.className).toContain("[&>*]:min-w-0");
+    // Caller width is honored but never escapes the viewport-relative cap.
+    expect(content.className).toContain("w-dialog-xl");
+    expect(content.className).toContain("max-w-[calc(100%-2rem)]");
+    // The pathological child is still in the tree — the guard suppresses its
+    // overflow instead of dropping it.
+    expect(screen.getByTestId("long-child")).toBeInTheDocument();
+  });
+});
+
 describe("ConfirmDialog tone (sprint-95 AC-05)", () => {
   it("AC-05: danger=true forwards tone='destructive' to AlertDialogContent", () => {
     render(
