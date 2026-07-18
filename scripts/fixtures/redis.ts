@@ -5,6 +5,7 @@ import Redis from "ioredis";
 import type { ResolvedSpec } from "./spec.js";
 import type { EntityRows } from "./generator.js";
 import { entityOrder } from "./spec.js";
+import { applyRedisShowcase } from "./redis-showcase.js";
 
 export interface RedisConnection {
   host: string;
@@ -92,6 +93,12 @@ export async function applyRedis(
       const start = Date.now();
       await insertEntity(client, entity, data);
       log(entityName, data.length, Date.now() - start);
+    }
+    // Redis type gallery (string/hash/list/set/zset/stream/json) so every shape
+    // the KV inspector renders is visible. Dev-profile only so e2e/CI seed
+    // shapes stay unchanged — same gating as applyPgShowcase.
+    if (spec.profile === "development") {
+      await applyRedisShowcase(client, log);
     }
   });
 }
