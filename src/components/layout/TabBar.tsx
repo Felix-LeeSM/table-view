@@ -40,6 +40,7 @@ export default function TabBar() {
     scrollRef,
     draggingId,
     ghostStyle,
+    dropIndicator,
     getDragHandlers,
     shouldSuppressClick,
   } = useTabDrag();
@@ -157,6 +158,22 @@ export default function TabBar() {
             removeTab(workspaceKey.connId, workspaceKey.db, id);
           }}
           onCancel={() => setPendingClose(null)}
+        />
+      )}
+
+      {/* Drop preview — vertical insertion line at the resolved drop slot,
+          shown live while dragging (before release). Positioned in client
+          coordinates like the ghost; centered on the target tab edge. */}
+      {dropIndicator && (
+        <div
+          aria-hidden
+          data-drop-indicator
+          className="pointer-events-none fixed z-50 w-0.5 -translate-x-1/2 rounded bg-primary"
+          style={{
+            left: dropIndicator.x,
+            top: dropIndicator.top,
+            height: dropIndicator.height,
+          }}
         />
       )}
 
