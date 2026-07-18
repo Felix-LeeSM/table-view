@@ -75,7 +75,7 @@ async fn dispatch_command(
             value,
             ttl_seconds,
         } => set_command(adapter, key, value, ttl_seconds).await,
-        RedisCommand::HSet { key, field, value } => hset_command(adapter, key, field, value).await,
+        RedisCommand::HSet { key, fields } => hset_command(adapter, key, fields).await,
         RedisCommand::HDel { key, fields } => {
             member_removal_command(adapter, "HDEL", "hdel", key, fields).await
         }
@@ -91,9 +91,7 @@ async fn dispatch_command(
         RedisCommand::SRem { key, members } => {
             member_removal_command(adapter, "SREM", "srem", key, members).await
         }
-        RedisCommand::ZAdd { key, score, member } => {
-            zadd_command(adapter, key, score, member).await
-        }
+        RedisCommand::ZAdd { key, entries } => zadd_command(adapter, key, entries).await,
         RedisCommand::ZRem { key, members } => {
             member_removal_command(adapter, "ZREM", "zrem", key, members).await
         }
@@ -427,19 +425,23 @@ async fn set_command(
     Ok(mutation_result(&key, "set", 1))
 }
 
+/// `HSET key field value [field value ...]` — set one or more hash fields. Each
+/// operand is `.arg()`-encoded individually so a field/value with spaces can
+/// never split into an extra command token. Returns the number of NEW fields
+/// added (Redis' HSET reply), mirroring the single-pair edit path (#1697).
 async fn hset_command(
     adapter: &RedisAdapter,
     key: String,
-    field: String,
-    value: String,
+    fields: Vec<(String, String)>,
 ) -> Result<RdbQueryResult, AppError> {
     let changed: u64 = adapter
         .with_connection(async |connection| {
-            ::redis::cmd("HSET")
-                .arg(&key)
-                .arg(&field)
-                .arg(&value)
-                .query_async(connection)
+            let mut cmd = ::redis::cmd("HSET");
+            cmd.arg(&key);
+            for (field, value) in &fields {
+                cmd.arg(field).arg(value);
+            }
+            cmd.query_async(connection)
                 .await
                 .map_err(|err| adapter.database_error(err))
         })
@@ -554,19 +556,22 @@ async fn sadd_command(
     Ok(mutation_result(&key, "sadd", changed))
 }
 
+/// `ZADD key score member [score member ...]` — add one or more scored members.
+/// Each score/member is `.arg()`-encoded individually. Returns the number of NEW
+/// members added (Redis' ZADD reply), mirroring the single-pair edit path (#1697).
 async fn zadd_command(
     adapter: &RedisAdapter,
     key: String,
-    score: f64,
-    member: String,
+    entries: Vec<(f64, String)>,
 ) -> Result<RdbQueryResult, AppError> {
     let changed: u64 = adapter
         .with_connection(async |connection| {
-            ::redis::cmd("ZADD")
-                .arg(&key)
-                .arg(score)
-                .arg(&member)
-                .query_async(connection)
+            let mut cmd = ::redis::cmd("ZADD");
+            cmd.arg(&key);
+            for (score, member) in &entries {
+                cmd.arg(*score).arg(member);
+            }
+            cmd.query_async(connection)
                 .await
                 .map_err(|err| adapter.database_error(err))
         })

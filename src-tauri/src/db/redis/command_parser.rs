@@ -54,8 +54,7 @@ pub(super) enum RedisCommand {
     },
     HSet {
         key: String,
-        field: String,
-        value: String,
+        fields: Vec<(String, String)>,
     },
     HDel {
         key: String,
@@ -89,8 +88,7 @@ pub(super) enum RedisCommand {
     },
     ZAdd {
         key: String,
-        score: f64,
-        member: String,
+        entries: Vec<(f64, String)>,
     },
     JsonSet {
         key: String,
@@ -413,12 +411,19 @@ fn parse_set(args: &[String]) -> Result<RedisCommand, AppError> {
     })
 }
 
+/// `HSET key field value [field value ...]` — Redis-native variadic. The
+/// operands after the key must form balanced field/value pairs (at least one),
+/// so a single-pair edit (`HSET k f v`, KvMutationPanel) and a multi-pair create
+/// (KvNewKeyDialog) both parse. Every operand is `.arg()`-encoded downstream, so
+/// a value with spaces can never leak into an extra command token (#1697).
 fn parse_hset(args: &[String]) -> Result<RedisCommand, AppError> {
-    require_arg_count(args, 3, "HSET")?;
+    let (key, pairs) = split_key_pairs(args, "HSET")?;
     Ok(RedisCommand::HSet {
-        key: checked_key(&args[0])?,
-        field: args[1].clone(),
-        value: args[2].clone(),
+        key,
+        fields: pairs
+            .chunks_exact(2)
+            .map(|pair| (pair[0].clone(), pair[1].clone()))
+            .collect(),
     })
 }
 
@@ -483,13 +488,40 @@ fn parse_sadd(args: &[String]) -> Result<RedisCommand, AppError> {
     })
 }
 
+/// `ZADD key score member [score member ...]` — Redis-native variadic. Balanced
+/// score/member pairs after the key (at least one); every score is validated as
+/// an f64 (a non-numeric score in any pair is rejected). Single-pair edits
+/// (KvMutationPanel) and multi-pair creates (KvNewKeyDialog) both parse (#1697).
 fn parse_zadd(args: &[String]) -> Result<RedisCommand, AppError> {
-    require_arg_count(args, 3, "ZADD")?;
+    let (key, pairs) = split_key_pairs(args, "ZADD")?;
     Ok(RedisCommand::ZAdd {
-        key: checked_key(&args[0])?,
-        score: parse_f64(&args[1], "ZADD score")?,
-        member: args[2].clone(),
+        key,
+        entries: pairs
+            .chunks_exact(2)
+            .map(|pair| Ok((parse_f64(&pair[0], "ZADD score")?, pair[1].clone())))
+            .collect::<Result<_, AppError>>()?,
     })
+}
+
+/// `<VERB> key a b [a b ...]` — validate the key and return the operand slice
+/// after it, requiring balanced pairs (HSET field/value, ZADD score/member).
+/// At least one pair, and an even operand count after the key (#1697).
+fn split_key_pairs<'a>(
+    args: &'a [String],
+    command: &str,
+) -> Result<(String, &'a [String]), AppError> {
+    if args.len() < 3 {
+        return Err(AppError::Validation(format!(
+            "{command} requires a key and at least one operand pair"
+        )));
+    }
+    let pairs = &args[1..];
+    if !pairs.len().is_multiple_of(2) {
+        return Err(AppError::Validation(format!(
+            "{command} operands after the key must form balanced pairs"
+        )));
+    }
+    Ok((checked_key(&args[0])?, pairs))
 }
 
 /// `JSON.SET key $ <json>` — bounded to the root path `$` so this ReJSON write
@@ -812,6 +844,69 @@ mod tests {
             "LSET key notanint value",
             "LREM key notanint value",
             "LSET key 0",
+        ] {
+            assert!(
+                matches!(parse_redis_command(command), Err(AppError::Validation(_))),
+                "expected validation error for {command}"
+            );
+        }
+    }
+
+    #[test]
+    fn parser_accepts_variadic_hset_and_zadd_field_value_pairs() {
+        // #1697 — HSET/ZADD are Redis-native variadic
+        // (`key field value [field value ...]` / `key score member [...]`). The
+        // type-first new-key composer emits multi-pair creates, so the parser
+        // accepts balanced pairs after the key (preview == execution), while the
+        // single-pair KvMutationPanel edit path stays valid.
+        let hset = parse_redis_command("HSET profile:1 name Ada role eng").unwrap();
+        assert_eq!(
+            hset,
+            RedisCommand::HSet {
+                key: "profile:1".into(),
+                fields: vec![("name".into(), "Ada".into()), ("role".into(), "eng".into()),],
+            }
+        );
+        assert_eq!(hset.effect(), RedisCommandEffect::Write);
+        // Single field/value pair (the KvMutationPanel HSET edit path) stays valid.
+        assert_eq!(
+            parse_redis_command("HSET profile:1 name Ada").unwrap(),
+            RedisCommand::HSet {
+                key: "profile:1".into(),
+                fields: vec![("name".into(), "Ada".into())],
+            }
+        );
+
+        let zadd = parse_redis_command("ZADD board 1.5 ada 2 bob").unwrap();
+        assert_eq!(
+            zadd,
+            RedisCommand::ZAdd {
+                key: "board".into(),
+                entries: vec![(1.5, "ada".into()), (2.0, "bob".into())],
+            }
+        );
+        assert_eq!(zadd.effect(), RedisCommandEffect::Write);
+        // Single score/member pair (the KvMutationPanel ZADD edit path) stays valid.
+        assert_eq!(
+            parse_redis_command("ZADD board 1 ada").unwrap(),
+            RedisCommand::ZAdd {
+                key: "board".into(),
+                entries: vec![(1.0, "ada".into())],
+            }
+        );
+    }
+
+    #[test]
+    fn parser_rejects_unbalanced_or_non_numeric_hset_and_zadd() {
+        for command in [
+            "HSET onlykey",             // no field/value pair
+            "HSET k f",                 // unbalanced (odd operand count)
+            "HSET k f v extra",         // trailing unbalanced token
+            "ZADD onlykey",             // no score/member pair
+            "ZADD k 1",                 // unbalanced (odd operand count)
+            "ZADD k 1 a 2",             // trailing unbalanced token
+            "ZADD k notanumber member", // non-numeric score
+            "ZADD k 1 a notnum b",      // non-numeric score in a later pair
         ] {
             assert!(
                 matches!(parse_redis_command(command), Err(AppError::Validation(_))),
