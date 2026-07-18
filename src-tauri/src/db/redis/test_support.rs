@@ -136,6 +136,7 @@ fn redis_stub_response(command: &[String]) -> Vec<u8> {
         Some("ZRANGE") => "*4\r\n$1\r\na\r\n$3\r\n1.5\r\n$1\r\nb\r\n$3\r\n2.5\r\n",
         Some("HSCAN") => "*2\r\n$1\r\n0\r\n*2\r\n$4\r\nname\r\n$3\r\nAda\r\n",
         Some("JSON.GET") => "$11\r\n{\"ok\":true}\r\n",
+        Some("JSON.SET") => "+OK\r\n",
         Some("XRANGE") => "*1\r\n*2\r\n$3\r\n1-0\r\n*2\r\n$4\r\ntype\r\n$5\r\nlogin\r\n",
         Some("HSET") => ":1\r\n",
         Some("LPUSH") | Some("RPUSH") => ":2\r\n",

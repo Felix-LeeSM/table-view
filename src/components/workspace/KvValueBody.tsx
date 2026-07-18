@@ -4,6 +4,7 @@ import { Maximize2 } from "lucide-react";
 import { CellDetailDialog } from "@components/datagrid";
 import { DocumentTreePanel } from "@components/document/DocumentTreePanel";
 import type { KvValueEnvelope } from "@/types/kv";
+import { KvJsonTreeEditor } from "./KvJsonTreeEditor";
 import {
   isJsonTreeCapable,
   jsonTreeValue,
@@ -12,10 +13,19 @@ import {
 
 export interface KvValueBodyProps {
   envelope: KvValueEnvelope;
+  // KV JSON tree write core (PR3) — when all four are supplied AND the
+  // connection allows edits, a JSON `string` / `json` value renders as an
+  // EDITABLE tree. Omit any of them (or pass `mutationEnabled={false}`) and the
+  // tree stays read-only — the safe default so a write path is never offered
+  // without an explicit, wired-up target.
+  connectionId?: string;
+  database?: number;
+  mutationEnabled?: boolean;
+  onWriteSuccess?: (key: string) => Promise<void> | void;
 }
 
-// KV JSON tree Phase 1 (2026-07-17) — read-only smart renderer for single-value
-// keys (string / json). Collections (hash/list/set/zSet) and streams are routed
+// KV JSON tree Phase 1 (2026-07-17) — smart renderer for single-value keys
+// (string / json). Collections (hash/list/set/zSet) and streams are routed
 // elsewhere by KvKeyDetailPanel; this component owns the `<pre>` fallthrough,
 // which previously leaked native ReJSON (`json`) values as raw text.
 //
@@ -26,9 +36,16 @@ export interface KvValueBodyProps {
 // - `string` + binary (hex): never attempt JSON — show the hex text.
 // - missing / unsupported: raw text.
 //
-// Read-only: DocumentTreePanel gets no `onCommitEdit`, so its leaf editor is
-// gated off. The write path lives in KvMutationPanel below, unchanged.
-export function KvValueBody({ envelope }: KvValueBodyProps) {
+// PR3 (2026-07-18) — an object/array value additionally becomes node-editable
+// via KvJsonTreeEditor when the write context is supplied; parse failures /
+// scalars / binary stay read-only raw text (never given a commit handler).
+export function KvValueBody({
+  envelope,
+  connectionId,
+  database,
+  mutationEnabled = false,
+  onWriteSuccess,
+}: KvValueBodyProps) {
   const { t } = useTranslation("workspace");
   const [detailOpen, setDetailOpen] = useState(false);
   const { value } = envelope;
@@ -41,6 +58,25 @@ export function KvValueBody({ envelope }: KvValueBodyProps) {
         : null;
 
   if (treeValue !== null) {
+    const editable =
+      mutationEnabled &&
+      connectionId !== undefined &&
+      database !== undefined &&
+      onWriteSuccess !== undefined &&
+      (value.type === "json" || value.type === "string");
+    if (editable) {
+      return (
+        <KvJsonTreeEditor
+          key={envelope.key}
+          fieldName={envelope.key}
+          original={treeValue}
+          writeType={value.type === "json" ? "json" : "string"}
+          connectionId={connectionId}
+          database={database}
+          onWriteSuccess={onWriteSuccess}
+        />
+      );
+    }
     return <DocumentTreePanel value={treeValue} fieldName={envelope.key} />;
   }
 

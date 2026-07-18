@@ -193,7 +193,16 @@ export default function KvKeyDetailPanel({
                 onEntryAction={entriesMutable ? requestEntryAction : undefined}
               />
             ) : (
-              <KvValueBody envelope={value} />
+              // PR3 — string(JSON)/json single-value keys get inline node
+              // editing when the connection allows edits. loadValue re-reads
+              // this key after a write, mirroring KvMutationPanel below.
+              <KvValueBody
+                envelope={value}
+                connectionId={connectionId}
+                database={database}
+                mutationEnabled={mutationEnabled}
+                onWriteSuccess={loadValue}
+              />
             )}
             {canRenderKvMutationPanel(value, mutationEnabled) && (
               <KvMutationPanel

@@ -97,6 +97,9 @@ async fn dispatch_command(
         RedisCommand::ZRem { key, members } => {
             member_removal_command(adapter, "ZREM", "zrem", key, members).await
         }
+        RedisCommand::JsonSet { key, path, value } => {
+            json_set_command(adapter, key, path, value).await
+        }
         RedisCommand::Expire { key, seconds } => expire_command(adapter, key, seconds).await,
         RedisCommand::Persist { key } => persist_command(adapter, key).await,
         RedisCommand::Del { key } => delete_command(adapter, key).await,
@@ -566,6 +569,29 @@ async fn zadd_command(
     Ok(mutation_result(&key, "zadd", changed))
 }
 
+/// `JSON.SET key $ <json>` — overwrite the whole ReJSON slot (#PR3). Mirrors
+/// `set_command`: the module returns `+OK`, projected as a `json.set` mutation.
+async fn json_set_command(
+    adapter: &RedisAdapter,
+    key: String,
+    path: String,
+    value: String,
+) -> Result<RdbQueryResult, AppError> {
+    adapter
+        .with_connection(async |connection| {
+            let _: String = ::redis::cmd("JSON.SET")
+                .arg(&key)
+                .arg(&path)
+                .arg(&value)
+                .query_async(connection)
+                .await
+                .map_err(|err| adapter.database_error(err))?;
+            Ok(())
+        })
+        .await?;
+    Ok(mutation_result(&key, "json.set", 1))
+}
+
 async fn expire_command(
     adapter: &RedisAdapter,
     key: String,
@@ -752,6 +778,25 @@ mod tests {
                 crate::models::QueryType::Dml { .. }
             ));
         }
+    }
+
+    #[tokio::test]
+    async fn command_runtime_projects_json_set_whole_value_overwrite() {
+        // PR3 — a ReJSON whole-value overwrite dispatches without a typed
+        // confirmation key and projects a `json.set` DML mutation result.
+        let adapter = connected_adapter().await;
+        let result = execute_command(
+            &adapter,
+            request("JSON.SET json $ \"{\\\"ok\\\":false}\""),
+            None,
+        )
+        .await
+        .unwrap();
+        assert_eq!(result.rows[0][1], json!("json.set"));
+        assert!(matches!(
+            result.query_type,
+            crate::models::QueryType::Dml { .. }
+        ));
     }
 
     #[tokio::test]
