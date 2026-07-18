@@ -142,4 +142,24 @@ describe("MqlPreviewModal", () => {
     expect(btn.getAttribute("style")).toMatch(/--tv-warning\)/);
     expect(btn.textContent).toContain("Execute on stage-mongo");
   });
+
+  // Reason: 사용자 보고 — MQL 미리보기에서 공백 포함 긴 단일 라인 쿼리가
+  // 다이얼로그를 가로로 뚫고 나가 레이아웃이 깨짐. preview <pre> 의 wrap
+  // 클래스는 조상 flex 컬럼에 min-w-0 이 없으면 실제로 작동하지 않는다
+  // (grid/flex item 의 min-width:auto 가 트랙을 늘림). jsdom 은 레이아웃을
+  // 측정하지 못하므로 wrapping affordance 클래스 계약으로 회귀를 고정한다
+  // (fix/mql-preview-overflow, 2026-07-18).
+  it("gives the preview block wrap affordances and a min-w-0 ancestor so long lines cannot overflow", () => {
+    renderModal({
+      previewLines: [
+        'db.sales_orders.updateOne({ _id: "709456c0-bec5-4632-8c4a-6554e9eb17d9" }, { $set: { "items.0.a": 3 } })',
+      ],
+    });
+
+    const pre = screen.getByLabelText("MQL commands");
+    expect(pre).toHaveClass("whitespace-pre-wrap");
+    expect(pre).toHaveClass("break-all");
+    // 조상 flex 컬럼이 min-w-0 이어야 pre 가 폭 제약을 받아 실제로 wrap.
+    expect(pre.parentElement).toHaveClass("min-w-0");
+  });
 });
