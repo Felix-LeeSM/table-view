@@ -59,7 +59,11 @@ export type KvEntryPayload =
   | { kind: "zSet"; member: string; score: number };
 
 export interface KvEntryActionIntent {
-  op: "edit" | "delete";
+  // "edit" = in-place overwrite prefill (hash HSET / list LSET). "copy" = #1683
+  // copy-to-add-form (set SADD / zSet ZADD): Redis has no in-place set/zSet
+  // member edit, so a row is copied into the add form, tweaked, added anew, then
+  // the old value deleted separately. Both prefill; only the UI naming differs.
+  op: "edit" | "delete" | "copy";
   payload: KvEntryPayload;
   requestId: number;
 }
@@ -303,9 +307,14 @@ export function entryDeletePending(
   };
 }
 
-// #1415 — row Edit prefill. Set members are immutable strings, so the table
-// never offers Edit for them (no case here).
-export function entryEditForm(payload: KvEntryPayload): Partial<MutationForm> {
+// #1415/#1683 — add-form prefill for an inline row action. hash/list "edit"
+// prefills the in-place HSET/LSET overwrite fields; set/zSet "copy" prefills the
+// SADD/ZADD add form (copy-to-form — no in-place set/zSet member edit exists).
+// The raw member/value (JSON or scalar) rides along in `entry` verbatim so the
+// user can tree/text-edit it before adding, then delete the old value separately.
+export function entryPrefillForm(
+  payload: KvEntryPayload,
+): Partial<MutationForm> {
   switch (payload.kind) {
     case "hash":
       return { field: payload.field, entry: payload.value };
@@ -314,6 +323,6 @@ export function entryEditForm(payload: KvEntryPayload): Partial<MutationForm> {
     case "zSet":
       return { score: String(payload.score), entry: payload.member };
     case "set":
-      return {};
+      return { entry: payload.member };
   }
 }

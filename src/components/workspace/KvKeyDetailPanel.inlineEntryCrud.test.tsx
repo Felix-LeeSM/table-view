@@ -117,12 +117,16 @@ describe("KvKeyDetailPanel inline entry CRUD", () => {
     expect(status).toHaveTextContent(/first matching value/i);
   });
 
-  it("prefills the edit form from a zSet row and previews ZADD", async () => {
+  // #1683 — copy-to-form (not in-place edit): the zSet row's copy button prefills
+  // the ZADD add form with score + member so the user re-adds a tweaked member.
+  it("copies a zSet row into the ZADD add form and previews ZADD", async () => {
     mockRedisRuntime(() => zSetEnvelope([{ member: "alpha", score: 1 }], 1));
     renderPanel();
     await waitForValue();
 
-    fireEvent.click(screen.getByRole("button", { name: "Edit alpha" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Copy alpha to add form" }),
+    );
     expect(screen.getByLabelText("ZSet score")).toHaveValue("1");
     expect(screen.getByLabelText("ZSet member")).toHaveValue("alpha");
 
@@ -141,17 +145,52 @@ describe("KvKeyDetailPanel inline entry CRUD", () => {
     });
   });
 
-  it("offers no inline edit action for immutable set members", async () => {
+  // #1683 — set members have no in-place edit; the copy button prefills the SADD
+  // add form's member field so the user re-creates a tweaked member. No Edit
+  // button (would imply in-place mutation Redis can't do).
+  it("copies a set row into the SADD add form and previews SADD", async () => {
     mockRedisRuntime(() => setEnvelope(["alpha"], 1));
     renderPanel();
     await waitForValue();
 
     expect(
-      screen.getByRole("button", { name: "Delete alpha" }),
-    ).toBeInTheDocument();
-    expect(
       screen.queryByRole("button", { name: "Edit alpha" }),
     ).not.toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Copy alpha to add form" }),
+    );
+    expect(screen.getByLabelText("Set member")).toHaveValue("alpha");
+
+    fireEvent.click(screen.getByRole("button", { name: /preview sadd/i }));
+    fireEvent.click(screen.getByRole("button", { name: /confirm sadd/i }));
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith("execute_kv_command", {
+        connectionId: "redis-1",
+        queryId: undefined,
+        request: { database: 0, command: "SADD user:1 alpha" },
+      });
+    });
+  });
+
+  // #1683 — a JSON member rides into the add form verbatim (raw string), so the
+  // user can tweak it and re-add; the value is not normalized on copy.
+  it("carries a JSON set member into the add form verbatim", async () => {
+    const member = '{"plan":"pro"}';
+    mockRedisRuntime(() => setEnvelope([member], 1));
+    renderPanel();
+    await waitForValue();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: `Copy ${member} to add form` }),
+    );
+    expect(screen.getByLabelText("Set member")).toHaveValue(member);
+
+    fireEvent.click(screen.getByRole("button", { name: /preview sadd/i }));
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      `SADD user:1 ${member}`,
+    );
   });
 
   it("hides inline actions for a partially loaded collection", async () => {

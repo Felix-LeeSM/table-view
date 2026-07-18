@@ -5,7 +5,7 @@ import { KvCollectionValueTable } from "./KvCollectionValueTable";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useSafeModeStore } from "@stores/safeModeStore";
 import type { ConnectionConfig } from "@/types/connection";
-import type { KvHashValue, KvListValue } from "@/types/kv";
+import type { KvHashValue, KvListValue, KvSetValue } from "@/types/kv";
 
 // Purpose: KV JSON tree write for collections (PR4, 2026-07-18) — a mutable hash
 // field / list element whose value is JSON is tree-editable in the chip dialog
@@ -33,6 +33,17 @@ function hash(fields: { field: string; value: string }[]): KvHashValue {
 
 function list(entries: { index: number; value: string }[]): KvListValue {
   return { type: "list", entries, total: entries.length };
+}
+
+function set(members: string[]): KvSetValue {
+  return {
+    type: "set",
+    members,
+    cursor: "0",
+    nextCursor: "0",
+    done: true,
+    total: members.length,
+  };
 }
 
 function redisConnection(): ConnectionConfig {
@@ -183,5 +194,26 @@ describe("KvCollectionValueTable write (KV JSON tree)", () => {
       "execute_kv_command",
       expect.anything(),
     );
+  });
+
+  // Reason: PR5a (#1683) — set members have no in-place edit, so even with a
+  // write context the JSON value tree stays read-only (copy-to-form is the only
+  // mutation path). Opening a JSON member offers no leaf editor and no Save.
+  it("keeps a set member JSON value read-only even with a write context", async () => {
+    const user = userEvent.setup();
+    render(
+      <KvCollectionValueTable
+        keyName="tags"
+        value={set(['{"plan":"pro"}'])}
+        writeContext={writeContext()}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /expand .* value/i }));
+    await user.click(await screen.findByTestId("tree-leaf-plan"));
+    expect(screen.queryByTestId("tree-edit-plan")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /save changes/i }),
+    ).not.toBeInTheDocument();
   });
 });
