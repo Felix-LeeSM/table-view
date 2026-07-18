@@ -175,6 +175,67 @@ export function redisToken(value: string): string {
   return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
 }
 
+// KV JSON tree write (PR4, 2026-07-18) — the four whole-value overwrite targets
+// the tree editor can re-serialize into. `string`/`json` are single-value keys
+// (PR3); `hash`/`list` are one JSON field/element inside a collection (PR4).
+// Redis has no partial JSON patch, so every target overwrites its whole slot
+// (last-writer-wins, no WATCH/CAS).
+export type KvTreeWriteTarget =
+  | { kind: "string"; key: string }
+  | { kind: "json"; key: string }
+  | { kind: "hash"; key: string; field: string }
+  | { kind: "list"; key: string; index: number };
+
+// Build the exact overwrite command for a re-serialized tree value. `summary`
+// is shown verbatim in the Safe Mode preview and `command`/`value` is what runs
+// — same string, so preview == execution (the data-loss mitigation for JSON
+// round-trip normalization). Operands go through `redisToken` for shell-safe
+// quoting; the numeric list index is emitted raw so the bounded parser reads it
+// as an integer, mirroring the manual LSET path in KvMutationPanel.
+export function buildTreeWriteMutation(
+  target: KvTreeWriteTarget,
+  json: string,
+): PendingMutation {
+  const key = redisToken(target.key);
+  switch (target.kind) {
+    case "string": {
+      // Routed through the typed set_kv_string_value command, not the raw
+      // command bridge — the `string` tier carries the payload in `value`.
+      const summary = `SET ${key} ${redisToken(json)}`;
+      return { kind: "string", label: "String set", summary, value: json };
+    }
+    case "json": {
+      const command = `JSON.SET ${key} $ ${redisToken(json)}`;
+      return { kind: "command", label: "JSON.SET", summary: command, command };
+    }
+    case "hash": {
+      const command = `HSET ${key} ${redisToken(target.field)} ${redisToken(json)}`;
+      return { kind: "command", label: "HSET", summary: command, command };
+    }
+    case "list": {
+      const command = `LSET ${key} ${target.index} ${redisToken(json)}`;
+      return { kind: "command", label: "LSET", summary: command, command };
+    }
+  }
+}
+
+// PR4 — a hash field / list element whose value is JSON can be tree-edited into
+// a whole-value HSET/LSET overwrite. Set members and zSet entries are out of
+// scope (PR5) and never get an editable tree → null.
+export function treeWriteTargetForEntry(
+  key: string,
+  payload: KvEntryPayload,
+): KvTreeWriteTarget | null {
+  switch (payload.kind) {
+    case "hash":
+      return { kind: "hash", key, field: payload.field };
+    case "list":
+      return { kind: "list", key, index: payload.index };
+    default:
+      return null;
+  }
+}
+
 function collectionTotal(value: KvValue): number | null {
   switch (value.type) {
     case "hash":

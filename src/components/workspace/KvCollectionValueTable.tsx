@@ -7,7 +7,10 @@ import type {
   KvSetValue,
   KvZSetValue,
 } from "@/types/kv";
-import type { KvEntryPayload } from "./kvMutationCommands";
+import {
+  type KvEntryPayload,
+  treeWriteTargetForEntry,
+} from "./kvMutationCommands";
 import { KvJsonValueCell } from "./KvJsonValueCell";
 import { formatCount } from "./kvValueFormat";
 
@@ -16,6 +19,11 @@ import { formatCount } from "./kvValueFormat";
 // bounded page; truncation is disclosed in the footer. When `onEntryAction` is
 // supplied (mutation enabled + fully loaded, #1415) each row gains inline edit/
 // delete that ride the KvMutationPanel gate. Command building stays in the panel.
+//
+// PR4 (2026-07-18) — when `writeContext` is supplied (same mutable gate as
+// `onEntryAction`), the value cell of a hash field / list element whose value is
+// JSON becomes a tree editor that writes the whole re-serialized value via
+// HSET/LSET. Set members and zSet entries are out of scope (PR5).
 
 export type KvCollectionValue =
   | KvHashValue
@@ -23,10 +31,17 @@ export type KvCollectionValue =
   | KvSetValue
   | KvZSetValue;
 
+export interface KvCollectionWriteContext {
+  connectionId: string;
+  database: number;
+  onWriteSuccess: (key: string) => Promise<void> | void;
+}
+
 export interface KvCollectionValueTableProps {
   keyName: string;
   value: KvCollectionValue;
   onEntryAction?: (op: "edit" | "delete", payload: KvEntryPayload) => void;
+  writeContext?: KvCollectionWriteContext;
 }
 
 interface CollectionRow {
@@ -93,6 +108,7 @@ export function KvCollectionValueTable({
   keyName,
   value,
   onEntryAction,
+  writeContext,
 }: KvCollectionValueTableProps) {
   const { t } = useTranslation("workspace");
   const { columns, rows, editable } = toRows(value);
@@ -126,14 +142,32 @@ export function KvCollectionValueTable({
           <tbody>
             {rows.map((row) => (
               <tr key={row.key} className="border-t border-border">
-                {row.cells.map((cell, cellIndex) => (
-                  <td
-                    key={cellIndex}
-                    className="px-2 py-1 align-top font-mono break-all text-foreground"
-                  >
-                    <KvJsonValueCell value={cell} label={row.cells[0] ?? ""} />
-                  </td>
-                ))}
+                {row.cells.map((cell, cellIndex) => {
+                  // Only the value column (last cell) of a mutable hash/list row
+                  // is JSON-editable; the field/index cell and set/zSet stay
+                  // read-only (treeWriteTargetForEntry returns null for those).
+                  const isValueCell = cellIndex === row.cells.length - 1;
+                  const target =
+                    writeContext && isValueCell
+                      ? treeWriteTargetForEntry(keyName, row.payload)
+                      : null;
+                  return (
+                    <td
+                      key={cellIndex}
+                      className="px-2 py-1 align-top font-mono break-all text-foreground"
+                    >
+                      <KvJsonValueCell
+                        value={cell}
+                        label={row.cells[0] ?? ""}
+                        edit={
+                          target && writeContext
+                            ? { target, ...writeContext }
+                            : undefined
+                        }
+                      />
+                    </td>
+                  );
+                })}
                 {showActions && onEntryAction && (
                   <td className="px-2 py-1 text-right align-top whitespace-nowrap">
                     {editable && (
