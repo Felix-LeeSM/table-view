@@ -365,6 +365,62 @@ describe("buildTreeNodesWithGhosts", () => {
   });
 });
 
+// Ghost depth off-by-one (2026-07-18) — 사용자 보고: DocumentTreePanel 에서
+// 배열 원소 객체에 `+ key` 로 새 키를 추가하면 형제 필드와 같은 들여쓰기가
+// 아니라 한 레벨 더 깊게 렌더됐다. 원인은 `buildTreeNodesWithGhosts` 의 로컬
+// `depthOf` 헬퍼가 `[` 로 시작하는 경로(배열 컬럼 root 기준)의 선행 대괄호를
+// 구분자로 이중 계산해 세그먼트 수보다 +1 큰 depth 를 돌려준 것. `depth` 가
+// `paddingLeft: node.depth * 16px` 로 쓰이므로 ghost 가 형제보다 16px 더
+// 들여써졌다. ghost.depth 는 같은 부모의 형제 base 노드와 반드시 일치해야 한다.
+describe("buildTreeNodesWithGhosts ghost depth parity", () => {
+  // Reason: 사용자 보고 회귀 — 배열 원소 객체(`[0]`)에 pending 새 키 `[0].a` 를
+  // 추가하면 ghost depth 가 형제 `[0].id`(2)와 달라 한 레벨 더 들여써졌다.
+  // depthOf("[0].a") 가 3 을 반환하던 off-by-one (2026-07-18).
+  it("gives an array-element ghost key the same depth as its sibling fields", () => {
+    const value = [{ id: "x" }];
+    const pending = new Map<string, string>([["[0].a", "3"]]);
+    const nodes = buildTreeNodesWithGhosts(value, pending);
+    const sibling = nodes.find((n) => n.path === "[0].id");
+    const ghost = nodes.find((n) => n.path === "[0].a");
+    expect(sibling?.depth).toBe(2);
+    expect(ghost?.isGhost).toBe(true);
+    expect(ghost?.depth).toBe(sibling?.depth);
+    // ghost sits at the END of the `[0]` child block (after `[0].id`).
+    const idIdx = nodes.findIndex((n) => n.path === "[0].id");
+    const ghostIdx = nodes.findIndex((n) => n.path === "[0].a");
+    expect(idIdx).toBeLessThan(ghostIdx);
+  });
+
+  // Reason: 회귀 방지 — 순수 점 경로(루트 키)는 off-by-one 대상이 아니므로
+  // fix 후에도 root ghost depth 는 기존 루트 필드와 동일(1)해야 한다 (2026-07-18).
+  it("keeps a root-level ghost at the same depth as existing root fields", () => {
+    const value = { id: "x" };
+    const pending = new Map<string, string>([["a", '{"role":"owner"}']]);
+    const nodes = buildTreeNodesWithGhosts(value, pending);
+    const existing = nodes.find((n) => n.path === "id");
+    const ghost = nodes.find((n) => n.path === "a");
+    expect(existing?.depth).toBe(1);
+    expect(ghost?.isGhost).toBe(true);
+    expect(ghost?.depth).toBe(1);
+    // nested ghost child indents one level below its parent.
+    expect(nodes.find((n) => n.path === "a.role")?.depth).toBe(2);
+  });
+
+  // Reason: 회귀 방지 — 배열에 `+ item` append 하는 ghost(`[N]`)도 같은
+  // over-indent 버그를 공유했다. append ghost depth 는 형제 원소(`[0]`)와
+  // 동일(1)해야 한다 (2026-07-18).
+  it("gives an array append ghost the same depth as existing elements", () => {
+    const value = ["x"];
+    const pending = new Map<string, string>([["[1]", "3"]]);
+    const nodes = buildTreeNodesWithGhosts(value, pending);
+    const existing = nodes.find((n) => n.path === "[0]");
+    const ghost = nodes.find((n) => n.path === "[1]");
+    expect(existing?.depth).toBe(1);
+    expect(ghost?.isGhost).toBe(true);
+    expect(ghost?.depth).toBe(1);
+  });
+});
+
 // #1445 (2026-07-15) — DoS defense layer. Tree data crosses the trust
 // boundary (DB server), so a hostile/malfunctioning server can return
 // pathologically deep nesting (stack-overflows the recursive walk) or an
