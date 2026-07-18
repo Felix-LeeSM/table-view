@@ -92,6 +92,11 @@ pub(super) enum RedisCommand {
         score: f64,
         member: String,
     },
+    JsonSet {
+        key: String,
+        path: String,
+        value: String,
+    },
     ZRem {
         key: String,
         members: Vec<String>,
@@ -135,7 +140,10 @@ impl RedisCommand {
             | RedisCommand::RPush { .. }
             | RedisCommand::LSet { .. }
             | RedisCommand::SAdd { .. }
-            | RedisCommand::ZAdd { .. } => RedisCommandEffect::Write,
+            | RedisCommand::ZAdd { .. }
+            // JSON.SET overwrites the whole ReJSON slot (last-writer-wins), the
+            // same non-destructive write tier as SET on a plain string (#PR3).
+            | RedisCommand::JsonSet { .. } => RedisCommandEffect::Write,
             RedisCommand::Ttl { .. }
             | RedisCommand::Expire { .. }
             | RedisCommand::Persist { .. } => RedisCommandEffect::Ttl,
@@ -207,6 +215,7 @@ pub(super) fn parse_redis_command(input: &str) -> Result<RedisCommand, AppError>
             key,
             members,
         }),
+        "JSON.SET" => parse_json_set(args),
         "EXPIRE" => parse_expire(args),
         "PERSIST" => Ok(RedisCommand::Persist {
             key: one_key(args, "PERSIST")?,
@@ -455,6 +464,24 @@ fn parse_zadd(args: &[String]) -> Result<RedisCommand, AppError> {
         key: checked_key(&args[0])?,
         score: parse_f64(&args[1], "ZADD score")?,
         member: args[2].clone(),
+    })
+}
+
+/// `JSON.SET key $ <json>` — bounded to the root path `$` so this ReJSON write
+/// can only overwrite the WHOLE value (last-writer-wins), never a surgical
+/// sub-path patch. That keeps the write auditable: the value the user confirmed
+/// in the Safe Mode preview is exactly the value that lands (#PR3).
+fn parse_json_set(args: &[String]) -> Result<RedisCommand, AppError> {
+    require_arg_count(args, 3, "JSON.SET")?;
+    if args[1] != "$" {
+        return Err(AppError::Unsupported(
+            "JSON.SET is bounded to the root path '$' (whole-value overwrite)".into(),
+        ));
+    }
+    Ok(RedisCommand::JsonSet {
+        key: checked_key(&args[0])?,
+        path: args[1].clone(),
+        value: args[2].clone(),
     })
 }
 
@@ -723,6 +750,40 @@ mod tests {
                 "expected validation error for {command}"
             );
         }
+    }
+
+    #[test]
+    fn parser_accepts_json_set_whole_value_overwrite() {
+        // PR3 — ReJSON write. Bounded to root path `$`; the quoted JSON payload
+        // (spaces + inner quotes) round-trips through the tokenizer intact.
+        let parsed =
+            parse_redis_command("JSON.SET doc:1 $ \"{\\\"name\\\":\\\"Ada Lovelace\\\"}\"")
+                .unwrap();
+        assert_eq!(
+            parsed,
+            RedisCommand::JsonSet {
+                key: "doc:1".into(),
+                path: "$".into(),
+                value: "{\"name\":\"Ada Lovelace\"}".into(),
+            }
+        );
+        // Whole-slot overwrite is a non-destructive write, no typed confirm key.
+        assert_eq!(parsed.effect(), RedisCommandEffect::Write);
+        assert_eq!(parsed.required_confirmation_key(), None);
+    }
+
+    #[test]
+    fn parser_rejects_non_root_and_malformed_json_set() {
+        // Sub-path patches are outside the bounded whole-value overwrite slice.
+        assert!(matches!(
+            parse_redis_command("JSON.SET doc:1 $.name \"x\""),
+            Err(AppError::Unsupported(_))
+        ));
+        // Missing the value operand.
+        assert!(matches!(
+            parse_redis_command("JSON.SET doc:1 $"),
+            Err(AppError::Validation(_))
+        ));
     }
 
     #[test]

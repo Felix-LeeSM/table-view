@@ -114,6 +114,14 @@ export const en = {
   kvKeyDetail: {
     sectionAria: "{{key}} key detail",
     expandValueAria: "Expand {{key}} value",
+    treeWrite: {
+      save: "Save changes",
+      discard: "Discard",
+      applying: "Applying",
+      confirmWrite: "Confirm write",
+      commandLabel: "Command to run",
+      overwriteReason: "This overwrites the whole {{key}} value.",
+    },
   },
   kvMutation: {
     sectionHeader: "Mutation",
@@ -381,6 +389,14 @@ export const ko = {
   kvKeyDetail: {
     sectionAria: "{{key}} 키 상세",
     expandValueAria: "{{key}} 값 펼치기",
+    treeWrite: {
+      save: "변경 저장",
+      discard: "취소",
+      applying: "적용 중",
+      confirmWrite: "쓰기 확인",
+      commandLabel: "실행할 명령",
+      overwriteReason: "{{key}} 값 전체를 덮어씁니다.",
+    },
   },
   kvMutation: {
     sectionHeader: "뮤테이션",
