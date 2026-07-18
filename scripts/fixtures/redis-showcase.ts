@@ -1,9 +1,11 @@
-// Redis type showcase — one curated key per shape the app's KV inspector
-// renders, so a dev can see every Redis data type in one place. Mirrors
-// pg-showcase.ts: a hand-authored gallery (not Faker-generated), idempotent
-// (each key DEL'd before write), applied inside applyRedis under the
-// `showcase:` namespace so it never collides with the entity hashes
-// (customer:*, product:*, order:*, ticket:*).
+// Redis type showcase — a balanced gallery with several curated keys per shape
+// the app's KV inspector renders, so a dev opens the store on a spread of every
+// Redis data type instead of a wall of one. (The entity hashes are capped to a
+// small sample in redis.ts for the same reason.) Mirrors pg-showcase.ts: a
+// hand-authored gallery (not Faker-generated), idempotent (each key DEL'd
+// before write), applied inside applyRedis under the `showcase:` namespace so
+// it never collides with the sampled entity hashes (customer:*, product:*,
+// order:*, ticket:*).
 //
 // The app (src-tauri/src/db/redis) dispatches on Redis TYPE and renders exactly
 // these seven shapes — so those are the seven the gallery covers:
@@ -32,14 +34,14 @@ const EDGE_EMOJI = "🌟⭐ 안녕 👋 こんにちは";
 const EDGE_RTL = "שלום عالم — مرحبا";
 const EDGE_MULTILINE = 'line1\nline2 "quoted" \t\\ end';
 
-// Bulk element count appended to the paging-sensitive collections (set/hash/
-// zset/list/stream) so SSCAN/HSCAN cursors and LRANGE/ZRANGE limits are visibly
-// exercised. Env-overridable like pg-showcase's SHOWCASE_ROWS; a non-numeric
-// value falls back to the default instead of poisoning the fill with NaN.
-const parsedBulk = Number(process.env.REDIS_SHOWCASE_ROWS ?? 250);
+// Extra elements appended to a few paging-sensitive collections so SSCAN/HSCAN
+// cursors and LRANGE/ZRANGE limits are exercised — enough to page, not so many
+// they dwarf the rest of the gallery. Env-overridable like pg-showcase's
+// SHOWCASE_ROWS; a non-numeric value falls back to the default.
+const parsedBulk = Number(process.env.REDIS_SHOWCASE_ROWS ?? 40);
 const BULK = Number.isFinite(parsedBulk)
   ? Math.max(0, Math.floor(parsedBulk))
-  : 250;
+  : 40;
 
 export type ShowcaseEntry =
   | { key: string; kind: "string"; value: string; ttl?: number; note: string }
@@ -106,10 +108,11 @@ function elementCount(e: ShowcaseEntry): number {
  */
 export function buildShowcase(bulk: number = BULK): ShowcaseEntry[] {
   const n = Math.max(0, bulk);
+  // `from..from+n-1`, used to bulk-fill a few paging-sensitive collections.
   const seq = (from: number) => Array.from({ length: n }, (_, i) => i + from);
 
   return [
-    // ── string, four ways the app renders a plain Redis string ──────────────
+    // ── strings — five ways the app renders a plain Redis string ────────────
     {
       key: `${NS}:string:counter`,
       kind: "string",
@@ -151,7 +154,7 @@ export function buildShowcase(bulk: number = BULK): ShowcaseEntry[] {
       note: "TTL badge → expires state (Timer icon, {n}s)",
     },
 
-    // ── hash ────────────────────────────────────────────────────────────────
+    // ── hashes ───────────────────────────────────────────────────────────────
     {
       key: `${NS}:hash:user:1001`,
       kind: "hash",
@@ -165,8 +168,31 @@ export function buildShowcase(bulk: number = BULK): ShowcaseEntry[] {
       ],
       note: "field/value table + unicode fields",
     },
+    {
+      key: `${NS}:hash:product:sku-42`,
+      kind: "hash",
+      fields: [
+        ["title", "메카니컬 키보드 ⌨️"],
+        ["price", "129.00"],
+        ["currency", "USD"],
+        ["stock", "37"],
+        ["rating", "4.7"],
+      ],
+      note: "second hash so the type isn't a singleton",
+    },
+    {
+      key: `${NS}:hash:cart:session-7`,
+      kind: "hash",
+      fields: [
+        ["sku-42", "1"],
+        ["sku-88", "3"],
+        ["coupon", "WELCOME10"],
+      ],
+      ttl: 1800,
+      note: "hash + TTL (an ephemeral cart)",
+    },
 
-    // ── list (ordered, RPUSH) ────────────────────────────────────────────────
+    // ── lists (ordered, RPUSH) ───────────────────────────────────────────────
     {
       key: `${NS}:list:deploy-log`,
       kind: "list",
@@ -180,8 +206,20 @@ export function buildShowcase(bulk: number = BULK): ShowcaseEntry[] {
       ],
       note: "index/value table (ordered); bulk-filled for LRANGE paging",
     },
+    {
+      key: `${NS}:list:queue:emails`,
+      kind: "list",
+      items: ["welcome@a.com", "receipt@b.jp", "digest@c.kr", "alert@d.de"],
+      note: "short FIFO queue",
+    },
+    {
+      key: `${NS}:list:recent-searches`,
+      kind: "list",
+      items: ["기계식 키보드", "usb-c dock", "モニター", "🖱️ mouse"],
+      note: "unicode list items",
+    },
 
-    // ── set (unordered unique, SADD) ─────────────────────────────────────────
+    // ── sets (unordered unique, SADD) ────────────────────────────────────────
     {
       key: `${NS}:set:tags`,
       kind: "set",
@@ -195,8 +233,21 @@ export function buildShowcase(bulk: number = BULK): ShowcaseEntry[] {
       ],
       note: "member table; bulk-filled for SSCAN cursor paging",
     },
+    {
+      key: `${NS}:set:online-users`,
+      kind: "set",
+      members: ["u-1001", "u-1002", "u-1042", "u-2007"],
+      ttl: 60,
+      note: "set + short TTL (presence)",
+    },
+    {
+      key: `${NS}:set:countries`,
+      kind: "set",
+      members: ["🇰🇷 KR", "🇯🇵 JP", "🇩🇪 DE", "🇧🇷 BR"],
+      note: "unicode/emoji members",
+    },
 
-    // ── zset (member/score, ZADD) ────────────────────────────────────────────
+    // ── zsets (member/score, ZADD) ───────────────────────────────────────────
     {
       key: `${NS}:zset:leaderboard`,
       kind: "zset",
@@ -209,10 +260,32 @@ export function buildShowcase(bulk: number = BULK): ShowcaseEntry[] {
         ["floor", -Infinity],
         ...seq(1).map((i): [string, number] => [`player-${i}`, i]),
       ],
-      note: "member/score table incl. +inf/-inf/negative/float; ZRANGE paging",
+      note: "member/score incl. +inf/-inf/negative/float; ZRANGE paging",
+    },
+    {
+      key: `${NS}:zset:trending`,
+      kind: "zset",
+      members: [
+        ["keyboard", 92],
+        ["monitor", 71],
+        ["dock", 55],
+        ["mouse 🖱️", 33],
+      ],
+      note: "small ranked set",
+    },
+    {
+      key: `${NS}:zset:latency-ms`,
+      kind: "zset",
+      members: [
+        ["p50", 12.5],
+        ["p90", 48.2],
+        ["p99", 210.7],
+        ["p999", 1503.4],
+      ],
+      note: "float scores",
     },
 
-    // ── stream (XADD id + fields) ────────────────────────────────────────────
+    // ── streams (XADD id + fields) ───────────────────────────────────────────
     {
       key: `${NS}:stream:orders`,
       kind: "stream",
@@ -251,8 +324,29 @@ export function buildShowcase(bulk: number = BULK): ShowcaseEntry[] {
       ],
       note: "id/fields reader panel; bulk-filled for XRANGE paging",
     },
+    {
+      key: `${NS}:stream:sensor`,
+      kind: "stream",
+      entries: [
+        {
+          id: "1-1",
+          fields: [
+            ["temp_c", "21.4"],
+            ["humidity", "48"],
+          ],
+        },
+        {
+          id: "2-1",
+          fields: [
+            ["temp_c", "21.6"],
+            ["humidity", "47"],
+          ],
+        },
+      ],
+      note: "second stream (sensor telemetry)",
+    },
 
-    // ── RedisJSON (module-gated; best-effort) ────────────────────────────────
+    // ── RedisJSON (module-gated; best-effort, skipped without ReJSON) ────────
     {
       key: `${NS}:json:profile`,
       kind: "json",
@@ -269,6 +363,17 @@ export function buildShowcase(bulk: number = BULK): ShowcaseEntry[] {
         ],
       },
       note: "RedisJSON → DocumentTree (needs ReJSON module; skipped if absent)",
+    },
+    {
+      key: `${NS}:json:feature-flags`,
+      kind: "json",
+      value: {
+        kv_write: true,
+        erd: true,
+        slow_query: false,
+        rollout: { pct: 25, cohorts: ["beta", "internal"] },
+      },
+      note: "second RedisJSON document (feature flags)",
     },
   ];
 }

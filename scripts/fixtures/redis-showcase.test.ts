@@ -7,13 +7,27 @@ import { describe, it, expect } from "vitest";
 import { buildShowcase, redisScore, KINDS } from "./redis-showcase.js";
 
 describe("redis showcase — type coverage", () => {
-  // Reason: the app dispatches on Redis TYPE and renders exactly these shapes
-  // (src-tauri/src/db/redis). If a kind is dropped from the gallery, that
-  // renderer path silently loses its only fixture — this is the parity guard.
-  it("includes at least one key for every renderable kind", () => {
+  // Reason: each entry.kind maps to a renderer path in the app
+  // (src-tauri/src/db/redis; `binary` is the string type's hex sub-encoding).
+  // If a kind is dropped from the gallery, that path silently loses its only
+  // fixture — this is the parity guard.
+  it("includes at least one key for every entry kind", () => {
     const present = new Set(buildShowcase().map((e) => e.kind));
     for (const kind of KINDS) {
       expect(present, `showcase missing kind: ${kind}`).toContain(kind);
+    }
+  });
+
+  // Reason: the whole point of this PR was that a lone key per type is drowned
+  // by the entity hashes (user reported "hash밖에 없어"). Guard that the
+  // collection types keep MULTIPLE keys so the gallery stays balanced/browsable.
+  it("ships multiple keys for each collection type (not singletons)", () => {
+    const counts: Record<string, number> = {};
+    for (const e of buildShowcase()) counts[e.kind] = (counts[e.kind] ?? 0) + 1;
+    for (const kind of ["hash", "list", "set", "zset", "stream", "json"]) {
+      expect(counts[kind] ?? 0, `too few ${kind} keys`).toBeGreaterThanOrEqual(
+        2,
+      );
     }
   });
 

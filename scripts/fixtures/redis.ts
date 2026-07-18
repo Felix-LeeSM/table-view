@@ -1,11 +1,23 @@
 // Redis fixture generator — KV pattern using `ioredis`.
 // Stores entities as Redis Hashes with key pattern `<prefix>:<id>`.
 // Mirrors export shape of other generators where applicable.
+//
+// A Redis/KV store is browsed key-by-key, not paged as a table, so seeding the
+// full row counts (20K+ hashes) drowns every other data type in a wall of
+// hashes. We keep only a small SAMPLE of each entity as realistic hashes and
+// let the type showcase (redis-showcase.ts) carry the variety, so the KV
+// inspector opens on a balanced gallery. Override the sample size with
+// REDIS_ENTITY_CAP (a non-numeric value falls back to the default).
 import Redis from "ioredis";
 import type { ResolvedSpec } from "./spec.js";
 import type { EntityRows } from "./generator.js";
 import { entityOrder } from "./spec.js";
 import { applyRedisShowcase } from "./redis-showcase.js";
+
+const parsedEntityCap = Number(process.env.REDIS_ENTITY_CAP ?? 6);
+const ENTITY_CAP = Number.isFinite(parsedEntityCap)
+  ? Math.max(0, Math.floor(parsedEntityCap))
+  : 6;
 
 export interface RedisConnection {
   host: string;
@@ -89,7 +101,9 @@ export async function applyRedis(
       const entity = spec.base.entities[entityName];
       if (!entity || !entity.redis || !entity.targets.includes("redis"))
         continue;
-      const data = rows[entityName] ?? [];
+      // Sample, don't bulk-load: a handful of realistic hashes per entity is
+      // enough for the KV viewer; the rest would just bury the other types.
+      const data = (rows[entityName] ?? []).slice(0, ENTITY_CAP);
       const start = Date.now();
       await insertEntity(client, entity, data);
       log(entityName, data.length, Date.now() - start);
