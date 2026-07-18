@@ -8,6 +8,7 @@ import type {
   KvZSetValue,
 } from "@/types/kv";
 import type { KvEntryPayload } from "./kvMutationCommands";
+import { KvJsonValueCell } from "./KvJsonValueCell";
 import { formatCount } from "./kvValueFormat";
 
 // Structured render for Redis collection values (#1465). The envelope arrives
@@ -130,7 +131,7 @@ export function KvCollectionValueTable({
                     key={cellIndex}
                     className="px-2 py-1 align-top font-mono break-all text-foreground"
                   >
-                    {cell}
+                    <KvJsonValueCell value={cell} label={row.cells[0] ?? ""} />
                   </td>
                 ))}
                 {showActions && onEntryAction && (
