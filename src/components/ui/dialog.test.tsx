@@ -491,6 +491,30 @@ describe("DialogContent horizontal-overflow guard (fix/mql-preview-overflow)", (
     // overflow instead of dropping it.
     expect(screen.getByTestId("long-child")).toBeInTheDocument();
   });
+
+  // Reason: AlertDialogContent is the sibling base primitive with the same grid
+  // className; without the same [&>*]:min-w-0 guard, confirm/danger dialogs
+  // (ConfirmDialog) keep the identical horizontal-overflow root cause
+  // (2026-07-18).
+  it("floors AlertDialogContent's direct grid children at min-width:0 too", () => {
+    render(
+      <ConfirmDialog
+        title="Delete?"
+        message={"a".repeat(4000)}
+        confirmLabel="Delete"
+        danger
+        onConfirm={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    const content = document.querySelector(
+      '[data-slot="alert-dialog-content"]',
+    ) as HTMLElement;
+    expect(content).not.toBeNull();
+    expect(content.className).toContain("[&>*]:min-w-0");
+    expect(content.className).toContain("max-w-[calc(100%-2rem)]");
+  });
 });
 
 describe("ConfirmDialog tone (sprint-95 AC-05)", () => {
