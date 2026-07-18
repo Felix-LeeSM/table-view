@@ -1192,4 +1192,86 @@ describe("ConnectionGroup", () => {
     const wrapper = container.firstElementChild as HTMLElement;
     expect(wrapper.className).toMatch(/\bpy-1\b/);
   });
+
+  // -----------------------------------------------------------------------
+  // Drop-location preview (2026-07-18) — dragging a connection over a group
+  // highlights the *whole group* container so the user sees where the drop
+  // lands. Whole-group affordance only; the per-item insertion indicator
+  // removed on 2026-05-05 (see the drop-target comment in the component)
+  // stays removed.
+  // -----------------------------------------------------------------------
+  describe("drop-target preview", () => {
+    // Reason: 드래그 UX 통일 요구 — drop 전 대상 그룹 하이라이트 (2026-07-18)
+    it("marks the wrapper as a drop target when isDropTarget is set", () => {
+      render(
+        <ConnectionGroup group={makeGroup()} connections={[]} isDropTarget />,
+      );
+      expect(screen.getByTestId("connection-group-wrapper")).toHaveAttribute(
+        "data-drop-target",
+        "true",
+      );
+    });
+
+    // Reason: 하이라이트 상태 누수 방지 — 비드래그 기본 상태엔 표시 없음 (2026-07-18)
+    it("does not mark the wrapper as a drop target by default", () => {
+      render(<ConnectionGroup group={makeGroup()} connections={[]} />);
+      expect(
+        screen.getByTestId("connection-group-wrapper"),
+      ).not.toHaveAttribute("data-drop-target");
+    });
+
+    // Reason: dragover 시 부모가 drop 대상 그룹을 추적하도록 id 보고 (2026-07-18)
+    it("reports its id via onDragOverGroup while a connection is dragged over it", () => {
+      _draggedConnectionId = "conn-42";
+      const onDragOverGroup = vi.fn();
+      render(
+        <ConnectionGroup
+          group={makeGroup()}
+          connections={[]}
+          onDragOverGroup={onDragOverGroup}
+        />,
+      );
+      act(() => {
+        fireEvent.dragOver(screen.getByTestId("connection-group-wrapper"), {
+          dataTransfer: { dropEffect: "" },
+        });
+      });
+      expect(onDragOverGroup).toHaveBeenCalledWith("g1");
+    });
+
+    // Reason: 활성 드래그가 아닐 때 헛 하이라이트 방지 — early return (2026-07-18)
+    it("does not report onDragOverGroup when no connection is being dragged", () => {
+      _draggedConnectionId = null;
+      const onDragOverGroup = vi.fn();
+      render(
+        <ConnectionGroup
+          group={makeGroup()}
+          connections={[]}
+          onDragOverGroup={onDragOverGroup}
+        />,
+      );
+      act(() => {
+        fireEvent.dragOver(screen.getByTestId("connection-group-wrapper"), {
+          dataTransfer: { dropEffect: "" },
+        });
+      });
+      expect(onDragOverGroup).not.toHaveBeenCalled();
+    });
+
+    // Reason: 하이라이트 추가가 기존 drop→moveConnectionToGroup 을 깨지 않음 (2026-07-18)
+    it("still moves the connection into the group on drop when highlighted", async () => {
+      _draggedConnectionId = "conn-42";
+      render(
+        <ConnectionGroup group={makeGroup()} connections={[]} isDropTarget />,
+      );
+      act(() => {
+        fireEvent.drop(screen.getByTestId("connection-group-wrapper"), {
+          dataTransfer: { getData: () => "" },
+        });
+      });
+      await waitFor(() => {
+        expect(mockMoveConnectionToGroup).toHaveBeenCalledWith("conn-42", "g1");
+      });
+    });
+  });
 });

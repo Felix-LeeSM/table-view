@@ -65,18 +65,31 @@ vi.mock("./ConnectionGroup", () => ({
     selectedId,
     onSelect,
     onActivate,
+    isDropTarget,
+    onDragOverGroup,
   }: {
     group: { id: string; name: string };
     connections: ConnectionConfig[];
     selectedId?: string | null;
     onSelect?: (id: string) => void;
     onActivate?: (id: string) => void;
+    isDropTarget?: boolean;
+    onDragOverGroup?: (groupId: string) => void;
   }) => (
     <div
       data-testid="connection-group"
+      data-group-id={group.id}
       data-selected={selectedId ?? ""}
       data-has-onselect={onSelect ? "true" : "false"}
       data-has-onactivate={onActivate ? "true" : "false"}
+      data-drop-target={isDropTarget ? "true" : "false"}
+      // The real ConnectionGroup calls onDragOverGroup(group.id) and
+      // stopPropagation() on dragover; the stub mirrors both so the event does
+      // not bubble to the list's root onDragOver (which the real group blocks).
+      onDragOver={(e) => {
+        e.stopPropagation();
+        onDragOverGroup?.(group.id);
+      }}
     >
       {group.name} ({connections.length})
     </div>
@@ -641,6 +654,99 @@ describe("ConnectionList", () => {
       expect(onSelect).toHaveBeenCalledWith("conn-q");
       // Single-click is select-only; window open is reserved for double-click.
       expect(openWorkspaceWindowMock).not.toHaveBeenCalled();
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Drop-location preview (2026-07-18) — the list owns which group the dragged
+  // connection is over and flags exactly that group as the drop target. The
+  // single dragend/drop cleanup means an Esc cancel leaves no highlight behind.
+  // The root highlight stays removed (see the 2026-05-05 lock above).
+  // ---------------------------------------------------------------------------
+  describe("drop-target highlight state", () => {
+    beforeEach(() => {
+      setStoreState({
+        connections: [
+          makeConnection({ id: "c1", name: "DB A", groupId: "g1" }),
+          makeConnection({ id: "c2", name: "DB B", groupId: "g2" }),
+        ],
+        groups: [
+          makeGroup({ id: "g1", name: "Group 1" }),
+          makeGroup({ id: "g2", name: "Group 2" }),
+        ],
+      });
+      _draggedConnectionId = "c1";
+    });
+
+    // Reason: dragover 시 그 그룹만 drop 대상으로 하이라이트 (2026-07-18)
+    it("flags only the hovered group as the drop target on dragover", () => {
+      render(<ConnectionList />);
+      const [g1, g2] = screen.getAllByTestId("connection-group");
+      act(() => {
+        fireEvent.dragOver(g1!);
+      });
+      expect(g1).toHaveAttribute("data-drop-target", "true");
+      expect(g2).toHaveAttribute("data-drop-target", "false");
+    });
+
+    // Reason: 포인터가 다른 그룹으로 옮겨가면 하이라이트도 따라 이동 (2026-07-18)
+    it("moves the highlight to the group under the pointer", () => {
+      render(<ConnectionList />);
+      const [g1, g2] = screen.getAllByTestId("connection-group");
+      act(() => {
+        fireEvent.dragOver(g1!);
+      });
+      act(() => {
+        fireEvent.dragOver(g2!);
+      });
+      expect(g1).toHaveAttribute("data-drop-target", "false");
+      expect(g2).toHaveAttribute("data-drop-target", "true");
+    });
+
+    // Reason: dragend(=드롭/Esc 취소) 시 하이라이트 제거, 상태 누수 없음 (2026-07-18)
+    it("clears the highlight on dragend so an Esc cancel leaves nothing behind", () => {
+      const { container } = render(<ConnectionList />);
+      const [g1] = screen.getAllByTestId("connection-group");
+      act(() => {
+        fireEvent.dragOver(g1!);
+      });
+      expect(g1).toHaveAttribute("data-drop-target", "true");
+
+      const root = container.firstElementChild as HTMLElement;
+      act(() => {
+        fireEvent.dragEnd(root);
+      });
+      expect(g1).toHaveAttribute("data-drop-target", "false");
+    });
+
+    // Reason: drop 완료 후 하이라이트 제거 (2026-07-18)
+    it("clears the highlight after a drop on the root area", () => {
+      const { container } = render(<ConnectionList />);
+      const [g1] = screen.getAllByTestId("connection-group");
+      act(() => {
+        fireEvent.dragOver(g1!);
+      });
+      const root = container.firstElementChild as HTMLElement;
+      act(() => {
+        fireEvent.drop(root, { dataTransfer: { getData: () => "" } });
+      });
+      expect(g1).toHaveAttribute("data-drop-target", "false");
+    });
+
+    // Reason: 포인터가 루트(비그룹) 영역으로 나가면 그룹 하이라이트 해제 (2026-07-18)
+    it("clears the group highlight when the pointer moves to the root area", () => {
+      const { container } = render(<ConnectionList />);
+      const [g1] = screen.getAllByTestId("connection-group");
+      act(() => {
+        fireEvent.dragOver(g1!);
+      });
+      expect(g1).toHaveAttribute("data-drop-target", "true");
+
+      const root = container.firstElementChild as HTMLElement;
+      act(() => {
+        fireEvent.dragOver(root, { dataTransfer: { dropEffect: "" } });
+      });
+      expect(g1).toHaveAttribute("data-drop-target", "false");
     });
   });
 });

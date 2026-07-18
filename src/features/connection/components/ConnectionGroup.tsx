@@ -53,6 +53,10 @@ interface ConnectionGroupProps {
   selectedId?: string | null;
   onSelect?: (id: string) => void;
   onActivate?: (id: string) => void;
+  /** True while a dragged connection hovers this group — highlights the drop target. */
+  isDropTarget?: boolean;
+  /** Fired on dragover so the parent can track which group is the current drop target. */
+  onDragOverGroup?: (groupId: string) => void;
 }
 
 export default function ConnectionGroup({
@@ -61,6 +65,8 @@ export default function ConnectionGroup({
   selectedId = null,
   onSelect,
   onActivate,
+  isDropTarget = false,
+  onDragOverGroup,
 }: ConnectionGroupProps) {
   const { t } = useTranslation("featuresConnection");
   const [collapsed, setCollapsed] = useState(() => group.collapsed);
@@ -138,6 +144,11 @@ export default function ConnectionGroup({
     e.preventDefault();
     e.stopPropagation();
     e.dataTransfer.dropEffect = "move";
+    // Drop-location preview: tell the parent this group is the current drop
+    // target so it renders the group-wide highlight. This is the *whole group*
+    // affordance only — NOT the per-item insertion line that was intentionally
+    // removed on 2026-05-05 (see the drop-target comment above).
+    onDragOverGroup?.(group.id);
   };
 
   const handleGroupDrop = async (e: DragEvent) => {
@@ -157,7 +168,12 @@ export default function ConnectionGroup({
     <>
       <div
         data-testid="connection-group-wrapper"
-        className="select-none py-1"
+        data-drop-target={isDropTarget ? "true" : undefined}
+        className={`select-none py-1${
+          isDropTarget
+            ? " rounded-md bg-primary/10 ring-1 ring-inset ring-primary/40"
+            : ""
+        }`}
         onDragOver={handleGroupDragOver}
         onDrop={handleGroupDrop}
       >
