@@ -350,7 +350,13 @@ export function buildTreeNodesWithGhosts(
   // process shallow ghosts first.
   const depthOf = (p: string): number => {
     if (p === "") return 0;
-    let n = 1;
+    // A bracket-led path (`[0]…`, an array-column root child) has no leading
+    // bare-key segment, so start at 0 and let the `[` counter below account
+    // for the first index. Dot-led / bare-key paths keep the +1 for their
+    // first segment. Without this, `[0].a` counted as depth 3 while its
+    // sibling `[0].id` (via buildTreeNodes) is depth 2 — the ghost rendered
+    // one indent too deep. Result now equals buildTreeNodes' segment count.
+    let n = p.startsWith("[") ? 0 : 1;
     for (let i = 0; i < p.length; i += 1) {
       const ch = p.charAt(i);
       if (ch === "." || ch === "[") n += 1;
