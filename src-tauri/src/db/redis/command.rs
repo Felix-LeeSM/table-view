@@ -103,6 +103,11 @@ async fn dispatch_command(
         RedisCommand::Expire { key, seconds } => expire_command(adapter, key, seconds).await,
         RedisCommand::Persist { key } => persist_command(adapter, key).await,
         RedisCommand::Del { key } => delete_command(adapter, key).await,
+        RedisCommand::XAdd { key, id, fields } => xadd_command(adapter, key, id, fields).await,
+        RedisCommand::XDel { key, ids } => {
+            member_removal_command(adapter, "XDEL", "xdel", key, ids).await
+        }
+        RedisCommand::XTrim { key, maxlen } => xtrim_command(adapter, key, maxlen).await,
     }
 }
 
@@ -623,6 +628,57 @@ async fn persist_command(adapter: &RedisAdapter, key: String) -> Result<RdbQuery
     Ok(mutation_result(&key, "persist", u64::from(changed)))
 }
 
+/// `XADD key <id> field value [field value ...]` — append one entry to an
+/// append-only stream (#1683 PR5b). Each field/value operand is `.arg()`-encoded
+/// individually, so a value with spaces or verb-like text can never inject an
+/// extra command token. The driver returns the assigned entry id; projected as a
+/// single `xadd` mutation.
+async fn xadd_command(
+    adapter: &RedisAdapter,
+    key: String,
+    id: String,
+    fields: Vec<(String, String)>,
+) -> Result<RdbQueryResult, AppError> {
+    adapter
+        .with_connection(async |connection| {
+            let mut cmd = ::redis::cmd("XADD");
+            cmd.arg(&key).arg(&id);
+            for (field, value) in &fields {
+                cmd.arg(field).arg(value);
+            }
+            let _: String = cmd
+                .query_async(connection)
+                .await
+                .map_err(|err| adapter.database_error(err))?;
+            Ok(())
+        })
+        .await?;
+    Ok(mutation_result(&key, "xadd", 1))
+}
+
+/// `XTRIM key MAXLEN <count>` — bound the stream to its newest `<count>` entries
+/// (#1683 PR5b). The MAXLEN strategy + count are fixed literals here (the parser
+/// already enforced the allowlist), so no caller-supplied option string reaches
+/// the driver. Returns the number of entries evicted.
+async fn xtrim_command(
+    adapter: &RedisAdapter,
+    key: String,
+    maxlen: u64,
+) -> Result<RdbQueryResult, AppError> {
+    let removed: u64 = adapter
+        .with_connection(async |connection| {
+            ::redis::cmd("XTRIM")
+                .arg(&key)
+                .arg("MAXLEN")
+                .arg(maxlen)
+                .query_async(connection)
+                .await
+                .map_err(|err| adapter.database_error(err))
+        })
+        .await?;
+    Ok(mutation_result(&key, "xtrim", removed))
+}
+
 async fn delete_command(adapter: &RedisAdapter, key: String) -> Result<RdbQueryResult, AppError> {
     let changed: u64 = adapter
         .with_connection(async |connection| {
@@ -768,6 +824,29 @@ mod tests {
             ("LREM list 1 a", "lrem"),
             ("SREM set a", "srem"),
             ("ZREM zset a", "zrem"),
+        ] {
+            let result = execute_command(&adapter, request(command), None)
+                .await
+                .unwrap();
+            assert_eq!(result.rows[0][1], json!(expected_name));
+            assert!(matches!(
+                result.query_type,
+                crate::models::QueryType::Dml { .. }
+            ));
+        }
+    }
+
+    #[tokio::test]
+    async fn command_runtime_projects_stream_mutation_results() {
+        // #1683 PR5b — append-only stream write surface. XADD appends (Write),
+        // XDEL drops whole entries + XTRIM MAXLEN bounds the log (Destructive);
+        // none require a typed key confirmation, so all dispatch as DML.
+        let adapter = connected_adapter().await;
+
+        for (command, expected_name) in [
+            ("XADD events * type login user ada", "xadd"),
+            ("XDEL events 1-0 1-1", "xdel"),
+            ("XTRIM events MAXLEN 100", "xtrim"),
         ] {
             let result = execute_command(&adapter, request(command), None)
                 .await

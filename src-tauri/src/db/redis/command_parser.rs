@@ -111,6 +111,19 @@ pub(super) enum RedisCommand {
     Del {
         key: String,
     },
+    XAdd {
+        key: String,
+        id: String,
+        fields: Vec<(String, String)>,
+    },
+    XDel {
+        key: String,
+        ids: Vec<String>,
+    },
+    XTrim {
+        key: String,
+        maxlen: u64,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -143,7 +156,11 @@ impl RedisCommand {
             | RedisCommand::ZAdd { .. }
             // JSON.SET overwrites the whole ReJSON slot (last-writer-wins), the
             // same non-destructive write tier as SET on a plain string (#PR3).
-            | RedisCommand::JsonSet { .. } => RedisCommandEffect::Write,
+            | RedisCommand::JsonSet { .. }
+            // XADD appends a new entry to an append-only log: it never mutates or
+            // drops an existing entry, so it is the same non-destructive write
+            // tier as SADD/ZADD (#1683 PR5b).
+            | RedisCommand::XAdd { .. } => RedisCommandEffect::Write,
             RedisCommand::Ttl { .. }
             | RedisCommand::Expire { .. }
             | RedisCommand::Persist { .. } => RedisCommandEffect::Ttl,
@@ -155,7 +172,12 @@ impl RedisCommand {
             | RedisCommand::HDel { .. }
             | RedisCommand::LRem { .. }
             | RedisCommand::SRem { .. }
-            | RedisCommand::ZRem { .. } => RedisCommandEffect::Destructive,
+            | RedisCommand::ZRem { .. }
+            // XDEL drops whole stream entries and XTRIM discards entries past the
+            // MAXLEN bound — both lose data, so they take the destructive tier
+            // (danger confirm) like the other element removals (#1683 PR5b).
+            | RedisCommand::XDel { .. }
+            | RedisCommand::XTrim { .. } => RedisCommandEffect::Destructive,
         }
     }
 
@@ -223,6 +245,9 @@ pub(super) fn parse_redis_command(input: &str) -> Result<RedisCommand, AppError>
         "DEL" => Ok(RedisCommand::Del {
             key: one_key(args, "DEL")?,
         }),
+        "XADD" => parse_xadd(args),
+        "XDEL" => parse_members(args, "XDEL", |key, ids| RedisCommand::XDel { key, ids }),
+        "XTRIM" => parse_xtrim(args),
         _ => Err(AppError::Unsupported(format!(
             "Redis command '{upper}' is not in the bounded command allowlist"
         ))),
@@ -496,6 +521,49 @@ fn parse_expire(args: &[String]) -> Result<RedisCommand, AppError> {
     Ok(RedisCommand::Expire {
         key: checked_key(&args[0])?,
         seconds,
+    })
+}
+
+/// `XADD key <id> field value [field value ...]` — append one entry to an
+/// append-only stream. The id is passed through verbatim so `*` (server-assigned
+/// id) and an explicit id both work; the field/value operands must form balanced
+/// pairs (at least one). Every token is later `.arg()`-encoded individually, so a
+/// value containing spaces can never leak into extra command tokens (#1683 PR5b).
+fn parse_xadd(args: &[String]) -> Result<RedisCommand, AppError> {
+    if args.len() < 4 {
+        return Err(AppError::Validation(
+            "XADD requires key, id, and at least one field-value pair".into(),
+        ));
+    }
+    let pairs = &args[2..];
+    if !pairs.len().is_multiple_of(2) {
+        return Err(AppError::Validation(
+            "XADD field-value pairs must be balanced".into(),
+        ));
+    }
+    Ok(RedisCommand::XAdd {
+        key: checked_key(&args[0])?,
+        id: args[1].clone(),
+        fields: pairs
+            .chunks_exact(2)
+            .map(|pair| (pair[0].clone(), pair[1].clone()))
+            .collect(),
+    })
+}
+
+/// `XTRIM key MAXLEN <count>` — bound to the single MAXLEN exact-count strategy.
+/// MINID / approximate `~` / LIMIT are outside the allowlist so a malicious
+/// option string can never widen the command into a different trim (#1683 PR5b).
+fn parse_xtrim(args: &[String]) -> Result<RedisCommand, AppError> {
+    require_arg_count(args, 3, "XTRIM")?;
+    if !args[1].eq_ignore_ascii_case("MAXLEN") {
+        return Err(AppError::Unsupported(
+            "XTRIM is bounded to the MAXLEN <count> strategy".into(),
+        ));
+    }
+    Ok(RedisCommand::XTrim {
+        key: checked_key(&args[0])?,
+        maxlen: parse_u64(&args[2], "XTRIM MAXLEN count")?,
     })
 }
 
@@ -784,6 +852,94 @@ mod tests {
             parse_redis_command("JSON.SET doc:1 $"),
             Err(AppError::Validation(_))
         ));
+    }
+
+    #[test]
+    fn parser_accepts_stream_mutation_commands() {
+        // #1683 PR5b — append-only stream write surface: XADD append (Write),
+        // XDEL entry drop + XTRIM MAXLEN trim (Destructive).
+        let xadd = parse_redis_command("XADD events * type login user ada").unwrap();
+        assert_eq!(
+            xadd,
+            RedisCommand::XAdd {
+                key: "events".into(),
+                id: "*".into(),
+                fields: vec![
+                    ("type".into(), "login".into()),
+                    ("user".into(), "ada".into()),
+                ],
+            }
+        );
+        // Append is a non-destructive write with no typed-key confirmation.
+        assert_eq!(xadd.effect(), RedisCommandEffect::Write);
+        assert_eq!(xadd.required_confirmation_key(), None);
+
+        // An explicit entry id is accepted verbatim alongside the `*` default.
+        assert!(matches!(
+            parse_redis_command("XADD events 1526919030474-0 k v").unwrap(),
+            RedisCommand::XAdd { id, .. } if id == "1526919030474-0"
+        ));
+
+        let xdel = parse_redis_command("XDEL events 1-1 1-2").unwrap();
+        assert_eq!(
+            xdel,
+            RedisCommand::XDel {
+                key: "events".into(),
+                ids: vec!["1-1".into(), "1-2".into()],
+            }
+        );
+
+        let xtrim = parse_redis_command("XTRIM events MAXLEN 100").unwrap();
+        assert_eq!(
+            xtrim,
+            RedisCommand::XTrim {
+                key: "events".into(),
+                maxlen: 100,
+            }
+        );
+
+        // Both removals are destructive without a typed key confirmation.
+        for command in ["XDEL events 1-1", "XTRIM events MAXLEN 0"] {
+            let parsed = parse_redis_command(command).unwrap();
+            assert_eq!(parsed.effect(), RedisCommandEffect::Destructive);
+            assert_eq!(parsed.required_confirmation_key(), None);
+        }
+    }
+
+    #[test]
+    fn parser_rejects_malformed_and_out_of_allowlist_stream_mutations() {
+        for command in [
+            "XADD events *",             // no field-value pair
+            "XADD events * onlyfield",   // unbalanced pair
+            "XADD events * a b c",       // trailing unbalanced token
+            "XDEL events",               // no entry id
+            "XTRIM events MINID 1-1",    // strategy outside the MAXLEN allowlist
+            "XTRIM events MAXLEN ~ 100", // approximate arg widens arity
+            "XTRIM events MAXLEN notint",
+            "XTRIM events",
+        ] {
+            assert!(
+                parse_redis_command(command).is_err(),
+                "expected rejection for {command}"
+            );
+        }
+    }
+
+    #[test]
+    fn stream_mutation_quoted_operands_never_leak_extra_tokens() {
+        // Injection guard — a quoted value containing whitespace and a verb-like
+        // word round-trips through the tokenizer as ONE field value, so it can
+        // never split into extra command tokens (each token is `.arg()`-encoded
+        // individually downstream).
+        let parsed = parse_redis_command("XADD events * note \"drop table; FLUSHALL x\"").unwrap();
+        assert_eq!(
+            parsed,
+            RedisCommand::XAdd {
+                key: "events".into(),
+                id: "*".into(),
+                fields: vec![("note".into(), "drop table; FLUSHALL x".into())],
+            }
+        );
     }
 
     #[test]
