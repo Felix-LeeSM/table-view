@@ -223,15 +223,21 @@ describe("KvKeyDetailPanel mutations", () => {
     expect(commandCalls("execute_kv_command")).toHaveLength(0);
   });
 
-  it("surfaces selected-key workbench actions and keeps create-key unsupported", async () => {
+  it("surfaces selected-key workbench actions and opens the create-key composer", async () => {
     mockRedisRuntime(stringValueEnvelope("Ada"));
 
     renderPanel();
 
     const newKeyAction = screen.getByRole("button", {
-      name: /new key \(unsupported\)/i,
+      name: /create a new key/i,
     });
-    expect(newKeyAction).toBeDisabled();
+    expect(newKeyAction).toBeEnabled();
+    fireEvent.click(newKeyAction);
+    // The type-first composer opens as a modal dialog.
+    expect(
+      await screen.findByRole("dialog", { name: /create a new key/i }),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /cancel/i }));
 
     await waitForValue();
 

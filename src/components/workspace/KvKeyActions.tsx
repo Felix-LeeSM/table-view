@@ -7,12 +7,14 @@ interface KvKeyActionsProps {
   productLabel: string;
   selectedMutationReady: boolean;
   onMutationAction: (kind: KvMutationActionIntent["kind"]) => void;
+  onNewKey: () => void;
 }
 
 export function KvKeyActions({
   productLabel,
   selectedMutationReady,
   onMutationAction,
+  onNewKey,
 }: KvKeyActionsProps) {
   const { t } = useTranslation("workspace");
   return (
@@ -25,7 +27,7 @@ export function KvKeyActions({
         size="xs"
         aria-label={t("kvKeyActions.newKey.aria")}
         title={t("kvKeyActions.newKey.title")}
-        disabled
+        onClick={onNewKey}
       >
         <Plus size={12} aria-hidden />
         {t("kvKeyActions.newKey.label")}

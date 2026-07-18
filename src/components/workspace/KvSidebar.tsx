@@ -6,12 +6,15 @@ import {
   Layers3,
   List,
   Loader2,
+  Plus,
   RefreshCw,
   Search,
   Square,
   Timer,
 } from "lucide-react";
 import { Button } from "@components/ui/button";
+import KvNewKeyDialog from "./KvNewKeyDialog";
+import { kvKeyDetailTab } from "./kvKeyTab";
 import {
   useTreeRoving,
   type TreeRovingRow,
@@ -69,6 +72,7 @@ export default function KvSidebar({ connectionId }: KvSidebarProps) {
   const [loadingKeys, setLoadingKeys] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [newKeyOpen, setNewKeyOpen] = useState(false);
   const autoScanRef = useRef(false);
   const rootScanInFlightRef = useRef<string | null>(null);
   const latestKeyScanRef = useRef(0);
@@ -175,17 +179,7 @@ export default function KvSidebar({ connectionId }: KvSidebarProps) {
       // MainArea's (connId, activeDb) key resolves to where the tab lives
       // (same guarantee SearchSidebar makes with SEARCH_WORKSPACE_DB).
       setActiveDb(connectionId, db);
-      addTab(connectionId, {
-        title: key,
-        connectionId,
-        type: "table",
-        closable: true,
-        database: db,
-        schema: db,
-        table: key,
-        subView: "structure",
-        paradigm: "kv",
-      });
+      addTab(connectionId, kvKeyDetailTab(connectionId, database, key));
     },
     [addTab, connectionId, database, setActiveDb],
   );
@@ -250,22 +244,34 @@ export default function KvSidebar({ connectionId }: KvSidebarProps) {
             <span className="truncate">{t("kvSidebar.keysHeader")}</span>
           </div>
         </div>
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          aria-label={t("kvSidebar.refreshCatalogAria", { productLabel })}
-          title={t("kvSidebar.refreshCatalogTitle", { productLabel })}
-          disabled={loadingCatalog}
-          onClick={() => {
-            void loadCatalog();
-          }}
-        >
-          {loadingCatalog ? (
-            <Loader2 size={12} className="animate-spin" />
-          ) : (
-            <RefreshCw size={12} />
-          )}
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button
+            variant="secondary"
+            size="xs"
+            aria-label={t("kvNewKey.trigger.aria", { productLabel })}
+            title={t("kvNewKey.trigger.title")}
+            onClick={() => setNewKeyOpen(true)}
+          >
+            <Plus size={12} aria-hidden />
+            {t("kvNewKey.trigger.label")}
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            aria-label={t("kvSidebar.refreshCatalogAria", { productLabel })}
+            title={t("kvSidebar.refreshCatalogTitle", { productLabel })}
+            disabled={loadingCatalog}
+            onClick={() => {
+              void loadCatalog();
+            }}
+          >
+            {loadingCatalog ? (
+              <Loader2 size={12} className="animate-spin" />
+            ) : (
+              <RefreshCw size={12} />
+            )}
+          </Button>
+        </div>
       </div>
 
       <div className="flex items-center gap-1 border-b border-border px-3 py-2">
@@ -408,6 +414,18 @@ export default function KvSidebar({ connectionId }: KvSidebarProps) {
           </div>
         )}
       </div>
+
+      {newKeyOpen && (
+        <KvNewKeyDialog
+          connectionId={connectionId}
+          database={database}
+          onClose={() => setNewKeyOpen(false)}
+          onCreated={(key) => {
+            void loadKeys("0");
+            openKeyDetail(key);
+          }}
+        />
+      )}
     </div>
   );
 }
