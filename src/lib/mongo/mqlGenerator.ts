@@ -227,6 +227,21 @@ function formatMqlObject(obj: Record<string, unknown>): string {
   return `{ ${inner} }`;
 }
 
+/** Join a column name with a nested tree path into a MongoDB dot-notation
+ *  field path for `$set` / `$unset`. Tree paths address array elements with
+ *  JS-style bracket indices (`items[0].a`, `[0]`, `foo[2].bar`), but MongoDB
+ *  addresses array positions with dot-index notation (`items.0.a`) — a
+ *  bracketed `[0]` is read as a literal field NAME to create, which fails
+ *  with `WriteError code 28` ("Cannot create field '[0]'"; user report
+ *  2026-07-18). Convert every `[N]` segment to `.N` and join with the column;
+ *  bracket-free object paths (`meta.verified`) pass through unchanged. */
+function toMongoFieldPath(columnName: string, path: string): string {
+  const dotted = path.replace(/\[(\d+)\]/g, ".$1");
+  return dotted.startsWith(".")
+    ? `${columnName}${dotted}`
+    : `${columnName}.${dotted}`;
+}
+
 /** `"rowIdx-colIdx"` → `[rowIdx, colIdx, null]`, or with a dot-path
  *  suffix `"rowIdx-colIdx:path.to.field"` → `[rowIdx, colIdx, "path.to.field"]`.
  *  Returns `null` for malformed keys so we never silently splice `NaN`
@@ -339,7 +354,8 @@ export function generateMqlPreview(input: MqlGenerateInput): MqlPreview {
         ? `id:${formatDocumentIdForMql(anchorId)}`
         : `__noid-${rowIdx}`;
     }
-    const fieldPath = path !== null ? `${col.name}.${path}` : col.name;
+    const fieldPath =
+      path !== null ? toMongoFieldPath(col.name, path) : col.name;
     const entry = { key, column: fieldPath, value, nested: path !== null };
     const existing = editsByDoc.get(groupKey);
     if (existing) {
@@ -353,6 +369,11 @@ export function generateMqlPreview(input: MqlGenerateInput): MqlPreview {
   // BSON wrapper 는 caller (DocumentDataGrid) 가 `__bson__:` prefix 의
   // 직렬화 string 으로 보관. 여기서 prefix detect 시 parse 해서 wrapper
   // 객체로 복원 → mongosh literal (`ObjectId("...")`) 로 출력된다.
+  // user report 2026-07-18 — `tagBsonWrapper` 는 non-string 값 (BSON wrapper
+  // object AND 트리 `+ key` 스칼라) 을 모두 JSON 으로 직렬화하므로 언랩도
+  // 대칭이어야 한다: object 뿐 아니라 parse 된 어떤 값 (number/boolean/null)
+  // 도 복원. object-only 가드는 스칼라를 리터럴 `"__bson__:3"` 문자열로
+  // 커밋해 WriteError 를 유발했다.
   editsByDoc.forEach(({ cells }) => {
     for (const cell of cells) {
       if (
@@ -360,10 +381,7 @@ export function generateMqlPreview(input: MqlGenerateInput): MqlPreview {
         cell.value.startsWith("__bson__:")
       ) {
         try {
-          const parsed = JSON.parse(cell.value.slice("__bson__:".length));
-          if (typeof parsed === "object" && parsed !== null) {
-            cell.value = parsed;
-          }
+          cell.value = JSON.parse(cell.value.slice("__bson__:".length));
         } catch {
           // leave as-is; downstream renders the raw tag string.
         }

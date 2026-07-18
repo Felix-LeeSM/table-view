@@ -637,3 +637,100 @@ describe("generateMqlPreview — Slice E add-key dispatch (Sprint 344)", () => {
     ]);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Purpose: MongoDB nested array-element $set path + scalar unwrap 회귀 가드 —
+// user report 2026-07-18. DocumentTreePanel 로 `items[0]` 에 key `a`=3 을
+// 추가하면 `$set: { "items.[0].a": "__bson__:3" }` 가 나가 MongoDB 가
+// WriteError code 28 (Cannot create field '[0]') 로 거부했다. 두 결함:
+//   1) 배열 원소 하위 필드는 dot-index 표기 (`items.0.a`) 여야 하는데 트리
+//      경로의 대괄호 세그먼트 (`[0]`) 가 그대로 붙었다.
+//   2) 트리로 추가한 스칼라 (number/boolean/null) 는 grid 가 `__bson__:` 로
+//      태그해 string-typed pendingEdits 를 통과시키는데, generator 의 언랩
+//      가드가 object 만 풀어 리터럴 `"__bson__:3"` 문자열로 커밋됐다.
+// ---------------------------------------------------------------------------
+describe("generateMqlPreview — nested array-element $set (user report 2026-07-18)", () => {
+  it("normalizes bracket array indices to Mongo dot-index and unwraps the scalar (exact repro)", () => {
+    // Reason: user report 2026-07-18 — `items[0]` 에 `a`=3 추가 시 커밋 실패.
+    // 배열 원소 경로 `[0].a` 는 `items.0.a` 로, `__bson__:3` 태그 스칼라는
+    // 실제 number 3 으로 나가야 한다. 같은 행의 bracket-free 객체 경로
+    // (`meta.verified`) 는 정규화 대상이 아님을 함께 잠근다 (회귀 방지).
+    const { previewLines, commands, errors } = generateMqlPreview(
+      makeInput({
+        columns: [
+          { name: "_id", data_type: "objectId", is_primary_key: true },
+          { name: "items", data_type: "array", is_primary_key: false },
+          { name: "meta", data_type: "document", is_primary_key: false },
+        ],
+        rows: [[{ $oid: HEX_A }, "[2 items]", "{...}"]],
+        pendingEdits: new Map<string, unknown>([
+          ["0-1:[0].a", "__bson__:3"],
+          ["0-2:verified", true],
+        ]),
+      }),
+    );
+    expect(errors).toEqual([]);
+    expect(previewLines).toEqual([
+      `db.users.updateOne({ _id: ObjectId("${HEX_A}") }, { $set: { "items.0.a": 3, "meta.verified": true } })`,
+    ]);
+    expect(commands[0]).toMatchObject({
+      patch: { $set: { "items.0.a": 3, "meta.verified": true } },
+    });
+  });
+
+  it("normalizes a mid-path bracket index (foo[2].bar) and a bare index ([0])", () => {
+    // Reason: user report 2026-07-18 — 정규화가 leading / mid / trailing 대괄호
+    // 를 모두 dot-index 로 바꾸는지 (앞 잉여 `.` 없이) 잠근다.
+    const { commands, errors } = generateMqlPreview(
+      makeInput({
+        columns: [
+          { name: "_id", data_type: "objectId", is_primary_key: true },
+          { name: "data", data_type: "document", is_primary_key: false },
+          { name: "items", data_type: "array", is_primary_key: false },
+        ],
+        rows: [[{ $oid: HEX_A }, "{...}", "[1 items]"]],
+        pendingEdits: new Map<string, unknown>([
+          ["0-1:foo[2].bar", "x"],
+          ["0-2:[0]", "y"],
+        ]),
+      }),
+    );
+    expect(errors).toEqual([]);
+    expect(commands[0]).toMatchObject({
+      patch: { $set: { "data.foo.2.bar": "x", "items.0": "y" } },
+    });
+  });
+
+  it.each([
+    { tagged: "__bson__:3", expected: 3 },
+    { tagged: "__bson__:true", expected: true },
+    { tagged: "__bson__:null", expected: null },
+    {
+      tagged: `__bson__:${JSON.stringify({ $oid: HEX_A })}`,
+      expected: { $oid: HEX_A },
+    },
+  ])(
+    "unwraps a tree-added value $tagged into its real type in the update patch (not the literal tag string)",
+    ({ tagged, expected }) => {
+      // Reason: user report 2026-07-18 — `+ key` 스칼라 add 는 grid 가
+      // `__bson__:<json>` 로 태그해 string-typed pendingEdits 를 통과시킨다.
+      // 언랩은 wrap 과 대칭인 JSON round-trip 이어야 한다 — object 뿐 아니라
+      // number/boolean/null 도 풀어야 하고, 기존 BSON wrapper object 언랩은
+      // 회귀 없어야 한다 (마지막 케이스가 그 가드).
+      const { commands, errors } = generateMqlPreview(
+        makeInput({
+          columns: [
+            { name: "_id", data_type: "objectId", is_primary_key: true },
+            { name: "meta", data_type: "document", is_primary_key: false },
+          ],
+          rows: [[{ $oid: HEX_A }, "{...}"]],
+          pendingEdits: new Map<string, unknown>([["0-1:score", tagged]]),
+        }),
+      );
+      expect(errors).toEqual([]);
+      expect(commands[0]).toMatchObject({
+        patch: { $set: { "meta.score": expected } },
+      });
+    },
+  );
+});
