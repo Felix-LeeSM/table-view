@@ -242,6 +242,123 @@ function toMongoFieldPath(columnName: string, path: string): string {
     : `${columnName}.${dotted}`;
 }
 
+/** Deep-set `value` at a dot-notation `subPath` inside a container, creating
+ *  plain-object intermediates as needed. Mutates `root` (callers pass a clone). */
+function deepSetField(root: object, subPath: string, value: unknown): void {
+  const segs = subPath.split(".");
+  let cur = root as Record<string, unknown>;
+  for (let i = 0; i < segs.length - 1; i += 1) {
+    const seg = segs[i]!;
+    const next = cur[seg];
+    if (typeof next !== "object" || next === null) cur[seg] = {};
+    cur = cur[seg] as Record<string, unknown>;
+  }
+  cur[segs[segs.length - 1]!] = value;
+}
+
+/** Deep-delete the leaf at a dot-notation `subPath` inside a container.
+ *  No-op if an intermediate is missing. Mutates `root` (callers pass a clone). */
+function deepDeleteField(root: object, subPath: string): void {
+  const segs = subPath.split(".");
+  let cur = root as Record<string, unknown>;
+  for (let i = 0; i < segs.length - 1; i += 1) {
+    const seg = segs[i]!;
+    const next = cur[seg];
+    if (typeof next !== "object" || next === null) return;
+    cur = next as Record<string, unknown>;
+  }
+  delete cur[segs[segs.length - 1]!];
+}
+
+/**
+ * Collapse prefix-overlapping field paths in one document's patch so MongoDB
+ * doesn't reject the update with WriteError code 40 — a single update can't
+ * touch both a parent path and its child (`$set: { "tags.1": {…},
+ * "tags.1.test": 3 }` → "Updating the path 'tags.1.test' would create a
+ * conflict at 'tags.1'"; user report 2026-07-18). This overlap is legitimate:
+ * the user added a container and filled it in one commit (`a`={} → `a.b`=3, or
+ * a new array element `tags[1]` → `tags[1].test`), so no edit may be dropped.
+ *
+ * Fold every descendant into its nearest ancestor already in the patch,
+ * shallowest-first so an ancestor is resolved before its descendants:
+ *   - ancestor `$set` (object/array) absorbs the descendant — a `$set` child
+ *     deep-sets into the parent value, a `$unset` child deep-deletes from it;
+ *     only the ancestor path is emitted, preserving the parent's other fields.
+ *   - ancestor `$unset` removes the whole subtree, so its descendants are
+ *     subsumed and dropped (the user deleted the parent).
+ * Paths with no ancestor in the patch (`a.b` alone) pass through unchanged —
+ * MongoDB creates the intermediate itself, which is not a conflict.
+ */
+function collapsePrefixConflicts(
+  setOps: Record<string, unknown>,
+  unsetOps: Record<string, unknown>,
+): { setOps: Record<string, unknown>; unsetOps: Record<string, unknown> } {
+  // Resolve shallowest-first so an ancestor is always placed before its
+  // descendants; the emit pass below restores the original key order.
+  const ordered = [
+    ...Object.keys(setOps).map((path) => ({ path, kind: "set" as const })),
+    ...Object.keys(unsetOps).map((path) => ({ path, kind: "unset" as const })),
+  ].sort((a, b) => a.path.split(".").length - b.path.split(".").length);
+
+  // Root paths surviving the collapse: `mergedSet` holds each `$set` root's
+  // (possibly merged, cloned) value; `unsetRoots` holds each `$unset` root.
+  const mergedSet = new Map<string, unknown>();
+  const unsetRoots = new Set<string>();
+  const cloned = new Set<string>();
+  const isAncestor = (anc: string, path: string) => path.startsWith(`${anc}.`);
+  // ponytail: O(n²) ancestor scan — patch cells per document are few; upgrade
+  // to a prefix trie only if a single doc ever carries thousands of edits.
+  const findAncestor = (roots: Iterable<string>, path: string) => {
+    for (const root of roots) if (isAncestor(root, path)) return root;
+    return undefined;
+  };
+
+  for (const { path, kind } of ordered) {
+    // An $unset ancestor removes the whole subtree → this edit is subsumed.
+    if (findAncestor(unsetRoots, path) !== undefined) continue;
+
+    const setAnc = findAncestor(mergedSet.keys(), path);
+    if (setAnc !== undefined) {
+      // Clone the parent value once before mutating so we never write back
+      // into the caller's pendingEdits objects.
+      if (!cloned.has(setAnc)) {
+        const base = mergedSet.get(setAnc);
+        mergedSet.set(
+          setAnc,
+          typeof base === "object" && base !== null
+            ? structuredClone(base)
+            : base,
+        );
+        cloned.add(setAnc);
+      }
+      const container = mergedSet.get(setAnc);
+      // ponytail: a scalar/null parent can't hold a nested field. The tree
+      // only nests keys under object/array elements, so this is UI-unreachable;
+      // the explicit whole-element replacement wins and the child is dropped.
+      if (typeof container === "object" && container !== null) {
+        const sub = path.slice(setAnc.length + 1);
+        if (kind === "set") deepSetField(container, sub, setOps[path]);
+        else deepDeleteField(container, sub);
+      }
+      continue;
+    }
+
+    if (kind === "set") mergedSet.set(path, setOps[path]);
+    else unsetRoots.add(path);
+  }
+
+  // Emit in the original insertion order (only surviving root paths).
+  const outSet: Record<string, unknown> = {};
+  for (const key of Object.keys(setOps)) {
+    if (mergedSet.has(key)) outSet[key] = mergedSet.get(key);
+  }
+  const outUnset: Record<string, unknown> = {};
+  for (const key of Object.keys(unsetOps)) {
+    if (unsetRoots.has(key)) outUnset[key] = unsetOps[key];
+  }
+  return { setOps: outSet, unsetOps: outUnset };
+}
+
 /** `"rowIdx-colIdx"` → `[rowIdx, colIdx, null]`, or with a dot-path
  *  suffix `"rowIdx-colIdx:path.to.field"` → `[rowIdx, colIdx, "path.to.field"]`.
  *  Returns `null` for malformed keys so we never silently splice `NaN`
@@ -431,15 +548,24 @@ export function generateMqlPreview(input: MqlGenerateInput): MqlPreview {
     // The `__op__:unset` sentinel is owned by DocumentTreePanel's delete
     // action; it's a string so the existing pendingEdits Map type stays
     // unchanged (string | object).
-    const setOps: Record<string, unknown> = {};
-    const unsetOps: Record<string, unknown> = {};
+    const rawSetOps: Record<string, unknown> = {};
+    const rawUnsetOps: Record<string, unknown> = {};
     for (const { column, value } of cells) {
       if (value === "__op__:unset") {
-        unsetOps[column] = "";
+        rawUnsetOps[column] = "";
       } else {
-        setOps[column] = value;
+        rawSetOps[column] = value;
       }
     }
+    // Sprint (user report 2026-07-18) — fold parent/child prefix overlaps so a
+    // container add + fill in one commit (`a`={} → `a.b`=3, `tags.1` →
+    // `tags.1.test`) doesn't emit both paths and trip WriteError code 40. Both
+    // the executed patch and the preview string derive from these, so the
+    // preview==execute invariant holds.
+    const { setOps, unsetOps } = collapsePrefixConflicts(
+      rawSetOps,
+      rawUnsetOps,
+    );
     // Empty patch (all edits resolved back to original values upstream)
     // should never happen because `useDataGridEdit` already prunes those,
     // but we guard defensively — generating `updateOne({_id}, {$set: {}})`
