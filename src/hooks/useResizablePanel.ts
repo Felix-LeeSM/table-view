@@ -111,6 +111,16 @@ export function useResizablePanel(
         }
       };
 
+      // Single teardown path shared by mouseup / Escape so no listener leaks.
+      const cleanup = () => {
+        dragRef.current = null;
+        document.removeEventListener("mousemove", handleMouseMove);
+        document.removeEventListener("mouseup", handleMouseUp);
+        document.removeEventListener("keydown", handleEscape);
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+      };
+
       const handleMouseUp = () => {
         if (!percentage && panelRef.current && dragRef.current) {
           // Commit final DOM width to React state
@@ -119,15 +129,28 @@ export function useResizablePanel(
             setSize(finalWidth);
           }
         }
-        dragRef.current = null;
-        document.removeEventListener("mousemove", handleMouseMove);
-        document.removeEventListener("mouseup", handleMouseUp);
-        document.body.style.cursor = "";
-        document.body.style.userSelect = "";
+        cleanup();
+      };
+
+      // Esc cancels the in-flight resize: revert to the size captured at drag
+      // start and tear down before any trailing mouseup can commit.
+      const handleEscape = (keyEvent: KeyboardEvent) => {
+        if (keyEvent.key !== "Escape") return;
+        const startSize = dragRef.current?.startSize;
+        cleanup();
+        if (startSize === undefined) return;
+        // Pixel mode mutates the DOM imperatively during drag and only commits
+        // to state on mouseup, so restore the element too — a no-op setSize
+        // would not re-render.
+        if (!percentage && panelRef.current) {
+          panelRef.current.style.width = `${startSize}px`;
+        }
+        setSize(startSize);
       };
 
       document.addEventListener("mousemove", handleMouseMove);
       document.addEventListener("mouseup", handleMouseUp);
+      document.addEventListener("keydown", handleEscape);
       document.body.style.cursor = cursor;
       document.body.style.userSelect = "none";
     },

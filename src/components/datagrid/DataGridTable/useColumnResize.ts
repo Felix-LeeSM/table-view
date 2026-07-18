@@ -99,20 +99,39 @@ export function useColumnResize({
         applyWidth(newWidth);
       };
 
-      const handleMouseUp = () => {
-        const session = resizingRef.current;
+      // Single teardown path shared by mouseup / Escape so no listener leaks.
+      const cleanup = () => {
         resizingRef.current = null;
         document.removeEventListener("mousemove", handleMouseMove);
         document.removeEventListener("mouseup", handleMouseUp);
+        document.removeEventListener("keydown", handleEscape);
         document.body.style.cursor = "";
         document.body.style.userSelect = "";
+      };
+
+      const handleMouseUp = () => {
+        const session = resizingRef.current;
+        cleanup();
         if (session) {
           onCommitWidth(session.colName, session.lastWidth);
         }
       };
 
+      // Esc cancels the in-flight resize: repaint --cols back to the start
+      // width and tear down without committing (React state still holds the
+      // start width, so no persist IPC fires).
+      const handleEscape = (keyEvent: KeyboardEvent) => {
+        if (keyEvent.key !== "Escape") return;
+        // applyWidth reads resizingRef, so revert before cleanup nulls it.
+        if (resizingRef.current) {
+          applyWidth(resizingRef.current.startWidth);
+        }
+        cleanup();
+      };
+
       document.addEventListener("mousemove", handleMouseMove);
       document.addEventListener("mouseup", handleMouseUp);
+      document.addEventListener("keydown", handleEscape);
       document.body.style.cursor = "col-resize";
       document.body.style.userSelect = "none";
     },

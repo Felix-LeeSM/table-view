@@ -450,6 +450,101 @@ describe("useResizablePanel", () => {
     expect(result.current.max).toBe(500);
   });
 
+  // --- Esc cancels the drag, reverting to the drag-start size ---
+  // Reason: 사용자 요구 — 모든 draggable 은 드래그 중 Esc 로 시작 크기로 복원
+  // (리사이즈 드래그 한정 PR) (2026-07-18)
+
+  it("Esc reverts DOM width to the drag-start size in horizontal mode", () => {
+    const { result } = renderHook(() =>
+      useResizablePanel({
+        axis: "horizontal",
+        min: 100,
+        max: 500,
+        initial: 250,
+      }),
+    );
+
+    const mockDiv = document.createElement("div");
+    mockDiv.style.width = "250px";
+    result.current.panelRef.current = mockDiv;
+
+    const mouseEvent = {
+      preventDefault: vi.fn(),
+      clientX: 250,
+    } as unknown as React.MouseEvent;
+    act(() => {
+      result.current.handleMouseDown(mouseEvent);
+    });
+    act(() => {
+      document.dispatchEvent(new MouseEvent("mousemove", { clientX: 300 }));
+    });
+    expect(mockDiv.style.width).toBe("300px");
+
+    act(() => {
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    });
+
+    // Reverted to start size, drag torn down, body styles reset.
+    expect(mockDiv.style.width).toBe("250px");
+    expect(result.current.size).toBe(250);
+    expect(document.body.style.cursor).toBe("");
+    expect(document.body.style.userSelect).toBe("");
+
+    // A trailing mouseup must not commit the abandoned drag width.
+    act(() => {
+      document.dispatchEvent(new MouseEvent("mouseup"));
+    });
+    expect(result.current.size).toBe(250);
+    // Listeners removed: further mousemove is ignored.
+    act(() => {
+      document.dispatchEvent(new MouseEvent("mousemove", { clientX: 500 }));
+    });
+    expect(mockDiv.style.width).toBe("250px");
+  });
+
+  it("Esc reverts size to the drag-start percentage in vertical mode", () => {
+    const container = document.createElement("div");
+    Object.defineProperty(container, "clientHeight", {
+      value: 1000,
+      configurable: true,
+    });
+    const containerRef = { current: container };
+
+    const { result } = renderHook(() =>
+      useResizablePanel({
+        axis: "vertical",
+        min: 10,
+        max: 90,
+        initial: 50,
+        percentage: true,
+        containerRef,
+      }),
+    );
+
+    const mouseEvent = {
+      preventDefault: vi.fn(),
+      clientY: 500,
+    } as unknown as React.MouseEvent;
+    act(() => {
+      result.current.handleMouseDown(mouseEvent);
+    });
+    act(() => {
+      document.dispatchEvent(new MouseEvent("mousemove", { clientY: 600 }));
+    });
+    expect(result.current.size).toBe(60);
+
+    act(() => {
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    });
+    expect(result.current.size).toBe(50);
+
+    // Drag torn down: subsequent mousemove no longer updates size.
+    act(() => {
+      document.dispatchEvent(new MouseEvent("mousemove", { clientY: 700 }));
+    });
+    expect(result.current.size).toBe(50);
+  });
+
   it("no further updates after mouseup", () => {
     const { result } = renderHook(() =>
       useResizablePanel({
