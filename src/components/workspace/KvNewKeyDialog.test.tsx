@@ -124,4 +124,36 @@ describe("KvNewKeyDialog", () => {
     });
     expect(onCreated).toHaveBeenCalledWith("user:1");
   });
+
+  it("creates a string key via the typed setKvStringValue command (rejectOverwrite)", async () => {
+    // The string type runs the typed set_kv_string_value path (NX overwrite
+    // guard + TTL), never the raw execute_kv_command command string.
+    getKvValueMock.mockResolvedValue(envelope({ type: "missing" }));
+    const { onCreated } = renderDialog();
+
+    fireEvent.click(screen.getByRole("button", { name: /^string$/ }));
+    fireEvent.change(screen.getByLabelText("Key name"), {
+      target: { value: "user:1" },
+    });
+    fireEvent.change(screen.getByLabelText("Value"), {
+      target: { value: "Ada" },
+    });
+    fireEvent.change(screen.getByLabelText("TTL seconds (optional)"), {
+      target: { value: "60" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /create key/i }));
+
+    await waitFor(() => {
+      expect(setKvStringValueMock).toHaveBeenCalledWith("redis-1", {
+        database: 0,
+        key: "user:1",
+        value: "Ada",
+        ttlSeconds: 60,
+        safety: "rejectOverwrite",
+      });
+    });
+    // The raw command path is never taken for the string type.
+    expect(executeKvCommandMock).not.toHaveBeenCalled();
+    expect(onCreated).toHaveBeenCalledWith("user:1");
+  });
 });
