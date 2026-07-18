@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useConnectionStore } from "../store";
 import { openWorkspaceWindow } from "@lib/tauri/window";
@@ -29,6 +29,12 @@ export default function ConnectionList({
   const moveConnectionToGroup = useConnectionStore(
     (s) => s.moveConnectionToGroup,
   );
+
+  // Drop-location preview: which group the dragged connection is currently
+  // hovering. Owned here (not per-group) so a single `dragend`/`drop` on this
+  // root — which bubbles up from the dragged ConnectionItem, including on an
+  // Esc cancel — clears the highlight with no per-group state to leak.
+  const [dragOverGroupId, setDragOverGroupId] = useState<string | null>(null);
 
   // Sprint 363 (Phase 3, Q13) — connection double-click 시 per-conn
   // workspace window 를 open/focus 한다. 같은 conn 두 번째 클릭은
@@ -72,9 +78,16 @@ export default function ConnectionList({
         if (!draggedConnectionId) return;
         e.preventDefault();
         e.dataTransfer.dropEffect = "move";
+        // Over the root (ungroup) area — no group is the drop target. Groups
+        // stopPropagation their own dragover, so this only fires outside them.
+        setDragOverGroupId(null);
       }}
+      // dragend bubbles up from the dragged ConnectionItem on both drop and
+      // Esc cancel, so this is the single cleanup point for the highlight.
+      onDragEnd={() => setDragOverGroupId(null)}
       onDrop={async (e) => {
         e.preventDefault();
+        setDragOverGroupId(null);
         const connId =
           draggedConnectionId ?? e.dataTransfer.getData("text/plain");
         if (connId) {
@@ -102,6 +115,8 @@ export default function ConnectionList({
           selectedId={selectedId}
           onSelect={onSelect}
           onActivate={handleActivate}
+          isDropTarget={dragOverGroupId === group.id}
+          onDragOverGroup={setDragOverGroupId}
         />
       ))}
 
