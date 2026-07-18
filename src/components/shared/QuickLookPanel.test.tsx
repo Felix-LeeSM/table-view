@@ -983,4 +983,52 @@ describe("QuickLookPanel", () => {
       expect(handle).toHaveAttribute("aria-valuenow", String(DEFAULT_HEIGHT));
     });
   });
+
+  // ── Esc cancels an in-flight resize drag, reverting to the start height ──
+  // Reason: 사용자 요구 — 모든 draggable 은 드래그 중 Esc 로 시작 크기 복원.
+  // QuickLookPanel 은 공유 리사이즈 훅을 거치지 않는 세 번째 resize 경로라
+  // 동일 시맨틱을 여기서 직접 검증한다 (PR #1690 review 회송) (2026-07-18)
+  describe("drag resize Esc-revert (2026-07-18)", () => {
+    const getHandle = () =>
+      screen.getByRole("separator", { name: "Resize Quick Look panel" });
+
+    it("Esc during a drag reverts the panel height to the drag-start value and tears down", () => {
+      render(<QuickLookPanel {...defaultProps} />);
+      const handle = getHandle();
+      expect(handle).toHaveAttribute("aria-valuenow", "280");
+
+      // Drag up (smaller clientY) → taller panel.
+      fireEvent.mouseDown(handle, { clientY: 300 });
+      fireEvent.mouseMove(document, { clientY: 200 });
+      expect(handle).toHaveAttribute("aria-valuenow", "380");
+
+      fireEvent.keyDown(document, { key: "Escape" });
+
+      // Reverted to the drag-start height; body styles reset.
+      expect(handle).toHaveAttribute("aria-valuenow", "280");
+      expect(document.body.style.cursor).toBe("");
+      expect(document.body.style.userSelect).toBe("");
+
+      // Listeners torn down: a trailing mouseup / mousemove is a no-op.
+      fireEvent.mouseUp(document);
+      fireEvent.mouseMove(document, { clientY: 100 });
+      expect(handle).toHaveAttribute("aria-valuenow", "280");
+    });
+
+    it("keeps the dragged height on a normal mouseup (no Esc regression)", () => {
+      render(<QuickLookPanel {...defaultProps} />);
+      const handle = getHandle();
+
+      fireEvent.mouseDown(handle, { clientY: 300 });
+      fireEvent.mouseMove(document, { clientY: 250 }); // delta 50 → 330
+      expect(handle).toHaveAttribute("aria-valuenow", "330");
+
+      fireEvent.mouseUp(document);
+      expect(handle).toHaveAttribute("aria-valuenow", "330");
+
+      // Listeners removed after mouseup: further mousemove no-op.
+      fireEvent.mouseMove(document, { clientY: 100 });
+      expect(handle).toHaveAttribute("aria-valuenow", "330");
+    });
+  });
 });
