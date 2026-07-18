@@ -68,9 +68,12 @@ export function KvValueBody({
       return (
         <KvJsonTreeEditor
           key={envelope.key}
-          fieldName={envelope.key}
+          target={{
+            kind: value.type === "json" ? "json" : "string",
+            key: envelope.key,
+          }}
+          treeLabel={envelope.key}
           original={treeValue}
-          writeType={value.type === "json" ? "json" : "string"}
           connectionId={connectionId}
           database={database}
           onWriteSuccess={onWriteSuccess}

@@ -191,6 +191,14 @@ export default function KvKeyDetailPanel({
                 keyName={value.key}
                 value={value.value}
                 onEntryAction={entriesMutable ? requestEntryAction : undefined}
+                // PR4 — hash field / list element JSON values become tree-
+                // editable (HSET/LSET) under the same mutable gate as the inline
+                // row actions; loadValue re-reads the key after a write.
+                writeContext={
+                  entriesMutable
+                    ? { connectionId, database, onWriteSuccess: loadValue }
+                    : undefined
+                }
               />
             ) : (
               // PR3 — string(JSON)/json single-value keys get inline node

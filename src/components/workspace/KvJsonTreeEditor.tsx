@@ -9,20 +9,23 @@ import { useConnectionStore } from "@stores/connectionStore";
 import ConfirmDestructiveDialog from "./ConfirmDestructiveDialog";
 import {
   analyzeKvMutationSafety,
+  buildTreeWriteMutation,
+  type KvTreeWriteTarget,
   type PendingMutation,
-  redisToken,
 } from "./kvMutationCommands";
 
-// KV JSON tree write core (PR3, 2026-07-18) — inline node editing for the two
-// single-value key types whose value IS JSON: `string` (a JSON string, written
-// with SET) and `json` (native ReJSON, written with JSON.SET). Both overwrite
+// KV JSON tree write core — inline node editing for any Redis slot whose value
+// IS JSON. PR3 (2026-07-18) shipped the two single-value key types: `string`
+// (written with SET) and `json` (native ReJSON, JSON.SET). PR4 (2026-07-18)
+// generalizes the write target to the four `KvTreeWriteTarget` variants, adding
+// a `hash` field (HSET) and a `list` element (LSET). Every target overwrites
 // the WHOLE slot; Redis has no partial JSON patch, so we re-serialize the edited
-// tree and issue one command (last-writer-wins, same semantics as the existing
-// string SET editor — no WATCH/CAS).
+// tree and issue one command (last-writer-wins — no WATCH/CAS).
 //
 // Reuses the shared write plumbing rather than adding a new path:
 //   - DocumentTreePanel's 2-phase edit (pendingByPath + onCommitEdit),
 //   - `applyTreeEdits` to fold the edits into a new full value,
+//   - `buildTreeWriteMutation` to map the target → the exact command,
 //   - the Safe Mode gate + ConfirmDestructiveDialog for the confirm surface,
 //   - `setKvStringValue` / `executeKvCommand` for execution.
 // The user always sees the exact command before it runs (the preview <pre>),
@@ -31,12 +34,12 @@ import {
 type PendingMap = Map<string, string | Record<string, unknown>>;
 
 export interface KvJsonTreeEditorProps {
-  /** The key name — the tree root label and the write target. */
-  fieldName: string;
+  /** Which Redis slot the re-serialized tree overwrites (carries the key). */
+  target: KvTreeWriteTarget;
+  /** Tree root label — the key (string/json) or field/index (hash/list). */
+  treeLabel: string;
   /** Original parsed value (object/array) the tree renders and we clone. */
   original: unknown;
-  /** `string` → SET, `json` → JSON.SET. */
-  writeType: "string" | "json";
   connectionId: string;
   database: number;
   /** Reload the key after a successful write (delete surfaces "(missing)"). */
@@ -44,9 +47,9 @@ export interface KvJsonTreeEditorProps {
 }
 
 export function KvJsonTreeEditor({
-  fieldName,
+  target,
+  treeLabel,
   original,
-  writeType,
   connectionId,
   database,
   onWriteSuccess,
@@ -86,24 +89,11 @@ export function KvJsonTreeEditor({
   }, []);
 
   // Phase 1 — fold the pending edits into a new full value and build the exact
-  // command. Shown to the user before anything runs.
+  // command for this write target. Shown to the user before anything runs.
   const buildPreview = () => {
     const { json } = applyTreeEdits(original, pending);
-    const command =
-      writeType === "json"
-        ? `JSON.SET ${redisToken(fieldName)} $ ${redisToken(json)}`
-        : `SET ${redisToken(fieldName)} ${redisToken(json)}`;
     setError(null);
-    setPreview(
-      writeType === "json"
-        ? { kind: "command", label: "JSON.SET", summary: command, command }
-        : {
-            kind: "string",
-            label: "String set",
-            summary: command,
-            value: json,
-          },
-    );
+    setPreview(buildTreeWriteMutation(target, json));
   };
 
   // Phase 2 — route the built command through the same Safe Mode gate the
@@ -112,7 +102,7 @@ export function KvJsonTreeEditor({
   const confirmWrite = () => {
     if (!preview) return;
     const decision = safeModeGate.decide(
-      analyzeKvMutationSafety(preview, fieldName),
+      analyzeKvMutationSafety(preview, target.key),
     );
     if (decision.action === "confirm") {
       setSafeModeConfirm({ mutation: preview, reason: decision.reason });
@@ -132,7 +122,7 @@ export function KvJsonTreeEditor({
       if (mutation.kind === "string") {
         await setKvStringValue(connectionId, {
           database,
-          key: fieldName,
+          key: target.key,
           value: mutation.value ?? "",
           safety: "allowOverwrite",
         });
@@ -145,7 +135,7 @@ export function KvJsonTreeEditor({
       setPending(new Map());
       setPreview(null);
       setSafeModeConfirm(null);
-      await onWriteSuccess(fieldName);
+      await onWriteSuccess(target.key);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -160,7 +150,7 @@ export function KvJsonTreeEditor({
     <div className="space-y-2">
       <DocumentTreePanel
         value={original}
-        fieldName={fieldName}
+        fieldName={treeLabel}
         pendingByPath={pending}
         onCommitEdit={onCommitEdit}
       />
