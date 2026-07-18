@@ -1406,4 +1406,128 @@ describe("TabBar", () => {
     // Single moveTab → t1 after t3 → [t2, t3, t1].
     expect(after).toEqual([before[1], before[2], before[0]]);
   });
+
+  // ── feat/tab-drag-esc-preview: Escape cancel + live drop preview ──
+  //
+  // User contract (drag UX unification): every draggable thing must (a)
+  // cancel on Escape and (b) preview where it will land before release.
+  // These three cases pin the tab-reorder slice of that contract.
+
+  it("Escape during a tab drag cancels the reorder and resets all state", () => {
+    setThreeTabs();
+    render(<TabBar />);
+
+    mockTabRects([
+      { left: 0, right: 100, width: 100 },
+      { left: 100, right: 200, width: 100 },
+      { left: 200, right: 300, width: 100 },
+    ]);
+
+    const before = getTestWorkspace().tabs.map((t) => t.id);
+    const tabs = screen.getAllByRole("tab");
+
+    act(() => {
+      fireEvent.pointerDown(tabs[0]!, {
+        button: 0,
+        pointerId: 1,
+        clientX: 50,
+      });
+      // Cross threshold → dragging: ghost + insertion line go live.
+      fireEvent.pointerMove(tabs[0]!, { pointerId: 1, clientX: 250 });
+    });
+    // Preview is visible mid-drag (before any release).
+    expect(document.querySelector("[data-drop-indicator]")).not.toBeNull();
+
+    act(() => {
+      fireEvent.keyDown(document, { key: "Escape" });
+    });
+
+    // Order unchanged and every drag artifact torn down.
+    expect(getTestWorkspace().tabs.map((t) => t.id)).toEqual(before);
+    expect(document.querySelector("[data-drop-indicator]")).toBeNull();
+    expectCleanDragState();
+
+    // Escape wins over a release — a trailing pointerup must not reorder.
+    act(() => {
+      fireEvent.pointerUp(tabs[0]!, { pointerId: 1, clientX: 250 });
+    });
+    expect(getTestWorkspace().tabs.map((t) => t.id)).toEqual(before);
+  });
+
+  it("shows a live insertion line that tracks the cursor before release", () => {
+    setThreeTabs();
+    render(<TabBar />);
+
+    mockTabRects([
+      { left: 0, right: 100, width: 100 },
+      { left: 100, right: 200, width: 100 },
+      { left: 200, right: 300, width: 100 },
+    ]);
+
+    const tabs = screen.getAllByRole("tab");
+
+    act(() => {
+      fireEvent.pointerDown(tabs[0]!, {
+        button: 0,
+        pointerId: 1,
+        clientX: 50,
+      });
+      // Over t3's left half (X=210 < t3 midpoint 250) → before t3 →
+      // line on t3's leading edge (t3.left = 200).
+      fireEvent.pointerMove(tabs[0]!, { pointerId: 1, clientX: 210 });
+    });
+
+    let line = document.querySelector<HTMLElement>("[data-drop-indicator]");
+    expect(line).not.toBeNull();
+    expect(line!.style.left).toBe("200px");
+
+    // Move to t3's right half (X=290 > midpoint 250) → after t3 → line
+    // jumps to t3's trailing edge (t3.right = 300).
+    act(() => {
+      fireEvent.pointerMove(tabs[0]!, { pointerId: 1, clientX: 290 });
+    });
+    line = document.querySelector<HTMLElement>("[data-drop-indicator]");
+    expect(line!.style.left).toBe("300px");
+
+    // Release commits exactly the previewed drop → t1 lands after t3.
+    const before = getTestWorkspace().tabs.map((t) => t.id);
+    act(() => {
+      fireEvent.pointerUp(tabs[0]!, { pointerId: 1, clientX: 290 });
+    });
+    expect(getTestWorkspace().tabs.map((t) => t.id)).toEqual([
+      before[1],
+      before[2],
+      before[0],
+    ]);
+    // Preview cleared once the drag ends.
+    expectCleanDragState();
+  });
+
+  it("does not mount an insertion line before the drag threshold is crossed", () => {
+    setThreeTabs();
+    render(<TabBar />);
+
+    mockTabRects([
+      { left: 0, right: 100, width: 100 },
+      { left: 100, right: 200, width: 100 },
+      { left: 200, right: 300, width: 100 },
+    ]);
+
+    const tabs = screen.getAllByRole("tab");
+    act(() => {
+      fireEvent.pointerDown(tabs[0]!, {
+        button: 0,
+        pointerId: 1,
+        clientX: 50,
+      });
+      // 7px drift — below the 8px threshold, so still a potential click.
+      fireEvent.pointerMove(tabs[0]!, { pointerId: 1, clientX: 57 });
+    });
+    expect(document.querySelector("[data-drop-indicator]")).toBeNull();
+
+    act(() => {
+      fireEvent.pointerUp(tabs[0]!, { pointerId: 1, clientX: 57 });
+    });
+    expectCleanDragState();
+  });
 });

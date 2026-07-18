@@ -1,4 +1,5 @@
 import {
+  useEffect,
   useRef,
   useState,
   type PointerEvent as ReactPointerEvent,
@@ -24,6 +25,17 @@ export interface GhostStyle {
   type: Tab["type"];
 }
 
+/**
+ * Viewport-space geometry for the live drop-preview insertion line. `x` is
+ * the leading/trailing edge of the anchor tab (client coordinates, so the
+ * consumer positions the line with `position: fixed` just like the ghost).
+ */
+export interface DropIndicator {
+  x: number;
+  top: number;
+  height: number;
+}
+
 export interface TabDragHandlers {
   onPointerDown: (e: ReactPointerEvent<HTMLElement>) => void;
   onPointerMove: (e: ReactPointerEvent<HTMLElement>) => void;
@@ -38,6 +50,12 @@ export interface UseTabDragResult {
   draggingId: string | null;
   /** Ghost coordinates / metadata, or `null` when no drag is in flight. */
   ghostStyle: GhostStyle | null;
+  /**
+   * Live insertion-line position, recomputed on every pointermove so the
+   * user sees where the tab will land *before* releasing. `null` when no
+   * drag is in flight or the cursor resolves to a no-op drop.
+   */
+  dropIndicator: DropIndicator | null;
   /**
    * Per-tab pointer handlers. Each invocation returns a fresh handler set
    * bound to `tab` + `displayTitle` (the title shown on the ghost).
@@ -61,6 +79,9 @@ interface DragState {
   tabHeight: number;
   tabTitle: string;
   tabType: Tab["type"];
+  // The capturing tab div. Kept so an Escape cancel (no pointerup) can
+  // still release pointer capture on the right element.
+  el: HTMLElement;
 }
 
 /**
@@ -85,19 +106,31 @@ export function useTabDrag(): UseTabDragResult {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [ghostStyle, setGhostStyle] = useState<GhostStyle | null>(null);
+  const [dropIndicator, setDropIndicator] = useState<DropIndicator | null>(
+    null,
+  );
 
   const dragStateRef = useRef<DragState | null>(null);
   // Set by pointerup when a real drag occurred, cleared on next tick.
   // The DOM `click` event fires after pointerup; without this guard, a
   // drag that lands back on the originating tab would re-activate it.
   const justDraggedRef = useRef(false);
+  // The keydown listener registered while a drag is live (Escape cancels).
+  // Held here so `cleanup` — the single teardown choke point for every end
+  // path — can always detach it without leaking a document-level listener.
+  const escHandlerRef = useRef<((e: KeyboardEvent) => void) | null>(null);
 
   const cleanup = (el: HTMLElement, pointerId: number) => {
     dragStateRef.current = null;
     setDraggingId(null);
     setGhostStyle(null);
+    setDropIndicator(null);
     document.body.style.cursor = "";
     document.body.style.userSelect = "";
+    if (escHandlerRef.current) {
+      document.removeEventListener("keydown", escHandlerRef.current);
+      escHandlerRef.current = null;
+    }
     // jsdom + some legacy WKWebView builds don't implement
     // hasPointerCapture; guard so the wrap-up path never throws.
     try {
@@ -109,10 +142,27 @@ export function useTabDrag(): UseTabDragResult {
     }
   };
 
+  // Detach a leaked keydown listener if the strip unmounts mid-drag (the
+  // only teardown path `cleanup` can't reach). Runs once — refs are stable.
+  useEffect(() => {
+    return () => {
+      if (escHandlerRef.current) {
+        document.removeEventListener("keydown", escHandlerRef.current);
+      }
+    };
+  }, []);
+
+  // ponytail: O(tabs) DOM read per call — fine for a handful of tabs; the
+  // same walk feeds both the live preview (pointermove) and the commit
+  // (pointerup) so they can never disagree.
   const resolveDropTarget = (
     sourceTabId: string,
     cursorX: number,
-  ): { targetId: string; side: "before" | "after" } | null => {
+  ): {
+    targetId: string;
+    side: "before" | "after";
+    indicator: DropIndicator;
+  } | null => {
     if (!scrollRef.current) return null;
     const tabEls = Array.from(
       scrollRef.current.querySelectorAll<HTMLElement>("[data-tab-id]"),
@@ -146,7 +196,17 @@ export function useTabDrag(): UseTabDragResult {
     }
     const targetId = targetEl.getAttribute("data-tab-id");
     if (!targetId || targetId === sourceTabId) return null;
-    return { targetId, side };
+    const rect = targetEl.getBoundingClientRect();
+    return {
+      targetId,
+      side,
+      // Line sits on the target's leading/trailing edge.
+      indicator: {
+        x: side === "before" ? rect.left : rect.right,
+        top: rect.top,
+        height: rect.height,
+      },
+    };
   };
 
   const getDragHandlers = (
@@ -189,6 +249,7 @@ export function useTabDrag(): UseTabDragResult {
         tabHeight: rect.height,
         tabTitle: displayTitle,
         tabType: tab.type,
+        el,
       };
     },
     onPointerMove: (e) => {
@@ -201,6 +262,19 @@ export function useTabDrag(): UseTabDragResult {
         document.body.style.cursor = "grabbing";
         // `userSelect = "none"` was already set in `pointerdown` so the
         // browser never anchored a text selection in the first place.
+        // Register Escape-to-cancel for the life of the drag. Detached in
+        // `cleanup` (every end path) and on unmount.
+        const onKeyDown = (ke: KeyboardEvent) => {
+          if (ke.key !== "Escape") return;
+          ke.preventDefault();
+          // Cancel = drop the drag with no reorder. Clearing dragStateRef
+          // here also makes any following pointerup a no-op, so Escape
+          // wins over a release-driven reorder.
+          const active = dragStateRef.current;
+          if (active) cleanup(active.el, active.pointerId);
+        };
+        escHandlerRef.current = onKeyDown;
+        document.addEventListener("keydown", onKeyDown);
       }
       if (src.isDragging) {
         setGhostStyle({
@@ -210,6 +284,10 @@ export function useTabDrag(): UseTabDragResult {
           title: src.tabTitle,
           type: src.tabType,
         });
+        // Live drop preview — same resolver the commit uses, so the line
+        // always marks exactly where pointerup will drop the tab.
+        const drop = resolveDropTarget(src.tabId, e.clientX);
+        setDropIndicator(drop ? drop.indicator : null);
       }
     },
     onPointerUp: (e) => {
@@ -250,6 +328,7 @@ export function useTabDrag(): UseTabDragResult {
     scrollRef,
     draggingId,
     ghostStyle,
+    dropIndicator,
     getDragHandlers,
     shouldSuppressClick: () => justDraggedRef.current,
   };
