@@ -133,7 +133,8 @@ KV 진입점 3건은 #1050(파괴 게이트) · #1415/#1466(CRUD UI) · #1051(db
   이는 의미상 별개 scope 라 억지 수렴 대상 아님(§3 예외/정합으로 대체).
 - **값 편집** — kv type-aware 패널(`KvMutationPanel`) → **§3 예외 등록 완료 (#1051)**.
 - **새 항목 생성** — kv `KvKeyActions` [+ New key] 툴바 버튼으로 기준표(`[+]`) 위치·
-  모델 정합; 생성 폼은 #1075 개방 대기(현재 disabled).
+  모델 정합; type-first 생성 폼(`KvNewKeyDialog`, 형 선택 → 첫 값 → command preview →
+  Safe Mode confirm)이 #1697 로 개방 완료 — 종전 disabled dead 버튼 + #1075 대기 해소.
 - **삭제 / Safe Mode 게이트** — #1050 으로 `ConfirmDestructiveDialog` +
   `safeModeGate.decide` 경유(`KvMutationPanel.tsx` `confirmPendingMutation`)로 정합.
   종전 inline typing-confirm / `allowOverwrite` 우회 폐기 — 안전 게이트 정상 적용.

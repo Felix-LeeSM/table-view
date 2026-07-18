@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Loader2, Timer } from "lucide-react";
 import { useConnectionStore } from "@stores/connectionStore";
+import { useWorkspaceStore } from "@stores/workspaceStore";
 import { getKvValue } from "@lib/tauri/kv";
 import type { KvValueEnvelope } from "@/types/kv";
 import { formatKvTtl } from "@/types/kv";
@@ -17,6 +18,8 @@ import {
 } from "./KvMutationPanel";
 import { KvCollectionValueTable } from "./KvCollectionValueTable";
 import { KvKeyActions } from "./KvKeyActions";
+import KvNewKeyDialog from "./KvNewKeyDialog";
+import { kvKeyDetailTab } from "./kvKeyTab";
 import { KvStreamReaderPanel } from "./KvStreamReaderPanel";
 import { KvValueBody } from "./KvValueBody";
 import { formatBytes, formatCount } from "./kvValueFormat";
@@ -38,6 +41,9 @@ export default function KvKeyDetailPanel({
   const connection = useConnectionStore((s) =>
     s.connections.find((c) => c.id === connectionId),
   );
+  const addTab = useWorkspaceStore((s) => s.addTab);
+  const setActiveDb = useConnectionStore((s) => s.setActiveDb);
+  const [newKeyOpen, setNewKeyOpen] = useState(false);
   const productLabel = connection
     ? DATABASE_TYPE_LABELS[connection.dbType]
     : "Redis";
@@ -155,7 +161,20 @@ export default function KvKeyDetailPanel({
         productLabel={productLabel}
         selectedMutationReady={selectedMutationReady}
         onMutationAction={requestMutationAction}
+        onNewKey={() => setNewKeyOpen(true)}
       />
+
+      {newKeyOpen && (
+        <KvNewKeyDialog
+          connectionId={connectionId}
+          database={database}
+          onClose={() => setNewKeyOpen(false)}
+          onCreated={(key) => {
+            setActiveDb(connectionId, String(database));
+            addTab(connectionId, kvKeyDetailTab(connectionId, database, key));
+          }}
+        />
+      )}
 
       {error && (
         <div
