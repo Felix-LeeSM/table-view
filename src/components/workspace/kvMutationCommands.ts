@@ -240,6 +240,59 @@ export function treeWriteTargetForEntry(
   }
 }
 
+// Stream mutation (PR5b, #1683) — a stream is an append-only log, so there is
+// no in-place entry-field edit. The three bounded write verbs are XADD (append;
+// id "*" = server-assigned), XDEL (drop a whole entry), and XTRIM MAXLEN (bound
+// the log length). Every operand goes through redisToken, so the previewed
+// summary is exactly the command that runs (preview == execution); the numeric
+// MAXLEN count is emitted raw so the bounded parser reads it as an integer.
+// XDEL/XTRIM lose data → `destructive` routes them to the danger Safe Mode tier;
+// XADD is a plain write (production still confirms it via the warn tier).
+export interface KvStreamFieldPair {
+  field: string;
+  value: string;
+}
+
+export function buildStreamAddMutation(
+  key: string,
+  id: string,
+  fields: KvStreamFieldPair[],
+): PendingMutation {
+  const pairs = fields
+    .map(({ field, value }) => `${redisToken(field)} ${redisToken(value)}`)
+    .join(" ");
+  const command = `XADD ${redisToken(key)} ${redisToken(id)} ${pairs}`;
+  return { kind: "command", label: "XADD", summary: command, command };
+}
+
+export function buildStreamDeleteMutation(
+  key: string,
+  id: string,
+): PendingMutation {
+  const command = `XDEL ${redisToken(key)} ${redisToken(id)}`;
+  return {
+    kind: "command",
+    label: "XDEL",
+    summary: command,
+    command,
+    destructive: true,
+  };
+}
+
+export function buildStreamTrimMutation(
+  key: string,
+  maxlen: number,
+): PendingMutation {
+  const command = `XTRIM ${redisToken(key)} MAXLEN ${maxlen}`;
+  return {
+    kind: "command",
+    label: "XTRIM",
+    summary: command,
+    command,
+    destructive: true,
+  };
+}
+
 function collectionTotal(value: KvValue): number | null {
   switch (value.type) {
     case "hash":

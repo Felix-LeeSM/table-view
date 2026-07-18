@@ -178,10 +178,16 @@ export default function KvKeyDetailPanel({
         ) : value ? (
           <>
             {value.value.type === "stream" ? (
+              // PR5b — streams own their write surface (XADD/XDEL/XTRIM +
+              // copy-to-form) inside the reader panel; the generic mutation
+              // panel below is suppressed for streams to avoid a contradictory
+              // "unsupported" notice. loadValue re-reads the key after a write.
               <KvStreamReaderPanel
                 connectionId={connectionId}
                 database={database}
                 stream={value.value}
+                mutationEnabled={mutationEnabled}
+                onMutationSuccess={loadValue}
               />
             ) : value.value.type === "hash" ||
               value.value.type === "list" ||
@@ -212,19 +218,20 @@ export default function KvKeyDetailPanel({
                 onWriteSuccess={loadValue}
               />
             )}
-            {canRenderKvMutationPanel(value, mutationEnabled) && (
-              <KvMutationPanel
-                value={value}
-                connectionId={connectionId}
-                database={database}
-                actionIntent={mutationActionIntent}
-                entryActionIntent={entryActionIntent}
-                // Panel is pinned to one key: reload our own value after a
-                // mutation (delete surfaces "(missing)"). The sidebar list is
-                // refreshed independently by its own Scan control.
-                onMutationSuccess={loadValue}
-              />
-            )}
+            {canRenderKvMutationPanel(value, mutationEnabled) &&
+              value.value.type !== "stream" && (
+                <KvMutationPanel
+                  value={value}
+                  connectionId={connectionId}
+                  database={database}
+                  actionIntent={mutationActionIntent}
+                  entryActionIntent={entryActionIntent}
+                  // Panel is pinned to one key: reload our own value after a
+                  // mutation (delete surfaces "(missing)"). The sidebar list is
+                  // refreshed independently by its own Scan control.
+                  onMutationSuccess={loadValue}
+                />
+              )}
           </>
         ) : null}
       </div>

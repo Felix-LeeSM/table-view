@@ -523,33 +523,35 @@ describe("KvKeyDetailPanel mutations", () => {
     });
   });
 
-  it.each([
-    [
-      () => streamValueEnvelope(),
-      "stream:events",
-      /stream value mutation is unsupported/i,
-    ],
-    [
-      () => partialHashValueEnvelope(),
-      "user:1",
+  it("fails a partial collection mutation surface clearly", async () => {
+    mockRedisRuntime(() => partialHashValueEnvelope());
+
+    renderPanel("redis-1", "user:1");
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
       /partial hash previews cannot be mutated/i,
-    ],
-  ])(
-    "fails unsupported or partial mutation surfaces clearly",
-    async (envelope, keyName, message) => {
-      mockRedisRuntime(envelope);
+    );
+    expect(
+      screen.queryByRole("button", { name: /preview delete/i }),
+    ).not.toBeInTheDocument();
+    expect(commandCalls("execute_kv_command")).toHaveLength(0);
+  });
 
-      renderPanel("redis-1", keyName as string);
+  // PR5b (#1683) — a stream key no longer shows the generic "unsupported"
+  // mutation notice: the reader panel owns its own append-only write surface
+  // (XADD add form), so the KvMutationPanel is suppressed for streams.
+  it("renders the stream write surface instead of an unsupported notice", async () => {
+    mockRedisRuntime(() => streamValueEnvelope());
 
-      expect(await screen.findByRole("alert")).toHaveTextContent(
-        message as RegExp,
-      );
-      expect(
-        screen.queryByRole("button", { name: /preview delete/i }),
-      ).not.toBeInTheDocument();
-      expect(commandCalls("execute_kv_command")).toHaveLength(0);
-    },
-  );
+    renderPanel("redis-1", "stream:events");
+
+    expect(
+      await screen.findByRole("button", { name: /preview xadd/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/stream value mutation is unsupported/i),
+    ).not.toBeInTheDocument();
+  });
 });
 
 type MutatingCommand =
