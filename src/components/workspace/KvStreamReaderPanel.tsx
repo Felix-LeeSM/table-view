@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { Button } from "@components/ui/button";
 import { readKvStream } from "@lib/tauri/kv";
 import type { KvStreamReadResult } from "@/types/kv";
+import { KvJsonValueCell } from "./KvJsonValueCell";
 
 const STREAM_READ_DEFAULT_LIMIT = 100;
 const STREAM_READ_MAX_LIMIT = 500;
@@ -174,7 +175,11 @@ export function KvStreamReaderPanel({
                         key={`${entry.id}:${field.field}:${index}`}
                         className="rounded bg-background px-1.5 py-0.5"
                       >
-                        {field.field}={field.value}
+                        {field.field}=
+                        <KvJsonValueCell
+                          value={field.value}
+                          label={field.field}
+                        />
                       </span>
                     ))}
                   </div>
