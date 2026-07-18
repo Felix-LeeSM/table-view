@@ -512,16 +512,21 @@ describe("generateMqlPreview — BSON literal (Sprint 324 G.2)", () => {
     const { previewLines } = generateMqlPreview(
       makeInput({
         pendingEdits: new Map<string, unknown>([
-          ["0-1:meta.id", { $oid: "65abcdef0123456789abcdef" }],
+          // Nested dot-path edit on a *different* column than the bare edit —
+          // sharing a column (`name` + `name.meta.id`) is a genuine parent/child
+          // prefix overlap that now collapses (code 40 guard, see
+          // mqlGenerator.collapse.test.ts); this test only pins mixed
+          // BSON-literal + plain rendering, so keep the paths disjoint.
+          ["0-2:meta.id", { $oid: "65abcdef0123456789abcdef" }],
           ["0-1", "Ada"],
         ]),
       }),
     );
-    // The dot-path BSON literal is quoted as "name.meta.id" and renders
+    // The dot-path BSON literal is quoted as "age.meta.id" and renders
     // ObjectId(...); the bare top-level edit renders as plain string.
     // (Insertion order of pendingEdits drives the patch ordering.)
     expect(previewLines[0]).toContain(
-      '"name.meta.id": ObjectId("65abcdef0123456789abcdef")',
+      '"age.meta.id": ObjectId("65abcdef0123456789abcdef")',
     );
     expect(previewLines[0]).toContain('name: "Ada"');
   });
