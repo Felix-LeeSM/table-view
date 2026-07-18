@@ -1,4 +1,4 @@
-import { Pencil, Trash2 } from "lucide-react";
+import { Copy, Pencil, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@components/ui/button";
 import type {
@@ -23,7 +23,14 @@ import { formatCount } from "./kvValueFormat";
 // PR4 (2026-07-18) — when `writeContext` is supplied (same mutable gate as
 // `onEntryAction`), the value cell of a hash field / list element whose value is
 // JSON becomes a tree editor that writes the whole re-serialized value via
-// HSET/LSET. Set members and zSet entries are out of scope (PR5).
+// HSET/LSET. Set members and zSet entries stay read-only trees (no in-place
+// member edit exists in Redis).
+//
+// PR5a (#1683) — each row's non-delete action is either "edit" (hash/list,
+// in-place HSET/LSET prefill) or "copy" (set/zSet copy-to-add-form: prefills the
+// SADD/ZADD add form so the user re-creates a member instead of editing one in
+// place). Copy carries the raw member/value verbatim; the set/zSet tree remains
+// read-only.
 
 export type KvCollectionValue =
   | KvHashValue
@@ -40,7 +47,10 @@ export interface KvCollectionWriteContext {
 export interface KvCollectionValueTableProps {
   keyName: string;
   value: KvCollectionValue;
-  onEntryAction?: (op: "edit" | "delete", payload: KvEntryPayload) => void;
+  onEntryAction?: (
+    op: "edit" | "delete" | "copy",
+    payload: KvEntryPayload,
+  ) => void;
   writeContext?: KvCollectionWriteContext;
 }
 
@@ -55,8 +65,11 @@ interface CollectionRows {
   /** i18n column-label keys under workspace:kvCollection. */
   columns: string[];
   rows: CollectionRow[];
-  /** Set members are immutable strings — delete only, no edit. */
-  editable: boolean;
+  /**
+   * Non-delete row action. "edit" = in-place HSET/LSET prefill (hash/list);
+   * "copy" = copy-to-add-form for set/zSet (no in-place member edit).
+   */
+  entryAction: "edit" | "copy";
 }
 
 function toRows(value: KvCollectionValue): CollectionRows {
@@ -64,7 +77,7 @@ function toRows(value: KvCollectionValue): CollectionRows {
     case "hash":
       return {
         columns: ["colField", "colValue"],
-        editable: true,
+        entryAction: "edit",
         rows: value.fields.map((field, index) => ({
           key: `${index}:${field.field}`,
           cells: [field.field, field.value],
@@ -74,7 +87,7 @@ function toRows(value: KvCollectionValue): CollectionRows {
     case "list":
       return {
         columns: ["colIndex", "colValue"],
-        editable: true,
+        entryAction: "edit",
         rows: value.entries.map((entry) => ({
           key: String(entry.index),
           cells: [String(entry.index), entry.value],
@@ -84,7 +97,7 @@ function toRows(value: KvCollectionValue): CollectionRows {
     case "set":
       return {
         columns: ["colMember"],
-        editable: false,
+        entryAction: "copy",
         rows: value.members.map((member, index) => ({
           key: `${index}:${member}`,
           cells: [member],
@@ -94,7 +107,7 @@ function toRows(value: KvCollectionValue): CollectionRows {
     case "zSet":
       return {
         columns: ["colMember", "colScore"],
-        editable: true,
+        entryAction: "copy",
         rows: value.entries.map((entry, index) => ({
           key: `${index}:${entry.member}`,
           cells: [entry.member, String(entry.score)],
@@ -111,8 +124,9 @@ export function KvCollectionValueTable({
   writeContext,
 }: KvCollectionValueTableProps) {
   const { t } = useTranslation("workspace");
-  const { columns, rows, editable } = toRows(value);
+  const { columns, rows, entryAction } = toRows(value);
   const showActions = Boolean(onEntryAction);
+  const isCopy = entryAction === "copy";
   const colSpan = columns.length + (showActions ? 1 : 0);
 
   return (
@@ -170,18 +184,21 @@ export function KvCollectionValueTable({
                 })}
                 {showActions && onEntryAction && (
                   <td className="px-2 py-1 text-right align-top whitespace-nowrap">
-                    {editable && (
-                      <Button
-                        variant="ghost"
-                        size="icon-xs"
-                        aria-label={t("kvCollection.editEntry", {
-                          label: row.cells[0],
-                        })}
-                        onClick={() => onEntryAction("edit", row.payload)}
-                      >
-                        <Pencil aria-hidden />
-                      </Button>
-                    )}
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      aria-label={t(
+                        isCopy
+                          ? "kvCollection.copyEntry"
+                          : "kvCollection.editEntry",
+                        { label: row.cells[0] },
+                      )}
+                      onClick={() =>
+                        onEntryAction(isCopy ? "copy" : "edit", row.payload)
+                      }
+                    >
+                      {isCopy ? <Copy aria-hidden /> : <Pencil aria-hidden />}
+                    </Button>
                     <Button
                       variant="ghost"
                       size="icon-xs"

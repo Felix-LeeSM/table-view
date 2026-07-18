@@ -104,7 +104,7 @@ export default function KvKeyDetailPanel({
     value && !loading && canMutateKvEntries(value, mutationEnabled, t),
   );
   const requestEntryAction = (
-    op: "edit" | "delete",
+    op: "edit" | "delete" | "copy",
     payload: KvEntryPayload,
   ) => {
     entryActionRequestRef.current += 1;

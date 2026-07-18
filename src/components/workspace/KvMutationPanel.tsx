@@ -14,7 +14,7 @@ import ConfirmDestructiveDialog from "./ConfirmDestructiveDialog";
 import {
   analyzeKvMutationSafety,
   entryDeletePending,
-  entryEditForm,
+  entryPrefillForm,
   type KvEntryActionIntent,
   type MutationField,
   type MutationForm,
@@ -109,10 +109,12 @@ export function KvMutationPanel({
     target?.focus();
   }, [actionIntent, value.key]);
 
-  // #1415 — a row Delete builds the destructive command directly (one click ->
-  // preview -> the same danger-tier confirm). A row Edit prefills the add form's
-  // fields so the user tweaks the value and confirms via the existing verb
-  // button. Guarded by requestId so a post-mutation value reload never replays.
+  // #1415/#1683 — a row Delete builds the destructive command directly (one
+  // click -> preview -> the same danger-tier confirm). A row Edit (hash/list) or
+  // Copy (set/zSet copy-to-form) prefills the add form's fields so the user
+  // tweaks the value and confirms via the existing verb button — both are
+  // add-form prefill, not an in-place write. Guarded by requestId so a
+  // post-mutation value reload never replays.
   const handledEntryRequestRef = useRef(0);
   useEffect(() => {
     if (!entryActionIntent) return;
@@ -126,7 +128,7 @@ export function KvMutationPanel({
       return;
     }
     formDirtyRef.current = true;
-    setForm((current) => ({ ...current, ...entryEditForm(payload) }));
+    setForm((current) => ({ ...current, ...entryPrefillForm(payload) }));
     setPending(null);
     firstEditInputRef.current?.focus();
   }, [entryActionIntent, value, t]);
