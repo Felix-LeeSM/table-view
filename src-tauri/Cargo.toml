@@ -1,6 +1,6 @@
 [package]
 name = "table-view"
-version = "0.5.0"
+version = "0.6.0"
 edition = "2021"
 rust-version = "1.91.0"
 # 데스크톱 앱 — crates.io 에 publish 되지 않음. 표식이 있어야 cargo deny 가
