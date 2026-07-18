@@ -3,13 +3,17 @@
 // (matches Rust storage path: ~/Library/Application Support/table-view/
 // connections.json on macOS, ~/.local/share/table-view/... on Linux).
 //
-// Password handling: the Rust storage layer assumes every on-disk
-// `password` field is AES-256-GCM ciphertext keyed by the file at
-// `<app-data>/.key`. Plaintext fields throw "Ciphertext too short" the
-// moment the user clicks Connect. Fixture therefore re-implements the
-// same envelope (12-byte nonce + ciphertext + 16-byte GCM tag, base64)
-// in Node, sharing the same `.key` file. Auto-generates the key when
-// missing so fixture CLI works before the app has ever been launched.
+// Password handling: the Rust storage layer treats every on-disk `password`
+// field as AES-256-GCM ciphertext (plaintext throws "Ciphertext too short" the
+// moment the user clicks Connect), so the fixture re-implements the same
+// envelope (12-byte nonce + ciphertext + 16-byte GCM tag, base64) in Node.
+// The AES key MUST be the one the app decrypts with, and its home moved in
+// Sprint 356: the app now keeps the file-key in the OS keyring (macOS Keychain
+// entry `com.tableview.app.file-key`) and secure-deletes the disk `.key` after
+// migration. So once the app has run on macOS the key lives ONLY in the
+// Keychain — the fixture reads it from there (see loadOrCreateAppKey). Minting
+// a fresh disk key while the app already holds a keyring key is exactly what
+// produced `error: aead::Error` at Connect (key divergence).
 import {
   readFileSync,
   writeFileSync,
@@ -18,6 +22,7 @@ import {
   chmodSync,
 } from "node:fs";
 import { createCipheriv, randomBytes } from "node:crypto";
+import { execFileSync } from "node:child_process";
 import { dirname, resolve } from "node:path";
 import { homedir, platform } from "node:os";
 import type { FixtureConnection, ProfileSpec, ResolvedSpec } from "./spec.js";
@@ -104,12 +109,58 @@ function keyFilePath(): string {
   return resolve(appDataPath(), ".key");
 }
 
-// Mirrors `crypto::get_or_create_key` in src-tauri/src/storage/crypto.rs.
-// The on-disk format is base64(32 random bytes) — anything shorter is
-// rejected so we surface the corruption instead of silently producing
-// an unusable AES key.
+// OS keyring entry the app stores the file-key under — matches
+// `KEYRING_ENTRY_NAME` in src-tauri/src/storage/crypto.rs. Both the Keychain
+// service and account are this string; the stored value is the raw 32-byte key.
+const KEYRING_ENTRY = "com.tableview.app.file-key";
+
+// `security find-generic-password -w` prints the app's raw key as 64 lowercase
+// hex chars (+ trailing newline). Accept hex first, then defensively base64 or
+// raw bytes, but only ever return exactly 32 bytes. Exported for unit coverage
+// (the `security` shell-out around it can't run in headless CI).
+export function decodeKeyringSecret(raw: Buffer): Buffer | null {
+  const text = raw.toString("utf8").trim();
+  if (/^[0-9a-fA-F]{64}$/.test(text)) return Buffer.from(text, "hex");
+  const b64 = Buffer.from(text, "base64");
+  if (b64.length === 32) return b64;
+  const bin = raw[raw.length - 1] === 0x0a ? raw.subarray(0, -1) : raw;
+  if (bin.length === 32) return Buffer.from(bin);
+  return null;
+}
+
+// macOS: read the app's file-key straight from the Keychain so the fixture
+// encrypts with the SAME key the app decrypts with. Returns null off macOS,
+// when the entry is absent (exit 44, no prompt), or when the Keychain is
+// locked/denied. First access triggers a one-time Keychain prompt (the item
+// was created by the app, not this process) — approve with "Always Allow".
+function readMacKeyringKey(): Buffer | null {
+  if (platform() !== "darwin") return null;
+  try {
+    const out = execFileSync(
+      "security",
+      ["find-generic-password", "-s", KEYRING_ENTRY, "-a", KEYRING_ENTRY, "-w"],
+      { stdio: ["ignore", "pipe", "ignore"] },
+    );
+    return decodeKeyringSecret(out);
+  } catch {
+    return null;
+  }
+}
+
+// Resolve the AES key the Rust app will decrypt with. Precedence mirrors
+// `key_migration::migrate_or_initialize`: OS keyring (post-Sprint-356 macOS,
+// where the app prefers the Keychain over any disk file) → disk `.key`
+// (Linux/Path C, or a pre-first-launch machine) → mint a fresh disk key (truly
+// new machine; the app's Path B adopts that same key on next boot). The
+// keyring is a single global OS entry that can't be sandboxed, so under
+// TABLE_VIEW_TEST_DATA_DIR (test isolation) we skip it and behave as a fresh
+// machine — never touching the developer's real Keychain.
 function loadOrCreateAppKey(): Buffer {
   const path = keyFilePath();
+  if (!process.env.TABLE_VIEW_TEST_DATA_DIR) {
+    const fromKeyring = readMacKeyringKey();
+    if (fromKeyring) return fromKeyring;
+  }
   if (existsSync(path)) {
     const key = Buffer.from(readFileSync(path, "utf8").trim(), "base64");
     if (key.length !== 32) {

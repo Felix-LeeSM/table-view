@@ -24,7 +24,11 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
-import { upsertConnections, clearConnections } from "./connections.js";
+import {
+  upsertConnections,
+  clearConnections,
+  decodeKeyringSecret,
+} from "./connections.js";
 import { loadSpec } from "./spec.js";
 
 let tempDir: string;
@@ -328,5 +332,45 @@ describe("connections — storage envelope contract (Rust crypto::decrypt compat
     expect(
       after.connections.find((c) => c.id.startsWith("fixture-")),
     ).toBeUndefined();
+  });
+});
+
+// Sprint 356 regression guard — the fixture must encrypt with the SAME key the
+// app holds in the OS keyring, or Connect throws `error: aead::Error`. The
+// `security` shell-out can't run headless, so we cover the decoder that turns
+// its `-w` output into the 32-byte key.
+describe("decodeKeyringSecret — Keychain `-w` output → 32-byte AES key", () => {
+  it("decodes 64 lowercase hex chars (the real `security -w` shape)", () => {
+    const key = nodeRandomBytes(32);
+    const out = Buffer.from(key.toString("hex"), "utf8");
+    expect(decodeKeyringSecret(out)?.equals(key)).toBe(true);
+  });
+
+  it("tolerates the trailing newline `security` appends", () => {
+    const key = nodeRandomBytes(32);
+    const out = Buffer.from(`${key.toString("hex")}\n`, "utf8");
+    expect(decodeKeyringSecret(out)?.equals(key)).toBe(true);
+  });
+
+  it("falls back to base64 text when the key is 32 bytes", () => {
+    const key = nodeRandomBytes(32);
+    const out = Buffer.from(key.toString("base64"), "utf8");
+    expect(decodeKeyringSecret(out)?.equals(key)).toBe(true);
+  });
+
+  it("accepts raw 32 bytes, stripping a single trailing newline", () => {
+    const key = Buffer.alloc(32, 7); // non-hex, non-newline last byte
+    expect(decodeKeyringSecret(key)?.equals(key)).toBe(true);
+    expect(
+      decodeKeyringSecret(Buffer.concat([key, Buffer.from([0x0a])]))?.equals(
+        key,
+      ),
+    ).toBe(true);
+  });
+
+  it("returns null for anything that isn't a 32-byte key", () => {
+    expect(decodeKeyringSecret(Buffer.from("hello\n", "utf8"))).toBeNull();
+    expect(decodeKeyringSecret(Buffer.from("abcd", "utf8"))).toBeNull(); // short hex
+    expect(decodeKeyringSecret(Buffer.alloc(0))).toBeNull();
   });
 });
