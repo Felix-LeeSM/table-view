@@ -87,15 +87,30 @@ export default function QuickLookPanel(props: QuickLookPanelProps) {
         setHeight(newHeight);
       };
 
-      const handleMouseUp = () => {
+      // Single teardown path shared by mouseup / Escape so no listener leaks.
+      const cleanup = () => {
         document.removeEventListener("mousemove", handleMouseMove);
         document.removeEventListener("mouseup", handleMouseUp);
+        document.removeEventListener("keydown", handleEscape);
         document.body.style.cursor = "";
         document.body.style.userSelect = "";
       };
 
+      const handleMouseUp = () => {
+        cleanup();
+      };
+
+      // Esc cancels the in-flight resize: revert to the height captured at
+      // drag start and tear down before any trailing mouseup fires.
+      const handleEscape = (keyEvent: KeyboardEvent) => {
+        if (keyEvent.key !== "Escape") return;
+        setHeight(startHeight);
+        cleanup();
+      };
+
       document.addEventListener("mousemove", handleMouseMove);
       document.addEventListener("mouseup", handleMouseUp);
+      document.addEventListener("keydown", handleEscape);
       document.body.style.cursor = "row-resize";
       document.body.style.userSelect = "none";
     },
