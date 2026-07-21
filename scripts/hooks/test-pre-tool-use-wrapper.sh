@@ -74,6 +74,22 @@ assert_deny \
 	'.hookSpecificOutput.decision.behavior == "deny"'
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Issue #1706 — EnterWorktree create form 차단 / path form 허용
+# ─────────────────────────────────────────────────────────────────────────────
+# Reason: 2026-07-22 agent 가 runbook (memory/runbook/worktree) 을 어기고
+# harness 내장 EnterWorktree 로 worktree 를 자율 생성 → 미-bootstrap worktree 의
+# hooksPath guard 가 전 Bash 를 차단하는 사태. create form (name 만) 은 deny,
+# sanctioned spawn 후 path form (기존 진입) 은 허용이어야 한다. (2026-07-22)
+assert_deny \
+	"EnterWorktree create form (name only) → permissionDecision deny + exit 0" \
+	"{\"hook_event_name\":\"PreToolUse\",\"tool_name\":\"EnterWorktree\",\"tool_input\":{\"name\":\"fix/foo\"}}" \
+	'.hookSpecificOutput.permissionDecision == "deny"'
+
+assert_pass \
+	"EnterWorktree path form (existing worktree 진입) → exit 0, no JSON" \
+	"{\"hook_event_name\":\"PreToolUse\",\"tool_name\":\"EnterWorktree\",\"tool_input\":{\"path\":\"worktrees/fix__foo\"}}"
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Brain-matcher parity (issue #1028)
 # ─────────────────────────────────────────────────────────────────────────────
 # 정책 목표는 "write tools + Read" 열거가 아니라 "secret 내용을 반환할 수 있는
@@ -117,6 +133,15 @@ assert_matcher_covers \
 	"$ROOT/.codex/hooks.json" \
 	'.hooks.PreToolUse[0].matcher' \
 	Bash Edit Write apply_patch
+
+# issue #1706 — EnterWorktree gate 은 Claude matcher 에 걸려 있어야 위의
+# create-form deny 가 fire 한다. Codex 는 EnterWorktree tool 자체가 없어
+# matcher 불요 (worktree 생성은 check-dangerous-bash 의 git_worktree_add 커버).
+assert_matcher_covers \
+	"parity: Claude PreToolUse matcher gates EnterWorktree (issue #1706)" \
+	"$ROOT/.claude/settings.json" \
+	'.hooks.PreToolUse[0].matcher' \
+	EnterWorktree
 
 printf '\n%d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

@@ -86,6 +86,9 @@ hardlink 라 물리 디스크 추가 없이 rsync 복사보다 빠르다. `cargo
 
 - spawn: orchestrator (현재 메인 세션) 가 명시 호출. agent 가 자율로
   worktree 생성하지 않음 (사용자가 보지 못하는 디스크 공간 차지 위험).
+  - hook enforcement (issue #1706): `scripts/hooks/pre-tool-use.sh` 가
+    `EnterWorktree` create form deny, `scripts/hooks/check-dangerous-bash.sh`
+    가 `git worktree add` block (brain 무관). path form(기존 진입) 은 허용.
 - cleanup: PR 머지 직후 또는 sprint 종료 시. `gh pr merge --delete-branch`
   는 branch 만 삭제 — worktree 디스크는 별도 정리 필요.
 - `scripts/worktree-cleanup.sh` 는 dirty worktree 를 제거하지 않고 SKIP 한다.

@@ -570,6 +570,47 @@ run_case \
   '{"tool_input":{"command":"git status && cat foo | "}}' \
   EMPTY
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Issue #1706 — worktree 자율 생성 차단 + 복구로 deadlock 해제
+# ─────────────────────────────────────────────────────────────────────────────
+# Reason: 2026-07-22 agent 가 worktree-spawn.sh 대신 harness 내장 도구로
+# worktree 를 자율 생성해 미-bootstrap 상태 → hooksPath guard 가 모든 Bash 를
+# 차단하고, block 메시지가 안내하는 setup.sh 마저 같은 guard 에 막히는
+# deadlock 실측. `git worktree add` 는 brain 무관(공유 스크립트) 차단,
+# sanctioned 복구 명령은 hooksPath 상태 검사에서 면제여야 한다. (2026-07-22)
+
+run_case \
+  "case-1706-1: git worktree add → block + worktree-spawn 안내" \
+  1 \
+  '{"tool_input":{"command":"git worktree add -b feat/x worktrees/feat__x origin/main"}}' \
+  'MATCH:git worktree add|worktree-spawn.sh|memory/runbook/worktree/memory.md'
+
+run_case \
+  "case-1706-2: bash scripts/worktree-spawn.sh → allow (sanctioned 경로)" \
+  0 \
+  '{"tool_input":{"command":"bash scripts/worktree-spawn.sh feat/x"}}' \
+  EMPTY
+
+git config core.hooksPath .no-hooks
+run_case \
+  "case-1706-3: hooksPath drift + bash scripts/setup.sh → allow (복구로)" \
+  0 \
+  '{"tool_input":{"command":"bash scripts/setup.sh"}}' \
+  EMPTY
+
+run_case \
+  "case-1706-4: hooksPath drift + git commit → 여전히 block (면제 범위 한정)" \
+  1 \
+  '{"tool_input":{"command":"git commit -m \"x\""}}' \
+  'MATCH:core.hooksPath|.githooks|Blocked'
+restore_hooks_path
+
+run_case \
+  "case-1706-5: 복구 + hook bypass 복합 → block (layer 독립)" \
+  1 \
+  '{"tool_input":{"command":"bash scripts/setup.sh && git commit --no-verify -m x"}}' \
+  'MATCH:--no-verify|hook 우회|memory/workflow/git-policy/memory.md'
+
 echo ""
 echo "==== smoke test summary ===="
 echo "PASS: $PASS_COUNT"
