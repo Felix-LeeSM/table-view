@@ -102,7 +102,7 @@ DANGEROUS_PATTERNS=(
   'git_reset_hard::(^|[^a-zA-Z0-9_])git[[:space:]]+reset[[:space:]]+--hard'
   'git_pull::(^|[^a-zA-Z0-9_])git[[:space:]]+pull([^a-zA-Z0-9_]|$)'
   'git_remote_ref_mutation::(^|[^a-zA-Z0-9_])git[[:space:]]+(reset|checkout)[[:space:]]+(FETCH_HEAD|ORIG_HEAD|@\{u\}|origin/[^[:space:];&|]+|upstream/[^[:space:];&|]+|refs/remotes/[^[:space:];&|]+)([^a-zA-Z0-9_]|$)'
-  'git_worktree_add::(^|[^a-zA-Z0-9_])git[[:space:]]+worktree[[:space:]]+add([^a-zA-Z0-9_]|$)'
+  'git_worktree_add::(^|[^a-zA-Z0-9_])git([[:space:]]+--[a-zA-Z-]+(=[^[:space:];&|]*)?|[[:space:]]+-[a-zA-Z]([[:space:]]+[^-[:space:];&|][^[:space:];&|]*)?)*[[:space:]]+worktree[[:space:]]+add([^a-zA-Z0-9_]|$)'
   'githooks_path_override::(^|[^a-zA-Z0-9_])git[[:space:]].*-c[[:space:]]+core[.]hooksPath[[:space:]]*='
   'git_config_set_hooks_path::(^|[^a-zA-Z0-9_])git[[:space:]]+config[[:space:]]+(-[a-zA-Z0-9-]+([[:space:]]+|=)[[:space:]]*)*core[.]hooksPath[[:space:]]+[^-[:space:];&|][^[:space:];&|]*'
   'no_verify::--no-verify([^a-zA-Z0-9_]|$)'
@@ -673,9 +673,14 @@ check_git_hooks() {
   # 통과. block 메시지가 안내하는 자기 회복 수단 (setup.sh) 이 자기 자신에게
   # 차단되는 deadlock 방지 (2026-07-22 실측). 나머지 block layer (dangerous
   # pattern 등) 는 독립 실행이라 면제 범위는 hooksPath 상태 검사로 한정된다.
-  if echo "$CMD" | grep -qE '(^|[[:space:];&|])bash[[:space:]]+(\./)?scripts/(setup|worktree-spawn)\.sh([[:space:]]|$)'; then
-    return 0
-  fi
+  # 명령 *두부* prefix anchor — 위치 무관 매치면 `git commit … && bash
+  # scripts/setup.sh` (수리가 commit 이후 실행) 도 guard 를 열어 review F1.
+  # setup.sh 자체의 `cd "$REPO_ROOT"` 가 경로를 잡으므로 caller prefix 불요.
+  case "$CMD" in
+    "bash scripts/setup.sh"* | "bash scripts/worktree-spawn.sh"* | "./scripts/setup.sh"* | "./scripts/worktree-spawn.sh"*)
+      return 0
+      ;;
+  esac
   if [ -z "$hooks_dir" ]; then
     block "Blocked: core.hooksPath is unset (default .git/hooks). This repo requires core.hooksPath=.githooks. Run 'bash scripts/setup.sh'."
   fi

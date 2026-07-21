@@ -611,6 +611,28 @@ run_case \
   '{"tool_input":{"command":"bash scripts/setup.sh && git commit --no-verify -m x"}}' \
   'MATCH:--no-verify|hook 우회|memory/workflow/git-policy/memory.md'
 
+# Review reflect (2026-07-22, PR #1707): F1 면제 prefix anchor / F2 git option
+# 우회 차단 / T2 drift 상태 spawn 면제 테스트.
+git config core.hooksPath .no-hooks
+run_case \
+  "case-1706-6: drift + 수리가 뒤 (commit && setup) → block (F1 anchor)" \
+  1 \
+  '{"tool_input":{"command":"git commit -m x && bash scripts/setup.sh"}}' \
+  'MATCH:core.hooksPath|.githooks|Blocked'
+
+run_case \
+  "case-1706-7: drift + bash scripts/worktree-spawn.sh → allow (T2 복구로)" \
+  0 \
+  '{"tool_input":{"command":"bash scripts/worktree-spawn.sh feat/x"}}' \
+  EMPTY
+restore_hooks_path
+
+run_case \
+  "case-1706-8: git -C /tmp worktree add → block (F2 option 우회)" \
+  1 \
+  '{"tool_input":{"command":"git -C /tmp worktree add -b feat/x wt origin/main"}}' \
+  'MATCH:git worktree add|worktree-spawn.sh|memory/runbook/worktree/memory.md'
+
 echo ""
 echo "==== smoke test summary ===="
 echo "PASS: $PASS_COUNT"

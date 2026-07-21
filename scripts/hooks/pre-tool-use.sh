@@ -56,8 +56,9 @@ is_bash_tool() {
 # 명시 호출 (scripts/worktree-spawn.sh) 이지 agent 자율이 아니다. path form
 # (이미 생성된 worktree 진입) 은 허용. Codex 에는 EnterWorktree tool 이 없고,
 # 그 쪽 `git worktree add` 는 check-dangerous-bash.sh 의 git_worktree_add 가 잡는다.
-# Fail-closed: jq 가 없으면 hook_json_field 가 empty 라 path form 도 deny —
-# 도구 부재로 gate 이 열리지 않는다.
+# path 필드 부재 시 path form 도 deny (필드 부재 기준 fail-closed). 단 jq
+# 자체 부재 시 deny() 의 jq -n 도 실패 (exit 127 → Claude non-blocking) 는
+# wrapper 전체의 기존 jq 의존 — 본 분기 고유 문제 아님.
 if [ "$tool_name" = "EnterWorktree" ]; then
 	if [ -z "$(hook_json_field '.tool_input.path // .input.path')" ]; then
 		deny "BLOCKED: agent worktree 자율 생성 금지 (issue #1706).
