@@ -914,7 +914,6 @@ fn test_mssql_binary_category_emits_unquoted_binary_literal_1677() {
 
 // [AC-1674-02] Identifier: ANSI double-quoted, embedded `"` doubled.
 #[test]
-#[ignore = "RED #1674 — GREEN implements oracle_dump + un-ignores"]
 fn test_quote_oracle_identifier_doubles_embedded_quote() {
     assert_eq!(quote_oracle_identifier("plain"), "\"plain\"");
     assert_eq!(quote_oracle_identifier(r#"od"col"#), r#""od""col""#);
@@ -925,7 +924,6 @@ fn test_quote_oracle_identifier_doubles_embedded_quote() {
 
 // [AC-1674-02] Qualified: `"schema"."table"`, both double-quote-escaped.
 #[test]
-#[ignore = "RED #1674 — GREEN implements oracle_dump + un-ignores"]
 fn test_qualified_oracle_table_builds_double_quote_dot_form() {
     assert_eq!(qualified_oracle_table("HR", "USERS"), "\"HR\".\"USERS\"");
     assert_eq!(
@@ -937,7 +935,6 @@ fn test_qualified_oracle_table_builds_double_quote_dot_form() {
 // [AC-1674-02] String: single-quoted with only the single quote doubled;
 // backslash is a literal (Oracle, like T-SQL, is not backslash-aware).
 #[test]
-#[ignore = "RED #1674 — GREEN implements oracle_dump + un-ignores"]
 fn test_quote_oracle_string_doubles_quote_keeps_backslash() {
     assert_eq!(quote_oracle_string("O'Reilly"), "'O''Reilly'");
     assert_eq!(quote_oracle_string(""), "''");
@@ -951,7 +948,6 @@ fn test_quote_oracle_string_doubles_quote_keeps_backslash() {
 
 // [AC-1674-02] Scalars: bool → `1`/`0` NUMBER (no pre-23c BOOLEAN column type).
 #[test]
-#[ignore = "RED #1674 — GREEN implements oracle_dump + un-ignores"]
 fn test_oracle_value_to_sql_literal_scalars() {
     assert_eq!(
         oracle_value_to_sql_literal(&JsonValue::Null, ColumnCategory::Unknown),
@@ -990,7 +986,6 @@ fn test_oracle_value_to_sql_literal_scalars() {
 // [AC-1674-02] Array / Object → plain quoted JSON string, no PG `::jsonb` cast
 // (Oracle implicitly coerces a string literal into a JSON column).
 #[test]
-#[ignore = "RED #1674 — GREEN implements oracle_dump + un-ignores"]
 fn test_oracle_value_to_sql_literal_json_has_no_cast() {
     let obj = oracle_value_to_sql_literal(&json!({"k": "v"}), ColumnCategory::Object);
     assert_eq!(obj, "'{\"k\":\"v\"}'");
@@ -1007,7 +1002,6 @@ fn test_oracle_value_to_sql_literal_json_has_no_cast() {
 // would restore the hex TEXT rather than the raw bytes. Oracle has no `0x`/`X''`
 // literal syntax, so the `HEXTORAW` function is the vendor form.
 #[test]
-#[ignore = "RED #1674 — GREEN implements oracle_dump + un-ignores"]
 fn test_oracle_binary_category_emits_hextoraw_literal() {
     assert_eq!(
         oracle_value_to_sql_literal(&json!("0x0aff"), ColumnCategory::Binary),
@@ -1590,6 +1584,36 @@ async fn run_schema_dump_writes_insert_lines_for_streamed_rows() {
         !mssql_body.contains(r#""dbo"."users""#) && !mssql_body.contains("`dbo`.`users`"),
         "mssql body leaked non-bracket identifier: {mssql_body}"
     );
+
+    // [AC-1674-03] Same streamed rows, `dialect = oracle` → ANSI double-quote
+    // identifiers (like PG) but the Oracle value dialect. Guards the fn-pointer
+    // dispatch grew an `oracle` arm.
+    let oracle_path = dir.path().join("inserts_oracle.sql");
+    let oracle_summary = super::run_schema_dump(
+        &state,
+        "rdb-conn",
+        &oracle_path,
+        "",
+        "",
+        &[dump_table("HR", "USERS", vec!["id", "name"])],
+        &dump_opts_dialect(ExportInclude::Dml, 2, DatabaseType::Oracle),
+        None,
+    )
+    .await
+    .unwrap();
+    assert_eq!(oracle_summary.rows_written, 3);
+    let oracle_body = std::fs::read_to_string(&oracle_path).unwrap();
+    assert!(
+        oracle_body.contains(r#"INSERT INTO "HR"."USERS" ("id", "name") VALUES (1, 'alice');"#),
+        "oracle body: {oracle_body}"
+    );
+    assert!(oracle_body.contains("VALUES (NULL, 'carol');"));
+    assert!(oracle_body.contains(r#"Data: "HR"."USERS""#));
+    // MySQL backticks must not leak into the Oracle dump.
+    assert!(
+        !oracle_body.contains("`HR`.`USERS`"),
+        "oracle body leaked MySQL backtick identifier: {oracle_body}"
+    );
 }
 
 // ── _inner dispatchers (Sprint 237 P5, 2026-05-08) ─────────────────
@@ -1954,4 +1978,9 @@ fn test_export_schema_dump_options_dialect_default_and_parse() {
     let mssql: ExportSchemaDumpOptions =
         serde_json::from_str(r#"{"include":"dml","batchSize":50,"dialect":"mssql"}"#).unwrap();
     assert!(matches!(mssql.dialect, DatabaseType::Mssql));
+
+    // #1674 — `"oracle"` steers the Oracle double-quote INSERT writer.
+    let oracle: ExportSchemaDumpOptions =
+        serde_json::from_str(r#"{"include":"dml","batchSize":50,"dialect":"oracle"}"#).unwrap();
+    assert!(matches!(oracle.dialect, DatabaseType::Oracle));
 }

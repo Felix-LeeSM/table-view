@@ -22,6 +22,7 @@ use std::time::Duration;
 use table_view_lib::db::mongodb::MongoAdapter;
 use table_view_lib::db::mssql::MssqlAdapter;
 use table_view_lib::db::mysql::MysqlAdapter;
+use table_view_lib::db::oracle::OracleAdapter;
 use table_view_lib::db::postgres::PostgresAdapter;
 use table_view_lib::db::DbAdapter;
 use table_view_lib::models::{ConnectionConfig, DatabaseType};
@@ -31,6 +32,10 @@ use testcontainers::ContainerAsync;
 use testcontainers_modules::mongo::Mongo as MongoImage;
 use testcontainers_modules::mssql_server::MssqlServer as MssqlImage;
 use testcontainers_modules::mysql::Mysql as MysqlImage;
+// Issue #1674 — Oracle Database Free has no ARM image, so the module is
+// `#[cfg]`-gated off on aarch64; the endpoint resolver silent-skips there.
+#[cfg(not(any(target_arch = "arm", target_arch = "aarch64")))]
+use testcontainers_modules::oracle::free::Oracle as OracleImage;
 use testcontainers_modules::postgres::Postgres as PostgresImage;
 use tokio::sync::OnceCell;
 
@@ -100,6 +105,8 @@ static PG_CONTAINER: OnceCell<Option<Arc<ContainerAsync<PostgresImage>>>> = Once
 static MONGO_CONTAINER: OnceCell<Option<Arc<ContainerAsync<MongoImage>>>> = OnceCell::const_new();
 static MYSQL_CONTAINER: OnceCell<Option<Arc<ContainerAsync<MysqlImage>>>> = OnceCell::const_new();
 static MSSQL_CONTAINER: OnceCell<Option<Arc<ContainerAsync<MssqlImage>>>> = OnceCell::const_new();
+#[cfg(not(any(target_arch = "arm", target_arch = "aarch64")))]
+static ORACLE_CONTAINER: OnceCell<Option<Arc<ContainerAsync<OracleImage>>>> = OnceCell::const_new();
 
 async fn pg_endpoint() -> Option<PgEndpoint> {
     // 1) 외부 PG 재사용 — `PGHOST`/`PGPORT`/... 가 모두 있으면 그 값을 그대로.
@@ -745,6 +752,160 @@ pub async fn setup_mssql_adapter() -> Option<MssqlAdapter> {
             }
             Err(e) => {
                 println!("SKIP: SQL Server connect failed after retries ({})", e);
+                return None;
+            }
+        }
+    }
+    None
+}
+
+#[derive(Clone, Debug)]
+#[allow(dead_code)]
+struct OracleEndpoint {
+    host: String,
+    port: u16,
+    user: String,
+    password: String,
+    /// Oracle service name (`database` in `ConnectionConfig`).
+    service: String,
+}
+
+/// Issue #1674 — Oracle endpoint resolver. Env override first (`ORACLE_HOST`,
+/// works on any arch); otherwise spawn the `gvenzl/oracle-free` testcontainer.
+/// Oracle Database Free has no ARM image, so on aarch64 the testcontainers
+/// module is `#[cfg]`-gated off and this silent-skips (`None`) — mirroring the
+/// MSSQL amd64-only skip. Point at an external instance with
+/// `ORACLE_HOST=... ORACLE_PORT=... cargo oracle-test`.
+#[allow(dead_code)]
+async fn oracle_endpoint() -> Option<OracleEndpoint> {
+    if std::env::var("ORACLE_DISABLE")
+        .ok()
+        .filter(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .is_some()
+    {
+        return None;
+    }
+
+    if let Ok(host) = std::env::var("ORACLE_HOST") {
+        return Some(OracleEndpoint {
+            host,
+            port: std::env::var("ORACLE_PORT")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(1521),
+            user: std::env::var("ORACLE_USER").unwrap_or_else(|_| "test".into()),
+            password: std::env::var("ORACLE_PASSWORD").unwrap_or_else(|_| "test".into()),
+            service: std::env::var("ORACLE_SERVICE").unwrap_or_else(|_| "FREEPDB1".into()),
+        });
+    }
+
+    #[cfg(not(any(target_arch = "arm", target_arch = "aarch64")))]
+    {
+        oracle_container_endpoint().await
+    }
+    #[cfg(any(target_arch = "arm", target_arch = "aarch64"))]
+    {
+        println!(
+            "SKIP: Oracle Database Free has no ARM image; set \
+             ORACLE_HOST/ORACLE_PORT/ORACLE_USER/ORACLE_PASSWORD/ORACLE_SERVICE \
+             to reuse an external Oracle."
+        );
+        None
+    }
+}
+
+/// Lazily spawn the `gvenzl/oracle-free:23-slim-faststart` testcontainer
+/// (amd64-only). Oracle takes ~30-90s to reach "DATABASE IS READY TO USE!", so
+/// the startup timeout is raised well past the 60s default.
+#[cfg(not(any(target_arch = "arm", target_arch = "aarch64")))]
+async fn oracle_container_endpoint() -> Option<OracleEndpoint> {
+    ensure_sweep_once().await;
+    let pid = current_pid_label();
+    let cell = ORACLE_CONTAINER
+        .get_or_init(|| async {
+            match OracleImage::default()
+                .with_startup_timeout(Duration::from_secs(300))
+                .with_label(OWNED_LABEL, "1")
+                .with_label(OWNER_PID_LABEL, &pid)
+                .start()
+                .await
+            {
+                Ok(c) => {
+                    register_container_for_process_cleanup(c.id().to_string());
+                    Some(Arc::new(c))
+                }
+                Err(e) => {
+                    println!(
+                        "SKIP: Oracle testcontainer 시작 실패 ({}). Docker daemon \
+                         (amd64) 확인 또는 ORACLE_HOST/ORACLE_PORT/ORACLE_USER/\
+                         ORACLE_PASSWORD/ORACLE_SERVICE 로 외부 Oracle 을 지정하세요.",
+                        e
+                    );
+                    None
+                }
+            }
+        })
+        .await
+        .as_ref()?;
+
+    let port = match cell.get_host_port_ipv4(1521).await {
+        Ok(p) => p,
+        Err(e) => {
+            println!("SKIP: Oracle container 포트 매핑 실패 ({})", e);
+            return None;
+        }
+    };
+
+    // gvenzl/oracle-free app user is `test`/`test` in the `FREEPDB1` PDB schema.
+    Some(OracleEndpoint {
+        host: "127.0.0.1".to_string(),
+        port,
+        user: "test".to_string(),
+        password: "test".to_string(),
+        service: "FREEPDB1".to_string(),
+    })
+}
+
+/// Issue #1674 — Oracle lifecycle helper. `OracleAdapter::connect` opens a
+/// service-name connection + version probe and stores the config; each streamed
+/// dump opens fresh connections from that config (two adapters over the same
+/// container stay independent, like MSSQL). Silent-skip (`None`) preserved.
+#[allow(dead_code)]
+pub async fn setup_oracle_adapter() -> Option<OracleAdapter> {
+    let endpoint = oracle_endpoint().await?;
+    let config = ConnectionConfig {
+        id: "test-conn".to_string(),
+        name: "TestOracle".to_string(),
+        db_type: DatabaseType::Oracle,
+        host: endpoint.host,
+        port: endpoint.port,
+        user: endpoint.user,
+        password: endpoint.password,
+        database: endpoint.service,
+        read_only: false,
+        group_id: None,
+        color: None,
+        connection_timeout: Some(30),
+        keep_alive_interval: None,
+        environment: None,
+        auth_source: None,
+        replica_set: None,
+        tls_enabled: None,
+        trust_server_certificate: None,
+        oracle_use_sid: None,
+        wallet_path: None,
+        wallet_password: String::new(),
+    };
+
+    let adapter = OracleAdapter::new();
+    for attempt in 0..5 {
+        match adapter.connect(&config).await {
+            Ok(()) => return Some(adapter),
+            Err(_) if attempt < 4 => {
+                tokio::time::sleep(Duration::from_millis(500 * (attempt + 1))).await;
+            }
+            Err(e) => {
+                println!("SKIP: Oracle connect failed after retries ({})", e);
                 return None;
             }
         }

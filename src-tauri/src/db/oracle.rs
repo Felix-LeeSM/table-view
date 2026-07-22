@@ -385,6 +385,24 @@ impl RdbAdapter for OracleAdapter {
         })
     }
 
+    // Issue #1674 — Oracle row streaming powers the DML/Full schema dump. Same
+    // contract as the pg/mysql/sqlite/mssql siblings; `oracle/runtime.rs` owns
+    // the cursor batching + cancellation body.
+    fn stream_table_rows<'a>(
+        &'a self,
+        namespace: &'a str,
+        table: &'a str,
+        batch_size: u32,
+        column_names: &'a [String],
+        sender: tokio::sync::mpsc::Sender<Vec<Vec<serde_json::Value>>>,
+        cancel: Option<&'a CancellationToken>,
+    ) -> BoxFuture<'a, Result<u64, AppError>> {
+        Box::pin(async move {
+            self.stream_table_rows(namespace, table, batch_size, column_names, sender, cancel)
+                .await
+        })
+    }
+
     fn drop_table<'a>(
         &'a self,
         req: &'a DropTableRequest,

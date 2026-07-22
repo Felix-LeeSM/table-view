@@ -1171,9 +1171,10 @@ describe("SchemaTree — actions", () => {
 
   // =========================================================================
   // Issue #1048 — export surface must match the real `stream_table_rows`
-  // backend, implemented for PostgreSQL / MySQL / MariaDB, SQLite (#1068), and
-  // SQL Server (#1642). DuckDB/Oracle still reject DML/Full dumps as
-  // `Unsupported`, so a visible export control there would be an error-on-click.
+  // backend, implemented for PostgreSQL / MySQL / MariaDB, SQLite (#1068),
+  // SQL Server (#1642), and Oracle (#1674). DuckDB still rejects DML/Full dumps
+  // as `Unsupported`, so a visible export control there would be an
+  // error-on-click.
   // =========================================================================
   it("[#1068] header Export trigger is visible for SQLite (backend supported)", async () => {
     useConnectionStore.setState({

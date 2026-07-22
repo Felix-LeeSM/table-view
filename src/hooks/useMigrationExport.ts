@@ -12,15 +12,17 @@
 // the resolved dialect shapes the DDL and is forwarded to the backend so
 // the DML INSERTs use the matching identifier/string quoting (#1641 —
 // MySQL/MariaDB backtick + backslash escape; #1642 — MSSQL `[bracket]` +
-// T-SQL escape; PG/SQLite ANSI). This hook handles connection→dialect
-// mapping, schemaStore metadata gathering, the invoke branch, the save()
-// dialog (silent on cancel), and toasts.
+// T-SQL escape; #1674 — Oracle `"double-quote"` + Oracle value escape;
+// PG/SQLite ANSI). This hook handles connection→dialect mapping, schemaStore
+// metadata gathering, the invoke branch, the save() dialog (silent on cancel),
+// and toasts.
 //
 // Data path (`RdbAdapter::stream_table_rows`) is implemented for PostgreSQL
 // (postgres.rs), MySQL/MariaDB (mysql.rs, shared adapter), SQLite
-// (adapters/sqlite, #1068), and MSSQL (mssql/runtime.rs, #1642). Every other
-// engine — DuckDB, Oracle — rejects DML/Full dumps as `Unsupported`, so callers
-// gate the export UI via `supportsMigrationExport`.
+// (adapters/sqlite, #1068), MSSQL (mssql/runtime.rs, #1642), and Oracle
+// (oracle/runtime.rs, #1674). Every other engine — DuckDB — rejects DML/Full
+// dumps as `Unsupported`, so callers gate the export UI via
+// `supportsMigrationExport`.
 import { useCallback, useState } from "react";
 import { save } from "@tauri-apps/plugin-dialog";
 import { useSchemaStore } from "@stores/schemaStore";
@@ -74,20 +76,22 @@ const DBMS_TO_DIALECT: Partial<Record<string, DdlDialect>> = {
   mariadb: "mariadb",
   sqlite: "sqlite",
   mssql: "mssql",
+  oracle: "oracle",
 };
 
 // Engines whose `stream_table_rows` backend is implemented (postgres.rs /
 // mysql.rs; MariaDB shares the MySQL adapter; sqlite adapter, #1068; mssql
-// runtime.rs, #1642). Any other engine rejects DML/Full dumps as `Unsupported`,
-// so the schema-tree export controls (header popover + row context menus)
-// surface only for these — surfacing elsewhere would be an error-on-click
-// (#1048).
+// runtime.rs, #1642; oracle runtime.rs, #1674). Any other engine rejects
+// DML/Full dumps as `Unsupported`, so the schema-tree export controls (header
+// popover + row context menus) surface only for these — surfacing elsewhere
+// would be an error-on-click (#1048).
 const MIGRATION_EXPORT_DBTYPES = new Set([
   "postgresql",
   "mysql",
   "mariadb",
   "sqlite",
   "mssql",
+  "oracle",
 ]);
 
 export function supportsMigrationExport(dbType: string | undefined): boolean {

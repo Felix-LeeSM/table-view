@@ -322,7 +322,8 @@ const MSSQL_RDB_CAPABILITIES: &[BackendAdapterCapability] = &[
 // which routes structured table/index/constraint DDL to the bounded builder
 // (`oracle/ddl.rs`), so the declaration claims `RelationalSchemaMutation` to
 // match the wired path. Raw DDL/admin, switch-database, and wallet/TNS surfaces
-// stay unsupported; the flag reflects support, not full DDL parity.
+// stay unsupported; schema-dump export is now wired (#1674 — `stream_table_rows`
+// + Oracle dump dialect). The flag reflects support, not full DDL parity.
 const ORACLE_RDB_CAPABILITIES: &[BackendAdapterCapability] = &[
     BackendAdapterCapability::Lifecycle,
     BackendAdapterCapability::RelationalCatalog,

@@ -158,7 +158,7 @@ function verifyEnterpriseRdbmsPromotionBoundary(): void {
       oracle.capabilities.ddl.alterTable &&
       oracle.capabilities.ddl.createIndex &&
       oracle.capabilities.ddl.dropObject,
-    "oracle: runtime support covers service-name catalog/query/cancel/tabular plus PK-projected editRows and #1072 structured table/index/constraint DDL; raw DDL/admin/import/export/full workbench stay unsupported",
+    "oracle: runtime support covers service-name catalog/query/cancel/tabular plus PK-projected editRows, #1072 structured table/index/constraint DDL, and #1674 vendor-restorable schema-dump export; raw DDL/admin/import/backup-restore/full workbench stay unsupported",
   );
 }
 

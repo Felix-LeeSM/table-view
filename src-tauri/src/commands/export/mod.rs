@@ -350,11 +350,13 @@ pub struct ExportSchemaDumpOptions {
     /// trade-off — 너무 작으면 cursor RTT, 너무 크면 batch 한 묶음이
     /// receiver 에서 tied up).
     pub batch_size: u32,
-    /// Issue #1641/#1642 — INSERT-writer dialect. `mysql`/`mariadb` emit
+    /// Issue #1641/#1642/#1674 — INSERT-writer dialect. `mysql`/`mariadb` emit
     /// backtick identifiers + backslash-aware MySQL string escaping; `mssql`
     /// emits `[bracket]` identifiers + T-SQL string escaping (bool → `1`/`0`);
-    /// everything else (`postgresql`, `sqlite`, and any unspecified value) uses
-    /// the ANSI double-quote PG writer. `#[serde(default)]` → old payloads
+    /// `oracle` emits ANSI double-quote identifiers + Oracle value escaping
+    /// (bool → `1`/`0` NUMBER, binary → `hextoraw('…')`); everything else
+    /// (`postgresql`, `sqlite`, and any unspecified value) uses the ANSI
+    /// double-quote PG writer. `#[serde(default)]` → old payloads
     /// without the field keep byte-identical PG output. DDL is dialect-shaped
     /// upstream in the frontend `generateMigrationDDL`, so this only steers the
     /// DML body.
@@ -582,11 +584,12 @@ async fn stream_schema_dump(
         })?;
         let rdb: &dyn RdbAdapter = adapter.as_rdb()?;
 
-        // Issue #1641/#1642 — pick the INSERT-writer dialect once for the whole
-        // dump. fn pointers keep the per-row/per-identifier hot loop
+        // Issue #1641/#1642/#1674 — pick the INSERT-writer dialect once for the
+        // whole dump. fn pointers keep the per-row/per-identifier hot loop
         // branch-free. `mysql`/`mariadb` → backtick + MySQL escaping;
-        // `mssql` → `[bracket]` + T-SQL escaping (bool → 1/0); everything else
-        // (`postgresql`/`sqlite`) → ANSI double-quote PG.
+        // `mssql` → `[bracket]` + T-SQL escaping (bool → 1/0); `oracle` → ANSI
+        // double-quote + Oracle escaping (bool → 1/0, binary → hextoraw);
+        // everything else (`postgresql`/`sqlite`) → ANSI double-quote PG.
         type QualifyFn = fn(&str, &str) -> String;
         type QuoteIdentFn = fn(&str) -> String;
         // Issue #1677 — the literal writer now takes the column's display

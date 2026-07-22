@@ -138,11 +138,12 @@ export async function writeTextFileExport(
 
 /**
  * 통합 schema/database dump. DDL header + DML INSERT 본체를 한 .sql 파일로
- * streaming. INSERT 직렬화는 `options.dialect` 로 방언화 (#1641/#1642):
+ * streaming. INSERT 직렬화는 `options.dialect` 로 방언화 (#1641/#1642/#1674):
  * `mysql`/`mariadb` 는 backtick identifier + MySQL string escape, `mssql` 는
- * `[bracket]` identifier + T-SQL escape (bool → 1/0), 그 외 (`postgresql`/
- * `sqlite`) 는 ANSI 더블쿼트. RDB 가 아닌 adapter 는 backend 가 `Unsupported`
- * 로 reject.
+ * `[bracket]` identifier + T-SQL escape (bool → 1/0), `oracle` 는 ANSI 더블쿼트
+ * identifier + Oracle value escape (bool → 1/0, binary → `hextoraw('…')`), 그 외
+ * (`postgresql`/`sqlite`) 는 ANSI 더블쿼트. RDB 가 아닌 adapter 는 backend 가
+ * `Unsupported` 로 reject.
  *
  * `tables[].columnNames` 는 source order 로 호출자가 결정 — backend 의
  * `serde_json::Map` lookup 이 이 순서로 row 를 직렬화한다. `ddlHeader` 가
