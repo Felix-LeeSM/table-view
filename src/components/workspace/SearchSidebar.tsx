@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Boxes,
+  ChevronDown,
+  ChevronRight,
   Database,
   FileStack,
   Loader2,
@@ -105,19 +107,29 @@ export default function SearchSidebar({ connectionId }: SearchSidebarProps) {
   const summaryText = catalog
     ? `${catalog.indexes.length} index${catalog.indexes.length === 1 ? "" : "es"} · ${catalog.aliases.length} alias${catalog.aliases.length === 1 ? "" : "es"} · ${catalog.dataStreams.length} data stream${catalog.dataStreams.length === 1 ? "" : "s"}`
     : "catalog pending";
-  const openIndex = useCallback(
+  const openStructure = useCallback(
     (entry: CatalogEntry, permanent = false) => {
       setSelectedId(entry.id);
-      if (entry.kind !== "index") return;
+      // Uniform row-click verb (#1716): a row click opens a STRUCTURE tab.
+      // index → its own structure; alias → its TARGET INDEX's structure
+      // (`alias.index`). dataStream row-click stays selection-only for now
+      // (still queryable via the magnifier) — noted as a follow-up.
+      const table =
+        entry.kind === "index"
+          ? entry.item.name
+          : entry.kind === "alias"
+            ? entry.item.index
+            : null;
+      if (table === null) return;
       setActiveDb(connectionId, SEARCH_WORKSPACE_DB);
       addTab(connectionId, {
-        title: entry.item.name,
+        title: table,
         connectionId,
         type: "table",
         closable: true,
         database: SEARCH_WORKSPACE_DB,
         schema: SEARCH_WORKSPACE_DB,
-        table: entry.item.name,
+        table,
         subView: "structure",
         paradigm: "search",
         permanent,
@@ -188,17 +200,46 @@ export default function SearchSidebar({ connectionId }: SearchSidebarProps) {
     [visible, t],
   );
 
+  // Session-local collapse state (#1716) — no persistence by design. Keyed by
+  // section.key ("indexes" | "aliases" | "dataStreams").
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
+  const toggleSection = useCallback((key: string) => {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }, []);
+
   const treeRef = useRef<HTMLDivElement>(null);
-  const rovingRows: TreeRovingRow[] = sections.flatMap((section) =>
-    section.entries.map((entry) => ({
-      key: entry.id,
+  // Section headers are depth-0 collapsible treeitems (aria-expanded); a
+  // section's entries are their depth-1 leaf children. A COLLAPSED section
+  // contributes only its header — its hidden rows are excluded from the roving
+  // order so Arrow keys never land on invisible rows (#1716 정합).
+  const rovingRows: TreeRovingRow[] = sections.flatMap((section) => {
+    const open = !collapsed.has(section.key);
+    const header: TreeRovingRow = {
+      key: section.key,
       depth: 0,
-      expanded: null,
+      expanded: open,
       focusable: true,
-    })),
-  );
-  // Every catalog row is a leaf, so there is nothing to expand/collapse.
-  const roving = useTreeRoving(rovingRows, () => {}, treeRef);
+    };
+    if (!open) return [header];
+    return [
+      header,
+      ...section.entries.map(
+        (entry): TreeRovingRow => ({
+          key: entry.id,
+          depth: 1,
+          expanded: null,
+          focusable: true,
+        }),
+      ),
+    ];
+  });
+  // ArrowRight/Left on a header expand/collapse it via the shared roving hook.
+  const roving = useTreeRoving(rovingRows, toggleSection, treeRef);
   const activeKey = roving.focusKey ?? rovingRows[0]?.key ?? null;
 
   return (
@@ -287,27 +328,35 @@ export default function SearchSidebar({ connectionId }: SearchSidebarProps) {
             className="py-1"
             onKeyDown={roving.onKeyDown}
           >
-            {sections.map((section) => (
-              <CatalogSection
-                key={section.key}
-                title={section.title}
-                empty={section.empty}
-              >
-                {section.entries.map((entry, index) => (
-                  <CatalogRow
-                    key={entry.id}
-                    entry={entry}
-                    selectedId={selectedId}
-                    onSelect={openIndex}
-                    onOpenQuery={openSearchQuery}
-                    tabIndex={activeKey === entry.id ? 0 : -1}
-                    onFocus={() => roving.setFocusKey(entry.id)}
-                    posInSet={index + 1}
-                    setSize={section.entries.length}
-                  />
-                ))}
-              </CatalogSection>
-            ))}
+            {sections.map((section) => {
+              const isCollapsed = collapsed.has(section.key);
+              return (
+                <CatalogSection
+                  key={section.key}
+                  sectionKey={section.key}
+                  title={section.title}
+                  empty={section.empty}
+                  collapsed={isCollapsed}
+                  onToggle={() => toggleSection(section.key)}
+                  tabIndex={activeKey === section.key ? 0 : -1}
+                  onFocus={() => roving.setFocusKey(section.key)}
+                >
+                  {section.entries.map((entry, index) => (
+                    <CatalogRow
+                      key={entry.id}
+                      entry={entry}
+                      selectedId={selectedId}
+                      onSelect={openStructure}
+                      onOpenQuery={openSearchQuery}
+                      tabIndex={activeKey === entry.id ? 0 : -1}
+                      onFocus={() => roving.setFocusKey(entry.id)}
+                      posInSet={index + 1}
+                      setSize={section.entries.length}
+                    />
+                  ))}
+                </CatalogSection>
+              );
+            })}
           </div>
         )}
       </div>
@@ -316,30 +365,65 @@ export default function SearchSidebar({ connectionId }: SearchSidebarProps) {
 }
 
 function CatalogSection({
+  sectionKey,
   title,
   empty,
+  collapsed,
+  onToggle,
+  tabIndex,
+  onFocus,
   children,
 }: {
+  sectionKey: string;
   title: string;
   empty: string;
+  collapsed: boolean;
+  onToggle: () => void;
+  // Roving wiring (#1716) — the header is a depth-0 collapsible treeitem, so it
+  // shares the tree's single tab stop and Enter/Space toggle.
+  tabIndex: number;
+  onFocus: () => void;
   children: React.ReactNode[];
 }) {
   return (
-    <section
-      role="group"
-      aria-label={title}
-      className="border-b border-border last:border-b-0"
-    >
-      <div className="px-3 pt-2 pb-1 text-3xs font-medium tracking-normal text-muted-foreground uppercase">
-        {title}
-      </div>
-      {children.length > 0 ? (
-        children
-      ) : (
-        <div role="status" className="px-3 pb-2 text-3xs text-muted-foreground">
-          {empty}
-        </div>
-      )}
+    <section className="border-b border-border last:border-b-0">
+      <button
+        type="button"
+        role="treeitem"
+        aria-level={1}
+        aria-expanded={!collapsed}
+        data-tree-key={sectionKey}
+        tabIndex={tabIndex}
+        onFocus={onFocus}
+        onClick={onToggle}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            onToggle();
+          }
+        }}
+        className="flex w-full items-center gap-1 px-3 pt-2 pb-1 text-left text-3xs font-medium tracking-normal text-muted-foreground uppercase hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+      >
+        {collapsed ? (
+          <ChevronRight size={12} className="shrink-0" aria-hidden />
+        ) : (
+          <ChevronDown size={12} className="shrink-0" aria-hidden />
+        )}
+        <span className="truncate">{title}</span>
+      </button>
+      {!collapsed &&
+        (children.length > 0 ? (
+          <div role="group" aria-label={title}>
+            {children}
+          </div>
+        ) : (
+          <div
+            role="status"
+            className="px-3 pb-2 text-3xs text-muted-foreground"
+          >
+            {empty}
+          </div>
+        ))}
     </section>
   );
 }
@@ -375,7 +459,7 @@ function CatalogRow({
   return (
     <div
       role="treeitem"
-      aria-level={1}
+      aria-level={2}
       aria-selected={selected}
       aria-setsize={setSize}
       aria-posinset={posInSet}

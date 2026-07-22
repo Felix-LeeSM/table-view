@@ -121,15 +121,18 @@ describe("SearchSidebar roving tabindex", () => {
     return screen.getByRole("tree", { name: /elasticsearch search catalog/i });
   }
 
-  it("puts exactly one treeitem in the tab order initially (first index)", async () => {
+  // #1716 — sections became collapsible header treeitems (depth-0), so the
+  // first tab stop is now the "Indexes" section header rather than the first
+  // index row.
+  it("puts exactly one treeitem in the tab order initially (first section header)", async () => {
     const tree = await renderTree();
     const items = within(tree).getAllByRole("treeitem");
     const tabbable = items.filter((el) => el.getAttribute("tabindex") === "0");
     expect(tabbable).toHaveLength(1);
-    expect(tabbable[0]).toHaveTextContent("idx-a");
+    expect(tabbable[0]).toHaveTextContent("Indexes");
   });
 
-  it("ArrowDown moves focus across rows, spanning sections", async () => {
+  it("ArrowDown moves focus across rows and section headers, spanning sections", async () => {
     const tree = await renderTree();
     const idxA = within(tree).getByRole("treeitem", { name: /idx-a/i });
     act(() => idxA.focus());
@@ -140,13 +143,19 @@ describe("SearchSidebar roving tabindex", () => {
       within(tree).getByRole("treeitem", { name: /idx-b/i }),
     ).toHaveFocus();
 
+    fireEvent.keyDown(tree, { key: "ArrowDown" }); // onto the Aliases header
+    await flushRaf();
+    expect(
+      within(tree).getByRole("treeitem", { name: /^aliases$/i }),
+    ).toHaveFocus();
+
     fireEvent.keyDown(tree, { key: "ArrowDown" }); // into the aliases section
     await flushRaf();
     expect(
       within(tree).getByRole("treeitem", { name: /alias-a/i }),
     ).toHaveFocus();
 
-    fireEvent.keyDown(tree, { key: "End" }); // last data stream
+    fireEvent.keyDown(tree, { key: "End" }); // last data stream row
     await flushRaf();
     expect(
       within(tree).getByRole("treeitem", { name: /stream-a/i }),
@@ -206,5 +215,33 @@ describe("SearchSidebar roving tabindex", () => {
     const idxB = within(tree).getByRole("treeitem", { name: /idx-b/i });
     fireEvent.click(idxB);
     expect(idxB).toHaveAttribute("aria-selected", "true");
+  });
+
+  // Reason: user OpenSearch-sidebar feedback #1716 — the index/alias/data-stream
+  // sections must be collapsible. The "정합 주의" is roving correctness: a
+  // collapsed section's rows are hidden, so they MUST leave the roving order or
+  // Arrow keys would land on invisible rows. (2026-07-22)
+  it("collapses a section: rows hidden and dropped from the roving order (#1716)", async () => {
+    const tree = await renderTree();
+    const header = within(tree).getByRole("treeitem", { name: /^indexes$/i });
+    expect(header).toHaveAttribute("aria-expanded", "true");
+    expect(
+      within(tree).queryByRole("treeitem", { name: /idx-a/i }),
+    ).not.toBeNull();
+
+    fireEvent.click(header); // collapse the Indexes section
+
+    expect(header).toHaveAttribute("aria-expanded", "false");
+    expect(within(tree).queryByRole("treeitem", { name: /idx-a/i })).toBeNull();
+    expect(within(tree).queryByRole("treeitem", { name: /idx-b/i })).toBeNull();
+
+    // Roving skips the collapsed section: ArrowDown from the Indexes header
+    // lands on the next visible section header, never a hidden index row.
+    act(() => header.focus());
+    fireEvent.keyDown(tree, { key: "ArrowDown" });
+    await flushRaf();
+    expect(
+      within(tree).getByRole("treeitem", { name: /^aliases$/i }),
+    ).toHaveFocus();
   });
 });

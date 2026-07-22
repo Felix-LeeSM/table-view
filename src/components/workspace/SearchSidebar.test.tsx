@@ -344,6 +344,38 @@ describe("SearchSidebar", () => {
     expect(commandCount("sample_search_documents")).toBe(0);
   });
 
+  // Reason: user OpenSearch-sidebar feedback #1716 — clicking an alias ROW did
+  // nothing (openIndex early-returned for non-index kinds). DECIDED: an alias
+  // row-click opens the STRUCTURE tab of its TARGET INDEX (alias.index), so the
+  // row-click verb stays uniform with index rows. (2026-07-22)
+  it("opens the target index structure tab when an alias row is clicked (#1716)", async () => {
+    render(<SearchSidebar connectionId="search-1" />);
+
+    const aliasTitle = await screen.findByText("logs-elastic");
+    const row = aliasTitle.closest('[role="treeitem"]');
+    expect(row).not.toBeNull();
+    if (!row) return;
+    fireEvent.click(row);
+
+    expect(row).toHaveAttribute("aria-selected", "true");
+    const tabs = getAllTabsForConnection("search-1");
+    expect(tabs).toHaveLength(1);
+    expect(tabs[0]).toMatchObject({
+      type: "table",
+      title: "logs-elastic-2026.05.24",
+      database: "_search",
+      schema: "_search",
+      table: "logs-elastic-2026.05.24",
+      paradigm: "search",
+      subView: "structure",
+    });
+    // Structure open must not trigger deep-metadata fetches from the sidebar.
+    expect(commandCount("list_search_catalog_summary")).toBe(1);
+    expect(commandCount("get_search_index_mapping")).toBe(0);
+    expect(commandCount("get_search_index_settings")).toBe(0);
+    expect(commandCount("sample_search_documents")).toBe(0);
+  });
+
   it("opens selected index and alias query tabs with Search target metadata", async () => {
     render(<SearchSidebar connectionId="search-1" />);
 
