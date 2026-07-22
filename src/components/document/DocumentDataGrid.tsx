@@ -33,6 +33,7 @@ import MqlPreviewModal from "@components/document/MqlPreviewModal";
 import ProjectionDialog from "@components/document/ProjectionDialog";
 import AddDocumentModal from "@components/document/AddDocumentModal";
 import { useDelayedFlag } from "@/hooks/useDelayedFlag";
+import { useRefreshEvent } from "@/hooks/useRefreshEvent";
 import { useSafeModeGate } from "@hooks/useSafeModeGate";
 import { insertDocument } from "@lib/tauri";
 import { DEFAULT_PAGE_SIZE } from "@lib/gridPolicy";
@@ -374,6 +375,12 @@ export default function DocumentDataGrid({
     window.addEventListener("reset-column-widths", handler);
     return () => window.removeEventListener("reset-column-widths", handler);
   }, [resetColumnWidths]);
+
+  // #1718 (Part of #1717) — the global soft-refresh (Cmd+R) broadcasts
+  // `refresh-data` for the records subView. Refetch the collection instead of
+  // ignoring the shortcut. App gates this dispatch behind the discard-confirm
+  // when pending edits exist.
+  useRefreshEvent("refresh-data", () => void fetchData());
 
   // Sprint 316 — explicit sort helpers driven by the column header
   // context menu. `append` mirrors shift+click semantics. The plain

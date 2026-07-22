@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Loader2, Plus, Trash2 } from "lucide-react";
 import { useDelayedFlag } from "@/hooks/useDelayedFlag";
+import { useRefreshEvent } from "@/hooks/useRefreshEvent";
 import { useDocumentCatalogStore } from "@/stores/documentCatalogStore";
 import {
   Tooltip,
@@ -96,6 +97,11 @@ export function MongoIndexesPanel({
       loadRequestIdRef.current += 1;
     };
   }, [loadIndexes]);
+
+  // #1718 (Part of #1717) — the global soft-refresh (Cmd+R) broadcasts
+  // `refresh-structure` for the Mongo Structure pane; force a cache-bypassing
+  // reload so the visible indexes actually refetch.
+  useRefreshEvent("refresh-structure", refresh);
 
   const busy = useDelayedFlag(loading, 1000);
 
