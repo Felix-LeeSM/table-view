@@ -82,6 +82,14 @@ export interface DocumentTreePanelProps {
     path: string,
     value: string | Record<string, unknown>,
   ) => void;
+  /**
+   * #1703 — drop a single pending entry for `path` (undo a pending
+   * `__op__:unset` delete). The panel can only ever *add* to the pending map
+   * via `onCommitEdit`; cancelling a marked-for-delete key needs a removal
+   * path. Shared across Mongo / RDB / Redis consumers so the in-tree undo
+   * toggle works for every backend that renders this panel.
+   */
+  onRemovePending?: (path: string) => void;
   /** Close button on the detail row header (mirrors the cell-level toggle). */
   onClose?: () => void;
   /**

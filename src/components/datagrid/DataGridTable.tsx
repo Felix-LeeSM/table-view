@@ -732,6 +732,21 @@ const DataGridTable = forwardRef<DataGridTableHandle, DataGridTableProps>(
                                     }
                                   : undefined
                               }
+                              onRemovePending={
+                                canEditRows
+                                  ? (path) => {
+                                      if (!setPendingEdits) return;
+                                      // #1703 — drop the scoped pending entry
+                                      // so the tree's undo-delete toggle cancels
+                                      // a pending `__op__:unset`.
+                                      const next = new Map(pendingEdits);
+                                      next.delete(
+                                        `${rowIdx}-${expandedNested!.colIdx}:${path}`,
+                                      );
+                                      setPendingEdits(next);
+                                    }
+                                  : undefined
+                              }
                               onClose={() => setExpandedNested(null)}
                             />
                           </div>
