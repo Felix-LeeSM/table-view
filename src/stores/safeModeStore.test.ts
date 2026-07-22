@@ -1,6 +1,4 @@
-// AC-185-02 — safeModeStore unit tests. 5 cases per Sprint 185 contract.
-// AC-186-01 — Sprint 186 extends toggle to 3-way (strict → warn → off → strict).
-// 작성 2026-05-01.
+// AC-185-02 — safeModeStore unit tests. 작성 2026-05-01.
 //
 // 2026-05-16 update (Phase 4 sprint-368, Q12) — safeModeStore actions
 // became backend-first (`persist_setting("safe_mode", JSON)` IPC). Tests
@@ -9,6 +7,11 @@
 // — the persist middleware was removed in this sprint (LS write 0 for
 // safe_mode). The new AC-368-02 LS-zero invariant is locked in
 // `safeModeStore.setSafeMode.test.ts`.
+//
+// 2026-07-22 update (issue #1631 test-audit Wave 2) — toggle 의 per-step
+// 전이(strict→warn / warn→off / off→strict)와 reversibility(full-cycle
+// 복귀)는 `safeModeStore.setSafeMode.test.ts` 의 full-cycle SOT 로 통합됨.
+// 이 파일은 default 앵커(#1113)와 setMode 기본 계약만 남긴다.
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
 vi.mock("@tauri-apps/api/core", () => ({
@@ -40,30 +43,6 @@ describe("safeModeStore", () => {
     expect(useSafeModeStore.getState().mode).toBe("strict");
   });
 
-  it("[AC-185-02c] toggle is reversible — full cycle returns to start", async () => {
-    // Cycle order 는 불변 (strict → warn → off → strict); 기본값 앵커만 warn.
-    expect(useSafeModeStore.getState().mode).toBe("warn");
-    await useSafeModeStore.getState().toggle();
-    await useSafeModeStore.getState().toggle();
-    await useSafeModeStore.getState().toggle();
-    expect(useSafeModeStore.getState().mode).toBe("warn");
-  });
-
-  it("[AC-186-01a] toggle: strict → warn", async () => {
-    useSafeModeStore.setState({ mode: "strict" });
-    await useSafeModeStore.getState().toggle();
-    expect(useSafeModeStore.getState().mode).toBe("warn");
-  });
-
-  it("[AC-186-01b] toggle: warn → off", async () => {
-    useSafeModeStore.setState({ mode: "warn" });
-    await useSafeModeStore.getState().toggle();
-    expect(useSafeModeStore.getState().mode).toBe("off");
-  });
-
-  it("[AC-186-01c] toggle: off → strict (no skipping warn)", async () => {
-    useSafeModeStore.setState({ mode: "off" });
-    await useSafeModeStore.getState().toggle();
-    expect(useSafeModeStore.getState().mode).toBe("strict");
-  });
+  // toggle per-step 전이 + reversibility 는 safeModeStore.setSafeMode.test.ts
+  // 의 full-cycle SOT 로 이관됨 — issue #1631 (2026-07-22).
 });

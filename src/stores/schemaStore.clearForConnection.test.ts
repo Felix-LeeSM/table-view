@@ -7,6 +7,11 @@
 // tableConstraintsCache / triggers)을
 // 한 번에 비워 wide drop 을 보장해야 한다. Sprint 130/263 의 기존 행동을
 // sprint-360 의 contract 어휘 (AC-360-01 / AC-360-05) 로 다시 고정한다.
+//
+// SOT 통합 (2026-07-22, issue #1631 test-audit Wave 2): schemaStore.test.ts
+// 에 흩어져 있던 clearForConnection 잔여 케이스(triggers/views/functions
+// sibling, drops-every, no-op)를 이 canonical 11-slot suite 로 이관.
+// schemaStore.test.ts 는 fetch/delegate 전용으로 슬림화.
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { setupTauriMock } from "@/test-utils/tauriMock";
@@ -50,6 +55,9 @@ const SEEDED_CACHE = {
     conn1: {
       db1: { public: [{ name: "v1", schema: "public", definition: null }] },
     },
+    conn2: {
+      db1: { public: [{ name: "v2", schema: "public", definition: null }] },
+    },
   },
   functions: {
     conn1: {
@@ -57,6 +65,21 @@ const SEEDED_CACHE = {
         public: [
           {
             name: "fn1",
+            schema: "public",
+            arguments: null,
+            returnType: null,
+            language: "sql",
+            source: null,
+            kind: "function" as const,
+          },
+        ],
+      },
+    },
+    conn2: {
+      db1: {
+        public: [
+          {
+            name: "fn2",
             schema: "public",
             arguments: null,
             returnType: null,
@@ -116,6 +139,13 @@ const SEEDED_CACHE = {
               definition: "",
             },
           ],
+        },
+      },
+    },
+    conn2: {
+      db1: {
+        public: {
+          items: [],
         },
       },
     },
@@ -185,5 +215,27 @@ describe("schemaStore.clearForConnection (sprint-360 Phase 2 Q23)", () => {
     expect(state.tableColumnsCache.conn2?.db1?.public?.users).toEqual([]);
     expect(state.tableIndexesCache.conn2?.db1?.public?.users).toEqual([]);
     expect(state.tableConstraintsCache.conn2?.db1?.public?.users).toEqual([]);
+    // views / functions / triggers sibling preservation — issue #1631 이관
+    // (schemaStore.test.ts:741,354 의 conn2 sibling 단언을 이 SOT 로 흡수).
+    expect(state.views.conn2?.db1?.public).toHaveLength(1);
+    expect(state.functions.conn2?.db1?.public).toHaveLength(1);
+    expect(state.triggers.conn2?.db1?.public?.items).toEqual([]);
+  });
+
+  // no-op edge — clearForConnection 대상 conn 에 캐시가 전혀 없어도 throw
+  // 없이 sibling conn 은 그대로 둔다. schemaStore.test.ts:898 에서 이관
+  // (sprint-360 SOT 통합, issue #1631).
+  it("is a no-op when the connection has no cached entries", () => {
+    useSchemaStore.setState({
+      schemas: { conn2: { db1: [{ name: "public" }] } },
+      tables: {},
+      views: {},
+      functions: {},
+      tableColumnsCache: {},
+    });
+
+    useSchemaStore.getState().clearForConnection("conn1");
+
+    expect(useSchemaStore.getState().schemas.conn2?.db1).toHaveLength(1);
   });
 });
