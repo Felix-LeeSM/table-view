@@ -82,6 +82,18 @@ export function KvJsonTreeEditor({
     [],
   );
 
+  // #1703 — drop a single pending entry so the tree's undo-delete toggle can
+  // cancel a pending `__op__:unset` on the shared panel (Redis path).
+  const onRemovePending = useCallback((path: string) => {
+    setPending((prev) => {
+      const next = new Map(prev);
+      next.delete(path);
+      return next;
+    });
+    setPreview(null);
+    setError(null);
+  }, []);
+
   const discard = useCallback(() => {
     setPending(new Map());
     setPreview(null);
@@ -153,6 +165,7 @@ export function KvJsonTreeEditor({
         fieldName={treeLabel}
         pendingByPath={pending}
         onCommitEdit={onCommitEdit}
+        onRemovePending={onRemovePending}
       />
       {pending.size > 0 && (
         <div className="space-y-2 rounded border border-border bg-background/60 p-2">

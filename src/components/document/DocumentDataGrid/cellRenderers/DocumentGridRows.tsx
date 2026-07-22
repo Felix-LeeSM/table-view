@@ -437,6 +437,13 @@ function NestedDetailRow({
               );
               setPendingEdits(next);
             }}
+            onRemovePending={(path) => {
+              // #1703 — drop the scoped pending entry so the tree's undo-delete
+              // toggle can cancel a pending `__op__:unset`.
+              const next = new Map(pendingEdits);
+              next.delete(`${rowIdx}-${expandedNested.colIdx}:${path}`);
+              setPendingEdits(next);
+            }}
             onClose={onClose}
             forbiddenRootKeys={MONGO_ROOT_RESERVED_KEYS}
           />

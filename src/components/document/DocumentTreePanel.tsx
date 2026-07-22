@@ -13,7 +13,14 @@
 import { useMemo, useState, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { ChevronRight, ChevronDown, X, Search, Trash2 } from "lucide-react";
+import {
+  ChevronRight,
+  ChevronDown,
+  X,
+  Search,
+  Trash2,
+  Undo2,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   TREE_ROW_HEIGHT_ESTIMATE,
@@ -57,6 +64,7 @@ export function DocumentTreePanel({
   fieldName,
   pendingByPath,
   onCommitEdit,
+  onRemovePending,
   onClose,
   forbiddenRootKeys,
 }: DocumentTreePanelProps) {
@@ -373,7 +381,18 @@ export function DocumentTreePanel({
             )}
           </button>
         )}
-        <span className="ml-1 text-value-key">{node.label}</span>
+        {/* #1703 — a pending unset deletes the whole entry (key), so the key
+          label carries the strike, not only the value. The value strike alone
+          reads as "value edited", hiding that the key itself is going away. */}
+        <span
+          className={
+            isPendingUnset(pending)
+              ? "ml-1 text-value-key line-through decoration-value-delete opacity-60"
+              : "ml-1 text-value-key"
+          }
+        >
+          {node.label}
+        </span>
         {node.kind === "obj" && (
           <span className="ml-1 text-muted-foreground">
             : {"{"}
@@ -448,10 +467,29 @@ export function DocumentTreePanel({
               cannot be unset (MongoDB rejects it; mqlGenerator's
               id-in-patch guard would drop the row anyway), so
               hide the trash for those leaves to keep the UI
-              honest. */}
+              honest.
+              #1703 — once a leaf is marked for delete, reuse the
+              same slot as an "undo delete" toggle (the trash used
+              to just vanish, leaving no in-tree way to cancel).
+              Clicking drops the pending unset via onRemovePending. */}
             {onCommitEdit &&
               node.path !== "_id" &&
-              !isPendingUnset(pending) && (
+              (isPendingUnset(pending) ? (
+                onRemovePending && (
+                  <button
+                    type="button"
+                    data-testid={`tree-undo-delete-${node.path}`}
+                    aria-label={t("treePanel.undoDeleteFieldAriaLabel", {
+                      path: node.path,
+                    })}
+                    title={t("treePanel.undoDeleteFieldTitle")}
+                    onClick={() => onRemovePending(node.path)}
+                    className="ml-2 inline-flex items-center align-middle text-value-delete transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                  >
+                    <Undo2 size={12} aria-hidden />
+                  </button>
+                )
+              ) : (
                 <button
                   type="button"
                   data-testid={`tree-delete-${node.path}`}
@@ -464,7 +502,7 @@ export function DocumentTreePanel({
                 >
                   <Trash2 size={12} aria-hidden />
                 </button>
-              )}
+              ))}
           </>
         )}
 

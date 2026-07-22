@@ -10,7 +10,7 @@ import {
   renderLeafValue,
   type TreeNode,
 } from "@/lib/jsonTree";
-import { joinObjectPath } from "./types";
+import { isPendingUnset, joinObjectPath } from "./types";
 
 type PendingMap = ReadonlyMap<string, string | Record<string, unknown>>;
 type CommitEdit = (
@@ -116,24 +116,35 @@ export function useTreeAdd({
     // Duplicate-key check against existing children of the parent in
     // `value` AND against same-parent entries already in pendingByPath
     // (so two consecutive `+ key` commits with the same key are blocked).
+    //
+    // #1703 — a key already marked for delete (pending `__op__:unset`) is NOT
+    // a collision: re-adding it under the same name is exactly how the user
+    // cancels the delete and gives it a fresh value. The re-add commit reuses
+    // the same path key, overwriting the unset entry. Both the `value` node
+    // scan and the pending scan skip the marked-for-delete path — the node
+    // still renders (struck through) and the pending entry still holds the
+    // unset sentinel, so neither guard branch may treat it as taken.
     const candidatePath = joinObjectPath(addingPath, trimmedKey);
-    const existingChildPaths = new Set<string>();
-    for (const node of nodes) {
-      // Direct children of the parent — their path is parent + "." + label
-      // (or just label when parent is root). The candidate collides iff
-      // node.path === candidatePath.
-      if (node.path === candidatePath) {
-        existingChildPaths.add(node.path);
+    const markedForDelete = isPendingUnset(pendingByPath?.get(candidatePath));
+    if (!markedForDelete) {
+      const existingChildPaths = new Set<string>();
+      for (const node of nodes) {
+        // Direct children of the parent — their path is parent + "." + label
+        // (or just label when parent is root). The candidate collides iff
+        // node.path === candidatePath.
+        if (node.path === candidatePath) {
+          existingChildPaths.add(node.path);
+        }
       }
-    }
-    if (pendingByPath) {
-      for (const path of pendingByPath.keys()) {
-        if (path === candidatePath) existingChildPaths.add(path);
+      if (pendingByPath) {
+        for (const path of pendingByPath.keys()) {
+          if (path === candidatePath) existingChildPaths.add(path);
+        }
       }
-    }
-    if (existingChildPaths.has(candidatePath)) {
-      setAddError("key already exists");
-      return;
+      if (existingChildPaths.has(candidatePath)) {
+        setAddError("key already exists");
+        return;
+      }
     }
 
     // Coerce raw input → JSON-typed value per Slice D's outer-quotes
