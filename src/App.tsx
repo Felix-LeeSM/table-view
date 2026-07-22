@@ -28,6 +28,7 @@ import { isEditableTarget } from "./lib/keyboard/isEditableTarget";
 import { useThemeStore } from "./stores/themeStore";
 import { markBootMilestone } from "./lib/perf/bootInstrumentation";
 import { useActiveTabConnection } from "./hooks/useActiveTabConnection";
+import { useHardRefresh } from "./lib/runtime/connection/hardRefresh";
 import { destroyCurrentWindow } from "./lib/window-controls";
 import { getCurrentWindowLabel, parseWorkspaceLabel } from "./lib/window-label";
 import { listen } from "@tauri-apps/api/event";
@@ -101,6 +102,9 @@ export default function App() {
   const connectionsLoadedOnce = useConnectionStore((s) => s.hasLoadedOnce);
   const windowHasDirtyTabs = useConnectionHasDirtyTabs(currentConnId);
   const { guard: confirmDiscard, dialog: discardDialog } = useDiscardConfirm();
+  // #1719 (Part of #1717) — Cmd+Shift+R hard refresh orchestration (reconnect
+  // + cache invalidate + refetch) for the current window's connection.
+  const hardRefresh = useHardRefresh();
   // Keep the latest dirty snapshot in a ref so the one-shot native-close
   // listener reads fresh state without re-registering on every edit (a
   // re-register gap could drop the OS close event).
@@ -393,10 +397,9 @@ export default function App() {
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [tabIds, workspaceKey, setActiveTab]);
 
-  // Cmd+R / Ctrl+R / F5 — context-aware refresh.
-  // Cmd+Shift+R / Ctrl+Shift+R — Sprint 258 (AC-258-08): broadcasts a
-  // `reset-column-widths` event so any mounted grid (RDB / Document /
-  // raw query result) can re-run its initial widths formula. We
+  // Cmd+R / Ctrl+R / F5 — context-aware soft refresh.
+  // Cmd+Shift+R / Ctrl+Shift+R — #1719 (Part of #1717) Stage 2 hard refresh:
+  // reconnect the session, invalidate the schema/grid caches, and refetch. We
   // normalise via `e.key.toLowerCase()` because shift flips `e.key` to
   // upper-case, and we'd otherwise miss the shortcut entirely.
   useEffect(() => {
@@ -411,9 +414,18 @@ export default function App() {
 
       e.preventDefault();
 
-      // Cmd+Shift+R routes to widths reset, NOT data refetch.
+      // #1719 (Part of #1717) — Cmd+Shift+R hard refresh: tear the session
+      // down + rebuild, invalidate the schema/grid caches, and refetch. Gated
+      // behind the same shared #1705 discard-confirm the soft records refresh
+      // uses so pending edits aren't dropped without a prompt (clean windows
+      // reconnect immediately). reset-column-widths moved to the grid header
+      // context menu (right-click a column header).
       if (lowerKey === "r" && e.shiftKey) {
-        window.dispatchEvent(new CustomEvent("reset-column-widths"));
+        const connId = activeTab?.connectionId ?? currentConnId;
+        if (!connId) return;
+        confirmDiscard(windowHasDirtyRef.current, () => {
+          void hardRefresh(connId);
+        });
         return;
       }
 
@@ -440,7 +452,7 @@ export default function App() {
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [activeTab, confirmDiscard]);
+  }, [activeTab, confirmDiscard, currentConnId, hardRefresh]);
 
   // Cmd+I / Ctrl+I — format SQL
   useEffect(() => {

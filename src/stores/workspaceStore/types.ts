@@ -319,6 +319,11 @@ export interface WorkspaceStoreState {
     sql?: string,
   ) => void;
   loadQueryIntoTab: (payload: LoadQueryPayload) => void;
+  // #1719 (Part of #1717) — hard refresh: collapse every query tab across the
+  // connection's databases to `idle`, abandoning in-flight and completed
+  // results (the intended result loss on a reconnect). The querySlice queryId
+  // guard drops any late IPC resolve that lands on an already-reset tab.
+  resetQueryStatesForConnection: (connId: string) => void;
 
   clearForConnection: (connId: string) => void;
   hydrateWorkspacesFromSnapshot: (

@@ -367,15 +367,6 @@ export default function DocumentDataGrid({
     onCommitWidth: setWidth,
   });
 
-  // AC-258-08 — cmd+shift+r 단축키가 reset-column-widths 이벤트를
-  // dispatch 한다. App.tsx 의 핸들러가 active grid 와 무관하게 broadcast
-  // 하고, 각 mounted grid 가 자기 widths 를 리셋한다.
-  useEffect(() => {
-    const handler = () => resetColumnWidths();
-    window.addEventListener("reset-column-widths", handler);
-    return () => window.removeEventListener("reset-column-widths", handler);
-  }, [resetColumnWidths]);
-
   // #1718 (Part of #1717) — the global soft-refresh (Cmd+R) broadcasts
   // `refresh-data` for the records subView. Refetch the collection instead of
   // ignoring the shortcut. App gates this dispatch behind the discard-confirm
