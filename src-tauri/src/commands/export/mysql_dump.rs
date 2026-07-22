@@ -11,6 +11,8 @@
 
 use serde_json::Value as JsonValue;
 
+use crate::models::ColumnCategory;
+
 /// Backtick-quote a MySQL identifier, doubling any embedded backtick.
 pub(super) fn quote_mysql_identifier(name: &str) -> String {
     let mut out = String::with_capacity(name.len() + 2);
@@ -64,7 +66,23 @@ pub(super) fn quote_mysql_string(s: &str) -> String {
 /// and (b) emits a plain quoted JSON string for Array/Object — MySQL casts a
 /// string literal into a JSON column implicitly, so the PG `::jsonb` suffix
 /// (which MySQL cannot parse) is dropped.
-pub(super) fn mysql_value_to_sql_literal(value: &JsonValue) -> String {
+pub(super) fn mysql_value_to_sql_literal(value: &JsonValue, category: ColumnCategory) -> String {
+    // Issue #1677 — a Binary-category cell arrives as a `"0x<hex>"` string from
+    // `cell_to_json`. Emit an unquoted MySQL binary literal `X'<hex>'` so a
+    // varbinary/BLOB restore stores the raw bytes; the quoted `'0x…'` string arm
+    // below would store the ASCII bytes of the hex text (silent corruption).
+    // `X'…'` (not bare `0x…`) also expresses the empty blob as `X''`, which `0x`
+    // alone cannot. Type-driven — a text column whose value merely starts with
+    // `0x` keeps the quoted-string path.
+    if category == ColumnCategory::Binary {
+        if let JsonValue::String(s) = value {
+            let hex = s
+                .strip_prefix("0x")
+                .or_else(|| s.strip_prefix("0X"))
+                .unwrap_or(s);
+            return format!("X'{hex}'");
+        }
+    }
     match value {
         JsonValue::Null => "NULL".to_string(),
         JsonValue::Bool(true) => "TRUE".to_string(),

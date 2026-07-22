@@ -15,6 +15,7 @@ use super::mysql_dump::{
     mysql_value_to_sql_literal, qualified_mysql_table, quote_mysql_identifier, quote_mysql_string,
 };
 use super::*;
+use crate::models::ColumnCategory;
 use serde_json::json;
 use std::path::Path;
 use tempfile::TempDir;
@@ -584,22 +585,40 @@ fn test_qualified_pg_table_builds_dot_form() {
 // [AC-192-05] pg_value_to_sql_literal: NULL is bare literal.
 #[test]
 fn test_pg_value_to_sql_literal_null_is_bare() {
-    assert_eq!(pg_value_to_sql_literal(&JsonValue::Null), "NULL");
+    assert_eq!(
+        pg_value_to_sql_literal(&JsonValue::Null, ColumnCategory::Unknown),
+        "NULL"
+    );
 }
 
 // [AC-192-05] pg_value_to_sql_literal: Bool → TRUE/FALSE (PG keyword).
 #[test]
 fn test_pg_value_to_sql_literal_bool_uppercase() {
-    assert_eq!(pg_value_to_sql_literal(&json!(true)), "TRUE");
-    assert_eq!(pg_value_to_sql_literal(&json!(false)), "FALSE");
+    assert_eq!(
+        pg_value_to_sql_literal(&json!(true), ColumnCategory::Bool),
+        "TRUE"
+    );
+    assert_eq!(
+        pg_value_to_sql_literal(&json!(false), ColumnCategory::Bool),
+        "FALSE"
+    );
 }
 
 // [AC-192-05] Number passes through unquoted (preserves int / float).
 #[test]
 fn test_pg_value_to_sql_literal_number_unquoted() {
-    assert_eq!(pg_value_to_sql_literal(&json!(42)), "42");
-    assert_eq!(pg_value_to_sql_literal(&json!(-7)), "-7");
-    assert_eq!(pg_value_to_sql_literal(&json!(2.5)), "2.5");
+    assert_eq!(
+        pg_value_to_sql_literal(&json!(42), ColumnCategory::Int),
+        "42"
+    );
+    assert_eq!(
+        pg_value_to_sql_literal(&json!(-7), ColumnCategory::Int),
+        "-7"
+    );
+    assert_eq!(
+        pg_value_to_sql_literal(&json!(2.5), ColumnCategory::Float),
+        "2.5"
+    );
 }
 
 // [AC-192-05] String → quoted + escaped. row_to_json 으로 들어온
@@ -607,26 +626,37 @@ fn test_pg_value_to_sql_literal_number_unquoted() {
 // 라 같은 path — restore 시 PG 가 column type 에 따라 implicit cast.
 #[test]
 fn test_pg_value_to_sql_literal_string_escapes_quote() {
-    assert_eq!(pg_value_to_sql_literal(&json!("hello")), "'hello'");
-    assert_eq!(pg_value_to_sql_literal(&json!("O'Reilly")), "'O''Reilly'");
+    assert_eq!(
+        pg_value_to_sql_literal(&json!("hello"), ColumnCategory::Text),
+        "'hello'"
+    );
+    assert_eq!(
+        pg_value_to_sql_literal(&json!("O'Reilly"), ColumnCategory::Text),
+        "'O''Reilly'"
+    );
     // bytea round-trip: row_to_json 의 `"\\x6162"` → literal `'\x6162'`.
     // serde_json 의 `"\\x6162"` 직렬화는 backslash 1개 + x. INSERT
-    // 시점에 PG 가 bytea column type 이면 implicit cast 된다.
-    assert_eq!(pg_value_to_sql_literal(&json!("\\x6162")), "'\\x6162'");
+    // 시점에 PG 가 bytea column type 이면 implicit cast 된다. #1677: PG
+    // keeps the quoted `'\x…'` form even for a Binary category — its bytea
+    // input parser casts it back to the exact bytes (unlike MySQL/MSSQL).
+    assert_eq!(
+        pg_value_to_sql_literal(&json!("\\x6162"), ColumnCategory::Binary),
+        "'\\x6162'"
+    );
 }
 
 // [AC-192-05] Array / Object → '...'::jsonb. PG 의 implicit cast 가
 // text → jsonb 로 가능하지만 명시 cast 가 restore 견고함을 보장.
 #[test]
 fn test_pg_value_to_sql_literal_object_casts_jsonb() {
-    let lit = pg_value_to_sql_literal(&json!({"k": "v"}));
+    let lit = pg_value_to_sql_literal(&json!({"k": "v"}), ColumnCategory::Object);
     assert!(lit.ends_with("::jsonb"), "lit: {}", lit);
     assert!(lit.contains("'{\"k\":\"v\"}'"), "lit: {}", lit);
 }
 
 #[test]
 fn test_pg_value_to_sql_literal_array_casts_jsonb() {
-    let lit = pg_value_to_sql_literal(&json!([1, 2, "a"]));
+    let lit = pg_value_to_sql_literal(&json!([1, 2, "a"]), ColumnCategory::Object);
     assert!(lit.ends_with("::jsonb"), "lit: {}", lit);
     assert!(lit.contains("'[1,2,\"a\"]'"), "lit: {}", lit);
 }
@@ -674,34 +704,81 @@ fn test_quote_mysql_string_escapes_backslash_and_quote() {
 // PG `::jsonb` cast (MySQL casts a string literal into a JSON column).
 #[test]
 fn test_mysql_value_to_sql_literal_scalars() {
-    assert_eq!(mysql_value_to_sql_literal(&JsonValue::Null), "NULL");
-    assert_eq!(mysql_value_to_sql_literal(&json!(true)), "TRUE");
-    assert_eq!(mysql_value_to_sql_literal(&json!(false)), "FALSE");
-    assert_eq!(mysql_value_to_sql_literal(&json!(42)), "42");
-    assert_eq!(mysql_value_to_sql_literal(&json!(-7)), "-7");
-    assert_eq!(mysql_value_to_sql_literal(&json!(2.5)), "2.5");
     assert_eq!(
-        mysql_value_to_sql_literal(&json!("O'Reilly")),
+        mysql_value_to_sql_literal(&JsonValue::Null, ColumnCategory::Unknown),
+        "NULL"
+    );
+    assert_eq!(
+        mysql_value_to_sql_literal(&json!(true), ColumnCategory::Bool),
+        "TRUE"
+    );
+    assert_eq!(
+        mysql_value_to_sql_literal(&json!(false), ColumnCategory::Bool),
+        "FALSE"
+    );
+    assert_eq!(
+        mysql_value_to_sql_literal(&json!(42), ColumnCategory::Int),
+        "42"
+    );
+    assert_eq!(
+        mysql_value_to_sql_literal(&json!(-7), ColumnCategory::Int),
+        "-7"
+    );
+    assert_eq!(
+        mysql_value_to_sql_literal(&json!(2.5), ColumnCategory::Float),
+        "2.5"
+    );
+    assert_eq!(
+        mysql_value_to_sql_literal(&json!("O'Reilly"), ColumnCategory::Text),
         "'O''Reilly'"
     );
     // BIGINT/DECIMAL arrive as precision-preserving JSON strings — quoted,
     // MySQL casts them back into the numeric column on restore.
     assert_eq!(
-        mysql_value_to_sql_literal(&json!("9223372036854775807")),
+        mysql_value_to_sql_literal(&json!("9223372036854775807"), ColumnCategory::Int),
         "'9223372036854775807'"
     );
 }
 
 #[test]
 fn test_mysql_value_to_sql_literal_json_has_no_jsonb_cast() {
-    let obj = mysql_value_to_sql_literal(&json!({"k": "v"}));
+    let obj = mysql_value_to_sql_literal(&json!({"k": "v"}), ColumnCategory::Object);
     assert_eq!(obj, "'{\"k\":\"v\"}'");
     assert!(!obj.contains("::jsonb"), "lit: {}", obj);
-    let arr = mysql_value_to_sql_literal(&json!([1, 2, "a"]));
+    let arr = mysql_value_to_sql_literal(&json!([1, 2, "a"]), ColumnCategory::Object);
     assert_eq!(arr, "'[1,2,\"a\"]'");
     // JSON containing a backslash escape must survive the MySQL escape layer.
-    let esc = mysql_value_to_sql_literal(&json!({"p": "c:\\x"}));
+    let esc = mysql_value_to_sql_literal(&json!({"p": "c:\\x"}), ColumnCategory::Object);
     assert_eq!(esc, r#"'{"p":"c:\\\\x"}'"#);
+}
+
+// Issue #1677 — a Binary-category cell (`cell_to_json` renders it as a
+// `"0x<hex>"` string) MUST become an unquoted MySQL binary literal `X'<hex>'`,
+// not a quoted `'0x<hex>'` string. Quoting stores the ASCII bytes of the hex
+// text, silently corrupting varbinary/BLOB on restore.
+#[test]
+fn test_mysql_binary_category_emits_unquoted_binary_literal_1677() {
+    assert_eq!(
+        mysql_value_to_sql_literal(&json!("0x0aff"), ColumnCategory::Binary),
+        "X'0aff'"
+    );
+    // Empty blob: `cell_to_json` yields `"0x"`. `0x` alone is not a valid MySQL
+    // literal, so the writer must fall back to `X''` (a valid empty binary).
+    assert_eq!(
+        mysql_value_to_sql_literal(&json!("0x"), ColumnCategory::Binary),
+        "X''"
+    );
+    // A NULL binary cell stays NULL (never a bogus `X'…'`).
+    assert_eq!(
+        mysql_value_to_sql_literal(&JsonValue::Null, ColumnCategory::Binary),
+        "NULL"
+    );
+    // False-positive guard: a TEXT column whose value merely starts with `0x`
+    // is NOT binary — it stays a quoted string. Type-driven, not a heuristic.
+    assert_eq!(
+        mysql_value_to_sql_literal(&json!("0xNotBinary"), ColumnCategory::Text),
+        "'0xNotBinary'"
+    );
 }
 
 // Issue #1642 — the T-SQL `mssql_dump` writer sibling. Same contract as the
@@ -745,32 +822,81 @@ fn test_quote_mssql_string_uses_n_prefix_doubles_quote_keeps_backslash() {
 // [AC-1642-02] Scalars: bool → BIT `1`/`0` (T-SQL has no TRUE/FALSE).
 #[test]
 fn test_mssql_value_to_sql_literal_scalars() {
-    assert_eq!(mssql_value_to_sql_literal(&JsonValue::Null), "NULL");
-    assert_eq!(mssql_value_to_sql_literal(&json!(true)), "1");
-    assert_eq!(mssql_value_to_sql_literal(&json!(false)), "0");
-    assert_eq!(mssql_value_to_sql_literal(&json!(42)), "42");
-    assert_eq!(mssql_value_to_sql_literal(&json!(-7)), "-7");
-    assert_eq!(mssql_value_to_sql_literal(&json!(2.5)), "2.5");
     assert_eq!(
-        mssql_value_to_sql_literal(&json!("O'Reilly")),
+        mssql_value_to_sql_literal(&JsonValue::Null, ColumnCategory::Unknown),
+        "NULL"
+    );
+    assert_eq!(
+        mssql_value_to_sql_literal(&json!(true), ColumnCategory::Bool),
+        "1"
+    );
+    assert_eq!(
+        mssql_value_to_sql_literal(&json!(false), ColumnCategory::Bool),
+        "0"
+    );
+    assert_eq!(
+        mssql_value_to_sql_literal(&json!(42), ColumnCategory::Int),
+        "42"
+    );
+    assert_eq!(
+        mssql_value_to_sql_literal(&json!(-7), ColumnCategory::Int),
+        "-7"
+    );
+    assert_eq!(
+        mssql_value_to_sql_literal(&json!(2.5), ColumnCategory::Float),
+        "2.5"
+    );
+    assert_eq!(
+        mssql_value_to_sql_literal(&json!("O'Reilly"), ColumnCategory::Text),
         "N'O''Reilly'"
     );
-    assert_eq!(mssql_value_to_sql_literal(&json!("안녕")), "N'안녕'");
+    assert_eq!(
+        mssql_value_to_sql_literal(&json!("안녕"), ColumnCategory::Text),
+        "N'안녕'"
+    );
 }
 
 // [AC-1642-02] Array / Object → plain quoted JSON string, no PG `::jsonb` cast
 // and no MySQL backslash doubling (SQL Server stores JSON in nvarchar).
 #[test]
 fn test_mssql_value_to_sql_literal_json_has_no_cast_or_backslash_escape() {
-    let obj = mssql_value_to_sql_literal(&json!({"k": "v"}));
+    let obj = mssql_value_to_sql_literal(&json!({"k": "v"}), ColumnCategory::Object);
     assert_eq!(obj, "N'{\"k\":\"v\"}'");
     assert!(!obj.contains("::jsonb"), "lit: {}", obj);
-    let arr = mssql_value_to_sql_literal(&json!([1, 2, "a"]));
+    let arr = mssql_value_to_sql_literal(&json!([1, 2, "a"]), ColumnCategory::Object);
     assert_eq!(arr, "N'[1,2,\"a\"]'");
     // A backslash inside the JSON stays single (T-SQL literal), where MySQL
     // would double it.
-    let esc = mssql_value_to_sql_literal(&json!({"p": "c:\\x"}));
+    let esc = mssql_value_to_sql_literal(&json!({"p": "c:\\x"}), ColumnCategory::Object);
     assert_eq!(esc, r#"N'{"p":"c:\\x"}'"#);
+}
+
+// Issue #1677 — a Binary-category cell (`"0x<hex>"` from `cell_to_json`) MUST
+// become an unquoted T-SQL varbinary literal `0x<hex>`, not a quoted `N'0x…'`
+// string, which would restore the hex TEXT rather than the raw bytes.
+#[test]
+fn test_mssql_binary_category_emits_unquoted_binary_literal_1677() {
+    assert_eq!(
+        mssql_value_to_sql_literal(&json!("0x0aff"), ColumnCategory::Binary),
+        "0x0aff"
+    );
+    // Empty blob: `0x` alone is a valid empty binary literal in T-SQL, so it is
+    // emitted verbatim (no `N'…'` wrapper).
+    assert_eq!(
+        mssql_value_to_sql_literal(&json!("0x"), ColumnCategory::Binary),
+        "0x"
+    );
+    // A NULL binary cell stays NULL.
+    assert_eq!(
+        mssql_value_to_sql_literal(&JsonValue::Null, ColumnCategory::Binary),
+        "NULL"
+    );
+    // False-positive guard: nvarchar text starting with `0x` stays a quoted
+    // `N'…'` literal. Type-driven, never a value heuristic.
+    assert_eq!(
+        mssql_value_to_sql_literal(&json!("0xNotBinary"), ColumnCategory::Text),
+        "N'0xNotBinary'"
+    );
 }
 
 // ── run_schema_dump direct tests (Sprint 237 P5) ─────────────────────
@@ -796,6 +922,10 @@ fn dump_table(schema: &str, table: &str, cols: Vec<&str>) -> ExportDumpTable {
         schema: schema.into(),
         table: table.into(),
         column_names: cols.into_iter().map(|s| s.into()).collect(),
+        // #1677 — these dispatch tests exercise non-binary rows; an empty
+        // categories vec makes every cell read back as `Unknown` (the existing
+        // quoted path), matching pre-#1677 output.
+        column_categories: Vec::new(),
     }
 }
 

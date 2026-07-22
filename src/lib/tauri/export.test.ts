@@ -278,7 +278,12 @@ describe("export Tauri wrappers", () => {
 
   it("exports schema dumps with ordered table metadata and null exportId default", async () => {
     const tables: SchemaDumpTable[] = [
-      { schema: "public", table: "users", columnNames: ["id", "email"] },
+      {
+        schema: "public",
+        table: "users",
+        columnNames: ["id", "email"],
+        columnCategories: ["int", "text"],
+      },
     ];
     const options: SchemaDumpOptions = {
       include: "both",

@@ -3,6 +3,7 @@
 import { invoke } from "@tauri-apps/api/core";
 
 import { toIpcSafeRows } from "@/lib/jsonCell";
+import type { ColumnCategory } from "@/lib/columnCategory";
 import type { DdlDialect } from "@/lib/sql/ddlGenerator";
 
 export type ExportFormat = "csv" | "tsv" | "sql" | "json";
@@ -153,6 +154,13 @@ export interface SchemaDumpTable {
   schema: string;
   table: string;
   columnNames: string[];
+  /**
+   * #1677 — per-column display category, in the same order as `columnNames`
+   * (both derive from one `t.columns` array). The backend branches a `binary`
+   * column to an unquoted binary literal (`X'…'` / `0x…`) instead of a quoted
+   * hex string that restores as text bytes, silently corrupting varbinary/BLOB.
+   */
+  columnCategories: ColumnCategory[];
 }
 
 export interface SchemaDumpOptions {
