@@ -107,6 +107,27 @@ export default function App() {
   const windowHasDirtyRef = useRef(windowHasDirtyTabs);
   windowHasDirtyRef.current = windowHasDirtyTabs;
 
+  // #1705 — the backend intercepts the OS window *close* (prevent_close →
+  // `window:close-requested`, gated above), but a webview *reload* (Cmd+R / F5
+  // while a grid cell editor holds focus, or a menu / right-click reload) is
+  // never intercepted. Since the pending-edit stores (`dataGridEditStore` /
+  // `rawQueryGridEditStore`) are window-local and non-persisted, that reload
+  // silently discarded every uncommitted edit. `beforeunload` is the native
+  // unsaved-changes guard for that path: while the window holds dirty tabs,
+  // cancel the event so the webview prompts before reloading. Reuses the same
+  // dirty snapshot ref the native-close listener reads (no re-register on every
+  // edit, which could leave a gap that drops the event).
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (!windowHasDirtyRef.current) return;
+      // `preventDefault()` is the modern trigger for the unsaved-changes prompt
+      // (the legacy `returnValue` assignment is deprecated).
+      e.preventDefault();
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, []);
+
   useEffect(() => {
     loadConnections();
     loadGroups();
