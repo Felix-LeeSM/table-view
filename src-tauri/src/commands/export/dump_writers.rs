@@ -10,6 +10,8 @@
 
 use serde_json::Value as JsonValue;
 
+use crate::models::ColumnCategory;
+
 pub(super) fn quote_pg_identifier(name: &str) -> String {
     let mut out = String::with_capacity(name.len() + 2);
     out.push('"');
@@ -59,7 +61,13 @@ pub(super) fn quote_pg_string(s: &str) -> String {
 /// restore 시 column type 에 따라 PG 가 implicit cast — text/varchar 는
 /// 그대로 들어가고, bytea 는 `\x...` 형식이 cast 되며, timestamp 은 ISO
 /// 8601 string 이 cast 된다.
-pub(super) fn pg_value_to_sql_literal(value: &JsonValue) -> String {
+///
+/// Issue #1677 — `_category` is accepted for signature parity with the MySQL /
+/// MSSQL sibling writers (the dump dispatch stores one `fn` pointer type). PG
+/// needs no binary branch: `cell_to_json` renders bytea as a quoted `'\x…'`
+/// string that PG's bytea input parser casts back to the exact bytes on
+/// restore, so the round-trip is already byte-faithful.
+pub(super) fn pg_value_to_sql_literal(value: &JsonValue, _category: ColumnCategory) -> String {
     match value {
         JsonValue::Null => "NULL".to_string(),
         JsonValue::Bool(true) => "TRUE".to_string(),

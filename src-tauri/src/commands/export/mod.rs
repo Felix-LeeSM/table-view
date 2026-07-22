@@ -19,7 +19,7 @@ use crate::commands::connection::AppState;
 use crate::commands::{register_cancel_token, release_cancel_token};
 use crate::db::RdbAdapter;
 use crate::error::AppError;
-use crate::models::DatabaseType;
+use crate::models::{ColumnCategory, DatabaseType};
 
 mod dump_writers;
 mod grid_writers;
@@ -578,7 +578,12 @@ async fn stream_schema_dump(
         // (`postgresql`/`sqlite`) → ANSI double-quote PG.
         type QualifyFn = fn(&str, &str) -> String;
         type QuoteIdentFn = fn(&str) -> String;
-        type LiteralFn = fn(&JsonValue) -> String;
+        // Issue #1677 — the literal writer now takes the column's display
+        // category so the dialect writers can branch binary/BLOB cells to an
+        // unquoted binary literal (a quoted hex string restores as text bytes,
+        // silently corrupting varbinary/BLOB). Type-driven, never a value
+        // heuristic.
+        type LiteralFn = fn(&JsonValue, ColumnCategory) -> String;
         let (qualify, quote_ident, to_literal): (QualifyFn, QuoteIdentFn, LiteralFn) =
             match options.dialect {
                 DatabaseType::Mysql | DatabaseType::Mariadb => (
@@ -646,7 +651,15 @@ async fn stream_schema_dump(
                         }
                     }
                     for row in &batch {
-                        let values = row.iter().map(&to_literal).collect::<Vec<_>>().join(", ");
+                        // Issue #1677 — pair each cell with its column category so
+                        // the writer can branch binary literals. GREEN wires the
+                        // real per-column categories; this placeholder keeps every
+                        // cell on the existing (quoted) path.
+                        let values = row
+                            .iter()
+                            .map(|v| to_literal(v, ColumnCategory::default()))
+                            .collect::<Vec<_>>()
+                            .join(", ");
                         let line =
                             format!("INSERT INTO {qualified} ({column_list}) VALUES ({values});\n");
                         writer

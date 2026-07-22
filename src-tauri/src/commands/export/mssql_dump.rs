@@ -13,6 +13,8 @@
 
 use serde_json::Value as JsonValue;
 
+use crate::models::ColumnCategory;
+
 /// Bracket-quote a T-SQL identifier, doubling any embedded `]`.
 pub(super) fn quote_mssql_identifier(name: &str) -> String {
     format!("[{}]", name.replace(']', "]]"))
@@ -57,7 +59,7 @@ pub(super) fn quote_mssql_string(s: &str) -> String {
 /// literal, and (c) emits a plain quoted JSON string for Array/Object — SQL
 /// Server stores JSON in `nvarchar`, so neither the PG `::jsonb` cast nor a
 /// MySQL-style implicit JSON column cast applies.
-pub(super) fn mssql_value_to_sql_literal(value: &JsonValue) -> String {
+pub(super) fn mssql_value_to_sql_literal(value: &JsonValue, _category: ColumnCategory) -> String {
     match value {
         JsonValue::Null => "NULL".to_string(),
         JsonValue::Bool(true) => "1".to_string(),
