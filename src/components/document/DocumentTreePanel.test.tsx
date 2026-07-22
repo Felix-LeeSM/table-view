@@ -1190,4 +1190,70 @@ describe("DocumentTreePanel", () => {
     expect(commit).toHaveBeenCalledTimes(1);
     expect(commit).toHaveBeenCalledWith("meta._id", "abc");
   });
+
+  // #1703 — a pending-unset leaf must expose an "undo delete" toggle in the
+  // tree (the trash button is swapped for it). Clicking calls onRemovePending
+  // with the leaf path so the grid drops the __op__:unset entry — the only
+  // in-tree way to cancel a pending delete.
+  it("#1703: pending-unset leaf shows an undo-delete toggle that calls onRemovePending", async () => {
+    const user = userEvent.setup();
+    const onRemovePending = vi.fn();
+    const pending = new Map<string, string>([["name", "__op__:unset"]]);
+    render(
+      <DocumentTreePanel
+        value={{ name: "Felix" }}
+        fieldName="profile"
+        onCommitEdit={vi.fn()}
+        onRemovePending={onRemovePending}
+        pendingByPath={pending}
+      />,
+    );
+    const undo = screen.getByTestId("tree-undo-delete-name");
+    expect(undo).toBeInTheDocument();
+    await user.click(undo);
+    expect(onRemovePending).toHaveBeenCalledWith("name");
+  });
+
+  // #1703 — deleting a key removes the whole entry, not just the value, so the
+  // key label (not only the value) carries the strike-through. Without this the
+  // strike-on-value-only reads as "value edited", hiding that the key is going.
+  it("#1703: pending-unset strikes the key label, not only the value", () => {
+    const pending = new Map<string, string>([["name", "__op__:unset"]]);
+    render(
+      <DocumentTreePanel
+        value={{ name: "Felix" }}
+        fieldName="profile"
+        onCommitEdit={vi.fn()}
+        pendingByPath={pending}
+      />,
+    );
+    const keyLabel = within(screen.getByTestId("tree-node-name")).getByText(
+      "name",
+    );
+    expect(keyLabel).toHaveClass("line-through");
+  });
+
+  // #1703 — a key marked for deletion is free to re-add under the same name;
+  // the duplicate-key guard must ignore pending-unset entries so the re-add
+  // (which overwrites the unset with a fresh value) is not blocked with
+  // "key already exists".
+  it("#1703: re-adding a pending-unset key under the same name is not blocked", async () => {
+    const user = userEvent.setup();
+    const commit = vi.fn();
+    const pending = new Map<string, string>([["name", "__op__:unset"]]);
+    render(
+      <DocumentTreePanel
+        value={{ name: "Felix" }}
+        fieldName="profile"
+        onCommitEdit={commit}
+        pendingByPath={pending}
+      />,
+    );
+    await user.click(screen.getByTestId("tree-add-key-__root"));
+    await user.type(screen.getByTestId("tree-add-key-input-__root"), "name");
+    await user.type(screen.getByTestId("tree-add-value-input-__root"), "Bob");
+    await user.keyboard("{Enter}");
+    expect(screen.queryByText(/key already exists/i)).not.toBeInTheDocument();
+    expect(commit).toHaveBeenCalledWith("name", "Bob");
+  });
 });
