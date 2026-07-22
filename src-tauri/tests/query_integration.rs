@@ -1088,6 +1088,138 @@ async fn test_per_cell_timestamp_matches_wrap_path_1175() {
     adapter.disconnect_pool().await.ok();
 }
 
+// ── #1722 — describe-degrade fallback shares the un-wrapped decode ─────────
+// 작성: 2026-07-22. #1722 fix 는 wrappable SELECT 의 `describe()` 가 (PG-wire
+// 프록시서) 실패하면 un-wrapped per-cell 경로(`run_unwrapped`)로 저하한다.
+// 저하 경로가 wrapped 경로와 "같은 셀"을 내야 사용자가 프록시 뒤에서도
+// 동일한 데이터를 본다. 실제 프록시 없이는 describe 실패를 트리거할 수 없으므로
+// (README/PR 에 명시), 대신 저하 경로가 의존하는 불변식을 고정한다: un-wrapped
+// 경로(data-modifying WITH, 기존 public 트리거)의 mixed-scalar decode 가 wrapped
+// 경로(plain SELECT → row_to_json)와 셀 단위로 동일하다. int4→number,
+// int8→string(ADR 0026), text→string, bool→bool, numeric→string 을 한 번에 건다.
+// #1175 timestamp 등가성 테스트의 자매 가드.
+#[tokio::test]
+#[serial_test::serial]
+async fn test_unwrapped_fallback_matches_wrapped_for_mixed_scalars_1722() {
+    let adapter = match common::setup_adapter(DatabaseType::Postgresql).await {
+        Some(a) => a,
+        None => return,
+    };
+
+    // wrapped path: plain SELECT of literals routes through describe +
+    // `row_to_json(q)::text`.
+    let wrapped = adapter
+        .execute_query(
+            "SELECT 42::int4 AS a, 9007199254740993::int8 AS b, 'hi'::text AS c, \
+             true AS d, 12345678901234567890.12345::numeric AS e",
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
+        .await
+        .expect("wrapped plain SELECT should succeed");
+
+    // un-wrapped path: a data-modifying WITH runs un-wrapped via `run_unwrapped`
+    // (same helper the #1722 describe-degrade fallback uses).
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis();
+    let table = format!("test_unwrapped_scalars_{ts}");
+    adapter
+        .execute_query(
+            &format!("CREATE TABLE {table} (a INT4, b INT8, c TEXT, d BOOL, e NUMERIC)"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
+        .await
+        .expect("CREATE TABLE should succeed");
+
+    let unwrapped = adapter
+        .execute_query(
+            &format!(
+                "WITH ins AS (INSERT INTO {table}(a, b, c, d, e) VALUES \
+                 (42, 9007199254740993, 'hi', true, 12345678901234567890.12345) \
+                 RETURNING a, b, c, d, e) SELECT a, b, c, d, e FROM ins"
+            ),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
+        .await
+        .expect("un-wrapped data-modifying WITH should succeed");
+
+    // Column names must agree in order.
+    let wrapped_names: Vec<&str> = wrapped.columns.iter().map(|c| c.name.as_str()).collect();
+    let unwrapped_names: Vec<&str> = unwrapped.columns.iter().map(|c| c.name.as_str()).collect();
+    assert_eq!(
+        wrapped_names, unwrapped_names,
+        "column order/names must match across paths"
+    );
+
+    // int4 / int8 / text / bool decode byte-identically across paths — this is
+    // the exact property the #1722 degrade relies on for the raw pg_catalog
+    // SELECT that motivated the issue (`nspname` text, oids, etc.).
+    assert_eq!(
+        wrapped.rows[0][..4],
+        unwrapped.rows[0][..4],
+        "un-wrapped fallback must decode int4/int8/text/bool identically to the wrapped path"
+    );
+    // Pin the ADR 0026 wire shapes so a future regression that drops the
+    // stringify on either path fails here even if both drift together.
+    assert_eq!(
+        unwrapped.rows[0][0].as_i64(),
+        Some(42),
+        "int4 -> JSON number"
+    );
+    assert_eq!(
+        unwrapped.rows[0][1].as_str(),
+        Some("9007199254740993"),
+        "int8 -> string (precision past 2^53-1)"
+    );
+    assert_eq!(unwrapped.rows[0][2].as_str(), Some("hi"), "text -> string");
+    assert_eq!(unwrapped.rows[0][3].as_bool(), Some(true), "bool -> bool");
+
+    // NUMERIC: both paths emit an arbitrary-precision string (ADR 0026), but the
+    // un-wrapped path decodes via `BigDecimal` which reconstructs full base-10000
+    // groups (`.12345000`), whereas `row_to_json` honors the column's `dscale`
+    // (`.12345`). This trailing-zero difference is a benign, pre-existing
+    // degradation of the un-wrapped path — no digits are lost — and #1722's
+    // fallback explicitly accepts degraded rendering. Assert value-equality
+    // after normalizing trailing zeros so the digits (never the padding) are
+    // pinned.
+    let wrapped_e = wrapped.rows[0][4]
+        .as_str()
+        .expect("wrapped numeric is string");
+    let unwrapped_e = unwrapped.rows[0][4]
+        .as_str()
+        .expect("un-wrapped numeric is string");
+    let normalize = |s: &str| -> String {
+        if s.contains('.') {
+            s.trim_end_matches('0').trim_end_matches('.').to_string()
+        } else {
+            s.to_string()
+        }
+    };
+    assert_eq!(
+        normalize(wrapped_e),
+        normalize(unwrapped_e),
+        "numeric digits must match across paths (trailing-zero padding is a benign degrade)"
+    );
+    assert_eq!(
+        unwrapped_e, "12345678901234567890.12345000",
+        "pin the un-wrapped BigDecimal rendering so a decode regression surfaces here"
+    );
+
+    adapter
+        .execute_query(
+            &format!("DROP TABLE {table}"),
+            None,
+            table_view_lib::db::row_cap::DEFAULT_ROW_CAP,
+        )
+        .await
+        .ok();
+    adapter.disconnect_pool().await.ok();
+}
+
 // ── execute_query_batch 통합 시나리오 ──────────────────────────────────────
 // 작성: 2026-05-08, Sprint 237 P5 후속 커버리지 보강.
 // 단위 테스트는 empty / validation 경로만 가지고 있고 실제 BEGIN/COMMIT/
