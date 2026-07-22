@@ -415,6 +415,89 @@ fn pg_cell_to_json(row: &sqlx::postgres::PgRow, idx: usize) -> serde_json::Value
     Value::Null
 }
 
+/// #1722 — resolve the wrapped-path column metadata (name + type only) from a
+/// `describe()` outcome, or degrade to `None` when the introspection fails.
+///
+/// sqlx's `describe()` returns column names and types WITHOUT executing the
+/// user statement, but to fill each column's nullability it *also* runs an
+/// extra query against `pg_catalog.pg_attribute`. A PG-wire proxy (e.g.
+/// QueryPie) can refuse that catalog probe and fail the whole `describe()`,
+/// even though the raw SELECT itself would run fine. We only use the
+/// name/type here (never the nullability), so a describe failure must NOT
+/// abort the query: returning `None` lets the caller fall back to the
+/// un-wrapped per-cell path (`run_unwrapped`). `Some(cols)` keeps the
+/// full-type `row_to_json` wrapped path.
+fn columns_from_describe(
+    described: Result<sqlx::Describe<sqlx::Postgres>, sqlx::Error>,
+) -> Option<Vec<QueryColumn>> {
+    // #1722 — degrade on a describe failure so the caller falls back to the
+    // un-wrapped per-cell path instead of aborting the whole SELECT.
+    let described = described.ok()?;
+    Some(
+        described
+            .columns()
+            .iter()
+            .map(|col| {
+                let data_type = col.type_info().to_string();
+                let category = map_pg_data_type(&data_type);
+                QueryColumn {
+                    name: col.name().to_string(),
+                    data_type,
+                    category,
+                }
+            })
+            .collect(),
+    )
+}
+
+/// #1086 / #1722 — the un-wrapped Select execution path: a SINGLE `fetch` of
+/// the user statement, decoded per-cell (`pg_cell_to_json`), streamed and
+/// capped like the wrapped path (#1231). Shared by (a) the un-wrappable branch
+/// (`SHOW` / `EXPLAIN` / data-modifying `WITH`, which cannot be wrapped in
+/// `row_to_json`) and (b) the #1722 describe-degrade fallback, so both decode
+/// rows identically. The user statement runs EXACTLY once — the #1086
+/// single-execution contract holds for side-effecting SELECTs (`nextval()`)
+/// too. bigint/numeric are emitted as strings to match the wrapped path's
+/// ADR 0026 wire format; exotic types (arrays/composites/ranges) degrade to
+/// their text form or `Null` (`pg_cell_to_json`).
+async fn run_unwrapped(
+    conn: &mut sqlx::postgres::PgConnection,
+    query: &str,
+    row_cap: usize,
+) -> Result<(Vec<QueryColumn>, Vec<Vec<serde_json::Value>>, bool), AppError> {
+    let mut stream = sqlx::query(query).fetch(&mut *conn);
+    let mut columns: Vec<QueryColumn> = Vec::new();
+    let mut json_rows: Vec<Vec<serde_json::Value>> = Vec::new();
+    let mut truncated = false;
+    while let Some(row) = stream.try_next().await? {
+        if columns.is_empty() {
+            columns = row
+                .columns()
+                .iter()
+                .map(|col| {
+                    let data_type = col.type_info().to_string();
+                    let category = map_pg_data_type(&data_type);
+                    QueryColumn {
+                        name: col.name().to_string(),
+                        data_type,
+                        category,
+                    }
+                })
+                .collect();
+        }
+        if json_rows.len() >= row_cap {
+            truncated = true;
+            break;
+        }
+        json_rows.push(
+            (0..row.columns().len())
+                .map(|idx| pg_cell_to_json(&row, idx))
+                .collect(),
+        );
+    }
+    Ok((columns, json_rows, truncated))
+}
+
 impl PostgresAdapter {
     pub async fn execute(&self, query: &str) -> Result<(), AppError> {
         let pool = self.active_pool().await?;
@@ -535,88 +618,61 @@ impl PostgresAdapter {
                         Vec<Vec<serde_json::Value>>,
                         bool,
                     ) = if wrappable {
-                        // Column metadata WITHOUT executing the statement.
-                        let described = (&mut *conn).describe(query).await?;
-                        let columns: Vec<QueryColumn> = described
-                            .columns()
-                            .iter()
-                            .map(|col| {
-                                let data_type = col.type_info().to_string();
-                                let category = map_pg_data_type(&data_type);
-                                QueryColumn {
-                                    name: col.name().to_string(),
-                                    data_type,
-                                    category,
+                        // #1722 — column metadata WITHOUT executing the
+                        // statement. sqlx's `describe` also probes
+                        // `pg_attribute` for nullability, which a PG-wire proxy
+                        // (QueryPie) can refuse; on that failure
+                        // `columns_from_describe` returns `None` and we degrade
+                        // to the un-wrapped per-cell path below instead of
+                        // aborting the whole SELECT. Only name/type is used here
+                        // (never nullability), so the failing probe is pure
+                        // waste.
+                        match columns_from_describe((&mut *conn).describe(query).await) {
+                            Some(columns) => {
+                                // Single execution. row_to_json coerces every PG
+                                // type to JSON and applies side effects once.
+                                // Issue #1231 — stream the scalar strings and
+                                // parse-and-drop each one into its projected row
+                                // so the `Vec<String>` + parsed `Vec<Value>`
+                                // never coexist (the old 2× peak), stopping at
+                                // cap+1 so the buffer is bounded.
+                                let wrapped_sql =
+                                    format!("SELECT row_to_json(q)::text FROM ({}) q", query);
+                                let mut stream =
+                                    sqlx::query_scalar::<_, String>(&wrapped_sql).fetch(&mut *conn);
+                                // #1353 — build the per-column type slice once;
+                                // the shared `parse_row_payload` reads only
+                                // `data_type`.
+                                let data_types: Vec<&str> =
+                                    columns.iter().map(|c| c.data_type.as_str()).collect();
+                                let mut json_rows: Vec<Vec<serde_json::Value>> = Vec::new();
+                                let mut truncated = false;
+                                while let Some(json_str) = stream.try_next().await? {
+                                    if json_rows.len() >= row_cap {
+                                        truncated = true;
+                                        break;
+                                    }
+                                    // #1296 — positional decode (duplicate output
+                                    // column names would collapse under name
+                                    // lookup). parse-and-drop each payload so the
+                                    // scalar `String` and the parsed row never
+                                    // coexist (#1231 memory contract).
+                                    json_rows.push(parse_row_payload(&json_str, &data_types));
                                 }
-                            })
-                            .collect();
-
-                        // Single execution. row_to_json coerces every PG type
-                        // to JSON and applies side effects once. Issue #1231 —
-                        // stream the scalar strings and parse-and-drop each one
-                        // into its projected row so the `Vec<String>` + parsed
-                        // `Vec<Value>` never coexist (the old 2× peak), and stop
-                        // at cap+1 so the buffer is bounded.
-                        let wrapped_sql = format!("SELECT row_to_json(q)::text FROM ({}) q", query);
-                        let mut stream =
-                            sqlx::query_scalar::<_, String>(&wrapped_sql).fetch(&mut *conn);
-                        // #1353 — build the per-column type slice once; the shared
-                        // `parse_row_payload` reads only `data_type`.
-                        let data_types: Vec<&str> =
-                            columns.iter().map(|c| c.data_type.as_str()).collect();
-                        let mut json_rows: Vec<Vec<serde_json::Value>> = Vec::new();
-                        let mut truncated = false;
-                        while let Some(json_str) = stream.try_next().await? {
-                            if json_rows.len() >= row_cap {
-                                truncated = true;
-                                break;
+                                (columns, json_rows, truncated)
                             }
-                            // #1296 — positional decode (duplicate output column
-                            // names would collapse under name lookup). parse-and
-                            // -drop each payload so the scalar `String` and the
-                            // parsed row never coexist (#1231 memory contract).
-                            json_rows.push(parse_row_payload(&json_str, &data_types));
+                            // #1722 — describe introspection unavailable (proxy
+                            // refused the `pg_attribute` probe): degrade to the
+                            // un-wrapped per-cell path. The user statement still
+                            // runs exactly once (#1086); exotic types render as
+                            // text/Null.
+                            None => run_unwrapped(&mut conn, query, row_cap).await?,
                         }
-
-                        (columns, json_rows, truncated)
                     } else {
                         // Un-wrappable: SHOW / EXPLAIN / data-modifying WITH.
-                        // Single execution; columns and values decoded per-cell
-                        // straight from the returned rows (bigint/numeric
-                        // emitted as strings to match the wrapped path's ADR
-                        // 0026 wire format). Streamed + capped like the wrapped
-                        // path (#1231).
-                        let mut stream = sqlx::query(query).fetch(&mut *conn);
-                        let mut columns: Vec<QueryColumn> = Vec::new();
-                        let mut json_rows: Vec<Vec<serde_json::Value>> = Vec::new();
-                        let mut truncated = false;
-                        while let Some(row) = stream.try_next().await? {
-                            if columns.is_empty() {
-                                columns = row
-                                    .columns()
-                                    .iter()
-                                    .map(|col| {
-                                        let data_type = col.type_info().to_string();
-                                        let category = map_pg_data_type(&data_type);
-                                        QueryColumn {
-                                            name: col.name().to_string(),
-                                            data_type,
-                                            category,
-                                        }
-                                    })
-                                    .collect();
-                            }
-                            if json_rows.len() >= row_cap {
-                                truncated = true;
-                                break;
-                            }
-                            json_rows.push(
-                                (0..row.columns().len())
-                                    .map(|idx| pg_cell_to_json(&row, idx))
-                                    .collect(),
-                            );
-                        }
-                        (columns, json_rows, truncated)
+                        // Single-execution per-cell decode, shared with the
+                        // #1722 describe-degrade fallback above.
+                        run_unwrapped(&mut conn, query, row_cap).await?
                     };
 
                     let total_count = json_rows.len() as i64;
@@ -1607,6 +1663,29 @@ mod tests {
                 other => panic!("expected marker string, got {other:?}"),
             }
         }
+    }
+
+    // ── #1722 — describe-degrade fallback decision ───────────────────────
+    // `columns_from_describe` maps a sqlx `describe()` outcome to the
+    // wrapped-path column plan. A PG-wire proxy (QueryPie) can fail
+    // describe()'s `pg_attribute` nullability probe even when the raw SELECT
+    // runs fine; we use only name/type (never nullability), so a describe
+    // failure must DEGRADE to `None` — the caller then falls back to the
+    // un-wrapped per-cell path instead of aborting the whole query.
+    //
+    // The describe-FAILURE branch is the #1722 core and the only branch
+    // unit-testable without a live Postgres (`sqlx::Describe` has no public
+    // constructor, so the `Ok` branch is covered by every wrapped-path
+    // integration test in `query_integration.rs`).
+    #[test]
+    fn columns_from_describe_degrades_to_none_on_describe_error_1722() {
+        let described: Result<sqlx::Describe<sqlx::Postgres>, sqlx::Error> = Err(
+            sqlx::Error::Protocol("proxy refused pg_attribute nullability introspection".into()),
+        );
+        assert!(
+            columns_from_describe(described).is_none(),
+            "#1722: a describe failure must degrade to the un-wrapped path, not abort"
+        );
     }
 
     #[test]
