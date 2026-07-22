@@ -180,8 +180,14 @@ impl SearchHttpConnection {
     }
 
     pub(crate) async fn list_data_streams(&self) -> Result<Vec<SearchDataStreamInfo>, AppError> {
-        let payload = self.get_json("/_data_stream").await?;
-        parse_data_streams(&payload, self.label())
+        // #1712 — `GET /_data_stream` needs indices:admin/data_stream/get (a
+        // monitor-class privilege separate from `read`). `catalog_summary()` is
+        // the sidebar command, so a 403 here must not fail the whole catalog:
+        // tolerate it as "no data streams" and keep the field_caps indices.
+        match permission_tolerant(self.get_json("/_data_stream").await)? {
+            Some(payload) => parse_data_streams(&payload, self.label()),
+            None => Ok(Vec::new()),
+        }
     }
 
     pub(crate) async fn get_index_mapping(

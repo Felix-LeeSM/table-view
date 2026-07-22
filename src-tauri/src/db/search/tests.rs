@@ -642,6 +642,55 @@ async fn elasticsearch_read_only_role_lists_indices_despite_forbidden_cat_and_al
 }
 
 #[tokio::test]
+async fn elasticsearch_read_only_role_catalog_summary_tolerates_forbidden_meta() {
+    // Reason: #1712 — the sidebar command is `list_search_catalog_summary` ->
+    // catalog_summary(), which ALSO calls `_data_stream`
+    // (indices:admin/data_stream/get, a monitor-class privilege separate from
+    // `read`). Fixing only list_indexes would leave the real command 403-ing at
+    // `_data_stream`, so a read-only role must still get its field_caps indices
+    // even when `_cat`, `_aliases`, AND `_data_stream` all 403 — only field_caps
+    // is authoritative. (2026-07-22)
+    let routes = vec![
+        route(
+            "/ ",
+            r#"{ "cluster_name": "elastic-dev", "version": { "number": "8.12.2" } }"#,
+        ),
+        route(
+            "/*/_field_caps?",
+            r#"{ "indices": ["logs-a", "logs-b"], "fields": { "_index": {} } }"#,
+        ),
+        route_with_status("/_cat/indices?", 403, r#"{ "error": "forbidden" }"#),
+        route_with_status("/_aliases", 403, r#"{ "error": "forbidden" }"#),
+        route_with_status("/_data_stream", 403, r#"{ "error": "forbidden" }"#),
+    ];
+    let (port, server) = spawn_search_http_server(routes).await;
+    let adapter = SearchEngineAdapter::new_elasticsearch();
+    let config = search_config(port);
+
+    let result = async {
+        adapter.connect(&config).await?;
+        adapter.catalog_summary().await
+    }
+    .await;
+    server.abort();
+    let _ = server.await;
+
+    let summary = result.expect("read-only role must still get a catalog summary");
+    let names: Vec<&str> = summary
+        .indexes
+        .iter()
+        .map(|index| index.name.as_str())
+        .collect();
+    assert_eq!(names, vec!["logs-a", "logs-b"]);
+    assert!(summary.aliases.is_empty());
+    assert!(summary.data_streams.is_empty());
+    assert!(summary
+        .indexes
+        .iter()
+        .all(|index| index.health == SearchIndexHealth::Unknown));
+}
+
+#[tokio::test]
 async fn elasticsearch_live_catalog_reads_mappings_settings_and_templates() {
     let routes = vec![
         route(
