@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::OnceLock;
 use std::time::Duration;
 
@@ -127,7 +127,33 @@ impl SearchHttpConnection {
         })
     }
 
+    /// #1712 — `_field_caps` (in the `read` privilege bucket via
+    /// `indices:data/read/field_caps`) is the authoritative index-visibility
+    /// source. `_cat/indices` only enumerates `monitor`/`view_index_metadata`
+    /// authorized indices, so a role with only `read` would have its indices
+    /// hidden from the sidebar (sibling of #1709). We union the field_caps names
+    /// (source of truth) with `_cat` meta (best-effort enrichment); if
+    /// field_caps itself fails the error is terminal.
     async fn list_index_summaries(&self) -> Result<Vec<SearchIndexInfo>, AppError> {
+        let visible = self.list_field_caps_indices().await?;
+        // `_cat/indices` is monitor-gated: tolerate a permission denial as "no
+        // meta" instead of hiding every index. Non-permission failures still
+        // propagate.
+        let mut indexes = permission_tolerant(self.list_cat_indices().await)?.unwrap_or_default();
+
+        // Union: field_caps guarantees read-visible (open) indices appear even
+        // when `_cat` is forbidden or omits them; `_cat`-only entries (closed or
+        // monitored indices) keep their full meta.
+        let known: HashSet<&str> = indexes.iter().map(|index| index.name.as_str()).collect();
+        let extra: Vec<String> = visible
+            .into_iter()
+            .filter(|name| !known.contains(name.as_str()))
+            .collect();
+        indexes.extend(extra.into_iter().map(synthesize_index_info));
+        Ok(indexes)
+    }
+
+    async fn list_cat_indices(&self) -> Result<Vec<SearchIndexInfo>, AppError> {
         let payload = self
             .get_json(
                 "/_cat/indices?format=json&bytes=b&h=health,status,index,uuid,docs.count,store.size,pri,rep",
@@ -136,9 +162,21 @@ impl SearchHttpConnection {
         parse_cat_indices(&payload, self.label())
     }
 
+    /// #1712 — the read-authorized index name set. `fields=_index` keeps the
+    /// payload minimal (a single metadata field) rather than `fields=*`, which
+    /// is huge on large clusters. field_caps returns only open indices.
+    async fn list_field_caps_indices(&self) -> Result<Vec<String>, AppError> {
+        let payload = self.get_json("/*/_field_caps?fields=_index").await?;
+        Ok(parse_field_caps_indices(&payload))
+    }
+
     pub(crate) async fn list_aliases(&self) -> Result<Vec<SearchAliasInfo>, AppError> {
-        let payload = self.get_json("/_aliases").await?;
-        parse_aliases(&payload, self.label())
+        // #1712 — alias privilege is separate from `read`; a 403 here must not
+        // hide read-visible indices. Tolerate permission denial as "no aliases".
+        match permission_tolerant(self.get_json("/_aliases").await)? {
+            Some(payload) => parse_aliases(&payload, self.label()),
+            None => Ok(Vec::new()),
+        }
     }
 
     pub(crate) async fn list_data_streams(&self) -> Result<Vec<SearchDataStreamInfo>, AppError> {
@@ -737,6 +775,45 @@ fn root_probe_capabilities(product: SearchProductKind) -> SearchClusterCapabilit
     }
 }
 
+/// #1712 — a permission-class error (403 → `AppError::SearchPermission`) on a
+/// best-effort meta endpoint (`_cat/indices`, `_aliases`) must not fail the
+/// whole catalog: the authoritative visibility source is `_field_caps`. Map such
+/// errors to `None`; propagate every other error unchanged.
+fn permission_tolerant<T>(result: Result<T, AppError>) -> Result<Option<T>, AppError> {
+    match result {
+        Ok(value) => Ok(Some(value)),
+        Err(AppError::SearchPermission(_)) => Ok(None),
+        Err(err) => Err(err),
+    }
+}
+
+/// #1712 — the `_field_caps` response carries a top-level `indices` array of the
+/// read-authorized (open) index names. Absent/non-array => empty set.
+fn parse_field_caps_indices(payload: &Value) -> Vec<String> {
+    payload
+        .get("indices")
+        .and_then(Value::as_array)
+        .map(|items| items.iter().filter_map(value_to_string).collect())
+        .unwrap_or_default()
+}
+
+/// #1712 — field_caps proved this index is read-visible but `_cat/indices` meta
+/// is unavailable (permission-denied or omitted). Surface it with Unknown meta
+/// rather than hiding it. field_caps only returns open indices.
+fn synthesize_index_info(name: String) -> SearchIndexInfo {
+    SearchIndexInfo {
+        name,
+        uuid: None,
+        health: SearchIndexHealth::Unknown,
+        open: true,
+        docs_count: None,
+        store_size_bytes: None,
+        aliases: Vec::new(),
+        primary_shards: None,
+        replica_shards: None,
+    }
+}
+
 fn parse_cat_indices(payload: &Value, label: &str) -> Result<Vec<SearchIndexInfo>, AppError> {
     let rows = payload.as_array().ok_or_else(|| {
         AppError::Connection(format!("{label} indices catalog returned non-array JSON"))
@@ -1144,6 +1221,37 @@ mod tests {
         );
 
         assert!(matches!(error, AppError::SearchShardFailure(_)));
+    }
+
+    #[test]
+    fn parse_field_caps_indices_reads_top_level_names_and_tolerates_gaps() {
+        // Reason: #1712 — `_field_caps?fields=_index` is the authoritative index
+        // visibility source; parse its top-level `indices` array. A cluster with
+        // no indices returns an empty array, and a malformed/absent field must
+        // degrade to an empty set (never a whole-catalog failure). (2026-07-22)
+        let full = json!({
+            "indices": ["logs-a", "logs-b"],
+            "fields": { "_index": { "_index": { "type": "_index" } } }
+        });
+        assert_eq!(parse_field_caps_indices(&full), vec!["logs-a", "logs-b"]);
+        assert!(parse_field_caps_indices(&json!({ "indices": [] })).is_empty());
+        assert!(parse_field_caps_indices(&json!({ "fields": {} })).is_empty());
+    }
+
+    #[test]
+    fn permission_tolerant_swallows_only_permission_errors() {
+        // Reason: #1712 — best-effort meta endpoints (`_cat/indices`, `_aliases`)
+        // tolerate a 403 (→ None) but must still surface every other error so a
+        // genuine transport/parse fault is not silently hidden. (2026-07-22)
+        assert_eq!(permission_tolerant(Ok::<_, AppError>(7)).unwrap(), Some(7));
+        assert_eq!(
+            permission_tolerant(Err::<i32, _>(AppError::SearchPermission("403".into()))).unwrap(),
+            None
+        );
+        assert!(matches!(
+            permission_tolerant(Err::<i32, _>(AppError::Connection("boom".into()))),
+            Err(AppError::Connection(_))
+        ));
     }
 
     fn test_connection() -> SearchHttpConnection {

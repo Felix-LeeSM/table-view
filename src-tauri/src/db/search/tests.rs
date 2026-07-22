@@ -332,6 +332,10 @@ async fn elasticsearch_live_catalog_reads_indexes_aliases_and_streams() {
             }"#,
         ),
         route(
+            "/*/_field_caps?",
+            r#"{ "indices": ["logs-elastic-2026.05.24"], "fields": { "_index": {} } }"#,
+        ),
+        route(
             "/_cat/indices?",
             r#"[
                 {
@@ -446,6 +450,10 @@ async fn elasticsearch_live_catalog_summary_uses_summary_endpoints_once() {
             }"#,
         ),
         route(
+            "/*/_field_caps?",
+            r#"{ "indices": ["logs-elastic-2026.05.24"], "fields": { "_index": {} } }"#,
+        ),
+        route(
             "/_cat/indices?",
             r#"[
                 {
@@ -518,6 +526,7 @@ async fn elasticsearch_live_catalog_summary_allows_empty_catalogs() {
                 "version": { "number": "8.12.2" }
             }"#,
         ),
+        route("/*/_field_caps?", r#"{ "indices": [], "fields": {} }"#),
         route("/_cat/indices?", "[]"),
         route("/_aliases", "{}"),
         route("/_data_stream", r#"{ "data_streams": [] }"#),
@@ -543,7 +552,14 @@ async fn elasticsearch_live_catalog_summary_allows_empty_catalogs() {
 }
 
 #[tokio::test]
-async fn elasticsearch_live_catalog_summary_surfaces_permission_errors() {
+async fn elasticsearch_live_catalog_summary_surfaces_field_caps_permission_errors() {
+    // Reason: #1712 flipped this contract. `_field_caps` is now the AUTHORITATIVE
+    // index-visibility source, so a 403 there is terminal and still surfaces a
+    // friendly SearchPermission ("전체 다 실패하면 뭐 할 수 없지"). A 403 on the
+    // best-effort `_cat`/`_aliases` meta is separately proven tolerable by
+    // `elasticsearch_read_only_role_lists_indices_despite_forbidden_cat_and_aliases`.
+    // Previously this test asserted an `_aliases`-403 surfaced the error; that is
+    // now tolerated, so the assertion is retargeted to field_caps. (2026-07-22)
     let routes = vec![
         route(
             "/ ",
@@ -552,8 +568,7 @@ async fn elasticsearch_live_catalog_summary_surfaces_permission_errors() {
                 "version": { "number": "8.12.2" }
             }"#,
         ),
-        route("/_cat/indices?", "[]"),
-        route_with_status("/_aliases", 403, r#"{ "error": "forbidden" }"#),
+        route_with_status("/*/_field_caps?", 403, r#"{ "error": "forbidden" }"#),
     ];
     let (port, server) = spawn_search_http_server(routes).await;
     let adapter = SearchEngineAdapter::new_elasticsearch();
@@ -578,7 +593,6 @@ async fn elasticsearch_live_catalog_summary_surfaces_permission_errors() {
 }
 
 #[tokio::test]
-#[ignore = "RED #1712: fails until the field_caps hybrid visibility fix lands (un-ignored in the GREEN commit)"]
 async fn elasticsearch_read_only_role_lists_indices_despite_forbidden_cat_and_aliases() {
     // Reason: #1712 (sibling of #1709) — a role with only `read`
     // (indices:data/read/*) can search/get docs, but `_cat/indices` and
@@ -757,6 +771,10 @@ async fn opensearch_live_catalog_reads_indexes_aliases_and_streams() {
                 },
                 "tagline": "The OpenSearch Project: https://opensearch.org/"
             }"#,
+        ),
+        route(
+            "/*/_field_caps?",
+            r#"{ "indices": ["logs-opensearch-2026.05.24"], "fields": { "_index": {} } }"#,
         ),
         route(
             "/_cat/indices?",
