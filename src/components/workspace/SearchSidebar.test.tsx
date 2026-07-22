@@ -473,4 +473,28 @@ describe("SearchSidebar", () => {
       ),
     );
   });
+
+  // #1715 — pure CSS layout invariants. Narrow sidebars must not (a) wrap the
+  // summary line onto multiple rows or (b) compress the index-name column to
+  // zero behind its badges. Assert the layout classes so a regression that
+  // drops the guardrails fails here.
+  it("keeps the index-name column above zero width so badges cannot cover it (#1715)", async () => {
+    render(<SearchSidebar connectionId="search-1" />);
+
+    const name = await screen.findByText("logs-elastic-2026.05.24");
+    const row = name.closest('[role="treeitem"]');
+    expect(row).not.toBeNull();
+    // Name track has a minimum width; the badge track is the shrinkable one.
+    expect(row).toHaveClass("grid-cols-[minmax(6rem,1fr)_minmax(0,auto)]");
+    expect(name).toHaveClass("truncate");
+  });
+
+  it("keeps the catalog summary on a single truncated line (#1715)", async () => {
+    render(<SearchSidebar connectionId="search-1" />);
+
+    await screen.findByText("logs-elastic-2026.05.24");
+    const summary = screen.getByText("2 indexes · 1 alias · 2 data streams");
+    expect(summary).toHaveClass("truncate");
+    expect(summary).toHaveClass("min-w-0");
+  });
 });
