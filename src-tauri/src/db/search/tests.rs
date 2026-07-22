@@ -332,6 +332,10 @@ async fn elasticsearch_live_catalog_reads_indexes_aliases_and_streams() {
             }"#,
         ),
         route(
+            "/*/_field_caps?",
+            r#"{ "indices": ["logs-elastic-2026.05.24"], "fields": { "_index": {} } }"#,
+        ),
+        route(
             "/_cat/indices?",
             r#"[
                 {
@@ -446,6 +450,10 @@ async fn elasticsearch_live_catalog_summary_uses_summary_endpoints_once() {
             }"#,
         ),
         route(
+            "/*/_field_caps?",
+            r#"{ "indices": ["logs-elastic-2026.05.24"], "fields": { "_index": {} } }"#,
+        ),
+        route(
             "/_cat/indices?",
             r#"[
                 {
@@ -518,6 +526,7 @@ async fn elasticsearch_live_catalog_summary_allows_empty_catalogs() {
                 "version": { "number": "8.12.2" }
             }"#,
         ),
+        route("/*/_field_caps?", r#"{ "indices": [], "fields": {} }"#),
         route("/_cat/indices?", "[]"),
         route("/_aliases", "{}"),
         route("/_data_stream", r#"{ "data_streams": [] }"#),
@@ -543,7 +552,14 @@ async fn elasticsearch_live_catalog_summary_allows_empty_catalogs() {
 }
 
 #[tokio::test]
-async fn elasticsearch_live_catalog_summary_surfaces_permission_errors() {
+async fn elasticsearch_live_catalog_summary_surfaces_field_caps_permission_errors() {
+    // Reason: #1712 flipped this contract. `_field_caps` is now the AUTHORITATIVE
+    // index-visibility source, so a 403 there is terminal and still surfaces a
+    // friendly SearchPermission ("전체 다 실패하면 뭐 할 수 없지"). A 403 on the
+    // best-effort `_cat`/`_aliases` meta is separately proven tolerable by
+    // `elasticsearch_read_only_role_lists_indices_despite_forbidden_cat_and_aliases`.
+    // Previously this test asserted an `_aliases`-403 surfaced the error; that is
+    // now tolerated, so the assertion is retargeted to field_caps. (2026-07-22)
     let routes = vec![
         route(
             "/ ",
@@ -552,8 +568,7 @@ async fn elasticsearch_live_catalog_summary_surfaces_permission_errors() {
                 "version": { "number": "8.12.2" }
             }"#,
         ),
-        route("/_cat/indices?", "[]"),
-        route_with_status("/_aliases", 403, r#"{ "error": "forbidden" }"#),
+        route_with_status("/*/_field_caps?", 403, r#"{ "error": "forbidden" }"#),
     ];
     let (port, server) = spawn_search_http_server(routes).await;
     let adapter = SearchEngineAdapter::new_elasticsearch();
@@ -575,6 +590,104 @@ async fn elasticsearch_live_catalog_summary_surfaces_permission_errors() {
         }
         other => panic!("Expected permission error, got {other:?}"),
     }
+}
+
+#[tokio::test]
+async fn elasticsearch_read_only_role_lists_indices_despite_forbidden_cat_and_aliases() {
+    // Reason: #1712 (sibling of #1709) — a role with only `read`
+    // (indices:data/read/*) can search/get docs, but `_cat/indices` and
+    // `_aliases` are monitor-gated, so its indices were hidden from the sidebar
+    // (an aliases-403 even failed the whole catalog). `_field_caps` lives in the
+    // read privilege bucket and becomes the authoritative visibility source;
+    // `_cat`/`_aliases` degrade to best-effort meta. A 403 on either must be
+    // tolerated and the field_caps indices must still surface with Unknown meta.
+    // (2026-07-22)
+    let routes = vec![
+        route(
+            "/ ",
+            r#"{ "cluster_name": "elastic-dev", "version": { "number": "8.12.2" } }"#,
+        ),
+        route(
+            "/*/_field_caps?",
+            r#"{ "indices": ["logs-a", "logs-b", "logs-c"], "fields": { "_index": {} } }"#,
+        ),
+        route_with_status("/_cat/indices?", 403, r#"{ "error": "forbidden" }"#),
+        route_with_status("/_aliases", 403, r#"{ "error": "forbidden" }"#),
+    ];
+    let (port, server) = spawn_search_http_server(routes).await;
+    let adapter = SearchEngineAdapter::new_elasticsearch();
+    let config = search_config(port);
+
+    let result = async {
+        adapter.connect(&config).await?;
+        adapter.list_indexes().await
+    }
+    .await;
+    server.abort();
+    let _ = server.await;
+
+    let indexes = result.expect("read-only role must still see field_caps indices");
+    let names: Vec<&str> = indexes.iter().map(|index| index.name.as_str()).collect();
+    assert_eq!(names, vec!["logs-a", "logs-b", "logs-c"]);
+    assert!(
+        indexes
+            .iter()
+            .all(|index| index.health == SearchIndexHealth::Unknown),
+        "field_caps-only indices carry Unknown health"
+    );
+    assert!(indexes.iter().all(|index| index.open));
+    assert!(indexes.iter().all(|index| index.docs_count.is_none()));
+    assert!(indexes.iter().all(|index| index.store_size_bytes.is_none()));
+    assert!(indexes.iter().all(|index| index.aliases.is_empty()));
+}
+
+#[tokio::test]
+async fn elasticsearch_read_only_role_catalog_summary_tolerates_forbidden_meta() {
+    // Reason: #1712 — the sidebar command is `list_search_catalog_summary` ->
+    // catalog_summary(), which ALSO calls `_data_stream`
+    // (indices:admin/data_stream/get, a monitor-class privilege separate from
+    // `read`). Fixing only list_indexes would leave the real command 403-ing at
+    // `_data_stream`, so a read-only role must still get its field_caps indices
+    // even when `_cat`, `_aliases`, AND `_data_stream` all 403 — only field_caps
+    // is authoritative. (2026-07-22)
+    let routes = vec![
+        route(
+            "/ ",
+            r#"{ "cluster_name": "elastic-dev", "version": { "number": "8.12.2" } }"#,
+        ),
+        route(
+            "/*/_field_caps?",
+            r#"{ "indices": ["logs-a", "logs-b"], "fields": { "_index": {} } }"#,
+        ),
+        route_with_status("/_cat/indices?", 403, r#"{ "error": "forbidden" }"#),
+        route_with_status("/_aliases", 403, r#"{ "error": "forbidden" }"#),
+        route_with_status("/_data_stream", 403, r#"{ "error": "forbidden" }"#),
+    ];
+    let (port, server) = spawn_search_http_server(routes).await;
+    let adapter = SearchEngineAdapter::new_elasticsearch();
+    let config = search_config(port);
+
+    let result = async {
+        adapter.connect(&config).await?;
+        adapter.catalog_summary().await
+    }
+    .await;
+    server.abort();
+    let _ = server.await;
+
+    let summary = result.expect("read-only role must still get a catalog summary");
+    let names: Vec<&str> = summary
+        .indexes
+        .iter()
+        .map(|index| index.name.as_str())
+        .collect();
+    assert_eq!(names, vec!["logs-a", "logs-b"]);
+    assert!(summary.aliases.is_empty());
+    assert!(summary.data_streams.is_empty());
+    assert!(summary
+        .indexes
+        .iter()
+        .all(|index| index.health == SearchIndexHealth::Unknown));
 }
 
 #[tokio::test]
@@ -707,6 +820,10 @@ async fn opensearch_live_catalog_reads_indexes_aliases_and_streams() {
                 },
                 "tagline": "The OpenSearch Project: https://opensearch.org/"
             }"#,
+        ),
+        route(
+            "/*/_field_caps?",
+            r#"{ "indices": ["logs-opensearch-2026.05.24"], "fields": { "_index": {} } }"#,
         ),
         route(
             "/_cat/indices?",
