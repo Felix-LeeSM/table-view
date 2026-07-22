@@ -190,14 +190,6 @@ export default function DataGrid({
   );
 
   useEffect(() => {
-    const handler = () => {
-      dataGridTableRef.current?.resetColumnWidths();
-    };
-    window.addEventListener("reset-column-widths", handler);
-    return () => window.removeEventListener("reset-column-widths", handler);
-  }, []);
-
-  useEffect(() => {
     const prev = prevPropsRef.current;
     if (
       prev.connectionId !== connectionId ||

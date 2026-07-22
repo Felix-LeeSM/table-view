@@ -33,6 +33,7 @@ type QuerySlice = Pick<
   | "completeMultiStatementQuery"
   | "completeQueryDryRun"
   | "loadQueryIntoTab"
+  | "resetQueryStatesForConnection"
 >;
 
 function isRunningQueryTab(
@@ -427,6 +428,32 @@ export function createQuerySlice(
             ),
         );
         return next ? { workspaces: next } : state;
+      });
+    },
+
+    resetQueryStatesForConnection: (connId) => {
+      set((state) => {
+        const conn = state.workspaces[connId];
+        if (!conn) return state;
+        let changed = false;
+        // Spread so untouched db slots keep identity; only rewrite the slots
+        // that actually held a non-idle query result.
+        const nextConn: Record<string, WorkspaceState> = { ...conn };
+        for (const [db, ws] of Object.entries(conn)) {
+          let wsChanged = false;
+          const tabs = ws.tabs.map((t) => {
+            if (t.type !== "query" || t.queryState.status === "idle") return t;
+            wsChanged = true;
+            return { ...t, queryState: { status: "idle" as const } };
+          });
+          if (wsChanged) {
+            changed = true;
+            nextConn[db] = { ...ws, tabs };
+          }
+        }
+        return changed
+          ? { workspaces: { ...state.workspaces, [connId]: nextConn } }
+          : state;
       });
     },
   };

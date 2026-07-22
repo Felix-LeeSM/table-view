@@ -75,6 +75,7 @@ export default function ShortcutCheatsheet() {
           { label: t("shortcuts.quickOpen"), keys: ["Cmd+P"] },
           { label: t("shortcuts.searchData"), keys: ["Cmd+Shift+P"] },
           { label: t("shortcuts.refresh"), keys: ["Cmd+R", "F5"] },
+          { label: t("shortcuts.hardRefresh"), keys: ["Cmd+Shift+R"] },
           { label: t("shortcuts.cancelQuery"), keys: ["Cmd+."] },
           // Connection swap is Home → double-click only — no Cmd+K shortcut.
         ],
