@@ -89,6 +89,15 @@ assert_pass \
 	"EnterWorktree path form (existing worktree 진입) → exit 0, no JSON" \
 	"{\"hook_event_name\":\"PreToolUse\",\"tool_name\":\"EnterWorktree\",\"tool_input\":{\"path\":\"worktrees/fix__foo\"}}"
 
+# issue #1706 codex coverage — tool_name 이 "Bash" 가 아닌 shell 계열
+# (codex runtime 변종) 도 command 필드만으로 dangerous check 를 타야 한다.
+# 이전 is_bash_tool 은 tool_name=="Bash" 또는 empty 만 인정 → 이름이 다른
+# shell tool 이 pattern gate 전체를 skip 했다.
+assert_deny \
+	"non-Bash shell tool name + git worktree add → permissionDecision deny" \
+	"{\"hook_event_name\":\"PermissionRequest\",\"tool_name\":\"shell\",\"tool_input\":{\"command\":\"git worktree add -b feat/x worktrees/feat__x origin/main\"}}" \
+	'.hookSpecificOutput.decision.behavior == "deny"'
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Brain-matcher parity (issue #1028)
 # ─────────────────────────────────────────────────────────────────────────────

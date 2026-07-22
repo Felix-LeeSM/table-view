@@ -48,7 +48,11 @@ deny() {
 }
 
 is_bash_tool() {
-	[ "$tool_name" = "Bash" ] || { [ -z "$tool_name" ] && [ -n "$command" ]; }
+	# command 필드 존재 = shell 계열 tool (brain 무관 fail-closed). tool_name 이
+	# "Bash" 가 아닌 shell tool (codex runtime 변종 등) 이 dangerous-pattern
+	# check 를 skip 하던 구멍 차단 (issue #1706 codex coverage). Edit / Write /
+	# apply_patch payload 에는 command 필드가 없어 영향 없다.
+	[ -n "$command" ]
 }
 
 # EnterWorktree tool → agent worktree 자율 생성 차단 (issue #1706).
