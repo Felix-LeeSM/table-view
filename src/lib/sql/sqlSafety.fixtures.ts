@@ -2,26 +2,6 @@ import type { StatementAnalysis } from "./sqlSafety";
 
 export type SqlSafetyExpectedCase = { sql: string } & StatementAnalysis;
 
-export const ddlAdditiveShapeSql = [
-  "CREATE TABLE t (a INTEGER)",
-  "CREATE INDEX idx ON t (a)",
-  "CREATE VIEW v AS SELECT a FROM t",
-  "ALTER TABLE t ADD COLUMN c TEXT",
-  "ALTER TABLE t ADD CONSTRAINT pk PRIMARY KEY (id)",
-  "ALTER TABLE t RENAME TO t2",
-  "ALTER TABLE t RENAME COLUMN a TO b",
-] as const;
-
-export const miscGrammarShapeSql = [
-  "GRANT SELECT ON users TO alice",
-  "REVOKE SELECT ON users FROM alice",
-  "EXPLAIN SELECT * FROM users",
-  "SHOW search_path",
-  "SET timezone = 'UTC'",
-  "COPY users FROM '/tmp/u.csv'",
-  "COMMENT ON TABLE users IS 'all'",
-] as const;
-
 export const mssqlDestructiveDdlSql = [
   "DROP TABLE [dbo].[users]",
   "TRUNCATE TABLE [dbo].[users]",

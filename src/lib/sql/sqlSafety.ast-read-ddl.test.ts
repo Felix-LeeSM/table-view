@@ -1,6 +1,5 @@
 import { describe, it, expect } from "vitest";
 import { analyzeStatement, isDangerous, isInfoStatement } from "./sqlSafety";
-import { ddlAdditiveShapeSql, miscGrammarShapeSql } from "./sqlSafety.fixtures";
 import {
   expectStatementAnalysisShape,
   usePreloadedSqlAst,
@@ -145,12 +144,10 @@ describe("sqlSafety.analyzeStatement — AST read, DDL, and misc contracts", () 
       );
     });
 
-    it("[AC-393b-X09] StatementAnalysis return shape unchanged for the new `with` path", () => {
-      const a = analyzeStatement("WITH t AS (SELECT 1) SELECT * FROM t");
-      expectStatementAnalysisShape(a);
-      expect(isInfoStatement(a)).toBe(true);
-      expect(isDangerous(a)).toBe(false);
-    });
+    // #1624 — former AC-393b-X09 shape re-verification dropped; the
+    // path-invariant shape is pinned once for this preloaded-AST file by
+    // AC-393a-X05 above. WITH…SELECT → select/info is pinned by AC-393b-X01;
+    // isInfoStatement/isDangerous are severity-derived path-independent helpers.
   });
 
   // -------------------------------------------------------------------------
@@ -246,12 +243,10 @@ describe("sqlSafety.analyzeStatement — AST read, DDL, and misc contracts", () 
       expect(a.severity).toBe("danger");
     });
 
-    it("[AC-394-X11] StatementAnalysis return shape unchanged for the new DDL additive paths", () => {
-      for (const sql of ddlAdditiveShapeSql) {
-        const a = analyzeStatement(sql);
-        expectStatementAnalysisShape(a);
-      }
-    });
+    // #1624 — former AC-394-X11 shape-only loop dropped: every statement in
+    // `ddlAdditiveShapeSql` is already exercised for kind/severity/reasons by
+    // AC-394-X01…X08 above, and the path-invariant shape is pinned once per
+    // file by AC-393a-X05.
   });
 
   describe("Sprint 395 — AST-based misc grammar classifier (AC-395-X)", () => {
@@ -355,11 +350,9 @@ describe("sqlSafety.analyzeStatement — AST read, DDL, and misc contracts", () 
       expect(a.severity).toBe("danger");
     });
 
-    it("[AC-395-X13] StatementAnalysis return shape unchanged for the new misc paths", () => {
-      for (const sql of miscGrammarShapeSql) {
-        const a = analyzeStatement(sql);
-        expectStatementAnalysisShape(a);
-      }
-    });
+    // #1624 — former AC-395-X13 shape-only loop dropped: every statement in
+    // `miscGrammarShapeSql` is already exercised for kind/severity/reasons by
+    // AC-395-X01…X10 above, and the path-invariant shape is pinned once per
+    // file by AC-393a-X05.
   });
 });
