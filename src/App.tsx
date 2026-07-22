@@ -420,7 +420,16 @@ export default function App() {
       if (activeTab && activeTab.type === "table") {
         // Table tab active — dispatch based on subview
         if (activeTab.subView === "records") {
-          window.dispatchEvent(new CustomEvent("refresh-data"));
+          // #1718 (Part of #1717) — a records-grid refresh refetches and drops
+          // the active cell editor (`useRdbDataGridShortcuts` → onCancelEdit),
+          // so it can discard an in-progress edit. Route the dispatch through
+          // the shared #1705 discard-confirm while the window holds pending
+          // edits: confirm proceeds (refresh + reset), cancel preserves the
+          // edit. Clean windows refresh immediately. The gate lives here so it
+          // applies uniformly to every records paradigm (RDB + document).
+          confirmDiscard(windowHasDirtyRef.current, () =>
+            window.dispatchEvent(new CustomEvent("refresh-data")),
+          );
         } else if (activeTab.subView === "structure") {
           window.dispatchEvent(new CustomEvent("refresh-structure"));
         }
@@ -431,7 +440,7 @@ export default function App() {
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [activeTab]);
+  }, [activeTab, confirmDiscard]);
 
   // Cmd+I / Ctrl+I — format SQL
   useEffect(() => {

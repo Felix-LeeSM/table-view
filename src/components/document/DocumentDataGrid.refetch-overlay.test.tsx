@@ -32,6 +32,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { setupTauriMock } from "@/test-utils/tauriMock";
 import {
+  act,
   render,
   screen,
   waitFor,
@@ -328,6 +329,23 @@ describe("DocumentDataGrid refetch overlay (sprint-176)", () => {
       | ((value: DocumentQueryResult) => void)
       | null;
     resolver?.(buildResult({ totalCount: 1500 }));
+  });
+
+  // Issue #1718 (Stage 1, Part of #1717) — the document records grid must
+  // refetch when the global soft-refresh (Cmd+R) broadcasts `refresh-data`.
+  // Before this change only the RDB grid listened, so Cmd+R on a Mongo
+  // collection was a no-op.
+  it("[#1718] refetches the collection on a refresh-data event", async () => {
+    findMock.mockResolvedValue(buildResult());
+    renderGrid();
+    await waitFor(() => expect(screen.getByText("Alice")).toBeInTheDocument());
+
+    const before = findMock.mock.calls.length;
+    act(() => {
+      window.dispatchEvent(new CustomEvent("refresh-data"));
+    });
+
+    await waitFor(() => expect(findMock.mock.calls.length).toBe(before + 1));
   });
 
   // Reason: AC-176-04 — spinner visuals on DocumentDataGrid match the

@@ -16,7 +16,9 @@ import {
   fireEvent,
   act,
   cleanup,
+  waitFor,
 } from "@testing-library/react";
+import { __resetDocumentStoreForTests } from "@/test-utils/documentStore";
 import { MongoStructurePanel } from "../MongoStructurePanel";
 
 const listMongoIndexesMock = vi.fn();
@@ -174,6 +176,33 @@ describe("MongoStructurePanel (Sprint 350 — tracer Indexes/Validator shell)", 
     expect(screen.getByTestId("collection-stats-panel")).toBeInTheDocument();
     expect(screen.queryByTestId("mongo-indexes-panel")).toBeNull();
     expect(screen.queryByTestId("validator-panel")).toBeNull();
+  });
+
+  // Issue #1718 (Stage 1, Part of #1717) — the Mongo Structure pane must
+  // refetch its active sub-sub-panel when the global soft-refresh (Cmd+R)
+  // broadcasts `refresh-structure`. The default Indexes panel force-reloads
+  // its indexes; before this change the pane ignored refresh entirely.
+  it("[#1718] refetches the Indexes panel on a refresh-structure event", async () => {
+    __resetDocumentStoreForTests();
+    render(
+      <MongoStructurePanel
+        connectionId="conn-mongo"
+        database="app"
+        collection="users"
+        dbType="mongodb"
+      />,
+    );
+
+    await waitFor(() => expect(listMongoIndexesMock).toHaveBeenCalled());
+    const before = listMongoIndexesMock.mock.calls.length;
+
+    act(() => {
+      window.dispatchEvent(new CustomEvent("refresh-structure"));
+    });
+
+    await waitFor(() =>
+      expect(listMongoIndexesMock.mock.calls.length).toBe(before + 1),
+    );
   });
 
   it("manages roving tabindex so only the active tab is focusable", () => {

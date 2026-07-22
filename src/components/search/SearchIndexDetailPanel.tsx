@@ -25,6 +25,7 @@ import {
   sampleSearchDocuments,
 } from "@lib/tauri/search";
 import { SearchResultView } from "@components/search/SearchResultView";
+import { useRefreshEvent } from "@/hooks/useRefreshEvent";
 import type {
   SearchCatalogSummary,
   SearchFieldStatsEnvelope,
@@ -94,6 +95,12 @@ export default function SearchIndexDetailPanel({
   const [deletePreviewOpen, setDeletePreviewOpen] = useState(false);
   const detailRequestGeneration = useRef(0);
   const tablistRef = useRef<HTMLDivElement>(null);
+  // #1718 (Part of #1717) — a search index tab carries `subView: "structure"`,
+  // so the global soft-refresh (Cmd+R) broadcasts `refresh-structure`. Bumping
+  // this nonce re-runs the catalog-load effect below (which also resets every
+  // sub-tab slot to idle so it re-loads lazily on activation).
+  const [reloadNonce, setReloadNonce] = useState(0);
+  useRefreshEvent("refresh-structure", () => setReloadNonce((n) => n + 1));
 
   useEffect(() => {
     let cancelled = false;
@@ -124,7 +131,8 @@ export default function SearchIndexDetailPanel({
       cancelled = true;
       detailRequestGeneration.current += 1;
     };
-  }, [connectionId, index]);
+    // `reloadNonce` re-triggers a full reload on a soft refresh (#1718).
+  }, [connectionId, index, reloadNonce]);
 
   const loadMapping = useCallback(async () => {
     if (mapping.status !== "idle") return;

@@ -10,6 +10,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useRefreshEvent } from "@/hooks/useRefreshEvent";
 import { safeStringifyCell } from "@/lib/jsonCell";
 import {
   getMongoValidator,
@@ -94,6 +95,10 @@ export function ValidatorPanel({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  // #1718 (Part of #1717) — a soft refresh (Cmd+R) on the Mongo Structure pane
+  // broadcasts `refresh-structure`; bumping this nonce re-runs the read effect.
+  const [reloadNonce, setReloadNonce] = useState(0);
+  useRefreshEvent("refresh-structure", () => setReloadNonce((n) => n + 1));
 
   useEffect(() => {
     if (database === "" || collection === "") return;
@@ -130,7 +135,8 @@ export function ValidatorPanel({
     return () => {
       cancelled = true;
     };
-  }, [connectionId, database, collection]);
+    // `reloadNonce` re-triggers the read on a soft refresh (#1718).
+  }, [connectionId, database, collection, reloadNonce]);
 
   const handleSave = useCallback(async () => {
     setSaveError(null);

@@ -6,6 +6,7 @@ import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useRefreshEvent } from "@/hooks/useRefreshEvent";
 import { DataGridSkeleton } from "@components/datagrid";
 import {
   collectionStatsMongo,
@@ -56,6 +57,10 @@ export function CollectionStatsPanel({
       setLoading(false);
     }
   }, [connectionId, paradigm, database, collection]);
+
+  // #1718 (Part of #1717) — a soft refresh (Cmd+R) on the Mongo Structure pane
+  // broadcasts `refresh-structure`; reload the stats for the visible panel.
+  useRefreshEvent("refresh-structure", () => void refresh());
 
   return (
     <section

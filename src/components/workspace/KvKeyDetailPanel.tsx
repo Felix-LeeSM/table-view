@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Loader2, Timer } from "lucide-react";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useWorkspaceStore } from "@stores/workspaceStore";
+import { useRefreshEvent } from "@/hooks/useRefreshEvent";
 import { getKvValue } from "@lib/tauri/kv";
 import type { KvValueEnvelope } from "@/types/kv";
 import { formatKvTtl } from "@/types/kv";
@@ -91,6 +92,11 @@ export default function KvKeyDetailPanel({
     setEntryActionIntent(null);
     void loadValue();
   }, [loadValue]);
+
+  // #1718 (Part of #1717) — a KV key tab carries `subView: "structure"`, so
+  // the global soft-refresh (Cmd+R) broadcasts `refresh-structure`. Re-read
+  // the key value on that event instead of ignoring the shortcut.
+  useRefreshEvent("refresh-structure", () => void loadValue());
 
   const selectedMutationReady = Boolean(
     value && !loading && canRenderKvMutationPanel(value, mutationEnabled),
