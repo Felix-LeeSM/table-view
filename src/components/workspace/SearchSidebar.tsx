@@ -257,8 +257,8 @@ export default function SearchSidebar({ connectionId }: SearchSidebarProps) {
         className="flex items-center justify-between gap-2 border-b border-border px-3 py-1.5 text-3xs text-muted-foreground"
         data-testid="search-catalog-status"
       >
-        <span>search-native</span>
-        <span>{summaryText}</span>
+        <span className="shrink-0">search-native</span>
+        <span className="truncate min-w-0">{summaryText}</span>
       </div>
 
       {error && (
@@ -383,7 +383,7 @@ function CatalogRow({
       data-tree-key={entry.id}
       tabIndex={tabIndex}
       onFocus={onFocus}
-      className="grid min-h-9 w-full grid-cols-[minmax(0,1fr)_auto] gap-x-2 px-3 py-1.5 text-left hover:bg-accent hover:text-accent-foreground data-[selected]:bg-accent data-[selected]:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+      className="grid min-h-9 w-full grid-cols-[minmax(6rem,1fr)_minmax(0,auto)] gap-x-2 px-3 py-1.5 text-left hover:bg-accent hover:text-accent-foreground data-[selected]:bg-accent data-[selected]:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
       onClick={() => onSelect(entry)}
       onDoubleClick={() => onSelect(entry, true)}
       onKeyDown={(event) => {
@@ -420,7 +420,7 @@ function CatalogRow({
           </div>
         </div>
       </div>
-      <div className="flex shrink-0 items-center gap-1.5 text-3xs text-muted-foreground">
+      <div className="flex min-w-0 items-center gap-1.5 overflow-hidden text-3xs text-muted-foreground">
         {entryBadges(entry).map((badge) => (
           <span key={badge} className="rounded bg-muted px-1.5 py-0.5">
             {badge}
