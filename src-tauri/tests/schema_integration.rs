@@ -195,6 +195,100 @@ async fn test_list_tables_visible_without_table_privilege() {
     );
 }
 
+/// #1709 (sibling of #1411) — SCHEMAS 패널이 빈 채로 떴다(`public` 존재에도).
+/// 근본 원인: `list_schemas` 가 `information_schema.schemata`(권한 종속 뷰)를
+/// 소스로 써서 스키마 노출이 그 뷰의 privilege 시맨틱에 묶였다. psql `\dn` /
+/// 이 파일의 다른 list_* 처럼 `pg_catalog.pg_namespace` +
+/// `has_schema_privilege(nspname, 'USAGE')` 로 옮겨 소유 무관·USAGE 기준으로
+/// 나열한다. 여기서는 admin 이 스키마를 만들고(admin 소유), 그 스키마에 **USAGE
+/// 만** 가진 비소유 login role 로 재접속해도 그 스키마가 목록에 뜨는지(비소유
+/// 노출) + `public` 도 함께 뜨는지(과차단 없음) + role 에 아무 권한도 없는
+/// 스키마는 안 뜨는지(has_schema_privilege 필터 유지 → 과노출 없음)를 가드한다.
+#[tokio::test]
+async fn test_list_schemas_visible_without_ownership() {
+    let admin = match common::setup_adapter(DatabaseType::Postgresql).await {
+        Some(a) => a,
+        None => return,
+    };
+    let base = common::pg_test_config()
+        .await
+        .expect("endpoint present when setup_adapter succeeded");
+
+    let usable = unique_schema_name("usable"); // 비소유 role 에 USAGE grant
+    let hidden = unique_schema_name("nousage"); // role 에 아무 grant 없음
+    let role = unique_table_name("schemaless"); // valid identifier (test_<...>_<nanos>)
+    let role_pw = "schemaless_pw_1";
+
+    // admin 이 두 스키마(admin 소유) + 아무 grant 없는 login role 생성.
+    admin
+        .execute(&format!("CREATE SCHEMA \"{usable}\""))
+        .await
+        .expect("admin create usable schema");
+    admin
+        .execute(&format!("CREATE SCHEMA \"{hidden}\""))
+        .await
+        .expect("admin create hidden schema");
+    admin
+        .execute(&format!(
+            "CREATE ROLE \"{role}\" LOGIN PASSWORD '{role_pw}'"
+        ))
+        .await
+        .expect("create non-owner role");
+    // 비소유 role 에 usable 스키마 USAGE 만 부여 — 소유권은 admin 유지.
+    admin
+        .execute(&format!("GRANT USAGE ON SCHEMA \"{usable}\" TO \"{role}\""))
+        .await
+        .expect("grant schema usage");
+
+    // 비소유 role 로 재접속.
+    let mut role_cfg = base.clone();
+    role_cfg.user = role.clone();
+    role_cfg.password = role_pw.to_string();
+    let restricted = PostgresAdapter::new();
+    restricted
+        .connect_pool(&role_cfg)
+        .await
+        .expect("non-owner role connect");
+
+    let schemas = restricted
+        .list_schemas()
+        .await
+        .expect("list_schemas as non-owner role");
+    let names: Vec<&str> = schemas.iter().map(|s| s.name.as_str()).collect();
+    let saw_usable = names.contains(&usable.as_str());
+    let saw_public = names.contains(&"public");
+    let saw_hidden = names.contains(&hidden.as_str());
+
+    // cleanup (assert 전에 정리해 role/스키마가 남아 후속 테스트를 방해하지 않도록).
+    restricted.disconnect_pool().await.ok();
+    admin
+        .execute(&format!("DROP SCHEMA IF EXISTS \"{usable}\" CASCADE"))
+        .await
+        .ok();
+    admin
+        .execute(&format!("DROP SCHEMA IF EXISTS \"{hidden}\" CASCADE"))
+        .await
+        .ok();
+    admin
+        .execute(&format!("DROP ROLE IF EXISTS \"{role}\""))
+        .await
+        .ok();
+    admin.disconnect_pool().await.ok();
+
+    assert!(
+        saw_usable,
+        "list_schemas must surface a non-owned schema the role holds USAGE on, got: {names:?}"
+    );
+    assert!(
+        saw_public,
+        "list_schemas must still surface 'public' (no over-blocking), got: {names:?}"
+    );
+    assert!(
+        !saw_hidden,
+        "list_schemas must hide a schema the role has no USAGE on (has_schema_privilege filter), got: {names:?}"
+    );
+}
+
 #[tokio::test]
 async fn test_create_table_and_list() {
     let adapter = match common::setup_adapter(DatabaseType::Postgresql).await {
