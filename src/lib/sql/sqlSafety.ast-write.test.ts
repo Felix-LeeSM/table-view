@@ -177,13 +177,11 @@ describe("sqlSafety.analyzeStatement — AST destructive and write contracts", (
       expect(a.severity).toBe("info");
     });
 
-    it("[AC-392-X08] AST callsite preserves the `StatementAnalysis` shape contract for DML", () => {
-      const a = analyzeStatement("UPDATE users SET name = 'a' WHERE id = 1");
-      expectStatementAnalysisShape(a);
-      // `warn` severity → not dangerous, not info.
-      expect(isDangerous(a)).toBe(false);
-      expect(isInfoStatement(a)).toBe(false);
-    });
+    // #1624 — the DML shape-contract re-verification (former AC-392-X08) is
+    // dropped: the `StatementAnalysis` shape is path-invariant and pinned once
+    // per preloaded-AST file by AC-391-X08 above. UPDATE WHERE → warn (AST) is
+    // pinned by AC-403-02b; isDangerous/isInfoStatement are severity-derived,
+    // path-independent helpers already covered in the regex suite.
 
     it("[AC-439-X02] CALL AST path → routine-call / warn", () => {
       const a = analyzeStatement("CALL refresh_user_stats()");

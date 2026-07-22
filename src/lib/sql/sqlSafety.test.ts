@@ -194,6 +194,12 @@ describe("sqlSafety.analyzeStatement — fallback and severity contracts", () =>
     expect(b.kind).toBe("ddl-create");
     expect(b.severity).toBe("info");
     expect(b.reasons).toEqual([]);
+    // #1624 dedup — CREATE TABLE → ddl-create / info hoisted here from the
+    // former Sprint-254 severity-only case (AC-254-02d) so the regex-path
+    // classification stays pinned once the weaker subset is removed.
+    const c = analyzeStatement("CREATE TABLE foo (id int)");
+    expect(c.kind).toBe("ddl-create");
+    expect(c.severity).toBe("info");
   });
 
   // -------------------------------------------------------------------------
@@ -254,19 +260,17 @@ describe("sqlSafety.analyzeStatement — fallback and severity contracts", () =>
   // -------------------------------------------------------------------------
 
   describe("Sprint 254 — 3-tier severity classifier", () => {
-    // ── INFO tier ─────────────────────────────────────────────────────────
-    it("[AC-254-01a] SELECT → info", () => {
-      const a = analyzeStatement("SELECT * FROM users");
-      expect(a.kind).toBe("select");
-      expect(a.severity).toBe("info");
-    });
+    // #1624 dedup (2026-07-22) — the severity-only SELECT / INSERT /
+    // UPDATE·DELETE WHERE / CREATE INDEX / ALTER ADD / DROP / TRUNCATE /
+    // WHERE-less DML / ALTER DROP cases were a WEAKER subset of the
+    // AC-185/187 full-triple (kind+severity+reasons) cases above and are
+    // removed. CREATE TABLE → ddl-create/info moved to the "ALTER additive /
+    // CREATE" test; WITH…SELECT kind pin folded into AC-254-04e. Only the
+    // statements with no stronger regex-path equivalent remain: EXPLAIN /
+    // SHOW / DESCRIBE / DESC (metadata reads), GRANT / REVOKE
+    // (permission-change), and the DML-CTE wrap corpus.
 
-    it("[AC-254-01b] WITH … SELECT (no DML CTE) → info", () => {
-      const a = analyzeStatement("WITH t AS (SELECT 1 AS n) SELECT n FROM t");
-      expect(a.kind).toBe("select");
-      expect(a.severity).toBe("info");
-    });
-
+    // ── INFO tier — metadata reads (no top-level equivalent) ──────────────
     it("[AC-254-01c] EXPLAIN → info", () => {
       const a = analyzeStatement("EXPLAIN SELECT * FROM users");
       expect(a.kind).toBe("info");
@@ -295,75 +299,7 @@ describe("sqlSafety.analyzeStatement — fallback and severity contracts", () =>
       expect(a.severity).toBe("info");
     });
 
-    // ── WARN tier ─────────────────────────────────────────────────────────
-    it("[AC-403-01] INSERT INTO → dml-insert / info", () => {
-      const a = analyzeStatement("INSERT INTO users (id) VALUES (1)");
-      expect(a.kind).toBe("dml-insert");
-      expect(a.severity).toBe("info");
-    });
-
-    it("[AC-254-02b] UPDATE … WHERE → warn (bounded)", () => {
-      const a = analyzeStatement("UPDATE users SET name = 'a' WHERE id = 1");
-      expect(a.kind).toBe("dml-update");
-      expect(a.severity).toBe("warn");
-    });
-
-    it("[AC-254-02c] DELETE … WHERE → warn (bounded)", () => {
-      const a = analyzeStatement("DELETE FROM users WHERE id = 1");
-      expect(a.kind).toBe("dml-delete");
-      expect(a.severity).toBe("warn");
-    });
-
-    it("[AC-254-02d] CREATE TABLE → ddl-create / info (sprint-394 update)", () => {
-      // Pre-sprint-394: classified as `ddl-other` / warn. Sprint-394
-      // moves CREATE TABLE / INDEX / VIEW to `ddl-create` / info per
-      // the contract — these are non-destructive constructions and do
-      // not require a warn dialog.
-      const a = analyzeStatement("CREATE TABLE foo (id int)");
-      expect(a.kind).toBe("ddl-create");
-      expect(a.severity).toBe("info");
-    });
-
-    it("[AC-254-02e] ALTER TABLE … ADD COLUMN (additive) → ddl-alter-add / warn (sprint-394 update)", () => {
-      // Sprint-394 kind change — kept under the same `warn` tier (the
-      // schema-changing nature of ADD COLUMN warrants the warn dialog).
-      const a = analyzeStatement("ALTER TABLE users ADD COLUMN nickname text");
-      expect(a.kind).toBe("ddl-alter-add");
-      expect(a.severity).toBe("warn");
-    });
-
-    it("[AC-254-02f] CREATE INDEX → ddl-create / info (sprint-394 update)", () => {
-      const a = analyzeStatement("CREATE INDEX idx_x ON users (x)");
-      expect(a.kind).toBe("ddl-create");
-      expect(a.severity).toBe("info");
-    });
-
-    // ── STOP tier (danger 보존) ───────────────────────────────────────────
-    it("[AC-254-03a] DROP TABLE → danger", () => {
-      const a = analyzeStatement("DROP TABLE users");
-      expect(a.severity).toBe("danger");
-    });
-
-    it("[AC-254-03b] TRUNCATE → danger", () => {
-      const a = analyzeStatement("TRUNCATE TABLE events");
-      expect(a.severity).toBe("danger");
-    });
-
-    it("[AC-254-03c] DELETE without WHERE → danger", () => {
-      const a = analyzeStatement("DELETE FROM users");
-      expect(a.severity).toBe("danger");
-    });
-
-    it("[AC-254-03d] UPDATE without WHERE → danger", () => {
-      const a = analyzeStatement("UPDATE users SET active = 0");
-      expect(a.severity).toBe("danger");
-    });
-
-    it("[AC-254-03e] ALTER TABLE … DROP COLUMN → danger", () => {
-      const a = analyzeStatement("ALTER TABLE users DROP COLUMN email");
-      expect(a.severity).toBe("danger");
-    });
-
+    // ── permission-change (unique — GRANT/REVOKE) ─────────────────────────
     it("[AC-254-03f] GRANT → permission-change / warn (sprint-395 update)", () => {
       // Pre-sprint-395: ddl-other / danger.
       // Sprint-395 (X01 / D5): permission-change / warn / pinned reason.
@@ -411,8 +347,12 @@ describe("sqlSafety.analyzeStatement — fallback and severity contracts", () =>
       expect(a.severity).toBe("info");
     });
 
-    it("[AC-254-04e] WITH x AS (SELECT 1) SELECT * — pure read CTE → info (regression)", () => {
+    it("[AC-254-04e] WITH x AS (SELECT 1) SELECT * — pure read CTE → select / info (regression)", () => {
+      // #1624 — kind=select pin folded in from the removed AC-254-01b
+      // severity-only WITH…SELECT case so the regex-path WITH-wrapped read
+      // classification stays asserted.
       const a = analyzeStatement("WITH x AS (SELECT 1 AS n) SELECT n FROM x");
+      expect(a.kind).toBe("select");
       expect(a.severity).toBe("info");
     });
   });
@@ -604,54 +544,20 @@ describe("sqlSafety.analyzeStatement — fallback and severity contracts", () =>
   // -------------------------------------------------------------------------
 
   describe("isInfoStatement (Sprint 255)", () => {
-    it("[AC-255-01a] SELECT → INFO", () => {
+    // #1624 dedup (2026-07-22) — `isInfoStatement(a)` is the one-line
+    // `a.severity === "info"` predicate, so re-verifying it across every
+    // INFO input (SELECT / WITH…SELECT / EXPLAIN / EXPLAIN ANALYZE / SHOW /
+    // DESCRIBE / DESC / lowercase / INSERT / CREATE TABLE / empty) only
+    // re-tests the same mapping; those inputs' severity=info is already
+    // pinned in the analyzeStatement contracts above. Collapsed to ONE
+    // representative POSITIVE. The NEGATIVES stay: a write mis-classified as
+    // "info" would skip the Safe-Mode dialog, so UPDATE WHERE / DELETE WHERE
+    // (warn) → false and DROP (danger) → false MUST remain (P8 boundary).
+
+    it("[AC-255-01a] info-severity statement (SELECT) → INFO (positive)", () => {
       expect(isInfoStatement(analyzeStatement("SELECT * FROM users"))).toBe(
         true,
       );
-    });
-
-    it("[AC-255-01b] WITH …SELECT (no DML CTE) → INFO", () => {
-      expect(
-        isInfoStatement(
-          analyzeStatement("WITH t AS (SELECT 1 AS n) SELECT n FROM t"),
-        ),
-      ).toBe(true);
-    });
-
-    it("[AC-255-01c] EXPLAIN → INFO", () => {
-      expect(
-        isInfoStatement(analyzeStatement("EXPLAIN SELECT * FROM users")),
-      ).toBe(true);
-    });
-
-    it("[AC-255-01d] EXPLAIN ANALYZE → INFO", () => {
-      expect(
-        isInfoStatement(
-          analyzeStatement("EXPLAIN ANALYZE SELECT * FROM users"),
-        ),
-      ).toBe(true);
-    });
-
-    it("[AC-255-01e] SHOW → INFO", () => {
-      expect(isInfoStatement(analyzeStatement("SHOW TABLES"))).toBe(true);
-    });
-
-    it("[AC-255-01f] DESCRIBE → INFO", () => {
-      expect(isInfoStatement(analyzeStatement("DESCRIBE users"))).toBe(true);
-    });
-
-    it("[AC-255-01g] DESC (MySQL short form) → INFO", () => {
-      expect(isInfoStatement(analyzeStatement("DESC users"))).toBe(true);
-    });
-
-    it("[AC-255-01h] case-insensitive (lowercase explain) → INFO", () => {
-      expect(isInfoStatement(analyzeStatement("explain select 1"))).toBe(true);
-    });
-
-    it("[AC-403-06] INSERT → INFO (no WARN dialog candidate)", () => {
-      expect(
-        isInfoStatement(analyzeStatement("INSERT INTO users (id) VALUES (1)")),
-      ).toBe(true);
     });
 
     it("[AC-255-01j] UPDATE WHERE → NOT INFO (WARN candidate)", () => {
@@ -668,37 +574,8 @@ describe("sqlSafety.analyzeStatement — fallback and severity contracts", () =>
       ).toBe(false);
     });
 
-    it("[AC-255-01l] CREATE TABLE → INFO (sprint-394 — ddl-create / info)", () => {
-      // Pre-sprint-394: NOT INFO (WARN candidate via `ddl-other`).
-      // Sprint-394 (per contract): CREATE TABLE is non-destructive
-      // construction → `ddl-create` / info. The safe-mode UI may now
-      // skip its warn dialog for plain CREATE TABLE.
-      expect(
-        isInfoStatement(analyzeStatement("CREATE TABLE foo (id int)")),
-      ).toBe(true);
-    });
-
-    it("[AC-255-01m] ALTER TABLE … ADD COLUMN (additive) → NOT INFO (ddl-alter-add / warn)", () => {
-      // Sprint-394 keeps ALTER ADD as warn (the schema-modifying nature
-      // warrants the warn dialog). The `kind` is `ddl-alter-add`; the
-      // severity tier is unchanged.
-      expect(
-        isInfoStatement(
-          analyzeStatement("ALTER TABLE users ADD COLUMN nickname text"),
-        ),
-      ).toBe(false);
-    });
-
     it("[AC-255-01n] DROP TABLE → NOT INFO (STOP candidate, severity danger)", () => {
       expect(isInfoStatement(analyzeStatement("DROP TABLE users"))).toBe(false);
-    });
-
-    it("[AC-255-01o] empty input → INFO (Sprint 254 default)", () => {
-      // Sprint 254 — empty / unknown defaults to INFO (severity: "info").
-      // INFO heuristic returns true so the WARN dialog never mounts on
-      // an empty buffer; the upstream `if (!sql) return` already short-
-      // circuits the empty path so the change is defensive only.
-      expect(isInfoStatement(analyzeStatement(""))).toBe(true);
     });
   });
 });
