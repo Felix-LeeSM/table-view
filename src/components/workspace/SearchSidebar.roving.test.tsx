@@ -121,15 +121,18 @@ describe("SearchSidebar roving tabindex", () => {
     return screen.getByRole("tree", { name: /elasticsearch search catalog/i });
   }
 
-  it("puts exactly one treeitem in the tab order initially (first index)", async () => {
+  // #1716 — sections became collapsible header treeitems (depth-0), so the
+  // first tab stop is now the "Indexes" section header rather than the first
+  // index row.
+  it("puts exactly one treeitem in the tab order initially (first section header)", async () => {
     const tree = await renderTree();
     const items = within(tree).getAllByRole("treeitem");
     const tabbable = items.filter((el) => el.getAttribute("tabindex") === "0");
     expect(tabbable).toHaveLength(1);
-    expect(tabbable[0]).toHaveTextContent("idx-a");
+    expect(tabbable[0]).toHaveTextContent("Indexes");
   });
 
-  it("ArrowDown moves focus across rows, spanning sections", async () => {
+  it("ArrowDown moves focus across rows and section headers, spanning sections", async () => {
     const tree = await renderTree();
     const idxA = within(tree).getByRole("treeitem", { name: /idx-a/i });
     act(() => idxA.focus());
@@ -140,13 +143,19 @@ describe("SearchSidebar roving tabindex", () => {
       within(tree).getByRole("treeitem", { name: /idx-b/i }),
     ).toHaveFocus();
 
+    fireEvent.keyDown(tree, { key: "ArrowDown" }); // onto the Aliases header
+    await flushRaf();
+    expect(
+      within(tree).getByRole("treeitem", { name: /^aliases$/i }),
+    ).toHaveFocus();
+
     fireEvent.keyDown(tree, { key: "ArrowDown" }); // into the aliases section
     await flushRaf();
     expect(
       within(tree).getByRole("treeitem", { name: /alias-a/i }),
     ).toHaveFocus();
 
-    fireEvent.keyDown(tree, { key: "End" }); // last data stream
+    fireEvent.keyDown(tree, { key: "End" }); // last data stream row
     await flushRaf();
     expect(
       within(tree).getByRole("treeitem", { name: /stream-a/i }),
