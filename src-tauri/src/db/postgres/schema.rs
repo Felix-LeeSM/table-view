@@ -69,25 +69,45 @@ pub(crate) const LIST_EXTENSIONS_SQL: &str = "SELECT e.extname AS name,
   JOIN pg_catalog.pg_namespace n ON n.oid = e.extnamespace
  ORDER BY e.extname";
 
-/// #1229 — canonical SQL emitted by `PostgresAdapter::list_schemas`.
+/// #1709 (sibling of #1411) — canonical SQL emitted by
+/// `PostgresAdapter::list_schemas`.
 ///
-/// Excludes the three fixed system schemas AND the per-backend internal
-/// temp namespaces PostgreSQL materializes on `CREATE TEMP TABLE`
-/// (`pg_temp_<N>` / `pg_toast_temp_<N>`). Those `pg_namespace` rows persist
-/// after the owning session ends, so without the pattern filter they leak
-/// into the sidebar (user report 2026-07-03).
+/// Sourced from `pg_catalog.pg_namespace` (like psql `\dn` / the sibling
+/// [`LIST_TABLES_SQL`]), NOT `information_schema.schemata`.
+/// `information_schema.schemata` is a privilege-gated view whose row
+/// visibility depends on the connecting role's relationship to each schema,
+/// so the SCHEMAS panel rendered EMPTY for a role that is not the owner of
+/// an existing schema (e.g. `public` owned by another role) even though
+/// `SELECT * FROM <table>` still worked — the exact "public exists but the
+/// panel is blank" symptom. `pg_namespace` is the base catalog, and the
+/// explicit `has_schema_privilege(nspname, 'USAGE')` filter surfaces every
+/// schema the role can actually reach (ownership-independent), matching what
+/// psql `\dn` shows. This is the same class of bug and the same migration as
+/// `list_tables` (#1411, commit 30157fb6).
 ///
-/// The `_` in the LIKE pattern is a wildcard, so both patterns escape it
-/// (`ESCAPE '\'`, matching the [`LIST_TYPES_SQL`] convention) to match a
-/// literal underscore — this keeps the filter scoped to the temp namespaces
-/// and never over-blocks. PostgreSQL reserves the `pg_` prefix for system
-/// schemas so a user-defined `pg_*` schema cannot exist, but the escaped,
-/// temp-specific patterns (never a blanket `pg\_%`) are defensive regardless.
-pub(crate) const LIST_SCHEMAS_SQL: &str = "SELECT schema_name FROM information_schema.schemata \
-     WHERE schema_name NOT IN ('pg_catalog', 'information_schema', 'pg_toast') \
-       AND schema_name NOT LIKE 'pg\\_temp\\_%' ESCAPE '\\' \
-       AND schema_name NOT LIKE 'pg\\_toast\\_temp\\_%' ESCAPE '\\' \
-     ORDER BY schema_name";
+/// `nspname AS schema_name` preserves the column contract the positional
+/// row parser and the upstream `list_namespaces` command expect.
+///
+/// Exclusions carried over from the prior information_schema query so the
+/// visible set never regresses:
+/// - the three fixed system schemas (`pg_catalog` / `information_schema` /
+///   `pg_toast`) — all carry PUBLIC USAGE so the `has_schema_privilege`
+///   filter would otherwise leak them into the sidebar.
+/// - the per-backend internal temp namespaces PostgreSQL materializes on
+///   `CREATE TEMP TABLE` (`pg_temp_<N>` / `pg_toast_temp_<N>`, #1229 user
+///   report 2026-07-03). The owning session holds USAGE on its own temp
+///   namespace, so the privilege filter alone would surface it. The `_` in
+///   the LIKE pattern is a wildcard, so both patterns escape it (`ESCAPE
+///   '\'`, matching the [`LIST_TYPES_SQL`] convention) to match a literal
+///   underscore — scoped to temp namespaces, never a blanket `pg\_%`
+///   (which would wrongly hide a hypothetical user schema).
+pub(crate) const LIST_SCHEMAS_SQL: &str = "SELECT n.nspname AS schema_name \
+     FROM pg_catalog.pg_namespace n \
+     WHERE has_schema_privilege(n.nspname, 'USAGE') \
+       AND n.nspname NOT IN ('pg_catalog', 'information_schema', 'pg_toast') \
+       AND n.nspname NOT LIKE 'pg\\_temp\\_%' ESCAPE '\\' \
+       AND n.nspname NOT LIKE 'pg\\_toast\\_temp\\_%' ESCAPE '\\' \
+     ORDER BY n.nspname";
 
 /// PG parity (2026-07-07 user report) — canonical SQL for
 /// `PostgresAdapter::list_tables`.
@@ -1999,13 +2019,14 @@ mod tests {
             "fixed system-schema exclusions must remain"
         );
         // temp 패턴 두 개를 escaped underscore 로 제외 — `_` 가 LIKE
-        // 와일드카드라 `ESCAPE '\'` 로 리터럴 언더스코어 매칭.
+        // 와일드카드라 `ESCAPE '\'` 로 리터럴 언더스코어 매칭. #1709 이후
+        // 소스가 `pg_catalog.pg_namespace` 로 바뀌어 컬럼은 `n.nspname`.
         assert!(
-            LIST_SCHEMAS_SQL.contains("schema_name NOT LIKE 'pg\\_temp\\_%' ESCAPE '\\'"),
+            LIST_SCHEMAS_SQL.contains("n.nspname NOT LIKE 'pg\\_temp\\_%' ESCAPE '\\'"),
             "pg_temp_N namespaces must be filtered with an escaped LIKE"
         );
         assert!(
-            LIST_SCHEMAS_SQL.contains("schema_name NOT LIKE 'pg\\_toast\\_temp\\_%' ESCAPE '\\'"),
+            LIST_SCHEMAS_SQL.contains("n.nspname NOT LIKE 'pg\\_toast\\_temp\\_%' ESCAPE '\\'"),
             "pg_toast_temp_N namespaces must be filtered with an escaped LIKE"
         );
         // 과차단 금지: blanket `pg_%` 는 사용자 스키마(이론상 `pg_*`)까지
@@ -2013,6 +2034,49 @@ mod tests {
         assert!(
             !LIST_SCHEMAS_SQL.contains("LIKE 'pg\\_%'"),
             "must not blanket-exclude all pg_-prefixed schemas"
+        );
+    }
+
+    // ── #1709 (sibling of #1411) — list_schemas must be catalog-based ─────
+    //
+    // 작성 이유: PostgreSQL 연결에서 SCHEMAS 패널이 빈 채로 떴다(`public`
+    // 존재에도). 근본 원인은 `list_schemas` 가 `information_schema.schemata`
+    // (권한 종속 뷰)를 소스로 써서 스키마 노출이 그 뷰의 privilege 시맨틱에
+    // 묶인 것 — `list_tables`(#1411) 와 정확히 같은 클래스의 버그. psql `\dn`
+    // / 이 파일의 다른 list_* 처럼 `pg_catalog.pg_namespace` +
+    // `has_schema_privilege(nspname, 'USAGE')` 로 옮겨 소유 무관·USAGE 기준으로
+    // 나열한다. 실 비소유-role 회귀는 docker 통합 테스트
+    // (`schema_integration.rs::test_list_schemas_visible_without_ownership`)
+    // 가 가드하지만 docker 없는 CI/로컬에선 silent-skip 되므로, 소스 카탈로그를
+    // byte-level 로 고정하는 docker-free 가드를 여기 둔다.
+    #[test]
+    fn list_schemas_sql_is_catalog_based_and_privilege_independent() {
+        // 카탈로그 기반이어야 한다 — pg_namespace.
+        assert!(
+            LIST_SCHEMAS_SQL.contains("pg_catalog.pg_namespace n"),
+            "list_schemas must read pg_catalog.pg_namespace (privilege-independent source), got: {LIST_SCHEMAS_SQL}"
+        );
+        // USAGE 필터는 psql `\dn` 패턴 — 접속 role 이 USAGE 가진 스키마
+        // (소유 무관) 를 나열한다.
+        assert!(
+            LIST_SCHEMAS_SQL.contains("has_schema_privilege(n.nspname, 'USAGE')"),
+            "must filter by has_schema_privilege(USAGE) (psql \\dn parity), got: {LIST_SCHEMAS_SQL}"
+        );
+        // 반환 컬럼 계약 보존 — 상위 파서는 위치 기반이지만 `schema_name`
+        // alias 로 계약을 명시 유지한다.
+        assert!(
+            LIST_SCHEMAS_SQL.contains("n.nspname AS schema_name"),
+            "must alias nspname AS schema_name to preserve the column contract"
+        );
+        // 권한 종속 뷰를 절대 소스로 쓰지 않는다 — 버그의 근본 원인.
+        assert!(
+            !LIST_SCHEMAS_SQL.contains("information_schema.schemata"),
+            "must NOT source information_schema.schemata (privilege-gated), got: {LIST_SCHEMAS_SQL}"
+        );
+        // ORDER BY 유지 — 사이드바 렌더 순서 불변.
+        assert!(
+            LIST_SCHEMAS_SQL.contains("ORDER BY n.nspname"),
+            "must keep alphabetical ORDER BY the schema name"
         );
     }
 
