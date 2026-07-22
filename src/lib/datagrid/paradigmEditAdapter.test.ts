@@ -461,6 +461,44 @@ describe("documentEditAdapter.preparePreview + execute", () => {
     }
   });
 
+  it("forwards rawDocuments so an array-element delete becomes a $set splice (#1704)", () => {
+    // Reason: #1704 — locks the wiring from `PreviewInput.rawDocuments` into
+    // the MQL generator. Without the forward, the delete falls back to a
+    // positional `$unset` (a `null` hole); with it, the generator reads the
+    // real array and re-emits the spliced whole array. (2026-07-22)
+    const arrData: TableData = {
+      ...docData,
+      columns: [
+        docData.columns[0]!,
+        { ...docData.columns[1]!, name: "tags", data_type: "array" },
+      ],
+      rows: [["507f1f77bcf86cd799439011", "[3 items]"]],
+    };
+    const adapter = documentEditAdapter({
+      connectionId: "conn-mongo",
+      history,
+    });
+    const { session } = adapter.preparePreview({
+      data: arrData,
+      schema: "mydb",
+      table: "users",
+      page: 1,
+      pendingEdits: new Map([["0-1:[1]", "__op__:unset"]]),
+      pendingNewRows: [],
+      pendingDeletedRowKeys: new Set(),
+      rawDocuments: [
+        { _id: { $oid: "507f1f77bcf86cd799439011" }, tags: ["a", "b", "c"] },
+      ],
+    });
+    if (!session || session.kind !== "document") {
+      throw new Error("session must be a document preview");
+    }
+    expect(session.mqlPreview.commands[0]).toMatchObject({
+      kind: "updateOne",
+      patch: { $set: { tags: ["a", "c"] } },
+    });
+  });
+
   it("returns session: null when no commands emerged", () => {
     const adapter = documentEditAdapter({
       connectionId: "conn-mongo",

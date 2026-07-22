@@ -242,6 +242,9 @@ export default function DocumentDataGrid({
     page,
     fetchData,
     canEditRows: canEditDocuments,
+    // Issue #1704 — the generator splices array-element deletes from the real
+    // document (index-aligned with `data.rows`) rather than nulling a slot.
+    rawDocuments: queryResult?.rawDocuments,
   });
 
   const totalPages = data

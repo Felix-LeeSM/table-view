@@ -12,6 +12,13 @@ export interface UseDataGridEditParams {
   fetchData: () => void;
   paradigm?: "rdb" | "document" | "search" | "kv";
   canEditRows?: boolean;
+  /**
+   * Issue #1704 — the document paradigm's original (non-sentinelised) documents
+   * for the current page, index-aligned with `data.rows`. The MQL generator
+   * needs the real array shape to splice an array-element delete instead of
+   * emitting a positional `$unset` (a `null` hole). RDB grids omit this.
+   */
+  rawDocuments?: ReadonlyArray<Record<string, unknown>>;
 }
 
 export interface DataGridEditState {
