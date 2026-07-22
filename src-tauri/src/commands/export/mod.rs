@@ -25,6 +25,7 @@ mod dump_writers;
 mod grid_writers;
 mod mssql_dump;
 mod mysql_dump;
+mod oracle_dump;
 // Issue #1443 — `pub` so `commands::export::session::export_grid_*` resolve
 // for `generate_handler!` (the `#[tauri::command]` hidden `__cmd__*` macro
 // items don't follow a `pub use` re-export).
@@ -34,6 +35,7 @@ use dump_writers::{pg_value_to_sql_literal, qualified_pg_table, quote_pg_identif
 use grid_writers::{require_sql_source_table, GridStreamState};
 use mssql_dump::{mssql_value_to_sql_literal, qualified_mssql_table, quote_mssql_identifier};
 use mysql_dump::{mysql_value_to_sql_literal, qualified_mysql_table, quote_mysql_identifier};
+use oracle_dump::{oracle_value_to_sql_literal, qualified_oracle_table, quote_oracle_identifier};
 // Issue #1640 — CSV import commit reuses the same identifier/string-literal
 // quoting as the SQL INSERT export writer so the two never drift.
 pub(crate) use grid_writers::{quote_sql_identifier, quote_sql_string};
@@ -604,6 +606,11 @@ async fn stream_schema_dump(
                     qualified_mssql_table,
                     quote_mssql_identifier,
                     mssql_value_to_sql_literal,
+                ),
+                DatabaseType::Oracle => (
+                    qualified_oracle_table,
+                    quote_oracle_identifier,
+                    oracle_value_to_sql_literal,
                 ),
                 _ => (
                     qualified_pg_table,

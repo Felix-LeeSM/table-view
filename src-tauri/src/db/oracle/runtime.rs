@@ -118,6 +118,20 @@ impl OracleAdapter {
             .await
     }
 
+    /// Issue #1674 — server-side row streaming for Oracle. RED stub; GREEN
+    /// implements the cursor-based batch loop and un-ignores the contract test.
+    pub async fn stream_table_rows(
+        &self,
+        _schema: &str,
+        _table: &str,
+        _batch_size: u32,
+        _column_names: &[String],
+        _sender: tokio::sync::mpsc::Sender<Vec<Vec<serde_json::Value>>>,
+        _cancel: Option<&CancellationToken>,
+    ) -> Result<u64, AppError> {
+        Ok(0)
+    }
+
     async fn execute_transactional_batch(
         &self,
         statements: &[String],
@@ -631,6 +645,46 @@ mod tests {
             .expect_err("cancelled query should fail before requiring a connection");
 
         assert!(matches!(err, AppError::Database(message) if message == "Query cancelled"));
+    }
+
+    // Issue #1674 — batch_size / column_names / identifier validation must reject
+    // before any connection lookup, mirroring the pg/mysql/sqlite/mssql siblings.
+    // RED against the stub (returns Ok(0)); GREEN un-ignores.
+    #[tokio::test]
+    #[ignore = "RED #1674 — GREEN implements streaming + un-ignores"]
+    async fn stream_table_rows_validation_short_circuits_before_connection_lookup() {
+        let adapter = OracleAdapter::new();
+        let cols = vec!["ID".to_string()];
+
+        let (tx, _rx) = tokio::sync::mpsc::channel(1);
+        let err = adapter
+            .stream_table_rows("HR", "USERS", 0, &cols, tx, None)
+            .await
+            .unwrap_err();
+        assert!(matches!(err, AppError::Validation(msg) if msg.contains("batch_size")));
+
+        let (tx, _rx) = tokio::sync::mpsc::channel(1);
+        let err = adapter
+            .stream_table_rows("HR", "USERS", 100, &[], tx, None)
+            .await
+            .unwrap_err();
+        assert!(matches!(err, AppError::Validation(msg) if msg.contains("column_names")));
+
+        // Identifier validation also fires before connection lookup.
+        let (tx, _rx) = tokio::sync::mpsc::channel(1);
+        let err = adapter
+            .stream_table_rows("1bad", "USERS", 100, &cols, tx, None)
+            .await
+            .unwrap_err();
+        assert!(matches!(err, AppError::Validation(_)));
+
+        // A valid request with no open connection reaches the connection gate.
+        let (tx, _rx) = tokio::sync::mpsc::channel(1);
+        let err = adapter
+            .stream_table_rows("HR", "USERS", 100, &cols, tx, None)
+            .await
+            .unwrap_err();
+        assert!(matches!(err, AppError::Connection(msg) if msg.contains("not open")));
     }
 
     #[tokio::test]
