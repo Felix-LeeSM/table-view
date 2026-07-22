@@ -75,6 +75,15 @@ export interface MqlGenerateInput {
    */
   editRowSnapshots?: ReadonlyMap<string, ReadonlyArray<unknown>>;
   deletedRowSnapshots?: ReadonlyMap<string, ReadonlyArray<unknown>>;
+  /**
+   * Issue #1704 — the original (non-sentinelised) documents for the current
+   * page, index-aligned with `rows`. Only the document paradigm supplies this;
+   * the generator needs the real array value to turn an array-element delete
+   * (`__op__:unset` on `tags[0]`) into a whole-array `$set` splice instead of a
+   * positional `$unset` (which MongoDB resolves to a `null` hole). Absent →
+   * the generator keeps the legacy `$unset` behaviour.
+   */
+  rawDocuments?: ReadonlyArray<Record<string, unknown>>;
 }
 
 /** A single MQL command ready to dispatch to the Tauri wrappers. */
