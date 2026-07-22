@@ -421,6 +421,40 @@ describe("generateMigrationDDL", () => {
     expect(sql).not.toContain("`dbo`.`orders`");
   });
 
+  // [#1674] Oracle uses ANSI `"double-quote"` identifier quoting with
+  // `"schema"."table"` qualification (like PG); embedded `"` is doubled. Oracle
+  // types pass through verbatim from the catalog. No MySQL backticks may leak.
+  it("[#1674] Oracle uses double-quote quoting", () => {
+    const sql = generateMigrationDDL({
+      dialect: "oracle",
+      schema: "HR",
+      tables: [
+        table("ORDERS", [
+          col({
+            name: "ID",
+            data_type: "NUMBER",
+            nullable: false,
+            is_primary_key: true,
+          }),
+          col({
+            name: "CUSTOMER NAME",
+            data_type: "VARCHAR2(255)",
+            nullable: false,
+          }),
+        ]),
+        table('WE"IRD', [col({ name: "OK", data_type: "NUMBER" })]),
+      ],
+      generatedAt: FIXED_DATE,
+    });
+    expect(sql).toContain("-- dialect: oracle");
+    expect(sql).toContain('CREATE TABLE "HR"."ORDERS"');
+    expect(sql).toContain('"ID" NUMBER NOT NULL PRIMARY KEY');
+    expect(sql).toContain('"CUSTOMER NAME" VARCHAR2(255) NOT NULL');
+    // embedded `"` doubled.
+    expect(sql).toContain('"WE""IRD"');
+    expect(sql).not.toContain("`HR`.`ORDERS`");
+  });
+
   // [AC-192-01-8] embedded quote 가 들어간 identifier 도 안전하게 escape.
   // " 는 "" 로, ` 는 `` 로. SQL injection 회귀 방지 가드.
   // date 2026-05-02

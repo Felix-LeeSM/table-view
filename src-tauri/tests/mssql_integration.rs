@@ -15,7 +15,7 @@
 mod common;
 
 use table_view_lib::db::mssql::MssqlAdapter;
-use table_view_lib::db::{DuckdbAdapter, OracleAdapter, RdbAdapter};
+use table_view_lib::db::{DuckdbAdapter, RdbAdapter};
 use table_view_lib::error::AppError;
 use table_view_lib::models::{ColumnDefinition, CreateTableRequest, DropTableRequest};
 
@@ -318,20 +318,14 @@ async fn test_mssql_stream_table_rows_aborts_when_receiver_drops() {
     adapter.drop_table(&drop_req(&table)).await.ok();
 }
 
-/// [AC-1642-05] Non-promoted RDB engines keep the trait-default `Unsupported`
-/// `stream_table_rows` — no docker required. Guards against a stray override
-/// silently opening DML/Full dumps for oracle/duckdb.
+/// [AC-1642-05] DuckDB keeps the trait-default `Unsupported` `stream_table_rows`
+/// — no docker required. Guards against a stray override silently opening
+/// DML/Full dumps for the one remaining non-promoted RDB engine. Oracle used to
+/// share this guard but is now a promoted streaming engine (#1674); its boundary
+/// lives in `tests/oracle_integration.rs`.
 #[tokio::test]
-async fn test_stream_table_rows_unsupported_for_oracle_and_duckdb() {
+async fn test_stream_table_rows_unsupported_for_duckdb() {
     let cols = vec!["id".to_string()];
-
-    let oracle = OracleAdapter::new();
-    let (tx, _rx) = tokio::sync::mpsc::channel(1);
-    let err = oracle
-        .stream_table_rows("s", "t", 100, &cols, tx, None)
-        .await
-        .expect_err("oracle stream must be unsupported");
-    assert!(matches!(err, AppError::Unsupported(_)), "oracle: {err:?}");
 
     let duckdb = DuckdbAdapter::new();
     let (tx, _rx) = tokio::sync::mpsc::channel(1);

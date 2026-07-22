@@ -118,6 +118,139 @@ impl OracleAdapter {
             .await
     }
 
+    /// Issue #1674 — server-side row streaming for Oracle, the sibling of the
+    /// PG/MySQL/SQLite/MSSQL `stream_table_rows`. Oracle's driver exposes a
+    /// server-side cursor natively (`connection.query` returns the first slice
+    /// plus a `cursor_id`/`has_more_rows`, and `fetch_more` pulls the next
+    /// slice), so this is the exact analogue of PG's `DECLARE … FETCH FORWARD`:
+    /// no OFFSET/ROWNUM re-scan pagination, one consistent read. Rows are
+    /// batched into the mpsc `sender`. Same contract as the siblings:
+    /// `batch_size` / `column_names` validation up front, cooperative
+    /// cancellation, and a receiver-drop abort. Returns the total rows sent.
+    pub async fn stream_table_rows(
+        &self,
+        schema: &str,
+        table: &str,
+        batch_size: u32,
+        column_names: &[String],
+        sender: tokio::sync::mpsc::Sender<Vec<Vec<serde_json::Value>>>,
+        cancel: Option<&CancellationToken>,
+    ) -> Result<u64, AppError> {
+        if batch_size == 0 {
+            return Err(AppError::Validation(
+                "stream_table_rows: batch_size must be > 0".into(),
+            ));
+        }
+        if column_names.is_empty() {
+            return Err(AppError::Validation(
+                "stream_table_rows: column_names must not be empty".into(),
+            ));
+        }
+        // Defang schema/table before they land in the un-parameterizable SELECT
+        // (identifiers cannot bind), matching the write path's contract.
+        super::ddl::validate_identifier(schema, "Schema name")?;
+        super::ddl::validate_identifier(table, "Table name")?;
+
+        let config = self.connected_config().await?;
+        let timeout_secs = connection_timeout_secs(&config);
+        let qualified = super::ddl::qualified_table(schema, table);
+        // Project the requested columns in caller order so the dump INSERT
+        // column list lines up with the values.
+        let select_list = column_names
+            .iter()
+            .map(|name| super::ddl::quote_ident(name))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let select_sql = format!("SELECT {select_list} FROM {qualified}");
+
+        let work = async {
+            let connection = OracleAdapter::open_connection(&config, timeout_secs).await?;
+            let result = Self::drain_stream_into_sender(
+                &connection,
+                &select_sql,
+                batch_size,
+                &sender,
+                cancel,
+            )
+            .await;
+            // Always close the borrowed connection; surface the stream error
+            // first if both fail (mirrors `execute_query`).
+            let close_result = connection.close().await.map_err(|err| {
+                oracle_query_error("Oracle row stream connection close failed", err)
+            });
+            match (result, close_result) {
+                (Ok(total), Ok(())) => Ok(total),
+                (Ok(_), Err(error)) => Err(error),
+                (Err(error), _) => Err(error),
+            }
+        };
+
+        cancellable(work, cancel).await
+    }
+
+    /// Pull the cursor slice-by-slice (`query` → `fetch_more`), batching into
+    /// `sender` at `batch_size` boundaries with a tail flush. Split out so the
+    /// connection close in `stream_table_rows` runs regardless of the outcome.
+    async fn drain_stream_into_sender(
+        connection: &oracle_rs::Connection,
+        select_sql: &str,
+        batch_size: u32,
+        sender: &tokio::sync::mpsc::Sender<Vec<Vec<serde_json::Value>>>,
+        cancel: Option<&CancellationToken>,
+    ) -> Result<u64, AppError> {
+        let mut result = connection
+            .query(select_sql, &[])
+            .await
+            .map_err(|err| oracle_query_error("Oracle row stream failed", err))?;
+        let columns = result.columns.clone();
+        let mut total: u64 = 0;
+        let mut batch: Vec<Vec<serde_json::Value>> = Vec::with_capacity(batch_size as usize);
+
+        loop {
+            if cancel.is_some_and(CancellationToken::is_cancelled) {
+                return Err(AppError::Database("Operation cancelled".into()));
+            }
+            for row in &result.rows {
+                let values: Vec<serde_json::Value> =
+                    row.values().iter().map(oracle_value_to_json).collect();
+                batch.push(values);
+                if batch.len() as u32 >= batch_size {
+                    let count = batch.len() as u64;
+                    let send_batch = std::mem::take(&mut batch);
+                    if sender.send(send_batch).await.is_err() {
+                        return Err(AppError::Database(
+                            "Receiver dropped — export aborted".into(),
+                        ));
+                    }
+                    total += count;
+                }
+            }
+            if !result.has_more_rows {
+                break;
+            }
+            if result.cursor_id == 0 {
+                return Err(AppError::Unsupported(
+                    "Oracle row stream returned a partial cursor without a cursor id".into(),
+                ));
+            }
+            result = connection
+                .fetch_more(result.cursor_id, &columns, batch_size)
+                .await
+                .map_err(|err| oracle_query_error("Oracle row stream fetch failed", err))?;
+        }
+        // tail flush — the final sub-`batch_size` remainder.
+        if !batch.is_empty() {
+            let count = batch.len() as u64;
+            if sender.send(batch).await.is_err() {
+                return Err(AppError::Database(
+                    "Receiver dropped — export aborted".into(),
+                ));
+            }
+            total += count;
+        }
+        Ok(total)
+    }
+
     async fn execute_transactional_batch(
         &self,
         statements: &[String],
@@ -631,6 +764,44 @@ mod tests {
             .expect_err("cancelled query should fail before requiring a connection");
 
         assert!(matches!(err, AppError::Database(message) if message == "Query cancelled"));
+    }
+
+    // Issue #1674 — batch_size / column_names / identifier validation must reject
+    // before any connection lookup, mirroring the pg/mysql/sqlite/mssql siblings.
+    #[tokio::test]
+    async fn stream_table_rows_validation_short_circuits_before_connection_lookup() {
+        let adapter = OracleAdapter::new();
+        let cols = vec!["ID".to_string()];
+
+        let (tx, _rx) = tokio::sync::mpsc::channel(1);
+        let err = adapter
+            .stream_table_rows("HR", "USERS", 0, &cols, tx, None)
+            .await
+            .unwrap_err();
+        assert!(matches!(err, AppError::Validation(msg) if msg.contains("batch_size")));
+
+        let (tx, _rx) = tokio::sync::mpsc::channel(1);
+        let err = adapter
+            .stream_table_rows("HR", "USERS", 100, &[], tx, None)
+            .await
+            .unwrap_err();
+        assert!(matches!(err, AppError::Validation(msg) if msg.contains("column_names")));
+
+        // Identifier validation also fires before connection lookup.
+        let (tx, _rx) = tokio::sync::mpsc::channel(1);
+        let err = adapter
+            .stream_table_rows("1bad", "USERS", 100, &cols, tx, None)
+            .await
+            .unwrap_err();
+        assert!(matches!(err, AppError::Validation(_)));
+
+        // A valid request with no open connection reaches the connection gate.
+        let (tx, _rx) = tokio::sync::mpsc::channel(1);
+        let err = adapter
+            .stream_table_rows("HR", "USERS", 100, &cols, tx, None)
+            .await
+            .unwrap_err();
+        assert!(matches!(err, AppError::Connection(msg) if msg.contains("not open")));
     }
 
     #[tokio::test]

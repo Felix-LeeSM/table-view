@@ -533,6 +533,7 @@ jobs:
             --test mariadb_ddl_preview \
             --test mssql_connection_routing \
             --test mssql_integration \
+            --test oracle_integration \
             --test redis_integration \
             --summary-only \
             --fail-under-lines 80 \

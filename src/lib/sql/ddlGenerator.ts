@@ -17,7 +17,8 @@ export type DdlDialect =
   | "mysql"
   | "mariadb"
   | "sqlite"
-  | "mssql";
+  | "mssql"
+  | "oracle";
 
 export interface DdlExportTable {
   name: string;

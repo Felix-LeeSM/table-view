@@ -14,6 +14,10 @@ use super::mssql_dump::{
 use super::mysql_dump::{
     mysql_value_to_sql_literal, qualified_mysql_table, quote_mysql_identifier, quote_mysql_string,
 };
+use super::oracle_dump::{
+    oracle_value_to_sql_literal, qualified_oracle_table, quote_oracle_identifier,
+    quote_oracle_string,
+};
 use super::*;
 use crate::models::ColumnCategory;
 use serde_json::json;
@@ -899,6 +903,128 @@ fn test_mssql_binary_category_emits_unquoted_binary_literal_1677() {
     );
 }
 
+// Issue #1674 — the Oracle `oracle_dump` writer sibling. Same contract as the
+// pure-function pg/mysql/mssql tests above: ANSI double-quote identifiers,
+// single-quote string escape (backslash-neutral, like T-SQL), bool → `1`/`0`
+// NUMBER (Oracle has no pre-23c BOOLEAN column type), `hextoraw('…')` binary
+// literals, and no `::jsonb` cast. The live cursor round-trip lives in
+// `tests/oracle_integration.rs`.
+//
+// RED #1674: these fail against the stub writer; GREEN un-ignores them.
+
+// [AC-1674-02] Identifier: ANSI double-quoted, embedded `"` doubled.
+#[test]
+fn test_quote_oracle_identifier_doubles_embedded_quote() {
+    assert_eq!(quote_oracle_identifier("plain"), "\"plain\"");
+    assert_eq!(quote_oracle_identifier(r#"od"col"#), r#""od""col""#);
+    // Double-quote dialect leaves an embedded backtick / bracket untouched.
+    assert_eq!(quote_oracle_identifier("a`b"), "\"a`b\"");
+    assert_eq!(quote_oracle_identifier("a]b"), "\"a]b\"");
+}
+
+// [AC-1674-02] Qualified: `"schema"."table"`, both double-quote-escaped.
+#[test]
+fn test_qualified_oracle_table_builds_double_quote_dot_form() {
+    assert_eq!(qualified_oracle_table("HR", "USERS"), "\"HR\".\"USERS\"");
+    assert_eq!(
+        qualified_oracle_table(r#"o"d"#, r#"t"b"#),
+        r#""o""d"."t""b""#
+    );
+}
+
+// [AC-1674-02] String: single-quoted with only the single quote doubled;
+// backslash is a literal (Oracle, like T-SQL, is not backslash-aware).
+#[test]
+fn test_quote_oracle_string_doubles_quote_keeps_backslash() {
+    assert_eq!(quote_oracle_string("O'Reilly"), "'O''Reilly'");
+    assert_eq!(quote_oracle_string(""), "''");
+    assert_eq!(quote_oracle_string(r"a\b"), r"'a\b'");
+    assert_eq!(quote_oracle_string(r"c:\'x"), r"'c:\''x'");
+    assert_eq!(quote_oracle_string("a\nb"), "'a\nb'");
+    // AL32UTF8 database charset — non-ASCII rides a plain literal.
+    assert_eq!(quote_oracle_string("안녕"), "'안녕'");
+    assert_eq!(quote_oracle_string("café☕"), "'café☕'");
+}
+
+// [AC-1674-02] Scalars: bool → `1`/`0` NUMBER (no pre-23c BOOLEAN column type).
+#[test]
+fn test_oracle_value_to_sql_literal_scalars() {
+    assert_eq!(
+        oracle_value_to_sql_literal(&JsonValue::Null, ColumnCategory::Unknown),
+        "NULL"
+    );
+    assert_eq!(
+        oracle_value_to_sql_literal(&json!(true), ColumnCategory::Bool),
+        "1"
+    );
+    assert_eq!(
+        oracle_value_to_sql_literal(&json!(false), ColumnCategory::Bool),
+        "0"
+    );
+    assert_eq!(
+        oracle_value_to_sql_literal(&json!(42), ColumnCategory::Int),
+        "42"
+    );
+    assert_eq!(
+        oracle_value_to_sql_literal(&json!(-7), ColumnCategory::Int),
+        "-7"
+    );
+    assert_eq!(
+        oracle_value_to_sql_literal(&json!(2.5), ColumnCategory::Float),
+        "2.5"
+    );
+    assert_eq!(
+        oracle_value_to_sql_literal(&json!("O'Reilly"), ColumnCategory::Text),
+        "'O''Reilly'"
+    );
+    assert_eq!(
+        oracle_value_to_sql_literal(&json!("안녕"), ColumnCategory::Text),
+        "'안녕'"
+    );
+}
+
+// [AC-1674-02] Array / Object → plain quoted JSON string, no PG `::jsonb` cast
+// (Oracle implicitly coerces a string literal into a JSON column).
+#[test]
+fn test_oracle_value_to_sql_literal_json_has_no_cast() {
+    let obj = oracle_value_to_sql_literal(&json!({"k": "v"}), ColumnCategory::Object);
+    assert_eq!(obj, "'{\"k\":\"v\"}'");
+    assert!(!obj.contains("::jsonb"), "lit: {}", obj);
+    let arr = oracle_value_to_sql_literal(&json!([1, 2, "a"]), ColumnCategory::Object);
+    assert_eq!(arr, "'[1,2,\"a\"]'");
+    // A backslash inside the JSON stays single (Oracle literal).
+    let esc = oracle_value_to_sql_literal(&json!({"p": "c:\\x"}), ColumnCategory::Object);
+    assert_eq!(esc, r#"'{"p":"c:\\x"}'"#);
+}
+
+// Issue #1674 — a Binary-category cell (`"0x<hex>"` from `cell_to_json`) MUST
+// become a `HEXTORAW('<hex>')` binary literal, not a quoted `'0x…'` string that
+// would restore the hex TEXT rather than the raw bytes. Oracle has no `0x`/`X''`
+// literal syntax, so the `HEXTORAW` function is the vendor form.
+#[test]
+fn test_oracle_binary_category_emits_hextoraw_literal() {
+    assert_eq!(
+        oracle_value_to_sql_literal(&json!("0x0aff"), ColumnCategory::Binary),
+        "hextoraw('0aff')"
+    );
+    // Empty blob: `cell_to_json` yields `"0x"` → `HEXTORAW('')`.
+    assert_eq!(
+        oracle_value_to_sql_literal(&json!("0x"), ColumnCategory::Binary),
+        "hextoraw('')"
+    );
+    // A NULL binary cell stays NULL (never a bogus `HEXTORAW`).
+    assert_eq!(
+        oracle_value_to_sql_literal(&JsonValue::Null, ColumnCategory::Binary),
+        "NULL"
+    );
+    // False-positive guard: a TEXT column whose value merely starts with `0x`
+    // is NOT binary — it stays a quoted string. Type-driven, not a heuristic.
+    assert_eq!(
+        oracle_value_to_sql_literal(&json!("0xNotBinary"), ColumnCategory::Text),
+        "'0xNotBinary'"
+    );
+}
+
 // ── run_schema_dump direct tests (Sprint 237 P5) ─────────────────────
 //
 // 작성 이유 (2026-05-08): export/mod.rs 의 `run_schema_dump` body 가
@@ -1458,6 +1584,36 @@ async fn run_schema_dump_writes_insert_lines_for_streamed_rows() {
         !mssql_body.contains(r#""dbo"."users""#) && !mssql_body.contains("`dbo`.`users`"),
         "mssql body leaked non-bracket identifier: {mssql_body}"
     );
+
+    // [AC-1674-03] Same streamed rows, `dialect = oracle` → ANSI double-quote
+    // identifiers (like PG) but the Oracle value dialect. Guards the fn-pointer
+    // dispatch grew an `oracle` arm.
+    let oracle_path = dir.path().join("inserts_oracle.sql");
+    let oracle_summary = super::run_schema_dump(
+        &state,
+        "rdb-conn",
+        &oracle_path,
+        "",
+        "",
+        &[dump_table("HR", "USERS", vec!["id", "name"])],
+        &dump_opts_dialect(ExportInclude::Dml, 2, DatabaseType::Oracle),
+        None,
+    )
+    .await
+    .unwrap();
+    assert_eq!(oracle_summary.rows_written, 3);
+    let oracle_body = std::fs::read_to_string(&oracle_path).unwrap();
+    assert!(
+        oracle_body.contains(r#"INSERT INTO "HR"."USERS" ("id", "name") VALUES (1, 'alice');"#),
+        "oracle body: {oracle_body}"
+    );
+    assert!(oracle_body.contains("VALUES (NULL, 'carol');"));
+    assert!(oracle_body.contains(r#"Data: "HR"."USERS""#));
+    // MySQL backticks must not leak into the Oracle dump.
+    assert!(
+        !oracle_body.contains("`HR`.`USERS`"),
+        "oracle body leaked MySQL backtick identifier: {oracle_body}"
+    );
 }
 
 // ── _inner dispatchers (Sprint 237 P5, 2026-05-08) ─────────────────
@@ -1822,4 +1978,9 @@ fn test_export_schema_dump_options_dialect_default_and_parse() {
     let mssql: ExportSchemaDumpOptions =
         serde_json::from_str(r#"{"include":"dml","batchSize":50,"dialect":"mssql"}"#).unwrap();
     assert!(matches!(mssql.dialect, DatabaseType::Mssql));
+
+    // #1674 — `"oracle"` steers the Oracle double-quote INSERT writer.
+    let oracle: ExportSchemaDumpOptions =
+        serde_json::from_str(r#"{"include":"dml","batchSize":50,"dialect":"oracle"}"#).unwrap();
+    assert!(matches!(oracle.dialect, DatabaseType::Oracle));
 }

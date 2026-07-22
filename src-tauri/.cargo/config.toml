@@ -9,11 +9,14 @@
 #   cargo mongo-test              — Mongo 통합 테스트
 #   cargo mysql-test              — MySQL 통합 테스트 (Sprint 296)
 #   cargo mssql-test              — SQL Server 통합 테스트 (#1642)
-#   cargo db-test                 — PG + Mongo + MySQL + MSSQL 전부
+#   cargo oracle-test             — Oracle 통합 테스트 (#1674; amd64 전용 이미지)
+#   cargo db-test                 — PG + Mongo + MySQL + MSSQL + Oracle 전부
 #   PGHOST=... cargo pg-test      — 외부 PG 재사용
 #   MSSQL_HOST=... cargo mssql-test — 외부 SQL Server 재사용
+#   ORACLE_HOST=... cargo oracle-test — 외부 Oracle 재사용 (arm 은 이미지 없음)
 pg-test = "test --test query_integration --test schema_integration --test value_search_integration --test fixture_loading"
 mongo-test = "test --test mongo_integration"
 mysql-test = "test --test mysql_integration"
 mssql-test = "test --test mssql_integration"
-db-test = "test --test query_integration --test schema_integration --test value_search_integration --test fixture_loading --test mongo_integration --test mysql_integration --test mssql_integration"
+oracle-test = "test --test oracle_integration"
+db-test = "test --test query_integration --test schema_integration --test value_search_integration --test fixture_loading --test mongo_integration --test mysql_integration --test mssql_integration --test oracle_integration"
