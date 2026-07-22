@@ -128,6 +128,30 @@ describe("KvKeyDetailPanel", () => {
     expect(screen.getByText("persistent")).toBeInTheDocument();
   });
 
+  // Issue #1718 (Stage 1, Part of #1717) — a KV key tab carries
+  // `subView: "structure"`, so the global soft-refresh (Cmd+R) broadcasts
+  // `refresh-structure`. The detail panel must re-read the key value on that
+  // event; before this change Cmd+R on a Redis key was a no-op.
+  it("[#1718] re-reads the key value on a refresh-structure event", async () => {
+    invokeMock.mockResolvedValue(hashEnvelope());
+
+    render(
+      <KvKeyDetailPanel connectionId="redis-1" database={0} keyName="user:1" />,
+    );
+
+    await screen.findByRole("table", { name: /user:1 hash entries/i });
+    const kvCalls = () =>
+      invokeMock.mock.calls.filter(([command]) => command === "get_kv_value")
+        .length;
+    const before = kvCalls();
+
+    act(() => {
+      window.dispatchEvent(new CustomEvent("refresh-structure"));
+    });
+
+    await waitFor(() => expect(kvCalls()).toBe(before + 1));
+  });
+
   // Reason: stream keys route to the bounded stream reader table, not the raw
   // <pre> body.
   it("renders the stream reader for a stream key", async () => {

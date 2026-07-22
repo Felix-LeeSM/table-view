@@ -320,6 +320,30 @@ describe("SearchIndexDetailPanel", () => {
     expect(commandCount("get_search_index_field_stats")).toBe(0);
   });
 
+  // Issue #1718 (Stage 1, Part of #1717) — a search index tab carries
+  // `subView: "structure"`, so the global soft-refresh (Cmd+R) broadcasts
+  // `refresh-structure`. The detail panel must reload its catalog summary on
+  // that event; before this change it ignored refresh entirely.
+  it("[#1718] reloads the catalog on a refresh-structure event", async () => {
+    render(
+      <SearchIndexDetailPanel
+        connectionId="search-1"
+        index="logs-elastic-2026.05.24"
+      />,
+    );
+
+    await screen.findByText(/Elasticsearch fixture/);
+    expect(commandCount("list_search_catalog_summary")).toBe(1);
+
+    act(() => {
+      window.dispatchEvent(new CustomEvent("refresh-structure"));
+    });
+
+    await waitFor(() =>
+      expect(commandCount("list_search_catalog_summary")).toBe(2),
+    );
+  });
+
   // a11y: WAI-ARIA tabpanel wiring — active section tab ↔ its content panel.
   it("wires the active section tab to its content panel", async () => {
     render(
