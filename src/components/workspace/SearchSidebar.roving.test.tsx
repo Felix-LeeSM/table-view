@@ -207,4 +207,32 @@ describe("SearchSidebar roving tabindex", () => {
     fireEvent.click(idxB);
     expect(idxB).toHaveAttribute("aria-selected", "true");
   });
+
+  // Reason: user OpenSearch-sidebar feedback #1716 — the index/alias/data-stream
+  // sections must be collapsible. The "정합 주의" is roving correctness: a
+  // collapsed section's rows are hidden, so they MUST leave the roving order or
+  // Arrow keys would land on invisible rows. (2026-07-22)
+  it("collapses a section: rows hidden and dropped from the roving order (#1716)", async () => {
+    const tree = await renderTree();
+    const header = within(tree).getByRole("treeitem", { name: /^indexes$/i });
+    expect(header).toHaveAttribute("aria-expanded", "true");
+    expect(
+      within(tree).queryByRole("treeitem", { name: /idx-a/i }),
+    ).not.toBeNull();
+
+    fireEvent.click(header); // collapse the Indexes section
+
+    expect(header).toHaveAttribute("aria-expanded", "false");
+    expect(within(tree).queryByRole("treeitem", { name: /idx-a/i })).toBeNull();
+    expect(within(tree).queryByRole("treeitem", { name: /idx-b/i })).toBeNull();
+
+    // Roving skips the collapsed section: ArrowDown from the Indexes header
+    // lands on the next visible section header, never a hidden index row.
+    act(() => header.focus());
+    fireEvent.keyDown(tree, { key: "ArrowDown" });
+    await flushRaf();
+    expect(
+      within(tree).getByRole("treeitem", { name: /^aliases$/i }),
+    ).toHaveFocus();
+  });
 });
