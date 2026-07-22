@@ -578,6 +578,56 @@ async fn elasticsearch_live_catalog_summary_surfaces_permission_errors() {
 }
 
 #[tokio::test]
+#[ignore = "RED #1712: fails until the field_caps hybrid visibility fix lands (un-ignored in the GREEN commit)"]
+async fn elasticsearch_read_only_role_lists_indices_despite_forbidden_cat_and_aliases() {
+    // Reason: #1712 (sibling of #1709) — a role with only `read`
+    // (indices:data/read/*) can search/get docs, but `_cat/indices` and
+    // `_aliases` are monitor-gated, so its indices were hidden from the sidebar
+    // (an aliases-403 even failed the whole catalog). `_field_caps` lives in the
+    // read privilege bucket and becomes the authoritative visibility source;
+    // `_cat`/`_aliases` degrade to best-effort meta. A 403 on either must be
+    // tolerated and the field_caps indices must still surface with Unknown meta.
+    // (2026-07-22)
+    let routes = vec![
+        route(
+            "/ ",
+            r#"{ "cluster_name": "elastic-dev", "version": { "number": "8.12.2" } }"#,
+        ),
+        route(
+            "/*/_field_caps?",
+            r#"{ "indices": ["logs-a", "logs-b", "logs-c"], "fields": { "_index": {} } }"#,
+        ),
+        route_with_status("/_cat/indices?", 403, r#"{ "error": "forbidden" }"#),
+        route_with_status("/_aliases", 403, r#"{ "error": "forbidden" }"#),
+    ];
+    let (port, server) = spawn_search_http_server(routes).await;
+    let adapter = SearchEngineAdapter::new_elasticsearch();
+    let config = search_config(port);
+
+    let result = async {
+        adapter.connect(&config).await?;
+        adapter.list_indexes().await
+    }
+    .await;
+    server.abort();
+    let _ = server.await;
+
+    let indexes = result.expect("read-only role must still see field_caps indices");
+    let names: Vec<&str> = indexes.iter().map(|index| index.name.as_str()).collect();
+    assert_eq!(names, vec!["logs-a", "logs-b", "logs-c"]);
+    assert!(
+        indexes
+            .iter()
+            .all(|index| index.health == SearchIndexHealth::Unknown),
+        "field_caps-only indices carry Unknown health"
+    );
+    assert!(indexes.iter().all(|index| index.open));
+    assert!(indexes.iter().all(|index| index.docs_count.is_none()));
+    assert!(indexes.iter().all(|index| index.store_size_bytes.is_none()));
+    assert!(indexes.iter().all(|index| index.aliases.is_empty()));
+}
+
+#[tokio::test]
 async fn elasticsearch_live_catalog_reads_mappings_settings_and_templates() {
     let routes = vec![
         route(
