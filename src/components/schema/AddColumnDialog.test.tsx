@@ -10,8 +10,12 @@
 //   with hint; commit-success closes + onColumnAdded called once.
 // - AC-236-03: IPC payload shape (camelCase) + sequence
 //   `[{ previewOnly: true }, { previewOnly: false }]`.
-// - AC-236-09: identifier rejection matrix (defense-in-depth — the
-//   modal-level surface is the user-visible gate).
+// - AC-236-09: invalid identifier surfaces the inline error + keeps
+//   Apply disabled (defense-in-depth — the modal-level surface is the
+//   user-visible gate). The full reject matrix (space / quote /
+//   leading-digit / >63 bytes / NULL / empty) was pushed down to the
+//   `validateIdentifier` util unit test (./identifier.test.ts) in issue
+//   #1626 (2026-07-22) — one representative case stays here.
 // - AC-236-10: DEFAULT/CHECK passthrough verbatim — no escaping, no
 //   syntax check, embedded `'` preserved.
 
@@ -132,45 +136,17 @@ describe("AddColumnDialog (Sprint 236)", () => {
     expect(screen.getByRole("button", { name: "Apply" })).toBeDisabled();
   });
 
-  // AC-236-04 / AC-236-09 — identifier rejection matrix.
-  it("[AC-236-09] inline error when name has embedded space", () => {
+  // AC-236-04 / AC-236-09 — wire-up: an invalid identifier surfaces the
+  // inline error AND keeps Apply disabled. The full reject matrix lives
+  // in ./identifier.test.ts (issue #1626, 2026-07-22); embedded space is
+  // the representative invalid input.
+  it("[AC-236-09] invalid identifier shows inline error + keeps Apply disabled", () => {
     renderDialog();
     fireEvent.change(screen.getByLabelText("Column name"), {
       target: { value: "bad name" },
     });
     expect(screen.getByRole("alert")).toHaveTextContent(/letter or underscore/);
-  });
-
-  it("[AC-236-09] inline error when name has embedded quote", () => {
-    renderDialog();
-    fireEvent.change(screen.getByLabelText("Column name"), {
-      target: { value: 'bad"name' },
-    });
-    expect(screen.getByRole("alert")).toHaveTextContent(/letter or underscore/);
-  });
-
-  it("[AC-236-09] inline error when name has leading digit", () => {
-    renderDialog();
-    fireEvent.change(screen.getByLabelText("Column name"), {
-      target: { value: "1bad" },
-    });
-    expect(screen.getByRole("alert")).toHaveTextContent(/letter or underscore/);
-  });
-
-  it("[AC-236-09] inline error when name length > 63 bytes", () => {
-    renderDialog();
-    fireEvent.change(screen.getByLabelText("Column name"), {
-      target: { value: "a".repeat(64) },
-    });
-    expect(screen.getByRole("alert")).toHaveTextContent(/63 bytes/);
-  });
-
-  it("[AC-236-09] inline error when name has embedded NULL byte", () => {
-    renderDialog();
-    fireEvent.change(screen.getByLabelText("Column name"), {
-      target: { value: "bad\0name" },
-    });
-    expect(screen.getByRole("alert")).toHaveTextContent(/letter or underscore/);
+    expect(screen.getByRole("button", { name: "Apply" })).toBeDisabled();
   });
 
   // AC-236-04 — collision pre-check disables Apply.
