@@ -46,6 +46,7 @@ export function useDataGridEdit({
   fetchData,
   paradigm = "rdb",
   canEditRows = true,
+  rawDocuments,
 }: UseDataGridEditParams): DataGridEditState {
   const { t } = useTranslation("datagrid");
   const activeTabId = useActiveTabId();
@@ -196,6 +197,7 @@ export function useDataGridEdit({
     pendingEditRowSnapshots,
     pendingDeletedRowSnapshots,
     canEditRows,
+    rawDocuments,
     setPendingEditErrors,
     onCommitCleanup: clearPendingAfterCommit,
     onPartialCommit: prunePartiallyCommitted,

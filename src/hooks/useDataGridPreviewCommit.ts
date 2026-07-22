@@ -54,6 +54,12 @@ export interface UseDataGridPreviewCommitParams {
   pendingDeletedRowSnapshots: ReadonlyMap<string, ReadonlyArray<unknown>>;
   canEditRows?: boolean;
   /**
+   * Issue #1704 — document paradigm only: the page's original documents so the
+   * MQL generator can splice array-element deletes (real removal + index shift)
+   * instead of nulling a slot with `$unset`. RDB commits leave this undefined.
+   */
+  rawDocuments?: ReadonlyArray<Record<string, unknown>>;
+  /**
    * Commit-success cleanup. ADR 0048 (#1126): this is NOT a plain
    * clear-all — the facade re-stages the committed edits into the undo
    * stack (post-commit Cmd+Z) while dropping editor / selection / errors.
@@ -146,6 +152,7 @@ export function useDataGridPreviewCommit(
     pendingEditRowSnapshots,
     pendingDeletedRowSnapshots,
     canEditRows = true,
+    rawDocuments,
     onCommitCleanup,
     onPartialCommit,
     setPendingEditErrors,
@@ -412,6 +419,7 @@ export function useDataGridPreviewCommit(
         pendingDeletedRowKeys,
         pendingEditRowSnapshots,
         pendingDeletedRowSnapshots,
+        rawDocuments,
       });
       // Adapter always reports coerce errors regardless of whether the
       // preview opens — pure-error edits surface inline next to the cell
@@ -430,6 +438,7 @@ export function useDataGridPreviewCommit(
       pendingNewRows,
       pendingEditRowSnapshots,
       pendingDeletedRowSnapshots,
+      rawDocuments,
       schema,
       table,
       page,

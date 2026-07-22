@@ -134,6 +134,13 @@ export interface PreviewInput {
    */
   pendingEditRowSnapshots?: ReadonlyMap<string, ReadonlyArray<unknown>>;
   pendingDeletedRowSnapshots?: ReadonlyMap<string, ReadonlyArray<unknown>>;
+  /**
+   * Issue #1704 — document paradigm's original documents for the current page,
+   * index-aligned with `data.rows`. The MQL generator reads the real array
+   * shape to splice an array-element delete (real removal + index shift)
+   * instead of a positional `$unset`. RDB adapters ignore it.
+   */
+  rawDocuments?: ReadonlyArray<Record<string, unknown>>;
 }
 
 export interface ParadigmEditAdapter {
@@ -412,6 +419,8 @@ export function documentEditAdapter(
         // Issue #1081 — row-identity anchors for the `_id` filter.
         editRowSnapshots: input.pendingEditRowSnapshots,
         deletedRowSnapshots: input.pendingDeletedRowSnapshots,
+        // Issue #1704 — real array shape for array-element delete splices.
+        rawDocuments: input.rawDocuments,
       });
       if (mqlPreview.commands.length === 0) {
         return { session: null, coerceErrors: new Map() };

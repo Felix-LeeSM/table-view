@@ -75,6 +75,15 @@ export interface MqlGenerateInput {
    */
   editRowSnapshots?: ReadonlyMap<string, ReadonlyArray<unknown>>;
   deletedRowSnapshots?: ReadonlyMap<string, ReadonlyArray<unknown>>;
+  /**
+   * Issue #1704 — the original (non-sentinelised) documents for the current
+   * page, index-aligned with `rows`. Only the document paradigm supplies this;
+   * the generator needs the real array value to turn an array-element delete
+   * (`__op__:unset` on `tags[0]`) into a whole-array `$set` splice instead of a
+   * positional `$unset` (which MongoDB resolves to a `null` hole). Absent →
+   * the generator keeps the plain `$unset` behaviour.
+   */
+  rawDocuments?: ReadonlyArray<Record<string, unknown>>;
 }
 
 /** A single MQL command ready to dispatch to the Tauri wrappers. */
@@ -270,6 +279,108 @@ function deepDeleteField(root: object, subPath: string): void {
   delete cur[segs[segs.length - 1]!];
 }
 
+/** Structural `_id` equality via the canonical MQL literal — used to confirm a
+ *  `rawDocuments[rowIdx]` really is the document a pending group targets before
+ *  its array is spliced (issue #1704). `a === null` (unliftable id) → false. */
+function sameDocumentId(a: DocumentId | null, b: DocumentId): boolean {
+  return a !== null && formatDocumentIdForMql(a) === formatDocumentIdForMql(b);
+}
+
+/** Navigate a dot-notation `path` inside a raw document, reading a numeric
+ *  segment as an array index and any other segment as an object key. Returns
+ *  `undefined` when the chain is missing or has the wrong shape. Sprint (issue
+ *  #1704) — lets the array-removal step learn whether a `$unset` target's
+ *  parent is really an Array (splice) or an object with a numeric key ($unset). */
+function rawValueAtPath(root: Record<string, unknown>, path: string): unknown {
+  let cur: unknown = root;
+  for (const seg of path.split(".")) {
+    if (Array.isArray(cur)) {
+      const idx = Number.parseInt(seg, 10);
+      if (!Number.isInteger(idx)) return undefined;
+      cur = cur[idx];
+    } else if (typeof cur === "object" && cur !== null) {
+      cur = (cur as Record<string, unknown>)[seg];
+    } else {
+      return undefined;
+    }
+  }
+  return cur;
+}
+
+/**
+ * Issue #1704 — turn array-element `$unset` ops into a whole-array `$set`
+ * splice so MongoDB REMOVES the element (shifting indices) instead of leaving
+ * a positional `null`. Mirrors the Redis `kvJsonWrite.applyTreeEdits` splice
+ * that the same DocumentTreePanel drives on the ReJSON path.
+ *
+ * For each `$unset` path whose last segment is an array index (the value at the
+ * parent path in `rawDoc` is an Array), the array is rebuilt on a clone:
+ *   1. same-array `$set` edits are applied at their ORIGINAL indices first, so
+ *      an edit + delete on one array in a single commit lands before the shift;
+ *   2. the deleted indices are dropped by an index filter — order-preserving,
+ *      so multiple deletes shift correctly and duplicates / legitimate nulls
+ *      are safe (never value-matched like `$pull`).
+ * The rebuilt array is emitted as `$set[parentPath]`; consumed `$set`/`$unset`
+ * ops are removed. Object numeric-string keys stay `$unset` (parent not Array).
+ * Mutates `setOps` / `unsetOps` in place.
+ *
+ * ponytail: overlapping array subtrees (one delete path an ancestor of another,
+ * e.g. `tags[0]` AND `tags[2].sub[0]` in one commit) are left as `$unset` for
+ * BOTH — a per-array splice can't compose across the shift the outer delete
+ * introduces, and the fallback never corrupts a sibling element. Upgrade to a
+ * whole-column rebuild (à la applyTreeEdits) only if that combo is ever reported.
+ */
+function applyArrayElementRemovals(
+  rawDoc: Record<string, unknown>,
+  setOps: Record<string, unknown>,
+  unsetOps: Record<string, unknown>,
+): void {
+  const arrays = new Map<string, Set<number>>();
+  for (const path of Object.keys(unsetOps)) {
+    const dot = path.lastIndexOf(".");
+    if (dot < 0) continue; // top-level column delete — never an array element
+    const last = path.slice(dot + 1);
+    if (!/^\d+$/.test(last)) continue;
+    const parentPath = path.slice(0, dot);
+    if (!Array.isArray(rawValueAtPath(rawDoc, parentPath))) continue;
+    let indices = arrays.get(parentPath);
+    if (!indices) {
+      indices = new Set();
+      arrays.set(parentPath, indices);
+    }
+    indices.add(Number.parseInt(last, 10));
+  }
+  if (arrays.size === 0) return;
+
+  const paths = [...arrays.keys()];
+  const overlapping = new Set<string>();
+  for (const a of paths) {
+    for (const b of paths) {
+      if (a !== b && (a.startsWith(`${b}.`) || b.startsWith(`${a}.`))) {
+        overlapping.add(a);
+      }
+    }
+  }
+
+  for (const [parentPath, indices] of arrays) {
+    if (overlapping.has(parentPath)) continue;
+    const original = rawValueAtPath(rawDoc, parentPath) as unknown[];
+    const rebuilt = structuredClone(original);
+    const prefix = `${parentPath}.`;
+    for (const setPath of Object.keys(setOps)) {
+      if (!setPath.startsWith(prefix)) continue;
+      deepSetField(
+        rebuilt as unknown as object,
+        setPath.slice(prefix.length),
+        setOps[setPath],
+      );
+      delete setOps[setPath];
+    }
+    setOps[parentPath] = rebuilt.filter((_, i) => !indices.has(i));
+    for (const i of indices) delete unsetOps[`${parentPath}.${i}`];
+  }
+}
+
 /**
  * Collapse prefix-overlapping field paths in one document's patch so MongoDB
  * doesn't reject the update with WriteError code 40 — a single update can't
@@ -412,6 +523,7 @@ export function generateMqlPreview(input: MqlGenerateInput): MqlPreview {
     pendingNewRows,
     editRowSnapshots,
     deletedRowSnapshots,
+    rawDocuments,
   } = input;
 
   const errors: MqlGenerationError[] = [];
@@ -556,6 +668,15 @@ export function generateMqlPreview(input: MqlGenerateInput): MqlPreview {
       } else {
         rawSetOps[column] = value;
       }
+    }
+    // Issue #1704 — an array-element delete must SPLICE (real removal + index
+    // shift), not `$unset` (which nulls the slot). Only when `rawDocuments`
+    // gives the current page's document AND its `_id` matches this group's id
+    // (so a stale/cross-page raw doc can never seed the wrong array) do we read
+    // the array's real shape and rebuild it into a whole-array `$set`.
+    const rawDoc = rawDocuments?.[rowIdx];
+    if (rawDoc !== undefined && sameDocumentId(documentIdFromRow(rawDoc), id)) {
+      applyArrayElementRemovals(rawDoc, rawSetOps, rawUnsetOps);
     }
     // Sprint (user report 2026-07-18) — fold parent/child prefix overlaps so a
     // container add + fill in one commit (`a`={} → `a.b`=3, `tags.1` →
