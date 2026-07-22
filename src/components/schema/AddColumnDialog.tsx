@@ -18,6 +18,7 @@ import CreateTableTypeCombobox from "./CreateTableTypeCombobox";
 import { usePostgresTypes } from "@hooks/usePostgresTypes";
 import { useConnectionStore } from "@stores/connectionStore";
 import type { ColumnInfo } from "@/types/schema";
+import { validateIdentifier } from "./identifier";
 
 /**
  * Sprint 236 — `AddColumnDialog`. Modal that mirrors the Sprint 235
@@ -52,9 +53,6 @@ import type { ColumnInfo } from "@/types/schema";
  * Sprint 236 contract Decisions §Cache invalidation path).
  */
 
-const IDENTIFIER_RE = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
-const IDENTIFIER_MAX_BYTES = 63;
-
 export interface AddColumnDialogProps {
   /** Connection id used by Safe Mode + `usePostgresTypes`. */
   connectionId: string;
@@ -81,20 +79,6 @@ export interface AddColumnDialogProps {
    * via the `onRefresh` prop of the hook.
    */
   onColumnAdded: () => Promise<void>;
-}
-
-function validateIdentifier(value: string): string | null {
-  const trimmed = value.trim();
-  if (trimmed.length === 0) {
-    return "Column name must not be empty";
-  }
-  if (new TextEncoder().encode(trimmed).length > IDENTIFIER_MAX_BYTES) {
-    return `Column name must not exceed ${IDENTIFIER_MAX_BYTES} bytes`;
-  }
-  if (!IDENTIFIER_RE.test(trimmed)) {
-    return "Column name must start with a letter or underscore and contain only alphanumeric characters and underscores";
-  }
-  return null;
 }
 
 export default function AddColumnDialog({
@@ -158,7 +142,7 @@ export default function AddColumnDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, tableName, schemaName]);
 
-  const validationError = validateIdentifier(columnName);
+  const validationError = validateIdentifier(columnName, "Column name");
   const trimmedType = dataType.trim();
   const trimmedName = columnName.trim();
   const collision = useMemo(

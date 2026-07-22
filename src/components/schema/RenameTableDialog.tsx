@@ -16,6 +16,7 @@ import { ConfirmDestructiveDialog } from "@features/workspace";
 import SqlSyntax from "@components/shared/SqlSyntax";
 import { useSchemaTableMutations } from "@/hooks/useSchemaTableMutations";
 import { useConnectionStore } from "@stores/connectionStore";
+import { validateIdentifier } from "./identifier";
 
 /**
  * Sprint 235 — `RenameTableDialog`. Single text input + Cancel + Show DDL +
@@ -43,9 +44,6 @@ import { useConnectionStore } from "@stores/connectionStore";
  * rest of Phase 24-26.
  */
 
-const IDENTIFIER_RE = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
-const IDENTIFIER_MAX_BYTES = 63;
-
 export interface RenameTableDialogProps {
   /** Connection id used by the Safe Mode gate + history record. */
   connectionId: string;
@@ -59,21 +57,6 @@ export interface RenameTableDialogProps {
   open: boolean;
   /** Called on Cancel / outside-close / commit-success. */
   onClose: () => void;
-}
-
-function validateIdentifier(value: string): string | null {
-  const trimmed = value.trim();
-  if (trimmed.length === 0) {
-    return "Table name must not be empty";
-  }
-  // Byte length — stay UTF-8 safe by encoding before measuring.
-  if (new TextEncoder().encode(trimmed).length > IDENTIFIER_MAX_BYTES) {
-    return `Table name must not exceed ${IDENTIFIER_MAX_BYTES} bytes`;
-  }
-  if (!IDENTIFIER_RE.test(trimmed)) {
-    return "Table name must start with a letter or underscore and contain only alphanumeric characters and underscores";
-  }
-  return null;
 }
 
 export default function RenameTableDialog({
@@ -120,7 +103,7 @@ export default function RenameTableDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, tableName]);
 
-  const validationError = validateIdentifier(newName);
+  const validationError = validateIdentifier(newName, "Table name");
   const isRenameToSelf = newName === tableName;
   const canPreview = !validationError && !isRenameToSelf;
   const canApply = canPreview && !ddl.previewLoading && !!ddl.previewSql;

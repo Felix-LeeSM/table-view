@@ -9,9 +9,11 @@
 // - AC-235-04: form behaviour — pre-fill from `tableName`, Apply
 //   disabled at name == current, identifier validation surfaces inline,
 //   commit-success closes modal + onClose called.
-// - AC-235-09: identifier rejections (length > 63, embedded quote,
-//   leading digit, embedded NULL byte) all keep Apply disabled with
-//   the inline error.
+// - AC-235-09: invalid identifier surfaces the inline error + keeps
+//   Apply disabled (wire-up). The full reject matrix (space / quote /
+//   leading-digit / >63 bytes / NULL / empty) was pushed down to the
+//   `validateIdentifier` util unit test (./identifier.test.ts) in issue
+//   #1626 (2026-07-22) — one representative case stays here.
 //
 // Mock pattern: `vi.hoisted` + factory mock for `@lib/tauri` so
 // `tauri.renameTableRequest` is re-bindable inside test bodies.
@@ -121,51 +123,18 @@ describe("RenameTableDialog (Sprint 235)", () => {
     expect(apply).toBeDisabled();
   });
 
-  // AC-235-04 / AC-235-09 — identifier validation messages surface.
-  it("[AC-235-04][AC-235-09] inline error when input has embedded space", () => {
+  // AC-235-04 / AC-235-09 — wire-up: an invalid identifier surfaces the
+  // inline error AND keeps Apply disabled. The full reject matrix lives
+  // in ./identifier.test.ts (issue #1626, 2026-07-22); embedded space is
+  // the representative invalid input.
+  it("[AC-235-04][AC-235-09] invalid identifier shows inline error + keeps Apply disabled", () => {
     renderDialog({ tableName: "users" });
     const input = screen.getByLabelText("New table name");
     fireEvent.change(input, { target: { value: "bad name" } });
     expect(
       screen.getByLabelText("Identifier validation error"),
     ).toHaveTextContent(/letter or underscore/);
-  });
-
-  it("[AC-235-09] inline error when input has embedded quote", () => {
-    renderDialog({ tableName: "users" });
-    const input = screen.getByLabelText("New table name");
-    fireEvent.change(input, { target: { value: 'bad"name' } });
-    expect(
-      screen.getByLabelText("Identifier validation error"),
-    ).toHaveTextContent(/letter or underscore/);
-  });
-
-  it("[AC-235-09] inline error when input has leading digit", () => {
-    renderDialog({ tableName: "users" });
-    const input = screen.getByLabelText("New table name");
-    fireEvent.change(input, { target: { value: "1bad" } });
-    expect(
-      screen.getByLabelText("Identifier validation error"),
-    ).toHaveTextContent(/letter or underscore/);
-  });
-
-  it("[AC-235-09] inline error when input length > 63 bytes", () => {
-    renderDialog({ tableName: "users" });
-    const input = screen.getByLabelText("New table name");
-    fireEvent.change(input, { target: { value: "a".repeat(64) } });
-    expect(
-      screen.getByLabelText("Identifier validation error"),
-    ).toHaveTextContent(/63 bytes/);
-  });
-
-  // AC-235-04 — empty input rejected.
-  it("[AC-235-04] inline error when input is empty / whitespace-only", () => {
-    renderDialog({ tableName: "users" });
-    const input = screen.getByLabelText("New table name");
-    fireEvent.change(input, { target: { value: "   " } });
-    expect(
-      screen.getByLabelText("Identifier validation error"),
-    ).toHaveTextContent(/must not be empty/);
+    expect(screen.getByRole("button", { name: "Apply" })).toBeDisabled();
   });
 
   // AC-235-01 / AC-235-03 — IPC sequence + payload shape.
