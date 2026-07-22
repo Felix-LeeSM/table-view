@@ -10,28 +10,18 @@
  *
  * Author intent (2026-05-12): vertical-slice persistence smoke. Sprint 358
  * 에서 write path 를 read-only-from-legacy 로 좁힘.
+ *
+ * 2026-07-22 (issue #1631 test-audit Wave 2) — "store mutation 이 LS 에
+ * 안 쓴다"는 no-LS-write invariant 는 workspaceStore/persistence.no-ls-write.test.ts
+ * 를 단일 SOT 로 삼는다. 본 파일의 중복 재검증은 제거하고, 여기서는 legacy
+ * LS seed 로부터의 read/rehydrate 경로만 검증한다.
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { useWorkspaceStore } from "./workspaceStore";
 import {
   installFakeLocalStorage,
   restoreLocalStorage,
 } from "./__tests__/workspaceStoreTestHelpers";
-import type { TableTabInit } from "./workspaceStore/types";
-
-function makeInit(overrides: Partial<TableTabInit> = {}): TableTabInit {
-  return {
-    type: "table",
-    title: "users",
-    connectionId: "conn1",
-    closable: true,
-    schema: "public",
-    table: "users",
-    subView: "records",
-    database: "dbA",
-    ...overrides,
-  };
-}
 
 describe("workspaceStore — persistence", () => {
   beforeEach(() => {
@@ -43,13 +33,9 @@ describe("workspaceStore — persistence", () => {
     restoreLocalStorage();
   });
 
-  it("sprint-358: mutating the store NO LONGER writes to localStorage (SQLite-only via persist_workspace IPC)", () => {
-    // 작성 2026-05-16 (sprint-358) — codex 6차 #5: workspace write 사이트
-    // 제거. 200ms debounce 가 지나도 LS entry 가 생기지 않음.
-    useWorkspaceStore.getState().addTab("conn1", makeInit());
-    vi.advanceTimersByTime(250);
-    expect(window.localStorage.getItem("table-view-workspaces")).toBeNull();
-  });
+  // no-LS-write invariant (store mutation → LS write 0) 는
+  // workspaceStore/persistence.no-ls-write.test.ts 가 단일 SOT — issue #1631
+  // (2026-07-22). 여기서의 중복 재검증은 제거.
 
   it("loadPersistedWorkspaces still rehydrates from legacy LS seed (boot import fallback)", () => {
     // Pre-seed LS as if a previous app version had written it. boot 시점의

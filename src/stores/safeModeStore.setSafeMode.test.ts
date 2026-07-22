@@ -92,12 +92,18 @@ describe("AC-368-02 setSafeMode backend-first, LS 0", () => {
     expect(JSON.parse(req.req.valueJson)).toBe("warn");
   });
 
+  // 각 toggle 후 state transition 을 개별 단언 (strict→warn→off→strict) +
+  // 3-toggle reversibility (시작값 복귀). safeModeStore.test.ts 의 per-step
+  // (strict→warn / warn→off / off→strict) + reversible 케이스를 이 SOT 로
+  // 흡수 — issue #1631 (2026-07-22). safeMode 는 safety feature 이므로
+  // 전이/가역성 단언을 강하게 유지한다.
   it("toggle cycles full strict → warn → off → strict via three IPC calls", async () => {
     await useSafeModeStore.getState().toggle();
+    expect(useSafeModeStore.getState().mode).toBe("warn"); // strict → warn
     await useSafeModeStore.getState().toggle();
+    expect(useSafeModeStore.getState().mode).toBe("off"); // warn → off
     await useSafeModeStore.getState().toggle();
-
-    expect(useSafeModeStore.getState().mode).toBe("strict");
+    expect(useSafeModeStore.getState().mode).toBe("strict"); // off → strict (reversible)
 
     const calls = invokeMock.mock.calls.filter(
       (c) => c[0] === "persist_setting",

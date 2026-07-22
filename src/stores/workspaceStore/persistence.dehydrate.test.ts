@@ -15,14 +15,9 @@
  * 호출자는 `WorkspacesShape` 를 순회하면서 각 `WorkspaceState` 에 대해
  * `dehydrate()` 를 호출하고, 결과를 `JSON.stringify` 해서 LS 에 write 한다.
  */
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
-import {
-  dehydrate,
-  migrateLoadedWorkspaces,
-  persistWorkspaces,
-  STORAGE_KEY,
-} from "./persistence";
+import { dehydrate, migrateLoadedWorkspaces } from "./persistence";
 import type { QueryTab, WorkspaceState } from "./types";
 import type { ConnectionId, TabId } from "@/types/branded";
 
@@ -60,62 +55,10 @@ function makeWorkspace(
   };
 }
 
-describe("persistWorkspaces — Sprint 353 (dehydration invariants preserved as `dehydrate()` purity)", () => {
-  beforeEach(() => {
-    window.localStorage.clear();
-  });
-
-  afterEach(() => {
-    window.localStorage.clear();
-  });
-
-  it("calling persistWorkspaces no longer writes the blob to LS (sprint-358), but `dehydrate()` still strips dirtyTabIds, idle-forces queryState, and caps closedTabHistory at 25", () => {
-    // 작성 2026-05-16 (sprint-358) — Sprint 353 의 strip invariants 는 dehydrate
-    // 함수 자체가 보장하지만, persist 사이트가 LS 에서 SQLite-only 로 이전됨에
-    // 따라 본 테스트는 (1) persistWorkspaces 호출이 더 이상 LS 에 쓰지 않음을
-    // 확인하고 (2) dehydrate 의 strip 의미는 그대로 직접 호출해 검증한다.
-    const completed = makeQueryTab({
-      sql: "SELECT * FROM users",
-      queryState: {
-        status: "completed",
-        result: {
-          columns: [{ name: "id", dataType: "int4", category: "int" }],
-          rows: [[1], [2], [3]],
-          totalCount: 3,
-          executionTimeMs: 4,
-          queryType: "select",
-        },
-      },
-    });
-    const memory: WorkspaceState = {
-      tabs: [completed],
-      activeTabId: completed.id,
-      closedTabHistory: Array.from({ length: 30 }, (_, i) =>
-        makeQueryTab({ id: `closed-${29 - i}`, sql: "SELECT 1" }),
-      ),
-      dirtyTabIds: [completed.id],
-      sidebar: {
-        selectedNode: "schema.public.users",
-        expanded: ["schema.public"],
-        scrollTop: 250,
-      },
-    };
-
-    persistWorkspaces({ c1: { d1: memory } });
-    // sprint-358 invariant: LS write 사이트 0.
-    expect(window.localStorage.getItem(STORAGE_KEY)).toBeNull();
-
-    // Sprint 353 strip invariants — `dehydrate()` 단독 호출로 검증.
-    const persistedWs = dehydrate(memory);
-    expect(persistedWs.dirtyTabIds).toEqual([]);
-    expect((persistedWs.tabs[0] as QueryTab).queryState).toEqual({
-      status: "idle",
-    });
-    expect(persistedWs.closedTabHistory).toHaveLength(25);
-    expect(persistedWs.sidebar.selectedNode).toBeNull();
-    expect(persistedWs.sidebar.scrollTop).toBe(0);
-  });
-});
+// persistWorkspaces 가 LS 에 쓰지 않는다(no-LS-write)는 invariant 는
+// workspaceStore/persistence.no-ls-write.test.ts 가 단일 SOT, dehydrate 의
+// strip 의미는 아래 개별 describe 들이 SOT — 둘을 한 test 로 묶었던 통합
+// 케이스는 순수 중복이라 제거 (issue #1631, 2026-07-22).
 
 describe("dehydrate — Sprint 353 (Q16/M-1 dirtyTabIds strip)", () => {
   it("strips dirtyTabIds to an empty array even when memory carries dirty markers", () => {
