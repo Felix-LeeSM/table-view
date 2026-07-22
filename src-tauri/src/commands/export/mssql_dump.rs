@@ -59,7 +59,17 @@ pub(super) fn quote_mssql_string(s: &str) -> String {
 /// literal, and (c) emits a plain quoted JSON string for Array/Object — SQL
 /// Server stores JSON in `nvarchar`, so neither the PG `::jsonb` cast nor a
 /// MySQL-style implicit JSON column cast applies.
-pub(super) fn mssql_value_to_sql_literal(value: &JsonValue, _category: ColumnCategory) -> String {
+pub(super) fn mssql_value_to_sql_literal(value: &JsonValue, category: ColumnCategory) -> String {
+    // Issue #1677 — a Binary-category cell is a `"0x<hex>"` string from
+    // `cell_to_json`. T-SQL reads unquoted `0x<hex>` as a varbinary literal (and
+    // bare `0x` as the empty binary), so emit it verbatim; the `N'…'` string arm
+    // below would restore the hex TEXT rather than the bytes. Type-driven — a
+    // text column that merely starts with `0x` stays a quoted `N'…'`.
+    if category == ColumnCategory::Binary {
+        if let JsonValue::String(s) = value {
+            return s.clone();
+        }
+    }
     match value {
         JsonValue::Null => "NULL".to_string(),
         JsonValue::Bool(true) => "1".to_string(),

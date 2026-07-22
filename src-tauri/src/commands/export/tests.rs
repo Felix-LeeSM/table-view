@@ -756,12 +756,7 @@ fn test_mysql_value_to_sql_literal_json_has_no_jsonb_cast() {
 // `"0x<hex>"` string) MUST become an unquoted MySQL binary literal `X'<hex>'`,
 // not a quoted `'0x<hex>'` string. Quoting stores the ASCII bytes of the hex
 // text, silently corrupting varbinary/BLOB on restore.
-//
-// RED: the writer has no binary branch yet, so this fails (emits `'0x0aff'`).
-// Ignored only so the pre-commit coverage gate can land the RED commit without
-// `--no-verify`; the GREEN fix removes `#[ignore]`.
 #[test]
-#[ignore = "RED #1677 — un-ignored by the GREEN binary-literal branch"]
 fn test_mysql_binary_category_emits_unquoted_binary_literal_1677() {
     assert_eq!(
         mysql_value_to_sql_literal(&json!("0x0aff"), ColumnCategory::Binary),
@@ -879,11 +874,7 @@ fn test_mssql_value_to_sql_literal_json_has_no_cast_or_backslash_escape() {
 // Issue #1677 — a Binary-category cell (`"0x<hex>"` from `cell_to_json`) MUST
 // become an unquoted T-SQL varbinary literal `0x<hex>`, not a quoted `N'0x…'`
 // string, which would restore the hex TEXT rather than the raw bytes.
-//
-// RED: no binary branch yet (emits `N'0x0aff'`). Ignored so the pre-commit
-// coverage gate can land the RED commit; GREEN removes `#[ignore]`.
 #[test]
-#[ignore = "RED #1677 — un-ignored by the GREEN binary-literal branch"]
 fn test_mssql_binary_category_emits_unquoted_binary_literal_1677() {
     assert_eq!(
         mssql_value_to_sql_literal(&json!("0x0aff"), ColumnCategory::Binary),
@@ -931,6 +922,10 @@ fn dump_table(schema: &str, table: &str, cols: Vec<&str>) -> ExportDumpTable {
         schema: schema.into(),
         table: table.into(),
         column_names: cols.into_iter().map(|s| s.into()).collect(),
+        // #1677 — these dispatch tests exercise non-binary rows; an empty
+        // categories vec makes every cell read back as `Unknown` (the existing
+        // quoted path), matching pre-#1677 output.
+        column_categories: Vec::new(),
     }
 }
 

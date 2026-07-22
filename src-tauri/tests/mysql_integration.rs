@@ -1182,7 +1182,7 @@ async fn test_mysql_dump_round_trip_restores_into_mysql() {
     };
     use table_view_lib::db::row_cap::DEFAULT_ROW_CAP;
     use table_view_lib::db::ActiveAdapter;
-    use table_view_lib::models::DatabaseType;
+    use table_view_lib::models::{ColumnCategory, DatabaseType};
 
     let adapter = match common::setup_mysql_adapter().await {
         Some(a) => a,
@@ -1194,11 +1194,15 @@ async fn test_mysql_dump_round_trip_restores_into_mysql() {
         .as_millis();
     let table = format!("test_dump_round_trip_{ts}");
 
+    // #1677 — `bin_col VARBINARY` exercises the binary-literal dump path. A
+    // pre-fix dump quoted the `0x…` hex as a string, so a restore stored the
+    // ASCII bytes of the hex text and the byte-faithful readback below diverged.
     adapter
         .execute_query(
             &format!(
                 "CREATE TABLE {table} \
-                 (id INT PRIMARY KEY, name VARCHAR(255), note TEXT, payload JSON)"
+                 (id INT PRIMARY KEY, name VARCHAR(255), note TEXT, payload JSON, \
+                  bin_col VARBINARY(16))"
             ),
             None,
             DEFAULT_ROW_CAP,
@@ -1208,12 +1212,14 @@ async fn test_mysql_dump_round_trip_restores_into_mysql() {
 
     // Seed tricky values. Built without `format!` on the value list so the
     // JSON braces aren't read as format placeholders; `\\\\` in Rust source
-    // is a doubled MySQL backslash → one stored backslash.
-    let mut seed = format!("INSERT INTO {table} (id, name, note, payload) VALUES ");
+    // is a doubled MySQL backslash → one stored backslash. `bin_col` carries a
+    // control byte (`0x0aff00`) that only survives a real binary literal, plus a
+    // NULL binary cell to prove the branch leaves NULL alone.
+    let mut seed = format!("INSERT INTO {table} (id, name, note, payload, bin_col) VALUES ");
     seed.push_str(
-        "(1, 'O''Reilly', 'C:\\\\Users\\\\me', '{\"k\": 1}'), \
-         (2, 'plain', 'has,comma and space', '{\"a\": [1, 2]}'), \
-         (3, 'q\"and\\\\slash', NULL, '{}')",
+        "(1, 'O''Reilly', 'C:\\\\Users\\\\me', '{\"k\": 1}', 0x0aff00), \
+         (2, 'plain', 'has,comma and space', '{\"a\": [1, 2]}', 0xdeadbeef), \
+         (3, 'q\"and\\\\slash', NULL, '{}', NULL)",
     );
     adapter
         .execute_query(&seed, None, DEFAULT_ROW_CAP)
@@ -1225,7 +1231,7 @@ async fn test_mysql_dump_round_trip_restores_into_mysql() {
     async fn read_all(adapter: &MysqlAdapter, table: &str) -> Vec<Vec<String>> {
         let result = adapter
             .execute_query(
-                &format!("SELECT id, name, note, payload FROM {table} ORDER BY id"),
+                &format!("SELECT id, name, note, payload, bin_col FROM {table} ORDER BY id"),
                 None,
                 DEFAULT_ROW_CAP,
             )
@@ -1260,7 +1266,22 @@ async fn test_mysql_dump_round_trip_restores_into_mysql() {
         &[ExportDumpTable {
             schema: MYSQL_SCHEMA.to_string(),
             table: table.clone(),
-            column_names: vec!["id".into(), "name".into(), "note".into(), "payload".into()],
+            column_names: vec![
+                "id".into(),
+                "name".into(),
+                "note".into(),
+                "payload".into(),
+                "bin_col".into(),
+            ],
+            // #1677 — `bin_col` is Binary → unquoted `X'…'` literal; the rest keep
+            // the quoted path. Order mirrors `column_names`.
+            column_categories: vec![
+                ColumnCategory::Int,
+                ColumnCategory::Text,
+                ColumnCategory::Text,
+                ColumnCategory::Object,
+                ColumnCategory::Binary,
+            ],
         }],
         &ExportSchemaDumpOptions {
             include: ExportInclude::Dml,
@@ -1283,6 +1304,16 @@ async fn test_mysql_dump_round_trip_restores_into_mysql() {
     assert!(
         !dump_sql.contains(&format!(r#""{table}""#)),
         "dump leaked ANSI double-quote identifier"
+    );
+    // #1677 — the varbinary cell dumps as an unquoted MySQL binary literal, never
+    // a quoted hex string (which would restore as the ASCII bytes of the text).
+    assert!(
+        dump_sql.contains("X'0aff00'"),
+        "binary column must dump as an unquoted MySQL binary literal: {dump_sql}"
+    );
+    assert!(
+        !dump_sql.contains("'0x0aff00'"),
+        "binary column must not dump as a quoted hex string: {dump_sql}"
     );
 
     // Restore: empty the table, replay each dumped INSERT statement.

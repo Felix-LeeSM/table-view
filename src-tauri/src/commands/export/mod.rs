@@ -369,6 +369,15 @@ pub struct ExportDumpTable {
     pub schema: String,
     pub table: String,
     pub column_names: Vec<String>,
+    /// Issue #1677 — per-column display category, in the same order as
+    /// `column_names` (the frontend derives both from one `t.columns` array, so
+    /// index `i` describes `column_names[i]`). Drives the dialect writers'
+    /// binary branch: a `Binary` cell dumps as an unquoted binary literal
+    /// instead of a quoted hex string that would restore as text bytes.
+    /// `#[serde(default)]` keeps older payloads (no field) parsing — a missing
+    /// category reads back as `Unknown`, i.e. the existing quoted path.
+    #[serde(default)]
+    pub column_categories: Vec<ColumnCategory>,
 }
 
 /// AC-192-05 — Sprint 192 통합. Schema/Database dump (DDL + DML) 을
@@ -652,12 +661,19 @@ async fn stream_schema_dump(
                     }
                     for row in &batch {
                         // Issue #1677 — pair each cell with its column category so
-                        // the writer can branch binary literals. GREEN wires the
-                        // real per-column categories; this placeholder keeps every
-                        // cell on the existing (quoted) path.
+                        // the writer branches binary/BLOB cells to an unquoted
+                        // binary literal. `column_categories[i]` describes
+                        // `column_names[i]`; a missing entry (older payload)
+                        // defaults to `Unknown` → the existing quoted path.
                         let values = row
                             .iter()
-                            .map(|v| to_literal(v, ColumnCategory::default()))
+                            .enumerate()
+                            .map(|(i, v)| {
+                                to_literal(
+                                    v,
+                                    entry.column_categories.get(i).copied().unwrap_or_default(),
+                                )
+                            })
                             .collect::<Vec<_>>()
                             .join(", ");
                         let line =

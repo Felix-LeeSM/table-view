@@ -82,7 +82,7 @@ async fn test_mssql_dump_round_trip_restores_into_mssql() {
     };
     use table_view_lib::db::row_cap::DEFAULT_ROW_CAP;
     use table_view_lib::db::ActiveAdapter;
-    use table_view_lib::models::DatabaseType;
+    use table_view_lib::models::{ColumnCategory, DatabaseType};
 
     // `MssqlAdapter` is not `Clone` (Mutex-guarded config), so take two
     // independent connections to the same container: one for seed/readback,
@@ -107,6 +107,8 @@ async fn test_mssql_dump_round_trip_restores_into_mssql() {
                 col("name", "nvarchar(255)", true),
                 col("note", "nvarchar(255)", true),
                 col("flag", "bit", true),
+                // #1677 — varbinary exercises the binary-literal dump path.
+                col("bin_col", "varbinary(16)", true),
             ],
         ))
         .await
@@ -116,13 +118,16 @@ async fn test_mssql_dump_round_trip_restores_into_mssql() {
     // NOT escaped — the opposite of MySQL), embedded double quote, NULL, a BIT
     // column (proves bool → `1`/`0`), and (#1642 B1) non-ASCII Unicode that a
     // non-`N` restore literal would code-page-fold to `?`. Seed literals carry
-    // their own `N` prefix so the source rows store the true Unicode.
+    // their own `N` prefix so the source rows store the true Unicode. (#1677)
+    // `bin_col` carries a control byte (`0x0aff00`) that only survives an
+    // unquoted binary literal, plus a NULL binary cell to prove NULL is left
+    // alone.
     let seed = format!(
-        "INSERT INTO {MSSQL_SCHEMA}.{table} (id, name, note, flag) VALUES \
-         (1, N'O''Reilly', N'C:\\path\\file', 1), \
-         (2, N'plain', N'has,comma and space', 0), \
-         (3, N'quote\"and\\slash', NULL, 1), \
-         (4, N'안녕세계', N'日本語 emoji 💡', 0)"
+        "INSERT INTO {MSSQL_SCHEMA}.{table} (id, name, note, flag, bin_col) VALUES \
+         (1, N'O''Reilly', N'C:\\path\\file', 1, 0x0aff00), \
+         (2, N'plain', N'has,comma and space', 0, 0xdeadbeef), \
+         (3, N'quote\"and\\slash', NULL, 1, NULL), \
+         (4, N'안녕세계', N'日本語 emoji 💡', 0, 0x00)"
     );
     adapter
         .execute_query(&seed, None, DEFAULT_ROW_CAP)
@@ -132,7 +137,9 @@ async fn test_mssql_dump_round_trip_restores_into_mssql() {
     async fn read_all(adapter: &MssqlAdapter, table: &str) -> Vec<Vec<String>> {
         let result = adapter
             .execute_query(
-                &format!("SELECT id, name, note, flag FROM {MSSQL_SCHEMA}.{table} ORDER BY id"),
+                &format!(
+                    "SELECT id, name, note, flag, bin_col FROM {MSSQL_SCHEMA}.{table} ORDER BY id"
+                ),
                 None,
                 DEFAULT_ROW_CAP,
             )
@@ -167,7 +174,22 @@ async fn test_mssql_dump_round_trip_restores_into_mssql() {
         &[ExportDumpTable {
             schema: MSSQL_SCHEMA.to_string(),
             table: table.clone(),
-            column_names: vec!["id".into(), "name".into(), "note".into(), "flag".into()],
+            column_names: vec![
+                "id".into(),
+                "name".into(),
+                "note".into(),
+                "flag".into(),
+                "bin_col".into(),
+            ],
+            // #1677 — `bin_col` is Binary → unquoted `0x…` literal; the rest keep
+            // the quoted path. Order mirrors `column_names`.
+            column_categories: vec![
+                ColumnCategory::Int,
+                ColumnCategory::Text,
+                ColumnCategory::Text,
+                ColumnCategory::Bool,
+                ColumnCategory::Binary,
+            ],
         }],
         &ExportSchemaDumpOptions {
             include: ExportInclude::Dml,
@@ -208,6 +230,12 @@ async fn test_mssql_dump_round_trip_restores_into_mssql() {
     assert!(
         dump_sql.contains("N'안녕세계'"),
         "Unicode literal must be N-prefixed to survive restore: {dump_sql}"
+    );
+    // #1677 — the varbinary cell dumps as an unquoted T-SQL binary literal, never
+    // a quoted `N'0x…'` (which would restore the hex text rather than the bytes).
+    assert!(
+        dump_sql.contains("0x0aff00") && !dump_sql.contains("N'0x0aff00'"),
+        "binary column must dump as an unquoted T-SQL binary literal: {dump_sql}"
     );
 
     // Restore: empty the table, replay each dumped INSERT statement.

@@ -152,6 +152,10 @@ function toDumpTables(metas: SchemaMeta[]): SchemaDumpTable[] {
         schema,
         table: t.name,
         columnNames: t.columns.map((c) => c.name),
+        // #1677 — carry each column's category (same order/source as the names)
+        // so the backend dumps binary/BLOB cells as an unquoted binary literal.
+        // `category` is backend-optional; a missing one is `unknown` (non-binary).
+        columnCategories: t.columns.map((c) => c.category ?? "unknown"),
       })),
   );
 }
