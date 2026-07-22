@@ -89,7 +89,7 @@ fi
 #   / git_remote_ref_mutation / base64_shell_pipe / eval_cmd_subst / no_verify
 #   / no_gpg_sign / gpgsign_false / gpgsign_env_key / githooks_path_override
 #   / git_config_set_hooks_path / githooks_path_env_key / lefthook_env_zero
-#   / lefthook_skip / husky_zero / dd_if / mkfs / dev_write
+#   / lefthook_skip / husky_zero / dd_if / mkfs / dev_write / git_worktree_add
 # Note: sql_drop / sql_truncate 는 이 배열이 아니라 check_sql_client_execution
 # 이 세그먼트 단위로 처리한다 (issue #1029 + PR #1151 review). 배열의 다른 패턴은
 # 명령 문자열 전체에 word-match 하지만, DROP/TRUNCATE 는 이 DB 클라이언트 repo 의
@@ -102,6 +102,7 @@ DANGEROUS_PATTERNS=(
   'git_reset_hard::(^|[^a-zA-Z0-9_])git[[:space:]]+reset[[:space:]]+--hard'
   'git_pull::(^|[^a-zA-Z0-9_])git[[:space:]]+pull([^a-zA-Z0-9_]|$)'
   'git_remote_ref_mutation::(^|[^a-zA-Z0-9_])git[[:space:]]+(reset|checkout)[[:space:]]+(FETCH_HEAD|ORIG_HEAD|@\{u\}|origin/[^[:space:];&|]+|upstream/[^[:space:];&|]+|refs/remotes/[^[:space:];&|]+)([^a-zA-Z0-9_]|$)'
+  'git_worktree_add::(^|[^a-zA-Z0-9_])git([[:space:]]+--[a-zA-Z-]+(=[^[:space:];&|]*)?|[[:space:]]+-[a-zA-Z]([[:space:]]+[^-[:space:];&|][^[:space:];&|]*)?)*[[:space:]]+worktree[[:space:]]+add([^a-zA-Z0-9_]|$)'
   'githooks_path_override::(^|[^a-zA-Z0-9_])git[[:space:]].*-c[[:space:]]+core[.]hooksPath[[:space:]]*='
   'git_config_set_hooks_path::(^|[^a-zA-Z0-9_])git[[:space:]]+config[[:space:]]+(-[a-zA-Z0-9-]+([[:space:]]+|=)[[:space:]]*)*core[.]hooksPath[[:space:]]+[^-[:space:];&|][^[:space:];&|]*'
   'no_verify::--no-verify([^a-zA-Z0-9_]|$)'
@@ -335,6 +336,17 @@ Allowed read-only inspection examples:
   git show origin/main
 
 자세히: $MEMORY_POINTER (Push reject 절 + hook 회피 금지)
+EOF
+      ;;
+    git_worktree_add)
+      cat >&2 <<EOF
+git worktree add — agent worktree 자율 생성 금지 (issue #1706).
+Rule: memory/runbook/worktree/memory.md — spawn 은 orchestrator 명시 호출:
+  bash scripts/worktree-spawn.sh <branch>
+본 스크립트가 lefthook install + deps warm-start + hook wiring 을 처리한다.
+(guard 는 top-level 명령 문자열만 본다 — 스크립트 내부 git worktree add 는 미영향.)
+
+자세히: memory/runbook/worktree/memory.md
 EOF
       ;;
     githooks_path_override | git_config_set_hooks_path | githooks_path_env_key)
@@ -657,6 +669,18 @@ check_git_hooks() {
   fi
 
   hooks_dir="$(git config --get core.hooksPath 2>/dev/null || true)"
+  # issue #1706 — 복구로 해제: hooksPath drift 여도 sanctioned repair 명령은
+  # 통과. block 메시지가 안내하는 자기 회복 수단 (setup.sh) 이 자기 자신에게
+  # 차단되는 deadlock 방지 (2026-07-22 실측). 나머지 block layer (dangerous
+  # pattern 등) 는 독립 실행이라 면제 범위는 hooksPath 상태 검사로 한정된다.
+  # 명령 *두부* prefix anchor — 위치 무관 매치면 `git commit … && bash
+  # scripts/setup.sh` (수리가 commit 이후 실행) 도 guard 를 열어 review F1.
+  # setup.sh 자체의 `cd "$REPO_ROOT"` 가 경로를 잡으므로 caller prefix 불요.
+  case "$CMD" in
+    "bash scripts/setup.sh"* | "bash scripts/worktree-spawn.sh"* | "./scripts/setup.sh"* | "./scripts/worktree-spawn.sh"*)
+      return 0
+      ;;
+  esac
   if [ -z "$hooks_dir" ]; then
     block "Blocked: core.hooksPath is unset (default .git/hooks). This repo requires core.hooksPath=.githooks. Run 'bash scripts/setup.sh'."
   fi

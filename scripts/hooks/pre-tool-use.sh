@@ -48,8 +48,30 @@ deny() {
 }
 
 is_bash_tool() {
-	[ "$tool_name" = "Bash" ] || { [ -z "$tool_name" ] && [ -n "$command" ]; }
+	# command 필드 존재 = shell 계열 tool (brain 무관 fail-closed). tool_name 이
+	# "Bash" 가 아닌 shell tool (codex runtime 변종 등) 이 dangerous-pattern
+	# check 를 skip 하던 구멍 차단 (issue #1706 codex coverage). Edit / Write /
+	# apply_patch payload 에는 command 필드가 없어 영향 없다.
+	[ -n "$command" ]
 }
+
+# EnterWorktree tool → agent worktree 자율 생성 차단 (issue #1706).
+# create form (name 만, path 없음) 은 deny — runbook 상 spawn 은 orchestrator 의
+# 명시 호출 (scripts/worktree-spawn.sh) 이지 agent 자율이 아니다. path form
+# (이미 생성된 worktree 진입) 은 허용. Codex 에는 EnterWorktree tool 이 없고,
+# 그 쪽 `git worktree add` 는 check-dangerous-bash.sh 의 git_worktree_add 가 잡는다.
+# path 필드 부재 시 path form 도 deny (필드 부재 기준 fail-closed). 단 jq
+# 자체 부재 시 deny() 의 jq -n 도 실패 (exit 127 → Claude non-blocking) 는
+# wrapper 전체의 기존 jq 의존 — 본 분기 고유 문제 아님.
+if [ "$tool_name" = "EnterWorktree" ]; then
+	if [ -z "$(hook_json_field '.tool_input.path // .input.path')" ]; then
+		deny "BLOCKED: agent worktree 자율 생성 금지 (issue #1706).
+Rule: memory/runbook/worktree/memory.md — spawn 은 orchestrator 명시 호출:
+  bash scripts/worktree-spawn.sh <branch>
+이미 생성된 worktree 진입은 path 형태 (EnterWorktree path:...) 로 허용."
+		exit 0
+	fi
+fi
 
 # Bash tool → destructive/hook-bypass command 정책 (check-dangerous-bash.sh).
 if is_bash_tool; then
