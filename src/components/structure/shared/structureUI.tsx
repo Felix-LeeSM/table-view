@@ -129,20 +129,18 @@ export const STRUCTURE_TH =
 export const STRUCTURE_TH_ACTIONS =
   "h-8 w-20 border-b border-border px-1 py-1.5 text-center align-middle text-xs font-medium text-secondary-foreground";
 
-/**
- * 데이터 행 `<tr>` — group hover 로 actions 버튼 노출.
- * #1739 — `min-h-8` (was `h-8`): 편집 시 ColumnsEditor 가 `flex-col` 로 USING /
- * 경고 input 을 추가하면 행이 32px 를 넘겨야 한다. 정적 행은 여전히 32px floor.
- */
-export const STRUCTURE_TR =
-  "group min-h-8 border-b border-border hover:bg-muted";
+/** 데이터 행 `<tr>` — group hover 로 actions 버튼 노출. */
+export const STRUCTURE_TR = "group h-8 border-b border-border hover:bg-muted";
 
 /**
  * 일반 데이터 `<td>`. caller 가 추가로 text-color / mono / max-w 토큰 합성.
- * #1739 — `min-h-8` 로 편집 확장 시 셀이 콘텐츠에 맞춰 늘어나되 정적 행은 32px 유지.
+ * `h-8` 은 table-cell 에서 CSS 2.2 §17.5.3 상 최소 높이 시맨틱 — 콘텐츠가 더
+ * 크면 (ColumnsEditor 편집 시 `flex-col` 로 USING/경고 input 추가) 셀/행이 그에
+ * 맞춰 성장하고, 정적 행은 32px floor 를 유지한다. table-cell 에서 `min-height`
+ * 는 undefined (webview 별 무시 가능) 이므로 `h-8` 을 유지한다.
  */
 export const STRUCTURE_TD =
-  "min-h-8 border-r border-border px-3 py-1 align-middle text-xs text-foreground";
+  "h-8 border-r border-border px-3 py-1 align-middle text-xs text-foreground";
 
 /** 우측 actions `<td>`. */
 export const STRUCTURE_TD_ACTIONS =
