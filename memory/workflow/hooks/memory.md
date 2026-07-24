@@ -29,6 +29,9 @@ exit code로 피드백하므로, 세부 판정은 hook script와 테스트가 so
   `pre-push-path-router.sh` 와 `check-main-worktree-source-edit.sh` 는 같은 classifier를
   source 해서 route/guard class drift를 막고, test는 classifier-visible cases를
   같이 고정한다.
+- `check-dangerous-bash.sh` 의 block 패턴을 추가/변경하면 entry 문서
+  (`AGENTS.md` / `CLAUDE.md`) 강제 룰의 대표 예가 여전히 대표적인지 확인한다.
+  전량 나열은 hook 이 SOT라 하지 않되, 대표 예 drift 는 막는다.
 
 ## 읽을 때
 
