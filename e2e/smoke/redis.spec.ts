@@ -7,6 +7,7 @@ import {
   step,
   switchToWorkspaceWindow,
   waitForGridTextAll,
+  waitForKvKeyVisible,
   waitForLauncher,
   waitForWorkspaceTextAll,
 } from "./_helpers";
@@ -34,9 +35,9 @@ describe("Redis smoke", () => {
         "Redis key browser did not surface the Safe Mode scan-paused gate",
       );
       await triggerKvKeyScan();
-      await waitForWorkspaceTextAll(
-        ["tv:string"],
-        15000,
+      await waitForKvKeyVisible(
+        "tv:string",
+        30000,
         "Redis key browser did not render seeded keys after manual scan",
       );
     });
@@ -155,22 +156,7 @@ async function triggerKvKeyScan() {
 }
 
 async function clickRedisKey(key: string) {
-  await browser.waitUntil(
-    async () =>
-      await browser.execute((label) => {
-        return Array.from(
-          document.querySelectorAll<HTMLElement>('[role="treeitem"]'),
-        ).some(
-          (item) =>
-            item.offsetParent !== null &&
-            (item.textContent ?? "").includes(label),
-        );
-      }, key),
-    {
-      timeout: 15000,
-      timeoutMsg: `${key} Redis key did not appear`,
-    },
-  );
+  await waitForKvKeyVisible(key, 15000, `${key} Redis key did not appear`);
   await browser.execute((label) => {
     const item = Array.from(
       document.querySelectorAll<HTMLElement>('[role="treeitem"]'),

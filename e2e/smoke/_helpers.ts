@@ -809,6 +809,38 @@ async function gridWaitDiagnostic() {
   return formatGridWaitDiagnostic(state);
 }
 
+// #1200 — the KV key browser is a `[role="treeitem"]` virtualized list. A plain
+// `waitForWorkspaceTextAll([key])` only proves the key string reached the DOM
+// text, not that its treeitem is laid out and interactable. Under the CI
+// software-render fallback (`LIBGL_ALWAYS_SOFTWARE` in scripts/e2e-smoke-ci.sh,
+// forced when WebKitGTK loses the DRI3 device) the string can paint before the
+// row settles, so the text wait passes but the follow-up select hits "element
+// not interactable". Wait for the seeded key's treeitem to actually exist AND
+// be visible (`offsetParent !== null`) — the same stabilization the click
+// helpers already use — so the render wait is deterministic, not text-coarse.
+export async function waitForKvKeyVisible(
+  key: string,
+  timeout = 30000,
+  timeoutMsg = `${key} key did not render in the KV key browser`,
+) {
+  await switchToWorkspaceWindow();
+  await browser.waitUntil(
+    async () =>
+      await browser.execute(
+        (label) =>
+          Array.from(
+            document.querySelectorAll<HTMLElement>('[role="treeitem"]'),
+          ).some(
+            (item) =>
+              item.offsetParent !== null &&
+              (item.textContent ?? "").includes(label),
+          ),
+        key,
+      ),
+    { timeout, timeoutMsg },
+  );
+}
+
 export async function waitForWorkspaceTextAll(
   snippets: string[],
   timeout: number,
