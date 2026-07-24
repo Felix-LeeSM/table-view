@@ -226,6 +226,35 @@ H4 umbrella closure means ERD/SchemaGraph support claims, reusable graph ownersh
 cached read-only schema diff, dense ERD smoke, and smoke routing are aligned. It
 does not mean data compare or migration/apply execution has shipped.
 
+### ERD 캔버스 v1 MVP 경계 (2026-07-24 오너 grill)
+
+ERD 캔버스 설계는 ADR 0054–0057 로 이미 잠겨 있다 (React Flow+elkjs 렌더러,
+가상 FK polymorphic, layout persist/reconcile/undo, facet 필터). 아래는 설계
+재론이 아니라 v1 MVP 경계와 빌드 순서를 확정한 로드맵 스코핑이다 — 위 gate
+테이블은 현재 shipped `SchemaErd*` panel 상태이고, 이 캔버스는 그 위에 얹는
+React Flow+elkjs rebuild 다.
+
+**v1 = 읽기전용 + 레이아웃 안정화.** layout persist 는 단순 편집 기능이 아니라
+elkjs 매-열람 자동재배치의 세션 간 안정성 문제라 v1 에 포함한다. 가상 FK 편집은
+v2 로 이월한다.
+
+| Slice | 분류 | 추적 | 근거 |
+|---|---|---|---|
+| React Flow+elkjs 렌더러 + semantic zoom | v1 | ADR 0054 | 가시 기능 baseline. semantic zoom 기본은 v1. |
+| facet 필터 | v1 | #1657, ADR 0057 | |
+| schema diff 하이라이트 | v1 | #1662 | |
+| layout persist/undo | v1 | #1660, ADR 0056 | 매-열람 elkjs 재배치의 세션 간 안정성을 닫는 것이 v1 목표. |
+| 가상 FK 렌더/추론/referential action | v2 | #1659 / #1668 / #1665, ADR 0055 | 편집 계열은 v2 이월. |
+| viewport 가상화 + worker 레이아웃 | 후속 | #1658 (성능 부분) | 실제 대형 스키마 성능 pain 신호 후 승격. 현재 수백 테이블 fixture 없음 (YAGNI). |
+| 워크플로우 연결 | park | #1667 | 의도 불명확. v1 범위 밖, 별도 확인 후 재스코핑. |
+
+**빌드 순서**: 가시 기능 우선 — React Flow 기본 캔버스 + semantic zoom 위에
+persist/facet/diff 를 먼저 얹는다. #1658 성능 작업(viewport 가상화/worker
+레이아웃)은 실제 대형 스키마 성능 pain 신호 후로 이월한다.
+
+**a11y 내장 원칙**: #1663 (keyboard nav + color+shape 이중 인코딩)은 별도 후기
+게이트가 아니라 각 v1 기능에 내장한다.
+
 ## H5 진행 기준
 
 H5 non-RDBMS 는 **Document/KV/Search claim 을 현재 구현과 증거에 맞추는 정합성
