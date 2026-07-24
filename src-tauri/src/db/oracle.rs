@@ -6,9 +6,11 @@
 //! table/index/constraint DDL, and PL/SQL body/package source. Issue #1065
 //! adds SID connections (`Config::with_sid`) and Oracle wallet mTLS
 //! (`Config::with_wallet`, `ewallet.pem`) with a host/service/SID injection
-//! whitelist. Raw DDL/admin execution, switch-database, trigger introspection
-//! (deferred, empty list), TNS descriptors, 1-way TLS (TCPS+CA), and advanced
-//! auth remain unsupported or unclaimed.
+//! whitelist. Issue #1072 (2차) also wires read-only trigger listing
+//! (`list_triggers` over `all_triggers`, header-only definition — the LONG
+//! body is not read). Raw DDL/admin execution, switch-database, trigger DDL
+//! (create/drop) and single-trigger source, TNS descriptors, 1-way TLS
+//! (TCPS+CA), and advanced auth remain unsupported or unclaimed.
 
 mod admin;
 mod catalog;
@@ -34,7 +36,7 @@ use crate::models::{
     AddColumnRequest, AddConstraintRequest, AlterTableRequest, ColumnInfo, ConnectionConfig,
     ConstraintInfo, CreateIndexRequest, CreateTableRequest, DatabaseType, DropColumnRequest,
     DropConstraintRequest, DropIndexRequest, DropTableRequest, FunctionInfo, IndexInfo,
-    RenameTableRequest, SchemaChangeResult, TableData, TableInfo, ViewInfo,
+    RenameTableRequest, SchemaChangeResult, TableData, TableInfo, TriggerInfo, ViewInfo,
 };
 
 use super::{BoxFuture, DbAdapter, NamespaceInfo, NamespaceLabel, RdbAdapter, RdbQueryResult};
@@ -542,8 +544,18 @@ impl RdbAdapter for OracleAdapter {
         Box::pin(async move { OracleAdapter::get_function_source(self, namespace, function).await })
     }
 
-    // `list_triggers` inherits the RdbAdapter default `Ok(Vec::new())` — Oracle
-    // trigger introspection is deferred like MySQL/SQLite, not a live claim.
+    // Reason: #1072 (2차) — list_triggers was the last Oracle catalog stub still
+    // inheriting the RdbAdapter default `Ok(Vec::new())`, so the Structure
+    // Triggers tab showed empty for Oracle despite live triggers. It now reads
+    // `all_triggers` through `oracle/catalog.rs` like the other list_* surfaces.
+    // (2026-07-25)
+    fn list_triggers<'a>(
+        &'a self,
+        namespace: &'a str,
+        table: &'a str,
+    ) -> BoxFuture<'a, Result<Vec<TriggerInfo>, AppError>> {
+        Box::pin(async move { OracleAdapter::list_triggers(self, namespace, table).await })
+    }
 
     // ── Issue #1073 — admin ops (activity/kill/slow/info) Oracle parity ──
     fn list_server_activity<'a>(

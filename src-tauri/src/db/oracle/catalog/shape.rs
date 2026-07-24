@@ -1,6 +1,8 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 
-use crate::models::{ColumnInfo, ConstraintInfo, FunctionInfo, IndexInfo, TableInfo, ViewInfo};
+use crate::models::{
+    ColumnInfo, ConstraintInfo, FunctionInfo, IndexInfo, TableInfo, TriggerInfo, ViewInfo,
+};
 
 use super::decode::map_oracle_data_type;
 
@@ -86,6 +88,22 @@ pub(super) struct OracleSynonymCatalogRow {
     pub(super) target_owner: Option<String>,
     pub(super) target_name: Option<String>,
     pub(super) db_link: Option<String>,
+}
+
+/// #1072 (2차) — one `all_triggers` row for a table trigger. The LONG
+/// `trigger_body` is deliberately not read (see `TRIGGERS_SQL`), so only the
+/// declaration metadata is carried.
+#[derive(Debug, Clone)]
+pub(super) struct OracleTriggerCatalogRow {
+    pub(super) name: String,
+    /// `all_triggers.trigger_type`, e.g. `"BEFORE EACH ROW"`, `"AFTER STATEMENT"`,
+    /// `"INSTEAD OF"`, `"COMPOUND"`.
+    pub(super) trigger_type: String,
+    /// `all_triggers.triggering_event`, e.g. `"INSERT OR UPDATE"`.
+    pub(super) triggering_event: String,
+    pub(super) when_clause: Option<String>,
+    /// `all_triggers.status`, `"ENABLED"` / `"DISABLED"`.
+    pub(super) status: String,
 }
 
 pub(super) fn build_tables(schema: &str, rows: Vec<OracleTableCatalogRow>) -> Vec<TableInfo> {
@@ -340,6 +358,126 @@ fn synonym_target(row: &OracleSynonymCatalogRow) -> String {
         Some(link) => format!("{target}@{link}"),
         None => target,
     }
+}
+
+// #1072 (2차) — map `all_triggers` rows onto the PG-shaped `TriggerInfo`. Oracle
+// triggers have an inline PL/SQL body rather than a separate trigger function
+// (PG semantics), so `function_schema` / `function_name` are left empty; the
+// frontend gates the "function" block on a non-empty `functionName`. The
+// `definition` is reconstructed from the declaration metadata (the LONG body is
+// not read — see `TRIGGERS_SQL`).
+pub(super) fn build_triggers(
+    schema: &str,
+    table: &str,
+    rows: Vec<OracleTriggerCatalogRow>,
+) -> Vec<TriggerInfo> {
+    rows.into_iter()
+        .map(|row| {
+            let timing = oracle_trigger_timing(&row.trigger_type);
+            let orientation = oracle_trigger_orientation(&row.trigger_type, &timing);
+            let events = oracle_trigger_events(&row.triggering_event);
+            let when_expression = row
+                .when_clause
+                .as_deref()
+                .map(str::trim)
+                .filter(|clause| !clause.is_empty())
+                .map(str::to_string);
+            let disabled = row.status.trim().eq_ignore_ascii_case("DISABLED");
+            let definition = build_trigger_definition(
+                schema,
+                table,
+                &row.name,
+                &timing,
+                &events,
+                &orientation,
+                when_expression.as_deref(),
+                disabled,
+            );
+            TriggerInfo {
+                name: row.name,
+                schema: schema.to_string(),
+                table: table.to_string(),
+                timing,
+                events,
+                orientation,
+                function_schema: String::new(),
+                function_name: String::new(),
+                arguments: None,
+                when_expression,
+                definition,
+            }
+        })
+        .collect()
+}
+
+/// Map `all_triggers.trigger_type` onto the PG `timing` whitelist. `COMPOUND`
+/// (and any future Oracle timing) surfaces verbatim — the `TriggerInfo.timing`
+/// field is a free `string`, not a literal union.
+fn oracle_trigger_timing(trigger_type: &str) -> String {
+    let upper = trigger_type.trim().to_ascii_uppercase();
+    if upper.contains("INSTEAD OF") {
+        "INSTEAD OF".to_string()
+    } else if upper.starts_with("BEFORE") {
+        "BEFORE".to_string()
+    } else if upper.starts_with("AFTER") {
+        "AFTER".to_string()
+    } else {
+        upper
+    }
+}
+
+/// `INSTEAD OF` triggers are always row-level even though `trigger_type` omits
+/// the `EACH ROW` marker; every other type is row-level only when it carries it.
+fn oracle_trigger_orientation(trigger_type: &str, timing: &str) -> String {
+    let upper = trigger_type.trim().to_ascii_uppercase();
+    if timing == "INSTEAD OF" || upper.contains("EACH ROW") {
+        "ROW".to_string()
+    } else {
+        "STATEMENT".to_string()
+    }
+}
+
+/// Split `all_triggers.triggering_event` (`"INSERT OR UPDATE"`) into the event
+/// tokens, dropping the `OR` separators. Table DML triggers only carry
+/// INSERT/UPDATE/DELETE, so no TRUNCATE filtering is needed here.
+fn oracle_trigger_events(triggering_event: &str) -> Vec<String> {
+    triggering_event
+        .split_whitespace()
+        .filter(|token| !token.eq_ignore_ascii_case("OR"))
+        .map(|token| token.to_ascii_uppercase())
+        .collect()
+}
+
+/// Reconstruct a header-only `CREATE OR REPLACE TRIGGER` declaration from the
+/// non-LONG dictionary columns. The PL/SQL body is not included (the LONG
+/// `trigger_body` is not read); the header still carries timing / events /
+/// target / orientation / WHEN / disabled state so the read-only Structure tab
+/// shows the trigger's contract.
+#[allow(clippy::too_many_arguments)]
+fn build_trigger_definition(
+    schema: &str,
+    table: &str,
+    name: &str,
+    timing: &str,
+    events: &[String],
+    orientation: &str,
+    when_expression: Option<&str>,
+    disabled: bool,
+) -> String {
+    let mut definition = format!(
+        "CREATE OR REPLACE TRIGGER \"{schema}\".\"{name}\"\n{timing} {events} ON \"{schema}\".\"{table}\"",
+        events = events.join(" OR "),
+    );
+    if orientation == "ROW" {
+        definition.push_str("\nFOR EACH ROW");
+    }
+    if let Some(when) = when_expression {
+        definition.push_str(&format!("\nWHEN ({when})"));
+    }
+    if disabled {
+        definition.push_str("\nDISABLE");
+    }
+    definition
 }
 
 #[cfg(test)]
@@ -706,5 +844,140 @@ mod tests {
 
         assert_eq!(synonyms[0].arguments.as_deref(), Some("EMPLOYEES"));
         assert_eq!(synonyms[1].arguments.as_deref(), Some("unresolved target"));
+    }
+
+    fn trigger_row(
+        name: &str,
+        trigger_type: &str,
+        triggering_event: &str,
+        when_clause: Option<&str>,
+        status: &str,
+    ) -> OracleTriggerCatalogRow {
+        OracleTriggerCatalogRow {
+            name: name.into(),
+            trigger_type: trigger_type.into(),
+            triggering_event: triggering_event.into(),
+            when_clause: when_clause.map(str::to_string),
+            status: status.into(),
+        }
+    }
+
+    // Reason: #1072 (2차) — a BEFORE EACH ROW trigger must decode into the
+    // PG-shaped timing/events/orientation fields, keep the WHEN clause, leave
+    // the Oracle-inapplicable function fields empty, and rebuild a FOR EACH ROW
+    // header. (2026-07-25)
+    #[test]
+    fn build_triggers_decodes_before_each_row_with_when_clause() {
+        let triggers = build_triggers(
+            "HR",
+            "EMPLOYEES",
+            vec![trigger_row(
+                "TRG_AUDIT",
+                "BEFORE EACH ROW",
+                "INSERT OR UPDATE",
+                Some("  :NEW.SALARY > 0  "),
+                "ENABLED",
+            )],
+        );
+
+        let trigger = &triggers[0];
+        assert_eq!(trigger.name, "TRG_AUDIT");
+        assert_eq!(trigger.schema, "HR");
+        assert_eq!(trigger.table, "EMPLOYEES");
+        assert_eq!(trigger.timing, "BEFORE");
+        assert_eq!(trigger.events, vec!["INSERT", "UPDATE"]);
+        assert_eq!(trigger.orientation, "ROW");
+        // Oracle triggers have no separate trigger function.
+        assert_eq!(trigger.function_schema, "");
+        assert_eq!(trigger.function_name, "");
+        assert_eq!(trigger.arguments, None);
+        // Whitespace-only padding is trimmed; a real predicate is kept.
+        assert_eq!(trigger.when_expression.as_deref(), Some(":NEW.SALARY > 0"));
+        assert_eq!(
+            trigger.definition,
+            "CREATE OR REPLACE TRIGGER \"HR\".\"TRG_AUDIT\"\n\
+             BEFORE INSERT OR UPDATE ON \"HR\".\"EMPLOYEES\"\n\
+             FOR EACH ROW\n\
+             WHEN (:NEW.SALARY > 0)"
+        );
+    }
+
+    // Reason: #1072 (2차) — a statement-level trigger has no FOR EACH ROW and no
+    // WHEN; the three-event roster must round-trip. (2026-07-25)
+    #[test]
+    fn build_triggers_decodes_after_statement_multi_event_without_row_or_when() {
+        let triggers = build_triggers(
+            "HR",
+            "AUDIT_LOG",
+            vec![trigger_row(
+                "TRG_LOG",
+                "AFTER STATEMENT",
+                "INSERT OR UPDATE OR DELETE",
+                None,
+                "ENABLED",
+            )],
+        );
+
+        let trigger = &triggers[0];
+        assert_eq!(trigger.timing, "AFTER");
+        assert_eq!(trigger.events, vec!["INSERT", "UPDATE", "DELETE"]);
+        assert_eq!(trigger.orientation, "STATEMENT");
+        assert_eq!(trigger.when_expression, None);
+        assert_eq!(
+            trigger.definition,
+            "CREATE OR REPLACE TRIGGER \"HR\".\"TRG_LOG\"\n\
+             AFTER INSERT OR UPDATE OR DELETE ON \"HR\".\"AUDIT_LOG\""
+        );
+    }
+
+    // Reason: #1072 (2차) — INSTEAD OF triggers are row-level even though
+    // trigger_type omits "EACH ROW", and a DISABLED trigger must render a
+    // trailing DISABLE so the read-only header reflects its state. (2026-07-25)
+    #[test]
+    fn build_triggers_marks_instead_of_row_scope_and_disabled_state() {
+        let triggers = build_triggers(
+            "HR",
+            "EMP_VIEW",
+            vec![trigger_row(
+                "TRG_VIEW",
+                "INSTEAD OF",
+                "INSERT",
+                None,
+                "DISABLED",
+            )],
+        );
+
+        let trigger = &triggers[0];
+        assert_eq!(trigger.timing, "INSTEAD OF");
+        assert_eq!(trigger.orientation, "ROW");
+        assert_eq!(trigger.events, vec!["INSERT"]);
+        assert_eq!(
+            trigger.definition,
+            "CREATE OR REPLACE TRIGGER \"HR\".\"TRG_VIEW\"\n\
+             INSTEAD OF INSERT ON \"HR\".\"EMP_VIEW\"\n\
+             FOR EACH ROW\n\
+             DISABLE"
+        );
+    }
+
+    // Reason: #1072 (2차) — a COMPOUND trigger has no single BEFORE/AFTER timing
+    // in the PG whitelist, so the raw Oracle keyword surfaces verbatim (the
+    // timing field is a free string). (2026-07-25)
+    #[test]
+    fn build_triggers_surfaces_compound_timing_verbatim() {
+        let triggers = build_triggers(
+            "HR",
+            "EMPLOYEES",
+            vec![trigger_row(
+                "TRG_COMPOUND",
+                "COMPOUND",
+                "UPDATE",
+                None,
+                "ENABLED",
+            )],
+        );
+
+        assert_eq!(triggers[0].timing, "COMPOUND");
+        assert_eq!(triggers[0].orientation, "STATEMENT");
     }
 }
