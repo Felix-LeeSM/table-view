@@ -298,6 +298,7 @@ export default function SearchSidebar({ connectionId }: SearchSidebarProps) {
         className="flex items-center justify-between gap-2 border-b border-border px-3 py-1.5 text-3xs text-muted-foreground"
         data-testid="search-catalog-status"
       >
+        {/* eslint-disable-next-line no-restricted-syntax -- "search-native": 검색 카탈로그 소스 타입 식별자(기술 토큰), 번역 대상 아님 (#1074) */}
         <span className="shrink-0">search-native</span>
         <span className="truncate min-w-0">{summaryText}</span>
       </div>

@@ -422,6 +422,57 @@ export default tseslint.config(
           message:
             "컴포넌트/페이지 .tsx에서 store.getState() 직접 호출 금지. selector hook (useStore(s => s.x)) 또는 src/hooks/* 의 lifecycle hook으로 분리.",
         },
+        // #1074 i18n — 하드코딩 UI 문자열 가드 (2026-07-25). 신규 하드코딩
+        // 영어 문자열을 차단해 22.30 milestone 이후 UI 가 다시 하드코딩으로
+        // 새는 것을 막는다. JSXText 자식 텍스트 + user-facing 속성만 대상이고
+        // className / data-* / 기술 토큰은 selector 밖이라 자동 exempt. 이미
+        // 번역된 surface (t() 사용) 는 리터럴이 없어 통과한다. 잔여 하드코딩이
+        // 밀집한 surface (query/schema/search/structure/connection-forms) 는
+        // 아래 별도 블록에서 이 규칙만 끈다 — Slice 2 (#1074) 잔여 번역 backlog.
+        {
+          // 자식 텍스트에 알파벳 2자 이상 = 번역 후보. 순수 공백/숫자/기호
+          // JSXText (`{value} ms` 의 공백 등) 는 매칭되지 않는다.
+          selector: "JSXText[value=/[A-Za-z]{2,}/]",
+          message:
+            "하드코딩 UI 문자열 금지 (#1074 i18n). useTranslation 의 t() 로 번역 키를 쓰세요. 코드/식별자/기술 토큰 등 번역 불가면 사유 코멘트와 함께 `eslint-disable-next-line no-restricted-syntax`.",
+        },
+        {
+          selector:
+            "JSXAttribute[name.name=/^(title|placeholder|alt|label|aria-label)$/] > Literal[value=/[A-Za-z]{2,}/]",
+          message:
+            "하드코딩 UI 속성 문자열 금지 (#1074 i18n). title/placeholder/alt/label/aria-label 은 t() 로 번역하세요. 기술 예시값이면 사유 코멘트와 함께 `eslint-disable-next-line no-restricted-syntax`.",
+        },
+      ],
+    },
+  },
+  // #1074 i18n phased rollout — 잔여 하드코딩이 밀집한 surface 는 위 JSXText/
+  // 속성 가드를 아직 끈다 (기존 select / getState 규칙은 유지). 이 목록은 Slice 2
+  // (#1074) 전량 번역 시 하나씩 제거되며, 제거 = 해당 surface 가드 편입.
+  // no-restricted-syntax 는 flat config 에서 배열 전체가 override 되므로
+  // select / getState 를 다시 나열해 위 블록의 두 규칙을 보존한다.
+  {
+    files: [
+      "src/components/query/**/*.tsx",
+      "src/components/schema/**/*.tsx",
+      "src/components/search/**/*.tsx",
+      "src/components/structure/**/*.tsx",
+      "src/features/connection/components/forms/**/*.tsx",
+    ],
+    ignores: ["**/*.test.tsx"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "JSXOpeningElement[name.name='select']",
+          message:
+            "Use <Select> from @components/ui/select instead of native <select>.",
+        },
+        {
+          selector:
+            "CallExpression[callee.type='MemberExpression'][callee.property.name='getState']",
+          message:
+            "컴포넌트/페이지 .tsx에서 store.getState() 직접 호출 금지. selector hook (useStore(s => s.x)) 또는 src/hooks/* 의 lifecycle hook으로 분리.",
+        },
       ],
     },
   },
