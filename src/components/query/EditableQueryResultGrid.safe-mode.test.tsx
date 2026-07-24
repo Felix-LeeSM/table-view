@@ -1,18 +1,23 @@
-// AC-185-05 — EditableQueryResultGrid Safe Mode gate. 4 cases per Sprint 185.
-// AC-186-05 — Sprint 186 adds warn-tier dialog handoff (3 cases).
-// Sprint 244 (2026-05-08) tightened the policy to "production+strict|off
-// = read-only" — REVERTED in Sprint 245 (ADR 0022 Phase 1). `[AC-244-09]`
-// (block on prod+strict + safe DML) was re-inverted back to a
-// pass-through assertion below as `[AC-245-C3]`.
-// date 2026-05-01 (initial), 2026-05-08 (Sprint 244 → Sprint 245).
+// EditableQueryResultGrid Safe Mode gate — SURFACE WIRING contract only.
 //
-// Current policy (Sprint 245 — ADR 0022 Phase 1, destructive-only):
-//   - production + any mode: SELECT and safe writes (INSERT, UPDATE
-//     WHERE, DELETE WHERE, CREATE, ALTER additive) flow through;
-//     destructive opens the confirm dialog (mode-specific reason copy).
-//   - non-production + strict: destructive opens the dialog (M.1 new
-//     flow); safe writes / SELECT pass.
-//   - non-production + warn / off: bypass.
+// Sprint 185/186 originally enumerated the full env×mode×severity matrix
+// (prod/strict|warn|off × destructive/safe) here AND in
+// `QueryTab.safe-mode.test.tsx` — the same decision matrix re-verified on two
+// surfaces. Issue #1623 (2026-07-24) dedups: the decision matrix SOT is the
+// unit layer —
+//   - `src/lib/safeMode.test.ts` (`decideSafeModeAction`, L1..L8 + reason copy)
+//   - `src/hooks/useSafeModeGate.test.ts` (store/env wiring into that decision)
+// the ConfirmDestructiveDialog rendering (prod vs non-prod header, reason copy,
+// confirm arming) is owned by `ConfirmDestructiveDialog.test.tsx`, and the
+// allow→executeQueryBatch happy path by `EditableQueryResultGrid.test.tsx`.
+//
+// This file keeps only the representative cells that prove the gate decision
+// is wired into THIS surface's real commit path (`executeQueryBatch`):
+//   - prod+strict destructive → ConfirmDestructiveDialog opens, batch NOT run
+//   - prod+warn confirm click → batch runs (and NOT before confirm)
+//   - dialog Cancel → batch NOT run, cancellation surfaced (security path)
+//
+// date 2026-05-01 (initial), 2026-07-24 (#1623 matrix dedup).
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { setupTauriMock } from "@/test-utils/tauriMock";
 import {
@@ -113,7 +118,7 @@ vi.mock("@lib/sql/rawQuerySqlBuilder", async (orig) => {
 
 import { buildRawEditSql } from "@lib/sql/rawQuerySqlBuilder";
 
-describe("EditableQueryResultGrid — Sprint 185 Safe Mode gate", () => {
+describe("EditableQueryResultGrid — Safe Mode gate → executeQueryBatch wiring", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockExecuteQueryBatch.mockResolvedValue([]);
@@ -154,24 +159,11 @@ describe("EditableQueryResultGrid — Sprint 185 Safe Mode gate", () => {
     });
   }
 
-  async function openPreviewAndExecute(buildSqls: string[]) {
-    await clickExecute(buildSqls);
-    // Strict + off + non-prod paths immediately fire either the toast (block)
-    // or executeQueryBatch (pass). Warn paths use clickExecute directly and
-    // assert against the dialog.
-    await waitFor(() => {
-      return (
-        mockToastError.mock.calls.length +
-          mockExecuteQueryBatch.mock.calls.length >
-        0
-      );
-    });
-  }
-
-  it("[AC-185-05a] production + strict + WHERE-less DELETE → confirm dialog opens, executeQueryBatch not called", async () => {
-    // Sprint 245 (ADR 0022 Phase 1) — was "block" under Sprint 244's
-    // read-only policy. Production destructive now opens the confirm
-    // dialog regardless of mode.
+  it("[AC-185-05a] production + strict + destructive → confirm dialog opens, executeQueryBatch NOT called", async () => {
+    // Representative "destructive → dialog" wiring: the gate decision
+    // (confirm) routes to ConfirmDestructiveDialog instead of the commit
+    // path. Full env×mode matrix lives in the unit SOT (safeMode.test.ts /
+    // useSafeModeGate.test.ts). (2026-05-01)
     setup("production", "strict");
     await clickExecute(["DELETE FROM users"]);
 
@@ -180,86 +172,19 @@ describe("EditableQueryResultGrid — Sprint 185 Safe Mode gate", () => {
     expect(mockToastError).not.toHaveBeenCalled();
   });
 
-  it("[AC-245-C3] production + strict + safe DML (UPDATE WHERE pk) → executeQueryBatch called once (Sprint 244 block reverted)", async () => {
-    // Sprint 245 — was [AC-244-09] "block". Safe writes flow through
-    // on production regardless of mode under the destructive-only
-    // policy. Cmd+Z undoes uncommitted grid edits only; committed writes
-    // are not recoverable (Phase 5 compensating-commit undo pending, #1126).
-    setup("production", "strict");
-    await openPreviewAndExecute([
-      "UPDATE users SET name = 'Alicia' WHERE id = 1",
-    ]);
-
-    expect(mockExecuteQueryBatch).toHaveBeenCalledTimes(1);
-    expect(mockToastError).not.toHaveBeenCalled();
-  });
-
-  it("[AC-185-05c] non-production + strict + WHERE-less DELETE → confirm dialog (M.1 new flow)", async () => {
-    // Sprint 245 — was "passes through". Strict on non-production now
-    // also opens the destructive dialog (M.1 — for shared-staging /
-    // learning environments). Sprint 246 (ADR 0022 Phase 2) — non-prod
-    // header reads "Destructive statement" + "Safe Mode (strict)"
-    // subcaption (no "PRODUCTION DATABASE" shout).
-    setup("development", "strict");
-    await clickExecute(["DELETE FROM users"]);
-
-    await screen.findByText("Destructive statement");
-    expect(screen.queryByText("PRODUCTION DATABASE")).not.toBeInTheDocument();
-    expect(screen.getByText(/Safe Mode \(strict\)/)).toBeInTheDocument();
-    expect(mockExecuteQueryBatch).not.toHaveBeenCalled();
-  });
-
-  it("[AC-185-05c-2] non-production + warn + WHERE-less DELETE → passes through", async () => {
-    // Sprint 245 — paired with the M.1 new flow above so the matrix
-    // coverage stays complete: warn on non-prod does NOT open the
-    // dialog even on destructive statements.
-    setup("development", "warn");
-    await openPreviewAndExecute(["DELETE FROM users"]);
-
-    expect(mockExecuteQueryBatch).toHaveBeenCalledTimes(1);
-    expect(mockToastError).not.toHaveBeenCalled();
-  });
-
-  it("[AC-245-L6] production + off + WHERE-less DELETE → confirm dialog with prod-auto reason copy", async () => {
-    // Sprint 245 — was [AC-190-01-4] "block (prod-auto)". The
-    // destructive-only policy opens the confirm dialog instead of
-    // blocking; prod-auto reason copy ("production environment forces
-    // Safe Mode — change connection environment tag to override") is
-    // preserved in the dialog body.
-    setup("production", "off");
-    await clickExecute(["DELETE FROM users"]);
-
-    await screen.findByText("PRODUCTION DATABASE");
-    expect(mockExecuteQueryBatch).not.toHaveBeenCalled();
-    expect(
-      screen.getAllByText(/production environment forces Safe Mode/).length,
-    ).toBeGreaterThan(0);
-  });
-
-  it("[AC-186-05a] production + warn + WHERE-less DELETE → ConfirmDestructiveDialog opens, executeQueryBatch not called", async () => {
-    // Sprint 246 (ADR 0022 Phase 2) — header is "PRODUCTION DATABASE".
-    // #1111 — Confirm is briefly disabled after mount to absorb a reflexive
-    // Enter, then arms. The mount-only invariant (no commit until the user
-    // clicks the armed Confirm) is preserved.
+  it("[AC-186-05b] warn dialog Confirm click → executeQueryBatch runs (and NOT before confirm)", async () => {
+    // Representative "confirm → execute" wiring. Sprint 246 — Confirm is a
+    // single click; #1111 — it arms after a short delay to absorb a
+    // reflexive Enter, so we wait for it to enable before asserting the
+    // commit path fires exactly once. (2026-05-01)
     setup("production", "warn");
     await clickExecute(["DELETE FROM users"]);
 
     await screen.findByText("PRODUCTION DATABASE");
     const confirmBtn = screen.getByTestId("confirm-destructive-confirm");
     await waitFor(() => expect(confirmBtn).not.toBeDisabled());
+    // Gate held the commit until the user confirms.
     expect(mockExecuteQueryBatch).not.toHaveBeenCalled();
-    expect(mockToastError).not.toHaveBeenCalled();
-  });
-
-  it("[AC-186-05b] warn dialog Confirm click → executeQueryBatch called", async () => {
-    // Sprint 246 — Confirm is a single click; type-to-confirm gate
-    // removed.
-    setup("production", "warn");
-    await clickExecute(["DELETE FROM users"]);
-
-    await screen.findByText("PRODUCTION DATABASE");
-    const confirmBtn = screen.getByTestId("confirm-destructive-confirm");
-    await waitFor(() => expect(confirmBtn).not.toBeDisabled());
     act(() => {
       confirmBtn.click();
     });
@@ -268,7 +193,9 @@ describe("EditableQueryResultGrid — Sprint 185 Safe Mode gate", () => {
     });
   });
 
-  it("[AC-186-05c] warn dialog Cancel → executeError set with warn message + toast.info", async () => {
+  it("[AC-186-05c] warn dialog Cancel → executeError set with warn message + toast.info, executeQueryBatch NOT called", async () => {
+    // Security path: cancelling the destructive dialog must not commit and
+    // must surface the cancellation on this surface. (2026-05-01)
     setup("production", "warn");
     await clickExecute(["DELETE FROM users"]);
 
