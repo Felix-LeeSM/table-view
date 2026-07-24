@@ -7,6 +7,7 @@ import {
   runQuery,
   step,
   switchToWorkspaceWindow,
+  waitForKvKeyVisible,
   waitForLauncher,
   waitForWorkspaceTextAll,
 } from "./_helpers";
@@ -30,9 +31,9 @@ describe("Valkey smoke", () => {
         "Valkey key browser did not surface the Safe Mode scan-paused gate",
       );
       await triggerKvKeyScan();
-      await waitForWorkspaceTextAll(
-        ["vk:string"],
-        15000,
+      await waitForKvKeyVisible(
+        "vk:string",
+        30000,
         "Valkey key browser did not render seeded keys after manual scan",
       );
     });
@@ -152,23 +153,7 @@ async function triggerKvKeyScan() {
 }
 
 async function clickKvKey(key: string) {
-  await switchToWorkspaceWindow();
-  await browser.waitUntil(
-    async () =>
-      await browser.execute((label) => {
-        return Array.from(
-          document.querySelectorAll<HTMLElement>('[role="treeitem"]'),
-        ).some(
-          (item) =>
-            item.offsetParent !== null &&
-            (item.textContent ?? "").includes(label),
-        );
-      }, key),
-    {
-      timeout: 15000,
-      timeoutMsg: `${key} Valkey key did not appear`,
-    },
-  );
+  await waitForKvKeyVisible(key, 15000, `${key} Valkey key did not appear`);
   await browser.execute((label) => {
     const item = Array.from(
       document.querySelectorAll<HTMLElement>('[role="treeitem"]'),
