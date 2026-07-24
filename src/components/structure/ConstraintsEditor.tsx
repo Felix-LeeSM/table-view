@@ -449,8 +449,8 @@ export default function ConstraintsEditor({
         ? selectSchemaGraphMigrationImpact(schemaGraphIntelligence, {
             kind: "constraint",
             constraintId: schemaGraphConstraintId(
-              schema,
-              table,
+              schema as SchemaName,
+              table as TableName,
               constraintName,
             ),
           })

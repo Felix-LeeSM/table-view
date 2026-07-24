@@ -1,3 +1,4 @@
+import type { SchemaName, TableName } from "@/types/branded";
 import type { ColumnInfo } from "@/types/schema";
 import type {
   SchemaGraphConstraintPayload,
@@ -113,8 +114,9 @@ export function normalizeForeignKeyRelationship({
         columns: sourceColumns,
       },
       target: {
-        schema: targetSchema,
-        table: referenceChoice.reference.table,
+        // Parsed FK reference string → graph endpoint trust boundary.
+        schema: targetSchema as SchemaName,
+        table: referenceChoice.reference.table as TableName,
         columns: referenceColumns,
       },
       rawMetadata: {

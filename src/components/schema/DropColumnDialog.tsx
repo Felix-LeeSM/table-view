@@ -18,6 +18,7 @@ import { useConnectionStore } from "@stores/connectionStore";
 import { useSchemaGraphIntelligence } from "@/hooks/useSchemaGraphIntelligence";
 import { selectSchemaGraphMigrationImpact } from "@/lib/schemaGraphSelectors";
 import { schemaGraphColumnId } from "@/lib/schemaGraphSupport";
+import type { SchemaName, TableName } from "@/types/branded";
 import SchemaGraphMigrationImpactSummary from "./SchemaGraphMigrationImpactSummary";
 
 /**
@@ -107,7 +108,11 @@ export default function DropColumnDialog({
       database && schemaGraphIntelligence
         ? selectSchemaGraphMigrationImpact(schemaGraphIntelligence, {
             kind: "column",
-            columnId: schemaGraphColumnId(schemaName, tableName, columnName),
+            columnId: schemaGraphColumnId(
+              schemaName as SchemaName,
+              tableName as TableName,
+              columnName,
+            ),
           })
         : null,
     [columnName, database, schemaGraphIntelligence, schemaName, tableName],

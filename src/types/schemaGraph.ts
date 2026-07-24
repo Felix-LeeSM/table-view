@@ -1,3 +1,4 @@
+import type { SchemaName, TableName } from "./branded";
 import type { RuntimeRdbmsDatabaseType } from "./rdbmsDataSources";
 import type {
   ColumnInfo,
@@ -44,21 +45,21 @@ export interface SchemaGraphNodeBase {
 
 export interface SchemaGraphSchemaNode extends SchemaGraphNodeBase {
   readonly kind: "schema";
-  readonly schema: string;
+  readonly schema: SchemaName;
   readonly data: SchemaInfo;
 }
 
 export interface SchemaGraphTableNode extends SchemaGraphNodeBase {
   readonly kind: "table";
-  readonly schema: string;
-  readonly table: string;
+  readonly schema: SchemaName;
+  readonly table: TableName;
   readonly data: TableInfo;
 }
 
 export interface SchemaGraphColumnNode extends SchemaGraphNodeBase {
   readonly kind: "column";
-  readonly schema: string;
-  readonly table: string;
+  readonly schema: SchemaName;
+  readonly table: TableName;
   readonly column: string;
   readonly ordinal: number;
   readonly data: ColumnInfo;
@@ -66,8 +67,8 @@ export interface SchemaGraphColumnNode extends SchemaGraphNodeBase {
 
 export interface SchemaGraphIndexNode extends SchemaGraphNodeBase {
   readonly kind: "index";
-  readonly schema: string;
-  readonly table: string;
+  readonly schema: SchemaName;
+  readonly table: TableName;
   readonly index: string;
   readonly data: IndexInfo;
 }
@@ -86,8 +87,8 @@ export interface SchemaGraphConstraintPayload {
 
 export interface SchemaGraphConstraintNode extends SchemaGraphNodeBase {
   readonly kind: "constraint";
-  readonly schema: string;
-  readonly table: string;
+  readonly schema: SchemaName;
+  readonly table: TableName;
   readonly constraint: string;
   readonly data: SchemaGraphConstraintPayload;
 }
@@ -122,8 +123,8 @@ export interface SchemaGraphEdge {
 }
 
 export interface SchemaGraphForeignKeyEndpoint {
-  readonly schema: string;
-  readonly table: string;
+  readonly schema: SchemaName;
+  readonly table: TableName;
   readonly columns: readonly string[];
 }
 
