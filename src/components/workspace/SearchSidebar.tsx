@@ -298,7 +298,7 @@ export default function SearchSidebar({ connectionId }: SearchSidebarProps) {
         className="flex items-center justify-between gap-2 border-b border-border px-3 py-1.5 text-3xs text-muted-foreground"
         data-testid="search-catalog-status"
       >
-        {/* eslint-disable-next-line no-restricted-syntax -- "search-native": 검색 카탈로그 소스 타입 식별자(기술 토큰), 번역 대상 아님 (#1074) */}
+        {/* eslint-disable-next-line no-restricted-syntax -- "search-native": 검색 카탈로그 소스 타입 라벨. 이 컴포넌트의 catalog summary(summaryText/identity)는 template literal 이라 가드 selector 밖에서 전량 미번역 — 단독 번역은 부조화라 컴포넌트 전체 번역(Slice 2, #1074)에서 함께 처리 */}
         <span className="shrink-0">search-native</span>
         <span className="truncate min-w-0">{summaryText}</span>
       </div>

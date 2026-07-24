@@ -303,6 +303,48 @@ const tvLocal = {
   },
 };
 
+// no-restricted-syntax selector 상수. flat config 에서 no-restricted-syntax 는
+// 파일당 마지막으로 매칭되는 블록의 배열이 전체를 override 한다 (병합 아님).
+// 이 규칙을 재정의하는 모든 블록이 그 file-scope 에 필요한 selector 를 additive
+// 하게 재나열해야 하므로, selector 를 상수로 뽑아 블록 간 drift 를 막는다.
+// (과거: cell-domain 블록이 JSON.stringify 하나로 덮어 datagrid/document 등에서
+//  i18n·native-select·getState 가드가 조용히 사라졌던 회귀 — #1074 리뷰 B1.)
+const NATIVE_SELECT_GUARD = {
+  selector: "JSXOpeningElement[name.name='select']",
+  message:
+    "Use <Select> from @components/ui/select instead of native <select>.",
+};
+const STORE_GETSTATE_GUARD = {
+  selector:
+    "CallExpression[callee.type='MemberExpression'][callee.property.name='getState']",
+  message:
+    "컴포넌트/페이지 .tsx에서 store.getState() 직접 호출 금지. selector hook (useStore(s => s.x)) 또는 src/hooks/* 의 lifecycle hook으로 분리.",
+};
+// #1074 i18n — 하드코딩 UI 문자열 가드. JSXText 자식 텍스트 + user-facing 속성만
+// 대상이고 className / data-* / 기술 토큰은 selector 밖이라 자동 exempt. 이미
+// 번역된 surface (t() 사용) 는 리터럴이 없어 통과한다.
+const I18N_HARDCODED_STRING_GUARDS = [
+  {
+    // 자식 텍스트에 알파벳 2자 이상 = 번역 후보. 순수 공백/숫자/기호 JSXText
+    // (`{value} ms` 의 공백 등) 는 매칭되지 않는다.
+    selector: "JSXText[value=/[A-Za-z]{2,}/]",
+    message:
+      "하드코딩 UI 문자열 금지 (#1074 i18n). useTranslation 의 t() 로 번역 키를 쓰세요. 코드/식별자/기술 토큰 등 번역 불가면 사유 코멘트와 함께 `eslint-disable-next-line no-restricted-syntax`.",
+  },
+  {
+    selector:
+      "JSXAttribute[name.name=/^(title|placeholder|alt|label|aria-label)$/] > Literal[value=/[A-Za-z]{2,}/]",
+    message:
+      "하드코딩 UI 속성 문자열 금지 (#1074 i18n). title/placeholder/alt/label/aria-label 은 t() 로 번역하세요. 기술 예시값이면 사유 코멘트와 함께 `eslint-disable-next-line no-restricted-syntax`.",
+  },
+];
+const CELL_JSON_STRINGIFY_GUARD = {
+  selector:
+    "CallExpression[callee.type='MemberExpression'][callee.object.name='JSON'][callee.property.name='stringify']",
+  message:
+    "Cell-domain code 에서는 `JSON.stringify` 대신 `@lib/jsonCell` 의 `safeStringifyCell` 사용. raw `JSON.stringify` 는 BigInt 만나면 throw, Decimal 만나면 `{}` 로 떨어져 DataGrid mount-time freeze 발생 (Sprint 305).",
+};
+
 export default tseslint.config(
   {
     ignores: [
@@ -409,39 +451,15 @@ export default tseslint.config(
       "src/test-utils.tsx", // test helper — generic store API 사용 위한 의도적 직접 접근.
     ],
     rules: {
+      // 하드코딩 UI 문자열 가드(#1074) 는 위 selector 상수로 additive 조합.
+      // 잔여 하드코딩이 밀집한 surface (query/schema/search/structure/
+      // connection-forms) 는 아래 phased-exempt 블록에서 i18n selector 만 뺀다
+      // — Slice 2 (#1074) 잔여 번역 backlog.
       "no-restricted-syntax": [
         "error",
-        {
-          selector: "JSXOpeningElement[name.name='select']",
-          message:
-            "Use <Select> from @components/ui/select instead of native <select>.",
-        },
-        {
-          selector:
-            "CallExpression[callee.type='MemberExpression'][callee.property.name='getState']",
-          message:
-            "컴포넌트/페이지 .tsx에서 store.getState() 직접 호출 금지. selector hook (useStore(s => s.x)) 또는 src/hooks/* 의 lifecycle hook으로 분리.",
-        },
-        // #1074 i18n — 하드코딩 UI 문자열 가드 (2026-07-25). 신규 하드코딩
-        // 영어 문자열을 차단해 22.30 milestone 이후 UI 가 다시 하드코딩으로
-        // 새는 것을 막는다. JSXText 자식 텍스트 + user-facing 속성만 대상이고
-        // className / data-* / 기술 토큰은 selector 밖이라 자동 exempt. 이미
-        // 번역된 surface (t() 사용) 는 리터럴이 없어 통과한다. 잔여 하드코딩이
-        // 밀집한 surface (query/schema/search/structure/connection-forms) 는
-        // 아래 별도 블록에서 이 규칙만 끈다 — Slice 2 (#1074) 잔여 번역 backlog.
-        {
-          // 자식 텍스트에 알파벳 2자 이상 = 번역 후보. 순수 공백/숫자/기호
-          // JSXText (`{value} ms` 의 공백 등) 는 매칭되지 않는다.
-          selector: "JSXText[value=/[A-Za-z]{2,}/]",
-          message:
-            "하드코딩 UI 문자열 금지 (#1074 i18n). useTranslation 의 t() 로 번역 키를 쓰세요. 코드/식별자/기술 토큰 등 번역 불가면 사유 코멘트와 함께 `eslint-disable-next-line no-restricted-syntax`.",
-        },
-        {
-          selector:
-            "JSXAttribute[name.name=/^(title|placeholder|alt|label|aria-label)$/] > Literal[value=/[A-Za-z]{2,}/]",
-          message:
-            "하드코딩 UI 속성 문자열 금지 (#1074 i18n). title/placeholder/alt/label/aria-label 은 t() 로 번역하세요. 기술 예시값이면 사유 코멘트와 함께 `eslint-disable-next-line no-restricted-syntax`.",
-        },
+        NATIVE_SELECT_GUARD,
+        STORE_GETSTATE_GUARD,
+        ...I18N_HARDCODED_STRING_GUARDS,
       ],
     },
   },
@@ -449,7 +467,8 @@ export default tseslint.config(
   // 속성 가드를 아직 끈다 (기존 select / getState 규칙은 유지). 이 목록은 Slice 2
   // (#1074) 전량 번역 시 하나씩 제거되며, 제거 = 해당 surface 가드 편입.
   // no-restricted-syntax 는 flat config 에서 배열 전체가 override 되므로
-  // select / getState 를 다시 나열해 위 블록의 두 규칙을 보존한다.
+  // NATIVE_SELECT_GUARD / STORE_GETSTATE_GUARD 를 재나열해 두 규칙을 보존하되
+  // i18n selector 만 의도적으로 뺀다.
   {
     files: [
       "src/components/query/**/*.tsx",
@@ -462,17 +481,8 @@ export default tseslint.config(
     rules: {
       "no-restricted-syntax": [
         "error",
-        {
-          selector: "JSXOpeningElement[name.name='select']",
-          message:
-            "Use <Select> from @components/ui/select instead of native <select>.",
-        },
-        {
-          selector:
-            "CallExpression[callee.type='MemberExpression'][callee.property.name='getState']",
-          message:
-            "컴포넌트/페이지 .tsx에서 store.getState() 직접 호출 금지. selector hook (useStore(s => s.x)) 또는 src/hooks/* 의 lifecycle hook으로 분리.",
-        },
+        NATIVE_SELECT_GUARD,
+        STORE_GETSTATE_GUARD,
       ],
     },
   },
@@ -488,27 +498,49 @@ export default tseslint.config(
   // 자동 제외. 본 scope 안에서도 cell-domain 이 아닌 callsite (예: mongo
   // filter / pipeline 객체 = schema-defined query AST) 가 필요하면 한 줄
   // `eslint-disable-next-line no-restricted-syntax` + 사유 코멘트.
+  // cell-domain .tsx (컴포넌트) — 과거 이 surface 는 JSON.stringify selector
+  // 하나만 담은 블록이 override 해 native-select / getState / i18n 가드를 조용히
+  // 무력화했다 (#1074 리뷰 B1). native-select / getState 는 상수로 additive
+  // 재나열해 복구하고 JSON.stringify 는 유지한다.
+  //
+  // i18n JSXText/속성 가드는 이 surface 에서 의도적으로 뺀다: datagrid/document/
+  // shared cell-domain 은 잔여 하드코딩(헤더 `... — {db}.{coll}`, 라벨 Level/
+  // Action/Index, plural item{s}, placeholder 힌트)이 밀집해 query/schema/search/
+  // structure/connection-forms 와 같은 Slice 2 (#1074) 전량 번역 backlog 다.
+  // 우연한 무력화가 아니라 명시적 phased-exempt.
   {
     files: [
-      "src/components/datagrid/**/*.{ts,tsx}",
-      "src/components/document/**/*.{ts,tsx}",
-      "src/components/shared/QuickLookPanel/**/*.{ts,tsx}",
+      "src/components/datagrid/**/*.tsx",
+      "src/components/document/**/*.tsx",
+      "src/components/shared/QuickLookPanel/**/*.tsx",
       "src/components/shared/BsonTreeViewer.tsx",
+    ],
+    ignores: ["**/*.test.tsx"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        NATIVE_SELECT_GUARD,
+        STORE_GETSTATE_GUARD,
+        CELL_JSON_STRINGIFY_GUARD,
+      ],
+    },
+  },
+  // cell-domain .ts (컴포넌트 아닌 로직/hook/유틸) — JSON.stringify 만 대상.
+  // native-select / i18n 은 JSX selector 라 .ts 에 매칭되지 않고, getState 금지는
+  // 컴포넌트 .tsx 전용 규칙이라 .ts hook(예: useDataGridEditPendingState.ts)의
+  // 정당한 store.getState() 호출을 잡으면 안 되므로 여기서는 뺀다.
+  {
+    files: [
+      "src/components/datagrid/**/*.ts",
+      "src/components/document/**/*.ts",
+      "src/components/shared/QuickLookPanel/**/*.ts",
       "src/lib/format.ts",
       "src/lib/mongo/mqlGenerator.ts",
       "src/lib/sql/rawQuerySqlBuilder.ts",
     ],
-    ignores: ["**/*.test.{ts,tsx}", "src/lib/jsonCell.ts"],
+    ignores: ["**/*.test.ts", "src/lib/jsonCell.ts"],
     rules: {
-      "no-restricted-syntax": [
-        "error",
-        {
-          selector:
-            "CallExpression[callee.type='MemberExpression'][callee.object.name='JSON'][callee.property.name='stringify']",
-          message:
-            "Cell-domain code 에서는 `JSON.stringify` 대신 `@lib/jsonCell` 의 `safeStringifyCell` 사용. raw `JSON.stringify` 는 BigInt 만나면 throw, Decimal 만나면 `{}` 로 떨어져 DataGrid mount-time freeze 발생 (Sprint 305).",
-        },
-      ],
+      "no-restricted-syntax": ["error", CELL_JSON_STRINGIFY_GUARD],
     },
   },
   // 2026-05-05: 결 2 — store 파일끼리 직접 import 금지. 한 store action에서
