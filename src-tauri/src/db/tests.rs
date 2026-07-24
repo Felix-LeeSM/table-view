@@ -16,31 +16,19 @@ use crate::models::{
 };
 use tokio_util::sync::CancellationToken;
 
+// Reason (2026-07-24, 이슈 #1625): normal/empty/unicode 3개는 입력만 다른
+// subset (testing-scenarios P9) — `From<SchemaInfo>` 가 `name` 을 그대로
+// 옮기는 계약을 table-driven 한 테스트로 회수. 빈 문자열/유니코드 경계값
+// 보존.
 #[test]
 fn namespace_info_from_schema_info_preserves_name() {
-    let schema = SchemaInfo {
-        name: "public".to_string(),
-    };
-    let ns: NamespaceInfo = schema.into();
-    assert_eq!(ns.name, "public");
-}
-
-#[test]
-fn namespace_info_from_schema_info_with_empty_name() {
-    let schema = SchemaInfo {
-        name: String::new(),
-    };
-    let ns: NamespaceInfo = schema.into();
-    assert_eq!(ns.name, "");
-}
-
-#[test]
-fn namespace_info_from_schema_info_keeps_unicode() {
-    let schema = SchemaInfo {
-        name: "스키마_名前".to_string(),
-    };
-    let ns: NamespaceInfo = schema.into();
-    assert_eq!(ns.name, "스키마_名前");
+    for name in ["public", "", "스키마_名前"] {
+        let ns: NamespaceInfo = SchemaInfo {
+            name: name.to_string(),
+        }
+        .into();
+        assert_eq!(ns.name, name);
+    }
 }
 
 // ── Sprint 180 (AC-180-04): cancel-token cooperation tests ───────────
@@ -710,96 +698,77 @@ fn assert_cancelled<T: std::fmt::Debug>(res: Result<T, AppError>) {
 
 // ── RDB ──────────────────────────────────────────────────────────────
 
-#[tokio::test]
-async fn test_rdb_query_table_data_honors_cancel_token() {
-    // Reason (2026-04-30): pre-cancel the token before driving the
-    // trait method so the inner sleep would never resolve; the
-    // `tokio::select!` arm must short-circuit with the cancelled
-    // error before the 60s timer would.
-    let adapter = FakeCancellableRdb;
-    let token = CancellationToken::new();
-    token.cancel();
-    let result = adapter
-        .query_table_data("public", "t", 1, 100, None, None, None, Some(&token))
-        .await;
-    assert_cancelled(result);
+// Reason (2026-07-24, 이슈 #1625): 4 RDB + 4 Document cancel 테스트는 각각
+// pre-cancel 토큰 → 메서드 호출 → `assert_cancelled` 로 동일 shape 반복
+// (입력만 다른 subset, testing-scenarios P9). 레이어당 한 테스트로
+// 파라메터화 — fake 의 `tokio::select!` cooperative-abort arm 을 모두
+// 회수하면서 boilerplate 를 제거한다. 실 `PostgresAdapter` cancel wrapper 는
+// pool 없이는 `active_pool()` 에서 "Not connected" 로 먼저 빠져 select! arm
+// 에 닿지 못하므로 fake 로 Sprint 180 AC-180-04 계약을 고정한다.
+fn pre_cancelled() -> CancellationToken {
+    let t = CancellationToken::new();
+    t.cancel();
+    t
 }
 
 #[tokio::test]
-async fn test_rdb_get_columns_honors_cancel_token() {
+async fn test_rdb_cancellable_methods_honor_pre_cancelled_token() {
     let adapter = FakeCancellableRdb;
-    let token = CancellationToken::new();
-    token.cancel();
-    let result = adapter.get_columns("public", "t", Some(&token)).await;
-    assert_cancelled(result);
-}
-
-#[tokio::test]
-async fn test_rdb_get_table_indexes_honors_cancel_token() {
-    let adapter = FakeCancellableRdb;
-    let token = CancellationToken::new();
-    token.cancel();
-    let result = adapter.get_table_indexes("public", "t", Some(&token)).await;
-    assert_cancelled(result);
-}
-
-#[tokio::test]
-async fn test_rdb_get_table_constraints_honors_cancel_token() {
-    let adapter = FakeCancellableRdb;
-    let token = CancellationToken::new();
-    token.cancel();
-    let result = adapter
-        .get_table_constraints("public", "t", Some(&token))
-        .await;
-    assert_cancelled(result);
+    assert_cancelled(
+        adapter
+            .query_table_data(
+                "public",
+                "t",
+                1,
+                100,
+                None,
+                None,
+                None,
+                Some(&pre_cancelled()),
+            )
+            .await,
+    );
+    assert_cancelled(
+        adapter
+            .get_columns("public", "t", Some(&pre_cancelled()))
+            .await,
+    );
+    assert_cancelled(
+        adapter
+            .get_table_indexes("public", "t", Some(&pre_cancelled()))
+            .await,
+    );
+    assert_cancelled(
+        adapter
+            .get_table_constraints("public", "t", Some(&pre_cancelled()))
+            .await,
+    );
 }
 
 // ── Document ─────────────────────────────────────────────────────────
 
+// Reason (2026-07-24, 이슈 #1625): RDB counterpart 와 동일 — Mongo bundled
+// driver 는 killOperations 미노출이라 future-drop 이 abort 계약(ADR-0018);
+// 각 메서드의 `tokio::select!` cancelled arm 을 회수한다.
 #[tokio::test]
-async fn test_document_find_honors_cancel_token() {
-    // Reason (2026-04-30): same form as the RDB tests — pre-cancel,
-    // assert short-circuit. Mongo bundled driver does not expose
-    // killOperations, so this guarantees the future drops promptly
-    // even though the server may continue briefly (ADR-0018).
+async fn test_document_cancellable_methods_honor_pre_cancelled_token() {
     let adapter = FakeCancellableDocument;
-    let token = CancellationToken::new();
-    token.cancel();
-    let result = adapter
-        .find("db", "c", FindBody::default(), Some(&token))
-        .await;
-    assert_cancelled(result);
-}
-
-#[tokio::test]
-async fn test_document_aggregate_honors_cancel_token() {
-    let adapter = FakeCancellableDocument;
-    let token = CancellationToken::new();
-    token.cancel();
-    let result = adapter
-        .aggregate("db", "c", Vec::new(), None, Some(&token))
-        .await;
-    assert_cancelled(result);
-}
-
-#[tokio::test]
-async fn test_document_infer_collection_fields_honors_cancel_token() {
-    let adapter = FakeCancellableDocument;
-    let token = CancellationToken::new();
-    token.cancel();
-    let result = adapter
-        .infer_collection_fields("db", "c", 100, Some(&token))
-        .await;
-    assert_cancelled(result);
-}
-
-#[tokio::test]
-async fn test_document_list_collections_honors_cancel_token() {
-    let adapter = FakeCancellableDocument;
-    let token = CancellationToken::new();
-    token.cancel();
-    let result = adapter.list_collections("db", Some(&token)).await;
-    assert_cancelled(result);
+    assert_cancelled(
+        adapter
+            .find("db", "c", FindBody::default(), Some(&pre_cancelled()))
+            .await,
+    );
+    assert_cancelled(
+        adapter
+            .aggregate("db", "c", Vec::new(), None, Some(&pre_cancelled()))
+            .await,
+    );
+    assert_cancelled(
+        adapter
+            .infer_collection_fields("db", "c", 100, Some(&pre_cancelled()))
+            .await,
+    );
+    assert_cancelled(adapter.list_collections("db", Some(&pre_cancelled())).await);
 }
 
 // ── Sanity checks: passing `None` does NOT short-circuit ─────────────
