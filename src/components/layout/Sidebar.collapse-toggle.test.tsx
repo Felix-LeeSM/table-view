@@ -69,6 +69,7 @@ vi.mock("./WorkspaceSidebar", () => ({
 import Sidebar from "./Sidebar";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useWorkspaceStore } from "@stores/workspaceStore";
+import { useSchemaStore } from "@stores/schemaStore";
 import {
   setFakeWindowConnectionId,
   resetFakeWindowConnectionId,
@@ -133,6 +134,10 @@ function seed(opts: {
 describe("Sidebar collapse/expand-all toggle per DB type (sprint-379)", () => {
   beforeEach(() => {
     invokeMock.mockClear();
+    // Reason: #1737 — expand-all enumerates the schemaStore cache; keep it
+    // empty by default so the collapse cases are unaffected and shuffled
+    // runs stay isolated (P3) (2026-07-24)
+    useSchemaStore.setState({ schemas: {} });
   });
 
   afterEach(() => {
@@ -161,6 +166,23 @@ describe("Sidebar collapse/expand-all toggle per DB type (sprint-379)", () => {
     expect(
       screen.getByRole("button", { name: /expand all schemas/i }),
     ).toBeInTheDocument();
+  });
+
+  // Reason: #1737 — "전체 펼치기(Expand all)" 버튼이 collapse 분기만 구현된
+  // no-op stub (sprint-379) 이라 클릭해도 라벨만 있고 아무 것도 펼쳐지지
+  // 않던 회귀. 로드된 모든 스키마명이 sidebar.expanded 에 채워져야 한다.
+  // 확장 규칙은 SchemaTree 가 키로 쓰는 bare schema name 과 동일 (2026-07-24)
+  it("AC-1737: PG + expanded=[] → click 'Expand all schemas' populates every loaded schema name", () => {
+    seed({ dbType: "postgresql", paradigm: "rdb", expanded: [] });
+    useSchemaStore.setState({
+      schemas: { c1: { db1: [{ name: "public" }, { name: "analytics" }] } },
+    });
+    render(<Sidebar />);
+    const btn = screen.getByRole("button", { name: /expand all schemas/i });
+    fireEvent.click(btn);
+    expect(
+      useWorkspaceStore.getState().workspaces["c1"]?.["db1"]?.sidebar.expanded,
+    ).toEqual(["public", "analytics"]);
   });
 
   // ── MySQL ───────────────────────────────────────────────────────────────

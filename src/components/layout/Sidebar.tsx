@@ -12,6 +12,8 @@ import {
 import { getSidebarObjectLabel } from "@lib/dbTypeLabels";
 import { useConnectionStore } from "@stores/connectionStore";
 import { resolveActiveDb, useWorkspaceStore } from "@stores/workspaceStore";
+import { useSchemaStore } from "@stores/schemaStore";
+import type { SchemaInfo } from "@/types/schema";
 import { useMruStore } from "@stores/mruStore";
 import { useThemeStore } from "@stores/themeStore";
 import { useResizablePanel } from "@hooks/useResizablePanel";
@@ -34,6 +36,10 @@ import { logger } from "@lib/logger";
 // 폐기. boot snapshot 이 차후 sprint 에서 `settings.sidebar_width` 를 hydrate
 // 하면 그 값을 초기로 사용. 본 sprint 는 default 시작 + drag mouseup 500ms
 // debounce 후 IPC commit 만 책임.
+// #1737 — stable empty ref so the schema-slot selector below doesn't churn
+// re-renders when the focused connection has no cached schemas yet.
+const EMPTY_SCHEMAS: readonly SchemaInfo[] = Object.freeze([]);
+
 const MIN_WIDTH = 220;
 const MAX_WIDTH = 540;
 const DEFAULT_WIDTH = 280;
@@ -158,15 +164,41 @@ export default function Sidebar() {
   // windows on the same connection_id.
   //
   // Sprint 379 — 단일 버튼이 DB type 별 적절한 객체 이름 (schemas /
-  // tables / collections) 을 노출하고 토글된다. 모두 collapsed 상태에서는
-  // "Expand all *" 라벨로 의도를 신호하지만 실제 expand path 는 후속
-  // sprint-381 에서 schema/mongo store 캐시를 walk 하여 구체화한다 — 본
-  // sprint 에서는 click 이 *no-op* 로 안전하게 떨어지도록 한다.
+  // tables / collections) 을 노출하고 토글된다.
   const handleCollapseAll = useCallback(() => {
     if (!focusedConnId) return;
     const db = resolveActiveDb(focusedConnId);
     setExpanded(focusedConnId, db, []);
   }, [focusedConnId, setExpanded]);
+
+  // #1737 — currently-cached schema list for the focused (connId, db).
+  // Subscribed via selector (not getState) so the component stays within the
+  // no-restricted-syntax store rule; the slot's array ref only changes when
+  // schemas load, so this is not a hot-path subscription.
+  const focusedSchemas = useSchemaStore((s) => {
+    if (!focusedConnId) return EMPTY_SCHEMAS;
+    const db = resolveActiveDb(focusedConnId);
+    return s.schemas[focusedConnId]?.[db] ?? EMPTY_SCHEMAS;
+  });
+
+  // #1737 — "전체 펼치기(Expand all)". sprint-379 가 남긴 no-op stub 을
+  // 구현. 현재 로드된 범위만 펼친다: 이 (connId, db) 에 캐시된 모든 스키마
+  // 이름을 sidebar.expanded 에 채운다. SchemaTree 는 `expandedSchemas.has(
+  // schema.name)` 로 bare schema name 을 키로 쓰므로 (treeRows.getVisibleRows
+  // + useSchemaTreeActions.handleExpandSchema) 여기서도 동일한 규칙을 재사용
+  // — nodeIdToString 는 쓰지 않는다 (그러면 트리가 매치 못 해 무효 데이터가
+  // 된다). 미로드 자식은 eager fetch 하지 않는다: expanded set 변경이 트리의
+  // reconciliation 효과(useSchemaTreeActions #1219)를 구동해 각 스키마를
+  // lazy-load 하므로 collapsed 스키마는 여전히 미fetch 로 남는다.
+  const handleExpandAll = useCallback(() => {
+    if (!focusedConnId || focusedSchemas.length === 0) return;
+    const db = resolveActiveDb(focusedConnId);
+    setExpanded(
+      focusedConnId,
+      db,
+      focusedSchemas.map((s) => s.name),
+    );
+  }, [focusedConnId, focusedSchemas, setExpanded]);
 
   // Sprint 379 — sidebar.expanded 의 현 상태로 토글 라벨 / 클릭 핸들러를
   // 분기. 안전한 read path 만 사용 (focusedConnId 없으면 비어 있는 워크
@@ -194,12 +226,14 @@ export default function Sidebar() {
   const ToggleIcon = isAllCollapsed ? UnfoldVertical : FoldVertical;
   const handleToggleExpansion = useCallback(() => {
     if (!focusedConnId) return;
-    // Collapse path → empty expanded array. Expand path → no-op for now
-    // (sprint-381 will walk the schema/mongo store caches).
-    if (!isAllCollapsed) {
+    // #1737 — Collapse path empties the expanded array; expand path fills it
+    // with every currently-loaded schema name (loaded scope only).
+    if (isAllCollapsed) {
+      handleExpandAll();
+    } else {
       handleCollapseAll();
     }
-  }, [focusedConnId, isAllCollapsed, handleCollapseAll]);
+  }, [focusedConnId, isAllCollapsed, handleCollapseAll, handleExpandAll]);
 
   const activeEntry =
     THEME_CATALOG.find((t) => t.id === themeId) ?? THEME_CATALOG[0];
@@ -239,8 +273,8 @@ export default function Sidebar() {
           <div className="flex items-center gap-1">
             {/* Sprint 379 — DB type 별 객체 이름 + 토글. PG → schemas,
                 MySQL/SQLite → tables, Mongo → collections. expanded 가
-                비어 있으면 동일 버튼이 "Expand all *" 라벨로 전환된다 (실제
-                expand 동작은 sprint-381 에서 schema/mongo store walk). */}
+                비어 있으면 동일 버튼이 "Expand all *" 라벨로 전환된다.
+                #1737 — expand path 가 로드된 스키마 캐시를 채우도록 구현됨. */}
             <Button
               variant="ghost"
               size="icon-xs"
