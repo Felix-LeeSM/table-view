@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   AlertTriangle,
@@ -39,7 +39,7 @@ interface SchemaErdRendererProps {
   graph: SchemaGraph;
   intelligence?: SchemaGraphIntelligenceSelectors;
   selectedTableId?: string;
-  onSelectedTableIdChange?: (tableId: string) => void;
+  onSelectedTableIdChange?: (tableId: string | null) => void;
 }
 
 export default function SchemaErdRenderer({
@@ -78,6 +78,25 @@ export default function SchemaErdRenderer({
     ? selectors.tablesById.get(activeSelected)
     : undefined;
 
+  const setSelection = useCallback(
+    (tableId: string | null) => {
+      setInternalSelectedTableId(tableId);
+      onSelectedTableIdChange?.(tableId);
+    },
+    [onSelectedTableIdChange],
+  );
+
+  // Escape clears the active selection (issue #1736). Attached only while a
+  // table is selected so the ERD never swallows Escape from unrelated surfaces.
+  useEffect(() => {
+    if (!activeSelected) return;
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setSelection(null);
+    };
+    document.addEventListener("keydown", handleEscape);
+    return () => document.removeEventListener("keydown", handleEscape);
+  }, [activeSelected, setSelection]);
+
   if (layout.tables.length === 0) {
     return (
       <div
@@ -103,13 +122,8 @@ export default function SchemaErdRenderer({
   );
   const zoomPercent = Math.round(zoom * 100);
 
-  const handleSelect = (tableId: string) => {
-    setInternalSelectedTableId(tableId);
-    onSelectedTableIdChange?.(tableId);
-  };
-
   const focusTable = (tableId: string) => {
-    handleSelect(tableId);
+    setSelection(tableId);
     runAfterPaint(() => {
       tableRefs.current.get(tableId)?.focus();
     });
@@ -252,6 +266,9 @@ export default function SchemaErdRenderer({
         role="figure"
         aria-label={t("databaseRelationshipDiagram")}
         className="relative flex-1 overflow-auto bg-background"
+        onClick={(event) => {
+          if (event.target === event.currentTarget) setSelection(null);
+        }}
       >
         <div
           className="relative"
@@ -260,6 +277,9 @@ export default function SchemaErdRenderer({
             height,
             transform: `scale(${zoom})`,
             transformOrigin: "top left",
+          }}
+          onClick={(event) => {
+            if (event.target === event.currentTarget) setSelection(null);
           }}
         >
           <svg
@@ -332,7 +352,7 @@ export default function SchemaErdRenderer({
                 aria-current={activeSelected === table.id ? "true" : undefined}
                 data-related={isRelated}
                 data-search-match={searchTerm.trim() ? isSearchMatch : true}
-                onClick={() => handleSelect(table.id)}
+                onClick={() => setSelection(isSelected ? null : table.id)}
                 className={`absolute flex flex-col overflow-hidden rounded border bg-card text-left shadow-sm transition-colors ${
                   isSelected
                     ? "border-primary ring-2 ring-primary/20"
