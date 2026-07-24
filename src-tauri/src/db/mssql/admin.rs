@@ -17,7 +17,7 @@
 use tiberius::Row;
 
 use crate::error::AppError;
-use crate::models::{ServerActivityRow, ServerInfoRow, SlowQueryRow};
+use crate::models::{DatabaseUserRow, ServerActivityRow, ServerInfoRow, SlowQueryRow};
 
 use super::MssqlAdapter;
 
@@ -53,6 +53,22 @@ SELECT CAST(SERVERPROPERTY('ProductVersion') AS NVARCHAR(128)), \
        CAST(SERVERPROPERTY('ProductLevel') AS NVARCHAR(128)), \
        CAST(SERVERPROPERTY('Collation') AS NVARCHAR(128)) \
 FROM sys.dm_os_sys_info si";
+
+/// Issue #1077 Stage 2 — read-only logins/roles from `sys.server_principals`.
+/// Only the principal name + coarse capability flags are projected;
+/// `sys.sql_logins.password_hash` (the only server-login credential) is never
+/// joined or selected, mirroring the PG `pg_roles`-only posture (see the
+/// `users_sql_*` guard test). `can_login` is true for an enabled non-role
+/// principal; `is_superuser` reflects `sysadmin` fixed-role membership, and a
+/// NULL result (a login the caller cannot resolve) collapses to 0. Server
+/// principals expose no per-login connection cap or password expiry.
+const USERS_SQL: &str = "\
+SELECT sp.name, \
+       CASE WHEN sp.is_disabled = 0 AND sp.type <> 'R' THEN 1 ELSE 0 END, \
+       CAST(ISNULL(IS_SRVROLEMEMBER('sysadmin', sp.name), 0) AS INT) \
+FROM sys.server_principals sp \
+WHERE sp.type IN ('S', 'U', 'G', 'R', 'C', 'K') \
+ORDER BY sp.name";
 
 impl MssqlAdapter {
     /// Issue #1073 — list backend sessions from `sys.dm_exec_sessions`
@@ -154,6 +170,37 @@ impl MssqlAdapter {
             connections_active: opt_i64(row, 3),
             extras,
         })
+    }
+
+    /// Issue #1077 Stage 2 — read-only logins/roles from `sys.server_principals`
+    /// (`USERS_SQL`). No credential column is read. The PG-shaped
+    /// `DatabaseUserRow` is reused: `name` is the principal name, `can_login`
+    /// marks an enabled non-role principal, `is_superuser` reflects `sysadmin`
+    /// membership. SQL Server exposes no per-login connection cap, password
+    /// expiry, or portable role-membership array on the server principal, so
+    /// `conn_limit` is -1 (unlimited), `valid_until` is None, and `member_of`
+    /// is empty (the server-role graph is #1077 Stage 2b). A login lacking
+    /// `VIEW ANY DEFINITION` fails loud via `admin_query`, not a silent empty
+    /// list.
+    pub async fn list_database_users(&self) -> Result<Vec<DatabaseUserRow>, AppError> {
+        let rows = self
+            .admin_query("sys.server_principals query failed", USERS_SQL)
+            .await?;
+        rows.iter()
+            .map(|row| {
+                Ok(DatabaseUserRow {
+                    name: opt_str(row, 0, "principal name")?.unwrap_or_default(),
+                    can_login: opt_i64(row, 1).unwrap_or(0) == 1,
+                    is_superuser: opt_i64(row, 2).unwrap_or(0) == 1,
+                    can_create_db: false,
+                    can_create_role: false,
+                    replication: false,
+                    conn_limit: -1,
+                    valid_until: None,
+                    member_of: Vec::new(),
+                })
+            })
+            .collect()
     }
 
     /// Open a fresh client (same as the catalog surface) and return the first
@@ -264,6 +311,39 @@ mod tests {
             adapter.list_server_activity().await,
             Err(AppError::Connection(_))
         ));
+    }
+
+    // Issue #1077 Stage 2 (2026-07-25) — the sys.server_principals row shape
+    // needs a live SQL Server (integration); the pool-acquisition guard is the
+    // branch reachable without a server, mirroring the admin-op guards above.
+    #[tokio::test]
+    async fn list_database_users_without_connection_fails() {
+        let adapter = MssqlAdapter::new();
+        assert!(matches!(
+            adapter.list_database_users().await,
+            Err(AppError::Connection(_))
+        ));
+    }
+
+    // Issue #1077 Stage 2 SECURITY (2026-07-25) — the users query must read
+    // `sys.server_principals` and must NEVER touch `sys.sql_logins` or select a
+    // `password_hash`, the only server-login credential. Fails if the query
+    // regresses toward a secret source.
+    #[test]
+    fn users_sql_never_reads_login_credential() {
+        assert!(
+            USERS_SQL.contains("sys.server_principals"),
+            "must source sys.server_principals"
+        );
+        let lower = USERS_SQL.to_ascii_lowercase();
+        assert!(
+            !lower.contains("sql_logins"),
+            "sys.sql_logins carries password_hash — must not be referenced"
+        );
+        assert!(
+            !lower.contains("password"),
+            "no password_hash credential column may be selected"
+        );
     }
 
     #[tokio::test]

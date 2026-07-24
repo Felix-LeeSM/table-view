@@ -24,6 +24,19 @@ use crate::models::{
 use super::checks::{build_check_map, is_check_metadata_unavailable};
 use super::MysqlAdapter;
 
+/// Issue #1077 Stage 2 — read-only users listing from the `mysql.user` grant
+/// table. Only the account identity (`User`/`Host`) and non-secret privilege
+/// flags are projected — the `authentication_string` / `Password` credential
+/// columns are NEVER selected (mirrors the PG `pg_roles`-only posture; see the
+/// `mysql_users_query_*` guard test). `max_user_connections` is
+/// `CAST(... AS SIGNED)` for the wire i64. `account_locked` gates `can_login`;
+/// it exists on MySQL 5.7.8+/MariaDB 10.4.2+ — older builds fail loud rather
+/// than silently mislabel a locked account as loginable.
+pub(crate) const MYSQL_USERS_QUERY: &str = "SELECT User, Host, Super_priv, \
+     Create_priv, Create_user_priv, Repl_slave_priv, account_locked, \
+     CAST(max_user_connections AS SIGNED) \
+     FROM mysql.user ORDER BY User, Host";
+
 async fn mysql_check_rows_or_empty<T>(
     supported: bool,
     result: impl Future<Output = Result<Vec<T>, sqlx::Error>>,
@@ -1180,6 +1193,53 @@ impl MysqlAdapter {
             extras,
         })
     }
+
+    /// Issue #1077 Stage 2 — read-only users listing from `mysql.user`
+    /// (`MYSQL_USERS_QUERY`). No credential column crosses the IPC boundary. The
+    /// PG-shaped `DatabaseUserRow` is reused: `name` is `user@host` (MySQL
+    /// scopes accounts by host, unlike PG's flat role name), the boolean flags
+    /// map from the `enum('N','Y')` grant columns, and `conn_limit` carries
+    /// `max_user_connections` (0 = unlimited on MySQL). `valid_until` and
+    /// `member_of` have no widely-portable `mysql.user` source — the MySQL role
+    /// graph (`mysql.role_edges`, 8.0+) is deferred to #1077 Stage 2b — so they
+    /// stay empty.
+    pub async fn list_database_users(
+        &self,
+    ) -> Result<Vec<crate::models::DatabaseUserRow>, AppError> {
+        #[allow(clippy::type_complexity)]
+        type Row = (String, String, String, String, String, String, String, i64);
+        let pool = self.active_pool().await?;
+        let rows: Vec<Row> = sqlx::query_as(MYSQL_USERS_QUERY)
+            .fetch_all(&pool)
+            .await
+            .map_err(|e| AppError::Database(format!("mysql.user listing failed: {e}")))?;
+
+        Ok(rows
+            .into_iter()
+            .map(
+                |(
+                    user,
+                    host,
+                    super_priv,
+                    create_priv,
+                    create_user_priv,
+                    repl_slave_priv,
+                    account_locked,
+                    conn_limit,
+                )| crate::models::DatabaseUserRow {
+                    name: format!("{user}@{host}"),
+                    can_login: account_locked != "Y",
+                    is_superuser: super_priv == "Y",
+                    can_create_db: create_priv == "Y",
+                    can_create_role: create_user_priv == "Y",
+                    replication: repl_slave_priv == "Y",
+                    conn_limit,
+                    valid_until: None,
+                    member_of: Vec::new(),
+                },
+            )
+            .collect())
+    }
 }
 
 /// Classify a `performance_schema` digest-query failure:
@@ -1400,5 +1460,40 @@ mod tests {
             }
             other => panic!("expected Connection, got ok? {}", other.is_ok()),
         }
+    }
+
+    // Issue #1077 Stage 2 (2026-07-25) — list_database_users has no params, so
+    // only the no-connection path is unit-reachable; the mysql.user row shape is
+    // covered by the integration suite. Mirrors the PG/MySQL admin-op guards.
+    #[tokio::test]
+    async fn list_database_users_without_connection_fails() {
+        let adapter = MysqlAdapter::new();
+        match adapter.list_database_users().await {
+            Err(AppError::Connection(msg)) => {
+                assert!(msg.contains("Not connected"), "unexpected: {msg}");
+            }
+            other => panic!("expected Connection, got ok? {}", other.is_ok()),
+        }
+    }
+
+    // Issue #1077 Stage 2 SECURITY (2026-07-25) — the users query must read the
+    // account identity + privilege flags from `mysql.user` and must NEVER
+    // select a credential column (`authentication_string` / `Password`). This
+    // fixture fails if the query ever regresses toward a secret column.
+    #[test]
+    fn mysql_users_query_never_selects_credential_column() {
+        assert!(
+            MYSQL_USERS_QUERY.contains("mysql.user"),
+            "must source the mysql.user grant table"
+        );
+        let lower = MYSQL_USERS_QUERY.to_ascii_lowercase();
+        assert!(
+            !lower.contains("authentication_string"),
+            "authentication_string is the credential column — must not be selected"
+        );
+        assert!(
+            !lower.contains("password"),
+            "no password credential column may be selected"
+        );
     }
 }
