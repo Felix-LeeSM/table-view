@@ -169,6 +169,7 @@ describe("SchemaTree — lifecycle", () => {
           groupId: null,
           color: null,
           paradigm: "rdb",
+          sslMode: "prefer",
         },
       ],
     });

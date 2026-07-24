@@ -317,6 +317,7 @@ function makeConnection(id: string): ConnectionConfig {
     color: null,
     environment: null,
     paradigm: "rdb",
+    sslMode: "prefer",
   };
 }
 
@@ -1010,6 +1011,7 @@ describe("MainArea", () => {
         dbType: "redis",
         database: "2",
         paradigm: "kv",
+        sslMode: "prefer",
       };
       setConnections({
         connections: [redisConnection],
@@ -1058,6 +1060,7 @@ describe("MainArea", () => {
         dbType: "mongodb",
         database: "analytics",
         paradigm: "document",
+        sslMode: "prefer",
       };
       setConnections({
         connections: [mongoConnection],
@@ -1249,12 +1252,14 @@ describe("MainArea", () => {
       name: "cache",
       dbType: "redis",
       paradigm: "kv",
+      sslMode: "prefer",
     };
     const duckConn: ConnectionConfig = {
       ...makeConnection("duck-1"),
       name: "dev",
       dbType: "duckdb",
       paradigm: "rdb",
+      sslMode: "prefer",
     };
 
     // Redis + DuckDB both connected; DuckDB is the global MRU (the pre-fix

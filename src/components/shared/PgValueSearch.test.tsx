@@ -54,6 +54,7 @@ function makeConn(
     color: null,
     environment: null,
     paradigm: "rdb",
+    sslMode: "prefer",
   };
 }
 

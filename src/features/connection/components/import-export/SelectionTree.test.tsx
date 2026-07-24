@@ -18,6 +18,7 @@ function makeConn(id: string, groupId: string | null = null): ConnectionConfig {
     environment: null,
     hasPassword: false,
     paradigm: "rdb",
+    sslMode: "prefer",
   };
 }
 

@@ -12,6 +12,8 @@ import {
   exposesTlsToggle,
   isSearchFamily,
   paradigmOf,
+  sslModeTlsOn,
+  type SslMode,
 } from "../../model";
 
 /**
@@ -89,28 +91,28 @@ export interface UseConnectionDraftFormReturn {
 }
 
 /**
- * #1062/#1063 — the TLS sanitize rule shared by the dbType dropdown
+ * #1062/#1063/#1649 — the TLS sanitize rule shared by the dbType dropdown
  * (`applyDbTypeChange`) and the URL-paste path (`applyParsedConnection`).
- * MSSQL forces encryption on with trust seeded; the other TLS-toggle engines
- * (mongo/redis/valkey/search) may carry the prior encryption flag but never a
- * skip-verify choice; the trust-boundary engines (pg/mysql/mariadb) and the
- * no-TLS engines reset both. This keeps two invariants on any engine switch:
- * no `tls_enabled=true, trust=None` residue the backend hard-rejects (#1062),
- * and no leaked skip-verify (`trust=true`) onto the new engine (#1063).
+ * MSSQL forces encryption on with trust seeded (`require`); the other TLS-toggle
+ * engines (mongo/redis/valkey/search) carry only the prior on/off state but
+ * never a skip-verify choice or CA path; the trust-boundary engines
+ * (pg/mysql/mariadb) and the no-TLS engines reset to `prefer`. This keeps the
+ * skip-verify posture (`require`) from leaking onto a new engine on switch, and
+ * drops any stale CA path (verify-ca is pg/mysql-only this slice).
  */
 function tlsFieldsForDbType(
   dbType: DatabaseType,
-  prevTlsEnabled: ConnectionDraft["tlsEnabled"],
-): Pick<ConnectionDraft, "tlsEnabled" | "trustServerCertificate"> {
-  return {
-    tlsEnabled:
-      dbType === "mssql"
-        ? true
-        : exposesTlsToggle(dbType)
-          ? prevTlsEnabled
-          : null,
-    trustServerCertificate: dbType === "mssql" ? true : null,
-  };
+  prevSslMode: SslMode | null | undefined,
+): Pick<ConnectionDraft, "sslMode" | "caCertPath"> {
+  const sslMode: SslMode =
+    dbType === "mssql"
+      ? "require"
+      : exposesTlsToggle(dbType)
+        ? sslModeTlsOn(prevSslMode)
+          ? "verify-full"
+          : "prefer"
+        : "prefer";
+  return { sslMode, caCertPath: null };
 }
 
 export function useConnectionDraftForm(
@@ -164,7 +166,7 @@ export function useConnectionDraftForm(
         user: defaults.user,
         database: defaults.database,
         readOnly: false,
-        ...tlsFieldsForDbType(dbType, f.tlsEnabled),
+        ...tlsFieldsForDbType(dbType, f.sslMode),
         paradigm: paradigmOf(dbType),
       };
     });
@@ -258,7 +260,7 @@ export function useConnectionDraftForm(
       // still win.
       const tlsSanitize =
         rest.dbType != null && rest.dbType !== f.dbType
-          ? tlsFieldsForDbType(rest.dbType, f.tlsEnabled)
+          ? tlsFieldsForDbType(rest.dbType, f.sslMode)
           : {};
       return {
         ...f,

@@ -41,6 +41,7 @@ const baseDraft: ConnectionDraft = {
   keepAliveInterval: 30,
   environment: "production",
   paradigm: "rdb",
+  sslMode: "prefer",
 };
 
 describe("connection Tauri wrappers", () => {
@@ -66,6 +67,7 @@ describe("connection Tauri wrappers", () => {
         environment: "production",
         has_password: true,
         paradigm: "rdb",
+        sslMode: "prefer",
       },
     ]);
 

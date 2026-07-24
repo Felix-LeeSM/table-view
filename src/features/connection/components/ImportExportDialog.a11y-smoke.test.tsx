@@ -28,6 +28,7 @@ function makeConn(id: string, hasPassword = false): ConnectionConfig {
     color: null,
     environment: null,
     paradigm: "rdb",
+    sslMode: "prefer",
   };
 }
 

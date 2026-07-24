@@ -13,7 +13,11 @@
  *     maps to `rediss://` in the Redis adapter.
  */
 import { useTranslation } from "react-i18next";
-import { DATABASE_TYPE_LABELS, type ConnectionDraft } from "../../model";
+import {
+  DATABASE_TYPE_LABELS,
+  sslModeTlsOn,
+  type ConnectionDraft,
+} from "../../model";
 import { fieldValidationProps, type ConnFieldKey } from "./fieldValidation";
 import TlsSkipVerifyToggle from "./TlsSkipVerifyToggle";
 
@@ -181,15 +185,10 @@ export default function RedisFormFields({
           id="conn-tls-enabled"
           type="checkbox"
           className="cursor-pointer"
-          checked={!!draft.tlsEnabled}
-          onChange={(e) => {
-            const tlsEnabled = e.target.checked;
-            onChange({
-              tlsEnabled,
-              // #1063 — clear a stale skip-verify choice when TLS is turned off.
-              ...(tlsEnabled ? {} : { trustServerCertificate: null }),
-            });
-          }}
+          checked={sslModeTlsOn(draft.sslMode)}
+          onChange={(e) =>
+            onChange({ sslMode: e.target.checked ? "verify-full" : "prefer" })
+          }
         />
         {t("form.enableTlsRedis")}
       </label>

@@ -1,11 +1,11 @@
 /**
- * #1063 — shared sslmode dropdown for the trust-dependent RDB engines
+ * #1063 / #1649 — shared sslmode dropdown for the trust-dependent RDB engines
  * (PostgreSQL / MySQL / MariaDB). These route through the backend
- * `resolve_tls_decision` boundary, so their TLS posture is a four-way choice
- * (disable / prefer / require / verify-full) rather than the plain on/off +
- * trust checkbox the on/off engines use. The dropdown is a pure view over the
- * stored `(tlsEnabled, trustServerCertificate)` fields (see `sslModeFromFields`
- * / `sslModeFields`), so no new persisted field is introduced.
+ * `resolve_tls_decision` boundary, so their TLS posture is a five-way choice
+ * (disable / prefer / require / verify-ca / verify-full). #1649 (ADR 0058)
+ * promotes `sslMode` to a real persisted field and adds `verify-ca`: when it is
+ * selected, a CA certificate path input appears so the server certificate can
+ * be validated against a private/self-signed CA (`caCertPath`).
  */
 import { useTranslation } from "react-i18next";
 import {
@@ -17,8 +17,6 @@ import {
 } from "@components/ui/select";
 import {
   SSL_MODE_OPTIONS,
-  sslModeFields,
-  sslModeFromFields,
   type ConnectionDraft,
   type SslMode,
 } from "../../model";
@@ -27,6 +25,7 @@ const SSL_MODE_LABEL_KEYS: Record<SslMode, string> = {
   disable: "form.sslModeDisable",
   prefer: "form.sslModePrefer",
   require: "form.sslModeRequire",
+  "verify-ca": "form.sslModeVerifyCa",
   "verify-full": "form.sslModeVerifyFull",
 };
 
@@ -44,10 +43,7 @@ export default function SslModeField({
   labelClass,
 }: SslModeFieldProps) {
   const { t } = useTranslation("featuresConnection");
-  const mode = sslModeFromFields(
-    draft.tlsEnabled,
-    draft.trustServerCertificate,
-  );
+  const mode = draft.sslMode ?? "prefer";
   return (
     <div>
       <label htmlFor="conn-ssl-mode" className={labelClass}>
@@ -55,7 +51,14 @@ export default function SslModeField({
       </label>
       <Select
         value={mode}
-        onValueChange={(value) => onChange(sslModeFields(value as SslMode))}
+        onValueChange={(value) =>
+          onChange({
+            sslMode: value as SslMode,
+            // #1649 — a CA path is only meaningful for verify-ca; drop a stale
+            // one when the user moves to any other posture.
+            ...(value === "verify-ca" ? {} : { caCertPath: null }),
+          })
+        }
       >
         <SelectTrigger
           id="conn-ssl-mode"
@@ -83,6 +86,25 @@ export default function SslModeField({
         <p className="mt-1 text-2xs text-destructive">
           {t("form.trustWarning")}
         </p>
+      )}
+      {/* #1649 — verify-ca validates the server against a user-supplied CA;
+          reveal the path input so the feature is reachable. */}
+      {mode === "verify-ca" && (
+        <div className="mt-2">
+          <label htmlFor="conn-ca-cert-path" className={labelClass}>
+            {t("form.labelCaCertPath")}
+          </label>
+          <input
+            id="conn-ca-cert-path"
+            className={inputClass}
+            value={draft.caCertPath ?? ""}
+            onChange={(e) => onChange({ caCertPath: e.target.value || null })}
+            placeholder={t("form.placeholderCaCertPath")}
+          />
+          <p className="mt-1 text-2xs text-muted-foreground">
+            {t("form.caCertPathHint")}
+          </p>
+        </div>
       )}
     </div>
   );

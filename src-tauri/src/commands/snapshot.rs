@@ -362,8 +362,15 @@ impl ConnectionRow {
             paradigm,
             auth_source: self.auth_source,
             replica_set: self.replica_set,
-            tls_enabled: self.tls_enabled.map(|v| v != 0),
-            trust_server_certificate: self.trust_server_certificate.map(|v| v != 0),
+            // #1649 — the mirror keeps the legacy integer columns; reconstruct
+            // the sslmode posture from them (verify-ca is not distinguishable
+            // here — it reconstructs as verify-full, matching how the mirror
+            // already drops wallet_path/oracle_use_sid, restored from the SOT).
+            ssl_mode: crate::models::SslMode::from_legacy(
+                self.tls_enabled.map(|v| v != 0),
+                self.trust_server_certificate.map(|v| v != 0),
+            ),
+            ca_cert_path: None,
             oracle_use_sid: None,
             wallet_path: None,
             // Default; `read_connections` overrides from the file-SOT presence
@@ -1039,8 +1046,8 @@ mod tests {
             environment: None,
             auth_source: None,
             replica_set: None,
-            tls_enabled: None,
-            trust_server_certificate: None,
+            ssl_mode: crate::models::SslMode::Prefer,
+            ca_cert_path: None,
             oracle_use_sid: None,
             wallet_path: None,
             wallet_password: String::new(),

@@ -40,23 +40,23 @@ function renderMssql(overrides: Partial<ConnectionDraft> = {}) {
   );
 }
 
-describe("MssqlFormFields trust warning (#1063)", () => {
-  it("warns while the default trust=true (skip-verify) posture is active", () => {
-    renderMssql({ tlsEnabled: true, trustServerCertificate: true });
+describe("MssqlFormFields trust warning (#1649)", () => {
+  it("warns while the default require (skip-verify) posture is active", () => {
+    renderMssql({ sslMode: "require" });
     expect(
       screen.getByText(/Certificate verification is skipped/),
     ).toBeInTheDocument();
   });
 
-  it("does not warn when the certificate is verified (trust=false)", () => {
-    renderMssql({ tlsEnabled: true, trustServerCertificate: false });
+  it("does not warn when the certificate is verified (verify-full)", () => {
+    renderMssql({ sslMode: "verify-full" });
     expect(
       screen.queryByText(/Certificate verification is skipped/),
     ).not.toBeInTheDocument();
   });
 
-  it("does not warn when TLS is off", () => {
-    renderMssql({ tlsEnabled: false, trustServerCertificate: true });
+  it("does not warn when TLS is off (disable/prefer)", () => {
+    renderMssql({ sslMode: "disable" });
     expect(
       screen.queryByText(/Certificate verification is skipped/),
     ).not.toBeInTheDocument();

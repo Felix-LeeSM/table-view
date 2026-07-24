@@ -79,6 +79,7 @@ function seedRdbConnection(defaultDb: string): void {
         groupId: null,
         color: null,
         paradigm: "rdb",
+        sslMode: "prefer",
       },
     ],
     activeStatuses: {},

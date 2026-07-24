@@ -156,6 +156,7 @@ function makeConn(id: string, name = `${id} DB`): ConnectionConfig {
     groupId: null,
     color: null,
     paradigm: "rdb",
+    sslMode: "prefer",
   };
 }
 

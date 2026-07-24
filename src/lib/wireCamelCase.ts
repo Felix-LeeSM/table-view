@@ -1,5 +1,9 @@
 import type { ConnectionConfig, ConnectionStatus } from "@/types/connection";
-import { canonicalEnvironmentTag } from "@/features/connection/model";
+import {
+  asSslMode,
+  canonicalEnvironmentTag,
+  sslModeFromTlsBooleans,
+} from "@/features/connection/model";
 import { sanitizeMessage } from "@/features/connection/components/ConnectionDialog/sanitize";
 import { logger } from "@/lib/logger";
 import type {
@@ -272,10 +276,17 @@ export function normalizeConnectionConfig(value: unknown): ConnectionConfig {
         : "rdb",
     authSource: optionalString(pick(r, "authSource", "auth_source")),
     replicaSet: optionalString(pick(r, "replicaSet", "replica_set")),
-    tlsEnabled: optionalBool(pick(r, "tlsEnabled", "tls_enabled")),
-    trustServerCertificate: optionalBool(
-      pick(r, "trustServerCertificate", "trust_server_certificate"),
-    ),
+    // #1649 — read the sslmode posture, folding an older snapshot's
+    // `(tlsEnabled, trustServerCertificate)` pair when `sslMode` is absent.
+    sslMode:
+      asSslMode(pick(r, "sslMode", "ssl_mode")) ??
+      sslModeFromTlsBooleans(
+        optionalBool(pick(r, "tlsEnabled", "tls_enabled")),
+        optionalBool(
+          pick(r, "trustServerCertificate", "trust_server_certificate"),
+        ),
+      ),
+    caCertPath: optionalString(pick(r, "caCertPath", "ca_cert_path")),
     oracleUseSid: optionalBool(pick(r, "oracleUseSid", "oracle_use_sid")),
     walletPath: optionalString(pick(r, "walletPath", "wallet_path")),
     hasWalletPassword:

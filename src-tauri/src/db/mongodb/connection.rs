@@ -95,12 +95,12 @@ impl MongoAdapter {
             opts.repl_set_name = Some(rs.to_string());
         }
 
-        if matches!(config.tls_enabled, Some(true)) {
+        if config.ssl_mode.tls_on() {
             // #1063 — `trust_server_certificate = true` is the shared skip-verify
             // opt-in; for MongoDB it maps onto `allow_invalid_certificates`, so a
             // self-signed cluster is reachable without turning TLS off entirely.
             // Absent/false trust keeps the driver's full CA + hostname check.
-            let tls_options = if matches!(config.trust_server_certificate, Some(true)) {
+            let tls_options = if config.ssl_mode.skip_verify() {
                 TlsOptions::builder()
                     .allow_invalid_certificates(true)
                     .build()
@@ -458,8 +458,8 @@ mod tests {
             environment: None,
             auth_source: Some("admin".into()),
             replica_set: Some("rs0".into()),
-            tls_enabled: Some(true),
-            trust_server_certificate: None,
+            ssl_mode: crate::models::SslMode::VerifyFull,
+            ca_cert_path: None,
             oracle_use_sid: None,
             wallet_path: None,
             wallet_password: String::new(),
@@ -507,13 +507,14 @@ mod tests {
         // `allow_invalid_certificates` on the driver TlsOptions, while the
         // default (trust absent) keeps full verification. (2026-07-17)
         let mut cfg = sample_config();
-        cfg.trust_server_certificate = Some(true);
+        // #1649 — `require` is the skip-verify posture (was trust=true).
+        cfg.ssl_mode = crate::models::SslMode::Require;
         let opts = MongoAdapter::build_options(&cfg).expect("build_options should succeed");
         match &opts.tls {
             Some(Tls::Enabled(t)) => assert_eq!(
                 t.allow_invalid_certificates,
                 Some(true),
-                "trust=true must skip certificate verification"
+                "require must skip certificate verification"
             ),
             other => panic!("expected TLS enabled, got {other:?}"),
         }
@@ -545,8 +546,8 @@ mod tests {
             environment: None,
             auth_source: None,
             replica_set: None,
-            tls_enabled: None,
-            trust_server_certificate: None,
+            ssl_mode: crate::models::SslMode::Prefer,
+            ca_cert_path: None,
             oracle_use_sid: None,
             wallet_path: None,
             wallet_password: String::new(),

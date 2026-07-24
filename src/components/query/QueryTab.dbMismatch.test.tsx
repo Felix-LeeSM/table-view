@@ -128,6 +128,7 @@ function seedConn1WithActiveDb(activeDb: string): void {
         color: null,
         hasPassword: false,
         paradigm: "rdb",
+        sslMode: "prefer",
       },
     ],
     activeStatuses: { conn1: { type: "connected", activeDb } },

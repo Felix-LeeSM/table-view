@@ -21,8 +21,8 @@ fn oracle_config() -> ConnectionConfig {
         environment: None,
         auth_source: None,
         replica_set: None,
-        tls_enabled: None,
-        trust_server_certificate: None,
+        ssl_mode: crate::models::SslMode::Prefer,
+        ca_cert_path: None,
         oracle_use_sid: None,
         wallet_path: None,
         wallet_password: String::new(),
@@ -52,10 +52,9 @@ fn connect_config_uses_service_name_without_sid_wallet_or_tls() {
     ));
 
     let mut explicit_false = oracle_config();
-    explicit_false.tls_enabled = Some(false);
-    explicit_false.trust_server_certificate = Some(false);
+    explicit_false.ssl_mode = crate::models::SslMode::Disable;
     OracleAdapter::connect_config(&explicit_false, 30)
-        .expect("explicit false TLS flags should not enable unsupported Oracle TLS mode");
+        .expect("explicit disable sslmode should not enable unsupported Oracle TLS mode");
 }
 
 #[test]
@@ -121,14 +120,14 @@ fn connect_config_still_rejects_advanced_auth_and_mssql_tls_toggles() {
     ));
 
     let mut tls = oracle_config();
-    tls.tls_enabled = Some(true);
+    tls.ssl_mode = crate::models::SslMode::VerifyFull;
     assert!(matches!(
         OracleAdapter::connect_config(&tls, 5),
         Err(AppError::Validation(message)) if message.contains("wallet")
     ));
 
     let mut trust = oracle_config();
-    trust.trust_server_certificate = Some(true);
+    trust.ssl_mode = crate::models::SslMode::Require;
     assert!(matches!(
         OracleAdapter::connect_config(&trust, 5),
         Err(AppError::Validation(message)) if message.contains("wallet")

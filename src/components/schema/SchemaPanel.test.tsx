@@ -31,6 +31,7 @@ function makeConn(id: string): ConnectionConfig {
     color: null,
     environment: null,
     paradigm: "rdb",
+    sslMode: "prefer",
   };
 }
 
@@ -168,6 +169,7 @@ describe("SchemaPanel", () => {
       ...makeConn("m1"),
       dbType: "mongodb",
       paradigm: "document",
+      sslMode: "prefer",
     };
     setupStore({ connections: [mongoConn], active: ["m1"] });
     render(<SchemaPanel selectedId="m1" />);

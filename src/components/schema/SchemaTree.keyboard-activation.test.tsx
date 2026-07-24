@@ -36,6 +36,7 @@ function makeConnection(id: string, dbType: DatabaseType): ConnectionConfig {
     color: null,
     environment: null,
     paradigm: "rdb",
+    sslMode: "prefer",
   };
 }
 

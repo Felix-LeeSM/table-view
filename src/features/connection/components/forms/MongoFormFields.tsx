@@ -11,7 +11,7 @@
  *     (see Sprint 65).
  */
 import { useTranslation } from "react-i18next";
-import type { ConnectionDraft } from "../../model";
+import { sslModeTlsOn, type ConnectionDraft } from "../../model";
 import { fieldValidationProps, type ConnFieldKey } from "./fieldValidation";
 import TlsSkipVerifyToggle from "./TlsSkipVerifyToggle";
 
@@ -191,15 +191,10 @@ export default function MongoFormFields({
             id="conn-tls-enabled"
             type="checkbox"
             className="cursor-pointer"
-            checked={!!draft.tlsEnabled}
-            onChange={(e) => {
-              const tlsEnabled = e.target.checked;
-              onChange({
-                tlsEnabled,
-                // #1063 — clear a stale skip-verify choice when TLS is turned off.
-                ...(tlsEnabled ? {} : { trustServerCertificate: null }),
-              });
-            }}
+            checked={sslModeTlsOn(draft.sslMode)}
+            onChange={(e) =>
+              onChange({ sslMode: e.target.checked ? "verify-full" : "prefer" })
+            }
           />
           {t("form.enableTlsMongo")}
         </label>

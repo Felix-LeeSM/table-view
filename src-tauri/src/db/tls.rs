@@ -1,85 +1,75 @@
 //! Shared TLS/encryption decision for the sqlx-based RDB adapters
 //! (PostgreSQL, MySQL/MariaDB).
 //!
-//! Issue #1062 — `ConnectionConfig::tls_enabled` /
-//! `trust_server_certificate` were carried on the model but never wired into
-//! the sqlx connect options, so PG/MySQL silently relied on the driver
-//! default (`sslmode=prefer` / `ssl-mode=PREFERRED`) — "encrypt if possible,
-//! otherwise plaintext". A user who believed TLS was on could be silently
-//! downgraded to cleartext. This helper resolves the model fields into an
-//! explicit, driver-neutral decision that each adapter maps onto its concrete
-//! `SslMode`, matching the MSSQL (tiberius) semantics in `db/mssql.rs`.
+//! Issue #1062 wired the model's TLS posture onto the sqlx connect options so a
+//! user who turns TLS on is never silently downgraded to plaintext by the
+//! driver default (`sslmode=prefer` / `ssl-mode=PREFERRED`). #1649 (ADR 0058)
+//! promotes that posture from the `(tls_enabled, trust_server_certificate)`
+//! boolean pair to the uniform [`SslMode`] enum and adds the `verify-ca`
+//! posture: the server certificate is validated against a user-supplied CA
+//! ([`ConnectionConfig::ca_cert_path`]), closing the MITM-substitution gap that
+//! `require` (skip-verify) leaves open and that `verify-full` cannot cover for
+//! private/self-signed CAs. This helper resolves the model into an explicit,
+//! driver-neutral decision that each adapter maps onto its concrete `SslMode`.
 
-use crate::error::AppError;
-use crate::models::ConnectionConfig;
+use crate::models::{ConnectionConfig, SslMode};
 
-/// Driver-neutral outcome of the `tls_enabled` / `trust_server_certificate`
-/// decision. Each sqlx adapter maps this onto its own `SslMode`:
+/// Driver-neutral outcome of the [`SslMode`] posture. Each sqlx adapter maps
+/// this onto its own `SslMode`:
 ///
-/// | decision            | `PgSslMode`  | `MySqlSslMode`   | sslmode UI    |
+/// | decision            | `PgSslMode`  | `MySqlSslMode`   | `SslMode`     |
 /// |---------------------|--------------|------------------|---------------|
 /// | `Disable`           | `Disable`    | `Disabled`       | `disable`     |
 /// | `Default`           | (unset)      | (unset)          | `prefer`      |
 /// | `RequireSkipVerify` | `Require`    | `Required`       | `require`     |
+/// | `RequireVerifyCa`   | `VerifyCa`   | `VerifyCa`       | `verify-ca`   |
 /// | `RequireVerifyFull` | `VerifyFull` | `VerifyIdentity` | `verify-full` |
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+///
+/// `RequireVerifyCa` carries the CA path so the adapter can point the driver's
+/// root-certificate option at it. `Clone` (not `Copy`) because of the owned
+/// path.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum TlsDecision {
-    /// #1063 — explicitly force plaintext (`sslmode=disable`). Distinct from
-    /// `Default`: the driver default (`prefer`) opportunistically encrypts and
-    /// an active attacker can strip it, whereas `Disable` is the operator's
-    /// deliberate choice to never negotiate TLS. Encoded as the otherwise-inert
-    /// `(tls_enabled=false, trust_server_certificate=false)` combo (existing
-    /// pg/mysql connections never authored it — the PG form clears trust to
-    /// `None` when TLS is off — so reinterpreting it is a no-op for real data).
+    /// Explicitly force plaintext (`sslmode=disable`) — never negotiate TLS.
     Disable,
     /// TLS not requested — leave the driver default (`prefer`) untouched.
-    /// Preserves the pre-#1062 behavior for existing connections
-    /// (`tls_enabled` unset / `false` with no explicit trust decision).
     Default,
-    /// Force encryption but skip certificate verification
-    /// (`trust_server_certificate = true`).
+    /// Force encryption but skip certificate verification (`sslmode=require`).
     RequireSkipVerify,
-    /// Force encryption with full CA + hostname verification
-    /// (`trust_server_certificate = false`).
+    /// #1649 — force encryption + verify the server certificate against the CA
+    /// at `ca_cert_path` (`sslmode=verify-ca`). `None` falls back to the
+    /// driver's default trust store (still verifies, just without a private CA).
+    RequireVerifyCa { ca_cert_path: Option<String> },
+    /// Force encryption with full CA + hostname verification (`verify-full`).
     RequireVerifyFull,
 }
 
-/// Resolve the TLS decision, rejecting combinations that cannot be honored
-/// rather than silently ignoring them (issue #1062 acceptance criterion).
+/// Resolve the model's [`SslMode`] posture into a driver-neutral decision.
 ///
-/// Parity with the MSSQL adapter (`db/mssql.rs`):
-/// * `tls_enabled = true` requires an explicit `trust_server_certificate`
-///   decision — `None` is rejected so the caller never gets an unexpected
-///   verification posture.
-/// * `trust_server_certificate = true` with TLS off is rejected — trusting a
-///   certificate is meaningless without encryption.
-pub(crate) fn resolve_tls_decision(config: &ConnectionConfig) -> Result<TlsDecision, AppError> {
-    match (
-        config.tls_enabled.unwrap_or(false),
-        config.trust_server_certificate,
-    ) {
-        (true, Some(true)) => Ok(TlsDecision::RequireSkipVerify),
-        (true, Some(false)) => Ok(TlsDecision::RequireVerifyFull),
-        (true, None) => Err(AppError::Validation(
-            "TLS requires an explicit trustServerCertificate decision".into(),
-        )),
-        (false, Some(true)) => Err(AppError::Validation(
-            "trustServerCertificate requires TLS to be enabled".into(),
-        )),
-        // #1063 — `sslmode=disable`: TLS off + an explicit trust=false marker
-        // means the operator deliberately forced plaintext, not the legacy
-        // opportunistic default.
-        (false, Some(false)) => Ok(TlsDecision::Disable),
-        (false, None) => Ok(TlsDecision::Default),
+/// Infallible since #1649: the `SslMode` enum makes the previously-rejected
+/// combinations (TLS on without a trust decision, trust without TLS)
+/// unrepresentable, so there is no longer an error path to surface.
+pub(crate) fn resolve_tls_decision(config: &ConnectionConfig) -> TlsDecision {
+    match config.ssl_mode {
+        SslMode::Disable => TlsDecision::Disable,
+        SslMode::Prefer => TlsDecision::Default,
+        SslMode::Require => TlsDecision::RequireSkipVerify,
+        SslMode::VerifyCa => TlsDecision::RequireVerifyCa {
+            ca_cert_path: config.ca_cert_path.clone(),
+        },
+        SslMode::VerifyFull => TlsDecision::RequireVerifyFull,
     }
 }
 
 #[cfg(test)]
 mod tests {
+    // Purpose: #1649 (ADR 0058) — resolve_tls_decision maps each SslMode posture
+    // onto the driver-neutral decision, and verify-ca carries the CA path so the
+    // adapter can validate the server certificate against a private CA.
     use super::*;
     use crate::models::DatabaseType;
 
-    fn config(tls_enabled: Option<bool>, trust: Option<bool>) -> ConnectionConfig {
+    fn config(ssl_mode: SslMode, ca_cert_path: Option<&str>) -> ConnectionConfig {
         ConnectionConfig {
             id: "t".into(),
             name: "t".into(),
@@ -97,8 +87,8 @@ mod tests {
             environment: None,
             auth_source: None,
             replica_set: None,
-            tls_enabled,
-            trust_server_certificate: trust,
+            ssl_mode,
+            ca_cert_path: ca_cert_path.map(String::from),
             oracle_use_sid: None,
             wallet_path: None,
             wallet_password: String::new(),
@@ -106,67 +96,86 @@ mod tests {
     }
 
     #[test]
-    fn tls_off_by_default_leaves_driver_default() {
-        // Legacy connections carry neither field — must not force TLS so the
-        // pre-#1062 behavior (driver `prefer`) is preserved.
+    fn prefer_leaves_driver_default() {
+        // Reason: the default posture must not force TLS so legacy connections
+        // keep the pre-#1062 driver `prefer` behavior. (2026-07-25)
         assert_eq!(
-            resolve_tls_decision(&config(None, None)).unwrap(),
-            TlsDecision::Default
-        );
-        assert_eq!(
-            resolve_tls_decision(&config(Some(false), None)).unwrap(),
+            resolve_tls_decision(&config(SslMode::Prefer, None)),
             TlsDecision::Default
         );
     }
 
     #[test]
-    fn tls_off_with_explicit_trust_false_is_disable() {
-        // Reason: #1063 — the sslmode dropdown's `disable` option must reach a
-        // distinct forced-plaintext decision, encoded as (tls=false,
-        // trust=false). Previously this combo collapsed to Default (prefer);
-        // the two postures differ (prefer opportunistically encrypts, disable
-        // never does), so `disable` needs its own decision. (2026-07-17)
+    fn disable_forces_plaintext() {
         assert_eq!(
-            resolve_tls_decision(&config(Some(false), Some(false))).unwrap(),
-            TlsDecision::Disable
-        );
-        assert_eq!(
-            resolve_tls_decision(&config(None, Some(false))).unwrap(),
+            resolve_tls_decision(&config(SslMode::Disable, None)),
             TlsDecision::Disable
         );
     }
 
     #[test]
-    fn tls_on_with_trust_skips_verification() {
+    fn require_skips_verification() {
         assert_eq!(
-            resolve_tls_decision(&config(Some(true), Some(true))).unwrap(),
+            resolve_tls_decision(&config(SslMode::Require, None)),
             TlsDecision::RequireSkipVerify
         );
     }
 
     #[test]
-    fn tls_on_without_trust_requires_full_verification() {
+    fn verify_full_requires_full_verification() {
         assert_eq!(
-            resolve_tls_decision(&config(Some(true), Some(false))).unwrap(),
+            resolve_tls_decision(&config(SslMode::VerifyFull, None)),
             TlsDecision::RequireVerifyFull
         );
     }
 
     #[test]
-    fn tls_on_without_trust_decision_is_rejected() {
-        // Parity with MSSQL: enabling TLS without deciding on cert trust must
-        // fail loudly, never silently pick a verification posture.
-        let err = resolve_tls_decision(&config(Some(true), None)).unwrap_err();
-        assert!(matches!(err, AppError::Validation(msg) if msg.contains("trustServerCertificate")));
+    fn verify_ca_carries_the_ca_path() {
+        // Reason: #1649 — verify-ca must forward the CA path so the adapter can
+        // validate the server cert against a private/self-signed CA; a stray
+        // ca_cert_path on a non-verify-ca posture must NOT leak into the
+        // decision. (2026-07-25)
+        assert_eq!(
+            resolve_tls_decision(&config(SslMode::VerifyCa, Some("/etc/ssl/my-ca.pem"))),
+            TlsDecision::RequireVerifyCa {
+                ca_cert_path: Some("/etc/ssl/my-ca.pem".into())
+            }
+        );
+        // verify-ca with no CA still verifies (driver trust store), just without
+        // a private anchor.
+        assert_eq!(
+            resolve_tls_decision(&config(SslMode::VerifyCa, None)),
+            TlsDecision::RequireVerifyCa { ca_cert_path: None }
+        );
+        // A ca_cert_path attached to verify-full is ignored — only verify-ca
+        // reads it.
+        assert_eq!(
+            resolve_tls_decision(&config(SslMode::VerifyFull, Some("/etc/ssl/my-ca.pem"))),
+            TlsDecision::RequireVerifyFull
+        );
     }
 
     #[test]
-    fn trust_without_tls_is_rejected() {
-        // Trusting a certificate is meaningless without encryption — reject
-        // instead of silently ignoring the flag.
-        let err = resolve_tls_decision(&config(Some(false), Some(true))).unwrap_err();
-        assert!(matches!(err, AppError::Validation(msg) if msg.contains("TLS")));
-        let err = resolve_tls_decision(&config(None, Some(true))).unwrap_err();
-        assert!(matches!(err, AppError::Validation(_)));
+    fn legacy_migration_matches_prior_resolve_semantics() {
+        // Reason: #1649 — SslMode::from_legacy must fold the ADR 0053 boolean
+        // pair onto the exact postures the old resolve_tls_decision produced, so
+        // stored connections migrate with zero downgrade. (2026-07-25)
+        assert_eq!(SslMode::from_legacy(None, None), SslMode::Prefer);
+        assert_eq!(SslMode::from_legacy(Some(false), None), SslMode::Prefer);
+        assert_eq!(
+            SslMode::from_legacy(Some(false), Some(false)),
+            SslMode::Disable
+        );
+        assert_eq!(SslMode::from_legacy(None, Some(false)), SslMode::Disable);
+        assert_eq!(
+            SslMode::from_legacy(Some(true), Some(true)),
+            SslMode::Require
+        );
+        assert_eq!(
+            SslMode::from_legacy(Some(true), Some(false)),
+            SslMode::VerifyFull
+        );
+        // ADR 0053 derived rule: on/off engines' `tls=true, trust=None`.
+        assert_eq!(SslMode::from_legacy(Some(true), None), SslMode::VerifyFull);
     }
 }

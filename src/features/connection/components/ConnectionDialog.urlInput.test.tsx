@@ -662,20 +662,33 @@ describe("[Sprint 447] URL import support follows data-source profiles", () => {
 });
 
 // ===========================================================================
-// #1063 — a pasted connection string carrying a TLS parameter we cannot map
-// (e.g. `sslmode=verify-ca`, which needs a CA file — follow-up scope) must not
-// silently drop it. The dialog surfaces a non-blocking notice naming the
-// dropped parameter so the user sets the posture manually.
+// #1063/#1649 — a pasted connection string carrying a TLS parameter we cannot
+// map (e.g. `sslmode=allow`) must not silently drop it; the dialog surfaces a
+// non-blocking notice naming the dropped parameter. #1649 makes `verify-ca`
+// representable, so it now reflects onto the form without a notice.
 // ===========================================================================
-describe("[#1063] unmappable TLS URL parameter notice", () => {
-  it("surfaces a notice naming a dropped sslmode=verify-ca on paste", async () => {
+describe("[#1649] unmappable TLS URL parameter notice", () => {
+  it("surfaces a notice naming a dropped sslmode=allow on paste", async () => {
+    renderDialog();
+    await act(async () => {
+      pasteIntoHost("postgresql://u:p@h:5432/db?sslmode=allow");
+    });
+    const notice = screen.getByTestId("connection-url-tls-notice");
+    expect(notice).toBeInTheDocument();
+    expect(notice.textContent).toContain("sslmode=allow");
+  });
+
+  it("shows no notice when sslmode=verify-ca maps cleanly (#1649)", async () => {
+    // Reason: #1649 (ADR 0058) — verify-ca is now a representable posture, so a
+    // pasted ?sslmode=verify-ca reflects onto the form instead of being flagged
+    // as dropped (the #1063 behavior). (2026-07-25)
     renderDialog();
     await act(async () => {
       pasteIntoHost("postgresql://u:p@h:5432/db?sslmode=verify-ca");
     });
-    const notice = screen.getByTestId("connection-url-tls-notice");
-    expect(notice).toBeInTheDocument();
-    expect(notice.textContent).toContain("sslmode=verify-ca");
+    expect(
+      screen.queryByTestId("connection-url-tls-notice"),
+    ).not.toBeInTheDocument();
   });
 
   it("shows no notice when the sslmode parameter maps cleanly", async () => {

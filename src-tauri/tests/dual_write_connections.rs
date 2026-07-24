@@ -72,8 +72,8 @@ fn sample_connection_req(id: &str, name: &str) -> PersistConnectionRequest {
         environment: None,
         auth_source: None,
         replica_set: None,
-        tls_enabled: None,
-        trust_server_certificate: None,
+        ssl_mode: table_view_lib::models::SslMode::Prefer,
+        ca_cert_path: None,
         sort_order: 0,
     }
 }

@@ -182,6 +182,7 @@ describe("DataGrid", () => {
           color: null,
           hasPassword: false,
           paradigm: "rdb",
+          sslMode: "prefer",
         },
       ],
     });
@@ -216,6 +217,7 @@ describe("DataGrid", () => {
           color: null,
           hasPassword: false,
           paradigm: "rdb",
+          sslMode: "prefer",
         },
       ],
     });
@@ -251,6 +253,7 @@ describe("DataGrid", () => {
           color: null,
           hasPassword: false,
           paradigm: "rdb",
+          sslMode: "prefer",
         },
       ],
     });
@@ -292,6 +295,7 @@ describe("DataGrid", () => {
           color: null,
           hasPassword: false,
           paradigm: "rdb",
+          sslMode: "prefer",
         },
       ],
     });
@@ -326,6 +330,7 @@ describe("DataGrid", () => {
           color: null,
           hasPassword: false,
           paradigm: "rdb",
+          sslMode: "prefer",
         },
       ],
     });
@@ -367,6 +372,7 @@ describe("DataGrid", () => {
           color: null,
           hasPassword: false,
           paradigm: "rdb",
+          sslMode: "prefer",
         },
       ],
     });
@@ -401,6 +407,7 @@ describe("DataGrid", () => {
           color: null,
           hasPassword: false,
           paradigm: "rdb",
+          sslMode: "prefer",
         },
       ],
     });

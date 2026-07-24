@@ -16,7 +16,7 @@ function makeDraft(overrides: Partial<ConnectionDraft> = {}): ConnectionDraft {
     groupId: null,
     color: null,
     paradigm: "kv",
-    tlsEnabled: false,
+    sslMode: "prefer",
     ...overrides,
   };
 }
@@ -88,10 +88,10 @@ describe("RedisFormFields", () => {
     expect(onChange).toHaveBeenCalledWith({ database: "5" });
   });
 
-  // Issue #1063 — redis/valkey gain the skip-verify opt-in. Guard the
+  // Issue #1063/#1649 — redis/valkey gain the skip-verify opt-in. Guard the
   // redis-specific wiring: the trust checkbox appears only with TLS on, and
-  // toggling TLS off clears a stale trust choice.
-  describe("skip-verify opt-in (#1063)", () => {
+  // toggling TLS off returns to the driver default. #1649 folds it into sslMode.
+  describe("skip-verify opt-in (#1649)", () => {
     function renderRedis(
       overrides: Partial<ConnectionDraft>,
       onChange = vi.fn(),
@@ -114,28 +114,22 @@ describe("RedisFormFields", () => {
     }
 
     it("reveals the trust checkbox only once TLS is on", () => {
-      renderRedis({ tlsEnabled: false });
+      renderRedis({ sslMode: "prefer" });
       expect(
         screen.queryByLabelText("Trust server certificate"),
       ).not.toBeInTheDocument();
-      renderRedis({ tlsEnabled: true });
+      renderRedis({ sslMode: "verify-full" });
       expect(
         screen.getByLabelText("Trust server certificate"),
       ).toBeInTheDocument();
     });
 
-    it("clears a stale trust choice when TLS is turned off", () => {
-      const onChange = renderRedis({
-        tlsEnabled: true,
-        trustServerCertificate: true,
-      });
+    it("returns to the driver default when TLS is turned off", () => {
+      const onChange = renderRedis({ sslMode: "require" });
       act(() => {
         fireEvent.click(screen.getByLabelText("Enable TLS"));
       });
-      expect(onChange).toHaveBeenCalledWith({
-        tlsEnabled: false,
-        trustServerCertificate: null,
-      });
+      expect(onChange).toHaveBeenCalledWith({ sslMode: "prefer" });
     });
   });
 });

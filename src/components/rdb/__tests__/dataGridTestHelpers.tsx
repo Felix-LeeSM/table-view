@@ -145,6 +145,7 @@ export function resetDataGridMocks(): void {
           color: null,
           hasPassword: false,
           paradigm: "rdb",
+          sslMode: "prefer",
         },
       ],
       groups: [],

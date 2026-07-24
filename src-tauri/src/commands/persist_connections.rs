@@ -51,10 +51,15 @@ pub struct PersistConnectionRequest {
     pub auth_source: Option<String>,
     #[serde(default)]
     pub replica_set: Option<String>,
+    /// #1649 (ADR 0058) — uniform TLS posture. The SQLite mirror keeps the
+    /// legacy `tls_enabled`/`trust_server_certificate` columns; they are derived
+    /// from this via [`SslMode::to_legacy`] on write (no schema change).
     #[serde(default)]
-    pub tls_enabled: Option<bool>,
+    pub ssl_mode: crate::models::SslMode,
+    /// #1649 — verify-ca CA path. Not mirrored to SQLite (the JSON SOT owns it,
+    /// like `wallet_path`); carried on the file-SOT config only.
     #[serde(default)]
-    pub trust_server_certificate: Option<bool>,
+    pub ca_cert_path: Option<String>,
     #[serde(default)]
     pub sort_order: i64,
 }
@@ -89,8 +94,8 @@ pub async fn persist_connection_inner(
         environment: req.environment.clone(),
         auth_source: req.auth_source.clone(),
         replica_set: req.replica_set.clone(),
-        tls_enabled: req.tls_enabled,
-        trust_server_certificate: req.trust_server_certificate,
+        ssl_mode: req.ssl_mode,
+        ca_cert_path: req.ca_cert_path.clone(),
         oracle_use_sid: None,
         wallet_path: None,
         wallet_password: String::new(),
@@ -131,6 +136,7 @@ async fn write_sqlite_mirror(
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_millis() as i64)
         .unwrap_or(0);
+    let (tls_col, trust_col) = req.ssl_mode.to_legacy();
     sqlx::query(
         "INSERT INTO connections \
          (id, name, db_type, host, port, user, password_enc, database, read_only, group_id, color, \
@@ -166,11 +172,11 @@ async fn write_sqlite_mirror(
     .bind(&req.environment)
     .bind(&req.auth_source)
     .bind(&req.replica_set)
-    .bind(req.tls_enabled.map(|v| if v { 1i64 } else { 0i64 }))
-    .bind(
-        req.trust_server_certificate
-            .map(|v| if v { 1i64 } else { 0i64 }),
-    )
+    // #1649 — derive the legacy mirror columns from the sslmode posture; the
+    // SQLite mirror is a lossy snapshot (verify-ca collapses to verify-full
+    // there, and ca_cert_path is not mirrored — the file SOT owns both).
+    .bind(tls_col.map(|v| if v { 1i64 } else { 0i64 }))
+    .bind(trust_col.map(|v| if v { 1i64 } else { 0i64 }))
     .bind(req.sort_order)
     .bind(now_ms)
     .bind(now_ms)
@@ -233,8 +239,8 @@ mod tests {
             environment: None,
             auth_source: None,
             replica_set: None,
-            tls_enabled: None,
-            trust_server_certificate: None,
+            ssl_mode: crate::models::SslMode::Prefer,
+            ca_cert_path: None,
             sort_order: 0,
         }
     }

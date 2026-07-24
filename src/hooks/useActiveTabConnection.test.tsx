@@ -37,6 +37,7 @@ function makeConnection(
     color: null,
     environment,
     paradigm: "rdb",
+    sslMode: "prefer",
   };
 }
 

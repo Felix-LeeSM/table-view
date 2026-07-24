@@ -4,8 +4,7 @@ import {
   parseSqliteFilePath,
   createEmptyDraft,
   isSupportedDatabaseType,
-  sslModeFields,
-  sslModeFromFields,
+  sslModeFromTlsBooleans,
   unreflectedTlsParam,
   DATABASE_DEFAULTS,
   DATABASE_DEFAULT_FIELDS,
@@ -130,7 +129,7 @@ describe("parseConnectionUrl paradigm tagging (Sprint 65)", () => {
       user: "user",
       password: "pw",
       database: "4",
-      tlsEnabled: true,
+      sslMode: "verify-full",
       paradigm: "kv",
     });
   });
@@ -200,22 +199,21 @@ describe("parseConnectionUrl Sprint 178 scheme aliases + edge cases", () => {
         port: 1433,
         user: "sa",
         database: "master",
-        tlsEnabled: true,
-        trustServerCertificate: true,
+        sslMode: "require",
         paradigm: "rdb",
       });
     }
   });
 
-  it("maps SQL Server encrypt/trustServerCertificate URL params", () => {
+  it("maps SQL Server encrypt/trustServerCertificate URL params to sslMode", () => {
+    // #1649 — encrypt=false → disable; encrypt+trust → require.
     expect(
       parseConnectionUrl(
         "sqlserver://sa:pw@host:1433/master?encrypt=false&trustServerCertificate=false",
       ),
     ).toMatchObject({
       dbType: "mssql",
-      tlsEnabled: false,
-      trustServerCertificate: false,
+      sslMode: "disable",
     });
     expect(
       parseConnectionUrl(
@@ -223,8 +221,7 @@ describe("parseConnectionUrl Sprint 178 scheme aliases + edge cases", () => {
       ),
     ).toMatchObject({
       dbType: "mssql",
-      tlsEnabled: true,
-      trustServerCertificate: true,
+      sslMode: "require",
     });
   });
 
@@ -508,80 +505,61 @@ describe("DuckDB file connection metadata (Sprint 455)", () => {
   });
 });
 
-// Purpose: #1063 — the sslmode dropdown is a pure view over the stored
-// (tlsEnabled, trust) pair, so legacy connections reinterpret without a
-// migration. These lock the round-trip and the legacy-combo mapping. (2026-07-17)
-describe("sslMode field mapping (#1063)", () => {
-  it("maps each dropdown option to a valid (tlsEnabled, trust) combo", () => {
-    expect(sslModeFields("disable")).toEqual({
-      tlsEnabled: false,
-      trustServerCertificate: false,
-    });
-    expect(sslModeFields("prefer")).toEqual({
-      tlsEnabled: null,
-      trustServerCertificate: null,
-    });
-    expect(sslModeFields("require")).toEqual({
-      tlsEnabled: true,
-      trustServerCertificate: true,
-    });
-    expect(sslModeFields("verify-full")).toEqual({
-      tlsEnabled: true,
-      trustServerCertificate: false,
-    });
-  });
-
-  it("reinterprets stored legacy combos as the matching dropdown value", () => {
+// Purpose: #1649 (ADR 0058) — `sslModeFromTlsBooleans` migrates the legacy
+// (tlsEnabled, trust) pair onto the `sslMode` enum so pre-migration snapshots
+// and pasted-URL booleans fold to the same posture the backend produces.
+describe("sslModeFromTlsBooleans (#1649)", () => {
+  it("folds each legacy combo onto the matching sslmode", () => {
     // Unset / legacy prefer.
-    expect(sslModeFromFields(null, null)).toBe("prefer");
-    expect(sslModeFromFields(undefined, undefined)).toBe("prefer");
+    expect(sslModeFromTlsBooleans(null, null)).toBe("prefer");
+    expect(sslModeFromTlsBooleans(undefined, undefined)).toBe("prefer");
     // #1062 boolean combos authored by the pre-#1063 two-checkbox PG form.
-    expect(sslModeFromFields(true, true)).toBe("require");
-    expect(sslModeFromFields(true, false)).toBe("verify-full");
+    expect(sslModeFromTlsBooleans(true, true)).toBe("require");
+    expect(sslModeFromTlsBooleans(true, false)).toBe("verify-full");
     // Explicit forced-plaintext.
-    expect(sslModeFromFields(false, false)).toBe("disable");
+    expect(sslModeFromTlsBooleans(false, false)).toBe("disable");
   });
 
-  it("collapses the invalid (tls=true, trust=null) residue to the secure verify-full", () => {
-    // The #1062 hard-reject residue must never surface as skip-verify.
-    expect(sslModeFromFields(true, null)).toBe("verify-full");
+  it("folds the (tls=true, trust=null) combo to the secure verify-full", () => {
+    // The former #1062 hard-reject residue must never surface as skip-verify.
+    expect(sslModeFromTlsBooleans(true, null)).toBe("verify-full");
   });
 });
 
-// Purpose: #1063 — a pasted connection string's sslmode/tls parameter is
-// honored, and an unmappable one (verify-ca) is reported rather than silently
-// dropped. (2026-07-17)
-describe("parseConnectionUrl TLS parameters (#1063)", () => {
-  it("maps pg sslmode=verify-full onto encrypt + verify", () => {
+// Purpose: #1649 — a pasted connection string's sslmode/tls parameter is
+// honored as the draft's `sslMode`. verify-ca is now representable (it was the
+// unmappable case in #1063); only unknown values are reported unreflected.
+describe("parseConnectionUrl TLS parameters (#1649)", () => {
+  it("maps pg sslmode=verify-full onto sslMode", () => {
     const result = parseConnectionUrl(
       "postgresql://u:p@h:5432/db?sslmode=verify-full",
     );
-    expect(result).toMatchObject({
-      tlsEnabled: true,
-      trustServerCertificate: false,
-    });
+    expect(result).toMatchObject({ sslMode: "verify-full" });
   });
 
-  it("maps pg sslmode=require onto encrypt + skip-verify", () => {
+  it("maps pg sslmode=require onto sslMode", () => {
     const result = parseConnectionUrl("postgresql://u:p@h/db?sslmode=require");
-    expect(result).toMatchObject({
-      tlsEnabled: true,
-      trustServerCertificate: true,
-    });
+    expect(result).toMatchObject({ sslMode: "require" });
+  });
+
+  it("maps pg sslmode=verify-ca onto sslMode (now representable)", () => {
+    // Reason: #1649 — verify-ca is the new advanced posture; a pasted
+    // ?sslmode=verify-ca reflects onto the form instead of being reported as
+    // unmappable (the #1063 behavior). The CA file itself is user-selected.
+    // (2026-07-25)
+    const url = "postgresql://u:p@h/db?sslmode=verify-ca";
+    expect(parseConnectionUrl(url)).toMatchObject({ sslMode: "verify-ca" });
+    expect(unreflectedTlsParam(url)).toBeNull();
   });
 
   it("maps sslmode=disable onto forced plaintext", () => {
     const result = parseConnectionUrl("postgresql://u:p@h/db?sslmode=disable");
-    expect(result).toMatchObject({
-      tlsEnabled: false,
-      trustServerCertificate: false,
-    });
+    expect(result).toMatchObject({ sslMode: "disable" });
   });
 
-  it("treats sslmode=prefer as unset (no TLS fields, no notice)", () => {
+  it("treats sslmode=prefer as unset (no sslMode, no notice)", () => {
     const result = parseConnectionUrl("postgresql://u:p@h/db?sslmode=prefer");
-    expect(result).not.toHaveProperty("tlsEnabled");
-    expect(result).not.toHaveProperty("trustServerCertificate");
+    expect(result).not.toHaveProperty("sslMode");
     expect(
       unreflectedTlsParam("postgresql://u:p@h/db?sslmode=prefer"),
     ).toBeNull();
@@ -591,24 +569,19 @@ describe("parseConnectionUrl TLS parameters (#1063)", () => {
     const result = parseConnectionUrl(
       "mysql://root:pw@h:3306/app?ssl-mode=REQUIRED",
     );
-    expect(result).toMatchObject({
-      tlsEnabled: true,
-      trustServerCertificate: true,
-    });
+    expect(result).toMatchObject({ sslMode: "require" });
   });
 
-  it("maps mongodb tls=true onto TLS on (verify-full, trust untouched)", () => {
+  it("maps mongodb tls=true onto sslMode verify-full", () => {
     const result = parseConnectionUrl("mongodb://u:p@h:27017/db?tls=true");
-    expect(result).toMatchObject({ tlsEnabled: true });
-    expect(result).not.toHaveProperty("trustServerCertificate");
+    expect(result).toMatchObject({ sslMode: "verify-full" });
   });
 
-  it("reports an unmappable sslmode=verify-ca instead of dropping it silently", () => {
-    const url = "postgresql://u:p@h/db?sslmode=verify-ca";
+  it("reports an unknown sslmode value instead of dropping it silently", () => {
+    const url = "postgresql://u:p@h/db?sslmode=allow";
     const result = parseConnectionUrl(url);
-    // Fields left unset — verify-ca needs a CA file (follow-up scope).
-    expect(result).not.toHaveProperty("tlsEnabled");
-    expect(unreflectedTlsParam(url)).toBe("sslmode=verify-ca");
+    expect(result).not.toHaveProperty("sslMode");
+    expect(unreflectedTlsParam(url)).toBe("sslmode=allow");
   });
 
   it("returns null from unreflectedTlsParam for a mappable or absent param", () => {
@@ -621,6 +594,6 @@ describe("parseConnectionUrl TLS parameters (#1063)", () => {
 
   it("keeps the rediss:// scheme meaning TLS on regardless of params", () => {
     const result = parseConnectionUrl("rediss://h:6379");
-    expect(result).toMatchObject({ tlsEnabled: true });
+    expect(result).toMatchObject({ sslMode: "verify-full" });
   });
 });

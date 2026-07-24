@@ -84,12 +84,11 @@ describe("PgFormFields", () => {
     expect(onChange).toHaveBeenCalledWith({ host: "db.example.com" });
   });
 
-  // #1063 — PG's TLS control is the sslmode dropdown (disable/prefer/require/
-  // verify-full), a pure view over the stored (tlsEnabled, trust) pair. It
-  // routes through the same `resolve_tls_decision` boundary as MSSQL, so every
-  // selectable option maps to a valid combo — the invalid `trust=None` while
-  // TLS is on can never be authored.
-  describe("sslmode dropdown (#1063)", () => {
+  // Purpose: #1649 (ADR 0058) — PG's TLS control is the sslmode dropdown, now
+  // bound directly to the stored `sslMode` enum (was a view over the boolean
+  // pair in #1063) and extended with `verify-ca`, which reveals a CA certificate
+  // path input so the server can be validated against a private/self-signed CA.
+  describe("sslmode dropdown (#1649)", () => {
     function renderPg(draft: Partial<ConnectionDraft>, onChange = vi.fn()) {
       render(
         <PgFormFields
@@ -114,36 +113,36 @@ describe("PgFormFields", () => {
     });
 
     it("reflects a stored verify-full posture", () => {
-      renderPg({ tlsEnabled: true, trustServerCertificate: false });
+      renderPg({ sslMode: "verify-full" });
       expect(screen.getByLabelText("SSL mode")).toHaveTextContent(
         /Verify full/,
       );
     });
 
-    it("selecting Disable maps to the forced-plaintext combo (tls=false, trust=false)", async () => {
+    it("selecting Disable sets sslMode=disable and clears any CA path", async () => {
       const user = userEvent.setup();
       const onChange = renderPg({});
       await user.click(screen.getByLabelText("SSL mode"));
       await user.click(screen.getByRole("option", { name: /Disable/ }));
       expect(onChange).toHaveBeenCalledWith({
-        tlsEnabled: false,
-        trustServerCertificate: false,
+        sslMode: "disable",
+        caCertPath: null,
       });
     });
 
-    it("selecting Require maps to encrypt-but-skip-verify (tls=true, trust=true)", async () => {
+    it("selecting Require sets sslMode=require", async () => {
       const user = userEvent.setup();
       const onChange = renderPg({});
       await user.click(screen.getByLabelText("SSL mode"));
       await user.click(screen.getByRole("option", { name: /Require/ }));
       expect(onChange).toHaveBeenCalledWith({
-        tlsEnabled: true,
-        trustServerCertificate: true,
+        sslMode: "require",
+        caCertPath: null,
       });
     });
 
     it("warns about skipped verification while Require is selected", () => {
-      renderPg({ tlsEnabled: true, trustServerCertificate: true });
+      renderPg({ sslMode: "require" });
       // Require = skip-verify: the MITM exposure is surfaced as an alert so the
       // choice is deliberate, not silent.
       expect(
@@ -152,10 +151,48 @@ describe("PgFormFields", () => {
     });
 
     it("does not warn for Verify full", () => {
-      renderPg({ tlsEnabled: true, trustServerCertificate: false });
+      renderPg({ sslMode: "verify-full" });
       expect(
         screen.queryByText(/Certificate verification is skipped/),
       ).not.toBeInTheDocument();
+    });
+
+    // Reason: #1649 (ADR 0058) — verify-ca is the new advanced posture; the
+    // form must expose the CA certificate path input so the feature is actually
+    // reachable (the visible-slice acceptance). Hidden for every other posture
+    // so a stray CA path is never authored. (2026-07-25)
+    it("reveals the CA certificate path input when verify-ca is selected", () => {
+      renderPg({ sslMode: "verify-ca", caCertPath: "/etc/ssl/ca.pem" });
+      const caInput = screen.getByLabelText(
+        "CA certificate file",
+      ) as HTMLInputElement;
+      expect(caInput).toBeInTheDocument();
+      expect(caInput.value).toBe("/etc/ssl/ca.pem");
+    });
+
+    it("hides the CA certificate path input for non-verify-ca postures", () => {
+      renderPg({ sslMode: "require" });
+      expect(
+        screen.queryByLabelText("CA certificate file"),
+      ).not.toBeInTheDocument();
+    });
+
+    it("selecting Verify CA sets sslMode=verify-ca (keeping the CA path key)", async () => {
+      const user = userEvent.setup();
+      const onChange = renderPg({});
+      await user.click(screen.getByLabelText("SSL mode"));
+      await user.click(screen.getByRole("option", { name: /Verify CA/ }));
+      expect(onChange).toHaveBeenCalledWith({ sslMode: "verify-ca" });
+    });
+
+    it("edits the CA path through onChange when verify-ca is active", () => {
+      const onChange = renderPg({ sslMode: "verify-ca" });
+      act(() => {
+        fireEvent.change(screen.getByLabelText("CA certificate file"), {
+          target: { value: "/tmp/ca.pem" },
+        });
+      });
+      expect(onChange).toHaveBeenCalledWith({ caCertPath: "/tmp/ca.pem" });
     });
   });
 });

@@ -259,6 +259,8 @@ async fn reconcile_connections(pool: &SqlitePool) -> Result<(), AppError> {
                 all_ok = false;
                 break;
             }
+            // #1649 — derive the legacy mirror columns from the sslmode posture.
+            let (tls_col, trust_col) = c.ssl_mode.to_legacy();
             let res = sqlx::query(
                 "INSERT OR REPLACE INTO connections \
                  (id, name, db_type, host, port, user, password_enc, database, read_only, group_id, color, \
@@ -287,11 +289,8 @@ async fn reconcile_connections(pool: &SqlitePool) -> Result<(), AppError> {
             .bind(&c.environment)
             .bind(&c.auth_source)
             .bind(&c.replica_set)
-            .bind(c.tls_enabled.map(|v| if v { 1i64 } else { 0i64 }))
-            .bind(
-                c.trust_server_certificate
-                    .map(|v| if v { 1i64 } else { 0i64 }),
-            )
+            .bind(tls_col.map(|v| if v { 1i64 } else { 0i64 }))
+            .bind(trust_col.map(|v| if v { 1i64 } else { 0i64 }))
             .bind(idx as i64)
             .bind(now_ms)
             .bind(now_ms)
@@ -489,8 +488,8 @@ mod tests {
             environment: None,
             auth_source: None,
             replica_set: None,
-            tls_enabled: None,
-            trust_server_certificate: None,
+            ssl_mode: crate::models::SslMode::Prefer,
+            ca_cert_path: None,
             oracle_use_sid: None,
             wallet_path: None,
             wallet_password: String::new(),

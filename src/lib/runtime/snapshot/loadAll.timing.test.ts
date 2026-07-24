@@ -47,6 +47,7 @@ function makeSnapshot(): InitialAppState {
             color: null,
             hasPassword: true,
             paradigm: "rdb",
+            sslMode: "prefer",
           },
         ],
         groups: [
@@ -191,7 +192,9 @@ describe("AC-367-01 boot-critical 5 store hydrate shape", () => {
       hasPassword: true,
       authSource: "admin",
       replicaSet: "rs0",
-      tlsEnabled: true,
+      // #1649 — a legacy snapshot's `tls_enabled: true` (no trust) folds to the
+      // secure verify-full posture on restore.
+      sslMode: "verify-full",
     });
     expect(conn.activeStatuses["legacy-c1"]).toEqual({
       type: "connected",

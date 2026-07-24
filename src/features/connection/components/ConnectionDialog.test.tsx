@@ -388,8 +388,7 @@ describe("ConnectionDialog", () => {
       port: 1521,
       user: "system",
       database: "FREEPDB1",
-      tlsEnabled: null,
-      trustServerCertificate: null,
+      sslMode: "prefer",
     });
   });
 
@@ -1057,7 +1056,7 @@ describe("ConnectionDialog", () => {
       expect(screen.getByLabelText("Database (optional)")).toBeInTheDocument();
     });
 
-    it("includes authSource, replicaSet, tlsEnabled in the saved draft", async () => {
+    it("includes authSource, replicaSet, sslMode in the saved draft", async () => {
       const user = userEvent.setup();
       renderDialog();
       const nameInput = screen.getByLabelText("Name") as HTMLInputElement;
@@ -1093,7 +1092,7 @@ describe("ConnectionDialog", () => {
       expect(draft.paradigm).toBe("document");
       expect(draft.authSource).toBe("admin");
       expect(draft.replicaSet).toBe("rs0");
-      expect(draft.tlsEnabled).toBe(true);
+      expect(draft.sslMode).toBe("verify-full");
     });
 
     // Sprint 381 (2026-05-17) — db-contract α: Mongo connection 의
@@ -1206,7 +1205,7 @@ describe("ConnectionDialog", () => {
       expect(draft.dbType).toBe("elasticsearch");
       expect(draft.paradigm).toBe("search");
       expect(draft.database).toBe("");
-      expect(draft.tlsEnabled).toBe(true);
+      expect(draft.sslMode).toBe("verify-full");
     });
   });
 
@@ -1832,7 +1831,7 @@ describe("ConnectionDialog", () => {
       expect(screen.getByLabelText("Trust server certificate")).toBeChecked();
     });
 
-    it("MSSQL save clears trustServerCertificate when encryption is disabled with bounded runtime claims", async () => {
+    it("MSSQL save resets sslMode to prefer when encryption is disabled with bounded runtime claims", async () => {
       const user = userEvent.setup();
       renderDialog();
       await act(async () => {
@@ -1860,8 +1859,7 @@ describe("ConnectionDialog", () => {
       expect(mockAddConnection).toHaveBeenCalledTimes(1);
       const draft = mockAddConnection.mock.calls[0]![0] as ConnectionDraft;
       expect(draft.dbType).toBe("mssql");
-      expect(draft.tlsEnabled).toBe(false);
-      expect(draft.trustServerCertificate).toBe(false);
+      expect(draft.sslMode).toBe("prefer");
       expect(
         dataSourceProfiles.getDataSourceProfile("mssql").capabilities,
       ).toMatchObject({
@@ -1984,15 +1982,14 @@ describe("ConnectionDialog", () => {
       expect(mockAddConnection).not.toHaveBeenCalled();
     });
 
-    it("does not default missing trustServerCertificate to true when editing an existing MSSQL connection", async () => {
+    it("hydrates a verifying MSSQL connection with the trust checkbox off, and ticking it selects require", async () => {
       renderDialog({
         connection: makeConnection({
           dbType: "mssql",
           port: 1433,
           user: "sa",
           database: "master",
-          tlsEnabled: true,
-          trustServerCertificate: undefined,
+          sslMode: "verify-full",
         }),
       });
 
@@ -2010,7 +2007,7 @@ describe("ConnectionDialog", () => {
       });
 
       const draft = mockUpdateConnection.mock.calls[0]![0] as ConnectionDraft;
-      expect(draft.trustServerCertificate).toBe(true);
+      expect(draft.sslMode).toBe("require");
     });
   });
 

@@ -108,6 +108,7 @@ describe("SearchSidebar roving tabindex", () => {
           color: null,
           environment: null,
           paradigm: "search",
+          sslMode: "prefer",
         },
       ],
       activeStatuses: { "search-1": { type: "connected" } },

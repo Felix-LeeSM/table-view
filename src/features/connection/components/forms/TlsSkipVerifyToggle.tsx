@@ -10,7 +10,11 @@
  * `danger_accept_invalid_certs`).
  */
 import { useTranslation } from "react-i18next";
-import type { ConnectionDraft } from "../../model";
+import {
+  sslModeSkipVerify,
+  sslModeTlsOn,
+  type ConnectionDraft,
+} from "../../model";
 
 export interface TlsSkipVerifyToggleProps {
   draft: ConnectionDraft;
@@ -22,11 +26,11 @@ export default function TlsSkipVerifyToggle({
   onChange,
 }: TlsSkipVerifyToggleProps) {
   const { t } = useTranslation("featuresConnection");
-  // Trust is meaningless without encryption, so the control only appears once
-  // TLS is enabled. Toggling TLS off resets trust to null (see the parent
-  // forms) so a stale skip-verify choice never lingers.
-  if (!draft.tlsEnabled) return null;
-  const trust = draft.trustServerCertificate === true;
+  // Skip-verify is meaningless without encryption, so the control only appears
+  // once TLS is enabled. #1649 — the choice is folded into `sslMode`: ticking
+  // it selects `require` (skip-verify), unticking returns to `verify-full`.
+  if (!sslModeTlsOn(draft.sslMode)) return null;
+  const skip = sslModeSkipVerify(draft.sslMode);
   return (
     <div className="space-y-1 pl-6">
       <label className="flex items-center gap-2 text-xs text-secondary-foreground">
@@ -34,14 +38,14 @@ export default function TlsSkipVerifyToggle({
           id="conn-trust-server-certificate"
           type="checkbox"
           className="cursor-pointer"
-          checked={trust}
+          checked={skip}
           onChange={(e) =>
-            onChange({ trustServerCertificate: e.target.checked })
+            onChange({ sslMode: e.target.checked ? "require" : "verify-full" })
           }
         />
         {t("form.trustServerCert")}
       </label>
-      {trust && (
+      {skip && (
         <p className="text-2xs text-destructive">{t("form.trustWarning")}</p>
       )}
     </div>

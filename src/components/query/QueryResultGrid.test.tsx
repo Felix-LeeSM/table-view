@@ -267,6 +267,7 @@ describe("QueryResultGrid", () => {
           color: null,
           hasPassword: false,
           paradigm: "rdb",
+          sslMode: "prefer",
         },
       ],
     });
@@ -326,6 +327,7 @@ describe("QueryResultGrid", () => {
           color: null,
           hasPassword: false,
           paradigm: "document",
+          sslMode: "prefer",
         },
       ],
     });
@@ -537,6 +539,7 @@ describe("QueryResultGrid", () => {
           color: null,
           hasPassword: false,
           paradigm: "rdb",
+          sslMode: "prefer",
         },
       ],
     });
@@ -656,6 +659,7 @@ describe("QueryResultGrid", () => {
           color: null,
           hasPassword: false,
           paradigm: "rdb",
+          sslMode: "prefer",
         },
       ],
     });
@@ -727,6 +731,7 @@ describe("QueryResultGrid", () => {
           color: null,
           hasPassword: false,
           paradigm: "rdb",
+          sslMode: "prefer",
         },
       ],
     });
@@ -847,6 +852,7 @@ describe("QueryResultGrid", () => {
             color: null,
             hasPassword: false,
             paradigm: "rdb",
+            sslMode: "prefer",
           },
         ],
       });

@@ -211,6 +211,7 @@ describe("SchemaTree — actions", () => {
           color: null,
           environment: null,
           paradigm: "rdb",
+          sslMode: "prefer",
         },
       ],
     });
@@ -307,6 +308,7 @@ describe("SchemaTree — actions", () => {
           color: null,
           environment: null,
           paradigm: "rdb",
+          sslMode: "prefer",
         },
       ],
     });
@@ -339,6 +341,7 @@ describe("SchemaTree — actions", () => {
           color: null,
           environment: null,
           paradigm: "rdb",
+          sslMode: "prefer",
         },
       ],
     });
@@ -395,6 +398,7 @@ describe("SchemaTree — actions", () => {
           color: null,
           environment: null,
           paradigm: "rdb",
+          sslMode: "prefer",
         },
       ],
     });
@@ -1114,6 +1118,7 @@ describe("SchemaTree — actions", () => {
           color: null,
           environment: "local",
           paradigm: "rdb",
+          sslMode: "prefer",
           hasPassword: false,
         },
       ],
@@ -1154,6 +1159,7 @@ describe("SchemaTree — actions", () => {
           color: null,
           environment: "local",
           paradigm: "document",
+          sslMode: "prefer",
           hasPassword: false,
         },
       ],
@@ -1192,6 +1198,7 @@ describe("SchemaTree — actions", () => {
           color: null,
           environment: null,
           paradigm: "rdb",
+          sslMode: "prefer",
         },
       ],
     });
@@ -1227,6 +1234,7 @@ describe("SchemaTree — actions", () => {
           color: null,
           environment: "local",
           paradigm: "rdb",
+          sslMode: "prefer",
           hasPassword: false,
         },
       ],
@@ -1261,6 +1269,7 @@ describe("SchemaTree — actions", () => {
           color: null,
           environment: null,
           paradigm: "rdb",
+          sslMode: "prefer",
         },
       ],
     });
@@ -1458,6 +1467,7 @@ describe("SchemaTree — actions", () => {
           color: null,
           environment: null,
           paradigm: "rdb",
+          sslMode: "prefer",
         },
       ],
     });
@@ -1531,6 +1541,7 @@ describe("SchemaTree — actions", () => {
             color: null,
             environment: "local",
             paradigm: "rdb",
+            sslMode: "prefer",
             hasPassword: false,
           },
         ],

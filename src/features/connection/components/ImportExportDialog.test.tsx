@@ -50,6 +50,7 @@ function makeConn(id: string, hasPw = false): ConnectionConfig {
     color: null,
     environment: null,
     paradigm: "rdb",
+    sslMode: "prefer",
   };
 }
 

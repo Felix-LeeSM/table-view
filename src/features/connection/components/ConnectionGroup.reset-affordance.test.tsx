@@ -62,6 +62,7 @@ function makeConnection(id: string, groupId: string | null): ConnectionConfig {
     color: null,
     environment: null,
     paradigm: "rdb",
+    sslMode: "prefer",
   };
 }
 

@@ -81,7 +81,7 @@ async fn open_search_connection(
         // the reqwest-backed search adapters this is `danger_accept_invalid_certs`
         // (applies only over https, which the `https` scheme selects when TLS is
         // on). Absent/false trust keeps reqwest's default full verification.
-        .danger_accept_invalid_certs(config.trust_server_certificate.unwrap_or(false))
+        .danger_accept_invalid_certs(config.ssl_mode.skip_verify())
         .build()
         .map_err(|err| AppError::Connection(format!("{label} HTTP client error: {err}")))?;
     let base_url = base_url(config);
@@ -559,7 +559,7 @@ impl SearchHttpAuth {
 }
 
 fn base_url(config: &ConnectionConfig) -> String {
-    let scheme = if config.tls_enabled.unwrap_or(false) {
+    let scheme = if config.ssl_mode.tls_on() {
         "https"
     } else {
         "http"

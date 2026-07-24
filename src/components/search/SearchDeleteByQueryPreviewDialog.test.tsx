@@ -29,6 +29,7 @@ function makeConn(
     color: null,
     environment,
     paradigm: "search",
+    sslMode: "prefer",
   };
 }
 

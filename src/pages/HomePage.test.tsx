@@ -111,6 +111,7 @@ function makeConnection(id: string): ConnectionConfig {
     color: null,
     environment: null,
     paradigm: "rdb",
+    sslMode: "prefer",
   };
 }
 

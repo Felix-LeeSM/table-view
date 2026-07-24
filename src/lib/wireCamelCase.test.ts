@@ -5,10 +5,52 @@ import {
   normalizeConnectionStatus,
 } from "./wireCamelCase";
 
-// Purpose: backend wire payload camelCase normalization for connection fields (2026-06-17)
+// Purpose: backend wire payload camelCase normalization for connection fields;
+// #1649 (ADR 0058) folds the TLS posture into `sslMode` + `caCertPath`.
 describe("normalizeConnectionConfig", () => {
-  // Reason: issue #901 adds SQL Server trust_server_certificate on the Rust wire (2026-06-17)
-  it("normalizes SQL Server trust_server_certificate from snake_case", () => {
+  // Reason: #1649 — the backend wire now carries `sslMode` (kebab-case);
+  // camelCase + snake_case keys and the verify-ca CA path both hydrate. (2026-07-25)
+  it("normalizes sslMode + caCertPath from the wire (both cases)", () => {
+    expect(
+      normalizeConnectionConfig({
+        id: "pg-1",
+        name: "PG",
+        db_type: "postgresql",
+        host: "localhost",
+        port: 5432,
+        user: "postgres",
+        database: "db",
+        has_password: true,
+        paradigm: "rdb",
+        ssl_mode: "verify-ca",
+        ca_cert_path: "/etc/ssl/ca.pem",
+      }),
+    ).toMatchObject({
+      dbType: "postgresql",
+      sslMode: "verify-ca",
+      caCertPath: "/etc/ssl/ca.pem",
+    });
+
+    expect(
+      normalizeConnectionConfig({
+        id: "pg-2",
+        name: "PG",
+        dbType: "postgresql",
+        host: "localhost",
+        port: 5432,
+        user: "postgres",
+        database: "db",
+        hasPassword: true,
+        paradigm: "rdb",
+        sslMode: "require",
+      }),
+    ).toMatchObject({ sslMode: "require" });
+  });
+
+  // Reason: #1649 — a pre-migration snapshot still carries the legacy
+  // `(tlsEnabled, trustServerCertificate)` pair; it must fold to the same
+  // posture the backend `SslMode::from_legacy` produces. (2026-07-25)
+  it("folds a legacy tlsEnabled/trustServerCertificate snapshot into sslMode", () => {
     expect(
       normalizeConnectionConfig({
         id: "mssql-1",
@@ -22,16 +64,9 @@ describe("normalizeConnectionConfig", () => {
         paradigm: "rdb",
         tls_enabled: true,
         trust_server_certificate: false,
-      }),
-    ).toMatchObject({
-      dbType: "mssql",
-      tlsEnabled: true,
-      trustServerCertificate: false,
-    });
-  });
+      }).sslMode,
+    ).toBe("verify-full");
 
-  // Reason: camelCase IPC snapshots should round-trip the same MSSQL trust decision (2026-06-17)
-  it("preserves camelCase trustServerCertificate", () => {
     expect(
       normalizeConnectionConfig({
         id: "mssql-2",
@@ -45,16 +80,13 @@ describe("normalizeConnectionConfig", () => {
         paradigm: "rdb",
         tlsEnabled: true,
         trustServerCertificate: true,
-      }),
-    ).toMatchObject({
-      dbType: "mssql",
-      tlsEnabled: true,
-      trustServerCertificate: true,
-    });
+      }).sslMode,
+    ).toBe("require");
   });
 
-  // Reason: existing MSSQL records without trust_server_certificate must not silently hydrate to true (2026-06-17)
-  it("does not default missing trustServerCertificate to true", () => {
+  // Reason: #1649 — a legacy record with `tls_enabled` but no trust decision
+  // must fold to the secure `verify-full`, never skip-verify. (2026-07-25)
+  it("folds legacy tls_enabled without a trust decision to verify-full", () => {
     const connection = normalizeConnectionConfig({
       id: "mssql-legacy",
       name: "SQL Server legacy",
@@ -68,7 +100,25 @@ describe("normalizeConnectionConfig", () => {
       tls_enabled: true,
     });
 
-    expect(connection.trustServerCertificate).toBeUndefined();
+    expect(connection.sslMode).toBe("verify-full");
+  });
+
+  // Reason: #1649 — a payload with no TLS keys at all hydrates to the driver
+  // default `prefer` (no silent encryption claim). (2026-07-25)
+  it("defaults a payload with no TLS keys to prefer", () => {
+    const connection = normalizeConnectionConfig({
+      id: "pg-legacy",
+      name: "PG legacy",
+      db_type: "postgresql",
+      host: "localhost",
+      port: 5432,
+      user: "postgres",
+      database: "db",
+      has_password: false,
+      paradigm: "rdb",
+    });
+    expect(connection.sslMode).toBe("prefer");
+    expect(connection.caCertPath).toBeUndefined();
   });
 });
 

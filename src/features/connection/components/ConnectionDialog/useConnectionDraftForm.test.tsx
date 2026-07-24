@@ -1,11 +1,11 @@
-// Issue #1062 (T5 review) — TLS draft carryover guard.
+// Issue #1062/#1063/#1649 — TLS draft carryover guard.
 //
-// The MSSQL form seeds `tlsEnabled=true`. Switching to a DBMS whose form has
-// no TLS toggle (pg/mysql/mariadb/oracle/sqlite/duckdb) previously carried
-// that `true` over while resetting `trust` to null, producing the
-// `tls_enabled=true, trust=None` combo the backend now hard-rejects — with no
-// in-form control to recover. These lock the carryover + the edit-form
-// normalization of pre-existing bug residue.
+// The MSSQL form seeds the `require` posture. #1649 (ADR 0058) promotes the TLS
+// posture to the `sslMode` enum; switching to a DBMS whose form has no TLS
+// toggle (pg/mysql/mariadb/oracle/sqlite/duckdb) resets it to `prefer`, while
+// the on/off engines (mongo/redis/valkey/search) carry only the on/off state
+// (never the skip-verify choice). These lock the carryover + the edit-form
+// hydration of a stored posture.
 import { describe, it, expect } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import { useConnectionDraftForm } from "./useConnectionDraftForm";
@@ -29,102 +29,97 @@ function storedConnection(
   };
 }
 
-describe("useConnectionDraftForm — TLS carryover on dbType switch (#1062)", () => {
+describe("useConnectionDraftForm — TLS carryover on dbType switch (#1649)", () => {
   it.each<DatabaseType>(["postgresql", "mysql", "mariadb", "oracle"])(
-    "resets tlsEnabled to null when switching MSSQL → %s (no TLS toggle)",
+    "resets sslMode to prefer when switching MSSQL → %s (no TLS toggle)",
     (target) => {
       const { result } = renderHook(() => useConnectionDraftForm());
       // Port stays default across each hop, so the switch applies immediately
       // without the custom-port confirm gate.
       act(() => result.current.handleDbTypeChange("mssql"));
-      expect(result.current.form.tlsEnabled).toBe(true);
+      expect(result.current.form.sslMode).toBe("require");
       act(() => result.current.handleDbTypeChange(target));
-      expect(result.current.form.tlsEnabled).toBeNull();
-      expect(result.current.form.trustServerCertificate).toBeNull();
+      expect(result.current.form.sslMode).toBe("prefer");
+      expect(result.current.form.caCertPath).toBeNull();
     },
   );
 
   it.each<DatabaseType>(["redis", "valkey", "mongodb"])(
-    "keeps carried tlsEnabled when switching MSSQL → %s (TLS toggle form)",
+    "carries only the on/off state (require → verify-full) MSSQL → %s (TLS toggle form)",
     (target) => {
       const { result } = renderHook(() => useConnectionDraftForm());
       act(() => result.current.handleDbTypeChange("mssql"));
       act(() => result.current.handleDbTypeChange(target));
-      expect(result.current.form.tlsEnabled).toBe(true);
+      // Encryption carries; the skip-verify (`require`) choice never does.
+      expect(result.current.form.sslMode).toBe("verify-full");
     },
   );
 });
 
-describe("useConnectionDraftForm — edit-form normalization of stored residue (#1062)", () => {
-  it("drops the reject residue (tls=true, trust=None) for a stored PostgreSQL connection", () => {
+describe("useConnectionDraftForm — edit-form hydrates the stored sslMode (#1649)", () => {
+  it("carries a stored verify-ca posture + CA path verbatim for PostgreSQL", () => {
     const conn = storedConnection({
       dbType: "postgresql",
-      tlsEnabled: true,
-      trustServerCertificate: null,
+      sslMode: "verify-ca",
+      caCertPath: "/etc/ssl/ca.pem",
     });
     const { result } = renderHook(() => useConnectionDraftForm(conn));
-    expect(result.current.form.tlsEnabled).toBeNull();
+    expect(result.current.form.sslMode).toBe("verify-ca");
+    expect(result.current.form.caCertPath).toBe("/etc/ssl/ca.pem");
   });
 
-  it("preserves an explicit valid combo (tls=true, trust=false) for a stored PostgreSQL connection", () => {
+  it("carries a stored verify-full posture for PostgreSQL", () => {
     const conn = storedConnection({
       dbType: "postgresql",
-      tlsEnabled: true,
-      trustServerCertificate: false,
+      sslMode: "verify-full",
     });
     const { result } = renderHook(() => useConnectionDraftForm(conn));
-    expect(result.current.form.tlsEnabled).toBe(true);
-    expect(result.current.form.trustServerCertificate).toBe(false);
+    expect(result.current.form.sslMode).toBe("verify-full");
   });
 
-  it("preserves tlsEnabled for a stored MongoDB connection (TLS toggle form)", () => {
+  it("carries a stored TLS posture for a MongoDB connection (TLS toggle form)", () => {
     const conn = storedConnection({
       dbType: "mongodb",
       paradigm: "document",
-      tlsEnabled: true,
-      trustServerCertificate: null,
+      sslMode: "verify-full",
     });
     const { result } = renderHook(() => useConnectionDraftForm(conn));
-    expect(result.current.form.tlsEnabled).toBe(true);
+    expect(result.current.form.sslMode).toBe("verify-full");
   });
 });
 
-// Issue #1063 — the on/off TLS engines (mongo/redis/valkey/search) gained a
-// meaningful `trustServerCertificate` (skip-verify). Switching between them
-// must NOT carry a skip-verify choice onto the next engine, or a dev cluster's
-// trust=true silently follows a prod connection. Encryption (tlsEnabled) may
-// carry; trust must reset.
-describe("useConnectionDraftForm — skip-verify never carries across dbType switch (#1063)", () => {
-  it("resets trust to null when switching a trusted MongoDB draft to Redis", () => {
+// Issue #1063/#1649 — the on/off TLS engines gained a meaningful skip-verify
+// (`require`). Switching between engines must NOT carry a skip-verify choice
+// onto the next engine, or a dev cluster's insecure posture silently follows a
+// prod connection. Encryption may carry (as verify-full); require must not.
+describe("useConnectionDraftForm — skip-verify never carries across dbType switch (#1649)", () => {
+  it("downgrades require to verify-full when switching a MongoDB draft to Redis", () => {
     const conn = storedConnection({
       dbType: "mongodb",
       paradigm: "document",
       port: 27017, // mongo default → switch applies without the confirm gate
-      tlsEnabled: true,
-      trustServerCertificate: true,
+      sslMode: "require",
     });
     const { result } = renderHook(() => useConnectionDraftForm(conn));
-    expect(result.current.form.trustServerCertificate).toBe(true);
+    expect(result.current.form.sslMode).toBe("require");
 
     act(() => result.current.handleDbTypeChange("redis"));
 
-    // Encryption carries, but the skip-verify decision is dropped.
-    expect(result.current.form.tlsEnabled).toBe(true);
-    expect(result.current.form.trustServerCertificate).toBeNull();
+    // Encryption carries as verify-full; the skip-verify decision is dropped.
+    expect(result.current.form.sslMode).toBe("verify-full");
   });
 
   // Reason: B1 review finding — the paste path (`applyParsedConnection`) bypassed
   // the dropdown's `applyDbTypeChange` sanitize, so a stored MSSQL draft's
-  // trust=true survived a `redis://` paste and reached the backend as
-  // redis `insecure=true`. (2026-07-17)
+  // `require` (skip-verify) survived a `redis://` paste and reached the backend
+  // as redis `insecure=true`. (2026-07-25)
   it("drops a carried skip-verify choice when a pasted URL changes the engine (#1063 B1)", () => {
     const conn = storedConnection({
       dbType: "mssql",
-      tlsEnabled: true,
-      trustServerCertificate: true,
+      sslMode: "require",
     });
     const { result } = renderHook(() => useConnectionDraftForm(conn));
-    expect(result.current.form.trustServerCertificate).toBe(true);
+    expect(result.current.form.sslMode).toBe("require");
 
     // Paste a redis URL that carries no TLS parameter (the B1 repro).
     act(() =>
@@ -142,22 +137,21 @@ describe("useConnectionDraftForm — skip-verify never carries across dbType swi
     );
 
     expect(result.current.form.dbType).toBe("redis");
-    // Encryption may carry; the skip-verify choice must not.
-    expect(result.current.form.trustServerCertificate).toBeNull();
+    // Encryption may carry (verify-full); the skip-verify choice must not.
+    expect(result.current.form.sslMode).toBe("verify-full");
   });
 
   // Reason: the sanitize must not clobber a TLS posture the pasted URL states
   // explicitly (e.g. `?sslmode=require`). Order matters: sanitize first, then
-  // the parsed fields override. (2026-07-17)
-  it("still applies explicit TLS params carried by the pasted URL", () => {
+  // the parsed fields override. (2026-07-25)
+  it("still applies an explicit sslMode carried by the pasted URL", () => {
     const conn = storedConnection({
       dbType: "mssql",
-      tlsEnabled: true,
-      trustServerCertificate: true,
+      sslMode: "require",
     });
     const { result } = renderHook(() => useConnectionDraftForm(conn));
 
-    // postgresql://...?sslmode=require → the parser emits tls=true, trust=true.
+    // postgresql://...?sslmode=require → the parser emits sslMode: "require".
     act(() =>
       result.current.applyParsedConnection(
         {
@@ -166,8 +160,7 @@ describe("useConnectionDraftForm — skip-verify never carries across dbType swi
           port: 5432,
           user: "u",
           database: "db",
-          tlsEnabled: true,
-          trustServerCertificate: true,
+          sslMode: "require",
           paradigm: "rdb",
         },
         "paste",
@@ -175,8 +168,8 @@ describe("useConnectionDraftForm — skip-verify never carries across dbType swi
     );
 
     expect(result.current.form.dbType).toBe("postgresql");
-    // The explicit sslmode=require (skip-verify) survives the sanitize.
-    expect(result.current.form.tlsEnabled).toBe(true);
-    expect(result.current.form.trustServerCertificate).toBe(true);
+    // The explicit sslmode=require survives the sanitize (which would otherwise
+    // reset pg to prefer).
+    expect(result.current.form.sslMode).toBe("require");
   });
 });

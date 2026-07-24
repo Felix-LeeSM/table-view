@@ -86,6 +86,11 @@ pub fn export_connections(ids: Vec<String>) -> Result<String, AppError> {
             // username / internal topology), mirroring the DuckDB absolute-path
             // strip above. Import forces the user to re-select the wallet.
             p.wallet_path = None;
+            // #1649 (ADR 0058) — strip the verify-ca CA path for the same
+            // reason (leaks home-directory username / internal topology). The
+            // sslmode posture itself is not a secret and round-trips; the user
+            // re-selects the CA file after import.
+            p.ca_cert_path = None;
             p
         })
         .collect();
@@ -270,8 +275,10 @@ pub fn import_connections(json: String) -> Result<ImportResult, AppError> {
             environment: conn.environment.clone(),
             auth_source: conn.auth_source.clone(),
             replica_set: conn.replica_set.clone(),
-            tls_enabled: conn.tls_enabled,
-            trust_server_certificate: conn.trust_server_certificate,
+            // #1649 — sslmode posture round-trips (not a secret); the CA path
+            // is stripped on both export and import — the user re-selects it.
+            ssl_mode: conn.ssl_mode,
+            ca_cert_path: None,
             // #1065 — the connect mode is not a secret, so it round-trips.
             oracle_use_sid: conn.oracle_use_sid,
             // Wallet path is stripped on export and never imported — the user
@@ -506,8 +513,8 @@ mod tests {
                 paradigm: crate::models::Paradigm::Rdb,
                 auth_source: None,
                 replica_set: None,
-                tls_enabled: None,
-                trust_server_certificate: None,
+                ssl_mode: crate::models::SslMode::Prefer,
+                ca_cert_path: None,
                 oracle_use_sid: None,
                 wallet_path: None,
                 has_wallet_password: false,
@@ -685,8 +692,8 @@ mod tests {
                 paradigm: crate::models::Paradigm::Rdb,
                 auth_source: None,
                 replica_set: None,
-                tls_enabled: None,
-                trust_server_certificate: None,
+                ssl_mode: crate::models::SslMode::Prefer,
+                ca_cert_path: None,
                 oracle_use_sid: None,
                 wallet_path: None,
                 has_wallet_password: false,
@@ -730,8 +737,8 @@ mod tests {
                 paradigm: crate::models::Paradigm::Rdb,
                 auth_source: None,
                 replica_set: None,
-                tls_enabled: None,
-                trust_server_certificate: None,
+                ssl_mode: crate::models::SslMode::Prefer,
+                ca_cert_path: None,
                 oracle_use_sid: None,
                 wallet_path: None,
                 has_wallet_password: false,
@@ -777,8 +784,8 @@ mod tests {
                 paradigm: crate::models::Paradigm::Rdb,
                 auth_source: None,
                 replica_set: None,
-                tls_enabled: None,
-                trust_server_certificate: None,
+                ssl_mode: crate::models::SslMode::Prefer,
+                ca_cert_path: None,
                 oracle_use_sid: None,
                 wallet_path: None,
                 has_wallet_password: false,
@@ -865,8 +872,8 @@ mod tests {
                 paradigm: crate::models::Paradigm::Rdb,
                 auth_source: None,
                 replica_set: None,
-                tls_enabled: None,
-                trust_server_certificate: None,
+                ssl_mode: crate::models::SslMode::Prefer,
+                ca_cert_path: None,
                 oracle_use_sid: None,
                 wallet_path: None,
                 has_wallet_password: false,
@@ -1024,8 +1031,8 @@ mod tests {
                 paradigm: crate::models::Paradigm::Rdb,
                 auth_source: None,
                 replica_set: None,
-                tls_enabled: None,
-                trust_server_certificate: None,
+                ssl_mode: crate::models::SslMode::Prefer,
+                ca_cert_path: None,
                 oracle_use_sid: None,
                 wallet_path: None,
                 has_wallet_password: false,

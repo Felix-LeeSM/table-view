@@ -20,8 +20,8 @@ fn config() -> ConnectionConfig {
         environment: None,
         auth_source: None,
         replica_set: None,
-        tls_enabled: None,
-        trust_server_certificate: None,
+        ssl_mode: crate::models::SslMode::Prefer,
+        ca_cert_path: None,
         oracle_use_sid: None,
         wallet_path: None,
         wallet_password: String::new(),
@@ -51,8 +51,8 @@ fn connection_config_validation_and_lifecycle_errors_are_local() {
     let tds_config = MssqlAdapter::build_tds_config(&ConnectionConfig {
         host: " sqlserver.local ".into(),
         database: " ".into(),
-        tls_enabled: Some(false),
-        trust_server_certificate: None,
+        ssl_mode: crate::models::SslMode::Prefer,
+        ca_cert_path: None,
         oracle_use_sid: None,
         wallet_path: None,
         wallet_password: String::new(),
@@ -64,8 +64,8 @@ fn connection_config_validation_and_lifecycle_errors_are_local() {
     let tds_config = MssqlAdapter::build_tds_config(&ConnectionConfig {
         host: " sqlserver.local ".into(),
         port: 1444,
-        tls_enabled: Some(true),
-        trust_server_certificate: Some(false),
+        ssl_mode: crate::models::SslMode::VerifyFull,
+        ca_cert_path: None,
         oracle_use_sid: None,
         wallet_path: None,
         wallet_password: String::new(),
@@ -77,8 +77,8 @@ fn connection_config_validation_and_lifecycle_errors_are_local() {
     let tds_config = MssqlAdapter::build_tds_config(&ConnectionConfig {
         host: " sqlserver.local ".into(),
         port: 1445,
-        tls_enabled: Some(true),
-        trust_server_certificate: Some(true),
+        ssl_mode: crate::models::SslMode::Require,
+        ca_cert_path: None,
         oracle_use_sid: None,
         wallet_path: None,
         wallet_password: String::new(),
@@ -119,30 +119,11 @@ fn connection_config_rejects_unsupported_mssql_auth_and_tls_modes_before_network
     })
     .unwrap_err();
     assert!(matches!(err, AppError::Validation(message) if message.contains("named instance")));
-
-    let err = MssqlAdapter::build_tds_config(&ConnectionConfig {
-        tls_enabled: Some(true),
-        trust_server_certificate: None,
-        oracle_use_sid: None,
-        wallet_path: None,
-        wallet_password: String::new(),
-        ..config()
-    })
-    .unwrap_err();
-    assert!(
-        matches!(err, AppError::Validation(message) if message.contains("trustServerCertificate"))
-    );
-
-    let err = MssqlAdapter::build_tds_config(&ConnectionConfig {
-        tls_enabled: Some(false),
-        trust_server_certificate: Some(true),
-        oracle_use_sid: None,
-        wallet_path: None,
-        wallet_password: String::new(),
-        ..config()
-    })
-    .unwrap_err();
-    assert!(matches!(err, AppError::Validation(message) if message.contains("requires TLS")));
+    // #1649 — the former "TLS on without a trust decision" and "trust without
+    // TLS" rejections are gone: the sslmode enum makes both combinations
+    // unrepresentable. The encryption branch itself stays exercised by the
+    // sslmode cases in the addr test above, which build VerifyFull/Require/Prefer
+    // configs successfully.
 }
 
 #[test]

@@ -77,7 +77,100 @@ pub enum Paradigm {
     Kv,
 }
 
+/// #1649 (ADR 0058) — the uniform, all-engine TLS posture vocabulary. Promotes
+/// the ADR 0053 `(tls_enabled, trust_server_certificate)` boolean pair — which
+/// was the persisted SOT on pg/mysql and the plain on/off toggle on the 1-stage
+/// engines — into a single `sslmode` enum stored on every engine. The five
+/// variants mirror the PostgreSQL `sslmode` vocabulary so a pasted `?sslmode=`
+/// value maps one-to-one:
+///
+/// | variant      | wire (`kebab`) | tls_on | skip_verify | needs CA |
+/// |--------------|----------------|--------|-------------|----------|
+/// | `Disable`    | `disable`      | no     | —           | no       |
+/// | `Prefer`     | `prefer`       | opportunistic (driver default) | no |
+/// | `Require`    | `require`      | yes    | yes         | no       |
+/// | `VerifyCa`   | `verify-ca`    | yes    | no          | yes (`ca_cert_path`) |
+/// | `VerifyFull` | `verify-full`  | yes    | no          | no (OS trust store) |
+///
+/// `VerifyCa` (#1649) is the new advanced-depth posture: it validates the server
+/// certificate against a user-supplied private/self-signed CA (`ca_cert_path`),
+/// closing the MITM-substitution gap that `Require` (skip-verify) leaves open
+/// and that `VerifyFull` cannot cover for non-public CAs.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum SslMode {
+    /// Force plaintext — never negotiate TLS (`sslmode=disable`).
+    Disable,
+    /// Driver default — opportunistic encryption (`sslmode=prefer`). The
+    /// pre-#1062 posture for legacy connections that set no TLS fields.
+    #[default]
+    Prefer,
+    /// Force encryption, skip certificate verification (`sslmode=require`).
+    /// MITM-exposed: encrypts but does not authenticate the server.
+    Require,
+    /// Force encryption + verify the server certificate against the CA in
+    /// `ca_cert_path` (`sslmode=verify-ca`). Hostname is not checked.
+    VerifyCa,
+    /// Force encryption + full CA + hostname verification against the OS trust
+    /// store (`sslmode=verify-full`).
+    VerifyFull,
+}
+
+impl SslMode {
+    /// Whether the adapter should negotiate TLS at all. Used by the on/off
+    /// engines (mongo/redis/valkey/search) and MSSQL that only need an
+    /// encrypt-or-not decision, not the full sslmode ladder.
+    pub fn tls_on(self) -> bool {
+        !matches!(self, SslMode::Disable | SslMode::Prefer)
+    }
+
+    /// Whether certificate verification is skipped (the MITM-exposed
+    /// `require`/skip-verify posture). Only `Require` skips verification;
+    /// `VerifyCa`/`VerifyFull` authenticate the server.
+    pub fn skip_verify(self) -> bool {
+        matches!(self, SslMode::Require)
+    }
+
+    /// Migrate the legacy `(tls_enabled, trust_server_certificate)` pair
+    /// (ADR 0053) into an `SslMode`. Preserves the exact
+    /// `resolve_tls_decision` semantics for the pg/mysql path and applies the
+    /// ADR 0053 derived rule for the on/off engines (`tls=true, trust=None`
+    /// reinterprets as verify-full — the current effective behavior, zero
+    /// downgrade). Used only at the deserialize + snapshot-reconstruct
+    /// boundaries; there is no dual-write (1-stage migration).
+    pub fn from_legacy(tls_enabled: Option<bool>, trust: Option<bool>) -> Self {
+        match (tls_enabled.unwrap_or(false), trust) {
+            (true, Some(true)) => SslMode::Require,
+            (true, Some(false)) => SslMode::VerifyFull,
+            // ADR 0053 derived rule: on/off engines stored `tls=true, trust=None`
+            // and connected with verification — reinterpret as verify-full.
+            (true, None) => SslMode::VerifyFull,
+            // Explicit forced-plaintext marker (#1063).
+            (false, Some(false)) => SslMode::Disable,
+            // Unset, or the nonsensical trust-without-tls combo (never authored
+            // by real data) — driver default.
+            (false, _) => SslMode::Prefer,
+        }
+    }
+
+    /// Inverse of [`SslMode::from_legacy`] onto the legacy boolean pair. Used to
+    /// write the SQLite snapshot mirror's `tls_enabled`/`trust_server_certificate`
+    /// integer columns without a schema change (the mirror is a lossy snapshot,
+    /// not the SOT; `VerifyCa` reconstructs as `VerifyFull` there and the
+    /// `ca_cert_path` is restored from the file SOT, mirroring how the mirror
+    /// already drops `wallet_path`/`oracle_use_sid`).
+    pub fn to_legacy(self) -> (Option<bool>, Option<bool>) {
+        match self {
+            SslMode::Prefer => (None, None),
+            SslMode::Disable => (Some(false), Some(false)),
+            SslMode::Require => (Some(true), Some(true)),
+            SslMode::VerifyCa | SslMode::VerifyFull => (Some(true), Some(false)),
+        }
+    }
+}
+
 #[derive(Clone, Serialize, Deserialize)]
+#[serde(from = "ConnectionConfigDe")]
 pub struct ConnectionConfig {
     pub id: String,
     pub name: String,
@@ -108,14 +201,20 @@ pub struct ConnectionConfig {
     /// MongoDB replica set name. Ignored by non-mongo adapters.
     #[serde(default)]
     pub replica_set: Option<String>,
-    /// Whether to enable TLS/encryption for adapters that support it.
+    /// #1649 (ADR 0058) — the uniform all-engine TLS posture. Replaces the
+    /// legacy `(tls_enabled, trust_server_certificate)` boolean pair; legacy
+    /// persisted JSON migrates through [`ConnectionConfigDe`] (1-stage, no
+    /// dual-write). `#[serde(default)]` yields `Prefer` for any payload lacking
+    /// the key.
     #[serde(default)]
-    pub tls_enabled: Option<bool>,
-    /// SQL Server trust-server-certificate decision. `None` means the caller
-    /// did not make an explicit certificate decision; MSSQL TLS paths require
-    /// an explicit value.
+    pub ssl_mode: SslMode,
+    /// #1649 (ADR 0058) — filesystem path to the CA certificate (PEM) that
+    /// `SslMode::VerifyCa` validates the server certificate against. A path
+    /// *reference* only — never the certificate contents (ADR 0052 file-credential
+    /// precedent). Stripped from export envelopes like `wallet_path`. `None` for
+    /// every non-verify-ca posture.
     #[serde(default)]
-    pub trust_server_certificate: Option<bool>,
+    pub ca_cert_path: Option<String>,
     /// Oracle-only (#1065): connect using a SID instead of a service name.
     /// `Some(true)` selects the driver's `Config::with_sid`; `None` /
     /// `Some(false)` use a service name. Ignored by non-Oracle adapters.
@@ -133,6 +232,88 @@ pub struct ConnectionConfig {
     /// the IPC boundary in plaintext (ADR 0005). Empty means "none stored".
     #[serde(default)]
     pub wallet_password: String,
+}
+
+/// #1649 (ADR 0058) — deserialize shim that migrates the legacy
+/// `(tls_enabled, trust_server_certificate)` boolean pair into `ssl_mode` in a
+/// single stage. `ConnectionConfig` deserializes *through* this type
+/// (`#[serde(from = ...)]`): a payload carrying an explicit `ssl_mode` uses it
+/// verbatim; a legacy payload (booleans only, no `ssl_mode`) is folded via
+/// [`SslMode::from_legacy`]. Serialization is one-way — `ConnectionConfig` only
+/// ever writes `ssl_mode`/`ca_cert_path`, so the next save drops the legacy
+/// keys (no dual-write). Every field mirrors `ConnectionConfig` with identical
+/// serde attributes so the persisted shape round-trips unchanged.
+#[derive(Deserialize)]
+struct ConnectionConfigDe {
+    id: String,
+    name: String,
+    db_type: DatabaseType,
+    host: String,
+    port: u16,
+    user: String,
+    password: String,
+    database: String,
+    #[serde(default)]
+    read_only: bool,
+    group_id: Option<String>,
+    color: Option<String>,
+    #[serde(default)]
+    connection_timeout: Option<u32>,
+    #[serde(default)]
+    keep_alive_interval: Option<u32>,
+    #[serde(default)]
+    environment: Option<String>,
+    #[serde(default)]
+    auth_source: Option<String>,
+    #[serde(default)]
+    replica_set: Option<String>,
+    /// New SOT posture. Absent for legacy payloads → folded from the pair below.
+    #[serde(default)]
+    ssl_mode: Option<SslMode>,
+    #[serde(default)]
+    ca_cert_path: Option<String>,
+    /// Legacy (ADR 0053) — deserialized only to migrate; never re-serialized.
+    #[serde(default)]
+    tls_enabled: Option<bool>,
+    #[serde(default)]
+    trust_server_certificate: Option<bool>,
+    #[serde(default)]
+    oracle_use_sid: Option<bool>,
+    #[serde(default)]
+    wallet_path: Option<String>,
+    #[serde(default)]
+    wallet_password: String,
+}
+
+impl From<ConnectionConfigDe> for ConnectionConfig {
+    fn from(de: ConnectionConfigDe) -> Self {
+        let ssl_mode = de
+            .ssl_mode
+            .unwrap_or_else(|| SslMode::from_legacy(de.tls_enabled, de.trust_server_certificate));
+        ConnectionConfig {
+            id: de.id,
+            name: de.name,
+            db_type: de.db_type,
+            host: de.host,
+            port: de.port,
+            user: de.user,
+            password: de.password,
+            database: de.database,
+            read_only: de.read_only,
+            group_id: de.group_id,
+            color: de.color,
+            connection_timeout: de.connection_timeout,
+            keep_alive_interval: de.keep_alive_interval,
+            environment: de.environment,
+            auth_source: de.auth_source,
+            replica_set: de.replica_set,
+            ssl_mode,
+            ca_cert_path: de.ca_cert_path,
+            oracle_use_sid: de.oracle_use_sid,
+            wallet_path: de.wallet_path,
+            wallet_password: de.wallet_password,
+        }
+    }
 }
 
 /// P3-2 (#1455) — manual `Debug` so an accidental `{:?}` (log line, error
@@ -160,8 +341,8 @@ impl std::fmt::Debug for ConnectionConfig {
             .field("environment", &self.environment)
             .field("auth_source", &self.auth_source)
             .field("replica_set", &self.replica_set)
-            .field("tls_enabled", &self.tls_enabled)
-            .field("trust_server_certificate", &self.trust_server_certificate)
+            .field("ssl_mode", &self.ssl_mode)
+            .field("ca_cert_path", &self.ca_cert_path)
             .field("oracle_use_sid", &self.oracle_use_sid)
             .field("wallet_path", &self.wallet_path)
             .field("wallet_password", &"***")
@@ -210,10 +391,16 @@ pub struct ConnectionConfigPublic {
     pub auth_source: Option<String>,
     #[serde(default, alias = "replica_set")]
     pub replica_set: Option<String>,
-    #[serde(default, alias = "tls_enabled")]
-    pub tls_enabled: Option<bool>,
-    #[serde(default, alias = "trust_server_certificate")]
-    pub trust_server_certificate: Option<bool>,
+    /// #1649 (ADR 0058) — the uniform all-engine TLS posture on the wire.
+    /// `#[serde(default)]` yields `Prefer` for a pre-#1649 export lacking the
+    /// key (the exported posture resets to prefer on import — a rare edge,
+    /// consistent with import already being a re-enter flow).
+    #[serde(default, alias = "ssl_mode")]
+    pub ssl_mode: SslMode,
+    /// #1649 (ADR 0058) — CA path for `verify-ca`. Stripped on export like
+    /// `wallet_path`; the user re-selects it after import.
+    #[serde(default, alias = "ca_cert_path")]
+    pub ca_cert_path: Option<String>,
     #[serde(default, alias = "oracle_use_sid")]
     pub oracle_use_sid: Option<bool>,
     #[serde(default, alias = "wallet_path")]
@@ -244,8 +431,8 @@ impl From<&ConnectionConfig> for ConnectionConfigPublic {
             has_password: !c.password.is_empty(),
             auth_source: c.auth_source.clone(),
             replica_set: c.replica_set.clone(),
-            tls_enabled: c.tls_enabled,
-            trust_server_certificate: c.trust_server_certificate,
+            ssl_mode: c.ssl_mode,
+            ca_cert_path: c.ca_cert_path.clone(),
             oracle_use_sid: c.oracle_use_sid,
             wallet_path: c.wallet_path.clone(),
             has_wallet_password: !c.wallet_password.is_empty(),
@@ -276,8 +463,8 @@ impl ConnectionConfigPublic {
             environment: self.environment,
             auth_source: self.auth_source,
             replica_set: self.replica_set,
-            tls_enabled: self.tls_enabled,
-            trust_server_certificate: self.trust_server_certificate,
+            ssl_mode: self.ssl_mode,
+            ca_cert_path: self.ca_cert_path,
             oracle_use_sid: self.oracle_use_sid,
             wallet_path: self.wallet_path,
             // Wallet password, like the DB password, never crosses IPC — the
@@ -362,8 +549,8 @@ mod tests {
             environment: None,
             auth_source: None,
             replica_set: None,
-            tls_enabled: None,
-            trust_server_certificate: None,
+            ssl_mode: SslMode::Prefer,
+            ca_cert_path: None,
             oracle_use_sid: None,
             wallet_path: None,
             wallet_password: String::new(),
@@ -404,8 +591,8 @@ mod tests {
             environment: None,
             auth_source: None,
             replica_set: None,
-            tls_enabled: None,
-            trust_server_certificate: None,
+            ssl_mode: SslMode::Prefer,
+            ca_cert_path: None,
             oracle_use_sid: Some(true),
             wallet_path: Some("/home/u/wallet".into()),
             wallet_password: "wpass@42XY".into(),
@@ -446,8 +633,8 @@ mod tests {
             environment: None,
             auth_source: None,
             replica_set: None,
-            tls_enabled: None,
-            trust_server_certificate: None,
+            ssl_mode: SslMode::Prefer,
+            ca_cert_path: None,
             oracle_use_sid: Some(true),
             wallet_path: Some("/home/u/wallet".into()),
             wallet_password: "wpass@42XY".into(),
@@ -538,8 +725,8 @@ mod tests {
             environment: None,
             auth_source: None,
             replica_set: None,
-            tls_enabled: None,
-            trust_server_certificate: None,
+            ssl_mode: SslMode::Prefer,
+            ca_cert_path: None,
             oracle_use_sid: None,
             wallet_path: None,
             wallet_password: String::new(),
@@ -589,8 +776,8 @@ mod tests {
             environment: None,
             auth_source: Some("admin".into()),
             replica_set: Some("rs0".into()),
-            tls_enabled: Some(true),
-            trust_server_certificate: None,
+            ssl_mode: SslMode::VerifyFull,
+            ca_cert_path: None,
             oracle_use_sid: None,
             wallet_path: None,
             wallet_password: String::new(),
@@ -615,21 +802,24 @@ mod tests {
             json
         );
         assert!(
-            json.contains("\"tlsEnabled\":true"),
-            "tlsEnabled missing from payload: {}",
+            json.contains("\"sslMode\":\"verify-full\""),
+            "sslMode missing from payload: {}",
             json
         );
         assert!(
             !json.contains("auth_source")
                 && !json.contains("replica_set")
-                && !json.contains("tls_enabled"),
+                && !json.contains("ssl_mode"),
             "public connection wire shape must not expose snake_case keys: {}",
             json
         );
     }
 
     #[test]
-    fn connection_config_public_deserializes_legacy_snake_case_payload() {
+    fn connection_config_public_deserializes_snake_case_payload() {
+        // Reason: the public wire shape keeps snake_case aliases for backward
+        // compatibility with older stored/exported payloads; #1649 folds the
+        // TLS posture into `ssl_mode`/`ca_cert_path`. (2026-07-25)
         let json = r#"{
             "id": "c1",
             "name": "DB",
@@ -647,7 +837,7 @@ mod tests {
             "paradigm": "document",
             "auth_source": "admin",
             "replica_set": "rs0",
-            "tls_enabled": true
+            "ssl_mode": "require"
         }"#;
 
         let public: ConnectionConfigPublic = serde_json::from_str(json).unwrap();
@@ -659,43 +849,48 @@ mod tests {
         assert!(public.has_password);
         assert_eq!(public.auth_source.as_deref(), Some("admin"));
         assert_eq!(public.replica_set.as_deref(), Some("rs0"));
-        assert_eq!(public.tls_enabled, Some(true));
-        assert_eq!(public.trust_server_certificate, None);
+        assert_eq!(public.ssl_mode, SslMode::Require);
+        assert_eq!(public.ca_cert_path, None);
     }
 
     #[test]
-    fn connection_config_public_deserializes_trust_server_certificate_wire_keys() {
+    fn connection_config_public_deserializes_ssl_mode_wire_keys() {
+        // Reason: #1649 — the public shape accepts both camelCase (`sslMode`,
+        // `caCertPath`) and snake_case (`ssl_mode`, `ca_cert_path`) so IPC and
+        // legacy exports both parse. (2026-07-25)
         let camel = r#"{
             "id": "c1",
-            "name": "SQL Server",
-            "dbType": "mssql",
+            "name": "PG",
+            "dbType": "postgresql",
             "host": "localhost",
-            "port": 1433,
-            "user": "sa",
-            "database": "master",
+            "port": 5432,
+            "user": "u",
+            "database": "d",
             "groupId": null,
             "color": null,
             "paradigm": "rdb",
-            "trustServerCertificate": true
+            "sslMode": "verify-ca",
+            "caCertPath": "/etc/ssl/ca.pem"
         }"#;
         let public: ConnectionConfigPublic = serde_json::from_str(camel).unwrap();
-        assert_eq!(public.trust_server_certificate, Some(true));
+        assert_eq!(public.ssl_mode, SslMode::VerifyCa);
+        assert_eq!(public.ca_cert_path.as_deref(), Some("/etc/ssl/ca.pem"));
 
         let snake = r#"{
             "id": "c1",
-            "name": "SQL Server",
-            "db_type": "mssql",
+            "name": "PG",
+            "db_type": "postgresql",
             "host": "localhost",
-            "port": 1433,
-            "user": "sa",
-            "database": "master",
+            "port": 5432,
+            "user": "u",
+            "database": "d",
             "group_id": null,
             "color": null,
             "paradigm": "rdb",
-            "trust_server_certificate": false
+            "ssl_mode": "disable"
         }"#;
         let public: ConnectionConfigPublic = serde_json::from_str(snake).unwrap();
-        assert_eq!(public.trust_server_certificate, Some(false));
+        assert_eq!(public.ssl_mode, SslMode::Disable);
     }
 
     #[test]
@@ -781,8 +976,10 @@ mod tests {
         // Sprint 65 additions remain None for legacy payloads.
         assert_eq!(config.auth_source, None);
         assert_eq!(config.replica_set, None);
-        assert_eq!(config.tls_enabled, None);
-        assert_eq!(config.trust_server_certificate, None);
+        // #1649 — a payload with no TLS keys migrates to the driver-default
+        // `prefer` posture with no CA path.
+        assert_eq!(config.ssl_mode, SslMode::Prefer);
+        assert_eq!(config.ca_cert_path, None);
     }
 
     #[test]
@@ -804,8 +1001,8 @@ mod tests {
             environment: None,
             auth_source: Some("admin".into()),
             replica_set: Some("rs0".into()),
-            tls_enabled: Some(true),
-            trust_server_certificate: None,
+            ssl_mode: SslMode::VerifyFull,
+            ca_cert_path: None,
             oracle_use_sid: None,
             wallet_path: None,
             wallet_password: String::new(),
@@ -814,7 +1011,7 @@ mod tests {
         let deserialized: ConnectionConfig = serde_json::from_str(&json).unwrap();
         assert_eq!(deserialized.auth_source.as_deref(), Some("admin"));
         assert_eq!(deserialized.replica_set.as_deref(), Some("rs0"));
-        assert_eq!(deserialized.tls_enabled, Some(true));
+        assert_eq!(deserialized.ssl_mode, SslMode::VerifyFull);
     }
 
     #[test]
@@ -870,8 +1067,8 @@ mod tests {
             paradigm: Paradigm::Document,
             auth_source: Some("admin".into()),
             replica_set: Some("rs0".into()),
-            tls_enabled: Some(true),
-            trust_server_certificate: Some(false),
+            ssl_mode: SslMode::VerifyCa,
+            ca_cert_path: Some("/etc/ssl/ca.pem".into()),
             oracle_use_sid: None,
             wallet_path: None,
             has_wallet_password: false,
@@ -890,7 +1087,100 @@ mod tests {
         assert_eq!(config.environment.as_deref(), Some("prod"));
         assert_eq!(config.auth_source.as_deref(), Some("admin"));
         assert_eq!(config.replica_set.as_deref(), Some("rs0"));
-        assert_eq!(config.tls_enabled, Some(true));
-        assert_eq!(config.trust_server_certificate, Some(false));
+        // #1649 — the sslmode posture and CA path survive the IPC promotion.
+        assert_eq!(config.ssl_mode, SslMode::VerifyCa);
+        assert_eq!(config.ca_cert_path.as_deref(), Some("/etc/ssl/ca.pem"));
+    }
+
+    /// Purpose: #1649 (ADR 0058) — the legacy `(tls_enabled,
+    /// trust_server_certificate)` boolean pair migrates to `ssl_mode` on load in
+    /// a single stage, and re-serialization drops the legacy keys entirely (no
+    /// dual-write).
+    #[test]
+    fn connection_config_migrates_legacy_tls_booleans_to_ssl_mode() {
+        // Reason: #1649 — a pre-migration connection stored `tls_enabled=true,
+        // trust_server_certificate=true`; loading it must fold to `require`, and
+        // saving it back must write `ssl_mode` while emitting neither legacy key,
+        // so the on-disk vocabulary flips in one pass. (2026-07-25)
+        let legacy = r#"{
+            "id": "c1",
+            "name": "PG",
+            "db_type": "postgresql",
+            "host": "h",
+            "port": 5432,
+            "user": "u",
+            "password": "",
+            "database": "d",
+            "group_id": null,
+            "color": null,
+            "tls_enabled": true,
+            "trust_server_certificate": true
+        }"#;
+        let config: ConnectionConfig = serde_json::from_str(legacy).unwrap();
+        assert_eq!(config.ssl_mode, SslMode::Require);
+
+        let round = serde_json::to_string(&config).unwrap();
+        assert!(
+            round.contains("\"ssl_mode\":\"require\""),
+            "re-serialized config must carry ssl_mode: {round}"
+        );
+        assert!(
+            !round.contains("tls_enabled") && !round.contains("trust_server_certificate"),
+            "1-stage migration must drop the legacy TLS keys on save: {round}"
+        );
+    }
+
+    /// Purpose: #1649 — an explicit `ssl_mode` in the payload wins over any
+    /// legacy booleans that may still be present during the migration window.
+    #[test]
+    fn connection_config_prefers_explicit_ssl_mode_over_legacy_booleans() {
+        // Reason: #1649 — a payload that carries both the new `ssl_mode` and a
+        // stale legacy pair must honor `ssl_mode` (verify-ca) and read its CA
+        // path, never silently downgrade to the boolean fold. (2026-07-25)
+        let mixed = r#"{
+            "id": "c1",
+            "name": "PG",
+            "db_type": "postgresql",
+            "host": "h",
+            "port": 5432,
+            "user": "u",
+            "password": "",
+            "database": "d",
+            "group_id": null,
+            "color": null,
+            "ssl_mode": "verify-ca",
+            "ca_cert_path": "/etc/ssl/ca.pem",
+            "tls_enabled": false,
+            "trust_server_certificate": false
+        }"#;
+        let config: ConnectionConfig = serde_json::from_str(mixed).unwrap();
+        assert_eq!(config.ssl_mode, SslMode::VerifyCa);
+        assert_eq!(config.ca_cert_path.as_deref(), Some("/etc/ssl/ca.pem"));
+    }
+
+    /// Purpose: #1649 — `SslMode` serializes to the kebab-case PostgreSQL
+    /// `sslmode` vocabulary so a pasted `?sslmode=` value maps one-to-one.
+    #[test]
+    fn ssl_mode_serializes_kebab_case() {
+        assert_eq!(
+            serde_json::to_string(&SslMode::Disable).unwrap(),
+            "\"disable\""
+        );
+        assert_eq!(
+            serde_json::to_string(&SslMode::Prefer).unwrap(),
+            "\"prefer\""
+        );
+        assert_eq!(
+            serde_json::to_string(&SslMode::Require).unwrap(),
+            "\"require\""
+        );
+        assert_eq!(
+            serde_json::to_string(&SslMode::VerifyCa).unwrap(),
+            "\"verify-ca\""
+        );
+        assert_eq!(
+            serde_json::to_string(&SslMode::VerifyFull).unwrap(),
+            "\"verify-full\""
+        );
     }
 }

@@ -44,6 +44,7 @@ function makeSearchConnection(): ConnectionConfig {
     color: null,
     hasPassword: false,
     paradigm: "search",
+    sslMode: "prefer",
   };
 }
 

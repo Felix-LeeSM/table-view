@@ -191,6 +191,7 @@ describe("connectionStore", () => {
       groupId: null,
       color: null,
       paradigm: "rdb" as const,
+      sslMode: "prefer" as const,
     };
     const saved = await useConnectionStore.getState().addConnection(draft);
     expect(saved.id).toBe("new-id");
@@ -212,6 +213,7 @@ describe("connectionStore", () => {
           groupId: null,
           color: null,
           paradigm: "rdb",
+          sslMode: "prefer" as const,
         },
       ],
     });
@@ -229,6 +231,7 @@ describe("connectionStore", () => {
       groupId: existing.groupId,
       color: existing.color,
       paradigm: existing.paradigm,
+      sslMode: "prefer" as const,
     });
 
     // saveConnection is mocked to echo the draft unchanged when isNew=false
@@ -256,6 +259,7 @@ describe("connectionStore", () => {
           groupId: null,
           color: null,
           paradigm: "rdb",
+          sslMode: "prefer" as const,
         },
       ],
     });
@@ -395,6 +399,7 @@ describe("connectionStore", () => {
           groupId: null,
           color: null,
           paradigm: "rdb",
+          sslMode: "prefer" as const,
         },
       ],
     });
@@ -418,6 +423,7 @@ describe("connectionStore", () => {
           groupId: "g1",
           color: null,
           paradigm: "rdb",
+          sslMode: "prefer" as const,
         },
       ],
       groups: [{ id: "g1", name: "Prod", color: null, collapsed: false }],
@@ -446,6 +452,7 @@ describe("connectionStore", () => {
           groupId: null,
           color: null,
           paradigm: "rdb",
+          sslMode: "prefer" as const,
         },
       ],
       activeStatuses: { c1: { type: "connected" } },
@@ -477,6 +484,7 @@ describe("connectionStore", () => {
           groupId: null,
           color: null,
           paradigm: "rdb",
+          sslMode: "prefer" as const,
         },
       ],
       activeStatuses: { c1: { type: "disconnected" } },
@@ -525,6 +533,7 @@ describe("connectionStore", () => {
       groupId: null,
       color: null,
       paradigm: "rdb" as const,
+      sslMode: "prefer" as const,
     };
 
     const result = await useConnectionStore.getState().testConnection(draft);
@@ -580,6 +589,7 @@ describe("connectionStore", () => {
             groupId: null,
             color: null,
             paradigm: "rdb",
+            sslMode: "prefer" as const,
           },
           {
             id: "c2",
@@ -593,6 +603,7 @@ describe("connectionStore", () => {
             groupId: null,
             color: null,
             paradigm: "rdb",
+            sslMode: "prefer" as const,
           },
         ],
       });
@@ -780,6 +791,7 @@ describe("connectionStore", () => {
           color: null,
           hasPassword: false,
           paradigm: "rdb",
+          sslMode: "prefer" as const,
         },
       ],
       activeStatuses: {},
@@ -807,6 +819,7 @@ describe("connectionStore", () => {
           color: null,
           hasPassword: false,
           paradigm: "rdb",
+          sslMode: "prefer" as const,
         },
       ],
       activeStatuses: {},
@@ -840,6 +853,7 @@ describe("connectionStore", () => {
           color: null,
           hasPassword: false,
           paradigm: "document",
+          sslMode: "prefer" as const,
         },
       ],
       activeStatuses: {},
@@ -871,6 +885,7 @@ describe("connectionStore", () => {
           color: null,
           hasPassword: false,
           paradigm: "document",
+          sslMode: "prefer" as const,
         },
       ],
       activeStatuses: {},
@@ -948,6 +963,7 @@ describe("connectionStore", () => {
           color: null,
           hasPassword: false,
           paradigm: "document",
+          sslMode: "prefer" as const,
         },
       ],
       activeStatuses: {},
@@ -1079,6 +1095,7 @@ describe("connectionStore", () => {
             color: null,
             hasPassword: false,
             paradigm: "rdb",
+            sslMode: "prefer" as const,
           },
           {
             id: "c2",
@@ -1092,6 +1109,7 @@ describe("connectionStore", () => {
             color: null,
             hasPassword: false,
             paradigm: "rdb",
+            sslMode: "prefer" as const,
           },
         ],
         activeStatuses: {},

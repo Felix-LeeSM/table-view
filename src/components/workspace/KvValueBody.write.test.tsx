@@ -61,6 +61,7 @@ function redisConnection(): ConnectionConfig {
     color: null,
     hasPassword: false,
     paradigm: "kv",
+    sslMode: "prefer",
     environment: "development",
   };
 }

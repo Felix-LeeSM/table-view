@@ -18,7 +18,7 @@ function makeDraft(overrides: Partial<ConnectionDraft> = {}): ConnectionDraft {
     paradigm: "document",
     authSource: null,
     replicaSet: null,
-    tlsEnabled: false,
+    sslMode: "prefer",
     ...overrides,
   };
 }
@@ -82,13 +82,14 @@ describe("MongoFormFields", () => {
     act(() => {
       fireEvent.click(screen.getByLabelText("Enable TLS"));
     });
-    expect(onChange).toHaveBeenCalledWith({ tlsEnabled: true });
+    // #1649 — enabling TLS on an on/off engine selects the secure verify-full.
+    expect(onChange).toHaveBeenCalledWith({ sslMode: "verify-full" });
   });
 
-  // Issue #1063 — the skip-verify opt-in (`trust server certificate`) only
-  // appears once TLS is on, warns while active, and never lingers when TLS is
-  // switched back off.
-  describe("skip-verify opt-in (#1063)", () => {
+  // Issue #1063/#1649 — the skip-verify opt-in (`trust server certificate`)
+  // only appears once TLS is on, warns while active, and never lingers when TLS
+  // is switched back off. #1649 folds the choice into `sslMode`.
+  describe("skip-verify opt-in (#1649)", () => {
     function renderMongo(
       overrides: Partial<ConnectionDraft>,
       onChange = vi.fn(),
@@ -111,39 +112,34 @@ describe("MongoFormFields", () => {
     }
 
     it("hides the trust checkbox while TLS is off", () => {
-      renderMongo({ tlsEnabled: false });
+      renderMongo({ sslMode: "prefer" });
       expect(
         screen.queryByLabelText("Trust server certificate"),
       ).not.toBeInTheDocument();
     });
 
     it("reveals the trust checkbox once TLS is on and opts into skip-verify on click", () => {
-      const onChange = renderMongo({ tlsEnabled: true });
+      const onChange = renderMongo({ sslMode: "verify-full" });
       act(() => {
         fireEvent.click(screen.getByLabelText("Trust server certificate"));
       });
-      expect(onChange).toHaveBeenCalledWith({ trustServerCertificate: true });
+      // #1649 — skip-verify is the `require` posture.
+      expect(onChange).toHaveBeenCalledWith({ sslMode: "require" });
     });
 
-    it("warns while trust is active", () => {
-      renderMongo({ tlsEnabled: true, trustServerCertificate: true });
+    it("warns while the skip-verify (require) posture is active", () => {
+      renderMongo({ sslMode: "require" });
       expect(
         screen.getByText(/Certificate verification is skipped/),
       ).toBeInTheDocument();
     });
 
-    it("clears a stale trust choice when TLS is turned off", () => {
-      const onChange = renderMongo({
-        tlsEnabled: true,
-        trustServerCertificate: true,
-      });
+    it("returns to the driver default when TLS is turned off", () => {
+      const onChange = renderMongo({ sslMode: "require" });
       act(() => {
         fireEvent.click(screen.getByLabelText("Enable TLS"));
       });
-      expect(onChange).toHaveBeenCalledWith({
-        tlsEnabled: false,
-        trustServerCertificate: null,
-      });
+      expect(onChange).toHaveBeenCalledWith({ sslMode: "prefer" });
     });
   });
 });

@@ -32,8 +32,8 @@ fn config(database: &str) -> ConnectionConfig {
         environment: None,
         auth_source: None,
         replica_set: None,
-        tls_enabled: None,
-        trust_server_certificate: None,
+        ssl_mode: crate::models::SslMode::Prefer,
+        ca_cert_path: None,
         oracle_use_sid: None,
         wallet_path: None,
         wallet_password: String::new(),
@@ -152,7 +152,7 @@ fn connection_info_keeps_credentials_in_structured_fields_not_a_url() {
 #[test]
 fn connection_info_uses_tcp_tls_target_when_tls_is_enabled() {
     let mut config = config("5");
-    config.tls_enabled = Some(true);
+    config.ssl_mode = crate::models::SslMode::VerifyFull;
 
     let (info, db) = connection_info(&config).unwrap();
 
@@ -171,13 +171,11 @@ fn connection_info_uses_tcp_tls_target_when_tls_is_enabled() {
 
 #[test]
 fn connection_info_trust_maps_to_insecure_tls_target() {
-    // Reason: #1063 — redis/valkey gain the shared skip-verify opt-in; a
-    // `trust_server_certificate = true` draft must set `insecure: true` on the
-    // TcpTls target, while the default (trust absent) keeps verification.
-    // (2026-07-17)
+    // Reason: #1063/#1649 — redis/valkey gain the shared skip-verify opt-in; the
+    // `require` sslmode posture must set `insecure: true` on the TcpTls target,
+    // while a verifying posture keeps verification. (2026-07-25)
     let mut config = config("5");
-    config.tls_enabled = Some(true);
-    config.trust_server_certificate = Some(true);
+    config.ssl_mode = crate::models::SslMode::Require;
 
     let (info, _db) = connection_info(&config).unwrap();
 

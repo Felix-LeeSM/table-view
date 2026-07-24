@@ -34,6 +34,7 @@ function seedConnection(dbType: DatabaseType): void {
     color: null,
     environment: null,
     paradigm: dbType === "mongodb" ? "document" : "rdb",
+    sslMode: "prefer",
   };
   useConnectionStore.setState({ connections: [conn] });
 }

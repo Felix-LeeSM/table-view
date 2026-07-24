@@ -44,8 +44,13 @@ fn mssql_public(
         paradigm: DatabaseType::Mssql.paradigm(),
         auth_source: None,
         replica_set: None,
-        tls_enabled,
-        trust_server_certificate,
+        // #1649 — the fixture keeps its (tls, trust) params; fold them into the
+        // sslmode posture the model now carries.
+        ssl_mode: table_view_lib::models::SslMode::from_legacy(
+            tls_enabled,
+            trust_server_certificate,
+        ),
+        ca_cert_path: None,
         oracle_use_sid: None,
         wallet_path: None,
         has_wallet_password: false,
@@ -76,8 +81,11 @@ fn mssql_config(
         environment: None,
         auth_source: None,
         replica_set: None,
-        tls_enabled,
-        trust_server_certificate,
+        ssl_mode: table_view_lib::models::SslMode::from_legacy(
+            tls_enabled,
+            trust_server_certificate,
+        ),
+        ca_cert_path: None,
         oracle_use_sid: None,
         wallet_path: None,
         wallet_password: String::new(),

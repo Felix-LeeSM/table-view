@@ -1,6 +1,8 @@
 import { useTranslation } from "react-i18next";
 import {
   getMssqlConnectionUnsupportedMessage,
+  sslModeSkipVerify,
+  sslModeTlsOn,
   type ConnectionDraft,
 } from "../../model";
 import {
@@ -196,14 +198,13 @@ export default function MssqlFormFields({
             id="conn-tls-enabled"
             type="checkbox"
             className="cursor-pointer"
-            checked={draft.tlsEnabled ?? true}
-            onChange={(e) => {
-              const tlsEnabled = e.target.checked;
-              onChange({
-                tlsEnabled,
-                ...(tlsEnabled ? {} : { trustServerCertificate: false }),
-              });
-            }}
+            checked={sslModeTlsOn(draft.sslMode)}
+            onChange={(e) =>
+              // #1649 — SQL Server's encrypt-by-default UX: enabling TLS seeds
+              // the trust=true posture (`require`), disabling returns to
+              // `prefer` (encryption not supported).
+              onChange({ sslMode: e.target.checked ? "require" : "prefer" })
+            }
           />
           {t("form.enableTls")}
         </label>
@@ -212,10 +213,12 @@ export default function MssqlFormFields({
             id="conn-trust-server-certificate"
             type="checkbox"
             className="cursor-pointer"
-            checked={draft.trustServerCertificate === true}
-            disabled={!(draft.tlsEnabled ?? true)}
+            checked={sslModeSkipVerify(draft.sslMode)}
+            disabled={!sslModeTlsOn(draft.sslMode)}
             onChange={(e) =>
-              onChange({ trustServerCertificate: e.target.checked })
+              onChange({
+                sslMode: e.target.checked ? "require" : "verify-full",
+              })
             }
           />
           {t("form.trustServerCert")}
@@ -227,7 +230,7 @@ export default function MssqlFormFields({
           Surface the MITM exposure when it is active. Persistent advisory copy
           (not a live alert region, which is reserved for the auth-combo error
           below). */}
-      {(draft.tlsEnabled ?? true) && draft.trustServerCertificate === true && (
+      {sslModeSkipVerify(draft.sslMode) && (
         <p className="text-2xs text-destructive">{t("form.trustWarning")}</p>
       )}
 

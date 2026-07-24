@@ -302,7 +302,7 @@ async fn elasticsearch_root_probe_tls_errors_are_classified_without_url() {
     // Reason: issue #898 requires Search HTTP TLS failures to be distinct and redacted (2026-06-16).
     let (port, server) = spawn_plain_tcp_server().await;
     let mut config = search_config(port);
-    config.tls_enabled = Some(true);
+    config.ssl_mode = crate::models::SslMode::VerifyFull;
 
     let result = SearchEngineAdapter::test(&config).await;
     server.abort();
@@ -1189,8 +1189,8 @@ fn search_config_for(port: u16, db_type: DatabaseType) -> ConnectionConfig {
         environment: None,
         auth_source: None,
         replica_set: None,
-        tls_enabled: Some(false),
-        trust_server_certificate: None,
+        ssl_mode: crate::models::SslMode::Prefer,
+        ca_cert_path: None,
         oracle_use_sid: None,
         wallet_path: None,
         wallet_password: String::new(),

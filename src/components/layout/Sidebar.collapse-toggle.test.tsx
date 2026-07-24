@@ -98,6 +98,7 @@ function makeConnection(
     color: null,
     environment: null,
     paradigm,
+    sslMode: "prefer",
   };
 }
 

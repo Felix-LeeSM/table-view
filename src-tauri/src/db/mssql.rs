@@ -151,26 +151,18 @@ impl MssqlAdapter {
         }
         tds_config.authentication(AuthMethod::sql_server(user, config.password.as_str()));
 
-        if config.tls_enabled.unwrap_or(false) {
-            match config.trust_server_certificate {
-                Some(true) | Some(false) => {}
-                None => {
-                    return Err(AppError::Validation(
-                        "SQL Server TLS requires an explicit trustServerCertificate decision"
-                            .into(),
-                    ));
-                }
-            }
+        // #1649 (ADR 0058) — the sslmode enum makes the previously-rejected
+        // combinations (TLS on without a trust decision, trust without TLS)
+        // unrepresentable, so the encryption decision is a clean two-way branch.
+        // `require` (skip_verify) opts into `trust_cert`; `verify-ca`/`verify-full`
+        // keep tiberius's certificate verification. (verify-ca CA-file wiring for
+        // MSSQL is deferred — only PG proves verify-ca end-to-end this slice.)
+        if config.ssl_mode.tls_on() {
             tds_config.encryption(EncryptionLevel::Required);
-            if config.trust_server_certificate == Some(true) {
+            if config.ssl_mode.skip_verify() {
                 tds_config.trust_cert();
             }
         } else {
-            if config.trust_server_certificate == Some(true) {
-                return Err(AppError::Validation(
-                    "SQL Server trustServerCertificate requires TLS/encryption".into(),
-                ));
-            }
             tds_config.encryption(EncryptionLevel::NotSupported);
         }
 
