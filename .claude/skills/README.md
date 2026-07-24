@@ -34,10 +34,10 @@ core.symlinks true` 후 재-checkout 해야 bridge 가 심링크로 풀린다.
 (근본 해결책인 symlink → thin-wrapper 재설계는 별도 결정 사항 — 여기선 caveat
 문서화만.)
 
-## 현재 bridge 목록 (11)
+## 현재 bridge 목록 (12)
 
-`caveman`, `code-simplification`, `diagnose`, `grill-with-memory`, `harness`,
-`improve-codebase-architecture`, `pr-create`, `pr-review`, `remember`,
+`caveman`, `code-simplification`, `delivery`, `diagnose`, `grill-with-memory`,
+`harness`, `improve-codebase-architecture`, `pr-create`, `pr-review`, `remember`,
 `split-memory`, `tdd`.
 
 `.agents/skills/*/SKILL.md` 와 1:1. skill 추가/삭제 시 이 브리지도 맞춘다.
