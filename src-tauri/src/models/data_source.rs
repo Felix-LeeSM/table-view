@@ -301,6 +301,15 @@ const SQLITE_RDB_CAPABILITIES: &[BackendAdapterCapability] = &[
     BackendAdapterCapability::RelationalQuery,
     BackendAdapterCapability::RelationalSchemaMutation,
 ];
+// Issue #1070 (ADR 0051 Stage 1) — the wired DuckdbAdapter now routes
+// structured grid row edits through `execute_sql_batch` (BEGIN..COMMIT batch +
+// `enforce_single_row_effect` single-row guard, #1767). Like CSV row import
+// (#1640), DML row mutation rides `RelationalQuery` (there is no separate
+// relational data-mutation capability), which DuckDB already declares — so the
+// declaration already matches the newly wired path and needs no new flag.
+// `RelationalSchemaMutation` (structural DDL) stays OFF: DuckDB's DDL trait
+// methods remain `Unsupported` pending Stage 2. Locked by
+// `db/adapters/tests.rs::duckdb_adapter_declares_query_without_schema_mutation`.
 const DUCKDB_RDB_CAPABILITIES: &[BackendAdapterCapability] = &[
     BackendAdapterCapability::Lifecycle,
     BackendAdapterCapability::RelationalCatalog,

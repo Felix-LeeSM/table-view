@@ -549,7 +549,9 @@ describe("DataSourceProfile registry", () => {
       filePicker: true,
     });
     expect(duckdb.capabilities.query.query).toBe(true);
-    expect(duckdb.capabilities.edit.editRows).toBe(false);
+    // #1070 (ADR 0051 Stage 1) — wired `execute_sql_batch` row edits (#1767).
+    expect(duckdb.capabilities.edit.editRows).toBe(true);
+    // Structural DDL stays Stage 2 — the boundary this slice must not cross.
     expect(duckdb.capabilities.ddl.createTable).toBe(false);
     expect(duckdb.backendAdapter).toEqual({
       id: "duckdb",

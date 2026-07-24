@@ -98,16 +98,22 @@ export default function DataGrid({
   // ("this DBMS supports a read-only connection mode") gated by the
   // per-connection `readOnly` runtime value the user picked, instead of a
   // `dbType === "sqlite"` roster the capability flag now owns.
+  // #1070 — the static row-edit capability comes from the single
+  // `supportsRowEditing` helper (SOT: `capabilities.edit.editRows`), the same
+  // gate `rowEditingSupported` reads below, so DuckDB (ADR 0051 Stage 1) is
+  // exposed the moment its profile declares `editRows`. The runtime `readOnly`
+  // value + primary-key requirement are the additional per-connection gates.
   const canEditRows =
     rowEditConnection !== undefined &&
-    getDataSourceProfile(rowEditConnection.dbType).capabilities.edit.editRows &&
+    supportsRowEditing(rowEditConnection.dbType) &&
     !(
       hasConnectionCapability(rowEditConnection.dbType, "readOnly") &&
       rowEditConnection.readOnly
     ) &&
     !tableWithoutRequiredPrimaryKey;
-  // #1052 — statically read-only engine (DuckDB) HIDES the row-write context
-  // menu items; `canEditRows` above only *disables* them for stateful blocks.
+  // #1052 — an engine that statically declines row editing HIDES the row-write
+  // context menu items; `canEditRows` above only *disables* them for stateful
+  // (runtime read_only / missing-PK) blocks.
   const rowEditingSupported = supportsRowEditing(rowEditConnection?.dbType);
 
   const columnOrder = useRdbColumnOrder({

@@ -460,6 +460,20 @@ export const DUCKDB_CAPABILITIES = capabilities({
     indexes: true,
     constraints: true,
   },
+  edit: {
+    // Issue #1070 (ADR 0051 Stage 1) — the wired DuckdbAdapter now routes
+    // structured grid row edits through `execute_sql_batch` (a BEGIN..COMMIT
+    // batch with drop-based rollback + the `enforce_single_row_effect`
+    // single-row guard, #1767), so `editRows` is a truthful claim. A
+    // `read_only=true` connection still blocks writes (the DataGrid gates on the
+    // per-connection `readOnly` value, and the backend rejects writes on the
+    // read-only connection). `requiresPrimaryKeyForEdit` stays at the base
+    // (false): DuckDB rides the all-column WHERE fallback like PG/MySQL and
+    // relies on the backend single-row guard, so PK-less analytical tables stay
+    // editable. Structural DDL is Stage 2 (#1070), so the `ddl.*` group stays
+    // unset here.
+    editRows: true,
+  },
 });
 
 export const MSSQL_CAPABILITIES = capabilities({
@@ -757,13 +771,18 @@ export function hasConnectionCapability(
 }
 
 /**
- * Issue #1052 — whether this engine supports row-level data editing. DuckDB is
- * read-only because its backend adapter implements no write/DDL path (the
- * `AccessMode::ReadOnly` connection reflects that, it is not the cause), and it
- * is the ONLY RDB engine with `edit.editRows: false`. Per ui-parity §4 the
- * affordances are HIDDEN (not disabled) when this returns false. An unknown /
- * still-loading dbType returns true so affordances aren't stripped before the
- * connection resolves.
+ * Issue #1052 — whether this engine STATICALLY supports row-level data editing
+ * (independent of the per-connection runtime `readOnly` value the DataGrid gates
+ * separately). Per ui-parity §4 the affordances are HIDDEN (not disabled) when
+ * this returns false. An unknown / still-loading dbType returns true so
+ * affordances aren't stripped before the connection resolves.
+ *
+ * Issue #1070 (ADR 0051 Stage 1) — DuckDB left the read-only base here: the
+ * wired adapter now routes structured grid row edits through
+ * `execute_sql_batch` (BEGIN..COMMIT + single-row guard, #1767), so every RDB
+ * engine now declares `edit.editRows`. Structural DDL is a separate Stage 2
+ * surface gated by `supportsDdl`, so this flip does not touch the schema-tree
+ * DDL entries.
  *
  * Issue #1460 — schema-tree DDL entries (Create / Rename / Drop) no longer ride
  * on this flag; they read the per-action `ddl.*` capability via `supportsDdl`
