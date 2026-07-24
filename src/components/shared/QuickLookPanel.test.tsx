@@ -340,6 +340,23 @@ describe("QuickLookPanel", () => {
         expect(metaTextarea.tagName).toBe("TEXTAREA");
       });
 
+      // Reason: #1739 refactor — FieldRow was the only edit surface that drew
+      // an always-on `border` box (it read as a "floating card"). It must now
+      // dissolve into the cell (no permanent border) and carry the unified
+      // primary focus ring. A className/style-contract assertion is the
+      // observable guard sanctioned for this pure-visual unification. (2026-07-24)
+      it("[#1739] edit input dissolves into the cell — no permanent border box, unified primary focus ring", () => {
+        const editState = makeEditState({ selectedRowIds: new Set([0]) });
+        render(<QuickLookPanel {...defaultProps} editState={editState} />);
+        fireEvent.click(screen.getByLabelText(/Toggle edit mode/i));
+
+        const nameInput = screen.getByLabelText("Edit value for name");
+        // No always-on border box — the "floating card" the refactor removes.
+        expect(nameInput.className).not.toMatch(/\bborder\b/);
+        // Unified edit ring: primary (was `ring-ring`), applied on focus.
+        expect(nameInput.className).toMatch(/focus:ring-primary/);
+      });
+
       it("[AC-194-01-4] PK / BLOB columns stay read-only in edit mode (no input rendered)", () => {
         const editState = makeEditState({ selectedRowIds: new Set([0]) });
         render(<QuickLookPanel {...defaultProps} editState={editState} />);

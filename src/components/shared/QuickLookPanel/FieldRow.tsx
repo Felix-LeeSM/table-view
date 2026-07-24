@@ -27,6 +27,7 @@ import {
   SelectValue,
 } from "@components/ui/select";
 import { cn } from "@lib/utils";
+import { INLINE_EDIT_INPUT } from "@components/ui/inlineEdit";
 import type { ColumnInfo } from "@/types/schema";
 import {
   cellToEditValue,
@@ -264,7 +265,7 @@ export function EditableValue({
     return (
       <div className="flex flex-col gap-1">
         <textarea
-          className="max-h-48 w-full resize-y rounded border border-border bg-background px-1 py-0.5 font-mono text-xs text-foreground outline-none focus:ring-1 focus:ring-ring"
+          className={cn("max-h-48 resize-y font-mono", INLINE_EDIT_INPUT)}
           value={draft}
           rows={4}
           aria-label={t("fieldRow.editValueFor", { column: column.name })}
@@ -302,7 +303,7 @@ export function EditableValue({
     <div className="flex items-center gap-2">
       <input
         type={getInputTypeForColumn(column.data_type)}
-        className="flex-1 rounded border border-border bg-background px-1 py-0.5 font-mono text-xs text-foreground outline-none focus:ring-1 focus:ring-ring"
+        className={cn("flex-1 font-mono", INLINE_EDIT_INPUT)}
         value={draft}
         aria-label={t("fieldRow.editValueFor", { column: column.name })}
         onChange={(e) => setDraft(e.target.value)}

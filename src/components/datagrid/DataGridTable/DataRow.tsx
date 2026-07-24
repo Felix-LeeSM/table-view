@@ -17,6 +17,7 @@ import {
   rowIdentityKey,
 } from "../dataGridEditFsm";
 import { cn } from "@lib/utils";
+import { INLINE_EDIT_CELL_RING } from "@components/ui/inlineEdit";
 import { isBlobColumn, parseFkReference } from "./columnUtils";
 import type { CellNavigationDirection } from "./useCellNavigation";
 
@@ -332,7 +333,7 @@ function DataRow({
         // the editing ring since it's a different property (outline vs ring).
         className={`group/cell flex min-w-0 items-center overflow-hidden border-r border-border px-3 py-1 text-xs text-foreground focus-visible:outline-1 focus-visible:-outline-offset-1 focus-visible:outline-ring${alignClass}${
           isEditing
-            ? " bg-primary/10 ring-2 ring-inset ring-primary"
+            ? ` bg-primary/10 ${INLINE_EDIT_CELL_RING}`
             : hasPendingEdit || nestedPendingCount > 0
               ? " bg-highlight/20"
               : ""
@@ -477,7 +478,11 @@ function DataRow({
                       editorFocusRef.current = el;
                     }}
                     type={getInputTypeForColumn(col.data_type)}
-                    className="w-full bg-transparent px-1 py-0 text-xs text-foreground outline-none"
+                    // #1739 — px-0 so the editing value aligns with the static
+                    // cell (px-3) and doesn't jump on edit-entry; the cell owns
+                    // the edit ring (INLINE_EDIT_CELL_RING) so the input stays
+                    // bare.
+                    className="w-full bg-transparent px-0 py-0 text-xs text-foreground outline-none"
                     value={editValue}
                     aria-label={t("editingAria", { col: col.name })}
                     aria-invalid={errorMessage ? true : undefined}
