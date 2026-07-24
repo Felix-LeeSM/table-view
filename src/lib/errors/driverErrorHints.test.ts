@@ -141,6 +141,19 @@ describe("classifyDriverError", () => {
     ).toBeNull();
   });
 
+  // Reason: index-OOB needle 단독 분류 — table 표본 2개가 모두 `connection::describe`
+  //         프레임을 담아, describe 문자열 없이 `index was outside the bounds of the
+  //         array` 만으로 introspectionFailed 매칭이 되는지 커버가 없었다. 프록시가
+  //         describe 프레임 없이 .NET IndexOutOfRangeException 원문만 반환하는
+  //         케이스를 잠근다. 이슈 #1723 후속 (2026-07-24).
+  it("classifies a bare index-OOB message (no connection::describe frame) as introspectionFailed", () => {
+    const msg =
+      'Database error: error returned from database: Index was outside the bounds of the array.; query: "SELECT id, name FROM users"';
+    // 단독 조건 보장 — describe 프레임이 섞이면 이 표본은 index needle 검증이 아니게 된다.
+    expect(msg.toLowerCase()).not.toContain("connection::describe");
+    expect(classifyDriverError(msg)?.category).toBe("introspectionFailed");
+  });
+
   // Reason: fail-open — 매핑 없는 원문은 그대로(null) 두고 억지 분류 금지 (2026-07-03).
   it("returns null for unmatched messages (fail-open)", () => {
     expect(classifyDriverError('syntax error at or near "SELCT"')).toBeNull();
