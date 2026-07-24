@@ -11,6 +11,7 @@ import Decimal from "decimal.js";
 import { X, Save, Trash2, Maximize2, Pencil } from "lucide-react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Button } from "@components/ui/button";
+import { INLINE_EDIT_CELL_RING } from "@components/ui/inlineEdit";
 import { safeStringifyCell } from "@lib/jsonCell";
 import type { QueryResult } from "@/types/query";
 import { useColumnWidths } from "@/hooks/useColumnWidths";
@@ -469,7 +470,7 @@ export default function EditableQueryResultGrid({
                       onFocus={() => roving.syncFocus(rowIdx, colIdx)}
                       className={`flex min-w-0 items-center overflow-hidden border-r border-border px-3 py-1 text-xs text-foreground ${
                         isEditing
-                          ? "bg-primary/10 ring-2 ring-inset ring-primary"
+                          ? `bg-primary/10 ${INLINE_EDIT_CELL_RING}`
                           : hasPendingEdit
                             ? "bg-highlight/20"
                             : readonlyReason
@@ -510,7 +511,11 @@ export default function EditableQueryResultGrid({
                         <input
                           ref={editorFocusRef}
                           type={getInputTypeForColumn(col.dataType)}
-                          className="w-full rounded-sm border-none bg-background px-1 py-0 text-xs text-foreground shadow-sm outline-none"
+                          // #1739 후속 (#1750) — px-0 aligns the editing value
+                          // with the static cell (px-3); the cell owns the edit
+                          // ring (INLINE_EDIT_CELL_RING) so the input stays bare
+                          // (dropped border/shadow "floating card" look).
+                          className="w-full bg-transparent px-0 py-0 text-xs text-foreground outline-none"
                           value={grid.editValue}
                           aria-label={t("editableGrid.editingCellAria", {
                             colName: col.name,

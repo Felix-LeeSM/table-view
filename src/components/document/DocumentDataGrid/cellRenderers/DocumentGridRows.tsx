@@ -11,6 +11,7 @@ import {
 } from "@components/datagrid";
 import { safeStringifyCell, renderCellValue } from "@lib/jsonCell";
 import { cn } from "@lib/utils";
+import { INLINE_EDIT_CELL_RING } from "@components/ui/inlineEdit";
 import { DocumentTreePanel } from "@components/document/DocumentTreePanel";
 
 export interface ExpandedNestedCell {
@@ -197,8 +198,7 @@ export default function DocumentGridRows({
                     data-editing={isEditing ? "true" : undefined}
                     className={cn(
                       "flex min-w-0 items-center overflow-hidden border-r border-border px-3 py-1 text-xs",
-                      isEditing &&
-                        "bg-primary/10 ring-2 ring-inset ring-primary",
+                      isEditing && `bg-primary/10 ${INLINE_EDIT_CELL_RING}`,
                       !isEditing && hasPendingEdit && "bg-highlight/20",
                     )}
                     title={getCellTitle(cell)}
@@ -214,7 +214,10 @@ export default function DocumentGridRows({
                         aria-label={t("gridRows.editingAriaLabel", {
                           colName: col.name,
                         })}
-                        className="w-full bg-transparent px-1 py-0 text-xs text-foreground outline-none"
+                        // #1739 후속 (#1750) — px-0 so the editing value aligns
+                        // with the static cell (px-3); the cell owns the edit
+                        // ring (INLINE_EDIT_CELL_RING) so the input stays bare.
+                        className="w-full bg-transparent px-0 py-0 text-xs text-foreground outline-none"
                         value={editState.editValue ?? ""}
                         onChange={(e) => editState.setEditValue(e.target.value)}
                         onKeyDown={(e) => {
