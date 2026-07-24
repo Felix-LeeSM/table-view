@@ -63,6 +63,7 @@ be read from `docs/product/README.md` and `docs/ROADMAP.md` first.
 | [0055](./0055-erd-virtual-fk-polymorphic-targets/memory.md)                          | ERD 수동 링크 — 가상 FK 1급 모델 (polymorphic targets + discriminator 옵션)                  | Accepted | 2026-07-17 | —          |
 | [0056](./0056-erd-layout-persistence-reconcile-undo/memory.md)                       | ERD 레이아웃 상태 계약 — connection별 persist + 명시적 자동정렬 + reconcile + undo            | Accepted | 2026-07-17 | —          |
 | [0057](./0057-erd-focus-filter-facet-chips/memory.md)                                | ERD 포커스 필터 — facet 칩 (facet 내 OR / facet 간 AND)                                       | Accepted | 2026-07-17 | —          |
+| [0058](./0058-connection-tls-advanced-ca-mtls/memory.md)                             | connection TLS advanced — CA 파일 + mTLS 클라이언트 인증서                                    | Accepted | 2026-07-24 | —          |
 
 ## 역사 (Superseded / Deprecated)
 
