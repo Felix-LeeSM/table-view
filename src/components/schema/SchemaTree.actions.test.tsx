@@ -318,12 +318,14 @@ describe("SchemaTree — actions", () => {
     expect(screen.queryByLabelText("Open ERD diagram")).toBeNull();
   });
 
-  // #1052 — DuckDB is read-only (only RDB with edit.editRows false). Its DDL
-  // entries (Rename / Drop context items AND the F2 rename shortcut) are HIDDEN
-  // / inert (ui-parity §4: static unsupported = hide); the read affordances
-  // Structure / Data stay. The writable-engine path is locked by the explicit
-  // postgres cases above (Rename/Drop shown, F2 opens rename).
-  it("hides Rename/Drop and inerts F2 on a read-only DuckDB table but keeps Structure/Data (#1052)", async () => {
+  // #1052 / #1070 — DuckDB Stage 1 (ADR 0051) wires structured row edits but
+  // NOT structural DDL: its `ddl.*` group stays unset, so the Rename / Drop
+  // context items AND the F2 rename shortcut ride the per-action `supportsDdl`
+  // gate and stay HIDDEN / inert (ui-parity §4: unsupported = hide), while the
+  // read affordances Structure / Data stay. (Row editing itself is exercised by
+  // the DataGrid tests; this locks the DDL surface, which is orthogonal.) The
+  // writable-engine DDL path is locked by the explicit postgres cases above.
+  it("hides Rename/Drop and inerts F2 on a DuckDB table (DDL unsupported) but keeps Structure/Data (#1052)", async () => {
     useConnectionStore.setState({
       connections: [
         {

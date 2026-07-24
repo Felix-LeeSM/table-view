@@ -241,10 +241,12 @@ describe("DataGridTable — context menu", () => {
     expect(defaultProps.onDuplicateRow).not.toHaveBeenCalled();
   });
 
-  // #1052 — a statically read-only engine (DuckDB: edit.editRows false) HIDES
-  // the row-write actions entirely (ui-parity §4: static unsupported = hide),
-  // unlike the stateful `canEditRows: false` case above which keeps them
-  // visible-but-disabled. Read actions (details / copy) stay.
+  // #1052 — an engine that statically declines row editing
+  // (`rowEditingSupported: false`) HIDES the row-write actions entirely
+  // (ui-parity §4: static unsupported = hide), unlike the stateful
+  // `canEditRows: false` case above which keeps them visible-but-disabled. Read
+  // actions (details / copy) stay. (Since #1070 flipped DuckDB, no RDB engine
+  // reaches this state via a real profile; the prop contract still holds.)
   it("hides row-write context menu actions when row editing is statically unsupported (#1052)", () => {
     renderTable({ rowEditingSupported: false });
 
