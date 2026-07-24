@@ -224,6 +224,11 @@ export const en = {
     colStarted: "Started",
     killing: "Killing…",
     kill: "Kill",
+    live: "Live",
+    paused: "Paused",
+    autoRefreshAria: "Toggle live auto-refresh",
+    sessionCount: "Sessions: {{count}}",
+    trendAria: "Active session count trend",
   },
   // ServerInfoPanel
   serverInfo: {
@@ -567,6 +572,11 @@ export const ko = {
     colStarted: "시작됨",
     killing: "종료 중…",
     kill: "종료",
+    live: "실시간",
+    paused: "일시정지",
+    autoRefreshAria: "실시간 자동 새로 고침 전환",
+    sessionCount: "세션: {{count}}",
+    trendAria: "활성 세션 수 추이",
   },
   serverInfo: {
     ariaSection: "서버 정보",
