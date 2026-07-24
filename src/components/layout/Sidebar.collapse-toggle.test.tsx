@@ -185,6 +185,28 @@ describe("Sidebar collapse/expand-all toggle per DB type (sprint-379)", () => {
     ).toEqual(["public", "analytics"]);
   });
 
+  // Reason: #1737 후속 — handleExpandAll 의 `focusedSchemas.length === 0 → return`
+  // 가드(스키마 미로드면 no-op)가 단언으로 미검증. 상태 기반 단언(expanded===[])
+  // 은 setExpanded 가 current===nodes 일 때 동일 참조를 돌려주는 idempotent no-op
+  // 이라 가드를 지워도 통과 → RED 불가. 가드가 store action 자체를 막는지
+  // setExpanded 호출 여부로 검증한다: 가드 제거 시 setExpanded 가 호출돼 RED
+  // (2026-07-24)
+  it("AC-1737: PG + empty schema cache → click 'Expand all schemas' is a no-op (setExpanded not called)", () => {
+    seed({ dbType: "postgresql", paradigm: "rdb", expanded: [] });
+    // schemaStore intentionally left empty (beforeEach clears it) →
+    // focusedSchemas is empty, so the guard must short-circuit.
+    const setExpandedSpy = vi.spyOn(
+      useWorkspaceStore.getState(),
+      "setExpanded",
+    );
+    render(<Sidebar />);
+    fireEvent.click(
+      screen.getByRole("button", { name: /expand all schemas/i }),
+    );
+    expect(setExpandedSpy).not.toHaveBeenCalled();
+    setExpandedSpy.mockRestore();
+  });
+
   // ── MySQL ───────────────────────────────────────────────────────────────
   it("AC-379-03: MySQL + expanded≥1 → label 'Collapse all tables', 클릭 → expanded=[]", () => {
     seed({
