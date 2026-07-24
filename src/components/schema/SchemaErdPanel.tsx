@@ -42,7 +42,6 @@ export default function SchemaErdPanel({
   database,
 }: SchemaErdPanelProps) {
   const { t } = useTranslation("schema");
-  const [selectedTableId, setSelectedTableId] = useState<string | undefined>();
   const [comparisonKey, setComparisonKey] = useState(NO_COMPARISON);
   const metadataInFlightRef = useRef<Set<string>>(new Set());
   const connections = useConnectionStore((state) => state.connections);
@@ -310,10 +309,6 @@ export default function SchemaErdPanel({
       <SchemaErdRenderer
         graph={intelligence.graph}
         intelligence={intelligence}
-        selectedTableId={selectedTableId}
-        onSelectedTableIdChange={(tableId) =>
-          setSelectedTableId(tableId ?? undefined)
-        }
       />
     </div>
   );
