@@ -8,6 +8,7 @@ import * as tauri from "@lib/tauri";
 import SqlPreviewDialog from "./SqlPreviewDialog";
 import { useDdlPreviewExecution } from "./useDdlPreviewExecution";
 import { Button } from "@components/ui/button";
+import { INLINE_EDIT_INPUT } from "@components/ui/inlineEdit";
 import { useConnectionStore } from "@stores/connectionStore";
 import { ConfirmDestructiveDialog } from "@features/workspace";
 import { AddColumnDialog, DropColumnDialog } from "@features/catalog";
@@ -177,8 +178,9 @@ function EditableColumnRow({
     database,
   ]);
 
-  const inputClass =
-    "w-full bg-transparent px-2 py-0.5 text-xs text-foreground outline-none focus:ring-1 focus:ring-primary";
+  // #1739 — shared inline-edit token (borderless, px-0 to align with the
+  // STRUCTURE_TD px-3, unified ring-1 primary focus ring).
+  const inputClass = INLINE_EDIT_INPUT;
 
   const handleSave = () => {
     const hasNullableChange = nullable !== col.nullable;

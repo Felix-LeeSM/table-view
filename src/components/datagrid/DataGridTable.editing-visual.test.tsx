@@ -103,6 +103,11 @@ describe("DataGridTable editing visual emphasis", () => {
     const input = screen.getByLabelText("Editing name") as HTMLInputElement;
     expect(input.value).toBe("Alice");
     expect(input.className).toMatch(/bg-transparent/);
+    // #1739 — px-0 so the editing value aligns with the static cell (px-3)
+    // and doesn't jump horizontally on edit-entry (was px-1). Style-contract
+    // guard for this visual-unification refactor's observable "no jump" claim.
+    expect(input.className).toMatch(/\bpx-0\b/);
+    expect(input.className).not.toMatch(/\bpx-1\b/);
   });
 
   // #1139 — WCAG 1.4.1: a pending edit was signalled only by `bg-highlight/20`
