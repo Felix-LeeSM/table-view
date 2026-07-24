@@ -29,6 +29,7 @@ import { DB_TYPE_META } from "@lib/db-meta";
 import { SearchResultView } from "@components/search/SearchResultView";
 import { DriverErrorHint } from "@components/errors/DriverErrorHint";
 import { classifyDriverError } from "@lib/errors/driverErrorHints";
+import { QueryErrorDetail } from "./QueryErrorDetail";
 import EditableQueryResultGrid from "./EditableQueryResultGrid";
 import { QueryResultTable } from "./QueryResultTable";
 import ScalarOrListPanel from "./ScalarOrListPanel";
@@ -690,9 +691,10 @@ function CompletedMultiResult({
                 showTitle={false}
                 className="mt-1"
               />
-              <div className="mt-1 whitespace-pre-wrap text-xs opacity-80">
-                {stmt.error ?? t("resultGrid.unknownError")}
-              </div>
+              <QueryErrorDetail
+                error={stmt.error ?? t("resultGrid.unknownError")}
+                collapsible={classifyDriverError(stmt.error ?? "") !== null}
+              />
             </div>
           ) : (
             <CompletedSingleResult
@@ -742,9 +744,7 @@ export default function QueryResultGrid({
           className="flex flex-1 flex-col items-center justify-center gap-2 px-6 py-8 text-center"
         >
           <DriverErrorHint hint={hint} />
-          <p className="text-xs text-muted-foreground opacity-80">
-            {queryState.error}
-          </p>
+          <QueryErrorDetail error={queryState.error} collapsible />
         </div>
       );
     }
@@ -755,9 +755,10 @@ export default function QueryResultGrid({
           className="border-b border-border bg-muted px-3 py-2 text-sm text-destructive"
         >
           <DriverErrorHint hint={hint} className="mb-1" />
-          <div className={hint ? "text-xs opacity-80" : undefined}>
-            {queryState.error}
-          </div>
+          <QueryErrorDetail
+            error={queryState.error}
+            collapsible={hint !== null}
+          />
         </div>
       </div>
     );

@@ -63,12 +63,21 @@ describe("classifyDriverError", () => {
     "Search permission error: action indices:data/read is unauthorized", // AppError::SearchPermission
   ];
 
+  // Reason: #1723 — sqlx 가 결과 메타(컬럼 타입)를 읽으려 태우는 describe 가
+  //         앞단 프록시/풀러의 왜곡으로 터진 원문. 사용자 SQL 문제로 오인되면
+  //         안 되므로 "메타를 못 읽었다 + 프록시 의심" 힌트로 흡수한다 (2026-07-24).
+  const introspectionFailed = [
+    'Database error: error returned from database: Index was outside the bounds of the array.; query: "SELECT ... pg_catalog.pg_attribute ..." (sqlx_postgres::connection::describe:492)', // pg describe via proxy
+    "Failed to describe statement (sqlx_sqlite::connection::describe:120)", // 다른 sqlx 드라이버 describe 경로
+  ];
+
   const table: Array<[DriverErrorCategory, string[]]> = [
     ["connectionRefused", connectionRefused],
     ["authFailed", authFailed],
     ["timeout", timeout],
     ["unknownHost", unknownHost],
     ["permissionDenied", permissionDenied],
+    ["introspectionFailed", introspectionFailed],
   ];
 
   for (const [category, samples] of table) {
