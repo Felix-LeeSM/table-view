@@ -311,7 +311,9 @@ export default function SchemaErdPanel({
         graph={intelligence.graph}
         intelligence={intelligence}
         selectedTableId={selectedTableId}
-        onSelectedTableIdChange={setSelectedTableId}
+        onSelectedTableIdChange={(tableId) =>
+          setSelectedTableId(tableId ?? undefined)
+        }
       />
     </div>
   );

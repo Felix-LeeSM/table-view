@@ -54,6 +54,66 @@ describe("SchemaErdRenderer", () => {
     expect(handleSelect).toHaveBeenCalledWith("table:public.orders");
   });
 
+  // Reason: 이슈 #1736 — 선택된 노드 재클릭 시 toggle 해제 (2026-07-24)
+  it("toggles selection off when the already-selected node is re-clicked", () => {
+    const handleSelect = vi.fn();
+    render(
+      <SchemaErdRenderer
+        graph={extractSchemaGraph(ordersSnapshot())}
+        onSelectedTableIdChange={handleSelect}
+      />,
+    );
+
+    const users = screen.getByRole("button", { name: /public\.users table/i });
+    fireEvent.click(users);
+    expect(users).toHaveAttribute("aria-pressed", "true");
+    expect(handleSelect).toHaveBeenLastCalledWith("table:public.users");
+
+    fireEvent.click(users);
+    expect(users).toHaveAttribute("aria-pressed", "false");
+    expect(handleSelect).toHaveBeenLastCalledWith(null);
+  });
+
+  // Reason: 이슈 #1736 — 빈 캔버스 클릭 시 선택 해제 (2026-07-24)
+  it("clears selection when the empty diagram canvas is clicked", () => {
+    const handleSelect = vi.fn();
+    render(
+      <SchemaErdRenderer
+        graph={extractSchemaGraph(ordersSnapshot())}
+        onSelectedTableIdChange={handleSelect}
+      />,
+    );
+
+    const users = screen.getByRole("button", { name: /public\.users table/i });
+    fireEvent.click(users);
+    expect(users).toHaveAttribute("aria-pressed", "true");
+
+    fireEvent.click(
+      screen.getByRole("figure", { name: /database relationship diagram/i }),
+    );
+    expect(users).toHaveAttribute("aria-pressed", "false");
+    expect(handleSelect).toHaveBeenLastCalledWith(null);
+  });
+
+  // Reason: 이슈 #1736 — ESC 키로 선택 해제 (2026-07-24)
+  it("clears selection when Escape is pressed", () => {
+    const handleSelect = vi.fn();
+    render(
+      <SchemaErdRenderer
+        graph={extractSchemaGraph(ordersSnapshot())}
+        onSelectedTableIdChange={handleSelect}
+      />,
+    );
+
+    const users = screen.getByRole("button", { name: /public\.users table/i });
+    fireEvent.click(users);
+    expect(users).toHaveAttribute("aria-pressed", "true");
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(users).toHaveAttribute("aria-pressed", "false");
+    expect(handleSelect).toHaveBeenLastCalledWith(null);
+  });
+
   it("shows incoming and outgoing dependencies with selected-table metadata", () => {
     const intelligence = selectSchemaGraphIntelligence(
       ordersSnapshotWithMetadata(),
