@@ -4,7 +4,6 @@ import {
   ChevronsLeft,
   ChevronsRight,
   Check,
-  Columns3,
   Loader2,
   X,
   Plus,
@@ -120,12 +119,6 @@ export interface DataGridToolbarProps {
    */
   onRedo?: () => void;
   canRedo?: boolean;
-  /**
-   * Sprint 238 AC-238-12 — `useColumnWidths.reset()` 트리거. callback 이
-   * 제공된 grid (records / document) 에서만 toolbar 버튼이 렌더된다 —
-   * structure 뷰 등 (c) 산식 적용 대상이 아닌 곳은 prop 을 omit.
-   */
-  onResetColumnWidths?: () => void;
 }
 
 export default function DataGridToolbar({
@@ -167,7 +160,6 @@ export default function DataGridToolbar({
   canUndo = false,
   onRedo,
   canRedo = false,
-  onResetColumnWidths,
 }: DataGridToolbarProps) {
   const { t } = useTranslation("datagrid");
   // Discard wipes the entire pending entry — including the undo stack — so a
@@ -338,18 +330,6 @@ export default function DataGridToolbar({
         )}
         {bulkOpsSlot}
         {exportSlot}
-        {onResetColumnWidths && (
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            className="relative text-muted-foreground"
-            onClick={onResetColumnWidths}
-            aria-label={t("resetColumnWidthsAria")}
-            title={t("resetColumnWidthsTitle")}
-          >
-            <Columns3 />
-          </Button>
-        )}
         <Button
           variant="ghost"
           size="icon-xs"

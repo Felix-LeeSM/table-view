@@ -41,10 +41,12 @@ export const en = {
 
   // Column resize grip (keyboard, WCAG 2.1.1)
   resizeColumnAria: "Resize column",
+  // #1733 — hover tooltip surfacing the double-click reset. The duplicate
+  // toolbar reset button was removed; double-click + the header context menu
+  // are now the only column-width reset triggers, so the grip advertises it.
+  resizeColumnTitle: "Drag to resize · double-click to reset width",
 
   // DataGridToolbar — column / view controls
-  resetColumnWidthsAria: "Reset column widths",
-  resetColumnWidthsTitle: "Reset column widths to default",
   toggleQuickLookAria: "Toggle Quick Look",
   toggleQuickLookTitle: "Quick Look (Cmd+L)",
   toggleFiltersAria: "Toggle filters",
@@ -193,10 +195,11 @@ export const ko = {
 
   // Column resize grip (keyboard, WCAG 2.1.1)
   resizeColumnAria: "열 크기 조절",
+  // #1733 — 더블클릭 초기화를 알리는 hover 툴팁. 중복이던 툴바 초기화 버튼을
+  // 제거했고, 이제 더블클릭 + 헤더 컨텍스트 메뉴만 열 너비 초기화 트리거다.
+  resizeColumnTitle: "드래그하여 크기 조절 · 더블클릭하면 너비 초기화",
 
   // DataGridToolbar — column / view controls
-  resetColumnWidthsAria: "열 너비 초기화",
-  resetColumnWidthsTitle: "열 너비를 기본값으로 초기화",
   toggleQuickLookAria: "Quick Look 전환",
   toggleQuickLookTitle: "Quick Look (Cmd+L)",
   toggleFiltersAria: "필터 전환",

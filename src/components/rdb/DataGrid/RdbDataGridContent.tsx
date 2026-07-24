@@ -1,8 +1,5 @@
-import { forwardRef } from "react";
 import type { DataGridEditState } from "@components/datagrid/useDataGridEdit";
-import DataGridTable, {
-  type DataGridTableHandle,
-} from "@components/datagrid/DataGridTable";
+import DataGridTable from "@components/datagrid/DataGridTable";
 import DataGridSkeleton from "@components/datagrid/DataGridSkeleton";
 import type { SortInfo, TableData } from "@/types/schema";
 
@@ -42,38 +39,32 @@ interface RdbDataGridContentProps {
   onCancelRefetch: () => void;
 }
 
-export const RdbDataGridContent = forwardRef<
-  DataGridTableHandle,
-  RdbDataGridContentProps
->(function RdbDataGridContent(
-  {
-    connectionId,
-    database,
-    schema,
-    table,
-    data,
-    loading,
-    error,
-    sorts,
-    columnOrder,
-    editState,
-    canEditRows,
-    rowEditingSupported,
-    page,
-    hiddenColumnNames,
-    activeFilterCount,
-    onSort,
-    onSortColumn,
-    onClearColumnSort,
-    onClearAllSorts,
-    onHideColumn,
-    onShowAllColumns,
-    onNavigateToFk,
-    onClearFilters,
-    onCancelRefetch,
-  },
-  ref,
-) {
+export function RdbDataGridContent({
+  connectionId,
+  database,
+  schema,
+  table,
+  data,
+  loading,
+  error,
+  sorts,
+  columnOrder,
+  editState,
+  canEditRows,
+  rowEditingSupported,
+  page,
+  hiddenColumnNames,
+  activeFilterCount,
+  onSort,
+  onSortColumn,
+  onClearColumnSort,
+  onClearAllSorts,
+  onHideColumn,
+  onShowAllColumns,
+  onNavigateToFk,
+  onClearFilters,
+  onCancelRefetch,
+}: RdbDataGridContentProps) {
   return (
     <>
       {error && (
@@ -89,7 +80,6 @@ export const RdbDataGridContent = forwardRef<
 
       {data && (
         <DataGridTable
-          ref={ref}
           data={data}
           loading={loading}
           sorts={sorts}
@@ -138,4 +128,4 @@ export const RdbDataGridContent = forwardRef<
       )}
     </>
   );
-});
+}

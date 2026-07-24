@@ -5,7 +5,6 @@ import { useConnectionStore } from "@stores/connectionStore";
 import { useMruStore } from "@stores/mruStore";
 import FilterBar from "@components/rdb/FilterBar";
 import type { FilterCondition } from "@/types/schema";
-import type { DataGridTableHandle } from "@components/datagrid/DataGridTable";
 import { useRdbDataGridEdit } from "@components/datagrid/useRdbDataGridEdit";
 import QuickLookPanel from "@components/shared/QuickLookPanel";
 import { DEFAULT_PAGE_SIZE } from "@lib/gridPolicy";
@@ -135,7 +134,6 @@ export default function DataGrid({
     tableName: table,
   });
 
-  const dataGridTableRef = useRef<DataGridTableHandle | null>(null);
   const prevPropsRef = useRef({ connectionId, table, schema });
   const totalPages = data ? Math.ceil(data.total_count / pageSize) : 0;
 
@@ -145,10 +143,6 @@ export default function DataGrid({
 
   const closeQuickLook = useCallback(() => {
     setShowQuickLook(false);
-  }, []);
-
-  const handleResetColumnWidths = useCallback(() => {
-    dataGridTableRef.current?.resetColumnWidths();
   }, []);
 
   const handleSetPageSize = useCallback(
@@ -235,7 +229,6 @@ export default function DataGrid({
         onSetPageSize={handleSetPageSize}
         onToggleFilters={filters.toggleFilters}
         onToggleQuickLook={toggleQuickLook}
-        onResetColumnWidths={handleResetColumnWidths}
       />
 
       <HiddenColumnsBadge
@@ -259,7 +252,6 @@ export default function DataGrid({
       )}
 
       <RdbDataGridContent
-        ref={dataGridTableRef}
         connectionId={connectionId}
         database={database}
         schema={schema}

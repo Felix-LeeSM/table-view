@@ -272,30 +272,12 @@ describe("DataGridToolbar — Sprint 179 paradigm-aware labels (AC-179-03)", () 
     ).toBeInTheDocument();
   });
 
-  describe("Sprint 238 AC-238-12 — Reset column widths button", () => {
-    it("renders the Reset column widths button when onResetColumnWidths is provided", () => {
-      renderToolbar({ onResetColumnWidths: vi.fn() });
-      expect(
-        screen.getByRole("button", { name: /reset column widths/i }),
-      ).toBeInTheDocument();
-    });
-
-    it("invokes onResetColumnWidths on click", () => {
-      const handler = vi.fn();
-      renderToolbar({ onResetColumnWidths: handler });
-      fireEvent.click(
-        screen.getByRole("button", { name: /reset column widths/i }),
-      );
-      expect(handler).toHaveBeenCalledTimes(1);
-    });
-
-    it("does not render the button when onResetColumnWidths is omitted", () => {
-      renderToolbar();
-      expect(
-        screen.queryByRole("button", { name: /reset column widths/i }),
-      ).not.toBeInTheDocument();
-    });
-  });
+  // #1733 (2026-07-24) — 중복이던 "Reset column widths" 툴바 버튼(Columns3)을
+  // 제거했다. 열 너비 초기화의 사용자 가시 계약은 이제 헤더 컨텍스트 메뉴 +
+  // 리사이즈 grip 더블클릭(+ hover title 힌트)으로만 존재하며, 이는 더 낮은
+  // 레이어인 `DataGridTable/HeaderRow.reset-affordance.test.tsx` 가 검증한다
+  // (P1: lowest layer). 여기서는 그 버튼을 단언하던 3개 테스트를 삭제했다 —
+  // 툴바는 더 이상 열 너비 초기화 관심사를 갖지 않는다.
 
   // 작성 이유 (2026-05-13, Sprint 289): 종전 page input 의 onChange 핸들러가
   // 매 키스트로크마다 `onSetPage` 를 호출 → 매번 fetch 가 폭발. 사용자가
