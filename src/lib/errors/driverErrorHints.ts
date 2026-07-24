@@ -21,6 +21,7 @@ export const DRIVER_ERROR_CATEGORIES = [
   "timeout",
   "unknownHost",
   "permissionDenied",
+  "introspectionFailed",
 ] as const;
 
 export type DriverErrorCategory = (typeof DRIVER_ERROR_CATEGORIES)[number];
@@ -112,6 +113,19 @@ const PATTERNS: ReadonlyArray<
       // 위 refused 주석과 동일 근거로 유저 머신 매핑을 따른다).
       "os error 60",
       "os error 110",
+    ],
+  ],
+  [
+    // describe/introspection 실패 (#1723). sqlx 는 결과 컬럼 메타(타입 등)를
+    // 읽으려 extended-protocol describe 를 태우는데, 앞단 프록시/풀러(pgbouncer
+    // 등)가 그 describe 응답을 왜곡하면 sqlx 내부(`connection::describe`)에서
+    // 터진다 — 사용자 SQL 문제가 아니라 연결/프록시 계층 문제다. 원문 대신
+    // "메타를 못 읽었다 + 프록시 의심" 힌트로 흡수한다. 가장 덜 구체적이라
+    // 우선순위 최하 — 위 연결/인증/권한 마커가 함께 있으면 그쪽이 이긴다.
+    "introspectionFailed",
+    [
+      "connection::describe", // sqlx describe 경로: `sqlx_postgres::connection::describe:492`
+      "index was outside the bounds of the array", // 프록시가 describe 응답을 왜곡
     ],
   ],
 ];

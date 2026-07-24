@@ -158,6 +158,7 @@ export const en = {
     statementSkipped:
       "Statement {{n}} was not executed — a prior statement failed and execution stopped.",
     unknownError: "Unknown error",
+    errorDetails: "Show error details",
     editableBanner:
       "Editable — double-click a cell to edit, right-click for delete",
     readonlyBanner: "Read-only —",
@@ -448,6 +449,7 @@ export const ko = {
     statementSkipped:
       "구문 {{n}}은(는) 실행되지 않았습니다 — 앞 구문이 실패하여 실행이 중단되었습니다.",
     unknownError: "알 수 없는 오류",
+    errorDetails: "오류 상세 보기",
     editableBanner: "편집 가능 — 셀을 더블클릭하여 편집, 우클릭으로 삭제",
     readonlyBanner: "읽기 전용 —",
     rowsAffected: "{{count}}개의 행이 영향받았습니다",

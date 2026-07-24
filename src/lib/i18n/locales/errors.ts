@@ -31,6 +31,10 @@ export const en = {
       title: "Permission denied",
       hint: "You're connected, but your account lacks permission for this operation. Ask a database administrator to grant the required privileges.",
     },
+    introspectionFailed: {
+      title: "Couldn't read the result metadata",
+      hint: "The database — or a proxy or connection pooler in front of it — returned an unexpected response while describing this query. Try connecting directly instead of through the proxy, or confirm it fully supports your database's wire protocol.",
+    },
   },
 } as const;
 
@@ -55,6 +59,10 @@ export const ko = {
     permissionDenied: {
       title: "권한이 거부되었습니다",
       hint: "연결은 되었으나 계정에 이 작업 권한이 없습니다. 데이터베이스 관리자에게 필요한 권한을 요청하세요.",
+    },
+    introspectionFailed: {
+      title: "결과 메타데이터를 읽지 못했습니다",
+      hint: "데이터베이스 또는 앞단의 프록시·커넥션 풀러가 이 쿼리를 설명(describe)하는 중 예기치 않은 응답을 반환했습니다. 프록시를 거치지 말고 직접 연결해 보거나, 해당 프록시가 데이터베이스 프로토콜을 완전히 지원하는지 확인하세요.",
     },
   },
 } as const;
