@@ -650,186 +650,138 @@ mod tests {
         assert!(matches!(r, Err(AppError::Connection(_))));
     }
 
-    // 작성 이유 (2026-05-15, Sprint 339): trait wrapper async block 회수 보강.
-    // 각 wrapper 가 inherent method 로 delegate 만 하지만, instrumentation
-    // 관점에서 wrapper future 자체가 별개의 region. PG 가 pool 없이 빠르게
-    // Connection 에러로 빠지는 경로만 호출해 wrapper region 을 회수.
+    // 작성 이유 (2026-07-24, 이슈 #1625): 아래 24개 `..._without_connection_fails`
+    // 는 `is_err()` 만 봐서 wrapper 가 *어떤* 에러로 실패했는지 무관 —
+    // change-detector 라 wrapper 가 `Connection` 이 아닌 다른 에러로 퇴행해도
+    // 통과했다. pool 없는 `PostgresAdapter` 의 모든 RdbAdapter wrapper 를 하나의
+    // 테스트로 몰아 회수(wrapper future 는 UFCS 로 각각 별개 region → coverage
+    // 동일)하되, 단언을 실 계약 `Connection("Not connected")` 로 강화한다.
+    // `list_database_users` wrapper 는 이전에 테스트 부재였으나 여기서 함께
+    // 회수해 production region coverage 를 넓힌다.
 
-    #[tokio::test]
-    async fn trait_list_namespaces_without_connection_fails() {
-        let a = PostgresAdapter::new();
-        let r = <PostgresAdapter as RdbAdapter>::list_namespaces(&a).await;
-        assert!(r.is_err());
+    /// pool 없는 wrapper future 가 공유 `Connection("Not connected")` 로
+    /// short-circuit 하는지 단언. 예전 `is_err()` probe 를 typed variant +
+    /// 메시지로 승격 — wrapper 가 다른 에러 kind (또는 `Ok`) 로 퇴행하면 fail.
+    macro_rules! assert_not_connected {
+        ($label:literal, $call:expr) => {
+            match $call.await {
+                Err(AppError::Connection(msg)) => assert!(
+                    msg.contains("Not connected"),
+                    "{}: expected 'Not connected', got: {msg}",
+                    $label
+                ),
+                Err(e) => panic!("{}: expected Connection error, got: {e:?}", $label),
+                Ok(_) => panic!("{}: expected Connection error, got Ok", $label),
+            }
+        };
     }
 
     #[tokio::test]
-    async fn trait_list_databases_without_connection_fails() {
-        let a = PostgresAdapter::new();
-        let r = <PostgresAdapter as RdbAdapter>::list_databases(&a).await;
-        assert!(r.is_err());
-    }
-
-    #[tokio::test]
-    async fn trait_switch_database_without_connection_fails() {
-        let a = PostgresAdapter::new();
-        let r = <PostgresAdapter as RdbAdapter>::switch_database(&a, "any").await;
-        assert!(r.is_err());
-    }
-
-    #[tokio::test]
-    async fn trait_list_tables_without_connection_fails() {
-        let a = PostgresAdapter::new();
-        let r = <PostgresAdapter as RdbAdapter>::list_tables(&a, "public").await;
-        assert!(r.is_err());
-    }
-
-    #[tokio::test]
-    async fn trait_get_columns_without_connection_fails() {
-        let a = PostgresAdapter::new();
-        let r = <PostgresAdapter as RdbAdapter>::get_columns(&a, "public", "users", None).await;
-        assert!(r.is_err());
-    }
-
-    #[tokio::test]
-    async fn trait_execute_sql_without_connection_fails() {
-        let a = PostgresAdapter::new();
-        let r = <PostgresAdapter as RdbAdapter>::execute_sql(&a, "SELECT 1", None).await;
-        assert!(r.is_err());
-    }
-
-    #[tokio::test]
-    async fn trait_execute_sql_batch_without_connection_fails() {
+    async fn trait_rdb_wrappers_without_connection_return_not_connected() {
         let a = PostgresAdapter::new();
         let stmts = vec!["SELECT 1".to_string()];
-        let r = <PostgresAdapter as RdbAdapter>::execute_sql_batch(&a, &stmts, None).await;
-        assert!(r.is_err());
-    }
-
-    #[tokio::test]
-    async fn trait_dry_run_sql_batch_without_connection_fails() {
-        let a = PostgresAdapter::new();
-        let stmts = vec!["SELECT 1".to_string()];
-        let r = <PostgresAdapter as RdbAdapter>::dry_run_sql_batch(&a, &stmts, None).await;
-        assert!(r.is_err());
-    }
-
-    #[tokio::test]
-    async fn trait_query_table_data_without_connection_fails() {
-        let a = PostgresAdapter::new();
-        let r = <PostgresAdapter as RdbAdapter>::query_table_data(
-            &a, "public", "users", 1, 10, None, None, None, None,
-        )
-        .await;
-        assert!(r.is_err());
-    }
-
-    #[tokio::test]
-    async fn trait_get_table_indexes_without_connection_fails() {
-        let a = PostgresAdapter::new();
-        let r =
-            <PostgresAdapter as RdbAdapter>::get_table_indexes(&a, "public", "users", None).await;
-        assert!(r.is_err());
-    }
-
-    #[tokio::test]
-    async fn trait_get_table_constraints_without_connection_fails() {
-        let a = PostgresAdapter::new();
-        let r = <PostgresAdapter as RdbAdapter>::get_table_constraints(&a, "public", "users", None)
-            .await;
-        assert!(r.is_err());
-    }
-
-    #[tokio::test]
-    async fn trait_count_null_rows_without_connection_fails() {
-        let a = PostgresAdapter::new();
-        let r =
-            <PostgresAdapter as RdbAdapter>::count_null_rows(&a, "public", "users", "col").await;
-        assert!(r.is_err());
-    }
-
-    #[tokio::test]
-    async fn trait_list_views_without_connection_fails() {
-        let a = PostgresAdapter::new();
-        let r = <PostgresAdapter as RdbAdapter>::list_views(&a, "public").await;
-        assert!(r.is_err());
-    }
-
-    #[tokio::test]
-    async fn trait_list_functions_without_connection_fails() {
-        let a = PostgresAdapter::new();
-        let r = <PostgresAdapter as RdbAdapter>::list_functions(&a, "public").await;
-        assert!(r.is_err());
-    }
-
-    #[tokio::test]
-    async fn trait_get_view_definition_without_connection_fails() {
-        let a = PostgresAdapter::new();
-        let r = <PostgresAdapter as RdbAdapter>::get_view_definition(&a, "public", "v").await;
-        assert!(r.is_err());
-    }
-
-    #[tokio::test]
-    async fn trait_get_view_columns_without_connection_fails() {
-        let a = PostgresAdapter::new();
-        let r = <PostgresAdapter as RdbAdapter>::get_view_columns(&a, "public", "v").await;
-        assert!(r.is_err());
-    }
-
-    #[tokio::test]
-    async fn trait_list_schema_columns_without_connection_fails() {
-        let a = PostgresAdapter::new();
-        let r = <PostgresAdapter as RdbAdapter>::list_schema_columns(&a, "public").await;
-        assert!(r.is_err());
-    }
-
-    #[tokio::test]
-    async fn trait_get_function_source_without_connection_fails() {
-        let a = PostgresAdapter::new();
-        let r = <PostgresAdapter as RdbAdapter>::get_function_source(&a, "public", "f").await;
-        assert!(r.is_err());
-    }
-
-    #[tokio::test]
-    async fn trait_list_triggers_without_connection_fails() {
-        let a = PostgresAdapter::new();
-        let r = <PostgresAdapter as RdbAdapter>::list_triggers(&a, "public", "users").await;
-        assert!(r.is_err());
-    }
-
-    #[tokio::test]
-    async fn trait_get_trigger_source_without_connection_fails() {
-        let a = PostgresAdapter::new();
-        let r =
-            <PostgresAdapter as RdbAdapter>::get_trigger_source(&a, "public", "users", "trg").await;
-        assert!(r.is_err());
-    }
-
-    #[tokio::test]
-    async fn trait_list_types_without_connection_fails() {
-        let a = PostgresAdapter::new();
-        let r = <PostgresAdapter as RdbAdapter>::list_types(&a).await;
-        assert!(r.is_err());
-    }
-
-    #[tokio::test]
-    async fn trait_list_extensions_without_connection_fails() {
-        let a = PostgresAdapter::new();
-        let r = <PostgresAdapter as RdbAdapter>::list_extensions(&a).await;
-        assert!(r.is_err());
-    }
-
-    #[tokio::test]
-    async fn trait_create_database_without_connection_fails() {
-        let a = PostgresAdapter::new();
-        let r = <PostgresAdapter as RdbAdapter>::create_database(&a, "newdb").await;
-        assert!(r.is_err());
-    }
-
-    #[tokio::test]
-    async fn trait_drop_database_without_connection_fails() {
-        let a = PostgresAdapter::new();
-        let r = <PostgresAdapter as RdbAdapter>::drop_database(&a, "olddb").await;
-        assert!(r.is_err());
+        assert_not_connected!(
+            "list_namespaces",
+            <PostgresAdapter as RdbAdapter>::list_namespaces(&a)
+        );
+        assert_not_connected!(
+            "list_databases",
+            <PostgresAdapter as RdbAdapter>::list_databases(&a)
+        );
+        assert_not_connected!(
+            "switch_database",
+            <PostgresAdapter as RdbAdapter>::switch_database(&a, "any")
+        );
+        assert_not_connected!(
+            "list_tables",
+            <PostgresAdapter as RdbAdapter>::list_tables(&a, "public")
+        );
+        assert_not_connected!(
+            "get_columns",
+            <PostgresAdapter as RdbAdapter>::get_columns(&a, "public", "users", None)
+        );
+        assert_not_connected!(
+            "execute_sql",
+            <PostgresAdapter as RdbAdapter>::execute_sql(&a, "SELECT 1", None)
+        );
+        assert_not_connected!(
+            "execute_sql_batch",
+            <PostgresAdapter as RdbAdapter>::execute_sql_batch(&a, &stmts, None)
+        );
+        assert_not_connected!(
+            "dry_run_sql_batch",
+            <PostgresAdapter as RdbAdapter>::dry_run_sql_batch(&a, &stmts, None)
+        );
+        assert_not_connected!(
+            "query_table_data",
+            <PostgresAdapter as RdbAdapter>::query_table_data(
+                &a, "public", "users", 1, 10, None, None, None, None
+            )
+        );
+        assert_not_connected!(
+            "get_table_indexes",
+            <PostgresAdapter as RdbAdapter>::get_table_indexes(&a, "public", "users", None)
+        );
+        assert_not_connected!(
+            "get_table_constraints",
+            <PostgresAdapter as RdbAdapter>::get_table_constraints(&a, "public", "users", None)
+        );
+        assert_not_connected!(
+            "count_null_rows",
+            <PostgresAdapter as RdbAdapter>::count_null_rows(&a, "public", "users", "col")
+        );
+        assert_not_connected!(
+            "list_views",
+            <PostgresAdapter as RdbAdapter>::list_views(&a, "public")
+        );
+        assert_not_connected!(
+            "list_functions",
+            <PostgresAdapter as RdbAdapter>::list_functions(&a, "public")
+        );
+        assert_not_connected!(
+            "get_view_definition",
+            <PostgresAdapter as RdbAdapter>::get_view_definition(&a, "public", "v")
+        );
+        assert_not_connected!(
+            "get_view_columns",
+            <PostgresAdapter as RdbAdapter>::get_view_columns(&a, "public", "v")
+        );
+        assert_not_connected!(
+            "list_schema_columns",
+            <PostgresAdapter as RdbAdapter>::list_schema_columns(&a, "public")
+        );
+        assert_not_connected!(
+            "get_function_source",
+            <PostgresAdapter as RdbAdapter>::get_function_source(&a, "public", "f")
+        );
+        assert_not_connected!(
+            "list_triggers",
+            <PostgresAdapter as RdbAdapter>::list_triggers(&a, "public", "users")
+        );
+        assert_not_connected!(
+            "get_trigger_source",
+            <PostgresAdapter as RdbAdapter>::get_trigger_source(&a, "public", "users", "trg")
+        );
+        assert_not_connected!(
+            "list_types",
+            <PostgresAdapter as RdbAdapter>::list_types(&a)
+        );
+        assert_not_connected!(
+            "list_extensions",
+            <PostgresAdapter as RdbAdapter>::list_extensions(&a)
+        );
+        assert_not_connected!(
+            "create_database",
+            <PostgresAdapter as RdbAdapter>::create_database(&a, "newdb")
+        );
+        assert_not_connected!(
+            "drop_database",
+            <PostgresAdapter as RdbAdapter>::drop_database(&a, "olddb")
+        );
+        assert_not_connected!(
+            "list_database_users",
+            <PostgresAdapter as RdbAdapter>::list_database_users(&a)
+        );
     }
 
     // Sprint 340 (U5 live wire) — slow_queries trait wrapper.

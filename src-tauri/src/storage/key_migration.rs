@@ -516,59 +516,63 @@ mod tests {
 
     // ---------------- helper: disk_key_path / sentinel paths ----------------
 
+    // Reason (2026-07-24, 이슈 #1625): 3 path helper 테스트는 `(fn, 기대
+    // 파일명)` 만 다른 반복 (testing-scenarios P9) — table-driven 으로 회수.
+    // 모든 helper 가 data_dir 를 parent 로 유지하고 고정 파일명을 붙이는
+    // 계약을 값 보존하며 단언한다.
     #[test]
-    fn disk_key_path_joins_dot_key_filename() {
+    fn path_helpers_join_expected_filename_under_data_dir() {
+        type PathBuilder = fn(&Path) -> PathBuf;
         let dir = TempDir::new().unwrap();
-        let path = disk_key_path(dir.path());
-        assert_eq!(path.file_name().and_then(|s| s.to_str()), Some(".key"));
-        assert_eq!(path.parent(), Some(dir.path()));
-    }
-
-    #[test]
-    fn migration_failed_sentinel_path_has_expected_filename() {
-        let dir = TempDir::new().unwrap();
-        let path = migration_failed_sentinel_path(dir.path());
-        assert_eq!(
-            path.file_name().and_then(|s| s.to_str()),
-            Some(".key.migration-failed")
-        );
-    }
-
-    #[test]
-    fn fallback_dismissed_sentinel_path_has_expected_filename() {
-        let dir = TempDir::new().unwrap();
-        let path = fallback_dismissed_sentinel_path(dir.path());
-        assert_eq!(
-            path.file_name().and_then(|s| s.to_str()),
-            Some(".keyring-fallback-dismissed")
-        );
+        let cases: [(PathBuilder, &str); 3] = [
+            (disk_key_path, ".key"),
+            (migration_failed_sentinel_path, ".key.migration-failed"),
+            (
+                fallback_dismissed_sentinel_path,
+                ".keyring-fallback-dismissed",
+            ),
+        ];
+        for (build, expected) in cases {
+            let path = build(dir.path());
+            assert_eq!(
+                path.file_name().and_then(|s| s.to_str()),
+                Some(expected),
+                "unexpected filename"
+            );
+            assert_eq!(path.parent(), Some(dir.path()));
+        }
     }
 
     // ---------------- helper: validate_key_len ----------------
 
+    // Reason (2026-07-24, 이슈 #1625): accept-32 / reject-16 / reject-empty 3개는
+    // 입력만 다른 반복 (testing-scenarios P9) — table-driven. Err 케이스는
+    // `Encryption` variant + 기대(32)/실제 길이가 메시지에 실리는 계약까지
+    // 단언(단순 is_err 강화). 경계값 32/16/0 보존.
     #[test]
-    fn validate_key_len_accepts_exactly_32_bytes() {
-        validate_key_len(&[0u8; 32]).expect("32 bytes is valid");
-    }
-
-    #[test]
-    fn validate_key_len_rejects_short_key() {
-        let err = validate_key_len(&[0u8; 16]).unwrap_err();
-        match err {
-            AppError::Encryption(msg) => {
-                assert!(
-                    msg.contains("32"),
-                    "msg should mention expected length: {msg}"
-                );
-                assert!(msg.contains("16"));
+    fn validate_key_len_enforces_32_byte_contract() {
+        // key → None = expect Ok; Some(parts) = expect Err(Encryption) whose
+        // message contains every substring in `parts`.
+        let cases: [(Vec<u8>, Option<Vec<&str>>); 3] = [
+            (vec![0u8; 32], None),
+            (vec![0u8; 16], Some(vec!["32", "16"])),
+            (vec![], Some(vec!["32", "0"])),
+        ];
+        for (key, expected) in &cases {
+            match (validate_key_len(key), expected) {
+                (Ok(()), None) => {}
+                (Err(AppError::Encryption(msg)), Some(parts)) => {
+                    for p in parts {
+                        assert!(
+                            msg.contains(p),
+                            "len {}: msg {msg:?} missing {p:?}",
+                            key.len()
+                        );
+                    }
+                }
+                (got, _) => panic!("len {}: unexpected result {got:?}", key.len()),
             }
-            other => panic!("Expected Encryption error, got {other:?}"),
         }
-    }
-
-    #[test]
-    fn validate_key_len_rejects_empty() {
-        assert!(validate_key_len(&[]).is_err());
     }
 
     // ---------------- helper: read_disk_key (try-await reject) ----------------
