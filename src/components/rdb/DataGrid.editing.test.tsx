@@ -426,6 +426,128 @@ describe("DataGrid", () => {
     expect(nameCell.querySelector("input")).not.toBeInTheDocument();
   });
 
+  // Reason: ADR 0051 Stage 1 (#1070) — the DuckDB `execute_sql_batch`
+  // BEGIN..COMMIT row-edit path (#1767) is now wired, so a writable
+  // (read_only=false) DuckDB connection must EXPOSE the grid row editor
+  // exactly like SQLite, instead of the pre-#1070 static hide. (2026-07-25)
+  it("enables row editing controls for writable DuckDB tables (ADR 0051 Stage 1, #1070)", async () => {
+    useConnectionStore.setState({
+      connections: [
+        {
+          id: "conn1",
+          name: "DuckDB",
+          dbType: "duckdb",
+          host: "",
+          port: 0,
+          user: "",
+          database: "/tmp/analytics.duckdb",
+          readOnly: false,
+          groupId: null,
+          color: null,
+          hasPassword: false,
+          paradigm: "rdb",
+        },
+      ],
+    });
+
+    renderDataGrid();
+    await screen.findByText("3 rows");
+
+    expect(screen.getByLabelText("Add row")).toBeInTheDocument();
+
+    const cells = screen.getAllByRole("gridcell");
+    const nameCell = cells[1]!;
+    await act(async () => {
+      fireEvent.dblClick(nameCell);
+    });
+
+    expect(nameCell.querySelector("input")).toBeInTheDocument();
+  });
+
+  // Reason: #1052 / #1529 — a runtime read_only DuckDB connection keeps the
+  // row editor OFF (same gate as read-only SQLite), so the capability flip
+  // does not override the user's read-only choice. (2026-07-25)
+  it("does not enable row editing controls for read-only DuckDB connections (#1052/#1529)", async () => {
+    useConnectionStore.setState({
+      connections: [
+        {
+          id: "conn1",
+          name: "DuckDB read-only",
+          dbType: "duckdb",
+          host: "",
+          port: 0,
+          user: "",
+          database: "/tmp/analytics.duckdb",
+          readOnly: true,
+          groupId: null,
+          color: null,
+          hasPassword: false,
+          paradigm: "rdb",
+        },
+      ],
+    });
+
+    renderDataGrid();
+    await screen.findByText("3 rows");
+
+    expect(screen.queryByLabelText("Add row")).not.toBeInTheDocument();
+
+    const cells = screen.getAllByRole("gridcell");
+    const nameCell = cells[1]!;
+    await act(async () => {
+      fireEvent.dblClick(nameCell);
+    });
+
+    expect(nameCell.querySelector("input")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Commit changes")).not.toBeInTheDocument();
+  });
+
+  // Reason: DuckDB declares `requiresPrimaryKeyForEdit: false` (rides the
+  // all-column WHERE fallback + backend single-row guard, like PG/MySQL), so a
+  // PK-less table STAYS editable — unlike SQLite/MSSQL/Oracle above. Locks the
+  // deliberate divergence so a "consistency fix" cannot silently hide editing
+  // on the PK-less analytical tables DuckDB commonly holds (#1070). (2026-07-25)
+  it("keeps row editing enabled for DuckDB tables without a primary key (requiresPrimaryKeyForEdit false)", async () => {
+    useConnectionStore.setState({
+      connections: [
+        {
+          id: "conn1",
+          name: "DuckDB",
+          dbType: "duckdb",
+          host: "",
+          port: 0,
+          user: "",
+          database: "/tmp/analytics.duckdb",
+          readOnly: false,
+          groupId: null,
+          color: null,
+          hasPassword: false,
+          paradigm: "rdb",
+        },
+      ],
+    });
+    mockQueryTableData.mockResolvedValueOnce({
+      ...MOCK_DATA,
+      columns: MOCK_DATA.columns.map((column) => ({
+        ...column,
+        is_primary_key: false,
+      })),
+    });
+
+    renderDataGrid();
+    await screen.findByText("3 rows");
+
+    expect(screen.getByLabelText("Add row")).toBeInTheDocument();
+
+    const cells = screen.getAllByRole("gridcell");
+    const nameCell = cells[1]!;
+    await act(async () => {
+      fireEvent.dblClick(nameCell);
+    });
+
+    expect(nameCell.querySelector("input")).toBeInTheDocument();
+  });
+
   // 36. Enter saves edit and shows pending indicator
   it("Enter saves edit and shows pending indicator", async () => {
     renderDataGrid();

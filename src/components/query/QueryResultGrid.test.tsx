@@ -246,13 +246,14 @@ describe("QueryResultGrid", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("syntax error");
   });
 
-  // #1059 — the row-editing-not-supported banner must surface the friendly
-  // DBMS label ("DuckDB"), not the raw profile id ("duckdb"). DuckDB's
-  // capabilities leave `editRows` at the empty base (false), so once the
-  // AST gate flips a single-table SELECT to `editability.editable` the
-  // banner surfaces `rowEditBlockReason` ("DuckDB row editing is not
-  // supported.") instead of the single-table reason.
-  it("uses the friendly DBMS name in the row-editing-not-supported banner (#1059)", async () => {
+  // Reason: ADR 0051 Stage 1 (#1070) wired the DuckDB `execute_sql_batch`
+  // row-edit path (#1767) and flipped `edit.editRows` true, so a writable
+  // DuckDB single-table SELECT is now EDITABLE in the query grid — the
+  // pre-#1070 "DuckDB row editing is not supported" block banner must be gone.
+  // (This retires the #1059 friendly-label banner check: no RDB declares
+  // editRows:false anymore, so that block branch is unreachable via a real
+  // profile.) (2026-07-25)
+  it("makes a writable DuckDB single-table SELECT editable (no row-editing-unsupported banner, #1070)", async () => {
     useConnectionStore.setState({
       connections: [
         {
@@ -263,6 +264,7 @@ describe("QueryResultGrid", () => {
           port: 0,
           user: "",
           database: "analytics.duckdb",
+          readOnly: false,
           groupId: null,
           color: null,
           hasPassword: false,
@@ -280,15 +282,14 @@ describe("QueryResultGrid", () => {
       />,
     );
 
-    // Wait for the AST gate to flip and the row-edit block reason to land.
+    // Once the AST gate resolves the single-table SELECT, the editable banner
+    // replaces the old read-only block.
     await waitFor(() => {
-      expect(
-        screen.getByText(/DuckDB row editing is not supported/i),
-      ).toBeInTheDocument();
+      expect(screen.getByText(/Editable/)).toBeInTheDocument();
     });
-    // The raw lowercase profile id must not leak into the user-facing
-    // banner. (Case-sensitive match — "DuckDB" is the friendly label.)
-    expect(screen.queryByText("duckdb row editing")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/row editing is not supported/i),
+    ).not.toBeInTheDocument();
   });
 
   it("renders SELECT result with column headers and rows", () => {
