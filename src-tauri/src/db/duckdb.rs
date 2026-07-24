@@ -19,6 +19,7 @@ use crate::models::{
 
 use super::{DbAdapter, NamespaceInfo, NamespaceLabel, RdbAdapter, RdbQueryResult};
 
+mod batch;
 mod connection;
 mod file_analytics;
 mod queries;
@@ -99,6 +100,19 @@ impl RdbAdapter for DuckdbAdapter {
             self.execute_query(sql, cancel, crate::db::row_cap::current())
                 .await
         })
+    }
+
+    // ADR 0051 Stage 1 — DuckDB inherited the trait `Unsupported` default, so
+    // structured grid row edits (which route through `execute_sql_batch`) were
+    // blocked even on a `read_only=false` connection. This wires the
+    // BEGIN..COMMIT batch (#1070). `dry_run_sql_batch` stays inherited pending
+    // Stage 3.
+    fn execute_sql_batch<'a>(
+        &'a self,
+        statements: &'a [String],
+        cancel: Option<&'a tokio_util::sync::CancellationToken>,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<RdbQueryResult>, AppError>> + Send + 'a>> {
+        Box::pin(async move { self.execute_query_batch(statements, cancel).await })
     }
 
     #[allow(clippy::too_many_arguments)]
