@@ -605,7 +605,8 @@ impl RdbAdapter for MssqlAdapter {
     // bounded T-SQL builder in `mssql/ddl.rs`, so these route through the same
     // plan/preview/execute dispatch as pg/mysql. `create_table_plan` inherits
     // the trait default (chains create_table + create_index + add_constraint).
-    // `list_triggers` and other admin/export surfaces stay 2차 (deferred).
+    // `list_triggers` now reads `sys.triggers` (Issue #1071 2차, see below);
+    // remaining trigger DDL / export surfaces stay 2차 (deferred).
     fn drop_table<'a>(
         &'a self,
         req: &'a DropTableRequest,
@@ -743,6 +744,17 @@ impl RdbAdapter for MssqlAdapter {
         namespace: &'a str,
     ) -> BoxFuture<'a, Result<Vec<FunctionInfo>, AppError>> {
         Box::pin(async move { MssqlAdapter::list_functions(self, namespace).await })
+    }
+
+    // Issue #1071 (2차) — trigger introspection now routes to the `sys.triggers`
+    // catalog reader in `mssql/catalog.rs`, so the schema tree's trigger list is
+    // populated instead of the inherited trait-default empty vec.
+    fn list_triggers<'a>(
+        &'a self,
+        namespace: &'a str,
+        table: &'a str,
+    ) -> BoxFuture<'a, Result<Vec<TriggerInfo>, AppError>> {
+        Box::pin(async move { MssqlAdapter::list_triggers(self, namespace, table).await })
     }
 
     // ── Issue #1073 — admin ops (activity/kill/slow/info) SQL Server parity ──
