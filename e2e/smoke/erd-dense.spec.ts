@@ -10,6 +10,13 @@ import {
   waitForLauncher,
 } from "./_helpers";
 
+// Regression-pinned evidence (P5) for ADR 0054 / #1655: the ERD is a React
+// Flow + elkjs `layered` canvas. This dense fixture proves the read-only
+// foundation renders table nodes with their columns and FK edges, and that the
+// built-in zoom + fit-to-view viewport controls are live on desktop and narrow
+// viewports. Selection / search / dependency-panel assertions were removed with
+// the hand-rolled SVG renderer; those surfaces return in follow-up ERD issues
+// (#1657+).
 const CONNECTION_NAME = "E2E Postgres ERD Dense";
 const TABLE_LABELS = [
   "public.erd_customers table",
@@ -29,7 +36,7 @@ const EDGE_LABELS = [
 ] as const;
 
 describe("Dense ERD smoke", () => {
-  it("renders dense SchemaGraph ERD evidence on desktop and narrow viewports", async () => {
+  it("renders dense SchemaGraph ERD canvas evidence on desktop and narrow viewports", async () => {
     await step("create Postgres connection and open workspace", async () => {
       await browser.setWindowSize(1440, 1000);
       await waitForLauncher();
@@ -54,79 +61,47 @@ describe("Dense ERD smoke", () => {
     });
 
     await step(
-      "verify dense ERD desktop interactions and screenshot",
+      "verify dense ERD canvas desktop interactions and screenshot",
       async () => {
-        await verifyDenseErdSurface("desktop", "payments");
+        await verifyDenseErdCanvas("desktop");
         await saveNonEmptyScreenshot("desktop");
       },
     );
 
     await step(
-      "verify dense ERD narrow interactions and screenshot",
+      "verify dense ERD canvas narrow interactions and screenshot",
       async () => {
         await browser.setWindowSize(390, 900);
-        await verifyDenseErdSurface("narrow", "refunds");
+        await verifyDenseErdCanvas("narrow");
         await saveNonEmptyScreenshot("narrow");
       },
     );
   });
 });
 
-async function verifyDenseErdSurface(
-  viewportName: "desktop" | "narrow",
-  searchTerm: string,
-) {
+async function verifyDenseErdCanvas(viewportName: "desktop" | "narrow") {
   const figure = await $('[aria-label="Database relationship diagram"]');
   await figure.waitForDisplayed({ timeout: 30000 });
 
   await waitForDenseGraphLabels(viewportName);
-  await selectTable("public.erd_orders table");
-  await expectSelected("public.erd_orders table");
-  await waitForMetadataStable(viewportName);
 
-  await setErdSearch(searchTerm);
-  await clickSearchResult(`public.erd_${searchTerm}`);
-  await expectSelected(`public.erd_${searchTerm} table`);
-
-  const zoomBefore = await waitForZoomPercent(viewportName);
-  await clickButton("Zoom in ERD");
+  // Built-in React Flow zoom changes the viewport scale.
+  const scaleBefore = await readViewportScale();
+  await clickButton("Zoom In");
   await browser.waitUntil(
     async () => {
-      const zoom = await readZoomPercent();
-      return zoom !== null && zoom > zoomBefore;
+      const scale = await readViewportScale();
+      return scale !== null && scaleBefore !== null && scale > scaleBefore;
     },
     {
       timeout: 5000,
-      timeoutMsg: `${viewportName} ERD zoom-in did not change the zoom percent`,
+      timeoutMsg: `${viewportName} ERD zoom-in did not increase the viewport scale`,
     },
   );
 
-  await clickButton("Zoom out ERD");
+  // Fit-to-view re-frames the whole graph without throwing.
   await clickButton("Fit ERD");
-  await browser.waitUntil(
-    async () => {
-      const zoom = await readZoomPercent();
-      return zoom === 85;
-    },
-    {
-      timeout: 5000,
-      timeoutMsg: `${viewportName} ERD fit did not set the expected zoom percent`,
-    },
-  );
-
-  await clickButton("Fit selected table");
-  await browser.waitUntil(
-    async () => {
-      const zoom = await readZoomPercent();
-      return zoom === 100;
-    },
-    {
-      timeout: 5000,
-      timeoutMsg: `${viewportName} ERD fit-selected did not restore 100% zoom`,
-    },
-  );
-
-  await setErdSearch("");
+  await figure.waitForDisplayed({ timeout: 5000 });
 }
 
 async function waitForDenseGraphLabels(viewportName: string) {
@@ -151,125 +126,19 @@ async function waitForDenseGraphLabels(viewportName: string) {
   );
 }
 
-async function selectTable(ariaLabel: string) {
-  const table = await $(`[aria-label="${ariaLabel}"]`);
-  await table.waitForDisplayed({ timeout: 10000 });
-  await table.click();
-}
-
-async function expectSelected(ariaLabel: string) {
-  await browser.waitUntil(
-    async () =>
-      (await $(`[aria-label="${ariaLabel}"]`).getAttribute("aria-pressed")) ===
-      "true",
-    {
-      timeout: 10000,
-      timeoutMsg: `${ariaLabel} was not selected in the ERD`,
-    },
-  );
-}
-
-async function waitForMetadataStable(viewportName: string) {
-  await browser.waitUntil(
-    async () =>
-      await browser.execute(() => {
-        const body = document.body.textContent?.toLowerCase() ?? "";
-        return (
-          body.includes("read-only schemagraph view") &&
-          body.includes("incoming") &&
-          body.includes("outgoing") &&
-          !body.includes("dependency metadata incomplete") &&
-          !body.includes("metadata readiness unknown")
-        );
-      }),
-    {
-      timeout: 30000,
-      timeoutMsg: `${viewportName} ERD metadata did not stabilize`,
-    },
-  );
-}
-
-async function setErdSearch(value: string) {
-  await browser.execute((nextValue) => {
-    const input = document.querySelector<HTMLInputElement>(
-      '[aria-label="Search ERD tables"]',
-    );
-    if (!input) throw new Error("Search ERD tables input did not appear");
-    input.focus();
-    const setter = Object.getOwnPropertyDescriptor(
-      window.HTMLInputElement.prototype,
-      "value",
-    )?.set;
-    if (!setter) throw new Error("HTMLInputElement value setter missing");
-    setter.call(input, nextValue);
-    input.dispatchEvent(new Event("input", { bubbles: true }));
-    input.dispatchEvent(new Event("change", { bubbles: true }));
-  }, value);
-
-  await browser.waitUntil(
-    async () =>
-      await browser.execute(
-        (expected) =>
-          document.querySelector<HTMLInputElement>(
-            '[aria-label="Search ERD tables"]',
-          )?.value === expected,
-        value,
-      ),
-    {
-      timeout: 5000,
-      timeoutMsg: "ERD search input did not receive expected value",
-    },
-  );
-}
-
-async function clickSearchResult(label: string) {
-  await browser.waitUntil(
-    async () =>
-      await browser.execute((expectedLabel) => {
-        return Array.from(
-          document.querySelectorAll<HTMLElement>('[role="option"]'),
-        ).some((element) => element.textContent?.trim() === expectedLabel);
-      }, label),
-    {
-      timeout: 10000,
-      timeoutMsg: `${label} did not appear in ERD search results`,
-    },
-  );
-
-  await browser.execute((expectedLabel) => {
-    const option = Array.from(
-      document.querySelectorAll<HTMLElement>('[role="option"]'),
-    ).find((element) => element.textContent?.trim() === expectedLabel);
-    if (!option) throw new Error(`${expectedLabel} option did not appear`);
-    option.click();
-  }, label);
-}
-
 async function clickButton(ariaLabel: string) {
   const button = await $(`[aria-label="${ariaLabel}"]`);
   await button.waitForDisplayed({ timeout: 5000 });
   await button.click();
 }
 
-async function waitForZoomPercent(viewportName: string): Promise<number> {
-  await browser.waitUntil(async () => (await readZoomPercent()) !== null, {
-    timeout: 5000,
-    timeoutMsg: `${viewportName} ERD zoom percent did not appear`,
-  });
-
-  const zoom = await readZoomPercent();
-  if (zoom === null)
-    throw new Error(`${viewportName} ERD zoom percent missing`);
-  return zoom;
-}
-
-async function readZoomPercent(): Promise<number | null> {
+async function readViewportScale(): Promise<number | null> {
   await switchToWorkspaceWindow();
   return await browser.execute(() => {
-    const label = document.querySelector<HTMLElement>(
-      '[aria-label="ERD zoom percent"]',
+    const viewport = document.querySelector<HTMLElement>(
+      ".react-flow__viewport",
     );
-    const match = label?.textContent?.trim().match(/^(\d{2,3})%$/);
+    const match = viewport?.style.transform.match(/scale\(([\d.]+)\)/);
     return match ? Number(match[1]) : null;
   });
 }
