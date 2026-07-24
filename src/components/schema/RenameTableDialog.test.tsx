@@ -187,4 +187,81 @@ describe("RenameTableDialog (Sprint 235)", () => {
       "db-1",
     );
   });
+
+  // Purpose: audit-residual error-branch + keyboard coverage for the
+  // Sprint 235 RenameTableDialog — preview/commit reject must surface an
+  // inline alert while the modal stays open (P4 parity with the success
+  // path), and the Enter-key submit path must commit. Mirrors the
+  // DropColumnDialog reject pattern (DropColumnDialog.test.tsx:385).
+  // Issue #1630 (2026-07-24) — 2026-07-17 test audit residual.
+  describe("error branches + Enter-key submit (issue #1630)", () => {
+    // Reason: preview reject (previewOnly:true renameTableRequest throws)
+    // → previewError surfaces as role="alert" + modal stays open
+    // (onClose NOT called). Issue #1630 (2026-07-24).
+    it("preview reject surfaces inline alert + keeps modal open", async () => {
+      mockRenameTableRequest.mockRejectedValueOnce(
+        new Error("permission denied for schema public"),
+      );
+      const onClose = vi.fn();
+      renderDialog({ tableName: "users", onClose });
+      const input = screen.getByLabelText("New table name");
+      fireEvent.change(input, { target: { value: "people" } });
+      const alert = await screen.findByRole("alert");
+      expect(alert).toHaveTextContent(/permission denied/);
+      expect(onClose).not.toHaveBeenCalled();
+    });
+
+    // Reason: commit reject (previewOnly:false renameTable mutation
+    // throws) → previewError surfaces as role="alert" + modal stays open
+    // (onClose NOT called). Equal weight to commit-success (P4).
+    // Issue #1630 (2026-07-24).
+    it("commit reject surfaces inline alert + keeps modal open", async () => {
+      mockRenameTable.mockRejectedValueOnce(
+        new Error('relation "people" already exists'),
+      );
+      const onClose = vi.fn();
+      renderDialog({ tableName: "users", onClose });
+      const input = screen.getByLabelText("New table name");
+      await act(async () => {
+        fireEvent.change(input, { target: { value: "people" } });
+      });
+      await waitFor(() => {
+        expect(screen.getByRole("button", { name: "Apply" })).toBeEnabled();
+      });
+      await act(async () => {
+        fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+      });
+      const alert = await screen.findByRole("alert");
+      expect(alert).toHaveTextContent(/already exists/);
+      expect(onClose).not.toHaveBeenCalled();
+    });
+
+    // Reason: Enter key in the name input runs the commit path
+    // (onKeyDown → handleApply) — keyboard parity with the Apply button.
+    // Previously unverified keyboard branch. Issue #1630 (2026-07-24).
+    it("Enter key in name input submits the rename (keyboard path)", async () => {
+      const onClose = vi.fn();
+      renderDialog({ tableName: "users", onClose });
+      const input = screen.getByLabelText("New table name");
+      await act(async () => {
+        fireEvent.change(input, { target: { value: "people" } });
+      });
+      await waitFor(() => {
+        expect(screen.getByRole("button", { name: "Apply" })).toBeEnabled();
+      });
+      await act(async () => {
+        fireEvent.keyDown(input, { key: "Enter" });
+      });
+      await waitFor(() => {
+        expect(onClose).toHaveBeenCalledTimes(1);
+      });
+      expect(mockRenameTable).toHaveBeenCalledWith(
+        "conn-1",
+        "users",
+        "public",
+        "people",
+        "db-1",
+      );
+    });
+  });
 });

@@ -400,4 +400,64 @@ describe("AddColumnDialog (Sprint 236)", () => {
         .disabled,
     ).toBe(true);
   });
+
+  // Purpose: audit-residual error-branch coverage for the Sprint 236
+  // AddColumnDialog — preview/commit reject must surface an inline alert
+  // while the modal stays open (P4 parity with commit-success). Mirrors
+  // the DropColumnDialog reject pattern (DropColumnDialog.test.tsx:385).
+  // Issue #1630 (2026-07-24) — 2026-07-17 test audit residual.
+  describe("error branches (issue #1630)", () => {
+    // Reason: preview reject (previewOnly:true addColumnRequest throws)
+    // → previewError surfaces as role="alert" + modal stays open
+    // (onClose NOT called). Issue #1630 (2026-07-24).
+    it("preview reject surfaces inline alert + keeps modal open", async () => {
+      mockAddColumnRequest.mockRejectedValueOnce(
+        new Error('type "varcha" does not exist'),
+      );
+      const onClose = vi.fn();
+      renderDialog({ onClose });
+      await act(async () => {
+        fireEvent.change(screen.getByLabelText("Column name"), {
+          target: { value: "email" },
+        });
+        fireEvent.change(screen.getByLabelText("Column data type"), {
+          target: { value: "varchar(255)" },
+        });
+      });
+      const alert = await screen.findByRole("alert");
+      expect(alert).toHaveTextContent(/does not exist/);
+      expect(onClose).not.toHaveBeenCalled();
+    });
+
+    // Reason: commit reject (previewOnly:false addColumnRequest throws)
+    // → previewError surfaces as role="alert" + modal stays open
+    // (onClose NOT called). Equal weight to commit-success (P4).
+    // Issue #1630 (2026-07-24).
+    it("commit reject surfaces inline alert + keeps modal open", async () => {
+      mockAddColumnRequest
+        .mockResolvedValueOnce({
+          sql: 'ALTER TABLE "public"."users" ADD COLUMN "email" varchar(255)',
+        })
+        .mockRejectedValueOnce(new Error('column "email" already exists'));
+      const onClose = vi.fn();
+      renderDialog({ onClose });
+      await act(async () => {
+        fireEvent.change(screen.getByLabelText("Column name"), {
+          target: { value: "email" },
+        });
+        fireEvent.change(screen.getByLabelText("Column data type"), {
+          target: { value: "varchar(255)" },
+        });
+      });
+      await waitFor(() => {
+        expect(screen.getByRole("button", { name: "Apply" })).toBeEnabled();
+      });
+      await act(async () => {
+        fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+      });
+      const alert = await screen.findByRole("alert");
+      expect(alert).toHaveTextContent(/already exists/);
+      expect(onClose).not.toHaveBeenCalled();
+    });
+  });
 });
