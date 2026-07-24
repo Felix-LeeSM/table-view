@@ -259,7 +259,10 @@ export default function HeaderRow({
                   (field=widths)` IPC) 호출. column-level 이 아닌 *전체*
                   widths reset 임에 유의 (sprint-378 contract). 단일
                   mousedown (drag-start) 은 reset 과 독립. e.stopPropagation
-                  으로 header onClick/sort 로의 bubble 차단. */}
+                  으로 header onClick/sort 로의 bubble 차단.
+                  #1733 (2026-07-24) — 중복이던 툴바 reset 버튼을 제거했으므로
+                  더블클릭이 유일한 grip reset 트리거다. hover `title` 로
+                  발견성 보완 (aria-label 은 SR 용 "Resize column" 유지). */}
               <div
                 className="absolute right-0 top-0 h-full w-3 cursor-col-resize hover:bg-primary/40 active:bg-primary/60 focus-visible:outline-1 focus-visible:outline-ring"
                 onMouseDown={(e) => onResizeStart(e, col.name, visualIdx)}
@@ -273,6 +276,7 @@ export default function HeaderRow({
                 role="separator"
                 aria-orientation="vertical"
                 aria-label={t("resizeColumnAria")}
+                title={t("resizeColumnTitle")}
               />
             </div>
           );

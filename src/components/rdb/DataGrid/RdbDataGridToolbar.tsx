@@ -22,7 +22,6 @@ interface RdbDataGridToolbarProps {
   onSetPageSize: (size: number) => void;
   onToggleFilters: () => void;
   onToggleQuickLook: () => void;
-  onResetColumnWidths: () => void;
 }
 
 export function RdbDataGridToolbar({
@@ -44,7 +43,6 @@ export function RdbDataGridToolbar({
   onSetPageSize,
   onToggleFilters,
   onToggleQuickLook,
-  onResetColumnWidths,
 }: RdbDataGridToolbarProps) {
   return (
     <DataGridToolbar
@@ -87,7 +85,6 @@ export function RdbDataGridToolbar({
       canUndo={editState.canUndo}
       onRedo={editState.redo}
       canRedo={editState.canRedo}
-      onResetColumnWidths={onResetColumnWidths}
     />
   );
 }
