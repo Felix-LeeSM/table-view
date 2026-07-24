@@ -7,18 +7,18 @@ import type {
   TableInfo,
 } from "@/types/schema";
 import type { SchemaGraphCatalogSnapshot } from "@/types/schemaGraph";
+import {
+  schemaGraphColumnId,
+  schemaGraphConstraintId,
+  schemaGraphIndexId,
+  schemaGraphTableId,
+} from "@/test-utils/schemaGraphIds";
 import { extractSchemaGraph } from "./schemaGraph";
 import {
   selectSchemaGraphMigrationImpact,
   selectSchemaGraphIntelligence,
   selectSchemaGraphNodeMaps,
 } from "./schemaGraphSelectors";
-import {
-  schemaGraphColumnId,
-  schemaGraphConstraintId,
-  schemaGraphIndexId,
-  schemaGraphTableId,
-} from "./schemaGraphSupport";
 
 describe("SchemaGraph intelligence selectors", () => {
   it("indexes PostgreSQL-like graph nodes, FK direction, readiness, and diagnostics", () => {

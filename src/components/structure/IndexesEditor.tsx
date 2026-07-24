@@ -353,7 +353,11 @@ export default function IndexesEditor({
       schemaGraphIntelligence
         ? selectSchemaGraphMigrationImpact(schemaGraphIntelligence, {
             kind: "index",
-            indexId: schemaGraphIndexId(schema, table, indexName),
+            indexId: schemaGraphIndexId(
+              schema as SchemaName,
+              table as TableName,
+              indexName,
+            ),
           })
         : null,
     );

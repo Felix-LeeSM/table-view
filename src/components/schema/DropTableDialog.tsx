@@ -19,6 +19,7 @@ import { useConnectionStore } from "@stores/connectionStore";
 import { useSchemaGraphIntelligence } from "@/hooks/useSchemaGraphIntelligence";
 import { selectSchemaGraphMigrationImpact } from "@/lib/schemaGraphSelectors";
 import { schemaGraphTableId } from "@/lib/schemaGraphSupport";
+import type { SchemaName, TableName } from "@/types/branded";
 import SchemaGraphMigrationImpactSummary from "./SchemaGraphMigrationImpactSummary";
 
 /**
@@ -98,7 +99,10 @@ export default function DropTableDialog({
       schemaGraphIntelligence
         ? selectSchemaGraphMigrationImpact(schemaGraphIntelligence, {
             kind: "table",
-            tableId: schemaGraphTableId(schemaName, tableName),
+            tableId: schemaGraphTableId(
+              schemaName as SchemaName,
+              tableName as TableName,
+            ),
           })
         : null,
     [schemaGraphIntelligence, schemaName, tableName],

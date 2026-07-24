@@ -6,7 +6,7 @@ import {
   selectSchemaGraphMigrationImpact,
 } from "@/lib/schemaGraphSelectors";
 import { buildSchemaGraphCatalogSnapshot } from "@/lib/schemaGraphSnapshot";
-import { schemaGraphTableId } from "@/lib/schemaGraphSupport";
+import { schemaGraphTableId } from "@/test-utils/schemaGraphIds";
 
 // ---------------------------------------------------------------------------
 // Sprint 109 — SqlPreviewDialog uses SqlSyntax for syntax-highlighted preview.

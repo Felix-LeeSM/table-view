@@ -12,13 +12,13 @@ import type {
   SchemaGraphCatalogSnapshot,
   SchemaGraphNode,
 } from "@/types/schemaGraph";
-import { extractSchemaGraph } from "./schemaGraph";
 import {
   schemaGraphColumnId,
   schemaGraphConstraintId,
   schemaGraphSchemaId,
   schemaGraphTableId,
-} from "./schemaGraphSupport";
+} from "@/test-utils/schemaGraphIds";
+import { extractSchemaGraph } from "./schemaGraph";
 
 describe("SchemaGraph extraction", () => {
   it("uses the Sprint 459 runtime RDBMS matrix as the accepted source set", () => {

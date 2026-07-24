@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { ColumnInfo, ConstraintInfo, TableInfo } from "@/types/schema";
 import type { SchemaGraphCatalogSnapshot } from "@/types/schemaGraph";
-import { extractSchemaGraph } from "./schemaGraph";
 import {
   schemaGraphColumnId,
   schemaGraphConstraintId,
   schemaGraphTableId,
-} from "./schemaGraphSupport";
+} from "@/test-utils/schemaGraphIds";
+import { extractSchemaGraph } from "./schemaGraph";
 
 describe("SchemaGraph relationship normalizer", () => {
   it("represents composite and single-column FKs with the same source-to-target contract", () => {

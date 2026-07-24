@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { rawEntryKey } from "@stores/rawQueryGridEditStore";
 import { entryKey } from "@stores/dataGridEditStore";
+import { schemaGraphTableId } from "@/lib/schemaGraphSupport";
 import type { SchemaState } from "@stores/schemaStore";
 import type { ExecuteRdbSingleStatementRequest } from "@components/query/QueryTab/rdbQueryExecution";
 import type { InlineFkPopoverProps } from "@components/schema/CreateTableDialog/InlineFkPopover";
@@ -130,6 +131,30 @@ describe("branded schemaStore catalog argument-order safety", () => {
     void getTableColumns(connectionId, database, schema, table);
     // @ts-expect-error swapped (table, schema) order must not compile
     void getTableColumns(connectionId, database, table, schema);
+  });
+});
+
+/**
+ * Type-level regression for issue #1495 (branded Phase 3, schema-graph slice).
+ * `schemaGraphTableId(schema, table)` composes the graph node id used by the
+ * schema ERD, migration-impact preview, and diff; a positional swap keyed
+ * "table:orders.public" instead of "table:public.orders" and silently matched
+ * nothing. Same live-directive discipline: before `SchemaName` / `TableName`
+ * were applied to the id builder's two positional axes both were plain
+ * `string`, so the swapped call type-checked and the `@ts-expect-error` was
+ * unused (`tsc --noEmit` fails, the RED). After branding the swap is a genuine
+ * compile error and the directive is live. This test hits the real production
+ * builder (not the test-utils shim) so it proves the brand, not the shim.
+ */
+describe("branded SchemaName / TableName schemaGraphTableId order safety", () => {
+  const schema = "public" as SchemaName;
+  const table = "orders" as TableName;
+
+  it("rejects a swapped schemaGraphTableId call at compile time", () => {
+    // Canonical order is (schema, table).
+    expect(schemaGraphTableId(schema, table)).toBe("table:public.orders");
+    // @ts-expect-error swapped (table, schema) order must not compile
+    expect(schemaGraphTableId(table, schema)).toBe("table:orders.public");
   });
 });
 

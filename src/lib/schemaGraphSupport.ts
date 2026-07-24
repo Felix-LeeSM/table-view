@@ -1,3 +1,4 @@
+import type { SchemaName, TableName } from "@/types/branded";
 import type {
   SchemaGraphDiagnostic,
   SchemaGraphDiagnosticKind,
@@ -5,33 +6,36 @@ import type {
   SchemaGraphEdgeKind,
 } from "@/types/schemaGraph";
 
-export function schemaGraphSchemaId(schema: string): string {
+export function schemaGraphSchemaId(schema: SchemaName): string {
   return `schema:${encodePart(schema)}`;
 }
 
-export function schemaGraphTableId(schema: string, table: string): string {
+export function schemaGraphTableId(
+  schema: SchemaName,
+  table: TableName,
+): string {
   return `table:${encodePart(schema)}.${encodePart(table)}`;
 }
 
 export function schemaGraphColumnId(
-  schema: string,
-  table: string,
+  schema: SchemaName,
+  table: TableName,
   column: string,
 ): string {
   return `${schemaGraphTableId(schema, table)}.column:${encodePart(column)}`;
 }
 
 export function schemaGraphIndexId(
-  schema: string,
-  table: string,
+  schema: SchemaName,
+  table: TableName,
   index: string,
 ): string {
   return `${schemaGraphTableId(schema, table)}.index:${encodePart(index)}`;
 }
 
 export function schemaGraphConstraintId(
-  schema: string,
-  table: string,
+  schema: SchemaName,
+  table: TableName,
   constraint: string,
 ): string {
   return `${schemaGraphTableId(schema, table)}.constraint:${encodePart(

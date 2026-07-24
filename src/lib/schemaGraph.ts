@@ -1,3 +1,4 @@
+import type { SchemaName, TableName } from "@/types/branded";
 import { RUNTIME_RDBMS_DATABASE_TYPES } from "@/types/rdbmsDataSources";
 import type {
   ColumnInfo,
@@ -409,8 +410,8 @@ function addForeignKeyEdges(
 function addForeignKeyColumnEdge(
   table: TableRef,
   sourceColumn: string,
-  referenceSchema: string,
-  referenceTable: string,
+  referenceSchema: SchemaName,
+  referenceTable: TableName,
   referenceColumn: string | undefined,
   constraintId: string,
   relationship: NonNullable<SchemaGraphConstraintPayload["foreignKey"]>,

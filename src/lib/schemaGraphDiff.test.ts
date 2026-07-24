@@ -10,6 +10,7 @@ import type {
   SchemaGraphCatalogSnapshot,
   SchemaGraphForeignKeyEndpoint,
 } from "@/types/schemaGraph";
+import { schemaName, tableName } from "@/test-utils/brandedKeys";
 import { selectSchemaGraphDiff } from "./schemaGraphDiff";
 
 describe("SchemaGraph diff", () => {
@@ -295,31 +296,31 @@ function foreignKeyGraph(order: "canonical" | "reordered"): SchemaGraph {
         id: "schema:public",
         kind: "schema",
         label: "public",
-        schema: "public",
+        schema: schemaName("public"),
         data: { name: "public" },
       },
       {
         id: ordersTableId,
         kind: "table",
         label: "orders",
-        schema: "public",
-        table: "orders",
+        schema: schemaName("public"),
+        table: tableName("orders"),
         data: table("public", "orders"),
       },
       {
         id: usersTableId,
         kind: "table",
         label: "users",
-        schema: "public",
-        table: "users",
+        schema: schemaName("public"),
+        table: tableName("users"),
         data: table("public", "users"),
       },
       {
         id: constraintId,
         kind: "constraint",
         label: "orders_user_id_fkey",
-        schema: "public",
-        table: "orders",
+        schema: schemaName("public"),
+        table: tableName("orders"),
         constraint: "orders_user_id_fkey",
         data: {
           name: "orders_user_id_fkey",
@@ -353,9 +354,17 @@ function foreignKeyEndpoint(
   columns: readonly string[],
 ): SchemaGraphForeignKeyEndpoint {
   if (order === "reordered") {
-    return { columns: [...columns], table, schema };
+    return {
+      columns: [...columns],
+      table: tableName(table),
+      schema: schemaName(schema),
+    };
   }
-  return { schema, table, columns: [...columns] };
+  return {
+    schema: schemaName(schema),
+    table: tableName(table),
+    columns: [...columns],
+  };
 }
 
 function table(schema: string, name: string): TableInfo {

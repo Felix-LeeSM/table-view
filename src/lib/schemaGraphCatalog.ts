@@ -8,11 +8,12 @@ import type {
   SchemaGraphCatalogSnapshot,
   SchemaGraphConstraintPayload,
 } from "@/types/schemaGraph";
+import type { SchemaName, TableName } from "@/types/branded";
 import { compareText, schemaGraphTableId } from "./schemaGraphSupport";
 
 export interface TableRef {
-  readonly schema: string;
-  readonly table: string;
+  readonly schema: SchemaName;
+  readonly table: TableName;
 }
 
 export function collectTables(
@@ -24,8 +25,13 @@ export function collectTables(
   )) {
     for (const table of schemaTables) {
       const normalized = { ...table, schema: table.schema || schemaName };
+      // Rust catalog IPC → graph trust boundary: brand the raw schema/table
+      // names once here so downstream graph construction flows the brands.
       tables.set(
-        schemaGraphTableId(normalized.schema, normalized.name),
+        schemaGraphTableId(
+          normalized.schema as SchemaName,
+          normalized.name as TableName,
+        ),
         normalized,
       );
     }
@@ -36,19 +42,22 @@ export function collectTables(
 export function collectSchemaNames(
   snapshot: SchemaGraphCatalogSnapshot,
   tables: Map<string, TableInfo>,
-): readonly string[] {
+): readonly SchemaName[] {
   const names = new Set(snapshot.schemas.map((schema) => schema.name));
   Object.keys(snapshot.tablesBySchema).forEach((schema) => names.add(schema));
   Object.keys(snapshot.columnsByTable).forEach((schema) => names.add(schema));
   [...tables.values()].forEach((table) => names.add(table.schema));
-  return [...names].sort(compareText);
+  return [...names].sort(compareText) as SchemaName[];
 }
 
 export function sortedTableRefs(
   tables: Map<string, TableInfo>,
 ): readonly TableRef[] {
   return [...tables.values()]
-    .map((table) => ({ schema: table.schema, table: table.name }))
+    .map((table) => ({
+      schema: table.schema as SchemaName,
+      table: table.name as TableName,
+    }))
     .sort(
       (left, right) =>
         compareText(left.schema, right.schema) ||

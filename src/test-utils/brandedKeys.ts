@@ -25,3 +25,14 @@ export const makeEntryKey = (
     schema as SchemaName,
     table as TableName,
   );
+
+/**
+ * Per-axis brand assertions for schema-graph fixtures (issue #1495, Phase 3).
+ * Production brands `schema`/`table` at the Rust-catalog → graph boundary
+ * (`collectTables` / `sortedTableRefs`); tests legitimately start from plain
+ * string literals, so these brand them in ONE place instead of scattering
+ * `as SchemaName` / `as TableName` across every graph test. Brands are erased,
+ * so the runtime value is the untouched string.
+ */
+export const schemaName = (value: string): SchemaName => value as SchemaName;
+export const tableName = (value: string): TableName => value as TableName;
