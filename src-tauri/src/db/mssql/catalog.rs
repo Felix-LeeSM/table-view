@@ -8,7 +8,8 @@ use tiberius::{Row, ToSql};
 
 use crate::error::AppError;
 use crate::models::{
-    ColumnInfo, ConstraintInfo, FunctionInfo, IndexInfo, SchemaInfo, TableInfo, ViewInfo,
+    ColumnInfo, ConstraintInfo, FunctionInfo, IndexInfo, SchemaInfo, TableInfo, TriggerInfo,
+    ViewInfo,
 };
 
 use self::decode::{
@@ -18,9 +19,9 @@ use self::decode::{
 use self::queries::*;
 use self::shape::{
     build_constraints, build_functions, build_indexes, build_object_columns, build_schema_columns,
-    build_tables, build_views, MssqlColumnCatalogRow, MssqlConstraintCatalogRow,
+    build_tables, build_triggers, build_views, MssqlColumnCatalogRow, MssqlConstraintCatalogRow,
     MssqlIndexCatalogRow, MssqlRoutineCatalogRow, MssqlRoutineParamCatalogRow,
-    MssqlSchemaColumnCatalogRow, MssqlTableCatalogRow, MssqlViewCatalogRow,
+    MssqlSchemaColumnCatalogRow, MssqlTableCatalogRow, MssqlTriggerCatalogRow, MssqlViewCatalogRow,
 };
 use super::MssqlAdapter;
 
@@ -374,6 +375,39 @@ impl MssqlAdapter {
                 "Routine {schema}.{function} not found"
             ))),
         }
+    }
+
+    /// Issue #1071 (2차) — DML triggers on `(schema, table)` from `sys.triggers`
+    /// joined to `sys.tables` / `sys.schemas` (scope) and `sys.trigger_events`
+    /// (per-event rows), system triggers excluded via `is_ms_shipped = 0`. The
+    /// body comes from `OBJECT_DEFINITION`. Metadata-denied logins yield an
+    /// empty list (same `query_catalog_rows` contract as the view/routine
+    /// surfaces). Mirrors the pg/mysql `list_triggers` shape.
+    pub async fn list_triggers(
+        &self,
+        schema: &str,
+        table: &str,
+    ) -> Result<Vec<TriggerInfo>, AppError> {
+        let params: [&dyn ToSql; 2] = [&schema, &table];
+        let rows = self
+            .query_catalog_rows(
+                "SQL Server trigger catalog query failed",
+                TRIGGERS_SQL,
+                &params,
+            )
+            .await?;
+        let catalog_rows = rows
+            .into_iter()
+            .map(|row| {
+                Ok(MssqlTriggerCatalogRow {
+                    name: row_string(&row, 0, "trigger name")?,
+                    is_instead_of: row_bool(&row, 1, "trigger instead-of flag")?,
+                    event: row_string(&row, 2, "trigger event")?,
+                    definition: row_optional_string(&row, 3, "trigger definition")?,
+                })
+            })
+            .collect::<Result<Vec<_>, AppError>>()?;
+        Ok(build_triggers(schema, table, catalog_rows))
     }
 
     async fn connected_client(&self) -> Result<MssqlClient, AppError> {
