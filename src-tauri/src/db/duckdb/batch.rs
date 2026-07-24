@@ -6,31 +6,106 @@
 //! early return, so a statement-K failure or the single-row guard
 //! (`enforce_single_row_effect`, #1469) rolls back statements 1..K-1 (dec.4).
 
+use duckdb::Connection;
 use tokio_util::sync::CancellationToken;
 
+use crate::db::enforce_single_row_effect;
+use crate::db::traits::finalize_cancelled;
 use crate::error::AppError;
-use crate::models::QueryResult;
+use crate::models::{QueryResult, QueryType};
 
 use super::connection::DuckdbAdapter;
+use super::sql_text::{strip_trailing_terminator, validate_supported_sql};
 
 impl DuckdbAdapter {
+    /// ADR 0051 Stage 1 — execute a structured row-edit batch inside one
+    /// `BEGIN..COMMIT`. Statement K's failure (or the single-row guard) rolls
+    /// back 1..K-1. Mirrors the SQLite template
+    /// (`db/adapters/sqlite/batch.rs`); `dry_run_sql_batch` stays inherited
+    /// `Unsupported` pending Stage 3.
     pub async fn execute_query_batch(
         &self,
-        _statements: &[String],
-        _cancel_token: Option<&CancellationToken>,
+        statements: &[String],
+        cancel_token: Option<&CancellationToken>,
     ) -> Result<Vec<QueryResult>, AppError> {
-        Err(AppError::Unsupported(
-            "DuckDB transactional batch not yet implemented".into(),
-        ))
+        if statements.is_empty() {
+            return Ok(Vec::new());
+        }
+        // Validate before opening a connection: a blank statement is a caller
+        // error, and the capability guard (extension install/load, external
+        // file access) applies to batch statements exactly as it gates
+        // free-form `execute_sql`.
+        for (idx, raw) in statements.iter().enumerate() {
+            let stmt = strip_trailing_terminator(raw);
+            if stmt.trim().is_empty() {
+                return Err(AppError::Validation(format!(
+                    "Statement {} of {} is empty",
+                    idx + 1,
+                    statements.len()
+                )));
+            }
+            validate_supported_sql(stmt)?;
+        }
+
+        let owned: Vec<String> = statements.to_vec();
+        let total = owned.len();
+        let result = self
+            .with_connection_cancellable(cancel_token, move |conn| {
+                run_commit_batch(conn, &owned, total)
+            })
+            .await;
+        finalize_cancelled(result, cancel_token)
     }
+}
+
+fn run_commit_batch(
+    conn: &Connection,
+    statements: &[String],
+    total: usize,
+) -> Result<Vec<QueryResult>, AppError> {
+    // `unchecked_transaction()` opens on a `&Connection` (the closure owns the
+    // fresh connection) with the default `DropBehavior::Rollback`, so any `?`
+    // below drops `tx` and rolls back the statements already run.
+    let tx = conn
+        .unchecked_transaction()
+        .map_err(|e| AppError::Database(e.to_string()))?;
+
+    let mut results = Vec::with_capacity(total);
+    for (idx, raw) in statements.iter().enumerate() {
+        let stmt = strip_trailing_terminator(raw);
+        let start = std::time::Instant::now();
+        let rows_affected = tx.execute(stmt, []).map_err(|error| {
+            AppError::Database(format!(
+                "statement {} of {} failed: {}",
+                idx + 1,
+                total,
+                error
+            ))
+        })? as u64;
+        // #1469 — a structured edit must affect exactly one row; anything else
+        // (0 → target vanished, N → not uniquely identified) rolls the whole
+        // batch back via the early return.
+        enforce_single_row_effect(idx, total, rows_affected)?;
+        results.push(QueryResult {
+            truncated: false,
+            columns: Vec::new(),
+            rows: Vec::new(),
+            total_count: rows_affected as i64,
+            execution_time_ms: start.elapsed().as_millis() as u64,
+            query_type: QueryType::Dml { rows_affected },
+        });
+    }
+
+    tx.commit()
+        .map_err(|e| AppError::Database(format!("commit failed: {e}")))?;
+    Ok(results)
 }
 
 #[cfg(test)]
 mod tests {
-    // Purpose: DuckDB Stage 1 transactional row-edit batch (ADR 0051, #1070).
-    // RED snapshot — this commit fixes the pre-implementation contract (batch is
-    // `Unsupported`); the GREEN commit replaces it with the committed/rollback
-    // behavioral suite (2026-07-24).
+    // Purpose: DuckDB Stage 1 transactional row-edit batch (ADR 0051, #1070) —
+    // commit atomicity, statement-failure rollback, single-row guard, read-only
+    // rejection, and blank-statement validation (2026-07-24).
     use tempfile::TempDir;
 
     use super::*;
@@ -83,20 +158,126 @@ mod tests {
         (dir, adapter)
     }
 
-    // Reason: RED — before ADR 0051 Stage 1, DuckDB's `execute_sql_batch`
-    // inherited the trait `Unsupported` default, so structured grid row edits
-    // were blocked even on a `read_only=false` connection (#1070) (2026-07-24).
+    // Reason: ADR 0051 Stage 1 — a multi-statement row edit must commit
+    // atomically so a fresh connection-per-call read sees every change (#1070)
+    // (2026-07-24).
     #[tokio::test]
-    async fn execute_query_batch_is_unsupported_before_stage1_1070() {
+    async fn execute_query_batch_commits_all_statements_atomically_1070() {
+        let (_dir, adapter) = fixture(false).await;
+
+        let results = adapter
+            .execute_query_batch(
+                &[
+                    "UPDATE items SET qty = 11 WHERE id = 1".to_string(),
+                    "INSERT INTO items VALUES (3, 'c', 30)".to_string(),
+                ],
+                None,
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(results.len(), 2);
+        assert!(matches!(
+            results[0].query_type,
+            QueryType::Dml { rows_affected: 1 }
+        ));
+
+        // A reopened connection (per-call) must observe the committed writes.
+        let page = adapter
+            .query_table_data("main", "items", 1, 100, Some("id ASC"), None, None, None)
+            .await
+            .unwrap();
+        assert_eq!(page.total_count, 3);
+        assert_eq!(page.rows[0][2], serde_json::json!(11));
+        assert_eq!(page.rows[2][0], serde_json::json!(3));
+    }
+
+    // Reason: ADR 0051 Stage 1 — a statement-K failure rolls back statements
+    // 1..K-1 so no partial write persists (#1070) (2026-07-24).
+    #[tokio::test]
+    async fn execute_query_batch_rolls_back_on_statement_failure_1070() {
         let (_dir, adapter) = fixture(false).await;
 
         let err = adapter
             .execute_query_batch(
-                &["UPDATE items SET qty = 11 WHERE id = 1".to_string()],
+                &[
+                    "INSERT INTO items VALUES (3, 'c', 30)".to_string(),
+                    "UPDATE does_not_exist SET x = 1".to_string(),
+                ],
                 None,
             )
             .await
             .unwrap_err();
-        assert!(matches!(err, AppError::Unsupported(_)), "got: {err:?}");
+        assert!(matches!(err, AppError::Database(_)), "got: {err:?}");
+
+        // The first INSERT must have been rolled back — still two seed rows.
+        let page = adapter
+            .query_table_data("main", "items", 1, 100, None, None, None, None)
+            .await
+            .unwrap();
+        assert_eq!(page.total_count, 2, "partial write must roll back");
+    }
+
+    // Reason: ADR 0051 Stage 1 — the single-row guard (enforce_single_row_effect,
+    // #1469) rolls back a statement that affects != 1 row so a mis-scoped edit
+    // never silently mass-updates (#1070) (2026-07-24).
+    #[tokio::test]
+    async fn execute_query_batch_single_row_guard_rolls_back_multi_row_effect_1070() {
+        let (_dir, adapter) = fixture(false).await;
+
+        let err = adapter
+            .execute_query_batch(
+                &["UPDATE items SET qty = 0 WHERE id IN (1, 2)".to_string()],
+                None,
+            )
+            .await
+            .unwrap_err();
+        match err {
+            AppError::Database(message) => {
+                assert!(
+                    message.contains("expected to affect exactly 1 row"),
+                    "unexpected message: {message}"
+                );
+            }
+            other => panic!("expected single-row guard error, got: {other:?}"),
+        }
+
+        // Both rows keep their seed values — the guard rolled the update back.
+        let page = adapter
+            .query_table_data("main", "items", 1, 100, Some("id ASC"), None, None, None)
+            .await
+            .unwrap();
+        assert_eq!(page.rows[0][2], serde_json::json!(10));
+        assert_eq!(page.rows[1][2], serde_json::json!(20));
+    }
+
+    // Reason: ADR 0051 dec.1 — a read_only connection must reject writes; the
+    // batch surfaces the connection's read-only failure instead of committing
+    // (#1070) (2026-07-24).
+    #[tokio::test]
+    async fn execute_query_batch_rejects_writes_on_read_only_connection_1070() {
+        let (_dir, adapter) = fixture(true).await;
+
+        let err = adapter
+            .execute_query_batch(&["INSERT INTO items VALUES (3, 'c', 30)".to_string()], None)
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(err, AppError::Database(_) | AppError::Connection(_)),
+            "read-only write must fail, got: {err:?}"
+        );
+    }
+
+    // Reason: a blank/whitespace statement is a validation error, not a silent
+    // no-op — mirrors the SQLite batch guard (#1070) (2026-07-24).
+    #[tokio::test]
+    async fn execute_query_batch_rejects_blank_statement_1070() {
+        let (_dir, adapter) = fixture(false).await;
+
+        let err = adapter
+            .execute_query_batch(&["   ".to_string()], None)
+            .await
+            .unwrap_err();
+        assert!(matches!(err, AppError::Validation(_)), "got: {err:?}");
     }
 }
