@@ -369,6 +369,10 @@ fn build_alter_table_statement(qualified: &str, change: &ColumnChange) -> Result
             new_nullable,
             new_default_value,
             using_expression,
+            // #1735 (c) — MSSQL column-comment emit is deferred (S7:
+            // sp_addextendedproperty). Gated off in the UI via
+            // `ddl.editColumnComment`, so no comment reaches here.
+            new_comment: _,
         } => {
             validate_identifier(name, "Column name")?;
             if using_expression.is_some() {

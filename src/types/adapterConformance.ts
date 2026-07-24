@@ -120,6 +120,11 @@ export const CONFORMANCE_CHECKS = Object.freeze([
   check("ddl.alterTable", "ddl", "Alter-table DDL claim is enabled."),
   check("ddl.createIndex", "ddl", "Create-index DDL claim is enabled."),
   check("ddl.dropObject", "ddl", "Drop-object DDL claim is enabled."),
+  check(
+    "ddl.editColumnComment",
+    "ddl",
+    "Column-comment DDL claim (COMMENT ON COLUMN via alter_table) is enabled.",
+  ),
   check("safety.policy", "safety", "Safety policy is declared."),
 ] as const satisfies readonly ConformanceCheck[]);
 
@@ -160,14 +165,18 @@ const DEFERRED_FEATURES = Object.freeze({
     catalog: ["catalog.constraints"],
     query: [],
     edit: [],
-    ddl: [],
+    // Issue #1735 (c) — MySQL column-comment emit (MODIFY COLUMN
+    // re-definition) is planned for S6, not yet wired → deferred, not
+    // unsupported.
+    ddl: ["ddl.editColumnComment"],
   },
   mariadb: {
     connection: [],
     catalog: ["catalog.constraints"],
     query: [],
     edit: [],
-    ddl: [],
+    // Issue #1735 (c) — see mysql; MariaDB shares the MySQL-family adapter.
+    ddl: ["ddl.editColumnComment"],
   },
   sqlite: {
     connection: [],
@@ -193,7 +202,15 @@ const DEFERRED_FEATURES = Object.freeze({
     edit: [],
     ddl: [],
   },
-  mssql: noneDeferred(),
+  mssql: {
+    connection: [],
+    catalog: [],
+    query: [],
+    edit: [],
+    // Issue #1735 (c) — MSSQL column-comment emit (sp_addextendedproperty) is
+    // planned for S7, not yet wired → deferred, not unsupported.
+    ddl: ["ddl.editColumnComment"],
+  },
   oracle: noneDeferred(),
   mongodb: {
     connection: ["connection.switchDatabase"],

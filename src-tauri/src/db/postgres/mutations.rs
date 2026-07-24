@@ -20,7 +20,7 @@ use super::PostgresAdapter;
 mod ddl;
 mod triggers;
 use ddl::{
-    build_add_column_sql, build_add_constraint_sql, build_alter_table_sql, build_create_index_sql,
+    build_add_column_sql, build_add_constraint_sql, build_alter_table_plan, build_create_index_sql,
     build_create_table_plan, build_drop_column_sql, build_drop_constraint_sql,
     build_drop_index_sql, build_drop_table_sql, build_rename_table_sql,
 };
@@ -357,25 +357,48 @@ impl PostgresAdapter {
 
     /// ALTER TABLE: add, modify, or drop columns in batch.
     /// If `preview_only` is true, returns the generated SQL without executing.
+    ///
+    /// #1735 (c) — a Modify carrying `new_comment` emits a separate
+    /// `COMMENT ON COLUMN` statement. The structural `ALTER TABLE` (if any) and
+    /// each comment statement run inside one `BEGIN/COMMIT` transaction so a
+    /// failed comment rolls back the whole batch (mirrors `create_table`). A
+    /// comment-only edit has no `ALTER TABLE` leg.
     pub async fn alter_table(
         &self,
         req: &AlterTableRequest,
     ) -> Result<SchemaChangeResult, AppError> {
-        let sql = build_alter_table_sql(req)?;
+        let plan = build_alter_table_plan(req)?;
 
         if req.preview_only {
-            return Ok(SchemaChangeResult { sql });
+            return Ok(SchemaChangeResult { sql: plan.sql });
         }
 
         let pool = self.active_pool().await?;
-
-        sqlx::query(&sql)
-            .execute(&pool)
+        let mut tx = pool
+            .begin()
             .await
             .map_err(|e| AppError::Database(e.to_string()))?;
 
+        if let Some(alter_sql) = &plan.alter_sql {
+            if let Err(e) = sqlx::query(alter_sql).execute(&mut *tx).await {
+                let _ = tx.rollback().await;
+                return Err(AppError::Database(e.to_string()));
+            }
+        }
+
+        for stmt in &plan.comment_stmts {
+            if let Err(e) = sqlx::query(stmt).execute(&mut *tx).await {
+                let _ = tx.rollback().await;
+                return Err(AppError::Database(e.to_string()));
+            }
+        }
+
+        tx.commit()
+            .await
+            .map_err(|e| AppError::Database(format!("commit failed: {}", e)))?;
+
         info!("Altered table {}.{}", req.schema, req.table);
-        Ok(SchemaChangeResult { sql })
+        Ok(SchemaChangeResult { sql: plan.sql })
     }
 
     /// Create an index on a table.
@@ -1394,6 +1417,7 @@ mod tests {
                 new_nullable: Some(false),
                 new_default_value: Some("0".to_string()),
                 using_expression: None,
+                new_comment: None,
             }],
             preview_only: true,
             expected_database: None,
@@ -1404,6 +1428,100 @@ mod tests {
         assert_eq!(
             schema_result.sql,
             "ALTER TABLE \"public\".\"users\" ALTER COLUMN \"age\" TYPE bigint, ALTER COLUMN \"age\" SET NOT NULL, ALTER COLUMN \"age\" SET DEFAULT 0"
+        );
+    }
+
+    // ── #1735 (c) — column comment edit (2026-07-25) ───────────────────
+    fn alter_modify_comment_req(name: &str, new_comment: Option<&str>) -> AlterTableRequest {
+        AlterTableRequest {
+            connection_id: "conn1".to_string(),
+            schema: "public".to_string(),
+            table: "users".to_string(),
+            changes: vec![ColumnChange::Modify {
+                name: name.to_string(),
+                new_data_type: None,
+                new_nullable: None,
+                new_default_value: None,
+                using_expression: None,
+                new_comment: new_comment.map(str::to_string),
+            }],
+            preview_only: true,
+            expected_database: None,
+        }
+    }
+
+    // Reason: #1735 (c) — a comment-only Modify emits ONLY the COMMENT ON
+    // COLUMN statement (no `ALTER TABLE` leg), terminated with `;` (2026-07-25).
+    #[tokio::test]
+    async fn alter_table_preview_comment_only_emits_comment_on_column() {
+        let adapter = PostgresAdapter::new();
+        let sql = adapter
+            .alter_table(&alter_modify_comment_req("email", Some("primary contact")))
+            .await
+            .unwrap()
+            .sql;
+        assert_eq!(
+            sql,
+            "COMMENT ON COLUMN \"public\".\"users\".\"email\" IS 'primary contact';"
+        );
+    }
+
+    // Reason: #1735 (c) — a type change + comment emits the ALTER TABLE and the
+    // COMMENT ON COLUMN as two `; `-joined statements (2026-07-25).
+    #[tokio::test]
+    async fn alter_table_preview_type_and_comment_emits_two_statements() {
+        let adapter = PostgresAdapter::new();
+        let req = AlterTableRequest {
+            connection_id: "conn1".to_string(),
+            schema: "public".to_string(),
+            table: "users".to_string(),
+            changes: vec![ColumnChange::Modify {
+                name: "email".to_string(),
+                new_data_type: Some("varchar(320)".to_string()),
+                new_nullable: None,
+                new_default_value: None,
+                using_expression: None,
+                new_comment: Some("primary contact".to_string()),
+            }],
+            preview_only: true,
+            expected_database: None,
+        };
+        let sql = adapter.alter_table(&req).await.unwrap().sql;
+        assert_eq!(
+            sql,
+            "ALTER TABLE \"public\".\"users\" ALTER COLUMN \"email\" TYPE varchar(320); COMMENT ON COLUMN \"public\".\"users\".\"email\" IS 'primary contact';"
+        );
+    }
+
+    // Reason: #1735 (c) — single quotes in the comment are doubled so the
+    // literal cannot break out of the string (injection guard) (2026-07-25).
+    #[tokio::test]
+    async fn alter_table_preview_comment_single_quote_escaped() {
+        let adapter = PostgresAdapter::new();
+        let sql = adapter
+            .alter_table(&alter_modify_comment_req("email", Some("O'Brien's box")))
+            .await
+            .unwrap()
+            .sql;
+        assert_eq!(
+            sql,
+            "COMMENT ON COLUMN \"public\".\"users\".\"email\" IS 'O''Brien''s box';"
+        );
+    }
+
+    // Reason: #1735 (c) — an explicitly cleared comment (empty string) emits
+    // `IS NULL` so the column comment is removed, not set to '' (2026-07-25).
+    #[tokio::test]
+    async fn alter_table_preview_comment_clear_emits_is_null() {
+        let adapter = PostgresAdapter::new();
+        let sql = adapter
+            .alter_table(&alter_modify_comment_req("email", Some("")))
+            .await
+            .unwrap()
+            .sql;
+        assert_eq!(
+            sql,
+            "COMMENT ON COLUMN \"public\".\"users\".\"email\" IS NULL;"
         );
     }
 
@@ -1565,6 +1683,7 @@ mod tests {
                 new_nullable: None,
                 new_default_value: None,
                 using_expression: None,
+                new_comment: None,
             }],
             preview_only: true,
             expected_database: None,
@@ -1590,6 +1709,7 @@ mod tests {
                 new_nullable: None,
                 new_default_value: None,
                 using_expression: Some("col::int".to_string()),
+                new_comment: None,
             }],
             preview_only: true,
             expected_database: None,
@@ -1617,6 +1737,7 @@ mod tests {
                 new_nullable: Some(false),
                 new_default_value: Some("0.0".to_string()),
                 using_expression: Some("score::numeric(10,2)".to_string()),
+                new_comment: None,
             }],
             preview_only: true,
             expected_database: None,
@@ -1644,6 +1765,7 @@ mod tests {
                 new_nullable: Some(true),
                 new_default_value: None,
                 using_expression: Some("col::int".to_string()),
+                new_comment: None,
             }],
             preview_only: true,
             expected_database: None,
@@ -1715,6 +1837,7 @@ mod tests {
                 new_nullable: None,
                 new_default_value: None,
                 using_expression: Some("col::int; DROP TABLE audit".to_string()),
+                new_comment: None,
             }],
             preview_only: true,
             expected_database: None,

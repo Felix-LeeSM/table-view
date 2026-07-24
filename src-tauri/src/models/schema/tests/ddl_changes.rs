@@ -52,6 +52,7 @@ fn column_change_wire_and_roundtrip() {
             new_nullable: Some(true),
             new_default_value: Some("0".to_string()),
             using_expression: None,
+            new_comment: None,
         },
         json!({
             "type": "modify",
@@ -60,6 +61,7 @@ fn column_change_wire_and_roundtrip() {
             "new_nullable": true,
             "new_default_value": "0",
             "using_expression": null,
+            "new_comment": null,
         }),
     );
     assert_wire!(
@@ -85,6 +87,7 @@ fn column_change_modify_using_expression_wire_and_backcompat() {
             new_nullable: None,
             new_default_value: None,
             using_expression: Some("age::int".to_string()),
+            new_comment: None,
         },
         json!({
             "type": "modify",
@@ -93,6 +96,7 @@ fn column_change_modify_using_expression_wire_and_backcompat() {
             "new_nullable": null,
             "new_default_value": null,
             "using_expression": "age::int",
+            "new_comment": null,
         }),
     );
 
@@ -108,6 +112,46 @@ fn column_change_modify_using_expression_wire_and_backcompat() {
         ColumnChange::Modify {
             using_expression, ..
         } => assert!(using_expression.is_none()),
+        _ => panic!("Expected ColumnChange::Modify"),
+    }
+}
+
+/// #1735 (c) — `new_comment` wire lock: `Some(text)` serializes under the
+/// snake_case `new_comment` key, and a payload omitting the field (pre-#1735
+/// caller) deserializes to `None` via `#[serde(default)]` (2026-07-25).
+#[test]
+fn column_change_modify_new_comment_wire_and_backcompat() {
+    assert_wire!(
+        ColumnChange,
+        ColumnChange::Modify {
+            name: "email".to_string(),
+            new_data_type: None,
+            new_nullable: None,
+            new_default_value: None,
+            using_expression: None,
+            new_comment: Some("primary contact".to_string()),
+        },
+        json!({
+            "type": "modify",
+            "name": "email",
+            "new_data_type": null,
+            "new_nullable": null,
+            "new_default_value": null,
+            "using_expression": null,
+            "new_comment": "primary contact",
+        }),
+    );
+
+    // 필드 생략 legacy payload → None (comment 미변경).
+    let legacy = json!({
+        "type": "modify",
+        "name": "email",
+        "new_data_type": null,
+        "new_nullable": null,
+        "new_default_value": null,
+    });
+    match serde_json::from_value(legacy).expect("deserialize legacy") {
+        ColumnChange::Modify { new_comment, .. } => assert!(new_comment.is_none()),
         _ => panic!("Expected ColumnChange::Modify"),
     }
 }

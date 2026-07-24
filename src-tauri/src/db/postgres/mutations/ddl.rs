@@ -137,7 +137,19 @@ pub(super) fn build_create_table_plan(
     })
 }
 
-pub(super) fn build_alter_table_sql(req: &AlterTableRequest) -> Result<String, AppError> {
+/// #1735 (c) — ALTER TABLE plan. Structural column changes collapse into a
+/// single `ALTER TABLE … <parts>` statement (`alter_sql`); each `new_comment`
+/// on a Modify emits a separate `COMMENT ON COLUMN …` statement
+/// (`comment_stmts`) because COMMENT ON COLUMN is not a valid ALTER TABLE
+/// action clause. A comment-only edit leaves `alter_sql = None`. `sql` is the
+/// preview form (see `join_alter_table_plan_sql`).
+pub(super) struct AlterTablePlan {
+    pub(super) alter_sql: Option<String>,
+    pub(super) comment_stmts: Vec<String>,
+    pub(super) sql: String,
+}
+
+pub(super) fn build_alter_table_plan(req: &AlterTableRequest) -> Result<AlterTablePlan, AppError> {
     validate_identifier(&req.schema, "Schema name")?;
     validate_identifier(&req.table, "Table name")?;
 
@@ -183,6 +195,9 @@ pub(super) fn build_alter_table_sql(req: &AlterTableRequest) -> Result<String, A
                 if let Some(expr) = using_expression {
                     validate_ddl_fragment(expr, "USING expression")?;
                 }
+                // `new_comment` needs no `validate_ddl_fragment` — it is emitted
+                // as a quoted string literal with single quotes doubled
+                // (injection-safe), never as raw SQL.
             }
             ColumnChange::Drop { name } => validate_identifier(name, "Column name")?,
         }
@@ -193,8 +208,30 @@ pub(super) fn build_alter_table_sql(req: &AlterTableRequest) -> Result<String, A
     for change in &req.changes {
         parts.extend(build_alter_table_parts(change));
     }
+    let comment_stmts = build_alter_table_comment_statements(&req.changes, &qualified);
 
-    Ok(format!("ALTER TABLE {} {}", qualified, parts.join(", ")))
+    let alter_sql = if parts.is_empty() {
+        None
+    } else {
+        Some(format!("ALTER TABLE {} {}", qualified, parts.join(", ")))
+    };
+
+    // A comment-only Modify yields no structural parts; a Modify with every
+    // field `None` yields neither part nor comment → reject rather than emit
+    // the invalid `ALTER TABLE t ` fragment.
+    if alter_sql.is_none() && comment_stmts.is_empty() {
+        return Err(AppError::Validation(
+            "At least one column change is required".into(),
+        ));
+    }
+
+    let sql = join_alter_table_plan_sql(alter_sql.as_deref(), &comment_stmts);
+
+    Ok(AlterTablePlan {
+        alter_sql,
+        comment_stmts,
+        sql,
+    })
 }
 
 pub(super) fn build_create_index_sql(req: &CreateIndexRequest) -> Result<String, AppError> {
@@ -334,6 +371,55 @@ fn build_create_table_comment_statements(req: &CreateTableRequest, qualified: &s
     comment_stmts
 }
 
+/// #1735 (c) — `COMMENT ON COLUMN` statements for each Modify carrying a
+/// `new_comment`. `Some(non-empty after trim)` → `IS '<escaped>'` (single
+/// quotes doubled — same escape as `build_create_table_comment_statements`);
+/// `Some("")` (explicit clear) → `IS NULL`; `None` → skipped (unchanged).
+fn build_alter_table_comment_statements(changes: &[ColumnChange], qualified: &str) -> Vec<String> {
+    let mut stmts = Vec::new();
+    for change in changes {
+        let ColumnChange::Modify {
+            name,
+            new_comment: Some(raw),
+            ..
+        } = change
+        else {
+            continue;
+        };
+        let trimmed = raw.trim();
+        let value = if trimmed.is_empty() {
+            "NULL".to_string()
+        } else {
+            format!("'{}'", trimmed.replace('\'', "''"))
+        };
+        stmts.push(format!(
+            "COMMENT ON COLUMN {}.{} IS {}",
+            qualified,
+            quote_identifier(name),
+            value
+        ));
+    }
+    stmts
+}
+
+/// #1735 (c) — preview join for an ALTER TABLE plan. No comments → the bare
+/// ALTER statement (byte-equivalent to the pre-#1735 single-statement
+/// emission, no trailing `;`); comments present → `"; "`-joined with a trailing
+/// `;` (mirrors `join_create_table_plan_sql`).
+fn join_alter_table_plan_sql(alter_sql: Option<&str>, comment_stmts: &[String]) -> String {
+    if comment_stmts.is_empty() {
+        return alter_sql.unwrap_or_default().to_string();
+    }
+    let mut segments: Vec<&str> = Vec::new();
+    if let Some(s) = alter_sql {
+        segments.push(s);
+    }
+    for stmt in comment_stmts {
+        segments.push(stmt);
+    }
+    format!("{};", segments.join("; "))
+}
+
 fn join_create_table_plan_sql(create_sql: &str, comment_stmts: &[String]) -> String {
     if comment_stmts.is_empty() {
         return create_sql.to_string();
@@ -371,6 +457,10 @@ fn build_alter_table_parts(change: &ColumnChange) -> Vec<String> {
             new_nullable,
             new_default_value,
             using_expression,
+            // #1735 (c) — comment is emitted as a separate `COMMENT ON COLUMN`
+            // statement (build_alter_table_comment_statements), not an ALTER
+            // COLUMN part.
+            new_comment: _,
         } => {
             let quoted_name = quote_identifier(name);
             let mut parts = Vec::new();

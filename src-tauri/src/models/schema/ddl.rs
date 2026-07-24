@@ -24,6 +24,18 @@ pub enum ColumnChange {
         /// emitted SQL is unchanged.
         #[serde(default)]
         using_expression: Option<String>,
+        /// #1735 (c) — column comment edit. `None` = comment unchanged
+        /// (byte-equivalent to pre-#1735 callers via `#[serde(default)]`).
+        /// `Some(text)` where trimmed non-empty → `COMMENT ON COLUMN … IS
+        /// '<escaped>'`; `Some("")` (explicit clear) → `… IS NULL`. Only
+        /// the PG + Oracle emitters honour this (both share the ANSI
+        /// `COMMENT ON COLUMN` syntax); MySQL (S6) / MSSQL (S7) ignore it,
+        /// and the frontend gates the edit affordance to PG/Oracle via the
+        /// `ddl.editColumnComment` capability so no engine surfaces a
+        /// broken edit. Emitted as a **separate statement** from the
+        /// `ALTER TABLE`, run in the same transaction.
+        #[serde(default)]
+        new_comment: Option<String>,
     },
     Drop {
         name: String,

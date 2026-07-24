@@ -128,6 +128,16 @@ export interface DataSourceCapabilities {
     readonly alterTable: boolean;
     readonly createIndex: boolean;
     readonly dropObject: boolean;
+    /**
+     * Issue #1735 (c) — whether the wired adapter emits a column-comment
+     * change (`COMMENT ON COLUMN … IS …`) through `alter_table`. Distinct
+     * from `alterTable` because MySQL (S6) / MSSQL (S7) run structural ALTERs
+     * but do not yet emit comment changes, so gating on `alterTable` alone
+     * would surface a broken edit there. True only for PostgreSQL + Oracle
+     * (shared ANSI `COMMENT ON COLUMN` emitter); consumed by the
+     * ColumnsEditor comment-cell gate.
+     */
+    readonly editColumnComment: boolean;
   };
   readonly intelligence: {
     readonly erd: boolean;
@@ -211,6 +221,7 @@ export function createEmptyDataSourceCapabilities(): DataSourceCapabilities {
       alterTable: false,
       createIndex: false,
       dropObject: false,
+      editColumnComment: false,
     },
     intelligence: {
       erd: false,
@@ -289,6 +300,9 @@ export const ORACLE_CAPABILITIES = capabilities({
     alterTable: true,
     createIndex: true,
     dropObject: true,
+    // Issue #1735 (c) — Oracle emits COMMENT ON COLUMN through alter_table
+    // (shares the ANSI syntax with PG).
+    editColumnComment: true,
   },
   intelligence: {
     erd: true,
@@ -338,6 +352,8 @@ export const POSTGRESQL_CAPABILITIES = capabilities({
     alterTable: true,
     createIndex: true,
     dropObject: true,
+    // Issue #1735 (c) — PG emits COMMENT ON COLUMN through alter_table.
+    editColumnComment: true,
   },
   intelligence: {
     erd: true,

@@ -121,6 +121,12 @@ export default function StructurePanel({
   const canAlterTable = supportsDdl(dbType, "alterTable");
   const canCreateIndex = supportsDdl(dbType, "createIndex");
   const canDropObject = supportsDdl(dbType, "dropObject");
+  // Issue #1735 (c) — the column comment cell becomes editable only where the
+  // adapter emits COMMENT ON COLUMN (PG + Oracle). MySQL/MSSQL run ALTER TABLE
+  // but defer comment emit (S6/S7), so gating on `canAlterTable` alone would
+  // surface a broken edit; the finer `editColumnComment` flag keeps the cell
+  // read-only there.
+  const canEditColumnComment = supportsDdl(dbType, "editColumnComment");
   // Clamp a sub-tab that the capability gate hides (e.g. a persisted
   // `initialSubTab="indexes"` on DuckDB) back to Columns so the render
   // branches AND the fetch effect never target a gated tab.
@@ -320,6 +326,7 @@ export default function StructurePanel({
             onRefresh={fetchData}
             paradigm={paradigm}
             canAlterTable={canAlterTable}
+            canEditColumnComment={canEditColumnComment}
           />
         )}
       {!loading &&

@@ -55,4 +55,23 @@ describe("supportsDdl (#1460)", () => {
       expect(supportsDdl(undefined, action)).toBe(true);
     }
   });
+
+  // Issue #1735 (c) — column comment edit is emit-wired only for PostgreSQL +
+  // Oracle (shared ANSI COMMENT ON COLUMN). MySQL/MariaDB (S6) and MSSQL (S7)
+  // run structural ALTER TABLE but do NOT emit comment changes yet, so the
+  // finer-grained `editColumnComment` flag gates the comment-edit affordance
+  // separately from `alterTable`. (2026-07-25)
+  it("claims editColumnComment only for PostgreSQL and Oracle", () => {
+    expect(supportsDdl("postgresql", "editColumnComment")).toBe(true);
+    expect(supportsDdl("oracle", "editColumnComment")).toBe(true);
+    for (const dbType of [
+      "mysql",
+      "mariadb",
+      "mssql",
+      "sqlite",
+      "duckdb",
+    ] as const) {
+      expect(supportsDdl(dbType, "editColumnComment")).toBe(false);
+    }
+  });
 });

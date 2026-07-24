@@ -109,7 +109,7 @@ impl OracleAdapter {
         let qualified = qualified_table(&req.schema, &req.table);
         let mut statements = Vec::with_capacity(req.changes.len());
         for change in &req.changes {
-            statements.push(build_alter_table_statement(&qualified, change)?);
+            statements.extend(build_alter_table_statements(&qualified, change)?);
         }
 
         self.preview_or_execute(req.preview_only, statements, "alter table")
@@ -345,7 +345,15 @@ impl OracleAdapter {
     }
 }
 
-fn build_alter_table_statement(qualified: &str, change: &ColumnChange) -> Result<String, AppError> {
+/// #1735 (c) — a single `ColumnChange` may map to more than one Oracle
+/// statement: a Modify carrying `new_comment` emits its structural
+/// `ALTER TABLE … MODIFY (…)` (if any) plus a separate `COMMENT ON COLUMN …`
+/// (Oracle shares the ANSI `COMMENT ON COLUMN` syntax with PG). Returns the
+/// statements in emission order.
+fn build_alter_table_statements(
+    qualified: &str,
+    change: &ColumnChange,
+) -> Result<Vec<String>, AppError> {
     match change {
         ColumnChange::Add {
             name,
@@ -361,11 +369,11 @@ fn build_alter_table_statement(qualified: &str, change: &ColumnChange) -> Result
                 comment: None,
                 is_identity: false,
             };
-            Ok(format!(
+            Ok(vec![format!(
                 "ALTER TABLE {} ADD ({})",
                 qualified,
                 build_column_definition(&column)?
-            ))
+            )])
         }
         ColumnChange::Modify {
             name,
@@ -373,6 +381,7 @@ fn build_alter_table_statement(qualified: &str, change: &ColumnChange) -> Result
             new_nullable,
             new_default_value,
             using_expression,
+            new_comment,
         } => {
             validate_identifier(name, "Column name")?;
             if using_expression.is_some() {
@@ -401,29 +410,65 @@ fn build_alter_table_statement(qualified: &str, change: &ColumnChange) -> Result
             if let Some(nullable) = new_nullable {
                 clauses.push(if *nullable { "NULL" } else { "NOT NULL" }.to_string());
             }
-            if clauses.is_empty() {
+
+            let comment_stmt =
+                build_column_comment_statement(qualified, name, new_comment.as_deref());
+
+            // Neither a structural change nor a comment → nothing to emit.
+            if clauses.is_empty() && comment_stmt.is_none() {
                 return Err(AppError::Validation(format!(
-                    "Oracle MODIFY requires a data type, default, or nullability change for '{}'",
+                    "Oracle MODIFY requires a data type, default, nullability, or comment change for '{}'",
                     name
                 )));
             }
 
-            Ok(format!(
-                "ALTER TABLE {} MODIFY ({} {})",
-                qualified,
-                quote_ident(name),
-                clauses.join(" ")
-            ))
+            let mut statements = Vec::new();
+            if !clauses.is_empty() {
+                statements.push(format!(
+                    "ALTER TABLE {} MODIFY ({} {})",
+                    qualified,
+                    quote_ident(name),
+                    clauses.join(" ")
+                ));
+            }
+            if let Some(stmt) = comment_stmt {
+                statements.push(stmt);
+            }
+            Ok(statements)
         }
         ColumnChange::Drop { name } => {
             validate_identifier(name, "Column name")?;
-            Ok(format!(
+            Ok(vec![format!(
                 "ALTER TABLE {} DROP COLUMN {}",
                 qualified,
                 quote_ident(name)
-            ))
+            )])
         }
     }
+}
+
+/// #1735 (c) — build a `COMMENT ON COLUMN <qualified>.<col> IS …` statement.
+/// `None` → no statement (comment unchanged). `Some(non-empty after trim)` →
+/// `IS '<escaped>'` (single quotes doubled — injection-safe). `Some("")`
+/// (explicit clear) → `IS NULL`.
+fn build_column_comment_statement(
+    qualified: &str,
+    name: &str,
+    new_comment: Option<&str>,
+) -> Option<String> {
+    let raw = new_comment?;
+    let trimmed = raw.trim();
+    let value = if trimmed.is_empty() {
+        "NULL".to_string()
+    } else {
+        format!("'{}'", trimmed.replace('\'', "''"))
+    };
+    Some(format!(
+        "COMMENT ON COLUMN {}.{} IS {}",
+        qualified,
+        quote_ident(name),
+        value
+    ))
 }
 
 fn build_column_definition(column: &ColumnDefinition) -> Result<String, AppError> {

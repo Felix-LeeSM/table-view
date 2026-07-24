@@ -475,6 +475,10 @@ impl MysqlAdapter {
                     new_nullable,
                     new_default_value,
                     using_expression: _,
+                    // #1735 (c) — MySQL column-comment emit is deferred (S6:
+                    // MODIFY COLUMN full-redefinition). Gated off in the UI via
+                    // `ddl.editColumnComment`, so no comment reaches here.
+                    new_comment: _,
                 } => {
                     // MySQL 의 modify column 은 PG 처럼 type/nullable/default
                     // 를 분리 절로 못 보낸다 — 전체 column 정의를 다시 쓰는
@@ -1052,6 +1056,7 @@ mod tests {
                 new_nullable: Some(true),
                 new_default_value: None,
                 using_expression: None,
+                new_comment: None,
             }],
             preview_only: true,
             expected_database: None,
@@ -1073,6 +1078,7 @@ mod tests {
                 new_nullable: Some(false),
                 new_default_value: Some("0".into()),
                 using_expression: None,
+                new_comment: None,
             }],
             preview_only: true,
             expected_database: None,

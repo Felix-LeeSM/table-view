@@ -739,3 +739,76 @@ describe("ColumnsEditor — Sprint 237 USING + null-rows probe", () => {
     vi.useRealTimers();
   });
 });
+
+// Purpose: #1735 (c) — column comment edit is exposed ONLY where the engine
+// emits COMMENT ON COLUMN (PG/Oracle → `canEditColumnComment`), and the edited
+// value forwards through the `alter_table` payload as `new_comment`. MySQL/
+// MSSQL keep the comment cell read-only even in edit mode (2026-07-25).
+describe("ColumnsEditor — #1735 (c) column comment edit", () => {
+  beforeEach(() => {
+    setProductionConnection();
+  });
+
+  // Reason: #1735 (c) — with the capability on, entering edit mode surfaces the
+  // comment input and Save forwards the typed value as `new_comment` in the
+  // alterTable preview payload (2026-07-25).
+  it("edits the comment cell and forwards new_comment when canEditColumnComment", async () => {
+    render(
+      <ColumnsEditor
+        connectionId="conn-1"
+        table="users"
+        schema="public"
+        columns={[SAMPLE_COLUMN]}
+        onRefresh={vi.fn().mockResolvedValue(undefined)}
+        canEditColumnComment
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Edit column email/i }));
+    fireEvent.change(screen.getByLabelText("Comment for email"), {
+      target: { value: "primary contact" },
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: /Save changes for email/i }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Review SQL \(1\)/i }));
+
+    await waitFor(() => {
+      expect(vi.mocked(tauri.alterTable)).toHaveBeenCalled();
+    });
+    const previewCall = vi
+      .mocked(tauri.alterTable)
+      .mock.calls.find(
+        (c) => (c[0] as { preview_only: boolean }).preview_only === true,
+      );
+    expect(previewCall).toBeDefined();
+    const req = previewCall![0] as {
+      changes: Array<{ type: string; new_comment?: string | null }>;
+    };
+    expect(req.changes).toHaveLength(1);
+    expect(req.changes[0]!.type).toBe("modify");
+    expect(req.changes[0]!.new_comment).toBe("primary contact");
+  });
+
+  // Reason: #1735 (c) — an engine that defers comment emit (MySQL/MSSQL,
+  // `canEditColumnComment={false}`) must keep the comment cell read-only: no
+  // comment input appears in edit mode, so no broken edit is surfaced (2026-07-25).
+  it("keeps the comment cell read-only when canEditColumnComment is false", () => {
+    render(
+      <ColumnsEditor
+        connectionId="conn-1"
+        table="users"
+        schema="public"
+        columns={[SAMPLE_COLUMN]}
+        onRefresh={vi.fn().mockResolvedValue(undefined)}
+        canEditColumnComment={false}
+      />,
+    );
+    // Row still enters edit mode (canAlterTable defaults true) …
+    fireEvent.click(screen.getByRole("button", { name: /Edit column email/i }));
+    expect(screen.getByLabelText("Data type for email")).toBeInTheDocument();
+    // … but the comment cell has no input.
+    expect(
+      screen.queryByLabelText("Comment for email"),
+    ).not.toBeInTheDocument();
+  });
+});
