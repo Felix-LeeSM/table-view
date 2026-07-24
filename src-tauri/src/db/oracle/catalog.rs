@@ -8,7 +8,8 @@ use oracle_rs::{Connection as OracleConnection, Value};
 
 use crate::error::AppError;
 use crate::models::{
-    ColumnInfo, ConstraintInfo, FunctionInfo, IndexInfo, SchemaInfo, TableInfo, ViewInfo,
+    ColumnInfo, ConstraintInfo, FunctionInfo, IndexInfo, SchemaInfo, TableInfo, TriggerInfo,
+    ViewInfo,
 };
 
 use self::decode::{
@@ -18,10 +19,11 @@ use self::decode::{
 use self::queries::*;
 use self::shape::{
     build_constraints, build_functions, build_indexes, build_object_columns, build_schema_columns,
-    build_sequences, build_synonyms, build_tables, build_views, OracleColumnCatalogRow,
-    OracleConstraintCatalogRow, OracleIndexCatalogRow, OracleRoutineCatalogRow,
-    OracleRoutineParamCatalogRow, OracleSchemaColumnCatalogRow, OracleSequenceCatalogRow,
-    OracleSynonymCatalogRow, OracleTableCatalogRow, OracleViewCatalogRow,
+    build_sequences, build_synonyms, build_tables, build_triggers, build_views,
+    OracleColumnCatalogRow, OracleConstraintCatalogRow, OracleIndexCatalogRow,
+    OracleRoutineCatalogRow, OracleRoutineParamCatalogRow, OracleSchemaColumnCatalogRow,
+    OracleSequenceCatalogRow, OracleSynonymCatalogRow, OracleTableCatalogRow,
+    OracleTriggerCatalogRow, OracleViewCatalogRow,
 };
 use super::{map_oracle_connection_error, OracleAdapter};
 
@@ -430,6 +432,32 @@ impl OracleAdapter {
             source.push_str(&row_string(&row, 0, "routine source line")?);
         }
         Ok(source)
+    }
+
+    // #1072 (2차) — trigger list for one table, sourced from `all_triggers` like
+    // the sibling `list_views` / `list_functions` catalog reads.
+    pub async fn list_triggers(
+        &self,
+        schema: &str,
+        table: &str,
+    ) -> Result<Vec<TriggerInfo>, AppError> {
+        let params = owner_object_params(schema, table);
+        let rows = self
+            .query_catalog_rows("Oracle trigger catalog query failed", TRIGGERS_SQL, &params)
+            .await?;
+        let catalog_rows = rows
+            .into_iter()
+            .map(|row| {
+                Ok(OracleTriggerCatalogRow {
+                    name: row_string(&row, 0, "trigger name")?,
+                    trigger_type: row_string(&row, 1, "trigger type")?,
+                    triggering_event: row_string(&row, 2, "triggering event")?,
+                    when_clause: row_optional_string(&row, 3, "trigger when clause")?,
+                    status: row_string(&row, 4, "trigger status")?,
+                })
+            })
+            .collect::<Result<Vec<_>, AppError>>()?;
+        Ok(build_triggers(schema, table, catalog_rows))
     }
 
     async fn open_catalog_connection(&self) -> Result<OracleConnection, AppError> {
