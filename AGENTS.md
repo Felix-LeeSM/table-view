@@ -15,6 +15,7 @@ Claude Code / Codex / Cursor 모두 본 파일 1번 read. 본문 lazy, 작업 �
 | PR review              | `memory/workflow/review/memory.md` → `pr-review` skill |
 | 문서화 / PR body       | `memory/workflow/documentation/memory.md`              |
 | git / PR / push reject | `memory/workflow/git-policy/memory.md`                 |
+| PR merge 막힘 / BLOCKED | `memory/runbook/pr-merge-gates/memory.md` (required CI green·review-gate·ruleset 게이트 진단) |
 | hook 설계 / lefthook   | `memory/workflow/hooks/memory.md` (git/verification hook taxonomy) |
 | worktree               | `memory/runbook/worktree/memory.md`                    |
 
