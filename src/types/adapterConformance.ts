@@ -120,6 +120,11 @@ export const CONFORMANCE_CHECKS = Object.freeze([
   check("ddl.alterTable", "ddl", "Alter-table DDL claim is enabled."),
   check("ddl.createIndex", "ddl", "Create-index DDL claim is enabled."),
   check("ddl.dropObject", "ddl", "Drop-object DDL claim is enabled."),
+  check(
+    "ddl.alterConstraint",
+    "ddl",
+    "Add/drop-constraint DDL claim is enabled.",
+  ),
   check("safety.policy", "safety", "Safety policy is declared."),
 ] as const satisfies readonly ConformanceCheck[]);
 

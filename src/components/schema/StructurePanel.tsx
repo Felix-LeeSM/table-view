@@ -121,6 +121,11 @@ export default function StructurePanel({
   const canAlterTable = supportsDdl(dbType, "alterTable");
   const canCreateIndex = supportsDdl(dbType, "createIndex");
   const canDropObject = supportsDdl(dbType, "dropObject");
+  // Issue #1070 (ADR 0051 Stage 2) — constraint add/drop is a separate gate
+  // from column-alter: DuckDB does native column ALTER but cannot add/drop
+  // constraints (Stage 2b), so the Constraints editor reads `alterConstraint`,
+  // not `alterTable`.
+  const canAlterConstraint = supportsDdl(dbType, "alterConstraint");
   // Clamp a sub-tab that the capability gate hides (e.g. a persisted
   // `initialSubTab="indexes"` on DuckDB) back to Columns so the render
   // branches AND the fetch effect never target a gated tab.
@@ -352,7 +357,7 @@ export default function StructurePanel({
             columns={columns}
             onColumnsChange={setColumns}
             onRefresh={fetchData}
-            canAlterTable={canAlterTable}
+            canAlterConstraint={canAlterConstraint}
           />
         )}
 

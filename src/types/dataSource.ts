@@ -128,6 +128,18 @@ export interface DataSourceCapabilities {
     readonly alterTable: boolean;
     readonly createIndex: boolean;
     readonly dropObject: boolean;
+    /**
+     * Issue #1070 (ADR 0051 Stage 2) — split out of `alterTable`: whether the
+     * adapter can run `ALTER TABLE ADD/DROP CONSTRAINT`. Column-alter (add/drop/
+     * type) and constraint-alter are both ALTER TABLE, but an engine can support
+     * one without the other — DuckDB does native column ALTER but cannot
+     * add/drop constraints (needs Stage 2b rebuild-swap). Gates ONLY the
+     * Constraints-editor add/drop controls; column editor + schema-tree rename
+     * stay on `alterTable`. Full-DDL engines (PG/MySQL/MSSQL/Oracle) set both;
+     * SQLite/DuckDB keep this false so the constraint controls stay hidden
+     * (#1046 disable-at-source) instead of click-then-error.
+     */
+    readonly alterConstraint: boolean;
   };
   readonly intelligence: {
     readonly erd: boolean;
@@ -211,6 +223,7 @@ export function createEmptyDataSourceCapabilities(): DataSourceCapabilities {
       alterTable: false,
       createIndex: false,
       dropObject: false,
+      alterConstraint: false,
     },
     intelligence: {
       erd: false,
@@ -289,6 +302,7 @@ export const ORACLE_CAPABILITIES = capabilities({
     alterTable: true,
     createIndex: true,
     dropObject: true,
+    alterConstraint: true,
   },
   intelligence: {
     erd: true,
@@ -338,6 +352,7 @@ export const POSTGRESQL_CAPABILITIES = capabilities({
     alterTable: true,
     createIndex: true,
     dropObject: true,
+    alterConstraint: true,
   },
   intelligence: {
     erd: true,
@@ -380,6 +395,7 @@ export const MYSQL_FAMILY_CAPABILITIES = capabilities({
     alterTable: true,
     createIndex: true,
     dropObject: true,
+    alterConstraint: true,
   },
   intelligence: {
     erd: true,
@@ -470,9 +486,20 @@ export const DUCKDB_CAPABILITIES = capabilities({
     // read-only connection). `requiresPrimaryKeyForEdit` stays at the base
     // (false): DuckDB rides the all-column WHERE fallback like PG/MySQL and
     // relies on the backend single-row guard, so PK-less analytical tables stay
-    // editable. Structural DDL is Stage 2 (#1070), so the `ddl.*` group stays
-    // unset here.
+    // editable.
     editRows: true,
+  },
+  // Issue #1070 (ADR 0051 Stage 2) — the wired DuckdbAdapter now runs native
+  // structural DDL (`duckdb/ddl.rs`): table create/drop/rename, column
+  // add/drop/type, index create/drop. `alterConstraint` stays false (base) —
+  // DuckDB `ALTER TABLE` cannot add/drop constraints, so the Constraints-editor
+  // add/drop controls stay hidden pending Stage 2b rebuild-swap (the read-only
+  // constraint list still shows via `catalog.constraints`).
+  ddl: {
+    createTable: true,
+    alterTable: true,
+    createIndex: true,
+    dropObject: true,
   },
 });
 
@@ -503,6 +530,7 @@ export const MSSQL_CAPABILITIES = capabilities({
     alterTable: true,
     createIndex: true,
     dropObject: true,
+    alterConstraint: true,
   },
   intelligence: {
     erd: true,

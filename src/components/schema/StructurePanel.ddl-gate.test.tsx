@@ -8,7 +8,9 @@
 //     still render (browse stays).
 //   - PostgreSQL (all DDL true) — both editors keep their mutation controls
 //     (regression guard).
-//   - DuckDB (no DDL) — `+ Column` hidden.
+//   - DuckDB (#1070 ADR 0051 Stage 2 — native structural DDL) — `+ Column` +
+//     `Create index` show, but `Add constraint` stays hidden (`alterConstraint`
+//     false: DuckDB ALTER TABLE cannot add/drop constraints — Stage 2b).
 //   - Unknown / still-loading connection — controls stay (affordance-preserving
 //     fallback, same as `supportsRowEditing`).
 import { describe, it, expect, beforeEach } from "vitest";
@@ -76,14 +78,44 @@ describe("StructurePanel DDL capability gate (#1460)", () => {
     ).toBeInTheDocument();
   });
 
-  it("hides Add Column for DuckDB (no DDL)", async () => {
+  it("shows Add Column for DuckDB (#1070 Stage 2 native column ALTER)", async () => {
     setConnection("duckdb");
     await act(async () => {
       renderPanel();
     });
     expect(
-      screen.queryByRole("button", { name: "Add column" }),
+      screen.getByRole("button", { name: "Add column" }),
+    ).toBeInTheDocument();
+  });
+
+  it("shows Create Index for DuckDB (#1070 Stage 2 native index DDL)", async () => {
+    setConnection("duckdb");
+    await act(async () => {
+      renderPanel({ initialSubTab: "indexes" });
+    });
+    expect(
+      screen.getByRole("button", { name: "Create index" }),
+    ).toBeInTheDocument();
+  });
+
+  it("hides Add Constraint for DuckDB (alterConstraint false, Stage 2b)", async () => {
+    setConnection("duckdb");
+    await act(async () => {
+      renderPanel({ initialSubTab: "constraints" });
+    });
+    expect(
+      screen.queryByRole("button", { name: "Add constraint" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("keeps Add Constraint for PostgreSQL (regression guard)", async () => {
+    setConnection("postgresql");
+    await act(async () => {
+      renderPanel({ initialSubTab: "constraints" });
+    });
+    expect(
+      screen.getByRole("button", { name: "Add constraint" }),
+    ).toBeInTheDocument();
   });
 
   it("keeps Add Column while the connection is unknown / still loading", async () => {

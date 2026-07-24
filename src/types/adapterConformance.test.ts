@@ -301,6 +301,7 @@ describe("adapter conformance matrix", () => {
       "ddl.alterTable",
       "ddl.createIndex",
       "ddl.dropObject",
+      "ddl.alterConstraint",
     ]);
     expect(mssql.areas.connection.unsupported).toEqual([
       "connection.switchDatabase",
@@ -337,6 +338,7 @@ describe("adapter conformance matrix", () => {
       "ddl.alterTable",
       "ddl.createIndex",
       "ddl.dropObject",
+      "ddl.alterConstraint",
     ]);
     expect(oracle.areas.connection.deferred).toEqual([]);
     expect(oracle.areas.connection.unsupported).toEqual([

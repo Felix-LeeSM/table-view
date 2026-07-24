@@ -285,14 +285,16 @@ describe("ConstraintsEditor — Sprint 187 Safe Mode gate", () => {
 // its adapter returns Unsupported for ALTER TABLE ADD/DROP CONSTRAINT, so both
 // the Add Constraint button and the per-row drop-constraint trash must be
 // hidden (disable-at-source, #1046) instead of click-then-error. Both are
-// ALTER TABLE forms, so a single `canAlterTable` gate covers them. (2026-07-17)
-describe("ConstraintsEditor — #1618 D1 alterTable gate", () => {
+// constraint-ALTER forms, so a single `canAlterConstraint` gate covers them.
+// #1070 (ADR 0051 Stage 2) split this out of `alterTable`: DuckDB does native
+// column ALTER but cannot add/drop constraints. (2026-07-25)
+describe("ConstraintsEditor — #1618 D1 / #1070 alterConstraint gate", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     useConnectionStore.setState({ connections: [] });
   });
 
-  function renderEditor(canAlterTable?: boolean) {
+  function renderEditor(canAlterConstraint?: boolean) {
     render(
       <ConstraintsEditor
         connectionId="conn-1"
@@ -303,7 +305,7 @@ describe("ConstraintsEditor — #1618 D1 alterTable gate", () => {
         columns={[]}
         onColumnsChange={vi.fn()}
         onRefresh={vi.fn().mockResolvedValue(undefined)}
-        {...(canAlterTable === undefined ? {} : { canAlterTable })}
+        {...(canAlterConstraint === undefined ? {} : { canAlterConstraint })}
       />,
     );
   }
@@ -324,7 +326,7 @@ describe("ConstraintsEditor — #1618 D1 alterTable gate", () => {
 
   // Reason: an adapter that cannot run ALTER TABLE ADD/DROP CONSTRAINT (DuckDB)
   // must not surface the click-then-error controls. (2026-07-17)
-  it("hides Add Constraint + drop-constraint controls when canAlterTable is false", () => {
+  it("hides Add Constraint + drop-constraint controls when canAlterConstraint is false", () => {
     renderEditor(false);
     expect(
       screen.queryByRole("button", { name: "Add constraint" }),
