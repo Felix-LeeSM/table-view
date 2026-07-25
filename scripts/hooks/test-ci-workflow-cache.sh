@@ -71,17 +71,26 @@ extract_trigger_block() {
 
 pull_request_trigger_block="$(extract_trigger_block "$workflow_text" "pull_request")"
 changes_block="$(sed -n '/^  changes:/,/^  pr-body:/p' <<<"$workflow_text" | sed '$d')"
-frontend_block="$(sed -n '/^  frontend:/,/^  rust:/p' <<<"$workflow_text" | sed '$d')"
-dependency_security_block="$(sed -n '/^  dependency-security:/,/^  frontend:/p' <<<"$workflow_text" | sed '$d')"
+# 2026-07-25 — `Frontend Checks` and `Integration Tests (Docker)` became
+# AGGREGATION jobs over the `frontend-shard` / `integration-shard` matrices.
+# The heavy work (vitest, instrumented nextest) moved into the shards; the
+# aggregations merge the shards' coverage and own the thresholds. Extraction
+# ranges below follow that split — note `/^  frontend:/` does not match
+# `  frontend-shard:`, so the two blocks stay disjoint.
+frontend_shard_block="$(sed -n '/^  frontend-shard:/,/^  frontend:/p' <<<"$workflow_text" | sed '$d')"
+frontend_block="$(sed -n '/^  frontend:/,/^  frontend-advisory:/p' <<<"$workflow_text" | sed '$d')"
+dependency_security_block="$(sed -n '/^  dependency-security:/,/^  frontend-shard:/p' <<<"$workflow_text" | sed '$d')"
 # rust job only (up to rust-static:), so the sql-parser-core cache assertions
 # below target the Rust Unit And Storage Tests job, not the rust-static job.
 rust_block="$(sed -n '/^  rust:/,/^  rust-static:/p' <<<"$workflow_text" | sed '$d')"
+integration_shard_block="$(sed -n '/^  integration-shard:/,/^  integration-tests:/p' <<<"$workflow_text" | sed '$d')"
 integration_block="$(sed -n '/^  integration-tests:/,/^  # Runtime E2E smoke/p' <<<"$workflow_text" | sed '$d')"
-pr_body_block="$(sed -n '/^  pr-body:/,/^  frontend:/p' <<<"$workflow_text" | sed '$d')"
+pr_body_block="$(sed -n '/^  pr-body:/,/^  frontend-shard:/p' <<<"$workflow_text" | sed '$d')"
 pr_body_only_block="$(sed -n '/^  pr-body:/,/^  doc-size:/p' <<<"$workflow_text" | sed '$d')"
-integration_disk_telemetry_step="$(extract_step_block "$integration_block" "Show disk usage before integration build")"
-integration_disk_cleanup_step="$(extract_step_block "$integration_block" "Free disk headroom before integration build")"
-integration_run_step="$(extract_step_block "$integration_block" "Run integration coverage")"
+integration_disk_telemetry_step="$(extract_step_block "$integration_shard_block" "Show disk usage before integration build")"
+integration_disk_cleanup_step="$(extract_step_block "$integration_shard_block" "Free disk headroom before integration build")"
+integration_run_step="$(extract_step_block "$integration_shard_block" "Run instrumented tests (\${{ matrix.shard.key }})")"
+integration_merge_step="$(extract_step_block "$integration_block" "Merge shard coverage and enforce thresholds")"
 
 if [ -z "$pr_body_block" ]; then
 	echo "FAIL: PR body job is missing from $WORKFLOW" >&2
@@ -118,7 +127,23 @@ assert_contains "$frontend_block" "run: git fetch --no-tags --prune --depth=1 or
 assert_contains "$frontend_block" "COVERAGE_RATCHET_REQUIRE_MAIN: \"1\"" "frontend coverage ratchet require main"
 assert_contains "$frontend_block" "run: pnpm exec tsx scripts/check-coverage-ratchet.ts" "frontend coverage ratchet"
 assert_order "$frontend_block" "- name: Fetch coverage ratchet base" "- name: Coverage ratchet" "frontend coverage ratchet base fetch order"
-assert_contains "$frontend_block" "run: pnpm test -- --run --coverage --coverage.reporter=text-summary" "frontend coverage gate"
+# The vitest suite runs in the `frontend-shard` matrix and `Frontend Checks`
+# merges the blobs. The gate is NOT weakened by the split, and these assertions
+# are what keeps that true: shards must zero the thresholds (a 1/3 slice cannot
+# clear an 85% global floor) and the merge must NOT — it re-applies the real
+# vite.config.ts floors over the union. Space-separated `--coverage.thresholds.*`
+# is required; vitest 4.1.3 silently ignores the `=` form.
+assert_contains "$frontend_shard_block" "name: Frontend Tests (shard \${{ matrix.shard }}/3)" "frontend shard job"
+assert_contains "$frontend_shard_block" "--shard=\${{ matrix.shard }}/3" "frontend shard partitioning"
+assert_contains "$frontend_shard_block" "--reporter=blob" "frontend shard blob report"
+assert_contains "$frontend_shard_block" "--coverage.thresholds.lines 0" "frontend shard defers thresholds to the merge"
+assert_contains "$frontend_shard_block" "uses: actions/upload-artifact@v4" "frontend shard blob upload"
+assert_contains "$frontend_shard_block" "if-no-files-found: error" "frontend shard blob upload fails loudly"
+assert_contains "$frontend_block" "pnpm exec vitest --mergeReports=.vitest-reports" "frontend coverage gate"
+assert_not_contains "$frontend_block" "--coverage.thresholds" "frontend merge must enforce the real thresholds"
+assert_contains "$frontend_block" "- name: Require test matrix success" "frontend aggregation grades the matrix"
+assert_contains "$frontend_block" "- frontend-shard" "frontend aggregation depends on the shards"
+assert_order "$frontend_block" "- name: Require test matrix success" "- name: Checkout" "frontend grades the matrix before any setup"
 assert_contains "$dependency_security_block" "name: Dependency Security" "dependency security job"
 assert_contains "$dependency_security_block" "timeout-minutes: 20" "dependency security job"
 assert_contains "$dependency_security_block" "CARGO_DENY_VERSION: \"0.19.9\"" "dependency security job"
@@ -144,38 +169,63 @@ assert_contains "$rust_block" "src-tauri -> target" "rust cache src-tauri worksp
 assert_contains "$rust_block" "src-tauri/sql-parser-core -> target" "rust cache sql-parser-core workspace"
 assert_contains "$rust_block" "cache-bin: false" "rust cache"
 assert_contains "$rust_block" "save-if: \${{ github.ref == 'refs/heads/main' }}" "rust cache"
-assert_contains "$integration_block" "workspaces: src-tauri -> target" "integration rust cache"
-assert_contains "$integration_block" "cache-bin: false" "integration rust cache"
-assert_contains "$integration_block" "save-if: \${{ github.ref == 'refs/heads/main' }}" "integration rust cache"
-assert_order "$integration_block" "- name: Show disk usage before integration build" "- name: Free disk headroom before integration build" "integration disk cleanup after telemetry"
-assert_order "$integration_block" "- name: Free disk headroom before integration build" "- name: Cache Rust artifacts" "integration disk cleanup before cache restore"
-assert_order "$integration_block" "- name: Cache Rust artifacts" "- name: Run integration coverage" "integration rust cache before coverage run"
-assert_order "$integration_block" "- name: Free disk headroom before integration build" "- name: Run integration coverage" "integration disk cleanup before coverage run"
-assert_order "$integration_block" "- name: Free disk headroom before integration build" "cargo llvm-cov nextest --profile push" "integration disk cleanup before coverage command"
+for block_label in "integration-shard:$integration_shard_block" "integration-tests:$integration_block"; do
+	label="${block_label%%:*}"
+	block="${block_label#*:}"
+	assert_contains "$block" "workspaces: src-tauri -> target" "$label rust cache"
+	assert_contains "$block" "cache-bin: false" "$label rust cache"
+	assert_contains "$block" "save-if: \${{ github.ref == 'refs/heads/main' }}" "$label rust cache"
+	assert_contains "$block" "components: llvm-tools-preview" "$label llvm-tools component"
+	assert_contains "$block" "uses: taiki-e/install-action@v2" "$label coverage tool installer"
+	assert_contains "$block" "tool: cargo-llvm-cov@0.8.7,cargo-nextest@0.9.137" "$label coverage tool pins"
+done
+assert_order "$integration_shard_block" "- name: Show disk usage before integration build" "- name: Free disk headroom before integration build" "integration disk cleanup after telemetry"
+assert_order "$integration_shard_block" "- name: Free disk headroom before integration build" "- name: Cache Rust artifacts" "integration disk cleanup before cache restore"
+assert_order "$integration_shard_block" "- name: Cache Rust artifacts" "cargo llvm-cov nextest --profile push" "integration rust cache before coverage run"
 assert_contains "$integration_disk_telemetry_step" "df -h /" "integration disk telemetry step"
 assert_contains "$integration_disk_telemetry_step" "du -sh src-tauri/target" "integration disk telemetry step"
 assert_contains "$integration_disk_telemetry_step" "docker system df" "integration disk telemetry step"
 assert_contains "$integration_disk_cleanup_step" "sudo apt-get clean" "integration disk cleanup step"
-assert_contains "$integration_disk_cleanup_step" "docker system prune -af" "integration disk cleanup step"
-assert_contains "$integration_disk_cleanup_step" "/usr/local/lib/android" "integration disk cleanup step"
-assert_contains "$integration_disk_cleanup_step" "/usr/share/dotnet" "integration disk cleanup step"
-assert_contains "$integration_disk_cleanup_step" "/opt/ghc" "integration disk cleanup step"
+# 2026-07-25 — the SDK deletions and `docker system prune -af` were removed:
+# the runner reports 86G free BEFORE any cleanup and the prune reclaimed
+# 1.765GB, so the step was spending 130s (13% of the job) to go from 86G to
+# 103G. The prune additionally evicted base images the testcontainers re-pull.
+# Guard against reintroduction, same as the no-op Vite cache above.
+assert_not_contains "$integration_disk_cleanup_step" "docker system prune -af" "integration disk prune removed (no-op, 1.765GB of 86G free)"
+assert_not_contains "$integration_disk_cleanup_step" "/usr/local/lib/android" "integration SDK deletion removed (no-op)"
+assert_not_contains "$integration_disk_cleanup_step" "/usr/share/dotnet" "integration SDK deletion removed (no-op)"
+assert_not_contains "$integration_disk_cleanup_step" "/opt/ghc" "integration SDK deletion removed (no-op)"
 # Rust integration coverage gate promoted from the pre-push rust route (audit
-# 2026-07-03 #6). The integration-tests job now owns the coverage floor: it
-# installs pinned cargo-llvm-cov + cargo-nextest with the llvm-tools component
-# and runs `cargo llvm-cov nextest --profile push` at the ratchet-locked
-# thresholds (lines 80 / functions 75 / regions 80). The extraction in
-# scripts/check-coverage-ratchet.ts reads these same flags from this workflow.
-assert_contains "$integration_block" "components: llvm-tools-preview" "integration llvm-tools component"
-assert_contains "$integration_block" "uses: taiki-e/install-action@v2" "integration coverage tool installer"
-assert_contains "$integration_block" "tool: cargo-llvm-cov@0.8.7,cargo-nextest@0.9.137" "integration coverage tool pins"
+# 2026-07-03 #6). Since 2026-07-25 the run is partitioned: `integration-shard`
+# executes the instrumented tests with `--no-report` (profraw only — one
+# shard's coverage means nothing alone), and `Integration Tests (Docker)`
+# merges every shard's profraw and applies the ratchet-locked thresholds
+# (lines 80 / functions 75 / regions 80). The extraction in
+# scripts/check-coverage-ratchet.ts reads those same flags from this workflow,
+# which is why the `cargo llvm-cov nextest --profile push` prefix and the
+# `--fail-under-*` flags must stay inside one command.
 assert_contains "$integration_run_step" "working-directory: src-tauri" "integration coverage cwd"
-assert_contains "$integration_run_step" "cargo llvm-cov nextest --profile push --lib" "integration coverage command"
-assert_contains "$integration_run_step" "--test redis_integration" "integration coverage keeps redis signal"
-assert_contains "$integration_run_step" "--test mssql_connection_routing" "integration coverage push-profile binary set"
-assert_contains "$integration_run_step" "--fail-under-lines 80" "integration coverage lines threshold"
-assert_contains "$integration_run_step" "--fail-under-functions 75" "integration coverage functions threshold"
-assert_contains "$integration_run_step" "--fail-under-regions 80" "integration coverage regions threshold"
+assert_contains "$integration_run_step" "cargo llvm-cov nextest --profile push --no-report" "integration shard defers the report to the merge"
+assert_contains "$integration_shard_block" "uses: actions/upload-artifact@v4" "integration shard profraw upload"
+assert_contains "$integration_shard_block" "if-no-files-found: error" "integration shard profraw upload fails loudly"
+# Every binary the pre-split single command ran must still be covered by SOME
+# shard — a target silently dropped from the matrix would lower the merged
+# total, not fail, so enumerate them.
+assert_contains "$integration_shard_block" "--lib" "integration matrix keeps lib tests"
+for target in storage_integration query_integration schema_integration \
+	value_search_integration fixture_loading mongo_integration mysql_integration \
+	duckdb_file_analytics mariadb_ddl_preview mssql_connection_routing \
+	mssql_integration oracle_integration redis_integration; do
+	assert_contains "$integration_shard_block" "--test $target" "integration matrix keeps $target"
+done
+assert_contains "$integration_block" "- name: Require integration matrix success" "integration aggregation grades the matrix"
+assert_contains "$integration_block" "- integration-shard" "integration aggregation depends on the shards"
+assert_order "$integration_block" "- name: Require integration matrix success" "- name: Checkout" "integration grades the matrix before any setup"
+assert_contains "$integration_merge_step" "working-directory: src-tauri" "integration merge cwd"
+assert_contains "$integration_merge_step" "cargo llvm-cov nextest --profile push --no-run" "integration merge rebuilds binaries without rerunning tests"
+assert_contains "$integration_merge_step" "--fail-under-lines 80" "integration coverage lines threshold"
+assert_contains "$integration_merge_step" "--fail-under-functions 75" "integration coverage functions threshold"
+assert_contains "$integration_merge_step" "--fail-under-regions 80" "integration coverage regions threshold"
 
 # docs/memory-only skip gate (audit 2026-07-03 #5). The `changes` job classifies
 # the change set; heavy jobs gate on it with a FAIL-CLOSED `if:` — skip only when
@@ -192,9 +242,16 @@ assert_contains "$changes_block" "fetch-depth: 0" "changes job needs full histor
 assert_contains "$changes_block" "code_changed: \${{ steps.detect.outputs.code_changed }}" "changes job output wiring"
 assert_contains "$changes_block" "run: bash scripts/hooks/detect-change-scope.sh" "changes job detection script"
 # Heavy jobs must gate on the change-detection output, fail-closed.
-assert_contains "$frontend_block" "needs: changes" "frontend needs changes"
+assert_contains "$frontend_block" "- changes" "frontend needs changes"
+# Every job in a shard→aggregation pair carries the fail-closed gate. If only
+# the aggregation had it, a docs-only run would skip the shards but still run
+# the aggregation, which would then fail on missing artifacts; if only the
+# shards had it, a broken detector could skip the shards while the aggregation
+# graded an empty matrix as success.
+assert_contains "$frontend_shard_block" "if: always() && (needs.changes.result != 'success' || needs.changes.outputs.code_changed == 'true')" "frontend-shard docs-only skip gate"
 assert_contains "$frontend_block" "if: always() && (needs.changes.result != 'success' || needs.changes.outputs.code_changed == 'true')" "frontend docs-only skip gate"
 assert_contains "$rust_block" "if: always() && (needs.changes.result != 'success' || needs.changes.outputs.code_changed == 'true')" "rust docs-only skip gate"
+assert_contains "$integration_shard_block" "if: always() && (needs.changes.result != 'success' || needs.changes.outputs.code_changed == 'true')" "integration-shard docs-only skip gate"
 assert_contains "$integration_block" "if: always() && (needs.changes.result != 'success' || needs.changes.outputs.code_changed == 'true')" "integration docs-only skip gate"
 assert_contains "$dependency_security_block" "if: always() && (needs.changes.result != 'success' || needs.changes.outputs.code_changed == 'true')" "dependency-security docs-only skip gate"
 # pr-body, doc-size, and frontend-advisory stay unconditional — cheap, and
