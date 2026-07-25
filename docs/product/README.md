@@ -390,8 +390,9 @@ parser/completion, fixture/live evidence, E2E smoke claim 을 만들지 않는�
   schema suggestions do not imply runtime permission for adapter-blocked
   extension, `COPY`, `ATTACH`/`DETACH`, capability-setting, or raw external-file
   statements.
-- Runtime/parser/completion/edit/fixture/e2e/support-claim gaps 를 lane 하나씩
-  닫는다.
+- Runtime/parser/completion/edit/fixture/e2e/support-claim gaps 는 lane 단위
+  깊이 우선순위를 따르되, 이는 권고이지 동시 진행 금지가 아니다 (ADR 0060).
+  새 `DatabaseType` 추가만 lane 통과를 기다린다.
 - PostgreSQL is the strongest active query/workbench parity lane. Its current routine
   desktop smoke proves the PostgreSQL connect -> browse/edit -> query journey,
   the Explain plan-inspection UI/source label, seeded `pgcrypto` and
