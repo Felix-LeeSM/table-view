@@ -83,8 +83,7 @@ export const en = {
   copy: "Copy",
 
   // SchemaErdPanel
-  erdNotAvailableTitle:
-    "ERD and dependency view are available for relational runtime adapters",
+  erdNotAvailableTitle: "ERD is available for relational runtime adapters",
   erdNotAvailableDesc:
     "Non-RDB connections and file analytics aliases do not expose this SchemaGraph surface.",
   schemaDiffHeading: "Schema diff",
@@ -296,8 +295,7 @@ export const ko = {
   copy: "복사",
 
   // SchemaErdPanel
-  erdNotAvailableTitle:
-    "ERD 및 의존성 뷰는 관계형 런타임 어댑터에서 사용 가능합니다",
+  erdNotAvailableTitle: "ERD는 관계형 런타임 어댑터에서 사용 가능합니다",
   erdNotAvailableDesc:
     "비RDB 연결 및 파일 분석 별칭은 SchemaGraph 화면을 제공하지 않습니다.",
   schemaDiffHeading: "스키마 비교",

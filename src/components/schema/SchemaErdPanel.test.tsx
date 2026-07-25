@@ -272,7 +272,7 @@ describe("SchemaErdPanel", () => {
     render(<SchemaErdPanel connectionId="conn1" database="app" />);
 
     expect(screen.getByRole("status")).toHaveTextContent(
-      /erd and dependency view are available for relational runtime adapters/i,
+      /erd is available for relational runtime adapters/i,
     );
     expect(screen.getByRole("status")).toHaveTextContent(
       /file analytics aliases do not expose this schemagraph surface/i,
