@@ -152,7 +152,7 @@
       "flakeRisk": "Existing Postgres runtime risk; isolated app data directory per spec and idempotent seed reduce cross-spec state bleed.",
       "cacheImpact": "Uses shared prepared Tauri binary and Rust target cache.",
       "failureArtifacts": "wdio report uploaded as e2e-smoke-artifacts-<spec_key>.",
-      "supportClaimImpact": "Runtime Happy Path evidence for the documented PostgreSQL slices only, including bounded table-plus-index Structure DDL, dense ERD render/search/selection/zoom/fit screenshot evidence, and the Safe Mode mode-dial matrix (toolbar toggle -> store -> gate -> dialog across strict/warn/off x prod/non-prod, issue #1124). ERD smoke does not claim FK row navigation, schema diff, migration impact, or data compare.",
+      "supportClaimImpact": "Runtime Happy Path evidence for the documented PostgreSQL slices only, including bounded table-plus-index Structure DDL, dense ERD canvas screenshot evidence (table nodes with columns, FK edges, zoom-scale change, fit-to-view; React Flow + elkjs foundation, issue #1655/ADR 0054), and the Safe Mode mode-dial matrix (toolbar toggle -> store -> gate -> dialog across strict/warn/off x prod/non-prod, issue #1124). ERD smoke does not claim ERD search/selection, FK row navigation, schema diff, migration impact, or data compare.",
       "action": "keep blocking E2E"
     },
     {
