@@ -1,0 +1,23 @@
+# H4 RDBMS Intelligence Smoke Matrix
+
+Smoke matrix band. Parent index:
+[`docs/contributor-guide/testing-and-quality.md`](../testing-and-quality.md).
+User-visible support boundaries live in
+[`docs/product/known-limitations.md`](../../product/known-limitations.md).
+
+This matrix is the H4 ERD/SchemaGraph gate. It separates current unit/component
+and dense screenshot smoke evidence so reusable graph claims do not imply
+data compare or migration/apply execution.
+
+| Claim / journey | Current evidence | Current gap / routing |
+|---|---|---|
+| Schema metadata cache owner | `src/stores/schemaStore.ts`, `src/stores/schemaStore.tableMetadataCache.test.ts`, `src/stores/schemaStore.clearForConnection.test.ts` | Current cache owner range is schemas/tables/views/functions/postgresExtensions/tableColumnsCache/tableIndexesCache/tableConstraintsCache/triggers. New catalog metadata must define cache ownership before UI claim promotion. |
+| Production ERD graph input | `src/components/schema/SchemaErdPanel.tsx`, `src/components/schema/SchemaErdPanel.test.tsx`, `src/lib/schemaGraphSnapshot.ts`, `src/lib/schemaGraphSnapshot.test.ts` | ERD uses schema/table/column cache plus cached/fetched explicit index/constraint metadata for visible tables. `ColumnInfo` PK/FK/CHECK metadata remains a synthetic fallback when explicit metadata is absent. |
+| Reusable SchemaGraph extraction and FK semantics | `src/lib/schemaGraph.ts`, `src/lib/schemaGraph.test.ts`, `src/lib/schemaGraphRelationships.ts`, `src/lib/schemaGraphRelationships.test.ts` | RDB catalog/FK semantics are current scope. Other paradigms may expose catalog graphs later, but must not pretend to be RDB schemas. |
+| ERD renderer local interactions | `src/components/schema/SchemaErdRenderer.test.tsx`, `src/components/schema/SchemaErdLayout.ts`, `e2e/smoke/erd-dense.spec.ts` | Table cards, FK edges, search, select, zoom, fit, focus, and highlight are local diagram interactions. The dense ERD smoke opens a seeded PostgreSQL graph on desktop and narrow viewports, asserts nodes/FK edges/search/selection/zoom/fit, and captures non-empty screenshot artifacts. |
+| Read-only dependency view | `src/components/schema/SchemaErdRenderer.test.tsx`, `src/components/schema/SchemaErdPanel.test.tsx` | Selected ERD tables show incoming/outgoing FK tables/columns, related indexes/constraints, CHECK expressions, and visible metadata/SchemaGraph diagnostics. Empty, diagnostic, and non-RDB unsupported states have focused component evidence. |
+| Migration impact summaries | `src/lib/schemaGraphSelectors.test.ts`, `src/components/structure/SqlPreviewDialog.test.tsx`, `src/components/schema/DropTableDialog.test.tsx`, `src/components/schema/DropColumnDialog.test.tsx`, `src/components/structure/IndexesEditor.test.tsx`, `src/components/structure/ConstraintsEditor.test.tsx` | Table, column, constraint, and index removal previews show cached SchemaGraph impact summaries for dependent tables/columns/indexes/constraints/FKs and metadata diagnostics. Current evidence is pure selector plus affected dialog/editor component coverage; no desktop smoke claim is made. |
+| Read-only schema diff | `src/lib/schemaGraphDiff.test.ts`, `src/components/schema/SchemaGraphDiffPanel.test.tsx`, `src/components/schema/SchemaErdPanel.test.tsx` | Same-source and cross-source cached RDBMS snapshots compare through SchemaGraph for table, column, index, constraint, and FK add/remove/change groups with stable ordering. The panel is read-only and does not claim migration/apply execution, data compare, import/export, admin, or DuckDB registered-file-alias support. |
+| FK row navigation boundary | `src/components/datagrid/DataGridTable.fk-navigation.test.tsx`, `src/components/datagrid/DataGridTable.parseFkReference.test.ts` | FK row navigation remains the DataGrid foreign-key cell/icon path. ERD interactions are not FK row navigation claims. |
+| Future data compare surfaces | `docs/ROADMAP.md`, `memory/engineering/architecture/data-source/memory.md` | Future data compare surfaces must reuse `SchemaGraph`/catalog input and avoid duplicate catalog parsing before support claims widen. |
+| Runtime E2E smoke inventory | This matrix, `scripts/e2e-smoke-ci.sh`, `.github/workflows/e2e-smoke.yml`, `e2e/fixtures/postgresql/query/seed.sql`, and `e2e/smoke/erd-dense.spec.ts` | The wired dense ERD smoke opens a seeded PostgreSQL schema, verifies table nodes, FK edges, search, selection, zoom, fit, desktop and narrow viewport behavior, metadata fetch stability, and non-empty screenshot artifacts. It does not claim FK row navigation through ERD, schema diff, migration impact, or data compare. |

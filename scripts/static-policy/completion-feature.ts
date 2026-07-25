@@ -1,9 +1,21 @@
 export const COMPLETION_FEATURE_PUBLIC_API_PATH =
   "src/features/completion/index.ts";
 
+// The smoke matrix bands carry the completion evidence rows that used to sit in
+// testing-and-quality.md. The parent page is now an index, so it must stay on
+// this list alongside every band file or the guard silently scans nothing.
 export const COMPLETION_FEATURE_REFERENCE_DOC_PATHS = [
   "docs/ROADMAP.md",
   "docs/contributor-guide/testing-and-quality.md",
+  "docs/contributor-guide/smoke-matrix/h1-data-source.md",
+  "docs/contributor-guide/smoke-matrix/h2-rdbms-parity.md",
+  "docs/contributor-guide/smoke-matrix/postgresql-query-workbench.md",
+  "docs/contributor-guide/smoke-matrix/sqlite-file-dbms.md",
+  "docs/contributor-guide/smoke-matrix/h3-duckdb-file-analytics.md",
+  "docs/contributor-guide/smoke-matrix/h4-rdbms-intelligence.md",
+  "docs/contributor-guide/smoke-matrix/h5-non-rdbms.md",
+  "docs/contributor-guide/smoke-matrix/h6-wider-source-candidates.md",
+  "docs/contributor-guide/smoke-matrix/h7-ops-security-reliability.md",
   "docs/archives/audits/refactor-02-frontend-compat-inventory-2026-06-10.md",
 ] as const;
 

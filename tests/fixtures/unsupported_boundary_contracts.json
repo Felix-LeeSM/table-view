@@ -26,7 +26,7 @@
           "mustContain": "Search live HTTP/admin promotion remains owned by the Search roadmap/milestone"
         },
         {
-          "path": "docs/contributor-guide/testing-and-quality.md",
+          "path": "docs/contributor-guide/smoke-matrix/h1-data-source.md",
           "mustContain": "Initial Search workbench load is index-catalog-first"
         }
       ],
