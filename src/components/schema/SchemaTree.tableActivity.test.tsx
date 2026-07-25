@@ -72,7 +72,11 @@ describe("SchemaTree — table activity wiring (#1218)", () => {
       db,
     );
     expect(recent.map((e) => e.table)).toContain("users");
-    // The Recent section renders the qualified label (with-schema default).
+    // #1738 — the Recent section is collapsed to 0 by default; expand it to
+    // assert the opened table surfaces there with its qualified label.
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("recent-tables-collapse"));
+    });
     expect(screen.getByText("public.users")).toBeInTheDocument();
   });
 
