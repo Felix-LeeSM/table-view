@@ -17,7 +17,9 @@ mod common;
 use table_view_lib::db::mssql::MssqlAdapter;
 use table_view_lib::db::{DuckdbAdapter, RdbAdapter};
 use table_view_lib::error::AppError;
-use table_view_lib::models::{ColumnDefinition, CreateTableRequest, DropTableRequest};
+use table_view_lib::models::{
+    AlterTableRequest, ColumnChange, ColumnDefinition, CreateTableRequest, DropTableRequest,
+};
 
 // SQL Server's namespace is the schema; the testcontainer connects to `master`
 // and everything lives under the default `dbo` schema.
@@ -334,4 +336,86 @@ async fn test_stream_table_rows_unsupported_for_duckdb() {
         .await
         .expect_err("duckdb stream must be unsupported");
     assert!(matches!(err, AppError::Unsupported(_)), "duckdb: {err:?}");
+}
+
+fn modify_default(column: &str, data_type: Option<&str>, default_value: &str) -> ColumnChange {
+    ColumnChange::Modify {
+        name: column.into(),
+        new_data_type: data_type.map(Into::into),
+        new_nullable: data_type.map(|_| false),
+        new_default_value: Some(default_value.into()),
+        using_expression: None,
+    }
+}
+
+fn alter_preview(changes: Vec<ColumnChange>) -> AlterTableRequest {
+    AlterTableRequest {
+        connection_id: "unused".into(),
+        schema: MSSQL_SCHEMA.into(),
+        table: "users".into(),
+        changes,
+        preview_only: true,
+        expected_database: None,
+    }
+}
+
+/// Issue #1071 — structural emit-order invariants for the column DEFAULT swap.
+/// Not docker-gated: `preview_only` never opens a connection, and the invariants
+/// are about statement ORDER and batch scoping, which the byte-exact golden in
+/// `src/db/mssql/ddl_tests.rs` cannot express once its expected string is
+/// itself the thing under review.
+///
+/// 1. `ALTER TABLE ... ALTER COLUMN` on a column that still owns a default
+///    definition is restricted to length/precision/scale edits, so a real type
+///    change behind a live default fails with Msg 5074 -> 4922 and rolls the
+///    whole `alter_table` transaction back. The DROP has to come first (the
+///    order SSMS generates too).
+/// 2. `preview_or_execute` joins the statement list with "; " and
+///    `SqlPreviewDialog` hands that exact string to Copy/history, so the preview
+///    must stay runnable as one T-SQL batch: two columns editing their DEFAULT
+///    cannot declare the same variable name twice (Msg 134).
+#[tokio::test]
+async fn test_mssql_default_swap_drops_before_alter_and_scopes_its_declare() {
+    let adapter = MssqlAdapter::new();
+
+    let sql = adapter
+        .alter_table(&alter_preview(vec![modify_default(
+            "status",
+            Some("NVARCHAR(32)"),
+            "N'active'",
+        )]))
+        .await
+        .expect("preview")
+        .sql;
+    let drop_at = sql
+        .find("DROP CONSTRAINT")
+        .expect("drop constraint emitted");
+    let alter_at = sql.find("ALTER COLUMN").expect("alter column emitted");
+    let rebind_at = sql.find("ADD DEFAULT").expect("default rebind emitted");
+    assert!(
+        drop_at < alter_at && alter_at < rebind_at,
+        "expected drop -> alter -> rebind order, got {sql:?}"
+    );
+
+    let batch = adapter
+        .alter_table(&alter_preview(vec![
+            modify_default("status", None, "N'active'"),
+            modify_default("tier", None, "N'free'"),
+        ]))
+        .await
+        .expect("preview")
+        .sql;
+    let declares: Vec<&str> = batch
+        .split("; ")
+        .filter(|statement| statement.starts_with("DECLARE "))
+        .collect();
+    assert_eq!(
+        declares.len(),
+        2,
+        "expected one DECLARE per column: {batch:?}"
+    );
+    assert_ne!(
+        declares[0], declares[1],
+        "joined preview batch redeclares the same variable (Msg 134): {batch:?}"
+    );
 }
