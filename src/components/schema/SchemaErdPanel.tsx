@@ -306,10 +306,7 @@ export default function SchemaErdPanel({
           <SchemaGraphDiffPanel diff={schemaDiff} />
         </div>
       ) : null}
-      <SchemaErdRenderer
-        graph={intelligence.graph}
-        intelligence={intelligence}
-      />
+      <SchemaErdRenderer graph={intelligence.graph} />
     </div>
   );
 }

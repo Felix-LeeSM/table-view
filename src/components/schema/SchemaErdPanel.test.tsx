@@ -1,19 +1,12 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { setupTauriMock } from "@/test-utils/tauriMock";
-import type { SchemaGraphIntelligenceSelectors } from "@/lib/schemaGraphSelectors";
 import type { SchemaGraph } from "@/types/schemaGraph";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useSchemaStore } from "@stores/schemaStore";
 
 vi.mock("./SchemaErdRenderer", () => ({
-  default: ({
-    graph,
-    intelligence,
-  }: {
-    graph: SchemaGraph;
-    intelligence?: SchemaGraphIntelligenceSelectors;
-  }) => (
+  default: ({ graph }: { graph: SchemaGraph }) => (
     <output aria-label="erd graph">
       {JSON.stringify({
         indexes: graph.nodes
@@ -22,13 +15,6 @@ vi.mock("./SchemaErdRenderer", () => ({
         constraints: graph.nodes
           .filter((node) => node.kind === "constraint")
           .map((node) => node.id),
-        metadata: [...(intelligence?.metadataReadinessByTableId.values() ?? [])]
-          .map((metadata) => ({
-            tableId: metadata.tableId,
-            status: metadata.status,
-            missing: metadata.missing,
-          }))
-          .sort((left, right) => left.tableId.localeCompare(right.tableId)),
       })}
     </output>
   ),
@@ -128,13 +114,6 @@ describe("SchemaErdPanel", () => {
     ]);
     expect(readGraphSummary().constraints).toEqual([
       "table:public.users.constraint:users_email_key",
-    ]);
-    expect(readGraphSummary().metadata).toEqual([
-      {
-        tableId: "table:public.users",
-        status: "ready",
-        missing: [],
-      },
     ]);
   });
 
@@ -238,13 +217,10 @@ describe("SchemaErdPanel", () => {
 
     render(<SchemaErdPanel connectionId="conn1" database="app" />);
 
-    expect(readGraphSummary().metadata).toEqual([
-      {
-        tableId: "table:public.users",
-        status: "partial",
-        missing: ["indexes", "constraints"],
-      },
-    ]);
+    // Precondition: the cached snapshot has columns only, so index/constraint
+    // metadata is still missing and must be hydrated lazily.
+    expect(readGraphSummary().indexes).toEqual([]);
+    expect(readGraphSummary().constraints).toEqual([]);
 
     await waitFor(() => {
       expect(tauri.getTableIndexes).toHaveBeenCalledTimes(1);
@@ -269,13 +245,6 @@ describe("SchemaErdPanel", () => {
       ]);
       expect(readGraphSummary().constraints).toEqual([
         "table:public.users.constraint:users_email_key",
-      ]);
-      expect(readGraphSummary().metadata).toEqual([
-        {
-          tableId: "table:public.users",
-          status: "ready",
-          missing: [],
-        },
       ]);
     });
   });
@@ -342,20 +311,10 @@ function idColumn() {
 function readGraphSummary(): {
   indexes: string[];
   constraints: string[];
-  metadata: {
-    tableId: string;
-    status: string;
-    missing: string[];
-  }[];
 } {
   const text = screen.getByLabelText("erd graph").textContent ?? "{}";
   return JSON.parse(text) as {
     indexes: string[];
     constraints: string[];
-    metadata: {
-      tableId: string;
-      status: string;
-      missing: string[];
-    }[];
   };
 }

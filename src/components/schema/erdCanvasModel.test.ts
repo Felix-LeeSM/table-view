@@ -45,6 +45,18 @@ describe("buildErdCanvasModel", () => {
     expect(model.edges).toEqual([]);
   });
 
+  // Reason: columns are grouped by the shared `schemaGraphTableId` encoding, so
+  // quoted identifiers containing the delimiter ("a"."b c" vs "a b"."c") cannot
+  // collide and leak each other's columns (#1655 review, 2026-07-25).
+  it("keeps columns apart for identifiers that share a naive schema/table join", () => {
+    const model = buildErdCanvasModel(extractSchemaGraph(ambiguousSnapshot()));
+
+    const first = model.nodes.find((node) => node.data.table.table === "b c");
+    const second = model.nodes.find((node) => node.data.table.schema === "a b");
+    expect(first?.data.columns.map((column) => column.column)).toEqual(["x"]);
+    expect(second?.data.columns.map((column) => column.column)).toEqual(["y"]);
+  });
+
   // Reason: an empty schema produces an empty model so the canvas can show its
   // "no tables to diagram" state instead of an empty React Flow (#1655).
   it("returns an empty model for an empty snapshot", () => {
@@ -88,6 +100,23 @@ function isolatedSnapshot(): SchemaGraphCatalogSnapshot {
     tablesBySchema: { main: [table("main", "events")] },
     columnsByTable: {
       main: { events: [column("id", { is_primary_key: true })] },
+    },
+    constraintsByTable: {},
+    indexesByTable: {},
+  };
+}
+
+function ambiguousSnapshot(): SchemaGraphCatalogSnapshot {
+  return {
+    source: { dbType: "postgresql", database: "app" },
+    schemas: [{ name: "a" }, { name: "a b" }],
+    tablesBySchema: {
+      a: [table("a", "b c")],
+      "a b": [table("a b", "c")],
+    },
+    columnsByTable: {
+      a: { "b c": [column("x")] },
+      "a b": { c: [column("y")] },
     },
     constraintsByTable: {},
     indexesByTable: {},

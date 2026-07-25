@@ -17,7 +17,6 @@ import {
 import "@xyflow/react/dist/style.css";
 import { Button } from "@components/ui/button";
 import type { SchemaGraph } from "@/types/schemaGraph";
-import type { SchemaGraphIntelligenceSelectors } from "@/lib/schemaGraphSelectors";
 import { buildErdCanvasModel, type ErdTableNodeData } from "./erdCanvasModel";
 import {
   ERD_NODE_WIDTH,
@@ -28,12 +27,11 @@ import {
 // #1655 — ERD canvas foundation (ADR 0054). Replaces the hand-rolled SVG
 // renderer with a React Flow canvas: read-only table nodes (columns listed),
 // FK edges, elkjs `layered` auto-placement, built-in zoom/pan + fit-to-view.
-// `intelligence` is still threaded from the panel for the follow-up ERD slices
-// (#1657+) but is not consumed by the read-only foundation.
+// The foundation reads only `SchemaGraph`; the follow-up ERD slices (#1657+)
+// add the selectors they actually consume when they land.
 
 interface SchemaErdRendererProps {
   graph: SchemaGraph;
-  intelligence?: SchemaGraphIntelligenceSelectors;
 }
 
 type ErdTableNode = Node<ErdTableNodeData, typeof ERD_TABLE_NODE_TYPE>;
