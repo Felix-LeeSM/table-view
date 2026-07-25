@@ -130,8 +130,7 @@ assert_order "$frontend_block" "- name: Fetch coverage ratchet base" "- name: Co
 # merges the blobs. The gate is NOT weakened by the split, and these assertions
 # are what keeps that true: shards must zero the thresholds (a 1/3 slice cannot
 # clear an 85% global floor) and the merge must NOT — it re-applies the real
-# vite.config.ts floors over the union. Space-separated `--coverage.thresholds.*`
-# is required; vitest 4.1.3 silently ignores the `=` form.
+# vite.config.ts floors over the union.
 assert_contains "$frontend_shard_block" "name: Frontend Tests (shard \${{ matrix.shard }}/3)" "frontend shard job"
 assert_contains "$frontend_shard_block" "--shard=\${{ matrix.shard }}/3" "frontend shard partitioning"
 assert_contains "$frontend_shard_block" "--reporter=blob" "frontend shard blob report"

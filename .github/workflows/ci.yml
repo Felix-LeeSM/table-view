@@ -201,12 +201,14 @@ jobs:
         working-directory: src-tauri
         run: cargo deny check advisories --hide-inclusion-graph
 
-  # The vitest suite (637 files / 6,106 cases) was the `Frontend Checks`
+  # The vitest suite (634 files / 6,765 cases) was the `Frontend Checks`
   # bottleneck at 437s of a 532s job. It splits across this matrix; each shard
-  # emits a `blob` report carrying its own coverage slice. `Frontend Checks`
-  # below merges the blobs and grades the MERGED coverage, so no threshold is
-  # weakened by the split — verified locally: a single run and a 2-shard merge
-  # of the same scope both reported 225/24539 statements, 219/21747 lines.
+  # emits a `blob` report carrying its own coverage slice (~8MB on disk,
+  # 1.6-1.9MB zipped as an artifact). `Frontend Checks` below merges the blobs
+  # and grades the MERGED coverage, so no threshold is weakened by the split —
+  # verified locally: a single run and a 2-shard merge of the same scope both
+  # reported 225/24539 statements, 219/21747 lines. Verified in CI: the merged
+  # report covers the same `634 passed (634)` file set as the undivided run.
   frontend-shard:
     name: Frontend Tests (shard ${{ matrix.shard }}/3)
     runs-on: ubuntu-latest
