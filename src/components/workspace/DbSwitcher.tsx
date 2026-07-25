@@ -52,6 +52,20 @@ import { hasConnectionCapability } from "@/types/dataSource";
  *   - Active tab but no value     → "(default)"
  */
 /**
+ * Is `a` the same database/container as `b` for this engine?
+ *
+ * #1072 — Oracle folds unquoted identifiers and its listener matches service
+ * names case-insensitively, so a `freepdb1` connection config and a `FREEPDB1`
+ * picker entry are one target: a byte compare would hide the current entry from
+ * the picker and dispatch a switch that the backend answers as a no-op.
+ * PostgreSQL/MySQL database names are byte-sensitive (`Foo` and `foo` can
+ * coexist), so the fold stays engine-scoped instead of a blanket lowercase.
+ */
+function isSameDatabase(a: string, b: string, dbType?: DatabaseType): boolean {
+  return dbType === "oracle" ? a.toLowerCase() === b.toLowerCase() : a === b;
+}
+
+/**
  * Paradigm- and state-aware tooltip copy for the read-only fallback. Each
  * branch surfaces the *user-visible* reason the switcher is non-interactive
  * (no internal milestone references in user-facing copy).
@@ -174,13 +188,15 @@ export default function DbSwitcher() {
   // focus call is a no-op (optional chaining on a null ref).
   useEffect(() => {
     if (databases.length === 0) return;
-    const sel = databases.findIndex((db) => db.name === label);
+    const sel = databases.findIndex((db) =>
+      isSameDatabase(db.name, label, activeConn?.dbType),
+    );
     const idx = sel >= 0 ? sel : 0;
     setActiveIndex(idx);
     listRef.current
       ?.querySelector<HTMLElement>(`[data-option-index="${idx}"]`)
       ?.focus();
-  }, [databases, label]);
+  }, [databases, label, activeConn?.dbType]);
 
   // ponytail: Arrow/Home/End roving only — no typeahead (add if users ask;
   // the db list is short and label-sorted).
@@ -260,7 +276,7 @@ export default function DbSwitcher() {
       // render alongside the toast — the user may want to re-try a
       // different db without losing the list.
       if (!activeConn) return;
-      if (dbName === activeDb) {
+      if (activeDb && isSameDatabase(dbName, activeDb, activeConn.dbType)) {
         // Re-selecting the active DB is a no-op — nothing to dispatch.
         // Closing the popover is enough; we keep the success toast
         // out of this branch so the user isn't told something
@@ -415,8 +431,15 @@ export default function DbSwitcher() {
                 <button
                   type="button"
                   role="option"
-                  aria-selected={db.name === label}
-                  data-active={db.name === label || undefined}
+                  aria-selected={isSameDatabase(
+                    db.name,
+                    label,
+                    activeConn?.dbType,
+                  )}
+                  data-active={
+                    isSameDatabase(db.name, label, activeConn?.dbType) ||
+                    undefined
+                  }
                   data-option-index={idx}
                   // Single tab stop: only the roving anchor is tabbable;
                   // an effect pulls focus onto it (the selected db) on open.

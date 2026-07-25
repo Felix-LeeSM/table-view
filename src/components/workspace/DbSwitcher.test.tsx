@@ -683,6 +683,64 @@ describe("DbSwitcher", () => {
     expect(useToastStore.getState().toasts).toHaveLength(0);
   });
 
+  // #1072 — Oracle folds unquoted identifiers and its listener matches service
+  // names case-insensitively, so a `freepdb1` connection config and the
+  // `FREEPDB1` container are one target. A byte compare left the current entry
+  // unmarked and dispatched a switch the backend answers as a no-op.
+  it("marks the active Oracle container regardless of case and re-clicking it is a no-op", async () => {
+    setStores({
+      paradigm: "rdb",
+      connected: true,
+      dbType: "oracle",
+      activeDb: "freepdb1",
+    });
+    listDatabasesMock.mockResolvedValueOnce([
+      { name: "FREEPDB1" },
+      { name: "XEPDB1" },
+    ]);
+    render(<DbSwitcher />);
+    fireEvent.click(
+      screen.getByRole("button", { name: /active database switcher/i }),
+    );
+    const listbox = await screen.findByRole("listbox", {
+      name: /available databases/i,
+    });
+    const current = within(listbox)
+      .getAllByRole("option")
+      .find((o) => o.textContent?.includes("FREEPDB1"))!;
+    expect(current).toHaveAttribute("aria-selected", "true");
+
+    await act(async () => {
+      fireEvent.click(current);
+    });
+    expect(switchActiveDbMock).not.toHaveBeenCalled();
+    expect(useToastStore.getState().toasts).toHaveLength(0);
+  });
+
+  // The Oracle fold is engine-scoped: PostgreSQL database names are
+  // byte-sensitive, so `Foo` and `foo` are two switchable databases.
+  it("keeps case-sensitive database identity for postgresql", async () => {
+    setStores({ paradigm: "rdb", connected: true, activeDb: "Foo" });
+    listDatabasesMock.mockResolvedValueOnce([{ name: "Foo" }, { name: "foo" }]);
+    switchActiveDbMock.mockResolvedValueOnce(undefined);
+    render(<DbSwitcher />);
+    fireEvent.click(
+      screen.getByRole("button", { name: /active database switcher/i }),
+    );
+    const listbox = await screen.findByRole("listbox", {
+      name: /available databases/i,
+    });
+    const lower = within(listbox)
+      .getAllByRole("option")
+      .find((o) => o.textContent?.includes("foo"))!;
+    expect(lower).toHaveAttribute("aria-selected", "false");
+
+    await act(async () => {
+      fireEvent.click(lower);
+    });
+    expect(switchActiveDbMock).toHaveBeenCalledWith("c1", "foo");
+  });
+
   // -- Label resolution sanity --
 
   // Reason: verify that the DbSwitcher falls back to the focused connection's

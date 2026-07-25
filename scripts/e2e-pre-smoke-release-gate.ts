@@ -159,7 +159,7 @@ function verifyEnterpriseRdbmsPromotionBoundary(): void {
       oracle.capabilities.ddl.createIndex &&
       oracle.capabilities.ddl.dropObject &&
       // #1072 — the DbSwitcher claim: the adapter re-dials the stored service
-      // name/SID, so the toolbar switcher must not render read-only.
+      // name, so the toolbar switcher must not render read-only.
       oracle.capabilities.connection.switchDatabase,
     "oracle: runtime support covers service-name catalog/query/cancel/tabular plus PK-projected editRows, #1072 structured table/index/constraint DDL and service-name database switching, and #1674 vendor-restorable schema-dump export; raw DDL/admin/import/backup-restore/full workbench stay unsupported",
   );

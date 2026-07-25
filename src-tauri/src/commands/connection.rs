@@ -71,8 +71,9 @@ pub use sqlite_file::create_sqlite_database_file;
 /// the #905/#906 runtime slice): service-name lifecycle, catalog metadata,
 /// SELECT/DML batch, cooperative cancel, tabular table-data queries, frontend
 /// SQL-batch row edits, structured table/index/constraint DDL, PL/SQL
-/// body/package source, and read-only trigger listing (#1072 2차) are live,
-/// while switch-database, raw DDL/admin, and trigger DDL/single-source stay
+/// body/package source, read-only trigger listing (#1072 2차), and
+/// switch-database (#1072 3차 — a service-name re-dial; SID profiles fail
+/// closed) are live, while raw DDL/admin and trigger DDL/single-source stay
 /// Unsupported.
 pub(crate) fn make_adapter(db_type: &DatabaseType) -> Result<ActiveAdapter, AppError> {
     match db_type {

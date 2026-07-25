@@ -2,7 +2,7 @@ mod decode;
 mod queries;
 mod shape;
 
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 use oracle_rs::{Connection as OracleConnection, Value};
 
@@ -25,7 +25,45 @@ use self::shape::{
     OracleSequenceCatalogRow, OracleSynonymCatalogRow, OracleTableCatalogRow,
     OracleTriggerCatalogRow, OracleViewCatalogRow,
 };
-use super::{map_oracle_connection_error, OracleAdapter};
+use super::{
+    map_oracle_connection_error, OracleAdapter, ORACLE_ROOT_CONTAINER, ORACLE_SEED_CONTAINER,
+};
+
+/// #1072 — the DB picker's entries must be *dialable* names, not container
+/// names: `switch_database` re-dials the pick as a TNS `SERVICE_NAME` (Oracle
+/// has no `USE <db>`), so the list axis and the dial axis have to be the same
+/// axis. Oracle auto-creates a default service named after each PDB, which is
+/// why a PDB name dials, while `CDB$ROOT` is a container with no service of
+/// that name (offering it is a guaranteed ORA-12514) and `PDB$SEED` is a
+/// read-only clone template. The stored target is always kept — from a CDB root
+/// session `CON_NAME` is `CDB$ROOT`, so the stored service is the only way back
+/// to the container the user is on. SID profiles list the stored SID alone: a
+/// PDB name is not a SID (ORA-12505), matching the fail-closed
+/// `switch_active_service`. Duplicates fold case-insensitively (Oracle folds
+/// unquoted identifiers) and keep the stored spelling, so the picker can
+/// highlight the active entry.
+pub(super) fn switch_target_names(
+    stored: Option<&str>,
+    containers: &[String],
+    use_sid: bool,
+) -> Vec<String> {
+    let mut names: BTreeMap<String, String> = BTreeMap::new();
+    if let Some(stored) = stored.map(str::trim).filter(|name| !name.is_empty()) {
+        names.insert(stored.to_ascii_uppercase(), stored.to_string());
+    }
+    if !use_sid {
+        for container in containers {
+            let container = container.trim();
+            let key = container.to_ascii_uppercase();
+            if container.is_empty() || key == ORACLE_ROOT_CONTAINER || key == ORACLE_SEED_CONTAINER
+            {
+                continue;
+            }
+            names.entry(key).or_insert_with(|| container.to_string());
+        }
+    }
+    names.into_values().collect()
+}
 
 impl OracleAdapter {
     pub async fn list_databases(&self) -> Result<Vec<SchemaInfo>, AppError> {
@@ -36,42 +74,47 @@ impl OracleAdapter {
                 &[],
             )
             .await?;
-        let queried = rows
+        let mut containers: Vec<String> = rows
             .first()
             .map(|row| row_optional_string(row, 0, "current database"))
             .transpose()?
-            .flatten();
-        let name = queried.or_else(|| {
-            self.state
-                .try_lock()
-                .ok()
-                .and_then(|guard| {
-                    guard
-                        .connected_config
-                        .as_ref()
-                        .map(|config| config.database.clone())
-                })
-                .map(|database| database.trim().to_string())
-                .filter(|database| !database.is_empty())
-        });
+            .flatten()
+            .into_iter()
+            .collect();
+
+        let (stored, use_sid) = {
+            let guard = self.state.lock().await;
+            match guard.connected_config.as_ref() {
+                Some(config) => (
+                    Some(config.database.trim().to_string()),
+                    config.oracle_use_sid.unwrap_or(false),
+                ),
+                None => (None, false),
+            }
+        };
 
         // #1072 — the list feeds the switch-database picker, so it must offer
-        // the other containers this session could dial, not just its own. The
-        // PDB read is best-effort (`query_catalog_rows` degrades a denied /
-        // absent `v$pdbs` to an empty list), so an unprivileged session or a
-        // non-CDB keeps exactly the pre-#1072 single-entry list.
-        let mut names: BTreeSet<String> = name.into_iter().collect();
-        for row in self
-            .query_catalog_rows("Oracle container catalog query failed", OPEN_PDBS_SQL, &[])
-            .await?
-        {
-            let name = row_string(&row, 0, "container name")?;
-            if !name.is_empty() {
-                names.insert(name);
+        // the other containers this session could dial, not just its own.
+        // Best-effort end to end: a denied / absent `v$pdbs`, a second login
+        // that fails, or an undecodable row must never cost the caller the
+        // entries it already has, so an unprivileged session or a non-CDB keeps
+        // exactly the pre-#1072 single-entry list.
+        if !use_sid {
+            for row in self
+                .query_catalog_rows("Oracle container catalog query failed", OPEN_PDBS_SQL, &[])
+                .await
+                .unwrap_or_default()
+            {
+                if let Ok(name) = row_string(&row, 0, "container name") {
+                    containers.push(name);
+                }
             }
         }
 
-        Ok(names.into_iter().map(|name| SchemaInfo { name }).collect())
+        Ok(switch_target_names(stored.as_deref(), &containers, use_sid)
+            .into_iter()
+            .map(|name| SchemaInfo { name })
+            .collect())
     }
 
     pub async fn list_schemas(&self) -> Result<Vec<SchemaInfo>, AppError> {

@@ -1,3 +1,4 @@
+use super::catalog::switch_target_names;
 use super::*;
 use crate::models::{ColumnChange, ColumnDefinition, ConstraintDefinition};
 use oracle_rs::config::ServiceMethod;
@@ -442,14 +443,108 @@ async fn switch_database_to_the_active_service_is_a_no_op() {
         guard.connected_config = Some(oracle_config());
     }
 
-    RdbAdapter::switch_database(&adapter, " XEPDB1 ")
-        .await
-        .expect("re-selecting the active service must not re-dial");
+    // Oracle folds unquoted identifiers and the listener matches service names
+    // case-insensitively, so `xepdb1` is the same target as the stored
+    // ` XEPDB1 ` — a byte compare here would tear down a working session and
+    // rewrite the stored spelling the picker highlights against.
+    for same in [" XEPDB1 ", "xepdb1", "XePdB1"] {
+        RdbAdapter::switch_database(&adapter, same)
+            .await
+            .expect("re-selecting the active service must not re-dial");
 
+        assert_eq!(
+            adapter.current_database().await.unwrap(),
+            Some("XEPDB1".into()),
+            "the active service name must survive the no-op switch for {same:?}"
+        );
+    }
+}
+
+// #1072 — the root container is not a listener service, so it can never be a
+// switch target. The guard sits in front of the connection lookup (like the
+// #1065 whitelist), so a picker that somehow offers it fails deterministically
+// instead of dying with ORA-12514 after a full dial.
+#[tokio::test]
+async fn switch_database_rejects_the_root_container_before_the_lookup() {
+    let adapter = OracleAdapter::new();
+
+    for name in ["CDB$ROOT", "cdb$root", " Cdb$Root "] {
+        let err = RdbAdapter::switch_database(&adapter, name)
+            .await
+            .expect_err("the root container must never be dialed");
+        assert!(
+            matches!(&err, AppError::Validation(message) if message.contains("CDB$ROOT")),
+            "expected a Validation rejection for {name:?}, got {err:?}"
+        );
+    }
+}
+
+// #1072 — a SID names the instance, not a container: dialing a PDB name as a
+// SID is ORA-12505. The picker lists only the stored SID for these profiles
+// (see `switch_target_names`), so this guards the IPC entry point.
+#[tokio::test]
+async fn switch_database_fails_closed_for_sid_profiles() {
+    let adapter = OracleAdapter::new();
+    {
+        let mut guard = adapter.state.lock().await;
+        let mut config = oracle_config();
+        config.oracle_use_sid = Some(true);
+        guard.connected_config = Some(config);
+    }
+
+    let err = RdbAdapter::switch_database(&adapter, "XEPDB2")
+        .await
+        .expect_err("a SID profile must not re-dial a PDB name");
+    assert!(
+        matches!(&err, AppError::Unsupported(message) if message.contains("SID")),
+        "expected Unsupported for a SID profile, got {err:?}"
+    );
     assert_eq!(
         adapter.current_database().await.unwrap(),
         Some("XEPDB1".into()),
-        "the active service name must survive the no-op switch"
+        "a rejected switch must leave the stored SID untouched"
+    );
+}
+
+// #1072 — the picker list and the dial both have to speak service names. The
+// repo's own `docker-compose.yml` Oracle profile is the case where they
+// diverge: the session dials service `XE`, but `CON_NAME` reports the container
+// `CDB$ROOT`, so a container-name list drops the only entry that can dial back.
+#[test]
+fn switch_targets_keep_the_dialed_service_and_drop_the_root_container() {
+    assert_eq!(
+        switch_target_names(
+            Some(" XE "),
+            &["CDB$ROOT".into(), "XEPDB1".into(), "PDB$SEED".into()],
+            false
+        ),
+        vec!["XE".to_string(), "XEPDB1".to_string()],
+        "the dialed service stays and the non-connectable containers go"
+    );
+}
+
+#[test]
+fn switch_targets_fold_case_and_prefer_the_stored_spelling() {
+    // A PDB session: `CON_NAME` echoes the container in Oracle's own casing
+    // while the stored config keeps what the user typed. One target, one entry
+    // — spelled the way the frontend's `activeDb` is.
+    assert_eq!(
+        switch_target_names(Some("freepdb1"), &["FREEPDB1".into()], false),
+        vec!["freepdb1".to_string()]
+    );
+    // No `v$pdbs` privilege (or a non-CDB): exactly the pre-#1072 single entry.
+    assert_eq!(
+        switch_target_names(Some("FREEPDB1"), &[], false),
+        vec!["FREEPDB1".to_string()]
+    );
+}
+
+#[test]
+fn switch_targets_offer_only_the_stored_sid_for_sid_profiles() {
+    assert_eq!(
+        switch_target_names(Some("XE"), &["CDB$ROOT".into(), "XEPDB1".into()], true),
+        vec!["XE".to_string()],
+        "a PDB name is not a SID, so a SID profile must not be offered one"
     );
 }
 

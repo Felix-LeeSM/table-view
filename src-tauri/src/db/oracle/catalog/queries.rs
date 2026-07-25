@@ -434,19 +434,4 @@ mod tests {
             "SELECT SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA') FROM DUAL"
         );
     }
-
-    // #1072 — the switch-database picker must never offer a target the user
-    // cannot dial: a MOUNTED/MIGRATE PDB refuses sessions and `PDB$SEED` is a
-    // read-only clone template. Both exclusions live in the SQL, so they are
-    // pinned here rather than in a live-container probe.
-    #[test]
-    fn open_pdbs_query_excludes_seed_and_unopened_containers_1072() {
-        assert!(OPEN_PDBS_SQL.contains("v$pdbs"));
-        assert!(OPEN_PDBS_SQL.contains("open_mode LIKE 'READ%'"));
-        assert!(OPEN_PDBS_SQL.contains("name <> 'PDB$SEED'"));
-        assert!(OPEN_PDBS_SQL.contains("ORDER BY name"));
-        // Read-only dictionary access only — no parameters to bind, so nothing
-        // from the connection config can reach this statement.
-        assert!(!OPEN_PDBS_SQL.contains(":1"));
-    }
 }

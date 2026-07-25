@@ -9,8 +9,9 @@
 //! whitelist. Issue #1072 (2차) also wires read-only trigger listing
 //! (`list_triggers` over `all_triggers`, header-only definition — the LONG
 //! body is not read), and (3차) database switching: `switch_database`
-//! re-dials the stored service name/SID and `list_databases` offers the
-//! session's container plus the reachable open PDBs. Raw DDL/admin execution,
+//! re-dials the stored service name and `list_databases` offers only dialable
+//! names — the stored service plus the open PDBs, never the `CDB$ROOT`
+//! container — while SID profiles fail closed. Raw DDL/admin execution,
 //! trigger DDL (create/drop) and single-trigger source, TNS descriptors, 1-way
 //! TLS (TCPS+CA), and advanced auth remain unsupported or unclaimed.
 
@@ -31,7 +32,7 @@ use std::time::Duration;
 use oracle_rs::{Config as OracleConfig, Connection as OracleConnection};
 use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
-use tracing::info;
+use tracing::{info, warn};
 
 use crate::error::AppError;
 use crate::models::{
@@ -46,6 +47,12 @@ use super::{BoxFuture, DbAdapter, NamespaceInfo, NamespaceLabel, RdbAdapter, Rdb
 const ORACLE_CONNECT_TIMEOUT_DEFAULT_SECS: u32 = 300;
 const ORACLE_CONNECT_TIMEOUT_MAX_SECS: u64 = 30;
 const ORACLE_TEST_CONNECT_TIMEOUT_SECS: u64 = 5;
+/// Bound for the detached Logoff of a session that a reconnect/switch replaced.
+const ORACLE_LOGOFF_TIMEOUT: Duration = Duration::from_secs(5);
+/// #1072 — container names that are never connect targets: the CDB root has no
+/// listener service of its own name, and the seed is a read-only clone template.
+const ORACLE_ROOT_CONTAINER: &str = "CDB$ROOT";
+const ORACLE_SEED_CONTAINER: &str = "PDB$SEED";
 
 #[derive(Default)]
 struct OracleConnectionState {
@@ -95,10 +102,32 @@ impl OracleAdapter {
             guard.connection.replace(connection)
         };
         // #1072 — a reconnect (and the switch-database path below) replaces the
-        // live session; close the old one instead of dropping it so the server
-        // releases the session now rather than at driver GC time.
+        // live session; send the clean Logoff instead of only dropping it, so
+        // the server releases the session now rather than at driver GC time.
+        // Detached and bounded on purpose: the driver has no read timeout
+        // (`transport/tcp.rs` times out `connect` only) and `close()` waits on
+        // `read_exact` for the Logoff reply, so a half-open socket — laptop
+        // sleep, VPN drop, container restart, i.e. exactly why a reconnect is
+        // happening — would block here until the TCP retransmit timeout. The
+        // state swap above is already committed at this point, so awaiting it
+        // would hang `switch_active_db` after the switch took effect and leave
+        // the UI label behind the backend with no error. Dropping was
+        // non-blocking before #1072; this keeps that property, and the failure
+        // is logged rather than `let _`-swallowed (same contract as
+        // `commands/connection/session.rs`).
         if let Some(replaced) = replaced {
-            let _ = replaced.close().await;
+            tokio::spawn(async move {
+                match tokio::time::timeout(ORACLE_LOGOFF_TIMEOUT, replaced.close()).await {
+                    Ok(Ok(())) => {}
+                    Ok(Err(err)) => {
+                        warn!("Oracle logoff of the replaced session failed: {err}");
+                    }
+                    Err(_) => warn!(
+                        "Oracle logoff of the replaced session timed out after {}s; the server reaps it",
+                        ORACLE_LOGOFF_TIMEOUT.as_secs()
+                    ),
+                }
+            });
         }
 
         info!("Connected to Oracle at {}:{}", config.host, config.port);
@@ -130,12 +159,35 @@ impl OracleAdapter {
                 "Oracle service name contains unsupported characters; TNS/easy-connect descriptors are not supported (#1065)".into(),
             ));
         }
+        // #1072 — the root container is not a listener service. A CDB root's
+        // service is the one the session already dialed (`XE`, `FREE`, …), so
+        // dialing `CDB$ROOT` is a guaranteed ORA-12514; the #1065 whitelist
+        // allows `$`, so it needs its own guard. `list_databases` never offers
+        // it either — the two axes have to agree.
+        if db_name.eq_ignore_ascii_case(ORACLE_ROOT_CONTAINER) {
+            return Err(AppError::Validation(
+                "Oracle CDB$ROOT is a container, not a connectable service; switch to a PDB or to the root's own service name".into(),
+            ));
+        }
 
         let mut config = self.connected_config().await?;
-        if config.database.trim() == db_name {
-            // Already the active service — the DbSwitcher re-selecting the
-            // current entry must not tear down a working session.
+        // Oracle folds unquoted identifiers and the listener matches service
+        // names case-insensitively, so a case-only re-select is the *same*
+        // target: the DbSwitcher re-selecting the current entry must not tear
+        // down a working session, and the stored spelling the picker highlights
+        // against must survive untouched.
+        if config.database.trim().eq_ignore_ascii_case(db_name) {
             return Ok(());
+        }
+        // #1072 — SID profiles fail closed. A SID names the instance, not a
+        // container: dialing a PDB name as a SID is ORA-12505, and a
+        // single-instance box has no second SID to offer. `list_databases`
+        // agrees by listing only the stored SID for these profiles, so this is
+        // unreachable from the picker and guards the IPC entry point.
+        if config.oracle_use_sid.unwrap_or(false) {
+            return Err(AppError::Unsupported(
+                "Oracle SID connections cannot switch database; a SID names the instance, not a pluggable database (#1072)".into(),
+            ));
         }
         config.database = db_name.to_string();
         self.connect_session(&config).await
