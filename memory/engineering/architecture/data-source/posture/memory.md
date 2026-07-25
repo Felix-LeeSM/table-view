@@ -30,9 +30,13 @@ active. trait default `Unsupported` 게이트는 Oracle 과 non-RDB paradigm 에
 (`pg_authid`/`authentication_string`/`sys.sql_logins.password_hash` 미조회).
 SQL Server 는 `sys.server_principals` 가 metadata-visibility 필터가 걸리는
 catalog view 라 `VIEW ANY DEFINITION` 을 먼저 probe 하고 없으면
-`CapabilityNotEnabled` 로 fail loud — 잘린 목록을 완전한 목록으로 렌더하지
-않는 것이 이 surface 의 불변식이다. 계정 write (create/alter/drop) 는 여전히
-별도 계약.
+`CapabilityNotEnabled` 로 fail loud — server-scope 권한 부재로 잘린 목록을
+완전한 목록으로 렌더하지 않는 것이 이 surface 의 불변식이다. probe 는 server
+scope 답만 주므로 principal 단위 `DENY VIEW DEFINITION ON LOGIN::x` 로 인한 행
+누락은 남는 경계이고 (product known-limitations 에 기록), 권한 flag 은
+`IS_SRVROLEMEMBER` 가 certificate/asymmetric-key principal 에 NULL 을 주므로
+catalog membership walk 와 항상 OR 한다 (NULL→0 collapse 금지). 계정 write
+(create/alter/drop) 는 여전히 별도 계약.
 
 Oracle is active for service-name lifecycle plus bounded catalog/query/cancel/
 tabular runtime: catalog metadata, SELECT/DML batch execution, cooperative

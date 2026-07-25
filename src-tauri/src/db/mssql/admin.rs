@@ -19,7 +19,10 @@
 //! share that fail-loud property: a catalog view is metadata-visibility
 //! filtered, so an under-privileged login silently receives a truncated row set.
 //! That path is gated by its own `VIEW ANY DEFINITION` probe instead — see
-//! `USERS_PERMISSION_PROBE_SQL`.
+//! `USERS_PERMISSION_PROBE_SQL`. The probe closes the server-wide truncation,
+//! not every truncation: a per-principal `DENY VIEW DEFINITION ON LOGIN::x`
+//! still hides that one row from a caller that holds the server-scope grant
+//! (recorded in `docs/product/known-limitations.md`).
 
 use tiberius::Row;
 
@@ -67,6 +70,13 @@ FROM sys.dm_os_sys_info si";
 /// error: `classify_view_server_state_error` never fires on that path and an
 /// account-audit screen would render a partial list as complete. Probing the
 /// effective permission first turns that into a loud `CapabilityNotEnabled`.
+///
+/// Residual, measured on SQL Server 2022 (16.0.4265.3): the probe answers for
+/// the SERVER scope, so a caller holding `VIEW ANY DEFINITION` still loses a
+/// single principal that carries `DENY VIEW DEFINITION ON LOGIN::x` for it —
+/// probe `1`, row silently absent. Detecting that needs per-principal
+/// permission reads that are themselves metadata-filtered; the boundary is
+/// recorded in `docs/product/known-limitations.md` instead.
 const USERS_PERMISSION_PROBE_SQL: &str =
     "SELECT CAST(ISNULL(HAS_PERMS_BY_NAME(NULL, NULL, 'VIEW ANY DEFINITION'), 0) AS BIGINT)";
 
@@ -81,36 +91,57 @@ const USERS_PERMISSION_PROBE_SQL: &str =
 /// `Error::Conversion`, and `opt_i64` swallows that into `None`, so a T-SQL
 /// `int` projection would render every row as "No" with no error anywhere.
 ///
-/// `is_superuser` is the OR of two independent sysadmin sources, never a lone
-/// `ISNULL(IS_SRVROLEMEMBER(...), 0)`: that function returns NULL for every
-/// certificate-mapped principal and for a caller that cannot resolve the
-/// membership, and collapsing NULL to 0 would report a sysadmin as
-/// unprivileged. `IS_SRVROLEMEMBER` additionally resolves Windows-group-derived
-/// membership that `sys.server_role_members` does not record, so keeping both
-/// can only ever raise the flag. `can_create_db` / `can_create_role` follow the
-/// fixed roles that actually confer the right (`dbcreator` / `securityadmin`,
-/// plus `sysadmin`, which implies both). `##MS_*` internal principals are
+/// Every privilege flag is the OR of two independent sources, never a lone
+/// `ISNULL(IS_SRVROLEMEMBER(...), 0)`. Measured on SQL Server 2022
+/// (16.0.4265.3): `IS_SRVROLEMEMBER` returns NULL for a certificate-mapped
+/// (`type = 'C'`) or asymmetric-key-mapped (`'K'`) principal and for a caller
+/// that cannot resolve the membership, so collapsing NULL to 0 turns "cannot
+/// resolve" into "not a member" — a false negative on an account-audit screen
+/// (a `dbcreator` member rendered as unable to create databases). The recursive
+/// `sys.server_role_members` walk is the NULL-free second source, while
+/// `IS_SRVROLEMEMBER` still contributes the Windows-group-derived membership
+/// that the catalog does not record (e.g. `NT AUTHORITY\\SYSTEM` via
+/// `BUILTIN\\Administrators`), so OR-ing the two can only ever raise a flag.
+/// `can_create_db` / `can_create_role` follow the fixed roles that actually
+/// confer the right (`dbcreator` / `securityadmin`, plus `sysadmin`, which
+/// implies both).
+///
+/// `can_login` whitelists the principal types that are an authentication path
+/// (`'S'` SQL login, `'U'` Windows login, `'G'` Windows group). A server role
+/// (`'R'`) never logs in, and neither does a `'C'`/`'K'` principal — those exist
+/// only to carry permissions for signed modules, so `type <> 'R'` reported them
+/// as loginable accounts (false positive). `##MS_*` internal principals are
 /// filtered — they are audit noise, never real accounts. Server principals
 /// expose no per-login connection cap or password expiry.
 const USERS_SQL: &str = "\
-WITH sysadmin_members AS ( \
-    SELECT rm.member_principal_id \
+WITH fixed_role_members AS ( \
+    SELECT r.name AS role_name, rm.member_principal_id \
     FROM sys.server_role_members rm \
     JOIN sys.server_principals r ON r.principal_id = rm.role_principal_id \
-    WHERE r.name = 'sysadmin' \
+    WHERE r.name IN ('sysadmin', 'dbcreator', 'securityadmin') \
     UNION ALL \
-    SELECT rm.member_principal_id \
+    SELECT m.role_name, rm.member_principal_id \
     FROM sys.server_role_members rm \
-    JOIN sysadmin_members m ON m.member_principal_id = rm.role_principal_id \
+    JOIN fixed_role_members m ON m.member_principal_id = rm.role_principal_id \
 ), principal_flags AS ( \
     SELECT sp.name AS name, \
-           CASE WHEN sp.is_disabled = 0 AND sp.type <> 'R' THEN 1 ELSE 0 END AS can_login, \
-           CASE WHEN ISNULL(IS_SRVROLEMEMBER('sysadmin', sp.name), 0) = 1 \
-                     OR EXISTS (SELECT 1 FROM sysadmin_members sm \
-                                WHERE sm.member_principal_id = sp.principal_id) \
+           CASE WHEN sp.is_disabled = 0 AND sp.type IN ('S', 'U', 'G') \
+                THEN 1 ELSE 0 END AS can_login, \
+           CASE WHEN IS_SRVROLEMEMBER('sysadmin', sp.name) = 1 \
+                     OR EXISTS (SELECT 1 FROM fixed_role_members fm \
+                                WHERE fm.role_name = 'sysadmin' \
+                                  AND fm.member_principal_id = sp.principal_id) \
                 THEN 1 ELSE 0 END AS is_sysadmin, \
-           ISNULL(IS_SRVROLEMEMBER('dbcreator', sp.name), 0) AS is_dbcreator, \
-           ISNULL(IS_SRVROLEMEMBER('securityadmin', sp.name), 0) AS is_securityadmin \
+           CASE WHEN IS_SRVROLEMEMBER('dbcreator', sp.name) = 1 \
+                     OR EXISTS (SELECT 1 FROM fixed_role_members fm \
+                                WHERE fm.role_name = 'dbcreator' \
+                                  AND fm.member_principal_id = sp.principal_id) \
+                THEN 1 ELSE 0 END AS is_dbcreator, \
+           CASE WHEN IS_SRVROLEMEMBER('securityadmin', sp.name) = 1 \
+                     OR EXISTS (SELECT 1 FROM fixed_role_members fm \
+                                WHERE fm.role_name = 'securityadmin' \
+                                  AND fm.member_principal_id = sp.principal_id) \
+                THEN 1 ELSE 0 END AS is_securityadmin \
     FROM sys.server_principals sp \
     WHERE sp.type IN ('S', 'U', 'G', 'R', 'C', 'K') \
       AND sp.name NOT LIKE '##MS_%' \
@@ -447,28 +478,54 @@ mod tests {
         );
     }
 
-    // Issue #1077 Stage 2 SECURITY (2026-07-25) — GREEN half 2. Verified
-    // against SQL Server 2022 (16.0.4265.3): `IS_SRVROLEMEMBER` returns NULL
-    // for every certificate-mapped principal on a default install, so a lone
-    // `ISNULL(..., 0)` reports "cannot resolve" as "not a sysadmin". The
-    // catalog membership walk is the NULL-free second source; OR-ing the two
-    // can only ever raise the flag, never lower it (`IS_SRVROLEMEMBER` still
-    // contributes the Windows-group-derived membership that
-    // `sys.server_role_members` does not record — e.g. `NT AUTHORITY\SYSTEM`
-    // via `BUILTIN\Administrators`).
+    // Issue #1077 Stage 2 SECURITY (2026-07-25) — GREEN half 2, widened to all
+    // three fixed roles after the re-review (PR #1786). Verified against SQL
+    // Server 2022 (16.0.4265.3): `IS_SRVROLEMEMBER` returns NULL for a
+    // certificate-/asymmetric-key-mapped principal, so a lone `ISNULL(..., 0)`
+    // reports "cannot resolve" as "not a member" — a real `dbcreator` renders
+    // as unable to create databases. The catalog membership walk is the
+    // NULL-free second source; OR-ing the two can only ever raise a flag, never
+    // lower it (`IS_SRVROLEMEMBER` still contributes the Windows-group-derived
+    // membership that `sys.server_role_members` does not record — e.g.
+    // `NT AUTHORITY\SYSTEM` via `BUILTIN\Administrators`). The behavioral gate
+    // is `test_mssql_users_null_role_membership_and_non_login_principals_1077`
+    // in `tests/mssql_integration.rs`.
     #[test]
-    fn users_sql_backs_the_sysadmin_flag_with_a_null_free_source() {
+    fn users_sql_backs_every_privilege_flag_with_a_null_free_source() {
         assert!(
             USERS_SQL.contains("sys.server_role_members"),
-            "the catalog membership walk is the NULL-free sysadmin source"
+            "the catalog membership walk is the NULL-free membership source"
         );
         assert!(
-            USERS_SQL.contains("IS_SRVROLEMEMBER('sysadmin'"),
-            "IS_SRVROLEMEMBER still contributes Windows-group-derived membership"
+            !USERS_SQL.contains("ISNULL(IS_SRVROLEMEMBER"),
+            "collapsing IS_SRVROLEMEMBER's NULL to 0 turns 'cannot resolve' into \
+             'not a member' — a privilege false negative"
         );
+        for role in ["sysadmin", "dbcreator", "securityadmin"] {
+            assert!(
+                USERS_SQL.contains(&format!("IS_SRVROLEMEMBER('{role}'")),
+                "{role}: IS_SRVROLEMEMBER still contributes Windows-group-derived \
+                 membership"
+            );
+            assert!(
+                USERS_SQL.contains(&format!("WHERE fm.role_name = '{role}'")),
+                "{role}: the two membership sources must be OR-ed, not a lone \
+                 IS_SRVROLEMEMBER answer"
+            );
+        }
+    }
+
+    // Issue #1077 Stage 2 SECURITY (2026-07-25) — re-review (PR #1786): a
+    // certificate-mapped (`'C'`) or asymmetric-key-mapped (`'K'`) principal
+    // carries permissions for signed modules and can never authenticate, so
+    // `type <> 'R'` reported it as a loginable account. Only `'S'`/`'U'`/`'G'`
+    // are authentication paths.
+    #[test]
+    fn users_sql_limits_can_login_to_authenticatable_principal_types() {
         assert!(
-            USERS_SQL.contains("OR EXISTS (SELECT 1 FROM sysadmin_members"),
-            "the two sysadmin sources must be OR-ed, not a lone ISNULL collapse"
+            USERS_SQL.contains("sp.is_disabled = 0 AND sp.type IN ('S', 'U', 'G')"),
+            "can_login must whitelist the authenticatable principal types, not \
+             exclude roles only"
         );
     }
 
