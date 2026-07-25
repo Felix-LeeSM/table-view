@@ -47,7 +47,12 @@ describe("query language support documentation", () => {
     );
 
     const activeClaimPatterns = [
-      /\bMSSQL\b[^.\n|]*(?:catalog-aware[^.\n|]*completion is active|structured DDL is active|full T-SQL semantics are active)/i,
+      // Issue #1071 — `structured DDL is active` left this overclaim guard: the
+      // MssqlAdapter now wires every structured DDL trait method
+      // (`src/types/dataSource.ts`), so forbidding the phrase would freeze a
+      // boundary the code has already moved. Catalog-aware completion and full
+      // T-SQL semantics stay forbidden — those are still unclaimed.
+      /\bMSSQL\b[^.\n|]*(?:catalog-aware[^.\n|]*completion is active|full T-SQL semantics are active)/i,
       /\bOracle\b[^.\n|]*(?:routine smoke is active|routine smoke support is active)/i,
       /\bOracle\b[^.\n|]*(?:structured DDL|raw DDL\/admin|full parser\/completion|PL\/SQL)[^.\n|]*(?:is active|is supported|runtime support is active|support is active)/i,
       /SQL Server smoke, seeded/i,

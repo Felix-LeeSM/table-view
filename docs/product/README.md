@@ -240,7 +240,10 @@ catalog browse/schema/indexes/constraints/relationships, query, multi-statement,
 cancel, tabular result, and editRows through frontend SQL batch with primary-key
 projection 는 active capability 다. #907 adds representative Runtime Happy Path
 smoke for connect, seeded catalog browse, SELECT/DML, destructive Safe Mode
-confirmation, cancellation, and grid edit. Structured DDL,
+confirmation, cancellation, and grid edit. #1071 promotes bounded structured
+table/index/constraint DDL through the shared StructurePanel path, including
+column type/nullability/DEFAULT-constraint edits and the SET NOT NULL NULL-row
+pre-flight probe. Trigger DDL, raw DDL/admin,
 admin/security/jobs/users/roles, import/export, profiler/activity, full T-SQL
 semantics, full workbench parity, sqlcmd/meta-command/procedure-body scripting,
 은 claim 하지 않는다. Oracle 은 #905/#906 에서 service-name
