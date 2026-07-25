@@ -109,6 +109,30 @@ describe("SchemaErdRenderer", () => {
     );
   });
 
+  // Reason: regression — PR #1783 review (2026-07-25) found the node handles
+  // pinned to `target: Top` / `source: Bottom` while elk ranks the referenced
+  // table *above* the referencing one, so every FK edge left the lower node's
+  // bottom, wrapped around it and re-entered the upper node's top. An edge runs
+  // referencing -> referenced, i.e. upward, so it must leave the source node's
+  // top side and enter the target node's bottom side. `data-handlepos` is React
+  // Flow's own DOM contract for the side a handle sits on.
+  it("anchors node handles on the sides the layout direction faces", async () => {
+    render(<SchemaErdRenderer graph={extractSchemaGraph(ordersSnapshot())} />);
+
+    const orders = await screen.findByRole("group", {
+      name: /public\.orders table/i,
+    });
+
+    expect(orders.querySelector(".react-flow__handle.source")).toHaveAttribute(
+      "data-handlepos",
+      "top",
+    );
+    expect(orders.querySelector(".react-flow__handle.target")).toHaveAttribute(
+      "data-handlepos",
+      "bottom",
+    );
+  });
+
   // Reason: fit-to-view is the one explicit viewport control for the read-only
   // foundation (zoom/pan are React Flow built-ins); it must exist and be
   // operable without throwing (#1655, 2026-07-25).

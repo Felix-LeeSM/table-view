@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { MarkerType } from "@xyflow/react";
 import { extractSchemaGraph } from "@/lib/schemaGraph";
 import type { SchemaGraphCatalogSnapshot } from "@/types/schemaGraph";
 import type { ColumnInfo, TableInfo } from "@/types/schema";
@@ -48,6 +49,22 @@ describe("layoutErdCanvasModel", () => {
         focusable: false,
       },
     ]);
+  });
+
+  // Reason: regression — PR #1783 review (2026-07-25) found FK edges rendered
+  // without an arrow head, a behavior regression against the hand-rolled SVG
+  // renderer on `main`, which pointed a `marker-end` arrow at the referenced
+  // table. Direction is the whole meaning of an FK edge, so the marker is part
+  // of the layout contract, not styling.
+  it("marks every FK edge with an arrow head pointing at the referenced table", async () => {
+    const model = buildErdCanvasModel(extractSchemaGraph(ordersSnapshot()));
+
+    const layout = await layoutErdCanvasModel(model);
+
+    expect(layout.edges).not.toHaveLength(0);
+    for (const edge of layout.edges) {
+      expect(edge.markerEnd).toEqual({ type: MarkerType.ArrowClosed });
+    }
   });
 
   // Reason: node height scales with column count (so elk reserves vertical
