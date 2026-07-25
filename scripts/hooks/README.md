@@ -61,7 +61,13 @@ Current dispatchers:
 - `check-memory-size.sh` — `memory.md` 복합 cap: 200줄 + 12,000 chars. 어느 하나라도
   초과 시 경고, `--strict` 시 block. override: `MEMORY_LINE_THRESHOLD`,
   `MEMORY_CHAR_THRESHOLD`. (pre-push `--strict` 전용.)
-- `check-doc-size.sh` — docs 지속 참조 문서 chars cap: 120,000 (advisory). 일회성
+- `check-doc-size.sh` — docs 지속 참조 문서 chars cap: 120,000. 일회성
   산출물(`docs/{sprints,archives,table_plus,explorations}`)은 제외. override:
-  `DOCS_CHAR_THRESHOLD`. ratchet 시점에 threshold 를 내려 분할을 유도한다.
-  (CI advisory 전용 — memory-size 와 정책 분리.)
+  `DOCS_CHAR_THRESHOLD`. 기본은 경고, `--strict` 시 block. CI `Doc Size And Line
+  Length` job 이 `--strict` 로 호출해 fail-closed 다 (2026-07-25 승격 — 그 전까지
+  advisory). local 은 `post-tool-use.sh` advisory 유지 — pre-push 미연동.
+- `scripts/check-doc-line-length.ts` (`pnpm docs:lines`) — 같은 doc 집합의 **줄당**
+  chars cap: 600. 실질적으로 table cell 길이다. baseline
+  `scripts/doc-line-length-targets.json` 과 exact match 를 요구하고, 개선/이동은
+  `pnpm docs:lines --update` 로 기록한다 (부채 증가는 refuse). 같은 CI job 소속.
+  정책 본문은 `docs/quality/doc-size-ratchet.md`.

@@ -1,49 +1,34 @@
-import { beforeAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
-// The script runs `main()` on import; the guard has to be set before the dynamic
-// import below so the unit tests do not shell out to git.
-process.env.DOC_LINE_LENGTH_SKIP_MAIN = "1";
-
-type FileMeasurement = { over: number; maxLen: number };
-type Targets = {
-  version: number;
-  ceiling: number;
-  total: number;
-  entries: { path: string; over: number; maxLen: number }[];
-};
-
-let isMeasuredDoc: (p: string) => boolean;
-let measure: (text: string, ceiling: number) => FileMeasurement;
-let findRatchetFailures: (
-  actual: ReadonlyMap<string, FileMeasurement>,
-  targets: Targets,
-) => string[];
-let findStaleTargets: (
-  actual: ReadonlyMap<string, FileMeasurement>,
-  targets: Targets,
-) => string[];
-
-beforeAll(async () => {
-  const mod = await import("../check-doc-line-length");
-  isMeasuredDoc = mod.isMeasuredDoc;
-  measure = mod.measure;
-  findRatchetFailures = mod.findRatchetFailures;
-  findStaleTargets = mod.findStaleTargets;
-});
+import {
+  buildTargets,
+  findMismatches,
+  findUpdateRefusals,
+  isMeasuredDoc,
+  measure,
+  parseTargets,
+  type FileMeasurement,
+} from "../check-doc-line-length";
 
 const CEILING = 600;
 
-function targets(
-  entries: { path: string; over: number; maxLen: number }[],
-  total?: number,
-): Targets {
-  return {
-    version: 2,
-    ceiling: CEILING,
-    total: total ?? entries.reduce((sum, e) => sum + e.over, 0),
-    entries,
-  };
+type Entry = {
+  path: string;
+  over: number;
+  maxLen: number;
+  excess: number;
+};
+
+function targets(entries: Entry[]) {
+  return { version: 3, ceiling: CEILING, entries };
 }
+
+function tree(files: Record<string, FileMeasurement>) {
+  return new Map(Object.entries(files));
+}
+
+/** A file whose lines all sit at or under the ceiling. */
+const clean: FileMeasurement = { over: 0, maxLen: 100, excess: 0 };
 
 describe("isMeasuredDoc", () => {
   it("measures live docs and skips the one-shot trees", () => {
@@ -71,140 +56,266 @@ describe("isMeasuredDoc", () => {
 });
 
 describe("measure", () => {
-  it("reports the over-ceiling count and the longest line", () => {
+  it("reports the count, the longest line, and the summed excess", () => {
     const text = ["a".repeat(700), "b".repeat(601), "c".repeat(4)].join("\n");
-    expect(measure(text, CEILING)).toEqual({ over: 2, maxLen: 700 });
+    expect(measure(text, CEILING)).toEqual({
+      over: 2,
+      maxLen: 700,
+      excess: 101,
+    });
+  });
+
+  it("treats the ceiling itself as within budget", () => {
+    expect(measure("a".repeat(CEILING), CEILING)).toEqual({
+      over: 0,
+      maxLen: CEILING,
+      excess: 0,
+    });
+    expect(measure("a".repeat(CEILING + 1), CEILING)).toEqual({
+      over: 1,
+      maxLen: CEILING + 1,
+      excess: 1,
+    });
   });
 
   it("counts code points, so Korean prose is not charged UTF-8 bytes", () => {
     // 400 Hangul syllables are 400 chars but 1200 bytes. A byte-based count
-    // would fail this line at a 600 ceiling.
+    // would fail this line at a 600 ceiling. This is load-bearing for the real
+    // baseline: known-limitations.md's longest row measures 6,334 code points
+    // where a byte count reports 6,346.
     expect(measure("가".repeat(400), CEILING)).toEqual({
       over: 0,
       maxLen: 400,
+      excess: 0,
     });
-    expect(measure("가".repeat(601), CEILING).over).toBe(1);
+    expect(measure("가".repeat(601), CEILING)).toEqual({
+      over: 1,
+      maxLen: 601,
+      excess: 1,
+    });
   });
 });
 
-describe("findRatchetFailures", () => {
+describe("findMismatches", () => {
+  it("accepts a baseline that describes the docs exactly", () => {
+    expect(
+      findMismatches(
+        tree({
+          "docs/a.md": { over: 1, maxLen: 900, excess: 300 },
+          "docs/b.md": clean,
+        }),
+        targets([{ path: "docs/a.md", over: 1, maxLen: 900, excess: 300 }]),
+      ),
+    ).toEqual([]);
+  });
+
   it("fails a long line in a file with no baseline entry", () => {
     // A file cleaned up once is permanently protected — this is the incentive
     // the ratchet exists to create.
-    const failures = findRatchetFailures(
-      new Map([["docs/quality/doc-size-ratchet.md", { over: 1, maxLen: 704 }]]),
+    const problems = findMismatches(
+      tree({ "docs/a.md": { over: 1, maxLen: 704, excess: 104 } }),
       targets([]),
     );
 
-    // Both invariants fire here, and that is correct: the file carries debt it
-    // has no entry for, and the repo total rose to cover it.
-    expect(failures.some((f) => f.includes("no ratchet entry"))).toBe(true);
-    expect(failures.some((f) => f.includes("repo total"))).toBe(true);
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toContain("no baseline entry");
+    expect(problems[0]).toContain("Split the cell");
   });
 
-  it("fails when a file's over-ceiling count rises above its baseline", () => {
-    const failures = findRatchetFailures(
-      new Map([["docs/ROADMAP.md", { over: 62, maxLen: 2236 }]]),
-      targets([{ path: "docs/ROADMAP.md", over: 61, maxLen: 2236 }]),
+  it("tells the author to split when a measurement rises", () => {
+    const problems = findMismatches(
+      tree({ "docs/a.md": { over: 2, maxLen: 900, excess: 400 } }),
+      targets([{ path: "docs/a.md", over: 1, maxLen: 900, excess: 300 }]),
     );
 
-    expect(failures.some((f) => f.includes("baseline allows 61"))).toBe(true);
+    expect(problems).toHaveLength(2);
+    for (const problem of problems) {
+      expect(problem).toContain("rose to");
+      expect(problem).toContain("Split the cell instead of raising");
+    }
   });
 
-  it("fails when the longest line grows even though the count is flat", () => {
-    // The swap hole: replacing the 6,334-char row with a 6,400-char one leaves
-    // the count unchanged.
-    const failures = findRatchetFailures(
-      new Map([
-        ["docs/product/known-limitations.md", { over: 18, maxLen: 6400 }],
-      ]),
-      targets([
-        { path: "docs/product/known-limitations.md", over: 18, maxLen: 6334 },
-      ]),
+  it("tells the author to run --update when a measurement falls", () => {
+    // Falling is progress, but a baseline left above reality lets the file
+    // drift back up later under an allowance it no longer needs.
+    const problems = findMismatches(
+      tree({ "docs/a.md": { over: 1, maxLen: 880, excess: 280 } }),
+      targets([{ path: "docs/a.md", over: 1, maxLen: 900, excess: 300 }]),
     );
 
-    expect(failures).toHaveLength(1);
-    expect(failures[0]).toContain("may be edited but not lengthened");
+    expect(problems).toHaveLength(2);
+    for (const problem of problems) {
+      expect(problem).toContain("fell to");
+      expect(problem).toContain("--update");
+    }
   });
 
-  it("accepts editing a long cell without lengthening it", () => {
-    // Regression guard: the first draft gated on `git diff` and rejected a
-    // review fix that rewrote one clause inside an already-long cell.
-    const failures = findRatchetFailures(
-      new Map([
-        [
-          "docs/contributor-guide/smoke-matrix/h1-data-source.md",
-          { over: 9, maxLen: 2880 },
-        ],
-      ]),
+  it("catches a non-longest long line growing while count and max stay flat", () => {
+    // The hole `excess` exists to close: with only `over` and `maxLen`, a
+    // 601-char row could grow to 899 in a file whose longest row is 900 and
+    // every tracked number would be unchanged.
+    const problems = findMismatches(
+      tree({ "docs/a.md": { over: 2, maxLen: 900, excess: 599 } }),
+      targets([{ path: "docs/a.md", over: 2, maxLen: 900, excess: 301 }]),
+    );
+
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toContain("excess chars rose to 599");
+  });
+
+  it("catches a swap that shortens the longest row while the count stays flat", () => {
+    // The hole `maxLen` exists to close, in the direction that matters for
+    // known-limitations.md: 6,334 -> 6,000 is progress and must be recorded,
+    // not absorbed silently.
+    const problems = findMismatches(
+      tree({
+        "docs/product/known-limitations.md": {
+          over: 18,
+          maxLen: 6000,
+          excess: 100000,
+        },
+      }),
       targets([
         {
-          path: "docs/contributor-guide/smoke-matrix/h1-data-source.md",
-          over: 9,
-          maxLen: 2880,
+          path: "docs/product/known-limitations.md",
+          over: 18,
+          maxLen: 6334,
+          excess: 100334,
         },
       ]),
     );
 
-    expect(failures).toEqual([]);
+    expect(problems.some((p) => p.includes("longest line fell to 6000"))).toBe(
+      true,
+    );
   });
 
-  it("accepts a pure move that keeps the repo total flat", () => {
-    // Regression guard: the first draft flagged every row a doc split moved.
-    const failures = findRatchetFailures(
-      new Map([
-        ["docs/contributor-guide/parent.md", { over: 1, maxLen: 700 }],
-        ["docs/contributor-guide/band.md", { over: 5, maxLen: 900 }],
-      ]),
-      targets(
-        [
-          { path: "docs/contributor-guide/parent.md", over: 1, maxLen: 700 },
-          { path: "docs/contributor-guide/band.md", over: 5, maxLen: 900 },
-        ],
-        6,
-      ),
+  it("fails a baseline entry whose file is no longer measured", () => {
+    const problems = findMismatches(
+      tree({}),
+      targets([{ path: "docs/deleted.md", over: 2, maxLen: 700, excess: 200 }]),
     );
 
-    expect(failures).toEqual([]);
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toContain("no longer measured");
   });
 
-  it("fails when the repo total rises even if every file is within its entry", () => {
-    const failures = findRatchetFailures(
-      new Map([
-        ["docs/a.md", { over: 2, maxLen: 700 }],
-        ["docs/b.md", { over: 2, maxLen: 700 }],
-      ]),
-      targets(
-        [
-          { path: "docs/a.md", over: 3, maxLen: 700 },
-          { path: "docs/b.md", over: 3, maxLen: 700 },
-        ],
-        3,
-      ),
+  it("reports a pure move as a baseline to record, not as new debt", () => {
+    // The gate does fail here: the baseline no longer describes the tree. What
+    // matters is that the remedy is `--update`, not "split the cell" — the rows
+    // already existed. The companion assertion is in findUpdateRefusals.
+    const problems = findMismatches(
+      tree({
+        "docs/parent.md": clean,
+        "docs/band.md": { over: 5, maxLen: 900, excess: 600 },
+      }),
+      targets([{ path: "docs/parent.md", over: 5, maxLen: 900, excess: 600 }]),
     );
 
-    expect(failures.some((f) => f.includes("repo total"))).toBe(true);
+    expect(problems.some((p) => p.includes("rose to"))).toBe(false);
   });
 });
 
-describe("findStaleTargets", () => {
-  it("requires a target to be lowered once the debt is paid down", () => {
-    const stale = findStaleTargets(
-      new Map([["docs/ROADMAP.md", { over: 55, maxLen: 1800 }]]),
-      targets([{ path: "docs/ROADMAP.md", over: 61, maxLen: 2236 }]),
-    );
-
-    expect(stale.some((s) => s.includes("lower it to 55"))).toBe(true);
-    expect(stale.some((s) => s.includes("baseline longest 2236"))).toBe(true);
-    expect(stale.some((s) => s.includes("repo total"))).toBe(true);
+describe("findUpdateRefusals", () => {
+  it("records a pure move, since a doc split authors no new long rows", () => {
+    // Regression guard. An earlier design failed the smoke-matrix split
+    // outright, flagging every row it moved as newly authored — blocking the
+    // remedy this gate exists to encourage.
+    expect(
+      findUpdateRefusals(
+        tree({
+          "docs/parent.md": clean,
+          "docs/band.md": { over: 5, maxLen: 900, excess: 600 },
+        }),
+        targets([
+          { path: "docs/parent.md", over: 5, maxLen: 900, excess: 600 },
+        ]),
+      ),
+    ).toEqual([]);
   });
 
-  it("flags a baseline entry whose file is gone", () => {
-    const stale = findStaleTargets(
-      new Map(),
-      targets([{ path: "docs/deleted.md", over: 2, maxLen: 700 }], 0),
+  it("records an edit that shortens an already-long cell", () => {
+    // Regression guard. An earlier design failed a review fix that rewrote one
+    // clause inside a grandfathered cell, because the edit changed the line
+    // text. Editing a long cell is not the failure mode.
+    expect(
+      findUpdateRefusals(
+        tree({ "docs/a.md": { over: 1, maxLen: 880, excess: 280 } }),
+        targets([{ path: "docs/a.md", over: 1, maxLen: 900, excess: 300 }]),
+      ),
+    ).toEqual([]);
+  });
+
+  it("refuses a baseline rewrite that adds a long line", () => {
+    const refusals = findUpdateRefusals(
+      tree({ "docs/a.md": { over: 2, maxLen: 900, excess: 400 } }),
+      targets([{ path: "docs/a.md", over: 1, maxLen: 900, excess: 300 }]),
     );
 
-    expect(stale.some((s) => s.includes("no longer exists"))).toBe(true);
+    expect(refusals.some((r) => r.includes("over-ceiling lines"))).toBe(true);
+    expect(refusals.some((r) => r.includes("excess chars"))).toBe(true);
+  });
+
+  it("refuses a baseline rewrite that lengthens a long line without adding one", () => {
+    const refusals = findUpdateRefusals(
+      tree({ "docs/a.md": { over: 2, maxLen: 900, excess: 599 } }),
+      targets([{ path: "docs/a.md", over: 2, maxLen: 900, excess: 301 }]),
+    );
+
+    expect(refusals).toHaveLength(1);
+    expect(refusals[0]).toContain("excess chars would rise from 301 to 599");
+  });
+});
+
+describe("buildTargets", () => {
+  it("records only files carrying debt, sorted by path", () => {
+    expect(
+      buildTargets(
+        tree({
+          "docs/z.md": { over: 1, maxLen: 700, excess: 100 },
+          "docs/a.md": { over: 2, maxLen: 900, excess: 400 },
+          "docs/clean.md": clean,
+        }),
+        CEILING,
+      ),
+    ).toEqual({
+      version: 3,
+      ceiling: CEILING,
+      entries: [
+        { path: "docs/a.md", over: 2, maxLen: 900, excess: 400 },
+        { path: "docs/z.md", over: 1, maxLen: 700, excess: 100 },
+      ],
+    });
+  });
+});
+
+describe("parseTargets", () => {
+  it("rejects a mistyped entry key instead of silently dropping an invariant", () => {
+    // Without the shape check, `maxlen` reads back as undefined, every
+    // comparison against it is false, and the longest-line rule is gone with
+    // no output at all.
+    expect(() =>
+      parseTargets({
+        version: 3,
+        ceiling: CEILING,
+        entries: [{ path: "docs/a.md", over: 1, maxlen: 900, excess: 300 }],
+      }),
+    ).toThrow(/malformed/);
+  });
+
+  it("rejects an older baseline version", () => {
+    expect(() =>
+      parseTargets({ version: 2, ceiling: CEILING, total: 205, entries: [] }),
+    ).toThrow(/unsupported shape/);
+  });
+
+  it("accepts the committed baseline shape", () => {
+    expect(
+      parseTargets({
+        version: 3,
+        ceiling: CEILING,
+        entries: [{ path: "docs/a.md", over: 1, maxLen: 900, excess: 300 }],
+      }).entries,
+    ).toHaveLength(1);
   });
 });

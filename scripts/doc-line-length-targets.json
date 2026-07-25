@@ -1,92 +1,108 @@
 {
-  "version": 2,
+  "version": 3,
   "ceiling": 600,
-  "total": 205,
   "entries": [
-    {
-      "path": "docs/ROADMAP.md",
-      "over": 60,
-      "maxLen": 2236
-    },
     {
       "path": "docs/contributor-guide/fixture-test-topology-inventory.md",
       "over": 1,
-      "maxLen": 765
+      "maxLen": 765,
+      "excess": 165
     },
     {
       "path": "docs/contributor-guide/release/release-notes-support-matrix.md",
       "over": 1,
-      "maxLen": 617
+      "maxLen": 617,
+      "excess": 17
     },
     {
       "path": "docs/contributor-guide/repository-topology-inventory.md",
       "over": 25,
-      "maxLen": 681
+      "maxLen": 681,
+      "excess": 2025
     },
     {
       "path": "docs/contributor-guide/smoke-matrix/h1-data-source.md",
       "over": 9,
-      "maxLen": 2880
+      "maxLen": 2880,
+      "excess": 8769
     },
     {
       "path": "docs/contributor-guide/smoke-matrix/h2-rdbms-parity.md",
       "over": 16,
-      "maxLen": 1408
+      "maxLen": 1408,
+      "excess": 4945
     },
     {
       "path": "docs/contributor-guide/smoke-matrix/h3-duckdb-file-analytics.md",
       "over": 4,
-      "maxLen": 2333
+      "maxLen": 2333,
+      "excess": 2379
     },
     {
       "path": "docs/contributor-guide/smoke-matrix/h4-rdbms-intelligence.md",
       "over": 1,
-      "maxLen": 622
+      "maxLen": 622,
+      "excess": 22
     },
     {
       "path": "docs/contributor-guide/smoke-matrix/h5-non-rdbms.md",
       "over": 20,
-      "maxLen": 2496
+      "maxLen": 2496,
+      "excess": 10548
     },
     {
       "path": "docs/contributor-guide/smoke-matrix/h6-wider-source-candidates.md",
       "over": 4,
-      "maxLen": 1638
+      "maxLen": 1638,
+      "excess": 2035
     },
     {
       "path": "docs/contributor-guide/smoke-matrix/h7-ops-security-reliability.md",
       "over": 11,
-      "maxLen": 2271
+      "maxLen": 2271,
+      "excess": 5617
     },
     {
       "path": "docs/contributor-guide/smoke-matrix/postgresql-query-workbench.md",
       "over": 4,
-      "maxLen": 1116
+      "maxLen": 1116,
+      "excess": 1127
     },
     {
       "path": "docs/contributor-guide/smoke-matrix/sqlite-file-dbms.md",
       "over": 5,
-      "maxLen": 1005
+      "maxLen": 1005,
+      "excess": 1139
     },
     {
       "path": "docs/contributor-guide/testing-and-quality.md",
       "over": 1,
-      "maxLen": 753
-    },
-    {
-      "path": "docs/product/README.md",
-      "over": 14,
-      "maxLen": 3470
+      "maxLen": 753,
+      "excess": 153
     },
     {
       "path": "docs/product/known-limitations.md",
       "over": 18,
-      "maxLen": 6334
+      "maxLen": 6334,
+      "excess": 33054
     },
     {
       "path": "docs/product/query-language-support.md",
       "over": 11,
-      "maxLen": 2693
+      "maxLen": 2693,
+      "excess": 12639
+    },
+    {
+      "path": "docs/product/README.md",
+      "over": 14,
+      "maxLen": 3470,
+      "excess": 12808
+    },
+    {
+      "path": "docs/ROADMAP.md",
+      "over": 60,
+      "maxLen": 2236,
+      "excess": 19978
     }
   ]
 }

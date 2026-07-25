@@ -6,52 +6,81 @@
 // line exceeds the ceiling — so "line length" here is in practice "table cell
 // length".
 //
-// markdownlint MD013 cannot cover this: its default config excludes tables and
-// code blocks, which is exactly where the long lines live.
+// Nothing else in this repo measures line length. `markdownlint` is not a
+// dependency (no config, no lockfile entry), and MD013 would not substitute
+// anyway: it has no notion of grandfathering the rows that already exist, which
+// is the whole reason this gate can be turned on without a 205-row rewrite.
 //
-// Two invariants, both compared against the committed baseline in
-// `scripts/doc-line-length-targets.json` — the same shape as the coverage
-// ratchet. Adding debt therefore requires editing a tracked file, and that edit
-// is what fails:
+// # The contract is exact match, not "may only fall"
 //
-//   1. Total over-ceiling lines may only fall. This is what catches new long
-//      content, and it stays quiet for pure moves: splitting a doc relocates
-//      long rows into new files without changing the total.
-//   2. Per-file longest line may only fall, and a file with no baseline entry
-//      must have every line at or under the ceiling. Without the max rule,
-//      swapping the 6,334-char row in known-limitations.md for a 6,000-char one
-//      keeps the total flat and passes. The no-entry half means a file cleaned
-//      up once is permanently
-//      protected, which is the actual incentive the ratchet exists to create.
+// The baseline in `scripts/doc-line-length-targets.json` must describe the
+// working tree exactly: same over-ceiling count, same longest line, same total
+// excess, per file. Both directions fail. That is deliberate — a baseline that
+// silently disagrees with reality is how a ratchet rots — but it means ANY
+// change to a long line requires a baseline update in the same commit.
 //
-// An earlier draft gated on `git diff` instead: any added-or-changed line over
-// the ceiling failed unless it existed verbatim in the base revision. That
-// rejected legitimate work twice — first every row a doc split moved, then a
-// review fix that rewrote one clause inside an already-long grandfathered cell.
-// Editing a long cell is not the failure mode; growing or multiplying long cells
-// is, and the baseline comparison expresses exactly that.
+// `--update` does that for you, and it is the only thing that enforces
+// direction: it refuses to write a baseline whose repo-wide over-count or total
+// excess is higher than the one already committed. So debt can be paid down or
+// moved between files, and cannot grow.
+//
+// Three numbers per file, because each closes a hole the others leave open:
+//
+//   - `over`   — how many lines exceed the ceiling. Catches new long rows.
+//   - `maxLen` — the longest line. Without it, swapping the 6,334-char row in
+//                known-limitations.md for a 6,000-char one keeps the count flat.
+//   - `excess` — summed chars above the ceiling. Without it, a non-longest long
+//                line can grow all the way to `maxLen` with count and max both
+//                unchanged.
+//
+// A file with no entry must have every line at or under the ceiling, so a file
+// cleaned up once is permanently protected. An entry whose file is gone must be
+// removed.
+//
+// # Two rejected designs, recorded so they are not re-proposed
+//
+// 1. A `git diff` rule: any added-or-changed line over the ceiling fails unless
+//    it existed verbatim in the base revision. It rejected legitimate work
+//    twice — every row a doc split moved, and then a review fix that rewrote one
+//    clause inside an already-long grandfathered cell. It also needed a base
+//    ref, so a shallow-fetch CI checkout with no merge base would silently skip
+//    half the gate.
+// 2. A "may only fall" rule with no `--update`: reviewable in principle, but it
+//    let a paid-down baseline sit above reality indefinitely, and the earlier
+//    draft of this file claimed that property while actually implementing exact
+//    match. The claim was wrong in both directions: a pure move failed, and an
+//    improvement failed.
+//
+// Deliberate ceiling: hand-editing the baseline upward passes the gate. Nothing
+// here can prevent that without a base ref. What it buys is that the raise shows
+// up as an explicit diff in a tracked file, which is the same posture as
+// `scripts/coverage-ratchet-targets.json`.
 
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 
 type RatchetEntry = {
   path: string;
   over: number;
   maxLen: number;
+  excess: number;
 };
 
 type RatchetTargets = {
   version: number;
   ceiling: number;
-  total: number;
   entries: RatchetEntry[];
 };
 
 export type FileMeasurement = {
   over: number;
   maxLen: number;
+  excess: number;
 };
+
+const TARGETS_VERSION = 3;
 
 const repoRoot =
   process.env.DOC_LINE_LENGTH_REPO_ROOT ??
@@ -83,111 +112,170 @@ export function isMeasuredDoc(relativePath: string): boolean {
 export function measure(text: string, ceiling: number): FileMeasurement {
   let over = 0;
   let maxLen = 0;
+  let excess = 0;
   for (const line of text.split("\n")) {
     const length = [...line].length;
-    if (length > ceiling) over += 1;
+    if (length > ceiling) {
+      over += 1;
+      excess += length - ceiling;
+    }
     if (length > maxLen) maxLen = length;
   }
-  return { over, maxLen };
+  return { over, maxLen, excess };
 }
 
-export function findRatchetFailures(
+function sumMeasurements(actual: ReadonlyMap<string, FileMeasurement>): {
+  over: number;
+  excess: number;
+} {
+  let over = 0;
+  let excess = 0;
+  for (const measurement of actual.values()) {
+    over += measurement.over;
+    excess += measurement.excess;
+  }
+  return { over, excess };
+}
+
+function sumEntries(entries: readonly RatchetEntry[]): {
+  over: number;
+  excess: number;
+} {
+  let over = 0;
+  let excess = 0;
+  for (const entry of entries) {
+    over += entry.over;
+    excess += entry.excess;
+  }
+  return { over, excess };
+}
+
+/**
+ * Every way the baseline can disagree with the working tree. The direction of
+ * the mismatch only changes the remedy printed, never whether it fails: a
+ * baseline that no longer describes reality is broken either way.
+ */
+export function findMismatches(
   actual: ReadonlyMap<string, FileMeasurement>,
   targets: RatchetTargets,
 ): string[] {
-  const failures: string[] = [];
-  const baseline = new Map(targets.entries.map((e) => [e.path, e]));
+  const problems: string[] = [];
+  const baseline = new Map(targets.entries.map((entry) => [entry.path, entry]));
   const { ceiling } = targets;
 
-  let total = 0;
   for (const [relativePath, measurement] of actual) {
-    total += measurement.over;
     const entry = baseline.get(relativePath);
 
     if (entry === undefined) {
       if (measurement.over > 0) {
-        failures.push(
-          `${relativePath}: ${measurement.over} line(s) over ${ceiling} chars in a file with no ratchet entry ` +
-            `(longest ${measurement.maxLen}). Split the cell into domain-grouped rows.`,
+        problems.push(
+          `${relativePath}: ${measurement.over} line(s) over ${ceiling} chars (longest ${measurement.maxLen}) ` +
+            `in a file with no baseline entry. Split the cell into domain-grouped rows; a file cleaned up once stays clean.`,
         );
       }
       continue;
     }
 
-    if (measurement.over > entry.over) {
-      failures.push(
-        `${relativePath}: ${measurement.over} lines over ${ceiling} chars, baseline allows ${entry.over}. ` +
-          `Split the cell instead of raising the target.`,
-      );
-    }
-    if (measurement.maxLen > entry.maxLen) {
-      failures.push(
-        `${relativePath}: longest line grew to ${measurement.maxLen} chars, baseline ${entry.maxLen}. ` +
-          `A long cell may be edited but not lengthened.`,
+    for (const [field, actualValue, baselineValue] of [
+      ["over-ceiling lines", measurement.over, entry.over],
+      ["longest line", measurement.maxLen, entry.maxLen],
+      ["excess chars", measurement.excess, entry.excess],
+    ] as const) {
+      if (actualValue === baselineValue) continue;
+      problems.push(
+        actualValue > baselineValue
+          ? `${relativePath}: ${field} rose to ${actualValue}, baseline ${baselineValue}. ` +
+              `Split the cell instead of raising the baseline.`
+          : `${relativePath}: ${field} fell to ${actualValue}, baseline ${baselineValue}. ` +
+              `Record it with \`pnpm docs:lines --update\`.`,
       );
     }
   }
 
-  if (total > targets.total) {
-    failures.push(
-      `repo total: ${total} lines over ${ceiling} chars, baseline ${targets.total}. ` +
-        `Net new long lines are not accepted; a pure move keeps this total flat.`,
+  for (const entry of targets.entries) {
+    if (actual.has(entry.path)) continue;
+    problems.push(
+      `${entry.path}: baseline entry for a file that is no longer measured. ` +
+        `Record it with \`pnpm docs:lines --update\`.`,
     );
   }
 
-  return failures;
+  return problems;
 }
 
-export function findStaleTargets(
+/**
+ * The only direction check in the gate. A baseline rewrite may record less debt
+ * than before, or the same debt in different files (a doc split moves long rows
+ * without authoring any), but never more.
+ */
+export function findUpdateRefusals(
   actual: ReadonlyMap<string, FileMeasurement>,
   targets: RatchetTargets,
 ): string[] {
-  const stale: string[] = [];
-  let total = 0;
-  for (const measurement of actual.values()) total += measurement.over;
+  const next = sumMeasurements(actual);
+  const current = sumEntries(targets.entries);
+  const refusals: string[] = [];
 
-  for (const entry of targets.entries) {
-    const measurement = actual.get(entry.path);
-    if (measurement === undefined) {
-      stale.push(
-        `${entry.path}: baseline entry for a file that no longer exists — remove it.`,
-      );
-      continue;
-    }
-    if (measurement.over < entry.over) {
-      stale.push(
-        `${entry.path}: baseline ${entry.over} but only ${measurement.over} remain — lower it to ${measurement.over}.`,
-      );
-    }
-    if (measurement.maxLen < entry.maxLen) {
-      stale.push(
-        `${entry.path}: baseline longest ${entry.maxLen} but actual is ${measurement.maxLen} — lower it.`,
-      );
-    }
-  }
-
-  if (total < targets.total) {
-    stale.push(
-      `repo total: baseline ${targets.total} but only ${total} remain — lower it to ${total}.`,
+  if (next.over > current.over) {
+    refusals.push(
+      `repo over-ceiling lines would rise from ${current.over} to ${next.over}.`,
     );
   }
-
-  return stale;
+  if (next.excess > current.excess) {
+    refusals.push(
+      `repo excess chars would rise from ${current.excess} to ${next.excess}.`,
+    );
+  }
+  return refusals;
 }
 
-function readTargets(): RatchetTargets {
-  const parsed = JSON.parse(
-    readFileSync(path.join(repoRoot, targetsPath), "utf8"),
-  ) as RatchetTargets;
+export function buildTargets(
+  actual: ReadonlyMap<string, FileMeasurement>,
+  ceiling: number,
+): RatchetTargets {
+  const entries = [...actual.entries()]
+    .filter(([, measurement]) => measurement.over > 0)
+    .map(([entryPath, measurement]) => ({
+      path: entryPath,
+      over: measurement.over,
+      maxLen: measurement.maxLen,
+      excess: measurement.excess,
+    }))
+    .sort((a, b) => a.path.localeCompare(b.path));
+  return { version: TARGETS_VERSION, ceiling, entries };
+}
+
+export function parseTargets(raw: unknown): RatchetTargets {
+  const parsed = raw as RatchetTargets;
   if (
-    parsed.version !== 2 ||
+    parsed?.version !== TARGETS_VERSION ||
     typeof parsed.ceiling !== "number" ||
-    typeof parsed.total !== "number" ||
     !Array.isArray(parsed.entries)
   ) {
     throw new Error("doc line-length target file has an unsupported shape");
   }
+  // Without this, a single mistyped key (`maxlen` for `maxLen`) reads back as
+  // undefined, every comparison against it is false, and that invariant is
+  // silently gone.
+  for (const entry of parsed.entries) {
+    if (
+      typeof entry?.path !== "string" ||
+      typeof entry.over !== "number" ||
+      typeof entry.maxLen !== "number" ||
+      typeof entry.excess !== "number"
+    ) {
+      throw new Error(
+        `doc line-length target entry is malformed: ${JSON.stringify(entry)}`,
+      );
+    }
+  }
   return parsed;
+}
+
+function readTargets(): RatchetTargets {
+  return parseTargets(
+    JSON.parse(readFileSync(path.join(repoRoot, targetsPath), "utf8")),
+  );
 }
 
 function listMeasuredDocs(): string[] {
@@ -201,42 +289,56 @@ function listMeasuredDocs(): string[] {
     .sort();
 }
 
-function main(): void {
-  const targets = readTargets();
-  const measured = listMeasuredDocs();
+function measureRepo(ceiling: number): Map<string, FileMeasurement> {
   const actual = new Map<string, FileMeasurement>();
-  for (const relativePath of measured) {
+  for (const relativePath of listMeasuredDocs()) {
     actual.set(
       relativePath,
-      measure(
-        readFileSync(path.join(repoRoot, relativePath), "utf8"),
-        targets.ceiling,
-      ),
+      measure(readFileSync(path.join(repoRoot, relativePath), "utf8"), ceiling),
     );
   }
+  return actual;
+}
 
-  const failures = findRatchetFailures(actual, targets);
-  const stale = findStaleTargets(actual, targets);
+function main(): void {
+  const targets = readTargets();
+  const actual = measureRepo(targets.ceiling);
 
-  if (stale.length > 0) {
-    console.error("doc:lines ratchet has stale targets:");
-    for (const message of stale) console.error(`- ${message}`);
+  if (process.argv.includes("--update")) {
+    const refusals = findUpdateRefusals(actual, targets);
+    if (refusals.length > 0) {
+      console.error("doc:lines --update refused: debt may not grow.");
+      for (const refusal of refusals) console.error(`- ${refusal}`);
+      console.error(
+        "Split the offending cell into domain-grouped rows instead.",
+      );
+      process.exit(1);
+    }
+    writeFileSync(
+      path.join(repoRoot, targetsPath),
+      `${JSON.stringify(buildTargets(actual, targets.ceiling), null, 2)}\n`,
+    );
+    const totals = sumMeasurements(actual);
+    console.log(
+      `doc:lines baseline written (${totals.over} lines over ${targets.ceiling} chars, ${totals.excess} excess chars)`,
+    );
+    return;
   }
-  if (failures.length > 0) {
-    console.error("doc:lines failed:");
-    for (const message of failures) console.error(`- ${message}`);
-  }
-  if (failures.length > 0 || stale.length > 0) {
+
+  const problems = findMismatches(actual, targets);
+  if (problems.length > 0) {
+    console.error(
+      "doc:lines failed — the baseline no longer matches the docs:",
+    );
+    for (const problem of problems) console.error(`- ${problem}`);
     process.exit(1);
   }
 
-  let total = 0;
-  for (const measurement of actual.values()) total += measurement.over;
+  const totals = sumMeasurements(actual);
   console.log(
-    `doc:lines ok (ceiling ${targets.ceiling}, ${measured.length} docs, ${total} grandfathered lines)`,
+    `doc:lines ok (ceiling ${targets.ceiling}, ${actual.size} docs, ${totals.over} grandfathered lines, ${totals.excess} excess chars)`,
   );
 }
 
-if (process.env.DOC_LINE_LENGTH_SKIP_MAIN !== "1") {
-  main();
-}
+const invokedPath = process.argv[1] ? path.resolve(process.argv[1]) : "";
+if (import.meta.url === pathToFileURL(invokedPath).href) main();

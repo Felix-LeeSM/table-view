@@ -96,9 +96,11 @@ jobs:
     #
     # Two metrics, because they catch different failures:
     #   - check-doc-size.sh --strict: whole-file chars (~30k tokens at the cap).
-    #   - docs:lines: per-line chars, which in this repo means per table cell.
-    #     Every baseline violation is a table row; markdownlint MD013 cannot
-    #     cover it because its default config excludes tables.
+    #   - docs:lines: per-line chars, which in this repo means per table cell
+    #     (every baseline violation is a table row). Nothing else here measures
+    #     line length; markdownlint is not a dependency, and MD013 could not
+    #     grandfather the 205 rows that already exist. See
+    #     docs/quality/doc-size-ratchet.md.
     #
     # Intentionally NOT change-gated: a docs-only PR is exactly the PR this gate
     # exists for, so it must not be skipped by the docs-only classifier.
