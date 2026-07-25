@@ -103,3 +103,64 @@ describe("cell-domain guard override — B1 regression (#1074)", () => {
     expect(sels.some((s) => /getState/.test(s))).toBe(false);
   });
 });
+
+/**
+ * #1792 — 위 shape assertion 은 selector 문자열이 config 에 *존재*하는지만 본다.
+ * esquery 가 실제로 매칭하는지는 검증하지 않으므로 노드 타입/속성 경로가 틀린
+ * selector (예: `JSXOpeningElement[name.value='select']`) 로 바뀌어도 통과한다
+ * — 규칙이 죽어도 green (#1781 리뷰 non-blocking). 아래 두 건이 cell-domain
+ * glob 에 매칭되는 경로를 실제로 lint 해 *발화*를 고정한다 (2026-07-25).
+ *
+ * cell-domain 경로는 typed lint(projectService) 대상이라, 실존하지 않는 fixture
+ * 는 "not found by the project service" fatal parse 를 낸다. 실존 .tsx 를
+ * typed-parse 하면 반대로 type program 로딩이 vitest 병렬에서 10s 를 넘긴다
+ * (위 주석). overrideConfig 로 이 lint 만 syntactic parser 로 내려 둘 다 피한다
+ * — `no-restricted-syntax` 는 건드리지 않으므로 발화 대상은 실 config 그대로다.
+ */
+const cellDomainEslint = new ESLint({
+  cwd: process.cwd(),
+  overrideConfig: {
+    files: ["**/*.tsx"],
+    languageOptions: { parserOptions: { projectService: false } },
+    // 타입 정보 없이 파싱하므로 type-aware 룰은 끈다 (없으면 rule crash).
+    rules: { "@typescript-eslint/no-deprecated": "off" },
+  },
+});
+const CELL_DOMAIN_FIXTURE = path.resolve(
+  "src/components/datagrid/__guard-fixture__/CellDomainGuard.tsx",
+);
+
+async function cellDomainMessages(code: string): Promise<string[]> {
+  const results = await cellDomainEslint.lintText(code, {
+    filePath: CELL_DOMAIN_FIXTURE,
+  });
+  const messages = results[0]?.messages ?? [];
+  // fatal parse 는 위반 0건과 구분되지 않아 위음성을 만든다 — 먼저 깬다.
+  const fatal = messages.find((m) => m.fatal);
+  if (fatal) throw new Error(`fixture parse failed: ${fatal.message}`);
+  return messages
+    .filter((m) => m.ruleId === "no-restricted-syntax")
+    .map((m) => m.message);
+}
+
+describe("cell-domain guard selector firing (#1792)", () => {
+  it("reports native <select> in cell-domain code", async () => {
+    // Reason: #1792 — B1 재나열이 셀렉터 문자열만 보존하고 실제 매칭은 잃는
+    // 회귀(오타/속성 경로 변경)를 잡는다. shape assertion 으로는 불가.
+    const messages = await cellDomainMessages(
+      `export const C = () => <select><option>a</option></select>;`,
+    );
+    expect(messages).toContain(
+      "Use <Select> from @components/ui/select instead of native <select>.",
+    );
+  });
+
+  it("reports raw JSON.stringify in cell-domain code", async () => {
+    // Reason: #1792 — CELL_JSON_STRINGIFY_GUARD 는 어떤 테스트도 발화를 보지
+    // 않았다. Sprint 305 DataGrid freeze 재발 방지선이므로 발화로 고정.
+    const messages = await cellDomainMessages(
+      `export const f = (v: unknown) => JSON.stringify(v);`,
+    );
+    expect(messages.some((m) => m.includes("safeStringifyCell"))).toBe(true);
+  });
+});
