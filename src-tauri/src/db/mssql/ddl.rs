@@ -109,8 +109,8 @@ impl MssqlAdapter {
 
         let qualified = qualified_table(&req.schema, &req.table);
         let mut statements = Vec::with_capacity(req.changes.len());
-        for change in &req.changes {
-            statements.extend(build_alter_table_statements(&qualified, change)?);
+        for (index, change) in req.changes.iter().enumerate() {
+            statements.extend(build_alter_table_statements(&qualified, change, index)?);
         }
 
         self.preview_or_execute(req.preview_only, statements, "alter table")
@@ -344,6 +344,7 @@ impl MssqlAdapter {
 fn build_alter_table_statements(
     qualified: &str,
     change: &ColumnChange,
+    change_index: usize,
 ) -> Result<Vec<String>, AppError> {
     match change {
         ColumnChange::Add {
@@ -381,6 +382,7 @@ fn build_alter_table_statements(
             }
 
             let mut statements = Vec::new();
+            let mut alter_column = None;
             match new_data_type.as_deref().map(str::trim) {
                 Some(data_type) => {
                     if data_type.is_empty() {
@@ -395,7 +397,7 @@ fn build_alter_table_statements(
                         Some(false) => " NOT NULL",
                         None => "",
                     };
-                    statements.push(format!(
+                    alter_column = Some(format!(
                         "ALTER TABLE {} ALTER COLUMN {} {}{}",
                         qualified,
                         quote_ident(name),
@@ -416,11 +418,20 @@ fn build_alter_table_statements(
                 None => {}
             }
 
+            let mut rebind_default = None;
             if let Some(default) = new_default_value.as_deref().map(str::trim) {
                 if !default.is_empty() {
                     validate_ddl_fragment(default, "DEFAULT value")?;
-                    statements.push(build_drop_default_constraint_statement(qualified, name));
-                    statements.push(format!(
+                    // Drop FIRST: while a default definition is still bound to
+                    // the column, T-SQL restricts ALTER COLUMN to length /
+                    // precision / scale edits, so a real type change here dies
+                    // with Msg 5074 -> 4922 and rolls the transaction back.
+                    statements.push(build_drop_default_constraint_statement(
+                        qualified,
+                        name,
+                        change_index,
+                    ));
+                    rebind_default = Some(format!(
                         "ALTER TABLE {} ADD DEFAULT ({}) FOR {}",
                         qualified,
                         default,
@@ -428,6 +439,8 @@ fn build_alter_table_statements(
                     ));
                 }
             }
+            statements.extend(alter_column);
+            statements.extend(rebind_default);
 
             if statements.is_empty() {
                 return Err(AppError::Validation(format!(
@@ -455,16 +468,27 @@ fn build_alter_table_statements(
 /// fed to `DROP CONSTRAINT` through `QUOTENAME`; the schema/table/column
 /// literals are `validate_identifier`-checked (ASCII alphanumeric + `_`) before
 /// they reach this builder, and are single-quote escaped anyway.
-fn build_drop_default_constraint_statement(qualified: &str, column: &str) -> String {
+///
+/// The variable carries the change index because `preview_or_execute` joins the
+/// statement list with "; " for the preview dialog: a batch may only declare a
+/// given variable name once (Msg 134), so a two-column DEFAULT edit needs two
+/// names. Execution is unaffected either way — `execute_schema_change` sends one
+/// TDS batch per statement.
+fn build_drop_default_constraint_statement(
+    qualified: &str,
+    column: &str,
+    change_index: usize,
+) -> String {
     format!(
-        "DECLARE @default_name sysname; \
-         SELECT @default_name = dc.name \
+        "DECLARE @default_name_{index} sysname; \
+         SELECT @default_name_{index} = dc.name \
          FROM sys.default_constraints AS dc \
          JOIN sys.columns AS c \
          ON c.object_id = dc.parent_object_id AND c.column_id = dc.parent_column_id \
          WHERE dc.parent_object_id = OBJECT_ID(N'{table_literal}') AND c.name = N'{column_literal}'; \
-         IF @default_name IS NOT NULL \
-         EXEC(N'ALTER TABLE {qualified} DROP CONSTRAINT ' + QUOTENAME(@default_name))",
+         IF @default_name_{index} IS NOT NULL \
+         EXEC(N'ALTER TABLE {qualified} DROP CONSTRAINT ' + QUOTENAME(@default_name_{index}))",
+        index = change_index,
         table_literal = qualified.replace('\'', "''"),
         column_literal = column.replace('\'', "''"),
     )

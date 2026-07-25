@@ -234,7 +234,11 @@ fn modify_users_column(change: ColumnChange) -> AlterTableRequest {
 // alongside the type/nullability change, and SQL Server declares
 // `ddl.alterTable` (`src/types/dataSource.ts`). T-SQL keeps the DEFAULT in its
 // own auto-named constraint, so the emitter has to drop the current one by
-// catalog lookup and rebind rather than reject the whole ALTER. (2026-07-25)
+// catalog lookup and rebind rather than reject the whole ALTER. The drop leads,
+// because ALTER COLUMN is restricted to length/precision/scale edits while a
+// default definition is still bound to the column (Msg 5074 -> 4922); the
+// structural order invariant lives in `tests/mssql_integration.rs`.
+// (2026-07-25)
 #[tokio::test]
 async fn alter_table_modify_swaps_the_column_default_constraint() {
     let req = modify_users_column(ColumnChange::Modify {
@@ -249,15 +253,15 @@ async fn alter_table_modify_swaps_the_column_default_constraint() {
 
     assert_eq!(
         sql,
-        "ALTER TABLE [dbo].[users] ALTER COLUMN [status] NVARCHAR(32) NOT NULL; \
-         DECLARE @default_name sysname; \
-         SELECT @default_name = dc.name \
+        "DECLARE @default_name_0 sysname; \
+         SELECT @default_name_0 = dc.name \
          FROM sys.default_constraints AS dc \
          JOIN sys.columns AS c \
          ON c.object_id = dc.parent_object_id AND c.column_id = dc.parent_column_id \
          WHERE dc.parent_object_id = OBJECT_ID(N'[dbo].[users]') AND c.name = N'status'; \
-         IF @default_name IS NOT NULL \
-         EXEC(N'ALTER TABLE [dbo].[users] DROP CONSTRAINT ' + QUOTENAME(@default_name)); \
+         IF @default_name_0 IS NOT NULL \
+         EXEC(N'ALTER TABLE [dbo].[users] DROP CONSTRAINT ' + QUOTENAME(@default_name_0)); \
+         ALTER TABLE [dbo].[users] ALTER COLUMN [status] NVARCHAR(32) NOT NULL; \
          ALTER TABLE [dbo].[users] ADD DEFAULT (N'active') FOR [status]"
     );
 }
@@ -287,7 +291,7 @@ async fn alter_table_modify_default_only_skips_alter_column_and_guards_fragments
         "default-only change must not emit ALTER COLUMN, got {sql:?}"
     );
     assert!(
-        sql.starts_with("DECLARE @default_name sysname;")
+        sql.starts_with("DECLARE @default_name_0 sysname;")
             && sql.ends_with("ALTER TABLE [dbo].[users] ADD DEFAULT (N'active') FOR [status]"),
         "expected drop-then-rebind pair, got {sql:?}"
     );
