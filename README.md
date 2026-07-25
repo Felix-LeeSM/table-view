@@ -191,8 +191,12 @@ Parser WASM 산출물은 `src/lib/**/wasm/` 아래에 체크인되어 있어 로
 
 ```bash
 pnpm test
-pnpm test -- --coverage
+pnpm exec vitest run --coverage
 ```
+
+> `pnpm test -- --coverage` 는 쓰지 않는다. pnpm 10 은 `--` 를 그대로 넘겨
+> `vitest run -- --coverage` 가 되고, vitest 는 `--` 뒤 인자를 플래그로 읽지
+> 않는다. 명령은 exit 0 으로 끝나지만 커버리지는 수집되지 않는다.
 
 ### 2. Rust 백엔드 단위 테스트
 
