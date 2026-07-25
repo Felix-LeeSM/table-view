@@ -1,9 +1,9 @@
 //! SQL Server structured DDL for the bounded table/index/constraint slice.
 //!
-//! Scope: table create/drop/rename/column alteration, index create/drop, and
-//! constraint add/drop. Enterprise/admin surfaces such as users, roles,
-//! backup/restore, jobs, SQLCMD, procedures, and trigger body authoring stay
-//! unsupported.
+//! Scope: table create/drop/rename/column alteration (type / nullability /
+//! DEFAULT constraint), index create/drop, and constraint add/drop.
+//! Enterprise/admin surfaces such as users, roles, backup/restore, jobs,
+//! SQLCMD, procedures, and trigger body authoring stay unsupported.
 
 use tracing::info;
 
@@ -110,7 +110,7 @@ impl MssqlAdapter {
         let qualified = qualified_table(&req.schema, &req.table);
         let mut statements = Vec::with_capacity(req.changes.len());
         for change in &req.changes {
-            statements.push(build_alter_table_statement(&qualified, change)?);
+            statements.extend(build_alter_table_statements(&qualified, change)?);
         }
 
         self.preview_or_execute(req.preview_only, statements, "alter table")
@@ -341,7 +341,10 @@ impl MssqlAdapter {
     }
 }
 
-fn build_alter_table_statement(qualified: &str, change: &ColumnChange) -> Result<String, AppError> {
+fn build_alter_table_statements(
+    qualified: &str,
+    change: &ColumnChange,
+) -> Result<Vec<String>, AppError> {
     match change {
         ColumnChange::Add {
             name,
@@ -357,11 +360,11 @@ fn build_alter_table_statement(qualified: &str, change: &ColumnChange) -> Result
                 comment: None,
                 is_identity: false,
             };
-            Ok(format!(
+            Ok(vec![format!(
                 "ALTER TABLE {} ADD {}",
                 qualified,
                 build_column_definition(&column)?
-            ))
+            )])
         }
         ColumnChange::Modify {
             name,
@@ -376,46 +379,95 @@ fn build_alter_table_statement(qualified: &str, change: &ColumnChange) -> Result
                     "SQL Server structured ALTER COLUMN USING expressions are not supported".into(),
                 ));
             }
-            if new_default_value.is_some() {
-                return Err(AppError::Unsupported(
-                    "SQL Server structured default-constraint changes are not supported".into(),
-                ));
+
+            let mut statements = Vec::new();
+            match new_data_type.as_deref().map(str::trim) {
+                Some(data_type) => {
+                    if data_type.is_empty() {
+                        return Err(AppError::Validation(format!(
+                            "Column '{}' must have a non-empty data type",
+                            name
+                        )));
+                    }
+                    validate_ddl_fragment(data_type, "Data type")?;
+                    let nullability = match new_nullable {
+                        Some(true) => " NULL",
+                        Some(false) => " NOT NULL",
+                        None => "",
+                    };
+                    statements.push(format!(
+                        "ALTER TABLE {} ALTER COLUMN {} {}{}",
+                        qualified,
+                        quote_ident(name),
+                        data_type,
+                        nullability
+                    ));
+                }
+                // T-SQL has no `ALTER COLUMN c NOT NULL` form — nullability is
+                // only expressible by restating the column type, so a
+                // type-less nullability edit cannot be emitted. A default-only
+                // edit *is* emittable: the DEFAULT lives in its own constraint.
+                None if new_nullable.is_some() => {
+                    return Err(AppError::Validation(format!(
+                        "SQL Server ALTER COLUMN requires a data type for '{}'",
+                        name
+                    )));
+                }
+                None => {}
             }
-            let Some(data_type) = new_data_type.as_deref().map(str::trim) else {
+
+            if let Some(default) = new_default_value.as_deref().map(str::trim) {
+                if !default.is_empty() {
+                    validate_ddl_fragment(default, "DEFAULT value")?;
+                    statements.push(build_drop_default_constraint_statement(qualified, name));
+                    statements.push(format!(
+                        "ALTER TABLE {} ADD DEFAULT ({}) FOR {}",
+                        qualified,
+                        default,
+                        quote_ident(name)
+                    ));
+                }
+            }
+
+            if statements.is_empty() {
                 return Err(AppError::Validation(format!(
-                    "SQL Server ALTER COLUMN requires a data type for '{}'",
+                    "SQL Server ALTER COLUMN requires a data type, nullability, or default change for '{}'",
                     name
                 )));
-            };
-            if data_type.is_empty() {
-                return Err(AppError::Validation(format!(
-                    "Column '{}' must have a non-empty data type",
-                    name
-                )));
             }
-            validate_ddl_fragment(data_type, "Data type")?;
-            let nullability = match new_nullable {
-                Some(true) => " NULL",
-                Some(false) => " NOT NULL",
-                None => "",
-            };
-            Ok(format!(
-                "ALTER TABLE {} ALTER COLUMN {} {}{}",
-                qualified,
-                quote_ident(name),
-                data_type,
-                nullability
-            ))
+            Ok(statements)
         }
         ColumnChange::Drop { name } => {
             validate_identifier(name, "Column name")?;
-            Ok(format!(
+            Ok(vec![format!(
                 "ALTER TABLE {} DROP COLUMN {}",
                 qualified,
                 quote_ident(name)
-            ))
+            )])
         }
     }
+}
+
+/// Issue #1071 — T-SQL stores a column DEFAULT in its own constraint, usually
+/// under an auto-generated name (`DF__users__status__3B75D760`), so rebinding a
+/// default means dropping whatever constraint currently owns the column first.
+/// The name is looked up from `sys.default_constraints` at execution time and
+/// fed to `DROP CONSTRAINT` through `QUOTENAME`; the schema/table/column
+/// literals are `validate_identifier`-checked (ASCII alphanumeric + `_`) before
+/// they reach this builder, and are single-quote escaped anyway.
+fn build_drop_default_constraint_statement(qualified: &str, column: &str) -> String {
+    format!(
+        "DECLARE @default_name sysname; \
+         SELECT @default_name = dc.name \
+         FROM sys.default_constraints AS dc \
+         JOIN sys.columns AS c \
+         ON c.object_id = dc.parent_object_id AND c.column_id = dc.parent_column_id \
+         WHERE dc.parent_object_id = OBJECT_ID(N'{table_literal}') AND c.name = N'{column_literal}'; \
+         IF @default_name IS NOT NULL \
+         EXEC(N'ALTER TABLE {qualified} DROP CONSTRAINT ' + QUOTENAME(@default_name))",
+        table_literal = qualified.replace('\'', "''"),
+        column_literal = column.replace('\'', "''"),
+    )
 }
 
 fn build_column_definition(column: &ColumnDefinition) -> Result<String, AppError> {

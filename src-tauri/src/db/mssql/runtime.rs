@@ -7,6 +7,7 @@ use tiberius::{
 };
 use tokio_util::sync::CancellationToken;
 
+use super::ddl::validate_identifier;
 use crate::db::raw_where::{validate_raw_where_clause, RawWhereDialect};
 use crate::error::AppError;
 use crate::models::{
@@ -269,6 +270,43 @@ impl MssqlAdapter {
             page_size,
             executed_query,
         })
+    }
+
+    /// Issue #1071 — the StructurePanel column editor probes NULL rows before
+    /// it offers SET NOT NULL (`src/components/structure/ColumnsEditor.tsx`).
+    /// Without this body SQL Server fell through to the `count_null_rows` trait
+    /// default (`Unsupported`) and, because the probe swallows errors by
+    /// design, the "N rows have NULL" warning silently never rendered.
+    ///
+    /// Identifiers cannot be bound as TDS parameters, so schema/table/column go
+    /// through the shared MSSQL `validate_identifier` (the same helper every
+    /// generated DDL statement uses) plus bracket quoting.
+    pub async fn count_null_rows(
+        &self,
+        schema: &str,
+        table: &str,
+        column: &str,
+    ) -> Result<i64, AppError> {
+        validate_identifier(schema, "Schema name")?;
+        validate_identifier(table, "Table name")?;
+        validate_identifier(column, "Column name")?;
+
+        let config = self.connected_config().await?;
+        let sql = count_null_rows_sql(schema, table, column);
+        let mut client = Self::connect_client(&config).await?;
+        let rows =
+            query_first_result(&mut client, "SQL Server NULL row count failed", &sql, &[]).await?;
+
+        Ok(rows
+            .first()
+            .map(|row| {
+                row.try_get::<i64, _>(0).map_err(|err| {
+                    AppError::Database(format!("SQL Server NULL row count decode failed: {err}"))
+                })
+            })
+            .transpose()?
+            .flatten()
+            .unwrap_or(0))
     }
 
     async fn execute_transactional_batch(
@@ -538,6 +576,14 @@ fn build_mssql_order_clause(
     } else {
         format!(" ORDER BY {}", order_parts.join(", "))
     }
+}
+
+fn count_null_rows_sql(schema: &str, table: &str, column: &str) -> String {
+    format!(
+        "SELECT COUNT_BIG(*) FROM {} WHERE {} IS NULL",
+        qualified_mssql_table(schema, table),
+        quote_mssql_identifier(column)
+    )
 }
 
 fn qualified_mssql_table(schema: &str, table: &str) -> String {
@@ -1509,6 +1555,18 @@ mod tests {
         );
         assert_eq!(qualified_mssql_table("", "odd]table"), "[odd]]table]");
         assert_eq!(qualified_mssql_table("dbo", "users"), "[dbo].[users]");
+    }
+
+    // Reason: issue #1071 — the SET NOT NULL pre-flight probe interpolates
+    // identifiers (TDS binds values only), so the emitted count must stay
+    // bracket-quoted and `COUNT_BIG` (a NULL count can exceed INT on a large
+    // table, which is exactly when the warning matters). (2026-07-25)
+    #[test]
+    fn null_row_probe_sql_is_bracket_quoted_count_big() {
+        assert_eq!(
+            count_null_rows_sql("dbo", "users", "email"),
+            "SELECT COUNT_BIG(*) FROM [dbo].[users] WHERE [email] IS NULL"
+        );
     }
 
     #[test]

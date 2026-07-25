@@ -455,22 +455,24 @@ async fn table_data_and_structured_ddl_execute_paths_require_open_connection() {
     assert_not_open(adapter.drop_constraint(&drop_constraint).await);
 }
 
-// Issue #1071 RED snapshot — the StructurePanel column editor probes
+// Reason: issue #1071 — the StructurePanel column editor probes
 // `count_null_rows` before it offers SET NOT NULL
 // (`src/components/structure/ColumnsEditor.tsx`), and the probe error is
-// swallowed on purpose, so the missing adapter body degrades silently: the
-// "N rows have NULL" warning never renders on SQL Server. This pins the
-// pre-implementation contract (trait-default `Unsupported`); the GREEN commit
-// replaces it with the validation + connection-guard suite. (2026-07-25)
+// swallowed on purpose, so a missing adapter body degrades silently instead of
+// surfacing. The override must reach the same connection guard as its pg/mysql
+// siblings and reject identifiers before any SQL is built. (2026-07-25)
 #[tokio::test]
-async fn null_row_probe_falls_through_to_the_trait_default_before_the_tsql_body_lands() {
-    let err = RdbAdapter::count_null_rows(&MssqlAdapter::new(), "dbo", "users", "email")
+async fn null_row_probe_validates_identifiers_and_requires_open_connection() {
+    let adapter = MssqlAdapter::new();
+
+    assert_not_open(RdbAdapter::count_null_rows(&adapter, "dbo", "users", "email").await);
+
+    let err = RdbAdapter::count_null_rows(&adapter, "dbo", "users", "email FROM sys.tables--")
         .await
         .unwrap_err();
-
     assert!(
-        matches!(err, AppError::Unsupported(ref message) if message.contains("NULL row counting")),
-        "expected the trait-default Unsupported, got {err:?}"
+        matches!(err, AppError::Validation(ref message) if message.contains("Column name")),
+        "expected column-name validation, got {err:?}"
     );
 }
 

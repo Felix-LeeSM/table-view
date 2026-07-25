@@ -218,47 +218,115 @@ async fn alter_table_preview_emits_tsql_statement_chain() {
     );
 }
 
-// Issue #1071 RED snapshot — the StructurePanel column editor
-// (`src/components/structure/ColumnsEditor.tsx`) emits `new_default_value`
-// whenever the user edits a column DEFAULT, and SQL Server declares
-// `ddl.alterTable` (`src/types/dataSource.ts`), so the affordance is visible
-// but every default edit fails. This commit pins the pre-implementation
-// contract; the GREEN commit replaces it with the default-constraint swap
-// suite. (2026-07-25)
-#[tokio::test]
-async fn alter_table_modify_default_change_is_unsupported_before_the_swap_lands() {
-    let modify = |change: ColumnChange| AlterTableRequest {
+fn modify_users_column(change: ColumnChange) -> AlterTableRequest {
+    AlterTableRequest {
         connection_id: "conn".into(),
         schema: "dbo".into(),
         table: "users".into(),
         changes: vec![change],
         preview_only: true,
         expected_database: None,
-    };
+    }
+}
 
-    let with_type = modify(ColumnChange::Modify {
+// Reason: issue #1071 — the StructurePanel column editor
+// (`src/components/structure/ColumnsEditor.tsx`) emits `new_default_value`
+// alongside the type/nullability change, and SQL Server declares
+// `ddl.alterTable` (`src/types/dataSource.ts`). T-SQL keeps the DEFAULT in its
+// own auto-named constraint, so the emitter has to drop the current one by
+// catalog lookup and rebind rather than reject the whole ALTER. (2026-07-25)
+#[tokio::test]
+async fn alter_table_modify_swaps_the_column_default_constraint() {
+    let req = modify_users_column(ColumnChange::Modify {
         name: "status".into(),
         new_data_type: Some("NVARCHAR(32)".into()),
         new_nullable: Some(false),
         new_default_value: Some("N'active'".into()),
         using_expression: None,
     });
-    assert!(matches!(
-        MssqlAdapter::new().alter_table(&with_type).await,
-        Err(AppError::Unsupported(message)) if message.contains("default-constraint changes")
-    ));
 
-    let default_only = modify(ColumnChange::Modify {
+    let sql = MssqlAdapter::new().alter_table(&req).await.unwrap().sql;
+
+    assert_eq!(
+        sql,
+        "ALTER TABLE [dbo].[users] ALTER COLUMN [status] NVARCHAR(32) NOT NULL; \
+         DECLARE @default_name sysname; \
+         SELECT @default_name = dc.name \
+         FROM sys.default_constraints AS dc \
+         JOIN sys.columns AS c \
+         ON c.object_id = dc.parent_object_id AND c.column_id = dc.parent_column_id \
+         WHERE dc.parent_object_id = OBJECT_ID(N'[dbo].[users]') AND c.name = N'status'; \
+         IF @default_name IS NOT NULL \
+         EXEC(N'ALTER TABLE [dbo].[users] DROP CONSTRAINT ' + QUOTENAME(@default_name)); \
+         ALTER TABLE [dbo].[users] ADD DEFAULT (N'active') FOR [status]"
+    );
+}
+
+// Reason: issue #1071 — a default-only edit carries no `new_data_type`, and in
+// T-SQL the DEFAULT lives outside the column definition, so the swap must run
+// without an ALTER COLUMN clause. Nullability still needs the type restated
+// (T-SQL has no `ALTER COLUMN c NOT NULL` form), an all-empty change must not
+// emit an empty ALTER, and the raw DEFAULT fragment stays behind
+// `validate_ddl_fragment` so it cannot append a statement. (2026-07-25)
+#[tokio::test]
+async fn alter_table_modify_default_only_skips_alter_column_and_guards_fragments() {
+    let default_only = modify_users_column(ColumnChange::Modify {
         name: "status".into(),
         new_data_type: None,
         new_nullable: None,
         new_default_value: Some("N'active'".into()),
         using_expression: None,
     });
-    assert!(matches!(
-        MssqlAdapter::new().alter_table(&default_only).await,
-        Err(AppError::Unsupported(message)) if message.contains("default-constraint changes")
-    ));
+    let sql = MssqlAdapter::new()
+        .alter_table(&default_only)
+        .await
+        .unwrap()
+        .sql;
+    assert!(
+        !sql.contains("ALTER COLUMN"),
+        "default-only change must not emit ALTER COLUMN, got {sql:?}"
+    );
+    assert!(
+        sql.starts_with("DECLARE @default_name sysname;")
+            && sql.ends_with("ALTER TABLE [dbo].[users] ADD DEFAULT (N'active') FOR [status]"),
+        "expected drop-then-rebind pair, got {sql:?}"
+    );
+
+    let nullability_only = modify_users_column(ColumnChange::Modify {
+        name: "status".into(),
+        new_data_type: None,
+        new_nullable: Some(false),
+        new_default_value: None,
+        using_expression: None,
+    });
+    assert_validation(
+        MssqlAdapter::new().alter_table(&nullability_only).await,
+        "requires a data type",
+    );
+
+    let empty_change = modify_users_column(ColumnChange::Modify {
+        name: "status".into(),
+        new_data_type: None,
+        new_nullable: None,
+        new_default_value: Some("   ".into()),
+        using_expression: None,
+    });
+    assert_validation(
+        MssqlAdapter::new().alter_table(&empty_change).await,
+        "data type, nullability, or default change",
+    );
+
+    let injected_default = modify_users_column(ColumnChange::Modify {
+        name: "status".into(),
+        new_data_type: None,
+        new_nullable: None,
+        new_default_value: Some("0; DROP TABLE [dbo].[audit]".into()),
+        using_expression: None,
+    });
+    assert_validation(
+        MssqlAdapter::new().alter_table(&injected_default).await,
+        "DEFAULT value",
+    );
 }
 
 #[tokio::test]

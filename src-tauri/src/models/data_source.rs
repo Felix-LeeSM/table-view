@@ -317,10 +317,15 @@ const DUCKDB_RDB_CAPABILITIES: &[BackendAdapterCapability] = &[
 ];
 // Issue #1071 — the wired MssqlAdapter now routes structured table/index/
 // constraint DDL to the bounded T-SQL builder (`mssql/ddl.rs`), so the
-// declaration claims `RelationalSchemaMutation` to match the wired path.
-// Admin/trigger surfaces stay unsupported; schema-dump export is now wired
-// (#1642 — `stream_table_rows` + T-SQL dump dialect). The flag reflects
-// support, not full DDL parity.
+// declaration claims `RelationalSchemaMutation` to match the wired path. The
+// column-alteration arm covers type/nullability plus DEFAULT-constraint edits
+// (drop-by-catalog-lookup then rebind, since T-SQL keeps a default in its own
+// auto-named constraint), and the StructurePanel SET NOT NULL pre-flight probe
+// (`count_null_rows`) has a T-SQL body instead of the trait-default
+// `Unsupported`. Trigger introspection is wired (#1778); trigger DDL and raw
+// DDL/admin stay unsupported. Schema-dump export is wired (#1642 —
+// `stream_table_rows` + T-SQL dump dialect), and admin ops (activity/kill/
+// slow/info) landed with #1073. The flag reflects support, not full DDL parity.
 const MSSQL_RDB_CAPABILITIES: &[BackendAdapterCapability] = &[
     BackendAdapterCapability::Lifecycle,
     BackendAdapterCapability::RelationalCatalog,

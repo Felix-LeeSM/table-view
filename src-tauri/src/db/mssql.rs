@@ -601,6 +601,19 @@ impl RdbAdapter for MssqlAdapter {
         })
     }
 
+    // Issue #1071 — the StructurePanel column editor's SET NOT NULL pre-flight
+    // probe. The trait default answers `Unsupported` and the probe swallows
+    // errors by design, so without this override the "N rows have NULL"
+    // warning silently never rendered on SQL Server. Body: `mssql/runtime.rs`.
+    fn count_null_rows<'a>(
+        &'a self,
+        namespace: &'a str,
+        table: &'a str,
+        column: &'a str,
+    ) -> BoxFuture<'a, Result<i64, AppError>> {
+        Box::pin(async move { MssqlAdapter::count_null_rows(self, namespace, table, column).await })
+    }
+
     // Issue #1071 — structured table/index/constraint DDL is wired to the
     // bounded T-SQL builder in `mssql/ddl.rs`, so these route through the same
     // plan/preview/execute dispatch as pg/mysql. `create_table_plan` inherits
