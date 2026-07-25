@@ -194,7 +194,10 @@ export function ServerActivityPanel({
               <th className="px-3 py-1 font-medium">
                 {t("serverActivity.colStarted")}
               </th>
-              <th className="px-3 py-1 font-medium" aria-label="actions" />
+              <th
+                className="px-3 py-1 font-medium"
+                aria-label={t("serverActivity.colActions")}
+              />
             </tr>
           </thead>
           <tbody>
