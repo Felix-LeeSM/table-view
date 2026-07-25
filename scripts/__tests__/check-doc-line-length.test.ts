@@ -4,24 +4,46 @@ import { beforeAll, describe, expect, it } from "vitest";
 // import below so the unit tests do not shell out to git.
 process.env.DOC_LINE_LENGTH_SKIP_MAIN = "1";
 
+type FileMeasurement = { over: number; maxLen: number };
+type Targets = {
+  version: number;
+  ceiling: number;
+  total: number;
+  entries: { path: string; over: number; maxLen: number }[];
+};
+
 let isMeasuredDoc: (p: string) => boolean;
-let countOverCeiling: (text: string, ceiling: number) => number;
-let addedLinesByFile: (
-  diff: string,
-) => Map<string, { line: string; index: number }[]>;
-let findHardCeilingFailures: (
-  addedByFile: Map<string, { line: string; index: number }[]>,
-  ceiling: number,
-  preexisting: ReadonlySet<string>,
+let measure: (text: string, ceiling: number) => FileMeasurement;
+let findRatchetFailures: (
+  actual: ReadonlyMap<string, FileMeasurement>,
+  targets: Targets,
+) => string[];
+let findStaleTargets: (
+  actual: ReadonlyMap<string, FileMeasurement>,
+  targets: Targets,
 ) => string[];
 
 beforeAll(async () => {
   const mod = await import("../check-doc-line-length");
   isMeasuredDoc = mod.isMeasuredDoc;
-  countOverCeiling = mod.countOverCeiling;
-  addedLinesByFile = mod.addedLinesByFile;
-  findHardCeilingFailures = mod.findHardCeilingFailures;
+  measure = mod.measure;
+  findRatchetFailures = mod.findRatchetFailures;
+  findStaleTargets = mod.findStaleTargets;
 });
+
+const CEILING = 600;
+
+function targets(
+  entries: { path: string; over: number; maxLen: number }[],
+  total?: number,
+): Targets {
+  return {
+    version: 2,
+    ceiling: CEILING,
+    total: total ?? entries.reduce((sum, e) => sum + e.over, 0),
+    entries,
+  };
+}
 
 describe("isMeasuredDoc", () => {
   it("measures live docs and skips the one-shot trees", () => {
@@ -48,108 +70,141 @@ describe("isMeasuredDoc", () => {
   });
 });
 
-describe("countOverCeiling", () => {
-  it("counts only lines past the ceiling", () => {
-    const text = ["a".repeat(601), "b".repeat(600), "c".repeat(4)].join("\n");
-    expect(countOverCeiling(text, 600)).toBe(1);
+describe("measure", () => {
+  it("reports the over-ceiling count and the longest line", () => {
+    const text = ["a".repeat(700), "b".repeat(601), "c".repeat(4)].join("\n");
+    expect(measure(text, CEILING)).toEqual({ over: 2, maxLen: 700 });
   });
 
-  it("counts code points, so Korean prose is not double-charged", () => {
-    // 400 Hangul syllables are 400 chars but 1200 UTF-8 bytes. A byte-based
-    // count would fail this line at a 600 ceiling.
-    expect(countOverCeiling("가".repeat(400), 600)).toBe(0);
-    expect(countOverCeiling("가".repeat(601), 600)).toBe(1);
-  });
-});
-
-describe("addedLinesByFile", () => {
-  it("collects added lines per destination file", () => {
-    const diff = [
-      "diff --git a/docs/ROADMAP.md b/docs/ROADMAP.md",
-      "--- a/docs/ROADMAP.md",
-      "+++ b/docs/ROADMAP.md",
-      "@@ -1 +1,2 @@",
-      "+first added",
-      "+second added",
-      "-removed line",
-      " context line",
-    ].join("\n");
-
-    expect(addedLinesByFile(diff).get("docs/ROADMAP.md")).toEqual([
-      { line: "first added", index: 1 },
-      { line: "second added", index: 2 },
-    ]);
-  });
-
-  it("skips deletions whose destination is /dev/null", () => {
-    const diff = [
-      "diff --git a/docs/gone.md b/docs/gone.md",
-      "--- a/docs/gone.md",
-      "+++ /dev/null",
-      "@@ -1 +0,0 @@",
-      "-old content",
-    ].join("\n");
-
-    expect(addedLinesByFile(diff).size).toBe(0);
+  it("counts code points, so Korean prose is not charged UTF-8 bytes", () => {
+    // 400 Hangul syllables are 400 chars but 1200 bytes. A byte-based count
+    // would fail this line at a 600 ceiling.
+    expect(measure("가".repeat(400), CEILING)).toEqual({
+      over: 0,
+      maxLen: 400,
+    });
+    expect(measure("가".repeat(601), CEILING).over).toBe(1);
   });
 });
 
-describe("findHardCeilingFailures", () => {
-  const ceiling = 600;
-  const longRow = `| ${"x".repeat(700)} |`;
+describe("findRatchetFailures", () => {
+  it("fails a long line in a file with no baseline entry", () => {
+    // A file cleaned up once is permanently protected — this is the incentive
+    // the ratchet exists to create.
+    const failures = findRatchetFailures(
+      new Map([["docs/quality/doc-size-ratchet.md", { over: 1, maxLen: 704 }]]),
+      targets([]),
+    );
 
-  it("fails a newly authored line past the ceiling", () => {
-    const failures = findHardCeilingFailures(
+    // Both invariants fire here, and that is correct: the file carries debt it
+    // has no entry for, and the repo total rose to cover it.
+    expect(failures.some((f) => f.includes("no ratchet entry"))).toBe(true);
+    expect(failures.some((f) => f.includes("repo total"))).toBe(true);
+  });
+
+  it("fails when a file's over-ceiling count rises above its baseline", () => {
+    const failures = findRatchetFailures(
+      new Map([["docs/ROADMAP.md", { over: 62, maxLen: 2236 }]]),
+      targets([{ path: "docs/ROADMAP.md", over: 61, maxLen: 2236 }]),
+    );
+
+    expect(failures.some((f) => f.includes("baseline allows 61"))).toBe(true);
+  });
+
+  it("fails when the longest line grows even though the count is flat", () => {
+    // The swap hole: replacing a 6,346-char row with a 6,400-char one leaves
+    // the count unchanged.
+    const failures = findRatchetFailures(
       new Map([
-        ["docs/product/known-limitations.md", [{ line: longRow, index: 4 }]],
+        ["docs/product/known-limitations.md", { over: 18, maxLen: 6400 }],
       ]),
-      ceiling,
-      new Set(),
+      targets([
+        { path: "docs/product/known-limitations.md", over: 18, maxLen: 6346 },
+      ]),
     );
 
     expect(failures).toHaveLength(1);
-    expect(failures[0]).toContain("docs/product/known-limitations.md");
-    expect(failures[0]).toContain("704 chars");
+    expect(failures[0]).toContain("may be edited but not lengthened");
   });
 
-  it("exempts a long line moved verbatim from the base revision", () => {
-    // Regression guard: treating a move as new authorship would make this gate
-    // block doc splits, which is the remedy it exists to encourage.
-    const failures = findHardCeilingFailures(
+  it("accepts editing a long cell without lengthening it", () => {
+    // Regression guard: the first draft gated on `git diff` and rejected a
+    // review fix that rewrote one clause inside an already-long cell.
+    const failures = findRatchetFailures(
       new Map([
         [
-          "docs/contributor-guide/smoke-matrix/h5-non-rdbms.md",
-          [{ line: longRow, index: 12 }],
+          "docs/contributor-guide/smoke-matrix/h1-data-source.md",
+          { over: 9, maxLen: 2880 },
         ],
       ]),
-      ceiling,
-      new Set([longRow]),
-    );
-
-    expect(failures).toEqual([]);
-  });
-
-  it("fails an edited long line even when a similar one existed before", () => {
-    const edited = `${longRow} plus a new clause`;
-    const failures = findHardCeilingFailures(
-      new Map([["docs/ROADMAP.md", [{ line: edited, index: 2 }]]]),
-      ceiling,
-      new Set([longRow]),
-    );
-
-    expect(failures).toHaveLength(1);
-  });
-
-  it("ignores added lines in pruned trees and short added lines", () => {
-    const failures = findHardCeilingFailures(
-      new Map([
-        ["docs/sprints/sprint-1/contract.md", [{ line: longRow, index: 1 }]],
-        ["docs/ROADMAP.md", [{ line: "| short |", index: 1 }]],
+      targets([
+        {
+          path: "docs/contributor-guide/smoke-matrix/h1-data-source.md",
+          over: 9,
+          maxLen: 2880,
+        },
       ]),
-      ceiling,
-      new Set(),
     );
 
     expect(failures).toEqual([]);
+  });
+
+  it("accepts a pure move that keeps the repo total flat", () => {
+    // Regression guard: the first draft flagged every row a doc split moved.
+    const failures = findRatchetFailures(
+      new Map([
+        ["docs/contributor-guide/parent.md", { over: 1, maxLen: 700 }],
+        ["docs/contributor-guide/band.md", { over: 5, maxLen: 900 }],
+      ]),
+      targets(
+        [
+          { path: "docs/contributor-guide/parent.md", over: 1, maxLen: 700 },
+          { path: "docs/contributor-guide/band.md", over: 5, maxLen: 900 },
+        ],
+        6,
+      ),
+    );
+
+    expect(failures).toEqual([]);
+  });
+
+  it("fails when the repo total rises even if every file is within its entry", () => {
+    const failures = findRatchetFailures(
+      new Map([
+        ["docs/a.md", { over: 2, maxLen: 700 }],
+        ["docs/b.md", { over: 2, maxLen: 700 }],
+      ]),
+      targets(
+        [
+          { path: "docs/a.md", over: 3, maxLen: 700 },
+          { path: "docs/b.md", over: 3, maxLen: 700 },
+        ],
+        3,
+      ),
+    );
+
+    expect(failures.some((f) => f.includes("repo total"))).toBe(true);
+  });
+});
+
+describe("findStaleTargets", () => {
+  it("requires a target to be lowered once the debt is paid down", () => {
+    const stale = findStaleTargets(
+      new Map([["docs/ROADMAP.md", { over: 55, maxLen: 1800 }]]),
+      targets([{ path: "docs/ROADMAP.md", over: 61, maxLen: 2236 }]),
+    );
+
+    expect(stale.some((s) => s.includes("lower it to 55"))).toBe(true);
+    expect(stale.some((s) => s.includes("baseline longest 2236"))).toBe(true);
+    expect(stale.some((s) => s.includes("repo total"))).toBe(true);
+  });
+
+  it("flags a baseline entry whose file is gone", () => {
+    const stale = findStaleTargets(
+      new Map(),
+      targets([{ path: "docs/deleted.md", over: 2, maxLen: 700 }], 0),
+    );
+
+    expect(stale.some((s) => s.includes("no longer exists"))).toBe(true);
   });
 });

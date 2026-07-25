@@ -23,25 +23,41 @@ length" — a cell holding a multi-domain paragraph instead of one claim.
 `markdownlint` MD013 cannot cover this. Its default config excludes tables and
 code blocks, which is exactly where the long lines are.
 
-## Two rules in `docs:lines`
+## Two invariants in `docs:lines`
 
-1. **Hard ceiling on newly authored lines.** A line over 600 chars that does not
-   already exist verbatim in `origin/main` fails outright. Without this rule,
-   replacing a 6,346-char row with a 6,000-char row keeps the count flat and
-   passes.
-2. **Per-file ratchet.** `scripts/doc-line-length-targets.json` records the
-   grandfathered count per file. A count may only fall. A target left above the
-   real count also fails, so the file cannot drift upward later under a stale
-   allowance.
+Both compare the working tree against the committed baseline in
+`scripts/doc-line-length-targets.json` — the same shape as the coverage ratchet.
+Adding debt therefore requires editing a tracked file, and that edit is what
+fails.
 
-Rule 1 exempts lines moved verbatim because splitting a large doc relocates long
-rows into new files. Treating a move as new authorship would make this gate block
-the remedy it exists to encourage.
+1. **Total over-ceiling lines may only fall.** This catches new long content, and
+   it stays quiet for pure moves: splitting a doc relocates long rows into new
+   files without changing the total.
+2. **Per-file longest line may only fall, and a file with no baseline entry must
+   have every line at or under 600.** Without the max rule, swapping a
+   6,346-char row for a 6,000-char row keeps the total flat and passes. The
+   no-entry half means a file cleaned up once is permanently protected, which is
+   the incentive the ratchet exists to create.
 
-Base comparison uses two-dot `git diff origin/main HEAD`, not three-dot: CI
-fetches the base with `--depth=1`, which leaves no merge base for `A...B` to
-resolve. `DOC_LINE_LENGTH_REQUIRE_BASE=1` in CI turns a missing base ref into a
-failure rather than a silently skipped rule.
+A stale target also fails: a baseline left above the real count, or above the
+real longest line, must be lowered. Otherwise a file could drift back up later
+under an allowance it no longer needs.
+
+### Why not a diff-based rule
+
+The first draft gated on `git diff` instead: any added-or-changed line over the
+ceiling failed unless it existed verbatim in the base revision. It rejected
+legitimate work twice.
+
+- Every row a doc split moved was flagged as newly authored, which would have
+  blocked the smoke-matrix split — the remedy this gate exists to encourage.
+- After exempting verbatim moves, a review fix that rewrote one clause inside an
+  already-long grandfathered cell still failed, because the edit changed the
+  line text.
+
+Editing a long cell is not the failure mode; growing or multiplying long cells
+is. The baseline comparison expresses exactly that, and it needs no base ref, so
+CI cannot silently skip half the gate when a shallow fetch has no merge base.
 
 ## Raising a target is not the fix
 

@@ -120,19 +120,13 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Fetch doc line-length base
-        # Same force refspec as the coverage ratchet: concurrent main pushes
-        # advance origin/main between checkout and this fetch, and a plain shallow
-        # fetch rejects the non-fast-forward update. The gate only compares
-        # against the current main tip, so overwriting the local ref is intended.
-        run: git fetch --no-tags --prune --depth=1 origin +refs/heads/main:refs/remotes/origin/main
-
       - name: Check doc size
         run: bash scripts/hooks/check-doc-size.sh --strict
 
       - name: Check doc line length
-        env:
-          DOC_LINE_LENGTH_REQUIRE_BASE: "1"
+        # No base ref needed: the gate compares the working tree against the
+        # committed baseline in scripts/doc-line-length-targets.json, so adding
+        # debt requires editing a tracked file and that edit is what fails.
         run: pnpm docs:lines
 
   dependency-security:

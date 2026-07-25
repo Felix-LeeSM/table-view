@@ -1,74 +1,92 @@
 {
-  "version": 1,
+  "version": 2,
   "ceiling": 600,
+  "total": 205,
   "entries": [
     {
       "path": "docs/ROADMAP.md",
-      "over": 60
+      "over": 60,
+      "maxLen": 2236
     },
     {
       "path": "docs/contributor-guide/fixture-test-topology-inventory.md",
-      "over": 1
+      "over": 1,
+      "maxLen": 765
     },
     {
       "path": "docs/contributor-guide/release/release-notes-support-matrix.md",
-      "over": 1
+      "over": 1,
+      "maxLen": 617
     },
     {
       "path": "docs/contributor-guide/repository-topology-inventory.md",
-      "over": 25
+      "over": 25,
+      "maxLen": 681
     },
     {
       "path": "docs/contributor-guide/smoke-matrix/h1-data-source.md",
-      "over": 9
+      "over": 9,
+      "maxLen": 2880
     },
     {
       "path": "docs/contributor-guide/smoke-matrix/h2-rdbms-parity.md",
-      "over": 16
+      "over": 16,
+      "maxLen": 1408
     },
     {
       "path": "docs/contributor-guide/smoke-matrix/h3-duckdb-file-analytics.md",
-      "over": 4
+      "over": 4,
+      "maxLen": 2333
     },
     {
       "path": "docs/contributor-guide/smoke-matrix/h4-rdbms-intelligence.md",
-      "over": 1
+      "over": 1,
+      "maxLen": 622
     },
     {
       "path": "docs/contributor-guide/smoke-matrix/h5-non-rdbms.md",
-      "over": 20
+      "over": 20,
+      "maxLen": 2496
     },
     {
       "path": "docs/contributor-guide/smoke-matrix/h6-wider-source-candidates.md",
-      "over": 4
+      "over": 4,
+      "maxLen": 1638
     },
     {
       "path": "docs/contributor-guide/smoke-matrix/h7-ops-security-reliability.md",
-      "over": 11
+      "over": 11,
+      "maxLen": 2271
     },
     {
       "path": "docs/contributor-guide/smoke-matrix/postgresql-query-workbench.md",
-      "over": 4
+      "over": 4,
+      "maxLen": 1116
     },
     {
       "path": "docs/contributor-guide/smoke-matrix/sqlite-file-dbms.md",
-      "over": 5
+      "over": 5,
+      "maxLen": 1005
     },
     {
       "path": "docs/contributor-guide/testing-and-quality.md",
-      "over": 1
+      "over": 1,
+      "maxLen": 753
     },
     {
       "path": "docs/product/README.md",
-      "over": 14
+      "over": 14,
+      "maxLen": 3470
     },
     {
       "path": "docs/product/known-limitations.md",
-      "over": 18
+      "over": 18,
+      "maxLen": 6334
     },
     {
       "path": "docs/product/query-language-support.md",
-      "over": 11
+      "over": 11,
+      "maxLen": 2693
     }
   ]
 }
