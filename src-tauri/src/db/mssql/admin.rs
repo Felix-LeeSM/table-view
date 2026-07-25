@@ -106,13 +106,22 @@ const USERS_PERMISSION_PROBE_SQL: &str =
 /// confer the right (`dbcreator` / `securityadmin`, plus `sysadmin`, which
 /// implies both).
 ///
-/// `can_login` whitelists the principal types that are an authentication path
-/// (`'S'` SQL login, `'U'` Windows login, `'G'` Windows group). A server role
-/// (`'R'`) never logs in, and neither does a `'C'`/`'K'` principal — those exist
-/// only to carry permissions for signed modules, so `type <> 'R'` reported them
-/// as loginable accounts (false positive). `##MS_*` internal principals are
-/// filtered — they are audit noise, never real accounts. Server principals
-/// expose no per-login connection cap or password expiry.
+/// `can_login` whitelists the principal types that are an authentication path:
+/// `'S'` SQL login, `'U'` Windows login, `'G'` Windows group, `'E'` Microsoft
+/// Entra (Azure AD) login, `'X'` Entra group. A server role (`'R'`) never logs
+/// in, and neither does a `'C'`/`'K'` principal — those exist only to carry
+/// permissions for signed modules, so `type <> 'R'` reported them as loginable
+/// accounts (false positive).
+///
+/// The row filter carries NO type predicate, only the `##MS_*` name filter.
+/// An earlier `sp.type IN ('S', 'U', 'G', 'R', 'C', 'K')` whitelist dropped
+/// every `'E'`/`'X'` Entra principal with no row and no error — on an
+/// Entra-authenticated server those are the primary login subjects, so the
+/// account-audit screen lost its main population silently. A type whitelist has
+/// to be re-edited for every principal type SQL Server adds; listing every row
+/// and deciding loginability per type cannot lose one. `##MS_*` internal
+/// principals stay filtered — they are audit noise, never real accounts. Server
+/// principals expose no per-login connection cap or password expiry.
 const USERS_SQL: &str = "\
 WITH fixed_role_members AS ( \
     SELECT r.name AS role_name, rm.member_principal_id \
@@ -125,7 +134,7 @@ WITH fixed_role_members AS ( \
     JOIN fixed_role_members m ON m.member_principal_id = rm.role_principal_id \
 ), principal_flags AS ( \
     SELECT sp.name AS name, \
-           CASE WHEN sp.is_disabled = 0 AND sp.type IN ('S', 'U', 'G') \
+           CASE WHEN sp.is_disabled = 0 AND sp.type IN ('S', 'U', 'G', 'E', 'X') \
                 THEN 1 ELSE 0 END AS can_login, \
            CASE WHEN IS_SRVROLEMEMBER('sysadmin', sp.name) = 1 \
                      OR EXISTS (SELECT 1 FROM fixed_role_members fm \
@@ -143,8 +152,7 @@ WITH fixed_role_members AS ( \
                                   AND fm.member_principal_id = sp.principal_id) \
                 THEN 1 ELSE 0 END AS is_securityadmin \
     FROM sys.server_principals sp \
-    WHERE sp.type IN ('S', 'U', 'G', 'R', 'C', 'K') \
-      AND sp.name NOT LIKE '##MS_%' \
+    WHERE sp.name NOT LIKE '##MS_%' \
 ) \
 SELECT name, \
        CAST(can_login AS BIGINT), \
@@ -259,9 +267,12 @@ impl MssqlAdapter {
     /// Issue #1077 Stage 2 — read-only logins/roles from `sys.server_principals`
     /// (`USERS_SQL`). No credential column is read. The PG-shaped
     /// `DatabaseUserRow` is reused: `name` is the principal name, `can_login`
-    /// marks an enabled non-role principal, `is_superuser` reflects `sysadmin`
-    /// membership, and `can_create_db` / `can_create_role` follow the
-    /// `dbcreator` / `securityadmin` fixed roles. SQL Server exposes no
+    /// marks an enabled principal whose type is an authentication path (SQL /
+    /// Windows / Entra login, Windows / Entra group — see `USERS_SQL`; a role
+    /// and a certificate-/key-mapped principal are listed as non-loginable),
+    /// `is_superuser` reflects `sysadmin` membership, and `can_create_db` /
+    /// `can_create_role` follow the `dbcreator` / `securityadmin` fixed roles.
+    /// Every principal reaches the list regardless of type. SQL Server exposes no
     /// per-login connection cap, password expiry, or portable role-membership
     /// array on the server principal, so `conn_limit` is -1 (unlimited),
     /// `valid_until` is None, and `member_of` is empty (the server-role graph
@@ -271,7 +282,11 @@ impl MssqlAdapter {
     /// DEFINITION` would receive a silently truncated list rather than an
     /// error. The permission is probed first and a denial surfaces as
     /// `CapabilityNotEnabled` — an account-audit screen must never render a
-    /// partial principal list as if it were complete.
+    /// partial principal list as if it were complete. That probe answers for
+    /// the SERVER scope, so it closes the server-wide truncation and not every
+    /// truncation: a principal carrying `DENY VIEW DEFINITION ON LOGIN::x`
+    /// against the connected login stays silently absent even when the probe
+    /// returns `1` (recorded in `docs/product/known-limitations.md`).
     pub async fn list_database_users(&self) -> Result<Vec<DatabaseUserRow>, AppError> {
         let probe = self
             .admin_query(
@@ -518,14 +533,37 @@ mod tests {
     // Issue #1077 Stage 2 SECURITY (2026-07-25) — re-review (PR #1786): a
     // certificate-mapped (`'C'`) or asymmetric-key-mapped (`'K'`) principal
     // carries permissions for signed modules and can never authenticate, so
-    // `type <> 'R'` reported it as a loginable account. Only `'S'`/`'U'`/`'G'`
-    // are authentication paths.
+    // `type <> 'R'` reported it as a loginable account. 3rd review B4 widened
+    // the whitelist to the Entra principals: `'E'` (Microsoft Entra login) and
+    // `'X'` (Entra group) authenticate exactly like a Windows login/group, and
+    // on an Entra-enabled server they are the primary login subjects.
     #[test]
     fn users_sql_limits_can_login_to_authenticatable_principal_types() {
         assert!(
-            USERS_SQL.contains("sp.is_disabled = 0 AND sp.type IN ('S', 'U', 'G')"),
-            "can_login must whitelist the authenticatable principal types, not \
-             exclude roles only"
+            USERS_SQL.contains("sp.is_disabled = 0 AND sp.type IN ('S', 'U', 'G', 'E', 'X')"),
+            "can_login must whitelist every authenticatable principal type \
+             (Entra 'E'/'X' included), not exclude roles only"
+        );
+    }
+
+    // Issue #1077 Stage 2 SECURITY (2026-07-25) — PR #1786 3rd review B4, data
+    // loss. The row filter used to be `sp.type IN ('S', 'U', 'G', 'R', 'C', 'K')`,
+    // which dropped every `'E'`/`'X'` Entra principal with no row and no error —
+    // on an Entra-authenticated server that is the whole account population,
+    // silently missing from an audit screen. A type whitelist has to be
+    // re-edited for every principal type SQL Server adds, so the row filter must
+    // stay name-only; loginability is decided per type in the projection above.
+    // The live completeness gate is
+    // `test_mssql_users_listing_drops_no_principal_type_1077` in
+    // `tests/mssql_integration.rs`.
+    #[test]
+    fn users_sql_row_filter_drops_no_principal_type() {
+        // The whole WHERE clause, up to the CTE's closing paren: nothing else
+        // may be ANDed in, so a re-added type predicate fails here.
+        assert!(
+            USERS_SQL.contains("WHERE sp.name NOT LIKE '##MS_%' )"),
+            "the listed-row filter must be the ##MS_* name filter only — a type \
+             predicate would silently drop every type it forgets"
         );
     }
 

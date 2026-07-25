@@ -35,8 +35,10 @@ catalog view 라 `VIEW ANY DEFINITION` 을 먼저 probe 하고 없으면
 scope 답만 주므로 principal 단위 `DENY VIEW DEFINITION ON LOGIN::x` 로 인한 행
 누락은 남는 경계이고 (product known-limitations 에 기록), 권한 flag 은
 `IS_SRVROLEMEMBER` 가 certificate/asymmetric-key principal 에 NULL 을 주므로
-catalog membership walk 와 항상 OR 한다 (NULL→0 collapse 금지). 계정 write
-(create/alter/drop) 는 여전히 별도 계약.
+catalog membership walk 와 항상 OR 한다 (NULL→0 collapse 금지). 행 선택에는
+principal type 필터를 걸지 않는다 — `type IN (...)` whitelist 는 Entra
+(`'E'`/`'X'`) principal 을 무기록·무에러로 누락시켰다. loginability 만 type 별로
+판정한다. 계정 write (create/alter/drop) 는 여전히 별도 계약.
 
 Oracle is active for service-name lifecycle plus bounded catalog/query/cancel/
 tabular runtime: catalog metadata, SELECT/DML batch execution, cooperative

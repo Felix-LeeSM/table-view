@@ -478,3 +478,70 @@ async fn test_mssql_users_null_role_membership_and_non_login_principals_1077() {
         "an asymmetric-key-mapped principal cannot authenticate either"
     );
 }
+
+/// Issue #1077 Stage 2 SECURITY — PR #1786 3rd review B4 (2026-07-25), data
+/// loss. The listing gated rows on `sp.type IN ('S', 'U', 'G', 'R', 'C', 'K')`,
+/// which silently dropped every `'E'` (Microsoft Entra login) and `'X'` (Entra
+/// group) principal: no row, no error. On an Entra-authenticated SQL Server /
+/// Azure SQL those two ARE the account population, so the audit screen rendered
+/// an empty-looking list as complete. The fix removes the type predicate
+/// entirely, and this is its live gate: the adapter must return exactly the
+/// principals the server holds, whatever their type.
+///
+/// A container cannot provision an `'E'`/`'X'` principal (Entra logins need an
+/// Entra-configured instance), so the Entra membership of the `can_login`
+/// whitelist is pinned by the `USERS_SQL` text guards in `db/mssql/admin.rs`
+/// (`users_sql_limits_can_login_to_authenticatable_principal_types`,
+/// `users_sql_row_filter_drops_no_principal_type`). What this test owns is the
+/// class against a real catalog: reintroduce ANY type whitelist that misses a
+/// type this server actually holds (`'R'` roles, the `'C'`/`'K'` fixture logins
+/// of the sibling test, …) and the two sets diverge here.
+#[tokio::test]
+#[serial_test::serial]
+async fn test_mssql_users_listing_drops_no_principal_type_1077() {
+    use table_view_lib::db::row_cap::DEFAULT_ROW_CAP;
+
+    let adapter = match common::setup_mssql_adapter().await {
+        Some(a) => a,
+        None => return,
+    };
+
+    // Control: same source, same `##MS_%` name filter, NO type predicate.
+    let control = adapter
+        .execute_query(
+            "SELECT name FROM sys.server_principals \
+             WHERE name NOT LIKE '##MS_%' ORDER BY name",
+            None,
+            DEFAULT_ROW_CAP,
+        )
+        .await
+        .expect("control sys.server_principals SELECT");
+    let expected: Vec<String> = control
+        .rows
+        .iter()
+        .map(|row| {
+            row[0]
+                .as_str()
+                .expect("principal name is a string cell")
+                .to_string()
+        })
+        .collect();
+    assert!(
+        expected.len() >= 2,
+        "control must see real principals (sa + fixed server roles), got {expected:?}"
+    );
+
+    let listed: Vec<String> = adapter
+        .list_database_users()
+        .await
+        .expect("sa holds VIEW ANY DEFINITION → the listing must succeed")
+        .into_iter()
+        .map(|r| r.name)
+        .collect();
+
+    assert_eq!(
+        listed, expected,
+        "every principal must reach the panel — a type filter drops accounts \
+         with no row and no error"
+    );
+}
