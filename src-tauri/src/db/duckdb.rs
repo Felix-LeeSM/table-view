@@ -1,9 +1,11 @@
 //! DuckDB adapter entrypoint.
 //!
 //! First runtime slice: file-backed `.duckdb` lifecycle, baseline catalog
-//! reads, table preview, and single-statement query execution. CSV/Parquet/JSON
-//! analytics shortcuts, extension install/load, DDL helpers, and write parity
-//! stay explicit unsupported surfaces until their follow-up sprints.
+//! reads, table preview, and single-statement query execution. ADR 0051 Stage 2
+//! (#1070) adds native structural DDL — table create/drop/rename, column
+//! add/drop/type, index create/drop — in `ddl.rs`. CSV/Parquet/JSON analytics
+//! shortcuts, extension install/load, constraint DDL (Stage 2b rebuild-swap),
+//! and dry-run (Stage 3) stay explicit unsupported surfaces.
 
 use std::future::Future;
 use std::pin::Pin;
@@ -11,16 +13,18 @@ use std::pin::Pin;
 use crate::error::AppError;
 use crate::models::{
     AddColumnRequest, AddConstraintRequest, AlterTableRequest, ColumnInfo, ConnectionConfig,
-    ConstraintInfo, CreateIndexRequest, CreateTableRequest, DropColumnRequest,
-    DropConstraintRequest, DropIndexRequest, DropTableRequest, FileAnalyticsPreview,
-    FileAnalyticsQueryResponse, FileAnalyticsSource, FileAnalyticsSourceMetadata, FilterCondition,
-    IndexInfo, RenameTableRequest, SchemaChangeResult, TableData, TableInfo, ViewInfo,
+    ConstraintInfo, CreateIndexRequest, CreateTablePlanRequest, CreateTableRequest,
+    DropColumnRequest, DropConstraintRequest, DropIndexRequest, DropTableRequest,
+    FileAnalyticsPreview, FileAnalyticsQueryResponse, FileAnalyticsSource,
+    FileAnalyticsSourceMetadata, FilterCondition, IndexInfo, RenameTableRequest,
+    SchemaChangeResult, TableData, TableInfo, ViewInfo,
 };
 
 use super::{DbAdapter, NamespaceInfo, NamespaceLabel, RdbAdapter, RdbQueryResult};
 
 mod batch;
 mod connection;
+mod ddl;
 mod file_analytics;
 mod queries;
 mod sql_text;
@@ -172,62 +176,80 @@ impl RdbAdapter for DuckdbAdapter {
         Box::pin(async move { self.execute_file_analytics_query(source_id, sql).await })
     }
 
+    // ADR 0051 Stage 2 (#1070) — native DuckDB structural DDL. Each trait
+    // method delegates to the inherent method in `ddl.rs` (inherent resolution
+    // wins over the same-named trait method, mirroring PostgresAdapter).
     fn drop_table<'a>(
         &'a self,
-        _req: &'a DropTableRequest,
+        req: &'a DropTableRequest,
     ) -> Pin<Box<dyn Future<Output = Result<SchemaChangeResult, AppError>> + Send + 'a>> {
-        Box::pin(async { Err(duckdb_unsupported("table drop")) })
+        Box::pin(async move { self.drop_table(req).await })
     }
 
     fn rename_table<'a>(
         &'a self,
-        _req: &'a RenameTableRequest,
+        req: &'a RenameTableRequest,
     ) -> Pin<Box<dyn Future<Output = Result<SchemaChangeResult, AppError>> + Send + 'a>> {
-        Box::pin(async { Err(duckdb_unsupported("table rename")) })
+        Box::pin(async move { self.rename_table(req).await })
     }
 
     fn alter_table<'a>(
         &'a self,
-        _req: &'a AlterTableRequest,
+        req: &'a AlterTableRequest,
     ) -> Pin<Box<dyn Future<Output = Result<SchemaChangeResult, AppError>> + Send + 'a>> {
-        Box::pin(async { Err(duckdb_unsupported("table alteration")) })
+        Box::pin(async move { self.alter_table(req).await })
     }
 
     fn add_column<'a>(
         &'a self,
-        _req: &'a AddColumnRequest,
+        req: &'a AddColumnRequest,
     ) -> Pin<Box<dyn Future<Output = Result<SchemaChangeResult, AppError>> + Send + 'a>> {
-        Box::pin(async { Err(duckdb_unsupported("column creation")) })
+        Box::pin(async move { self.add_column(req).await })
     }
 
     fn drop_column<'a>(
         &'a self,
-        _req: &'a DropColumnRequest,
+        req: &'a DropColumnRequest,
     ) -> Pin<Box<dyn Future<Output = Result<SchemaChangeResult, AppError>> + Send + 'a>> {
-        Box::pin(async { Err(duckdb_unsupported("column drop")) })
+        Box::pin(async move { self.drop_column(req).await })
     }
 
     fn create_table<'a>(
         &'a self,
-        _req: &'a CreateTableRequest,
+        req: &'a CreateTableRequest,
     ) -> Pin<Box<dyn Future<Output = Result<SchemaChangeResult, AppError>> + Send + 'a>> {
-        Box::pin(async { Err(duckdb_unsupported("table creation")) })
+        Box::pin(async move { self.create_table(req).await })
+    }
+
+    // Overridden (not inherited): the trait default chains `create_table` then
+    // `add_constraint` per row, which on DuckDB creates the table and only then
+    // fails. The override pre-blocks a constraint-bearing plan so the dialog
+    // never half-applies one. See `duckdb/ddl.rs::create_table_plan`.
+    fn create_table_plan<'a>(
+        &'a self,
+        req: &'a CreateTablePlanRequest,
+    ) -> Pin<Box<dyn Future<Output = Result<SchemaChangeResult, AppError>> + Send + 'a>> {
+        Box::pin(async move { self.create_table_plan(req).await })
     }
 
     fn create_index<'a>(
         &'a self,
-        _req: &'a CreateIndexRequest,
+        req: &'a CreateIndexRequest,
     ) -> Pin<Box<dyn Future<Output = Result<SchemaChangeResult, AppError>> + Send + 'a>> {
-        Box::pin(async { Err(duckdb_unsupported("index creation")) })
+        Box::pin(async move { self.create_index(req).await })
     }
 
     fn drop_index<'a>(
         &'a self,
-        _req: &'a DropIndexRequest,
+        req: &'a DropIndexRequest,
     ) -> Pin<Box<dyn Future<Output = Result<SchemaChangeResult, AppError>> + Send + 'a>> {
-        Box::pin(async { Err(duckdb_unsupported("index drop")) })
+        Box::pin(async move { self.drop_index(req).await })
     }
 
+    // Stage 2b — DuckDB `ALTER TABLE` cannot add/drop constraints, so these need
+    // the rebuild-swap path (owner decision #1070). Kept `Unsupported`; the
+    // `ddl.alterConstraint` capability hides the Constraints-editor add/drop
+    // controls until then, so this is never a click-then-error surface.
     fn add_constraint<'a>(
         &'a self,
         _req: &'a AddConstraintRequest,

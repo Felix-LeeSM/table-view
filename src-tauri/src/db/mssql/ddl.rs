@@ -369,6 +369,13 @@ fn build_alter_table_statement(qualified: &str, change: &ColumnChange) -> Result
             new_nullable,
             new_default_value,
             using_expression,
+            // #1735 — SQL Server has no ANSI `COMMENT ON`; a column comment is
+            // an extended property (`sp_addextendedproperty` /
+            // `sp_updateextendedproperty`), i.e. a different emitter with its
+            // own add-vs-update branch and catalog read-back. Not wired here;
+            // the UI gates it off via `ddl.editColumnComment: false`, so no
+            // comment reaches this arm.
+            new_comment: _,
         } => {
             validate_identifier(name, "Column name")?;
             if using_expression.is_some() {

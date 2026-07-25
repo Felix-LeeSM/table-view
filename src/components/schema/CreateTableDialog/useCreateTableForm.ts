@@ -3,6 +3,7 @@ import * as tauri from "@lib/tauri";
 import { useDdlPreviewExecution } from "@components/structure/useDdlPreviewExecution";
 import { useSchemaStore } from "@stores/schemaStore";
 import { useConnectionStore } from "@stores/connectionStore";
+import { supportsDdl } from "@/types/dataSource";
 import { useFkReferencePicker } from "@hooks/useFkReferencePicker";
 import { usePostgresTypes } from "@hooks/usePostgresTypes";
 import type { IndexDraft } from "./IndexesTabBody";
@@ -112,6 +113,19 @@ export function useCreateTableForm({
     (s) =>
       s.connections.find((c) => c.id === connectionId)?.environment ?? null,
   );
+  // Issue #1070 (ADR 0051 Stage 2) — the DuckDB capability flip made this
+  // dialog reachable for engines that cannot execute every surface it renders.
+  // `create_table_plan` fans the FK / CHECK / UNIQUE rows out into
+  // `add_constraint`, and the Identity checkbox rides `ColumnDefinition
+  // .is_identity`; both are `Unsupported` on DuckDB (and identity on SQLite).
+  // Unsupported = hidden, never click-then-error (#1046). An unknown /
+  // still-loading dbType keeps both (affordance-preserving `supportsDdl`
+  // fallback).
+  const dbType = useConnectionStore(
+    (s) => s.connections.find((c) => c.id === connectionId)?.dbType,
+  );
+  const canDeclareConstraints = supportsDdl(dbType, "alterConstraint");
+  const canDeclareIdentity = supportsDdl(dbType, "identityColumn");
   const ddl = useDdlPreviewExecution({
     connectionId,
     onRefresh: async () => {
@@ -570,6 +584,9 @@ export function useCreateTableForm({
     activeTab,
     setActiveTab,
     canPreview,
+    // per-engine DDL gates (#1070)
+    canDeclareConstraints,
+    canDeclareIdentity,
     showDdl,
     handleShowDdl,
     // columns
