@@ -1496,4 +1496,28 @@ mod tests {
             "no password credential column may be selected"
         );
     }
+
+    // Issue #1077 Stage 2 RED (2026-07-25) — pre-implementation snapshot. The
+    // users query is the one identifier select in this file that skips the
+    // `CONVERT(... USING utf8mb4)` rule `MysqlAdapter::list_schemas` documents
+    // right above: `mysql.user.User`/`Host` carry a utf8mb3 `_bin` collation
+    // that sqlx sees as binary. Verified against the MySQL 8 testcontainer —
+    // the whole listing dies with `mysql.user listing failed: error occurred
+    // while decoding column 0: mismatched types; Rust type
+    // `alloc::string::String` (as SQL type `VARCHAR`) is not compatible with
+    // SQL type `BINARY``. A failing-test commit is blocked by the pre-commit
+    // Tier-1 coverage gate, so the RED is expressed as the pre-implementation
+    // expectation per memory/workflow/tdd; the GREEN commit replaces this
+    // snapshot with the CONVERT contract and the pure row-mapper suite.
+    #[test]
+    fn mysql_users_query_selects_identifiers_raw_pre_impl() {
+        assert!(
+            MYSQL_USERS_QUERY.contains("SELECT User, Host"),
+            "pre-impl: identifier columns are selected raw"
+        );
+        assert!(
+            !MYSQL_USERS_QUERY.contains("CONVERT("),
+            "pre-impl: no select is wrapped in CONVERT(... USING utf8mb4)"
+        );
+    }
 }

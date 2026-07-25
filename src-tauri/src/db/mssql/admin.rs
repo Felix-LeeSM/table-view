@@ -346,6 +346,41 @@ mod tests {
         );
     }
 
+    // Issue #1077 Stage 2 RED (2026-07-25) — pre-implementation snapshot of two
+    // defects `USERS_SQL` ships with. A failing-test commit is blocked by the
+    // pre-commit Tier-1 coverage gate, so the RED is expressed as the
+    // pre-implementation expectation per memory/workflow/tdd; the GREEN commit
+    // replaces this snapshot with the BIGINT / NULL-safety contracts.
+    //
+    //   1. `CASE ... THEN 1 ELSE 0 END` and `CAST(... AS INT)` are T-SQL `int`.
+    //      tiberius' `i64` FromSql rejects a non-NULL `I32` with
+    //      `Error::Conversion`, and `opt_i64` (`try_get::<i64,_>().ok()`)
+    //      swallows that into `None` → `unwrap_or(0)` → `false`. Every row
+    //      renders `Can login = No` / `Superuser = No` with no error anywhere.
+    //      The same file already documents the fix at `ACTIVITY_SQL`:
+    //      "`id` is `CAST(... AS BIGINT)` for the wire i64".
+    //   2. `ISNULL(IS_SRVROLEMEMBER('sysadmin', …), 0)` collapses "cannot
+    //      resolve" to "not a sysadmin". Verified against SQL Server 2022
+    //      (16.0.4265.3): `IS_SRVROLEMEMBER` returns NULL for every
+    //      certificate-mapped principal (`type = 'C'`, e.g.
+    //      `##MS_PolicySigningCertificate##`), so the collapse is reachable on
+    //      a default install, not just under a permission gap.
+    #[test]
+    fn users_sql_projects_tsql_int_and_collapses_null_sysadmin_pre_impl() {
+        assert!(
+            USERS_SQL.contains(" AS INT)"),
+            "pre-impl: the sysadmin flag is projected as T-SQL int"
+        );
+        assert!(
+            !USERS_SQL.contains("AS BIGINT"),
+            "pre-impl: no flag is cast to the wire i64 width"
+        );
+        assert!(
+            USERS_SQL.contains("ISNULL(IS_SRVROLEMEMBER"),
+            "pre-impl: an unresolvable sysadmin collapses to 0"
+        );
+    }
+
     #[tokio::test]
     async fn kill_session_without_connection_fails() {
         let adapter = MssqlAdapter::new();

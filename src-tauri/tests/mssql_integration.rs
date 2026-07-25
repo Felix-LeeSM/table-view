@@ -335,3 +335,49 @@ async fn test_stream_table_rows_unsupported_for_duckdb() {
         .expect_err("duckdb stream must be unsupported");
     assert!(matches!(err, AppError::Unsupported(_)), "duckdb: {err:?}");
 }
+
+/// Issue #1077 Stage 2 — row-shape gate for `list_database_users`. The unit
+/// guards in `db/mssql/admin.rs` only assert the SQL text; the decode path is
+/// only observable against a live server. tiberius rejects a non-NULL `I32`
+/// when `opt_i64` asks for `i64`, and `opt_i64` swallows that error into
+/// `None` — so a T-SQL `int` projection renders EVERY row as "No" with no
+/// error anywhere. `sa` is an enabled sysadmin, which pins the flags true.
+#[tokio::test]
+#[serial_test::serial]
+async fn test_mssql_list_database_users_row_shape_1077() {
+    let adapter = match common::setup_mssql_adapter().await {
+        Some(a) => a,
+        None => return,
+    };
+
+    let rows = adapter
+        .list_database_users()
+        .await
+        .expect("sa holds VIEW ANY DEFINITION → the listing must succeed");
+
+    let sa = rows
+        .iter()
+        .find(|r| r.name == "sa")
+        .expect("the sa login must be listed");
+    assert!(sa.can_login, "sa is enabled and not a role → can_login");
+    assert!(sa.is_superuser, "sa is a sysadmin member → is_superuser");
+    assert!(sa.can_create_db, "sysadmin implies CREATE DATABASE");
+    assert!(
+        sa.can_create_role,
+        "sysadmin implies CREATE LOGIN/server roles"
+    );
+
+    // Fixed server roles are principals too, and they are not login-capable.
+    let public_role = rows
+        .iter()
+        .find(|r| r.name == "public")
+        .expect("the public fixed server role must be listed");
+    assert!(!public_role.can_login, "a server role cannot log in");
+
+    // `##MS_*` are internal certificate/role principals — audit noise, and the
+    // certificate-mapped ones make `IS_SRVROLEMEMBER` return NULL.
+    assert!(
+        rows.iter().all(|r| !r.name.starts_with("##MS_")),
+        "internal ##MS_* principals must not reach the panel"
+    );
+}
