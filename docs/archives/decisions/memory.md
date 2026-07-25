@@ -65,6 +65,7 @@ be read from `docs/product/README.md` and `docs/ROADMAP.md` first.
 | [0057](./0057-erd-focus-filter-facet-chips/memory.md)                                | ERD 포커스 필터 — facet 칩 (facet 내 OR / facet 간 AND)                                       | Accepted | 2026-07-17 | —          |
 | [0058](./0058-connection-tls-advanced-ca-mtls/memory.md)                             | connection TLS advanced — CA 파일 + mTLS 클라이언트 인증서                                    | Accepted | 2026-07-24 | —          |
 | [0059](./0059-i18n-react-i18next-per-surface-namespaces/memory.md)                   | UI i18n — react-i18next + surface별 inline namespace (ko/en)                                   | Accepted | 2026-07-25 | —          |
+| [0060](./0060-runtime-freeze-new-datasource-only/memory.md)                          | Runtime promotion freeze 범위 — 새 `DatabaseType` 추가에만 적용                                | Accepted | 2026-07-25 | —          |
 
 ## 역사 (Superseded / Deprecated)
 

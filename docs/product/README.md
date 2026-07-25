@@ -345,8 +345,10 @@ parser/completion, fixture/live evidence, E2E smoke claim 을 만들지 않는�
 
 ## Current Boundaries
 
-- 새 DBMS/runtime promotion 은 기존 지원 DBMS 하나가 데스크톱 DB 클라이언트 수준의
-  query/workbench parity lane 을 통과할 때까지 시작하지 않는다.
+- 새 `DatabaseType` 추가는 기존 지원 DBMS 하나가 데스크톱 DB 클라이언트 수준의
+  query/workbench parity lane 을 통과할 때까지 시작하지 않는다 (ADR 0060). 이미
+  지원 중인 엔진의 capability 확장은 이 제약 밖이지만, 각 support claim 은 여전히
+  해당 source 의 runtime/parser/completion/edit/fixture/e2e evidence 를 요구한다.
 - Full admin parity 는 staged promotion 대상이다 (#1077, 2026-07-02 owner
   decision): extension management UI, schema diff/migration preview, deep
   activity/profiler dashboards 는 여전히 scope 밖. import/export 는 Stage 1,

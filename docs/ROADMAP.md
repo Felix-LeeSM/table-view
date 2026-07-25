@@ -31,10 +31,12 @@ sequencing 을 명시 요청하면 별도 sprint contract queue 에 번호와 �
   명시적으로 export 하지 않는 한 로컬에 남긴다.
 - RDBMS parity 를 먼저 닫는다: PostgreSQL, MySQL, MariaDB, SQLite, 그 다음
   DuckDB/file analytics.
-- 기존 지원 DBMS 하나를 데스크톱 DB 클라이언트 수준의 query/workbench parity 까지 끌어올리는
-  동안 추가 DBMS/runtime 승격은 시작하지 않는다. Full admin parity 는 scope 밖이고,
-  작업은 DBMS lane 하나씩 진행한다. Active parity lane 이 끝날 때까지 actual Search
-  admin execution 과 broader Search smoke 는 deferred 로 유지한다. MSSQL 은
+- 새 `DatabaseType` 추가는 기존 지원 DBMS 하나가 데스크톱 DB 클라이언트 수준의
+  query/workbench parity 에 도달할 때까지 시작하지 않는다 (ADR 0060). 이미 active 인
+  `DatabaseType` 의 capability 확장은 이 제약 밖이며, 깊이 우선 순서는 승격 후보
+  목록이 권고한다. Full admin parity 는 여전히 scope 밖이다. Search index/settings
+  admin execution 과 broader Search smoke 는 freeze 가 아니라 각자의 promotion gate
+  때문에 deferred 다 — live `_delete_by_query` 실행은 #1076 으로 이미 승격됐다. MSSQL 은
   bounded catalog/query/cancel/tabular enterprise RDBMS slice 로 제한하고 Oracle 은
   bounded catalog/query/cancel/tabular/edit-row runtime slice 로 연다. SQL Server auth/TDS/T-SQL
   contract 와 Oracle service/SID/TNS/wallet/Oracle SQL contract 는 source-specific
@@ -57,7 +59,7 @@ sequencing 을 명시 요청하면 별도 sprint contract queue 에 번호와 �
 | H2 | RDBMS parity | 현재 아키텍처가 가장 강한 영역이고, 사용자에게 보이는 gap 이 기존 DB 클라이언트 전환 blocker 다. | DBMS 하나씩 query/workbench parity gate 를 통과한 뒤 다음 DBMS/runtime 승격을 시작한다. |
 | H3 | DuckDB + file analytics | Local-first file analytics 는 새 paradigm 없이 RDBMS 작업을 확장한다. | `.duckdb` raw SQL, registered local CSV/Parquet/JSON/NDJSON preview basics, source-scoped SELECT UI/API evidence, and documented file privacy/export boundary 가 green 이다. |
 | H4 | RDBMS intelligence | ERD, migration preview, and read-only schema diff reuse the shared `SchemaGraph`/catalog input path. Duplicate catalog parsing 은 만들지 않는다. | Production ERD 는 schema/table/column cache 와 cached/fetched explicit index/constraint metadata 를 함께 쓰는 reusable `SchemaGraph` 를 사용한다. Read-only dependency view 는 selected table 의 FK/index/constraint/CHECK diagnostics 를 보여주며, DDL preview/confirm flow 는 table/column/constraint/index removal migration-impact summaries 를 같은 graph 에서 보여준다. Read-only schema diff compares cached RDBMS snapshots through the same graph path. Dense ERD desktop/narrow screenshot smoke is wired; data compare remains a future promotion gate. |
-| H5 | First-class non-RDBMS | Redis/Valkey, Elasticsearch/OpenSearch, MongoDB 가 가장 명확한 non-RDBMS 사용자 workflow 를 덮는다. | MongoDB 는 whitelisted document workflow 로, Redis 는 bounded KV browser/value mutation + command/query/completion + representative smoke 로, Valkey 는 connection/key scan/value preview + selected stream read + bounded command query runtime slice + Redis 와 동일한 string/hash/list/set/zset KvMutationPanel write controls (#1075) + proven-row command completion + Runtime Happy Path smoke 로, Elasticsearch/OpenSearch 는 live connection/catalog/query + backend-bounded Search DSL validator + Runtime Happy Path smoke + fixture/live delete-by-query safety planning + bounded TypeScript editor completion 으로 support claim 이 정렬돼 있다. Actual Search live admin execution, full language-core parser/completion ownership, observability, and broader Search smoke 는 active parity lane 을 약화시키지 않고 promotion gate 를 통과할 때까지 deferred 다. |
+| H5 | First-class non-RDBMS | Redis/Valkey, Elasticsearch/OpenSearch, MongoDB 가 가장 명확한 non-RDBMS 사용자 workflow 를 덮는다. | MongoDB 는 whitelisted document workflow 로, Redis 는 bounded KV browser/value mutation + command/query/completion + representative smoke 로, Valkey 는 connection/key scan/value preview + selected stream read + bounded command query runtime slice + Redis 와 동일한 string/hash/list/set/zset KvMutationPanel write controls (#1075) + proven-row command completion + Runtime Happy Path smoke 로, Elasticsearch/OpenSearch 는 live connection/catalog/query + backend-bounded Search DSL validator + Runtime Happy Path smoke + fixture/live delete-by-query safety planning + bounded TypeScript editor completion 으로 support claim 이 정렬돼 있다. Live `_delete_by_query` 실행은 #1076 으로 승격돼 Safe Mode confirm gate 뒤에서 지원된다. Search index/settings admin execution, full language-core parser/completion ownership, observability, and broader Search smoke 는 각자의 promotion gate 를 통과할 때까지 deferred 다 (freeze 사유가 아니다 — ADR 0060). |
 | H6 | 더 넓은 paradigm | Cassandra, DynamoDB, graph DB, vector DB, stream source 는 active work 전 명확한 workflow proof 가 필요하다. | MSSQL 은 bounded catalog/query/cancel/tabular/edit-row capability 와 representative smoke 로, Oracle 은 bounded catalog/query/cancel/tabular/edit-row capability, bounded Safe Mode/editor assistance, and representative smoke 로 허용한다. Wider source 는 candidate-only 계약으로 정렬된다. Profile target, connection kind, language, catalog model, result envelope, safety policy, fixture strategy 가 문서화되고 각 source 의 matching evidence 없이 DDL/admin/full parser-completion/future smoke widening claim 은 생기지 않는다. |
 | H7 | 운영, 보안, 신뢰성 | 넓은 source support 는 관찰 가능하고 안전하며 반복 검증 가능해야 한다. | 현재 CI/hook/E2E/security/a11y/perf claim 과 future gate routing 이 실제 설정에 맞게 정렬된다. 새 routine gate 는 owner/runtime cost/actionability 가 잠긴 뒤에만 승격한다. |
 
@@ -290,7 +292,7 @@ gate**다. H5 closure 는 non-RDBMS 전체 first-class parity ship 을 뜻하지
 | Elasticsearch support-claim closure audit | `docs/product/README.md`, `docs/product/query-language-support.md`, `docs/product/known-limitations.md`, `docs/contributor-guide/testing-and-quality.md`, #500/#899 | Final support-claim audit confirms Elasticsearch support is live URL/auth/TLS root probe, catalog/query/destructive-plan safety, selected metadata rendering, visible error surfacing, and wired Runtime Happy Path smoke. Search fixture files stay contract evidence, OpenSearch query is a product-separated runtime slice, and actual live admin execution, broader observability, profile/explain workflow, and full language-core editor parser/completion ownership remain future gates. |
 | Elasticsearch documentation recheck | `docs/product/README.md`, `docs/product/query-language-support.md`, `docs/product/known-limitations.md`, `docs/contributor-guide/testing-and-quality.md`, this roadmap, #543 | Final docs recheck confirms the product snapshot, query-language page, known limitations, testing matrix, and H5 roadmap agree on shipped Elasticsearch behavior. Runtime, parser/safety, bounded TypeScript autocomplete assistance, fixture/live evidence, OpenSearch catalog focused evidence, and remaining unsupported admin/observability/profile-explain work stay separated before parity closure. |
 | Elasticsearch test coverage recheck | `docs/contributor-guide/testing-and-quality.md`, `.github/workflows/e2e-smoke.yml`, `scripts/e2e-smoke-ci.sh`, `e2e/smoke/elasticsearch.spec.ts`, `e2e/smoke/opensearch.spec.ts`, `e2e/smoke/search-runtime-smoke.ts`, `src-tauri/src/db/search/tests.rs`, `src-tauri/src/db/search/tests/live_query.rs`, `src-tauri/src/db/search_executor.rs`, `src-tauri/src/db/search_dsl.rs`, `src-tauri/src/db/search_live_destructive.rs`, `src/lib/search/searchDslCompletion.test.ts`, `src/hooks/useSearchAutocomplete.test.ts`, `src/lib/tauri/search.test.ts`, `src/components/workspace/SearchSidebar.test.tsx`, `src/components/search/SearchIndexDetailPanel.test.tsx`, `src/components/search/SearchResultView.test.tsx`, `src/components/query/QueryTab.search-route.test.tsx`, #544/#507 | Final test coverage recheck maps live connection/catalog/query/destructive-plan backend evidence, source-equivalent sidebar/detail/result/query UI paths, backend parser/safety unsupported-boundary behavior, TypeScript Search DSL completion vocabulary/context tests, fixture inventory, and wired Runtime Happy Path smoke routing before parity closure. |
-| Search live admin/smoke promotion | `docs/product/query-language-support.md`, `docs/product/known-limitations.md`, `docs/contributor-guide/testing-and-quality.md` | Search live HTTP/admin promotion remains owned by the Search roadmap/milestone. Future promotion must cover actual admin destructive execution policy, broader observability/profile-explain workflows, product-specific destructive deltas, and active RDBMS lane freeze. |
+| Search live admin/smoke promotion | `docs/product/query-language-support.md`, `docs/product/known-limitations.md`, `docs/contributor-guide/testing-and-quality.md` | Search live HTTP/admin promotion remains owned by the Search roadmap/milestone. Future promotion must cover index/settings admin destructive execution policy, broader observability/profile-explain workflows, and product-specific destructive deltas. Live `_delete_by_query` execution already shipped through #1076. RDBMS lane freeze is no longer a precondition (ADR 0060). |
 | Non-RDBMS smoke matrix | `docs/contributor-guide/testing-and-quality.md` | Current desktop E2E claim covers MongoDB, Redis, Valkey, Elasticsearch, and OpenSearch representative workflows. Elasticsearch/OpenSearch representative smoke now covers live connect/auth/TLS contract, catalog metadata, bounded render, delete-plan preview, and error surface. Actual Search admin execution and broader Search observability/profile workflows remain future promotion gates. |
 
 H5 umbrella closure means support claims, runtime contracts, and smoke routing are
@@ -458,7 +460,7 @@ Product support-claim wording stays in #759.
 |---|---|---|
 | Data-source architecture | 새 DBMS/support surface 는 profile, capability, adapter, language, catalog, result envelope, safety contract 를 통해 들어온다. | `memory/engineering/architecture/data-source/memory.md`, `memory/engineering/architecture/data-source/adding/memory.md`, ADR 0046 |
 | RDBMS runtime | 불확실한 paradigm 을 넓히기 전에 PostgreSQL, MySQL, MariaDB, SQLite, DuckDB/file analytics support 를 강하게 만든다. | `docs/product/README.md`, historical phase notes in `docs/archives/phases/retired/phase-18.md` and `docs/archives/phases/retired/phase-19.md` |
-| Non-RDBMS runtime | Redis 와 MongoDB 는 runtime slice 가 있다. Valkey 는 connection/key scan/value preview, bounded command query runtime slice, proven-row completion, Runtime Happy Path smoke 가 있다. Elasticsearch/OpenSearch 는 live connection/catalog/query/destructive-plan, bounded Search DSL autocomplete, separated fixture contracts, and Runtime Happy Path smoke evidence 가 있다. Cassandra/Scylla, DynamoDB, graph, vector, stream 은 gated candidate 다. 새 runtime promotion 은 active one-DBMS parity lane 뒤로 둔다. | `memory/engineering/architecture/data-source/memory.md`, `docs/product/README.md`, `docs/product/known-limitations.md` |
+| Non-RDBMS runtime | Redis 와 MongoDB 는 runtime slice 가 있다. Valkey 는 connection/key scan/value preview, bounded command query runtime slice, proven-row completion, Runtime Happy Path smoke 가 있다. Elasticsearch/OpenSearch 는 live connection/catalog/query/destructive-plan, bounded Search DSL autocomplete, separated fixture contracts, and Runtime Happy Path smoke evidence 가 있다. Cassandra/Scylla, DynamoDB, graph, vector, stream 은 gated candidate 다. 새 `DatabaseType` 추가는 freeze 대상이고, 기존 엔진의 capability 확장은 freeze 밖이다 (ADR 0060). | `memory/engineering/architecture/data-source/memory.md`, `docs/product/README.md`, `docs/product/known-limitations.md` |
 | Language core | 가능한 범위에서 Rust/WASM 이 hot-path parse/completion vocabulary, context routing, capability gate 를 소유한다. | `memory/engineering/architecture/query-language/memory.md`, ADR 0045, `docs/product/query-language-support.md`, `docs/archives/phases/completed/phase-31.md` |
 | Query editor | Query surface 는 legacy `queryMode` 가 아니라 `queryLanguage` 와 workbench paradigm 으로 고른다. | `memory/engineering/architecture/data-source/memory.md`, ADR 0045, `docs/product/query-language-support.md` |
 | Data editing | Preview/commit/discard, bulk operation, paradigm 별 edit semantics. | `docs/product/README.md`, `docs/product/known-limitations.md` |
@@ -504,9 +506,17 @@ Near-term follow-up groups:
 1. 새 partial workflow 를 추가하기 전에 눈에 보이는 미완성 workflow 를 먼저 닫는다.
 2. connect/browse/query 만 노출하는 runtime 을 하나 더 붙이는 것보다, 기존 runtime
    깊이를 우선한다.
-3. Runtime promotion freeze: Search admin execution, MSSQL DDL/admin/smoke/full parser-completion widening, Oracle DDL/admin/smoke/full parser-completion
-   widening, 기타 새 DBMS lane 은 현재 지원 DBMS 하나가
-   query/workbench parity lane 을 통과할 때까지 기다린다.
+3. Runtime promotion freeze 는 **새 `DatabaseType` 추가**에만 적용한다 (ADR 0060).
+   현재 대상은 wider candidate 5종 (Cassandra/Scylla, DynamoDB, graph, vector,
+   stream) 이고, 해제 조건은
+   `memory/engineering/architecture/data-source/adding/memory.md` 의 Required
+   Contract 10항목 lock 이다. 이미 active 인 `DatabaseType` 의 capability 확장 —
+   MSSQL 구조적 DDL, Oracle 런타임 슬라이스 해제, DuckDB DDL/batch, Redis/Valkey
+   잔여 축, Search index/settings admin 실행, 기존 엔진 admin/import-export/profiler —
+   은 freeze 밖이고 실행 bucket 은 GitHub milestone 22.50 "DBMS Parity - 엔진별 결손"
+   또는 22.80 "Admin Parity - 단계 승격" 이다. freeze 밖은 착수 가능을 뜻할 뿐
+   support claim 승격을 뜻하지 않는다 — 각 gate 의 evidence 요구는 그대로다. 얕은
+   partial workflow 확산 방지는 순서 규칙 1·2 와 승격 후보 순서가 소유한다.
 4. Query/workbench parity 범위는 SQL/MQL execution, parser/Safe Mode, completion,
    edit semantics, fixtures, e2e, support claim, dry-run 근처의 lightweight
    EXPLAIN/plan inspection 이다. Full admin surface 는 별도 선택 전까지 scope 밖이다.
@@ -549,7 +559,7 @@ Roadmap item 을 active implementation 으로 승격하기 전 필요한 것:
 | MariaDB | MySQL adapter reuse 를 단순하게 유지할 수 있나? | Dialect flag 로 reuse. Evidence 있을 때만 split. |
 | SQLite DBMS | Unsupported `ALTER TABLE` 을 disable 할지 auto-rebuild 할지? | ADR 이 rebuild 를 선택하기 전까지 disable + tooltip. |
 | DuckDB | File analytics 를 RDBMS 로 볼지 separate file-sql paradigm 으로 볼지? | Evidence 가 split 을 요구하기 전까지 RDBMS + `file` connection kind. |
-| Redis/Search | Redis full UI/editor parity 와 actual Search admin execution 을 언제 승격할 수 있나? | Active one-DBMS parity lane 이후만. 그 뒤 actual Search admin execution, broader Search smoke, and remaining MSSQL/Oracle widening 은 evidence/smoke 비용 기준으로 다시 고른다. |
+| Redis/Search | Redis full UI/editor parity 와 Search index/settings admin execution 을 언제 승격할 수 있나? | 둘 다 freeze 밖이라 lane 통과를 기다리지 않는다 (ADR 0060). Search 는 admin destructive 실행 정책과 observability/profile-explain 계약이 선행이다 — live `_delete_by_query` 는 #1076 으로 이미 shipped. Redis full parity, broader Search smoke, remaining MSSQL/Oracle widening 은 evidence/smoke 비용 기준으로 고른다. |
 | 더 넓은 paradigm | Cassandra/DynamoDB/graph/vector/stream 중 무엇을 먼저 승격하나? | H6 기본값은 candidate-only. Workflow value, contract readiness, fixture/live evidence, smoke/E2E cost, safety risk 가 분명해질 때까지 승격 금지. |
 | App state | State-management migration 은 언제 재개하나? | DB support 작업이 storage/schema surface 와 충돌하지 않을 때. |
 | Security | Users/roles/auth mechanism UI 는 언제 추가하나? | RDBMS/DuckDB/non-RDBMS source order 가 명확해진 뒤. |
@@ -558,8 +568,9 @@ Roadmap item 을 active implementation 으로 승격하기 전 필요한 것:
 ## 승격 후보
 
 다음 작업을 고를 때는 이 목록, 현재 product docs, live issue state 를 먼저 본다.
-`docs/phases/phase-32.md` 는 historical context 로만 사용한다. Active lane 이
-선택되기 전까지 sprint sequence 를 새로 만들지 않는다.
+`docs/phases/phase-32.md` 는 historical context 로만 사용한다. 아래 순서는 새
+`DatabaseType` 추가에만 강제이고 (ADR 0060), 기존 엔진 작업에는 깊이 우선순위
+권고다 — lane 선택 없이 milestone 22.50 / 22.80 으로 진행한다.
 
 다음 승격 후보 순서:
 
