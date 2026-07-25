@@ -504,9 +504,15 @@ Near-term follow-up groups:
 1. 새 partial workflow 를 추가하기 전에 눈에 보이는 미완성 workflow 를 먼저 닫는다.
 2. connect/browse/query 만 노출하는 runtime 을 하나 더 붙이는 것보다, 기존 runtime
    깊이를 우선한다.
-3. Runtime promotion freeze: Search admin execution, MSSQL DDL/admin/smoke/full parser-completion widening, Oracle DDL/admin/smoke/full parser-completion
-   widening, 기타 새 DBMS lane 은 현재 지원 DBMS 하나가
-   query/workbench parity lane 을 통과할 때까지 기다린다.
+3. Runtime promotion freeze 는 **새 `DatabaseType` 추가**에만 적용한다 (ADR 0060).
+   이미 active 인 `DatabaseType` 의 capability 확장 — MSSQL 구조적 DDL, Oracle
+   런타임 슬라이스 해제, DuckDB DDL/batch, Redis/Valkey 잔여 축, Search live admin
+   실행, 기존 엔진 admin/import-export/profiler — 은 freeze 밖이고 실행 bucket 은
+   GitHub milestone 22.50 "DBMS Parity - 엔진별 결손" 이다. 새 `DatabaseType`
+   (Cassandra/Scylla, DynamoDB, graph, vector, stream) 은 freeze 안이며 해제 조건은
+   `memory/engineering/architecture/data-source/adding/memory.md` 의 계약 10항목
+   lock 이다. 얕은 partial workflow 확산 방지는 순서 규칙 1·2 와 승격 후보 순서가
+   소유한다.
 4. Query/workbench parity 범위는 SQL/MQL execution, parser/Safe Mode, completion,
    edit semantics, fixtures, e2e, support claim, dry-run 근처의 lightweight
    EXPLAIN/plan inspection 이다. Full admin surface 는 별도 선택 전까지 scope 밖이다.
@@ -549,7 +555,7 @@ Roadmap item 을 active implementation 으로 승격하기 전 필요한 것:
 | MariaDB | MySQL adapter reuse 를 단순하게 유지할 수 있나? | Dialect flag 로 reuse. Evidence 있을 때만 split. |
 | SQLite DBMS | Unsupported `ALTER TABLE` 을 disable 할지 auto-rebuild 할지? | ADR 이 rebuild 를 선택하기 전까지 disable + tooltip. |
 | DuckDB | File analytics 를 RDBMS 로 볼지 separate file-sql paradigm 으로 볼지? | Evidence 가 split 을 요구하기 전까지 RDBMS + `file` connection kind. |
-| Redis/Search | Redis full UI/editor parity 와 actual Search admin execution 을 언제 승격할 수 있나? | Active one-DBMS parity lane 이후만. 그 뒤 actual Search admin execution, broader Search smoke, and remaining MSSQL/Oracle widening 은 evidence/smoke 비용 기준으로 다시 고른다. |
+| Redis/Search | Redis full UI/editor parity 와 actual Search admin execution 을 언제 승격할 수 있나? | 둘 다 freeze 밖이다 (ADR 0060) — lane 통과를 기다리지 않는다. Search admin 실행은 #1076 이 preview-only by design 으로 종결했으므로 되살리려면 새 결정이 필요하다. Redis full parity, broader Search smoke, remaining MSSQL/Oracle widening 은 evidence/smoke 비용 기준으로 고른다. |
 | 더 넓은 paradigm | Cassandra/DynamoDB/graph/vector/stream 중 무엇을 먼저 승격하나? | H6 기본값은 candidate-only. Workflow value, contract readiness, fixture/live evidence, smoke/E2E cost, safety risk 가 분명해질 때까지 승격 금지. |
 | App state | State-management migration 은 언제 재개하나? | DB support 작업이 storage/schema surface 와 충돌하지 않을 때. |
 | Security | Users/roles/auth mechanism UI 는 언제 추가하나? | RDBMS/DuckDB/non-RDBMS source order 가 명확해진 뒤. |
@@ -558,8 +564,10 @@ Roadmap item 을 active implementation 으로 승격하기 전 필요한 것:
 ## 승격 후보
 
 다음 작업을 고를 때는 이 목록, 현재 product docs, live issue state 를 먼저 본다.
-`docs/phases/phase-32.md` 는 historical context 로만 사용한다. Active lane 이
-선택되기 전까지 sprint sequence 를 새로 만들지 않는다.
+`docs/phases/phase-32.md` 는 historical context 로만 사용한다. "Active lane 선택
+전까지 새 sprint sequence 를 만들지 않는다" 제약은 새 `DatabaseType` 추가에만
+적용한다 (ADR 0060). 기존 엔진의 capability 확장은 lane 선택 없이 milestone
+22.50 으로 진행한다.
 
 다음 승격 후보 순서:
 
