@@ -881,19 +881,31 @@ pub async fn setup_oracle_adapter() -> Option<OracleAdapter> {
 /// only be exercised from the root container. `gvenzl/oracle-free` publishes the
 /// root service `FREE` and sets the SYSTEM account from `ORACLE_PASSWORD`;
 /// override with `ORACLE_ROOT_SERVICE` / `ORACLE_ROOT_USER` /
-/// `ORACLE_ROOT_PASSWORD` for an external server. Silent-skip (`None`) when the
-/// endpoint or the privileged login is unavailable, like every other Oracle
-/// helper here.
+/// `ORACLE_ROOT_PASSWORD` for an external server.
+///
+/// Skipping is only silent where it is *unavoidable*: no reachable endpoint at
+/// all (Docker down, ARM host, `ORACLE_DISABLE`), or an external endpoint whose
+/// privileged account this harness cannot know. When the container was spawned
+/// here, the credentials are ours and a failed root login is a broken gate, not
+/// an environment fact — a switch gate that silently no-ops is the exact defect
+/// this test exists to prevent, so it fails loud instead.
 #[allow(dead_code)]
 pub async fn setup_oracle_cdb_root_adapter() -> Option<OracleAdapter> {
     let endpoint = oracle_endpoint().await?;
-    connect_oracle_adapter(OracleEndpoint {
+    let self_spawned = std::env::var("ORACLE_HOST").is_err();
+    let adapter = connect_oracle_adapter(OracleEndpoint {
         user: std::env::var("ORACLE_ROOT_USER").unwrap_or_else(|_| "system".into()),
         password: std::env::var("ORACLE_ROOT_PASSWORD").unwrap_or_else(|_| "testsys".into()),
         service: std::env::var("ORACLE_ROOT_SERVICE").unwrap_or_else(|_| "FREE".into()),
         ..endpoint
     })
-    .await
+    .await;
+    assert!(
+        adapter.is_some() || !self_spawned,
+        "CDB-root login failed on the container this harness started; the #1072 \
+         switch gate must not silently skip (see the SKIP line above for the driver error)"
+    );
+    adapter
 }
 
 async fn connect_oracle_adapter(endpoint: OracleEndpoint) -> Option<OracleAdapter> {
