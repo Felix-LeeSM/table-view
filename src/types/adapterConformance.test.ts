@@ -302,6 +302,7 @@ describe("adapter conformance matrix", () => {
       "ddl.createIndex",
       "ddl.dropObject",
       "ddl.alterConstraint",
+      "ddl.identityColumn",
     ]);
     expect(mssql.areas.connection.unsupported).toEqual([
       "connection.switchDatabase",
@@ -339,6 +340,7 @@ describe("adapter conformance matrix", () => {
       "ddl.createIndex",
       "ddl.dropObject",
       "ddl.alterConstraint",
+      "ddl.identityColumn",
     ]);
     expect(oracle.areas.connection.deferred).toEqual([]);
     expect(oracle.areas.connection.unsupported).toEqual([
@@ -377,6 +379,21 @@ describe("adapter conformance matrix", () => {
       "catalog.constraints",
     ]);
     expect(duckdb.areas.query.checks).toContain("query.query");
+    // #1070 (ADR 0051 Stage 2) — lock the flipped `ddl` claim the same way
+    // mssql/oracle are locked: the four native actions are live checks and
+    // `alterConstraint` / `identityColumn` are DEFERRED (planned Stage 2b:
+    // rebuild-swap + CREATE SEQUENCE-backed identity), not unsupported.
+    expect(duckdb.areas.ddl.checks).toEqual([
+      "ddl.createTable",
+      "ddl.alterTable",
+      "ddl.createIndex",
+      "ddl.dropObject",
+    ]);
+    expect(duckdb.areas.ddl.deferred).toEqual([
+      "ddl.alterConstraint",
+      "ddl.identityColumn",
+    ]);
+    expect(duckdb.areas.ddl.unsupported).toEqual([]);
   });
 });
 

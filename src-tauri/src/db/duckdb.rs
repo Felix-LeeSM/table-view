@@ -13,10 +13,11 @@ use std::pin::Pin;
 use crate::error::AppError;
 use crate::models::{
     AddColumnRequest, AddConstraintRequest, AlterTableRequest, ColumnInfo, ConnectionConfig,
-    ConstraintInfo, CreateIndexRequest, CreateTableRequest, DropColumnRequest,
-    DropConstraintRequest, DropIndexRequest, DropTableRequest, FileAnalyticsPreview,
-    FileAnalyticsQueryResponse, FileAnalyticsSource, FileAnalyticsSourceMetadata, FilterCondition,
-    IndexInfo, RenameTableRequest, SchemaChangeResult, TableData, TableInfo, ViewInfo,
+    ConstraintInfo, CreateIndexRequest, CreateTablePlanRequest, CreateTableRequest,
+    DropColumnRequest, DropConstraintRequest, DropIndexRequest, DropTableRequest,
+    FileAnalyticsPreview, FileAnalyticsQueryResponse, FileAnalyticsSource,
+    FileAnalyticsSourceMetadata, FilterCondition, IndexInfo, RenameTableRequest,
+    SchemaChangeResult, TableData, TableInfo, ViewInfo,
 };
 
 use super::{DbAdapter, NamespaceInfo, NamespaceLabel, RdbAdapter, RdbQueryResult};
@@ -218,6 +219,17 @@ impl RdbAdapter for DuckdbAdapter {
         req: &'a CreateTableRequest,
     ) -> Pin<Box<dyn Future<Output = Result<SchemaChangeResult, AppError>> + Send + 'a>> {
         Box::pin(async move { self.create_table(req).await })
+    }
+
+    // Overridden (not inherited): the trait default chains `create_table` then
+    // `add_constraint` per row, which on DuckDB creates the table and only then
+    // fails. The override pre-blocks a constraint-bearing plan so the dialog
+    // never half-applies one. See `duckdb/ddl.rs::create_table_plan`.
+    fn create_table_plan<'a>(
+        &'a self,
+        req: &'a CreateTablePlanRequest,
+    ) -> Pin<Box<dyn Future<Output = Result<SchemaChangeResult, AppError>> + Send + 'a>> {
+        Box::pin(async move { self.create_table_plan(req).await })
     }
 
     fn create_index<'a>(

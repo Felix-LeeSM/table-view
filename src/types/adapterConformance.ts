@@ -125,6 +125,11 @@ export const CONFORMANCE_CHECKS = Object.freeze([
     "ddl",
     "Add/drop-constraint DDL claim is enabled.",
   ),
+  check(
+    "ddl.identityColumn",
+    "ddl",
+    "Identity / auto-increment column DDL claim is enabled.",
+  ),
   check("safety.policy", "safety", "Safety policy is declared."),
 ] as const satisfies readonly ConformanceCheck[]);
 
@@ -196,7 +201,11 @@ const DEFERRED_FEATURES = Object.freeze({
     // the profile claims it and it is a live check, not a deferral.
     query: ["query.explain"],
     edit: [],
-    ddl: [],
+    // Issue #1070 — `ddl.alterConstraint` / `ddl.identityColumn` are PLANNED
+    // Stage 2b slices (the rebuild-swap path and the CREATE SEQUENCE-backed
+    // identity path), not abandoned claims, so they belong in `deferred` rather
+    // than `unsupported` (same posture as `query.explain` above).
+    ddl: ["ddl.alterConstraint", "ddl.identityColumn"],
   },
   mssql: noneDeferred(),
   oracle: noneDeferred(),

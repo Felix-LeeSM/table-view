@@ -24,8 +24,8 @@ use duckdb::Connection;
 use crate::error::AppError;
 use crate::models::{
     AddColumnRequest, AlterTableRequest, ColumnChange, ColumnDefinition, CreateIndexRequest,
-    CreateTableRequest, DropColumnRequest, DropIndexRequest, DropTableRequest, RenameTableRequest,
-    SchemaChangeResult,
+    CreateTablePlanRequest, CreateTableRequest, DropColumnRequest, DropIndexRequest,
+    DropTableRequest, RenameTableRequest, SchemaChangeResult,
 };
 
 use crate::db::ddl_fragment::validate_ddl_fragment;
@@ -88,6 +88,72 @@ impl DuckdbAdapter {
     ) -> Result<SchemaChangeResult, AppError> {
         let statements = build_alter_table_statements(req)?;
         self.run_ddl_or_preview(req.preview_only, statements).await
+    }
+
+    /// CreateTableDialog's single-IPC plan (table + indexes + constraints).
+    ///
+    /// Overridden instead of inheriting `RdbAdapter::create_table_plan`'s
+    /// default body: that default chains `create_table` then one
+    /// `add_constraint` per row, so on DuckDB (where `add_constraint` is
+    /// `Unsupported` until Stage 2b) it would CREATE the table and only then
+    /// fail — a half-applied plan behind an opaque error. Pre-block the whole
+    /// plan instead, the same way SQLite does
+    /// (`db/adapters/sqlite/ddl.rs::create_table_plan`). Indexes are native, so
+    /// their chain is kept verbatim (atomic policy C: an index failure does not
+    /// roll back the CREATE TABLE).
+    pub(super) async fn create_table_plan(
+        &self,
+        req: &CreateTablePlanRequest,
+    ) -> Result<SchemaChangeResult, AppError> {
+        if !req.constraints.is_empty() {
+            return Err(AppError::Unsupported(
+                "DuckDB cannot create table constraints yet (ADR 0051 Stage 2b): remove the \
+                 FOREIGN KEY / CHECK / UNIQUE rows and create the table without them"
+                    .into(),
+            ));
+        }
+
+        let table = self
+            .create_table(&CreateTableRequest {
+                connection_id: req.connection_id.clone(),
+                schema: req.schema.clone(),
+                name: req.name.clone(),
+                columns: req.columns.clone(),
+                primary_key: req.primary_key.clone(),
+                preview_only: req.preview_only,
+                table_comment: req.table_comment.clone(),
+                // Sprint 271c — the parent handler already probed
+                // `expected_database`; child calls do not re-probe.
+                expected_database: None,
+            })
+            .await?;
+
+        let mut sql_parts = vec![table.sql];
+        for idx in &req.indexes {
+            let created = self
+                .create_index(&CreateIndexRequest {
+                    connection_id: req.connection_id.clone(),
+                    schema: req.schema.clone(),
+                    table: req.name.clone(),
+                    index_name: idx.index_name.clone(),
+                    columns: idx.columns.clone(),
+                    index_type: idx.index_type.clone(),
+                    is_unique: idx.is_unique,
+                    preview_only: req.preview_only,
+                    expected_database: None,
+                })
+                .await
+                // Sprint 240 — surface the failing index name so the dialog's
+                // preview pane shows which row blocked the chain.
+                .map_err(|e| {
+                    AppError::Database(format!("Index \"{}\" failed: {}", idx.index_name, e))
+                })?;
+            sql_parts.push(created.sql);
+        }
+
+        Ok(SchemaChangeResult {
+            sql: sql_parts.join(";\n"),
+        })
     }
 
     pub(super) async fn create_index(
@@ -186,7 +252,7 @@ fn build_add_column_statements(req: &AddColumnRequest) -> Result<Vec<String>, Ap
     validate_identifier(&req.schema, "Schema name")?;
     validate_identifier(&req.table, "Table name")?;
     validate_identifier(&req.column.name, "Column name")?;
-    validate_column_data_type(&req.column)?;
+    validate_column_definition(&req.column)?;
 
     // DuckDB `ALTER TABLE ADD COLUMN` rejects inline CHECK (it is a constraint,
     // Parser: "Adding columns with constraints not yet supported"). A CHECK on a
@@ -252,7 +318,7 @@ fn build_create_table_statements(req: &CreateTableRequest) -> Result<Vec<String>
     }
     for col in &req.columns {
         validate_identifier(&col.name, "Column name")?;
-        validate_column_data_type(col)?;
+        validate_column_definition(col)?;
     }
     if let Some(pk_cols) = &req.primary_key {
         for pk in pk_cols {
@@ -415,10 +481,10 @@ fn build_drop_index_sql(req: &DropIndexRequest) -> Result<String, AppError> {
 }
 
 fn build_column_definition(col: &ColumnDefinition) -> String {
+    // `is_identity` is not read here on purpose: `validate_column_definition`
+    // (run by every caller before this point) rejects it outright, so an
+    // identity column never reaches the emitter.
     let mut def = format!("{} {}", quote_identifier(&col.name), col.data_type.trim());
-    // DuckDB identity: a sequence-backed default. `CREATE SEQUENCE`-per-column
-    // is out of this slice — mirror the plain NOT NULL path and let a caller
-    // that needs auto-increment go through a future explicit path.
     if !col.nullable {
         def.push_str(" NOT NULL");
     }
@@ -459,7 +525,22 @@ fn build_comment_statements(req: &CreateTableRequest, qualified: &str) -> Vec<St
     stmts
 }
 
-fn validate_column_data_type(col: &ColumnDefinition) -> Result<(), AppError> {
+/// Single guard for every column definition DuckDB emits — both
+/// `build_create_table_statements` (per column) and
+/// `build_add_column_statements` route through here, so a rejected shape can
+/// never reach one builder while slipping past the other.
+fn validate_column_definition(col: &ColumnDefinition) -> Result<(), AppError> {
+    // DuckDB auto-increment is a `CREATE SEQUENCE` + `DEFAULT nextval(...)`
+    // pair, which is out of the Stage 2 slice. Reject explicitly (SQLite does
+    // the same) — silently dropping the flag would emit a plain column and
+    // report success, so the user would believe they got auto-increment.
+    if col.is_identity {
+        return Err(AppError::Unsupported(
+            "DuckDB structured DDL does not support identity columns yet (ADR 0051 Stage 2b): \
+             DuckDB auto-increment needs a CREATE SEQUENCE + DEFAULT nextval(...) pair"
+                .into(),
+        ));
+    }
     if col.data_type.trim().is_empty() {
         return Err(AppError::Validation(format!(
             "Column '{}' must have a non-empty data type",
@@ -512,7 +593,8 @@ mod tests {
     use super::*;
     use crate::db::{DbAdapter, RdbAdapter};
     use crate::models::{
-        ColumnChange, ColumnDefinition, ConnectionConfig, DatabaseType, DropColumnRequest,
+        ColumnChange, ColumnDefinition, ConnectionConfig, ConstraintDefinition,
+        CreateTablePlanConstraint, CreateTablePlanRequest, DatabaseType, DropColumnRequest,
     };
 
     // ---- builder shape contracts -----------------------------------------
@@ -726,25 +808,34 @@ mod tests {
         }
     }
 
+    // Every round-trip below dispatches through `RdbAdapter::<method>(&adapter,
+    // ..)` (UFCS) rather than the inherent method: the trait impl in
+    // `db/duckdb.rs` is what the `ddl.*` commands actually call via `as_rdb()`,
+    // so a method that regressed to `Err(duckdb_unsupported(..))` there has to
+    // fail a test here.
     #[tokio::test]
     async fn create_then_drop_table_round_trips_1070() {
         let (_dir, adapter) = fixture(false).await;
 
-        adapter.create_table(&create_req("widgets")).await.unwrap();
+        RdbAdapter::create_table(&adapter, &create_req("widgets"))
+            .await
+            .unwrap();
         let tables = RdbAdapter::list_tables(&adapter, "main").await.unwrap();
         assert!(tables.iter().any(|t| t.name == "widgets"));
 
-        adapter
-            .drop_table(&DropTableRequest {
+        RdbAdapter::drop_table(
+            &adapter,
+            &DropTableRequest {
                 connection_id: "d".into(),
                 schema: "main".into(),
                 table: "widgets".into(),
                 cascade: false,
                 preview_only: false,
                 expected_database: None,
-            })
-            .await
-            .unwrap();
+            },
+        )
+        .await
+        .unwrap();
         let tables = RdbAdapter::list_tables(&adapter, "main").await.unwrap();
         assert!(!tables.iter().any(|t| t.name == "widgets"));
     }
@@ -753,17 +844,19 @@ mod tests {
     async fn rename_table_preserves_rows_1070() {
         let (_dir, adapter) = fixture(false).await;
 
-        adapter
-            .rename_table(&RenameTableRequest {
+        RdbAdapter::rename_table(
+            &adapter,
+            &RenameTableRequest {
                 connection_id: "d".into(),
                 schema: "main".into(),
                 table: "items".into(),
                 new_name: "goods".into(),
                 preview_only: false,
                 expected_database: None,
-            })
-            .await
-            .unwrap();
+            },
+        )
+        .await
+        .unwrap();
 
         let page = adapter
             .query_table_data("main", "goods", 1, 100, Some("id ASC"), None, None, None)
@@ -777,10 +870,14 @@ mod tests {
     async fn add_and_drop_column_and_alter_type_round_trip_1070() {
         let (_dir, adapter) = fixture(false).await;
 
-        // Add a nullable column, then a NOT NULL column with a default so the
-        // existing rows backfill.
-        adapter
-            .add_column(&AddColumnRequest {
+        // Add a NOT NULL column with a default. DuckDB rejects an inline NOT
+        // NULL on ADD COLUMN, so the builder splits it into `ADD COLUMN ...
+        // DEFAULT 0` + `ALTER COLUMN ... SET NOT NULL`; both halves are asserted
+        // below (nullable flag + backfilled value), so deleting either statement
+        // fails this test.
+        RdbAdapter::add_column(
+            &adapter,
+            &AddColumnRequest {
                 connection_id: "d".into(),
                 schema: "main".into(),
                 table: "items".into(),
@@ -795,14 +892,16 @@ mod tests {
                 check_expression: None,
                 preview_only: false,
                 expected_database: None,
-            })
-            .await
-            .unwrap();
+            },
+        )
+        .await
+        .unwrap();
 
         // Widen `qty` INTEGER -> BIGINT and promote it to NOT NULL via
         // ALTER COLUMN TYPE + SET NOT NULL (two DuckDB statements, one tx).
-        adapter
-            .alter_table(&AlterTableRequest {
+        RdbAdapter::alter_table(
+            &adapter,
+            &AlterTableRequest {
                 connection_id: "d".into(),
                 schema: "main".into(),
                 table: "items".into(),
@@ -815,19 +914,37 @@ mod tests {
                 }],
                 preview_only: false,
                 expected_database: None,
-            })
-            .await
-            .unwrap();
+            },
+        )
+        .await
+        .unwrap();
 
         let cols = adapter.get_columns("main", "items", None).await.unwrap();
         let price = cols.iter().find(|c| c.name == "price").unwrap();
         assert!(price.data_type.to_uppercase().contains("INT"));
+        // The `SET NOT NULL` half of the split actually landed …
+        assert!(!price.nullable, "ADD COLUMN must be promoted to NOT NULL");
         let qty = cols.iter().find(|c| c.name == "qty").unwrap();
         assert!(qty.data_type.to_uppercase().contains("BIGINT"));
+        assert!(!qty.nullable, "ALTER COLUMN SET NOT NULL must land");
+
+        // … and the DEFAULT backfilled the pre-existing rows (without it the
+        // SET NOT NULL would have failed on the seeded rows).
+        let page = adapter
+            .query_table_data("main", "items", 1, 100, Some("id ASC"), None, None, None)
+            .await
+            .unwrap();
+        let price_idx = page
+            .columns
+            .iter()
+            .position(|c| c.name == "price")
+            .expect("price column in page");
+        assert_eq!(page.rows[0][price_idx], serde_json::json!(0));
 
         // Drop the `name` column; the other columns and rows survive.
-        adapter
-            .drop_column(&DropColumnRequest {
+        RdbAdapter::drop_column(
+            &adapter,
+            &DropColumnRequest {
                 connection_id: "d".into(),
                 schema: "main".into(),
                 table: "items".into(),
@@ -835,9 +952,10 @@ mod tests {
                 cascade: false,
                 preview_only: false,
                 expected_database: None,
-            })
-            .await
-            .unwrap();
+            },
+        )
+        .await
+        .unwrap();
         let cols = adapter.get_columns("main", "items", None).await.unwrap();
         assert!(!cols.iter().any(|c| c.name == "name"));
         assert!(cols.iter().any(|c| c.name == "id"));
@@ -847,8 +965,9 @@ mod tests {
     async fn create_and_drop_index_round_trip_1070() {
         let (_dir, adapter) = fixture(false).await;
 
-        adapter
-            .create_index(&CreateIndexRequest {
+        RdbAdapter::create_index(
+            &adapter,
+            &CreateIndexRequest {
                 connection_id: "d".into(),
                 schema: "main".into(),
                 table: "items".into(),
@@ -858,16 +977,18 @@ mod tests {
                 is_unique: false,
                 preview_only: false,
                 expected_database: None,
-            })
-            .await
-            .unwrap();
+            },
+        )
+        .await
+        .unwrap();
         let indexes = RdbAdapter::get_table_indexes(&adapter, "main", "items", None)
             .await
             .unwrap();
         assert!(indexes.iter().any(|i| i.name == "idx_items_name"));
 
-        adapter
-            .drop_index(&DropIndexRequest {
+        RdbAdapter::drop_index(
+            &adapter,
+            &DropIndexRequest {
                 connection_id: "d".into(),
                 schema: "main".into(),
                 index_name: "idx_items_name".into(),
@@ -875,9 +996,10 @@ mod tests {
                 if_exists: false,
                 preview_only: false,
                 expected_database: None,
-            })
-            .await
-            .unwrap();
+            },
+        )
+        .await
+        .unwrap();
         let indexes = RdbAdapter::get_table_indexes(&adapter, "main", "items", None)
             .await
             .unwrap();
@@ -890,8 +1012,9 @@ mod tests {
 
         // First op succeeds (add col), second targets a missing column so the
         // whole ALTER batch must roll back — the added column must NOT persist.
-        let err = adapter
-            .alter_table(&AlterTableRequest {
+        let err = RdbAdapter::alter_table(
+            &adapter,
+            &AlterTableRequest {
                 connection_id: "d".into(),
                 schema: "main".into(),
                 table: "items".into(),
@@ -908,9 +1031,10 @@ mod tests {
                 ],
                 preview_only: false,
                 expected_database: None,
-            })
-            .await
-            .unwrap_err();
+            },
+        )
+        .await
+        .unwrap_err();
         assert!(matches!(err, AppError::Database(_)), "got: {err:?}");
 
         let cols = adapter.get_columns("main", "items", None).await.unwrap();
@@ -924,38 +1048,231 @@ mod tests {
     async fn preview_only_emits_sql_without_touching_the_database_1070() {
         let (_dir, adapter) = fixture(false).await;
 
-        let result = adapter
-            .drop_table(&DropTableRequest {
+        let result = RdbAdapter::drop_table(
+            &adapter,
+            &DropTableRequest {
                 connection_id: "d".into(),
                 schema: "main".into(),
                 table: "items".into(),
                 cascade: false,
                 preview_only: true,
                 expected_database: None,
-            })
-            .await
-            .unwrap();
+            },
+        )
+        .await
+        .unwrap();
         assert_eq!(result.sql, "DROP TABLE \"main\".\"items\"");
         // Preview must not execute — the table is still there.
         let tables = RdbAdapter::list_tables(&adapter, "main").await.unwrap();
         assert!(tables.iter().any(|t| t.name == "items"));
     }
 
+    // ---- Stage 2b boundary: constraints + identity are REJECTED, never
+    // silently dropped and never half-applied ------------------------------
+
+    fn plan_req(name: &str, constraints: Vec<CreateTablePlanConstraint>) -> CreateTablePlanRequest {
+        let base = create_req(name);
+        CreateTablePlanRequest {
+            connection_id: base.connection_id,
+            schema: base.schema,
+            name: base.name,
+            columns: base.columns,
+            primary_key: base.primary_key,
+            table_comment: None,
+            indexes: Vec::new(),
+            constraints,
+            preview_only: false,
+            expected_database: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn create_table_plan_pre_blocks_constraints_without_creating_the_table_1070() {
+        let (_dir, adapter) = fixture(false).await;
+
+        // The `RdbAdapter::create_table_plan` DEFAULT body chains
+        // `create_table` then `add_constraint` — on DuckDB that creates the
+        // table and only then fails, so a CreateTableDialog FK/CHECK/UNIQUE row
+        // is a click-then-error with a half-applied plan. DuckDB must pre-block
+        // like SQLite (`db/adapters/sqlite/ddl.rs`).
+        let err = RdbAdapter::create_table_plan(
+            &adapter,
+            &plan_req(
+                "widgets",
+                vec![CreateTablePlanConstraint {
+                    constraint_name: "chk_widgets_id".into(),
+                    definition: ConstraintDefinition::Check {
+                        expression: "id > 0".into(),
+                    },
+                }],
+            ),
+        )
+        .await
+        .unwrap_err();
+        assert!(matches!(err, AppError::Unsupported(_)), "got: {err:?}");
+
+        let tables = RdbAdapter::list_tables(&adapter, "main").await.unwrap();
+        assert!(
+            !tables.iter().any(|t| t.name == "widgets"),
+            "a rejected plan must not leave a half-applied table"
+        );
+    }
+
+    #[tokio::test]
+    async fn create_table_plan_without_constraints_still_chains_indexes_1070() {
+        let (_dir, adapter) = fixture(false).await;
+
+        RdbAdapter::create_table_plan(
+            &adapter,
+            &CreateTablePlanRequest {
+                indexes: vec![crate::models::CreateTablePlanIndex {
+                    index_name: "idx_widgets_label".into(),
+                    columns: vec!["label".into()],
+                    index_type: "btree".into(),
+                    is_unique: false,
+                }],
+                ..plan_req("widgets", Vec::new())
+            },
+        )
+        .await
+        .unwrap();
+
+        let indexes = RdbAdapter::get_table_indexes(&adapter, "main", "widgets", None)
+            .await
+            .unwrap();
+        assert!(indexes.iter().any(|i| i.name == "idx_widgets_label"));
+    }
+
+    #[test]
+    fn create_table_rejects_identity_columns_instead_of_dropping_them_1070() {
+        // Silently ignoring `is_identity` creates a plain column with no
+        // auto-increment and reports success. PG emits IDENTITY, SQLite rejects
+        // — DuckDB must reject too until the sequence path lands.
+        let mut req = create_req("widgets");
+        req.columns[0].is_identity = true;
+        assert!(matches!(
+            build_create_table_statements(&req),
+            Err(AppError::Unsupported(_))
+        ));
+    }
+
+    #[test]
+    fn add_column_rejects_identity_columns_instead_of_dropping_them_1070() {
+        let req = AddColumnRequest {
+            connection_id: "d".into(),
+            schema: "main".into(),
+            table: "items".into(),
+            column: ColumnDefinition {
+                name: "seq_id".into(),
+                data_type: "INTEGER".into(),
+                nullable: false,
+                default_value: None,
+                comment: None,
+                is_identity: true,
+            },
+            check_expression: None,
+            preview_only: true,
+            expected_database: None,
+        };
+        assert!(matches!(
+            build_add_column_statements(&req),
+            Err(AppError::Unsupported(_))
+        ));
+    }
+
     #[tokio::test]
     async fn ddl_rejected_on_read_only_connection_1070() {
         let (_dir, adapter) = fixture(true).await;
 
-        let err = adapter
-            .drop_table(&DropTableRequest {
+        let err = RdbAdapter::drop_table(
+            &adapter,
+            &DropTableRequest {
                 connection_id: "d".into(),
                 schema: "main".into(),
                 table: "items".into(),
                 cascade: false,
                 preview_only: false,
                 expected_database: None,
-            })
-            .await
-            .unwrap_err();
+            },
+        )
+        .await
+        .unwrap_err();
         assert!(matches!(err, AppError::Unsupported(_)), "got: {err:?}");
+    }
+
+    // ---- Stage 2b boundary lock ------------------------------------------
+
+    #[tokio::test]
+    async fn constraint_ddl_stays_unsupported_until_stage_2b_1070() {
+        let (_dir, adapter) = fixture(false).await;
+
+        // Locks the other half of the `ddl.alterConstraint` capability claim:
+        // if either method ever starts returning Ok, the capability must flip
+        // with it (otherwise the Constraints editor stays hidden for a path
+        // that now works).
+        let add = RdbAdapter::add_constraint(
+            &adapter,
+            &crate::models::AddConstraintRequest {
+                connection_id: "d".into(),
+                schema: "main".into(),
+                table: "items".into(),
+                constraint_name: "chk_items_qty".into(),
+                definition: ConstraintDefinition::Check {
+                    expression: "qty > 0".into(),
+                },
+                preview_only: true,
+                expected_database: None,
+            },
+        )
+        .await
+        .unwrap_err();
+        assert!(matches!(add, AppError::Unsupported(_)), "got: {add:?}");
+
+        let drop = RdbAdapter::drop_constraint(
+            &adapter,
+            &crate::models::DropConstraintRequest {
+                connection_id: "d".into(),
+                schema: "main".into(),
+                table: "items".into(),
+                constraint_name: "chk_items_qty".into(),
+                preview_only: true,
+                expected_database: None,
+            },
+        )
+        .await
+        .unwrap_err();
+        assert!(matches!(drop, AppError::Unsupported(_)), "got: {drop:?}");
+    }
+
+    // ---- identifier validation -------------------------------------------
+
+    #[test]
+    fn validate_identifier_rejects_every_invalid_shape_1070() {
+        // Peer parity: the other five `validate_identifier` copies
+        // (postgres/mutations.rs, mysql/mutations.rs, adapters/sqlite/ddl.rs)
+        // each lock their reject matrix. The DuckDB copy differs only in
+        // `DUCKDB_IDENTIFIER_MAX_BYTES`, which is asserted at the boundary.
+        for bad in ["", "   ", "1abc", "a-b", "a b", "a\"b", "tbl;DROP"] {
+            assert!(
+                matches!(
+                    validate_identifier(bad, "Table name"),
+                    Err(AppError::Validation(_))
+                ),
+                "expected rejection for {bad:?}"
+            );
+        }
+
+        // 255 bytes is the documented cap: accepted at the boundary, rejected
+        // one byte past it.
+        let at_cap = "a".repeat(DUCKDB_IDENTIFIER_MAX_BYTES);
+        assert!(validate_identifier(&at_cap, "Table name").is_ok());
+        let over_cap = "a".repeat(DUCKDB_IDENTIFIER_MAX_BYTES + 1);
+        assert!(matches!(
+            validate_identifier(&over_cap, "Table name"),
+            Err(AppError::Validation(_))
+        ));
+
+        // Accepted shapes (leading underscore, digits/underscores in the body).
+        assert!(validate_identifier("_my_table1", "Table name").is_ok());
     }
 }

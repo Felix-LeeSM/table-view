@@ -29,6 +29,18 @@ export interface ColumnsTabBodyProps {
   onRemoveColumn: (trackingId: string) => void;
   onUpdateColumn: (trackingId: string, updates: Partial<ColumnDraft>) => void;
   onMoveColumn: (trackingId: string, direction: -1 | 1) => void;
+  /**
+   * Issue #1070 — render the per-row inline FK popover + CHECK input. Both
+   * become `add_constraint` calls, which DuckDB rejects until Stage 2b, so the
+   * parent passes `supportsDdl(dbType, "alterConstraint")`.
+   */
+  showInlineConstraints: boolean;
+  /**
+   * Issue #1070 — render the per-row Identity checkbox. The parent passes
+   * `supportsDdl(dbType, "identityColumn")`; SQLite / DuckDB reject
+   * `is_identity` with `Unsupported`.
+   */
+  showIdentity: boolean;
 }
 
 /**
@@ -51,6 +63,8 @@ export default function ColumnsTabBody({
   onRemoveColumn,
   onUpdateColumn,
   onMoveColumn,
+  showInlineConstraints,
+  showIdentity,
 }: ColumnsTabBodyProps) {
   const { t } = useTranslation("schemaDialogs");
   return (
@@ -129,23 +143,25 @@ export default function ColumnsTabBody({
                     />
                     {t("createTable.columnNullableLabel")}
                   </label>
-                  <label
-                    className="flex cursor-pointer items-center gap-1 text-xs text-foreground"
-                    title={t("createTable.columnIdentityTitle")}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={col.is_identity}
-                      onChange={(e) =>
-                        onUpdateColumn(col.trackingId, {
-                          is_identity: e.target.checked,
-                        })
-                      }
-                      className="rounded border-border"
-                      aria-label={t("createTable.columnIdentityAria")}
-                    />
-                    {t("createTable.columnIdentityLabel")}
-                  </label>
+                  {showIdentity && (
+                    <label
+                      className="flex cursor-pointer items-center gap-1 text-xs text-foreground"
+                      title={t("createTable.columnIdentityTitle")}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={col.is_identity}
+                        onChange={(e) =>
+                          onUpdateColumn(col.trackingId, {
+                            is_identity: e.target.checked,
+                          })
+                        }
+                        className="rounded border-border"
+                        aria-label={t("createTable.columnIdentityAria")}
+                      />
+                      {t("createTable.columnIdentityLabel")}
+                    </label>
+                  )}
                   <input
                     className="flex-1 rounded border border-border bg-background px-2 py-1 text-xs text-foreground outline-none focus:border-primary disabled:opacity-50"
                     value={col.is_identity ? "" : col.default_value}
@@ -177,59 +193,63 @@ export default function ColumnsTabBody({
                 {/* Inline FK + CHECK on the column row (TablePlus parity).
                     FK is edited via a popover (cell-click pattern);
                     single-column CHECK is a free-text input. Multi-column
-                    variants continue to live in the Constraints tab. */}
-                <div className="flex items-center gap-1.5">
-                  <InlineFkPopover
-                    columnTrackingId={col.trackingId}
-                    value={{
-                      ref_schema: col.fk_ref_schema,
-                      ref_table: col.fk_ref_table,
-                      ref_column: col.fk_ref_column,
-                      on_delete: col.fk_on_delete,
-                      on_update: col.fk_on_update,
-                    }}
-                    defaultSchema={selectedSchema}
-                    availableSchemas={schemaOptions}
-                    refTablesByKey={refTablesByKey}
-                    refColumnsByKey={refColumnsByKey}
-                    onSchemaPicked={onSchemaPicked}
-                    onTablePicked={onTablePicked}
-                    onChange={(updates) => {
-                      const mapped: Partial<ColumnDraft> = {};
-                      if (updates.ref_schema !== undefined)
-                        mapped.fk_ref_schema = updates.ref_schema;
-                      if (updates.ref_table !== undefined)
-                        mapped.fk_ref_table = updates.ref_table;
-                      if (updates.ref_column !== undefined)
-                        mapped.fk_ref_column = updates.ref_column;
-                      if (updates.on_delete !== undefined)
-                        mapped.fk_on_delete = updates.on_delete;
-                      if (updates.on_update !== undefined)
-                        mapped.fk_on_update = updates.on_update;
-                      onUpdateColumn(col.trackingId, mapped);
-                    }}
-                    onClear={() =>
-                      onUpdateColumn(col.trackingId, {
-                        fk_ref_schema: "",
-                        fk_ref_table: "",
-                        fk_ref_column: "",
-                        fk_on_delete: "NO ACTION",
-                        fk_on_update: "NO ACTION",
-                      })
-                    }
-                  />
-                  <input
-                    className="flex-1 rounded border border-border bg-background px-2 py-1 text-xs text-foreground outline-none focus:border-primary"
-                    value={col.check_expression}
-                    onChange={(e) =>
-                      onUpdateColumn(col.trackingId, {
-                        check_expression: e.target.value,
-                      })
-                    }
-                    placeholder={t("createTable.columnCheckPlaceholder")}
-                    aria-label={t("createTable.columnCheckAria")}
-                  />
-                </div>
+                    variants continue to live in the Constraints tab. Both feed
+                    the `add_constraint` chain, so they follow the Constraints
+                    tab's capability gate (#1070). */}
+                {showInlineConstraints && (
+                  <div className="flex items-center gap-1.5">
+                    <InlineFkPopover
+                      columnTrackingId={col.trackingId}
+                      value={{
+                        ref_schema: col.fk_ref_schema,
+                        ref_table: col.fk_ref_table,
+                        ref_column: col.fk_ref_column,
+                        on_delete: col.fk_on_delete,
+                        on_update: col.fk_on_update,
+                      }}
+                      defaultSchema={selectedSchema}
+                      availableSchemas={schemaOptions}
+                      refTablesByKey={refTablesByKey}
+                      refColumnsByKey={refColumnsByKey}
+                      onSchemaPicked={onSchemaPicked}
+                      onTablePicked={onTablePicked}
+                      onChange={(updates) => {
+                        const mapped: Partial<ColumnDraft> = {};
+                        if (updates.ref_schema !== undefined)
+                          mapped.fk_ref_schema = updates.ref_schema;
+                        if (updates.ref_table !== undefined)
+                          mapped.fk_ref_table = updates.ref_table;
+                        if (updates.ref_column !== undefined)
+                          mapped.fk_ref_column = updates.ref_column;
+                        if (updates.on_delete !== undefined)
+                          mapped.fk_on_delete = updates.on_delete;
+                        if (updates.on_update !== undefined)
+                          mapped.fk_on_update = updates.on_update;
+                        onUpdateColumn(col.trackingId, mapped);
+                      }}
+                      onClear={() =>
+                        onUpdateColumn(col.trackingId, {
+                          fk_ref_schema: "",
+                          fk_ref_table: "",
+                          fk_ref_column: "",
+                          fk_on_delete: "NO ACTION",
+                          fk_on_update: "NO ACTION",
+                        })
+                      }
+                    />
+                    <input
+                      className="flex-1 rounded border border-border bg-background px-2 py-1 text-xs text-foreground outline-none focus:border-primary"
+                      value={col.check_expression}
+                      onChange={(e) =>
+                        onUpdateColumn(col.trackingId, {
+                          check_expression: e.target.value,
+                        })
+                      }
+                      placeholder={t("createTable.columnCheckPlaceholder")}
+                      aria-label={t("createTable.columnCheckAria")}
+                    />
+                  </div>
+                )}
               </div>
               {/* Up / down reorder buttons (left of the remove button).
                   Boundary-disabled at top/bottom row; the parent handler

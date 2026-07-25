@@ -49,6 +49,7 @@ const expectedMssqlRuntimeCapabilities = expectedCapabilities({
     createIndex: true,
     dropObject: true,
     alterConstraint: true,
+    identityColumn: true,
   },
   intelligence: { erd: true },
   // Issue #1073 — SQL Server admin ops parity (no users: #1077 PG-first).
@@ -70,6 +71,7 @@ const expectedOracleRuntimeCapabilities = expectedCapabilities({
     createIndex: true,
     dropObject: true,
     alterConstraint: true,
+    identityColumn: true,
   },
   intelligence: { erd: true },
   // Issue #1073 — Oracle admin ops parity (no users: #1077 PG-first).
