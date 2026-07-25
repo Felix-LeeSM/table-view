@@ -4,8 +4,14 @@
 // (b) refresh 클릭, (c) Kill 클릭 → kill + re-fetch, (d) empty state,
 // (e) error state.
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ServerActivityPanel } from "./ServerActivityPanel";
 
@@ -179,5 +185,75 @@ describe("ServerActivityPanel (Sprint 336 — U1 live wire)", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       /permission denied/i,
     );
+  });
+});
+
+// #1077 admin-parity Stage 3 (2026-07-25) — snapshot panel promoted to an
+// auto-polling dashboard. Polling cadence is asserted with deterministic
+// fake timers; the trend is a session-local sparkline (no persistence).
+describe("ServerActivityPanel — #1077 Stage 3 profiler dashboard", () => {
+  const row = (id: number) => ({
+    id,
+    db: "analytics",
+    user: "alice",
+    state: "active",
+    query: "SELECT 1",
+    waitEvent: null,
+    startedAt: null,
+  });
+
+  beforeEach(() => {
+    listServerActivityMock.mockReset();
+    killServerActivityMock.mockReset();
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("auto-polls list_server_activity and updates the session-count trend", async () => {
+    listServerActivityMock.mockResolvedValue([row(1), row(2)]);
+    render(<ServerActivityPanel connectionId="conn-pg" dbType="postgresql" />);
+
+    // Flush the mount fetch (not timer-driven).
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(listServerActivityMock).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId("server-activity-count")).toHaveTextContent(
+      "Sessions: 2",
+    );
+
+    // One session drops before the next 5s poll tick.
+    listServerActivityMock.mockResolvedValue([row(1)]);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000);
+    });
+    expect(listServerActivityMock).toHaveBeenCalledTimes(2);
+    expect(screen.getByTestId("server-activity-count")).toHaveTextContent(
+      "Sessions: 1",
+    );
+
+    // Two samples now exist → the time-series sparkline renders.
+    const trend = screen.getByTestId("server-activity-trend");
+    expect(trend).toHaveAttribute("role", "img");
+    expect(trend).toHaveAccessibleName("Active session count trend");
+  });
+
+  it("stops polling once the live toggle is switched off", async () => {
+    listServerActivityMock.mockResolvedValue([row(1)]);
+    render(<ServerActivityPanel connectionId="conn-pg" dbType="postgresql" />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(listServerActivityMock).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByTestId("server-activity-autorefresh"));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(15000);
+    });
+    // Paused: no further polls despite three elapsed intervals.
+    expect(listServerActivityMock).toHaveBeenCalledTimes(1);
   });
 });
