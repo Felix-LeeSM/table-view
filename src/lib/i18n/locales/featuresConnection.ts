@@ -297,14 +297,14 @@ export const en = {
     sslModeDisable: "Disable (no encryption)",
     sslModePrefer: "Prefer (opportunistic)",
     sslModeRequire: "Require (encrypt, skip verification)",
-    sslModeVerifyCa: "Verify CA (encrypt + validate against a CA file)",
+    sslModeVerifyCa: "Verify CA (encrypt + verify, also trusting a CA file)",
     sslModeVerifyFull: "Verify full (encrypt + verify)",
     tlsHintSslMode:
-      "Prefer keeps the driver's opportunistic default and may connect without encryption. Require forces TLS but skips certificate verification (exposed to a man-in-the-middle). Verify CA forces TLS and validates the server certificate against the CA file below. Verify full also checks the hostname against the OS trust store. Disable forces plaintext.",
+      "Prefer keeps the driver's opportunistic default and may connect without encryption. Require forces TLS but skips certificate verification (exposed to a man-in-the-middle). Verify full forces TLS and verifies the certificate chain and the hostname against the built-in public CA list. Verify CA does the same and additionally trusts the CA file below, so a server signed by a private CA can be verified — it adds a trust anchor rather than replacing the public ones. Disable forces plaintext.",
     labelCaCertPath: "CA certificate file",
     placeholderCaCertPath: "/path/to/ca.pem",
     caCertPathHint:
-      "Path to the CA certificate (PEM) that signs the server certificate. Only the path is stored — the file stays on disk and is never exported.",
+      "Path to the CA certificate (PEM) that signs the server certificate. It is trusted in addition to the built-in public CA list, which stays active. Only the path is stored — the file stays on disk and is never exported.",
     // MongoDB-specific
     labelUserOptional: "User (optional)",
     labelPasswordOptional: "Password (optional)",
@@ -642,14 +642,14 @@ export const ko = {
     sslModeDisable: "Disable (암호화 없음)",
     sslModePrefer: "Prefer (기회적)",
     sslModeRequire: "Require (암호화, 검증 생략)",
-    sslModeVerifyCa: "Verify CA (암호화 + CA 파일로 검증)",
+    sslModeVerifyCa: "Verify CA (암호화 + 검증, CA 파일도 신뢰)",
     sslModeVerifyFull: "Verify full (암호화 + 검증)",
     tlsHintSslMode:
-      "Prefer는 드라이버 기본값(기회적 암호화)을 유지하여 암호화 없이 연결될 수 있습니다. Require는 TLS를 강제하지만 인증서 검증을 건너뜁니다(중간자 공격에 노출). Verify CA는 TLS를 강제하고 아래 CA 파일로 서버 인증서를 검증합니다. Verify full은 여기에 더해 OS 신뢰 저장소로 호스트명까지 검증합니다. Disable은 평문을 강제합니다.",
+      "Prefer는 드라이버 기본값(기회적 암호화)을 유지하여 암호화 없이 연결될 수 있습니다. Require는 TLS를 강제하지만 인증서 검증을 건너뜁니다(중간자 공격에 노출). Verify full은 TLS를 강제하고 내장 공개 CA 목록으로 인증서 체인과 호스트명을 검증합니다. Verify CA는 동일한 검증에 아래 CA 파일을 추가로 신뢰하여 사설 CA가 서명한 서버도 검증할 수 있게 합니다 — 공개 CA를 대체하는 것이 아니라 신뢰 앵커를 추가합니다. Disable은 평문을 강제합니다.",
     labelCaCertPath: "CA 인증서 파일",
     placeholderCaCertPath: "/path/to/ca.pem",
     caCertPathHint:
-      "서버 인증서를 서명한 CA 인증서(PEM) 경로. 경로만 저장되며 파일은 디스크에 남고 export 되지 않습니다.",
+      "서버 인증서를 서명한 CA 인증서(PEM) 경로. 내장 공개 CA 목록은 그대로 유지된 채 이 CA가 추가로 신뢰됩니다. 경로만 저장되며 파일은 디스크에 남고 export 되지 않습니다.",
     labelUserOptional: "사용자 (선택)",
     labelPasswordOptional: "비밀번호 (선택)",
     labelDatabaseOptional: "데이터베이스 (선택)",

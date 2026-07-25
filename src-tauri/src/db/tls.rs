@@ -6,11 +6,43 @@
 //! driver default (`sslmode=prefer` / `ssl-mode=PREFERRED`). #1649 (ADR 0058)
 //! promotes that posture from the `(tls_enabled, trust_server_certificate)`
 //! boolean pair to the uniform [`SslMode`] enum and adds the `verify-ca`
-//! posture: the server certificate is validated against a user-supplied CA
-//! ([`ConnectionConfig::ca_cert_path`]), closing the MITM-substitution gap that
-//! `require` (skip-verify) leaves open and that `verify-full` cannot cover for
-//! private/self-signed CAs. This helper resolves the model into an explicit,
-//! driver-neutral decision that each adapter maps onto its concrete `SslMode`.
+//! posture: the user names a private/self-signed CA
+//! ([`ConnectionConfig::ca_cert_path`]) so a server whose certificate no public
+//! CA signs can still be authenticated, closing the MITM-substitution gap that
+//! `require` (skip-verify) leaves open. This helper resolves the model into an
+//! explicit, driver-neutral decision that each adapter maps onto its concrete
+//! `SslMode`.
+//!
+//! ## Why `verify-ca` is never handed to the driver as `VerifyCa` (#1649 re-review)
+//!
+//! Two upstream facts, both read from the pinned sources:
+//!
+//! 1. **The user CA is added to the public roots, not substituted for them.**
+//!    `sqlx-core-0.8.6/src/net/tls/tls_rustls.rs:141` seeds the store with
+//!    `certs_from_webpki()` (the bundled Mozilla roots — the `runtime-tokio-rustls`
+//!    feature resolves to `_tls-rustls-ring-webpki`) and `:153` then `add()`s the
+//!    user's PEM on top. Naming a CA therefore *widens* the trust set; sqlx 0.8.6
+//!    offers no way to narrow it (`PgConnectOptions`/`MySqlConnectOptions` expose
+//!    only `ssl_mode` / `ssl_root_cert` / `ssl_ca` / client cert+key — no custom
+//!    `rustls::ClientConfig`).
+//! 2. **`VerifyCa` asks rustls to stop checking the hostname.**
+//!    `sqlx-postgres-0.8.6/src/connection/tls.rs:52` and
+//!    `sqlx-mysql-0.8.6/src/connection/tls.rs:64` both compute
+//!    `accept_invalid_hostnames = !matches!(mode, VerifyFull | VerifyIdentity)`,
+//!    which swaps the verifier for `NoHostnameTlsVerifier`
+//!    (`tls_rustls.rs:157-173`).
+//!
+//! Fact 2 is *currently* inert by accident: `NoHostnameTlsVerifier`
+//! (`tls_rustls.rs:309`) swallows only the unit `CertificateError::NotValidForName`,
+//! while rustls 0.23.39 — the version in our lockfile — raises
+//! `NotValidForNameContext { .. }` instead (`rustls-0.23.39/src/webpki/mod.rs:71-78`),
+//! so the error falls through and the handshake still fails on a name mismatch. A
+//! patch bump on either crate re-opens it silently. We do not build on an upstream
+//! accident: `verify-ca` resolves to the same decision as `verify-full` plus the
+//! user's CA as an *extra* anchor, so hostname verification is our choice, not
+//! sqlx's. Since fact 1 is not fixable inside sqlx 0.8.6, a certificate issued by
+//! any public CA **for the real database hostname** is still accepted — that
+//! residual is recorded in `docs/product/known-limitations.md`, not papered over.
 
 use crate::error::AppError;
 use crate::models::{ConnectionConfig, SslMode};
@@ -25,17 +57,22 @@ pub(crate) const VERIFY_CA_REQUIRES_CA_MESSAGE: &str =
 /// Driver-neutral outcome of the [`SslMode`] posture. Each sqlx adapter maps
 /// this onto its own `SslMode`:
 ///
-/// | decision            | `PgSslMode`  | `MySqlSslMode`   | `SslMode`     |
-/// |---------------------|--------------|------------------|---------------|
-/// | `Disable`           | `Disable`    | `Disabled`       | `disable`     |
-/// | `Default`           | (unset)      | (unset)          | `prefer`      |
-/// | `RequireSkipVerify` | `Require`    | `Required`       | `require`     |
-/// | `RequireVerifyCa`   | `VerifyCa`   | `VerifyCa`       | `verify-ca`   |
-/// | `RequireVerifyFull` | `VerifyFull` | `VerifyIdentity` | `verify-full` |
+/// | decision                          | `PgSslMode`  | `MySqlSslMode`   | `SslMode`                  |
+/// |-----------------------------------|--------------|------------------|----------------------------|
+/// | `Disable`                         | `Disable`    | `Disabled`       | `disable`                  |
+/// | `Default`                         | (unset)      | (unset)          | `prefer`                   |
+/// | `RequireSkipVerify`               | `Require`    | `Required`       | `require`                  |
+/// | `RequireVerifyFull { Some(path) }`| `VerifyFull` + `ssl_root_cert` | `VerifyIdentity` + `ssl_ca` | `verify-ca`   |
+/// | `RequireVerifyFull { None }`      | `VerifyFull` | `VerifyIdentity` | `verify-full`              |
 ///
-/// `RequireVerifyCa` carries the CA path so the adapter can point the driver's
-/// root-certificate option at it. `Clone` (not `Copy`) because of the owned
-/// path.
+/// There is deliberately **no** variant that selects the drivers' own
+/// `VerifyCa` / `VerifyCa` modes — see the module docs: those ask rustls to stop
+/// checking the hostname while still trusting the bundled Mozilla roots, and the
+/// only reason that is not exploitable on the current lockfile is an upstream
+/// pattern-match mismatch. Collapsing the two verifying postures into one
+/// variant makes the unsafe mapping unrepresentable in both adapters at once
+/// rather than relying on each of them to remember. `Clone` (not `Copy`) because
+/// of the owned path.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum TlsDecision {
     /// Explicitly force plaintext (`sslmode=disable`) — never negotiate TLS.
@@ -44,17 +81,19 @@ pub(crate) enum TlsDecision {
     Default,
     /// Force encryption but skip certificate verification (`sslmode=require`).
     RequireSkipVerify,
-    /// #1649 — force encryption + verify the server certificate against the CA
-    /// at `ca_cert_path` (`sslmode=verify-ca`). The path is **not** optional:
-    /// sqlx 0.8.6 answers a rootless `VerifyCa` with the bundled Mozilla webpki
-    /// roots *and* `accept_invalid_hostnames = true`, so a missing anchor turns
-    /// the posture into "any public CA, any hostname" — strictly weaker than
-    /// `verify-full` while looking stricter. [`resolve_tls_decision`] rejects
-    /// that combination instead of constructing this variant (libpq does the
-    /// same); hostname checking is what `verify-full` adds on top.
-    RequireVerifyCa { ca_cert_path: String },
-    /// Force encryption with full CA + hostname verification (`verify-full`).
-    RequireVerifyFull,
+    /// Force encryption with full CA **and hostname** verification.
+    ///
+    /// `extra_ca_cert_path` is the `verify-ca` posture (#1649): the user's
+    /// private/self-signed CA, handed to the driver's root-certificate option so
+    /// rustls trusts it *in addition to* the bundled public roots
+    /// (`sqlx-core-0.8.6/src/net/tls/tls_rustls.rs:141` seeds, `:153` adds — the
+    /// anchor set can only grow). `None` is plain `verify-full`.
+    ///
+    /// The path is **not** optional for `verify-ca`: a posture that names a
+    /// trust anchor it does not have is indistinguishable from `verify-full`,
+    /// so [`resolve_tls_decision`] rejects it (libpq does the same) instead of
+    /// silently re-labelling the user's choice.
+    RequireVerifyFull { extra_ca_cert_path: Option<String> },
 }
 
 /// The CA path a `verify-ca` posture must carry, or the fail-closed error.
@@ -84,6 +123,10 @@ pub(crate) fn validate_tls_posture(config: &ConnectionConfig) -> Result<(), AppE
 
 /// Resolve the model's [`SslMode`] posture into a driver-neutral decision.
 ///
+/// `verify-ca` and `verify-full` deliberately collapse onto the same variant —
+/// the former just carries an extra trust anchor. See the module docs for why we
+/// never select the drivers' own `VerifyCa` mode.
+///
 /// The only error since #1649 is the fail-closed `verify-ca`-without-a-CA-file
 /// rejection: the `SslMode` enum makes the old invalid combinations (TLS on
 /// without a trust decision, trust without TLS) unrepresentable, but a posture
@@ -93,10 +136,12 @@ pub(crate) fn resolve_tls_decision(config: &ConnectionConfig) -> Result<TlsDecis
         SslMode::Disable => TlsDecision::Disable,
         SslMode::Prefer => TlsDecision::Default,
         SslMode::Require => TlsDecision::RequireSkipVerify,
-        SslMode::VerifyCa => TlsDecision::RequireVerifyCa {
-            ca_cert_path: require_ca_cert_path(config.ca_cert_path.as_deref())?,
+        SslMode::VerifyCa => TlsDecision::RequireVerifyFull {
+            extra_ca_cert_path: Some(require_ca_cert_path(config.ca_cert_path.as_deref())?),
         },
-        SslMode::VerifyFull => TlsDecision::RequireVerifyFull,
+        SslMode::VerifyFull => TlsDecision::RequireVerifyFull {
+            extra_ca_cert_path: None,
+        },
     })
 }
 
@@ -164,7 +209,9 @@ mod tests {
     fn verify_full_requires_full_verification() {
         assert_eq!(
             resolve_tls_decision(&config(SslMode::VerifyFull, None)).unwrap(),
-            TlsDecision::RequireVerifyFull
+            TlsDecision::RequireVerifyFull {
+                extra_ca_cert_path: None
+            }
         );
     }
 
@@ -176,26 +223,28 @@ mod tests {
         // decision. (2026-07-25)
         assert_eq!(
             resolve_tls_decision(&config(SslMode::VerifyCa, Some("/etc/ssl/my-ca.pem"))).unwrap(),
-            TlsDecision::RequireVerifyCa {
-                ca_cert_path: "/etc/ssl/my-ca.pem".into()
+            TlsDecision::RequireVerifyFull {
+                extra_ca_cert_path: Some("/etc/ssl/my-ca.pem".into())
             }
         );
         // A ca_cert_path attached to verify-full is ignored — only verify-ca
         // reads it.
         assert_eq!(
             resolve_tls_decision(&config(SslMode::VerifyFull, Some("/etc/ssl/my-ca.pem"))).unwrap(),
-            TlsDecision::RequireVerifyFull
+            TlsDecision::RequireVerifyFull {
+                extra_ca_cert_path: None
+            }
         );
     }
 
     #[test]
     fn verify_ca_without_a_ca_file_fails_closed() {
-        // Reason: #1649 review B1 — sqlx 0.8.6 answers a rootless `VerifyCa`
-        // with the public webpki roots *and* `accept_invalid_hostnames = true`,
-        // so letting it through would accept any publicly-signed certificate for
-        // any hostname. libpq hard-errors on the same combination; so do we.
-        // Whitespace-only counts as absent (hand-edited JSON / raw IPC).
-        // (2026-07-25)
+        // Reason: #1649 review B1 — a `verify-ca` posture with no CA file names
+        // a trust anchor it does not have, so it is byte-for-byte the
+        // `verify-full` it claims to be stricter than. libpq hard-errors on the
+        // same combination rather than silently re-labelling the user's choice;
+        // so do we. Whitespace-only counts as absent (hand-edited JSON / raw
+        // IPC). (2026-07-25)
         for missing in [None, Some(""), Some("   ")] {
             let err = resolve_tls_decision(&config(SslMode::VerifyCa, missing))
                 .expect_err("verify-ca without a CA file must not reach the driver");

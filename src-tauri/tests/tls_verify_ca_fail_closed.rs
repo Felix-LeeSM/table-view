@@ -1,16 +1,23 @@
 //! #1649 (ADR 0058) — `verify-ca` without a CA file must fail closed.
 //!
-//! sqlx 0.8.6 turns `VerifyCa` with no explicit root certificate into "verify
-//! against the bundled Mozilla webpki roots, `accept_invalid_hostnames = true`"
-//! (sqlx-postgres `src/connection/tls.rs` computes
-//! `accept_invalid_hostnames = !matches!(ssl_mode, VerifyFull)`; sqlx-core
-//! `src/net/tls/tls_rustls.rs` falls back to the public root store when
-//! `root_cert_path` is `None`). Any certificate signed by any public CA, for any
-//! hostname, then passes — a user who deliberately picked `verify-ca` gets a
-//! silently MITM-able session, the exact substitution attack ADR 0058 decision 1
-//! exists to close. libpq treats the same combination as a hard error; these
-//! tests pin that contract on the adapter entry points, *before* a socket is
-//! opened, so the posture can never reach the driver without a trust anchor.
+//! `verify-ca` means "also trust this private CA": sqlx 0.8.6 seeds the root
+//! store with the bundled Mozilla roots (`sqlx-core-0.8.6/src/net/tls/
+//! tls_rustls.rs:141`) and `add()`s the user's PEM on top (`:153`) — the anchor
+//! set can only grow. A `verify-ca` posture carrying no CA file therefore
+//! resolves to *exactly* the `verify-full` the user chose not to pick, while the
+//! stored vocabulary keeps claiming a private trust anchor that does not exist —
+//! the connection reads as hardened in the UI and in an export review, and the
+//! discrepancy only surfaces when someone audits the certificate chain. libpq
+//! treats the same combination as a hard error rather than re-labelling the
+//! choice; these tests pin that contract on the adapter entry points, *before* a
+//! socket is opened.
+//!
+//! The companion property — that a `verify-ca` posture never disables hostname
+//! verification — is pinned in the `--lib` unit tests next to the mapping it
+//! guards (`src-tauri/src/db/postgres/connection.rs`,
+//! `src-tauri/src/db/mysql/connection.rs`:
+//! `connect_options_never_select_the_hostname_skipping_mode`), because
+//! `connect_options` is private to the adapters.
 
 use table_view_lib::db::{MysqlAdapter, PostgresAdapter};
 use table_view_lib::error::AppError;

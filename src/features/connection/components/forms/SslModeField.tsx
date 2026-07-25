@@ -4,8 +4,8 @@
  * `resolve_tls_decision` boundary, so their TLS posture is a five-way choice
  * (disable / prefer / require / verify-ca / verify-full). #1649 (ADR 0058)
  * promotes `sslMode` to a real persisted field and adds `verify-ca`: when it is
- * selected, a CA certificate path input appears so the server certificate can
- * be validated against a private/self-signed CA (`caCertPath`).
+ * selected, a CA certificate path input appears so a private/self-signed CA
+ * (`caCertPath`) is trusted *in addition to* the driver's built-in public roots.
  */
 import { useTranslation } from "react-i18next";
 import {
@@ -90,12 +90,11 @@ export default function SslModeField({
           {t("form.trustWarning")}
         </p>
       )}
-      {/* #1649 — verify-ca validates the server against a user-supplied CA;
-          reveal the path input so the feature is reachable. The CA file is
-          required for this posture: with no trust anchor the driver falls back
-          to the public trust store *and* stops checking the hostname, so the
-          save is blocked rather than landing a posture weaker than the
-          verify-full it reads as. */}
+      {/* #1649 — verify-ca adds a user-supplied CA to the trust anchors; reveal
+          the path input so the feature is reachable. The CA file is required for
+          this posture: with no anchor to add, `verify-ca` *is* `verify-full`,
+          so the save is blocked rather than storing a posture that claims a
+          private trust anchor the connection does not have. */}
       {mode === "verify-ca" && (
         <div className="mt-2">
           <label htmlFor="conn-ca-cert-path" className={labelClass}>

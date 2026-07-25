@@ -269,12 +269,11 @@ export default function ConnectionDialog({
       );
       return;
     }
-    // #1649 — `verify-ca` validates the server against a user-supplied CA, so
-    // the CA file is required for that posture. Without it the driver falls
-    // back to the public trust store with hostname verification off (weaker
-    // than verify-full while reading as stricter), which the backend now
-    // refuses to save — block it here so the user is corrected in the form
-    // rather than by a save error.
+    // #1649 — `verify-ca` adds a user-supplied CA to the trust anchors, so the
+    // CA file is required for that posture: with nothing to add it is exactly
+    // the `verify-full` the user did not pick, stored under a label that claims
+    // a private anchor. The backend refuses to save that — block it here so the
+    // user is corrected in the form rather than by a save error.
     if (trimmed.sslMode === "verify-ca" && !(trimmed.caCertPath ?? "").trim()) {
       failValidation("caCertPath", t("dialog.errorCaCertPathRequired"));
       return;

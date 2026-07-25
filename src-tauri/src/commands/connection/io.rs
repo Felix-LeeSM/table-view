@@ -282,9 +282,10 @@ pub fn import_connections(json: String) -> Result<ImportResult, AppError> {
             // cannot survive the trip: it would land as a posture naming a
             // trust anchor the machine does not have, which `save_connection`
             // and the connect path now reject (fail closed). Fold it to
-            // `verify-full` — strictly stronger (full chain *and* hostname,
-            // against the system store) and the same safe-side fold the SQLite
-            // mirror already applies in `SslMode::to_legacy`. A private-CA
+            // `verify-full` — the same verification with a *narrower* anchor set
+            // (built-in public roots only, minus the private CA the importing
+            // machine does not have), i.e. safe-side, and the same fold the
+            // SQLite mirror already applies in `SslMode::to_legacy`. A private-CA
             // server then fails the handshake loudly and the user re-selects
             // the CA file, exactly as they must re-enter the password.
             ssl_mode: match conn.ssl_mode {

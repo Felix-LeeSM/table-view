@@ -88,11 +88,15 @@ impl MysqlAdapter {
     ///
     /// Issue #1062 / #1649 — 모델의 sslmode posture 를 `MySqlSslMode` 로 결선.
     /// TLS 를 켠 operator 가 sqlx 기본 `ssl-mode=PREFERRED` 로 조용히 평문
-    /// downgrade 되지 않도록 한다. #1649 는 `verify-ca` 를 추가 — 서버 인증서를
-    /// 사용자 CA(`ca_cert_path`) 로 검증. fallible 인 유일한 이유는 fail-closed
-    /// `verify-ca` 거부다 — CA 없는 `MySqlSslMode::VerifyCa` 는 공개 webpki
-    /// 루트로 떨어지며 hostname 검증도 꺼지므로 `resolve_tls_decision` 이 그
-    /// 조합을 거부한다 (libpq 동형).
+    /// downgrade 되지 않도록 한다. #1649 는 `verify-ca` 를 추가 — 사용자 CA
+    /// (`ca_cert_path`) 를 `ssl_ca` 로 넘겨 **추가** 신뢰 앵커로 삼는다.
+    ///
+    /// `MySqlSslMode::VerifyCa` 는 의도적으로 절대 선택하지 않는다 — 그 모드는
+    /// hostname 검증을 끄면서 (`sqlx-mysql-0.8.6/src/connection/tls.rs:64`)
+    /// 번들 Mozilla 루트를 하나도 빼지 않으므로
+    /// (`sqlx-core-0.8.6/src/net/tls/tls_rustls.rs:141`) `VerifyIdentity` 보다
+    /// 약해질 뿐 좁아지지 않는다. 근거는 `db::tls` 모듈 문서. fallible 인 유일한
+    /// 이유는 CA 없는 `verify-ca` 의 fail-closed 거부다.
     fn connect_options(config: &ConnectionConfig) -> Result<MySqlConnectOptions, AppError> {
         let options = MySqlConnectOptions::new()
             .host(&config.host)
@@ -104,14 +108,13 @@ impl MysqlAdapter {
             TlsDecision::Disable => options.ssl_mode(MySqlSslMode::Disabled),
             TlsDecision::Default => options,
             TlsDecision::RequireSkipVerify => options.ssl_mode(MySqlSslMode::Required),
-            // #1649 — verify-ca validates the server cert against the user's CA.
-            // sqlx maps this onto `MySqlSslMode::VerifyCa` + `ssl_ca`; the
-            // decision type guarantees the path is present. (Only PG proves
-            // verify-ca end-to-end this slice; MySQL is wired for parity.)
-            TlsDecision::RequireVerifyCa { ca_cert_path } => options
-                .ssl_mode(MySqlSslMode::VerifyCa)
-                .ssl_ca(ca_cert_path),
-            TlsDecision::RequireVerifyFull => options.ssl_mode(MySqlSslMode::VerifyIdentity),
+            TlsDecision::RequireVerifyFull { extra_ca_cert_path } => {
+                let options = options.ssl_mode(MySqlSslMode::VerifyIdentity);
+                match extra_ca_cert_path {
+                    Some(ca_cert_path) => options.ssl_ca(ca_cert_path),
+                    None => options,
+                }
+            }
         })
     }
 
@@ -568,19 +571,25 @@ mod tests {
     }
 
     #[test]
-    fn connect_options_verify_ca_maps_to_verify_ca() {
-        // Reason: #1649 (ADR 0058) — the verify-ca posture reaches
-        // `MySqlSslMode::VerifyCa` and forwards the CA path via `ssl_ca` so
-        // MySQL/MariaDB stay at parity with PG's verify-ca wiring. The path
-        // assertion is load-bearing: the mode alone would still pass if the
-        // `ssl_ca` call were dropped, which is the whole feature. (2026-07-25)
+    fn connect_options_verify_ca_keeps_hostname_verification_and_adds_the_ca() {
+        // Reason: #1649 re-review B1 — `MySqlSslMode::VerifyCa` sets
+        // `accept_invalid_hostnames = true`
+        // (`sqlx-mysql-0.8.6/src/connection/tls.rs:64`) on a root store that
+        // still holds every bundled Mozilla root — `ssl_ca` is `add()`ed on top
+        // of `certs_from_webpki()`, never substituted for it
+        // (`sqlx-core-0.8.6/src/net/tls/tls_rustls.rs:141` + `:153`). The
+        // posture must land on `VerifyIdentity` with the CA as an *extra*
+        // anchor. The path assertion is load-bearing: the mode alone would still
+        // pass if the `ssl_ca` call were dropped, which is the whole feature.
+        // (2026-07-25)
         let mut config = sample_config();
         config.ssl_mode = crate::models::SslMode::VerifyCa;
         config.ca_cert_path = Some("/etc/ssl/private-ca.pem".into());
         let opts = MysqlAdapter::connect_options(&config).unwrap();
         assert!(
-            matches!(opts.get_ssl_mode(), MySqlSslMode::VerifyCa),
-            "ssl_mode=verify-ca must select MySqlSslMode::VerifyCa"
+            matches!(opts.get_ssl_mode(), MySqlSslMode::VerifyIdentity),
+            "ssl_mode=verify-ca must keep hostname verification on, got {:?}",
+            opts.get_ssl_mode()
         );
         let opts_str = format!("{opts:?}");
         assert!(
@@ -590,11 +599,37 @@ mod tests {
     }
 
     #[test]
+    fn connect_options_never_select_the_hostname_skipping_mode() {
+        // Reason: #1649 re-review B1 — PG parity guard. `MySqlSslMode::VerifyCa`
+        // is the one verifying mode sqlx routes through `NoHostnameTlsVerifier`
+        // (`sqlx-core-0.8.6/src/net/tls/tls_rustls.rs:165`); no posture may reach
+        // it. (2026-07-25)
+        for mode in [
+            crate::models::SslMode::Disable,
+            crate::models::SslMode::Prefer,
+            crate::models::SslMode::Require,
+            crate::models::SslMode::VerifyCa,
+            crate::models::SslMode::VerifyFull,
+        ] {
+            let mut config = sample_config();
+            config.ssl_mode = mode;
+            config.ca_cert_path = Some("/etc/ssl/private-ca.pem".into());
+            let opts = MysqlAdapter::connect_options(&config)
+                .unwrap_or_else(|e| panic!("{mode:?} must resolve, got: {e}"));
+            assert!(
+                !matches!(opts.get_ssl_mode(), MySqlSslMode::VerifyCa),
+                "{mode:?} reached MySqlSslMode::VerifyCa, which disables hostname \
+                 verification while still trusting every bundled public root"
+            );
+        }
+    }
+
+    #[test]
     fn connect_options_verify_ca_without_ca_fails_closed() {
-        // Reason: #1649 review B1 — a rootless `MySqlSslMode::VerifyCa` falls
-        // back to the public webpki roots with hostname verification off, so the
-        // posture must be rejected before it reaches sqlx (PG parity, libpq
-        // semantics). (2026-07-25)
+        // Reason: #1649 review B1 — a `verify-ca` posture with no CA file names
+        // a trust anchor it does not have, making it byte-for-byte the
+        // verify-full it advertises itself as stricter than. Rejected before it
+        // reaches sqlx (PG parity, libpq semantics). (2026-07-25)
         let mut config = sample_config();
         config.ssl_mode = crate::models::SslMode::VerifyCa;
         config.ca_cert_path = None;

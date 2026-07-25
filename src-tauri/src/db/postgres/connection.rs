@@ -100,12 +100,16 @@ impl PostgresAdapter {
     ///
     /// Issue #1062 — map the model's TLS posture onto `PgSslMode` so an operator
     /// who turns TLS on is never silently downgraded to plaintext by sqlx's
-    /// default `sslmode=prefer`. #1649 (ADR 0058) adds `verify-ca`: the server
-    /// certificate is validated against the user's CA at `ca_cert_path` via
-    /// `ssl_root_cert`. Fallible only for the fail-closed `verify-ca` rejection
-    /// — `PgSslMode::VerifyCa` without `ssl_root_cert` would fall back to the
-    /// public webpki roots with hostname checking off, so `resolve_tls_decision`
-    /// refuses that posture (libpq parity) and it never reaches sqlx.
+    /// default `sslmode=prefer`. #1649 (ADR 0058) adds `verify-ca`: the user's
+    /// CA at `ca_cert_path` is handed to `ssl_root_cert` as an **additional**
+    /// trust anchor so a private/self-signed server can be authenticated.
+    ///
+    /// `PgSslMode::VerifyCa` is deliberately never selected — it turns hostname
+    /// verification off (`sqlx-postgres-0.8.6/src/connection/tls.rs:52`) without
+    /// removing a single bundled Mozilla root
+    /// (`sqlx-core-0.8.6/src/net/tls/tls_rustls.rs:141`), so the posture can only
+    /// be weaker than `VerifyFull`, never narrower. See `db::tls` module docs.
+    /// Fallible only for the fail-closed `verify-ca`-without-a-CA-file rejection.
     fn connect_options(config: &ConnectionConfig) -> Result<PgConnectOptions, AppError> {
         let options = PgConnectOptions::new()
             .host(&config.host)
@@ -117,13 +121,13 @@ impl PostgresAdapter {
             TlsDecision::Disable => options.ssl_mode(PgSslMode::Disable),
             TlsDecision::Default => options,
             TlsDecision::RequireSkipVerify => options.ssl_mode(PgSslMode::Require),
-            // #1649 — verify-ca authenticates the server against the user's CA.
-            // `ssl_root_cert` points sqlx at the PEM; the decision type
-            // guarantees the path is present.
-            TlsDecision::RequireVerifyCa { ca_cert_path } => options
-                .ssl_mode(PgSslMode::VerifyCa)
-                .ssl_root_cert(ca_cert_path),
-            TlsDecision::RequireVerifyFull => options.ssl_mode(PgSslMode::VerifyFull),
+            TlsDecision::RequireVerifyFull { extra_ca_cert_path } => {
+                let options = options.ssl_mode(PgSslMode::VerifyFull);
+                match extra_ca_cert_path {
+                    Some(ca_cert_path) => options.ssl_root_cert(ca_cert_path),
+                    None => options,
+                }
+            }
         })
     }
 
@@ -728,20 +732,25 @@ mod tests {
     }
 
     #[test]
-    fn connect_options_verify_ca_maps_to_verify_ca_with_root_cert() {
-        // Reason: #1649 (ADR 0058) — the verify-ca posture must reach
-        // `PgSslMode::VerifyCa` and point sqlx at the user's CA via
-        // `ssl_root_cert`, so the PG adapter actually validates the server
-        // certificate against a private/self-signed CA end-to-end. This is the
-        // load-bearing proof that verify-ca is wired, not just modeled.
-        // (2026-07-25)
+    fn connect_options_verify_ca_keeps_hostname_verification_and_adds_the_ca() {
+        // Reason: #1649 re-review B1 — `PgSslMode::VerifyCa` sets
+        // `accept_invalid_hostnames = true`
+        // (`sqlx-postgres-0.8.6/src/connection/tls.rs:52`) while the root store
+        // still holds every bundled Mozilla root — `ssl_root_cert` is `add()`ed
+        // on top of `certs_from_webpki()`, never substituted for it
+        // (`sqlx-core-0.8.6/src/net/tls/tls_rustls.rs:141` + `:153`). Selecting
+        // it would therefore drop the hostname binding without narrowing the
+        // anchor set by one certificate: strictly weaker than verify-full while
+        // reading as stricter. The posture must land on `VerifyFull` with the
+        // user's CA as an *extra* anchor. (2026-07-25)
         let mut config = sample_config();
         config.ssl_mode = SslMode::VerifyCa;
         config.ca_cert_path = Some("/etc/ssl/private-ca.pem".into());
         let opts = PostgresAdapter::connect_options(&config).unwrap();
         assert!(
-            matches!(opts.get_ssl_mode(), PgSslMode::VerifyCa),
-            "ssl_mode=verify-ca must select PgSslMode::VerifyCa"
+            matches!(opts.get_ssl_mode(), PgSslMode::VerifyFull),
+            "ssl_mode=verify-ca must keep hostname verification on, got {:?}",
+            opts.get_ssl_mode()
         );
         // The CA path is stored on the options; Debug renders the configured
         // root cert path so the wiring is observable without a live server.
@@ -753,14 +762,44 @@ mod tests {
     }
 
     #[test]
+    fn connect_options_never_select_the_hostname_skipping_mode() {
+        // Reason: #1649 re-review B1 — the guard that keeps the defect from
+        // coming back through a different posture. `PgSslMode::VerifyCa` is the
+        // one verifying mode sqlx hands to `NoHostnameTlsVerifier`; no posture
+        // may reach it. (Today the skip happens to be inert because
+        // `NoHostnameTlsVerifier` matches the unit
+        // `CertificateError::NotValidForName` while rustls 0.23.39 raises
+        // `NotValidForNameContext` — `rustls-0.23.39/src/webpki/mod.rs:71`. That
+        // is an upstream accident a patch bump can undo, which is exactly why
+        // the mapping, not the accident, has to carry the property.)
+        // (2026-07-25)
+        for mode in [
+            SslMode::Disable,
+            SslMode::Prefer,
+            SslMode::Require,
+            SslMode::VerifyCa,
+            SslMode::VerifyFull,
+        ] {
+            let mut config = sample_config();
+            config.ssl_mode = mode;
+            config.ca_cert_path = Some("/etc/ssl/private-ca.pem".into());
+            let opts = PostgresAdapter::connect_options(&config)
+                .unwrap_or_else(|e| panic!("{mode:?} must resolve, got: {e}"));
+            assert!(
+                !matches!(opts.get_ssl_mode(), PgSslMode::VerifyCa),
+                "{mode:?} reached PgSslMode::VerifyCa, which disables hostname \
+                 verification while still trusting every bundled public root"
+            );
+        }
+    }
+
+    #[test]
     fn connect_options_verify_ca_without_ca_fails_closed() {
-        // Reason: #1649 review B1 — sqlx 0.8.6 resolves a rootless
-        // `PgSslMode::VerifyCa` to the bundled Mozilla webpki roots *and* sets
-        // `accept_invalid_hostnames = true` (VerifyFull is the only mode that
-        // keeps hostname checking), so letting it through would accept any
-        // publicly-signed certificate for any hostname — weaker than the
-        // verify-full the user could have picked, while reading as stricter.
-        // libpq hard-errors on the same combination. (2026-07-25)
+        // Reason: #1649 review B1 — a `verify-ca` posture with no CA file names
+        // a trust anchor it does not have, making it byte-for-byte the
+        // verify-full it advertises itself as stricter than. libpq hard-errors
+        // on the same combination instead of silently re-labelling the user's
+        // choice. (2026-07-25)
         let mut config = sample_config();
         config.ssl_mode = SslMode::VerifyCa;
         config.ca_cert_path = None;

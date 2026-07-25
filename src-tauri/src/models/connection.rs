@@ -90,18 +90,26 @@ pub enum Paradigm {
 /// | `Prefer`     | `prefer`       | opportunistic (driver default) | no |
 /// | `Require`    | `require`      | yes    | yes         | no       |
 /// | `VerifyCa`   | `verify-ca`    | yes    | no          | yes (`ca_cert_path`) |
-/// | `VerifyFull` | `verify-full`  | yes    | no          | no (OS trust store) |
+/// | `VerifyFull` | `verify-full`  | yes    | no          | no (public roots)   |
 ///
-/// `VerifyCa` (#1649) is the new advanced-depth posture: it validates the server
-/// certificate against a user-supplied private/self-signed CA (`ca_cert_path`),
-/// closing the MITM-substitution gap that `Require` (skip-verify) leaves open
-/// and that `VerifyFull` cannot cover for non-public CAs. It is the one variant
-/// with a companion requirement: `ca_cert_path` must be set, enforced at the
-/// write boundary (`save_connection`) and again at connect
+/// `VerifyCa` (#1649) is the new advanced-depth posture: it adds a user-supplied
+/// private/self-signed CA (`ca_cert_path`) to the trust anchors so a server no
+/// public CA signs can still be authenticated, closing the MITM-substitution gap
+/// that `Require` (skip-verify) leaves open. It is an **addition**, not a
+/// restriction: sqlx 0.8.6 seeds the root store with the bundled Mozilla roots
+/// and then adds the user's PEM
+/// (`sqlx-core-0.8.6/src/net/tls/tls_rustls.rs:141` + `:153`), and exposes no way
+/// to swap the store out, so `verify-ca` trusts *more* certificates than
+/// `VerifyFull`, never fewer. Both postures verify the hostname: the adapters
+/// deliberately map `VerifyCa` onto the drivers' `VerifyFull`/`VerifyIdentity`
+/// rather than their `VerifyCa`, which would drop the hostname binding without
+/// narrowing the anchor set (see `db::tls` module docs).
+///
+/// It is the one variant with a companion requirement: `ca_cert_path` must be
+/// set, enforced at the write boundary (`save_connection`) and again at connect
 /// (`db::tls::resolve_tls_decision`). libpq is one-to-one here too — it rejects
-/// `sslmode=verify-ca` without a root certificate rather than falling back to
-/// the system store, which is what sqlx would otherwise do (with hostname
-/// verification off, i.e. weaker than `VerifyFull`).
+/// `sslmode=verify-ca` without a root certificate rather than silently treating
+/// it as the system-store posture the user did not pick.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum SslMode {
@@ -114,12 +122,12 @@ pub enum SslMode {
     /// Force encryption, skip certificate verification (`sslmode=require`).
     /// MITM-exposed: encrypts but does not authenticate the server.
     Require,
-    /// Force encryption + verify the server certificate against the CA in
-    /// `ca_cert_path` (`sslmode=verify-ca`), which is **required** for this
-    /// posture. Hostname is not checked — that is what `VerifyFull` adds.
+    /// Force encryption + full chain **and hostname** verification, with the CA
+    /// in `ca_cert_path` (`sslmode=verify-ca`, **required** for this posture)
+    /// trusted in addition to the built-in public roots.
     VerifyCa,
-    /// Force encryption + full CA + hostname verification against the OS trust
-    /// store (`sslmode=verify-full`).
+    /// Force encryption + full chain + hostname verification against the
+    /// built-in public roots only (`sslmode=verify-full`).
     VerifyFull,
 }
 
@@ -216,10 +224,10 @@ pub struct ConnectionConfig {
     #[serde(default)]
     pub ssl_mode: SslMode,
     /// #1649 (ADR 0058) — filesystem path to the CA certificate (PEM) that
-    /// `SslMode::VerifyCa` validates the server certificate against. A path
-    /// *reference* only — never the certificate contents (ADR 0052 file-credential
-    /// precedent). Stripped from export envelopes like `wallet_path`. `None` for
-    /// every non-verify-ca posture.
+    /// `SslMode::VerifyCa` trusts *in addition to* the driver's built-in public
+    /// roots. A path *reference* only — never the certificate contents (ADR 0052
+    /// file-credential precedent). Stripped from export envelopes like
+    /// `wallet_path`. `None` for every non-verify-ca posture.
     #[serde(default)]
     pub ca_cert_path: Option<String>,
     /// Oracle-only (#1065): connect using a SID instead of a service name.

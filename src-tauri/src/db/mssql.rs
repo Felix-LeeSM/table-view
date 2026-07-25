@@ -155,8 +155,10 @@ impl MssqlAdapter {
         // combinations (TLS on without a trust decision, trust without TLS)
         // unrepresentable, so the encryption decision is a clean two-way branch.
         // `require` (skip_verify) opts into `trust_cert`; `verify-ca`/`verify-full`
-        // keep tiberius's certificate verification. (verify-ca CA-file wiring for
-        // MSSQL is deferred — only PG proves verify-ca end-to-end this slice.)
+        // keep tiberius's certificate verification. (No CA-file wiring for MSSQL —
+        // `ca_cert_path` is ignored here, so a `verify-ca` connection on this
+        // engine verifies against the system trust store exactly like
+        // `verify-full`; the form only offers the CA input on pg/mysql/mariadb.)
         if config.ssl_mode.tls_on() {
             tds_config.encryption(EncryptionLevel::Required);
             if config.ssl_mode.skip_verify() {

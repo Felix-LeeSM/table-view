@@ -115,8 +115,8 @@ export interface ConnectionConfig {
    *  value as `prefer`. */
   sslMode?: SslMode;
   /** #1649 — filesystem path to the CA certificate (PEM) that `verify-ca`
-   *  validates the server certificate against. A path reference only —
-   *  stripped from exports like `walletPath`. */
+   *  trusts *in addition to* the driver's built-in public roots. A path
+   *  reference only — stripped from exports like `walletPath`. */
   caCertPath?: string | null;
 
   // ── MongoDB-specific optional fields ──────────────────────────────
@@ -322,10 +322,13 @@ export function exposesTlsToggle(dbType: DatabaseType): boolean {
  * | `prefer`      | opportunistic (driver default)     | no   |
  * | `require`     | yes    | yes         | no                |
  * | `verify-ca`   | yes    | no          | yes (`caCertPath`)|
- * | `verify-full` | yes    | no          | no (OS trust)     |
+ * | `verify-full` | yes    | no          | no (public roots) |
  *
- * `verify-ca` (#1649) validates the server certificate against a user-supplied
- * private/self-signed CA.
+ * `verify-ca` (#1649) is `verify-full` — same chain *and* hostname check — with
+ * the user's private/self-signed CA trusted **in addition to** the driver's
+ * built-in public roots, so a server no public CA signs can be authenticated.
+ * It adds a trust anchor; it does not remove the public ones. See
+ * `src-tauri/src/db/tls.rs` module docs for the upstream constraint.
  */
 export type SslMode =
   | "disable"
