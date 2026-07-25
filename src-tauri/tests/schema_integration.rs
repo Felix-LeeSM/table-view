@@ -2220,6 +2220,7 @@ async fn test_pg_trait_dispatch_covers_rdb_adapter_surface() {
             new_nullable: Some(true),
             new_default_value: None,
             using_expression: None,
+            new_comment: None,
         }],
         preview_only: true,
         expected_database: None,

@@ -230,6 +230,7 @@ async fn alter_table_preview_emits_oracle_statement_chain() {
                 new_nullable: Some(false),
                 new_default_value: None,
                 using_expression: None,
+                new_comment: None,
             },
             ColumnChange::Drop {
                 name: "legacy".into(),
@@ -245,6 +246,94 @@ async fn alter_table_preview_emits_oracle_statement_chain() {
             sql,
             "ALTER TABLE \"APP\".\"users\" ADD (\"nickname\" VARCHAR2(100)); ALTER TABLE \"APP\".\"users\" MODIFY (\"email\" VARCHAR2(255) NOT NULL); ALTER TABLE \"APP\".\"users\" DROP COLUMN \"legacy\""
         );
+}
+
+// ── #1735 — Oracle column comment edit (2026-07-25) ────────────────
+fn oracle_alter_comment_req(name: &str, new_comment: Option<&str>) -> AlterTableRequest {
+    AlterTableRequest {
+        connection_id: "conn".into(),
+        schema: "APP".into(),
+        table: "users".into(),
+        changes: vec![ColumnChange::Modify {
+            name: name.into(),
+            new_data_type: None,
+            new_nullable: None,
+            new_default_value: None,
+            using_expression: None,
+            new_comment: new_comment.map(str::to_string),
+        }],
+        preview_only: true,
+        expected_database: None,
+    }
+}
+
+// Reason: #1735 — a comment-only Oracle Modify emits ONLY the ANSI
+// `COMMENT ON COLUMN` statement, no `MODIFY (…)` leg (2026-07-25).
+#[tokio::test]
+async fn alter_table_preview_comment_only_emits_comment_on_column() {
+    let sql = OracleAdapter::new()
+        .alter_table(&oracle_alter_comment_req("email", Some("primary contact")))
+        .await
+        .unwrap()
+        .sql;
+    assert_eq!(
+        sql,
+        "COMMENT ON COLUMN \"APP\".\"users\".\"email\" IS 'primary contact'"
+    );
+}
+
+// Reason: #1735 — a type change + comment emits the MODIFY and the COMMENT
+// ON COLUMN as two `; `-joined statements (2026-07-25).
+#[tokio::test]
+async fn alter_table_preview_type_and_comment_emits_two_statements() {
+    let req = AlterTableRequest {
+        connection_id: "conn".into(),
+        schema: "APP".into(),
+        table: "users".into(),
+        changes: vec![ColumnChange::Modify {
+            name: "email".into(),
+            new_data_type: Some("VARCHAR2(320)".into()),
+            new_nullable: None,
+            new_default_value: None,
+            using_expression: None,
+            new_comment: Some("primary contact".into()),
+        }],
+        preview_only: true,
+        expected_database: None,
+    };
+    let sql = OracleAdapter::new().alter_table(&req).await.unwrap().sql;
+    assert_eq!(
+        sql,
+        "ALTER TABLE \"APP\".\"users\" MODIFY (\"email\" VARCHAR2(320)); COMMENT ON COLUMN \"APP\".\"users\".\"email\" IS 'primary contact'"
+    );
+}
+
+// Reason: #1735 — single quotes in the comment are doubled (injection guard);
+// an empty comment clears via `IS ''`. Oracle's `COMMENT ON` grammar takes a
+// *text literal* only — `IS NULL` is a parse error there (PG accepts it), and
+// in Oracle `''` IS NULL, so the empty literal is the documented clear form
+// (2026-07-25).
+#[tokio::test]
+async fn alter_table_preview_comment_escape_and_clear() {
+    let escaped = OracleAdapter::new()
+        .alter_table(&oracle_alter_comment_req("email", Some("O'Brien")))
+        .await
+        .unwrap()
+        .sql;
+    assert_eq!(
+        escaped,
+        "COMMENT ON COLUMN \"APP\".\"users\".\"email\" IS 'O''Brien'"
+    );
+
+    let cleared = OracleAdapter::new()
+        .alter_table(&oracle_alter_comment_req("email", Some("")))
+        .await
+        .unwrap()
+        .sql;
+    assert_eq!(
+        cleared,
+        "COMMENT ON COLUMN \"APP\".\"users\".\"email\" IS ''"
+    );
 }
 
 #[tokio::test]
@@ -362,6 +451,7 @@ async fn structured_ddl_rejects_unsupported_oracle_boundaries() {
             new_nullable: None,
             new_default_value: None,
             using_expression: Some("LOWER(email)".into()),
+            new_comment: None,
         }],
         preview_only: true,
         expected_database: None,
