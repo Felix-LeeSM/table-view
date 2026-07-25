@@ -83,18 +83,73 @@ this page stays the index plus the cross-band policy sections.
 
 | Band | Scope |
 |---|---|
-| [`h1-data-source.md`](smoke-matrix/h1-data-source.md) | Data source architecture smoke boundary across every adapter |
-| [`h2-rdbms-parity.md`](smoke-matrix/h2-rdbms-parity.md) | RDBMS parity lanes: PostgreSQL, MySQL, MariaDB |
-| [`postgresql-query-workbench.md`](smoke-matrix/postgresql-query-workbench.md) | PostgreSQL query and workbench lane |
-| [`sqlite-file-dbms.md`](smoke-matrix/sqlite-file-dbms.md) | SQLite file DBMS lane |
-| [`h3-duckdb-file-analytics.md`](smoke-matrix/h3-duckdb-file-analytics.md) | DuckDB and registered local file analytics |
-| [`h4-rdbms-intelligence.md`](smoke-matrix/h4-rdbms-intelligence.md) | Schema metadata cache, ERD graph, dependency view, schema diff |
-| [`h5-non-rdbms.md`](smoke-matrix/h5-non-rdbms.md) | MongoDB, Redis/Valkey, and other non-RDBMS paradigms |
-| [`h6-wider-source-candidates.md`](smoke-matrix/h6-wider-source-candidates.md) | MSSQL/Oracle guardrails plus wide-column, cloud-document, graph, vector, and stream candidates |
-| [`h7-ops-security-reliability.md`](smoke-matrix/h7-ops-security-reliability.md) | Ops, security, and reliability |
+| [`h1-data-source.md`](smoke-matrix/h1-data-source.md) | Cross-adapter architecture boundary: profile/capability/adapter-contract registry, query-language and result-envelope ownership, and the connect-to-query journey for PostgreSQL, MySQL, MariaDB, MongoDB, Redis, Elasticsearch/OpenSearch, and DuckDB |
+| [`h2-rdbms-parity.md`](smoke-matrix/h2-rdbms-parity.md) | RDBMS parity lanes and their closure audits: PostgreSQL, MySQL, MariaDB, SQLite, and DuckDB `.duckdb` runtime smoke |
+| [`postgresql-query-workbench.md`](smoke-matrix/postgresql-query-workbench.md) | PostgreSQL lane detail: query execution, catalog/workbench metadata, parser and Safe Mode, completion and installed extensions, edit semantics, Explain, cancellation |
+| [`sqlite-file-dbms.md`](smoke-matrix/sqlite-file-dbms.md) | SQLite lane detail: file connection lifecycle, writable-file DML, catalog browse, row edit, DDL and unsupported `ALTER` behavior |
+| [`h3-duckdb-file-analytics.md`](smoke-matrix/h3-duckdb-file-analytics.md) | DuckDB `.duckdb` runtime plus registered CSV/Parquet/JSON/NDJSON analytics, and the local-file privacy/export and extension/`COPY` gates |
+| [`h4-rdbms-intelligence.md`](smoke-matrix/h4-rdbms-intelligence.md) | Schema metadata cache, ERD graph input and renderer, dependency view, migration impact, schema diff, FK row navigation |
+| [`h5-non-rdbms.md`](smoke-matrix/h5-non-rdbms.md) | Non-RDBMS paradigms: MongoDB, Redis/Valkey, and Elasticsearch/OpenSearch Search, with their closure audits |
+| [`h6-wider-source-candidates.md`](smoke-matrix/h6-wider-source-candidates.md) | MSSQL and Oracle runtime/smoke guardrails plus unpromoted wide-column, cloud-document, graph, vector, and stream candidates |
+| [`h7-ops-security-reliability.md`](smoke-matrix/h7-ops-security-reliability.md) | CI/hook gate surface, destructive-operation safety, credential and local-first privacy, dependency security, a11y, performance, platform smoke, E2E isolation |
 
 Band sizes are not restated here — `scripts/hooks/check-doc-size.sh` owns that
 number, so duplicating it would only create a claim nothing verifies.
+
+## Pre-Release Verification Gate
+
+Use this gate before pushing a `v*.*.*` release tag, manually dispatching the
+release workflow, or publishing a draft GitHub Release. The gate is tied to one
+exact commit SHA; if the SHA changes, rerun the gate.
+
+Required local evidence:
+
+- Source state: record the intended release SHA and confirm the release worktree
+  has no unrelated source changes with `git status --short --branch`.
+- Hook path: normal signed commit and pre-push path-routed gates must pass. Hook
+  bypass flags remain forbidden by git policy.
+- Frontend/build lane: `pnpm wasm:size`, `pnpm lint`,
+  `pnpm exec vitest run --coverage --coverage.reporter=text-summary`, and
+  `pnpm build`. The former `pnpm test -- --run --coverage ...` form did NOT
+  measure coverage: pnpm 10 forwards the `--`, so vitest received
+  `run -- --run --coverage ...` and treats everything after `--` as non-flag
+  arguments. It exited 0 without collecting coverage or applying the
+  vite.config.ts thresholds, so this lane produced no coverage evidence.
+- Rust lane: `cargo test --manifest-path src-tauri/Cargo.toml --lib --test storage_integration`,
+  `cargo test --manifest-path src-tauri/sql-parser-core/Cargo.toml --lib`, and
+  `cargo test --manifest-path src-tauri/Cargo.toml --test parse_sql_backend`.
+- Docker integration lane: with required services available,
+  `cargo test --manifest-path src-tauri/Cargo.toml --test schema_integration --test query_integration --test mongo_integration --test fixture_loading --test redis_integration`.
+- Documentation lane: docs changed for the release must pass Prettier and local
+  link/target review for the touched docs.
+
+Required remote evidence on the exact release SHA:
+
+- CI passes: PR Body Contract where applicable, Frontend Checks, Rust Unit And
+  Storage Tests, and Integration Tests (Docker).
+- Runtime Happy Path passes: Prepare E2E runtime artifacts plus the wired
+  PostgreSQL, MySQL, MariaDB, SQLite, DuckDB `.duckdb`, DuckDB file analytics,
+  MongoDB, Redis, Valkey, Elasticsearch, OpenSearch, MSSQL, and Oracle matrix
+  checks.
+- `main` push checks pass on the merge commit before a release tag is pushed.
+- Release workflow output is packaging evidence only. Draft bundle creation and
+  checksum upload do not replace CI or Runtime Happy Path evidence.
+
+Deferred or non-blocking checks must stay explicit:
+
+- Theme contrast is advisory today.
+- Link checking, a11y beyond the critical component smoke set, perf budgets,
+  macOS/Windows desktop runtime smoke, and per-spec database fixture reset are
+  not routine release blockers unless a release issue explicitly promotes one of
+  them. (Rust llvm-cov integration cutoffs became a routine blocking check on
+  2026-07-03 — the CI `Integration Tests (Docker)` job enforces them.)
+- Non-routine E2E specs remain scenario inventory or manual regression evidence
+  until a workflow/script invokes them.
+- No support claim can ship on fixture-only evidence. Fixture files, profile
+  rows, generator tests, and compatibility inventories become live runtime
+  evidence only when the matching workflow/script/test path is wired and green.
+  Exceptions require a visible issue or release note entry; they must not be
+  hidden as a flaky pass.
 
 ## Frontend Test Quality
 
