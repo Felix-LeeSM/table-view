@@ -387,7 +387,9 @@ async fn list_database_users_inner(
 }
 
 /// Issue #1077 Stage 2 — read-only users/roles listing for the active
-/// connection. PG queries `pg_roles` (password-masked); other engines return
+/// connection. PG queries `pg_roles` (password-masked), MySQL/MariaDB query
+/// `mysql.user`, and SQL Server queries `sys.server_principals` behind a
+/// `VIEW ANY DEFINITION` probe; Oracle and the non-RDB paradigms return
 /// `Unsupported` until their parity slice ships.
 #[tauri::command]
 pub async fn list_database_users(

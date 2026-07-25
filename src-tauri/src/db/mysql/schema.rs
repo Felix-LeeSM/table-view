@@ -1276,7 +1276,7 @@ impl MysqlAdapter {
     /// grant columns, and `max_user_connections` is normalised onto the PG
     /// `rolconnlimit` sentinel. `valid_until` and `member_of` have no
     /// widely-portable `mysql.user` source — the MySQL role graph
-    /// (`mysql.role_edges`, 8.0+) is deferred to #1077 Stage 2b — so they stay
+    /// (`mysql.role_edges`, 8.0+) is a later #1077 depth step — so they stay
     /// empty.
     pub async fn list_database_users(
         &self,

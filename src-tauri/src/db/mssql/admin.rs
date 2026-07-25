@@ -13,6 +13,13 @@
 //! without it makes the query error out — surfaced verbatim rather than
 //! swallowed into a silently empty list (parity with the MySQL
 //! performance_schema-off fail-loud contract).
+//!
+//! Issue #1077 Stage 2 adds the read-only users/roles listing, whose source
+//! (`sys.server_principals`) is deliberately NOT a DMV and therefore does NOT
+//! share that fail-loud property: a catalog view is metadata-visibility
+//! filtered, so an under-privileged login silently receives a truncated row set.
+//! That path is gated by its own `VIEW ANY DEFINITION` probe instead — see
+//! `USERS_PERMISSION_PROBE_SQL`.
 
 use tiberius::Row;
 
@@ -227,7 +234,7 @@ impl MssqlAdapter {
     /// per-login connection cap, password expiry, or portable role-membership
     /// array on the server principal, so `conn_limit` is -1 (unlimited),
     /// `valid_until` is None, and `member_of` is empty (the server-role graph
-    /// is #1077 Stage 2b).
+    /// is a later #1077 depth step).
     ///
     /// `sys.server_principals` is a catalog view, so a login without `VIEW ANY
     /// DEFINITION` would receive a silently truncated list rather than an

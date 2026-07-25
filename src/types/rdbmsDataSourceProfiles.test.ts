@@ -76,7 +76,8 @@ const expectedOracleRuntimeCapabilities = expectedCapabilities({
     dropObject: true,
   },
   intelligence: { erd: true },
-  // Issue #1073 — Oracle admin ops parity (no users: #1077 PG-first).
+  // Issue #1073 — Oracle admin ops parity. `users` stays false: Oracle
+  // (`dba_users`/`all_users`) is the remaining #1077 Stage 2 slice.
   operations: { activity: true, slowQueries: true, serverInfo: true },
 });
 
