@@ -218,6 +218,49 @@ async fn alter_table_preview_emits_tsql_statement_chain() {
     );
 }
 
+// Issue #1071 RED snapshot — the StructurePanel column editor
+// (`src/components/structure/ColumnsEditor.tsx`) emits `new_default_value`
+// whenever the user edits a column DEFAULT, and SQL Server declares
+// `ddl.alterTable` (`src/types/dataSource.ts`), so the affordance is visible
+// but every default edit fails. This commit pins the pre-implementation
+// contract; the GREEN commit replaces it with the default-constraint swap
+// suite. (2026-07-25)
+#[tokio::test]
+async fn alter_table_modify_default_change_is_unsupported_before_the_swap_lands() {
+    let modify = |change: ColumnChange| AlterTableRequest {
+        connection_id: "conn".into(),
+        schema: "dbo".into(),
+        table: "users".into(),
+        changes: vec![change],
+        preview_only: true,
+        expected_database: None,
+    };
+
+    let with_type = modify(ColumnChange::Modify {
+        name: "status".into(),
+        new_data_type: Some("NVARCHAR(32)".into()),
+        new_nullable: Some(false),
+        new_default_value: Some("N'active'".into()),
+        using_expression: None,
+    });
+    assert!(matches!(
+        MssqlAdapter::new().alter_table(&with_type).await,
+        Err(AppError::Unsupported(message)) if message.contains("default-constraint changes")
+    ));
+
+    let default_only = modify(ColumnChange::Modify {
+        name: "status".into(),
+        new_data_type: None,
+        new_nullable: None,
+        new_default_value: Some("N'active'".into()),
+        using_expression: None,
+    });
+    assert!(matches!(
+        MssqlAdapter::new().alter_table(&default_only).await,
+        Err(AppError::Unsupported(message)) if message.contains("default-constraint changes")
+    ));
+}
+
 #[tokio::test]
 async fn remaining_table_column_and_index_preview_paths_emit_tsql() {
     let adapter = MssqlAdapter::new();

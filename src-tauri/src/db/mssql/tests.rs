@@ -455,6 +455,25 @@ async fn table_data_and_structured_ddl_execute_paths_require_open_connection() {
     assert_not_open(adapter.drop_constraint(&drop_constraint).await);
 }
 
+// Issue #1071 RED snapshot — the StructurePanel column editor probes
+// `count_null_rows` before it offers SET NOT NULL
+// (`src/components/structure/ColumnsEditor.tsx`), and the probe error is
+// swallowed on purpose, so the missing adapter body degrades silently: the
+// "N rows have NULL" warning never renders on SQL Server. This pins the
+// pre-implementation contract (trait-default `Unsupported`); the GREEN commit
+// replaces it with the validation + connection-guard suite. (2026-07-25)
+#[tokio::test]
+async fn null_row_probe_falls_through_to_the_trait_default_before_the_tsql_body_lands() {
+    let err = RdbAdapter::count_null_rows(&MssqlAdapter::new(), "dbo", "users", "email")
+        .await
+        .unwrap_err();
+
+    assert!(
+        matches!(err, AppError::Unsupported(ref message) if message.contains("NULL row counting")),
+        "expected the trait-default Unsupported, got {err:?}"
+    );
+}
+
 fn assert_not_open<T>(result: Result<T, AppError>) {
     assert!(matches!(result, Err(AppError::Connection(message)) if message.contains("not open")));
 }
