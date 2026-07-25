@@ -345,11 +345,17 @@ impl OracleAdapter {
     }
 }
 
-/// #1735 (c) — a single `ColumnChange` may map to more than one Oracle
+/// #1735 — a single `ColumnChange` may map to more than one Oracle
 /// statement: a Modify carrying `new_comment` emits its structural
 /// `ALTER TABLE … MODIFY (…)` (if any) plus a separate `COMMENT ON COLUMN …`
 /// (Oracle shares the ANSI `COMMENT ON COLUMN` syntax with PG). Returns the
 /// statements in emission order.
+///
+/// Unlike the PG sibling these do NOT run atomically — `execute_schema_change`
+/// runs them sequentially and Oracle auto-commits every DDL, so a `MODIFY` that
+/// succeeds followed by a failing `COMMENT` leaves the type change applied.
+/// Pre-existing for multi-change batches; comment edit widens the exposure to a
+/// single-column edit.
 fn build_alter_table_statements(
     qualified: &str,
     change: &ColumnChange,
@@ -447,10 +453,18 @@ fn build_alter_table_statements(
     }
 }
 
-/// #1735 (c) — build a `COMMENT ON COLUMN <qualified>.<col> IS …` statement.
+/// #1735 — build a `COMMENT ON COLUMN <qualified>.<col> IS …` statement.
 /// `None` → no statement (comment unchanged). `Some(non-empty after trim)` →
 /// `IS '<escaped>'` (single quotes doubled — injection-safe). `Some("")`
-/// (explicit clear) → `IS NULL`.
+/// (explicit clear) → `IS ''`.
+///
+/// The clear form is where Oracle and PG diverge even though both spell the
+/// statement `COMMENT ON COLUMN … IS …`: Oracle's grammar accepts a **text
+/// literal only**, so `IS NULL` (valid and idiomatic in PG) is an ORA parse
+/// error. Oracle treats `''` as NULL, so the empty literal both parses and
+/// removes the comment. Executed round-trip proof:
+/// `src-tauri/tests/oracle_integration.rs`
+/// `test_oracle_column_comment_set_and_clear_round_trip`.
 fn build_column_comment_statement(
     qualified: &str,
     name: &str,
@@ -459,7 +473,7 @@ fn build_column_comment_statement(
     let raw = new_comment?;
     let trimmed = raw.trim();
     let value = if trimmed.is_empty() {
-        "NULL".to_string()
+        "''".to_string()
     } else {
         format!("'{}'", trimmed.replace('\'', "''"))
     };
@@ -596,10 +610,14 @@ fn format_index_kind(index_type: &str) -> Result<&'static str, AppError> {
     }
 }
 
+/// Guard for the CREATE TABLE / ADD COLUMN paths, which build one statement and
+/// have no place to chain a `COMMENT ON`. #1735 wired the ALTER path only, so
+/// the message names the path rather than claiming Oracle-wide unsupport (which
+/// stopped being true once `alter_table` started emitting `COMMENT ON COLUMN`).
 fn reject_non_empty_comment(value: Option<&str>, label: &str) -> Result<(), AppError> {
     if value.is_some_and(|comment| !comment.trim().is_empty()) {
         return Err(AppError::Unsupported(format!(
-            "{} are not supported in Oracle structured DDL",
+            "{} are not emitted by the Oracle CREATE TABLE / ADD COLUMN path",
             label
         )));
     }

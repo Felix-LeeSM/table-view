@@ -68,7 +68,7 @@ const expectedOracleRuntimeCapabilities = expectedCapabilities({
     alterTable: true,
     createIndex: true,
     dropObject: true,
-    // Issue #1735 (c) — Oracle emits COMMENT ON COLUMN via alter_table.
+    // Issue #1735 — Oracle emits COMMENT ON COLUMN via alter_table.
     editColumnComment: true,
   },
   intelligence: { erd: true },

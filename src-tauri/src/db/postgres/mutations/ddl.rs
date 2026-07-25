@@ -137,7 +137,7 @@ pub(super) fn build_create_table_plan(
     })
 }
 
-/// #1735 (c) — ALTER TABLE plan. Structural column changes collapse into a
+/// #1735 — ALTER TABLE plan. Structural column changes collapse into a
 /// single `ALTER TABLE … <parts>` statement (`alter_sql`); each `new_comment`
 /// on a Modify emits a separate `COMMENT ON COLUMN …` statement
 /// (`comment_stmts`) because COMMENT ON COLUMN is not a valid ALTER TABLE
@@ -371,7 +371,7 @@ fn build_create_table_comment_statements(req: &CreateTableRequest, qualified: &s
     comment_stmts
 }
 
-/// #1735 (c) — `COMMENT ON COLUMN` statements for each Modify carrying a
+/// #1735 — `COMMENT ON COLUMN` statements for each Modify carrying a
 /// `new_comment`. `Some(non-empty after trim)` → `IS '<escaped>'` (single
 /// quotes doubled — same escape as `build_create_table_comment_statements`);
 /// `Some("")` (explicit clear) → `IS NULL`; `None` → skipped (unchanged).
@@ -402,7 +402,7 @@ fn build_alter_table_comment_statements(changes: &[ColumnChange], qualified: &st
     stmts
 }
 
-/// #1735 (c) — preview join for an ALTER TABLE plan. No comments → the bare
+/// #1735 — preview join for an ALTER TABLE plan. No comments → the bare
 /// ALTER statement (byte-equivalent to the pre-#1735 single-statement
 /// emission, no trailing `;`); comments present → `"; "`-joined with a trailing
 /// `;` (mirrors `join_create_table_plan_sql`).
@@ -457,7 +457,7 @@ fn build_alter_table_parts(change: &ColumnChange) -> Vec<String> {
             new_nullable,
             new_default_value,
             using_expression,
-            // #1735 (c) — comment is emitted as a separate `COMMENT ON COLUMN`
+            // #1735 — comment is emitted as a separate `COMMENT ON COLUMN`
             // statement (build_alter_table_comment_statements), not an ALTER
             // COLUMN part.
             new_comment: _,

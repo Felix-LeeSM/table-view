@@ -81,7 +81,7 @@ interface EditableColumnRowProps {
    */
   canAlterTable: boolean;
   /**
-   * Issue #1735 (c) — when false the comment cell stays read-only even in edit
+   * Issue #1735 — when false the comment cell stays read-only even in edit
    * mode (the engine's adapter defers COMMENT ON COLUMN emit — MySQL/MSSQL/
    * SQLite/DuckDB). True only for PG + Oracle. Separate from `canAlterTable`
    * so a MySQL/MSSQL row can still edit type/nullable/default while the comment
@@ -108,7 +108,7 @@ function EditableColumnRow({
   const [dataType, setDataType] = useState(col.data_type);
   const [nullable, setNullable] = useState(col.nullable);
   const [defaultValue, setDefaultValue] = useState(col.default_value ?? "");
-  // #1735 (c) — column comment draft. Initialised from the current comment
+  // #1735 — column comment draft. Initialised from the current comment
   // ("" when null) so `hasCommentChange` detects both edits and clears.
   const [comment, setComment] = useState(col.comment ?? "");
   // Sprint 237 — free-text USING cast expression. Rendered only when the
@@ -198,7 +198,7 @@ function EditableColumnRow({
     const hasNullableChange = nullable !== col.nullable;
     const hasDefaultChange =
       (defaultValue || null) !== (col.default_value ?? null);
-    // #1735 (c) — comment diff is only meaningful where the engine emits it.
+    // #1735 — comment diff is only meaningful where the engine emits it.
     // Compare against the current comment ("" when null); an emptied field is a
     // real change (clear → IS NULL).
     const hasCommentChange =
@@ -229,7 +229,7 @@ function EditableColumnRow({
       new_nullable: hasNullableChange ? nullable : null,
       new_default_value: hasDefaultChange ? defaultValue || null : null,
       using_expression: usingPayload,
-      // #1735 (c) — send the raw draft (incl. "" for an explicit clear) only
+      // #1735 — send the raw draft (incl. "" for an explicit clear) only
       // when changed; `null` means "comment unchanged" (backend skips it).
       new_comment: hasCommentChange ? comment : null,
     });
@@ -361,7 +361,7 @@ function EditableColumnRow({
       <td
         className={`${STRUCTURE_TD} max-w-50 truncate text-muted-foreground !border-r-0`}
       >
-        {/* #1735 (c) \u2014 comment editable only when the engine emits COMMENT ON
+        {/* #1735 \u2014 comment editable only when the engine emits COMMENT ON
             COLUMN (PG/Oracle); otherwise it stays a read-only view. */}
         {isEditing && canEditColumnComment ? (
           <input
@@ -475,7 +475,7 @@ interface ColumnsEditorProps {
    */
   canAlterTable?: boolean;
   /**
-   * Issue #1735 (c) — whether the comment cell is editable (engine emits
+   * Issue #1735 — whether the comment cell is editable (engine emits
    * COMMENT ON COLUMN). Defaults to `true` so callers that don't gate keep the
    * editable surface (same affordance-preserving fallback as `canAlterTable`);
    * the production caller passes `supportsDdl(dbType, "editColumnComment")`.

@@ -165,9 +165,10 @@ const DEFERRED_FEATURES = Object.freeze({
     catalog: ["catalog.constraints"],
     query: [],
     edit: [],
-    // Issue #1735 (c) — MySQL column-comment emit (MODIFY COLUMN
-    // re-definition) is planned for S6, not yet wired → deferred, not
-    // unsupported.
+    // Issue #1735 — MySQL has no ANSI `COMMENT ON`; a column comment lives
+    // inside the column definition, so emitting one means re-writing the full
+    // `MODIFY COLUMN` definition. Reachable with the existing adapter, just not
+    // wired yet → deferred, not unsupported. Tracked on #1735.
     ddl: ["ddl.editColumnComment"],
   },
   mariadb: {
@@ -175,7 +176,7 @@ const DEFERRED_FEATURES = Object.freeze({
     catalog: ["catalog.constraints"],
     query: [],
     edit: [],
-    // Issue #1735 (c) — see mysql; MariaDB shares the MySQL-family adapter.
+    // Issue #1735 — see mysql; MariaDB shares the MySQL-family adapter.
     ddl: ["ddl.editColumnComment"],
   },
   sqlite: {
@@ -207,8 +208,10 @@ const DEFERRED_FEATURES = Object.freeze({
     catalog: [],
     query: [],
     edit: [],
-    // Issue #1735 (c) — MSSQL column-comment emit (sp_addextendedproperty) is
-    // planned for S7, not yet wired → deferred, not unsupported.
+    // Issue #1735 — SQL Server has no ANSI `COMMENT ON`; column comments are
+    // extended properties (`sp_addextendedproperty` / `sp_update…`), a separate
+    // emitter with its own add-vs-update branch. Reachable with the existing
+    // adapter, just not wired yet → deferred, not unsupported. Tracked on #1735.
     ddl: ["ddl.editColumnComment"],
   },
   oracle: noneDeferred(),

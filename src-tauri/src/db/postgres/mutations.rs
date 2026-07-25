@@ -358,7 +358,7 @@ impl PostgresAdapter {
     /// ALTER TABLE: add, modify, or drop columns in batch.
     /// If `preview_only` is true, returns the generated SQL without executing.
     ///
-    /// #1735 (c) — a Modify carrying `new_comment` emits a separate
+    /// #1735 — a Modify carrying `new_comment` emits a separate
     /// `COMMENT ON COLUMN` statement. The structural `ALTER TABLE` (if any) and
     /// each comment statement run inside one `BEGIN/COMMIT` transaction so a
     /// failed comment rolls back the whole batch (mirrors `create_table`). A
@@ -1431,7 +1431,7 @@ mod tests {
         );
     }
 
-    // ── #1735 (c) — column comment edit (2026-07-25) ───────────────────
+    // ── #1735 — column comment edit (2026-07-25) ───────────────────
     fn alter_modify_comment_req(name: &str, new_comment: Option<&str>) -> AlterTableRequest {
         AlterTableRequest {
             connection_id: "conn1".to_string(),
@@ -1450,7 +1450,7 @@ mod tests {
         }
     }
 
-    // Reason: #1735 (c) — a comment-only Modify emits ONLY the COMMENT ON
+    // Reason: #1735 — a comment-only Modify emits ONLY the COMMENT ON
     // COLUMN statement (no `ALTER TABLE` leg), terminated with `;` (2026-07-25).
     #[tokio::test]
     async fn alter_table_preview_comment_only_emits_comment_on_column() {
@@ -1466,7 +1466,7 @@ mod tests {
         );
     }
 
-    // Reason: #1735 (c) — a type change + comment emits the ALTER TABLE and the
+    // Reason: #1735 — a type change + comment emits the ALTER TABLE and the
     // COMMENT ON COLUMN as two `; `-joined statements (2026-07-25).
     #[tokio::test]
     async fn alter_table_preview_type_and_comment_emits_two_statements() {
@@ -1493,7 +1493,7 @@ mod tests {
         );
     }
 
-    // Reason: #1735 (c) — single quotes in the comment are doubled so the
+    // Reason: #1735 — single quotes in the comment are doubled so the
     // literal cannot break out of the string (injection guard) (2026-07-25).
     #[tokio::test]
     async fn alter_table_preview_comment_single_quote_escaped() {
@@ -1509,7 +1509,7 @@ mod tests {
         );
     }
 
-    // Reason: #1735 (c) — an explicitly cleared comment (empty string) emits
+    // Reason: #1735 — an explicitly cleared comment (empty string) emits
     // `IS NULL` so the column comment is removed, not set to '' (2026-07-25).
     #[tokio::test]
     async fn alter_table_preview_comment_clear_emits_is_null() {

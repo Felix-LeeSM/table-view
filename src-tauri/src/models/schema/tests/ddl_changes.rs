@@ -116,7 +116,7 @@ fn column_change_modify_using_expression_wire_and_backcompat() {
     }
 }
 
-/// #1735 (c) — `new_comment` wire lock: `Some(text)` serializes under the
+/// #1735 — `new_comment` wire lock: `Some(text)` serializes under the
 /// snake_case `new_comment` key, and a payload omitting the field (pre-#1735
 /// caller) deserializes to `None` via `#[serde(default)]` (2026-07-25).
 #[test]

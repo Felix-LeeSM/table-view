@@ -162,13 +162,14 @@ export type ColumnChange =
        */
       using_expression?: string | null;
       /**
-       * #1735 (c) — column comment edit. `undefined` / `null` = comment
+       * #1735 — column comment edit. `undefined` / `null` = comment
        * unchanged (`#[serde(default)]` → `None`, byte-equivalent to pre-#1735
        * callers). A non-empty string → `COMMENT ON COLUMN … IS '<escaped>'`;
-       * an empty string (explicit clear) → `… IS NULL`. Only PG + Oracle
-       * emit this today; the editor gates the affordance via the
-       * `ddl.editColumnComment` capability so MySQL/MSSQL/SQLite/DuckDB never
-       * surface a broken edit.
+       * an empty string (explicit clear) → PG `… IS NULL` / Oracle `… IS ''`
+       * (Oracle's grammar takes a text literal only, and there `''` IS NULL).
+       * Only PG + Oracle emit this today; the editor gates the affordance via
+       * the `ddl.editColumnComment` capability so MySQL/MSSQL/SQLite/DuckDB
+       * never surface a broken edit.
        */
       new_comment?: string | null;
     }

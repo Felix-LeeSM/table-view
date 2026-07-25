@@ -337,7 +337,7 @@ describe("adapter conformance matrix", () => {
       "ddl.alterTable",
       "ddl.createIndex",
       "ddl.dropObject",
-      // Issue #1735 (c) — Oracle emits COMMENT ON COLUMN via alter_table.
+      // Issue #1735 — Oracle emits COMMENT ON COLUMN via alter_table.
       "ddl.editColumnComment",
     ]);
     expect(oracle.areas.connection.deferred).toEqual([]);

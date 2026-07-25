@@ -475,9 +475,14 @@ impl MysqlAdapter {
                     new_nullable,
                     new_default_value,
                     using_expression: _,
-                    // #1735 (c) — MySQL column-comment emit is deferred (S6:
-                    // MODIFY COLUMN full-redefinition). Gated off in the UI via
-                    // `ddl.editColumnComment`, so no comment reaches here.
+                    // #1735 — MySQL has no ANSI `COMMENT ON`; a column comment
+                    // rides inside the column definition, so changing it means
+                    // re-emitting the FULL `MODIFY COLUMN` definition (type,
+                    // nullability, default, charset, auto_increment) — lossy
+                    // whenever an attribute is absent from the payload. Not
+                    // wired here; the UI gates it off via
+                    // `ddl.editColumnComment: false`, so no comment reaches
+                    // this arm.
                     new_comment: _,
                 } => {
                     // MySQL 의 modify column 은 PG 처럼 type/nullable/default

@@ -24,16 +24,24 @@ pub enum ColumnChange {
         /// emitted SQL is unchanged.
         #[serde(default)]
         using_expression: Option<String>,
-        /// #1735 (c) — column comment edit. `None` = comment unchanged
+        /// #1735 — column comment edit. `None` = comment unchanged
         /// (byte-equivalent to pre-#1735 callers via `#[serde(default)]`).
         /// `Some(text)` where trimmed non-empty → `COMMENT ON COLUMN … IS
-        /// '<escaped>'`; `Some("")` (explicit clear) → `… IS NULL`. Only
-        /// the PG + Oracle emitters honour this (both share the ANSI
-        /// `COMMENT ON COLUMN` syntax); MySQL (S6) / MSSQL (S7) ignore it,
-        /// and the frontend gates the edit affordance to PG/Oracle via the
-        /// `ddl.editColumnComment` capability so no engine surfaces a
-        /// broken edit. Emitted as a **separate statement** from the
-        /// `ALTER TABLE`, run in the same transaction.
+        /// '<escaped>'`. `Some("")` (explicit clear) → PG `… IS NULL`,
+        /// Oracle `… IS ''` — Oracle's grammar takes a text literal only, and
+        /// there `''` IS NULL.
+        ///
+        /// Only the PG + Oracle emitters honour this. MySQL and MSSQL have no
+        /// ANSI `COMMENT ON` (MySQL folds the comment into the column
+        /// definition, MSSQL uses extended properties), so their emitters
+        /// ignore the field and the frontend hides the affordance there via the
+        /// `ddl.editColumnComment` capability — no engine surfaces a broken
+        /// edit.
+        ///
+        /// Always emitted as a **separate statement** from the `ALTER TABLE`.
+        /// Atomicity is engine-specific: PG wraps the whole batch in one
+        /// `BEGIN/COMMIT`, while Oracle auto-commits each DDL, so on Oracle a
+        /// structural change can land while the comment leg fails.
         #[serde(default)]
         new_comment: Option<String>,
     },
