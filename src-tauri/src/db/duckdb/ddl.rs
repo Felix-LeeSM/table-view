@@ -12,7 +12,8 @@
 //!      emits one statement per change/sub-op and runs them in a single
 //!      `BEGIN..COMMIT` (rollback on any mid-batch failure).
 //!   2. `CREATE INDEX` takes no `USING <method>` clause (DuckDB indexes are
-//!      ART-only), so the index type is not emitted.
+//!      ART-only), so no index method is emitted and a requested one that is
+//!      not the ART default is rejected rather than silently dropped.
 //!
 //! Constraint DDL (`add_constraint` / `drop_constraint`) stays `Unsupported`
 //! (Stage 2b): DuckDB's `ALTER TABLE` cannot add/drop constraints, so those
@@ -34,6 +35,9 @@ use super::connection::DuckdbAdapter;
 use super::sql_text::quote_identifier;
 
 const DUCKDB_IDENTIFIER_MAX_BYTES: usize = 255;
+/// Index methods DuckDB can honour. ART is the only index structure it has, and
+/// `btree` is what the Structure index dialog sends by default.
+const DUCKDB_INDEX_TYPES: &[&str] = &["btree", "art"];
 
 // --------------------------------------------------------------------------
 // Inherent DDL entry points — the RdbAdapter trait impl (duckdb.rs) delegates
@@ -268,16 +272,21 @@ fn build_add_column_statements(req: &AddColumnRequest) -> Result<Vec<String>, Ap
     }
 
     let qualified = qualified_table(&req.schema, &req.table);
-    Ok(add_column_ops(&req.column)
+    let mut statements: Vec<String> = add_column_ops(&req.column)
         .into_iter()
         .map(|op| format!("ALTER TABLE {qualified} {op}"))
-        .collect())
+        .collect();
+    // `COMMENT ON COLUMN` is a standalone statement, not an `ALTER TABLE`
+    // alteration, so it is appended here rather than inside `add_column_ops`.
+    statements.extend(column_comment_statement(&qualified, &req.column));
+    Ok(statements)
 }
 
 /// The `ALTER TABLE …` alteration clauses that add one column DuckDB-safely.
 /// DuckDB's `ADD COLUMN` rejects an inline `NOT NULL`, so a non-null column is
 /// added nullable (with its `DEFAULT`, which backfills existing rows) and then
-/// promoted with a separate `ALTER COLUMN … SET NOT NULL`.
+/// promoted with a separate `ALTER COLUMN … SET NOT NULL`. The column comment
+/// is not an alteration clause — callers append `column_comment_statement`.
 fn add_column_ops(col: &ColumnDefinition) -> Vec<String> {
     let quoted = quote_identifier(&col.name);
     let mut add = format!("ADD COLUMN {} {}", quoted, col.data_type.trim());
@@ -462,6 +471,7 @@ fn build_create_index_sql(req: &CreateIndexRequest) -> Result<String, AppError> 
     for col in &req.columns {
         validate_identifier(col, "Index column name")?;
     }
+    reject_unsupported_index_type(&req.index_type)?;
     let columns: Vec<String> = req.columns.iter().map(|c| quote_identifier(c)).collect();
     let unique = if req.is_unique { "UNIQUE " } else { "" };
     // DuckDB indexes are ART-only: no `USING <method>` clause (unlike Postgres).
@@ -472,6 +482,24 @@ fn build_create_index_sql(req: &CreateIndexRequest) -> Result<String, AppError> 
         qualified_table(&req.schema, &req.table),
         columns.join(", ")
     ))
+}
+
+/// DuckDB has no `USING <method>` clause, so a requested index method cannot be
+/// honoured. Reject it instead of dropping it silently — every peer builder does
+/// (`postgres/mutations/ddl.rs`, `mysql/mutations.rs`, and the
+/// `format_index_kind` pair in `mssql/ddl.rs` / `oracle/ddl.rs`), and the
+/// Structure index dialog offers the whole PostgreSQL method list to every
+/// engine. `btree` (the dialog's default) and an empty value mean "no method
+/// requested" and map onto DuckDB's ART index, as `nonclustered` does on MSSQL.
+fn reject_unsupported_index_type(index_type: &str) -> Result<(), AppError> {
+    let normalized = index_type.trim().to_ascii_lowercase();
+    if normalized.is_empty() || DUCKDB_INDEX_TYPES.contains(&normalized.as_str()) {
+        return Ok(());
+    }
+    Err(AppError::Validation(format!(
+        "DuckDB indexes are ART-only, so index type must be one of: {} (got {index_type})",
+        DUCKDB_INDEX_TYPES.join(", ")
+    )))
 }
 
 fn build_drop_index_sql(req: &DropIndexRequest) -> Result<String, AppError> {
@@ -515,20 +543,30 @@ fn build_comment_statements(req: &CreateTableRequest, qualified: &str) -> Vec<St
             ));
         }
     }
-    for col in &req.columns {
-        if let Some(raw) = &col.comment {
-            let trimmed = raw.trim();
-            if !trimmed.is_empty() {
-                stmts.push(format!(
-                    "COMMENT ON COLUMN {}.{} IS '{}'",
-                    qualified,
-                    quote_identifier(&col.name),
-                    trimmed.replace('\'', "''")
-                ));
-            }
-        }
-    }
+    stmts.extend(
+        req.columns
+            .iter()
+            .filter_map(|col| column_comment_statement(qualified, col)),
+    );
     stmts
+}
+
+/// The `COMMENT ON COLUMN` statement for a column that carries a comment, or
+/// `None`. Single emitter for every column comment DuckDB writes — both
+/// `build_create_table_statements` (per column) and `build_add_column_statements`
+/// route through here, so a comment can never be emitted by one builder while
+/// being dropped on the floor by the other.
+fn column_comment_statement(qualified: &str, col: &ColumnDefinition) -> Option<String> {
+    let trimmed = col.comment.as_deref()?.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    Some(format!(
+        "COMMENT ON COLUMN {}.{} IS '{}'",
+        qualified,
+        quote_identifier(&col.name),
+        trimmed.replace('\'', "''")
+    ))
 }
 
 /// Single guard for every column definition DuckDB emits — both
@@ -694,6 +732,80 @@ mod tests {
             build_create_index_sql(&req).unwrap(),
             "CREATE UNIQUE INDEX \"idx_user\" ON \"main\".\"orders\" (\"user_id\")"
         );
+    }
+
+    #[test]
+    fn add_column_emits_the_column_comment_like_create_table_1070() {
+        // Round-2 #1070 — `create_table` emits `COMMENT ON COLUMN` (DuckDB has
+        // the native statement), so `add_column` dropping `column.comment` on
+        // the floor would be exactly the silent-wrong-input class this adapter
+        // rejects everywhere else (identity columns, CHECK, constraints). Both
+        // builders route through `column_comment_statement`.
+        let mut req = AddColumnRequest {
+            connection_id: "d".into(),
+            schema: "main".into(),
+            table: "items".into(),
+            column: ColumnDefinition {
+                name: "price".into(),
+                data_type: "INTEGER".into(),
+                nullable: false,
+                default_value: Some("0".into()),
+                comment: Some("unit 'price'".into()),
+                is_identity: false,
+            },
+            check_expression: None,
+            preview_only: true,
+            expected_database: None,
+        };
+        assert_eq!(
+            build_add_column_statements(&req).unwrap(),
+            vec![
+                "ALTER TABLE \"main\".\"items\" ADD COLUMN \"price\" INTEGER DEFAULT 0",
+                "ALTER TABLE \"main\".\"items\" ALTER COLUMN \"price\" SET NOT NULL",
+                "COMMENT ON COLUMN \"main\".\"items\".\"price\" IS 'unit ''price'''",
+            ]
+        );
+
+        // A blank comment emits nothing (same trim rule as create_table).
+        req.column.comment = Some("   ".into());
+        assert_eq!(build_add_column_statements(&req).unwrap().len(), 2);
+    }
+
+    #[test]
+    fn create_index_rejects_index_types_duckdb_cannot_honour_1070() {
+        // DuckDB indexes are ART-only and `CREATE INDEX` takes no `USING
+        // <method>`, so a requested method cannot be honoured. Every peer
+        // rejects instead of dropping it (`postgres/mutations/ddl.rs`,
+        // `mysql/mutations.rs`, `mssql/ddl.rs` + `oracle/ddl.rs`
+        // `format_index_kind`), and the Structure index dialog
+        // (`src/components/structure/IndexesEditor.tsx`) offers the full
+        // PostgreSQL list to every engine, so a DuckDB user can reach this.
+        let req = |index_type: &str| CreateIndexRequest {
+            connection_id: "d".into(),
+            schema: "main".into(),
+            table: "orders".into(),
+            index_name: "idx_user".into(),
+            columns: vec!["user_id".into()],
+            index_type: index_type.into(),
+            is_unique: false,
+            preview_only: true,
+            expected_database: None,
+        };
+        for accepted in ["", "btree", "BTREE", "art"] {
+            assert!(
+                build_create_index_sql(&req(accepted)).is_ok(),
+                "expected {accepted:?} to be accepted"
+            );
+        }
+        for rejected in ["hash", "gin", "gist", "brin"] {
+            assert!(
+                matches!(
+                    build_create_index_sql(&req(rejected)),
+                    Err(AppError::Validation(_))
+                ),
+                "expected rejection for {rejected:?}"
+            );
+        }
     }
 
     #[test]
@@ -968,6 +1080,39 @@ mod tests {
         let cols = adapter.get_columns("main", "items", None).await.unwrap();
         assert!(!cols.iter().any(|c| c.name == "name"));
         assert!(cols.iter().any(|c| c.name == "id"));
+    }
+
+    #[tokio::test]
+    async fn add_column_with_comment_executes_in_one_transaction_1070() {
+        let (_dir, adapter) = fixture(false).await;
+
+        // The `COMMENT ON COLUMN` shares the `ALTER TABLE ADD COLUMN`
+        // transaction, so if DuckDB rejected a comment on a column added in the
+        // same tx the whole batch would roll back and `price` would be missing.
+        RdbAdapter::add_column(
+            &adapter,
+            &AddColumnRequest {
+                connection_id: "d".into(),
+                schema: "main".into(),
+                table: "items".into(),
+                column: ColumnDefinition {
+                    name: "price".into(),
+                    data_type: "INTEGER".into(),
+                    nullable: true,
+                    default_value: None,
+                    comment: Some("unit 'price'".into()),
+                    is_identity: false,
+                },
+                check_expression: None,
+                preview_only: false,
+                expected_database: None,
+            },
+        )
+        .await
+        .unwrap();
+
+        let cols = adapter.get_columns("main", "items", None).await.unwrap();
+        assert!(cols.iter().any(|c| c.name == "price"));
     }
 
     #[tokio::test]
