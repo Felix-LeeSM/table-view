@@ -391,6 +391,27 @@ async fn raw_ddl_admin_execution_fails_closed_without_connection() {
     ));
 }
 
+// RED (#1072) — Oracle still inherits the `RdbAdapter::switch_database` trait
+// default, so `switch_active_db` on an Oracle connection answers "This adapter
+// does not support database switching" and the DbSwitcher renders read-only.
+// This pins the pre-implementation contract; the GREEN commit replaces it with
+// the promoted validate / same-service no-op / fail-closed suite. The TS side is
+// already pinned by `src/types/dataSource.test.ts` and
+// `src/types/rdbmsDataSourceProfiles.test.ts` (`switchDatabase` false).
+#[tokio::test]
+async fn switch_database_is_unsupported_before_1072_promotion() {
+    let adapter = OracleAdapter::new();
+
+    let err = RdbAdapter::switch_database(&adapter, "XEPDB1")
+        .await
+        .expect_err("pre-#1072 Oracle inherits the trait-default Unsupported");
+
+    assert!(matches!(
+        err,
+        AppError::Unsupported(message) if message.contains("does not support database switching")
+    ));
+}
+
 #[tokio::test]
 async fn catalog_surfaces_require_open_connection() {
     let adapter = OracleAdapter::new();
