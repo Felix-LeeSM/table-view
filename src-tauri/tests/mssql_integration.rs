@@ -381,3 +381,100 @@ async fn test_mssql_list_database_users_row_shape_1077() {
         "internal ##MS_* principals must not reach the panel"
     );
 }
+
+/// Issue #1077 Stage 2 SECURITY — PR #1786 re-review (2026-07-25). Two defects
+/// only a real principal fixture can catch, both measured on SQL Server 2022
+/// (16.0.4265.3) through `sqlcmd` before this test existed:
+///
+/// - `IS_SRVROLEMEMBER('dbcreator', <certificate-mapped login>)` is NULL even
+///   though `sys.server_role_members` records the membership, so the previous
+///   `ISNULL(IS_SRVROLEMEMBER(...), 0)` reported a real `dbcreator` as unable to
+///   create databases — "cannot resolve" collapsed into "not a member" on an
+///   account-audit surface. Same for `securityadmin` and an asymmetric-key login.
+/// - a `'C'`/`'K'` principal exists only to carry permissions for signed
+///   modules and can never authenticate, yet `type <> 'R'` reported it as a
+///   loginable account.
+///
+/// The unit guards in `db/mssql/admin.rs` only pin the SQL text; the server's
+/// NULL answer is the part that has to come from a live server. Fixture DDL
+/// goes through `common::mssql_admin_batch` because the adapter refuses raw DDL
+/// by design (#903).
+#[tokio::test]
+#[serial_test::serial]
+async fn test_mssql_users_null_role_membership_and_non_login_principals_1077() {
+    let adapter = match common::setup_mssql_adapter().await {
+        Some(a) => a,
+        None => return,
+    };
+
+    // Idempotent: a previous aborted run must not fail the fixture.
+    const TEARDOWN_SQL: &str = "\
+        IF EXISTS (SELECT 1 FROM sys.server_principals WHERE name = 'tv1077_cert_login') \
+            DROP LOGIN tv1077_cert_login; \
+        IF EXISTS (SELECT 1 FROM sys.server_principals WHERE name = 'tv1077_key_login') \
+            DROP LOGIN tv1077_key_login; \
+        IF EXISTS (SELECT 1 FROM sys.certificates WHERE name = 'tv1077_cert') \
+            DROP CERTIFICATE tv1077_cert; \
+        IF EXISTS (SELECT 1 FROM sys.asymmetric_keys WHERE name = 'tv1077_key') \
+            DROP ASYMMETRIC KEY tv1077_key;";
+    common::mssql_admin_batch(TEARDOWN_SQL)
+        .await
+        .expect("pre-clean principal fixture");
+    common::mssql_admin_batch(
+        // A `#`-leading SUBJECT is read as RFC 4514 hex DN data and rejected
+        // with "certificate data is invalid" (error 15297), so no issue anchor
+        // here.
+        "CREATE CERTIFICATE tv1077_cert ENCRYPTION BY PASSWORD = 'Fixture!1077Pass' \
+             WITH SUBJECT = 'issue 1077 stage 2 users listing fixture'; \
+         CREATE LOGIN tv1077_cert_login FROM CERTIFICATE tv1077_cert; \
+         CREATE ASYMMETRIC KEY tv1077_key \
+             WITH ALGORITHM = RSA_2048 ENCRYPTION BY PASSWORD = 'Fixture!1077Pass'; \
+         CREATE LOGIN tv1077_key_login FROM ASYMMETRIC KEY tv1077_key; \
+         ALTER SERVER ROLE dbcreator ADD MEMBER tv1077_cert_login; \
+         ALTER SERVER ROLE securityadmin ADD MEMBER tv1077_key_login;",
+    )
+    .await
+    .expect("create certificate/asymmetric-key principal fixture");
+
+    let listed = adapter.list_database_users().await;
+
+    // Read the rows out before asserting so a failure still drops the fixture.
+    let found = listed.as_ref().ok().map(|rows| {
+        let pick = |name: &str| {
+            rows.iter()
+                .find(|r| r.name == name)
+                .map(|r| (r.can_login, r.can_create_db, r.can_create_role))
+        };
+        (pick("tv1077_cert_login"), pick("tv1077_key_login"))
+    });
+    common::mssql_admin_batch(TEARDOWN_SQL)
+        .await
+        .expect("drop principal fixture");
+
+    listed.expect("sa holds VIEW ANY DEFINITION → the listing must succeed");
+    let (cert_login, key_login) = found.expect("listing succeeded");
+    let (cert_can_login, cert_can_create_db, _) =
+        cert_login.expect("the certificate-mapped login must be listed");
+    let (key_can_login, _, key_can_create_role) =
+        key_login.expect("the asymmetric-key-mapped login must be listed");
+
+    assert!(
+        cert_can_create_db,
+        "dbcreator membership is recorded in sys.server_role_members — a NULL \
+         IS_SRVROLEMEMBER answer must not report the member as unprivileged"
+    );
+    assert!(
+        key_can_create_role,
+        "securityadmin membership is recorded in sys.server_role_members — a NULL \
+         IS_SRVROLEMEMBER answer must not report the member as unprivileged"
+    );
+    assert!(
+        !cert_can_login,
+        "a certificate-mapped principal carries permissions for signed modules and \
+         cannot authenticate"
+    );
+    assert!(
+        !key_can_login,
+        "an asymmetric-key-mapped principal cannot authenticate either"
+    );
+}
