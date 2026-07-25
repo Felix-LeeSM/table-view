@@ -18,4 +18,7 @@ backlog, product claim ledger 는 여기 두지 않는다. 미래 순서와 승�
 
 과거 active plan snapshot 은
 [`docs/archives/plans/active-plan-2026-05-27.md`](archives/plans/active-plan-2026-05-27.md)
-에 보존한다.
+에 보존한다. 닫힌 roadmap horizon (H1/H2/H5/H6 enterprise slice/H7) 의 gate
+ledger 는
+[`docs/archives/plans/roadmap-closed-gates-2026-07-26.md`](archives/plans/roadmap-closed-gates-2026-07-26.md)
+에 있다.
