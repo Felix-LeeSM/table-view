@@ -3,9 +3,9 @@ use table_view_lib::{
     db::{DuckdbAdapter, KvAdapter, RdbAdapter, RedisAdapter, SearchAdapter, SearchEngineAdapter},
     error::AppError,
     models::{
-        get_data_source_profile, BackendAdapterCapability, DatabaseType, DropTableRequest,
-        Paradigm, QueryLanguageId, SafetyPolicyId, SearchDeleteByQueryRequest,
-        SearchDestructiveSafety,
+        get_data_source_profile, AddConstraintRequest, BackendAdapterCapability,
+        ConstraintDefinition, DatabaseType, Paradigm, QueryLanguageId, SafetyPolicyId,
+        SearchDeleteByQueryRequest, SearchDestructiveSafety,
     },
 };
 
@@ -127,10 +127,13 @@ fn dbms_specific_unsupported_capability_deltas_are_declared() {
     assert!(oracle.has_backend_capability(BackendAdapterCapability::RelationalSchemaMutation));
 
     // SQLite's wired adapter implements create_table, so it declares schema
-    // mutation; DuckDB's wired create_table stays Unsupported, so it does not (#1044).
+    // mutation (#1044). DuckDB used to be the counter-example here; #1070
+    // (ADR 0051 Stage 2) wired native structural DDL in `duckdb/ddl.rs`, so it
+    // declares the capability too — its remaining unsupported delta is
+    // constraint DDL, asserted in the sibling test below.
     assert!(get_data_source_profile(&DatabaseType::Sqlite)
         .has_backend_capability(BackendAdapterCapability::RelationalSchemaMutation));
-    assert!(!get_data_source_profile(&DatabaseType::Duckdb)
+    assert!(get_data_source_profile(&DatabaseType::Duckdb)
         .has_backend_capability(BackendAdapterCapability::RelationalSchemaMutation));
     assert!(get_data_source_profile(&DatabaseType::Redis)
         .has_backend_capability(BackendAdapterCapability::KeyValueMutation));
@@ -184,10 +187,13 @@ async fn sqlite_schema_mutation_declaration_matches_wired_create_table() {
 
 #[tokio::test]
 async fn dbms_specific_unsupported_delta_paths_return_explicit_app_errors() {
+    // #1070 (ADR 0051 Stage 2) — `drop_table` is native now, so DuckDB's
+    // unsupported delta moved to constraint DDL (Stage 2b needs a rebuild-swap
+    // because DuckDB `ALTER TABLE` cannot add/drop constraints).
     let duckdb = DuckdbAdapter::new();
     assert_unsupported(
-        RdbAdapter::drop_table(&duckdb, &drop_table_request()).await,
-        &["DuckDB", "table drop"],
+        RdbAdapter::add_constraint(&duckdb, &add_constraint_request()).await,
+        &["DuckDB", "constraint creation"],
     );
 
     let valkey = RedisAdapter::new_valkey();
@@ -248,12 +254,15 @@ fn unsupported_app_error_keeps_legacy_tauri_string_mapping() {
     assert_eq!(value, json!("Unsupported operation: feature not supported"));
 }
 
-fn drop_table_request() -> DropTableRequest {
-    DropTableRequest {
+fn add_constraint_request() -> AddConstraintRequest {
+    AddConstraintRequest {
         connection_id: "fixture".into(),
         schema: "main".into(),
         table: "users".into(),
-        cascade: false,
+        constraint_name: "chk_users_id".into(),
+        definition: ConstraintDefinition::Check {
+            expression: "id > 0".into(),
+        },
         preview_only: true,
         expected_database: None,
     }
