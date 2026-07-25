@@ -278,7 +278,7 @@ MSSQL 은 #903 에서 catalog/query/cancel/tabular/editRows runtime slice 로 �
 Oracle 은 #906 에서 key-projected editRows 와 bounded static Safe Mode/editor
 assistance 까지 승격됐다. #907 은 두 source 의 bounded Runtime Happy Path smoke
 를 추가한다. SQL Server DDL/admin/import/export/full-workbench, full T-SQL
-scripting parity 과 Oracle SID/TNS/wallet/advanced auth, structured DDL, raw
+scripting parity 과 Oracle TNS/wallet-less TLS/advanced auth, raw
 DDL/admin, full parser/completion promotion, PL/SQL work 는 각각
 source-specific promotion issue 에서 evidence 를 잠근 뒤 capability/profile
 claim 을 바꾼다.

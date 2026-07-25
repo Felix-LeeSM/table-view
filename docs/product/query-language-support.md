@@ -437,10 +437,11 @@ are:
   connection path, catalog/query runtime, and #907 Runtime Happy Path smoke do
   not create active parser, completion, structured DDL, admin, or full T-SQL
   support.
-  Oracle is a bounded catalog/query/cancel/tabular/edit-row runtime identity,
-  but does not add Oracle structured DDL, raw DDL/admin, full parser/completion
-  promotion, PL/SQL body/package work, or trigger catalog beyond the bounded
-  catalog smoke path.
+  Oracle is a full-adapter runtime identity (#1072) covering
+  catalog/query/cancel/tabular/edit-row, bounded structured DDL, read-only
+  trigger listing, and a service-name re-dial switch-database, but it does not
+  add Oracle raw DDL/admin, full parser/completion promotion, PL/SQL
+  body/package work, or trigger DDL.
   Promotion requires source-specific runtime, contract, docs, and smoke evidence
   before any SQL Server or Oracle support claim widens beyond those boundaries.
 - Deferred language ids for CQL, PartiQL, Cypher, GQL, Gremlin, vector query,

@@ -23,9 +23,11 @@ export type DatabaseType =
  * tables / columns) 만 동작 — DDL / queries / streaming 은 Slice B~G
  * 합류 전까지 `AppError::Unsupported` 가 surfacing 된다.
  *
- * Oracle is exposed for service-name lifecycle plus bounded catalog/query/cancel
- * runtime. Edit/DDL, parser/completion, PL/SQL, SID/TNS/wallet/TLS remain
- * unclaimed.
+ * Oracle is exposed for service-name/SID lifecycle plus bounded catalog/query/
+ * cancel runtime, key-projected row edit, bounded structured DDL, read-only
+ * trigger listing, and (#1072) a service-name re-dial `switch_database`.
+ * Full parser/completion, PL/SQL authoring, raw DDL/admin, TNS descriptors, and
+ * wallet-less TLS remain unclaimed.
  */
 export const SUPPORTED_DATABASE_TYPES: readonly DatabaseType[] = [
   "postgresql",

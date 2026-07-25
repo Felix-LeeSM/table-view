@@ -34,7 +34,7 @@ Known limits to state in release notes:
   Windows desktop runtime smoke remain deferred.
 - Search live admin execution, Redis/Valkey full CLI/admin parity, MongoDB
   arbitrary JavaScript shell behavior, MSSQL full T-SQL/SQLCMD/admin support,
-  and Oracle SID/TNS/wallet/TLS/DDL/raw-admin/full PL/SQL support remain out of
+  and Oracle TNS/wallet-less TLS/raw-admin/full PL/SQL support remain out of
   scope.
 - DuckDB COPY/ATTACH/DETACH, extension install/load, raw external-file SQL
   functions, automatic import/export workflow, structured DDL/write UI, and
@@ -55,7 +55,7 @@ Known limits to state in release notes:
 | Elasticsearch | Live URL/auth/TLS root probe, live catalog, bounded `_search`, Search DSL validation, Runtime Happy Path smoke, and delete-by-query safety planning are active. Actual live admin execution and broader observability/profile/explain workflows remain deferred. | [`docs/product/README.md`](../../product/README.md), [`known-limitations.md`](../../product/known-limitations.md) |
 | OpenSearch | OpenSearch-specific live root probe, Elasticsearch endpoint rejection, live catalog, bounded `_search`, mapping-aware completion, Runtime Happy Path smoke, and delete-by-query safety planning are active. Actual live admin execution remains deferred. | [`docs/product/README.md`](../../product/README.md), [`query-language-support.md`](../../product/query-language-support.md) |
 | MSSQL | Bounded SQL authentication, catalog/query/cancel/tabular runtime, primary-key row edit through frontend SQL batch, bounded T-SQL editor guardrails, and representative Runtime Happy Path smoke are active. Structured DDL, SQLCMD/admin/security/backup/jobs/users/roles, broad parser/completion semantics, and full T-SQL semantics remain unsupported. | [`docs/product/README.md`](../../product/README.md), [`known-limitations.md`](../../product/known-limitations.md) |
-| Oracle | Service-name lifecycle, bounded catalog/query/cancel/tabular runtime, primary-key row edit through frontend SQL batch, bounded Safe Mode classification, bounded editor assistance, and representative Runtime Happy Path smoke are supported for `host:port/serviceName` with default fixture service `XEPDB1`. SID, TNS, wallet, advanced auth, structured DDL, raw DDL/admin, full parser/completion promotion, and PL/SQL body/package work remain unsupported until Oracle-specific evidence lands. | [`docs/product/README.md`](../../product/README.md), [`known-limitations.md`](../../product/known-limitations.md) |
+| Oracle | Service-name/SID lifecycle, wallet mTLS, bounded catalog/query/cancel/tabular runtime, primary-key row edit through frontend SQL batch, bounded structured DDL, read-only trigger listing, Operations activity/kill/slow-query/server-info panels, bounded Safe Mode classification, bounded editor assistance, database switching as a service-name re-dial (SID profiles fail closed), and representative Runtime Happy Path smoke are supported for `host:port/serviceName` with default fixture service `XEPDB1`. TNS descriptors, wallet-less TLS, advanced auth, raw DDL/admin, trigger DDL, full parser/completion promotion, and PL/SQL body/package work remain unsupported until Oracle-specific evidence lands. | [`docs/product/README.md`](../../product/README.md), [`known-limitations.md`](../../product/known-limitations.md) |
 
 ## Fixture And Smoke Coverage
 

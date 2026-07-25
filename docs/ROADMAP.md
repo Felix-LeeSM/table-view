@@ -313,8 +313,8 @@ tabular table-data query, key-projected editRows, bounded static Safe Mode
 classification, and bounded editor assistance 만 허용한다. #907 representative
 smoke 는 MSSQL/Oracle 모두 connect, seeded catalog browse, SELECT/DML,
 destructive Safe Mode confirmation, cancellation, and grid edit 로 제한한다.
-MSSQL DDL/admin/broad parser/completion claim 과 Oracle SID/TNS/wallet/advanced auth,
-structured DDL/raw DDL/admin/full parser/completion promotion/PLSQL/future smoke widening claim 은 각 source 의
+MSSQL DDL/admin/broad parser/completion claim 과 Oracle TNS/wallet-less TLS/advanced auth,
+raw DDL/admin/full parser/completion promotion/PLSQL/future smoke widening claim 은 각 source 의
 matching runtime, contract, docs, and smoke evidence 없이 만들지 않는다.
 Cassandra/Scylla, DynamoDB, graph, vector, stream 은 candidate-only 다.
 아직 active `DatabaseType`/profile/runtime/parser/completion, fixture/live
@@ -323,8 +323,8 @@ evidence, 또는 E2E smoke claim 이 없다.
 H6 closure 는 MSSQL/Oracle 을 source-specific promotion guardrail 뒤에 둔다는 뜻이지
 enterprise RDBMS full workbench support 를 출시했다는 뜻이 아니다. Full admin parity,
 import/export, profiler/activity, role/user/permission UI, broad scripting,
-MSSQL DDL/admin/smoke/full T-SQL semantics, and Oracle SID/TNS/wallet/TLS/
-advanced auth/structured DDL/raw DDL/admin/PLSQL/future smoke semantics 는 별도 source-specific evidence
+MSSQL DDL/admin/smoke/full T-SQL semantics, and Oracle TNS/wallet-less TLS/
+advanced auth/raw DDL/admin/PLSQL/future smoke semantics 는 별도 source-specific evidence
 전까지 out of scope 다.
 
 | Gate | Current owner | H6 boundary |
@@ -492,7 +492,7 @@ Near-term follow-up groups:
 | Redis/Valkey | Redis first slice is backend KV primitives, key browser/value preview/edit UI, selected-key bounded stream reader, bounded command query runtime/completion, current-DB/type-filtered key suggestions, and representative connect/scan/preview/GET/guarded-write/TTL/delete smoke. Valkey first slice is connection/key scan/value preview plus selected-key bounded stream reader, bounded command query, the shared Redis/Valkey string plus hash/list/set/zset KvMutationPanel write controls (#1075), Runtime Happy Path smoke, focused local testcontainer evidence, and proven-row command completion. Define contracts and evidence for consumer-group stream UI, full CLI/admin parity, language-core parser/completion ownership, broader command coverage, cluster, pub/sub, modules, consumer-group management, and full Redis compatibility before broader support claims. |
 | MongoDB | Keep support to tested whitelisted document workflows. Future widening needs version/deployment gates and safe native document-first panels; arbitrary JavaScript/shell behavior remains unsupported unless a new decision changes the policy. |
 | Search | Keep actual Elasticsearch/OpenSearch admin execution deferred. Elasticsearch/OpenSearch live connection/catalog/query, backend-bounded Search DSL validation, delete-by-query safety planning, bounded TypeScript Search DSL editor assistance, and representative Runtime Happy Path smoke are active; the smoke covers connect/auth/TLS contract, selected metadata, bounded render, delete-plan preview, and error surface. Promote broader live HTTP only after admin execution policy, broader observability/profile workflows, full language-core parser/completion ownership, and product-specific delta contracts are explicit. |
-| MSSQL/Oracle | Keep MSSQL at bounded catalog/query/cancel/tabular/edit-row enterprise RDBMS support with source-specific SQL-auth/TDS/encryption contract and #907 representative smoke, and keep Oracle at bounded service-name catalog/query/cancel/tabular/edit-row runtime support with bounded Safe Mode/editor assistance and #907 representative smoke. Future promotion must add matching DDL, full parser/completion, docs, and smoke evidence without hiding SQL Server and Oracle auth/dialect differences behind a shared abstraction. Keep full admin parity, import/export, profiler/activity, role/user/permission UI, broad scripting, MSSQL admin/full T-SQL semantics, and Oracle SID/TNS/wallet/advanced auth/structured DDL/raw DDL/admin/TLS/PLSQL semantics out of scope until separately proven. |
+| MSSQL/Oracle | Keep MSSQL at bounded catalog/query/cancel/tabular/edit-row enterprise RDBMS support with source-specific SQL-auth/TDS/encryption contract and #907 representative smoke, and keep Oracle at the #1072 full adapter — catalog/query/cancel/tabular/edit-row runtime, bounded Safe Mode/editor assistance, bounded structured DDL, read-only trigger listing, service-name re-dial switch-database, and #907 representative smoke. Future promotion must add matching full parser/completion, docs, and smoke evidence without hiding SQL Server and Oracle auth/dialect differences behind a shared abstraction. Keep full admin parity, import/export, full profiler/activity parity, role/user/permission UI, broad scripting, MSSQL admin/full T-SQL semantics, and Oracle TNS/wallet-less TLS/advanced auth/raw DDL/admin/PLSQL semantics out of scope until separately proven. |
 | Wider source candidates | Keep Cassandra/Scylla, DynamoDB, graph, vector, and stream as candidate-only. Do not add active `DatabaseType`, profile, runtime, parser/completion, fixture/live, or E2E support claims until workflow value and the full adding-data-source contract are locked. |
 | Connection TLS/SSH/Oracle | 2026-07-17 오너 grill 이 연결 보안 lane 1차 범위를 lock 했다 (ADR 0053, `docs/explorations/{connection-tls-parity,ssh-tunnel,oracle-wallet-tns}-threat-model-2026-07-17.md` 결정 섹션). 1차 = core 2필드 TLS 어휘 통일 + pg/mysql sslmode enum + warning-first 기본값 (#1063), SSH 터널 잔여 축 (#1064, ADR 0052 위), Oracle A1 SID+Service (#1065). Advanced TLS depth-step — CA 파일·클라이언트 인증서·1단 엔진 sslmode 확장·`verify-ca`·TOFU 인증서 핀 검토 — 는 #1649 로 후속 승격한다. Oracle 1-way TLS (TCPS + CA cert) 는 #1650 으로 advanced TLS CA 지원(#1649)에 의존해 묶는다. |
 | Security / ops policy | Keep destructive/admin/security claims source-specific until a threat-model handoff and source-specific implementation own preview/confirm/dry-run/auditability. Users/roles/auth mechanism UI waits until source order is clear. |
@@ -504,7 +504,7 @@ Near-term follow-up groups:
 1. 새 partial workflow 를 추가하기 전에 눈에 보이는 미완성 workflow 를 먼저 닫는다.
 2. connect/browse/query 만 노출하는 runtime 을 하나 더 붙이는 것보다, 기존 runtime
    깊이를 우선한다.
-3. Runtime promotion freeze: Search admin execution, MSSQL DDL/admin/smoke/full parser-completion widening, Oracle raw DDL/admin/smoke/full parser-completion
+3. Runtime promotion freeze: Search admin execution, MSSQL DDL/admin/smoke/full parser-completion widening, Oracle DDL/admin/smoke/full parser-completion
    widening, 기타 새 DBMS lane 은 현재 지원 DBMS 하나가
    query/workbench parity lane 을 통과할 때까지 기다린다.
 4. Query/workbench parity 범위는 SQL/MQL execution, parser/Safe Mode, completion,
