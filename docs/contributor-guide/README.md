@@ -7,7 +7,35 @@ decision logs.
 ## Entries
 
 - [`testing-and-quality.md`](testing-and-quality.md) — developer-facing
-  verification gaps and quality follow-ups.
+  verification gaps, quality follow-ups, the pre-release verification gate, and
+  the index of the smoke matrix bands below.
+- [`smoke-matrix/h1-data-source.md`](smoke-matrix/h1-data-source.md) —
+  cross-adapter architecture boundary: profile/capability/adapter-contract
+  registry, query-language and result-envelope ownership, per-DBMS
+  connect-to-query journeys.
+- [`smoke-matrix/h2-rdbms-parity.md`](smoke-matrix/h2-rdbms-parity.md) — RDBMS
+  parity lanes and closure audits for PostgreSQL, MySQL, MariaDB, SQLite, and
+  DuckDB `.duckdb` runtime smoke.
+- [`smoke-matrix/postgresql-query-workbench.md`](smoke-matrix/postgresql-query-workbench.md) —
+  PostgreSQL lane detail: query, catalog, parser/Safe Mode, completion, edit,
+  Explain, cancellation.
+- [`smoke-matrix/sqlite-file-dbms.md`](smoke-matrix/sqlite-file-dbms.md) —
+  SQLite lane detail: file lifecycle, writable-file DML, catalog, row edit, DDL
+  and unsupported `ALTER` behavior.
+- [`smoke-matrix/h3-duckdb-file-analytics.md`](smoke-matrix/h3-duckdb-file-analytics.md) —
+  DuckDB `.duckdb` runtime, registered CSV/Parquet/JSON/NDJSON analytics, and
+  the local-file privacy/export and extension/`COPY` gates.
+- [`smoke-matrix/h4-rdbms-intelligence.md`](smoke-matrix/h4-rdbms-intelligence.md) —
+  schema metadata cache, ERD graph and renderer, dependency view, migration
+  impact, schema diff, FK row navigation.
+- [`smoke-matrix/h5-non-rdbms.md`](smoke-matrix/h5-non-rdbms.md) — non-RDBMS
+  paradigms: MongoDB, Redis/Valkey, Elasticsearch/OpenSearch Search.
+- [`smoke-matrix/h6-wider-source-candidates.md`](smoke-matrix/h6-wider-source-candidates.md) —
+  MSSQL and Oracle runtime/smoke guardrails plus unpromoted wide-column,
+  cloud-document, graph, vector, and stream candidates.
+- [`smoke-matrix/h7-ops-security-reliability.md`](smoke-matrix/h7-ops-security-reliability.md) —
+  CI/hook gate surface, destructive-operation safety, credential privacy,
+  dependency security, a11y, performance, platform smoke, E2E isolation.
 - [`repository-topology-inventory.md`](repository-topology-inventory.md) —
   Refactor 01 final repository root ownership, lifecycle, cleanup, hook-routing,
   and migration SOT.
