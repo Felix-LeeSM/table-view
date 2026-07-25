@@ -469,6 +469,97 @@ async fn test_snapshot_returns_seeded_connections_and_groups() {
 }
 
 // ----------------------------------------------------------------------
+// #1649 — the SQLite mirror has no CA column, so its reconstructed posture is
+// lossy (`verify-ca` reads back as `verify-full`, `caCertPath` as null). The
+// boot snapshot is editable before `loadConnections()` replaces it, so a save
+// in that window used to write the null CA path back to the file SOT and lose
+// it. `read_connections` overlays the posture from the file SOT (which it
+// already opens for the wallet presence map) — assert the snapshot reports the
+// authoritative values, not the mirror's.
+// ----------------------------------------------------------------------
+#[tokio::test]
+#[serial]
+async fn test_snapshot_connection_posture_comes_from_the_file_sot() {
+    let (_dir, pool) = setup().await;
+    let now = 1_700_000_000_000i64;
+
+    // Mirror row as `SslMode::to_legacy` writes a verify-ca connection:
+    // tls_enabled=1 / trust_server_certificate=0, i.e. verify-full, no CA path.
+    sqlx::query(
+        "INSERT INTO connections(id, name, db_type, host, port, user, password_enc, database, \
+         group_id, color, connection_timeout, keep_alive_interval, environment, auth_source, \
+         replica_set, tls_enabled, trust_server_certificate, sort_order, created_at, updated_at) \
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    )
+    .bind("c1")
+    .bind("MyPG")
+    .bind("postgresql")
+    .bind("localhost")
+    .bind(5432i64)
+    .bind("postgres")
+    .bind("")
+    .bind("postgres")
+    .bind::<Option<String>>(None)
+    .bind::<Option<String>>(None)
+    .bind::<Option<i64>>(None)
+    .bind::<Option<i64>>(None)
+    .bind::<Option<String>>(None)
+    .bind::<Option<String>>(None)
+    .bind::<Option<String>>(None)
+    .bind(1i64)
+    .bind(0i64)
+    .bind(0i64)
+    .bind(now)
+    .bind(now)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    // File SOT — the authoritative posture the mirror cannot represent.
+    let mut config = table_view_lib::models::ConnectionConfig {
+        id: "c1".into(),
+        name: "MyPG".into(),
+        db_type: table_view_lib::models::DatabaseType::Postgresql,
+        host: "localhost".into(),
+        port: 5432,
+        user: "postgres".into(),
+        password: String::new(),
+        database: "postgres".into(),
+        read_only: false,
+        group_id: None,
+        color: None,
+        connection_timeout: None,
+        keep_alive_interval: None,
+        environment: None,
+        auth_source: None,
+        replica_set: None,
+        ssl_mode: table_view_lib::models::SslMode::VerifyCa,
+        ca_cert_path: Some("/etc/ssl/corp-ca.pem".into()),
+        oracle_use_sid: None,
+        wallet_path: None,
+        wallet_password: String::new(),
+    };
+    config.password = String::new();
+    table_view_lib::storage::save_connection(config, Some(String::new())).unwrap();
+
+    let snap = get_initial_app_state_inner(&pool, "launcher", &empty_status())
+        .await
+        .unwrap();
+    let json = serde_json::to_value(&snap).unwrap();
+    let items = json["stores"]["connections"]["items"].as_array().unwrap();
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0]["sslMode"], Value::String("verify-ca".into()));
+    assert_eq!(
+        items[0]["caCertPath"],
+        Value::String("/etc/ssl/corp-ca.pem".into()),
+        "the boot snapshot must carry the file-SOT CA path so an edit in the \
+         cold-boot window cannot clobber it"
+    );
+
+    cleanup();
+}
+
+// ----------------------------------------------------------------------
 // AC-357-01 — mru 가 last_used DESC 정렬 + lastUsedConnectionId 가 맨 위.
 // ----------------------------------------------------------------------
 #[tokio::test]
