@@ -22,6 +22,7 @@
     "wasm:size": "bash scripts/check-wasm-size.sh",
     "docs:links": "tsx scripts/check-doc-links.ts",
     "memory:paths": "tsx scripts/check-memory-paths.ts",
+    "memory:matrix": "tsx scripts/check-agents-matrix-coverage.ts",
     "test": "vitest run",
     "contrast:check": "tsx scripts/check-theme-contrast.ts",
     "build:e2e": "vite build --mode e2e --minify=false",
