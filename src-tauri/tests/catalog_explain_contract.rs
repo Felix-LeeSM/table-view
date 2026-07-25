@@ -281,11 +281,23 @@ async fn duckdb_catalog_explain_contract_records_schema_rdb_deltas() {
                 definition_contains: "active",
                 columns: &["id", "email"],
             },
-            index_delta: IndexDelta::Empty {
-                reason: "DuckDB RdbAdapter index metadata is not surfaced by the current catalog contract",
+            // #1070 (`caa6a98f`) replaced the silent `Ok(vec![])` index and
+            // constraint stubs with real `duckdb_indexes()` /
+            // `duckdb_constraints()` introspection, so both deltas are no
+            // longer empty (#1811). `expressions` comes back with DuckDB's own
+            // identifier quoting — `name` is quoted, plain identifiers are not
+            // (see `duckdb_get_table_indexes_returns_real_indexes_1070` for the
+            // unquoted `user_id` case) — and that quoting difference vs SQLite
+            // is exactly what this delta contract records.
+            index_delta: IndexDelta::Contains {
+                name: "idx_users_name",
+                columns: &["\"name\""],
+                is_unique: false,
+                is_primary: false,
             },
-            constraint_delta: ConstraintDelta::Empty {
-                reason: "DuckDB RdbAdapter constraint metadata is not surfaced by the current catalog contract",
+            constraint_delta: ConstraintDelta::Contains {
+                constraint_type: "PRIMARY KEY",
+                columns: &["id"],
             },
         },
     )

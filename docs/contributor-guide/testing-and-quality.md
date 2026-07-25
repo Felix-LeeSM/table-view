@@ -58,6 +58,42 @@ landed and live GitHub showed no open Refactor 04 child issues.
 | Link checker | Add an internal-doc link checker after archive routing settles. |
 | Dependency security | Track `hickory-proto` advisory exposure through `mongodb 3.6.0`, `rustls-pemfile` exposure through `oracle-rs 0.1.7`, and `quick-xml` DoS advisories (RUSTSEC-2026-0194/0195) through `plist 1.8.0`; remove deny ignores when upstream dependency updates make it possible. |
 
+### Rust Integration Test Gate
+
+`Integration Tests (Docker)` in `.github/workflows/ci.yml` runs
+`cargo llvm-cov nextest --profile push --lib --test '*'`. The `--test '*'` glob
+is deliberate: it selects the lib test target plus every binary under
+`src-tauri/tests`, so a new `tests/*.rs` file is gated the run it lands, and
+`--lib --test '*'` (rather than a bare run or `--tests`) keeps `src/main.rs` out
+of the instrumented set.
+
+Before #1811 the step carried a hand-maintained allowlist of 13 `--test` names.
+With `parse_sql_backend` covered by the macOS `rust` job, that left 61 of the 75
+binaries under `src-tauri/tests` never run in CI, and three had assertions
+against strings/shapes that no longer exist in `src-tauri/src`: the preview-only
+delete-by-query contract retired by #1076, the Oracle validation wording changed
+by #1065, and the DuckDB empty index/constraint stubs replaced by #1070.
+`scripts/hooks/test-ci-workflow-cache.sh` now fails if a named `--test <target>`
+allowlist reappears in that step.
+
+No binary is excluded. The only exclusions are test-level and declared in source:
+
+| Excluded tests | Reason |
+|---|---|
+| `src-tauri/tests/oracle_smoke_boundary_probe.rs`, all 7 `#[ignore]` | Needs a live Oracle container seeded from `e2e/fixtures/seed.oracle.sql`. The image is amd64-only and the seed is not in the CI service set, so the binary is selected but runs zero tests. |
+| `src-tauri/tests/mysql_integration.rs`, 2 `#[ignore]` routine tests | `CREATE FUNCTION` is rejected by the sqlx prepared-statement protocol (MySQL error 1295). |
+
+Docker-backed targets (`cancel_*`, `mariadb_returning_runtime`,
+`testcontainer_lifecycle_test`, the `*_integration` set) keep their silent-skip
+semantics — `src-tauri/tests/common/mod.rs` returns `None` when a container
+cannot start and the test returns early. Docker is present on the CI runner, so
+they execute there for real.
+
+The macOS `Rust Unit And Storage Tests` job stays on
+`--lib --test storage_integration`: it is a second-platform smoke, not the
+contract owner, and widening it would spend macOS minutes re-running what the
+Linux coverage job already gates.
+
 ## Static Lint Gate
 
 `pnpm lint` runs `scripts/check-eslint-static-policy.ts`. The wrapper runs the

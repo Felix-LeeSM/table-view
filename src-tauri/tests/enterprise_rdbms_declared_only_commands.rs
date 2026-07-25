@@ -40,9 +40,18 @@ async fn test_connection_dispatches_oracle_validation_instead_of_declared_only_r
     .await;
 
     match result {
+        // #1065 reworded the Mongo-only-field rejection (`OracleAdapter::
+        // connect_config`, `src-tauri/src/db/oracle.rs`) when the TNS/`//`
+        // substring checks were subsumed by the identifier whitelist. The
+        // contract is unchanged — `test_connection` reaches Oracle's own
+        // validation instead of a declared-only rejection — so the assertion
+        // follows the current wording (#1811).
         Err(AppError::Validation(msg)) => {
-            assert!(msg.contains("Oracle SID/TNS/advanced auth fields"));
-            assert!(msg.contains("service-name"));
+            assert!(
+                msg.contains("Oracle advanced auth fields are unsupported"),
+                "unexpected Oracle validation message: {msg}"
+            );
+            assert!(msg.contains("service-name"), "message: {msg}");
         }
         other => panic!("Expected Oracle validation rejection, got: {other:?}"),
     }

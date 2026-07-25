@@ -24,6 +24,9 @@ pub struct ViewContract<'a> {
     pub columns: &'a [&'a str],
 }
 
+/// Both wired file RDBs now surface explicit indexes, so there is no `Empty`
+/// variant: an adapter that stops listing indexes must fail this contract, not
+/// silently re-declare itself index-free (#1811, the shape #1070 fixed).
 pub enum IndexDelta<'a> {
     Contains {
         name: &'a str,
@@ -31,13 +34,16 @@ pub enum IndexDelta<'a> {
         is_unique: bool,
         is_primary: bool,
     },
-    Empty {
-        reason: &'a str,
-    },
 }
 
 pub enum ConstraintDelta<'a> {
-    Empty { reason: &'a str },
+    Contains {
+        constraint_type: &'a str,
+        columns: &'a [&'a str],
+    },
+    Empty {
+        reason: &'a str,
+    },
 }
 
 pub struct RdbCatalogContract<'a> {
@@ -212,30 +218,24 @@ where
         .get_table_indexes(contract.namespace, contract.table, None)
         .await
         .unwrap();
-    match &contract.index_delta {
-        IndexDelta::Contains {
-            name,
-            columns,
-            is_unique,
-            is_primary,
-        } => {
-            let index = indexes
-                .iter()
-                .find(|index| index.name == *name)
-                .unwrap_or_else(|| {
-                    panic!(
-                        "{:?}.{}.{} index {:?} missing from {:?}",
-                        contract.db_type, contract.namespace, contract.table, name, indexes
-                    )
-                });
-            assert_eq!(index.columns, columns.to_vec());
-            assert_eq!(index.is_unique, *is_unique);
-            assert_eq!(index.is_primary, *is_primary);
-        }
-        IndexDelta::Empty { reason } => {
-            assert!(indexes.is_empty(), "{reason}: {indexes:?}");
-        }
-    }
+    let IndexDelta::Contains {
+        name,
+        columns,
+        is_unique,
+        is_primary,
+    } = &contract.index_delta;
+    let index = indexes
+        .iter()
+        .find(|index| index.name == *name)
+        .unwrap_or_else(|| {
+            panic!(
+                "{:?}.{}.{} index {:?} missing from {:?}",
+                contract.db_type, contract.namespace, contract.table, name, indexes
+            )
+        });
+    assert_eq!(index.columns, columns.to_vec());
+    assert_eq!(index.is_unique, *is_unique);
+    assert_eq!(index.is_primary, *is_primary);
 }
 
 async fn assert_constraint_delta<A>(adapter: &A, contract: &RdbCatalogContract<'_>)
@@ -247,6 +247,25 @@ where
         .await
         .unwrap();
     match &contract.constraint_delta {
+        ConstraintDelta::Contains {
+            constraint_type,
+            columns,
+        } => {
+            let constraint = constraints
+                .iter()
+                .find(|constraint| constraint.constraint_type == *constraint_type)
+                .unwrap_or_else(|| {
+                    panic!(
+                        "{:?}.{}.{} constraint {:?} missing from {:?}",
+                        contract.db_type,
+                        contract.namespace,
+                        contract.table,
+                        constraint_type,
+                        constraints
+                    )
+                });
+            assert_eq!(constraint.columns, columns.to_vec());
+        }
         ConstraintDelta::Empty { reason } => {
             assert!(constraints.is_empty(), "{reason}: {constraints:?}");
         }

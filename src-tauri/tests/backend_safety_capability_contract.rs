@@ -205,8 +205,16 @@ async fn dbms_specific_unsupported_delta_paths_return_explicit_app_errors() {
     );
 }
 
+/// #1076 (`45131090`) promoted `_delete_by_query` from preview-only to live
+/// execution behind the Safe Mode confirm gate, so the old assertions here
+/// (`!requires_confirmation`, an "execution is unsupported" warning, and an
+/// `Unsupported("only preview plans are available")` on the execute path) all
+/// describe a retired contract — none of those strings exist in `src-tauri/src`
+/// any more. The surviving invariants, re-bound to the current source (#1811):
+/// the plan always asks for confirmation, the execute path returns a typed
+/// result, and wildcard fan-out targets stay rejected.
 #[tokio::test]
-async fn destructive_search_plan_stays_preview_only() {
+async fn destructive_search_plan_requires_confirmation_and_executes_behind_gate() {
     let search = SearchEngineAdapter::fixture_opensearch();
     let preview = search
         .plan_delete_by_query(&preview_delete_by_query_request())
@@ -216,19 +224,29 @@ async fn destructive_search_plan_stays_preview_only() {
     assert_eq!(preview.operation, "deleteByQuery");
     assert_eq!(preview.target, "logs-opensearch-2026.05.24");
     assert!(preview.preview_only);
-    assert!(!preview.requires_confirmation);
-    assert!(preview
-        .warnings
-        .iter()
-        .any(|warning| warning.contains("execution is unsupported")));
+    assert!(preview.requires_confirmation);
+    assert!(
+        preview
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("cannot be undone")),
+        "destructive plan must keep the irreversibility warning: {:?}",
+        preview.warnings
+    );
 
     let mut execution = preview_delete_by_query_request();
     execution.preview_only = false;
     execution.safety.acknowledged_risk = true;
     execution.safety.expected_target = Some("logs-opensearch-2026.05.24".into());
-    assert_unsupported(
-        search.plan_delete_by_query(&execution).await,
-        &["only preview plans are available"],
+    let executed = search
+        .execute_delete_by_query(&execution)
+        .await
+        .expect("delete-by-query execution is wired behind the Safe Mode gate");
+    assert_eq!(executed.target, "logs-opensearch-2026.05.24");
+    assert_eq!(
+        Some(executed.deleted),
+        preview.estimated_document_count,
+        "the read-only fixture reports the matched estimate as deleted"
     );
 
     let mut wildcard = preview_delete_by_query_request();

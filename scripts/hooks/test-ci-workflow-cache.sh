@@ -170,9 +170,14 @@ assert_contains "$integration_block" "components: llvm-tools-preview" "integrati
 assert_contains "$integration_block" "uses: taiki-e/install-action@v2" "integration coverage tool installer"
 assert_contains "$integration_block" "tool: cargo-llvm-cov@0.8.7,cargo-nextest@0.9.137" "integration coverage tool pins"
 assert_contains "$integration_run_step" "working-directory: src-tauri" "integration coverage cwd"
-assert_contains "$integration_run_step" "cargo llvm-cov nextest --profile push --lib" "integration coverage command"
-assert_contains "$integration_run_step" "--test redis_integration" "integration coverage keeps redis signal"
-assert_contains "$integration_run_step" "--test mssql_connection_routing" "integration coverage push-profile binary set"
+assert_contains "$integration_run_step" "cargo llvm-cov nextest --profile push --lib --test '*'" "integration coverage command"
+# #1811 — the coverage run must select EVERY integration test binary through
+# cargo's glob target selection. A hand-maintained `--test <name>` allowlist is
+# what left 62 of 75 binaries unexecuted (and their contract assertions dead),
+# so any named target here is a regression: newly added tests/*.rs files must be
+# gated automatically.
+assert_not_contains "$integration_run_step" "--test storage_integration" "integration coverage must not re-introduce a target allowlist"
+assert_not_contains "$integration_run_step" "--test redis_integration" "integration coverage must not re-introduce a target allowlist"
 assert_contains "$integration_run_step" "--fail-under-lines 80" "integration coverage lines threshold"
 assert_contains "$integration_run_step" "--fail-under-functions 75" "integration coverage functions threshold"
 assert_contains "$integration_run_step" "--fail-under-regions 80" "integration coverage regions threshold"

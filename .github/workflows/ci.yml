@@ -526,14 +526,22 @@ jobs:
       # regions 80), ratchet-locked in scripts/coverage-ratchet-targets.json
       # (`rust.pre_push.integration`; check-coverage-ratchet.ts reads the
       # thresholds from this step). This coverage run REPLACES the former plain
-      # `cargo test` step (no reason to run the same tests twice): it adds the
-      # nine push-profile integration binaries + --lib, and keeps
-      # redis_integration — which the plain test ran and the old pre-push
-      # coverage command omitted — so no test signal is lost. PG/Mongo reuse the
-      # GHA services via PGHOST/MONGO_HOST; MySQL/MSSQL/Redis fall back to their
-      # self-owned testcontainers (Docker is present on the runner). Instrumented
-      # build + extra testcontainers cost more wall-clock than the old plain
-      # test — the accepted promotion trade-off (timeout raised 40 -> 60m).
+      # `cargo test` step (no reason to run the same tests twice). PG/Mongo reuse
+      # the GHA services via PGHOST/MONGO_HOST; MySQL/MSSQL/Redis fall back to
+      # their self-owned testcontainers (Docker is present on the runner).
+      #
+      # #1811 — the target list used to be a hand-maintained allowlist of 13
+      # `--test` names; with `parse_sql_backend` covered by the macOS rust job
+      # that left 61 of the 75 binaries under src-tauri/tests NEVER run in CI,
+      # accumulating dead contract assertions (three were found in one day by
+      # unrelated deliveries). `--lib --test '*'` is cargo's glob target
+      # selection: it selects the lib test target plus every integration test
+      # binary, so a newly added tests/*.rs file is gated the moment it lands
+      # and cannot silently rot again. `--lib --test '*'` (not bare/`--tests`)
+      # keeps src/main.rs out of the instrumented set so the thresholds still
+      # measure library code. Docker-gated targets silent-skip when their
+      # container cannot start, and Oracle's boundary probe stays `#[ignore]`d;
+      # see docs/contributor-guide/testing-and-quality.md.
       - name: Run integration coverage
         working-directory: src-tauri
         env:
@@ -545,20 +553,7 @@ jobs:
           MONGO_HOST: localhost
           MONGO_PORT: 27017
         run: |
-          cargo llvm-cov nextest --profile push --lib \
-            --test storage_integration \
-            --test query_integration \
-            --test schema_integration \
-            --test value_search_integration \
-            --test fixture_loading \
-            --test mongo_integration \
-            --test mysql_integration \
-            --test duckdb_file_analytics \
-            --test mariadb_ddl_preview \
-            --test mssql_connection_routing \
-            --test mssql_integration \
-            --test oracle_integration \
-            --test redis_integration \
+          cargo llvm-cov nextest --profile push --lib --test '*' \
             --summary-only \
             --fail-under-lines 80 \
             --fail-under-functions 75 \
