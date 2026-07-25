@@ -84,19 +84,56 @@ jobs:
         run: node scripts/hooks/check-pr-body.mjs
 
   doc-size:
-    name: Doc Size Advisory (non-blocking)
+    name: Doc Size And Line Length
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    # advisory (non-blocking) — 현재 회귀 0 (최대 106K chars < 120K cap). threshold 는 추후 ratchet.
-    # pre-push 에는 연동하지 않는다 (신규 advisory 정책). block 전환은 분할 정리 후 별도 결정.
-    continue-on-error: true
+    # Promoted from advisory to blocking. The old comment deferred the flip until
+    # "분할 정리 후" — that split landed (testing-and-quality.md 115,825 -> 9,476
+    # chars), so no measured doc is near the 120,000-char cap and the gate can
+    # fail closed without failing on day one.
+    #
+    # Two metrics, because they catch different failures:
+    #   - check-doc-size.sh --strict: whole-file chars (~30k tokens at the cap).
+    #   - docs:lines: per-line chars, which in this repo means per table cell.
+    #     Every baseline violation is a table row; markdownlint MD013 cannot
+    #     cover it because its default config excludes tables.
+    #
+    # Intentionally NOT change-gated: a docs-only PR is exactly the PR this gate
+    # exists for, so it must not be skipped by the docs-only classifier.
 
     steps:
       - name: Checkout
         uses: actions/checkout@v6
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 10.20.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22.14.0
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Fetch doc line-length base
+        # Same force refspec as the coverage ratchet: concurrent main pushes
+        # advance origin/main between checkout and this fetch, and a plain shallow
+        # fetch rejects the non-fast-forward update. The gate only compares
+        # against the current main tip, so overwriting the local ref is intended.
+        run: git fetch --no-tags --prune --depth=1 origin +refs/heads/main:refs/remotes/origin/main
+
       - name: Check doc size
-        run: bash scripts/hooks/check-doc-size.sh
+        run: bash scripts/hooks/check-doc-size.sh --strict
+
+      - name: Check doc line length
+        env:
+          DOC_LINE_LENGTH_REQUIRE_BASE: "1"
+        run: pnpm docs:lines
 
   dependency-security:
     name: Dependency Security
@@ -694,7 +731,13 @@ jobs:
   #   (fmt + clippy, mirrors lefthook), rust unit/storage tests, integration
   #   coverage (`cargo llvm-cov nextest --profile push`, thresholds 80/75/80 —
   #   promoted from the local pre-push rust route, audit 2026-07-03 #6).
-  #   Non-blocking (advisory): doc-size, dependency-advisories (RUSTSEC),
+  #   Fail-closed but not yet ruleset-required: doc-size (whole-file chars +
+  #   per-line/table-cell chars). `continue-on-error` is gone, so the job now
+  #   reports red. Making it merge-blocking needs `Doc Size And Line Length`
+  #   added to the `pr_to_main` ruleset's required contexts, and that must happen
+  #   AFTER this workflow lands on main — a required context no workflow produces
+  #   yet would block every open PR.
+  #   Non-blocking (advisory): dependency-advisories (RUSTSEC),
   #   frontend-advisory (docs:links + WCAG contrast).
   # `Frontend Checks` is an AGGREGATION job (2026-07-25): the vitest suite runs
   # in the `frontend-shard` matrix and this job merges the shards' blob reports

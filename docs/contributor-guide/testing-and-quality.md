@@ -71,7 +71,9 @@ full ESLint config and then enforces the Refactor 00 static policy from
 | `src/features/**` imports | Feature production modules may use feature-local code, feature public APIs, `@lib`, `@/types`, and `@components/ui`; cross-feature internal imports fail and must route through `src/features/<domain>/index.ts`. Imports from legacy components, hooks, stores, pages, router, or app shell still fail unless they are an explicit public-facade exception. | The PR adding a feature dependency owns reusable extraction, public API export, or removal of the dependency. |
 
 Coverage thresholds are governed by
-[`docs/quality/coverage-ratchet.md`](../quality/coverage-ratchet.md), E2E
+[`docs/quality/coverage-ratchet.md`](../quality/coverage-ratchet.md), doc size
+and per-line/table-cell length by
+[`docs/quality/doc-size-ratchet.md`](../quality/doc-size-ratchet.md), E2E
 breadth stays with #581, and CI cache or parallelism with #582. Static lint
 changes should not edit those gates.
 

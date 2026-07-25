@@ -1,0 +1,74 @@
+{
+  "version": 1,
+  "ceiling": 600,
+  "entries": [
+    {
+      "path": "docs/ROADMAP.md",
+      "over": 60
+    },
+    {
+      "path": "docs/contributor-guide/fixture-test-topology-inventory.md",
+      "over": 1
+    },
+    {
+      "path": "docs/contributor-guide/release/release-notes-support-matrix.md",
+      "over": 1
+    },
+    {
+      "path": "docs/contributor-guide/repository-topology-inventory.md",
+      "over": 25
+    },
+    {
+      "path": "docs/contributor-guide/smoke-matrix/h1-data-source.md",
+      "over": 9
+    },
+    {
+      "path": "docs/contributor-guide/smoke-matrix/h2-rdbms-parity.md",
+      "over": 16
+    },
+    {
+      "path": "docs/contributor-guide/smoke-matrix/h3-duckdb-file-analytics.md",
+      "over": 4
+    },
+    {
+      "path": "docs/contributor-guide/smoke-matrix/h4-rdbms-intelligence.md",
+      "over": 1
+    },
+    {
+      "path": "docs/contributor-guide/smoke-matrix/h5-non-rdbms.md",
+      "over": 20
+    },
+    {
+      "path": "docs/contributor-guide/smoke-matrix/h6-wider-source-candidates.md",
+      "over": 4
+    },
+    {
+      "path": "docs/contributor-guide/smoke-matrix/h7-ops-security-reliability.md",
+      "over": 11
+    },
+    {
+      "path": "docs/contributor-guide/smoke-matrix/postgresql-query-workbench.md",
+      "over": 4
+    },
+    {
+      "path": "docs/contributor-guide/smoke-matrix/sqlite-file-dbms.md",
+      "over": 5
+    },
+    {
+      "path": "docs/contributor-guide/testing-and-quality.md",
+      "over": 1
+    },
+    {
+      "path": "docs/product/README.md",
+      "over": 14
+    },
+    {
+      "path": "docs/product/known-limitations.md",
+      "over": 18
+    },
+    {
+      "path": "docs/product/query-language-support.md",
+      "over": 11
+    }
+  ]
+}
