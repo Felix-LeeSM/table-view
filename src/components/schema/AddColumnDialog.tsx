@@ -17,6 +17,7 @@ import SqlSyntax from "@components/shared/SqlSyntax";
 import CreateTableTypeCombobox from "./CreateTableTypeCombobox";
 import { usePostgresTypes } from "@hooks/usePostgresTypes";
 import { useConnectionStore } from "@stores/connectionStore";
+import { supportsDdl } from "@/types/dataSource";
 import type { ColumnInfo } from "@/types/schema";
 import { validateIdentifier } from "./identifier";
 
@@ -112,6 +113,17 @@ export default function AddColumnDialog({
     (s) =>
       s.connections.find((c) => c.id === connectionId)?.environment ?? null,
   );
+  // Issue #1070 (ADR 0051 Stage 2) — the DuckDB capability flip made this
+  // dialog reachable for engines that reject two of its inputs: a CHECK on
+  // `ADD COLUMN` (DuckDB cannot add a constrained column until the Stage 2b
+  // rebuild-swap) and `is_identity` (SQLite / DuckDB have no identity emitter).
+  // Unsupported = hidden, never click-then-error (#1046); an unknown /
+  // still-loading dbType keeps both.
+  const dbType = useConnectionStore(
+    (s) => s.connections.find((c) => c.id === connectionId)?.dbType,
+  );
+  const showCheck = supportsDdl(dbType, "alterConstraint");
+  const showIdentity = supportsDdl(dbType, "identityColumn");
 
   const ddl = useDdlPreviewExecution({
     connectionId,
@@ -327,19 +339,21 @@ export default function AddColumnDialog({
                   />
                   {t("addColumn.notNullLabel")}
                 </label>
-                <label
-                  className="flex cursor-pointer items-center gap-2 text-xs text-foreground"
-                  title={t("addColumn.identityTitle")}
-                >
-                  <input
-                    type="checkbox"
-                    checked={isIdentity}
-                    onChange={(e) => setIsIdentity(e.target.checked)}
-                    className="rounded border-border"
-                    aria-label={t("addColumn.identityAria")}
-                  />
-                  {t("addColumn.identityLabel")}
-                </label>
+                {showIdentity && (
+                  <label
+                    className="flex cursor-pointer items-center gap-2 text-xs text-foreground"
+                    title={t("addColumn.identityTitle")}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isIdentity}
+                      onChange={(e) => setIsIdentity(e.target.checked)}
+                      className="rounded border-border"
+                      aria-label={t("addColumn.identityAria")}
+                    />
+                    {t("addColumn.identityLabel")}
+                  </label>
+                )}
               </div>
 
               <div>
@@ -364,22 +378,24 @@ export default function AddColumnDialog({
                 />
               </div>
 
-              <div>
-                <label
-                  htmlFor="add-column-check"
-                  className="mb-1 block text-xs font-medium text-secondary-foreground"
-                >
-                  {t("addColumn.checkLabel")}
-                </label>
-                <input
-                  id="add-column-check"
-                  className="w-full rounded border border-border bg-background px-2 py-1.5 text-sm text-foreground outline-none focus:border-primary"
-                  value={checkExpr}
-                  onChange={(e) => setCheckExpr(e.target.value)}
-                  placeholder={t("addColumn.checkPlaceholder")}
-                  aria-label={t("addColumn.checkAria")}
-                />
-              </div>
+              {showCheck && (
+                <div>
+                  <label
+                    htmlFor="add-column-check"
+                    className="mb-1 block text-xs font-medium text-secondary-foreground"
+                  >
+                    {t("addColumn.checkLabel")}
+                  </label>
+                  <input
+                    id="add-column-check"
+                    className="w-full rounded border border-border bg-background px-2 py-1.5 text-sm text-foreground outline-none focus:border-primary"
+                    value={checkExpr}
+                    onChange={(e) => setCheckExpr(e.target.value)}
+                    placeholder={t("addColumn.checkPlaceholder")}
+                    aria-label={t("addColumn.checkAria")}
+                  />
+                </div>
+              )}
             </div>
 
             <div className="border-t border-border">

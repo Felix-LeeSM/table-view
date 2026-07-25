@@ -318,14 +318,13 @@ describe("SchemaTree — actions", () => {
     expect(screen.queryByLabelText("Open ERD diagram")).toBeNull();
   });
 
-  // #1052 / #1070 — DuckDB Stage 1 (ADR 0051) wires structured row edits but
-  // NOT structural DDL: its `ddl.*` group stays unset, so the Rename / Drop
-  // context items AND the F2 rename shortcut ride the per-action `supportsDdl`
-  // gate and stay HIDDEN / inert (ui-parity §4: unsupported = hide), while the
-  // read affordances Structure / Data stay. (Row editing itself is exercised by
-  // the DataGrid tests; this locks the DDL surface, which is orthogonal.) The
-  // writable-engine DDL path is locked by the explicit postgres cases above.
-  it("hides Rename/Drop and inerts F2 on a DuckDB table (DDL unsupported) but keeps Structure/Data (#1052)", async () => {
+  // #1070 (ADR 0051 Stage 2) — DuckDB now wires native structural DDL, so its
+  // `ddl.*` group flips on (createTable / alterTable / dropObject). The Rename
+  // (alterTable) + Drop (dropObject) context items AND the F2 rename shortcut
+  // ride the per-action `supportsDdl` gate and are now SHOWN / active, matching
+  // the writable-postgres cases above. This replaces the Stage-1 lock (which
+  // asserted they were hidden): the DDL surface moved with the wired adapter.
+  it("shows Rename/Drop and F2 opens rename on a DuckDB table (#1070 Stage 2 native DDL)", async () => {
     useConnectionStore.setState({
       connections: [
         {
@@ -365,15 +364,14 @@ describe("SchemaTree — actions", () => {
 
     expect(screen.getByText("Structure")).toBeInTheDocument();
     expect(screen.getByText("Data")).toBeInTheDocument();
-    expect(screen.queryByText("Rename")).toBeNull();
-    expect(screen.queryByText("Drop")).toBeNull();
+    expect(screen.getByText("Rename")).toBeInTheDocument();
+    expect(screen.getByText("Drop")).toBeInTheDocument();
 
-    // F2 must not open the rename dialog on a read-only engine (regression for
-    // the click-then-error DDL path).
+    // F2 opens the rename dialog now that DuckDB claims `alterTable`.
     await act(async () => {
       fireEvent.keyDown(tableItem, { key: "F2" });
     });
-    expect(screen.queryByText("Rename Table")).toBeNull();
+    expect(screen.getByText("Rename Table")).toBeInTheDocument();
   });
 
   // #1460 — SQLite has PARTIAL DDL: the wired adapter runs `create_table` but

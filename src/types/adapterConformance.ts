@@ -121,6 +121,16 @@ export const CONFORMANCE_CHECKS = Object.freeze([
   check("ddl.createIndex", "ddl", "Create-index DDL claim is enabled."),
   check("ddl.dropObject", "ddl", "Drop-object DDL claim is enabled."),
   check(
+    "ddl.alterConstraint",
+    "ddl",
+    "Add/drop-constraint DDL claim is enabled.",
+  ),
+  check(
+    "ddl.identityColumn",
+    "ddl",
+    "Identity / auto-increment column DDL claim is enabled.",
+  ),
+  check(
     "ddl.editColumnComment",
     "ddl",
     "Column-comment DDL claim (COMMENT ON COLUMN via alter_table) is enabled.",
@@ -201,7 +211,15 @@ const DEFERRED_FEATURES = Object.freeze({
     // the profile claims it and it is a live check, not a deferral.
     query: ["query.explain"],
     edit: [],
-    ddl: [],
+    // Issue #1070 — `ddl.alterConstraint` / `ddl.identityColumn` are PLANNED
+    // Stage 2b slices (the rebuild-swap path and the CREATE SEQUENCE-backed
+    // identity path), not abandoned claims, so they belong in `deferred` rather
+    // than `unsupported` (same posture as `query.explain` above).
+    // Issue #1735 — `ddl.editColumnComment` joins them: DuckDB has native
+    // `COMMENT ON COLUMN` and `duckdb/ddl.rs` already emits it from
+    // `create_table`, so the ALTER leg is unwired, not unsupported (same
+    // classification mysql/mariadb/mssql got).
+    ddl: ["ddl.alterConstraint", "ddl.identityColumn", "ddl.editColumnComment"],
   },
   mssql: {
     connection: [],

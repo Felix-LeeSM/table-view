@@ -117,10 +117,16 @@ export default function StructurePanel({
   // column, Create Index, Drop index) read the per-action DDL capability so an
   // engine whose adapter rejects the write hides the control instead of
   // click-then-error (#1046). SQLite claims only `createTable`, so its column /
-  // index editors are view-only; DuckDB/MSSQL/Oracle claim no DDL at all.
+  // index editors are view-only; DuckDB (#1070), MSSQL (#1071) and Oracle
+  // (#1072) now claim these four, so their editors are live.
   const canAlterTable = supportsDdl(dbType, "alterTable");
   const canCreateIndex = supportsDdl(dbType, "createIndex");
   const canDropObject = supportsDdl(dbType, "dropObject");
+  // Issue #1070 (ADR 0051 Stage 2) — constraint add/drop is a separate gate
+  // from column-alter: DuckDB does native column ALTER but cannot add/drop
+  // constraints (Stage 2b), so the Constraints editor reads `alterConstraint`,
+  // not `alterTable`.
+  const canAlterConstraint = supportsDdl(dbType, "alterConstraint");
   // Issue #1735 — the column comment cell becomes editable only where the
   // adapter emits COMMENT ON COLUMN (PG + Oracle). MySQL/MSSQL run ALTER TABLE
   // but have no ANSI COMMENT ON and their emitters drop `new_comment` silently,
@@ -360,7 +366,7 @@ export default function StructurePanel({
             columns={columns}
             onColumnsChange={setColumns}
             onRefresh={fetchData}
-            canAlterTable={canAlterTable}
+            canAlterConstraint={canAlterConstraint}
           />
         )}
 

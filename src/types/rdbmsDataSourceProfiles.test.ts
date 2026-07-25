@@ -48,6 +48,8 @@ const expectedMssqlRuntimeCapabilities = expectedCapabilities({
     alterTable: true,
     createIndex: true,
     dropObject: true,
+    alterConstraint: true,
+    identityColumn: true,
   },
   intelligence: { erd: true },
   // Issue #1073 — SQL Server admin ops parity (no users: #1077 PG-first).
@@ -68,6 +70,8 @@ const expectedOracleRuntimeCapabilities = expectedCapabilities({
     alterTable: true,
     createIndex: true,
     dropObject: true,
+    alterConstraint: true,
+    identityColumn: true,
     // Issue #1735 — Oracle emits COMMENT ON COLUMN via alter_table.
     editColumnComment: true,
   },
