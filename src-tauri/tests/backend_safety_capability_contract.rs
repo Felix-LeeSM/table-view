@@ -225,6 +225,12 @@ async fn destructive_search_plan_requires_confirmation_and_executes_behind_gate(
     assert_eq!(preview.target, "logs-opensearch-2026.05.24");
     assert!(preview.preview_only);
     assert!(preview.requires_confirmation);
+    assert_eq!(
+        preview.estimated_document_count,
+        Some(1),
+        "the plan must estimate the one matching fixture document; a zero \
+         estimate would make the deleted/estimate agreement below vacuous"
+    );
     assert!(
         preview
             .warnings
@@ -243,6 +249,7 @@ async fn destructive_search_plan_requires_confirmation_and_executes_behind_gate(
         .await
         .expect("delete-by-query execution is wired behind the Safe Mode gate");
     assert_eq!(executed.target, "logs-opensearch-2026.05.24");
+    assert_eq!(executed.deleted, 1, "one matched document must be reported");
     assert_eq!(
         Some(executed.deleted),
         preview.estimated_document_count,
@@ -306,8 +313,13 @@ fn unsupported_search_body_request() -> SearchDeleteByQueryRequest {
 fn preview_delete_by_query_request() -> SearchDeleteByQueryRequest {
     SearchDeleteByQueryRequest {
         index_pattern: "logs-opensearch-2026.05.24".into(),
+        // `status.keyword: ok` matches exactly ONE of the two fixture hits
+        // (`src-tauri/src/db/search.rs` seeds `status` `ok` / `error`). A query
+        // over a field the fixture does not carry would estimate 0 and make the
+        // preview/execute agreement below `Some(0) == Some(0)` — vacuously true
+        // (#1811 review).
         body: json!({
-            "query": { "term": { "service": "api" } }
+            "query": { "term": { "status.keyword": "ok" } }
         }),
         preview_only: true,
         safety: SearchDestructiveSafety {

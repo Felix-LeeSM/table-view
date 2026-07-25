@@ -31,6 +31,28 @@ fn cleanup() {
     std::env::remove_var("TABLE_VIEW_TEST_DATA_DIR");
 }
 
+/// p95 budget in microseconds, or `None` when the budget must not be enforced.
+///
+/// #1811 put this binary into the CI coverage run (`--lib --test '*'`), which
+/// builds with `-C instrument-coverage`: every region carries a counter
+/// increment, so the wall clock measures instrumentation overhead rather than
+/// the snapshot query plan — and nextest schedules this binary alongside the
+/// container-heavy integration binaries on a shared runner. Enforcing a 100ms
+/// p95 there is a coin flip, not a gate. `cargo llvm-cov` exports
+/// `LLVM_PROFILE_FILE` into every instrumented test process, so that variable is
+/// the instrumented-run signal. The measurement and its `println!` still run, so
+/// a regression is still visible in the CI log; only the hard assert is skipped.
+fn p95_budget_us() -> Option<u128> {
+    if std::env::var_os("LLVM_PROFILE_FILE").is_some() {
+        return None;
+    }
+    #[cfg(debug_assertions)]
+    let budget_us = 100_000u128; // 100ms — debug noise relief.
+    #[cfg(not(debug_assertions))]
+    let budget_us = 50_000u128; // 50ms — Q9 strict budget (release).
+    Some(budget_us)
+}
+
 async fn seed(pool: &SqlitePool) {
     let now = 1_700_000_000_000i64;
 
@@ -198,17 +220,14 @@ async fn test_snapshot_p95_under_50ms() {
         p50, p95, p99, max
     );
 
-    #[cfg(debug_assertions)]
-    let budget_us = 100_000u128; // 100ms — debug noise relief.
-    #[cfg(not(debug_assertions))]
-    let budget_us = 50_000u128; // 50ms — Q9 strict budget (release).
-
-    assert!(
-        p95 <= budget_us,
-        "p95 ({}us) exceeded budget ({}us) — Q9 boot perf regression",
-        p95,
-        budget_us
-    );
+    if let Some(budget_us) = p95_budget_us() {
+        assert!(
+            p95 <= budget_us,
+            "p95 ({}us) exceeded budget ({}us) — Q9 boot perf regression",
+            p95,
+            budget_us
+        );
+    }
 
     cleanup();
 }
@@ -247,17 +266,14 @@ async fn test_snapshot_workspace_scope_p95_under_50ms() {
         p50, p95, p99, max
     );
 
-    #[cfg(debug_assertions)]
-    let budget_us = 100_000u128;
-    #[cfg(not(debug_assertions))]
-    let budget_us = 50_000u128;
-
-    assert!(
-        p95 <= budget_us,
-        "workspace scope p95 ({}us) exceeded budget ({}us)",
-        p95,
-        budget_us
-    );
+    if let Some(budget_us) = p95_budget_us() {
+        assert!(
+            p95 <= budget_us,
+            "workspace scope p95 ({}us) exceeded budget ({}us)",
+            p95,
+            budget_us
+        );
+    }
 
     cleanup();
 }

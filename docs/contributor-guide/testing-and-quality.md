@@ -63,9 +63,32 @@ landed and live GitHub showed no open Refactor 04 child issues.
 `Integration Tests (Docker)` in `.github/workflows/ci.yml` runs
 `cargo llvm-cov nextest --profile push --lib --test '*'`. The `--test '*'` glob
 is deliberate: it selects the lib test target plus every binary under
-`src-tauri/tests`, so a new `tests/*.rs` file is gated the run it lands, and
-`--lib --test '*'` (rather than a bare run or `--tests`) keeps `src/main.rs` out
-of the instrumented set.
+`src-tauri/tests`, so a new `tests/*.rs` file is gated the run it lands.
+`--test '*'` rather than `--tests` because `--tests` additionally selects the
+`table-view` bin as a test harness, which carries no tests.
+
+Target selection does **not** move the coverage population, and #1811 measured
+that rather than assuming it. `cargo llvm-cov` reports only files under
+`src-tauri/src/**`; no `tests/*.rs` row appears, so the ~13,200 lines of newly
+selected test source never enter the denominator and no
+`--ignore-filename-regex` is needed. Both target selections report the identical
+denominator — 93,156 regions / 8,358 functions / 65,311 lines — and `src/main.rs`
+(3 regions) plus `src/lib.rs` (528 regions, Tauri runtime wiring) sit at 0.00% in
+both, so target selection moves the numerator only.
+
+Measured runs on the #1811 branch:
+
+| Targets | Regions | Functions | Lines |
+|---|---:|---:|---:|
+| `--lib --test storage_integration` (narrow allowlist shape) | 75.13% | 72.37% | 75.45% |
+| `--lib --test '*'` (this gate) | **82.38%** | **77.95%** | **83.26%** |
+| Threshold | 80 | 75 | 80 |
+
+The glob run was `2,477 tests run: 2,477 passed, 11 skipped` across 76 binaries
+and exits 0 against the `--fail-under` flags. Every metric also clears the
+`docs/archives/audits/refactor-00-baseline-2026-06-09.md` 10-binary baseline
+(80.53 / 75.39 / 81.18): widening the target set raises coverage because the
+newly gated binaries execute more library code.
 
 Before #1811 the step carried a hand-maintained allowlist of 13 `--test` names.
 With `parse_sql_backend` covered by the macOS `rust` job, that left 61 of the 75
@@ -76,12 +99,31 @@ by #1065, and the DuckDB empty index/constraint stubs replaced by #1070.
 `scripts/hooks/test-ci-workflow-cache.sh` now fails if a named `--test <target>`
 allowlist reappears in that step.
 
-No binary is excluded. The only exclusions are test-level and declared in source:
+No binary is excluded. The only exclusions are test-level `#[ignore]`s declared
+in source — two binaries under `src-tauri/tests` plus two unit tests inside the
+`--lib` target the same command selects:
 
 | Excluded tests | Reason |
 |---|---|
 | `src-tauri/tests/oracle_smoke_boundary_probe.rs`, all 7 `#[ignore]` | Needs a live Oracle container seeded from `e2e/fixtures/seed.oracle.sql`. The image is amd64-only and the seed is not in the CI service set, so the binary is selected but runs zero tests. |
 | `src-tauri/tests/mysql_integration.rs`, 2 `#[ignore]` routine tests | `CREATE FUNCTION` is rejected by the sqlx prepared-statement protocol (MySQL error 1295). |
+| `src-tauri/src/db/mongodb/connection.rs:726`, 1 `#[ignore]` | Needs a live MongoDB: the test drives the `list_database_names` probe and the mutate path against a real server. Selected by `--lib`, never executed. |
+| `src-tauri/src/db/postgres/connection.rs:646`, 1 `#[ignore]` | Needs a live Postgres at `TEST_PG`: the cache-miss path opens a real pool. Selected by `--lib`, never executed. |
+
+One assertion — not a test — is conditionally skipped:
+`src-tauri/tests/snapshot_perf.rs` measures a p95 wall-clock budget for
+`get_initial_app_state_inner`. Under `-C instrument-coverage` every region
+carries a counter increment and nextest schedules the binary next to the
+container-heavy integration targets, so the number measures instrumentation
+overhead, not the query plan. `p95_budget_us()` returns `None` when
+`LLVM_PROFILE_FILE` is set (cargo-llvm-cov exports it into every instrumented
+test process): the samples and the `println!` still run, so a regression stays
+visible in the CI log, but the hard assert only fires on an uninstrumented
+build. The remaining wall-clock assertions in `src-tauri/tests` are
+cancellation-latency bounds (2-10s in `cancel_pg.rs`, `cancel_mysql.rs`,
+`cancel_mongo.rs`, `mssql_connection_routing.rs`, `query_integration.rs`,
+`mysql_integration.rs`) — coarse "must not hang" checks, not budgets, and safe
+under instrumentation.
 
 Docker-backed targets (`cancel_*`, `mariadb_returning_runtime`,
 `testcontainer_lifecycle_test`, the `*_integration` set) keep their silent-skip
@@ -89,10 +131,15 @@ semantics — `src-tauri/tests/common/mod.rs` returns `None` when a container
 cannot start and the test returns early. Docker is present on the CI runner, so
 they execute there for real.
 
-The macOS `Rust Unit And Storage Tests` job stays on
-`--lib --test storage_integration`: it is a second-platform smoke, not the
-contract owner, and widening it would spend macOS minutes re-running what the
-Linux coverage job already gates.
+The macOS `Rust Unit And Storage Tests` job stays narrow — `--lib --test
+storage_integration`, the `sql-parser-core` lib tests, and `--test
+parse_sql_backend`. It is a second-platform smoke, not the contract owner, so it
+is not widened to the glob: that would spend macOS minutes re-running what the
+Linux coverage job already gates. `parse_sql_backend` and `storage_integration`
+are now run twice (macOS here, Linux under `--test '*'`) and that duplication is
+deliberate: the macOS copies are the only non-Linux execution of the SQL parser
+bridge and the app-state storage layer, so #1811 widened the Linux gate without
+removing second-platform signal.
 
 ## Static Lint Gate
 
@@ -316,11 +363,16 @@ Required local evidence:
 - Frontend/build lane: `pnpm wasm:size`, `pnpm lint`,
   `pnpm test -- --run --coverage --coverage.reporter=text-summary`, and
   `pnpm build`.
-- Rust lane: `cargo test --manifest-path src-tauri/Cargo.toml --lib --test storage_integration`,
+- Rust lane (mirrors the `Rust Unit And Storage Tests` job):
+  `cargo test --manifest-path src-tauri/Cargo.toml --lib --test storage_integration`,
   `cargo test --manifest-path src-tauri/sql-parser-core/Cargo.toml --lib`, and
   `cargo test --manifest-path src-tauri/Cargo.toml --test parse_sql_backend`.
-- Docker integration lane: with required services available,
-  `cargo test --manifest-path src-tauri/Cargo.toml --test schema_integration --test query_integration --test mongo_integration --test fixture_loading --test redis_integration`.
+- Docker integration lane (mirrors the `Integration Tests (Docker)` job): with
+  required services available,
+  `cargo test --manifest-path src-tauri/Cargo.toml --lib --test '*'`. #1811
+  replaced the former five-name `--test` allowlist here with the same glob CI
+  uses — a hand-maintained list in either place drifts out of date silently, and
+  a release gate that runs less than CI is not a gate.
 - Documentation lane: docs changed for the release must pass Prettier and local
   link/target review for the touched docs.
 

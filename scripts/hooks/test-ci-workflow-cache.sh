@@ -173,7 +173,9 @@ assert_contains "$integration_run_step" "working-directory: src-tauri" "integrat
 assert_contains "$integration_run_step" "cargo llvm-cov nextest --profile push --lib --test '*'" "integration coverage command"
 # #1811 — the coverage run must select EVERY integration test binary through
 # cargo's glob target selection. A hand-maintained `--test <name>` allowlist is
-# what left 62 of 75 binaries unexecuted (and their contract assertions dead),
+# what left 61 of 75 binaries unexecuted (and their contract assertions dead —
+# 62 were outside the 13-name allowlist, minus parse_sql_backend which the macOS
+# rust job runs on its own),
 # so any named target here is a regression: newly added tests/*.rs files must be
 # gated automatically.
 assert_not_contains "$integration_run_step" "--test storage_integration" "integration coverage must not re-introduce a target allowlist"

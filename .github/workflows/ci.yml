@@ -537,11 +537,16 @@ jobs:
       # unrelated deliveries). `--lib --test '*'` is cargo's glob target
       # selection: it selects the lib test target plus every integration test
       # binary, so a newly added tests/*.rs file is gated the moment it lands
-      # and cannot silently rot again. `--lib --test '*'` (not bare/`--tests`)
-      # keeps src/main.rs out of the instrumented set so the thresholds still
-      # measure library code. Docker-gated targets silent-skip when their
-      # container cannot start, and Oracle's boundary probe stays `#[ignore]`d;
-      # see docs/contributor-guide/testing-and-quality.md.
+      # and cannot silently rot again. `--test '*'` rather than `--tests`
+      # because `--tests` additionally selects the `table-view` bin as a test
+      # harness, which carries no tests. The threshold POPULATION is unaffected
+      # either way: cargo-llvm-cov reports only src-tauri/src/** (no tests/*.rs
+      # row appears), and src/main.rs / src/lib.rs are already in it at 0%
+      # (3 and 528 regions of 93,156). Measured on the #1811 branch with this
+      # exact command: regions 82.38 / functions 77.95 / lines 83.26, 2477
+      # tests passed, 11 skipped, 76 binaries. Docker-gated targets silent-skip
+      # when their container cannot start, and Oracle's boundary probe stays
+      # `#[ignore]`d; see docs/contributor-guide/testing-and-quality.md.
       - name: Run integration coverage
         working-directory: src-tauri
         env:
