@@ -301,10 +301,19 @@ const SQLITE_RDB_CAPABILITIES: &[BackendAdapterCapability] = &[
     BackendAdapterCapability::RelationalQuery,
     BackendAdapterCapability::RelationalSchemaMutation,
 ];
+// Issue #1070 (ADR 0051 Stage 2) — the wired DuckdbAdapter now routes native
+// structural DDL (table create/drop/rename, column add/drop/type, index
+// create/drop) through `duckdb/ddl.rs`, so the declaration claims
+// `RelationalSchemaMutation` to match the wired path (like SQLite #1044).
+// Constraint DDL stays `Unsupported` (Stage 2b rebuild-swap); the flag reflects
+// support, not full DDL. Stage 1 already routed grid row edits through
+// `execute_sql_batch` on `RelationalQuery`. Locked by
+// `db/adapters/tests.rs::duckdb_adapter_declares_schema_mutation_stage2`.
 const DUCKDB_RDB_CAPABILITIES: &[BackendAdapterCapability] = &[
     BackendAdapterCapability::Lifecycle,
     BackendAdapterCapability::RelationalCatalog,
     BackendAdapterCapability::RelationalQuery,
+    BackendAdapterCapability::RelationalSchemaMutation,
 ];
 // Issue #1071 — the wired MssqlAdapter now routes structured table/index/
 // constraint DDL to the bounded T-SQL builder (`mssql/ddl.rs`), so the

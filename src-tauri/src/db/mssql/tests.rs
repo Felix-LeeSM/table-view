@@ -326,6 +326,8 @@ async fn catalog_surfaces_fail_locally_without_open_connection() {
     assert_not_open(RdbAdapter::list_schema_columns(&adapter, "dbo").await);
     assert_not_open(RdbAdapter::list_functions(&adapter, "dbo").await);
     assert_not_open(RdbAdapter::get_function_source(&adapter, "dbo", "touch_user").await);
+    // Issue #1071 (2차) — trigger introspection joins the connection guard set.
+    assert_not_open(RdbAdapter::list_triggers(&adapter, "dbo", "users").await);
 
     let err = RdbAdapter::switch_database(&adapter, " ")
         .await

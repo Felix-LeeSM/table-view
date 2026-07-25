@@ -292,6 +292,7 @@ export default function KvNewKeyDialog({
         {form.type === "json" && (
           <label className="grid gap-1 text-3xs text-muted-foreground">
             {t("kvNewKey.jsonValue")}
+            {/* eslint-disable no-restricted-syntax -- placeholder 는 JSON 형식 예시(기술 토큰), 번역 대상 아님 (#1074) */}
             <textarea
               aria-label={t("kvNewKey.jsonValue")}
               className="h-24 w-full resize-y rounded border border-border bg-background p-2 font-mono text-3xs outline-none"
@@ -299,6 +300,7 @@ export default function KvNewKeyDialog({
               onChange={(e) => patch({ jsonValue: e.target.value })}
               placeholder='{"field":"value"}'
             />
+            {/* eslint-enable no-restricted-syntax */}
           </label>
         )}
 

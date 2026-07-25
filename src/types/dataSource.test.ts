@@ -61,6 +61,8 @@ describe("DataSourceProfile registry", () => {
       alterTable: true,
       createIndex: true,
       dropObject: true,
+      alterConstraint: true,
+      identityColumn: true,
     },
     intelligence: { erd: true },
     // Issue #1073 — MySQL/MariaDB admin ops parity (no users: #1077 PG-first).
@@ -90,6 +92,10 @@ describe("DataSourceProfile registry", () => {
         alterTable: true,
         createIndex: true,
         dropObject: true,
+        alterConstraint: true,
+        identityColumn: true,
+        // Issue #1735 — PG emits COMMENT ON COLUMN via alter_table.
+        editColumnComment: true,
       },
       intelligence: { erd: true },
       operations: {
@@ -120,6 +126,23 @@ describe("DataSourceProfile registry", () => {
       // Issue #1070 — indexes/constraints backed by real duckdb_indexes() /
       // duckdb_constraints() introspection (was a silent Ok(vec![]) stub).
       catalog: { indexes: true, constraints: true },
+      // Issue #1070 (ADR 0051 Stage 1) — the wired `execute_sql_batch`
+      // BEGIN..COMMIT path (#1767) makes structured grid row edits real, so the
+      // profile declares editRows. `requiresPrimaryKeyForEdit` stays at the base
+      // (false): DuckDB rides the all-column WHERE fallback like PG/MySQL and
+      // relies on the backend single-row guard (`enforce_single_row_effect`).
+      edit: { editRows: true },
+      // Issue #1070 (ADR 0051 Stage 2) — native structural DDL is wired
+      // (`duckdb/ddl.rs`): table create/drop/rename, column add/drop/type, index
+      // create/drop. `alterConstraint` / `identityColumn` stay false (base) —
+      // DuckDB ALTER TABLE cannot add/drop constraints and has no identity
+      // emitter (both Stage 2b).
+      ddl: {
+        createTable: true,
+        alterTable: true,
+        createIndex: true,
+        dropObject: true,
+      },
     }),
     mssql: expectedCapabilities({
       connection: { test: true, readOnly: true },
@@ -135,6 +158,8 @@ describe("DataSourceProfile registry", () => {
         alterTable: true,
         createIndex: true,
         dropObject: true,
+        alterConstraint: true,
+        identityColumn: true,
       },
       intelligence: { erd: true },
       // Issue #1073 — SQL Server admin ops parity (no users: #1077 PG-first).
@@ -154,6 +179,10 @@ describe("DataSourceProfile registry", () => {
         alterTable: true,
         createIndex: true,
         dropObject: true,
+        alterConstraint: true,
+        identityColumn: true,
+        // Issue #1735 — Oracle emits COMMENT ON COLUMN via alter_table.
+        editColumnComment: true,
       },
       intelligence: { erd: true },
       // Issue #1073 — Oracle admin ops parity (no users: #1077 PG-first).
@@ -542,8 +571,15 @@ describe("DataSourceProfile registry", () => {
       filePicker: true,
     });
     expect(duckdb.capabilities.query.query).toBe(true);
-    expect(duckdb.capabilities.edit.editRows).toBe(false);
-    expect(duckdb.capabilities.ddl.createTable).toBe(false);
+    // #1070 (ADR 0051 Stage 1) — wired `execute_sql_batch` row edits (#1767).
+    expect(duckdb.capabilities.edit.editRows).toBe(true);
+    // #1070 (ADR 0051 Stage 2) — native structural DDL is wired; column/table/
+    // index actions claim true, but `alterConstraint` / `identityColumn` stay
+    // false (Stage 2b).
+    expect(duckdb.capabilities.ddl.createTable).toBe(true);
+    expect(duckdb.capabilities.ddl.alterTable).toBe(true);
+    expect(duckdb.capabilities.ddl.alterConstraint).toBe(false);
+    expect(duckdb.capabilities.ddl.identityColumn).toBe(false);
     expect(duckdb.backendAdapter).toEqual({
       id: "duckdb",
       kind: "rdb",
@@ -631,16 +667,18 @@ describe("DataSourceProfile registry", () => {
 });
 
 describe("supportsRowEditing — #1052 read-only-engine gate", () => {
-  it("is false for DuckDB (the only RDB with edit.editRows false)", () => {
-    expect(supportsRowEditing("duckdb")).toBe(false);
-  });
-
-  it("is true for engines that can edit rows", () => {
+  // Reason: ADR 0051 Stage 1 (#1070) wired the DuckDB `execute_sql_batch`
+  // BEGIN..COMMIT row-edit path (#1767), so DuckDB now declares
+  // `edit.editRows` and every RDB engine is row-editable — no RDB is left at
+  // the read-only base. Runtime read_only is a separate gate the DataGrid owns
+  // (2026-07-25).
+  it("is true for every RDB engine that can edit rows (DuckDB joined via #1070)", () => {
     for (const dbType of [
       "postgresql",
       "mysql",
       "mariadb",
       "sqlite",
+      "duckdb",
       "mssql",
       "oracle",
     ] as const) {

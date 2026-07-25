@@ -37,3 +37,22 @@ fn sqlite_adapter_topology_preserves_public_paths_and_contracts() {
     // the declaration claims RelationalSchemaMutation (#1044).
     assert!(profile.has_backend_capability(BackendAdapterCapability::RelationalSchemaMutation));
 }
+
+#[test]
+fn duckdb_adapter_declares_schema_mutation_stage2() {
+    // Issue #1070 (ADR 0051 Stage 2) — the DuckdbAdapter now wires native
+    // structural DDL (table create/drop/rename, column add/drop/type, index
+    // create/drop) in `duckdb/ddl.rs`, so it claims `RelationalSchemaMutation`
+    // (like SQLite #1044). This replaces the Stage-1 lock (which asserted the
+    // flag was OFF): the capability boundary moved with the wired DDL. Constraint
+    // DDL stays `Unsupported` (Stage 2b) — the coarse `RelationalSchemaMutation`
+    // reflects "some structural DDL", not full DDL; the per-action frontend
+    // `ddl.*` capabilities (incl. `alterConstraint`) express the exact surface.
+    let profile = get_data_source_profile(&DatabaseType::Duckdb);
+    assert_eq!(
+        profile.adapter_contract.kind,
+        BackendAdapterContractKind::Rdb
+    );
+    assert!(profile.has_backend_capability(BackendAdapterCapability::RelationalQuery));
+    assert!(profile.has_backend_capability(BackendAdapterCapability::RelationalSchemaMutation));
+}

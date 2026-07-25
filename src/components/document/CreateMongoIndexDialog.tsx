@@ -261,6 +261,7 @@ export function CreateMongoIndexDialog({
                     data-testid={`mongo-create-index-field-name-${i}`}
                     className="flex-1 rounded border border-border bg-background px-2 py-1.5 text-sm outline-none focus:border-primary"
                   />
+                  {/* eslint-disable-next-line no-restricted-syntax -- 기존 native <select>. cell-domain override 로 sprint-112 규칙이 무력화돼 있던 선재 부채, Radix <Select> 전환은 이 i18n 슬라이스(#1074) 밖 별도 후속 */}
                   <select
                     value={field.direction}
                     onChange={(e) =>
@@ -400,6 +401,7 @@ export function CreateMongoIndexDialog({
                 data-testid="mongo-create-index-collation-locale"
                 className="flex-1 rounded border border-border bg-background px-2 py-1.5 text-sm outline-none focus:border-primary"
               />
+              {/* eslint-disable-next-line no-restricted-syntax -- 기존 native <select>. cell-domain override 로 sprint-112 규칙이 무력화돼 있던 선재 부채, Radix <Select> 전환은 이 i18n 슬라이스(#1074) 밖 별도 후속 */}
               <select
                 value={collationStrength}
                 onChange={(e) => setCollationStrength(Number(e.target.value))}

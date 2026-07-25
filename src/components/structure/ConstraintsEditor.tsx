@@ -355,17 +355,20 @@ interface ConstraintsEditorProps {
   /** Called after a successful execute to trigger data refresh */
   onRefresh: () => Promise<void>;
   /**
-   * Issue #1618 (D1) — whether the engine's adapter can run the ALTER TABLE
-   * ADD/DROP CONSTRAINT path. Both add + drop constraint are ALTER TABLE forms
-   * (mirroring ColumnsEditor's add/drop column), so a single `alterTable` gate
-   * hides the Add Constraint button AND the per-row drop-constraint trash when
-   * the adapter rejects the write. Defaults to `true` so non-gating callers keep
-   * the prior surface; production passes `supportsDdl(dbType, "alterTable")`.
-   * Fixes the DuckDB fail-open (catalog.constraints true, so the Constraints tab
-   * shows, but the adapter returns Unsupported for add/drop) where the controls
-   * were click-then-error instead of hidden (#1046 disable-at-source).
+   * Issue #1618 (D1) / #1070 (ADR 0051 Stage 2) — whether the engine's adapter
+   * can run the `ALTER TABLE ADD/DROP CONSTRAINT` path. Both add + drop
+   * constraint are constraint-ALTER forms, so a single gate hides the Add
+   * Constraint button AND the per-row drop-constraint trash when the adapter
+   * rejects the write. Split from `alterTable` in Stage 2: column-ALTER and
+   * constraint-ALTER are independent (DuckDB does native column ALTER but cannot
+   * add/drop constraints), so production passes
+   * `supportsDdl(dbType, "alterConstraint")`. Defaults to `true` so non-gating
+   * callers keep the prior surface. Fixes the fail-open (catalog.constraints
+   * true, so the Constraints tab shows, but the adapter returns Unsupported for
+   * add/drop) where the controls were click-then-error instead of hidden
+   * (#1046 disable-at-source).
    */
-  canAlterTable?: boolean;
+  canAlterConstraint?: boolean;
 }
 
 export default function ConstraintsEditor({
@@ -377,7 +380,7 @@ export default function ConstraintsEditor({
   columns,
   onColumnsChange,
   onRefresh,
-  canAlterTable = true,
+  canAlterConstraint = true,
 }: ConstraintsEditorProps) {
   const { t } = useTranslation("structure");
   const [showAddConstraintModal, setShowAddConstraintModal] = useState(false);
@@ -522,7 +525,7 @@ export default function ConstraintsEditor({
         actions={
           // #1618 (D1) — Add Constraint hidden when the engine's adapter can't
           // run ALTER TABLE ADD CONSTRAINT.
-          canAlterTable ? (
+          canAlterConstraint ? (
             <Button
               variant="ghost"
               size="xs"
@@ -577,7 +580,7 @@ export default function ConstraintsEditor({
                     {/* #1618 (D1) — drop-constraint is an ALTER TABLE DROP
                         CONSTRAINT action; hidden when the adapter cannot run
                         it (disable-at-source, not click-then-error). */}
-                    {canAlterTable && (
+                    {canAlterConstraint && (
                       <Button
                         variant="ghost"
                         size="icon-xs"

@@ -312,6 +312,21 @@ WHERE owner = :1
   AND (:3 != '%' OR type IN ('PROCEDURE', 'FUNCTION', 'PACKAGE', 'PACKAGE BODY'))
 ORDER BY line";
 
+// #1072 (2차) — trigger list for one table. Only the VARCHAR2 dictionary
+// columns are read; the PL/SQL body (`all_triggers.trigger_body`) is a LONG
+// column the catalog browse deliberately avoids (same policy as
+// `all_views.text`), so the reconstructed definition is header-only.
+pub(super) const TRIGGERS_SQL: &str = "\
+SELECT trigger_name,
+       trigger_type,
+       triggering_event,
+       when_clause,
+       status
+FROM all_triggers
+WHERE table_owner = :1
+  AND table_name = :2
+ORDER BY trigger_name";
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -361,6 +376,28 @@ mod tests {
         assert!(ROUTINES_SQL.contains("PACKAGE"));
         assert!(ROUTINE_PARAMS_SQL.contains("all_arguments"));
         assert!(ROUTINE_SOURCE_SQL.contains("all_source"));
+    }
+
+    // Reason: #1072 (2차) — the trigger list must stay table-scoped by
+    // (table_owner, table_name) and must never read the LONG trigger_body /
+    // description columns (same LONG-avoidance policy as the view browse).
+    // (2026-07-25)
+    #[test]
+    fn trigger_query_is_table_scoped_and_avoids_long_body_columns() {
+        assert!(TRIGGERS_SQL.contains("all_triggers"));
+        assert!(TRIGGERS_SQL.contains("table_owner = :1"));
+        assert!(TRIGGERS_SQL.contains("table_name = :2"));
+        assert!(TRIGGERS_SQL.contains("trigger_type"));
+        assert!(TRIGGERS_SQL.contains("triggering_event"));
+        assert!(TRIGGERS_SQL.contains("when_clause"));
+        assert!(TRIGGERS_SQL.contains("status"));
+        assert!(TRIGGERS_SQL.contains("ORDER BY trigger_name"));
+
+        let lower = TRIGGERS_SQL.to_ascii_lowercase();
+        assert!(
+            !lower.contains("trigger_body") && !lower.contains("description"),
+            "Oracle trigger browse must not read LONG trigger_body/description columns"
+        );
     }
 
     #[test]

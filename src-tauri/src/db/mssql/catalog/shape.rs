@@ -1,6 +1,8 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 
-use crate::models::{ColumnInfo, ConstraintInfo, FunctionInfo, IndexInfo, TableInfo, ViewInfo};
+use crate::models::{
+    ColumnInfo, ConstraintInfo, FunctionInfo, IndexInfo, TableInfo, TriggerInfo, ViewInfo,
+};
 
 use super::decode::map_mssql_data_type;
 
@@ -67,6 +69,18 @@ pub(super) struct MssqlRoutineParamCatalogRow {
     pub(super) parameter_name: String,
     pub(super) data_type: String,
     pub(super) is_output: bool,
+}
+
+#[derive(Debug, Clone)]
+pub(super) struct MssqlTriggerCatalogRow {
+    pub(super) name: String,
+    /// `sys.triggers.is_instead_of_trigger` — SQL Server DML triggers are
+    /// either `INSTEAD OF` or `AFTER` (there is no `BEFORE`).
+    pub(super) is_instead_of: bool,
+    /// One `sys.trigger_events.type_desc` — `INSERT` / `UPDATE` / `DELETE`.
+    pub(super) event: String,
+    /// `OBJECT_DEFINITION` body — `None` for `WITH ENCRYPTION` triggers.
+    pub(super) definition: Option<String>,
 }
 
 pub(super) fn build_tables(schema: &str, rows: Vec<MssqlTableCatalogRow>) -> Vec<TableInfo> {
@@ -245,10 +259,105 @@ pub(super) fn build_functions(
         .collect()
 }
 
+/// Issue #1071 (2차) — fold the per-event `sys.trigger_events` rows into one
+/// `TriggerInfo` per trigger. SQL Server DML triggers are statement-level and
+/// carry an inline T-SQL body (no separate trigger function), so `orientation`
+/// is always `STATEMENT` and `function_name` is left empty — the same non-PG
+/// mapping the MySQL adapter uses onto the shared `TriggerInfo` shape.
+pub(super) fn build_triggers(
+    schema: &str,
+    table: &str,
+    rows: Vec<MssqlTriggerCatalogRow>,
+) -> Vec<TriggerInfo> {
+    // BTreeMap keeps triggers name-ordered (matching the SQL `ORDER BY`) and
+    // dedups the multi-event fan-out into one entry with accumulated events.
+    let mut folded: BTreeMap<String, (bool, Vec<String>, Option<String>)> = BTreeMap::new();
+    for row in rows {
+        let entry = folded
+            .entry(row.name)
+            .or_insert_with(|| (row.is_instead_of, Vec::new(), row.definition.clone()));
+        if !entry.1.contains(&row.event) {
+            entry.1.push(row.event);
+        }
+    }
+
+    folded
+        .into_iter()
+        .map(|(name, (is_instead_of, events, definition))| TriggerInfo {
+            name,
+            schema: schema.to_string(),
+            table: table.to_string(),
+            timing: if is_instead_of { "INSTEAD OF" } else { "AFTER" }.to_string(),
+            events,
+            orientation: "STATEMENT".to_string(),
+            function_schema: schema.to_string(),
+            function_name: String::new(),
+            arguments: None,
+            when_expression: None,
+            definition: definition.unwrap_or_default(),
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::models::ColumnCategory;
+
+    // Reason: 회귀 #1071 (2차) — SQL Server trigger 목록은 이전엔 trait default
+    // `Ok(Vec::new())` 스텁이라 스키마 트리에 항상 빈 목록이었다. 실 DB 없이
+    // fold/매핑 로직을 고정: multi-event 행이 한 TriggerInfo 로 접히고, events 가
+    // 누적되며, INSTEAD OF/AFTER timing 매핑 + statement 지향 + inline-body
+    // placeholder(function_name 공백) + WITH ENCRYPTION NULL body 를 검증
+    // 한다 (2026-07-25).
+    #[test]
+    fn build_triggers_folds_events_and_maps_sql_server_semantics() {
+        let triggers = build_triggers(
+            "dbo",
+            "users",
+            vec![
+                MssqlTriggerCatalogRow {
+                    name: "trg_audit".into(),
+                    is_instead_of: false,
+                    event: "INSERT".into(),
+                    definition: Some("CREATE TRIGGER trg_audit ...".into()),
+                },
+                MssqlTriggerCatalogRow {
+                    name: "trg_audit".into(),
+                    is_instead_of: false,
+                    event: "UPDATE".into(),
+                    definition: Some("CREATE TRIGGER trg_audit ...".into()),
+                },
+                MssqlTriggerCatalogRow {
+                    name: "trg_guard".into(),
+                    is_instead_of: true,
+                    event: "DELETE".into(),
+                    definition: None,
+                },
+            ],
+        );
+
+        assert_eq!(triggers.len(), 2);
+
+        // BTreeMap orders by name — `trg_audit` before `trg_guard`.
+        let audit = &triggers[0];
+        assert_eq!(audit.name, "trg_audit");
+        assert_eq!(audit.schema, "dbo");
+        assert_eq!(audit.table, "users");
+        assert_eq!(audit.timing, "AFTER");
+        assert_eq!(audit.events, vec!["INSERT", "UPDATE"]);
+        assert_eq!(audit.orientation, "STATEMENT");
+        assert_eq!(audit.function_schema, "dbo");
+        assert!(audit.function_name.is_empty());
+        assert_eq!(audit.definition, "CREATE TRIGGER trg_audit ...");
+
+        let guard = &triggers[1];
+        assert_eq!(guard.name, "trg_guard");
+        assert_eq!(guard.timing, "INSTEAD OF");
+        assert_eq!(guard.events, vec!["DELETE"]);
+        // WITH ENCRYPTION trigger — OBJECT_DEFINITION is NULL, coalesced to empty.
+        assert_eq!(guard.definition, "");
+    }
 
     fn column(name: &str, data_type: &str, base: &str) -> MssqlColumnCatalogRow {
         MssqlColumnCatalogRow {

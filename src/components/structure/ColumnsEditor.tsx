@@ -80,6 +80,14 @@ interface EditableColumnRowProps {
    * view of the column. Unsupported = hidden, not click-then-error (#1046).
    */
   canAlterTable: boolean;
+  /**
+   * Issue #1735 — when false the comment cell stays read-only even in edit
+   * mode (the engine's adapter defers COMMENT ON COLUMN emit — MySQL/MSSQL/
+   * SQLite/DuckDB). True only for PG + Oracle. Separate from `canAlterTable`
+   * so a MySQL/MSSQL row can still edit type/nullable/default while the comment
+   * stays a read-only view.
+   */
+  canEditColumnComment: boolean;
 }
 
 function EditableColumnRow({
@@ -94,11 +102,15 @@ function EditableColumnRow({
   schema,
   tableName,
   canAlterTable,
+  canEditColumnComment,
 }: EditableColumnRowProps) {
   const { t } = useTranslation("structure");
   const [dataType, setDataType] = useState(col.data_type);
   const [nullable, setNullable] = useState(col.nullable);
   const [defaultValue, setDefaultValue] = useState(col.default_value ?? "");
+  // #1735 — column comment draft. Initialised from the current comment
+  // ("" when null) so `hasCommentChange` detects both edits and clears.
+  const [comment, setComment] = useState(col.comment ?? "");
   // Sprint 237 — free-text USING cast expression. Rendered only when the
   // user has chosen a NEW data type (i.e. `dataType !== col.data_type`).
   // Cleared when the user reverts to the original type so a stale value
@@ -186,8 +198,18 @@ function EditableColumnRow({
     const hasNullableChange = nullable !== col.nullable;
     const hasDefaultChange =
       (defaultValue || null) !== (col.default_value ?? null);
+    // #1735 — comment diff is only meaningful where the engine emits it.
+    // Compare against the current comment ("" when null); an emptied field is a
+    // real change (clear → IS NULL).
+    const hasCommentChange =
+      canEditColumnComment && comment !== (col.comment ?? "");
 
-    if (!hasDataTypeChange && !hasNullableChange && !hasDefaultChange) {
+    if (
+      !hasDataTypeChange &&
+      !hasNullableChange &&
+      !hasDefaultChange &&
+      !hasCommentChange
+    ) {
       onCancelEdit();
       return;
     }
@@ -207,6 +229,9 @@ function EditableColumnRow({
       new_nullable: hasNullableChange ? nullable : null,
       new_default_value: hasDefaultChange ? defaultValue || null : null,
       using_expression: usingPayload,
+      // #1735 — send the raw draft (incl. "" for an explicit clear) only
+      // when changed; `null` means "comment unchanged" (backend skips it).
+      new_comment: hasCommentChange ? comment : null,
     });
   };
 
@@ -336,7 +361,19 @@ function EditableColumnRow({
       <td
         className={`${STRUCTURE_TD} max-w-50 truncate text-muted-foreground !border-r-0`}
       >
-        {col.comment ?? "\u2014"}
+        {/* #1735 \u2014 comment editable only when the engine emits COMMENT ON
+            COLUMN (PG/Oracle); otherwise it stays a read-only view. */}
+        {isEditing && canEditColumnComment ? (
+          <input
+            className={inputClass}
+            value={comment}
+            onChange={(e) => setComment(e.target.value)}
+            aria-label={t("col.commentAria", { name: col.name })}
+            placeholder={t("col.commentPlaceholder")}
+          />
+        ) : (
+          (col.comment ?? "\u2014")
+        )}
       </td>
       <td className={STRUCTURE_TD_ACTIONS}>
         {/* #1460 — Edit / Delete are ALTER TABLE operations; hidden when the
@@ -437,6 +474,13 @@ interface ColumnsEditorProps {
    * caller passes `supportsDdl(dbType, "alterTable")`.
    */
   canAlterTable?: boolean;
+  /**
+   * Issue #1735 — whether the comment cell is editable (engine emits
+   * COMMENT ON COLUMN). Defaults to `true` so callers that don't gate keep the
+   * editable surface (same affordance-preserving fallback as `canAlterTable`);
+   * the production caller passes `supportsDdl(dbType, "editColumnComment")`.
+   */
+  canEditColumnComment?: boolean;
 }
 
 export default function ColumnsEditor({
@@ -448,6 +492,7 @@ export default function ColumnsEditor({
   onRefresh,
   paradigm,
   canAlterTable = true,
+  canEditColumnComment = true,
 }: ColumnsEditorProps) {
   const { t } = useTranslation("structure");
   // `getParadigmVocabulary` enforces the `undefined → rdb` fallback in
@@ -668,6 +713,7 @@ export default function ColumnsEditor({
                 schema={schema}
                 tableName={table}
                 canAlterTable={canAlterTable}
+                canEditColumnComment={canEditColumnComment}
               />
             ))}
             {/* Sprint 236 \u2014 inline `NewColumnRow` + pending-add row

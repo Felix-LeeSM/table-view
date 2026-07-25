@@ -136,8 +136,9 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
   // affordance matches what the wired adapter can execute: Create Table →
   // `createTable`, Rename (ALTER TABLE RENAME) → `alterTable`, Drop →
   // `dropObject`. SQLite claims only `createTable`, so its Rename/Drop entries
-  // are hidden while Create Table stays; DuckDB/MSSQL/Oracle claim none (all
-  // hidden). Unsupported = HIDDEN, not click-then-error (#1046). An unknown /
+  // are hidden while Create Table stays; DuckDB (#1070), MSSQL (#1071) and
+  // Oracle (#1072) claim all three, so every entry shows.
+  // Unsupported = HIDDEN, not click-then-error (#1046). An unknown /
   // still-loading dbType returns true for each so entries aren't stripped early.
   const canCreateTable = supportsDdl(dbType, "createTable");
   const canAlterTable = supportsDdl(dbType, "alterTable");
@@ -640,20 +641,6 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
             )}
           </div>
         )}
-
-        {/* #1218 — Pinned + Recent table sections. Rendered above the tree and
-          outside `role="tree"` so their native <button> rows stay
-          keyboard-reachable without touching the tree's roving-tabindex
-          model (#1129). Clicking a row reuses `handleTableClick` — the same
-          entry point as a tree node click. */}
-        {db && (
-          <PinnedRecentSections
-            connectionId={connectionId}
-            db={db}
-            treeShape={treeShape}
-            onOpenTable={actions.handleTableClick}
-          />
-        )}
       </div>
 
       {/* #1587 — initial-load skeleton. Before any schema resolves the tree
@@ -713,6 +700,22 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
           </div>
         )}
       </div>
+
+      {/* #1218 / #1738 — Pinned + Recent table sections. Moved BELOW the tree
+          (was above) so they no longer push the more-important schema tree
+          down; Recent collapses to 0 by default (PinnedRecentSections'
+          0-cap). Still outside `role="tree"` so their native <button> rows
+          stay keyboard-reachable without touching the tree's roving-tabindex
+          model (#1129). Clicking a row reuses `handleTableClick` — the same
+          entry point as a tree node click. */}
+      {db && (
+        <PinnedRecentSections
+          connectionId={connectionId}
+          db={db}
+          treeShape={treeShape}
+          onOpenTable={actions.handleTableClick}
+        />
+      )}
 
       {/* Sprint 235 — Phase 27 Rename / Drop modal slots replacing the
           legacy minimal confirm-dialog versions. The slot wrappers

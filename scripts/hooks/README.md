@@ -45,7 +45,10 @@ Current dispatchers:
 - `check-signed-commits.sh` — pre-push outgoing signed-commit gate.
 - `pre-push-path-router.sh` — path-sensitive pre-push TS/Rust gate router. Also
   runs `scripts/check-memory-paths.ts` (reverse code->memory path-citation gate)
-  when memory changes or a push drops/renames a path.
+  when memory changes or a push drops/renames a path, and
+  `scripts/check-agents-matrix-coverage.ts` (issue #1755 — fails when a memory
+  room referenced by >=7 by-task intents is missing from the `AGENTS.md` matrix)
+  when memory or `AGENTS.md` changes.
 - `post-tool-use.sh` — post-edit formatter/check dispatcher.
 - `pr-create-reminder.sh` — PostToolUse(Bash) soft 넛지: 명령이 `gh pr create` 를
   포함하면 델리버리 T4(pr-reviewer read-only) 리뷰를 잊지 않도록 additionalContext

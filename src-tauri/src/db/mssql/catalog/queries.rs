@@ -308,6 +308,25 @@ WHERE s.name = @P1
   AND o.type IN (N'P', N'FN', N'IF', N'TF', N'FS', N'FT')
   AND o.is_ms_shipped = 0";
 
+// Issue #1071 (2차) — DML triggers attached to (schema @P1, table @P2). The
+// `sys.tables` join scopes to table-parented triggers (DDL/server triggers have
+// `parent_id = 0`), while `sys.trigger_events` fans one row per fired event
+// (INSERT/UPDATE/DELETE) so the shape layer can fold them into one TriggerInfo.
+// `OBJECT_DEFINITION` is the trigger body (NULL for WITH ENCRYPTION).
+pub(super) const TRIGGERS_SQL: &str = "\
+SELECT tr.name AS trigger_name,
+       tr.is_instead_of_trigger,
+       te.type_desc AS event_type,
+       OBJECT_DEFINITION(tr.object_id) AS definition
+FROM sys.triggers AS tr
+JOIN sys.tables AS t ON t.object_id = tr.parent_id
+JOIN sys.schemas AS s ON s.schema_id = t.schema_id
+JOIN sys.trigger_events AS te ON te.object_id = tr.object_id
+WHERE s.name = @P1
+  AND t.name = @P2
+  AND tr.is_ms_shipped = 0
+ORDER BY tr.name, te.type_desc";
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -338,10 +357,28 @@ mod tests {
             INDEXES_SQL,
             CONSTRAINTS_SQL,
             ROUTINE_SOURCE_SQL,
+            TRIGGERS_SQL,
         ] {
             assert!(sql.contains("@P1"));
             assert!(sql.contains("@P2"));
         }
+    }
+
+    // Reason: 회귀 #1071 (2차) — SQL Server trigger introspection 은 이전엔 trait
+    // default `Ok(Vec::new())` 스텁이라 항상 빈 목록이었다. 실 DB 없이 catalog
+    // 쿼리가 DML trigger 계약(sys.triggers ⨝ sys.trigger_events, 시스템 trigger
+    // 제외, per-event fan-out, body 는 OBJECT_DEFINITION)을 유지하는지 고정
+    // 한다 (2026-07-25).
+    #[test]
+    fn triggers_query_keeps_dml_trigger_contract() {
+        assert!(TRIGGERS_SQL.contains("sys.triggers"));
+        assert!(TRIGGERS_SQL.contains("sys.trigger_events"));
+        assert!(TRIGGERS_SQL.contains("is_instead_of_trigger"));
+        assert!(TRIGGERS_SQL.contains("OBJECT_DEFINITION(tr.object_id)"));
+        // Table scope + system-trigger filter + deterministic ordering.
+        assert!(TRIGGERS_SQL.contains("t.name = @P2"));
+        assert!(TRIGGERS_SQL.contains("tr.is_ms_shipped = 0"));
+        assert!(TRIGGERS_SQL.contains("ORDER BY"));
     }
 
     #[test]

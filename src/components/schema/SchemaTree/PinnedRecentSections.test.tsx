@@ -60,8 +60,10 @@ describe("PinnedRecentSections", () => {
         onOpenTable={vi.fn()}
       />,
     );
-    expect(screen.getByText("public.users")).toBeInTheDocument();
     expect(screen.getByText("recentHeader")).toBeInTheDocument();
+    // #1738 — recents collapse to 0 by default; expand to reveal the row.
+    fireEvent.click(screen.getByTestId("recent-tables-collapse"));
+    expect(screen.getByText("public.users")).toBeInTheDocument();
   });
 
   it("shows the bare table for flat SQLite (schema null)", () => {
@@ -83,6 +85,8 @@ describe("PinnedRecentSections", () => {
         onOpenTable={vi.fn()}
       />,
     );
+    // #1738 — collapsed by default; expand to reveal the bare-table row.
+    fireEvent.click(screen.getByTestId("recent-tables-collapse"));
     expect(screen.getByText("todos")).toBeInTheDocument();
   });
 
@@ -106,6 +110,8 @@ describe("PinnedRecentSections", () => {
         onOpenTable={onOpenTable}
       />,
     );
+    // #1738 — collapsed by default; expand before clicking the recent row.
+    fireEvent.click(screen.getByTestId("recent-tables-collapse"));
     fireEvent.click(screen.getByText("public.users"));
     expect(onOpenTable).toHaveBeenCalledWith("users", "public");
   });
@@ -142,14 +148,17 @@ describe("PinnedRecentSections", () => {
     expect(screen.getAllByText("public.orders")).toHaveLength(1);
   });
 
-  it("caps Recent to the shared default and expands via the collapse toggle (#1309)", () => {
+  // Reason: #1738 (2026-07-25) — "접으면 완전 숨김(0개; 접힘 시 slice 5→0)".
+  // 최근 테이블 섹션은 shared HISTORY_DEFAULT_VISIBLE(5) 대신 0-cap 을 써서
+  // 접힘(기본) 상태에서 행을 하나도 렌더하지 않고, 펼치면 전부 노출한다.
+  it("hides all recent rows while collapsed and reveals them on expand (#1738)", () => {
     seed(
-      range(7).map((i) => ({
+      range(3).map((i) => ({
         connectionId: "pg1",
         db: "app",
         schema: "public",
         table: `t${i}`,
-        lastUsed: 100 - i, // t0 is most-recent, t6 the oldest
+        lastUsed: 100 - i, // t0 most-recent
         pinnedAt: null,
       })),
     );
@@ -161,29 +170,41 @@ describe("PinnedRecentSections", () => {
         onOpenTable={vi.fn()}
       />,
     );
-    // 7 recents, cap 5 → most-recent 5 shown, oldest 2 hidden behind the toggle.
-    expect(screen.getByText("public.t0")).toBeInTheDocument();
-    expect(screen.queryByText("public.t6")).toBeNull();
+    // Collapsed by default → header + toggle present, but ZERO recent rows.
+    expect(screen.getByText("recentHeader")).toBeInTheDocument();
+    expect(screen.queryByText("public.t0")).toBeNull();
+    expect(screen.queryByText("public.t2")).toBeNull();
 
     const toggle = screen.getByTestId("recent-tables-collapse");
     expect(toggle).toHaveAttribute("aria-expanded", "false");
     fireEvent.click(toggle);
 
     expect(toggle).toHaveAttribute("aria-expanded", "true");
-    expect(screen.getByText("public.t6")).toBeInTheDocument();
+    expect(screen.getByText("public.t0")).toBeInTheDocument();
+    expect(screen.getByText("public.t2")).toBeInTheDocument();
   });
 
-  it("does not render the collapse toggle when Recent is at or below the cap", () => {
-    seed(
-      range(4).map((i) => ({
+  // Reason: #1738 (2026-07-25) — recent 의 0-cap 접힘은 pinned 섹션에 영향
+  // 없음. pinned 은 항상 노출되고, recent 만 접힘(0개) 대상이다.
+  it("keeps pinned rows visible while recent rows stay collapsed (#1738)", () => {
+    seed([
+      {
         connectionId: "pg1",
         db: "app",
         schema: "public",
-        table: `t${i}`,
-        lastUsed: 100 - i,
-        pinnedAt: null,
-      })),
-    );
+        table: "orders",
+        lastUsed: 30,
+        pinnedAt: 5, // pinned
+      },
+      {
+        connectionId: "pg1",
+        db: "app",
+        schema: "public",
+        table: "users",
+        lastUsed: 20,
+        pinnedAt: null, // recent-only
+      },
+    ]);
     render(
       <PinnedRecentSections
         connectionId="pg1"
@@ -192,7 +213,10 @@ describe("PinnedRecentSections", () => {
         onOpenTable={vi.fn()}
       />,
     );
-    expect(screen.queryByTestId("recent-tables-collapse")).toBeNull();
+    // pinned row always visible; recent row hidden until expanded.
+    expect(screen.getByText("public.orders")).toBeInTheDocument();
+    expect(screen.queryByText("public.users")).toBeNull();
+    expect(screen.getByTestId("recent-tables-collapse")).toBeInTheDocument();
   });
 
   it("the pin toggle unpins a pinned table via the store", () => {
@@ -252,7 +276,9 @@ describe("PinnedRecentSections", () => {
         onOpenTable={vi.fn()}
       />,
     );
-    // users is under Recent; orders is under Pinned.
+    // users is under Recent; orders is under Pinned. #1738 — Recent is
+    // collapsed by default, so expand it to observe the recent row first.
+    fireEvent.click(screen.getByTestId("recent-tables-collapse"));
     expect(screen.getByText("public.users")).toBeInTheDocument();
     fireEvent.click(screen.getByLabelText("clearRecentTablesAria"));
     // Recent row gone; pinned row still present.

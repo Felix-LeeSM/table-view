@@ -50,6 +50,8 @@ export default function CreateTableDialog(props: CreateTableDialogProps) {
     activeTab,
     setActiveTab,
     canPreview,
+    canDeclareConstraints,
+    canDeclareIdentity,
     showDdl,
     handleShowDdl,
     columns,
@@ -226,22 +228,29 @@ export default function CreateTableDialog(props: CreateTableDialogProps) {
                       </span>
                     )}
                   </TabsTrigger>
-                  <TabsTrigger value="foreign_keys" className="rounded-none">
-                    {t("createTable.tabConstraints")}
-                    {declaredConstraintsForChain.length > 0 && (
-                      <span className="ml-1 text-3xs text-muted-foreground">
-                        (
-                        {[
-                          fks.length > 0 ? `FK ${fks.length}` : null,
-                          checks.length > 0 ? `CHK ${checks.length}` : null,
-                          uniques.length > 0 ? `UQ ${uniques.length}` : null,
-                        ]
-                          .filter((s): s is string => s !== null)
-                          .join(" · ")}
-                        )
-                      </span>
-                    )}
-                  </TabsTrigger>
+                  {/* Issue #1070 — the Constraints tab (FK / CHECK / UNIQUE)
+                      fans out into `add_constraint`, which DuckDB rejects until
+                      the Stage 2b rebuild-swap lands. Unsupported = hidden
+                      (#1046), so the trigger and its panel are not rendered at
+                      all for such engines. */}
+                  {canDeclareConstraints && (
+                    <TabsTrigger value="foreign_keys" className="rounded-none">
+                      {t("createTable.tabConstraints")}
+                      {declaredConstraintsForChain.length > 0 && (
+                        <span className="ml-1 text-3xs text-muted-foreground">
+                          (
+                          {[
+                            fks.length > 0 ? `FK ${fks.length}` : null,
+                            checks.length > 0 ? `CHK ${checks.length}` : null,
+                            uniques.length > 0 ? `UQ ${uniques.length}` : null,
+                          ]
+                            .filter((s): s is string => s !== null)
+                            .join(" · ")}
+                          )
+                        </span>
+                      )}
+                    </TabsTrigger>
+                  )}
                 </TabsList>
 
                 {/* Columns tab */}
@@ -269,6 +278,8 @@ export default function CreateTableDialog(props: CreateTableDialogProps) {
                     onRemoveColumn={handleRemoveColumn}
                     onUpdateColumn={handleUpdateColumn}
                     onMoveColumn={handleMoveColumn}
+                    showInlineConstraints={canDeclareConstraints}
+                    showIdentity={canDeclareIdentity}
                   />
                 </TabsContent>
 
@@ -306,40 +317,42 @@ export default function CreateTableDialog(props: CreateTableDialogProps) {
                 </TabsContent>
 
                 {/* Foreign Keys tab — Sprint 229 editor (extracted body) */}
-                <TabsContent
-                  value="foreign_keys"
-                  className="pt-3 data-[state=inactive]:hidden"
-                  data-testid="create-table-foreign-keys-panel"
-                  forceMount
-                >
-                  <ForeignKeysTabBody
-                    fks={fks}
-                    checks={checks}
-                    uniques={uniques}
-                    availableColumns={validPkColumns}
-                    availableSchemas={schemaOptions}
-                    refTablesByKey={refTablesByKey}
-                    refColumnsByKey={refColumnsByKey}
-                    fkRefColumnsLoadingByTrackingId={
-                      fkRefColumnsLoadingByTrackingId
-                    }
-                    onAddFk={handleAddFk}
-                    onRemoveFk={handleRemoveFk}
-                    onUpdateFk={handleUpdateFk}
-                    onToggleFkLocalColumn={handleToggleFkLocalColumn}
-                    onToggleFkRefColumn={handleToggleFkRefColumn}
-                    onAddCheck={handleAddCheck}
-                    onRemoveCheck={handleRemoveCheck}
-                    onUpdateCheck={handleUpdateCheck}
-                    onAddUnique={handleAddUnique}
-                    onRemoveUnique={handleRemoveUnique}
-                    onUpdateUnique={handleUpdateUnique}
-                    onToggleUniqueColumn={handleToggleUniqueColumn}
-                    onMoveFk={handleMoveFk}
-                    onMoveCheck={handleMoveCheck}
-                    onMoveUnique={handleMoveUnique}
-                  />
-                </TabsContent>
+                {canDeclareConstraints && (
+                  <TabsContent
+                    value="foreign_keys"
+                    className="pt-3 data-[state=inactive]:hidden"
+                    data-testid="create-table-foreign-keys-panel"
+                    forceMount
+                  >
+                    <ForeignKeysTabBody
+                      fks={fks}
+                      checks={checks}
+                      uniques={uniques}
+                      availableColumns={validPkColumns}
+                      availableSchemas={schemaOptions}
+                      refTablesByKey={refTablesByKey}
+                      refColumnsByKey={refColumnsByKey}
+                      fkRefColumnsLoadingByTrackingId={
+                        fkRefColumnsLoadingByTrackingId
+                      }
+                      onAddFk={handleAddFk}
+                      onRemoveFk={handleRemoveFk}
+                      onUpdateFk={handleUpdateFk}
+                      onToggleFkLocalColumn={handleToggleFkLocalColumn}
+                      onToggleFkRefColumn={handleToggleFkRefColumn}
+                      onAddCheck={handleAddCheck}
+                      onRemoveCheck={handleRemoveCheck}
+                      onUpdateCheck={handleUpdateCheck}
+                      onAddUnique={handleAddUnique}
+                      onRemoveUnique={handleRemoveUnique}
+                      onUpdateUnique={handleUpdateUnique}
+                      onToggleUniqueColumn={handleToggleUniqueColumn}
+                      onMoveFk={handleMoveFk}
+                      onMoveCheck={handleMoveCheck}
+                      onMoveUnique={handleMoveUnique}
+                    />
+                  </TabsContent>
+                )}
               </Tabs>
             </div>
           </DialogShell.Body>

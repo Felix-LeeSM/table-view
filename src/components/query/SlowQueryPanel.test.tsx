@@ -2,9 +2,15 @@
 // dispatches the paradigm-neutral `slow_queries` IPC through
 // `@/lib/api/slowQueries` and renders the top-N table.
 
-import { render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 const sqMock = vi.fn();
 
@@ -121,5 +127,64 @@ describe("SlowQueryPanel (Sprint 340 U5 live wire)", () => {
     await waitFor(() => expect(sqMock).toHaveBeenCalledTimes(1));
     await user.click(screen.getByTestId("slow-query-refresh"));
     await waitFor(() => expect(sqMock).toHaveBeenCalledTimes(2));
+  });
+});
+
+// #1077 admin-parity Stage 3 (2026-07-25) — snapshot panel promoted to an
+// auto-polling dashboard. Cadence is asserted with deterministic fake
+// timers; the trend is a session-local sparkline (no persistence).
+describe("SlowQueryPanel — #1077 Stage 3 profiler dashboard", () => {
+  const twoRows = [pgStub[0], { ...pgStub[0], query: "SELECT 2" }];
+
+  beforeEach(() => {
+    sqMock.mockReset();
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("auto-polls slow_queries and updates the tracked-count trend", async () => {
+    sqMock.mockResolvedValue(pgStub);
+    render(<SlowQueryPanel connectionId="conn-pg" dbType="postgresql" />);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(sqMock).toHaveBeenCalledTimes(1);
+    expect(sqMock).toHaveBeenCalledWith("conn-pg", 25);
+    expect(screen.getByTestId("slow-query-count")).toHaveTextContent(
+      "Tracked: 1",
+    );
+
+    // A second slow query appears before the next 15s poll tick.
+    sqMock.mockResolvedValue(twoRows);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(15000);
+    });
+    expect(sqMock).toHaveBeenCalledTimes(2);
+    expect(screen.getByTestId("slow-query-count")).toHaveTextContent(
+      "Tracked: 2",
+    );
+
+    const trend = screen.getByTestId("slow-query-trend");
+    expect(trend).toHaveAttribute("role", "img");
+    expect(trend).toHaveAccessibleName("Slow query count trend");
+  });
+
+  it("stops polling once the live toggle is switched off", async () => {
+    sqMock.mockResolvedValue(pgStub);
+    render(<SlowQueryPanel connectionId="conn-pg" dbType="postgresql" />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(sqMock).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByTestId("slow-query-autorefresh"));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(45000);
+    });
+    expect(sqMock).toHaveBeenCalledTimes(1);
   });
 });
