@@ -201,6 +201,7 @@ async fn alter_table_preview_emits_tsql_statement_chain() {
                 new_nullable: Some(false),
                 new_default_value: None,
                 using_expression: None,
+                new_comment: None,
             },
             ColumnChange::Drop {
                 name: "legacy".into(),
@@ -247,6 +248,7 @@ async fn alter_table_modify_swaps_the_column_default_constraint() {
         new_nullable: Some(false),
         new_default_value: Some("N'active'".into()),
         using_expression: None,
+        new_comment: None,
     });
 
     let sql = MssqlAdapter::new().alter_table(&req).await.unwrap().sql;
@@ -280,6 +282,7 @@ async fn alter_table_modify_default_only_skips_alter_column_and_guards_fragments
         new_nullable: None,
         new_default_value: Some("N'active'".into()),
         using_expression: None,
+        new_comment: None,
     });
     let sql = MssqlAdapter::new()
         .alter_table(&default_only)
@@ -302,6 +305,7 @@ async fn alter_table_modify_default_only_skips_alter_column_and_guards_fragments
         new_nullable: Some(false),
         new_default_value: None,
         using_expression: None,
+        new_comment: None,
     });
     assert_validation(
         MssqlAdapter::new().alter_table(&nullability_only).await,
@@ -314,6 +318,7 @@ async fn alter_table_modify_default_only_skips_alter_column_and_guards_fragments
         new_nullable: None,
         new_default_value: Some("   ".into()),
         using_expression: None,
+        new_comment: None,
     });
     assert_validation(
         MssqlAdapter::new().alter_table(&empty_change).await,
@@ -326,6 +331,7 @@ async fn alter_table_modify_default_only_skips_alter_column_and_guards_fragments
         new_nullable: None,
         new_default_value: Some("0; DROP TABLE [dbo].[audit]".into()),
         using_expression: None,
+        new_comment: None,
     });
     assert_validation(
         MssqlAdapter::new().alter_table(&injected_default).await,
@@ -448,6 +454,7 @@ async fn structured_ddl_rejects_unsupported_mssql_boundaries() {
             new_nullable: None,
             new_default_value: None,
             using_expression: Some("LOWER(email)".into()),
+            new_comment: None,
         }],
         preview_only: true,
         expected_database: None,

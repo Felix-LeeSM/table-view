@@ -120,6 +120,11 @@ export const CONFORMANCE_CHECKS = Object.freeze([
   check("ddl.alterTable", "ddl", "Alter-table DDL claim is enabled."),
   check("ddl.createIndex", "ddl", "Create-index DDL claim is enabled."),
   check("ddl.dropObject", "ddl", "Drop-object DDL claim is enabled."),
+  check(
+    "ddl.editColumnComment",
+    "ddl",
+    "Column-comment DDL claim (COMMENT ON COLUMN via alter_table) is enabled.",
+  ),
   check("safety.policy", "safety", "Safety policy is declared."),
 ] as const satisfies readonly ConformanceCheck[]);
 
@@ -160,14 +165,19 @@ const DEFERRED_FEATURES = Object.freeze({
     catalog: ["catalog.constraints"],
     query: [],
     edit: [],
-    ddl: [],
+    // Issue #1735 — MySQL has no ANSI `COMMENT ON`; a column comment lives
+    // inside the column definition, so emitting one means re-writing the full
+    // `MODIFY COLUMN` definition. Reachable with the existing adapter, just not
+    // wired yet → deferred, not unsupported. Tracked on #1735.
+    ddl: ["ddl.editColumnComment"],
   },
   mariadb: {
     connection: [],
     catalog: ["catalog.constraints"],
     query: [],
     edit: [],
-    ddl: [],
+    // Issue #1735 — see mysql; MariaDB shares the MySQL-family adapter.
+    ddl: ["ddl.editColumnComment"],
   },
   sqlite: {
     connection: [],
@@ -193,7 +203,17 @@ const DEFERRED_FEATURES = Object.freeze({
     edit: [],
     ddl: [],
   },
-  mssql: noneDeferred(),
+  mssql: {
+    connection: [],
+    catalog: [],
+    query: [],
+    edit: [],
+    // Issue #1735 — SQL Server has no ANSI `COMMENT ON`; column comments are
+    // extended properties (`sp_addextendedproperty` / `sp_update…`), a separate
+    // emitter with its own add-vs-update branch. Reachable with the existing
+    // adapter, just not wired yet → deferred, not unsupported. Tracked on #1735.
+    ddl: ["ddl.editColumnComment"],
+  },
   oracle: noneDeferred(),
   mongodb: {
     connection: ["connection.switchDatabase"],

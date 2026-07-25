@@ -345,6 +345,11 @@ fn modify_default(column: &str, data_type: Option<&str>, default_value: &str) ->
         new_nullable: data_type.map(|_| false),
         new_default_value: Some(default_value.into()),
         using_expression: None,
+        // #1735/#1788 — SQL Server has no ANSI `COMMENT ON`; the MSSQL emitter
+        // discards `new_comment` (`db/mssql/ddl.rs`) and the ColumnsEditor
+        // comment cell is capability-gated off, so the DEFAULT-swap fixtures
+        // carry none.
+        new_comment: None,
     }
 }
 

@@ -380,6 +380,7 @@ function ImportPanel({ onImported }: ImportPanelProps) {
         }
       />
 
+      {/* eslint-disable no-restricted-syntax -- placeholder 는 import JSON 형식 예시(기술 토큰), 번역 대상 아님 (#1074) */}
       <textarea
         className="h-40 w-full resize-none rounded border border-border bg-background p-2 font-mono text-2xs text-foreground outline-none focus:border-primary focus-visible:ring-2 focus-visible:ring-ring"
         placeholder='{"v":1,"kdf":"argon2id","alg":"aes-256-gcm",...} or {"schema_version":1,"connections":[...],"groups":[...]}'
@@ -387,6 +388,7 @@ function ImportPanel({ onImported }: ImportPanelProps) {
         onChange={(e) => setText(e.target.value)}
         aria-label={t("importExport.ariaImportJson")}
       />
+      {/* eslint-enable no-restricted-syntax */}
 
       <div className="flex items-center gap-2">
         <Button

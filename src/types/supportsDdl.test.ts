@@ -50,9 +50,34 @@ describe("supportsDdl (#1460)", () => {
   });
 
   it("returns true for every action while the dbType is unknown / still loading", () => {
-    for (const action of ACTIONS) {
+    // Issue #1735 — `editColumnComment` rides the same fail-open fallback
+    // (`StructurePanel.tsx` reads it before the connection resolves), so it is
+    // asserted alongside the four #1460 actions instead of being left out of
+    // the `ACTIONS` matrix. It is NOT in `ACTIONS` because the per-engine
+    // matrix above expects all listed actions to be true for MySQL/MSSQL.
+    for (const action of [...ACTIONS, "editColumnComment" as const]) {
       expect(supportsDdl(null, action)).toBe(true);
       expect(supportsDdl(undefined, action)).toBe(true);
+    }
+  });
+
+  // Issue #1735 — column comment edit is emit-wired only for PostgreSQL +
+  // Oracle (shared ANSI COMMENT ON COLUMN). MySQL/MariaDB and MSSQL run
+  // structural ALTER TABLE but have no ANSI COMMENT ON (comment is part of the
+  // column definition / an extended property), so the finer-grained
+  // `editColumnComment` flag gates the comment-edit affordance separately from
+  // `alterTable`. (2026-07-25)
+  it("claims editColumnComment only for PostgreSQL and Oracle", () => {
+    expect(supportsDdl("postgresql", "editColumnComment")).toBe(true);
+    expect(supportsDdl("oracle", "editColumnComment")).toBe(true);
+    for (const dbType of [
+      "mysql",
+      "mariadb",
+      "mssql",
+      "sqlite",
+      "duckdb",
+    ] as const) {
+      expect(supportsDdl(dbType, "editColumnComment")).toBe(false);
     }
   });
 });
