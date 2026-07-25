@@ -58,7 +58,7 @@ sequencing 을 명시 요청하면 별도 sprint contract queue 에 번호와 �
 | H3 | DuckDB + file analytics | Local-first file analytics 는 새 paradigm 없이 RDBMS 작업을 확장한다. | `.duckdb` raw SQL, registered local CSV/Parquet/JSON/NDJSON preview basics, source-scoped SELECT UI/API evidence, and documented file privacy/export boundary 가 green 이다. |
 | H4 | RDBMS intelligence | ERD, migration preview, and read-only schema diff reuse the shared `SchemaGraph`/catalog input path. Duplicate catalog parsing 은 만들지 않는다. | Production ERD 는 schema/table/column cache 와 cached/fetched explicit index/constraint metadata 를 함께 쓰는 reusable `SchemaGraph` 를 사용한다. Read-only dependency view 는 selected table 의 FK/index/constraint/CHECK diagnostics 를 보여주며, DDL preview/confirm flow 는 table/column/constraint/index removal migration-impact summaries 를 같은 graph 에서 보여준다. Read-only schema diff compares cached RDBMS snapshots through the same graph path. Dense ERD desktop/narrow screenshot smoke is wired; data compare remains a future promotion gate. |
 | H5 | First-class non-RDBMS | Redis/Valkey, Elasticsearch/OpenSearch, MongoDB 가 가장 명확한 non-RDBMS 사용자 workflow 를 덮는다. | MongoDB 는 whitelisted document workflow 로, Redis 는 bounded KV browser/value mutation + command/query/completion + representative smoke 로, Valkey 는 connection/key scan/value preview + selected stream read + bounded command query runtime slice + Redis 와 동일한 string/hash/list/set/zset KvMutationPanel write controls (#1075) + proven-row command completion + Runtime Happy Path smoke 로, Elasticsearch/OpenSearch 는 live connection/catalog/query + backend-bounded Search DSL validator + Runtime Happy Path smoke + fixture/live delete-by-query safety planning + bounded TypeScript editor completion 으로 support claim 이 정렬돼 있다. Actual Search live admin execution, full language-core parser/completion ownership, observability, and broader Search smoke 는 active parity lane 을 약화시키지 않고 promotion gate 를 통과할 때까지 deferred 다. |
-| H6 | 더 넓은 paradigm | Cassandra, DynamoDB, graph DB, vector DB, stream source 는 active work 전 명확한 workflow proof 가 필요하다. | MSSQL 은 bounded catalog/query/cancel/tabular/edit-row capability 와 representative smoke 로, Oracle 은 bounded catalog/query/cancel/tabular/edit-row capability, bounded Safe Mode/editor assistance, and representative smoke 로 허용한다. Wider source 는 candidate-only 계약으로 정렬된다. Profile target, connection kind, language, catalog model, result envelope, safety policy, fixture strategy 가 문서화되고 각 source 의 matching evidence 없이 DDL/admin/full parser-completion/future smoke widening claim 은 생기지 않는다. |
+| H6 | 더 넓은 paradigm | Cassandra, DynamoDB, graph DB, vector DB, stream source 는 active work 전 명확한 workflow proof 가 필요하다. | MSSQL 은 bounded catalog/query/cancel/tabular/edit-row capability 와 representative smoke 로, Oracle 은 #1072 로 그 slice 를 해소한 full adapter — catalog/query/cancel/tabular/edit-row capability, bounded Safe Mode/editor assistance, bounded structured DDL, read-only trigger listing, service-name re-dial switch-database, and representative smoke — 로 허용한다. Wider source 는 candidate-only 계약으로 정렬된다. Profile target, connection kind, language, catalog model, result envelope, safety policy, fixture strategy 가 문서화되고 각 source 의 matching evidence 없이 raw DDL/admin/full parser-completion/future smoke widening claim 은 생기지 않는다. |
 | H7 | 운영, 보안, 신뢰성 | 넓은 source support 는 관찰 가능하고 안전하며 반복 검증 가능해야 한다. | 현재 CI/hook/E2E/security/a11y/perf claim 과 future gate routing 이 실제 설정에 맞게 정렬된다. 새 routine gate 는 owner/runtime cost/actionability 가 잠긴 뒤에만 승격한다. |
 
 ## H1 완료 기준
@@ -303,11 +303,11 @@ execution, or MongoDB full-support parity has shipped.
 H6 wider source 는 **bounded-runtime enterprise RDBMS +
 planned/candidate contract 정합성 gate**다. MSSQL 은 SQL-auth/TDS
 catalog/query/cancel/tabular runtime slice plus primary-key-projected row edit
-through the frontend SQL batch path 이고, Oracle 은 source-specific bounded
-catalog/query/cancel/tabular/edit-row runtime slice
+through the frontend SQL batch path 이고, Oracle 은 #1072 로 그 bounded
+runtime slice 를 해소한 source-specific full-adapter
 inventory 다. `DatabaseType`/profile/dialect/labels/defaults/URL parsing/
 seed-spec inventory 는 남기되 MSSQL 은 connection.test/connect/ping,
-catalog/query/cancel/tabular result 와 key-projected editRows 만, Oracle 은
+catalog/query/cancel/tabular result 와 key-projected editRows 만, Oracle 은 #905/#906 에서
 service-name lifecycle, catalog metadata, SELECT/DML batch, cooperative cancel,
 tabular table-data query, key-projected editRows, bounded static Safe Mode
 classification, and bounded editor assistance 만 허용한다. #907 representative
@@ -504,7 +504,7 @@ Near-term follow-up groups:
 1. 새 partial workflow 를 추가하기 전에 눈에 보이는 미완성 workflow 를 먼저 닫는다.
 2. connect/browse/query 만 노출하는 runtime 을 하나 더 붙이는 것보다, 기존 runtime
    깊이를 우선한다.
-3. Runtime promotion freeze: Search admin execution, MSSQL DDL/admin/smoke/full parser-completion widening, Oracle DDL/admin/smoke/full parser-completion
+3. Runtime promotion freeze: Search admin execution, MSSQL DDL/admin/smoke/full parser-completion widening, Oracle raw DDL/admin/smoke/full parser-completion
    widening, 기타 새 DBMS lane 은 현재 지원 DBMS 하나가
    query/workbench parity lane 을 통과할 때까지 기다린다.
 4. Query/workbench parity 범위는 SQL/MQL execution, parser/Safe Mode, completion,

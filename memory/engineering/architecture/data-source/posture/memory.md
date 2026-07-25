@@ -30,9 +30,10 @@ activity, kill session, slow queries, server info off `v$session`/`v$sql`/
 `v$instance`; fail-loud without the catalog-read grant), and (#1072) database
 switching — Oracle has no `USE <db>`, so the switch re-dials the service name
 and the picker offers only dialable names (the stored service plus the open
-PDBs; never the `CDB$ROOT` container, whose service is the stored one, and
-never a name outside the #1065 connect-time character whitelist, which the
-switch enforces too). Authorization is still proven at switch time, not at list
+PDBs; never the `CDB$ROOT` container, whose service is the stored one, never
+the read-only `PDB$SEED` clone template, and never a name outside the #1065
+connect-time character whitelist — the switch enforces all three, so list and
+dial stay one axis). Authorization is still proven at switch time, not at list
 time. Switching from a SID profile fails closed (a SID names the instance, not
 a PDB). TNS descriptors, wallet-less TLS, advanced auth, raw DDL/admin, trigger
 DDL, parser/completion promotion, PL/SQL source/body/package authoring,

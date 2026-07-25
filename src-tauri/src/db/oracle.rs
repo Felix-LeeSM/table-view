@@ -10,10 +10,11 @@
 //! (`list_triggers` over `all_triggers`, header-only definition — the LONG
 //! body is not read), and (3차) database switching: `switch_database`
 //! re-dials the stored service name and `list_databases` offers only dialable
-//! names — the stored service plus the open PDBs, never the `CDB$ROOT`
-//! container — while SID profiles fail closed. Raw DDL/admin execution,
-//! trigger DDL (create/drop) and single-trigger source, TNS descriptors, 1-way
-//! TLS (TCPS+CA), and advanced auth remain unsupported or unclaimed.
+//! names — the stored service plus the open PDBs, never the `CDB$ROOT` or
+//! `PDB$SEED` containers — while SID profiles fail closed. Raw DDL/admin
+//! execution, trigger DDL (create/drop) and single-trigger source, TNS
+//! descriptors, 1-way TLS (TCPS+CA), and advanced auth remain unsupported or
+//! unclaimed.
 
 mod admin;
 mod catalog;
@@ -167,6 +168,17 @@ impl OracleAdapter {
         if db_name.eq_ignore_ascii_case(ORACLE_ROOT_CONTAINER) {
             return Err(AppError::Validation(
                 "Oracle CDB$ROOT is a container, not a connectable service; switch to a PDB or to the root's own service name".into(),
+            ));
+        }
+        // #1072 — same-axis rule, same reason: the seed is a read-only clone
+        // template Oracle keeps mounted for `CREATE PLUGGABLE DATABASE`, never a
+        // workload target. `OPEN_PDBS_SQL` and `switch_target_names`
+        // (`oracle/catalog.rs`) both drop it, so without this guard the dial
+        // would accept a name the picker refuses to offer — the whitelist
+        // permits `$`, so it needs its own guard exactly like the root.
+        if db_name.eq_ignore_ascii_case(ORACLE_SEED_CONTAINER) {
+            return Err(AppError::Validation(
+                "Oracle PDB$SEED is a read-only clone template, not a connectable database; switch to a PDB or to the connection's own service name".into(),
             ));
         }
 

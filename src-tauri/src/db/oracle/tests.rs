@@ -460,22 +460,32 @@ async fn switch_database_to_the_active_service_is_a_no_op() {
     }
 }
 
-// #1072 — the root container is not a listener service, so it can never be a
-// switch target. The guard sits in front of the connection lookup (like the
-// #1065 whitelist), so a picker that somehow offers it fails deterministically
-// instead of dying with ORA-12514 after a full dial.
+// #1072 — the root container has no listener service of its own name and the
+// seed is a read-only clone template, so neither can ever be a switch target.
+// `switch_target_names` drops both (asserted below), and the same-axis rule only
+// holds if the dial refuses exactly what the list withholds — the IPC entry
+// point is reachable without the picker. Both guards sit in front of the
+// connection lookup (like the #1065 whitelist), so an unconnected adapter
+// separates the outcomes: `Validation` means the guard fired, `Connection`
+// means the name got past it and only the missing session stopped it.
 #[tokio::test]
-async fn switch_database_rejects_the_root_container_before_the_lookup() {
+async fn switch_database_rejects_the_non_connectable_containers_before_the_lookup() {
     let adapter = OracleAdapter::new();
 
-    for name in ["CDB$ROOT", "cdb$root", " Cdb$Root "] {
-        let err = RdbAdapter::switch_database(&adapter, name)
-            .await
-            .expect_err("the root container must never be dialed");
-        assert!(
-            matches!(&err, AppError::Validation(message) if message.contains("CDB$ROOT")),
-            "expected a Validation rejection for {name:?}, got {err:?}"
-        );
+    for container in [ORACLE_ROOT_CONTAINER, ORACLE_SEED_CONTAINER] {
+        for name in [
+            container.to_string(),
+            container.to_ascii_lowercase(),
+            format!(" {container} "),
+        ] {
+            let err = RdbAdapter::switch_database(&adapter, &name)
+                .await
+                .expect_err("a non-connectable container must never be dialed");
+            assert!(
+                matches!(&err, AppError::Validation(message) if message.contains(container)),
+                "expected a Validation rejection for {name:?}, got {err:?}"
+            );
+        }
     }
 }
 
