@@ -424,3 +424,89 @@ async fn test_mssql_default_swap_drops_before_alter_and_scopes_its_declare() {
         "joined preview batch redeclares the same variable (Msg 134): {batch:?}"
     );
 }
+
+// Reason: PR #1795 re-review B1 — the DEFAULT swap has to be *runnable* T-SQL,
+// not merely correctly ordered. The character-string `EXECUTE` form is
+// `EXEC ( { @string_variable | [N]'tsql_string' } [ + ...n ] )`: its `+`
+// operands are literals and variables only, so a function call in the operand
+// list (`EXEC(N'…' + QUOTENAME(@v))`) never reaches execution — SQL Server
+// rejects it at parse time with `Msg 102, Incorrect syntax near 'QUOTENAME'`
+// and the whole alter rolls back at statement 1 of 3. Neither the byte-exact
+// golden (`src/db/mssql/ddl_tests.rs`) nor the `preview_only` order invariant
+// above can see that: both compare strings the emitter itself produced. Only
+// the server is the oracle for "does this parse", so this drives the real
+// execute path (`preview_only: false`) and reads the outcome back out of
+// `sys.columns` / `sys.default_constraints`. (2026-07-25)
+#[tokio::test]
+#[serial_test::serial]
+async fn test_mssql_default_swap_executes_against_sql_server() {
+    use table_view_lib::db::row_cap::DEFAULT_ROW_CAP;
+
+    let adapter = match common::setup_mssql_adapter().await {
+        Some(adapter) => adapter,
+        None => return,
+    };
+    let table = format!("test_default_swap_{}", ts());
+
+    let mut seeded = col("status", "nvarchar(16)", false);
+    seeded.default_value = Some("N'new'".into());
+    adapter
+        .create_table(&create_req(&table, vec![col("id", "int", false), seeded]))
+        .await
+        .expect("CREATE TABLE");
+
+    let swap = AlterTableRequest {
+        connection_id: "unused".into(),
+        schema: MSSQL_SCHEMA.into(),
+        table: table.clone(),
+        changes: vec![modify_default("status", Some("NVARCHAR(32)"), "N'active'")],
+        preview_only: false,
+        expected_database: None,
+    };
+    // Msg 102 surfaces here, before any readback: the drop statement is the
+    // first of the three the swap emits.
+    adapter
+        .alter_table(&swap)
+        .await
+        .expect("DEFAULT swap must execute on SQL Server");
+
+    let readback = adapter
+        .execute_query(
+            &format!(
+                "SELECT CAST(c.max_length AS nvarchar(16)) AS max_length, \
+                 ISNULL(dc.definition, N'<none>') AS definition \
+                 FROM sys.columns AS c \
+                 LEFT JOIN sys.default_constraints AS dc \
+                 ON dc.parent_object_id = c.object_id \
+                 AND dc.parent_column_id = c.column_id \
+                 WHERE c.object_id = OBJECT_ID(N'[{MSSQL_SCHEMA}].[{table}]') \
+                 AND c.name = N'status'"
+            ),
+            None,
+            DEFAULT_ROW_CAP,
+        )
+        .await
+        .expect("readback");
+    let row: Vec<String> = readback
+        .rows
+        .first()
+        .expect("status column row")
+        .iter()
+        .map(|cell| cell.as_str().unwrap_or_default().to_string())
+        .collect();
+
+    // NVARCHAR(32) is 64 bytes: proves the ALTER COLUMN ran *after* the drop
+    // (a still-bound default restricts it to length/precision/scale and would
+    // have failed with Msg 5074 -> 4922), and the rebound definition proves the
+    // swap replaced `N'new'` rather than leaving the seeded constraint behind.
+    assert_eq!(
+        (row[0].as_str(), row[1].as_str()),
+        ("64", "(N'active')"),
+        "expected NVARCHAR(32) + rebound default, got {row:?}"
+    );
+
+    adapter
+        .drop_table(&drop_req(&table))
+        .await
+        .expect("cleanup");
+}
