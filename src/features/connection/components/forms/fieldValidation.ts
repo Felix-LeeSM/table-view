@@ -12,8 +12,14 @@
  * returned here. `MasterPasswordField` is the pattern this generalises.
  */
 
-/** Field keys `ConnectionDialog.handleSave` can flag as invalid. */
-export type ConnFieldKey = "name" | "host" | "database";
+/**
+ * Field keys `ConnectionDialog.handleSave` can flag as invalid.
+ *
+ * `caCertPath` (#1649) is conditionally required: only the `verify-ca` sslmode
+ * needs it, and without it the posture names a trust anchor that does not
+ * exist, which the backend refuses to save.
+ */
+export type ConnFieldKey = "name" | "host" | "database" | "caCertPath";
 
 /** id of the shared footer save-error banner (single `role="alert"`). */
 export const CONNECTION_ERROR_ID = "connection-form-error";

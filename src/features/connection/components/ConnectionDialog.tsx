@@ -210,9 +210,11 @@ export default function ConnectionDialog({
         ? "conn-name"
         : field === "host"
           ? "conn-host"
-          : isFileConnection
-            ? "conn-sqlite-path"
-            : "conn-database";
+          : field === "caCertPath"
+            ? "conn-ca-cert-path"
+            : isFileConnection
+              ? "conn-sqlite-path"
+              : "conn-database";
     document.getElementById(id)?.focus();
   };
 
@@ -265,6 +267,16 @@ export default function ConnectionDialog({
           ? t("dialog.errorServiceNameRequired")
           : t("dialog.errorDatabaseRequired"),
       );
+      return;
+    }
+    // #1649 — `verify-ca` validates the server against a user-supplied CA, so
+    // the CA file is required for that posture. Without it the driver falls
+    // back to the public trust store with hostname verification off (weaker
+    // than verify-full while reading as stricter), which the backend now
+    // refuses to save — block it here so the user is corrected in the form
+    // rather than by a save error.
+    if (trimmed.sslMode === "verify-ca" && !(trimmed.caCertPath ?? "").trim()) {
+      failValidation("caCertPath", t("dialog.errorCaCertPathRequired"));
       return;
     }
     const unsupportedMessage = getMssqlConnectionUnsupportedMessage(trimmed);

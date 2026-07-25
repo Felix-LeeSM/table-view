@@ -95,7 +95,13 @@ pub enum Paradigm {
 /// `VerifyCa` (#1649) is the new advanced-depth posture: it validates the server
 /// certificate against a user-supplied private/self-signed CA (`ca_cert_path`),
 /// closing the MITM-substitution gap that `Require` (skip-verify) leaves open
-/// and that `VerifyFull` cannot cover for non-public CAs.
+/// and that `VerifyFull` cannot cover for non-public CAs. It is the one variant
+/// with a companion requirement: `ca_cert_path` must be set, enforced at the
+/// write boundary (`save_connection`) and again at connect
+/// (`db::tls::resolve_tls_decision`). libpq is one-to-one here too — it rejects
+/// `sslmode=verify-ca` without a root certificate rather than falling back to
+/// the system store, which is what sqlx would otherwise do (with hostname
+/// verification off, i.e. weaker than `VerifyFull`).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum SslMode {
@@ -109,7 +115,8 @@ pub enum SslMode {
     /// MITM-exposed: encrypts but does not authenticate the server.
     Require,
     /// Force encryption + verify the server certificate against the CA in
-    /// `ca_cert_path` (`sslmode=verify-ca`). Hostname is not checked.
+    /// `ca_cert_path` (`sslmode=verify-ca`), which is **required** for this
+    /// posture. Hostname is not checked — that is what `VerifyFull` adds.
     VerifyCa,
     /// Force encryption + full CA + hostname verification against the OS trust
     /// store (`sslmode=verify-full`).
@@ -1306,6 +1313,73 @@ mod tests {
         }"#;
         let public: ConnectionConfigPublic = serde_json::from_str(mixed).unwrap();
         assert_eq!(public.ssl_mode, SslMode::VerifyCa);
+
+        // The camelCase legacy pair is still valid on the wire (IPC payloads
+        // authored before #1649), so it must fold too — the snake_case case
+        // above does not cover the `trustServerCertificate` alias.
+        let legacy_camel = r#"{
+            "id": "c1",
+            "name": "PG",
+            "dbType": "postgresql",
+            "host": "localhost",
+            "port": 5432,
+            "user": "u",
+            "database": "d",
+            "groupId": null,
+            "color": null,
+            "paradigm": "rdb",
+            "tlsEnabled": true,
+            "trustServerCertificate": true
+        }"#;
+        let public: ConnectionConfigPublic = serde_json::from_str(legacy_camel).unwrap();
+        assert_eq!(public.ssl_mode, SslMode::Require);
+    }
+
+    /// Purpose: #1649 review B3 — `to_legacy` writes the SQLite mirror's
+    /// `tls_enabled` / `trust_server_certificate` columns
+    /// (`commands/persist_connections.rs`, `storage/reconcile.rs`), which cold
+    /// boot reads back through `from_legacy`. Nothing else in the suite fails if
+    /// two arms are exchanged, so pin the whole table plus the round trip.
+    #[test]
+    fn ssl_mode_to_legacy_pins_the_mirror_columns() {
+        // Reason: a swapped `Require` / `VerifyFull` arm would paint a
+        // skip-verify connection as verify-full (and the reverse) in the boot
+        // snapshot until the file SOT loads. The `VerifyCa` row is the one
+        // documented lossy cell: the mirror has no CA column, so it reconstructs
+        // as the stronger verify-full and the CA path comes back from the file
+        // SOT. (2026-07-25)
+        let cells = [
+            (SslMode::Prefer, (None, None), SslMode::Prefer),
+            (
+                SslMode::Disable,
+                (Some(false), Some(false)),
+                SslMode::Disable,
+            ),
+            (SslMode::Require, (Some(true), Some(true)), SslMode::Require),
+            (
+                SslMode::VerifyFull,
+                (Some(true), Some(false)),
+                SslMode::VerifyFull,
+            ),
+            (
+                SslMode::VerifyCa,
+                (Some(true), Some(false)),
+                SslMode::VerifyFull,
+            ),
+        ];
+        for (mode, columns, reconstructed) in cells {
+            assert_eq!(
+                mode.to_legacy(),
+                columns,
+                "{mode:?} must write the mirror columns {columns:?}"
+            );
+            let (tls_enabled, trust) = mode.to_legacy();
+            assert_eq!(
+                SslMode::from_legacy(tls_enabled, trust),
+                reconstructed,
+                "{mode:?} must reconstruct from the mirror as {reconstructed:?}"
+            );
+        }
     }
 
     /// Purpose: #1649 — `SslMode` serializes to the kebab-case PostgreSQL

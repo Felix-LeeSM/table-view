@@ -89,36 +89,35 @@ impl MysqlAdapter {
     /// Issue #1062 / #1649 — 모델의 sslmode posture 를 `MySqlSslMode` 로 결선.
     /// TLS 를 켠 operator 가 sqlx 기본 `ssl-mode=PREFERRED` 로 조용히 평문
     /// downgrade 되지 않도록 한다. #1649 는 `verify-ca` 를 추가 — 서버 인증서를
-    /// 사용자 CA(`ca_cert_path`) 로 검증. sslmode enum 이 invalid 조합을
-    /// 표현 불가로 만들어 시그니처는 infallible 이다.
-    fn connect_options(config: &ConnectionConfig) -> MySqlConnectOptions {
+    /// 사용자 CA(`ca_cert_path`) 로 검증. fallible 인 유일한 이유는 fail-closed
+    /// `verify-ca` 거부다 — CA 없는 `MySqlSslMode::VerifyCa` 는 공개 webpki
+    /// 루트로 떨어지며 hostname 검증도 꺼지므로 `resolve_tls_decision` 이 그
+    /// 조합을 거부한다 (libpq 동형).
+    fn connect_options(config: &ConnectionConfig) -> Result<MySqlConnectOptions, AppError> {
         let options = MySqlConnectOptions::new()
             .host(&config.host)
             .port(config.port)
             .username(&config.user)
             .password(&config.password)
             .database(&config.database);
-        match resolve_tls_decision(config) {
+        Ok(match resolve_tls_decision(config)? {
             TlsDecision::Disable => options.ssl_mode(MySqlSslMode::Disabled),
             TlsDecision::Default => options,
             TlsDecision::RequireSkipVerify => options.ssl_mode(MySqlSslMode::Required),
             // #1649 — verify-ca validates the server cert against the user's CA.
-            // sqlx maps this onto `MySqlSslMode::VerifyCa` + `ssl_ca`. (Only PG
-            // proves verify-ca end-to-end this slice; MySQL is wired for parity.)
-            TlsDecision::RequireVerifyCa { ca_cert_path } => {
-                let options = options.ssl_mode(MySqlSslMode::VerifyCa);
-                match ca_cert_path {
-                    Some(path) => options.ssl_ca(path),
-                    None => options,
-                }
-            }
+            // sqlx maps this onto `MySqlSslMode::VerifyCa` + `ssl_ca`; the
+            // decision type guarantees the path is present. (Only PG proves
+            // verify-ca end-to-end this slice; MySQL is wired for parity.)
+            TlsDecision::RequireVerifyCa { ca_cert_path } => options
+                .ssl_mode(MySqlSslMode::VerifyCa)
+                .ssl_ca(ca_cert_path),
             TlsDecision::RequireVerifyFull => options.ssl_mode(MySqlSslMode::VerifyIdentity),
-        }
+        })
     }
 
     /// 5s timeout 의 one-shot probe. PG `test` 패턴 답습.
     pub async fn test(config: &ConnectionConfig) -> Result<(), AppError> {
-        let options = Self::connect_options(config);
+        let options = Self::connect_options(config)?;
         let pool = MySqlPoolOptions::new()
             .max_connections(1)
             .acquire_timeout(std::time::Duration::from_secs(5))
@@ -138,7 +137,7 @@ impl MysqlAdapter {
     }
 
     pub async fn connect_pool(&self, config: &ConnectionConfig) -> Result<(), AppError> {
-        let options = Self::connect_options(config);
+        let options = Self::connect_options(config)?;
         let timeout_secs = config
             .connection_timeout
             .unwrap_or(MYSQL_POOL_ACQUIRE_TIMEOUT_DEFAULT_SECS);
@@ -240,7 +239,7 @@ impl MysqlAdapter {
             SwitchPath::Miss(boxed_config) => {
                 let mut config = *boxed_config;
                 config.database = db_name.to_string();
-                let options = Self::connect_options(&config);
+                let options = Self::connect_options(&config)?;
                 let timeout_secs = config
                     .connection_timeout
                     .unwrap_or(MYSQL_POOL_ACQUIRE_TIMEOUT_DEFAULT_SECS);
@@ -343,7 +342,7 @@ impl MysqlAdapter {
                 .ok_or_else(|| AppError::Connection("Not connected — cannot issue cancel".into()))?
         };
 
-        let options = Self::connect_options(&config);
+        let options = Self::connect_options(&config)?;
         let cancel_pool = MySqlPoolOptions::new()
             .max_connections(1)
             .acquire_timeout(std::time::Duration::from_secs(5))
@@ -523,7 +522,7 @@ mod tests {
     #[test]
     fn connect_options_builder_reflects_config() {
         let config = sample_config();
-        let opts = MysqlAdapter::connect_options(&config);
+        let opts = MysqlAdapter::connect_options(&config).unwrap();
         let opts_str = format!("{opts:?}");
         assert!(
             opts_str.contains("localhost") || opts_str.contains("3306"),
@@ -539,7 +538,7 @@ mod tests {
     #[test]
     fn connect_options_prefer_preserves_preferred() {
         let config = sample_config();
-        let opts = MysqlAdapter::connect_options(&config);
+        let opts = MysqlAdapter::connect_options(&config).unwrap();
         assert!(
             matches!(opts.get_ssl_mode(), MySqlSslMode::Preferred),
             "ssl_mode=prefer must leave the default Preferred ssl_mode"
@@ -550,7 +549,7 @@ mod tests {
     fn connect_options_require_maps_to_required() {
         let mut config = sample_config();
         config.ssl_mode = crate::models::SslMode::Require;
-        let opts = MysqlAdapter::connect_options(&config);
+        let opts = MysqlAdapter::connect_options(&config).unwrap();
         assert!(
             matches!(opts.get_ssl_mode(), MySqlSslMode::Required),
             "ssl_mode=require must force encryption without cert verification"
@@ -561,7 +560,7 @@ mod tests {
     fn connect_options_verify_full_maps_to_verify_identity() {
         let mut config = sample_config();
         config.ssl_mode = crate::models::SslMode::VerifyFull;
-        let opts = MysqlAdapter::connect_options(&config);
+        let opts = MysqlAdapter::connect_options(&config).unwrap();
         assert!(
             matches!(opts.get_ssl_mode(), MySqlSslMode::VerifyIdentity),
             "ssl_mode=verify-full must verify CA + host identity"
@@ -572,14 +571,38 @@ mod tests {
     fn connect_options_verify_ca_maps_to_verify_ca() {
         // Reason: #1649 (ADR 0058) — the verify-ca posture reaches
         // `MySqlSslMode::VerifyCa` and forwards the CA path via `ssl_ca` so
-        // MySQL/MariaDB stay at parity with PG's verify-ca wiring. (2026-07-25)
+        // MySQL/MariaDB stay at parity with PG's verify-ca wiring. The path
+        // assertion is load-bearing: the mode alone would still pass if the
+        // `ssl_ca` call were dropped, which is the whole feature. (2026-07-25)
         let mut config = sample_config();
         config.ssl_mode = crate::models::SslMode::VerifyCa;
         config.ca_cert_path = Some("/etc/ssl/private-ca.pem".into());
-        let opts = MysqlAdapter::connect_options(&config);
+        let opts = MysqlAdapter::connect_options(&config).unwrap();
         assert!(
             matches!(opts.get_ssl_mode(), MySqlSslMode::VerifyCa),
             "ssl_mode=verify-ca must select MySqlSslMode::VerifyCa"
+        );
+        let opts_str = format!("{opts:?}");
+        assert!(
+            opts_str.contains("private-ca.pem"),
+            "verify-ca must forward the CA path to ssl_ca: {opts_str}"
+        );
+    }
+
+    #[test]
+    fn connect_options_verify_ca_without_ca_fails_closed() {
+        // Reason: #1649 review B1 — a rootless `MySqlSslMode::VerifyCa` falls
+        // back to the public webpki roots with hostname verification off, so the
+        // posture must be rejected before it reaches sqlx (PG parity, libpq
+        // semantics). (2026-07-25)
+        let mut config = sample_config();
+        config.ssl_mode = crate::models::SslMode::VerifyCa;
+        config.ca_cert_path = None;
+        let err = MysqlAdapter::connect_options(&config)
+            .expect_err("verify-ca without a CA file must not reach sqlx");
+        assert!(
+            matches!(err, AppError::Validation(_)),
+            "expected a validation rejection, got: {err}"
         );
     }
 
@@ -590,7 +613,7 @@ mod tests {
         // default an unset config keeps. (2026-07-17)
         let mut config = sample_config();
         config.ssl_mode = crate::models::SslMode::Disable;
-        let opts = MysqlAdapter::connect_options(&config);
+        let opts = MysqlAdapter::connect_options(&config).unwrap();
         assert!(
             matches!(opts.get_ssl_mode(), MySqlSslMode::Disabled),
             "sslmode=disable must force plaintext, not opportunistic Preferred"

@@ -12,7 +12,15 @@
 //! private/self-signed CAs. This helper resolves the model into an explicit,
 //! driver-neutral decision that each adapter maps onto its concrete `SslMode`.
 
+use crate::error::AppError;
 use crate::models::{ConnectionConfig, SslMode};
+
+/// Fail-closed rejection for `verify-ca` without a CA file (#1649 review B1).
+/// Surfaced verbatim by `save_connection` and by the pg/mysql connect path, so
+/// the user reads the same actionable sentence wherever the posture is caught.
+pub(crate) const VERIFY_CA_REQUIRES_CA_MESSAGE: &str =
+    "sslmode=verify-ca requires a CA certificate file: select the CA that signs the server \
+     certificate, or switch to verify-full to verify against the system trust store";
 
 /// Driver-neutral outcome of the [`SslMode`] posture. Each sqlx adapter maps
 /// this onto its own `SslMode`:
@@ -37,28 +45,59 @@ pub(crate) enum TlsDecision {
     /// Force encryption but skip certificate verification (`sslmode=require`).
     RequireSkipVerify,
     /// #1649 — force encryption + verify the server certificate against the CA
-    /// at `ca_cert_path` (`sslmode=verify-ca`). `None` falls back to the
-    /// driver's default trust store (still verifies, just without a private CA).
-    RequireVerifyCa { ca_cert_path: Option<String> },
+    /// at `ca_cert_path` (`sslmode=verify-ca`). The path is **not** optional:
+    /// sqlx 0.8.6 answers a rootless `VerifyCa` with the bundled Mozilla webpki
+    /// roots *and* `accept_invalid_hostnames = true`, so a missing anchor turns
+    /// the posture into "any public CA, any hostname" — strictly weaker than
+    /// `verify-full` while looking stricter. [`resolve_tls_decision`] rejects
+    /// that combination instead of constructing this variant (libpq does the
+    /// same); hostname checking is what `verify-full` adds on top.
+    RequireVerifyCa { ca_cert_path: String },
     /// Force encryption with full CA + hostname verification (`verify-full`).
     RequireVerifyFull,
 }
 
+/// The CA path a `verify-ca` posture must carry, or the fail-closed error.
+/// Whitespace-only is treated as absent — the form writes `null` for an empty
+/// input, but a hand-edited `connections.json` or IPC payload can carry `" "`.
+fn require_ca_cert_path(ca_cert_path: Option<&str>) -> Result<String, AppError> {
+    ca_cert_path
+        .map(str::trim)
+        .filter(|path| !path.is_empty())
+        .map(str::to_owned)
+        .ok_or_else(|| AppError::Validation(VERIFY_CA_REQUIRES_CA_MESSAGE.into()))
+}
+
+/// #1649 review B1 — the write-boundary half of the fail-closed `verify-ca`
+/// contract: a stored connection never carries `verify-ca` without a CA file.
+/// `save_connection` calls this for every engine (the on/off engines ignore
+/// `ca_cert_path`, but storing an unanchored `verify-ca` there would still
+/// travel to pg/mysql through an export or a dbType switch), and
+/// [`resolve_tls_decision`] repeats the check at connect time for rows written
+/// before this gate existed.
+pub(crate) fn validate_tls_posture(config: &ConnectionConfig) -> Result<(), AppError> {
+    if config.ssl_mode == SslMode::VerifyCa {
+        require_ca_cert_path(config.ca_cert_path.as_deref())?;
+    }
+    Ok(())
+}
+
 /// Resolve the model's [`SslMode`] posture into a driver-neutral decision.
 ///
-/// Infallible since #1649: the `SslMode` enum makes the previously-rejected
-/// combinations (TLS on without a trust decision, trust without TLS)
-/// unrepresentable, so there is no longer an error path to surface.
-pub(crate) fn resolve_tls_decision(config: &ConnectionConfig) -> TlsDecision {
-    match config.ssl_mode {
+/// The only error since #1649 is the fail-closed `verify-ca`-without-a-CA-file
+/// rejection: the `SslMode` enum makes the old invalid combinations (TLS on
+/// without a trust decision, trust without TLS) unrepresentable, but a posture
+/// that names a trust anchor it does not have must not reach the driver.
+pub(crate) fn resolve_tls_decision(config: &ConnectionConfig) -> Result<TlsDecision, AppError> {
+    Ok(match config.ssl_mode {
         SslMode::Disable => TlsDecision::Disable,
         SslMode::Prefer => TlsDecision::Default,
         SslMode::Require => TlsDecision::RequireSkipVerify,
         SslMode::VerifyCa => TlsDecision::RequireVerifyCa {
-            ca_cert_path: config.ca_cert_path.clone(),
+            ca_cert_path: require_ca_cert_path(config.ca_cert_path.as_deref())?,
         },
         SslMode::VerifyFull => TlsDecision::RequireVerifyFull,
-    }
+    })
 }
 
 #[cfg(test)]
@@ -100,7 +139,7 @@ mod tests {
         // Reason: the default posture must not force TLS so legacy connections
         // keep the pre-#1062 driver `prefer` behavior. (2026-07-25)
         assert_eq!(
-            resolve_tls_decision(&config(SslMode::Prefer, None)),
+            resolve_tls_decision(&config(SslMode::Prefer, None)).unwrap(),
             TlsDecision::Default
         );
     }
@@ -108,7 +147,7 @@ mod tests {
     #[test]
     fn disable_forces_plaintext() {
         assert_eq!(
-            resolve_tls_decision(&config(SslMode::Disable, None)),
+            resolve_tls_decision(&config(SslMode::Disable, None)).unwrap(),
             TlsDecision::Disable
         );
     }
@@ -116,7 +155,7 @@ mod tests {
     #[test]
     fn require_skips_verification() {
         assert_eq!(
-            resolve_tls_decision(&config(SslMode::Require, None)),
+            resolve_tls_decision(&config(SslMode::Require, None)).unwrap(),
             TlsDecision::RequireSkipVerify
         );
     }
@@ -124,7 +163,7 @@ mod tests {
     #[test]
     fn verify_full_requires_full_verification() {
         assert_eq!(
-            resolve_tls_decision(&config(SslMode::VerifyFull, None)),
+            resolve_tls_decision(&config(SslMode::VerifyFull, None)).unwrap(),
             TlsDecision::RequireVerifyFull
         );
     }
@@ -136,46 +175,86 @@ mod tests {
         // ca_cert_path on a non-verify-ca posture must NOT leak into the
         // decision. (2026-07-25)
         assert_eq!(
-            resolve_tls_decision(&config(SslMode::VerifyCa, Some("/etc/ssl/my-ca.pem"))),
+            resolve_tls_decision(&config(SslMode::VerifyCa, Some("/etc/ssl/my-ca.pem"))).unwrap(),
             TlsDecision::RequireVerifyCa {
-                ca_cert_path: Some("/etc/ssl/my-ca.pem".into())
+                ca_cert_path: "/etc/ssl/my-ca.pem".into()
             }
-        );
-        // verify-ca with no CA still verifies (driver trust store), just without
-        // a private anchor.
-        assert_eq!(
-            resolve_tls_decision(&config(SslMode::VerifyCa, None)),
-            TlsDecision::RequireVerifyCa { ca_cert_path: None }
         );
         // A ca_cert_path attached to verify-full is ignored — only verify-ca
         // reads it.
         assert_eq!(
-            resolve_tls_decision(&config(SslMode::VerifyFull, Some("/etc/ssl/my-ca.pem"))),
+            resolve_tls_decision(&config(SslMode::VerifyFull, Some("/etc/ssl/my-ca.pem"))).unwrap(),
             TlsDecision::RequireVerifyFull
         );
+    }
+
+    #[test]
+    fn verify_ca_without_a_ca_file_fails_closed() {
+        // Reason: #1649 review B1 — sqlx 0.8.6 answers a rootless `VerifyCa`
+        // with the public webpki roots *and* `accept_invalid_hostnames = true`,
+        // so letting it through would accept any publicly-signed certificate for
+        // any hostname. libpq hard-errors on the same combination; so do we.
+        // Whitespace-only counts as absent (hand-edited JSON / raw IPC).
+        // (2026-07-25)
+        for missing in [None, Some(""), Some("   ")] {
+            let err = resolve_tls_decision(&config(SslMode::VerifyCa, missing))
+                .expect_err("verify-ca without a CA file must not reach the driver");
+            assert!(
+                matches!(err, AppError::Validation(ref msg) if msg == VERIFY_CA_REQUIRES_CA_MESSAGE),
+                "ca_cert_path {missing:?} must fail closed with the shared message, got: {err}"
+            );
+        }
+        // Same contract at the write boundary `save_connection` uses.
+        assert!(validate_tls_posture(&config(SslMode::VerifyCa, None)).is_err());
+        assert!(validate_tls_posture(&config(SslMode::VerifyCa, Some("/ca.pem"))).is_ok());
+        // Every other posture is unaffected — no CA file is required.
+        for mode in [
+            SslMode::Disable,
+            SslMode::Prefer,
+            SslMode::Require,
+            SslMode::VerifyFull,
+        ] {
+            assert!(
+                validate_tls_posture(&config(mode, None)).is_ok(),
+                "{mode:?} must not require a CA file"
+            );
+        }
     }
 
     #[test]
     fn legacy_migration_matches_prior_resolve_semantics() {
         // Reason: #1649 — SslMode::from_legacy must fold the ADR 0053 boolean
         // pair onto the exact postures the old resolve_tls_decision produced, so
-        // stored connections migrate with zero downgrade. (2026-07-25)
-        assert_eq!(SslMode::from_legacy(None, None), SslMode::Prefer);
-        assert_eq!(SslMode::from_legacy(Some(false), None), SslMode::Prefer);
-        assert_eq!(
-            SslMode::from_legacy(Some(false), Some(false)),
-            SslMode::Disable
-        );
-        assert_eq!(SslMode::from_legacy(None, Some(false)), SslMode::Disable);
-        assert_eq!(
-            SslMode::from_legacy(Some(true), Some(true)),
-            SslMode::Require
-        );
-        assert_eq!(
-            SslMode::from_legacy(Some(true), Some(false)),
-            SslMode::VerifyFull
-        );
-        // ADR 0053 derived rule: on/off engines' `tls=true, trust=None`.
-        assert_eq!(SslMode::from_legacy(Some(true), None), SslMode::VerifyFull);
+        // stored connections migrate with zero downgrade. The table is the full
+        // 3x3 `(tls_enabled, trust_server_certificate)` matrix — the two cells
+        // the old code rejected with `AppError::Validation` ((unset|false, true))
+        // are the ones this migration changes behavior on, so they are pinned
+        // here rather than left to inference. (2026-07-25)
+        let cells: [(Option<bool>, Option<bool>, SslMode); 9] = [
+            // tls unset
+            (None, None, SslMode::Prefer),
+            (None, Some(false), SslMode::Disable),
+            // Was `Err("trustServerCertificate requires TLS to be enabled")`;
+            // now the opportunistic default. `tls_enabled` unset is the user's
+            // "no TLS choice" state, so `prefer` (never weaker than the old
+            // behavior, which refused to connect at all) is the fold.
+            (None, Some(true), SslMode::Prefer),
+            // tls off — explicit forced-plaintext marker (#1063).
+            (Some(false), None, SslMode::Prefer),
+            (Some(false), Some(false), SslMode::Disable),
+            // Same previously-rejected combination with an explicit `tls=false`.
+            (Some(false), Some(true), SslMode::Prefer),
+            // tls on
+            (Some(true), None, SslMode::VerifyFull),
+            (Some(true), Some(false), SslMode::VerifyFull),
+            (Some(true), Some(true), SslMode::Require),
+        ];
+        for (tls_enabled, trust, expected) in cells {
+            assert_eq!(
+                SslMode::from_legacy(tls_enabled, trust),
+                expected,
+                "legacy cell (tls_enabled={tls_enabled:?}, trust={trust:?}) must fold to {expected:?}"
+            );
+        }
     }
 }

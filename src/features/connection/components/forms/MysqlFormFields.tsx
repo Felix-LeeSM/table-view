@@ -158,6 +158,7 @@ export default function MysqlFormFields({
         onChange={onChange}
         inputClass={inputClass}
         labelClass={labelClass}
+        invalidField={invalidField}
       />
     </>
   );

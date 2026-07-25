@@ -17,7 +17,9 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 
 use crate::error::AppError;
-use crate::models::{ConnectionConfig, ConnectionConfigPublic, ConnectionGroup, DatabaseType};
+use crate::models::{
+    ConnectionConfig, ConnectionConfigPublic, ConnectionGroup, DatabaseType, SslMode,
+};
 use crate::storage;
 
 const EXPORT_SCHEMA_VERSION: u32 = 1;
@@ -275,9 +277,20 @@ pub fn import_connections(json: String) -> Result<ImportResult, AppError> {
             environment: conn.environment.clone(),
             auth_source: conn.auth_source.clone(),
             replica_set: conn.replica_set.clone(),
-            // #1649 — sslmode posture round-trips (not a secret); the CA path
-            // is stripped on both export and import — the user re-selects it.
-            ssl_mode: conn.ssl_mode,
+            // #1649 — the sslmode posture round-trips (not a secret), but the
+            // CA path is stripped on both export and import, so `verify-ca`
+            // cannot survive the trip: it would land as a posture naming a
+            // trust anchor the machine does not have, which `save_connection`
+            // and the connect path now reject (fail closed). Fold it to
+            // `verify-full` — strictly stronger (full chain *and* hostname,
+            // against the system store) and the same safe-side fold the SQLite
+            // mirror already applies in `SslMode::to_legacy`. A private-CA
+            // server then fails the handshake loudly and the user re-selects
+            // the CA file, exactly as they must re-enter the password.
+            ssl_mode: match conn.ssl_mode {
+                SslMode::VerifyCa => SslMode::VerifyFull,
+                mode => mode,
+            },
             ca_cert_path: None,
             // #1065 — the connect mode is not a secret, so it round-trips.
             oracle_use_sid: conn.oracle_use_sid,
@@ -474,6 +487,54 @@ mod tests {
         assert!(exported_connection.get("fileAnalyticsSources").is_none());
         assert!(exported_connection.get("sourceMetadata").is_none());
 
+        cleanup_test_env();
+    }
+
+    #[test]
+    #[serial]
+    fn test_export_strips_ca_path_and_import_folds_verify_ca_to_verify_full() {
+        // Reason: #1649 (ADR 0058) — the CA path leaks a home-directory
+        // username / internal topology exactly like the Oracle wallet path, so
+        // export strips it. Because import cannot restore it, a `verify-ca` row
+        // would land naming a trust anchor it does not have (rejected by the
+        // connect path since review B1); it folds to the strictly stronger
+        // `verify-full` instead, the same safe-side fold the SQLite mirror
+        // applies. Both halves are pinned here — deleting either line in
+        // `export_connections` / `import_connections` must fail. (2026-07-25)
+        let _dir = setup_test_env();
+        let ca_path = "/Users/felix/private/corp-ca.pem";
+        let mut conn = sample_connection("pg-ca", "PG private CA");
+        conn.ssl_mode = SslMode::VerifyCa;
+        conn.ca_cert_path = Some(ca_path.into());
+        storage_save_conn(conn).unwrap();
+
+        let exported = export_connections(vec!["pg-ca".into()]).unwrap();
+        assert!(
+            !exported.contains(ca_path),
+            "export must not carry the CA path: {exported}"
+        );
+        let payload: ExportPayload = serde_json::from_str(&exported).unwrap();
+        assert_eq!(payload.connections[0].ca_cert_path, None);
+        assert_eq!(
+            payload.connections[0].ssl_mode,
+            SslMode::VerifyCa,
+            "the posture itself is not a secret and round-trips"
+        );
+
+        import_connections(exported).unwrap();
+        let imported = load_storage()
+            .unwrap()
+            .connections
+            .into_iter()
+            .find(|c| c.id != "pg-ca")
+            .expect("imported copy");
+        assert_eq!(imported.ca_cert_path, None);
+        assert_eq!(
+            imported.ssl_mode,
+            SslMode::VerifyFull,
+            "verify-ca cannot survive the CA strip — it must fold to verify-full, \
+             never land unanchored"
+        );
         cleanup_test_env();
     }
 

@@ -564,7 +564,9 @@ function resolveUrlTls(
 
 /**
  * #1063 — report a `key=value` TLS parameter from `url` that `parseConnectionUrl`
- * could not reflect onto the form (e.g. `sslmode=verify-ca`), else `null`.
+ * could not reflect onto the form (e.g. `sslmode=allow`), else `null`. #1649
+ * made `verify-ca` mappable, so it is no longer an example of a dropped value —
+ * only the CA file itself is never taken from a URL.
  * The paste/import UI surfaces this so a dropped security parameter is visible
  * rather than silently lost.
  */

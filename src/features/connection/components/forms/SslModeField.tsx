@@ -20,6 +20,7 @@ import {
   type ConnectionDraft,
   type SslMode,
 } from "../../model";
+import { fieldValidationProps, type ConnFieldKey } from "./fieldValidation";
 
 const SSL_MODE_LABEL_KEYS: Record<SslMode, string> = {
   disable: "form.sslModeDisable",
@@ -34,6 +35,7 @@ export interface SslModeFieldProps {
   onChange: (patch: Partial<ConnectionDraft>) => void;
   inputClass: string;
   labelClass: string;
+  invalidField?: ConnFieldKey | null;
 }
 
 export default function SslModeField({
@@ -41,6 +43,7 @@ export default function SslModeField({
   onChange,
   inputClass,
   labelClass,
+  invalidField,
 }: SslModeFieldProps) {
   const { t } = useTranslation("featuresConnection");
   const mode = draft.sslMode ?? "prefer";
@@ -88,7 +91,11 @@ export default function SslModeField({
         </p>
       )}
       {/* #1649 — verify-ca validates the server against a user-supplied CA;
-          reveal the path input so the feature is reachable. */}
+          reveal the path input so the feature is reachable. The CA file is
+          required for this posture: with no trust anchor the driver falls back
+          to the public trust store *and* stops checking the hostname, so the
+          save is blocked rather than landing a posture weaker than the
+          verify-full it reads as. */}
       {mode === "verify-ca" && (
         <div className="mt-2">
           <label htmlFor="conn-ca-cert-path" className={labelClass}>
@@ -100,6 +107,7 @@ export default function SslModeField({
             value={draft.caCertPath ?? ""}
             onChange={(e) => onChange({ caCertPath: e.target.value || null })}
             placeholder={t("form.placeholderCaCertPath")}
+            {...fieldValidationProps("caCertPath", true, invalidField)}
           />
           <p className="mt-1 text-2xs text-muted-foreground">
             {t("form.caCertPathHint")}

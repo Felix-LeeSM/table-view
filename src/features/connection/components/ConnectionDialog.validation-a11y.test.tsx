@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, act } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import ConnectionDialog from "./ConnectionDialog";
 import { useConnectionStore } from "@stores/connectionStore";
 import type { ConnectionConfig } from "@/types/connection";
@@ -122,6 +123,51 @@ describe("ConnectionDialog validation-state exposure (#1135)", () => {
     // Name is no longer the flagged field.
     expect(nameInput).not.toHaveAttribute("aria-invalid");
     expect(document.activeElement).toBe(hostInput);
+  });
+
+  // Reason: #1649 review B1 — `verify-ca` names a trust anchor. With no CA file
+  // the driver falls back to the public trust store *and* stops verifying the
+  // hostname, i.e. weaker than the verify-full it reads as, so the save must be
+  // blocked in the form (the backend rejects it too). (2026-07-25)
+  it("blocks save when verify-ca is selected without a CA file", async () => {
+    renderDialog(makeConnection());
+    const save = () => screen.getByText("Update");
+    const user = userEvent.setup();
+    await user.click(screen.getByLabelText("SSL mode"));
+    await user.click(screen.getByRole("option", { name: /Verify CA/ }));
+
+    const caInput = screen.getByLabelText(
+      "CA certificate file",
+    ) as HTMLInputElement;
+    expect(caInput).toBeRequired();
+    expect(caInput.value).toBe("");
+
+    await act(async () => {
+      fireEvent.click(save());
+    });
+
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "A CA certificate file is required for Verify CA",
+    );
+    expect(caInput).toHaveAttribute("aria-invalid", "true");
+    expect(caInput).toHaveAttribute("aria-describedby", CONNECTION_ERROR_ID);
+    expect(document.activeElement).toBe(caInput);
+    expect(mockUpdateConnection).not.toHaveBeenCalled();
+
+    // Filling the CA path unblocks the same save.
+    await act(async () => {
+      fireEvent.change(caInput, { target: { value: "/etc/ssl/corp-ca.pem" } });
+    });
+    await act(async () => {
+      fireEvent.click(save());
+    });
+    expect(mockUpdateConnection).toHaveBeenCalledTimes(1);
+    expect(mockUpdateConnection).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sslMode: "verify-ca",
+        caCertPath: "/etc/ssl/corp-ca.pem",
+      }),
+    );
   });
 
   it("submits via the form (Enter) reaching handleSave", async () => {

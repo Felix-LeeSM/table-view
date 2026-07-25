@@ -69,6 +69,12 @@ pub fn save_connection(req: SaveConnectionRequest) -> Result<ConnectionConfigPub
     }
 
     let mut conn = req.connection.into_config_with_empty_password();
+    // #1649 (ADR 0058) — `verify-ca` names a trust anchor, so refuse to persist
+    // one that has none. Enforced here rather than only at connect time so the
+    // user is corrected while the form is open, and for every engine: the
+    // on/off engines ignore `ca_cert_path` today, but an unanchored `verify-ca`
+    // stored there still travels to pg/mysql through a dbType switch.
+    crate::db::tls::validate_tls_posture(&conn)?;
     if req.is_new.unwrap_or(false) {
         conn.id = uuid::Uuid::new_v4().to_string();
     }
@@ -315,6 +321,42 @@ mod tests {
         conn.host = "   ".to_string();
         let result = save_via_command(conn, None);
         assert!(result.is_err());
+    }
+
+    #[test]
+    #[serial]
+    fn test_save_connection_rejects_verify_ca_without_ca_file() {
+        // Reason: #1649 review B1 — `verify-ca` names a trust anchor, and sqlx
+        // answers a missing one with the public webpki roots + hostname
+        // verification off. Reject at the write boundary so the user is
+        // corrected in the form instead of saving a posture that only fails
+        // later at connect time. Whitespace-only counts as missing.
+        // (2026-07-25)
+        let _dir = setup_test_env();
+        for missing in [None, Some("   ".to_string())] {
+            let mut conn = sample_connection("c1", "MyDB");
+            conn.ssl_mode = crate::models::SslMode::VerifyCa;
+            conn.ca_cert_path = missing.clone();
+            match save_via_command(conn, Some(true)) {
+                Err(AppError::Validation(msg)) => assert!(
+                    msg.contains("verify-ca") && msg.contains("CA certificate"),
+                    "rejection must name the missing CA file, got: {msg}"
+                ),
+                other => panic!("expected a Validation rejection for {missing:?}, got: {other:?}"),
+            }
+        }
+        assert!(
+            load_storage().unwrap().connections.is_empty(),
+            "a rejected posture must not be persisted"
+        );
+
+        // The same posture with a CA file saves normally.
+        let mut conn = sample_connection("c1", "MyDB");
+        conn.ssl_mode = crate::models::SslMode::VerifyCa;
+        conn.ca_cert_path = Some("/etc/ssl/corp-ca.pem".into());
+        let saved = save_via_command(conn, Some(true)).expect("verify-ca with a CA file must save");
+        assert_eq!(saved.ca_cert_path.as_deref(), Some("/etc/ssl/corp-ca.pem"));
+        cleanup_test_env();
     }
 
     // AC-12: save_connection with is_new=true generates UUID

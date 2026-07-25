@@ -102,35 +102,33 @@ impl PostgresAdapter {
     /// who turns TLS on is never silently downgraded to plaintext by sqlx's
     /// default `sslmode=prefer`. #1649 (ADR 0058) adds `verify-ca`: the server
     /// certificate is validated against the user's CA at `ca_cert_path` via
-    /// `ssl_root_cert`. Infallible since #1649 — the `SslMode` enum makes the
-    /// previously-rejected combinations unrepresentable.
-    fn connect_options(config: &ConnectionConfig) -> PgConnectOptions {
+    /// `ssl_root_cert`. Fallible only for the fail-closed `verify-ca` rejection
+    /// — `PgSslMode::VerifyCa` without `ssl_root_cert` would fall back to the
+    /// public webpki roots with hostname checking off, so `resolve_tls_decision`
+    /// refuses that posture (libpq parity) and it never reaches sqlx.
+    fn connect_options(config: &ConnectionConfig) -> Result<PgConnectOptions, AppError> {
         let options = PgConnectOptions::new()
             .host(&config.host)
             .port(config.port)
             .username(&config.user)
             .password(&config.password)
             .database(&config.database);
-        match resolve_tls_decision(config) {
+        Ok(match resolve_tls_decision(config)? {
             TlsDecision::Disable => options.ssl_mode(PgSslMode::Disable),
             TlsDecision::Default => options,
             TlsDecision::RequireSkipVerify => options.ssl_mode(PgSslMode::Require),
             // #1649 — verify-ca authenticates the server against the user's CA.
-            // `ssl_root_cert` points sqlx at the PEM; with no CA the driver
-            // still verifies against its default trust store.
-            TlsDecision::RequireVerifyCa { ca_cert_path } => {
-                let options = options.ssl_mode(PgSslMode::VerifyCa);
-                match ca_cert_path {
-                    Some(path) => options.ssl_root_cert(path),
-                    None => options,
-                }
-            }
+            // `ssl_root_cert` points sqlx at the PEM; the decision type
+            // guarantees the path is present.
+            TlsDecision::RequireVerifyCa { ca_cert_path } => options
+                .ssl_mode(PgSslMode::VerifyCa)
+                .ssl_root_cert(ca_cert_path),
             TlsDecision::RequireVerifyFull => options.ssl_mode(PgSslMode::VerifyFull),
-        }
+        })
     }
 
     pub async fn test(config: &ConnectionConfig) -> Result<(), AppError> {
-        let options = Self::connect_options(config);
+        let options = Self::connect_options(config)?;
         let pool = PgPoolOptions::new()
             .max_connections(1)
             .acquire_timeout(std::time::Duration::from_secs(5))
@@ -151,7 +149,7 @@ impl PostgresAdapter {
     }
 
     pub async fn connect_pool(&self, config: &ConnectionConfig) -> Result<(), AppError> {
-        let options = Self::connect_options(config);
+        let options = Self::connect_options(config)?;
         let timeout_secs = config
             .connection_timeout
             .unwrap_or(PG_POOL_ACQUIRE_TIMEOUT_DEFAULT_SECS);
@@ -274,7 +272,7 @@ impl PostgresAdapter {
             SwitchPath::Miss(boxed_config) => {
                 let mut config = *boxed_config;
                 config.database = db_name.to_string();
-                let options = Self::connect_options(&config);
+                let options = Self::connect_options(&config)?;
                 let timeout_secs = config
                     .connection_timeout
                     .unwrap_or(PG_POOL_ACQUIRE_TIMEOUT_DEFAULT_SECS);
@@ -384,7 +382,7 @@ impl PostgresAdapter {
                 .ok_or_else(|| AppError::Connection("Not connected — cannot issue cancel".into()))?
         };
 
-        let options = Self::connect_options(&config);
+        let options = Self::connect_options(&config)?;
         // 5-second hard ceiling — cancel should be sub-second on a healthy
         // network; longer than that the user's intent is to give up
         // anyway.
@@ -676,7 +674,7 @@ mod tests {
     #[test]
     fn connect_options_builder() {
         let config = sample_config();
-        let opts = PostgresAdapter::connect_options(&config);
+        let opts = PostgresAdapter::connect_options(&config).unwrap();
 
         // PgConnectOptions exposes host, port, username, database via Debug
         // We verify by building a connection string and checking the components
@@ -700,7 +698,7 @@ mod tests {
         // Legacy/unset connections (SslMode::Prefer) must keep the driver
         // default so existing sessions are not forced onto TLS unexpectedly.
         let config = sample_config();
-        let opts = PostgresAdapter::connect_options(&config);
+        let opts = PostgresAdapter::connect_options(&config).unwrap();
         assert!(
             matches!(opts.get_ssl_mode(), PgSslMode::Prefer),
             "ssl_mode=prefer must leave the default Prefer ssl_mode"
@@ -711,7 +709,7 @@ mod tests {
     fn connect_options_require_maps_to_require() {
         let mut config = sample_config();
         config.ssl_mode = SslMode::Require;
-        let opts = PostgresAdapter::connect_options(&config);
+        let opts = PostgresAdapter::connect_options(&config).unwrap();
         assert!(
             matches!(opts.get_ssl_mode(), PgSslMode::Require),
             "ssl_mode=require must force encryption without cert verification"
@@ -722,7 +720,7 @@ mod tests {
     fn connect_options_verify_full_maps_to_verify_full() {
         let mut config = sample_config();
         config.ssl_mode = SslMode::VerifyFull;
-        let opts = PostgresAdapter::connect_options(&config);
+        let opts = PostgresAdapter::connect_options(&config).unwrap();
         assert!(
             matches!(opts.get_ssl_mode(), PgSslMode::VerifyFull),
             "ssl_mode=verify-full must verify the full certificate chain"
@@ -740,7 +738,7 @@ mod tests {
         let mut config = sample_config();
         config.ssl_mode = SslMode::VerifyCa;
         config.ca_cert_path = Some("/etc/ssl/private-ca.pem".into());
-        let opts = PostgresAdapter::connect_options(&config);
+        let opts = PostgresAdapter::connect_options(&config).unwrap();
         assert!(
             matches!(opts.get_ssl_mode(), PgSslMode::VerifyCa),
             "ssl_mode=verify-ca must select PgSslMode::VerifyCa"
@@ -755,15 +753,23 @@ mod tests {
     }
 
     #[test]
-    fn connect_options_verify_ca_without_ca_still_selects_verify_ca() {
-        // Reason: #1649 — verify-ca with no CA file still verifies against the
-        // driver's default trust store (does not silently fall back to
-        // skip-verify). (2026-07-25)
+    fn connect_options_verify_ca_without_ca_fails_closed() {
+        // Reason: #1649 review B1 — sqlx 0.8.6 resolves a rootless
+        // `PgSslMode::VerifyCa` to the bundled Mozilla webpki roots *and* sets
+        // `accept_invalid_hostnames = true` (VerifyFull is the only mode that
+        // keeps hostname checking), so letting it through would accept any
+        // publicly-signed certificate for any hostname — weaker than the
+        // verify-full the user could have picked, while reading as stricter.
+        // libpq hard-errors on the same combination. (2026-07-25)
         let mut config = sample_config();
         config.ssl_mode = SslMode::VerifyCa;
         config.ca_cert_path = None;
-        let opts = PostgresAdapter::connect_options(&config);
-        assert!(matches!(opts.get_ssl_mode(), PgSslMode::VerifyCa));
+        let err = PostgresAdapter::connect_options(&config)
+            .expect_err("verify-ca without a CA file must not reach sqlx");
+        assert!(
+            matches!(err, AppError::Validation(_)),
+            "expected a validation rejection, got: {err}"
+        );
     }
 
     #[test]
@@ -773,7 +779,7 @@ mod tests {
         // that an unset config keeps. (2026-07-17)
         let mut config = sample_config();
         config.ssl_mode = SslMode::Disable;
-        let opts = PostgresAdapter::connect_options(&config);
+        let opts = PostgresAdapter::connect_options(&config).unwrap();
         assert!(
             matches!(opts.get_ssl_mode(), PgSslMode::Disable),
             "sslmode=disable must force plaintext, not opportunistic Prefer"

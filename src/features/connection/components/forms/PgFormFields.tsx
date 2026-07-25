@@ -167,6 +167,7 @@ export default function PgFormFields({
         onChange={onChange}
         inputClass={inputClass}
         labelClass={labelClass}
+        invalidField={invalidField}
       />
     </>
   );
