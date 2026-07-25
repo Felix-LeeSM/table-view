@@ -355,7 +355,7 @@ impl std::fmt::Debug for ConnectionConfig {
 /// `hasPassword` is the only signal the UI gets about whether a password is
 /// stored. The plaintext never leaves the backend.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", from = "ConnectionConfigPublicDe")]
 pub struct ConnectionConfigPublic {
     pub id: String,
     pub name: String,
@@ -391,10 +391,11 @@ pub struct ConnectionConfigPublic {
     pub auth_source: Option<String>,
     #[serde(default, alias = "replica_set")]
     pub replica_set: Option<String>,
-    /// #1649 (ADR 0058) — the uniform all-engine TLS posture on the wire.
-    /// `#[serde(default)]` yields `Prefer` for a pre-#1649 export lacking the
-    /// key (the exported posture resets to prefer on import — a rare edge,
-    /// consistent with import already being a re-enter flow).
+    /// #1649 (ADR 0058) — the uniform all-engine TLS posture on the wire. A
+    /// pre-#1649 payload (export envelope, hand-authored IPC call) carries the
+    /// legacy boolean pair instead and folds through
+    /// [`ConnectionConfigPublicDe`], so importing an old export keeps its
+    /// posture rather than silently dropping to `prefer`.
     #[serde(default, alias = "ssl_mode")]
     pub ssl_mode: SslMode,
     /// #1649 (ADR 0058) — CA path for `verify-ca`. Stripped on export like
@@ -409,6 +410,93 @@ pub struct ConnectionConfigPublic {
     /// the plaintext wallet password never leaves the backend (#1065, ADR 0005).
     #[serde(default, alias = "has_wallet_password")]
     pub has_wallet_password: bool,
+}
+
+/// #1649 (ADR 0058) — deserialize shim for the public wire shape, mirroring
+/// [`ConnectionConfigDe`]. `ConnectionConfigPublic` already keeps snake_case
+/// aliases so older stored/exported payloads parse; this extends the same
+/// promise to the TLS posture, folding the legacy
+/// `(tlsEnabled, trustServerCertificate)` pair when `sslMode` is absent.
+/// Without it a pre-#1649 export envelope would import as `prefer` — a silent
+/// downgrade from a stored `require`/`verify-full`. Serialization is one-way:
+/// `ConnectionConfigPublic` only ever writes `sslMode`/`caCertPath`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ConnectionConfigPublicDe {
+    id: String,
+    name: String,
+    #[serde(alias = "db_type")]
+    db_type: DatabaseType,
+    host: String,
+    port: u16,
+    user: String,
+    database: String,
+    #[serde(default, alias = "read_only")]
+    read_only: bool,
+    #[serde(alias = "group_id")]
+    group_id: Option<String>,
+    color: Option<String>,
+    #[serde(default, alias = "connection_timeout")]
+    connection_timeout: Option<u32>,
+    #[serde(default, alias = "keep_alive_interval")]
+    keep_alive_interval: Option<u32>,
+    #[serde(default)]
+    environment: Option<String>,
+    #[serde(default, alias = "has_password")]
+    has_password: bool,
+    paradigm: Paradigm,
+    #[serde(default, alias = "auth_source")]
+    auth_source: Option<String>,
+    #[serde(default, alias = "replica_set")]
+    replica_set: Option<String>,
+    /// New SOT posture. Absent for legacy payloads → folded from the pair below.
+    #[serde(default, alias = "ssl_mode")]
+    ssl_mode: Option<SslMode>,
+    #[serde(default, alias = "ca_cert_path")]
+    ca_cert_path: Option<String>,
+    /// Legacy (ADR 0053) — deserialized only to migrate; never re-serialized.
+    #[serde(default, alias = "tls_enabled")]
+    tls_enabled: Option<bool>,
+    #[serde(default, alias = "trust_server_certificate")]
+    trust_server_certificate: Option<bool>,
+    #[serde(default, alias = "oracle_use_sid")]
+    oracle_use_sid: Option<bool>,
+    #[serde(default, alias = "wallet_path")]
+    wallet_path: Option<String>,
+    #[serde(default, alias = "has_wallet_password")]
+    has_wallet_password: bool,
+}
+
+impl From<ConnectionConfigPublicDe> for ConnectionConfigPublic {
+    fn from(de: ConnectionConfigPublicDe) -> Self {
+        let ssl_mode = de
+            .ssl_mode
+            .unwrap_or_else(|| SslMode::from_legacy(de.tls_enabled, de.trust_server_certificate));
+        ConnectionConfigPublic {
+            id: de.id,
+            name: de.name,
+            db_type: de.db_type,
+            host: de.host,
+            port: de.port,
+            user: de.user,
+            database: de.database,
+            read_only: de.read_only,
+            group_id: de.group_id,
+            color: de.color,
+            connection_timeout: de.connection_timeout,
+            keep_alive_interval: de.keep_alive_interval,
+            environment: de.environment,
+            has_password: de.has_password,
+            paradigm: de.paradigm,
+            auth_source: de.auth_source,
+            replica_set: de.replica_set,
+            ssl_mode,
+            ca_cert_path: de.ca_cert_path,
+            oracle_use_sid: de.oracle_use_sid,
+            wallet_path: de.wallet_path,
+            has_wallet_password: de.has_wallet_password,
+        }
+    }
 }
 
 impl From<&ConnectionConfig> for ConnectionConfigPublic {
@@ -1156,6 +1244,68 @@ mod tests {
         let config: ConnectionConfig = serde_json::from_str(mixed).unwrap();
         assert_eq!(config.ssl_mode, SslMode::VerifyCa);
         assert_eq!(config.ca_cert_path.as_deref(), Some("/etc/ssl/ca.pem"));
+    }
+
+    /// Purpose: #1649 (ADR 0058) — the public wire shape folds the legacy
+    /// `(tlsEnabled, trustServerCertificate)` pair too, so a pre-#1649 export
+    /// envelope imports with its stored posture instead of silently dropping to
+    /// the opportunistic `prefer`.
+    #[test]
+    fn connection_config_public_migrates_legacy_tls_booleans_to_ssl_mode() {
+        // Reason: #1649 — `import_connections` parses an export file into this
+        // shape, and an export written before the migration carries only the
+        // booleans. Folding them here is what keeps a stored `require` /
+        // `verify-full` from becoming `prefer` on import. (2026-07-25)
+        let legacy = r#"{
+            "id": "c1",
+            "name": "ES",
+            "dbType": "elasticsearch",
+            "host": "localhost",
+            "port": 9200,
+            "user": "elastic",
+            "database": "",
+            "groupId": null,
+            "color": null,
+            "paradigm": "search",
+            "tlsEnabled": true
+        }"#;
+        let public: ConnectionConfigPublic = serde_json::from_str(legacy).unwrap();
+        assert_eq!(public.ssl_mode, SslMode::VerifyFull);
+
+        let legacy_trusted = r#"{
+            "id": "c1",
+            "name": "PG",
+            "db_type": "postgresql",
+            "host": "localhost",
+            "port": 5432,
+            "user": "u",
+            "database": "d",
+            "group_id": null,
+            "color": null,
+            "paradigm": "rdb",
+            "tls_enabled": true,
+            "trust_server_certificate": true
+        }"#;
+        let public: ConnectionConfigPublic = serde_json::from_str(legacy_trusted).unwrap();
+        assert_eq!(public.ssl_mode, SslMode::Require);
+
+        // An explicit posture still wins over a stale legacy pair.
+        let mixed = r#"{
+            "id": "c1",
+            "name": "PG",
+            "dbType": "postgresql",
+            "host": "localhost",
+            "port": 5432,
+            "user": "u",
+            "database": "d",
+            "groupId": null,
+            "color": null,
+            "paradigm": "rdb",
+            "sslMode": "verify-ca",
+            "tlsEnabled": false
+        }"#;
+        let public: ConnectionConfigPublic = serde_json::from_str(mixed).unwrap();
+        assert_eq!(public.ssl_mode, SslMode::VerifyCa);
     }
 
     /// Purpose: #1649 — `SslMode` serializes to the kebab-case PostgreSQL
