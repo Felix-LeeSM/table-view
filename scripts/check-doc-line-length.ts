@@ -19,8 +19,9 @@
 //      long rows into new files without changing the total.
 //   2. Per-file longest line may only fall, and a file with no baseline entry
 //      must have every line at or under the ceiling. Without the max rule,
-//      swapping a 6,346-char row for a 6,000-char row keeps the total flat and
-//      passes. The no-entry half means a file cleaned up once is permanently
+//      swapping the 6,334-char row in known-limitations.md for a 6,000-char one
+//      keeps the total flat and passes. The no-entry half means a file cleaned
+//      up once is permanently
 //      protected, which is the actual incentive the ratchet exists to create.
 //
 // An earlier draft gated on `git diff` instead: any added-or-changed line over

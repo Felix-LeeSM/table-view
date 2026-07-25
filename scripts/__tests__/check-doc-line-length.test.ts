@@ -112,14 +112,14 @@ describe("findRatchetFailures", () => {
   });
 
   it("fails when the longest line grows even though the count is flat", () => {
-    // The swap hole: replacing a 6,346-char row with a 6,400-char one leaves
+    // The swap hole: replacing the 6,334-char row with a 6,400-char one leaves
     // the count unchanged.
     const failures = findRatchetFailures(
       new Map([
         ["docs/product/known-limitations.md", { over: 18, maxLen: 6400 }],
       ]),
       targets([
-        { path: "docs/product/known-limitations.md", over: 18, maxLen: 6346 },
+        { path: "docs/product/known-limitations.md", over: 18, maxLen: 6334 },
       ]),
     );
 

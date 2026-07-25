@@ -88,9 +88,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     # Promoted from advisory to blocking. The old comment deferred the flip until
-    # "분할 정리 후" — that split landed (testing-and-quality.md 115,825 -> 9,476
-    # chars), so no measured doc is near the 120,000-char cap and the gate can
-    # fail closed without failing on day one.
+    # "분할 정리 후"; that split landed (#1827 took testing-and-quality.md from
+    # 117,319 to 13,772 chars), so at the time of the flip the largest measured
+    # doc was docs/ROADMAP.md at 108,185 of the 120,000-char cap and the gate can
+    # fail closed without failing on day one. Both numbers drift — the gate's own
+    # output is the live figure, not this comment.
     #
     # Two metrics, because they catch different failures:
     #   - check-doc-size.sh --strict: whole-file chars (~30k tokens at the cap).
