@@ -399,6 +399,14 @@ if [ "$needs_memory" = "1" ] || [ "$has_deletion" = "1" ]; then
 	run_step "memory-paths" npx tsx scripts/check-memory-paths.ts
 fi
 
+# AGENTS.md matrix coverage gate (issue #1755): a memory change can push a room
+# over the high-reference threshold, and an AGENTS.md edit can drop a matrix row.
+# Run on either trigger. AGENTS.md classifies as a docs path (not agent), so key
+# off the outgoing path set directly rather than a route flag.
+if [ "$needs_memory" = "1" ] || grep -qxF "AGENTS.md" "$PATHS_FILE"; then
+	run_step "agents-matrix" npx tsx scripts/check-agents-matrix-coverage.ts
+fi
+
 if [ "$has_paths" = "0" ]; then
 	echo "[pre-push-route] route: no outgoing path changes; skipping TS/Rust gates"
 elif [ "$docs_only" = "1" ]; then

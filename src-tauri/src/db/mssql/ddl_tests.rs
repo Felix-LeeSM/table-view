@@ -201,6 +201,7 @@ async fn alter_table_preview_emits_tsql_statement_chain() {
                 new_nullable: Some(false),
                 new_default_value: None,
                 using_expression: None,
+                new_comment: None,
             },
             ColumnChange::Drop {
                 name: "legacy".into(),
@@ -333,6 +334,7 @@ async fn structured_ddl_rejects_unsupported_mssql_boundaries() {
             new_nullable: None,
             new_default_value: None,
             using_expression: Some("LOWER(email)".into()),
+            new_comment: None,
         }],
         preview_only: true,
         expected_database: None,

@@ -37,6 +37,12 @@ vi.mock("@components/theme/ThemePicker", () => ({
   default: () => <div data-testid="theme-picker-mock" />,
 }));
 
+// #1738 (2026-07-25) — 테마/언어를 사이드바 상단 단일 영역(theme 팝오버)으로
+// 통합. LanguageSwitcher 도 같은 방식으로 격리해 상단 배치만 검증한다.
+vi.mock("@components/theme/LanguageSwitcher", () => ({
+  default: () => <div data-testid="language-switcher-mock" />,
+}));
+
 // Sprint 154 — `WorkspacePage` registers a `tauri://close-requested`
 // listener at mount and routes Back through the `@lib/window-controls`
 // seam. Stub the seam so the assertions can observe call shape directly
@@ -184,6 +190,18 @@ describe("WorkspacePage", () => {
     });
 
     expect(screen.getByTestId("theme-picker-mock")).toBeInTheDocument();
+  });
+
+  // Reason: #1738 (2026-07-25) — 테마/언어 컨트롤을 사이드바 상단 단일
+  // 영역(theme 팝오버)으로 통합. 상단 트리거를 열면 테마 + 언어 컨트롤이
+  // 함께 노출되어야 한다 (하단 footer 의 중복 theme/language 제거의 대응).
+  it("top theme popover also exposes the language switcher (#1738 상단 단일화)", async () => {
+    render(<WorkspacePage />);
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /workspace theme/i }));
+    });
+    expect(screen.getByTestId("theme-picker-mock")).toBeInTheDocument();
+    expect(screen.getByTestId("language-switcher-mock")).toBeInTheDocument();
   });
 
   // Reason: Phase 14 AC-161-02 — Workspace에서 theme mode 변경 시 store 업데이트 검증 (2026-04-28)

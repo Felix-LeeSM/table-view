@@ -347,8 +347,18 @@ assert_contains "$memory_output" "route: frontend=0 rust=0 hook=0 memory=1 agent
 assert_contains "$memory_output" "RUN memory-structure:" "memory"
 assert_contains "$memory_output" "RUN memory-size:" "memory"
 assert_contains "$memory_output" "RUN memory-paths:" "memory"
+# A memory change can push a room over the high-reference threshold (issue #1755).
+assert_contains "$memory_output" "RUN agents-matrix:" "memory"
 assert_not_contains "$memory_output" "RUN ts-test:" "memory"
 assert_not_contains "$memory_output" "RUN rust-test-and-coverage:" "memory"
+
+# AGENTS.md classifies as docs, but a matrix-row edit must still trigger the
+# coverage gate (issue #1755). memory-paths stays off (no memory change/deletion).
+agents_md_output="$(run_case agents-md normal AGENTS.md)"
+assert_contains "$agents_md_output" "route: docs-only" "agents md"
+assert_contains "$agents_md_output" "RUN agents-matrix:" "agents md"
+assert_not_contains "$agents_md_output" "RUN memory-paths:" "agents md"
+assert_not_contains "$agents_md_output" "RUN ts-test:" "agents md"
 
 unknown_output="$(run_case unknown normal .prettierrc)"
 assert_contains "$unknown_output" "route: full" "unknown"

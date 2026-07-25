@@ -126,6 +126,13 @@ export default function StructurePanel({
   // constraints (Stage 2b), so the Constraints editor reads `alterConstraint`,
   // not `alterTable`.
   const canAlterConstraint = supportsDdl(dbType, "alterConstraint");
+  // Issue #1735 — the column comment cell becomes editable only where the
+  // adapter emits COMMENT ON COLUMN (PG + Oracle). MySQL/MSSQL run ALTER TABLE
+  // but have no ANSI COMMENT ON and their emitters drop `new_comment` silently,
+  // so gating on `canAlterTable` alone would surface a broken edit; the finer
+  // `editColumnComment` flag keeps the cell read-only there. Wiring pinned by
+  // `StructurePanel.ddl-gate.test.tsx`.
+  const canEditColumnComment = supportsDdl(dbType, "editColumnComment");
   // Clamp a sub-tab that the capability gate hides (e.g. a persisted
   // `initialSubTab="indexes"` on DuckDB) back to Columns so the render
   // branches AND the fetch effect never target a gated tab.
@@ -325,6 +332,7 @@ export default function StructurePanel({
             onRefresh={fetchData}
             paradigm={paradigm}
             canAlterTable={canAlterTable}
+            canEditColumnComment={canEditColumnComment}
           />
         )}
       {!loading &&

@@ -13,8 +13,10 @@ import {
   PopoverTrigger,
 } from "@components/ui/popover";
 import ThemePicker from "@components/theme/ThemePicker";
+import LanguageSwitcher from "@components/theme/LanguageSwitcher";
 import { useThemeStore } from "@stores/themeStore";
 import { THEME_CATALOG } from "@lib/themeCatalog";
+import { subscribeSystemModeChange } from "@lib/themeBoot";
 import { logger } from "@lib/logger";
 import { useWindowFocusHydration } from "@hooks/useWindowFocusHydration";
 import { useAutoResolveActiveDb } from "@hooks/useAutoResolveActiveDb";
@@ -60,11 +62,21 @@ export default function WorkspacePage() {
   // trigger's visual state.
   const themeId = useThemeStore((s) => s.themeId);
   const themeMode = useThemeStore((s) => s.mode);
+  const handleSystemChange = useThemeStore((s) => s.handleSystemChange);
 
   const activeEntry =
     THEME_CATALOG.find((t) => t.id === themeId) ?? THEME_CATALOG[0];
   const ThemeIcon =
     themeMode === "dark" ? Moon : themeMode === "light" ? Sun : Monitor;
+
+  // #1738 (2026-07-25) — the workspace window's system-mode subscription moved
+  // here from `Sidebar` alongside the theme UI. Each Tauri window keeps its
+  // own subscription (HomePage owns the launcher window's); when mode is
+  // "system" the OS light/dark switch re-resolves the theme live.
+  useEffect(() => {
+    if (themeMode !== "system") return;
+    return subscribeSystemModeChange(handleSystemChange);
+  }, [themeMode, handleSystemChange]);
 
   // Back-to-connections — separate handler from disconnect. Wave 9.5
   // (2026-05-16) — focus launcher 먼저 (사용자 expected: connections 창에
@@ -142,10 +154,11 @@ export default function WorkspacePage() {
             <span className="text-xs">{t("connections")}</span>
           </Button>
 
-          {/* Workspace-level theme toggle. Mirrors the
-              Popover+ThemePicker pattern from Sidebar.tsx so users can
-              change theme from the header without scrolling to the
-              sidebar footer. */}
+          {/* #1738 (2026-07-25) — single top area for appearance controls.
+              This popover is now the ONLY place theme + language live (the
+              duplicate sidebar-footer copy was removed); it groups
+              ThemePicker + LanguageSwitcher so both settings sit together
+              in the header without scrolling to the sidebar footer. */}
           <Popover>
             <PopoverTrigger asChild>
               <Button
@@ -173,7 +186,10 @@ export default function WorkspacePage() {
               collisionPadding={8}
               className="w-72 max-h-[var(--radix-popover-content-available-height)] overflow-y-auto p-2"
             >
-              <ThemePicker />
+              <div className="flex flex-col gap-2">
+                <ThemePicker />
+                <LanguageSwitcher />
+              </div>
             </PopoverContent>
           </Popover>
         </div>

@@ -486,7 +486,17 @@ jobs:
           E2E_SPEC: ${{ matrix.spec }}
           E2E_SPEC_KEY: ${{ matrix.spec_key }}
           E2E_REPORT_DIR: e2e/wdio-report/${{ matrix.spec_key }}
-        run: bash scripts/e2e-smoke-ci.sh
+        # `shell: bash` + explicit pipefail so the `| tee` capture does NOT mask
+        # a real E2E failure (tee would otherwise swallow the script's exit code).
+        shell: bash
+        run: |
+          set -o pipefail
+          bash scripts/e2e-smoke-ci.sh 2>&1 | tee "$RUNNER_TEMP/e2e-smoke.log"
+
+      - name: Summarize masked E2E flake markers (#1293)
+        if: always()
+        shell: bash
+        run: bash scripts/e2e-smoke-flake-summary.sh "$RUNNER_TEMP/e2e-smoke.log" "${{ matrix.spec_key }}"
 
       - name: Stop OpenSearch service
         if: always() && matrix.spec_key == 'opensearch'
@@ -610,7 +620,17 @@ jobs:
           E2E_SPEC: ${{ matrix.spec }}
           E2E_SPEC_KEY: ${{ matrix.spec_key }}
           E2E_REPORT_DIR: e2e/wdio-report/${{ matrix.spec_key }}
-        run: bash scripts/e2e-smoke-ci.sh
+        # `shell: bash` + explicit pipefail so the `| tee` capture does NOT mask
+        # a real E2E failure (tee would otherwise swallow the script's exit code).
+        shell: bash
+        run: |
+          set -o pipefail
+          bash scripts/e2e-smoke-ci.sh 2>&1 | tee "$RUNNER_TEMP/e2e-smoke.log"
+
+      - name: Summarize masked E2E flake markers (#1293)
+        if: always()
+        shell: bash
+        run: bash scripts/e2e-smoke-flake-summary.sh "$RUNNER_TEMP/e2e-smoke.log" "${{ matrix.spec_key }}"
 
       - name: Upload E2E artifacts
         if: always()

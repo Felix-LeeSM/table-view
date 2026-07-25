@@ -341,6 +341,8 @@ describe("adapter conformance matrix", () => {
       "ddl.dropObject",
       "ddl.alterConstraint",
       "ddl.identityColumn",
+      // Issue #1735 — Oracle emits COMMENT ON COLUMN via alter_table.
+      "ddl.editColumnComment",
     ]);
     expect(oracle.areas.connection.deferred).toEqual([]);
     expect(oracle.areas.connection.unsupported).toEqual([
@@ -392,6 +394,9 @@ describe("adapter conformance matrix", () => {
     expect(duckdb.areas.ddl.deferred).toEqual([
       "ddl.alterConstraint",
       "ddl.identityColumn",
+      // #1735 — DuckDB has native COMMENT ON COLUMN (create_table already
+      // emits it); only the alter_table leg is unwired.
+      "ddl.editColumnComment",
     ]);
     expect(duckdb.areas.ddl.unsupported).toEqual([]);
   });

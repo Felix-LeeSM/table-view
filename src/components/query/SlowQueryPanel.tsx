@@ -3,11 +3,18 @@
 // table sourced from `pg_stat_statements` (RDB) or `system.profile`
 // (Mongo). `limit` is fixed at 25 for the initial wire; a follow-up
 // sprint can add a selector once usage tells us what range matters.
+//
+// #1077 admin-parity Stage 3 (2026-07-25) — promoted to an auto-polling
+// dashboard: a live-toggle drives periodic refresh and a session-local
+// sparkline tracks the tracked slow-query count over time. Same
+// `slow_queries` IPC on a timer, no new backend.
 
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Loader2, RefreshCw } from "lucide-react";
+import { Loader2, Pause, Play, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Sparkline } from "@/components/ui/Sparkline";
+import { useAutoRefresh, useTrendBuffer } from "@/lib/dashboard/opsPolling";
 import { DataGridSkeleton } from "@components/datagrid";
 import { slowQueries, type SlowQueryRow } from "@/lib/api/slowQueries";
 import { getCapabilityNotEnabledInfo } from "@/lib/tauri/error";
@@ -24,6 +31,8 @@ export interface SlowQueryPanelProps {
 }
 
 const DEFAULT_LIMIT = 25;
+const POLL_MS = 15000;
+const TREND_CAPACITY = 60;
 
 export function SlowQueryPanel({ connectionId, dbType }: SlowQueryPanelProps) {
   const { t } = useTranslation("query");
@@ -34,6 +43,8 @@ export function SlowQueryPanel({ connectionId, dbType }: SlowQueryPanelProps) {
   // Server-side capability gap (extension/permission missing) — rendered as a
   // passive enablement hint keyed by `code`, not a red error box.
   const [unavailableCode, setUnavailableCode] = useState<string | null>(null);
+  const [autoRefresh, setAutoRefresh] = useState(true);
+  const { samples, push } = useTrendBuffer(TREND_CAPACITY, connectionId);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -42,6 +53,7 @@ export function SlowQueryPanel({ connectionId, dbType }: SlowQueryPanelProps) {
     try {
       const next = await slowQueries(connectionId, DEFAULT_LIMIT);
       setRows(next);
+      push(next.length);
     } catch (e) {
       const capability = getCapabilityNotEnabledInfo(e);
       if (capability) {
@@ -52,11 +64,13 @@ export function SlowQueryPanel({ connectionId, dbType }: SlowQueryPanelProps) {
     } finally {
       setLoading(false);
     }
-  }, [connectionId]);
+  }, [connectionId, push]);
 
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  useAutoRefresh(() => void refresh(), POLL_MS, autoRefresh);
 
   return (
     <section
@@ -69,20 +83,45 @@ export function SlowQueryPanel({ connectionId, dbType }: SlowQueryPanelProps) {
         <span>
           {t("slowQuery.header", { db: DATABASE_TYPE_LABELS[dbType] })}
         </span>
-        <Button
-          variant="ghost"
-          size="sm"
-          data-testid="slow-query-refresh"
-          onClick={() => void refresh()}
-          disabled={loading}
-        >
-          {loading ? (
-            <Loader2 className="animate-spin" size={12} aria-hidden />
-          ) : (
-            <RefreshCw size={12} aria-hidden />
-          )}
-          {t("slowQuery.refresh")}
-        </Button>
+        <div className="flex items-center gap-3">
+          <span data-testid="slow-query-count" className="tabular-nums">
+            {t("slowQuery.trackedCount", { count: rows?.length ?? 0 })}
+          </span>
+          <Sparkline
+            data={samples}
+            ariaLabel={t("slowQuery.trendAria")}
+            data-testid="slow-query-trend"
+          />
+          <Button
+            variant="ghost"
+            size="sm"
+            aria-pressed={autoRefresh}
+            aria-label={t("slowQuery.autoRefreshAria")}
+            data-testid="slow-query-autorefresh"
+            onClick={() => setAutoRefresh((v) => !v)}
+          >
+            {autoRefresh ? (
+              <Pause size={12} aria-hidden />
+            ) : (
+              <Play size={12} aria-hidden />
+            )}
+            {autoRefresh ? t("slowQuery.live") : t("slowQuery.paused")}
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            data-testid="slow-query-refresh"
+            onClick={() => void refresh()}
+            disabled={loading}
+          >
+            {loading ? (
+              <Loader2 className="animate-spin" size={12} aria-hidden />
+            ) : (
+              <RefreshCw size={12} aria-hidden />
+            )}
+            {t("slowQuery.refresh")}
+          </Button>
+        </div>
       </header>
 
       {error !== null && (

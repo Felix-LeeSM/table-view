@@ -400,6 +400,12 @@ fn build_alter_ops(change: &ColumnChange) -> Result<Vec<String>, AppError> {
             new_nullable,
             new_default_value,
             using_expression,
+            // #1735 — DuckDB does have native `COMMENT ON COLUMN` (this file
+            // already emits it from `create_table`), but the ALTER leg is not
+            // wired: the Structure column editor gates the comment cell on
+            // `ddl.editColumnComment`, which stays false for DuckDB, so no
+            // comment reaches this arm (same posture as MySQL / MSSQL).
+            new_comment: _,
         } => {
             validate_identifier(name, "Column name")?;
             if new_data_type.is_none() && using_expression.is_some() {
@@ -641,6 +647,7 @@ mod tests {
                     new_nullable: Some(false),
                     new_default_value: Some("0".into()),
                     using_expression: None,
+                    new_comment: None,
                 },
                 ColumnChange::Drop { name: "old".into() },
             ],
@@ -701,6 +708,7 @@ mod tests {
                 new_nullable: None,
                 new_default_value: None,
                 using_expression: Some("c::int".into()),
+                new_comment: None,
             }],
             preview_only: true,
             expected_database: None,
@@ -911,6 +919,7 @@ mod tests {
                     new_nullable: Some(false),
                     new_default_value: None,
                     using_expression: None,
+                    new_comment: None,
                 }],
                 preview_only: false,
                 expected_database: None,
