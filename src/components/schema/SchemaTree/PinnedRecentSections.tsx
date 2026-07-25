@@ -56,8 +56,12 @@ export function PinnedRecentSections({
     () => selectRecentTables(entries, connectionId, db),
     [entries, connectionId, db],
   );
-  // #1309 — Recent is a history surface: show ~5 then collapse the rest.
-  const recentCollapse = useCollapsibleHistory(recent);
+  // #1738 (2026-07-25) — Recent moved below the tree; collapsed state now hides
+  // it completely (0 shown) instead of leaving the shared 5-row peek. Pass a
+  // 0 cap so "접으면 완전 숨김" — the section header + toggle stay, but no rows
+  // render until the user expands. (#1309's shared HISTORY_DEFAULT_VISIBLE=5
+  // stays the default for other history surfaces like the query panel.)
+  const recentCollapse = useCollapsibleHistory(recent, 0);
 
   if (pinned.length === 0 && recent.length === 0) return null;
 

@@ -1,11 +1,18 @@
 // Sprint 336 (2026-05-15) — U1 live wire. Server activity (PG
 // pg_stat_activity / Mongo db.currentOp) + Kill action. Wire shape is
 // paradigm-neutral so the grid renders both sides identically.
+//
+// #1077 admin-parity Stage 3 (2026-07-25) — promoted from a manual snapshot
+// to an auto-polling dashboard: a live-toggle drives periodic refresh and a
+// session-local sparkline tracks the active-session count over time. No new
+// backend/IPC — same `list_server_activity` on a timer.
 
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Loader2, RefreshCw } from "lucide-react";
+import { Loader2, Pause, Play, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Sparkline } from "@/components/ui/Sparkline";
+import { useAutoRefresh, useTrendBuffer } from "@/lib/dashboard/opsPolling";
 import {
   killServerActivity,
   listServerActivity,
@@ -13,6 +20,9 @@ import {
 } from "@/lib/api/serverActivity";
 import { DATABASE_TYPE_LABELS, paradigmOf, type DatabaseType } from "../model";
 import { PanelLoadingSkeleton } from "./PanelLoadingSkeleton";
+
+const POLL_MS = 5000;
+const TREND_CAPACITY = 60;
 
 export interface ServerActivityPanelProps {
   connectionId: string;
@@ -38,6 +48,8 @@ export function ServerActivityPanel({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [killingId, setKillingId] = useState<number | null>(null);
+  const [autoRefresh, setAutoRefresh] = useState(true);
+  const { samples, push } = useTrendBuffer(TREND_CAPACITY, connectionId);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -45,16 +57,19 @@ export function ServerActivityPanel({
     try {
       const next = await listServerActivity(connectionId);
       setRows(next);
+      push(next.length);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
     }
-  }, [connectionId]);
+  }, [connectionId, push]);
 
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  useAutoRefresh(() => void refresh(), POLL_MS, autoRefresh);
 
   const handleKill = useCallback(
     async (row: ServerActivityRow) => {
@@ -85,20 +100,47 @@ export function ServerActivityPanel({
             paradigm: DATABASE_TYPE_LABELS[dbType],
           })}
         </span>
-        <Button
-          variant="ghost"
-          size="sm"
-          data-testid="server-activity-refresh"
-          onClick={() => void refresh()}
-          disabled={loading}
-        >
-          {loading ? (
-            <Loader2 className="animate-spin" size={12} aria-hidden />
-          ) : (
-            <RefreshCw size={12} aria-hidden />
-          )}
-          {t("serverActivity.refresh")}
-        </Button>
+        <div className="flex items-center gap-3">
+          <span data-testid="server-activity-count" className="tabular-nums">
+            {t("serverActivity.sessionCount", { count: rows.length })}
+          </span>
+          <Sparkline
+            data={samples}
+            ariaLabel={t("serverActivity.trendAria")}
+            data-testid="server-activity-trend"
+          />
+          <Button
+            variant="ghost"
+            size="sm"
+            aria-pressed={autoRefresh}
+            aria-label={t("serverActivity.autoRefreshAria")}
+            data-testid="server-activity-autorefresh"
+            onClick={() => setAutoRefresh((v) => !v)}
+          >
+            {autoRefresh ? (
+              <Pause size={12} aria-hidden />
+            ) : (
+              <Play size={12} aria-hidden />
+            )}
+            {autoRefresh
+              ? t("serverActivity.live")
+              : t("serverActivity.paused")}
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            data-testid="server-activity-refresh"
+            onClick={() => void refresh()}
+            disabled={loading}
+          >
+            {loading ? (
+              <Loader2 className="animate-spin" size={12} aria-hidden />
+            ) : (
+              <RefreshCw size={12} aria-hidden />
+            )}
+            {t("serverActivity.refresh")}
+          </Button>
+        </div>
       </header>
 
       {error !== null && (
@@ -152,7 +194,10 @@ export function ServerActivityPanel({
               <th className="px-3 py-1 font-medium">
                 {t("serverActivity.colStarted")}
               </th>
-              <th className="px-3 py-1 font-medium" aria-label="actions" />
+              <th
+                className="px-3 py-1 font-medium"
+                aria-label={t("serverActivity.colActions")}
+              />
             </tr>
           </thead>
           <tbody>

@@ -263,6 +263,11 @@ export const en = {
     colTotalMs: "Total (ms)",
     colRows: "Rows",
     rawExtras: "Raw extras (first row)",
+    live: "Live",
+    paused: "Paused",
+    autoRefreshAria: "Toggle live auto-refresh",
+    trackedCount: "Tracked: {{count}}",
+    trendAria: "Slow query count trend",
     unavailable: {
       pg_stat_statements: {
         title: "pg_stat_statements extension is not installed",
@@ -543,6 +548,11 @@ export const ko = {
     colTotalMs: "합계 (ms)",
     colRows: "행",
     rawExtras: "원본 추가 정보 (첫 번째 행)",
+    live: "실시간",
+    paused: "일시정지",
+    autoRefreshAria: "실시간 자동 새로 고침 전환",
+    trackedCount: "추적: {{count}}",
+    trendAria: "느린 쿼리 수 추이",
     unavailable: {
       pg_stat_statements: {
         title: "pg_stat_statements 확장이 설치되어 있지 않습니다",

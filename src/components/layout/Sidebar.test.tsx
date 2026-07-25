@@ -54,12 +54,6 @@ import type { ConnectionConfig, ConnectionStatus } from "@/types/connection";
   });
 }
 
-// Isolate Sidebar from the full ThemePicker (and its transitive radix portals)
-// so we can assert the trigger contract without rendering 72 cards.
-vi.mock("@components/theme/ThemePicker", () => ({
-  default: () => <div data-testid="theme-picker-mock" />,
-}));
-
 // Mock WorkspaceSidebar (sprint 126 swap-in for SchemaPanel) so we don't
 // have to render the full paradigm-aware tree. The test still asserts on
 // `data-testid="schema-panel"` for stability — the slot's role from
@@ -325,25 +319,16 @@ describe("Sidebar (schemas-only)", () => {
       expect(screen.queryByTestId("connection-dialog")).toBeNull();
     });
 
-    it("renders the theme picker trigger with current theme in aria-label", () => {
+    // Reason: #1738 (2026-07-25) — 테마/언어 컨트롤을 사이드바 상단 단일
+    // 영역(WorkspacePage 헤더 theme 팝오버)으로 이관. 사이드바 하단 footer
+    // 의 theme 팝오버 + LanguageSwitcher 는 제거되어 더 이상 렌더되지 않음을
+    // lock (하단 중복 제거 회귀 가드).
+    it("does NOT render a theme/language control in the sidebar footer (#1738 상단 단일화)", () => {
       render(<Sidebar />);
-      const btn = screen.getByRole("button", {
-        name: /theme picker: currently/i,
-      });
-      expect(btn).toBeInTheDocument();
-    });
-
-    it("opens the theme picker popover when the trigger is clicked", () => {
-      render(<Sidebar />);
-      const btn = screen.getByRole("button", {
-        name: /theme picker: currently/i,
-      });
-      // Popover portal content is not mounted until the trigger is clicked.
+      expect(
+        screen.queryByRole("button", { name: /theme picker: currently/i }),
+      ).toBeNull();
       expect(screen.queryByTestId("theme-picker-mock")).toBeNull();
-      act(() => {
-        fireEvent.click(btn);
-      });
-      expect(screen.getByTestId("theme-picker-mock")).toBeInTheDocument();
     });
 
     it("has a resize handle on the right edge", () => {

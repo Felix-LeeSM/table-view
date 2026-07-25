@@ -1,34 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import {
-  Sun,
-  Moon,
-  Monitor,
-  Plus,
-  RotateCcw,
-  FoldVertical,
-  UnfoldVertical,
-} from "lucide-react";
+import { Plus, RotateCcw, FoldVertical, UnfoldVertical } from "lucide-react";
 import { getSidebarObjectLabel } from "@lib/dbTypeLabels";
 import { useConnectionStore } from "@stores/connectionStore";
 import { resolveActiveDb, useWorkspaceStore } from "@stores/workspaceStore";
 import { useSchemaStore } from "@stores/schemaStore";
 import type { SchemaInfo } from "@/types/schema";
 import { useMruStore } from "@stores/mruStore";
-import { useThemeStore } from "@stores/themeStore";
 import { useResizablePanel } from "@hooks/useResizablePanel";
 import { useCurrentWindowConnectionId } from "@hooks/useCurrentWindowConnectionId";
-import { THEME_CATALOG } from "@lib/themeCatalog";
-import { subscribeSystemModeChange } from "@lib/themeBoot";
 import { Button } from "@components/ui/button";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@components/ui/popover";
 import WorkspaceSidebar from "@components/workspace/WorkspaceSidebar";
-import ThemePicker from "@components/theme/ThemePicker";
-import LanguageSwitcher from "@components/theme/LanguageSwitcher";
 import { persistSettingValue, resetSetting } from "@lib/tauri/settings";
 import { logger } from "@lib/logger";
 
@@ -74,14 +56,9 @@ export default function Sidebar() {
   // engagement with the connection.
   const markConnectionUsed = useMruStore((s) => s.markConnectionUsed);
 
-  const themeId = useThemeStore((s) => s.themeId);
-  const themeMode = useThemeStore((s) => s.mode);
-  const handleSystemChange = useThemeStore((s) => s.handleSystemChange);
-
-  useEffect(() => {
-    if (themeMode !== "system") return;
-    return subscribeSystemModeChange(handleSystemChange);
-  }, [themeMode, handleSystemChange]);
+  // #1738 (2026-07-25) — theme/language controls (and the system-mode
+  // subscription that backed them) moved to the single top area owned by
+  // `WorkspacePage`. The sidebar footer no longer renders a theme popover.
 
   // sprint-366 (Phase 4, Q15) — Removed the two `setFocusedConn` effects
   // ("focus active tab's conn" + "heal vanished focus") that previously
@@ -235,11 +212,6 @@ export default function Sidebar() {
     }
   }, [focusedConnId, isAllCollapsed, handleCollapseAll, handleExpandAll]);
 
-  const activeEntry =
-    THEME_CATALOG.find((t) => t.id === themeId) ?? THEME_CATALOG[0];
-  const ThemeIcon =
-    themeMode === "dark" ? Moon : themeMode === "light" ? Sun : Monitor;
-
   // New-connection creation happens on the launcher window (HomePage);
   // the `connections` effect above heals focus when the new connection
   // lands in the store.
@@ -315,41 +287,11 @@ export default function Sidebar() {
           <WorkspaceSidebar selectedId={focusedConnId} />
         </div>
 
-        {/* Theme picker footer */}
+        {/* Sidebar footer. #1738 (2026-07-25) — the duplicate theme popover +
+            LanguageSwitcher were removed from here; theme/language now live in
+            the single top area (`WorkspacePage` header). Only the "Reset
+            width" affordance remains. */}
         <div className="border-t border-border px-3 py-2">
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                variant="ghost"
-                size="xs"
-                className="w-full justify-start text-muted-foreground"
-                aria-label={t("sidebar.themePickerAria", {
-                  name: activeEntry.name,
-                  mode: themeMode,
-                })}
-              >
-                <span
-                  aria-hidden="true"
-                  className="h-3 w-3 shrink-0 rounded-full border border-border"
-                  style={{ backgroundColor: activeEntry.swatch }}
-                />
-                <span className="truncate">{activeEntry.name}</span>
-                <ThemeIcon className="ml-auto" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent
-              align="start"
-              side="top"
-              sideOffset={8}
-              collisionPadding={8}
-              className="w-72 max-h-[var(--radix-popover-content-available-height)] overflow-y-auto p-2"
-            >
-              <div className="flex flex-col gap-2">
-                <ThemePicker />
-                <LanguageSwitcher />
-              </div>
-            </PopoverContent>
-          </Popover>
           {/* Sprint 376 (Phase 6 Q21 #3-a) — "Reset sidebar width" 가시
               버튼. 우클릭 컨텍스트 메뉴 대신 직관적 위치 (sidebar
               하단, drag handle 과 시각 근접) 에 노출. */}
