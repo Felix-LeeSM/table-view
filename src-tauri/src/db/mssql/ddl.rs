@@ -476,7 +476,18 @@ fn build_alter_table_statements(
 /// literals are `validate_identifier`-checked (ASCII alphanumeric + `_`) before
 /// they reach this builder, and are single-quote escaped anyway.
 ///
-/// The variable carries the change index because `preview_or_execute` joins the
+/// The dynamic statement is materialised into `@drop_default_N` *before* the
+/// `EXEC`, because the character-string `EXECUTE` form is
+/// `EXEC ( { @string_variable | [N]'tsql_string' } [ + ...n ] )` — its `+`
+/// operands are string literals and variables only. A function call in the
+/// operand list (`EXEC(N'…' + QUOTENAME(@v))`) is not in that grammar and SQL
+/// Server rejects it at parse time with `Msg 102, Incorrect syntax near
+/// 'QUOTENAME'`, which would roll the whole alter back at statement 1 of 3
+/// (verified against SQL Server 2022 16.0.4265.3 — PR #1795 review B1). A
+/// missing default leaves `@default_name_N` NULL, `QUOTENAME(NULL)` NULL, and
+/// the concatenation NULL, so the `IF` doubles as the not-found guard.
+///
+/// The variables carry the change index because `preview_or_execute` joins the
 /// statement list with "; " for the preview dialog: a batch may only declare a
 /// given variable name once (Msg 134), so a two-column DEFAULT edit needs two
 /// names. Execution is unaffected either way — `execute_schema_change` sends one
@@ -487,14 +498,15 @@ fn build_drop_default_constraint_statement(
     change_index: usize,
 ) -> String {
     format!(
-        "DECLARE @default_name_{index} sysname; \
+        "DECLARE @default_name_{index} sysname, @drop_default_{index} nvarchar(max); \
          SELECT @default_name_{index} = dc.name \
          FROM sys.default_constraints AS dc \
          JOIN sys.columns AS c \
          ON c.object_id = dc.parent_object_id AND c.column_id = dc.parent_column_id \
          WHERE dc.parent_object_id = OBJECT_ID(N'{table_literal}') AND c.name = N'{column_literal}'; \
-         IF @default_name_{index} IS NOT NULL \
-         EXEC(N'ALTER TABLE {qualified} DROP CONSTRAINT ' + QUOTENAME(@default_name_{index}))",
+         SET @drop_default_{index} = \
+         N'ALTER TABLE {qualified} DROP CONSTRAINT ' + QUOTENAME(@default_name_{index}); \
+         IF @drop_default_{index} IS NOT NULL EXEC(@drop_default_{index})",
         index = change_index,
         table_literal = qualified.replace('\'', "''"),
         column_literal = column.replace('\'', "''"),
