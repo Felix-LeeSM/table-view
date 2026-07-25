@@ -249,8 +249,6 @@ jobs:
         # the `Frontend Checks` merge step below runs with the config's real
         # thresholds over the merged coverage of all three shards, and that job
         # (not these shards) is the name in the `pr_to_main` ruleset.
-        # Space-separated form is required — `--coverage.thresholds.lines=0`
-        # parses but is silently ignored by vitest 4.1.3.
         run: |
           pnpm exec vitest run \
             --shard=${{ matrix.shard }}/3 \
@@ -515,55 +513,33 @@ jobs:
         working-directory: src-tauri
         run: cargo clippy --all-targets --all-features -- -D warnings
 
-  # 2026-07-25 — split out of the former single `Integration Tests (Docker)`
-  # job. Measured on run 30140302749: that job spent 70s compiling and 689s
-  # running 2194 tests across 14 binaries, i.e. 89% of the step was test
-  # execution, so partitioning by test binary converts almost all of it into
-  # wall-clock savings. Each shard pays the ~70s compile again; that is the
-  # accepted trade. Grouping rules: `mysql_integration` and `mongo_integration`
-  # are pinned to `max-threads = 1` in src-tauri/.config/nextest.toml (shared
-  # catalog contention, #1240/#1244), so they are placed in SEPARATE shards
-  # rather than serialising behind each other; `oracle_integration` trips the
-  # 60s SLOW threshold and gets grouped with the other enterprise drivers.
-  integration-shard:
-    name: Integration Shard (${{ matrix.shard.key }})
+  # 2026-07-25 — this job was briefly split into a 4-way `integration-shard`
+  # matrix and reverted after measurement on run 30142745666. Partitioning by
+  # test binary made it SLOWER, not faster: the slowest shard (mysql-family)
+  # took 1294s against 1028s for the whole undivided job. The bottleneck is not
+  # aggregate CPU but the `max-threads = 1` test groups in
+  # src-tauri/.config/nextest.toml (`mysql-integration`, `mongo-integration`,
+  # pinned for shared-catalog contention #1240/#1244). Inside one job those
+  # serialised tests interleave with other binaries across all 4 threads; alone
+  # in a shard they run single-threaded with 3 cores idle while every shard
+  # re-pays checkout + apt + toolchain + 70s compile + container startup. Do not
+  # re-split this job on test-binary lines — fix the serialisation first (give
+  # the MySQL/Mongo tests private databases so the groups can lift), and only
+  # then revisit. Frontend sharding is unaffected and stays: its suite has no
+  # equivalent serial pin.
+  integration-tests:
+    name: Integration Tests (Docker)
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # Raised 40 -> 60: this job now runs instrumented `cargo llvm-cov nextest`
+    # coverage (promoted from pre-push) plus MySQL/MSSQL testcontainers, both
+    # heavier than the former plain `cargo test`.
+    timeout-minutes: 60
     needs: changes
     # Fail-closed: skip heavy job ONLY when `changes` succeeded AND classified
     # the set as docs-only. If `changes` itself failed/was cancelled (infra),
     # its outputs are empty and result != 'success', so this runs full — a
     # detection failure must never let unverified code satisfy a required check.
     if: always() && (needs.changes.result != 'success' || needs.changes.outputs.code_changed == 'true')
-
-    strategy:
-      # A red shard must not cancel its siblings: the aggregation grades every
-      # shard's real result, and a cancelled shard uploads no profraw at all.
-      fail-fast: false
-      matrix:
-        shard:
-          - key: core
-            targets: >-
-              --lib
-              --test storage_integration
-              --test query_integration
-              --test schema_integration
-              --test value_search_integration
-              --test fixture_loading
-          - key: document-kv
-            targets: >-
-              --test mongo_integration
-              --test redis_integration
-              --test duckdb_file_analytics
-          - key: mysql-family
-            targets: >-
-              --test mysql_integration
-              --test mariadb_ddl_preview
-          - key: enterprise
-            targets: >-
-              --test mssql_connection_routing
-              --test mssql_integration
-              --test oracle_integration
 
     # Sprint 237 P5+ (2026-05-08) — PG/Mongo 둘 다 GHA service container 로
     # 띄우고 환경변수로 endpoint 를 노출. tests/common/mod.rs 의
@@ -678,7 +654,7 @@ jobs:
       # self-owned testcontainers (Docker is present on the runner). Instrumented
       # build + extra testcontainers cost more wall-clock than the old plain
       # test — the accepted promotion trade-off (timeout raised 40 -> 60m).
-      - name: Run instrumented tests (${{ matrix.shard.key }})
+      - name: Run integration coverage
         working-directory: src-tauri
         env:
           PGHOST: localhost
@@ -688,124 +664,21 @@ jobs:
           PGDATABASE: table_view_test
           MONGO_HOST: localhost
           MONGO_PORT: 27017
-        # `--no-report` keeps the raw .profraw and skips report generation —
-        # a single shard's coverage is meaningless on its own. The thresholds
-        # are applied once, by `Integration Tests (Docker)`, over every shard's
-        # profraw merged together.
         run: |
-          cargo llvm-cov nextest --profile push --no-report ${{ matrix.shard.targets }}
-
-      # Uploaded per shard and renamed on download: cargo-llvm-cov names profraw
-      # files `<crate>-%p-%m.profraw` where %p is the PID. Distinct runners pick
-      # PIDs independently, so a flat `merge-multiple: true` download could
-      # silently overwrite one shard's file with another's — losing coverage and
-      # under-reporting the total, the exact failure this gate exists to catch.
-      - name: Upload raw coverage (${{ matrix.shard.key }})
-        uses: actions/upload-artifact@v4
-        with:
-          name: llvm-cov-profraw-${{ matrix.shard.key }}
-          path: src-tauri/target/llvm-cov-target/*.profraw
-          retention-days: 1
-          if-no-files-found: error
-
-  integration-tests:
-    name: Integration Tests (Docker)
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    needs:
-      - changes
-      - integration-shard
-    # Fail-closed on `changes` exactly like the shards, plus `always()` so a
-    # FAILED shard still reaches the grading step below — a skipped required
-    # check counts as successful on GitHub, so silent skip is not an option.
-    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.code_changed == 'true')
-
-    steps:
-      - name: Require integration matrix success
-        run: |
-          if [ "${{ needs.integration-shard.result }}" != "success" ]; then
-            echo "Integration matrix result: ${{ needs.integration-shard.result }}"
-            exit 1
-          fi
-
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Install Tauri Linux dependencies
-        run: |
-          install_deps() {
-            sudo apt-get update && sudo apt-get install -y \
-              libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
-          }
-          for i in 1 2 3; do
-            install_deps && exit 0
-            echo "apt install attempt $i failed; retrying in $((i * 10))s" >&2
-            sleep "$((i * 10))"
-          done
-          echo "apt install failed after 3 attempts" >&2
-          exit 1
-
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: 1.91.0
-          components: llvm-tools-preview
-
-      - name: Install cargo-llvm-cov and cargo-nextest
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-llvm-cov@0.8.7,cargo-nextest@0.9.137
-
-      - name: Cache Rust artifacts
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: src-tauri -> target
-          cache-bin: false
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-
-      - name: Download shard coverage
-        uses: actions/download-artifact@v4
-        with:
-          pattern: llvm-cov-profraw-*
-          path: profraw-shards
-
-      # Per-shard subdirectories are flattened here with a shard-name prefix so
-      # identical `<crate>-<pid>-<hash>.profraw` names from different runners
-      # cannot clobber each other. The count assertion is the guard: a merge
-      # that silently lost a shard would report a LOWER total and could still
-      # clear 80%, turning the gate into a rubber stamp.
-      - name: Collect profraw for merge
-        run: |
-          mkdir -p src-tauri/target/llvm-cov-target
-          for dir in profraw-shards/llvm-cov-profraw-*; do
-            key="$(basename "$dir" | sed 's/^llvm-cov-profraw-//')"
-            for f in "$dir"/*.profraw; do
-              cp "$f" "src-tauri/target/llvm-cov-target/${key}-$(basename "$f")"
-            done
-          done
-          found="$(ls src-tauri/target/llvm-cov-target/*.profraw | wc -l)"
-          shards="$(ls -d profraw-shards/llvm-cov-profraw-* | wc -l)"
-          echo "collected $found profraw files from $shards shards"
-          test "$shards" -eq 4 || { echo "expected 4 shards, got $shards"; exit 1; }
-          test "$found" -gt 0 || { echo "no profraw collected"; exit 1; }
-
-      # Rust integration coverage gate (audit 2026-07-03 #6). Promoted here from
-      # the local pre-push rust route so a required *remote* check — not just the
-      # dev machine's hook — owns the integration coverage floor. Thresholds
-      # (lines 80 / functions 75 / regions 80) are ratchet-locked in
-      # scripts/coverage-ratchet-targets.json (`rust.pre_push.integration`;
-      # check-coverage-ratchet.ts reads them out of this step's text, which is
-      # why the `cargo llvm-cov nextest --profile push` prefix and the
-      # `--fail-under-*` flags must stay in one command).
-      #
-      # `--no-run` rebuilds the instrumented binaries (needed to map profraw
-      # back to source) but runs no tests, then reports over the profraw the
-      # shards produced. It implies no-clean — cargo-llvm-cov rejects the two
-      # together — so the collected shard data survives.
-      - name: Merge shard coverage and enforce thresholds
-        working-directory: src-tauri
-        run: |
-          cargo llvm-cov nextest --profile push --no-run \
+          cargo llvm-cov nextest --profile push --lib \
+            --test storage_integration \
+            --test query_integration \
+            --test schema_integration \
+            --test value_search_integration \
+            --test fixture_loading \
+            --test mongo_integration \
+            --test mysql_integration \
+            --test duckdb_file_analytics \
+            --test mariadb_ddl_preview \
+            --test mssql_connection_routing \
+            --test mssql_integration \
+            --test oracle_integration \
+            --test redis_integration \
             --summary-only \
             --fail-under-lines 80 \
             --fail-under-functions 75 \
@@ -821,13 +694,14 @@ jobs:
   #   promoted from the local pre-push rust route, audit 2026-07-03 #6).
   #   Non-blocking (advisory): doc-size, dependency-advisories (RUSTSEC),
   #   frontend-advisory (docs:links + WCAG contrast).
-  # `Frontend Checks` and `Integration Tests (Docker)` are AGGREGATION jobs
-  # (2026-07-25): the work runs in the `frontend-shard` / `integration-shard`
-  # matrices and these two merge the shards' coverage and apply the thresholds.
-  # Their `name:` values are load-bearing — the `pr_to_main` ruleset lists the
-  # required contexts by name, so renaming either job silently un-gates main
-  # (a context that never reports is not a context that fails). Same reason the
-  # e2e workflow keeps a bare `Runtime Happy Path` aggregation over its matrix.
+  # `Frontend Checks` is an AGGREGATION job (2026-07-25): the vitest suite runs
+  # in the `frontend-shard` matrix and this job merges the shards' blob reports
+  # and applies the coverage thresholds. Its `name:` is load-bearing — the
+  # `pr_to_main` ruleset lists the required contexts by name, so renaming the
+  # job silently un-gates main (a context that never reports is not a context
+  # that fails). Same reason the e2e workflow keeps a bare `Runtime Happy Path`
+  # aggregation over its matrix. `Integration Tests (Docker)` was measured under
+  # the same split and reverted — see the comment on that job.
   # The blocking jobs + dependency-advisories gate on `changes` with a
   # fail-closed `if:` (skip only when `changes` succeeded AND said docs-only;
   # any detection failure runs full), so docs/memory/*.md-only changes skip them

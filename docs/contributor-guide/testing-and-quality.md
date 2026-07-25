@@ -278,8 +278,12 @@ Required local evidence:
 - Hook path: normal signed commit and pre-push path-routed gates must pass. Hook
   bypass flags remain forbidden by git policy.
 - Frontend/build lane: `pnpm wasm:size`, `pnpm lint`,
-  `pnpm test -- --run --coverage --coverage.reporter=text-summary`, and
-  `pnpm build`.
+  `pnpm exec vitest run --coverage --coverage.reporter=text-summary`, and
+  `pnpm build`. The former `pnpm test -- --run --coverage ...` form did NOT
+  measure coverage: pnpm 10 forwards the `--`, so vitest received
+  `run -- --run --coverage ...` and treats everything after `--` as non-flag
+  arguments. It exited 0 without collecting coverage or applying the
+  vite.config.ts thresholds, so this lane produced no coverage evidence.
 - Rust lane: `cargo test --manifest-path src-tauri/Cargo.toml --lib --test storage_integration`,
   `cargo test --manifest-path src-tauri/sql-parser-core/Cargo.toml --lib`, and
   `cargo test --manifest-path src-tauri/Cargo.toml --test parse_sql_backend`.

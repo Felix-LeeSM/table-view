@@ -45,6 +45,10 @@ Thumbs.db
 
 # Test
 /coverage/
+# vitest `--reporter=blob` output. Written by the CI `Frontend Tests (shard n/3)`
+# matrix and by any local `vitest --shard` run reproducing it; the merge step
+# consumes it. Multi-hundred-MB and never a source artifact.
+/.vitest-reports/
 # Anchor `wdio-report/` to the repo root so the e2e bind-mount target
 # (`e2e/wdio-report/`) can preserve its `.gitkeep` (sprint-169 Sprint 4).
 /wdio-report/
