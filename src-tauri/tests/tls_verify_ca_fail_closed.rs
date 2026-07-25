@@ -18,6 +18,12 @@
 //! `src-tauri/src/db/mysql/connection.rs`:
 //! `connect_options_never_select_the_hostname_skipping_mode`), because
 //! `connect_options` is private to the adapters.
+//!
+//! The write-boundary half (#1649 re-review B5) likewise lives in `--lib`, next
+//! to the writers it guards: `commands::connection::crud` and
+//! `commands::persist_connections` (`persist_connection_*_verify_ca_*`), both of
+//! which now route through the single `storage::save_connection_with_wallet`
+//! chokepoint. `--lib` is where CI runs today, which this target does not yet.
 
 use table_view_lib::db::{MysqlAdapter, PostgresAdapter};
 use table_view_lib::error::AppError;

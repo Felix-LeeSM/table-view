@@ -23,7 +23,7 @@ export const en = {
     errorServiceNameRequired: "Service name is required",
     errorDatabaseRequired: "Database is required",
     errorCaCertPathRequired:
-      "A CA certificate file is required for Verify CA. Choose the CA that signs the server certificate, or switch to Verify full to use the system trust store.",
+      "A CA certificate file is required for Verify CA. Choose the CA that signs the server certificate, or switch to Verify full to use the built-in public CA list.",
   },
   // ConnectionDialogBody
   body: {
@@ -386,7 +386,7 @@ export const ko = {
     errorServiceNameRequired: "서비스 이름은 필수입니다",
     errorDatabaseRequired: "데이터베이스는 필수입니다",
     errorCaCertPathRequired:
-      "Verify CA에는 CA 인증서 파일이 필요합니다. 서버 인증서를 서명한 CA를 선택하거나, 시스템 신뢰 저장소를 쓰려면 Verify full로 전환하세요.",
+      "Verify CA에는 CA 인증서 파일이 필요합니다. 서버 인증서를 서명한 CA를 선택하거나, 내장 공개 CA 목록을 쓰려면 Verify full로 전환하세요.",
   },
   body: {
     modeForm: "Form",

@@ -126,9 +126,11 @@ describe("ConnectionDialog validation-state exposure (#1135)", () => {
   });
 
   // Reason: #1649 review B1 — `verify-ca` names a trust anchor. With no CA file
-  // the driver falls back to the public trust store *and* stops verifying the
-  // hostname, i.e. weaker than the verify-full it reads as, so the save must be
-  // blocked in the form (the backend rejects it too). (2026-07-25)
+  // the posture is byte-for-byte the `verify-full` it claims to be stricter than
+  // (built-in public CA list, chain + hostname), so the stored label lies about
+  // a private anchor that is not there. libpq rejects the same combination; the
+  // save must be blocked in the form too (the backend rejects it as well).
+  // (2026-07-26)
   it("blocks save when verify-ca is selected without a CA file", async () => {
     renderDialog(makeConnection());
     const save = () => screen.getByText("Update");

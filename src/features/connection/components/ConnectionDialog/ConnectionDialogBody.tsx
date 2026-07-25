@@ -506,7 +506,8 @@ export default function ConnectionDialogBody({
           )}
 
           {/* #1063 — a TLS parameter in the pasted URL could not be mapped
-              (e.g. `sslmode=verify-ca`). Advisory, role="alert" so it is
+              (e.g. `sslmode=allow`; #1649 made `verify-ca` mappable).
+              Advisory, role="alert" so it is
               announced but non-blocking; the user sets the posture manually via
               the TLS control below. */}
           {tlsNotice && (

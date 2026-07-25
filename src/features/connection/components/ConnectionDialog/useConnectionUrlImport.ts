@@ -101,7 +101,8 @@ export interface UseConnectionUrlImportReturn {
   setDetectedScheme: React.Dispatch<React.SetStateAction<string | null>>;
   /**
    * #1063 — the raw `key=value` of a TLS parameter in the pasted/parsed URL
-   * that could not be reflected onto the form (e.g. `sslmode=verify-ca`), or
+   * that could not be reflected onto the form (e.g. `sslmode=allow`; #1649 made
+   * `verify-ca` mappable, so it is no longer an example of a dropped value), or
    * `null`. Surfaced as a non-blocking advisory so a dropped security
    * parameter is visible rather than silently lost.
    */

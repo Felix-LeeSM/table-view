@@ -109,7 +109,8 @@ pub enum Paradigm {
 /// set, enforced at the write boundary (`save_connection`) and again at connect
 /// (`db::tls::resolve_tls_decision`). libpq is one-to-one here too — it rejects
 /// `sslmode=verify-ca` without a root certificate rather than silently treating
-/// it as the system-store posture the user did not pick.
+/// it as the built-in-public-roots posture (`verify-full`) the user did not
+/// pick.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum SslMode {

@@ -342,6 +342,82 @@ mod tests {
         cleanup();
     }
 
+    /// #1649 re-review B5 regression: this IPC is the *second* file-SOT writer
+    /// and used to bypass `validate_tls_posture`, which only the connection-form
+    /// `save_connection` called — so an unanchored `verify-ca` the form refuses
+    /// could still be persisted here. The guard now lives at the shared
+    /// chokepoint `storage::save_connection_with_wallet`; this pins that the
+    /// previously-bypassing path is covered, and that neither store keeps a row.
+    /// Whitespace-only counts as missing (hand-edited JSON / raw IPC).
+    /// (2026-07-26)
+    #[tokio::test]
+    #[serial]
+    async fn persist_connection_rejects_verify_ca_without_a_ca_file() {
+        cleanup();
+        let (_dir, pool) = setup().await;
+
+        for missing in [None, Some(""), Some("   ")] {
+            let mut req = sample_req("c-verify-ca");
+            req.ssl_mode = crate::models::SslMode::VerifyCa;
+            req.ca_cert_path = missing.map(str::to_owned);
+
+            match persist_connection_inner(&pool, req).await {
+                Ok(()) => panic!(
+                    "ca_cert_path {missing:?} must be refused at the dual-write \
+                     boundary too, not only in the connection form"
+                ),
+                Err(AppError::Validation(msg)) => assert!(
+                    msg.contains("verify-ca") && msg.contains("CA certificate"),
+                    "the rejection must name the missing CA file, got: {msg}"
+                ),
+                Err(other) => panic!("expected a Validation rejection, got {other:?}"),
+            }
+        }
+
+        let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM connections")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(count, 0, "SQLite mirror must stay empty on rejection");
+        assert!(
+            crate::storage::load_storage_redacted()
+                .unwrap()
+                .connections
+                .is_empty(),
+            "file SOT must stay empty on rejection"
+        );
+        cleanup();
+    }
+
+    /// Companion to the rejection above: the anchored posture still persists and
+    /// keeps its CA path on the file SOT (the SQLite mirror is lossy by design).
+    #[tokio::test]
+    #[serial]
+    async fn persist_connection_accepts_verify_ca_with_a_ca_file() {
+        cleanup();
+        let (_dir, pool) = setup().await;
+
+        let mut req = sample_req("c-verify-ca-ok");
+        req.ssl_mode = crate::models::SslMode::VerifyCa;
+        req.ca_cert_path = Some("/etc/ssl/corp-ca.pem".into());
+        persist_connection_inner(&pool, req)
+            .await
+            .expect("verify-ca with a CA file must persist");
+
+        let data = crate::storage::load_storage_redacted().unwrap();
+        assert_eq!(data.connections.len(), 1);
+        assert_eq!(
+            data.connections[0].ssl_mode,
+            crate::models::SslMode::VerifyCa
+        );
+        assert_eq!(
+            data.connections[0].ca_cert_path.as_deref(),
+            Some("/etc/ssl/corp-ca.pem"),
+            "the anchored posture must round-trip through the file SOT"
+        );
+        cleanup();
+    }
+
     /// #1355 regression: a valid db_type (here an alias) is normalized once and
     /// the file SOT + SQLite mirror store the identical canonical tag.
     #[tokio::test]

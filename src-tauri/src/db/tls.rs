@@ -52,7 +52,7 @@ use crate::models::{ConnectionConfig, SslMode};
 /// the user reads the same actionable sentence wherever the posture is caught.
 pub(crate) const VERIFY_CA_REQUIRES_CA_MESSAGE: &str =
     "sslmode=verify-ca requires a CA certificate file: select the CA that signs the server \
-     certificate, or switch to verify-full to verify against the system trust store";
+     certificate, or switch to verify-full to verify against the built-in public CA list";
 
 /// Driver-neutral outcome of the [`SslMode`] posture. Each sqlx adapter maps
 /// this onto its own `SslMode`:
@@ -109,9 +109,15 @@ fn require_ca_cert_path(ca_cert_path: Option<&str>) -> Result<String, AppError> 
 
 /// #1649 review B1 — the write-boundary half of the fail-closed `verify-ca`
 /// contract: a stored connection never carries `verify-ca` without a CA file.
-/// `save_connection` calls this for every engine (the on/off engines ignore
+///
+/// #1649 re-review B5 — called from `storage::save_connection_with_wallet`, the
+/// single chokepoint through which every file-SOT writer introduces a posture
+/// (the `save_connection` IPC, the dual-write `persist_connection` IPC, and
+/// import). Guarding the chokepoint instead of each caller is what makes the
+/// invariant hold at *every* boundary — `persist_connection` used to write past
+/// a caller-side check. It runs for every engine: the on/off engines ignore
 /// `ca_cert_path`, but storing an unanchored `verify-ca` there would still
-/// travel to pg/mysql through an export or a dbType switch), and
+/// travel to pg/mysql through an export or a dbType switch.
 /// [`resolve_tls_decision`] repeats the check at connect time for rows written
 /// before this gate existed.
 pub(crate) fn validate_tls_posture(config: &ConnectionConfig) -> Result<(), AppError> {

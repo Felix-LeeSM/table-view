@@ -364,11 +364,20 @@ pub fn save_connection(
 /// wallet password with identical 3-state semantics (`None` preserve /
 /// `Some("")` clear / `Some(s)` encrypt+store). Split from [`save_connection`]
 /// so the ~20 non-Oracle callers keep the 2-arg signature.
+///
+/// #1649 re-review B5 — this is the **only** function that can introduce a new
+/// TLS posture into the file SOT (`delete_group` / `move_connection_to_group`
+/// re-save existing rows but touch `group_id` only), so the fail-closed
+/// `verify-ca`-needs-a-CA-file check lives here rather than in each caller. Both
+/// IPC write paths — `commands::connection::crud::save_connection` and the
+/// dual-write `commands::persist_connections::persist_connection` — route
+/// through it, and the latter used to bypass the check entirely.
 pub fn save_connection_with_wallet(
     mut conn: ConnectionConfig,
     new_password: Option<String>,
     new_wallet_password: Option<String>,
 ) -> Result<(), AppError> {
+    crate::db::tls::validate_tls_posture(&conn)?;
     with_lock(|| {
         let mut data = load_storage_raw()?;
 

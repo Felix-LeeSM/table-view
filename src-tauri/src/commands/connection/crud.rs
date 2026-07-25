@@ -69,12 +69,11 @@ pub fn save_connection(req: SaveConnectionRequest) -> Result<ConnectionConfigPub
     }
 
     let mut conn = req.connection.into_config_with_empty_password();
-    // #1649 (ADR 0058) — `verify-ca` names a trust anchor, so refuse to persist
-    // one that has none. Enforced here rather than only at connect time so the
-    // user is corrected while the form is open, and for every engine: the
-    // on/off engines ignore `ca_cert_path` today, but an unanchored `verify-ca`
-    // stored there still travels to pg/mysql through a dbType switch.
-    crate::db::tls::validate_tls_posture(&conn)?;
+    // #1649 (ADR 0058) — `verify-ca` names a trust anchor, so an unanchored one
+    // is refused before it can be persisted. The check itself lives at the file
+    // SOT chokepoint (`storage::save_connection_with_wallet`) so the dual-write
+    // `persist_connection` IPC is covered by the same guard rather than by a
+    // copy of it here (#1649 re-review B5).
     if req.is_new.unwrap_or(false) {
         conn.id = uuid::Uuid::new_v4().to_string();
     }
@@ -326,12 +325,14 @@ mod tests {
     #[test]
     #[serial]
     fn test_save_connection_rejects_verify_ca_without_ca_file() {
-        // Reason: #1649 review B1 — `verify-ca` names a trust anchor, and sqlx
-        // answers a missing one with the public webpki roots + hostname
-        // verification off. Reject at the write boundary so the user is
-        // corrected in the form instead of saving a posture that only fails
-        // later at connect time. Whitespace-only counts as missing.
-        // (2026-07-25)
+        // Reason: #1649 review B1 — `verify-ca` names a trust anchor. With no CA
+        // file the posture resolves to exactly `verify-full` (bundled public
+        // roots, chain + hostname), so the stored label keeps advertising a
+        // private anchor the connection does not actually have. libpq rejects
+        // the same combination; reject it at the write boundary too so the user
+        // is corrected in the form instead of saving a mislabelled posture that
+        // only surfaces at connect time. Whitespace-only counts as missing.
+        // (2026-07-26)
         let _dir = setup_test_env();
         for missing in [None, Some("   ".to_string())] {
             let mut conn = sample_connection("c1", "MyDB");

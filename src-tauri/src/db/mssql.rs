@@ -157,8 +157,11 @@ impl MssqlAdapter {
         // `require` (skip_verify) opts into `trust_cert`; `verify-ca`/`verify-full`
         // keep tiberius's certificate verification. (No CA-file wiring for MSSQL —
         // `ca_cert_path` is ignored here, so a `verify-ca` connection on this
-        // engine verifies against the system trust store exactly like
-        // `verify-full`; the form only offers the CA input on pg/mysql/mariadb.)
+        // engine verifies exactly like `verify-full`; the form only offers the
+        // CA input on pg/mysql/mariadb.) The anchor set here really is the OS
+        // trust store — tiberius is pinned to `native-tls` (`Cargo.toml:75`),
+        // unlike the sqlx engines, which use rustls with the bundled Mozilla
+        // roots (`webpki`), never the OS store.
         if config.ssl_mode.tls_on() {
             tds_config.encryption(EncryptionLevel::Required);
             if config.ssl_mode.skip_verify() {
