@@ -273,6 +273,105 @@ async fn test_oracle_dump_round_trip_restores_into_oracle() {
     adapter.drop_table(&drop_req(&table)).await.ok();
 }
 
+/// Issue #1735 — Oracle column-comment round-trip (set → read back → clear →
+/// read back) against live Oracle.
+///
+/// The `ddl_tests.rs` preview cases can only pin the emitted *string*; this is
+/// the only layer that proves the string PARSES. Oracle's `COMMENT ON` grammar
+/// takes a text literal, so the first cut's `IS NULL` clear (correct for PG,
+/// which shares the emitter shape) was an ORA parse error while every unit test
+/// stayed green. `''` IS NULL in Oracle, so `IS ''` both parses and removes the
+/// comment. Read-back goes through `ALL_COL_COMMENTS` — the catalog view the
+/// structure panel's own column fetch reads.
+#[tokio::test]
+#[serial_test::serial]
+async fn test_oracle_column_comment_set_and_clear_round_trip() {
+    use table_view_lib::db::row_cap::DEFAULT_ROW_CAP;
+    use table_view_lib::models::{AlterTableRequest, ColumnChange};
+
+    let adapter = match common::setup_oracle_adapter().await {
+        Some(a) => a,
+        None => return,
+    };
+    let table = format!("COL_COMMENT_{}", ts());
+    adapter
+        .create_table(&create_req(
+            &table,
+            vec![
+                col("ID", "NUMBER", false),
+                col("NOTE", "VARCHAR2(255)", true),
+            ],
+        ))
+        .await
+        .expect("CREATE TABLE");
+
+    fn comment_req(table: &str, new_comment: &str) -> AlterTableRequest {
+        AlterTableRequest {
+            connection_id: "unused".into(),
+            schema: ORACLE_SCHEMA.into(),
+            table: table.into(),
+            changes: vec![ColumnChange::Modify {
+                name: "NOTE".into(),
+                new_data_type: None,
+                new_nullable: None,
+                new_default_value: None,
+                using_expression: None,
+                new_comment: Some(new_comment.into()),
+            }],
+            preview_only: false,
+            expected_database: None,
+        }
+    }
+
+    // `<cleared>` sentinel keeps the assertion on a plain string instead of the
+    // JSON `null` rendering of a NULL cell.
+    async fn read_comment(adapter: &OracleAdapter, table: &str) -> String {
+        let result = adapter
+            .execute_query(
+                &format!(
+                    "SELECT NVL(COMMENTS, '<cleared>') FROM ALL_COL_COMMENTS \
+                     WHERE OWNER = '{ORACLE_SCHEMA}' AND TABLE_NAME = '{table}' \
+                     AND COLUMN_NAME = 'NOTE'"
+                ),
+                None,
+                DEFAULT_ROW_CAP,
+            )
+            .await
+            .expect("ALL_COL_COMMENTS readback");
+        result
+            .rows
+            .first()
+            .and_then(|row| row.first())
+            .map(|cell| cell.to_string())
+            .unwrap_or_default()
+    }
+
+    // Set — the apostrophe exercises the `''` doubling escape end to end.
+    adapter
+        .alter_table(&comment_req(&table, "O'Brien's note"))
+        .await
+        .expect("COMMENT ON COLUMN set must parse on live Oracle");
+    let stored = read_comment(&adapter, &table).await;
+    assert!(
+        stored.contains("O'Brien's note"),
+        "comment set did not land in ALL_COL_COMMENTS: {stored}"
+    );
+
+    // Clear — regression guard for the `IS NULL` dialect bug. `IS NULL` is a
+    // parse error here, so a green execute is itself the grammar proof.
+    adapter
+        .alter_table(&comment_req(&table, ""))
+        .await
+        .expect("COMMENT ON COLUMN clear must parse on live Oracle");
+    let cleared = read_comment(&adapter, &table).await;
+    assert!(
+        cleared.contains("<cleared>"),
+        "comment clear left a value behind: {cleared}"
+    );
+
+    adapter.drop_table(&drop_req(&table)).await.ok();
+}
+
 /// Mirror of the MySQL/MSSQL `stream_table_rows aborts when receiver drops` gate.
 #[tokio::test]
 #[serial_test::serial]

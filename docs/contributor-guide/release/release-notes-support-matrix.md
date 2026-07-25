@@ -37,8 +37,11 @@ Known limits to state in release notes:
   and Oracle TNS/wallet-less TLS/raw-admin/full PL/SQL support remain out of
   scope.
 - DuckDB COPY/ATTACH/DETACH, extension install/load, raw external-file SQL
-  functions, automatic import/export workflow, structured DDL/write UI, and
-  admin parity remain out of scope.
+  functions, automatic import/export workflow, and admin parity remain out of
+  scope. Native structural DDL (table create/drop/rename, column
+  add/drop/type, index create/drop) is in scope as ADR 0051 Stage 2 (#1070);
+  constraint add/drop, identity/auto-increment columns (Stage 2b), and
+  dry-run/multi-statement transactions (Stage 3) stay out of scope.
 
 ## Support Matrix
 

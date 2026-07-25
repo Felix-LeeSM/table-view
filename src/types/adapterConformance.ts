@@ -120,6 +120,21 @@ export const CONFORMANCE_CHECKS = Object.freeze([
   check("ddl.alterTable", "ddl", "Alter-table DDL claim is enabled."),
   check("ddl.createIndex", "ddl", "Create-index DDL claim is enabled."),
   check("ddl.dropObject", "ddl", "Drop-object DDL claim is enabled."),
+  check(
+    "ddl.alterConstraint",
+    "ddl",
+    "Add/drop-constraint DDL claim is enabled.",
+  ),
+  check(
+    "ddl.identityColumn",
+    "ddl",
+    "Identity / auto-increment column DDL claim is enabled.",
+  ),
+  check(
+    "ddl.editColumnComment",
+    "ddl",
+    "Column-comment DDL claim (COMMENT ON COLUMN via alter_table) is enabled.",
+  ),
   check("safety.policy", "safety", "Safety policy is declared."),
 ] as const satisfies readonly ConformanceCheck[]);
 
@@ -160,14 +175,19 @@ const DEFERRED_FEATURES = Object.freeze({
     catalog: ["catalog.constraints"],
     query: [],
     edit: [],
-    ddl: [],
+    // Issue #1735 — MySQL has no ANSI `COMMENT ON`; a column comment lives
+    // inside the column definition, so emitting one means re-writing the full
+    // `MODIFY COLUMN` definition. Reachable with the existing adapter, just not
+    // wired yet → deferred, not unsupported. Tracked on #1735.
+    ddl: ["ddl.editColumnComment"],
   },
   mariadb: {
     connection: [],
     catalog: ["catalog.constraints"],
     query: [],
     edit: [],
-    ddl: [],
+    // Issue #1735 — see mysql; MariaDB shares the MySQL-family adapter.
+    ddl: ["ddl.editColumnComment"],
   },
   sqlite: {
     connection: [],
@@ -191,9 +211,27 @@ const DEFERRED_FEATURES = Object.freeze({
     // the profile claims it and it is a live check, not a deferral.
     query: ["query.explain"],
     edit: [],
-    ddl: [],
+    // Issue #1070 — `ddl.alterConstraint` / `ddl.identityColumn` are PLANNED
+    // Stage 2b slices (the rebuild-swap path and the CREATE SEQUENCE-backed
+    // identity path), not abandoned claims, so they belong in `deferred` rather
+    // than `unsupported` (same posture as `query.explain` above).
+    // Issue #1735 — `ddl.editColumnComment` joins them: DuckDB has native
+    // `COMMENT ON COLUMN` and `duckdb/ddl.rs` already emits it from
+    // `create_table`, so the ALTER leg is unwired, not unsupported (same
+    // classification mysql/mariadb/mssql got).
+    ddl: ["ddl.alterConstraint", "ddl.identityColumn", "ddl.editColumnComment"],
   },
-  mssql: noneDeferred(),
+  mssql: {
+    connection: [],
+    catalog: [],
+    query: [],
+    edit: [],
+    // Issue #1735 — SQL Server has no ANSI `COMMENT ON`; column comments are
+    // extended properties (`sp_addextendedproperty` / `sp_update…`), a separate
+    // emitter with its own add-vs-update branch. Reachable with the existing
+    // adapter, just not wired yet → deferred, not unsupported. Tracked on #1735.
+    ddl: ["ddl.editColumnComment"],
+  },
   oracle: noneDeferred(),
   mongodb: {
     connection: ["connection.switchDatabase"],

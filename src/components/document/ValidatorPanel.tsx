@@ -237,6 +237,7 @@ export function ValidatorPanel({
       <div className="flex flex-wrap items-end gap-3 text-xs">
         <label className="flex flex-col gap-1">
           <span className="font-medium text-muted-foreground">Level</span>
+          {/* eslint-disable-next-line no-restricted-syntax -- 기존 native <select>. cell-domain override 로 sprint-112 규칙이 무력화돼 있던 선재 부채, Radix <Select> 전환은 이 i18n 슬라이스(#1074) 밖 별도 후속 */}
           <select
             aria-label={t("validatorPanel.levelAriaLabel")}
             data-testid="validator-level-select"
@@ -254,6 +255,7 @@ export function ValidatorPanel({
 
         <label className="flex flex-col gap-1">
           <span className="font-medium text-muted-foreground">Action</span>
+          {/* eslint-disable-next-line no-restricted-syntax -- 기존 native <select>. cell-domain override 로 sprint-112 규칙이 무력화돼 있던 선재 부채, Radix <Select> 전환은 이 i18n 슬라이스(#1074) 밖 별도 후속 */}
           <select
             aria-label={t("validatorPanel.actionAriaLabel")}
             data-testid="validator-action-select"

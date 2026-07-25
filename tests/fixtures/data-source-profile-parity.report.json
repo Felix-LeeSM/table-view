@@ -7,7 +7,7 @@
     "excludedFromStrictParity": ["ts.capabilities", "rust.adapter_contract"]
   },
   "capabilityPosture": {
-    "duckdb": { "schemaMutation": false, "dataMutation": false },
+    "duckdb": { "schemaMutation": true, "dataMutation": false },
     "elasticsearch": { "schemaMutation": false, "dataMutation": false },
     "mariadb": { "schemaMutation": true, "dataMutation": false },
     "mongodb": { "schemaMutation": false, "dataMutation": true },

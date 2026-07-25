@@ -301,6 +301,8 @@ describe("adapter conformance matrix", () => {
       "ddl.alterTable",
       "ddl.createIndex",
       "ddl.dropObject",
+      "ddl.alterConstraint",
+      "ddl.identityColumn",
     ]);
     expect(mssql.areas.connection.unsupported).toEqual([
       "connection.switchDatabase",
@@ -340,6 +342,10 @@ describe("adapter conformance matrix", () => {
       "ddl.alterTable",
       "ddl.createIndex",
       "ddl.dropObject",
+      "ddl.alterConstraint",
+      "ddl.identityColumn",
+      // Issue #1735 — Oracle emits COMMENT ON COLUMN via alter_table.
+      "ddl.editColumnComment",
     ]);
     expect(oracle.areas.connection.deferred).toEqual([]);
     expect(oracle.areas.connection.unsupported).toEqual([
@@ -377,6 +383,24 @@ describe("adapter conformance matrix", () => {
       "catalog.constraints",
     ]);
     expect(duckdb.areas.query.checks).toContain("query.query");
+    // #1070 (ADR 0051 Stage 2) — lock the flipped `ddl` claim the same way
+    // mssql/oracle are locked: the four native actions are live checks and
+    // `alterConstraint` / `identityColumn` are DEFERRED (planned Stage 2b:
+    // rebuild-swap + CREATE SEQUENCE-backed identity), not unsupported.
+    expect(duckdb.areas.ddl.checks).toEqual([
+      "ddl.createTable",
+      "ddl.alterTable",
+      "ddl.createIndex",
+      "ddl.dropObject",
+    ]);
+    expect(duckdb.areas.ddl.deferred).toEqual([
+      "ddl.alterConstraint",
+      "ddl.identityColumn",
+      // #1735 — DuckDB has native COMMENT ON COLUMN (create_table already
+      // emits it); only the alter_table leg is unwired.
+      "ddl.editColumnComment",
+    ]);
+    expect(duckdb.areas.ddl.unsupported).toEqual([]);
   });
 });
 
