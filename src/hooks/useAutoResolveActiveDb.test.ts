@@ -187,18 +187,40 @@ describe("useAutoResolveActiveDb", () => {
     },
   );
 
-  // Reason: mssql/oracle are RDB but NOT switch-capable (no switchDatabase
-  // capability), so they render a read-only switcher — must be excluded too.
-  it("does not auto-resolve for a non-switch-capable RDB (oracle)", async () => {
+  // Reason: mssql is RDB but NOT switch-capable (no switchDatabase capability),
+  // so it renders a read-only switcher — must be excluded too. (Oracle left this
+  // list in #1072: its switch re-dials the stored service name, so it is now
+  // switch-capable and covered by the auto-resolve case below.)
+  it("does not auto-resolve for a non-switch-capable RDB (mssql)", async () => {
     setFakeWindowConnectionId("c1");
-    listDatabasesMock.mockResolvedValue([{ name: "FREEPDB1" }]);
-    seedConn(makeConnection({ id: "c1", paradigm: "rdb", dbType: "oracle" }), {
+    listDatabasesMock.mockResolvedValue([{ name: "master" }]);
+    seedConn(makeConnection({ id: "c1", paradigm: "rdb", dbType: "mssql" }), {
       type: "connected",
     });
 
     renderHook(() => useAutoResolveActiveDb());
     await Promise.resolve();
     expect(listDatabasesMock).not.toHaveBeenCalled();
+  });
+
+  // Reason: #1072 — an Oracle connection whose activeDb never got seeded must
+  // self-heal like the other switch-capable RDBs (list → switch → setActiveDb),
+  // otherwise the schema tree stays blank with no way to recover.
+  it("auto-resolves an Oracle connection after the #1072 switch promotion", async () => {
+    setFakeWindowConnectionId("c1");
+    listDatabasesMock.mockResolvedValue([{ name: "FREEPDB1" }]);
+    seedConn(makeConnection({ id: "c1", paradigm: "rdb", dbType: "oracle" }), {
+      type: "connected",
+    });
+
+    switchActiveDbMock.mockResolvedValue(undefined);
+
+    renderHook(() => useAutoResolveActiveDb());
+    await waitFor(() =>
+      expect(switchActiveDbMock).toHaveBeenCalledWith("c1", "FREEPDB1"),
+    );
+    expect(listDatabasesMock).toHaveBeenCalledWith("c1");
+    await waitFor(() => expect(activeDbOf("c1")).toBe("FREEPDB1"));
   });
 
   // Reason: a disconnected connection has no live pool — auto-resolve must wait

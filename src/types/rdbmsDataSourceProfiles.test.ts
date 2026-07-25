@@ -55,7 +55,8 @@ const expectedMssqlRuntimeCapabilities = expectedCapabilities({
 });
 
 const expectedOracleRuntimeCapabilities = expectedCapabilities({
-  connection: { test: true, readOnly: true },
+  // Issue #1072 — switch-database is wired (service-name/SID re-dial).
+  connection: { test: true, switchDatabase: true, readOnly: true },
   query: { query: true, cancel: true },
   catalog: {
     indexes: true,
@@ -133,7 +134,9 @@ describe("RDBMS data source profiles", () => {
     });
     expect(oracle.capabilities).toEqual(expectedOracleRuntimeCapabilities);
     expect(oracle.capabilities.connection.test).toBe(true);
-    expect(oracle.capabilities.connection.switchDatabase).toBe(false);
+    // Issue #1072 — the last runtime-slice residual: switch-database now
+    // re-dials the stored service name instead of inheriting Unsupported.
+    expect(oracle.capabilities.connection.switchDatabase).toBe(true);
     expect(oracle.capabilities.query.query).toBe(true);
     expect(oracle.capabilities.query.cancel).toBe(true);
     expect(oracle.capabilities.query.explain).toBe(false);

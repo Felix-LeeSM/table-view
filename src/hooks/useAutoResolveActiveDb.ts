@@ -21,11 +21,12 @@ import { logger } from "@/lib/logger";
  * store, then persists via `setActiveDb` → `persistActiveStatuses` so the
  * *next* reload is already healed.
  *
- * Scope: RDB switch-capable only (postgresql / mysql / mariadb). document
- * (Mongo) and search (ES) keep DB scope elsewhere and have no `switchDatabase`
- * capability; kv (Redis/Valkey) is switch-capable but paradigm "kv" with its
- * own numeric "0" fallback — the `paradigm === "rdb"` guard excludes it.
- * Non-switch-capable RDB (sqlite/duckdb/mssql/oracle) render a read-only
+ * Scope: RDB switch-capable only (postgresql / mysql / mariadb / oracle — the
+ * last joined in #1072, where a switch re-dials the stored service name).
+ * document (Mongo) and search (ES) keep DB scope elsewhere and have no
+ * `switchDatabase` capability; kv (Redis/Valkey) is switch-capable but paradigm
+ * "kv" with its own numeric "0" fallback — the `paradigm === "rdb"` guard
+ * excludes it. Non-switch-capable RDB (sqlite/duckdb/mssql) render a read-only
  * switcher and are excluded by the capability check.
  *
  * Keyed on `useCurrentWindowConnectionId()` (the window's pinned connection),

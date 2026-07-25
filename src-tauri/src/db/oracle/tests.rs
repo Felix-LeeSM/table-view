@@ -391,25 +391,66 @@ async fn raw_ddl_admin_execution_fails_closed_without_connection() {
     ));
 }
 
-// RED (#1072) — Oracle still inherits the `RdbAdapter::switch_database` trait
-// default, so `switch_active_db` on an Oracle connection answers "This adapter
-// does not support database switching" and the DbSwitcher renders read-only.
-// This pins the pre-implementation contract; the GREEN commit replaces it with
-// the promoted validate / same-service no-op / fail-closed suite. The TS side is
-// already pinned by `src/types/dataSource.test.ts` and
-// `src/types/rdbmsDataSourceProfiles.test.ts` (`switchDatabase` false).
+// GREEN (#1072) — `switch_database` no longer inherits the trait-default
+// `Unsupported`. The name is a service name that lands in a TNS descriptor the
+// driver interpolates verbatim (#1065), so validation must fire at the trust
+// boundary *before* the connection lookup; that ordering is also what makes the
+// promotion testable without a live Oracle. (2026-07-25)
 #[tokio::test]
-async fn switch_database_is_unsupported_before_1072_promotion() {
+async fn switch_database_validates_service_name_before_connection_lookup() {
     let adapter = OracleAdapter::new();
 
-    let err = RdbAdapter::switch_database(&adapter, "XEPDB1")
+    let empty = RdbAdapter::switch_database(&adapter, "   ")
         .await
-        .expect_err("pre-#1072 Oracle inherits the trait-default Unsupported");
-
+        .expect_err("an empty service name must be rejected");
     assert!(matches!(
-        err,
-        AppError::Unsupported(message) if message.contains("does not support database switching")
+        empty,
+        AppError::Validation(message) if message.contains("service name")
     ));
+
+    // The #1065 descriptor-injection shapes must not reach the driver.
+    for bad in [
+        "X)(SERVER=DEDICATED))(ADDRESS=(HOST=evil",
+        "(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)))",
+        "pdb name",
+        "pdb/../other",
+    ] {
+        assert!(
+            matches!(
+                RdbAdapter::switch_database(&adapter, bad).await,
+                Err(AppError::Validation(_))
+            ),
+            "switch-database service name injection not rejected: {bad}"
+        );
+    }
+
+    // A well-formed name gets past validation and fails closed on the missing
+    // connection instead of reporting Unsupported.
+    assert_oracle_not_open(RdbAdapter::switch_database(&adapter, "FREEPDB1").await);
+}
+
+// #1072 — re-selecting the active entry in the DbSwitcher must not tear down a
+// working session (the picker highlights the current container, and
+// `useAutoResolveActiveDb` switches to `list_databases()[0]`, which is usually
+// the current one). The no-op short-circuits before any dial, so a connected
+// adapter answers Ok without touching the network.
+#[tokio::test]
+async fn switch_database_to_the_active_service_is_a_no_op() {
+    let adapter = OracleAdapter::new();
+    {
+        let mut guard = adapter.state.lock().await;
+        guard.connected_config = Some(oracle_config());
+    }
+
+    RdbAdapter::switch_database(&adapter, " XEPDB1 ")
+        .await
+        .expect("re-selecting the active service must not re-dial");
+
+    assert_eq!(
+        adapter.current_database().await.unwrap(),
+        Some("XEPDB1".into()),
+        "the active service name must survive the no-op switch"
+    );
 }
 
 #[tokio::test]

@@ -22,14 +22,17 @@ and bounded static parser/Safe Mode metadata. SQL Server TLS-required workflow,
 SQLCMD/admin/security/backup/jobs/users/roles, broader auth/encryption, instance
 discovery, and full T-SQL semantic parity remain separate contracts.
 
-Oracle is active for service-name lifecycle plus bounded catalog/query/cancel/
-tabular runtime: catalog metadata, SELECT/DML batch execution, cooperative
-cancellation, and table-data query through the bounded runtime wrapper. SID/TNS/
-wallet/TLS, advanced auth, switch database, editRows, structured DDL, raw
-DDL/admin, parser/completion, runtime smoke, triggers, PL/SQL source/body/
-package authoring, sequences/synonyms DDL/admin, import/export, profiler/
-activity, users/roles/grants/session/storage, full workbench parity, and full
-PL/SQL executable semantics remain separate contracts.
+Oracle is active for service-name/SID lifecycle plus catalog metadata,
+SELECT/DML batch execution, cooperative cancellation, table-data query,
+key-projected editRows, bounded structured table/index/constraint DDL,
+read-only trigger listing, schema-dump export, admin ops, and (#1072) database
+switching — Oracle has no `USE <db>`, so the switch re-dials the stored service
+name/SID and the picker lists the session container plus reachable open PDBs.
+TNS descriptors, wallet-less TLS, advanced auth, raw DDL/admin, trigger DDL,
+parser/completion promotion, PL/SQL source/body/package authoring,
+sequences/synonyms DDL/admin, import/export, users/roles/grants/session/storage,
+full workbench parity, and full PL/SQL executable semantics remain separate
+contracts.
 
 Redis and Valkey are active KV profiles with bounded connection/key browse/value
 preview and command-query slices. Redis has direct key mutation controls for the

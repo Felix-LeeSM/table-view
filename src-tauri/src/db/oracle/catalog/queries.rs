@@ -1,5 +1,18 @@
 pub(super) const CURRENT_DATABASE_SQL: &str = "SELECT SYS_CONTEXT('USERENV', 'CON_NAME') FROM DUAL";
 
+/// #1072 — switch-database targets for the DB picker. From CDB$ROOT a session
+/// with catalog-read privilege sees every open PDB; from inside a PDB the view
+/// returns only that PDB; on a non-CDB (or 11g) the view is absent and the read
+/// raises ORA-00942, which the best-effort `query_catalog_rows` path degrades to
+/// an empty list — so the picker never loses the current container. `PDB$SEED`
+/// is a read-only clone template, never a connect target.
+pub(super) const OPEN_PDBS_SQL: &str = "\
+SELECT name
+FROM v$pdbs
+WHERE open_mode LIKE 'READ%'
+  AND name <> 'PDB$SEED'
+ORDER BY name";
+
 pub(super) const CURRENT_SCHEMA_SQL: &str =
     "SELECT SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA') FROM DUAL";
 
@@ -420,5 +433,20 @@ mod tests {
             CURRENT_SCHEMA_SQL,
             "SELECT SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA') FROM DUAL"
         );
+    }
+
+    // #1072 — the switch-database picker must never offer a target the user
+    // cannot dial: a MOUNTED/MIGRATE PDB refuses sessions and `PDB$SEED` is a
+    // read-only clone template. Both exclusions live in the SQL, so they are
+    // pinned here rather than in a live-container probe.
+    #[test]
+    fn open_pdbs_query_excludes_seed_and_unopened_containers_1072() {
+        assert!(OPEN_PDBS_SQL.contains("v$pdbs"));
+        assert!(OPEN_PDBS_SQL.contains("open_mode LIKE 'READ%'"));
+        assert!(OPEN_PDBS_SQL.contains("name <> 'PDB$SEED'"));
+        assert!(OPEN_PDBS_SQL.contains("ORDER BY name"));
+        // Read-only dictionary access only — no parameters to bind, so nothing
+        // from the connection config can reach this statement.
+        assert!(!OPEN_PDBS_SQL.contains(":1"));
     }
 }

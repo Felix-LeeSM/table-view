@@ -8,9 +8,11 @@
 //! (`Config::with_wallet`, `ewallet.pem`) with a host/service/SID injection
 //! whitelist. Issue #1072 (2차) also wires read-only trigger listing
 //! (`list_triggers` over `all_triggers`, header-only definition — the LONG
-//! body is not read). Raw DDL/admin execution, switch-database, trigger DDL
-//! (create/drop) and single-trigger source, TNS descriptors, 1-way TLS
-//! (TCPS+CA), and advanced auth remain unsupported or unclaimed.
+//! body is not read), and (3차) database switching: `switch_database`
+//! re-dials the stored service name/SID and `list_databases` offers the
+//! session's container plus the reachable open PDBs. Raw DDL/admin execution,
+//! trigger DDL (create/drop) and single-trigger source, TNS descriptors, 1-way
+//! TLS (TCPS+CA), and advanced auth remain unsupported or unclaimed.
 
 mod admin;
 mod catalog;
@@ -85,14 +87,58 @@ impl OracleAdapter {
         }
 
         let server_info = connection.server_info().await;
-        let mut guard = self.state.lock().await;
-        guard.server_version = non_empty(server_info.version);
-        guard.server_banner = non_empty(server_info.banner);
-        guard.connected_config = Some(config.clone());
-        guard.connection = Some(connection);
+        let replaced = {
+            let mut guard = self.state.lock().await;
+            guard.server_version = non_empty(server_info.version);
+            guard.server_banner = non_empty(server_info.banner);
+            guard.connected_config = Some(config.clone());
+            guard.connection.replace(connection)
+        };
+        // #1072 — a reconnect (and the switch-database path below) replaces the
+        // live session; close the old one instead of dropping it so the server
+        // releases the session now rather than at driver GC time.
+        if let Some(replaced) = replaced {
+            let _ = replaced.close().await;
+        }
 
         info!("Connected to Oracle at {}:{}", config.host, config.port);
         Ok(())
+    }
+
+    /// Issue #1072 — Oracle database switching re-points the stored service name
+    /// (or SID) and re-opens the session. Oracle has no `USE <db>`: a session is
+    /// bound to the service/PDB it dialed, and an `ALTER SESSION SET CONTAINER`
+    /// would not survive anyway because every query opens a fresh connection
+    /// from `connected_config` (`oracle/runtime.rs`). Swapping the stored config
+    /// is therefore the only switch that holds for the next statement — the same
+    /// shape as `mssql/catalog.rs::switch_active_database`. `connect_session`
+    /// dials and pings the target *before* it touches the stored state, so a
+    /// rejected service name leaves the current connection usable.
+    async fn switch_active_service(&self, db_name: &str) -> Result<(), AppError> {
+        let db_name = db_name.trim();
+        // Validate at the trust boundary before the connection lookup: the name
+        // lands in a TNS descriptor the driver interpolates verbatim (#1065),
+        // and the guard order is what makes this unit-testable without a live
+        // Oracle (same posture as `stream_table_rows`).
+        if db_name.is_empty() {
+            return Err(AppError::Validation(
+                "Oracle service name is required to switch database".into(),
+            ));
+        }
+        if !is_oracle_identifier_safe(db_name) {
+            return Err(AppError::Validation(
+                "Oracle service name contains unsupported characters; TNS/easy-connect descriptors are not supported (#1065)".into(),
+            ));
+        }
+
+        let mut config = self.connected_config().await?;
+        if config.database.trim() == db_name {
+            // Already the active service — the DbSwitcher re-selecting the
+            // current entry must not tear down a working session.
+            return Ok(());
+        }
+        config.database = db_name.to_string();
+        self.connect_session(&config).await
     }
 
     async fn disconnect_session(&self) -> Result<(), AppError> {
@@ -319,6 +365,14 @@ impl RdbAdapter for OracleAdapter {
 
     fn current_database<'a>(&'a self) -> BoxFuture<'a, Result<Option<String>, AppError>> {
         Box::pin(async move { Ok(self.current_service_name().await) })
+    }
+
+    // Issue #1072 — the last runtime-slice residual: Oracle inherited the trait
+    // default `Unsupported`, so the DbSwitcher stayed read-only. See
+    // `switch_active_service` for why re-dialing the service name (not
+    // `ALTER SESSION SET CONTAINER`) is the switch that actually holds.
+    fn switch_database<'a>(&'a self, db_name: &'a str) -> BoxFuture<'a, Result<(), AppError>> {
+        Box::pin(async move { self.switch_active_service(db_name).await })
     }
 
     fn list_tables<'a>(

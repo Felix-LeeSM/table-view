@@ -263,6 +263,12 @@ export const UNSUPPORTED_CAPABILITIES = capabilities();
 export const ORACLE_CAPABILITIES = capabilities({
   connection: {
     test: true,
+    // Issue #1072 — the last runtime-slice residual. `OracleAdapter` now
+    // overrides `switch_database`: Oracle has no `USE <db>`, so the switch
+    // re-dials the stored service name/SID (the same shape PG uses for its
+    // sub-pool), and `list_databases` offers the session container plus the
+    // reachable open PDBs. The claim is truthful for the DbSwitcher path.
+    switchDatabase: true,
     // Issue #1529 — the backend read-only gate is engine-agnostic, so every
     // server RDB that can write exposes the toggle (same protection = same
     // control). Prevents a stuck read-only connection with no UI to clear it.

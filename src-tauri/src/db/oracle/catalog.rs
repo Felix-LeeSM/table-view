@@ -55,9 +55,23 @@ impl OracleAdapter {
                 .filter(|database| !database.is_empty())
         });
 
-        Ok(name
-            .map(|name| vec![SchemaInfo { name }])
-            .unwrap_or_default())
+        // #1072 — the list feeds the switch-database picker, so it must offer
+        // the other containers this session could dial, not just its own. The
+        // PDB read is best-effort (`query_catalog_rows` degrades a denied /
+        // absent `v$pdbs` to an empty list), so an unprivileged session or a
+        // non-CDB keeps exactly the pre-#1072 single-entry list.
+        let mut names: BTreeSet<String> = name.into_iter().collect();
+        for row in self
+            .query_catalog_rows("Oracle container catalog query failed", OPEN_PDBS_SQL, &[])
+            .await?
+        {
+            let name = row_string(&row, 0, "container name")?;
+            if !name.is_empty() {
+                names.insert(name);
+            }
+        }
+
+        Ok(names.into_iter().map(|name| SchemaInfo { name }).collect())
     }
 
     pub async fn list_schemas(&self) -> Result<Vec<SchemaInfo>, AppError> {

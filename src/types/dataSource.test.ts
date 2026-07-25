@@ -148,7 +148,8 @@ describe("DataSourceProfile registry", () => {
       operations: { activity: true, slowQueries: true, serverInfo: true },
     }),
     oracle: expectedCapabilities({
-      connection: { test: true, readOnly: true },
+      // Issue #1072 — switch-database is wired (service-name re-dial).
+      connection: { test: true, switchDatabase: true, readOnly: true },
       query: { query: true, cancel: true },
       catalog: {
         indexes: true,
@@ -484,7 +485,9 @@ describe("DataSourceProfile registry", () => {
     expect(hasConnectionCapability("mysql", "switchDatabase")).toBe(true);
     expect(hasConnectionCapability("mariadb", "switchDatabase")).toBe(true);
     expect(hasConnectionCapability("mssql", "switchDatabase")).toBe(false);
-    expect(hasConnectionCapability("oracle", "switchDatabase")).toBe(false);
+    // Issue #1072 — Oracle switches by re-dialing the stored service name/SID
+    // (no `USE <db>`); MSSQL stays false under its current connection contract.
+    expect(hasConnectionCapability("oracle", "switchDatabase")).toBe(true);
     expect(hasConnectionCapability("sqlite", "switchDatabase")).toBe(false);
     expect(hasConnectionCapability("mongodb", "switchDatabase")).toBe(false);
     expect(hasConnectionCapability("redis", "switchDatabase")).toBe(true);

@@ -468,3 +468,66 @@ async fn oracle_admin_ops_serve_or_fail_loud_1073() {
 
     disconnect_adapter(&adapter).await;
 }
+
+#[tokio::test]
+#[serial]
+#[ignore = "requires local Oracle container plus e2e/fixtures/seed.oracle.sql"]
+async fn oracle_switch_database_lists_containers_and_fails_closed_1072() {
+    // Issue #1072 — the last runtime-slice residual. `list_databases` feeds the
+    // DbSwitcher (session container plus any reachable open PDB; the `v$pdbs`
+    // read is best-effort, so an unprivileged probe user still sees its own
+    // container), and `switch_database` re-dials the stored service name. The
+    // bounded live assertions are: the picker is never empty, never offers the
+    // read-only PDB$SEED template, re-selecting the active service is accepted,
+    // and an unreachable service fails loud without disturbing the session.
+    let (config, _schema, adapter) = connected_adapter().await;
+    let service = config.database.trim().to_string();
+
+    let databases = RdbAdapter::list_databases(&adapter)
+        .await
+        .expect("Oracle container list should succeed");
+    let names = databases
+        .iter()
+        .map(|db| db.name.as_str())
+        .collect::<Vec<_>>();
+    println!("ORACLE_PROBE G containers={names:?}");
+    assert!(
+        !names.is_empty(),
+        "the picker must offer at least the session's own container"
+    );
+    assert!(
+        !names
+            .iter()
+            .any(|name| name.eq_ignore_ascii_case("PDB$SEED")),
+        "PDB$SEED is a read-only clone template, never a switch target: {names:?}"
+    );
+
+    RdbAdapter::switch_database(&adapter, &service)
+        .await
+        .expect("re-selecting the active service must be accepted");
+    assert_eq!(
+        RdbAdapter::current_database(&adapter)
+            .await
+            .expect("current database should resolve after the switch")
+            .as_deref(),
+        Some(service.as_str()),
+        "the active service name must survive the switch"
+    );
+
+    let rejected = RdbAdapter::switch_database(&adapter, "VT1072_NO_SUCH_SERVICE")
+        .await
+        .expect_err("an unreachable service must fail loud, not silently re-point");
+    println!("ORACLE_PROBE G switch_reject err={rejected:?}");
+    assert!(
+        matches!(rejected, AppError::Connection(_)),
+        "expected a redacted Connection error, got {rejected:?}"
+    );
+
+    // The failed dial must leave the previous session usable (fail-closed).
+    let still_readable = scalar_count(&adapter, "SELECT COUNT(*) FROM users").await;
+    assert!(
+        still_readable >= 2,
+        "a rejected switch must not disturb the active session"
+    );
+    disconnect_adapter(&adapter).await;
+}
