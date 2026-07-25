@@ -26,7 +26,8 @@ use self::shape::{
     OracleTriggerCatalogRow, OracleViewCatalogRow,
 };
 use super::{
-    map_oracle_connection_error, OracleAdapter, ORACLE_ROOT_CONTAINER, ORACLE_SEED_CONTAINER,
+    is_oracle_identifier_safe, map_oracle_connection_error, OracleAdapter, ORACLE_ROOT_CONTAINER,
+    ORACLE_SEED_CONTAINER,
 };
 
 /// #1072 — the DB picker's entries must be *dialable* names, not container
@@ -37,11 +38,11 @@ use super::{
 /// that name (offering it is a guaranteed ORA-12514) and `PDB$SEED` is a
 /// read-only clone template. The stored target is always kept — from a CDB root
 /// session `CON_NAME` is `CDB$ROOT`, so the stored service is the only way back
-/// to the container the user is on. SID profiles list the stored SID alone: a
-/// PDB name is not a SID (ORA-12505), matching the fail-closed
-/// `switch_active_service`. Duplicates fold case-insensitively (Oracle folds
-/// unquoted identifiers) and keep the stored spelling, so the picker can
-/// highlight the active entry.
+/// to the container the user is on (it also dialed once, so it is whitelist-safe
+/// by construction). SID profiles list the stored SID alone: a PDB name is not a
+/// SID (ORA-12505), matching the fail-closed `switch_active_service`. Duplicates
+/// fold case-insensitively (Oracle folds unquoted identifiers) and keep the
+/// stored spelling, so the picker can highlight the active entry.
 pub(super) fn switch_target_names(
     stored: Option<&str>,
     containers: &[String],
@@ -55,7 +56,16 @@ pub(super) fn switch_target_names(
         for container in containers {
             let container = container.trim();
             let key = container.to_ascii_uppercase();
-            if container.is_empty() || key == ORACLE_ROOT_CONTAINER || key == ORACLE_SEED_CONTAINER
+            // #1072 — the same-axis rule is only true if the list applies every
+            // gate the dial applies. `switch_active_service` rejects anything
+            // outside the #1065 TNS whitelist before it dials, and Oracle does
+            // allow a quoted PDB name (`CREATE PLUGGABLE DATABASE "my pdb"`),
+            // so an unfiltered `v$pdbs` row can be an entry the picker offers
+            // and the switch always refuses. Drop it here instead.
+            if container.is_empty()
+                || key == ORACLE_ROOT_CONTAINER
+                || key == ORACLE_SEED_CONTAINER
+                || !is_oracle_identifier_safe(container)
             {
                 continue;
             }

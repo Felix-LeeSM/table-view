@@ -548,6 +548,47 @@ fn switch_targets_offer_only_the_stored_sid_for_sid_profiles() {
     );
 }
 
+// #1072 — "every entry the picker offers is a name these credentials can dial"
+// is a property of the *pair*, so it is asserted as a pair: the list must drop
+// exactly what the dial refuses. Oracle allows quoted PDB names
+// (`CREATE PLUGGABLE DATABASE "my pdb"`), so `v$pdbs` can hand back characters
+// the #1065 TNS whitelist rejects — an unfiltered list would offer a target
+// `switch_database` can only bounce. The whitelist runs before the connection
+// lookup, so an unconnected adapter separates the two outcomes: `Validation`
+// means the name was refused by the guard, `Connection` means it got past it.
+#[tokio::test]
+async fn switch_targets_drop_the_names_the_dial_would_reject() {
+    let dialable = "PDB-2";
+    let undialable = "MY PDB";
+
+    assert_eq!(
+        switch_target_names(
+            Some("XE"),
+            &[undialable.into(), dialable.into(), "XEPDB1".into()],
+            false
+        ),
+        vec!["PDB-2".to_string(), "XE".to_string(), "XEPDB1".to_string()],
+        "a container whose name is outside the #1065 whitelist must not be offered"
+    );
+
+    let adapter = OracleAdapter::new();
+    let err = RdbAdapter::switch_database(&adapter, undialable)
+        .await
+        .expect_err("the dropped name must also be undialable");
+    assert!(
+        matches!(&err, AppError::Validation(message) if message.contains("unsupported characters")),
+        "expected the #1065 whitelist rejection for {undialable:?}, got {err:?}"
+    );
+
+    let err = RdbAdapter::switch_database(&adapter, dialable)
+        .await
+        .expect_err("an unconnected adapter cannot dial anything");
+    assert!(
+        matches!(&err, AppError::Connection(_)),
+        "an offered name must clear the whitelist and fail only on the connection, got {err:?}"
+    );
+}
+
 #[tokio::test]
 async fn catalog_surfaces_require_open_connection() {
     let adapter = OracleAdapter::new();
