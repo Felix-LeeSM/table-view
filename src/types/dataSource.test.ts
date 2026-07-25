@@ -485,8 +485,9 @@ describe("DataSourceProfile registry", () => {
     expect(hasConnectionCapability("mysql", "switchDatabase")).toBe(true);
     expect(hasConnectionCapability("mariadb", "switchDatabase")).toBe(true);
     expect(hasConnectionCapability("mssql", "switchDatabase")).toBe(false);
-    // Issue #1072 — Oracle switches by re-dialing the stored service name/SID
-    // (no `USE <db>`); MSSQL stays false under its current connection contract.
+    // Issue #1072 — Oracle switches by re-dialing a service name (no `USE
+    // <db>`); SID profiles keep the toggle but fail closed at the adapter.
+    // MSSQL stays false under its current connection contract.
     expect(hasConnectionCapability("oracle", "switchDatabase")).toBe(true);
     expect(hasConnectionCapability("sqlite", "switchDatabase")).toBe(false);
     expect(hasConnectionCapability("mongodb", "switchDatabase")).toBe(false);

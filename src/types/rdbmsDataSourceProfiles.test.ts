@@ -55,7 +55,8 @@ const expectedMssqlRuntimeCapabilities = expectedCapabilities({
 });
 
 const expectedOracleRuntimeCapabilities = expectedCapabilities({
-  // Issue #1072 — switch-database is wired (service-name/SID re-dial).
+  // Issue #1072 — switch-database is wired as a service-name re-dial; SID
+  // profiles keep the toggle and fail closed at the adapter.
   connection: { test: true, switchDatabase: true, readOnly: true },
   query: { query: true, cancel: true },
   catalog: {

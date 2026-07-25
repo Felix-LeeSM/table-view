@@ -25,17 +25,20 @@ discovery, and full T-SQL semantic parity remain separate contracts.
 Oracle is active for service-name/SID lifecycle plus catalog metadata,
 SELECT/DML batch execution, cooperative cancellation, table-data query,
 key-projected editRows, bounded structured table/index/constraint DDL,
-read-only trigger listing, schema-dump export, admin ops, and (#1072) database
+read-only trigger listing, schema-dump export, #1073 admin ops (server
+activity, kill session, slow queries, server info off `v$session`/`v$sql`/
+`v$instance`; fail-loud without the catalog-read grant), and (#1072) database
 switching — Oracle has no `USE <db>`, so the switch re-dials the service name
 and the picker offers only dialable names (the stored service plus the open
-PDBs; never the `CDB$ROOT` container, whose service is the stored one).
-Dialability is proven at switch time, not at list time. Switching from a SID
-profile fails closed (a SID names the instance, not a PDB). TNS descriptors,
-wallet-less TLS, advanced auth, raw DDL/admin, trigger DDL, parser/completion
-promotion, PL/SQL source/body/package authoring, sequences/synonyms DDL/admin,
-import/export, profiler/activity dashboards,
-users/roles/grants/session/storage, full workbench parity, and full PL/SQL
-executable semantics remain separate contracts.
+PDBs; never the `CDB$ROOT` container, whose service is the stored one, and
+never a name outside the #1065 connect-time character whitelist, which the
+switch enforces too). Authorization is still proven at switch time, not at list
+time. Switching from a SID profile fails closed (a SID names the instance, not
+a PDB). TNS descriptors, wallet-less TLS, advanced auth, raw DDL/admin, trigger
+DDL, parser/completion promotion, PL/SQL source/body/package authoring,
+sequences/synonyms DDL/admin, import/export, users/roles/lock operations
+panels, grants/session/storage management, trace/AWR profiling, full workbench
+parity, and full PL/SQL executable semantics remain separate contracts.
 
 Redis and Valkey are active KV profiles with bounded connection/key browse/value
 preview and command-query slices. Redis has direct key mutation controls for the

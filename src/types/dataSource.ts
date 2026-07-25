@@ -265,9 +265,12 @@ export const ORACLE_CAPABILITIES = capabilities({
     test: true,
     // Issue #1072 — the last runtime-slice residual. `OracleAdapter` now
     // overrides `switch_database`: Oracle has no `USE <db>`, so the switch
-    // re-dials the stored service name/SID (the same shape PG uses for its
+    // re-dials the stored service name (the same shape PG uses for its
     // sub-pool), and `list_databases` offers the session container plus the
-    // reachable open PDBs. The claim is truthful for the DbSwitcher path.
+    // reachable open PDBs. SID profiles keep the toggle but fail closed at the
+    // adapter (a SID names the instance, not a pluggable database), and their
+    // picker lists only the stored SID, so the DbSwitcher never offers them a
+    // target they cannot reach. The claim is truthful for the DbSwitcher path.
     switchDatabase: true,
     // Issue #1529 — the backend read-only gate is engine-agnostic, so every
     // server RDB that can write exposes the toggle (same protection = same
