@@ -244,9 +244,12 @@ confirmation, cancellation, and grid edit. #1071 promotes bounded structured
 table/index/constraint DDL through the shared StructurePanel path, including
 column type/nullability/DEFAULT-constraint edits and the SET NOT NULL NULL-row
 pre-flight probe. Trigger DDL, raw DDL/admin,
-admin/security/jobs/users/roles, import/export, profiler/activity, full T-SQL
-semantics, full workbench parity, sqlcmd/meta-command/procedure-body scripting,
-은 claim 하지 않는다. Oracle 은 #905/#906 에서 service-name
+security/jobs/users/roles, DB-level import/backup/restore, full
+profiler/activity admin parity, full T-SQL semantics, full workbench parity,
+sqlcmd/meta-command/procedure-body scripting 은 claim 하지 않는다. 공유 server
+activity/slow-query (profiler) 패널, session kill, server info 는 #1073 의
+capability-gated admin ops 이고, schema dump 는 #1642 에서 vendor-restorable
+이다. Oracle 은 #905/#906 에서 service-name
 lifecycle, catalog metadata, SELECT/DML batch, cooperative cancel, tabular
 table-data query, key-projected editRows, bounded static Safe Mode classification,
 and bounded editor completion assistance 만 허용한다. #907 adds representative
