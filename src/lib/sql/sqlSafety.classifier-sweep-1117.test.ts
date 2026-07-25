@@ -125,3 +125,97 @@ describe("Issue #1117 — known-safe utility/session statements → known-safe /
     expect(a.severity).toBe("info");
   });
 });
+
+// Issue #1071 (PR #1795 review B4) — deferred-payload fail-open.
+//
+// `analyzeStatement` branches on the LEADING keyword, so a destructive
+// statement that does not start at offset 0 was never seen: a T-SQL
+// `IF <predicate> <statement>` head matched no branch and fell through to the
+// `other`/info fail-open bucket, and an MSSQL batch led by `DECLARE` returned
+// the procedural warn *before* the #1118 multi-statement split ran.
+//
+// The concrete asymmetry that surfaced this: the MSSQL column DEFAULT swap
+// emits its `DROP CONSTRAINT` through dynamic SQL (T-SQL cannot name a
+// constraint by variable), and `useDdlPreviewExecution` classified those
+// statements as info — no confirmation dialog — while the PostgreSQL
+// `ALTER TABLE … DROP CONSTRAINT` for the same user action is `danger`/confirm.
+// Same destructive intent, two safety levels, decided by which engine the
+// connection happens to be.
+//
+// Fail-open is the documented fallback for *unrecognised* statements; it is not
+// a licence to skip a statement the roster does recognise but that sits behind
+// a control-flow head or inside a dynamic-SQL variable assignment. (2026-07-25)
+describe("Issue #1071 — deferred destructive payloads fail safe, not open", () => {
+  it("[AC-1071-B4-01] IF-guarded DROP TABLE → danger (was other/info)", () => {
+    const a = analyzeStatement("IF @c IS NOT NULL DROP TABLE users");
+    expect(a.kind).toBe("ddl-drop");
+    expect(a.severity).toBe("danger");
+    expect(isDangerous(a)).toBe(true);
+  });
+
+  it("[AC-1071-B4-02] dynamic-SQL assignment carrying DROP CONSTRAINT → danger", () => {
+    // Statement 3 of the MSSQL DEFAULT swap, exactly as
+    // `src-tauri/src/db/mssql/ddl.rs` emits it and
+    // `useDdlPreviewExecution` splits it.
+    const a = analyzeStatement(
+      "SET @drop_default_0 = N'ALTER TABLE [dbo].[users] DROP CONSTRAINT ' + QUOTENAME(@default_name_0)",
+    );
+    expect(a.kind).toBe("ddl-alter-drop");
+    expect(a.severity).toBe("danger");
+    // Parity check: the PostgreSQL statement for the same user action.
+    expect(
+      analyzeStatement("ALTER TABLE users DROP CONSTRAINT users_status_df")
+        .severity,
+    ).toBe("danger");
+  });
+
+  it("[AC-1071-B4-03] MSSQL batch led by DECLARE no longer stops at the procedural warn", () => {
+    const a = analyzeStatement("DECLARE @x INT; DROP TABLE users", {
+      dialect: "mssql",
+    });
+    expect(a.severity).toBe("danger");
+    expect(a.kind).toBe("ddl-drop");
+    // Same batch without the MSSQL dialect already reached danger — that gap
+    // between dialects is the defect.
+    expect(analyzeStatement("DECLARE @x INT; DROP TABLE users").severity).toBe(
+      "danger",
+    );
+  });
+
+  it("[AC-1071-B4-04] IF-guarded EXEC of an opaque variable stays warn, not info", () => {
+    const a = analyzeStatement("IF @sql IS NOT NULL EXEC(@sql)");
+    expect(a.kind).toBe("routine-call");
+    expect(a.severity).toBe("warn");
+  });
+
+  // Non-regression: the rescan is scoped to control-flow heads and T-SQL local
+  // variable assignments. A destructive-looking string in an ordinary DML/DQL
+  // statement is data, not a deferred payload, and must not escalate.
+  it("[AC-1071-B4-05] SQL-shaped text in a normal UPDATE literal does not escalate", () => {
+    const a = analyzeStatement(
+      "UPDATE users SET note = 'DROP TABLE users' WHERE id = 1",
+    );
+    expect(a.kind).toBe("dml-update");
+    expect(a.severity).toBe("warn");
+  });
+
+  it("[AC-1071-B4-06] SELECT of a destructive-looking literal stays info", () => {
+    const a = analyzeStatement("SELECT 'DROP TABLE users' AS t");
+    expect(a.severity).toBe("info");
+  });
+
+  it("[AC-1071-B4-07] benign local variable assignment stays config-write / info", () => {
+    const a = analyzeStatement("SET @x = 1");
+    expect(a.kind).toBe("config-write");
+    expect(a.severity).toBe("info");
+  });
+
+  it("[AC-1071-B4-08] a lone MSSQL DECLARE keeps the procedural warn", () => {
+    const a = analyzeStatement("DECLARE @x INT", { dialect: "mssql" });
+    expect(a.kind).toBe("routine-call");
+    expect(a.severity).toBe("warn");
+    expect(a.reasons).toEqual([
+      "T-SQL procedural scripting unsupported in Safe Mode",
+    ]);
+  });
+});
