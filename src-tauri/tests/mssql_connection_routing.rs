@@ -207,25 +207,12 @@ async fn test_connection_dispatches_mssql_validation_instead_of_declared_only_re
     }
 }
 
-#[tokio::test]
-async fn test_connection_requires_tls_trust_decision_before_network() {
-    let port = unused_tcp_port().await;
-
-    let result = test_connection(TestConnectionRequest {
-        config: mssql_public("127.0.0.1", port, Some(1), Some(true), None),
-        password: Some("pw".into()),
-        wallet_password: None,
-        existing_id: None,
-    })
-    .await;
-
-    match result {
-        Err(AppError::Validation(msg)) => {
-            assert!(msg.contains("trustServerCertificate"));
-        }
-        other => panic!("Expected SQL Server TLS validation rejection, got: {other:?}"),
-    }
-}
+// #1649 (ADR 0058) — `test_connection_requires_tls_trust_decision_before_network`
+// is gone with the rejection it asserted: the `SslMode` enum makes "TLS on
+// without a trust decision" unrepresentable, so `build_tds_config` no longer
+// has that error path (see `src-tauri/src/db/mssql/tests.rs`). The
+// validate-before-network property is still locked by the named-instance
+// rejection above.
 
 #[tokio::test]
 async fn mssql_login_uses_configured_connection_timeout() {

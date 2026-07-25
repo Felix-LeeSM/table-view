@@ -9,8 +9,9 @@
  *     configuration). Stored as string in `ConnectionDraft.database` for
  *     parity with the existing schema; the input type is `number` and we
  *     clamp to the 0–15 range.
- *   - `tlsEnabled` is shared with Mongo's TLS toggle for code reuse and
- *     maps to `rediss://` in the Redis adapter.
+ *   - the TLS checkbox is shared with Mongo's for code reuse and writes the
+ *     `sslMode` posture (#1649), which maps to `rediss://` in the Redis
+ *     adapter.
  */
 import { useTranslation } from "react-i18next";
 import {

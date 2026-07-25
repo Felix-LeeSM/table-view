@@ -279,29 +279,23 @@ export const isSearchFamily = (dbType: DatabaseType): boolean =>
   paradigmOf(dbType) === "search";
 
 /**
- * Membership gate for `tlsEnabled` carry (`applyDbTypeChange`) and verbatim
- * preservation (`resolveDraftTlsEnabled`). Members: `mssql`, `mongodb`,
- * `redis`, `valkey`, `elasticsearch`, `opensearch`.
+ * Membership gate for the encryption carry on `dbType` switch
+ * (`tlsFieldsForDbType`). Members: `mssql`, `mongodb`, `redis`, `valkey`,
+ * `elasticsearch`, `opensearch` — the engines whose form renders a plain
+ * on/off TLS checkbox rather than the sslmode dropdown.
  *
- * `mssql` is a member but its behavior never depends on the membership: both
- * consumers special-case `dbType === "mssql"` first (seed `trust=true` /
- * `tlsEnabled ?? true`), so those branches win before `exposesTlsToggle` is
- * ever consulted. Its presence here is therefore inert. mongo/redis/valkey/
- * search are the types that genuinely rely on membership — their TLS toggle is
- * a plain on/off with no trust dependency, so `tls_enabled=true, trust=None`
- * is a legitimate stored state that must be carried/preserved verbatim.
+ * `mssql` is a member but its behavior never depends on the membership: the
+ * consumer special-cases `dbType === "mssql"` first (seeds `require`), so that
+ * branch wins before `exposesTlsToggle` is ever consulted. Its presence here is
+ * therefore inert. mongo/redis/valkey/search are the types that genuinely rely
+ * on membership — switching between them carries the on/off state (as
+ * `verify-full`) while #1063 still drops any skip-verify (`require`) choice.
  *
- * `postgresql` renders a TLS toggle (#1526) but is deliberately kept OUT.
- * Unlike mongo/redis it routes through the trust-dependent
- * `resolve_tls_decision` boundary where `tls_enabled=true, trust=None` is a
- * backend hard-reject (#1062). Staying out of the set keeps its two required
- * behaviors: `resolveDraftTlsEnabled` heals that reject-residue instead of
- * preserving it, and `applyDbTypeChange` resets TLS to null on `dbType` switch
- * instead of carrying a `true` that would leave `trust=None`. The PG form
- * itself seeds `trust=false` on enable so the invalid combo is never authored.
- *
- * The no-TLS-control types (mysql/mariadb/oracle/sqlite/duckdb) also stay out:
- * `tlsEnabled` must not be carried onto — or persisted for — those drafts.
+ * `postgresql` renders a TLS control (#1526) but is deliberately kept OUT: its
+ * control is the five-way sslmode dropdown, so a `dbType` switch resets it to
+ * `prefer` instead of carrying an encryption flag whose verification posture
+ * was chosen for a different engine. The no-TLS-control types
+ * (mysql/mariadb/oracle/sqlite/duckdb) stay out for the same reason.
  */
 export const TLS_TOGGLE_DATABASE_TYPES: readonly DatabaseType[] = [
   "mssql",
@@ -385,7 +379,11 @@ export function sslModeFromTlsBooleans(
   trust: boolean | null | undefined,
 ): SslMode {
   if (tlsEnabled === true) return trust === true ? "require" : "verify-full";
-  if (tlsEnabled === false && trust === false) return "disable";
+  // The backend folds through `tls_enabled.unwrap_or(false)`, so an unset
+  // `tlsEnabled` alongside the explicit `trust=false` plaintext marker resolves
+  // to `disable` there too — matching it keeps the UI from showing `prefer` for
+  // a connection the adapter opens with TLS off.
+  if (trust === false) return "disable";
   return "prefer";
 }
 

@@ -6,9 +6,9 @@
  *     connections in dev clusters)
  *   - `database` is the default DB to land on after connect — labelled
  *     "(optional)" because the user can pick a DB later via DbSwitcher
- *   - `authSource`, `replicaSet`, `tlsEnabled` are Mongo-specific and
- *     persisted in the existing `ConnectionConfig` extension fields
- *     (see Sprint 65).
+ *   - `authSource` / `replicaSet` are Mongo-specific and persisted in the
+ *     existing `ConnectionConfig` extension fields (see Sprint 65); the TLS
+ *     checkbox writes the shared `sslMode` posture (#1649).
  */
 import { useTranslation } from "react-i18next";
 import { sslModeTlsOn, type ConnectionDraft } from "../../model";

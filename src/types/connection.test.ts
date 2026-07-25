@@ -524,6 +524,19 @@ describe("sslModeFromTlsBooleans (#1649)", () => {
     // The former #1062 hard-reject residue must never surface as skip-verify.
     expect(sslModeFromTlsBooleans(true, null)).toBe("verify-full");
   });
+
+  // Reason: the backend `SslMode::from_legacy` reads the pair through
+  // `tls_enabled.unwrap_or(false)`, so an unset `tlsEnabled` with the explicit
+  // `trust=false` plaintext marker resolves to `disable` there. The two folds
+  // must agree or the form shows `prefer` for a connection the adapter opens
+  // with TLS off. (2026-07-25)
+  it("matches the backend fold for an unset tlsEnabled with trust=false", () => {
+    expect(sslModeFromTlsBooleans(null, false)).toBe("disable");
+    expect(sslModeFromTlsBooleans(undefined, false)).toBe("disable");
+    // Trust-without-TLS stays the driver default on both sides.
+    expect(sslModeFromTlsBooleans(null, true)).toBe("prefer");
+    expect(sslModeFromTlsBooleans(false, true)).toBe("prefer");
+  });
 });
 
 // Purpose: #1649 — a pasted connection string's sslmode/tls parameter is
