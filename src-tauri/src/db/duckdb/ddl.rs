@@ -1067,6 +1067,37 @@ mod tests {
         assert!(tables.iter().any(|t| t.name == "items"));
     }
 
+    #[tokio::test]
+    async fn create_table_with_comments_executes_without_rolling_back_1070() {
+        let (_dir, adapter) = fixture(false).await;
+
+        // `COMMENT ON TABLE/COLUMN` runs inside the same transaction as the
+        // CREATE TABLE, so a statement DuckDB rejected would roll the whole
+        // table back. The Create Table dialog's Table comment / per-column
+        // comment inputs make this user-reachable, so it needs real execution,
+        // not just a string assertion — including the `''` escape path.
+        let mut req = create_req("widgets");
+        req.table_comment = Some("orders per widget".into());
+        req.columns[1].comment = Some("display 'label'".into());
+        RdbAdapter::create_table(&adapter, &req).await.unwrap();
+
+        // Committed = every COMMENT ON statement was accepted.
+        let tables = RdbAdapter::list_tables(&adapter, "main").await.unwrap();
+        assert!(tables.iter().any(|t| t.name == "widgets"));
+        let cols = adapter.get_columns("main", "widgets", None).await.unwrap();
+        assert_eq!(cols.len(), 2);
+
+        // Read-back of the stored comment is NOT asserted: `duckdb/queries.rs`
+        // returns `comment: None` for every column (a pre-existing catalog-read
+        // gap, unrelated to this write path). The emitted escape is locked on
+        // the builder instead.
+        let stmts = build_create_table_statements(&req).unwrap();
+        assert_eq!(
+            stmts[2],
+            "COMMENT ON COLUMN \"main\".\"widgets\".\"label\" IS 'display ''label'''"
+        );
+    }
+
     // ---- Stage 2b boundary: constraints + identity are REJECTED, never
     // silently dropped and never half-applied ------------------------------
 
