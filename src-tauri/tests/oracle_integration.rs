@@ -348,3 +348,132 @@ async fn test_stream_table_rows_boundary_duckdb_unsupported_oracle_validated() {
         "oracle: {err:?}"
     );
 }
+
+// ── Issue #1072 — switch-database gate ────────────────────────────────────
+//
+// These live in the CI-run `--test oracle_integration` target
+// (`.github/workflows/ci.yml`), not in the `#[ignore]`d smoke probes, because
+// the switch path's only real failure mode is the one a live listener decides:
+// whether a name the picker offered can actually be dialed.
+
+/// [AC-1072-01] `CDB$ROOT` is a container, never a listener service, so the
+/// picker must never offer it and the switch must refuse it at the trust
+/// boundary — before the connection lookup, so the rejection is deterministic
+/// and needs no live Oracle. Dialing it would reach the whitelist
+/// (`is_oracle_identifier_safe` allows `$`) and then die with ORA-12514.
+#[tokio::test]
+async fn test_oracle_switch_database_refuses_the_root_container_1072() {
+    let adapter = OracleAdapter::new();
+
+    for name in ["CDB$ROOT", "cdb$root", "  Cdb$Root  "] {
+        let err = RdbAdapter::switch_database(&adapter, name)
+            .await
+            .expect_err("the root container must never be a switch target");
+        assert!(
+            matches!(&err, AppError::Validation(message) if message.contains("CDB$ROOT")),
+            "expected a Validation rejection for {name:?}, got {err:?}"
+        );
+    }
+}
+
+/// [AC-1072-02] The list axis and the dial axis must be the same axis. From a
+/// CDB root session the picker has more than one entry, so this is the only
+/// configuration where the contract is observable: the stored service must stay
+/// in its own list, `CDB$ROOT` must not appear, and **every** offered entry must
+/// be dialable with the same credentials (Oracle auto-creates a default service
+/// per PDB, which is why PDB names are dialable and the root container is not).
+#[tokio::test]
+#[serial_test::serial]
+async fn test_oracle_switch_database_round_trip_from_cdb_root_1072() {
+    let adapter = match common::setup_oracle_cdb_root_adapter().await {
+        Some(a) => a,
+        None => return,
+    };
+    let root_service = RdbAdapter::current_database(&adapter)
+        .await
+        .expect("current database should resolve")
+        .expect("a connected adapter stores its service name");
+
+    let names: Vec<String> = RdbAdapter::list_databases(&adapter)
+        .await
+        .expect("container list should succeed from CDB root")
+        .into_iter()
+        .map(|db| db.name)
+        .collect();
+
+    assert!(
+        names.iter().any(|name| name == &root_service),
+        "the service this session dialed must stay in its own picker: {names:?}"
+    );
+    assert!(
+        !names.iter().any(|n| n.eq_ignore_ascii_case("CDB$ROOT")),
+        "CDB$ROOT has no listener service and must not be offered: {names:?}"
+    );
+    assert!(
+        !names.iter().any(|n| n.eq_ignore_ascii_case("PDB$SEED")),
+        "PDB$SEED is a read-only clone template, never a switch target: {names:?}"
+    );
+    assert!(
+        names.len() >= 2,
+        "a privileged CDB-root session must see at least one PDB besides its own service: {names:?}"
+    );
+
+    for name in &names {
+        RdbAdapter::switch_database(&adapter, name)
+            .await
+            .unwrap_or_else(|e| panic!("picker offered a target it cannot dial: {name} ({e:?})"));
+        assert_eq!(
+            RdbAdapter::current_database(&adapter)
+                .await
+                .expect("current database should resolve after a switch")
+                .as_deref(),
+            Some(name.as_str()),
+            "the switch must re-point the stored target"
+        );
+    }
+
+    RdbAdapter::switch_database(&adapter, &root_service)
+        .await
+        .expect("returning to the original container must work");
+}
+
+/// [AC-1072-03] Oracle service/container names are case-insensitive, so a
+/// case-only re-select is the *same* target: it must short-circuit instead of
+/// tearing down a working session, and it must not rewrite the stored spelling
+/// (the picker highlights the current entry by comparing against it).
+#[tokio::test]
+#[serial_test::serial]
+async fn test_oracle_switch_database_same_target_ignores_case_1072() {
+    use table_view_lib::db::row_cap::DEFAULT_ROW_CAP;
+
+    let adapter = match common::setup_oracle_adapter().await {
+        Some(a) => a,
+        None => return,
+    };
+    let service = RdbAdapter::current_database(&adapter)
+        .await
+        .expect("current database should resolve")
+        .expect("a connected adapter stores its service name");
+    let refolded = if service.chars().any(|c| c.is_ascii_uppercase()) {
+        service.to_ascii_lowercase()
+    } else {
+        service.to_ascii_uppercase()
+    };
+
+    RdbAdapter::switch_database(&adapter, &refolded)
+        .await
+        .expect("a case-only re-select must be accepted");
+    assert_eq!(
+        RdbAdapter::current_database(&adapter)
+            .await
+            .expect("current database should resolve")
+            .as_deref(),
+        Some(service.as_str()),
+        "a case-only re-select is a no-op and must not rewrite the stored target"
+    );
+
+    adapter
+        .execute_query("SELECT 1 FROM DUAL", None, DEFAULT_ROW_CAP)
+        .await
+        .expect("the working session must survive a case-only re-select");
+}

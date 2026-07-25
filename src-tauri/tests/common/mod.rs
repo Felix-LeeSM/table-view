@@ -872,7 +872,31 @@ async fn oracle_container_endpoint() -> Option<OracleEndpoint> {
 /// container stay independent, like MSSQL). Silent-skip (`None`) preserved.
 #[allow(dead_code)]
 pub async fn setup_oracle_adapter() -> Option<OracleAdapter> {
+    connect_oracle_adapter(oracle_endpoint().await?).await
+}
+
+/// Issue #1072 — CDB-root variant of `setup_oracle_adapter`. A PDB session only
+/// ever sees its own container, so the switch-database contract (every
+/// `list_databases` entry must be a service the same credentials can dial) can
+/// only be exercised from the root container. `gvenzl/oracle-free` publishes the
+/// root service `FREE` and sets the SYSTEM account from `ORACLE_PASSWORD`;
+/// override with `ORACLE_ROOT_SERVICE` / `ORACLE_ROOT_USER` /
+/// `ORACLE_ROOT_PASSWORD` for an external server. Silent-skip (`None`) when the
+/// endpoint or the privileged login is unavailable, like every other Oracle
+/// helper here.
+#[allow(dead_code)]
+pub async fn setup_oracle_cdb_root_adapter() -> Option<OracleAdapter> {
     let endpoint = oracle_endpoint().await?;
+    connect_oracle_adapter(OracleEndpoint {
+        user: std::env::var("ORACLE_ROOT_USER").unwrap_or_else(|_| "system".into()),
+        password: std::env::var("ORACLE_ROOT_PASSWORD").unwrap_or_else(|_| "testsys".into()),
+        service: std::env::var("ORACLE_ROOT_SERVICE").unwrap_or_else(|_| "FREE".into()),
+        ..endpoint
+    })
+    .await
+}
+
+async fn connect_oracle_adapter(endpoint: OracleEndpoint) -> Option<OracleAdapter> {
     let config = ConnectionConfig {
         id: "test-conn".to_string(),
         name: "TestOracle".to_string(),
@@ -905,7 +929,10 @@ pub async fn setup_oracle_adapter() -> Option<OracleAdapter> {
                 tokio::time::sleep(Duration::from_millis(500 * (attempt + 1))).await;
             }
             Err(e) => {
-                println!("SKIP: Oracle connect failed after retries ({})", e);
+                println!(
+                    "SKIP: Oracle connect failed after retries for service {} ({})",
+                    config.database, e
+                );
                 return None;
             }
         }
