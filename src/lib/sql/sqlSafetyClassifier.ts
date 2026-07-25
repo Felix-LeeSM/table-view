@@ -31,6 +31,23 @@ function worstAnalysis(analyses: StatementAnalysis[]): StatementAnalysis {
   );
 }
 
+// Issue #1071 (PR #1795 review B4) — statement shapes whose payload is not at
+// offset 0: a T-SQL control-flow head guards a statement after an arbitrary
+// predicate, and a local-variable assignment carries dynamic SQL as a string.
+// Scoped deliberately: an ordinary `UPDATE t SET note = 'DROP TABLE x'` keeps
+// its own leading keyword, so SQL-shaped *data* is never rescanned. `SET`/
+// `DECLARE` only qualify with an `@`-prefixed variable, which is the T-SQL
+// local-variable form, not `UPDATE … SET col =`.
+const DEFERRED_PAYLOAD_HEAD_RE = /^(?:IF|WHILE|ELSE)\b|^(?:SET|DECLARE)\s+@/;
+
+// Write/destructive statement heads worth re-anchoring on. Read/benign heads
+// are omitted: they can never raise the worst severity, so scanning for them
+// only costs work. A head that turns out to sit inside a predicate or a
+// non-SQL string over-classifies, which is the fail-SAFE direction — the whole
+// point of this pass.
+const DEFERRED_PAYLOAD_BODY_RE =
+  /\b(?:DROP|TRUNCATE|DELETE|UPDATE|INSERT|MERGE|ALTER|CREATE|GRANT|REVOKE|DENY|RESTORE|BACKUP|EXEC|EXECUTE)\b/g;
+
 // Issue #1117 — session integrity switches that disable FK / uniqueness /
 // constraint / trigger enforcement. Only the *disabling* direction warns
 // (re-enabling `=1` / `ON` stays benign config). Disabling one of these arms a
@@ -53,6 +70,35 @@ const INTEGRITY_SWITCH_OFF_RES: RegExp[] = [
 // here is a benign read/config.
 const KNOWN_SAFE_RE =
   /^(BEGIN|START\s+TRANSACTION|COMMIT|END\s+TRANSACTION|ROLLBACK|SAVEPOINT|RELEASE|VACUUM|ANALYZE|REINDEX|CHECKPOINT|PRAGMA)\b/;
+
+/**
+ * Issue #1071 (PR #1795 review B4) — fail-safe rescan for a destructive payload
+ * that does not start at offset 0.
+ *
+ * Returns `null` when the statement is not one of the deferred-payload shapes
+ * or carries no write/destructive head after offset 0, so the caller falls
+ * through to the normal leading-keyword branches unchanged. Otherwise returns
+ * the worst analysis over every candidate suffix.
+ *
+ * Recursion terminates: a suffix starts at a write/destructive head, none of
+ * which is a deferred-payload head, so the re-entered call cannot rescan again.
+ */
+function analyzeDeferredPayload(
+  normalized: string,
+  upper: string,
+  options: StatementAnalysisOptions | undefined,
+): StatementAnalysis | null {
+  if (!DEFERRED_PAYLOAD_HEAD_RE.test(upper)) return null;
+
+  const analyses: StatementAnalysis[] = [];
+  DEFERRED_PAYLOAD_BODY_RE.lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = DEFERRED_PAYLOAD_BODY_RE.exec(upper)) !== null) {
+    if (match.index === 0) continue;
+    analyses.push(analyzeStatement(normalized.slice(match.index), options));
+  }
+  return analyses.length > 0 ? worstAnalysis(analyses) : null;
+}
 
 /**
  * Sprint 391 — DDL destructive classifier callsite migration.
@@ -433,26 +479,58 @@ export function analyzeStatement(
     };
   }
 
+  // Issue #1118 — multi-statement defense. Placed after the MSSQL
+  // batch-separator early-return so a `GO` batch still reports the separator.
+  // A genuinely joined batch is split with the literal/comment-aware splitter
+  // and each statement is re-analyzed; the worst severity wins.
+  // Single-statement input (length <= 1) skips this and takes the fast path
+  // below unchanged.
+  const parts = splitSqlStatements(sql, options?.dialect === "oracle");
+  const batchAnalyses =
+    parts.length > 1
+      ? parts.map((part) => analyzeStatement(part, options))
+      : [];
+
   if (
     isMssqlSafetyContext(options) &&
     isUnsupportedTsqlProceduralScript(upper)
   ) {
-    return {
+    const procedural: StatementAnalysis = {
       kind: "routine-call",
       severity: "warn",
       reasons: ["T-SQL procedural scripting unsupported in Safe Mode"],
     };
+    // Issue #1071 — this used to return before the #1118 split ran, so
+    // `DECLARE @x INT; DROP TABLE users` reported warn under the MSSQL dialect
+    // while every other dialect reported danger for the same text. The
+    // procedural warn is kept (a single-blob `BEGIN … END;` body is still
+    // unsupported and its parts classify benignly), but it now competes with
+    // the per-statement analyses instead of hiding them. `worstAnalysis` keeps
+    // the earliest on ties, so a batch with nothing worse still surfaces the
+    // procedural reason verbatim.
+    return batchAnalyses.length > 0
+      ? worstAnalysis([procedural, ...batchAnalyses])
+      : procedural;
   }
 
-  // Issue #1118 — multi-statement defense. Placed after the MSSQL
-  // batch-separator / procedural early-returns so single-blob T-SQL bodies
-  // (BEGIN … END; with internal semicolons) stay intact. A genuinely joined
-  // batch is split with the literal/comment-aware splitter and each statement
-  // is re-analyzed; the worst severity wins. Single-statement input (length
-  // <= 1) skips this and takes the fast path below unchanged.
-  const parts = splitSqlStatements(sql, options?.dialect === "oracle");
-  if (parts.length > 1) {
-    return worstAnalysis(parts.map((part) => analyzeStatement(part, options)));
+  if (batchAnalyses.length > 0) {
+    return worstAnalysis(batchAnalyses);
+  }
+
+  // Issue #1071 — deferred-payload rescan. Every branch below is anchored at
+  // the leading keyword, so a destructive statement that does not start at
+  // offset 0 was invisible and fell through to the `other`/info fail-open
+  // bucket: `IF <predicate> DROP TABLE t` (the guarded statement sits after an
+  // arbitrary predicate) and `SET @v = N'ALTER TABLE … DROP CONSTRAINT ' + …`
+  // (T-SQL cannot name a constraint by variable, so the MSSQL DEFAULT swap has
+  // to build its DROP as dynamic SQL). Fail-open is the documented fallback for
+  // statements the roster does not recognise — not a licence to skip one it
+  // does. Rather than parse a T-SQL predicate or expression, re-analyze the
+  // suffix at each destructive statement head found after offset 0 and keep the
+  // worst, the same "worst wins" rule the batch split above uses.
+  const deferred = analyzeDeferredPayload(normalized, upper, options);
+  if (deferred !== null) {
+    return deferred;
   }
 
   // Issue #1117 — session integrity switch OFF → warn. Placed *before* the
