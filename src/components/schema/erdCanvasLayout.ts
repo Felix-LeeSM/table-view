@@ -1,5 +1,5 @@
 import ELK, { type ElkNode } from "elkjs/lib/elk.bundled.js";
-import type { Edge, Node } from "@xyflow/react";
+import { MarkerType, Position, type Edge, type Node } from "@xyflow/react";
 import type { ErdCanvasModel, ErdTableNodeData } from "./erdCanvasModel";
 
 // #1655 — ERD canvas foundation (ADR 0054). elkjs `layered` auto-placement:
@@ -18,9 +18,24 @@ const ERD_ROW_HEIGHT = 26;
 // A hidden module-level instance; `.layout()` is pure per call.
 const elk = new ELK();
 
+// The single authority for the canvas' vertical orientation. ADR 0054 puts the
+// referenced (parent) table on the higher layer, which we get by feeding elk
+// each FK edge reversed under `elk.direction: DOWN` (see `layoutErdCanvasModel`
+// below). A React Flow edge runs referencing -> referenced, i.e. *upward*, so
+// it has to leave the source node's top side and enter the target node's bottom
+// side. Declaring the elk direction and both handle sides together is what
+// keeps them from drifting apart: the renderer must read the handle sides from
+// here instead of hardcoding its own, and `erdCanvasLayout.test.ts` pins this
+// object against the y ordering of a real elk run.
+export const ERD_ORIENTATION = {
+  elkDirection: "DOWN",
+  sourceHandle: Position.Top,
+  targetHandle: Position.Bottom,
+} as const;
+
 const LAYOUT_OPTIONS = {
   "elk.algorithm": "layered",
-  "elk.direction": "DOWN",
+  "elk.direction": ERD_ORIENTATION.elkDirection,
   "elk.layered.spacing.nodeNodeBetweenLayers": "96",
   "elk.spacing.nodeNode": "64",
   "elk.layered.considerModelOrder.strategy": "NODES_AND_EDGES",
@@ -73,10 +88,13 @@ export async function layoutErdCanvasModel(
     data: node.data,
   }));
 
+  // `markerEnd` draws the arrow head at the referenced end — direction is the
+  // whole meaning of an FK edge, and the deleted SVG renderer drew one too.
   const edges: Edge[] = model.edges.map((edge) => ({
     id: edge.id,
     source: edge.source,
     target: edge.target,
+    markerEnd: { type: MarkerType.ArrowClosed },
     ariaLabel: edge.label,
     focusable: false,
   }));

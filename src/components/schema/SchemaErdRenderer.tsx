@@ -5,7 +5,6 @@ import {
   Background,
   Controls,
   Handle,
-  Position,
   ReactFlow,
   ReactFlowProvider,
   useReactFlow,
@@ -20,6 +19,7 @@ import type { SchemaGraph } from "@/types/schemaGraph";
 import { buildErdCanvasModel, type ErdTableNodeData } from "./erdCanvasModel";
 import {
   ERD_NODE_WIDTH,
+  ERD_ORIENTATION,
   ERD_TABLE_NODE_TYPE,
   layoutErdCanvasModel,
 } from "./erdCanvasLayout";
@@ -45,7 +45,16 @@ function ErdTableNodeView({ data }: NodeProps<ErdTableNode>) {
       className="flex flex-col overflow-hidden rounded border border-border bg-card text-left shadow-sm"
       style={{ width: ERD_NODE_WIDTH }}
     >
-      <Handle type="target" position={Position.Top} isConnectable={false} />
+      {/* Handle sides come from `ERD_ORIENTATION`, the elk layout-direction
+          authority — hardcoding them here made every FK edge wrap around its
+          nodes (PR #1783 review). An FK edge runs referencing -> referenced,
+          and elk ranks the referenced table above, so it leaves this node's
+          top and enters the referenced node's bottom. */}
+      <Handle
+        type="source"
+        position={ERD_ORIENTATION.sourceHandle}
+        isConnectable={false}
+      />
       <div className="border-b border-border bg-secondary px-3 py-2">
         <div className="truncate text-3xs uppercase text-muted-foreground">
           {table.schema}
@@ -82,7 +91,11 @@ function ErdTableNodeView({ data }: NodeProps<ErdTableNode>) {
           </li>
         ))}
       </ul>
-      <Handle type="source" position={Position.Bottom} isConnectable={false} />
+      <Handle
+        type="target"
+        position={ERD_ORIENTATION.targetHandle}
+        isConnectable={false}
+      />
     </div>
   );
 }

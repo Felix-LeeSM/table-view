@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { MarkerType } from "@xyflow/react";
+import { MarkerType, Position } from "@xyflow/react";
 import { extractSchemaGraph } from "@/lib/schemaGraph";
 import type { SchemaGraphCatalogSnapshot } from "@/types/schemaGraph";
 import type { ColumnInfo, TableInfo } from "@/types/schema";
 import { buildErdCanvasModel } from "./erdCanvasModel";
 import {
+  ERD_ORIENTATION,
   ERD_TABLE_NODE_TYPE,
   erdNodeHeight,
   layoutErdCanvasModel,
@@ -45,10 +46,36 @@ describe("layoutErdCanvasModel", () => {
         id: expect.any(String),
         source: "table:public.orders",
         target: "table:public.users",
+        markerEnd: { type: MarkerType.ArrowClosed },
         ariaLabel: "public.orders.user_id references public.users.id",
         focusable: false,
       },
     ]);
+  });
+
+  // Reason: regression — PR #1783 review (2026-07-25) found the handle sides
+  // hardcoded in the renderer opposite to `elk.direction`, so every FK edge
+  // wrapped around its nodes. `ERD_ORIENTATION` is now the single authority for
+  // both; derive the expected sides from where elk actually put the nodes so a
+  // direction change that is not mirrored on the handles fails here.
+  it("faces the handle sides at the peer node elk placed the edge toward", async () => {
+    const model = buildErdCanvasModel(extractSchemaGraph(ordersSnapshot()));
+
+    const layout = await layoutErdCanvasModel(model);
+
+    const [edge] = layout.edges;
+    if (!edge) throw new Error("expected the FK edge to survive layout");
+    const referencedIsAbove =
+      nodeY(layout, edge.target) < nodeY(layout, edge.source);
+
+    expect({
+      sourceHandle: ERD_ORIENTATION.sourceHandle,
+      targetHandle: ERD_ORIENTATION.targetHandle,
+    }).toEqual(
+      referencedIsAbove
+        ? { sourceHandle: Position.Top, targetHandle: Position.Bottom }
+        : { sourceHandle: Position.Bottom, targetHandle: Position.Top },
+    );
   });
 
   // Reason: regression — PR #1783 review (2026-07-25) found FK edges rendered
