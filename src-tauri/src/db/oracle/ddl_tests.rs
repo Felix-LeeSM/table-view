@@ -248,7 +248,7 @@ async fn alter_table_preview_emits_oracle_statement_chain() {
         );
 }
 
-// ── #1735 (c) — Oracle column comment edit (2026-07-25) ────────────────
+// ── #1735 — Oracle column comment edit (2026-07-25) ────────────────
 fn oracle_alter_comment_req(name: &str, new_comment: Option<&str>) -> AlterTableRequest {
     AlterTableRequest {
         connection_id: "conn".into(),
@@ -267,7 +267,7 @@ fn oracle_alter_comment_req(name: &str, new_comment: Option<&str>) -> AlterTable
     }
 }
 
-// Reason: #1735 (c) — a comment-only Oracle Modify emits ONLY the ANSI
+// Reason: #1735 — a comment-only Oracle Modify emits ONLY the ANSI
 // `COMMENT ON COLUMN` statement, no `MODIFY (…)` leg (2026-07-25).
 #[tokio::test]
 async fn alter_table_preview_comment_only_emits_comment_on_column() {
@@ -282,7 +282,7 @@ async fn alter_table_preview_comment_only_emits_comment_on_column() {
     );
 }
 
-// Reason: #1735 (c) — a type change + comment emits the MODIFY and the COMMENT
+// Reason: #1735 — a type change + comment emits the MODIFY and the COMMENT
 // ON COLUMN as two `; `-joined statements (2026-07-25).
 #[tokio::test]
 async fn alter_table_preview_type_and_comment_emits_two_statements() {
@@ -308,8 +308,11 @@ async fn alter_table_preview_type_and_comment_emits_two_statements() {
     );
 }
 
-// Reason: #1735 (c) — single quotes in the comment are doubled (injection
-// guard); an empty comment clears via `IS NULL` (2026-07-25).
+// Reason: #1735 — single quotes in the comment are doubled (injection guard);
+// an empty comment clears via `IS ''`. Oracle's `COMMENT ON` grammar takes a
+// *text literal* only — `IS NULL` is a parse error there (PG accepts it), and
+// in Oracle `''` IS NULL, so the empty literal is the documented clear form
+// (2026-07-25).
 #[tokio::test]
 async fn alter_table_preview_comment_escape_and_clear() {
     let escaped = OracleAdapter::new()
@@ -329,7 +332,7 @@ async fn alter_table_preview_comment_escape_and_clear() {
         .sql;
     assert_eq!(
         cleared,
-        "COMMENT ON COLUMN \"APP\".\"users\".\"email\" IS NULL"
+        "COMMENT ON COLUMN \"APP\".\"users\".\"email\" IS ''"
     );
 }
 

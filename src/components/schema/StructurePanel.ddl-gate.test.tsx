@@ -11,8 +11,12 @@
 //   - DuckDB (no DDL) — `+ Column` hidden.
 //   - Unknown / still-loading connection — controls stay (affordance-preserving
 //     fallback, same as `supportsRowEditing`).
+//
+// Issue #1735 — adds the `editColumnComment` axis: the comment cell reads its
+// OWN capability, not `alterTable`, so an engine that runs structural ALTERs
+// but does not emit `COMMENT ON COLUMN` keeps the cell read-only.
 import { describe, it, expect, beforeEach } from "vitest";
-import { screen, act } from "@testing-library/react";
+import { screen, act, fireEvent } from "@testing-library/react";
 import { useConnectionStore } from "@stores/connectionStore";
 import type { DatabaseType } from "@/types/connection";
 import {
@@ -93,6 +97,37 @@ describe("StructurePanel DDL capability gate (#1460)", () => {
     expect(
       screen.getByRole("button", { name: "Add column" }),
     ).toBeInTheDocument();
+  });
+
+  // Issue #1735 — capability → prop seam for the comment cell. `ColumnsEditor`
+  // owns the rendering rule and its own suite injects `canEditColumnComment`
+  // directly, so only this layer can catch a mis-wire in
+  // `StructurePanel.tsx` (e.g. reusing `canAlterTable`). A mis-wire is
+  // silent-data-loss shaped: `src-tauri/src/db/mysql/mutations.rs` matches
+  // `new_comment: _` and drops the value with no error, so the user would see
+  // "saved" and no change. (2026-07-25)
+  it("shows the comment input in edit mode for PostgreSQL (editColumnComment true)", async () => {
+    setConnection("postgresql");
+    await act(async () => {
+      renderPanel();
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Edit column id" }));
+    expect(screen.getByLabelText("Comment for id")).toBeInTheDocument();
+  });
+
+  // Reason: MySQL has `ddl.alterTable: true` but `ddl.editColumnComment: false`
+  // — the row must stay editable while the comment cell stays read-only. Pins
+  // the two flags apart so a future `canAlterTable` reuse fails here. (2026-07-25)
+  it("keeps the comment cell read-only in edit mode for MySQL (alterTable true, editColumnComment false)", async () => {
+    setConnection("mysql");
+    await act(async () => {
+      renderPanel();
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Edit column id" }));
+    // Structural edit affordances survive …
+    expect(screen.getByLabelText("Data type for id")).toBeInTheDocument();
+    // … but the comment cell has no input.
+    expect(screen.queryByLabelText("Comment for id")).not.toBeInTheDocument();
   });
 
   it("hides Create Index + drop-index for SQLite (createIndex / dropObject false)", async () => {

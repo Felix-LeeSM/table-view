@@ -740,16 +740,24 @@ describe("ColumnsEditor — Sprint 237 USING + null-rows probe", () => {
   });
 });
 
-// Purpose: #1735 (c) — column comment edit is exposed ONLY where the engine
-// emits COMMENT ON COLUMN (PG/Oracle → `canEditColumnComment`), and the edited
-// value forwards through the `alter_table` payload as `new_comment`. MySQL/
-// MSSQL keep the comment cell read-only even in edit mode (2026-07-25).
-describe("ColumnsEditor — #1735 (c) column comment edit", () => {
+// Purpose: #1735 — column comment edit is exposed ONLY where the engine emits
+// COMMENT ON COLUMN (PG/Oracle → `canEditColumnComment`), and the edited value
+// forwards through the `alter_table` payload as `new_comment`. MySQL/MSSQL keep
+// the comment cell read-only even in edit mode (2026-07-25).
+describe("ColumnsEditor — #1735 column comment edit", () => {
   beforeEach(() => {
+    // P3 isolation, mirroring the three sibling describes: the shared
+    // `alterTable` mock is call-counted below, and a leaked `strict` Safe Mode
+    // would change the preview→execute branch under `--shuffle`.
+    vi.clearAllMocks();
+    useSafeModeStore.setState({ mode: "off" });
+    vi.mocked(tauri.alterTable).mockResolvedValue({
+      sql: "ALTER TABLE users DROP COLUMN email",
+    });
     setProductionConnection();
   });
 
-  // Reason: #1735 (c) — with the capability on, entering edit mode surfaces the
+  // Reason: #1735 — with the capability on, entering edit mode surfaces the
   // comment input and Save forwards the typed value as `new_comment` in the
   // alterTable preview payload (2026-07-25).
   it("edits the comment cell and forwards new_comment when canEditColumnComment", async () => {
@@ -789,7 +797,41 @@ describe("ColumnsEditor — #1735 (c) column comment edit", () => {
     expect(req.changes[0]!.new_comment).toBe("primary contact");
   });
 
-  // Reason: #1735 (c) — an engine that defers comment emit (MySQL/MSSQL,
+  // Reason: #1735 — the CLEAR path. Starting from a column that already has a
+  // comment, emptying the input must forward `new_comment: ""` (the explicit
+  // clear the backend turns into PG `IS NULL` / Oracle `IS ''`). Without this
+  // case an FE regression to `comment || null` would drop the clear silently
+  // and no test would fail (2026-07-25).
+  it("forwards new_comment as an empty string when the existing comment is cleared", async () => {
+    render(
+      <ColumnsEditor
+        connectionId="conn-1"
+        table="users"
+        schema="public"
+        columns={[{ ...SAMPLE_COLUMN, comment: "legacy note" }]}
+        onRefresh={vi.fn().mockResolvedValue(undefined)}
+        canEditColumnComment
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Edit column email/i }));
+    fireEvent.change(screen.getByLabelText("Comment for email"), {
+      target: { value: "" },
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: /Save changes for email/i }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Review SQL \(1\)/i }));
+
+    await waitFor(() => {
+      expect(vi.mocked(tauri.alterTable)).toHaveBeenCalled();
+    });
+    const req = vi.mocked(tauri.alterTable).mock.calls[0]![0] as {
+      changes: Array<{ new_comment?: string | null }>;
+    };
+    expect(req.changes[0]!.new_comment).toBe("");
+  });
+
+  // Reason: #1735 — an engine that defers comment emit (MySQL/MSSQL,
   // `canEditColumnComment={false}`) must keep the comment cell read-only: no
   // comment input appears in edit mode, so no broken edit is surfaced (2026-07-25).
   it("keeps the comment cell read-only when canEditColumnComment is false", () => {
