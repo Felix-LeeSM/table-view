@@ -274,4 +274,5 @@ are:
 
 - [`docs/product/known-limitations.md`](known-limitations.md) — product-visible limitations
 - [`docs/roadmap/follow-up-queue.md`](../roadmap/follow-up-queue.md) — future query-language widening
+- [`docs/ROADMAP.md`](../ROADMAP.md) — promotion order
 - [`memory/engineering/architecture/query-language/memory.md`](../../memory/engineering/architecture/query-language/memory.md) — engineering ownership rules
