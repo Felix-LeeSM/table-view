@@ -22,7 +22,7 @@
           "mustContain": "Search uses an index-catalog-first workbench boundary"
         },
         {
-          "path": "docs/ROADMAP.md",
+          "path": "docs/roadmap/h5.md",
           "mustContain": "Search live HTTP/admin promotion remains owned by the Search roadmap/milestone"
         },
         {
