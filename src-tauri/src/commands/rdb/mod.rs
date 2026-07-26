@@ -41,8 +41,9 @@ use crate::error::AppError;
 /// trait invocation target the same adapter instance but are separate awaits:
 /// a concurrent same-connection `switch_active_db` landing between them is a
 /// narrow TOCTOU this best-effort guard cannot catch (recorded in
-/// docs/product/known-limitations.md). Returns `Ok(())` when the guard is
-/// satisfied (or opted out via `None`), otherwise
+/// docs/product/known-limitations-cross-cutting.md, Adapter / workspace
+/// boundary). Returns `Ok(())` when the guard is satisfied (or opted out via
+/// `None`), otherwise
 /// `AppError::DbMismatch { expected, actual }` — byte-equivalent to the
 /// Sprint 266 reference probe at
 /// `src-tauri/src/commands/rdb/query.rs:83–92`.

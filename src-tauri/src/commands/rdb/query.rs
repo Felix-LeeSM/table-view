@@ -201,9 +201,9 @@ async fn execute_query_inner(
         // NO LONGER serialised against a concurrent same-connection
         // `switch_active_db` by the global lock, so a switch landing between
         // the probe and the dispatch is a narrow TOCTOU the guard cannot
-        // catch (recorded in docs/product/known-limitations.md). Restoring
-        // true atomicity would need an adapter-level checked-execute API,
-        // out of #1087 scope.
+        // catch (recorded in docs/product/known-limitations-cross-cutting.md).
+        // Restoring true atomicity would need an adapter-level checked-execute
+        // API, out of #1087 scope.
         if let Some(expected) = expected_database {
             let actual = adapter.current_database().await?.unwrap_or_default();
             if actual != expected {

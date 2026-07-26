@@ -89,4 +89,5 @@ delete confirmation path 로 포커스를 보낸다. 따라서 delete 는 local 
 - [`memory/engineering/architecture/data-source/memory.md`](../../memory/engineering/architecture/data-source/memory.md) — data-source profile/capability architecture
 - [`memory/engineering/architecture/data-source/adding/memory.md`](../../memory/engineering/architecture/data-source/adding/memory.md) — contributor checklist for new sources
 - [`docs/product/known-limitations.md`](known-limitations.md) — current product-visible limitations
-- [`docs/ROADMAP.md`](../ROADMAP.md) — future follow-ups and promotion order
+- [`docs/roadmap/follow-up-queue.md`](../roadmap/follow-up-queue.md) — open follow-up queue
+- [`docs/ROADMAP.md`](../ROADMAP.md) — promotion order
