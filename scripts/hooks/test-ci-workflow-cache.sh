@@ -254,4 +254,54 @@ if grep -Eq "^[[:space:]]+paths-ignore:" "$WORKFLOW"; then
 	exit 1
 fi
 
+# Doc-contract gate (#1841). The repo's doc-contract assertions live INSIDE the
+# vitest suite, which runs in the change-gated `frontend-shard` matrix — so a
+# docs-only PR skipped exactly the checks that guard the documents it changed,
+# and GitHub counts a skipped required check as satisfied. The `doc-contract`
+# job runs them unconditionally. These assertions are what keep that true.
+doc_contract_block="$(sed -n '/^  doc-contract:/,/^  dependency-security:/p' <<<"$workflow_text" | sed '$d')"
+if [ -z "$doc_contract_block" ]; then
+	echo "FAIL: doc-contract job is missing from $WORKFLOW" >&2
+	exit 1
+fi
+
+assert_contains "$doc_contract_block" "name: Doc Contract Checks" "doc-contract job"
+assert_contains "$doc_contract_block" "run: pnpm test:doc-contracts" "doc-contract runs the doc-contract vitest files"
+assert_contains "$doc_contract_block" "run: pnpm lint" "doc-contract runs the lint doc scans"
+# Ungated on purpose. Depending on the detector would reintroduce the hole in
+# its strongest form: a skip is indistinguishable from a pass to the ruleset,
+# and there is no detector outcome for which these checks should not run.
+assert_not_contains "$doc_contract_block" "needs: changes" "doc-contract always runs (docs-only PRs must still verify docs)"
+assert_not_contains "$doc_contract_block" "needs.changes.outputs.code_changed" "doc-contract always runs (docs-only PRs must still verify docs)"
+# Blocking, unlike the advisory doc-size / frontend-advisory jobs. Promotion to
+# merge-blocking additionally needs the context in the pr_to_main ruleset.
+assert_not_contains "$doc_contract_block" "continue-on-error" "doc-contract is a blocking gate, not advisory"
+
+# Drift guard: a NEW test that reads docs/ at runtime but never gets added to
+# `test:doc-contracts` would be silently skipped on docs-only PRs — the exact
+# hole this job closes. Fixture-driven doc contracts (doc paths held in JSON,
+# e.g. tests/fixtures/unsupported_boundary_contracts.json) are invisible to a
+# source scan and stay manual entries, so this is a subset check, not the list.
+doc_contract_script="$(grep -F '"test:doc-contracts":' "$ROOT/package.json" || true)"
+if [ -z "$doc_contract_script" ]; then
+	echo "FAIL: package.json is missing the test:doc-contracts script" >&2
+	exit 1
+fi
+# Line-joined, because prettier wraps `readFileSync(\n  "docs/…"` onto two lines
+# and a line-oriented grep would miss exactly those — the same silent-skip class.
+docs_reading_tests() {
+	local file
+	while IFS= read -r file; do
+		if tr '\n' ' ' <"$ROOT/$file" |
+			grep -qE 'read(FileSync|dirSync)\([[:space:]]*"docs/'; then
+			echo "$file"
+		fi
+	done
+}
+while IFS= read -r doc_reader; do
+	[ -n "$doc_reader" ] || continue
+	assert_contains "$doc_contract_script" "$doc_reader" "test:doc-contracts covers docs-reading test"
+done <<<"$(cd "$ROOT" && find src scripts tests \
+	\( -name '*.test.ts' -o -name '*.test.tsx' \) | sort | docs_reading_tests)"
+
 echo "PASS: CI workflow cache and coverage check"

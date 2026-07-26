@@ -27,6 +27,9 @@ label 메커니즘 자체는 [delivery](../../workflow/delivery/memory.md) (T5/T
    `gh pr merge <n> --admin` 의 에러 메시지로만 확인된다.
    (2026-07-03 #1183 delivery 실측 — 이전 서술 "E2E 만" 은 불완전했음.)
    2차 등록분 fail 도 이제 BLOCKED 다 — 대응은 fix (PR body 정정 / clippy fix) 지 회피 아님.
+   ★ **미등록 pending**: `Doc Contract Checks` (2026-07-27 `ci.yml` 신설, 무조건 실행).
+   workflow 가 main 에 올라간 **뒤에** ruleset 에 추가한다 — 아무 run 도 만들지 않는
+   required context 는 열린 PR 전부를 BLOCKED 로 고착시킨다.
 
 → protection API 만 보고 "required 는 review-gate 뿐" 이라 단정하지 말 것. E2E 가 진짜
 blocker 인 경우가 많다 (docs/hook 변경이어도 ruleset 이 E2E 를 요구).

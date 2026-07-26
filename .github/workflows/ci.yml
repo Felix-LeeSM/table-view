@@ -98,6 +98,71 @@ jobs:
       - name: Check doc size
         run: bash scripts/hooks/check-doc-size.sh
 
+  doc-contract:
+    name: Doc Contract Checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Intentionally NOT change-gated, for the same reason doc-size above is not:
+    # every check this job owns reads docs/, so a docs-only change is precisely
+    # when it matters most.
+    #
+    # The hole it closes (#1841): the repo's doc-contract assertions live INSIDE
+    # the vitest suite and inside the lint policy scan, and both of those sit
+    # behind the docs-only skip gate. On merged docs-only PR #1841 the checks
+    # read `Frontend Checks: skipping` and `Frontend Tests (shard N/3):
+    # skipping`; GitHub treats a skipped required check as satisfied, so that PR
+    # merged with the contracts on the documents it edited never evaluated.
+    #
+    # Runs unconditionally instead of inverting the gate on the detector output.
+    # That is the strongest fail-closed posture available: with no dependency on
+    # the detection job, no detection outcome — success, failure, cancellation —
+    # can turn this into a skip. It is also the correct behaviour on code PRs:
+    # these contracts read docs/ but are DRIVEN by code (the
+    # src/types/queryLanguage.ts registry, SUPPORTED_DATABASE_TYPES, the
+    # completion feature's public API), so a code-only change breaks them too.
+    # Cost of the duplicate on code PRs is ~1s of vitest plus a ~20s lint in a
+    # parallel job, well off the ~9m Frontend Checks critical path. Avoiding it
+    # would need this file's only inverted change gate — clarity wins.
+    #
+    # Blocking on purpose: no advisory escape hatch, unlike doc-size. Making it
+    # MERGE-blocking additionally requires adding the `Doc Contract Checks`
+    # context to the pr_to_main ruleset's required-context list, and only AFTER
+    # this workflow is on main — a required context that no workflow produces
+    # yet blocks every open PR.
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 10.20.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22.14.0
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # The file list lives in package.json so the local run and CI cannot
+      # drift, and so pre-push can assert it still covers every test that reads
+      # docs/ at runtime (scripts/hooks/test-ci-workflow-cache.sh).
+      - name: Doc contract tests
+        run: pnpm test:doc-contracts
+
+      # `pnpm lint` is not only a code gate. scripts/check-eslint-static-policy.ts
+      # reads docs/archives/audits/refactor-02-frontend-compat-inventory-2026-06-10.md
+      # as the frontend-compat inventory SOT, and scans docs/ROADMAP.md plus
+      # every docs/roadmap/*.md for stale moved-completion references. Those doc
+      # contracts sat behind the same skip gate as the vitest ones.
+      - name: Lint doc scans
+        run: pnpm lint
+
   dependency-security:
     name: Dependency Security
     runs-on: ubuntu-latest
