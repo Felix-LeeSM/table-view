@@ -1,7 +1,17 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { SUPPORTED_DATABASE_TYPES } from "../features/connection/model";
 import { QUERY_LANGUAGE_REGISTRY } from "./queryLanguage";
+
+// Reads every docs/product page rather than a fixed file list: the product SOT
+// is split across an index plus child pages, and a claim may live in any of
+// them. Directory-wide keeps these contracts stable across further splits.
+function readProductDocs(): string {
+  return readdirSync("docs/product")
+    .filter((name) => name.endsWith(".md"))
+    .map((name) => readFileSync(`docs/product/${name}`, "utf8"))
+    .join("\n");
+}
 
 describe("query language support documentation", () => {
   it("documents every query language ownership record", () => {
@@ -22,13 +32,9 @@ describe("query language support documentation", () => {
 
   it("keeps enterprise SQL runtime slices scoped", () => {
     const supportDocs = [
-      "docs/product/README.md",
-      "docs/product/known-limitations.md",
-      "docs/product/query-language-support.md",
-      "docs/ROADMAP.md",
-    ]
-      .map((path) => readFileSync(path, "utf8"))
-      .join("\n");
+      readProductDocs(),
+      readFileSync("docs/ROADMAP.md", "utf8"),
+    ].join("\n");
 
     expect(supportDocs).toMatch(
       /\bMSSQL\b[\s\S]*catalog\/query\/cancel\/tabular runtime/i,
@@ -88,13 +94,7 @@ describe("query language support documentation", () => {
   });
 
   it("keeps Search fixture contracts separate from live runtime evidence", () => {
-    const productDocs = [
-      "docs/product/README.md",
-      "docs/product/known-limitations.md",
-      "docs/product/query-language-support.md",
-    ]
-      .map((path) => readFileSync(path, "utf8"))
-      .join("\n");
+    const productDocs = readProductDocs();
 
     expect(productDocs).toMatch(/Search fixture files.*contract evidence/i);
     expect(productDocs).toMatch(
