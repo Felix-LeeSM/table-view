@@ -15,9 +15,9 @@ fixtures, change runtime behavior, or widen product support claims.
 Issue #755 keeps this page as the contributor-facing topology SOT after the
 Refactor 04 fixture/test child issues landed. Durable workflow rules live in
 `memory/engineering/conventions/testing-scenarios/fixtures/memory.md`; product
-support claims still live in `docs/product/README.md`,
-`docs/product/query-language-support.md`, and
-`docs/product/known-limitations.md`.
+support claims still live in `docs/product/**` — the `README.md`,
+`query-language-support.md`, and `known-limitations.md` indexes plus their child
+pages.
 
 Current GitHub closure state checked on 2026-06-12:
 

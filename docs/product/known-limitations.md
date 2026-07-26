@@ -1,7 +1,8 @@
 # Known Limitations
 
-This page records current product-visible support boundaries. Future work and
-sequencing live in [`docs/ROADMAP.md`](../ROADMAP.md). Historical risk IDs live
+This page records current product-visible support boundaries. Future work items
+live in [`docs/roadmap/follow-up-queue.md`](../roadmap/follow-up-queue.md) and
+sequencing lives in [`docs/ROADMAP.md`](../ROADMAP.md). Historical risk IDs live
 in [`docs/archives/risks/active-risk-register-2026-05-27.md`](../archives/risks/active-risk-register-2026-05-27.md).
 
 The MySQL/MariaDB import/export boundary row in

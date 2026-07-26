@@ -43,10 +43,10 @@ Redis/Valkey 는 `RedisFormFields`, SQLite/DuckDB 는 file-form `SqliteFormField
 
 Support audit artifacts are historical inputs only.
 `docs/archives/audits/refactor-05-support-claims-ledger-2026-06-12.md` 는
-snapshot 으로 보존하고, durable result 는 이 page, `known-limitations.md`,
-`query-language-support.md`, `docs/ROADMAP.md`, and symbol/path owners above 로
-흡수한다. New claims must update those SOTs directly; line-number references are
-not stable SOT.
+snapshot 으로 보존하고, durable result 는 `docs/product/**` (이 index 와 Detail
+Pages / known-limitations / query-language-support 의 child page), `docs/ROADMAP.md`,
+and symbol/path owners above 로 흡수한다. New claims must update those SOTs
+directly; line-number references are not stable SOT.
 
 ## Database Scope Semantics
 
