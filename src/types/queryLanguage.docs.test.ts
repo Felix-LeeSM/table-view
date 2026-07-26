@@ -3,6 +3,14 @@ import { describe, expect, it } from "vitest";
 import { SUPPORTED_DATABASE_TYPES } from "../features/connection/model";
 import { QUERY_LANGUAGE_REGISTRY } from "./queryLanguage";
 
+// known-limitations.md is an index; the boundary rows live in its children.
+const KNOWN_LIMITATIONS_DOCS = [
+  "docs/product/known-limitations.md",
+  "docs/product/known-limitations-rdbms.md",
+  "docs/product/known-limitations-non-rdbms.md",
+  "docs/product/known-limitations-cross-cutting.md",
+];
+
 describe("query language support documentation", () => {
   it("documents every query language ownership record", () => {
     const supportDocs = readFileSync(
@@ -23,7 +31,7 @@ describe("query language support documentation", () => {
   it("keeps enterprise SQL runtime slices scoped", () => {
     const supportDocs = [
       "docs/product/README.md",
-      "docs/product/known-limitations.md",
+      ...KNOWN_LIMITATIONS_DOCS,
       "docs/product/query-language-support.md",
       "docs/ROADMAP.md",
     ]
@@ -90,7 +98,7 @@ describe("query language support documentation", () => {
   it("keeps Search fixture contracts separate from live runtime evidence", () => {
     const productDocs = [
       "docs/product/README.md",
-      "docs/product/known-limitations.md",
+      ...KNOWN_LIMITATIONS_DOCS,
       "docs/product/query-language-support.md",
     ]
       .map((path) => readFileSync(path, "utf8"))
