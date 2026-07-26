@@ -1,6 +1,5 @@
 # Open Follow-Up Queue
 
-
 Open risks are no longer tracked in a standalone active risk register. Route each
 item to the document that owns the decision:
 
