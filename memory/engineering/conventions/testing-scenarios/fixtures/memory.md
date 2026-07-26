@@ -1,7 +1,7 @@
 ---
 title: Fixture strategy — support claims need local evidence
 type: convention
-updated: 2026-06-12
+updated: 2026-07-26
 task: test-writing, fixture, data-source-promotion, support-claim
 surface: src-tauri/src/db/fixtures.rs, src-tauri/tests, tests/fixtures, e2e/fixtures
 trigger:
@@ -72,6 +72,11 @@ fixture 또는 emulator/testcontainer/embedded sample 로 재현 가능한 증�
 - SQL emitter 나 serializer fixture 는 byte-equivalent assertion 으로 고정한다.
   기대 문자열을 바꾸려면 product/architecture 의미 변화와 migration 근거가 있어야
   한다.
+- 산문 문서 문구를 pin 하는 fixture (`tests/fixtures/unsupported_boundary_contracts.json`
+  의 `docs[].mustContain`) 는 whitespace 를 정규화해 비교한다 (`\s+` → 한 칸).
+  문구가 줄바꿈으로 감겨도 pin 이 유지되므로, pinned 문구를 한 줄에 묶어 둘 의무가
+  없다. 반대로 `sourceGates` 의 code 문구는 raw 비교를 유지한다 — 식별자와 사용자
+  노출 error string literal 은 whitespace 자체가 pin 대상이다.
 - `fixture-backed` 기능을 product/docs 에 적을 때는 live connection, auth/TLS,
   admin, observability 등 미구현 surface 를 같이 적는다.
 

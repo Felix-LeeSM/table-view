@@ -114,8 +114,10 @@ describe("unsupported_boundary_contracts.json", () => {
     const fixture = loadBoundaryFixture();
     for (const row of fixture.rows) {
       for (const doc of row.docs) {
-        expect(readRepoFile(doc.path), `${row.id} docs ${doc.path}`).toContain(
+        expectDocPin(
+          readRepoFile(doc.path),
           doc.mustContain,
+          `${row.id} docs ${doc.path}`,
         );
       }
 
@@ -135,6 +137,27 @@ describe("unsupported_boundary_contracts.json", () => {
         }
       }
     }
+  });
+
+  // Reason: doc pins must survive prose re-flow — 11 of the 15 pinned phrases
+  // currently sit inside over-600-char doc lines, so the >600-char cleanup would
+  // otherwise have to keep each phrase on one unbreakable line forever. Raised
+  // as finding F6 in the PR #1838 review (2026-07-26).
+  it("matches a doc pin wrapped across lines but still rejects absent wording", () => {
+    const phrase = "Search uses an index-catalog-first workbench boundary";
+    const wrapped = `- ${phrase.replace(" workbench", "\n  workbench")} for now.\n`;
+
+    // Old raw-substring comparison could not see the wrapped phrase.
+    expect(wrapped).not.toContain(phrase);
+    expectDocPin(wrapped, phrase, "wrapped doc pin");
+
+    expect(() =>
+      expectDocPin(
+        wrapped,
+        "Search uses a table-first workbench boundary",
+        "absent doc pin",
+      ),
+    ).toThrow();
   });
 
   it("keeps MSSQL runtime and Oracle runtime-slice boundaries explicit", () => {
@@ -244,6 +267,26 @@ function rowById(fixture: BoundaryFixture, id: string): BoundaryRow {
 
 function readJson<T>(path: string): T {
   return JSON.parse(readRepoFile(path)) as T;
+}
+
+/**
+ * Doc pins are prose, so they are matched whitespace-insensitively: any run of
+ * whitespace collapses to a single space on both sides. A pinned phrase may
+ * therefore wrap across lines in the document without the pin going stale.
+ *
+ * Source gates (`row.sourceGates`) intentionally keep the strict raw match —
+ * they pin code identifiers and a user-facing error string literal, where
+ * whitespace is part of the fact being pinned.
+ */
+function expectDocPin(content: string, phrase: string, label: string): void {
+  expect(
+    collapseWhitespace(content),
+    `${label} must contain (whitespace-normalized): ${phrase}`,
+  ).toContain(collapseWhitespace(phrase));
+}
+
+function collapseWhitespace(text: string): string {
+  return text.replace(/\s+/g, " ");
 }
 
 function readRepoFile(path: string): string {
