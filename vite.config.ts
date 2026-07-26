@@ -51,13 +51,6 @@ export default defineConfig(async () => ({
         ? ["text"]
         : ["text", ["lcov", { projectDirectory: "src" }]],
       include: ["src/**/*.{ts,tsx}"],
-      // `.d.ts` carries no statements, but the include glob above still hands
-      // it to the v8 provider, which parses uncovered files as JS. The
-      // wasm-bindgen declarations (`export const memory: WebAssembly.Memory;`)
-      // are a rollup PARSE_ERROR there, and that rejection can abort report
-      // generation instead of being downgraded to the usual "excluding it
-      // from coverage" warning.
-      exclude: ["src/**/*.d.ts"],
       thresholds: {
         // 2026-06-09 — #580 coverage ratchet. Current measured global
         // coverage: statements 86.14, branches 78.78, functions 88.18,
