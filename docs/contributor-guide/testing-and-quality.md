@@ -140,10 +140,10 @@ Required remote evidence on the exact release SHA:
 Deferred or non-blocking checks must stay explicit:
 
 - Theme contrast is advisory today.
-- Doc size and per-line/table-cell length fail closed in CI as of 2026-07-25,
-  but `Doc Size And Line Length` is not yet one of the contexts the `pr_to_main`
-  ruleset requires by name, so a red result reports without blocking merge.
-  Adding the context is a follow-up that has to land after the workflow itself.
+- Doc size and per-line/table-cell length fail closed in CI, but `Doc Size And
+  Line Length` is not yet one of the contexts the `pr_to_main` ruleset requires
+  by name, so a red result reports without blocking merge. Status and remedies:
+  [`docs/quality/doc-size-ratchet.md`](../quality/doc-size-ratchet.md).
 - Link checking, a11y beyond the critical component smoke set, perf budgets,
   macOS/Windows desktop runtime smoke, and per-spec database fixture reset are
   not routine release blockers unless a release issue explicitly promotes one of

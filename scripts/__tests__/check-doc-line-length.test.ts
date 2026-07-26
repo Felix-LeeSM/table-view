@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+
 import { describe, expect, it } from "vitest";
 
 import {
@@ -9,8 +11,11 @@ import {
   parseTargets,
   type FileMeasurement,
 } from "../check-doc-line-length";
+import { renderContract } from "../doc-line-length-contract";
 
 const CEILING = 600;
+const SOT_PAGE = "docs/quality/doc-size-ratchet.md";
+const GENERATED_MARKER = "<!-- generated: pnpm docs:lines:contract -->";
 
 type Entry = {
   path: string;
@@ -29,6 +34,39 @@ function tree(files: Record<string, FileMeasurement>) {
 
 /** A file whose lines all sit at or under the ceiling. */
 const clean: FileMeasurement = { over: 0, maxLen: 100, excess: 0 };
+
+describe("published contract", () => {
+  // The gate's behavior used to live as hand-written prose in the SOT page, the
+  // script header, the workflow comment and these test comments at once, and
+  // every review round found another copy that no longer matched the code. The
+  // page now embeds real output; this is the assertion that keeps it real.
+  it("matches the block the SOT page publishes", () => {
+    const page = readFileSync(SOT_PAGE, "utf8");
+    const block = page
+      .split(GENERATED_MARKER)[1]
+      ?.match(/```text\n([\s\S]*?)```/);
+
+    expect(block, `${SOT_PAGE} is missing the generated block`).toBeTruthy();
+    expect(block?.[1].trimEnd()).toBe(renderContract());
+  });
+
+  it("covers every branch the gate can print", () => {
+    const contract = renderContract();
+
+    for (const branch of [
+      "doc:lines ok (",
+      "in a file with no baseline entry. Split the cell",
+      "in a file with no baseline entry. Record it",
+      "rose to",
+      "fell to",
+      "no longer measured",
+      "doc:lines --update refused",
+      "doc:lines baseline written",
+    ]) {
+      expect(contract).toContain(branch);
+    }
+  });
+});
 
 describe("isMeasuredDoc", () => {
   it("measures live docs and skips the one-shot trees", () => {
@@ -109,11 +147,10 @@ describe("findMismatches", () => {
     ).toEqual([]);
   });
 
-  it("fails a long line in a file with no baseline entry, naming both remedies", () => {
-    // The first long row in a clean file is a hard stop. It is not a permanent
-    // seal — a doc split legitimately moves rows into a file that had no entry
-    // — so the message has to name `--update` too, or it sends the author of a
-    // pure move off to re-split rows that are already split.
+  it("fails a long line in a file with no baseline entry", () => {
+    // The first long row in a clean file is a hard stop, and here it is new
+    // debt: nothing else in the tree gave a long row up, so `--update` would
+    // refuse and splitting is the only remedy.
     const problems = findMismatches(
       tree({ "docs/a.md": { over: 1, maxLen: 704, excess: 104 } }),
       targets([]),
@@ -121,8 +158,7 @@ describe("findMismatches", () => {
 
     expect(problems).toHaveLength(1);
     expect(problems[0]).toContain("no baseline entry");
-    expect(problems[0]).toContain("Split the cell");
-    expect(problems[0]).toContain("--update");
+    expect(problems[0]).toContain("Split the cell into domain-grouped rows");
   });
 
   it("tells the author to split when a measurement rises", () => {
@@ -134,7 +170,7 @@ describe("findMismatches", () => {
     expect(problems).toHaveLength(2);
     for (const problem of problems) {
       expect(problem).toContain("rose to");
-      expect(problem).toContain("Split the cell instead of raising");
+      expect(problem).toContain("Split the cell into domain-grouped rows");
     }
   });
 
@@ -226,6 +262,31 @@ describe("findMismatches", () => {
       "no baseline entry",
     );
   });
+
+  it("reports a move into a file that already holds an entry as a move too", () => {
+    // The destination here is not a clean file, which is the shape every real
+    // move in this repo has: all nine smoke-matrix band files hold entries. A
+    // per-file direction check calls this a rise and tells the author to split
+    // rows a doc split already split, while `--update` accepts the very same
+    // tree. The remedy has to follow the repo totals, not the file's.
+    const moved = tree({
+      "docs/src.md": { over: 13, maxLen: 900, excess: 4700 },
+      "docs/dest.md": { over: 21, maxLen: 900, excess: 7300 },
+    });
+    const before = targets([
+      { path: "docs/src.md", over: 14, maxLen: 900, excess: 5000 },
+      { path: "docs/dest.md", over: 20, maxLen: 900, excess: 7000 },
+    ]);
+
+    expect(findUpdateRefusals(moved, before)).toEqual([]);
+
+    const problems = findMismatches(moved, before);
+
+    expect(problems).toHaveLength(4);
+    for (const problem of problems) expect(problem).toContain("--update");
+    expect(problems.filter((p) => p.includes("Split the cell"))).toEqual([]);
+    expect(problems.filter((p) => p.includes("rose to"))).toHaveLength(2);
+  });
 });
 
 describe("findUpdateRefusals", () => {
@@ -279,10 +340,9 @@ describe("findUpdateRefusals", () => {
   });
 
   it("refuses consolidating many long rows into one giant cell", () => {
-    // Both sums read this as progress: the count falls 18 -> 1 and the excess
-    // is unchanged. Only `longest` sees it. Without that third check `--update`
-    // writes a baseline that findMismatches then rejects on the next run,
-    // leaving the two halves of the gate contradicting each other.
+    // Same numbers as the consolidation scenario in the published contract:
+    // 18 rows measuring 43,854 chars (excess 33,054, longest 6,334) merged into
+    // one cell and trimmed by 10,200 chars leave the excess untouched.
     const refusals = findUpdateRefusals(
       tree({
         "docs/product/known-limitations.md": {
@@ -354,6 +414,22 @@ describe("parseTargets", () => {
         entries: [{ path: "docs/a.md", over: 1, maxlen: 900, excess: 300 }],
       }),
     ).toThrow(/malformed/);
+  });
+
+  it("rejects a duplicated path instead of doubling its allowance", () => {
+    // findMismatches keys entries by path, but totalDebt sums every row, so a
+    // duplicate silently raises the ceiling the direction check compares
+    // against while every printed number stays the same.
+    expect(() =>
+      parseTargets({
+        version: 3,
+        ceiling: CEILING,
+        entries: [
+          { path: "docs/a.md", over: 1, maxLen: 900, excess: 300 },
+          { path: "docs/a.md", over: 1, maxLen: 900, excess: 300 },
+        ],
+      }),
+    ).toThrow(/duplicate entry: docs\/a\.md/);
   });
 
   it("rejects an older baseline version", () => {

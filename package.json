@@ -22,6 +22,7 @@
     "wasm:size": "bash scripts/check-wasm-size.sh",
     "docs:links": "tsx scripts/check-doc-links.ts",
     "docs:lines": "tsx scripts/check-doc-line-length.ts",
+    "docs:lines:contract": "tsx scripts/doc-line-length-contract.ts",
     "memory:paths": "tsx scripts/check-memory-paths.ts",
     "memory:matrix": "tsx scripts/check-agents-matrix-coverage.ts",
     "test": "vitest run",

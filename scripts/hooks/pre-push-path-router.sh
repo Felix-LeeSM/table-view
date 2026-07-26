@@ -237,6 +237,11 @@ run_hook_gates() {
 	run_step "pre-push-router-tests" bash scripts/hooks/test-pre-push-path-router.sh
 	run_step "memory-size-tests" bash scripts/hooks/test-check-memory-size.sh
 	run_step "doc-size-tests" bash scripts/hooks/test-check-doc-size.sh
+	# check-doc-line-length.ts classifies as a hook path (its baseline sibling
+	# must, or a doc split's baseline diff promotes the push to the full route),
+	# and the hook route does not run vitest. Its own suite runs here instead, so
+	# the classification does not silently drop the script's only test.
+	run_step "doc-line-length-tests" npx vitest run scripts/__tests__/check-doc-line-length.test.ts
 }
 
 run_ci_workflow_gates() {

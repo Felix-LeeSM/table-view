@@ -64,10 +64,10 @@ Current dispatchers:
 - `check-doc-size.sh` — docs 지속 참조 문서 chars cap: 120,000. 일회성
   산출물(`docs/{sprints,archives,table_plus,explorations}`)은 제외. override:
   `DOCS_CHAR_THRESHOLD`. 기본은 경고, `--strict` 시 block. CI `Doc Size And Line
-  Length` job 이 `--strict` 로 호출해 fail-closed 다 (2026-07-25 승격 — 그 전까지
-  advisory). local 은 `post-tool-use.sh` advisory 유지 — pre-push 미연동.
+  Length` job 이 `--strict` 로 호출해 fail-closed 다 (그 전까지 advisory 였다).
+  local 은 `post-tool-use.sh` advisory 유지 — pre-push 미연동.
 - `scripts/check-doc-line-length.ts` (`pnpm docs:lines`) — 같은 doc 집합의 **줄당**
-  chars cap: 600. 실질적으로 table cell 길이다. baseline
-  `scripts/doc-line-length-targets.json` 과 exact match 를 요구하고, 개선/이동은
-  `pnpm docs:lines --update` 로 기록한다 (부채 증가는 refuse). 같은 CI job 소속.
-  정책 본문은 `docs/quality/doc-size-ratchet.md`.
+  chars cap: 600. 실질적으로 table cell 길이다. baseline 은
+  `scripts/doc-line-length-targets.json`, 같은 CI job 소속. 동작 계약은 여기서
+  재진술하지 않는다 — `docs/quality/doc-size-ratchet.md` 의 생성 블록이 SOT 다
+  (`pnpm docs:lines:contract` 로 재생성).

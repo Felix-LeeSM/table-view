@@ -87,23 +87,13 @@ jobs:
     name: Doc Size And Line Length
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    # Promoted from advisory to blocking. The old comment deferred the flip until
-    # "분할 정리 후"; that split landed (#1827 took testing-and-quality.md from
-    # 117,319 to 13,772 chars), so at the time of the flip the largest measured
-    # doc was docs/ROADMAP.md at 108,185 of the 120,000-char cap and the gate can
-    # fail closed without failing on day one. Both numbers drift — the gate's own
-    # output is the live figure, not this comment.
+    # Contract, thresholds and remedies: docs/quality/doc-size-ratchet.md.
+    # Promoted from advisory to blocking once the doc split (#1827) brought the
+    # measured set under both caps; the gate's own output is the live figure.
     #
-    # Two metrics, because they catch different failures:
-    #   - check-doc-size.sh --strict: whole-file chars (~30k tokens at the cap).
-    #   - docs:lines: per-line chars, which in this repo means per table cell
-    #     (every baseline violation is a table row). Nothing else here measures
-    #     line length; markdownlint is not a dependency, and MD013 could not
-    #     grandfather the 205 rows that already exist. See
-    #     docs/quality/doc-size-ratchet.md.
-    #
-    # Intentionally NOT change-gated: a docs-only PR is exactly the PR this gate
-    # exists for, so it must not be skipped by the docs-only classifier.
+    # Workflow-local decisions: this job is intentionally NOT change-gated (a
+    # docs-only PR is exactly the PR it exists for), and the shape below is
+    # pinned by scripts/hooks/test-ci-workflow-cache.sh.
 
     steps:
       - name: Checkout
@@ -735,12 +725,9 @@ jobs:
   #   (fmt + clippy, mirrors lefthook), rust unit/storage tests, integration
   #   coverage (`cargo llvm-cov nextest --profile push`, thresholds 80/75/80 —
   #   promoted from the local pre-push rust route, audit 2026-07-03 #6).
-  #   Fail-closed but not yet ruleset-required: doc-size (whole-file chars +
-  #   per-line/table-cell chars). `continue-on-error` is gone, so the job now
-  #   reports red. Making it merge-blocking needs `Doc Size And Line Length`
-  #   added to the `pr_to_main` ruleset's required contexts, and that must happen
-  #   AFTER this workflow lands on main — a required context no workflow produces
-  #   yet would block every open PR.
+  #   Fail-closed but not yet ruleset-required: doc-size — see
+  #   docs/quality/doc-size-ratchet.md for why the ruleset context is a
+  #   follow-up that has to land after this workflow.
   #   Non-blocking (advisory): dependency-advisories (RUSTSEC),
   #   frontend-advisory (docs:links + WCAG contrast).
   # `Frontend Checks` is an AGGREGATION job (2026-07-25): the vitest suite runs

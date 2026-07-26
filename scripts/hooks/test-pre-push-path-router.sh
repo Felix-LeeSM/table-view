@@ -308,6 +308,20 @@ assert_contains "$ratchet_script_output" "RUN coverage-ratchet:" "ratchet script
 assert_not_contains "$ratchet_script_output" "RUN ts-test:" "ratchet script"
 assert_not_contains "$ratchet_script_output" "RUN rust-test-and-coverage:" "ratchet script"
 
+# A doc split that touches a long row commits the regenerated baseline next to
+# the doc change (docs/quality/doc-size-ratchet.md). Unregistered, the JSON fell
+# through to the unknown catch-all and promoted that push to the full route.
+doc_line_length_output="$(run_case doc-line-length normal scripts/check-doc-line-length.ts scripts/doc-line-length-targets.json)"
+assert_contains "$doc_line_length_output" "route: frontend=0 rust=0 hook=1 memory=0 agent=0" "doc line length ratchet"
+assert_contains "$doc_line_length_output" "RUN doc-line-length-tests:" "doc line length ratchet"
+assert_not_contains "$doc_line_length_output" "route: full" "doc line length ratchet"
+assert_not_contains "$doc_line_length_output" "RUN ts-test:" "doc line length ratchet"
+assert_not_contains "$doc_line_length_output" "RUN rust-test-and-coverage:" "doc line length ratchet"
+
+doc_split_output="$(run_case doc-split normal docs/product/known-limitations.md scripts/doc-line-length-targets.json)"
+assert_contains "$doc_split_output" "route: frontend=0 rust=0 hook=1 memory=0 agent=0" "doc split baseline"
+assert_not_contains "$doc_split_output" "route: full" "doc split baseline"
+
 ci_workflow_output="$(run_case ci-workflow normal .github/workflows/e2e-smoke.yml)"
 assert_contains "$ci_workflow_output" "route: frontend=0 rust=0" "ci workflow"
 assert_contains "$ci_workflow_output" "ci_workflow=1" "ci workflow"

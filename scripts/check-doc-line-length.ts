@@ -1,84 +1,30 @@
-// Doc line-length gate.
+// Doc line-length gate: per-line chars in the measured docs, against the
+// committed baseline in scripts/doc-line-length-targets.json.
 //
-// `scripts/hooks/check-doc-size.sh` caps a whole file's chars. That misses the
-// failure this gate owns: a single markdown table cell holding a paragraph.
-// Every baseline violation in the measured set is a table row — no non-table
-// line exceeds the ceiling — so "line length" here is in practice "table cell
-// length".
+// The behavior contract — what each comparison catches, which remedy each
+// message names, the rejected designs, the deliberate ceilings — lives in
+// docs/quality/doc-size-ratchet.md, and the scenario block on that page is
+// `renderContract()` output checked against this file by
+// scripts/__tests__/check-doc-line-length.test.ts. Do not restate the contract
+// here: a second hand-written copy is what drifted three review rounds running.
 //
-// Nothing else in this repo measures line length. `markdownlint` is not a
-// dependency (no config, no lockfile entry), and MD013 would not substitute
-// anyway: it has no notion of grandfathering the rows that already exist, which
-// is the whole reason this gate can be turned on without a 205-row rewrite.
-//
-// # The contract is exact match, not "may only fall"
-//
-// The baseline in `scripts/doc-line-length-targets.json` must describe the
-// working tree exactly: same over-ceiling count, same longest line, same total
-// excess, per file. Both directions fail. That is deliberate — a baseline that
-// silently disagrees with reality is how a ratchet rots — but it means ANY
-// change to a long line requires a baseline update in the same commit.
-//
-// `--update` does that for you, and it is the only thing that enforces
-// direction: it refuses to write a baseline whose repo-wide over-count, total
-// excess, or longest line is higher than the one already committed. So debt can
-// be paid down or moved between files, and cannot grow.
-//
-// All three go in the direction check, not just the two sums. Checking only
-// over-count and excess accepted deleting 17 of known-limitations.md's 18 long
-// rows into one 33,654-char cell: the count falls, the excess is unchanged, and
-// the gate that runs next says `longest line rose to 33654 ... Split the cell`
-// about the very baseline `--update` just wrote.
-//
-// Three numbers per file, because each closes a hole the others leave open:
-//
-//   - `over`   — how many lines exceed the ceiling. Catches new long rows.
-//   - `maxLen` — the longest line. Without it, swapping the 6,334-char row in
-//                known-limitations.md for a 6,000-char one keeps the count flat.
-//   - `excess` — summed chars above the ceiling. Without it, a non-longest long
-//                line can grow all the way to `maxLen` with count and max both
-//                unchanged.
-//
-// A file with no entry must have every line at or under the ceiling, so the
-// first long row there is a hard stop. It is not a permanent seal: `--update`
-// can re-grant that file an entry, but only by paying for it — some other file
-// has to give up an over-ceiling line, and the repo totals still may not rise.
-// Distinguishing "a row moved here" from "a row was written here" needs a base
-// revision, which is rejected design 1 below. An entry whose file is gone must
-// be removed.
-//
-// # Two rejected designs, recorded so they are not re-proposed
-//
-// 1. A `git diff` rule: any added-or-changed line over the ceiling fails unless
-//    it existed verbatim in the base revision. It rejected legitimate work
-//    twice — every row a doc split moved, and then a review fix that rewrote one
-//    clause inside an already-long grandfathered cell. It also needed a base
-//    ref, so a shallow-fetch CI checkout with no merge base would silently skip
-//    half the gate.
-// 2. A "may only fall" rule with no `--update`: reviewable in principle, but it
-//    let a paid-down baseline sit above reality indefinitely, and the earlier
-//    draft of this file claimed that property while actually implementing exact
-//    match. The claim was wrong in both directions: a pure move failed, and an
-//    improvement failed.
-//
-// Deliberate ceiling: hand-editing the baseline upward passes the gate. Nothing
-// here can prevent that without a base ref. What it buys is that the raise shows
-// up as an explicit diff in a tracked file, which is the same posture as
-// `scripts/coverage-ratchet-targets.json`.
+// What is only true at this file: `runGate` returns the CLI's exact text and
+// exit code instead of printing, so the published contract and the shipped
+// binary cannot disagree.
 
 import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
-type RatchetEntry = {
+export type RatchetEntry = {
   path: string;
   over: number;
   maxLen: number;
   excess: number;
 };
 
-type RatchetTargets = {
+export type RatchetTargets = {
   version: number;
   ceiling: number;
   entries: RatchetEntry[];
@@ -92,14 +38,10 @@ export type FileMeasurement = {
 
 const TARGETS_VERSION = 3;
 
-const repoRoot =
-  process.env.DOC_LINE_LENGTH_REPO_ROOT ??
-  execFileSync("git", ["rev-parse", "--show-toplevel"], {
-    encoding: "utf8",
-  }).trim();
-const targetsPath =
-  process.env.DOC_LINE_LENGTH_TARGETS_PATH ??
-  "scripts/doc-line-length-targets.json";
+const repoRoot = execFileSync("git", ["rev-parse", "--show-toplevel"], {
+  encoding: "utf8",
+}).trim();
+const targetsPath = "scripts/doc-line-length-targets.json";
 
 // Mirrors the prune list in scripts/hooks/check-doc-size.sh. Those trees are
 // one-shot artifacts (sprint output, archives, vendored mirror, historical
@@ -156,9 +98,12 @@ function totalDebt(
 }
 
 /**
- * Every way the baseline can disagree with the working tree. The direction of
- * the mismatch only changes the remedy printed, never whether it fails: a
- * baseline that no longer describes reality is broken either way.
+ * Every way the baseline can disagree with the working tree. Both directions
+ * fail; the direction only changes the wording.
+ *
+ * The remedy is decided once per run from the repo totals, never per file. A
+ * per-file direction picks the wrong one for a move: the destination "rises"
+ * while the repo stays flat, and `--update` accepts that same input.
  */
 export function findMismatches(
   actual: ReadonlyMap<string, FileMeasurement>,
@@ -167,6 +112,10 @@ export function findMismatches(
   const problems: string[] = [];
   const baseline = new Map(targets.entries.map((entry) => [entry.path, entry]));
   const { ceiling } = targets;
+  const remedy =
+    findUpdateRefusals(actual, targets).length > 0
+      ? "Split the cell into domain-grouped rows; `pnpm docs:lines --update` refuses while repo debt is higher."
+      : "Record it with `pnpm docs:lines --update`.";
 
   for (const [relativePath, measurement] of actual) {
     const entry = baseline.get(relativePath);
@@ -175,8 +124,7 @@ export function findMismatches(
       if (measurement.over > 0) {
         problems.push(
           `${relativePath}: ${measurement.over} line(s) over ${ceiling} chars (longest ${measurement.maxLen}) ` +
-            `in a file with no baseline entry. Split the cell into domain-grouped rows, or — if these rows moved ` +
-            `here from another file — record the move with \`pnpm docs:lines --update\`.`,
+            `in a file with no baseline entry. ${remedy}`,
         );
       }
       continue;
@@ -188,12 +136,9 @@ export function findMismatches(
       ["excess chars", measurement.excess, entry.excess],
     ] as const) {
       if (actualValue === baselineValue) continue;
+      const direction = actualValue > baselineValue ? "rose" : "fell";
       problems.push(
-        actualValue > baselineValue
-          ? `${relativePath}: ${field} rose to ${actualValue}, baseline ${baselineValue}. ` +
-              `Split the cell instead of raising the baseline.`
-          : `${relativePath}: ${field} fell to ${actualValue}, baseline ${baselineValue}. ` +
-              `Record it with \`pnpm docs:lines --update\`.`,
+        `${relativePath}: ${field} ${direction} to ${actualValue}, baseline ${baselineValue}. ${remedy}`,
       );
     }
   }
@@ -201,8 +146,7 @@ export function findMismatches(
   for (const entry of targets.entries) {
     if (actual.has(entry.path)) continue;
     problems.push(
-      `${entry.path}: baseline entry for a file that is no longer measured. ` +
-        `Record it with \`pnpm docs:lines --update\`.`,
+      `${entry.path}: baseline entry for a file that is no longer measured. ${remedy}`,
     );
   }
 
@@ -210,13 +154,10 @@ export function findMismatches(
 }
 
 /**
- * The only direction check in the gate. A baseline rewrite may record less debt
- * than before, or the same debt in different files (a doc split moves long rows
- * without authoring any), but never more.
- *
- * All three numbers, so that `--update` can never write a baseline the gate
- * would then complain about. Without `longest`, consolidating many long rows
- * into one giant cell reads as progress on both sums.
+ * The only direction check in the gate: a baseline rewrite may record less debt
+ * than before, or the same debt in different files, but never more. Why all
+ * three numbers and not just the two sums is the consolidation scenario in the
+ * published contract.
  */
 export function findUpdateRefusals(
   actual: ReadonlyMap<string, FileMeasurement>,
@@ -268,6 +209,7 @@ export function parseTargets(raw: unknown): RatchetTargets {
   // Without this, a single mistyped key (`maxlen` for `maxLen`) reads back as
   // undefined, every comparison against it is false, and that invariant is
   // silently gone.
+  const seen = new Set<string>();
   for (const entry of parsed.entries) {
     if (
       typeof entry?.path !== "string" ||
@@ -279,6 +221,16 @@ export function parseTargets(raw: unknown): RatchetTargets {
         `doc line-length target entry is malformed: ${JSON.stringify(entry)}`,
       );
     }
+    // `findMismatches` keys entries by path and keeps the last one, but
+    // `totalDebt` sums every row. A duplicated entry therefore inflates the
+    // allowance the direction check compares against without changing any
+    // number a reader would look at.
+    if (seen.has(entry.path)) {
+      throw new Error(
+        `doc line-length target file has a duplicate entry: ${entry.path}`,
+      );
+    }
+    seen.add(entry.path);
   }
   return parsed;
 }
@@ -311,44 +263,84 @@ function measureRepo(ceiling: number): Map<string, FileMeasurement> {
   return actual;
 }
 
-function main(): void {
-  const targets = readTargets();
-  const actual = measureRepo(targets.ceiling);
+export type GateOutcome = {
+  /** Process exit code. */
+  code: 0 | 1;
+  /** Exactly what the CLI prints — stdout when `code` is 0, stderr otherwise. */
+  text: string;
+  /** Whether the CLI should rewrite the baseline file. */
+  writesBaseline: boolean;
+};
 
-  if (process.argv.includes("--update")) {
+/**
+ * The whole CLI except the filesystem. Returning the text instead of printing
+ * it is what lets `docs/quality/doc-size-ratchet.md` publish real output rather
+ * than a hand-written paraphrase of it.
+ */
+export function runGate(
+  actual: ReadonlyMap<string, FileMeasurement>,
+  targets: RatchetTargets,
+  mode: "check" | "update",
+): GateOutcome {
+  const totals = totalDebt(actual.values());
+
+  if (mode === "update") {
     const refusals = findUpdateRefusals(actual, targets);
     if (refusals.length > 0) {
-      console.error("doc:lines --update refused: debt may not grow.");
-      for (const refusal of refusals) console.error(`- ${refusal}`);
-      console.error(
-        "Split the offending cell into domain-grouped rows instead.",
-      );
-      process.exit(1);
+      return {
+        code: 1,
+        writesBaseline: false,
+        text: [
+          "doc:lines --update refused: debt may not grow.",
+          ...refusals.map((refusal) => `- ${refusal}`),
+          "Split the offending cell into domain-grouped rows instead.",
+        ].join("\n"),
+      };
     }
-    writeFileSync(
-      path.join(repoRoot, targetsPath),
-      `${JSON.stringify(buildTargets(actual, targets.ceiling), null, 2)}\n`,
-    );
-    const totals = totalDebt(actual.values());
-    console.log(
-      `doc:lines baseline written (${totals.over} lines over ${targets.ceiling} chars, ${totals.excess} excess chars)`,
-    );
-    return;
+    return {
+      code: 0,
+      writesBaseline: true,
+      text: `doc:lines baseline written (${totals.over} lines over ${targets.ceiling} chars, ${totals.excess} excess chars)`,
+    };
   }
 
   const problems = findMismatches(actual, targets);
   if (problems.length > 0) {
-    console.error(
-      "doc:lines failed — the baseline no longer matches the docs:",
-    );
-    for (const problem of problems) console.error(`- ${problem}`);
-    process.exit(1);
+    return {
+      code: 1,
+      writesBaseline: false,
+      text: [
+        "doc:lines failed — the baseline no longer matches the docs:",
+        ...problems.map((problem) => `- ${problem}`),
+      ].join("\n"),
+    };
   }
 
-  const totals = totalDebt(actual.values());
-  console.log(
-    `doc:lines ok (ceiling ${targets.ceiling}, ${actual.size} docs, ${totals.over} grandfathered lines, ${totals.excess} excess chars)`,
+  return {
+    code: 0,
+    writesBaseline: false,
+    text: `doc:lines ok (ceiling ${targets.ceiling}, ${actual.size} docs, ${totals.over} grandfathered lines, ${totals.excess} excess chars)`,
+  };
+}
+
+function main(): void {
+  const targets = readTargets();
+  const actual = measureRepo(targets.ceiling);
+  const outcome = runGate(
+    actual,
+    targets,
+    process.argv.includes("--update") ? "update" : "check",
   );
+
+  if (outcome.writesBaseline) {
+    writeFileSync(
+      path.join(repoRoot, targetsPath),
+      `${JSON.stringify(buildTargets(actual, targets.ceiling), null, 2)}\n`,
+    );
+  }
+  if (outcome.code === 0) console.log(outcome.text);
+  else console.error(outcome.text);
+  process.exitCode = outcome.code;
 }
 
 const invokedPath = process.argv[1] ? path.resolve(process.argv[1]) : "";

@@ -12,7 +12,10 @@ different failures, so neither replaces the other.
 
 Measured set for both: `docs/**/*.md` minus `sprints`, `archives`,
 `table_plus`, and `explorations`. Those four are one-shot artifacts that no
-agent re-reads, so their shape carries no cost.
+agent re-reads, so their shape carries no cost. The two gates discover that set
+differently — `check-doc-size.sh` walks the tree with `find`, so it also sees
+untracked files, while `pnpm docs:lines` reads `git ls-files`. Both count code
+points, not UTF-8 bytes, so Korean prose is not charged three times.
 
 ## Why per-line, and why 600
 
@@ -20,58 +23,168 @@ Every baseline violation is a markdown table row. No non-table line in the
 measured set exceeds 600 chars, so "line length" here is in practice "table cell
 length" — a cell holding a multi-domain paragraph instead of one claim.
 
-That shape is not just ugly, it blocks correction. The longest cell in
-`docs/product/known-limitations.md` is 6,334 chars and mixes on the order of
-twenty separate claims. Retiring one of them means surgery inside that cell, so
-in practice limitations get appended and never retired: a capability ships and
-its "unsupported" sentence stays. Splitting cells into one claim per row is what
-makes a claim individually correctable, and later machine-checkable.
+That shape is not just ugly, it blocks correction. The longest row in the
+measured set is 6,334 code points in
+[`docs/product/known-limitations-cross-cutting.md`](../product/known-limitations-cross-cutting.md)
+and mixes on the order of twenty separate claims (measured 2026-07-27;
+`pnpm docs:lines` prints the live totals). Retiring one of them means surgery
+inside that cell, so in practice limitations get appended and never retired: a
+capability ships and its "unsupported" sentence stays. Splitting cells into one
+claim per row is what makes a claim individually correctable, and later
+machine-checkable.
 
 Nothing else in this repo measures line length. `markdownlint` is not a
 dependency — no config file, no lockfile entry — and MD013 would not substitute
 if it were: it has no notion of grandfathering the rows that already exist,
-which is the only reason this gate can be turned on without first rewriting 205
-rows.
+which is the only reason this gate can be turned on without first rewriting
+every long row in the repo.
 
-## How `docs:lines` compares
+## The contract
+
+Everything below this heading is generated. It is the output of the real gate
+over fixture trees, not a description of it, so a page that disagrees with the
+shipped behavior is a test failure rather than a reader's problem
+(`scripts/__tests__/check-doc-line-length.test.ts`). Regenerate with
+`pnpm docs:lines:contract`.
 
 The baseline in `scripts/doc-line-length-targets.json` must describe the working
-tree **exactly**: same over-ceiling count, same longest line, same total excess,
-per file. Mismatches in either direction fail. A baseline that silently
-disagrees with reality is how a ratchet rots.
+tree **exactly**, per file: same over-ceiling count, same longest line, same
+total excess. Mismatches in either direction fail — a baseline that silently
+disagrees with reality is how a ratchet rots — so any change to a long line
+needs a baseline update in the same commit. `pnpm docs:lines --update` writes
+it, and that command is where direction is enforced.
 
-The consequence is that any change to a long line needs a baseline update in the
-same commit. `pnpm docs:lines --update` writes it, and that command is where
-direction is enforced: it refuses to write a baseline whose repo-wide
-over-ceiling count, total excess, **or longest line** is higher than the
-committed one. Debt can be paid down, or moved between files, and cannot grow.
+<!-- generated: pnpm docs:lines:contract -->
 
-All three, not just the two sums. Checking only count and excess accepted
-deleting 17 of `known-limitations.md`'s 18 long rows into a single 33,654-char
-cell — the count falls, the excess is unchanged — and the gate that runs next
-then rejects the baseline `--update` had just written.
+```text
+# The baseline describes the tree
+# baseline:
+#   docs/a.md over=2 longest=900 excess=500
+# tree:
+#   docs/a.md over=2 longest=900 excess=500
+#   docs/b.md over=0 longest=120 excess=0
+$ pnpm docs:lines
+doc:lines ok (ceiling 600, 2 docs, 2 grandfathered lines, 500 excess chars)
+exit 0
 
-Three numbers per file, because each closes a hole the others leave open:
+# A long row is written into a file that has no entry
+# baseline:
+#   docs/a.md over=2 longest=900 excess=500
+# tree:
+#   docs/a.md over=2 longest=900 excess=500
+#   docs/b.md over=1 longest=700 excess=100
+$ pnpm docs:lines
+doc:lines failed — the baseline no longer matches the docs:
+- docs/b.md: 1 line(s) over 600 chars (longest 700) in a file with no baseline entry. Split the cell into domain-grouped rows; `pnpm docs:lines --update` refuses while repo debt is higher.
+exit 1
 
-| Number | Closes |
-| --- | --- |
-| `over` | a new long row appearing |
-| `maxLen` | swapping the 6,334-char row for a 6,000-char one, which keeps `over` flat |
-| `excess` | a non-longest long row growing to just under `maxLen`, which keeps `over` and `maxLen` flat |
+# A long row grows in a file that has an entry
+# baseline:
+#   docs/a.md over=2 longest=900 excess=500
+# tree:
+#   docs/a.md over=2 longest=1000 excess=600
+$ pnpm docs:lines
+doc:lines failed — the baseline no longer matches the docs:
+- docs/a.md: longest line rose to 1000, baseline 900. Split the cell into domain-grouped rows; `pnpm docs:lines --update` refuses while repo debt is higher.
+- docs/a.md: excess chars rose to 600, baseline 500. Split the cell into domain-grouped rows; `pnpm docs:lines --update` refuses while repo debt is higher.
+exit 1
 
-Two more rules complete it. A file with no baseline entry must have every line at
-or under 600, so the first long row there is a hard stop. An entry whose file is
-no longer measured must be removed.
+# A row moves between two files that both have entries
+# baseline:
+#   docs/a.md over=2 longest=900 excess=500
+#   docs/b.md over=2 longest=900 excess=500
+# tree:
+#   docs/a.md over=1 longest=900 excess=300
+#   docs/b.md over=3 longest=900 excess=700
+$ pnpm docs:lines
+doc:lines failed — the baseline no longer matches the docs:
+- docs/a.md: over-ceiling lines fell to 1, baseline 2. Record it with `pnpm docs:lines --update`.
+- docs/a.md: excess chars fell to 300, baseline 500. Record it with `pnpm docs:lines --update`.
+- docs/b.md: over-ceiling lines rose to 3, baseline 2. Record it with `pnpm docs:lines --update`.
+- docs/b.md: excess chars rose to 700, baseline 500. Record it with `pnpm docs:lines --update`.
+exit 1
+
+# A row moves into a file that has no entry
+# baseline:
+#   docs/a.md over=2 longest=900 excess=500
+# tree:
+#   docs/a.md over=0 longest=120 excess=0
+#   docs/b.md over=2 longest=900 excess=500
+$ pnpm docs:lines
+doc:lines failed — the baseline no longer matches the docs:
+- docs/a.md: over-ceiling lines fell to 0, baseline 2. Record it with `pnpm docs:lines --update`.
+- docs/a.md: longest line fell to 120, baseline 900. Record it with `pnpm docs:lines --update`.
+- docs/a.md: excess chars fell to 0, baseline 500. Record it with `pnpm docs:lines --update`.
+- docs/b.md: 2 line(s) over 600 chars (longest 900) in a file with no baseline entry. Record it with `pnpm docs:lines --update`.
+exit 1
+
+# Debt is paid down and an entry's file is gone
+# baseline:
+#   docs/a.md over=2 longest=900 excess=500
+#   docs/gone.md over=1 longest=700 excess=100
+# tree:
+#   docs/a.md over=1 longest=700 excess=100
+$ pnpm docs:lines
+doc:lines failed — the baseline no longer matches the docs:
+- docs/a.md: over-ceiling lines fell to 1, baseline 2. Record it with `pnpm docs:lines --update`.
+- docs/a.md: longest line fell to 700, baseline 900. Record it with `pnpm docs:lines --update`.
+- docs/a.md: excess chars fell to 100, baseline 500. Record it with `pnpm docs:lines --update`.
+- docs/gone.md: baseline entry for a file that is no longer measured. Record it with `pnpm docs:lines --update`.
+exit 1
+
+# --update refuses 18 long rows consolidated into one cell
+# baseline:
+#   docs/a.md over=18 longest=6334 excess=33054
+# tree:
+#   docs/a.md over=1 longest=33654 excess=33054
+$ pnpm docs:lines --update
+doc:lines --update refused: debt may not grow.
+- repo longest line would rise from 6334 to 33654.
+Split the offending cell into domain-grouped rows instead.
+exit 1
+
+# --update records the move the check above rejected
+# baseline:
+#   docs/a.md over=2 longest=900 excess=500
+#   docs/b.md over=2 longest=900 excess=500
+# tree:
+#   docs/a.md over=1 longest=900 excess=300
+#   docs/b.md over=3 longest=900 excess=700
+$ pnpm docs:lines --update
+doc:lines baseline written (4 lines over 600 chars, 1000 excess chars)
+exit 0
+```
+
+### Reading the block
+
+- **The remedy follows the repo totals, not the file's.** A row moving into a
+  file that already has an entry makes that file "rise" while the repo stays
+  flat, and the message still points at `--update`, because that is what
+  `--update` will do with the same input. Only when `--update` would refuse does
+  the gate tell you to split.
+- **`longest` is in the direction check, not just the two sums.** The
+  consolidation scenario is why: 18 rows merged into one cell, trimmed just
+  enough to keep the excess flat, makes the count fall 18 → 1 and both sums read
+  it as progress. `buildTargets` projects whatever tree it measured, so a
+  baseline `--update` writes can never be rejected afterwards — the raised cell
+  ceiling would be permanent.
+- **`longest` only counts files that carry debt.** A repo paid down to zero
+  still has ordinary prose in it; charging that against a baseline of 0 would
+  refuse the very commit that clears the last entry.
+- **Falling is still a failure (exit 1).** Paying debt down without recording it
+  leaves the file an allowance it no longer needs.
 
 ### Workflow
 
-- Added a long row → split it into domain-grouped rows. Raising the baseline is
-  not the remedy, and `--update` refuses it unless the same commit pays the debt
-  down somewhere else.
-- Shortened or split a long row → `pnpm docs:lines --update`, then commit the
-  baseline diff alongside the doc change.
-- Moved rows between files, as a doc split does → same thing. The repo totals
-  stay flat, so `--update` accepts it.
+- Added a long row → split it into domain-grouped rows.
+- Shortened, split, or moved a long row → `pnpm docs:lines --update`, then
+  commit the baseline diff alongside the doc change. The baseline file is
+  registered in `scripts/hooks/path-classifier.sh` as a hook path, so that diff
+  routes the push to the hook gates instead of promoting it to the full route.
+- Landing a doc PR while other doc PRs are in flight → every merge to `main`
+  that touches a long row makes every open branch's baseline stale in the
+  falling direction, which is exit 1 above. Re-run `--update` on the branch just
+  before merge.
 
 ### Deliberate ceilings
 
@@ -83,16 +196,15 @@ no longer measured must be removed.
   totals, not per-file ones, so a commit that pays one file down and lands a
   long row in a file that had no entry is accepted — that is indistinguishable
   from a move without a base revision, and moves are the remedy this gate exists
-  to encourage. The cost is real: some other file must give up an over-ceiling
-  line and the totals still may not rise. What is not protected is any single
-  file's cleaned-up status.
-- **The job is fail-closed but not merge-blocking yet.** `doc-size` is not among
-  the contexts the `pr_to_main` ruleset requires by name, so a red result reports
+  to encourage. What is not protected is any single file's cleaned-up status.
+- **The job is fail-closed but not merge-blocking yet.** `Doc Size And Line
+  Length` is not among the contexts the `pr_to_main` ruleset requires by name
+  (the ruleset registers display names, not job keys), so a red result reports
   but does not block. Adding the context has to happen after the workflow lands
   on `main`; a required context no workflow produces would block every open PR.
 - **CI only, not wired into `pre-push`.** This follows the existing decision for
-  `check-doc-size.sh` and keeps the docs-only push route fast. The cost is that a
-  long cell is caught at PR time rather than at push time.
+  `check-doc-size.sh`. The cost is that a long cell is caught at PR time rather
+  than at push time.
 
 ## Two rejected designs
 

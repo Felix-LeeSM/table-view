@@ -87,6 +87,7 @@ rust_block="$(sed -n '/^  rust:/,/^  rust-static:/p' <<<"$workflow_text" | sed '
 integration_block="$(sed -n '/^  integration-tests:/,/^  # Runtime E2E smoke/p' <<<"$workflow_text" | sed '$d')"
 pr_body_block="$(sed -n '/^  pr-body:/,/^  frontend-shard:/p' <<<"$workflow_text" | sed '$d')"
 pr_body_only_block="$(sed -n '/^  pr-body:/,/^  doc-size:/p' <<<"$workflow_text" | sed '$d')"
+doc_size_block="$(sed -n '/^  doc-size:/,/^  dependency-security:/p' <<<"$workflow_text" | sed '$d')"
 integration_disk_telemetry_step="$(extract_step_block "$integration_block" "Show disk usage before integration build")"
 integration_disk_cleanup_step="$(extract_step_block "$integration_block" "Free disk headroom before integration build")"
 integration_run_step="$(extract_step_block "$integration_block" "Run integration coverage")"
@@ -107,6 +108,24 @@ if [ -z "$dependency_security_block" ]; then
 	echo "FAIL: dependency security job is missing from $WORKFLOW" >&2
 	exit 1
 fi
+if [ -z "$doc_size_block" ]; then
+	echo "FAIL: doc size job is missing from $WORKFLOW" >&2
+	exit 1
+fi
+
+# The doc gates were advisory until this job dropped `continue-on-error`. Every
+# way back to advisory is a one-line edit, so each one is pinned here: without
+# these, deleting the whole job still passed this test.
+assert_contains "$doc_size_block" "name: Doc Size And Line Length" "doc-size job name is the ruleset context"
+assert_not_contains "$doc_size_block" "continue-on-error" "doc-size job stays fail-closed"
+assert_contains "$doc_size_block" "run: bash scripts/hooks/check-doc-size.sh --strict" "doc-size whole-file gate runs strict"
+assert_contains "$doc_size_block" "run: pnpm docs:lines" "doc-size per-line gate"
+# `--update` in CI would let the job repair the baseline it is supposed to
+# enforce, which is the same failure as running the gate advisory.
+assert_not_contains "$doc_size_block" "docs:lines --update" "doc-size never rewrites the baseline in CI"
+assert_contains "$doc_size_block" "cache: pnpm" "doc-size pnpm cache"
+assert_contains "$doc_size_block" "cache-dependency-path: pnpm-lock.yaml" "doc-size pnpm cache"
+assert_order "$doc_size_block" "uses: pnpm/action-setup@v6" "uses: actions/setup-node@v6" "doc-size pnpm before node cache setup"
 
 assert_contains "$pr_body_block" "name: PR Body Contract" "PR body job"
 assert_contains "$pr_body_block" "node-version: 22.14.0" "PR body job"
@@ -243,8 +262,8 @@ assert_contains "$frontend_block" "if: always() && (needs.changes.result != 'suc
 assert_contains "$rust_block" "if: always() && (needs.changes.result != 'success' || needs.changes.outputs.code_changed == 'true')" "rust docs-only skip gate"
 assert_contains "$integration_block" "if: always() && (needs.changes.result != 'success' || needs.changes.outputs.code_changed == 'true')" "integration docs-only skip gate"
 assert_contains "$dependency_security_block" "if: always() && (needs.changes.result != 'success' || needs.changes.outputs.code_changed == 'true')" "dependency-security docs-only skip gate"
-# pr-body, doc-size, and frontend-advisory stay unconditional — cheap, and
-# docs:links (frontend-advisory) is most meaningful on docs-only PRs.
+# pr-body, doc-size, and frontend-advisory stay unconditional — docs:links
+# (frontend-advisory) and the doc gates are most meaningful on docs-only PRs.
 assert_not_contains "$pr_body_only_block" "needs.changes.outputs.code_changed" "pr-body always runs"
 assert_not_contains "$frontend_advisory_block" "needs: changes" "frontend-advisory always runs (docs:links matters on docs PRs)"
 # Guard against the forbidden shortcut: a workflow-level paths-ignore key (not a
