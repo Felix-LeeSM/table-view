@@ -254,9 +254,8 @@ jobs:
         #
         # `blob` writes results to a file and prints nothing else, so a red
         # shard's log held one line — `blob report written` — and no assertion.
-        # Pairing it with `default` restores the failure text in the log; the
-        # blob path then has to be keyed (`--outputFile.blob`) because a bare
-        # `--outputFile` would apply to both reporters.
+        # `default` restores the failure text. `--outputFile` stays bare: only
+        # blob/json/junit/benchmark read it, and `default` is not one of them.
         run: |
           pnpm exec vitest run \
             --shard=${{ matrix.shard }}/3 \
@@ -267,7 +266,7 @@ jobs:
             --coverage.thresholds.branches 0 \
             --reporter=blob \
             --reporter=default \
-            --outputFile.blob=.vitest-reports/blob-${{ matrix.shard }}.json
+            --outputFile=.vitest-reports/blob-${{ matrix.shard }}.json
 
       - name: Upload shard blob report
         uses: actions/upload-artifact@v4
