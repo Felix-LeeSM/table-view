@@ -5,7 +5,11 @@ import { extname, posix, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 const ROOT_DOCS = ["README.md", "AGENTS.md", "CLAUDE.md", "docs/ROADMAP.md"];
-const ACTIVE_DOC_DIRS = ["docs/product", "docs/contributor-guide"];
+const ACTIVE_DOC_DIRS = [
+  "docs/product",
+  "docs/contributor-guide",
+  "docs/roadmap",
+];
 const EXCLUDED_SOURCE_DIRS = ["docs/archives", "docs/sprints"];
 
 export interface LinkCheckIssue {
