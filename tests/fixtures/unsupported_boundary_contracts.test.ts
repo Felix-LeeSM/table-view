@@ -128,6 +128,10 @@ describe("unsupported_boundary_contracts.json", () => {
         ).toBe(true);
       }
 
+      // Source gates keep the raw substring match on purpose (no
+      // `expectDocPin`): they pin Rust identifiers and a user-facing error
+      // string literal, so whitespace is part of the pinned fact, and the
+      // over-600-char re-flow that motivated doc normalization is docs-only.
       for (const gate of row.sourceGates ?? []) {
         const source = readRepoFile(gate.path);
         for (const phrase of gate.mustContain) {
@@ -157,7 +161,26 @@ describe("unsupported_boundary_contracts.json", () => {
         "Search uses a table-first workbench boundary",
         "absent doc pin",
       ),
-    ).toThrow();
+    ).toThrow(
+      /absent doc pin must contain \(whitespace-normalized\): Search uses a table-first workbench boundary/,
+    );
+  });
+
+  // Reason: normalization must not let a pin be assembled from two paragraphs —
+  // a doc could split a claim in half and the pin would keep passing (false
+  // pass). Finding N1 in the PR #1840 review (2026-07-26).
+  it("rejects a doc pin assembled across a blank line but accepts a wrapped one", () => {
+    const phrase = "Search uses an index-catalog-first workbench boundary";
+    const head = "Search uses an index-catalog-first";
+    const tail = "workbench boundary";
+
+    expect(() =>
+      expectDocPin(`${head}\n\n${tail}\n`, phrase, "paragraph-split doc pin"),
+    ).toThrow(
+      /paragraph-split doc pin must contain \(whitespace-normalized\): Search uses an index-catalog-first workbench boundary/,
+    );
+
+    expectDocPin(`${head}\n${tail}\n`, phrase, "line-wrapped doc pin");
   });
 
   it("keeps MSSQL runtime and Oracle runtime-slice boundaries explicit", () => {
@@ -280,9 +303,24 @@ function readJson<T>(path: string): T {
  */
 function expectDocPin(content: string, phrase: string, label: string): void {
   expect(
-    collapseWhitespace(content),
+    normalizeDocText(content),
     `${label} must contain (whitespace-normalized): ${phrase}`,
   ).toContain(collapseWhitespace(phrase));
+}
+
+/**
+ * Collapse whitespace *inside* each paragraph while keeping the blank line as a
+ * hard boundary. A pinned phrase may wrap across lines, but it must not be
+ * assembled from the tail of one paragraph plus the head of the next — that
+ * would let a doc split a claim in half and keep the pin passing (false pass).
+ * Sound because no pin contains a newline, so a collapsed phrase can never
+ * span the `\n\n` joiner.
+ */
+function normalizeDocText(text: string): string {
+  return text
+    .split(/\n[^\S\n]*\n/)
+    .map(collapseWhitespace)
+    .join("\n\n");
 }
 
 function collapseWhitespace(text: string): string {
