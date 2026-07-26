@@ -9,7 +9,7 @@ This matrix is the SQLite file-DBMS lane inventory for #196/#242/#457/#458/#459/
 It separates current unit/integration/fixture evidence from the deterministic
 SQLite desktop smoke now wired into the GitHub Runtime Happy Path.
 
-#### Routine desktop E2E claim
+## Routine desktop E2E claim
 
 Current evidence:
 
@@ -24,7 +24,7 @@ rejection, and internal app-state DB rejection. Structured DDL beyond bounded
 table creation and extension-boundary non-claims stay routed to #460/#461 rather
 than broadening this smoke.
 
-#### File connection lifecycle
+## File connection lifecycle
 
 Current evidence:
 
@@ -39,7 +39,7 @@ Absolute file paths, create-new-file, read-only mode, no host requirement,
 file-picker capability, and internal app-state DB rejection have evidence.
 Server auth, switch-database, and multi-namespace flows are not SQLite claims.
 
-#### Query and writable-file DML
+## Query and writable-file DML
 
 Current evidence:
 
@@ -55,7 +55,7 @@ Read queries, writable-file DML, transactional DML batches, dry-run rollback,
 cancellation, and read-only/DDL/batch-failure error normalization have adapter
 evidence. Raw SQL DDL is rejected by the adapter.
 
-#### Catalog/workbench browse
+## Catalog/workbench browse
 
 Current evidence:
 
@@ -71,7 +71,7 @@ FKs, indexes, views, and view columns. Schemas, functions, triggers, full
 constraints, table stats parity, and richer admin/workbench surfaces remain
 future work.
 
-#### Row edit semantics
+## Row edit semantics
 
 Current evidence:
 
@@ -90,7 +90,7 @@ paths, pending edit errors, and read-only write rejection have coverage. Nested
 JSON edits, arbitrary query-result mutation, and bulk/admin edit workflows are
 not supported.
 
-#### DDL and unsupported ALTER behavior
+## DDL and unsupported ALTER behavior
 
 Current evidence:
 
@@ -111,7 +111,7 @@ table, add/drop column, index, constraint) returns explicit `Unsupported`.
 Unsupported ALTER behavior is adapter rejection today; automatic table rebuild
 remains a future ADR-backed implementation decision.
 
-#### Completion and extension boundary
+## Completion and extension boundary
 
 Current evidence:
 
@@ -129,7 +129,7 @@ non-executable completion metadata and are not executed.
 JSON1/FTS/RTREE/loadable-extension semantics are not detected, consumed from
 extension inventory, gated, dispatched, or semantically validated client-side.
 
-#### Documentation recheck
+## Documentation recheck
 
 Current evidence:
 
@@ -144,7 +144,7 @@ commands are non-executable completion vocabulary, and extension/capability,
 structured DDL beyond bounded table creation, ALTER, and nested JSON support
 stays unsupported or future.
 
-#### Test coverage recheck
+## Test coverage recheck
 
 Current evidence:
 
@@ -169,7 +169,7 @@ classification, adapter-level unsupported DDL/read-only/internal-state
 guardrails, autocomplete vocabulary/context/real-WASM behavior, and fixture/live
 smoke routing all have mapped evidence.
 
-#### Support-claim closure audit
+## Support-claim closure audit
 
 Current evidence:
 
@@ -184,7 +184,7 @@ structured table creation, not structured DDL parity beyond table creation,
 admin, or vendor CLI parity. DuckDB/file analytics remains a separate H3 lane,
 and fixture-only inventory does not become live runtime evidence.
 
-#### Fixture inventory
+## Fixture inventory
 
 Current evidence:
 
@@ -209,7 +209,7 @@ SID/TNS/wallet/advanced-auth fixture assumptions. Fixture existence alone does
 not widen support; Oracle structured DDL/full parser-completion/PLSQL claims
 remain absent until matching source-specific evidence lands.
 
-#### DuckDB separation
+## DuckDB separation
 
 Current evidence:
 

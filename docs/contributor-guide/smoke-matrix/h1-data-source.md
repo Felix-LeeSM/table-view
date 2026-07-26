@@ -9,7 +9,7 @@ This matrix records the current data-source architecture smoke boundary. It is
 not a product support expansion; product-visible limits remain in
 [`docs/product/known-limitations.md`](../../product/known-limitations.md).
 
-#### PostgreSQL connect -> browse/edit -> query result + Explain + extension completion + Safe Mode confirmation + cancellation + bounded Structure table/index DDL + dense ERD
+## PostgreSQL connect -> browse/edit -> query result + Explain + extension completion + Safe Mode confirmation + cancellation + bounded Structure table/index DDL + dense ERD
 
 Current evidence:
 
@@ -30,7 +30,7 @@ plus index creation only, and dense ERD smoke covers local diagram interactions
 only, not FK row navigation, roles/users, extensions, profiler, import/export,
 or broad admin flows.
 
-#### MySQL connect -> browse/edit -> SELECT/CALL/DML batch -> cancellation + history evidence
+## MySQL connect -> browse/edit -> SELECT/CALL/DML batch -> cancellation + history evidence
 
 Current evidence:
 
@@ -62,7 +62,7 @@ metadata, and explicit unsupported scripting boundaries. Support-claim closure
 is audited in the MySQL rows of [`h2-rdbms-parity.md`](h2-rdbms-parity.md);
 remaining gaps stay routed as promotion gates.
 
-#### MariaDB connect -> browse/edit -> SELECT/CALL/DML batch -> cancellation + history evidence
+## MariaDB connect -> browse/edit -> SELECT/CALL/DML batch -> cancellation + history evidence
 
 Current evidence:
 
@@ -86,7 +86,7 @@ MariaDB-only `RETURNING`, routine/default behavior beyond the seeded CALL probe,
 procedure-management, trigger CRUD, completion-runtime, admin/import/export, or
 full workbench claims.
 
-#### MongoDB connect -> collection edit/query -> query-tab read/safety -> document result
+## MongoDB connect -> collection edit/query -> query-tab read/safety -> document result
 
 Current evidence:
 
@@ -137,7 +137,7 @@ destructive collection typing-confirm, and document workbench routing.
 Full-support parity, native document-first result panels, and server-version
 feature promotion gates remain future lane work.
 
-#### Query history source labels across RDB/document journeys
+## Query history source labels across RDB/document journeys
 
 Current evidence:
 
@@ -147,7 +147,7 @@ Gap routing:
 
 Keep as regression guard for source attribution.
 
-#### Profile/capability/adapter contract registry
+## Profile/capability/adapter contract registry
 
 Current evidence:
 
@@ -159,7 +159,7 @@ Gap routing:
 
 Extend same matrix when a DBMS capability is promoted.
 
-#### Backend contract common/delta ownership
+## Backend contract common/delta ownership
 
 Current evidence:
 
@@ -177,7 +177,7 @@ expectations stay separate from
 DBMS/version/dialect/paradigm/capability/evidence deltas; fixture-only evidence
 does not widen support claims.
 
-#### Query language owner registry
+## Query language owner registry
 
 Current evidence:
 
@@ -188,7 +188,7 @@ Gap routing:
 
 Add active owner metadata before any new runtime-active language.
 
-#### Result envelope compatibility
+## Result envelope compatibility
 
 Current evidence:
 
@@ -200,7 +200,7 @@ Gap routing:
 Backend-native RDBMS envelope wire format is future hardening; wrapper boundary
 is current SOT.
 
-#### Redis key browser/value preview/edit + bounded command runtime
+## Redis key browser/value preview/edit + bounded command runtime
 
 Current evidence:
 
@@ -240,7 +240,7 @@ parser ownership, consumer-group stream UI, broader command families, multi-key
 destructive commands, cluster/pubsub/modules/consumer-group flows, and Valkey
 hash/list/set/zset writes remain future H5 Redis/Valkey work.
 
-#### Elasticsearch/OpenSearch live connection/catalog/query + fixture/live destructive planning + editor completion
+## Elasticsearch/OpenSearch live connection/catalog/query + fixture/live destructive planning + editor completion
 
 Current evidence:
 
@@ -288,7 +288,7 @@ HTTP/admin promotion remains owned by the Search roadmap/milestone. Actual live
 `_delete_by_query` execution, live admin smoke, and global audit/admin/security
 dashboards remain outside this scope.
 
-#### DuckDB `.duckdb` file workflow and file analytics
+## DuckDB `.duckdb` file workflow and file analytics
 
 Current evidence:
 
@@ -317,7 +317,7 @@ and extension/external-file blocklists. COPY/ATTACH/DETACH, extension
 install/load, raw external-file SQL functions, automatic import/export workflow,
 structured DDL/write UI, and admin parity remain unpromoted.
 
-#### Static DBMS fixture inventory
+## Static DBMS fixture inventory
 
 Current evidence:
 
@@ -339,7 +339,7 @@ Issue #753 keeps fixture tiers and smoke-routing cost/risk rationale in
 Structure table/index/FK DDL smoke impact to those routed rows. Add
 DBMS-specific runtime smoke when each remaining parity lane becomes active.
 
-#### MySQL/MariaDB/SQLite/DuckDB support claims
+## MySQL/MariaDB/SQLite/DuckDB support claims
 
 Current evidence:
 

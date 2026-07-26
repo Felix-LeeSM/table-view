@@ -9,7 +9,7 @@ This matrix is the H3 DuckDB/file analytics gate. It records the current
 evidence slice and keeps local-file analytics within the existing RDBMS + `file`
 connection model until runtime evidence requires a separate paradigm.
 
-#### DuckDB modeling boundary
+## DuckDB modeling boundary
 
 Current evidence:
 
@@ -22,7 +22,7 @@ Current gap / routing:
 DuckDB remains an `rdb` profile with `file` connection kind; no separate
 file-SQL paradigm is introduced.
 
-#### `.duckdb` connection, catalog, table read, raw SQL
+## `.duckdb` connection, catalog, table read, raw SQL
 
 Current evidence:
 
@@ -43,7 +43,7 @@ add/drop/type, and index create/drop; constraint add/drop and identity columns
 (Stage 2b) are not claimed, and a DuckDB structured-DDL runtime smoke remains a
 separate promotion gate.
 
-#### CSV/Parquet/JSON/NDJSON registration and preview
+## CSV/Parquet/JSON/NDJSON registration and preview
 
 Current evidence:
 
@@ -58,7 +58,7 @@ Product UI registers active-session local sources and previews rows without
 exposing absolute paths. Source-scoped dialog history labeling is covered below;
 broader import workflows are not claimed.
 
-#### Source metadata/workbench parity
+## Source metadata/workbench parity
 
 Current evidence:
 
@@ -72,7 +72,7 @@ Registered local source aliases, columns, and preview SQL are surfaced in
 workbench metadata without exposing absolute local paths. Refresh and disconnect
 clear active-session source state.
 
-#### Registered-source SELECT workflows
+## Registered-source SELECT workflows
 
 Current evidence:
 
@@ -96,7 +96,7 @@ registered deterministic CSV source -> global editor SELECT -> result grid ->
 `FILE` history/source evidence -> no absolute local path in visible UI.
 Automatic import/export parity is not promoted.
 
-#### Local-file privacy and export boundary
+## Local-file privacy and export boundary
 
 Current evidence:
 
@@ -109,7 +109,7 @@ Public payloads expose alias/file name/kind/size/columns/preview SQL only;
 export remains the generic explicit grid export for current rows, not automatic
 export of a registered local file source.
 
-#### Extension, external-file, and COPY gate
+## Extension, external-file, and COPY gate
 
 Current evidence:
 
@@ -126,7 +126,7 @@ functions are adapter-blocked. Completion remains editor assistance and does not
 create runtime support for blocked statements. No DuckDB extension semantic
 support is claimed.
 
-#### DuckDB test coverage recheck
+## DuckDB test coverage recheck
 
 Current evidence:
 
@@ -169,7 +169,7 @@ DuckDB `.duckdb` fixture generation and deterministic CSV file analytics fixture
 separately from their wired Runtime Happy Path smokes. File analytics automatic
 import/export parity remains future promotion work.
 
-#### Runtime E2E smoke inventory
+## Runtime E2E smoke inventory
 
 Current evidence:
 
@@ -186,7 +186,7 @@ grid/`FILE` history/no-visible-absolute-path evidence. Broader
 CSV/Parquet/JSON/NDJSON automatic import/export workflows and blocked
 extension/file statements remain future promotion gates.
 
-#### DuckDB documentation recheck
+## DuckDB documentation recheck
 
 Current evidence:
 

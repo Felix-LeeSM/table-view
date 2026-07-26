@@ -9,7 +9,7 @@ This matrix is the PostgreSQL lane inventory for #186/#241. It distinguishes the
 current GitHub Runtime Happy Path claim from component, unit, integration, and
 future smoke evidence.
 
-#### Routine desktop E2E claim
+## Routine desktop E2E claim
 
 Current evidence:
 
@@ -36,7 +36,7 @@ flows, broader history-source labeling, FK row navigation through ERD, schema
 diff, migration impact, data compare, admin, arbitrary extension semantics, or
 profiler/activity scenarios.
 
-#### Closure coverage baseline
+## Closure coverage baseline
 
 Current evidence:
 
@@ -62,7 +62,7 @@ vocabulary/context, and fixture/live smoke routing all have mapped evidence.
 Fixture inventory remains contract evidence only; it does not widen live runtime
 support.
 
-#### Runtime query execution
+## Runtime query execution
 
 Current evidence:
 
@@ -78,7 +78,7 @@ table data, cancellation, and raw-query grid edit are covered below desktop
 smoke. psql meta commands, DB-level backup/restore/import/export, and PL/pgSQL
 body authoring remain outside current parity claims.
 
-#### Catalog/workbench metadata
+## Catalog/workbench metadata
 
 Current evidence:
 
@@ -95,7 +95,7 @@ migration impact summaries, and cached read-only schema diff have evidence.
 Server activity, profiler, role/user/permission UI, extension management UI,
 data compare, and migration/apply execution are future H7/H4-style work.
 
-#### Parser and Safe Mode
+## Parser and Safe Mode
 
 Current evidence:
 
@@ -114,7 +114,7 @@ preview. Routine smoke covers PostgreSQL info/warn/destructive confirmation plus
 raw DDL and grid-edit preview paths. Full PL/pgSQL bodies, broad MERGE variants,
 arbitrary nested expressions, and arbitrary extension semantics are not modeled.
 
-#### Completion and installed extensions
+## Completion and installed extensions
 
 Current evidence:
 
@@ -134,7 +134,7 @@ seeded `fuzzystrmatch` enables `LEVENSHTEIN`, absent `uuid-ossp` withholds
 completion does not enumerate every extension symbol or make parser/Safe Mode
 semantically extension-aware.
 
-#### Edit semantics
+## Edit semantics
 
 Current evidence:
 
@@ -149,7 +149,7 @@ Key-projected row edits, JSON/array SQL generation, preview/commit/discard, and
 Safe Mode confirmation have targeted evidence. Arbitrary query-result mutation
 and bulk/admin edit workflows are future work.
 
-#### Lightweight Explain path
+## Lightweight Explain path
 
 Current evidence:
 
@@ -167,7 +167,7 @@ Backend/API/component/parser/safety evidence and routine desktop smoke exist for
 lightweight plan inspection. It is not a profiler surface or server activity
 dashboard claim.
 
-#### Cancellation and long-running query workflow
+## Cancellation and long-running query workflow
 
 Current evidence:
 
@@ -182,7 +182,7 @@ Backend cancellation, query-tab cancelled state/history, same-window history
 refresh, stale-grid clearing, and retry are covered. This does not claim server
 activity/session management UI.
 
-#### Non-routine scenario assets
+## Non-routine scenario assets
 
 Current evidence:
 

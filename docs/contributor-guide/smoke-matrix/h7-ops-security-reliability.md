@@ -9,7 +9,7 @@ This matrix is the H7 gate-alignment record. It separates the current automated
 gate surface from future ops/security/a11y/perf work so docs do not imply
 routine coverage that is not wired into CI or hooks.
 
-#### PR/main CI gate surface
+## PR/main CI gate surface
 
 Current evidence:
 
@@ -35,7 +35,7 @@ floor. Theme contrast and link checking are advisory (Frontend Advisory job).
 Full a11y, perf, and macOS/Windows runtime smoke are not routine blocking
 checks.
 
-#### docs/memory-only CI skip
+## docs/memory-only CI skip
 
 Current evidence:
 
@@ -64,7 +64,7 @@ script is fail-safe too: missing base ref, git error, `workflow_dispatch`, or
 any mixed docs+code set returns `code_changed=true`. `pr-body`, `doc-size`, and
 `frontend-advisory` always run (docs:links is most useful on docs PRs).
 
-#### Local pre-push routing
+## Local pre-push routing
 
 Current evidence:
 
@@ -89,7 +89,7 @@ paths run full checks. The Rust route runs only the fast gates (`cargo check`,
 owns the fast lib-only Tier 1 coverage. Hook bypass remains forbidden by git
 policy and dangerous-bash guards.
 
-#### Runtime Happy Path E2E
+## Runtime Happy Path E2E
 
 Current evidence:
 
@@ -140,7 +140,7 @@ default routing, and SQLite/DuckDB visible assertion evidence aligned.
 `scripts/e2e-smoke-ci.sh` must wire a spec before it becomes part of the routine
 remote gate.
 
-#### Non-routine E2E smoke specs
+## Non-routine E2E smoke specs
 
 Current evidence:
 
@@ -154,7 +154,7 @@ These are scenario inventory or local/manual regression assets unless a
 workflow/script invokes them. They do not currently expand the Runtime Happy
 Path claim.
 
-#### Destructive/admin operation safety
+## Destructive/admin operation safety
 
 Current evidence:
 
@@ -175,7 +175,7 @@ execution unsupported. There is no universal dry-run, actual live Search admin
 execution, admin audit log, role/user/permission UI, or security dashboard
 claim.
 
-#### Credential and local-first privacy
+## Credential and local-first privacy
 
 Current evidence:
 
@@ -202,7 +202,7 @@ absolute paths. Credential rotation, KDF changes, ACL, cloud credential UI,
 code-signing, provider-secret decisions, broad key lifecycle smoke, and
 multi-user security flows require threat-model handoff before promotion.
 
-#### Security decision process
+## Security decision process
 
 Current evidence:
 
@@ -215,7 +215,7 @@ supply-chain, or multi-user decisions need a threat-model handoff before option
 grilling. H7 does not lock new security architecture by documentation-only
 claim.
 
-#### Dependency security
+## Dependency security
 
 Current evidence:
 
@@ -243,7 +243,7 @@ through `sqlx-mysql`, and `quick-xml` (RUSTSEC-2026-0194/0195) through
 `plist 1.8.0`. Node audit is deferred; runtime dependency upgrades remain
 separate PRs.
 
-#### A11y
+## A11y
 
 Current evidence:
 
@@ -264,7 +264,7 @@ Quick Open, candidate-source UI, and 72-theme strict WCAG gates are not wired.
 Promote from the follow-up table only when a feature lane gives the check a
 concrete owner and budget.
 
-#### Performance
+## Performance
 
 Current evidence:
 
@@ -285,7 +285,7 @@ signals only; they are not routine FPS, scroll, wheel-to-paint,
 graph/vector/stream renderer, or CI-blocking latency budgets. Promote
 FPS/latency budgets only with owner, runtime cost, and failure triage.
 
-#### Link checking
+## Link checking
 
 Current evidence:
 
@@ -302,7 +302,7 @@ target and anchor resolution while excluding `docs/archives/**` and
 `docs/sprints/**` as default source roots. CI runs it as advisory only; blocking
 promotion remains future work after owner/runtime cost/actionability settle.
 
-#### Platform smoke
+## Platform smoke
 
 Current evidence:
 
@@ -322,7 +322,7 @@ platform job and summary, but the canary is not required until owner, cost,
 triage path, and repeated green runs exist. This does not prove macOS or Windows
 desktop runtime support.
 
-#### E2E isolation
+## E2E isolation
 
 Current evidence:
 

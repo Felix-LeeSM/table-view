@@ -9,7 +9,7 @@ This matrix is the H4 ERD/SchemaGraph gate. It separates current unit/component
 and dense screenshot smoke evidence so reusable graph claims do not imply
 data compare or migration/apply execution.
 
-#### Schema metadata cache owner
+## Schema metadata cache owner
 
 Current evidence:
 
@@ -23,7 +23,7 @@ Current cache owner range is
 schemas/tables/views/functions/postgresExtensions/tableColumnsCache/tableIndexesCache/tableConstraintsCache/triggers.
 New catalog metadata must define cache ownership before UI claim promotion.
 
-#### Production ERD graph input
+## Production ERD graph input
 
 Current evidence:
 
@@ -38,7 +38,7 @@ ERD uses schema/table/column cache plus cached/fetched explicit index/constraint
 metadata for visible tables. `ColumnInfo` PK/FK/CHECK metadata remains a
 synthetic fallback when explicit metadata is absent.
 
-#### Reusable SchemaGraph extraction and FK semantics
+## Reusable SchemaGraph extraction and FK semantics
 
 Current evidence:
 
@@ -52,7 +52,7 @@ Current gap / routing:
 RDB catalog/FK semantics are current scope. Other paradigms may expose catalog
 graphs later, but must not pretend to be RDB schemas.
 
-#### ERD renderer local interactions
+## ERD renderer local interactions
 
 Current evidence:
 
@@ -67,7 +67,7 @@ diagram interactions. The dense ERD smoke opens a seeded PostgreSQL graph on
 desktop and narrow viewports, asserts nodes/FK edges/search/selection/zoom/fit,
 and captures non-empty screenshot artifacts.
 
-#### Read-only dependency view
+## Read-only dependency view
 
 Current evidence:
 
@@ -81,7 +81,7 @@ indexes/constraints, CHECK expressions, and visible metadata/SchemaGraph
 diagnostics. Empty, diagnostic, and non-RDB unsupported states have focused
 component evidence.
 
-#### Migration impact summaries
+## Migration impact summaries
 
 Current evidence:
 
@@ -99,7 +99,7 @@ impact summaries for dependent tables/columns/indexes/constraints/FKs and
 metadata diagnostics. Current evidence is pure selector plus affected
 dialog/editor component coverage; no desktop smoke claim is made.
 
-#### Read-only schema diff
+## Read-only schema diff
 
 Current evidence:
 
@@ -115,7 +115,7 @@ stable ordering. The panel is read-only and does not claim migration/apply
 execution, data compare, import/export, admin, or DuckDB registered-file-alias
 support.
 
-#### FK row navigation boundary
+## FK row navigation boundary
 
 Current evidence:
 
@@ -127,7 +127,7 @@ Current gap / routing:
 FK row navigation remains the DataGrid foreign-key cell/icon path. ERD
 interactions are not FK row navigation claims.
 
-#### Future data compare surfaces
+## Future data compare surfaces
 
 Current evidence:
 
@@ -139,7 +139,7 @@ Current gap / routing:
 Future data compare surfaces must reuse `SchemaGraph`/catalog input and avoid
 duplicate catalog parsing before support claims widen.
 
-#### Runtime E2E smoke inventory
+## Runtime E2E smoke inventory
 
 Current evidence:
 

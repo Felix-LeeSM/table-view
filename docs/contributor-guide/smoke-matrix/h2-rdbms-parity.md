@@ -9,7 +9,7 @@ This matrix is the H2 RDBMS parity gate. It separates current remote smoke
 evidence from fixture/unit/integration evidence so support claims do not imply
 full desktop-client parity for every RDBMS.
 
-#### Active parity lane selection
+## Active parity lane selection
 
 Current evidence:
 
@@ -24,7 +24,7 @@ editor SELECT -> result grid -> `FILE` history/source evidence -> no absolute
 local path in visible UI, while broader import/export parity still waits for
 source-specific promotion gates.
 
-#### PostgreSQL connect -> browse/edit -> query -> Explain -> extension completion -> Safe Mode -> cancellation -> Structure table/index DDL -> dense ERD
+## PostgreSQL connect -> browse/edit -> query -> Explain -> extension completion -> Safe Mode -> cancellation -> Structure table/index DDL -> dense ERD
 
 Current evidence:
 
@@ -53,7 +53,7 @@ row navigation, schema diff, migration impact, or data compare. Future parity
 hardening must add a scoped issue with matching tests and smoke routing before
 claims widen.
 
-#### RDBMS common history/source attribution
+## RDBMS common history/source attribution
 
 Current evidence:
 
@@ -67,7 +67,7 @@ Cross-source history label regression guard remains separate; MySQL and MariaDB
 smoke additionally verify `sidebar-prefetch` and `grid-edit` source badges plus
 raw query text evidence for their routine paths.
 
-#### MySQL runtime/query/edit/cancel adapter
+## MySQL runtime/query/edit/cancel adapter
 
 Current evidence:
 
@@ -98,7 +98,7 @@ Unsupported scripting boundaries reject stored routine/event bodies, broad CALL
 expressions, control-flow fragments, `DELIMITER`, and `LOAD DATA` before
 dispatch.
 
-#### MySQL autocomplete context
+## MySQL autocomplete context
 
 Current evidence:
 
@@ -116,7 +116,7 @@ replace ranges. These are completion-context evidence only; routine body
 authoring, scripting, and completion runtime smoke remain separate promotion
 gates.
 
-#### MySQL test coverage closure audit
+## MySQL test coverage closure audit
 
 Current evidence:
 
@@ -149,7 +149,7 @@ expression rejection, autocomplete vocabulary/context coverage, and fixture/live
 smoke routing. Fixture inventory remains contract evidence only unless the
 runtime smoke script wires the matching spec.
 
-#### MySQL smoke scenario inventory
+## MySQL smoke scenario inventory
 
 Current evidence:
 
@@ -166,7 +166,7 @@ Remaining promotion slices: broader tables/views/functions/procedures browse,
 routine behavior beyond the seeded CALL probe, structured trigger CRUD decision,
 admin/import/export, and vendor-workbench parity.
 
-#### MySQL support-claim closure audit
+## MySQL support-claim closure audit
 
 Current evidence:
 
@@ -182,7 +182,7 @@ evidence. Fixture-only inventory, catalog-aware completion suggestions, profile
 metadata, and focused tests do not become full workbench, admin/import/export,
 routine-body, scripting, trigger CRUD, or completion-runtime claims.
 
-#### MariaDB engine baseline and identity/delta evidence
+## MariaDB engine baseline and identity/delta evidence
 
 Current evidence:
 
@@ -209,7 +209,7 @@ integration separately verifies live version context and characterizes
 `DELETE ... RETURNING` as server-accepted with no returned rows and no
 affected-row count from the shared adapter.
 
-#### MariaDB MySQL-family reuse audit
+## MariaDB MySQL-family reuse audit
 
 Current evidence:
 
@@ -231,7 +231,7 @@ identity/dialect, MariaDB version evidence for CHECK/constraint catalog
 promotion, and profile/completion `RETURNING`. MySQL-only evidence does not
 unlock MariaDB support claims without MariaDB-specific evidence.
 
-#### MariaDB `RETURNING` parser/Safe Mode/runtime boundary
+## MariaDB `RETURNING` parser/Safe Mode/runtime boundary
 
 Current evidence:
 
@@ -252,7 +252,7 @@ characterization verifies current server acceptance for `DELETE ... RETURNING`
 while the shared adapter returns a DML envelope with no returned rows and no
 affected-row count.
 
-#### MariaDB autocomplete delta parity
+## MariaDB autocomplete delta parity
 
 Current evidence:
 
@@ -269,7 +269,7 @@ the WASM boundary, share MySQL-family functions, and gate the `RETURNING`
 suggestion at known MariaDB versions below `10.0.5`. This is a keyword-level
 editor-assistance gate, not statement-specific runtime acceptance evidence.
 
-#### MariaDB smoke scenario inventory
+## MariaDB smoke scenario inventory
 
 Current evidence:
 
@@ -289,7 +289,7 @@ slices: routine default/body behavior beyond the seeded CALL probe, MariaDB
 `RETURNING` returned-row runtime support if promoted, completion-runtime smoke,
 trigger CRUD, admin/import/export, and broader vendor-workbench parity.
 
-#### MariaDB catalog/workbench metadata parity
+## MariaDB catalog/workbench metadata parity
 
 Current evidence:
 
@@ -308,7 +308,7 @@ auto-load coverage. CHECK constraint hints remain version-gated at MariaDB
 `>= 10.2.1`; routine metadata browse and the seeded CALL probe do not claim
 procedure body authoring/management or broad runtime routine semantics.
 
-#### MariaDB row edit and bounded DDL parity
+## MariaDB row edit and bounded DDL parity
 
 Current evidence:
 
@@ -328,7 +328,7 @@ smoke evidence. Trigger create/drop, procedure body management, DB-level
 import/export, admin, and full vendor-workbench parity remain separate promotion
 gates.
 
-#### MariaDB support-claim closure audit
+## MariaDB support-claim closure audit
 
 Current evidence:
 
@@ -345,7 +345,7 @@ routine baseline, focused tests cover shared-path deltas, and remaining
 MariaDB-only runtime/admin/import/export/completion-runtime work stays routed as
 future promotion slices.
 
-#### MariaDB documentation recheck
+## MariaDB documentation recheck
 
 Current evidence:
 
@@ -360,7 +360,7 @@ snapshot, runtime/query support, parser/Safe Mode structure, autocomplete
 evidence, known limitations, and test matrix rows all distinguish live evidence
 from fixture-only or completion-only evidence.
 
-#### MariaDB test coverage recheck
+## MariaDB test coverage recheck
 
 Current evidence:
 
@@ -386,7 +386,7 @@ boundary, and fixture/live smoke routing before parity closure. Fixture
 inventory remains contract evidence only unless the runtime smoke script wires
 the matching spec.
 
-#### SQLite file DBMS read/write boundary
+## SQLite file DBMS read/write boundary
 
 Current evidence:
 
@@ -401,7 +401,7 @@ Runtime smoke now covers file create/open, browse, read query, writable DML, row
 edit, read-only write rejection, and internal app-state DB rejection. DDL UI
 parity, raw DDL, ALTER rebuild, and extension semantics remain unsupported.
 
-#### SQLite documentation recheck
+## SQLite documentation recheck
 
 Current evidence:
 
@@ -416,7 +416,7 @@ limitations, and testing matrix match shipped SQLite behavior. Runtime smoke,
 parser/Safe Mode, autocomplete, DDL rejection, extension-boundary, and
 fixture-only evidence remain separated.
 
-#### SQLite test coverage recheck
+## SQLite test coverage recheck
 
 Current evidence:
 
@@ -442,7 +442,7 @@ Mode coverage, autocomplete vocabulary/context/real-WASM coverage, and
 fixture/live smoke routing before parity closure. Fixture-only and
 completion-only evidence remain non-runtime support claims.
 
-#### SQLite support-claim closure audit
+## SQLite support-claim closure audit
 
 Current evidence:
 
@@ -458,7 +458,7 @@ coverage, unsupported DDL/ALTER/nested JSON/sqlite-cli execution/extension
 semantics, fixture-only evidence boundaries, and DuckDB/file analytics
 separation.
 
-#### DuckDB `.duckdb` runtime smoke
+## DuckDB `.duckdb` runtime smoke
 
 Current evidence:
 
@@ -477,7 +477,7 @@ runtime smoke, constraint add/drop + identity columns (Stage 2b), DuckDB
 extension semantics, and file analytics automatic import/export remain separate
 H3 promotion gates.
 
-#### RDBMS conformance/capability gate
+## RDBMS conformance/capability gate
 
 Current evidence:
 

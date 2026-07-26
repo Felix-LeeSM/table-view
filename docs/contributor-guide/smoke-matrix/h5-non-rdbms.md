@@ -9,7 +9,7 @@ This matrix is the H5 non-RDBMS claim gate. It separates current evidence from
 future promotion scenarios so Document/KV/Search support claims do not imply
 full first-class parity.
 
-#### MongoDB connection/catalog/query/edit workflow
+## MongoDB connection/catalog/query/edit workflow
 
 Current evidence:
 
@@ -45,7 +45,7 @@ fallbacks, structure/index/validator panels, field inference, and document
 workbench routing. Full-support parity, native document-first result panels, and
 version/deployment gates remain future lane work.
 
-#### MongoDB whitelist and safety boundary
+## MongoDB whitelist and safety boundary
 
 Current evidence:
 
@@ -63,7 +63,7 @@ statements, and cross-db shell navigation are unsupported with visible parser
 errors and no IPC dispatch. Transaction-style paths on unsupported standalone
 deployments must fail clearly rather than silently commit partial work.
 
-#### MongoDB test coverage recheck
+## MongoDB test coverage recheck
 
 Current evidence:
 
@@ -88,7 +88,7 @@ inventory, and wired Runtime Happy Path smoke routing before parity closure.
 Fixture inventory remains contract evidence only, and completion tests remain
 editor-assistance evidence unless a runtime smoke path also covers the workflow.
 
-#### MongoDB documentation recheck
+## MongoDB documentation recheck
 
 Current evidence:
 
@@ -104,7 +104,7 @@ matrix match shipped MongoDB behavior. Runtime smoke, focused component/backend
 evidence, fixture-only inventory, and completion-only editor assistance stay
 separated before parity closure.
 
-#### Redis backend KV first slice
+## Redis backend KV first slice
 
 Current evidence:
 
@@ -123,7 +123,7 @@ set, delete confirmation, TTL expire/persist, and bounded stream read. Redis
 desktop E2E smoke now covers the representative
 connect/scan/preview/GET/guarded-write/TTL/delete path on seeded DB 2.
 
-#### Redis visible UI journey
+## Redis visible UI journey
 
 Current evidence:
 
@@ -140,7 +140,7 @@ expire/persist/delete preview/confirm semantics. Runtime E2E smoke proves one
 representative string-key path; consumer-group stream UI and full Redis
 CLI/admin parity remain future promotion gates.
 
-#### Redis test coverage recheck
+## Redis test coverage recheck
 
 Current evidence:
 
@@ -169,7 +169,7 @@ vocabulary evidence for the backend allowlist plus current-DB/type-filtered key
 suggestion evidence. Fixture inventory remains contract evidence only unless the
 path is wired into the Redis Runtime Happy Path smoke.
 
-#### Valkey bounded command runtime claim
+## Valkey bounded command runtime claim
 
 Current evidence:
 
@@ -206,7 +206,7 @@ backend testcontainer evidence covers direct string set, expire, persist,
 exact-key delete, exact-key confirmation success, and selected backend details
 against local Valkey.
 
-#### Valkey fixture/live evidence strategy
+## Valkey fixture/live evidence strategy
 
 Current evidence:
 
@@ -225,7 +225,7 @@ Valkey collection-write smoke coverage, broader compatibility, and full Redis
 compatibility before those claims widen. Live/manual evidence can only
 supplement local fixture/testcontainer/smoke evidence, not replace it.
 
-#### Valkey Redis compatibility matrix
+## Valkey Redis compatibility matrix
 
 Current evidence:
 
@@ -248,7 +248,7 @@ Admin/server-control, broad destructive, cluster, pub/sub, modules/functions,
 scripting, and consumer-group workflows need separate workflow-specific
 promotion.
 
-#### Valkey test coverage recheck
+## Valkey test coverage recheck
 
 Current evidence:
 
@@ -272,7 +272,7 @@ and Runtime Happy Path smoke routing before milestone closure. Redis-only
 evidence does not widen Valkey claims; fixture-only compatibility rows remain
 contract evidence unless backed by local Valkey runtime or smoke.
 
-#### Valkey documentation recheck
+## Valkey documentation recheck
 
 Current evidence:
 
@@ -289,7 +289,7 @@ evidence, shared string plus hash/list/set/zset KvMutationPanel write evidence
 (#1075), TypeScript completion assistance, fixture-only compatibility inventory,
 and remaining full-compatibility work stay separated before parity closure.
 
-#### Valkey support-claim closure audit
+## Valkey support-claim closure audit
 
 Current evidence:
 
@@ -308,7 +308,7 @@ parity (#1075), while full Redis compatibility, CLI/admin parity, broad
 destructive/admin/server-control commands, cluster/pubsub/modules/functions,
 scripting, and consumer-group flows remain future gates.
 
-#### Redis support-claim closure audit
+## Redis support-claim closure audit
 
 Current evidence:
 
@@ -327,7 +327,7 @@ parity, consumer-group stream UI, cluster/pubsub/modules, broader command
 coverage, multi-key destructive commands, and language-core parser ownership
 remain separate future gates.
 
-#### Search fixture-backed contract
+## Search fixture-backed contract
 
 Current evidence:
 
@@ -378,7 +378,7 @@ search render, delete-plan, and error-surface smoke, but this does not claim
 actual live admin execution, broader observability, profile/explain request
 workflow, or full language-core Search DSL parser/completion ownership.
 
-#### Elasticsearch/OpenSearch product delta
+## Elasticsearch/OpenSearch product delta
 
 Current evidence:
 
@@ -413,7 +413,7 @@ still requires actual admin execution policy, broader
 observability/profile-explain workflows, and product-specific destructive
 deltas.
 
-#### Elasticsearch support-claim closure audit
+## Elasticsearch support-claim closure audit
 
 Current evidence:
 
@@ -431,7 +431,7 @@ contract evidence, OpenSearch query is now a focused runtime slice, and actual
 live admin execution, broader observability/profile-explain workflow, and full
 language-core editor parser/completion ownership remain separate future gates.
 
-#### Elasticsearch documentation recheck
+## Elasticsearch documentation recheck
 
 Current evidence:
 
@@ -449,7 +449,7 @@ OpenSearch connection/catalog focused evidence, and remaining unsupported live
 admin/observability/profile-explain/full-language-core-completion work stay
 separated before parity closure.
 
-#### OpenSearch documentation recheck
+## OpenSearch documentation recheck
 
 Current evidence:
 
@@ -467,7 +467,7 @@ live service evidence, and remaining unsupported live
 admin/observability/profile-explain/full-language-core-completion work stay
 separated before parity closure.
 
-#### OpenSearch test coverage recheck
+## OpenSearch test coverage recheck
 
 Current evidence:
 
@@ -496,7 +496,7 @@ inventory, and wired OpenSearch Runtime Happy Path smoke routing before parity
 closure. Completion-only evidence remains editor-assistance evidence unless
 backed by runtime smoke, and actual live admin execution stays out of scope.
 
-#### OpenSearch support-claim closure audit
+## OpenSearch support-claim closure audit
 
 Current evidence:
 
@@ -517,7 +517,7 @@ execution, broader observability/profile-explain workflow, product-specific
 destructive deltas, and full language-core editor parser/completion ownership
 remain separate future gates.
 
-#### Elasticsearch test coverage recheck
+## Elasticsearch test coverage recheck
 
 Current evidence:
 
@@ -547,7 +547,7 @@ Elasticsearch/OpenSearch Runtime Happy Path smoke routing before parity closure.
 Completion-only evidence remains editor-assistance evidence unless backed by
 runtime smoke.
 
-#### Non-RDBMS E2E inventory
+## Non-RDBMS E2E inventory
 
 Current evidence:
 

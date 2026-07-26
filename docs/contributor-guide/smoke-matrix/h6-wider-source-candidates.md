@@ -9,7 +9,7 @@ This matrix is the H6 planned/candidate claim gate. It separates current E2E
 evidence from focused connection/query evidence and future source-specific smoke
 so MSSQL/Oracle and wider candidates do not look broader than implemented.
 
-#### Current desktop E2E claim
+## Current desktop E2E claim
 
 Current evidence:
 
@@ -38,7 +38,7 @@ seeded catalog browse, SELECT/DML, destructive Safe Mode confirmation,
 cancellation, and grid edit paths. H6 adds no Cassandra/Scylla, DynamoDB, graph,
 vector, or stream runtime E2E claim.
 
-#### MSSQL runtime/smoke guardrail
+## MSSQL runtime/smoke guardrail
 
 Current evidence:
 
@@ -63,7 +63,7 @@ profiler/activity, full T-SQL semantics, SQLCMD/procedure scripting, full
 parser/completion promotion, and full workbench parity remain unsupported or
 unclaimed until separate evidence lands.
 
-#### Oracle runtime/smoke guardrail
+## Oracle runtime/smoke guardrail
 
 Current evidence:
 
@@ -95,7 +95,7 @@ smoke path. SID, TNS, wallet, TLS, advanced auth, full parser/completion
 promotion, admin/import/export/full workbench, and broader Oracle semantics
 remain unsupported or unclaimed until separate evidence lands.
 
-#### Wider source candidate common gate
+## Wider source candidate common gate
 
 Current evidence:
 
@@ -115,7 +115,7 @@ profile target, connection kind, language owner, catalog model, result envelope,
 safety policy, fixture strategy, conformance scope, docs, and source-specific
 smoke before support claims widen.
 
-#### Wide-column candidate smoke inventory
+## Wide-column candidate smoke inventory
 
 Current evidence:
 
@@ -130,7 +130,7 @@ Future evidence path is a Cassandra testcontainer baseline plus a Scylla
 testcontainer compatibility delta before any Scylla claim; this is inventory
 only, not active runtime, parser/completion, fixture/live, or E2E support.
 
-#### Cloud-document candidate smoke inventory
+## Cloud-document candidate smoke inventory
 
 Current evidence:
 
@@ -146,7 +146,7 @@ decisions. PartiQL stays deferred inventory, and DynamoDB Local/emulator or
 bounded mock evidence is future-only, not active runtime, parser/completion,
 fixture/live, or E2E support.
 
-#### Graph candidate smoke inventory
+## Graph candidate smoke inventory
 
 Current evidence:
 
@@ -160,7 +160,7 @@ GQL/Gremlin split, existing graph envelope path views, tabular projections,
 traversal/write guardrails, and Neo4j-compatible fixture graph/testcontainer
 evidence. RDBMS `SchemaGraph` remains separate from the graph-source catalog.
 
-#### Vector candidate smoke inventory
+## Vector candidate smoke inventory
 
 Current evidence:
 
@@ -176,7 +176,7 @@ evidence. Cloud providers require a separate `cloud-api` profile decision and
 threat-model handoff before credential/provider choices. This is inventory only,
 not active runtime, parser/completion, fixture/live, or E2E support.
 
-#### Stream candidate smoke inventory
+## Stream candidate smoke inventory
 
 Current evidence:
 
