@@ -4,6 +4,7 @@ import net from "net";
 import { spawn, spawnSync } from "child_process";
 import { fileURLToPath } from "url";
 import type { Options } from "@wdio/types";
+import { resetSmokeDataDir } from "./scripts/e2e-smoke-data-dir.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -173,6 +174,16 @@ export const config: Options.Testrunner = {
     if (!passed) await dumpFailureArtifacts(test.title, test.parent);
   },
   beforeSession: async () => {
+    // #1836: scripts/e2e-smoke-ci.sh clears the data dir once per spec file,
+    // but a specFileRetries retry reuses the same TABLE_VIEW_TEST_DATA_DIR, so
+    // attempt 2 booted against attempt 1's connections.json and died in the
+    // create*Connection helpers ("Connection with name '...' already exists")
+    // before reaching the spec. Reset per session so a retry starts from the
+    // state a first attempt starts from. No-op without the env override — see
+    // scripts/e2e-smoke-data-dir.ts for the safety boundaries.
+    const resetDir = resetSmokeDataDir();
+    if (resetDir) console.log(`[wdio] Cleared smoke data dir ${resetDir}`);
+
     const driverPath = resolveTauriDriver();
     console.log(`[wdio] Starting tauri-driver at ${driverPath}`);
     tauriDriver = spawn(driverPath, [], {

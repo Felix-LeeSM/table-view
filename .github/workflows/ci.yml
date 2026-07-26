@@ -286,6 +286,11 @@ jobs:
         # the `Frontend Checks` merge step below runs with the config's real
         # thresholds over the merged coverage of all three shards, and that job
         # (not these shards) is the name in the `pr_to_main` ruleset.
+        #
+        # `blob` writes results to a file and prints nothing else, so a red
+        # shard's log held one line — `blob report written` — and no assertion.
+        # `default` restores the failure text. `--outputFile` stays bare: only
+        # blob/json/junit/benchmark read it, and `default` is not one of them.
         run: |
           pnpm exec vitest run \
             --shard=${{ matrix.shard }}/3 \
@@ -295,6 +300,7 @@ jobs:
             --coverage.thresholds.functions 0 \
             --coverage.thresholds.branches 0 \
             --reporter=blob \
+            --reporter=default \
             --outputFile=.vitest-reports/blob-${{ matrix.shard }}.json
 
       - name: Upload shard blob report

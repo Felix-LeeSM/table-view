@@ -53,7 +53,7 @@ landed and live GitHub showed no open Refactor 04 child issues.
 | Local DB ports | Make local DB service ports deterministic or self-allocating instead of relying on partial env override. |
 | macOS smoke | Keep macOS E2E deferred until tauri-driver WKWebView support or an alternate mac smoke path exists. |
 | Right-click E2E | Add an alternate context-menu trigger or wait for tauri-driver W3C Actions support. |
-| E2E isolation | Reset fixtures before each smoke instead of relying on one reused app instance. |
+| E2E isolation | App-local state (`connections.json`, prefs, safe-mode flags) is emptied per session by `beforeSession` in `wdio.smoke.conf.ts` (`scripts/e2e-smoke-data-dir.ts`), so a `specFileRetries` retry no longer inherits the previous attempt's connections (#1836). Remaining: DB-server fixtures are still seeded once per spec-file run, not per retry. |
 | Masked E2E flakes | `wdio.smoke.conf.ts` sets `specFileRetries: 1`, so a first-attempt `no such window` crash is recovered in the same run and never shows in the workflow pass/fail tally. The `e2e-smoke` and `e2e-smoke-file-backed` jobs tee their run log and a post-step (`scripts/e2e-smoke-flake-summary.sh`) counts `no such window` + `RETRYING` markers into the job summary with a non-failing warning annotation. Read that summary on green runs; tracked in #1293. |
 | Link checker | Add an internal-doc link checker after archive routing settles. |
 | Dependency security | Track `hickory-proto` advisory exposure through `mongodb 3.6.0`, `rustls-pemfile` exposure through `oracle-rs 0.1.7`, and `quick-xml` DoS advisories (RUSTSEC-2026-0194/0195) through `plist 1.8.0`; remove deny ignores when upstream dependency updates make it possible. |

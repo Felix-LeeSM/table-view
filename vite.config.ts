@@ -51,6 +51,16 @@ export default defineConfig(async () => ({
         ? ["text"]
         : ["text", ["lcov", { projectDirectory: "src" }]],
       include: ["src/**/*.{ts,tsx}"],
+      // `include` matches `.d.ts` too, and the uncovered-file pass
+      // (`getCoverageMapForUncoveredFiles`) parses every included file a run did
+      // not execute. wasm-pack's `*_bg.wasm.d.ts` are ambient declarations
+      // rollup rejects (`'const' declarations must be initialized`), so each
+      // sharded run printed a RollupError stack per file. Vitest recovers on its
+      // own ("Excluding it from coverage") and the exit code is unaffected — the
+      // stacks are pure noise, and they already misled one CI diagnosis. Vitest 4
+      // ships `coverage.exclude: []`, so this adds a rule without dropping a
+      // default. Declaration files carry no runtime code: measurement unchanged.
+      exclude: ["**/*.d.ts"],
       thresholds: {
         // 2026-06-09 — #580 coverage ratchet. Current measured global
         // coverage: statements 86.14, branches 78.78, functions 88.18,

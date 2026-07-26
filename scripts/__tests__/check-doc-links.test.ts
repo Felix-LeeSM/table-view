@@ -33,6 +33,9 @@ describe("collectActiveDocSources", () => {
         "docs/ROADMAP.md": "[guide](contributor-guide/testing-and-quality.md)",
         "docs/product/README.md": "[archive](../archives/README.md)",
         "docs/contributor-guide/testing-and-quality.md": "# Quality",
+        // Split out of docs/ROADMAP.md; without this root the horizon pages
+        // carry links that nothing checks.
+        "docs/roadmap/h2.md": "[limits](../product/known-limitations.md)",
         "docs/archives/README.md": "[missing](missing.md)",
         "docs/sprints/sprint-1/contract.md": "[missing](missing.md)",
       },
@@ -42,6 +45,7 @@ describe("collectActiveDocSources", () => {
           "docs/ROADMAP.md",
           "docs/contributor-guide/testing-and-quality.md",
           "docs/product/README.md",
+          "docs/roadmap/h2.md",
         ]);
       },
     );

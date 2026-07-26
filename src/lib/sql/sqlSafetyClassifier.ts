@@ -864,7 +864,7 @@ export function analyzeStatement(
   // bounded slice because PL/SQL opacity makes an unknown statement
   // unclassifiable. The final defense for RDB is the backend Safe Mode gate at
   // the Rust IPC chokepoint (#1112), not this classifier. See
-  // `docs/product/known-limitations.md` (Security / admin surface).
+  // `docs/product/known-limitations-cross-cutting.md` (Security / admin surface).
   return { kind: "other", severity: "info", reasons: [] };
 }
 

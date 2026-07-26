@@ -15,6 +15,7 @@ const ACTIVE_DOC_DIRS = [
   "docs/product",
   "docs/contributor-guide",
   "docs/quality",
+  "docs/roadmap",
 ];
 const EXCLUDED_SOURCE_DIRS = ["docs/archives", "docs/sprints"];
 
