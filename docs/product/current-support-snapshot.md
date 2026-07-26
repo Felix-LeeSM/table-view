@@ -1,24 +1,26 @@
 # Current Support Snapshot
 
-| DBMS | Runtime | Parser / safety | Completion |
-|---|---|---|---|
-| [PostgreSQL](#postgresql) | strong | strong bounded subset | WASM-first + installed-extension-gated packs |
-| [MySQL](#mysql) | runtime/query/edit/DDL adapter active | bounded parser/Safe Mode slice; constraint conformance version-gated | Rust/WASM MySQL-family vocabulary + current-catalog schema/table/column/routine suggestions |
-| [MariaDB](#mariadb) | runtime/query/edit/catalog/DDL adapter active through distinct MariaDB engine smoke | MySQL-family parser/Safe Mode path + MariaDB dialect/profile identity | Rust/WASM MySQL-family vocabulary + version-aware profile/completion MariaDB `RETURNING` delta |
-| [SQLite](#sqlite) | file adapter + read/writable-file DML + bounded structured table creation | bounded parser/Safe Mode guardrails; raw DDL rejected by adapter | Rust/WASM built-in vocabulary + cached schema objects + sqlite-cli suggestions |
-| [DuckDB](#duckdb) | RDBMS file adapter + registered local analytics query | DuckDB SQL/file analytics guardrails | Rust/WASM DuckDB editor vocabulary + cached schema objects |
-| [MongoDB](#mongodb) | runtime-backed whitelisted document workflow | whitelisted mongosh/MQL | Rust/WASM vocabulary + cached catalog context |
-| [Redis](#redis) | connection/profile + backend KV primitives + key browser/value preview/edit UI + selected-key bounded stream reader + bounded command editor vocabulary/key suggestions | backend KV guardrails plus bounded command allowlist and typed-confirm mutation controls; not language-core parser ownership | TypeScript bounded command vocabulary + current-DB/type-filtered key suggestions |
-| [Valkey](#valkey) | KV runtime for connection + key browser/value preview + selected-key stream reader + bounded command query + shared string/hash/list/set/zset KvMutationPanel write controls | Redis-compatible bounded command allowlist and typed confirmation; same write surface as Redis (#1075) | TypeScript proven Valkey command subset + current-DB/type-filtered key suggestions |
-| [Elasticsearch/OpenSearch](#elasticsearchopensearch) | Elasticsearch live connection + live catalog + bounded live Search query plus fixture/live delete-by-query safety planning and live `_delete_by_query` execution; OpenSearch live connection + live catalog + bounded live Search query plus fixture/live delete-by-query safety planning and live `_delete_by_query` execution | index-catalog sidebar shell plus selected-index lazy catalog detail and samples for both products; mapping/search guardrails for both products; destructive-plan guardrails for both products | Backend Search DSL validator active; full language-core parser/completion ownership remains future; bounded TypeScript completion is editor assistance for Elasticsearch/OpenSearch catalog and mapping context |
-| [MSSQL](#mssql) | SQL-auth/TDS connection plus catalog/query/cancel/tabular runtime and PK-projected row edit through SQL batch | bounded parser/Safe Mode unsupported-boundary recognition only | bounded editor assistance only |
-| [Oracle](#oracle) | service-name lifecycle plus bounded catalog/query/cancel/tabular runtime and PK-projected row edit | bounded static Safe Mode classification only | bounded editor assistance only |
-| [Cassandra/Scylla, DynamoDB, graph, vector, stream](#cassandrascylla-dynamodb-graph-vector-stream) | candidate only | deferred language ids only | deferred |
+| DBMS | Parser / safety | Completion |
+|---|---|---|
+| [PostgreSQL](#postgresql) | strong bounded subset | WASM-first + installed-extension-gated packs |
+| [MySQL](#mysql) | bounded parser/Safe Mode slice; constraint conformance version-gated | Rust/WASM MySQL-family vocabulary + current-catalog schema/table/column/routine suggestions |
+| [MariaDB](#mariadb) | MySQL-family parser/Safe Mode path + MariaDB dialect/profile identity | Rust/WASM MySQL-family vocabulary + version-aware profile/completion MariaDB `RETURNING` delta |
+| [SQLite](#sqlite) | bounded parser/Safe Mode guardrails; raw DDL rejected by adapter | Rust/WASM built-in vocabulary + cached schema objects + sqlite-cli suggestions |
+| [DuckDB](#duckdb) | DuckDB SQL/file analytics guardrails | Rust/WASM DuckDB editor vocabulary + cached schema objects |
+| [MongoDB](#mongodb) | whitelisted mongosh/MQL | Rust/WASM vocabulary + cached catalog context |
+| [Redis](#redis) | backend KV guardrails plus bounded command allowlist and typed-confirm mutation controls; not language-core parser ownership | TypeScript bounded command vocabulary + current-DB/type-filtered key suggestions |
+| [Valkey](#valkey) | Redis-compatible bounded command allowlist and typed confirmation; same write surface as Redis (#1075) | TypeScript proven Valkey command subset + current-DB/type-filtered key suggestions |
+| [Elasticsearch/OpenSearch](#elasticsearchopensearch) | index-catalog sidebar shell plus selected-index lazy catalog detail and samples for both products; mapping/search guardrails for both products; destructive-plan guardrails for both products | Backend Search DSL validator active; full language-core parser/completion ownership remains future; bounded TypeScript completion is editor assistance for Elasticsearch/OpenSearch catalog and mapping context |
+| [MSSQL](#mssql) | bounded parser/Safe Mode unsupported-boundary recognition only | bounded editor assistance only |
+| [Oracle](#oracle) | bounded static Safe Mode classification only | bounded editor assistance only |
+| [Cassandra/Scylla, DynamoDB, graph, vector, stream](#cassandrascylla-dynamodb-graph-vector-stream) | deferred language ids only | deferred |
 
 ## PostgreSQL
 
-현재 가장 강한 lane 이다. routine desktop smoke 는 connect/browse/edit/query, Explain
-plan-inspection UI/source-label path, seeded `pgcrypto`/`fuzzystrmatch`
+**Runtime**: strong
+
+**현재 판단**: 현재 가장 강한 lane 이다. routine desktop smoke 는 connect/browse/edit/query,
+Explain plan-inspection UI/source-label path, seeded `pgcrypto`/`fuzzystrmatch`
 installed-extension completion gating, Safe Mode info/warn/destructive
 confirmation, raw DDL preview, grid-edit preview, cancellation UI/history/retry
 behavior, and bounded Structure table-plus-index DDL
@@ -35,33 +37,38 @@ parity 는 여전히 out-of-scope
 
 ## MySQL
 
-connection, browsing, databases/schemas, tables, views, columns, indexes,
-constraints/FKs, raw query, DML-oriented multi-statement batch, row edit with
-MySQL-quoted generated SQL/key projection, cancellation, and bounded structured
-table/index/constraint DDL are active. Routine desktop smoke covers connect,
-browse seeded table, SELECT result grid, narrow seeded `CALL proc(scalar)`
-result rendering, DML batch per-statement result, row edit, cancellation/retry,
-history/source labels, result-envelope rendering, and bounded Structure
-table/index/FK DDL preview/execute/catalog readback. Completion suggestions use
-the current connection/database catalog and MySQL backtick identifier context,
-but they do not widen runtime support for stored routine bodies or scripting.
-CHECK/constraint catalog metadata uses live MySQL `>= 8.0.16` context;
-older/unknown versions return empty CHECK hints. Stored routine/event bodies,
-broad CALL expressions, control-flow scripting, `DELIMITER`, and `LOAD DATA` are
-explicit unsupported editor/backend boundaries. Trigger metadata is read-only in
-Structure; structured trigger create/drop and DB-level import/export/dump parity
-remain unsupported/follow-up
+**Runtime**: runtime/query/edit/DDL adapter active
+
+**현재 판단**: connection, browsing, databases/schemas, tables, views, columns,
+indexes, constraints/FKs, raw query, DML-oriented multi-statement batch, row
+edit with MySQL-quoted generated SQL/key projection, cancellation, and bounded
+structured table/index/constraint DDL are active. Routine desktop smoke covers
+connect, browse seeded table, SELECT result grid, narrow seeded
+`CALL proc(scalar)` result rendering, DML batch per-statement result, row edit,
+cancellation/retry, history/source labels, result-envelope rendering, and
+bounded Structure table/index/FK DDL preview/execute/catalog readback.
+Completion suggestions use the current connection/database catalog and MySQL
+backtick identifier context, but they do not widen runtime support for stored
+routine bodies or scripting. CHECK/constraint catalog metadata uses live MySQL
+`>= 8.0.16` context; older/unknown versions return empty CHECK hints. Stored
+routine/event bodies, broad CALL expressions, control-flow scripting,
+`DELIMITER`, and `LOAD DATA` are explicit unsupported editor/backend boundaries.
+Trigger metadata is read-only in Structure; structured trigger create/drop and
+DB-level import/export/dump parity remain unsupported/follow-up
 
 ## MariaDB
 
-connection, seeded table browse, catalog/workbench metadata browse, SELECT
-result grid, DML batch per-statement result, narrow seeded `CALL proc(scalar)`
-result rendering, row edit, cancellation/retry, history/source labels,
-result-envelope rendering, and bounded Structure table/index/FK DDL
-preview/execute/catalog readback have wired MariaDB Runtime Happy Path evidence.
-Catalog/workbench coverage includes tables, views, columns, indexes,
-constraints/FKs, and routine metadata browse through the shared MySQL-family
-adapter plus MariaDB-specific smoke seed/categories. Row edit has
+**Runtime**: runtime/query/edit/catalog/DDL adapter active through distinct
+MariaDB engine smoke
+
+**현재 판단**: connection, seeded table browse, catalog/workbench metadata browse,
+SELECT result grid, DML batch per-statement result, narrow seeded
+`CALL proc(scalar)` result rendering, row edit, cancellation/retry,
+history/source labels, result-envelope rendering, and bounded Structure
+table/index/FK DDL preview/execute/catalog readback have wired MariaDB Runtime
+Happy Path evidence. Catalog/workbench coverage includes tables, views, columns,
+indexes, constraints/FKs, and routine metadata browse through the shared
+MySQL-family adapter plus MariaDB-specific smoke seed/categories. Row edit has
 MariaDB-specific hook evidence for quoted key-projected preview/discard/commit
 SQL, and bounded table/index/constraint DDL has MariaDB-specific
 export/backend-preview evidence with runtime smoke coverage for the intentional
@@ -80,7 +87,10 @@ without MariaDB-specific tests/docs
 
 ## SQLite
 
-user DBMS adapter 는 internal SQLite state 와 분리됨. 쓰기는 writable file 의
+**Runtime**: file adapter + read/writable-file DML + bounded structured table
+creation
+
+**현재 판단**: user DBMS adapter 는 internal SQLite state 와 분리됨. 쓰기는 writable file 의
 DML/PK-projected row edit 로 제한된다. GitHub Runtime Happy Path now runs a
 deterministic SQLite desktop smoke for file create/open, table browse, read
 query, writable DML, row edit, bounded structured table creation with schema
@@ -91,7 +101,9 @@ execution, extension/capability semantics 는 unsupported
 
 ## DuckDB
 
-`rdb` profile + `file` connection kind 로 표현한다. local `.duckdb` file 은
+**Runtime**: RDBMS file adapter + registered local analytics query
+
+**현재 판단**: `rdb` profile + `file` connection kind 로 표현한다. local `.duckdb` file 은
 catalog/table read 와 statement-level raw SQL 실행 경로를 지원한다. GitHub Runtime Happy
 Path now runs separate deterministic DuckDB desktop smokes: `.duckdb`
 open/catalog/table browse/raw SELECT/history/read-only evidence, and registered
@@ -120,45 +132,55 @@ file analytics automatic import/export parity 는 unsupported/follow-up 이며 �
 
 ## MongoDB
 
-connection, source-aware catalog metadata, workbench metadata panels, document
-query/edit with MQL preview/discard, catalog-aware collection/field/index-name
-autocomplete, bulk delete/update previews with partial-commit warnings,
-bulk/index/validator slices, cancellation, destructive collection/admin
-confirmations, and transaction-helper unsupported gates are active for tested
-whitelist paths. Runtime Happy Path smoke proves seeded collection browse,
-row-edit MQL preview/execute, query-tab `find` projection/sort/limit,
-destructive `runCommand` confirmation, and cancel/no-mutation re-read. Focused
-component/backend tests cover broader catalog, autocomplete, bulk, index,
-validator, parser, cancellation, and unsupported-helper gates below smoke.
-arbitrary JavaScript/shell behavior, unsupported cursor helpers, server-version
-feature promotion gates, native document-first result panels, and full-support
-parity remain follow-up
+**Runtime**: runtime-backed whitelisted document workflow
+
+**현재 판단**: connection, source-aware catalog metadata, workbench metadata panels,
+document query/edit with MQL preview/discard, catalog-aware
+collection/field/index-name autocomplete, bulk delete/update previews with
+partial-commit warnings, bulk/index/validator slices, cancellation, destructive
+collection/admin confirmations, and transaction-helper unsupported gates are
+active for tested whitelist paths. Runtime Happy Path smoke proves seeded
+collection browse, row-edit MQL preview/execute, query-tab `find`
+projection/sort/limit, destructive `runCommand` confirmation, and
+cancel/no-mutation re-read. Focused component/backend tests cover broader
+catalog, autocomplete, bulk, index, validator, parser, cancellation, and
+unsupported-helper gates below smoke. arbitrary JavaScript/shell behavior,
+unsupported cursor helpers, server-version feature promotion gates, native
+document-first result panels, and full-support parity remain follow-up
 
 ## Redis
 
-key browser/value preview and selected-key bounded stream reader are live.
-Runtime Happy Path smoke covers Redis connection, deterministic DB 2 seed/reset,
-key scan, string value preview, `GET` command result, guarded string overwrite,
-TTL update, and exact-key delete confirmation. The value panel promotes bounded
-string/hash/list/set/zset edits plus expire/persist/delete preview/confirm
-flows, while partial/unsupported surfaces fail visibly. Frontend stream reader
-evidence covers selected stream start/end/count controls, refresh, loading/error
-states, and bounded table rendering through `read_kv_stream`. Backend guarded
-string set, delete confirmation, TTL expire/persist, bounded stream read,
-selected read/write/TTL/stream command dispatch, tabular projection, and
-exact-key `confirmKey` enforcement for single-key `DEL`/`PERSIST` have focused
-IPC/runtime evidence. The Redis command editor suggests the backend allowlist
-command names with arity hints/snippets plus current-DB key suggestions filtered
-by command key type. It still does not own full Redis CLI parsing or admin
-parity.
+**Runtime**: connection/profile + backend KV primitives + key browser/value
+preview/edit UI + selected-key bounded stream reader + bounded command editor
+vocabulary/key suggestions
+
+**현재 판단**: key browser/value preview and selected-key bounded stream reader are
+live. Runtime Happy Path smoke covers Redis connection, deterministic DB 2
+seed/reset, key scan, string value preview, `GET` command result, guarded string
+overwrite, TTL update, and exact-key delete confirmation. The value panel
+promotes bounded string/hash/list/set/zset edits plus expire/persist/delete
+preview/confirm flows, while partial/unsupported surfaces fail visibly. Frontend
+stream reader evidence covers selected stream start/end/count controls, refresh,
+loading/error states, and bounded table rendering through `read_kv_stream`.
+Backend guarded string set, delete confirmation, TTL expire/persist, bounded
+stream read, selected read/write/TTL/stream command dispatch, tabular
+projection, and exact-key `confirmKey` enforcement for single-key
+`DEL`/`PERSIST` have focused IPC/runtime evidence. The Redis command editor
+suggests the backend allowlist command names with arity hints/snippets plus
+current-DB key suggestions filtered by command key type. It still does not own
+full Redis CLI parsing or admin parity.
 Full CLI/admin parity, consumer-group stream UI, cluster/pubsub/modules/consumer-group management,
 multi-key destructive commands, broader command coverage, language-core
 parser/completion ownership, and Valkey command compatibility are follow-up
 
 ## Valkey
 
-`valkey` is an active `DatabaseType`/profile identity with server connection
-kind, product label, KV paradigm, Valkey backend adapter profile, and
+**Runtime**: KV runtime for connection + key browser/value preview +
+selected-key stream reader + bounded command query + shared
+string/hash/list/set/zset KvMutationPanel write controls
+
+**현재 판단**: `valkey` is an active `DatabaseType`/profile identity with server
+connection kind, product label, KV paradigm, Valkey backend adapter profile, and
 `redis-command` compatibility target. Connection UI/runtime support is exposed
 for test/connect/key browse/value preview and selected bounded command query
 rows through the same Redis command allowlist. Selected stream keys use the same
@@ -176,8 +198,14 @@ coverage and full Redis compatibility are not claimed
 
 ## Elasticsearch/OpenSearch
 
-Search uses an index-catalog-first workbench boundary: the sidebar shell loads
-only index/alias/data-stream summaries, and selected-index
+**Runtime**: Elasticsearch live connection + live catalog + bounded live Search
+query plus fixture/live delete-by-query safety planning and live
+`_delete_by_query` execution; OpenSearch live connection + live catalog +
+bounded live Search query plus fixture/live delete-by-query safety planning and
+live `_delete_by_query` execution
+
+**현재 판단**: Search uses an index-catalog-first workbench boundary: the sidebar
+shell loads only index/alias/data-stream summaries, and selected-index
 mappings/settings/analyzers/templates/field stats/sample documents load from
 detail tabs or explicit actions. Elasticsearch exposes URL/auth/TLS connection
 UI, a live HTTP root probe that detects product/version/distribution and
@@ -215,13 +243,17 @@ product-specific live deltas beyond these slices are deferred
 
 ## MSSQL
 
-`mssql` is a source-specific profile/dialect identity with SQL Server labels,
-defaults, URL parsing, and seed/spec inventory. Issue #903 promotes connection
-test/connect/ping, catalog browse/schema/indexes/constraints/relationships,
-query, multi-statement execution, cancellation, tabular result rendering, and
-editRows through the frontend SQL batch path with primary-key projection. #907
-adds representative Runtime Happy Path smoke for connect, seeded catalog browse,
-SELECT/DML, destructive Safe Mode confirmation, cancellation, and grid edit.
+**Runtime**: SQL-auth/TDS connection plus catalog/query/cancel/tabular runtime
+and PK-projected row edit through SQL batch
+
+**현재 판단**: `mssql` is a source-specific profile/dialect identity with SQL Server
+labels, defaults, URL parsing, and seed/spec inventory. Issue #903 promotes
+connection test/connect/ping, catalog
+browse/schema/indexes/constraints/relationships, query, multi-statement
+execution, cancellation, tabular result rendering, and editRows through the
+frontend SQL batch path with primary-key projection. #907 adds representative
+Runtime Happy Path smoke for connect, seeded catalog browse, SELECT/DML,
+destructive Safe Mode confirmation, cancellation, and grid edit.
 `switchDatabase` remains disabled under the current connection contract. Named
 instances, Windows authentication, Azure AD/authSource modes, structured DDL,
 admin/security/jobs/users/roles, import/export, profiler/activity, full T-SQL
@@ -230,9 +262,12 @@ scripting remain unclaimed.
 
 ## Oracle
 
-`oracle` remains a source-specific profile/dialect identity with Oracle labels,
-service-name defaults, URL parsing, and seed/spec inventory. #905 promotes
-lifecycle, catalog metadata, SELECT/DML batch execution, cooperative
+**Runtime**: service-name lifecycle plus bounded catalog/query/cancel/tabular
+runtime and PK-projected row edit
+
+**현재 판단**: `oracle` remains a source-specific profile/dialect identity with
+Oracle labels, service-name defaults, URL parsing, and seed/spec inventory. #905
+promotes lifecycle, catalog metadata, SELECT/DML batch execution, cooperative
 cancellation, and tabular table-data query. #906 adds key-projected editRows
 through the frontend SQL batch path, Oracle identifier/literal generation,
 tested SELECT/DML/DDL Safe Mode classification, and PL/SQL/admin boundary
@@ -248,7 +283,9 @@ and full parser/completion promotion.
 
 ## Cassandra/Scylla, DynamoDB, graph, vector, stream
 
-no active `DatabaseType`/profile/runtime/parser/completion, fixture/live
-evidence, or E2E smoke claim. Workflow value, profile target, connection kind,
-language owner, catalog model, result envelope, safety policy, fixture strategy,
-and smoke evidence must be locked before promotion
+**Runtime**: candidate only
+
+**현재 판단**: no active `DatabaseType`/profile/runtime/parser/completion,
+fixture/live evidence, or E2E smoke claim. Workflow value, profile target,
+connection kind, language owner, catalog model, result envelope, safety policy,
+fixture strategy, and smoke evidence must be locked before promotion
