@@ -20,9 +20,15 @@
 // change to a long line requires a baseline update in the same commit.
 //
 // `--update` does that for you, and it is the only thing that enforces
-// direction: it refuses to write a baseline whose repo-wide over-count or total
-// excess is higher than the one already committed. So debt can be paid down or
-// moved between files, and cannot grow.
+// direction: it refuses to write a baseline whose repo-wide over-count, total
+// excess, or longest line is higher than the one already committed. So debt can
+// be paid down or moved between files, and cannot grow.
+//
+// All three go in the direction check, not just the two sums. Checking only
+// over-count and excess accepted deleting 17 of known-limitations.md's 18 long
+// rows into one 33,654-char cell: the count falls, the excess is unchanged, and
+// the gate that runs next says `longest line rose to 33654 ... Split the cell`
+// about the very baseline `--update` just wrote.
 //
 // Three numbers per file, because each closes a hole the others leave open:
 //
@@ -33,9 +39,13 @@
 //                line can grow all the way to `maxLen` with count and max both
 //                unchanged.
 //
-// A file with no entry must have every line at or under the ceiling, so a file
-// cleaned up once is permanently protected. An entry whose file is gone must be
-// removed.
+// A file with no entry must have every line at or under the ceiling, so the
+// first long row there is a hard stop. It is not a permanent seal: `--update`
+// can re-grant that file an entry, but only by paying for it — some other file
+// has to give up an over-ceiling line, and the repo totals still may not rise.
+// Distinguishing "a row moved here" from "a row was written here" needs a base
+// revision, which is rejected design 1 below. An entry whose file is gone must
+// be removed.
 //
 // # Two rejected designs, recorded so they are not re-proposed
 //
@@ -124,30 +134,25 @@ export function measure(text: string, ceiling: number): FileMeasurement {
   return { over, maxLen, excess };
 }
 
-function sumMeasurements(actual: ReadonlyMap<string, FileMeasurement>): {
-  over: number;
-  excess: number;
-} {
-  let over = 0;
-  let excess = 0;
-  for (const measurement of actual.values()) {
-    over += measurement.over;
-    excess += measurement.excess;
-  }
-  return { over, excess };
-}
+type RepoTotals = { over: number; excess: number; longest: number };
 
-function sumEntries(entries: readonly RatchetEntry[]): {
-  over: number;
-  excess: number;
-} {
+/**
+ * `longest` only counts files that carry debt. A file whose every line is under
+ * the ceiling has no over-ceiling line to compare, and charging its longest
+ * ordinary line against the baseline would refuse a fully paid-down repo.
+ */
+function totalDebt(
+  rows: Iterable<{ over: number; excess: number; maxLen: number }>,
+): RepoTotals {
   let over = 0;
   let excess = 0;
-  for (const entry of entries) {
-    over += entry.over;
-    excess += entry.excess;
+  let longest = 0;
+  for (const row of rows) {
+    over += row.over;
+    excess += row.excess;
+    if (row.over > 0 && row.maxLen > longest) longest = row.maxLen;
   }
-  return { over, excess };
+  return { over, excess, longest };
 }
 
 /**
@@ -170,7 +175,8 @@ export function findMismatches(
       if (measurement.over > 0) {
         problems.push(
           `${relativePath}: ${measurement.over} line(s) over ${ceiling} chars (longest ${measurement.maxLen}) ` +
-            `in a file with no baseline entry. Split the cell into domain-grouped rows; a file cleaned up once stays clean.`,
+            `in a file with no baseline entry. Split the cell into domain-grouped rows, or — if these rows moved ` +
+            `here from another file — record the move with \`pnpm docs:lines --update\`.`,
         );
       }
       continue;
@@ -207,24 +213,29 @@ export function findMismatches(
  * The only direction check in the gate. A baseline rewrite may record less debt
  * than before, or the same debt in different files (a doc split moves long rows
  * without authoring any), but never more.
+ *
+ * All three numbers, so that `--update` can never write a baseline the gate
+ * would then complain about. Without `longest`, consolidating many long rows
+ * into one giant cell reads as progress on both sums.
  */
 export function findUpdateRefusals(
   actual: ReadonlyMap<string, FileMeasurement>,
   targets: RatchetTargets,
 ): string[] {
-  const next = sumMeasurements(actual);
-  const current = sumEntries(targets.entries);
+  const next = totalDebt(actual.values());
+  const current = totalDebt(targets.entries);
   const refusals: string[] = [];
 
-  if (next.over > current.over) {
-    refusals.push(
-      `repo over-ceiling lines would rise from ${current.over} to ${next.over}.`,
-    );
-  }
-  if (next.excess > current.excess) {
-    refusals.push(
-      `repo excess chars would rise from ${current.excess} to ${next.excess}.`,
-    );
+  for (const [label, nextValue, currentValue] of [
+    ["over-ceiling lines", next.over, current.over],
+    ["excess chars", next.excess, current.excess],
+    ["longest line", next.longest, current.longest],
+  ] as const) {
+    if (nextValue > currentValue) {
+      refusals.push(
+        `repo ${label} would rise from ${currentValue} to ${nextValue}.`,
+      );
+    }
   }
   return refusals;
 }
@@ -318,7 +329,7 @@ function main(): void {
       path.join(repoRoot, targetsPath),
       `${JSON.stringify(buildTargets(actual, targets.ceiling), null, 2)}\n`,
     );
-    const totals = sumMeasurements(actual);
+    const totals = totalDebt(actual.values());
     console.log(
       `doc:lines baseline written (${totals.over} lines over ${targets.ceiling} chars, ${totals.excess} excess chars)`,
     );
@@ -334,7 +345,7 @@ function main(): void {
     process.exit(1);
   }
 
-  const totals = sumMeasurements(actual);
+  const totals = totalDebt(actual.values());
   console.log(
     `doc:lines ok (ceiling ${targets.ceiling}, ${actual.size} docs, ${totals.over} grandfathered lines, ${totals.excess} excess chars)`,
   );

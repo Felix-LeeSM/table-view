@@ -46,6 +46,26 @@ describe("collectActiveDocSources", () => {
       },
     );
   });
+
+  it("scans the docs index and the quality SOTs", () => {
+    // These two roots were outside the source list, so `docs/README.md` and
+    // everything under `docs/quality/` could rot their outbound links with no
+    // gate at all. Both are SOT pages other docs are told to follow.
+    withFixture(
+      {
+        "docs/README.md": "[ratchet](quality/doc-size-ratchet.md)",
+        "docs/quality/doc-size-ratchet.md": "[coverage](coverage-ratchet.md)",
+        "docs/quality/coverage-ratchet.md": "# Coverage",
+      },
+      (cwd) => {
+        expect(collectActiveDocSources(cwd)).toEqual([
+          "docs/README.md",
+          "docs/quality/coverage-ratchet.md",
+          "docs/quality/doc-size-ratchet.md",
+        ]);
+      },
+    );
+  });
 });
 
 describe("collectMarkdownAnchors", () => {

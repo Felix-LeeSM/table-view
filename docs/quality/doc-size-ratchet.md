@@ -43,8 +43,13 @@ disagrees with reality is how a ratchet rots.
 The consequence is that any change to a long line needs a baseline update in the
 same commit. `pnpm docs:lines --update` writes it, and that command is where
 direction is enforced: it refuses to write a baseline whose repo-wide
-over-ceiling count or total excess is higher than the committed one. Debt can be
-paid down, or moved between files, and cannot grow.
+over-ceiling count, total excess, **or longest line** is higher than the
+committed one. Debt can be paid down, or moved between files, and cannot grow.
+
+All three, not just the two sums. Checking only count and excess accepted
+deleting 17 of `known-limitations.md`'s 18 long rows into a single 33,654-char
+cell — the count falls, the excess is unchanged — and the gate that runs next
+then rejects the baseline `--update` had just written.
 
 Three numbers per file, because each closes a hole the others leave open:
 
@@ -55,13 +60,14 @@ Three numbers per file, because each closes a hole the others leave open:
 | `excess` | a non-longest long row growing to just under `maxLen`, which keeps `over` and `maxLen` flat |
 
 Two more rules complete it. A file with no baseline entry must have every line at
-or under 600, so a file cleaned up once stays clean. An entry whose file is no
-longer measured must be removed.
+or under 600, so the first long row there is a hard stop. An entry whose file is
+no longer measured must be removed.
 
 ### Workflow
 
 - Added a long row → split it into domain-grouped rows. Raising the baseline is
-  not the remedy, and `--update` will refuse.
+  not the remedy, and `--update` refuses it unless the same commit pays the debt
+  down somewhere else.
 - Shortened or split a long row → `pnpm docs:lines --update`, then commit the
   baseline diff alongside the doc change.
 - Moved rows between files, as a doc split does → same thing. The repo totals
@@ -73,6 +79,13 @@ longer measured must be removed.
   that without comparing against a base revision, which was rejected below. What
   it buys is that the raise appears as an explicit diff in a tracked file, the
   same posture as `scripts/coverage-ratchet-targets.json`.
+- **A cleaned-up file can be re-granted an entry.** `--update` compares repo
+  totals, not per-file ones, so a commit that pays one file down and lands a
+  long row in a file that had no entry is accepted — that is indistinguishable
+  from a move without a base revision, and moves are the remedy this gate exists
+  to encourage. The cost is real: some other file must give up an over-ceiling
+  line and the totals still may not rise. What is not protected is any single
+  file's cleaned-up status.
 - **The job is fail-closed but not merge-blocking yet.** `doc-size` is not among
   the contexts the `pr_to_main` ruleset requires by name, so a red result reports
   but does not block. Adding the context has to happen after the workflow lands

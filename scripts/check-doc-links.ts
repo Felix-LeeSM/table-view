@@ -4,8 +4,18 @@ import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { extname, posix, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
-const ROOT_DOCS = ["README.md", "AGENTS.md", "CLAUDE.md", "docs/ROADMAP.md"];
-const ACTIVE_DOC_DIRS = ["docs/product", "docs/contributor-guide"];
+const ROOT_DOCS = [
+  "README.md",
+  "AGENTS.md",
+  "CLAUDE.md",
+  "docs/ROADMAP.md",
+  "docs/README.md",
+];
+const ACTIVE_DOC_DIRS = [
+  "docs/product",
+  "docs/contributor-guide",
+  "docs/quality",
+];
 const EXCLUDED_SOURCE_DIRS = ["docs/archives", "docs/sprints"];
 
 export interface LinkCheckIssue {

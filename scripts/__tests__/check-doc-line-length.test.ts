@@ -109,9 +109,11 @@ describe("findMismatches", () => {
     ).toEqual([]);
   });
 
-  it("fails a long line in a file with no baseline entry", () => {
-    // A file cleaned up once is permanently protected — this is the incentive
-    // the ratchet exists to create.
+  it("fails a long line in a file with no baseline entry, naming both remedies", () => {
+    // The first long row in a clean file is a hard stop. It is not a permanent
+    // seal — a doc split legitimately moves rows into a file that had no entry
+    // — so the message has to name `--update` too, or it sends the author of a
+    // pure move off to re-split rows that are already split.
     const problems = findMismatches(
       tree({ "docs/a.md": { over: 1, maxLen: 704, excess: 104 } }),
       targets([]),
@@ -120,6 +122,7 @@ describe("findMismatches", () => {
     expect(problems).toHaveLength(1);
     expect(problems[0]).toContain("no baseline entry");
     expect(problems[0]).toContain("Split the cell");
+    expect(problems[0]).toContain("--update");
   });
 
   it("tells the author to split when a measurement rises", () => {
@@ -202,8 +205,9 @@ describe("findMismatches", () => {
 
   it("reports a pure move as a baseline to record, not as new debt", () => {
     // The gate does fail here: the baseline no longer describes the tree. What
-    // matters is that the remedy is `--update`, not "split the cell" — the rows
-    // already existed. The companion assertion is in findUpdateRefusals.
+    // matters is that every message points at `--update` and none accuses the
+    // author of writing a long row — the rows already existed. The companion
+    // assertion is in findUpdateRefusals.
     const problems = findMismatches(
       tree({
         "docs/parent.md": clean,
@@ -212,7 +216,15 @@ describe("findMismatches", () => {
       targets([{ path: "docs/parent.md", over: 5, maxLen: 900, excess: 600 }]),
     );
 
-    expect(problems.some((p) => p.includes("rose to"))).toBe(false);
+    expect(problems).toHaveLength(4);
+    for (const problem of problems) expect(problem).toContain("--update");
+    expect(problems.filter((p) => p.includes("rose to"))).toEqual([]);
+    expect(problems.filter((p) => p.startsWith("docs/parent.md"))).toHaveLength(
+      3,
+    );
+    expect(problems.find((p) => p.startsWith("docs/band.md"))).toContain(
+      "no baseline entry",
+    );
   });
 });
 
@@ -264,6 +276,47 @@ describe("findUpdateRefusals", () => {
 
     expect(refusals).toHaveLength(1);
     expect(refusals[0]).toContain("excess chars would rise from 301 to 599");
+  });
+
+  it("refuses consolidating many long rows into one giant cell", () => {
+    // Both sums read this as progress: the count falls 18 -> 1 and the excess
+    // is unchanged. Only `longest` sees it. Without that third check `--update`
+    // writes a baseline that findMismatches then rejects on the next run,
+    // leaving the two halves of the gate contradicting each other.
+    const refusals = findUpdateRefusals(
+      tree({
+        "docs/product/known-limitations.md": {
+          over: 1,
+          maxLen: 33654,
+          excess: 33054,
+        },
+      }),
+      targets([
+        {
+          path: "docs/product/known-limitations.md",
+          over: 18,
+          maxLen: 6334,
+          excess: 33054,
+        },
+      ]),
+    );
+
+    expect(refusals).toEqual([
+      "repo longest line would rise from 6334 to 33654.",
+    ]);
+  });
+
+  it("ignores the longest line of files that carry no debt", () => {
+    // `longest` is the longest over-ceiling line, not the longest line. A repo
+    // paid down to zero still has ordinary prose in it, and charging that
+    // against a baseline of 0 would refuse the very commit that clears the
+    // last entry.
+    expect(
+      findUpdateRefusals(
+        tree({ "docs/a.md": { over: 0, maxLen: 590, excess: 0 } }),
+        targets([]),
+      ),
+    ).toEqual([]);
   });
 });
 
