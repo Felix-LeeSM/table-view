@@ -18,7 +18,7 @@
           "mustContain": "global audit/admin/security dashboards"
         },
         {
-          "path": "docs/product/README.md",
+          "path": "docs/product/supported-workflow-summary.md",
           "mustContain": "Search uses an index-catalog-first workbench boundary"
         },
         {
@@ -79,11 +79,11 @@
           "mustContain": "Bounded structured table/index/constraint DDL is now wired through the shared StructurePanel path (#1072)."
         },
         {
-          "path": "docs/product/README.md",
+          "path": "docs/product/supported-workflow-summary.md",
           "mustContain": "MSSQL: runtime catalog/query/edit-row support is active for issue #903."
         },
         {
-          "path": "docs/product/README.md",
+          "path": "docs/product/supported-workflow-summary.md",
           "mustContain": "Oracle: bounded catalog/query/cancel/tabular/edit-row runtime support is active"
         }
       ],
@@ -129,7 +129,7 @@
       "claimBoundary": "Redis command editor remains a bounded allowlist. Full CLI parsing, admin, cluster, pubsub, modules, scripting, and consumer-group workflows stay unsupported.",
       "docs": [
         {
-          "path": "docs/product/README.md",
+          "path": "docs/product/current-support-snapshot.md",
           "mustContain": "Full CLI/admin parity, consumer-group stream UI, cluster/pubsub/modules/consumer-group management"
         }
       ],
