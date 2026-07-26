@@ -7,6 +7,8 @@ import { QUERY_LANGUAGE_REGISTRY } from "./queryLanguage";
 // plus child pages can hold a claim in any of them, so a fixed list silently
 // loses coverage the next time a page splits. Files are still accepted for an
 // index that sits outside its own child directory, like docs/ROADMAP.md.
+// Prose is whitespace-normalized so the claim guards below cannot be weakened
+// by re-flowing a wide table cell into ~80-column paragraphs.
 function readDocs(...paths: readonly string[]): string {
   return paths
     .flatMap((path) =>
@@ -16,8 +18,39 @@ function readDocs(...paths: readonly string[]): string {
             .filter((name) => name.endsWith(".md"))
             .map((name) => `${path}/${name}`),
     )
-    .map((path) => readFileSync(path, "utf8"))
-    .join("\n");
+    .map((path) => normalizeDocProse(readFileSync(path, "utf8")))
+    .join("\n\n");
+}
+
+/**
+ * Collapse whitespace *inside* each paragraph and keep the blank line as a hard
+ * boundary. Doc prose is moving out of wide GFM table cells into re-flowed
+ * ~80-column paragraphs, so a physical line break no longer marks any semantic
+ * boundary — a guard bounded by the line would silently stop seeing a claim
+ * split across a wrap. A blank line stays a bound so a claim can never be
+ * assembled from the tail of one paragraph plus the head of the next.
+ * Same contract as `tests/fixtures/unsupported_boundary_contracts.test.ts`.
+ */
+function normalizeDocProse(text: string): string {
+  return text
+    .split(/\n[^\S\n]*\n/)
+    .map((paragraph) => paragraph.replace(/\s+/g, " "))
+    .join("\n\n");
+}
+
+// Bounds after normalization: `.` = sentence end, `\n` = paragraph (and file)
+// boundary, `|` = table-cell boundary while a row is still a table — inert but
+// harmless once that row is re-flowed into prose.
+const ACTIVE_CLAIM_PATTERNS = [
+  /\bMSSQL\b[^.\n|]*(?:catalog-aware[^.\n|]*completion is active|structured DDL is active|full T-SQL semantics are active)/i,
+  /\bOracle\b[^.\n|]*(?:routine smoke is active|routine smoke support is active)/i,
+  /\bOracle\b[^.\n|]*(?:structured DDL|raw DDL\/admin|full parser\/completion|PL\/SQL)[^.\n|]*(?:is active|is supported|runtime support is active|support is active)/i,
+  /SQL Server smoke, seeded/i,
+  /\bOracle\b[^.\n|]*autocomplete is active/i,
+];
+
+function matchesAnyActiveClaim(text: string): boolean {
+  return ACTIVE_CLAIM_PATTERNS.some((pattern) => pattern.test(text));
 }
 
 describe("query language support documentation", () => {
@@ -60,17 +93,27 @@ describe("query language support documentation", () => {
       /#907 Runtime Happy Path smoke covers representative service-name connect, seeded catalog\/routine browse, SELECT\/DML, destructive Safe Mode confirmation, cancellation, and grid edit/,
     );
 
-    const activeClaimPatterns = [
-      /\bMSSQL\b[^.\n|]*(?:catalog-aware[^.\n|]*completion is active|structured DDL is active|full T-SQL semantics are active)/i,
-      /\bOracle\b[^.\n|]*(?:routine smoke is active|routine smoke support is active)/i,
-      /\bOracle\b[^.\n|]*(?:structured DDL|raw DDL\/admin|full parser\/completion|PL\/SQL)[^.\n|]*(?:is active|is supported|runtime support is active|support is active)/i,
-      /SQL Server smoke, seeded/i,
-      /\bOracle\b[^.\n|]*autocomplete is active/i,
-    ];
-
-    for (const pattern of activeClaimPatterns) {
+    for (const pattern of ACTIVE_CLAIM_PATTERNS) {
       expect(supportDocs).not.toMatch(pattern);
     }
+  });
+
+  // Reason: the over-600-code-point line cleanup pulls this prose out of wide
+  // table cells into ~80-column paragraphs, which collapses a line-bounded
+  // guard window to a single wrapped line. Nothing is broken today (the corpus
+  // maximum is still set by unconverted files), so this pins the forward case.
+  // Raised as a non-blocking finding in the review of PR #1841 (2026-07-26).
+  it("catches an enterprise overclaim split across a re-flowed line break", () => {
+    const reflowed =
+      "Oracle 워크벤치 프로파일은 raw DDL/admin\nsupport is active 로 승격되었다.\n";
+
+    // Line-bounded matching (pre-fix corpus shape) never sees the claim.
+    expect(matchesAnyActiveClaim(reflowed)).toBe(false);
+    expect(matchesAnyActiveClaim(normalizeDocProse(reflowed))).toBe(true);
+
+    // A blank line stays a hard bound: two paragraphs are not one claim.
+    const twoParagraphs = reflowed.replace("\n", "\n\n");
+    expect(matchesAnyActiveClaim(normalizeDocProse(twoParagraphs))).toBe(false);
   });
 
   it("documents current connection support and dedicated DBMS form owners", () => {
