@@ -478,7 +478,7 @@ async fn execute_query_dry_run_inner(
         }
         let adapter = active.as_rdb()?;
         // Sprint 271b — opt-in db-mismatch guard. Byte-equivalent to the
-        // Sprint 266 reference at `execute_query_inner:83–92`: probe
+        // Sprint 266 reference probe inlined in `execute_query_inner`: probe
         // sampled inside the same `active_connections.lock()` acquisition,
         // `unwrap_or_default()` coercion on `current_database`, mismatch
         // returns `AppError::DbMismatch` BEFORE invoking the trait, and
@@ -657,7 +657,7 @@ async fn query_table_data_inner(
             .ok_or_else(|| not_connected(connection_id))?;
         let adapter = active.as_rdb()?;
         // Sprint 271b — opt-in db-mismatch guard. Byte-equivalent to the
-        // Sprint 266 reference at `execute_query_inner:83–92`: probe runs
+        // Sprint 266 reference probe inlined in `execute_query_inner`: it runs
         // inside the same `active_connections.lock()` acquisition,
         // `unwrap_or_default()` coercion on `current_database`, mismatch
         // returns `AppError::DbMismatch` BEFORE invoking the trait. The

@@ -16,7 +16,9 @@
 //! `active_connections.lock()` acquisition that wraps the dispatch, and
 //! returns `AppError::DbMismatch` BEFORE invoking the trait method. The
 //! `None` path is byte-equivalent to pre-Sprint-271. Mirrors the Sprint 266
-//! reference probe at `src-tauri/src/commands/rdb/query.rs:83–92`.
+//! reference probe inlined in `execute_query_inner`
+//! (`src-tauri/src/commands/rdb/query.rs`). Named, not line-numbered — line
+//! ranges drift.
 //!
 //! Sprint 271c (2026-05-13) — `ensure_expected_db` helper hoisted to
 //! `super` (`commands/rdb/mod.rs`) so DDL handlers can share the same
@@ -1119,7 +1121,8 @@ mod tests {
     // ── Sprint 271a — expected_database guard (2026-05-13) ───────────────
     //
     // 작성 이유: 12 schema introspection commands 각각의 mismatch 가드
-    // verbatim assertion. Sprint 266 reference (query.rs:83–92) 와 byte
+    // verbatim assertion. Sprint 266 reference (`query.rs` 의
+    // `execute_query_inner` inline probe) 와 byte
     // equivalent — current_database probe 가 trait 호출 *전에* 일어나야
     // 하고, mismatch 시 underlying trait method (list_namespaces, list_tables
     // 등) 가 호출되지 않아야 함. underlying trait closure 가 panic 하도록
