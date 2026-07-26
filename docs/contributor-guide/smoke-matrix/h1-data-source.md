@@ -268,9 +268,9 @@ Gap routing:
 Elasticsearch live connection test covers URL/auth/TLS UI, root product/version
 detection, and scoped redacted auth/TLS/network/timeout/permission/server/shard
 failure surfacing. Live catalog covers indexes, aliases, data streams, mappings,
-settings/analyzers, templates, and field paths. Initial Search workbench load is
-index-catalog-first: the sidebar shell loads only index/alias/data-stream
-summaries, while selected-index detail tabs fetch
+settings/analyzers, templates, and field paths.
+Initial Search workbench load is index-catalog-first: the sidebar shell loads
+only index/alias/data-stream summaries, while selected-index detail tabs fetch
 mapping/settings/templates/sample documents/field stats only after explicit user
 action. Live query covers bounded `_search` dispatch, backend request validation
 for `match_all`, `term`, `terms`, `match`, `bool` filter, `range`, `exists`, and
