@@ -1,7 +1,7 @@
 ---
 title: Workflow
 type: index
-updated: 2026-07-17
+updated: 2026-07-27
 ---
 
 # Workflow
@@ -21,6 +21,7 @@ updated: 2026-07-17
 - [tdd](./tdd/memory.md) — code-profile sprint 의 RED evidence / pre-push TDD gate 해석
 - [delivery](./delivery/memory.md) — code → commit → push → PR → review → merge 전체 자율 pipeline
 - [review](./review/memory.md) — PR 생성 후 독립 read-only review pack을 붙이는 행동 계약
+- [orchestration](./orchestration/memory.md) — 병렬 작업 spawn · 리뷰 큐 직렬화 · 사이클 정지 · 이슈 수용기준
 - [documentation](./documentation/memory.md) — 문서화 필요 여부 판단 + 기존 SOT 라우팅 + PR evidence portability
 - [git-policy](./git-policy/memory.md) — hook 회피 금지 룰 (commit / push 강제 메커니즘)
 - [hooks](./hooks/memory.md) — hook 은 read-only 검증 게이트라는 작성 원칙
@@ -36,6 +37,7 @@ updated: 2026-07-17
 | 문서 추가 / PR 작성 / workflow 변경       | documentation  | [documentation](./documentation/memory.md) — impact 판단 후 기존 SOT 반영             |
 | 구현 끝 / 사용자가 "마무리해"             | delivery       | [delivery](./delivery/memory.md) — commit → push → PR → review → merge                |
 | PR 생성 / 사용자가 "리뷰해"               | review         | [review](./review/memory.md) — 독립 read-only review pack 후 delivery owner 에게 반환 |
+| 여러 작업 동시 진행 / 이슈 발행 / 리뷰 라운드가 안 끝남 | orchestration | [orchestration](./orchestration/memory.md) — spawn 후 파일 교집합 실측, 리뷰 큐 직렬화, 사이클이면 정지·보고 |
 
 ## 관련 방
 

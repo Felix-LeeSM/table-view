@@ -1,7 +1,7 @@
 ---
 title: Delivery — commit → push → PR → review → merge 자율 행동 계약
 type: workflow-rule
-updated: 2026-07-24
+updated: 2026-07-27
 task: delivery, commit, push, pr, review, merge
 trigger:
   signal: implementation 완료 / 사용자가 "마무리해" / sprint 종료
@@ -35,7 +35,7 @@ reflect 시킨다. 실패 worker 를 계속 새로 쌓지 않음.
 - `gh pr merge` 의 squash/merge/rebase 정책이 명시 안 됐을 때.
 - 사용자 명시 거부("commit 하지 마", "push 멈춰") — 즉시 중단.
 
-merge 자율 조건(모든 정성 차원 ≥ 8/10, CI SUCCESS + `review:approved`,
+merge 자율 조건(정성 차원에 blocking 없음, CI SUCCESS + `review:approved`,
 mergeable, 사용자 거부 없음)과 T0~T7 세부는 skill 참조.
 
 ## Hook 강제 — 절대 회피 금지

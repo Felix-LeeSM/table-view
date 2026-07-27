@@ -51,8 +51,8 @@ Fan-out은 항상-spawn이 아니라 coordinator의 자율 판단이다. 작은 
 
 `pr-subreviewer` spawn이 실패하면(중첩 spawn 불능 포함) coordinator는 같은
 관점들을 순차 단독 검증으로 강등해 직접 수행하고, scorecard에 "fan-out 불가로
-단독 강등" 사실을 명시한다. 강등해도 관점별 findings와 severity 병합 규칙은
-동일하게 적용한다.
+단독 강등" 사실을 명시한다. 강등해도 관점별 발견 수집과 coordinator 단독 판정
+규칙은 동일하게 적용한다.
 
 Subreviewer도 이 skill의 Boundaries를 상속한다.
 각 subreviewer는 같은 immutable input을 받고, 서로의 결과를 보기 전에 독립
@@ -76,10 +76,11 @@ external reviewer agent는 subreviewer가 아니다.
 - `security`: `security-infra`, `sot-scope-docs`, 필요한 `code-semantics`.
 - 관련 diff가 없으면 해당 관점은 생략한다. 같은 관점 중복 spawn은 금지한다.
 
-Subreviewer 출력은 `관점`, `blocking findings`, `non-blocking notes`, `evidence
-coverage`만 포함한다. Coordinator는 중복을 합치고, 가장 높은 severity를 유지한다.
-한 관점이라도 blocking이면 최종 verdict는 blocking이다. 점수 평균으로 blocking을
-희석하지 않는다.
+Subreviewer 출력은 `관점`, `발견`, `확인한 범위`, `확인 못 한 범위`만 포함한다.
+발견 하나는 (무엇이 틀렸나 / 어디인가 repo-relative / 근거) 셋으로 쓴다.
+Subreviewer는 severity를 붙이지 않는다 — blocking 판정은 coordinator 단독
+권한이다. Coordinator는 중복을 합친 뒤 발견마다 Verdict의 원칙 1·2·3을 적용해
+단 한 번 판정한다. 관점을 늘려도 blocking이 늘지 않는다.
 
 ## Profile 선택
 
@@ -143,29 +144,84 @@ coverage`만 포함한다. Coordinator는 중복을 합치고, 가장 높은 sev
 - <status> <check or source>
 
 ## 관점 입력
-- <perspective>: pass|blocking — <short basis>
+- <perspective>: 발견 <n>건 — <short basis>
 
 ## 정성 차원 (profile: <name>)
-| 차원 | 점수 | 결함 |
-|---|---:|---|
-| 정합성 | N/10 | ... |
-| Scope | N/10 | ... |
-| PR body | N/10 | ... |
+| 차원 | 판정 | 근거 |
+|---|---|---|
+| 정합성 | blocking | docs/ROADMAP.md:488이 #1804 결정을 반전 (반례: ADR 본문) |
+| Scope | pass | — |
+| PR body | note | 수치 3건에 재현 명령 없음 → #NNNN |
 
 ## Action items
 1. ...
 ```
 
 Profile에 적용되지 않는 차원은 출력하지 않는다. "N/A" 행으로 채우지 않는다.
+판정 칸은 `blocking` / `note` / `pass` 셋뿐이고, `blocking`은 Verdict 원칙 1의
+세 사유에만 근거한다. 점수는 쓰지 않는다 — 앵커가 없어 "몇 점인가"가 판정을
+대신해 왔다. 표를 유지하는 이유는 차원 누락 방지이지 점수가 아니다.
 
 ## Verdict
 
-- Red / Blocking: 자동 layer 실패, score < 8, contract miss, SOT 충돌, scope 침범,
-  로컬 evidence, reviewer boundary 위반.
-- Green / Pass: 적용 차원 모두 8/10 이상이고 blocking item이 없다.
-- 8/10은 "merge-ready with bounded residual risk"다. 7/10은 "works but needs
-  reflection"이므로 red/blocking으로 취급한다.
-- 결함이 있으면 delivery owner가 고친 뒤 reviewer가 다시 본다.
+판정은 아래 세 원칙에서 매번 재도출한다. 사례를 규칙으로 열거해 늘리지 않는다.
+
+### 원칙 1 — "이 PR이 main을 나쁘게 만드나"만 판정한다
+
+Blocking은 셋뿐이다.
+
+1. 런타임 동작이 틀리거나 사용자 데이터·보안이 위험하다.
+2. 이 PR 귀책의 거짓 문장이 main의 SOT에 들어간다.
+3. 자동 layer(required check) 실패.
+
+2의 귀책은 넷으로 가른다 — ① 이 PR이 새로 쓴 문장이 거짓 ② 참을 거짓으로
+뒤집음(블록을 옮겨 기존 참조가 깨지는 등) ③ 머지가 거짓으로 만듦 ④ PR 이전부터
+거짓. ④는 blocking이 아니라 이슈다. 기존 거짓의 도달 범위를 넓혔으면 ②로 본다.
+
+그 외는 전부 non-blocking이다. reviewer가 `gh issue create`로 배출하고 이슈
+번호를 scorecard에 남긴다. "후속" 약속만 남기지 않는다. 이슈 수용 기준은
+`memory/workflow/orchestration/memory.md` §4가 SOT다 — 완료 조건은 명령 출력
+하나이고, 적히지 않은 것은 범위 밖이다.
+
+**Blocking은 폐쇄 집합이다.** memory, 과거 리뷰, 관행이 무엇을 요구하든 그것으로
+blocking을 추가하지 않는다. 거기서 온 요구는 note이거나 이슈다. 리뷰 프롬프트에
+"특히 파고들 곳"을 열거하지 않는다 — 열린 집합 주장에서 그것은 finding
+생성기다. 검증 항목은 착수 전 저자에게 준다.
+
+### 원칙 2 — 판정은 전함수여야 한다
+
+blocking은 반례, 명령 출력, 자동 게이트 중 하나로 뒷받침된다. 셋 다 없으면
+blocking이 아니다. 성립 예: "docs/ROADMAP.md:488이 거짓 — 반례로 #1804 본문이
+반대 결정". 불성립 예: "근거가 부족하다", "모든 경우에 참인지 확인되지 않았다".
+
+subreviewer 근거가 판정에 부족하면 note로 강등한다. 단 원칙 1의 1은 coordinator가
+read-only로 직접 확인한다.
+
+클래스 잔여(인용한 N곳 외에 더 있다)를 주장하려면 그 클래스를 뽑는 명령을 첨부한다.
+
+1. 기존 열거 기계가 커버하면 그것을 쓴다 — `pnpm docs:links`, `pnpm lint`,
+   `scripts/check-memory-paths.ts`, `scripts/static-policy/*`. 출력이 곧 모집단이고
+   선언 기반이라 정당한 hit이 섞이지 않는다.
+2. 커버하지 않으면 `rg`를 쓴다. 이건 갭 신호이므로 이슈 후보로 기록한다. 정당한
+   hit은 명령 안에서 제외한다. 산문 예외 목록은 금지한다.
+3. 정제할 수 없으면 클래스 주장이 아니다. 인용한 인스턴스만 지적하고 나머지는 이슈다.
+
+저자는 그 명령의 출력이 0이 될 때까지 고치고 출력을 증거로 낸다. 명령 출력에
+없는 것은 그 라운드 범위 밖이다. 이 명령은 해당 PR의 클래스를 닫는 용도이고,
+영구 가드가 필요하면 별도 이슈다.
+
+### 원칙 3 — 라운드는 단조 감소한다
+
+라운드 2 이상은 이전 라운드 blocking의 해소 여부만 판정한다. 신규 발견은
+이슈다. 단 원칙 1의 1은 라운드와 무관하게 blocking이다.
+
+위반이 곧 사이클 신호다 — 라운드 k+1의 blocking 집합이 라운드 k의 진부분집합이
+아니면 coordinator는 verdict 대신 사이클을 보고한다. 라운드별 blocking 집합
+변화, 재발한 클래스와 라운드별 인스턴스 수, 저자가 시도한 것을 낸다. 정지와
+재설계 판단은 coordinator가 하지 않는다 — 사이클 지점은 자동 판단이 이미 실패한
+곳이므로 delivery owner를 거쳐 사용자에게 올린다.
+
+결함이 있으면 delivery owner가 고친 뒤 reviewer가 다시 본다.
 
 ## Related
 

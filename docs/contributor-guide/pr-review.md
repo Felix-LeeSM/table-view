@@ -17,15 +17,24 @@ paths are not valid evidence.
 
 ## Red / Green Rule
 
-The pass bar is `8/10` for every applicable qualitative dimension.
+A finding blocks the merge only when it makes `main` worse. There are three
+such cases and no others:
 
-- Green/pass: all applicable dimensions are at least `8/10`, automatic gates are
-  green, and there are no blocking findings.
-- Red/blocking: any applicable dimension is below `8/10`, any automatic gate
-  fails, or the review finds a contract miss, source-of-truth conflict, scope
-  drift, local-only evidence, or reviewer boundary violation.
+1. Runtime behaviour is wrong, or user data or security is at risk.
+2. A false statement this PR is responsible for lands in a source of truth.
+3. An automatic gate (required check) fails.
 
-`7/10` means the work may function, but it still needs reflection before merge.
+Everything else is non-blocking. The reviewer files it as an issue and records
+the issue number on the scorecard.
+
+A blocking finding must be backed by a counter-example, a command's output, or
+a gate result. "Insufficient evidence" and "not verified for every case" are
+not blocking. Rounds after the first judge only whether the previous round's
+blocking findings were resolved; anything newly discovered becomes an issue,
+except case 1 which blocks regardless of round.
+
+Scores are not used. Blocking is decided once, by the coordinator — perspective
+subreviewers report findings and evidence, not severity.
 
 ## Source Of Truth
 
