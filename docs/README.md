@@ -48,7 +48,7 @@ updated: 2026-05-28
 `RISKS.md` 는 독립 active 문서로 유지하지 않는다. 위험/제약은 소유 문서로
 라우팅한다:
 
-- 현재 사용자-visible 사실이면 `product/**` — per-source boundary 행은
+- 현재 사용자-visible 사실이면 `product/**` — per-source boundary 항목은
   `product/known-limitations-{rdbms,non-rdbms,cross-cutting}.md`.
 - 미래 work item 이면 `roadmap/follow-up-queue.md` (승격 후보 순서 자체를 바꾸면
   `ROADMAP.md`).

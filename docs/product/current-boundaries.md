@@ -26,7 +26,7 @@
   out-of-scope: 16 MiB 초과 `.sql` streaming restore, DuckDB `COPY`
   import/export, DB-level backup/restore. admin parity 경계를 기록한 ADR 은
   존재하지 않으므로 이 문단이 그 경계의 SOT 다. 각 잔여 슬라이스의
-  known-limitations 행은 해당 sub-issue 가 출하 시 갱신한다. profiler dashboard
+  known-limitations 항목은 해당 sub-issue 가 출하 시 갱신한다. profiler dashboard
   는 Stage 3 후속.
 - DuckDB file analytics paths stay in active-session adapter state and clear on
   connect/refresh/disconnect. Source metadata, preview, source-scoped query,

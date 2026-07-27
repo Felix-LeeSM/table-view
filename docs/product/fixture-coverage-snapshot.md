@@ -9,18 +9,160 @@ Fixture 파일 존재는 support claim 을 넓히지 않는다. 현재 fixture i
 2026-06-12 support-claim audit snapshot 이다. 현재 product support SOT 는 이
 page, `known-limitations.md`, `query-language-support.md`, and testing matrix 다.
 
-| Source | Fixture asset | Current meaning |
-|---|---|---|
-| PostgreSQL | `e2e/fixtures/postgresql/query/seed.sql` | GitHub Runtime Happy Path 의 active RDBMS smoke seed |
-| MySQL | `e2e/fixtures/mysql/query/seed.sql` | wired Runtime Happy Path seed for the connect/browse/query/edit/cancel baseline plus bounded Structure table/index/FK DDL smoke |
-| MariaDB | `e2e/fixtures/mariadb/query/seed.sql` | wired Runtime Happy Path seed for the MariaDB connect/browse/query/edit/cancel baseline plus catalog/workbench probe objects and bounded Structure table/index/FK DDL smoke |
-| SQLite | `e2e/fixtures/sqlite/query/seed.sql` | wired Runtime Happy Path seed for deterministic file create/open, table browse, read query, writable DML, row edit, read-only write rejection, and internal app-state DB rejection |
-| DuckDB | `e2e/fixtures/duckdb/query/seed.sql`, `e2e/fixtures/duckdb/file-analytics/sales.csv` | wired Runtime Happy Path seeds for separate `.duckdb` open/catalog/table browse/raw SELECT/history/read-only evidence and registered deterministic CSV source -> global editor SELECT -> result grid -> `FILE` history/source evidence -> no absolute local path in visible UI. Broader CSV/Parquet/JSON/NDJSON automatic import/export workflow parity remains future work |
-| MongoDB | `e2e/fixtures/mongodb/document/seed.json` | document fixture used by current MongoDB smoke seed path |
-| Redis | `e2e/fixtures/redis/kv/seed.json` | wired Runtime Happy Path seed for Redis DB 2 connect/scan/preview/GET plus guarded string write, TTL, and exact-key delete smoke. Broader stream consumer, cluster/pubsub/modules, admin, and Valkey parity remain future work |
-| Elasticsearch | `e2e/fixtures/elasticsearch/search/seed.json`, `e2e/smoke/elasticsearch.spec.ts`, `src-tauri/src/db/search.rs`, `src-tauri/src/db/search_destructive.rs`, `src-tauri/src/db/search_dsl.rs`, `src-tauri/src/db/search_http.rs`, `src-tauri/src/db/search_live_destructive.rs`, `src-tauri/src/db/search_live_query.rs` | embedded Search fixture contract plus wired Runtime Happy Path smoke for live HTTP connect/auth/TLS, catalog metadata, bounded Search render, delete-by-query preview planning plus live `_delete_by_query` execution behind a Safe Mode confirmation, and visible error surface; actual live index/settings admin execution deferred |
-| OpenSearch | `e2e/fixtures/opensearch/search/seed.json`, `.github/workflows/e2e-smoke.yml`, `scripts/e2e-smoke-ci.sh`, `e2e/fixtures/seed-smoke.ts`, `e2e/smoke/opensearch.spec.ts`, `e2e/smoke/search-runtime-smoke.ts`, `scripts/fixtures/dbms-seeds.test.ts`, `src-tauri/src/db/search.rs`, `src-tauri/src/db/search_destructive.rs`, `src-tauri/src/db/search_dsl.rs`, `src-tauri/src/db/search_http.rs`, `src-tauri/src/db/search_live_destructive.rs`, `src-tauri/src/db/search_live_query.rs`, `src-tauri/src/db/search/tests.rs`, `src-tauri/src/db/search/tests/destructive.rs`, `src-tauri/src/db/search/tests/live_query.rs`, `src/lib/search/searchDslCompletion.ts`, `src/lib/search/searchDslCompletion.test.ts`, `src/hooks/useSearchAutocomplete.ts`, `src/hooks/useSearchAutocomplete.test.ts`, `src/components/workspace/SearchSidebar.test.tsx`, `src/components/search/SearchIndexDetailPanel.test.tsx`, `src/components/query/QueryTab.search-route.test.tsx`, `src/types/dataSource.ts` | embedded Search fixture contract plus wired Runtime Happy Path smoke, focused live HTTP connection/catalog/query tests, and mapping-aware TypeScript editor completion for URL/auth/TLS, product/version/distribution detection, Elasticsearch endpoint rejection, auth/network failures, indexes, aliases, data streams, mappings, settings/analyzers, composable/legacy templates, field paths, bounded `_search` dispatch/result rendering, shared DSL parser/safety validation for query/filter/aggs/sort/source shapes, sample documents, cancellation, HTTP error surfacing, safe `_search` delete-by-query preview plan estimates plus live `_delete_by_query` execution behind a Safe Mode confirmation, and product-scoped index/alias/data-stream/field/type/sort/source suggestions; the smoke covers connect/auth/TLS, catalog metadata, selected-index detail, bounded render, delete-plan preview + live delete-execution, and visible error surface, with no actual OpenSearch index/settings admin execution claim |
-| MSSQL | `e2e/fixtures/seed.mssql.sql`, `e2e/smoke/mssql.spec.ts`, `src-tauri/tests/backend_adapter_contract_profile.rs`, `src-tauri/tests/mssql_connection_routing.rs` | SQL Server product evidence for connection validation/routing plus bounded catalog/query/cancel/tabular runtime contracts and #907 Runtime Happy Path smoke for connect, seeded catalog browse, SELECT/DML, destructive Safe Mode confirmation, cancellation, and grid edit. The fixture and smoke path do not claim structured DDL, parser/completion execution, admin, import/export, or full workbench parity. |
-| Oracle | `docker-compose.yml`, `scripts/fixtures/oracle.ts`, `scripts/fixtures/oracle.test.ts`, `e2e/fixtures/seed.oracle.sql`, `e2e/smoke/oracle.spec.ts`, `src-tauri/tests/backend_adapter_contract_profile.rs` | focused #905/#906 product/backend evidence for service-name lifecycle, bounded catalog/query/cancel/tabular runtime, and key-projected row edit generator/Safe Mode/editor-assistance boundaries, plus #907 Runtime Happy Path smoke for service-name connect, seeded catalog/routine browse, SELECT/DML, destructive Safe Mode confirmation, cancellation, and grid edit. The fixture boundary is `host:port/serviceName` with default `XEPDB1`; SID, TNS, wallet, TLS, and advanced auth are rejected or unsupported. The smoke path is not product evidence for structured DDL, raw DDL/admin, full parser/completion promotion, PL/SQL body/package work, admin, import/export, or full workbench parity. |
-| Valkey | `e2e/fixtures/valkey/kv/seed.json`, `e2e/fixtures/valkey.redis-compatibility.json` | wired Runtime Happy Path seed for Valkey DB 2 connect/scan/preview/GET/HGETALL/XRANGE plus bounded SET/EXPIRE and destructive/unsupported command guards. Focused backend/component evidence covers the shared string plus hash/list/set/zset KvMutationPanel write controls (#1075). The compatibility matrix separates proven local-runtime rows from candidate/rejected command families; Valkey collection-write smoke coverage, broader command families, and full Redis compatibility remain future gates |
-| Wider candidates | none | no active fixture/live evidence; future fixture or smoke mentions are promotion inventory only |
+## Fixture Coverage Entries
+
+### PostgreSQL
+
+**Fixture asset**: `e2e/fixtures/postgresql/query/seed.sql`
+
+**Current meaning**: GitHub Runtime Happy Path 의 active RDBMS smoke seed
+
+### MySQL
+
+**Fixture asset**: `e2e/fixtures/mysql/query/seed.sql`
+
+**Current meaning**: wired Runtime Happy Path seed for the
+connect/browse/query/edit/cancel baseline plus bounded Structure table/index/FK
+DDL smoke
+
+### MariaDB
+
+**Fixture asset**: `e2e/fixtures/mariadb/query/seed.sql`
+
+**Current meaning**: wired Runtime Happy Path seed for the MariaDB
+connect/browse/query/edit/cancel baseline plus catalog/workbench probe objects
+and bounded Structure table/index/FK DDL smoke
+
+### SQLite
+
+**Fixture asset**: `e2e/fixtures/sqlite/query/seed.sql`
+
+**Current meaning**: wired Runtime Happy Path seed for deterministic file
+create/open, table browse, read query, writable DML, row edit, read-only write
+rejection, and internal app-state DB rejection
+
+### DuckDB
+
+**Fixture asset**: `e2e/fixtures/duckdb/query/seed.sql`,
+`e2e/fixtures/duckdb/file-analytics/sales.csv`
+
+**Current meaning**: wired Runtime Happy Path seeds for separate `.duckdb`
+open/catalog/table browse/raw SELECT/history/read-only evidence and registered
+deterministic CSV source -> global editor SELECT -> result grid -> `FILE`
+history/source evidence -> no absolute local path in visible UI. Broader
+CSV/Parquet/JSON/NDJSON automatic import/export workflow parity remains future
+work
+
+### MongoDB
+
+**Fixture asset**: `e2e/fixtures/mongodb/document/seed.json`
+
+**Current meaning**: document fixture used by current MongoDB smoke seed path
+
+### Redis
+
+**Fixture asset**: `e2e/fixtures/redis/kv/seed.json`
+
+**Current meaning**: wired Runtime Happy Path seed for Redis DB 2
+connect/scan/preview/GET plus guarded string write, TTL, and exact-key delete
+smoke. Broader stream consumer, cluster/pubsub/modules, admin, and Valkey parity
+remain future work
+
+### Elasticsearch
+
+**Fixture asset**: `e2e/fixtures/elasticsearch/search/seed.json`,
+`e2e/smoke/elasticsearch.spec.ts`, `src-tauri/src/db/search.rs`,
+`src-tauri/src/db/search_destructive.rs`, `src-tauri/src/db/search_dsl.rs`,
+`src-tauri/src/db/search_http.rs`,
+`src-tauri/src/db/search_live_destructive.rs`,
+`src-tauri/src/db/search_live_query.rs`
+
+**Current meaning**: embedded Search fixture contract plus wired Runtime Happy
+Path smoke for live HTTP connect/auth/TLS, catalog metadata, bounded Search
+render, delete-by-query preview planning plus live `_delete_by_query` execution
+behind a Safe Mode confirmation, and visible error surface; actual live
+index/settings admin execution deferred
+
+### OpenSearch
+
+**Fixture asset**: `e2e/fixtures/opensearch/search/seed.json`,
+`.github/workflows/e2e-smoke.yml`, `scripts/e2e-smoke-ci.sh`,
+`e2e/fixtures/seed-smoke.ts`, `e2e/smoke/opensearch.spec.ts`,
+`e2e/smoke/search-runtime-smoke.ts`, `scripts/fixtures/dbms-seeds.test.ts`,
+`src-tauri/src/db/search.rs`, `src-tauri/src/db/search_destructive.rs`,
+`src-tauri/src/db/search_dsl.rs`, `src-tauri/src/db/search_http.rs`,
+`src-tauri/src/db/search_live_destructive.rs`,
+`src-tauri/src/db/search_live_query.rs`, `src-tauri/src/db/search/tests.rs`,
+`src-tauri/src/db/search/tests/destructive.rs`,
+`src-tauri/src/db/search/tests/live_query.rs`,
+`src/lib/search/searchDslCompletion.ts`,
+`src/lib/search/searchDslCompletion.test.ts`,
+`src/hooks/useSearchAutocomplete.ts`, `src/hooks/useSearchAutocomplete.test.ts`,
+`src/components/workspace/SearchSidebar.test.tsx`,
+`src/components/search/SearchIndexDetailPanel.test.tsx`,
+`src/components/query/QueryTab.search-route.test.tsx`, `src/types/dataSource.ts`
+
+**Current meaning**: embedded Search fixture contract plus wired Runtime Happy
+Path smoke, focused live HTTP connection/catalog/query tests, and mapping-aware
+TypeScript editor completion for URL/auth/TLS, product/version/distribution
+detection, Elasticsearch endpoint rejection, auth/network failures, indexes,
+aliases, data streams, mappings, settings/analyzers, composable/legacy
+templates, field paths, bounded `_search` dispatch/result rendering, shared DSL
+parser/safety validation for query/filter/aggs/sort/source shapes, sample
+documents, cancellation, HTTP error surfacing, safe `_search` delete-by-query
+preview plan estimates plus live `_delete_by_query` execution behind a Safe Mode
+confirmation, and product-scoped index/alias/data-stream/field/type/sort/source
+suggestions; the smoke covers connect/auth/TLS, catalog metadata, selected-index
+detail, bounded render, delete-plan preview + live delete-execution, and visible
+error surface, with no actual OpenSearch index/settings admin execution claim
+
+### MSSQL
+
+**Fixture asset**: `e2e/fixtures/seed.mssql.sql`, `e2e/smoke/mssql.spec.ts`,
+`src-tauri/tests/backend_adapter_contract_profile.rs`,
+`src-tauri/tests/mssql_connection_routing.rs`
+
+**Current meaning**: SQL Server product evidence for connection
+validation/routing plus bounded catalog/query/cancel/tabular runtime contracts
+and #907 Runtime Happy Path smoke for connect, seeded catalog browse,
+SELECT/DML, destructive Safe Mode confirmation, cancellation, and grid edit. The
+fixture and smoke path do not claim structured DDL, parser/completion execution,
+admin, import/export, or full workbench parity.
+
+### Oracle
+
+**Fixture asset**: `docker-compose.yml`, `scripts/fixtures/oracle.ts`,
+`scripts/fixtures/oracle.test.ts`, `e2e/fixtures/seed.oracle.sql`,
+`e2e/smoke/oracle.spec.ts`,
+`src-tauri/tests/backend_adapter_contract_profile.rs`
+
+**Current meaning**: focused #905/#906 product/backend evidence for service-name
+lifecycle, bounded catalog/query/cancel/tabular runtime, and key-projected row
+edit generator/Safe Mode/editor-assistance boundaries, plus #907 Runtime Happy
+Path smoke for service-name connect, seeded catalog/routine browse, SELECT/DML,
+destructive Safe Mode confirmation, cancellation, and grid edit. The fixture
+boundary is `host:port/serviceName` with default `XEPDB1`; SID, TNS, wallet,
+TLS, and advanced auth are rejected or unsupported. The smoke path is not
+product evidence for structured DDL, raw DDL/admin, full parser/completion
+promotion, PL/SQL body/package work, admin, import/export, or full workbench
+parity.
+
+### Valkey
+
+**Fixture asset**: `e2e/fixtures/valkey/kv/seed.json`,
+`e2e/fixtures/valkey.redis-compatibility.json`
+
+**Current meaning**: wired Runtime Happy Path seed for Valkey DB 2
+connect/scan/preview/GET/HGETALL/XRANGE plus bounded SET/EXPIRE and
+destructive/unsupported command guards. Focused backend/component evidence
+covers the shared string plus hash/list/set/zset KvMutationPanel write controls
+(#1075). The compatibility matrix separates proven local-runtime rows from
+candidate/rejected command families; Valkey collection-write smoke coverage,
+broader command families, and full Redis compatibility remain future gates
+
+### Wider candidates
+
+**Fixture asset**: none
+
+**Current meaning**: no active fixture/live evidence; future fixture or smoke
+mentions are promotion inventory only

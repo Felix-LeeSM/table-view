@@ -53,15 +53,103 @@ sequencing 을 명시 요청하면 별도 sprint contract queue 에 번호와 �
 
 ## 지평 순서
 
-| 지평 | 목표 | 이 순서인 이유 | 종료 신호 |
-|---:|---|---|---|
-| H1 | 현재 코드 -> data-source architecture 정렬 | RDBMS + DuckDB + Redis/Search/Graph/Vector 확장을 그냥 붙이면 switch sprawl 이 커진다. 추가 기능 전 기존 코드를 새 구조에 넣어야 한다. | 현재 `DatabaseType`/`Paradigm`/`ActiveAdapter`/workspace query/result path 가 profile, capability, query language, result envelope 로 감싸지고 사용자 회귀가 없다. |
-| H2 | RDBMS parity | 현재 아키텍처가 가장 강한 영역이고, 사용자에게 보이는 gap 이 기존 DB 클라이언트 전환 blocker 다. | 지원 DBMS 하나가 query/workbench parity gate 를 통과한 뒤 새 `DatabaseType` 을 추가한다 (ADR 0060). 기존 엔진의 capability 확장은 이 gate 를 기다리지 않는다. |
-| H3 | DuckDB + file analytics | Local-first file analytics 는 새 paradigm 없이 RDBMS 작업을 확장한다. | `.duckdb` raw SQL, registered local CSV/Parquet/JSON/NDJSON preview basics, source-scoped SELECT UI/API evidence, and documented file privacy/export boundary 가 green 이다. |
-| H4 | RDBMS intelligence | ERD, migration preview, and read-only schema diff reuse the shared `SchemaGraph`/catalog input path. Duplicate catalog parsing 은 만들지 않는다. | Production ERD 는 schema/table/column cache 와 cached/fetched explicit index/constraint metadata 를 함께 쓰는 reusable `SchemaGraph` 를 사용한다. Read-only dependency view 는 selected table 의 FK/index/constraint/CHECK diagnostics 를 보여주며, DDL preview/confirm flow 는 table/column/constraint/index removal migration-impact summaries 를 같은 graph 에서 보여준다. Read-only schema diff compares cached RDBMS snapshots through the same graph path. Dense ERD desktop/narrow screenshot smoke is wired; data compare remains a future promotion gate. |
-| H5 | First-class non-RDBMS | Redis/Valkey, Elasticsearch/OpenSearch, MongoDB 가 가장 명확한 non-RDBMS 사용자 workflow 를 덮는다. | MongoDB 는 whitelisted document workflow 로, Redis 는 bounded KV browser/value mutation + command/query/completion + representative smoke 로, Valkey 는 connection/key scan/value preview + selected stream read + bounded command query runtime slice + Redis 와 동일한 string/hash/list/set/zset KvMutationPanel write controls (#1075) + proven-row command completion + Runtime Happy Path smoke 로, Elasticsearch/OpenSearch 는 live connection/catalog/query + backend-bounded Search DSL validator + Runtime Happy Path smoke + fixture/live delete-by-query safety planning + bounded TypeScript editor completion 으로 support claim 이 정렬돼 있다. Live `_delete_by_query` 실행은 #1076 으로 승격돼 Safe Mode confirm gate 뒤에서 지원된다. Search index/settings admin execution, full language-core parser/completion ownership, observability, and broader Search smoke 는 각자의 promotion gate 를 통과할 때까지 deferred 다 (freeze 사유가 아니다 — ADR 0060). |
-| H6 | 더 넓은 paradigm | Cassandra, DynamoDB, graph DB, vector DB, stream source 는 active work 전 명확한 workflow proof 가 필요하다. | MSSQL 은 bounded catalog/query/cancel/tabular/edit-row capability 와 representative smoke 로, Oracle 은 bounded catalog/query/cancel/tabular/edit-row capability, bounded Safe Mode/editor assistance, and representative smoke 로 허용한다. Wider source 는 candidate-only 계약으로 정렬된다. Profile target, connection kind, language, catalog model, result envelope, safety policy, fixture strategy 가 문서화되고 각 source 의 matching evidence 없이 DDL/admin/full parser-completion/future smoke widening claim 은 생기지 않는다. |
-| H7 | 운영, 보안, 신뢰성 | 넓은 source support 는 관찰 가능하고 안전하며 반복 검증 가능해야 한다. | 현재 CI/hook/E2E/security/a11y/perf claim 과 future gate routing 이 실제 설정에 맞게 정렬된다. 새 routine gate 는 owner/runtime cost/actionability 가 잠긴 뒤에만 승격한다. |
+### H1
+
+**목표**: 현재 코드 -> data-source architecture 정렬
+
+**이 순서인 이유**: RDBMS + DuckDB + Redis/Search/Graph/Vector 확장을 그냥
+붙이면 switch sprawl 이 커진다. 추가 기능 전 기존 코드를 새 구조에 넣어야 한다.
+
+**종료 신호**: 현재 `DatabaseType`/`Paradigm`/`ActiveAdapter`/workspace
+query/result path 가 profile, capability, query language, result envelope 로
+감싸지고 사용자 회귀가 없다.
+
+### H2
+
+**목표**: RDBMS parity
+
+**이 순서인 이유**: 현재 아키텍처가 가장 강한 영역이고, 사용자에게 보이는 gap 이
+기존 DB 클라이언트 전환 blocker 다.
+
+**종료 신호**: 지원 DBMS 하나가 query/workbench parity gate 를 통과한 뒤 새
+`DatabaseType` 을 추가한다 (ADR 0060). 기존 엔진의 capability 확장은 이 gate 를
+기다리지 않는다.
+
+### H3
+
+**목표**: DuckDB + file analytics
+
+**이 순서인 이유**: Local-first file analytics 는 새 paradigm 없이 RDBMS 작업을
+확장한다.
+
+**종료 신호**: `.duckdb` raw SQL, registered local CSV/Parquet/JSON/NDJSON
+preview basics, source-scoped SELECT UI/API evidence, and documented file
+privacy/export boundary 가 green 이다.
+
+### H4
+
+**목표**: RDBMS intelligence
+
+**이 순서인 이유**: ERD, migration preview, and read-only schema diff reuse the
+shared `SchemaGraph`/catalog input path. Duplicate catalog parsing 은 만들지
+않는다.
+
+**종료 신호**: Production ERD 는 schema/table/column cache 와 cached/fetched
+explicit index/constraint metadata 를 함께 쓰는 reusable `SchemaGraph` 를
+사용한다. Read-only dependency view 는 selected table 의
+FK/index/constraint/CHECK diagnostics 를 보여주며, DDL preview/confirm flow 는
+table/column/constraint/index removal migration-impact summaries 를 같은 graph
+에서 보여준다. Read-only schema diff compares cached RDBMS snapshots through the
+same graph path. Dense ERD desktop/narrow screenshot smoke is wired; data
+compare remains a future promotion gate.
+
+### H5
+
+**목표**: First-class non-RDBMS
+
+**이 순서인 이유**: Redis/Valkey, Elasticsearch/OpenSearch, MongoDB 가 가장
+명확한 non-RDBMS 사용자 workflow 를 덮는다.
+
+**종료 신호**: MongoDB 는 whitelisted document workflow 로, Redis 는 bounded KV
+browser/value mutation + command/query/completion + representative smoke 로,
+Valkey 는 connection/key scan/value preview + selected stream read + bounded
+command query runtime slice + Redis 와 동일한 string/hash/list/set/zset
+KvMutationPanel write controls (#1075) + proven-row command completion + Runtime
+Happy Path smoke 로, Elasticsearch/OpenSearch 는 live connection/catalog/query +
+backend-bounded Search DSL validator + Runtime Happy Path smoke + fixture/live
+delete-by-query safety planning + bounded TypeScript editor completion 으로
+support claim 이 정렬돼 있다. Live `_delete_by_query` 실행은 #1076 으로 승격돼
+Safe Mode confirm gate 뒤에서 지원된다. Search index/settings admin execution,
+full language-core parser/completion ownership, observability, and broader
+Search smoke 는 각자의 promotion gate 를 통과할 때까지 deferred 다 (freeze
+사유가 아니다 — ADR 0060).
+
+### H6
+
+**목표**: 더 넓은 paradigm
+
+**이 순서인 이유**: Cassandra, DynamoDB, graph DB, vector DB, stream source 는
+active work 전 명확한 workflow proof 가 필요하다.
+
+**종료 신호**: MSSQL 은 bounded catalog/query/cancel/tabular/edit-row capability
+와 representative smoke 로, Oracle 은 bounded
+catalog/query/cancel/tabular/edit-row capability, bounded Safe Mode/editor
+assistance, and representative smoke 로 허용한다. Wider source 는 candidate-only
+계약으로 정렬된다. Profile target, connection kind, language, catalog model,
+result envelope, safety policy, fixture strategy 가 문서화되고 각 source 의
+matching evidence 없이 DDL/admin/full parser-completion/future smoke widening
+claim 은 생기지 않는다.
+
+### H7
+
+**목표**: 운영, 보안, 신뢰성
+
+**이 순서인 이유**: 넓은 source support 는 관찰 가능하고 안전하며 반복 검증
+가능해야 한다.
+
+**종료 신호**: 현재 CI/hook/E2E/security/a11y/perf claim 과 future gate routing
+이 실제 설정에 맞게 정렬된다. 새 routine gate 는 owner/runtime
+cost/actionability 가 잠긴 뒤에만 승격한다.
 
 ## 지평별 진행 기준
 
@@ -97,20 +185,109 @@ Product support-claim wording stays in #759.
 
 ## 트랙 맵
 
-| 트랙 | 장기 방향 | 현재 기준 |
-|---|---|---|
-| Data-source architecture | 새 DBMS/support surface 는 profile, capability, adapter, language, catalog, result envelope, safety contract 를 통해 들어온다. | `memory/engineering/architecture/data-source/memory.md`, `memory/engineering/architecture/data-source/adding/memory.md`, ADR 0046 |
-| RDBMS runtime | 불확실한 paradigm 을 넓히기 전에 PostgreSQL, MySQL, MariaDB, SQLite, DuckDB/file analytics support 를 강하게 만든다. | `docs/product/README.md`, historical phase notes in `docs/archives/phases/retired/phase-18.md` and `docs/archives/phases/retired/phase-19.md` |
-| Non-RDBMS runtime | Redis 와 MongoDB 는 runtime slice 가 있다. Valkey 는 connection/key scan/value preview, bounded command query runtime slice, proven-row completion, Runtime Happy Path smoke 가 있다. Elasticsearch/OpenSearch 는 live connection/catalog/query/destructive-plan, bounded Search DSL autocomplete, separated fixture contracts, and Runtime Happy Path smoke evidence 가 있다. Cassandra/Scylla, DynamoDB, graph, vector, stream 은 gated candidate 다. 새 `DatabaseType` 추가는 freeze 대상이고, 기존 엔진의 capability 확장은 freeze 밖이다 (ADR 0060). | `memory/engineering/architecture/data-source/memory.md`, `docs/product/README.md`, `docs/product/known-limitations.md` |
-| Language core | 가능한 범위에서 Rust/WASM 이 hot-path parse/completion vocabulary, context routing, capability gate 를 소유한다. | `memory/engineering/architecture/query-language/memory.md`, ADR 0045, `docs/product/query-language-support.md`, `docs/archives/phases/completed/phase-31.md` |
-| Query editor | Query surface 는 legacy `queryMode` 가 아니라 `queryLanguage` 와 workbench paradigm 으로 고른다. | `memory/engineering/architecture/data-source/memory.md`, ADR 0045, `docs/product/query-language-support.md` |
-| Data editing | Preview/commit/discard, bulk operation, paradigm 별 edit semantics. | `docs/product/README.md`, `docs/product/known-limitations.md` |
-| Schema / DDL | RDB DDL parity 는 대부분 닫혔고, ERD/schema graph 가 다음 reusable intelligence layer 다. | completed Phases 24-27, `memory/engineering/architecture/data-source/memory.md` |
-| Operations | Core parity 이후 Explain/activity/stats/server info/profiler surface 를 다룬다. | `docs/product/known-limitations.md`, `docs/contributor-guide/testing-and-quality.md` |
-| Security | Credential/key handling, role/user management, auth mechanism expansion, destructive action policy. | `.agents/skills/grill-with-memory/SKILL.md`, `docs/contributor-guide/testing-and-quality.md` |
-| App state | SQLite-backed durable app state, query history, settings, keyring, cross-window sync. | `memory/engineering/architecture/state-management/memory.md` |
-| Quality | CI, E2E smoke, perf/a11y baseline, testing reliability, refactor backlog burn-down. | `docs/contributor-guide/testing-and-quality.md`, `docs/archives/audits/code-smell-audit-2026-05-15.md` |
-| CLI surface (`tvw`) | 자동화 + 에이전트 표면. one-shot v0.1 (SQL 코어 4종: PostgreSQL/MySQL/MariaDB/SQLite) → REPL + completion → 앱 지원 DBMS 확장 (CLI claim ⊆ 앱 claim 원칙) → `tvw mcp` 서버 모드. TUI 는 영구 non-goal. 새 DBMS claim 을 만들지 않는 surface 트랙이라 runtime promotion freeze (순서 규칙 3) 와 독립. | ADR 0058, GitHub milestone 33.00 |
+### Data-source architecture
+
+**장기 방향**: 새 DBMS/support surface 는 profile, capability, adapter,
+language, catalog, result envelope, safety contract 를 통해 들어온다.
+
+**현재 기준**: `memory/engineering/architecture/data-source/memory.md`,
+`memory/engineering/architecture/data-source/adding/memory.md`, ADR 0046
+
+### RDBMS runtime
+
+**장기 방향**: 불확실한 paradigm 을 넓히기 전에 PostgreSQL, MySQL, MariaDB,
+SQLite, DuckDB/file analytics support 를 강하게 만든다.
+
+**현재 기준**: `docs/product/README.md`, historical phase notes in
+`docs/archives/phases/retired/phase-18.md` and
+`docs/archives/phases/retired/phase-19.md`
+
+### Non-RDBMS runtime
+
+**장기 방향**: Redis 와 MongoDB 는 runtime slice 가 있다. Valkey 는
+connection/key scan/value preview, bounded command query runtime slice,
+proven-row completion, Runtime Happy Path smoke 가 있다.
+Elasticsearch/OpenSearch 는 live connection/catalog/query/destructive-plan,
+bounded Search DSL autocomplete, separated fixture contracts, and Runtime Happy
+Path smoke evidence 가 있다. Cassandra/Scylla, DynamoDB, graph, vector, stream
+은 gated candidate 다. 새 `DatabaseType` 추가는 freeze 대상이고, 기존 엔진의
+capability 확장은 freeze 밖이다 (ADR 0060).
+
+**현재 기준**: `memory/engineering/architecture/data-source/memory.md`,
+`docs/product/README.md`, `docs/product/known-limitations.md`
+
+### Language core
+
+**장기 방향**: 가능한 범위에서 Rust/WASM 이 hot-path parse/completion
+vocabulary, context routing, capability gate 를 소유한다.
+
+**현재 기준**: `memory/engineering/architecture/query-language/memory.md`, ADR
+0045, `docs/product/query-language-support.md`,
+`docs/archives/phases/completed/phase-31.md`
+
+### Query editor
+
+**장기 방향**: Query surface 는 legacy `queryMode` 가 아니라 `queryLanguage` 와
+workbench paradigm 으로 고른다.
+
+**현재 기준**: `memory/engineering/architecture/data-source/memory.md`, ADR
+0045, `docs/product/query-language-support.md`
+
+### Data editing
+
+**장기 방향**: Preview/commit/discard, bulk operation, paradigm 별 edit
+semantics.
+
+**현재 기준**: `docs/product/README.md`, `docs/product/known-limitations.md`
+
+### Schema / DDL
+
+**장기 방향**: RDB DDL parity 는 대부분 닫혔고, ERD/schema graph 가 다음
+reusable intelligence layer 다.
+
+**현재 기준**: completed Phases 24-27,
+`memory/engineering/architecture/data-source/memory.md`
+
+### Operations
+
+**장기 방향**: Core parity 이후 Explain/activity/stats/server info/profiler
+surface 를 다룬다.
+
+**현재 기준**: `docs/product/known-limitations.md`,
+`docs/contributor-guide/testing-and-quality.md`
+
+### Security
+
+**장기 방향**: Credential/key handling, role/user management, auth mechanism
+expansion, destructive action policy.
+
+**현재 기준**: `.agents/skills/grill-with-memory/SKILL.md`,
+`docs/contributor-guide/testing-and-quality.md`
+
+### App state
+
+**장기 방향**: SQLite-backed durable app state, query history, settings,
+keyring, cross-window sync.
+
+**현재 기준**: `memory/engineering/architecture/state-management/memory.md`
+
+### Quality
+
+**장기 방향**: CI, E2E smoke, perf/a11y baseline, testing reliability, refactor
+backlog burn-down.
+
+**현재 기준**: `docs/contributor-guide/testing-and-quality.md`,
+`docs/archives/audits/code-smell-audit-2026-05-15.md`
+
+### CLI surface (`tvw`)
+
+**장기 방향**: 자동화 + 에이전트 표면. one-shot v0.1 (SQL 코어 4종:
+PostgreSQL/MySQL/MariaDB/SQLite) → REPL + completion → 앱 지원 DBMS 확장 (CLI
+claim ⊆ 앱 claim 원칙) → `tvw mcp` 서버 모드. TUI 는 영구 non-goal. 새 DBMS
+claim 을 만들지 않는 surface 트랙이라 runtime promotion freeze (순서 규칙 3) 와
+독립.
+
+**현재 기준**: ADR 0058, GitHub milestone 33.00
 
 ## 순서 규칙
 

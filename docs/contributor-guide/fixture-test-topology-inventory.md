@@ -58,32 +58,32 @@ Supporting checks:
 
 ## Fixture Topology Table
 
-| fixture path | dbms/profile | lifecycle | consumed by tests | evidence tier | product docs row | smoke routing | action |
+| fixture path | dbms/profile | lifecycle | consumed by tests | evidence tier | product docs entry | smoke routing | action |
 |---|---|---|---|---|---|---|---|
 | `fixtures/base.yaml` | shared fixture generator schema for PostgreSQL, MongoDB, MySQL, SQLite, DuckDB, MariaDB, MSSQL, Oracle, Redis | authored static generator spec | `scripts/fixtures/spec.test.ts`, `scripts/fixtures/generator.test.ts`, fixture CLI via `loadSpec()` | generator contract only; not product/runtime evidence | none | none directly; CLI fixture stack only | consumed; keep |
 | `fixtures/profiles/development.yaml` | `development` profile | authored static generator profile | `scripts/fixtures/spec.test.ts`, `scripts/fixtures/index.ts`, `scripts/e2e-pre-smoke-release-gate.ts`, fixture stack tests | generator/profile contract only | none | none directly; `scripts/db/wait.sh` can seed Redis development fixture | consumed; keep |
 | `fixtures/profiles/e2e.yaml` | `e2e` profile | authored static generator profile; file comment marks it dormant until WebDriver cold-start/OOM blocker is cleared | `scripts/fixtures/spec.test.ts`, `scripts/fixtures/generator.test.ts`, `scripts/fixtures/fixture-stack.test.ts`, `scripts/e2e-pre-smoke-release-gate.ts` | dormant static contract; not current Runtime Happy Path seed | none | none directly; current Runtime Happy Path uses DBMS/function topology paths under `e2e/fixtures/**` instead | dormant; keep |
-| `tests/fixtures/data-source-profile-parity.report.json` | all `DatabaseType` profiles | authored static JSON report | `src/types/dataSourceProfileParity.test.ts`, `src-tauri/tests/data_source_profile_parity.rs` | TS/Rust strict profile parity contract; profile presence is not runtime support | none; product rows depend on profile/runtime evidence, not this report alone | none | consumed; keep |
+| `tests/fixtures/data-source-profile-parity.report.json` | all `DatabaseType` profiles | authored static JSON report | `src/types/dataSourceProfileParity.test.ts`, `src-tauri/tests/data_source_profile_parity.rs` | TS/Rust strict profile parity contract; profile presence is not runtime support | none; product entries depend on profile/runtime evidence, not this report alone | none | consumed; keep |
 | `tests/fixtures/fk_reference_samples.json` | RDB FK reference parser/serializer sample | authored static JSON fixture | `tests/fixtures/fk_reference_samples.test.ts`, `src-tauri/tests/fixture_loading.rs`, `src/components/datagrid/DataGridTable.parseFkReference.test.ts`, `src-tauri/src/db/postgres/schema.rs` tests | shared parser/serializer fixture; not product/runtime evidence | none | none | consumed; keep |
 | `tests/fixtures/fk_reference_samples.test.ts` | RDB FK reference loader test | authored Vitest loader test colocated with fixture | `pnpm exec vitest run tests/fixtures/fk_reference_samples.test.ts` when selected by frontend tests | fixture loader evidence | none | none | consumed; keep as test source |
-| `tests/fixtures/unsupported_boundary_contracts.json` | unsupported/partial-support support-boundary rows | authored static JSON fixture | `tests/fixtures/unsupported_boundary_contracts.test.ts` | negative support-boundary evidence only; not runtime support | known-limitations/query-language boundary rows | none | consumed; keep |
+| `tests/fixtures/unsupported_boundary_contracts.json` | unsupported/partial-support support-boundary rows | authored static JSON fixture | `tests/fixtures/unsupported_boundary_contracts.test.ts` | negative support-boundary evidence only; not runtime support | known-limitations/query-language boundary entries | none | consumed; keep |
 | `tests/fixtures/unsupported_boundary_contracts.test.ts` | unsupported-boundary loader/contract test | authored Vitest contract test colocated with fixture | `pnpm exec vitest run tests/fixtures/unsupported_boundary_contracts.test.ts` | support-boundary guard | none | none | consumed; keep as test source |
-| `e2e/fixtures/seed-smoke.ts` | PostgreSQL, MongoDB, MySQL, MariaDB, Redis, Valkey, Elasticsearch, OpenSearch, MSSQL, Oracle | authored smoke seed orchestrator | `scripts/e2e-smoke-ci.sh`, `scripts/fixtures/dbms-seeds.test.ts` | Runtime Happy Path seed routing for wired external-service smoke targets | `docs/product/current-support-snapshot.md` and `docs/product/fixture-coverage-snapshot.md` rows for the routed DBMSs; MSSQL/Oracle bounded runtime and #907 smoke rows | invoked before `scripts/e2e-smoke-ci.sh` runs wired specs; maps SQLite/DuckDB to no external seed | consumed; keep |
+| `e2e/fixtures/seed-smoke.ts` | PostgreSQL, MongoDB, MySQL, MariaDB, Redis, Valkey, Elasticsearch, OpenSearch, MSSQL, Oracle | authored smoke seed orchestrator | `scripts/e2e-smoke-ci.sh`, `scripts/fixtures/dbms-seeds.test.ts` | Runtime Happy Path seed routing for wired external-service smoke targets | `docs/product/current-support-snapshot.md` and `docs/product/fixture-coverage-snapshot.md` entries for the routed DBMSs; MSSQL/Oracle bounded runtime and #907 smoke entries | invoked before `scripts/e2e-smoke-ci.sh` runs wired specs; maps SQLite/DuckDB to no external seed | consumed; keep |
 | `e2e/fixtures/smoke-routing-decisions.json` | all tracked fixture-root promotion decisions | authored machine-readable routing table | `scripts/e2e-smoke-routing-decisions.ts`, `scripts/e2e-smoke-ci.sh`, `scripts/fixtures/dbms-seeds.test.ts` | smoke promotion SOT; records unit/integration/dormant/blocking tier with cost/risk | supports product docs by preventing fixture-only claim widening | pre-smoke guard runs before script-wired smoke specs | consumed; keep |
-| `e2e/fixtures/postgresql/query/seed.sql` | PostgreSQL | authored idempotent SQL seed | `e2e/fixtures/seed-smoke.ts`, `scripts/fixtures/dbms-seeds.test.ts` | wired Runtime Happy Path seed | PostgreSQL row; Fixture Coverage Snapshot PostgreSQL row | `postgres`, `postgres-safe-mode`, `postgres-explain`, `postgres-extension-completion`, `postgres-cancellation`, `postgres-structure-ddl` specs via seed target `postgres` | consumed; keep |
-| `e2e/fixtures/mysql/query/seed.sql` | MySQL | authored idempotent SQL seed | `e2e/fixtures/seed-smoke.ts`, `scripts/fixtures/dbms-seeds.test.ts` | wired Runtime Happy Path seed | MySQL row; Fixture Coverage Snapshot MySQL row | `mysql` spec via seed target `mysql` | consumed; keep |
-| `e2e/fixtures/mariadb/query/seed.sql` | MariaDB | authored idempotent SQL seed with catalog/workbench probes | `e2e/fixtures/seed-smoke.ts`, `scripts/fixtures/dbms-seeds.test.ts` | wired Runtime Happy Path seed plus catalog probe contract | MariaDB row; Fixture Coverage Snapshot MariaDB row | `mariadb` spec via seed target `mariadb` | consumed; keep |
-| `e2e/fixtures/seed.mssql.sql` | MSSQL / SQL Server | authored SQL Server seed | `e2e/fixtures/seed-smoke.ts`, `scripts/fixtures/dbms-seeds.test.ts`, `e2e/smoke/mssql.spec.ts` | wired Runtime Happy Path seed for bounded SQL Server smoke | MSSQL #907 bounded runtime/smoke row; Fixture Coverage Snapshot MSSQL row | `mssql` spec via enterprise RDBMS workflow/script route | consumed; keep |
-| `e2e/fixtures/seed.oracle.sql` | Oracle | authored Oracle seed | `e2e/fixtures/seed-smoke.ts`, `scripts/fixtures/dbms-seeds.test.ts`, `e2e/smoke/oracle.spec.ts`, `src-tauri/tests/oracle_smoke_boundary_probe.rs` ignored probes | wired Runtime Happy Path seed for bounded Oracle smoke; not structured DDL, full parser/completion promotion, or PL/SQL evidence | Oracle #905/#906/#907 bounded runtime/edit/smoke row; Fixture Coverage Snapshot Oracle row | `oracle` spec via enterprise RDBMS workflow/script route | consumed; keep |
-| `e2e/fixtures/sqlite/query/seed.sql` | SQLite | authored local-file SQL seed | `e2e/smoke/sqlite.spec.ts`, `scripts/fixtures/dbms-seeds.test.ts` | wired Runtime Happy Path seed for file smoke | SQLite row; Fixture Coverage Snapshot SQLite row | `sqlite` spec reads file directly; `seed-smoke.ts` maps `sqlite` to no external seed | consumed; keep |
-| `e2e/fixtures/duckdb/query/seed.sql` | DuckDB | authored local-file SQL seed | `e2e/smoke/duckdb.spec.ts`, `scripts/fixtures/dbms-seeds.test.ts` | wired Runtime Happy Path seed for `.duckdb` file smoke | DuckDB row; Fixture Coverage Snapshot DuckDB row | `duckdb` spec reads file directly; `seed-smoke.ts` maps `duckdb` to no external seed | consumed; keep |
-| `e2e/fixtures/mongodb/document/seed.json` | MongoDB | authored idempotent document seed | `e2e/fixtures/seed-smoke.ts`, `scripts/fixtures/dbms-seeds.test.ts` | wired Runtime Happy Path seed | MongoDB row; Fixture Coverage Snapshot MongoDB row | `mongodb` spec and `phase-28-slice-A` seed target `mongodb`; only `mongodb` is routine script spec | consumed; keep |
-| `e2e/fixtures/redis/kv/seed.json` | Redis | authored idempotent KV seed | `e2e/fixtures/seed-smoke.ts`, `scripts/fixtures/dbms-seeds.test.ts` | wired Runtime Happy Path seed | Redis row; Fixture Coverage Snapshot Redis row | `redis` spec via seed target `redis` | consumed; keep |
-| `e2e/fixtures/valkey/kv/seed.json` | Valkey | authored Runtime Happy Path KV seed | `e2e/fixtures/seed-smoke.ts`, `scripts/fixtures/dbms-seeds.test.ts` | wired Runtime Happy Path seed | Valkey row; Fixture Coverage Snapshot Valkey row | `valkey` spec via seed target `valkey` | consumed; keep |
-| `e2e/fixtures/valkey.redis-compatibility.json` | Valkey Redis compatibility matrix | authored static compatibility matrix | `scripts/fixtures/dbms-seeds.test.ts`, product/query-language docs | static matrix plus focused-runtime boundary; not full Redis compatibility evidence | Valkey row; Fixture Coverage Snapshot Valkey row; `docs/product/query-language-support.md` Valkey boundary row | no direct smoke execution; paired with `e2e/fixtures/valkey/kv/seed.json` evidence | consumed; keep |
-| `e2e/fixtures/elasticsearch/search/seed.json` | Elasticsearch | authored Search seed JSON | `e2e/fixtures/seed-smoke.ts`, `scripts/fixtures/dbms-seeds.test.ts` | embedded Search fixture contract plus wired Runtime Happy Path seed | Elasticsearch/OpenSearch row; Fixture Coverage Snapshot Elasticsearch row | `elasticsearch` spec via seed target `elasticsearch` | consumed; keep |
-| `e2e/fixtures/opensearch/search/seed.json` | OpenSearch | authored Search seed JSON | `e2e/fixtures/seed-smoke.ts`, `scripts/fixtures/dbms-seeds.test.ts` | embedded Search fixture contract plus wired Runtime Happy Path seed | Elasticsearch/OpenSearch row; Fixture Coverage Snapshot OpenSearch row | `opensearch` spec via seed target `opensearch` | consumed; keep |
-| `src-tauri/src/db/fixtures.rs` | Elasticsearch/OpenSearch fixture harness | authored Rust fixture harness with embedded static Search fixtures | `src-tauri/tests/fixture_harness.rs`, internal `#[cfg(test)]` module | local-first embedded fixture harness; DBMS seed files are separate | Search DSL / Elasticsearch/OpenSearch rows; Fixture Coverage Snapshot Search rows | none directly; harness backs focused adapter fixture tests, not `scripts/e2e-smoke-ci.sh` | consumed; keep; do not infer MSSQL/Oracle fixture presence from DBMS seed files |
+| `e2e/fixtures/postgresql/query/seed.sql` | PostgreSQL | authored idempotent SQL seed | `e2e/fixtures/seed-smoke.ts`, `scripts/fixtures/dbms-seeds.test.ts` | wired Runtime Happy Path seed | PostgreSQL entry; Fixture Coverage Snapshot PostgreSQL entry | `postgres`, `postgres-safe-mode`, `postgres-explain`, `postgres-extension-completion`, `postgres-cancellation`, `postgres-structure-ddl` specs via seed target `postgres` | consumed; keep |
+| `e2e/fixtures/mysql/query/seed.sql` | MySQL | authored idempotent SQL seed | `e2e/fixtures/seed-smoke.ts`, `scripts/fixtures/dbms-seeds.test.ts` | wired Runtime Happy Path seed | MySQL entry; Fixture Coverage Snapshot MySQL entry | `mysql` spec via seed target `mysql` | consumed; keep |
+| `e2e/fixtures/mariadb/query/seed.sql` | MariaDB | authored idempotent SQL seed with catalog/workbench probes | `e2e/fixtures/seed-smoke.ts`, `scripts/fixtures/dbms-seeds.test.ts` | wired Runtime Happy Path seed plus catalog probe contract | MariaDB entry; Fixture Coverage Snapshot MariaDB entry | `mariadb` spec via seed target `mariadb` | consumed; keep |
+| `e2e/fixtures/seed.mssql.sql` | MSSQL / SQL Server | authored SQL Server seed | `e2e/fixtures/seed-smoke.ts`, `scripts/fixtures/dbms-seeds.test.ts`, `e2e/smoke/mssql.spec.ts` | wired Runtime Happy Path seed for bounded SQL Server smoke | MSSQL #907 bounded runtime/smoke entry; Fixture Coverage Snapshot MSSQL entry | `mssql` spec via enterprise RDBMS workflow/script route | consumed; keep |
+| `e2e/fixtures/seed.oracle.sql` | Oracle | authored Oracle seed | `e2e/fixtures/seed-smoke.ts`, `scripts/fixtures/dbms-seeds.test.ts`, `e2e/smoke/oracle.spec.ts`, `src-tauri/tests/oracle_smoke_boundary_probe.rs` ignored probes | wired Runtime Happy Path seed for bounded Oracle smoke; not structured DDL, full parser/completion promotion, or PL/SQL evidence | Oracle #905/#906/#907 bounded runtime/edit/smoke entry; Fixture Coverage Snapshot Oracle entry | `oracle` spec via enterprise RDBMS workflow/script route | consumed; keep |
+| `e2e/fixtures/sqlite/query/seed.sql` | SQLite | authored local-file SQL seed | `e2e/smoke/sqlite.spec.ts`, `scripts/fixtures/dbms-seeds.test.ts` | wired Runtime Happy Path seed for file smoke | SQLite entry; Fixture Coverage Snapshot SQLite entry | `sqlite` spec reads file directly; `seed-smoke.ts` maps `sqlite` to no external seed | consumed; keep |
+| `e2e/fixtures/duckdb/query/seed.sql` | DuckDB | authored local-file SQL seed | `e2e/smoke/duckdb.spec.ts`, `scripts/fixtures/dbms-seeds.test.ts` | wired Runtime Happy Path seed for `.duckdb` file smoke | DuckDB entry; Fixture Coverage Snapshot DuckDB entry | `duckdb` spec reads file directly; `seed-smoke.ts` maps `duckdb` to no external seed | consumed; keep |
+| `e2e/fixtures/mongodb/document/seed.json` | MongoDB | authored idempotent document seed | `e2e/fixtures/seed-smoke.ts`, `scripts/fixtures/dbms-seeds.test.ts` | wired Runtime Happy Path seed | MongoDB entry; Fixture Coverage Snapshot MongoDB entry | `mongodb` spec and `phase-28-slice-A` seed target `mongodb`; only `mongodb` is routine script spec | consumed; keep |
+| `e2e/fixtures/redis/kv/seed.json` | Redis | authored idempotent KV seed | `e2e/fixtures/seed-smoke.ts`, `scripts/fixtures/dbms-seeds.test.ts` | wired Runtime Happy Path seed | Redis entry; Fixture Coverage Snapshot Redis entry | `redis` spec via seed target `redis` | consumed; keep |
+| `e2e/fixtures/valkey/kv/seed.json` | Valkey | authored Runtime Happy Path KV seed | `e2e/fixtures/seed-smoke.ts`, `scripts/fixtures/dbms-seeds.test.ts` | wired Runtime Happy Path seed | Valkey entry; Fixture Coverage Snapshot Valkey entry | `valkey` spec via seed target `valkey` | consumed; keep |
+| `e2e/fixtures/valkey.redis-compatibility.json` | Valkey Redis compatibility matrix | authored static compatibility matrix | `scripts/fixtures/dbms-seeds.test.ts`, product/query-language docs | static matrix plus focused-runtime boundary; not full Redis compatibility evidence | Valkey entry; Fixture Coverage Snapshot Valkey entry; `docs/product/query-language-support.md` Valkey boundary entry | no direct smoke execution; paired with `e2e/fixtures/valkey/kv/seed.json` evidence | consumed; keep |
+| `e2e/fixtures/elasticsearch/search/seed.json` | Elasticsearch | authored Search seed JSON | `e2e/fixtures/seed-smoke.ts`, `scripts/fixtures/dbms-seeds.test.ts` | embedded Search fixture contract plus wired Runtime Happy Path seed | Elasticsearch/OpenSearch entry; Fixture Coverage Snapshot Elasticsearch entry | `elasticsearch` spec via seed target `elasticsearch` | consumed; keep |
+| `e2e/fixtures/opensearch/search/seed.json` | OpenSearch | authored Search seed JSON | `e2e/fixtures/seed-smoke.ts`, `scripts/fixtures/dbms-seeds.test.ts` | embedded Search fixture contract plus wired Runtime Happy Path seed | Elasticsearch/OpenSearch entry; Fixture Coverage Snapshot OpenSearch entry | `opensearch` spec via seed target `opensearch` | consumed; keep |
+| `src-tauri/src/db/fixtures.rs` | Elasticsearch/OpenSearch fixture harness | authored Rust fixture harness with embedded static Search fixtures | `src-tauri/tests/fixture_harness.rs`, internal `#[cfg(test)]` module | local-first embedded fixture harness; DBMS seed files are separate | Search DSL / Elasticsearch/OpenSearch entries; Fixture Coverage Snapshot Search entries | none directly; harness backs focused adapter fixture tests, not `scripts/e2e-smoke-ci.sh` | consumed; keep; do not infer MSSQL/Oracle fixture presence from DBMS seed files |
 
 ## Smoke Routing Notes
 
@@ -159,12 +159,52 @@ Allowed tiers: `unit-only`, `integration-backed`, `dormant E2E`, `blocking E2E`.
 Routine remote smoke is the script-wired subset, not every file under
 `e2e/smoke/**`.
 
-| scenario surface | current files | fixture dependency | action |
-|---|---|---|---|
-| Routine Runtime Happy Path smoke | `postgres.spec.ts`, `postgres-safe-mode.spec.ts`, `postgres-explain.spec.ts`, `postgres-extension-completion.spec.ts`, `postgres-cancellation.spec.ts`, `postgres-structure-ddl.spec.ts`, `erd-dense.spec.ts`, `mysql.spec.ts`, `mariadb.spec.ts`, `sqlite.spec.ts`, `duckdb.spec.ts`, `duckdb-file-analytics.spec.ts`, `mongodb.spec.ts`, `redis.spec.ts`, `valkey.spec.ts`, `elasticsearch.spec.ts`, `opensearch.spec.ts`, `mssql.spec.ts`, `oracle.spec.ts` | Wired by `scripts/e2e-smoke-ci.sh`; service-backed specs seed through `e2e/fixtures/seed-smoke.ts`, while SQLite, DuckDB, and DuckDB file analytics read local file fixtures directly. MSSQL/Oracle run through the enterprise RDBMS workflow route. | consumed; keep as routine gate |
-| Non-routine E2E smoke assets | `history-source-5.spec.ts`, `phase-28-slice-A.spec.ts`, helper modules under `e2e/smoke/*.ts` | May reuse smoke helpers or fixture data, but not script-wired into the routine gate. | consumed/manual; keep out of support-claim expansion |
-| Frontend fixture loader tests | `tests/fixtures/fk_reference_samples.test.ts`, `src/types/dataSourceProfileParity.test.ts` | Read tracked fixtures under `tests/fixtures/**`. | consumed; keep |
-| Fixture CLI tests | `scripts/fixtures/*.test.ts` | Read `fixtures/**`, `e2e/fixtures/**`, workflow/script routing, and DBMS seed files. | consumed; keep |
+### Routine Runtime Happy Path smoke
+
+**current files**: `postgres.spec.ts`, `postgres-safe-mode.spec.ts`,
+`postgres-explain.spec.ts`, `postgres-extension-completion.spec.ts`,
+`postgres-cancellation.spec.ts`, `postgres-structure-ddl.spec.ts`,
+`erd-dense.spec.ts`, `mysql.spec.ts`, `mariadb.spec.ts`, `sqlite.spec.ts`,
+`duckdb.spec.ts`, `duckdb-file-analytics.spec.ts`, `mongodb.spec.ts`,
+`redis.spec.ts`, `valkey.spec.ts`, `elasticsearch.spec.ts`,
+`opensearch.spec.ts`, `mssql.spec.ts`, `oracle.spec.ts`
+
+**fixture dependency**: Wired by `scripts/e2e-smoke-ci.sh`; service-backed specs
+seed through `e2e/fixtures/seed-smoke.ts`, while SQLite, DuckDB, and DuckDB file
+analytics read local file fixtures directly. MSSQL/Oracle run through the
+enterprise RDBMS workflow route.
+
+**action**: consumed; keep as routine gate
+
+### Non-routine E2E smoke assets
+
+**current files**: `history-source-5.spec.ts`, `phase-28-slice-A.spec.ts`,
+helper modules under `e2e/smoke/*.ts`
+
+**fixture dependency**: May reuse smoke helpers or fixture data, but not
+script-wired into the routine gate.
+
+**action**: consumed/manual; keep out of support-claim expansion
+
+### Frontend fixture loader tests
+
+**current files**: `tests/fixtures/fk_reference_samples.test.ts`,
+`src/types/dataSourceProfileParity.test.ts`
+
+**fixture dependency**: Read tracked fixtures under `tests/fixtures/**`.
+
+**action**: consumed; keep
+
+### Fixture CLI tests
+
+**current files**: `scripts/fixtures/*.test.ts`
+
+**fixture dependency**: Read `fixtures/**`, `e2e/fixtures/**`, workflow/script
+routing, and DBMS seed files.
+
+**action**: consumed; keep
+
+## Large Scenario Test Risk
 
 Large scenario-style tests are not fixture roots, but later topology work should
 treat them as refactor risk because they couple multiple support claims in one
