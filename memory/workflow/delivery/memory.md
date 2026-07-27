@@ -61,6 +61,15 @@ mergeable, 사용자 거부 없음)과 T0~T7 세부는 skill 참조.
 외부 시각 필요 시 `codex-reviewer` (사용자 명시 시만). Multi-worktree 병렬 시 각
 worktree 의 delivery 도 delivery owner 가 소유, merge 는 owner 책임.
 
+## Spawn 전 파일 교집합
+
+작업 agent 를 띄우기 전에 열린 PR 전부와 대상 파일의 교집합을 잰다 — 열린
+branch 마다 `git diff --name-only origin/main...origin/<branch>`. 교집합이 비어
+있지 않으면 소유권을 줄 단위로 가르거나 머지 순서를 먼저 못 박는다. 나중에 푸는
+머지 충돌 1건 = 리뷰 라운드 1개 폐기 (push 가 `review:approved` 를 자동 해제 —
+[review](../review/memory.md)). 리뷰가 2라운드에 진입하면 fix 착수 전에 같은
+방의 재설계 심사를 먼저 한다.
+
 ## Why
 
 사용자 2026-05-16 강하게 lock — "커밋 왜 자꾸 나한테 하라고 지랄이야". 이전 패턴

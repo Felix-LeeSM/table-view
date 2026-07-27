@@ -1,7 +1,7 @@
 ---
 title: PR Review Behavior
 type: workflow-rule
-updated: 2026-07-02
+updated: 2026-07-27
 task: review, pr-reviewer, delivery
 trigger:
   signal: PR 생성 / 사용자가 "리뷰해" / delivery T4
@@ -45,6 +45,53 @@ agent가 반드시 취해야 할 행동 계약만 둔다. 평가 차원, profile
 - 결함이 있으면 delivery owner가 수정하고 push한 뒤 review를 다시 요청한다.
 - Merge 판단은 delivery owner 책임이다. Reviewer pack은 판단 input만 제공한다.
 - External reviewer는 사용자가 명시적으로 요청했을 때만 추가한다.
+
+## 라운드 에스컬레이션
+
+라운드 수는 결함 개수가 아니라 **작업 설계**의 신호다. reviewer와 delivery
+owner는 다음 라운드의 fix에 착수하기 전에 아래 단계를 먼저 수행한다.
+
+### Round 2 — 재설계 심사
+
+2라운드 리뷰가 열리면 fix를 시작하기 전에 세 질문에 답하고, 답을 PR body나
+review comment에 남긴다.
+
+1. 이 작업이 **왜** 필요한가 — 막으려는 실제 결함이 무엇이고 지금 살아 있는가.
+2. 지금 방식이 **최선인가** — 더 싼 방식, 아예 안 만드는 선택지가 있는가.
+3. 지금까지의 finding이 **원래 문제**에서 나왔는가, 아니면 **선택한 방식이 만든
+   부수 문제**에서 나왔는가.
+
+3번이 판별식이다. finding이 방식 자체에서 파생되면 finding을 고치는 건 밑빠진
+독이다 — 방식을 바꾸거나 작업을 접는다. 실측 선례:
+
+- PR #1828 (closed, `+1638 / -15`): 6라운드 중 5라운드가 600자 규칙이 아니라
+  ratchet 기계의 semantics에 쓰였다. 그 기계는 grandfathered 부채(205 → 37)를
+  관용하려고만 존재 → 부채를 0으로 민 뒤 예외 없는 hard cap으로 교체.
+- PR #1845: always-on job → allowlist → drift guard → pre-push route →
+  classifier 예외로 이어진 사슬 전체가 단 하나의 거짓 분류(docs-only 변경을
+  `code_changed=false`로 내보내 downstream이 "아무것도 안 바뀜"으로 읽음)를
+  보정하고 있었다. round 3에서 분류를 고치자 사슬이 통째로 삭제됐다.
+
+### Round 3 — 클래스 재발 표
+
+3라운드부터 reviewer는 개별 finding 나열보다 먼저, finding을 증상이 아니라
+**클래스**로 라벨링하고 라운드별 재발 횟수를 표로 낸다. vicious cycle 신호:
+
+- 같은 클래스가 2라운드 연속 등장.
+- 어떤 fix가 자기 클래스의 새 인스턴스를 만들어냄.
+- 중복 발생 지점 수가 증가.
+- 이전 라운드의 non-blocking이 다음 라운드의 blocking으로 승격 — 가장 강한 신호.
+
+신호가 하나라도 잡히면 Round 2 재설계 심사로 되돌아간다.
+
+## Fix scope — severity가 아니라 defect class
+
+finding은 인용된 `file:line`이 아니라 **클래스**로 닫는다. blocking /
+non-blocking 구분 없이 tree 전수 스윕과 잔여 0을 보이는 검색 근거를 붙인다.
+severity로 scope를 가르면 non-blocking의 형제 인스턴스가 다음 라운드에
+blocking으로 승격한다 — 이 repo 재리뷰의 최대 원인. PR #1839에서 승격이 R1→R2,
+R1→R3 각 1회 일어났고, severity gate를 없앤 라운드는 R3→R4 승격 0 / fix가 만든
+새 인스턴스 0으로 green.
 
 ## Merge 전 요구
 

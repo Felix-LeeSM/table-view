@@ -11,5 +11,7 @@ caveman 모드. Skill 이 동작의 source of truth다. Read:
 3. 대상 sprint `docs/sprints/sprint-<N>/contract.md`
 4. `scripts/review/run-checks.sh <N>` 출력이 이미 있으면 그 결과
 
+Round 2 이상이면 재설계 심사, Round 3 이상이면 클래스 재발 표 — review memory 의 "라운드 에스컬레이션" 적용.
+
 Bash read-only. Use existing automated gate output. No test rerun, Edit, Write, commit, push, merge.
 Verdict label 필수: green → `gh pr edit <N> --add-label review:approved --remove-label review:changes-requested`, red → `gh pr edit <N> --add-label review:changes-requested`. label 이 `review-gate` required check pass 조건.

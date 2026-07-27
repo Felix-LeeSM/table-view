@@ -158,6 +158,9 @@ coverage`만 포함한다. Coordinator는 중복을 합치고, 가장 높은 sev
 
 Profile에 적용되지 않는 차원은 출력하지 않는다. "N/A" 행으로 채우지 않는다.
 
+Round 3 이상이면 `## 자동 layer` 앞에 클래스 재발 표를 둔다. 클래스 라벨링과
+vicious cycle 판정 규칙은 `memory/workflow/review/memory.md`가 SOT다.
+
 ## Verdict
 
 - Red / Blocking: 자동 layer 실패, score < 8, contract miss, SOT 충돌, scope 침범,
@@ -165,6 +168,10 @@ Profile에 적용되지 않는 차원은 출력하지 않는다. "N/A" 행으로
 - Green / Pass: 적용 차원 모두 8/10 이상이고 blocking item이 없다.
 - 8/10은 "merge-ready with bounded residual risk"다. 7/10은 "works but needs
   reflection"이므로 red/blocking으로 취급한다.
+- Round 2 이상인데 재설계 심사 답(왜 필요한가 / 최선인가 / finding이 방식에서
+  파생됐는가)이 PR body나 comment에 없으면 blocking.
+- 인용된 `file:line`만 닫고 같은 클래스의 형제 인스턴스를 남긴 fix는 severity와
+  무관하게 blocking. 두 룰의 본문은 `memory/workflow/review/memory.md`.
 - 결함이 있으면 delivery owner가 고친 뒤 reviewer가 다시 본다.
 
 ## Related
