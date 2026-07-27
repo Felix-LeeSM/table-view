@@ -100,16 +100,15 @@ pre-commit:
           echo "WARNING: Possible hardcoded secrets detected in staged files"
           exit 1
         fi
-    no-line-number-refs:
-      # Source comments must cite a symbol, not `file.ext:NNN` — a line number
-      # rots the moment the target file shifts by one line and nothing catches
-      # it. Repo-wide legitimate uses at introduction: 0 (issue #1839 sweep).
-      glob: "*.{rs,ts,tsx,sh}"
-      run: |
-        if grep -nE '[A-Za-z0-9_-]+\.(rs|ts|tsx|sh):[0-9]+' {staged_files}; then
-          echo "ERROR: line-number reference above — cite the symbol name instead" >&2
-          exit 1
-        fi
+    comment-refs:
+      # Fast local mirror of the `pnpm lint` gate — same script, so the rule
+      # body exists once (scripts/static-policy/comment-refs.ts) and cannot
+      # drift between here and CI. TREE-WIDE, not `{staged_files}`: the class
+      # it bans came back through files nobody was editing, which a staged-file
+      # scan is structurally blind to. The blocking copy runs in CI
+      # `Frontend Checks`, which fires on docs-only PRs too (#1845).
+      glob: "*.{rs,ts,tsx,js,mjs,cjs,sh,sql,md,yml,yaml,toml}"
+      run: npx tsx scripts/check-comment-refs.ts
     adr-frozen:
       # Sprint 388 — docs/archives/decisions/*/memory.md 의 frontmatter 외 hunk 차단.
       # 새 ADR (untracked → added) 은 OK. 결정 뒤집기는 새 ADR + supersedes.

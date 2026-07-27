@@ -54,7 +54,7 @@ import OrderedColumnPicker from "./OrderedColumnPicker";
 /**
  * The five PG-canonical referential actions for FK ON DELETE / ON
  * UPDATE clauses. Backend whitelists this exact set (case-sensitive
- * uppercase) — see `src-tauri/src/db/postgres/mutations.rs`
+ * uppercase) — see `src-tauri/src/db/postgres/mutations/ddl.rs`
  * `format_referential_action_clause`.
  */
 export type ReferentialAction =

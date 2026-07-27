@@ -1964,7 +1964,7 @@ async fn test_execute_query_bigint_select_emits_string_wire() {
 // =============================================================================
 // Sprint 296 follow-up (2026-05-14) — PG RdbAdapter 트레잇 dispatch 통합
 // =============================================================================
-// 작성 이유: `db/postgres.rs` (390 line) 의 트레잇 dispatch wrapper 가
+// 작성 이유: `db/postgres.rs` 의 `RdbAdapter` 트레잇 dispatch wrapper 가
 // 4.62% 만 hit. inherent method 만 직접 호출하던 기존 시나리오는 트레잇 surface
 // 를 건너뛴다. Sprint 296 의 MySQL 측 (`db/mysql.rs`) 합류를 PG 로 mirror —
 // `Arc<dyn DbAdapter>` / `Arc<dyn RdbAdapter>` 로 호출해 wrapper 본체를 hit.

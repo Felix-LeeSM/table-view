@@ -11,7 +11,8 @@
 -- 전환.
 
 -- ---------------------------------------------------------------------------
--- connections — strategy line 1156 (LegacyPayload shape) + models/connection.rs.
+-- connections — strategy F.2 "W1 boot import 절차" 의 `LegacyPayload` shape
+-- + models/connection.rs.
 -- Encrypted password ciphertext (post-Q22 keyring 이주 시점에는 keyring 이
 -- SOT 가 되지만, schema 자체는 그대로 — `password_enc` 컬럼이 빈 문자열).
 -- ---------------------------------------------------------------------------
@@ -53,7 +54,7 @@ CREATE TABLE IF NOT EXISTS connection_groups (
 
 -- ---------------------------------------------------------------------------
 -- workspaces — Q13 PK (connection_id, db_name) + 3 JSON columns (tabs /
--- sidebar_expanded / closed_tabs). Strategy line 615–632.
+-- sidebar_expanded / closed_tabs). Strategy Q13 "`workspaces` table".
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS workspaces (
     connection_id         TEXT NOT NULL,
@@ -77,7 +78,8 @@ CREATE INDEX IF NOT EXISTS idx_mru_last_used ON mru(last_used DESC);
 
 -- ---------------------------------------------------------------------------
 -- settings — key-value (theme / safe_mode / sidebar_width / home_recent_collapsed
--- / query_history_retention_days / query_history_enabled). Strategy line 650–664.
+-- / query_history_retention_days / query_history_enabled).
+-- Strategy Q12 "`settings` table".
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS settings (
     key         TEXT PRIMARY KEY,
@@ -87,7 +89,7 @@ CREATE TABLE IF NOT EXISTS settings (
 
 -- ---------------------------------------------------------------------------
 -- query_history — Q13 + codex 6차 #2 (query_mode 추가, workspace_id 컬럼 / index
--- 제거). Strategy line 535–562.
+-- 제거). Strategy Q13 "`query_history` schema".
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS query_history (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -128,7 +130,7 @@ CREATE INDEX IF NOT EXISTS idx_favorites_connection ON favorites(connection_id);
 
 -- ---------------------------------------------------------------------------
 -- datagrid_column_prefs — Q20.4 + Q20.5 (codex 7차 #2 — PK 5-tuple).
--- Strategy line 671–685.
+-- Strategy Q20 "`datagrid_column_prefs` table".
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS datagrid_column_prefs (
     connection_id       TEXT NOT NULL,
@@ -143,7 +145,8 @@ CREATE TABLE IF NOT EXISTS datagrid_column_prefs (
 );
 
 -- ---------------------------------------------------------------------------
--- meta — key-value sentinels. Strategy line 1184 `legacy_imported` 4-state:
+-- meta — key-value sentinels. Strategy F.2 "Race gate" 의 `legacy_imported`
+-- 4-state:
 --   pending | importing | done | failed.
 --
 -- Fresh install 의 default = 'pending'. Frontend 가 LS read 후 IPC 호출 시

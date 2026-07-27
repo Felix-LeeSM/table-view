@@ -1,6 +1,7 @@
 //! 작성 2026-05-16 (Phase 1 sprint-355) — AC-355-07 grep CI.
 //!
-//! Strategy 1222: "backend grep CI: `#[tauri::command]` 함수가 A/C domain
+//! Strategy F.2 "Guard 적용 IPC 전체 목록" 의 마지막 문단: "backend grep CI:
+//! `#[tauri::command]` 함수가 A/C domain
 //! mutate 면 함수 첫줄에 `state.guard_legacy_import_done()?` 있어야 함."
 //!
 //! 본 sprint (355) 시점에는 A/C domain mutate IPC 의 실체가 아직 sprint-358+

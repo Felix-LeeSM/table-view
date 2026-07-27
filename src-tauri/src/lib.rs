@@ -233,7 +233,8 @@ pub fn run() {
     //    the JS close-requested handler could prevent it, ensure the
     //    launcher is visible so the user isn't left without any window.
     //
-    // 2. Sprint 363 (Q13 lock) — Launcher CloseRequested:
+    // 2. Sprint 363 (Phase 3 "Single-instance + Launcher 영속", Q3) —
+    //    Launcher CloseRequested:
     //    when the user clicks the launcher's close button (X), intercept
     //    the OS-level close, `prevent_close()` the event, and hide the
     //    launcher via `handle_launcher_close_request`. This keeps the

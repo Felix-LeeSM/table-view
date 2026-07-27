@@ -1,6 +1,7 @@
 // 작성 2026-05-16 (Phase 3 sprint-363)
 //
-// 사유: sprint-363 (Q13 lock) 으로 launcher close 의 의미가
+// 사유: sprint-363 (Phase 3 "Single-instance + Launcher 영속", Q3) 으로
+// launcher close 의 의미가
 // **exit → hide** 로 바뀐다. `registerLauncherCloseHandler` 는 backend 가
 // 이미 `api.prevent_close()` 로 OS-level close 를 차단하고 hide 를 수행한
 // 상태에서 jsdom / runtime 모두에서 동일한 lifecycle 신호 (`hideWindow('launcher')`)

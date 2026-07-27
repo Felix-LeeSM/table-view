@@ -64,8 +64,8 @@ pub async fn persist_mru(
 /// `RecentConnections` panel converges to empty without re-fetching the
 /// table.
 ///
-/// `Bulk` op is the contract for `mru` domain (strategy doc F.4 line
-/// 1305-1306 + frontend dispatcher `routeNormalHandler` `case "mru"`
+/// `Bulk` op is the contract for `mru` domain (strategy doc F.4
+/// `StateChangedPayload` + frontend dispatcher `routeNormalHandler` `case "mru"`
 /// which only knows `bulk`).
 pub async fn clear_mru_inner(pool: &SqlitePool) -> Result<(), AppError> {
     guard_legacy_import_done(pool).await?;

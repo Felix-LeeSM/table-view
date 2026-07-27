@@ -1,6 +1,7 @@
 //! Sprint 355 (Phase 1) — `import_legacy_localstorage` IPC.
 //!
-//! Strategy 1140–1180 의 LegacyPayload shape 을 받아 SQLite 에 1회 import.
+//! Strategy F.2 "W1 boot import 절차" 의 `LegacyPayload` shape 을 받아
+//! SQLite 에 1회 import.
 //! 4-state transition (pending → importing → done | failed) 을 `meta` table
 //! 로 추적. Idempotent — 이미 `done` 이면 no-op.
 //!
@@ -45,7 +46,8 @@ pub struct LegacyMruEntry {
     pub last_used: i64,
 }
 
-/// Strategy 1156: 실제 LS shape — `table-view-favorites` (array JSON),
+/// Strategy F.2 "W1 boot import 절차" 의 `LegacyPayload` — 실제 LS shape 은
+/// `table-view-favorites` (array JSON),
 /// `table-view-mru` (array JSON). 다른 LS key (workspaces / theme / safeMode)
 /// 는 sprint-358+ 에서 추가.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]

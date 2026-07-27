@@ -750,8 +750,9 @@ async fn count_null_rows_inner(
     // Sprint 237 — identifier validation runs *before* connection lookup
     // so a bogus schema / table / column short-circuits without taking
     // the `active_connections` lock. Mirrors the
-    // `validate_query_inputs` placement on `execute_query_inner` (line
-    // 57). The validator is the same `[a-zA-Z_][a-zA-Z0-9_]*` +
+    // `validate_query_inputs` call that opens `execute_query_inner`,
+    // ahead of its own lookup. The validator is the same
+    // `[a-zA-Z_][a-zA-Z0-9_]*` +
     // NAMEDATALEN-63 helper used by every DDL emitter
     // (`db/postgres/mutations.rs::validate_identifier`).
     validate_identifier(schema, "Schema name")?;

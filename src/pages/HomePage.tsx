@@ -107,7 +107,7 @@ export default function HomePage() {
   // Sprint 376 (Phase 6 Q21 #2) — Recent collapse reset. Backend deletes
   // the SQLite row and emits setting.reset; the strategy contract
   // F.4 "Reset op 처리 흐름" says receivers do not refetch — they apply the
-  // default (false) directly. Local window: collapse to default false
+  // frontend default (false) directly. Local window: collapse to default false
   // synchronously to mirror the cross-window outcome.
   const handleResetRecentCollapse = useCallback(() => {
     setRecentCollapsed(false);

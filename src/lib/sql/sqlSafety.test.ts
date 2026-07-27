@@ -363,7 +363,7 @@ describe("sqlSafety.analyzeStatement — fallback and severity contracts", () =>
   // (`WITH a AS (SELECT 1), b AS (DELETE FROM t) SELECT …`) was classified as a
   // benign read and ran without a confirm dialog in strict+production. The fix
   // scans EVERY `AS ( … )` body and merges the worst severity. Must stay in
-  // parity with the backend `classify_dml_cte` (safety.rs `multi_cte_parity`).
+  // parity with the backend `sql-parser-core/src/safety.rs` `classify_dml_cte`.
   // -------------------------------------------------------------------------
   describe("Issue #1350 — multi-CTE destructive body detection", () => {
     it("[AC-1350-01] 2nd CTE DELETE without WHERE → danger", () => {
@@ -582,10 +582,10 @@ describe("sqlSafety.analyzeStatement — fallback and severity contracts", () =>
 
 describe("sqlSafety — security-boundary classification (2026-07-17 audit)", () => {
   // Reason: an always-true predicate (WHERE 1=1) still classifies as warn,
-  // not danger — the static classifier only checks WHERE *presence*; danger
-  // promotion is deferred to the dynamic dry-run (sqlSafetyClassifier.ts
-  // ~538-542). Pin so a future "evaluate the predicate" refactor does not
-  // silently over-escalate. (2026-07-17)
+  // not danger — the static classifier `sqlSafetyClassifier.ts` only checks
+  // WHERE *presence*; danger promotion is deferred to the dynamic dry-run
+  // (`escalateWarnIfLargeImpact.ts`). Pin so a future "evaluate the predicate"
+  // refactor does not silently over-escalate. (2026-07-17)
   it("DELETE / UPDATE with a WHERE 1=1 predicate stay warn (not danger)", () => {
     const del = analyzeStatement("DELETE FROM t WHERE 1=1");
     expect(del.kind).toBe("dml-delete");
@@ -600,7 +600,7 @@ describe("sqlSafety — security-boundary classification (2026-07-17 audit)", ()
 
   // Reason: `session_replication_role = local` disables FK/trigger firing the
   // same as `replica`; the integrity-switch-off regex covers both
-  // (sqlSafetyClassifier.ts ~44 `REPLICA|LOCAL`). Existing tests pin only the
+  // (`sqlSafetyClassifier.ts` `INTEGRITY_SWITCH_OFF_RES`). Existing tests pin only the
   // `replica` variant. (2026-07-17)
   it("SET session_replication_role = local → warn (integrity switch off)", () => {
     const a = analyzeStatement("SET session_replication_role = local");

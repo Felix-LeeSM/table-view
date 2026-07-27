@@ -35,8 +35,8 @@ export async function persistSettingValue(
 /**
  * Sprint 376 (Phase 6 Q21) — single-key reset to default. Backend
  * deletes the SQLite `settings` row and emits `state-changed
- * { domain:"setting", op:"reset", entityId: key }`. Strategy doc line
- * 1389 — receivers do NOT refetch; they apply the frontend
+ * { domain:"setting", op:"reset", entityId: key }`. Strategy doc F.4
+ * "Reset op 처리 흐름" — receivers do NOT refetch; they apply the frontend
  * `SETTING_DEFAULTS[entityId]` constant directly. Idempotent: missing
  * key is a no-op but still emits so cross-window state converges.
  *

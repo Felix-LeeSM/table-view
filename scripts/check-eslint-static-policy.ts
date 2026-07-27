@@ -8,6 +8,7 @@ import {
   findCiGateEnumerationViolations,
   readCiGateEnumerationSources,
 } from "./static-policy/ci-gate-enumeration";
+import { findCommentRefFailures } from "./check-comment-refs";
 import {
   COMPLETION_FEATURE_REFERENCE_DOC_PATHS,
   findCompletionFeatureBoundaryViolations as findCompletionFeatureBoundaryViolationsImpl,
@@ -659,6 +660,9 @@ async function main() {
     ...findFeatureImportBoundaryViolations(sourceFileContents),
     ...findFrontendCompatInventoryViolations(sourceFileContents),
     ...ciGateFailures,
+    // Tree-wide, and deliberately not limited to the TS/TSX source roots above:
+    // the comment-reference class comes back through files nobody is editing.
+    ...findCommentRefFailures(cwd),
     ...(await validateFeatureBoundaryRule(eslint, cwd)),
   ];
 

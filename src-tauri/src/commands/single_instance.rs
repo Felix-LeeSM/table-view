@@ -3,8 +3,9 @@
 //! Background
 //! ----------
 //! The state-management strategy ("Single-instance 모델", Q3) locked
-//! single-instance: attempting a 2nd launch must focus the existing launcher
-//! window rather than spinning up a parallel app process. `lib.rs` wires
+//! single-instance: attempting a 2nd launch must focus the existing
+//! process's launcher window rather than spinning up a parallel app
+//! process. `lib.rs` wires
 //! `tauri_plugin_single_instance::init(...)` with a callback that, on
 //! every spurious launch, runs the logic in this module against the
 //! living `AppHandle`.

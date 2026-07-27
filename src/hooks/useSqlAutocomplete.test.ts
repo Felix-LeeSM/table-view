@@ -679,7 +679,7 @@ describe("useSqlAutocomplete", () => {
   // useSqlAutocomplete 가 `ns["public.brief_news_tasks"]` (도트 split path)
   // 와 `ns["brief_news_tasks"]` (bare) 까지만 등록하고, 사용자가 종종 직접
   // 사용하는 fully-quoted form `"public"."brief_news_tasks"` 는 등록되지
-  // 않아 CodeMirror 의 `addNamespaceObject` (lang-sql:507-523) 가 동일
+  // 않아 CodeMirror 의 `addNamespaceObject` (`@codemirror/lang-sql`) 가 동일
   // children 까지 도달하지 못함. PG / SQLite double-quote dialect 에서
   // 이 키도 emit 해야 함.
 

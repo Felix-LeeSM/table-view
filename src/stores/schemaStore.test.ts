@@ -408,7 +408,8 @@ describe("schemaStore", () => {
 
   it("[AC-191-01] evictSchemaForName drops tables/views/functions for one (conn, schema)", async () => {
     // Sprint 191 (AC-191-01) — single-schema cache eviction action that
-    // replaces the SchemaTree:603 direct setState. Asserts (a) the
+    // replaces the direct `useSchemaStore.setState` call `SchemaTree.tsx`
+    // used to make. Asserts (a) the
     // targeted (conn, schemaName) entries are removed across all three
     // caches and (b) sibling entries (other schemaName, other conn) stay
     // intact so a refresh-this-schema action doesn't blow the rest of the

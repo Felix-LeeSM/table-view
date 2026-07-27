@@ -16,7 +16,7 @@
 //!     codex 7차 #1 — 두 affordance 독립; widths reset 이 hidden 풀거나 반대 0.
 //!
 //! `legacy_imported != Done` 이면 모든 IPC 가 `AppError::LegacyImportInProgress`
-//! 로 reject. Strategy 라인 1189.
+//! 로 reject. Strategy F.2 "Race gate".
 //!
 //! event emit (datagridColumnPrefs / update / reset) 은 Tauri command 의
 //! AppHandle 경유로 후속 sprint 가 wiring — `*_inner` 함수는 SQLite I/O 만
@@ -31,7 +31,7 @@ use sqlx::SqlitePool;
 use tauri::State;
 
 // ---------------------------------------------------------------------------
-// Wire types (strategy Q20 `datagrid_column_prefs` DDL).
+// Wire types (strategy Q20 "IPC wire" — the DDL above it is a separate block).
 // ---------------------------------------------------------------------------
 
 /// 5-tuple PK matching `datagrid_column_prefs` schema. `db_name` /
@@ -66,7 +66,7 @@ pub struct SetDatagridPrefsRequest {
 
 /// `get_datagrid_prefs` 응답. row 가 없으면 `widths = {}`, `hidden_columns = []`,
 /// `updated_at = None` 으로 채워서 반환 — 호출자가 별도의 "exists" check 를
-/// 피할 수 있게 (strategy 720).
+/// 피할 수 있게 (strategy Q20 "IPC wire").
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct GetDatagridPrefsResponse {

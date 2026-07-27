@@ -717,8 +717,10 @@ jobs:
   #
   #   frontend-shard  the vitest suite holds the doc contracts
   #   frontend        `pnpm lint` -> scripts/check-eslint-static-policy.ts reads
-  #                   the 20 COMPLETION_FEATURE_REFERENCE_DOC_PATHS and the
-  #                   frontend-compat inventory
+  #                   the 20 COMPLETION_FEATURE_REFERENCE_DOC_PATHS, the
+  #                   frontend-compat inventory, and (scripts/check-comment-refs.ts)
+  #                   every non-frozen .md plus the design doc it resolves
+  #                   comment citations against
   #
   # This four-line list is the ONLY thing a human maintains here, and
   # scripts/hooks/test-ci-workflow-cache.sh asserts that exactly these jobs

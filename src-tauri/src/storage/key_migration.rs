@@ -2,7 +2,7 @@
 //!
 //! 본 모듈은 SQLite migration **전** 에 1회 호출된다. 따라서 sentinel /
 //! migration-failed 마커는 SQLite `meta` table 에 두지 않고 file sidecar
-//! 로만 둔다 (codex 5차 #5 fix — strategy 873–905 line).
+//! 로만 둔다 (codex 5차 #5 fix — 아래 F.1 "File-key keyring 이주" 절차).
 //!
 //! 3 path (state-management-strategy 2026-05-15, F.1 "File-key keyring 이주", Q22):
 //!   - **Path A (신규)**: 디스크 `.key` 없음 + keyring 없음 → 새 key 생성,

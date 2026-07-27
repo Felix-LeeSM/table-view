@@ -231,7 +231,7 @@ export function useSqlAutocomplete(
 
     // Sprint 233 (2026-05-07): also emit the *fully-quoted*
     // schema-qualified form (`"schema"."table"` for PG/SQLite).
-    // CodeMirror's `addNamespaceObject` (lang-sql:507-523) splits keys on
+    // CodeMirror's `addNamespaceObject` (`@codemirror/lang-sql`) splits keys on
     // `.`, so registering this form yields a top-level child `"schema"`
     // whose child is `"table"` — distinct from the unquoted
     // `schema.table` path. Users (per 2026-05-07 bug report) often paste

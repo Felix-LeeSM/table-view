@@ -19,7 +19,9 @@
  *   #27 `queryCounter`       workspaceStore/shared.ts     → 위와 동일
  *   #28 `historyCounter`     queryHistoryStore (retired sprint-373) — N/A
  *   #29 `favoriteCounter`    favoritesStore.ts            → `__resetFavoriteCounterForTests` (sprint-375)
- *   #30 `queryGuard`         documentQueryStore.ts        → `__resetDocumentStoreForTests` (기존)
+ *   #30 `requestCounters`    documentQueryStore.ts 에서 `queryGuard` 로 개명
+ *                            → test-utils/documentStore.ts 의
+ *                              `__resetDocumentStoreForTests` (기존)
  *   #31 `persistTimer`       workspaceStore/persistence.ts → `__resetPersistTimerForTests` (sprint-375)
  *   #32 `_sessionId`         scopedLocalStorage.ts        → `__resetSessionIdForTests` (sprint-375)
  *   #33 `lastApplied`        themeStore.ts                → `__resetLastAppliedForTests` (sprint-375)

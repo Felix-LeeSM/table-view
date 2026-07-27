@@ -253,7 +253,8 @@ describe("AC-141-*: Launcher/Workspace lifecycle (real-window, post-Phase 12)", 
   // workspace close behaves like Back (preventDefault + hide+show,
   // no disconnect).
   //
-  // Sprint 363 (Phase 3, Q13 lock) replaced the launcher's
+  // Sprint 363 (Phase 3 "Single-instance + Launcher 영속", Q3) replaced the
+  // launcher's
   // close-exits-app behavior with close-hides-launcher. Open workspaces
   // (`workspace-{conn_id}`) stay alive; the launcher can be resurfaced
   // via the macOS dock icon or 2nd-launch single-instance callback.

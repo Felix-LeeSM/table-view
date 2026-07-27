@@ -721,7 +721,7 @@ describe("[AC-178-04] malformed URL paste is silent", () => {
       ).not.toBeInTheDocument();
 
       // No new role="alert" / role="status" added. The save-error
-      // alert in `ConnectionDialog` is conditional on `error` state, which
+      // alert in `ConnectionDialogFooter` is conditional on `error` state, which
       // our paste handler never sets — so the alert count must equal
       // the baseline.
       expect(screen.queryAllByRole("alert").length).toBe(baselineAlerts);
@@ -812,8 +812,8 @@ describe("[AC-178-05] password leak guard", () => {
 
   // Reason: trigger Save error with a backend message that naively
   // echoes the connection string. Sanitiser must strip the password
-  // before the message lands in the role="alert" region at line
-  // 750-757 of ConnectionDialog.tsx. Date 2026-04-30.
+  // before the message lands in the role="alert" region rendered by
+  // `ConnectionDialog/ConnectionDialogFooter.tsx`. Date 2026-04-30.
   it("[AC-178-05b] password absent from save-error alert after backend echoes connection string", async () => {
     mockAddConnection.mockRejectedValue(
       new Error("connection refused at postgres://u:pass123ZZ@h/db"),

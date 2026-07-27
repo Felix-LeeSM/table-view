@@ -1,6 +1,6 @@
 /**
- * Boot-time launcher close handler. Sprint 363 (Q13 lock)
- * changed the close semantics: the launcher's X button now HIDES the
+ * Boot-time launcher close handler. Sprint 363 (Phase 3 "Single-instance +
+ * Launcher 영속", Q3) changed the close semantics: the launcher's X button now HIDES the
  * launcher window instead of exiting the app — open workspace windows
  * stay alive, the process stays alive, and the launcher can be
  * resurfaced via the macOS dock icon or system tray.

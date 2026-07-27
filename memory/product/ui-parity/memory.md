@@ -100,7 +100,8 @@ cross-paradigm heuristic 은 `paradigms/memory.md` 에 있었지만 *게이트�
 document(상단 미렌더, tab-local chip) · kv(상단 활성 `DbSwitcher` *와* 사이드바
 로컬 state 이중 진입점) · search(상단 read-only + `_search` 하드코드) 로 네 갈래
 난 것이 직접 계기다. capability 값(`switchDatabase` true/false)만으로 위치를
-정하면 안 되는 이유 — kv 는 `true`(`dataSource.test.ts:461`)라 상단 스위처가
+정하면 안 되는 이유 — kv 는 `true`(`dataSource.test.ts` 의
+`hasConnectionCapability("redis", "switchDatabase")`)라 상단 스위처가
 활성임에도 사이드바에 별도 state 가 또 있다.
 
 ## How to apply (PR 체크리스트)

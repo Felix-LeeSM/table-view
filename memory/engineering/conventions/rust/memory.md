@@ -80,6 +80,6 @@ fn get_user(id: u64) -> Result<User, AppError> {
 
 ## 관련
 
-- [conventions](../memory.md) — 상위 컨벤션 룸
+- [conventions](../memory.md) — 상위 컨벤션 룸 (주석의 줄 번호 참조 금지 포함)
 - [refactoring](../refactoring/memory.md) — refactor 4 카테고리
 - [testing-scenarios](../testing-scenarios/memory.md) — 시나리오 설계 9원칙

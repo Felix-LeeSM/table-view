@@ -134,8 +134,8 @@ describe("dehydrate — Sprint 353 (AC-353-01 queryState idle strip)", () => {
 
 describe("dehydrate — Sprint 353 (Q19 closedTabHistory cap 25)", () => {
   it("trims closedTabHistory to the most-recent 25 entries (LRU, newest-first) when memory carries 30", () => {
-    // closedTabHistory is newest-first per `tabSlice.ts` `closeTab`
-    // (`[closingTab, ...ws.closedTabHistory]`). Index 0 → most recently
+    // closedTabHistory is newest-first per `slices/tabSlice.ts` `removeTab`
+    // (`[historyEntry, ...ws.closedTabHistory]`). Index 0 → most recently
     // closed, index N → oldest. 30-deep history → drop oldest 5
     // (indices 25..29) so cap=25.
     const history = Array.from({ length: 30 }, (_, i) =>

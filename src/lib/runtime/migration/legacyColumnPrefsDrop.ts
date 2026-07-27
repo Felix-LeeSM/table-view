@@ -6,7 +6,8 @@
  * 영속을 들고 있었지만, strategy doc Q20.4–Q20.5 결정 (`datagrid_column_prefs`
  * SQLite SOT) 으로 sprint-369 에서 폐기. legacy key 는 PK 5-tuple 의
  * connection_id / db_name 정보가 없어 SQLite 로 migrate 가 불가능 — 그래서
- * 우리는 *drop without migration* 만 한다 (strategy doc 745).
+ * 우리는 *drop without migration* 만 한다 (strategy doc Q20 "Legacy LS
+ * migration").
  *
  * 사용자에게는 "Per-table preferences will reset once" 안내를 1회만 띄운다.
  * 다음 boot 부터는 sentinel `meta.legacy_column_prefs_drop_dismissed = "1"`
