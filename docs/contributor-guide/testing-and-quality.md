@@ -39,13 +39,36 @@ landed and live GitHub showed no open Refactor 04 child issues.
 
 ## Backend And Integration Coverage
 
-| Area | Follow-up |
-|---|---|
-| Tauri commands | Add mock coverage for async connection commands such as connect, disconnect, and keep-alive behavior. |
-| Integration skip policy | Normalize skip behavior between query and schema integration tests. |
-| Docker-backed integration | Document or automate local DB service bootstrap for schema integration tests. |
-| MariaDB deltas | Keep `RETURNING` returned-row runtime support, routine/default behavior, procedure-management, trigger CRUD, completion-runtime, admin/import/export, and full workbench claims behind separate MariaDB-specific promotion gates. Current `RETURNING` evidence is profile/completion plus a version-aware completion suggestion gate, structural parser/Safe Mode classification, and focused `mariadb:11` runtime characterization showing server-accepted `DELETE ... RETURNING` side effect with no returned-row or affected-row-count adapter support claim; current row-edit and bounded table/index/constraint DDL evidence is limited to the tested MySQL-family path under MariaDB identity, with smoke coverage for the bounded Structure DDL path. |
-| Fixture inventory | Keep `scripts/fixtures/dbms-seeds.test.ts` aligned with every static DBMS fixture before product docs mention fixture evidence. |
+### Tauri commands
+
+Add mock coverage for async connection commands such as connect, disconnect, and
+keep-alive behavior.
+
+### Integration skip policy
+
+Normalize skip behavior between query and schema integration tests.
+
+### Docker-backed integration
+
+Document or automate local DB service bootstrap for schema integration tests.
+
+### MariaDB deltas
+
+Keep `RETURNING` returned-row runtime support, routine/default behavior,
+procedure-management, trigger CRUD, completion-runtime, admin/import/export, and
+full workbench claims behind separate MariaDB-specific promotion gates. Current
+`RETURNING` evidence is profile/completion plus a version-aware completion
+suggestion gate, structural parser/Safe Mode classification, and focused
+`mariadb:11` runtime characterization showing server-accepted `DELETE ...
+RETURNING` side effect with no returned-row or affected-row-count adapter
+support claim; current row-edit and bounded table/index/constraint DDL evidence
+is limited to the tested MySQL-family path under MariaDB identity, with smoke
+coverage for the bounded Structure DDL path.
+
+### Fixture inventory
+
+Keep `scripts/fixtures/dbms-seeds.test.ts` aligned with every static DBMS
+fixture before product docs mention fixture evidence.
 
 ## Local Development And CI
 
@@ -67,7 +90,7 @@ full ESLint config and then enforces the Refactor 00 static policy from
 
 | Gate | Current policy | Triage owner |
 |---|---|---|
-| `max-lines` | Existing 22 warnings are an exact allowlist. New entries and stale entries fail. | The PR touching the file removes new debt or shrinks the allowlist. |
+| `max-lines` | Existing 18 warnings are an exact allowlist. New entries and stale entries fail. | The PR touching the file removes new debt or shrinks the allowlist. |
 | Hidden TS/TSX lint candidates | Only generated wasm artifacts under `src/lib/sql/wasm/**` and `src/lib/mongo/wasm/**` may be ignored. | The PR adding a broad ignore must either narrow it or document generated-artifact ownership. |
 | `src/features/**` imports | Feature production modules may use feature-local code, feature public APIs, `@lib`, `@/types`, and `@components/ui`; cross-feature internal imports fail and must route through `src/features/<domain>/index.ts`. Imports from legacy components, hooks, stores, pages, router, or app shell still fail unless they are an explicit public-facade exception. | The PR adding a feature dependency owns reusable extraction, public API export, or removal of the dependency. |
 

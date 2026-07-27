@@ -1,12 +1,13 @@
 export const COMPLETION_FEATURE_PUBLIC_API_PATH =
   "src/features/completion/index.ts";
 
-// The smoke matrix bands carry the completion evidence rows that used to sit in
-// testing-and-quality.md, and the horizon pages carry the ones that used to sit
-// in ROADMAP.md. Both parents are now indexes, so each must stay on this list
-// alongside every child file or the guard silently scans nothing. Every horizon
-// is listed, not just the two holding references today: a reference moves
-// between horizons as work lands, and a hit-based list would go stale silently.
+// The smoke matrix bands carry the completion evidence entries that used to
+// sit in testing-and-quality.md, and the horizon pages carry the ones that
+// used to sit in ROADMAP.md. Both parents are now indexes, so each must stay on
+// this list alongside every child file or the guard silently scans nothing.
+// Every horizon is listed, not just the two holding references today: a
+// reference moves between horizons as work lands, and a hit-based list would go
+// stale silently.
 export const COMPLETION_FEATURE_REFERENCE_DOC_PATHS = [
   "docs/ROADMAP.md",
   "docs/roadmap/h1.md",
