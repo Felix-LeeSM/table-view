@@ -233,7 +233,7 @@ pub fn run() {
     //    the JS close-requested handler could prevent it, ensure the
     //    launcher is visible so the user isn't left without any window.
     //
-    // 2. Sprint 363 (Q13, strategy line 773) — Launcher CloseRequested:
+    // 2. Sprint 363 (Q13 lock) — Launcher CloseRequested:
     //    when the user clicks the launcher's close button (X), intercept
     //    the OS-level close, `prevent_close()` the event, and hide the
     //    launcher via `handle_launcher_close_request`. This keeps the
@@ -412,7 +412,7 @@ pub fn run() {
         });
 
         // Sprint 375 (Phase 6 cleanup) — boot-time legacy file cleanup.
-        // W4 의 `.legacy.json` 30일 보관 정책 (strategy F.1 line 862) — 30일
+        // W4 의 `.legacy.json` 30일 보관 정책 (strategy F.1 "File preservation") — 30일
         // 보다 오래된 파일을 silent delete. 사용자 visible 영향 0 (toast 없음).
         // detached task — first paint 블록 0.
         tauri::async_runtime::spawn(async {

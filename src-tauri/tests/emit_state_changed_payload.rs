@@ -332,7 +332,7 @@ fn history_clear_with_null_entity_id_and_null_origin() {
 
 #[test]
 fn nine_domains_each_serialize_to_strategy_doc_keys() {
-    // F.4 wire spec — strategy doc lines 1300–1313 list the 9 domains.
+    // F.4 Cross-Window Event Contract lists the 9 domains.
     // This test locks every variant's serde tag so a future rename of any
     // variant breaks loudly here (and not silently in cross-window receivers).
     let app = make_app();
@@ -379,7 +379,7 @@ fn nine_domains_each_serialize_to_strategy_doc_keys() {
 
 #[test]
 fn all_ops_serialize_to_strategy_doc_tags() {
-    // F.4 wire spec — strategy doc lines 1302–1306 list the ops. Lock
+    // F.4 Cross-Window Event Contract lists the ops. Lock
     // every op tag so a typo in `serde(rename)` is caught immediately.
     let app = make_app();
     let bucket = capture_payloads(&app);

@@ -302,7 +302,7 @@ describe("AC-154-*: Window lifecycle wiring", () => {
   // ---------------------------------------------------------------------------
   // AC-154-04 (sprint-363 update): Launcher close → hide (NOT exit)
   //
-  // Sprint 363 (Phase 3, Q13 / strategy line 773) changed launcher close
+  // Sprint 363 (Phase 3, Q13 lock) changed launcher close
   // semantics: the X button hides the launcher without exiting the app so
   // open `workspace-{conn_id}` windows stay alive (multi-conn TablePlus
   // pattern). The backend's `on_window_event` matcher in `src-tauri/src/lib.rs`

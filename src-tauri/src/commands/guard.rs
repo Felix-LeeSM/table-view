@@ -3,9 +3,9 @@
 //! 모든 A/C 도메인 mutate IPC (connections / favorites / mru / settings /
 //! workspaces / datagrid_column_prefs / query_history insert / connection_groups
 //! CRUD) 가 첫 줄에서 본 helper 를 호출해야 한다. import 가 `done` 이 아니면
-//! `AppError::LegacyImportInProgress` 로 reject (strategy line 1189).
+//! `AppError::LegacyImportInProgress` 로 reject (strategy F.2 "Race gate").
 //!
-//! 적용 IPC 전체 목록 (strategy line 1194–1216):
+//! 적용 IPC 전체 목록 (strategy F.2 "Guard 적용 IPC 전체 목록"):
 //!   connection: add/update/delete/reorder
 //!   group:      add/update/delete/reorder
 //!   mru:        set_mru_lastused / reorder_mru / clear_mru

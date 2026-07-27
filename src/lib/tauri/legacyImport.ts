@@ -1,7 +1,7 @@
 /**
  * Sprint 355 (Phase 1) — `import_legacy_localstorage` IPC frontend wrapper.
  *
- * Strategy line 1140–1180: 첫 boot 시 frontend 가 5 LS key 를 read 해 정규화
+ * Strategy F.2 "W1 boot import 절차": 첫 boot 시 frontend 가 5 LS key 를 read 해 정규화
  * 후 본 wrapper 를 통해 backend 로 전송. Backend 는 SQLite 에 1회 import
  * + `meta.legacy_imported` 4-state transition 관리 (idempotent).
  *

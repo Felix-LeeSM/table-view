@@ -1247,7 +1247,7 @@ mod tests {
     // + invalid placeholder reject 까지 cover.
     //
     // `StubDocumentAdapter` 와 `ActiveAdapter` 는 sprint-308 블록에서 이미
-    // import 됨 (line 602-603) — 여기서 재import 하면 E0252.
+    // import 됨 — 여기서 재import 하면 E0252.
 
     use std::sync::{Arc, Mutex};
 

@@ -2,7 +2,7 @@
 //! 의 wire shape 검증 (AC-357-01 / AC-357-03 / AC-357-04 / AC-357-06 /
 //! AC-357-07).
 //!
-//! strategy doc F.2 (line 911–998) 와 byte-equivalent shape:
+//! strategy doc F.2 Snapshot Payload Contract 와 byte-equivalent shape:
 //!   {
 //!     schemaVersion: 1,
 //!     snapshotVersion: number,

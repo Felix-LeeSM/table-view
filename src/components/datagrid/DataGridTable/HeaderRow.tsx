@@ -75,7 +75,7 @@ export interface HeaderRowProps {
    * When provided, the context menu surfaces an item that calls back.
    * Wire (in DataGridTable.tsx): the callback is
    * `useColumnWidths.reset`, which fires
-   * `resetDatagridPrefs(field="widths")` — strategy doc line 1395.
+   * `resetDatagridPrefs(field="widths")` — strategy doc F.4 "Domain 별 수신자 처리".
    */
   onResetColumnWidths?: () => void;
   /**

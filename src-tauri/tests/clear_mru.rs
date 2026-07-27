@@ -5,7 +5,7 @@
 //!   1. `mru` table 의 모든 row 가 DELETE.
 //!   2. `state-changed` payload `{domain:"mru", op:"bulk", entityId:null}`
 //!      이 emit (mru 도메인은 frontend dispatcher 의 `routeNormalHandler`
-//!      에서 `Bulk` 만 받음 — stateChanged.ts:301-308).
+//!      에서 `Bulk` 만 받음 — stateChanged.ts 의 `case "mru"`).
 //!   3. originWindow 가 caller label 그대로 echo.
 //!   4. 빈 table 에서의 clear 는 no-op + emit 1회 (idempotent / cross-window
 //!      converge).

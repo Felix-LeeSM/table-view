@@ -192,7 +192,7 @@ describe("RenameTableDialog (Sprint 235)", () => {
   // Sprint 235 RenameTableDialog — preview/commit reject must surface an
   // inline alert while the modal stays open (P4 parity with the success
   // path), and the Enter-key submit path must commit. Mirrors the
-  // DropColumnDialog reject pattern (DropColumnDialog.test.tsx:385).
+  // DropColumnDialog reject pattern (`[AC-236-05]` in `DropColumnDialog.test.tsx`).
   // Issue #1630 (2026-07-24) — 2026-07-17 test audit residual.
   describe("error branches + Enter-key submit (issue #1630)", () => {
     // Reason: preview reject (previewOnly:true renameTableRequest throws)

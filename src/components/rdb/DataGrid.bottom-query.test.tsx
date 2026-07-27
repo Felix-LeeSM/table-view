@@ -9,7 +9,7 @@
 // 본 테스트는 (a) bottom strip 이 SqlSyntax 가 emit 하는 token span 구조를
 // 실제로 갖는지, (b) keyword 색상 클래스가 SELECT/FROM/LIMIT/OFFSET 모두에
 // 적용되는지, (c) PG double-quoted identifier 가 `text-syntax-string` 이 아닌
-// `text-foreground` (identifier) 로 분류되는지 (sqlTokenize.ts:213-220 분기)
+// `text-foreground` (identifier) 로 분류되는지 (`tokenizeSql` 의 quote-char 분기)
 // 를 확인한다.
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { setupTauriMock } from "@/test-utils/tauriMock";
@@ -175,7 +175,7 @@ describe("DataGrid — bottom executed-query strip (Sprint 233)", () => {
   });
 
   // AC-233-04 (c) — `"public"` and `"brief_news_tasks"` are PG double-quoted
-  // identifiers, NOT string literals. `sqlTokenize.ts:213-220` distinguishes
+  // identifiers, NOT string literals. `tokenizeSql` distinguishes
   // by quote char (`"` → identifier, `'` → string). The rendered DOM must
   // therefore mark them with the identifier class (`text-foreground`), not
   // the string class (`text-syntax-string`).

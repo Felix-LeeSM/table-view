@@ -404,7 +404,7 @@ describe("AddColumnDialog (Sprint 236)", () => {
   // Purpose: audit-residual error-branch coverage for the Sprint 236
   // AddColumnDialog — preview/commit reject must surface an inline alert
   // while the modal stays open (P4 parity with commit-success). Mirrors
-  // the DropColumnDialog reject pattern (DropColumnDialog.test.tsx:385).
+  // the DropColumnDialog reject pattern (`[AC-236-05]` in `DropColumnDialog.test.tsx`).
   // Issue #1630 (2026-07-24) — 2026-07-17 test audit residual.
   describe("error branches (issue #1630)", () => {
     // Reason: preview reject (previewOnly:true addColumnRequest throws)

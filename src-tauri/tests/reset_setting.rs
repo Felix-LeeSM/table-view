@@ -5,7 +5,7 @@
 //!   1. `settings` row 가 SQLite 에서 DELETE.
 //!   2. `state-changed` 이벤트가 `{domain:"setting", op:"reset", entityId:<key>}`
 //!      payload 로 emit (refetch 미경로 — receiver 가 frontend
-//!      `SETTING_DEFAULTS[entityId]` 에 set, strategy doc line 1389).
+//!      `SETTING_DEFAULTS[entityId]` 에 set, strategy doc F.4 "Reset op 처리 흐름").
 //!   3. version 카운터는 (`setting`, `<key>`) 단위로 monotonic.
 //!   4. originWindow 이 caller 의 window label 로 echo (자기 자신 self-echo
 //!      skip 의 discriminator).

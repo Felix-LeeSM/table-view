@@ -641,7 +641,7 @@ describe("useSqlAutocomplete", () => {
   // children }` 형태로 직접 inject 해 quote 우회를 강제했었다.
   //
   // Sprint 302 갱신 (2026-05-14): keyword 의 책임을 lang-sql 의 자체
-  // `keywordCompletionSource` (line 691-693, dialect.dialect.words 기반,
+  // `keywordCompletionSource` (dialect.dialect.words 기반,
   // `defaultKeyword = (label, type) => ({ label, type, boost: -1 })`
   // 라서 quote 발생 안 함) 로 일원화. ns 에 keyword 를 또 inject 하면
   // 두 source 가 같은 라벨을 popup 으로 흘려보내 사용자에게 "SELECT 가

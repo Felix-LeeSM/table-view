@@ -3,7 +3,7 @@
 // propagation) 만 확인 — 실제 SQLite read 와 atomic guarantee 는 Rust 통합
 // 테스트 책임.
 //
-// F.2 wire shape (line 911–998):
+// F.2 Snapshot Payload Contract wire shape:
 //   { schemaVersion: 1, snapshotVersion: number, generatedAt: number,
 //     partial: boolean, stores: { connections, workspaces, mru, theme, safeMode },
 //     runtime: { activeStatuses } }

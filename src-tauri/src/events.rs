@@ -78,7 +78,7 @@ pub enum EventOp {
 }
 
 /// `field` discriminator for `datagridColumnPrefs.reset` (codex 7차 #1).
-/// Strategy doc lines 1355–1363 + 1434–1444 lock the three variants:
+/// Strategy doc F.4 "Domain 별 payload 예시" + "Reset op 처리 흐름" lock the three variants:
 ///   - `widths` — reset widths only, hidden_columns preserved.
 ///   - `hiddenColumns` — reset hidden_columns only, widths preserved.
 ///   - `all` — reset both (row DELETE).

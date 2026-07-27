@@ -350,10 +350,11 @@ fn classify_by_keyword(stmt: &str, dialect: SqlDialect) -> Severity {
 
 /// Severity of a leading `DROP` the AST could not parse. Mirrors the frontend
 /// split: `DROP TABLE|DATABASE|SCHEMA|INDEX|VIEW|TRIGGER` is danger
-/// (`sqlSafety.ts:656`); every other object (`FUNCTION` / `PROCEDURE` / `ROLE`
-/// / `EXTENSION` / `MATERIALIZED VIEW` / …) is `ddl-other` warn
-/// (`sqlSafety.ts:759`), which the Safe Mode matrix never gates — hard-gating
-/// them would permanently reject legitimate DDL (issue #1112 review B2).
+/// (the `DROP` danger branch in `sqlSafetyClassifier`); every other object
+/// (`FUNCTION` / `PROCEDURE` / `ROLE` / `EXTENSION` / `MATERIALIZED VIEW`
+/// / …) is `ddl-other` warn (the `ddl-other` branch in the same module),
+/// which the Safe Mode matrix never gates — hard-gating them would
+/// permanently reject legitimate DDL (issue #1112 review B2).
 fn drop_keyword_severity(upper: &str) -> Severity {
     let after = upper.strip_prefix("DROP").unwrap_or(upper).trim_start();
     match first_word(after).as_str() {

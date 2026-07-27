@@ -210,7 +210,7 @@ describe("aliasColumnCompletionSource — Sprint 294 Slice D edge cases", () => 
   // ── (D4) 동일 alias 중복 ──────────────────────────────────────────────
   // `FROM users u, orders u` — 같은 alias `u` 가 두 테이블에 바인딩.
   // crash 없이 어느 한쪽 컬럼은 노출. 정책은 parseFromContext 의 last-wins
-  // (line 128 `aliases[aliasName] = tableName`) — 코드 코멘트로 명시.
+  // (`parseFromContext` 의 `aliases[alias] = table` 대입) — 코드 코멘트로 명시.
   it("동일 alias 중복: FROM users u, orders u — crash 없이 어느 한쪽 컬럼 노출", () => {
     const source = aliasColumnCompletionSource(() => TEST_SCHEMA);
     const doc = "SELECT u. FROM users u, orders u";

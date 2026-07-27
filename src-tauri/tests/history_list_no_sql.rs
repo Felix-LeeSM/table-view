@@ -1,7 +1,7 @@
 //! 작성 2026-05-17 (Phase 5 sprint-371, AC-371-05) — `list_history` 응답
 //! 의 **어떤 row 에도 `sql` 필드 부재**.
 //!
-//! Privacy invariant (strategy doc F.5 line 540) — 원본 SQL 은 detail IPC
+//! Privacy invariant (strategy doc F.5) — 원본 SQL 은 detail IPC
 //! 에서만 노출. list 응답이 우연히라도 `sql` key 를 carry 하면 toast / UI
 //! 가 무의식적으로 노출할 수 있어 row-level 검증으로 잠근다.
 //!

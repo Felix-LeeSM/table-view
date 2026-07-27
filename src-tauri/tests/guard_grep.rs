@@ -60,7 +60,7 @@ fn test_guard_helper_symbol_exists() {
 
 // AC-355-07 (forward-looking, sprint-355 시점):
 //
-// A/C mutate IPC 목록은 strategy line 1194–1216 에 정의되어 있다. sprint-355
+// A/C mutate IPC 목록은 strategy F.2 "Guard 적용 IPC 전체 목록" 에 있다. sprint-355
 // 시점에 그 IPC 들의 실체는 아직 없다 — 본 sprint 의 신규 IPC 는
 // `import_legacy_localstorage` 하나뿐이고 그것은 transition 자체이므로 guard
 // exempt 다. 따라서 현재 단계의 grep 은 "guard 가 정의되어 있으나 호출자는

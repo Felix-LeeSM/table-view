@@ -1,7 +1,7 @@
 /**
  * Sprint 369 (Phase 4) — settings IPC frontend wrapper.
  * Sprint 376 (Phase 6 Q21) — `resetSetting` 추가. Q21 9 affordance 가
- * 모두 본 wrapper 를 경유. Strategy doc line 1389 — `setting.reset` 은
+ * 모두 본 wrapper 를 경유. Strategy doc F.4 "Reset op 처리 흐름" — `setting.reset` 은
  * receiver refetch 없이 frontend `SETTING_DEFAULTS[entityId]` 적용.
  *
  * `persist_setting` 은 sprint-358 (Phase 1 W1) 에서 backend dual-write 가

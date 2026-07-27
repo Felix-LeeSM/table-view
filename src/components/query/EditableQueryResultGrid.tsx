@@ -113,7 +113,7 @@ export default function EditableQueryResultGrid({
 
   // #1477 review B1 — 가상화로 편집 행이 window 밖 unmount 후 remount 될 때
   // `autoFocus` 는 focus 를 다시 훔치며 스크롤을 편집 셀로 점프시킨다.
-  // DataGridTable (editorFocusRef, L222) 과 동일하게 edit-start 시점에만
+  // DataGridTable (`DataRow` 의 `editorFocusRef`) 과 동일하게 edit-start 시점에만
   // effect 로 focus 한다 — remount 는 deps 를 안 바꾸므로 재focus 없음.
   const editorFocusRef = useRef<HTMLInputElement | null>(null);
   useEffect(() => {

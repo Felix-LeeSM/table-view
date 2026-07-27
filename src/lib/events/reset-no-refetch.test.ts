@@ -1,7 +1,7 @@
 /**
  * 작성 2026-05-16 (Phase 3 sprint-365, AC-365-05)
  *
- * 사유: F.4 "Reset op 처리 흐름" (strategy doc lines 1416–1444 + codex 6차
+ * 사유: F.4 "Reset op 처리 흐름" (strategy doc + codex 6차
  * #4 통일). `op:"reset"` 은 update 와 달리 refetch 경로를 타지 않는다 —
  * backend `reset_setting` 은 row 를 삭제하기에 `get_setting` 결과가
  * null 이 되어 refetch 가 무의미. 수신자는 frontend `SETTING_DEFAULTS`

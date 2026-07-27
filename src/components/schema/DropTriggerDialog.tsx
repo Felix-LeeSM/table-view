@@ -122,7 +122,7 @@ export default function DropTriggerDialog({
 
   // Sprint 274 — typing-confirm match is case-sensitive byte-for-byte.
   // No trim, no debounce — every keystroke re-evaluates. Mirrors
-  // DropTableDialog line 105 contract.
+  // `DropTableDialog` 의 `typingMatches` contract.
   const typingMatches = typingConfirm === triggerName;
   const canPreview = typingMatches;
   const canApply = canPreview && !ddl.previewLoading && !!ddl.previewSql;

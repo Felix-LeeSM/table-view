@@ -14,12 +14,12 @@
  * `resetStateChangedRegistryForTests()` without re-running module-load
  * side effects.
  *
- * Strategy F.4 line 1388 — `setting.update` payloads carry the settings
+ * Strategy F.4 "Domain 별 수신자 처리" — `setting.update` payloads carry the settings
  * key in `entityId`; the actual value is fetched via `get_setting(key)`
  * (the event is a notification, not a payload). `reset` is out of scope
  * for sprint-368 (sprint-372 owns the reset receiver for `theme` /
  * `safe_mode`; the dispatcher already separates `onUpdated` from
- * `onReset` per strategy line 1389).
+ * `onReset` per strategy F.4 "Reset op 처리 흐름").
  */
 
 import { setStateChangedHandlers } from "@lib/events/stateChanged";

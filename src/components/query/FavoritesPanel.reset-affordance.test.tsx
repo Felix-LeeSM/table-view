@@ -2,7 +2,7 @@
  * 작성 2026-05-17 (Phase 6 sprint-376 Q21 affordance #9 — audit only).
  *
  * 사유: Favorites panel 의 entry-별 remove 는 기존 구현 (FavoritesPanel.tsx
- * line 122-134) 이 그대로 Q21 의 reset affordance. 본 sprint 는 신규
+ * 의 `removeFavorite(fav.id)` 버튼) 이 그대로 Q21 의 reset affordance. 본 sprint 는 신규
  * UI 추가가 아니라 회귀 가드 — 다음 sprint 가 remove 버튼을 실수로
  * 제거하면 본 test 가 fail. (Q21 audit 항목 #9.)
  *

@@ -4,7 +4,7 @@
 //! migration-failed 마커는 SQLite `meta` table 에 두지 않고 file sidecar
 //! 로만 둔다 (codex 5차 #5 fix — strategy 873–905 line).
 //!
-//! 3 path (state-management-strategy 2026-05-15, Q22 + line 873–905):
+//! 3 path (state-management-strategy 2026-05-15, F.1 "File-key keyring 이주", Q22):
 //!   - **Path A (신규)**: 디스크 `.key` 없음 + keyring 없음 → 새 key 생성,
 //!     keyring 저장, 디스크 file 폐기. AC-356-01.
 //!   - **Path B (migration)**: 디스크 `.key` 있음 + keyring 없음 → 디스크
@@ -232,7 +232,7 @@ fn path_b_migrate_from_disk<B: KeyringBackend>(
         }
     }
 
-    // (c) ciphertext decrypt sanity check (strategy line 886–887). Best
+    // (c) ciphertext decrypt sanity check (strategy F.1 "File-key keyring 이주"). Best
     // effort — if there are no ciphertexts to validate (fresh dual-write
     // user) we still proceed.
     if let Err(e) = validate_ciphertexts_decrypt(data_dir, &disk_key) {

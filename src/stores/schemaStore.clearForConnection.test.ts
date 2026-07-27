@@ -216,14 +216,14 @@ describe("schemaStore.clearForConnection (sprint-360 Phase 2 Q23)", () => {
     expect(state.tableIndexesCache.conn2?.db1?.public?.users).toEqual([]);
     expect(state.tableConstraintsCache.conn2?.db1?.public?.users).toEqual([]);
     // views / functions / triggers sibling preservation — issue #1631 이관
-    // (schemaStore.test.ts:741,354 의 conn2 sibling 단언을 이 SOT 로 흡수).
+    // (`schemaStore.test.ts` 의 conn2 sibling 단언을 이 SOT 로 흡수).
     expect(state.views.conn2?.db1?.public).toHaveLength(1);
     expect(state.functions.conn2?.db1?.public).toHaveLength(1);
     expect(state.triggers.conn2?.db1?.public?.items).toEqual([]);
   });
 
   // no-op edge — clearForConnection 대상 conn 에 캐시가 전혀 없어도 throw
-  // 없이 sibling conn 은 그대로 둔다. schemaStore.test.ts:898 에서 이관
+  // 없이 sibling conn 은 그대로 둔다. `schemaStore.test.ts` 에서 이관
   // (sprint-360 SOT 통합, issue #1631).
   it("is a no-op when the connection has no cached entries", () => {
     useSchemaStore.setState({

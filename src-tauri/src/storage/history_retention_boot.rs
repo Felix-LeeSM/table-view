@@ -10,7 +10,7 @@
 //!   3. `boot_vacuum_old_history(&pool, retention_days).await` 호출.
 //!   4. 결과는 best-effort — 실패 시 `tracing::warn` 만, 사용자에게는
 //!      toast 등 surface 안 함 (사용자 visible 영향 0; AC-373-05 + sprint
-//!      contract Invariants line 39).
+//!      contract Invariants — "Retention vacuum 은 boot 1회").
 //!
 //! `lib.rs` 의 `setup` 안에서 `boot_history_retention_vacuum` 을 spawn —
 //! mismatch_metric 과 동일한 paradigm (best-effort detached task,

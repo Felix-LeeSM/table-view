@@ -1849,7 +1849,7 @@ async fn test_mysql_execute_query_batch_strips_trailing_semicolons() {
 //
 // Wire encoding (ADR 0026 정합 — issue #1082 로 MySQL 정수 경로도 합류):
 // - PG BIGINT → JSON string. MySQL BIGINT → JSON string (issue #1082).
-// - PG NUMERIC → JSON string. MySQL DECIMAL → JSON string (queries.rs line 145).
+// - PG NUMERIC → JSON string. MySQL DECIMAL → JSON string (`cell_to_json`).
 // - INT/SMALLINT/MEDIUMINT/YEAR 는 둘 다 JSON number (≤32bit, f64 무손실).
 // - CHECK clauses: MySQL adapter 는 information_schema CHECK expression 을
 //   column-level check_clauses 로 투영.
@@ -2675,7 +2675,7 @@ async fn test_mysql_get_view_columns_returns_columns_in_order() {
     assert_eq!(columns[1].name, "name");
     assert_eq!(columns[2].name, "score");
 
-    // view columns 는 PK/FK 메타를 들고 다니지 않는다 (schema.rs line 543-545).
+    // view columns 는 PK/FK 메타를 들고 다니지 않는다 (`get_view_columns`).
     for col in &columns {
         assert!(!col.is_primary_key, "view col {} not PK", col.name);
         assert!(!col.is_foreign_key, "view col {} not FK", col.name);
@@ -2948,7 +2948,7 @@ async fn test_mysql_list_databases_includes_user_db() {
     };
     let dbs = adapter.list_databases().await.expect("list_databases");
     let names: Vec<_> = dbs.iter().map(|d| &d.name).collect();
-    // MySQL adapter 의 `list_schemas` (schema.rs line 73) 는 admin DB
+    // MySQL adapter 의 `list_schemas` 는 admin DB
     // (information_schema / mysql / performance_schema / sys) 를 의도적으로
     // 제외 — UI 의 schema panel surface 에 noise 가 노출되지 않게. testcontainers
     // 의 default DB "test" 는 user DB 로 항상 포함.
@@ -3407,7 +3407,7 @@ async fn test_mysql_get_table_columns_populates_fk_reference_in_child() {
 // ── Wire-encoding 시나리오 — ADR 0026 정합 (MySQL == PG, issue #1082) ─────
 // MySQL adapter (queries.rs):
 // - BIGINT (i64/u64): JSON string — 프론트가 BigInt 로 승격 (정밀도 보존).
-// - DECIMAL/NEWDECIMAL: JSON string (line 145).
+// - DECIMAL/NEWDECIMAL: JSON string (`cell_to_json`).
 // - INT/SMALLINT/MEDIUMINT/INTEGER/YEAR/TINYINT: JSON number (i64) — ≤32bit
 //   라 f64 (±2^53-1) 무손실이므로 그대로 Number. 폭 넓은 TINYINT("TINYINT")
 //   와 "TINYINT UNSIGNED" 는 Number, TINYINT(1)("BOOLEAN") 은 bool (issue #1484).
@@ -3567,7 +3567,7 @@ async fn test_mysql_query_table_data_decimal_value_is_string_wire() {
     let cell = &data.rows[0][1];
     assert!(
         cell.is_string(),
-        "MySQL decimal cell must be JSON string (queries.rs line 145), got: {cell:?}"
+        "MySQL decimal cell must be JSON string (`cell_to_json`), got: {cell:?}"
     );
     assert_eq!(cell.as_str(), Some("123456789.123456789012345678"));
 
@@ -3637,12 +3637,12 @@ async fn test_mysql_query_table_data_int_value_remains_number_wire() {
 
 /// issue #1484 — 폭 넓은 TINYINT 정수 컬럼이 그리드에서 true/false bool 로
 /// 붕괴하던 회귀 가드. sqlx-mysql 의 type_info().name() 은 ColumnType::Tiny 를
-/// 폭에 따라 세 keyword 로 report 한다 (vendored column.rs L175-181):
+/// 폭에 따라 세 keyword 로 report 한다 (`MySqlTypeInfo::name()`):
 /// TINYINT(1) → "BOOLEAN", unsigned → "TINYINT UNSIGNED", 나머지 → "TINYINT".
 /// sqlx bool decode 는 byte != 0 이면 성공하므로 예전 `"TINYINT" | "BOOLEAN"`
 /// 공통 bool-우선 분기가 non-zero TINYINT (2, 127, -5)를 전부 Ok(Some(true)) 로
 /// 붕괴시켰다. 폭 넓은 TINYINT 는 JSON number 로, TINYINT(1)(="BOOLEAN") 은
-/// MySQL boolean 관례대로 JSON bool 로 렌더돼야 한다 (line 3227 계약).
+/// MySQL boolean 관례대로 JSON bool 로 렌더돼야 한다 ("Wire-encoding 시나리오" 계약).
 #[tokio::test]
 #[serial_test::serial]
 async fn test_mysql_query_table_data_tinyint_value_is_number_not_bool() {
@@ -4474,7 +4474,7 @@ async fn test_mysql_get_trigger_source_unknown_returns_connection_error() {
         None => return,
     };
     // 본 어댑터는 trigger 미존재 시 `AppError::Connection("Trigger … not found")`
-    // 반환 (schema.rs line 777).
+    // 반환 (`get_trigger_source`).
     let err = adapter
         .get_trigger_source(MYSQL_SCHEMA, "any_table", "definitely_does_not_exist_trg")
         .await
@@ -4490,7 +4490,7 @@ async fn test_mysql_get_trigger_source_unknown_returns_connection_error() {
 
 #[tokio::test]
 async fn test_mysql_create_trigger_trait_returns_unsupported() {
-    // MySQL adapter 의 `create_trigger` 트레잇 wrapper (db/mysql.rs line 397)
+    // MySQL adapter 의 `create_trigger` 트레잇 wrapper (`impl RdbAdapter for MysqlAdapter`)
     // 는 Unsupported 즉시 반환 — MySQL 의 trigger body 는 inline compound
     // statement 이고 PG 의 `function_name`-driven 모델과 패러다임 불일치.
     let adapter: Arc<dyn RdbAdapter> = Arc::new(MysqlAdapter::new());

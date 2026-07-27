@@ -343,7 +343,7 @@ describe("DataGridToolbar — Sprint 179 paradigm-aware labels (AC-179-03)", () 
 
   it("[AC-179-03b] DOCUMENT_LABELS literal output is unchanged byte-for-byte", () => {
     // Anchors the derived constant's literal strings so DocumentDataGrid
-    // (the existing consumer at DocumentDataGrid.tsx:273-276) sees no
+    // (the existing consumer `DocumentDataGrid`) sees no
     // shape drift after Sprint 179's derivation refactor.
     expect(DOCUMENT_LABELS).toEqual({
       rowCountLabel: "documents",

@@ -55,7 +55,7 @@ const initial = readStoredState();
  * call site. The `valueJson` field is the strategy F.4 wire shape
  * (`{themeId, mode}`); store mutate + LS sync are deferred to the
  * action's `await` continuation so a rejected IPC leaves the store at
- * its previous value (strategy line 1282 — "LS 는 마지막 성공값 유지").
+ * its previous value (strategy F.3 Write Ownership — "LS 는 마지막 성공값 유지").
  */
 async function persistThemeSetting(value: ThemeState): Promise<void> {
   await persistSettingValue("theme", value);
@@ -213,7 +213,7 @@ void attachZustandIpcBridge<ThemeStoreState>(useThemeStore, {
  * the LS-sync subscriber writes the FOUC cache.
  *
  * The refetch (rather than trusting the event payload) is the strategy
- * F.4 line 1388 contract — "event 는 알림, 실제 값은 수신자가 refetch".
+ * F.4 "Domain 별 수신자 처리" contract — "event 는 알림, 실제 값은 수신자가 refetch".
  * It also keeps the receiver shape uniform across all `setting` keys
  * (theme / safe_mode / sidebar_width / …): the dispatcher dispatches one
  * `onUpdated`, the handler dispatches per-key.

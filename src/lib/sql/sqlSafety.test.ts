@@ -491,7 +491,7 @@ describe("sqlSafety.analyzeStatement — fallback and severity contracts", () =>
   // with no dialog in any mode. Per the 2026-07-02 user decision ("구문 that
   // can silently lose existing data is always confirm"), REPLACE classifies
   // as `danger`. The Rust `sql-parser-core` returns `unsupported-statement`
-  // for REPLACE (sql-parser-core/src/lib.rs:158), so the AST path cannot
+  // for REPLACE (`sql-parser-core` `parse_sql`), so the AST path cannot
   // classify it — the regex branch is the source of truth here.
   // -------------------------------------------------------------------------
   describe("Issue #1115 — REPLACE INTO destructive upsert → danger", () => {

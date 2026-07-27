@@ -125,7 +125,7 @@ describe("ConnectionDialog critical accessibility smoke", () => {
 
   // Reason: #1366 — the a11y-smoke masking test above only covered the Test
   // Connection failure path; the Save failure path (`handleSave` catch →
-  // `setError(sanitizeMessage(...))`, ConnectionDialog.tsx:284-289) was
+  // `setError(sanitizeMessage(...))` in `ConnectionDialog`) was
   // unguarded, leaving ADR-0005 (no plaintext password leaves the frontend)
   // open to regression on save. A backend that echoes the connection string
   // in its save error must not surface the password in the footer alert.

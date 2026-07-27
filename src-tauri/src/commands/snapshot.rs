@@ -1,6 +1,6 @@
 //! Sprint 357 (Phase 1) — `get_initial_app_state` snapshot IPC.
 //!
-//! Strategy F.2 (line 911–998) 의 wire shape 을 byte-equivalent 으로 반환.
+//! Strategy F.2 Snapshot Payload Contract 의 wire shape 을 byte-equivalent 으로 반환.
 //! Boot 시점에 frontend 가 단일 IPC 로 5 boot-critical stores + runtime
 //! activeStatuses 를 atomic 으로 받아 hydration. Lazy stores (favorites /
 //! queryHistory / schemaCache / datagrid_prefs) 는 mount 시 별도 IPC.
@@ -8,7 +8,7 @@
 //! Atomic guarantee — 모든 store read 는 단일 `BEGIN IMMEDIATE` 트랜잭션 안에서
 //! 수행. Transaction 시작 후 다른 thread 의 write 는 snapshot 결과에 반영 X.
 //!
-//! Partial fallback (F.2 line 1125) — 한 store 의 SQLite query 실패 시 그 슬롯에
+//! Partial fallback (F.2 "Partial fallback") — 한 store 의 SQLite query 실패 시 그 슬롯에
 //! `{ error: "..." }` 채우고 `partial: true`. 다른 store 는 정상 진행. 본
 //! Phase 1 구현은 single tx 안에서 read 하므로 partial 진입 분기는 코드 형태로
 //! 만 두고 실제 trigger 는 향후 store별 hydrate 가 별 코드 path 가 되었을 때.
@@ -39,7 +39,7 @@ static SNAPSHOT_VERSION: AtomicU64 = AtomicU64::new(0);
 const WORKSPACE_LABEL_PREFIX: &str = "workspace-";
 
 // ---------------------------------------------------------------------------
-// Wire types — F.2 line 911–998 정합.
+// Wire types — F.2 Snapshot Payload Contract 정합.
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -177,7 +177,7 @@ pub async fn get_initial_app_state_inner(
         .strip_prefix(WORKSPACE_LABEL_PREFIX)
         .map(|s| s.to_string());
 
-    // F.2 line 1122 — `BEGIN IMMEDIATE` 단일 read transaction. 모든 store 가
+    // F.2 "Atomic guarantee" — `BEGIN IMMEDIATE` 단일 read transaction. 모든 store 가
     // 같은 시점의 일관된 view 를 보도록 잠금.
     let mut tx = pool
         .begin_with("BEGIN IMMEDIATE")

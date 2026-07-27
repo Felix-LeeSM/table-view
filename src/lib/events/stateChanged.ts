@@ -38,7 +38,7 @@
  */
 
 /**
- * Strategy doc F.4 (line 1300–1313) wire shape. `camelCase` matches the
+ * Strategy doc F.4 Cross-Window Event Contract wire shape. `camelCase` matches the
  * backend `#[serde(rename_all = "camelCase")]` on `StateChangedPayload`.
  */
 export type EventDomain =

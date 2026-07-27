@@ -1,7 +1,7 @@
 /**
  * 작성 2026-05-16 (Phase 3 sprint-365, AC-365-09)
  *
- * 사유: F.5 "Clear query history" (strategy doc lines 1366–1368 + codex
+ * 사유: F.5 "Clear query history" (strategy doc + codex
  * 7차 #3). `{domain:"history", op:"clear", entityId:null, version:N+1}`
  * 수신 → mounted history panel 의 `entries=[]` set + page reset. refetch
  * 0회. 본 테스트는 dispatcher 가 history.clear payload 를 `onClear`

@@ -176,7 +176,7 @@ describe("wrapNumericCells (Sprint 261 / ADR 0026)", () => {
   });
 
   it("wraps MySQL BIGINT UNSIGNED and SQLite exotic integer decltypes as BigInt (issue #1082 review)", () => {
-    // MySQL reports unsigned as "BIGINT UNSIGNED" (sqlx column.rs L180);
+    // MySQL reports unsigned as "BIGINT UNSIGNED" (sqlx `MySqlTypeInfo::name()`);
     // SQLite affinity accepts any declared type containing "INT" — e.g.
     // "UNSIGNED BIG INT" / "INT8" / "INT2". All must promote.
     const result = {

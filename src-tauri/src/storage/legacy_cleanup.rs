@@ -1,13 +1,13 @@
 //! Sprint 375 (Phase 6 cleanup, 2026-05-17) — `.legacy.json` 30일 cleanup.
 //!
-//! state-management-strategy doc F.1 (line 862) — W4 단계의 정책:
+//! state-management-strategy doc F.1 "File preservation" — W4 단계의 정책:
 //!
 //! > legacy 정리 (Phase 6) — SQLite SOT 전환 완료 후 file/LS key 삭제,
 //! > `connections.json` 은 `.legacy.json` rename 30일 보관.
 //!
 //! 본 cleanup 는 boot 시 한 번 호출되어, `*.legacy.json` 파일 (sprint-370
 //! 의 W3→W4 rename helper 가 만든) 의 mtime 이 30일 보다 오래된 것을
-//! silent delete 한다. user-visible toast / dialog 0 — strategy line 907
+//! silent delete 한다. user-visible toast / dialog 0 — strategy F.1
 //! 의 "사용자 manual recovery 용" 의도와 align (30일 동안 사용자는 디스크
 //! 에서 직접 손에 넣을 수 있고, 그 이후엔 SQLite SOT 가 안정적이라고 간주).
 //!
@@ -19,7 +19,7 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 use tracing::{info, warn};
 
-/// 30일 retention 의 ms 표현. Strategy F.1 line 862 의 fixed window.
+/// 30일 retention 의 ms 표현. Strategy F.1 "File preservation" 의 fixed window.
 /// const 로 둔다 — 회귀 가드 (`assert_eq!` 단언 가능) + boot path 가
 /// 단순.
 pub const RETENTION_MS: u64 = 30 * 24 * 60 * 60 * 1000;

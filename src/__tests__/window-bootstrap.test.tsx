@@ -218,7 +218,7 @@ describe("AC-150-*: window-label-driven boot routing", () => {
   // 2026-05-01 — macOS native File > New Connection (Cmd+N) menu fires
   // the Tauri event `menu:new-connection`. The launcher shell must adapt
   // it into the existing `new-connection` DOM event so HomePage's listener
-  // (HomePage.tsx:78) opens the ConnectionDialog. Regression guard for the
+  // (`HomePage` 의 `new-connection` listener) opens the ConnectionDialog. Guard for the
   // case where the user closed every window on macOS and Cmd+N is the only
   // path back to the connection dialog.
   it("LauncherShell bridges menu:new-connection Tauri event into the new-connection DOM event", () => {

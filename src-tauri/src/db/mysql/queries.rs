@@ -113,7 +113,7 @@ fn cell_to_json(row: &sqlx::mysql::MySqlRow, idx: usize) -> serde_json::Value {
     match type_name.as_str() {
         "BOOLEAN" => {
             // sqlx-mysql 은 ColumnType::Tiny 를 폭에 따라 세 keyword 로 report
-            // 한다 (vendored column.rs L175-181): TINYINT(1) → `"BOOLEAN"`,
+            // 한다 (sqlx-mysql `MySqlTypeInfo::name()`): TINYINT(1) → `"BOOLEAN"`,
             // unsigned → `"TINYINT UNSIGNED"`, 나머지 → `"TINYINT"`. width 1
             // (`"BOOLEAN"`) 은 MySQL 의 boolean 관용형이라 bool 로 렌더 —
             // TablePlus 동작 정합. bool decode 실패 시 i64 폴백. 폭이 넓은
@@ -131,7 +131,7 @@ fn cell_to_json(row: &sqlx::mysql::MySqlRow, idx: usize) -> serde_json::Value {
             // 동일하게 정밀도-보존 JSON string token 으로 직렬화하고, 프론트
             // wrapNumericCells 가 컬럼 data_type 을 보고 BigInt 로 승격한다.
             // sqlx-mysql 0.8.6 의 type_info().name() 은 unsigned 를
-            // `"BIGINT UNSIGNED"` 로 report 한다 (vendored column.rs L180) —
+            // `"BIGINT UNSIGNED"` 로 report 한다 (sqlx-mysql `MySqlTypeInfo::name()`) —
             // signed 만 매치하면 unsigned 는 wildcard 로 떨어져 String decode
             // 실패 → Null 값 소실. 대형 auto-inc PK 관용형이라 명시 매치 필수.
             try_decode!(i64, |v: i64| serde_json::Value::String(v.to_string()));
@@ -146,8 +146,8 @@ fn cell_to_json(row: &sqlx::mysql::MySqlRow, idx: usize) -> serde_json::Value {
             // TINYINT (2, 127, -5) 가 전부 true 로 붕괴했다 (issue #1484).
             // TINYINT(1) 은 sqlx 가 `"BOOLEAN"` 으로 report 해 위 bool 분기가
             // 처리하므로, 여기 `"TINYINT"` 는 순수 정수 컬럼만 온다. unsigned
-            // 변형은 sqlx-mysql 이 별도 keyword (`"INT UNSIGNED"` 등, vendored
-            // column.rs L176-179) 로 report 하므로 명시 매치해야 wildcard 로
+            // 변형은 sqlx-mysql 이 별도 keyword (`"INT UNSIGNED"` 등,
+            // `MySqlTypeInfo::name()`) 로 report 하므로 명시 매치해야 wildcard 로
             // 떨어져 Null 값 소실되는 것을 막는다. signed 우선 (i64) → 실패 시 u64.
             try_decode!(i64, |v: i64| serde_json::Value::Number(v.into()));
             try_decode!(u64, |v: u64| serde_json::Value::Number(v.into()));

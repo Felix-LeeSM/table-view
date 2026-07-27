@@ -69,7 +69,7 @@ export function useAutoResolveActiveDb(): void {
         const dbs = await listDatabases(connId);
         const first = dbs[0];
         if (!first) return; // empty list — leave read-only, guard blocks retry
-        // Order matters (schemaStore.ts:56 contract): the backend must swap
+        // Order matters (`schemaStore` module doc contract): the backend must swap
         // the active sub-pool *before* the frontend records the activeDb, or
         // the schema cache keys ahead of the pool.
         await switchActiveDb(connId, first.name);

@@ -2,7 +2,7 @@
 //! Q9 boot perf (AC-357-05).
 //!
 //! 시드: 10 connection × 5 group × 50 workspace tab × 500 history row.
-//! Strategy F.2 line 968 — p95 < 50ms.
+//! Strategy F.6 Phase 1 AC — `get_initial_app_state()` p95 < 50ms.
 //!
 //! 측정: 100 회 반복, sorted samples 의 95-percentile. `--release` 권장
 //! (debug 빌드는 sqlite SELECT 자체가 2-3x slower).

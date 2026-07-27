@@ -1,9 +1,9 @@
 //! 작성 2026-05-16 (Phase 1 sprint-355) — Migration 적용 후 9 table 존재 +
 //! PK / 인덱스 / `meta` table 검증.
 //!
-//! AC-355-02 / AC-355-03 의 source-of-truth. Strategy 문서 line 534 의 9 table
-//! 목록 (8 도메인 + meta) 과 line 626 의 `workspaces` PK `(connection_id,
-//! db_name)`, line 556-557 의 `query_history` index 가 모두 적용됐는지 검증.
+//! AC-355-02 / AC-355-03 의 source-of-truth. Strategy 문서 Phase 1 의
+//! `0001_initial.sql` 9 table 목록 (8 도메인 + meta) 과 `workspaces` PK
+//! `(connection_id, db_name)`, `query_history` index 가 적용됐는지 검증.
 
 use serial_test::serial;
 use sqlx::Row;

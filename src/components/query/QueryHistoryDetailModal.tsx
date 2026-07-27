@@ -3,7 +3,7 @@
  *
  * 단일 history row 의 원문 sql 을 보여주는 modal. List 응답에는 원문이
  * 없으므로 modal mount 시 `get_history_detail(id)` IPC 를 발사해야만
- * 원문이 표시된다 (redact-only display invariant — strategy F.5 line 537).
+ * 원문이 표시된다 (redact-only display invariant — strategy F.5).
  *
  * 책임:
  *   - mount 시 `getHistoryDetail({ id })` 1회 호출 + loading state.

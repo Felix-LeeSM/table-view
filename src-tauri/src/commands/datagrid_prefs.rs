@@ -31,7 +31,7 @@ use sqlx::SqlitePool;
 use tauri::State;
 
 // ---------------------------------------------------------------------------
-// Wire types (strategy doc lines 692–727).
+// Wire types (strategy Q20 `datagrid_column_prefs` DDL).
 // ---------------------------------------------------------------------------
 
 /// 5-tuple PK matching `datagrid_column_prefs` schema. `db_name` /
@@ -180,7 +180,7 @@ pub async fn get_datagrid_prefs_inner(
     pool: &SqlitePool,
     pk: ColumnPrefsPk,
 ) -> Result<GetDatagridPrefsResponse, AppError> {
-    // read 는 guard 적용하지 않음 — strategy line 1216 ("예외: ... get_* read")
+    // read 는 guard 적용하지 않음 — strategy F.2 "예외 (guard 없음)" 의 get_* read
     let row: Option<(String, String, i64)> = sqlx::query_as(
         "SELECT widths_json, hidden_columns_json, updated_at \
          FROM datagrid_column_prefs \

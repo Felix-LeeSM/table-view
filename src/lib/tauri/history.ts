@@ -7,7 +7,7 @@
  *   - `getHistoryDetail`  — `get_history_detail` (single row with `sql`).
  *   - `clearHistory`      — `clear_history` (drops all + VACUUM).
  *
- * Wire contract (strategy doc F.5 line 535–605):
+ * Wire contract (strategy doc F.5 "List / Detail IPC wire"):
  *   - `paradigm` + `queryMode` are a discriminated union — invalid combos
  *     are rejected by serde at the backend before any handler logic.
  *   - `list_history` responses NEVER carry `sql` — only `sqlRedacted`.

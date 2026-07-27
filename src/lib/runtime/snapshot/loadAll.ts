@@ -212,7 +212,7 @@ export async function loadAllFromSnapshot(): Promise<InitialAppState> {
 
 /**
  * Apply the snapshot to the 5 boot-critical stores + runtime mirror.
- * `Promise.all` invariant (contract Invariants line 35) — every store
+ * `Promise.all` invariant (sprint-367 contract Invariants, "직렬 hydrate 금지") — every store
  * receiver returns synchronously today but the Promise.all shape guards
  * against accidental serialization if a future receiver goes async.
  */

@@ -3,7 +3,7 @@
 //! key-value settings 의 backend mirror.
 //!
 //! Sprint 368 (Phase 4 Q12) — `get_setting` IPC 추가. `state-changed`
-//! 수신자가 key 별 단일 refetch 로 store 를 갱신 (strategy F.4 line 1388).
+//! 수신자가 key 별 단일 refetch 로 store 를 갱신 (strategy F.4 "Domain 별 수신자 처리").
 //! Sprint 370 부터 SQLite 가 read SOT — `settings` table 에서 직접 조회.
 //!
 //! Sprint 370 (Phase 4 W3): `persist_setting` 는 file (`settings.json`)
@@ -49,7 +49,7 @@ pub async fn persist_setting_inner(
 /// `setting.update` 이벤트를 발사.
 ///
 /// `origin_window` 은 frontend 의 dispatcher self-echo skip 의 핵심
-/// discriminator (sprint-365 line 1389) — 호출 측 window label 을 그대로
+/// discriminator (sprint-365, F.4 "Self-echo") — 호출 측 window label 을 그대로
 /// 전달. emit 이 SQLite write 보다 앞서면 receiver 의 `get_setting` refetch
 /// 가 stale 값을 봐서 idempotent 한 update 가 nothing-update 로 떨어진다 →
 /// 순서 invariant 유지.
@@ -114,7 +114,7 @@ pub async fn persist_setting<R: Runtime>(
 
 /// Sprint 368 (Phase 4 Q12) — read a single settings key. Frontend
 /// `state-changed` receiver calls this after a `setting:update` event to
-/// refetch the canonical value (strategy F.4 line 1388).
+/// refetch the canonical value (strategy F.4 "Domain 별 수신자 처리").
 ///
 /// Sprint 370 (Phase 4 W3) — file SOT 폐기. SQLite 의 `settings` table 을
 /// 직접 read. Returns `Some(value_json)` if the row exists, else `None`.
@@ -136,7 +136,7 @@ pub async fn get_setting(
 }
 
 /// Sprint 376 (Phase 6 Q21) — reset a single settings key to default by
-/// removing its row. Strategy doc line 1389: `setting.reset` is the
+/// removing its row. Strategy doc F.4 "Reset op 처리 흐름": `setting.reset` is the
 /// **row-delete** path — receivers MUST NOT refetch (the row is gone);
 /// they read their frontend `SETTING_DEFAULTS[entityId]` constant
 /// directly. Backend therefore (a) deletes the row, (b) emits
@@ -162,7 +162,7 @@ pub async fn reset_setting_inner(pool: &SqlitePool, key: &str) -> Result<(), App
 }
 
 /// `reset_setting` 의 wrapper — SQLite delete 후 `setting.reset` emit.
-/// Strategy doc F.4 line 1306 contract: `op = "reset"`, refetch
+/// Strategy doc F.4 "Reset op 처리 흐름" contract: `op = "reset"`, refetch
 /// 안 함 (receiver 가 frontend default 상수로 set). origin_window 채워
 /// frontend dispatcher 의 self-echo skip 가 동작하게 한다.
 pub async fn reset_setting_with_emit<R: Runtime>(

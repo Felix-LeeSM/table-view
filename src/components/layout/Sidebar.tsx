@@ -68,7 +68,7 @@ export default function Sidebar() {
   // tab's conn always matches the window's by construction, and (b) a
   // vanished connection means the window itself should close — not a
   // silent reassignment to a sibling connection (which would surprise
-  // the user). Strategy doc line 1656 requires "workspace 에서 set
+  // the user). Strategy doc F.6 Phase 4 AC requires "workspace 에서 set
   // 호출 0건"; keeping these as dead writes propagates to the launcher
   // slot via the cross-window IPC bridge and races with the user's own
   // launcher selection.

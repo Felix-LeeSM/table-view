@@ -21,7 +21,7 @@ use tauri::State;
 use tracing::{info, warn};
 
 // ---------------------------------------------------------------------------
-// Payload — Strategy line 1156–1160 의 frontend 송신 shape (camelCase).
+// Payload — Strategy F.2 "W1 boot import 절차" 의 frontend 송신 shape (camelCase).
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

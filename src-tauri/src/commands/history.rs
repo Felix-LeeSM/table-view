@@ -16,7 +16,7 @@
 //!     than `settings.query_history_retention_days`). Function-level
 //!     unit test (AC-371-10); boot wire is sprint-373.
 //!
-//! Strategy doc F.5 (line 535–605) — privacy invariants:
+//! Strategy doc F.5 Query History Privacy Contract — privacy invariants:
 //!   - `sql_redacted NOT NULL` — `sql_redact()` 가 panic 시 원문 fallback.
 //!   - list 응답 어디에도 `sql` 부재.
 //!   - detail IPC 가 단일 row id 만 — bulk dump path 0.
@@ -276,7 +276,7 @@ pub struct AddHistoryEntryResponse {
     pub sql_redacted: String,
 }
 
-/// drift threshold 5 minutes (strategy doc F.5 line 605).
+/// drift threshold 5 minutes (strategy doc `executedAt` validation, M6 fix).
 const DRIFT_THRESHOLD_MS: i64 = 5 * 60 * 1000;
 
 fn now_ms() -> i64 {

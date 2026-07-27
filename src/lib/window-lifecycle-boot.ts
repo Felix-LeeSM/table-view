@@ -1,5 +1,5 @@
 /**
- * Boot-time launcher close handler. Sprint 363 (Q13 / strategy line 773)
+ * Boot-time launcher close handler. Sprint 363 (Q13 lock)
  * changed the close semantics: the launcher's X button now HIDES the
  * launcher window instead of exiting the app — open workspace windows
  * stay alive, the process stays alive, and the launcher can be

@@ -1,7 +1,7 @@
 //! 작성 2026-05-16 (Phase 2 sprint-359) — AC-359-02b:
 //! introspection_pool 격리 + round-robin 호출 spy.
 //!
-//! Strategy doc lines 478–480: sidebar / autocomplete / prefetch 가
+//! Strategy doc "Connection 모델 (Q5.x lock)": sidebar / autocomplete / prefetch 가
 //! tab pool 과 별도로 idle round-robin 한다. 본 sprint 의 격리 surface
 //! 는 `AppState.introspection_pools: HashMap<conn_id, IntrospectionPool>`
 //! 이고, 각 `IntrospectionPool::acquire_slot()` 가 cap=5 modulo 의

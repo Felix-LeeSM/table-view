@@ -12,7 +12,7 @@
 //     `:root[data-mode="X"]`          → (0, 2, 0)   ← :root 는 pseudo-class
 //     `[data-theme="X"][data-mode="Y"]` → (0, 2, 0)
 //   **동일**. 동일 specificity 이면 cascade order 가 승부. index.css 가
-//   `@import "./themes.css"` 를 line 9 에 두고 fallback 블록을 line 99+ 에
+//   `@import "./themes.css"` 를 먼저 두고 fallback 블록을 그 뒤에
 //   두기 때문에 **fallback 이 themes.css 의 모든 per-theme override 를 덮어쓴다**.
 //   결과: data-theme 가 무엇이든 slate 색깔이 강제.
 //

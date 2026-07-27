@@ -1,7 +1,7 @@
 //! Sprint 359 (Phase 2 Q5.4) — sidebar / autocomplete / prefetch
 //! **introspection pool**.
 //!
-//! Rationale (strategy doc lines 478–480):
+//! Rationale (strategy doc "Connection 모델 (Q5.x lock)"):
 //!
 //! > Sidebar / autocomplete / prefetch run on a **separate** idle pool so
 //! > a long user query in the tab pool never starves schema introspection.
@@ -82,7 +82,7 @@ mod tests {
 
     #[test]
     fn default_capacity_is_five() {
-        // strategy line 465 의 max_K=5 정합.
+        // strategy "Connection 모델 (Q5.x lock)" 의 max_K=5 정합.
         let p = IntrospectionPool::new();
         assert_eq!(p.max_size(), 5);
     }

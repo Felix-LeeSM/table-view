@@ -203,7 +203,7 @@ pub struct AppState {
     /// Sidebar / autocomplete / prefetch borrow idle slots from this map
     /// instead of the tab pool, so a long user query in tab affinity
     /// never starves schema introspection. Lookup is `connection_id`,
-    /// the slot count is `max_K=5` (strategy doc line 465). Real
+    /// the slot count is `max_K=5` (strategy "Connection 모델 (Q5.x lock)"). Real
     /// `pool.acquire()` rewiring of schema commands is the follow-up
     /// step — this surface is the structural precursor sidebar callers
     /// will start consuming in sprint-360+.

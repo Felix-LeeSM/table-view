@@ -97,7 +97,7 @@ describe("useCurrentWindowConnectionId", () => {
 
   it("returns null for an empty conn_id (`workspace-`)", () => {
     // 사유: degenerate "workspace-" label 은 parseWorkspaceLabel 이 null
-    // 을 돌려주는 케이스다 (window-label.ts:60). Hook 도 그 결정을 그대로
+    // 을 돌려주는 케이스다 (`parseWorkspaceLabel` 의 빈 id 분기). Hook 도 그 결정을
     // 통과시켜야 한다.
     mockedGetLabel.mockReturnValue("workspace-");
     const { result } = renderHook(() => useCurrentWindowConnectionId());

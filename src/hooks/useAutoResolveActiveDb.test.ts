@@ -87,7 +87,7 @@ describe("useAutoResolveActiveDb", () => {
 
   // Reason: the core bug — connected PG with no activeDb must auto-select the
   // first listed DB via `switchActiveDb` → `setActiveDb` (order per
-  // schemaStore.ts:56 contract), landing a non-empty activeDb in the store so
+  // `schemaStore` module doc contract), landing a non-empty activeDb in the store so
   // the workspace key stops resolving to `db=""` (2026-07-07).
   it("auto-selects the first database when connected RDB has no activeDb", async () => {
     setFakeWindowConnectionId("c1");

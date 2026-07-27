@@ -2,7 +2,7 @@
 //! `meta.legacy_imported` 의 4-state enum 과 `meta.last_legacy_import_at`
 //! sentinel 을 관리.
 //!
-//! Strategy line 1184: `pending | importing | done | failed`.
+//! Strategy F.2 "Race gate": `pending | importing | done | failed`.
 //!
 //! - `pending`: 새 사용자 또는 첫 boot 전. legacy LS read 시도 가능 상태.
 //! - `importing`: legacy import IPC 진행 중 — A/C mutate IPC block 대상.

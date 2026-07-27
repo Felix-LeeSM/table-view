@@ -721,7 +721,7 @@ describe("[AC-178-04] malformed URL paste is silent", () => {
       ).not.toBeInTheDocument();
 
       // No new role="alert" / role="status" added. The save-error
-      // alert at line 750-757 is conditional on `error` state, which
+      // alert in `ConnectionDialog` is conditional on `error` state, which
       // our paste handler never sets — so the alert count must equal
       // the baseline.
       expect(screen.queryAllByRole("alert").length).toBe(baselineAlerts);

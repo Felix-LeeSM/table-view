@@ -2,7 +2,7 @@
  * Sprint 357 (Phase 1) — `get_initial_app_state` IPC frontend wrapper.
  *
  * Boot 시 atomic single-shot read 로 5 boot-critical store + runtime
- * activeStatuses 를 hydration. Strategy F.2 (line 911–998) 의 wire shape
+ * activeStatuses 를 hydration. Strategy F.2 Snapshot Payload Contract 의 wire shape
  * 과 byte-equivalent. 호출은 launcher 또는 workspace window 어디서나 가능 —
  * window scope 분기는 backend 가 `window.label()` 로 자동 처리.
  *
@@ -14,7 +14,7 @@
  * 본 snapshot 에 포함되지 않음. Mount 시 도메인별 IPC 로 fetch.
  *
  * Partial fallback: `partial=true` 면 dev mode banner + 해당 store 만 default
- * 초기화. Boot 자체는 진행 (F.2 line 1125).
+ * 초기화. Boot 자체는 진행 (F.2 "Partial fallback").
  */
 
 import { invoke } from "@tauri-apps/api/core";

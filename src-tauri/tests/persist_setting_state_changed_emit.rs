@@ -6,7 +6,7 @@
 //! `commands/` 전체에서 0개 — sprint-368 의 backend-first contract 가 SQLite
 //! write 만 하고 cross-window 알림은 누락. frontend `theme-sync` bridge 가
 //! 따로 있지만 backend path 가 살아 있어야 reconcile / state-changed 의 9-domain
-//! 통합 dispatcher 가 일관되게 동작 (strategy F.4 line 1388).
+//! 통합 dispatcher 가 일관되게 동작 (strategy F.4 "Domain 별 수신자 처리").
 //!
 //! 본 test 는 user journey 의 backend half 를 lock 한다:
 //!
@@ -234,7 +234,7 @@ async fn persist_setting_writes_sqlite_before_emit_so_receiver_refetch_sees_new_
 
     // At the moment emit fired, the SQLite row must already contain the
     // new value so any receiver immediately calling `get_setting("theme")`
-    // sees it (strategy F.4 line 1388 — event=알림, 실제 값=수신자 refetch).
+    // sees it (strategy F.4 "Domain 별 수신자 처리" — 값은 수신자가 refetch).
     let value: String = sqlx::query_scalar("SELECT value_json FROM settings WHERE key = 'theme'")
         .fetch_one(&pool)
         .await

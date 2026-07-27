@@ -136,7 +136,7 @@ describe("QueryHistoryPanel per-tab (sprint-372)", () => {
 
   // AC-372-08 — redact-only display. 원문 sql 은 list 응답에 없고
   // panel 어디에도 노출되어선 안 된다.
-  // 작성 2026-05-17. 사유: privacy invariant (strategy F.5 line 537).
+  // 작성 2026-05-17. 사유: privacy invariant (strategy F.5).
   // detail modal 외에서 원문 sql 0 노출.
   it("[AC-372-08] panel renders sqlRedacted only — no leak of original sql", async () => {
     invokeMock.mockResolvedValueOnce({

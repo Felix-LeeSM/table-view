@@ -1,5 +1,5 @@
 //! 작성 2026-05-16 (Phase 1 sprint-357) — `get_initial_app_state_inner` 의
-//! partial fallback 검증 (AC-357-07). Strategy F.2 line 1125 — 한 store 의
+//! partial fallback 검증 (AC-357-07). Strategy F.2 "Partial fallback" — 한 store 의
 //! SQLite query 실패 시 `{ error: "..." }` 만 그 슬롯에 채우고 `partial: true`.
 //! 다른 store 는 정상 진행.
 //!

@@ -144,7 +144,7 @@ impl RdbAdapter for PostgresAdapter {
         // mirrors `execute_query` — race the inherent future against the
         // token's `cancelled()` future and propagate the same
         // `AppError::Database("Operation cancelled")` shape used at
-        // `postgres.rs:541`.
+        // `kill_session`.
         Box::pin(async move {
             let work = self.get_table_columns(table, namespace);
             match cancel {

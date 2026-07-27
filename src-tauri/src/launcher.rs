@@ -235,7 +235,7 @@ fn can_self_install_impl(is_linux: bool, appimage_env: Option<std::ffi::OsString
     !is_linux || appimage_env.is_some()
 }
 
-/// Sprint 363 (Phase 3, Q13 / strategy line 773) — launcher close-request
+/// Sprint 363 (Phase 3, Q13 lock) — launcher close-request
 /// handler. The launcher window's `tauri://close-requested` event is wired
 /// in `lib.rs` `on_window_event` to call this function and `prevent_close()`
 /// the event. The strategy doc requires that the launcher's close button
@@ -378,7 +378,7 @@ mod tests {
 
     /// Reason 2026-05-16 (Phase 3 sprint-363) — AC-363-04 + AC-363-05.
     ///
-    /// Q13 / strategy line 773 의 launcher lifecycle: 사용자가 launcher 의
+    /// Q13 lock 의 launcher lifecycle: 사용자가 launcher 의
     /// close 버튼을 눌러도 process 가 종료되지 않고 launcher 만 hide 된다.
     /// workspace-{conn} 윈도우들은 그대로 살아있어야 한다 (multi-conn 사용
     /// 도중에 사용자가 launcher 만 정리하는 경우). 본 unit 테스트는

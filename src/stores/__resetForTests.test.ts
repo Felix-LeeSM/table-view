@@ -15,14 +15,14 @@
  * 모듈 상태를 0/null 로 되돌리는지 user-flow 관점에서 lock.
  *
  * 모듈 변수 inventory (state-management doc Part D `M-9` 기준):
- *   #26 `tabCounter`         workspaceStore.ts:74         → `__resetCountersForTests` (sprint-354)
- *   #27 `queryCounter`       workspaceStore.ts:75         → 위와 동일
+ *   #26 `tabCounter`         workspaceStore/shared.ts     → `__resetCountersForTests` (sprint-354)
+ *   #27 `queryCounter`       workspaceStore/shared.ts     → 위와 동일
  *   #28 `historyCounter`     queryHistoryStore (retired sprint-373) — N/A
- *   #29 `favoriteCounter`    favoritesStore.ts:111        → `__resetFavoriteCounterForTests` (sprint-375)
- *   #30 `requestCounters`    documentStore.ts:73          → `__resetDocumentStoreForTests` (기존)
- *   #31 `persistTimer`       workspaceStore/persistence:48 → `__resetPersistTimerForTests` (sprint-375)
- *   #32 `_sessionId`         scopedLocalStorage.ts:16     → `__resetSessionIdForTests` (sprint-375)
- *   #33 `lastApplied`        themeStore.ts:157            → `__resetLastAppliedForTests` (sprint-375)
+ *   #29 `favoriteCounter`    favoritesStore.ts            → `__resetFavoriteCounterForTests` (sprint-375)
+ *   #30 `queryGuard`         documentQueryStore.ts        → `__resetDocumentStoreForTests` (기존)
+ *   #31 `persistTimer`       workspaceStore/persistence.ts → `__resetPersistTimerForTests` (sprint-375)
+ *   #32 `_sessionId`         scopedLocalStorage.ts        → `__resetSessionIdForTests` (sprint-375)
+ *   #33 `lastApplied`        themeStore.ts                → `__resetLastAppliedForTests` (sprint-375)
  *
  * 각 assertion 은 (a) reset 호출 전 module 상태가 mutated 임을 확인 →
  * (b) reset 호출 → (c) 다시 mutate 가능 + 초기 상태로 돌아왔음 확인.

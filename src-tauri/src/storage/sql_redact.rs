@@ -1,6 +1,6 @@
 //! Sprint 371 (Phase 5 F.5) — SQL literal masking for `query_history.sql_redacted`.
 //!
-//! Strategy doc F.5 (line 535–562) — every `query_history` row carries two
+//! Strategy doc F.5 Query History Privacy Contract — every `query_history` row carries two
 //! columns: `sql` (user-readable, returned only from `get_history_detail`) and
 //! `sql_redacted` (literal-masked, returned in `list_history`). The contract
 //! invariant is `sql_redacted NOT NULL` — even when the redact pass panics

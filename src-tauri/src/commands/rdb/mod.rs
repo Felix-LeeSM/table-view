@@ -46,8 +46,8 @@ use crate::error::AppError;
 /// `None`), otherwise
 /// `AppError::DbMismatch { expected, actual }` — byte-equivalent to the
 /// Sprint 266 reference probe inlined in `execute_query_inner`
-/// (`src-tauri/src/commands/rdb/query.rs`). Named, not line-numbered: the old
-/// `query.rs:83–92` range had already drifted onto unrelated helpers.
+/// (`src-tauri/src/commands/rdb/query.rs`). Named, not line-numbered: the
+/// old line range had already drifted onto unrelated helpers.
 ///
 /// Sprint 271c (2026-05-13) hoisted this helper from `schema.rs` to
 /// `mod.rs` so DDL handlers share the same body. `query.rs` still
