@@ -2,7 +2,8 @@
 
 This page collects developer-facing verification gaps and quality follow-ups.
 User-visible support boundaries live in
-[`docs/product/known-limitations.md`](../product/known-limitations.md). Future
+[`docs/product/known-limitations.md`](../product/known-limitations.md) and its
+`known-limitations-{rdbms,non-rdbms,cross-cutting}.md` children. Future
 sequencing lives in [`docs/ROADMAP.md`](../ROADMAP.md). The retired risk register
 is archived at
 [`docs/archives/risks/active-risk-register-2026-05-27.md`](../archives/risks/active-risk-register-2026-05-27.md).

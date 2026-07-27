@@ -87,7 +87,8 @@ product/roadmap/architecture/contributor/archives SOT 로 흡수한다. handoff 
   2. 맥락 없이 보면 왜 그랬는지 의아하다.
   3. 실제 trade-off 가 있었다.
 - Product 상태와 사용자-visible 제한은 `docs/product/`.
-- 미래 목표, roadmap 크기의 미완/계획, sequencing 후보는 `docs/ROADMAP.md`.
+- 미래 목표와 sequencing 후보는 `docs/ROADMAP.md` (index), 지평 본문은
+  `docs/roadmap/h1.md`~`h7.md`, 미완/계획 대기열은 `docs/roadmap/follow-up-queue.md`.
 - 작은 active routing/compatibility note 만 `docs/PLAN.md`; PLAN 을 backlog 로 만들지 않는다.
 - Sprint evidence 는 `docs/sprints/sprint-N/`.
 - 구조적 제약은 architecture SOT, 개발/운영 검증 제약은

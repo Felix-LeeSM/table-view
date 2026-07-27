@@ -1,28 +1,32 @@
 # Known Limitations
 
-This page records current product-visible support boundaries. Future work and
-sequencing live in [`docs/ROADMAP.md`](../ROADMAP.md). Historical risk IDs live
+This page records current product-visible support boundaries. Future work items
+live in [`docs/roadmap/follow-up-queue.md`](../roadmap/follow-up-queue.md) and
+sequencing lives in [`docs/ROADMAP.md`](../ROADMAP.md). Historical risk IDs live
 in [`docs/archives/risks/active-risk-register-2026-05-27.md`](../archives/risks/active-risk-register-2026-05-27.md).
 
-The MySQL/MariaDB import/export boundary row in
+The MySQL/MariaDB import/export boundary entry in
 [`docs/product/known-limitations-rdbms.md`](known-limitations-rdbms.md) stays at
 its current unshipped wording until #1641 (MySQL restorable dump) ships. #1639/#1640
 (PostgreSQL CSV row-level import) has shipped — PostgreSQL now maps CSV columns
 to a target table and commits one single-row INSERT per row through the shared
 `execute_query_batch` command in a single all-or-nothing transaction (empty
 fields map to SQL NULL or `''` via a tri-state toggle; other engines return
-`Unsupported`), so the PostgreSQL row records it as supported while DB-level
+`Unsupported`), so the PostgreSQL entry records it as supported while DB-level
 backup/restore/import/export stays a future gate. #1638 (tabular JSON export)
 has shipped — grid JSON export is engine-agnostic (no capability gate) and now
 serves table/query surfaces as an array of objects keyed by headers, so no
-boundary row claims it as unsupported. This page is not edited ahead of the
-feature; the forward-looking Stage 1 scope boundary is owned by the Current
-Boundaries section of [`docs/product/README.md`](README.md).
+boundary entry claims it as unsupported. This page is not edited ahead of the
+feature; the forward-looking Stage 1 scope boundary is owned by
+[`docs/product/current-boundaries.md`](current-boundaries.md).
 
 ## Data Source Support
 
-Per-source boundary rows moved to the child pages below. Each child keeps the
-same `| Area | Current limitation |` table and the exact row wording.
+Per-source boundary entries moved to the child pages below. Each child keeps the
+exact entry wording, and every entry keeps its area label and its current
+limitation. Layout is per-page: an entry is either a row of the original
+`| Area | Current limitation |` table or the equivalent heading section, because
+#1842 unwraps those tables one page at a time.
 
 - [`docs/product/known-limitations-rdbms.md`](known-limitations-rdbms.md) —
   PostgreSQL, MySQL/MariaDB, SQLite, DuckDB, MSSQL, Oracle.
@@ -123,6 +127,7 @@ Installs outside those keys do not auto-update:
 
 ## Related
 
-- [`docs/product/README.md`](README.md) — current support snapshot
-- [`docs/ROADMAP.md`](../ROADMAP.md) — follow-up queue and promotion order
+- [`docs/product/current-support-snapshot.md`](current-support-snapshot.md) — current support snapshot
+- [`docs/roadmap/follow-up-queue.md`](../roadmap/follow-up-queue.md) — open follow-up queue
+- [`docs/ROADMAP.md`](../ROADMAP.md) — promotion order
 - [`docs/contributor-guide/testing-and-quality.md`](../contributor-guide/testing-and-quality.md) — developer-facing verification gaps

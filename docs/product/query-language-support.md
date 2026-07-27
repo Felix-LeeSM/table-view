@@ -2,7 +2,7 @@
 
 This page records the current user-visible query surface. Engineering ownership
 rules live in `memory/engineering/architecture/query-language/memory.md`; future
-widening work lives in `docs/ROADMAP.md`.
+widening work lives in `docs/roadmap/follow-up-queue.md`.
 
 ## Reading This Page
 
@@ -273,5 +273,6 @@ are:
 ## Related
 
 - [`docs/product/known-limitations.md`](known-limitations.md) — product-visible limitations
-- [`docs/ROADMAP.md`](../ROADMAP.md) — future query-language widening
+- [`docs/roadmap/follow-up-queue.md`](../roadmap/follow-up-queue.md) — future query-language widening
+- [`docs/ROADMAP.md`](../ROADMAP.md) — promotion order
 - [`memory/engineering/architecture/query-language/memory.md`](../../memory/engineering/architecture/query-language/memory.md) — engineering ownership rules

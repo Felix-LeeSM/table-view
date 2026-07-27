@@ -13,7 +13,8 @@ full desktop-client parity for every RDBMS.
 
 Current evidence:
 
-`docs/ROADMAP.md` H2/H3 진행 기준
+[`docs/roadmap/h2.md`](../../roadmap/h2.md) 및
+[`docs/roadmap/h3.md`](../../roadmap/h3.md) 진행 기준
 
 Current gap / routing:
 

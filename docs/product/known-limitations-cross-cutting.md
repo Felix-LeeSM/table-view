@@ -1,8 +1,8 @@
 # Known Limitations — Cross-Cutting Data Source Boundaries
 
-Boundary rows that are not owned by a single engine: credentials, security
+Boundary entries that are not owned by a single engine: credentials, security
 and admin safeguards, runtime E2E smoke, adapter/workspace typing, and schema
-relationship surfaces. Index and the per-engine rows live in
+relationship surfaces. Index and the per-engine entries live in
 [`docs/product/known-limitations.md`](known-limitations.md).
 
 | Area | Current limitation |
@@ -20,5 +20,6 @@ relationship surfaces. Index and the per-engine rows live in
 ## Related
 
 - [`docs/product/known-limitations.md`](known-limitations.md) — boundary index
-- [`docs/product/README.md`](README.md) — current support snapshot
-- [`docs/ROADMAP.md`](../ROADMAP.md) — follow-up queue and promotion order
+- [`docs/product/current-support-snapshot.md`](current-support-snapshot.md) — current support snapshot
+- [`docs/roadmap/follow-up-queue.md`](../roadmap/follow-up-queue.md) — open follow-up queue
+- [`docs/ROADMAP.md`](../ROADMAP.md) — promotion order

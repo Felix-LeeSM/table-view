@@ -91,7 +91,8 @@ profile/explain request workflow, full language-core parser/completion ownership
 
 Cassandra/Scylla, DynamoDB, graph, vector, stream 은 active `DatabaseType`,
 profile, runtime, parser/completion, fixture/live evidence, E2E smoke claim 이
-없다. 이 후보들은 `docs/ROADMAP.md` H6 계약과 adding-data-source checklist 를
+없다. 이 후보들은 [`docs/roadmap/h6.md`](../roadmap/h6.md) 계약과
+adding-data-source checklist 를
 통과하기 전까지 candidate-only 상태다.
 
 DynamoDB 는 candidate-only `cloud-document` profile target 이다. Promotion 전

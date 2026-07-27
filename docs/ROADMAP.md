@@ -157,8 +157,8 @@ Roadmap item 을 active implementation 으로 승격하기 전 필요한 것:
 | Gate | 필요 산출물 |
 |---|---|
 | 사용자 논의 | 구현 시작 전 scope, order, non-goal 합의. |
-| SOT check | `docs/product/README.md`, `docs/product/known-limitations.md`, `memory/engineering/**`, contributor docs 를 업데이트하거나 변경 없음으로 선언. |
-| Follow-up check | 현재 제한은 product, 미래 work item 은 roadmap, 구조 제약은 `memory/engineering/architecture`, 개발/운영 제약은 `memory/engineering` 또는 contributor docs, 과거 사건은 archives 로 라우팅한다. |
+| SOT check | `docs/product/**` (index + child page), `memory/engineering/**`, contributor docs 를 업데이트하거나 변경 없음으로 선언. |
+| Follow-up check | 현재 제한은 `docs/product/**`, 미래 work item 은 `roadmap/follow-up-queue.md`, 구조 제약은 `memory/engineering/architecture`, 개발/운영 제약은 `memory/engineering` 또는 contributor docs, 과거 사건은 archives 로 라우팅한다. |
 | Contract check | 코딩 전 acceptance criteria 와 verification command 를 확정. |
 | Architecture check | 지속 결정 변경 또는 이전 방향 뒤집기일 때만 ADR 필요. |
 | Archive check | 오래된 draft/spec docs 는 archive 로 이동하거나 historical context 로 link. |
@@ -201,4 +201,4 @@ Roadmap item 을 active implementation 으로 승격하기 전 필요한 것:
     DBMS lane 과 병행 가능. 실행 bucket 은 GitHub milestone 33.00.
 
 이 순서를 바꾸면 이 파일을 업데이트한다. 현재 제품 상태가 달라지는 변경이면
-`docs/product/README.md` 도 함께 업데이트한다.
+`docs/product/**` 의 해당 index/child page 도 함께 업데이트한다.

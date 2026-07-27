@@ -1,6 +1,6 @@
 # Known Limitations — Non-RDBMS And Search Sources
 
-Per-source boundary rows for key-value, document, and search engines, plus
+Per-source boundary entries for key-value, document, and search engines, plus
 the not-yet-modeled source candidates. Index and the remaining boundary areas
 live in [`docs/product/known-limitations.md`](known-limitations.md).
 
@@ -15,5 +15,6 @@ live in [`docs/product/known-limitations.md`](known-limitations.md).
 ## Related
 
 - [`docs/product/known-limitations.md`](known-limitations.md) — boundary index
-- [`docs/product/README.md`](README.md) — current support snapshot
-- [`docs/ROADMAP.md`](../ROADMAP.md) — follow-up queue and promotion order
+- [`docs/product/current-support-snapshot.md`](current-support-snapshot.md) — current support snapshot
+- [`docs/roadmap/follow-up-queue.md`](../roadmap/follow-up-queue.md) — open follow-up queue
+- [`docs/ROADMAP.md`](../ROADMAP.md) — promotion order

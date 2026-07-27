@@ -43,10 +43,10 @@ Redis/Valkey 는 `RedisFormFields`, SQLite/DuckDB 는 file-form `SqliteFormField
 
 Support audit artifacts are historical inputs only.
 `docs/archives/audits/refactor-05-support-claims-ledger-2026-06-12.md` 는
-snapshot 으로 보존하고, durable result 는 이 page, `known-limitations.md`,
-`query-language-support.md`, `docs/ROADMAP.md`, and symbol/path owners above 로
-흡수한다. New claims must update those SOTs directly; line-number references are
-not stable SOT.
+snapshot 으로 보존하고, durable result 는 `docs/product/**` (이 index 와 Detail
+Pages / known-limitations / query-language-support 의 child page), `docs/ROADMAP.md`,
+and symbol/path owners above 로 흡수한다. New claims must update those SOTs
+directly; line-number references are not stable SOT.
 
 ## Database Scope Semantics
 
@@ -89,4 +89,5 @@ delete confirmation path 로 포커스를 보낸다. 따라서 delete 는 local 
 - [`memory/engineering/architecture/data-source/memory.md`](../../memory/engineering/architecture/data-source/memory.md) — data-source profile/capability architecture
 - [`memory/engineering/architecture/data-source/adding/memory.md`](../../memory/engineering/architecture/data-source/adding/memory.md) — contributor checklist for new sources
 - [`docs/product/known-limitations.md`](known-limitations.md) — current product-visible limitations
-- [`docs/ROADMAP.md`](../ROADMAP.md) — future follow-ups and promotion order
+- [`docs/roadmap/follow-up-queue.md`](../roadmap/follow-up-queue.md) — open follow-up queue
+- [`docs/ROADMAP.md`](../ROADMAP.md) — promotion order

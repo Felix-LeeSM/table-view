@@ -60,7 +60,9 @@ decision logs.
 ## Boundary
 
 - Product-visible limitations live in
-  [`docs/product/known-limitations.md`](../product/known-limitations.md).
+  [`docs/product/known-limitations.md`](../product/known-limitations.md) and its
+  `known-limitations-{rdbms,non-rdbms,cross-cutting}.md` children, which own the
+  per-source boundary entries.
 - Future sequencing lives in [`docs/ROADMAP.md`](../ROADMAP.md).
 - Historical records live under [`docs/archives/`](../archives/).
 - Active engineering rules live under [`memory/engineering/`](../../memory/engineering/memory.md).
