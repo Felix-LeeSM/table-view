@@ -1,7 +1,13 @@
 import { ESLint } from "eslint";
+import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { extname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  deriveCiGates,
+  findCiGateEnumerationViolations,
+  readCiGateEnumerationSources,
+} from "./static-policy/ci-gate-enumeration";
 import {
   COMPLETION_FEATURE_REFERENCE_DOC_PATHS,
   findCompletionFeatureBoundaryViolations as findCompletionFeatureBoundaryViolationsImpl,
@@ -609,6 +615,26 @@ async function main() {
   ]);
   const ignored = await findIgnoredCandidates(eslint, sourceFiles);
   const unexpectedIgnored = findUnexpectedIgnoredFiles(ignored);
+
+  // CI gate enumeration (#1845). Tracked files only: an untracked scratch note
+  // is not a SOT and must not fail anyone's lint.
+  const readRepoFile = (path: string) =>
+    readFileSync(resolve(cwd, path), "utf8");
+  const trackedFiles = execFileSync("git", ["ls-files", "-z"], {
+    cwd,
+    encoding: "utf8",
+    maxBuffer: 32 * 1024 * 1024,
+  })
+    .split("\0")
+    .filter(Boolean);
+  const derivedGates = deriveCiGates(readRepoFile);
+  const ciGateFailures =
+    typeof derivedGates === "string"
+      ? [derivedGates]
+      : findCiGateEnumerationViolations(
+          readCiGateEnumerationSources(trackedFiles, readRepoFile),
+          derivedGates,
+        );
   const failures = [
     ...compareMaxLinesAllowlist(summary.maxLineWarningPaths),
     ...(summary.unexpectedWarningRules.length > 0
@@ -632,6 +658,7 @@ async function main() {
     ...findConnectionFeatureBoundaryViolations(sourceFileContents),
     ...findFeatureImportBoundaryViolations(sourceFileContents),
     ...findFrontendCompatInventoryViolations(sourceFileContents),
+    ...ciGateFailures,
     ...(await validateFeatureBoundaryRule(eslint, cwd)),
   ];
 

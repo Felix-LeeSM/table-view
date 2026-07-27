@@ -53,11 +53,12 @@ T0~T7 오케스트레이션 절차 SOT 다. 행동 계약(ownership / 중단 조
      필요, main required check + enforce_admins 라 우회 불가)
    - `gh pr view` mergeable 이고 branch policy block 없음
    - 사용자 명시 거부 없음
-   조건 미달 시 원인(PR conflict / CI / policy / review)을 사용자에게 보고.
-   mergeable 인데 BLOCKED / "base branch policy" 로 막히면
-   [runbook/pr-merge-gates](../../../memory/runbook/pr-merge-gates/memory.md) 진단 —
-   required 는 review-gate + E2E `Runtime Happy Path` 이중, UNSTABLE 은 merge 가능,
-   트리거 반복 금지.
+     조건 미달 시 원인(PR conflict / CI / policy / review)을 사용자에게 보고.
+     mergeable 인데 BLOCKED / "base branch policy" 로 막히면
+     [runbook/pr-merge-gates](../../../memory/runbook/pr-merge-gates/memory.md) 진단.
+     required 게이트 목록은 그 방이 유일 SOT 다 (여기 복제 금지 — 이전 복제본은
+     protection 하나 + ruleset 하나라고 적어 실제 등록분을 빠뜨렸다).
+     UNSTABLE 은 merge 가능, 트리거 반복 금지.
 7. **T7 Cleanup** — merge / blocked 이후 agent close + worktree cleanup, 또는
    보존 사유 기록.
 

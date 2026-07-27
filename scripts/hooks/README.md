@@ -43,6 +43,19 @@ Current dispatchers:
 - `check-worktree-bootstrap.sh` — linked-worktree Rust cache guard before Cargo
   pre-commit gates.
 - `check-signed-commits.sh` — pre-push outgoing signed-commit gate.
+- `detect-change-scope.sh` — classifies a change set into two independent
+  signals, `code_changed` and `docs_changed`. The second exists because a
+  docs-only change is not "no change": the vitest suite holds the doc contracts
+  and `pnpm lint` reads the 20 `COMPLETION_FEATURE_REFERENCE_DOC_PATHS` plus the
+  frontend-compat inventory, so the jobs running those must fire on a docs-only
+  PR (#1841 merged with its doc contracts unevaluated; #1844 and #1847 merged
+  reading `Frontend Checks: skipping`). Any ambiguity sets both to true.
+  Tests: `test-detect-change-scope.sh`; the CI wiring — exactly which jobs carry
+  the `docs_changed` clause — is asserted in `test-ci-workflow-cache.sh` against
+  the `DOCS-READING JOBS` note in `.github/workflows/ci.yml`.
+  - Ceiling: that assertion runs at pre-push on `.github/workflows/*` edits, not
+    as its own CI job, so dropping the clause is caught locally rather than
+    remotely.
 - `pre-push-path-router.sh` — path-sensitive pre-push TS/Rust gate router. Also
   runs `scripts/check-memory-paths.ts` (reverse code->memory path-citation gate)
   when memory changes or a push drops/renames a path, and

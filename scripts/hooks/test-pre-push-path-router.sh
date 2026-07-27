@@ -320,7 +320,6 @@ assert_contains "$ci_workflow_output" "RUN tag-version-verify-tests:" "ci workfl
 assert_contains "$ci_workflow_output" "RUN auto-tag-release-workflow:" "ci workflow"
 assert_not_contains "$ci_workflow_output" "RUN ts-test:" "ci workflow"
 assert_not_contains "$ci_workflow_output" "RUN rust-test-and-coverage:" "ci workflow"
-
 github_meta_output="$(run_case github-meta normal .github/dependabot.yml)"
 assert_contains "$github_meta_output" "route: full" "github meta"
 assert_contains "$github_meta_output" "RUN ts-test:" "github meta"

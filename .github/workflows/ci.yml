@@ -47,6 +47,10 @@ jobs:
     timeout-minutes: 5
     outputs:
       code_changed: ${{ steps.detect.outputs.code_changed }}
+      # Independent of code_changed; both are true for a mixed set. A docs-only
+      # change is a real change to anything that READS docs/, so the jobs listed
+      # under DOCS-READING JOBS at the bottom of this file gate on this too.
+      docs_changed: ${{ steps.detect.outputs.docs_changed }}
 
     steps:
       - name: Checkout
@@ -214,8 +218,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     needs: changes
-    # Fail-closed, same rule as every other change-gated job below.
-    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.code_changed == 'true')
+    # Fail-closed, same rule as every other change-gated job below — plus
+    # `docs_changed`, because this matrix runs the vitest suite and that suite
+    # contains the doc contracts (src/types/queryLanguage.docs.test.ts and the
+    # boundary/fixture contracts that read docs/). DOCS-READING JOB: see the
+    # note at the bottom of this file.
+    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.code_changed == 'true' || needs.changes.outputs.docs_changed == 'true')
 
     strategy:
       # One shard's failure must not cancel the others: the aggregation wants
@@ -291,7 +299,11 @@ jobs:
     # so the grading step below turns a red shard into a red required check
     # instead of letting `needs` silently skip it (GitHub counts a skipped
     # required check as successful).
-    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.code_changed == 'true')
+    # `docs_changed` is in the condition because this job runs `pnpm lint`, i.e.
+    # scripts/check-eslint-static-policy.ts, which reads the 20
+    # COMPLETION_FEATURE_REFERENCE_DOC_PATHS and the frontend-compat inventory.
+    # DOCS-READING JOB: see the note at the bottom of this file.
+    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.code_changed == 'true' || needs.changes.outputs.docs_changed == 'true')
 
     steps:
       # Grade the matrix BEFORE any setup: with a failed shard there is no blob
@@ -695,24 +707,53 @@ jobs:
   # Runtime E2E smoke lives in .github/workflows/e2e-smoke.yml as a
   # blocking remote check on pull requests and main. This workflow keeps the
   # non-runtime correctness gates.
-  #   Blocking: dependency-security (bans/licenses/sources), frontend
-  #   (ratchet → wasm:size → lint → merge shard coverage → build), rust-static
-  #   (fmt + clippy, mirrors lefthook), rust unit/storage tests, integration
-  #   coverage (`cargo llvm-cov nextest --profile push`, thresholds 80/75/80 —
-  #   promoted from the local pre-push rust route, audit 2026-07-03 #6).
-  #   Non-blocking (advisory): doc-size, dependency-advisories (RUSTSEC),
-  #   frontend-advisory (docs:links + WCAG contrast).
-  # `Frontend Checks` is an AGGREGATION job (2026-07-25): the vitest suite runs
-  # in the `frontend-shard` matrix and this job merges the shards' blob reports
-  # and applies the coverage thresholds. Its `name:` is load-bearing — the
-  # `pr_to_main` ruleset lists the required contexts by name, so renaming the
-  # job silently un-gates main (a context that never reports is not a context
-  # that fails). Same reason the e2e workflow keeps a bare `Runtime Happy Path`
-  # aggregation over its matrix. `Integration Tests (Docker)` was measured under
-  # the same split and reverted — see the comment on that job.
-  # The blocking jobs + dependency-advisories gate on `changes` with a
-  # fail-closed `if:` (skip only when `changes` succeeded AND said docs-only;
-  # any detection failure runs full), so docs/memory/*.md-only changes skip them
-  # while a broken detector never satisfies a required check by skip. pr-body,
-  # doc-size, and frontend-advisory always run (cheap / docs:links matters most
-  # on docs PRs).
+  #
+  # ---------------------------------------------------------------- #
+  # DOCS-READING JOBS — the list `docs_changed` exists for.            #
+  # ---------------------------------------------------------------- #
+  # These jobs run checks that READ docs/, so they must run when only docs
+  # change. Each carries `|| needs.changes.outputs.docs_changed == 'true'` in
+  # its `if:`:
+  #
+  #   frontend-shard  the vitest suite holds the doc contracts
+  #   frontend        `pnpm lint` -> scripts/check-eslint-static-policy.ts reads
+  #                   the 20 COMPLETION_FEATURE_REFERENCE_DOC_PATHS and the
+  #                   frontend-compat inventory
+  #
+  # This four-line list is the ONLY thing a human maintains here, and
+  # scripts/hooks/test-ci-workflow-cache.sh asserts that exactly these jobs
+  # carry the docs clause — add a docs-reading check to another job and that
+  # test fails. It replaces an allowlist of individual test FILES plus a drift
+  # guard plus a dedicated route plus a `vitest list` universe scanner, all of
+  # which existed only to compensate for `changes` calling a docs edit "no
+  # change". Ceiling: the test runs at pre-push on `.github/workflows/*` edits,
+  # not as its own CI job, so a same-PR edit that drops the docs clause is
+  # caught locally rather than remotely.
+  #
+  # The rest of the gating mechanism, which is not an enumeration: a
+  # change-gated job carries `needs: changes` plus a fail-closed `if:` that
+  # skips only when `changes` SUCCEEDED and said the set was out of its scope,
+  # so a broken detector runs the full set instead of satisfying a required
+  # check by skipping. An ungated job has no `if:` at all.
+  #
+  # WHICH JOB IS GATED / UNGATED / ADVISORY / MERGE-BLOCKING IS NOT LISTED HERE.
+  # It used to be, in this comment and in four documents, none of them tied to
+  # the job definitions above; #1845 found three of the copies stale. The
+  # membership is now derived from this file by the CI-gate enumeration section
+  # of scripts/check-eslint-static-policy.ts (`pnpm lint`), which also fails the
+  # build if any document (or this comment) re-enumerates it:
+  #   - gated / ungated / advisory, derived from the `if:` and
+  #     `continue-on-error` keys above:
+  #     docs/contributor-guide/smoke-matrix/h7-ops-security-reliability.md
+  #   - required contexts in the `pr_to_main` ruleset, which is live GitHub
+  #     state and not derivable from this repo:
+  #     memory/runbook/pr-merge-gates/memory.md
+  #
+  # Job `name:` values are load-bearing: the ruleset lists required contexts by
+  # name, so renaming a job silently un-gates main (a context that never reports
+  # is not a context that fails). `Frontend Checks` is an AGGREGATION job
+  # (2026-07-25) — the vitest suite runs in the `frontend-shard` matrix and this
+  # job merges the shards' blob reports and applies the coverage thresholds; the
+  # e2e workflow keeps a bare aggregation over its matrix for the same reason.
+  # `Integration Tests (Docker)` was measured under the same split and reverted
+  # — see the comment on that job.
