@@ -16,6 +16,7 @@ FAIL_DETAILS=()
 TMP_ROOT=""
 MAIN_ROOT=""
 LINKED_ROOT=""
+HOME_FIXTURE=""
 cleanup() {
 	if [ -n "$TMP_ROOT" ] && [ -d "$TMP_ROOT" ]; then
 		rm -rf "$TMP_ROOT"
@@ -34,6 +35,10 @@ setup_git_fixture() {
 	TMP_ROOT="$(mktemp -d)"
 	MAIN_ROOT="$TMP_ROOT/main"
 	LINKED_ROOT="$MAIN_ROOT/worktrees/linked-fixture"
+	# Home fixture OUTSIDE the repo root, so `~`-prefixed cases are deterministic
+	# regardless of where the developer's real $HOME sits (issue #1797).
+	HOME_FIXTURE="$TMP_ROOT/home"
+	must mkdir -p "$HOME_FIXTURE"
 
 	must git init -q "$MAIN_ROOT"
 	must git -C "$MAIN_ROOT" config user.email "hook-test@example.invalid"
@@ -71,6 +76,13 @@ run_case() {
 			;;
 		main-command)
 			actual_stderr="$(CHECK_MAIN_WORKTREE_SOURCE_EDIT_ROOT="$MAIN_ROOT" bash "$HOOK" --command "$1" 2>&1 >/dev/null)"
+			actual_exit=$?
+			;;
+		# `$1` = HOME for this case, `$2` = command. Lets a `~` case pin what the
+		# shell would expand to, including the case where the repo lives INSIDE
+		# the home directory (issue #1797).
+		main-command-home)
+			actual_stderr="$(HOME="$1" CHECK_MAIN_WORKTREE_SOURCE_EDIT_ROOT="$MAIN_ROOT" bash "$HOOK" --command "$2" 2>&1 >/dev/null)"
 			actual_exit=$?
 			;;
 		linked-path)
@@ -311,6 +323,27 @@ run_case "main command: heredoc body apostrophe does not mask next-line write (#
 # `<<<` is a here-string, not a heredoc; it must not swallow following lines.
 b1_herestring="$(printf 'grep foo <<<BAR\nrm src/App.tsx')"
 run_case "main command: here-string <<< does not swallow next-line write (#1251 B1)" 1 main-command "$b1_herestring"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Issue #1797 — a `~` token is not expanded by the approximate tokenizer, so it
+# was joined onto $ROOT (`$ROOT/~/...`), landed inside the repo and blocked home
+# directory maintenance from the primary worktree. The token must be expanded
+# the way the shell would: home OUTSIDE the repo passes, and — because the repo
+# can live UNDER $HOME — a `~` path that resolves back INTO the repo stays
+# blocked (a blanket "skip anything starting with ~" would under-block there).
+run_case "main command: tilde home file removal allowed (#1797)" 0 main-command-home "$HOME_FIXTURE" "rm ~/.claude/skills/x"
+run_case "main command: tilde home redirect allowed (#1797)" 0 main-command-home "$HOME_FIXTURE" "cat > ~/.zshrc"
+run_case "main command: tilde home path is not repo-relative (#1797)" 0 main-command-home "$HOME_FIXTURE" "rm ~/src/App.tsx"
+run_case "main command: absolute home file removal allowed (#1797)" 0 main-command-home "$HOME_FIXTURE" "rm $HOME_FIXTURE/.claude/settings.json"
+run_case "main command: unexpanded \$HOME token allowed (#1797)" 0 main-command-home "$HOME_FIXTURE" 'cat > $HOME/.claude/settings.json'
+# Under-block guards: repo source must stay blocked, including when $HOME IS the
+# repo root so `~/...` expands back into it.
+run_case "main command: rust source removal still blocked (#1797)" 1 main-command-home "$HOME_FIXTURE" "rm src-tauri/src/main.rs"
+run_case "main command: tilde expanding into repo source blocked (#1797)" 1 main-command-home "$MAIN_ROOT" "rm ~/src/App.tsx"
+run_case "main command: tilde expanding into repo rust source blocked (#1797)" 1 main-command-home "$MAIN_ROOT" "cat > ~/src-tauri/src/main.rs"
+# Literal `~`-prefixed repo file (no slash after `~`): not a home reference, so
+# it stays a repo-relative path and stays blocked.
+run_case "main command: literal tilde-prefixed repo file blocked (#1797)" 1 main-command-home "$HOME_FIXTURE" "rm ~backup.ts"
 
 # Issue #1242 — Bash 3.2 (macOS) + set -u empty-array crash. Running the hook in
 # path mode with NO path args expanded an empty "${PATH_ARGS[@]}" (unbound
