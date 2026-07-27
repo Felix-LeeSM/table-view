@@ -392,6 +392,34 @@ run_case "main path: tilde agent settings stays blocked (#1858)" 1 main-path-hom
 # allow, so the stderr leak is the only observable difference.
 run_case_stderr_lacks "main command: unset HOME does not abort the guard (#1858)" 0 "unbound variable" main-command-no-home "rm ~/.claude/skills/x"
 
+# A quoted `~` is literal NO MATTER WHERE the quote sits in the token, so every
+# route into emit_path has to see it: a redirect glued to its target keeps the
+# quote in the middle of the token (`>"~/x"`), and so do the glued multi-redirect
+# segments and `dd of=`. Anchoring the rule at the token's first character
+# covered only the space-separated spelling (#1858 round 2 under-block).
+# One case per emit route, quoted (blocked) next to its unquoted twin (allowed).
+run_case "main command: glued redirect quoted tilde blocked (#1858)" 1 main-command-home "$HOME_FIXTURE" 'cat >"~/src/App.tsx"'
+run_case "main command: glued append redirect quoted tilde blocked (#1858)" 1 main-command-home "$HOME_FIXTURE" 'cat >>"~/src/App.tsx"'
+run_case "main command: glued stderr redirect quoted tilde blocked (#1858)" 1 main-command-home "$HOME_FIXTURE" 'cat 2>"~/src/App.tsx"'
+run_case "main command: glued fd1 redirect quoted tilde blocked (#1858)" 1 main-command-home "$HOME_FIXTURE" 'cat 1>"~/src/App.tsx"'
+run_case "main command: glued redirect single-quoted tilde blocked (#1858)" 1 main-command-home "$HOME_FIXTURE" "cat >'~/src/App.tsx'"
+run_case "main command: glued multi-redirect quoted tilde segment blocked (#1858)" 1 main-command-home "$HOME_FIXTURE" 'printf x >memory/a.md>"~/src/App.tsx"'
+run_case "main command: dd of= quoted tilde blocked (#1858)" 1 main-command-home "$HOME_FIXTURE" 'dd if=/dev/zero of="~/src/App.tsx"'
+run_case "main command: spaced redirect quoted tilde blocked (#1858)" 1 main-command-home "$HOME_FIXTURE" 'cat > "~/src/App.tsx"'
+run_case "main command: tee quoted tilde blocked (#1858)" 1 main-command-home "$HOME_FIXTURE" 'printf x | tee "~/src/App.tsx"'
+run_case "main command: cp destination quoted tilde blocked (#1858)" 1 main-command-home "$HOME_FIXTURE" 'cp /tmp/a "~/src/App.tsx"'
+# Unquoted twins: the shell DOES expand these, so they stay allowed.
+run_case "main command: glued redirect unquoted tilde allowed (#1858)" 0 main-command-home "$HOME_FIXTURE" "cat >~/.zshrc"
+run_case "main command: glued append redirect unquoted tilde allowed (#1858)" 0 main-command-home "$HOME_FIXTURE" "cat >>~/.zshrc"
+run_case "main command: dd of= unquoted tilde allowed (#1858)" 0 main-command-home "$HOME_FIXTURE" "dd if=/dev/zero of=~/.zshrc"
+run_case "main command: tee unquoted tilde allowed (#1858)" 0 main-command-home "$HOME_FIXTURE" "printf x | tee ~/.zshrc"
+# Control: a quoted literal repo path stays blocked through the same route.
+run_case "main command: glued redirect quoted repo path blocked (#1858)" 1 main-command-home "$HOME_FIXTURE" 'cat >"src/App.tsx"'
+# apply_patch markers are literal file paths, not shell words — nothing expands
+# `~` there either.
+tilde_patch_input="$(printf '*** Begin Patch\n*** Update File: ~/src/App.tsx\n@@\n-old\n+new\n*** End Patch\n')"
+run_case "main command: patch marker tilde path blocked (#1858)" 1 main-command-home "$HOME_FIXTURE" "$tilde_patch_input"
+
 # Issue #1242 — Bash 3.2 (macOS) + set -u empty-array crash. Running the hook in
 # path mode with NO path args expanded an empty "${PATH_ARGS[@]}" (unbound
 # variable), crashing the guard (exit 1). It must now no-op cleanly (exit 0).
