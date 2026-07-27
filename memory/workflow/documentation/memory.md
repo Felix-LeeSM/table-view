@@ -103,7 +103,7 @@ heading 이름·항목 라벨·repo-relative path 같은 **내용 식별자**로
 측정 근거: #1850 이 스스로 `this row`→`this entry` / `행`→`항목` 를 스윕했는데도
 round-1 리뷰가 같은 클래스 2건을 blocking 으로 잡았고, 그 fix 의 전수 재스윕에서
 3건이 더 나왔다. 기계 가드는 두지 않는다 — live `.md` 155개 전수 스캔에서 후보
-147줄 중 실제 위반은 5줄(precision 3.4%)이라 allowlist 없이는 상시 RED 다.
+147줄 중 실제 위반은 5개 문장·7줄(4.8%)이라 allowlist 없이는 상시 RED 다.
 
 ## Reviewer gate
 
