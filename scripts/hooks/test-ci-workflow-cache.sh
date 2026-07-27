@@ -292,10 +292,19 @@ for job_id in $(grep -Eo '^  [a-z][a-z0-9-]*:' "$WORKFLOW" | tr -d ' :'); do
 	esac
 done
 
-# The declared list must also appear in the workflow's own DOCS-READING JOBS
-# note, so the comment a maintainer reads cannot drift from the assertion.
-for job_id in $docs_reading_jobs; do
-	assert_contains "$workflow_text" "#   $job_id" "DOCS-READING JOBS note lists $job_id"
-done
+# The note in the workflow must list exactly the declared jobs, so the comment a
+# maintainer reads cannot drift from the assertions above. Compare SETS, both
+# directions: a substring needle cannot do this, because `#   frontend` is a
+# prefix of `#   frontend-shard` (the shard entry alone satisfied the `frontend`
+# needle, and an invented `#   rust` entry was invisible). A note entry is a
+# note-indented comment whose first word is the job id; the continuation lines
+# are indented past that column and do not match, so an empty capture (e.g. the
+# note reindented or deleted) also fails.
+note_jobs="$(grep -Eo '^  #   [a-z][a-z0-9-]*' "$WORKFLOW" | awk '{print $2}' | sort -u)"
+declared_jobs="$(tr ' ' '\n' <<<"$docs_reading_jobs" | sed '/^$/d' | sort -u)"
+if [ "$note_jobs" != "$declared_jobs" ]; then
+	echo "FAIL: DOCS-READING JOBS note lists [$(tr '\n' ' ' <<<"$note_jobs")] but the declared list is [$docs_reading_jobs]" >&2
+	exit 1
+fi
 
 echo "PASS: CI workflow cache and coverage check"

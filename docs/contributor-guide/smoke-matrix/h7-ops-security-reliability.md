@@ -90,10 +90,12 @@ only when detection SUCCEEDED and said the change was out of its scope; if the
 runs full, so a broken detector never lets a skip satisfy a required check.
 `paths-ignore` is deliberately NOT used: it would leave the required contexts
 expected/missing forever, whereas an `if:`-skipped job's check run satisfies the
-required status check (GitHub treats skipped checks as successful). The
-e2e-smoke matrix, `e2e-smoke-prepare`, and the `e2e-smoke-required` aggregation
-use the same fail-closed guard on `code_changed`. The script is fail-safe too:
-missing base ref, git error, or `workflow_dispatch` sets BOTH signals true.
+required status check (GitHub treats skipped checks as successful). In
+`e2e-smoke.yml` only `e2e-smoke-prepare` and the `e2e-smoke-required`
+aggregation carry that guard as a job-level `if:`; the three matrix jobs have no
+`if:` of their own and inherit the skip through `needs: e2e-smoke-prepare`. The
+script is fail-safe too: missing base ref, git error, or `workflow_dispatch`
+sets BOTH signals true.
 
 The three sets below are derived from `.github/workflows/ci.yml` by
 `scripts/static-policy/ci-gate-enumeration.ts` (`pnpm lint`) and re-checked on
