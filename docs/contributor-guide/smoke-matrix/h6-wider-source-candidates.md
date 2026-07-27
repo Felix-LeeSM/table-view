@@ -119,7 +119,7 @@ smoke before support claims widen.
 
 Current evidence:
 
-`docs/ROADMAP.md` H6 진행 기준
+[`docs/roadmap/h6.md`](../../roadmap/h6.md) 진행 기준
 
 Current gap / routing:
 
@@ -134,7 +134,7 @@ only, not active runtime, parser/completion, fixture/live, or E2E support.
 
 Current evidence:
 
-`docs/ROADMAP.md` H6 진행 기준
+[`docs/roadmap/h6.md`](../../roadmap/h6.md) 진행 기준
 
 Current gap / routing:
 
@@ -150,7 +150,7 @@ fixture/live, or E2E support.
 
 Current evidence:
 
-`docs/ROADMAP.md` H6 진행 기준
+[`docs/roadmap/h6.md`](../../roadmap/h6.md) 진행 기준
 
 Current gap / routing:
 
@@ -164,7 +164,7 @@ evidence. RDBMS `SchemaGraph` remains separate from the graph-source catalog.
 
 Current evidence:
 
-`docs/ROADMAP.md` H6 진행 기준
+[`docs/roadmap/h6.md`](../../roadmap/h6.md) 진행 기준
 
 Current gap / routing:
 
@@ -180,7 +180,7 @@ not active runtime, parser/completion, fixture/live, or E2E support.
 
 Current evidence:
 
-`docs/ROADMAP.md` H6 진행 기준
+[`docs/roadmap/h6.md`](../../roadmap/h6.md) 진행 기준
 
 Current gap / routing:
 

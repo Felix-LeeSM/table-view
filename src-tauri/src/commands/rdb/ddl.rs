@@ -15,7 +15,8 @@
 //! helper hoisted from `schema.rs` to `super`) and returns
 //! `AppError::DbMismatch` BEFORE invoking the trait method. The `None`
 //! path is byte-equivalent to pre-Sprint-271 (no probe overhead). Mirrors
-//! the Sprint 266 reference probe at `commands/rdb/query.rs:83–92`.
+//! the Sprint 266 reference probe inlined in `execute_query_inner`
+//! (`commands/rdb/query.rs`). Named, not line-numbered — line ranges drift.
 
 use crate::commands::connection::AppState;
 use crate::error::AppError;
@@ -924,7 +925,8 @@ mod tests {
     // ── Sprint 271c — expected_database guard (2026-05-13) ────────────────
     //
     // 작성 이유: 11 DDL commands 각각의 mismatch 가드 verbatim assertion.
-    // Sprint 266 reference (`query.rs:83–92`) 와 byte-equivalent — probe 가
+    // Sprint 266 reference (`query.rs` 의 `execute_query_inner` inline
+    // probe) 와 byte-equivalent — probe 가
     // trait 호출 *전에* 일어나고 mismatch 시 underlying trait method
     // (drop_table_sql 등) 가 호출되지 않아야 함. trait closure 가 panic
     // 하도록 두어 가드가 새면 fail-loud. 슬라이스 271a 의 schema 측

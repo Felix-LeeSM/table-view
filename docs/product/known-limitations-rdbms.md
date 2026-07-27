@@ -264,5 +264,6 @@ source-specific promotion issues prove them.
 ## Related
 
 - [`docs/product/known-limitations.md`](known-limitations.md) — boundary index
-- [`docs/product/README.md`](README.md) — current support snapshot
-- [`docs/ROADMAP.md`](../ROADMAP.md) — follow-up queue and promotion order
+- [`docs/product/current-support-snapshot.md`](current-support-snapshot.md) — current support snapshot
+- [`docs/roadmap/follow-up-queue.md`](../roadmap/follow-up-queue.md) — open follow-up queue
+- [`docs/ROADMAP.md`](../ROADMAP.md) — promotion order

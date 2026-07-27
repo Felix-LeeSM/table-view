@@ -65,8 +65,9 @@ PR body 에 다음 섹션을 포함:
 | sequencing / 다음 sprint 후보 | `docs/ROADMAP.md` |
 | 실제 sprint 범위 / AC / handoff | `docs/sprints/sprint-N/` |
 | 반복 적용 규칙 / workflow / product / engineering | `memory/**/memory.md` |
-| 현재 사용자-visible 제한 | `docs/product/known-limitations.md` 또는 `docs/product/README.md` |
-| 미래 follow-up / 승격 후보 | `docs/ROADMAP.md` |
+| 현재 사용자-visible 제한 | `docs/product/**` — per-source 행은 `known-limitations-{rdbms,non-rdbms,cross-cutting}.md` |
+| 미래 follow-up | `docs/roadmap/follow-up-queue.md` |
+| 승격 후보 순서 | `docs/ROADMAP.md` |
 | 구조적 제약 | `memory/engineering/architecture/**` |
 | 개발/운영 검증 제약 | `memory/engineering/**` 또는 `docs/contributor-guide/**` |
 | 과거 risk register / 사건 | `docs/archives/**` |

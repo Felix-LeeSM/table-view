@@ -1,7 +1,8 @@
 # Known Limitations
 
-This page records current product-visible support boundaries. Future work and
-sequencing live in [`docs/ROADMAP.md`](../ROADMAP.md). Historical risk IDs live
+This page records current product-visible support boundaries. Future work items
+live in [`docs/roadmap/follow-up-queue.md`](../roadmap/follow-up-queue.md) and
+sequencing lives in [`docs/ROADMAP.md`](../ROADMAP.md). Historical risk IDs live
 in [`docs/archives/risks/active-risk-register-2026-05-27.md`](../archives/risks/active-risk-register-2026-05-27.md).
 
 The MySQL/MariaDB import/export boundary row in
@@ -16,8 +17,8 @@ backup/restore/import/export stays a future gate. #1638 (tabular JSON export)
 has shipped — grid JSON export is engine-agnostic (no capability gate) and now
 serves table/query surfaces as an array of objects keyed by headers, so no
 boundary row claims it as unsupported. This page is not edited ahead of the
-feature; the forward-looking Stage 1 scope boundary is owned by the Current
-Boundaries section of [`docs/product/README.md`](README.md).
+feature; the forward-looking Stage 1 scope boundary is owned by
+[`docs/product/current-boundaries.md`](current-boundaries.md).
 
 ## Data Source Support
 
@@ -123,6 +124,7 @@ Installs outside those keys do not auto-update:
 
 ## Related
 
-- [`docs/product/README.md`](README.md) — current support snapshot
-- [`docs/ROADMAP.md`](../ROADMAP.md) — follow-up queue and promotion order
+- [`docs/product/current-support-snapshot.md`](current-support-snapshot.md) — current support snapshot
+- [`docs/roadmap/follow-up-queue.md`](../roadmap/follow-up-queue.md) — open follow-up queue
+- [`docs/ROADMAP.md`](../ROADMAP.md) — promotion order
 - [`docs/contributor-guide/testing-and-quality.md`](../contributor-guide/testing-and-quality.md) — developer-facing verification gaps

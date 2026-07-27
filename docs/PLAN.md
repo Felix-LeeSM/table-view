@@ -9,6 +9,7 @@ backlog, product claim ledger 는 여기 두지 않는다. 미래 순서와 승�
 | 현재 제품 상태 / 지원 범위 | [`docs/product/README.md`](product/README.md) |
 | 현재 제품 제한 / 지원 경계 | [`docs/product/known-limitations.md`](product/known-limitations.md) |
 | 미래 목표 / 승격 후보 / 순서 기준 | [`docs/ROADMAP.md`](ROADMAP.md) |
+| 지평별 진행 기준 / 실행 대기열 | [`docs/roadmap/`](roadmap/) |
 | GitHub milestone / issue execution buckets | [`docs/ROADMAP.md`](ROADMAP.md) + live GitHub milestones/issues |
 | 개발/검증 follow-up | [`docs/contributor-guide/testing-and-quality.md`](contributor-guide/testing-and-quality.md) |
 | phase specs | [`docs/phases/`](phases/) |

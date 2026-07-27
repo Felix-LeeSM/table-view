@@ -6,7 +6,8 @@
 #   docs/archives     — 과거 기록·결정 로그
 #   docs/table_plus   — vendored 외부 mirror (README 가 docs.tableplus.com/llms.txt 명시)
 #   docs/explorations — historical artifacts (README 가 "현재 SOT 아님" 선언)
-# 남은 살아있는 참조 문서(product, contributor-guide, ROADMAP, quality, phases, docs root)만 잰다.
+# 남은 살아있는 참조 문서(product, contributor-guide, roadmap, ROADMAP, quality,
+# phases, docs root)만 잰다.
 # memory 와 달리 줄 수 cap 은 두지 않는다 — docs 는 한 줄이 긴 것이 흔하고 분량(chars)이
 # 읽기 부하의 더 나은 척도다.
 # 기본: 경고만 출력 (exit 0). --strict: 초과 파일이 있으면 exit 1.

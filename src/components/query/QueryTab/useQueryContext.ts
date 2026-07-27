@@ -45,7 +45,7 @@ export function supportsNativeCancel(
 
 /**
  * `useQueryContext` — `useQueryExecution` 의 "context substrate" 추출
- * (docs/ROADMAP.md H1 후속 `useQueryExecution decomposition`). connection/db
+ * (docs/roadmap/h1.md 후속 `useQueryExecution decomposition`). connection/db
  * 식별자에 바인딩된 store-action 래퍼 7개, capability 파생, history-record
  * 팩토리, Safe Mode 게이트를 한 곳에 모은다.
  *

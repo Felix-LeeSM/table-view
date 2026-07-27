@@ -11,5 +11,5 @@ caveman 모드 (단 보안 경고 / 위험 안내 시 잠시 끔). 작업 시 �
 2. 관련 ADR (`docs/archives/decisions/0005-*`, `0021-*`, `0036-*`, `0040-*`)
 
 Write 좁게: `docs/explorations/*-threat-model-*.md`, `docs/product/**`,
-`docs/ROADMAP.md`, `docs/contributor-guide/**`, `docs/archives/**`,
+`docs/ROADMAP.md`, `docs/roadmap/**`, `docs/contributor-guide/**`, `docs/archives/**`,
 `memory/**`. `src/`, `src-tauri/` 코드 변경 금지. `gh`, `git push` 금지.
