@@ -140,6 +140,21 @@ relative_path() {
 			;;
 	esac
 
+	# Tilde expansion. The tokenizer sees the token BEFORE the shell expands it,
+	# so `~/x` used to be joined onto $ROOT (`$ROOT/~/x`), land inside the repo
+	# and block home-directory maintenance from the primary worktree (issue
+	# #1797). Expand it the way the shell would instead of skipping every `~`
+	# token: this repo can live under $HOME, so `~/<repo>/src/App.tsx` must still
+	# resolve into the repo and stay blocked. Only `~` and `~/...` are home
+	# references — `~name/...` (another user's home) is left alone, so it keeps
+	# the pre-#1797 conservative behavior of being treated as repo-relative.
+	case "$raw" in
+		'~' | '~/'*)
+			[ -n "${HOME:-}" ] || return 1
+			raw="${HOME}${raw#\~}"
+			;;
+	esac
+
 	case "$raw" in
 		/*)
 			normalized_raw="$(normalize_path "$raw")" || return 1
