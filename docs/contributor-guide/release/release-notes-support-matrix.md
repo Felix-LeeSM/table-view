@@ -26,7 +26,8 @@ Known limits to state in release notes:
 
 - Full vendor-admin parity is not claimed. Backup/restore/import/export,
   role/user/permission management, server activity dashboards, and broad admin
-  execution remain future gates unless a row below says otherwise.
+  execution remain future gates unless a per-source entry under
+  `## Support Matrix` says otherwise.
 - Completion is editor assistance. It does not widen runtime execution support.
 - Fixture inventory is not live support evidence unless wired by Runtime Happy
   Path or focused runtime tests.

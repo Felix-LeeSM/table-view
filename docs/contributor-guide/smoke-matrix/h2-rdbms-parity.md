@@ -42,7 +42,7 @@ Current evidence:
 Current gap / routing:
 
 This remains the strongest RDBMS remote E2E smoke-backed lane today; MySQL and
-MariaDB have narrower routine baselines in their own rows. Explain evidence is
+MariaDB have narrower routine baselines of their own. Explain evidence is
 plan inspection/source-label only; installed-extension completion smoke covers
 seeded `pgcrypto` and `fuzzystrmatch` gating only; Safe Mode smoke covers
 info/warn/destructive, raw DDL, and grid-edit preview paths; cancellation smoke

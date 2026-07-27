@@ -84,6 +84,27 @@ PR body / review comment / handoff 는 GitHub 에서 확인 가능한 증거만 
 - 금지: `/Users/...`, `/tmp/...`, `file://...`, `worktrees/...`, 로컬 plan path.
 - 로컬 임시 로그는 요약을 붙이고, 재현 명령 또는 repo artifact 로 대체.
 
+## 문서는 레이아웃이 아니라 내용을 가리킨다
+
+다른 문서(또는 자기 문서)의 **레이아웃**을 서술한 문장은 그 레이아웃이 바뀌는
+순간 거짓이 된다. 포인터는 표/행/열/셀 이나 "위·아래" 같은 위치가 아니라
+heading 이름·항목 라벨·repo-relative path 같은 **내용 식별자**로 쓴다.
+
+- 금지: `a row below`, `the MySQL rows of <file>`, `아래 표 참조`, `N행 표`.
+- 허용: `` `## Support Matrix` 의 per-source 항목 ``, 항목 라벨 그대로 인용,
+  `docs/roadmap/follow-up-queue.md` 처럼 파일을 지목.
+- 전환 중이라 "A 이거나 B" 로 헤지한 문장은 전환을 끝내는 PR 에서 최종 상태로
+  접는다. 안 접으면 존재하지 않는 중간 상태를 서술하게 된다.
+- 스윕은 영어·한국어 동시에. 영어 어휘만 훑어서 `행`/`표` 잔여를 놓친 사고가
+  실제로 있었다 (#1850).
+- 예외: 같은 문서에서 바로 이어지는 블록을 가리키는 "아래/위" 는 그대로 둔다.
+  깨지는 건 표 구조를 전제한 포인터다.
+
+측정 근거: #1850 이 스스로 `this row`→`this entry` / `행`→`항목` 를 스윕했는데도
+round-1 리뷰가 같은 클래스 2건을 blocking 으로 잡았고, 그 fix 의 전수 재스윕에서
+3건이 더 나왔다. 기계 가드는 두지 않는다 — live `.md` 155개 전수 스캔에서 후보
+147줄 중 실제 위반은 5줄(precision 3.4%)이라 allowlist 없이는 상시 RED 다.
+
 ## Reviewer gate
 
 pr-reviewer 는 다음을 blocking finding 으로 본다:
@@ -91,6 +112,7 @@ pr-reviewer 는 다음을 blocking finding 으로 본다:
 - 문서화 트리거가 있는데 `Required: no` 이거나 Updated SOT 없음.
 - 기존 SOT 대신 새 backlog/plan 디렉토리를 만들고 retire 조건 없음.
 - PR 에서 볼 수 없는 로컬 절대경로를 body/comment 근거로 사용.
+- 표/heading 구조를 바꾸는 PR 인데 그 레이아웃을 서술한 다른 문장을 안 고침.
 - workflow/rule 변경인데 `memory/workflow/**` 또는 관련 wrapper 갱신 없음.
 
 ## 관련

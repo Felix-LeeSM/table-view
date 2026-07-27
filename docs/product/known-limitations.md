@@ -23,10 +23,8 @@ feature; the forward-looking Stage 1 scope boundary is owned by
 ## Data Source Support
 
 Per-source boundary entries moved to the child pages below. Each child keeps the
-exact entry wording, and every entry keeps its area label and its current
-limitation. Layout is per-page: an entry is either a row of the original
-`| Area | Current limitation |` table or the equivalent heading section, because
-#1842 unwraps those tables one page at a time.
+exact entry wording; every entry is titled with its area label and states its
+current limitation.
 
 - [`docs/product/known-limitations-rdbms.md`](known-limitations-rdbms.md) —
   PostgreSQL, MySQL/MariaDB, SQLite, DuckDB, MSSQL, Oracle.

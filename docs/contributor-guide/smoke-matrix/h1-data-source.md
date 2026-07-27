@@ -59,8 +59,9 @@ generated SQL quoting/key projection and preview/commit/discard coverage,
 bounded Structure table/index/FK DDL preview/confirmation/catalog-readback
 coverage, catalog-aware completion context evidence, read-only Structure trigger
 metadata, and explicit unsupported scripting boundaries. Support-claim closure
-is audited in the MySQL rows of [`h2-rdbms-parity.md`](h2-rdbms-parity.md);
-remaining gaps stay routed as promotion gates.
+is audited under `## MySQL support-claim closure audit` in
+[`h2-rdbms-parity.md`](h2-rdbms-parity.md); remaining gaps stay routed as
+promotion gates.
 
 ## MariaDB connect -> browse/edit -> SELECT/CALL/DML batch -> cancellation + history evidence
 
