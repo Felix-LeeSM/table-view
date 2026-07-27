@@ -1,6 +1,6 @@
 # Known Limitations — Non-RDBMS And Search Sources
 
-Per-source boundary rows for key-value, document, and search engines, plus
+Per-source boundary entries for key-value, document, and search engines, plus
 the not-yet-modeled source candidates. Index and the remaining boundary areas
 live in [`docs/product/known-limitations.md`](known-limitations.md).
 
