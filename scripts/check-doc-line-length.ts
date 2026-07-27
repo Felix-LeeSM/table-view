@@ -36,16 +36,15 @@ export type FileMeasurement = {
   excess: number;
 };
 
-const TARGETS_VERSION = 3;
+export const TARGETS_VERSION = 3;
 
 const repoRoot = execFileSync("git", ["rev-parse", "--show-toplevel"], {
   encoding: "utf8",
 }).trim();
 const targetsPath = "scripts/doc-line-length-targets.json";
 
-// Mirrors the prune list in scripts/hooks/check-doc-size.sh. Those trees are
-// one-shot artifacts (sprint output, archives, vendored mirror, historical
-// explorations) that no agent re-reads, so their line shape is not a cost.
+// Mirrors the prune list in scripts/hooks/check-doc-size.sh. Why those trees
+// are exempt is on the SOT page; not restated here.
 const PRUNED_DIRS = new Set([
   "sprints",
   "archives",
@@ -235,7 +234,12 @@ export function parseTargets(raw: unknown): RatchetTargets {
   return parsed;
 }
 
-function readTargets(): RatchetTargets {
+/**
+ * The committed baseline is the only place the ceiling is written down.
+ * Everything that needs the number — the gate, the published contract, the
+ * tests — reads it from here, so changing it cannot leave a stale copy behind.
+ */
+export function readTargets(): RatchetTargets {
   return parseTargets(
     JSON.parse(readFileSync(path.join(repoRoot, targetsPath), "utf8")),
   );

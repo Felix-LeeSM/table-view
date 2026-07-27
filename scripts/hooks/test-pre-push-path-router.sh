@@ -311,7 +311,7 @@ assert_not_contains "$ratchet_script_output" "RUN rust-test-and-coverage:" "ratc
 # A doc split that touches a long row commits the regenerated baseline next to
 # the doc change (docs/quality/doc-size-ratchet.md). Unregistered, the JSON fell
 # through to the unknown catch-all and promoted that push to the full route.
-doc_line_length_output="$(run_case doc-line-length normal scripts/check-doc-line-length.ts scripts/doc-line-length-targets.json)"
+doc_line_length_output="$(run_case doc-line-length normal scripts/check-doc-line-length.ts scripts/doc-line-length-contract.ts scripts/doc-line-length-targets.json)"
 assert_contains "$doc_line_length_output" "route: frontend=0 rust=0 hook=1 memory=0 agent=0" "doc line length ratchet"
 assert_contains "$doc_line_length_output" "RUN doc-line-length-tests:" "doc line length ratchet"
 assert_not_contains "$doc_line_length_output" "route: full" "doc line length ratchet"

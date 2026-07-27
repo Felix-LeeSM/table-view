@@ -88,12 +88,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     # Contract, thresholds and remedies: docs/quality/doc-size-ratchet.md.
-    # Promoted from advisory to blocking once the doc split (#1827) brought the
-    # measured set under both caps; the gate's own output is the live figure.
+    # Running this job fail-closed does not require paying the existing debt off
+    # first: scripts/doc-line-length-targets.json grandfathers the long rows in
+    # the tree today, so only a change that grows debt fails.
     #
     # Workflow-local decisions: this job is intentionally NOT change-gated (a
-    # docs-only PR is exactly the PR it exists for), and the shape below is
-    # pinned by scripts/hooks/test-ci-workflow-cache.sh.
+    # docs-only PR is exactly the PR it exists for), and both that and the shape
+    # below are asserted by scripts/hooks/test-ci-workflow-cache.sh.
 
     steps:
       - name: Checkout

@@ -9,13 +9,22 @@ import {
   isMeasuredDoc,
   measure,
   parseTargets,
+  runGate,
   type FileMeasurement,
 } from "../check-doc-line-length";
-import { renderContract } from "../doc-line-length-contract";
+import {
+  contractOutputs,
+  contractTargets,
+  CONTRACT_CEILING,
+  renderContract,
+} from "../doc-line-length-contract";
 
-const CEILING = 600;
+// One ceiling, read from the committed baseline. A second literal here is how
+// the gate's headline number could change while every doc kept the old one.
+const CEILING = CONTRACT_CEILING;
 const SOT_PAGE = "docs/quality/doc-size-ratchet.md";
-const GENERATED_MARKER = "<!-- generated: pnpm docs:lines:contract -->";
+const CHECKED_MARKER =
+  "<!-- checked against: pnpm --silent docs:lines:contract -->";
 
 type Entry = {
   path: string;
@@ -25,7 +34,7 @@ type Entry = {
 };
 
 function targets(entries: Entry[]) {
-  return { version: 3, ceiling: CEILING, entries };
+  return contractTargets(entries);
 }
 
 function tree(files: Record<string, FileMeasurement>) {
@@ -35,36 +44,115 @@ function tree(files: Record<string, FileMeasurement>) {
 /** A file whose lines all sit at or under the ceiling. */
 const clean: FileMeasurement = { over: 0, maxLen: 100, excess: 0 };
 
+const m = (over: number, maxLen: number, excess: number): FileMeasurement => ({
+  over,
+  maxLen,
+  excess,
+});
+
+/**
+ * Every way one file can sit relative to its baseline entry. Crossed with
+ * itself this reaches both remedies, both directions, all three fields, the
+ * missing-entry and orphaned-entry paths, and both `--update` outcomes —
+ * without anyone listing an output string by hand.
+ */
+const FILE_STATES: { entry?: FileMeasurement; file?: FileMeasurement }[] = [
+  {},
+  { entry: m(2, 900, 500), file: m(2, 900, 500) }, // exact match
+  { entry: m(2, 900, 500), file: m(3, 1000, 700) }, // every number rises
+  { entry: m(2, 900, 500), file: m(3, 900, 700) }, // count and excess rise only
+  { entry: m(2, 900, 500), file: m(1, 700, 300) }, // every number falls
+  { entry: m(2, 900, 500), file: m(0, 120, 0) }, // paid off
+  { entry: m(1, 1200, 600), file: m(1, 700, 100) }, // longest falls hard
+  { entry: m(1, 700, 100), file: m(1, 1000, 400) }, // longest rises alone
+  { entry: m(2, 900, 500) }, // entry whose file is gone
+  { file: m(2, 900, 500) }, // new debt, no entry
+  { file: m(9, 900, 2000) }, // enough new debt to force the split remedy
+  { file: m(0, 120, 0) }, // clean, no entry
+];
+
+const PATHS = ["docs/a.md", "docs/b.md"] as const;
+
+/** Everything `runGate` prints across the cross-product of FILE_STATES. */
+function probeOutputs(): string[] {
+  const outputs: string[] = [];
+  for (const first of FILE_STATES) {
+    for (const second of FILE_STATES) {
+      const states = [first, second];
+      const entries = states.flatMap((state, index) =>
+        state.entry ? [{ path: PATHS[index], ...state.entry }] : [],
+      );
+      const actual = new Map(
+        states.flatMap((state, index) =>
+          state.file ? ([[PATHS[index], state.file]] as const) : [],
+        ),
+      );
+      for (const mode of ["check", "update"] as const) {
+        outputs.push(runGate(actual, contractTargets(entries), mode).text);
+      }
+    }
+  }
+  return outputs;
+}
+
+/** Distinct printed lines with the varying parts blanked out. */
+function shapes(texts: string[]): string[] {
+  return [
+    ...new Set(
+      texts
+        .flatMap((text) => text.split("\n"))
+        .map((line) =>
+          line.replace(/docs\/[\w.-]+\.md/g, "PATH").replace(/\d+/g, "N"),
+        ),
+    ),
+  ].sort();
+}
+
 describe("published contract", () => {
   // The gate's behavior used to live as hand-written prose in the SOT page, the
   // script header, the workflow comment and these test comments at once, and
   // every review round found another copy that no longer matched the code. The
-  // page now embeds real output; this is the assertion that keeps it real.
+  // page now carries real output; these are the assertions that keep it real.
   it("matches the block the SOT page publishes", () => {
     const page = readFileSync(SOT_PAGE, "utf8");
     const block = page
-      .split(GENERATED_MARKER)[1]
+      .split(CHECKED_MARKER)[1]
       ?.match(/```text\n([\s\S]*?)```/);
 
-    expect(block, `${SOT_PAGE} is missing the generated block`).toBeTruthy();
+    expect(block, `${SOT_PAGE} is missing the checked block`).toBeTruthy();
     expect(block?.[1].trimEnd()).toBe(renderContract());
   });
 
-  it("covers every branch the gate can print", () => {
-    const contract = renderContract();
+  it("publishes exactly the message shapes the gate can print", () => {
+    // Set equality in both directions: an unpublished branch fails here, and so
+    // does a scenario that publishes a message the gate can no longer produce.
+    expect(shapes(contractOutputs())).toEqual(shapes(probeOutputs()));
+  });
 
-    for (const branch of [
-      "doc:lines ok (",
-      "in a file with no baseline entry. Split the cell",
-      "in a file with no baseline entry. Record it",
-      "rose to",
-      "fell to",
-      "no longer measured",
-      "doc:lines --update refused",
-      "doc:lines baseline written",
-    ]) {
-      expect(contract).toContain(branch);
-    }
+  it("publishes the whole-file threshold its sibling gate defaults to", () => {
+    // The other row of the page's Scope table names a number this suite does
+    // not own. Read it back out of the shell gate so that copy cannot outlive
+    // a threshold change either.
+    const shell = readFileSync("scripts/hooks/check-doc-size.sh", "utf8");
+    const threshold = shell.match(/DOCS_CHAR_THRESHOLD:-(\d+)/)?.[1];
+
+    expect(
+      threshold,
+      "check-doc-size.sh has no default threshold",
+    ).toBeTruthy();
+    expect(readFileSync(SOT_PAGE, "utf8")).toContain(
+      Number(threshold).toLocaleString("en-US"),
+    );
+  });
+
+  it("leaves the ceiling to the block, not to the page's prose", () => {
+    // A hand-typed ceiling in the surrounding prose is a copy that survives a
+    // baseline change. The number may only appear where the gate printed it.
+    const page = readFileSync(SOT_PAGE, "utf8");
+    const [intro, rest = ""] = page.split(CHECKED_MARKER);
+    const prose = intro + rest.replace(/```text\n[\s\S]*?```/, "");
+
+    expect(prose).not.toContain(String(CONTRACT_CEILING));
   });
 });
 
@@ -117,18 +205,33 @@ describe("measure", () => {
   });
 
   it("counts code points, so Korean prose is not charged UTF-8 bytes", () => {
-    // 400 Hangul syllables are 400 chars but 1200 bytes. A byte-based count
-    // would fail this line at a 600 ceiling. This is load-bearing for the real
-    // baseline: known-limitations.md's longest row measures 6,334 code points
-    // where a byte count reports 6,346.
+    // 400 Hangul syllables are 400 chars but 1200 UTF-8 bytes. A byte-based
+    // count would fail this line at a 600 ceiling.
     expect(measure("가".repeat(400), CEILING)).toEqual({
       over: 0,
       maxLen: 400,
       excess: 0,
     });
-    expect(measure("가".repeat(601), CEILING)).toEqual({
+    expect(measure("가".repeat(CEILING + 1), CEILING)).toEqual({
       over: 1,
-      maxLen: 601,
+      maxLen: CEILING + 1,
+      excess: 1,
+    });
+  });
+
+  it("counts an astral character once, not as its two UTF-16 units", () => {
+    // Hangul is in the BMP, so it cannot tell `[...line].length` apart from
+    // `line.length` — both report 400. A surrogate pair can: 400 emoji are 400
+    // code points and 800 UTF-16 units, so a `.length` count would invent 200
+    // over-ceiling chars in a line that is comfortably inside the budget.
+    expect(measure("😀".repeat(400), CEILING)).toEqual({
+      over: 0,
+      maxLen: 400,
+      excess: 0,
+    });
+    expect(measure("😀".repeat(CEILING + 1), CEILING)).toEqual({
+      over: 1,
+      maxLen: CEILING + 1,
       excess: 1,
     });
   });
@@ -185,7 +288,10 @@ describe("findMismatches", () => {
     expect(problems).toHaveLength(2);
     for (const problem of problems) {
       expect(problem).toContain("fell to");
-      expect(problem).toContain("--update");
+      expect(problem).toContain("Record it with `pnpm docs:lines --update`");
+      // The split remedy also contains the literal `--update`, so asserting on
+      // that alone cannot tell the two remedies apart.
+      expect(problem).not.toContain("Split the cell");
     }
   });
 
@@ -203,25 +309,12 @@ describe("findMismatches", () => {
   });
 
   it("catches a swap that shortens the longest row while the count stays flat", () => {
-    // The hole `maxLen` exists to close, in the direction that matters for
-    // known-limitations.md: 6,334 -> 6,000 is progress and must be recorded,
-    // not absorbed silently.
+    // The hole `maxLen` exists to close: trimming the single longest cell while
+    // the count and the summed excess stay put is progress, and it has to be
+    // recorded rather than absorbed silently.
     const problems = findMismatches(
-      tree({
-        "docs/product/known-limitations.md": {
-          over: 18,
-          maxLen: 6000,
-          excess: 100000,
-        },
-      }),
-      targets([
-        {
-          path: "docs/product/known-limitations.md",
-          over: 18,
-          maxLen: 6334,
-          excess: 100334,
-        },
-      ]),
+      tree({ "docs/a.md": { over: 18, maxLen: 6000, excess: 100000 } }),
+      targets([{ path: "docs/a.md", over: 18, maxLen: 6334, excess: 100334 }]),
     );
 
     expect(problems.some((p) => p.includes("longest line fell to 6000"))).toBe(
@@ -253,7 +346,10 @@ describe("findMismatches", () => {
     );
 
     expect(problems).toHaveLength(4);
-    for (const problem of problems) expect(problem).toContain("--update");
+    for (const problem of problems) {
+      expect(problem).toContain("Record it with `pnpm docs:lines --update`");
+      expect(problem).not.toContain("Split the cell");
+    }
     expect(problems.filter((p) => p.includes("rose to"))).toEqual([]);
     expect(problems.filter((p) => p.startsWith("docs/parent.md"))).toHaveLength(
       3,
@@ -264,11 +360,11 @@ describe("findMismatches", () => {
   });
 
   it("reports a move into a file that already holds an entry as a move too", () => {
-    // The destination here is not a clean file, which is the shape every real
-    // move in this repo has: all nine smoke-matrix band files hold entries. A
-    // per-file direction check calls this a rise and tells the author to split
-    // rows a doc split already split, while `--update` accepts the very same
-    // tree. The remedy has to follow the repo totals, not the file's.
+    // The destination here already carries debt, which is the shape a doc split
+    // takes whenever rows land in a file that is not clean. A per-file
+    // direction check calls this a rise and tells the author to split rows a
+    // doc split already split, while `--update` accepts the very same tree.
+    // The remedy has to follow the repo totals, not the file's.
     const moved = tree({
       "docs/src.md": { over: 13, maxLen: 900, excess: 4700 },
       "docs/dest.md": { over: 21, maxLen: 900, excess: 7300 },
@@ -340,25 +436,12 @@ describe("findUpdateRefusals", () => {
   });
 
   it("refuses consolidating many long rows into one giant cell", () => {
-    // Same numbers as the consolidation scenario in the published contract:
-    // 18 rows measuring 43,854 chars (excess 33,054, longest 6,334) merged into
-    // one cell and trimmed by 10,200 chars leave the excess untouched.
+    // Same numbers as the consolidation scenario in the published block: 18
+    // rows whose excess is 33,054 merged into one cell and trimmed just enough
+    // to leave that excess untouched, so only `longest` notices.
     const refusals = findUpdateRefusals(
-      tree({
-        "docs/product/known-limitations.md": {
-          over: 1,
-          maxLen: 33654,
-          excess: 33054,
-        },
-      }),
-      targets([
-        {
-          path: "docs/product/known-limitations.md",
-          over: 18,
-          maxLen: 6334,
-          excess: 33054,
-        },
-      ]),
+      tree({ "docs/a.md": { over: 1, maxLen: 33654, excess: 33054 } }),
+      targets([{ path: "docs/a.md", over: 18, maxLen: 6334, excess: 33054 }]),
     );
 
     expect(refusals).toEqual([

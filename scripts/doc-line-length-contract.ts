@@ -1,28 +1,34 @@
 // The published behavior contract for `pnpm docs:lines`.
 //
-// docs/quality/doc-size-ratchet.md embeds `renderContract()` verbatim and
-// scripts/__tests__/check-doc-line-length.test.ts fails when the page and this
-// output disagree. That is the point: the SOT page cannot describe behavior the
-// gate does not have, because the page IS the gate's output. Hand-written
-// restatements of the contract drifted in three consecutive review rounds; this
-// file is what replaces them.
+// This command prints the block; it does not write the page. A human pastes the
+// output into docs/quality/doc-size-ratchet.md and
+// scripts/__tests__/check-doc-line-length.test.ts fails when the two disagree,
+// so the page is *checked* against the gate rather than generated from it. The
+// effect is the same one that matters: the page cannot describe behavior the
+// gate does not have. Hand-written restatements of the contract drifted in
+// three consecutive review rounds; this file is what replaces them.
 //
-// Every scenario below runs the real `runGate`, so adding a branch to the gate
-// without a scenario leaves the branch undocumented, and changing a message
-// without regenerating the page turns the doc red.
+// Every scenario below runs the real `runGate`. The test also enumerates every
+// message shape the gate can print over a generated probe space and requires
+// the published block to contain exactly that set, so adding a branch without a
+// scenario is a test failure, not an undocumented branch.
 //
-// Regenerate the page block with `pnpm docs:lines:contract`.
+// Reprint the page block with `pnpm --silent docs:lines:contract`.
 
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
 import {
+  readTargets,
   runGate,
+  TARGETS_VERSION,
   type FileMeasurement,
   type RatchetEntry,
+  type RatchetTargets,
 } from "./check-doc-line-length";
 
-export const CONTRACT_CEILING = 600;
+/** Read from the committed baseline so the number has one home. */
+export const CONTRACT_CEILING = readTargets().ceiling;
 
 type Scenario = {
   title: string;
@@ -87,6 +93,42 @@ const SCENARIOS: Scenario[] = [
     tree: { "docs/a.md": { over: 1, maxLen: 700, excess: 100 } },
   },
   {
+    title: "A long row is added while another file is paid down",
+    mode: "check",
+    baseline: [
+      { path: "docs/a.md", over: 2, maxLen: 900, excess: 500 },
+      { path: "docs/gone.md", over: 1, maxLen: 700, excess: 100 },
+    ],
+    tree: {
+      "docs/a.md": { over: 1, maxLen: 700, excess: 300 },
+      "docs/b.md": { over: 9, maxLen: 900, excess: 2000 },
+    },
+  },
+  {
+    title: "A long row multiplies in a file that has an entry",
+    mode: "check",
+    baseline: [{ path: "docs/a.md", over: 2, maxLen: 900, excess: 500 }],
+    tree: { "docs/a.md": { over: 3, maxLen: 900, excess: 700 } },
+  },
+  {
+    title: "A row moves and the destination's longest row grows with it",
+    mode: "check",
+    baseline: [
+      { path: "docs/a.md", over: 1, maxLen: 1200, excess: 600 },
+      { path: "docs/b.md", over: 1, maxLen: 700, excess: 100 },
+    ],
+    tree: {
+      "docs/a.md": { over: 1, maxLen: 700, excess: 100 },
+      "docs/b.md": { over: 1, maxLen: 1000, excess: 400 },
+    },
+  },
+  {
+    title: "--update refuses a tree that adds long rows",
+    mode: "update",
+    baseline: [{ path: "docs/a.md", over: 2, maxLen: 900, excess: 500 }],
+    tree: { "docs/a.md": { over: 3, maxLen: 1000, excess: 700 } },
+  },
+  {
     title: "--update refuses 18 long rows consolidated into one cell",
     mode: "update",
     baseline: [{ path: "docs/a.md", over: 18, maxLen: 6334, excess: 33054 }],
@@ -115,14 +157,30 @@ function describeRows(
   );
 }
 
+export function contractTargets(baseline: RatchetEntry[]): RatchetTargets {
+  return {
+    version: TARGETS_VERSION,
+    ceiling: CONTRACT_CEILING,
+    entries: baseline,
+  };
+}
+
+/** Exactly what the gate returns for each published scenario, unformatted. */
+export function contractOutputs(): string[] {
+  return SCENARIOS.map(
+    (scenario) =>
+      runGate(
+        new Map(Object.entries(scenario.tree)),
+        contractTargets(scenario.baseline),
+        scenario.mode,
+      ).text,
+  );
+}
+
 function renderScenario(scenario: Scenario): string {
   const outcome = runGate(
     new Map(Object.entries(scenario.tree)),
-    {
-      version: 3,
-      ceiling: CONTRACT_CEILING,
-      entries: scenario.baseline,
-    },
+    contractTargets(scenario.baseline),
     scenario.mode,
   );
 
