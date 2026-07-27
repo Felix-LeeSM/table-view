@@ -19,23 +19,43 @@ Current evidence:
 
 Current gap / routing:
 
-Blocking remote checks are Frontend Checks, Dependency Security, Rust Unit And
-Storage Tests, Rust Static Analysis, Integration Tests (Docker), and Runtime
-Happy Path. Frontend Checks run the coverage ratchet and Vitest coverage
-thresholds. Dependency Security runs `cargo deny check bans licenses sources` in
-`src-tauri`; RUSTSEC advisories are decoupled into the non-blocking Dependency
-Advisories job. Rust Static Analysis mirrors the local lefthook
-`cargo fmt --check` and
-`cargo clippy --all-targets --all-features -- -D warnings` gates. Integration
-Tests (Docker) runs the Rust integration coverage cutoffs
-(`cargo llvm-cov nextest --profile push`, lines 80 / functions 75 / regions 80,
-ratchet-locked as `rust.pre_push.integration`) — promoted from the local
-pre-push rust route on 2026-07-03 (audit #6) so a required remote check owns the
-floor. Theme contrast and link checking are advisory (Frontend Advisory job).
-Full a11y, perf, and macOS/Windows runtime smoke are not routine blocking
-checks.
+Merge-blocking membership is deliberately not restated here. The `pr_to_main`
+ruleset's required contexts are listed once, in
+[`memory/runbook/pr-merge-gates/memory.md`](../../../memory/runbook/pr-merge-gates/memory.md),
+and the CI-gate enumeration policy in
+[`scripts/static-policy/ci-gate-enumeration.ts`](../../../scripts/static-policy/ci-gate-enumeration.ts)
+(run by `pnpm lint`) fails the build if any other document re-enumerates them,
+or if a listed context stops matching a job that the workflows actually
+produce. This band used to carry its own copy of that list; three copies across
+the repo had gone stale by #1845.
 
-## docs/memory-only CI skip
+What the individual jobs own:
+
+- Frontend Checks aggregates the shard matrix, then applies the coverage ratchet
+  and the Vitest coverage thresholds.
+
+- Dependency Security runs `cargo deny check bans licenses sources` in
+  `src-tauri`; RUSTSEC advisories are decoupled into the advisory Dependency
+  Advisories job.
+
+- Rust Static Analysis mirrors the local lefthook `cargo fmt --check` and
+  `cargo clippy --all-targets --all-features -- -D warnings` gates.
+
+- Integration Tests (Docker) runs the Rust integration coverage cutoffs
+  (`cargo llvm-cov nextest --profile push`, lines 80 / functions 75 /
+  regions 80, ratchet-locked as `rust.pre_push.integration`) — promoted from the
+  local pre-push rust route on 2026-07-03 (audit #6) so a required remote check
+  owns the floor.
+
+Theme contrast and link checking are advisory (Frontend Advisory job). Full
+a11y, perf, and macOS/Windows runtime smoke are not routine blocking checks.
+
+There is no separate doc-contract job. The doc contracts are ordinary members of
+the vitest suite and of `pnpm lint`; what used to hide them from docs-only PRs
+was the change classification, and that is where it is fixed — see the next
+section.
+
+## Change-scope classification and the docs-only skip
 
 Current evidence:
 
@@ -43,26 +63,70 @@ Current evidence:
 - `.github/workflows/e2e-smoke.yml`
 - `scripts/hooks/detect-change-scope.sh`
 - `scripts/hooks/test-detect-change-scope.sh`
+- `scripts/static-policy/ci-gate-enumeration.ts`
 
 Current gap / routing:
 
-A lightweight `changes` (Detect Change Scope) job classifies each PR/main-push
-change set; docs-only means every changed path is under `docs/`, `memory/`, or
-ends in `.md`. Heavy jobs (frontend, rust, rust-static, integration-tests,
-dependency-security/-advisories, e2e-smoke matrix + prepare) carry
-`needs: changes` + a fail-closed
-`if: always() && (needs.changes.result != 'success' || needs.changes.outputs.code_changed == 'true')`:
-a job skips only when detection SUCCEEDED and said docs-only; if the `changes`
-job itself fails/cancels (infra), its outputs are empty and the job runs full,
-so a broken detector never lets a skip satisfy a required check. `paths-ignore`
-is deliberately NOT used: it would leave the required contexts expected/missing
-forever, whereas an `if:`-skipped job's check run satisfies the required status
-check (GitHub treats skipped checks as successful). The `Runtime Happy Path`
-aggregation uses the same fail-closed guard: it skips on a successful docs-only
-verdict but runs and grades the (fail-closed) matrix on detection failure. The
-script is fail-safe too: missing base ref, git error, `workflow_dispatch`, or
-any mixed docs+code set returns `code_changed=true`. `pr-body`, `doc-size`, and
-`frontend-advisory` always run (docs:links is most useful on docs PRs).
+A lightweight `changes` job classifies each PR/main-push change set into two
+INDEPENDENT signals: `code_changed` (a path outside `docs/`, `memory/`, `*.md`)
+and `docs_changed` (a path inside them). Both are true for a mixed set.
+
+`docs_changed` exists because a docs-only change is not "no change". The doc
+contracts are ordinary members of the vitest suite, and `pnpm lint` reads the 20
+`COMPLETION_FEATURE_REFERENCE_DOC_PATHS` plus the frontend-compat inventory. A
+single `code_changed` flag described those as unaffected, so docs-only PRs
+skipped exactly the checks guarding the documents they edited — #1841 merged
+with its doc contracts unevaluated, and #1844/#1847 merged reading
+`Frontend Checks: skipping`, which GitHub counts as a satisfied required check.
+The jobs that read docs (`frontend-shard`, `frontend`) therefore gate on
+`code_changed || docs_changed`; the `DOCS-READING JOBS` note at the end of
+`.github/workflows/ci.yml` is the list, and
+`scripts/hooks/test-ci-workflow-cache.sh` asserts that exactly those jobs carry
+the clause.
+
+Every change-gated job carries `needs: changes` + a fail-closed `if:`: it skips
+only when detection SUCCEEDED and said the change was out of its scope; if the
+`changes` job itself fails/cancels (infra), its outputs are empty and the job
+runs full, so a broken detector never lets a skip satisfy a required check.
+`paths-ignore` is deliberately NOT used: it would leave the required contexts
+expected/missing forever, whereas an `if:`-skipped job's check run satisfies the
+required status check (GitHub treats skipped checks as successful). In
+`e2e-smoke.yml` only `e2e-smoke-prepare` and the `e2e-smoke-required`
+aggregation carry that guard as a job-level `if:`; the three matrix jobs have no
+`if:` of their own and inherit the skip through `needs: e2e-smoke-prepare`. The
+script is fail-safe too: missing base ref, git error, or `workflow_dispatch`
+sets BOTH signals true.
+
+The three sets below are derived from `.github/workflows/ci.yml` by
+`scripts/static-policy/ci-gate-enumeration.ts` (`pnpm lint`) and re-checked on
+every run, so they cannot drift from the workflow the way a hand-maintained list
+does. Job ids, not check-context names:
+
+<!-- ci-gates:change-gated -->
+
+- Change-gated: `dependency-security`, `dependency-advisories`,
+  `frontend-shard`, `frontend`, `rust`, `rust-static`, `integration-tests`.
+
+<!-- /ci-gates -->
+
+<!-- ci-gates:ungated -->
+
+- Ungated (no job-level `if:` at all): `changes`, `pr-body`, `doc-size`,
+  `frontend-advisory`.
+
+<!-- /ci-gates -->
+
+<!-- ci-gates:advisory -->
+
+- Advisory (`continue-on-error`, so a red never blocks): `doc-size`,
+  `dependency-advisories`, `frontend-advisory`.
+
+<!-- /ci-gates -->
+
+`frontend-advisory` stays ungated because `docs:links` is most useful on docs
+PRs. No compensating always-on doc-contract job exists any more: with the
+classification honest, the jobs that already own those checks run when docs
+change.
 
 ## Local pre-push routing
 
@@ -73,6 +137,7 @@ Current evidence:
 - `scripts/hooks/pre-push-path-router.sh`
 - `scripts/hooks/test-pre-push-path-router.sh`
 - `scripts/hooks/test-generated-fences.sh`
+- `scripts/hooks/test-detect-change-scope.sh`
 
 Current gap / routing:
 
@@ -80,7 +145,9 @@ Pre-push always runs signed-commit, coverage-ratchet, and TDD-cycle checks, then
 routes by outgoing path. Docs-only skips TS/Rust but still runs the ratchet;
 hook/tooling-only paths run hook self-checks; frontend or Rust paths run the
 matching stack; mixed frontend+Rust routes run both stacks in parallel by
-default; CI workflow paths run workflow contract checks; root-local
+default; CI workflow paths run workflow contract checks, which include the
+`DOCS-READING JOBS` assertion in `scripts/hooks/test-ci-workflow-cache.sh`;
+root-local
 generated/cache/tmp/worktree paths are explicit non-source surfaces; unknown
 paths run full checks. The Rust route runs only the fast gates (`cargo check`,
 `cargo deny`, `cargo machete`); the heavy integration coverage gate

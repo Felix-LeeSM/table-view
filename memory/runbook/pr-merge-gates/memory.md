@@ -1,7 +1,7 @@
 ---
 title: PR merge 게이트 진단 / 처리
 type: runbook
-updated: 2026-07-16
+updated: 2026-07-27
 task: merge, pr, review-gate, ci, blocked, ruleset, e2e, synchronize-rerun, cancelled-rollup
 trigger:
   signal: PR 이 mergeable 인데 mergeState=BLOCKED / merge 가 base branch policy 로 거부
@@ -18,15 +18,27 @@ label 메커니즘 자체는 [delivery](../../workflow/delivery/memory.md) (T5/T
 
 1. **legacy branch protection** — `review-gate` 하나.
    `gh api repos/{o}/{r}/branches/main/protection/required_status_checks` 로 보임.
-2. **repository ruleset `pr_to_main`** — 8개: `Frontend Checks` /
-   `Rust Unit And Storage Tests` / `Integration Tests (Docker)` / `Runtime Happy Path` /
-   `Dependency Security` (2026-07-05 1차) / `Rust Static Analysis` / `PR Body Contract` /
-   `Detect Change Scope` (2026-07-10 2차 — 셋 다 무조건 실행 + 40여 PR green 관측 근거로
-   일괄 등록, 소유자 확정).
-   ★ protection API 에 **안 나온다**. `gh api repos/{o}/{r}/rulesets/<id>` 또는
-   `gh pr merge <n> --admin` 의 에러 메시지로만 확인된다.
+2. **repository ruleset `pr_to_main`** — 아래 블록이 목록. ★ protection API 에
+   **안 나온다**. `gh api repos/{o}/{r}/rulesets/<id>` 또는 `gh pr merge <n> --admin`
+   의 에러 메시지로만 확인된다.
    (2026-07-03 #1183 delivery 실측 — 이전 서술 "E2E 만" 은 불완전했음.)
-   2차 등록분 fail 도 이제 BLOCKED 다 — 대응은 fix (PR body 정정 / clippy fix) 지 회피 아님.
+
+**이 블록이 repo 유일의 required context 목록이다.** 다른 문서는 열거하지 말고 여기를
+가리킨다 — `scripts/static-policy/ci-gate-enumeration.ts` (`pnpm lint`) 가 강제하고,
+여기 적힌 이름이 실제 workflow job context 와 어긋나면 CI 가 RED 다.
+
+<!-- ci-gates:required-contexts -->
+
+- 2026-07-05 1차: `Frontend Checks` · `Rust Unit And Storage Tests` ·
+  `Integration Tests (Docker)` · `Runtime Happy Path` · `Dependency Security`
+- 2026-07-10 2차: `Rust Static Analysis` · `PR Body Contract` ·
+  `Detect Change Scope` (셋 다 무조건 실행 + 40여 PR green 관측 근거로 일괄 등록)
+
+<!-- /ci-gates -->
+
+2차 등록분 fail 도 BLOCKED 다 — 대응은 fix (PR body 정정 / clippy fix) 지 회피 아님.
+신규 required context 등록은 workflow 가 main 에 올라간 **뒤에** 한다 — 아무 run 도
+만들지 않는 required context 는 열린 PR 전부를 BLOCKED 로 고착시킨다.
 
 → protection API 만 보고 "required 는 review-gate 뿐" 이라 단정하지 말 것. E2E 가 진짜
 blocker 인 경우가 많다 (docs/hook 변경이어도 ruleset 이 E2E 를 요구).
