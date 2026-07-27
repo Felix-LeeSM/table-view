@@ -45,6 +45,37 @@ is_ci_workflow_path() {
 	esac
 }
 
+# Vitest-collected test files. Mirrors vitest's default `include`
+# (`**/*.{test,spec}.?(c|m)[jt]s?(x)`), because vite.config.ts sets no
+# `test.include`. Used to route the doc-contract drift guard: the event that
+# stales the `test:doc-contracts` list is a NEW test that reads docs/, not a
+# workflow edit.
+is_test_path() {
+	case "$1" in
+	*.test.ts | *.test.tsx | *.test.mts | *.test.cts | *.test.js | *.test.jsx | *.test.mjs | *.test.cjs | \
+		*.spec.ts | *.spec.tsx | *.spec.mts | *.spec.cts | *.spec.js | *.spec.jsx | *.spec.mjs | *.spec.cjs)
+		return 0
+		;;
+	*)
+		return 1
+		;;
+	esac
+}
+
+# Inputs the doc-contract drift guard reads besides the tests themselves: the
+# list lives in package.json and the collection universe comes from the vitest
+# config.
+is_doc_contract_input_path() {
+	case "$1" in
+	package.json | vite.config.* | vitest.config.*)
+		return 0
+		;;
+	*)
+		return 1
+		;;
+	esac
+}
+
 is_agent_path() {
 	case "$1" in
 	.claude/* | .codex/* | .agents/*)

@@ -320,6 +320,30 @@ assert_contains "$ci_workflow_output" "RUN tag-version-verify-tests:" "ci workfl
 assert_contains "$ci_workflow_output" "RUN auto-tag-release-workflow:" "ci workflow"
 assert_not_contains "$ci_workflow_output" "RUN ts-test:" "ci workflow"
 assert_not_contains "$ci_workflow_output" "RUN rust-test-and-coverage:" "ci workflow"
+# test-ci-workflow-cache.sh already calls the doc-contract gate, so this route
+# must not run it a second time.
+assert_not_contains "$ci_workflow_output" "RUN doc-contract-gate:" "ci workflow"
+
+# The doc-contract drift guard routes on the CAUSE of a stale
+# `test:doc-contracts` list — someone adding a test that reads docs/ — not on a
+# workflow edit. Until #1845 round-1 it only fired on `.github/workflows/*`,
+# i.e. never on the change that actually stales the list.
+new_test_output="$(run_case new-test normal src/features/foo/foo.test.ts)"
+assert_contains "$new_test_output" "doc_contract=1" "new test"
+assert_contains "$new_test_output" "RUN doc-contract-gate:" "new test"
+
+spec_test_output="$(run_case spec-test normal tests/boundary.spec.ts)"
+assert_contains "$spec_test_output" "RUN doc-contract-gate:" "spec test"
+
+vitest_config_output="$(run_case vitest-config normal vite.config.ts)"
+assert_contains "$vitest_config_output" "RUN doc-contract-gate:" "vitest config"
+
+package_json_output="$(run_case doc-contract-list normal package.json)"
+assert_contains "$package_json_output" "RUN doc-contract-gate:" "doc contract list"
+
+plain_frontend_output="$(run_case plain-frontend normal src/features/foo/foo.ts)"
+assert_contains "$plain_frontend_output" "doc_contract=0" "plain frontend"
+assert_not_contains "$plain_frontend_output" "RUN doc-contract-gate:" "plain frontend"
 
 github_meta_output="$(run_case github-meta normal .github/dependabot.yml)"
 assert_contains "$github_meta_output" "route: full" "github meta"

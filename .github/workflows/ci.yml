@@ -120,9 +120,20 @@ jobs:
     # these contracts read docs/ but are DRIVEN by code (the
     # src/types/queryLanguage.ts registry, SUPPORTED_DATABASE_TYPES, the
     # completion feature's public API), so a code-only change breaks them too.
-    # Cost of the duplicate on code PRs is ~1s of vitest plus a ~20s lint in a
-    # parallel job, well off the ~9m Frontend Checks critical path. Avoiding it
-    # would need this file's only inverted change gate — clarity wins.
+    # Cost of the duplicate on code PRs, measured on run 30225336622 (this
+    # branch's head b5935353, warm pnpm cache): `Doc contract tests` 3s,
+    # `Lint doc scans` 54s, 85s job wall — against a 7m10s
+    # `Frontend Tests (shard N/3)` -> `Frontend Checks` chain and a 15m43s run
+    # wall. Reproduce:
+    #   gh api repos/Felix-LeeSM/table-view/actions/jobs/89854499098 \
+    #     --jq '.steps[] | "\(.name)\t\(.started_at)\t\(.completed_at)"'
+    #   gh api repos/Felix-LeeSM/table-view/actions/runs/30225336622/jobs \
+    #     --jq '.jobs[] | "\(.name)\t\(.started_at)\t\(.completed_at)"'
+    # The `Doc contract gate` step below post-dates that run; it is under 1s
+    # locally (`time bash scripts/hooks/test-ci-workflow-cache.sh`). The
+    # duplicate is
+    # a parallel job well off the critical path. Avoiding it would need this
+    # file's only inverted change gate — clarity wins.
     #
     # Blocking on purpose: no advisory escape hatch, unlike doc-size. Making it
     # MERGE-blocking additionally requires adding the `Doc Contract Checks`
@@ -149,9 +160,21 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # The gate on the gate. It parses this workflow (a `grep -F` lock reads
+      # one spelling; `needs:` as a block sequence and a job- or step-level
+      # `if: false` are all skips the ruleset accepts) and re-derives the
+      # `test:doc-contracts` list from `vitest list`, so a new docs-reading
+      # test cannot land uncovered. It runs HERE because this job is ungated:
+      # a new docs-reading test arrives on an ordinary code PR, which is
+      # exactly when the pre-push `.github/workflows/*` route does not fire.
+      # Ceiling: running inside the job it guards, it cannot catch this job
+      # being switched off — pre-push owns that case, since editing this file
+      # routes through the same script.
+      - name: Doc contract gate
+        run: bash scripts/hooks/test-ci-workflow-cache.sh
+
       # The file list lives in package.json so the local run and CI cannot
-      # drift, and so pre-push can assert it still covers every test that reads
-      # docs/ at runtime (scripts/hooks/test-ci-workflow-cache.sh).
+      # drift.
       - name: Doc contract tests
         run: pnpm test:doc-contracts
 
@@ -760,13 +783,21 @@ jobs:
   # Runtime E2E smoke lives in .github/workflows/e2e-smoke.yml as a
   # blocking remote check on pull requests and main. This workflow keeps the
   # non-runtime correctness gates.
-  #   Blocking: dependency-security (bans/licenses/sources), frontend
-  #   (ratchet → wasm:size → lint → merge shard coverage → build), rust-static
-  #   (fmt + clippy, mirrors lefthook), rust unit/storage tests, integration
-  #   coverage (`cargo llvm-cov nextest --profile push`, thresholds 80/75/80 —
-  #   promoted from the local pre-push rust route, audit 2026-07-03 #6).
-  #   Non-blocking (advisory): doc-size, dependency-advisories (RUSTSEC),
-  #   frontend-advisory (docs:links + WCAG contrast).
+  #   MERGE-blocking = a required context in the `pr_to_main` ruleset. From
+  #   this file: changes (Detect Change Scope), pr-body (PR Body Contract),
+  #   frontend (ratchet → wasm:size → lint → merge shard coverage → build),
+  #   rust (unit/storage tests), rust-static (fmt + clippy, mirrors lefthook),
+  #   dependency-security (bans/licenses/sources), integration-tests
+  #   (`cargo llvm-cov nextest --profile push`, thresholds 80/75/80 — promoted
+  #   from the local pre-push rust route, audit 2026-07-03 #6). Plus Runtime
+  #   Happy Path from e2e-smoke.yml. Registration list:
+  #   memory/runbook/pr-merge-gates/memory.md.
+  #   RUN-blocking, not yet a required context: doc-contract (Doc Contract
+  #   Checks) — a red turns the run red, but merge is only blocked once the
+  #   context is added to the ruleset (#1845 follow-up).
+  #   Advisory (continue-on-error, never blocks): doc-size,
+  #   dependency-advisories (RUSTSEC), frontend-advisory (docs:links + WCAG
+  #   contrast).
   # `Frontend Checks` is an AGGREGATION job (2026-07-25): the vitest suite runs
   # in the `frontend-shard` matrix and this job merges the shards' blob reports
   # and applies the coverage thresholds. Its `name:` is load-bearing — the
@@ -775,9 +806,12 @@ jobs:
   # that fails). Same reason the e2e workflow keeps a bare `Runtime Happy Path`
   # aggregation over its matrix. `Integration Tests (Docker)` was measured under
   # the same split and reverted — see the comment on that job.
-  # The blocking jobs + dependency-advisories gate on `changes` with a
-  # fail-closed `if:` (skip only when `changes` succeeded AND said docs-only;
-  # any detection failure runs full), so docs/memory/*.md-only changes skip them
-  # while a broken detector never satisfies a required check by skip. pr-body,
-  # doc-size, and frontend-advisory always run (cheap / docs:links matters most
-  # on docs PRs).
+  # Change-gated jobs (fail-closed `if:` on `changes` — skip only when `changes`
+  # succeeded AND said docs-only; any detection failure runs full):
+  # frontend-shard, frontend, rust, rust-static, integration-tests,
+  # dependency-security, dependency-advisories. So docs/memory/*.md-only
+  # changes skip them while a broken detector never satisfies a required check
+  # by skip.
+  # Ungated (no `if:` at all): changes, pr-body, doc-size, doc-contract,
+  # frontend-advisory — cheap, and the doc contracts plus docs:links matter most
+  # on exactly the docs-only PRs the gate above skips.

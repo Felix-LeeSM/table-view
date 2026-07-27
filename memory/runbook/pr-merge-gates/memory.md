@@ -1,7 +1,7 @@
 ---
 title: PR merge 게이트 진단 / 처리
 type: runbook
-updated: 2026-07-16
+updated: 2026-07-27
 task: merge, pr, review-gate, ci, blocked, ruleset, e2e, synchronize-rerun, cancelled-rollup
 trigger:
   signal: PR 이 mergeable 인데 mergeState=BLOCKED / merge 가 base branch policy 로 거부

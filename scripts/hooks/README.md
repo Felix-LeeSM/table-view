@@ -43,6 +43,12 @@ Current dispatchers:
 - `check-worktree-bootstrap.sh` — linked-worktree Rust cache guard before Cargo
   pre-commit gates.
 - `check-signed-commits.sh` — pre-push outgoing signed-commit gate.
+- `check-doc-contract-gate.mjs` — parses `.github/workflows/ci.yml` (`yaml`) to
+  assert the `doc-contract` job stays ungated and blocking, and re-derives the
+  `test:doc-contracts` list from `vitest list --filesOnly` so a new test that
+  reads `docs/` cannot land uncovered. Runs in the `Doc Contract Checks` CI job
+  and from the pre-push router on test / `package.json` / vitest-config /
+  workflow changes. Tests: `test-doc-contract-gate.sh`.
 - `pre-push-path-router.sh` — path-sensitive pre-push TS/Rust gate router. Also
   runs `scripts/check-memory-paths.ts` (reverse code->memory path-citation gate)
   when memory changes or a push drops/renames a path, and

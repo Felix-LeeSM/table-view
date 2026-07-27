@@ -19,9 +19,13 @@ Current evidence:
 
 Current gap / routing:
 
-Blocking remote checks are Frontend Checks, Dependency Security, Rust Unit And
-Storage Tests, Rust Static Analysis, Integration Tests (Docker), and Runtime
-Happy Path. Frontend Checks run the coverage ratchet and Vitest coverage
+Merge-blocking remote checks are the `pr_to_main` ruleset's required contexts:
+Detect Change Scope, PR Body Contract, Frontend Checks, Dependency Security,
+Rust Unit And Storage Tests, Rust Static Analysis, Integration Tests (Docker),
+and Runtime Happy Path. Doc Contract Checks turns the run red but is not yet a
+required context, so it does not block merge until it is registered (pending
+entry in `memory/runbook/pr-merge-gates/memory.md`). Frontend Checks run the
+coverage ratchet and Vitest coverage
 thresholds. Dependency Security runs `cargo deny check bans licenses sources` in
 `src-tauri`; RUSTSEC advisories are decoupled into the non-blocking Dependency
 Advisories job. Rust Static Analysis mirrors the local lefthook
@@ -43,6 +47,7 @@ Current evidence:
 - `.github/workflows/e2e-smoke.yml`
 - `scripts/hooks/detect-change-scope.sh`
 - `scripts/hooks/test-detect-change-scope.sh`
+- `scripts/hooks/check-doc-contract-gate.mjs`
 
 Current gap / routing:
 
@@ -61,8 +66,13 @@ check (GitHub treats skipped checks as successful). The `Runtime Happy Path`
 aggregation uses the same fail-closed guard: it skips on a successful docs-only
 verdict but runs and grades the (fail-closed) matrix on detection failure. The
 script is fail-safe too: missing base ref, git error, `workflow_dispatch`, or
-any mixed docs+code set returns `code_changed=true`. `pr-body`, `doc-size`, and
-`frontend-advisory` always run (docs:links is most useful on docs PRs).
+any mixed docs+code set returns `code_changed=true`. The ungated jobs — no
+`if:` at all — are `changes`, `pr-body`, `doc-size`, `doc-contract`, and
+`frontend-advisory`. `doc-contract` (Doc Contract Checks) exists because the
+repo's doc contracts live inside the change-gated vitest suite and inside
+`pnpm lint`, so a docs-only PR used to skip exactly the checks guarding the
+documents it edited; docs:links (frontend-advisory) is likewise most useful on
+docs PRs.
 
 ## Local pre-push routing
 
@@ -73,6 +83,7 @@ Current evidence:
 - `scripts/hooks/pre-push-path-router.sh`
 - `scripts/hooks/test-pre-push-path-router.sh`
 - `scripts/hooks/test-generated-fences.sh`
+- `scripts/hooks/test-doc-contract-gate.sh`
 
 Current gap / routing:
 
@@ -80,7 +91,11 @@ Pre-push always runs signed-commit, coverage-ratchet, and TDD-cycle checks, then
 routes by outgoing path. Docs-only skips TS/Rust but still runs the ratchet;
 hook/tooling-only paths run hook self-checks; frontend or Rust paths run the
 matching stack; mixed frontend+Rust routes run both stacks in parallel by
-default; CI workflow paths run workflow contract checks; root-local
+default; CI workflow paths run workflow contract checks; test files (any
+vitest-collected `*.{test,spec}.*`), `package.json`, or a vitest config run the
+doc-contract drift guard (`scripts/hooks/check-doc-contract-gate.mjs`), which
+the CI workflow route already covers through
+`scripts/hooks/test-ci-workflow-cache.sh`; root-local
 generated/cache/tmp/worktree paths are explicit non-source surfaces; unknown
 paths run full checks. The Rust route runs only the fast gates (`cargo check`,
 `cargo deny`, `cargo machete`); the heavy integration coverage gate
