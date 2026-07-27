@@ -73,8 +73,8 @@ PostgreSQL query/workbench parity 를 먼저 닫는다:
 ## 후속 lane (historical)
 
 아래 목록은 planning context 다. 현재 shipped/deferred 경계는 product docs 와
-`docs/roadmap/h2.md` / `docs/roadmap/h5.md` / `docs/roadmap/h6.md` 의 rows 를
-우선한다.
+`docs/roadmap/h2.md` / `docs/roadmap/h5.md` / `docs/roadmap/h6.md` 의 gate 경계
+기술을 우선한다.
 
 - MySQL/MariaDB: semantic widening, MariaDB engine evidence, dialect delta,
   explain format, routine/trigger read workflow.
