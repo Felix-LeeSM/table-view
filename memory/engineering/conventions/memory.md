@@ -1,7 +1,7 @@
 ---
 title: 코딩 컨벤션
 type: memory
-updated: 2026-07-16
+updated: 2026-07-27
 ---
 
 # 코딩 컨벤션
@@ -66,6 +66,7 @@ Sprint 189–198 의 모든 refactor / feature 커밋은 본 표준의 규칙을
 - `any` (TypeScript).
 - 민감 정보(비밀번호, API 키) 하드코딩.
 - **임시 진단 코드 커밋** — `console.log` / `console.warn` / `tracing::debug!` / `tracing::warn!` / 임시 단언 / 회귀 확인용 throwaway log. working tree 에서 진단 끝나면 제거. production-grade observability (구조화 logger, telemetry, error reporting) 는 별개 — 명세 + 시나리오 + test 와 함께 들어간다.
+- **주석의 줄 번호 참조** — `file.ts:123` / `strategy line 1388` 처럼 줄 번호로 다른 위치를 가리키지 않는다. 대상이 한 줄만 밀려도 조용히 깨진다. 가장 가까운 named item (fn / struct / test / 문서 섹션 제목) 을 인용한다. `lefthook.yml` 의 `no-line-number-refs` pre-commit 이 `*.{rs,ts,tsx,sh}` 의 `file.ext:NNN` 을 차단.
 - 직접 DOM 조작 (`document.querySelector` 등).
 - 테스트 없는 새 기능 커밋.
 - `eval()`, `innerHTML` (XSS 위험).
