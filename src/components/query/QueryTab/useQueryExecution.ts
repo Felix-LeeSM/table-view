@@ -93,7 +93,7 @@ export interface QueryExecution {
 export function useQueryExecution({
   tab,
 }: UseQueryExecutionArgs): QueryExecution {
-  // Sprint follow-up (docs/ROADMAP.md H1) — connection/db 식별자에 바인딩된
+  // Sprint follow-up (docs/roadmap/h1.md) — connection/db 식별자에 바인딩된
   // store-action 래퍼, capability 파생, history-record 팩토리, Safe Mode 게이트는
   // `useQueryContext` substrate 로 추출됐다. 본 hook 은 paradigm dispatch runner +
   // confirmation state 만 소유한다. 추출 코드는 deps/호출순서 byte-for-byte 보존.

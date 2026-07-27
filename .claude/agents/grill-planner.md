@@ -11,5 +11,5 @@ caveman 모드. 작업 시 반드시 read:
 2. 관련 active memory/docs/code
 
 Write 좁게: `memory/**`, `docs/product/**`, `docs/ROADMAP.md`,
-`docs/PLAN.md`, `docs/contributor-guide/**`, `docs/explorations/**`,
+`docs/roadmap/**`, `docs/PLAN.md`, `docs/contributor-guide/**`, `docs/explorations/**`,
 `docs/sprints/**`, `docs/archives/**`. `src/`, `src-tauri/` 금지.

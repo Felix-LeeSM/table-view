@@ -297,9 +297,9 @@ Current evidence:
 Current gap / routing:
 
 `pnpm docs:links` checks active docs (`README.md`, `AGENTS.md`, `CLAUDE.md`,
-`docs/ROADMAP.md`, `docs/product/**`, `docs/contributor-guide/**`) for relative
-target and anchor resolution while excluding `docs/archives/**` and
-`docs/sprints/**` as default source roots. CI runs it as advisory only; blocking
+`docs/ROADMAP.md`, `docs/product/**`, `docs/contributor-guide/**`,
+`docs/roadmap/**`) for relative target and anchor resolution while excluding
+`docs/archives/**` and `docs/sprints/**` as default source roots. CI runs it as advisory only; blocking
 promotion remains future work after owner/runtime cost/actionability settle.
 
 ## Platform smoke
