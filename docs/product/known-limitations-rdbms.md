@@ -1,10 +1,10 @@
 # Known Limitations — RDBMS Sources
 
-Per-source boundary rows for the relational engines. Index and the
+Per-source boundary entries for the relational engines. Index and the
 remaining boundary areas live in
 [`docs/product/known-limitations.md`](known-limitations.md).
 
-## Per-Source Boundary Rows
+## Per-Source Boundary Entries
 
 ### PostgreSQL query/workbench parity
 
