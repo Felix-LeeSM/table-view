@@ -5,7 +5,7 @@ item to the document that owns the decision:
 
 - Product-visible support boundaries and known limitations:
   [`docs/product/known-limitations.md`](../product/known-limitations.md) for the
-  index and the UI/results/auto-update rows; per-source rows go to its
+  index and the UI/results/auto-update entries; per-source entries go to its
   `known-limitations-{rdbms,non-rdbms,cross-cutting}.md` children.
 - Developer-facing verification gaps:
   [`docs/contributor-guide/testing-and-quality.md`](../contributor-guide/testing-and-quality.md).
