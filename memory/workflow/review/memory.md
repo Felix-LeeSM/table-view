@@ -31,15 +31,20 @@ agent가 반드시 취해야 할 행동 계약만 둔다. 평가 차원, profile
   PR body, sprint contract, 필요한 active SOT만 읽는다.
 - Subreview 결과는 coordinator의 입력이다. Coordinator는 PR에 직접 하나의
   통합 scorecard와 action items를 repo-relative evidence로 comment한다.
-- Review verdict는 `8/10` 기준이다. 적용 차원 중 하나라도 8 미만이면
-  red/blocking, 모두 8 이상이면 green/pass다.
-- Scorecard의 차원별 `N/10` 표는 **어떤 경우에도 생략 금지** — 요청자가 반환
+- Blocking은 SKILL.md Verdict 원칙 1의 세 사유뿐이다(런타임·보안 / 이 PR 귀책의
+  거짓이 SOT에 들어감 / 자동 layer 실패). 그 외 발견은 non-blocking이고 이슈로
+  배출한다. 점수 기준은 쓰지 않는다 — 앵커가 없어 판정을 대신해 왔다.
+- Blocking 판정은 coordinator 단독 권한이다. subreviewer는 발견과 근거만 내고
+  severity를 붙이지 않는다. 관점을 늘려도 blocking이 늘지 않는다.
+- Scorecard의 차원별 판정 표는 **어떤 경우에도 생략 금지** — 요청자가 반환
   형식을 GREEN/RED 등으로 좁게 지정해도, delta 재검증이어도 표를 출력한다.
   (2026-07-04 실제 회귀: 요청 프롬프트의 반환 형식 지정이 rubric을 밀어냄.)
 - Verdict는 label로 공표한다: green이면 `gh pr edit <N> --add-label
   review:approved --remove-label review:changes-requested`, red면
   `--add-label review:changes-requested`. reviewer의 write는 scorecard
-  comment와 verdict label 두 가지가 전부다(그 외 write 금지).
+  comment, verdict label, non-blocking 발견의 `gh issue create` 세 가지가
+  전부다(그 외 write 금지). 원칙 1이 blocking을 좁히므로 배출구가 없으면
+  발견이 기록 없이 증발한다.
   `review:approved`는 `review-gate` required check의 pass 조건이다
   (계정 1개 = GitHub review approval 불가의 label 우회).
 - 결함이 있으면 delivery owner가 수정하고 push한 뒤 review를 다시 요청한다.

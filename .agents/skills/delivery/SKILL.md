@@ -39,7 +39,8 @@ T0~T7 오케스트레이션 절차 SOT 다. 행동 계약(ownership / 중단 조
      관점별 read-only `pr-subreviewer` 를 fan-out.
    - self-review 는 편향 → 독립 reviewer 가 본다.
    - 출력: PR 에 직접 남긴 통합 scorecard comment + verdict label
-     (green → `review:approved`, red → `review:changes-requested`).
+     (green → `review:approved`, red → `review:changes-requested`)
+     + non-blocking 발견을 배출한 이슈 번호.
    - soft backstop: `gh pr create` 직후 PostToolUse 리마인더 훅
      (`scripts/hooks/pr-create-reminder.sh`)이 이 단계를 상기시킨다. block 아님.
    - 외부 옵션: 사용자가 "codex 리뷰도 받아" → `codex-reviewer` 추가(자동 X).
@@ -48,7 +49,7 @@ T0~T7 오케스트레이션 절차 SOT 다. 행동 계약(ownership / 중단 조
    재리뷰 필수.
 6. **T6 Merge or Blocked report** — 자율 머지 조건 모두 충족 시
    `gh pr merge --squash --delete-branch` 자율 실행:
-   - 정성 모든 차원 ≥ 8/10
+   - 정성 차원에 blocking 없음 (pr-review Verdict 원칙 1 기준)
    - `gh pr checks` SUCCESS (`review-gate` 는 reviewer 의 `review:approved` label
      필요, main required check + enforce_admins 라 우회 불가)
    - `gh pr view` mergeable 이고 branch policy block 없음

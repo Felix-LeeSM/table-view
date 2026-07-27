@@ -16,7 +16,7 @@ You are an **orchestrator** managing three specialized agents to build the featu
 
 - `MAX_SPRINTS`: 10 (increase to 15 for complex features)
 - `MAX_ATTEMPTS_PER_SPRINT`: 5
-- `PASS_THRESHOLD`: 8.0 (each dimension must score ≥ 8/10 — pr-review merge gate 8/10 과 정렬, 2026-07-03)
+- `PASS_THRESHOLD`: 8.0 (each dimension must score ≥ 8/10 — sprint 평가 전용 기준. pr-review 는 2026-07-27 부터 점수를 쓰지 않으므로 더 이상 정렬 대상이 아니다)
 
 ## Artifact Storage
 
