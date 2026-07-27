@@ -109,9 +109,9 @@ jobs:
     # The hole it closes (#1841): the repo's doc-contract assertions live INSIDE
     # the vitest suite and inside the lint policy scan, and both of those sit
     # behind the docs-only skip gate. On merged docs-only PR #1841 the checks
-    # read `Frontend Checks: skipping` and `Frontend Tests (shard N/3):
-    # skipping`; GitHub treats a skipped required check as satisfied, so that PR
-    # merged with the contracts on the documents it edited never evaluated.
+    # read the frontend shard and aggregate jobs as `skipping`; GitHub treats a
+    # skipped required check as satisfied, so that PR merged with the contracts
+    # on the documents it edited never evaluated.
     #
     # Runs unconditionally instead of inverting the gate on the detector output.
     # That is the strongest fail-closed posture available: with no dependency on
@@ -120,26 +120,35 @@ jobs:
     # these contracts read docs/ but are DRIVEN by code (the
     # src/types/queryLanguage.ts registry, SUPPORTED_DATABASE_TYPES, the
     # completion feature's public API), so a code-only change breaks them too.
+    #
     # Cost of the duplicate on code PRs, measured on run 30225336622 (this
     # branch's head b5935353, warm pnpm cache): `Doc contract tests` 3s,
-    # `Lint doc scans` 54s, 85s job wall — against a 7m10s
-    # `Frontend Tests (shard N/3)` -> `Frontend Checks` chain and a 15m43s run
-    # wall. Reproduce:
+    # `Lint doc scans` 54s, 85s job wall — against a 7m10s frontend
+    # shard-to-aggregate chain and a 15m43s run wall. Each number has a command;
+    # run all three, in order, and they reproduce exactly:
     #   gh api repos/Felix-LeeSM/table-view/actions/jobs/89854499098 \
     #     --jq '.steps[] | "\(.name)\t\(.started_at)\t\(.completed_at)"'
-    #   gh api repos/Felix-LeeSM/table-view/actions/runs/30225336622/jobs \
+    #   gh api --paginate repos/Felix-LeeSM/table-view/actions/runs/30225336622/jobs \
     #     --jq '.jobs[] | "\(.name)\t\(.started_at)\t\(.completed_at)"'
-    # The `Doc contract gate` step below post-dates that run; it is under 1s
-    # locally (`time bash scripts/hooks/test-ci-workflow-cache.sh`). The
-    # duplicate is
-    # a parallel job well off the critical path. Avoiding it would need this
-    # file's only inverted change gate — clarity wins.
+    #   gh api repos/Felix-LeeSM/table-view/actions/runs/30225336622 \
+    #     --jq '{run_started_at,updated_at}'
+    # The run wall is the third command's span (23:28:52Z -> 23:44:35Z); the
+    # per-job spans in the second do not contain it, because the run clock
+    # starts before the first job is scheduled. The `Doc contract gate` step
+    # post-dates that run and so is unmeasured in CI; locally it is 2.0-2.2s
+    # wall over five runs, warm node_modules, on the 2026-07-27 tree
+    # (`for i in 1 2 3 4 5; do /usr/bin/time -p bash
+    # scripts/hooks/test-ci-workflow-cache.sh; done`). Most of that is one
+    # `vitest list --filesOnly`.
+    # The duplicate is a parallel job well off the critical path. Avoiding it
+    # would need this file's only inverted change gate — clarity wins.
     #
-    # Blocking on purpose: no advisory escape hatch, unlike doc-size. Making it
-    # MERGE-blocking additionally requires adding the `Doc Contract Checks`
-    # context to the pr_to_main ruleset's required-context list, and only AFTER
-    # this workflow is on main — a required context that no workflow produces
-    # yet blocks every open PR.
+    # Blocking on purpose: no advisory escape hatch, unlike doc-size. Today that
+    # means RUN-blocking only. It becomes MERGE-blocking when the
+    # `Doc Contract Checks` context is added to the pr_to_main ruleset, and that
+    # can only happen AFTER this workflow is on main — a required context that
+    # no workflow produces yet blocks every open PR. Registration list and
+    # status: memory/runbook/pr-merge-gates/memory.md.
 
     steps:
       - name: Checkout
@@ -167,9 +176,15 @@ jobs:
       # test cannot land uncovered. It runs HERE because this job is ungated:
       # a new docs-reading test arrives on an ordinary code PR, which is
       # exactly when the pre-push `.github/workflows/*` route does not fire.
+      # It also derives the gated/ungated/advisory/required enumeration from
+      # this file and fails if any document hand-copies it, which is how three
+      # prose SOTs went stale before #1845.
       # Ceiling: running inside the job it guards, it cannot catch this job
-      # being switched off — pre-push owns that case, since editing this file
-      # routes through the same script.
+      # being switched off. Editing this file does route through the same
+      # script at pre-push, but a local hook is not an enforcement point —
+      # docs/quality/hook-performance.md is explicit that hooks can be absent
+      # or bypassed and CI is the shared record. The real closure is ruleset
+      # registration; until then this job is run-blocking and merge-advisory.
       - name: Doc contract gate
         run: bash scripts/hooks/test-ci-workflow-cache.sh
 
@@ -783,35 +798,32 @@ jobs:
   # Runtime E2E smoke lives in .github/workflows/e2e-smoke.yml as a
   # blocking remote check on pull requests and main. This workflow keeps the
   # non-runtime correctness gates.
-  #   MERGE-blocking = a required context in the `pr_to_main` ruleset. From
-  #   this file: changes (Detect Change Scope), pr-body (PR Body Contract),
-  #   frontend (ratchet → wasm:size → lint → merge shard coverage → build),
-  #   rust (unit/storage tests), rust-static (fmt + clippy, mirrors lefthook),
-  #   dependency-security (bans/licenses/sources), integration-tests
-  #   (`cargo llvm-cov nextest --profile push`, thresholds 80/75/80 — promoted
-  #   from the local pre-push rust route, audit 2026-07-03 #6). Plus Runtime
-  #   Happy Path from e2e-smoke.yml. Registration list:
-  #   memory/runbook/pr-merge-gates/memory.md.
-  #   RUN-blocking, not yet a required context: doc-contract (Doc Contract
-  #   Checks) — a red turns the run red, but merge is only blocked once the
-  #   context is added to the ruleset (#1845 follow-up).
-  #   Advisory (continue-on-error, never blocks): doc-size,
-  #   dependency-advisories (RUSTSEC), frontend-advisory (docs:links + WCAG
-  #   contrast).
-  # `Frontend Checks` is an AGGREGATION job (2026-07-25): the vitest suite runs
-  # in the `frontend-shard` matrix and this job merges the shards' blob reports
-  # and applies the coverage thresholds. Its `name:` is load-bearing — the
-  # `pr_to_main` ruleset lists the required contexts by name, so renaming the
-  # job silently un-gates main (a context that never reports is not a context
-  # that fails). Same reason the e2e workflow keeps a bare `Runtime Happy Path`
-  # aggregation over its matrix. `Integration Tests (Docker)` was measured under
-  # the same split and reverted — see the comment on that job.
-  # Change-gated jobs (fail-closed `if:` on `changes` — skip only when `changes`
-  # succeeded AND said docs-only; any detection failure runs full):
-  # frontend-shard, frontend, rust, rust-static, integration-tests,
-  # dependency-security, dependency-advisories. So docs/memory/*.md-only
-  # changes skip them while a broken detector never satisfies a required check
-  # by skip.
-  # Ungated (no `if:` at all): changes, pr-body, doc-size, doc-contract,
-  # frontend-advisory — cheap, and the doc contracts plus docs:links matter most
-  # on exactly the docs-only PRs the gate above skips.
+  #
+  # WHICH JOB IS GATED / UNGATED / ADVISORY / MERGE-BLOCKING IS NOT LISTED HERE.
+  # It used to be, in this comment and in four documents, none of them tied to
+  # the job definitions above; #1845 found three of the copies stale. The
+  # membership is now derived from this file by
+  # scripts/hooks/check-doc-contract-gate.mjs, which also fails the build if any
+  # document (or this comment) re-enumerates it:
+  #   - gated / ungated / advisory, derived from the `if:` and
+  #     `continue-on-error` keys above:
+  #     docs/contributor-guide/smoke-matrix/h7-ops-security-reliability.md
+  #   - required contexts in the `pr_to_main` ruleset, which is live GitHub
+  #     state and not derivable from this repo:
+  #     memory/runbook/pr-merge-gates/memory.md
+  #
+  # The mechanism, which is not an enumeration: a change-gated job carries
+  # `needs: changes` plus a fail-closed `if:` that skips only when `changes`
+  # SUCCEEDED and reported docs-only, so a broken detector runs the full set
+  # instead of satisfying a required check by skipping. An ungated job has no
+  # `if:` at all — cheap jobs, plus the doc contracts and docs:links, which
+  # matter most on exactly the docs-only PRs the gate skips.
+  #
+  # Job `name:` values are load-bearing: the ruleset lists required contexts by
+  # name, so renaming a job silently un-gates main (a context that never reports
+  # is not a context that fails). `Frontend Checks` is an AGGREGATION job
+  # (2026-07-25) — the vitest suite runs in the `frontend-shard` matrix and this
+  # job merges the shards' blob reports and applies the coverage thresholds; the
+  # e2e workflow keeps a bare aggregation over its matrix for the same reason.
+  # `Integration Tests (Docker)` was measured under the same split and reverted
+  # — see the comment on that job.

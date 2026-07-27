@@ -324,6 +324,19 @@ assert_not_contains "$ci_workflow_output" "RUN rust-test-and-coverage:" "ci work
 # must not run it a second time.
 assert_not_contains "$ci_workflow_output" "RUN doc-contract-gate:" "ci workflow"
 
+# ...and the case above cannot prove that on its own: with only a workflow path
+# outgoing, `needs_doc_contract` is 0, so the `elif` that suppresses the second
+# run is never evaluated. Mutating that `elif` to `if` in
+# pre-push-path-router.sh SURVIVED for exactly that reason. This row supplies
+# the one input shape that reaches the branch — a workflow edit and a test
+# added in the same push, which is also what a real "wire a new doc contract"
+# change looks like.
+mixed_workflow_test_output="$(run_case mixed-workflow-test normal .github/workflows/e2e-smoke.yml src/features/foo/foo.test.ts)"
+assert_contains "$mixed_workflow_test_output" "ci_workflow=1" "mixed workflow+test"
+assert_contains "$mixed_workflow_test_output" "doc_contract=1" "mixed workflow+test"
+assert_contains "$mixed_workflow_test_output" "RUN ci-workflow-cache:" "mixed workflow+test"
+assert_not_contains "$mixed_workflow_test_output" "RUN doc-contract-gate:" "mixed workflow+test"
+
 # The doc-contract drift guard routes on the CAUSE of a stale
 # `test:doc-contracts` list — someone adding a test that reads docs/ — not on a
 # workflow edit. Until #1845 round-1 it only fired on `.github/workflows/*`,
@@ -337,6 +350,14 @@ assert_contains "$spec_test_output" "RUN doc-contract-gate:" "spec test"
 
 vitest_config_output="$(run_case vitest-config normal vite.config.ts)"
 assert_contains "$vitest_config_output" "RUN doc-contract-gate:" "vitest config"
+
+# vitest's default include is `**/*.{test,spec}.?(c|m)[jt]s?(x)`; the `?(x)`
+# forms of the `c`/`m` variants were missing from is_test_path, so a test added
+# as `foo.test.mtsx` would be collected by vitest and skipped by the router.
+for suffix in mtsx ctsx mjsx cjsx; do
+	suffix_output="$(run_case "ext-$suffix" normal "src/features/foo/foo.test.$suffix")"
+	assert_contains "$suffix_output" "RUN doc-contract-gate:" "test.$suffix"
+done
 
 package_json_output="$(run_case doc-contract-list normal package.json)"
 assert_contains "$package_json_output" "RUN doc-contract-gate:" "doc contract list"

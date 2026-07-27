@@ -44,11 +44,26 @@ Current dispatchers:
   pre-commit gates.
 - `check-signed-commits.sh` — pre-push outgoing signed-commit gate.
 - `check-doc-contract-gate.mjs` — parses `.github/workflows/ci.yml` (`yaml`) to
-  assert the `doc-contract` job stays ungated and blocking, and re-derives the
+  assert the `doc-contract` job stays ungated and blocking, re-derives the
   `test:doc-contracts` list from `vitest list --filesOnly` so a new test that
-  reads `docs/` cannot land uncovered. Runs in the `Doc Contract Checks` CI job
-  and from the pre-push router on test / `package.json` / vitest-config /
-  workflow changes. Tests: `test-doc-contract-gate.sh`.
+  reads `docs/` cannot land uncovered, and derives the gated / ungated /
+  advisory / required-context enumeration from the workflows so no document can
+  hand-copy it (`<!-- ci-gates:<kind> -->` blocks are the only allowed
+  restatement, and they are compared against the derived set). Runs in the
+  `Doc Contract Checks` CI job and from the pre-push router on test /
+  `package.json` / vitest-config / workflow changes. Tests:
+  `test-doc-contract-gate.sh`.
+  - Docs-only coverage rests on two commands being pinned into that ungated
+    job: `pnpm test:doc-contracts` (vitest doc contracts) and `pnpm lint`
+    (`scripts/check-eslint-static-policy.ts`, which reads the 20
+    `COMPLETION_FEATURE_REFERENCE_DOC_PATHS` and the frontend-compat
+    inventory). A docs-reading check reachable from neither command is the
+    declared ceiling — it would sit behind the docs-only skip again, and
+    nothing detects that automatically.
+  - Until `Doc Contract Checks` is a required context in the `pr_to_main`
+    ruleset the job is run-blocking only. The local pre-push route is not a
+    substitute: `docs/quality/hook-performance.md` treats CI as the shared
+    record because hooks can be absent or bypassed.
 - `pre-push-path-router.sh` — path-sensitive pre-push TS/Rust gate router. Also
   runs `scripts/check-memory-paths.ts` (reverse code->memory path-citation gate)
   when memory changes or a push drops/renames a path, and

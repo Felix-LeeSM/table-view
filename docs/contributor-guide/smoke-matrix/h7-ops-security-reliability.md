@@ -19,25 +19,42 @@ Current evidence:
 
 Current gap / routing:
 
-Merge-blocking remote checks are the `pr_to_main` ruleset's required contexts:
-Detect Change Scope, PR Body Contract, Frontend Checks, Dependency Security,
-Rust Unit And Storage Tests, Rust Static Analysis, Integration Tests (Docker),
-and Runtime Happy Path. Doc Contract Checks turns the run red but is not yet a
-required context, so it does not block merge until it is registered (pending
-entry in `memory/runbook/pr-merge-gates/memory.md`). Frontend Checks run the
-coverage ratchet and Vitest coverage
-thresholds. Dependency Security runs `cargo deny check bans licenses sources` in
-`src-tauri`; RUSTSEC advisories are decoupled into the non-blocking Dependency
-Advisories job. Rust Static Analysis mirrors the local lefthook
-`cargo fmt --check` and
-`cargo clippy --all-targets --all-features -- -D warnings` gates. Integration
-Tests (Docker) runs the Rust integration coverage cutoffs
-(`cargo llvm-cov nextest --profile push`, lines 80 / functions 75 / regions 80,
-ratchet-locked as `rust.pre_push.integration`) — promoted from the local
-pre-push rust route on 2026-07-03 (audit #6) so a required remote check owns the
-floor. Theme contrast and link checking are advisory (Frontend Advisory job).
-Full a11y, perf, and macOS/Windows runtime smoke are not routine blocking
-checks.
+Merge-blocking membership is deliberately not restated here. The `pr_to_main`
+ruleset's required contexts are listed once, in
+[`memory/runbook/pr-merge-gates/memory.md`](../../../memory/runbook/pr-merge-gates/memory.md),
+and `scripts/hooks/check-doc-contract-gate.mjs` fails the build if any other
+document re-enumerates them, or if a listed context stops matching a job that
+the workflows actually produce. This band used to carry its own copy of that
+list; three copies across the repo had gone stale by #1845.
+
+What the individual jobs own:
+
+- Frontend Checks aggregates the shard matrix, then applies the coverage ratchet
+  and the Vitest coverage thresholds.
+
+- Dependency Security runs `cargo deny check bans licenses sources` in
+  `src-tauri`; RUSTSEC advisories are decoupled into the advisory Dependency
+  Advisories job.
+
+- Rust Static Analysis mirrors the local lefthook `cargo fmt --check` and
+  `cargo clippy --all-targets --all-features -- -D warnings` gates.
+
+- Integration Tests (Docker) runs the Rust integration coverage cutoffs
+  (`cargo llvm-cov nextest --profile push`, lines 80 / functions 75 /
+  regions 80, ratchet-locked as `rust.pre_push.integration`) — promoted from the
+  local pre-push rust route on 2026-07-03 (audit #6) so a required remote check
+  owns the floor.
+
+- Doc Contract Checks runs the doc contract suite plus the lint doc scans. It is
+  run-blocking today — a red turns the run red — and becomes merge-blocking only
+  once the context is registered in the ruleset. Until then no remote gate
+  rejects a change that switches the job off; the local pre-push route reaches
+  that case but is not an enforcement point, because
+  [`docs/quality/hook-performance.md`](../../quality/hook-performance.md) is
+  explicit that hooks can be absent or bypassed and CI is the shared record.
+
+Theme contrast and link checking are advisory (Frontend Advisory job). Full
+a11y, perf, and macOS/Windows runtime smoke are not routine blocking checks.
 
 ## docs/memory-only CI skip
 
@@ -51,28 +68,52 @@ Current evidence:
 
 Current gap / routing:
 
-A lightweight `changes` (Detect Change Scope) job classifies each PR/main-push
-change set; docs-only means every changed path is under `docs/`, `memory/`, or
-ends in `.md`. Heavy jobs (frontend, rust, rust-static, integration-tests,
-dependency-security/-advisories, e2e-smoke matrix + prepare) carry
-`needs: changes` + a fail-closed
+A lightweight `changes` job classifies each PR/main-push change set; docs-only
+means every changed path is under `docs/`, `memory/`, or ends in `.md`. The
+change-gated jobs carry `needs: changes` + a fail-closed
 `if: always() && (needs.changes.result != 'success' || needs.changes.outputs.code_changed == 'true')`:
 a job skips only when detection SUCCEEDED and said docs-only; if the `changes`
 job itself fails/cancels (infra), its outputs are empty and the job runs full,
 so a broken detector never lets a skip satisfy a required check. `paths-ignore`
 is deliberately NOT used: it would leave the required contexts expected/missing
 forever, whereas an `if:`-skipped job's check run satisfies the required status
-check (GitHub treats skipped checks as successful). The `Runtime Happy Path`
-aggregation uses the same fail-closed guard: it skips on a successful docs-only
-verdict but runs and grades the (fail-closed) matrix on detection failure. The
-script is fail-safe too: missing base ref, git error, `workflow_dispatch`, or
-any mixed docs+code set returns `code_changed=true`. The ungated jobs — no
-`if:` at all — are `changes`, `pr-body`, `doc-size`, `doc-contract`, and
-`frontend-advisory`. `doc-contract` (Doc Contract Checks) exists because the
-repo's doc contracts live inside the change-gated vitest suite and inside
-`pnpm lint`, so a docs-only PR used to skip exactly the checks guarding the
-documents it edited; docs:links (frontend-advisory) is likewise most useful on
-docs PRs.
+check (GitHub treats skipped checks as successful). The e2e-smoke matrix,
+`e2e-smoke-prepare`, and the `e2e-smoke-required` aggregation use the same
+fail-closed guard: they skip on a successful docs-only verdict but run and grade
+the matrix on detection failure. The script is fail-safe too: missing base ref,
+git error, `workflow_dispatch`, or any mixed docs+code set returns
+`code_changed=true`.
+
+The three sets below are derived from `.github/workflows/ci.yml` by
+`scripts/hooks/check-doc-contract-gate.mjs` and re-checked on every run, so they
+cannot drift from the workflow the way a hand-maintained list does. Job ids, not
+check-context names:
+
+<!-- ci-gates:change-gated -->
+
+- Change-gated: `dependency-security`, `dependency-advisories`,
+  `frontend-shard`, `frontend`, `rust`, `rust-static`, `integration-tests`.
+
+<!-- /ci-gates -->
+
+<!-- ci-gates:ungated -->
+
+- Ungated (no job-level `if:` at all): `changes`, `pr-body`, `doc-size`,
+  `doc-contract`, `frontend-advisory`.
+
+<!-- /ci-gates -->
+
+<!-- ci-gates:advisory -->
+
+- Advisory (`continue-on-error`, so a red never blocks): `doc-size`,
+  `dependency-advisories`, `frontend-advisory`.
+
+<!-- /ci-gates -->
+
+`doc-contract` is ungated because the repo's doc contracts live inside the
+change-gated vitest suite and inside `pnpm lint`, so a docs-only PR used to skip
+exactly the checks guarding the documents it edited; `docs:links`
+(`frontend-advisory`) is likewise most useful on docs PRs.
 
 ## Local pre-push routing
 

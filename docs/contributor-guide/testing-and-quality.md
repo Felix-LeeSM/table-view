@@ -125,15 +125,17 @@ Required local evidence:
 
 Required remote evidence on the exact release SHA:
 
-- CI passes: PR Body Contract where applicable, Frontend Checks, Rust Unit And
-  Storage Tests, and Integration Tests (Docker).
-- Runtime Happy Path passes: Prepare E2E runtime artifacts plus the wired
+- Every required context in the `pr_to_main` ruleset passes. That list lives in
+  one place, `memory/runbook/pr-merge-gates/memory.md`; do not copy it here,
+  because the copy that used to live here listed four of the eight. The
+  run-blocking Doc Contract Checks job must be green too.
+- The runtime smoke matrix passes: Prepare E2E runtime artifacts plus the wired
   PostgreSQL, MySQL, MariaDB, SQLite, DuckDB `.duckdb`, DuckDB file analytics,
   MongoDB, Redis, Valkey, Elasticsearch, OpenSearch, MSSQL, and Oracle matrix
   checks.
 - `main` push checks pass on the merge commit before a release tag is pushed.
 - Release workflow output is packaging evidence only. Draft bundle creation and
-  checksum upload do not replace CI or Runtime Happy Path evidence.
+  checksum upload do not replace CI or runtime smoke evidence.
 
 Deferred or non-blocking checks must stay explicit:
 
