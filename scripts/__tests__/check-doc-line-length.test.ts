@@ -205,8 +205,8 @@ describe("measure", () => {
   });
 
   it("counts code points, so Korean prose is not charged UTF-8 bytes", () => {
-    // 400 Hangul syllables are 400 chars but 1200 UTF-8 bytes. A byte-based
-    // count would fail this line at a 600 ceiling.
+    // 400 Hangul syllables are 400 chars but 1200 UTF-8 bytes, so a byte-based
+    // count would fail a line this suite expects to pass.
     expect(measure("가".repeat(400), CEILING)).toEqual({
       over: 0,
       maxLen: 400,

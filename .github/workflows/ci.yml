@@ -119,9 +119,8 @@ jobs:
         run: bash scripts/hooks/check-doc-size.sh --strict
 
       - name: Check doc line length
-        # No base ref needed: the gate compares the working tree against the
-        # committed baseline in scripts/doc-line-length-targets.json, so adding
-        # debt requires editing a tracked file and that edit is what fails.
+        # No base ref needed, which is why a shallow checkout is fine here —
+        # docs/quality/doc-size-ratchet.md, "Two rejected designs".
         run: pnpm docs:lines
 
   dependency-security:
