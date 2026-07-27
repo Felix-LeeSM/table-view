@@ -140,20 +140,30 @@ relative_path() {
 			;;
 	esac
 
-	# Tilde expansion. The tokenizer sees the token BEFORE the shell expands it,
-	# so `~/x` used to be joined onto $ROOT (`$ROOT/~/x`), land inside the repo
-	# and block home-directory maintenance from the primary worktree (issue
-	# #1797). Expand it the way the shell would instead of skipping every `~`
-	# token: this repo can live under $HOME, so `~/<repo>/src/App.tsx` must still
-	# resolve into the repo and stay blocked. Only `~` and `~/...` are home
-	# references — `~name/...` (another user's home) is left alone, so it keeps
-	# the pre-#1797 conservative behavior of being treated as repo-relative.
-	case "$raw" in
-		'~' | '~/'*)
-			[ -n "${HOME:-}" ] || return 1
-			raw="${HOME}${raw#\~}"
-			;;
-	esac
+	# Tilde expansion, scoped to exactly what a shell would expand.
+	#
+	# In --command mode the tokenizer sees the token BEFORE the shell expands it,
+	# so `~/x` was joined onto $ROOT (`$ROOT/~/x`), landed inside the repo and
+	# blocked home-directory maintenance from the primary worktree (issue #1797).
+	# Expanding (rather than skipping every `~` token) keeps the repo covered when
+	# it lives under $HOME: `~/<repo>/src/App.tsx` still resolves back into the
+	# repo and stays blocked.
+	#
+	# Path mode (`$COMMAND` empty) must NOT expand, or the guard under-blocks (PR
+	# #1858 review): Edit/Write tool paths come from Node fs, which has no shell,
+	# so `~/src/App.tsx` really is the literal `<repo>/~/src/App.tsx`. A QUOTED
+	# command token is literal for the same reason; it is neutralized upstream, in
+	# paths_from_command_tokens, while the quotes are still visible.
+	# `~name/...` (another user's home) is not resolvable here, so it also stays
+	# literal — a conservative ceiling that over-blocks rather than under-blocks.
+	if [ -n "$COMMAND" ]; then
+		case "$raw" in
+			'~' | '~/'*)
+				[ -n "${HOME:-}" ] || return 1
+				raw="${HOME}${raw#\~}"
+				;;
+		esac
+	fi
 
 	case "$raw" in
 		/*)
@@ -406,6 +416,15 @@ paths_from_command_tokens() {
 				expect_redir=0
 				continue
 				;;
+		esac
+
+		# A QUOTED `~` is never tilde-expanded by the shell: `rm "~/src/App.tsx"`
+		# targets the literal `<repo>/~/src/App.tsx`. trim_token is about to drop
+		# the quotes, so rewrite the token into an explicit relative path first —
+		# `./~/...` normalizes to the same literal repo path and no longer looks
+		# like a home reference to relative_path (#1858 under-block).
+		case "$word" in
+			'"~'* | "'~"*) word="./${word#?}" ;;
 		esac
 
 		word="$(trim_token "$word")"
