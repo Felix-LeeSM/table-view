@@ -13,6 +13,7 @@ Claude Code / Codex / Cursor 모두 본 파일 1번 read. 본문 lazy, 작업 �
 | TDD / RED evidence     | `memory/workflow/tdd/memory.md`                        |
 | commit / PR            | `memory/workflow/delivery/memory.md`                   |
 | PR review              | `memory/workflow/review/memory.md` → `pr-review` skill |
+| 병렬 작업 / 이슈 발행  | `memory/workflow/orchestration/memory.md` (spawn·리뷰 큐·사이클 정지·이슈 수용기준) |
 | 문서화 / PR body       | `memory/workflow/documentation/memory.md`              |
 | git / PR / push reject | `memory/workflow/git-policy/memory.md`                 |
 | PR merge 막힘 / BLOCKED | `memory/runbook/pr-merge-gates/memory.md` (required CI green·review-gate·ruleset 게이트 진단) |

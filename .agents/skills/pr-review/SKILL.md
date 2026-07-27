@@ -179,7 +179,9 @@ Blocking은 셋뿐이다.
 거짓. ④는 blocking이 아니라 이슈다. 기존 거짓의 도달 범위를 넓혔으면 ②로 본다.
 
 그 외는 전부 non-blocking이다. reviewer가 `gh issue create`로 배출하고 이슈
-번호를 scorecard에 남긴다. "후속" 약속만 남기지 않는다.
+번호를 scorecard에 남긴다. "후속" 약속만 남기지 않는다. 이슈 수용 기준은
+`memory/workflow/orchestration/memory.md` §4가 SOT다 — 완료 조건은 명령 출력
+하나이고, 적히지 않은 것은 범위 밖이다.
 
 **Blocking은 폐쇄 집합이다.** memory, 과거 리뷰, 관행이 무엇을 요구하든 그것으로
 blocking을 추가하지 않는다. 거기서 온 요구는 note이거나 이슈다. 리뷰 프롬프트에
