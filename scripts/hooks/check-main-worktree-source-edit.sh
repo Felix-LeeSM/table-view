@@ -140,6 +140,19 @@ relative_path() {
 			;;
 	esac
 
+	# Tilde expansion, scoped to exactly what a shell would expand.
+	#
+	# In --command mode the tokenizer sees the token BEFORE the shell expands it,
+	# so `~/x` was joined onto $ROOT (`$ROOT/~/x`), landed inside the repo and
+	# blocked home-directory maintenance from the primary worktree (issue #1797).
+	# Expanding (rather than skipping every `~` token) keeps the repo covered when
+	# it lives under $HOME: `~/<repo>/src/App.tsx` still resolves back into the
+	# repo and stays blocked.
+	#
+	# No tilde handling here: this resolves a path, it does not interpret shell
+	# syntax. `~` is a SHELL construct, so it is resolved in the shell-token
+	# pipeline (paths_from_command_tokens / emit_path) and everything arriving
+	# here — Edit/Write tool paths, apply_patch markers — is already literal.
 	case "$raw" in
 		/*)
 			normalized_raw="$(normalize_path "$raw")" || return 1
@@ -189,10 +202,28 @@ check_path() {
 	deny_path "$rel"
 }
 
+# Single funnel for every write target the command tokenizer finds. Tilde
+# EXPANSION lives here, downstream of every route (plain token, glued redirect
+# target, glued multi-redirect segment, `of=` operand, tee/cp/mv/rm/sed/perl
+# argument), so no route can be added later that silently skips it. Callers that
+# are not shell words — path-mode arguments and apply_patch markers — never come
+# through here, and are left literal on purpose.
 emit_path() {
 	local value="$1"
 	value="$(trim_token "$value")"
 	[ -n "$value" ] || return 0
+	# A leading `~` the shell would have expanded (issue #1797). A QUOTED `~` is
+	# literal instead; it was rewritten to `./~` upstream, while the quotes were
+	# still visible, so it no longer matches here. `~name/...` (another user's
+	# home) is not resolvable, so it stays literal too — a conservative ceiling
+	# that over-blocks rather than under-blocks. An unset HOME leaves nothing to
+	# resolve against, so the token is not a repo path.
+	case "$value" in
+		'~' | '~/'*)
+			[ -n "${HOME:-}" ] || return 0
+			value="${HOME}${value#\~}"
+			;;
+	esac
 	printf '%s\n' "$value"
 }
 
@@ -392,6 +423,17 @@ paths_from_command_tokens() {
 				continue
 				;;
 		esac
+
+		# A `~` sitting immediately inside a quote is literal for the shell:
+		# `rm "~/src/App.tsx"` and `cat >"~/src/App.tsx"` both write
+		# <repo>/~/src/App.tsx. This is the last point where the quotes are still
+		# visible — trim_token drops the outer ones on the next line, and the
+		# redirect/segment/operand slices below are cut from the trimmed word — so
+		# every quoted `~` is rewritten to an explicit `./~` HERE, wherever in the
+		# token it sits. Anchoring this at the token's first character covered
+		# only the space-separated spelling (#1858 round 2 under-block).
+		word="${word//\"~/\"./~}"
+		word="${word//\'~/\'./~}"
 
 		word="$(trim_token "$word")"
 		[ -n "$word" ] || continue

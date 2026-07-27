@@ -16,6 +16,7 @@ FAIL_DETAILS=()
 TMP_ROOT=""
 MAIN_ROOT=""
 LINKED_ROOT=""
+HOME_FIXTURE=""
 cleanup() {
 	if [ -n "$TMP_ROOT" ] && [ -d "$TMP_ROOT" ]; then
 		rm -rf "$TMP_ROOT"
@@ -34,6 +35,10 @@ setup_git_fixture() {
 	TMP_ROOT="$(mktemp -d)"
 	MAIN_ROOT="$TMP_ROOT/main"
 	LINKED_ROOT="$MAIN_ROOT/worktrees/linked-fixture"
+	# Home fixture OUTSIDE the repo root, so `~`-prefixed cases are deterministic
+	# regardless of where the developer's real $HOME sits (issue #1797).
+	HOME_FIXTURE="$TMP_ROOT/home"
+	must mkdir -p "$HOME_FIXTURE"
 
 	must git init -q "$MAIN_ROOT"
 	must git -C "$MAIN_ROOT" config user.email "hook-test@example.invalid"
@@ -57,36 +62,63 @@ record_fail() {
 	echo "FAIL  $1"
 }
 
-run_case() {
-	local name="$1"
-	local expected_exit="$2"
-	local mode="$3"
-	shift 3
+# Runs one hook invocation and publishes ACTUAL_STDERR / ACTUAL_EXIT. Shared by
+# every assertion helper so a mode is defined once and is usable from ALL of
+# them — the `*-home` modes were previously reachable from run_case only, which
+# made the `$HOME` guard's stderr unassertable (PR #1858 review).
+#
+# `*-home` modes take HOME as the first argument, then the path/command.
+ACTUAL_STDERR=""
+ACTUAL_EXIT=0
+exec_case() {
+	local mode="$1"
+	shift
 
-	local actual_stderr actual_exit
 	case "$mode" in
 		main-path)
-			actual_stderr="$(CHECK_MAIN_WORKTREE_SOURCE_EDIT_ROOT="$MAIN_ROOT" bash "$HOOK" "$@" 2>&1 >/dev/null)"
-			actual_exit=$?
+			ACTUAL_STDERR="$(CHECK_MAIN_WORKTREE_SOURCE_EDIT_ROOT="$MAIN_ROOT" bash "$HOOK" "$@" 2>&1 >/dev/null)"
+			ACTUAL_EXIT=$?
+			;;
+		main-path-home)
+			ACTUAL_STDERR="$(HOME="$1" CHECK_MAIN_WORKTREE_SOURCE_EDIT_ROOT="$MAIN_ROOT" bash "$HOOK" "${@:2}" 2>&1 >/dev/null)"
+			ACTUAL_EXIT=$?
 			;;
 		main-command)
-			actual_stderr="$(CHECK_MAIN_WORKTREE_SOURCE_EDIT_ROOT="$MAIN_ROOT" bash "$HOOK" --command "$1" 2>&1 >/dev/null)"
-			actual_exit=$?
+			ACTUAL_STDERR="$(CHECK_MAIN_WORKTREE_SOURCE_EDIT_ROOT="$MAIN_ROOT" bash "$HOOK" --command "$1" 2>&1 >/dev/null)"
+			ACTUAL_EXIT=$?
+			;;
+		main-command-home)
+			ACTUAL_STDERR="$(HOME="$1" CHECK_MAIN_WORKTREE_SOURCE_EDIT_ROOT="$MAIN_ROOT" bash "$HOOK" --command "$2" 2>&1 >/dev/null)"
+			ACTUAL_EXIT=$?
+			;;
+		# HOME removed from the environment entirely (not just empty).
+		main-command-no-home)
+			ACTUAL_STDERR="$(env -u HOME CHECK_MAIN_WORKTREE_SOURCE_EDIT_ROOT="$MAIN_ROOT" bash "$HOOK" --command "$1" 2>&1 >/dev/null)"
+			ACTUAL_EXIT=$?
 			;;
 		linked-path)
-			actual_stderr="$(CHECK_MAIN_WORKTREE_SOURCE_EDIT_ROOT="$LINKED_ROOT" bash "$HOOK" "$@" 2>&1 >/dev/null)"
-			actual_exit=$?
+			ACTUAL_STDERR="$(CHECK_MAIN_WORKTREE_SOURCE_EDIT_ROOT="$LINKED_ROOT" bash "$HOOK" "$@" 2>&1 >/dev/null)"
+			ACTUAL_EXIT=$?
 			;;
 		*)
 			echo "FAIL: unknown mode: $mode" >&2
 			exit 1
 			;;
 	esac
+}
 
-	if [ "$actual_exit" = "$expected_exit" ]; then
+run_case() {
+	local name="$1"
+	local expected_exit="$2"
+	local mode="$3"
+	shift 3
+
+	exec_case "$mode" "$@"
+
+	if [ "$ACTUAL_EXIT" = "$expected_exit" ]; then
 		record_pass "$name"
 	else
-		record_fail "$name expected exit $expected_exit, got $actual_exit; stderr=$actual_stderr"
+		record_fail "$name expected exit $expected_exit, got $ACTUAL_EXIT; stderr=$ACTUAL_STDERR"
 	fi
 }
 
@@ -97,30 +129,34 @@ run_case_stderr_contains() {
 	local mode="$4"
 	shift 4
 
-	local actual_stderr actual_exit
-	case "$mode" in
-		main-path)
-			actual_stderr="$(CHECK_MAIN_WORKTREE_SOURCE_EDIT_ROOT="$MAIN_ROOT" bash "$HOOK" "$@" 2>&1 >/dev/null)"
-			actual_exit=$?
-			;;
-		main-command)
-			actual_stderr="$(CHECK_MAIN_WORKTREE_SOURCE_EDIT_ROOT="$MAIN_ROOT" bash "$HOOK" --command "$1" 2>&1 >/dev/null)"
-			actual_exit=$?
-			;;
-		linked-path)
-			actual_stderr="$(CHECK_MAIN_WORKTREE_SOURCE_EDIT_ROOT="$LINKED_ROOT" bash "$HOOK" "$@" 2>&1 >/dev/null)"
-			actual_exit=$?
-			;;
-		*)
-			echo "FAIL: unknown mode: $mode" >&2
-			exit 1
-			;;
-	esac
+	exec_case "$mode" "$@"
 
-	if [ "$actual_exit" != "$expected_exit" ]; then
-		record_fail "$name expected exit $expected_exit, got $actual_exit; stderr=$actual_stderr"
-	elif ! grep -Fq "$expected_stderr" <<<"$actual_stderr"; then
-		record_fail "$name expected stderr to contain '$expected_stderr'; stderr=$actual_stderr"
+	if [ "$ACTUAL_EXIT" != "$expected_exit" ]; then
+		record_fail "$name expected exit $expected_exit, got $ACTUAL_EXIT; stderr=$ACTUAL_STDERR"
+	elif ! grep -Fq "$expected_stderr" <<<"$ACTUAL_STDERR"; then
+		record_fail "$name expected stderr to contain '$expected_stderr'; stderr=$ACTUAL_STDERR"
+	else
+		record_pass "$name"
+	fi
+}
+
+# Same shape as run_case_stderr_contains, negated: the run must finish with the
+# expected exit code AND must not have leaked the given text (e.g. a `set -u`
+# "unbound variable" abort, which fails open with the same exit code as a clean
+# allow — exit code alone cannot tell the two apart).
+run_case_stderr_lacks() {
+	local name="$1"
+	local expected_exit="$2"
+	local forbidden_stderr="$3"
+	local mode="$4"
+	shift 4
+
+	exec_case "$mode" "$@"
+
+	if [ "$ACTUAL_EXIT" != "$expected_exit" ]; then
+		record_fail "$name expected exit $expected_exit, got $ACTUAL_EXIT; stderr=$ACTUAL_STDERR"
+	elif grep -Fq "$forbidden_stderr" <<<"$ACTUAL_STDERR"; then
+		record_fail "$name expected stderr NOT to contain '$forbidden_stderr'; stderr=$ACTUAL_STDERR"
 	else
 		record_pass "$name"
 	fi
@@ -311,6 +347,78 @@ run_case "main command: heredoc body apostrophe does not mask next-line write (#
 # `<<<` is a here-string, not a heredoc; it must not swallow following lines.
 b1_herestring="$(printf 'grep foo <<<BAR\nrm src/App.tsx')"
 run_case "main command: here-string <<< does not swallow next-line write (#1251 B1)" 1 main-command "$b1_herestring"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Issue #1797 — a `~` token is not expanded by the approximate tokenizer, so it
+# was joined onto $ROOT (`$ROOT/~/...`), landed inside the repo and blocked home
+# directory maintenance from the primary worktree. The token must be expanded
+# the way the shell would: home OUTSIDE the repo passes, and — because the repo
+# can live UNDER $HOME — a `~` path that resolves back INTO the repo stays
+# blocked (a blanket "skip anything starting with ~" would under-block there).
+run_case "main command: tilde home file removal allowed (#1797)" 0 main-command-home "$HOME_FIXTURE" "rm ~/.claude/skills/x"
+run_case "main command: tilde home redirect allowed (#1797)" 0 main-command-home "$HOME_FIXTURE" "cat > ~/.zshrc"
+run_case "main command: tilde home path is not repo-relative (#1797)" 0 main-command-home "$HOME_FIXTURE" "rm ~/src/App.tsx"
+run_case "main command: absolute home file removal allowed (#1797)" 0 main-command-home "$HOME_FIXTURE" "rm $HOME_FIXTURE/.claude/settings.json"
+run_case "main command: absolute home redirect allowed (#1797)" 0 main-command-home "$HOME_FIXTURE" "cat > $HOME_FIXTURE/.claude/settings.json"
+run_case "main command: unexpanded \$HOME token allowed (#1797)" 0 main-command-home "$HOME_FIXTURE" 'cat > $HOME/.claude/settings.json'
+# Bare `~` is a home reference too (`cp x ~`, `mv f ~`): without its own branch
+# the token is joined onto $ROOT and blocked as a repo edit.
+run_case "main command: bare tilde cp destination allowed (#1797)" 0 main-command-home "$HOME_FIXTURE" "cp notes.txt ~"
+run_case "main command: bare tilde mv destination allowed (#1797)" 0 main-command-home "$HOME_FIXTURE" "mv /tmp/notes.txt ~"
+# Under-block guards: repo source must stay blocked, including when $HOME IS the
+# repo root so `~/...` expands back into it.
+run_case "main command: rust source removal still blocked (#1797)" 1 main-command-home "$HOME_FIXTURE" "rm src-tauri/src/main.rs"
+run_case "main command: tilde expanding into repo source blocked (#1797)" 1 main-command-home "$MAIN_ROOT" "rm ~/src/App.tsx"
+run_case "main command: tilde expanding into repo rust source blocked (#1797)" 1 main-command-home "$MAIN_ROOT" "cat > ~/src-tauri/src/main.rs"
+# Literal `~`-prefixed repo file (no slash after `~`): not a home reference, so
+# it stays a repo-relative path and stays blocked.
+run_case "main command: literal tilde-prefixed repo file blocked (#1797)" 1 main-command-home "$HOME_FIXTURE" "rm ~backup.ts"
+# Ceiling: `~name/...` (another user's home) is NOT expanded, so it keeps the
+# conservative pre-#1797 treatment of a repo-relative path and stays blocked.
+run_case "main command: ~name token stays conservatively blocked (#1797)" 1 main-command-home "$HOME_FIXTURE" "rm ~otheruser/src/App.tsx"
+# A quoted token is never tilde-expanded by the shell — `rm "~/src/App.tsx"`
+# targets the literal `<repo>/~/src/App.tsx`, so it must stay blocked
+# (under-block regression found in PR #1858 review).
+run_case "main command: double-quoted tilde token stays repo-relative (#1858)" 1 main-command-home "$HOME_FIXTURE" 'rm "~/src/App.tsx"'
+run_case "main command: single-quoted tilde token stays repo-relative (#1858)" 1 main-command-home "$HOME_FIXTURE" "rm '~/src/App.tsx'"
+# PATH mode carries no shell: Edit/Write tool paths (Node fs) never expand `~`,
+# so `~/src/App.tsx` lands on the literal `<repo>/~/src/App.tsx` and must stay
+# blocked (under-block regression found in PR #1858 review).
+run_case "main path: tilde frontend source stays blocked (#1858)" 1 main-path-home "$HOME_FIXTURE" "~/src/App.tsx"
+run_case "main path: tilde rust source stays blocked (#1858)" 1 main-path-home "$HOME_FIXTURE" "~/src-tauri/src/main.rs"
+run_case "main path: tilde agent settings stays blocked (#1858)" 1 main-path-home "$HOME_FIXTURE" "~/.claude/settings.local.json"
+# An unset HOME must not abort the guard mid-run: under `set -u` an unguarded
+# `${HOME}` kills the subshell and fails open with the SAME exit code as a clean
+# allow, so the stderr leak is the only observable difference.
+run_case_stderr_lacks "main command: unset HOME does not abort the guard (#1858)" 0 "unbound variable" main-command-no-home "rm ~/.claude/skills/x"
+
+# A quoted `~` is literal NO MATTER WHERE the quote sits in the token, so every
+# route into emit_path has to see it: a redirect glued to its target keeps the
+# quote in the middle of the token (`>"~/x"`), and so do the glued multi-redirect
+# segments and `dd of=`. Anchoring the rule at the token's first character
+# covered only the space-separated spelling (#1858 round 2 under-block).
+# One case per emit route, quoted (blocked) next to its unquoted twin (allowed).
+run_case "main command: glued redirect quoted tilde blocked (#1858)" 1 main-command-home "$HOME_FIXTURE" 'cat >"~/src/App.tsx"'
+run_case "main command: glued append redirect quoted tilde blocked (#1858)" 1 main-command-home "$HOME_FIXTURE" 'cat >>"~/src/App.tsx"'
+run_case "main command: glued stderr redirect quoted tilde blocked (#1858)" 1 main-command-home "$HOME_FIXTURE" 'cat 2>"~/src/App.tsx"'
+run_case "main command: glued fd1 redirect quoted tilde blocked (#1858)" 1 main-command-home "$HOME_FIXTURE" 'cat 1>"~/src/App.tsx"'
+run_case "main command: glued redirect single-quoted tilde blocked (#1858)" 1 main-command-home "$HOME_FIXTURE" "cat >'~/src/App.tsx'"
+run_case "main command: glued multi-redirect quoted tilde segment blocked (#1858)" 1 main-command-home "$HOME_FIXTURE" 'printf x >memory/a.md>"~/src/App.tsx"'
+run_case "main command: dd of= quoted tilde blocked (#1858)" 1 main-command-home "$HOME_FIXTURE" 'dd if=/dev/zero of="~/src/App.tsx"'
+run_case "main command: spaced redirect quoted tilde blocked (#1858)" 1 main-command-home "$HOME_FIXTURE" 'cat > "~/src/App.tsx"'
+run_case "main command: tee quoted tilde blocked (#1858)" 1 main-command-home "$HOME_FIXTURE" 'printf x | tee "~/src/App.tsx"'
+run_case "main command: cp destination quoted tilde blocked (#1858)" 1 main-command-home "$HOME_FIXTURE" 'cp /tmp/a "~/src/App.tsx"'
+# Unquoted twins: the shell DOES expand these, so they stay allowed.
+run_case "main command: glued redirect unquoted tilde allowed (#1858)" 0 main-command-home "$HOME_FIXTURE" "cat >~/.zshrc"
+run_case "main command: glued append redirect unquoted tilde allowed (#1858)" 0 main-command-home "$HOME_FIXTURE" "cat >>~/.zshrc"
+run_case "main command: dd of= unquoted tilde allowed (#1858)" 0 main-command-home "$HOME_FIXTURE" "dd if=/dev/zero of=~/.zshrc"
+run_case "main command: tee unquoted tilde allowed (#1858)" 0 main-command-home "$HOME_FIXTURE" "printf x | tee ~/.zshrc"
+# Control: a quoted literal repo path stays blocked through the same route.
+run_case "main command: glued redirect quoted repo path blocked (#1858)" 1 main-command-home "$HOME_FIXTURE" 'cat >"src/App.tsx"'
+# apply_patch markers are literal file paths, not shell words — nothing expands
+# `~` there either.
+tilde_patch_input="$(printf '*** Begin Patch\n*** Update File: ~/src/App.tsx\n@@\n-old\n+new\n*** End Patch\n')"
+run_case "main command: patch marker tilde path blocked (#1858)" 1 main-command-home "$HOME_FIXTURE" "$tilde_patch_input"
 
 # Issue #1242 — Bash 3.2 (macOS) + set -u empty-array crash. Running the hook in
 # path mode with NO path args expanded an empty "${PATH_ARGS[@]}" (unbound
