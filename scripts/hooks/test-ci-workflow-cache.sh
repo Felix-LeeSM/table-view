@@ -230,6 +230,7 @@ fi
 assert_contains "$changes_block" "name: Detect Change Scope" "changes job"
 assert_contains "$changes_block" "fetch-depth: 0" "changes job needs full history for diff base"
 assert_contains "$changes_block" "code_changed: \${{ steps.detect.outputs.code_changed }}" "changes job output wiring"
+assert_contains "$changes_block" "docs_changed: \${{ steps.detect.outputs.docs_changed }}" "changes job docs output wiring"
 assert_contains "$changes_block" "run: bash scripts/hooks/detect-change-scope.sh" "changes job detection script"
 # Heavy jobs must gate on the change-detection output, fail-closed.
 assert_contains "$frontend_block" "- changes" "frontend needs changes"
@@ -238,11 +239,15 @@ assert_contains "$frontend_block" "- changes" "frontend needs changes"
 # the aggregation, which would then fail on missing artifacts; if only the
 # shards had it, a broken detector could skip the shards while the aggregation
 # graded an empty matrix as success.
-assert_contains "$frontend_shard_block" "if: always() && (needs.changes.result != 'success' || needs.changes.outputs.code_changed == 'true')" "frontend-shard docs-only skip gate"
-assert_contains "$frontend_block" "if: always() && (needs.changes.result != 'success' || needs.changes.outputs.code_changed == 'true')" "frontend docs-only skip gate"
-assert_contains "$rust_block" "if: always() && (needs.changes.result != 'success' || needs.changes.outputs.code_changed == 'true')" "rust docs-only skip gate"
-assert_contains "$integration_block" "if: always() && (needs.changes.result != 'success' || needs.changes.outputs.code_changed == 'true')" "integration docs-only skip gate"
-assert_contains "$dependency_security_block" "if: always() && (needs.changes.result != 'success' || needs.changes.outputs.code_changed == 'true')" "dependency-security docs-only skip gate"
+CODE_GATE="if: always() && (needs.changes.result != 'success' || needs.changes.outputs.code_changed == 'true')"
+# The two docs-reading jobs carry the same fail-closed shape plus the docs
+# clause; see the DOCS-READING JOBS block at the end of this file.
+DOCS_GATE="${CODE_GATE%)} || needs.changes.outputs.docs_changed == 'true')"
+assert_contains "$frontend_shard_block" "$DOCS_GATE" "frontend-shard docs+code gate"
+assert_contains "$frontend_block" "$DOCS_GATE" "frontend docs+code gate"
+assert_contains "$rust_block" "$CODE_GATE" "rust docs-only skip gate"
+assert_contains "$integration_block" "$CODE_GATE" "integration docs-only skip gate"
+assert_contains "$dependency_security_block" "$CODE_GATE" "dependency-security docs-only skip gate"
 # pr-body, doc-size, and frontend-advisory stay unconditional — cheap, and
 # docs:links (frontend-advisory) is most meaningful on docs-only PRs.
 assert_not_contains "$pr_body_only_block" "needs.changes.outputs.code_changed" "pr-body always runs"
@@ -254,18 +259,43 @@ if grep -Eq "^[[:space:]]+paths-ignore:" "$WORKFLOW"; then
 	exit 1
 fi
 
-# Doc-contract gate (#1841). The repo's doc-contract assertions live INSIDE the
-# vitest suite, which runs in the change-gated `frontend-shard` matrix — so a
-# docs-only PR skipped exactly the checks that guard the documents it changed,
-# and GitHub counts a skipped required check as satisfied. The `doc-contract`
-# job runs them unconditionally.
+# DOCS-READING JOBS (#1845). This is the list `docs_changed` exists for, and
+# the one check kept from the deleted allowlist+drift-guard design.
 #
-# The assertions that keep that true are NOT here: `grep -F` reads one spelling
-# and YAML has several (`needs:` as a block sequence, a job- or step-level
-# `if: false`), all of which produce a skip that the ruleset accepts. They live
-# in scripts/hooks/check-doc-contract-gate.mjs, which parses the workflow and
-# re-derives the `test:doc-contracts` list from `vitest list`. It honours
-# CI_WORKFLOW_PATH the same way this script does.
-node "$ROOT/scripts/hooks/check-doc-contract-gate.mjs"
+# The hole: doc-reading checks live inside the vitest suite (`frontend-shard`)
+# and inside `pnpm lint` -> scripts/check-eslint-static-policy.ts (`frontend`).
+# Both were gated on `code_changed` alone, so a docs-only PR skipped exactly the
+# checks guarding the documents it edited — and GitHub counts a skipped required
+# check as satisfied. #1841 merged that way; #1844 and #1847 merged reading
+# `Frontend Checks: skipping`.
+#
+# The fix is the classification, not a compensating job: `changes` now also
+# emits `docs_changed`, and these two jobs gate on `code_changed || docs_changed`.
+# What a human still has to get right is WHICH jobs read docs, so that is what
+# this asserts — exactly these two carry the docs clause, and no other job does.
+# Add a docs-reading check to a third job and this fails until the clause and
+# this list are both updated.
+docs_reading_jobs="frontend-shard frontend"
+for job_id in $(grep -Eo '^  [a-z][a-z0-9-]*:' "$WORKFLOW" | tr -d ' :'); do
+	# Stop at the next job key OR a top-level comment: the DOCS-READING JOBS
+	# note trails the last job and would otherwise be read as part of it.
+	block="$(awk -v j="  $job_id:" '$0 == j {f=1; next} f && /^  [a-z#]/ {exit} f {print}' "$WORKFLOW")"
+	case " $docs_reading_jobs " in
+	*" $job_id "*)
+		assert_contains "$block" "needs.changes.outputs.docs_changed == 'true'" \
+			"$job_id is a declared docs-reading job and must gate on docs_changed"
+		;;
+	*)
+		assert_not_contains "$block" "needs.changes.outputs.docs_changed" \
+			"$job_id gates on docs_changed but is not in the docs-reading list"
+		;;
+	esac
+done
+
+# The declared list must also appear in the workflow's own DOCS-READING JOBS
+# note, so the comment a maintainer reads cannot drift from the assertion.
+for job_id in $docs_reading_jobs; do
+	assert_contains "$workflow_text" "#   $job_id" "DOCS-READING JOBS note lists $job_id"
+done
 
 echo "PASS: CI workflow cache and coverage check"

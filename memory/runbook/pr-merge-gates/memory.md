@@ -24,7 +24,7 @@ label 메커니즘 자체는 [delivery](../../workflow/delivery/memory.md) (T5/T
    (2026-07-03 #1183 delivery 실측 — 이전 서술 "E2E 만" 은 불완전했음.)
 
 **이 블록이 repo 유일의 required context 목록이다.** 다른 문서는 열거하지 말고 여기를
-가리킨다 — `scripts/hooks/check-doc-contract-gate.mjs` 의 ENUMERATION 불변식이 강제하고,
+가리킨다 — `scripts/static-policy/ci-gate-enumeration.ts` (`pnpm lint`) 가 강제하고,
 여기 적힌 이름이 실제 workflow job context 와 어긋나면 CI 가 RED 다.
 
 <!-- ci-gates:required-contexts -->
@@ -37,10 +37,8 @@ label 메커니즘 자체는 [delivery](../../workflow/delivery/memory.md) (T5/T
 <!-- /ci-gates -->
 
 2차 등록분 fail 도 BLOCKED 다 — 대응은 fix (PR body 정정 / clippy fix) 지 회피 아님.
-★ **미등록 pending**: `Doc Contract Checks` (2026-07-27 `ci.yml` 신설, 무조건 실행).
-workflow 가 main 에 올라간 **뒤에** 추가한다 — 아무 run 도 만들지 않는 required context
-는 열린 PR 전부를 BLOCKED 로 고착시킨다. 그때까지 이 job 은 run-blocking (red 면 run 이
-red) 이고 merge 는 못 막는다.
+신규 required context 등록은 workflow 가 main 에 올라간 **뒤에** 한다 — 아무 run 도
+만들지 않는 required context 는 열린 PR 전부를 BLOCKED 로 고착시킨다.
 
 → protection API 만 보고 "required 는 review-gate 뿐" 이라 단정하지 말 것. E2E 가 진짜
 blocker 인 경우가 많다 (docs/hook 변경이어도 ruleset 이 E2E 를 요구).

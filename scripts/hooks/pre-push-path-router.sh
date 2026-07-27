@@ -237,7 +237,6 @@ run_hook_gates() {
 	run_step "pre-push-router-tests" bash scripts/hooks/test-pre-push-path-router.sh
 	run_step "memory-size-tests" bash scripts/hooks/test-check-memory-size.sh
 	run_step "doc-size-tests" bash scripts/hooks/test-check-doc-size.sh
-	run_step "doc-contract-gate-tests" bash scripts/hooks/test-doc-contract-gate.sh
 }
 
 run_ci_workflow_gates() {
@@ -250,14 +249,6 @@ run_ci_workflow_gates() {
 	run_step "latest-json-verify-tests" bash scripts/hooks/test-verify-latest-json.sh
 	run_step "tag-version-verify-tests" bash scripts/hooks/test-verify-tag-version.sh
 	run_step "auto-tag-release-workflow" bash scripts/hooks/test-auto-tag-release-workflow.sh
-}
-
-# The doc-contract drift guard, routed on the CAUSE of staleness rather than on
-# the workflow file: the `test:doc-contracts` list goes stale when someone adds
-# a test that reads docs/, and such a change touches no workflow. Folded into
-# run_ci_workflow_gates when that route already fires (same script).
-run_doc_contract_gate() {
-	run_step "doc-contract-gate" node scripts/hooks/check-doc-contract-gate.mjs
 }
 
 run_memory_gates() {
@@ -335,7 +326,6 @@ needs_hook=0
 needs_memory=0
 needs_agent=0
 needs_ci_workflow=0
-needs_doc_contract=0
 needs_generated=0
 needs_fixture=0
 needs_committed_generated=0
@@ -347,11 +337,6 @@ while read -r path; do
 
 	if ! is_docs_path "$path"; then
 		docs_only=0
-	fi
-	# Checked before the class `continue`s below so a test file under an
-	# early-returning class (scripts/hooks/, .claude/, …) still routes here.
-	if is_test_path "$path" || is_doc_contract_input_path "$path"; then
-		needs_doc_contract=1
 	fi
 	if is_hook_path "$path"; then
 		docs_only=0
@@ -432,7 +417,7 @@ else
 		needs_rust=1
 		echo "[pre-push-route] route: full (workflow or unknown path)"
 	else
-		echo "[pre-push-route] route: frontend=$needs_frontend rust=$needs_rust hook=$needs_hook memory=$needs_memory agent=$needs_agent generated=$needs_generated ci_workflow=$needs_ci_workflow doc_contract=$needs_doc_contract fixture=$needs_fixture committed_generated=$needs_committed_generated"
+		echo "[pre-push-route] route: frontend=$needs_frontend rust=$needs_rust hook=$needs_hook memory=$needs_memory agent=$needs_agent generated=$needs_generated ci_workflow=$needs_ci_workflow fixture=$needs_fixture committed_generated=$needs_committed_generated"
 	fi
 
 	if [ "$needs_hook" = "1" ]; then
@@ -443,8 +428,6 @@ else
 	fi
 	if [ "$needs_ci_workflow" = "1" ]; then
 		run_ci_workflow_gates
-	elif [ "$needs_doc_contract" = "1" ]; then
-		run_doc_contract_gate
 	fi
 	run_frontend_and_rust_gates
 fi

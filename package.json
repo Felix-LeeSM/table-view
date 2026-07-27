@@ -24,7 +24,6 @@
     "memory:paths": "tsx scripts/check-memory-paths.ts",
     "memory:matrix": "tsx scripts/check-agents-matrix-coverage.ts",
     "test": "vitest run",
-    "test:doc-contracts": "vitest run src/types/queryLanguage.docs.test.ts tests/fixtures/unsupported_boundary_contracts.test.ts scripts/__tests__/completion-feature-doc-paths.test.ts",
     "contrast:check": "tsx scripts/check-theme-contrast.ts",
     "build:e2e": "vite build --mode e2e --minify=false",
     "test:e2e": "wdio run wdio.smoke.conf.ts",

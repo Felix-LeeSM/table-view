@@ -45,51 +45,6 @@ is_ci_workflow_path() {
 	esac
 }
 
-# Vitest-collected test files. Mirrors vitest's default `include`
-# (`**/*.{test,spec}.?(c|m)[jt]s?(x)`) in full — all 12 suffixes per prefix,
-# including the `?(x)` forms of the `c`/`m` variants that an earlier list
-# dropped — because vite.config.ts sets no `test.include`. Used to route the
-# doc-contract drift guard: the event that stales the `test:doc-contracts` list
-# is a NEW test that reads docs/, not a workflow edit.
-#
-# Boundary, measured 2026-07-27 against the tracked tree: 665 files match this
-# glob, `vitest list --filesOnly` collects 638. The 27-file gap is
-# `e2e/smoke/*.spec.ts`, which vite.config.ts drops via `test.exclude`
-# (`e2e/**`, plus `node_modules/**`, `.claude/**`, `.codex/**`, `worktrees/**`).
-# That over-match is deliberate: mirroring `exclude` here would add a second
-# copy of a config list that can change, and routing a guard on 27 extra paths
-# only costs a sub-second run — whereas under-matching would miss the very
-# change the guard exists to catch. Reproduce:
-#   git ls-files | rg -c '\.(test|spec)\.(c|m)?[jt]sx?$'
-#   pnpm exec vitest list --filesOnly | rg -c '\.(test|spec)\.'
-is_test_path() {
-	case "$1" in
-	*.test.ts | *.test.tsx | *.test.mts | *.test.mtsx | *.test.cts | *.test.ctsx | \
-		*.test.js | *.test.jsx | *.test.mjs | *.test.mjsx | *.test.cjs | *.test.cjsx | \
-		*.spec.ts | *.spec.tsx | *.spec.mts | *.spec.mtsx | *.spec.cts | *.spec.ctsx | \
-		*.spec.js | *.spec.jsx | *.spec.mjs | *.spec.mjsx | *.spec.cjs | *.spec.cjsx)
-		return 0
-		;;
-	*)
-		return 1
-		;;
-	esac
-}
-
-# Inputs the doc-contract drift guard reads besides the tests themselves: the
-# list lives in package.json and the collection universe comes from the vitest
-# config.
-is_doc_contract_input_path() {
-	case "$1" in
-	package.json | vite.config.* | vitest.config.*)
-		return 0
-		;;
-	*)
-		return 1
-		;;
-	esac
-}
-
 is_agent_path() {
 	case "$1" in
 	.claude/* | .codex/* | .agents/*)

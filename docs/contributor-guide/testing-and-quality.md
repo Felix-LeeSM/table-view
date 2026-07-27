@@ -128,8 +128,7 @@ Required remote evidence on the exact release SHA:
 
 - Every required context in the `pr_to_main` ruleset passes. That list lives in
   one place, `memory/runbook/pr-merge-gates/memory.md`; do not copy it here,
-  because the copy that used to live here listed four of the eight. The
-  run-blocking Doc Contract Checks job must be green too.
+  because the copy that used to live here listed four of the eight.
 - The runtime smoke matrix passes: Prepare E2E runtime artifacts plus the wired
   PostgreSQL, MySQL, MariaDB, SQLite, DuckDB `.duckdb`, DuckDB file analytics,
   MongoDB, Redis, Valkey, Elasticsearch, OpenSearch, MSSQL, and Oracle matrix
