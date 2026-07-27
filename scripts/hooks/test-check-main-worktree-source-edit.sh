@@ -62,43 +62,63 @@ record_fail() {
 	echo "FAIL  $1"
 }
 
-run_case() {
-	local name="$1"
-	local expected_exit="$2"
-	local mode="$3"
-	shift 3
+# Runs one hook invocation and publishes ACTUAL_STDERR / ACTUAL_EXIT. Shared by
+# every assertion helper so a mode is defined once and is usable from ALL of
+# them — the `*-home` modes were previously reachable from run_case only, which
+# made the `$HOME` guard's stderr unassertable (PR #1858 review).
+#
+# `*-home` modes take HOME as the first argument, then the path/command.
+ACTUAL_STDERR=""
+ACTUAL_EXIT=0
+exec_case() {
+	local mode="$1"
+	shift
 
-	local actual_stderr actual_exit
 	case "$mode" in
 		main-path)
-			actual_stderr="$(CHECK_MAIN_WORKTREE_SOURCE_EDIT_ROOT="$MAIN_ROOT" bash "$HOOK" "$@" 2>&1 >/dev/null)"
-			actual_exit=$?
+			ACTUAL_STDERR="$(CHECK_MAIN_WORKTREE_SOURCE_EDIT_ROOT="$MAIN_ROOT" bash "$HOOK" "$@" 2>&1 >/dev/null)"
+			ACTUAL_EXIT=$?
+			;;
+		main-path-home)
+			ACTUAL_STDERR="$(HOME="$1" CHECK_MAIN_WORKTREE_SOURCE_EDIT_ROOT="$MAIN_ROOT" bash "$HOOK" "${@:2}" 2>&1 >/dev/null)"
+			ACTUAL_EXIT=$?
 			;;
 		main-command)
-			actual_stderr="$(CHECK_MAIN_WORKTREE_SOURCE_EDIT_ROOT="$MAIN_ROOT" bash "$HOOK" --command "$1" 2>&1 >/dev/null)"
-			actual_exit=$?
+			ACTUAL_STDERR="$(CHECK_MAIN_WORKTREE_SOURCE_EDIT_ROOT="$MAIN_ROOT" bash "$HOOK" --command "$1" 2>&1 >/dev/null)"
+			ACTUAL_EXIT=$?
 			;;
-		# `$1` = HOME for this case, `$2` = command. Lets a `~` case pin what the
-		# shell would expand to, including the case where the repo lives INSIDE
-		# the home directory (issue #1797).
 		main-command-home)
-			actual_stderr="$(HOME="$1" CHECK_MAIN_WORKTREE_SOURCE_EDIT_ROOT="$MAIN_ROOT" bash "$HOOK" --command "$2" 2>&1 >/dev/null)"
-			actual_exit=$?
+			ACTUAL_STDERR="$(HOME="$1" CHECK_MAIN_WORKTREE_SOURCE_EDIT_ROOT="$MAIN_ROOT" bash "$HOOK" --command "$2" 2>&1 >/dev/null)"
+			ACTUAL_EXIT=$?
+			;;
+		# HOME removed from the environment entirely (not just empty).
+		main-command-no-home)
+			ACTUAL_STDERR="$(env -u HOME CHECK_MAIN_WORKTREE_SOURCE_EDIT_ROOT="$MAIN_ROOT" bash "$HOOK" --command "$1" 2>&1 >/dev/null)"
+			ACTUAL_EXIT=$?
 			;;
 		linked-path)
-			actual_stderr="$(CHECK_MAIN_WORKTREE_SOURCE_EDIT_ROOT="$LINKED_ROOT" bash "$HOOK" "$@" 2>&1 >/dev/null)"
-			actual_exit=$?
+			ACTUAL_STDERR="$(CHECK_MAIN_WORKTREE_SOURCE_EDIT_ROOT="$LINKED_ROOT" bash "$HOOK" "$@" 2>&1 >/dev/null)"
+			ACTUAL_EXIT=$?
 			;;
 		*)
 			echo "FAIL: unknown mode: $mode" >&2
 			exit 1
 			;;
 	esac
+}
 
-	if [ "$actual_exit" = "$expected_exit" ]; then
+run_case() {
+	local name="$1"
+	local expected_exit="$2"
+	local mode="$3"
+	shift 3
+
+	exec_case "$mode" "$@"
+
+	if [ "$ACTUAL_EXIT" = "$expected_exit" ]; then
 		record_pass "$name"
 	else
-		record_fail "$name expected exit $expected_exit, got $actual_exit; stderr=$actual_stderr"
+		record_fail "$name expected exit $expected_exit, got $ACTUAL_EXIT; stderr=$ACTUAL_STDERR"
 	fi
 }
 
@@ -109,30 +129,34 @@ run_case_stderr_contains() {
 	local mode="$4"
 	shift 4
 
-	local actual_stderr actual_exit
-	case "$mode" in
-		main-path)
-			actual_stderr="$(CHECK_MAIN_WORKTREE_SOURCE_EDIT_ROOT="$MAIN_ROOT" bash "$HOOK" "$@" 2>&1 >/dev/null)"
-			actual_exit=$?
-			;;
-		main-command)
-			actual_stderr="$(CHECK_MAIN_WORKTREE_SOURCE_EDIT_ROOT="$MAIN_ROOT" bash "$HOOK" --command "$1" 2>&1 >/dev/null)"
-			actual_exit=$?
-			;;
-		linked-path)
-			actual_stderr="$(CHECK_MAIN_WORKTREE_SOURCE_EDIT_ROOT="$LINKED_ROOT" bash "$HOOK" "$@" 2>&1 >/dev/null)"
-			actual_exit=$?
-			;;
-		*)
-			echo "FAIL: unknown mode: $mode" >&2
-			exit 1
-			;;
-	esac
+	exec_case "$mode" "$@"
 
-	if [ "$actual_exit" != "$expected_exit" ]; then
-		record_fail "$name expected exit $expected_exit, got $actual_exit; stderr=$actual_stderr"
-	elif ! grep -Fq "$expected_stderr" <<<"$actual_stderr"; then
-		record_fail "$name expected stderr to contain '$expected_stderr'; stderr=$actual_stderr"
+	if [ "$ACTUAL_EXIT" != "$expected_exit" ]; then
+		record_fail "$name expected exit $expected_exit, got $ACTUAL_EXIT; stderr=$ACTUAL_STDERR"
+	elif ! grep -Fq "$expected_stderr" <<<"$ACTUAL_STDERR"; then
+		record_fail "$name expected stderr to contain '$expected_stderr'; stderr=$ACTUAL_STDERR"
+	else
+		record_pass "$name"
+	fi
+}
+
+# Same shape as run_case_stderr_contains, negated: the run must finish with the
+# expected exit code AND must not have leaked the given text (e.g. a `set -u`
+# "unbound variable" abort, which fails open with the same exit code as a clean
+# allow — exit code alone cannot tell the two apart).
+run_case_stderr_lacks() {
+	local name="$1"
+	local expected_exit="$2"
+	local forbidden_stderr="$3"
+	local mode="$4"
+	shift 4
+
+	exec_case "$mode" "$@"
+
+	if [ "$ACTUAL_EXIT" != "$expected_exit" ]; then
+		record_fail "$name expected exit $expected_exit, got $ACTUAL_EXIT; stderr=$ACTUAL_STDERR"
+	elif grep -Fq "$forbidden_stderr" <<<"$ACTUAL_STDERR"; then
+		record_fail "$name expected stderr NOT to contain '$forbidden_stderr'; stderr=$ACTUAL_STDERR"
 	else
 		record_pass "$name"
 	fi
@@ -335,7 +359,12 @@ run_case "main command: tilde home file removal allowed (#1797)" 0 main-command-
 run_case "main command: tilde home redirect allowed (#1797)" 0 main-command-home "$HOME_FIXTURE" "cat > ~/.zshrc"
 run_case "main command: tilde home path is not repo-relative (#1797)" 0 main-command-home "$HOME_FIXTURE" "rm ~/src/App.tsx"
 run_case "main command: absolute home file removal allowed (#1797)" 0 main-command-home "$HOME_FIXTURE" "rm $HOME_FIXTURE/.claude/settings.json"
+run_case "main command: absolute home redirect allowed (#1797)" 0 main-command-home "$HOME_FIXTURE" "cat > $HOME_FIXTURE/.claude/settings.json"
 run_case "main command: unexpanded \$HOME token allowed (#1797)" 0 main-command-home "$HOME_FIXTURE" 'cat > $HOME/.claude/settings.json'
+# Bare `~` is a home reference too (`cp x ~`, `mv f ~`): without its own branch
+# the token is joined onto $ROOT and blocked as a repo edit.
+run_case "main command: bare tilde cp destination allowed (#1797)" 0 main-command-home "$HOME_FIXTURE" "cp notes.txt ~"
+run_case "main command: bare tilde mv destination allowed (#1797)" 0 main-command-home "$HOME_FIXTURE" "mv /tmp/notes.txt ~"
 # Under-block guards: repo source must stay blocked, including when $HOME IS the
 # repo root so `~/...` expands back into it.
 run_case "main command: rust source removal still blocked (#1797)" 1 main-command-home "$HOME_FIXTURE" "rm src-tauri/src/main.rs"
@@ -344,6 +373,24 @@ run_case "main command: tilde expanding into repo rust source blocked (#1797)" 1
 # Literal `~`-prefixed repo file (no slash after `~`): not a home reference, so
 # it stays a repo-relative path and stays blocked.
 run_case "main command: literal tilde-prefixed repo file blocked (#1797)" 1 main-command-home "$HOME_FIXTURE" "rm ~backup.ts"
+# Ceiling: `~name/...` (another user's home) is NOT expanded, so it keeps the
+# conservative pre-#1797 treatment of a repo-relative path and stays blocked.
+run_case "main command: ~name token stays conservatively blocked (#1797)" 1 main-command-home "$HOME_FIXTURE" "rm ~otheruser/src/App.tsx"
+# A quoted token is never tilde-expanded by the shell — `rm "~/src/App.tsx"`
+# targets the literal `<repo>/~/src/App.tsx`, so it must stay blocked
+# (under-block regression found in PR #1858 review).
+run_case "main command: double-quoted tilde token stays repo-relative (#1858)" 1 main-command-home "$HOME_FIXTURE" 'rm "~/src/App.tsx"'
+run_case "main command: single-quoted tilde token stays repo-relative (#1858)" 1 main-command-home "$HOME_FIXTURE" "rm '~/src/App.tsx'"
+# PATH mode carries no shell: Edit/Write tool paths (Node fs) never expand `~`,
+# so `~/src/App.tsx` lands on the literal `<repo>/~/src/App.tsx` and must stay
+# blocked (under-block regression found in PR #1858 review).
+run_case "main path: tilde frontend source stays blocked (#1858)" 1 main-path-home "$HOME_FIXTURE" "~/src/App.tsx"
+run_case "main path: tilde rust source stays blocked (#1858)" 1 main-path-home "$HOME_FIXTURE" "~/src-tauri/src/main.rs"
+run_case "main path: tilde agent settings stays blocked (#1858)" 1 main-path-home "$HOME_FIXTURE" "~/.claude/settings.local.json"
+# An unset HOME must not abort the guard mid-run: under `set -u` an unguarded
+# `${HOME}` kills the subshell and fails open with the SAME exit code as a clean
+# allow, so the stderr leak is the only observable difference.
+run_case_stderr_lacks "main command: unset HOME does not abort the guard (#1858)" 0 "unbound variable" main-command-no-home "rm ~/.claude/skills/x"
 
 # Issue #1242 — Bash 3.2 (macOS) + set -u empty-array crash. Running the hook in
 # path mode with NO path args expanded an empty "${PATH_ARGS[@]}" (unbound
