@@ -1,7 +1,7 @@
 ---
 title: Delivery — commit → push → PR → review → merge 자율 행동 계약
 type: workflow-rule
-updated: 2026-07-24
+updated: 2026-07-27
 task: delivery, commit, push, pr, review, merge
 trigger:
   signal: implementation 완료 / 사용자가 "마무리해" / sprint 종료

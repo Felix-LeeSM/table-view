@@ -41,7 +41,7 @@ Top-level orchestrator 의 행동 계약. 개별 작업 방법은 각 skill 이 
 
 ## 3. 사이클이면 멈추고 사용자에게 올린다
 
-트리거는 [review](../review/memory.md) 원칙 3 위반이다 — 라운드 k+1 의 blocking
+트리거는 `.agents/skills/pr-review/SKILL.md` Verdict 원칙 3 위반이다 — 라운드 k+1 의 blocking
 집합이 라운드 k 의 진부분집합이 아니다.
 
 1. 해당 PR 리뷰 중단.
@@ -85,7 +85,8 @@ Top-level orchestrator 의 행동 계약. 개별 작업 방법은 각 skill 이 
 
 ## 관련
 
-- [review](../review/memory.md) — 원칙 3 정의. 사이클 트리거의 source
+- `.agents/skills/pr-review/SKILL.md` — Verdict 원칙 1·2·3 정의. 사이클 트리거의 source
+- [review](../review/memory.md) — reviewer 행동 계약
 - [delivery](../delivery/memory.md) — 구현 완료 후 T0~T7 파이프라인
 - [git-policy](../git-policy/memory.md) — force-push 금지, rebase 대신 merge
 - [worktree](../../runbook/worktree/memory.md) — linked worktree spawn

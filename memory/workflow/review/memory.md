@@ -1,7 +1,7 @@
 ---
 title: PR Review Behavior
 type: workflow-rule
-updated: 2026-07-02
+updated: 2026-07-27
 task: review, pr-reviewer, delivery
 trigger:
   signal: PR 생성 / 사용자가 "리뷰해" / delivery T4
@@ -57,7 +57,8 @@ agent가 반드시 취해야 할 행동 계약만 둔다. 평가 차원, profile
   `review:approved` label이 있어야 pass — branch protection required check +
   enforce_admins라 우회 불가. 새 commit push 시 label이 자동 해제되므로
   fix 후에는 재리뷰가 필수다.
-- 적용된 정성 차원이 통과해야 한다.
+- 정성 차원에 blocking 이 없어야 한다 — 위 행동 계약의 blocking 정의를 그대로
+  쓴다. 이 절은 별도 기준을 세우지 않는다.
 - PR이 mergeable이고 branch policy block이 없어야 한다.
 - 사용자 명시 거부가 없어야 한다.
 
