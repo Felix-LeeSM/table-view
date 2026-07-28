@@ -150,6 +150,14 @@ is_repo_location() {
 		return 0
 	fi
 
+	# A directory the SAME command creates counts as existing. Checking the disk
+	# alone let `mkdir -p a/b && echo pwn > a/b/x.ts` through: at hook time `a/b`
+	# does not exist yet, so the target read as an artifact — but by the time the
+	# redirect runs, `mkdir` has made it real and the file lands in the repo.
+	case " $CREATED_DIRS " in
+		*" ${rel%/*} "*) return 0 ;;
+	esac
+
 	# Not on disk yet. A new file is still a repo edit when the directory that
 	# would hold it exists; when it does not, nothing can be written there, so the
 	# token is prose or an expression that merely looks like a path —
@@ -173,9 +181,62 @@ is_repo_location() {
 	return 0
 }
 
+# Directories this command creates before it writes, repo-relative, plus their
+# ancestors (`mkdir -p a/b` makes `a` too). Space-delimited for a substring test.
+CREATED_DIRS=""
+collect_created_dirs() {
+	[ -n "$COMMAND" ] || return 0
+	local d r
+	while IFS= read -r d; do
+		[ -n "$d" ] || continue
+		r="$(relative_path "$d")" || continue
+		while [ -n "$r" ]; do
+			CREATED_DIRS="$CREATED_DIRS $r"
+			case "$r" in
+				*/*) r="${r%/*}" ;;
+				*) r="" ;;
+			esac
+		done
+	done < <(
+		# Split on command separators, then take the operands of each `mkdir`.
+		printf '%s' "$COMMAND" | tr ';&|' '\n\n\n' | awk '
+			{
+				for (i = 1; i <= NF; i++) {
+					if ($i != "mkdir") continue
+					for (j = i + 1; j <= NF; j++) {
+						if (substr($j, 1, 1) == "-") continue
+						print $j
+					}
+					break
+				}
+			}
+		'
+	)
+}
+
 check_path() {
+	local raw="$1" unsure=0
+	case "$raw" in
+		"$UNSURE_PREFIX"*)
+			# The analyzer could not establish the command's directory (`cd "$W"`).
+			# It anchored the target at the repo root as the conservative guess.
+			# Blocking every such guess reproduced 101 of the 293 recorded false
+			# denials — the variable held a linked worktree or a scratch dir every
+			# recorded time. Blocking none of them released a real repo write when
+			# the destination happened to BE the root (`cd "$PWD"`, `cd ""`).
+			# Narrow it to a path that already exists: a scratch file has no
+			# namesake at the root, a real source file does.
+			unsure=1
+			raw="${raw#"$UNSURE_PREFIX"}"
+			;;
+	esac
+
 	local rel
-	rel="$(relative_path "$1")" || return 0
+	rel="$(relative_path "$raw")" || return 0
+
+	if [ "$unsure" = "1" ] && [ ! -e "$ROOT/$rel" ]; then
+		return 0
+	fi
 
 	# Command mode only. Path mode carries structured tool arguments (Edit/Write
 	# `file_path`, apply_patch markers) — there is no tokenizer between the agent
@@ -201,6 +262,8 @@ check_path() {
 if ! is_primary_worktree; then
 	exit 0
 fi
+
+collect_created_dirs
 
 if [ -n "$COMMAND" ]; then
 	if is_patch_payload "$COMMAND"; then

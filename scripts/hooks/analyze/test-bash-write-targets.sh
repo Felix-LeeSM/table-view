@@ -21,8 +21,12 @@ PASS=0
 FAIL=0
 
 # targets <command> -> newline-separated, sorted, $FIXTURE collapsed to `.`
+# $FIXTURE collapses to `.`; the unsure marker (a control byte) is spelled
+# `unsure` so a failure message is readable.
 targets() {
-	paths_from_command_tokens "$1" | sed "s|^$FIXTURE|.|" | sort -u | paste -sd, -
+	paths_from_command_tokens "$1" |
+		sed -e "s|$UNSURE_PREFIX|unsure|" -e "s|$FIXTURE|.|" |
+		sort -u | paste -sd, -
 }
 
 expect() { # <name> <expected-csv> <command>
@@ -65,6 +69,15 @@ expect "verb: git status is not a write" "" "git status --short"
 
 # A verb out of command position is a subcommand, not a write.
 expect "position: docker rm is not a write" "" "docker rm -f tv-probe-mssql"
+# …but a wrapper or keyword does not consume the command position. Each of these
+# hid a verb and released a real write until #1860 review caught them.
+expect "position: env assignment prefix is transparent" "./a.ts" "env FOO=1 rm a.ts"
+expect "position: bare assignment prefix is transparent" "./a.ts" "FOO=1 rm a.ts"
+expect "position: time is transparent" "./a.ts" "time rm a.ts"
+expect "position: nohup is transparent" "./a.ts" "nohup rm a.ts"
+expect "position: brace group does not consume it" "./a.ts" "{ rm a.ts; }"
+expect "position: then does not consume it" "./a.ts" "if true; then rm a.ts; fi"
+expect "position: do does not consume it" "./a.ts" "for f in x; do rm a.ts; done"
 expect "position: verb after a separator is a verb" "./a.ts" "echo x; rm a.ts"
 expect "position: verb on the next line is a verb" "./a.ts" "$(printf 'echo x\nrm a.ts\n')"
 
@@ -73,7 +86,11 @@ expect "cwd: cd moves the anchor" "/elsewhere/a.ts" "cd /elsewhere && rm a.ts"
 expect "cwd: cd as an argument does not move it" "./a.ts" "grep cd file && rm a.ts"
 expect "cwd: a separator does not restore the anchor" "/elsewhere/a.ts" \
 	"cd /elsewhere; rm a.ts"
-expect "cwd: unexpandable destination drops relative targets" "" \
+# An unexpandable destination is reported, not dropped: `cd "$PWD"`, `cd $(pwd)`
+# and `cd ""` all stay put, so dropping the target released real repo writes
+# (review #1860). The target is anchored at the starting cwd and tagged `unsure`;
+# how much doubt to tolerate is the caller's policy, not this reader's.
+expect "cwd: unexpandable destination is tagged unsure, not dropped" "unsure./a.ts" \
 	'W=/x; cd "$W" && rm a.ts'
 expect "cwd: unexpandable destination keeps absolute targets" "/abs/a.ts" \
 	'W=/x; cd "$W" && rm /abs/a.ts'

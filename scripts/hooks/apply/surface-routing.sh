@@ -43,7 +43,7 @@ trap 'rm -f "$rules_file" "$paths_file"' EXIT
 { hook_paths_from_json; hook_paths_from_patch; } | sort -u > "$paths_file"
 # Bash payload: no file_path, so ask git what the command actually wrote.
 if [ ! -s "$paths_file" ] && [ -n "$command" ]; then
-	recent_writes "$ROOT" | sort -u > "$paths_file"
+	recent_writes "$ROOT" "" "$command" | sort -u > "$paths_file"
 fi
 
 while IFS= read -r raw; do

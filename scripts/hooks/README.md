@@ -15,10 +15,12 @@ A script belongs to exactly one layer, named by the question it answers:
 | `lib/` | shared source-only helpers | no |
 
 Why: `check-main-worktree-source-edit.sh` was 892 lines doing analysis and
-policy at once, and its 293 recorded false denials were all reader defects
-wearing a policy message — indistinguishable from the outside because the only
-observable was "denied". Splitting them made the reader directly testable
-(`analyze/test-bash-write-targets.sh` asks "which paths?", never "denied?").
+policy at once, and most of its recorded denials were reader defects wearing a
+policy message — indistinguishable from a real block, because the only
+observable was "denied". (Of 293 replayed denials, 277 were released by fixing
+the reader; the rest include genuine blocks.) Splitting the two made the reader
+directly testable — `analyze/test-bash-write-targets.sh` asks "which paths?",
+never "denied?".
 
 Placement test when adding a script: if it can be exercised without a repository
 it is `analyze/`; if its exit code answers allow/deny it is `policy/`; if it

@@ -26,6 +26,11 @@
 # tokenizer never produces one, so no token can collide with the sentinel.
 readonly CWD_UNKNOWN=$'\001unknown-cwd'
 
+# Marks an emitted path whose directory could not be established (the command
+# `cd`-ed somewhere unexpandable). The caller decides how much doubt to allow —
+# this file states the fact, it does not set the policy.
+readonly UNSURE_PREFIX=$'\002unsure\002'
+
 trim_token() {
 	local value="$1"
 	value="${value//$'\r'/}"
@@ -153,10 +158,17 @@ emit_path() {
 		*)
 			local base_cwd="${MODE_CWD:-${CMD_CWD:-$BASH_WRITE_TARGETS_CWD}}"
 			# `cd "$W"` / `git -C "$WT"`: the destination is a variable this static
-			# reader cannot expand, so a relative target has no anchor. Anchoring it
-			# at the starting cwd is a guess that was wrong in every recorded
-			# instance — the variable always held a linked worktree or a scratch dir.
-			[ "$base_cwd" = "$CWD_UNKNOWN" ] && return 0
+			# reader cannot expand. Releasing the target outright was too wide —
+			# `cd "$PWD"`, `cd $(pwd)` and `cd ""` all stay in the starting
+			# directory, so a real repo write was released. Anchor at the starting
+			# cwd instead and mark the result UNSURE; the caller narrows an unsure
+			# target to one that already exists, which keeps the scratch-dir case
+			# (`cd "$W" && rm .pr-body.md`, no such file at the root) released.
+			if [ "$base_cwd" = "$CWD_UNKNOWN" ]; then
+				value="$BASH_WRITE_TARGETS_CWD/$value"
+				printf '%s%s\n' "$UNSURE_PREFIX" "$value"
+				return 0
+			fi
 			value="$base_cwd/$value"
 			;;
 	esac
@@ -392,6 +404,14 @@ paths_from_command_tokens() {
 		# ';'/',', which would otherwise erase a standalone separator before it can
 		# reset state and leak expect_redir into the next command's first word.
 		case "$word" in
+			# Shell keywords and grouping tokens do not consume the command
+			# position — the word after them is still a command. Without this,
+			# `{ rm x; }`, `if true; then rm x; fi` and `for f in a; do rm x; done`
+			# all hid the verb, and the write was released.
+			"{" | "}" | "(" | ")" | "then" | "else" | "elif" | "do" | "done" | "fi" | "esac" | "!")
+				at_cmd_start=1
+				continue
+				;;
 			"&&" | "||" | "|" | ";" | ";;")
 				reset_mode
 				expect_redir=0
@@ -432,6 +452,23 @@ paths_from_command_tokens() {
 		if [ "$at_cmd_start" = "1" ] && [ "$word" = "cd" ]; then
 			expect_cd=1
 			continue
+		fi
+
+		# Command wrappers and leading assignments are TRANSPARENT: the real verb
+		# is the next word, still in command position. `env FOO=1 rm x`,
+		# `time rm x` and `nohup rm x` each hid an `rm` and released the write.
+		# `sudo`/`xargs` stay out — they take their own options and operands, and
+		# treating them as transparent would misread those as write targets.
+		if [ "$at_cmd_start" = "1" ]; then
+			case "$(trim_token "$word")" in
+				env | time | nohup | command | builtin | exec | stdbuf)
+					continue
+					;;
+				[A-Za-z_]*=*)
+					# `FOO=1 rm x` — a variable assignment prefix.
+					continue
+					;;
+			esac
 		fi
 
 		# `git rm <paths>` deletes tracked files exactly like `rm`, but `rm` is not

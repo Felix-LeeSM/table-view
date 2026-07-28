@@ -28,19 +28,53 @@ if [ ! -x "$HOOK" ]; then
   exit 1
 fi
 
+# Cases 5c/5d below set `core.hooksPath` to `.no-hooks` and then unset it, to
+# prove the guard blocks a commit while hook enforcement is off. Run bare, those
+# writes land in the CURRENT repository's config — which for a linked worktree is
+# the SHARED `.git/config`, so for the duration every worktree and every parallel
+# agent session loses `.githooks/*`, signed-commit gate included. Measured on the
+# real repo: 12 sampled windows in one run. And the restoring `trap ... EXIT`
+# does not fire on SIGKILL, so a killed run leaves `.no-hooks` behind — after
+# which check-dangerous-bash.sh blocks every Bash command (the #1706 deadlock).
+#
+# This was harmless only while the suite ran nowhere. Wiring it into pre-push
+# made it fire on every push touching a hook path, so the four drift sites now
+# run inside a throwaway repository.
+#
+# Only those four move. The rest must stay in the real repository because they
+# assert against real paths (`.env.example`, `scripts/worktree-spawn.sh`, source
+# files to grep) — a blanket `cd` into the fixture broke 19 of them.
+FIXTURE_REPO="$(mktemp -d "${TMPDIR:-/tmp}/dangerous-bash-fixture.XXXXXX")"
+cleanup_fixture_repo() { rm -rf "$FIXTURE_REPO"; }
+git init -q "$FIXTURE_REPO"
+mkdir -p "$FIXTURE_REPO/.githooks"
+for _h in pre-commit pre-push commit-msg post-checkout post-merge prepare-commit-msg; do
+  printf '#!/usr/bin/env bash\nexit 0\n' > "$FIXTURE_REPO/.githooks/$_h"
+  chmod 0755 "$FIXTURE_REPO/.githooks/$_h"
+done
+git -C "$FIXTURE_REPO" config core.hooksPath .githooks
+
+# The guard resolves its repository from the cwd, so entering the fixture is what
+# scopes a `core.hooksPath` write to it. Four call sites drift the path; every one
+# must be wrapped. Same shell rather than a subshell — run_case updates
+# PASS_COUNT/FAIL_DETAILS, which a subshell would discard.
+_real_repo_pwd=""
+enter_fixture() {
+  _real_repo_pwd="$PWD"
+  cd "$FIXTURE_REPO" || exit 1
+}
+leave_fixture() {
+  git config core.hooksPath .githooks
+  cd "$_real_repo_pwd" || exit 1
+}
+
 PASS_COUNT=0
 FAIL_COUNT=0
 FAIL_DETAILS=()
-ORIGINAL_HOOKS_PATH="$(git config --get core.hooksPath 2>/dev/null || true)"
-
-restore_hooks_path() {
-  if [ -n "$ORIGINAL_HOOKS_PATH" ]; then
-    git config core.hooksPath "$ORIGINAL_HOOKS_PATH"
-  else
-    git config --unset-all core.hooksPath || true
-  fi
-}
-trap restore_hooks_path EXIT
+# No restore of the real repo's hooksPath any more: nothing in this file writes
+# it. Only the fixture needs cleaning up, and a single trap does it — a second
+# `trap ... EXIT` would silently replace the first.
+trap cleanup_fixture_repo EXIT
 
 # run_case <name> <expected_exit> <input_cmd_json> <stderr_must_contain_or_empty>
 # - stderr_must_contain_or_empty: "EMPTY" 면 stderr 가 빈 문자열이어야 함.
@@ -146,6 +180,12 @@ run_case \
   '{"tool_input":{"command":"git config --get core.hooksPath --local"}}' \
   EMPTY
 
+# 5c/5d need a repository whose hook enforcement is actually broken. The guard
+# resolves its repository from the cwd, so run them inside the fixture — these
+# two `git config` calls used to write the SHARED `.git/config` and disarmed
+# `.githooks/*` for every worktree and parallel session while they ran.
+# Same shell, not a subshell: run_case updates PASS_COUNT/FAIL_DETAILS.
+enter_fixture
 git config core.hooksPath .no-hooks
 run_case \
   "case5c: git commit with core.hooksPath=.no-hooks → block" \
@@ -158,6 +198,7 @@ run_case \
   1 \
   '{"tool_input":{"command":"git commit -m \"test: no hooksPath\""}}' \
   'MATCH:core.hooksPath|default .git/hooks|bash scripts/setup.sh'
+leave_fixture
 
 run_case \
   "case5e: git config --local core.hooksPath .no-hooks && git commit → block" \
@@ -176,7 +217,6 @@ run_case \
   1 \
   '{"tool_input":{"command":"GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.hooksPath GIT_CONFIG_VALUE_0=.no-hooks git commit -m \"test: block hooksPath\""}}' \
   'MATCH:core.hooksPath|Git hooks 경로를 임시|BLOCKED'
-restore_hooks_path
 
 # Case 6 — gh pr merge command that already chains cleanup stays quiet.
 run_case \
@@ -598,6 +638,7 @@ run_case \
   '{"tool_input":{"command":"bash scripts/worktree-spawn.sh feat/x"}}' \
   EMPTY
 
+enter_fixture
 git config core.hooksPath .no-hooks
 run_case \
   "case-1706-3: hooksPath drift + bash scripts/setup.sh → allow (복구로)" \
@@ -610,7 +651,7 @@ run_case \
   1 \
   '{"tool_input":{"command":"git commit -m \"x\""}}' \
   'MATCH:core.hooksPath|.githooks|Blocked'
-restore_hooks_path
+leave_fixture
 
 run_case \
   "case-1706-5: 복구 + hook bypass 복합 → block (layer 독립)" \
@@ -620,6 +661,7 @@ run_case \
 
 # Review reflect (2026-07-22, PR #1707): F1 면제 prefix anchor / F2 git option
 # 우회 차단 / T2 drift 상태 spawn 면제 테스트.
+enter_fixture
 git config core.hooksPath .no-hooks
 run_case \
   "case-1706-6: drift + 수리가 뒤 (commit && setup) → block (F1 anchor)" \
@@ -632,7 +674,7 @@ run_case \
   0 \
   '{"tool_input":{"command":"bash scripts/worktree-spawn.sh feat/x"}}' \
   EMPTY
-restore_hooks_path
+leave_fixture
 
 run_case \
   "case-1706-8: git -C /tmp worktree add → block (F2 option 우회)" \

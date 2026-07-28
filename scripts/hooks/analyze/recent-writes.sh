@@ -17,11 +17,40 @@
 #
 # Sourced, not executed: no `set -e` here, the caller owns its shell options.
 
+# Does this command plausibly write anything? `git status` reports the dirty tree
+# whether or not the command caused it, so without this an `ls` inherited every
+# file the developer had edited by hand in the last window — and the formatters
+# downstream would rewrite them. The mtime window bounds WHEN; this bounds
+# WHETHER. Deliberately generous: a miss here only means no formatting, while a
+# false positive would rewrite an unrelated file.
+command_may_write() {
+	case "$1" in
+		*'>'* | *' tee '* | *' dd '* | *'sed -i'* | *'perl -'*'i'* | \
+			*' rm '* | *' rm -'* | *' mv '* | *' cp '* | *' touch '* | \
+			*' mkdir '* | *' truncate '* | *' install '* | *'git rm'* | \
+			*'git mv'* | *'git apply'* | *'git checkout'* | *'git restore'* | \
+			*'apply_patch'* | *'npm '* | *'pnpm '* | *'cargo '* | *'npx '* | \
+			*'python'* | *'node '* | *'>>'*)
+			return 0
+			;;
+		rm\ * | mv\ * | cp\ * | touch\ * | mkdir\ * | tee\ * | dd\ * | sed\ * | perl\ *)
+			return 0
+			;;
+	esac
+	return 1
+}
+
 recent_writes() {
 	local root="$1"
 	local window="${2:-${RECENT_WRITES_WINDOW:-120}}"
+	local cmd="${3:-}"
 	[ -n "$root" ] || return 0
 	command -v git >/dev/null 2>&1 || return 0
+	# When the caller passes the command, use it to skip read-only invocations
+	# entirely. Callers that cannot supply one keep the old (wider) behaviour.
+	if [ -n "$cmd" ] && ! command_may_write "$cmd"; then
+		return 0
+	fi
 
 	local ref
 	ref="$(mktemp "${TMPDIR:-/tmp}/recent-writes-ref.XXXXXX")" || return 0

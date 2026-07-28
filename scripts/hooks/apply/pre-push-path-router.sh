@@ -225,7 +225,45 @@ run_rust_gates() {
 }
 
 run_hook_gates() {
-	run_step "hook-shell-syntax" bash -n .githooks/pre-push scripts/hooks/*.sh scripts/hooks/lib/*.sh scripts/hooks/analyze/*.sh scripts/setup.sh scripts/target-cache.sh scripts/worktree-spawn.sh scripts/worktree-cleanup.sh scripts/worktree-bootstrap-deps.sh scripts/prune-gh-caches.sh
+	# Every layer, not a hand-kept list. The flat glob `scripts/hooks/*.sh` stopped
+	# reaching the checks once they moved into subdirectories — it matched only the
+	# 10 compatibility shims, leaving 47 of 68 hook scripts unparsed. A per-layer
+	# glob would rot the same way the next time a directory is added, so the file
+	# list comes from git.
+	# One `bash -n` per file, in a loop. `bash -n a.sh b.sh` parses ONLY a.sh and
+	# passes the rest as positional parameters, so this step had been checking
+	# `.githooks/pre-push` alone and reporting green for every other file for as
+	# long as it existed — proven by appending `if [ 1` to a check script and
+	# watching the multi-argument form still exit 0.
+	#
+	# The file list comes from git rather than a glob: `scripts/hooks/*.sh` stopped
+	# reaching the checks when they moved into subdirectories (it matched only the
+	# 10 compatibility shims), and a hand-kept per-layer glob would rot the same
+	# way the next time a directory is added.
+	run_step "hook-shell-syntax" bash -c '
+		set -u
+		status=0
+		count=0
+		while IFS= read -r f; do
+			[ -n "$f" ] || continue
+			count=$((count + 1))
+			bash -n "$f" || status=1
+		done <<EOF
+$(git ls-files "scripts/hooks/*.sh" "scripts/hooks/**/*.sh")
+.githooks/pre-push
+.githooks/pre-commit
+.githooks/commit-msg
+scripts/setup.sh
+scripts/target-cache.sh
+scripts/worktree-spawn.sh
+scripts/worktree-cleanup.sh
+scripts/worktree-bootstrap-deps.sh
+scripts/prune-gh-caches.sh
+EOF
+		# A silently empty list would report green forever.
+		[ "$count" -ge 60 ] || { echo "hook-shell-syntax: only $count files checked" >&2; status=1; }
+		exit $status
+	'
 	run_step "detect-change-scope" bash scripts/hooks/analyze/test-detect-change-scope.sh
 	# The PreToolUse guard suites ran nowhere before this: not here, not in CI.
 	# `bash -n` above proved they parse, which is why 161 assertions could sit

@@ -55,6 +55,23 @@ else
 	no "Bash: 방금 쓴 파일을 잡아 advisory 를 낸다" "출력 없음"
 fi
 
+# ── 쓰기 힌트가 없는 명령은 git 을 아예 묻지 않는다 (review #1860) ───────────
+# mtime 창은 "언제"만 좁힌다. 창 안에서 사람이 손으로 고친 파일이 있으면 읽기
+# 전용 명령 뒤에도 포매터가 그 파일을 다시 쓴다. 인과를 못 보는 것이 문제라
+# "이 명령이 쓸 수 있는 형태인가"로 한 겹 더 좁힌다.
+out="$(run_hook '{"tool_name":"Bash","tool_input":{"command":"ls -la"}}')"
+if [ -z "$out" ]; then
+	ok "읽기 전용 명령(ls)은 dirty 파일을 건드리지 않는다"
+else
+	no "읽기 전용 명령(ls)은 dirty 파일을 건드리지 않는다" "출력=[$out]"
+fi
+out="$(run_hook '{"tool_name":"Bash","tool_input":{"command":"git log --oneline | head"}}')"
+if [ -z "$out" ]; then
+	ok "읽기 전용 파이프라인도 건드리지 않는다"
+else
+	no "읽기 전용 파이프라인도 건드리지 않는다" "출력=[$out]"
+fi
+
 # ── 오래된 dirty 파일은 이 명령의 결과가 아니다 ──────────────────────────────
 printf 'stale\n' > "$FIX/docs/stale.md"
 touch -t 202001010000 "$FIX/docs/stale.md"

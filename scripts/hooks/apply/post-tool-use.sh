@@ -29,7 +29,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/../analyze/recent-writes.sh"
 
 { hook_paths_from_json; hook_paths_from_patch; } | sort -u > "$paths_file"
 if [ ! -s "$paths_file" ] && [ -n "$command" ]; then
-	recent_writes "$ROOT" "${POST_TOOL_USE_MTIME_WINDOW:-120}" | sort -u > "$paths_file"
+	recent_writes "$ROOT" "${POST_TOOL_USE_MTIME_WINDOW:-120}" "$command" | sort -u > "$paths_file"
 fi
 [ -s "$paths_file" ] || exit 0
 

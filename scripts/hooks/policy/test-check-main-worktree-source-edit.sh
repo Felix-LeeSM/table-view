@@ -540,6 +540,62 @@ run_case "unknown cwd: bare cd releases relative targets" 0 main-command \
 # …but an absolute target still names the primary worktree wherever cwd went.
 run_case "unknown cwd: absolute repo target still blocked" 1 main-command \
 	"W=/somewhere/else; cd \"\$W\" && rm $MAIN_ROOT/src/lib/sql/wasm/loader.ts"
+# (5b) The existence gate itself. Neutering `is_repo_location` to `return 0` left
+# the whole suite green (review #1860), which meant the headline fix of this
+# series had no assertion of its own. These three are the witnesses: each names a
+# directory that does not exist in the repo, so the token cannot be a write to
+# it — with the gate removed each is denied instead.
+run_case "existence gate: cp into a directory that does not exist" 0 main-command \
+	"cp a/b/c/d.txt e/f/g/h.txt"
+run_case "existence gate: mv within a directory that does not exist" 0 main-command \
+	"mv notes-absent/old.md notes-absent/new.md"
+run_case "existence gate: touch under a directory that does not exist" 0 main-command \
+	"touch build/artifacts/out.bin"
+# …and the gate must not release a write into a directory that DOES exist.
+run_case "existence gate: new file in a real directory is still blocked" 1 main-command \
+	"touch src/lib/sql/wasm/brand-new.ts"
+
+# (6) Review #1860 B2 — command position was lost in six ways, each releasing a
+# real repo write. Base blocked all ten of these; the command-position narrowing
+# released them until the wrappers and keywords below were made transparent.
+run_case "position: env assignment prefix keeps the verb" 1 main-command \
+	"env FOO=1 rm src/lib/sql/wasm/loader.ts"
+run_case "position: bare assignment prefix keeps the verb" 1 main-command \
+	"FOO=1 rm src/lib/sql/wasm/loader.ts"
+run_case "position: time keeps the verb" 1 main-command \
+	"time rm src/lib/sql/wasm/loader.ts"
+run_case "position: nohup keeps the verb" 1 main-command \
+	"nohup rm src/lib/sql/wasm/loader.ts"
+run_case "position: brace group keeps the verb" 1 main-command \
+	"{ rm src/lib/sql/wasm/loader.ts; }"
+run_case "position: then keeps the verb" 1 main-command \
+	"if true; then rm src/lib/sql/wasm/loader.ts; fi"
+run_case "position: do keeps the verb" 1 main-command \
+	"for f in a; do rm src/lib/sql/wasm/loader.ts; done"
+# …and a wrapper that is NOT transparent must not swallow its own operands.
+run_case "position: docker rm still not a repo write" 0 main-command \
+	"docker rm -f tv-probe-mssql"
+
+# (7) A cwd that cannot be expanded may still BE the repo root — `cd "$PWD"`,
+# `cd $(pwd)` and `cd ""` all stay put. Releasing every unsure target let those
+# through. Now an unsure target is blocked only when it already exists, so a
+# scratch file under an unknown directory stays released.
+run_case "unsure cwd: cd \$(pwd) then remove a repo file" 1 main-command \
+	"cd \$(pwd) && rm vite.config.ts"
+run_case "unsure cwd: cd \"\$PWD\" then write a repo file" 1 main-command \
+	'cd "$PWD" && echo x > vite.config.ts'
+run_case "unsure cwd: cd empty string then write a repo file" 1 main-command \
+	'cd "" && echo x > vite.config.ts'
+run_case "unsure cwd: a file that does not exist at the root stays released" 0 main-command \
+	'W=/somewhere/else; cd "$W" && rm .pr-body-scratch.md'
+
+# (8) A directory the same command creates is a real directory by the time the
+# write runs. Checking only the disk let a new file into the repo.
+run_case "mkdir then write into the new directory is blocked" 1 main-command \
+	"mkdir -p src/newdir/deeper && echo x > src/newdir/deeper/thing.ts"
+run_case "mkdir outside the repo then write there is allowed" 0 main-command \
+	"mkdir -p /tmp/scratchdir && echo x > /tmp/scratchdir/thing.ts"
+
 run_case "unknown cwd: reset by a separator" 1 main-command \
 	'W=/somewhere/else; cd "$W"; rm x.txt; cd '"$MAIN_ROOT"'; rm src/lib/sql/wasm/loader.ts'
 
