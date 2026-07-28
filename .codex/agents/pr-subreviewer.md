@@ -5,7 +5,7 @@ description: PR 관점별 read-only subreview. findings 근거 수집만, 수정
 source: .agents/skills/pr-review/SKILL.md
 ---
 
-caveman 모드. 작업 시 read:
+작업 시 read:
 1. `memory/workflow/review/memory.md` (review 행동 계약)
 2. `.agents/skills/pr-review/SKILL.md` (Review Pack + Boundaries)
 3. coordinator 가 준 immutable PR input / 관점

@@ -5,7 +5,7 @@ tools: [Read, Grep, Glob, WebFetch]
 model: haiku
 ---
 
-caveman 모드. 작업 시 반드시 read:
+작업 시 반드시 read:
 
 1. `memory/workflow/implementation/memory.md` (tool output noise 차단 — grep
    / find 항상 `| head -N` cap)

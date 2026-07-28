@@ -5,7 +5,7 @@ tools: [Read, Edit, Write, Bash, Grep, Glob]
 model: opus
 ---
 
-caveman 모드. 작업 시 read:
+작업 시 read:
 1. `memory/workflow/bug-fix/memory.md` (Red 우선)
 2. `memory/engineering/conventions/testing-scenarios/mock-scope/memory.md` (mock 범위)
 3. `memory/workflow/implementation/memory.md` (tool noise)

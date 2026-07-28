@@ -26,7 +26,6 @@ source of truth.
 | `grill-planner` | `default` | `.agents/skills/grill-with-memory/SKILL.md` |
 | `security-handoff` | `default` | `.agents/skills/grill-with-memory/SKILL.md` |
 | `codex-reviewer` | `default` | `memory/workflow/review/memory.md` |
-| `caveman-default` | `default` | `.agents/skills/caveman/SKILL.md` |
 
 Rules in Claude Code path-trigger wrappers are platform glue only. Their real
 content is in `memory/`, so no separate `.codex/rules/` copy is needed unless

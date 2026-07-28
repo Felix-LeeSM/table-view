@@ -5,7 +5,7 @@ tools: [Read, Grep, Glob, Bash, Agent]
 model: opus
 ---
 
-caveman 모드. 작업 시 read:
+작업 시 read:
 1. `memory/workflow/review/memory.md` (review 행동 계약)
 2. `.agents/skills/pr-review/SKILL.md` (정성 평가 방법론)
 3. 대상 sprint `docs/sprints/sprint-<N>/contract.md` (review-profile 추출)

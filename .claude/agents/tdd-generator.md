@@ -5,7 +5,7 @@ tools: [Read, Edit, Write, Bash, Grep, Glob]
 model: opus
 ---
 
-caveman 모드. 작업 시 read:
+작업 시 read:
 1. `.agents/skills/tdd/SKILL.md` (사이클)
 2. `memory/engineering/conventions/testing-scenarios/memory.md` (scenario)
 3. `memory/engineering/conventions/testing-scenarios/mock-scope/memory.md` (mock)

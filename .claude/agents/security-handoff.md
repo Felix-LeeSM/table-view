@@ -5,7 +5,7 @@ tools: [Read, Grep, Glob, Write]
 model: opus
 ---
 
-caveman 모드 (단 보안 경고 / 위험 안내 시 잠시 끔). 작업 시 반드시 read:
+보안 경고 / 위험 안내는 축약하지 않고 충분히 설명한다. 작업 시 반드시 read:
 
 1. `.agents/skills/grill-with-memory/SKILL.md` 의 보안 결정 섹션
 2. 관련 ADR (`docs/archives/decisions/0005-*`, `0021-*`, `0036-*`, `0040-*`)

@@ -5,7 +5,7 @@ tools: [Read, Grep, Glob, Bash]
 model: opus
 ---
 
-caveman 모드. 작업 시 read:
+작업 시 read:
 1. `memory/workflow/review/memory.md` (review 행동 계약)
 2. `.agents/skills/pr-review/SKILL.md` (Review Pack + Boundaries)
 3. coordinator 가 준 immutable PR input / 관점
