@@ -11,6 +11,10 @@ source "$SCRIPT_DIR/path-classifier.sh"
 
 COMMAND=""
 PATH_ARGS=()
+# CMD_CWD value meaning "the command moved somewhere this reader cannot expand"
+# (`cd "$WT"`). A control character keeps it distinct from every real path: the
+# tokenizer never produces one, so no token can collide with the sentinel.
+readonly CWD_UNKNOWN=$'\001unknown-cwd'
 
 usage() {
 	cat >&2 <<'EOF'
@@ -187,9 +191,78 @@ EOF
 	exit 1
 }
 
+# Does this resolved token name a real place in the repository?
+#
+# `--command` mode is an approximate shell reader, not a parser (see usage()),
+# so besides real write targets it emits fragments that are not paths at all:
+# `2>&1|tail` yields the token `&1|tail`, `sed 's/a/b/'` yields the substitution
+# expression, and heredoc/prose words leak through. relative_path() will happily
+# join ANY such string onto $ROOT, after which path_class_for_message() labels it
+# from its extension alone — `&1|tail` was denied as `unknown`, `foo.mjs` created
+# under some other directory as `frontend-source`.
+#
+# Measured over 293 recorded denials: 258 named something that exists nowhere in
+# the repository, 35 named a tracked file or a new file inside a real repository
+# directory. Gating on that distinction is what separates a write from a
+# tokenizer artifact — a string that resolves to no repo location cannot be an
+# edit to this repository, whatever its extension looks like.
+#
+# Deliberately NOT a `git ls-files` check: a brand-new file is still a repo edit,
+# and the guard must stay usable before the file exists.
+is_repo_location() {
+	local rel="$1"
+
+	# A literal (shell-unexpanded) `~` token keeps the conservative ceiling from
+	# issues #1797 / #1858 — `<repo>/~/...` and `~name/...` stay blocked there by
+	# design, and that decision is not re-litigated here. Costs nothing: an
+	# UNEXPANDED `~/...` is expanded upstream in emit_path() and lands outside
+	# $ROOT, so it never reaches this function.
+	case "$rel" in
+		'~'*)
+			return 0
+			;;
+	esac
+
+	# Already on disk (tracked file, untracked file, or directory).
+	if [ -e "$ROOT/$rel" ]; then
+		return 0
+	fi
+
+	# Not on disk yet. A new file is still a repo edit when the directory that
+	# would hold it exists; when it does not, nothing can be written there, so the
+	# token is prose or an expression that merely looks like a path —
+	# `s/Smoke-Test-Plan:/.../`, a heredoc sentence, a `python -c` body.
+	#
+	# A bare word (no directory part) stays BLOCKED: with CMD_CWD tracking it is
+	# genuinely relative to the command's own directory, and `> realfile.txt` at
+	# the repo root creates a repo file. The bare artifacts this used to release
+	# (`&1|tail`, `cleaned`) are gone at the source now that the tokenizer splits
+	# glued separators, and the ones that were really elsewhere (`cd /tmp && …
+	# cllvmcov`) resolve outside $ROOT before reaching here.
+	case "$rel" in
+		*/*)
+			if [ -d "$ROOT/${rel%/*}" ]; then
+				return 0
+			fi
+			return 1
+			;;
+	esac
+
+	return 0
+}
+
 check_path() {
 	local rel
 	rel="$(relative_path "$1")" || return 0
+
+	# Command mode only. Path mode carries structured tool arguments (Edit/Write
+	# `file_path`, apply_patch markers) — there is no tokenizer between the agent
+	# and this check, so there are no artifacts to filter, and those tools create
+	# missing parent directories, which makes "parent does not exist" a fact about
+	# the future rather than a reason to allow.
+	if [ -n "$COMMAND" ] && ! is_repo_location "$rel"; then
+		return 0
+	fi
 
 	if is_linked_worktree_target_path "$rel"; then
 		return 0
@@ -222,6 +295,32 @@ emit_path() {
 		'~' | '~/'*)
 			[ -n "${HOME:-}" ] || return 0
 			value="${HOME}${value#\~}"
+			;;
+	esac
+	# Tokens that are not paths at all. relative_path() rejects these by looking at
+	# the raw string's first character, which the CMD_CWD join below would hide
+	# behind a leading `/` — an unexpanded `$DST` became `<repo>/$DST` and was
+	# denied as a repo edit.
+	case "$value" in
+		-* | '$'* | http://* | https://*)
+			return 0
+			;;
+	esac
+	# Resolve a relative target against the directory the command is actually
+	# running in, not against $ROOT. `cd /tmp && ... cllvmcov` and
+	# `cd worktrees/<wt> && rm .pr-body.md` were both re-rooted at $ROOT and denied
+	# as repo edits; 101 of 293 recorded denials were this. CMD_CWD is tracked in
+	# paths_from_command_tokens; path mode leaves it unset and keeps $ROOT.
+	case "$value" in
+		/*) ;;
+		*)
+			local base_cwd="${MODE_CWD:-${CMD_CWD:-$ROOT}}"
+			# `cd "$W"` / `git -C "$WT"`: the destination is a variable this static
+			# reader cannot expand, so a relative target has no anchor. Placing it at
+			# $ROOT is a guess that was wrong in every recorded instance — the
+			# variable always held a linked worktree or a scratch dir.
+			[ "$base_cwd" = "$CWD_UNKNOWN" ] && return 0
+			value="$base_cwd/$value"
 			;;
 	esac
 	printf '%s\n' "$value"
@@ -371,10 +470,33 @@ tokenize_quote_aware() {
 				if (has) { print tok; tok = ""; has = 0 }
 				continue
 			}
+			# Command separators GLUED to a word. Splitting only on whitespace left
+			# `2>&1|tail` as one token, whose `>`-branch emitted `&1|tail` as a write
+			# target, and left `x 2>/dev/null; echo cleaned` in a single token run so
+			# `rm`/`mv` operand mode never reset and swallowed `cleaned`. Both were
+			# denied as repo paths. `|` and `;` cannot appear unquoted in a filename,
+			# so they are always separators; `&` is only one as `&&`, because a lone
+			# `&` belongs to the redirect forms (`2>&1`, `>&-`) handled downstream.
+			if (sq == 0 && dq == 0 && (c == "|" || c == ";")) {
+				if (has) { print tok; tok = ""; has = 0 }
+				print c
+				continue
+			}
+			if (sq == 0 && dq == 0 && c == "&" && substr($0, i + 1, 1) == "&") {
+				if (has) { print tok; tok = ""; has = 0 }
+				print "&&"
+				i++
+				continue
+			}
 			tok = tok c; has = 1
 		}
 		if (sq == 0 && dq == 0) {
 			if (has) { print tok; tok = ""; has = 0 }
+			# An unquoted newline terminates the command, exactly like `;`. Emitting
+			# the separator resets operand mode AND command position, so a verb on
+			# the next line is seen as a verb (issue #1251 B1) and a word on the next
+			# line is not swallowed as an operand of the command above it.
+			print ";"
 		} else {
 			tok = tok " " # unclosed quote spans the newline: join with a space
 		}
@@ -393,6 +515,20 @@ paths_from_command_tokens() {
 	done < <(tokenize_quote_aware "$cmd")
 
 	local word base expect_redir=0 mode="" last_dest="" sed_inplace=0 perl_inplace=0
+	# A literal single quote, held in a variable because it cannot be written as
+	# `\'` inside the double-quoted parameter expansion that consumes it below.
+	local SQ="'"
+
+	# Working directory the command is running in, as `cd` moves it. Read by
+	# emit_path to resolve a relative write target. Command-position only: a `cd`
+	# that is not the first word of a segment (`grep cd file`) must not move it.
+	# Not a shell: a `cd` inside a subshell/`$(...)` leaks to the rest of the
+	# command here, which over-scopes toward the cwd rather than toward $ROOT.
+	CMD_CWD="$ROOT"
+	local at_cmd_start=1 expect_cd=0 expect_git=0 expect_git_c=0 git_c=""
+	# Overrides CMD_CWD for the operands of the current verb only (`git -C <dir>
+	# rm <paths>`). Cleared by reset_mode with the verb it belongs to.
+	MODE_CWD=""
 
 	flush_last_dest() {
 		if [ -n "$last_dest" ]; then
@@ -404,6 +540,7 @@ paths_from_command_tokens() {
 	reset_mode() {
 		flush_last_dest
 		mode=""
+		MODE_CWD=""
 		sed_inplace=0
 		perl_inplace=0
 	}
@@ -420,9 +557,93 @@ paths_from_command_tokens() {
 			"&&" | "||" | "|" | ";" | ";;")
 				reset_mode
 				expect_redir=0
+				at_cmd_start=1
+				# `cd && …`: the separator arrives before any operand, so this is a
+				# bare `cd` — it lands on $HOME, outside the repo.
+				[ "$expect_cd" = "1" ] && CMD_CWD="$CWD_UNKNOWN"
+				expect_cd=0
+				expect_git=0
+				expect_git_c=0
+				git_c=""
 				continue
 				;;
 		esac
+
+		# `cd <dir>` in command position moves CMD_CWD for everything after it.
+		if [ "$expect_cd" = "1" ]; then
+			expect_cd=0
+			case "$word" in
+				-*) ;; # `cd -P`, `cd --`: keep looking for the operand
+				*)
+					local target
+					target="$(trim_token "$word")"
+					case "$target" in
+						'' | -) CMD_CWD="$CWD_UNKNOWN" ;;           # `cd` / `cd -`
+						*'$'* | *'`'*) CMD_CWD="$CWD_UNKNOWN" ;;    # `cd "$WT"`
+						'~' | '~/'*) [ -n "${HOME:-}" ] && CMD_CWD="${HOME}${target#\~}" ;;
+						/*) CMD_CWD="$target" ;;
+						*)
+							[ "$CMD_CWD" = "$CWD_UNKNOWN" ] || CMD_CWD="$CMD_CWD/$target"
+							;;
+					esac
+					;;
+			esac
+			at_cmd_start=0
+			continue
+		fi
+		if [ "$at_cmd_start" = "1" ] && [ "$word" = "cd" ]; then
+			expect_cd=1
+			continue
+		fi
+
+		# `git rm <paths>` deletes tracked files exactly like `rm`, but `rm` is not
+		# in command position there so the verb table below never sees it. One
+		# recorded denial was `cd <primary root> && git rm src/lib/completion/*.ts`
+		# — a real primary-worktree deletion that the command-position narrowing
+		# would otherwise release. `-C <dir>` re-roots GIT's operands only; the
+		# shell's cwd is untouched, so a redirect on the same line still lands in
+		# the shell's directory. Applying it as a `cd` denied four scratch-dir
+		# captures of the form `cd /tmp/x && git -C <root> show REF:f > out.md`.
+		#
+		# Ceiling: only `rm` and `mv`. `git checkout <ref>` / `git restore` also
+		# overwrite the tree but their operands are usually refs, and emitting a
+		# branch name as a write target is the false-positive class this commit
+		# exists to remove.
+		if [ "$expect_git_c" = "1" ]; then
+			expect_git_c=0
+			local gtarget
+			gtarget="$(trim_token "$word")"
+			case "$gtarget" in
+				'' | *'$'* | *'`'*) git_c="$CWD_UNKNOWN" ;;
+				/*) git_c="$gtarget" ;;
+				*) git_c="${CMD_CWD}/$gtarget" ;;
+			esac
+			at_cmd_start=0
+			continue
+		fi
+		if [ "$expect_git" = "1" ]; then
+			case "$(trim_token "$word")" in
+				-C) expect_git_c=1; at_cmd_start=0; continue ;;
+				-*) at_cmd_start=0; continue ;;
+				rm | mv)
+					expect_git=0
+					reset_mode
+					mode="all-targets"
+					MODE_CWD="$git_c"
+					at_cmd_start=0
+					continue
+					;;
+				*) expect_git=0 ;;
+			esac
+		fi
+		if [ "$at_cmd_start" = "1" ] && [ "${word##*/}" = "git" ]; then
+			expect_git=1
+			at_cmd_start=0
+			continue
+		fi
+
+		local was_cmd_start="$at_cmd_start"
+		at_cmd_start=0
 
 		# A `~` sitting immediately inside a quote is literal for the shell:
 		# `rm "~/src/App.tsx"` and `cat >"~/src/App.tsx"` both write
@@ -432,8 +653,14 @@ paths_from_command_tokens() {
 		# every quoted `~` is rewritten to an explicit `./~` HERE, wherever in the
 		# token it sits. Anchoring this at the token's first character covered
 		# only the space-separated spelling (#1858 round 2 under-block).
+		#
+		# The single-quote spelling goes through variables. Inside a double-quoted
+		# `${var//pat/rep}`, `\"` is a real escape but `\'` is NOT — bash keeps the
+		# backslash, so the replacement inserted `\'./~` and trim_token then failed
+		# to strip a leading quote that was no longer leading. The rel became
+		# `\'./~/src/App.tsx`, and only a blanket deny made the assertion look green.
 		word="${word//\"~/\"./~}"
-		word="${word//\'~/\'./~}"
+		word="${word//${SQ}~/${SQ}./~}"
 
 		word="$(trim_token "$word")"
 		[ -n "$word" ] || continue
@@ -533,7 +760,20 @@ paths_from_command_tokens() {
 				;;
 		esac
 
+		# Write verbs are recognised in COMMAND POSITION only. Matching them
+		# anywhere made a subcommand of the same name switch on operand mode:
+		# `docker rm -f tv-probe-mssql` put the container name into all-targets mode
+		# and denied it as a repo path. `git rm` is a real deletion and is handled
+		# explicitly above, before this table.
+		#
+		# Ceiling: an indirected verb (`xargs rm`, `sudo rm`, `find -exec rm`) is no
+		# longer in command position and is not inspected. That is a deliberate
+		# narrowing of a best-effort careless-write layer — `rm -rf`, dd and
+		# force-push stay covered by check-dangerous-bash.sh.
 		base="${word##*/}"
+		if [ "$was_cmd_start" != "1" ]; then
+			base=""
+		fi
 		case "$base" in
 			tee)
 				reset_mode

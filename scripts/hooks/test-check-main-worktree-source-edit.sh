@@ -47,6 +47,34 @@ setup_git_fixture() {
 	printf '%s\n' "fixture" > "$MAIN_ROOT/README.md"
 	must git -C "$MAIN_ROOT" add README.md
 	must git -C "$MAIN_ROOT" commit -q -m "fixture"
+
+	# Repository skeleton. The guard now asks whether a resolved token names a
+	# real place in the repo (is_repo_location), so a fixture with nothing but
+	# README.md would make every "blocked" assertion below pass vacuously — the
+	# paths would be released as tokenizer artifacts rather than judged by
+	# policy. Mirror the real tree: the directories the assertions write INTO,
+	# and the repo-root config files they name directly (a bare word with no
+	# directory part is only a repo path when the file itself exists).
+	must mkdir -p \
+		"$MAIN_ROOT/src/lib/sql/wasm" \
+		"$MAIN_ROOT/src-tauri/src" \
+		"$MAIN_ROOT/src-tauri/capabilities" \
+		"$MAIN_ROOT/src-tauri/permissions" \
+		"$MAIN_ROOT/src-tauri/icons" \
+		"$MAIN_ROOT/docs" \
+		"$MAIN_ROOT/notes" \
+		"$MAIN_ROOT/memory/runbook/worktree" \
+		"$MAIN_ROOT/scripts/hooks" \
+		"$MAIN_ROOT/scripts/fixtures" \
+		"$MAIN_ROOT/.agents/skills/tdd" \
+		"$MAIN_ROOT/.claude" \
+		"$MAIN_ROOT/.codex" \
+		"$MAIN_ROOT/.github"
+	for f in package.json components.json tsconfig.node.json vite.config.ts \
+		vitest.config.ts eslint.config.js; do
+		printf '%s\n' "fixture" > "$MAIN_ROOT/$f"
+	done
+
 	must mkdir -p "$MAIN_ROOT/worktrees"
 	must git -C "$MAIN_ROOT" worktree add -q -b linked-fixture "$LINKED_ROOT"
 }
@@ -429,6 +457,78 @@ doc_patch_input="$(printf '*** Begin Patch\n*** Update File: memory/foo/memory.m
 run_case "main command: apply_patch checks patch markers only" 0 main-command "$doc_patch_input"
 mixed_patch_shell_input="$(printf 'printf patch_marker <<EOF\n*** Update File: memory/foo/memory.md\nEOF\nprintf hi > src/App.tsx\n')"
 run_case "main command: patch marker plus source write blocked" 1 main-command "$mixed_patch_shell_input"
+
+# --- Orchestration false positives (293 recorded denials, precision 12/293) ---
+#
+# Three independent causes, each with its own layer. Every case below was an
+# ACTUAL blocked orchestration command taken from session transcripts.
+
+# (1) Separators glued to a word. `2>&1|tail` was one token, so the `>` branch
+# emitted `&1|tail`; `…; echo cleaned` never reset `rm` operand mode.
+run_case "orchestration: fd dup piped to tail allowed" 0 main-command \
+	"git fetch origin main -q 2>&1|tail -2"
+run_case "orchestration: echo after semicolon-glued redirect allowed" 0 main-command \
+	"rm -f /tmp/pr_body.md 2>/dev/null; echo cleaned"
+run_case "orchestration: source write after glued separator still blocked" 1 main-command \
+	"echo hi 2>/dev/null; printf x > src/App.tsx"
+
+# (2) The command runs somewhere else. A relative target was re-rooted at $ROOT.
+run_case "orchestration: scratch file under cd to /tmp allowed" 0 main-command \
+	"cd /tmp && rm -rf cllvmcov && mkdir cllvmcov"
+run_case "orchestration: PR body inside a linked worktree allowed" 0 main-command \
+	"cd worktrees/linked-fixture && rm -f .pr-body-1705.md"
+run_case "orchestration: cd out then back into repo source still blocked" 1 main-command \
+	"cd /tmp && cd $MAIN_ROOT && printf x > src/App.tsx"
+run_case "orchestration: cd as a grep argument does not move cwd" 1 main-command \
+	"grep cd notes/review.md; printf x > src/App.tsx"
+
+# (3) The token is not a path. relative_path() joins any string to $ROOT, after
+# which path_class_for_message() labels it from its extension alone.
+run_case "orchestration: sed substitution expression allowed" 0 main-command \
+	"gh pr edit 1 --body \"\$(sed -E 's/Smoke-Test-Plan:/Not required:/' /tmp/b.md)\""
+run_case "orchestration: python -c body allowed" 0 main-command \
+	"python3 -c \"import re; t=open('/tmp/erd.html').read(); print(t[:200])\""
+# …but a real in-place edit of a real repo file is still an edit.
+run_case "orchestration: sed -i on a repo doc still blocked" 1 main-command \
+	"sed -i '' 's/a/b/' docs/PLAN.md"
+run_case "orchestration: new file in an existing repo dir still blocked" 1 main-command \
+	"printf x > src/NewThing.tsx"
+
+# (4) `git rm` deletes tracked files but `rm` is not in command position there,
+# so the command-position verb table alone released a real primary-worktree
+# deletion (`cd <root> && git rm src/lib/completion/*.ts`, one recorded denial).
+run_case "git: rm of repo source blocked" 1 main-command \
+	"git rm src/lib/sql/wasm/loader.ts"
+run_case "git: rm after cd back to the root blocked" 1 main-command \
+	"cd /tmp && cd $MAIN_ROOT && git rm src/lib/sql/wasm/loader.ts"
+run_case "git: -C into the root blocked" 1 main-command \
+	"git -C $MAIN_ROOT rm src/lib/sql/wasm/loader.ts"
+run_case "git: -C into a linked worktree allowed" 0 main-command \
+	"git -C $LINKED_ROOT rm src/lib/sql/wasm/loader.ts"
+# `-C` re-roots git, not the shell: the redirect below lands in /tmp/scratch.
+# Treating it as a `cd` denied four scratch-dir captures of committed files.
+run_case "git: -C does not move the shell for a redirect" 0 main-command \
+	"mkdir -p /tmp/scratch && cd /tmp/scratch && git -C $MAIN_ROOT show HEAD:README.md > base.md"
+# A ref is not a path: `git checkout -b <branch>` used to emit the branch name.
+run_case "git: checkout of a branch is not a write" 0 main-command \
+	"git checkout -b test/1629-remove-dead-completion-sources"
+run_case "git: status is not a write" 0 main-command \
+	"git status --short | head"
+
+# (5) A cwd this reader cannot expand has no anchor for a relative target.
+# Every recorded instance held a linked worktree or a scratch dir, so anchoring
+# at $ROOT denied writes that never touched the primary worktree.
+run_case "unknown cwd: cd to a variable releases relative targets" 0 main-command \
+	'W=/somewhere/else; cd "$W" && rm src/lib/sql/wasm/loader.ts'
+run_case "unknown cwd: git -C a variable releases relative targets" 0 main-command \
+	'W=/somewhere/else; git -C "$W" rm src/lib/sql/wasm/loader.ts'
+run_case "unknown cwd: bare cd releases relative targets" 0 main-command \
+	"cd && rm src/lib/sql/wasm/loader.ts"
+# …but an absolute target still names the primary worktree wherever cwd went.
+run_case "unknown cwd: absolute repo target still blocked" 1 main-command \
+	"W=/somewhere/else; cd \"\$W\" && rm $MAIN_ROOT/src/lib/sql/wasm/loader.ts"
+run_case "unknown cwd: reset by a separator" 1 main-command \
+	'W=/somewhere/else; cd "$W"; rm x.txt; cd '"$MAIN_ROOT"'; rm src/lib/sql/wasm/loader.ts'
 
 run_codex_hook_case \
 	"Codex hook: Edit src denied" \
