@@ -3,12 +3,9 @@
 
 set -euo pipefail
 
-# See policy/test-check-main-worktree-source-edit.sh: git's hook env (GIT_DIR and
-# friends) overrides `git -C`, so a fixture repo created below would be operated
-# on the OUTER repository instead. Cut the inheritance here so the suite is
-# correct however it is invoked.
-# shellcheck disable=SC2046
-unset $(git rev-parse --local-env-vars) 2>/dev/null || true
+# shellcheck source=../lib/git-fixture.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../lib" && pwd)/git-fixture.sh" || exit 1
+scrub_git_env
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 

@@ -3,15 +3,15 @@
 
 set -euo pipefail
 
+# shellcheck source=../lib/git-fixture.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../lib" && pwd)/git-fixture.sh" || exit 1
+scrub_git_env
+
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 ROUTER="$ROOT/scripts/hooks/apply/pre-push-path-router.sh"
-TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/pre-push-router-check.XXXXXX")"
+TMP_DIR="$(fixture_mktemp pre-push-router-check)"
 ZERO_OID="0000000000000000000000000000000000000000"
 trap 'rm -rf "$TMP_DIR"' EXIT
-
-while read -r git_env_var; do
-	[ -n "$git_env_var" ] && unset "$git_env_var"
-done < <(git -C "$ROOT" rev-parse --local-env-vars)
 
 assert_contains() {
 	local text="$1"
@@ -42,10 +42,7 @@ init_repo() {
 
 	rm -rf "$repo"
 	mkdir -p "$repo"
-	git -C "$repo" init --quiet
-	git -C "$repo" config user.name "Test User"
-	git -C "$repo" config user.email "test@example.invalid"
-	git -C "$repo" config commit.gpgsign false
+	fixture_init_repo "$repo"
 	mkdir -p "$repo/.no-hooks"
 	git -C "$repo" config core.hooksPath .no-hooks
 

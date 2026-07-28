@@ -49,7 +49,12 @@ Rules:
   top-level side effects, no executable bit. Consumed via `source` from
   dispatchers (same pattern as `analyze/path-classifier.sh`).
 - Currently: `lib/locale-utf8.sh` (UTF-8 locale guard), `lib/root-resolve.sh`
-  (repository root resolution), `lib/hook-json.sh` (hook JSON field/path parse).
+  (repository root resolution), `lib/hook-json.sh` (hook JSON field/path parse),
+  `lib/git-fixture.sh` (throwaway fixture repositories for the test suites).
+- `lib/test-*.sh` is the one exception to source-only, and only that name: a
+  suite for the module beside it, run by `apply/pre-push-path-router.sh` and
+  never sourced. Tests live next to what they test everywhere else here
+  (`policy/test-*.sh`, `analyze/test-*.sh`); a lib is not exempt from having one.
 - Adding a new lib: it is automatically covered by the `scripts/hooks/lib/*.sh`
   glob in the `hook-shell-syntax` gate (`apply/pre-push-path-router.sh`). Do
   **not** put top-level execution code in a lib — it runs on every `source` and

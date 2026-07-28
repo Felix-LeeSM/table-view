@@ -1,16 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# See test-check-main-worktree-source-edit.sh: git's hook env (GIT_DIR and
-# friends) overrides `git -C`, so the fixture repo below would be operated on the
-# outer repository — and `git rev-parse --show-toplevel` on the next line would
-# resolve against the injected GIT_DIR rather than this checkout.
-# shellcheck disable=SC2046
-unset $(git rev-parse --local-env-vars) 2>/dev/null || true
+# shellcheck source=../lib/git-fixture.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../lib" && pwd)/git-fixture.sh" || exit 1
+scrub_git_env
 
 ROOT="$(git rev-parse --show-toplevel)"
 HOOK="$ROOT/scripts/hooks/policy/check-worktree-bootstrap.sh"
-TMP_DIR="$(mktemp -d)"
+TMP_DIR="$(fixture_mktemp worktree-bootstrap-check)"
 trap 'rm -rf "$TMP_DIR"' EXIT
 
 fail() {
@@ -21,9 +18,7 @@ fail() {
 make_repo() {
   local repo="$TMP_DIR/repo"
 
-  git init -q -b main "$repo"
-  git -C "$repo" config user.email "test@example.com"
-  git -C "$repo" config user.name "Test User"
+  fixture_init_repo "$repo"
   mkdir -p "$repo/src-tauri/src"
   printf 'pub fn base() {}\n' >"$repo/src-tauri/src/lib.rs"
   git -C "$repo" add src-tauri/src/lib.rs

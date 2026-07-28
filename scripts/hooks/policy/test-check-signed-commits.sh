@@ -3,21 +3,16 @@
 
 set -euo pipefail
 
-# See test-check-main-worktree-source-edit.sh: git's hook env (GIT_DIR and
-# friends) overrides `git -C`, so the fixture repo below would be operated on the
-# outer repository. Cut it here rather than trusting the caller.
-# shellcheck disable=SC2046
-unset $(git rev-parse --local-env-vars) 2>/dev/null || true
+# shellcheck source=../lib/git-fixture.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../lib" && pwd)/git-fixture.sh" || exit 1
+scrub_git_env
 
 ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 CHECK="$ROOT/scripts/hooks/policy/check-signed-commits.sh"
-TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/signed-commits-test.XXXXXX")"
+TMP_DIR="$(fixture_mktemp signed-commits-test)"
 trap 'rm -rf "$TMP_DIR"' EXIT
 
-git -C "$TMP_DIR" init --quiet
-git -C "$TMP_DIR" config user.name "Test User"
-git -C "$TMP_DIR" config user.email "test@example.invalid"
-git -C "$TMP_DIR" config commit.gpgsign false
+fixture_init_repo "$TMP_DIR"
 git -C "$TMP_DIR" remote add origin "$TMP_DIR"
 
 printf 'one\n' >"$TMP_DIR/file.txt"
