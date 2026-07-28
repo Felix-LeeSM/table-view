@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$(git rev-parse --show-toplevel)/scripts/hooks/pre-tool-use.sh\"",
+            "command": "bash \"$(git rev-parse --show-toplevel)/scripts/hooks/apply/pre-tool-use.sh\"",
             "timeout": 10
           }
         ]
@@ -18,8 +18,14 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cd \"$CLAUDE_PROJECT_DIR\" && bash scripts/hooks/post-tool-use.sh 2>&1 | head -60 || true",
+            "command": "cd \"$CLAUDE_PROJECT_DIR\" && bash scripts/hooks/apply/post-tool-use.sh 2>&1 | head -60 || true",
             "timeout": 30
+          },
+          {
+            "type": "command",
+            "command": "bash \"$(git rev-parse --show-toplevel)/scripts/hooks/apply/surface-routing.sh\"",
+            "timeout": 15,
+            "statusMessage": "Routing surface rules"
           }
         ]
       },
@@ -28,8 +34,20 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$(git rev-parse --show-toplevel)/scripts/hooks/pr-create-reminder.sh\"",
+            "command": "bash \"$(git rev-parse --show-toplevel)/scripts/hooks/apply/pr-create-reminder.sh\"",
             "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "cd \"$CLAUDE_PROJECT_DIR\" && bash scripts/hooks/apply/post-tool-use.sh 2>&1 | head -60 || true",
+            "timeout": 30,
+            "statusMessage": "Running repo post-edit checks"
+          },
+          {
+            "type": "command",
+            "command": "bash \"$(git rev-parse --show-toplevel)/scripts/hooks/apply/surface-routing.sh\"",
+            "timeout": 15,
+            "statusMessage": "Routing surface rules"
           }
         ]
       }

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # lib/hook-json.sh — sourced module (순수 함수 정의, top-level 부작용 없음).
 # runtime wrapper 가 stdin 으로 주는 hook JSON 에서 필드/경로를 추출.
-# 소비: scripts/hooks/post-tool-use.sh, scripts/hooks/check-edit-policy.sh.
+# 소비: scripts/hooks/apply/post-tool-use.sh, scripts/hooks/apply/check-edit-policy.sh.
 # 호환성(동작 불변): 함수는 caller 의 전역 \$INPUT / \$command / \$patch_payload
 # 를 참조. 인자화 정리는 Phase 2.
 

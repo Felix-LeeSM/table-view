@@ -17,10 +17,10 @@ pre-commit:
   commands:
     rust-format:
       glob: "*.rs"
-      run: bash scripts/hooks/check-worktree-bootstrap.sh && cd src-tauri && cargo fmt --check
+      run: bash scripts/hooks/policy/check-worktree-bootstrap.sh && cd src-tauri && cargo fmt --check
     rust-clippy:
       glob: "*.rs"
-      run: bash scripts/hooks/check-worktree-bootstrap.sh && cd src-tauri && cargo clippy --all-targets --all-features -- -D warnings
+      run: bash scripts/hooks/policy/check-worktree-bootstrap.sh && cd src-tauri && cargo clippy --all-targets --all-features -- -D warnings
     rust-coverage:
       # pre-commit 의 coverage gate 는 Tier 1 (unit + storage_integration 미포함)
       # 만 측정. Tier 2 (testcontainers 기반 PG/Mongo 통합) 는 매 commit 마다
@@ -56,7 +56,7 @@ pre-commit:
       # functions 71.40 / regions 74.13. New gates keep at least 1pp cushion.
       glob: "*.rs"
       run: |
-        bash scripts/hooks/check-worktree-bootstrap.sh
+        bash scripts/hooks/policy/check-worktree-bootstrap.sh
         if ! rustup component list --installed 2>/dev/null | grep -q '^llvm-tools'; then
           echo "ERROR: rustup llvm-tools-preview 컴포넌트가 없습니다." >&2
           echo "       cargo llvm-cov 가 interactive 프롬프트로 install 의향을" >&2
@@ -75,11 +75,11 @@ pre-commit:
       # 없으면 cargo pg-test 가 실패하므로, PG 영역 작업자는 daemon 가동을
       # 사전 조건으로 본다.
       glob: "src-tauri/src/db/postgres/**/*.rs"
-      run: bash scripts/hooks/check-worktree-bootstrap.sh && cd src-tauri && cargo pg-test
+      run: bash scripts/hooks/policy/check-worktree-bootstrap.sh && cd src-tauri && cargo pg-test
     rust-mongo-test:
       # Sprint 237 P5+ (2026-05-08) — Mongo adapter 본체 staged 시 트리거.
       glob: "src-tauri/src/db/mongodb/**/*.rs"
-      run: bash scripts/hooks/check-worktree-bootstrap.sh && cd src-tauri && cargo mongo-test
+      run: bash scripts/hooks/policy/check-worktree-bootstrap.sh && cd src-tauri && cargo mongo-test
     ts-format:
       glob: "*.{ts,tsx}"
       run: npx prettier --write {staged_files}
@@ -104,14 +104,14 @@ pre-commit:
       # Sprint 388 — docs/archives/decisions/*/memory.md 의 frontmatter 외 hunk 차단.
       # 새 ADR (untracked → added) 은 OK. 결정 뒤집기는 새 ADR + supersedes.
       glob: "docs/archives/decisions/**/*.md"
-      run: bash scripts/hooks/check-adr-frozen.sh
+      run: bash scripts/hooks/policy/check-adr-frozen.sh
 
 pre-push:
   # ADR 0044 (2026-05-20) — runtime E2E smoke 는 GitHub Actions remote
   # check 로 승격한다. pre-push 는 push 전에 빠른 정적/단위/통합 게이트를
   # 유지하고, PR/main 의 실제 앱 부팅 smoke 는 `.github/workflows/e2e-smoke.yml`
   # 이 blocking check 로 보장한다. `--no-verify` / `LEFTHOOK=0` 회피는
-  # `scripts/hooks/check-dangerous-bash.sh`에서 차단.
+  # `scripts/hooks/policy/check-dangerous-bash.sh`에서 차단.
   #
   # The router verifies signed commits first, dispatches frontend/Rust stacks
   # from outgoing changed paths, then runs the TDD-cycle invariant. Mixed
@@ -120,14 +120,14 @@ pre-push:
   piped: true
   commands:
     0_path-routed-gates:
-      # `scripts/hooks/pre-push-path-router.sh` preserves signed-commit and
+      # `scripts/hooks/apply/pre-push-path-router.sh` preserves signed-commit and
       # TDD-cycle gates, then routes TS/Rust checks from outgoing changed paths:
       # docs/agent-only => signed/TDD only; memory => memory checks; frontend =>
       # TS checks/tests; Rust => cargo checks/coverage; hook changes => hook
       # self-checks; GitHub workflow/unknown => conservative full checks.
       # Cargo-deny still unsets Git-local env before nested Git can run.
       tags: security git lint test frontend rust
-      run: bash scripts/hooks/pre-push-path-router.sh
+      run: bash scripts/hooks/apply/pre-push-path-router.sh
 
 commit-msg:
   commands:

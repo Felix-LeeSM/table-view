@@ -4,7 +4,7 @@
 #   1. CLAUDE_PROJECT_DIR
 #   2. git rev-parse --show-toplevel
 #   3. caller $0 기준 dirname/../.. (또는 arg1 로 전달된 fallback)
-# 소비: scripts/hooks/post-tool-use.sh, scripts/hooks/check-edit-policy.sh.
+# 소비: scripts/hooks/apply/post-tool-use.sh, scripts/hooks/apply/check-edit-policy.sh.
 # 주의: source 된 함수라도 \$0 는 caller 스크립트명을 가리킨다.
 
 resolve_hook_root() {

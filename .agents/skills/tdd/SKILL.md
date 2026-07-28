@@ -101,7 +101,7 @@ GREEN: 통과시킬 최소 코드 → 통과
 ## RED evidence commit (pre-push gate)
 
 이 repo 의 `review-profile: code` sprint 는 push 전에 RED commit 을 evidence 로
-요구한다. pre-push `scripts/hooks/check-tdd-cycle.sh` 가 `merge-base..HEAD` 의
+요구한다. pre-push `scripts/hooks/policy/check-tdd-cycle.sh` 가 `merge-base..HEAD` 의
 commit subject 를 검사하고, RED 표식이 없으면 push 를 차단한다. 방법론만 지키고
 commit history 에 RED 흔적을 남기지 않으면 pre-push 에서 막힌다.
 

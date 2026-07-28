@@ -79,7 +79,7 @@ snapback was a systemic failure mode rather than a one-off command typo.
   `cargo deny check`.
 - `scripts/worktree-spawn.sh`: new branches created from `origin/main` have
   upstream unset until their own remote ref exists.
-- `scripts/hooks/test-worktree-push-ref-safety.sh`: static regression guard for
+- `scripts/hooks/policy/test-worktree-push-ref-safety.sh`: static regression guard for
   both invariants.
 
 ## Historical Prevention Rule
@@ -97,6 +97,6 @@ then literal SHA refspec push.
 
 ## Validation
 
-- `bash scripts/hooks/test-worktree-push-ref-safety.sh`
+- `bash scripts/hooks/policy/test-worktree-push-ref-safety.sh`
 - `git status --short --branch` on a fresh diagnosis worktree confirms no
   upstream is set for `diagnose/git-ref-root-cause-audit`.

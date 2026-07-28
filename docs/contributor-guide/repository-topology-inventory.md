@@ -36,7 +36,7 @@ Durable SOT routing:
 - [`source-root-migration-constraints.md`](source-root-migration-constraints.md)
   owns later Refactor 02/03 source movement constraints and compatibility export
   requirements.
-- `scripts/hooks/path-classifier.sh`, `pre-push-path-router.sh`, and
+- `scripts/hooks/analyze/path-classifier.sh`, `pre-push-path-router.sh`, and
   `check-main-worktree-source-edit.sh` own executable path classification.
 - `memory/workflow/hooks/memory.md` owns the hook taxonomy contract only, not the
   classifier table.

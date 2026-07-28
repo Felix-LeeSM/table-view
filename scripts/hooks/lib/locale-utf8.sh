@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # lib/locale-utf8.sh — sourced module (순수 함수 정의, top-level 부작용 없음).
 # wc -m 이 멀티바이트를 문자 수로 세도록 LC_ALL 을 UTF-8 계열로 보장.
-# 소비: scripts/hooks/check-memory-size.sh, scripts/hooks/check-doc-size.sh.
+# 소비: scripts/hooks/policy/check-memory-size.sh, scripts/hooks/policy/check-doc-size.sh.
 
 ensure_utf8_locale() {
 	# LC_ALL 이 이미 UTF-8 계열이면 존중, 그 외(C 등)/비어있으면 가용 locale 로 override.

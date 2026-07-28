@@ -10,7 +10,7 @@ status: in_progress
 
 ## Goal
 
-sprint-389 의 hook (`scripts/hooks/check-dangerous-bash.sh`) 은 *Claude Bash
+sprint-389 의 hook (`scripts/hooks/policy/check-dangerous-bash.sh`) 은 *Claude Bash
 PreToolUse* + *lefthook* 만 cover. 본 sprint 는 **3 개의 후속 gap** 을 닫는다:
 
 - **G1** — sprint-389 / sprint-390 / sprint-385 agent 보고 "push 후 local HEAD 가
@@ -38,7 +38,7 @@ PreToolUse* + *lefthook* 만 cover. 본 sprint 는 **3 개의 후속 gap** 을 �
    verification snippet 출력* 추가.
 4. **D4 (G3 + 운영) — `memory/runbook/worktree/memory.md` 갱신** — 첫 turn 검증
    가이드 1 절 추가 (sprint-400 가 도입한 패턴).
-5. **D5 — Smoke test 확장** (`scripts/hooks/test-check-dangerous-bash.sh`) —
+5. **D5 — Smoke test 확장** (`scripts/hooks/policy/test-check-dangerous-bash.sh`) —
    G2 의 4 case + spawn script 의 path-verify 의 1 case = 신규 5 case 추가
    (sprint-389 의 7 case + 본 sprint 5 case = 12 case).
 
@@ -111,7 +111,7 @@ PreToolUse* + *lefthook* 만 cover. 본 sprint 는 **3 개의 후속 gap** 을 �
 
 ### 회귀 가드 + 인프라
 
-- `AC-400-13` `bash scripts/hooks/test-check-dangerous-bash.sh` exit 0
+- `AC-400-13` `bash scripts/hooks/policy/test-check-dangerous-bash.sh` exit 0
   (sprint-389 의 7 case + 본 sprint 의 5 case = 12 case all PASS).
 - `AC-400-14` `bash scripts/check-memory-structure.sh` exit 0.
 - `AC-400-15` `pnpm tsc --noEmit` 0 error.
@@ -136,7 +136,7 @@ PreToolUse* + *lefthook* 만 cover. 본 sprint 는 **3 개의 후속 gap** 을 �
 
 ### Required Checks
 
-1. `bash scripts/hooks/test-check-dangerous-bash.sh` — 12 case GREEN.
+1. `bash scripts/hooks/policy/test-check-dangerous-bash.sh` — 12 case GREEN.
 2. `bash scripts/check-memory-structure.sh`
 3. `wc -l memory/runbook/worktree/memory.md` ≤ 200.
 4. `pnpm tsc --noEmit`
@@ -203,7 +203,7 @@ PreToolUse* + *lefthook* 만 cover. 본 sprint 는 **3 개의 후속 gap** 을 �
 ## Test Requirements
 
 - Vitest 신규 0 (코드 변경 0). 기존 baseline 통과 확인만.
-- Hook 자체 동작은 `scripts/hooks/test-check-dangerous-bash.sh` 가 fixture.
+- Hook 자체 동작은 `scripts/hooks/policy/test-check-dangerous-bash.sh` 가 fixture.
   본 sprint 가 5 case 추가.
 
 ## Ownership

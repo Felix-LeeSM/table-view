@@ -17,7 +17,7 @@ sprint 의 delivery gate 가 요구하는 evidence 를 작업 초반에 보이�
 
 - branch 이름이 `sprint-N/...`
 - `docs/sprints/sprint-N/contract.md` frontmatter 가 `review-profile: code`
-- pre-push `scripts/hooks/check-tdd-cycle.sh` 가 `merge-base..HEAD` 에 RED commit
+- pre-push `scripts/hooks/policy/check-tdd-cycle.sh` 가 `merge-base..HEAD` 에 RED commit
   subject 를 요구
 
 ## 요구 evidence
@@ -63,4 +63,4 @@ git log "$base..HEAD" --format="%s"
 - [delivery](../delivery/memory.md) — push/PR/merge pipeline
 - [review](../review/memory.md) — profile 별 review matrix
 - [git-policy](../git-policy/memory.md) — hook 회피 금지
-- `scripts/hooks/check-tdd-cycle.sh` — pre-push enforcement
+- `scripts/hooks/policy/check-tdd-cycle.sh` — pre-push enforcement

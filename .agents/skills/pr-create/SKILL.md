@@ -5,7 +5,7 @@ description: PR 생성 시 사용. PULL_REQUEST_TEMPLATE 기반으로 body를 �
 
 # PR Create
 
-PR body contract(`scripts/hooks/check-pr-body.mjs`, CI `PR Body Contract` job)를
+PR body contract(`scripts/hooks/policy/check-pr-body.mjs`, CI `PR Body Contract` job)를
 **push 전**에 충족시켜, CI fail → body 재작성 → re-push 사이클을 없앤다.
 `gh pr create` CLI는 `.github/PULL_REQUEST_TEMPLATE.md`를 자동 적용하지 않으므로,
 이 skill이 template을 읽어 채우고 로컬에서 검증한 뒤 생성한다.
@@ -34,7 +34,7 @@ PR body contract(`scripts/hooks/check-pr-body.mjs`, CI `PR Body Contract` job)�
      / `- Updated SOT: <repo-relative path, or n/a>` / `- Reason: <판단 근거>`.
    - `## Links` — issue/ADR/sprint/CI/관련 PR.
 3. **로컬 검증** — 조립 body를 임시 파일로:
-   `node scripts/hooks/check-pr-body.mjs --body-file <tmp>`.
+   `node scripts/hooks/policy/check-pr-body.mjs --body-file <tmp>`.
    - `PASS` → 다음 단계.
    - `FAIL` → 누락 섹션/필드 메시지 읽고 채운 뒤 재검증. 반복.
 4. **생성** — `gh pr create --body-file <tmp>` (title 은 Conventional Commits).
@@ -50,6 +50,6 @@ PR body contract(`scripts/hooks/check-pr-body.mjs`, CI `PR Body Contract` job)�
 ## Related
 
 - `.github/PULL_REQUEST_TEMPLATE.md` — 7섹션 template (SOT)
-- `scripts/hooks/check-pr-body.mjs` — contract 검증 (SOT, 본 skill 은 중복不)
+- `scripts/hooks/policy/check-pr-body.mjs` — contract 검증 (SOT, 본 skill 은 중복不)
 - `memory/workflow/documentation/memory.md` — Documentation impact gate
 - `memory/workflow/delivery/memory.md` — T3 PR 단계

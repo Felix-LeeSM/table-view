@@ -22,10 +22,10 @@ exit code로 피드백하므로, 세부 판정은 hook script와 테스트가 so
 - **Agent hook** (`.codex/hooks.json`, `.claude/settings.json`): agent 작업 중
   안전장치와 가벼운 품질 보조 layer. Linter/check와 명시된 formatter는 허용한다.
 - Formatter/fix step은 숨은 repair가 아니라 명시된 agent post-tool 또는 formatter
-  step이어야 한다. 현재 dispatcher는 `scripts/hooks/post-tool-use.sh`다.
+  step이어야 한다. 현재 dispatcher는 `scripts/hooks/apply/post-tool-use.sh`다.
 - pass/fail 패턴과 formatter 범위는 `scripts/hooks/*`, `lefthook.yml`, hook tests에
   둔다. memory에는 복제하지 않는다.
-- Repo path taxonomy 는 `scripts/hooks/path-classifier.sh` 가 source of truth다.
+- Repo path taxonomy 는 `scripts/hooks/analyze/path-classifier.sh` 가 source of truth다.
   `pre-push-path-router.sh` 와 `check-main-worktree-source-edit.sh` 는 같은 classifier를
   source 해서 route/guard class drift를 막고, test는 classifier-visible cases를
   같이 고정한다.

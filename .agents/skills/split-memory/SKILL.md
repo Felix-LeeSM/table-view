@@ -30,4 +30,4 @@ description: 200줄 또는 12,000 chars를 초과한 memory.md를 주제별 sub-
 
 - `remember` skill — 새 룰 저장 (분량 cap 점검 포함)
 - `memory/memory.md` — 팔레스 입구
-- `scripts/hooks/check-memory-structure.sh` — `memory.md` 외 파일 차단
+- `scripts/hooks/policy/check-memory-structure.sh` — `memory.md` 외 파일 차단

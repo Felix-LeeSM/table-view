@@ -11,7 +11,7 @@ if [ -d "$HOME/.local/share/mise/shims" ]; then
   export PATH
 fi
 
-VERIFY_HOOK_PATH="$(cd "$(dirname "$0")/../scripts/hooks" && pwd)/verify-git-hooks-path.sh"
+VERIFY_HOOK_PATH="$(cd "$(dirname "$0")/../scripts/hooks/policy" && pwd)/verify-git-hooks-path.sh"
 if [ ! -x "$VERIFY_HOOK_PATH" ]; then
   echo "ERROR: 훅 경로 검증 스크립트가 없습니다: $VERIFY_HOOK_PATH" >&2
   exit 1
