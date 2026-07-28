@@ -48,7 +48,9 @@ T0~T7 오케스트레이션 절차 SOT 다. 행동 계약(ownership / 중단 조
    synchronize 마다 승인 해제) — 한 라운드의 fix 는 전부 반영한 뒤 한 번만 push.
    **Reflect** — fix 착수 전 아래 중 하나면 fix 를 멈춘다. delivery owner 가
    재단다(리뷰어 판정을 기다리지 않는다).
-   - 라운드 3 이상 — `review-gate` 가 세어서 머지를 막는다.
+   - 라운드 3 이상 — `review-gate` 가 PR comment 수로 센다. 그래서 **저자는 PR 에
+     comment 를 남기지 않는다** — fix 보고가 라운드로 세어져 실제보다 일찍 막힌다.
+     상태는 commit 메시지와 PR body 로 말한다.
    - 이전 라운드에서 고친 유형이 다시 나옴.
    - reviewer 가 verdict 대신 사이클을 보고(pr-review 원칙 3).
 

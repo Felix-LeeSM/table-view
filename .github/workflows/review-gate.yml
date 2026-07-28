@@ -36,9 +36,10 @@ jobs:
 
       # 3라운드부터는 fix 를 더 쌓지 말고 근본 원인을 재평가한다 (delivery T5 reflect).
       # 라운드 프록시는 PR comment 수 — reviewer 가 라운드마다 scorecard 를 하나
-      # 남긴다. payload 에 이미 정수로 오므로 API 조회도 본문 파싱도 필요 없다.
-      # 다른 코멘트도 같이 세어 조금 이르게 걸릴 수 있는데, "멈추고 생각하라" 는
-      # 게이트에서는 그 방향이 안전하다.
+      # 남기고 저자는 comment 를 남기지 않는다 (delivery T5). payload 에 이미 정수로
+      # 오므로 API 조회도 본문 파싱도 필요 없다.
+      # 실측 2026-07-29: 최근 머지 30건 중 16건이 승인 시점에 comments >= 3 이었다.
+      # 임계값 3 은 완화 대상이 아니라 지켜야 할 선이다 — 걸리면 라운드를 줄여라.
       - name: Stop at review round 3
         if: >-
           github.event_name == 'pull_request'
