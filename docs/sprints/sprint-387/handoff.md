@@ -25,7 +25,7 @@ wrapper 만.
 ### Codex (미적용 — handoff 대상)
 
 - `AGENTS.md` 1번 read 만으로 작업 type 점프 가능.
-- `scripts/hooks/check-dangerous-bash.sh` 를 Codex 의 PreToolUse hook 으로
+- `scripts/hooks/policy/check-dangerous-bash.sh` 를 Codex 의 PreToolUse hook 으로
   연결 가능 — env 또는 argv 입력으로.
 - Codex 전용 agent definition 형식 (`.codex/agents/*.md` 같은) 은 본 sprint
   scope 아님 → 차후 sprint 에서 정의. Claude Code 의 frontmatter 패턴을
@@ -58,7 +58,7 @@ wrapper 만.
 - `.claude/rules/*.md` 의 `paths` frontmatter 는 Claude Code 의 auto-load
   trigger — 본 trigger 가 깨지면 wrapper 가 매치되지 않아 redirect 가 의미
   없어짐. 변경 시 주의.
-- Hook script 는 `scripts/hooks/check-dangerous-bash.sh` 가 권위. 새 pattern
+- Hook script 는 `scripts/hooks/policy/check-dangerous-bash.sh` 가 권위. 새 pattern
   추가는 본 파일에만.
 
 ## 다음 사용 시점에 점검할 것

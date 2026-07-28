@@ -42,7 +42,7 @@ T0~T7 오케스트레이션 절차 SOT 다. 행동 계약(ownership / 중단 조
      (green → `review:approved`, red → `review:changes-requested`)
      + non-blocking 발견을 배출한 이슈 번호.
    - soft backstop: `gh pr create` 직후 PostToolUse 리마인더 훅
-     (`scripts/hooks/pr-create-reminder.sh`)이 이 단계를 상기시킨다. block 아님.
+     (`scripts/hooks/apply/pr-create-reminder.sh`)이 이 단계를 상기시킨다. block 아님.
    - 외부 옵션: 사용자가 "codex 리뷰도 받아" → `codex-reviewer` 추가(자동 X).
 5. **T5 Reflect/Fix** — 결함 발견 시 delivery owner 가 fix commit + push → T4
    재시작. push(synchronize)는 `review-gate` 가 `review:approved` 를 자동 해제 —

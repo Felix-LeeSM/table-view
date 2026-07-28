@@ -56,7 +56,7 @@ path 점프.
 
 ### 3. Hook script 평면화
 
-- `scripts/hooks/check-dangerous-bash.sh` (platform-neutral, 3 입력)
+- `scripts/hooks/policy/check-dangerous-bash.sh` (platform-neutral, 3 입력)
 - `.claude/hooks/pre-bash.sh` (Claude Code wrapper, 5줄 `exec` only)
 
 3 입력 동작:

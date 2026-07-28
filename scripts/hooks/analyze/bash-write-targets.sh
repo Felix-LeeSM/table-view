@@ -4,7 +4,7 @@
 # Layer boundary. This file answers ONE question — "which paths does this command
 # write?" — and answers it with no knowledge of repositories, worktrees or
 # policy. It emits ABSOLUTE paths; deciding whether one of them may be written is
-# the caller's job (scripts/hooks/check-main-worktree-source-edit.sh).
+# the caller's job (scripts/hooks/policy/check-main-worktree-source-edit.sh).
 #
 # Not a shell parser. It is a best-effort reader for obvious writes: redirection,
 # tee, dd, cp/mv/rm/touch/mkdir/truncate, `sed -i`, `perl -i`, `git rm`/`git mv`,

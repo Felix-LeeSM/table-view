@@ -80,14 +80,14 @@ hardlink 라 물리 디스크 추가 없이 rsync 복사보다 빠르다. `cargo
 
 수동 target cache 보충은 `scripts/target-cache.sh` 로만 한다. 이 helper 는 stale
 판단 / lock / 자동 spawn 소비를 하지 않는다. routine cache lane 계약은
-`scripts/hooks/test-target-cache.sh` 가 고정한다.
+`scripts/hooks/policy/test-target-cache.sh` 가 고정한다.
 
 ## 책임
 
 - spawn: orchestrator (현재 메인 세션) 가 명시 호출. agent 가 자율로
   worktree 생성하지 않음 (사용자가 보지 못하는 디스크 공간 차지 위험).
-  - hook enforcement (issue #1706): `scripts/hooks/pre-tool-use.sh` 가
-    `EnterWorktree` create form deny, `scripts/hooks/check-dangerous-bash.sh`
+  - hook enforcement (issue #1706): `scripts/hooks/apply/pre-tool-use.sh` 가
+    `EnterWorktree` create form deny, `scripts/hooks/policy/check-dangerous-bash.sh`
     가 `git worktree add` block (brain 무관). path form(기존 진입) 은 허용.
 - cleanup: PR 머지 직후 또는 sprint 종료 시. `gh pr merge --delete-branch`
   는 branch 만 삭제 — worktree 디스크는 별도 정리 필요.
@@ -101,8 +101,8 @@ primary worktree 는 orchestration-only. `memory/` 와 `AGENTS.md` 같은 agent
 `scripts/`, `.claude/`, `.codex/`, `.agents/`, app source/config/manifest 는 모두
 linked worktree 에서 수정한다.
 
-`scripts/hooks/check-edit-policy.sh` 가
-`scripts/hooks/check-main-worktree-source-edit.sh` 를 호출해 Edit/Write/MultiEdit 과
+`scripts/hooks/apply/check-edit-policy.sh` 가
+`scripts/hooks/policy/check-main-worktree-source-edit.sh` 를 호출해 Edit/Write/MultiEdit 과
 obvious Bash writes(redirection, tee, sed/perl -i, cp/mv 등)를 차단한다. primary
 에서 repo 파일을 바꾸려다 막히면 우회하지 말고 worktree 를 만들고 그 안에서
 수정한다.
@@ -130,7 +130,7 @@ reflect/fix 로 되돌린다. 실패 worker 는 즉시 close 하고 dirty worktr
 - worktree 안에서 또 worktree spawn 하지 마. 동일 base repo 의 `.git/worktrees/`
   메타데이터가 중첩 시 추적 어려움.
 - `git push --force` 같은 destructive 명령은 worktree 환경 무관하게
-  `scripts/hooks/check-dangerous-bash.sh` 가 차단.
+  `scripts/hooks/policy/check-dangerous-bash.sh` 가 차단.
 
 ## 첫 turn 검증 (sprint-400)
 

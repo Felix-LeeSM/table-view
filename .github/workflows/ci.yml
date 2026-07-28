@@ -65,7 +65,7 @@ jobs:
         env:
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
           PUSH_BEFORE_SHA: ${{ github.event.before }}
-        run: bash scripts/hooks/detect-change-scope.sh
+        run: bash scripts/hooks/analyze/detect-change-scope.sh
 
   pr-body:
     name: PR Body Contract
@@ -82,10 +82,10 @@ jobs:
           node-version: 22.14.0
 
       - name: Test PR body checker
-        run: bash scripts/hooks/test-check-pr-body.sh
+        run: bash scripts/hooks/policy/test-check-pr-body.sh
 
       - name: Validate PR body
-        run: node scripts/hooks/check-pr-body.mjs
+        run: node scripts/hooks/policy/check-pr-body.mjs
 
   doc-size:
     name: Doc Size Advisory (non-blocking)
@@ -100,7 +100,7 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Check doc size
-        run: bash scripts/hooks/check-doc-size.sh
+        run: bash scripts/hooks/policy/check-doc-size.sh
 
   dependency-security:
     name: Dependency Security
@@ -142,7 +142,7 @@ jobs:
           cargo deny --version | grep -Fx "cargo-deny ${CARGO_DENY_VERSION}"
 
       - name: Dependency security summary
-        run: bash scripts/hooks/cargo-deny-summary.sh
+        run: bash scripts/hooks/apply/cargo-deny-summary.sh
 
       # Blocking gate. bans/licenses/sources are properties of *this PR's*
       # dependency set — a banned crate, disallowed license, or untrusted
@@ -721,7 +721,7 @@ jobs:
   #                   frontend-compat inventory
   #
   # This four-line list is the ONLY thing a human maintains here, and
-  # scripts/hooks/test-ci-workflow-cache.sh asserts that exactly these jobs
+  # scripts/hooks/policy/test-ci-workflow-cache.sh asserts that exactly these jobs
   # carry the docs clause — add a docs-reading check to another job and that
   # test fails. It replaces an allowlist of individual test FILES plus a drift
   # guard plus a dedicated route plus a `vitest list` universe scanner, all of

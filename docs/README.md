@@ -28,7 +28,7 @@ updated: 2026-05-28
 `quality/`, `phases/`, docs root)는 120,000 chars 분량 cap 을 둔다 — agent 가
 읽을 때 context 부하를 가두기 위함. 일회성 산출물(`sprints/`, `archives/`,
 `table_plus/`, `explorations/`)은 cap 에서 제외한다 (다시 읽을 일이 거의 없음).
-검사는 `scripts/hooks/check-doc-size.sh`. 현재 회귀 0, threshold 는 추후 ratchet.
+검사는 `scripts/hooks/policy/check-doc-size.sh`. 현재 회귀 0, threshold 는 추후 ratchet.
 
 ## 유지할 최상위 묶음
 

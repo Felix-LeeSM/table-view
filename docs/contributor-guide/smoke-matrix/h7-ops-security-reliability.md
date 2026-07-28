@@ -15,7 +15,7 @@ Current evidence:
 
 - `.github/workflows/ci.yml`
 - `.github/workflows/e2e-smoke.yml`
-- `scripts/hooks/detect-change-scope.sh`
+- `scripts/hooks/analyze/detect-change-scope.sh`
 
 Current gap / routing:
 
@@ -61,8 +61,8 @@ Current evidence:
 
 - `.github/workflows/ci.yml`
 - `.github/workflows/e2e-smoke.yml`
-- `scripts/hooks/detect-change-scope.sh`
-- `scripts/hooks/test-detect-change-scope.sh`
+- `scripts/hooks/analyze/detect-change-scope.sh`
+- `scripts/hooks/analyze/test-detect-change-scope.sh`
 - `scripts/static-policy/ci-gate-enumeration.ts`
 
 Current gap / routing:
@@ -81,7 +81,7 @@ with its doc contracts unevaluated, and #1844/#1847 merged reading
 The jobs that read docs (`frontend-shard`, `frontend`) therefore gate on
 `code_changed || docs_changed`; the `DOCS-READING JOBS` note at the end of
 `.github/workflows/ci.yml` is the list, and
-`scripts/hooks/test-ci-workflow-cache.sh` asserts that exactly those jobs carry
+`scripts/hooks/policy/test-ci-workflow-cache.sh` asserts that exactly those jobs carry
 the clause.
 
 Every change-gated job carries `needs: changes` + a fail-closed `if:`: it skips
@@ -134,10 +134,10 @@ Current evidence:
 
 - `.githooks/pre-push`
 - `lefthook.yml`
-- `scripts/hooks/pre-push-path-router.sh`
-- `scripts/hooks/test-pre-push-path-router.sh`
-- `scripts/hooks/test-generated-fences.sh`
-- `scripts/hooks/test-detect-change-scope.sh`
+- `scripts/hooks/apply/pre-push-path-router.sh`
+- `scripts/hooks/apply/test-pre-push-path-router.sh`
+- `scripts/hooks/policy/test-generated-fences.sh`
+- `scripts/hooks/analyze/test-detect-change-scope.sh`
 
 Current gap / routing:
 
@@ -146,7 +146,7 @@ routes by outgoing path. Docs-only skips TS/Rust but still runs the ratchet;
 hook/tooling-only paths run hook self-checks; frontend or Rust paths run the
 matching stack; mixed frontend+Rust routes run both stacks in parallel by
 default; CI workflow paths run workflow contract checks, which include the
-`DOCS-READING JOBS` assertion in `scripts/hooks/test-ci-workflow-cache.sh`;
+`DOCS-READING JOBS` assertion in `scripts/hooks/policy/test-ci-workflow-cache.sh`;
 root-local
 generated/cache/tmp/worktree paths are explicit non-source surfaces; unknown
 paths run full checks. The Rust route runs only the fast gates (`cargo check`,
@@ -162,7 +162,7 @@ Current evidence:
 
 - `.github/workflows/e2e-smoke.yml`
 - `scripts/e2e-smoke-ci.sh`
-- `scripts/hooks/test-e2e-smoke-workflow.sh`
+- `scripts/hooks/policy/test-e2e-smoke-workflow.sh`
 - `e2e/smoke/postgres.spec.ts`
 - `e2e/smoke/postgres-safe-mode.spec.ts`
 - `e2e/smoke/postgres-explain.spec.ts`
@@ -288,9 +288,9 @@ Current evidence:
 
 - `.github/workflows/ci.yml`
 - `src-tauri/deny.toml`
-- `scripts/hooks/cargo-deny-summary.sh`
-- `scripts/hooks/test-cargo-deny-summary.sh`
-- `scripts/hooks/pre-push-path-router.sh`
+- `scripts/hooks/apply/cargo-deny-summary.sh`
+- `scripts/hooks/apply/test-cargo-deny-summary.sh`
+- `scripts/hooks/apply/pre-push-path-router.sh`
 - `docs/archives/risks/active-risk-register-2026-05-27.md`
 
 Current gap / routing:
@@ -376,7 +376,7 @@ Current evidence:
 - `.github/workflows/platform-smoke-canary.yml`
 - `.github/workflows/e2e-smoke.yml`
 - `.github/workflows/ci.yml`
-- `scripts/hooks/test-platform-smoke-canary-workflow.sh`
+- `scripts/hooks/policy/test-platform-smoke-canary-workflow.sh`
 
 Current gap / routing:
 

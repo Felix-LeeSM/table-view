@@ -32,7 +32,7 @@ Claude Code / Codex / Cursor 모두 본 파일 1번 read. 본문 lazy, 작업 �
   보안 결정도 `grill-with-memory` skill 의 보안 결정 섹션을 따른다.
 - ADR 동결. 결정 뒤집기 = 새 ADR + `Superseded`.
 - git/hook 회피 금지: 대표 예 `--no-verify` / force-push — 전체 차단 목록은 hook
-  `scripts/hooks/check-dangerous-bash.sh` 가 SOT. `memory/workflow/git-policy/memory.md` (`.claude/rules/git-policy.md` wrapper).
+  `scripts/hooks/policy/check-dangerous-bash.sh` 가 SOT. `memory/workflow/git-policy/memory.md` (`.claude/rules/git-policy.md` wrapper).
 - primary worktree 는 orchestration-only: `AGENTS.md` / `memory/*` 외 편집 금지,
   소스는 linked worktree (`scripts/worktree-spawn.sh`) 에서. `memory/runbook/worktree/memory.md`.
 - 대화 결정은 `remember` skill.
