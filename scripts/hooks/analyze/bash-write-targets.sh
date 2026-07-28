@@ -376,6 +376,8 @@ paths_from_command_tokens() {
 	# starting directory.
 	CMD_CWD="$BASH_WRITE_TARGETS_CWD"
 	local at_cmd_start=1 expect_cd=0 expect_git=0 expect_git_c=0 git_c=""
+	# Previous token, for the subcommand-host blacklist below (`docker rm`).
+	local prev_word=""
 	# Overrides CMD_CWD for the operands of the current verb only (`git -C <dir>
 	# rm <paths>`). Cleared by reset_mode with the verb it belongs to.
 	MODE_CWD=""
@@ -408,6 +410,15 @@ paths_from_command_tokens() {
 			# position — the word after them is still a command. Without this,
 			# `{ rm x; }`, `if true; then rm x; fi` and `for f in a; do rm x; done`
 			# all hid the verb, and the write was released.
+			"&")
+				# A lone `&` backgrounds the command before it; it is a separator,
+				# not a token. Emitted as a path it became `<cwd>/&`.
+				reset_mode
+				expect_redir=0
+				at_cmd_start=1
+				prev_word=""
+				continue
+				;;
 			"{" | "}" | "(" | ")" | "then" | "else" | "elif" | "do" | "done" | "fi" | "esac" | "!")
 				at_cmd_start=1
 				continue
@@ -423,6 +434,7 @@ paths_from_command_tokens() {
 				expect_git=0
 				expect_git_c=0
 				git_c=""
+				prev_word=""
 				continue
 				;;
 		esac
@@ -517,7 +529,6 @@ paths_from_command_tokens() {
 			continue
 		fi
 
-		local was_cmd_start="$at_cmd_start"
 		at_cmd_start=0
 
 		# A `~` sitting immediately inside a quote is literal for the shell:
@@ -635,20 +646,33 @@ paths_from_command_tokens() {
 				;;
 		esac
 
-		# Write verbs are recognised in COMMAND POSITION only. Matching them
-		# anywhere made a subcommand of the same name switch on operand mode:
-		# `docker rm -f tv-probe-mssql` put the container name into all-targets mode
-		# and denied it as a repo path. `git rm` is a real deletion and is handled
-		# explicitly above, before this table.
+		# Write verbs are recognised WHEREVER they appear, with one exception below.
 		#
-		# Ceiling: an indirected verb (`xargs rm`, `sudo rm`, `find -exec rm`) is no
-		# longer in command position and is not inspected. That is a deliberate
-		# narrowing of a best-effort careless-write layer — `rm -rf`, dd and
-		# force-push stay covered by check-dangerous-bash.sh.
+		# The reverse — recognising them in command position only — was tried and
+		# reverted. It started as a fix for one false positive (`docker rm -f
+		# <container>` reading the container name as a repo path) and it worked, but
+		# the set of things that can precede a verb without being one is open:
+		# wrappers (`env`, `env -i`, `time`, `nohup`, `nice`, `ionice`, `sudo`,
+		# `timeout`, `setsid`, `stdbuf`, `command -p`, `exec -a`), keywords (`then`,
+		# `do`, `while`, `until`, `case`, `coproc`), indirection (`xargs`, `find
+		# -exec`, `eval`, command substitution), and any option spelling of the
+		# wrappers already listed. Two review rounds enumerated 29 more each time
+		# after the previous round's list was patched. A whitelist of transparent
+		# prefixes cannot close that; every gap silently RELEASES a real deletion.
+		#
+		# So the polarity is inverted: recognise everywhere, and carry a bounded
+		# blacklist of commands that take a same-named SUBCOMMAND. Being wrong here
+		# costs a false allow for those tools only — and none of them write repo
+		# files — whereas being wrong the other way costs a lost source file.
+		case "$(trim_token "$prev_word")" in
+			docker | podman | nerdctl | kubectl | oc | helm | flatpak | snap)
+				prev_word="$word"
+				continue
+				;;
+		esac
+		prev_word="$word"
+
 		base="${word##*/}"
-		if [ "$was_cmd_start" != "1" ]; then
-			base=""
-		fi
 		case "$base" in
 			tee)
 				reset_mode

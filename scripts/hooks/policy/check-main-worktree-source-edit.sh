@@ -5,8 +5,9 @@
 # Layer boundary. Reading a bash command for write targets is NOT done here —
 # `analyze/bash-write-targets.sh` answers "which paths does this write?" with no
 # knowledge of this repository, and this file answers "may that path be written
-# from here?" with no knowledge of shell syntax. The 293 recorded false denials
-# this guard used to produce were all analyzer defects wearing a policy message.
+# from here?" with no knowledge of shell syntax. Most of the denials this guard
+# used to produce were analyzer defects wearing a policy message; of 293 replayed,
+# 273 were released by fixing the reader and the remainder include real blocks.
 
 set -euo pipefail
 
@@ -198,11 +199,16 @@ collect_created_dirs() {
 			esac
 		done
 	done < <(
-		# Split on command separators, then take the operands of each `mkdir`.
+		# Split on command separators, then take the operands of each directory
+		# creator. `install -d` makes directories exactly like `mkdir -p`, and
+		# leaving it out let `install -d a/b && echo x > a/b/x.ts` through.
 		printf '%s' "$COMMAND" | tr ';&|' '\n\n\n' | awk '
 			{
 				for (i = 1; i <= NF; i++) {
-					if ($i != "mkdir") continue
+					if ($i == "mkdir") { creator = 1 }
+					else if ($i == "install") { creator = 0; for (k = i + 1; k <= NF; k++) if ($k ~ /^-[a-zA-Z]*d/) creator = 1 }
+					else { continue }
+					if (!creator) continue
 					for (j = i + 1; j <= NF; j++) {
 						if (substr($j, 1, 1) == "-") continue
 						print $j

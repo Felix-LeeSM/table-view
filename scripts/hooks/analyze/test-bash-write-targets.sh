@@ -67,17 +67,46 @@ expect "verb: git rm" "./a.ts" "git rm a.ts"
 expect "verb: git mv takes both operands" "./a.ts,./b.ts" "git mv a.ts b.ts"
 expect "verb: git status is not a write" "" "git status --short"
 
-# A verb out of command position is a subcommand, not a write.
-expect "position: docker rm is not a write" "" "docker rm -f tv-probe-mssql"
-# …but a wrapper or keyword does not consume the command position. Each of these
-# hid a verb and released a real write until #1860 review caught them.
-expect "position: env assignment prefix is transparent" "./a.ts" "env FOO=1 rm a.ts"
-expect "position: bare assignment prefix is transparent" "./a.ts" "FOO=1 rm a.ts"
-expect "position: time is transparent" "./a.ts" "time rm a.ts"
-expect "position: nohup is transparent" "./a.ts" "nohup rm a.ts"
-expect "position: brace group does not consume it" "./a.ts" "{ rm a.ts; }"
-expect "position: then does not consume it" "./a.ts" "if true; then rm a.ts; fi"
-expect "position: do does not consume it" "./a.ts" "for f in x; do rm a.ts; done"
+# A verb that is a SUBCOMMAND of a known host is not a write. That host list is
+# the only exception to "recognise verbs anywhere" — see the blacklist rationale
+# in bash-write-targets.sh. It is deliberately short and its failure mode is a
+# false allow for container tooling, which does not write repo files.
+expect "host: docker rm is a subcommand, not a write" "" "docker rm -f tv-probe-mssql"
+expect "host: podman rm is a subcommand" "" "podman rm -f probe"
+expect "host: kubectl rm-shaped argument is not a write" "" "kubectl delete pod rm"
+
+# Everything that can precede a verb without being one. Recognising verbs in
+# command position only made each of these hide the verb and release a real
+# deletion — two review rounds enumerated 29 more each time the previous list was
+# patched, which is why the polarity was inverted instead.
+expect "wrapper: env assignment" "./a.ts" "env FOO=1 rm a.ts"
+expect "wrapper: env -i" "./a.ts" "env -i rm a.ts"
+expect "wrapper: env -u" "./a.ts" "env -u FOO rm a.ts"
+expect "wrapper: bare assignment" "./a.ts" "FOO=1 rm a.ts"
+expect "wrapper: time" "./a.ts" "time rm a.ts"
+expect "wrapper: nohup" "./a.ts" "nohup rm a.ts"
+expect "wrapper: nice" "./a.ts" "nice rm a.ts"
+expect "wrapper: ionice" "./a.ts" "ionice -c3 rm a.ts"
+expect "wrapper: sudo" "./a.ts" "sudo rm a.ts"
+expect "wrapper: timeout" "./a.ts" "timeout 5 rm a.ts"
+expect "wrapper: setsid" "./a.ts" "setsid rm a.ts"
+expect "wrapper: stdbuf" "./a.ts" "stdbuf -oL rm a.ts"
+expect "wrapper: command -p" "./a.ts" "command -p rm a.ts"
+expect "wrapper: exec -a" "./a.ts" "exec -a x rm a.ts"
+expect "wrapper: xargs" "./a.ts" "xargs rm a.ts"
+# find's `\;` terminator is emitted alongside the real target, like a sed
+# expression: this reader cannot tell it from a filename, and the caller's
+# existence gate removes it (`./\` names no directory).
+expect "wrapper: find -exec" './\,./a.ts' 'find . -name x -exec rm a.ts \;'
+expect "keyword: brace group" "./a.ts" "{ rm a.ts; }"
+expect "keyword: subshell" "./a.ts" "( rm a.ts )"
+expect "keyword: if condition" "./a.ts" "if rm a.ts; then echo y; fi"
+expect "keyword: then branch" "./a.ts" "if true; then rm a.ts; fi"
+expect "keyword: while condition" "./a.ts" "while rm a.ts; do break; done"
+expect "keyword: until condition" "./a.ts" "until rm a.ts; do break; done"
+expect "keyword: for body" "./a.ts" "for f in x; do rm a.ts; done"
+expect "keyword: case body" "./a.ts" "case x in x) rm a.ts;; esac"
+expect "background: trailing ampersand" "./a.ts" "echo a && rm a.ts &"
 expect "position: verb after a separator is a verb" "./a.ts" "echo x; rm a.ts"
 expect "position: verb on the next line is a verb" "./a.ts" "$(printf 'echo x\nrm a.ts\n')"
 

@@ -471,7 +471,10 @@ run_case "main command: apply_patch checks patch markers only" 0 main-command "$
 mixed_patch_shell_input="$(printf 'printf patch_marker <<EOF\n*** Update File: memory/foo/memory.md\nEOF\nprintf hi > src/App.tsx\n')"
 run_case "main command: patch marker plus source write blocked" 1 main-command "$mixed_patch_shell_input"
 
-# --- Orchestration false positives (293 recorded denials, precision 12/293) ---
+# --- Orchestration false positives, drawn from 293 recorded denials -----------
+# Replaying those 293 through the current guard releases 273 and still denies 20;
+# the denied remainder is a mix of real blocks and residual reader artifacts. The
+# cases below are the shapes that mattered, pinned so they cannot come back.
 #
 # Three independent causes, each with its own layer. Every case below was an
 # ACTUAL blocked orchestration command taken from session transcripts.

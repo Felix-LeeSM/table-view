@@ -28,15 +28,21 @@ command_may_write() {
 		*'>'* | *' tee '* | *' dd '* | *'sed -i'* | *'perl -'*'i'* | \
 			*' rm '* | *' rm -'* | *' mv '* | *' cp '* | *' touch '* | \
 			*' mkdir '* | *' truncate '* | *' install '* | *'git rm'* | \
-			*'git mv'* | *'git apply'* | *'git checkout'* | *'git restore'* | \
-			*'apply_patch'* | *'npm '* | *'pnpm '* | *'cargo '* | *'npx '* | \
-			*'python'* | *'node '* | *'>>'*)
+			*'git mv'* | *'git apply'* | *'git restore'* | *'git checkout'* | \
+			*'apply_patch'*)
 			return 0
 			;;
 		rm\ * | mv\ * | cp\ * | touch\ * | mkdir\ * | tee\ * | dd\ * | sed\ * | perl\ *)
 			return 0
 			;;
 	esac
+	# Build and script runners (`cargo test`, `npm run build`, `npx tsc`,
+	# `python3 -c`, `node -e`) are deliberately NOT here. They were, and review
+	# #1860 measured the consequence: `cargo test` reached this function, git
+	# reported the tree the developer had been editing by hand, and prettier
+	# rewrote a file that command never touched. They mostly write build outputs
+	# rather than sources, so the cost of excluding them is a missed format on a
+	# generated file — against rewriting someone's work in progress.
 	return 1
 }
 

@@ -71,6 +71,17 @@ if [ -z "$out" ]; then
 else
 	no "읽기 전용 파이프라인도 건드리지 않는다" "출력=[$out]"
 fi
+# 빌드/스크립트 러너도 제외 대상이다 — review #1860 실측에서 `cargo test` 가
+# prefilter 를 통과해, 그 명령이 건드리지도 않은 사용자 편집 파일에 prettier 가
+# 돌았다. 소스가 아니라 빌드 산출물을 쓰는 쪽이라 제외 비용이 더 싸다.
+for c in "cargo test" "npm run build" "npx tsc --noEmit" "python3 -c \"print(1)\"" "node -e 1"; do
+	out="$(run_hook "{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"$c\"}}")"
+	if [ -z "$out" ]; then
+		ok "빌드 러너는 dirty 파일을 건드리지 않는다: $c"
+	else
+		no "빌드 러너는 dirty 파일을 건드리지 않는다: $c" "출력=[$out]"
+	fi
+done
 
 # ── 오래된 dirty 파일은 이 명령의 결과가 아니다 ──────────────────────────────
 printf 'stale\n' > "$FIX/docs/stale.md"

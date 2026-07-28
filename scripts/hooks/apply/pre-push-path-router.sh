@@ -260,8 +260,15 @@ scripts/worktree-cleanup.sh
 scripts/worktree-bootstrap-deps.sh
 scripts/prune-gh-caches.sh
 EOF
-		# A silently empty list would report green forever.
-		[ "$count" -ge 60 ] || { echo "hook-shell-syntax: only $count files checked" >&2; status=1; }
+		# A silently shrinking list would report green forever. A fixed floor left
+		# slack — 60 against 77 actual meant a whole layer could vanish unnoticed —
+		# so compare against the live count instead: the tracked hook scripts plus
+		# the 9 fixed entries listed above.
+		expected=$(( $(git ls-files "scripts/hooks/*.sh" "scripts/hooks/**/*.sh" | wc -l) + 9 ))
+		[ "$count" -eq "$expected" ] || {
+			echo "hook-shell-syntax: checked $count files, expected $expected" >&2
+			status=1
+		}
 		exit $status
 	'
 	run_step "detect-change-scope" bash scripts/hooks/analyze/test-detect-change-scope.sh
