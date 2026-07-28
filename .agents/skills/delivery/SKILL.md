@@ -44,9 +44,21 @@ T0~T7 오케스트레이션 절차 SOT 다. 행동 계약(ownership / 중단 조
    - soft backstop: `gh pr create` 직후 PostToolUse 리마인더 훅
      (`scripts/hooks/apply/pr-create-reminder.sh`)이 이 단계를 상기시킨다. block 아님.
    - 외부 옵션: 사용자가 "codex 리뷰도 받아" → `codex-reviewer` 추가(자동 X).
-5. **T5 Reflect/Fix** — 결함 발견 시 delivery owner 가 fix commit + push → T4
-   재시작. push(synchronize)는 `review-gate` 가 `review:approved` 를 자동 해제 —
-   재리뷰 필수.
+5. **T5 Reflect/Fix** — 라운드 단위는 commit 이 아니라 push 다 (`review-gate` 가
+   synchronize 마다 승인 해제) — 한 라운드의 fix 는 전부 반영한 뒤 한 번만 push.
+   **Reflect** — fix 착수 전 아래 중 하나면 fix 를 멈춘다. delivery owner 가
+   재단다(리뷰어 판정을 기다리지 않는다).
+   - 라운드 3 이상 — `review-gate` 가 세어서 머지를 막는다.
+   - 이전 라운드에서 고친 유형이 다시 나옴.
+   - reviewer 가 verdict 대신 사이클을 보고(pr-review 원칙 3).
+
+   멈추면 재발 유형 / 라운드별 건수 / 시도한 것을 사용자에게 올린다. 같은
+   유형에 fix 를 더 쌓지 않는다. 재설계 여부는 사용자 결정이고, 진행 승인은
+   `reflect:done` label 로 표시한다.
+
+   **Fix** — 그 외. reviewer 가 전수 명령을 첨부했으면 그 출력이 0 이 될
+   때까지 고치고 출력을 증거로 낸다(원칙 2). 반영 후 T4 재시작 — 재리뷰 범위는
+   이전 라운드 blocking 의 해소 여부다(원칙 3).
 6. **T6 Merge or Blocked report** — 자율 머지 조건 모두 충족 시
    `gh pr merge --squash --delete-branch` 자율 실행:
    - 정성 차원에 blocking 없음 (pr-review Verdict 원칙 1 기준)
@@ -67,7 +79,8 @@ T0~T7 오케스트레이션 절차 SOT 다. 행동 계약(ownership / 중단 조
 
 - 중단 조건(사용자 확인 / 별도 절차 필요) 도달 시 즉시 중단·보고: agent path 의
   `git push --force` / `--force-with-lease`, main 직접 push, `gh pr merge` 의
-  squash/merge/rebase 정책 미명시, 사용자 명시 거부("commit 하지 마" 등).
+  squash/merge/rebase 정책 미명시, T5 reflect 트리거, 사용자 명시
+  거부("commit 하지 마" 등).
 - hook 회피 금지: `--no-verify` / `--no-gpg-sign` / `LEFTHOOK=0` 등
   (`.claude/rules/git-policy.md`). hook 실패는 근본 fix. GPG signing pinentry
   timeout 시 즉시 중단, unsigned commit 으로 진행하지 않는다.
