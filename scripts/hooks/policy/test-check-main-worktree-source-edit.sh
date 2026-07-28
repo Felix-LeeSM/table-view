@@ -598,6 +598,11 @@ run_case "mkdir then write into the new directory is blocked" 1 main-command \
 	"mkdir -p src/newdir/deeper && echo x > src/newdir/deeper/thing.ts"
 run_case "mkdir outside the repo then write there is allowed" 0 main-command \
 	"mkdir -p /tmp/scratchdir && echo x > /tmp/scratchdir/thing.ts"
+# `install` creates directories too — `-d`, `-D` and `--directory` all do.
+run_case "install -d then write into the new directory is blocked" 1 main-command \
+	"install -d src/newdir2 && echo x > src/newdir2/thing.ts"
+run_case "install -D then write into the new directory is blocked" 1 main-command \
+	"install -D src/newdir3/thing.ts src/newdir3/other.ts && echo x > src/newdir3/z.ts"
 
 run_case "unknown cwd: reset by a separator" 1 main-command \
 	'W=/somewhere/else; cd "$W"; rm x.txt; cd '"$MAIN_ROOT"'; rm src/lib/sql/wasm/loader.ts'

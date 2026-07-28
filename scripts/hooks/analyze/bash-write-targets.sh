@@ -378,6 +378,7 @@ paths_from_command_tokens() {
 	local at_cmd_start=1 expect_cd=0 expect_git=0 expect_git_c=0 git_c=""
 	# Previous token, for the subcommand-host blacklist below (`docker rm`).
 	local prev_word=""
+	local prev_was_cmd_start=0
 	# Overrides CMD_CWD for the operands of the current verb only (`git -C <dir>
 	# rm <paths>`). Cleared by reset_mode with the verb it belongs to.
 	MODE_CWD=""
@@ -412,11 +413,19 @@ paths_from_command_tokens() {
 			# all hid the verb, and the write was released.
 			"&")
 				# A lone `&` backgrounds the command before it; it is a separator,
-				# not a token. Emitted as a path it became `<cwd>/&`.
+				# not a token. Emitted as a path it became `<cwd>/&`. It must reset
+				# the same state as `;` — resetting only part of it left `cd & rm x`
+				# and `git -C & rm x` waiting for an operand that never came, and the
+				# write was released.
 				reset_mode
 				expect_redir=0
 				at_cmd_start=1
+				expect_cd=0
+				expect_git=0
+				expect_git_c=0
+				git_c=""
 				prev_word=""
+				prev_was_cmd_start=0
 				continue
 				;;
 			"{" | "}" | "(" | ")" | "then" | "else" | "elif" | "do" | "done" | "fi" | "esac" | "!")
@@ -435,6 +444,7 @@ paths_from_command_tokens() {
 				expect_git_c=0
 				git_c=""
 				prev_word=""
+				prev_was_cmd_start=0
 				continue
 				;;
 		esac
@@ -523,6 +533,7 @@ paths_from_command_tokens() {
 				*) expect_git=0 ;;
 			esac
 		fi
+		local was_cmd_start="$at_cmd_start"
 		if [ "$at_cmd_start" = "1" ] && [ "${word##*/}" = "git" ]; then
 			expect_git=1
 			at_cmd_start=0
@@ -662,15 +673,25 @@ paths_from_command_tokens() {
 		#
 		# So the polarity is inverted: recognise everywhere, and carry a bounded
 		# blacklist of commands that take a same-named SUBCOMMAND. Being wrong here
-		# costs a false allow for those tools only — and none of them write repo
-		# files — whereas being wrong the other way costs a lost source file.
-		case "$(trim_token "$prev_word")" in
-			docker | podman | nerdctl | kubectl | oc | helm | flatpak | snap)
-				prev_word="$word"
-				continue
-				;;
-		esac
+		# costs a false allow for one word after those tools; being wrong the other
+		# way costs a lost source file. (`docker cp` and `kubectl cp` DO write to
+		# the host — the exemption is one word wide, so the destination operand
+		# after them is still judged.)
+		#
+		# The host must be in COMMAND position. Matching it as a bare previous token
+		# meant a host NAME used as an operand disarmed the next word:
+		# `cp docker <root>/src/App.tsx` released the destination.
+		if [ "$prev_was_cmd_start" = "1" ]; then
+			case "$(trim_token "$prev_word")" in
+				docker | podman | nerdctl | kubectl | oc | helm | flatpak | snap)
+					prev_word="$word"
+					prev_was_cmd_start=0
+					continue
+					;;
+			esac
+		fi
 		prev_word="$word"
+		prev_was_cmd_start="$was_cmd_start"
 
 		base="${word##*/}"
 		case "$base" in

@@ -17,8 +17,9 @@ A script belongs to exactly one layer, named by the question it answers:
 Why: `check-main-worktree-source-edit.sh` was 892 lines doing analysis and
 policy at once, and most of its recorded denials were reader defects wearing a
 policy message — indistinguishable from a real block, because the only
-observable was "denied". (Of 293 replayed denials, 277 were released by fixing
-the reader; the rest include genuine blocks.) Splitting the two made the reader
+observable was "denied". (Of 293 replayed denials, 273 were released by fixing
+the reader; the 20 that remain mix genuine blocks with residual artifacts.)
+Splitting the two made the reader
 directly testable — `analyze/test-bash-write-targets.sh` asks "which paths?",
 never "denied?".
 

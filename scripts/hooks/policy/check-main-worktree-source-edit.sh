@@ -206,7 +206,14 @@ collect_created_dirs() {
 			{
 				for (i = 1; i <= NF; i++) {
 					if ($i == "mkdir") { creator = 1 }
-					else if ($i == "install") { creator = 0; for (k = i + 1; k <= NF; k++) if ($k ~ /^-[a-zA-Z]*d/) creator = 1 }
+					else if ($i == "install") {
+						# `-d`, `-Dd`, `--directory`, and `-D` (which creates the
+						# DESTINATION s parents). A `[a-zA-Z]*d` class missed `-D`
+						# and the long form.
+						creator = 0
+						for (k = i + 1; k <= NF; k++)
+							if ($k ~ /^-[a-zA-Z]*[dD]/ || $k == "--directory") creator = 1
+					}
 					else { continue }
 					if (!creator) continue
 					for (j = i + 1; j <= NF; j++) {
@@ -226,7 +233,7 @@ check_path() {
 		"$UNSURE_PREFIX"*)
 			# The analyzer could not establish the command's directory (`cd "$W"`).
 			# It anchored the target at the repo root as the conservative guess.
-			# Blocking every such guess reproduced 101 of the 293 recorded false
+			# Blocking every such guess reproduced 101 of the 293 recorded
 			# denials — the variable held a linked worktree or a scratch dir every
 			# recorded time. Blocking none of them released a real repo write when
 			# the destination happened to BE the root (`cd "$PWD"`, `cd ""`).

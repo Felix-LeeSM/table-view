@@ -260,13 +260,19 @@ scripts/worktree-cleanup.sh
 scripts/worktree-bootstrap-deps.sh
 scripts/prune-gh-caches.sh
 EOF
-		# A silently shrinking list would report green forever. A fixed floor left
-		# slack — 60 against 77 actual meant a whole layer could vanish unnoticed —
-		# so compare against the live count instead: the tracked hook scripts plus
-		# the 9 fixed entries listed above.
-		expected=$(( $(git ls-files "scripts/hooks/*.sh" "scripts/hooks/**/*.sh" | wc -l) + 9 ))
-		[ "$count" -eq "$expected" ] || {
-			echo "hook-shell-syntax: checked $count files, expected $expected" >&2
+		# A silently shrinking list would report green forever. Two independent
+		# checks, because either alone is defeatable: an exact match against the
+		# live count catches a partial loss, and an absolute floor catches the case
+		# where the list itself is empty (both sides derive from the same
+		# `git ls-files`, so `0 + 9 == 9` would otherwise pass with every hook
+		# script deleted).
+		tracked=$(git ls-files "scripts/hooks/*.sh" "scripts/hooks/**/*.sh" | wc -l)
+		[ "$count" -eq $((tracked + 9)) ] || {
+			echo "hook-shell-syntax: checked $count files, expected $((tracked + 9))" >&2
+			status=1
+		}
+		[ "$tracked" -ge 40 ] || {
+			echo "hook-shell-syntax: only $tracked hook scripts tracked, expected >= 40" >&2
 			status=1
 		}
 		exit $status
