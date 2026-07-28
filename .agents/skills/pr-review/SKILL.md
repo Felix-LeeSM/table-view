@@ -201,7 +201,7 @@ read-only로 직접 확인한다.
 첨부한다.
 
 1. 기존 열거 기계가 커버하면 그것을 쓴다 — `pnpm docs:links`, `pnpm lint`,
-   `scripts/check-memory-paths.ts`, `scripts/static-policy/*`. 출력이 곧 모집단이고
+   `scripts/check-memory-paths.ts`, `scripts/static-policy/*`. 출력이 곧 대상 전체이고
    선언 기반이라 정당한 hit이 섞이지 않는다.
 2. 커버하지 않으면 `rg`를 쓴다. 이건 갭 신호이므로 이슈 후보로 기록한다. 정당한
    hit은 명령 안에서 제외한다. 산문 예외 목록은 금지한다.
