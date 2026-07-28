@@ -381,4 +381,21 @@ assert_contains "$delete_output" "RUN ts-test:" "delete frontend"
 # Deleting a path triggers the reverse code->memory citation gate (issue #1032).
 assert_contains "$delete_output" "RUN memory-paths:" "delete frontend"
 
+# A suite that nothing runs cannot go red, so whatever it guards is unguarded.
+# Four sat in the tree in exactly that state — `bash -n` proved they parse and
+# nothing executed them. #1862 found one of them by hand and wired it; the other
+# three survived that sweep, and one of those builds fixture repositories, which
+# is the failure this repository has already paid for. Finding them by hand is
+# what failed, so compare the router's own `run_step` lines against the tracked
+# suites instead. Deliberately reading the router as text: the point is to catch
+# a suite that is never named there, which running the router cannot show.
+unwired="$(comm -23 \
+	<(git -C "$ROOT" ls-files 'scripts/hooks/**/test-*.sh' 'scripts/test-*.sh' | sort) \
+	<(grep -o 'run_step "[^"]*" bash [^ ]*\.sh' "$ROUTER" | awk '{print $NF}' | sort -u))"
+[ -z "$unwired" ] || {
+	echo "FAIL: suites the router never runs:" >&2
+	printf '  %s\n' $unwired >&2
+	exit 1
+}
+
 echo "PASS: pre-push path router smoke check"
