@@ -185,6 +185,11 @@ expect "subshell: a pipeline stage does not move the parent" "./a.ts" "cd /elsew
 # directory here would re-anchor the write at the repo root and block it.
 expect "subshell: a cd before the pipeline survives it" "/elsewhere/log.txt" \
 	"cd /elsewhere && ls | tee log.txt"
+# Popping the anchor has to move the PIPELINE anchor with it. Leaving that one
+# line out kept the anchor pointing inside the closed subshell, and a pipeline
+# after it reverted the cwd to there.
+expect "subshell: a pipeline after ) reverts outside it, not inside" "/a/f" \
+	"cd /a && ( cd /b ; ls ) | tee f"
 # `||` is a logical OR, not two pipes. The tokenizer emitted `|` per character,
 # so `cd "$W" || exit 1` looked like a pipeline and lost the unknown directory.
 expect "subshell: || is not a pipeline" "/elsewhere/a.ts" "cd /elsewhere || exit 1; rm a.ts"

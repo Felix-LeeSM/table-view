@@ -456,20 +456,22 @@ paths_from_command_tokens() {
 	# `(`/`)` push and pop the anchor, `|` reverts, and `&` drops back to the
 	# base directory.
 	#
-	# `|` reverts to the last SEPARATOR, which is where its pipeline starts only
-	# when the first stage is a simple command. That covers `cd /x | cat` and
-	# leaves `cd /x && ls | grep y` alone, but a compound first stage still
-	# leaks: `{ cd /elsewhere ; } | tee a.ts` reports `/elsewhere/a.ts` where
-	# bash writes at the starting directory, because the `;` inside the braces
-	# moved the anchor.
+	# Two constructs still leak a `cd` outward, and BOTH fail open — the write
+	# is reported inside the construct while bash performs it at the starting
+	# directory, so a delete there is released:
 	#
-	# A `cd` inside `$( … )` leaks the same way and this one fails OPEN:
-	# `echo $( ls ; cd /wt ) ; rm src/App.tsx` reports `/wt/src/App.tsx`, so a
-	# delete at the starting directory is released. The substitution's parens
-	# are absorbed into the word (that is what keeps `/tmp/a/$(dirname $f)` in
-	# one piece), so nothing pops the anchor back.
+	#   `{ cd /elsewhere ; } | tee a.ts`        reports `/elsewhere/a.ts`
+	#   `echo $( ls ; cd /wt ) ; rm src/App.tsx`  reports `/wt/src/App.tsx`
 	#
-	# Neither is a regression — both predate this anchor and behave the same on
+	# The first is a compound pipeline stage: `|` reverts to the last SEPARATOR,
+	# which is where the pipeline starts only when the first stage is a simple
+	# command, and the `;` inside the braces moved the anchor. That much still
+	# covers `cd /x | cat` and leaves `cd /x && ls | grep y` alone. The second
+	# is a command substitution, whose parens are absorbed into the word — the
+	# same rule that keeps `/tmp/a/$(dirname $f)` in one piece — so nothing pops
+	# the anchor back.
+	#
+	# Neither is a regression: both predate this anchor and behave the same on
 	# the previous revision, and neither spelling appears in the recorded
 	# corpus. They are stated as ceilings rather than closed because each
 	# additional shell spelling closed here has cost a review round and opened
