@@ -7,12 +7,9 @@
 
 set -uo pipefail
 
-# See policy/test-check-main-worktree-source-edit.sh: git's hook env (GIT_DIR and
-# friends) overrides `git -C`, so a fixture repo created below would be operated
-# on the OUTER repository instead. Cut the inheritance here so the suite is
-# correct however it is invoked.
-# shellcheck disable=SC2046
-unset $(git rev-parse --local-env-vars) 2>/dev/null || true
+# shellcheck source=../lib/git-fixture.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../lib" && pwd)/git-fixture.sh"
+scrub_git_env
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 HOOK="$SCRIPT_DIR/post-tool-use.sh"
@@ -28,13 +25,10 @@ no() {
 	printf 'FAIL  %s\n  %s\n' "$1" "$2"
 }
 
-FIX="$(mktemp -d)"
+FIX="$(fixture_mktemp)"
 trap 'rm -rf "$FIX"' EXIT
 
-git init -q "$FIX"
-git -C "$FIX" config user.email t@e.x
-git -C "$FIX" config user.name t
-git -C "$FIX" config commit.gpgsign false
+fixture_init_repo "$FIX"
 mkdir -p "$FIX/docs" "$FIX/src"
 printf 'seed\n' > "$FIX/README.md"
 git -C "$FIX" add -A

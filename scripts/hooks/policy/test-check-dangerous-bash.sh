@@ -13,12 +13,9 @@
 
 set -uo pipefail
 
-# See policy/test-check-main-worktree-source-edit.sh: git's hook env (GIT_DIR and
-# friends) overrides `git -C`, so a fixture repo created below would be operated
-# on the OUTER repository instead. Cut the inheritance here so the suite is
-# correct however it is invoked.
-# shellcheck disable=SC2046
-unset $(git rev-parse --local-env-vars) 2>/dev/null || true
+# shellcheck source=../lib/git-fixture.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../lib" && pwd)/git-fixture.sh"
+scrub_git_env
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 HOOK="$SCRIPT_DIR/check-dangerous-bash.sh"
@@ -44,9 +41,9 @@ fi
 # Only those four move. The rest must stay in the real repository because they
 # assert against real paths (`.env.example`, `scripts/worktree-spawn.sh`, source
 # files to grep) — a blanket `cd` into the fixture broke 19 of them.
-FIXTURE_REPO="$(mktemp -d "${TMPDIR:-/tmp}/dangerous-bash-fixture.XXXXXX")"
+FIXTURE_REPO="$(fixture_mktemp dangerous-bash-fixture)"
 cleanup_fixture_repo() { rm -rf "$FIXTURE_REPO"; }
-git init -q "$FIXTURE_REPO"
+fixture_init_repo "$FIXTURE_REPO"
 mkdir -p "$FIXTURE_REPO/.githooks"
 for _h in pre-commit pre-push commit-msg post-checkout post-merge prepare-commit-msg; do
   printf '#!/usr/bin/env bash\nexit 0\n' > "$FIXTURE_REPO/.githooks/$_h"

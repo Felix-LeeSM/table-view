@@ -3,14 +3,14 @@
 
 set -euo pipefail
 
+# shellcheck source=../lib/git-fixture.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../lib" && pwd)/git-fixture.sh"
+scrub_git_env
+
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 CHECKER="$ROOT/scripts/check-coverage-ratchet.ts"
-TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/coverage-ratchet-check.XXXXXX")"
+TMP_DIR="$(fixture_mktemp coverage-ratchet-check)"
 trap 'rm -rf "$TMP_DIR"' EXIT
-
-while read -r git_env_var; do
-	[ -n "$git_env_var" ] && unset "$git_env_var"
-done < <(git -C "$ROOT" rev-parse --local-env-vars)
 
 assert_contains() {
 	local text="$1"
@@ -223,10 +223,7 @@ init_repo() {
 	local repo="$1"
 
 	mkdir -p "$repo"
-	git -C "$repo" init --quiet
-	git -C "$repo" config user.name "Test User"
-	git -C "$repo" config user.email "test@example.invalid"
-	git -C "$repo" config commit.gpgsign false
+	fixture_init_repo "$repo"
 	mkdir -p "$repo/.no-hooks"
 	git -C "$repo" config core.hooksPath .no-hooks
 	write_threshold_sources "$repo"
