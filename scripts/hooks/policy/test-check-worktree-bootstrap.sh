@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# See test-check-main-worktree-source-edit.sh: git's hook env (GIT_DIR and
+# friends) overrides `git -C`, so the fixture repo below would be operated on the
+# outer repository — and `git rev-parse --show-toplevel` on the next line would
+# resolve against the injected GIT_DIR rather than this checkout.
+# shellcheck disable=SC2046
+unset $(git rev-parse --local-env-vars) 2>/dev/null || true
+
 ROOT="$(git rev-parse --show-toplevel)"
 HOOK="$ROOT/scripts/hooks/policy/check-worktree-bootstrap.sh"
 TMP_DIR="$(mktemp -d)"

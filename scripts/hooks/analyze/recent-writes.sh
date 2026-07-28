@@ -33,7 +33,14 @@ recent_writes() {
 	# `--untracked-files=all`, not the default `normal`: normal collapses a wholly
 	# untracked directory to `docs/`, which is not a file, so the first file
 	# written into a new directory was dropped.
-	git -C "$root" status --porcelain --untracked-files=all 2>/dev/null |
+	#
+	# `--no-optional-locks` because this runs after EVERY Bash tool call. Plain
+	# `git status` takes index.lock to write back refreshed stat info, which
+	# collides with the agent's own next git command — observed as
+	# "Unable to create index.lock: File exists" on a `git add` issued
+	# immediately after the previous command's hook. A read-only observer must
+	# not contend for the index of the repository it is observing.
+	git -C "$root" --no-optional-locks status --porcelain --untracked-files=all 2>/dev/null |
 		while IFS= read -r line; do
 			local rel abs
 			rel="${line:3}"

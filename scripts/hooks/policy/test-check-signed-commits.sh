@@ -3,6 +3,12 @@
 
 set -euo pipefail
 
+# See test-check-main-worktree-source-edit.sh: git's hook env (GIT_DIR and
+# friends) overrides `git -C`, so the fixture repo below would be operated on the
+# outer repository. Cut it here rather than trusting the caller.
+# shellcheck disable=SC2046
+unset $(git rev-parse --local-env-vars) 2>/dev/null || true
+
 ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 CHECK="$ROOT/scripts/hooks/policy/check-signed-commits.sh"
 TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/signed-commits-test.XXXXXX")"

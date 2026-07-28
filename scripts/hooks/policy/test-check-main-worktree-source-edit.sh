@@ -3,6 +3,19 @@
 
 set -uo pipefail
 
+# git injects GIT_DIR / GIT_INDEX_FILE / GIT_WORK_TREE into every hook process.
+# With those set, a `git -C <fixture>` below is NOT redirected — GIT_DIR wins over
+# -C — so every fixture operation lands in the OUTER repository instead. The
+# fixture then reads as a linked worktree, `is_primary_worktree` returns false,
+# and all 161 assertions flip from "blocked" to "allowed" while reporting no
+# stderr at all. Same class as the 2026-05-21 cargo-deny ref-snapback incident.
+#
+# This never surfaced because the suite ran nowhere; it appeared the moment it
+# was wired into pre-push. Cut the inheritance here so the suite is correct
+# however it is invoked, rather than relying on the caller to scrub.
+# shellcheck disable=SC2046
+unset $(git rev-parse --local-env-vars) 2>/dev/null || true
+
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 HOOK="$SCRIPT_DIR/check-main-worktree-source-edit.sh"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
