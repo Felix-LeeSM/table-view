@@ -4,8 +4,10 @@
 # Every suite that builds a fixture repository needs the same three steps, and
 # each one used to spell them itself. Measured at 7c974ec2^:
 #
-#   git grep -ho 'user\.email "[^"]*"' 7c974ec2^ -- scripts/hooks | sort -u
-#                                                                     -> 3 identities
+#   git grep -h 'user\.email' 7c974ec2^ -- scripts/hooks \
+#     | sed 's/.*user\.email //;s/ .*//' | sort -u                     -> 4 identities
+#     (not all of them quoted: apply/test-post-tool-use.sh:35 spelled it `t@e.x`,
+#     which is why matching only `"..."` undercounts)
 #   git grep -l 'unset $(git rev-parse --local-env-vars)' 7c974ec2^ -- scripts/hooks
 #                                                                     -> 7 suites
 #   git grep -l '^init_repo()' 7c974ec2^ -- scripts/hooks             -> 2 copies
@@ -34,10 +36,12 @@
 #   git fsck --unreachable | awk '$2=="commit"{print $3}' \
 #     | xargs -I{} git log -1 --format='%ae' {} | grep -c 'example\.invalid'
 #
-# answers 12 in this repository, all from 2026-06-01, plus one on 2026-07-28
-# that stayed reachable on a branch for six hours because nothing looks. It is
-# invisible from inside the suite, which reports every assertion as passing
-# because the fixture now reads as a linked worktree.
+# answers 12 in this repository, all from 2026-06-01. Six more reached a real
+# branch tip on 2026-07-28 alone — d6dca587 `init`, b42aee65 `fixture`,
+# 6c8d6a78 `two`, b6a47d8d `seed`, 3068c94f `fixture`, 98ec364d `fixture` — every
+# one unsigned, and between them they wear all four of the scattered identities
+# above. It is invisible from inside the suite, which reports every assertion as
+# passing because the fixture now reads as a linked worktree.
 #
 # `fixture_init_repo` calls this itself, so a suite cannot lose the protection
 # by forgetting. Suites still call it at the top as well, for two reasons the
