@@ -267,6 +267,10 @@ EOF
 		# where the list itself is empty (both sides derive from the same
 		# `git ls-files`, so `0 + 10 == 10` would otherwise pass with every hook
 		# script deleted).
+		#
+		# The 10 is hand-maintained against the heredoc above ON PURPOSE. Derive
+		# it from that list and the guard eats itself: drop a line and `count`
+		# and the expectation fall together, which is green.
 		tracked=$(git ls-files "scripts/hooks/*.sh" "scripts/hooks/**/*.sh" | wc -l)
 		[ "$count" -eq $((tracked + 10)) ] || {
 			echo "hook-shell-syntax: checked $count files, expected $((tracked + 10))" >&2
@@ -295,6 +299,13 @@ EOF
 	run_step "post-tool-use-dispatcher-tests" bash scripts/hooks/apply/test-post-tool-use.sh
 	run_step "surface-rules-analyzer-tests" bash scripts/hooks/analyze/test-surface-rules.sh
 	run_step "worktree-bootstrap-tests" bash scripts/hooks/policy/test-check-worktree-bootstrap.sh
+	# Wired because nothing ran this file at all — `bash -n` and nothing else,
+	# and it is the suite that builds a repository AND adds worktrees to it.
+	# What this step does NOT catch: from a clean environment, deleting that
+	# file's scrub still exits 0. The scrub only shows under a hook environment
+	# (measured rc=1 there, rc=0 clean), and that mechanism is what
+	# `lib/test-git-fixture.sh` covers.
+	run_step "worktree-cleanup-tests" bash scripts/test-worktree-cleanup.sh
 	run_step "lefthook-validate" lefthook validate
 	run_step_in "nextest-push-profile-config" src-tauri cargo nextest --no-pager show-config version --profile push
 	run_step "coverage-ratchet-tests" bash scripts/hooks/policy/test-coverage-ratchet.sh
