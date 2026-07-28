@@ -163,6 +163,15 @@ expect "subshell: an escaped ( is not structure" "./src/App.tsx" \
 	'( cd /wt && grep -c \( src/App.tsx ) ; rm src/App.tsx'
 expect "subshell: an escaped ) is not structure" "./src/App.tsx" \
 	'( cd /wt && grep -c \) src/App.tsx ) ; rm src/App.tsx'
+# The same guard is needed INSIDE a substitution: an escaped paren moved the
+# substitution depth, the substitution never closed, and the `)` of the
+# enclosing subshell was absorbed instead of popping.
+expect "subshell: an escaped ( inside a substitution is not structure" "./a.ts" \
+	'( cd /elsewhere && echo $( echo \( ) ) ; rm a.ts'
+# An escaped paren in a FILENAME survives as one path rather than three
+# fragments, which is the same guard seen from the operand side.
+expect "path: an escaped paren in a filename stays one path" './src/App\(1\).tsx' \
+	'rm src/App\(1\).tsx'
 # Quoted parens are literal data, not structure: a quoted `)` must not close the
 # subshell it appears inside.
 expect "subshell: a quoted ) does not close it" "/elsewhere/a.ts" \

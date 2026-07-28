@@ -308,6 +308,15 @@ strip_heredoc_bodies() {
 # operator still splits normally and a quoted redirect target (`> "src/x"`) stays
 # one checkable token — real writes remain blocked.
 tokenize_quote_aware() {
+	# NO APOSTROPHES anywhere below, including in prose. The awk program is a
+	# single-quoted shell word, so one apostrophe ends it and the whole file
+	# stops parsing. Because the guard sources this file on every tool call,
+	# that does not fail quietly — it blocks every command in the session until
+	# the character is removed. It has happened twice; `bash -n` catches it at
+	# push time, nothing catches it at edit time.
+	#
+	# The tokenizer knows nothing about this repository. Its whole job is to
+	# turn a command string into words and separators.
 	awk '
 	{
 		n = length($0)
@@ -360,6 +369,13 @@ tokenize_quote_aware() {
 			# a released delete. No claim is made here that this is the only
 			# unbalanced form; the set of shell spellings is open, and the point
 			# is the direction each one fails in.
+			#
+			# extglob is fragmented rather than matched: `rm @(a|b).ts` reports
+			# `@` and `a` instead of the two files, because `|` and the parens
+			# all read as separators. Unchanged from before this rule, and it
+			# over-reports rather than under-reports, but a fragment that
+			# collides with a real path is a false denial.
+			#
 			# Parens opened by `$(` belong to the WORD, not to the structure.
 			# Splitting those too broke `/tmp/a/$(dirname $f)` into three tokens
 			# and let `dirname` out as an operand of the `mkdir` in front of it.
@@ -367,7 +383,12 @@ tokenize_quote_aware() {
 				tok = tok "$("; has = 1; i++; subst++
 				continue
 			}
-			if (sq == 0 && dq == 0 && subst > 0 && (c == "(" || c == ")")) {
+			# The escape guard applies inside a substitution too. Without it an
+			# escaped paren moved `subst` and the substitution never closed, so
+			# the `)` of the enclosing subshell was absorbed instead of popping:
+			# `( cd <dir> && echo $( echo \( ) ) ; rm a.ts` released a delete at
+			# the starting directory.
+			if (sq == 0 && dq == 0 && subst > 0 && (c == "(" || c == ")") && substr($0, i - 1, 1) != "\\") {
 				if (c == "(") { subst++; tok = tok c; has = 1 }
 				else {
 					subst--
