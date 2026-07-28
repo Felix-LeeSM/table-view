@@ -46,6 +46,12 @@
             "command": "bash \"$(git rev-parse --show-toplevel)/scripts/hooks/apply/pr-create-reminder.sh\"",
             "timeout": 10,
             "statusMessage": "PR review reminder"
+          },
+          {
+            "type": "command",
+            "command": "bash \"$(git rev-parse --show-toplevel)/.codex/hooks/post-tool-use.sh\"",
+            "timeout": 30,
+            "statusMessage": "Running repo post-edit checks"
           }
         ]
       }
