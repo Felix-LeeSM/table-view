@@ -3,6 +3,16 @@
 Claude Code 가 working file path 매치 시 자동 로드하는 rule 정의. **본 파일은
 thin wrapper** — 본문은 모두 `memory/` 의 source room 으로 redirect.
 
+## 도달 경로
+
+- 상시 로드: 이 `README.md` (frontmatter 없음) + `git-policy.md` (`paths: "**"`).
+  나머지 wrapper 는 매칭 파일을 건드릴 때 붙는다.
+- `AGENTS.md` 는 wrapper 가 아니라 `CLAUDE.md` 의 `@AGENTS.md` import 로 온다.
+  마크다운 링크였을 때는 subagent 에 배달되지 않았다 (#1865 측정).
+- 편집 시점에 확실히 닿는 채널은 PostToolUse hook
+  (`scripts/hooks/apply/surface-routing.sh`) 의 `memory/` 방 주입 (도달 557 vs
+  `nested_memory` 0/512). 룰 본문을 방에 두는 근거다.
+
 ## 패턴 (sprint-387 lock)
 
 각 wrapper 는 frontmatter `paths` trigger + 1-3줄 redirect:
@@ -43,7 +53,7 @@ brain 별 wrapper, 본문은 `memory/` source.
 
 ## 관련
 
-- `AGENTS.md` — universal entry
+- `AGENTS.md` — universal entry. `CLAUDE.md` 가 `@` import 로 싣는다
 - `memory/engineering/conventions/memory.md` — 코드 룰
 - `memory/workflow/git-policy/memory.md` — git hook 회피 금지 source
 - `.claude/agents/README.md` — agent wrapper 정책
