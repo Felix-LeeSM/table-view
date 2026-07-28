@@ -237,6 +237,7 @@ run_hook_gates() {
 	run_step "dangerous-bash-tests" bash scripts/hooks/policy/test-check-dangerous-bash.sh
 	run_step "pre-tool-use-wrapper-tests" bash scripts/hooks/apply/test-pre-tool-use-wrapper.sh
 	run_step "post-tool-use-dispatcher-tests" bash scripts/hooks/apply/test-post-tool-use.sh
+	run_step "surface-rules-analyzer-tests" bash scripts/hooks/analyze/test-surface-rules.sh
 	run_step "worktree-bootstrap-tests" bash scripts/hooks/policy/test-check-worktree-bootstrap.sh
 	run_step "lefthook-validate" lefthook validate
 	run_step_in "nextest-push-profile-config" src-tauri cargo nextest --no-pager show-config version --profile push

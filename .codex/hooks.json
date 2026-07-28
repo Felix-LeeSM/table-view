@@ -35,6 +35,12 @@
             "command": "bash \"$(git rev-parse --show-toplevel)/.codex/hooks/post-tool-use.sh\"",
             "timeout": 30,
             "statusMessage": "Running repo post-edit checks"
+          },
+          {
+            "type": "command",
+            "command": "bash \"$(git rev-parse --show-toplevel)/scripts/hooks/apply/surface-routing.sh\"",
+            "timeout": 15,
+            "statusMessage": "Routing surface rules"
           }
         ]
       },
@@ -52,6 +58,12 @@
             "command": "bash \"$(git rev-parse --show-toplevel)/.codex/hooks/post-tool-use.sh\"",
             "timeout": 30,
             "statusMessage": "Running repo post-edit checks"
+          },
+          {
+            "type": "command",
+            "command": "bash \"$(git rev-parse --show-toplevel)/scripts/hooks/apply/surface-routing.sh\"",
+            "timeout": 15,
+            "statusMessage": "Routing surface rules"
           }
         ]
       }

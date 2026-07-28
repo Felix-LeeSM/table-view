@@ -22,6 +22,12 @@ Claude Code / Codex / Cursor 모두 본 파일 1번 read. 본문 lazy, 작업 �
 
 코드 만지기 전: `memory/index/by-surface.md` (해당 active rule 묶음).
 
+이 인덱스는 **찾아보지 않아도 온다**. 파일을 편집하면 PostToolUse hook
+(`scripts/hooks/apply/surface-routing.sh`) 이 그 surface 의 active rule 목록을
+컨텍스트로 넣는다. 목록이 오면 그 룸을 읽어라 — 링크만 보고 넘기지 마라.
+spawn 된 subagent 는 이 hook 이 유일한 자동 도달 경로다 (`nested_memory` 도달
+0/512, hook 도달 557 — 실측).
+
 ## 강제 룰
 
 - `memory/` 트리: `memory.md` 만, 200줄 / 12,000 chars cap (둘 다).

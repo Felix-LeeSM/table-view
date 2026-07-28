@@ -23,60 +23,13 @@ trap 'rm -f "$paths_file" "$output_file" "$context_file"' EXIT
 # A Bash command that writes carries no `file_path`, so Edit/Write-shaped
 # extraction returns nothing and this dispatcher used to exit before formatting
 # or checking anything. `sed -i`, `> file`, `cat > file` and `git mv` all landed
-# unformatted and unadvised.
-#
-# Ask git what actually changed rather than reading the command: the analyzer in
-# analyze/bash-write-targets.sh is a best-effort reader with documented blind
-# spots (a target held in a variable, a write inside a heredoc fed to bash), and
-# a formatter that silently skips those is worse than one driven by the truth on
-# disk.
-#
-# Scoped by mtime because `git status` reports the whole dirty tree, including
-# files that were already dirty before this command. MTIME_WINDOW seconds back
-# from now is the "this command just wrote it" window — generous enough for a
-# slow command, narrow enough that unrelated work in progress is left alone.
-MTIME_WINDOW="${POST_TOOL_USE_MTIME_WINDOW:-120}"
-
-paths_from_git_status() {
-	[ -n "$command" ] || return 0
-	command -v git >/dev/null 2>&1 || return 0
-	local rel abs
-	# `--untracked-files=all`, not the default `normal`: normal collapses a wholly
-	# untracked directory to `docs/`, which is not a file, so the first file
-	# written into a new directory was dropped.
-	git -C "$ROOT" status --porcelain --untracked-files=all 2>/dev/null |
-		while IFS= read -r line; do
-			# `XY path` and `XY old -> new` (rename): the write landed on the right side.
-			rel="${line:3}"
-			case "$rel" in
-				*' -> '*) rel="${rel##* -> }" ;;
-			esac
-			# Porcelain quotes a path containing specials; those are rare and not worth
-			# a dequoter here, so they are skipped rather than mis-parsed.
-			case "$rel" in
-				'"'*) continue ;;
-			esac
-			abs="$ROOT/$rel"
-			[ -f "$abs" ] || continue
-			# `find -newermt` is not portable to macOS's find for a relative time, so
-			# compare against a reference file stamped MTIME_WINDOW seconds ago.
-			# Written as an `if`, not `[ ] && printf`: the loop runs in a pipeline
-			# subshell under `set -e`, where a failing AND-list as the last command
-			# aborts the subshell — the first not-recent file would truncate the rest.
-			if [ "$abs" -nt "$mtime_ref" ]; then
-				printf '%s\n' "$abs"
-			fi
-		done
-}
-
-mtime_ref="$(mktemp "${TMPDIR:-/tmp}/agent-hook-mtime.XXXXXX")"
-trap 'rm -f "$paths_file" "$output_file" "$context_file" "$mtime_ref"' EXIT
-touch -t "$(date -v-"${MTIME_WINDOW}"S '+%Y%m%d%H%M.%S' 2>/dev/null ||
-	date -d "-${MTIME_WINDOW} seconds" '+%Y%m%d%H%M.%S')" "$mtime_ref" 2>/dev/null || :
+# unformatted and unadvised. analyze/recent-writes.sh answers "what did the
+# command that just ran write?" from git rather than by reading the command.
+source "$(dirname "${BASH_SOURCE[0]}")/../analyze/recent-writes.sh"
 
 { hook_paths_from_json; hook_paths_from_patch; } | sort -u > "$paths_file"
-if [ ! -s "$paths_file" ]; then
-	paths_from_git_status | sort -u > "$paths_file"
+if [ ! -s "$paths_file" ] && [ -n "$command" ]; then
+	recent_writes "$ROOT" "${POST_TOOL_USE_MTIME_WINDOW:-120}" | sort -u > "$paths_file"
 fi
 [ -s "$paths_file" ] || exit 0
 
