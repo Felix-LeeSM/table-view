@@ -341,6 +341,46 @@ tokenize_quote_aware() {
 				print c
 				continue
 			}
+			# `(` and `)` are the same grade of separator, and they must be split
+			# here or the cwd rule downstream is decided by whitespace: with
+			# `ls )` the `)` arrived and the subshell closed, with `ls)` it did
+			# not and the `cd` inside leaked out — `( cd worktrees/x && pnpm
+			# test) ; rm src/App.tsx` released a delete at the repo root.
+			#
+			# Splitting them is also what keeps them BALANCED: `args=( --json
+			# body )` and `run()` become a push and a matching pop, so a stray
+			# `)` cannot pop a subshell that is still open. `$( … )` reaches
+			# balance the other way, by staying inside the word (below).
+			#
+			# A `case` pattern (`x)`) is the one form that stays unbalanced. At
+			# the top level it pops nothing; inside a subshell that also runs
+			# `cd` it closes the anchor early, so the write re-anchors at the
+			# starting directory. Measured: `( cd /wt && case x in x) rm a.ts;;
+			# esac )` reports `<start>/a.ts` where bash would touch `/wt/a.ts`.
+			# That over-blocks rather than releases, which is the direction to
+			# fail in, and it is the remaining ceiling here.
+			# Parens opened by `$(` belong to the WORD, not to the structure.
+			# Splitting those too broke `/tmp/a/$(dirname $f)` into three tokens
+			# and let `dirname` out as an operand of the `mkdir` in front of it.
+			if (sq == 0 && dq == 0 && c == "$" && substr($0, i + 1, 1) == "(") {
+				tok = tok "$("; has = 1; i++; subst++
+				continue
+			}
+			if (sq == 0 && dq == 0 && subst > 0 && (c == "(" || c == ")")) {
+				if (c == "(") { subst++; tok = tok c; has = 1 }
+				else {
+					subst--
+					# Glued (`$f)`) it is part of the word; bare it is the closing
+					# of the substitution and names nothing.
+					if (has) tok = tok c
+				}
+				continue
+			}
+			if (sq == 0 && dq == 0 && (c == "(" || c == ")")) {
+				if (has) { print tok; tok = ""; has = 0 }
+				print c
+				continue
+			}
 			if (sq == 0 && dq == 0 && c == "&" && substr($0, i + 1, 1) == "&") {
 				if (has) { print tok; tok = ""; has = 0 }
 				print "&&"
@@ -386,11 +426,17 @@ paths_from_command_tokens() {
 	# fail-OPEN, not conservative: `( cd worktrees/x && pnpm test ) ; rm
 	# src/App.tsx` deletes the file at the ROOT, and carrying the move past the
 	# `)` sent the guard looking in the worktree, where nothing was protected.
-	# The three constructs that scope it are handled where they are tokenised —
-	# `(`/`)` push and pop the anchor, `|` reverts to where its pipeline started,
-	# and `&` drops back to the base directory. `$(...)` and backticks are NOT:
-	# they are glued inside a token, so a `cd` in a command substitution still
-	# leaks. That ceiling is unmeasured in the recorded corpus.
+	# The constructs that scope it are handled where they are tokenised —
+	# `(`/`)` push and pop the anchor, `|` reverts, and `&` drops back to the
+	# base directory.
+	#
+	# `|` reverts to the last SEPARATOR, which is where its pipeline starts only
+	# when the first stage is a simple command. That covers `cd /x | cat` and
+	# leaves `cd /x && ls | grep y` alone, but a compound first stage still
+	# leaks: `{ cd /elsewhere ; } | tee a.ts` reports `/elsewhere/a.ts` where
+	# bash writes at the starting directory, because the `;` inside the braces
+	# moved the anchor. Not a regression — it predates the anchor and does not
+	# appear in the recorded corpus.
 	local cwd_stack="" pipe_anchor="$BASH_WRITE_TARGETS_CWD"
 	CMD_CWD="$BASH_WRITE_TARGETS_CWD"
 	local at_cmd_start=1 expect_cd=0 expect_git=0 expect_git_c=0 git_c=""

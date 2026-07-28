@@ -121,6 +121,36 @@ expect "cwd: a completed cd before ';' does carry" "/elsewhere/a.ts" "cd /elsewh
 # so a `cd` inside does not move the parent. Closing `&` alone left the other
 # two releasing writes (review #1860 round 4).
 expect "subshell: ( … ) does not move the parent" "./a.ts" "( cd /elsewhere && ls ) ; rm a.ts"
+# Whitespace must not decide this. The consumer for `(`/`)` was added before the
+# tokenizer split them, so the rule only fired when the parens happened to be
+# surrounded by spaces and `ls)` leaked the `cd` back out (review #1861).
+expect "subshell: a glued ) still closes it" "./a.ts" "( cd /elsewhere && ls) ; rm a.ts"
+expect "subshell: a glued ( still opens it" "./a.ts" "(cd /elsewhere && ls); rm a.ts"
+expect "subshell: a glued ( does not swallow the verb" "./src/App.tsx" "(rm src/App.tsx)"
+# Splitting both parens is what keeps every other paren form BALANCED, so a
+# stray `)` cannot close a subshell that is still open. Each of these was a new
+# FALSE POSITIVE while only `)` was reaching the consumer: the write landed in
+# the worktree, and the early pop re-anchored it at the repo root.
+expect "subshell: a command substitution balances" "/wt/.pr-body.md" \
+	'( cd /wt && echo $( date ) > .pr-body.md )'
+expect "subshell: an array assignment balances" "/wt/out.md" \
+	"( cd /wt && args=( --json body ) && gh pr view > out.md )"
+expect "subshell: a function definition balances" "/wt/a.ts" \
+	"cd /wt && run() { echo hi; } && rm a.ts"
+expect "subshell: arithmetic expansion balances" "/wt/a.ts" \
+	'cd /wt && n=$(( 1 + 1 )) && rm a.ts'
+# A `$(` opens a substitution INSIDE a word. Treating that paren as structure
+# broke the word into three tokens and released `dirname` as an operand of the
+# `mkdir` in front of it — a path that names nothing, denied as a repo edit.
+expect "subshell: \$( … ) inside a word keeps the word whole" \
+	'/tmp/a/$(dirname,/tmp/a/$f' \
+	'mkdir -p /tmp/a/$(dirname $f); git show origin/main:$f > /tmp/a/$f'
+expect "subshell: a bare ) closing a substitution is not a path" "./a.ts" \
+	'echo $( date ) ; rm a.ts'
+# Quoted parens are literal data, not structure: a quoted `)` must not close the
+# subshell it appears inside.
+expect "subshell: a quoted ) does not close it" "/elsewhere/a.ts" \
+	"( cd /elsewhere && echo ')' && rm a.ts )"
 expect "subshell: ( … ) still tracks cd inside itself" "/elsewhere/a.ts" \
 	"( cd /elsewhere && rm a.ts )"
 expect "subshell: nested ( … ) unwinds one level at a time" "/mid/a.ts" \
