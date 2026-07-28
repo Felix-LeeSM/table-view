@@ -417,6 +417,12 @@ paths_from_command_tokens() {
 				# the same state as `;` — resetting only part of it left `cd & rm x`
 				# and `git -C & rm x` waiting for an operand that never came, and the
 				# write was released.
+				#
+				# It resets MORE than `;` does: everything before it ran in a
+				# background subshell, so a completed `cd` never moved the parent's
+				# directory. Carrying CMD_CWD across (the `;` model) sent
+				# `cd worktrees/x & rm src/App.tsx` to the worktree, while bash
+				# deletes the file at the root.
 				reset_mode
 				expect_redir=0
 				at_cmd_start=1
@@ -426,10 +432,16 @@ paths_from_command_tokens() {
 				git_c=""
 				prev_word=""
 				prev_was_cmd_start=0
+				CMD_CWD="$BASH_WRITE_TARGETS_CWD"
 				continue
 				;;
 			"{" | "}" | "(" | ")" | "then" | "else" | "elif" | "do" | "done" | "fi" | "esac" | "!")
 				at_cmd_start=1
+				# A keyword is not a subcommand host's argument. Leaving prev_word
+				# alone carried the host across it, so `docker { rm x; }` exempted
+				# `rm` and released the write.
+				prev_word=""
+				prev_was_cmd_start=0
 				continue
 				;;
 			"&&" | "||" | "|" | ";" | ";;")
@@ -674,14 +686,18 @@ paths_from_command_tokens() {
 		# So the polarity is inverted: recognise everywhere, and carry a bounded
 		# blacklist of commands that take a same-named SUBCOMMAND. Being wrong here
 		# costs a false allow for one word after those tools; being wrong the other
-		# way costs a lost source file. (`docker cp` and `kubectl cp` DO write to
-		# the host — the exemption is one word wide, so the destination operand
-		# after them is still judged.)
+		# way costs a lost source file.
+		#
+		# `cp` is excluded from the exemption because every host here spells it the
+		# same way the shell does and it lands on the HOST filesystem:
+		# `docker cp probe:/out/report.json src/App.tsx` overwrites a source file.
+		# Judging it costs no false positive — the container side reads as
+		# `probe:/out/report.json`, which resolves to no repo location.
 		#
 		# The host must be in COMMAND position. Matching it as a bare previous token
 		# meant a host NAME used as an operand disarmed the next word:
 		# `cp docker <root>/src/App.tsx` released the destination.
-		if [ "$prev_was_cmd_start" = "1" ]; then
+		if [ "$prev_was_cmd_start" = "1" ] && [ "$(trim_token "$word")" != "cp" ]; then
 			case "$(trim_token "$prev_word")" in
 				docker | podman | nerdctl | kubectl | oc | helm | flatpak | snap)
 					prev_word="$word"

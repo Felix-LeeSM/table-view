@@ -112,11 +112,24 @@ expect "background: trailing ampersand" "./a.ts" "echo a && rm a.ts &"
 # was released (review #1860 round 3).
 expect "background: & resets a pending cd" "./a.ts" "cd & rm a.ts"
 expect "background: & resets a pending git -C" "./a.ts" "git -C & rm a.ts"
+# `&` backgrounds what precedes it, so a COMPLETED cd never moved the parent's
+# directory either. Modelling `&` on `;` carried the move across and sent the
+# write to the wrong tree.
+expect "background: & undoes a completed cd" "./a.ts" "cd /elsewhere & rm a.ts"
+expect "cwd: a completed cd before ';' does carry" "/elsewhere/a.ts" "cd /elsewhere ; rm a.ts"
 # The subcommand-host exemption applies to a host in COMMAND position only. As a
 # bare previous token it disarmed the next word, so a host NAME used as an
 # operand released the destination after it.
 expect "host: a host name as an operand is not an exemption" "./dst.ts" "cp docker dst.ts"
 expect "host: the exemption is one word wide" "./a.ts" "docker foo rm a.ts"
+# `cp` is the one subcommand every host spells like the shell does, and it lands
+# on the HOST filesystem. Exempting it released an overwrite of a source file.
+expect "host: docker cp writes the host destination" "./src/App.tsx" \
+	"docker cp probe:/out/report.json src/App.tsx"
+expect "host: kubectl cp writes the host destination" "./src/App.tsx" \
+	"kubectl cp pod:/out/report.json src/App.tsx"
+# A keyword does not carry the host across it.
+expect "host: a keyword ends the exemption" "./a.ts" "docker { rm a.ts; }"
 expect "position: verb after a separator is a verb" "./a.ts" "echo x; rm a.ts"
 expect "position: verb on the next line is a verb" "./a.ts" "$(printf 'echo x\nrm a.ts\n')"
 
