@@ -4,7 +4,8 @@
 # Every suite that builds a fixture repository needs the same three steps, and
 # each one used to spell them itself. Measured at 7c974ec2^:
 #
-#   git grep -h 'user\.email "' 7c974ec2^ -- scripts/hooks | sort -u   -> 3 identities
+#   git grep -ho 'user\.email "[^"]*"' 7c974ec2^ -- scripts/hooks | sort -u
+#                                                                     -> 3 identities
 #   git grep -l 'unset $(git rev-parse --local-env-vars)' 7c974ec2^ -- scripts/hooks
 #                                                                     -> 7 suites
 #   git grep -l '^init_repo()' 7c974ec2^ -- scripts/hooks             -> 2 copies
@@ -27,10 +28,16 @@
 # git injects GIT_DIR / GIT_INDEX_FILE / GIT_WORK_TREE into every hook it runs,
 # and GIT_DIR beats `git -C`. With them set, a fixture operation lands in the
 # OUTER repository instead: `git -C "$fixture" add .` stages the real tree and
-# `git -C "$fixture" commit` writes a real commit. That is not hypothetical —
-# it produced five stray commits and a rewritten local identity in this
-# repository, and it is invisible from inside the suite, which reports every
-# assertion as passing because the fixture now reads as a linked worktree.
+# `git -C "$fixture" commit` writes a real commit. That is not hypothetical, and
+# it is not rare:
+#
+#   git fsck --unreachable | awk '$2=="commit"{print $3}' \
+#     | xargs -I{} git log -1 --format='%ae' {} | grep -c 'example\.invalid'
+#
+# answers 12 in this repository, all from 2026-06-01, plus one on 2026-07-28
+# that stayed reachable on a branch for six hours because nothing looks. It is
+# invisible from inside the suite, which reports every assertion as passing
+# because the fixture now reads as a linked worktree.
 #
 # `fixture_init_repo` calls this itself, so a suite cannot lose the protection
 # by forgetting. Suites still call it at the top as well, for two reasons the
