@@ -306,6 +306,15 @@ EOF
 	# (measured rc=1 there, rc=0 clean), and that mechanism is what
 	# `lib/test-git-fixture.sh` covers.
 	run_step "worktree-cleanup-tests" bash scripts/test-worktree-cleanup.sh
+	# #1862 wired the one above and stopped there. Three more were in the same
+	# state — present, parsing, executed by nothing — and the first of them builds
+	# fixture repositories through the helper, so its scrub was decorative: a suite
+	# nothing runs cannot go red. `test-pre-push-path-router.sh` now fails when a
+	# tracked suite is missing from this list, which is what stops the fourth.
+	# Measured cost: 0.76s + 0.03s + 0.08s.
+	run_step "signed-commit-guard-tests" bash scripts/hooks/policy/test-check-signed-commits.sh
+	run_step "worktree-push-ref-safety-tests" bash scripts/hooks/policy/test-worktree-push-ref-safety.sh
+	run_step "pr-create-reminder-tests" bash scripts/hooks/apply/test-pr-create-reminder.sh
 	run_step "lefthook-validate" lefthook validate
 	run_step_in "nextest-push-profile-config" src-tauri cargo nextest --no-pager show-config version --profile push
 	run_step "coverage-ratchet-tests" bash scripts/hooks/policy/test-coverage-ratchet.sh
