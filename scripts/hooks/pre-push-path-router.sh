@@ -225,8 +225,18 @@ run_rust_gates() {
 }
 
 run_hook_gates() {
-	run_step "hook-shell-syntax" bash -n .githooks/pre-push scripts/hooks/*.sh scripts/hooks/lib/*.sh scripts/setup.sh scripts/target-cache.sh scripts/worktree-spawn.sh scripts/worktree-cleanup.sh scripts/worktree-bootstrap-deps.sh scripts/prune-gh-caches.sh
+	run_step "hook-shell-syntax" bash -n .githooks/pre-push scripts/hooks/*.sh scripts/hooks/lib/*.sh scripts/hooks/analyze/*.sh scripts/setup.sh scripts/target-cache.sh scripts/worktree-spawn.sh scripts/worktree-cleanup.sh scripts/worktree-bootstrap-deps.sh scripts/prune-gh-caches.sh
 	run_step "detect-change-scope" bash scripts/hooks/test-detect-change-scope.sh
+	# The PreToolUse guard suites ran nowhere before this: not here, not in CI.
+	# `bash -n` above proved they parse, which is why 161 assertions could sit
+	# green against a guard that denied 95% of the orchestration it inspected.
+	# ~13s total, and only when a hook path is in the push.
+	run_step "write-target-analyzer-tests" bash scripts/hooks/analyze/test-bash-write-targets.sh
+	run_step "main-worktree-guard-tests" bash scripts/hooks/test-check-main-worktree-source-edit.sh
+	run_step "edit-policy-tests" bash scripts/hooks/test-check-edit-policy.sh
+	run_step "dangerous-bash-tests" bash scripts/hooks/test-check-dangerous-bash.sh
+	run_step "pre-tool-use-wrapper-tests" bash scripts/hooks/test-pre-tool-use-wrapper.sh
+	run_step "worktree-bootstrap-tests" bash scripts/hooks/test-check-worktree-bootstrap.sh
 	run_step "lefthook-validate" lefthook validate
 	run_step_in "nextest-push-profile-config" src-tauri cargo nextest --no-pager show-config version --profile push
 	run_step "coverage-ratchet-tests" bash scripts/hooks/test-coverage-ratchet.sh
