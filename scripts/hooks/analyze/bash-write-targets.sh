@@ -308,6 +308,15 @@ strip_heredoc_bodies() {
 # operator still splits normally and a quoted redirect target (`> "src/x"`) stays
 # one checkable token — real writes remain blocked.
 tokenize_quote_aware() {
+	# NO APOSTROPHES anywhere below, including in prose. The awk program is a
+	# single-quoted shell word, so one apostrophe ends it and the whole file
+	# stops parsing. Because the guard sources this file on every tool call,
+	# that does not fail quietly — it blocks every command in the session until
+	# the character is removed. It has happened twice; `bash -n` catches it at
+	# push time, nothing catches it at edit time.
+	#
+	# The tokenizer knows nothing about this repository. Its whole job is to
+	# turn a command string into words and separators.
 	awk '
 	{
 		n = length($0)
@@ -326,7 +335,74 @@ tokenize_quote_aware() {
 			# denied as repo paths. `|` and `;` cannot appear unquoted in a filename,
 			# so they are always separators; `&` is only one as `&&`, because a lone
 			# `&` belongs to the redirect forms (`2>&1`, `>&-`) handled downstream.
+			# `||` is one operator, not two pipes. Emitting it as two `|` made it
+			# indistinguishable from a pipeline downstream, so the subshell rule
+			# for `|` fired on `cd "$W" || exit 1` and threw away the unknown
+			# directory — three orchestration commands went back to being denied.
+			if (sq == 0 && dq == 0 && c == "|" && substr($0, i + 1, 1) == "|") {
+				if (has) { print tok; tok = ""; has = 0 }
+				print "||"
+				i++
+				continue
+			}
 			if (sq == 0 && dq == 0 && (c == "|" || c == ";")) {
+				if (has) { print tok; tok = ""; has = 0 }
+				print c
+				continue
+			}
+			# `(` and `)` are the same grade of separator, and they must be split
+			# here or the cwd rule downstream is decided by whitespace: with
+			# `ls )` the `)` arrived and the subshell closed, with `ls)` it did
+			# not and the `cd` inside leaked out — `( cd worktrees/x && pnpm
+			# test) ; rm src/App.tsx` released a delete at the repo root.
+			#
+			# Splitting them is also what keeps them BALANCED: `args=( --json
+			# body )` and `run()` become a push and a matching pop, so a stray
+			# `)` cannot pop a subshell that is still open. `$( … )` reaches
+			# balance the other way, by staying inside the word (below), and an
+			# escaped `\(` is excluded here as data.
+			#
+			# What is left unbalanced is a `case` pattern, and it is unbalanced
+			# in the CLOSING direction only, so it fails toward over-blocking.
+			# Measured: `( cd /wt && case x in x) rm a.ts;; esac )` reports
+			# `<start>/a.ts` where bash touches `/wt/a.ts` — a false denial, not
+			# a released delete. No claim is made here that this is the only
+			# unbalanced form; the set of shell spellings is open, and the point
+			# is the direction each one fails in.
+			#
+			# extglob is fragmented rather than matched: `rm @(a|b).ts` reports
+			# `@` and `a` instead of the two files, because `|` and the parens
+			# all read as separators. Unchanged from before this rule, and it
+			# over-reports rather than under-reports, but a fragment that
+			# collides with a real path is a false denial.
+			#
+			# Parens opened by `$(` belong to the WORD, not to the structure.
+			# Splitting those too broke `/tmp/a/$(dirname $f)` into three tokens
+			# and let `dirname` out as an operand of the `mkdir` in front of it.
+			if (sq == 0 && dq == 0 && c == "$" && substr($0, i + 1, 1) == "(") {
+				tok = tok "$("; has = 1; i++; subst++
+				continue
+			}
+			# The escape guard applies inside a substitution too. Without it an
+			# escaped paren moved `subst` and the substitution never closed, so
+			# the `)` of the enclosing subshell was absorbed instead of popping:
+			# `( cd <dir> && echo $( echo \( ) ) ; rm a.ts` released a delete at
+			# the starting directory.
+			if (sq == 0 && dq == 0 && subst > 0 && (c == "(" || c == ")") && substr($0, i - 1, 1) != "\\") {
+				if (c == "(") { subst++; tok = tok c; has = 1 }
+				else {
+					subst--
+					# Glued (`$f)`) it is part of the word; bare it is the closing
+					# of the substitution and names nothing.
+					if (has) tok = tok c
+				}
+				continue
+			}
+			# A backslash-escaped paren is data, not structure — `grep -c \(`.
+			# Reading it as structure pushed a level that the real `)` then
+			# popped instead of the subshell, so the `cd` inside stayed in force
+			# and the write after the subshell was released.
+			if (sq == 0 && dq == 0 && (c == "(" || c == ")") && substr($0, i - 1, 1) != "\\") {
 				if (has) { print tok; tok = ""; has = 0 }
 				print c
 				continue
@@ -371,9 +447,36 @@ paths_from_command_tokens() {
 	# Working directory the command is running in, as `cd` moves it. Read by
 	# emit_path to resolve a relative write target. Command-position only: a `cd`
 	# that is not the first word of a segment (`grep cd file`) must not move it.
-	# Not a shell: a `cd` inside a subshell/`$(...)` leaks to the rest of the
-	# command here, which over-scopes toward the cwd rather than toward the
-	# starting directory.
+	#
+	# `cd` is also scoped to the construct it runs in, and getting that wrong is
+	# fail-OPEN, not conservative: `( cd worktrees/x && pnpm test ) ; rm
+	# src/App.tsx` deletes the file at the ROOT, and carrying the move past the
+	# `)` sent the guard looking in the worktree, where nothing was protected.
+	# The constructs that scope it are handled where they are tokenised —
+	# `(`/`)` push and pop the anchor, `|` reverts, and `&` drops back to the
+	# base directory.
+	#
+	# Two constructs still leak a `cd` outward, and BOTH fail open — the write
+	# is reported inside the construct while bash performs it at the starting
+	# directory, so a delete there is released:
+	#
+	#   `{ cd /elsewhere ; } | tee a.ts`        reports `/elsewhere/a.ts`
+	#   `echo $( ls ; cd /wt ) ; rm src/App.tsx`  reports `/wt/src/App.tsx`
+	#
+	# The first is a compound pipeline stage: `|` reverts to the last SEPARATOR,
+	# which is where the pipeline starts only when the first stage is a simple
+	# command, and the `;` inside the braces moved the anchor. That much still
+	# covers `cd /x | cat` and leaves `cd /x && ls | grep y` alone. The second
+	# is a command substitution, whose parens are absorbed into the word — the
+	# same rule that keeps `/tmp/a/$(dirname $f)` in one piece — so nothing pops
+	# the anchor back.
+	#
+	# Neither is a regression: both predate this anchor and behave the same on
+	# the previous revision, and neither spelling appears in the recorded
+	# corpus. They are stated as ceilings rather than closed because each
+	# additional shell spelling closed here has cost a review round and opened
+	# a new edge; the set is open.
+	local cwd_stack="" pipe_anchor="$BASH_WRITE_TARGETS_CWD"
 	CMD_CWD="$BASH_WRITE_TARGETS_CWD"
 	local at_cmd_start=1 expect_cd=0 expect_git=0 expect_git_c=0 git_c=""
 	# Previous token, for the subcommand-host blacklist below (`docker rm`).
@@ -433,9 +536,44 @@ paths_from_command_tokens() {
 				prev_word=""
 				prev_was_cmd_start=0
 				CMD_CWD="$BASH_WRITE_TARGETS_CWD"
+				pipe_anchor="$CMD_CWD"
 				continue
 				;;
-			"{" | "}" | "(" | ")" | "then" | "else" | "elif" | "do" | "done" | "fi" | "esac" | "!")
+			"(")
+				# A subshell: `cd` inside it does not move the parent. Remember
+				# where the parent stands so `)` can put it back.
+				#
+				# No flush here, unlike `)` below: this branch only SAVES the
+				# anchor, it never moves it, so a pending `cp`/`install`
+				# destination still resolves against the same directory.
+				cwd_stack="$CMD_CWD
+$cwd_stack"
+				pipe_anchor="$CMD_CWD"
+				at_cmd_start=1
+				prev_word=""
+				prev_was_cmd_start=0
+				continue
+				;;
+			")")
+				# Flush before the anchor moves. `cp`/`install` hold their
+				# destination until the verb ends, and emit_path resolves it
+				# against CMD_CWD at THAT moment — popping first resolved
+				# `( cd <dir> && cp a b )` against the parent and denied a write
+				# that lands inside the subshell.
+				flush_last_dest
+				# Unbalanced (a `case` pattern written `x )`, a stray paren): leave
+				# the anchor alone rather than guess.
+				if [ -n "$cwd_stack" ]; then
+					CMD_CWD="${cwd_stack%%$'\n'*}"
+					cwd_stack="${cwd_stack#*$'\n'}"
+					pipe_anchor="$CMD_CWD"
+				fi
+				at_cmd_start=1
+				prev_word=""
+				prev_was_cmd_start=0
+				continue
+				;;
+			"{" | "}" | "then" | "else" | "elif" | "do" | "done" | "fi" | "esac" | "!")
 				at_cmd_start=1
 				# A keyword is not a subcommand host's argument. Leaving prev_word
 				# alone carried the host across it, so `docker { rm x; }` exempted
@@ -451,6 +589,18 @@ paths_from_command_tokens() {
 				# `cd && …`: the separator arrives before any operand, so this is a
 				# bare `cd` — it lands on $HOME, outside the repo.
 				[ "$expect_cd" = "1" ] && CMD_CWD="$CWD_UNKNOWN"
+				if [ "$word" = "|" ]; then
+					# Every stage of a pipeline is a subshell, so a `cd` inside one
+					# does not survive it: `cd /x | cat ; rm a` deletes `<cwd>/a`.
+					# Reverting to where this pipeline STARTED is what separates
+					# that from `cd /x && ls | grep y`, where the `cd` ran before the
+					# pipeline and does survive. Resetting to the base directory
+					# instead would re-anchor that second form at the repo root and
+					# block a write that lands outside it.
+					CMD_CWD="$pipe_anchor"
+				else
+					pipe_anchor="$CMD_CWD"
+				fi
 				expect_cd=0
 				expect_git=0
 				expect_git_c=0
