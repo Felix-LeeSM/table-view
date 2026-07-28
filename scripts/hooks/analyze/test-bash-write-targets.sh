@@ -147,6 +147,22 @@ expect "subshell: \$( … ) inside a word keeps the word whole" \
 	'mkdir -p /tmp/a/$(dirname $f); git show origin/main:$f > /tmp/a/$f'
 expect "subshell: a bare ) closing a substitution is not a path" "./a.ts" \
 	'echo $( date ) ; rm a.ts'
+# `cp`/`install` hold their destination until the verb ends, and it resolves
+# against the anchor at THAT moment. Moving the anchor on `(`/`)` without
+# flushing first re-anchored a write that lands inside the subshell.
+expect "subshell: cp inside one resolves against the inside" "/wt/b" \
+	"( cd /wt && cp a b )"
+expect "subshell: install inside one resolves against the inside" "/wt/b" \
+	"( cd /wt && install -m 644 a b )"
+expect "subshell: a deferred dest does not leak past the )" "./d,/wt/b" \
+	"( cd /wt && cp a b ) ; cp c d"
+# An escaped paren is data. Reading `\(` as structure pushed a level that the
+# real `)` popped instead of the subshell, so the `cd` stayed in force and the
+# write after the subshell was released.
+expect "subshell: an escaped ( is not structure" "./src/App.tsx" \
+	'( cd /wt && grep -c \( src/App.tsx ) ; rm src/App.tsx'
+expect "subshell: an escaped ) is not structure" "./src/App.tsx" \
+	'( cd /wt && grep -c \) src/App.tsx ) ; rm src/App.tsx'
 # Quoted parens are literal data, not structure: a quoted `)` must not close the
 # subshell it appears inside.
 expect "subshell: a quoted ) does not close it" "/elsewhere/a.ts" \

@@ -350,15 +350,16 @@ tokenize_quote_aware() {
 			# Splitting them is also what keeps them BALANCED: `args=( --json
 			# body )` and `run()` become a push and a matching pop, so a stray
 			# `)` cannot pop a subshell that is still open. `$( … )` reaches
-			# balance the other way, by staying inside the word (below).
+			# balance the other way, by staying inside the word (below), and an
+			# escaped `\(` is excluded here as data.
 			#
-			# A `case` pattern (`x)`) is the one form that stays unbalanced. At
-			# the top level it pops nothing; inside a subshell that also runs
-			# `cd` it closes the anchor early, so the write re-anchors at the
-			# starting directory. Measured: `( cd /wt && case x in x) rm a.ts;;
-			# esac )` reports `<start>/a.ts` where bash would touch `/wt/a.ts`.
-			# That over-blocks rather than releases, which is the direction to
-			# fail in, and it is the remaining ceiling here.
+			# What is left unbalanced is a `case` pattern, and it is unbalanced
+			# in the CLOSING direction only, so it fails toward over-blocking.
+			# Measured: `( cd /wt && case x in x) rm a.ts;; esac )` reports
+			# `<start>/a.ts` where bash touches `/wt/a.ts` — a false denial, not
+			# a released delete. No claim is made here that this is the only
+			# unbalanced form; the set of shell spellings is open, and the point
+			# is the direction each one fails in.
 			# Parens opened by `$(` belong to the WORD, not to the structure.
 			# Splitting those too broke `/tmp/a/$(dirname $f)` into three tokens
 			# and let `dirname` out as an operand of the `mkdir` in front of it.
@@ -376,7 +377,11 @@ tokenize_quote_aware() {
 				}
 				continue
 			}
-			if (sq == 0 && dq == 0 && (c == "(" || c == ")")) {
+			# A backslash-escaped paren is data, not structure — `grep -c \(`.
+			# Reading it as structure pushed a level that the real `)` then
+			# popped instead of the subshell, so the `cd` inside stayed in force
+			# and the write after the subshell was released.
+			if (sq == 0 && dq == 0 && (c == "(" || c == ")") && substr($0, i - 1, 1) != "\\") {
 				if (has) { print tok; tok = ""; has = 0 }
 				print c
 				continue
@@ -435,8 +440,19 @@ paths_from_command_tokens() {
 	# leaves `cd /x && ls | grep y` alone, but a compound first stage still
 	# leaks: `{ cd /elsewhere ; } | tee a.ts` reports `/elsewhere/a.ts` where
 	# bash writes at the starting directory, because the `;` inside the braces
-	# moved the anchor. Not a regression — it predates the anchor and does not
-	# appear in the recorded corpus.
+	# moved the anchor.
+	#
+	# A `cd` inside `$( … )` leaks the same way and this one fails OPEN:
+	# `echo $( ls ; cd /wt ) ; rm src/App.tsx` reports `/wt/src/App.tsx`, so a
+	# delete at the starting directory is released. The substitution's parens
+	# are absorbed into the word (that is what keeps `/tmp/a/$(dirname $f)` in
+	# one piece), so nothing pops the anchor back.
+	#
+	# Neither is a regression — both predate this anchor and behave the same on
+	# the previous revision, and neither spelling appears in the recorded
+	# corpus. They are stated as ceilings rather than closed because each
+	# additional shell spelling closed here has cost a review round and opened
+	# a new edge; the set is open.
 	local cwd_stack="" pipe_anchor="$BASH_WRITE_TARGETS_CWD"
 	CMD_CWD="$BASH_WRITE_TARGETS_CWD"
 	local at_cmd_start=1 expect_cd=0 expect_git=0 expect_git_c=0 git_c=""
@@ -503,6 +519,10 @@ paths_from_command_tokens() {
 			"(")
 				# A subshell: `cd` inside it does not move the parent. Remember
 				# where the parent stands so `)` can put it back.
+				#
+				# No flush here, unlike `)` below: this branch only SAVES the
+				# anchor, it never moves it, so a pending `cp`/`install`
+				# destination still resolves against the same directory.
 				cwd_stack="$CMD_CWD
 $cwd_stack"
 				pipe_anchor="$CMD_CWD"
@@ -512,6 +532,12 @@ $cwd_stack"
 				continue
 				;;
 			")")
+				# Flush before the anchor moves. `cp`/`install` hold their
+				# destination until the verb ends, and emit_path resolves it
+				# against CMD_CWD at THAT moment — popping first resolved
+				# `( cd <dir> && cp a b )` against the parent and denied a write
+				# that lands inside the subshell.
+				flush_last_dest
 				# Unbalanced (a `case` pattern written `x )`, a stray paren): leave
 				# the anchor alone rather than guess.
 				if [ -n "$cwd_stack" ]; then
