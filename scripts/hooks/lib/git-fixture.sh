@@ -39,9 +39,10 @@
 # answers 12 in this repository, all from 2026-06-01. Six more reached a real
 # branch tip on 2026-07-28 alone — d6dca587 `init`, b42aee65 `fixture`,
 # 6c8d6a78 `two`, b6a47d8d `seed`, 3068c94f `fixture`, 98ec364d `fixture` — every
-# one unsigned, and between them they wear all four of the scattered identities
-# above. It is invisible from inside the suite, which reports every assertion as
-# passing because the fixture now reads as a linked worktree.
+# one unsigned, wearing three of the identities above (3 hook-test@example.invalid,
+# 2 t@e.x, 1 test@example.com). It is invisible from inside the suite, which
+# reports every assertion as passing because the fixture now reads as a linked
+# worktree.
 #
 # `fixture_init_repo` calls this itself, so a suite cannot lose the protection
 # by forgetting. Suites still call it at the top as well, for two reasons the

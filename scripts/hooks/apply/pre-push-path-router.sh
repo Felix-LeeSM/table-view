@@ -259,16 +259,17 @@ scripts/worktree-spawn.sh
 scripts/worktree-cleanup.sh
 scripts/worktree-bootstrap-deps.sh
 scripts/prune-gh-caches.sh
+scripts/test-worktree-cleanup.sh
 EOF
 		# A silently shrinking list would report green forever. Two independent
 		# checks, because either alone is defeatable: an exact match against the
 		# live count catches a partial loss, and an absolute floor catches the case
 		# where the list itself is empty (both sides derive from the same
-		# `git ls-files`, so `0 + 9 == 9` would otherwise pass with every hook
+		# `git ls-files`, so `0 + 10 == 10` would otherwise pass with every hook
 		# script deleted).
 		tracked=$(git ls-files "scripts/hooks/*.sh" "scripts/hooks/**/*.sh" | wc -l)
-		[ "$count" -eq $((tracked + 9)) ] || {
-			echo "hook-shell-syntax: checked $count files, expected $((tracked + 9))" >&2
+		[ "$count" -eq $((tracked + 10)) ] || {
+			echo "hook-shell-syntax: checked $count files, expected $((tracked + 10))" >&2
 			status=1
 		}
 		[ "$tracked" -ge 40 ] || {
