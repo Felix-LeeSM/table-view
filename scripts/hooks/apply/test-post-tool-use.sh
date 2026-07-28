@@ -8,7 +8,7 @@
 set -uo pipefail
 
 # shellcheck source=../lib/git-fixture.sh
-source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../lib" && pwd)/git-fixture.sh"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../lib" && pwd)/git-fixture.sh" || exit 1
 scrub_git_env
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -25,10 +25,10 @@ no() {
 	printf 'FAIL  %s\n  %s\n' "$1" "$2"
 }
 
-FIX="$(fixture_mktemp)"
+FIX="$(fixture_mktemp post-tool-use-check)"
 trap 'rm -rf "$FIX"' EXIT
 
-fixture_init_repo "$FIX"
+fixture_init_repo "$FIX" || exit 1
 mkdir -p "$FIX/docs" "$FIX/src"
 printf 'seed\n' > "$FIX/README.md"
 git -C "$FIX" add -A

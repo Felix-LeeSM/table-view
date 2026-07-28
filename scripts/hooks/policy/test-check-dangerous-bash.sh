@@ -14,7 +14,7 @@
 set -uo pipefail
 
 # shellcheck source=../lib/git-fixture.sh
-source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../lib" && pwd)/git-fixture.sh"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../lib" && pwd)/git-fixture.sh" || exit 1
 scrub_git_env
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -43,7 +43,7 @@ fi
 # files to grep) — a blanket `cd` into the fixture broke 19 of them.
 FIXTURE_REPO="$(fixture_mktemp dangerous-bash-fixture)"
 cleanup_fixture_repo() { rm -rf "$FIXTURE_REPO"; }
-fixture_init_repo "$FIXTURE_REPO"
+fixture_init_repo "$FIXTURE_REPO" || exit 1
 mkdir -p "$FIXTURE_REPO/.githooks"
 for _h in pre-commit pre-push commit-msg post-checkout post-merge prepare-commit-msg; do
   printf '#!/usr/bin/env bash\nexit 0\n' > "$FIXTURE_REPO/.githooks/$_h"

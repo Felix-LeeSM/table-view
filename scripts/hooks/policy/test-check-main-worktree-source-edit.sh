@@ -4,7 +4,7 @@
 set -uo pipefail
 
 # shellcheck source=../lib/git-fixture.sh
-source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../lib" && pwd)/git-fixture.sh"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../lib" && pwd)/git-fixture.sh" || exit 1
 scrub_git_env
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -36,7 +36,7 @@ must() {
 }
 
 setup_git_fixture() {
-	TMP_ROOT="$(fixture_mktemp)"
+	TMP_ROOT="$(fixture_mktemp main-worktree-guard-check)"
 	MAIN_ROOT="$TMP_ROOT/main"
 	LINKED_ROOT="$MAIN_ROOT/worktrees/linked-fixture"
 	# Home fixture OUTSIDE the repo root, so `~`-prefixed cases are deterministic
@@ -44,7 +44,7 @@ setup_git_fixture() {
 	HOME_FIXTURE="$TMP_ROOT/home"
 	must mkdir -p "$HOME_FIXTURE"
 
-	fixture_init_repo "$MAIN_ROOT"
+	must fixture_init_repo "$MAIN_ROOT"
 	printf '%s\n' "fixture" > "$MAIN_ROOT/README.md"
 	must git -C "$MAIN_ROOT" add README.md
 	must git -C "$MAIN_ROOT" commit -q -m "fixture"

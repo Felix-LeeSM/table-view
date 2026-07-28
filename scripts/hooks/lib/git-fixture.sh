@@ -2,14 +2,19 @@
 # Throwaway-repository helpers for the hook test suites. Sourced, not executed.
 #
 # Every suite that builds a fixture repository needs the same three steps, and
-# each one used to spell them itself. That produced four different test
-# identities, two spellings of the environment scrub, and three copies of an
-# `init_repo` helper. The reasoning for the scrub was pasted into ten files,
-# which is where a rule goes to rot: it is long, it is not obviously load
-# bearing, and the next suite has to know it exists to copy it.
+# each one used to spell them itself. Measured at 7c974ec2^:
 #
-#   scrub_git_env       cut git's injected hook environment. Call it FIRST.
-#   fixture_mktemp      a throwaway directory.
+#   git grep -h 'user\.email "' 7c974ec2^ -- scripts/hooks | sort -u   -> 3 identities
+#   git grep -l 'unset $(git rev-parse --local-env-vars)' 7c974ec2^ -- scripts/hooks
+#                                                                     -> 7 suites
+#   git grep -l '^init_repo()' 7c974ec2^ -- scripts/hooks             -> 2 copies
+#
+# The reasoning for the scrub was pasted into seven of those, four to six
+# comment lines each, which is where a rule goes to rot: it is long, it is not
+# obviously load bearing, and the next suite has to know it exists to copy it.
+#
+#   scrub_git_env       cut git's injected hook environment.
+#   fixture_mktemp      a throwaway directory, named after its owner.
 #   fixture_init_repo   a repository whose identity cannot sign or prompt.
 #
 # Cleanup is deliberately NOT owned here. Every caller already installs its own
@@ -27,8 +32,10 @@
 # repository, and it is invisible from inside the suite, which reports every
 # assertion as passing because the fixture now reads as a linked worktree.
 #
-# Call this before creating any fixture, so the suite is correct however it is
-# invoked rather than depending on the caller to scrub.
+# `fixture_init_repo` calls this itself, so a suite cannot lose the protection
+# by forgetting. Suites still call it at the top as well, for two reasons the
+# helper cannot cover: a suite that runs git BEFORE building a fixture, and a
+# suite that builds no fixture at all.
 scrub_git_env() {
 	# shellcheck disable=SC2046
 	unset $(git rev-parse --local-env-vars) 2>/dev/null || true
@@ -36,11 +43,18 @@ scrub_git_env() {
 
 # fixture_mktemp [label] -> path on stdout
 #
-# The label is the point. `mktemp -d` alone already randomises the name and
-# already honours $TMPDIR, so neither of those is what this adds — it names the
-# directory after the suite that made it, which is the difference between
-# finding the owner of a leaked fixture and guessing. `${TMPDIR:-/tmp}` is
-# spelled out only because the template form requires a full path.
+# Two things a bare `mktemp -d` does not give. The label, so a leaked fixture
+# names the suite that made it instead of being one more `tmp.XXXXXX`. And
+# $TMPDIR: on macOS — the only platform these suites run on, since CI runs only
+# `policy/test-check-pr-body.sh` — a template-less `mktemp -d` ignores $TMPDIR
+# entirely and always answers from the per-user Darwin temp dir. Measured:
+#
+#   env TMPDIR=/tmp/probe sh -c 'mktemp -d'
+#     -> /var/folders/ty/.../T/tmp.RMUkJEkteU
+#   env TMPDIR=/tmp/probe sh -c 'mktemp -d "$TMPDIR/l.XXXXXX"'
+#     -> /tmp/probe/l.XWTqFI
+#
+# so spelling the template out is what lets a caller redirect fixtures at all.
 fixture_mktemp() {
 	mktemp -d "${TMPDIR:-/tmp}/${1:-hook-fixture}.XXXXXX"
 }
@@ -51,11 +65,31 @@ fixture_mktemp() {
 # developer's real signing config, and a fixture commit either blocks on a key
 # prompt or fails outright in CI — a test run has no business touching a signing
 # key. The identity is `.invalid` (RFC 2606) so it can never resolve.
+#
+# Those two writes are also the damage when the environment is not scrubbed.
+# They do not fail; they OVERWRITE the developer's identity and disable signing
+# in the repository the suite is running inside — measured in this one. So the
+# scrub is taken here rather than asked of the caller, and the aim is checked
+# before the first `config`, not before the first commit.
 fixture_init_repo() {
 	local repo="$1" branch="${2:-main}"
 
+	scrub_git_env
+
 	mkdir -p "$repo" || return 1
 	git -C "$repo" init --quiet -b "$branch" || return 1
+
+	# The scrub is the only thing aiming the writes below, and its failure is
+	# silent: every assertion downstream still passes while the writes land
+	# outside. Confirm the aim, and refuse rather than overwrite.
+	local want
+	want="$(cd "$repo" 2>/dev/null && pwd -P)/.git"
+	if [ "$(git -C "$repo" rev-parse --absolute-git-dir 2>/dev/null)" != "$want" ]; then
+		printf 'fixture_init_repo: %s does not resolve to itself — refusing to write config\n' \
+			"$repo" >&2
+		return 1
+	fi
+
 	git -C "$repo" config user.name "Hook Test" || return 1
 	git -C "$repo" config user.email "hook-test@example.invalid" || return 1
 	git -C "$repo" config commit.gpgsign false || return 1

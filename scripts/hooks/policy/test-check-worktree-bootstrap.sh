@@ -2,12 +2,12 @@
 set -euo pipefail
 
 # shellcheck source=../lib/git-fixture.sh
-source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../lib" && pwd)/git-fixture.sh"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../lib" && pwd)/git-fixture.sh" || exit 1
 scrub_git_env
 
 ROOT="$(git rev-parse --show-toplevel)"
 HOOK="$ROOT/scripts/hooks/policy/check-worktree-bootstrap.sh"
-TMP_DIR="$(fixture_mktemp)"
+TMP_DIR="$(fixture_mktemp worktree-bootstrap-check)"
 trap 'rm -rf "$TMP_DIR"' EXIT
 
 fail() {

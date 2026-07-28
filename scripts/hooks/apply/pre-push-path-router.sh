@@ -282,9 +282,9 @@ EOF
 	# `bash -n` above proved they parse, which is why 161 assertions could sit
 	# green against a guard that denied 95% of the orchestration it inspected.
 	# ~13s total, and only when a hook path is in the push.
-	# First, because every fixture-building suite below depends on it: it is what
-	# proves the environment scrub still cuts GIT_DIR. When that stops working the
-	# other suites do not fail, they pass against the real repository.
+	# Ahead of every fixture-building suite below, because it is what proves the
+	# environment scrub still cuts GIT_DIR. When that stops working the other
+	# suites do not fail, they pass against the real repository.
 	run_step "git-fixture-helper-tests" bash scripts/hooks/lib/test-git-fixture.sh
 	run_step "write-target-analyzer-tests" bash scripts/hooks/analyze/test-bash-write-targets.sh
 	run_step "main-worktree-guard-tests" bash scripts/hooks/policy/test-check-main-worktree-source-edit.sh
