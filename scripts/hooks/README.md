@@ -101,6 +101,18 @@ Current dispatchers:
   codex 공유 — `.claude/settings.json` + `.codex/hooks.json` PostToolUse(Bash) 양쪽이
   동일 스크립트를 호출한다.
 
+## Routing 계측 (opt-in, 로컬 전용)
+
+`apply/surface-routing.sh` 가 룰을 주입할 때 `routing.rule.delivered` 카운터를
+낸다. `OTEL_EXPORTER_OTLP_ENDPOINT` 가 없으면 **아무 것도 하지 않는다** —
+설정 방법과 무엇을 보는지는 `scripts/otel/collector-local.yaml` 상단 주석이
+SOT. 네트워크로 내보내는 exporter 추가는 제품 텔레메트리 결정이므로 ADR 필요
+(ADR 0036 telemetry zero-collection).
+
+측정 대상은 "룰이 도달했는가" 가 아니라 **"도달한 룰을 읽었는가"** 다.
+`routing.rule.delivered` 와 주입된 `memory/` 경로에 대한 Claude Code 자체
+`claude_code.tool_decision`(Read) 사이의 간극이 곧 헤맴 신호다.
+
 ## Memory / doc size cap thresholds
 
 - `policy/check-memory-size.sh` — `memory.md` 복합 cap: 200줄 + 12,000 chars. 어느 하나라도

@@ -57,6 +57,15 @@ done < "$paths_file"
 
 body="$(sort -u "$rules_file" | awk -F'\t' '{ printf "- %s — `%s`\n", $1, $2 }')"
 
+# Whether a routed rule is ever acted on is the open question this whole line of
+# work exists to answer, and it cannot be read off the transcript after the
+# fact. Count the delivery here; the read that should follow shows up in Claude
+# Code's own `claude_code.tool_decision` for Read. Off unless a local collector
+# endpoint is configured.
+source "$SCRIPT_DIR/otel-emit.sh"
+otel_count "routing.rule.delivered" "$(printf '%s\n' "$body" | grep -c '^- ')" \
+	"first_path=$(head -1 "$paths_file" | sed "s|^$ROOT/||")" || :
+
 jq -n --arg body "$body" '{
   hookSpecificOutput: {
     hookEventName: "PostToolUse",
