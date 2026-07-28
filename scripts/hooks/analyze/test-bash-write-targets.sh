@@ -117,6 +117,24 @@ expect "background: & resets a pending git -C" "./a.ts" "git -C & rm a.ts"
 # write to the wrong tree.
 expect "background: & undoes a completed cd" "./a.ts" "cd /elsewhere & rm a.ts"
 expect "cwd: a completed cd before ';' does carry" "/elsewhere/a.ts" "cd /elsewhere ; rm a.ts"
+# `&`, `|` and `( … )` are one class: each runs what it encloses in a subshell,
+# so a `cd` inside does not move the parent. Closing `&` alone left the other
+# two releasing writes (review #1860 round 4).
+expect "subshell: ( … ) does not move the parent" "./a.ts" "( cd /elsewhere && ls ) ; rm a.ts"
+expect "subshell: ( … ) still tracks cd inside itself" "/elsewhere/a.ts" \
+	"( cd /elsewhere && rm a.ts )"
+expect "subshell: nested ( … ) unwinds one level at a time" "/mid/a.ts" \
+	"cd /mid && ( ( cd /deep ) ) && rm a.ts"
+expect "subshell: a pipeline stage does not move the parent" "./a.ts" "cd /elsewhere | cat ; rm a.ts"
+# The cd ran BEFORE the pipeline, so it does survive it. Reverting to the base
+# directory here would re-anchor the write at the repo root and block it.
+expect "subshell: a cd before the pipeline survives it" "/elsewhere/log.txt" \
+	"cd /elsewhere && ls | tee log.txt"
+# `||` is a logical OR, not two pipes. The tokenizer emitted `|` per character,
+# so `cd "$W" || exit 1` looked like a pipeline and lost the unknown directory.
+expect "subshell: || is not a pipeline" "/elsewhere/a.ts" "cd /elsewhere || exit 1; rm a.ts"
+expect "subshell: || keeps an unexpandable cd unsure" "unsure./a.ts" \
+	'W=/x; cd "$W" || exit 1; rm a.ts'
 # The subcommand-host exemption applies to a host in COMMAND position only. As a
 # bare previous token it disarmed the next word, so a host NAME used as an
 # operand released the destination after it.

@@ -326,6 +326,16 @@ tokenize_quote_aware() {
 			# denied as repo paths. `|` and `;` cannot appear unquoted in a filename,
 			# so they are always separators; `&` is only one as `&&`, because a lone
 			# `&` belongs to the redirect forms (`2>&1`, `>&-`) handled downstream.
+			# `||` is one operator, not two pipes. Emitting it as two `|` made it
+			# indistinguishable from a pipeline downstream, so the subshell rule
+			# for `|` fired on `cd "$W" || exit 1` and threw away the unknown
+			# directory — three orchestration commands went back to being denied.
+			if (sq == 0 && dq == 0 && c == "|" && substr($0, i + 1, 1) == "|") {
+				if (has) { print tok; tok = ""; has = 0 }
+				print "||"
+				i++
+				continue
+			}
 			if (sq == 0 && dq == 0 && (c == "|" || c == ";")) {
 				if (has) { print tok; tok = ""; has = 0 }
 				print c
@@ -371,9 +381,17 @@ paths_from_command_tokens() {
 	# Working directory the command is running in, as `cd` moves it. Read by
 	# emit_path to resolve a relative write target. Command-position only: a `cd`
 	# that is not the first word of a segment (`grep cd file`) must not move it.
-	# Not a shell: a `cd` inside a subshell/`$(...)` leaks to the rest of the
-	# command here, which over-scopes toward the cwd rather than toward the
-	# starting directory.
+	#
+	# `cd` is also scoped to the construct it runs in, and getting that wrong is
+	# fail-OPEN, not conservative: `( cd worktrees/x && pnpm test ) ; rm
+	# src/App.tsx` deletes the file at the ROOT, and carrying the move past the
+	# `)` sent the guard looking in the worktree, where nothing was protected.
+	# The three constructs that scope it are handled where they are tokenised —
+	# `(`/`)` push and pop the anchor, `|` reverts to where its pipeline started,
+	# and `&` drops back to the base directory. `$(...)` and backticks are NOT:
+	# they are glued inside a token, so a `cd` in a command substitution still
+	# leaks. That ceiling is unmeasured in the recorded corpus.
+	local cwd_stack="" pipe_anchor="$BASH_WRITE_TARGETS_CWD"
 	CMD_CWD="$BASH_WRITE_TARGETS_CWD"
 	local at_cmd_start=1 expect_cd=0 expect_git=0 expect_git_c=0 git_c=""
 	# Previous token, for the subcommand-host blacklist below (`docker rm`).
@@ -433,9 +451,34 @@ paths_from_command_tokens() {
 				prev_word=""
 				prev_was_cmd_start=0
 				CMD_CWD="$BASH_WRITE_TARGETS_CWD"
+				pipe_anchor="$CMD_CWD"
 				continue
 				;;
-			"{" | "}" | "(" | ")" | "then" | "else" | "elif" | "do" | "done" | "fi" | "esac" | "!")
+			"(")
+				# A subshell: `cd` inside it does not move the parent. Remember
+				# where the parent stands so `)` can put it back.
+				cwd_stack="$CMD_CWD
+$cwd_stack"
+				pipe_anchor="$CMD_CWD"
+				at_cmd_start=1
+				prev_word=""
+				prev_was_cmd_start=0
+				continue
+				;;
+			")")
+				# Unbalanced (a `case` pattern written `x )`, a stray paren): leave
+				# the anchor alone rather than guess.
+				if [ -n "$cwd_stack" ]; then
+					CMD_CWD="${cwd_stack%%$'\n'*}"
+					cwd_stack="${cwd_stack#*$'\n'}"
+					pipe_anchor="$CMD_CWD"
+				fi
+				at_cmd_start=1
+				prev_word=""
+				prev_was_cmd_start=0
+				continue
+				;;
+			"{" | "}" | "then" | "else" | "elif" | "do" | "done" | "fi" | "esac" | "!")
 				at_cmd_start=1
 				# A keyword is not a subcommand host's argument. Leaving prev_word
 				# alone carried the host across it, so `docker { rm x; }` exempted
@@ -451,6 +494,18 @@ paths_from_command_tokens() {
 				# `cd && …`: the separator arrives before any operand, so this is a
 				# bare `cd` — it lands on $HOME, outside the repo.
 				[ "$expect_cd" = "1" ] && CMD_CWD="$CWD_UNKNOWN"
+				if [ "$word" = "|" ]; then
+					# Every stage of a pipeline is a subshell, so a `cd` inside one
+					# does not survive it: `cd /x | cat ; rm a` deletes `<cwd>/a`.
+					# Reverting to where this pipeline STARTED is what separates
+					# that from `cd /x && ls | grep y`, where the `cd` ran before the
+					# pipeline and does survive. Resetting to the base directory
+					# instead would re-anchor that second form at the repo root and
+					# block a write that lands outside it.
+					CMD_CWD="$pipe_anchor"
+				else
+					pipe_anchor="$CMD_CWD"
+				fi
 				expect_cd=0
 				expect_git=0
 				expect_git_c=0
