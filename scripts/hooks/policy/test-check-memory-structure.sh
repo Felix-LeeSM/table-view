@@ -23,14 +23,26 @@ scrub_git_env
 # Hand-maintained against the fixture directory ON PURPOSE. A sweep alone
 # reports green over an empty directory, so deleting the case a previous review
 # round paid for is invisible — the regression this convention exists to stop.
-# Derive these from the sweep and the check eats itself: drop a case and both
+# Derive this from the sweep and the check eats itself: drop a case and both
 # sides fall together.
 #
-# They are not the whole floor. Lowering a constant to match a deleted case is a
-# three-line edit, so the counts are ALSO checked against the guard source
-# below, which a fixture edit does not touch.
-EXPECTED_CASES=7
-EXPECTED_REJECTS=3
+# A table of verdict + name rather than a count, for two things a count misses.
+# Flipping a case's `expect:` from reject to accept does not move a case count,
+# and it fails here. And a deletion has to take a NAME out, so the diff reads
+# `-reject stray-non-markdown` instead of `-7 +6`.
+#
+# Ceiling, stated because the previous round's version claimed more than it did:
+# an author who means to delete a case and its row still gets green. Nothing
+# here prevents that, and nothing can. What it buys is that the loss is named in
+# the diff instead of hiding inside a lowered integer. The floors below are the
+# part that does not move with a fixture edit.
+EXPECTED_CASES="accept generated-index-exempt
+accept index-parent-exempt
+accept parent-with-index-and-child
+accept plain-room
+reject parent-without-index
+reject stray-filename
+reject stray-non-markdown"
 
 # One reject case per rejection path the guard has, one accept case per carve-out
 # it grants. Both numbers are read out of the guard rather than declared here, so
@@ -78,6 +90,7 @@ $unsuffixed"
 
 cases=0
 rejects=0
+swept=""
 
 for case_dir in "$FIXTURES"/*/; do
 	[ -d "$case_dir" ] || break
@@ -160,15 +173,16 @@ $strict_out"
 		*) fail "$case_name: 'expect:' must be reject or accept, got '$expect'" ;;
 	esac
 
+	swept="$swept$expect $case_name
+"
 	cases=$((cases + 1))
 done
 
 accepts=$((cases - rejects))
 
-[ "$cases" -eq "$EXPECTED_CASES" ] ||
-	fail "swept $cases cases, expected $EXPECTED_CASES — a case was deleted, or a new one needs the count raised"
-[ "$rejects" -eq "$EXPECTED_REJECTS" ] ||
-	fail "$rejects reject cases, expected $EXPECTED_REJECTS — a case was flipped to accept, or a new one needs the count raised"
+drift="$(diff <(sort <<<"$EXPECTED_CASES") <(sort <<<"${swept%$'\n'}") || true)"
+[ -z "$drift" ] || fail "case table drift (< declared, > on disk):
+$drift"
 [ "$rejects" -ge "$guard_rejections" ] ||
 	fail "$rejects reject cases for $guard_rejections rejection paths in the guard — one each"
 [ "$accepts" -ge 1 ] ||
