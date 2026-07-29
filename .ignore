@@ -1,0 +1,13 @@
+# ripgrep / fd 전용 제외 목록 (git 은 이 파일을 보지 않는다).
+#
+# 아래 넷은 과거 기록이다. 에이전트가 `rg` 로 현재 규칙을 찾을 때 폐기된 결정이
+# 같은 우선순위로 딸려 오는 것을 막는다. 실측 2026-07-29: `rg -l review-profile`
+# 이 56건을 냈고 그중 53건(95%)이 이 디렉터리들이었다.
+#
+# 과거 기록을 일부러 볼 때는 `rg --no-ignore <패턴> docs/sprints/` 로 되살린다.
+# git·훅·CI 는 영향받지 않는다 — 문서 게이트는 `find`(check-doc-size.sh) 와
+# `fs`(check-doc-links.ts, check-memory-paths.ts) 로 읽지 `rg` 를 쓰지 않는다.
+docs/sprints/
+docs/archives/
+docs/table_plus/
+docs/explorations/
