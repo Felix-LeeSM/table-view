@@ -19,8 +19,8 @@ source "$ROOT/scripts/hooks/lib/git-fixture.sh"
 # so deleting the case a previous review round paid for is invisible — the
 # regression this convention exists to stop. Derive these from the sweep and the
 # check eats itself: drop a fixture and both sides fall together.
-EXPECTED_CASES=1
-EXPECTED_REJECTS=1
+EXPECTED_CASES=2
+EXPECTED_REJECTS=2
 
 WORK="$(fixture_mktemp memory-structure-sweep)"
 trap 'rm -rf "$WORK"' EXIT
