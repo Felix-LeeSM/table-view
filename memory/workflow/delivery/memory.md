@@ -36,7 +36,8 @@ reflect 시킨다. 실패 worker 를 계속 새로 쌓지 않음.
 - T5 reflect 트리거(라운드 3 이상 / 유형 재발 / 리뷰어 사이클 보고) — 같은
   유형에 fix 를 더 쌓지 않는다. 재설계는 사용자 결정(`reflect:done` label).
   단 verdict 가 green 이면 중단이 아니다 — 라운드 3 이상이어도 `reflect:done`
-  붙이고 머지한다(T6).
+  붙이고 머지한다(T6). 게이트 진단은
+  [runbook/pr-merge-gates](../../runbook/pr-merge-gates/memory.md).
 - 사용자 명시 거부("commit 하지 마", "push 멈춰") — 즉시 중단.
 
 merge 자율 조건(정성 차원에 blocking 없음, CI SUCCESS + `review:approved`,

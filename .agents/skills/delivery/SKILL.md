@@ -88,8 +88,8 @@ T0~T7 오케스트레이션 절차 SOT 다. 행동 계약(ownership / 중단 조
 
 - 중단 조건(사용자 확인 / 별도 절차 필요) 도달 시 즉시 중단·보고: agent path 의
   `git push --force` / `--force-with-lease`, main 직접 push, `gh pr merge` 의
-  squash/merge/rebase 정책 미명시, T5 reflect 트리거, 사용자 명시
-  거부("commit 하지 마" 등).
+  squash/merge/rebase 정책 미명시, T5 reflect 트리거(단 green 은 제외 — T5),
+  사용자 명시 거부("commit 하지 마" 등).
 - hook 회피 금지: `--no-verify` / `--no-gpg-sign` / `LEFTHOOK=0` 등
   (`.claude/rules/git-policy.md`). hook 실패는 근본 fix. GPG signing pinentry
   timeout 시 즉시 중단, unsigned commit 으로 진행하지 않는다.
