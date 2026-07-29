@@ -36,13 +36,18 @@ scrub_git_env
 # here prevents that, and nothing can. What it buys is that the loss is named in
 # the diff instead of hiding inside a lowered integer. The floors below are the
 # part that does not move with a fixture edit.
-EXPECTED_CASES="accept generated-index-exempt
+# Every row on its own line, including the first and last: a row that shares a
+# line with the quote is a different edit from the rest, which is how a row
+# removal half-lands.
+EXPECTED_CASES="
+accept generated-index-exempt
 accept index-parent-exempt
 accept parent-with-index-and-child
 accept plain-room
 reject parent-without-index
 reject stray-filename
-reject stray-non-markdown"
+reject stray-non-markdown
+"
 
 # Every distinct violation message the guard can print, read out of the guard
 # rather than declared here. Each one has to be produced by some reject case, so
@@ -187,7 +192,7 @@ done
 
 accepts=$((cases - rejects))
 
-drift="$(diff <(sort <<<"$EXPECTED_CASES") <(sort <<<"${swept%$'\n'}") || true)"
+drift="$(diff <(sed '/^$/d' <<<"$EXPECTED_CASES" | sort) <(sed '/^$/d' <<<"$swept" | sort) || true)"
 [ -z "$drift" ] || fail "case table drift (< declared, > on disk):
 $drift"
 while IFS= read -r msg; do
