@@ -44,16 +44,20 @@ reject parent-without-index
 reject stray-filename
 reject stray-non-markdown"
 
-# One reject case per rejection path the guard has, one accept case per carve-out
-# it grants. Both numbers are read out of the guard rather than declared here, so
-# adding a decision to the guard demands a case for it, and trimming cases to fit
-# a lowered constant fails.
+# Every distinct violation message the guard can print, read out of the guard
+# rather than declared here. Each one has to be produced by some reject case, so
+# adding a rejection path to the guard demands a case for it.
 #
-# Ceiling: this greps for how the guard spells those two things today —
-# `violations=$((violations + 1))` and a `) continue ;;` arm. A rewrite that
-# increments or exempts some other way lowers the floor silently, so both are
-# asserted non-zero before use.
-guard_rejections="$(grep -cF 'violations=$((violations + 1))' "$CHECK" || true)"
+# This is "one case per rejection path" stated so it can tell WHICH path a case
+# covers. A count cannot, and that is not theoretical: two cases on the filename
+# path and none on the missing-index path satisfies `rejects >= 2` while the
+# second path sits unguarded — measured on the previous version of this file.
+guard_messages="$(grep -oE 'memory structure: .* — [^"]*' "$CHECK" | sed 's/^.* — //' | sort -u)"
+
+# Accept cases per carve-out. Still a count: a carve-out is a `continue`, it
+# prints nothing, so there is no output to map a case onto the way the messages
+# above map the reject cases. Ceiling: two accept cases satisfy this whichever
+# carve-outs they exercise.
 guard_carveouts="$(grep -cE '\) continue ;;' "$CHECK" || true)"
 
 WORK="$(fixture_mktemp memory-structure-sweep)"
@@ -83,14 +87,15 @@ unsuffixed="$(git -C "$ROOT" ls-files -- "$FIXTURE_ROOT" | grep -v '\.fixture$' 
 [ -z "$unsuffixed" ] || fail "tracked fixture files without the .fixture suffix:
 $unsuffixed"
 
-[ "$guard_rejections" -gt 0 ] ||
-	fail "read 0 rejection paths out of the guard — the floor below would be vacuous"
+[ -n "$guard_messages" ] ||
+	fail "read 0 violation messages out of the guard — the floor below would be vacuous"
 [ "$guard_carveouts" -gt 0 ] ||
 	fail "read 0 carve-outs out of the guard — the floor below would be vacuous"
 
 cases=0
 rejects=0
 swept=""
+reject_output=""
 
 for case_dir in "$FIXTURES"/*/; do
 	[ -d "$case_dir" ] || break
@@ -159,6 +164,8 @@ $strict_out"
 $warn_out"
 			grep -Fq "$mentions" <<<"$warn_out" ||
 				fail "$case_name: warn-only mode said nothing about '$mentions'"
+			reject_output="$reject_output$strict_out
+"
 			rejects=$((rejects + 1))
 			;;
 		accept)
@@ -183,8 +190,13 @@ accepts=$((cases - rejects))
 drift="$(diff <(sort <<<"$EXPECTED_CASES") <(sort <<<"${swept%$'\n'}") || true)"
 [ -z "$drift" ] || fail "case table drift (< declared, > on disk):
 $drift"
-[ "$rejects" -ge "$guard_rejections" ] ||
-	fail "$rejects reject cases for $guard_rejections rejection paths in the guard — one each"
+while IFS= read -r msg; do
+	[ -n "$msg" ] || continue
+	grep -Fq "$msg" <<<"$reject_output" ||
+		fail "no reject case makes the guard print this, so that rejection path has no case:
+  $msg"
+done <<<"$guard_messages"
+
 [ "$accepts" -ge 1 ] ||
 	fail "no accept case — the sweep is then satisfied by a guard that rejects everything"
 [ "$accepts" -ge "$guard_carveouts" ] ||
