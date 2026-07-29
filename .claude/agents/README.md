@@ -15,7 +15,7 @@ tools: [Read, Edit, Write, Bash, ...]
 model: opus | sonnet | haiku
 ---
 
-caveman 모드. 작업 시 read:
+작업 시 read:
 1. memory/<source-room>/memory.md (룰)
 2. 조건부 read (보안 키워드 / god file 등)
 금지: --no-verify, LEFTHOOK=0, destructive Bash
@@ -31,17 +31,42 @@ caveman 모드. 작업 시 read:
   세션만 `Agent` tool 사용). fan-out coordinator (`pr-reviewer`) 는 top-level
   전용이고, spawn 실패 시 관점-순차 단독 검증으로 강등한다 — 기준·fallback SOT 는
   `.agents/skills/pr-review/SKILL.md` Review Pack.
-- 각 wrapper 본문 첫 줄은 `caveman 모드.` 로 시작 (delivery / security-handoff 는 조건부 변형 `caveman 모드 (단 …)`). agent 파일 간 상속 메커니즘은 없음 — 아래 "caveman/ponytail 주입" 참조.
+- 공통 규칙을 한 wrapper 에만 적어 두지 않는다. agent 정의 파일 간 상속
+  메커니즘이 없어 나머지 agent 에는 전달되지 않는다 — 아래 "subagent 가 보는 것"
+  참조.
 
-## caveman/ponytail 주입 (상속 아님)
+## subagent 가 보는 것 (상속 두 가지를 구분)
 
-Claude Code 하네스에 agent 정의 파일 간 **상속은 없다** — 각 `.md` 는 독립
-프롬프트다. 모든 subagent 에 caveman(간결 응답)/ponytail(lazy 구현) 을 거는 실제
-주입은 **userspace** `~/.claude/settings.json` 의 `SubagentStart` 훅
-(`~/.agents/hooks/subagent-rules.js`, repo 밖) 이 런타임에 수행한다. 보강으로 각
-wrapper 본문도 자체 `caveman 모드.` 줄을 하드코딩해 힌트를 남긴다. repo-side
-caveman 규칙 본문은 `.agents/skills/caveman/SKILL.md` (과거 문서가 지목한
-`memory/engineering/conventions/memory.md` 에는 caveman 내용 없음).
+**agent 정의 파일끼리는 상속이 없다.** `.claude/agents/*.md` 는 각각 독립
+프롬프트다. 한 wrapper 가 다른 wrapper 의 본문을 물려받는 경로는 없다.
+
+**subagent 는 `CLAUDE.md` 를 물려받는다.** 도구 사용 0회 프로브(#1864 측정 1)로
+확인 — subagent 컨텍스트에 repo `CLAUDE.md`, 그리고 `~/.claude/CLAUDE.md` 가
+`@` import 한 `~/.agents/AGENTS.md` 본문이 있었다. 반면 repo 루트 `AGENTS.md`
+본문은 없었다 — 그때 `CLAUDE.md` 가 마크다운 링크로만 가리켰기 때문이다. 즉
+**`@` import 는 따라가고 마크다운 링크는 안 따라간다.** #1865 가 그 링크를
+`@AGENTS.md` 로 바꿔 지금은 도달한다. 여전히 링크로만 걸린 문서
+(`memory/index/by-surface.md`, `docs/PLAN.md`)는 spawn prompt 에 경로를 직접
+적어야 subagent 가 읽는다.
+
+**`.claude/rules/` 는 링크와 무관한 별도 채널이다.** 무조건 내려가는 것은
+`README.md`(frontmatter 없음)와 `git-policy.md`(`paths: "**"`) 둘이다. 나머지
+— `testing.md`, `test-scenarios.md`, `react-conventions.md`,
+`rust-conventions.md`, `e2e-scenarios.md` — 는 working file path 가 자기 glob 에
+매치할 때만 붙는다. 그래서 `CLAUDE.md` 의 링크 셋 중 `git-policy.md` 만
+도달하는데, 그것도 링크가 아니라 `paths: "**"` 때문이다. 공통 룰을 좁은 glob
+wrapper 에 두면 그 확장자를 안 건드리는 subagent 는 못 본다.
+
+`CLAUDE.md` / `AGENTS.md` 는 세션 시작 시 스냅샷으로 잡힌다. 고쳐도 진행 중인
+세션에는 안 먹으므로 반영 확인은 새 세션에서 한다(#1864 측정 2). 단 스냅샷이
+세션당 하나는 아니다 — 다른 checkout 의 파일을 건드리면 그쪽 `CLAUDE.md` 가
+중간에 추가로 주입된다. worktree 를 오가는 세션은 두 버전을 다 보게 된다. 훅은
+subagent spawn 마다 다시 실행되므로 즉시 반영된다.
+
+ponytail(lazy 구현) 을 모든 subagent 에 거는 주입은 **userspace**
+`~/.claude/settings.json` 의 `SubagentStart` 훅
+(`~/.agents/hooks/subagent-rules.js`, repo 밖) 이 런타임에 수행한다. 같이 걸려
+있던 출력 압축 모드 주입은 2026-07-29 에 제거했다(#1864).
 
 주입 훅을 repo (`scripts/hooks/`) 로 이관해 `.claude/settings.json` 에 등록하는
 방안(#1022)은 런타임/userspace 를 건드리므로 사람 결정 대기 — 본 문서는 정정만.
@@ -58,6 +83,5 @@ Codex / Cursor 도 같은 agent 개념 사용 시 본 wrapper 패턴을 base 로
 - `memory/memory.md` — 팔레스 입구
 - `memory/workflow/memory.md` — 협업 phase 룰
 - `memory/engineering/conventions/memory.md` — 코드 룰
-- `.agents/skills/caveman/SKILL.md` — caveman 규칙 본문 (repo-side source)
 - `.claude/rules/README.md` — auto-load rule wrapper 정책
 - `.agents/skills/remember/SKILL.md`, `.agents/skills/split-memory/SKILL.md` — agent skill source

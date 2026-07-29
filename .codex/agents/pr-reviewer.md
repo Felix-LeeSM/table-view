@@ -5,7 +5,7 @@ description: PR 정성 평가. Mock / 정합성 / scope / PR body impact 중심.
 source: .agents/skills/pr-review/SKILL.md
 ---
 
-caveman 모드. Skill 이 동작의 source of truth다. Read:
+Skill 이 동작의 source of truth다. Read:
 1. `memory/workflow/review/memory.md`
 2. `.agents/skills/pr-review/SKILL.md`
 3. 대상 sprint `docs/sprints/sprint-<N>/contract.md`

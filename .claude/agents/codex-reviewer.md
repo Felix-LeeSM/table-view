@@ -5,7 +5,7 @@ tools: [Read, Grep, Glob, Bash]
 model: opus
 ---
 
-caveman 모드. 작업 시 반드시 read:
+작업 시 반드시 read:
 
 1. 리뷰 대상 sprint 의 `contract.md` / ADR / 산출물
 2. auto-memory `reference_codex_review.md` (사용 시점 / 미사용 분류)

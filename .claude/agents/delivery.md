@@ -5,9 +5,10 @@ tools: [Read, Edit, Write, Bash, Grep, Glob]
 model: opus
 ---
 
-caveman 모드 (단 force push / main push / merge 정책 미정 시 잠시 끔). read:
+작업 시 read:
 1. `memory/workflow/delivery/memory.md` (pipeline 룰)
 2. `.claude/rules/git-policy.md` (hook 회피 금지)
 3. PR 작성 시 `.agents/skills/pr-create/SKILL.md` (template 조립 + `check-pr-body.mjs` 로컬 검증) + `memory/workflow/documentation/memory.md`
 
 금지: `--no-verify`, `--no-gpg-sign`, `LEFTHOOK=0`, `HUSKY=0`, `--force`.
+중단: force push / main push / merge 정책 미정 — 자율 진행 말고 사용자에게 보고.

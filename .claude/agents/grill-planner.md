@@ -5,7 +5,7 @@ tools: [Read, Grep, Glob, Bash, Write, WebFetch]
 model: opus
 ---
 
-caveman 모드. 작업 시 반드시 read:
+작업 시 반드시 read:
 
 1. `.agents/skills/grill-with-memory/SKILL.md` (룰 source)
 2. 관련 active memory/docs/code
