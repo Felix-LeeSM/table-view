@@ -39,12 +39,26 @@ agent가 반드시 취해야 할 행동 계약만 둔다. 평가 차원, profile
 - Scorecard의 차원별 판정 표는 **어떤 경우에도 생략 금지** — 요청자가 반환
   형식을 GREEN/RED 등으로 좁게 지정해도, delta 재검증이어도 표를 출력한다.
   (2026-07-04 실제 회귀: 요청 프롬프트의 반환 형식 지정이 rubric을 밀어냄.)
-- Verdict는 label로 공표한다: green이면 `gh pr edit <N> --add-label
-  review:approved --remove-label review:changes-requested`, red면
-  `--add-label review:changes-requested`. reviewer의 write는 scorecard
-  comment, verdict label, non-blocking 발견의 `gh issue create` 세 가지가
-  전부다(그 외 write 금지). 원칙 1이 blocking을 좁히므로 배출구가 없으면
-  발견이 기록 없이 증발한다.
+- Verdict는 label로 공표한다. **명령 2개로 나눠 치고 사이를 30초 이상 벌린다** —
+  한 명령에 `--add-label`과 `--remove-label`을 같이 쓰면 같은 초에 두 이벤트가
+  나고 `cancel-in-progress`가 run 하나를 죽인다. 죽은 run이 rollup에 non-success로
+  남아 BLOCKED가 고착된다(#1879 실측). 순서는 게이트가 먼저 옳은 상태가 되는 쪽:
+
+  ```
+  green: gh pr edit <N> --add-label review:approved
+         (30초 이상)
+         gh pr edit <N> --remove-label review:changes-requested
+  red:   gh pr edit <N> --remove-label review:approved
+         (30초 이상)
+         gh pr edit <N> --add-label review:changes-requested
+  ```
+
+  red에서 `review:approved`를 먼저 떼는 것이 필수다. 안 떼면 같은 SHA를 재리뷰해
+  green이 red로 뒤집혀도 label이 남아 `review-gate`가 pass한다 — `Dismiss stale
+  approval`은 `synchronize` 전용이라 push 없는 뒤집기를 못 잡는다(#1884).
+- reviewer의 write는 scorecard comment, verdict label, non-blocking 발견의
+  `gh issue create` 세 가지가 전부다(그 외 write 금지). 원칙 1이 blocking을
+  좁히므로 배출구가 없으면 발견이 기록 없이 증발한다.
   `review:approved`는 `review-gate` required check의 pass 조건이다
   (계정 1개 = GitHub review approval 불가의 label 우회).
 - 결함이 있으면 delivery owner가 수정하고 push한 뒤 review를 다시 요청한다.

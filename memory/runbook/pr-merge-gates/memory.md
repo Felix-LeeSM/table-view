@@ -74,7 +74,8 @@ blocker 인 경우가 많다 (docs/hook 변경이어도 ruleset 이 E2E 를 요�
   재발화.
 - **delta GREEN 후 고착 해소**: 재push→delta 리뷰 GREEN 인데 gate 가 fail 로 고착이면
   리뷰어 label 유무와 무관하게 `gh pr edit <pr> --remove-label "review:approved"` →
-  `--add-label "review:approved"` 로 재발화해야 새 labeled run 이 pass 로 뜬다.
+  **30초 이상 대기** → `--add-label "review:approved"` 로 재발화해야 새 labeled run 이
+  pass 로 뜬다. 대기가 없으면 두 이벤트가 같은 초에 나 위 CANCELLED 고착을 새로 만든다.
   단 `comments >= 3` 이면 재발화해도 라운드 게이트에서 다시 막힌다 (아래).
 - **라운드 3 이상은 `labeled` 도 fail (2026-07-29)**: `Stop at review round 3` step 이
   `comments >= 3` 이고 `reflect:done` label 이 없으면 exit 1 한다. rerun 도 label
