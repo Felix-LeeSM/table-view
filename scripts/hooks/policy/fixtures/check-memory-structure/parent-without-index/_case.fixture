@@ -1,0 +1,15 @@
+---
+expect: reject
+mentions: memory/parent — 자식 디렉토리는
+---
+
+# Parent without an index
+
+The guard's second rejection path: `memory/parent` has a child directory and no
+`memory.md` of its own.
+
+`mentions` has to run past the path here. The first version of this case said
+`memory/parent`, which is a prefix of `memory/parent/child/memory.md` — a guard
+blaming the healthy child directory printed a superset of that string and the
+case still passed. The sweep now rejects a `mentions` that is a prefix of any
+path the case builds.
