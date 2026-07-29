@@ -91,24 +91,31 @@ hardlink 라 물리 디스크 추가 없이 rsync 복사보다 빠르다. `cargo
     가 `git worktree add` block (brain 무관). path form(기존 진입) 은 허용.
 - cleanup: PR 머지 직후 또는 sprint 종료 시. `gh pr merge --delete-branch`
   는 branch 만 삭제 — worktree 디스크는 별도 정리 필요.
-- `scripts/worktree-cleanup.sh` 는 dirty worktree 를 제거하지 않고 SKIP 한다.
-  dirty 는 진행 중이거나 보존 사유가 필요한 상태로 보고 먼저 확인한다. 2026-07-29
-  실측에서 머지된 PR 의 worktree 하나가 커밋 안 된 51줄을 갖고 있었다.
+- `scripts/worktree-cleanup.sh` 는 dirty worktree 를 SKIP 한다 (untracked 도
+  dirty). 2026-07-29 실측에서 머지된 PR 의 worktree 하나가 커밋 안 된 51줄을 갖고
+  있었다 — 먼저 확인하고 보존 사유를 기록한다.
 
 ## `--merged` 판정 근거
 
-머지 여부는 PR 상태로 판정한다 — `gh pr list --head <branch> --state merged`.
-조상 판정 (`git for-each-ref --merged origin/main`) 은 이 저장소에서 구조적으로
-0건이다. squash 머지가 브랜치 커밋을 main 의 조상으로 만들지 않기 때문이고,
-2026-07-29 실측에서 머지된 PR 의 worktree 5개를 한 건도 못 잡았다 (#1932).
-`gh` 조회가 실패하면 `WARN` + 비정상 종료 — 조용한 0건은 "정리할 게 없다" 와
-구분이 안 된다. 테스트는 `WORKTREE_CLEANUP_PR_MERGED_CMD` 로 조회를 갈아끼워
+**조상 관계는 머지 여부와 무관하다.** 양쪽으로 틀린다 (#1932, 2026-07-29 실측):
+squash 머지된 브랜치는 main 의 조상이 아니라 머지된 worktree 5개를 하나도 못
+잡았고, 방금 spawn 한 브랜치는 `origin/main` 에 앉아 자명한 조상이라
+`for-each-ref --merged` 가 나열한 32건 중 둘이 머지 PR 0건인 활성 worktree 였다.
+
+그래서 머지된 PR 의 head OID (`gh pr list --head <b> --state merged --json
+headRefOid`) 를 받아 **로컬 tip 이 그 안에 포함될 때만** 제거한다. 이름은 한 번
+참이면 영원히 참이라 이름 재사용과 머지 뒤 추가 커밋을 못 거른다. 판정 불가는
+미머지로 강등하지 않는다 — 조회 실패 / OID 아닌 응답 / 로컬에 없는 OID 는 전부
+`WARN` + 비정상 종료. 스윕 끝에 한 줄 요약을 남긴다 (조용한 0건이 이 버그의
+서명이었다). 테스트는 `WORKTREE_CLEANUP_PR_MERGED_CMD` 로 조회를 갈아끼워
 네트워크를 타지 않는다.
 
-`worktrees/` 아래에 있는데 `git worktree list` 에 없는 디렉토리는 `--merged` /
-`--prune` 이 `ORPHAN:` 으로 보고만 한다. 자동 삭제 금지 — 실측에서 `.git` 이
-저장소 이름이 바뀌기 전 경로를 가리켰다. `--prune` 은 반대 방향(메타데이터만
-남고 디렉토리가 없음)만 처리한다.
+절대 안 지우는 것: main worktree, **명령을 실행한 그 worktree** (서 있는 자리가
+사라지면 이후 git 호출이 getcwd 에러를 뱉고 스윕이 조용히 잘린다), `git status`
+를 못 읽는 worktree, `git worktree list` 에 없는 디렉토리 (`ORPHAN:` 으로 보고만
+— 실측에서 `.git` 이 이름 바뀌기 전 경로를 가리켰다. 남의 저장소일 수 있다.
+`--prune` 은 반대 방향만 처리). gitignore 된 로컬 상태는 디렉토리와 함께
+사라지므로 지우기 전에 `NOTE:` 로 알린다 — 백업 정책은 #1948.
 
 ## Primary worktree guard
 
