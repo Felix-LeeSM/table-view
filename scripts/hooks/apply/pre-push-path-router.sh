@@ -517,6 +517,14 @@ else
 	if [ "$needs_ci_workflow" = "1" ]; then
 		run_ci_workflow_gates
 	fi
+	# The round-gate contract spans the workflow, the delivery skill and two
+	# memory rooms, so any one of those routes can break it on its own. hook is
+	# in the list because the check itself lives under scripts/hooks — without
+	# it, gutting the check is the one edit the check cannot catch.
+	if [ "$needs_ci_workflow" = "1" ] || [ "$needs_memory" = "1" ] ||
+		[ "$needs_agent" = "1" ] || [ "$needs_hook" = "1" ]; then
+		run_step "review-gate-round-contract" bash scripts/hooks/policy/test-review-gate-round.sh
+	fi
 	run_frontend_and_rust_gates
 fi
 

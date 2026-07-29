@@ -1,7 +1,7 @@
 ---
 title: Delivery — commit → push → PR → review → merge 자율 행동 계약
 type: workflow-rule
-updated: 2026-07-27
+updated: 2026-07-29
 task: delivery, commit, push, pr, review, merge
 trigger:
   signal: implementation 완료 / 사용자가 "마무리해" / sprint 종료
@@ -33,6 +33,8 @@ reflect 시킨다. 실패 worker 를 계속 새로 쌓지 않음.
   ([git-policy.md](../../../.claude/rules/git-policy.md)).
 - main 직접 push (PR 우회).
 - `gh pr merge` 의 squash/merge/rebase 정책이 명시 안 됐을 때.
+- T5 reflect 트리거(라운드 3 이상 / 유형 재발 / 리뷰어 사이클 보고) — 같은
+  유형에 fix 를 더 쌓지 않는다. 재설계는 사용자 결정(`reflect:done` label).
 - 사용자 명시 거부("commit 하지 마", "push 멈춰") — 즉시 중단.
 
 merge 자율 조건(정성 차원에 blocking 없음, CI SUCCESS + `review:approved`,
