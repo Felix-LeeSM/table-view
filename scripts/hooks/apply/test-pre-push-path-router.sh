@@ -5,6 +5,8 @@ set -euo pipefail
 
 # shellcheck source=../lib/git-fixture.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../lib" && pwd)/git-fixture.sh" || exit 1
+# shellcheck source=../analyze/path-classifier.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../analyze" && pwd)/path-classifier.sh" || exit 1
 scrub_git_env
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
@@ -386,15 +388,58 @@ assert_contains "$delete_output" "RUN memory-paths:" "delete frontend"
 # nothing executed them. #1862 found one of them by hand and wired it; the other
 # three survived that sweep, and one of those builds fixture repositories, which
 # is the failure this repository has already paid for. Finding them by hand is
-# what failed, so compare the router's own `run_step` lines against the tracked
-# suites instead. Deliberately reading the router as text: the point is to catch
-# a suite that is never named there, which running the router cannot show.
-unwired="$(comm -23 \
-	<(git -C "$ROOT" ls-files 'scripts/hooks/**/test-*.sh' 'scripts/test-*.sh' | sort) \
-	<(grep -o 'run_step "[^"]*" bash [^ ]*\.sh' "$ROUTER" | awk '{print $NF}' | sort -u))"
+# what failed, so compare mechanically.
+#
+# The wired set is the router's own DRY_RUN output, reusing the route cases
+# already run above, NOT a grep for `run_step` over the router text. Text
+# matching answered wrong in both directions, measured on copies: a commented-out
+# `run_step`, one inside a function nothing calls, and one inside a heredoc all
+# counted as wired; `run_step_in`, a line continuation, and a path held in a
+# variable all counted as unwired. DRY_RUN prints what would actually execute.
+#
+# Two routes, because the suites are split across them: `.github/workflows/*`
+# reaches nine of them and a hook path reaches the rest.
+wired="$(printf '%s\n%s\n' "$hook_output" "$ci_workflow_output" |
+	sed -n 's/^RUN [^:]*:.* bash \([^ ]*\.sh\).*/\1/p' | sort -u)"
+
+# One pathspec and a basename filter, not a set of `**` globs. In a git pathspec
+# `*` crosses `/`, so `scripts/*.sh` already reaches every depth, while
+# `scripts/hooks/**/test-*.sh` requires at least one `/` and silently cannot see a
+# suite placed directly in `scripts/hooks/`. There is no such file today, so no
+# mutation can prove the missing-glob case — removing the construct is what makes
+# it unprovable-because-absent instead of untested.
+tracked_suites="$(git -C "$ROOT" ls-files 'scripts/*.sh' |
+	grep -E '(^|/)test-[^/]*\.sh$' | sort)"
+
+# An empty left side makes every comparison below vacuous — `comm` would find
+# nothing missing and this file would report green with the suites gone. The
+# floor is hand-maintained ON PURPOSE: derive it from the same `ls-files` and
+# both sides fall together, which is green. Same reasoning as the `tracked + 10`
+# constant in the router's `hook-shell-syntax` step.
+suite_count="$(printf '%s\n' "$tracked_suites" | grep -c . || true)"
+[ "$suite_count" -ge 25 ] || {
+	echo "FAIL: only $suite_count suites tracked, expected at least 25" >&2
+	exit 1
+}
+
+unwired="$(comm -23 <(printf '%s\n' "$tracked_suites") <(printf '%s\n' "$wired"))"
 [ -z "$unwired" ] || {
 	echo "FAIL: suites the router never runs:" >&2
 	printf '  %s\n' $unwired >&2
+	exit 1
+}
+
+# Being in the router is not enough: the hook route only runs when the push
+# carries a path `is_hook_path` recognises. A suite outside that list is wired to
+# a gate its own edits never trigger.
+unrouted=""
+while IFS= read -r suite; do
+	[ -n "$suite" ] || continue
+	is_hook_path "$suite" || unrouted="$unrouted $suite"
+done <<<"$tracked_suites"
+[ -z "$unrouted" ] || {
+	echo "FAIL: suites whose own edits do not select the hook route:" >&2
+	printf '  %s\n' $unrouted >&2
 	exit 1
 }
 
