@@ -43,6 +43,59 @@ Rules:
 - Shared business/tooling CLIs stay outside this directory until they are proven hook-only.
 - Agent-specific wrappers stay in the runtime directory and delegate here.
 
+## Guard fixtures (`policy/fixtures/`)
+
+A `policy/` guard that decides from file content owns a fixture directory, and
+the suite beside it sweeps that directory whole:
+
+```
+policy/fixtures/<guard>/<case>.md   one input, one verdict
+policy/test-<guard>.sh              sweeps every case in it
+```
+
+Why a directory instead of cases inline in the suite: when a review round gets
+an input past a guard, the author fixes the guard and the input is thrown away.
+The next round starts from a blank page, so a fix that loses the previous
+round's detection is invisible. Measured on #1905 — the round-2 rewrite of a
+check scored 0 hits on the same bytes the round-1 version found, and only a
+human reading it again noticed. A case file is the handoff: round N's escape
+becomes round N+1's regression test.
+
+Each case carries its whole setup in frontmatter:
+
+```
+---
+fixture: memory/parent/child/memory.md   where it lands in the throwaway tree
+expect: reject                           reject | accept
+mentions: memory/parent                  reject only — what the guard must name
+---
+```
+
+`mentions` is what keeps a reject case honest. `expect: reject` alone is
+satisfied by *anything* firing, so a case written for one rejection path keeps
+passing after that path is deleted, as long as some other path still trips.
+Naming the string the guard has to print binds the case to the path it was
+written for.
+
+Applying this to another guard:
+
+1. The case file is the guard's entire input, so this fits guards that decide
+   from file content. `check-memory-structure.sh` qualifies.
+   `check-adr-frozen.sh` does not — it reads `git diff --cached`, which a case
+   file cannot hold. Do not generalize the convention to reach argv, env, or
+   repository state; those need a fixture repository (`lib/git-fixture.sh`).
+2. Copy `policy/test-check-memory-structure.sh` and repoint `CHECK` and
+   `FIXTURES`. The sweep, the frontmatter reader, and the assertions are the
+   same shape for any content guard.
+3. One case per rejection path in the guard source, plus at least one `accept`.
+   Without an accept case the whole suite is satisfied by a guard that rejects
+   everything.
+4. Set `EXPECTED_CASES` / `EXPECTED_REJECTS` by hand. They are the only reason
+   deleting a case fails; derived from the sweep they would fall along with it.
+5. Wire the suite into `apply/pre-push-path-router.sh`.
+   `apply/test-pre-push-path-router.sh` fails on a tracked `test-*.sh` the
+   router never names, so an unwired suite does not stay unwired quietly.
+
 ## Shared libs (`lib/`)
 
 - `lib/*.sh` are **source-only modules** — pure function definitions, no
