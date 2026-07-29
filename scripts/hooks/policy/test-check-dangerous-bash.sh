@@ -157,7 +157,7 @@ run_case \
   '{"tool_input":{"command":"git log --oneline"}}' \
   EMPTY
 
-# Case 5 — gh pr merge warns because worktree cleanup is a separate T7 step.
+# Case 5 — gh pr merge warns because worktree cleanup is a separate step.
 run_case \
   "case5: gh pr merge 123 → warn cleanup reminder" \
   0 \

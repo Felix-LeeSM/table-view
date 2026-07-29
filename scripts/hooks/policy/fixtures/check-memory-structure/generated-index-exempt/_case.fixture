@@ -1,0 +1,11 @@
+---
+expect: accept
+---
+
+# The generated index is exempt from the filename rule
+
+`memory/index/*.md` is written by `scripts/regenerate-indexes.sh`, so the first
+rejection path skips it. This is the carve-out a rewrite of that path is most
+likely to drop: the naive "every file under memory/ must be memory.md" rule is
+shorter, still rejects `stray-filename`, and turns every index regeneration into
+a blocked push.

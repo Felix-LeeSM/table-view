@@ -136,17 +136,18 @@ orchestrator 는 spawn 할 때 agent registry 를 머릿속/작업 노트에 유
 
 | state | 의미 |
 |---|---|
-| planned | 목적 / PR / worktree / owner / 종료 조건 확정 |
+| planned | 목적 / PR / worktree / node / 종료 조건 확정 |
 | running | agent 작업 중. 같은 책임 중복 spawn 금지 |
 | waiting | CI / review / 사용자 결정 대기 |
 | done | 결과가 PR 또는 branch 에 반영됨 |
 | closed | `close_agent` + worktree cleanup 또는 보존 사유 기록 완료 |
 | abandoned | 실패/오염. push 금지, close 후 상태 기록 |
 
-한 PR 의 write 책임자는 **delivery owner 1명**. reviewer 는 read-only.
-review finding 은 새 worker 를 계속 만들지 말고 같은 delivery owner 에게
-reflect/fix 로 되돌린다. 실패 worker 는 즉시 close 하고 dirty worktree 는
-보존 사유를 기록하거나 사용자 승인 후 정리.
+**worktree 는 PR 당 하나이고, 거기에 동시에 쓰는 node 는 하나다.** 파일을 쓰는
+역할은 구현자뿐이고 reviewer 는 read-only. review finding 은 새 worktree 를 만들지
+말고 같은 worktree 에 다음 라운드 구현자를 붙인다 — node 당 worktree 로 쪼개면 죽은
+구현자의 미푸시 커밋을 다음 구현자가 이어받지 못한다. 실패한 node 는 즉시 close 하고
+dirty worktree 는 보존 사유를 기록하거나 사용자 승인 후 정리.
 
 ## 주의
 

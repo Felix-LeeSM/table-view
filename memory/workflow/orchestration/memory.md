@@ -1,7 +1,7 @@
 ---
 title: Orchestration — 병렬 작업 spawn · 리뷰 큐 · 사이클 정지
 type: workflow-rule
-updated: 2026-07-27
+updated: 2026-07-29
 task: orchestration, parallel-pr, spawn, review-queue, cycle-detection, issue-authoring
 trigger:
   signal: 여러 작업을 동시에 돌리거나, 이슈를 발행하거나, 리뷰 라운드가 안 끝날 때
@@ -14,25 +14,30 @@ Top-level orchestrator 의 행동 계약. 개별 작업 방법은 각 skill 이 
 방은 **작업 사이의 결정** 만 둔다 — 무엇을 언제 spawn 하는가, 리뷰를 어떤 순서로
 붙이는가, 언제 멈추는가.
 
-## 1. 범위를 예측하지 않는다
+## 1. 파일 범위는 착수 전에 티켓이 갖는다
 
-파일 범위를 가장 잘 아는 쪽이 가장 늦게 알고, 가장 일찍 결정해야 하는 쪽이 가장
-모른다 — orchestrator 는 primary worktree 가 orchestration-only 라 코드를 읽지
-않고 checkout 도 밀려 있다. 구현 agent 는 착수해봐야 안다.
+범위를 예측하지 않는다는 옛 전제는 폐기됐다. 계획이 구현 안에 있던 시절엔 구현
+agent 가 착수해봐야 알았지만, 지금은 명세 작성자(`issue-refine`)가 착수 전에 전수
+명령을 **실제로 돌려서** 티켓에 파일 범위를 박는다. 그 출력이 곧 범위다.
 
-그래서 spawn 시점에 겹침을 예측해 막지 않는다. **PR 생성 직후 사실로 대조한다.**
+그래서 spawn 전에 티켓의 파일 범위로 겹침을 재고, PR 이 열린 뒤에는 사실로 다시
+대조한다.
 
     gh pr view <N> --json files -q '.files[].path'
 
+이 명령의 출력은 orchestrator 컨텍스트에 넣지 않는다 — 쌍마다 교집합을 재고 순서만
+돌려주는 것은 판단이 0 이라 script 의 일이다 (§2).
+
 **Why**: 2026-07-25 동시 in-flight 8건에서 28쌍 중 18쌍이 파일 교집합을 가졌고,
 `docs/contributor-guide/testing-and-quality.md` 하나를 5개 PR 이 동시 수정했다
-(`docs/ROADMAP.md` 4개, `docs/product/known-limitations.md` 3개). 예측 기반
-설계였다면 셋 다 놓쳤다.
+(`docs/ROADMAP.md` 4개, `docs/product/known-limitations.md` 3개). 겹침은 예외가
+아니라 기본값이라 재지 않으면 리뷰 한 라운드가 통째로 버려진다.
 
 ## 2. 작업은 병렬로, 리뷰를 직렬화한다
 
 충돌 비용은 작업이 아니라 리뷰다. 겹침이 있으면 작업을 막는 게 아니라 **리뷰 큐
-순서** 를 준다.
+순서** 를 준다. 큐를 만드는 주체는 orchestrator 가 아니라 script 다 — 판단이 0 이고,
+열린 PR 의 파일 목록 수백 줄이 orchestrator 컨텍스트에 들어오면 안 된다.
 
 - 교집합이 있는 PR 은 큐 뒤로. 앞 PR merge 후 `git merge` 로 최신 base 를 들인 뒤
   리뷰한다 (rebase 는 force-push 가 필요해 금지 — [git-policy](../git-policy/memory.md)).
@@ -41,24 +46,28 @@ Top-level orchestrator 의 행동 계약. 개별 작업 방법은 각 skill 이 
 
 ## 3. 사이클이면 멈추고 사용자에게 올린다
 
+판정 주체는 회고자(`round-reflect`)다 — 라운드 3부터는 개별 지적이 아니라 같은
+유형의 반복을 본다. 저자도 orchestrator 도 여기서 판정하지 않는다.
 트리거는 `.agents/skills/pr-review/SKILL.md` Verdict 원칙 3 위반이다 — 라운드 k+1 의 blocking
 집합이 라운드 k 의 진부분집합이 아니다.
 
 1. 해당 PR 리뷰 중단.
 2. 파일 교집합이 있는 in-flight PR 을 리뷰 큐에서 함께 정지 (작업은 그대로).
-3. 사용자에게 보고하고 대기한다. **orchestrator 는 여기서 판단하지 않는다.**
+3. 사용자에게 보고하고 대기한다(`needs:user`). **orchestrator 는 창구일 뿐 판단하지
+   않는다.**
 
 보고에 담을 것: 라운드별 blocking 집합 변화 / 재발한 유형과 라운드별 건수 /
 저자가 시도한 것 / 함께 정지된 PR 과 공유 파일 / 선택지(범위 축소·근본
 분리·닫고 재설계).
 
 **Why**: 사이클 지점은 정의상 자동 판단이 이미 실패한 곳이다. 저자가 잡은 근본이
-다음 라운드에 재발 판정을 받은 실제 사례가 있으므로, orchestrator 가 "무엇이
+다음 라운드에 재발 판정을 받은 실제 사례가 있으므로, 저자나 orchestrator 가 "무엇이
 근본인가" 를 자동 판정하면 같은 실패를 조용히 반복한다.
 
 ## 4. 이슈는 확대해석의 여지가 없어야 한다
 
-이슈 본문의 배경·근본원인·표는 상세해도 좋다. **닫혀야 하는 것은 수용 기준이다.**
+티켓을 쓰는 주체는 명세 작성자(`issue-refine`)이고, 이 절이 그 기준이다. 이슈 본문의
+배경·근본원인·표는 상세해도 좋다. **닫혀야 하는 것은 수용 기준이다.**
 
 - 완료 조건은 **명령 출력 하나**다. 여러 개면 이슈를 나눈다.
 - **적히지 않은 것은 범위 밖이다.** 구현자도 리뷰어도 넓힐 수 없다.
@@ -74,8 +83,8 @@ Top-level orchestrator 의 행동 계약. 개별 작업 방법은 각 skill 이 
 
 ## 5. 이슈 1개 ≠ PR 1개
 
-착수 시점에 변경 기준을 잡고 작업을 자른다. 이슈가 크면 PR 을 나눈다 — 리뷰가
-쪼개라고 말하는 건 이미 라운드를 태운 뒤라 늦다.
+명세 작성자가 착수 시점에 변경 기준을 잡고 작업을 자른다. 이슈가 크면 PR 을
+나눈다 — 리뷰가 쪼개라고 말하는 건 이미 라운드를 태운 뒤라 늦다.
 
 ## 6. 상충
 
@@ -87,7 +96,7 @@ Top-level orchestrator 의 행동 계약. 개별 작업 방법은 각 skill 이 
 
 - `.agents/skills/pr-review/SKILL.md` — Verdict 원칙 1·2·3 정의. 사이클 트리거의 source
 - [review](../review/memory.md) — reviewer 행동 계약
-- [delivery](../delivery/memory.md) — 구현 완료 후 T0~T7 파이프라인
+- [delivery](../delivery/memory.md) — 커밋 → 푸시 → PR → 리뷰 → 머지 구간의 node 별 계약
 - [git-policy](../git-policy/memory.md) — force-push 금지, rebase 대신 merge
 - [worktree](../../runbook/worktree/memory.md) — linked worktree spawn
 - [pr-merge-gates](../../runbook/pr-merge-gates/memory.md) — merge 게이트 진단

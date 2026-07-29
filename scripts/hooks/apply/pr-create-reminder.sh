@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # PostToolUse reminder (Claude Code + codex 공유). `gh pr create` 실행 직후
-# 델리버리 T4 리뷰를 잊지 않도록 non-blocking 넛지를 additionalContext 로 주입한다.
+# 리뷰 단계를 잊지 않도록 non-blocking 넛지를 additionalContext 로 주입한다.
 #
-# 왜: review(T4, pr-reviewer read-only)는 기본/자동/무-게이트 단계인데, 실사용에서
-# 간헐적으로 누락되고 merge-확인 단계와 혼동됐다. merge(T6)만 확인 대상이다.
+# 왜: 리뷰(pr-reviewer read-only)는 기본/자동/무-게이트 단계인데, 실사용에서
+# 간헐적으로 누락되고 merge-확인 단계와 혼동됐다. 머지만 확인 대상이다.
 # 사용자 결정(soft-first): hook 으로 강제(block)하지 않고 리마인더만 준다.
 # block 이 아니라 additionalContext 만 내므로 턴을 막지 않는다.
 #
@@ -23,7 +23,7 @@ case "$command" in
 		jq -n '{
       hookSpecificOutput: {
         hookEventName: "PostToolUse",
-        additionalContext: "gh pr create 실행 감지 — 델리버리 T4: PR 이 생성됐다면 지금 pr-reviewer(read-only) coordinator 를 spawn 해 리뷰해라. 리뷰는 기본/자동/무-게이트 단계이고, merge(T6)만 확인 대상이다. 리뷰를 건너뛰고 이 턴을 끝내지 마라."
+        additionalContext: "gh pr create 실행 감지 — 리뷰 단계: 이 PR 에는 독립 pr-reviewer(read-only) coordinator 리뷰가 붙어야 한다. 붙이는 주체는 orchestrator 다 — 저자는 자기 PR 의 리뷰어를 부르지 않는다(self-review 편향). 리뷰는 기본/자동/무-게이트 단계이고, 머지만 확인 대상이다. 리뷰 없이 이 PR 을 끝난 것으로 두지 마라."
       }
     }'
 		;;

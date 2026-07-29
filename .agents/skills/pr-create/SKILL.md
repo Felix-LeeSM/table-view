@@ -52,4 +52,4 @@ PR body contract(`scripts/hooks/policy/check-pr-body.mjs`, CI `PR Body Contract`
 - `.github/PULL_REQUEST_TEMPLATE.md` — 7섹션 template (SOT)
 - `scripts/hooks/policy/check-pr-body.mjs` — contract 검증 (SOT, 본 skill 은 중복不)
 - `memory/workflow/documentation/memory.md` — Documentation impact gate
-- `memory/workflow/delivery/memory.md` — T3 PR 단계
+- `memory/workflow/delivery/memory.md` — PR 생성 단계의 행동 계약

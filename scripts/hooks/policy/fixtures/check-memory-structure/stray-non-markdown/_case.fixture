@@ -1,0 +1,14 @@
+---
+expect: reject
+mentions: memory/workflow/notes.txt — memory/ 트리는
+---
+
+# Stray file that is not markdown
+
+The rule is "memory.md only", not "markdown only", so a `.txt` under `memory/`
+is a violation too. The guard's walk is `find memory -type f`, with no name
+filter — narrowing it to `-name '*.md'` is a one-word edit that looks like a
+tightening and is not.
+
+The destination keeps its real extension. Only the at-rest name carries
+`.fixture`.
