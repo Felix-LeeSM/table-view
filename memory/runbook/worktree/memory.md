@@ -1,7 +1,7 @@
 ---
 title: Multi-agent worktree
 type: runbook
-updated: 2026-07-22
+updated: 2026-07-29
 task: worktree, multi-agent, parallel, spawn-verify, agent-hard-rule
 ---
 
@@ -47,7 +47,7 @@ bash scripts/worktree-spawn.sh --full-target sprint-388/foo
 # 머지 끝난 worktree 정리
 bash scripts/worktree-cleanup.sh sprint-388/foo
 
-# main 머지된 worktree 일괄 정리
+# PR 이 머지된 worktree 일괄 정리
 bash scripts/worktree-cleanup.sh --merged
 
 # stale 메타데이터만 정리
@@ -92,7 +92,23 @@ hardlink 라 물리 디스크 추가 없이 rsync 복사보다 빠르다. `cargo
 - cleanup: PR 머지 직후 또는 sprint 종료 시. `gh pr merge --delete-branch`
   는 branch 만 삭제 — worktree 디스크는 별도 정리 필요.
 - `scripts/worktree-cleanup.sh` 는 dirty worktree 를 제거하지 않고 SKIP 한다.
-  dirty 는 진행 중이거나 보존 사유가 필요한 상태로 보고 먼저 확인한다.
+  dirty 는 진행 중이거나 보존 사유가 필요한 상태로 보고 먼저 확인한다. 2026-07-29
+  실측에서 머지된 PR 의 worktree 하나가 커밋 안 된 51줄을 갖고 있었다.
+
+## `--merged` 판정 근거
+
+머지 여부는 PR 상태로 판정한다 — `gh pr list --head <branch> --state merged`.
+조상 판정 (`git for-each-ref --merged origin/main`) 은 이 저장소에서 구조적으로
+0건이다. squash 머지가 브랜치 커밋을 main 의 조상으로 만들지 않기 때문이고,
+2026-07-29 실측에서 머지된 PR 의 worktree 5개를 한 건도 못 잡았다 (#1932).
+`gh` 조회가 실패하면 `WARN` + 비정상 종료 — 조용한 0건은 "정리할 게 없다" 와
+구분이 안 된다. 테스트는 `WORKTREE_CLEANUP_PR_MERGED_CMD` 로 조회를 갈아끼워
+네트워크를 타지 않는다.
+
+`worktrees/` 아래에 있는데 `git worktree list` 에 없는 디렉토리는 `--merged` /
+`--prune` 이 `ORPHAN:` 으로 보고만 한다. 자동 삭제 금지 — 실측에서 `.git` 이
+저장소 이름이 바뀌기 전 경로를 가리켰다. `--prune` 은 반대 방향(메타데이터만
+남고 디렉토리가 없음)만 처리한다.
 
 ## Primary worktree guard
 
