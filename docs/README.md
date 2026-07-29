@@ -68,14 +68,25 @@ updated: 2026-05-28
 
 ## 검색 팁
 
-Active 문서만 먼저 볼 때:
-
-```sh
-rg --glob '!docs/sprints/**' --glob '!docs/archives/**' --glob '!docs/phases/**' '<term>' docs README.md AGENTS.md
-```
-
-스프린트 evidence 까지 포함할 때:
+루트의 `.ignore` 가 `docs/{sprints,archives,table_plus,explorations}` 를 빼 두므로
+기본 검색이 곧 active 문서 검색이다:
 
 ```sh
 rg '<term>' docs memory README.md AGENTS.md
+```
+
+과거 기록까지 볼 때는 `--no-ignore-dot` 을 붙이거나 그 디렉터리를 직접 지정한다.
+직접 지정이 더 안전하다 — 아래 주의 참조.
+
+```sh
+rg '<term>' docs/sprints docs/archives          # 기록만
+rg --no-ignore-dot '<term>' docs memory README.md AGENTS.md   # active + 기록
+```
+
+**주의 — 루트를 둘 이상 주면 ignore 적용이 비결정적이다.** 병렬 walker 경합이라
+같은 명령이 실행마다 다른 결과를 낸다 (실측: 10회 중 5회 0건, 5회 53건). 전수
+주장의 근거로 쓸 명령이면 `-j1` 을 붙이거나 루트를 하나만 줘라.
+
+```sh
+rg -j1 '<term>' docs memory README.md AGENTS.md
 ```
