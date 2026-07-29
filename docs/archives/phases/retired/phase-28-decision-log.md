@@ -16,7 +16,7 @@
 >
 > 메모리 팔레스 ADR 과 차이: 본 문서는 sprint scope 안 implementation
 > trade-off 의 동결 로그 (sprint context 가 없으면 의미가 사라짐). 시스템
-> 전반에 영향을 주는 결정은 `docs/archives/decisions/` 에 ADR 로 별도 기록.
+> 전반에 영향을 주는 결정은 `docs/decisions/` 에 ADR 로 별도 기록.
 
 ## 형식
 

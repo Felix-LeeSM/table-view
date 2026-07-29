@@ -34,7 +34,7 @@ description: active memory의 도메인 언어와 현재 docs에 비추어 코�
 
 먼저 `memory/memory.md`, `memory/index/by-surface.md`, 건드리는 영역의 관련
 `memory/**/memory.md`, `docs/product/README.md`, `docs/ROADMAP.md` 를 읽어.
-과거 결정 출처가 필요한 경우에만 `docs/archives/decisions/memory.md` 를 추가로 본다.
+과거 결정 출처가 필요한 경우에만 `docs/decisions/memory.md` 를 추가로 본다.
 
 그 다음 Agent 도구를 `subagent_type=Explore`와 함께 사용해서 코드베이스를 걸어. 경직된 휴리스틱을 따르지 말고 — 유기적으로 탐색하면서 마찰을 느끼는 곳을 메모:
 

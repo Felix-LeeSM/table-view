@@ -20,4 +20,4 @@ task: implementation, refactor, bug-fix, review
 - 구조를 이해하거나 모듈 경계를 바꾸면 [architecture](./architecture/memory.md) 먼저.
 - 코드를 작성, 테스트, 리팩토링하면 [conventions](./conventions/memory.md) 먼저.
 - 과거 ADR/incident 는 기본 탐색 대상이 아니다. 필요할 때만
-  `docs/archives/decisions/`, `docs/archives/incidents/` 를 historical context 로 본다.
+  `docs/decisions/`, `docs/archives/incidents/` 를 historical context 로 본다.

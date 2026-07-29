@@ -28,7 +28,7 @@ memory 만 갱신하지 말고, 필요한 docs SOT 도 즉시 갱신한다.
   `memory/index/by-task.md`, 관련 `memory/**/memory.md`, `docs/product/README.md`,
   `docs/ROADMAP.md`, 필요 시 코드.
 - Archived ADR 은 기본 입력이 아니다. 과거 결정 출처가 필요하거나 hard decision
-  충돌을 점검할 때만 `docs/archives/decisions/memory.md` 를 본다.
+  충돌을 점검할 때만 `docs/decisions/memory.md` 를 본다.
 - 코드/문서로 답할 수 있으면 사용자에게 묻지 않는다. 모순만 surface 한다.
 - 기존 memory/ADR 과 용어가 충돌하면 즉시 callout 한다.
 

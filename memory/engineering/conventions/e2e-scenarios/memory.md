@@ -99,6 +99,6 @@ e2e 파일을 만지는 모든 작업은 이 원칙을 컨텍스트로 받는다
 ## 관련 방
 
 - [conventions](../memory.md) — 코딩 컨벤션 (테스트 일반)
-- [docs/archives/decisions/0014-e2e-switchwindow-multi-window](../../../../docs/archives/decisions/0014-e2e-switchwindow-multi-window/memory.md) — 멀티 윈도우 e2e 패턴
+- [docs/decisions/0014-e2e-switchwindow-multi-window](../../../../docs/decisions/0014-e2e-switchwindow-multi-window/memory.md) — 멀티 윈도우 e2e 패턴
 - [docs/ROADMAP.md](../../../../docs/ROADMAP.md) — 어떤 목표의 어떤 기능까지 e2e 대상인지
 - 자동 로드 stub: `.claude/rules/e2e-scenarios.md`

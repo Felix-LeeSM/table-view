@@ -20,7 +20,7 @@ description: 대화 중 합의된 결정, 룰, 적용 원칙을 repo memory/docs
 | 실행 절차 / 운영 protocol | `runbook` | `memory/runbook/<topic>/memory.md` |
 | Agent skill body (`remember`, `split-memory` 등) | `agent-skill` | `.agents/skills/<name>/SKILL.md` |
 | 외부 도구 사용법 | `reference` | `memory/reference/<tool>/memory.md` 또는 **미이동** + 사용자 질의 옵션 |
-| 트레이드오프 있는 결정 이력 | `ADR` | `docs/archives/decisions/NNNN-<slug>/memory.md` |
+| 트레이드오프 있는 결정 이력 | `ADR` | `docs/decisions/NNNN-<slug>/memory.md` |
 | 사건 이력 / 재발 방지 기록 | `incident` | `docs/archives/incidents/<domain>/YYYY-MM-DD-<slug>/memory.md` |
 | 시스템 구조 변화 | `topic` | `memory/<area>/memory.md` 갱신 |
 
@@ -28,7 +28,7 @@ description: 대화 중 합의된 결정, 룰, 적용 원칙을 repo memory/docs
 
 1. **Type 판정** — 위 매트릭스. 두 type 사이 애매 시 사용자에게 1q.
 2. **위치 계산**:
-   - ADR `NNNN`: `docs/archives/decisions/` 의 최대 번호 + 1 (4자리 zero-pad).
+   - ADR `NNNN`: `docs/decisions/` 의 최대 번호 + 1 (4자리 zero-pad).
    - 슬러그: 주제 접두사 + 결정 꼬리 kebab-case (예: `global-state-zustand`).
    - sub-room 임계: 같은 영역 룰 누적되어 본문 200줄 또는 12,000 chars 위협 시 sub-room 분기.
 3. **정합성 검증** (필수):
@@ -46,7 +46,7 @@ description: 대화 중 합의된 결정, 룰, 적용 원칙을 repo memory/docs
    - 그 외 route 는 디렉토리 + `memory.md` 생성.
    - Memory frontmatter — type / updated / 필요 시 `trigger:` (signal + layer + hook_script).
    - 본문 — 룰 명세 + Why + How to apply + 관련 cross-link.
-   - ADR 이면 `docs/archives/decisions/memory.md` 인덱스에 한 행 추가.
+   - ADR 이면 `docs/decisions/memory.md` 인덱스에 한 행 추가.
    - 기존 ADR 뒤집기 시:
      - 새 ADR frontmatter `supersedes: NNNN`
      - 원본 ADR frontmatter `status: Superseded`, `superseded_by: NNNN` (메타만)

@@ -226,7 +226,7 @@ trust 류 옵션은 "수동 도청만 막으면 되는 사설망 self-signed" �
 ## 결정 (2026-07-17 grill)
 
 오너 grill 에서 아래를 lock 했다. 본문 §1~6 분석은 무수정 보존. 결정 1~4 의
-근거·트레이드오프는 [ADR 0053](../archives/decisions/0053-connection-tls-core-vocabulary-warning-first-defaults/memory.md) 이 동결한다.
+근거·트레이드오프는 [ADR 0053](../decisions/0053-connection-tls-core-vocabulary-warning-first-defaults/memory.md) 이 동결한다.
 
 1. **공통 어휘 (§5a)** — core 2필드 (`tlsEnabled` + `trustServerCertificate`) 를 전
    엔진 통일한다. 추가로 **pg/mysql 은 sslmode enum (`disable`/`prefer`/`require`/

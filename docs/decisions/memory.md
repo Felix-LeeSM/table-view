@@ -103,9 +103,9 @@ be read from `docs/product/README.md` and `docs/ROADMAP.md` first.
 삭제하지 않고 **구조화**로 정리한다:
 
 - 인덱스가 200줄 초과하면 `/split-memory`로 주제별 하위 디렉토리 분할 (예: `decisions/state/`, `decisions/stack/`).
-- 주제 접두사로 관련 ADR 훑기: `ls docs/archives/decisions | grep global-state`.
+- 주제 접두사로 관련 ADR 훑기: `ls docs/decisions | grep global-state`.
 
 ## 관련 방
 
-- [memory/engineering/architecture](../../../memory/engineering/architecture/memory.md)
-- [docs/ROADMAP.md](../../ROADMAP.md)
+- [memory/engineering/architecture](../../memory/engineering/architecture/memory.md)
+- [docs/ROADMAP.md](../ROADMAP.md)

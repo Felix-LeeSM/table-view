@@ -25,7 +25,7 @@ wrappers 는 이 룰을 가리키거나 hook script 로 위임한다.
   secret scan) = 품질 기준선.
 - pre-push (`cargo test`, `npm run test`, `npm run lint`, `cargo check`) =
   로컬 회귀 가드.
-- [ADR 0044](../../../docs/archives/decisions/0044-e2e-smoke-remote-required/memory.md)
+- [ADR 0044](../../../docs/decisions/0044-e2e-smoke-remote-required/memory.md)
   이후 runtime e2e smoke 는 GitHub Actions PR/main blocking check 가 source of
   truth. hook 우회 시 로컬 가드가 빠지므로 여전히 production 빌드 위험으로 본다.
 
@@ -189,8 +189,8 @@ zsh 는 word 안의 `:` 를 modifier 로 해석 → `<sha>:refs/heads/foo` 가
 
 ## 관련
 
-- [ADR 0044](../../../docs/archives/decisions/0044-e2e-smoke-remote-required/memory.md) — E2E smoke remote PR/main blocking check
-- [ADR 0019](../../../docs/archives/decisions/0019-e2e-pre-push-not-ci/memory.md) / [ADR 0020](../../../docs/archives/decisions/0020-e2e-pre-push-host-docker/memory.md) — superseded 된 pre-push e2e 정책
+- [ADR 0044](../../../docs/decisions/0044-e2e-smoke-remote-required/memory.md) — E2E smoke remote PR/main blocking check
+- [ADR 0019](../../../docs/decisions/0019-e2e-pre-push-not-ci/memory.md) / [ADR 0020](../../../docs/decisions/0020-e2e-pre-push-host-docker/memory.md) — superseded 된 pre-push e2e 정책
 - `scripts/hooks/policy/check-dangerous-bash.sh`, `scripts/hooks/README.md` — hook script ownership
 - `.claude/settings.json` / `.codex/hooks.json` → `scripts/hooks/apply/pre-tool-use.sh` (PreToolUse wrapper), `.codex/hooks/post-tool-use.sh` → `scripts/hooks/apply/post-tool-use.sh` — runtime hook 매니페스트
 - `lefthook.yml` — hook 정의

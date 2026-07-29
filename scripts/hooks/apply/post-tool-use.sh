@@ -59,7 +59,7 @@ while IFS= read -r raw; do
 	esac
 	case "$rel" in
 		memory/*) has_memory=1 ;;
-		docs/archives/decisions/*) has_adr=1 ;;
+		docs/decisions/*) has_adr=1 ;;
 		docs/sprints/* | docs/archives/* | docs/table_plus/* | docs/explorations/*) ;;
 		docs/*) has_docs=1 ;;
 		.claude/agents/*.md | .claude/rules/*.md | .codex/agents/*.md)

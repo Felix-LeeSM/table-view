@@ -7,7 +7,7 @@ source: .agents/skills/grill-with-memory/SKILL.md
 
 Read:
 1. `.agents/skills/grill-with-memory/SKILL.md` 의 `보안 결정` 섹션
-2. Related ADRs, commonly `docs/archives/decisions/0005-*`, `0021-*`, `0036-*`,
+2. Related ADRs, commonly `docs/decisions/0005-*`, `0021-*`, `0036-*`,
    `0040-*`
 
 Write scope, if any: `docs/threat-models/**`, `memory/security/**`. Do not

@@ -101,9 +101,9 @@ pre-commit:
           exit 1
         fi
     adr-frozen:
-      # Sprint 388 — docs/archives/decisions/*/memory.md 의 frontmatter 외 hunk 차단.
+      # Sprint 388 — docs/decisions/*/memory.md 의 frontmatter 외 hunk 차단.
       # 새 ADR (untracked → added) 은 OK. 결정 뒤집기는 새 ADR + supersedes.
-      glob: "docs/archives/decisions/**/*.md"
+      glob: "docs/decisions/**/*.md"
       run: bash scripts/hooks/policy/check-adr-frozen.sh
 
 pre-push:

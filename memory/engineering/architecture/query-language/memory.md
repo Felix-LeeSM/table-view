@@ -79,4 +79,4 @@ Current product-facing support boundaries live in
 ## Related
 
 - [data-source architecture](../data-source/memory.md)
-- [ADR 0045](../../../../docs/archives/decisions/0045-language-completion-profile-wasm-boundary/memory.md)
+- [ADR 0045](../../../../docs/decisions/0045-language-completion-profile-wasm-boundary/memory.md)

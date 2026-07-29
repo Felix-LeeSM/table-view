@@ -37,7 +37,7 @@ updated: 2026-07-26
 - 미래 목표와 sequencing 은 [docs/ROADMAP.md](../docs/ROADMAP.md) 가 소유한다.
   live 실행 상태는 GitHub milestones/issues 가 소유한다.
 - 과거 결정과 사건 기록은 기본 memory 탐색 대상이 아니다. 필요할 때만
-  `docs/archives/decisions/`, `docs/archives/incidents/`,
+  `docs/decisions/`, `docs/archives/incidents/`,
   `docs/archives/roadmaps/` 를 historical context 로 본다.
 
 ## 방 지도

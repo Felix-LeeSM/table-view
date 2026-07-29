@@ -54,13 +54,19 @@ updated: 2026-05-28
   `ROADMAP.md`).
 - 구조적 제약이면 `memory/engineering/architecture/**`.
 - 개발/운영 절차 제약이면 `memory/engineering/**` 또는 `contributor-guide/`.
-- 과거 사건/결정/retired register 는 `archives/`.
+- 트레이드오프가 있는 결정이면 `decisions/` 에 새 ADR (`remember` skill). 기존 ADR
+  본문은 고치지 않는다 — 뒤집기는 새 ADR + `Superseded`.
+- 과거 사건/retired register 는 `archives/`.
 
 ## Memory 와 Docs 경계
 
 - `memory/` - agent 가 작업 중 자동으로 읽는 active product/engineering/workflow/runbook 규칙.
 - `memory/engineering/` - 코드 구조, architecture, convention, fixture, UI 규칙 SOT.
-- `docs/archives/decisions/`, `docs/archives/incidents/` - 과거 결정과 사건 기록. 기본 agent memory 탐색 대상이 아니다.
+- `docs/decisions/` - ADR. **활성 레지스트리다** — 동결은 "본문을 다시 쓰지 않는다"
+  는 뜻이지 "죽었다"는 뜻이 아니다. 새 ADR 이 계속 추가되고 `check-adr-frozen.sh`
+  가 경로로 감시한다. `.ignore` 밖이라 기본 검색에 잡힌다.
+- `docs/archives/incidents/` - 사건별 root cause 기록. `.ignore` 안이라 기본 검색에서
+  빠진다 — 볼 때는 디렉터리를 직접 지정한다.
 - `.agents/skills/` - agent skill 본문과 slash command source.
 - `docs/` - 사람이 탐색하는 제품/프로젝트 문서와 sprint evidence.
 

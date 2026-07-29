@@ -63,7 +63,7 @@ check_path() {
 	esac
 
 	case "$rel" in
-		docs/archives/decisions/*/memory.md)
+		docs/decisions/*/memory.md)
 			echo "WARNING: ADR 본문은 작성 순간 동결입니다. 결정을 뒤집으려면 새 ADR을 추가하세요." >&2
 			;;
 	esac

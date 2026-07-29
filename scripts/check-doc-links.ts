@@ -9,6 +9,10 @@ const ACTIVE_DOC_DIRS = [
   "docs/product",
   "docs/contributor-guide",
   "docs/roadmap",
+  // ADRs are a live registry, not an archive: new ones keep landing and
+  // `check-adr-frozen.sh` watches the path. Promoting them out of
+  // `docs/archives/` is only cosmetic unless the live link gate follows.
+  "docs/decisions",
 ];
 const EXCLUDED_SOURCE_DIRS = ["docs/archives", "docs/sprints"];
 

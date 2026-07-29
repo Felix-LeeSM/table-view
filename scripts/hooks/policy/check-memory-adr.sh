@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # check-memory-adr.sh
-# docs/archives/decisions/*/memory.md ADR 파일의 프론트매터 정합성 검사.
+# docs/decisions/*/memory.md ADR 파일의 프론트매터 정합성 검사.
 #  - 필수 필드: id, title, status, date
 #  - status 화이트리스트: Accepted | Deprecated | Superseded
 #  - id와 디렉토리 번호 일치
@@ -16,7 +16,7 @@ for arg in "$@"; do
 	esac
 done
 
-if [ ! -d "docs/archives/decisions" ]; then
+if [ ! -d "docs/decisions" ]; then
 	exit 0
 fi
 
@@ -48,7 +48,7 @@ extract_field() {
 adr_list="$(mktemp "${TMPDIR:-/tmp}/memory-adr-files.XXXXXX")"
 trap 'rm -f "$adr_list"' EXIT
 
-find docs/archives/decisions -mindepth 2 -maxdepth 2 -name "memory.md" -type f | sort > "$adr_list"
+find docs/decisions -mindepth 2 -maxdepth 2 -name "memory.md" -type f | sort > "$adr_list"
 
 if [ ! -s "$adr_list" ]; then
 	exit 0
