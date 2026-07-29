@@ -57,6 +57,28 @@ model: opus | sonnet | haiku
 도달하는데, 그것도 링크가 아니라 `paths: "**"` 때문이다. 공통 룰을 좁은 glob
 wrapper 에 두면 그 확장자를 안 건드리는 subagent 는 못 본다.
 
+**frontmatter `skills:` 는 스킬 본문 전문을 주입한다.** 도구 사용 0회
+프로브(#1931)로 확인 — `skills:` 를 단 정의로 spawn 한 subagent 는 저장소에 없는
+표식을 그대로 인용했고, 그 필드 하나만 뺀 대조군은 `tool_uses: 0` 에서 못 했다.
+들어가는 것은 스킬 파일 **본문 + base directory 한 줄**이고 frontmatter
+`description` 은 안 들어간다. 조건이 둘이다. 첫째, **spawn 되는 subagent 에만
+간다** — 같은 정의를 `claude --agent <name>` 으로 세션 본체에 걸면 주입이 없다.
+둘째, 정의를 새로 쓰거나 고쳐도 **즉시 반영되지 않는다.** 파일을 쓴 직후 spawn 은
+`Agent type '<name>' not found` 로 실패했고 같은 세션 뒤쪽에서는 성공했다 — 갱신
+트리거와 지연은 안 쟀으니 반영 확인은 새 세션에서 해라. 스킬 파일은 반대로 쓴
+직후 목록에 붙는다.
+
+**같은 프로브로 잰 나머지 필드.** `memory: project` 는
+`<project>/.claude/agent-memory/<agent-name>/` 를 만들고 그 경로를 주입한다.
+`isolation: worktree` 는 `.claude/worktrees/agent-<id>` 에서 돌고 무변경이면 자동
+정리된다. `maxTurns` 는 걸리지만 한도에 걸린 subagent 는 **반환값을 통째로
+잃는다** — 인계를 반환에 싣는 노드에는 걸지 마라. `hooks:` 는 `PreToolUse` 만
+발화하고 `SessionStart` / `SubagentStart` 는 자기 정의에 걸어도 발화하지 않는다.
+즉 **agent 시작 지점에 무언가를 강제할 훅은 없고**, 가장 이른 지점이 첫 도구 사용
+직전이다. frontmatter YAML 이 깨지면 그 정의는 에러 없이 목록에서 사라진다
+(`--debug` 에도 안 나온다) — 따옴표 없는 스칼라에 `: ` 를 넣지 마라. 명령·출력
+전문과 재현 절차는 #1931 코멘트.
+
 `CLAUDE.md` / `AGENTS.md` 는 세션 시작 시 스냅샷으로 잡힌다. 고쳐도 진행 중인
 세션에는 안 먹으므로 반영 확인은 새 세션에서 한다(#1864 측정 2). 단 스냅샷이
 세션당 하나는 아니다 — 다른 checkout 의 파일을 건드리면 그쪽 `CLAUDE.md` 가
