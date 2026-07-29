@@ -50,11 +50,12 @@ model: opus | sonnet | haiku
 적어야 subagent 가 읽는다.
 
 **`.claude/rules/` 는 링크와 무관한 별도 채널이다.** 무조건 내려가는 것은
-`README.md`(frontmatter 없음)와 `git-policy.md`(`paths: "**"`) 둘뿐이고, 나머지
-넷은 working file path 가 자기 glob 에 매치할 때만 붙는다. 그래서 `CLAUDE.md` 의
-링크 셋 중 `git-policy.md` 만 도달하는데, 그것도 링크가 아니라 `paths: "**"`
-때문이다. 공통 룰을 좁은 glob wrapper(`testing.md` 등)에 두면 그 확장자를 안
-건드리는 subagent 는 못 본다.
+`README.md`(frontmatter 없음)와 `git-policy.md`(`paths: "**"`) 둘이다. 나머지
+— `testing.md`, `test-scenarios.md`, `react-conventions.md`,
+`rust-conventions.md`, `e2e-scenarios.md` — 는 working file path 가 자기 glob 에
+매치할 때만 붙는다. 그래서 `CLAUDE.md` 의 링크 셋 중 `git-policy.md` 만
+도달하는데, 그것도 링크가 아니라 `paths: "**"` 때문이다. 공통 룰을 좁은 glob
+wrapper 에 두면 그 확장자를 안 건드리는 subagent 는 못 본다.
 
 `CLAUDE.md` / `AGENTS.md` 는 세션 시작 시 스냅샷으로 잡힌다. 고쳐도 진행 중인
 세션에는 안 먹으므로 반영 확인은 새 세션에서 한다(#1864 측정 2). 단 스냅샷이
