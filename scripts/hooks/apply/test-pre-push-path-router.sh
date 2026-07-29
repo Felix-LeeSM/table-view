@@ -95,13 +95,16 @@ delete_path() {
 run_router() {
 	local repo="$1"
 	local remote_oid="$2"
+	# Overridable so the mutation proof at the end of this file can drive a
+	# mutated copy of the router through the same fixtures.
+	local router="${3:-$ROUTER}"
 	local local_oid
 
 	local_oid="$(git -C "$repo" rev-parse HEAD)"
 	(
 		cd "$repo"
 		printf 'refs/heads/main %s refs/heads/main %s\n' "$local_oid" "$remote_oid" |
-			PRE_PUSH_PATH_ROUTER_DRY_RUN=1 "$ROUTER"
+			PRE_PUSH_PATH_ROUTER_DRY_RUN=1 "$router"
 	)
 }
 
@@ -390,17 +393,35 @@ assert_contains "$delete_output" "RUN memory-paths:" "delete frontend"
 # is the failure this repository has already paid for. Finding them by hand is
 # what failed, so compare mechanically.
 #
-# The wired set is the router's own DRY_RUN output, reusing the route cases
-# already run above, NOT a grep for `run_step` over the router text. Text
+# The wired set is the router's own DRY_RUN output over the same route fixtures
+# the cases above built, NOT a grep for `run_step` over the router text. Text
 # matching answered wrong in both directions, measured on copies: a commented-out
 # `run_step`, one inside a function nothing calls, and one inside a heredoc all
 # counted as wired; `run_step_in`, a line continuation, and a path held in a
 # variable all counted as unwired. DRY_RUN prints what would actually execute.
 #
 # Two routes, because the suites are split across them: `.github/workflows/*`
-# reaches nine of them and a hook path reaches the rest.
-wired="$(printf '%s\n%s\n' "$hook_output" "$ci_workflow_output" |
-	sed -n 's/^RUN [^:]*:.* bash \([^ ]*\.sh\).*/\1/p' | sort -u)"
+# reaches nine of them and a hook path reaches the rest. Both fixtures are the
+# ones the route cases above already built; `run_case` commits exactly once past
+# the remote oid, so `HEAD~1` replays the same push.
+#
+# A function rather than an inline pipeline because the mutation proof at the end
+# of this file calls it too. One implementation, so the proof exercises the
+# decision this check makes instead of a copy that can drift away from it: with
+# the extraction duplicated, swapping the line below back to a text scan kept the
+# whole file green. Ceiling: swapping THIS BODY back to a text scan now turns the
+# proof red, but replacing the call below with an inline grep still does not —
+# that one is review's to catch, not this file's.
+wired_suites_of() {
+	local router="$1"
+
+	printf '%s\n%s\n' \
+		"$(run_router "$TMP_DIR/hook" "$(git -C "$TMP_DIR/hook" rev-parse HEAD~1)" "$router")" \
+		"$(run_router "$TMP_DIR/ci-workflow" "$(git -C "$TMP_DIR/ci-workflow" rev-parse HEAD~1)" "$router")" |
+		sed -n 's/^RUN [^:]*:.* bash \([^ ]*\.sh\).*/\1/p' | sort -u
+}
+
+wired="$(wired_suites_of "$ROUTER")"
 
 # One pathspec and a basename filter, not a set of `**` globs. In a git pathspec
 # `*` crosses `/`, so `scripts/*.sh` already reaches every depth, while
@@ -442,5 +463,79 @@ done <<<"$tracked_suites"
 	printf '  %s\n' $unrouted >&2
 	exit 1
 }
+
+# Proof that DRY_RUN and the text scan it replaced are not interchangeable.
+# Without it, reverting the comparison above to `grep run_step` keeps this file
+# green, because the router as it stands today is a case both implementations
+# read the same way. Each mutation below rewrites ONE already-wired call into a
+# form exactly one implementation reads wrong, and asserts the two verdicts
+# disagree — with DRY_RUN on the correct side.
+MUTANT_DIR="$TMP_DIR/mutants"
+mkdir -p "$MUTANT_DIR/apply"
+# The router sources `path-classifier.sh` relative to its own directory, so a
+# mutant copy needs a sibling `analyze/`.
+ln -s "$ROOT/scripts/hooks/analyze" "$MUTANT_DIR/analyze"
+
+VICTIM_SUITE="scripts/hooks/policy/test-check-doc-size.sh"
+VICTIM_CALL="run_step \"doc-size-tests\" bash $VICTIM_SUITE"
+
+# The predecessor implementation, kept only so the mutations can show it wrong.
+wired_by_text() {
+	{ grep -o 'run_step "[^"]*" bash [^ ]*\.sh' "$1" || true; } | awk '{print $NF}' | sort -u
+}
+
+# The verdict this file reaches for a wired set, reusing the `comm` above rather
+# than restating it.
+verdict_for() {
+	if [ -n "$(comm -23 <(printf '%s\n' "$tracked_suites") <(printf '%s\n' "$1"))" ]; then
+		printf 'red\n'
+	else
+		printf 'green\n'
+	fi
+}
+
+# `body` replaces the wired call in place, `tail` is appended at top level.
+# Both are read by `awk -v`, so `\n` and `\t` are real characters there.
+assert_mutation() {
+	local name="$1" want_text="$2" want_dry_run="$3" body="$4" tail="$5"
+	local mutant got_text got_dry_run
+
+	mutant="$MUTANT_DIR/apply/$name.sh"
+	awk -v victim="$VICTIM_CALL" -v body="$body" -v tail="$tail" '
+		index($0, victim) {
+			if (body != "") print body
+			next
+		}
+		{ print }
+		END { if (tail != "") print tail }
+	' "$ROUTER" >"$mutant"
+	chmod +x "$mutant"
+	# A mutation that stopped matching would leave the router untouched, and both
+	# implementations would then agree for the boring reason.
+	! cmp -s "$ROUTER" "$mutant" || {
+		echo "FAIL: mutation $name did not apply: '$VICTIM_CALL' not found in the router" >&2
+		exit 1
+	}
+
+	got_text="$(verdict_for "$(wired_by_text "$mutant")")"
+	got_dry_run="$(verdict_for "$(wired_suites_of "$mutant")")"
+	[ "$got_text" = "$want_text" ] && [ "$got_dry_run" = "$want_dry_run" ] || {
+		echo "FAIL: mutation $name: text=$got_text (want $want_text), dry-run=$got_dry_run (want $want_dry_run)" >&2
+		exit 1
+	}
+	echo "  mutation $name: text=$got_text dry-run=$got_dry_run"
+}
+
+# Counted as wired by the text scan, never executed by the router. The text scan
+# stays green; DRY_RUN goes red, which is the correct verdict.
+assert_mutation commented-out green red "#\t$VICTIM_CALL" ""
+assert_mutation uncalled-function green red "" "never_called() {\n\t$VICTIM_CALL\n}"
+assert_mutation heredoc green red "" ": <<'MUTATION'\n\t$VICTIM_CALL\nMUTATION"
+
+# Executed by the router, invisible to the text scan. The text scan goes red on
+# a suite that runs; DRY_RUN stays green, which is the correct verdict.
+assert_mutation run-step-in red green "\trun_step_in \"doc-size-tests\" . bash $VICTIM_SUITE" ""
+assert_mutation line-continuation red green "\trun_step \"doc-size-tests\" \\\\\n\t\tbash $VICTIM_SUITE" ""
+assert_mutation variable-path red green "\tdoc_size_suite=$VICTIM_SUITE\n\trun_step \"doc-size-tests\" bash \"\$doc_size_suite\"" ""
 
 echo "PASS: pre-push path router smoke check"
