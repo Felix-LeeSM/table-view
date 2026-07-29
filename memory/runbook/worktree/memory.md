@@ -97,25 +97,21 @@ hardlink 라 물리 디스크 추가 없이 rsync 복사보다 빠르다. `cargo
 
 ## `--merged` 판정 근거
 
-**조상 관계는 머지 여부와 무관하다.** 양쪽으로 틀린다 (#1932, 2026-07-29 실측):
+**조상 관계는 머지 여부와 무관하다** — 양쪽으로 틀린다 (#1932, 2026-07-29 실측).
 squash 머지된 브랜치는 main 의 조상이 아니라 머지된 worktree 5개를 하나도 못
 잡았고, 방금 spawn 한 브랜치는 `origin/main` 에 앉아 자명한 조상이라
 `for-each-ref --merged` 가 나열한 32건 중 둘이 머지 PR 0건인 활성 worktree 였다.
 
-그래서 머지된 PR 의 head OID (`gh pr list --head <b> --state merged --json
-headRefOid`) 를 받아 **로컬 tip 이 그 안에 포함될 때만** 제거한다. 이름은 한 번
-참이면 영원히 참이라 이름 재사용과 머지 뒤 추가 커밋을 못 거른다. 판정 불가는
-미머지로 강등하지 않는다 — 조회 실패 / OID 아닌 응답 / 로컬에 없는 OID 는 전부
-`WARN` + 비정상 종료. 스윕 끝에 한 줄 요약을 남긴다 (조용한 0건이 이 버그의
-서명이었다). 테스트는 `WORKTREE_CLEANUP_PR_MERGED_CMD` 로 조회를 갈아끼워
-네트워크를 타지 않는다.
+그래서 머지된 PR 의 head OID 를 받아 **로컬 tip 이 그 안에 포함될 때만** 제거한다.
+이름은 한 번 참이면 영원히 참이라 이름 재사용과 머지 뒤 추가 커밋을 못 거른다.
+판정 불가는 미머지로 강등하지 않는다 — 조용한 0건이 이 버그의 서명이었다.
 
-절대 안 지우는 것: main worktree, **명령을 실행한 그 worktree** (서 있는 자리가
-사라지면 이후 git 호출이 getcwd 에러를 뱉고 스윕이 조용히 잘린다), `git status`
-를 못 읽는 worktree, `git worktree list` 에 없는 디렉토리 (`ORPHAN:` 으로 보고만
-— 실측에서 `.git` 이 이름 바뀌기 전 경로를 가리켰다. 남의 저장소일 수 있다.
-`--prune` 은 반대 방향만 처리). gitignore 된 로컬 상태는 디렉토리와 함께
-사라지므로 지우기 전에 `NOTE:` 로 알린다 — 백업 정책은 #1948.
+절대 안 지우는 것: main worktree, **명령을 실행한 그 worktree** (지우면 이후 git
+호출이 getcwd 에러를 뱉고 스윕이 조용히 잘린다), `git status` 를 못 읽는
+worktree, `git worktree list` 에 없는 디렉토리 (`ORPHAN:` 보고만 — 실측에서
+`.git` 이 이름 바뀌기 전 경로를 가리켰다. 남의 저장소일 수 있다). gitignore 된
+로컬 상태는 디렉토리와 함께 사라진다 (`NOTE:` 로 알림, 정책은 #1948). 조회 주입
+같은 나머지 동작은 `--help` 와 구현이 소유한다.
 
 ## Primary worktree guard
 
