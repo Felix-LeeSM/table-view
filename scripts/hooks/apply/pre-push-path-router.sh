@@ -324,6 +324,7 @@ EOF
 	run_step "cargo-deny-summary-tests" bash scripts/hooks/apply/test-cargo-deny-summary.sh
 	run_step "pre-push-router-tests" bash scripts/hooks/apply/test-pre-push-path-router.sh
 	run_step "memory-size-tests" bash scripts/hooks/policy/test-check-memory-size.sh
+	run_step "memory-structure-tests" bash scripts/hooks/policy/test-check-memory-structure.sh
 	run_step "doc-size-tests" bash scripts/hooks/policy/test-check-doc-size.sh
 }
 

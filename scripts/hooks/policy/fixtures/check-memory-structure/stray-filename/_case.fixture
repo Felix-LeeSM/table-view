@@ -1,0 +1,12 @@
+---
+expect: reject
+mentions: memory/workflow/notes.md — memory/ 트리는
+---
+
+# Stray filename
+
+The guard's first rejection path: a file under `memory/` whose basename is not
+`memory.md`.
+
+`mentions` runs past the path into the message so that a guard naming some other
+file cannot satisfy this case.
