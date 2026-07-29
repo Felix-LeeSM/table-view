@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Contract check for the review-gate round gate (delivery T5 reflect).
+# Contract check for the review-gate round gate (delivery round reflect).
 #
 # The gate refuses the merge once a PR reaches `comments >= <cap>` without the
 # escape label. Two values are load-bearing and duplicated across four files:

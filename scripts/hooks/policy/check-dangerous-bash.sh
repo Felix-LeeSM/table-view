@@ -471,7 +471,7 @@ EOF
     gh_pr_merge_cleanup)
       cat >&2 <<EOF
 WARNING: gh pr merge 는 linked worktree 디스크를 자동 정리하지 않음.
-\`--delete-branch\` 는 remote branch/ref 만 지운다. merge 성공 후 T7 cleanup 을
+\`--delete-branch\` 는 remote branch/ref 만 지운다. merge 성공 후 worktree 정리를
 반드시 실행:
 
   bash scripts/worktree-cleanup.sh <branch>
@@ -482,7 +482,7 @@ Dirty worktree 는 cleanup script 가 제거하지 않고 SKIP 으로 보고한�
 
 자세히:
   - memory/runbook/worktree/memory.md (cleanup 책임)
-  - memory/workflow/delivery/memory.md (T7 Cleanup)
+  - memory/workflow/delivery/memory.md (정리 단계 — 종결자 소관)
 EOF
       ;;
     *)
