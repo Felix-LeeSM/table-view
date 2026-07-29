@@ -59,10 +59,16 @@ reject stray-non-markdown
 # second path sits unguarded — measured on the previous version of this file.
 guard_messages="$(grep -oE 'memory structure: .* — [^"]*' "$CHECK" | sed 's/^.* — //' | sort -u)"
 
-# Accept cases per carve-out. Still a count: a carve-out is a `continue`, it
-# prints nothing, so there is no output to map a case onto the way the messages
-# above map the reject cases. Ceiling: two accept cases satisfy this whichever
-# carve-outs they exercise.
+# Accept cases per carve-out. Still a count, because a carve-out is a `continue`
+# and prints nothing — there is no output to map a case onto the way the
+# messages above map the reject cases.
+#
+# Ceiling, measured: deleting BOTH carve-out cases and their table rows leaves
+# 2 accepts (`plain-room`, `parent-with-index-and-child`) and stays green. So on
+# the accept side the table row is the reviewable artifact, not the floor. The
+# alternative — glob-matching the guard's carve-out patterns against each case's
+# tree — closes that one deletion and doubles what a copier has to adapt, so it
+# is not taken here.
 guard_carveouts="$(grep -cE '\) continue ;;' "$CHECK" || true)"
 
 WORK="$(fixture_mktemp memory-structure-sweep)"
