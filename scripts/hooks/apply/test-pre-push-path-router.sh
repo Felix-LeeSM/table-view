@@ -406,12 +406,8 @@ assert_contains "$delete_output" "RUN memory-paths:" "delete frontend"
 # the remote oid, so `HEAD~1` replays the same push.
 #
 # A function rather than an inline pipeline because the mutation proof at the end
-# of this file calls it too. One implementation, so the proof exercises the
-# decision this check makes instead of a copy that can drift away from it: with
-# the extraction duplicated, swapping the line below back to a text scan kept the
-# whole file green. Ceiling: swapping THIS BODY back to a text scan now turns the
-# proof red, but replacing the call below with an inline grep still does not —
-# that one is review's to catch, not this file's.
+# of this file passes it as the extractor. Naming the extractor is what lets the
+# proof drive this file's real verdict with either implementation.
 wired_suites_of() {
 	local router="$1"
 
@@ -420,8 +416,6 @@ wired_suites_of() {
 		"$(run_router "$TMP_DIR/ci-workflow" "$(git -C "$TMP_DIR/ci-workflow" rev-parse HEAD~1)" "$router")" |
 		sed -n 's/^RUN [^:]*:.* bash \([^ ]*\.sh\).*/\1/p' | sort -u
 }
-
-wired="$(wired_suites_of "$ROUTER")"
 
 # One pathspec and a basename filter, not a set of `**` globs. In a git pathspec
 # `*` crosses `/`, so `scripts/*.sh` already reaches every depth, while
@@ -443,12 +437,29 @@ suite_count="$(printf '%s\n' "$tracked_suites" | grep -c . || true)"
 	exit 1
 }
 
-unwired="$(comm -23 <(printf '%s\n' "$tracked_suites") <(printf '%s\n' "$wired"))"
-[ -z "$unwired" ] || {
-	echo "FAIL: suites the router never runs:" >&2
-	printf '  %s\n' $unwired >&2
-	exit 1
+# The whole verdict — extraction, comparison, and the failure branch — in one
+# function, because the mutation proof at the end of this file calls exactly this
+# to grade its mutants. Splitting it leaves a copy no mutation reaches: measured
+# on this file, with the comparison written out twice, blanking the production
+# copy passed, and so did adding `| grep -v test-check-doc-size` to it, which
+# exempts the very suite every mutation below moves.
+#
+# Ceiling: a mutation that deletes or `|| true`s the call below is a deletion in
+# the diff, not a silent edit, so it stays review's to catch.
+assert_all_suites_wired() {
+	local router="$1"
+	local list_wired="$2"
+	local unwired
+
+	unwired="$(comm -23 <(printf '%s\n' "$tracked_suites") <(printf '%s\n' "$("$list_wired" "$router")"))"
+	[ -z "$unwired" ] || {
+		echo "FAIL: suites the router never runs:" >&2
+		printf '  %s\n' $unwired >&2
+		return 1
+	}
 }
+
+assert_all_suites_wired "$ROUTER" wired_suites_of || exit 1
 
 # Being in the router is not enough: the hook route only runs when the push
 # carries a path `is_hook_path` recognises. A suite outside that list is wired to
@@ -484,13 +495,14 @@ wired_by_text() {
 	{ grep -o 'run_step "[^"]*" bash [^ ]*\.sh' "$1" || true; } | awk '{print $NF}' | sort -u
 }
 
-# The verdict this file reaches for a wired set, reusing the `comm` above rather
-# than restating it.
+# The verdict this file reaches for a router, by calling the check above rather
+# than restating it. Both implementations go through the same comparison, so any
+# edit to that comparison shows up in every mutation below.
 verdict_for() {
-	if [ -n "$(comm -23 <(printf '%s\n' "$tracked_suites") <(printf '%s\n' "$1"))" ]; then
-		printf 'red\n'
-	else
+	if assert_all_suites_wired "$1" "$2" 2>/dev/null; then
 		printf 'green\n'
+	else
+		printf 'red\n'
 	fi
 }
 
@@ -517,8 +529,8 @@ assert_mutation() {
 		exit 1
 	}
 
-	got_text="$(verdict_for "$(wired_by_text "$mutant")")"
-	got_dry_run="$(verdict_for "$(wired_suites_of "$mutant")")"
+	got_text="$(verdict_for "$mutant" wired_by_text)"
+	got_dry_run="$(verdict_for "$mutant" wired_suites_of)"
 	[ "$got_text" = "$want_text" ] && [ "$got_dry_run" = "$want_dry_run" ] || {
 		echo "FAIL: mutation $name: text=$got_text (want $want_text), dry-run=$got_dry_run (want $want_dry_run)" >&2
 		exit 1
