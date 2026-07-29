@@ -11,7 +11,8 @@ trigger:
 # PR merge 게이트 진단 / 처리
 
 `gh pr merge` 가 BLOCKED / "base branch policy prohibits" 로 막힐 때 원인 규명 순서.
-label 메커니즘 자체는 [delivery](../../workflow/delivery/memory.md) (T5/T6) 소유 —
+label 메커니즘 자체는 [delivery](../../workflow/delivery/memory.md) 의 라운드 회고 ·
+머지 계약이 소유 —
 본 방은 **required 게이트의 숨은 위치와 잘못된 대응이 만드는 함정**만 다룬다.
 
 ## Required 게이트는 두 곳에 분산 (핵심)
@@ -80,8 +81,9 @@ blocker 인 경우가 많다 (docs/hook 변경이어도 ruleset 이 E2E 를 요�
   `comments >= 3` 이고 `reflect:done` label 이 없으면 exit 1 한다. rerun 도 label
   재발화도 같은 payload 를 재생하므로 계속 fail — 해소는 `reflect:done` 뿐이다
   (`enforce_admins=true` 라 `--admin` 우회 없음). **누가 붙이냐는 verdict 가 가른다** —
-  green 이면 delivery owner 가 바로 붙이고, red 면 T5 reflect 를 사용자에게 올려
-  받는다 ([delivery](../../workflow/delivery/memory.md)). 게이트는 라운드만 세고
+  green 이면 종결자(`pr-finalize`)가 바로 붙이고, red 면 회고자(`round-reflect`)가
+  사용자에게 올려 받는다 ([delivery](../../workflow/delivery/memory.md)). 저자는
+  붙이지 않는다. 게이트는 라운드만 세고
   verdict 를 안 보므로 green 도 걸린다.
   최근 머지 30건 중 16건이 승인 시점에 `comments >= 3` 이었다.
 
@@ -90,8 +92,8 @@ blocker 인 경우가 많다 (docs/hook 변경이어도 ruleset 이 E2E 를 요�
 1. 리뷰 green 확보 → CI 를 자연히 다 돌게 둔다 (트리거 추가 X).
 2. **맨 마지막에** `review:approved` label 부착 (labeled → review-gate success).
    그 뒤로 push/rerun/update-branch 로 SHA·run 을 건드리지 않는다.
-   `comments >= 3` 이면 `reflect:done` 이 먼저 필요하다 — green 은 owner 가 붙이고,
-   red 는 [delivery](../../workflow/delivery/memory.md) T5 reflect 를 거친다.
+   `comments >= 3` 이면 `reflect:done` 이 먼저 필요하다 — green 은 종결자가 붙이고,
+   red 는 [delivery](../../workflow/delivery/memory.md) 의 라운드 회고를 거친다.
 3. E2E flaky fail 은 workflow run 완료 후 `gh run rerun <id> --failed` 1회.
 4. `mergeState` 가 `UNSTABLE` 또는 `CLEAN` 이 되면 `gh pr merge`.
    (`--admin` 은 `enforce_admins=true` + ruleset 이라 우회 불가 — required 를 실제로
@@ -117,6 +119,6 @@ merge 막히면 위 "두 곳 분산" → "함정" → "올바른 순서" 순으�
 
 ## 관련
 
-- [delivery](../../workflow/delivery/memory.md) — T4~T7, review-gate label / enforce_admins 계약
+- [delivery](../../workflow/delivery/memory.md) — 리뷰~정리 구간의 review-gate label / enforce_admins 계약
 - [worktree](../worktree/memory.md) — merge 후 worktree cleanup
 - `.claude/rules/git-policy.md` — hook 회피 / force push 금지

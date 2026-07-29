@@ -1,10 +1,10 @@
 ---
 title: PR Review Behavior
 type: workflow-rule
-updated: 2026-07-27
+updated: 2026-07-29
 task: review, pr-reviewer, delivery
 trigger:
-  signal: PR 생성 / 사용자가 "리뷰해" / delivery T4
+  signal: PR 생성 / 사용자가 "리뷰해" / 수정 push 후 재리뷰
   layer: index
 ---
 
@@ -16,7 +16,8 @@ agent가 반드시 취해야 할 행동 계약만 둔다. 평가 차원, profile
 
 ## 행동 계약
 
-- PR이 생성되면 delivery owner는 독립 `pr-reviewer` coordinator를 1회 붙인다.
+- PR이 생성되면 orchestrator가 label을 보고 독립 `pr-reviewer` coordinator를 1회
+  붙인다. 저자는 자기 PR의 리뷰어를 부르지 않는다 — self-review는 편향이다.
 - Coordinator는 `.agents/skills/pr-review/SKILL.md`를 적용한다.
 - `pr-reviewer`는 top-level 전용 coordinator다(하네스가 subagent 중첩 spawn을
   막음). 스스로 판단해 필요하면 관점별 read-only `pr-subreviewer`를 fan-out
@@ -47,8 +48,9 @@ agent가 반드시 취해야 할 행동 계약만 둔다. 평가 차원, profile
   발견이 기록 없이 증발한다.
   `review:approved`는 `review-gate` required check의 pass 조건이다
   (계정 1개 = GitHub review approval 불가의 label 우회).
-- 결함이 있으면 delivery owner가 수정하고 push한 뒤 review를 다시 요청한다.
-- Merge 판단은 delivery owner 책임이다. Reviewer pack은 판단 input만 제공한다.
+- 결함이 있으면 orchestrator가 `review:changes-requested` label을 보고 구현자를
+  다시 띄운다. 구현자가 수정하고 push하면 그 커밋에 다음 라운드 리뷰가 붙는다.
+- Merge 판단은 종결자(`pr-finalize`) 몫이다. Reviewer pack은 판단 input만 제공한다.
 - External reviewer는 사용자가 명시적으로 요청했을 때만 추가한다.
 
 ## Merge 전 요구
@@ -66,6 +68,6 @@ agent가 반드시 취해야 할 행동 계약만 둔다. 평가 차원, profile
 
 - `.agents/skills/pr-review/SKILL.md` — review 방법론
 - `.claude/agents/pr-reviewer.md` / `.codex/agents/pr-reviewer.md` — runtime wrappers
-- [delivery](../delivery/memory.md) — commit → push → PR → review → merge pipeline
+- [delivery](../delivery/memory.md) — 커밋 → 푸시 → PR → 리뷰 → 머지 구간의 node 별 계약
 - [documentation](../documentation/memory.md) — PR body와 documentation impact gate
 - `scripts/review/run-checks.sh` — sprint Required Checks runner
