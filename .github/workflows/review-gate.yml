@@ -34,7 +34,8 @@ jobs:
           echo "::error::new commits pushed — review:approved dismissed, re-review required"
           exit 1
 
-      # 3라운드부터는 fix 를 더 쌓지 말고 근본 원인을 재평가한다 (delivery T5 reflect).
+      # 3라운드부터는 red 면 fix 를 더 쌓지 말고 근본 원인을 재평가한다 (delivery
+      # T5 reflect). green 이면 재평가 대상이 아니라 owner 가 label 붙이고 머지한다.
       # 라운드 프록시는 PR comment 수 — reviewer 가 라운드마다 scorecard 를 하나
       # 남기고 저자는 comment 를 남기지 않는다 (delivery T5). payload 에 이미 정수로
       # 오므로 API 조회도 본문 파싱도 필요 없다.
@@ -46,7 +47,7 @@ jobs:
           && github.event.pull_request.comments >= 3
           && !contains(github.event.pull_request.labels.*.name, 'reflect:done')
         run: |
-          echo "::error::comments=${{ github.event.pull_request.comments }} — 리뷰 3라운드. 같은 유형에 fix 를 더 쌓지 말고 재발 유형 / 라운드별 건수 / 시도한 것을 사용자에게 올려라. 진행 승인은 reflect:done label."
+          echo "::error::comments=${{ github.event.pull_request.comments }} — 리뷰 3라운드. green 이면 reflect:done 을 붙이고 머지해라 (게이트는 라운드만 세고 verdict 는 안 본다). red 면 같은 유형에 fix 를 더 쌓지 말고 재발 유형 / 라운드별 건수 / 시도한 것을 사용자에게 올려라 — 진행 승인이 reflect:done 이다."
           exit 1
 
       - name: Require review:approved label

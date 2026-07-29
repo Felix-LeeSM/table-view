@@ -58,6 +58,10 @@ T0~T7 오케스트레이션 절차 SOT 다. 행동 계약(ownership / 중단 조
    유형에 fix 를 더 쌓지 않는다. 재설계 여부는 사용자 결정이고, 진행 승인은
    `reflect:done` label 로 표시한다.
 
+   **verdict 가 green 이면 Reflect 를 거치지 않는다** — 라운드 3 이상이어도
+   머지가 정답이다(T6). 게이트가 세는 것은 라운드 수지 결함 수가 아니라, green
+   을 받은 PR 은 멈춰서 재평가할 대상이 아니다.
+
    **Fix** — 그 외. reviewer 가 전수 명령을 첨부했으면 그 출력이 0 이 될
    때까지 고치고 출력을 증거로 낸다(원칙 2). 반영 후 T4 재시작 — 재리뷰 범위는
    이전 라운드 blocking 의 해소 여부다(원칙 3).
@@ -67,6 +71,9 @@ T0~T7 오케스트레이션 절차 SOT 다. 행동 계약(ownership / 중단 조
    - `gh pr checks` SUCCESS (`review-gate` 는 reviewer 의 `review:approved` label
      필요, main required check + enforce_admins 라 우회 불가)
    - `gh pr view` mergeable 이고 branch policy block 없음
+   - 라운드 3 이상이면 `reflect:done` label. 게이트는 comment 수만 보고 verdict
+     는 안 보므로 green 이어도 막는다 — green 이면 owner 가 붙이고 머지한다.
+     T5 Reflect 로 가는 것은 red 로 라운드를 태우는 PR 뿐이다.
    - 사용자 명시 거부 없음
      조건 미달 시 원인(PR conflict / CI / policy / review)을 사용자에게 보고.
      mergeable 인데 BLOCKED / "base branch policy" 로 막히면
@@ -81,8 +88,8 @@ T0~T7 오케스트레이션 절차 SOT 다. 행동 계약(ownership / 중단 조
 
 - 중단 조건(사용자 확인 / 별도 절차 필요) 도달 시 즉시 중단·보고: agent path 의
   `git push --force` / `--force-with-lease`, main 직접 push, `gh pr merge` 의
-  squash/merge/rebase 정책 미명시, T5 reflect 트리거, 사용자 명시
-  거부("commit 하지 마" 등).
+  squash/merge/rebase 정책 미명시, T5 reflect 트리거(단 green 은 제외 — T5),
+  사용자 명시 거부("commit 하지 마" 등).
 - hook 회피 금지: `--no-verify` / `--no-gpg-sign` / `LEFTHOOK=0` 등
   (`.claude/rules/git-policy.md`). hook 실패는 근본 fix. GPG signing pinentry
   timeout 시 즉시 중단, unsigned commit 으로 진행하지 않는다.

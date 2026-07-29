@@ -78,8 +78,11 @@ blocker 인 경우가 많다 (docs/hook 변경이어도 ruleset 이 E2E 를 요�
   단 `comments >= 3` 이면 재발화해도 라운드 게이트에서 다시 막힌다 (아래).
 - **라운드 3 이상은 `labeled` 도 fail (2026-07-29)**: `Stop at review round 3` step 이
   `comments >= 3` 이고 `reflect:done` label 이 없으면 exit 1 한다. rerun 도 label
-  재발화도 같은 payload 를 재생하므로 계속 fail — 해소는 T5 reflect 를 사용자에게
-  올려 `reflect:done` 을 받는 것뿐이다 (`enforce_admins=true` 라 `--admin` 우회 없음).
+  재발화도 같은 payload 를 재생하므로 계속 fail — 해소는 `reflect:done` 뿐이다
+  (`enforce_admins=true` 라 `--admin` 우회 없음). **누가 붙이냐는 verdict 가 가른다** —
+  green 이면 delivery owner 가 바로 붙이고, red 면 T5 reflect 를 사용자에게 올려
+  받는다 ([delivery](../../workflow/delivery/memory.md)). 게이트는 라운드만 세고
+  verdict 를 안 보므로 green 도 걸린다.
   최근 머지 30건 중 16건이 승인 시점에 `comments >= 3` 이었다.
 
 ## 올바른 순서
@@ -87,7 +90,8 @@ blocker 인 경우가 많다 (docs/hook 변경이어도 ruleset 이 E2E 를 요�
 1. 리뷰 green 확보 → CI 를 자연히 다 돌게 둔다 (트리거 추가 X).
 2. **맨 마지막에** `review:approved` label 부착 (labeled → review-gate success).
    그 뒤로 push/rerun/update-branch 로 SHA·run 을 건드리지 않는다.
-   `comments >= 3` 이면 `reflect:done` 이 먼저 필요하다 — [delivery](../../workflow/delivery/memory.md) T5 reflect.
+   `comments >= 3` 이면 `reflect:done` 이 먼저 필요하다 — green 은 owner 가 붙이고,
+   red 는 [delivery](../../workflow/delivery/memory.md) T5 reflect 를 거친다.
 3. E2E flaky fail 은 workflow run 완료 후 `gh run rerun <id> --failed` 1회.
 4. `mergeState` 가 `UNSTABLE` 또는 `CLEAN` 이 되면 `gh pr merge`.
    (`--admin` 은 `enforce_admins=true` + ruleset 이라 우회 불가 — required 를 실제로
