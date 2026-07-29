@@ -481,10 +481,11 @@ fi
 run_step "signed-commits" bash scripts/hooks/policy/check-signed-commits.sh <"$REFS_FILE"
 run_step "coverage-ratchet" npx tsx scripts/check-coverage-ratchet.ts
 
-# verdict label 계약 (#1879 / #1884). 무조건 실행한다 — 위험한 결합 형태 스윕이
-# 추적 중인 모든 .md 를 훑으므로 어느 route 로 들어와도 표적이 될 수 있고, 특히
-# docs-only push 는 아래 else 블록을 통째로 건너뛴다. 154파일 0.6초라 조건 분기를
-# 둘 이유가 없다 — 분기 자체가 이 저장소에서 반복된 실패 지점이다.
+# verdict label 계약 (#1879 / #1884). 무조건 실행한다 — 스윕 대상이 `docs/sprints`
+# 와 `docs/archives` 를 뺀 추적 .md 154개(전체 1,600개 중)이고 이들은 어느 route
+# 로도 들어올 수 있다. 특히 docs-only push 는 아래 else 블록을 통째로 건너뛴다.
+# 154파일 0.6초라 조건 분기를 둘 이유가 없다 — 분기 자체가 이 저장소에서 반복된
+# 실패 지점이다. 비-md 추적 파일 1,947개는 스윕 대상이 아니다.
 run_step "verdict-label-contract" bash scripts/hooks/policy/test-verdict-label-contract.sh
 
 # Reverse code->memory gate: run when memory changed or any path was removed,
