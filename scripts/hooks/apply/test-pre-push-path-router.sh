@@ -5,6 +5,8 @@ set -euo pipefail
 
 # shellcheck source=../lib/git-fixture.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../lib" && pwd)/git-fixture.sh" || exit 1
+# shellcheck source=../analyze/path-classifier.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../analyze" && pwd)/path-classifier.sh" || exit 1
 scrub_git_env
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
@@ -93,13 +95,16 @@ delete_path() {
 run_router() {
 	local repo="$1"
 	local remote_oid="$2"
+	# Overridable so the mutation proof at the end of this file can drive a
+	# mutated copy of the router through the same fixtures.
+	local router="${3:-$ROUTER}"
 	local local_oid
 
 	local_oid="$(git -C "$repo" rev-parse HEAD)"
 	(
 		cd "$repo"
 		printf 'refs/heads/main %s refs/heads/main %s\n' "$local_oid" "$remote_oid" |
-			PRE_PUSH_PATH_ROUTER_DRY_RUN=1 "$ROUTER"
+			PRE_PUSH_PATH_ROUTER_DRY_RUN=1 "$router"
 	)
 }
 
@@ -386,16 +391,163 @@ assert_contains "$delete_output" "RUN memory-paths:" "delete frontend"
 # nothing executed them. #1862 found one of them by hand and wired it; the other
 # three survived that sweep, and one of those builds fixture repositories, which
 # is the failure this repository has already paid for. Finding them by hand is
-# what failed, so compare the router's own `run_step` lines against the tracked
-# suites instead. Deliberately reading the router as text: the point is to catch
-# a suite that is never named there, which running the router cannot show.
-unwired="$(comm -23 \
-	<(git -C "$ROOT" ls-files 'scripts/hooks/**/test-*.sh' 'scripts/test-*.sh' | sort) \
-	<(grep -o 'run_step "[^"]*" bash [^ ]*\.sh' "$ROUTER" | awk '{print $NF}' | sort -u))"
-[ -z "$unwired" ] || {
-	echo "FAIL: suites the router never runs:" >&2
-	printf '  %s\n' $unwired >&2
+# what failed, so compare mechanically.
+#
+# The wired set is the router's own DRY_RUN output over the same route fixtures
+# the cases above built, NOT a grep for `run_step` over the router text. Text
+# matching answered wrong in both directions, measured on copies: a commented-out
+# `run_step`, one inside a function nothing calls, and one inside a heredoc all
+# counted as wired; `run_step_in`, a line continuation, and a path held in a
+# variable all counted as unwired. DRY_RUN prints what would actually execute.
+#
+# Two routes, because the suites are split across them: `.github/workflows/*`
+# reaches nine of them and a hook path reaches the rest. Both fixtures are the
+# ones the route cases above already built; `run_case` commits exactly once past
+# the remote oid, so `HEAD~1` replays the same push.
+#
+# A function rather than an inline pipeline because the mutation proof at the end
+# of this file passes it as the extractor. Naming the extractor is what lets the
+# proof drive this file's real verdict with either implementation.
+wired_suites_of() {
+	local router="$1"
+
+	printf '%s\n%s\n' \
+		"$(run_router "$TMP_DIR/hook" "$(git -C "$TMP_DIR/hook" rev-parse HEAD~1)" "$router")" \
+		"$(run_router "$TMP_DIR/ci-workflow" "$(git -C "$TMP_DIR/ci-workflow" rev-parse HEAD~1)" "$router")" |
+		sed -n 's/^RUN [^:]*:.* bash \([^ ]*\.sh\).*/\1/p' | sort -u
+}
+
+# One pathspec and a basename filter, not a set of `**` globs. In a git pathspec
+# `*` crosses `/`, so `scripts/*.sh` already reaches every depth, while
+# `scripts/hooks/**/test-*.sh` requires at least one `/` and silently cannot see a
+# suite placed directly in `scripts/hooks/`. There is no such file today, so no
+# mutation can prove the missing-glob case — removing the construct is what makes
+# it unprovable-because-absent instead of untested.
+tracked_suites="$(git -C "$ROOT" ls-files 'scripts/*.sh' |
+	grep -E '(^|/)test-[^/]*\.sh$' | sort)"
+
+# An empty left side makes every comparison below vacuous — `comm` would find
+# nothing missing and this file would report green with the suites gone. The
+# floor is hand-maintained ON PURPOSE: derive it from the same `ls-files` and
+# both sides fall together, which is green. Same reasoning as the `tracked + 10`
+# constant in the router's `hook-shell-syntax` step.
+suite_count="$(printf '%s\n' "$tracked_suites" | grep -c . || true)"
+[ "$suite_count" -ge 25 ] || {
+	echo "FAIL: only $suite_count suites tracked, expected at least 25" >&2
 	exit 1
 }
+
+# The whole verdict — extraction, comparison, and the failure branch — in one
+# function, because the mutation proof at the end of this file calls exactly this
+# to grade its mutants. Splitting it leaves a copy no mutation reaches: measured
+# on this file, with the comparison written out twice, blanking the production
+# copy passed, and so did adding `| grep -v test-check-doc-size` to it, which
+# exempts the very suite every mutation below moves.
+#
+# Ceiling: a mutation that deletes or `|| true`s the call below is a deletion in
+# the diff, not a silent edit, so it stays review's to catch.
+assert_all_suites_wired() {
+	local router="$1"
+	local list_wired="$2"
+	local unwired
+
+	unwired="$(comm -23 <(printf '%s\n' "$tracked_suites") <(printf '%s\n' "$("$list_wired" "$router")"))"
+	[ -z "$unwired" ] || {
+		echo "FAIL: suites the router never runs:" >&2
+		printf '  %s\n' $unwired >&2
+		return 1
+	}
+}
+
+assert_all_suites_wired "$ROUTER" wired_suites_of || exit 1
+
+# Being in the router is not enough: the hook route only runs when the push
+# carries a path `is_hook_path` recognises. A suite outside that list is wired to
+# a gate its own edits never trigger.
+unrouted=""
+while IFS= read -r suite; do
+	[ -n "$suite" ] || continue
+	is_hook_path "$suite" || unrouted="$unrouted $suite"
+done <<<"$tracked_suites"
+[ -z "$unrouted" ] || {
+	echo "FAIL: suites whose own edits do not select the hook route:" >&2
+	printf '  %s\n' $unrouted >&2
+	exit 1
+}
+
+# Proof that DRY_RUN and the text scan it replaced are not interchangeable.
+# Without it, reverting the comparison above to `grep run_step` keeps this file
+# green, because the router as it stands today is a case both implementations
+# read the same way. Each mutation below rewrites ONE already-wired call into a
+# form exactly one implementation reads wrong, and asserts the two verdicts
+# disagree — with DRY_RUN on the correct side.
+MUTANT_DIR="$TMP_DIR/mutants"
+mkdir -p "$MUTANT_DIR/apply"
+# The router sources `path-classifier.sh` relative to its own directory, so a
+# mutant copy needs a sibling `analyze/`.
+ln -s "$ROOT/scripts/hooks/analyze" "$MUTANT_DIR/analyze"
+
+VICTIM_SUITE="scripts/hooks/policy/test-check-doc-size.sh"
+VICTIM_CALL="run_step \"doc-size-tests\" bash $VICTIM_SUITE"
+
+# The predecessor implementation, kept only so the mutations can show it wrong.
+wired_by_text() {
+	{ grep -o 'run_step "[^"]*" bash [^ ]*\.sh' "$1" || true; } | awk '{print $NF}' | sort -u
+}
+
+# The verdict this file reaches for a router, by calling the check above rather
+# than restating it. Both implementations go through the same comparison, so any
+# edit to that comparison shows up in every mutation below.
+verdict_for() {
+	if assert_all_suites_wired "$1" "$2" 2>/dev/null; then
+		printf 'green\n'
+	else
+		printf 'red\n'
+	fi
+}
+
+# `body` replaces the wired call in place, `tail` is appended at top level.
+# Both are read by `awk -v`, so `\n` and `\t` are real characters there.
+assert_mutation() {
+	local name="$1" want_text="$2" want_dry_run="$3" body="$4" tail="$5"
+	local mutant got_text got_dry_run
+
+	mutant="$MUTANT_DIR/apply/$name.sh"
+	awk -v victim="$VICTIM_CALL" -v body="$body" -v tail="$tail" '
+		index($0, victim) {
+			if (body != "") print body
+			next
+		}
+		{ print }
+		END { if (tail != "") print tail }
+	' "$ROUTER" >"$mutant"
+	chmod +x "$mutant"
+	# A mutation that stopped matching would leave the router untouched, and both
+	# implementations would then agree for the boring reason.
+	! cmp -s "$ROUTER" "$mutant" || {
+		echo "FAIL: mutation $name did not apply: '$VICTIM_CALL' not found in the router" >&2
+		exit 1
+	}
+
+	got_text="$(verdict_for "$mutant" wired_by_text)"
+	got_dry_run="$(verdict_for "$mutant" wired_suites_of)"
+	[ "$got_text" = "$want_text" ] && [ "$got_dry_run" = "$want_dry_run" ] || {
+		echo "FAIL: mutation $name: text=$got_text (want $want_text), dry-run=$got_dry_run (want $want_dry_run)" >&2
+		exit 1
+	}
+	echo "  mutation $name: text=$got_text dry-run=$got_dry_run"
+}
+
+# Counted as wired by the text scan, never executed by the router. The text scan
+# stays green; DRY_RUN goes red, which is the correct verdict.
+assert_mutation commented-out green red "#\t$VICTIM_CALL" ""
+assert_mutation uncalled-function green red "" "never_called() {\n\t$VICTIM_CALL\n}"
+assert_mutation heredoc green red "" ": <<'MUTATION'\n\t$VICTIM_CALL\nMUTATION"
+
+# Executed by the router, invisible to the text scan. The text scan goes red on
+# a suite that runs; DRY_RUN stays green, which is the correct verdict.
+assert_mutation run-step-in red green "\trun_step_in \"doc-size-tests\" . bash $VICTIM_SUITE" ""
+assert_mutation line-continuation red green "\trun_step \"doc-size-tests\" \\\\\n\t\tbash $VICTIM_SUITE" ""
+assert_mutation variable-path red green "\tdoc_size_suite=$VICTIM_SUITE\n\trun_step \"doc-size-tests\" bash \"\$doc_size_suite\"" ""
 
 echo "PASS: pre-push path router smoke check"
