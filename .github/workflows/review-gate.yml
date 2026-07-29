@@ -46,7 +46,7 @@ jobs:
           && github.event.pull_request.comments >= 3
           && !contains(github.event.pull_request.labels.*.name, 'reflect:done')
         run: |
-          echo "::error::comments=${{ github.event.pull_request.comments }} — 리뷰 3라운드. 같은 유형에 fix 를 더 쌓지 말고 재발 유형 / 라운드별 건수 / 시도한 것을 사용자에게 올려라. 진행 승인은 reflect:done label."
+          echo "::error::comments=${{ github.event.pull_request.comments }} — 리뷰 3라운드. green 이면 reflect:done 을 붙이고 머지해라 (게이트는 라운드만 세고 verdict 는 안 본다). red 면 같은 유형에 fix 를 더 쌓지 말고 재발 유형 / 라운드별 건수 / 시도한 것을 사용자에게 올려라 — 진행 승인이 reflect:done 이다."
           exit 1
 
       - name: Require review:approved label
