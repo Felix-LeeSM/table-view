@@ -1,15 +1,21 @@
 ---
 name: delivery
-description: 구현 완료 후 commit→push→PR→review→merge→cleanup 파이프라인을 자율 오케스트레이션할 때 사용. T0~T7 절차를 순서대로 실행하고 T3는 pr-create, T4는 pr-review skill에 위임한다. 중단 조건 도달 시 사용자에게 보고.
+description: 구현자가 변경을 커밋하고 푸시하고 PR 을 여는 절차. 커밋 형식 · SHA refspec push · PR body 게이트 · 멈추는 자리가 여기 있고, PR 본문 조립은 pr-create skill 이 소유한다. 리뷰 부착 · 라운드 판정 · 머지는 이 절차 밖이다.
 ---
 
-# Delivery
+# 배송 — 구현자 절차
 
-구현이 끝나면 delivery owner 가 commit→push→PR→review→merge→cleanup 을 자율
-실행한다. 사용자에게 "이제 커밋해 주세요" 안내 금지. 이 skill 은 그 파이프라인의
-T0~T7 오케스트레이션 절차 SOT 다. 행동 계약(ownership / 중단 조건 / why)은
-`memory/workflow/delivery/memory.md` 가 소유하고, T3(PR 생성)·T4(review)의 방법론은
-각각 `pr-create`·`pr-review` skill 이 소유하므로 여기서 재서술하지 않고 참조만 한다.
+구현이 끝나면 구현자(`issue-implement`)가 **커밋 → 푸시 → PR 생성** 까지 자율
+실행하고, 결과를 남기고 죽는다. 사용자에게 "이제 커밋해 주세요" 안내 금지.
+
+절차는 PR 생성에서 끝난다. 리뷰어를 붙이는 일, 라운드를 재는 일, 머지, 브랜치와
+worktree 회수는 다른 node 가 하고 orchestrator 가 label 을 보고 띄운다. 저자가 자기
+PR 의 리뷰어를 부르거나 자기가 고친 것을 자기가 재발로 판정하지 않게 하는 것이 이
+분리의 목적이다.
+
+행동 계약(멈추는 자리 / why)은 `memory/workflow/delivery/memory.md` 가 소유하고, PR
+본문 조립 방법론은 `pr-create` skill 이 소유하므로 여기서 재서술하지 않고 참조만
+한다.
 
 ## Inputs
 
@@ -18,92 +24,69 @@ T0~T7 오케스트레이션 절차 SOT 다. 행동 계약(ownership / 중단 조
 3. sprint contract(있으면 `docs/sprints/sprint-<N>/contract.md` — `review-profile`).
 4. 관련 active memory / docs.
 
-## Pipeline (T0~T7)
+## 절차
 
-작업 종료 시 아래를 순서대로 자율 실행. 각 step 은 hook 통과가 전제 —
-회피하지 않고 실패는 근본 fix.
+각 step 은 hook 통과가 전제 — 회피하지 않고 실패는 근본 fix.
 
-1. **T1 Commit** — `git add <특정 파일>` + `git commit -m "..."`. pre-commit hook
+1. **변경 커밋** — `git add <특정 파일>` + `git commit -m "..."`. pre-commit hook
    통과 책임. Conventional Commits 형식(`feat(scope): description`).
-2. **T2 Push** — SHA refspec push: `git rev-parse HEAD` →
+2. **브랜치 푸시** — SHA refspec push: `git rev-parse HEAD` →
    `git push origin '<literal-sha>':'refs/heads/<branch>'`. pre-push stage 통과.
    `sprint-N/*` branch contract 가 `review-profile: code` 면 push 전
    [tdd](../../../memory/workflow/tdd/memory.md) 의 RED evidence 를 확인한다.
-3. **T3 PR** — `pr-create` skill (`.agents/skills/pr-create/SKILL.md`) 적용:
+3. **PR 생성** — `pr-create` skill (`.agents/skills/pr-create/SKILL.md`) 적용:
    `.github/PULL_REQUEST_TEMPLATE.md` 기반 body 조립 + `check-pr-body.mjs` 로컬
    검증 → PASS 시 `gh pr create`. push 전 통과로 CI re-push 낭비 차단.
-4. **T4 Review** — `pr-reviewer` coordinator 1회 spawn(default 자동, 무-게이트):
-   - 정량은 자동 layer(hook / lint / pre-push / `scripts/review/run-checks.sh`)가
-     이미 수행. reviewer 는 재실행하지 않는다.
-   - `pr-reviewer` 는 `.agents/skills/pr-review/SKILL.md` 를 적용하고 필요 시
-     관점별 read-only `pr-subreviewer` 를 fan-out.
-   - self-review 는 편향 → 독립 reviewer 가 본다.
-   - 출력: PR 에 직접 남긴 통합 scorecard comment + verdict label
-     (green → `review:approved`, red → `review:changes-requested`)
-     + non-blocking 발견을 배출한 이슈 번호.
-   - soft backstop: `gh pr create` 직후 PostToolUse 리마인더 훅
-     (`scripts/hooks/apply/pr-create-reminder.sh`)이 이 단계를 상기시킨다. block 아님.
-   - 외부 옵션: 사용자가 "codex 리뷰도 받아" → `codex-reviewer` 추가(자동 X).
-5. **T5 Reflect/Fix** — 라운드 단위는 commit 이 아니라 push 다 (`review-gate` 가
-   synchronize 마다 승인 해제) — 한 라운드의 fix 는 전부 반영한 뒤 한 번만 push.
-   **Reflect** — fix 착수 전 아래 중 하나면 fix 를 멈춘다. delivery owner 가
-   재단다(리뷰어 판정을 기다리지 않는다).
-   - 라운드 3 이상 — `review-gate` 가 PR comment 수로 센다. 그래서 **저자는 PR 에
-     comment 를 남기지 않는다** — fix 보고가 라운드로 세어져 실제보다 일찍 막힌다.
-     상태는 commit 메시지와 PR body 로 말한다.
-   - 이전 라운드에서 고친 유형이 다시 나옴.
-   - reviewer 가 verdict 대신 사이클을 보고(pr-review 원칙 3).
+4. **PR URL 보고 후 종료** — 리뷰는 독립 `pr-reviewer` coordinator 가 본다(self-review
+   는 편향). 그 부착 시점은 `memory/workflow/review/memory.md` 가 정한다.
+   `gh pr create` 직후의 PostToolUse 리마인더
+   (`scripts/hooks/apply/pr-create-reminder.sh`)가 그 단계를 상기시킨다 — block 아님.
 
-   멈추면 재발 유형 / 라운드별 건수 / 시도한 것을 사용자에게 올린다. 같은
-   유형에 fix 를 더 쌓지 않는다. 재설계 여부는 사용자 결정이고, 진행 승인은
-   `reflect:done` label 로 표시한다.
+## 수정 라운드
 
-   **verdict 가 green 이면 Reflect 를 거치지 않는다** — 라운드 3 이상이어도
-   머지가 정답이다(T6). 게이트가 세는 것은 라운드 수지 결함 수가 아니라, green
-   을 받은 PR 은 멈춰서 재평가할 대상이 아니다.
+`review:changes-requested` 를 받은 PR 에 다시 붙는 구현자의 절차다.
 
-   **Fix** — 그 외. reviewer 가 전수 명령을 첨부했으면 그 출력이 0 이 될
-   때까지 고치고 출력을 증거로 낸다(원칙 2). 반영 후 T4 재시작 — 재리뷰 범위는
-   이전 라운드 blocking 의 해소 여부다(원칙 3).
-6. **T6 Merge or Blocked report** — 자율 머지 조건 모두 충족 시
-   `gh pr merge --squash --delete-branch` 자율 실행:
-   - 정성 차원에 blocking 없음 (pr-review Verdict 원칙 1 기준)
-   - `gh pr checks` SUCCESS (`review-gate` 는 reviewer 의 `review:approved` label
-     필요, main required check + enforce_admins 라 우회 불가)
-   - `gh pr view` mergeable 이고 branch policy block 없음
-   - 라운드 3 이상이면 `reflect:done` label. 게이트는 comment 수만 보고 verdict
-     는 안 보므로 green 이어도 막는다 — green 이면 owner 가 붙이고 머지한다.
-     T5 Reflect 로 가는 것은 red 로 라운드를 태우는 PR 뿐이다.
-   - 사용자 명시 거부 없음
-     조건 미달 시 원인(PR conflict / CI / policy / review)을 사용자에게 보고.
-     mergeable 인데 BLOCKED / "base branch policy" 로 막히면
-     [runbook/pr-merge-gates](../../../memory/runbook/pr-merge-gates/memory.md) 진단.
-     required 게이트 목록은 그 방이 유일 SOT 다 (여기 복제 금지 — 이전 복제본은
-     protection 하나 + ruleset 하나라고 적어 실제 등록분을 빠뜨렸다).
-     UNSTABLE 은 merge 가능, 트리거 반복 금지.
-7. **T7 Cleanup** — merge / blocked 이후 agent close + worktree cleanup, 또는
-   보존 사유 기록.
+- 라운드 단위는 commit 이 아니라 push 다 (`review-gate` 가 synchronize 마다 승인
+  해제) — 한 라운드의 fix 를 전부 반영한 뒤 한 번만 push 한다.
+- **PR 에 comment 를 남기지 않는다** — `review-gate` 가 PR comment 수로 라운드를
+  세므로 fix 보고가 라운드로 세어져 실제보다 일찍 막힌다. 상태는 commit 메시지와
+  PR body 로 말한다.
+- 리뷰어가 전수 명령을 첨부했으면 그 출력이 0 이 될 때까지 고치고 출력을 증거로
+  낸다(pr-review 원칙 2). 인용된 줄만 고치면 같은 파일의 잔여가 다음 라운드에 다시
+  red 로 온다.
+- 재리뷰 범위는 이전 라운드 blocking 의 해소 여부다(원칙 3).
+
+**멈추는 자리** — 아래는 구현자가 판정하지 않는다. fix 를 더 쌓지 말고 종료하면
+orchestrator 가 라운드 회고(`round-reflect`) 또는 사용자에게 넘긴다.
+
+- 라운드 3 이상 — `review-gate` 가 `comments >= 3` 으로 센다.
+- 이전 라운드에서 고친 유형이 다시 나옴.
+- 리뷰어가 verdict 대신 사이클을 보고(pr-review 원칙 3).
+
+`reflect:done` 은 라운드 3 이상 PR 의 머지를 여는 label 이다. green 이면
+종결자(`pr-finalize`)가, red 면 사용자의 재설계 판단 뒤에 붙는다. **구현자는 붙이지
+않는다.**
 
 ## Boundaries
 
-- 중단 조건(사용자 확인 / 별도 절차 필요) 도달 시 즉시 중단·보고: agent path 의
-  `git push --force` / `--force-with-lease`, main 직접 push, `gh pr merge` 의
-  squash/merge/rebase 정책 미명시, T5 reflect 트리거(단 green 은 제외 — T5),
-  사용자 명시 거부("commit 하지 마" 등).
+- 즉시 중단·보고: agent path 의 `git push --force` / `--force-with-lease`, main 직접
+  push, 사용자 명시 거부("commit 하지 마" 등).
 - hook 회피 금지: `--no-verify` / `--no-gpg-sign` / `LEFTHOOK=0` 등
   (`.claude/rules/git-policy.md`). hook 실패는 근본 fix. GPG signing pinentry
   timeout 시 즉시 중단, unsigned commit 으로 진행하지 않는다.
-- reviewer 는 read-only — commit / push / merge / branch 수정 금지. delivery owner
-  만 소유하고, 한 PR 의 delivery owner 는 1명(fix 는 같은 owner 에게 되돌린다).
-- 각 step 후 1줄 결과 보고(PR URL / merge SHA 등). narration 없음.
+- **파일을 쓰는 역할은 구현자뿐이다.** 리뷰어는 read-only — commit / push / merge /
+  branch 수정 금지. 한 worktree 에 동시에 쓰는 node 는 하나다.
+- 머지하지 않는다. 자율 머지 조건과 게이트 진단은 종결자 몫이고 SOT 는
+  `memory/runbook/pr-merge-gates/memory.md` — 여기 복제 금지.
+- 각 step 후 1줄 결과 보고(PR URL 등). narration 없음.
 - PR body / comment 는 GitHub 에서 보이는 repo-relative path / URL 만
   ([documentation](../../../memory/workflow/documentation/memory.md)).
 
 ## Related
 
-- `memory/workflow/delivery/memory.md` — delivery 행동 계약(ownership / 중단 / why)
-- `.agents/skills/pr-create/SKILL.md` — T3 PR 생성 방법론(중복 서술 금지)
-- `.agents/skills/pr-review/SKILL.md` — T4 review 방법론
+- `memory/workflow/delivery/memory.md` — 배송 phase 의 node 별 행동 계약
+- `.agents/skills/pr-create/SKILL.md` — PR 생성 방법론(중복 서술 금지)
+- `.agents/skills/pr-review/SKILL.md` — 리뷰 방법론
 - `.claude/rules/git-policy.md` — hook / signing 회피 금지 + SHA refspec push
 - `memory/workflow/tdd/memory.md` — code-profile sprint RED evidence
 - `memory/runbook/pr-merge-gates/memory.md` — merge gate 진단

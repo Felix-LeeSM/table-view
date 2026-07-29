@@ -220,13 +220,13 @@ read-only로 직접 확인한다.
 아니면 coordinator는 verdict 대신 사이클을 보고한다. 라운드별 blocking 집합
 변화, 재발한 유형과 라운드별 건수, 저자가 시도한 것을 낸다. 정지와
 재설계 판단은 coordinator가 하지 않는다 — 사이클 지점은 자동 판단이 이미 실패한
-곳이므로 delivery owner를 거쳐 사용자에게 올린다.
+곳이므로 저자에게 되돌리지 않고 orchestrator를 거쳐 사용자에게 올린다.
 
-결함이 있으면 delivery owner가 고친 뒤 reviewer가 다시 본다.
+결함이 있으면 다음 라운드의 구현자가 고치고, 그 push에 reviewer가 다시 붙는다.
 
 ## Related
 
 - `memory/workflow/review/memory.md` — review phase 행동 계약
-- `memory/workflow/delivery/memory.md` — T4/T5/T6 통합
+- `memory/workflow/delivery/memory.md` — 리뷰 · 라운드 회고 · 머지 구간의 node 별 계약
 - `memory/workflow/documentation/memory.md` — Documentation impact gate
 - `scripts/review/run-checks.sh` — sprint Required Checks runner
