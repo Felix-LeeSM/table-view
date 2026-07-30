@@ -380,8 +380,25 @@ function checkState(rollup) {
 // 첫 줄이 이기고, 그 순서 자체가 실측된 동시 매치 넷의 처방이다.
 //
 //   needs:user 최상단        — 종결보다 아래면 사용자 차단을 무시하고 머지로 간다
+//   회고는 차단기            — needs:user 바로 다음 (아래 설명)
 //   approved & checks 미완   — 승인에서 마지막 required check 까지 7분26초 (#1938)
-//   종결 > 회고              — 라운드 3에서 green 이면 사용자를 안 부른다
+//
+// **회고 줄은 종결의 하위 대안이 아니라 차단기다.** `review-gate.yml` 의
+// "Stop at review round 3" 은 verdict 를 안 보고 `comments >= cap && !reflect:done`
+// 이면 `exit 1` 하는데, `review-gate` 는 유일한 required check 다
+// (`gh api repos/{owner}/{repo}/branches/main/protection --jq
+// '.required_status_checks.contexts[]'` → `review-gate`). 그래서 라운드 임계를
+// 넘고 `reflect:done` 이 없으면 checks 가 절대 green 이 안 되고, 아래 종결 줄은
+// 그 상태에서 도달 불가다. 두 줄은 배타적이다 — green ⟹ 게이트 통과 ⟹
+// (임계 미만 또는 `reflect:done`) ⟹ 회고 줄 불성립. #1922 가 "라운드 3에서 green
+// 이면 종결" 이라 적은 상태는 `reflect:done` 이 붙은 뒤이고, 그때는 회고 줄이 안
+// 걸리므로 이 순서가 그 처방을 그대로 지킨다.
+//
+// 회고 줄이 `review:changes-requested` **아래** 있으면 라운드 3 red 가 구현자로
+// 간다 — 같은 게이트가 "red 면 같은 유형에 fix 를 더 쌓지 말고 사용자에게 올려라"
+// 라고 막는 바로 그 행동이다. #1918 §11 은 그 상태를 `needs:user` 로 보내라고
+// 적었지만 그 label 을 붙일 주체가 없다 (리뷰어는 `review:changes-requested` 를
+// 붙인다). 회고가 가장 필요한 자리에서 회고자가 영영 안 뜬다.
 //
 // 표의 "사용자가 raw 를 지목 → RUN issue-refine" 줄은 여기 없다. 그 계기는 label 이
 // 아니라 사용자의 말이고 (승격은 자동화하지 않는다 — #1918 §5), 어휘를 현행 유지하기로
@@ -394,11 +411,11 @@ function route(context) {
   if (context.issueClosed) return "DONE";
   if (!context.issueLabels.has("task")) return "BLOCKED raw-promotion";
   if (!context.hasPr) return "RUN issue-implement";
+  if (context.rounds >= context.cap && !context.prLabels.has("reflect:done")) return "RUN round-reflect";
   if (context.prLabels.has("review:changes-requested")) return "RUN issue-implement";
   if (!context.prLabels.has("review:approved")) return "RUN pr-reviewer";
   if (context.checks === "pending") return "WAIT checks";
   if (context.checks === "green") return "RUN pr-finalize";
-  if (context.rounds >= context.cap && !context.prLabels.has("reflect:done")) return "RUN round-reflect";
   return "BROKEN";
 }
 

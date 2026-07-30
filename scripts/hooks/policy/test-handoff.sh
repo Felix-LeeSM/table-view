@@ -386,6 +386,7 @@ case_state_rows() {
 	expect_state task-closed-pr OPEN "task" \
 		"$(pr_json 7 CLOSED "review:approved" 0 "$GREEN_CHECKS")" "RUN issue-implement"
 	# 수정 푸시 직후: changes-requested 가 남고 새 커밋엔 리뷰가 없다 → 구현자.
+	# 라운드가 임계 미만이라 회고 줄이 이 자리를 가로채지 않는 것도 같이 고정한다.
 	expect_state changes-requested OPEN "task" \
 		"$(pr_json 7 OPEN "review:changes-requested" 1 "$GREEN_CHECKS")" "RUN issue-implement"
 	expect_state no-verdict OPEN "task" \
@@ -395,13 +396,27 @@ case_state_rows() {
 		"$(pr_json 7 OPEN "review:approved" 0 "$PENDING_CHECKS")" "WAIT checks"
 	expect_state approved-checks-green OPEN "task" \
 		"$(pr_json 7 OPEN "review:approved" 0 "$GREEN_CHECKS")" "RUN pr-finalize"
-	# 라운드 3 에서 green 이면 회고가 아니라 종결이다.
-	expect_state round3-green OPEN "task" \
-		"$(pr_json 7 OPEN "review:approved" 5 "$GREEN_CHECKS")" "RUN pr-finalize"
-	expect_state round3-not-green OPEN "task" \
+	# 라운드 3 red — 실제로 일어나는 상태다. verdict label 은 changes-requested 이고,
+	# checks 의 실패는 다른 게 아니라 라운드 게이트 자신이다 (`review-gate` 가
+	# `comments >= cap && !reflect:done` 이면 `exit 1`, 그리고 유일한 required check).
+	# 회고 줄이 changes-requested 아래 있으면 여기서 구현자가 다시 불려 나가는데,
+	# 그게 같은 게이트가 금지한 "같은 유형에 fix 를 더 쌓기" 다.
+	expect_state round3-changes-requested OPEN "task" \
+		"$(pr_json 7 OPEN "review:changes-requested" 5 "$FAILED_CHECKS")" "RUN round-reflect"
+	# 라운드 3 green(=리뷰어가 승인) — 이때도 게이트가 죽어 있으니 checks 는 failed 다.
+	expect_state round3-approved OPEN "task" \
 		"$(pr_json 7 OPEN "review:approved" 5 "$FAILED_CHECKS")" "RUN round-reflect"
-	expect_state round3-reflect-done OPEN "task" \
+	# `reflect:done` 이 붙으면 게이트가 풀리고 checks 가 green 이 될 수 있다. #1922 의
+	# "라운드 3에서 green 이면 종결" 은 이 상태를 말한다 — 회고 줄이 안 걸린다.
+	expect_state round3-reflect-done-green OPEN "task" \
+		"$(pr_json 7 OPEN "review:approved,reflect:done" 5 "$GREEN_CHECKS")" "RUN pr-finalize"
+	expect_state round3-reflect-done-failed OPEN "task" \
 		"$(pr_json 7 OPEN "review:approved,reflect:done" 5 "$FAILED_CHECKS")" "BROKEN"
+	# 임계를 넘었는데 checks 가 green 인 조합은 게이트가 required 인 한 도달 불가다
+	# (green ⟹ 게이트 통과 ⟹ 임계 미만 또는 reflect:done). 그래도 우선순위는
+	# 고정해 둔다 — 차단기가 종결보다 위다.
+	expect_state round3-green-unreachable OPEN "task" \
+		"$(pr_json 7 OPEN "review:approved" 5 "$GREEN_CHECKS")" "RUN round-reflect"
 	# 어느 줄에도 안 맞는다 = 라우팅 구멍. WAIT 과 뭉치면 안 된다.
 	expect_state broken OPEN "task" \
 		"$(pr_json 7 OPEN "review:approved" 0 "$FAILED_CHECKS")" "BROKEN"
@@ -515,25 +530,35 @@ verdict_for() { # bin label
 	fi
 }
 
-assert_mutation() { # name victim replacement
-	local name="$1" victim="$2" replacement="$3"
-	local mutant got
-
-	mutant="$MUTANT_DIR/$name.mjs"
-	awk -v victim="$victim" -v body="$replacement" '
+# 한 단계 치환. 적용 안 된 단계는 원본을 그대로 돌려서 GREEN 을 준다 — `\Q` 안에서
+# 변수가 보간돼 패턴이 빈 문자열이 된 사고가 이 저장소에 있었다. 단계마다 본다.
+mutate_step() { # name step victim replacement in out
+	awk -v victim="$3" -v body="$4" '
 		index($0, victim) {
 			if (body != "") print body
 			next
 		}
 		{ print }
-	' "$HANDOFF" >"$mutant"
-
-	# 적용 안 된 mutation 은 원본을 그대로 돌려서 GREEN 을 준다. `\Q` 안에서 변수가
-	# 보간돼 패턴이 빈 문자열이 된 사고가 이 저장소에 있었다 — 치환 여부를 먼저 본다.
-	! cmp -s "$HANDOFF" "$mutant" || {
-		echo "FAIL: mutation $name 이 적용되지 않았다 — 표적이 handoff.mjs 에 없다: '$victim'" >&2
+	' "$5" >"$6"
+	! cmp -s "$5" "$6" || {
+		echo "FAIL: mutation $1 의 $2 단계가 적용되지 않았다 — 표적이 없다: '$3'" >&2
 		exit 1
 	}
+}
+
+# 줄을 옮기는 mutation 은 두 단계다 — 원래 자리에서 지우고, 옮길 자리 아래에 다시
+# 넣는다. 지우기만 하면 "줄이 사라졌다" 를 보는 것이지 "순서가 뒤집혔다" 가 아니다.
+assert_mutation() { # name victim replacement [victim2 replacement2]
+	local name="$1" victim="$2" replacement="$3" victim2="${4:-}" replacement2="${5:-}"
+	local mutant got
+
+	mutant="$MUTANT_DIR/$name.mjs"
+	mutate_step "$name" 1 "$victim" "$replacement" "$HANDOFF" "$mutant"
+	if [ -n "$victim2" ]; then
+		mutate_step "$name" 2 "$victim2" "$replacement2" "$mutant" "$mutant.step2"
+		mv "$mutant.step2" "$mutant"
+	fi
+
 	# 문법이 깨진 mutant 는 어느 케이스로도 RED 다. 그러면 이 증명이 "그 방어선을
 	# 잡는다" 가 아니라 "파서가 잡는다" 를 보게 된다.
 	node --check "$mutant" || {
@@ -588,5 +613,18 @@ assert_mutation needs-user-pr-side-dropped \
 assert_mutation wait-row-dead \
 	'  if (context.checks === "pending") return "WAIT checks";' \
 	''
+
+# 회고 줄이 있다
+assert_mutation round-row-dead \
+	'  if (context.rounds >= context.cap && !context.prLabels.has("reflect:done")) return "RUN round-reflect";' \
+	''
+
+# 회고 줄이 `review:changes-requested` **위**에 있다. 아래로 되돌리면 라운드 3 red 가
+# 구현자로 가고, 그게 게이트가 금지한 "같은 유형에 fix 를 더 쌓기" 다.
+assert_mutation round-row-below-changes-requested \
+	'  if (context.rounds >= context.cap && !context.prLabels.has("reflect:done")) return "RUN round-reflect";' \
+	'' \
+	'  if (context.prLabels.has("review:changes-requested")) return "RUN issue-implement";' \
+	'  if (context.prLabels.has("review:changes-requested")) return "RUN issue-implement";\n  if (context.rounds >= context.cap && !context.prLabels.has("reflect:done")) return "RUN round-reflect";'
 
 echo "PASS: handoff write / read / state"
