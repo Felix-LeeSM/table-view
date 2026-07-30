@@ -331,6 +331,7 @@ EOF
 	run_step "memory-size-tests" bash scripts/hooks/policy/test-check-memory-size.sh
 	run_step "memory-structure-tests" bash scripts/hooks/policy/test-check-memory-structure.sh
 	run_step "verdict-label-contract-tests" bash scripts/hooks/policy/test-check-verdict-label-contract.sh
+	run_step "raw-promotion-gate-tests" bash scripts/hooks/policy/test-check-raw-promotion-gate.sh
 	run_step "doc-size-tests" bash scripts/hooks/policy/test-check-doc-size.sh
 }
 
@@ -565,6 +566,13 @@ else
 	if [ "$needs_ci_workflow" = "1" ] || [ "$needs_memory" = "1" ] ||
 		[ "$needs_agent" = "1" ] || [ "$needs_hook" = "1" ]; then
 		run_step "review-gate-round-contract" bash scripts/hooks/policy/test-review-gate-round.sh
+	fi
+	# raw → task 승격 문지기와 리뷰어 배출 계약 (#1921). 대상이 agent 정의 둘과
+	# memory 방 하나라 두 route 어느 쪽으로도 깨지고, 검사 자신이 scripts/hooks
+	# 아래라 hook route 도 필요하다 — 없으면 가드를 비우는 편집이 그 가드가 못
+	# 잡는 유일한 편집이 된다.
+	if [ "$needs_agent" = "1" ] || [ "$needs_memory" = "1" ] || [ "$needs_hook" = "1" ]; then
+		run_step "raw-promotion-gate" bash scripts/hooks/policy/check-raw-promotion-gate.sh
 	fi
 	run_frontend_and_rust_gates
 fi

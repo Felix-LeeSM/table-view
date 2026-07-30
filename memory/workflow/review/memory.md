@@ -60,7 +60,9 @@ agent가 반드시 취해야 할 행동 계약만 둔다. 평가 차원, profile
 - reviewer의 write는 scorecard
   comment, verdict label, non-blocking 발견의 `gh issue create` 세 가지가
   전부다(그 외 write 금지). 원칙 1이 blocking을 좁히므로 배출구가 없으면
-  발견이 기록 없이 증발한다.
+  발견이 기록 없이 증발한다. 배출하는 이슈는 `raw` label을 달고 본문에
+  출처(`origin` — PR 번호 · 라운드 · 관점)를 적는다. 문제 제기지 작업 티켓이
+  아니고, `task`로의 승격은 사용자만 한다(#1918 §5).
   `review:approved`는 `review-gate` required check의 pass 조건이다
   (계정 1개 = GitHub review approval 불가의 label 우회).
 - 결함이 있으면 orchestrator가 `review:changes-requested` label을 보고 구현자를
