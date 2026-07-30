@@ -38,8 +38,8 @@ What the individual jobs own:
   place either check runs.
 
 - `Integration Tests (Docker)` runs the Rust integration coverage cutoffs
-  (`cargo llvm-cov nextest --profile push`, lines 80 / functions 75 /
-  regions 80, written as literals in the workflow).
+  (`cargo llvm-cov nextest --profile push`). The cutoff numbers stay in the
+  workflow's `--fail-under-*` literals and are not restated here.
 
 - `Detect Change Scope`, `PR Body Contract` and `Runtime Happy Path` are
   name-only jobs: required contexts that cannot fail and verify nothing.
