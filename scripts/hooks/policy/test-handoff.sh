@@ -327,20 +327,19 @@ YAML
 	expect_in "roundtrip/형제 키 보존" "$CASE/out" "other: x"
 }
 
-case_write_labels_on_pr() {
-	new_case write-labels-on-pr
+case_write_labels_never_touch_pr() {
+	# --pr 을 줘도 label 은 이슈에만 간다. PR label 이벤트는 review-gate 를 깨우고,
+	# 같은 초에 둘 나면 run 하나가 죽어 BLOCKED 가 고착된다 (#1879).
+	new_case write-labels-never-touch-pr
 	valid_handoff "$CASE/in.yaml"
-	make_issue_json "$CASE/issue.json" OPEN "task,wip:pr-reviewer"
-	printf '{"labels":[{"name":"review:approved"}]}' >"$CASE/pr.json"
+	make_issue_json "$CASE/issue.json" OPEN "task,wip:pr-reviewer,needs:user"
 	handoff write --stage pr-reviewer --issue 7 --pr 7 \
-		--add-label review:changes-requested --remove-label review:approved <"$CASE/in.yaml"
-	expect_eq "labels/PR exit" "$RC" "0"
-	# verdict label 은 PR 에 산다. 이슈에 붙으면 머지 게이트가 못 본다.
-	grep -E '^pr edit 7' "$CASE/calls.log" >"$CASE/pr-calls" || true
-	expect_in "labels/PR 에 add" "$CASE/pr-calls" "--add-label review:changes-requested"
-	expect_in "labels/PR 에 remove" "$CASE/pr-calls" "--remove-label review:approved"
-	expect_not_in "labels/이슈에 add 안 함" "$CASE/calls.log" "issue edit 7 --add-label"
-	expect_not_in "labels/이슈에서 verdict remove 안 함" "$CASE/calls.log" "issue edit 7 --remove-label review:approved"
+		--add-label reviewing --remove-label needs:user <"$CASE/in.yaml"
+	expect_eq "labels/--pr 있어도 exit" "$RC" "0"
+	grep -E '^issue edit 7' "$CASE/calls.log" >"$CASE/issue-calls" || true
+	expect_in "labels/이슈에 add" "$CASE/issue-calls" "--add-label reviewing"
+	expect_in "labels/이슈에서 remove" "$CASE/issue-calls" "--remove-label needs:user"
+	expect_not_in "labels/PR 은 안 건드린다" "$CASE/calls.log" "pr edit"
 }
 
 case_write_labels_on_issue() {
@@ -370,12 +369,11 @@ case_write_labels_noop() {
 	new_case write-labels-noop
 	valid_handoff "$CASE/in.yaml"
 	make_issue_json "$CASE/issue.json" OPEN "task,wip:pr-reviewer"
-	printf '{"labels":[{"name":"review:approved"}]}' >"$CASE/pr.json"
 	handoff write --stage pr-reviewer --issue 7 --pr 7 \
-		--add-label review:approved --remove-label reflect:done <"$CASE/in.yaml"
+		--add-label task --remove-label reflect:done <"$CASE/in.yaml"
 	expect_eq "labels/noop exit" "$RC" "0"
-	expect_not_in "labels/이미 있으면 add 안 함" "$CASE/calls.log" "pr edit 7 --add-label"
-	expect_not_in "labels/없으면 remove 안 함" "$CASE/calls.log" "pr edit 7 --remove-label"
+	expect_not_in "labels/이미 있으면 add 안 함" "$CASE/calls.log" "--add-label"
+	expect_not_in "labels/없으면 remove 안 함" "$CASE/calls.log" "--remove-label reflect:done"
 }
 
 case_write_foreign_stage() {
@@ -626,7 +624,7 @@ run_all_cases() { # bin label
 	case_write_cross_identity_same_run_id
 	case_write_fence_variant_dedupe
 	case_write_read_roundtrip_indented
-	case_write_labels_on_pr
+	case_write_labels_never_touch_pr
 	case_write_labels_on_issue
 	case_write_labels_noop
 	case_write_foreign_stage
@@ -848,10 +846,10 @@ queue_mutation label-block-dead \
 	'  if (options.addLabel.length > 0 || options.removeLabel.length > 0) {' \
 	'  if (false) {'
 
-# verdict label 은 PR 에 붙는다 — 이슈에 붙으면 머지 게이트가 못 본다
-queue_mutation label-target-swapped \
-	'      ? ["pr", "edit", String(options.pr)]' \
-	'      ? ["issue", "edit", String(options.issue)]'
+# label 은 이슈에만 간다 — PR label 이벤트는 review-gate 를 깨워 run 을 죽인다 (#1879)
+queue_mutation label-target-pr \
+	'    if (add.length > 0) gh("issue", "edit", String(options.issue), "--add-label", add.join(","));' \
+	'    if (add.length > 0) gh("pr", "edit", String(options.pr), "--add-label", add.join(","));'
 
 # needs:user 는 PR 쪽에 붙어도 최상단이다
 queue_mutation needs-user-pr-side-dropped \

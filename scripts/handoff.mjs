@@ -346,20 +346,18 @@ function cmdWrite(options) {
   const wip = wipLabelFor(stage);
   if (wip && labels.has(wip)) gh("issue", "edit", String(options.issue), "--remove-label", wip);
 
+  // 명시 label 갱신은 **이슈에만** 한다. PR verdict label 은 이 스킬이 안 건드린다 —
+  // `review-gate` 가 `pull_request` label 이벤트마다 돌고 `cancel-in-progress` 라,
+  // 같은 초에 이벤트가 둘 나면 run 하나가 죽고 죽은 run 이 rollup 에 non-success 로
+  // 남아 BLOCKED 가 고착된다 (#1879 실측). 그래서 verdict 전환은 "먼저 떼고 30초 이상
+  // 기다렸다가 붙인다" 는 절차가 필요하고, 그 절차는 리뷰어가 소유한다
+  // (`memory/workflow/review/memory.md`). 이슈 label 에는 그 게이트가 없다.
   if (options.addLabel.length > 0 || options.removeLabel.length > 0) {
-    // verdict label 은 PR 에 산다. --pr 이 있으면 PR 이 대상, 없으면 이슈다.
-    const target = options.pr
-      ? ["pr", "edit", String(options.pr)]
-      : ["issue", "edit", String(options.issue)];
-    const current = options.pr
-      ? new Set(
-          (ghJson("pr", "view", String(options.pr), "--json", "labels").labels ?? []).map((l) => l.name),
-        )
-      : labels;
-    const add = options.addLabel.filter((label) => !current.has(label));
-    const remove = options.removeLabel.filter((label) => current.has(label));
-    if (add.length > 0) gh(...target, "--add-label", add.join(","));
-    if (remove.length > 0) gh(...target, "--remove-label", remove.join(","));
+    // 뗄 것을 먼저 뗀다. 같은 label 을 add/remove 로 동시에 넘겨도 결과가 정해진다.
+    const remove = options.removeLabel.filter((label) => labels.has(label));
+    const add = options.addLabel.filter((label) => !labels.has(label));
+    if (remove.length > 0) gh("issue", "edit", String(options.issue), "--remove-label", remove.join(","));
+    if (add.length > 0) gh("issue", "edit", String(options.issue), "--add-label", add.join(","));
   }
 }
 

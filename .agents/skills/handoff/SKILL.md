@@ -15,10 +15,15 @@ description: node 사이의 인계를 쓰고 읽고 다음 상태를 라우팅�
 
 ```sh
 node scripts/handoff.mjs read  --stage <역할> --issue N
-node scripts/handoff.mjs write --stage <역할> --issue N [--pr M] \
-    [--add-label L]... [--remove-label L]...     # 인계 YAML 은 표준입력
+node scripts/handoff.mjs write --stage <역할> --issue N [--pr M] [label 옵션]
 node scripts/handoff.mjs state --issue N
 ```
+
+`write` 는 인계 YAML 을 표준입력으로 받는다. label 옵션은 둘, 반복 가능하고
+**이슈에만** 적용된다:
+
+- `--add-label <L>` — 이슈에 붙인다
+- `--remove-label <L>` — 이슈에서 뗀다 (뗄 것을 먼저 뗀다)
 
 역할: `issue-refine` · `issue-implement` · `pr-reviewer` · `round-reflect` ·
 `pr-finalize` · `user`. #1918 의 한국어 표기(구현자·리뷰어·회고자·종결자·명세
@@ -114,6 +119,11 @@ PR 이 없는 티켓 단계엔 `at` 이 필요 없다.
   `OWNER`/`MEMBER`/`COLLABORATOR` 인 코멘트의 인계만 받는다. 그 밖의 인계 블록은
   거부하고 stderr 로 누구 것을 왜 버렸는지 낸다 — 인계는 받는 node 가 돌릴
   `action.cmd` 를 실어 나르므로 아무나 쓴 것을 권위 있는 입력으로 볼 수 없다.
+- **PR 의 verdict label 은 이 스킬이 안 건드린다.** `review-gate` 가 PR label
+  이벤트마다 돌고 `cancel-in-progress` 라, 같은 초에 이벤트가 둘 나면 run 하나가
+  죽고 그 죽은 run 때문에 BLOCKED 가 고착된다 (#1879 실측). 그래서 verdict 전환은
+  먼저 떼고 30초 이상 기다렸다 붙이는 절차가 필요하고, 그 절차는 리뷰어가
+  소유한다 (`memory/workflow/review/memory.md`). 여기 label 옵션은 이슈 전용이다.
 - **label 은 상태, 코멘트는 내용.** orchestrator 는 앞의 것만 본다. 코멘트를 읽기
   시작하면 판단을 하게 되고, 판단하면 다시 상태를 쌓는 존재가 된다.
 - `run_id` 는 외부 쓰기 3곳(`gh issue comment` / `gh pr comment` /
