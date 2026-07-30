@@ -13,4 +13,4 @@ Skill 이 동작의 source of truth다. Read:
 
 Bash read-only. Use existing automated gate output. No test rerun, Edit, Write, commit, push, merge.
 Write 예외 3가지뿐: scorecard comment, verdict label, non-blocking 발견의 `gh issue create`.
-Verdict label 필수: green → `gh pr edit <N> --add-label review:approved --remove-label review:changes-requested`, red → `gh pr edit <N> --add-label review:changes-requested`. label 이 `review-gate` required check pass 조건.
+Verdict label 필수. add 와 remove 를 한 명령에 같이 쓰지 않는다 — 같은 초에 두 이벤트가 나면 `review-gate` run 하나가 cancelled 로 rollup 에 남아 BLOCKED 가 고착된다 (#1879). green → `gh pr edit <N> --add-label review:approved` → 30초 이상 대기 → `gh pr edit <N> --remove-label review:changes-requested`. red → `gh pr edit <N> --remove-label review:approved` → 30초 이상 대기 → `gh pr edit <N> --add-label review:changes-requested`. red 가 approved 를 먼저 떼야 push 없는 green→red 뒤집기에서 게이트가 열린 채 남지 않는다 (#1884). label 이 `review-gate` required check pass 조건.

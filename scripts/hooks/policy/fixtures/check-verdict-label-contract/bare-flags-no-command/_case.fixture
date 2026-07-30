@@ -1,0 +1,15 @@
+---
+expect: reject
+mentions: docs/verdict-note.md:3 — 한 명령이 label 을 add 하고 remove 한다
+---
+
+# The combined form written without `gh pr edit`
+
+Round 1 of #1905 (NEW-5). The first version of that check required the literal
+`gh pr edit`, and both pr-reviewer wrappers write the flags with no command in
+front of them — so the guard's own primary target was outside its reach, and
+restoring the combined form in either wrapper passed.
+
+What separates safe from dangerous is whether the two flags share one command.
+That question does not need the command's name, so the guard must not ask for
+it.

@@ -1,0 +1,14 @@
+---
+expect: accept
+---
+
+# The split procedure, spelled correctly
+
+The negative control, and the only case that reaches every rule the guard has.
+Without at least one input the guard must let through, every assertion in the
+sweep is satisfied by a guard that exits 1 on everything.
+
+All three paths in the guard's `REQUIRED_SOTS` floor are built here, each with
+both branches split across two commands and the wait stated between them. The
+sweep reads that list out of the guard and fails an accept case that skips one,
+because such a case accepts without the second check ever having a subject.

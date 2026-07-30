@@ -1,0 +1,12 @@
+# PR Review Behavior
+
+- Verdict는 label로 공표한다. add와 remove를 한 명령에 같이 쓰지 않는다.
+
+  ```
+  green: gh pr edit <N> --add-label review:approved
+         30초 이상 대기
+         gh pr edit <N> --remove-label review:changes-requested
+  red:   gh pr edit <N> --remove-label review:approved
+         30초 이상 대기
+         gh pr edit <N> --add-label review:changes-requested
+  ```

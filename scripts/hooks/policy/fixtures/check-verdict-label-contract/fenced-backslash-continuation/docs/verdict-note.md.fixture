@@ -1,0 +1,6 @@
+# 백슬래시 줄연결
+
+```bash
+gh pr edit <N> --add-label review:approved \
+  --remove-label review:changes-requested
+```

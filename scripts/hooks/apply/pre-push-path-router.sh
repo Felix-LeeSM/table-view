@@ -326,6 +326,7 @@ EOF
 	run_step "pre-push-router-tests" bash scripts/hooks/apply/test-pre-push-path-router.sh
 	run_step "memory-size-tests" bash scripts/hooks/policy/test-check-memory-size.sh
 	run_step "memory-structure-tests" bash scripts/hooks/policy/test-check-memory-structure.sh
+	run_step "verdict-label-contract-tests" bash scripts/hooks/policy/test-check-verdict-label-contract.sh
 	run_step "doc-size-tests" bash scripts/hooks/policy/test-check-doc-size.sh
 }
 
@@ -482,6 +483,24 @@ fi
 
 run_step "signed-commits" bash scripts/hooks/policy/check-signed-commits.sh <"$REFS_FILE"
 run_step "coverage-ratchet" npx tsx scripts/check-coverage-ratchet.ts
+
+# Verdict label contract (#1879 / #1884). Unconditional, at column 0, because
+# the subject is every tracked `.md` and any route can carry one: a docs-only
+# push skips the whole `else` block below, and the two files this guard exists
+# to protect are agent wrappers, which a docs-only push does not select either.
+# Measured 0.76 / 0.66 / 0.67s over 1,600 files (`/usr/bin/time -p bash
+# scripts/hooks/policy/check-verdict-label-contract.sh`, three runs), so a route
+# condition would buy nothing and the condition itself is what this repository
+# keeps getting wrong.
+#
+# Ceiling, measured: deleting this line is caught by nothing.
+# `test-pre-push-path-router.sh` compares tracked `test-*.sh` against the DRY_RUN
+# output, so it holds `verdict-label-contract-tests` in `run_hook_gates` but not
+# a `check-*.sh` step — removing this one leaves both suites green. That
+# is true of every `check-*.sh` step in this router today, not something this
+# guard introduces, and closing it needs a carve-out list for the guards that are
+# wired to pre-commit or PreToolUse instead.
+run_step "verdict-label-contract" bash scripts/hooks/policy/check-verdict-label-contract.sh
 
 # Reverse code->memory gate: run when memory changed or any path was removed,
 # since a deletion/rename can stale a memory path citation (issue #1032).
