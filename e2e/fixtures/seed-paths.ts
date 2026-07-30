@@ -4,11 +4,6 @@ import { resolve } from "node:path";
 /**
  * Seed-fixture lookup for the smoke suite. `e2e/fixtures/seed-smoke.ts` is the
  * only caller.
- *
- * A missing or renamed seed fails in `readFile` as an ENOENT carrying the
- * resolved path. That path identifies the DBMS, but not the fixture key the
- * caller asked for — worth knowing at `seed-smoke.ts`'s search-runtime call,
- * which passes a key chosen at runtime.
  */
 export type E2eSeedFixtureKey =
   | "postgresql"
@@ -39,7 +34,12 @@ export async function readE2eSeedFixture(
   key: E2eSeedFixtureKey,
   root = process.cwd(),
 ): Promise<string> {
-  return await readFile(resolve(root, E2E_SEED_FIXTURE_PATHS[key]), {
-    encoding: "utf8",
-  });
+  const path = resolve(root, E2E_SEED_FIXTURE_PATHS[key]);
+  try {
+    return await readFile(path, { encoding: "utf8" });
+  } catch (cause) {
+    // `seed-smoke.ts` picks the key at runtime, so a bare ENOENT would name the
+    // path but not which caller asked for it.
+    throw new Error(`"${key}" seed fixture not readable at ${path}`, { cause });
+  }
 }
