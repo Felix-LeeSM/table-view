@@ -14,9 +14,10 @@
  * is what keeps "residual zero" true after the fix, not just at it.
  *
  * This lives in `pnpm lint` rather than a bespoke gate because `pnpm lint` is
- * already the repo's static-policy home and already reads docs/, and because
- * the `frontend` job that runs it is now gated on `docs_changed` too — so this
- * runs on exactly the docs-only PRs where a prose enumeration goes stale.
+ * already the repo's static-policy home and already reads docs/, and because a
+ * job gated on `docs_changed` always runs it — `doc-contracts` on a docs-only
+ * set since #1991, the `frontend` job on every other set. Either way this runs
+ * on exactly the docs-only PRs where a prose enumeration goes stale.
  *
  * Ceiling: it reads Markdown paragraphs and YAML comment blocks. Prose that
  * asserts gate membership without naming any job is out of reach.

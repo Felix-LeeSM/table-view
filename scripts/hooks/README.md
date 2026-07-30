@@ -216,7 +216,12 @@ Current dispatchers:
   and `pnpm lint` reads the 20 `COMPLETION_FEATURE_REFERENCE_DOC_PATHS` plus the
   frontend-compat inventory, so the jobs running those must fire on a docs-only
   PR (#1841 merged with its doc contracts unevaluated; #1844 and #1847 merged
-  reading `Frontend Checks: skipping`). Any ambiguity sets both to true.
+  reading `Frontend Checks: skipping`). Since #1991 a docs-only set routes to the
+  single `doc-contracts` job rather than the shard matrix; its `if:` is the
+  complement of the shared code gate, so the doc-reading checks run exactly once.
+  That job is not a required context, so the aggregation still runs on the
+  docs-only lane — with every heavy step gated off — purely to grade
+  `needs.doc-contracts.result`. Any ambiguity sets both signals to true.
   Tests: `test-detect-change-scope.sh`; the CI wiring — exactly which jobs carry
   the `docs_changed` clause — is asserted in `test-ci-workflow-cache.sh` against
   the `DOCS-READING JOBS` note in `.github/workflows/ci.yml`.
