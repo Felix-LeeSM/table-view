@@ -107,7 +107,7 @@ Product support-claim wording stays in #759.
 | Data editing | Preview/commit/discard, bulk operation, paradigm 별 edit semantics. | `docs/product/README.md`, `docs/product/known-limitations.md` |
 | Schema / DDL | RDB DDL parity 는 대부분 닫혔고, ERD/schema graph 가 다음 reusable intelligence layer 다. | completed Phases 24-27, `memory/engineering/architecture/data-source/memory.md` |
 | Operations | Core parity 이후 Explain/activity/stats/server info/profiler surface 를 다룬다. | `docs/product/known-limitations.md`, `docs/contributor-guide/testing-and-quality.md` |
-| Security | Credential/key handling, role/user management, auth mechanism expansion, destructive action policy. | `docs/contributor-guide/testing-and-quality.md` (보안 결정 절차를 담던 `grill-with-memory` skill 은 #2033 에서 삭제) |
+| Security | Credential/key handling, role/user management, auth mechanism expansion, destructive action policy. | `docs/contributor-guide/testing-and-quality.md` |
 | App state | SQLite-backed durable app state, query history, settings, keyring, cross-window sync. | `memory/engineering/architecture/state-management/memory.md` |
 | Quality | CI, E2E smoke, perf/a11y baseline, testing reliability, refactor backlog burn-down. | `docs/contributor-guide/testing-and-quality.md`, `docs/archives/audits/code-smell-audit-2026-05-15.md` |
 | CLI surface (`tvw`) | 자동화 + 에이전트 표면. one-shot v0.1 (SQL 코어 4종: PostgreSQL/MySQL/MariaDB/SQLite) → REPL + completion → 앱 지원 DBMS 확장 (CLI claim ⊆ 앱 claim 원칙) → `tvw mcp` 서버 모드. TUI 는 영구 non-goal. 새 DBMS claim 을 만들지 않는 surface 트랙이라 runtime promotion freeze (순서 규칙 3) 와 독립. | ADR 0058, GitHub milestone 33.00 |

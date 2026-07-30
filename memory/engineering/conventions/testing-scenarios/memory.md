@@ -8,14 +8,13 @@ updated: 2026-07-17
 
 E2E 외 모든 테스트(`*.test.{ts,tsx}`, Rust `#[cfg(test)]`, `src-tauri/tests/`)
 를 새로 작성·수정하기 전에 이 방을 읽는다.
-자동 로드는 없다 — 이 방을 가리키던 `.claude/rules/testing.md` 는 삭제됐다 (#2033).
+자동 로드는 없다 — 직접 열어야 한다.
 
 E2E 원칙([e2e-scenarios](../e2e-scenarios/memory.md))과 같은 P-시리즈
 번호를 사용해 레이어 간 일관성을 유지한다 — 같은 P 번호는 같은 의도다.
 
 기존 메커니즘 룰(`*.rs` 명명, `mockall`, RTL 쿼리 등)은 [conventions](../memory.md)
-가 권위 (`.claude/rules/testing.md` 는 삭제됨). 이 방은 *어떤 시나리오를 만들 것인가*
-의 원칙만 정제한다.
+가 권위다. 이 방은 *어떤 시나리오를 만들 것인가* 의 원칙만 정제한다.
 
 ---
 
@@ -184,4 +183,4 @@ suite green, (c) 보안·데이터무결성 테스트(redact/injection/escape/cr
 - [e2e-scenarios](../e2e-scenarios/memory.md) — 같은 P-시리즈, e2e 레이어
 - [fixtures](fixtures/memory.md) — fixture strategy / support claim evidence
 - [docs/archives/decisions](../../../../docs/archives/decisions/memory.md) — historical ADR archive
-- 자동 로드 없음 (`.claude/rules/testing.md` 삭제됨)
+- 자동 로드 없음 — 직접 열어야 한다

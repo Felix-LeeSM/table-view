@@ -2,7 +2,7 @@
 title: By-task 인덱스
 type: index
 generated: 2026-07-30
-generator: none — scripts/regenerate-indexes.sh 삭제됨 (#2033), 이제 손으로 갱신한다
+generator: none — 손으로 갱신한다
 ---
 
 # By-task 인덱스
@@ -11,7 +11,7 @@ generator: none — scripts/regenerate-indexes.sh 삭제됨 (#2033), 이제 손�
 
 본 인덱스는 routing-only cross-link 다. 규칙 / 결정 / 문서 SOT 가 아니며 owner 는 링크 대상 memory/docs/skill 이다.
 
-수동 추가 또는 task 필드 누락된 룰은 본 인덱스에 빠질 수 있음. 예전에는 `remember` skill 절차가 frontmatter 를 갱신하면 generator 가 자동 등록했지만, skill 과 generator 모두 삭제됐다 (#2033) — 방을 추가/삭제하면 이 인덱스를 손으로 고쳐야 한다.
+자동 등록은 없다. 방을 추가하거나 삭제하면 이 인덱스를 손으로 고쳐야 하고, 안 고치면 조용히 빠진다.
 
 ## 작업 → 룰 / 방 매핑
 

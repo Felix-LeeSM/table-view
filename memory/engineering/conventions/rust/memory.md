@@ -6,12 +6,12 @@ surface: src-tauri/**/*.rs
 task: rust-impl, refactor
 trigger:
   signal: src-tauri/**/*.rs 편집 시
-  layer: none — 자동 로드 wrapper 삭제됨 (#2033), 직접 열어야 함
+  layer: none — 자동 로드 없음, 직접 열어야 함
 ---
 
 # Rust 컨벤션
 
-모든 brain 공통 source. 이 방을 paths 매처로 자동 배달하던 `.claude/rules/rust-conventions.md` 는 삭제됐다 (#2033) — 이제 직접 열어야 한다.
+모든 brain 공통 source. 자동 배달은 없으므로 직접 열어야 한다.
 
 ## 포맷팅 / 린트
 
@@ -63,7 +63,7 @@ fn get_user(id: u64) -> Result<User, AppError> {
 - 모든 공개 함수에 테스트 필수
 - 커버리지: Rust local target 은 sprint/contract 에 명시한다. Parser/adapter/command
   처럼 위험한 surface 는 기존 high-coverage 선례를 참고한다. Frontend/Rust shared
-  coverage floor 는 `.github/workflows/ci.yml` 의 `--fail-under-*` 리터럴이 소유한다 (ratchet 문서·스크립트는 #2033 에서 삭제).
+  coverage floor 는 `.github/workflows/ci.yml` 의 `--fail-under-*` 리터럴이 소유한다.
 
 ## 보안
 

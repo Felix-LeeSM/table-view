@@ -22,11 +22,10 @@ the product-facing support boundary stays in `docs/product/**`.
 | Surface | Owner | Rule |
 |---|---|---|
 | DBMS-first E2E seeds | `e2e/fixtures/<dbms>/<function>/...` | Runtime seed topology is DBMS-first, then capability/function. Existing active functions are `query`, `document`, `kv`, and `search`; future `completion`, `catalog`, `explain`, `errors`, `edit`, `safety`, or `metadata` roots need a consuming test and promotion decision. |
-| Smoke promotion decisions | `e2e/fixtures/smoke-routing-decisions.json` | Every fixture/root records `unit-only`, `integration-backed`, `dormant E2E`, or `blocking E2E` with cost/risk/support-claim impact before it can be cited in smoke evidence. |
 | Shared contract fixtures | `tests/fixtures/**` | Shared TS/Rust/parser/support-boundary fixtures are contract evidence only. Unsupported-boundary fixtures are negative evidence and do not widen runtime support. |
 | Backend adapter fixture harness | `src-tauri/src/db/fixtures.rs`, `src-tauri/tests/fixture_harness.rs` | Adapter fixtures are requested by profile/family/paradigm/capability. Missing fixture diagnostics are failures, not silent skips. Current embedded harness coverage is Search-only. |
-| Generator/profile specs | `fixtures/**` | The fixture tooling and its specs (`scripts/fixtures`) were deleted in #2033. Profile existence is not runtime support. |
-| Test placement | `src/**`, `src-tauri/tests`, `e2e/smoke` | Frontend unit/component tests stay near their feature/domain; Rust integration stays under `src-tauri/tests`; desktop smoke stays under `e2e/smoke` (its runner was deleted in #2033, so nothing wires it automatically). |
+| Generator/profile specs | `fixtures/**` | Profile existence is not runtime support. |
+| Test placement | `src/**`, `src-tauri/tests`, `e2e/smoke` | Frontend unit/component tests stay near their feature/domain; Rust integration stays under `src-tauri/tests`; desktop smoke stays under `e2e/smoke`, which nothing wires automatically. |
 
 Promotion gate: fixture path + consuming contract/integration/E2E test +
 product docs or known-limitation review + smoke-routing decision. Fixture
@@ -45,7 +44,7 @@ landed and live GitHub showed no open Refactor 04 child issues.
 | Integration skip policy | Normalize skip behavior between query and schema integration tests. |
 | Docker-backed integration | Document or automate local DB service bootstrap for schema integration tests. |
 | MariaDB deltas | Keep `RETURNING` returned-row runtime support, routine/default behavior, procedure-management, trigger CRUD, completion-runtime, admin/import/export, and full workbench claims behind separate MariaDB-specific promotion gates. Current `RETURNING` evidence is profile/completion plus a version-aware completion suggestion gate, structural parser/Safe Mode classification, and focused `mariadb:11` runtime characterization showing server-accepted `DELETE ... RETURNING` side effect with no returned-row or affected-row-count adapter support claim; current row-edit and bounded table/index/constraint DDL evidence is limited to the tested MySQL-family path under MariaDB identity, with smoke coverage for the bounded Structure DDL path. |
-| Fixture inventory | The test that kept fixture inventory aligned (`scripts/fixtures/dbms-seeds.test.ts`) was deleted in #2033. Check `e2e/fixtures/<dbms>/` by hand before product docs mention fixture evidence. |
+| Fixture inventory | Nothing checks that the fixture inventory matches the docs. Read `e2e/fixtures/<dbms>/` before product docs cite fixture evidence. |
 
 ## Local Development And CI
 
@@ -55,20 +54,17 @@ landed and live GitHub showed no open Refactor 04 child issues.
 | macOS smoke | Keep macOS E2E deferred until tauri-driver WKWebView support or an alternate mac smoke path exists. |
 | Right-click E2E | Add an alternate context-menu trigger or wait for tauri-driver W3C Actions support. |
 | E2E isolation | App-local state (`connections.json`, prefs, safe-mode flags) is emptied per session by `beforeSession` in `wdio.smoke.conf.ts` (`e2e/support/smoke-data-dir.ts`), so a `specFileRetries` retry no longer inherits the previous attempt's connections (#1836). Remaining: DB-server fixtures are still seeded once per spec-file run, not per retry. |
-| Masked E2E flakes | `wdio.smoke.conf.ts` sets `specFileRetries: 1`, so a first-attempt `no such window` crash is recovered in the same run and never shows in the workflow pass/fail tally. The jobs that tee'd their run log and counted `no such window` + `RETRYING` markers into a job summary were removed with the smoke runner (#2033), so no flake tally exists; tracked in #1293. |
+| Masked E2E flakes | `wdio.smoke.conf.ts` sets `specFileRetries: 1`, so a first-attempt `no such window` crash is recovered in the same run and never shows in the workflow pass/fail tally. No flake tally exists — nothing counts `no such window` or `RETRYING` markers; tracked in #1293. |
 | Link checker | Add an internal-doc link checker after archive routing settles. |
 | Dependency security | Track `hickory-proto` advisory exposure through `mongodb 3.6.0`, `rustls-pemfile` exposure through `oracle-rs 0.1.7`, and `quick-xml` DoS advisories (RUSTSEC-2026-0194/0195) through `plist 1.8.0`; remove deny ignores when upstream dependency updates make it possible. |
 
 ## Static Lint Gate
 
-`pnpm lint` runs ESLint directly. It used to run
-`scripts/check-eslint-static-policy.ts`, a wrapper that ran the full ESLint
-config **and then** enforced the Refactor 00 static policy from
-`docs/archives/audits/refactor-00-static-hardening-2026-06-09.md`. The wrapper
-was deleted in #2033: the ESLint half survives, the policy half below does not.
-The rules still described here are now unenforced — `eslint.config.js` keeps
-`max-lines` as a warning and the feature-import rule as an error, and nothing
-checks the allowlists:
+`pnpm lint` runs ESLint. `eslint.config.js` keeps `max-lines` as a warning and
+the feature-import rule as an error. **Nothing enforces the rules below** — they
+come from the Refactor 00 static policy in
+`docs/archives/audits/refactor-00-static-hardening-2026-06-09.md`, and no check
+reads the allowlists:
 
 | Gate | Current policy | Triage owner |
 |---|---|---|
@@ -77,8 +73,8 @@ checks the allowlists:
 | `src/features/**` imports | Feature production modules may use feature-local code, feature public APIs, `@lib`, `@/types`, and `@components/ui`; cross-feature internal imports fail and must route through `src/features/<domain>/index.ts`. Imports from legacy components, hooks, stores, pages, router, or app shell still fail unless they are an explicit public-facade exception. | The PR adding a feature dependency owns reusable extraction, public API export, or removal of the dependency. |
 
 Coverage thresholds are governed by `vite.config.ts` (frontend) and the
-`--fail-under-*` literals in `.github/workflows/ci.yml` (Rust integration); the
-ratchet that locked them was deleted in #2033. E2E breadth stays with #581, and
+`--fail-under-*` literals in `.github/workflows/ci.yml` (Rust integration) —
+those two files are the only places the numbers live. E2E breadth stays with #581, and
 CI cache or parallelism with #582. Static lint changes should not edit those
 gates.
 
@@ -100,9 +96,8 @@ this page stays the index plus the cross-band policy sections.
 | [`h6-wider-source-candidates.md`](smoke-matrix/h6-wider-source-candidates.md) | MSSQL and Oracle runtime/smoke guardrails plus unpromoted wide-column, cloud-document, graph, vector, and stream candidates |
 | [`h7-ops-security-reliability.md`](smoke-matrix/h7-ops-security-reliability.md) | CI/hook gate surface, destructive-operation safety, credential and local-first privacy, dependency security, a11y, performance, platform smoke, E2E isolation |
 
-Band sizes are not restated here. `check-doc-size.sh` used to own that number
-and was deleted in #2033, so there is no size gate at all now — restating a band
-size here would be a claim nothing verifies.
+Band sizes are not restated here. No size gate exists, so a band size written
+here would be a number nothing verifies.
 
 ## Pre-Release Verification Gate
 
@@ -114,8 +109,8 @@ Required local evidence:
 
 - Source state: record the intended release SHA and confirm the release worktree
   has no unrelated source changes with `git status --short --branch`.
-- Hook path: there are no local hooks (#2033). Commits must still be signed, and
-  bypass flags remain forbidden by git policy.
+- Hook path: there are no local hooks. Commits must still be signed, and bypass
+  flags remain forbidden by git policy.
 - Frontend/build lane: `pnpm lint`,
   `pnpm exec vitest run --coverage --coverage.reporter=text-summary`, and
   `pnpm build`. The former `pnpm test -- --run --coverage ...` form did NOT
@@ -134,8 +129,8 @@ Required local evidence:
 Required remote evidence on the exact release SHA:
 
 - Every required context in the `pr_to_main` ruleset passes. That list lives in
-  one place, `memory/runbook/pr-merge-gates/memory.md`; do not copy it here,
-  because the copy that used to live here listed five of the eight.
+  one place, `memory/runbook/pr-merge-gates/memory.md`. Do not copy it here — a
+  copy kept here once listed five of the eight.
 - The runtime smoke matrix passes: Prepare E2E runtime artifacts plus the wired
   PostgreSQL, MySQL, MariaDB, SQLite, DuckDB `.duckdb`, DuckDB file analytics,
   MongoDB, Redis, Valkey, Elasticsearch, OpenSearch, MSSQL, and Oracle matrix

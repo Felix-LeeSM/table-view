@@ -1,13 +1,5 @@
 # SQLite File DBMS Smoke Matrix
 
-> **2026-07-30 (#2033):** 이 문서가 인용하는 `scripts/**` 경로 — smoke 러너
-> (`e2e-smoke-ci.sh`), fixture 도구(`scripts/fixtures/*`), 훅 스크립트 — 와
-> 로컬 git hook 은 모두 삭제됐다. **여기 적힌 자동 실행·게이트 서술은 더 이상
-> 성립하지 않는다.** e2e spec 과 fixture 데이터 자체는 남아 있고 손으로 구동할 수
-> 있다 (README 「E2E Smoke」 참조). CI 에서 도는 것은 `.github/workflows/ci.yml`
-> 뿐이다.
-
-
 Smoke matrix band. Parent index:
 [`docs/contributor-guide/testing-and-quality.md`](../testing-and-quality.md).
 User-visible support boundaries live in
@@ -21,7 +13,7 @@ SQLite desktop smoke now wired into the GitHub Runtime Happy Path.
 
 Current evidence:
 
-`scripts/e2e-smoke-ci.sh`, `e2e/smoke/sqlite.spec.ts`,
+`e2e/smoke/sqlite.spec.ts`,
 `e2e/fixtures/sqlite/query/seed.sql`, #456
 
 Current gap / routing:
@@ -167,8 +159,8 @@ Current evidence:
 `src-tauri/sql-parser-core/src/completion/completion_tests.rs`,
 `src/features/completion/sql/sqlCompletionContext.test.ts`,
 `src/features/completion/sql/sqlCompletionRequest.test.ts`,
-`src/lib/sql/sqlWasmArtifact.test.ts`, `scripts/fixtures/sqlite.test.ts`,
-`scripts/e2e-smoke-ci.sh`, `e2e/smoke/sqlite.spec.ts`, #534
+`src/lib/sql/sqlWasmArtifact.test.ts`,
+`e2e/smoke/sqlite.spec.ts`, #534
 
 Current gap / routing:
 
@@ -199,12 +191,6 @@ Current evidence:
 - `e2e/fixtures/sqlite/query/seed.sql`
 - `e2e/fixtures/seed.mssql.sql`
 - `e2e/fixtures/seed.oracle.sql`
-- `scripts/fixtures/spec.test.ts`
-- `scripts/fixtures/sqlite.test.ts`
-- `scripts/fixtures/mssql.test.ts`
-- `scripts/fixtures/oracle.test.ts`
-- `scripts/e2e-pre-smoke-release-gate.ts`
-- `scripts/e2e-smoke-ci.sh`
 
 Current gap / routing:
 

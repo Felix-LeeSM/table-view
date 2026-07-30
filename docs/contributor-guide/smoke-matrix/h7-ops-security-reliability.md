@@ -1,13 +1,5 @@
 # H7 Ops, Security, And Reliability Smoke Matrix
 
-> **2026-07-30 (#2033):** 이 문서가 인용하는 `scripts/**` 경로 — smoke 러너
-> (`e2e-smoke-ci.sh`), fixture 도구(`scripts/fixtures/*`), 훅 스크립트 — 와
-> 로컬 git hook 은 모두 삭제됐다. **여기 적힌 자동 실행·게이트 서술은 더 이상
-> 성립하지 않는다.** e2e spec 과 fixture 데이터 자체는 남아 있고 손으로 구동할 수
-> 있다 (README 「E2E Smoke」 참조). CI 에서 도는 것은 `.github/workflows/ci.yml`
-> 뿐이다.
-
-
 Smoke matrix band. Parent index:
 [`docs/contributor-guide/testing-and-quality.md`](../testing-and-quality.md).
 User-visible support boundaries live in
@@ -23,206 +15,45 @@ Current evidence:
 
 - `.github/workflows/ci.yml`
 - `.github/workflows/e2e-smoke.yml`
-- `scripts/hooks/analyze/detect-change-scope.sh`
-
-Current gap / routing:
 
 Merge-blocking membership is deliberately not restated here. The `pr_to_main`
 ruleset's required contexts are listed once, in
-[`memory/runbook/pr-merge-gates/memory.md`](../../../memory/runbook/pr-merge-gates/memory.md),
-and the CI-gate enumeration policy in
-[`scripts/static-policy/ci-gate-enumeration.ts`](../../../scripts/static-policy/ci-gate-enumeration.ts)
-(run by `pnpm lint`) fails the build if any other document re-enumerates them,
-or if a listed context stops matching a job that the workflows actually
-produce. This band used to carry its own copy of that list; three copies across
-the repo had gone stale by #1845.
+[`memory/runbook/pr-merge-gates/memory.md`](../../../memory/runbook/pr-merge-gates/memory.md).
+Nothing verifies that a copy kept here still matches the workflows, and three
+copies across the repo had already gone stale by #1845.
 
 What the individual jobs own:
 
-- Frontend Checks aggregates the shard matrix, then applies the coverage ratchet
-  and the Vitest coverage thresholds. On a docs-only change set every one of
-  those steps is gated off and the job does one thing instead: it grades the
-  `doc-contracts` result, which has no required context of its own.
+- `Frontend Checks` aggregates the three-shard vitest matrix, applies
+  `vite.config.ts`'s coverage thresholds to the merged report, and runs
+  `pnpm lint` and `pnpm build`.
 
-- Dependency Security runs `cargo deny check bans licenses sources` in
-  `src-tauri`; RUSTSEC advisories are decoupled into the advisory Dependency
-  Advisories job.
+- `Dependency Security` runs `cargo deny check bans licenses sources` in
+  `src-tauri`. RUSTSEC advisories are decoupled into `Dependency Advisories`,
+  which is `continue-on-error` so one new external advisory cannot turn every
+  open PR red at once.
 
-- Rust Static Analysis mirrors the local lefthook `cargo fmt --check` and
-  `cargo clippy --all-targets --all-features -- -D warnings` gates.
+- `Rust Static Analysis` runs `cargo fmt --check` and
+  `cargo clippy --all-targets --all-features -- -D warnings`. There are no local
+  git hooks, so this is the only place either check runs.
 
-- Integration Tests (Docker) runs the Rust integration coverage cutoffs
+- `Integration Tests (Docker)` runs the Rust integration coverage cutoffs
   (`cargo llvm-cov nextest --profile push`, lines 80 / functions 75 /
-  regions 80, ratchet-locked as `rust.pre_push.integration`) — promoted from the
-  local pre-push rust route on 2026-07-03 (audit #6) so a required remote check
-  owns the floor.
+  regions 80, written as literals in the workflow).
 
-Theme contrast and link checking are advisory (Frontend Advisory job). Full
-a11y, perf, and macOS/Windows runtime smoke are not routine blocking checks.
+- `Detect Change Scope`, `PR Body Contract` and `Runtime Happy Path` are
+  name-only jobs: required contexts that cannot fail and verify nothing.
 
-The doc contracts are ordinary members of the vitest suite and of `pnpm lint`.
-On a code change they run there. On a docs-only change set they run in the
-`doc-contracts` job instead, which exists so a markdown edit no longer drags the
-three-shard matrix along. That job is not itself a required context, so the
-required aggregation runs alongside it and grades its result — see the next
-section.
-
-## Change-scope classification and the docs-only skip
-
-Current evidence:
-
-- `.github/workflows/ci.yml`
-- `.github/workflows/e2e-smoke.yml`
-- `scripts/hooks/analyze/detect-change-scope.sh`
-- `scripts/hooks/analyze/test-detect-change-scope.sh`
-- `scripts/static-policy/ci-gate-enumeration.ts`
-
-Current gap / routing:
-
-A lightweight `changes` job classifies each PR/main-push change set into two
-INDEPENDENT signals: `code_changed` (a path outside `docs/`, `memory/`, `*.md`)
-and `docs_changed` (a path inside them). Both are true for a mixed set.
-
-`docs_changed` exists because a docs-only change is not "no change". The doc
-contracts are ordinary members of the vitest suite, and `pnpm lint` reads the 20
-`COMPLETION_FEATURE_REFERENCE_DOC_PATHS` plus the frontend-compat inventory. A
-single `code_changed` flag described those as unaffected, so docs-only PRs
-skipped exactly the checks guarding the documents they edited — #1841 merged
-with its doc contracts unevaluated, and #1844/#1847 merged reading
-`Frontend Checks: skipping`, which GitHub counts as a satisfied required check.
-The job that reads docs (`doc-contracts`) therefore gates on `docs_changed`, and
-so does `frontend`, which reads nothing there but is the required context that
-reports the reader's result. The `DOCS-READING JOBS` note at the end of
-`.github/workflows/ci.yml` is the list, and
-`scripts/hooks/policy/test-ci-workflow-cache.sh` asserts that exactly those two jobs
-carry the clause.
-
-Until #1991 the two readers were `frontend-shard` and `frontend`, so a docs edit
-ran the whole 638-file vitest suite across three shards to reach five doc
-contract files. Count:
-
-```bash
-git ls-files | grep -E '\.(test|spec)\.(ts|tsx)$' | grep -vE '^e2e/' | wc -l
-```
-
-Those five were identified by mutation — overwrite every `docs/`, `memory/`,
-`*.md` file and diff the failing set against a clean run, then repeat with the
-files deleted, because two of them assert a path EXISTS and survive an
-overwrite.
-
-Every change-gated job carries `needs: changes`, and the heavy ones add a
-fail-closed `if:`: such a job skips only when detection SUCCEEDED and said the
-change was out of its scope; if the `changes` job itself fails/cancels (infra),
-its outputs are empty and the job runs full, so a broken detector never lets a
-skip satisfy a required check. `doc-contracts` is the single exception and
-inverts that clause — it requires `needs.changes.result == 'success'`, so a
-broken detector skips it. That is safe because its gate is the complement of the
-heavy one: whenever it skips on a non-empty change set, the heavy jobs are
-running, and they contain the same two doc readers.
-`paths-ignore` is deliberately NOT used: it would leave the required contexts
-expected/missing forever, whereas an `if:`-skipped job's check run satisfies the
-required status check (GitHub treats skipped checks as successful). In
-`e2e-smoke.yml` only `e2e-smoke-prepare` and the `e2e-smoke-required`
-aggregation carry that guard as a job-level `if:`; the three matrix jobs have no
-`if:` of their own and inherit the skip through `needs: e2e-smoke-prepare`. The
-script is fail-safe too: missing base ref, git error, or `workflow_dispatch`
-sets BOTH signals true.
-
-The three sets below are derived from `.github/workflows/ci.yml` by
-`scripts/static-policy/ci-gate-enumeration.ts` (`pnpm lint`) and re-checked on
-every run, so they cannot drift from the workflow the way a hand-maintained list
-does. Job ids, not check-context names:
-
-<!-- ci-gates:change-gated -->
-
-- Change-gated: `dependency-security`, `dependency-advisories`,
-  `doc-contracts`, `frontend-shard`, `frontend`, `rust`, `rust-static`,
-  `integration-tests`.
-
-<!-- /ci-gates -->
-
-<!-- ci-gates:ungated -->
-
-- Ungated (no job-level `if:` at all): `changes`, `pr-body`, `doc-size`,
-  `frontend-advisory`.
-
-<!-- /ci-gates -->
-
-<!-- ci-gates:advisory -->
-
-- Advisory (`continue-on-error`, so a red never blocks): `doc-size`,
-  `dependency-advisories`, `frontend-advisory`.
-
-<!-- /ci-gates -->
-
-`frontend-advisory` stays ungated because `docs:links` is most useful on docs
-PRs.
-
-`doc-contracts` is the docs-only lane (#1991). Its `if:` is the complement of
-the shared code gate, so on a docs-only change set it runs while `frontend-shard`
-skips, and on every other change set the reverse holds. The doc-reading checks
-therefore run exactly once, never zero times: a failed detector leaves the shard
-matrix fail-closed and running, and the only set where both lanes skip is an
-empty diff.
-
-The lane needs a required context to be worth anything — GitHub counts a skipped
-required check as satisfied, and `doc-contracts` is not in the `pr_to_main`
-ruleset. Registering it there cannot ship with this change: a required context
-is matched by name, and every open PR whose head predates the job produces no
-such check run, so the context would sit at "expected" and block them all until
-each rebased. So the result is projected instead. `frontend` keeps the
-`docs_changed` clause and runs on both lanes, every one of its heavy steps
-carries the code lane's gate, and its first step grades whichever lane ran —
-`needs.frontend-shard.result` on a code set, `needs.doc-contracts.result` on a
-docs-only one. That is the same mechanism the job already used for the shard
-matrix, it lands in the same commit as the gate change, and it leaves the
-ruleset untouched. `scripts/hooks/policy/test-ci-workflow-cache.sh` pins every
-`if:` literal as a whole line, pins all three lines of the grading step, walks
-the truth table over the pinned literals, and walks the job to assert that every
-step except the grading step and the checkout carries the code gate.
-
-CEILING: the docs-only lane runs the doc contracts that live under `scripts/`,
-`tests/`, and `src/types/`. A doc contract added outside those three roots is
-not picked up automatically — a grep-based completeness guard was measured and
-rejected, because the tightest pattern still matched 14 unrelated test files
-while missing `tests/fixtures/unsupported_boundary_contracts.test.ts` entirely.
-On a code change set nothing is missed: the whole suite runs.
-
-## Local pre-push routing
-
-Current evidence:
-
-- `.githooks/pre-push`
-- `lefthook.yml`
-- `scripts/hooks/apply/pre-push-path-router.sh`
-- `scripts/hooks/apply/test-pre-push-path-router.sh`
-- `scripts/hooks/policy/test-generated-fences.sh`
-- `scripts/hooks/analyze/test-detect-change-scope.sh`
-
-Current gap / routing:
-
-Pre-push always runs signed-commit, coverage-ratchet, and TDD-cycle checks, then
-routes by outgoing path. Docs-only skips TS/Rust but still runs the ratchet;
-hook/tooling-only paths run hook self-checks; frontend or Rust paths run the
-matching stack; mixed frontend+Rust routes run both stacks in parallel by
-default; CI workflow paths run workflow contract checks, which include the
-`DOCS-READING JOBS` assertion in `scripts/hooks/policy/test-ci-workflow-cache.sh`;
-root-local
-generated/cache/tmp/worktree paths are explicit non-source surfaces; unknown
-paths run full checks. The Rust route runs only the fast gates (`cargo check`,
-`cargo deny`, `cargo machete`); the heavy integration coverage gate
-(`cargo llvm-cov nextest --profile push`) was promoted to CI
-`Integration Tests (Docker)` on 2026-07-03 (audit #6), while `pre-commit` still
-owns the fast lib-only Tier 1 coverage. Hook bypass remains forbidden by git
-policy and dangerous-bash guards.
+No job is change-gated — every job runs on every push and pull request, so a
+docs-only PR pays for the full suite and no skipped check ever stands in for an
+unverified one. Full a11y, perf, and macOS/Windows runtime smoke are not routine
+blocking checks.
 
 ## Runtime Happy Path E2E
 
 Current evidence:
 
 - `.github/workflows/e2e-smoke.yml`
-- `scripts/e2e-smoke-ci.sh`
-- `scripts/hooks/policy/test-e2e-smoke-workflow.sh`
 - `e2e/smoke/postgres.spec.ts`
 - `e2e/smoke/postgres-safe-mode.spec.ts`
 - `e2e/smoke/postgres-explain.spec.ts`
@@ -264,7 +95,7 @@ evidence and does not claim FK row navigation, schema diff, migration impact, or
 data compare. The workflow contract test keeps matrix keys, spec paths, script
 default routing, and SQLite/DuckDB visible assertion evidence aligned.
 `wdio.smoke.conf.ts` can discover more smoke specs, but
-`scripts/e2e-smoke-ci.sh` must wire a spec before it becomes part of the routine
+ must wire a spec before it becomes part of the routine
 remote gate.
 
 ## Non-routine E2E smoke specs
@@ -333,7 +164,6 @@ multi-user security flows require threat-model handoff before promotion.
 
 Current evidence:
 
-- `.agents/skills/grill-with-memory/SKILL.md`
 
 Current gap / routing:
 
@@ -348,9 +178,6 @@ Current evidence:
 
 - `.github/workflows/ci.yml`
 - `src-tauri/deny.toml`
-- `scripts/hooks/apply/cargo-deny-summary.sh`
-- `scripts/hooks/apply/test-cargo-deny-summary.sh`
-- `scripts/hooks/apply/pre-push-path-router.sh`
 - `docs/archives/risks/active-risk-register-2026-05-27.md`
 
 Current gap / routing:
@@ -416,8 +243,6 @@ FPS/latency budgets only with owner, runtime cost, and failure triage.
 
 Current evidence:
 
-- `scripts/check-doc-links.ts`
-- `scripts/__tests__/check-doc-links.test.ts`
 - `package.json`
 - `.github/workflows/ci.yml`
 
@@ -436,7 +261,6 @@ Current evidence:
 - `.github/workflows/platform-smoke-canary.yml`
 - `.github/workflows/e2e-smoke.yml`
 - `.github/workflows/ci.yml`
-- `scripts/hooks/policy/test-platform-smoke-canary-workflow.sh`
 
 Current gap / routing:
 
@@ -453,7 +277,6 @@ desktop runtime support.
 
 Current evidence:
 
-- `scripts/e2e-smoke-ci.sh`
 - `e2e/fixtures/seed-smoke.ts`
 
 Current gap / routing:

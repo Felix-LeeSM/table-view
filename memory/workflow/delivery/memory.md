@@ -14,8 +14,8 @@ trigger:
 죽는다. 사용자에게 "이제 커밋해 주세요" 안내 금지. 리뷰 부착·라운드 판정·머지·정리는
 그 뒤의 다른 node 가 하고, 무엇을 언제 띄울지는 orchestrator 가 label 로 정한다.
 
-이 방은 **행동 계약**(누가·언제·무엇을 지켜야 하나)만 둔다. 구현자 절차 SOT 는
-구현자 절차를 소유하던 `delivery` skill 은 삭제됐다 (#2033).
+이 방은 **행동 계약**(누가·언제·무엇을 지켜야 하나)만 둔다. 구현자 절차의 상세
+SOT 는 없다.
 
 ## Node 별 계약
 
@@ -49,7 +49,7 @@ trigger:
 - 사용자 명시 거부("commit 하지 마", "push 멈춰") — 즉시 중단.
 
 머지 자율 조건(정성 차원에 blocking 없음, CI SUCCESS + `review:approved`,
-mergeable, 사용자 거부 없음)은 종결자가 종합한다. 구현자 절차 세부는 skill 참조.
+mergeable, 사용자 거부 없음)은 종결자가 종합한다.
 
 ## Hook 강제 — 절대 회피 금지
 
@@ -69,7 +69,7 @@ mergeable, 사용자 거부 없음)은 종결자가 종합한다. 구현자 절�
 
 self-review 는 편향. 독립 `pr-reviewer` coordinator 를
 독립 spawn 해 평가한다 — 저자가 부르지 않는다.
-[review](../review/memory.md) 행동 계약 적용 (방법론 skill 은 삭제됨).
+[review](../review/memory.md) 행동 계약 적용.
 외부 시각 필요 시 `codex-reviewer` (사용자 명시 시만). worktree 는 PR 당 하나이고
 동시에 쓰는 node 는 하나다 — 라운드마다 새로 만들지 않는다
 ([worktree](../../runbook/worktree/memory.md)).
@@ -88,7 +88,6 @@ narration 없음.
 ## 관련
 
 - [git-policy](../git-policy/memory.md) — `--no-verify` / force-push 금지 (집행 훅 없음)
-- delivery / pr-create / pr-review skill 과 issue-implement node 정의는 #2033 에서 삭제됐다
 - [review](../review/memory.md) — 리뷰 단계 행동 계약
 - [documentation](../documentation/memory.md) — 문서화 impact + evidence portability
 - [tdd](../tdd/memory.md) — code-profile sprint RED evidence

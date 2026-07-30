@@ -5,19 +5,16 @@ updated: 2026-07-30
 task: commit, push, hook, push-reject, pr-close, race-trace
 trigger:
   signal: git commit / git push / push reject / PR close 시
-  layer: none — 집행 훅 전부 삭제됨 (#2033), 규율만 남음
+  layer: none — 집행 훅 없음, 규율만
 ---
 
 # Git 정책
 
 이 파일이 git 정책의 **유일한 SOT** 다 — 절차, 근거, 차단 목록 전부.
 
-**2026-07-30 (#2033): 집행 장치가 사라졌다.** 차단 목록의 SOT 이자 집행자였던
-`check-dangerous-bash.sh`, PreToolUse wrapper, `.githooks/`, `lefthook.yml`,
-그리고 이 문서를 subagent 에 실어 나르던 `.claude/rules/git-policy.md` 까지 전부
-삭제됐다. 아래 금지 항목은 이제 **아무도 막지 않는다** — 실행되기 전에 스스로
-멈춰야 하고, 이 방은 `CLAUDE.md` → `AGENTS.md` import 를 타고 오는 포인터를 보고
-직접 열어야 닿는다.
+**집행 장치는 없다.** 아래 금지 항목을 **아무도 막지 않는다** — 실행되기 전에
+스스로 멈춰야 한다. 이 방은 `CLAUDE.md` → `AGENTS.md` import 를 타고 오는 포인터를
+보고 직접 열어야 닿는다.
 
 ## 절대 금지 — Hook 회피
 
@@ -34,8 +31,8 @@ trigger:
 - signing 우회 금지는 그대로다. 서명은 훅이 아니라 `commit.gpgsign` 설정이
   건다.
 - [ADR 0044](../../../docs/archives/decisions/0044-e2e-smoke-remote-required/memory.md)
-  는 runtime e2e smoke 를 GitHub Actions blocking check 로 승격했지만, 그 워크플로도
-  #2033 에서 stub 으로 축소됐다 — e2e 는 지금 어디서도 안 돈다.
+  는 runtime e2e smoke 를 GitHub Actions blocking check 로 승격했지만, 그 워크플로는
+  이름만 보고하는 stub 이다 — e2e 는 어디서도 안 돈다.
 
 ## push 전에 스스로 돌려라
 
@@ -58,9 +55,8 @@ cargo test --manifest-path src-tauri/Cargo.toml --lib   # Rust 를 건드렸으�
 
 ## Hard block — 승인으로도 우회 불가
 
-아래는 사용자 승인 요청 대상이 아니라 **수행 금지**다. 예전에는
-`check-dangerous-bash.sh` 가 실제로 차단했고 이 목록의 SOT 였다. 그 훅이
-없어졌으므로 **이 목록이 SOT 이고 집행자는 agent 자신이다.**
+아래는 사용자 승인 요청 대상이 아니라 **수행 금지**다. **이 목록이 SOT 이고
+집행자는 agent 자신이다** — 차단하는 장치는 없다.
 
 - `git commit --no-verify` / `git push --no-verify`
 - `--no-gpg-sign` / `commit.gpgsign=false`
@@ -97,9 +93,8 @@ reset 으로 ref 가 옮겨진 결과_ 의 push reject.
 
 push 가 non-fast-forward 로 튕겼을 때 **절대** `git reset --hard FETCH_HEAD`
 / `git pull --rebase` 하지 말 것 — 본인 commit wipe 또는 silent rebase.
-금지 대상 (예전에는 훅이 단독 명령까지 block 했다 — 처음엔 `git fetch && git
-reset --hard FETCH_HEAD` sequence 만 막다가 agent 가 2 단계로 분리해 우회했고,
-race-trace 가 그 우회를 진범으로 확정했다):
+금지 대상 — 시퀀스로 쓰든 두 단계로 쪼개 쓰든 같다. race-trace 가 그 2 단계
+분리를 push reject 의 진범으로 확정했다:
 
 - `git reset --hard FETCH_HEAD` / `ORIG_HEAD` / `@{u}` / `origin/<branch>`
   / `refs/remotes/<...>`
@@ -144,7 +139,7 @@ closed-PR stale ref 가 의심되면 (PR close 시 `--delete-branch` 누락):
 
 `gh pr close` 시 **반드시** `--delete-branch` 동반. closed-PR 의 head ref 가
 remote 에 stale 로 남으면, 같은 작업이 재 spawn 될 때 새 branch 의 SHA 와
-non-fast-forward 충돌 → push reject. 누락을 경고하던 훅은 삭제됐다.
+non-fast-forward 충돌 → push reject. 누락을 경고해 주는 것은 없다.
 
 ```bash
 gh pr close <N> --delete-branch --comment "<reason>"

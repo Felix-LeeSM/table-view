@@ -7,14 +7,6 @@ updated: 2026-06-11
 
 # Source Root Migration Constraints
 
-> **2026-07-30 (#2033):** 이 문서가 인용하는 `scripts/**` 경로 — smoke 러너
-> (`e2e-smoke-ci.sh`), fixture 도구(`scripts/fixtures/*`), 훅 스크립트 — 와
-> 로컬 git hook 은 모두 삭제됐다. **여기 적힌 자동 실행·게이트 서술은 더 이상
-> 성립하지 않는다.** e2e spec 과 fixture 데이터 자체는 남아 있고 손으로 구동할 수
-> 있다 (README 「E2E Smoke」 참조). CI 에서 도는 것은 `.github/workflows/ci.yml`
-> 뿐이다.
-
-
 This is the Refactor 01 source-root migration contract for issue #730. It
 defines constraints that later Refactor 02 and Refactor 03 PRs must obey before
 moving frontend or backend code.
@@ -34,8 +26,7 @@ roots, compatibility exports, and committed generated inputs.
 
 ## Inputs
 
-- Refactor 01 final repository topology and lifecycle SOT:
-  [`repository-topology-inventory.md`](repository-topology-inventory.md).
+- Refactor 01 final repository topology and lifecycle SOT: [`repository-topology-inventory.md`](repository-topology-inventory.md).
 - #729 generated/cache/tmp/worktree fencing is a prerequisite when a later move
   relies on root-local cache/tmp/worktree paths staying outside source routing.
   This document does not duplicate #729 ignore or hook-router rules.
@@ -74,9 +65,9 @@ state the compatibility export plan before moving files.
 | Parser crates                     | `src-tauri/sql-parser-core/`, `src-tauri/mongosh-parser-core/`       | Forbidden                                                                           | Forbidden unless the parser crate itself is the issue scope                     | Parser crate moves require separate WASM build and generated-artifact evidence.                                                          |
 | Committed generated inputs        | `src/lib/*/wasm/`, `src-tauri/gen/`, `src-tauri/icons/`              | Forbidden as disposable cache; allowed only through generator-owner PRs             | Forbidden as disposable cache; allowed only through generator-owner PRs         | These are generated but committed inputs. They must stay source-visible and must not be hidden by cache/tmp/worktree policies.           |
 | Frontend tests                    | `src/**/*.test.ts`, `src/**/*.test.tsx`, `tests/`                    | Move with the frontend contract they prove                                          | Move only for shared contract updates caused by backend API changes             | Keep assertions on user-facing invariants and import compatibility, not old directory trivia.                                            |
-| Fixtures and fixture generators   | `fixtures/`, `tests/fixtures/`, `e2e/fixtures/`, `scripts/fixtures/` | Forbidden unless the issue explicitly owns fixture routing                          | Forbidden unless the issue explicitly owns fixture routing                      | Fixture data and generator code are committed inputs. Do not treat them as tmp output or support-claim promotion by themselves.          |
+| Fixtures and fixture generators   | `fixtures/`, `tests/fixtures/`, `e2e/fixtures/` | Forbidden unless the issue explicitly owns fixture routing                          | Forbidden unless the issue explicitly owns fixture routing                      | Fixture data and generator code are committed inputs. Do not treat them as tmp output or support-claim promotion by themselves.          |
 | E2E smoke source and report mount | `e2e/`                                                               | Smoke spec moves require smoke routing proof                                        | Smoke spec moves require smoke routing proof                                    | Preserve `e2e/wdio-report/.gitkeep`; report output remains local generated output.                                                       |
-| Tooling, hooks, CI, and docs      | `scripts/`, `.githooks/`, `.github/`, `docs/`, `memory/`             | Forbidden unless the migration issue names that policy surface                      | Forbidden unless the migration issue names that policy surface                  | Keep hook/path-router, workflow memory, and docs SOT changes out of source moves unless they are required and documented in the PR body. |
+| Tooling, hooks, CI, and docs      | `.github/`, `docs/`, `memory/`             | Forbidden unless the migration issue names that policy surface                      | Forbidden unless the migration issue names that policy surface                  | Keep hook/path-router, workflow memory, and docs SOT changes out of source moves unless they are required and documented in the PR body. |
 
 ## Compatibility Export Constraints
 

@@ -1,13 +1,5 @@
 # H5 Non-RDBMS Smoke Matrix
 
-> **2026-07-30 (#2033):** 이 문서가 인용하는 `scripts/**` 경로 — smoke 러너
-> (`e2e-smoke-ci.sh`), fixture 도구(`scripts/fixtures/*`), 훅 스크립트 — 와
-> 로컬 git hook 은 모두 삭제됐다. **여기 적힌 자동 실행·게이트 서술은 더 이상
-> 성립하지 않는다.** e2e spec 과 fixture 데이터 자체는 남아 있고 손으로 구동할 수
-> 있다 (README 「E2E Smoke」 참조). CI 에서 도는 것은 `.github/workflows/ci.yml`
-> 뿐이다.
-
-
 Smoke matrix band. Parent index:
 [`docs/contributor-guide/testing-and-quality.md`](../testing-and-quality.md).
 User-visible support boundaries live in
@@ -75,7 +67,7 @@ deployments must fail clearly rather than silently commit partial work.
 
 Current evidence:
 
-`scripts/e2e-smoke-ci.sh`, `e2e/smoke/mongodb.spec.ts`,
+`e2e/smoke/mongodb.spec.ts`,
 `src-tauri/tests/mongo_integration.rs`, `src-tauri/tests/cancel_mongo.rs`,
 `src/lib/mongo/mongoshAst.test.ts`, `src/lib/mongo/mongoshParser.test.ts`,
 `src/lib/mongo/mongoSafety.test.ts`,
@@ -118,7 +110,6 @@ Current evidence:
 
 - `e2e/fixtures/redis/kv/seed.json`
 - `e2e/smoke/redis.spec.ts`
-- `scripts/e2e-smoke-ci.sh`
 - `src-tauri/src/db/redis/mod.rs`
 - `src-tauri/src/db/redis/tests.rs`
 - `src-tauri/tests/redis_integration.rs`
@@ -152,7 +143,7 @@ CLI/admin parity remain future promotion gates.
 
 Current evidence:
 
-`.github/workflows/e2e-smoke.yml`, `scripts/e2e-smoke-ci.sh`,
+`.github/workflows/e2e-smoke.yml`,
 `e2e/fixtures/redis/kv/seed.json`, `e2e/smoke/redis.spec.ts`,
 `src-tauri/src/commands/kv.rs`, `src-tauri/src/db/kv_types.rs`,
 `src-tauri/src/db/redis/mod.rs`, `src-tauri/src/db/redis/command.rs`,
@@ -193,8 +184,8 @@ Current evidence:
 `src-tauri/src/commands/connection.rs`, `src-tauri/src/db/redis/mod.rs`,
 `src-tauri/tests/backend_adapter_contract_profile.rs`,
 `src-tauri/tests/redis_integration.rs`, `e2e/fixtures/valkey/kv/seed.json`,
-`e2e/smoke/valkey.spec.ts`, `scripts/e2e-smoke-ci.sh`,
-`.github/workflows/e2e-smoke.yml`, `scripts/fixtures/dbms-seeds.test.ts`,
+`e2e/smoke/valkey.spec.ts`,
+`.github/workflows/e2e-smoke.yml`,
 `docs/product/README.md`, `docs/product/query-language-support.md`,
 `docs/product/known-limitations.md`, `docs/ROADMAP.md`, #488/#489/#490/#491/#890
 
@@ -219,7 +210,7 @@ against local Valkey.
 Current evidence:
 
 `e2e/fixtures/valkey/kv/seed.json`, `e2e/smoke/valkey.spec.ts`,
-`scripts/fixtures/dbms-seeds.test.ts`, `src-tauri/tests/redis_integration.rs`,
+`src-tauri/tests/redis_integration.rs`,
 this matrix, #486/#488/#489/#490/#491/#890
 
 Current gap / routing:
@@ -238,7 +229,7 @@ supplement local fixture/testcontainer/smoke evidence, not replace it.
 Current evidence:
 
 `e2e/fixtures/valkey.redis-compatibility.json`,
-`scripts/fixtures/dbms-seeds.test.ts`, `docs/product/query-language-support.md`,
+`docs/product/query-language-support.md`,
 `src/features/completion/redis/redisCommandCompletion.test.ts`,
 #487/#489/#490/#491
 
@@ -260,7 +251,7 @@ promotion.
 
 Current evidence:
 
-`.github/workflows/e2e-smoke.yml`, `scripts/e2e-smoke-ci.sh`,
+`.github/workflows/e2e-smoke.yml`,
 `e2e/fixtures/valkey/kv/seed.json`,
 `e2e/fixtures/valkey.redis-compatibility.json`, `e2e/smoke/valkey.spec.ts`,
 `src-tauri/tests/redis_integration.rs`,
@@ -342,7 +333,6 @@ Current evidence:
 - `e2e/fixtures/elasticsearch/search/seed.json`
 - `e2e/fixtures/opensearch/search/seed.json`
 - `.github/workflows/e2e-smoke.yml`
-- `scripts/e2e-smoke-ci.sh`
 - `e2e/fixtures/seed-smoke.ts`
 - `e2e/smoke/elasticsearch.spec.ts`
 - `e2e/smoke/opensearch.spec.ts`
@@ -361,7 +351,6 @@ Current evidence:
 - `src/components/search/SearchIndexDetailPanel.test.tsx`
 - `src/components/search/SearchResultView.test.tsx`
 - `src/components/query/QueryTab.search-route.test.tsx`
-- `scripts/fixtures/dbms-seeds.test.ts`
 
 Current gap / routing:
 
@@ -479,10 +468,10 @@ separated before parity closure.
 
 Current evidence:
 
-`docs/ROADMAP.md`, `.github/workflows/e2e-smoke.yml`, `scripts/e2e-smoke-ci.sh`,
+`docs/ROADMAP.md`, `.github/workflows/e2e-smoke.yml`,
 `e2e/smoke/opensearch.spec.ts`, `e2e/smoke/search-runtime-smoke.ts`,
 `e2e/fixtures/opensearch/search/seed.json`, `e2e/fixtures/seed-smoke.ts`,
-`scripts/fixtures/dbms-seeds.test.ts`, `src-tauri/src/db/search/tests.rs`,
+`src-tauri/src/db/search/tests.rs`,
 `src-tauri/src/db/search/tests/live_query.rs`,
 `src-tauri/src/db/search/tests/destructive.rs`,
 `src-tauri/src/db/search_dsl.rs`, `src-tauri/src/db/search_live_destructive.rs`,
@@ -529,7 +518,7 @@ remain separate future gates.
 
 Current evidence:
 
-`docs/ROADMAP.md`, `.github/workflows/e2e-smoke.yml`, `scripts/e2e-smoke-ci.sh`,
+`docs/ROADMAP.md`, `.github/workflows/e2e-smoke.yml`,
 `e2e/smoke/elasticsearch.spec.ts`, `e2e/smoke/opensearch.spec.ts`,
 `e2e/smoke/search-runtime-smoke.ts`,
 `e2e/fixtures/elasticsearch/search/seed.json`,

@@ -27,10 +27,8 @@ updated: 2026-07-26
 
 - `memory/memory.md` 는 memory 진입 라우터만 소유한다. 세부 규칙은 각 방의
   `memory.md` 가 소유한다.
-- workflow 는 행동 계약만 둔다. 긴 절차·평가 매트릭스·대화 방식·구현 방법론을
-  소유하던 repo-owned skill (`.agents/skills/*`) 은 전부 삭제됐다 (#2033) —
-  그 내용은 지금 repo 어디에도 없다. 계약을 넘는 절차가 필요하면 memory 를
-  쪼개서 여기 적는다.
+- workflow 는 행동 계약만 둔다. 긴 절차·평가 매트릭스·대화 방식·구현 방법론은
+  repo 어디에도 없다. 계약을 넘는 절차가 필요하면 memory 를 쪼개서 여기 적는다.
 - 제품 상태와 지원 범위는 [docs/product](../docs/product/README.md) 가 소유한다.
   memory 는 product merge gate 와 agent rule 만 둔다.
 - 미래 목표와 sequencing 은 [docs/ROADMAP.md](../docs/ROADMAP.md) 가 소유한다.
@@ -66,8 +64,8 @@ updated: 2026-07-26
 - 손작성 active rule 파일은 `memory.md` 만 허용. 각 `memory.md` 는 200줄 이하
   및 12,000 chars 이하 (둘 다 지켜야 함). 어느 하나라도 초과 시
   `split-memory` skill 로 하위 주제 분할.
-  - chars 는 **문자 수** (`wc -m`) 다 — byte 수 (`wc -c`) 가 아니다.
-    측정하던 `check-memory-size.sh` 는 삭제됐으므로 `wc -m` 을 직접 돌린다.
+  - chars 는 **문자 수** (`wc -m`) 다 — byte 수 (`wc -c`) 가 아니다. 재는
+    장치가 없으니 `wc -m` 을 직접 돌린다.
     한글 본문은 UTF-8 에서 문자당 3 byte 라 `wc -c` 와 크게 벌어진다. 크기를
     인용할 때는 단위를 함께 적는다.
 - `memory/index/by-task.md`, `memory/index/by-surface.md` 는 cross-link 예외다.

@@ -1,13 +1,5 @@
 # H3 DuckDB And File Analytics Smoke Matrix
 
-> **2026-07-30 (#2033):** 이 문서가 인용하는 `scripts/**` 경로 — smoke 러너
-> (`e2e-smoke-ci.sh`), fixture 도구(`scripts/fixtures/*`), 훅 스크립트 — 와
-> 로컬 git hook 은 모두 삭제됐다. **여기 적힌 자동 실행·게이트 서술은 더 이상
-> 성립하지 않는다.** e2e spec 과 fixture 데이터 자체는 남아 있고 손으로 구동할 수
-> 있다 (README 「E2E Smoke」 참조). CI 에서 도는 것은 `.github/workflows/ci.yml`
-> 뿐이다.
-
-
 Smoke matrix band. Parent index:
 [`docs/contributor-guide/testing-and-quality.md`](../testing-and-quality.md).
 User-visible support boundaries live in
@@ -38,7 +30,6 @@ Current evidence:
 - `src-tauri/tests/duckdb_browse_query_adapter.rs`
 - `e2e/fixtures/duckdb/query/seed.sql`
 - `e2e/smoke/duckdb.spec.ts`
-- `scripts/e2e-smoke-ci.sh`
 
 Current gap / routing:
 
@@ -152,8 +143,6 @@ Current evidence:
 `src/components/shared/QueryHistorySourceBadge.test.tsx`,
 `src/lib/tauri/fileAnalytics.test.ts`,
 `src/components/schema/SchemaTree.dbms-shape.test.tsx`,
-`scripts/fixtures/duckdb.test.ts`, `scripts/fixtures/connections.test.ts`,
-`scripts/fixtures/dbms-seeds.test.ts`, `scripts/e2e-smoke-ci.sh`,
 `e2e/fixtures/duckdb/query/seed.sql`,
 `e2e/fixtures/duckdb/file-analytics/sales.csv`, `e2e/smoke/duckdb.spec.ts`,
 `e2e/smoke/duckdb-file-analytics.spec.ts`, #536/#875/#877/#879

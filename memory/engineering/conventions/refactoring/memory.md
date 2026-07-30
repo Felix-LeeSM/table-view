@@ -62,7 +62,7 @@ Phase 2 ESLint 룰 도입 시점: 현재 legacy debt 를 store action 또는
 
 ## 관련 방
 
-- deepening opportunity (shallow→deep 모듈) 발견 루프를 담던 `improve-codebase-architecture` skill 은 삭제됐다 (#2033) — 이 방이 리팩토링 진입점이다.
+- 이 방이 리팩토링 진입점이다. shallow→deep 모듈 발견 루프를 담은 별도 SOT 는 없다.
 - [conventions](../memory.md) — Rust/TS 기본 컨벤션 + 금지 사항.
 - [architecture](../../architecture/memory.md) — 모듈 구조 (lib / hooks /
   components / stores).

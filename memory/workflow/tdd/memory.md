@@ -19,13 +19,13 @@ evidence 를 작업 초반에 보이게 하는 것.
 먼저 커밋하지 않아도, 먼저 작성하지 않아도 문제가 되지 않는다. 유도는
 `issue-implement` description 과 `tdd` skill 본문(`skills:` 주입)이 한다.
 
-관련 사실 둘. (1) 옛 판이 "RED 강제는 훅이 이미 갖고 있다"(#1918) 고 적었는데
-거짓이었다 (#1975) — `check-tdd-cycle.sh` 는 브랜치명에서 `sprint-[0-9]+` 를 못
-뽑으면 `exit 0` 이고 최근 머지 100건 어디에도 `sprint` 이 없다
-(`gh pr list --state merged --limit 100 --json headRefName -q '.[].headRefName' | grep -c sprint` → `0`).
-(2) 강제가 폐기됐으므로 그 훅의 존재 이유도 없어졌다. **훅 제거는 별건**이다 —
-라우터 배선을 건드리는데 그 `check-*.sh` 스텝들에 테스트 보호가 없고(#1989),
-훅을 옮기면 열려 있는 다른 세션의 가드가 조용히 꺼진다.
+**RED 를 강제하는 장치는 없다.** #1918 이 "훅이 이미 갖고 있다" 고 적었으나
+#1975 에서 거짓으로 판정됐고, 그 훅 자체도 지금 없다. 브랜치명 기반 판정은
+애초에 동작하지 않았다 — 최근 머지 100건 어디에도 `sprint` 이 없다:
+
+```bash
+gh pr list --state merged --limit 100 --json headRefName -q '.[].headRefName' | grep -c sprint
+```
 
 ## 아직 남아 있는 훅 조건
 
@@ -72,4 +72,4 @@ git log "$base..HEAD" --format="%s"
 - [delivery](../delivery/memory.md) — push/PR/merge pipeline
 - [review](../review/memory.md) — profile 별 review matrix
 - [git-policy](../git-policy/memory.md) — hook 회피 금지
-- pre-push 로 이 사이클을 강제하던 `check-tdd-cycle.sh` 는 삭제됐다 (#2033) — 집행 없음
+- 이 사이클을 강제하는 장치는 없다 — 집행 없음

@@ -25,8 +25,7 @@ label 메커니즘 자체는 [delivery](../../workflow/delivery/memory.md) 의 �
    (2026-07-03 #1183 delivery 실측 — 이전 서술 "E2E 만" 은 불완전했음.)
 
 **이 블록이 repo 유일의 required context 목록이다.** 다른 문서는 열거하지 말고 여기를
-가리킨다. 이 단일성을 강제하던 `ci-gate-enumeration.ts` (`pnpm lint`) 는 삭제됐으므로
-(#2033) 이름이 실제 workflow job context 와 어긋나도 CI 는 조용하다 — 워크플로를
+가리킨다. 이름이 실제 workflow job context 와 어긋나도 CI 는 조용하므로, 워크플로를
 고칠 때 여기를 같이 고쳐라.
 
 <!-- ci-gates:required-contexts -->

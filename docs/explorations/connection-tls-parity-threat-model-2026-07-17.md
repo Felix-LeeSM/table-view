@@ -9,7 +9,7 @@ status: decisions locked 2026-07-17
 # 연결 폼 TLS 노출 parity — threat-model handoff (#1063)
 
 Grill(소유자 결정 인터뷰) 진입 전 informed consent 용 임시 산출물.
-`.agents/skills/grill-with-memory/SKILL.md` 보안 결정 6섹션 형식.
+ 보안 결정 6섹션 형식.
 
 **이슈 스냅샷과 현행 코드의 차이 (2026-07-02 → 현재)**: 이슈가 "pg 0단"으로
 기록했으나 이후 #1062(백엔드 결선) + #1526(PG 폼 토글)이 머지됨. 현행:

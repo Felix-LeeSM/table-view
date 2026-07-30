@@ -11,10 +11,8 @@ task: worktree, multi-agent, parallel, spawn-verify, agent-hard-rule
 병렬 작업할 때 worktree 로 인스턴스 격리. 각 worktree 는 독립 디렉토리 +
 독립 branch → 충돌 없이 동시 실행.
 
-**2026-07-30 (#2033): worktree 도구와 가드가 전부 삭제됐다.** `worktree-spawn.sh`,
-`worktree-cleanup.sh`, `worktree-bootstrap-deps.sh`, `target-cache.sh`, 그리고
-이들을 강제하던 훅까지 `scripts/` 트리와 함께 사라졌다. 아래 절차는 이제 전부
-수동이고, 어겨도 막아 주는 것이 없다.
+**worktree 도구와 가드는 없다.** 아래 절차는 전부 수동이고, 어겨도 막아 주는
+것이 없다.
 
 ## 소유권 / SOT
 
@@ -47,9 +45,8 @@ git worktree remove worktrees/sprint-388__foo
 git worktree prune                    # stale 메타데이터만
 ```
 
-`src-tauri/target/` 은 복사하지 않는다. warm-start 로 재사용하던 pre-push
-Rust/coverage 산출물 자체가 없어졌고, 복사본은 stale path 로 tauri 빌드를 깨뜨린 전력이
-있다 — 새 worktree 는 cold 로 시작한다.
+`src-tauri/target/` 은 복사하지 않는다. 복사본은 stale path 로 tauri 빌드를
+깨뜨린 전력이 있다 — 새 worktree 는 cold 로 시작한다.
 
 ## 격리 동작
 
@@ -57,16 +54,14 @@ Rust/coverage 산출물 자체가 없어졌고, 복사본은 stale path 로 taur
   - 예: `sprint-388/foo` → `worktrees/sprint-388__foo/`
   - `worktrees/` 는 platform-neutral — 어떤 brain 이든 같은 경로.
   - `.claude/worktrees/` 와 별개 — 그쪽은 Claude Code 의 sub-agent 전용.
-- git hook 은 없다 (`.githooks/`, `lefthook.yml` 삭제). 예전에는 worktree 별
-  `.git/worktrees/<name>/hooks/` 에 `lefthook install` 이 붙었다.
+- git hook 은 없다 — worktree 별로 설치할 것도 없다.
 - working tree state (untracked / staged) 는 worktree 별 독립
 
 ## 책임
 
 - spawn: orchestrator (현재 메인 세션) 가 명시 호출. agent 가 자율로
-  worktree 생성하지 않음 (사용자가 보지 못하는 디스크 공간 차지 위험).
-  예전에는 훅이 `EnterWorktree` create form 과 `git worktree add` 를 차단했다 —
-  지금은 규율만 남았다.
+  worktree 생성하지 않음 (사용자가 보지 못하는 디스크 공간 차지 위험). 이걸
+  막는 장치는 없고 규율만 있다.
 - cleanup: PR 머지 직후 또는 작업 종료 시. `gh pr merge --delete-branch`
   는 branch 만 삭제 — worktree 디스크는 별도 정리 필요.
 - **dirty worktree 는 지우지 않는다** (untracked 도 dirty). 2026-07-29 실측에서

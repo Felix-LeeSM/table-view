@@ -1,13 +1,5 @@
 # H1 Data Source Smoke Matrix
 
-> **2026-07-30 (#2033):** 이 문서가 인용하는 `scripts/**` 경로 — smoke 러너
-> (`e2e-smoke-ci.sh`), fixture 도구(`scripts/fixtures/*`), 훅 스크립트 — 와
-> 로컬 git hook 은 모두 삭제됐다. **여기 적힌 자동 실행·게이트 서술은 더 이상
-> 성립하지 않는다.** e2e spec 과 fixture 데이터 자체는 남아 있고 손으로 구동할 수
-> 있다 (README 「E2E Smoke」 참조). CI 에서 도는 것은 `.github/workflows/ci.yml`
-> 뿐이다.
-
-
 Smoke matrix band. Parent index:
 [`docs/contributor-guide/testing-and-quality.md`](../testing-and-quality.md).
 User-visible support boundaries live in
@@ -76,7 +68,6 @@ Current evidence:
 
 - `e2e/smoke/mariadb.spec.ts`
 - `e2e/fixtures/mariadb/query/seed.sql`
-- `scripts/e2e-smoke-ci.sh`
 - `.github/workflows/e2e-smoke.yml`
 - `src/components/datagrid/useDataGridEdit.mixed-batch.test.ts`
 - `src/lib/sql/ddlGenerator.test.ts`
@@ -212,7 +203,6 @@ is current SOT.
 
 Current evidence:
 
-- `scripts/e2e-smoke-ci.sh`
 - `.github/workflows/e2e-smoke.yml`
 - `e2e/fixtures/redis/kv/seed.json`
 - `e2e/smoke/redis.spec.ts`
@@ -303,7 +293,6 @@ Current evidence:
 - `e2e/smoke/duckdb.spec.ts`
 - `e2e/smoke/duckdb-file-analytics.spec.ts`
 - `e2e/fixtures/duckdb/query/seed.sql`
-- `scripts/e2e-smoke-ci.sh`
 - `src/components/query/DuckdbFileAnalyticsDialog.test.tsx`
 - `src/components/query/QueryTab/useQueryExecution.test.tsx`
 - `src/components/query/QueryHistoryPanel.per-tab.test.tsx`
@@ -329,12 +318,10 @@ structured DDL/write UI, and admin parity remain unpromoted.
 
 Current evidence:
 
-- `scripts/fixtures/dbms-seeds.test.ts`
 - `e2e/fixtures/**/seed.*`
 - `e2e/fixtures/seed.mssql.sql`
 - `e2e/fixtures/seed.oracle.sql`
 - `e2e/fixtures/valkey.redis-compatibility.json`
-- `e2e/fixtures/smoke-routing-decisions.json`
 
 Gap routing:
 
@@ -343,7 +330,7 @@ script wires the matching spec. Valkey's seed is wired into Runtime Happy Path
 smoke; its compatibility matrix still only separates proven local-runtime rows
 from candidate/rejected command families and is not full compatibility evidence.
 Issue #753 keeps fixture tiers and smoke-routing cost/risk rationale in
-`e2e/fixtures/smoke-routing-decisions.json`; #870 adds MySQL/MariaDB bounded
+; #870 adds MySQL/MariaDB bounded
 Structure table/index/FK DDL smoke impact to those routed rows. Add
 DBMS-specific runtime smoke when each remaining parity lane becomes active.
 

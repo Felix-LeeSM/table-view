@@ -20,34 +20,27 @@ Claude Code / Codex / Cursor 모두 본 파일 1번 read. 본문 lazy, 작업 �
 
 코드 만지기 전: `memory/index/by-surface.md` (해당 active rule 묶음).
 
-**이 인덱스는 찾아가야 온다.** 예전에는 파일을 편집하면 PostToolUse hook
-(`scripts/hooks/apply/surface-routing.sh`) 이 그 surface 의 active rule 목록을
-컨텍스트로 밀어 넣었다. 그 hook 은 `scripts/` 트리와 함께 삭제됐다 (#2033).
-지금은 아무것도 밀어 주지 않으므로 직접 열어야 한다.
+**이 인덱스는 찾아가야 온다.** 편집한 파일의 surface rule 을 컨텍스트로 밀어
+주는 장치는 없다 — 직접 열어야 한다.
 
-**spawn 된 subagent 에 자동으로 닿는 채널은 이제 하나다** — `CLAUDE.md` 와
-그것의 `@` import (이 파일이 그렇게 온다). 나머지 셋은 사라졌다: PostToolUse
-hook, 선택자로 내려가던 `.claude/rules/*.md`, agent frontmatter `skills:` 의
-스킬 본문. **마크다운 링크는 그때도 지금도 안 따라간다** — 매트릭스의 memory
-경로는 agent 가 스스로 읽어야 한다.
+**spawn 된 subagent 에 자동으로 닿는 채널은 하나뿐이다** — `CLAUDE.md` 와
+그것의 `@` import (이 파일이 그렇게 온다). **마크다운 링크는 안 따라간다** —
+매트릭스의 memory 경로는 agent 가 스스로 읽어야 한다.
 
 ## 강제 룰
 
-아래 룰에는 **집행 장치가 없다.** 이걸 검사하던 훅·스크립트·CI 게이트는 전부
-삭제됐다 (#2033). 어기면 아무도 막지 않으므로 agent 가 스스로 지킨다.
+아래 룰에는 **집행 장치가 없다.** 어기면 아무도 막지 않으므로 agent 가 스스로
+지킨다.
 
 - `memory/` 트리: `memory.md` 만, 200줄 / 12,000 chars cap (둘 다).
 - workflow memory 는 행동 계약만 둔다. 절차가 길어지면 memory 를 쪼개라 —
-  긴 절차를 옮겨 담던 skill 계층은 없어졌다.
+  긴 절차를 옮겨 담을 다른 계층은 없다.
 - ADR 동결. 결정 뒤집기 = 새 ADR + `Superseded`. 본문은
   `docs/archives/decisions/`.
-- git/hook 회피 금지: 대표 예 `--no-verify` / force-push. 예전에는
-  `scripts/hooks/policy/check-dangerous-bash.sh` 가 차단 목록의 SOT 이자
-  집행자였다. 그 훅이 없으니 이제 SOT 는 `memory/workflow/git-policy/memory.md`
-  하나이고 차단은 일어나지 않는다.
+- git/hook 회피 금지: 대표 예 `--no-verify` / force-push. SOT 는
+  `memory/workflow/git-policy/memory.md` 하나이고 차단은 일어나지 않는다.
 - primary worktree 는 orchestration-only: `AGENTS.md` / `memory/*` 외 편집 금지,
-  소스는 linked worktree 에서. 생성 스크립트(`scripts/worktree-spawn.sh`) 는
-  삭제됐으므로 `git worktree add` 를 직접 쓴다.
+  소스는 linked worktree 에서. `git worktree add` 를 직접 쓴다 —
   `memory/runbook/worktree/memory.md`.
 
 ## 더 깊이

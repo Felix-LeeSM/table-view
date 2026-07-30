@@ -47,7 +47,7 @@ Rust / TypeScript / 테스트 / 커밋 / 금지 사항. 작업 전 훑어볼 것
 - Coverage gate: frontend `vite.config.ts` 기준 statements 85% / 라인 87% /
   함수 87% / 브랜치 78% (`vite.config.ts` 가 SOT), Rust는 `.github/workflows/ci.yml` 의 llvm-cov 임계값을
   따른다. 신규·수정 파일도 이 gate 를 낮추는 방향으로 들어가지 않는다.
-- 시나리오 체크: happy path, 빈/누락 입력, 에러 복구, 동시성(빠른 더블 클릭 등), 상태 전이. 상세를 담던 `.claude/rules/test-scenarios.md` 는 삭제됐다 (#2033) — 이 목록이 남은 전부다.
+- 시나리오 체크: happy path, 빈/누락 입력, 에러 복구, 동시성(빠른 더블 클릭 등), 상태 전이. 이 목록이 전부다.
 - 변경 후 필수 검증: `pnpm vitest run`, `pnpm tsc --noEmit`, `pnpm lint`.
 
 ## 리팩토링 코드 표준

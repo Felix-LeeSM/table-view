@@ -2,7 +2,7 @@
 title: By-surface 인덱스
 type: index
 generated: 2026-07-30
-generator: none — scripts/regenerate-indexes.sh 삭제됨 (#2033), 이제 손으로 갱신한다
+generator: none — 손으로 갱신한다
 ---
 
 # By-surface 인덱스

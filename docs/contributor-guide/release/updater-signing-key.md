@@ -25,7 +25,7 @@ the signing key lifecycle.
 | Private key | GitHub Actions secret `TAURI_SIGNING_PRIVATE_KEY` | CI-only, write-only |
 | Key password | GitHub Actions secret `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | CI-only, write-only |
 | Signing step | [`.github/workflows/release.yml`](../../../.github/workflows/release.yml) "Build + upload to draft release" | `tauri-action` signs each updater bundle |
-| Drift gate | **없음 (#2033)** — `verify-updater-sigs.mjs` 와 그것을 부르던 release.yml step 이 삭제됐다 | 서명 키 ID 가 커밋된 pubkey 와 어긋나도 릴리스가 통과한다. 키 회전 시 양쪽을 손으로 맞춰라 |
+| Drift gate | **없음** | 서명 키 ID 가 커밋된 pubkey 와 어긋나도 릴리스가 통과한다. 키 회전 시 양쪽을 손으로 맞춰라 |
 
 To print the key ID the committed pubkey belongs to (useful for eyeball checks
 during rotation), run from the repo root:

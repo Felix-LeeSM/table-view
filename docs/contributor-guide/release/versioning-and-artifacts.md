@@ -17,7 +17,7 @@ pre-release gate stays in
 - The release tag is `vX.Y.Z` for that exact version. It must point at the
   `main` commit whose `tauri.conf.json` version equals the tag, and `release.yml`
   enforces this on every tagged build via
-  `scripts/release/verify-tag-version.mjs` (#2033 에서 삭제 — 아래 검사는 이제 자동으로 돌지 않는다):
+   (no automated check — verify the items below by hand):
   a tag whose checked-out version disagrees fails before any build work.
 - The tag must also point to a `main` commit SHA that passed the Pre-Release
   Verification Gate. If the SHA changes, rerun the gate before tagging.
@@ -48,7 +48,7 @@ Two workflows drive a release:
   build pipeline.
   - A `v*.*.*` tag push (from auto-tag, or a deliberate manual push) starts the
     real release build. Its first gate step (after the boilerplate checkout)
-    (`verify-tag-version.mjs` — 삭제됨, 수동 확인)
+    (no automated check — verify by hand)
     fails every build leg if the tag disagrees with the checked-out
     `tauri.conf.json` version, so a hand-pushed tag cannot ship a mismatched
     bundle.
@@ -116,7 +116,7 @@ so a broken one is silent (updater errors are DEV-log-only, ADR 0036):
 
 - Confirm the draft carries `latest.json`, and that the release run's
   `Verify latest.json platform completeness` job passed. That gate
-  (`verify-latest-json.mjs` — 삭제됨, 수동 확인)
+  (no automated check — verify by hand)
   fails the release unless `latest.json` lists every build-matrix platform key
   (`darwin-aarch64`, `windows-x86_64`, `linux-x86_64`), each with a non-empty
   `url` and `signature`. A dropped key would make `check()` on that OS report
@@ -124,7 +124,7 @@ so a broken one is silent (updater errors are DEV-log-only, ADR 0036):
 - Confirm each platform's updater bundle and its sibling `.sig` are attached
   (macOS: `<app>.app.tar.gz` + `<app>.app.tar.gz.sig`), and that the
   `Verify updater signatures against committed pubkey` step passed. That gate
-  (`verify-updater-sigs.mjs` — 삭제됨, 수동 확인)
+  (no automated check — verify by hand)
   fails the release if any `.sig` was signed by a key other than the pubkey in
   `tauri.conf.json`. Key backup, rotation, and loss handling live in
   [`updater-signing-key.md`](updater-signing-key.md) — do not repeat them here.

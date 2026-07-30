@@ -41,8 +41,8 @@ trigger:
 
 ## 관련
 
-- 진단 루프(피드백 신호 구축 → 이분법 → 계측 → 회귀 test)를 담던 `diagnose` skill 과,
-  증상 lock 절차를 담던 `grill-with-memory` skill 은 모두 삭제됐다 (#2033) — 순서만 남았다
+- 진단 루프(피드백 신호 구축 → 이분법 → 계측 → 회귀 test)와 증상 lock 절차의
+  본문은 repo 에 없다 — 위 순서가 전부다
 - [implementation](../implementation/memory.md) — Red 작성 후 Green 단계 narration / noise 룰
 - [delivery](../delivery/memory.md) — fix 끝나면 자율 commit/push
 - [engineering/conventions/testing-scenarios](../../engineering/conventions/testing-scenarios/memory.md) — 시나리오 9원칙

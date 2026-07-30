@@ -6,7 +6,7 @@ task: refactor, god-file, comment-cleanup, decomposition
 surface: '**/*.ts, **/*.tsx, **/*.rs'
 trigger:
   signal: file >= 700 lines
-  layer: ESLint max-lines + agent-prompt (경고 hook 은 #2033 에서 삭제)
+  layer: ESLint max-lines + agent-prompt
 ---
 
 # God file 시퀀스
@@ -14,7 +14,6 @@ trigger:
 ## 임계 — 700줄
 
 파일 line count ≥ 700 → "god file" 지정. 자동 감지:
-- PostToolUse hook (`check-god-file.sh`) 이 Edit/Write 시 stderr 경고를 내고 본 문서 path 를 띄웠다 — #2033 에서 삭제. 지금 남은 신호는 ESLint `max-lines` 경고뿐이다.
 - ESLint `max-lines: 700` (warn).
 - Clippy `too_many_lines` (활성 검토).
 

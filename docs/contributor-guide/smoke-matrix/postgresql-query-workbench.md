@@ -1,13 +1,5 @@
 # PostgreSQL Query/Workbench Smoke Matrix
 
-> **2026-07-30 (#2033):** 이 문서가 인용하는 `scripts/**` 경로 — smoke 러너
-> (`e2e-smoke-ci.sh`), fixture 도구(`scripts/fixtures/*`), 훅 스크립트 — 와
-> 로컬 git hook 은 모두 삭제됐다. **여기 적힌 자동 실행·게이트 서술은 더 이상
-> 성립하지 않는다.** e2e spec 과 fixture 데이터 자체는 남아 있고 손으로 구동할 수
-> 있다 (README 「E2E Smoke」 참조). CI 에서 도는 것은 `.github/workflows/ci.yml`
-> 뿐이다.
-
-
 Smoke matrix band. Parent index:
 [`docs/contributor-guide/testing-and-quality.md`](../testing-and-quality.md).
 User-visible support boundaries live in
@@ -21,7 +13,6 @@ future smoke evidence.
 
 Current evidence:
 
-- `scripts/e2e-smoke-ci.sh`
 - `e2e/smoke/postgres.spec.ts`
 - `e2e/smoke/postgres-explain.spec.ts`
 - `e2e/smoke/postgres-extension-completion.spec.ts`
@@ -60,7 +51,6 @@ Current evidence:
 - `src/features/completion/sql/sqlCompletionRequest.test.ts`
 - `src/lib/sql/sqlCompletionWasm.test.ts`
 - `src-tauri/sql-parser-core/src/completion/completion_tests.rs`
-- `scripts/e2e-smoke-ci.sh`
 
 Current gap / routing:
 
@@ -200,5 +190,5 @@ Current evidence:
 Current gap / routing:
 
 These can inform local/manual regression and future CI wiring. They do not
-expand the GitHub Runtime Happy Path unless `scripts/e2e-smoke-ci.sh` invokes
+expand the GitHub Runtime Happy Path unless  invokes
 them.

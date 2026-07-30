@@ -1,13 +1,5 @@
 # H2 RDBMS Parity Smoke Matrix
 
-> **2026-07-30 (#2033):** 이 문서가 인용하는 `scripts/**` 경로 — smoke 러너
-> (`e2e-smoke-ci.sh`), fixture 도구(`scripts/fixtures/*`), 훅 스크립트 — 와
-> 로컬 git hook 은 모두 삭제됐다. **여기 적힌 자동 실행·게이트 서술은 더 이상
-> 성립하지 않는다.** e2e spec 과 fixture 데이터 자체는 남아 있고 손으로 구동할 수
-> 있다 (README 「E2E Smoke」 참조). CI 에서 도는 것은 `.github/workflows/ci.yml`
-> 뿐이다.
-
-
 Smoke matrix band. Parent index:
 [`docs/contributor-guide/testing-and-quality.md`](../testing-and-quality.md).
 User-visible support boundaries live in
@@ -144,10 +136,8 @@ Current evidence:
 - `src/lib/sql/sqlCompletionWasm.test.ts`
 - `src/features/completion/sql/sqlHybridCompletionSource.test.ts`
 - `src-tauri/sql-parser-core/src/completion/completion_tests.rs`
-- `scripts/e2e-smoke-ci.sh`
 - `e2e/smoke/mysql.spec.ts`
 - `e2e/fixtures/mysql/query/seed.sql`
-- `scripts/fixtures/dbms-seeds.test.ts`
 
 Current gap / routing:
 
@@ -197,7 +187,6 @@ Current evidence:
 
 - `e2e/smoke/mariadb.spec.ts`
 - `e2e/fixtures/mariadb/query/seed.sql`
-- `scripts/e2e-smoke-ci.sh`
 - `.github/workflows/e2e-smoke.yml`
 - `src/types/dataSource.test.ts`
 - `src-tauri/tests/backend_adapter_contract_profile.rs`
@@ -384,7 +373,6 @@ Current evidence:
 - `src/features/completion/sql/sqlCodeMirrorCompletionAdapter.test.ts`
 - `src/lib/sql/sqlCompletionWasm.test.ts`
 - `src-tauri/sql-parser-core/src/completion/completion_tests.rs`
-- `scripts/e2e-smoke-ci.sh`
 
 Current gap / routing:
 
@@ -400,7 +388,7 @@ the matching spec.
 Current evidence:
 
 `e2e/smoke/sqlite.spec.ts`, `e2e/fixtures/sqlite/query/seed.sql`,
-`scripts/e2e-smoke-ci.sh`, `src-tauri/tests/sqlite_connection_command.rs`,
+`src-tauri/tests/sqlite_connection_command.rs`,
 `src-tauri/tests/sqlite_browse_query_adapter.rs`,
 `src-tauri/tests/workspace_sqlite_only.rs`, #456
 
@@ -440,8 +428,8 @@ Current evidence:
 `src-tauri/sql-parser-core/src/completion/completion_tests.rs`,
 `src/features/completion/sql/sqlCompletionContext.test.ts`,
 `src/features/completion/sql/sqlCompletionRequest.test.ts`,
-`src/lib/sql/sqlWasmArtifact.test.ts`, `scripts/fixtures/sqlite.test.ts`,
-`scripts/e2e-smoke-ci.sh`, `e2e/smoke/sqlite.spec.ts`, #534
+`src/lib/sql/sqlWasmArtifact.test.ts`,
+`e2e/smoke/sqlite.spec.ts`, #534
 
 Current gap / routing:
 
@@ -472,7 +460,7 @@ separation.
 Current evidence:
 
 `e2e/smoke/duckdb.spec.ts`, `e2e/fixtures/duckdb/query/seed.sql`,
-`scripts/e2e-smoke-ci.sh`, `src-tauri/tests/duckdb_browse_query_adapter.rs`,
+`src-tauri/tests/duckdb_browse_query_adapter.rs`,
 #463
 
 Current gap / routing:

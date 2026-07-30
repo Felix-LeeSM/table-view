@@ -10,9 +10,9 @@ trigger:
 
 # PR Review Behavior
 
-이 방은 PR review phase에서 agent가 반드시 취해야 할 행동 계약을 둔다. 평가
-차원, profile 분기, scorecard 형식을 소유하던 `pr-review` skill 은 삭제됐다
-(#2033) — **review 방법론에는 지금 SOT 가 없고**, 리뷰어는 아래 계약만 받는다.
+이 방은 PR review phase에서 agent가 반드시 취해야 할 행동 계약을 둔다.
+**review 방법론에는 SOT 가 없다** — 평가 차원, profile 분기, scorecard 형식은
+어디에도 없고, 리뷰어는 아래 계약만 받는다.
 
 ## 행동 계약
 
@@ -23,9 +23,8 @@ trigger:
 - `pr-reviewer` coordinator는 스스로 판단해 필요하면 관점별 read-only
   `pr-subreviewer`를 fan-out 한다 — 항상-spawn이 아니라 자율 판단이고, 소형 PR
   단독 검증도 유효한 경로다. coordinator가 subagent로 떠 있어도 fan-out은 된다 —
-  중첩 spawn은 막히지 않는다. 깊이 한도·예산(`.claude/agents/README.md`)과
-  fan-out 기준(SKILL.md Review Pack) 문서는 모두 삭제됐으므로 판단은
-  orchestrator 몫이다. 같은 관점 중복 spawn은 금지한다.
+  중첩 spawn은 막히지 않는다. 깊이 한도·예산·fan-out 기준을 적은 문서는 없으므로
+  판단은 orchestrator 몫이다. 같은 관점 중복 spawn은 금지한다.
 - `pr-subreviewer` spawn이 실패하면(깊이 한도 초과나 일시적 실패) coordinator는 같은
   관점들을 순차 단독 검증으로 강등해 수행하고, scorecard에 "fan-out 불가로 단독
   강등" 사실을 명시한다.
@@ -82,6 +81,5 @@ trigger:
 
 ## 관련
 
-- review 방법론 SOT 와 runtime agent wrapper 는 #2033 에서 삭제됐다
 - [delivery](../delivery/memory.md) — 커밋 → 푸시 → PR → 리뷰 → 머지 구간의 node 별 계약
 - [documentation](../documentation/memory.md) — PR body와 documentation impact gate

@@ -11,8 +11,8 @@ updated: 2026-07-29
 ## 원칙
 
 - Workflow memory는 "언제 agent가 무엇을 해야 하는가"를 저장한다.
-- 긴 절차, 평가 매트릭스, 대화 방식, 구현 방법론을 담던 `.agents/skills/*` 는
-  삭제됐다 (#2033). 계약을 넘는 내용이 필요하면 방을 쪼개 여기 적는다.
+- 긴 절차, 평가 매트릭스, 대화 방식, 구현 방법론은 repo 에 없다. 계약을 넘는
+  내용이 필요하면 방을 쪼개 여기 적는다.
 
 ## 방 지도
 
@@ -46,5 +46,4 @@ updated: 2026-07-29
 - 기능 빌드의 planner→generator→evaluator 하네스는 2026-07-30 폐기 (#1987) —
   import 이후 672커밋 동안 산출물 0(전 히스토리 798)이었고 node 모델(#1918)이
   `issue-refine` → `issue-implement` → `pr-reviewer` 로 대체한다.
-- 결정 / grill 절차(`grill-with-memory`)와 PR review 방법론(`pr-review`) 을
-  소유하던 skill 은 삭제됐다. 두 주제 모두 지금은 SOT 가 없다.
+- 결정 / grill 절차와 PR review 방법론은 두 주제 모두 SOT 가 없다.
