@@ -87,7 +87,7 @@ Sprint 189–198 의 모든 refactor / feature 커밋은 본 표준의 규칙을
 
 - `docs/sprints/`는 **오직 `sprint-N/`(정수 번호)** 만 사용. 알파벳 suffix(A1/A2/B 등)나 다른 네이밍 스킴 금지.
 - Phase 내부 플랜이 A1/A2/B~F처럼 부속 ID를 가져도 프로젝트 sprint 번호는 전역 순차 번호로 매핑한다. 본문에서 플랜 섹션 ID를 병기하고 싶으면 `Sprint 63 (Phase 6 plan A1)` 형태로 표기.
-- `/harness` 등으로 스프린트 번호 `N`이 지정되지 않으면 `docs/sprints/`의 다음 미사용 정수 번호를 사용한다.
+- 스프린트 번호 `N`이 지정되지 않으면 `docs/sprints/`의 다음 미사용 정수 번호를 사용한다.
 
 ## 관련 방
 

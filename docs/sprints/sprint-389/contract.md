@@ -25,7 +25,7 @@ memory 잘 읽겠지" 대신 "Bash tool 결과에 inline 으로 instruction 이 
 
 ### In scope
 
-1. **D1 — Hook block message 향상** (`scripts/hooks/check-dangerous-bash.sh`)
+1. **D1 — Hook block message 향상** (`scripts/hooks/policy/check-dangerous-bash.sh`)
    - 패턴별 tailored 메시지 dispatch.
    - `git reset --hard` 차단 시 4-step recovery sequence + memory pointer 출력.
    - `--no-verify` / `LEFTHOOK=0` 차단 시 "hook 실패 근본 fix 가 정답" + memory pointer.
@@ -39,7 +39,7 @@ memory 잘 읽겠지" 대신 "Bash tool 결과에 inline 으로 instruction 이 
    - **NEW**: SHA refspec push 패턴 (race fix, zsh `:r` trap).
    - 200줄 cap 안에서 작성. 초과 시 sub-room 분할.
    - **AGENTS.md**: "git / PR / push reject" 매트릭스 행 추가.
-4. **D4 — Smoke test** (`scripts/hooks/test-check-dangerous-bash.sh`)
+4. **D4 — Smoke test** (`scripts/hooks/policy/test-check-dangerous-bash.sh`)
    - case 1: `git reset --hard FETCH_HEAD` → exit 1 + stderr 4-step + memory pointer.
    - case 2: `gh pr close 123` → exit 0 + stderr WARNING + `--delete-branch`.
    - case 3: `gh pr close 123 --delete-branch` → exit 0 + stderr 없음.
@@ -63,30 +63,30 @@ memory 잘 읽겠지" 대신 "Bash tool 결과에 inline 으로 instruction 이 
 
 ## Acceptance Criteria
 
-- `AC-389-01` `scripts/hooks/check-dangerous-bash.sh` 의 `block()` (또는 동등
+- `AC-389-01` `scripts/hooks/policy/check-dangerous-bash.sh` 의 `block()` (또는 동등
   dispatch) 에 pattern→tailored message 매핑 존재.
-- `AC-389-02` `bash scripts/hooks/check-dangerous-bash.sh` 에 stdin
+- `AC-389-02` `bash scripts/hooks/policy/check-dangerous-bash.sh` 에 stdin
   `{"tool_input":{"command":"git reset --hard FETCH_HEAD"}}` 전달 시
   exit 1 + stderr 에 모두 포함:
   - `git ls-remote origin`
   - `gh api -X DELETE`
   - `git pull --rebase`
   - `memory/workflow/git-policy/memory.md`
-- `AC-389-03` `bash scripts/hooks/check-dangerous-bash.sh` 에 stdin
+- `AC-389-03` `bash scripts/hooks/policy/check-dangerous-bash.sh` 에 stdin
   `{"tool_input":{"command":"gh pr close 123"}}` 전달 시 exit 0 + stderr 에
   `WARNING` + `--delete-branch` + `memory/workflow/git-policy/memory.md`.
-- `AC-389-04` `bash scripts/hooks/check-dangerous-bash.sh` 에 stdin
+- `AC-389-04` `bash scripts/hooks/policy/check-dangerous-bash.sh` 에 stdin
   `{"tool_input":{"command":"gh pr close 123 --delete-branch"}}` 전달 시
   exit 0, stderr 빈 문자열.
-- `AC-389-05` `bash scripts/hooks/check-dangerous-bash.sh` 에 stdin
+- `AC-389-05` `bash scripts/hooks/policy/check-dangerous-bash.sh` 에 stdin
   `{"tool_input":{"command":"git log --oneline"}}` 전달 시 exit 0, stderr 빈.
-- `AC-389-06` `bash scripts/hooks/check-dangerous-bash.sh` 에 stdin
+- `AC-389-06` `bash scripts/hooks/policy/check-dangerous-bash.sh` 에 stdin
   `{"tool_input":{"command":"git commit --no-verify"}}` 전달 시 exit 1 +
   stderr 에 `memory/workflow/git-policy/memory.md` 포함 (회귀 가드 + 회복 안내).
-- `AC-389-07` `bash scripts/hooks/check-dangerous-bash.sh` 에 stdin
+- `AC-389-07` `bash scripts/hooks/policy/check-dangerous-bash.sh` 에 stdin
   `{"tool_input":{"command":"rm -rf /tmp/foo"}}` 전달 시 — 기존 동작과 동일
   (block 또는 allow, 단 본 hook 의 패턴이 매칭하면 exit 1).
-- `AC-389-08` `bash scripts/hooks/test-check-dangerous-bash.sh` exit 0 (4 case
+- `AC-389-08` `bash scripts/hooks/policy/test-check-dangerous-bash.sh` exit 0 (4 case
   all green + 회귀 case PASS).
 - `AC-389-09` `memory/workflow/git-policy/memory.md` ≤ 200줄, 새 3 section
   포함 (Push reject 응급 처치 / PR close cleanup / SHA refspec push).
@@ -111,7 +111,7 @@ memory 잘 읽겠지" 대신 "Bash tool 결과에 inline 으로 instruction 이 
 
 ### Required Checks
 
-1. `bash scripts/hooks/test-check-dangerous-bash.sh` — 4 + 회귀 case GREEN.
+1. `bash scripts/hooks/policy/test-check-dangerous-bash.sh` — 4 + 회귀 case GREEN.
 2. `bash scripts/check-memory-structure.sh`
 3. `wc -l memory/workflow/git-policy/memory.md` ≤ 200.
 4. `pnpm tsc --noEmit`
@@ -128,7 +128,7 @@ memory 잘 읽겠지" 대신 "Bash tool 결과에 inline 으로 instruction 이 
 ## Test Requirements
 
 - Vitest 신규 0 (코드 변경 0). 기존 baseline 통과 확인만.
-- Hook 자체 동작은 `scripts/hooks/test-check-dangerous-bash.sh` 가 fixture.
+- Hook 자체 동작은 `scripts/hooks/policy/test-check-dangerous-bash.sh` 가 fixture.
 
 ## Ownership
 

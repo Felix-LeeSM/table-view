@@ -5,13 +5,13 @@ updated: 2026-06-18
 task: commit, push, hook, lefthook, push-reject, pr-close, race-trace
 trigger:
   signal: git commit / git push / hook 실패 / push reject / PR close 시
-  layer: hook (scripts/hooks/pre-tool-use.sh wrapper → check-edit-policy.sh + check-dangerous-bash.sh)
+  layer: hook (scripts/hooks/apply/pre-tool-use.sh wrapper → check-edit-policy.sh + check-dangerous-bash.sh)
 ---
 
 # Git 정책
 
-이 파일이 git/hook 정책 source. `.claude/rules/git-policy.md` 와 runtime agent
-wrappers 는 이 룰을 가리키거나 hook script 로 위임한다.
+이 파일이 git/hook 정책의 **절차와 근거** source. 차단 목록 SOT 는
+`check-dangerous-bash.sh` 이고, 그것을 subagent 에 배달하는 채널은 포인터가 아니라 `.claude/rules/git-policy.md` **본문**이다 — 마크다운 링크는 안 따라간다 (#1978).
 
 ## 절대 금지 — Hook 회피
 
@@ -31,8 +31,8 @@ wrappers 는 이 룰을 가리키거나 hook script 로 위임한다.
 
 ## 강제 메커니즘 (3 레이어)
 
-1. **PreToolUse neutral wrapper** (`scripts/hooks/pre-tool-use.sh`, Claude/codex 공유) — policy 스크립트 exit 1 → JSON `permissionDecision:"deny"` 변환. Claude Code 는 exit 2 만 block; 직접 호출 시 차단 무시.
-2. **policy check 스크립트** — `check-dangerous-bash.sh`(`--no-verify`/`LEFTHOOK=0`/force-push) + `check-edit-policy.sh`/`check-main-worktree-source-edit.sh`(source/`.env`/primary-worktree). exit 1. 상세: README.md.
+1. **PreToolUse neutral wrapper** (`scripts/hooks/apply/pre-tool-use.sh`, Claude/codex 공유) — policy 스크립트 exit 1 → JSON `permissionDecision:"deny"` 변환. Claude Code 는 exit 2 만 block; 직접 호출 시 차단 무시.
+2. **policy check 스크립트** — PreToolUse 가 부르는 것은 `check-dangerous-bash.sh`(`--no-verify`/`LEFTHOOK=0`/force-push) 와 `check-edit-policy.sh`/`check-main-worktree-source-edit.sh`(source/`.env`/primary-worktree) 뿐이다. `scripts/hooks/policy/check-agent-reach.sh`(rules wrapper 가 그 목록을 손복제 아니라 파생으로 싣는지 동작으로 대조) 는 **pre-push** 의 agent/hook 경로에서 돈다. 전부 exit 1. 상세: README.md.
 3. **본 정책 문서** — 사람/agent 명문화 룰.
 
 ## Hook 한계 + Worktree (sprint-387)
@@ -46,7 +46,7 @@ alias / PATH override 같은 의도적 우회는 **차단 불가능** — hook �
 / alias 정의 본문 / heredoc / nohup / background / `base64 -d | bash` 류 script-smuggling / `eval $(...)` / remote-upstream target-only `git reset/checkout`.
 
 Worktree: runtime wrapper 는 사본의 `scripts/hooks/*.sh` 호출. PreToolUse wrapper
-(`scripts/hooks/pre-tool-use.sh`) Claude/codex 공유(과거 `.codex/hooks/pre-tool-use.sh` 흡수); post-tool-use.sh만 `.codex/hooks/` 잔존(advisory 위임).
+(`scripts/hooks/apply/pre-tool-use.sh`) Claude/codex 공유(과거 `.codex/hooks/pre-tool-use.sh` 흡수); post-tool-use.sh만 `.codex/hooks/` 잔존(advisory 위임).
 
 ## Hook 실패 시 — 회피 X, 근본 fix
 
@@ -59,7 +59,7 @@ Worktree: runtime wrapper 는 사본의 `scripts/hooks/*.sh` 호출. PreToolUse 
 
 ## Hard block — 승인으로도 우회 불가
 
-`scripts/hooks/check-dangerous-bash.sh` 가 hard-block 하는 명령은 사용자 승인
+`scripts/hooks/policy/check-dangerous-bash.sh` 가 hard-block 하는 명령은 사용자 승인
 요청 대상이 아니라 수행 금지다. 특히 다음은 어떤 상황에서도 쓰지 않는다.
 
 - `git commit --no-verify` / `git push --no-verify`
@@ -69,7 +69,7 @@ Worktree: runtime wrapper 는 사본의 `scripts/hooks/*.sh` 호출. PreToolUse 
 - hook 이 force-push 또는 fetch/reset/pull recovery hazard 로 차단하는 명령
 
 긴급 복구도 hard-block 명령 승인 우회가 아니라 별도 hook/script 정책 변경으로
-기록한다. 실제 차단 목록과 판정은 `scripts/hooks/check-dangerous-bash.sh` 와 테스트가
+기록한다. 실제 차단 목록과 판정은 `scripts/hooks/policy/check-dangerous-bash.sh` 와 테스트가
 source of truth다. GPG signing 불가 시 unsigned commit 으로 진행하지 않는다.
 
 ## 책임 주체 — Assistant 직접 실행
@@ -191,8 +191,8 @@ zsh 는 word 안의 `:` 를 modifier 로 해석 → `<sha>:refs/heads/foo` 가
 
 - [ADR 0044](../../../docs/archives/decisions/0044-e2e-smoke-remote-required/memory.md) — E2E smoke remote PR/main blocking check
 - [ADR 0019](../../../docs/archives/decisions/0019-e2e-pre-push-not-ci/memory.md) / [ADR 0020](../../../docs/archives/decisions/0020-e2e-pre-push-host-docker/memory.md) — superseded 된 pre-push e2e 정책
-- `scripts/hooks/check-dangerous-bash.sh`, `scripts/hooks/README.md` — hook script ownership
-- `.claude/settings.json` / `.codex/hooks.json` → `scripts/hooks/pre-tool-use.sh` (PreToolUse wrapper), `.codex/hooks/post-tool-use.sh` → `scripts/hooks/post-tool-use.sh` — runtime hook 매니페스트
+- `scripts/hooks/policy/check-dangerous-bash.sh`, `scripts/hooks/README.md` — hook script ownership
+- `.claude/settings.json` / `.codex/hooks.json` → `scripts/hooks/apply/pre-tool-use.sh` (PreToolUse wrapper), `.codex/hooks/post-tool-use.sh` → `scripts/hooks/apply/post-tool-use.sh` — runtime hook 매니페스트
 - `lefthook.yml` — hook 정의
 - [delivery](../delivery/memory.md) — 자율 pipeline
-- `.claude/agents/delivery.md` / `.codex/agents/delivery.md` — delivery wrappers
+- `.claude/agents/issue-implement.md` — commit / push / PR 을 실제로 수행하는 node

@@ -94,7 +94,7 @@ this page stays the index plus the cross-band policy sections.
 | [`h6-wider-source-candidates.md`](smoke-matrix/h6-wider-source-candidates.md) | MSSQL and Oracle runtime/smoke guardrails plus unpromoted wide-column, cloud-document, graph, vector, and stream candidates |
 | [`h7-ops-security-reliability.md`](smoke-matrix/h7-ops-security-reliability.md) | CI/hook gate surface, destructive-operation safety, credential and local-first privacy, dependency security, a11y, performance, platform smoke, E2E isolation |
 
-Band sizes are not restated here — `scripts/hooks/check-doc-size.sh` owns that
+Band sizes are not restated here — `scripts/hooks/policy/check-doc-size.sh` owns that
 number, so duplicating it would only create a claim nothing verifies.
 
 ## Pre-Release Verification Gate

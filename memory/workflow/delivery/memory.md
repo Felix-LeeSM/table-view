@@ -1,29 +1,37 @@
 ---
-title: Delivery — commit → push → PR → review → merge 자율 행동 계약
+title: Delivery — 커밋 → 푸시 → PR → 리뷰 → 머지 구간의 node 별 행동 계약
 type: workflow-rule
-updated: 2026-07-24
+updated: 2026-07-29
 task: delivery, commit, push, pr, review, merge
 trigger:
   signal: implementation 완료 / 사용자가 "마무리해" / sprint 종료
-  layer: agent-prompt (delivery agent)
+  layer: agent-prompt (구현자 node)
 ---
 
 # Delivery — 행동 계약
 
-작업 종료 시 delivery owner 가 commit → push → PR → review → merge → cleanup 을
-자율 실행한다. 사용자에게 "이제 커밋해 주세요" 안내 금지.
+작업 종료 시 구현자가 commit → push → PR 생성까지 자율 실행하고 결과를 남기고
+죽는다. 사용자에게 "이제 커밋해 주세요" 안내 금지. 리뷰 부착·라운드 판정·머지·정리는
+그 뒤의 다른 node 가 하고, 무엇을 언제 띄울지는 orchestrator 가 label 로 정한다.
 
-이 방은 **행동 계약**(누가·언제·무엇을 지켜야 하나)만 둔다. T0~T7 오케스트레이션
-절차 SOT 는 [`delivery` skill](../../../.agents/skills/delivery/SKILL.md).
+이 방은 **행동 계약**(누가·언제·무엇을 지켜야 하나)만 둔다. 구현자 절차 SOT 는
+[`delivery` skill](../../../.agents/skills/delivery/SKILL.md).
 
-## Ownership
+## Node 별 계약
 
-- **orchestrator**: task 정의, worktree/agent 상태 추적, blocker 보고.
-- **delivery owner**: 구현/commit/push/PR/review 반영/merge/cleanup 소유.
-- **pr-reviewer**: read-only 판단자. commit / push / merge 금지.
+한 node 는 한 가지 행동을 하고, 상태(label + 결과 기록)를 남기고 죽는다. node 가
+다음 node 를 부르지 않는다 — orchestrator 가 빈 slot 을 보고 띄운다.
 
-한 PR 에 delivery owner 는 1명. review finding fix 는 같은 owner 에게 되돌려
-reflect 시킨다. 실패 worker 를 계속 새로 쌓지 않음.
+| node | 이 구간에서 하는 일 | 안 하는 일 |
+|---|---|---|
+| orchestrator | label 을 보고 다음 node spawn, 사용자 창구 | 판단. 코멘트를 읽지 않는다 |
+| 구현자 (`issue-implement`) | 커밋 · 푸시 · PR 생성 · 수정 라운드 반영. **파일을 쓰는 유일한 역할** | 리뷰어 부착, 라운드 판정, 머지 |
+| 리뷰어 (`pr-reviewer`) | 판정 + scorecard + verdict label | commit / push / merge / branch 수정 |
+| 회고자 (`round-reflect`) | 라운드 3부터 개별 지적이 아니라 유형 반복을 본다 | 코드 수정 |
+| 종결자 (`pr-finalize`) | 머지 · 브랜치 삭제 · worktree 회수 · 이슈 종결 | 코드 수정 |
+
+**저자가 자기 판정을 하지 않는다** — 자기 PR 의 리뷰어를 부르는 것, 자기가 고친
+것을 재발로 재단하는 것, 자기 PR 을 머지하는 것 셋 다 다른 node 로 나갔다.
 
 ## 자율 실행 vs 중단
 
@@ -32,11 +40,16 @@ reflect 시킨다. 실패 worker 를 계속 새로 쌓지 않음.
 - `git push --force` / `--force-with-lease`: agent path 에서 수행 금지
   ([git-policy.md](../../../.claude/rules/git-policy.md)).
 - main 직접 push (PR 우회).
-- `gh pr merge` 의 squash/merge/rebase 정책이 명시 안 됐을 때.
+- `gh pr merge` 의 squash/merge/rebase 정책이 명시 안 됐을 때 — 종결자.
+- 라운드 회고 트리거(라운드 3 이상 / 유형 재발 / 리뷰어 사이클 보고) — 구현자는
+  같은 유형에 fix 를 더 쌓지 말고 종료한다. 판정은 회고자가, 재설계는 사용자가
+  한다(`reflect:done` label). 단 verdict 가 green 이면 중단이 아니다 — 라운드 3
+  이상이어도 종결자가 `reflect:done` 붙이고 머지한다. 게이트 진단은
+  [runbook/pr-merge-gates](../../runbook/pr-merge-gates/memory.md).
 - 사용자 명시 거부("commit 하지 마", "push 멈춰") — 즉시 중단.
 
-merge 자율 조건(모든 정성 차원 ≥ 8/10, CI SUCCESS + `review:approved`,
-mergeable, 사용자 거부 없음)과 T0~T7 세부는 skill 참조.
+머지 자율 조건(정성 차원에 blocking 없음, CI SUCCESS + `review:approved`,
+mergeable, 사용자 거부 없음)은 종결자가 종합한다. 구현자 절차 세부는 skill 참조.
 
 ## Hook 강제 — 절대 회피 금지
 
@@ -55,11 +68,12 @@ mergeable, 사용자 거부 없음)과 T0~T7 세부는 skill 참조.
 
 ## Agent spawn — reviewer 독립
 
-리뷰는 orchestrator 자기 리뷰 = 편향. `pr-reviewer` coordinator
-(`.claude/agents/pr-reviewer.md`) spawn 으로 독립 평가.
+self-review 는 편향. `pr-reviewer` coordinator (`.claude/agents/pr-reviewer.md`) 를
+독립 spawn 해 평가한다 — 저자가 부르지 않는다.
 [review](../review/memory.md) 행동 계약 + `.agents/skills/pr-review/SKILL.md` 적용.
-외부 시각 필요 시 `codex-reviewer` (사용자 명시 시만). Multi-worktree 병렬 시 각
-worktree 의 delivery 도 delivery owner 가 소유, merge 는 owner 책임.
+외부 시각 필요 시 `codex-reviewer` (사용자 명시 시만). worktree 는 PR 당 하나이고
+동시에 쓰는 node 는 하나다 — 라운드마다 새로 만들지 않는다
+([worktree](../../runbook/worktree/memory.md)).
 
 ## Why
 
@@ -74,11 +88,11 @@ narration 없음.
 
 ## 관련
 
-- [`delivery` skill](../../../.agents/skills/delivery/SKILL.md) — T0~T7 절차 SOT
+- [`delivery` skill](../../../.agents/skills/delivery/SKILL.md) — 구현자 절차 SOT
 - `.claude/rules/git-policy.md` — `--no-verify` / `LEFTHOOK=0` 금지 + hook 강제
-- `.claude/agents/delivery.md` / `.codex/agents/delivery.md` — delivery wrappers
-- `.agents/skills/pr-create/SKILL.md` / `.agents/skills/pr-review/SKILL.md` — T3/T4 방법론
-- [review](../review/memory.md) — T4 review 행동 계약
+- `.claude/agents/issue-implement.md` — 이 절차를 실행하는 node (`skills:` 로 위 skill 본문을 받는다)
+- `.agents/skills/pr-create/SKILL.md` / `.agents/skills/pr-review/SKILL.md` — PR 생성 / 리뷰 방법론
+- [review](../review/memory.md) — 리뷰 단계 행동 계약
 - [documentation](../documentation/memory.md) — 문서화 impact + evidence portability
 - [tdd](../tdd/memory.md) — code-profile sprint RED evidence
 - [engineering/conventions](../../engineering/conventions/memory.md) — Conventional Commits 형식

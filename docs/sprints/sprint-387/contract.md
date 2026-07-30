@@ -34,7 +34,7 @@ Code / Codex / Cursor / 미래 brain 어떤 것이든 같은 룰, 같은 훅, �
 3. **`CLAUDE.md` 슬림화** — sprint-386 작업으로 두꺼워진 본문을 redirect-only
    로 축소 (≤ 20 줄). Claude Code 의 기본 read 비용 절감.
 4. **Hook 평면화** — `.claude/hooks/pre-bash.sh` 를
-   `scripts/hooks/check-dangerous-bash.sh` 로 이동. multi-input adapter:
+   `scripts/hooks/policy/check-dangerous-bash.sh` 로 이동. multi-input adapter:
    - env var `$COMMAND`
    - argv `$1`
    - stdin JSON (`.tool_input.command`)
@@ -69,7 +69,7 @@ Code / Codex / Cursor / 미래 brain 어떤 것이든 같은 룰, 같은 훅, �
   auto-load 호환). 본문이 redirect 만이어도 `paths` 가 있으면 동일 trigger
   발생.
 - `.claude/hooks/pre-bash.sh` 호출 경로 (PreToolUse Bash hook) 호환 — wrapper
-  로 `scripts/hooks/check-dangerous-bash.sh` 호출.
+  로 `scripts/hooks/policy/check-dangerous-bash.sh` 호출.
 - `.claude/commands/{remember,split-memory}.md` 는 존재하지 않음. skill source
   는 `.agents/skills/{remember,split-memory}/SKILL.md` 만.
 - `.claude/agents/*.md` 의 frontmatter (`name`, `description`, `tools`,
@@ -85,7 +85,7 @@ Code / Codex / Cursor / 미래 brain 어떤 것이든 같은 룰, 같은 훅, �
 - `AC-387-01` `wc -l .claude/agents/*.md` 모두 ≤ 15. (현재 50-90 → 압축 확인.)
 - `AC-387-02` `AGENTS.md` 루트에 존재, 5-30 줄, work-type 매트릭스 포함.
 - `AC-387-03` `CLAUDE.md` ≤ 25 줄, 본문이 `memory/memory.md` redirect.
-- `AC-387-04` `scripts/hooks/check-dangerous-bash.sh` 존재, executable,
+- `AC-387-04` `scripts/hooks/policy/check-dangerous-bash.sh` 존재, executable,
   3 입력 (env / argv / stdin JSON) 처리. `.claude/hooks/pre-bash.sh` 는
   wrapper 로 위 스크립트 호출.
 - `AC-387-05` `.claude/rules/*.md` 6개 모두 ≤ 20 줄, paths frontmatter 보존,
@@ -98,8 +98,8 @@ Code / Codex / Cursor / 미래 brain 어떤 것이든 같은 룰, 같은 훅, �
 - `AC-387-09` `memory/runbook/worktree/memory.md` 존재, runbook room 룰
   (사용 시점 / 명령 / 정리) 포함.
 - `AC-387-10` `bash scripts/check-memory-structure.sh` exit 0.
-- `AC-387-11` `bash scripts/hooks/check-dangerous-bash.sh < <(echo '{"tool_input":{"command":"git push --force"}}')` exit 1 (block).
-- `AC-387-12` `bash scripts/hooks/check-dangerous-bash.sh < <(echo '{"tool_input":{"command":"ls"}}')` exit 0 (allow).
+- `AC-387-11` `bash scripts/hooks/policy/check-dangerous-bash.sh < <(echo '{"tool_input":{"command":"git push --force"}}')` exit 1 (block).
+- `AC-387-12` `bash scripts/hooks/policy/check-dangerous-bash.sh < <(echo '{"tool_input":{"command":"ls"}}')` exit 0 (allow).
 - `AC-387-13` `pnpm tsc --noEmit` clean.
 - `AC-387-14` `pnpm lint` clean.
 - `AC-387-15` `pnpm vitest run` PASS (baseline 4128+).

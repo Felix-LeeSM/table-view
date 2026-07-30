@@ -1,17 +1,18 @@
 ---
 title: PR merge 게이트 진단 / 처리
 type: runbook
-updated: 2026-07-27
-task: merge, pr, review-gate, ci, blocked, ruleset, e2e, synchronize-rerun, cancelled-rollup
+updated: 2026-07-29
+task: merge, pr, review-gate, ci, blocked, ruleset, e2e, synchronize-rerun, cancelled-rollup, round-gate
 trigger:
   signal: PR 이 mergeable 인데 mergeState=BLOCKED / merge 가 base branch policy 로 거부
-  layer: agent-prompt (delivery agent)
+  layer: agent-prompt (orchestrator / 종결 스크립트)
 ---
 
 # PR merge 게이트 진단 / 처리
 
 `gh pr merge` 가 BLOCKED / "base branch policy prohibits" 로 막힐 때 원인 규명 순서.
-label 메커니즘 자체는 [delivery](../../workflow/delivery/memory.md) (T5/T6) 소유 —
+label 메커니즘 자체는 [delivery](../../workflow/delivery/memory.md) 의 라운드 회고 ·
+머지 계약이 소유 —
 본 방은 **required 게이트의 숨은 위치와 잘못된 대응이 만드는 함정**만 다룬다.
 
 ## Required 게이트는 두 곳에 분산 (핵심)
@@ -49,7 +50,8 @@ blocker 인 경우가 많다 (docs/hook 변경이어도 ruleset 이 E2E 를 요�
   `gh pr update-branch` 를 섞으면 head SHA 에 review-gate check-run 이
   fail·cancelled·success 로 뒤섞여 쌓이고, 최신이 success 여도 GitHub 이 required
   판정을 못 풀어 BLOCKED 가 고착된다. review-gate 는 `labeled` 이벤트에서만 success 를
-  내고 opened/synchronize/rerun 은 fail run 을 남긴다.
+  낼 수 있고 opened/synchronize/rerun 은 fail run 을 남긴다 — `labeled` 라도 라운드
+  게이트에 걸리면 fail 한다 (아래).
 - **update-branch(main pull) 불필요**: branch protection `strict`(up-to-date)=false →
   behind 여도 merge 된다. update-branch 는 synchronize 이벤트로 `review:approved` 를
   떨구기만 하고 이득 없음.
@@ -74,12 +76,24 @@ blocker 인 경우가 많다 (docs/hook 변경이어도 ruleset 이 E2E 를 요�
 - **delta GREEN 후 고착 해소**: 재push→delta 리뷰 GREEN 인데 gate 가 fail 로 고착이면
   리뷰어 label 유무와 무관하게 `gh pr edit <pr> --remove-label "review:approved"` →
   `--add-label "review:approved"` 로 재발화해야 새 labeled run 이 pass 로 뜬다.
+  단 `comments >= 3` 이면 재발화해도 라운드 게이트에서 다시 막힌다 (아래).
+- **라운드 3 이상은 `labeled` 도 fail (2026-07-29)**: `Stop at review round 3` step 이
+  `comments >= 3` 이고 `reflect:done` label 이 없으면 exit 1 한다. rerun 도 label
+  재발화도 같은 payload 를 재생하므로 계속 fail — 해소는 `reflect:done` 뿐이다
+  (`enforce_admins=true` 라 `--admin` 우회 없음). **누가 붙이냐는 verdict 가 가른다** —
+  green 이면 종결자(`pr-finalize`)가 바로 붙이고, red 면 회고자(`round-reflect`)가
+  사용자에게 올려 받는다 ([delivery](../../workflow/delivery/memory.md)). 저자는
+  붙이지 않는다. 게이트는 라운드만 세고
+  verdict 를 안 보므로 green 도 걸린다.
+  최근 머지 30건 중 16건이 승인 시점에 `comments >= 3` 이었다.
 
 ## 올바른 순서
 
 1. 리뷰 green 확보 → CI 를 자연히 다 돌게 둔다 (트리거 추가 X).
 2. **맨 마지막에** `review:approved` label 부착 (labeled → review-gate success).
    그 뒤로 push/rerun/update-branch 로 SHA·run 을 건드리지 않는다.
+   `comments >= 3` 이면 `reflect:done` 이 먼저 필요하다 — green 은 종결자가 붙이고,
+   red 는 [delivery](../../workflow/delivery/memory.md) 의 라운드 회고를 거친다.
 3. E2E flaky fail 은 workflow run 완료 후 `gh run rerun <id> --failed` 1회.
 4. `mergeState` 가 `UNSTABLE` 또는 `CLEAN` 이 되면 `gh pr merge`.
    (`--admin` 은 `enforce_admins=true` + ruleset 이라 우회 불가 — required 를 실제로
@@ -105,6 +119,6 @@ merge 막히면 위 "두 곳 분산" → "함정" → "올바른 순서" 순으�
 
 ## 관련
 
-- [delivery](../../workflow/delivery/memory.md) — T4~T7, review-gate label / enforce_admins 계약
+- [delivery](../../workflow/delivery/memory.md) — 리뷰~정리 구간의 review-gate label / enforce_admins 계약
 - [worktree](../worktree/memory.md) — merge 후 worktree cleanup
 - `.claude/rules/git-policy.md` — hook 회피 / force push 금지

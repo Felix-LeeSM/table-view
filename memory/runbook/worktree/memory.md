@@ -1,7 +1,7 @@
 ---
 title: Multi-agent worktree
 type: runbook
-updated: 2026-07-22
+updated: 2026-07-29
 task: worktree, multi-agent, parallel, spawn-verify, agent-hard-rule
 ---
 
@@ -47,7 +47,7 @@ bash scripts/worktree-spawn.sh --full-target sprint-388/foo
 # 머지 끝난 worktree 정리
 bash scripts/worktree-cleanup.sh sprint-388/foo
 
-# main 머지된 worktree 일괄 정리
+# PR 이 머지된 worktree 일괄 정리
 bash scripts/worktree-cleanup.sh --merged
 
 # stale 메타데이터만 정리
@@ -80,19 +80,38 @@ hardlink 라 물리 디스크 추가 없이 rsync 복사보다 빠르다. `cargo
 
 수동 target cache 보충은 `scripts/target-cache.sh` 로만 한다. 이 helper 는 stale
 판단 / lock / 자동 spawn 소비를 하지 않는다. routine cache lane 계약은
-`scripts/hooks/test-target-cache.sh` 가 고정한다.
+`scripts/hooks/policy/test-target-cache.sh` 가 고정한다.
 
 ## 책임
 
 - spawn: orchestrator (현재 메인 세션) 가 명시 호출. agent 가 자율로
   worktree 생성하지 않음 (사용자가 보지 못하는 디스크 공간 차지 위험).
-  - hook enforcement (issue #1706): `scripts/hooks/pre-tool-use.sh` 가
-    `EnterWorktree` create form deny, `scripts/hooks/check-dangerous-bash.sh`
+  - hook enforcement (issue #1706): `scripts/hooks/apply/pre-tool-use.sh` 가
+    `EnterWorktree` create form deny, `scripts/hooks/policy/check-dangerous-bash.sh`
     가 `git worktree add` block (brain 무관). path form(기존 진입) 은 허용.
 - cleanup: PR 머지 직후 또는 sprint 종료 시. `gh pr merge --delete-branch`
   는 branch 만 삭제 — worktree 디스크는 별도 정리 필요.
-- `scripts/worktree-cleanup.sh` 는 dirty worktree 를 제거하지 않고 SKIP 한다.
-  dirty 는 진행 중이거나 보존 사유가 필요한 상태로 보고 먼저 확인한다.
+- `scripts/worktree-cleanup.sh` 는 dirty worktree 를 SKIP 한다 (untracked 도
+  dirty). 2026-07-29 실측에서 머지된 PR 의 worktree 하나가 커밋 안 된 51줄을 갖고
+  있었다 — 먼저 확인하고 보존 사유를 기록한다.
+
+## `--merged` 판정 근거
+
+**조상 관계는 머지 여부와 무관하다** — 양쪽으로 틀린다 (#1932, 2026-07-29 실측).
+squash 머지된 브랜치는 main 의 조상이 아니라 머지된 worktree 5개를 하나도 못
+잡았고, 방금 spawn 한 브랜치는 `origin/main` 에 앉아 자명한 조상이라
+`for-each-ref --merged` 가 나열한 32건 중 둘이 머지 PR 0건인 활성 worktree 였다.
+
+그래서 머지된 PR 의 head OID 를 받아 **로컬 tip 이 그 안에 포함될 때만** 제거한다.
+이름은 한 번 참이면 영원히 참이라 이름 재사용과 머지 뒤 추가 커밋을 못 거른다.
+판정 불가는 미머지로 강등하지 않는다 — 조용한 0건이 이 버그의 서명이었다.
+
+절대 안 지우는 것: main worktree, **명령을 실행한 그 worktree** (지우면 이후 git
+호출이 getcwd 에러를 뱉고 스윕이 조용히 잘린다), `git status` 를 못 읽는
+worktree, `git worktree list` 에 없는 디렉토리 (`ORPHAN:` 보고만 — 실측에서
+`.git` 이 이름 바뀌기 전 경로를 가리켰다. 남의 저장소일 수 있다). gitignore 된
+로컬 상태는 디렉토리와 함께 사라진다 (`NOTE:` 로 알림, 정책은 #1948). 조회 주입
+같은 나머지 동작은 `--help` 와 구현이 소유한다.
 
 ## Primary worktree guard
 
@@ -101,8 +120,8 @@ primary worktree 는 orchestration-only. `memory/` 와 `AGENTS.md` 같은 agent
 `scripts/`, `.claude/`, `.codex/`, `.agents/`, app source/config/manifest 는 모두
 linked worktree 에서 수정한다.
 
-`scripts/hooks/check-edit-policy.sh` 가
-`scripts/hooks/check-main-worktree-source-edit.sh` 를 호출해 Edit/Write/MultiEdit 과
+`scripts/hooks/apply/check-edit-policy.sh` 가
+`scripts/hooks/policy/check-main-worktree-source-edit.sh` 를 호출해 Edit/Write/MultiEdit 과
 obvious Bash writes(redirection, tee, sed/perl -i, cp/mv 등)를 차단한다. primary
 에서 repo 파일을 바꾸려다 막히면 우회하지 말고 worktree 를 만들고 그 안에서
 수정한다.
@@ -113,24 +132,25 @@ orchestrator 는 spawn 할 때 agent registry 를 머릿속/작업 노트에 유
 
 | state | 의미 |
 |---|---|
-| planned | 목적 / PR / worktree / owner / 종료 조건 확정 |
+| planned | 목적 / PR / worktree / node / 종료 조건 확정 |
 | running | agent 작업 중. 같은 책임 중복 spawn 금지 |
 | waiting | CI / review / 사용자 결정 대기 |
 | done | 결과가 PR 또는 branch 에 반영됨 |
 | closed | `close_agent` + worktree cleanup 또는 보존 사유 기록 완료 |
 | abandoned | 실패/오염. push 금지, close 후 상태 기록 |
 
-한 PR 의 write 책임자는 **delivery owner 1명**. reviewer 는 read-only.
-review finding 은 새 worker 를 계속 만들지 말고 같은 delivery owner 에게
-reflect/fix 로 되돌린다. 실패 worker 는 즉시 close 하고 dirty worktree 는
-보존 사유를 기록하거나 사용자 승인 후 정리.
+**worktree 는 PR 당 하나이고, 거기에 동시에 쓰는 node 는 하나다.** 파일을 쓰는
+역할은 구현자뿐이고 reviewer 는 read-only. review finding 은 새 worktree 를 만들지
+말고 같은 worktree 에 다음 라운드 구현자를 붙인다 — node 당 worktree 로 쪼개면 죽은
+구현자의 미푸시 커밋을 다음 구현자가 이어받지 못한다. 실패한 node 는 즉시 close 하고
+dirty worktree 는 보존 사유를 기록하거나 사용자 승인 후 정리.
 
 ## 주의
 
 - worktree 안에서 또 worktree spawn 하지 마. 동일 base repo 의 `.git/worktrees/`
   메타데이터가 중첩 시 추적 어려움.
 - `git push --force` 같은 destructive 명령은 worktree 환경 무관하게
-  `scripts/hooks/check-dangerous-bash.sh` 가 차단.
+  `scripts/hooks/policy/check-dangerous-bash.sh` 가 차단.
 
 ## 첫 turn 검증 (sprint-400)
 
