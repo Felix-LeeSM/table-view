@@ -12,6 +12,9 @@ historical artifacts 다. 현재 source of truth 가 아니다.
 새 exploration 이 필요하면 sprint contract 또는 active docs 에 먼저 목적과
 후속 반영 경로를 적고, 완료 뒤 archive 로 라우팅한다.
 
+이 디렉터리는 `scripts/hooks/policy/check-doc-size.sh` 의 doc size 검사에서
+제외한다 — 현재 SOT 가 아니라 분할 대상이 아니기 때문이다.
+
 ## 2026-06-12 Audit
 
 현재 제품 상태는 [`docs/product/README.md`](../product/README.md) 와
