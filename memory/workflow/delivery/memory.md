@@ -90,7 +90,7 @@ narration 없음.
 
 - [`delivery` skill](../../../.agents/skills/delivery/SKILL.md) — 구현자 절차 SOT
 - `.claude/rules/git-policy.md` — `--no-verify` / `LEFTHOOK=0` 금지 + hook 강제
-- `.claude/agents/delivery.md` / `.codex/agents/delivery.md` — delivery wrappers
+- `.claude/agents/issue-implement.md` — 이 절차를 실행하는 node (`skills:` 로 위 skill 본문을 받는다)
 - `.agents/skills/pr-create/SKILL.md` / `.agents/skills/pr-review/SKILL.md` — PR 생성 / 리뷰 방법론
 - [review](../review/memory.md) — 리뷰 단계 행동 계약
 - [documentation](../documentation/memory.md) — 문서화 impact + evidence portability

@@ -5,7 +5,7 @@ updated: 2026-07-29
 task: merge, pr, review-gate, ci, blocked, ruleset, e2e, synchronize-rerun, cancelled-rollup, round-gate
 trigger:
   signal: PR 이 mergeable 인데 mergeState=BLOCKED / merge 가 base branch policy 로 거부
-  layer: agent-prompt (delivery agent)
+  layer: agent-prompt (orchestrator / 종결 스크립트)
 ---
 
 # PR merge 게이트 진단 / 처리

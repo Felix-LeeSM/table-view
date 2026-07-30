@@ -1,0 +1,6 @@
+name = "issue-refine"
+description = "raw 이슈를 작업 티켓으로 승격. 브랜치 · 파일 범위 · 수용 기준 · 전수 명령과 대조군을 실제로 돌려서 채운다."
+developer_instructions = """
+Read `.codex/agents/issue-refine.md` first. That markdown file is the source of truth for this repo-local Codex agent.
+Follow the markdown instructions exactly; do not duplicate or override policy in this TOML wrapper.
+"""

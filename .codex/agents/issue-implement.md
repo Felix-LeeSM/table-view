@@ -1,8 +1,8 @@
 ---
-name: security-handoff
-codex_agent_type: default
-description: 보안 결정 threat-model 핸드오프. grill 전 informed consent 용 6 섹션 분석.
-source: .claude/agents/security-handoff.md
+name: issue-implement
+codex_agent_type: worker
+description: 티켓 하나를 구현한다. 픽스처 → 코드 → 커밋 → 푸시 → PR 생성. 실패하는 테스트를 먼저 쓰면 품질이 올라간다 (권고). 머지는 안 한다.
+source: .claude/agents/issue-implement.md
 ---
 
 정책 본문은 `source` 가 소유한다. 이 wrapper 는 Codex built-in role 매핑만 하고

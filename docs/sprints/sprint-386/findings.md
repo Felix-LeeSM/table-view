@@ -48,6 +48,12 @@
 1. **기존 god file 43개 식별** (ESLint max-lines warn). 정리 작업 별 sprint 후보. 본 sprint 의 hook + agent prompt + ESLint 가 미래 god file 신규 발생 방지 + 기존도 점진 정리 유도.
 2. **Index 의 surface 키 cosmetic issue** — yaml string quote (`'**/*.ts, ...'`) 가 awk 추출 시 키에 단일 인용부호 포함. Link 는 작동, 표시만 어색. regenerate-indexes.sh 의 awk 스크립트에 quote strip 1줄 추가하면 해결. 다음 sprint 의 polish.
 3. **사용자 model lock = opus** — 모든 agent definition (caveman-default / grill-planner / tdd-generator / evaluator / bug-fix / research / security-handoff / delivery / codex-reviewer) 의 model 을 사후 opus 로 변경. research 도 haiku → opus. 토큰 비용 vs 품질 trade-off 사용자 명시 결정.
+   **번복됨 (2026-07-30, #1987).** 사용자가 "정의에 모델을 못 박지 않는다 —
+   부르는 쪽이 고른다" 로 결정을 바꿔 남은 agent 7종에서 `model:` 을 뺐다.
+   고르는 기준과 생략 시 동작 실측은 `.claude/agents/README.md`. 이 항목을
+   지우지 않고 남기는 이유: 이 lock 이 `research.md` 에 한 번도 반영되지 않은
+   채(`git log --follow -p -- .claude/agents/research.md | grep -E '^[-+]model:'`
+   → `+model: haiku` 1회) 남아 있던 것이 #1975 가 이 항목을 찾아낸 계기다.
 4. **R2 (트리거 layer 전면 자동 derive) 미적용** — god file 만 적용. 나머지 룰 (mock-scope, bug-fix 등) 은 agent prompt 인용에 의존. 효과 측정 후 확장 — handoff deferred 참조.
 5. **CLAUDE.md context 의 auto-memory snippet** — 사용자 환경의 system prompt 가 auto-memory MEMORY.md 와 일부 feedback 본문을 잘라 context 로 주입. 본 sprint 가 auto-memory 파일 삭제 → 사용자 다음 세션 시 context 가 재구성됨. 단 stale 한 system prompt cache 에는 일시적 잔존 가능.
 

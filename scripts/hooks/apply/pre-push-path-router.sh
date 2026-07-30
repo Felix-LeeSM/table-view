@@ -295,6 +295,10 @@ EOF
 	run_step "main-worktree-guard-tests" bash scripts/hooks/policy/test-check-main-worktree-source-edit.sh
 	run_step "edit-policy-tests" bash scripts/hooks/apply/test-check-edit-policy.sh
 	run_step "dangerous-bash-tests" bash scripts/hooks/policy/test-check-dangerous-bash.sh
+	# Same subject as the line above, one layer out: it proves the block list
+	# blocks, this proves the block list still reaches a spawned subagent.
+	# Measured 10.72s (`/usr/bin/time -p`), eleven fixture trees.
+	run_step "agent-reach-tests" bash scripts/hooks/policy/test-check-agent-reach.sh
 	run_step "pre-tool-use-wrapper-tests" bash scripts/hooks/apply/test-pre-tool-use-wrapper.sh
 	run_step "post-tool-use-dispatcher-tests" bash scripts/hooks/apply/test-post-tool-use.sh
 	run_step "surface-rules-analyzer-tests" bash scripts/hooks/analyze/test-surface-rules.sh
@@ -345,6 +349,19 @@ run_ci_workflow_gates() {
 run_memory_gates() {
 	run_step "memory-structure" bash scripts/hooks/policy/check-memory-structure.sh --strict
 	run_step "memory-size" bash scripts/hooks/policy/check-memory-size.sh --strict
+}
+
+# Agent-configuration gates. Both were unwired: `check-wrapper-cap.sh` ran only
+# as a PostToolUse advisory in its warn-only default mode, so a 16-line
+# `pr-reviewer.md` sat over cap on main and the sprint-388 AC "exit 0" could not
+# fall (#1975). `check-agent-reach.sh` is new and guards the two configuration
+# channels measured to reach every spawned subagent (#1978).
+#
+# Runs on the hook route too, not just the agent route: both guards read
+# `scripts/hooks/policy/*`, so a hook-only push can break either of them.
+run_agent_gates() {
+	run_step "wrapper-cap" bash scripts/hooks/policy/check-wrapper-cap.sh --strict
+	run_step "agent-reach" bash scripts/hooks/policy/check-agent-reach.sh
 }
 
 run_frontend_and_rust_gates() {
@@ -537,6 +554,9 @@ else
 	fi
 	if [ "$needs_ci_workflow" = "1" ]; then
 		run_ci_workflow_gates
+	fi
+	if [ "$needs_agent" = "1" ] || [ "$needs_hook" = "1" ]; then
+		run_agent_gates
 	fi
 	# The round-gate contract spans the workflow, the delivery skill and two
 	# memory rooms, so any one of those routes can break it on its own. hook is

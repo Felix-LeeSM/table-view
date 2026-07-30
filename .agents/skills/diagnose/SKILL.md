@@ -26,7 +26,7 @@ description: 어려운 버그와 성능 회귀(regression)를 위한 체계적 �
 7. **속성 / fuzz 루프.** 버그가 "가끔 잘못된 출력"이라면, 1000개의 무작위 입력을 돌려서 실패 모드를 찾아.
 8. **이분법 하니스.** 버그가 두 알려진 상태(commit, dataset, 버전) 사이에 나타났다면, "상태 X로 부팅, 확인, 반복"을 자동화해서 `git bisect run`으로 실행 가능하게.
 9. **차분(differential) 루프.** 같은 입력을 구버전 vs 신버전 (또는 두 config)에 통과시키고 출력을 diff.
-10. **HITL bash 스크립트.** 마지막 수단. 사람이 클릭해야 한다면, `.agents/skills/diagnose/scripts/hitl-loop.template.sh`로 _사람_을 구동해서 루프가 구조화되도록. 캡처된 출력이 너에게 피드백.
+10. **HITL bash 스크립트.** 마지막 수단. 사람이 클릭해야 한다면, `.agents/skills/diagnose/scripts/hitl-loop.template.sh`를 복사·편집해서 **사용자에게 경로를 넘기고 사용자가 자기 터미널에서 돌린다.** 네가 직접 돌리면 안 된다 — agent 의 Bash 에는 stdin 에 터미널이 없어(`[ -t 0 ]` false, `read -r -t 2` → rc=1) 모든 프롬프트가 답 없이 흘러가고 성공한 것처럼 보인다. 사용자가 붙여넣는 KEY=VALUE 블록이 너에게 피드백.
 
 올바른 피드백 루프를 만들면, 버그는 90% 수정된 셈.
 

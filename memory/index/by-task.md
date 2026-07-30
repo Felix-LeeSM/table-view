@@ -1,7 +1,7 @@
 ---
 title: By-task 인덱스
 type: index
-generated: 2026-07-27
+generated: 2026-07-30
 generator: scripts/regenerate-indexes.sh
 ---
 
@@ -295,6 +295,10 @@ generator: scripts/regenerate-indexes.sh
 ### roadmap
 
 - [감사 wave — 이력 + 다음 후보](../../memory/product/audit-waves/memory.md)
+
+### round-gate
+
+- [PR merge 게이트 진단 / 처리](../../memory/runbook/pr-merge-gates/memory.md)
 
 ### ruleset
 
