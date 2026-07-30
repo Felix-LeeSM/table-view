@@ -1,5 +1,6 @@
 import { readdirSync, rmSync } from "node:fs";
-import { resolve } from "node:path";
+import { homedir } from "node:os";
+import { parse, resolve } from "node:path";
 
 /**
  * Empty the app-data directory the smoke run gave the Tauri binary via
@@ -27,10 +28,28 @@ import { resolve } from "node:path";
  *   sibling `<dataDir>-fixtures` (e2e/smoke/_helpers.ts `smokeFixtureRoot`,
  *   #1449) hold prepared file-DB fixtures built once per job and must survive.
  * - A missing directory is normal on the first session of a run.
+ * - The value is typed by hand now that no script exports it (README 「E2E
+ *   Smoke」), so a typo or an unexpanded `${VAR}` can point it at a real
+ *   directory. `assertDeletableDataDir` refuses the roots a slip lands on
+ *   rather than emptying them.
  */
+const UNDELETABLE = new Set(
+  [homedir(), parse(process.cwd()).root, process.cwd()].map((p) => resolve(p)),
+);
+
+function assertDeletableDataDir(dataDir: string): void {
+  if (UNDELETABLE.has(resolve(dataDir))) {
+    throw new Error(
+      `TABLE_VIEW_TEST_DATA_DIR must be a throwaway directory, got "${dataDir}". ` +
+        `resetSmokeDataDir() empties it on every session.`,
+    );
+  }
+}
+
 export function resetSmokeDataDir(): string | null {
   const dataDir = process.env.TABLE_VIEW_TEST_DATA_DIR;
   if (!dataDir) return null;
+  assertDeletableDataDir(dataDir);
 
   let entries: string[];
   try {

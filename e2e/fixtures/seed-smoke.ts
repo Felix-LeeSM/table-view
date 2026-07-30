@@ -1,4 +1,3 @@
-import { readFile } from "node:fs/promises";
 import { MongoClient, type Document } from "mongodb";
 import { createConnection } from "mysql2/promise";
 import { Client as PgClient } from "pg";
@@ -305,7 +304,7 @@ async function seedMariadb() {
 }
 
 async function seedMssql() {
-  const seedSql = await readFile("e2e/fixtures/seed.mssql.sql", "utf-8");
+  const seedSql = await readE2eSeedFixture("mssql");
   await retry("MSSQL", async () => {
     await ensureMssqlDatabase();
     const pool = await mssqlPool(mssqlConfig.database);
@@ -361,7 +360,7 @@ function quoteMssqlIdentifier(identifier: string): string {
 }
 
 async function seedOracle() {
-  const seedSql = await readFile("e2e/fixtures/seed.oracle.sql", "utf-8");
+  const seedSql = await readE2eSeedFixture("oracle");
   await retry("Oracle", async () => {
     const connection = await oracledb.getConnection({
       user: oracleConfig.user,
