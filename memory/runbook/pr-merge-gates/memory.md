@@ -38,19 +38,22 @@ label 메커니즘 자체는 [delivery](../../workflow/delivery/memory.md) 의 �
 
 <!-- /ci-gates -->
 
-**2026-07-30 (#2033): 8종 중 3종이 빈 껍데기다.** `Detect Change Scope`,
-`PR Body Contract`, `Runtime Happy Path` 는 검사하던 스크립트가 삭제돼 지금은
-`echo` 한 줄만 돌리는 stub job 이다 — 이름을 지우면 컨텍스트가 영영 `expected` 로
-남아 모든 머지가 막히므로 job 만 남겼다. 이 셋은 **항상 green 이고 아무것도
-보증하지 않는다.** ruleset 에서 빼면 stub 도 지울 수 있다 (GitHub 라이브 상태
-변경이라 별도 결정).
+**8종 중 3종은 빈 껍데기다.** `Detect Change Scope`, `PR Body Contract`,
+`Runtime Happy Path` 는 `exit 0` 한 줄뿐인 name-only job 이다 — **항상 green 이고
+아무것도 보증하지 않는다.** 이름을 지우면 컨텍스트가 영영 `expected` 로 남아 모든
+머지가 막히므로 job 만 남겼다. 순서는 ruleset 에서 먼저 빼고 그다음 job 삭제다
+(ruleset 은 GitHub 라이브 상태라 별도 결정).
 
-나머지 5종 fail 은 BLOCKED 다 — 대응은 fix (clippy fix / 테스트 수정) 지 회피 아님.
-신규 required context 등록은 workflow 가 main 에 올라간 **뒤에** 한다 — 아무 run 도
-만들지 않는 required context 는 열린 PR 전부를 BLOCKED 로 고착시킨다.
+**BLOCKED 진단은 이 셋을 먼저 배제해라** — 세 이름은 실패할 수 없으므로 원인이
+아니다. 나머지 5종(`Frontend Checks`, `Rust Unit And Storage Tests`,
+`Integration Tests (Docker)`, `Dependency Security`, `Rust Static Analysis`) 과
+`review-gate` 만 red 가 될 수 있고, 대응은 fix (clippy fix / 테스트 수정) 지 회피
+아님. 신규 required context 등록은 workflow 가 main 에 올라간 **뒤에** 한다 —
+아무 run 도 만들지 않는 required context 는 열린 PR 전부를 BLOCKED 로 고착시킨다.
 
-→ protection API 만 보고 "required 는 review-gate 뿐" 이라 단정하지 말 것. E2E 가 진짜
-blocker 인 경우가 많다 (docs/hook 변경이어도 ruleset 이 E2E 를 요구).
+→ protection API 만 보고 "required 는 review-gate 뿐" 이라 단정하지 말 것. ruleset
+8종은 별도 계층이고 docs 만 바꾼 PR 에도 전부 요구된다. 단 `Runtime Happy Path` 는
+위 stub 셋에 속하므로 E2E 를 blocker 로 의심하지 마라 — 실패할 수 없다.
 
 ## 잘못된 대응이 만드는 함정
 

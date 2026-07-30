@@ -59,12 +59,11 @@ mergeable, 사용자 거부 없음)은 종결자가 종합한다. 구현자 절�
 - GPG signing pinentry timeout 시 즉시 중단. unsigned commit 으로 진행하지 않음.
 - code-profile sprint 의 RED evidence 요구는 [tdd](../tdd/memory.md) 를 따른다.
 
-## PR body gates
+## PR body
 
-- `Documentation impact` 필수. 자세히: [documentation](../documentation/memory.md).
-- `Smoke impact` 필수. `Smoke-Test-Plan:` 에 근거 명시.
-- PR body / comment 는 GitHub 에서 볼 수 있는 repo-relative path / URL 만.
-  `/Users`, `/tmp`, `file://`, `worktrees/` 근거 금지.
+형식 요구는 없다. 유일한 제약은 근거의 이식성 — PR body / comment 는 GitHub 에서
+열리는 repo-relative path 와 URL 만 쓴다. `/Users`, `/tmp`, `file://`,
+`worktrees/` 금지. 문서화 판단은 [documentation](../documentation/memory.md).
 
 ## Agent spawn — reviewer 독립
 
