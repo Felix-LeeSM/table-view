@@ -36,6 +36,34 @@ except case 1 which blocks regardless of round.
 Scores are not used. Blocking is decided once, by the coordinator — perspective
 subreviewers report findings and evidence, not severity.
 
+## Measuring Rounds And Merge Rate
+
+`scripts/review/measure-rounds.sh` reports how review is actually going. It is
+read-only: it reads the GitHub API and prints numbers, it never comments or
+labels. Nothing schedules it — run it when you want the number.
+
+```
+bash scripts/review/measure-rounds.sh --since 2026-06-01
+```
+
+The first three lines are the contract (`rounds_per_merge`, `merge_rate`,
+`merge_rate_by_files`). After them come the round definition in force, the
+window, whether the scan was truncated, the distribution of the gap *between*
+rounds, a per-day series, and the command that produced the output. Quote the
+command with the number — a number without one is a red finding here.
+
+Two round definitions exist and both are printed on every run:
+
+- `comments` (default) — one PR comment is one round. Same proxy the
+  `Stop at review round 3` gate in `.github/workflows/review-gate.yml` uses.
+- `head-oid` — one distinct head commit carrying review is one round. This is
+  the definition issue #1968 wants to move the gate to.
+
+Both live in the `round_events()` jq function inside that script, and nowhere
+else. Run `bash scripts/review/measure-rounds.sh --help` for the flags, and read
+the "못 재는 것" comment at the bottom of the script before quoting a number:
+it lists what the tool cannot see, starting with blocking sets.
+
 ## Source Of Truth
 
 The detailed rubric lives in `.agents/skills/pr-review/SKILL.md`. Workflow
