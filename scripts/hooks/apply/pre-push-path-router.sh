@@ -321,6 +321,7 @@ EOF
 	run_step "target-cache-tests" bash scripts/hooks/policy/test-target-cache.sh
 	run_step "generated-fence-tests" bash scripts/hooks/policy/test-generated-fences.sh
 	run_step "pr-body-contract-tests" bash scripts/hooks/policy/test-check-pr-body.sh
+	run_step "handoff-tests" bash scripts/hooks/policy/test-handoff.sh
 	run_step "cargo-deny-summary-tests" bash scripts/hooks/apply/test-cargo-deny-summary.sh
 	run_step "pre-push-router-tests" bash scripts/hooks/apply/test-pre-push-path-router.sh
 	run_step "memory-size-tests" bash scripts/hooks/policy/test-check-memory-size.sh
