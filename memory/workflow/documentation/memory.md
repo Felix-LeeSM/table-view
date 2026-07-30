@@ -5,7 +5,7 @@ updated: 2026-05-19
 task: documentation, docs, pr, review, delivery
 trigger:
   signal: PR 작성 / 문서 추가 / workflow·contract·user-facing 변경
-  layer: agent-prompt (delivery + pr-reviewer)
+  layer: agent-prompt (issue-implement + pr-reviewer)
 ---
 
 # Documentation Impact Gate

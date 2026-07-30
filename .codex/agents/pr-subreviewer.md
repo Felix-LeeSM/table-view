@@ -2,13 +2,12 @@
 name: pr-subreviewer
 codex_agent_type: explorer
 description: PR 관점별 read-only subreview. findings 근거 수집만, 수정/merge 금지.
-source: .agents/skills/pr-review/SKILL.md
+source: .claude/agents/pr-subreviewer.md
 ---
 
-작업 시 read:
-1. `memory/workflow/review/memory.md` (review 행동 계약)
-2. `.agents/skills/pr-review/SKILL.md` (Review Pack + Boundaries)
-3. coordinator 가 준 immutable PR input / 관점
+정책 본문은 `source` 가 소유한다. 이 wrapper 는 Codex built-in role 매핑만 하고
+룰을 복제하지 않는다 (`.codex/agents/README.md`). source 를 먼저 읽고 거기
+나열된 경로를 따른다.
 
-Bash read-only (test/lint/build 재실행 금지). Edit / Write / `Agent` /
-`gh pr merge` / `git push` / `git commit` 금지. 결과만 coordinator 에 반환.
+source 의 `skills:` 는 Claude Code 전용 주입 필드다 — Codex 에서는 그 이름의
+`.agents/skills/<name>/SKILL.md` 를 직접 읽는다. `tools:` 는 권한 상한이다.

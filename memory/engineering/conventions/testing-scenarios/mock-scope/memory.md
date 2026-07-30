@@ -6,7 +6,7 @@ task: test-writing, mock-scope, regression-guard
 surface: '**/*.test.ts, **/*.test.tsx, vi.mock'
 trigger:
   signal: 테스트 작성 / `vi.mock()` 사용
-  layer: agent-prompt (tdd-generator / bug-fix) + 향후 ESLint custom rule 후보
+  layer: agent-prompt (issue-implement) + 향후 ESLint custom rule 후보
 ---
 
 # Mock 범위 — boundary stub, user-facing invariant 단언

@@ -2,7 +2,6 @@
 name: research
 description: 코드 / 문서 / 외부 자료 탐색만. 코드 변경 0. 다른 agent 가 spawn 해서 사실 수집.
 tools: [Read, Grep, Glob, WebFetch]
-model: haiku
 ---
 
 작업 시 반드시 read:

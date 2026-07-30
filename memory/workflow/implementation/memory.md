@@ -5,7 +5,7 @@ updated: 2026-07-27
 task: implementation, code-writing, refactor, agent-autonomy
 trigger:
   signal: 사용자가 코드 작성/구현/refactor 지시
-  layer: agent-prompt (tdd-generator / bug-fix / refactor agent)
+  layer: agent-prompt (issue-implement)
 ---
 
 # Implementation — agent 자율성 + noise 차단

@@ -331,17 +331,31 @@ claude_agent_output="$(run_case claude-agent normal .claude/settings.json)"
 assert_contains "$claude_agent_output" "route: frontend=0 rust=0 hook=0 memory=0 agent=1" "claude agent"
 assert_not_contains "$claude_agent_output" "RUN ts-test:" "claude agent"
 assert_not_contains "$claude_agent_output" "RUN rust-test-and-coverage:" "claude agent"
+# The agent route ran no gate of its own before #1987: `check-wrapper-cap.sh`
+# was a PostToolUse advisory in warn-only mode, which is why a 16-line wrapper
+# sat over cap on main (#1975). `--strict` is the load-bearing token — the
+# default mode always exits 0, so asserting the bare script name would hold
+# while the gate could not fail.
+assert_contains "$claude_agent_output" "RUN wrapper-cap: bash scripts/hooks/policy/check-wrapper-cap.sh --strict" "claude agent"
+assert_contains "$claude_agent_output" "RUN agent-reach: bash scripts/hooks/policy/check-agent-reach.sh" "claude agent"
 
 codex_agent_output="$(run_case codex-agent normal .codex/hooks.json)"
 assert_contains "$codex_agent_output" "route: frontend=0 rust=0 hook=0 memory=0 agent=1" "codex agent"
 assert_not_contains "$codex_agent_output" "RUN e2e-smoke-workflow-cache:" "codex agent"
 assert_not_contains "$codex_agent_output" "RUN ts-test:" "codex agent"
 assert_not_contains "$codex_agent_output" "RUN rust-test-and-coverage:" "codex agent"
+assert_contains "$codex_agent_output" "RUN wrapper-cap: bash scripts/hooks/policy/check-wrapper-cap.sh --strict" "codex agent"
 
 agents_skill_output="$(run_case agents-skill normal .agents/skills/example/SKILL.md)"
 assert_contains "$agents_skill_output" "route: frontend=0 rust=0 hook=0 memory=0 agent=1" "agents skill"
 assert_not_contains "$agents_skill_output" "RUN ts-test:" "agents skill"
 assert_not_contains "$agents_skill_output" "RUN rust-test-and-coverage:" "agents skill"
+assert_contains "$agents_skill_output" "RUN wrapper-cap: bash scripts/hooks/policy/check-wrapper-cap.sh --strict" "agents skill"
+
+# Both guards read scripts/hooks/policy, so the hook route must carry them too:
+# gutting either one is otherwise the single edit neither can catch.
+assert_contains "$hook_output" "RUN wrapper-cap: bash scripts/hooks/policy/check-wrapper-cap.sh --strict" "hook"
+assert_contains "$hook_output" "RUN agent-reach: bash scripts/hooks/policy/check-agent-reach.sh" "hook"
 
 memory_output="$(run_case memory normal memory/workflow/example/memory.md)"
 assert_contains "$memory_output" "route: frontend=0 rust=0 hook=0 memory=1 agent=0" "memory"
