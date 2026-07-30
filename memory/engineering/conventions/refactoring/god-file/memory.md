@@ -6,7 +6,7 @@ task: refactor, god-file, comment-cleanup, decomposition
 surface: '**/*.ts, **/*.tsx, **/*.rs'
 trigger:
   signal: file >= 700 lines
-  layer: ESLint max-lines + agent-prompt
+  layer: ESLint max-lines. memory 자동 로드 없음
 ---
 
 # God file 시퀀스
@@ -77,13 +77,13 @@ pnpm tsc --noEmit && pnpm lint && pnpm vitest run <touched-tree>
 
 주석 본문이 cross-component invariant 이거나 archive 가치가 있으면:
 - 별도로 `docs/archives/incidents/YYYY-MM-DD-<slug>/memory.md` 추가
-- 또는 ADR 가치 있으면 `remember` skill 로 `docs/archives/decisions/NNNN-<slug>/`
+- 또는 ADR 가치 있으면 `docs/archives/decisions/NNNN-<slug>/` 에 ADR 로 남긴다
 - 코드 주석은 그 메모리에 cross-link (단 link rot 위험 — 메모리 path 변경 가능성 고려)
 
 ## Why
 
 - Sprint history 는 git log/blame 이 더 정확하고 갱신 안 됨 → rot.
-- CLAUDE.md comment policy ("only WHY when non-obvious; no WHAT/sprint-history") 정합.
+- 주석은 자명하지 않은 WHY 만 남긴다 — WHAT 과 sprint history 는 쓰지 않는다.
 - 사용자 지시 (2026-05-05): "memory 로 필요한 건 옮기고, 간단하게 병합할만하거나 요약할만한 건 요약."
 - 500줄 임계 (2026-05-17): 사용자 reframe — 단순 주석 정리 룰이 god file 시퀀스 트리거로 격상.
 - 700줄 임계 (2026-05-29): 500줄은 일반 production/test 파일에 너무 공격적이라

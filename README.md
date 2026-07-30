@@ -240,7 +240,7 @@ TABLE_VIEW_TEST_DATA_DIR=/tmp/table-view-smoke \
 `pnpm db:up`은 PostgreSQL/MySQL/MariaDB/MongoDB/MSSQL/Oracle/Redis를 준비합니다.
 헤드리스 Linux에서는 `WEBKIT_DISABLE_DMABUF_RENDERER=1`,
 `WEBKIT_DISABLE_COMPOSITING_MODE=1`, `LIBGL_ALWAYS_SOFTWARE=1`을 직접 export해야
-합니다 — 삭제된 러너가 하던 일입니다 (#1261/#1293).
+합니다 (#1261/#1293).
 
 macOS/Windows 로컬에서는 tauri-driver의 Linux/GTK 의존성 차이가 있습니다.
 

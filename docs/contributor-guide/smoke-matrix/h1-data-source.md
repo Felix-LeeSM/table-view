@@ -216,7 +216,6 @@ Current evidence:
 - `src/components/query/QueryTab.dialect.test.tsx`
 - `src/components/query/QueryTab/useQueryExecution.kvDispatch.test.tsx`
 - `src/components/workspace/KvSidebar.test.tsx`
-- `src/components/workspace/KvSidebar.mutations.test.tsx`
 
 Gap routing:
 
@@ -248,8 +247,9 @@ Current evidence:
 `src-tauri/src/db/search_live_query.rs`, `src-tauri/src/db/search/tests.rs`,
 `src-tauri/src/db/search/tests/live_query.rs`,
 `src-tauri/src/commands/connection/crud.rs`, `src/types/dataSource.test.ts`,
-`src/types/search.ts`, `src/components/connection/ConnectionDialog.test.tsx`,
-`src/components/connection/ConnectionDialog.urlInput.test.tsx`,
+`src/types/search.ts`,
+`src/features/connection/components/ConnectionDialog.test.tsx`,
+`src/features/connection/components/ConnectionDialog.urlInput.test.tsx`,
 `e2e/fixtures/elasticsearch/search/seed.json`,
 `e2e/fixtures/opensearch/search/seed.json`, `src-tauri/src/commands/search.rs`,
 `src/lib/tauri/search.test.ts`, `src/lib/search/searchDslCompletion.ts`,
@@ -325,12 +325,13 @@ Current evidence:
 
 Gap routing:
 
-Fixture existence is contract/evidence inventory only unless the runtime smoke
-script wires the matching spec. Valkey's seed is wired into Runtime Happy Path
-smoke; its compatibility matrix still only separates proven local-runtime rows
-from candidate/rejected command families and is not full compatibility evidence.
-Issue #753 keeps fixture tiers and smoke-routing cost/risk rationale in
-; #870 adds MySQL/MariaDB bounded
+Fixture existence is contract/evidence inventory only until a spec exercises it.
+Valkey's seed is wired into Runtime Happy Path smoke; its compatibility matrix
+still only separates proven local-runtime rows from candidate/rejected command
+families and is not full compatibility evidence. Issue #753 fixture tiers and
+smoke-routing cost/risk rationale live in
+[`fixture-test-topology-inventory.md`](../fixture-test-topology-inventory.md);
+#870 adds MySQL/MariaDB bounded
 Structure table/index/FK DDL smoke impact to those routed rows. Add
 DBMS-specific runtime smoke when each remaining parity lane becomes active.
 

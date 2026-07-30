@@ -72,7 +72,6 @@ Current evidence:
 `src/types/connection.ts`, `src/types/adapterConformance.test.ts`,
 `src/components/rdb/DataGrid.editing.test.tsx`,
 `src-tauri/tests/backend_adapter_contract_profile.rs`,
-`src-tauri/src/db/oracle/connection_only.rs`,
 `src/lib/sql/oracleSafety.test.ts`,
 `src/components/datagrid/sqlGenerator.dialects.test.ts`,
 `.github/workflows/e2e-smoke.yml`,

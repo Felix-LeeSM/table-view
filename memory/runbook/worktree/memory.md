@@ -35,7 +35,7 @@ task: worktree, multi-agent, parallel, spawn-verify, agent-hard-rule
 # 새 worktree + branch — 디렉토리 이름은 브랜치의 `/` 를 `__` 로 바꾼 형태
 git worktree add -b sprint-388/foo worktrees/sprint-388__foo origin/main
 
-# 의존성 (spawn 스크립트가 하던 일 — 이제 직접)
+# 의존성
 cd worktrees/sprint-388__foo && pnpm install --frozen-lockfile --prefer-offline
 cargo fetch --manifest-path src-tauri/Cargo.toml
 
@@ -115,8 +115,8 @@ orchestrator 는 spawn 할 때 agent registry 를 머릿속/작업 노트에 유
 
 - worktree 안에서 또 worktree spawn 하지 마. 동일 base repo 의 `.git/worktrees/`
   메타데이터가 중첩 시 추적 어려움.
-- `git push --force` 같은 destructive 명령은 금지다. 차단하던 훅
-  (`check-dangerous-bash.sh`) 이 없으니 실행되기 전에 스스로 멈춰야 한다.
+- `git push --force` 같은 destructive 명령은 금지다. 차단하는 장치가 없으니
+  실행되기 전에 스스로 멈춰야 한다.
 
 ## 첫 turn 검증
 

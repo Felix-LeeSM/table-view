@@ -1,6 +1,6 @@
 // Sprint 249 (ADR 0022 Phase 5) — DataGrid Cmd+Z / Ctrl+Z keyboard
 // binding for pending-edit undo. Maps to AC-249-K1..K5 from
-// `docs/sprints/sprint-249/contract.md`. Date 2026-05-09.
+// Sprint 249 contract. Date 2026-05-09.
 //
 // Asserted scenarios:
 // - K1: Cmd+Z (metaKey) → editState.undo invoked.

@@ -30,7 +30,7 @@ Current evidence:
 
 - `src-tauri/src/db/adapters/sqlite/connection.rs`
 - `src-tauri/tests/sqlite_connection_command.rs`
-- `src/components/connection/forms/SqliteFormFields.test.tsx`
+- `src/features/connection/components/forms/SqliteFormFields.test.tsx`
 - `src/types/dataSource.test.ts`
 
 Current gap / routing:
@@ -194,8 +194,8 @@ Current evidence:
 
 Current gap / routing:
 
-SQLite fixtures are deterministic local files and pre-smoke validates fixture
-presence/path. MSSQL fixture rows stay bounded to the promoted runtime and #907
+SQLite fixtures are deterministic local files; nothing validates their presence
+or path before a run. MSSQL fixture rows stay bounded to the promoted runtime and #907
 smoke slice. Oracle fixture rows now pin the #905/#906 service-name
 catalog/query/cancel/tabular/edit-row runtime boundary plus #907 representative
 smoke (`host:port/serviceName`, default `XEPDB1`) while rejecting

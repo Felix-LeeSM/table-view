@@ -7,7 +7,7 @@ import { useToastStore } from "@/stores/toastStore";
 
 // Sprint 94 — Toaster container tests.
 //
-// Coverage targets the AC list in `docs/sprints/sprint-94/contract.md`:
+// Coverage targets the AC list in Sprint 94 contract:
 //   AC-01: toast.success / error / info / warning render via the container.
 //   AC-05: variant-specific role (status/alert), Esc key dismiss, dismiss
 //          button aria-label.

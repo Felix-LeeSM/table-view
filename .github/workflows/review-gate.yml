@@ -35,9 +35,9 @@ jobs:
           exit 1
 
       # 3라운드부터는 red 면 fix 를 더 쌓지 말고 근본 원인을 재평가한다 (delivery
-      # T5 reflect). green 이면 재평가 대상이 아니라 owner 가 label 붙이고 머지한다.
+      # 「자율 실행 vs 중단」). green 이면 재평가 대상이 아니라 owner 가 label 붙이고 머지한다.
       # 라운드 프록시는 PR comment 수 — reviewer 가 라운드마다 scorecard 를 하나
-      # 남기고 저자는 comment 를 남기지 않는다 (delivery T5). payload 에 이미 정수로
+      # 남기고 저자는 comment 를 남기지 않는다. payload 에 이미 정수로
       # 오므로 API 조회도 본문 파싱도 필요 없다.
       # 실측 2026-07-29: 최근 머지 30건 중 16건이 승인 시점에 comments >= 3 이었다.
       # 임계값 3 은 완화 대상이 아니라 지켜야 할 선이다 — 걸리면 라운드를 줄여라.
@@ -53,7 +53,7 @@ jobs:
       - name: Require review:approved label
         if: github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'review:approved')
         run: |
-          echo "::error::review:approved label missing — pr-reviewer green verdict required before merge"
+          echo "::error::review:approved label missing — green review verdict required before merge"
           exit 1
 
       # main 에 올라온 merge commit — PR head SHA 에서 이미 gate 를 통과했으므로

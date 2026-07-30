@@ -226,5 +226,3 @@ MongoDB 연결에서도 끊김 없이 반복할 수 있는가" — 단, paradigm
 ## Demo / 산출물
 
 본 phase 의 grill 진행 중 사용된 HTML mock 시리즈는 결정 lock 후 폐기.
-재현이 필요하면 `feedback_demo_html_for_grill.md` 패턴을 따라 새로
-작성한다.

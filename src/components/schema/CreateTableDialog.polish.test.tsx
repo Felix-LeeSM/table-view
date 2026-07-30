@@ -5,7 +5,7 @@ import { useConnectionStore } from "@stores/connectionStore";
 import { useSafeModeStore } from "@stores/safeModeStore";
 import { useQueryHistoryStore } from "@stores/queryHistoryStore";
 import {
-  PRE_PUSH_LOAD_TEST_TIMEOUT_MS,
+  HEAVY_LOAD_TEST_TIMEOUT_MS,
   mockCreateTable,
   mockListPostgresTypes,
   renderDialog,
@@ -252,7 +252,7 @@ describe("Sprint 234 — CreateTableDialog UX polish", () => {
       expect(upButtons[0]).toBeDisabled();
       expect(downButtons[2]).toBeDisabled();
     },
-    PRE_PUSH_LOAD_TEST_TIMEOUT_MS,
+    HEAVY_LOAD_TEST_TIMEOUT_MS,
   );
 
   // Sprint 234 AC-234-04 / Sprint 238 — reorder auto-refetches the
@@ -295,6 +295,6 @@ describe("Sprint 234 — CreateTableDialog UX polish", () => {
       };
       expect(second.columns.map((c) => c.name)).toEqual(["name", "id"]);
     },
-    PRE_PUSH_LOAD_TEST_TIMEOUT_MS,
+    HEAVY_LOAD_TEST_TIMEOUT_MS,
   );
 });

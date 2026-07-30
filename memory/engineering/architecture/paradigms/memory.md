@@ -16,8 +16,8 @@ Current SOT:
 - Architecture boundary: [data-source](../data-source/memory.md)
 - Future promotion order: [docs/ROADMAP.md](../../../../docs/ROADMAP.md)
 
-Historical source: 구 `docs/paradigm-ui-map.md` (2026-04-24) 압축본. Old Phase
-7/8 sprint labels, "P0/P2" labels, and frozen wording are historical context only.
+Old Phase 7/8 sprint labels, "P0/P2" labels, and frozen wording below are
+historical context only.
 
 ## Durable Heuristics
 

@@ -26,5 +26,5 @@ subagent 에 닿는 유일한 채널이다.**
 
 - 별도 Claude 전용 정책을 여기서 만들지 않는다. 충돌 시
   [`AGENTS.md`](AGENTS.md) 가 우선.
-- memory cap / ADR 동결 / git·hook 회피 금지 / `remember` 는 위 import 로 실린
+- memory cap / ADR 동결 / git·hook 회피 금지는 위 import 로 실린
   `AGENTS.md` 「강제 룰」이 SOT. 여기 복제하면 drift 한다.

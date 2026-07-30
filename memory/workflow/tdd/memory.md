@@ -2,10 +2,10 @@
 title: TDD Evidence
 type: workflow-rule
 updated: 2026-07-03
-task: tdd, delivery, pre-push, sprint
+task: tdd, delivery, sprint
 trigger:
-  signal: code-profile sprint, RED commit, TDD-cycle hook
-  layer: agent-prompt + pre-push
+  signal: code-profile sprint, RED commit
+  layer: none — 자동 로드 없음, 직접 열어야 함
 ---
 
 # TDD Evidence
@@ -16,22 +16,9 @@ evidence 를 작업 초반에 보이게 하는 것.
 ## 강제하지 않는다 — 권고다 (2026-07-30 사용자 결정, #1987)
 
 **실패하는 테스트를 먼저 커밋하는 것은 품질 수단이지 통과 조건이 아니다.**
-먼저 커밋하지 않아도, 먼저 작성하지 않아도 문제가 되지 않는다. 유도는
-`issue-implement` description 과 `tdd` skill 본문(`skills:` 주입)이 한다.
+먼저 커밋하지 않아도, 먼저 작성하지 않아도 문제가 되지 않는다.
 
-**RED 를 강제하는 장치는 없다.** #1918 이 "훅이 이미 갖고 있다" 고 적었으나
-#1975 에서 거짓으로 판정됐고, 그 훅 자체도 지금 없다. 브랜치명 기반 판정은
-애초에 동작하지 않았다 — 최근 머지 100건 어디에도 `sprint` 이 없다:
-
-```bash
-gh pr list --state merged --limit 100 --json headRefName -q '.[].headRefName' | grep -c sprint
-```
-
-## 아직 남아 있는 훅 조건
-
-`docs/sprints/sprint-N/contract.md` frontmatter 가 `review-profile: code` 이고
-브랜치명이 `sprint-N/...` 일 때만 pre-push `check-tdd-cycle.sh` 가
-`merge-base..HEAD` 에 RED commit subject 를 요구한다. 그 밖에는 안 돈다.
+**RED 를 강제하는 장치는 없다.** 이 방을 읽은 agent 가 스스로 판단한다.
 
 ## 권장 evidence
 
@@ -58,18 +45,15 @@ git log "$base..HEAD" --format="%s"
 ```
 
 위 범위에 RED subject 가 없다고 해서 push 를 미루지는 않는다 — 권고이지 조건이
-아니다. 훅이 실제로 도는 조건(위)에서 막혔다면 `SKIP_TDD_CYCLE=1` 같은 skip env
-는 사용자 명시 승인 없이는 금지.
+아니다.
 
 ## 예외
 
-- `review-profile` 이 `docs`, `infra`, `security` 등 code 가 아니면 훅이 안 돈다.
-- 긴급 hotfix 에서 skip 이 필요하면 사용자가 명시해야 한다. 이후 follow-up 에서
-  검증 근거를 남긴다.
+- 긴급 hotfix 에서 RED 를 건너뛰면 이후 follow-up 에서 검증 근거를 남긴다.
 
 ## 관련
 
 - [delivery](../delivery/memory.md) — push/PR/merge pipeline
-- [review](../review/memory.md) — profile 별 review matrix
-- [git-policy](../git-policy/memory.md) — hook 회피 금지
+- [review](../review/memory.md) — PR review 행동 계약
+- [git-policy](../git-policy/memory.md) — 검증 우회 금지
 - 이 사이클을 강제하는 장치는 없다 — 집행 없음

@@ -36,7 +36,7 @@ task: e2e, testing, scenario
   3. Home ↔ Workspace 왕복 + tab persistence
   4. Schema 트리 → 데이터 그리드 → 셀 편집 commit
   5. 멀티 윈도우 라이프사이클 (workspace 종료/재오픈)
-- CUJ 실패 = 머지 차단. 위치/태깅 방식은 Step 2(`docs/sprints/`)에서 확정.
+- CUJ 실패 = 머지 차단.
 
 ### P4. DBMS × paradigm 매트릭스 (필요 최소)
 - PG는 풀 시나리오, Mongo는 paradigm 분기점에서만. MySQL/SQLite 추가 시점에
@@ -52,8 +52,7 @@ task: e2e, testing, scenario
 - 스캐폴드만 두고 deferred면 (a) GitHub issue 링크를 spec 코멘트에 박거나
   (b) 한 sprint 안에 본문을 채우거나 (c) spec을 지운다.
 - "그대로 두기"는 금지. stale skip은 선택지 행세하는 노이즈다.
-- 새 `skip()`을 추가할 때마다 `docs/sprints/{현재}/handoff.md`에 사유와 만료
-  조건을 기록한다.
+- 새 `skip()`을 추가할 때마다 사유와 만료 조건을 코멘트로 남긴다.
 
 ### P7. tauri-driver 한계와 화해
 - tauri-driver로 못 잡는 것: OS 컨텍스트 메뉴, Radix Select portal, 마우스
@@ -80,7 +79,7 @@ task: e2e, testing, scenario
    워크스페이스 라이프사이클
 4. **Flakiness 잡기** — step 라벨 헬퍼, 실패 시 스크린샷, helpers timeout 표준화
 
-각 단계는 별도 sprint로 진행한다 (`docs/sprints/sprint-N/`).
+각 단계는 따로 진행한다.
 
 ---
 

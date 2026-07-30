@@ -189,6 +189,5 @@ Current evidence:
 
 Current gap / routing:
 
-These can inform local/manual regression and future CI wiring. They do not
-expand the GitHub Runtime Happy Path unless  invokes
-them.
+These can inform local/manual regression and future CI wiring. Nothing invokes
+them automatically, so they expand no runtime claim.

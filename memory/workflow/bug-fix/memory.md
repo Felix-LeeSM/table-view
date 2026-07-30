@@ -5,7 +5,7 @@ updated: 2026-05-17
 task: bug-fix, regression-test, user-report
 trigger:
   signal: 사용자가 버그/회귀/UX 이슈 보고
-  layer: agent-prompt (issue-implement — 버그/회귀 경로에서 먼저 read)
+  layer: none — 자동 로드 없음, 직접 열어야 함
 ---
 
 # 버그 fix — Red test 먼저

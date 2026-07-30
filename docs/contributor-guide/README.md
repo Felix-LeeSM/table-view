@@ -34,11 +34,11 @@ decision logs.
   MSSQL and Oracle runtime/smoke guardrails plus unpromoted wide-column,
   cloud-document, graph, vector, and stream candidates.
 - [`smoke-matrix/h7-ops-security-reliability.md`](smoke-matrix/h7-ops-security-reliability.md) —
-  CI/hook gate surface, destructive-operation safety, credential privacy,
+  CI gate surface, destructive-operation safety, credential privacy,
   dependency security, a11y, performance, platform smoke, E2E isolation.
 - [`repository-topology-inventory.md`](repository-topology-inventory.md) —
-  Refactor 01 final repository root ownership, lifecycle, cleanup, hook-routing,
-  and migration SOT.
+  Refactor 01 final repository root ownership, lifecycle, cleanup, and
+  migration SOT.
 - [`fixture-test-topology-inventory.md`](fixture-test-topology-inventory.md) —
   Refactor 04 fixture/test topology baseline and evidence classification.
 - [`source-root-migration-constraints.md`](source-root-migration-constraints.md) —

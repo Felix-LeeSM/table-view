@@ -5,7 +5,7 @@ updated: 2026-07-29
 task: merge, pr, review-gate, ci, blocked, ruleset, e2e, synchronize-rerun, cancelled-rollup, round-gate
 trigger:
   signal: PR 이 mergeable 인데 mergeState=BLOCKED / merge 가 base branch policy 로 거부
-  layer: agent-prompt (orchestrator / 종결 스크립트)
+  layer: none — 자동 로드 없음, 직접 열어야 함
 ---
 
 # PR merge 게이트 진단 / 처리
@@ -91,7 +91,7 @@ label 메커니즘 자체는 [delivery](../../workflow/delivery/memory.md) 의 �
   `comments >= 3` 이고 `reflect:done` label 이 없으면 exit 1 한다. rerun 도 label
   재발화도 같은 payload 를 재생하므로 계속 fail — 해소는 `reflect:done` 뿐이다
   (`enforce_admins=true` 라 `--admin` 우회 없음). **누가 붙이냐는 verdict 가 가른다** —
-  green 이면 종결자(`pr-finalize`)가 바로 붙이고, red 면 회고자(`round-reflect`)가
+  green 이면 종결자가 바로 붙이고, red 면 회고자가
   사용자에게 올려 받는다 ([delivery](../../workflow/delivery/memory.md)). 저자는
   붙이지 않는다. 게이트는 라운드만 세고
   verdict 를 안 보므로 green 도 걸린다.

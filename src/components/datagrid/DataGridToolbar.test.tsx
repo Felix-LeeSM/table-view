@@ -176,7 +176,7 @@ describe("DataGridToolbar — Sprint 98 commit flashing", () => {
 });
 
 // Sprint 249 (ADR 0022 Phase 5) — Toolbar Undo button. Maps to
-// AC-249-T1..T3 from `docs/sprints/sprint-249/contract.md`. The button
+// AC-249-T1..T3 from Sprint 249 contract. The button
 // is a discoverability surface for users who don't know the Cmd+Z
 // binding wired in DataGrid. Date 2026-05-09.
 describe("DataGridToolbar — Sprint 249 Undo button (AC-249-T1..T3)", () => {

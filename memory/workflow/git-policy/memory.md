@@ -2,7 +2,7 @@
 title: Git 정책
 type: workflow-rule
 updated: 2026-07-30
-task: commit, push, hook, push-reject, pr-close, race-trace
+task: commit, push, signing, push-reject, pr-close, race-trace
 trigger:
   signal: git commit / git push / push reject / PR close 시
   layer: none — 집행 훅 없음, 규율만
@@ -16,27 +16,24 @@ trigger:
 스스로 멈춰야 한다. 이 방은 `CLAUDE.md` → `AGENTS.md` import 를 타고 오는 포인터를
 보고 직접 열어야 닿는다.
 
-## 절대 금지 — Hook 회피
+## 절대 금지 — 검증 우회
 
 **`git commit --no-verify` / `git push --no-verify` 어떤 상황에서도 사용 금지.**
 **`--no-gpg-sign` / `commit.gpgsign=false` 등 signing 우회도 금지.**
-**환경 변수 `LEFTHOOK=0`, `LEFTHOOK_SKIP=...`, `HUSKY=0` 등 hook 비활성화도 금지.**
 
 ### Why
 
-- 이 명령들이 우회하던 로컬 게이트(pre-commit 의 `cargo fmt` / `cargo clippy -D
-  warnings` / `prettier` / `eslint` / secret scan, pre-push 의 테스트·lint) 는
-  이제 **존재하지 않는다.** 우회할 훅이 없다는 뜻이 아니라, 같은 검사가 CI 에만
-  남았다는 뜻이다 — 로컬에서 깨진 코드를 push 하면 CI 에서 처음 드러난다.
-- signing 우회 금지는 그대로다. 서명은 훅이 아니라 `commit.gpgsign` 설정이
-  건다.
+- `cargo fmt` / `cargo clippy -D warnings` / `prettier` / `eslint` / 테스트는
+  **CI 에서만 돈다.** 로컬에서 깨진 코드를 push 하면 CI 에서 처음 드러나므로
+  아래 세트를 스스로 돌리고 push 한다.
+- 서명은 `commit.gpgsign` 설정이 건다.
 - [ADR 0044](../../../docs/archives/decisions/0044-e2e-smoke-remote-required/memory.md)
   는 runtime e2e smoke 를 GitHub Actions blocking check 로 승격했지만, 그 워크플로는
   이름만 보고하는 stub 이다 — e2e 는 어디서도 안 돈다.
 
 ## push 전에 스스로 돌려라
 
-훅이 하던 일을 대신할 최소 세트. commit/push 전에 바꾼 영역만:
+CI 가 돌릴 검사의 최소 세트. commit/push 전에 바꾼 영역만:
 
 ```bash
 pnpm lint && pnpm test          # 프론트엔드를 건드렸으면
@@ -60,7 +57,6 @@ cargo test --manifest-path src-tauri/Cargo.toml --lib   # Rust 를 건드렸으�
 
 - `git commit --no-verify` / `git push --no-verify`
 - `--no-gpg-sign` / `commit.gpgsign=false`
-- `LEFTHOOK=0`, `LEFTHOOK_SKIP=...`, `HUSKY=0`
 - `git push --force` / `--force-with-lease` 등 force-push 전 변종
 - `git reset --hard` 의 remote-upstream target 형(아래 fetch/reset/pull 절)
 - 소스/앱 자산을 지우는 destructive command (`rm -rf` 로 트래킹 파일 제거 등)
@@ -75,12 +71,12 @@ merge 자율 실행. 사용자에게 "이제 커밋해 주세요" 안내 금지 
 lock).
 
 - 자율 범위 / 예외 / spawn 패턴: [delivery](../delivery/memory.md)
-- 본 정책 (hook 회피 금지) 은 자율 실행의 조건 — hook 통과 안 되면 commit/
-  push 자체 안 됨. agent 가 hook 실패 회피 시도 = 본 정책 위반.
+- 본 정책은 자율 실행의 조건 — 위 최소 세트가 로컬에서 green 이어야 push 한다.
+  아무도 막지 않으므로 agent 가 스스로 지킨다.
 
 ## 외부 race 가짜 신호 (sprint-402)
 
-`diag/race-trace` agent 결과: push reject / 알 수 없는 remote SHA 를 "외부
+push reject / 알 수 없는 remote SHA 를 "외부
 race" (다른 작업자 / 다른 brain 의 동시 push) 로 오인하는 사례 = 거의 100%
 **본인 (agent) 의 fetch + reset 또는 pull 자체가 진범**. 즉, race 가
 _감지되는 시점_ 에는 이미 본인 명령이 원인. 외부 race 가설은 가짜 신호.
@@ -100,7 +96,7 @@ push 가 non-fast-forward 로 튕겼을 때 **절대** `git reset --hard FETCH_H
   / `refs/remotes/<...>`
 - `git pull` 모든 변종 (`--rebase`, `origin <branch>` 포함)
 
-막아 주는 훅은 이제 없다. 위 명령이 손에 떠오르면 그 자체가 진단 신호다 —
+막아 주는 장치는 없다. 위 명령이 손에 떠오르면 그 자체가 진단 신호다 —
 아래 4-step 으로 간다.
 
 ### 회복 정답 (4-step)
@@ -132,7 +128,7 @@ push 가 non-fast-forward 로 튕겼을 때 **절대** `git reset --hard FETCH_H
 
 closed-PR stale ref 가 의심되면 (PR close 시 `--delete-branch` 누락):
 `gh api -X DELETE repos/<owner>/<repo>/git/refs/heads/<branch>` 후 재시도.
-여전히 안 풀리면 force/reset/hook-bypass 를 시도하지 말고 상황 보고 후 별도
+여전히 안 풀리면 force/reset 을 시도하지 말고 상황 보고 후 별도
 복구 절차를 합의한다.
 
 ## PR close cleanup (sprint-389)

@@ -54,7 +54,7 @@ landed and live GitHub showed no open Refactor 04 child issues.
 | macOS smoke | Keep macOS E2E deferred until tauri-driver WKWebView support or an alternate mac smoke path exists. |
 | Right-click E2E | Add an alternate context-menu trigger or wait for tauri-driver W3C Actions support. |
 | E2E isolation | App-local state (`connections.json`, prefs, safe-mode flags) is emptied per session by `beforeSession` in `wdio.smoke.conf.ts` (`e2e/support/smoke-data-dir.ts`), so a `specFileRetries` retry no longer inherits the previous attempt's connections (#1836). Remaining: DB-server fixtures are still seeded once per spec-file run, not per retry. |
-| Masked E2E flakes | `wdio.smoke.conf.ts` sets `specFileRetries: 1`, so a first-attempt `no such window` crash is recovered in the same run and never shows in the workflow pass/fail tally. No flake tally exists — nothing counts `no such window` or `RETRYING` markers; tracked in #1293. |
+| Masked E2E flakes | `wdio.smoke.conf.ts` sets `specFileRetries: 1`, so a first-attempt `no such window` crash is recovered in the same run and never shows in that run's pass/fail tally. No flake tally exists — nothing counts `no such window` or `RETRYING` markers; tracked in #1293. |
 | Link checker | Add an internal-doc link checker after archive routing settles. |
 | Dependency security | Track `hickory-proto` advisory exposure through `mongodb 3.6.0`, `rustls-pemfile` exposure through `oracle-rs 0.1.7`, and `quick-xml` DoS advisories (RUSTSEC-2026-0194/0195) through `plist 1.8.0`; remove deny ignores when upstream dependency updates make it possible. |
 
@@ -94,7 +94,7 @@ this page stays the index plus the cross-band policy sections.
 | [`h4-rdbms-intelligence.md`](smoke-matrix/h4-rdbms-intelligence.md) | Schema metadata cache, ERD graph input and renderer, dependency view, migration impact, schema diff, FK row navigation |
 | [`h5-non-rdbms.md`](smoke-matrix/h5-non-rdbms.md) | Non-RDBMS paradigms: MongoDB, Redis/Valkey, and Elasticsearch/OpenSearch Search, with their closure audits |
 | [`h6-wider-source-candidates.md`](smoke-matrix/h6-wider-source-candidates.md) | MSSQL and Oracle runtime/smoke guardrails plus unpromoted wide-column, cloud-document, graph, vector, and stream candidates |
-| [`h7-ops-security-reliability.md`](smoke-matrix/h7-ops-security-reliability.md) | CI/hook gate surface, destructive-operation safety, credential and local-first privacy, dependency security, a11y, performance, platform smoke, E2E isolation |
+| [`h7-ops-security-reliability.md`](smoke-matrix/h7-ops-security-reliability.md) | CI gate surface, destructive-operation safety, credential and local-first privacy, dependency security, a11y, performance, platform smoke, E2E isolation |
 
 Band sizes are not restated here. No size gate exists, so a band size written
 here would be a number nothing verifies.
@@ -109,8 +109,8 @@ Required local evidence:
 
 - Source state: record the intended release SHA and confirm the release worktree
   has no unrelated source changes with `git status --short --branch`.
-- Hook path: there are no local hooks. Commits must still be signed, and bypass
-  flags remain forbidden by git policy.
+- Commit path: there are no local hooks. Commits must still be signed, and
+  bypass flags remain forbidden by git policy.
 - Frontend/build lane: `pnpm lint`,
   `pnpm exec vitest run --coverage --coverage.reporter=text-summary`, and
   `pnpm build`. The former `pnpm test -- --run --coverage ...` form did NOT
@@ -131,10 +131,10 @@ Required remote evidence on the exact release SHA:
 - Every required context in the `pr_to_main` ruleset passes. That list lives in
   one place, `memory/runbook/pr-merge-gates/memory.md`. Do not copy it here — a
   copy kept here once listed five of the eight.
-- The runtime smoke matrix passes: Prepare E2E runtime artifacts plus the wired
-  PostgreSQL, MySQL, MariaDB, SQLite, DuckDB `.duckdb`, DuckDB file analytics,
-  MongoDB, Redis, Valkey, Elasticsearch, OpenSearch, MSSQL, and Oracle matrix
-  checks.
+- No runtime smoke runs in CI. `.github/workflows/e2e-smoke.yml` reports the
+  `Runtime Happy Path` context without executing a spec, so a green PR proves no
+  desktop runtime behavior. Run `pnpm test:e2e:smoke` by hand on the release SHA
+  if the release needs runtime evidence.
 - `main` push checks pass on the merge commit before a release tag is pushed.
 - Release workflow output is packaging evidence only. Draft bundle creation and
   checksum upload do not replace CI or runtime smoke evidence.
@@ -147,11 +147,11 @@ Deferred or non-blocking checks must stay explicit:
   not routine release blockers unless a release issue explicitly promotes one of
   them. (Rust llvm-cov integration cutoffs became a routine blocking check on
   2026-07-03 — the CI `Integration Tests (Docker)` job enforces them.)
-- Non-routine E2E specs remain scenario inventory or manual regression evidence
-  until a workflow/script invokes them.
+- Every E2E spec is manual regression evidence. Nothing invokes them
+  automatically.
 - No support claim can ship on fixture-only evidence. Fixture files, profile
   rows, generator tests, and compatibility inventories become live runtime
-  evidence only when the matching workflow/script/test path is wired and green.
+  evidence only when a matching workflow or test path runs them green.
   Exceptions require a visible issue or release note entry; they must not be
   hidden as a flaky pass.
 

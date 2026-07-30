@@ -368,11 +368,11 @@ mod tests {
     }
 
     // ----------------------------------------------------------------------
-    // DB-backed unit smoke for reconcile helpers — `cargo llvm-cov --lib` 가
-    // 통합 테스트를 포함하지 않아, reconcile 의 각 도메인 helper coverage 가
-    // 0 이 된다. 본 모듈은 pre-commit Tier 1 floor 유지를 위해 helper happy/
-    // sad path 를 inline 으로 1회씩 cover. 전체 E2E 시나리오는
-    // `tests/dual_write_reconcile.rs` 통합 테스트가 담당.
+    // DB-backed unit smoke for reconcile helpers — 전체 E2E 시나리오를 도는
+    // `tests/dual_write_reconcile.rs` 가 CI `Run integration coverage` 의 측정
+    // set 밖이라, reconcile 의 각 도메인 helper coverage 가 0 이 된다. 본 모듈은
+    // 그 커버리지 floor 유지를 위해 helper happy/sad path 를 inline 으로 1회씩
+    // cover.
     // ----------------------------------------------------------------------
 
     use crate::storage::local;

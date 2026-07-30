@@ -128,7 +128,6 @@ Current evidence:
 
 - `e2e/smoke/redis.spec.ts`
 - `src/components/workspace/KvSidebar.test.tsx`
-- `src/components/workspace/KvSidebar.mutations.test.tsx`
 - `src/lib/tauri/kv.test.ts`
 
 Current gap / routing:
@@ -155,8 +154,7 @@ Current evidence:
 `src/components/query/QueryTab/useQueryExecution.kvDispatch.test.tsx`,
 `src/components/query/QueryTab.dialect.test.tsx`,
 `src/components/query/QueryEditor.tsx`, `src/types/queryLanguage.docs.test.ts`,
-`src/components/workspace/KvSidebar.test.tsx`,
-`src/components/workspace/KvSidebar.mutations.test.tsx`, #540/#481/#482/#483
+`src/components/workspace/KvSidebar.test.tsx`, #540/#481/#482/#483
 
 Current gap / routing:
 
@@ -174,9 +172,8 @@ Current evidence:
 
 `src/types/connection.test.ts`, `src/types/dataSource.test.ts`,
 `src/types/adapterConformance.test.ts`,
-`src/components/connection/ConnectionDialog/ConnectionDialogBody.tsx`,
+`src/features/connection/components/ConnectionDialog/ConnectionDialogBody.tsx`,
 `src/components/workspace/KvSidebar.test.tsx`,
-`src/components/workspace/KvSidebar.mutations.test.tsx`,
 `src/components/query/QueryTab/useQueryExecution.kvDispatch.test.tsx`,
 `src/features/completion/redis/redisCommandCompletion.test.ts`,
 `src/components/query/RedisCommandEditor.test.tsx`,

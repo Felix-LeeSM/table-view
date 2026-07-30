@@ -7,9 +7,9 @@ generator: none — 손으로 갱신한다
 
 # By-surface 인덱스
 
-코드 surface (모듈 / 디렉토리) → 관련 active rule/convention. 자동 생성 — 직접 편집 금지. 메모리 frontmatter 의 `surface:` 필드를 input 으로 한다.
+코드 surface (모듈 / 디렉토리) → 관련 active rule/convention. 손으로 갱신한다. 메모리 frontmatter 의 `surface:` 필드를 input 으로 한다.
 
-본 인덱스는 routing-only cross-link 다. 규칙 / 결정 / 문서 SOT 가 아니며 owner 는 링크 대상 memory/docs/skill 이다.
+본 인덱스는 routing-only cross-link 다. 규칙 / 결정 / 문서 SOT 가 아니며 owner 는 링크 대상 memory/docs 다.
 
 ## Surface → 룰 매핑
 

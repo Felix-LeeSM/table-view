@@ -2,7 +2,7 @@
 title: PR Review Behavior
 type: workflow-rule
 updated: 2026-07-30
-task: review, pr-reviewer, delivery
+task: review, pr, delivery
 trigger:
   signal: PR 생성 / 사용자가 "리뷰해" / 수정 push 후 재리뷰
   layer: index
@@ -16,16 +16,15 @@ trigger:
 
 ## 행동 계약
 
-- PR이 생성되면 orchestrator가 label을 보고 독립 `pr-reviewer` coordinator를 1회
+- PR이 생성되면 orchestrator가 label을 보고 독립 리뷰 coordinator를 1회
   붙인다. 저자는 자기 PR의 리뷰어를 부르지 않는다 — self-review는 편향이다.
-- Coordinator 를 규정하던 skill 본문이 없으므로, 리뷰 범위와 판정 기준은
-  리뷰어가 이 방의 계약과 PR diff 로부터 스스로 세운다.
-- `pr-reviewer` coordinator는 스스로 판단해 필요하면 관점별 read-only
-  `pr-subreviewer`를 fan-out 한다 — 항상-spawn이 아니라 자율 판단이고, 소형 PR
-  단독 검증도 유효한 경로다. coordinator가 subagent로 떠 있어도 fan-out은 된다 —
-  중첩 spawn은 막히지 않는다. 깊이 한도·예산·fan-out 기준을 적은 문서는 없으므로
-  판단은 orchestrator 몫이다. 같은 관점 중복 spawn은 금지한다.
-- `pr-subreviewer` spawn이 실패하면(깊이 한도 초과나 일시적 실패) coordinator는 같은
+- 리뷰 범위와 판정 기준은 리뷰어가 이 방의 계약과 PR diff 로부터 스스로 세운다.
+- coordinator는 스스로 판단해 필요하면 관점별 read-only subreviewer를 fan-out
+  한다 — 항상-spawn이 아니라 자율 판단이고, 소형 PR 단독 검증도 유효한 경로다.
+  coordinator가 subagent로 떠 있어도 fan-out은 된다 — 중첩 spawn은 막히지
+  않는다. 깊이 한도·예산·fan-out 기준을 적은 문서는 없으므로 판단은 orchestrator
+  몫이다. 같은 관점 중복 spawn은 금지한다.
+- subreviewer spawn이 실패하면(깊이 한도 초과나 일시적 실패) coordinator는 같은
   관점들을 순차 단독 검증으로 강등해 수행하고, scorecard에 "fan-out 불가로 단독
   강등" 사실을 명시한다.
 - Coordinator와 subreviewer는 read-only다. commit, push, merge, branch 수정 금지.
@@ -33,8 +32,8 @@ trigger:
   PR body, sprint contract, 필요한 active SOT만 읽는다.
 - Subreview 결과는 coordinator의 입력이다. Coordinator는 PR에 직접 하나의
   통합 scorecard와 action items를 repo-relative evidence로 comment한다.
-- Blocking은 SKILL.md Verdict 원칙 1의 세 사유뿐이다(런타임·보안 / 이 PR 귀책의
-  거짓이 SOT에 들어감 / 자동 layer 실패). 그 외 발견은 non-blocking이고 이슈로
+- Blocking은 세 사유뿐이다: 런타임·보안 / 이 PR 귀책의 거짓이 SOT에 들어감 /
+  자동 layer 실패. 그 외 발견은 non-blocking이고 이슈로
   배출한다. 점수 기준은 쓰지 않는다 — 앵커가 없어 판정을 대신해 왔다.
 - Blocking 판정은 coordinator 단독 권한이다. subreviewer는 발견과 근거만 내고
   severity를 붙이지 않는다. 관점을 늘려도 blocking이 늘지 않는다.
@@ -65,7 +64,7 @@ trigger:
   (계정 1개 = GitHub review approval 불가의 label 우회).
 - 결함이 있으면 orchestrator가 `review:changes-requested` label을 보고 구현자를
   다시 띄운다. 구현자가 수정하고 push하면 그 커밋에 다음 라운드 리뷰가 붙는다.
-- Merge 판단은 종결자(`pr-finalize`) 몫이다. Reviewer pack은 판단 input만 제공한다.
+- Merge 판단은 종결자 몫이다. Reviewer pack은 판단 input만 제공한다.
 - External reviewer는 사용자가 명시적으로 요청했을 때만 추가한다.
 
 ## Merge 전 요구

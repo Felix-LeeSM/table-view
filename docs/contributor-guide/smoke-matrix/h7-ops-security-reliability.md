@@ -7,7 +7,7 @@ User-visible support boundaries live in
 
 This matrix is the H7 gate-alignment record. It separates the current automated
 gate surface from future ops/security/a11y/perf work so docs do not imply
-routine coverage that is not wired into CI or hooks.
+routine coverage that is not wired into CI.
 
 ## PR/main CI gate surface
 
@@ -34,8 +34,8 @@ What the individual jobs own:
   open PR red at once.
 
 - `Rust Static Analysis` runs `cargo fmt --check` and
-  `cargo clippy --all-targets --all-features -- -D warnings`. There are no local
-  git hooks, so this is the only place either check runs.
+  `cargo clippy --all-targets --all-features -- -D warnings`. CI is the only
+  place either check runs.
 
 - `Integration Tests (Docker)` runs the Rust integration coverage cutoffs
   (`cargo llvm-cov nextest --profile push`, lines 80 / functions 75 /
@@ -76,12 +76,15 @@ Current evidence:
 
 Current gap / routing:
 
-The remote runtime gate builds the app on Ubuntu and executes wired PostgreSQL,
-MySQL, MariaDB, SQLite, DuckDB `.duckdb`, DuckDB file analytics, MongoDB, Redis,
-Valkey, Elasticsearch, OpenSearch, MSSQL, and Oracle smoke specs. MSSQL/Oracle
-smoke is bounded to representative connect, seeded catalog browse, SELECT/DML,
-destructive Safe Mode confirmation, cancellation, and grid edit paths and does
-not create structured
+No CI job runs these specs. `.github/workflows/e2e-smoke.yml` only reports the
+`Runtime Happy Path` required context; nothing executes behind it. The specs
+still run by hand: build the debug binary, seed through
+`e2e/fixtures/seed-smoke.ts`, then `pnpm test:e2e:smoke`. The bounds below
+describe what such a manual run proves, not a merge gate.
+
+MSSQL/Oracle smoke is bounded to representative connect, seeded catalog browse,
+SELECT/DML, destructive Safe Mode confirmation, cancellation, and grid edit paths
+and does not create structured
 DDL/raw-admin/full-parser-completion/PLSQL/full-T-SQL/full-Oracle semantics
 claims. DuckDB `.duckdb` smoke is scoped to open/browse/SELECT/history/read-only
 evidence; DuckDB file analytics smoke is scoped to registered deterministic CSV
@@ -92,11 +95,8 @@ support. The PostgreSQL Structure DDL smoke is scoped to one table plus one
 index with history/source and schema refresh proof. The dense ERD smoke is
 scoped to graph render/search/selection/zoom/fit/desktop+narrow screenshot
 evidence and does not claim FK row navigation, schema diff, migration impact, or
-data compare. The workflow contract test keeps matrix keys, spec paths, script
-default routing, and SQLite/DuckDB visible assertion evidence aligned.
-`wdio.smoke.conf.ts` can discover more smoke specs, but
- must wire a spec before it becomes part of the routine
-remote gate.
+data compare. `wdio.smoke.conf.ts` globs `e2e/smoke/**/*.spec.ts`, so a manual
+run picks up every spec file present.
 
 ## Non-routine E2E smoke specs
 
@@ -108,9 +108,8 @@ Current evidence:
 
 Current gap / routing:
 
-These are scenario inventory or local/manual regression assets unless a
-workflow/script invokes them. They do not currently expand the Runtime Happy
-Path claim.
+Nothing invokes these automatically. They are scenario inventory or manual
+regression assets and do not expand any runtime support claim.
 
 ## Destructive/admin operation safety
 
@@ -162,9 +161,6 @@ multi-user security flows require threat-model handoff before promotion.
 
 ## Security decision process
 
-Current evidence:
-
-
 Current gap / routing:
 
 Password, credential, encryption, KDF, file-sharing, ACL, code-signing,
@@ -182,8 +178,8 @@ Current evidence:
 
 Current gap / routing:
 
-`cargo deny check` runs on local Rust/full pre-push routes and in CI as two
-jobs: the blocking PR/main Dependency Security job runs
+`cargo deny check` runs in CI as two jobs: the blocking PR/main Dependency
+Security job runs
 `cargo deny check bans licenses sources`, and the non-blocking Dependency
 Advisories job runs `cargo deny check advisories` (decoupled 2026-07-02 so one
 new RUSTSEC advisory cannot turn every unrelated PR and main push red at once).
@@ -205,8 +201,7 @@ Current evidence:
 `src/components/datagrid/DataGridTable.a11y-smoke.test.tsx`,
 `src/features/connection/components/ConnectionDialog.a11y-smoke.test.tsx`,
 `src/features/connection/components/ImportExportDialog.a11y-smoke.test.tsx`,
-component tests using roles/labels, and `.github/workflows/ci.yml` advisory
-contrast step
+and component tests using roles/labels
 
 Current gap / routing:
 
@@ -241,18 +236,12 @@ FPS/latency budgets only with owner, runtime cost, and failure triage.
 
 ## Link checking
 
-Current evidence:
-
-- `package.json`
-- `.github/workflows/ci.yml`
-
 Current gap / routing:
 
-`pnpm docs:links` checks active docs (`README.md`, `AGENTS.md`, `CLAUDE.md`,
-`docs/ROADMAP.md`, `docs/product/**`, `docs/contributor-guide/**`,
-`docs/roadmap/**`) for relative target and anchor resolution while excluding
-`docs/archives/**` and `docs/sprints/**` as default source roots. CI runs it as advisory only; blocking
-promotion remains future work after owner/runtime cost/actionability settle.
+No link checker exists. Nothing verifies that a relative markdown target or
+anchor resolves, in any doc root, so touched links are reviewed by hand.
+Introducing a check remains future work after owner, runtime cost, and
+actionability settle.
 
 ## Platform smoke
 
@@ -264,8 +253,9 @@ Current evidence:
 
 Current gap / routing:
 
-Runtime Happy Path remains the only blocking desktop runtime gate and is
-Ubuntu/Linux only. The opt-in `workflow_dispatch` platform canary runs separate
+No desktop runtime gate blocks a merge: the `Runtime Happy Path` required
+context reports without running anything. The opt-in `workflow_dispatch`
+platform canary runs separate
 macOS arm64 and Windows x86_64 install/Tauri no-bundle build jobs for evidence
 gathering only; the Windows canary is pinned to `windows-2022` and sets
 `CXXFLAGS=/std:c++17` for the MSVC DuckDB build. Canary failures are logged by
@@ -278,15 +268,17 @@ desktop runtime support.
 Current evidence:
 
 - `e2e/fixtures/seed-smoke.ts`
+- `e2e/support/smoke-data-dir.ts`
+- `wdio.smoke.conf.ts`
 
 Current gap / routing:
 
-The current script gives each wired spec its own app data directory and resets
-the matching fixture before each `run_wdio` invocation by passing the spec key
-into `seed-smoke.ts`. App data directory isolation only separates local app
-state; it does not reset external databases. PostgreSQL, MongoDB, MySQL,
-MariaDB, Redis, and Valkey reset through their existing idempotent fixtures.
-SQLite and DuckDB file-backed smokes keep their local-file behavior and have no
-external DB reset. This does not add Cassandra, DynamoDB, graph, vector, stream,
-or broader MSSQL/Oracle/Search service coverage beyond the already wired bounded
-runtime specs.
+`beforeSession` in `wdio.smoke.conf.ts` empties the app data directory named by
+`TABLE_VIEW_TEST_DATA_DIR`, and `E2E_SPEC_KEY=<spec> tsx e2e/fixtures/seed-smoke.ts`
+reseeds one target before the run. App data directory isolation only separates
+local app state; it does not reset external databases. PostgreSQL, MongoDB,
+MySQL, MariaDB, Redis, and Valkey reset through their existing idempotent
+fixtures. SQLite and DuckDB file-backed smokes keep their local-file behavior
+and have no external DB reset. This does not add Cassandra, DynamoDB, graph,
+vector, stream, or broader MSSQL/Oracle/Search service coverage beyond the
+bounded runtime specs that exist.

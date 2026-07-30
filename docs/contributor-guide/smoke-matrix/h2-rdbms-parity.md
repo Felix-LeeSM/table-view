@@ -145,8 +145,8 @@ Current gap / routing:
 runtime/query/catalog/cancel coverage, source-equivalent edit/DDL coverage,
 parser/safety and unsupported scripting boundary coverage including broad CALL
 expression rejection, autocomplete vocabulary/context coverage, and fixture/live
-smoke routing. Fixture inventory remains contract evidence only unless the
-runtime smoke script wires the matching spec.
+smoke routing. Fixture inventory remains contract evidence only until a spec
+exercises it.
 
 ## MySQL smoke scenario inventory
 
@@ -380,8 +380,7 @@ Current gap / routing:
 parser/Safe Mode unsupported-boundary behavior, autocomplete vocabulary/context
 behavior, the focused MariaDB `RETURNING` server-resolved/no-returned-row
 boundary, and fixture/live smoke routing before parity closure. Fixture
-inventory remains contract evidence only unless the runtime smoke script wires
-the matching spec.
+inventory remains contract evidence only until a spec exercises it.
 
 ## SQLite file DBMS read/write boundary
 

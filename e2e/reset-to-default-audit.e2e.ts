@@ -18,7 +18,7 @@
 //      visible affordance 만 검증 — 강등 경로 불필요.
 //   8. 진단성: 각 step 라벨 + screenshot 가능.
 //
-// 본 spec 은 `pnpm test:e2e:docker` 환경에서 실행. host docker daemon 이
+// 본 spec 은 host docker daemon 이
 // PG 컨테이너를 띄우고 있어야 함 (다른 e2e 와 동일 전제).
 //
 // 9 시나리오 (sprint-377 / 2026-05-17 갱신: settings panel entry 두 개 제거):

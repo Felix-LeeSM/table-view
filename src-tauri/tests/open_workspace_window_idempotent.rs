@@ -12,7 +12,7 @@
 //!     동시 존재.
 //!   - 추가: launcher 윈도우 label `"launcher"` 변경 0 (Invariant).
 //!
-//! Tauri 의 `MockRuntime` 은 OS 윈도우를 띄우지 않으므로 CI / pre-push 에서도
+//! Tauri 의 `MockRuntime` 은 OS 윈도우를 띄우지 않으므로 headless CI 에서도
 //! 안전. `tests/` 경로에 둠으로써 `lib.rs` 의 `invoke_handler` 가 등록한 IPC
 //! 시그니처 (Sprint contract: `open_workspace_window(connection_id: String)`)
 //! 가 모듈 public 으로 노출돼 있는지도 함께 잠금.

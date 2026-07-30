@@ -69,7 +69,7 @@ async fn pg_cancel_query_terminates_pg_sleep_within_budget() {
     };
 
     // Give the spawned task a deterministic virtual start window without
-    // burning wall-clock time under pre-push load.
+    // burning wall-clock time.
     tokio::time::pause();
     tokio::task::yield_now().await;
     tokio::time::advance(Duration::from_millis(100)).await;

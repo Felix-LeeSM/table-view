@@ -7,9 +7,9 @@ generator: none — 손으로 갱신한다
 
 # By-task 인덱스
 
-작업 의도 키워드 → 관련 룰/방. 자동 생성 — 직접 편집 금지. 메모리 frontmatter 의 `task:` 필드를 input 으로 한다.
+작업 의도 키워드 → 관련 룰/방. 손으로 갱신한다. 메모리 frontmatter 의 `task:` 필드를 input 으로 한다.
 
-본 인덱스는 routing-only cross-link 다. 규칙 / 결정 / 문서 SOT 가 아니며 owner 는 링크 대상 memory/docs/skill 이다.
+본 인덱스는 routing-only cross-link 다. 규칙 / 결정 / 문서 SOT 가 아니며 owner 는 링크 대상 memory/docs 다.
 
 자동 등록은 없다. 방을 추가하거나 삭제하면 이 인덱스를 손으로 고쳐야 하고, 안 고치면 조용히 빠진다.
 
@@ -139,13 +139,6 @@ generator: none — 손으로 갱신한다
 
 - [God file 시퀀스](../../memory/engineering/conventions/refactoring/god-file/memory.md)
 
-### hook
-
-- [Git 정책](../../memory/workflow/git-policy/memory.md)
-
-### hook-design
-
-
 ### implementation
 
 - [Engineering](../../memory/engineering/memory.md)
@@ -214,21 +207,11 @@ generator: none — 손으로 갱신한다
 - [PR merge 게이트 진단 / 처리](../../memory/runbook/pr-merge-gates/memory.md)
 - [Delivery — 행동 계약](../../memory/workflow/delivery/memory.md)
 - [Documentation Impact Gate](../../memory/workflow/documentation/memory.md)
+- [PR Review Behavior](../../memory/workflow/review/memory.md)
 
 ### pr-close
 
 - [Git 정책](../../memory/workflow/git-policy/memory.md)
-
-### pr-reviewer
-
-- [PR Review Behavior](../../memory/workflow/review/memory.md)
-
-### pre-commit
-
-
-### pre-push
-
-- [TDD Evidence](../../memory/workflow/tdd/memory.md)
 
 ### push
 
@@ -312,6 +295,10 @@ generator: none — 손으로 갱신한다
 ### scenario
 
 - [E2E 시나리오 설계 원칙](../../memory/engineering/conventions/e2e-scenarios/memory.md)
+
+### signing
+
+- [Git 정책](../../memory/workflow/git-policy/memory.md)
 
 ### spawn
 

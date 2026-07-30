@@ -5,7 +5,7 @@ updated: 2026-07-29
 task: delivery, commit, push, pr, review, merge
 trigger:
   signal: implementation 완료 / 사용자가 "마무리해" / sprint 종료
-  layer: agent-prompt (구현자 node)
+  layer: none — 자동 로드 없음, 직접 열어야 함
 ---
 
 # Delivery — 행동 계약
@@ -25,10 +25,10 @@ SOT 는 없다.
 | node | 이 구간에서 하는 일 | 안 하는 일 |
 |---|---|---|
 | orchestrator | label 을 보고 다음 node spawn, 사용자 창구 | 판단. 코멘트를 읽지 않는다 |
-| 구현자 (`issue-implement`) | 커밋 · 푸시 · PR 생성 · 수정 라운드 반영. **파일을 쓰는 유일한 역할** | 리뷰어 부착, 라운드 판정, 머지 |
-| 리뷰어 (`pr-reviewer`) | 판정 + scorecard + verdict label | commit / push / merge / branch 수정 |
-| 회고자 (`round-reflect`) | 라운드 3부터 개별 지적이 아니라 유형 반복을 본다 | 코드 수정 |
-| 종결자 (`pr-finalize`) | 머지 · 브랜치 삭제 · worktree 회수 · 이슈 종결 | 코드 수정 |
+| 구현자 | 커밋 · 푸시 · PR 생성 · 수정 라운드 반영. **파일을 쓰는 유일한 역할** | 리뷰어 부착, 라운드 판정, 머지 |
+| 리뷰어 | 판정 + scorecard + verdict label | commit / push / merge / branch 수정 |
+| 회고자 | 라운드 3부터 개별 지적이 아니라 유형 반복을 본다 | 코드 수정 |
+| 종결자 | 머지 · 브랜치 삭제 · worktree 회수 · 이슈 종결 | 코드 수정 |
 
 **저자가 자기 판정을 하지 않는다** — 자기 PR 의 리뷰어를 부르는 것, 자기가 고친
 것을 재발로 재단하는 것, 자기 PR 을 머지하는 것 셋 다 다른 node 로 나갔다.
@@ -51,11 +51,10 @@ SOT 는 없다.
 머지 자율 조건(정성 차원에 blocking 없음, CI SUCCESS + `review:approved`,
 mergeable, 사용자 거부 없음)은 종결자가 종합한다.
 
-## Hook 강제 — 절대 회피 금지
+## 검증 — 절대 회피 금지
 
-- `--no-verify` / `LEFTHOOK=0` / `--no-gpg-sign` 금지
-  ([git-policy](../git-policy/memory.md)).
-- hook 실패 시 회피 X, 근본 원인 fix.
+- `--no-verify` / `--no-gpg-sign` 금지 ([git-policy](../git-policy/memory.md)).
+- CI 실패 시 회피 X, 근본 원인 fix.
 - GPG signing pinentry timeout 시 즉시 중단. unsigned commit 으로 진행하지 않음.
 - code-profile sprint 의 RED evidence 요구는 [tdd](../tdd/memory.md) 를 따른다.
 
@@ -67,10 +66,9 @@ mergeable, 사용자 거부 없음)은 종결자가 종합한다.
 
 ## Agent spawn — reviewer 독립
 
-self-review 는 편향. 독립 `pr-reviewer` coordinator 를
-독립 spawn 해 평가한다 — 저자가 부르지 않는다.
-[review](../review/memory.md) 행동 계약 적용.
-외부 시각 필요 시 `codex-reviewer` (사용자 명시 시만). worktree 는 PR 당 하나이고
+self-review 는 편향. 독립 리뷰 coordinator 를 spawn 해 평가한다 — 저자가
+부르지 않는다. [review](../review/memory.md) 행동 계약 적용.
+외부 시각은 사용자가 명시할 때만 추가한다. worktree 는 PR 당 하나이고
 동시에 쓰는 node 는 하나다 — 라운드마다 새로 만들지 않는다
 ([worktree](../../runbook/worktree/memory.md)).
 
@@ -87,7 +85,7 @@ narration 없음.
 
 ## 관련
 
-- [git-policy](../git-policy/memory.md) — `--no-verify` / force-push 금지 (집행 훅 없음)
+- [git-policy](../git-policy/memory.md) — `--no-verify` / force-push 금지 (집행 장치 없음)
 - [review](../review/memory.md) — 리뷰 단계 행동 계약
 - [documentation](../documentation/memory.md) — 문서화 impact + evidence portability
 - [tdd](../tdd/memory.md) — code-profile sprint RED evidence

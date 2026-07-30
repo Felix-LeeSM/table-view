@@ -12,7 +12,7 @@ import { aliasColumnCompletionSource } from "./aliasColumnCompletion";
  * Sprint 294 (2026-05-14) — Slice B — alias-aware mid-typing column source.
  *
  * 작성 이유:
- *   Slice A 의 findings (`docs/sprints/sprint-294/slice-A-findings.md`) 가
+ *   Slice A 의 findings (Sprint 294 slice-A-findings) 가
  *   확정한 진짜 gap — 사용자가 `SELECT u.` 까지만 입력한 시점 (FROM 절 아직
  *   미입력) — 에서는 lang-sql 의 `getAliases` 가 alias 를 바인딩할 source 가
  *   없어 후보 0 개. DataGrip / TablePlus 는 buffer 어딘가의 `FROM <table>

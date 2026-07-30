@@ -1,6 +1,6 @@
 // Sprint 250 (ADR 0022 Phase 5 follow-up) — onBlur commit hook-layer
 // guards. Maps to AC-250-01 / AC-250-04 / AC-250-05 from
-// `docs/sprints/sprint-250/contract.md`. Date 2026-05-09.
+// Sprint 250 contract. Date 2026-05-09.
 //
 // Scope (hook layer only):
 // - AC-250-01: saveCurrentEdit applied via the onBlur entry point persists

@@ -15,10 +15,11 @@ pre-release gate stays in
   those three files are the source of truth, not this page. They must all agree
   on the same `X.Y.Z` (at time of writing, `0.4.2`).
 - The release tag is `vX.Y.Z` for that exact version. It must point at the
-  `main` commit whose `tauri.conf.json` version equals the tag, and `release.yml`
-  enforces this on every tagged build via
-   (no automated check — verify the items below by hand):
-  a tag whose checked-out version disagrees fails before any build work.
+  `main` commit whose `tauri.conf.json` version equals the tag.
+  `auto-tag-release.yml` checks the three files agree before it creates a tag,
+  but `release.yml` does not recheck at build time (#1431): a hand-pushed
+  `git push origin vX.Y.Z` publishes whatever bundle the tag points at, under a
+  mismatched version. Confirm the match yourself before pushing a tag by hand.
 - The tag must also point to a `main` commit SHA that passed the Pre-Release
   Verification Gate. If the SHA changes, rerun the gate before tagging.
 - Parser subcrate versions such as `sql-parser-core` and `mongosh-parser-core`
@@ -28,8 +29,7 @@ pre-release gate stays in
 
 To bump the version, edit `package.json`, `src-tauri/tauri.conf.json`, and
 `src-tauri/Cargo.toml` together in a `chore/release-X.Y.Z` PR (this drives the
-auto-tag flow in Tag And Workflow below), then rerun CI and Runtime Happy Path
-on the merge commit.
+auto-tag flow in Tag And Workflow below), then rerun CI on the merge commit.
 
 ## Tag And Workflow
 

@@ -6,10 +6,7 @@
 `docs/product/README.md` 가 SOT이고, `docs/PLAN.md` 는 이 파일로 들어오는
 호환 인덱스다.
 
-본 문서는 sprint 번호를 배정하지 않는다. Implementation sprint 번호는
-`docs/sprints/sprint-N/` 에서 배정한다. 기본은 실행 직전 배정이지만, 사용자가
-sequencing 을 명시 요청하면 별도 sprint contract queue 에 번호와 의존성을 먼저
-잡을 수 있다.
+본 문서는 sprint 번호를 배정하지 않는다.
 
 ## 북극성
 
@@ -61,7 +58,7 @@ sequencing 을 명시 요청하면 별도 sprint contract queue 에 번호와 �
 | H4 | RDBMS intelligence | ERD, migration preview, and read-only schema diff reuse the shared `SchemaGraph`/catalog input path. Duplicate catalog parsing 은 만들지 않는다. | Production ERD 는 schema/table/column cache 와 cached/fetched explicit index/constraint metadata 를 함께 쓰는 reusable `SchemaGraph` 를 사용한다. Read-only dependency view 는 selected table 의 FK/index/constraint/CHECK diagnostics 를 보여주며, DDL preview/confirm flow 는 table/column/constraint/index removal migration-impact summaries 를 같은 graph 에서 보여준다. Read-only schema diff compares cached RDBMS snapshots through the same graph path. Dense ERD desktop/narrow screenshot smoke is wired; data compare remains a future promotion gate. |
 | H5 | First-class non-RDBMS | Redis/Valkey, Elasticsearch/OpenSearch, MongoDB 가 가장 명확한 non-RDBMS 사용자 workflow 를 덮는다. | MongoDB 는 whitelisted document workflow 로, Redis 는 bounded KV browser/value mutation + command/query/completion + representative smoke 로, Valkey 는 connection/key scan/value preview + selected stream read + bounded command query runtime slice + Redis 와 동일한 string/hash/list/set/zset KvMutationPanel write controls (#1075) + proven-row command completion + Runtime Happy Path smoke 로, Elasticsearch/OpenSearch 는 live connection/catalog/query + backend-bounded Search DSL validator + Runtime Happy Path smoke + fixture/live delete-by-query safety planning + bounded TypeScript editor completion 으로 support claim 이 정렬돼 있다. Live `_delete_by_query` 실행은 #1076 으로 승격돼 Safe Mode confirm gate 뒤에서 지원된다. Search index/settings admin execution, full language-core parser/completion ownership, observability, and broader Search smoke 는 각자의 promotion gate 를 통과할 때까지 deferred 다 (freeze 사유가 아니다 — ADR 0060). |
 | H6 | 더 넓은 paradigm | Cassandra, DynamoDB, graph DB, vector DB, stream source 는 active work 전 명확한 workflow proof 가 필요하다. | MSSQL 은 bounded catalog/query/cancel/tabular/edit-row capability 와 representative smoke 로, Oracle 은 bounded catalog/query/cancel/tabular/edit-row capability, bounded Safe Mode/editor assistance, and representative smoke 로 허용한다. Wider source 는 candidate-only 계약으로 정렬된다. Profile target, connection kind, language, catalog model, result envelope, safety policy, fixture strategy 가 문서화되고 각 source 의 matching evidence 없이 DDL/admin/full parser-completion/future smoke widening claim 은 생기지 않는다. |
-| H7 | 운영, 보안, 신뢰성 | 넓은 source support 는 관찰 가능하고 안전하며 반복 검증 가능해야 한다. | 현재 CI/hook/E2E/security/a11y/perf claim 과 future gate routing 이 실제 설정에 맞게 정렬된다. 새 routine gate 는 owner/runtime cost/actionability 가 잠긴 뒤에만 승격한다. |
+| H7 | 운영, 보안, 신뢰성 | 넓은 source support 는 관찰 가능하고 안전하며 반복 검증 가능해야 한다. | 현재 CI/E2E/security/a11y/perf claim 과 future gate routing 이 실제 설정에 맞게 정렬된다. 새 routine gate 는 owner/runtime cost/actionability 가 잠긴 뒤에만 승격한다. |
 
 ## 지평별 진행 기준
 
@@ -89,7 +86,7 @@ Product support-claim wording stays in #759.
 
 | Bucket | Parent | Live GitHub state | Routing boundary |
 |---|---|---|---|
-| 09.10 Refactor 01 - Directory Topology | #572 | closed; 0 open / 6 closed issues | Repository topology inventory, generated/cache/tmp/worktree fences, source-root migration constraints, hook/path-router alignment, and docs/memory SOT. No frontend/backend domain moves. |
+| 09.10 Refactor 01 - Directory Topology | #572 | closed; 0 open / 6 closed issues | Repository topology inventory, generated/cache/tmp/worktree fences, source-root migration constraints, and docs/memory SOT. No frontend/backend domain moves. |
 | 09.20 Refactor 02 - Frontend Domain Strangler | #573 | closed; 0 open / 17 closed issues | IPC boundary, frontend compatibility inventory, typed wrapper routing, connection/completion/query/catalog/result/workspace splits, import-boundary enforcement, and docs/memory SOT. |
 | 09.30 Refactor 03 - Backend Adapter Contracts | #574 | closed; 0 open / 12 closed issues | TS/Rust profile parity, typed error envelopes, contract-test matrix, query/result/catalog/explain/completion/safety capability contracts, representative adapter topology, and docs/memory SOT. |
 | 09.40 Refactor 04 - Fixtures And Test Topology | #575 | closed; 0 open / 13 closed issues | Fixture/test inventory, representative fixture/test slices, SQL and Document/KV/Search fixture topology, loader shim, SQL-core/UI test splits, smoke routing, unsupported-boundary fixtures, and docs/memory SOT. Fixture existence alone is not support evidence. |

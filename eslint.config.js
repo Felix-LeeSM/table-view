@@ -355,7 +355,6 @@ export default tseslint.config(
       // sub-agent worktree 디렉토리. main repo 의 lint 가 안의 partial
       // 변경을 collect 하지 않도록 차단.
       ".claude/**",
-      ".codex/**",
       "worktrees/**",
       // wasm-pack generated JS glue + d.ts. Nothing asserts that these ignores
       // do not hide source max-lines debt — keep the list narrow.

@@ -62,15 +62,15 @@ updated: 2026-07-26
 ## 팔레스 규칙
 
 - 손작성 active rule 파일은 `memory.md` 만 허용. 각 `memory.md` 는 200줄 이하
-  및 12,000 chars 이하 (둘 다 지켜야 함). 어느 하나라도 초과 시
-  `split-memory` skill 로 하위 주제 분할.
+  및 12,000 chars 이하 (둘 다 지켜야 함). 어느 하나라도 초과 시 하위 주제로
+  방을 쪼갠다.
   - chars 는 **문자 수** (`wc -m`) 다 — byte 수 (`wc -c`) 가 아니다. 재는
     장치가 없으니 `wc -m` 을 직접 돌린다.
     한글 본문은 UTF-8 에서 문자당 3 byte 라 `wc -c` 와 크게 벌어진다. 크기를
     인용할 때는 단위를 함께 적는다.
 - `memory/index/by-task.md`, `memory/index/by-surface.md` 는 cross-link 예외다.
-  rule SOT 가 아니다. 재생성하던 `regenerate-indexes.sh` 가 삭제돼 이제 손으로
-  갱신한다 — 방을 추가/삭제하면 두 인덱스를 같이 고친다.
+  rule SOT 가 아니다. 손으로 갱신한다 — 방을 추가/삭제하면 두 인덱스를 같이
+  고친다.
 - 새 non-`memory.md` 파일 추가 금지. index 예외 변경은 별도 memory/tooling 결정으로
   다룬다.
 - `docs/` 파일과 내용 중복 금지. 링크로 포인터만.

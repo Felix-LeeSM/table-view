@@ -5,7 +5,7 @@ updated: 2026-05-19
 task: documentation, docs, pr, review, delivery
 trigger:
   signal: PR 작성 / 문서 추가 / workflow·contract·user-facing 변경
-  layer: agent-prompt (issue-implement + pr-reviewer)
+  layer: none — 자동 로드 없음, 직접 열어야 함
 ---
 
 # Documentation Impact Gate
@@ -27,9 +27,9 @@ PR body / 커밋 메시지 / 리뷰 코멘트 중 아무 곳이나 고른다.
 
 - 사용자 가시 동작 변경: UI flow, shortcut, warning/confirm, default 값.
 - contract 변경: IPC payload, store/hook API, enum, SQL kind/severity.
-- workflow/rule 변경: agent, review, delivery, git, hook 정책.
+- workflow/rule 변경: agent, review, delivery, git 정책.
 - safety/security 변경: password, signing, destructive command, safe mode.
-- 운영/검증 변경: CI, pre-push, test strategy, coverage threshold.
+- 운영/검증 변경: CI, test strategy, coverage threshold.
 - architecture/invariant 변경: 앞으로 지켜야 할 설계 제약.
 - deferred risk/follow-up 발생: 지금 안 고치는 이유와 추적 위치 필요.
 
@@ -38,7 +38,6 @@ PR body / 커밋 메시지 / 리뷰 코멘트 중 아무 곳이나 고른다.
 | 내용 | SOT |
 |---|---|
 | sequencing / 다음 sprint 후보 | `docs/ROADMAP.md` |
-| 실제 sprint 범위 / AC / handoff | `docs/sprints/sprint-N/` |
 | 반복 적용 규칙 / workflow / product / engineering | `memory/**/memory.md` |
 | 현재 사용자-visible 제한 | `docs/product/**` — per-source 행은 `known-limitations-{rdbms,non-rdbms,cross-cutting}.md` |
 | 미래 follow-up | `docs/roadmap/follow-up-queue.md` |
@@ -61,8 +60,8 @@ PR body / review comment / handoff 는 GitHub 에서 확인 가능한 증거만 
 
 ## Reviewer 판정
 
-pr-reviewer 는 다음을 blocking finding 으로 본다. 셋 다 **내용**에 관한 것이고,
-body 에 어떤 섹션이 있는지는 더 이상 판정 대상이 아니다:
+리뷰어는 다음을 blocking finding 으로 본다. 셋 다 **내용**에 관한 것이고,
+body 에 어떤 섹션이 있는지는 판정 대상이 아니다:
 
 - 문서화 트리거가 있는데 어떤 SOT 도 갱신되지 않음.
 - 기존 SOT 대신 새 backlog/plan 디렉토리를 만들고 retire 조건 없음.
@@ -73,4 +72,4 @@ body 에 어떤 섹션이 있는지는 더 이상 판정 대상이 아니다:
 
 - [delivery](../delivery/memory.md) — commit → push → PR 행동 계약
 - [review](../review/memory.md) — documentation topology 평가
-- [git-policy](../git-policy/memory.md) — hook / signing safety
+- [git-policy](../git-policy/memory.md) — 검증 우회 / signing safety

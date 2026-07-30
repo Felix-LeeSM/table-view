@@ -1,7 +1,6 @@
 # sprint-169 / Sprint 1 — minimise build context while preserving every input
 # the Rust crate, the Vite/Tauri build, and the E2E specs read.
 #
-# Exclusions are audited row-by-row in docs/sprints/sprint-169/handoff.md.
 # Anything added here MUST be re-audited there. In particular:
 #   - tests/fixtures/** is REQUIRED at compile time
 #     (src-tauri/src/db/postgres.rs:include_str!("../../../tests/fixtures/...")).

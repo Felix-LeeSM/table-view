@@ -1,15 +1,15 @@
 # PR Review
 
-PR review separates automatic gates from qualitative judgement. Hook, lint,
-typecheck, test, CI, and Required Checks are automatic gates. The reviewer does
+PR review separates automatic gates from qualitative judgement. Lint, typecheck,
+test, CI, and Required Checks are automatic gates. The reviewer does
 not rerun those checks; it reads their results and evaluates the PR diff, body,
 and relevant source of truth.
 
 ## Reviewer Output
 
-The `pr-reviewer` coordinator must leave one integrated scorecard comment on
-the PR for each review round. Perspective-specific `pr-subreviewer` outputs are
-internal inputs and should not create separate PR comments.
+The reviewer must leave one integrated scorecard comment on the PR for each
+review round. Per-perspective notes are internal inputs and should not create
+separate PR comments.
 
 The comment must use GitHub-visible evidence only: repo-relative paths, PR URLs,
 commit URLs, or check URLs. Local absolute paths, temporary files, and worktree
@@ -33,8 +33,8 @@ not blocking. Rounds after the first judge only whether the previous round's
 blocking findings were resolved; anything newly discovered becomes an issue,
 except case 1 which blocks regardless of round.
 
-Scores are not used. Blocking is decided once, by the coordinator — perspective
-subreviewers report findings and evidence, not severity.
+Scores are not used. Blocking is decided once, in the integrated scorecard
+comment; per-perspective notes report findings and evidence, not severity.
 
 ## Source Of Truth
 
