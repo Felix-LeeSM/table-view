@@ -15,9 +15,9 @@
  *
  * This lives in `pnpm lint` rather than a bespoke gate because `pnpm lint` is
  * already the repo's static-policy home and already reads docs/, and because a
- * job gated on `docs_changed` always runs it — `doc-contracts` since #1991, the
- * `frontend` job before that. Either way this runs on exactly the docs-only PRs
- * where a prose enumeration goes stale.
+ * job gated on `docs_changed` always runs it — `doc-contracts` on a docs-only
+ * set since #1991, the `frontend` job on every other set. Either way this runs
+ * on exactly the docs-only PRs where a prose enumeration goes stale.
  *
  * Ceiling: it reads Markdown paragraphs and YAML comment blocks. Prose that
  * asserts gate membership without naming any job is out of reach.

@@ -32,7 +32,9 @@ the repo had gone stale by #1845.
 What the individual jobs own:
 
 - Frontend Checks aggregates the shard matrix, then applies the coverage ratchet
-  and the Vitest coverage thresholds.
+  and the Vitest coverage thresholds. On a docs-only change set every one of
+  those steps is gated off and the job does one thing instead: it grades the
+  `doc-contracts` result, which has no required context of its own.
 
 - Dependency Security runs `cargo deny check bans licenses sources` in
   `src-tauri`; RUSTSEC advisories are decoupled into the advisory Dependency
@@ -53,7 +55,9 @@ a11y, perf, and macOS/Windows runtime smoke are not routine blocking checks.
 The doc contracts are ordinary members of the vitest suite and of `pnpm lint`.
 On a code change they run there. On a docs-only change set they run in the
 `doc-contracts` job instead, which exists so a markdown edit no longer drags the
-three-shard matrix along — see the next section.
+three-shard matrix along. That job is not itself a required context, so the
+required aggregation runs alongside it and grades its result — see the next
+section.
 
 ## Change-scope classification and the docs-only skip
 
@@ -78,22 +82,35 @@ single `code_changed` flag described those as unaffected, so docs-only PRs
 skipped exactly the checks guarding the documents they edited — #1841 merged
 with its doc contracts unevaluated, and #1844/#1847 merged reading
 `Frontend Checks: skipping`, which GitHub counts as a satisfied required check.
-The job that reads docs (`doc-contracts`) therefore gates on `docs_changed`; the
-`DOCS-READING JOBS` note at the end of `.github/workflows/ci.yml` is the list,
-and `scripts/hooks/policy/test-ci-workflow-cache.sh` asserts that exactly those jobs
+The job that reads docs (`doc-contracts`) therefore gates on `docs_changed`, and
+so does `frontend`, which reads nothing there but is the required context that
+reports the reader's result. The `DOCS-READING JOBS` note at the end of
+`.github/workflows/ci.yml` is the list, and
+`scripts/hooks/policy/test-ci-workflow-cache.sh` asserts that exactly those two jobs
 carry the clause.
 
 Until #1991 the two readers were `frontend-shard` and `frontend`, so a docs edit
-ran the whole 634-file suite across three shards to reach five doc contract
-files. Those five were identified by mutation — overwrite every `docs/`,
-`memory/`, `*.md` file and diff the failing set against a clean run, then repeat
-with the files deleted, because two of them assert a path EXISTS and survive an
+ran the whole 638-file vitest suite across three shards to reach five doc
+contract files. Count:
+
+```bash
+git ls-files | grep -E '\.(test|spec)\.(ts|tsx)$' | grep -vE '^e2e/' | wc -l
+```
+
+Those five were identified by mutation — overwrite every `docs/`, `memory/`,
+`*.md` file and diff the failing set against a clean run, then repeat with the
+files deleted, because two of them assert a path EXISTS and survive an
 overwrite.
 
-Every change-gated job carries `needs: changes` + a fail-closed `if:`: it skips
-only when detection SUCCEEDED and said the change was out of its scope; if the
-`changes` job itself fails/cancels (infra), its outputs are empty and the job
-runs full, so a broken detector never lets a skip satisfy a required check.
+Every change-gated job carries `needs: changes`, and the heavy ones add a
+fail-closed `if:`: such a job skips only when detection SUCCEEDED and said the
+change was out of its scope; if the `changes` job itself fails/cancels (infra),
+its outputs are empty and the job runs full, so a broken detector never lets a
+skip satisfy a required check. `doc-contracts` is the single exception and
+inverts that clause — it requires `needs.changes.result == 'success'`, so a
+broken detector skips it. That is safe because its gate is the complement of the
+heavy one: whenever it skips on a non-empty change set, the heavy jobs are
+running, and they contain the same two doc readers.
 `paths-ignore` is deliberately NOT used: it would leave the required contexts
 expected/missing forever, whereas an `if:`-skipped job's check run satisfies the
 required status check (GitHub treats skipped checks as successful). In
@@ -134,12 +151,34 @@ does. Job ids, not check-context names:
 PRs.
 
 `doc-contracts` is the docs-only lane (#1991). Its `if:` is the complement of
-the shared code gate, so on a docs-only change set it runs while
-`frontend-shard` and `frontend` skip, and on every other change set the reverse
-holds. The doc-reading checks therefore run exactly once, never zero times: a
-failed detector leaves the heavy pair fail-closed and running, and the only set
-where both lanes skip is an empty diff. `scripts/hooks/policy/test-ci-workflow-cache.sh`
-pins both `if:` literals and walks that truth table.
+the shared code gate, so on a docs-only change set it runs while `frontend-shard`
+skips, and on every other change set the reverse holds. The doc-reading checks
+therefore run exactly once, never zero times: a failed detector leaves the shard
+matrix fail-closed and running, and the only set where both lanes skip is an
+empty diff.
+
+The lane needs a required context to be worth anything — GitHub counts a skipped
+required check as satisfied, and `doc-contracts` is not in the `pr_to_main`
+ruleset. Registering it there cannot ship with this change: a required context
+is matched by name, and every open PR whose head predates the job produces no
+such check run, so the context would sit at "expected" and block them all until
+each rebased. So the result is projected instead. `frontend` keeps the
+`docs_changed` clause and runs on both lanes, every one of its heavy steps
+carries the code lane's gate, and its first step grades whichever lane ran —
+`needs.frontend-shard.result` on a code set, `needs.doc-contracts.result` on a
+docs-only one. That is the same mechanism the job already used for the shard
+matrix, it lands in the same commit as the gate change, and it leaves the
+ruleset untouched. `scripts/hooks/policy/test-ci-workflow-cache.sh` pins every
+`if:` literal as a whole line, pins all three lines of the grading step, walks
+the truth table over the pinned literals, and walks the job to assert that every
+step except the grading step and the checkout carries the code gate.
+
+CEILING: the docs-only lane runs the doc contracts that live under `scripts/`,
+`tests/`, and `src/types/`. A doc contract added outside those three roots is
+not picked up automatically — a grep-based completeness guard was measured and
+rejected, because the tightest pattern still matched 14 unrelated test files
+while missing `tests/fixtures/unsupported_boundary_contracts.test.ts` entirely.
+On a code change set nothing is missed: the whole suite runs.
 
 ## Local pre-push routing
 

@@ -14,9 +14,14 @@
 # single `code_changed` flag forced those to be described as "no change", and
 # three separate holes were then patched on top of that one false statement
 # (#1841 merged with its doc contracts unevaluated, and #1844/#1847 merged
-# reading `Frontend Checks: skipping`). Jobs that read docs now gate on
-# `code_changed || docs_changed` instead, so the classification is true and the
-# gate follows from it.
+# reading `Frontend Checks: skipping`). Since #1991 the doc readers sit in their
+# own `doc-contracts` job gated on `docs_changed`, while the shard matrix gates
+# on `code_changed`; the two `if:` conditions are complementary, so every
+# non-empty change set runs the doc readers exactly once. `doc-contracts` is not
+# a required context, so the `Frontend Checks` aggregation carries the
+# `docs_changed` clause too and grades that job's result — its own heavy steps
+# are gated off on that lane. The classification is true and the gates follow
+# from it.
 #
 # Fail-safe: any ambiguity — missing base ref, git error, unhandled event
 # (e.g. workflow_dispatch) — sets BOTH to true so the full pipeline runs. Never
