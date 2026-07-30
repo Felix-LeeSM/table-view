@@ -53,6 +53,9 @@
 # 지시는 도달을 보장하지 않고, 주입은 보장한다. 반대 방향(`skills:` 에만 있고
 # 산문에 없음)은 위반이 아니다 — 그게 정상 상태다.
 #
+# 그리고 선언한 이름은 실재해야 한다. 스킬을 지우거나 이름을 바꾸면 `skills:`
+# 줄은 남고 주입만 0 이 된다 — 배선 총계도 안 변하므로 바닥값이 못 잡는다.
+#
 # ## 검사 3 — codex 포인터가 실재하는 source 를 가리켜야 한다
 #
 # `.codex/agents/*.md` 의 본문은 `source:` 한 줄이 사실상 전부다. 그 한 줄이
@@ -262,6 +265,14 @@ for agent in "$AGENT_DIR"/*.md; do
 	declared="$(sed -n 's/^skills:[[:space:]]*\[\(.*\)\].*/\1/p' "$agent" | head -1 |
 		tr ',' '\n' | tr -d ' ' | grep -v '^$' | sort -u || true)"
 	[ -n "$declared" ] && wired_agents=$((wired_agents + 1))
+
+	# 선언한 스킬이 실재해야 주입할 본문이 있다. 이름을 바꾸거나 스킬을 지우면
+	# 이 줄은 남고 주입만 0 이 된다 — 조용한 실패라 여기서 잡는다.
+	while IFS= read -r want; do
+		[ -n "$want" ] || continue
+		[ -f "$SKILL_DIR/$want/SKILL.md" ] ||
+			report "$(basename "$agent") 의 skills: 가 '$want' 를 선언하는데 $SKILL_DIR/$want/SKILL.md 가 없다 — 주입할 본문이 없다"
+	done <<<"$declared"
 
 	# frontmatter 를 뺀 본문에서만 찾는다. `skills:` 줄 자신이 히트하면 안 된다.
 	# 공백은 한 칸으로 접는다 — 산문은 줄바꿈에서 접히므로 `security-handoff.md`

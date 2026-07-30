@@ -127,6 +127,14 @@ fix="$(new_fixture skills-dropped-no-prose)"
 drop_skills "$fix/.claude/agents/issue-implement.md"
 expect_rc "산문이 안 부르는 skill 의 배선 삭제 (바닥이 잡는다)" 1 "$fix"
 
+# 선언은 남고 본문만 사라지는 경우. `skills:` 줄은 그대로라 배선 총계도 그대로다.
+fix="$(new_fixture skill-sot-gone)"
+rm -f "$fix/.agents/skills"
+mkdir -p "$fix/.agents/skills"
+cp -R "$ROOT"/.agents/skills/* "$fix/.agents/skills/"
+rm -rf "$fix/.agents/skills/tdd"
+expect_rc "선언한 skill 의 SOT 가 사라짐" 1 "$fix"
+
 # --- 검사 3: codex 포인터 ----------------------------------------------------
 # `.claude` 쪽 정의 이름을 바꾸면 codex wrapper 는 그대로 남아 없는 파일을 가리킨다.
 # 그 wrapper 의 정책 본문은 그 한 줄이 전부라 도달이 0 이 된다.

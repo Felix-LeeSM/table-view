@@ -297,7 +297,7 @@ EOF
 	run_step "dangerous-bash-tests" bash scripts/hooks/policy/test-check-dangerous-bash.sh
 	# Same subject as the line above, one layer out: it proves the block list
 	# blocks, this proves the block list still reaches a spawned subagent.
-	# Measured 11.46s (`/usr/bin/time -p`), ten fixture repositories.
+	# Measured 10.72s (`/usr/bin/time -p`), eleven fixture trees.
 	run_step "agent-reach-tests" bash scripts/hooks/policy/test-check-agent-reach.sh
 	run_step "pre-tool-use-wrapper-tests" bash scripts/hooks/apply/test-pre-tool-use-wrapper.sh
 	run_step "post-tool-use-dispatcher-tests" bash scripts/hooks/apply/test-post-tool-use.sh
