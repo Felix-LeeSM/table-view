@@ -37,7 +37,7 @@ node scripts/handoff.mjs state --issue N
 | code | 뜻 | 어떻게 |
 |---|---|---|
 | 0 | 통과 | 일을 시작/종료한다 |
-| 1 | 거부 (스키마·사용법) | 메시지가 무엇이 없는지 말한다. 고쳐서 다시 쓴다 |
+| 1 | 거부 (스키마·사용법·키 충돌) | 메시지가 무엇이 없는지/무엇이 겹치는지 말한다. 고쳐서 다시 쓴다. **아무것도 안 올라갔고 `wip:` 도 그대로다** |
 | 2 | 외부 명령 실패 | `gh`/`git` 출력 그대로. 재시도 전에 원인을 본다 |
 | 3 | `RETRY` | 판정이 낡았다 (`at` 이 PR head 의 조상). 리뷰를 다시 돈다 |
 | 4 | `USER` | 사용자에게 올린다. **재시도로 안 고쳐진다** |
@@ -55,7 +55,7 @@ handoff:
   subject: pr/1905             # pr/<번호> 또는 issue/<번호>
   at: 2420164486b0ccedd2fae3fe41c4e35eed897e6c        # 판정 대상. full OID 40자
   base_oid: 2826a660962382306f3578f9d6268162e8968b65  # 기록만. 무효화 트리거 아님
-  run_id: pr1905-r2-review     # 외부 쓰기 멱등 키
+  run_id: pr1905-review-2420164 # 외부 쓰기 멱등 키. 라운드가 아니라 **시도** 단위
   verdict: red                 # findings 가 있으면 필수. green|red
   findings:
     - id: B1
@@ -81,6 +81,12 @@ handoff:
 무엇이 필수인지는 **`write` 의 거부 메시지가 판정한다.** 여기 골격은 요약이 아니라
 출발점이다 — 검증기가 `누락: handoff.findings[0].evidence.want` 처럼 자리를 찍어준다.
 
+**`run_id` 는 시도 단위다.** 멱등 키는 `(from, to, subject, run_id)` 이고, 같은 키로
+**다른 내용**을 쓰면 거부한다(exit 1) — 조용히 스킵하면 새 판정이 버려진 채 `wip:`
+만 풀려서 다음 node 가 낡은 인계를 다시 읽는다. 라운드 이름(`pr1905-r2-review`)을
+키로 쓰면 `RETRY` 로 다시 돈 재리뷰가 정확히 그 상태가 되므로, PR 단계에선 `at` 앞
+7자를 붙여라(`pr1905-review-2420164`). head 가 움직이면 키가 저절로 바뀐다.
+
 `at` 은 **full OID** 다. short OID 는 저장소가 커지면 접두사가 충돌하고 8자는 이미
 다른 개체와 겹칠 수 있다. `at` 은 **PR head** 와 대조된다(로컬 HEAD 가 아니다) —
 구현자의 미푸시 커밋은 그 판정에 대한 응답이지 판정을 낡게 만들지 않는다.
@@ -104,6 +110,10 @@ PR 이 없는 티켓 단계엔 `at` 이 필요 없다.
 
 ## Boundaries
 
+- **저장소가 PUBLIC 이라 신뢰 경계가 있다.** `read` 는 `authorAssociation` 이
+  `OWNER`/`MEMBER`/`COLLABORATOR` 인 코멘트의 인계만 받는다. 그 밖의 인계 블록은
+  거부하고 stderr 로 누구 것을 왜 버렸는지 낸다 — 인계는 받는 node 가 돌릴
+  `action.cmd` 를 실어 나르므로 아무나 쓴 것을 권위 있는 입력으로 볼 수 없다.
 - **label 은 상태, 코멘트는 내용.** orchestrator 는 앞의 것만 본다. 코멘트를 읽기
   시작하면 판단을 하게 되고, 판단하면 다시 상태를 쌓는 존재가 된다.
 - `run_id` 는 외부 쓰기 3곳(`gh issue comment` / `gh pr comment` /

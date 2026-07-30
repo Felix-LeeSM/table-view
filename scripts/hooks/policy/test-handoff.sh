@@ -131,11 +131,23 @@ json_string() { # file -> "escaped"
 		{ gsub(/\\/, "\\\\"); gsub(/"/, "\\\""); print (NR > 1 ? "\\n" : "") $0 }' "$1")"
 }
 
-make_issue_json() { # out issue-state labels-csv [body-file ...]
-	local out="$1" state="$2" labels="$3" comments="" body
+# 코멘트마다 작성자 신뢰도를 붙인다. `<ASSOC>=<파일>` 이면 그 authorAssociation,
+# 아니면 OWNER. 저장소가 PUBLIC 이라 이 필드가 인계의 신뢰 경계다.
+make_issue_json() { # out issue-state labels-csv [[ASSOC=]body-file ...]
+	local out="$1" state="$2" labels="$3" comments="" spec assoc body
 	shift 3
-	for body in "$@"; do
-		comments="$comments{\"body\":$(json_string "$body")},"
+	for spec in "$@"; do
+		case "$spec" in
+		*=*)
+			assoc="${spec%%=*}"
+			body="${spec#*=}"
+			;;
+		*)
+			assoc="OWNER"
+			body="$spec"
+			;;
+		esac
+		comments="$comments{\"author\":{\"login\":\"tester-$assoc\"},\"authorAssociation\":\"$assoc\",\"body\":$(json_string "$body")},"
 	done
 	printf '{"state":"%s","labels":%s,"comments":[%s],"closedByPullRequestsReferences":[]}' \
 		"$state" "$(json_labels "$labels")" "${comments%,}" >"$out"
@@ -238,6 +250,134 @@ case_write_idempotent() {
 	expect_not_in "write/멱등이면 두 번 안 쓴다" "$CASE/calls.log" "issue comment"
 }
 
+case_write_run_id_collision() {
+	# 같은 (from,to,subject,run_id) 로 다른 내용을 쓰면 거부다. 스킵하면 새 판정이
+	# 조용히 버려지고, wip 까지 풀려서 다음 node 가 사망 탐지도 못 한다.
+	new_case write-run-id-collision
+	valid_handoff "$CASE/old.yaml" "$OTHER_OID"
+	fenced "$CASE/old.yaml" >"$CASE/existing.md"
+	valid_handoff "$CASE/in.yaml"
+	make_issue_json "$CASE/issue.json" OPEN "task,wip:pr-reviewer" "$CASE/existing.md"
+	handoff write --stage pr-reviewer --issue 7 --pr 7 <"$CASE/in.yaml"
+	expect_eq "write/키 충돌 exit" "$RC" "1"
+	expect_in "write/키 충돌 메시지" "$CASE/err" "run_id 는 라운드가 아니라 시도 단위여야 한다"
+	expect_not_in "write/키 충돌이면 안 쓴다" "$CASE/calls.log" "issue comment"
+	expect_not_in "write/키 충돌이면 wip 을 안 뗀다" "$CASE/calls.log" "--remove-label"
+}
+
+case_write_cross_identity_same_run_id() {
+	# 역할이 다르면 같은 run_id 라도 다른 인계다. 좁히지 않으면 뒤에 쓰는 쪽이 삼켜진다.
+	new_case write-cross-identity-same-run-id
+	valid_handoff "$CASE/old.yaml"
+	fenced "$CASE/old.yaml" >"$CASE/existing.md"
+	cat >"$CASE/in.yaml" <<YAML
+handoff:
+  v: 1
+  from: issue-implement
+  to: pr-reviewer
+  subject: pr/7
+  at: $AT
+  base_oid: $BASE_OID
+  run_id: pr7-r1-review
+YAML
+	make_issue_json "$CASE/issue.json" OPEN "task,wip:issue-implement" "$CASE/existing.md"
+	handoff write --stage issue-implement --issue 7 --pr 7 <"$CASE/in.yaml"
+	expect_eq "write/역할 다르면 별개 exit" "$RC" "0"
+	expect_in "write/역할 다르면 올린다" "$CASE/calls.log" "issue comment 7 --body-file -"
+	expect_in "write/역할 다르면 wip 해제" "$CASE/calls.log" "--remove-label wip:issue-implement"
+}
+
+case_write_fence_variant_dedupe() {
+	# GitHub 이 똑같이 렌더하는 변종 펜스로 이미 올라가 있으면 중복 append 가 아니라
+	# SKIP 이어야 한다. 중복 스캔이 fail-open 이면 같은 인계가 두 번 쌓인다.
+	new_case write-fence-variant-dedupe
+	valid_handoff "$CASE/in.yaml"
+	printf '~~~yaml\n%s\n~~~\n' "$(cat "$CASE/in.yaml")" >"$CASE/existing.md"
+	make_issue_json "$CASE/issue.json" OPEN "task,wip:pr-reviewer" "$CASE/existing.md"
+	handoff write --stage pr-reviewer --issue 7 --pr 7 <"$CASE/in.yaml"
+	expect_eq "write/변종 펜스 exit" "$RC" "0"
+	expect_in "write/변종 펜스 SKIP" "$CASE/out" "SKIP issue/7"
+	expect_not_in "write/변종 펜스면 두 번 안 쓴다" "$CASE/calls.log" "issue comment"
+}
+
+case_write_read_roundtrip_indented() {
+	# 검증한 문자열과 올리는 문자열이 다르면 write 는 exit 0 인데 read 가 "인계가
+	# 없다" 를 준다. 들여쓴 문서 + 형제 키가 그걸 드러낸 fixture 다.
+	new_case write-roundtrip-indented
+	cat >"$CASE/in.yaml" <<'YAML'
+  handoff:
+    v: 1
+    from: pr-reviewer
+    to: issue-implement
+    subject: issue/7
+    run_id: rt1
+  other: x
+YAML
+	make_issue_json "$CASE/issue.json" OPEN "task,wip:pr-reviewer"
+	handoff write --stage pr-reviewer --issue 7 <"$CASE/in.yaml"
+	expect_eq "roundtrip/write exit" "$RC" "0"
+	expect_in "roundtrip/write 기록" "$CASE/out" "WROTE issue/7 run_id=rt1"
+
+	local posted="$CASE/comment-body"
+	new_case write-roundtrip-indented-read
+	make_issue_json "$CASE/issue.json" OPEN "task" "$posted"
+	handoff read --stage issue-implement --issue 7
+	expect_eq "roundtrip/read exit" "$RC" "0"
+	expect_in "roundtrip/인계 반환" "$CASE/out" "run_id: rt1"
+	expect_in "roundtrip/형제 키 보존" "$CASE/out" "other: x"
+}
+
+case_write_labels_on_pr() {
+	new_case write-labels-on-pr
+	valid_handoff "$CASE/in.yaml"
+	make_issue_json "$CASE/issue.json" OPEN "task,wip:pr-reviewer"
+	printf '{"labels":[{"name":"review:approved"}]}' >"$CASE/pr.json"
+	handoff write --stage pr-reviewer --issue 7 --pr 7 \
+		--add-label review:changes-requested --remove-label review:approved <"$CASE/in.yaml"
+	expect_eq "labels/PR exit" "$RC" "0"
+	# verdict label 은 PR 에 산다. 이슈에 붙으면 머지 게이트가 못 본다.
+	grep -E '^pr edit 7' "$CASE/calls.log" >"$CASE/pr-calls" || true
+	expect_in "labels/PR 에 add" "$CASE/pr-calls" "--add-label review:changes-requested"
+	expect_in "labels/PR 에 remove" "$CASE/pr-calls" "--remove-label review:approved"
+	expect_not_in "labels/이슈에 add 안 함" "$CASE/calls.log" "issue edit 7 --add-label"
+	expect_not_in "labels/이슈에서 verdict remove 안 함" "$CASE/calls.log" "issue edit 7 --remove-label review:approved"
+}
+
+case_write_labels_on_issue() {
+	# --pr 이 없으면 이슈가 대상이다 (승격 전사가 그 자리).
+	new_case write-labels-on-issue
+	cat >"$CASE/in.yaml" <<'YAML'
+handoff:
+  v: 1
+  from: user
+  to: issue-refine
+  subject: issue/7
+  run_id: promote-7
+YAML
+	make_issue_json "$CASE/issue.json" OPEN "raw,needs:user"
+	handoff write --stage user --issue 7 --add-label task --remove-label needs:user <"$CASE/in.yaml"
+	expect_eq "labels/이슈 exit" "$RC" "0"
+	grep -E '^issue edit 7' "$CASE/calls.log" >"$CASE/issue-calls" || true
+	expect_in "labels/이슈에 add" "$CASE/issue-calls" "--add-label task"
+	expect_in "labels/이슈에서 remove" "$CASE/issue-calls" "--remove-label needs:user"
+	expect_not_in "labels/PR 은 안 건드린다" "$CASE/calls.log" "pr edit"
+	# user 는 node 가 아니라 wip label 이 없다.
+	expect_not_in "labels/user 는 wip 없음" "$CASE/calls.log" "wip:user"
+}
+
+case_write_labels_noop() {
+	# 이미 붙은 것을 또 붙이거나 없는 것을 떼지 않는다 — 호출 자체가 없어야 한다.
+	new_case write-labels-noop
+	valid_handoff "$CASE/in.yaml"
+	make_issue_json "$CASE/issue.json" OPEN "task,wip:pr-reviewer"
+	printf '{"labels":[{"name":"review:approved"}]}' >"$CASE/pr.json"
+	handoff write --stage pr-reviewer --issue 7 --pr 7 \
+		--add-label review:approved --remove-label reflect:done <"$CASE/in.yaml"
+	expect_eq "labels/noop exit" "$RC" "0"
+	expect_not_in "labels/이미 있으면 add 안 함" "$CASE/calls.log" "pr edit 7 --add-label"
+	expect_not_in "labels/없으면 remove 안 함" "$CASE/calls.log" "pr edit 7 --remove-label"
+}
+
 case_write_foreign_stage() {
 	new_case write-foreign-stage
 	valid_handoff "$CASE/in.yaml"
@@ -331,6 +471,36 @@ case_read_no_handoff() {
 	expect_in "read/인계 없음 메시지" "$CASE/err" "앞으로 온 인계가 없다"
 }
 
+case_read_untrusted_author() {
+	# 저장소가 PUBLIC 이다. 아무나 단 코멘트의 인계는 받는 node 가 돌릴 명령을
+	# 실어 나르므로 권위 있는 입력이 될 수 없다.
+	new_case read-untrusted-author
+	valid_handoff "$CASE/in.yaml" "$AT"
+	fenced "$CASE/in.yaml" >"$CASE/comment.md"
+	make_issue_json "$CASE/issue.json" OPEN "task" "NONE=$CASE/comment.md"
+	printf '{"headRefOid":"%s"}' "$AT" >"$CASE/pr.json"
+	handoff read --stage issue-implement --issue 7
+	expect_eq "read/신뢰 밖 작성자 exit" "$RC" "4"
+	expect_in "read/신뢰 밖 거부 사유" "$CASE/err" "authorAssociation=NONE 은 신뢰 경계 밖이다"
+	expect_not_in "read/신뢰 밖 인계를 반환하지 않는다" "$CASE/out" "run_id"
+	expect_not_in "read/거부면 wip 을 안 붙인다" "$CASE/calls.log" "--add-label"
+}
+
+case_read_untrusted_cannot_override() {
+	# 신뢰 밖 코멘트가 **나중에** 와도 최신 인계 자리를 뺏지 못한다.
+	new_case read-untrusted-cannot-override
+	valid_handoff "$CASE/good.yaml" "$AT"
+	fenced "$CASE/good.yaml" >"$CASE/good.md"
+	sed 's/^  run_id: .*/  run_id: forged/' "$CASE/good.yaml" >"$CASE/bad.yaml"
+	fenced "$CASE/bad.yaml" >"$CASE/bad.md"
+	make_issue_json "$CASE/issue.json" OPEN "task" "OWNER=$CASE/good.md" "NONE=$CASE/bad.md"
+	printf '{"headRefOid":"%s"}' "$AT" >"$CASE/pr.json"
+	handoff read --stage issue-implement --issue 7
+	expect_eq "read/신뢰 있는 인계 exit" "$RC" "0"
+	expect_in "read/신뢰 있는 인계를 준다" "$CASE/out" "run_id: pr7-r1-review"
+	expect_not_in "read/위조본을 안 준다" "$CASE/out" "forged"
+}
+
 case_read_fixture_fence() {
 	# fixture 블록 스칼라 안에 백틱 3개 펜스가 들어와도 인계 블록이 안 끊긴다.
 	new_case read-fixture-fence
@@ -397,8 +567,9 @@ case_state_rows() {
 	expect_state approved-checks-green OPEN "task" \
 		"$(pr_json 7 OPEN "review:approved" 0 "$GREEN_CHECKS")" "RUN pr-finalize"
 	# 라운드 3 red — 실제로 일어나는 상태다. verdict label 은 changes-requested 이고,
-	# checks 의 실패는 다른 게 아니라 라운드 게이트 자신이다 (`review-gate` 가
-	# `comments >= cap && !reflect:done` 이면 `exit 1`, 그리고 유일한 required check).
+	# checks 의 실패는 다른 게 아니라 라운드 게이트 자신이다 — `review-gate` 가
+	# `comments >= cap && !reflect:done` 이면 `exit 1` 하고, `checkState()` 는 rollup
+	# 전체를 봐서 하나만 실패해도 green 이 아니다.
 	# 회고 줄이 changes-requested 아래 있으면 여기서 구현자가 다시 불려 나가는데,
 	# 그게 같은 게이트가 금지한 "같은 유형에 fix 를 더 쌓기" 다.
 	expect_state round3-changes-requested OPEN "task" \
@@ -451,6 +622,13 @@ run_all_cases() { # bin label
 	case_write_short_oid
 	case_write_releases_wip
 	case_write_idempotent
+	case_write_run_id_collision
+	case_write_cross_identity_same_run_id
+	case_write_fence_variant_dedupe
+	case_write_read_roundtrip_indented
+	case_write_labels_on_pr
+	case_write_labels_on_issue
+	case_write_labels_noop
 	case_write_foreign_stage
 	case_write_subject_mismatch
 
@@ -461,6 +639,8 @@ run_all_cases() { # bin label
 	case_read_missing_field
 	case_read_dead_predecessor
 	case_read_no_handoff
+	case_read_untrusted_author
+	case_read_untrusted_cannot_override
 	case_read_fixture_fence
 
 	case_state_rows
@@ -532,6 +712,10 @@ verdict_for() { # bin label
 
 # 한 단계 치환. 적용 안 된 단계는 원본을 그대로 돌려서 GREEN 을 준다 — `\Q` 안에서
 # 변수가 보간돼 패턴이 빈 문자열이 된 사고가 이 저장소에 있었다. 단계마다 본다.
+#
+# 표적 문자열에 백슬래시를 넣지 마라. `awk -v` 가 값의 escape 를 해석해서 `\s` 같은
+# 비표준 escape 는 `s` 로 뭉개진다 — 표적이 조용히 안 맞는다 (여기서 실제로 겪었다).
+# `\n` 은 반대로 진짜 개행이 되므로 replacement 에서 줄을 늘릴 때만 쓴다.
 mutate_step() { # name step victim replacement in out
 	awk -v victim="$3" -v body="$4" '
 		index($0, victim) {
@@ -574,57 +758,124 @@ assert_mutation() { # name victim replacement [victim2 replacement2]
 	echo "  mutation $name: red"
 }
 
+# mutant 는 서로 독립이고(각자 RUN_DIR) 저마다 케이스 전체를 다시 돈다 — mutation
+# 하나가 곧 스위트 한 벌이라 직렬로 두면 개수에 그대로 비례한다. 서브셸이라 전역이
+# 안 섞인다. 같은 기계에서 번갈아 3회씩 (`date +%s%N` 차):
+#   HANDOFF_TEST_MUTATION_JOBS=serial   47276 / 47536 / 47746 ms
+#   (기본, 병렬)                        13655 / 15203 / 20706 ms
+# 병렬 쪽 편차가 큰 건 부하를 타서다. 흔들리면 `serial` 로 돌려 하나씩 본다.
+MUT_PIDS=""
+MUT_NAMES=""
+MUTATION_JOBS="${HANDOFF_TEST_MUTATION_JOBS:-parallel}"
+
+queue_mutation() { # 인자는 assert_mutation 과 같다
+	if [ "$MUTATION_JOBS" = "serial" ]; then
+		assert_mutation "$@"
+		return
+	fi
+	assert_mutation "$@" >"$MUTANT_DIR/$1.log" 2>&1 &
+	MUT_PIDS="$MUT_PIDS $!"
+	MUT_NAMES="$MUT_NAMES $1"
+}
+
+await_mutations() {
+	local status=0 pid name
+	for pid in $MUT_PIDS; do wait "$pid" || status=1; done
+	# 큐에 넣은 순서로 출력해서 병렬이 로그 순서를 흔들지 않게 한다.
+	for name in $MUT_NAMES; do cat "$MUTANT_DIR/$name.log"; done
+	[ "$status" = "0" ] || exit 1
+}
+
 # write 가 wip:<node> 를 해제한다
-assert_mutation wip-not-released \
+queue_mutation wip-not-released \
 	'  if (wip && labels.has(wip)) gh("issue", "edit", String(options.issue), "--remove-label", wip);' \
 	''
 
 # BROKEN 이 WAIT 과 안 뭉친다
-assert_mutation broken-folded-into-wait \
+queue_mutation broken-folded-into-wait \
 	'  return "BROKEN";' \
 	'  return "WAIT checks";'
 
 # at 이 40자가 아니면 거부한다
-assert_mutation short-oid-accepted \
+queue_mutation short-oid-accepted \
 	'const FULL_OID = /^[0-9a-f]{40}$/;' \
 	'const FULL_OID = /^[0-9a-f]{7,40}$/;'
 
 # 조상 여부가 재시도와 사용자 report 를 가른다
-assert_mutation ancestor-branch-dead \
+queue_mutation ancestor-branch-dead \
 	'      if (status === "ahead") {' \
 	'      if (false) {'
 
 # base_oid 는 무효화 트리거가 아니다
-assert_mutation base-oid-as-trigger \
+queue_mutation base-oid-as-trigger \
 	'    const head = ghJson("pr", "view", prNumber, "--json", "headRefOid").headRefOid;' \
 	'    const head = ghJson("pr", "view", prNumber, "--json", "headRefOid").headRefOid;\n    if (String(handoff.base_oid) !== String(head)) toUser("base drift");'
 
-# run_id 가 코멘트의 멱등 키다
-assert_mutation run-id-not-idempotent \
-	'    handoffsIn(comment.body).some((entry) => String(entry.doc.handoff.run_id) === String(handoff.run_id)),' \
-	'    handoffsIn(comment.body).some((entry) => String(entry.doc.handoff.run_id) === "다른-run-id"),'
+# 같은 키 같은 내용이면 두 번 안 올린다
+queue_mutation run-id-not-idempotent \
+	'  const already = sameKey.find((entry) => canonical(entry.doc) === canonical(doc));' \
+	'  const already = undefined;'
+
+# 멱등 키는 run_id 단독이 아니라 (from, to, subject, run_id) 다
+queue_mutation identity-key-run-id-only \
+	'  JSON.stringify([normalizeRole(h.from), normalizeRole(h.to), String(h.subject), String(h.run_id)]);' \
+	'  JSON.stringify([String(h.run_id)]);'
+
+# 같은 키 다른 내용은 SKIP 이 아니라 거부다 — 스킵하면 새 판정이 조용히 버려진다
+queue_mutation collision-skipped-not-rejected \
+	'  if (sameKey.length > 0 && !already) {' \
+	'  if (false) {'
+
+# 검증한 문자열과 올리는 문자열이 같아야 한다 (들여쓴 YAML 이 깨지던 자리)
+queue_mutation payload-trimmed-again \
+	'  const payload = raw.trimEnd();' \
+	'  const payload = raw.trim();'
+
+# 되읽기 검사가 없으면 그 깨진 본문이 exit 0 으로 올라간다 — 받는 쪽 진단이 틀린다
+queue_mutation readback-check-dropped \
+	'  const payload = raw.trimEnd();' \
+	'  const payload = raw.trim();' \
+	'  if (readBack.length !== 1 || canonical(readBack[0].doc) !== canonical(doc)) {' \
+	'  if (false) {'
+
+# 신뢰 밖 작성자의 인계를 거부한다 (저장소 PUBLIC)
+queue_mutation author-trust-dropped \
+	'    if (!TRUSTED_ASSOCIATIONS.has(association)) {' \
+	'    if (false) {'
+
+# label 갱신 블록이 실제로 돈다
+queue_mutation label-block-dead \
+	'  if (options.addLabel.length > 0 || options.removeLabel.length > 0) {' \
+	'  if (false) {'
+
+# verdict label 은 PR 에 붙는다 — 이슈에 붙으면 머지 게이트가 못 본다
+queue_mutation label-target-swapped \
+	'      ? ["pr", "edit", String(options.pr)]' \
+	'      ? ["issue", "edit", String(options.issue)]'
 
 # needs:user 는 PR 쪽에 붙어도 최상단이다
-assert_mutation needs-user-pr-side-dropped \
+queue_mutation needs-user-pr-side-dropped \
 	'  if (context.issueLabels.has("needs:user") || context.prLabels.has("needs:user")) {' \
 	'  if (context.issueLabels.has("needs:user")) {'
 
 # approved & checks 미완 줄이 종결 줄 위에 있다
-assert_mutation wait-row-dead \
+queue_mutation wait-row-dead \
 	'  if (context.checks === "pending") return "WAIT checks";' \
 	''
 
 # 회고 줄이 있다
-assert_mutation round-row-dead \
+queue_mutation round-row-dead \
 	'  if (context.rounds >= context.cap && !context.prLabels.has("reflect:done")) return "RUN round-reflect";' \
 	''
 
 # 회고 줄이 `review:changes-requested` **위**에 있다. 아래로 되돌리면 라운드 3 red 가
 # 구현자로 가고, 그게 게이트가 금지한 "같은 유형에 fix 를 더 쌓기" 다.
-assert_mutation round-row-below-changes-requested \
+queue_mutation round-row-below-changes-requested \
 	'  if (context.rounds >= context.cap && !context.prLabels.has("reflect:done")) return "RUN round-reflect";' \
 	'' \
 	'  if (context.prLabels.has("review:changes-requested")) return "RUN issue-implement";' \
 	'  if (context.prLabels.has("review:changes-requested")) return "RUN issue-implement";\n  if (context.rounds >= context.cap && !context.prLabels.has("reflect:done")) return "RUN round-reflect";'
+
+await_mutations
 
 echo "PASS: handoff write / read / state"

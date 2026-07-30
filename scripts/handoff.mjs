@@ -211,7 +211,13 @@ function checkSchema(doc, options, onFail) {
 // 코드펜스 길이를 역참조로 닫는다. `fixture:` 블록 스칼라에 백틱 3개짜리 펜스가
 // 들어와도 인계 블록이 거기서 끊기지 않는다 — 리뷰어가 뚫은 입력은 마크다운인
 // 경우가 흔하다.
-const FENCE = /(?:^|\n)(`{3,})yaml\r?\n([\s\S]*?)\r?\n\1(?=\r?\n|$)/g;
+//
+// GitHub 이 똑같이 렌더하는 변종을 다 받는다 — 펜스 앞 공백 0-3칸(CommonMark),
+// `~~~`, info string 뒤의 말(` ```yaml title=x `), 닫는 펜스 뒤 공백. 좁게 잡으면
+// `read` 는 fail-closed("인계 없다")로 끝나지만 `write` 의 중복 스캔은 fail-open
+// 이라 같은 인계를 두 번 올린다.
+const FENCE =
+  /(?:^|\n)[ ]{0,3}(`{3,}|~{3,})[ \t]*yaml\b[^\n]*\r?\n([\s\S]*?)\r?\n[ ]{0,3}\1[ \t]*(?=\r?\n|$)/g;
 
 function fence(body) {
   let length = 3;
@@ -236,6 +242,40 @@ function handoffsIn(body) {
   return found;
 }
 
+// 이 저장소는 PUBLIC 이다 (`gh repo view --json visibility` → PUBLIC). 아무나 이슈에
+// 코멘트를 달 수 있고, 인계는 받는 node 가 돌릴 명령(`action.cmd`)과 저장할 픽스처를
+// 실어 나른다. 그래서 신뢰 경계는 저장소 권한이다 — 응답이 이미 주는
+// `authorAssociation` 을 본다. `subject: issue/N` 으로 쓰면 `at` 대조도 안 걸리므로
+// 이 검사가 없으면 위조 비용이 0 이다.
+const TRUSTED_ASSOCIATIONS = new Set(["OWNER", "MEMBER", "COLLABORATOR"]);
+
+function trustedHandoffs(comments) {
+  const found = [];
+  for (const comment of comments ?? []) {
+    const entries = handoffsIn(comment.body);
+    if (entries.length === 0) continue;
+    const association = String(comment.authorAssociation ?? "");
+    if (!TRUSTED_ASSOCIATIONS.has(association)) {
+      // 조용히 버리면 "인계가 없다" 와 "거부했다" 가 관측상 같아진다.
+      process.stderr.write(
+        `거부: ${comment.author?.login ?? "?"} 의 인계 블록 ${entries.length}건 — ` +
+          `authorAssociation=${association || "없음"} 은 신뢰 경계 밖이다 ` +
+          `(${[...TRUSTED_ASSOCIATIONS].join("/")} 만).\n`,
+      );
+      continue;
+    }
+    found.push(...entries);
+  }
+  return found;
+}
+
+// 멱등 키는 `run_id` 단독이 아니라 `(from, to, subject, run_id)` 다. 단독이면 서로
+// 다른 역할이 같은 라운드 이름을 쓸 때 뒤에 쓰는 인계가 통째로 삼켜진다.
+const identityOf = (h) =>
+  JSON.stringify([normalizeRole(h.from), normalizeRole(h.to), String(h.subject), String(h.run_id)]);
+
+const canonical = (doc) => yaml().stringify(doc);
+
 // ------------------------------------------------------------------- 연산 셋
 
 function cmdWrite(options) {
@@ -257,17 +297,46 @@ function cmdWrite(options) {
   const issue = ghJson("issue", "view", String(options.issue), "--json", "labels,comments");
   const labels = new Set((issue.labels ?? []).map((label) => label.name));
 
+  // 검증한 문자열과 올리는 문자열이 다르면 `write` 는 exit 0 인데 `read` 가
+  // "인계가 없다" 를 준다 — 받는 쪽이 받는 진단이 틀린다. 앞 공백을 벗기면 들여쓴
+  // YAML 의 첫 줄만 col 0 으로 내려가 구조가 깨지므로 뒤만 다듬는다.
+  const payload = raw.trimEnd();
+  const mark = fence(payload);
+  const body = `${mark}yaml\n${payload}\n${mark}\n`;
+
+  // 올릴 본문을 **읽는 쪽 파서로 되읽어** 같은 문서가 나오는지 본다. 펜스든
+  // 들여쓰기든 조립이 인계를 가리면 여기서 멈춘다 — 인계를 안 남겼으면 exit 0 을
+  // 주면 안 된다.
+  const readBack = handoffsIn(body);
+  if (readBack.length !== 1 || canonical(readBack[0].doc) !== canonical(doc)) {
+    reject(
+      `올릴 본문을 되읽지 못했다 (블록 ${readBack.length}건) — 코드펜스나 들여쓰기가 인계를 가린다. ` +
+        `아무것도 올리지 않았고 wip 도 그대로다.`,
+    );
+  }
+
   // run_id 는 외부 쓰기 3곳의 멱등 키다 (#1918 §7). 그중 이 스킬이 소유하는 자리는
   // `gh issue comment` 하나이고, 값은 코멘트 본문 YAML 안에 실려 다음 시도가 그걸
   // 본다. label add/remove 에는 안 붙인다 — GitHub API 가 이미 멱등이다.
-  const duplicate = (issue.comments ?? []).some((comment) =>
-    handoffsIn(comment.body).some((entry) => String(entry.doc.handoff.run_id) === String(handoff.run_id)),
+  //
+  // 같은 키로 **다른 내용**이 이미 있으면 SKIP 이 아니라 거부다. 스킵하면 새 판정이
+  // 조용히 버려지고, 그 상태로 wip 까지 풀리면 다음 node 가 사망 탐지도 못 한다.
+  const sameKey = trustedHandoffs(issue.comments).filter(
+    (entry) => identityOf(entry.doc.handoff) === identityOf(handoff),
   );
-  if (duplicate) {
-    process.stdout.write(`SKIP issue/${options.issue} run_id=${handoff.run_id} (이미 기록됨)\n`);
+  const already = sameKey.find((entry) => canonical(entry.doc) === canonical(doc));
+  if (sameKey.length > 0 && !already) {
+    reject(
+      `같은 (from,to,subject,run_id) 로 다른 내용이 이미 #${options.issue} 에 있다 — ` +
+        `run_id 는 라운드가 아니라 시도 단위여야 한다. 새 run_id 로 다시 써라. ` +
+        `아무것도 올리지 않았고 wip 도 그대로다.`,
+    );
+  }
+
+  if (already) {
+    process.stdout.write(`SKIP issue/${options.issue} run_id=${handoff.run_id} (같은 내용이 이미 기록됨)\n`);
   } else {
-    const mark = fence(raw);
-    run("gh", ["issue", "comment", String(options.issue), "--body-file", "-"], `${mark}yaml\n${raw.trim()}\n${mark}\n`);
+    run("gh", ["issue", "comment", String(options.issue), "--body-file", "-"], body);
     process.stdout.write(`WROTE issue/${options.issue} run_id=${handoff.run_id}\n`);
   }
 
@@ -307,9 +376,9 @@ function cmdRead(options) {
     toUser(`${wip} 이 이미 붙어 있다 — 앞 시도가 인계를 쓰기 전에 죽었다. 재시도로 안 고쳐진다.`);
   }
 
-  const mine = (issue.comments ?? [])
-    .flatMap((comment) => handoffsIn(comment.body))
-    .filter((entry) => normalizeRole(entry.doc.handoff.to) === stage);
+  const mine = trustedHandoffs(issue.comments).filter(
+    (entry) => normalizeRole(entry.doc.handoff.to) === stage,
+  );
   const latest = mine.at(-1);
   if (!latest) toUser(`#${options.issue} 에 ${stage} 앞으로 온 인계가 없다. 앞 node 가 아예 안 돌았다.`);
 
@@ -385,14 +454,20 @@ function checkState(rollup) {
 //
 // **회고 줄은 종결의 하위 대안이 아니라 차단기다.** `review-gate.yml` 의
 // "Stop at review round 3" 은 verdict 를 안 보고 `comments >= cap && !reflect:done`
-// 이면 `exit 1` 하는데, `review-gate` 는 유일한 required check 다
-// (`gh api repos/{owner}/{repo}/branches/main/protection --jq
-// '.required_status_checks.contexts[]'` → `review-gate`). 그래서 라운드 임계를
-// 넘고 `reflect:done` 이 없으면 checks 가 절대 green 이 안 되고, 아래 종결 줄은
-// 그 상태에서 도달 불가다. 두 줄은 배타적이다 — green ⟹ 게이트 통과 ⟹
+// 이면 `exit 1` 한다. 그 실패가 `statusCheckRollup` 에 들어오고, `checkState()` 는
+// **rollup 전체**를 봐서 하나라도 실패면 `"failed"` 를 준다 — 다른 검사가 전부
+// 통과해도 green 이 안 된다. 그래서 라운드 임계를 넘고 `reflect:done` 이 없는
+// 동안 아래 종결 줄은 도달 불가고, 두 줄은 배타적이다: green ⟹ 게이트 통과 ⟹
 // (임계 미만 또는 `reflect:done`) ⟹ 회고 줄 불성립. #1922 가 "라운드 3에서 green
 // 이면 종결" 이라 적은 상태는 `reflect:done` 이 붙은 뒤이고, 그때는 회고 줄이 안
 // 걸리므로 이 순서가 그 처방을 그대로 지킨다.
+//
+// (`review-gate` 는 required 지만 유일하지 않다 — classic protection 이 그 하나를,
+// ruleset `pr_to_main` 이 여덟을 더 요구해서 합쳐서 9다. 두 겹을 다 보는 명령은
+// `gh api graphql` 의 `isRequired(pullRequestNumber:)` 뿐이고,
+// `.../branches/main/protection` 은 classic 한 겹만 읽어 그 주장을 증명하지
+// 못한다. 어차피 위 논증은 required 여부가 아니라 rollup 전체를 본다는 사실에만
+// 기댄다.)
 //
 // 회고 줄이 `review:changes-requested` **아래** 있으면 라운드 3 red 가 구현자로
 // 간다 — 같은 게이트가 "red 면 같은 유형에 fix 를 더 쌓지 말고 사용자에게 올려라"
