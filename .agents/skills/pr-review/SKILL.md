@@ -40,8 +40,10 @@ summary에는 repo-relative path 또는 GitHub URL만 남긴다.
 
 ## Review Pack
 
-`pr-reviewer`는 top-level 전용 coordinator다. 하네스는 subagent의 중첩 spawn을
-막으므로 `pr-subreviewer`는 top-level `pr-reviewer`만 spawn할 수 있다.
+`pr-subreviewer`를 spawn하는 것은 `pr-reviewer` coordinator뿐이다. coordinator가
+subagent로 떠 있어도 fan-out은 된다 — 중첩 spawn은 막히지 않는다. `pr-subreviewer`는
+잎이라 `Agent`를 받지 않는다. 깊이 한도와 이 pack의 깊이 예산은
+`.claude/agents/README.md`가 SOT다.
 
 Fan-out은 항상-spawn이 아니라 coordinator의 자율 판단이다. 작은 PR은 단독
 평가한다. diff가 대략 800줄 이상, 또는 15파일 이상, 또는 3개 이상 영역
@@ -49,7 +51,7 @@ Fan-out은 항상-spawn이 아니라 coordinator의 자율 판단이다. 작은 
 2-4개 fan-out한 뒤 하나의 scorecard로 합친다. 세 축은 목표치이지 hard gate가
 아니고, 경계는 coordinator 재량이다.
 
-`pr-subreviewer` spawn이 실패하면(중첩 spawn 불능 포함) coordinator는 같은
+`pr-subreviewer` spawn이 실패하면(깊이 한도 초과나 일시적 실패) coordinator는 같은
 관점들을 순차 단독 검증으로 강등해 직접 수행하고, scorecard에 "fan-out 불가로
 단독 강등" 사실을 명시한다. 강등해도 관점별 발견 수집과 coordinator 단독 판정
 규칙은 동일하게 적용한다.
