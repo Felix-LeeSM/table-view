@@ -35,8 +35,8 @@ jobs:
   # Name-only, same as `pr-body` below: `Detect Change Scope` is a required
   # context in the `pr_to_main` ruleset (live GitHub state); a name that stops
   # reporting stays "expected" and blocks every merge. Drop the ruleset entry
-  # before deleting this job. No job is change-gated — everything below runs on
-  # every event.
+  # before deleting this job, and keep this the only job anywhere that carries
+  # the name. No job is change-gated — everything below runs on every event.
   changes:
     name: Detect Change Scope
     runs-on: ubuntu-latest
