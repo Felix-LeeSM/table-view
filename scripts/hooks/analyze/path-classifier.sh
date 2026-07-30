@@ -12,9 +12,14 @@ is_docs_path() {
 	esac
 }
 
+# `scripts/handoff.mjs` is here for the same reason the worktree and ratchet
+# scripts are: its gate (`policy/test-handoff.sh`) lives on the hook route, and
+# without the entry an edit to the tool would run the TS gates — which do not
+# read `.mjs` at all (eslint globs `**/*.{ts,tsx}`, tsconfig includes only `src`)
+# — while its own suite stayed unexecuted.
 is_hook_path() {
 	case "$1" in
-	.gitignore | lefthook.yml | .githooks/* | scripts/hooks/* | scripts/setup.sh | scripts/target-cache.sh | scripts/worktree-spawn.sh | scripts/worktree-cleanup.sh | scripts/test-worktree-cleanup.sh | scripts/worktree-bootstrap-deps.sh | scripts/prune-gh-caches.sh | scripts/check-coverage-ratchet.ts | scripts/coverage-ratchet-targets.json | src-tauri/.config/nextest.toml)
+	.gitignore | lefthook.yml | .githooks/* | scripts/hooks/* | scripts/setup.sh | scripts/target-cache.sh | scripts/worktree-spawn.sh | scripts/worktree-cleanup.sh | scripts/test-worktree-cleanup.sh | scripts/worktree-bootstrap-deps.sh | scripts/prune-gh-caches.sh | scripts/handoff.mjs | scripts/check-coverage-ratchet.ts | scripts/coverage-ratchet-targets.json | src-tauri/.config/nextest.toml)
 		return 0
 		;;
 	*)
