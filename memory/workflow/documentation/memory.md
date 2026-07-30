@@ -15,10 +15,10 @@ trigger:
 
 ## PR body contract
 
-모든 PR body 는 `scripts/hooks/policy/check-pr-body.mjs` (CI `PR Body Contract` job) 가
-강제하는 7 섹션을 포함해야 머지 가능. agent 는 `pr-create` skill
-(`.agents/skills/pr-create/SKILL.md`) 로 template 기반 조립 + 로컬 검증 후 생성 —
-push 전 통과로 CI re-push 낭비 차단. template: `.github/PULL_REQUEST_TEMPLATE.md`.
+PR body 는 7 섹션을 포함한다. 이걸 강제하던 `check-pr-body.mjs` 와 조립을 돕던
+`pr-create` skill 은 삭제됐고, CI `PR Body Contract` job 은 아무것도 검사하지 않는
+stub 이다 (#2033) — **지금은 이 방이 유일한 SOT 이고 검사는 사람이 한다.**
+template: `.github/PULL_REQUEST_TEMPLATE.md`.
 
 | 섹션 | 요구 |
 |---|---|

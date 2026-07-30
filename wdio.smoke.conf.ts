@@ -4,7 +4,7 @@ import net from "net";
 import { spawn, spawnSync } from "child_process";
 import { fileURLToPath } from "url";
 import type { Options } from "@wdio/types";
-import { resetSmokeDataDir } from "./scripts/e2e-smoke-data-dir.js";
+import { resetSmokeDataDir } from "./e2e/support/smoke-data-dir.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -138,8 +138,14 @@ export const config: Options.Testrunner = {
   // WebKitGTK/wry webview can hard-crash mid-spec on headless CI (`no such
   // window`, DRI3 crash — issues #1261/#1200/#1293). The window handle is gone,
   // so command-level retries can't recover; only a fresh session (spec re-run)
-  // can. specFileRetries re-runs the whole spec file in a new session as a
-  // second layer behind the render-mitigation env in scripts/e2e-smoke-ci.sh.
+  // can. specFileRetries re-runs the whole spec file in a new session.
+  //
+  // It used to be the SECOND layer: scripts/e2e-smoke-ci.sh exported
+  // WEBKIT_DISABLE_DMABUF_RENDERER / WEBKIT_DISABLE_COMPOSITING_MODE /
+  // LIBGL_ALWAYS_SOFTWARE first. That runner is deleted and nothing exports
+  // them now, so on a headless Linux run this retry is the ONLY mitigation —
+  // export the three yourself before invoking wdio there. No effect on macOS
+  // (WKWebView), where they were no-ops anyway.
   // Not concealed: the first attempt's `no such window` failure stays in stdout
   // and WDIO logs the retry, so `grep "no such window"` on a green run still
   // surfaces the flake for #1293 tracking.
@@ -174,13 +180,14 @@ export const config: Options.Testrunner = {
     if (!passed) await dumpFailureArtifacts(test.title, test.parent);
   },
   beforeSession: async () => {
-    // #1836: scripts/e2e-smoke-ci.sh clears the data dir once per spec file,
-    // but a specFileRetries retry reuses the same TABLE_VIEW_TEST_DATA_DIR, so
-    // attempt 2 booted against attempt 1's connections.json and died in the
-    // create*Connection helpers ("Connection with name '...' already exists")
-    // before reaching the spec. Reset per session so a retry starts from the
-    // state a first attempt starts from. No-op without the env override — see
-    // scripts/e2e-smoke-data-dir.ts for the safety boundaries.
+    // #1836: the deleted scripts/e2e-smoke-ci.sh cleared the data dir once per
+    // spec file, but a specFileRetries retry reuses the same
+    // TABLE_VIEW_TEST_DATA_DIR, so attempt 2 booted against attempt 1's
+    // connections.json and died in the create*Connection helpers ("Connection
+    // with name '...' already exists") before reaching the spec. Reset per
+    // session so a retry starts from the state a first attempt starts from —
+    // now the only reset there is. No-op without the env override — see
+    // e2e/support/smoke-data-dir.ts for the safety boundaries.
     const resetDir = resetSmokeDataDir();
     if (resetDir) console.log(`[wdio] Cleared smoke data dir ${resetDir}`);
 

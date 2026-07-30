@@ -25,8 +25,9 @@ label 메커니즘 자체는 [delivery](../../workflow/delivery/memory.md) 의 �
    (2026-07-03 #1183 delivery 실측 — 이전 서술 "E2E 만" 은 불완전했음.)
 
 **이 블록이 repo 유일의 required context 목록이다.** 다른 문서는 열거하지 말고 여기를
-가리킨다 — `scripts/static-policy/ci-gate-enumeration.ts` (`pnpm lint`) 가 강제하고,
-여기 적힌 이름이 실제 workflow job context 와 어긋나면 CI 가 RED 다.
+가리킨다. 이 단일성을 강제하던 `ci-gate-enumeration.ts` (`pnpm lint`) 는 삭제됐으므로
+(#2033) 이름이 실제 workflow job context 와 어긋나도 CI 는 조용하다 — 워크플로를
+고칠 때 여기를 같이 고쳐라.
 
 <!-- ci-gates:required-contexts -->
 
@@ -37,7 +38,14 @@ label 메커니즘 자체는 [delivery](../../workflow/delivery/memory.md) 의 �
 
 <!-- /ci-gates -->
 
-2차 등록분 fail 도 BLOCKED 다 — 대응은 fix (PR body 정정 / clippy fix) 지 회피 아님.
+**2026-07-30 (#2033): 8종 중 3종이 빈 껍데기다.** `Detect Change Scope`,
+`PR Body Contract`, `Runtime Happy Path` 는 검사하던 스크립트가 삭제돼 지금은
+`echo` 한 줄만 돌리는 stub job 이다 — 이름을 지우면 컨텍스트가 영영 `expected` 로
+남아 모든 머지가 막히므로 job 만 남겼다. 이 셋은 **항상 green 이고 아무것도
+보증하지 않는다.** ruleset 에서 빼면 stub 도 지울 수 있다 (GitHub 라이브 상태
+변경이라 별도 결정).
+
+나머지 5종 fail 은 BLOCKED 다 — 대응은 fix (clippy fix / 테스트 수정) 지 회피 아님.
 신규 required context 등록은 workflow 가 main 에 올라간 **뒤에** 한다 — 아무 run 도
 만들지 않는 required context 는 열린 PR 전부를 BLOCKED 로 고착시킨다.
 
@@ -121,4 +129,4 @@ merge 막히면 위 "두 곳 분산" → "함정" → "올바른 순서" 순으�
 
 - [delivery](../../workflow/delivery/memory.md) — 리뷰~정리 구간의 review-gate label / enforce_admins 계약
 - [worktree](../worktree/memory.md) — merge 후 worktree cleanup
-- `.claude/rules/git-policy.md` — hook 회피 / force push 금지
+- [git-policy](../../workflow/git-policy/memory.md) — force push 금지 (집행 훅 없음)

@@ -2,7 +2,7 @@
 title: By-task 인덱스
 type: index
 generated: 2026-07-30
-generator: scripts/regenerate-indexes.sh
+generator: none — scripts/regenerate-indexes.sh 삭제됨 (#2033), 이제 손으로 갱신한다
 ---
 
 # By-task 인덱스
@@ -11,7 +11,7 @@ generator: scripts/regenerate-indexes.sh
 
 본 인덱스는 routing-only cross-link 다. 규칙 / 결정 / 문서 SOT 가 아니며 owner 는 링크 대상 memory/docs/skill 이다.
 
-수동 추가 또는 task 필드 누락된 룰은 본 인덱스에 빠질 수 있음 — `.agents/skills/remember/SKILL.md` 절차로 frontmatter 갱신 시 자동 등록됨.
+수동 추가 또는 task 필드 누락된 룰은 본 인덱스에 빠질 수 있음. 예전에는 `remember` skill 절차가 frontmatter 를 갱신하면 generator 가 자동 등록했지만, skill 과 generator 모두 삭제됐다 (#2033) — 방을 추가/삭제하면 이 인덱스를 손으로 고쳐야 한다.
 
 ## 작업 → 룰 / 방 매핑
 
@@ -145,7 +145,6 @@ generator: scripts/regenerate-indexes.sh
 
 ### hook-design
 
-- [Hook taxonomy — git hooks vs agent hooks](../../memory/workflow/hooks/memory.md)
 
 ### implementation
 
@@ -159,7 +158,6 @@ generator: scripts/regenerate-indexes.sh
 ### lefthook
 
 - [Git 정책](../../memory/workflow/git-policy/memory.md)
-- [Hook taxonomy — git hooks vs agent hooks](../../memory/workflow/hooks/memory.md)
 
 ### local-storage
 
@@ -231,11 +229,9 @@ generator: scripts/regenerate-indexes.sh
 
 ### pre-commit
 
-- [Hook taxonomy — git hooks vs agent hooks](../../memory/workflow/hooks/memory.md)
 
 ### pre-push
 
-- [Hook taxonomy — git hooks vs agent hooks](../../memory/workflow/hooks/memory.md)
 - [TDD Evidence](../../memory/workflow/tdd/memory.md)
 
 ### push
@@ -394,7 +390,6 @@ generator: scripts/regenerate-indexes.sh
 
 ### verification-gate
 
-- [Hook taxonomy — git hooks vs agent hooks](../../memory/workflow/hooks/memory.md)
 
 ### wave
 

@@ -45,9 +45,9 @@ Rust / TypeScript / 테스트 / 커밋 / 금지 사항. 작업 전 훑어볼 것
 - E2E: WebdriverIO + tauri-driver 로 핵심 플로우(연결 생성, 쿼리 실행, 결과 확인). 시나리오 설계 원칙은 [e2e-scenarios](e2e-scenarios/memory.md) 필독.
 - 시나리오 원칙: 비-E2E 는 [testing-scenarios](testing-scenarios/memory.md), E2E 는 [e2e-scenarios](e2e-scenarios/memory.md). 같은 P-시리즈로 일관.
 - Coverage gate: frontend `vite.config.ts` 기준 statements 85% / 라인 87% /
-  함수 87% / 브랜치 78%, Rust는 `docs/quality/coverage-ratchet.md` target을
+  함수 87% / 브랜치 78% (`vite.config.ts` 가 SOT), Rust는 `.github/workflows/ci.yml` 의 llvm-cov 임계값을
   따른다. 신규·수정 파일도 이 gate 를 낮추는 방향으로 들어가지 않는다.
-- 시나리오 체크: happy path, 빈/누락 입력, 에러 복구, 동시성(빠른 더블 클릭 등), 상태 전이. 상세: `.claude/rules/test-scenarios.md`.
+- 시나리오 체크: happy path, 빈/누락 입력, 에러 복구, 동시성(빠른 더블 클릭 등), 상태 전이. 상세를 담던 `.claude/rules/test-scenarios.md` 는 삭제됐다 (#2033) — 이 목록이 남은 전부다.
 - 변경 후 필수 검증: `pnpm vitest run`, `pnpm tsc --noEmit`, `pnpm lint`.
 
 ## 리팩토링 코드 표준
@@ -97,6 +97,6 @@ Sprint 189–198 의 모든 refactor / feature 커밋은 본 표준의 규칙을
 - [e2e-scenarios](e2e-scenarios/memory.md) — E2E 시나리오 설계 8원칙 + CUJ 5종
 - [testing-scenarios](testing-scenarios/memory.md) — 비-E2E 시나리오 설계 9원칙 (unit/component/store/integration/async)
 - [fixture strategy](testing-scenarios/fixtures/memory.md) — fixture-backed support claim / conformance evidence
-- [rust](./rust/memory.md) — Rust 컨벤션 전체 (`.claude/rules/rust-conventions.md` source)
-- [react](./react/memory.md) — React/TS 컨벤션 전체 (`.claude/rules/react-conventions.md` source)
+- [rust](./rust/memory.md) — Rust 컨벤션 전체
+- [react](./react/memory.md) — React/TS 컨벤션 전체
 - [docs/archives/decisions](../../../docs/archives/decisions/memory.md) — historical ADR archive

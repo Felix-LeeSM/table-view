@@ -35,8 +35,9 @@ const SYNTAX_TOKENS = [
  * 하고 `data-mode` 토글로 cascade 가 작동하는지만 단언한다.
  *
  * 실제 themes.css 의 144 블록 × 12 토큰 = 1728 값의 무결성은
- * `scripts/check-theme-contrast.ts` 가 별도 검사. 본 테스트는 토큰이
- * "어디서든 cascade 로 발동하는지" 만 본다.
+ * `scripts/check-theme-contrast.ts` 가 검사했다 — 그 스크립트는 삭제됐고
+ * 대체 검사가 없다. 본 테스트는 토큰이 "어디서든 cascade 로 발동하는지" 만
+ * 본다 (그때도 그랬다).
  */
 function injectFallback(): HTMLStyleElement {
   const style = document.createElement("style");

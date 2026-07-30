@@ -72,4 +72,4 @@ git log "$base..HEAD" --format="%s"
 - [delivery](../delivery/memory.md) — push/PR/merge pipeline
 - [review](../review/memory.md) — profile 별 review matrix
 - [git-policy](../git-policy/memory.md) — hook 회피 금지
-- `scripts/hooks/policy/check-tdd-cycle.sh` — pre-push enforcement
+- pre-push 로 이 사이클을 강제하던 `check-tdd-cycle.sh` 는 삭제됐다 (#2033) — 집행 없음

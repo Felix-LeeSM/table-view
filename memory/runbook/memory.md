@@ -13,8 +13,8 @@ updated: 2026-06-12
 ## 소유권 / SOT
 
 - 본 방은 운영 절차의 의도, 순서, guardrail 만 소유한다.
-- 정확한 CLI 옵션 / side effect / 구현 상세는 각 `scripts/**` 파일과 `--help` 가
-  소유한다.
+- 위임할 `scripts/**` 와 그 `--help` 는 삭제됐다 (#2033). 각 런북 방이 절차의
+  유일한 SOT 이고, 명령은 표준 git/gh/pnpm 으로 적는다.
 - workflow 행동 계약은 [workflow](../workflow/memory.md) 가 소유하고, runbook 은
   실행 절차로만 연결한다.
 - 미래 목표는 [docs/ROADMAP.md](../../docs/ROADMAP.md), historical 사건은

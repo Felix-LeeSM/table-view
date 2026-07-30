@@ -15,7 +15,7 @@ trigger:
 그 뒤의 다른 node 가 하고, 무엇을 언제 띄울지는 orchestrator 가 label 로 정한다.
 
 이 방은 **행동 계약**(누가·언제·무엇을 지켜야 하나)만 둔다. 구현자 절차 SOT 는
-[`delivery` skill](../../../.agents/skills/delivery/SKILL.md).
+구현자 절차를 소유하던 `delivery` skill 은 삭제됐다 (#2033).
 
 ## Node 별 계약
 
@@ -38,7 +38,7 @@ trigger:
 자율 진행이 기본. 다음 중단 조건 도달 시 즉시 멈추고 사용자에게 원인 보고:
 
 - `git push --force` / `--force-with-lease`: agent path 에서 수행 금지
-  ([git-policy.md](../../../.claude/rules/git-policy.md)).
+  ([git-policy](../git-policy/memory.md)).
 - main 직접 push (PR 우회).
 - `gh pr merge` 의 squash/merge/rebase 정책이 명시 안 됐을 때 — 종결자.
 - 라운드 회고 트리거(라운드 3 이상 / 유형 재발 / 리뷰어 사이클 보고) — 구현자는
@@ -54,7 +54,7 @@ mergeable, 사용자 거부 없음)은 종결자가 종합한다. 구현자 절�
 ## Hook 강제 — 절대 회피 금지
 
 - `--no-verify` / `LEFTHOOK=0` / `--no-gpg-sign` 금지
-  ([git-policy.md](../../../.claude/rules/git-policy.md)).
+  ([git-policy](../git-policy/memory.md)).
 - hook 실패 시 회피 X, 근본 원인 fix.
 - GPG signing pinentry timeout 시 즉시 중단. unsigned commit 으로 진행하지 않음.
 - code-profile sprint 의 RED evidence 요구는 [tdd](../tdd/memory.md) 를 따른다.
@@ -68,9 +68,9 @@ mergeable, 사용자 거부 없음)은 종결자가 종합한다. 구현자 절�
 
 ## Agent spawn — reviewer 독립
 
-self-review 는 편향. `pr-reviewer` coordinator (`.claude/agents/pr-reviewer.md`) 를
+self-review 는 편향. 독립 `pr-reviewer` coordinator 를
 독립 spawn 해 평가한다 — 저자가 부르지 않는다.
-[review](../review/memory.md) 행동 계약 + `.agents/skills/pr-review/SKILL.md` 적용.
+[review](../review/memory.md) 행동 계약 적용 (방법론 skill 은 삭제됨).
 외부 시각 필요 시 `codex-reviewer` (사용자 명시 시만). worktree 는 PR 당 하나이고
 동시에 쓰는 node 는 하나다 — 라운드마다 새로 만들지 않는다
 ([worktree](../../runbook/worktree/memory.md)).
@@ -88,10 +88,8 @@ narration 없음.
 
 ## 관련
 
-- [`delivery` skill](../../../.agents/skills/delivery/SKILL.md) — 구현자 절차 SOT
-- `.claude/rules/git-policy.md` — `--no-verify` / `LEFTHOOK=0` 금지 + hook 강제
-- `.claude/agents/issue-implement.md` — 이 절차를 실행하는 node (`skills:` 로 위 skill 본문을 받는다)
-- `.agents/skills/pr-create/SKILL.md` / `.agents/skills/pr-review/SKILL.md` — PR 생성 / 리뷰 방법론
+- [git-policy](../git-policy/memory.md) — `--no-verify` / force-push 금지 (집행 훅 없음)
+- delivery / pr-create / pr-review skill 과 issue-implement node 정의는 #2033 에서 삭제됐다
 - [review](../review/memory.md) — 리뷰 단계 행동 계약
 - [documentation](../documentation/memory.md) — 문서화 impact + evidence portability
 - [tdd](../tdd/memory.md) — code-profile sprint RED evidence

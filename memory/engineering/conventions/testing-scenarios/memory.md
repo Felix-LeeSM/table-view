@@ -8,13 +8,13 @@ updated: 2026-07-17
 
 E2E 외 모든 테스트(`*.test.{ts,tsx}`, Rust `#[cfg(test)]`, `src-tauri/tests/`)
 를 새로 작성·수정하기 전에 이 방을 읽는다.
-자동 로드: `.claude/rules/testing.md` 가 이 방을 가리킨다.
+자동 로드는 없다 — 이 방을 가리키던 `.claude/rules/testing.md` 는 삭제됐다 (#2033).
 
 E2E 원칙([e2e-scenarios](../e2e-scenarios/memory.md))과 같은 P-시리즈
 번호를 사용해 레이어 간 일관성을 유지한다 — 같은 P 번호는 같은 의도다.
 
 기존 메커니즘 룰(`*.rs` 명명, `mockall`, RTL 쿼리 등)은 [conventions](../memory.md)
-와 `.claude/rules/testing.md`가 권위. 이 방은 *어떤 시나리오를 만들 것인가*
+가 권위 (`.claude/rules/testing.md` 는 삭제됨). 이 방은 *어떤 시나리오를 만들 것인가*
 의 원칙만 정제한다.
 
 ---
@@ -121,7 +121,7 @@ parity, redact/injection allowlist)면 유지 — 삭제 시 계약이 조용히
 
 **정리 규율(cleanup = refactor)**: 무의미 테스트 제거는 리팩터로 다룬다 —
 (a) 제거 라인이 다른 테스트로 이미 커버되어 coverage ratchet
-(`docs/quality/coverage-ratchet.md`)이 유지되는지 확인(중립 제거), (b) 배치마다
+(`vite.config.ts`)이 유지되는지 확인(중립 제거), (b) 배치마다
 suite green, (c) 보안·데이터무결성 테스트(redact/injection/escape/crypto)는
 절대 얇게 만들지 않는다(P8), (d) 완전성/불변식 가드는 삭제가 아니라 behavioral
 재작성으로 대체(예: source-grep 라우팅 완전성 → 각 domain dispatch 실행 검증).
@@ -135,7 +135,7 @@ suite green, (c) 보안·데이터무결성 테스트(redact/injection/escape/cr
 - 분기 매트릭스는 table-driven: `for (input, expected) in &[...] { ... }`.
 - `mockall` for trait, `#[tokio::test]` for async, `assert_matches!` for `Result::Err`.
 - 커버리지: frontend 전역 gate 는 `vite.config.ts` 와
-  `docs/quality/coverage-ratchet.md` 의 statements 85 / lines 87 / functions 87 /
+  `vite.config.ts` 의 statements 85 / lines 87 / functions 87 /
   branches 78. Rust local target 은 sprint/contract 에 adapter/parser/command
   위험도 기준으로 명시한다.
 
@@ -184,4 +184,4 @@ suite green, (c) 보안·데이터무결성 테스트(redact/injection/escape/cr
 - [e2e-scenarios](../e2e-scenarios/memory.md) — 같은 P-시리즈, e2e 레이어
 - [fixtures](fixtures/memory.md) — fixture strategy / support claim evidence
 - [docs/archives/decisions](../../../../docs/archives/decisions/memory.md) — historical ADR archive
-- 자동 로드: `.claude/rules/testing.md` (전역 paths)
+- 자동 로드 없음 (`.claude/rules/testing.md` 삭제됨)

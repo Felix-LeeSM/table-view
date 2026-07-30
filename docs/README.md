@@ -7,7 +7,7 @@ updated: 2026-05-28
 # Docs Index
 
 `docs/` 는 사람이 읽는 제품/프로젝트 문서다. Agent 실행 규칙과 협업 룰은
-`memory/`, skill 본문은 `.agents/skills/` 에 둔다.
+`memory/` 에 둔다. skill 본문(`.agents/skills/`)은 #2033 에서 삭제됐다.
 
 ## 빠른 진입
 
@@ -28,7 +28,7 @@ updated: 2026-05-28
 `quality/`, `phases/`, docs root)는 120,000 chars 분량 cap 을 둔다 — agent 가
 읽을 때 context 부하를 가두기 위함. 일회성 산출물(`sprints/`, `archives/`,
 `table_plus/`, `explorations/`)은 cap 에서 제외한다 (다시 읽을 일이 거의 없음).
-검사는 `scripts/hooks/policy/check-doc-size.sh`. 현재 회귀 0, threshold 는 추후 ratchet.
+검사하던 `check-doc-size.sh` 는 #2033 에서 삭제됐다 — cap 은 규율로만 남았고 자동 검사가 없다.
 
 ## 유지할 최상위 묶음
 
@@ -43,7 +43,6 @@ updated: 2026-05-28
 - `archives/` - 더 이상 active SOT 가 아닌 기록.
 - `phases/` - active phase planning 만 둔다. 보류/완료/비활성 phase 는
   `archives/phases/` 로 이동한다.
-- `quality/` - coverage ratchet, hook performance 같은 품질 게이트 정책.
 
 `RISKS.md` 는 독립 active 문서로 유지하지 않는다. 위험/제약은 소유 문서로
 라우팅한다:
@@ -61,7 +60,6 @@ updated: 2026-05-28
 - `memory/` - agent 가 작업 중 자동으로 읽는 active product/engineering/workflow/runbook 규칙.
 - `memory/engineering/` - 코드 구조, architecture, convention, fixture, UI 규칙 SOT.
 - `docs/archives/decisions/`, `docs/archives/incidents/` - 과거 결정과 사건 기록. 기본 agent memory 탐색 대상이 아니다.
-- `.agents/skills/` - agent skill 본문과 slash command source.
 - `docs/` - 사람이 탐색하는 제품/프로젝트 문서와 sprint evidence.
 
 같은 내용을 둘 이상에 복제하지 않는다. 한쪽에 본문을 두고 다른 쪽은 링크만 둔다.

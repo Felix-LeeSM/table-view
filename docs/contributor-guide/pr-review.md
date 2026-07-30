@@ -38,6 +38,6 @@ subreviewers report findings and evidence, not severity.
 
 ## Source Of Truth
 
-The detailed rubric lives in `.agents/skills/pr-review/SKILL.md`. Workflow
+The detailed rubric lived in `.agents/skills/pr-review/SKILL.md`, deleted in #2033 — there is no rubric SOT now. Workflow
 behavior lives in `memory/workflow/review/memory.md` and delivery merge gating
 lives in `memory/workflow/delivery/memory.md`.

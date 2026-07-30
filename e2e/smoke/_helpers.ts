@@ -812,8 +812,9 @@ async function gridWaitDiagnostic() {
 // #1200 — the KV key browser is a `[role="treeitem"]` virtualized list. A plain
 // `waitForWorkspaceTextAll([key])` only proves the key string reached the DOM
 // text, not that its treeitem is laid out and interactable. Under the CI
-// software-render fallback (`LIBGL_ALWAYS_SOFTWARE` in scripts/e2e-smoke-ci.sh,
-// forced when WebKitGTK loses the DRI3 device) the string can paint before the
+// software-render fallback (`LIBGL_ALWAYS_SOFTWARE`, which the deleted
+// scripts/e2e-smoke-ci.sh exported and nothing sets now — see the note in
+// wdio.smoke.conf.ts) the string can paint before the
 // row settles, so the text wait passes but the follow-up select hits "element
 // not interactable". Wait for the seeded key's treeitem to actually exist AND
 // be visible (`offsetParent !== null`) — the same stabilization the click

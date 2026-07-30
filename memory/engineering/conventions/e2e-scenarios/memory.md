@@ -9,7 +9,7 @@ task: e2e, testing, scenario
 # E2E 시나리오 설계 원칙
 
 `e2e/**/*.spec.ts`를 새로 작성·수정하기 전에 이 방을 읽는다.
-자동 로드: `.claude/rules/e2e-scenarios.md` 가 같은 paths를 매처로 가지고 있으므로
+자동 로드는 없다 (#2033 에서 `.claude/rules/e2e-scenarios.md` 삭제). 예전에는 같은 paths를 매처로 가지고 있어서
 e2e 파일을 만지는 모든 작업은 이 원칙을 컨텍스트로 받는다.
 
 기준점: **"끊김 없는 전환"** (`docs/product/README.md`). E2E는 그 기준이 깨졌는지를
@@ -101,4 +101,4 @@ e2e 파일을 만지는 모든 작업은 이 원칙을 컨텍스트로 받는다
 - [conventions](../memory.md) — 코딩 컨벤션 (테스트 일반)
 - [docs/archives/decisions/0014-e2e-switchwindow-multi-window](../../../../docs/archives/decisions/0014-e2e-switchwindow-multi-window/memory.md) — 멀티 윈도우 e2e 패턴
 - [docs/ROADMAP.md](../../../../docs/ROADMAP.md) — 어떤 목표의 어떤 기능까지 e2e 대상인지
-- 자동 로드 stub: `.claude/rules/e2e-scenarios.md`
+- 자동 로드 stub 이었던 `.claude/rules/e2e-scenarios.md` 는 삭제됐다

@@ -357,9 +357,10 @@ export default tseslint.config(
       ".claude/**",
       ".codex/**",
       "worktrees/**",
-      // wasm-pack generated JS glue + d.ts. The allowlist is mirrored by
-      // scripts/check-eslint-static-policy.ts so generated ignores do not hide
-      // source max-lines debt.
+      // wasm-pack generated JS glue + d.ts. This allowlist used to be mirrored
+      // by scripts/check-eslint-static-policy.ts, which asserted that generated
+      // ignores did not hide source max-lines debt. That script is gone, so the
+      // list is unguarded — keep it narrow.
       ...GENERATED_WASM_ESLINT_IGNORES,
     ],
   },
@@ -426,8 +427,7 @@ export default tseslint.config(
       "src/lib/perf/bootInstrumentation.ts",
       // Test files — `console.*` 은 mock spy 대상 또는 stderr 검증.
       "**/*.test.{ts,tsx}",
-      // CLI / 빌드 / e2e / wdio — CLI 출력은 console 이 정상.
-      "scripts/**/*.{ts,tsx}",
+      // e2e / wdio — 러너 출력은 console 이 정상.
       "e2e/**/*.{ts,tsx}",
       "wdio*.ts",
     ],
@@ -604,12 +604,13 @@ export default tseslint.config(
   // service" 로 실패한다.
   {
     files: ["src/**/*.{ts,tsx}"],
-    // scripts/check-eslint-static-policy.ts validates the feature-import rule
-    // with a synthetic `lintText` on the non-existent path
-    // `src/features/demo/Feature.tsx`. projectService parses against tsconfig,
-    // which `include: ["src"]` would match, so a file that is not on disk
-    // becomes a fatal parse error. Exclude that scratch path from typed lint so
-    // the self-test keeps using the syntactic parser.
+    // Kept after scripts/check-eslint-static-policy.ts was deleted. That
+    // self-test validated the feature-import rule with a synthetic `lintText`
+    // on the non-existent path `src/features/demo/Feature.tsx`, and
+    // projectService turns a file that is not on disk but matches tsconfig's
+    // `include: ["src"]` into a fatal parse error. The exclusion costs nothing
+    // and keeps `src/features/demo/**` usable as a scratch path; drop it if a
+    // real `src/features/demo` feature is ever added.
     ignores: ["src/features/demo/**"],
     languageOptions: {
       parserOptions: {

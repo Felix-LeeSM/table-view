@@ -8,6 +8,14 @@ updated: 2026-06-12
 
 # Fixture And Test Topology Inventory
 
+> **2026-07-30 (#2033):** 이 문서가 인용하는 `scripts/**` 경로 — smoke 러너
+> (`e2e-smoke-ci.sh`), fixture 도구(`scripts/fixtures/*`), 훅 스크립트 — 와
+> 로컬 git hook 은 모두 삭제됐다. **여기 적힌 자동 실행·게이트 서술은 더 이상
+> 성립하지 않는다.** e2e spec 과 fixture 데이터 자체는 남아 있고 손으로 구동할 수
+> 있다 (README 「E2E Smoke」 참조). CI 에서 도는 것은 `.github/workflows/ci.yml`
+> 뿐이다.
+
+
 Issue #750 captures the current fixture and test topology before later Refactor
 04 work moves, shims, or deletes anything. This inventory does not move
 fixtures, change runtime behavior, or widen product support claims.

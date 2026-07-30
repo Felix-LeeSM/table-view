@@ -27,11 +27,10 @@ updated: 2026-07-26
 
 - `memory/memory.md` 는 memory 진입 라우터만 소유한다. 세부 규칙은 각 방의
   `memory.md` 가 소유한다.
-- workflow 는 행동 계약만 둔다. 긴 절차, 평가 매트릭스, 대화 방식, 구현 방법론은
-  repo-owned skill source `.agents/skills/<name>/SKILL.md` 가 소유한다.
-- 결정 / grill 은 workflow memory 가 아니라
-  `.agents/skills/grill-with-memory/SKILL.md` 를 따른다.
-  보안 결정도 `grill-with-memory` skill 의 보안 결정 섹션을 따른다.
+- workflow 는 행동 계약만 둔다. 긴 절차·평가 매트릭스·대화 방식·구현 방법론을
+  소유하던 repo-owned skill (`.agents/skills/*`) 은 전부 삭제됐다 (#2033) —
+  그 내용은 지금 repo 어디에도 없다. 계약을 넘는 절차가 필요하면 memory 를
+  쪼개서 여기 적는다.
 - 제품 상태와 지원 범위는 [docs/product](../docs/product/README.md) 가 소유한다.
   memory 는 product merge gate 와 agent rule 만 둔다.
 - 미래 목표와 sequencing 은 [docs/ROADMAP.md](../docs/ROADMAP.md) 가 소유한다.
@@ -47,10 +46,10 @@ updated: 2026-07-26
   - [engineering/conventions/refactoring](./engineering/conventions/refactoring/memory.md) — 리팩토링 코드 작성 기준 (B/D/C/A 4 카테고리, god-file 시퀀스)
   - [engineering/conventions/testing-scenarios](./engineering/conventions/testing-scenarios/memory.md) — 비-E2E 시나리오 9원칙 (mock-scope sub-room 포함)
   - [engineering/conventions/e2e-scenarios](./engineering/conventions/e2e-scenarios/memory.md) — E2E 시나리오 설계
-  - [engineering/conventions/rust](./engineering/conventions/rust/memory.md) — Rust 컨벤션 전체 (`.claude/rules/rust-conventions.md` source)
-  - [engineering/conventions/react](./engineering/conventions/react/memory.md) — React/TS 컨벤션 전체 (`.claude/rules/react-conventions.md` source)
+  - [engineering/conventions/rust](./engineering/conventions/rust/memory.md) — Rust 컨벤션 전체
+  - [engineering/conventions/react](./engineering/conventions/react/memory.md) — React/TS 컨벤션 전체
 - [workflow](./workflow/memory.md) — 사용자-agent 협업 phase 행동 계약 (bug-fix / implementation / delivery / review / git-policy)
-  - [workflow/git-policy](./workflow/git-policy/memory.md) — hook 회피 금지 (`.claude/rules/git-policy.md` source)
+  - [workflow/git-policy](./workflow/git-policy/memory.md) — git 안전 규율 (집행 훅 없음)
 - [product](./product/memory.md) — 제품/UX 머지 기준 (영속 상태 reset 등)
 - [runbook](./runbook/memory.md) — 절차 (multi-agent worktree 등)
   - [runbook/worktree](./runbook/worktree/memory.md) — git worktree 다중 agent 격리 룰
@@ -68,11 +67,12 @@ updated: 2026-07-26
   및 12,000 chars 이하 (둘 다 지켜야 함). 어느 하나라도 초과 시
   `split-memory` skill 로 하위 주제 분할.
   - chars 는 **문자 수** (`wc -m`) 다 — byte 수 (`wc -c`) 가 아니다.
-    `scripts/hooks/policy/check-memory-size.sh` 가 `wc -m` 으로 측정하고, 한글 본문은
-    UTF-8 에서 문자당 3 byte 라 두 값이 크게 벌어진다. 크기를 인용할 때는
-    단위를 함께 적는다.
-- `memory/index/by-task.md`, `memory/index/by-surface.md` 는 자동 생성 cross-link
-  예외다. rule SOT 가 아니며 `scripts/regenerate-indexes.sh` 가 재생성한다.
+    측정하던 `check-memory-size.sh` 는 삭제됐으므로 `wc -m` 을 직접 돌린다.
+    한글 본문은 UTF-8 에서 문자당 3 byte 라 `wc -c` 와 크게 벌어진다. 크기를
+    인용할 때는 단위를 함께 적는다.
+- `memory/index/by-task.md`, `memory/index/by-surface.md` 는 cross-link 예외다.
+  rule SOT 가 아니다. 재생성하던 `regenerate-indexes.sh` 가 삭제돼 이제 손으로
+  갱신한다 — 방을 추가/삭제하면 두 인덱스를 같이 고친다.
 - 새 non-`memory.md` 파일 추가 금지. index 예외 변경은 별도 memory/tooling 결정으로
   다룬다.
 - `docs/` 파일과 내용 중복 금지. 링크로 포인터만.

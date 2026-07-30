@@ -49,7 +49,7 @@ Backend adapter capability (`BackendAdapterCapability`) 를 flip 하면 5곳을 
 2. TS capabilities — `src/types/dataSource.ts` 의 `capabilities`
    (query/catalog/edit/ddl/intelligence).
 3. Parity fixture — `tests/fixtures/data-source-profile-parity.report.json`.
-4. Release-gate boundary assert — `scripts/e2e-pre-smoke-release-gate.ts`.
+4. Release-gate boundary assert — `scripts/e2e-pre-smoke-release-gate.ts` 는 #2033 에서 삭제됐다. 대체 게이트 없음.
 5. Docker integration boundary test.
 
 예외: `operations` capability 는 TS-only (`dataSource.ts` 의 `operations` 객체) —

@@ -62,8 +62,8 @@ trigger:
 
 **Why**: 이 여섯이 2026-07 리뷰 라운드 폭증의 finding 공급원이었다. 리뷰어
 컨텍스트에 두면 blocking 사유가 계속 늘고, 저자 컨텍스트에 두면 라운드가 줄어든다.
-blocking 판정은 `.agents/skills/pr-review/SKILL.md` Verdict 원칙 1 의 세 사유로
-고정이고 이 표는 거기에 추가되지 않는다.
+blocking 판정은 Verdict 원칙 1 의 세 사유로 고정이고 이 표는 거기에 추가되지
+않는다. 원칙 본문을 담던 `pr-review` skill 은 삭제됐다 (#2033).
 
 ## 관련
 

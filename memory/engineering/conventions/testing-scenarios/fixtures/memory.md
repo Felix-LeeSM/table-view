@@ -34,7 +34,7 @@ fixture 또는 emulator/testcontainer/embedded sample 로 재현 가능한 증�
 - `fixtures/**` — fixture generator/profile spec. Runtime support evidence 가 아니다.
 - Frontend unit/component tests stay near their domain under `src/**`; Rust
   integration tests stay under `src-tauri/tests`; E2E smoke stays under `e2e/smoke`;
-  fixture tooling tests stay under `scripts/fixtures`.
+  the fixture tooling and its tests (`scripts/fixtures`) were deleted in #2033.
 
 ## 기본 원칙
 
@@ -105,7 +105,7 @@ evidence requires all of these:
 - fixture path exists in the canonical topology
 - a consumer test/spec reads it
 - `e2e/fixtures/smoke-routing-decisions.json` records the tier and cost/risk
-- `.github/workflows/e2e-smoke.yml` and `scripts/e2e-smoke-ci.sh` wire the spec
+- `.github/workflows/e2e-smoke.yml` and `scripts/e2e-smoke-ci.sh` used to wire the spec
   when the tier is `blocking E2E`
 
 Unsupported/partial-support fixtures are negative evidence. They protect support

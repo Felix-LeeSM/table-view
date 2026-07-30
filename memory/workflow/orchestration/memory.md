@@ -48,7 +48,7 @@ agent 가 착수해봐야 알았지만, 지금은 명세 작성자(`issue-refine
 
 판정 주체는 회고자(`round-reflect`)다 — 라운드 3부터는 개별 지적이 아니라 같은
 유형의 반복을 본다. 저자도 orchestrator 도 여기서 판정하지 않는다.
-트리거는 `.agents/skills/pr-review/SKILL.md` Verdict 원칙 3 위반이다 — 라운드 k+1 의 blocking
+트리거는 Verdict 원칙 3 위반이다 (원칙 본문을 담던 skill 은 삭제됨) — 라운드 k+1 의 blocking
 집합이 라운드 k 의 진부분집합이 아니다.
 
 1. 해당 PR 리뷰 중단.
@@ -94,7 +94,6 @@ agent 가 착수해봐야 알았지만, 지금은 명세 작성자(`issue-refine
 
 ## 관련
 
-- `.agents/skills/pr-review/SKILL.md` — Verdict 원칙 1·2·3 정의. 사이클 트리거의 source
 - [review](../review/memory.md) — reviewer 행동 계약
 - [delivery](../delivery/memory.md) — 커밋 → 푸시 → PR → 리뷰 → 머지 구간의 node 별 계약
 - [git-policy](../git-policy/memory.md) — force-push 금지, rebase 대신 merge

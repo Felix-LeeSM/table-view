@@ -6,12 +6,12 @@ surface: src/**/*.ts, src/**/*.tsx
 task: react-impl, refactor, frontend
 trigger:
   signal: src/**/*.{ts,tsx} 편집 시
-  layer: hook (.claude/rules/react-conventions.md paths frontmatter)
+  layer: none — 자동 로드 wrapper 삭제됨 (#2033), 직접 열어야 함
 ---
 
 # React / TypeScript 컨벤션
 
-`.claude/rules/react-conventions.md` wrapper 가 가리키는 source. 모든 brain 공통.
+모든 brain 공통 source. 이 방을 paths 매처로 자동 배달하던 `.claude/rules/react-conventions.md` 는 삭제됐다 (#2033) — 이제 직접 열어야 한다.
 
 ## 컴포넌트
 
