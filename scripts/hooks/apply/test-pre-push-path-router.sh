@@ -564,4 +564,49 @@ assert_mutation run-step-in red green "\trun_step_in \"doc-size-tests\" . bash $
 assert_mutation line-continuation red green "\trun_step \"doc-size-tests\" \\\\\n\t\tbash $VICTIM_SUITE" ""
 assert_mutation variable-path red green "\tdoc_size_suite=$VICTIM_SUITE\n\trun_step \"doc-size-tests\" bash \"\$doc_size_suite\"" ""
 
+# `|| true` on a gate call is the one edit BOTH implementations above read as
+# green: the DRY_RUN line stays byte-identical, the step still prints and still
+# runs, and its exit status is thrown away, so the gate can no longer fail a
+# push. Measured on a copy: appending it to the two `run_agent_gates` calls left
+# every assertion in this file green.
+#
+# Wiring asks "does this execute", which text cannot answer — that is what the
+# six mutations above prove. Status discard is a different question: it is a
+# property of the call site's syntax, and reading the syntax is how you answer
+# it. So this one is a scan, and it covers every `run_*` gate call rather than
+# the two the review found, because a guard in the shared shape is smaller than
+# one per call site.
+#
+# Ceiling: only the trailing `|| true` / `|| :` form. Wrapping a call in
+# `set +e` / `set -e`, or moving it into a function that swallows the status,
+# is invisible here.
+status_discarding_gates() {
+	grep -nE '^[[:space:]]*run_[a-z_]+[[:space:]].*\|\|[[:space:]]*(true|:)([[:space:]]|$)' "$1" || true
+}
+
+discarded="$(status_discarding_gates "$ROUTER")"
+[ -z "$discarded" ] || {
+	echo "FAIL: gate calls whose exit status the router throws away:" >&2
+	printf '%s\n' "$discarded" >&2
+	exit 1
+}
+
+# The detector has to fire on the real thing, or the empty result above means
+# "cannot see" rather than "clean".
+discard_mutant="$MUTANT_DIR/apply/status-discard.sh"
+awk -v victim="$VICTIM_CALL" '
+	index($0, victim) { print $0 " || true"; next }
+	{ print }
+' "$ROUTER" >"$discard_mutant"
+chmod +x "$discard_mutant"
+[ -n "$(status_discarding_gates "$discard_mutant")" ] || {
+	echo "FAIL: status-discard mutation went undetected" >&2
+	exit 1
+}
+[ "$(verdict_for "$discard_mutant" wired_suites_of)" = green ] || {
+	echo "FAIL: status-discard mutation changed the DRY_RUN wiring verdict; it is supposed to be invisible there" >&2
+	exit 1
+}
+echo "  mutation status-discard: detector=red dry-run=green"
+
 echo "PASS: pre-push path router smoke check"

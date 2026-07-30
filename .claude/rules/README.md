@@ -47,7 +47,8 @@ Source: [`memory/engineering/conventions/rust/memory.md`](../../memory/engineeri
   전부 모든 subagent 의 시스템 프롬프트에 실린다.
 - `paths` glob 보존 — auto-load trigger 다.
 - 본문을 손으로 복제하지 않는다. 싣더라도 **SOT 에서 파생하고 drift 검사를
-  붙인다** (예: `git-policy.md` 의 차단 목록 ↔ `check-git-policy-reach.sh`).
+  붙인다** (예: `git-policy.md` 의 차단 목록 ↔
+  `scripts/hooks/policy/check-agent-reach.sh`, pre-push 의 agent/hook 경로).
 
 ## 현재 wrapper 목록
 

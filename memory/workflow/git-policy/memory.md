@@ -32,7 +32,7 @@ trigger:
 ## 강제 메커니즘 (3 레이어)
 
 1. **PreToolUse neutral wrapper** (`scripts/hooks/apply/pre-tool-use.sh`, Claude/codex 공유) — policy 스크립트 exit 1 → JSON `permissionDecision:"deny"` 변환. Claude Code 는 exit 2 만 block; 직접 호출 시 차단 무시.
-2. **policy check 스크립트** — `check-dangerous-bash.sh`(`--no-verify`/`LEFTHOOK=0`/force-push) + `check-edit-policy.sh`/`check-main-worktree-source-edit.sh`(source/`.env`/primary-worktree) + `check-git-policy-reach.sh`(rules wrapper 가 그 목록을 손복제 아니라 파생으로 싣는지 대조). exit 1. 상세: README.md.
+2. **policy check 스크립트** — PreToolUse 가 부르는 것은 `check-dangerous-bash.sh`(`--no-verify`/`LEFTHOOK=0`/force-push) 와 `check-edit-policy.sh`/`check-main-worktree-source-edit.sh`(source/`.env`/primary-worktree) 뿐이다. `scripts/hooks/policy/check-agent-reach.sh`(rules wrapper 가 그 목록을 손복제 아니라 파생으로 싣는지 동작으로 대조) 는 **pre-push** 의 agent/hook 경로에서 돈다. 전부 exit 1. 상세: README.md.
 3. **본 정책 문서** — 사람/agent 명문화 룰.
 
 ## Hook 한계 + Worktree (sprint-387)

@@ -1,9 +1,13 @@
 # Sprint Artifacts
 
-Harness sprint outputs live here. Sprint directories are execution records, not
+Sprint outputs live here. Sprint directories are execution records, not
 the current product, roadmap, risk, or workflow source of truth.
 
-Prompts/templates stay in `.agents/skills/harness/`; run artifacts go in `docs/sprints/sprint-N/`.
+The `harness` skill that produced these runs was retired on 2026-07-30 (#1987),
+prompts and templates included, so no live template source backs this directory
+any more. Run artifacts stay in `docs/sprints/sprint-N/`; new work goes through
+`issue-refine` → `issue-implement` → `pr-reviewer`
+(`memory/workflow/memory.md`).
 
 ## Policy
 
