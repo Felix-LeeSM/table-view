@@ -26,21 +26,35 @@ Claude Code 는 skill 을 `~/.claude/skills/` (user-global) 과 프로젝트
 
 git 기본값 `core.symlinks=false` (개발자 모드/관리자 아님) 에서는 각 bridge 가
 심링크가 아니라 **타겟 경로 텍스트 한 줄을 담은 일반 파일**로 무경고
-체크아웃된다. 그러면 `.claude/skills/<name>/SKILL.md` 가 존재하지 않아 위 12개
-skill 이 계약 skill(`remember` / `grill-with-memory` / `pr-review`) 포함 전부
+체크아웃된다. 그러면 `.claude/skills/<name>/SKILL.md` 가 존재하지 않아 아래
+10개 skill 이 계약 skill(`remember` / `grill-with-memory` / `pr-review`) 포함 전부
 **무경고 등록 실패**한다. Windows 는 개발자 모드 + `git config --global
 core.symlinks true` 후 재-checkout 해야 bridge 가 심링크로 풀린다.
 
 (근본 해결책인 symlink → thin-wrapper 재설계는 별도 결정 사항 — 여기선 caveat
 문서화만.)
 
-## 현재 bridge 목록 (12)
+## 현재 bridge 목록 (10)
 
-`code-simplification`, `delivery`, `diagnose`, `grill-with-memory`, `handoff`,
-`harness`, `improve-codebase-architecture`, `pr-create`, `pr-review`, `remember`,
+`delivery`, `diagnose`, `grill-with-memory`, `handoff`,
+`improve-codebase-architecture`, `pr-create`, `pr-review`, `remember`,
 `split-memory`, `tdd`.
 
-`.agents/skills/*/SKILL.md` 와 1:1. skill 추가/삭제 시 이 브리지도 맞춘다.
+**bridge 는 `.agents/skills/*` 와 1:1 이 아니다** — 이 디렉토리는 "Claude Code 가
+등록해야 할 skill" 목록이지 저장소가 가진 skill 전부가 아니다. 2026-07-30 (#1987)
+기준 차이는 하나:
+
+- `code-simplification` — SOT 는 남기고 bridge 만 뺐다. 그 skill 자신의 `:10` 이
+  "Claude Code 는 내장 `/simplify` 가 우선이므로 이 skill 을 별도 배선하지
+  않는다 (#1038)" 라고 적어 놓고 bridge 가 있어 이중 노출이었다. Codex 는 계속
+  `.agents/skills/code-simplification/` 을 직접 읽는다.
+
+`harness` 는 SOT 와 bridge 를 같이 지웠다 (#1987 — import 이후 672커밋 산출물 0).
+
+**`skills:` 로 거는 것과 bridge 는 다른 채널이다.** agent frontmatter
+`skills: [<name>]` 는 스킬 본문 전문을 spawn 된 subagent 에 주입하고, 심링크
+bridge 로도 그대로 주입된다 (#1978 이 #1944 를 닫았다). bridge 는 그 이름이
+discovery 목록에 뜨게 할 뿐이다.
 
 ## Multi-brain 호환
 

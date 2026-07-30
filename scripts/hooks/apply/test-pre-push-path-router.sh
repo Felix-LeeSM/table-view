@@ -341,17 +341,31 @@ claude_agent_output="$(run_case claude-agent normal .claude/settings.json)"
 assert_contains "$claude_agent_output" "route: frontend=0 rust=0 hook=0 memory=0 agent=1" "claude agent"
 assert_not_contains "$claude_agent_output" "RUN ts-test:" "claude agent"
 assert_not_contains "$claude_agent_output" "RUN rust-test-and-coverage:" "claude agent"
+# The agent route ran no gate of its own before #1987: `check-wrapper-cap.sh`
+# was a PostToolUse advisory in warn-only mode, which is why a 16-line wrapper
+# sat over cap on main (#1975). `--strict` is the load-bearing token — the
+# default mode always exits 0, so asserting the bare script name would hold
+# while the gate could not fail.
+assert_contains "$claude_agent_output" "RUN wrapper-cap: bash scripts/hooks/policy/check-wrapper-cap.sh --strict" "claude agent"
+assert_contains "$claude_agent_output" "RUN agent-reach: bash scripts/hooks/policy/check-agent-reach.sh" "claude agent"
 
 codex_agent_output="$(run_case codex-agent normal .codex/hooks.json)"
 assert_contains "$codex_agent_output" "route: frontend=0 rust=0 hook=0 memory=0 agent=1" "codex agent"
 assert_not_contains "$codex_agent_output" "RUN e2e-smoke-workflow-cache:" "codex agent"
 assert_not_contains "$codex_agent_output" "RUN ts-test:" "codex agent"
 assert_not_contains "$codex_agent_output" "RUN rust-test-and-coverage:" "codex agent"
+assert_contains "$codex_agent_output" "RUN wrapper-cap: bash scripts/hooks/policy/check-wrapper-cap.sh --strict" "codex agent"
 
 agents_skill_output="$(run_case agents-skill normal .agents/skills/example/SKILL.md)"
 assert_contains "$agents_skill_output" "route: frontend=0 rust=0 hook=0 memory=0 agent=1" "agents skill"
 assert_not_contains "$agents_skill_output" "RUN ts-test:" "agents skill"
 assert_not_contains "$agents_skill_output" "RUN rust-test-and-coverage:" "agents skill"
+assert_contains "$agents_skill_output" "RUN wrapper-cap: bash scripts/hooks/policy/check-wrapper-cap.sh --strict" "agents skill"
+
+# Both guards read scripts/hooks/policy, so the hook route must carry them too:
+# gutting either one is otherwise the single edit neither can catch.
+assert_contains "$hook_output" "RUN wrapper-cap: bash scripts/hooks/policy/check-wrapper-cap.sh --strict" "hook"
+assert_contains "$hook_output" "RUN agent-reach: bash scripts/hooks/policy/check-agent-reach.sh" "hook"
 
 memory_output="$(run_case memory normal memory/workflow/example/memory.md)"
 assert_contains "$memory_output" "route: frontend=0 rust=0 hook=0 memory=1 agent=0" "memory"
@@ -559,5 +573,50 @@ assert_mutation heredoc green red "" ": <<'MUTATION'\n\t$VICTIM_CALL\nMUTATION"
 assert_mutation run-step-in red green "\trun_step_in \"doc-size-tests\" . bash $VICTIM_SUITE" ""
 assert_mutation line-continuation red green "\trun_step \"doc-size-tests\" \\\\\n\t\tbash $VICTIM_SUITE" ""
 assert_mutation variable-path red green "\tdoc_size_suite=$VICTIM_SUITE\n\trun_step \"doc-size-tests\" bash \"\$doc_size_suite\"" ""
+
+# `|| true` on a gate call is the one edit BOTH implementations above read as
+# green: the DRY_RUN line stays byte-identical, the step still prints and still
+# runs, and its exit status is thrown away, so the gate can no longer fail a
+# push. Measured on a copy: appending it to the two `run_agent_gates` calls left
+# every assertion in this file green.
+#
+# Wiring asks "does this execute", which text cannot answer — that is what the
+# six mutations above prove. Status discard is a different question: it is a
+# property of the call site's syntax, and reading the syntax is how you answer
+# it. So this one is a scan, and it covers every `run_*` gate call rather than
+# the two the review found, because a guard in the shared shape is smaller than
+# one per call site.
+#
+# Ceiling: only the trailing `|| true` / `|| :` form. Wrapping a call in
+# `set +e` / `set -e`, or moving it into a function that swallows the status,
+# is invisible here.
+status_discarding_gates() {
+	grep -nE '^[[:space:]]*run_[a-z_]+[[:space:]].*\|\|[[:space:]]*(true|:)([[:space:]]|$)' "$1" || true
+}
+
+discarded="$(status_discarding_gates "$ROUTER")"
+[ -z "$discarded" ] || {
+	echo "FAIL: gate calls whose exit status the router throws away:" >&2
+	printf '%s\n' "$discarded" >&2
+	exit 1
+}
+
+# The detector has to fire on the real thing, or the empty result above means
+# "cannot see" rather than "clean".
+discard_mutant="$MUTANT_DIR/apply/status-discard.sh"
+awk -v victim="$VICTIM_CALL" '
+	index($0, victim) { print $0 " || true"; next }
+	{ print }
+' "$ROUTER" >"$discard_mutant"
+chmod +x "$discard_mutant"
+[ -n "$(status_discarding_gates "$discard_mutant")" ] || {
+	echo "FAIL: status-discard mutation went undetected" >&2
+	exit 1
+}
+[ "$(verdict_for "$discard_mutant" wired_suites_of)" = green ] || {
+	echo "FAIL: status-discard mutation changed the DRY_RUN wiring verdict; it is supposed to be invisible there" >&2
+	exit 1
+}
+echo "  mutation status-discard: detector=red dry-run=green"
 
 echo "PASS: pre-push path router smoke check"

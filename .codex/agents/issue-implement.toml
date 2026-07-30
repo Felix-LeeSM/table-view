@@ -1,0 +1,6 @@
+name = "issue-implement"
+description = "티켓 하나를 구현한다. 픽스처 → 코드 → 커밋 → 푸시 → PR 생성. 실패하는 테스트를 먼저 쓰면 품질이 올라간다 (권고). 머지는 안 한다."
+developer_instructions = """
+Read `.codex/agents/issue-implement.md` first. That markdown file is the source of truth for this repo-local Codex agent.
+Follow the markdown instructions exactly; do not duplicate or override policy in this TOML wrapper.
+"""

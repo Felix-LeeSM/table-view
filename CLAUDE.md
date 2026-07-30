@@ -19,7 +19,9 @@ subagent 에 배달되지 않았다 (#1865 측정). 지우면 배달이 끊긴�
   해당 surface active rule 묶음.
 - [`docs/PLAN.md`](docs/PLAN.md) — product/roadmap/contributor SOT 인덱스.
 - [`.claude/rules/git-policy.md`](.claude/rules/git-policy.md) — hook/signing
-  회피 금지 wrapper. 본문 source 는 `memory/workflow/git-policy/memory.md`.
+  회피 금지. 차단 목록 본문이 거기 실려 있고, 링크가 아니라 그 파일의 `paths`
+  선택자 때문에 spawn 된 subagent 에도 내려간다 (#1978 실측). 절차와 근거는
+  `memory/workflow/git-policy/memory.md`.
 
 ## 강제 룰
 

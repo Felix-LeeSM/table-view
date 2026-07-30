@@ -60,7 +60,7 @@ description: 대화 중 합의된 결정, 룰, 적용 원칙을 repo memory/docs
 ---
 name: <한 줄 제목>
 description: <한 줄 설명 — 미래 재방문 시 trigger 신호>
-type: convention | workflow-rule | product-rule | runbook | reference | ADR | incident | topic
+type: convention | workflow-rule | product-rule | runbook | reference | ADR | incident | topic | index
 updated: YYYY-MM-DD
 trigger:  # 선택 — 인지 layer 자동화 input
   signal: <어떤 상황에서 룰 발동되는가>
