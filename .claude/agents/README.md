@@ -27,10 +27,23 @@ model: opus | sonnet | haiku
 - main read (해당 agent 본인 룰) 는 강제, 조건부 read 만 진짜 lazy.
 - frontmatter `name` / `description` / `tools` / `model` 필수. subagent spawn
   도구명은 `Agent` (구세대 별칭 `Task` 금지 — drift 소스).
-- **중첩 spawn 불가**: subagent 는 또 다른 subagent 를 spawn 못 한다 (top-level
-  세션만 `Agent` tool 사용). fan-out coordinator (`pr-reviewer`) 는 top-level
-  전용이고, spawn 실패 시 관점-순차 단독 검증으로 강등한다 — 기준·fallback SOT 는
+- **중첩 spawn 은 된다 — 한도는 깊이다.** subagent 도 `Agent` 로 또 다른 subagent 를
+  spawn 한다. 기본 한도는 main 대화 아래 **3층**이고, 한도에 닿은 층부터 Claude
+  Code 가 subagent 에게서 `Agent` 를 회수한다 (fork 만 예외).
+  `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH` 로 한도를 바꾸고 `1` 이면 중첩이 꺼진다
+  (공식 문서 "Let subagents spawn their own subagents", `claude --version` →
+  `2.1.220`). **이 저장소의 깊이 예산은 2다** — `orchestrator`(main) →
+  `pr-reviewer`(1층) → `pr-subreviewer`(2층), 한 층 남는다. `pr-subreviewer` 가
+  `tools` 에서 `Agent` 를 안 받는 것은 한도 때문이 아니라 잎으로 두려는 선택이다.
+  spawn 이 실패하면 (깊이 한도 초과, 일시적 실패) fan-out coordinator
+  (`pr-reviewer`) 는 관점-순차 단독 검증으로 강등한다 — 기준·fallback SOT 는
   `.agents/skills/pr-review/SKILL.md` Review Pack.
+- **플랫폼 제약을 적을 때는 측정 인용을 같이 적는다.** "하네스가 X 를 막는다" 류
+  문장에는 잰 명령과 버전, 또는 공식 문서 인용을 붙인다 (`claude --version` →
+  `2.1.220`, `(#1931 프로브)` 처럼). 증상 하나를 보고 제약을 추론해 적지 않는다 —
+  #1023 이 구식 도구명 `Task` 하나에서 "중첩 spawn 불가" 로 건너뛰었고, 그 거짓이
+  3 SOT 에 3주 넘게 살아남아 설계 전제로까지 들어갔다 (#1930). 같은 파일의
+  `tools` 에 `Agent` 가 이미 들어 있었는데도 아무도 몰랐다.
 - 공통 규칙을 한 wrapper 에만 적어 두지 않는다. agent 정의 파일 간 상속
   메커니즘이 없어 나머지 agent 에는 전달되지 않는다 — 아래 "subagent 가 보는 것"
   참조.
