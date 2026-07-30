@@ -200,19 +200,20 @@
     {
       "retiredBy": 1076,
       "issue": 1812,
-      "reason": "Live `_delete_by_query` execution shipped behind the Safe Mode confirm gate. Evidence: src-tauri/src/commands/search.rs execute_search_delete_by_query calls safe_mode::enforce_search_danger before dispatch, and e2e/smoke/search-runtime-smoke.ts deletes with previewOnly false plus safetyConfirmed true, then re-plans to estimatedDocumentCount 0. #1076 updated three docs/product pages and left the same claim stale in eight other live-prose sentences; these phrases are the exact wordings #1812 retired.",
+      "reason": "Live `_delete_by_query` execution shipped behind the Safe Mode confirm gate. Evidence: src-tauri/src/commands/search.rs execute_search_delete_by_query calls safe_mode::enforce_search_danger before dispatch, and e2e/smoke/search-runtime-smoke.ts deletes with previewOnly false plus safetyConfirmed true, then re-plans to estimatedDocumentCount 0. #1076 updated three docs/product pages and left the same claim stale in ten other live-prose sentences; these phrases are the wordings #1812 retired. The last two are paraphrases, not repeats of the docs wording — the memory/ rooms said the same thing in their own words and the first phrase list walked straight past them. Rule of thumb when adding a phrase: replay it against the pre-fix tree first. It must hit, and it must not hit prose that is legitimately still true (`broader admin APIs` was dropped for exactly that: four docs qualify it as `(index/settings create/delete)`).",
       "phrases": [
         "Delete-by-query planning is preview-only",
         "preview-only execution rejection",
         "as a preview-only plan",
         "as preview-only plans",
         "delete-by-query preview plan estimates with actual execution unsupported",
-        "Actual live `_delete_by_query` execution, live admin smoke",
         "actual live admin execution",
         "actual admin execution",
         "actual Search admin execution",
         "actual live Search admin execution",
-        "Search live admin execution"
+        "Search live admin execution",
+        "Actual delete-by-query execution",
+        "actual live `_delete_by_query`"
       ]
     }
   ]

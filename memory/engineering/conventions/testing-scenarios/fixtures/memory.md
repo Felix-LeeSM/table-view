@@ -79,6 +79,12 @@ fixture 또는 emulator/testcontainer/embedded sample 로 재현 가능한 증�
   머리로 조립되는 매치는 거부한다 (문서가 claim 을 두 문단으로 쪼개도 pin 이 통과하는
   false pass 차단). 반대로 `sourceGates` 의 code 문구는 raw 비교를 유지한다 —
   식별자와 사용자 노출 error string literal 은 whitespace 자체가 pin 대상이다.
+- `mustContain` 은 존재만 본다. capability 를 승격하면 은퇴한 non-claim 문구를
+  같은 fixture 의 `retiredClaims[].phrases` 에 넣어라 — live prose (README +
+  `docs/` + `memory/`, 동결 트리 셋 제외) 전수에서 그 문구가 사라졌는지 본다
+  (#1812). 문구를 넣기 전에 고치기 전 트리에 replay 해서 hit > 0 인지, 그리고
+  아직 참인 문장을 안 잡는지 확인한다. `broader admin APIs` 는 네 문서가
+  `(index/settings create/delete)` 로 한정해 쓰고 있어 오탐 4건으로 뺐다.
 - `fixture-backed` 기능을 product/docs 에 적을 때는 live connection, auth/TLS,
   admin, observability 등 미구현 surface 를 같이 적는다.
 

@@ -46,7 +46,8 @@ interface BoundaryFixture {
  * can only assert that the NEW wording arrived somewhere; it cannot see the OLD
  * wording still sitting in a file nobody listed. That gap is what #1812 measured:
  * #1076 promoted live `_delete_by_query` execution, updated three docs/product
- * pages, and left eight other live-prose sentences claiming it was preview-only.
+ * pages, and left ten other live-prose sentences claiming it was preview-only —
+ * eight in docs/, two in memory/, none of them named by any boundary row.
  */
 interface RetiredClaim {
   readonly retiredBy: number;
@@ -220,7 +221,7 @@ describe("unsupported_boundary_contracts.json", () => {
   // Reason: #1812 — a promoted capability leaves its retired non-claim behind in
   // live prose nobody listed. `docs[].mustContain` is presence-only, so it stays
   // green while a contradicting sentence sits two files over. This sweeps every
-  // live-prose markdown file, not a hand-kept path list, because the eight stale
+  // live-prose markdown file, not a hand-kept path list, because the ten stale
   // #1076 sentences were in files no boundary row named. (2026-07-30)
   it("keeps retired support non-claims out of live prose", () => {
     const retiredClaims = loadBoundaryFixture().retiredClaims ?? [];
@@ -253,12 +254,16 @@ describe("unsupported_boundary_contracts.json", () => {
   it("enumerates live prose, prunes frozen trees, and matches across a wrap", () => {
     const files = liveProseFiles();
 
-    // The four files #1812 found stale that no boundary row lists by path.
+    // Files #1812 found stale that no boundary row lists by path. The two
+    // memory/ rooms are why `LIVE_PROSE_ROOTS` is not just `docs`: they carry
+    // the same claim in their own words, so a docs-only walk stays green.
     for (const stale of [
       "README.md",
       "docs/roadmap/h5.md",
       "docs/contributor-guide/smoke-matrix/h7-ops-security-reliability.md",
       "docs/contributor-guide/release/release-notes-support-matrix.md",
+      "memory/engineering/architecture/data-source/memory.md",
+      "memory/engineering/architecture/data-source/posture/memory.md",
     ]) {
       expect(files, `live prose must reach ${stale}`).toContain(stale);
     }

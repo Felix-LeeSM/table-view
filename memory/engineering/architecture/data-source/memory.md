@@ -130,10 +130,11 @@ capability claims during topology moves.
   cluster/pubsub/modules, consumer-group management, broad destructive commands,
   and full Redis compatibility need follow-up evidence.
 - `SearchAdapter`: Elasticsearch/OpenSearch support live HTTP connection,
-  catalog/index detail, bounded `_search`, Search result envelopes, and
-  destructive-plan contracts. Fixture harness remains contract evidence. Actual
-  delete-by-query execution, broader admin APIs, observability/profile/explain
-  workflows, and product-specific widening need separate promotion gates.
+  catalog/index detail, bounded `_search`, Search result envelopes,
+  destructive-plan contracts, and live `_delete_by_query` execution behind the
+  Safe Mode confirm gate (#1076). Fixture harness remains contract evidence.
+  Index/settings admin APIs, observability/profile/explain workflows, and
+  product-specific widening need separate promotion gates.
 - `WideColumnAdapter`, `CloudDocumentAdapter`, `GraphAdapter`, `VectorAdapter`,
   `StreamAdapter`: future contracts only.
 
