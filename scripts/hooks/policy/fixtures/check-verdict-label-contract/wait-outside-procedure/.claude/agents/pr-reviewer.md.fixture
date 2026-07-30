@@ -1,0 +1,3 @@
+Verdict label 필수. 예전에는 두 명령 사이를 30초 벌렸다.
+green → `gh pr edit <N> --add-label review:approved` → 곧바로 → `gh pr edit <N> --remove-label review:changes-requested`.
+red → `gh pr edit <N> --remove-label review:approved` → 곧바로 → `gh pr edit <N> --add-label review:changes-requested`.

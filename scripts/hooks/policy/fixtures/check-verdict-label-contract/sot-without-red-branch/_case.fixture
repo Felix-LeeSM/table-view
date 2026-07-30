@@ -1,0 +1,18 @@
+---
+expect: reject
+mentions: .codex/agents/pr-reviewer.md — verdict 절차 SOT 인데 red 분기 명령이 없다
+---
+
+# A verdict SOT that only documents green
+
+#1884's own starting state, and the floor under the derived subject list.
+
+The guard picks its second-check subjects out of the sweep rather than a
+hand-written array, because an array is deleted one line at a time and takes the
+file out of the check with it (#1875). Derivation has the mirrored failure: drop
+the red branch from a file and it simply stops being a subject, and an empty
+derived set is green.
+
+So the three paths #1884 names are a floor on that set. Here `.codex` documents
+only green — nothing else in the tree is wrong — and the floor is the only thing
+that can notice.

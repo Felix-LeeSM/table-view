@@ -1,0 +1,19 @@
+---
+expect: reject
+repo: none
+mentions: git ls-files — 파일 목록을 못 얻었다. 빈 목록을 통과로 읽지 않는다
+---
+
+# The enumeration dies, and the sweep must not read that as clean
+
+Round 1 of #1905 (NEW-6), the fail-open half. Piping `git ls-files` straight
+into the loop means a dead `git` produces an empty list, the loop runs zero
+times, and the guard reports "0 combined forms" over a repository it never read.
+
+The tree here is the correct procedure, so the ONLY thing that can make this
+case reject is the enumeration check. If the guard ever exits 0 with an unusable
+list, the input it would have accepted is a healthy one.
+
+`repo: none` means the sweep materializes the tree and never runs `git init`, so
+`git ls-files` exits 128. The sweep refuses to run this case if `$TMPDIR` sits
+inside a repository, since git would then answer from that one instead.

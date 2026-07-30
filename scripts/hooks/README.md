@@ -142,7 +142,27 @@ and more durable than asking each future guard to remember an exclude.
    `-reject stray-non-markdown` in the diff rather than `-7 +6`.
 6. Wire the suite into `apply/pre-push-path-router.sh`.
    `apply/test-pre-push-path-router.sh` fails on a tracked `test-*.sh` the
-   router never names, so an unwired suite does not stay unwired quietly.
+   router never names, so an unwired suite does not stay unwired quietly. It
+   does not do the same for the `check-*.sh` step beside it — that comparison
+   enumerates suites only, so an unwired guard is still review's to catch.
+
+### `repo:` — when the input includes a repository
+
+`policy/test-check-verdict-label-contract.sh` is the second guard on this
+convention, and it enumerates with `git ls-files` rather than `find`. Its cases
+carry one more frontmatter key:
+
+```
+repo: tracked      the default — init, then `git add -A`
+repo: untracked    init and add nothing, so the enumeration returns empty
+repo: none         no init at all, so the enumeration exits 128
+```
+
+The point is not the plumbing. A guard that reads its input through another
+command inherits that command's failure modes, and those are the ones that fail
+open: `git ls-files` answering empty looks exactly like a clean sweep. Without
+a knob for it, the two cases that pin those paths cannot be written at all, and
+"fail closed" stays a claim in a comment.
 
 Known ceiling: none of this stops an author who means to delete a case. The
 floors catch a fixture directory that has been emptied, a verdict flipped, and a
