@@ -1,15 +1,27 @@
 #!/usr/bin/env bash
-# Regression tests for scripts/handoff.mjs — 인계 write / read / state.
+# Regression tests for scripts/handoff.mjs — 인계 write / read.
+# (`state` 는 이 스위트에 없다. #2006 이 소유한다.)
 #
 # `gh` 를 PATH 앞에 놓은 가짜로 갈아끼우고, 케이스 디렉터리의 캔 응답을 읽게 한다.
 # 진짜 GitHub 을 안 건드리면서 argv 와 코멘트 본문까지 검사할 수 있다.
 #
 # 파일 끝의 mutation 증명이 이 스위트의 진짜 검증이다. 케이스가 GREEN 인 것은
-# "돌았다" 만 말하고 "잡는다" 는 말하지 않는다. `assert_mutation` 은 표적이 실제로
-# 치환됐는지(`cmp`)와 mutant 가 여전히 파싱되는지(`node --check`)를 먼저 보는데,
-# 둘 다 없으면 아무것도 안 바꾼 mutation 은 GREEN 을, 문법을 깬 mutation 은 파서가
-# 주는 RED 를 증명으로 오독하게 된다. 표적 문자열은 이 파일 저자의 머릿속 표기가
-# 아니라 handoff.mjs 에서 그대로 복사한 실제 표기다.
+# "돌았다" 만 말하고 "잡는다" 는 말하지 않는다. 그 증명이 서려면 네 겹이 필요하고,
+# 넷 다 이 파일에 있다:
+#
+#   1. 표적이 실제로 치환됐나 — `cmp -s` (아무것도 안 바꾼 mutation 은 GREEN 이다)
+#   2. mutant 가 여전히 파싱되나 — `node --check` (문법을 깨면 파서의 RED 를 증명으로
+#      오독한다)
+#   3. **변조 안 한 사본이 같은 자리에서 통과하나** — 양성 대조. 없으면 mutant 전부가
+#      환경 오류로 같이 죽어도 `mutation …: red` 17줄 + `PASS` + exit 0 이 나온다.
+#      실제로 그럴 수 있었다: `ln -s "$(node -p …)"` 는 명령치환이 실패해도
+#      `set -euo pipefail` 이 안 잡고 `ln -s "" t` 가 rc=0 으로 길이 0짜리 링크를
+#      만든다 (둘 다 실측). 그러면 mutant 가 전부 `MODULE_NOT_FOUND` 로 죽는다.
+#   4. **환경 오류를 assertion 사망과 갈라 보나** — `env_broken()`. 그리고 그 판별기가
+#      죽지 않았는지를 음성 대조가 본다 (`yaml` 을 뗀 자리에서 `broken` 이 나와야 한다).
+#
+# 표적 문자열은 이 파일 저자의 머릿속 표기가 아니라 handoff.mjs 에서 그대로 복사한
+# 실제 표기다.
 
 set -euo pipefail
 
@@ -153,29 +165,6 @@ make_issue_json() { # out issue-state labels-csv [[ASSOC=]body-file ...]
 		"$state" "$(json_labels "$labels")" "${comments%,}" >"$out"
 }
 
-make_state_json() { # issue-state issue-labels pr-json-or-none
-	local refs="[]" number
-	if [ "$3" != "none" ]; then
-		number="${3#*\"number\":}"
-		number="${number%%,*}"
-		refs="[{\"url\":\"https://github.com/o/r/pull/$number\"}]"
-		printf '%s' "$3" >"$CASE/pr.json"
-	fi
-	printf '{"state":"%s","labels":%s,"closedByPullRequestsReferences":%s}' \
-		"$1" "$(json_labels "$2")" "$refs" >"$CASE/issue.json"
-}
-
-pr_json() { # number state labels-csv rounds checks-json
-	local comments="" i
-	for ((i = 0; i < $4; i++)); do comments="$comments{\"body\":\"x\"},"; done
-	printf '{"number":%s,"state":"%s","labels":%s,"comments":[%s],"statusCheckRollup":%s}' \
-		"$1" "$2" "$(json_labels "$3")" "${comments%,}" "$5"
-}
-
-GREEN_CHECKS='[{"name":"ci","status":"COMPLETED","conclusion":"SUCCESS"}]'
-PENDING_CHECKS='[{"name":"ci","status":"IN_PROGRESS","conclusion":""}]'
-FAILED_CHECKS='[{"name":"ci","status":"COMPLETED","conclusion":"FAILURE"}]'
-
 valid_handoff() { # out-file [at] [base_oid]
 	cat >"$1" <<YAML
 handoff:
@@ -192,9 +181,9 @@ handoff:
       severity: blocking
       where: scripts/handoff.mjs:1
       evidence:
-        cmd: "node scripts/handoff.mjs state --issue 7"
-        got: "BROKEN"
-        want: "WAIT checks"
+        cmd: "node scripts/handoff.mjs read --stage issue-implement --issue 7"
+        got: "exit 4"
+        want: "exit 0"
       action:
         type: fix
         cmd: "bash scripts/hooks/policy/test-handoff.sh"
@@ -532,80 +521,91 @@ YAML
 	expect_in "read/중첩 펜스 본문 보존" "$CASE/out" "git grep -c X"
 }
 
-# --------------------------------------------------------------- state 케이스
-
-expect_state() { # label issue-state issue-labels pr-json want
-	new_case "state-$1"
-	make_state_json "$2" "$3" "$4"
-	handoff state --issue 7
-	expect_eq "state/$1 exit" "$RC" "0"
-	expect_eq "state/$1" "$(cat "$CASE/out")" "$5"
+case_read_contributor_rejected() {
+	# 신뢰 집합의 **경계**. `NONE` 만 때리면 집합을 넓히는 편집이 안 잡힌다 —
+	# `CONTRIBUTOR` 는 PR 한 번 머지된 외부인이고, PUBLIC 저장소에서 가장 싼 위조
+	# 경로다. GitHub 이 이 필드에 줄 수 있는 값 8종은 handoff.mjs 의 allowlist 주석에
+	# 전수로 적혀 있다.
+	new_case read-contributor-rejected
+	valid_handoff "$CASE/in.yaml" "$AT"
+	fenced "$CASE/in.yaml" >"$CASE/comment.md"
+	make_issue_json "$CASE/issue.json" OPEN "task" "CONTRIBUTOR=$CASE/comment.md"
+	printf '{"headRefOid":"%s"}' "$AT" >"$CASE/pr.json"
+	handoff read --stage issue-implement --issue 7
+	expect_eq "read/CONTRIBUTOR 거부 exit" "$RC" "4"
+	expect_in "read/CONTRIBUTOR 거부 사유" "$CASE/err" "authorAssociation=CONTRIBUTOR 은 신뢰 경계 밖이다"
+	expect_not_in "read/CONTRIBUTOR 인계를 반환하지 않는다" "$CASE/out" "run_id"
 }
 
-case_state_rows() {
-	# needs:user 는 최상단이다 — PR 쪽에 붙어도, green 이어도 사용자가 먼저다.
-	expect_state needs-user-on-pr OPEN "task" \
-		"$(pr_json 7 OPEN "review:approved,needs:user" 0 "$GREEN_CHECKS")" "BLOCKED needs:user"
-	expect_state needs-user-on-issue OPEN "task,needs:user" "none" "BLOCKED needs:user"
-	expect_state closed CLOSED "task" "none" "DONE"
-	expect_state raw OPEN "raw" "none" "BLOCKED raw-promotion"
-	expect_state unlabeled OPEN "" "none" "BLOCKED raw-promotion"
-	expect_state task-no-pr OPEN "task" "none" "RUN issue-implement"
-	expect_state task-closed-pr OPEN "task" \
-		"$(pr_json 7 CLOSED "review:approved" 0 "$GREEN_CHECKS")" "RUN issue-implement"
-	# 수정 푸시 직후: changes-requested 가 남고 새 커밋엔 리뷰가 없다 → 구현자.
-	# 라운드가 임계 미만이라 회고 줄이 이 자리를 가로채지 않는 것도 같이 고정한다.
-	expect_state changes-requested OPEN "task" \
-		"$(pr_json 7 OPEN "review:changes-requested" 1 "$GREEN_CHECKS")" "RUN issue-implement"
-	expect_state no-verdict OPEN "task" \
-		"$(pr_json 7 OPEN "" 0 "$GREEN_CHECKS")" "RUN pr-reviewer"
-	# 승인에서 마지막 required check 까지 7분26초가 실측된 자리 (#1938).
-	expect_state approved-checks-pending OPEN "task" \
-		"$(pr_json 7 OPEN "review:approved" 0 "$PENDING_CHECKS")" "WAIT checks"
-	expect_state approved-checks-green OPEN "task" \
-		"$(pr_json 7 OPEN "review:approved" 0 "$GREEN_CHECKS")" "RUN pr-finalize"
-	# 라운드 3 red — 실제로 일어나는 상태다. verdict label 은 changes-requested 이고,
-	# checks 의 실패는 다른 게 아니라 라운드 게이트 자신이다 — `review-gate` 가
-	# `comments >= cap && !reflect:done` 이면 `exit 1` 하고, `checkState()` 는 rollup
-	# 전체를 봐서 하나만 실패해도 green 이 아니다.
-	# 회고 줄이 changes-requested 아래 있으면 여기서 구현자가 다시 불려 나가는데,
-	# 그게 같은 게이트가 금지한 "같은 유형에 fix 를 더 쌓기" 다.
-	expect_state round3-changes-requested OPEN "task" \
-		"$(pr_json 7 OPEN "review:changes-requested" 5 "$FAILED_CHECKS")" "RUN round-reflect"
-	# 라운드 3 green(=리뷰어가 승인) — 이때도 게이트가 죽어 있으니 checks 는 failed 다.
-	expect_state round3-approved OPEN "task" \
-		"$(pr_json 7 OPEN "review:approved" 5 "$FAILED_CHECKS")" "RUN round-reflect"
-	# `reflect:done` 이 붙으면 게이트가 풀리고 checks 가 green 이 될 수 있다. #1922 의
-	# "라운드 3에서 green 이면 종결" 은 이 상태를 말한다 — 회고 줄이 안 걸린다.
-	expect_state round3-reflect-done-green OPEN "task" \
-		"$(pr_json 7 OPEN "review:approved,reflect:done" 5 "$GREEN_CHECKS")" "RUN pr-finalize"
-	expect_state round3-reflect-done-failed OPEN "task" \
-		"$(pr_json 7 OPEN "review:approved,reflect:done" 5 "$FAILED_CHECKS")" "BROKEN"
-	# 임계를 넘었는데 checks 가 green 인 조합은 게이트가 required 인 한 도달 불가다
-	# (green ⟹ 게이트 통과 ⟹ 임계 미만 또는 reflect:done). 그래도 우선순위는
-	# 고정해 둔다 — 차단기가 종결보다 위다.
-	expect_state round3-green-unreachable OPEN "task" \
-		"$(pr_json 7 OPEN "review:approved" 5 "$GREEN_CHECKS")" "RUN round-reflect"
-	# 어느 줄에도 안 맞는다 = 라우팅 구멍. WAIT 과 뭉치면 안 된다.
-	expect_state broken OPEN "task" \
-		"$(pr_json 7 OPEN "review:approved" 0 "$FAILED_CHECKS")" "BROKEN"
-	# 체크가 아직 하나도 안 생긴 PR 을 green 으로 읽으면 검증 0인 채 머지 줄로 간다.
-	expect_state approved-no-checks OPEN "task" \
-		"$(pr_json 7 OPEN "review:approved" 0 "[]")" "WAIT checks"
-	# labeled 재실행 창: 옛 실패와 새 큐가 같이 보이면 pending 이 이긴다.
-	expect_state approved-mixed OPEN "task" \
-		"$(pr_json 7 OPEN "review:approved" 0 '[{"name":"a","status":"COMPLETED","conclusion":"FAILURE"},{"name":"b","status":"QUEUED","conclusion":""}]')" \
-		"WAIT checks"
+case_read_uppercase_fence() {
+	# GitHub 은 ```YAML 과 ```yaml 을 같은 바이트로 렌더한다 (handoff.mjs 의 FENCE
+	# 주석에 `gh api /markdown` 확인 명령이 있다). 대소문자를 가리면 정상 인계를
+	# "없다" 로 읽는다.
+	new_case read-uppercase-fence
+	valid_handoff "$CASE/in.yaml" "$AT"
+	printf '```YAML\n%s\n```\n' "$(cat "$CASE/in.yaml")" >"$CASE/comment.md"
+	make_issue_json "$CASE/issue.json" OPEN "task" "$CASE/comment.md"
+	printf '{"headRefOid":"%s"}' "$AT" >"$CASE/pr.json"
+	handoff read --stage issue-implement --issue 7
+	expect_eq "read/대문자 펜스 exit" "$RC" "0"
+	expect_in "read/대문자 펜스 인계 반환" "$CASE/out" "run_id: pr7-r1-review"
 }
 
-case_state_broken_is_not_wait() {
-	# 두 반환이 실제로 다른 문자열인지 본다. 뭉치면 정상 대기와 라우팅 구멍이
-	# 관측상 같아진다 — 이 반환이 존재하는 이유 자체가 그 구분이다.
-	local broken wait
-	broken="$(cat "$RUN_DIR/state-broken/out")"
-	wait="$(cat "$RUN_DIR/state-approved-checks-pending/out")"
-	[ "$broken" != "$wait" ] || note_fail "state/BROKEN 이 WAIT 과 같은 값이다 ('$broken')"
-	expect_eq "state/BROKEN 값" "$broken" "BROKEN"
+case_write_uppercase_fence_dedupe() {
+	# 같은 인계가 ```YAML 펜스로 이미 있는데 중복 스캔이 그걸 못 보면 fail-open 이라
+	# 코멘트가 두 번 올라간다. `read` 는 fail-closed 지만 `write` 는 아니다.
+	new_case write-uppercase-fence-dedupe
+	valid_handoff "$CASE/in.yaml"
+	printf '```YAML\n%s\n```\n' "$(cat "$CASE/in.yaml")" >"$CASE/existing.md"
+	make_issue_json "$CASE/issue.json" OPEN "task,wip:pr-reviewer" "$CASE/existing.md"
+	handoff write --stage pr-reviewer --issue 7 --pr 7 <"$CASE/in.yaml"
+	expect_eq "write/대문자 펜스 exit" "$RC" "0"
+	expect_in "write/대문자 펜스 SKIP" "$CASE/out" "SKIP issue/7"
+	expect_not_in "write/대문자 펜스면 두 번 안 쓴다" "$CASE/calls.log" "issue comment"
+}
+
+case_write_untrusted_collision_ignored() {
+	# `write` 쪽 신뢰 필터. 외부인이 같은 (from,to,subject,run_id) 로 다른 내용을
+	# 심어도 정상 write 를 막지 못해야 한다 — 막히면 외부인이 인계를 exit 1 로
+	# 고착시킬 수 있다.
+	new_case write-untrusted-collision-ignored
+	valid_handoff "$CASE/old.yaml" "$OTHER_OID"
+	fenced "$CASE/old.yaml" >"$CASE/forged.md"
+	valid_handoff "$CASE/in.yaml"
+	make_issue_json "$CASE/issue.json" OPEN "task,wip:pr-reviewer" "NONE=$CASE/forged.md"
+	handoff write --stage pr-reviewer --issue 7 --pr 7 <"$CASE/in.yaml"
+	expect_eq "write/신뢰 밖 충돌은 무시 exit" "$RC" "0"
+	expect_in "write/신뢰 밖 충돌이어도 올린다" "$CASE/out" "WROTE issue/7"
+	expect_in "write/신뢰 밖 거부 사유는 남긴다" "$CASE/err" "신뢰 경계 밖이다"
+}
+
+case_read_module_missing() {
+	# BF2. `yaml` 이 안 잡히는 자리에서 도는 것은 **운영 실패(exit 2)** 다.
+	# 이 구분이 없으면 `read` 는 exit 4 `앞 node 가 아예 안 돌았다` (#1918 §10 의 사망
+	# 탐지 신호이자 스킬이 "재시도로 안 고쳐진다" 로 못박은 코드) 를 주고, `write` 는
+	# exit 1 (=입력을 고쳐 다시 써라) 을 줘서 agent 가 멀쩡한 YAML 을 계속 고친다.
+	# 둘 다 진짜 원인은 `npm install` 한 줄이다.
+	new_case read-module-missing
+	# 이 케이스만 일부러 모듈 오류를 낸다. env_broken() 이 이 표식을 보고 건너뛴다 —
+	# 안 그러면 정상 실행이 매번 "환경이 깨졌다" 로 읽힌다.
+	printf 'BF2\n' >"$CASE/expects-module-error"
+	local bare="$CASE/bare" saved="$BIN"
+	mkdir -p "$bare"
+	cp "$BIN" "$bare/handoff.mjs"
+	valid_handoff "$CASE/in.yaml" "$AT"
+	fenced "$CASE/in.yaml" >"$CASE/comment.md"
+	make_issue_json "$CASE/issue.json" OPEN "task" "$CASE/comment.md"
+	printf '{"headRefOid":"%s"}' "$AT" >"$CASE/pr.json"
+
+	BIN="$bare/handoff.mjs"
+	handoff read --stage issue-implement --issue 7
+	expect_eq "read/모듈 부재 exit" "$RC" "2"
+	expect_in "read/모듈 부재 원인" "$CASE/err" "npm install"
+	expect_not_in "read/모듈 부재를 사망 신호로 안 읽는다" "$CASE/err" "앞 node 가 아예 안 돌았다"
+	handoff write --stage pr-reviewer --issue 7 --pr 7 <"$CASE/in.yaml"
+	expect_eq "write/모듈 부재 exit" "$RC" "2"
+	expect_not_in "write/모듈 부재를 입력 실패로 안 읽는다" "$CASE/err" "표준입력 YAML 파싱 실패"
+	BIN="$saved"
 }
 
 # ------------------------------------------------------------------ 실행 묶음
@@ -629,6 +629,8 @@ run_all_cases() { # bin label
 	case_write_labels_noop
 	case_write_foreign_stage
 	case_write_subject_mismatch
+	case_write_uppercase_fence_dedupe
+	case_write_untrusted_collision_ignored
 
 	case_read_head_match
 	case_read_at_ancestor
@@ -639,10 +641,10 @@ run_all_cases() { # bin label
 	case_read_no_handoff
 	case_read_untrusted_author
 	case_read_untrusted_cannot_override
+	case_read_contributor_rejected
 	case_read_fixture_fence
-
-	case_state_rows
-	case_state_broken_is_not_wait
+	case_read_uppercase_fence
+	case_read_module_missing
 
 	[ "$FAILURES" = "0" ]
 }
@@ -653,57 +655,67 @@ run_all_cases "$HANDOFF" real || {
 }
 echo "  cases: 모두 통과 (real)"
 
-# --------------------------------------------- 라운드 임계는 워크플로가 소유
-
-# 임계값을 여기서 다시 적으면 세 번째 사본이 된다. 저장소 밖 픽스처에 다른 값을
-# 넣고 그 값이 판정을 바꾸는지 본다 — 코드에 3 이 박혀 있으면 rounds=5 가 회고로
-# 가서 이 단언이 깨진다. 저장소 루트는 cwd 에서 오고 모듈은 스크립트 위치에서
-# 오므로, 픽스처 안에서 진짜 handoff.mjs 를 그대로 돌릴 수 있다.
-FIXTURE="$TMP_DIR/cap-fixture"
-fixture_init_repo "$FIXTURE"
-mkdir -p "$FIXTURE/.github/workflows"
-printf 'github.event.pull_request.comments >= 9\n' >"$FIXTURE/.github/workflows/review-gate.yml"
-
-CASE="$TMP_DIR/runs/cap"
-mkdir -p "$CASE"
-: >"$CASE/calls.log"
-make_state_json OPEN "task" "$(pr_json 7 OPEN "review:approved" 5 "$FAILED_CHECKS")"
-
-set +e
-(cd "$FIXTURE" && PATH="$TMP_DIR/bin:$PATH" HANDOFF_CASE="$CASE" \
-	node "$HANDOFF" state --issue 7 >"$CASE/out" 2>"$CASE/err")
-RC=$?
-set -e
-expect_eq "cap/exit" "$RC" "0"
-expect_eq "cap/임계 9 에서는 라운드 5 가 회고가 아니다" "$(cat "$CASE/out")" "BROKEN"
-
-[ "$FAILURES" = "0" ] || {
-	echo "FAIL: 라운드 임계 케이스 $FAILURES 건 실패" >&2
-	cat "$CASE/err" >&2
-	exit 1
-}
-echo "  round cap: .github/workflows/review-gate.yml 에서 읽는다"
-
 # ------------------------------------------------------------ mutation 증명
 
 # 케이스가 GREEN 이라는 것은 "돌았다" 이지 "잡는다" 가 아니다. 아래 mutation 은
 # 각 수용 기준의 방어선을 하나씩 끊고, 이 파일의 판정이 그때마다 RED 로 뒤집히는지
-# 본다. 표적 문자열은 전부 handoff.mjs 에서 그대로 복사한 실제 표기다 — 작성자
-# 머릿속 표기로 만들면 작성자의 사각을 그대로 물려받는다.
+# 본다. 표적 문자열은 handoff.mjs 에서 그대로 복사한 실제 표기여야 하고, 그걸
+# 강제하는 것이 `mutate_step` 의 `cmp -s` 다 — 표적이 파일에 없으면 스위트가 그
+# 자리에서 하드 FAIL 한다. 작성자 머릿속 표기로 만들면 작성자의 사각을 물려받는다.
 MUTANT_DIR="$TMP_DIR/mutants"
 mkdir -p "$MUTANT_DIR/node_modules"
+
 # 모듈은 스크립트 위치에서 해석된다. 저장소 밖 mutant 가 `yaml` 을 못 찾으면 전부
 # 같은 이유로 죽어서 mutation 이 아무것도 증명하지 못한다 — 붙여준다.
-ln -s "$(node -p 'require("node:path").dirname(require.resolve("yaml/package.json"))')" \
-	"$MUTANT_DIR/node_modules/yaml"
+#
+# **대입으로 받는다.** `ln -s "$(node -p …)"` 로 쓰면 안 된다: 명령치환이 실패해도
+# 그 상태가 인자 자리에서는 simple command 의 상태로 안 올라가서 `set -euo pipefail`
+# 이 안 잡고, 이어지는 `ln -s "" t` 는 rc=0 으로 길이 0짜리 링크를 만든다. 둘 다
+# 실측이다. 대입은 반대로 치환의 상태가 곧 대입의 상태라 `set -e` 가 그 자리에서
+# 끊는다. 해석 기준도 cwd 가 아니라 $ROOT 다 — 저장소 밖에서 스위트를 돌려도 같은
+# 곳을 본다.
+YAML_DIR="$(node -p \
+	'require("node:path").dirname(require.resolve("yaml/package.json", { paths: [process.argv[1]] }))' \
+	"$ROOT")"
+[ -d "$YAML_DIR" ] || {
+	echo "FAIL: yaml 모듈 위치가 디렉터리가 아니다: '$YAML_DIR' — 저장소에서 npm install 해라" >&2
+	exit 1
+}
+ln -s "$YAML_DIR" "$MUTANT_DIR/node_modules/yaml"
 
-verdict_for() { # bin label
+# mutant 가 **방어선 때문에** 죽었는지 **환경 때문에** 죽었는지 가른다. 후자면 mutant
+# 전부가 같은 이유로 죽어서 red 가 증명이 아니다. 실측된 방아쇠는 위 심링크지만,
+# handoff.mjs 에 의존성이 하나 더 붙어도 같은 일이 난다 — 그래서 심링크가 아니라
+# **증상**을 본다: node loader 의 문자열과 handoff.mjs 가 운영 실패로 내는 문자열.
+ENV_ERROR='MODULE_NOT_FOUND|Cannot find (module|package)|모듈이 없다'
+
+# 일부러 모듈을 뗀 케이스(read-module-missing)는 그 문자열이 곧 단언이라 건너뛴다.
+# 표식이 없으면 정상 실행이 매번 broken 으로 읽힌다 — 필터가 실제로 거르는 것이
+# 그거고, 음성 대조가 그 필터 때문에 판별기가 죽지 않았음을 따로 증명한다.
+env_broken() { # run-dir
+	local dir hits=""
+	for dir in "$1"/*/; do
+		if [ -e "$dir/expects-module-error" ]; then
+			continue
+		fi
+		if [ -f "$dir/err" ] && grep -qE "$ENV_ERROR" "$dir/err"; then
+			hits="$dir"
+			break
+		fi
+	done
+	[ -n "$hits" ]
+}
+
+verdict_for() { # bin label -> green | red | broken
+	local rc=0
 	QUIET=1
-	if run_all_cases "$1" "$2"; then
-		QUIET=0
+	run_all_cases "$1" "$2" || rc=1
+	QUIET=0
+	if env_broken "$TMP_DIR/runs/$2"; then
+		printf 'broken\n'
+	elif [ "$rc" = "0" ]; then
 		printf 'green\n'
 	else
-		QUIET=0
 		printf 'red\n'
 	fi
 }
@@ -711,11 +723,18 @@ verdict_for() { # bin label
 # 한 단계 치환. 적용 안 된 단계는 원본을 그대로 돌려서 GREEN 을 준다 — `\Q` 안에서
 # 변수가 보간돼 패턴이 빈 문자열이 된 사고가 이 저장소에 있었다. 단계마다 본다.
 #
-# 표적 문자열에 백슬래시를 넣지 마라. `awk -v` 가 값의 escape 를 해석해서 `\s` 같은
-# 비표준 escape 는 `s` 로 뭉개진다 — 표적이 조용히 안 맞는다 (여기서 실제로 겪었다).
-# `\n` 은 반대로 진짜 개행이 되므로 replacement 에서 줄을 늘릴 때만 쓴다.
+# 표적/치환값은 `-v` 가 아니라 **환경**으로 넘긴다. `awk -v` 는 값의 escape 를
+# 해석해서 `\s` 같은 비표준 escape 를 `s` 로 뭉개고, 그러면 정규식을 표적으로 삼을
+# 수가 없다 (여기서 실제로 겪었다). `ENVIRON` 은 그 처리를 안 한다. 줄을 늘릴 때만
+# `%%NL%%` 를 개행으로 편다 — `\n` 을 그 표식으로 쓰면 정규식 안의 `\n` 까지 같이
+# 깨진다.
 mutate_step() { # name step victim replacement in out
-	awk -v victim="$3" -v body="$4" '
+	MUT_VICTIM="$3" MUT_BODY="$4" awk '
+		BEGIN {
+			victim = ENVIRON["MUT_VICTIM"]
+			body = ENVIRON["MUT_BODY"]
+			gsub(/%%NL%%/, "\n", body)
+		}
 		index($0, victim) {
 			if (body != "") print body
 			next
@@ -749,31 +768,79 @@ assert_mutation() { # name victim replacement [victim2 replacement2]
 	}
 
 	got="$(verdict_for "$mutant" "$name")"
-	[ "$got" = "red" ] || {
+	case "$got" in
+	red) ;;
+	broken)
+		# red 와 갈라 놓는 자리. 여기서 뭉치면 mutant 가 모듈을 못 찾아 죽은 것도
+		# "방어선을 잡았다" 로 세어진다 — 그게 이 스위트가 통째로 헛돌던 경로다.
+		echo "FAIL: mutation $name 이 환경 오류로 죽었다 (모듈 미해석) — 이 red 는 방어선이 아니다" >&2
+		exit 1
+		;;
+	*)
 		echo "FAIL: mutation $name: 스위트가 $got — 이 방어선을 아무 케이스도 안 잡는다" >&2
 		exit 1
-	}
+		;;
+	esac
 	echo "  mutation $name: red"
 }
 
-# mutant 는 서로 독립이고(각자 RUN_DIR) 저마다 케이스 전체를 다시 돈다 — mutation
+# 양성 대조 — mutant 와 **같은 자리**에 변조 안 한 사본을 놓고 green 인지 본다.
+# 위쪽의 `run_all_cases "$HANDOFF" real` 은 이걸 대신 못 한다: 저장소 안에서 도니까
+# node_modules 가 그냥 잡힌다. 여기가 green 이 아니면 아래 mutation 의 red 는 전부
+# 같은 이유로 난 것이고, 그때 `PASS` 를 내면 이 스위트의 증거가 통째로 공허해진다.
+assert_positive_control() {
+	local got
+	cp "$HANDOFF" "$MUTANT_DIR/positive-control.mjs"
+	got="$(verdict_for "$MUTANT_DIR/positive-control.mjs" positive-control)"
+	[ "$got" = "green" ] || {
+		echo "FAIL: 양성 대조가 $got — mutant 자리에서 변조 안 한 사본이 통과하지 않는다." >&2
+		echo "      아래 mutation 이 red 여도 방어선을 증명하지 못한다. read-head-match 의 stderr:" >&2
+		head -n 2 "$TMP_DIR/runs/positive-control/read-head-match/err" 2>/dev/null >&2
+		exit 1
+	}
+	echo "  positive control: green (변조 안 한 사본이 mutant 자리에서 통과한다)"
+}
+
+# 음성 대조 — 그 자리에서 `yaml` 만 떼면 판정이 green 도 red 도 아닌 `broken` 이어야
+# 한다. 이게 없으면 "양성 대조가 green" 이 무엇을 배제했는지 알 수 없다. 판별기가
+# 죽으면 (ENV_ERROR 오타, env_broken 의 표식 필터가 전부를 건너뜀 등) 여기서 걸린다.
+assert_negative_control() {
+	local dir="$TMP_DIR/no-yaml" got
+	mkdir -p "$dir"
+	cp "$HANDOFF" "$dir/negative-control.mjs"
+	got="$(verdict_for "$dir/negative-control.mjs" negative-control)"
+	[ "$got" = "broken" ] || {
+		echo "FAIL: 음성 대조가 $got — yaml 을 뗀 자리인데 환경 오류로 안 갈린다. 판별기가 죽었다." >&2
+		exit 1
+	}
+	echo "  negative control: broken (yaml 을 떼면 환경 오류로 갈린다)"
+}
+
+# mutant 와 대조 둘은 서로 독립이고(각자 RUN_DIR) 저마다 케이스 전체를 다시 돈다 —
 # 하나가 곧 스위트 한 벌이라 직렬로 두면 개수에 그대로 비례한다. 서브셸이라 전역이
-# 안 섞인다. 같은 기계에서 번갈아 3회씩 (`date +%s%N` 차):
-#   HANDOFF_TEST_MUTATION_JOBS=serial   47276 / 47536 / 47746 ms
-#   (기본, 병렬)                        13655 / 15203 / 20706 ms
-# 병렬 쪽 편차가 큰 건 부하를 타서다. 흔들리면 `serial` 로 돌려 하나씩 본다.
+# 안 섞인다. 같은 기계에서 3회씩, `s=$(date +%s%N); bash scripts/hooks/policy/
+# test-handoff.sh; e=$(date +%s%N)` 의 차 (2026-07-30, 19 job = mutation 17 + 대조 2):
+#   (기본, 병렬)                        13837 / 14919 / 14882 ms
+#   HANDOFF_TEST_MUTATION_JOBS=serial   58640 / 56594 / 76872 ms
+# 직렬 쪽 편차가 큰 건 부하를 타서다. 흔들리면 `serial` 로 돌려 하나씩 본다.
 MUT_PIDS=""
 MUT_NAMES=""
 MUTATION_JOBS="${HANDOFF_TEST_MUTATION_JOBS:-parallel}"
 
-queue_mutation() { # 인자는 assert_mutation 과 같다
+queue_job() { # name cmd...
+	local name="$1"
+	shift
 	if [ "$MUTATION_JOBS" = "serial" ]; then
-		assert_mutation "$@"
+		"$@"
 		return
 	fi
-	assert_mutation "$@" >"$MUTANT_DIR/$1.log" 2>&1 &
+	"$@" >"$MUTANT_DIR/$name.log" 2>&1 &
 	MUT_PIDS="$MUT_PIDS $!"
-	MUT_NAMES="$MUT_NAMES $1"
+	MUT_NAMES="$MUT_NAMES $name"
+}
+
+queue_mutation() { # 인자는 assert_mutation 과 같다
+	queue_job "$1" assert_mutation "$@"
 }
 
 await_mutations() {
@@ -784,15 +851,14 @@ await_mutations() {
 	[ "$status" = "0" ] || exit 1
 }
 
+# 대조 둘이 먼저다 — 둘 중 하나라도 어긋나면 아래 red 들이 증명이 아니다.
+queue_job positive-control assert_positive_control
+queue_job negative-control assert_negative_control
+
 # write 가 wip:<node> 를 해제한다
 queue_mutation wip-not-released \
 	'  if (wip && labels.has(wip)) gh("issue", "edit", String(options.issue), "--remove-label", wip);' \
 	''
-
-# BROKEN 이 WAIT 과 안 뭉친다
-queue_mutation broken-folded-into-wait \
-	'  return "BROKEN";' \
-	'  return "WAIT checks";'
 
 # at 이 40자가 아니면 거부한다
 queue_mutation short-oid-accepted \
@@ -807,7 +873,7 @@ queue_mutation ancestor-branch-dead \
 # base_oid 는 무효화 트리거가 아니다
 queue_mutation base-oid-as-trigger \
 	'    const head = ghJson("pr", "view", prNumber, "--json", "headRefOid").headRefOid;' \
-	'    const head = ghJson("pr", "view", prNumber, "--json", "headRefOid").headRefOid;\n    if (String(handoff.base_oid) !== String(head)) toUser("base drift");'
+	'    const head = ghJson("pr", "view", prNumber, "--json", "headRefOid").headRefOid;%%NL%%    if (String(handoff.base_oid) !== String(head)) toUser("base drift");'
 
 # 같은 키 같은 내용이면 두 번 안 올린다
 queue_mutation run-id-not-idempotent \
@@ -841,6 +907,34 @@ queue_mutation author-trust-dropped \
 	'    if (!TRUSTED_ASSOCIATIONS.has(association)) {' \
 	'    if (false) {'
 
+# 신뢰 **집합**을 넓히는 편집도 잡는다. `CONTRIBUTOR` 는 PR 한 번 머지된 외부인이다
+# (#1997 의 WEAK-trust-set-widened).
+queue_mutation trust-set-widened \
+	'const TRUSTED_ASSOCIATIONS = new Set(["OWNER", "MEMBER", "COLLABORATOR"]);' \
+	'const TRUSTED_ASSOCIATIONS = new Set(["OWNER", "MEMBER", "COLLABORATOR", "CONTRIBUTOR"]);'
+
+# `write` 의 중복 스캔도 신뢰 필터를 지난다 — 안 지나면 외부인이 남의 키로 코멘트를
+# 심어 write 를 exit 1 로 고착시킨다 (#1997 의 WEAK-write-scan-untrusted).
+queue_mutation write-scan-skips-trust \
+	'  const sameKey = trustedHandoffs(issue.comments).filter(' \
+	'  const sameKey = (issue.comments ?? []).flatMap((c) => handoffsIn(c.body)).filter('
+
+# BF2 — `yaml` 모듈 부재(운영 실패)를 catch 가 삼키면 `read` 는 사망 신호를, `write` 는
+# 입력 실패를 준다. Halt 를 다시 던지는 두 줄이 그걸 가른다.
+queue_mutation module-error-swallowed-in-scan \
+	'      rethrowHalt(error); // 모듈 부재는 운영 실패다. "인계가 아니다" 로 뭉개지 않는다.' \
+	''
+
+queue_mutation module-error-as-input-error \
+	'    rethrowHalt(error); // 모듈 부재를 exit 1 로 주면 agent 가 멀쩡한 YAML 을 계속 고친다.' \
+	''
+
+# BF3 — info string 대소문자. `i` 를 떼면 ```YAML 펜스가 안 잡히고, `write` 의 중복
+# 스캔은 fail-open 이라 같은 인계가 두 번 올라간다.
+queue_mutation fence-case-sensitive \
+	'  /(?:^|\n)[ ]{0,3}(`{3,}|~{3,})[ \t]*yaml\b[^\n]*\r?\n([\s\S]*?)\r?\n[ ]{0,3}\1[ \t]*(?=\r?\n|$)/gi;' \
+	'  /(?:^|\n)[ ]{0,3}(`{3,}|~{3,})[ \t]*yaml\b[^\n]*\r?\n([\s\S]*?)\r?\n[ ]{0,3}\1[ \t]*(?=\r?\n|$)/g;'
+
 # label 갱신 블록이 실제로 돈다
 queue_mutation label-block-dead \
 	'  if (options.addLabel.length > 0 || options.removeLabel.length > 0) {' \
@@ -851,29 +945,6 @@ queue_mutation label-target-pr \
 	'    if (add.length > 0) gh("issue", "edit", String(options.issue), "--add-label", add.join(","));' \
 	'    if (add.length > 0) gh("pr", "edit", String(options.pr), "--add-label", add.join(","));'
 
-# needs:user 는 PR 쪽에 붙어도 최상단이다
-queue_mutation needs-user-pr-side-dropped \
-	'  if (context.issueLabels.has("needs:user") || context.prLabels.has("needs:user")) {' \
-	'  if (context.issueLabels.has("needs:user")) {'
-
-# approved & checks 미완 줄이 종결 줄 위에 있다
-queue_mutation wait-row-dead \
-	'  if (context.checks === "pending") return "WAIT checks";' \
-	''
-
-# 회고 줄이 있다
-queue_mutation round-row-dead \
-	'  if (context.rounds >= context.cap && !context.prLabels.has("reflect:done")) return "RUN round-reflect";' \
-	''
-
-# 회고 줄이 `review:changes-requested` **위**에 있다. 아래로 되돌리면 라운드 3 red 가
-# 구현자로 가고, 그게 게이트가 금지한 "같은 유형에 fix 를 더 쌓기" 다.
-queue_mutation round-row-below-changes-requested \
-	'  if (context.rounds >= context.cap && !context.prLabels.has("reflect:done")) return "RUN round-reflect";' \
-	'' \
-	'  if (context.prLabels.has("review:changes-requested")) return "RUN issue-implement";' \
-	'  if (context.prLabels.has("review:changes-requested")) return "RUN issue-implement";\n  if (context.rounds >= context.cap && !context.prLabels.has("reflect:done")) return "RUN round-reflect";'
-
 await_mutations
 
-echo "PASS: handoff write / read / state"
+echo "PASS: handoff write / read"

@@ -1,13 +1,16 @@
 #!/usr/bin/env node
-// handoff — 인계를 쓰고, 읽고, 다음 상태를 라우팅하는 단 하나의 지점.
+// handoff — 인계를 쓰고 읽는 단 하나의 지점.
 //
-// 설계 SOT: issue #1918 (§7 스키마 · §8 3연산 · §6 라우팅 표) 와 #1922 (라우팅 표).
+// 설계 SOT: issue #1918 (§7 스키마 · §8 3연산).
 // 각 역할이 `gh issue comment` 를 손으로 치면 인계 형식이 갈린다. 이 저장소가 이미
 // 겪는 실패라서 한 곳에만 구현한다.
 //
 //   handoff write --stage <역할> --issue N [--pr M] [--add-label L] [--remove-label L]
 //   handoff read  --stage <역할> --issue N
-//   handoff state --issue N
+//
+// #1918 §8 의 세 번째 연산 `state` (라우팅 표 · 체크 집계) 는 여기 없다 — #2006 이
+// 소유한다. 그 이슈가 옮겨간 것: `route()` · `checkState()` · `cmdState()` ·
+// `roundCap()` 과 미해소 blocking 하나(열린 PR 을 "PR 없음" 으로 읽는 `hasPr`).
 //
 // exit 코드는 호출자가 재시도할지 사람에게 올릴지를 가른다 (#1918 §10 — 실패는
 // 종류마다 다르게 처리한다):
@@ -16,7 +19,6 @@
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import { createRequire } from "node:module";
-import path from "node:path";
 
 const EXIT_REJECT = 1;
 const EXIT_OPERATIONAL = 2;
@@ -43,8 +45,28 @@ const toUser = (message) => {
   throw new Halt(EXIT_USER, `USER: ${message}`);
 };
 
-// 실패를 삼키지 않는다. 외부 명령이 죽었는데 빈 출력을 정상값으로 읽으면 라우팅이
-// 조용히 틀린다 — 이 저장소가 `git ls-files` fail-open 으로 이미 겪은 유형이다.
+// **Halt 는 어떤 catch 도 삼키지 않는다.** 아래 두 자리는 "파싱 실패 = 인계가 아닌
+// 입력" 으로 넘기는 catch 인데, `yaml()` 이 모듈 부재로 던지는 운영 Halt 까지 같이
+// 삼켰다. 그러면 `read` 는 exit 4 `앞 node 가 아예 안 돌았다`(= #1918 §10 의 사망
+// 탐지 신호, 스킬이 "재시도로 안 고쳐진다" 로 못박은 코드), `write` 는 exit 1
+// (= 입력을 고쳐 다시 써라) 을 준다. 둘 다 원인은 `npm install` 한 줄이다.
+//
+// 이 파일의 catch 는 전부 Halt 를 통과시킨다. 전수 — `^\s*` 앵커가 이 주석을 거른다
+// (앵커를 빼면 이 줄까지 잡혀서 5가 된다):
+//   git grep -nP '^\s*\} catch' scripts/handoff.mjs                     → 4
+//   git grep -nP '^\s+(rethrowHalt\(error\);|if \(error instanceof Halt\))' \
+//     scripts/handoff.mjs                                                → 4
+// 넷의 내역: yaml() 자신이 Halt 를 만들고, handoffsIn 과 cmdWrite 가 이 가드를
+// 부르고, 파일 끝 top-level 이 `instanceof Halt` 로 exit code 를 정한다.
+const rethrowHalt = (error) => {
+  if (error instanceof Halt) throw error;
+};
+
+// 외부 명령이 죽었는데 빈 출력을 정상값으로 읽으면 판정이 조용히 틀린다 — 이
+// 저장소가 `git ls-files` fail-open 으로 이미 겪은 유형이다. `spawnSync` 결과에서
+// `error`(spawn 자체 실패)와 `status !== 0` 둘을 Halt 로 올린다. 시그널로 죽으면
+// `status` 가 `null` 이라 뒤쪽 분기에 걸린다. 이 둘이 실패 표시의 전부라는 주장은
+// 하지 않는다 — 확인한 것은 이 두 경로가 fail-open 을 안 남긴다는 것까지다.
 function run(cmd, args, input) {
   const result = spawnSync(cmd, args, { input, encoding: "utf8" });
   if (result.error) operational(`${cmd} 실행 실패: ${result.error.message}`);
@@ -57,12 +79,9 @@ function run(cmd, args, input) {
 const gh = (...args) => run("gh", args);
 const ghJson = (...args) => JSON.parse(gh(...args));
 
-// 저장소 루트는 cwd 에서, 모듈은 이 스크립트 위치에서 찾는다. 둘을 한 base 로
-// 묶으면 안 된다 — `--no-deps` 로 띄운 linked worktree 엔 node_modules 가 없고,
-// 거기서 도는 node 는 자기 위(=primary checkout)의 것을 쓴다.
-let repoRootCache = null;
-const repoRoot = () => (repoRootCache ??= run("git", ["rev-parse", "--show-toplevel"]).trim());
-
+// 모듈은 cwd 가 아니라 **이 스크립트 위치**에서 찾는다 — `--no-deps` 로 띄운 linked
+// worktree 엔 node_modules 가 없고, 거기서 도는 node 는 자기 위(=primary checkout)의
+// 것을 쓴다. 실패는 운영 실패(exit 2)다. 입력 실패가 아니라 `npm install` 이다.
 let yamlCache = null;
 function yaml() {
   if (yamlCache !== null) return yamlCache;
@@ -74,10 +93,13 @@ function yaml() {
   return yamlCache;
 }
 
-// node 이름은 `wip:<node>` label 어휘와 같다 (gh label list). `user` 는 node 가
-// 아니라 orchestrator 가 사용자 결정을 전사하는 자리라서 (#1918 §12) wip label 이
-// 없다. #1918 이 역할을 한국어로 적으므로 그 표기도 받는다 — SOT 에서 복사한 값이
-// 스킬에서 튕기면 그게 형식이 갈리는 첫 걸음이다.
+// node 이름은 `wip:<node>` label 어휘와 같다. 전수 (2026-07-30):
+//   gh label list --limit 200 --json name --jq '.[].name' | grep -E '^wip:'
+//   → wip:issue-refine / wip:issue-implement / wip:pr-reviewer / wip:round-reflect
+//     / wip:pr-finalize   (5개, 아래 NODES 와 같은 집합)
+// `user` 는 node 가 아니라 orchestrator 가 사용자 결정을 전사하는 자리라서
+// (#1918 §12) wip label 이 없다. #1918 이 역할을 한국어로 적으므로 그 표기도 받는다
+// — SOT 에서 복사한 값이 스킬에서 튕기면 그게 형식이 갈리는 첫 걸음이다.
 const NODES = ["issue-refine", "issue-implement", "pr-reviewer", "round-reflect", "pr-finalize"];
 const ALIASES = {
   명세작성자: "issue-refine",
@@ -110,7 +132,8 @@ const SUBJECT = /^(pr|issue)\/(\d+)$/;
 
 // #1918 §7. `at` 은 full OID 40자다 — short OID 는 저장소가 커지면 접두사가 충돌하고
 // 8자는 이미 다른 개체와 겹칠 수 있다. `base_oid` 는 기록만 하고 무효화 트리거로는
-// 쓰지 않는다 (머지 60건 중 34건이 base 가 움직였다 — 트리거로 쓰면 57%가 재리뷰다).
+// 쓰지 않는다: 트리거로 쓰면 재리뷰가 57% 로 뛴다는 실측은 **#1918 §7 이 소유한다**
+// (머지 60건 중 34건에서 base 가 1회 이상 움직였다). 여기서 다시 재지 않는다.
 function inspect(doc, { pr } = {}) {
   const missing = [];
   const malformed = [];
@@ -212,12 +235,29 @@ function checkSchema(doc, options, onFail) {
 // 들어와도 인계 블록이 거기서 끊기지 않는다 — 리뷰어가 뚫은 입력은 마크다운인
 // 경우가 흔하다.
 //
-// GitHub 이 똑같이 렌더하는 변종을 다 받는다 — 펜스 앞 공백 0-3칸(CommonMark),
-// `~~~`, info string 뒤의 말(` ```yaml title=x `), 닫는 펜스 뒤 공백. 좁게 잡으면
-// `read` 는 fail-closed("인계 없다")로 끝나지만 `write` 의 중복 스캔은 fail-open
-// 이라 같은 인계를 두 번 올린다.
+// **아래 다섯 변종을 받는다. GitHub 렌더러가 이것과 같게 취급하는 것을 다 덮는다는
+// 주장은 하지 않는다 — 그 집합은 이 저장소에서 열거할 수 없다** (CommonMark 명세와
+// GitHub 구현 둘 다 우리 밖이다). 라운드 2에서 여섯 번째(info string 대소문자)가
+// 빠져 있는 것이 실제로 걸렸다.
+//
+//   1. 펜스 앞 공백 0-3칸  2. `~~~`  3. info string 뒤의 말(` ```yaml title=x `)
+//   4. 닫는 펜스 뒤 공백    5. info string 대소문자 (` ```YAML `) — `i` 플래그
+//
+// 5번은 서버에 물어서 확인했다:
+//   A="$(gh api /markdown -f mode=gfm -f text='```YAML
+//   handoff:
+//   ```')"; B="$(gh api /markdown -f mode=gfm -f text='```yaml
+//   handoff:
+//   ```')"; [ "$A" = "$B" ] && echo IDENTICAL
+//   → IDENTICAL (둘 다 `highlight-source-yaml`, shasum f83c5d11…)
+//
+// 여기서 좁게 잡으면 `read` 는 fail-closed("인계 없다")로 끝나지만 `write` 의 중복
+// 스캔은 fail-open 이라 같은 인계를 두 번 올린다.
+//
+// `i` 는 info string 에만 영향을 준다 — 패턴의 나머지는 백틱 · 물결 · 공백 · 문자
+// 클래스 escape 라 대소문자 개념이 없다.
 const FENCE =
-  /(?:^|\n)[ ]{0,3}(`{3,}|~{3,})[ \t]*yaml\b[^\n]*\r?\n([\s\S]*?)\r?\n[ ]{0,3}\1[ \t]*(?=\r?\n|$)/g;
+  /(?:^|\n)[ ]{0,3}(`{3,}|~{3,})[ \t]*yaml\b[^\n]*\r?\n([\s\S]*?)\r?\n[ ]{0,3}\1[ \t]*(?=\r?\n|$)/gi;
 
 function fence(body) {
   let length = 3;
@@ -234,7 +274,8 @@ function handoffsIn(body) {
     let doc;
     try {
       doc = yaml().parse(match[2]);
-    } catch {
+    } catch (error) {
+      rethrowHalt(error); // 모듈 부재는 운영 실패다. "인계가 아니다" 로 뭉개지 않는다.
       continue; // 인계가 아닌 yaml 블록
     }
     if (doc && typeof doc === "object" && doc.handoff) found.push({ doc, text: match[2] });
@@ -245,8 +286,18 @@ function handoffsIn(body) {
 // 이 저장소는 PUBLIC 이다 (`gh repo view --json visibility` → PUBLIC). 아무나 이슈에
 // 코멘트를 달 수 있고, 인계는 받는 node 가 돌릴 명령(`action.cmd`)과 저장할 픽스처를
 // 실어 나른다. 그래서 신뢰 경계는 저장소 권한이다 — 응답이 이미 주는
-// `authorAssociation` 을 본다. `subject: issue/N` 으로 쓰면 `at` 대조도 안 걸리므로
-// 이 검사가 없으면 위조 비용이 0 이다.
+// `authorAssociation` 을 본다. `subject: issue/N` 으로 쓰면 `at` 대조가 안 걸리므로
+// 이 검사가 없으면 위조에 저장소 권한이 아예 필요 없다.
+//
+// allowlist 라 "빠진 값" 이 아니라 "넣은 값" 이 위험이다. GitHub 이 이 필드에 줄 수
+// 있는 값 전수 (2026-07-30):
+//   gh api graphql -f query='{ __type(name:"CommentAuthorAssociation")
+//     { enumValues { name } } }' --jq '[.data.__type.enumValues[].name]|join(" / ")'
+//   → MEMBER / OWNER / MANNEQUIN / COLLABORATOR / CONTRIBUTOR /
+//     FIRST_TIME_CONTRIBUTOR / FIRST_TIMER / NONE      (8종)
+// 아래가 3종이므로 거부는 5종 + 필드 부재(= 빈 문자열, 역시 거부)다. `CONTRIBUTOR`
+// 를 넣으면 PR 한 번 머지된 외부인이 통과한다 — 그래서 그 값이 거부되는 것을
+// 케이스와 mutation 으로 잠근다.
 const TRUSTED_ASSOCIATIONS = new Set(["OWNER", "MEMBER", "COLLABORATOR"]);
 
 function trustedHandoffs(comments) {
@@ -285,6 +336,7 @@ function cmdWrite(options) {
   try {
     doc = yaml().parse(raw);
   } catch (error) {
+    rethrowHalt(error); // 모듈 부재를 exit 1 로 주면 agent 가 멀쩡한 YAML 을 계속 고친다.
     reject(`표준입력 YAML 파싱 실패: ${error.message}`);
   }
 
@@ -315,9 +367,14 @@ function cmdWrite(options) {
     );
   }
 
-  // run_id 는 외부 쓰기 3곳의 멱등 키다 (#1918 §7). 그중 이 스킬이 소유하는 자리는
-  // `gh issue comment` 하나이고, 값은 코멘트 본문 YAML 안에 실려 다음 시도가 그걸
-  // 본다. label add/remove 에는 안 붙인다 — GitHub API 가 이미 멱등이다.
+  // run_id 는 #1918 §7 이 지정한 외부 쓰기 3곳(`gh issue comment` / `gh pr comment` /
+  // `gh issue create`)의 멱등 키다. **그중 이 파일이 부르는 것은 아래 한 줄뿐이다.**
+  // 전수:
+  //   git grep -cP '"(issue|pr)", "(comment|create)"' -- scripts/handoff.mjs   → 1
+  // 이 호출은 argv 표기라 `gh issue comment` 를 찾는 셸 표기 grep 에는 안 걸린다 —
+  // 저장소 전체를 그 표기로 훑는 전수는 PR 본문이 따로 적는다.
+  // 값은 코멘트 본문 YAML 안에 실려 다음 시도가 그걸 본다. label add/remove 에는 안
+  // 붙인다 — GitHub API 가 이미 멱등이다.
   //
   // 같은 키로 **다른 내용**이 이미 있으면 SKIP 이 아니라 거부다. 스킵하면 새 판정이
   // 조용히 버려지고, 그 상태로 wip 까지 풀리면 다음 node 가 사망 탐지도 못 한다.
@@ -367,9 +424,10 @@ function cmdRead(options) {
   const issue = ghJson("issue", "view", String(options.issue), "--json", "labels,comments");
   const labels = new Set((issue.labels ?? []).map((label) => label.name));
 
-  // 가장 자주 일어나고 유일하게 무한 루프가 되는 실패는 "node 가 인계를 쓰기 전에
-  // 죽는 것"이다. 카운터는 컨텍스트에 살아서 압축되면 사라지므로 label 유무로
-  // 판정한다 (#1918 §10).
+  // "node 가 인계를 쓰기 전에 죽는 것" 을 사망 탐지의 첫 신호로 삼는다 — 그 실패가
+  // 가장 흔하고 재시도로 안 풀린다는 판단은 **#1918 §10 이 소유한다.** 여기서 실패
+  // 유형을 다시 열거하지 않는다. 카운터는 컨텍스트에 살아서 압축되면 사라지므로
+  // label 유무로 판정한다.
   if (wip && labels.has(wip)) {
     toUser(`${wip} 이 이미 붙어 있다 — 앞 시도가 인계를 쓰기 전에 죽었다. 재시도로 안 고쳐진다.`);
   }
@@ -380,8 +438,10 @@ function cmdRead(options) {
   const latest = mine.at(-1);
   if (!latest) toUser(`#${options.issue} 에 ${stage} 앞으로 온 인계가 없다. 앞 node 가 아예 안 돌았다.`);
 
-  // 필드 누락 상한은 0 이다 — `write` 가 이미 검증하므로 읽을 때 누락이면 스킬
-  // 우회 / 스키마 버전 불일치 / 스킬 버그 셋 중 하나이고 재시도로 안 고쳐진다.
+  // 필드 누락의 재시도 상한은 0 이다 — `write` 가 같은 검증기를 이미 통과시켰으므로
+  // 읽을 때 누락이면 인계를 만든 경로가 이 스킬이 아니었다는 뜻이다 (알려진 경우는
+  // 스킬 우회 · 스키마 버전 불일치 · 스킬 버그. 그 셋이 전부라는 주장은 아니다).
+  // 어느 쪽이든 같은 입력을 다시 읽어서 고쳐지지 않는다.
   const { handoff, prScoped, prNumber } = checkSchema(latest.doc, {}, toUser);
 
   if (prScoped) {
@@ -407,139 +467,13 @@ function cmdRead(options) {
   process.stdout.write(`${latest.text}\n`);
 }
 
-// 라운드 임계는 게이트가 소유한다. 여기서 숫자를 다시 적으면 세 번째 사본이 되고,
-// 그게 이 저장소가 반복해서 겪은 실패다 — 워크플로에서 읽는다
-// (scripts/hooks/policy/test-review-gate-round.sh 가 같은 값을 같은 방식으로 읽는다).
-function roundCap() {
-  const workflow = path.join(repoRoot(), ".github/workflows/review-gate.yml");
-  if (!fs.existsSync(workflow)) operational(`라운드 임계를 읽을 ${workflow} 가 없다.`);
-  const cap = /pull_request\.comments >= (\d+)/.exec(fs.readFileSync(workflow, "utf8"))?.[1];
-  if (!cap) operational("review-gate.yml 에서 라운드 임계를 못 읽었다.");
-  return Number(cap);
-}
-
-// 하나라도 안 끝났으면 pending 이 실패를 이긴다. `labeled` 트리거의 재실행 창이
-// 실재해서다 — `review:approved` 를 붙이는 순간 옛 review-gate 실패가 rollup 에
-// 남아 있고 새 run 은 아직 큐에 있다. 거기서 failed 로 단정하면 정상 전이가 매번
-// BROKEN 으로 올라간다.
-function checkState(rollup) {
-  // 체크가 아직 하나도 안 생긴 PR 을 green 으로 읽으면 검증 0인 채 머지 줄로 간다.
-  if (!Array.isArray(rollup) || rollup.length === 0) return "pending";
-  let pending = false;
-  let failed = false;
-  for (const check of rollup) {
-    const status = String(check.status ?? "");
-    const conclusion = String(check.conclusion ?? check.state ?? "");
-    if (status !== "" && status !== "COMPLETED") {
-      pending = true;
-    } else if (conclusion === "" || conclusion === "PENDING" || conclusion === "EXPECTED") {
-      pending = true;
-    } else if (!["SUCCESS", "NEUTRAL", "SKIPPED"].includes(conclusion)) {
-      failed = true;
-    }
-  }
-  if (pending) return "pending";
-  return failed ? "failed" : "green";
-}
-
-// #1918 §6 / #1922 의 라우팅 표. **이 함수가 그 표의 유일한 사본이다** — 산문에
-// 두면 구현과 갈리고, orchestrator 에게 도달시킬 방법도 마땅치 않다. 위에서부터
-// 첫 줄이 이기고, 그 순서 자체가 실측된 동시 매치 넷의 처방이다.
-//
-//   needs:user 최상단        — 종결보다 아래면 사용자 차단을 무시하고 머지로 간다
-//   회고는 차단기            — needs:user 바로 다음 (아래 설명)
-//   approved & checks 미완   — 승인에서 마지막 required check 까지 7분26초 (#1938)
-//
-// **회고 줄은 종결의 하위 대안이 아니라 차단기다.** `review-gate.yml` 의
-// "Stop at review round 3" 은 verdict 를 안 보고 `comments >= cap && !reflect:done`
-// 이면 `exit 1` 한다. 그 실패가 `statusCheckRollup` 에 들어오고, `checkState()` 는
-// **rollup 전체**를 봐서 하나라도 실패면 `"failed"` 를 준다 — 다른 검사가 전부
-// 통과해도 green 이 안 된다. 그래서 라운드 임계를 넘고 `reflect:done` 이 없는
-// 동안 아래 종결 줄은 도달 불가고, 두 줄은 배타적이다: green ⟹ 게이트 통과 ⟹
-// (임계 미만 또는 `reflect:done`) ⟹ 회고 줄 불성립. #1922 가 "라운드 3에서 green
-// 이면 종결" 이라 적은 상태는 `reflect:done` 이 붙은 뒤이고, 그때는 회고 줄이 안
-// 걸리므로 이 순서가 그 처방을 그대로 지킨다.
-//
-// (`review-gate` 는 required 지만 유일하지 않다 — classic protection 이 그 하나를,
-// ruleset `pr_to_main` 이 여덟을 더 요구해서 합쳐서 9다. 두 겹을 다 보는 명령은
-// `gh api graphql` 의 `isRequired(pullRequestNumber:)` 뿐이고,
-// `.../branches/main/protection` 은 classic 한 겹만 읽어 그 주장을 증명하지
-// 못한다. 어차피 위 논증은 required 여부가 아니라 rollup 전체를 본다는 사실에만
-// 기댄다.)
-//
-// 회고 줄이 `review:changes-requested` **아래** 있으면 라운드 3 red 가 구현자로
-// 간다 — 같은 게이트가 "red 면 같은 유형에 fix 를 더 쌓지 말고 사용자에게 올려라"
-// 라고 막는 바로 그 행동이다. #1918 §11 은 그 상태를 `needs:user` 로 보내라고
-// 적었지만 그 label 을 붙일 주체가 없다 (리뷰어는 `review:changes-requested` 를
-// 붙인다). 회고가 가장 필요한 자리에서 회고자가 영영 안 뜬다.
-//
-// 표의 "사용자가 raw 를 지목 → RUN issue-refine" 줄은 여기 없다. 그 계기는 label 이
-// 아니라 사용자의 말이고 (승격은 자동화하지 않는다 — #1918 §5), 어휘를 현행 유지하기로
-// 해서 담을 label 도 없다. 그 자리는 아래 `BLOCKED raw-promotion` 이 사용자에게
-// 올리고, 사용자가 승격하면 orchestrator 가 그 턴에 issue-refine 을 띄운다.
-function route(context) {
-  if (context.issueLabels.has("needs:user") || context.prLabels.has("needs:user")) {
-    return "BLOCKED needs:user";
-  }
-  if (context.issueClosed) return "DONE";
-  if (!context.issueLabels.has("task")) return "BLOCKED raw-promotion";
-  if (!context.hasPr) return "RUN issue-implement";
-  if (context.rounds >= context.cap && !context.prLabels.has("reflect:done")) return "RUN round-reflect";
-  if (context.prLabels.has("review:changes-requested")) return "RUN issue-implement";
-  if (!context.prLabels.has("review:approved")) return "RUN pr-reviewer";
-  if (context.checks === "pending") return "WAIT checks";
-  if (context.checks === "green") return "RUN pr-finalize";
-  return "BROKEN";
-}
-
-function cmdState(options) {
-  const issue = ghJson(
-    "issue",
-    "view",
-    String(options.issue),
-    "--json",
-    "state,labels,closedByPullRequestsReferences",
-  );
-
-  // 참조는 번호만 주고 상태를 안 준다. 열린 PR 만 "이번 시도" 이고, 여럿이면 가장
-  // 최근 것이다. URL 로 조회해 다른 저장소의 PR 을 이 저장소 번호로 읽지 않는다.
-  let pr = null;
-  for (const ref of issue.closedByPullRequestsReferences ?? []) {
-    const view = ghJson("pr", "view", ref.url, "--json", "number,state,labels,comments,statusCheckRollup");
-    if (view.state === "OPEN" && (pr === null || view.number > pr.number)) pr = view;
-  }
-
-  const checks = pr ? checkState(pr.statusCheckRollup) : "none";
-  const prLabels = new Set((pr?.labels ?? []).map((label) => label.name));
-  const rounds = pr ? (pr.comments ?? []).length : 0;
-  const verdict = route({
-    issueLabels: new Set((issue.labels ?? []).map((label) => label.name)),
-    issueClosed: String(issue.state).toUpperCase() === "CLOSED",
-    hasPr: pr !== null,
-    prLabels,
-    checks,
-    rounds,
-    cap: roundCap(),
-  });
-
-  process.stdout.write(`${verdict}\n`);
-  // 진단용 한 줄. BROKEN 이 왜 났는지는 관측된 상태를 봐야 알 수 있고, stdout 은
-  // 기계가 읽으므로 stderr 로 나간다.
-  process.stderr.write(
-    `issue/${options.issue} ${issue.state} ` +
-      (pr ? `pr/${pr.number} checks=${checks} rounds=${rounds} ` : "pr=none ") +
-      `labels=[${[...(issue.labels ?? []).map((l) => l.name), ...prLabels].join(" ")}]\n`,
-  );
-}
-
 // ---------------------------------------------------------------------- CLI
 
-const USAGE = `handoff — 인계 write / read / state (설계 SOT: #1918 §7 §8, #1922)
+const USAGE = `handoff — 인계 write / read (설계 SOT: #1918 §7 §8. state 는 #2006)
 
   node scripts/handoff.mjs write --stage <역할> --issue N [--pr M] \\
       [--add-label L]... [--remove-label L]...     # 인계 YAML 은 표준입력
   node scripts/handoff.mjs read  --stage <역할> --issue N
-  node scripts/handoff.mjs state --issue N
 
 역할: ${[...NODES, "user"].join(" / ")}
 exit: 0 통과 · 1 거부 · 2 외부 명령 실패 · 3 RETRY · 4 사용자`;
@@ -589,9 +523,6 @@ function main(argv) {
       return 0;
     case "read":
       cmdRead(options);
-      return 0;
-    case "state":
-      cmdState(options);
       return 0;
     default:
       reject(`모르는 연산 '${options.command}'\n\n${USAGE}`);
