@@ -112,7 +112,8 @@ pnpm install
 ### 3. 개발용 데이터베이스 실행
 
 PostgreSQL, MongoDB, MySQL, MariaDB, MSSQL, Oracle, Redis compose 컨테이너를
-띄우고 health check를 기다립니다.
+띄웁니다. `docker compose up -d`는 health check 통과를 기다리지 않으므로,
+연결 전에 `docker compose ps`로 `healthy`를 확인하세요.
 
 ```bash
 pnpm db:up
@@ -120,8 +121,7 @@ pnpm db:up
 
 MSSQL과 Oracle 컨테이너는 수동 연결과 explicit fixture load에 사용됩니다.
 Oracle은 #905 focused catalog/query/cancel/tabular evidence만 갖고, routine
-Runtime Happy Path smoke wiring은 #907 전까지 넓히지 않습니다. Fixture CLI의 기본 `all/default` target은
-PostgreSQL/MongoDB/MySQL/SQLite/DuckDB/Redis만 로드했습니다.
+Runtime Happy Path smoke wiring은 #907 전까지 넓히지 않습니다.
 
 **Fixture seeding CLI(`pnpm db:seed`)는 없습니다.** 남아 있는 `pnpm fixtures:start`
 / `fixtures:stop`은 컨테이너 기동·정지일 뿐 seed를 넣지 않습니다 —
@@ -272,8 +272,8 @@ macOS debug 앱 번들은 `src-tauri/target/debug/bundle/macos/Table View.app`�
 
 ## 🍺 Homebrew 배포 (Homebrew)
 
-`release` 이벤트가 `published`로 바뀌면 이 저장소의 워크플로가 Homebrew tap을 갱신합니다.
-현재 절차는 `publish` 수동 승인 후 반영됩니다.
+이 저장소에는 cask를 갱신하는 워크플로가 없습니다. draft 릴리스를 손으로 publish한 뒤
+`Felix-LeeSM/homebrew-table-view` tap의 `Casks/table-view.rb`를 직접 갱신합니다.
 
 ```bash
 brew tap Felix-LeeSM/table-view
