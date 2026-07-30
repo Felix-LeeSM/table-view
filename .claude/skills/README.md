@@ -27,17 +27,18 @@ Claude Code 는 skill 을 `~/.claude/skills/` (user-global) 과 프로젝트
 git 기본값 `core.symlinks=false` (개발자 모드/관리자 아님) 에서는 각 bridge 가
 심링크가 아니라 **타겟 경로 텍스트 한 줄을 담은 일반 파일**로 무경고
 체크아웃된다. 그러면 `.claude/skills/<name>/SKILL.md` 가 존재하지 않아 아래
-9개 skill 이 계약 skill(`remember` / `grill-with-memory` / `pr-review`) 포함 전부
+10개 skill 이 계약 skill(`remember` / `grill-with-memory` / `pr-review`) 포함 전부
 **무경고 등록 실패**한다. Windows 는 개발자 모드 + `git config --global
 core.symlinks true` 후 재-checkout 해야 bridge 가 심링크로 풀린다.
 
 (근본 해결책인 symlink → thin-wrapper 재설계는 별도 결정 사항 — 여기선 caveat
 문서화만.)
 
-## 현재 bridge 목록 (9)
+## 현재 bridge 목록 (10)
 
-`delivery`, `diagnose`, `grill-with-memory`, `improve-codebase-architecture`,
-`pr-create`, `pr-review`, `remember`, `split-memory`, `tdd`.
+`delivery`, `diagnose`, `grill-with-memory`, `handoff`,
+`improve-codebase-architecture`, `pr-create`, `pr-review`, `remember`,
+`split-memory`, `tdd`.
 
 **bridge 는 `.agents/skills/*` 와 1:1 이 아니다** — 이 디렉토리는 "Claude Code 가
 등록해야 할 skill" 목록이지 저장소가 가진 skill 전부가 아니다. 2026-07-30 (#1987)

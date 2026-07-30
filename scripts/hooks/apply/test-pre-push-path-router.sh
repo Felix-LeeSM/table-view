@@ -218,6 +218,7 @@ assert_contains "$hook_output" "RUN pre-push-router-tests:" "hook"
 assert_contains "$hook_output" "RUN target-cache-tests:" "hook"
 assert_contains "$hook_output" "RUN generated-fence-tests:" "hook"
 assert_contains "$hook_output" "RUN cargo-deny-summary-tests:" "hook"
+assert_contains "$hook_output" "RUN handoff-tests:" "hook"
 assert_not_contains "$hook_output" "RUN ts-typecheck:" "hook"
 assert_not_contains "$hook_output" "RUN rust-test-and-coverage:" "hook"
 
@@ -226,6 +227,15 @@ assert_contains "$hook_doc_output" "route: frontend=0 rust=0 hook=1 memory=0 age
 assert_contains "$hook_doc_output" "RUN pre-push-router-tests:" "hook doc"
 assert_not_contains "$hook_doc_output" "RUN ts-test:" "hook doc"
 assert_not_contains "$hook_doc_output" "RUN rust-test-and-coverage:" "hook doc"
+
+# The handoff tool is `.mjs`, which `is_frontend_path` matches on extension. Without
+# the classifier entry it would route to the TS gates — which never read it (eslint
+# globs `**/*.{ts,tsx}`, tsconfig includes only `src`) — and its own suite would not
+# run on its own edits.
+handoff_output="$(run_case handoff normal scripts/handoff.mjs)"
+assert_contains "$handoff_output" "route: frontend=0 rust=0 hook=1 memory=0 agent=0" "handoff tool"
+assert_contains "$handoff_output" "RUN handoff-tests:" "handoff tool"
+assert_not_contains "$handoff_output" "RUN ts-test:" "handoff tool"
 
 setup_output="$(run_case setup normal scripts/setup.sh)"
 assert_contains "$setup_output" "route: frontend=0 rust=0 hook=1 memory=0 agent=0" "setup"
