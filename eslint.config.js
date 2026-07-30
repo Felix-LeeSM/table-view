@@ -357,10 +357,8 @@ export default tseslint.config(
       ".claude/**",
       ".codex/**",
       "worktrees/**",
-      // wasm-pack generated JS glue + d.ts. This allowlist used to be mirrored
-      // by scripts/check-eslint-static-policy.ts, which asserted that generated
-      // ignores did not hide source max-lines debt. That script is gone, so the
-      // list is unguarded — keep it narrow.
+      // wasm-pack generated JS glue + d.ts. Nothing asserts that these ignores
+      // do not hide source max-lines debt — keep the list narrow.
       ...GENERATED_WASM_ESLINT_IGNORES,
     ],
   },
@@ -599,18 +597,15 @@ export default tseslint.config(
   // 자동 차단. deprecated API 는 에디터 취소선으로만 보이고 tsc/CI 어디서도
   // 안 잡히다가, upstream 이 심볼을 실제 제거하는 순간 한꺼번에 tsc 에러로
   // 터진다. type-aware 룰이므로 projectService(typed lint) 를 켠다. scope 는
-  // tsconfig.json 의 include: ["src"] 에 맞춰 src 로 한정 — e2e/scripts/wdio 등
+  // tsconfig.json 의 include: ["src"] 에 맞춰 src 로 한정 — e2e/wdio 등
   // tsconfig 밖 파일에 projectService 를 걸면 "not found by the project
   // service" 로 실패한다.
   {
     files: ["src/**/*.{ts,tsx}"],
-    // Kept after scripts/check-eslint-static-policy.ts was deleted. That
-    // self-test validated the feature-import rule with a synthetic `lintText`
-    // on the non-existent path `src/features/demo/Feature.tsx`, and
-    // projectService turns a file that is not on disk but matches tsconfig's
-    // `include: ["src"]` into a fatal parse error. The exclusion costs nothing
-    // and keeps `src/features/demo/**` usable as a scratch path; drop it if a
-    // real `src/features/demo` feature is ever added.
+    // projectService turns a path that is not on disk but matches tsconfig's
+    // `include: ["src"]` into a fatal parse error, so `src/features/demo/**`
+    // stays usable as a scratch path. Drop this if a real `src/features/demo`
+    // feature is ever added.
     ignores: ["src/features/demo/**"],
     languageOptions: {
       parserOptions: {

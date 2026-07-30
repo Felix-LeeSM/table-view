@@ -1,8 +1,7 @@
 /**
  * Sprint-88 AC-02: self-verification for `expectNodeStable`.
  *
- * Covers the canonical scenarios (the rule file that named them,
- * `.claude/rules/test-scenarios.md`, has since been deleted):
+ * Covers the canonical scenarios:
  * - Happy path: same DOM node identity → passes silently.
  * - Error case: unmount/remount → fails with a descriptive message.
  * - Boundary: getter throws on re-invocation → wrapped error mentions unmount.

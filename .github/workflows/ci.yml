@@ -451,10 +451,9 @@ jobs:
           # llvm-tools-preview backs `cargo llvm-cov`'s source-based coverage.
           components: llvm-tools-preview
 
-      # cargo-llvm-cov + cargo-nextest back the promoted integration coverage
-      # gate below. taiki-e/install-action downloads pinned prebuilt binaries
-      # (versions match the local pre-push toolchain from scripts/setup.sh) and
-      # caches them, so no per-run source build lands on the 40m+ critical path.
+      # cargo-llvm-cov + cargo-nextest back the integration coverage gate below.
+      # taiki-e/install-action downloads pinned prebuilt binaries and caches
+      # them, so no per-run source build lands on the 40m+ critical path.
       - name: Install cargo-llvm-cov and cargo-nextest
         uses: taiki-e/install-action@v2
         with:

@@ -6,10 +6,9 @@ import { resolve } from "node:path";
  * `TABLE_VIEW_TEST_DATA_DIR`, returning the directory that was reset (or
  * `null` when nothing was touched).
  *
- * Moved here from `scripts/e2e-smoke-data-dir.ts`, deleted with the script
- * tree; `wdio.smoke.conf.ts` was its only caller.
+ * `wdio.smoke.conf.ts` is the only caller.
  *
- * #1836: the smoke runner wiped the data dir once per *spec file*, but
+ * #1836: the data dir used to be wiped once per *spec file*, but
  * `specFileRetries` re-runs a spec in a new session inside the same wdio
  * process with the same `TABLE_VIEW_TEST_DATA_DIR`. Attempt 2 therefore booted
  * against attempt 1's `connections.json` and died in the `create*Connection`

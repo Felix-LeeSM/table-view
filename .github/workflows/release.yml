@@ -65,12 +65,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      # REMOVED GATE (#1431) — tag ↔ conf version. scripts/release/
-      # verify-tag-version.mjs failed every leg before any build work when a
-      # manually pushed tag disagreed with the checked-out tauri.conf.json
-      # version. auto-tag-release.yml still checks this before *creating* a tag,
-      # so the hole is the manual `git push origin vX.Y.Z` path: it can now
-      # publish the checked-out bundle under a mismatched tag.
+      # UNGUARDED (#1431) — nothing checks the tag against the checked-out
+      # tauri.conf.json version here. auto-tag-release.yml checks it before
+      # *creating* a tag, so the hole is the manual `git push origin vX.Y.Z`
+      # path: it publishes the checked-out bundle under a mismatched tag.
 
       # Linux Tauri bundles depend on webkit2gtk + librsvg + patchelf. macOS &
       # Windows runners come with everything Tauri needs preinstalled (libwebview2
@@ -195,13 +193,11 @@ jobs:
           grep -q "Sealed Resources version=2" /tmp/cs.txt || { echo "FAIL: no Sealed Resources — bundle not signed, would be 'damaged'"; cat /tmp/cs.txt; exit 1; }
           echo "OK: macOS bundle carries Sealed Resources (proper ad-hoc signature)"
 
-      # REMOVED GATE (#1430) — updater signature verification.
-      # scripts/release/verify-updater-sigs.mjs checked every produced `.sig`
-      # against the pubkey committed in src-tauri/tauri.conf.json before the
-      # draft was published. If the signing key and the committed pubkey drift
-      # (e.g. a rotation updates only one side), every client's auto-update now
-      # fails silently: updater errors are DEV-log-only and there is no
-      # telemetry (ADR 0036), so nothing else catches it.
+      # UNGUARDED (#1430) — nothing verifies the produced `.sig` files against
+      # the pubkey committed in src-tauri/tauri.conf.json. If the signing key and
+      # that pubkey drift (e.g. a rotation updates only one side), every client's
+      # auto-update fails silently: updater errors are DEV-log-only and there is
+      # no telemetry (ADR 0036), so nothing else catches it.
 
       # tauri-action exposes `artifactPaths` — the JSON array of bundles it just
       # uploaded as release assets. We hash each one with sha256 and upload the
@@ -255,8 +251,7 @@ jobs:
           TAG: ${{ github.ref_type == 'tag' && github.ref_name || format('manual-{0}', github.sha) }}
         run: gh release download "$TAG" --pattern latest.json --output latest.json
 
-      # REMOVED GATE — scripts/release/verify-latest-json.mjs asserted that the
-      # merged updater manifest carried one platform key per build-matrix leg.
-      # The download above still fails closed when the draft has no latest.json
-      # at all, but an INCOMPLETE manifest (a leg that died after upload) now
-      # publishes unnoticed.
+      # UNGUARDED — nothing asserts that the merged updater manifest carries one
+      # platform key per build-matrix leg. The download above fails closed when
+      # the draft has no latest.json at all, but an INCOMPLETE manifest (a leg
+      # that died after upload) publishes unnoticed.

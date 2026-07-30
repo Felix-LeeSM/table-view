@@ -40,8 +40,7 @@ Thumbs.db
 # stale worktree roots.
 /.claude/worktrees/
 # Multi-agent / multi-brain worktrees (Claude / Codex / Cursor 공통, platform-neutral).
-# 예전에는 `scripts/worktree-spawn.sh` 가 만들었다 — 그 스크립트는 없어졌지만
-# 손으로 `git worktree add` 한 것도 같은 자리에 놓이므로 항목은 유지한다.
+# `git worktree add` 로 손수 만든 것도 같은 자리에 놓인다.
 /worktrees/
 
 # Test

@@ -25,8 +25,6 @@ fixture 또는 emulator/testcontainer/embedded sample 로 재현 가능한 증�
   증거가 생길 때 같은 DBMS-first 규칙으로 추가한다.
 - `e2e/fixtures/seed-smoke.ts` — external service seed orchestrator. SQLite/DuckDB
   file smoke 는 spec 이 local SQL seed 를 직접 읽는다.
-- `e2e/fixtures/smoke-routing-decisions.json` — fixture promotion tier 와
-  smoke-routing decision 의 machine-readable SOT.
 - `tests/fixtures/**` — shared TS/Rust/parser/support-boundary contract fixtures.
   제품 runtime support claim 으로 승격하지 않는다.
 - `src-tauri/src/db/fixtures.rs` — backend adapter fixture harness. 현재 Search

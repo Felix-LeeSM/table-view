@@ -2,19 +2,13 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 /**
- * Seed-fixture lookup for the smoke suite.
+ * Seed-fixture lookup for the smoke suite. `e2e/fixtures/seed-smoke.ts` is the
+ * only caller.
  *
- * This used to live in `scripts/fixtures/e2e-seed-paths.ts`, deleted with the
- * rest of the script tree; `e2e/fixtures/seed-smoke.ts` was its only surviving
- * caller, so the suite now owns it.
- *
- * The legacy-path fallback did not come along. It existed for seed files that
- * had moved (`e2e/fixtures/seed.mysql.sql` -> `e2e/fixtures/mysql/query/seed.sql`)
- * and carried a removal condition tied to milestone #40, which is closed. All
- * ten canonical paths below exist and none of the legacy names do, so the
- * fallback, its both-exist conflict check and the two assertion helpers built on
- * it were dead code. A missing file now fails in `readFile` with the path in the
- * message, which is the same signal the explicit throw gave.
+ * A missing or renamed seed fails in `readFile` as an ENOENT carrying the
+ * resolved path. That path identifies the DBMS, but not the fixture key the
+ * caller asked for — worth knowing at `seed-smoke.ts`'s search-runtime call,
+ * which passes a key chosen at runtime.
  */
 export type E2eSeedFixtureKey =
   | "postgresql"

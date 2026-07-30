@@ -8,8 +8,7 @@ import path from "node:path";
  * lint 하므로, 규칙이 없어지거나 selector 가 헐거워지면 이 테스트가 깨진다.
  *
  * projectService(typed lint) 는 tsconfig `include: ["src"]` 밖의 실존-없는
- * 파일에서 "not found by the project service" fatal parse 를 낸다. 삭제된
- * static-policy self-test(`scripts/check-eslint-static-policy.ts`)와 같이, typed 에서
+ * 파일에서 "not found by the project service" fatal parse 를 낸다. 그래서 typed 에서
  * ignore 된 `src/features/demo/` 경로를 fixture 로 써서 syntactic parser 로
  * 파싱되게 한다 (eslint.config.js 의 `ignores: ["src/features/demo/**"]` 참조).
  * demo 경로는 phased-exempt 목록(query/schema/search/structure/forms) 밖이라

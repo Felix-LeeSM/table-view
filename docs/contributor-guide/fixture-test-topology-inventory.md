@@ -36,7 +36,7 @@ Required inventory commands:
 |---|---|
 | `rg --files fixtures tests/fixtures e2e/fixtures` | 23 tracked fixture-root paths. |
 | `rg -n "FixtureHarness\|dbms-seeds\|seed\\." src-tauri tests scripts e2e --glob '!src-tauri/target/**' --glob '!target/**' --glob '!node_modules/**'` | 84 tracked-source matches; cache and dependency hits are excluded from topology decisions by the repository topology SOT. |
-| `pnpm exec vitest run scripts/fixtures/*.test.ts tests/fixtures/*.test.ts` | PASS: 13 files, 98 tests. |
+| `pnpm exec vitest run tests/fixtures/*.test.ts` | Fixture contract tests. |
 
 Supporting checks:
 

@@ -1,21 +1,13 @@
 name: E2E Smoke
 
-# The runtime smoke matrix that used to live here is gone. Every leg of it ran
-# through scripts/e2e-smoke-ci.sh — the single entry point that exported the
-# per-DBMS endpoint env vars, built the Tauri debug binary, seeded fixtures and
-# invoked wdio — and that script (plus scripts/e2e-smoke-routing-decisions.ts,
-# scripts/e2e-pre-smoke-release-gate.ts and scripts/e2e-smoke-flake-summary.sh,
-# which it called) was removed with the rest of the script tree. Without an
-# entry point the 24-spec matrix and its Postgres/MySQL/MariaDB/MSSQL/Oracle/
-# Redis/Valkey/Elasticsearch/OpenSearch service containers had nothing to run.
+# There is no runtime E2E smoke. This workflow is a reporting shell: it exists
+# because `Runtime Happy Path` and `Detect Change Scope` are required contexts in
+# the `pr_to_main` ruleset (live GitHub state), and a name that stops reporting
+# stays "expected" and blocks every merge. THESE JOBS VERIFY NOTHING.
 #
-# What remains is the reporting shell. `Runtime Happy Path` and `Detect Change
-# Scope` are required contexts in the `pr_to_main` ruleset — live GitHub state,
-# not repo state — so deleting this workflow would leave both permanently
-# "expected" and block every merge. These jobs keep the names reporting and
-# nothing else: THERE IS NO RUNTIME E2E COVERAGE BEHIND THEM. The e2e sources
-# themselves (e2e/, wdio.smoke.conf.ts) are untouched, so restoring the runner
-# restores the matrix.
+# The e2e sources (`e2e/`, `wdio.smoke.conf.ts`) still work by hand — see
+# README 「E2E Smoke」. Wiring them back means writing a runner, then registering
+# the contexts.
 
 on:
   push:
