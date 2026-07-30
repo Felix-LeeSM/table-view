@@ -123,7 +123,9 @@ Oracle은 #905 focused catalog/query/cancel/tabular evidence만 갖고, routine
 Runtime Happy Path smoke wiring은 #907 전까지 넓히지 않습니다. Fixture CLI의 기본 `all/default` target은
 PostgreSQL/MongoDB/MySQL/SQLite/DuckDB/Redis만 로드했습니다.
 
-**Fixture CLI(`pnpm fixtures:*`, `pnpm db:seed`)는 없습니다.** seed 데이터 자체는
+**Fixture seeding CLI(`pnpm db:seed`)는 없습니다.** 남아 있는 `pnpm fixtures:start`
+/ `fixtures:stop`은 컨테이너 기동·정지일 뿐 seed를 넣지 않습니다 —
+`fixtures:stop`은 `docker compose down -v`라 볼륨까지 지웁니다. seed 데이터 자체는
 `e2e/fixtures/<dbms>/` 아래에 남아 있으므로, 컨테이너에 직접 먹이거나
 `e2e/fixtures/seed-smoke.ts`로 smoke seeding을 돌릴 수 있습니다.
 

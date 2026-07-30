@@ -371,9 +371,6 @@ generator: none — 손으로 갱신한다
 
 - [Product 머지 기준](../../memory/product/memory.md)
 
-### verification-gate
-
-
 ### wave
 
 - [감사 wave — 이력 + 다음 후보](../../memory/product/audit-waves/memory.md)

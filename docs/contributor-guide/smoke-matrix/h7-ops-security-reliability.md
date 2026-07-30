@@ -79,7 +79,9 @@ Current gap / routing:
 No CI job runs these specs. `.github/workflows/e2e-smoke.yml` only reports the
 `Runtime Happy Path` required context; nothing executes behind it. The specs
 still run by hand: build the debug binary, seed through
-`e2e/fixtures/seed-smoke.ts`, then `pnpm test:e2e:smoke`. The bounds below
+`e2e/fixtures/seed-smoke.ts`, then
+`TABLE_VIEW_TEST_DATA_DIR=/tmp/table-view-smoke pnpm test:e2e:smoke` — without
+that variable the specs write into your real connection store. The bounds below
 describe what such a manual run proves, not a merge gate.
 
 MSSQL/Oracle smoke is bounded to representative connect, seeded catalog browse,

@@ -592,8 +592,8 @@ export default tseslint.config(
       ],
     },
   },
-  // #1403 (2026-07-16) — `@deprecated` JSDoc 심볼 사용을 pre-push + CI 에서
-  // 자동 차단. deprecated API 는 에디터 취소선으로만 보이고 tsc/CI 어디서도
+  // #1403 (2026-07-16) — `@deprecated` JSDoc 심볼 사용을 CI lint 에서 자동
+  // 차단. deprecated API 는 에디터 취소선으로만 보이고 tsc/CI 어디서도
   // 안 잡히다가, upstream 이 심볼을 실제 제거하는 순간 한꺼번에 tsc 에러로
   // 터진다. type-aware 룰이므로 projectService(typed lint) 를 켠다. scope 는
   // tsconfig.json 의 include: ["src"] 에 맞춰 src 로 한정 — e2e/wdio 등

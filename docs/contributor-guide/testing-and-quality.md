@@ -133,8 +133,11 @@ Required remote evidence on the exact release SHA:
   copy kept here once listed five of the eight.
 - No runtime smoke runs in CI. `.github/workflows/e2e-smoke.yml` reports the
   `Runtime Happy Path` context without executing a spec, so a green PR proves no
-  desktop runtime behavior. Run `pnpm test:e2e:smoke` by hand on the release SHA
-  if the release needs runtime evidence.
+  desktop runtime behavior. Run the suite by hand on the release SHA if the
+  release needs runtime evidence — the full sequence (debug build, seed, then
+  `TABLE_VIEW_TEST_DATA_DIR=/tmp/table-view-smoke pnpm test:e2e:smoke`) is in
+  README 「E2E Smoke」. Without that variable the specs drive the app against
+  your real connection store (`src-tauri/src/storage/mod.rs` `data_dir_override`).
 - `main` push checks pass on the merge commit before a release tag is pushed.
 - Release workflow output is packaging evidence only. Draft bundle creation and
   checksum upload do not replace CI or runtime smoke evidence.

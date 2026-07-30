@@ -34,15 +34,15 @@ Required inventory commands:
 
 | Command | Result |
 |---|---|
-| `rg --files fixtures tests/fixtures e2e/fixtures` | 23 tracked fixture-root paths. |
-| `rg -n "FixtureHarness\|dbms-seeds\|seed\\." src-tauri tests e2e --glob '!src-tauri/target/**' --glob '!target/**' --glob '!node_modules/**'` | 84 tracked-source matches; cache and dependency hits are excluded from topology decisions by the repository topology SOT. |
+| `rg --files fixtures tests/fixtures e2e/fixtures` | 26 tracked fixture-root paths. |
+| `rg -n "FixtureHarness\|dbms-seeds\|seed\\." src-tauri tests e2e --glob '!src-tauri/target/**' --glob '!target/**' --glob '!node_modules/**'` | 71 tracked-source matches; cache and dependency hits are excluded from topology decisions by the repository topology SOT. |
 | `pnpm exec vitest run tests/fixtures/*.test.ts` | Fixture contract tests. |
 
 Supporting checks:
 
 | Command | Result |
 |---|---|
-| `git ls-files fixtures tests/fixtures e2e/fixtures` | Same 23 tracked fixture-root paths. |
+| `git ls-files fixtures tests/fixtures e2e/fixtures` | Same 26 tracked fixture-root paths. |
 | `git check-ignore -v fixtures tests/fixtures e2e/fixtures tests/fixtures/data-source-profile-parity.report.json` | No ignored tracked fixture roots reported. |
 | `rg -n "data-source-profile-parity\\.report\|PROFILE_PARITY_REPORT\|profile parity report\|reportVersion" . --glob '!src-tauri/target/**' --glob '!target/**' --glob '!node_modules/**'` | Report fixture is consumed by TS and Rust parity tests; no writer was found in the repo. |
 | `rg -n "writeFile\|writeFileSync\|fixture.*report\|report\\.json" src src-tauri tests package.json --glob '!src-tauri/target/**' --glob '!target/**' --glob '!node_modules/**'` | Fixture writers touch runtime/app-storage state, not tracked fixture-root inventory files. |
@@ -88,9 +88,11 @@ Supporting checks:
 
 - No CI job runs a smoke spec. `.github/workflows/e2e-smoke.yml` reports the
   `Runtime Happy Path` context and executes nothing behind it.
-- `pnpm test:e2e:smoke` runs the specs by hand through `wdio.smoke.conf.ts`,
-  whose `specs` glob is `e2e/smoke/**/*.spec.ts` — it picks up every spec file
-  present. MSSQL and Oracle need their service up first.
+- `TABLE_VIEW_TEST_DATA_DIR=/tmp/table-view-smoke pnpm test:e2e:smoke` runs the
+  specs by hand through `wdio.smoke.conf.ts`, whose `specs` glob is
+  `e2e/smoke/**/*.spec.ts` — it picks up every spec file present. MSSQL and
+  Oracle need their service up first. Dropping the variable points the app at
+  your real connection store.
 - `e2e/fixtures/seed-smoke.ts` seeds external-service targets. SQLite and DuckDB
   smoke specs create local files and read their SQL seeds directly.
 - A fixture is runtime evidence only when someone runs the matching spec green

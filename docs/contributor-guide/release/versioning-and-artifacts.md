@@ -47,18 +47,17 @@ Two workflows drive a release:
 - [`.github/workflows/release.yml`](../../../.github/workflows/release.yml): the
   build pipeline.
   - A `v*.*.*` tag push (from auto-tag, or a deliberate manual push) starts the
-    real release build. Its first gate step (after the boilerplate checkout)
-    (no automated check — verify by hand)
-    fails every build leg if the tag disagrees with the checked-out
-    `tauri.conf.json` version, so a hand-pushed tag cannot ship a mismatched
-    bundle.
+    real release build. **It does not recheck the tag against the checked-out
+    `tauri.conf.json` version** (#1431, `release.yml:68`), so a hand-pushed tag
+    ships whatever bundle it points at, under a mismatched version. Confirm the
+    match yourself before pushing a tag by hand.
   - `workflow_dispatch` is a dry-run path. It creates a draft release named
-    `manual-<sha>` instead of a version tag, and skips the tag/version gate.
+    `manual-<sha>` instead of a version tag.
 - Release workflow output is a draft GitHub Release. A maintainer reviews and
-  publishes it manually — the draft gate is the human check that stops a bad
-  build from auto-installing to every user via the updater.
-- Draft release creation is packaging evidence only. It does not replace CI,
-  Runtime Happy Path, or product support evidence.
+  publishes it manually — the draft is the only check that stops a bad build
+  from auto-installing to every user via the updater.
+- Draft release creation is packaging evidence only. It does not replace CI or
+  product support evidence.
 
 ### `RELEASE_PAT` — health and least privilege
 
@@ -108,29 +107,31 @@ After the draft release is created:
   [`release-notes-support-matrix.md`](release-notes-support-matrix.md),
   [`docs/product/README.md`](../../product/README.md), and
   [`docs/product/known-limitations.md`](../../product/known-limitations.md).
-- Before publishing, confirm the exact release SHA has green CI and Runtime
-  Happy Path checks from the Pre-Release Verification Gate.
+- Before publishing, confirm the exact release SHA has green CI. `Runtime Happy
+  Path` reports without running a spec, so it is not evidence — run the smoke
+  suite by hand if the release needs runtime proof (see
+  [`testing-and-quality.md`](../testing-and-quality.md)).
 
 Updater artifacts — the auto-update path, which reaches every installed client,
 so a broken one is silent (updater errors are DEV-log-only, ADR 0036):
 
-- Confirm the draft carries `latest.json`, and that the release run's
-  `Verify latest.json platform completeness` job passed. That gate
-  (no automated check — verify by hand)
-  fails the release unless `latest.json` lists every build-matrix platform key
-  (`darwin-aarch64`, `windows-x86_64`, `linux-x86_64`), each with a non-empty
-  `url` and `signature`. A dropped key would make `check()` on that OS report
-  "up to date" forever.
+- Open `latest.json` from the draft and confirm it lists every build-matrix
+  platform key (`darwin-aarch64`, `windows-x86_64`, `linux-x86_64`), each with a
+  non-empty `url` and `signature`. The release run's `Verify latest.json is
+  present` job only fails when the draft carries no `latest.json` at all
+  (`release.yml:254`); **nothing checks completeness**, and a dropped key makes
+  `check()` on that OS report "up to date" forever.
 - Confirm each platform's updater bundle and its sibling `.sig` are attached
-  (macOS: `<app>.app.tar.gz` + `<app>.app.tar.gz.sig`), and that the
-  `Verify updater signatures against committed pubkey` step passed. That gate
-  (no automated check — verify by hand)
-  fails the release if any `.sig` was signed by a key other than the pubkey in
-  `tauri.conf.json`. Key backup, rotation, and loss handling live in
-  [`updater-signing-key.md`](updater-signing-key.md) — do not repeat them here.
-- Do not bypass either gate. A green release proves the signed updater artifacts
-  are present and internally consistent; it does not by itself prove a live
-  `check()` roundtrip works end to end (see the post-publish smoke below).
+  (macOS: `<app>.app.tar.gz` + `<app>.app.tar.gz.sig`). **Nothing verifies those
+  `.sig` files against the pubkey committed in `tauri.conf.json`**
+  (`release.yml:196`) — if the signing key and that pubkey drift, every client
+  rejects the update silently. Verify by hand. Key backup, rotation, and loss
+  handling live in [`updater-signing-key.md`](updater-signing-key.md) — do not
+  repeat them here.
+- Both checks above are yours to run. A green release proves only that the build
+  legs finished; it proves nothing about updater manifest completeness or
+  signature validity, and nothing about a live `check()` roundtrip (see the
+  post-publish smoke below).
 
 After publishing:
 

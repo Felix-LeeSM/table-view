@@ -368,11 +368,11 @@ mod tests {
     }
 
     // ----------------------------------------------------------------------
-    // DB-backed unit smoke for reconcile helpers — 전체 E2E 시나리오를 도는
-    // `tests/dual_write_reconcile.rs` 가 CI `Run integration coverage` 의 측정
-    // set 밖이라, reconcile 의 각 도메인 helper coverage 가 0 이 된다. 본 모듈은
-    // 그 커버리지 floor 유지를 위해 helper happy/sad path 를 inline 으로 1회씩
-    // cover.
+    // DB-backed unit smoke for reconcile helpers — 전체 E2E 시나리오를 담은
+    // `tests/dual_write_reconcile.rs` 는 CI 의 어떤 job 에서도 실행되지 않는다
+    // (`ci.yml` 의 `--test` 목록 밖). 그대로 두면 reconcile 의 각 도메인 helper
+    // coverage 가 0 이 되므로, 본 모듈이 helper happy/sad path 를 inline 으로
+    // 1회씩 cover 해 floor 를 유지한다.
     // ----------------------------------------------------------------------
 
     use crate::storage::local;
