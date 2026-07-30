@@ -90,7 +90,7 @@ Contributor/agent routing:
 - [mise](https://mise.jdx.dev/) 또는 asdf — `.tool-versions` 기반 런타임 관리
 - OS별 Tauri 2 시스템 의존성
 
-버전 기준은 [`.tool-versions`](./.tool-versions)입니다. Node.js, pnpm, Rust, direnv 버전이 이 파일에 고정되어 있습니다. `lefthook` 항목도 남아 있지만 실제로 쓰이지는 않습니다 — git hook 이 없습니다.
+버전 기준은 [`.tool-versions`](./.tool-versions)입니다. Node.js, pnpm, Rust, direnv 버전이 이 파일에 고정되어 있습니다.
 
 ### 2. 초기 셋업
 

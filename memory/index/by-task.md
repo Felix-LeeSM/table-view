@@ -155,10 +155,6 @@ generator: none — 손으로 갱신한다
 
 - [Orchestration](../../memory/workflow/orchestration/memory.md)
 
-### lefthook
-
-- [Git 정책](../../memory/workflow/git-policy/memory.md)
-
 ### local-storage
 
 - [State Management Architecture](../../memory/engineering/architecture/state-management/memory.md)
