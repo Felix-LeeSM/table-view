@@ -90,6 +90,13 @@
 #     8쌍이 그 유형이었다) 이 가드는 그걸 판정하지 않는다.
 #   - **`.claude` 정의 본문의 `tools:` / 금지 문구는 안 본다.** 그 값이 뒤집혀도
 #     `source` 는 그대로 실재하므로 이 가드도 `check-wrapper-cap.sh` 도 rc=0 이다.
+#     `research.md` 에 `Bash` / `Write` 를 넣는 편집이 실측 rc=0 이었다.
+#   - **`model:` 을 정의에 다시 못 박아도 안 잡는다.** 그건 도달이 아니라
+#     `.claude/agents/README.md` 가 적은 정책이고, 집행 장치가 없다.
+#   - **memory 산문이 부르는 agent 이름이 실재하는지 안 본다.** `layer:` 필드에
+#     죽은 agent 이름을 되살려도 rc=0 이다. 기계 판정이 어려운 이유는 방 이름과
+#     agent 이름이 같은 토큰이기 때문이다 (`bug-fix`). 손 스윕:
+#     `git grep -nP '^\s+layer:' -- memory` 로 뽑아 `.claude/agents/` 와 대조.
 
 set -euo pipefail
 
