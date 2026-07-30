@@ -78,6 +78,9 @@ changes_block="$(sed -n '/^  changes:/,/^  pr-body:/p' <<<"$workflow_text" | sed
 # `Integration Tests (Docker)` was measured under the same split and REVERTED
 # (the `max-threads = 1` nextest groups made the slowest shard 1294s against
 # 1028s undivided), so it stays a single job here.
+# #1991 — the docs-only lane sits between doc-size and dependency-security, so
+# every sed range below keeps its original endpoints.
+doc_contracts_block="$(sed -n '/^  doc-contracts:/,/^  dependency-security:/p' <<<"$workflow_text" | sed '$d')"
 frontend_shard_block="$(sed -n '/^  frontend-shard:/,/^  frontend:/p' <<<"$workflow_text" | sed '$d')"
 frontend_block="$(sed -n '/^  frontend:/,/^  frontend-advisory:/p' <<<"$workflow_text" | sed '$d')"
 dependency_security_block="$(sed -n '/^  dependency-security:/,/^  frontend-shard:/p' <<<"$workflow_text" | sed '$d')"
@@ -240,11 +243,52 @@ assert_contains "$frontend_block" "- changes" "frontend needs changes"
 # shards had it, a broken detector could skip the shards while the aggregation
 # graded an empty matrix as success.
 CODE_GATE="if: always() && (needs.changes.result != 'success' || needs.changes.outputs.code_changed == 'true')"
-# The two docs-reading jobs carry the same fail-closed shape plus the docs
-# clause; see the DOCS-READING JOBS block at the end of this file.
-DOCS_GATE="${CODE_GATE%)} || needs.changes.outputs.docs_changed == 'true')"
-assert_contains "$frontend_shard_block" "$DOCS_GATE" "frontend-shard docs+code gate"
-assert_contains "$frontend_block" "$DOCS_GATE" "frontend docs+code gate"
+# #1991 — the docs-only lane's gate is the COMPLEMENT of CODE_GATE: it runs on
+# exactly the sets where the heavy jobs skip and there is still something to
+# re-read. Pinning both literals is what keeps the truth table below honest;
+# edit either `if:` and these fail before the table can describe a stale gate.
+DOCS_ONLY_GATE="if: always() && needs.changes.result == 'success' && needs.changes.outputs.code_changed != 'true' && needs.changes.outputs.docs_changed == 'true'"
+assert_contains "$frontend_shard_block" "$CODE_GATE" "frontend-shard code gate"
+assert_contains "$frontend_block" "$CODE_GATE" "frontend code gate"
+assert_contains "$doc_contracts_block" "$DOCS_ONLY_GATE" "doc-contracts docs-only gate"
+assert_contains "$doc_contracts_block" "name: Doc Contracts" "doc-contracts job name"
+assert_contains "$doc_contracts_block" "needs: changes" "doc-contracts needs changes"
+# The doc contracts were enumerated by mutation (overwrite then delete every
+# docs/, memory/, *.md file and diff the failing set against a clean run) and
+# landed on five files across exactly these three roots. Directory-scoped, not a
+# per-file allowlist: #1845 deleted one of those and re-adding it reopens the
+# hole. Drop a root here and the docs-only lane silently stops covering it.
+assert_contains "$doc_contracts_block" "pnpm exec vitest run scripts/ tests/ src/types/" "doc-contracts runs the doc contract roots"
+# Same command the aggregation job runs, so the two lint paths cannot drift.
+assert_contains "$doc_contracts_block" "run: pnpm lint" "doc-contracts runs the doc-reading static policy"
+assert_contains "$frontend_block" "run: pnpm lint" "frontend still runs lint on code changes"
+
+# Truth table over the change-detection outputs. These two functions mirror the
+# `if:` literals asserted just above; the doc-reading checks must run EXACTLY
+# once on every classification, and never zero times when something changed.
+heavy_runs() { # $1=changes result, $2=code_changed
+	[ "$1" != "success" ] || [ "$2" = "true" ]
+}
+docs_lane_runs() { # $1=changes result, $2=code_changed, $3=docs_changed
+	[ "$1" = "success" ] && [ "$2" != "true" ] && [ "$3" = "true" ]
+}
+# result|code|docs|expected number of lanes covering the doc readers
+while IFS='|' read -r res code docs want; do
+	got=0
+	heavy_runs "$res" "$code" && got=$((got + 1))
+	docs_lane_runs "$res" "$code" "$docs" && got=$((got + 1))
+	if [ "$got" -ne "$want" ]; then
+		echo "FAIL: gate truth table: result=$res code=$code docs=$docs ran $got lane(s), expected $want" >&2
+		exit 1
+	fi
+done <<'TABLE'
+failure|||1
+cancelled|||1
+success|true|true|1
+success|true|false|1
+success|false|true|1
+success|false|false|0
+TABLE
 assert_contains "$rust_block" "$CODE_GATE" "rust docs-only skip gate"
 assert_contains "$integration_block" "$CODE_GATE" "integration docs-only skip gate"
 assert_contains "$dependency_security_block" "$CODE_GATE" "dependency-security docs-only skip gate"
@@ -275,7 +319,7 @@ fi
 # this asserts — exactly these two carry the docs clause, and no other job does.
 # Add a docs-reading check to a third job and this fails until the clause and
 # this list are both updated.
-docs_reading_jobs="frontend-shard frontend"
+docs_reading_jobs="doc-contracts"
 for job_id in $(grep -Eo '^  [a-z][a-z0-9-]*:' "$WORKFLOW" | tr -d ' :'); do
 	# Stop at the next job key OR a top-level comment: the DOCS-READING JOBS
 	# note trails the last job and would otherwise be read as part of it.

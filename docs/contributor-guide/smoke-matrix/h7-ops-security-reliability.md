@@ -105,7 +105,8 @@ does. Job ids, not check-context names:
 <!-- ci-gates:change-gated -->
 
 - Change-gated: `dependency-security`, `dependency-advisories`,
-  `frontend-shard`, `frontend`, `rust`, `rust-static`, `integration-tests`.
+  `doc-contracts`, `frontend-shard`, `frontend`, `rust`, `rust-static`,
+  `integration-tests`.
 
 <!-- /ci-gates -->
 
@@ -124,9 +125,15 @@ does. Job ids, not check-context names:
 <!-- /ci-gates -->
 
 `frontend-advisory` stays ungated because `docs:links` is most useful on docs
-PRs. No compensating always-on doc-contract job exists any more: with the
-classification honest, the jobs that already own those checks run when docs
-change.
+PRs.
+
+`doc-contracts` is the docs-only lane (#1991). Its `if:` is the complement of
+the shared code gate, so on a docs-only change set it runs while
+`frontend-shard` and `frontend` skip, and on every other change set the reverse
+holds. The doc-reading checks therefore run exactly once, never zero times: a
+failed detector leaves the heavy pair fail-closed and running, and the only set
+where both lanes skip is an empty diff. `scripts/hooks/policy/test-ci-workflow-cache.sh`
+pins both `if:` literals and walks that truth table.
 
 ## Local pre-push routing
 
