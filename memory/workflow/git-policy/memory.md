@@ -39,7 +39,7 @@ CI 가 돌릴 검사의 최소 세트. commit/push 전에 바꾼 영역만:
 `could not find Cargo.toml` 로 죽는다.
 
 ```bash
-# 프론트엔드를 건드렸으면 — Frontend Checks 가 돌리는 것과 같은 셋
+# 프론트엔드를 건드렸으면
 pnpm lint && pnpm test && pnpm build
 
 # Rust 를 건드렸으면 — Rust Static Analysis + Rust Unit And Storage Tests
@@ -50,8 +50,16 @@ cargo test --manifest-path src-tauri/sql-parser-core/Cargo.toml --lib
 cargo test --manifest-path src-tauri/Cargo.toml --test parse_sql_backend
 ```
 
-`Integration Tests (Docker)` 가 돌리는 13개 통합 타깃은 testcontainer 가 필요해
-위 세트에 없다. 그 job 이 유일한 실행처다.
+위 세트로도 못 덮는 두 가지:
+
+- **커버리지 임계값.** `pnpm test` 는 `vitest run` 이라 `--coverage` 가 없다.
+  `vite.config.ts` 의 statements 85 / lines 87 / functions 87 / branches 78 은
+  `Frontend Checks` 가 3개 shard 를 병합해 `--coverage` 로 돌 때만 걸린다.
+  로컬 green 이 그 임계값 통과를 뜻하지 않는다.
+- **testcontainer 통합 11종.** `Integration Tests (Docker)` 가 도는 13개 중
+  `storage_integration` 은 위 세트와 macOS job 에도 있고 `fixture_loading` 은
+  `include_str!` + serde 뿐이라 컨테이너가 필요 없다. 나머지 11개가 그 job 에서만
+  돈다.
 
 ## 실패 시 — 회피 X, 근본 fix
 

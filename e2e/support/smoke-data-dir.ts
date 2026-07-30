@@ -1,6 +1,5 @@
-import { readdirSync, rmSync } from "node:fs";
-import { homedir } from "node:os";
-import { parse, resolve } from "node:path";
+import { readdirSync, rmSync, writeFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 /**
  * Empty the app-data directory the smoke run gave the Tauri binary via
@@ -30,26 +29,34 @@ import { parse, resolve } from "node:path";
  * - A missing directory is normal on the first session of a run.
  * - The value is typed by hand now that no script exports it (README 「E2E
  *   Smoke」), so a typo or an unexpanded `${VAR}` can point it at a real
- *   directory. `assertDeletableDataDir` refuses the roots a slip lands on
- *   rather than emptying them.
+ *   directory. Refusing a denylist of roots does not cover that: the directory
+ *   a slip most plausibly lands on is the real store itself
+ *   (`~/Library/Application Support/table-view`), which is not a root of
+ *   anything. So an existing non-empty directory is emptied only if it carries
+ *   the marker a previous reset wrote. Anything else — the real store, a home
+ *   subdirectory, a source tree — throws untouched.
  */
-const UNDELETABLE = new Set(
-  [homedir(), parse(process.cwd()).root, process.cwd()].map((p) => resolve(p)),
-);
+const MARKER = ".table-view-smoke-data-dir";
 
-function assertDeletableDataDir(dataDir: string): void {
-  if (UNDELETABLE.has(resolve(dataDir))) {
-    throw new Error(
-      `TABLE_VIEW_TEST_DATA_DIR must be a throwaway directory, got "${dataDir}". ` +
-        `resetSmokeDataDir() empties it on every session.`,
-    );
-  }
+/**
+ * Throws unless `dataDir` is safe to empty. Safe means: it does not exist yet,
+ * it is empty, or a previous `resetSmokeDataDir` left its marker there.
+ */
+export function assertDeletableDataDir(
+  dataDir: string,
+  entries: string[],
+): void {
+  if (entries.length === 0 || entries.includes(MARKER)) return;
+  throw new Error(
+    `Refusing to empty "${dataDir}": it has ${entries.length} entries and no ` +
+      `${MARKER} marker, so it was not created by a smoke run. Point ` +
+      `TABLE_VIEW_TEST_DATA_DIR at a throwaway directory.`,
+  );
 }
 
 export function resetSmokeDataDir(): string | null {
   const dataDir = process.env.TABLE_VIEW_TEST_DATA_DIR;
   if (!dataDir) return null;
-  assertDeletableDataDir(dataDir);
 
   let entries: string[];
   try {
@@ -59,8 +66,12 @@ export function resetSmokeDataDir(): string | null {
     throw error;
   }
 
+  assertDeletableDataDir(dataDir, entries);
+
   for (const entry of entries) {
+    if (entry === MARKER) continue;
     rmSync(resolve(dataDir, entry), { recursive: true, force: true });
   }
+  writeFileSync(resolve(dataDir, MARKER), "");
   return dataDir;
 }

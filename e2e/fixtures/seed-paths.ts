@@ -2,24 +2,16 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 /**
- * Seed-fixture lookup for the smoke suite. `e2e/fixtures/seed-smoke.ts` is the
- * only caller.
+ * Seed-fixture registry for the smoke suite.
+ *
+ * `e2e/fixtures/seed-smoke.ts` reads every seed it needs through
+ * `readE2eSeedFixture`. The file-DB specs do NOT: e2e/smoke/sqlite.spec.ts:222,
+ * e2e/smoke/duckdb-fixture.ts:10 and e2e/smoke/duckdb-schema-filter.spec.ts:29
+ * hold their own literal paths. Those three seeds are registered here anyway so
+ * the registry stays a complete list of tracked seed files — that is what
+ * tests/fixtures/e2e_seed_paths.test.ts enforces. It does not stop a spec from
+ * writing its own path.
  */
-export type E2eSeedFixtureKey =
-  | "postgresql"
-  | "mysql"
-  | "mariadb"
-  | "sqlite"
-  | "duckdb"
-  | "duckdb-schema-filter"
-  | "mongodb"
-  | "redis"
-  | "valkey"
-  | "elasticsearch"
-  | "opensearch"
-  | "mssql"
-  | "oracle";
-
 export const E2E_SEED_FIXTURE_PATHS = {
   postgresql: "e2e/fixtures/postgresql/query/seed.sql",
   mysql: "e2e/fixtures/mysql/query/seed.sql",
@@ -35,7 +27,9 @@ export const E2E_SEED_FIXTURE_PATHS = {
   // MSSQL and Oracle predate the DBMS-first layout and still sit at the root.
   mssql: "e2e/fixtures/seed.mssql.sql",
   oracle: "e2e/fixtures/seed.oracle.sql",
-} as const satisfies Record<E2eSeedFixtureKey, string>;
+} as const;
+
+export type E2eSeedFixtureKey = keyof typeof E2E_SEED_FIXTURE_PATHS;
 
 export async function readE2eSeedFixture(
   key: E2eSeedFixtureKey,
