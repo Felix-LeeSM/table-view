@@ -306,19 +306,20 @@ fi
 # DOCS-READING JOBS (#1845). This is the list `docs_changed` exists for, and
 # the one check kept from the deleted allowlist+drift-guard design.
 #
-# The hole: doc-reading checks live inside the vitest suite (`frontend-shard`)
-# and inside `pnpm lint` -> scripts/check-eslint-static-policy.ts (`frontend`).
-# Both were gated on `code_changed` alone, so a docs-only PR skipped exactly the
-# checks guarding the documents it edited — and GitHub counts a skipped required
-# check as satisfied. #1841 merged that way; #1844 and #1847 merged reading
-# `Frontend Checks: skipping`.
+# The hole: doc-reading checks were gated on `code_changed` alone, so a docs-only
+# PR skipped exactly the checks guarding the documents it edited — and GitHub
+# counts a skipped required check as satisfied. #1841 merged that way; #1844 and
+# #1847 merged reading `Frontend Checks: skipping`.
 #
-# The fix is the classification, not a compensating job: `changes` now also
-# emits `docs_changed`, and these two jobs gate on `code_changed || docs_changed`.
+# The fix is the classification: `changes` also emits `docs_changed`, and the
+# doc readers gate on it. #1991 moved them off the shard matrix and its
+# aggregation — running three shards of a 634-file suite to reach five doc
+# contract files — into the single `doc-contracts` job.
+#
 # What a human still has to get right is WHICH jobs read docs, so that is what
-# this asserts — exactly these two carry the docs clause, and no other job does.
-# Add a docs-reading check to a third job and this fails until the clause and
-# this list are both updated.
+# this asserts — exactly the declared jobs carry the docs clause, and no other
+# job does. Add a docs-reading check to another job and this fails until the
+# clause and this list are both updated.
 docs_reading_jobs="doc-contracts"
 for job_id in $(grep -Eo '^  [a-z][a-z0-9-]*:' "$WORKFLOW" | tr -d ' :'); do
 	# Stop at the next job key OR a top-level comment: the DOCS-READING JOBS

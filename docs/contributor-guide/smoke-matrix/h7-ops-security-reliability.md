@@ -50,10 +50,10 @@ What the individual jobs own:
 Theme contrast and link checking are advisory (Frontend Advisory job). Full
 a11y, perf, and macOS/Windows runtime smoke are not routine blocking checks.
 
-There is no separate doc-contract job. The doc contracts are ordinary members of
-the vitest suite and of `pnpm lint`; what used to hide them from docs-only PRs
-was the change classification, and that is where it is fixed — see the next
-section.
+The doc contracts are ordinary members of the vitest suite and of `pnpm lint`.
+On a code change they run there. On a docs-only change set they run in the
+`doc-contracts` job instead, which exists so a markdown edit no longer drags the
+three-shard matrix along — see the next section.
 
 ## Change-scope classification and the docs-only skip
 
@@ -78,11 +78,17 @@ single `code_changed` flag described those as unaffected, so docs-only PRs
 skipped exactly the checks guarding the documents they edited — #1841 merged
 with its doc contracts unevaluated, and #1844/#1847 merged reading
 `Frontend Checks: skipping`, which GitHub counts as a satisfied required check.
-The jobs that read docs (`frontend-shard`, `frontend`) therefore gate on
-`code_changed || docs_changed`; the `DOCS-READING JOBS` note at the end of
-`.github/workflows/ci.yml` is the list, and
-`scripts/hooks/policy/test-ci-workflow-cache.sh` asserts that exactly those jobs carry
-the clause.
+The job that reads docs (`doc-contracts`) therefore gates on `docs_changed`; the
+`DOCS-READING JOBS` note at the end of `.github/workflows/ci.yml` is the list,
+and `scripts/hooks/policy/test-ci-workflow-cache.sh` asserts that exactly those jobs
+carry the clause.
+
+Until #1991 the two readers were `frontend-shard` and `frontend`, so a docs edit
+ran the whole 634-file suite across three shards to reach five doc contract
+files. Those five were identified by mutation — overwrite every `docs/`,
+`memory/`, `*.md` file and diff the failing set against a clean run, then repeat
+with the files deleted, because two of them assert a path EXISTS and survive an
+overwrite.
 
 Every change-gated job carries `needs: changes` + a fail-closed `if:`: it skips
 only when detection SUCCEEDED and said the change was out of its scope; if the
