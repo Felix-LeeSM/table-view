@@ -331,9 +331,9 @@ jobs:
       # the WebKitGTK/GTK system libraries to compile on Linux. Mirrors the
       # integration-tests job's apt step.
       - name: Install Tauri Linux dependencies
-        # Retry wrapper: transient apt mirror failures (e.g. packages.microsoft.com
-        # 403) fail the whole setup. Up to 3 attempts with linear backoff.
-        # Mirrors the e2e-smoke workflow's install_deps retry loop (#1293).
+        # Retry wrapper (#1293): transient apt mirror failures (e.g.
+        # packages.microsoft.com 403) fail the whole setup. Up to 3 attempts
+        # with linear backoff.
         run: |
           install_deps() {
             sudo apt-get update && sudo apt-get install -y \
@@ -428,9 +428,10 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Install Tauri Linux dependencies
-        # Retry wrapper: transient apt mirror failures (e.g. packages.microsoft.com
-        # 403) fail the whole setup. Up to 3 attempts with linear backoff.
-        # Mirrors the e2e-smoke workflow's install_deps retry loop (#1293).
+        # Retry wrapper (#1293): transient apt mirror failures (e.g.
+        # packages.microsoft.com 403) fail the whole setup. Up to 3 attempts
+        # with linear backoff. The `Rust Static Analysis` job above runs the
+        # same loop.
         run: |
           install_deps() {
             sudo apt-get update && sudo apt-get install -y \

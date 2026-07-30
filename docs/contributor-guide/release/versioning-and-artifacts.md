@@ -90,8 +90,8 @@ concerns follow from that:
 | Windows x86_64 | `Windows x86_64`, `x86_64-pc-windows-msvc` | Windows installer bundle, normally `.msi`, plus `.sha256`. Current packages are unsigned, so SmartScreen may warn. |
 | Linux x64 | `Linux x64`, `x86_64-unknown-linux-gnu` | Linux bundles produced by Tauri, such as `.deb`, `.rpm`, or `.AppImage`, plus `.sha256`. This lane is automation packaging evidence, not the primary supported desktop distribution target. |
 | Checksums | `Upload SHA256 checksums` step | Every uploaded bundle should have a sibling `.sha256` file in standard `shasum -a 256` format. |
-| Updater artifacts | `createUpdaterArtifacts: true` in `tauri.conf.json`; `tauri-action` signs each with the minisign key | Each platform's updater bundle plus a sibling minisign `.sig` (macOS: `<app>.app.tar.gz` + `<app>.app.tar.gz.sig`), aggregated into one `latest.json` manifest on the draft release. This is the auto-update path — verified by the gates in Post-Release Verification. |
-| Homebrew cask | [`homebrew-cask.md`](homebrew-cask.md) after release publish | Published GitHub Release triggers the Homebrew tap workflow. It uses the macOS arm64 `.dmg` and checksum to open or update the tap PR. |
+| Updater artifacts | `createUpdaterArtifacts: true` in `tauri.conf.json`; `tauri-action` signs each with the minisign key | Each platform's updater bundle plus a sibling minisign `.sig` (macOS: `<app>.app.tar.gz` + `<app>.app.tar.gz.sig`), aggregated into one `latest.json` manifest on the draft release. This is the auto-update path — no job verifies it; check it by hand in Post-Release Verification. |
+| Homebrew cask | [`homebrew-cask.md`](homebrew-cask.md) after release publish | No workflow updates the tap. After publishing, edit `Casks/table-view.rb` in the tap repo by hand from the macOS arm64 `.dmg` and its checksum, and open the tap PR. |
 
 ## Post-Release Verification
 
@@ -119,7 +119,7 @@ so a broken one is silent (updater errors are DEV-log-only, ADR 0036):
   platform key (`darwin-aarch64`, `windows-x86_64`, `linux-x86_64`), each with a
   non-empty `url` and `signature`. The release run's `Verify latest.json is
   present` job only fails when the draft carries no `latest.json` at all
-  (`release.yml:254`); **nothing checks completeness**, and a dropped key makes
+  (`release.yml:251`); **nothing checks completeness**, and a dropped key makes
   `check()` on that OS report "up to date" forever.
 - Confirm each platform's updater bundle and its sibling `.sig` are attached
   (macOS: `<app>.app.tar.gz` + `<app>.app.tar.gz.sig`). **Nothing verifies those
@@ -141,11 +141,13 @@ After publishing:
   confirm the prompt offers the new version, accept it, and confirm
   `downloadAndInstall` completes and the app relaunches into the new version.
   This is the only check that exercises the real `check()` ->
-  `downloadAndInstall` roundtrip; CI verifies the artifacts but cannot install a
-  published release. `.deb`/`.rpm` installs cannot self-update (no writable
-  in-place target) and show a manual-upgrade hint instead of a prompt (#1437),
-  so run the roundtrip on a macOS, Windows, or Linux AppImage install.
-- Confirm the Homebrew cask workflow ran.
+  `downloadAndInstall` roundtrip; CI produces the updater artifacts but verifies
+  nothing about them and cannot install a published release. `.deb`/`.rpm`
+  installs cannot self-update (no writable in-place target) and show a
+  manual-upgrade hint instead of a prompt (#1437), so run the roundtrip on a
+  macOS, Windows, or Linux AppImage install.
+- Update the Homebrew tap by hand — no workflow does it. The procedure is in
+  [`homebrew-cask.md`](homebrew-cask.md).
 - Confirm the Homebrew tap PR points at the published macOS arm64 `.dmg` and
   matching checksum.
 - If the tap PR is merged, run a fresh `brew update` and cask install check on a
@@ -179,14 +181,15 @@ stays put. The only way to move users off a bad published release is to ship a
 **higher** version that fixes (or reverts) it. That is the superseding patch.
 
 1. **Fix or revert on `main`.** Land the fix — or a straight revert of the bad
-   change — on `main`, and rerun CI + Runtime Happy Path on the merge commit.
-   If the fix is a pure revert, it can be small and fast; correctness still
-   gates it.
+   change — on `main`, and rerun CI on the merge commit. If the release needs
+   runtime proof, run the smoke suite by hand; no CI job does. If the fix is a
+   pure revert, it can be small and fast; correctness still gates it.
 2. **Bump to the next patch.** In one `chore/release-X.Y.Z+1` PR, bump
    `package.json`, `src-tauri/tauri.conf.json`, and `src-tauri/Cargo.toml`
    together to the next patch version (a bad `0.4.2` is superseded by `0.4.3`,
    never by re-releasing `0.4.2`). This is the normal release flow, just
-   prioritized: merging it drives auto-tag → draft build → the gates above.
+   prioritized: merging it drives auto-tag → draft build → the Post-Release
+   Verification above.
 3. **Publish the patch draft** after the normal Post-Release Verification. On
    publish it becomes `latest`, and every install on the bad version auto-updates
    forward to it on next launch + user approval.

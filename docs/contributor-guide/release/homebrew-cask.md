@@ -46,8 +46,9 @@ brew upgrade --cask table-view
 - GitHub Release를 `Publish`하기 전에는
   [`../testing-and-quality.md`](../testing-and-quality.md)의 Pre-Release
   Verification Gate가 같은 release SHA에서 통과해야 합니다. Draft bundle과
-  checksum은 packaging evidence일 뿐, CI/Runtime Happy Path나 live support claim
-  evidence를 대체하지 않습니다.
+  checksum은 packaging evidence일 뿐, CI 결과나 live support claim evidence를
+  대체하지 않습니다. `Runtime Happy Path` 는 spec 을 하나도 실행하지 않으므로
+  runtime 근거가 아닙니다.
 - 릴리스 노트의 support claim은
   [`release-notes-support-matrix.md`](release-notes-support-matrix.md)를 기준으로
   작성하고, product docs와 known limitations 링크를 함께 둡니다.
