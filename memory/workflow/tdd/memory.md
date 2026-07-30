@@ -10,8 +10,8 @@ trigger:
 
 # TDD Evidence
 
-본 문서는 작업 방식을 마이크로매니징하지 않는다. 역할은 delivery gate 가 요구하는
-evidence 를 작업 초반에 보이게 하는 것.
+본 문서는 작업 방식을 마이크로매니징하지 않는다. 역할은 RED evidence 를 작업
+초반에 보이게 하는 것.
 
 ## 강제하지 않는다 — 권고다 (2026-07-30 사용자 결정, #1987)
 
@@ -56,4 +56,3 @@ git log "$base..HEAD" --format="%s"
 - [delivery](../delivery/memory.md) — push/PR/merge pipeline
 - [review](../review/memory.md) — PR review 행동 계약
 - [git-policy](../git-policy/memory.md) — 검증 우회 금지
-- 이 사이클을 강제하는 장치는 없다 — 집행 없음

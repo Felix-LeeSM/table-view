@@ -16,8 +16,8 @@ task: worktree, multi-agent, parallel, spawn-verify, agent-hard-rule
 
 ## 소유권 / SOT
 
-- 본 파일이 worktree 사용 시점, 격리 의미, lifecycle guardrail 을 소유한다.
-  위임할 script `--help` 가 더는 없으므로 여기가 유일한 SOT 다.
+- 본 파일이 worktree 사용 시점, 격리 의미, lifecycle guardrail 을 소유한다 —
+  여기가 유일한 SOT 다.
 - commit / push / PR / merge 행동 계약은 [delivery](../../workflow/delivery/memory.md)
   가 소유한다. push reject 회복 정책은
   [git-policy](../../workflow/git-policy/memory.md) 가 소유한다.
@@ -66,7 +66,7 @@ git worktree prune                    # stale 메타데이터만
   는 branch 만 삭제 — worktree 디스크는 별도 정리 필요.
 - **dirty worktree 는 지우지 않는다** (untracked 도 dirty). 2026-07-29 실측에서
   머지된 PR 의 worktree 하나가 커밋 안 된 51줄을 갖고 있었다 — 먼저 확인하고
-  보존 사유를 기록한다. 자동 SKIP 해 주던 스크립트가 없으니 손으로 본다.
+  보존 사유를 기록한다. dirty 판정은 손으로 한다.
 
 ## 머지 판정 — 조상 관계를 쓰지 마라
 
@@ -90,8 +90,8 @@ primary worktree 는 orchestration-only. `memory/` 와 `AGENTS.md` 같은 agent
 계약 수정, `worktrees/*` linked target 생성/수정만 허용한다. `docs/`, app
 source/config/manifest 는 linked worktree 에서 수정한다.
 
-집행하던 훅(`check-main-worktree-source-edit.sh`)이 삭제돼 지금은 **차단되지 않는다.**
-primary 에서 소스를 고치고 있다는 걸 스스로 알아채야 한다.
+**차단하는 장치는 없다.** primary 에서 소스를 고치고 있다는 걸 스스로
+알아채야 한다.
 
 ## Agent lifecycle
 
@@ -130,8 +130,8 @@ test "$(git rev-parse --show-toplevel)" = "<expected_path>" \
   || { echo "ABORT: wrong worktree" >&2; exit 1; }
 ```
 
-이 스니펫을 자동 출력해 주던 spawn 스크립트가 없으므로 orchestrator 가 직접
-agent prompt 의 "MANDATORY first command" 슬롯에 넣는다. 불일치 시 agent 는
+orchestrator 가 이 스니펫을 직접 agent prompt 의 "MANDATORY first command"
+슬롯에 넣는다. 불일치 시 agent 는
 **즉시 abort + 사용자 보고**. main 디렉토리에서 작업 재개 X.
 
 ### Agent hard rule — fetch/reset/pull 금지

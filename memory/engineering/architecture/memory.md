@@ -45,7 +45,7 @@ table-view/
 │   ├── lib/             # pure/domain helpers + boundary wrappers; runtime exception below
 │   └── types/           # TypeScript 타입
 ├── e2e/                 # WebdriverIO + tauri-driver E2E
-└── docs/                # 사람용 프로젝트 문서 (product, roadmap, sprints, archives)
+└── docs/                # 사람용 프로젝트 문서 (product, roadmap, phases, archives)
 ```
 
 ## 계층

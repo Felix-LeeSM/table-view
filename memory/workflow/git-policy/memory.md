@@ -23,9 +23,9 @@ trigger:
 
 ### Why
 
-- `cargo fmt` / `cargo clippy -D warnings` / `prettier` / `eslint` / 테스트는
-  **CI 에서만 돈다.** 로컬에서 깨진 코드를 push 하면 CI 에서 처음 드러나므로
-  아래 세트를 스스로 돌리고 push 한다.
+- `cargo fmt` / `cargo clippy -D warnings` / `eslint` / 테스트는 **CI 에서만
+  돈다.** 로컬에서 깨진 코드를 push 하면 CI 에서 처음 드러나므로 아래 세트를
+  스스로 돌리고 push 한다. `prettier` 는 CI 에도 없다 — 손으로 `pnpm format`.
 - 서명은 `commit.gpgsign` 설정이 건다.
 - [ADR 0044](../../../docs/archives/decisions/0044-e2e-smoke-remote-required/memory.md)
   는 runtime e2e smoke 를 GitHub Actions blocking check 로 승격했지만, 그 워크플로는

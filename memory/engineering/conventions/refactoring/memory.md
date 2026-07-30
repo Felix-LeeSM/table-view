@@ -12,7 +12,9 @@ Sprint 189–198 의 refactor / feature 커밋이 일관되게 따를 **코드 �
 작업 sequencing 은 2026-05-02 Sprint 198 종료로 완료. 본 룰셋은 **영속** —
 198 이후 신규 refactor 에도 동일 적용.
 
-이미 정해진 룰 (`react-conventions.md`, `testing.md`, `test-scenarios.md`,
+이미 정해진 룰 (`memory/engineering/conventions/react/memory.md`,
+`memory/engineering/conventions/testing-scenarios/memory.md`,
+`memory/engineering/conventions/e2e-scenarios/memory.md`,
 `memory/engineering/conventions/memory.md`) 은 그대로 상속. 본 방은 **리팩토링 sprint
 에서 추가로 강제하는 항목** 만 다룬다.
 

@@ -47,4 +47,4 @@ historical context only.
 
 - [architecture](../memory.md)
 - [conventions](../../conventions/memory.md)
-- [product/ui-parity](../../../product/ui-parity/memory.md) — cross-paradigm UI parity merge gate (이 방 heuristic 의 게이트 버전; heuristic 은 머지를 막지 않지만 ui-parity rule 은 막는다)
+- [product/ui-parity](../../../product/ui-parity/memory.md) — cross-paradigm UI parity merge rule (이 방 heuristic 의 룰 버전; 자동 게이트는 없고 리뷰어가 머지를 보류한다)

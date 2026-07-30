@@ -56,7 +56,7 @@ mergeable, 사용자 거부 없음)은 종결자가 종합한다.
 - `--no-verify` / `--no-gpg-sign` 금지 ([git-policy](../git-policy/memory.md)).
 - CI 실패 시 회피 X, 근본 원인 fix.
 - GPG signing pinentry timeout 시 즉시 중단. unsigned commit 으로 진행하지 않음.
-- code-profile sprint 의 RED evidence 요구는 [tdd](../tdd/memory.md) 를 따른다.
+- RED evidence 는 [tdd](../tdd/memory.md) 의 권고이지 통과 조건이 아니다.
 
 ## PR body
 

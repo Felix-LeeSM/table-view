@@ -93,4 +93,3 @@ pnpm tsc --noEmit && pnpm lint && pnpm vitest run <touched-tree>
 
 - [refactoring](../memory.md) — 4 카테고리 (B/D/C/A) 룰셋
 - [decomposition](../decomposition/memory.md) — god file commit 시퀀스 (5+ commit)
-- CLAUDE.md — comment policy (WHY only)

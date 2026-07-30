@@ -37,8 +37,8 @@ label 메커니즘 자체는 [delivery](../../workflow/delivery/memory.md) 의 �
 
 <!-- /ci-gates -->
 
-**8종 중 3종은 빈 껍데기다.** `Detect Change Scope`, `PR Body Contract`,
-`Runtime Happy Path` 는 `exit 0` 한 줄뿐인 name-only job 이다 — **항상 green 이고
+**8종 중 3종은 빈 껍데기다.** `Detect Change Scope` 와 `PR Body Contract` 는
+`exit 0` 한 줄, `Runtime Happy Path` 는 echo 한 줄인 name-only job 이다 — **항상 green 이고
 아무것도 보증하지 않는다.** 이름을 지우면 컨텍스트가 영영 `expected` 로 남아 모든
 머지가 막히므로 job 만 남겼다. 순서는 ruleset 에서 먼저 빼고 그다음 job 삭제다
 (ruleset 은 GitHub 라이브 상태라 별도 결정).
@@ -76,8 +76,8 @@ label 메커니즘 자체는 [delivery](../../workflow/delivery/memory.md) 의 �
 - **synchronize run 은 `gh run rerun` 해도 영원히 fail** — push(synchronize) 마다
   "Dismiss stale approval on new commits" step 이 `review:approved` 를 DELETE + 의도적
   exit 1. rerun 은 같은 dismissal 로직을 재실행해 다시 `exit 1` — synchronize run 은
-  절대 pass 로 못 뒤집는다. watcher 의 자동 rerun 1회가 여기 낭비되면 watcher 가
-  포기(exit 2)하니, 부착 전 review-gate bucket 이 pass 인지 확인한다 (#1523).
+  절대 pass 로 못 뒤집는다. 자동 rerun 을 대신 돌려 주는 watcher 는 없으니, label
+  부착 전에 review-gate bucket 이 pass 인지 손으로 확인한다 (#1523).
 - **CANCELLED 고착 (#1515, 2h timeout 원인)**: `labeled` run 이 concurrency 로 CANCELLED
   되면 rollup 에 non-success 로 남아 BLOCKED 가 고착된다. `gh pr checks` 는 최신 run 만
   보여줘 all-pass 처럼 보인다 — 진단은 `statusCheckRollup`(GraphQL) 또는 commit

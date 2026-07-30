@@ -39,17 +39,19 @@ Feature enablement 은 profile/capability contract 에서 온다. `DatabaseType`
 `queryMode` 는 old tab/history compatibility 이다. 새 query routing 은
 `queryLanguage`, result rendering 은 typed result envelope 를 쓴다.
 
-## Capability Flip — 5-Surface Sync
+## Capability Flip — 4-Surface Sync
 
-Backend adapter capability (`BackendAdapterCapability`) 를 flip 하면 5곳을 함께
-갱신한다 — 하나라도 빠지면 parity/release-gate 가 RED 로 잡는다:
+Backend adapter capability (`BackendAdapterCapability`) 를 flip 하면 4곳을 함께
+갱신한다. 1-3 누락은 `cargo test --lib` 의 contract assertion 과
+`src/types/dataSourceProfileParity.test.ts` 가 CI 에서 잡는다. 4 는 잡아 주는
+게이트가 없으니 손으로 확인한다:
 
 1. Rust adapter contract — `src-tauri/src/models/data_source.rs` 의 `adapter_contract`
    capability set (+ `src-tauri/src/db/adapters/tests.rs` contract assertion).
 2. TS capabilities — `src/types/dataSource.ts` 의 `capabilities`
    (query/catalog/edit/ddl/intelligence).
 3. Parity fixture — `tests/fixtures/data-source-profile-parity.report.json`.
-5. Docker integration boundary test.
+4. Docker integration boundary test.
 
 예외: `operations` capability 는 TS-only (`dataSource.ts` 의 `operations` 객체) —
 Rust 필드/parity report 는 추적하지 않는다 (MySQL 선례 커밋 `d495f330`).
