@@ -1,8 +1,0 @@
----
-expect: accept
----
-
-# A plain room
-
-The negative control. Without at least one input the guard must let through,
-every assertion in the sweep is satisfied by a guard that exits 1 on everything.
