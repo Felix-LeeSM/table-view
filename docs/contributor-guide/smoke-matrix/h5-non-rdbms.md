@@ -368,15 +368,18 @@ validation for query/filter/aggs, pagination, `track_total_hits`, field sort,
 and `_source` filters plus the shared Search-native result renderer;
 OpenSearch-specific tests lock raw/admin/destructive target rejection,
 unsupported body feature rejection, safe `_search` delete-by-query estimates,
-wildcard target rejection, and preview-only execution rejection before dispatch.
-Delete-by-query planning is preview-only for both Search products. Search DSL
-editor completion uses product-scoped Elasticsearch/OpenSearch catalog/mapping
-context for index/alias/data-stream/field/type/sort/source suggestions plus
-shared snippets. Runtime Happy Path now wires representative Elasticsearch and
-OpenSearch connect/auth/TLS root-probe, catalog metadata, selected-index detail,
-search render, delete-plan, and error-surface smoke, but this does not claim
-actual live admin execution, broader observability, profile/explain request
-workflow, or full language-core Search DSL parser/completion ownership.
+and wildcard target rejection before dispatch. Delete-by-query is a safe
+`_search` preview plan followed by a live `_delete_by_query` behind the Safe
+Mode confirm gate for both Search products (#1076); only the wildcard/`_all`
+fan-out target stays rejected. Search DSL editor completion uses product-scoped
+Elasticsearch/OpenSearch catalog/mapping context for
+index/alias/data-stream/field/type/sort/source suggestions plus shared snippets.
+Runtime Happy Path now wires representative Elasticsearch and OpenSearch
+connect/auth/TLS root-probe, catalog metadata, selected-index detail, search
+render, delete-plan, live delete-execution, and error-surface smoke, but this
+does not claim actual live index/settings admin execution, broader
+observability, profile/explain request workflow, or full language-core Search
+DSL parser/completion ownership.
 
 ## Elasticsearch/OpenSearch product delta
 
@@ -400,16 +403,17 @@ root probe now detects product/version/distribution, live catalog reads indexes,
 aliases, data streams, mappings, settings/analyzers, templates, and field paths,
 live `_search` validates the supported query/filter/aggs/sort/source request
 subset before parsing hits/shards/aggs/error/cancel surfaces, and live
-delete-by-query planning estimates through safe `_search` as a preview-only
-plan. OpenSearch root probe now detects OpenSearch product/version/distribution,
+delete-by-query estimates through safe `_search` as a preview plan before
+executing a live `_delete_by_query` behind the Safe Mode confirm gate (#1076).
+OpenSearch root probe now detects OpenSearch product/version/distribution,
 rejects Elasticsearch endpoints, surfaces auth/network failures, reads live
 indexes, aliases, data streams, mappings, settings/analyzers, composable/legacy
 templates, and field paths, live `_search` validates the same supported request
 subset before parsing hits/shards/aggs/error/cancel surfaces, live
-delete-by-query planning estimates through safe `_search` as a preview-only
-plan, Runtime Happy Path covers the representative product workflow, and Search
-DSL completion keeps catalog candidates product-scoped. Broader live promotion
-still requires actual admin execution policy, broader
+delete-by-query runs the same preview-plan-then-confirmed-execution path,
+Runtime Happy Path covers the representative product workflow, and Search DSL
+completion keeps catalog candidates product-scoped. Broader live promotion still
+requires index/settings admin execution policy, broader
 observability/profile-explain workflows, and product-specific destructive
 deltas.
 
@@ -425,11 +429,13 @@ Current gap / routing:
 
 Final support-claim audit confirms the product docs agree on the exact
 Elasticsearch claim: live URL/auth/TLS root probe, catalog/index detail, bounded
-`_search` request validation/rendering, delete-by-query safety planning, visible
-error surface, and wired Runtime Happy Path smoke. Static Search fixtures remain
-contract evidence, OpenSearch query is now a focused runtime slice, and actual
-live admin execution, broader observability/profile-explain workflow, and full
-language-core editor parser/completion ownership remain separate future gates.
+`_search` request validation/rendering, delete-by-query safety planning plus
+live `_delete_by_query` execution behind the Safe Mode confirm gate (#1076),
+visible error surface, and wired Runtime Happy Path smoke. Static Search
+fixtures remain contract evidence, OpenSearch query is now a focused runtime
+slice, and actual live index/settings admin execution, broader
+observability/profile-explain workflow, and full language-core editor
+parser/completion ownership remain separate future gates.
 
 ## Elasticsearch documentation recheck
 
@@ -494,7 +500,8 @@ sidebar/detail/result/query UI paths, backend parser/safety unsupported-boundary
 behavior, TypeScript Search DSL completion vocabulary/context behavior, fixture
 inventory, and wired OpenSearch Runtime Happy Path smoke routing before parity
 closure. Completion-only evidence remains editor-assistance evidence unless
-backed by runtime smoke, and actual live admin execution stays out of scope.
+backed by runtime smoke, and actual live index/settings admin execution stays
+out of scope.
 
 ## OpenSearch support-claim closure audit
 
@@ -510,12 +517,13 @@ Final support-claim audit confirms the product docs agree on the exact
 OpenSearch claim: live URL/auth/TLS root probe with OpenSearch
 product/version/distribution detection, Elasticsearch endpoint rejection, live
 catalog/index detail, bounded `_search` request validation/rendering,
-delete-by-query safety planning, mapping-aware editor assistance, visible error
-surface, and wired Runtime Happy Path smoke. Static Search fixtures remain
-contract evidence, Elasticsearch claims stay separate, and actual live admin
-execution, broader observability/profile-explain workflow, product-specific
-destructive deltas, and full language-core editor parser/completion ownership
-remain separate future gates.
+delete-by-query safety planning plus live `_delete_by_query` execution behind
+the Safe Mode confirm gate (#1076), mapping-aware editor assistance, visible
+error surface, and wired Runtime Happy Path smoke. Static Search fixtures remain
+contract evidence, Elasticsearch claims stay separate, and actual live
+index/settings admin execution, broader observability/profile-explain workflow,
+product-specific destructive deltas, and full language-core editor
+parser/completion ownership remain separate future gates.
 
 ## Elasticsearch test coverage recheck
 
@@ -558,8 +566,10 @@ Current gap / routing:
 Redis, MongoDB, Valkey, Elasticsearch, and OpenSearch now have wired Runtime
 Happy Path smoke paths. Elasticsearch/OpenSearch smoke covers live service
 connect/auth/TLS contract, catalog/index detail metadata, bounded search
-rendering, delete-by-query safety planning, and visible error surface. Future
-Search promotion still includes actual admin execution policy, broader
-observability/profile workflows, and product-specific destructive deltas. Future
-Redis/Valkey smoke expansion can add DB switch, stream-specific coverage, and
-confirmed Valkey delete/persist success without widening full CLI/admin parity.
+rendering, delete-by-query safety planning, live `_delete_by_query` execution
+behind the Safe Mode confirm gate with a re-plan proving the estimate drops to
+zero (#1076), and visible error surface. Future Search promotion still includes
+index/settings admin execution policy, broader observability/profile workflows,
+and product-specific destructive deltas. Future Redis/Valkey smoke expansion can
+add DB switch, stream-specific coverage, and confirmed Valkey delete/persist
+success without widening full CLI/admin parity.

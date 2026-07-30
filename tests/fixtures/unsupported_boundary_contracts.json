@@ -7,7 +7,7 @@
       "id": "search-live-http-deferred-admin-boundaries",
       "minimumRow": "Search live HTTP non-claim",
       "products": ["elasticsearch", "opensearch"],
-      "claimBoundary": "Live Search support stays bounded to connect/catalog/_search/render/delete-plan/scoped-error slices. Fixture and live evidence do not promote broader admin, global audit/security dashboards, profile/explain, raw target, or actual delete-by-query execution.",
+      "claimBoundary": "Live Search support stays bounded to connect/catalog/_search/render/delete-plan/delete-execute/scoped-error slices. #1076 promoted live `_delete_by_query` execution behind the backend Safe Mode confirm gate, so destructive execution is no longer part of this non-claim; wildcard/`_all` fan-out targets stay rejected. Fixture and live evidence do not promote index/settings admin execution, global audit/security dashboards, profile/explain, or raw target dispatch.",
       "docs": [
         {
           "path": "docs/product/known-limitations-non-rdbms.md",
@@ -194,6 +194,26 @@
         }
       ],
       "consumedBy": ["tests/fixtures/unsupported_boundary_contracts.test.ts"]
+    }
+  ],
+  "retiredClaims": [
+    {
+      "retiredBy": 1076,
+      "issue": 1812,
+      "reason": "Live `_delete_by_query` execution shipped behind the Safe Mode confirm gate. Evidence: src-tauri/src/commands/search.rs execute_search_delete_by_query calls safe_mode::enforce_search_danger before dispatch, and e2e/smoke/search-runtime-smoke.ts deletes with previewOnly false plus safetyConfirmed true, then re-plans to estimatedDocumentCount 0. #1076 updated three docs/product pages and left the same claim stale in eight other live-prose sentences; these phrases are the exact wordings #1812 retired.",
+      "phrases": [
+        "Delete-by-query planning is preview-only",
+        "preview-only execution rejection",
+        "as a preview-only plan",
+        "as preview-only plans",
+        "delete-by-query preview plan estimates with actual execution unsupported",
+        "Actual live `_delete_by_query` execution, live admin smoke",
+        "actual live admin execution",
+        "actual admin execution",
+        "actual Search admin execution",
+        "actual live Search admin execution",
+        "Search live admin execution"
+      ]
     }
   ]
 }

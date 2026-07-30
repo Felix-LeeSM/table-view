@@ -1,5 +1,5 @@
-import { existsSync, readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseMongoshExpression } from "@features/query";
 import {
@@ -15,10 +15,44 @@ const FIXTURE_PATH = resolve(
   "unsupported_boundary_contracts.json",
 );
 
+// Live prose = every markdown SOT a reader is expected to trust today. Each
+// pruned tree declares itself historical in its own README — `docs/sprints`
+// ("Treat docs/sprints/sprint-N/** as historical once the sprint is delivered.
+// Do not infer shipped support ... from old contract, handoff, findings ...
+// text"), `docs/archives` ("Treat every file under this directory as
+// historical"), `docs/explorations` ("현재 SOT 아님") — so retiring a claim must
+// not rewrite them. This is `scripts/hooks/policy/check-doc-size.sh`'s prune set
+// minus `docs/table_plus`, which is dropped because it prunes zero tracked files
+// (an exclusion that filters nothing only looks precise). Measured 2026-07-30:
+// 1541 markdown files under README.md/docs/memory, 91 after pruning
+// (docs/sprints 1287, docs/archives 159, docs/explorations 4).
+const LIVE_PROSE_ROOTS = ["docs", "memory"] as const;
+const LIVE_PROSE_ROOT_FILES = ["README.md"] as const;
+const FROZEN_PROSE_TREES = [
+  "docs/sprints",
+  "docs/archives",
+  "docs/explorations",
+] as const;
+
 interface BoundaryFixture {
   readonly $schema: "unsupported-boundary-contracts@1";
   readonly issue: 754;
   readonly rows: readonly BoundaryRow[];
+  readonly retiredClaims?: readonly RetiredClaim[];
+}
+
+/**
+ * A support claim that used to be a non-claim and is now shipped. `docs[].mustContain`
+ * can only assert that the NEW wording arrived somewhere; it cannot see the OLD
+ * wording still sitting in a file nobody listed. That gap is what #1812 measured:
+ * #1076 promoted live `_delete_by_query` execution, updated three docs/product
+ * pages, and left eight other live-prose sentences claiming it was preview-only.
+ */
+interface RetiredClaim {
+  readonly retiredBy: number;
+  readonly issue: number;
+  readonly reason: string;
+  readonly phrases: readonly string[];
 }
 
 interface BoundaryRow {
@@ -183,6 +217,78 @@ describe("unsupported_boundary_contracts.json", () => {
     expectDocPin(`${head}\n${tail}\n`, phrase, "line-wrapped doc pin");
   });
 
+  // Reason: #1812 — a promoted capability leaves its retired non-claim behind in
+  // live prose nobody listed. `docs[].mustContain` is presence-only, so it stays
+  // green while a contradicting sentence sits two files over. This sweeps every
+  // live-prose markdown file, not a hand-kept path list, because the eight stale
+  // #1076 sentences were in files no boundary row named. (2026-07-30)
+  it("keeps retired support non-claims out of live prose", () => {
+    const retiredClaims = loadBoundaryFixture().retiredClaims ?? [];
+    expect(retiredClaims.length).toBeGreaterThan(0);
+
+    const files = liveProseFiles();
+    const hits = retiredClaims.flatMap((claim) =>
+      files.flatMap((file) => {
+        const prose = normalizeDocText(readRepoFile(file));
+        return claim.phrases
+          .filter((phrase) =>
+            prose
+              .toLowerCase()
+              .includes(collapseWhitespace(phrase.toLowerCase())),
+          )
+          .map(
+            (phrase) =>
+              `${file}: "${phrase}" was retired by #${claim.retiredBy} (tracked in #${claim.issue})`,
+          );
+      }),
+    );
+
+    expect(hits).toEqual([]);
+  });
+
+  // Reason: the sweep above is only worth its lines if the enumeration really
+  // reaches the files that went stale and really prunes the frozen trees, and if
+  // the matcher survives an ~80-column re-wrap. All three were false-pass modes
+  // this repo has already shipped once. (2026-07-30)
+  it("enumerates live prose, prunes frozen trees, and matches across a wrap", () => {
+    const files = liveProseFiles();
+
+    // The four files #1812 found stale that no boundary row lists by path.
+    for (const stale of [
+      "README.md",
+      "docs/roadmap/h5.md",
+      "docs/contributor-guide/smoke-matrix/h7-ops-security-reliability.md",
+      "docs/contributor-guide/release/release-notes-support-matrix.md",
+    ]) {
+      expect(files, `live prose must reach ${stale}`).toContain(stale);
+    }
+    // Each prune must remove something. An exclusion that filters nothing reads
+    // as precision and is really a blind spot, so assert the tree exists on disk
+    // with markdown in it AND that none of it survived the walk.
+    for (const frozen of FROZEN_PROSE_TREES) {
+      const inTree = readdirSync(repoPath(frozen), {
+        recursive: true,
+        withFileTypes: true,
+      }).filter((entry) => entry.isFile() && entry.name.endsWith(".md"));
+      expect(
+        inTree.length,
+        `${frozen} must hold prunable markdown`,
+      ).toBeGreaterThan(0);
+      expect(
+        files.filter((file) => file.startsWith(`${frozen}/`)),
+        `${frozen} must be pruned`,
+      ).toEqual([]);
+    }
+
+    // A retired phrase re-introduced across a line break must still be caught —
+    // prettier keeps `proseWrap: preserve`, so docs wrap by hand at ~80 columns
+    // and a raw substring check would miss exactly the sentences #1812 fixed.
+    const phrase = "Delete-by-query planning is preview-only";
+    const wrapped = "Delete-by-query planning is\npreview-only for Search.\n";
+    expect(wrapped).not.toContain(phrase);
+    expect(normalizeDocText(wrapped)).toContain(collapseWhitespace(phrase));
+  });
+
   it("keeps MSSQL runtime and Oracle runtime-slice boundaries explicit", () => {
     const row = rowById(
       loadBoundaryFixture(),
@@ -290,6 +396,32 @@ function rowById(fixture: BoundaryFixture, id: string): BoundaryRow {
 
 function readJson<T>(path: string): T {
   return JSON.parse(readRepoFile(path)) as T;
+}
+
+/**
+ * Every repo-relative markdown path a reader is expected to trust as current.
+ * Walked, not enumerated: the whole point of the retired-claim sweep is to reach
+ * files no boundary row lists, so a hand-kept path list would reproduce the bug
+ * it guards against.
+ */
+function liveProseFiles(): string[] {
+  const files = [...LIVE_PROSE_ROOT_FILES];
+  for (const root of LIVE_PROSE_ROOTS) {
+    for (const entry of readdirSync(repoPath(root), {
+      recursive: true,
+      withFileTypes: true,
+    })) {
+      if (!entry.isFile() || !entry.name.endsWith(".md")) continue;
+      const path = relative(
+        repoPath("."),
+        resolve(entry.parentPath, entry.name),
+      );
+      if (FROZEN_PROSE_TREES.some((tree) => path.startsWith(`${tree}/`)))
+        continue;
+      files.push(path);
+    }
+  }
+  return files;
 }
 
 /**
