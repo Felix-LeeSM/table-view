@@ -1,15 +1,24 @@
 #!/usr/bin/env bash
-# review/test-measure-rounds.sh — scripts/review/measure-rounds.sh 회귀 스위트.
+# review/measure-rounds.test.sh — scripts/review/measure-rounds.sh 회귀 스위트.
 #
 # 네트워크를 타지 않는다. 입력은 scripts/review/fixtures/ 의 실제 GraphQL 캡처
 # 한 벌이고, 기대값은 issue #1856 의 baseline 표 그대로다.
 #
 # 실행:
-#   bash scripts/review/test-measure-rounds.sh
+#   bash scripts/review/measure-rounds.test.sh
 #
-# CI 배선: scripts/__tests__/measure-rounds.test.ts 가 이 파일을 실행한다.
+# 배선: scripts/__tests__/measure-rounds.test.ts 가 이 파일을 실행한다.
 # vitest 가 이미 도는 러너라 워크플로를 건드리지 않고 붙였다 — 아무도 안 돌리는
 # 스위트는 red 가 될 수 없다.
+#
+# 이름이 `test-*.sh` 가 아닌 이유 (#2025): 저장소에서 그 이름은 pre-push hook
+# route 스위트를 뜻한다. `scripts/hooks/apply/test-pre-push-path-router.sh` 가
+# tracked `test-*.sh` 를 전부 모아 (1) 라우터가 부르는지 (2) 그 파일의 편집이
+# `is_hook_path` 로 hook route 를 고르는지 둘 다 요구하는데, 이건 hook 이 아니라
+# 리뷰 계측 도구의 스위트다. 이름을 지키려면 `scripts/review/*` 를 hook surface 로
+# 올려야 하고, 그러면 measure-rounds.sh 를 한 줄 고칠 때마다 hook 스위트 30여 개가
+# 돈다. 지금 배선으로도 이 경로의 편집은 pre-push 에서 full route -> `ts-test`
+# (`npm run test`) 를 고르므로 vitest 가 이 파일을 돌린다.
 #
 # 끝에 mutation 단계가 붙어 있다. 변조본을 만들어 이 스위트가 실제로 red 가
 # 되는지 보고, 미변조 사본이 green 인 것(양성 대조)까지 확인한다. 변조가
@@ -18,7 +27,9 @@
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-SELF="$ROOT/scripts/review/test-measure-rounds.sh"
+# 자기 경로. mutation 단계가 자신을 다시 부르는데, 리터럴로 박아두면 파일을
+# 옮겼을 때 "미변조 사본이 red" 라는 엉뚱한 실패로 나타난다 (#2025 의 rename).
+SELF="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/${BASH_SOURCE[0]##*/}"
 SCRIPT="${MEASURE_ROUNDS_SCRIPT:-$ROOT/scripts/review/measure-rounds.sh}"
 FIXTURE="$ROOT/scripts/review/fixtures/measure-rounds-2026-07-24_27.json"
 
@@ -108,8 +119,9 @@ assert_nth_line 1 "rounds_per_merge=2.54" "week window rounds_per_merge"
 
 echo "round definition (#1968):"
 
-# 정의는 measure-rounds.sh 의 round_events() 한 곳에만 있다. 두 정의 모두 한 번의
-# 실행으로 나와야 #1968 착지가 기본값 한 줄 교체로 끝난다.
+# 계측 쪽 두 정의는 measure-rounds.sh 의 round_events() 가 계산한다. 한 번의 실행이
+# 둘 다 내야 #1968 이 이 파일에서 기본값 한 줄만 바꾸면 된다 — 게이트 쪽
+# (`review-gate.yml` + `test-review-gate-round.sh`) 은 별도로 바뀐다.
 measure --since 2026-07-25 --until 2026-07-26
 assert_has "round_def=comments" "default def is comments (review-gate.yml 프록시)"
 assert_has "rounds_per_merge_by_def=comments:8.17 head-oid:5.5" "comments 모드가 두 정의를 다 낸다"

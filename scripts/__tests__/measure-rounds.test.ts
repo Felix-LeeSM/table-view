@@ -12,7 +12,7 @@ import { describe, expect, it } from "vitest";
 // 네트워크를 타지 않는다. 입력은 scripts/review/fixtures/ 의 캡처 한 벌이다.
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "..", "..");
-const suite = "scripts/review/test-measure-rounds.sh";
+const suite = "scripts/review/measure-rounds.test.sh";
 
 // Purpose: scripts/review/measure-rounds.sh 회귀 스위트를 CI 에 배선 — issue #1856 (2026-07-30)
 describe("measure-rounds", () => {
