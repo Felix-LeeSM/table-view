@@ -1,0 +1,12 @@
+---
+expect: reject
+mentions: docs/verdict-note.md:4 — 한 명령이 label 을 add 하고 remove 한다
+---
+
+# One command, two lines, joined by a backslash
+
+The other way a single command outruns a single line. Inside a fenced block the
+line is the command, so the guard has to undo `\` continuation before judging —
+otherwise the same evasion as `folded-inline-span` works with different bytes.
+
+Measured as passing against the round-2 version of the #1905 check.
