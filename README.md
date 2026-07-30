@@ -219,7 +219,7 @@ cargo test --manifest-path src-tauri/Cargo.toml --lib
 cargo test --manifest-path src-tauri/Cargo.toml --test schema_integration --test query_integration
 ```
 
-### 4. E2E Smoke 테스트 (Linux host / CI)
+### 4. E2E Smoke 테스트 (Linux host, 수동 실행)
 
 WebdriverIO + tauri-driver로 실제 Tauri 앱을 부팅해 PostgreSQL, MySQL,
 MariaDB, MSSQL, SQLite, DuckDB, MongoDB, Redis, Valkey,

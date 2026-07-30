@@ -601,10 +601,11 @@ export default tseslint.config(
   // service" 로 실패한다.
   {
     files: ["src/**/*.{ts,tsx}"],
+    // src/lib/i18n/hardcoded-string-guard.test.ts lints the non-existent path
+    // `src/features/demo/HardcodedStringFixture.tsx` with `lintText`.
     // projectService turns a path that is not on disk but matches tsconfig's
-    // `include: ["src"]` into a fatal parse error, so `src/features/demo/**`
-    // stays usable as a scratch path. Drop this if a real `src/features/demo`
-    // feature is ever added.
+    // `include: ["src"]` into a fatal parse error, so that scratch path must
+    // stay on the syntactic parser. Removing this ignore turns that test red.
     ignores: ["src/features/demo/**"],
     languageOptions: {
       parserOptions: {

@@ -24,8 +24,9 @@ Top-level orchestrator 의 행동 계약. 개별 작업 방법의 SOT 는 없고
 
     gh pr view <N> --json files -q '.files[].path'
 
-이 명령의 출력은 orchestrator 컨텍스트에 넣지 않는다 — 쌍마다 교집합만 재고
-경로 목록은 버린다 (§2).
+이 명령은 orchestrator 가 직접 돌리지 않는다 — Bash 결과는 그대로 컨텍스트에
+남으므로 열린 PR 의 파일 목록 수백 줄이 들어온다. subagent 하나에 맡기고
+**겹치는 쌍과 순서만** 돌려받는다 (§2).
 
 **Why**: 2026-07-25 동시 in-flight 8건에서 28쌍 중 18쌍이 파일 교집합을 가졌고,
 `docs/contributor-guide/testing-and-quality.md` 하나를 5개 PR 이 동시 수정했다
@@ -35,8 +36,8 @@ Top-level orchestrator 의 행동 계약. 개별 작업 방법의 SOT 는 없고
 ## 2. 작업은 병렬로, 리뷰를 직렬화한다
 
 충돌 비용은 작업이 아니라 리뷰다. 겹침이 있으면 작업을 막는 게 아니라 **리뷰 큐
-순서** 를 준다. 큐는 orchestrator 가 직접 만든다 — 열린 PR 의 파일 목록 수백 줄이
-orchestrator 컨텍스트에 들어오면 안 되므로, 교집합만 남기고 목록은 버린다.
+순서** 를 준다. 교집합 계산은 subagent 에 위임하고 orchestrator 는 큐 순서만
+받는다 — 판단이 0 인 작업이고, 목록 자체가 컨텍스트에 들어오면 안 된다.
 
 - 교집합이 있는 PR 은 큐 뒤로. 앞 PR merge 후 `git merge` 로 최신 base 를 들인 뒤
   리뷰한다 (rebase 는 force-push 가 필요해 금지 — [git-policy](../git-policy/memory.md)).

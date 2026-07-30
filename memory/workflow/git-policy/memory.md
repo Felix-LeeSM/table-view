@@ -35,11 +35,23 @@ trigger:
 
 CI 가 돌릴 검사의 최소 세트. commit/push 전에 바꾼 영역만:
 
+루트에 `Cargo.toml` 이 없다 — cargo 명령은 `--manifest-path` 없이 돌면
+`could not find Cargo.toml` 로 죽는다.
+
 ```bash
-pnpm lint && pnpm test          # 프론트엔드를 건드렸으면
-cargo fmt --check && cargo clippy --all-targets --all-features -- -D warnings
-cargo test --manifest-path src-tauri/Cargo.toml --lib   # Rust 를 건드렸으면
+# 프론트엔드를 건드렸으면 — Frontend Checks 가 돌리는 것과 같은 셋
+pnpm lint && pnpm test && pnpm build
+
+# Rust 를 건드렸으면 — Rust Static Analysis + Rust Unit And Storage Tests
+cargo fmt --check --manifest-path src-tauri/Cargo.toml
+cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings
+cargo test --manifest-path src-tauri/Cargo.toml --lib --test storage_integration
+cargo test --manifest-path src-tauri/sql-parser-core/Cargo.toml --lib
+cargo test --manifest-path src-tauri/Cargo.toml --test parse_sql_backend
 ```
+
+`Integration Tests (Docker)` 가 돌리는 13개 통합 타깃은 testcontainer 가 필요해
+위 세트에 없다. 그 job 이 유일한 실행처다.
 
 ## 실패 시 — 회피 X, 근본 fix
 
