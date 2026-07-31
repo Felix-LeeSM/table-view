@@ -97,8 +97,15 @@ gh pr checks <N>
 
 ## 3단계 — 머지
 
+머지 전에 squash body 로 들어갈 커밋 메시지를 훑는다. 기본 squash body 는 커밋
+메시지에서 오므로 중간 커밋의 낡은 수치나 재현 명령 없는 수치가 그대로 main 기록이
+된다 — 그런 수치가 있으면 교정본을 만들어 `--body-file` 로 대체한다. 계약과 사유는
+`memory/workflow/delivery/memory.md` 「PR body」.
+
 ```bash
-gh pr merge <N> --squash --delete-branch
+gh pr view <N> --json commits -q '.commits[] | .messageHeadline, .messageBody'
+gh pr merge <N> --squash --delete-branch                            # 기본 body
+gh pr merge <N> --squash --delete-branch --body-file <교정본 경로>  # 교정할 때
 ```
 
 `--squash` 는 `memory/workflow/delivery/memory.md` 「자율 실행 vs 중단」이 정한
@@ -129,6 +136,7 @@ gh pr merge <N> --squash --delete-branch
 
 ```
 - PR: #<번호> — merged <머지 SHA> (squash)
+- squash body: 기본 / 교정(사유)
 - reflect:done: 부착 / 불필요 (코멘트 <N>건) — 부착했으면 labeled run 결과
 - required: 머지 시점 전부 green (확인: statusCheckRollup)
 - PR body 재검사: clean / dirty → 머지 중단하고 새 commit 요구
