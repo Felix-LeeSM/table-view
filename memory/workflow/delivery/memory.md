@@ -62,7 +62,13 @@ mergeable, 사용자 거부 없음)은 종결자가 종합한다.
 
 형식 요구는 없다. 유일한 제약은 근거의 이식성 — PR body / comment 는 GitHub 에서
 열리는 repo-relative path 와 URL 만 쓴다. `/Users`, `/tmp`, `file://`,
-`worktrees/` 금지. 문서화 판단은 [documentation](../documentation/memory.md).
+`worktrees/`, `clones/` 금지. 문서화 판단은 [documentation](../documentation/memory.md).
+
+2026-07-31 부터 PR body 는 CI 가 실제로 검사한다 — `PR Body Contract` job 이
+`/Users/` · `/tmp/` · `file://` · `worktrees/` · `clones/` 를 찾으면 fail 이다
+(빈 body 는 pass). 게이트라 **금지 패턴을 인용만 해도 걸린다** — 예시를 들 때는
+문자열을 쪼개거나 이름으로 부르고 그대로 붙이지 마라. 해소는 새 commit 뿐이다
+(body 편집으로는 재검사되지 않음 — [pr-merge-gates](../../runbook/pr-merge-gates/memory.md)).
 
 ## Agent spawn — reviewer 독립
 

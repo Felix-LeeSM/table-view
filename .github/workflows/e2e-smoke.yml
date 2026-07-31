@@ -5,9 +5,11 @@ name: E2E Smoke
 # (live GitHub state), and a name that stops reporting stays "expected" and
 # blocks every merge. THIS JOB VERIFIES NOTHING.
 #
-# `Detect Change Scope`, the ruleset's other name-only context, is reported by
-# ci.yml — one workflow per required name, or the ruleset cannot tell which run
-# satisfied it.
+# Since 2026-07-31 this is the ruleset's ONLY name-only context: the other two
+# stubs are gone (one dropped from ruleset and workflow, one turned into a real
+# check in ci.yml). Keep one workflow per required name, or the ruleset cannot
+# tell which run satisfied it. memory/runbook/pr-merge-gates/memory.md carries
+# the live list.
 #
 # The e2e sources (`e2e/`, `wdio.smoke.conf.ts`) still work by hand — see
 # README 「E2E Smoke」. Wiring them back means writing a runner, then registering

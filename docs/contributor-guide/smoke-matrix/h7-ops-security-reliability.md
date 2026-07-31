@@ -41,8 +41,13 @@ What the individual jobs own:
   (`cargo llvm-cov nextest --profile push`). The cutoff numbers stay in the
   workflow's `--fail-under-*` literals and are not restated here.
 
-- `Detect Change Scope`, `PR Body Contract` and `Runtime Happy Path` are
-  name-only jobs: required contexts that cannot fail and verify nothing.
+- `PR Body Contract` rejects a PR body that carries a path only the author can
+  open (`/Users`, `/tmp`, `file:` URLs, worktree- and clone-internal paths). An
+  empty body passes. Because the workflow does not listen for `edited`, a red
+  verdict clears on the next commit, not on a body edit.
+
+- `Runtime Happy Path` is the last name-only job: a required context that
+  cannot fail and verifies nothing.
 
 No job is change-gated — every job runs on every push and pull request, so a
 docs-only PR pays for the full suite and no skipped check ever stands in for an

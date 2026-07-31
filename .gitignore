@@ -42,6 +42,9 @@ Thumbs.db
 # Multi-agent / multi-brain worktrees (Claude / Codex / Cursor 공통, platform-neutral).
 # `git worktree add` 로 손수 만든 것도 같은 자리에 놓인다.
 /worktrees/
+# Multi-agent clone 사본 — worktree 대신 독립 clone 으로 격리할 때 놓는 자리.
+# 격리 규약 SOT: memory/runbook/worktree/memory.md
+/clones/
 
 # Test
 /coverage/

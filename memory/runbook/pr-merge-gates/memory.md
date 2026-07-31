@@ -1,7 +1,7 @@
 ---
 title: PR merge 게이트 진단 / 처리
 type: runbook
-updated: 2026-07-29
+updated: 2026-07-31
 task: merge, pr, review-gate, ci, blocked, ruleset, e2e, synchronize-rerun, cancelled-rollup, round-gate
 trigger:
   signal: PR 이 mergeable 인데 mergeState=BLOCKED / merge 가 base branch policy 로 거부
@@ -32,27 +32,37 @@ label 메커니즘 자체는 [delivery](../../workflow/delivery/memory.md) 의 �
 
 - 2026-07-05 1차: `Frontend Checks` · `Rust Unit And Storage Tests` ·
   `Integration Tests (Docker)` · `Runtime Happy Path` · `Dependency Security`
-- 2026-07-10 2차: `Rust Static Analysis` · `PR Body Contract` ·
-  `Detect Change Scope` (셋 다 무조건 실행 + 40여 PR green 관측 근거로 일괄 등록)
+- 2026-07-10 2차: `Rust Static Analysis` · `PR Body Contract` (무조건 실행 +
+  40여 PR green 관측 근거로 등록)
+- 2026-07-31: `Detect Change Scope` 를 ruleset 과 `ci.yml` 양쪽에서 **제거**.
+  현재 required context 는 **7종**이다.
 
 <!-- /ci-gates -->
 
-**8종 중 3종은 빈 껍데기다.** `Detect Change Scope` 와 `PR Body Contract` 는
-`exit 0` 한 줄, `Runtime Happy Path` 는 echo 한 줄인 name-only job 이다 — **항상 green 이고
-아무것도 보증하지 않는다.** 이름을 지우면 컨텍스트가 영영 `expected` 로 남아 모든
-머지가 막히므로 job 만 남겼다. 순서는 ruleset 에서 먼저 빼고 그다음 job 삭제다
-(ruleset 은 GitHub 라이브 상태라 별도 결정).
+**7종 중 빈 껍데기는 이제 1종이다.** `Runtime Happy Path` 만 echo 한 줄인
+name-only job 으로 남았다 — **항상 green 이고 아무것도 보증하지 않는다.** 이름을
+지우면 컨텍스트가 영영 `expected` 로 남아 모든 머지가 막히므로 job 만 남겼다.
+순서는 ruleset 에서 먼저 빼고 그다음 job 삭제다 (ruleset 은 GitHub 라이브 상태라
+별도 결정) — 2026-07-31 `Detect Change Scope` 제거가 그 순서를 그대로 밟았다.
 
-**BLOCKED 진단은 이 셋을 먼저 배제해라** — 세 이름은 실패할 수 없으므로 원인이
-아니다. 나머지 5종(`Frontend Checks`, `Rust Unit And Storage Tests`,
-`Integration Tests (Docker)`, `Dependency Security`, `Rust Static Analysis`) 과
-`review-gate` 만 red 가 될 수 있고, 대응은 fix (clippy fix / 테스트 수정) 지 회피
-아님. 신규 required context 등록은 workflow 가 main 에 올라간 **뒤에** 한다 —
-아무 run 도 만들지 않는 required context 는 열린 PR 전부를 BLOCKED 로 고착시킨다.
+**`PR Body Contract` 는 2026-07-31 부터 실검사다.** PR body 에 `/Users/` ·
+`/tmp/` · `file://` · `worktrees/` · `clones/` 가 있으면 그 줄을 찍고 fail 한다
+(빈 body 는 pass). 계약 SOT 는 [delivery](../../workflow/delivery/memory.md)
+「PR body」. **ci.yml 은 `edited` 를 안 듣는다** — body 만 고치고 `gh run rerun`
+해도 원래 payload 의 옛 body 를 다시 읽어 같은 자리에서 fail 한다. **해소는 새
+commit 뿐이다.**
+
+**BLOCKED 진단에서 먼저 배제할 이름은 `Runtime Happy Path` 하나다** — 실패할 수
+없으므로 원인이 아니다. 나머지 6종(`Frontend Checks`, `Rust Unit And Storage
+Tests`, `Integration Tests (Docker)`, `Dependency Security`, `Rust Static
+Analysis`, `PR Body Contract`) 과 `review-gate` 만 red 가 될 수 있고, 대응은 fix
+(clippy fix / 테스트 수정 / body 고쳐 재push) 지 회피 아님. 신규 required context
+등록은 workflow 가 main 에 올라간 **뒤에** 한다 — 아무 run 도 만들지 않는 required
+context 는 열린 PR 전부를 BLOCKED 로 고착시킨다.
 
 → protection API 만 보고 "required 는 review-gate 뿐" 이라 단정하지 말 것. ruleset
-8종은 별도 계층이고 docs 만 바꾼 PR 에도 전부 요구된다. 단 `Runtime Happy Path` 는
-위 stub 셋에 속하므로 E2E 를 blocker 로 의심하지 마라 — 실패할 수 없다.
+7종은 별도 계층이고 docs 만 바꾼 PR 에도 전부 요구된다. 단 `Runtime Happy Path` 는
+위 stub 이므로 E2E 를 blocker 로 의심하지 마라 — 실패할 수 없다.
 
 ## 잘못된 대응이 만드는 함정
 
@@ -74,10 +84,12 @@ label 메커니즘 자체는 [delivery](../../workflow/delivery/memory.md) 의 �
 ## review-gate run 상태 함정 (#1523/#1515 실측, 2026-07-16)
 
 - **synchronize run 은 `gh run rerun` 해도 영원히 fail** — push(synchronize) 마다
-  "Dismiss stale approval on new commits" step 이 `review:approved` 를 DELETE + 의도적
-  exit 1. rerun 은 같은 dismissal 로직을 재실행해 다시 `exit 1` — synchronize run 은
-  절대 pass 로 못 뒤집는다. 자동 rerun 을 대신 돌려 주는 watcher 는 없으니, label
-  부착 전에 review-gate bucket 이 pass 인지 손으로 확인한다 (#1523).
+  "Dismiss stale approval on new commits" step 이 `review:approved` 와
+  `review:changes-requested` 를 DELETE + 의도적 exit 1 (2026-07-31 부터 대칭 —
+  고친 commit 이 올라와도 red verdict label 이 남던 문제). rerun 은 같은 dismissal
+  로직을 재실행해 다시 `exit 1` — synchronize run 은 절대 pass 로 못 뒤집는다.
+  자동 rerun 을 대신 돌려 주는 watcher 는 없으니, label 부착 전에 review-gate
+  bucket 이 pass 인지 손으로 확인한다 (#1523).
 - **CANCELLED 고착 (#1515, 2h timeout 원인)**: `labeled` run 이 concurrency 로 CANCELLED
   되면 rollup 에 non-success 로 남아 BLOCKED 가 고착된다. `gh pr checks` 는 최신 run 만
   보여줘 all-pass 처럼 보인다 — 진단은 `statusCheckRollup`(GraphQL) 또는 commit
