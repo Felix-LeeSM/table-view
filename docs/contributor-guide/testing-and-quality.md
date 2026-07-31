@@ -23,7 +23,7 @@ the product-facing support boundary stays in `docs/product/**`.
 |---|---|---|
 | DBMS-first E2E seeds | `e2e/fixtures/<dbms>/<function>/...` | Runtime seed topology is DBMS-first, then capability/function. Existing active functions are `query`, `document`, `kv`, and `search`; future `completion`, `catalog`, `explain`, `errors`, `edit`, `safety`, or `metadata` roots need a consuming test and promotion decision. |
 | Shared contract fixtures | `tests/fixtures/**` | Shared TS/Rust/parser/support-boundary fixtures are contract evidence only. Unsupported-boundary fixtures are negative evidence and do not widen runtime support. |
-| Backend adapter fixture harness | `src-tauri/src/db/fixtures.rs`, `src-tauri/tests/fixture_harness.rs` | Adapter fixtures are requested by profile/family/paradigm/capability. Missing fixture diagnostics are failures, not silent skips. Current embedded harness coverage is Search-only. |
+| Backend adapter fixture harness | `src-tauri/table-view-core/src/db/fixtures.rs`, `src-tauri/tests/fixture_harness.rs` | Adapter fixtures are requested by profile/family/paradigm/capability. Missing fixture diagnostics are failures, not silent skips. Current embedded harness coverage is Search-only. |
 | Generator/profile specs | `fixtures/**` | Profile existence is not runtime support. |
 | Test placement | `src/**`, `src-tauri/tests`, `e2e/smoke` | Frontend unit/component tests stay near their feature/domain; Rust integration stays under `src-tauri/tests`; desktop smoke stays under `e2e/smoke`, which nothing wires automatically. |
 
@@ -163,7 +163,7 @@ Required remote evidence on the exact release SHA:
   produce — the full sequence (debug build, seed, then
   `TABLE_VIEW_TEST_DATA_DIR=/tmp/table-view-smoke pnpm test:e2e:smoke`) is in
   README 「E2E Smoke」. Without that variable the specs drive the app against
-  your real connection store (`src-tauri/src/storage/mod.rs` `data_dir_override`).
+  your real connection store (`src-tauri/table-view-core/src/storage/mod.rs` `data_dir_override`).
 - `main` push checks pass on the merge commit before a release tag is pushed.
 - Release workflow output is packaging evidence only. Draft bundle creation and
   checksum upload do not replace CI or runtime smoke evidence.

@@ -2,7 +2,7 @@
 title: Data Source Architecture
 type: memory
 updated: 2026-07-17
-surface: src-tauri/src/db/**, src/lib/**, src/types/dataSource*, src/types/queryLanguage*
+surface: src-tauri/table-view-core/src/db/**, src/lib/**, src/types/dataSource*, src/types/queryLanguage*
 task: data-source, architecture, adapter, capability
 keywords: DataSourceProfile, DATA_SOURCE_PROFILES, DatabaseType, DataParadigm, adapter_contract, make_adapter, dataSourceProfileParity.test.ts, ActiveAdapter, result envelope, SchemaGraph, fail-closed, fail-open
 trigger:
@@ -50,9 +50,9 @@ contract 도 profile registry 에서 읽고 ad-hoc `dbType` switch 로 분산하
 
 ## Backend Contract Boundary
 
-`src-tauri/src/db/contracts` 는 backend trait/DTO contract import path 다.
-`src-tauri/src/db/capabilities` 는 backend capability/profile import path 다.
-`src-tauri/src/db/adapters/<dbms>` 는 concrete adapter home 이다. Legacy
+`src-tauri/table-view-core/src/db/contracts` 는 backend trait/DTO contract import path 다.
+`src-tauri/table-view-core/src/db/capabilities` 는 backend capability/profile import path 다.
+`src-tauri/table-view-core/src/db/adapters/<dbms>` 는 concrete adapter home 이다. Legacy
 `db::<dbms>`, `db::traits`, `db::types` 는 migration 중 shim/re-export 로만 둔다.
 
 Command layer 는 DBMS behavior 를 소유하지 않는다: request validate →
@@ -114,10 +114,10 @@ product/contributor docs.
 
 ## Adapter Families
 
-Backend adapter modules use a progressive topology. `src-tauri/src/db/contracts`
-is the canonical trait/DTO contract import path, `src-tauri/src/db/capabilities`
+Backend adapter modules use a progressive topology. `src-tauri/table-view-core/src/db/contracts`
+is the canonical trait/DTO contract import path, `src-tauri/table-view-core/src/db/capabilities`
 is the backend capability/profile import path, and
-`src-tauri/src/db/adapters/<dbms>` is the canonical concrete adapter home.
+`src-tauri/table-view-core/src/db/adapters/<dbms>` is the canonical concrete adapter home.
 Legacy `db::<dbms>`, `db::traits`, and `db::types` paths stay as shims/re-exports
 until call sites migrate. Move one DBMS per PR; prefer file-backed/local-testable
 adapters before server-backed adapters; do not widen runtime support or product

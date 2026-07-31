@@ -6,14 +6,18 @@
 #![warn(clippy::unwrap_used)]
 
 pub mod commands;
-pub mod db;
 pub mod diagnostics;
-pub mod error;
 pub mod events;
 pub mod launcher;
-pub mod models;
 pub mod state;
 pub mod storage;
+
+// #1769 — `db` / `error` / `models` 본체는 `table-view-core` path crate 에 산다.
+// 여기서 crate root 로 되꽂아 두면 `crate::db::…` / `table_view_lib::models::…`
+// 를 쓰는 command·state·통합 테스트가 그대로 컴파일된다. `storage` 만 위의 shim
+// 모듈이 따로 받는다 — boot 글루 두 파일이 `crate::commands::` 를 역참조해서
+// core 로 못 내려갔다.
+pub use table_view_core::{db, error, models};
 
 use commands::connection::AppState;
 use std::sync::OnceLock;

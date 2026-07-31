@@ -68,7 +68,7 @@ related:
   DB 인증은 여전히 필요하지만 "방화벽 뒤 네트워크 도달권" 자체가 새어 나간다.
 - 에러/로그 에코: russh 에러 문자열에 key 경로·fingerprint·사용자명이 섞여
   사이드바/로그로 새는 경로. 현행 `connection_redacted` 는 URI userinfo 와
-  `password=`/`pwd=` 만 마스킹 (`src-tauri/src/error.rs:136`) — SSH 흔적은
+  `password=`/`pwd=` 만 마스킹 (`src-tauri/table-view-core/src/error.rs:136`) — SSH 흔적은
   현재 redaction 범위 밖이다 (Q6 가 해소 대상).
 
 **내부 실수**
@@ -90,7 +90,7 @@ related:
 
 **암호화·저장 (재사용 대상 — 신규 매체 없음)**
 - at-rest: AES-256-GCM, master file-key 는 OS keyring
-  (`com.tableview.app.file-key`, `src-tauri/src/storage/crypto.rs:22`),
+  (`com.tableview.app.file-key`, `src-tauri/table-view-core/src/storage/crypto.rs:22`),
   Linux Secret Service 불가 시 disk fallback 0600 + probe retry 3×50ms
   (`crypto.rs:84–114`). ADR 0040 threat 1 (offline disk-access) 보호,
   threat 2 (running malware) 는 범위 밖 — SSH secret 도 동일 수용선.
@@ -112,7 +112,7 @@ related:
   얹으면 터널 누수(연결 끊김 후 SSH 세션 잔존)를 별도 로직 없이 차단 (Q2).
 
 **에러 표면 (현행 갭)**
-- `AppError` 에 SSH variant 없음 (`src-tauri/src/error.rs:34–127`).
+- `AppError` 에 SSH variant 없음 (`src-tauri/table-view-core/src/error.rs:34–127`).
 - 힌팅 레이어 (#1056): `DRIVER_ERROR_CATEGORIES` 5종
   (`src/lib/errors/driverErrorHints.ts:18–24`), 매칭 실패 시 **fail-open
   null → 원문 그대로 노출** (`:119`). SSH 에러 원문이 이 fail-open 을 타면
@@ -127,7 +127,7 @@ related:
 
 **엔진별 connect 경로 (터널 배선 지점)**
 - sqlx (pg/mysql/mariadb): host/port 기반 ConnectOptions
-  (`src-tauri/src/db/mysql/connection.rs:94` 등) — 커스텀 stream 주입 불가.
+  (`src-tauri/table-view-core/src/db/mysql/connection.rs:94` 등) — 커스텀 stream 주입 불가.
 - tiberius (mssql): stream 주입 가능한 유일 드라이버 (`tiberius 0.12.3`).
 - mongodb / redis / reqwest(ES·OS) / oracle-rs: host/port·URL 기반.
 - 결론: 균일 배선은 로컬 listener 뿐. in-process 직결은 mssql 만 용이 —

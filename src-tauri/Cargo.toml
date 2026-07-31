@@ -18,6 +18,9 @@ tauri-build = { version = "2", features = [] }
 tempfile = "3"
 serial_test = "3"
 tauri = { version = "2", features = ["test"] }
+# #1769 — command 테스트가 `crate::db::testing::Stub*` 를 쓴다. dev-dep 쪽에서만
+# feature 를 켜므로 `cargo build` (dev-dep 미해결) 에는 안 들어간다.
+table-view-core = { path = "table-view-core", version = "0.1.0", features = ["testing"] }
 # Sprint 237 P5+ (2026-05-08) — DB tier 2 통합 테스트용. cargo test --test
 # pg_integration 호출 시 process 안에서 docker container lifecycle 을
 # 자체 관리. PG_TEST_URL env 가 셋팅돼 있으면 외부 PG 재사용 (빠른
@@ -27,6 +30,12 @@ testcontainers = "0.27"
 testcontainers-modules = { version = "0.15", features = ["postgres", "mongo", "mysql", "mssql_server", "oracle", "redis"] }
 
 [dependencies]
+# #1769 — DB adapter / wire model / 로컬 저장소 본체. `sql-parser-core` 와 같은
+# path dependency (workspace member 아님) 라서 llvm-cov profile 이 섞이지 않고,
+# core 를 단독 빌드할 때 Tauri transitive dep 이 0 이다 (ADR 0061 의 `tvw` CLI
+# 선행 조건). `lib.rs` 가 `db` / `error` / `models` 를 crate root 로 re-export
+# 한다.
+table-view-core = { path = "table-view-core", version = "0.1.0" }
 tauri = { version = "2", features = [] }
 tauri-plugin-shell = "2"
 tauri-plugin-dialog = "2"
@@ -42,12 +51,7 @@ bson = "2"
 futures-util = "0.3"
 tokio = { version = "1", features = ["full", "test-util"] }
 tokio-util = { version = "0.7", features = ["rt", "compat"] }
-aes-gcm = "0.10"
-argon2 = "0.5"
-zeroize = { version = "1", features = ["derive"] }
-bip39 = { version = "2", default-features = false, features = ["std"] }
 base64 = "0.22"
-thiserror = "2"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 # #1564 — file log sink. Packaged builds (macOS `.app` from Finder → stdout
@@ -60,26 +64,10 @@ tracing-appender = "0.2"
 uuid = { version = "1", features = ["v4"] }
 dirs = "6"
 csv = "1"
-# Sprint 371 (Phase 5 F.5) — query_history `sql_redacted` regex masking
-# (quoted/numeric literal → `?`). 같은 crate 가 `tracing-subscriber` /
-# `globset` / `mongodb` 의 transitive 로 이미 잠겨 있어 build cost 추가 0.
-regex = "1"
-# #1107 — percent-encode ES/OpenSearch index names into URL path segments so a
-# validated index can never break out of its segment. Already locked at 2.3.2 via
-# reqwest/url transitives, so making it a direct dep adds zero build cost.
-percent-encoding = "2"
 # Sprint 466 — Redis/Valkey KV adapter. `tokio-rustls-comp` gives async
 # command support on the existing Tokio runtime and `rediss://` TLS.
 redis = { version = "0.32", features = ["tokio-rustls-comp"] }
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 tiberius = { version = "0.12.3", default-features = false, features = ["tds73", "native-tls", "tokio", "chrono", "bigdecimal"] }
-# Sprint 356 (2026-05-16) — Q22 keyring file-key migration.
-# Cross-platform abstraction lives in `storage::crypto::KeyringBackend`;
-# the in-memory backend used by tests means we never link against the
-# real OS keyring at test time, keeping the test binary slim. The
-# platform-specific feature is gated below so a single-OS build does
-# not pull in the other two native backends.
-keyring = { version = "3", default-features = false }
 tauri-plugin-single-instance = "2"
 # Sprint 385 (2026-05-17) — pure-Rust SQL parser. The crate lives under
 # `sql-parser-core/` as a path dependency (NOT a Cargo workspace member)
@@ -89,18 +77,8 @@ tauri-plugin-single-instance = "2"
 # transitive deps. The same `.rs` sources compile to native (this dep)
 # and to WASM (frontend lazy-load via wasm-pack).
 sql-parser-core = { path = "sql-parser-core", version = "0.1.0" }
-sqlparser = "0.62.0"
 duckdb = { version = "1.10503.1", features = ["bundled", "json", "parquet"] }
 oracle-rs = "0.1.7"
-
-[target.'cfg(target_os = "macos")'.dependencies]
-keyring = { version = "3", default-features = false, features = ["apple-native"] }
-
-[target.'cfg(target_os = "windows")'.dependencies]
-keyring = { version = "3", default-features = false, features = ["windows-native"] }
-
-[target.'cfg(target_os = "linux")'.dependencies]
-keyring = { version = "3", default-features = false, features = ["sync-secret-service", "crypto-rust"] }
 
 [profile.dev]
 # llvm-cov source-based coverage 는 DWARF 가 필요 없다 (coverage mapping 은 별도

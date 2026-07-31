@@ -2,7 +2,7 @@
 title: Adding A Data Source
 type: checklist
 updated: 2026-07-17
-surface: src-tauri/src/db/**, src/types/dataSource*, src/types/queryLanguage*, tests/fixtures/**
+surface: src-tauri/table-view-core/src/db/**, src/types/dataSource*, src/types/queryLanguage*, tests/fixtures/**
 task: data-source, support-claim, adapter, fixture
 keywords: Required Contract, DatabaseType, ConnectionKind, AppError::connection_redacted, QueryLanguageId, Capability Flip, 4-Surface Sync, BackendAdapterCapability, cargo test --lib, ADR Gate, Handoff Checklist, fixture-only
 trigger:
@@ -47,8 +47,8 @@ Backend adapter capability (`BackendAdapterCapability`) 를 flip 하면 4곳을 
 `src/types/dataSourceProfileParity.test.ts` 가 CI 에서 잡는다. 4 를 잡는 것은
 없다:
 
-1. Rust adapter contract — `src-tauri/src/models/data_source.rs` 의 `adapter_contract`
-   capability set (+ `src-tauri/src/db/adapters/tests.rs` contract assertion).
+1. Rust adapter contract — `src-tauri/table-view-core/src/models/data_source.rs` 의 `adapter_contract`
+   capability set (+ `src-tauri/table-view-core/src/db/adapters/tests.rs` contract assertion).
 2. TS capabilities — `src/types/dataSource.ts` 의 `capabilities`
    (query/catalog/edit/ddl/intelligence).
 3. Parity fixture — `tests/fixtures/data-source-profile-parity.report.json`.

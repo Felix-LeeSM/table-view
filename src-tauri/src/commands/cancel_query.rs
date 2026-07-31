@@ -106,9 +106,7 @@ pub async fn cancel_query_native_inner(
         let fallback = CancelError::NetworkError {
             message: msg.clone(),
         };
-        CancelError::AlreadyCompleted
-            .pass_through_if_completion(&msg)
-            .unwrap_or(fallback)
+        pass_through_if_completion(&msg).unwrap_or(fallback)
     })?;
 
     let outcome = match query_tag {
@@ -138,14 +136,17 @@ pub async fn cancel_query_native_inner(
     }
 }
 
-impl CancelError {
-    fn pass_through_if_completion(self, msg: &str) -> Option<CancelError> {
-        let lower = msg.to_ascii_lowercase();
-        if lower.contains("not found") {
-            Some(CancelError::AlreadyCompleted)
-        } else {
-            None
-        }
+/// `not found` 계열 메시지면 cancel race 로 보고 `AlreadyCompleted` 로 흡수한다.
+///
+/// #1769 전에는 `CancelError` 의 inherent method 였다. `CancelError` 가
+/// `table-view-core` 로 내려가면서 이 crate 에서 inherent `impl` 을 못 달게 됐고
+/// (E0116), `self` 를 읽지 않던 method 라 자유 함수로 내렸다 — 동작 동일.
+fn pass_through_if_completion(msg: &str) -> Option<CancelError> {
+    let lower = msg.to_ascii_lowercase();
+    if lower.contains("not found") {
+        Some(CancelError::AlreadyCompleted)
+    } else {
+        None
     }
 }
 

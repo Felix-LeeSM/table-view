@@ -459,7 +459,7 @@ export const SQLITE_CAPABILITIES = capabilities({
   },
   catalog: {
     // Issue #1459 — the SQLite adapter has a real `PRAGMA index_list`
-    // introspection path (src-tauri/src/db/adapters/sqlite/connection.rs),
+    // introspection path (src-tauri/table-view-core/src/db/adapters/sqlite/connection.rs),
     // so the Indexes claim is true. Constraints stays false: the adapter's
     // structured constraint listing is a stub that always returns [].
     indexes: true,
@@ -471,7 +471,7 @@ export const SQLITE_CAPABILITIES = capabilities({
   ddl: {
     // Issue #1460 — the wired production `SqliteAdapter` implements only
     // `create_table` / `create_table_plan`
-    // (src-tauri/src/db/adapters/sqlite/mod.rs delegates `create_table` to a
+    // (src-tauri/table-view-core/src/db/adapters/sqlite/mod.rs delegates `create_table` to a
     // real BEGIN/execute/COMMIT path; ddl.rs). Every other structured DDL
     // trait method (`drop_table`, `rename_table`, `alter_table`, `add_column`,
     // `create_index`, `drop_index`) returns `sqlite_unsupported(...)`, so only

@@ -47,8 +47,9 @@ pub use connection::PostgresAdapter;
 // `count_null_rows` Tauri command in `commands/rdb/query.rs` reuses
 // the same body to defang injection on its raw-SQL interpolation path.
 // Hoisting the re-export here keeps `mutations` itself private while
-// letting cross-module callers share one validator.
-pub(crate) use mutations::validate_identifier;
+// letting cross-module callers share one validator. `pub` (not
+// `pub(crate)`) since #1769 put `commands/rdb/query.rs` in the other crate.
+pub use mutations::validate_identifier;
 
 use std::future::Future;
 use std::pin::Pin;

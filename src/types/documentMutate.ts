@@ -1,7 +1,7 @@
 /**
  * Document paradigm — frontend mutate wire types.
  *
- * These mirror the Rust `DocumentId` enum (`src-tauri/src/db/mod.rs`) and the
+ * These mirror the Rust `DocumentId` enum (`src-tauri/table-view-core/src/db/mod.rs`) and the
  * mutate Tauri commands (`src-tauri/src/commands/document/mutate.rs`). The
  * Rust enum uses `#[serde(rename_all = "camelCase")]` on the externally tagged
  * enum, so serde produces:

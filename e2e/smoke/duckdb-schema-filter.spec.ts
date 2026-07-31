@@ -12,7 +12,7 @@ import {
 import { prepareDuckdbFixture } from "./duckdb-fixture";
 
 // Regression pin (E2E P5): the backend `list_namespaces` query
-// (`src-tauri/src/db/duckdb/connection.rs::LIST_NAMESPACES_SQL`) used to filter
+// (`src-tauri/table-view-core/src/db/duckdb/connection.rs::LIST_NAMESPACES_SQL`) used to filter
 // only the `information_schema`/`pg_catalog` *schemas*. But DuckDB's
 // `information_schema.schemata` spans every attached catalog, and the internal
 // `system` and `temp` catalogs each own their own `main` schema. So `main` came

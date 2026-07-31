@@ -26,7 +26,7 @@ file-SQL paradigm is introduced.
 
 Current evidence:
 
-- `src-tauri/src/db/duckdb.rs`
+- `src-tauri/table-view-core/src/db/duckdb.rs`
 - `src-tauri/tests/duckdb_browse_query_adapter.rs`
 - `e2e/fixtures/duckdb/query/seed.sql`
 - `e2e/smoke/duckdb.spec.ts`
@@ -37,7 +37,7 @@ DuckDB now has a deterministic desktop E2E smoke for `.duckdb` open,
 catalog/table browse, raw SELECT tabular result/history evidence, writable DML
 readback, and read-only write rejection. Native structural DDL (ADR 0051 Stage
 2, #1070) is claimed on Rust round-trip evidence
-(`src-tauri/src/db/duckdb/ddl.rs`) for table create/drop/rename, column
+(`src-tauri/table-view-core/src/db/duckdb/ddl.rs`) for table create/drop/rename, column
 add/drop/type, and index create/drop; constraint add/drop and identity columns
 (Stage 2b) are not claimed, and a DuckDB structured-DDL runtime smoke remains a
 separate promotion gate.
@@ -112,7 +112,7 @@ export of a registered local file source.
 
 Current evidence:
 
-- `src-tauri/src/db/duckdb.rs`
+- `src-tauri/table-view-core/src/db/duckdb.rs`
 - `src-tauri/tests/duckdb_browse_query_adapter.rs`
 - `src-tauri/tests/duckdb_file_analytics.rs`
 - `docs/product/query-language-support.md`
@@ -130,7 +130,7 @@ support is claimed.
 Current evidence:
 
 `src-tauri/tests/duckdb_browse_query_adapter.rs`,
-`src-tauri/tests/duckdb_file_analytics.rs`, `src-tauri/src/db/duckdb.rs`,
+`src-tauri/tests/duckdb_file_analytics.rs`, `src-tauri/table-view-core/src/db/duckdb.rs`,
 `src/types/dataSource.test.ts`, `src/lib/sql/sqlDialectProfile.test.ts`,
 `src/lib/sql/sqlDialectKeywords.test.ts`,
 `src/features/completion/sql/sqlCompletionRequest.test.ts`,

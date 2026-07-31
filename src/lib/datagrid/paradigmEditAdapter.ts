@@ -24,7 +24,7 @@ import type { TableData } from "@/types/schema";
 
 /**
  * Edit-lifecycle seam between RDB SQL and Document MQL paradigms. Mirrors
- * the backend `RdbAdapter` / `DocumentAdapter` trait split (src-tauri/src/db/traits.rs)
+ * the backend `RdbAdapter` / `DocumentAdapter` trait split (src-tauri/table-view-core/src/db/traits.rs)
  * so a DataGrid commit cycle is paradigm-blind in the React layer too.
  *
  * Lifecycle: `preparePreview(input)` builds a {@link PreviewSession} that

@@ -17,7 +17,7 @@ status: decisions locked 2026-07-17
 ## 0. 코드 재실증 (이슈 인용 :194-196 → 현재 위치)
 
 이슈가 인용한 `oracle.rs:194-196` 은 1줄 shift, 실질 동일. 현행 거부 지점
-전체 (`src-tauri/src/db/oracle.rs`, `connect_config()`):
+전체 (`src-tauri/table-view-core/src/db/oracle.rs`, `connect_config()`):
 
 | 라인 | 거부 대상 | 방식 |
 |---|---|---|

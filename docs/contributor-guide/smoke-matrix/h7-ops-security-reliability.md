@@ -138,9 +138,9 @@ Current evidence:
 - `src-tauri/src/commands/rdb/ddl.rs`
 - `src/components/datagrid/useDataGridEdit.safe-mode.test.ts`
 - `src-tauri/src/commands/document/**`
-- `src-tauri/src/db/kv_trait.rs`
-- `src-tauri/src/db/search_destructive.rs`
-- `src-tauri/src/db/search_live_destructive.rs`
+- `src-tauri/table-view-core/src/db/kv_trait.rs`
+- `src-tauri/table-view-core/src/db/search_destructive.rs`
+- `src-tauri/table-view-core/src/db/search_live_destructive.rs`
 - `docs/product/query-language-support.md`
 
 Current gap / routing:
