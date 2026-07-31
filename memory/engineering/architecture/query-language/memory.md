@@ -4,6 +4,7 @@ type: memory
 updated: 2026-06-12
 surface: src/types/queryLanguage.ts, src/lib/sql/**, src/lib/mongo/**, src-tauri/*-parser-core/**
 task: query-language, parser, completion, safe-mode
+keywords: QUERY_LANGUAGE_REGISTRY, queryLanguage.ts, mongosh, redis-command, search-dsl, Rust/WASM language core, Safe Mode, splitSqlStatements, analyzeStatement, completion, CodeMirror, future owner placeholder
 trigger:
   signal: queryLanguage 추가 / parser owner 변경 / completion 변경 / Safe Mode 변경
   layer: index

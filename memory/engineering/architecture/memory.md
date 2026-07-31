@@ -2,6 +2,7 @@
 title: Architecture
 type: memory
 updated: 2026-06-12
+keywords: 기술 스택, 디렉토리 구조, Tauri 2.0, React 19, Zustand, IPC 경계, tauri::command, invoke(), ActiveAdapter, DbAdapter, AppError::DbMismatch, src/lib/runtime/**
 ---
 
 # 시스템 구조

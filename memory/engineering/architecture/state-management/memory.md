@@ -4,6 +4,7 @@ type: memory
 updated: 2026-06-12
 surface: src/stores/**, src/hooks/useCurrentWindowConnectionId.ts, src-tauri/src/storage/**, src-tauri/src/events.rs
 task: state-management, persistence, cross-window, local-storage, sqlite
+keywords: cross-window, localStorage, SQLite, FOUC, Workspace Identity, focusedConnId, dirtyTabIds, dataGridEditStore, prevent_close, workspace_close, closedTabHistory, reset-to-default
 trigger:
   signal: 새 state 추가 / persistence 변경 / cross-window sync 변경 / localStorage 사용
   layer: index

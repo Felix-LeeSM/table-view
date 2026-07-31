@@ -4,6 +4,7 @@ type: convention
 updated: 2026-07-26
 task: test-writing, fixture, data-source-promotion, support-claim
 surface: src-tauri/src/db/fixtures.rs, src-tauri/tests, tests/fixtures, e2e/fixtures
+keywords: fixture-backed, fixture-only, support claim, Local-first, Selector-based, Missing fixture = diagnostic failure, table_view_lib::db::fixtures, schema_version, unsupported_boundary_contracts.json, mustContain, Promotion gate, Runtime Happy Path
 trigger:
   signal: fixture 추가 / DBMS support claim / adapter conformance test
   layer: index

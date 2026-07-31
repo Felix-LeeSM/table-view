@@ -4,6 +4,7 @@ type: convention
 updated: 2026-06-12
 task: refactor, god-file, comment-cleanup, decomposition
 surface: '**/*.ts, **/*.tsx, **/*.rs'
+keywords: God file, 700줄, max-lines, too_many_lines, 주석 단순화, sprint history 메타, load-bearing WHY, 정합성 검증, 5+ commit, Hidden constraints, Memory 이관 패턴, 500줄 임계
 trigger:
   signal: file >= 700 lines
   layer: ESLint max-lines. memory 자동 로드 없음

@@ -55,7 +55,7 @@ cap 은 규율로만 남았고 자동 검사가 없다.
 
 ## Memory 와 Docs 경계
 
-- `memory/` - agent 가 작업 중 자동으로 읽는 active product/engineering/workflow/runbook 규칙.
+- `memory/` - agent 가 작업 중 직접 열어 읽는 active product/engineering/workflow/runbook 규칙. 자동 로드는 없다.
 - `memory/engineering/` - 코드 구조, architecture, convention, fixture, UI 규칙 SOT.
 - `docs/archives/decisions/`, `docs/archives/incidents/` - 과거 결정과 사건 기록. 기본 agent memory 탐색 대상이 아니다.
 - `docs/` - 사람이 탐색하는 제품/프로젝트 문서.

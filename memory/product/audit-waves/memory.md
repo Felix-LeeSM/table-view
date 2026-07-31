@@ -4,6 +4,7 @@ description: breadth-first 감사 wave 의 완료 이력과 다음 wave 후보 �
 type: topic
 updated: 2026-07-16
 task: audit, wave, roadmap, milestone
+keywords: 감사 wave, breadth-first, 완료 이력, 다음 wave 후보, milestone, wave 28, feature-discovery, 에러 복구 UX, errux lane, 코드 퀄리티, CI flake 전수 조사
 ---
 
 # 감사 wave — 이력 + 다음 후보

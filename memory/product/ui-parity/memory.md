@@ -4,6 +4,7 @@ type: product-rule
 updated: 2026-07-17
 surface: src/components/workspace/**, src/components/query/**
 task: ui-parity, review, merge-gate, unsupported-convention
+keywords: UI parity, 같은 진입점, 머지 보류, DbSwitcher, ConfirmDestructiveDialog, OperationsPanel, KvMutationPanel, 예외 등록, Unsupported 표현 규약, return null, hasConnectionCapability, switchDatabase
 ---
 
 # Cross-paradigm UI Parity 머지 기준

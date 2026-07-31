@@ -4,6 +4,7 @@ type: memory
 updated: 2026-07-17
 surface: src-tauri/src/db/**
 task: data-source, posture, support-claim, capability
+keywords: Runtime Posture, separate contracts, MSSQL, T-SQL, Oracle, PL/SQL, Redis, Valkey, Elasticsearch/OpenSearch, _delete_by_query, Safe Mode confirm gate, Runtime Happy Path
 trigger:
   signal: DBMS 지원 범위 / runtime posture / support claim 변경
   layer: index

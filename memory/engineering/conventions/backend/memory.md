@@ -4,6 +4,7 @@ type: convention
 updated: 2026-06-12
 surface: src-tauri/**/*.rs
 task: backend, rust-impl, tauri
+keywords: Contract-first backend, AppState, ActiveAdapter, as_rdb, ensure_expected_db, expected_database, AppError::DbMismatch, preview_only, raw_where, spawn_blocking, active_connections, cancel token
 trigger:
   signal: src-tauri backend 편집 시
   layer: none — 자동 로드 없음, 직접 열어야 함

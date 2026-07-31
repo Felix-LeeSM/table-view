@@ -2,6 +2,7 @@
 title: 리팩토링 코드 작성 기준
 type: memory
 updated: 2026-06-11
+keywords: 4 카테고리, store-coupling, lib-hook-boundary, hook-api, decomposition, 강제 메커니즘, no-direct-zustand-setstate, exhaustive-deps, no-restricted-imports, Frontend domain strangler, migration-only, Refactor 02
 ---
 
 # 리팩토링 코드 작성 기준

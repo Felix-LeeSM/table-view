@@ -2,6 +2,7 @@
 title: 비-E2E 테스트 시나리오 설계 원칙 (Rust unit/integration · React component · Zustand store · Hook · Async)
 type: memory
 updated: 2026-07-17
+keywords: 9 가지 원칙, 레이어 분리, getByRole, vi.clearAllMocks(), mockall, vi.useFakeTimers(), tokio::time::pause, src/test-setup.ts, 무의미 테스트 금지, tautology, change-detector, assertion-roulette
 ---
 
 # 비-E2E 테스트 시나리오 설계 원칙

@@ -2,6 +2,7 @@
 title: 코딩 컨벤션
 type: memory
 updated: 2026-07-16
+keywords: 디렉토리 depth, cargo fmt, cargo clippy, unwrap(), console.log, Coverage gate, vite.config.ts, pnpm vitest run, pnpm tsc --noEmit, pnpm lint, 금지 사항, Conventional Commits
 ---
 
 # 코딩 컨벤션

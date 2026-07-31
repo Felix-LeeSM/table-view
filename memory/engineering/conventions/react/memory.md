@@ -4,6 +4,7 @@ type: convention
 updated: 2026-07-06
 surface: src/**/*.ts, src/**/*.tsx
 task: react-impl, refactor, frontend
+keywords: 함수 컴포넌트만, class 금지, PascalCase, Zustand, __resetCountersForTests, __resetSessionIdForTests, 타입 가드, strict mode, 다크 모드, src/features/<domain>/index.ts, document.querySelector, innerHTML
 trigger:
   signal: src/**/*.{ts,tsx} 편집 시
   layer: none — 자동 로드 없음, 직접 열어야 함

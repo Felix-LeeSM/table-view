@@ -2,6 +2,7 @@
 title: D. lib vs hook 경계
 type: memory
 updated: 2026-05-28
+keywords: pure lib, runtime lib, src/lib/runtime/**, 3 layer 분리, Import direction, 역방향, Pure 추출 강도, 명명 규칙, lib sub-grouping, sqlTokenize, analyzeStatement, paradigmEditAdapter.ts
 ---
 
 # D. lib vs hook 경계

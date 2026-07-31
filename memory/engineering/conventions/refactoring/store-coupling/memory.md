@@ -2,6 +2,7 @@
 title: B. Store 결합도
 type: memory
 updated: 2026-05-28
+keywords: Store 결합도, useXStore.setState, 직접 write 금지, getState(), read-then-set, render path, selector, Stale guard, completeQuery, Action 명명, zustand-ipc-bridge.ts, tv-local/no-direct-zustand-setstate
 ---
 
 # B. Store 결합도
