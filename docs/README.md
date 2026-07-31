@@ -94,3 +94,35 @@ rg -j1 --no-ignore-dot '<term>' docs memory README.md AGENTS.md   # active + 기
 # -j1 을 뺀 형태다. 비결정성 재현용이고 레시피가 아니다.
 for i in $(seq 20); do rg -l 'lefthook' docs memory README.md AGENTS.md | grep -cE '^docs/(archives|explorations)/'; done | sort | uniq -c
 ```
+
+### 저장소 전수
+
+경로를 안 주고 저장소를 훑으면 `rg` 는 dot 경로(`.agents/`, `.claude/`, `.github/`
+등)를 기본으로 뺀다. 에이전트 프롬프트나 워크플로까지 보려면 `--hidden` 이 필요하고,
+`.ignore` 를 끄는 `--no-ignore-dot` 과는 별개 스위치라 전수에는 둘 다 붙는다.
+(위의 경로 한정 레시피처럼 dot 디렉터리를 명령줄에 직접 주면 그때는 `--hidden`
+없이도 걸어 들어간다 — `rg --files .github` 8건.)
+
+**전수는 `git grep` 이 기본이다** — 추적 파일 전부를 훑고 ignore 파일에 안 걸린다.
+rg 로 같은 모집단에 근사할 때는 두 플래그를 다 붙이고, `--hidden` 이 `.git/` 안까지
+내려가므로 `-g '!.git'` 으로 막는다.
+
+```sh
+git grep -n '<term>'                                # 전수 — 추적 파일 기준
+rg -n --no-ignore-dot --hidden -g '!.git' '<term>'  # rg 로 같은 모집단에 근사
+```
+
+**둘은 근사지 등식이 아니다.** 어긋나는 방향이 둘 다 있고, 아래가 차이 파일을
+그대로 뽑는다 (2026-08-01 실측). 건수를 적지 않는 이유는 이 문서가 두 검색어를
+품고 있어 자기 자신을 세기 때문이다 — 차이 집합만 안정적이다.
+
+```sh
+diff <(git grep -l lefthook | sort) <(rg -l --no-ignore-dot --hidden lefthook | sort)
+diff <(git grep -l sql_parser_core | sort) <(rg -l --no-ignore-dot --hidden sql_parser_core | sort)
+```
+
+첫 줄은 rg 쪽 여분으로 `.git/packed-refs` 와 `.git/hooks/pre-push` 를 낸다 — git 은
+자기 내부 파일을 추적하지 않는다. rg 에 `-g '!.git'` 을 붙이면 두 집합이 같아진다
+(`.git/hooks/pre-push` 는 `pnpm install` 이 lefthook 훅을 깔았을 때만 있다).
+둘째 줄은 git grep 쪽 여분으로 `src/lib/sql/wasm/sql_parser_core_bg.wasm` 을 낸다 —
+git grep 은 추적 바이너리 안을 맞히고 rg 는 바이너리를 건너뛴다.
