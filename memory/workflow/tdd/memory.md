@@ -1,8 +1,9 @@
 ---
 title: TDD Evidence
 type: workflow-rule
-updated: 2026-07-03
+updated: 2026-07-31
 task: tdd, delivery, sprint
+keywords: RED, GREEN, evidence, failing test, commit subject, 권고
 trigger:
   signal: code-profile sprint, RED commit
   layer: none — 자동 로드 없음, 직접 열어야 함

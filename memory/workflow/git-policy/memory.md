@@ -1,8 +1,9 @@
 ---
 title: Git 정책
 type: workflow-rule
-updated: 2026-07-30
+updated: 2026-07-31
 task: commit, push, signing, push-reject, pr-close, race-trace
+keywords: non-fast-forward, push reject, force-push, --no-verify, --no-gpg-sign, FETCH_HEAD, ORIG_HEAD, update-ref, ls-remote, stale ref, pinentry, gpg failed
 trigger:
   signal: git commit / git push / push reject / PR close 시
   layer: none — 집행 훅 없음, 규율만

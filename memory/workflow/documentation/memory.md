@@ -1,8 +1,9 @@
 ---
 title: Documentation Impact Gate
 type: workflow-rule
-updated: 2026-05-19
+updated: 2026-07-31
 task: documentation, docs, pr, review, delivery
+keywords: 문서화, documentation impact, SOT 라우팅, evidence portability, repo-relative, retire 조건
 trigger:
   signal: PR 작성 / 문서 추가 / workflow·contract·user-facing 변경
   layer: none — 자동 로드 없음, 직접 열어야 함
@@ -55,7 +56,8 @@ retire 조건, 흡수 계획을 적고 사용자 승인을 받는다.
 PR body / review comment / handoff 는 GitHub 에서 확인 가능한 증거만 사용:
 
 - 허용: repo-relative `path:line`, GitHub PR/commit/check URL.
-- 금지: `/Users/...`, `/tmp/...`, `file://...`, `worktrees/...`, 로컬 plan path.
+- 금지: `/Users/...`, `/tmp/...`, `file://...`, `worktrees/...`, `clones/...`,
+  로컬 plan path.
 - 로컬 임시 로그는 요약을 붙이고, 재현 명령 또는 repo artifact 로 대체.
 
 ## Reviewer 판정

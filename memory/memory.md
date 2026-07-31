@@ -1,7 +1,8 @@
 ---
 title: Table View — 팔레스 입구
 type: index
-updated: 2026-07-26
+updated: 2026-07-31
+keywords: 팔레스, 방 지도, index, by-surface, by-task, 200줄, 12000 chars, wc -m
 ---
 
 # 팔레스 입구

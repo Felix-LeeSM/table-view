@@ -1,8 +1,9 @@
 ---
 title: Orchestration — 병렬 작업 spawn · 리뷰 큐 · 사이클 정지
 type: workflow-rule
-updated: 2026-07-29
+updated: 2026-07-31
 task: orchestration, parallel-pr, spawn, review-queue, cycle-detection, issue-authoring
+keywords: spawn, slot, 병렬, 파일 교집합, 리뷰 큐, 수용 기준, 접수 조건, 사이클, needs:user, 이슈 발행, 유형 단위, raw, task
 trigger:
   signal: 여러 작업을 동시에 돌리거나, 이슈를 발행하거나, 리뷰 라운드가 안 끝날 때
   layer: none — 자동 로드 없음, 직접 열어야 함
@@ -10,9 +11,13 @@ trigger:
 
 # Orchestration
 
-Top-level orchestrator 의 행동 계약. 개별 작업 방법의 SOT 는 없고, 이
+Orchestrator 의 행동 계약 — interface 가 `.agents/prompts/orchestrator.md`
+파일 그대로 spawn 하는 subagent 다. 개별 작업 방법의 SOT 는 없고, 이
 방은 **작업 사이의 결정** 만 둔다 — 무엇을 언제 spawn 하는가, 리뷰를 어떤 순서로
 붙이는가, 언제 멈추는가.
+
+**입력은 task 티켓과 label 뿐이다.** 사용자 산문은 접수하지 않는다 — 설계·범위
+발화가 오면 [interface](../interface/memory.md) 가 티켓으로 만들어야 한다.
 
 ## 1. 파일 범위는 착수 전에 티켓이 갖는다
 
@@ -45,14 +50,14 @@ script 도 대체물도 없다.
 
 ## 3. 사이클이면 멈추고 사용자에게 올린다
 
-판정 주체는 회고자다 — 라운드 3부터는 개별 지적이 아니라 같은
+판정 주체는 회고 모드 리뷰어다 — 라운드 3부터는 개별 지적이 아니라 같은
 유형의 반복을 본다. 저자도 orchestrator 도 여기서 판정하지 않는다.
 트리거는 라운드 k+1 의 blocking 집합이 라운드 k 의 진부분집합이 아닐 때다.
 
 1. 해당 PR 리뷰 중단.
 2. 파일 교집합이 있는 in-flight PR 을 리뷰 큐에서 함께 정지 (작업은 그대로).
-3. 사용자에게 보고하고 대기한다(`needs:user`). **orchestrator 는 창구일 뿐 판단하지
-   않는다.**
+3. [interface](../interface/memory.md) 를 거쳐 사용자에게 올리고
+   대기한다(`needs:user`). **orchestrator 는 판단하지 않는다.**
 
 보고에 담을 것: 라운드별 blocking 집합 변화 / 재발한 유형과 라운드별 건수 /
 저자가 시도한 것 / 함께 정지된 PR 과 공유 파일 / 선택지(범위 축소·근본
@@ -75,6 +80,10 @@ script 도 대체물도 없다.
 
 전수 명령의 hit 수가 곧 작업 크기다 — 예측 없이 착수 전에 알 수 있다.
 
+**이 절은 orchestrator 의 접수 조건이다.** 못 채운 이슈는 `task` 가 아니라
+`raw` 다. raw → task 승격은 [interface](../interface/memory.md) 전담 — 어떤
+노드도 `task` 를 직접 발행하지 않는다.
+
 **Why**: 상세함과 닫힘은 다르다. 수용 기준 5개가 전부 "전 target 열거 / 전수 조사
 / target 별로 판정" 이던 이슈가 낳은 PR 은 5라운드 끝에 닫혔다. 열린 집합 주장은
 반증만 되고 검증은 안 된다 — 종료 조건이 없다.
@@ -90,8 +99,16 @@ script 도 대체물도 없다.
 - **결정 상충** — 파일이 안 겹쳐도 발생하고 구현 후에야 드러난다. 사후 탐지에
   맡긴다(§3 트리거). 열린 이슈 전부를 ADR 로 승격시키는 건 현재 자원 밖이다.
 
+## 7. 도달은 spawn 하는 쪽이 책임진다
+
+노드가 memory 를 스스로 읽으러 오리라 기대하지 않는다 — 안 읽는 것이 실측이다.
+spawn 프롬프트에 넣는다: 행동 계약(구현자는 implementation §5 표)은 **본문
+인라인**, 절차는 read 명령, 그리고 MANDATORY 첫 명령으로 사본 경로 검증.
+형식은 `.agents/prompts/orchestrator.md` 의 "Spawn 규칙".
+
 ## 관련
 
+- [interface](../interface/memory.md) — 사용자 대화·티켓 승격·orchestrator 운용
 - [review](../review/memory.md) — reviewer 행동 계약
 - [delivery](../delivery/memory.md) — 커밋 → 푸시 → PR → 리뷰 → 머지 구간의 node 별 계약
 - [git-policy](../git-policy/memory.md) — force-push 금지, rebase 대신 merge
