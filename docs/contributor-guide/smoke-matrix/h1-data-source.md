@@ -277,13 +277,17 @@ hits/source/fields/highlights/sort/shards/aggs response parsing, scoped/redacted
 HTTP error body surfacing, and in-flight cancel token behavior. Delete-by-query
 planning covers fixture estimates, live safe `_search` estimates,
 raw/destructive target rejection, wildcard target rejection, unsupported body
-rejection, scoped/redacted preview errors, and explicit preview-only execution
-rejection. Search DSL editor completion covers product-scoped
+rejection, and scoped/redacted preview errors. Live `_delete_by_query` execution
+is covered too (#1076): `execute_search_delete_by_query` runs
+`safe_mode::enforce_search_danger` as a backend IPC chokepoint before any
+dispatch, and `validate_search_destructive_request` still rejects wildcard/`_all`
+targets and a missing query body. Search DSL editor completion covers
+product-scoped
 Elasticsearch/OpenSearch index/alias/data-stream/field/type/sort/source
 suggestions plus shared bounded query/aggs/sort/source snippets; completion
 remains editor assistance and does not widen runtime smoke. Search live
 HTTP/admin promotion remains owned by the Search roadmap/milestone. Actual live
-`_delete_by_query` execution, live admin smoke, and global audit/admin/security
+index/settings admin execution, live admin smoke, and global audit/admin/security
 dashboards remain outside this scope.
 
 ## DuckDB `.duckdb` file workflow and file analytics

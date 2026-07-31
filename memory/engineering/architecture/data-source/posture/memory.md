@@ -38,9 +38,10 @@ compatibility unclaimed until Valkey-specific evidence promotes them.
 
 Elasticsearch/OpenSearch are active Search profiles for live HTTP connection,
 catalog/index detail, bounded live `_search`, backend Search DSL validation,
-Runtime Happy Path smoke, and delete-by-query safety planning. Embedded fixtures
-remain contract evidence; actual live `_delete_by_query` and broader admin APIs
-remain deferred.
+Runtime Happy Path smoke, delete-by-query safety planning, and the live
+`_delete_by_query` execution #1076 promoted behind the Safe Mode confirm gate.
+Embedded fixtures remain contract evidence; index/settings admin APIs and
+wildcard/`_all` delete targets remain deferred.
 
 Cassandra/Scylla, DynamoDB, graph, vector, stream 은
 workflow/profile/connection/language/catalog/result/safety/fixture contract 전
