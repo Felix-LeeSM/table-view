@@ -76,12 +76,18 @@ jobs:
       # A second, unrelated contract rides in this job: CLAUDE.md's
       # `@AGENTS.md` line. That one line is what loads the agent rules into
       # every harness and every spawned subagent — rewritten as a markdown link
-      # it stopped being delivered (#1865), and #2033 removed the last checker
-      # that would have noticed it vanishing. It lives here because this is the
-      # cheapest job with no change gate, so the guard runs on every PR and
-      # every push to main; the job `name:` is a required context, so it cannot
-      # be renamed to match. Checkout is needed only by this step — the PR body
-      # step above reads its input from the event payload.
+      # it stopped being delivered (#1865). Nothing has ever checked the line
+      # itself: the doc-link checker #2033 deleted collected inline, reference
+      # and href/src links only, with no branch for a line-leading `@path`
+      # (`git show 6cced3ab^:scripts/check-doc-links.ts`), and `git log --all
+      # -S '@AGENTS.md' -- scripts .github` finds no other checker. What that
+      # one did cover is CLAUDE.md's separate `[AGENTS.md](AGENTS.md)` link —
+      # the `test -f` half below, never the import. It lives here because this
+      # is the cheapest job with no change gate, so the guard runs on every PR
+      # and every push to main; the job `name:` is a required context, so it
+      # cannot be renamed to match. Checkout is needed only by this step — the
+      # PR body step above reads its input from the event payload. A red here
+      # is diagnosed from memory/runbook/pr-merge-gates/memory.md.
       - name: Checkout
         uses: actions/checkout@v6
 
