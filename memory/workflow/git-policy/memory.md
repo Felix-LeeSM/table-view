@@ -24,11 +24,11 @@ trigger:
 
 ### Why
 
-- push 직전 로컬 검증은 **lefthook pre-push 3종이 전부다** (`lefthook.yml`):
+- push 직전 로컬 검증은 **lefthook pre-push 4종이 전부다** (`lefthook.yml`):
   ① `biome check . --error-on-warnings` (포맷 + 일반 lint, 전체 트리)
   ② push 대상 변경 파일 한정 `eslint --quiet` (repo 고유 가드)
-  ③ `cargo fmt --manifest-path src-tauri/Cargo.toml --check`.
-  `--no-verify` 는 이 셋을 통째로 끈다.
+  ③④ `cargo fmt --check` 를 두 manifest 에 한 번씩 — `src-tauri/Cargo.toml` 과
+  path dep `src-tauri/table-view-core/Cargo.toml`. `--no-verify` 는 이 넷을 통째로 끈다.
 - 나머지 — `cargo clippy -D warnings`, `cargo test`, vitest, 커버리지 —
   는 여전히 **CI 에서만 돈다.** 깨진 코드를 push 하면 CI 에서 처음 드러난다.
 - pre-commit 훅은 없다. 커밋은 게이트 없이 지나가고 push 에서 한 번 잡힌다.
