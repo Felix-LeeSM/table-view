@@ -49,8 +49,9 @@ SOT 는 없다.
   [runbook/pr-merge-gates](../../runbook/pr-merge-gates/memory.md).
 - 사용자 명시 거부("commit 하지 마", "push 멈춰") — 즉시 중단.
 
-머지 자율 조건(정성 차원에 blocking 없음, CI SUCCESS + `review:approved`,
-mergeable, 사용자 거부 없음)은 종결자가 종합한다.
+머지 자율 조건(정성 차원에 blocking 없음, CI SUCCESS + `review:approved`, 서로 다른
+head OID 로 센 라운드가 3 이상이면 `reflect:done` 까지, mergeable, 사용자 거부 없음)은
+종결자가 종합한다.
 
 **머지 방식은 squash 가 기본값이다.** 사본 회수의 head-OID 대조와 브랜치 삭제
 흐름이 squash 를 전제하고([worktree](../../runbook/worktree/memory.md) 「회수」),
