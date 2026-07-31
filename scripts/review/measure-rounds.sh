@@ -276,24 +276,23 @@ fi
 #
 # 게이트는 여기를 안 지난다. `.github/workflows/review-gate.yml` 의
 # `Stop at review round 3` 은 웹훅 payload 의 `pull_request.comments` 를 조건식에서
-# 직접 읽고, `scripts/hooks/policy/test-review-gate-round.sh` 가 그 값을 API 조회로
-# 바꾸지 못하게 막는다 (토큰/권한 표면 때문). 즉 `comments` 정의의 집행 구현은
-# 저 워크플로에 따로 있다.
+# 직접 읽는다. 즉 `comments` 정의의 집행 구현은 저 워크플로에 따로 있고, 이 파일의
+# 기본값은 그 수와 같은 것을 재도록 맞춰 둔 것이다. 그 정합을
+# `scripts/review/measure-rounds.test.sh` 의 "gate coupling" 단계가 검사한다.
 #
 #   comments  현행 프록시. PR 코멘트 1건 = 1라운드. 위 게이트가 조건식에서 읽는
-#             값과 같은 수다. 구현자 응답 / 세션 공지 / "닫는다" 코멘트까지
-#             라운드로 센다.
+#             값과 같은 수다. 리뷰어는 라운드마다 scorecard 코멘트를 하나 남기지만
+#             (memory/workflow/review/memory.md), 코멘트 작성자를 API 로 구분할 수
+#             없어서 구현자 응답 / 세션 공지 / "닫는다" 코멘트까지 라운드로 센다.
 #
 #   head-oid  #1968 이 교체하자고 제안한 정의. 서로 다른 head 커밋에 붙은
 #             리뷰 인계의 수. 같은 커밋에 코멘트가 여러 개 달리면 1라운드다.
 #             근사: 코멘트 시각 이하의 마지막 커밋을 그 코멘트의 head 로 본다.
-#             인계에 head OID 가 박히기 전(#1919)까지 이게 최선의 프록시다.
 #             한계는 이 파일 하단 "못 재는 것" 주석에 적었다.
 #
 # #1968 이 착지해도 이 파일에서 할 일은 기본값 한 줄 교체다. 그게 전부는 아니다 —
-# 게이트 쪽은 `review-gate.yml` 의 조건식과 `test-review-gate-round.sh` 의 가드를
-# 같이 바꿔야 하고, 웹훅 payload 에는 head OID 별 집계가 없어서 조건식이 읽을 값
-# 자체가 없다. 산정할 때 이 파일만 보지 마라.
+# `review-gate.yml` 의 조건식도 같이 바꿔야 하는데 웹훅 payload 에는 head OID 별
+# 집계가 없어서 조건식이 읽을 값 자체가 없다. 산정할 때 이 파일만 보지 마라.
 # ─────────────────────────────────────────────────────────────────────────
 # `win` 도 여기 있다. 두 번 도는 jq (건수 확인 / 본 집계) 가 같은 윈도를 봐야
 # 하는데, 정의를 양쪽에 복사하면 한쪽만 고쳐지는 날이 온다.
@@ -427,14 +426,19 @@ exit 0
 
 # 못 재는 것 (계측의 사각 — 값을 인용할 때 같이 인용해라):
 #
-# 1. blocking 집합. 원칙 3 의 사이클 신호("라운드 k+1 의 blocking 이 라운드 k 의
-#    진부분집합이 아니다", .agents/skills/pr-review/SKILL.md)는 여기서 안 나온다.
-#    scorecard 가 산문이라 blocking 항목을 기계로 셀 수 없다. 이 스크립트는
-#    라운드 수와 간격까지만 낸다 — 사이클 판정은 여전히 사람/리뷰어 몫이다.
+# 1. blocking 집합. 라운드 3부터 리뷰어가 들어가는 회고 모드 — "개별 지적 대신
+#    유형 반복 표" (memory/workflow/delivery/memory.md 노드 표) — 가 보는 유형
+#    재발은 여기서 안 나온다. scorecard 가 산문이라 blocking 항목을 기계로 셀 수
+#    없다. 이 스크립트는 라운드 수와 간격까지만 낸다 — 유형 판정은 리뷰어 몫이다.
 # 2. 누가 쓴 코멘트인지. 이 저장소는 계정이 하나라 리뷰어 코멘트와 구현자 응답을
-#    API 로 구분할 수 없다 (#1968 실측: 168/168 동일 계정, bot 0건). comments
-#    정의가 라운드를 앞지르는 이유가 이것이고, head-oid 정의는 같은 커밋에 달린
-#    응답을 접어서 줄일 뿐 없애지는 못한다.
+#    API 로 구분할 수 없다. 2026-07-31 실측 143/143 동일 계정:
+#      gh api graphql -f query='{repository(owner:"Felix-LeeSM",name:"table-view"){
+#        pullRequests(first:60,orderBy:{field:CREATED_AT,direction:DESC}){nodes{
+#        comments(first:50){nodes{author{login}}}}}}}' \
+#        --jq '[.data.repository.pullRequests.nodes[].comments.nodes[].author.login]
+#              | group_by(.) | map({login:.[0], n:length})'
+#    comments 정의가 라운드를 앞지르는 이유가 이것이고, head-oid 정의는 같은
+#    커밋에 달린 응답을 접어서 줄일 뿐 없애지는 못한다.
 # 3. head-oid 근사의 오차. 코멘트 시각 이하의 마지막 커밋을 head 로 보는데,
 #    committedDate 는 push 시각이 아니다. rebase 나 오래된 커밋을 뒤늦게 push
 #    하면 코멘트가 실제와 다른 커밋에 붙는다. commits(last:100) 를 넘는 PR 은

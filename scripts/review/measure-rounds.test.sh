@@ -7,18 +7,12 @@
 # 실행:
 #   bash scripts/review/measure-rounds.test.sh
 #
-# 배선: scripts/__tests__/measure-rounds.test.ts 가 이 파일을 실행한다.
-# vitest 가 이미 도는 러너라 워크플로를 건드리지 않고 붙였다 — 아무도 안 돌리는
-# 스위트는 red 가 될 수 없다.
-#
-# 이름이 `test-*.sh` 가 아닌 이유 (#2025): 저장소에서 그 이름은 pre-push hook
-# route 스위트를 뜻한다. `scripts/hooks/apply/test-pre-push-path-router.sh` 가
-# tracked `test-*.sh` 를 전부 모아 (1) 라우터가 부르는지 (2) 그 파일의 편집이
-# `is_hook_path` 로 hook route 를 고르는지 둘 다 요구하는데, 이건 hook 이 아니라
-# 리뷰 계측 도구의 스위트다. 이름을 지키려면 `scripts/review/*` 를 hook surface 로
-# 올려야 하고, 그러면 measure-rounds.sh 를 한 줄 고칠 때마다 hook 스위트 30여 개가
-# 돈다. 지금 배선으로도 이 경로의 편집은 pre-push 에서 full route -> `ts-test`
-# (`npm run test`) 를 고르므로 vitest 가 이 파일을 돌린다.
+# 배선: scripts/__tests__/measure-rounds.test.ts 가 이 파일을 실행하고, 그 래퍼를
+# `vitest run` 이 집는다 (vite.config.ts 의 test.exclude 에 scripts/ 가 없다).
+# CI 에서는 `Frontend Tests (shard N/3)` 잡이 그 명령을 돌린다. 이미 도는 러너에
+# 붙인 것이라 워크플로를 건드리지 않았다 — 아무도 안 돌리는 스위트는 red 가 될 수
+# 없다. 확인:
+#   pnpm exec vitest list | grep measure-rounds
 #
 # 끝에 mutation 단계가 붙어 있다. 변조본을 만들어 이 스위트가 실제로 red 가
 # 되는지 보고, 미변조 사본이 green 인 것(양성 대조)까지 확인한다. 변조가
@@ -28,10 +22,14 @@ set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # 자기 경로. mutation 단계가 자신을 다시 부르는데, 리터럴로 박아두면 파일을
-# 옮겼을 때 "미변조 사본이 red" 라는 엉뚱한 실패로 나타난다 (#2025 의 rename).
+# 옮겼을 때 "미변조 사본이 red" 라는 엉뚱한 실패로 나타난다.
 SELF="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/${BASH_SOURCE[0]##*/}"
 SCRIPT="${MEASURE_ROUNDS_SCRIPT:-$ROOT/scripts/review/measure-rounds.sh}"
 FIXTURE="$ROOT/scripts/review/fixtures/measure-rounds-2026-07-24_27.json"
+# 게이트 워크플로. 아래 "gate coupling" 단계가 읽는다. env 로 갈아끼울 수 있는
+# 것은 그 단계의 RED 를 손으로 재현하기 위해서다 (MEASURE_ROUNDS_SCRIPT 와 같은
+# 이유). 기본값은 저장소의 진짜 파일이다.
+GATE_WORKFLOW="${MEASURE_ROUNDS_GATE_WORKFLOW:-$ROOT/.github/workflows/review-gate.yml}"
 
 if [ ! -f "$SCRIPT" ]; then
 	echo "FAIL: 대상 스크립트가 없다: $SCRIPT" >&2
@@ -121,9 +119,24 @@ echo "round definition (#1968):"
 
 # 계측 쪽 두 정의는 measure-rounds.sh 의 round_events() 가 계산한다. 한 번의 실행이
 # 둘 다 내야 #1968 이 이 파일에서 기본값 한 줄만 바꾸면 된다 — 게이트 쪽
-# (`review-gate.yml` + `test-review-gate-round.sh`) 은 별도로 바뀐다.
+# (`review-gate.yml` 의 조건식) 은 별도로 바뀐다.
+#
+# 기본 정의는 게이트와 묶여 있다. 게이트(`Stop at review round 3`)는 웹훅 payload 의
+# `github.event.pull_request.comments` 를 조건식에서 직접 읽으므로, 그 리터럴이
+# 워크플로에 있는 한 이 도구의 기본값도 `comments` 여야 둘이 같은 것을 잰다.
+# 아래 단계가 그 정합을 검사한다. RED 재현:
+#   d="$(mktemp -d)"; grep -v 'pull_request.comments' \
+#     .github/workflows/review-gate.yml > "$d/gate.yml"
+#   MEASURE_ROUNDS_GATE_WORKFLOW="$d/gate.yml" bash scripts/review/measure-rounds.test.sh
 measure --since 2026-07-25 --until 2026-07-26
-assert_has "round_def=comments" "default def is comments (review-gate.yml 프록시)"
+if [ ! -f "$GATE_WORKFLOW" ]; then
+	fail "gate coupling: 게이트 워크플로가 없다: $GATE_WORKFLOW"
+elif grep -qF 'github.event.pull_request.comments' "$GATE_WORKFLOW"; then
+	assert_has "round_def=comments" "기본 정의가 게이트 신호(payload 의 comments)와 같다"
+else
+	fail "gate coupling: $GATE_WORKFLOW 가 pull_request.comments 를 더 이상 안 읽는다" \
+		"게이트가 세는 신호가 바뀌었다. measure-rounds.sh 의 기본 ROUND_DEF 를 그 신호에 맞춰라 (#1968)."
+fi
 assert_has "rounds_per_merge_by_def=comments:8.17 head-oid:5.5" "comments 모드가 두 정의를 다 낸다"
 
 measure --since 2026-07-25 --until 2026-07-26 --round-def head-oid
