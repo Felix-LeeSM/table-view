@@ -330,19 +330,28 @@ jobs:
       - name: Cache Rust artifacts
         uses: Swatinem/rust-cache@v2
         with:
-          # sql-parser-core is a path crate (not a workspace member), so the
-          # standalone `--manifest-path src-tauri/sql-parser-core/Cargo.toml`
-          # test below compiles into its OWN target dir. Caching only
-          # `src-tauri -> target` left it uncached, recompiling every run
-          # (audit 2026-07-03). List its target as a second workspace.
+          # sql-parser-core and table-view-core are path crates (not workspace
+          # members), so the standalone `--manifest-path .../Cargo.toml` tests
+          # below compile into their OWN target dirs. Caching only
+          # `src-tauri -> target` left them uncached, recompiling every run
+          # (audit 2026-07-03). List each target as a separate workspace.
           workspaces: |
             src-tauri -> target
             src-tauri/sql-parser-core -> target
+            src-tauri/table-view-core -> target
           cache-bin: false
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Run cargo tests
         run: cargo test --manifest-path src-tauri/Cargo.toml --lib --test storage_integration
+
+      # #1769 — db/models/storage/error moved into the `table-view-core` path
+      # crate, taking 1175 of the 1978 pre-split `--lib` tests with them. The
+      # line above only runs `table-view`'s own lib tests, so without this step
+      # those 1175 would stop running while CI stayed green. Same wiring the
+      # sql-parser-core step below got for the same reason.
+      - name: Run table-view-core unit tests
+        run: cargo test --manifest-path src-tauri/table-view-core/Cargo.toml --lib
 
       # Sprint 390 (2026-05-17) — sprint-385 review found that the
       # `sql-parser-core` path crate's 31 lib tests and the
@@ -397,7 +406,9 @@ jobs:
       - name: Cache Rust artifacts
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: src-tauri -> target
+          workspaces: |
+            src-tauri -> target
+            src-tauri/table-view-core -> target
           cache-bin: false
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
@@ -408,6 +419,19 @@ jobs:
 
       - name: Clippy
         working-directory: src-tauri
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+      # #1769 — `cargo fmt` / `cargo clippy` only touch the package they are
+      # invoked on, never its path dependencies. `table-view-core` holds the
+      # db/models/storage/error tree, so without these two steps ~60% of the
+      # Rust source would leave both gates while CI stayed green. clippy reads
+      # `clippy.toml` from CARGO_MANIFEST_DIR, hence the crate's own copy.
+      - name: Rustfmt (table-view-core)
+        working-directory: src-tauri/table-view-core
+        run: cargo fmt --check
+
+      - name: Clippy (table-view-core)
+        working-directory: src-tauri/table-view-core
         run: cargo clippy --all-targets --all-features -- -D warnings
 
   # 2026-07-25 — this job was briefly split into a 4-way `integration-shard`

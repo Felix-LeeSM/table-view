@@ -42,7 +42,7 @@
       ],
       "sourceGates": [
         {
-          "path": "src-tauri/src/db/search_dsl.rs",
+          "path": "src-tauri/table-view-core/src/db/search_dsl.rs",
           "mustContain": [
             "RAW_PATH_TARGET_ERROR",
             "unsupported_search_body_features_reject_before_http_dispatch",
