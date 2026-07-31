@@ -33,6 +33,7 @@ PRIMARY="$(git rev-parse --show-toplevel)"
 DEST="$PRIMARY/../table-view-clones/<branch 의 / 를 __ 로>"
 # 1) 로컬 객체를 hardlink 로 공유하는 clone — 수 초, 디스크 저렴
 git clone --local "$PRIMARY" "$DEST"
+DEST="$(cd "$DEST" && pwd -P)"   # `..` 정규화 — 첫 turn 검증(rev-parse)의 문자열 비교와 일치시킨다
 # 2) origin 을 GitHub 으로 — 이후 fetch/push 는 GitHub 과 직접 (https — 이
 #    머신의 ssh 는 GitHub 인증이 없어 fetch 가 실패한다, 2026-07-31 실측)
 git -C "$DEST" remote set-url origin https://github.com/Felix-LeeSM/table-view.git
