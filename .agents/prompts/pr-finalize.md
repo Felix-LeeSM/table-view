@@ -60,11 +60,14 @@ test "$(git rev-parse --show-toplevel)" != "$CLONE" \
 
 ```bash
 gh pr view <N> --json comments -q .comments
+# rollup 은 review-gate run 이 쌓였는지 보려고만 쓴다 — required 판정 수단이 아니다
 gh pr view <N> --json statusCheckRollup \
   -q '.statusCheckRollup[] | select(.name == "review-gate") | {status, conclusion}'
 ```
 
-라운드 게이트의 조건 · 누가 붙이는가 · rollup 을 봐야 하는 이유는
+rollup 은 이 한 곳에서만 쓴다 — **required 판정 수단이 아니다.** required 는
+2단계의 이름별 최신 판정으로 확인한다. 그 구분과 라운드 게이트의 조건 · 누가
+붙이는가 · 여기서 rollup 을 봐야 하는 이유는
 `memory/runbook/pr-merge-gates/memory.md` 가 SOT 다.
 
 ## 2단계 — 머지 전 확인 (전부 통과해야 진행)
@@ -138,7 +141,7 @@ gh pr merge <N> --squash --delete-branch --body-file <교정본 경로>  # 교�
 - PR: #<번호> — merged <머지 SHA> (squash)
 - squash body: 기본 / 교정(사유)
 - reflect:done: 부착 / 불필요 (코멘트 <N>건) — 부착했으면 labeled run 결과
-- required: 머지 시점 전부 green (확인: statusCheckRollup)
+- required: 머지 시점 전부 green (확인: `gh pr checks` + `mergeStateStatus`)
 - PR body 재검사: clean / dirty → 머지 중단하고 새 commit 요구
 - 브랜치: remote 삭제 완료 / 로컬 삭제 실패(무해)
 - 사본: 삭제 / 보존(사유)
