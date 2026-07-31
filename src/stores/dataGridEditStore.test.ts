@@ -1,3 +1,5 @@
+// biome-ignore-all lint/suspicious/noTemplateCurlyInString: the `${...}` is inside a test name that quotes the composite key's shape. Interpolating it would name the test after four undefined variables.
+
 // Sprint 251 — `dataGridEditStore` (in-memory zustand) lift of the four
 // pending-edit slices. Maps to AC-251-S1..S5 from
 // Sprint 251 contract. Date 2026-05-09.

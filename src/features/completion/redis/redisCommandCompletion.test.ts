@@ -1,3 +1,5 @@
+// biome-ignore-all lint/suspicious/noTemplateCurlyInString: the `${...}` here are the CodeMirror snippet placeholders this suite asserts on, copied verbatim from the completion specs under test.
+
 import type { CompletionResult } from "@codemirror/autocomplete";
 import { CompletionContext } from "@codemirror/autocomplete";
 import { EditorState } from "@codemirror/state";

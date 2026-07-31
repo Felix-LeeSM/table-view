@@ -1,3 +1,5 @@
+// biome-ignore-all lint/suspicious/noTemplateCurlyInString: the `${...}` sits inside a fixture string of mongosh source text that the parser under test must tokenize. Interpolating it would change the input.
+
 // Sprint 382 (2026-05-17) — mongosh AST parser MVP unit tests.
 //
 // 작성 이유: sprint-381 의 정규식 기반 statement classifier 를 typed AST 로
