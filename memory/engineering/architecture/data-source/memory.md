@@ -4,6 +4,7 @@ type: memory
 updated: 2026-07-17
 surface: src-tauri/src/db/**, src/lib/**, src/types/dataSource*, src/types/queryLanguage*
 task: data-source, architecture, adapter, capability
+keywords: DataSourceProfile, DATA_SOURCE_PROFILES, DatabaseType, DataParadigm, adapter_contract, make_adapter, dataSourceProfileParity.test.ts, ActiveAdapter, result envelope, SchemaGraph, fail-closed, fail-open
 trigger:
   signal: DBMS 추가 / adapter 변경 / capability 변경 / query result envelope 변경
   layer: index

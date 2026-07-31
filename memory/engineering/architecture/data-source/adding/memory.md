@@ -4,6 +4,7 @@ type: checklist
 updated: 2026-07-17
 surface: src-tauri/src/db/**, src/types/dataSource*, src/types/queryLanguage*, tests/fixtures/**
 task: data-source, support-claim, adapter, fixture
+keywords: Required Contract, DatabaseType, ConnectionKind, AppError::connection_redacted, QueryLanguageId, Capability Flip, 4-Surface Sync, BackendAdapterCapability, cargo test --lib, ADR Gate, Handoff Checklist, fixture-only
 trigger:
   signal: DBMS 추가 / source promotion / fixture-backed slice 승격
   layer: index

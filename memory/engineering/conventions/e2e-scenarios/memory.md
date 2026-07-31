@@ -4,6 +4,7 @@ type: memory
 updated: 2026-07-17
 surface: e2e/**
 task: e2e, testing, scenario
+keywords: spec.ts, CUJ 5종, Critical User Journey, Runtime Happy Path, e2e/scope-map.mjs, 테스트 피라미드, regression-pinned, skip(), tauri-driver 한계, step 라벨, e2e/wdio-report/, Flakiness
 ---
 
 # E2E 시나리오 설계 원칙

@@ -4,6 +4,7 @@ type: convention
 updated: 2026-05-28
 task: test-writing, mock-scope, regression-guard
 surface: '**/*.test.ts, **/*.test.tsx, vi.mock'
+keywords: vi.mock, boundary stub, user-facing invariant, implementation detail, silent failure, 광역 mock, real import, reset helper, jsdom 한계, MockRuntime, destroyCurrentWindow, workspace_close
 trigger:
   signal: 테스트 작성 / `vi.mock()` 사용
   layer: none — 자동 로드 없음. 향후 ESLint custom rule 후보

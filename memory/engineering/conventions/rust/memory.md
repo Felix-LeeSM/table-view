@@ -4,6 +4,7 @@ type: convention
 updated: 2026-08-01
 surface: src-tauri/**/*.rs
 task: rust-impl, refactor
+keywords: cargo fmt, cargo clippy, thiserror, unwrap(), spawn_blocking, tokio::sync::Mutex, cargo-mutants, --in-place, include_str!, sqlparser, raw_where.rs, SECURITY RE-AUDIT ON sqlparser BUMP
 trigger:
   signal: src-tauri/**/*.rs 편집 시
   layer: none — 자동 로드 없음, 직접 열어야 함

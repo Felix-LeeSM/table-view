@@ -2,6 +2,7 @@
 title: C. Hook API shape
 type: memory
 updated: 2026-06-12
+keywords: Hook API shape, 객체 통일, Deps stability, useCallback 강제, exhaustive-deps, 최신 참조 패턴, useEffectEvent, Hook 시그니처, positional, Hook sub-grouping, 15개 임계, AbortController
 ---
 
 # C. Hook API shape

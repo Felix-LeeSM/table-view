@@ -3,6 +3,7 @@ title: Engineering
 type: index
 updated: 2026-05-27
 task: implementation, refactor, bug-fix, review
+keywords: 방 지도, 진입 규칙, architecture, conventions, 모듈 경계, 코드 작성 규칙, 기술 스택, IPC, 상태 흐름, docs/archives/decisions
 ---
 
 # Engineering

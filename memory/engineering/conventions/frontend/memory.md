@@ -4,6 +4,7 @@ type: convention
 updated: 2026-07-03
 surface: src/**/*.ts, src/**/*.tsx, src/**/*.css
 task: frontend, ui, react-impl
+keywords: 카드 중첩 금지, skeleton, spinner, DataGridSkeleton, 150ms arm, useDelayedFlag, no-restricted-imports, src/features/<domain>/index.ts, AppError::CapabilityNotEnabled, safeStringifyCell, SYNCED_KEYS, migration-only
 trigger:
   signal: src frontend/UI 편집 시
   layer: none — 자동 로드 없음, 직접 열어야 함

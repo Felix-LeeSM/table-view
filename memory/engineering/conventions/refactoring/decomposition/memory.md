@@ -2,6 +2,7 @@
 title: A. 분해 boundary
 type: memory
 updated: 2026-05-02
+keywords: 분해 boundary, 데이터/UI 분리 axis, data hook, Paradigm 분기 axis, useDataGridEditRdb, useDataGridEditDocument, dataGridEditTypes.ts, 2-of-3, Sub-component 추출 임계, Hook 추출 임계, 5+ commit, axis of change
 ---
 
 # A. 분해 boundary

@@ -3,6 +3,7 @@ title: Product 머지 기준
 type: product-rule
 updated: 2026-07-16
 task: ux-review, persistence-reset, merge-gate, safe-mode-severity, collapse-default, telemetry-local-only
+keywords: reset-to-default, 영속 상태, Reset to defaults, Safe Mode severity, danger, warn, sqlSafety.ts, required_confirmation_key, 첫번째만 펼침, 텔레메트리, ADR 0036, 머지 보류
 ---
 
 # Product 머지 기준

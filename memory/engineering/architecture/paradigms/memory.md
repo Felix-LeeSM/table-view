@@ -2,6 +2,7 @@
 title: Paradigm UI Heuristics
 type: historical-note
 updated: 2026-06-12
+keywords: Paradigm UI Heuristics, Durable Heuristics, UI slot, Reuse existing slots, key/type/TTL, index/mapping/score/highlight, Not SOT For, delete-by-query, Redis, Valkey, Elasticsearch/OpenSearch, historical context
 ---
 
 # Paradigm UI Heuristics
