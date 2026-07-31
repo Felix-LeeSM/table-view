@@ -10,6 +10,13 @@ import { Loader2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useRefreshEvent } from "@/hooks/useRefreshEvent";
 import { safeStringifyCell } from "@/lib/jsonCell";
 import {
@@ -235,42 +242,55 @@ export function ValidatorPanel({
       )}
 
       <div className="flex flex-wrap items-end gap-3 text-xs">
+        {/* `<label>` wrapping stays valid: the Radix trigger is a `<button>`,
+            a labelable element, so the visible caption keeps forwarding clicks.
+            `aria-label` still wins the accessible name (accname precedence). */}
         <label className="flex flex-col gap-1">
           <span className="font-medium text-muted-foreground">Level</span>
-          {/* eslint-disable-next-line no-restricted-syntax -- 기존 native <select>. cell-domain override 로 sprint-112 규칙이 무력화돼 있던 선재 부채, Radix <Select> 전환은 이 i18n 슬라이스(#1074) 밖 별도 후속 */}
-          <select
-            aria-label={t("validatorPanel.levelAriaLabel")}
-            data-testid="validator-level-select"
-            className="h-7 rounded-md border border-border bg-background px-2 text-xs"
+          <Select
             value={level}
-            onChange={(e) => setLevel(e.target.value as MongoValidationLevel)}
+            onValueChange={(next) => setLevel(next as MongoValidationLevel)}
           >
-            {LEVEL_OPTIONS.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
+            <SelectTrigger
+              aria-label={t("validatorPanel.levelAriaLabel")}
+              size="sm"
+              className="text-xs"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {LEVEL_OPTIONS.map((option) => (
+                <SelectItem key={option} value={option}>
+                  {option}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </label>
 
         <label className="flex flex-col gap-1">
           <span className="font-medium text-muted-foreground">Action</span>
-          {/* eslint-disable-next-line no-restricted-syntax -- 기존 native <select>. cell-domain override 로 sprint-112 규칙이 무력화돼 있던 선재 부채, Radix <Select> 전환은 이 i18n 슬라이스(#1074) 밖 별도 후속 */}
-          <select
-            aria-label={t("validatorPanel.actionAriaLabel")}
-            data-testid="validator-action-select"
-            className="h-7 rounded-md border border-border bg-background px-2 text-xs disabled:cursor-not-allowed disabled:opacity-50"
+          <Select
             value={action}
-            onChange={(e) => setAction(e.target.value as MongoValidationAction)}
+            onValueChange={(next) => setAction(next as MongoValidationAction)}
             disabled={actionDisabled}
-            aria-disabled={actionDisabled ? "true" : undefined}
           >
-            {ACTION_OPTIONS.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
+            <SelectTrigger
+              aria-label={t("validatorPanel.actionAriaLabel")}
+              aria-disabled={actionDisabled ? "true" : undefined}
+              size="sm"
+              className="text-xs"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {ACTION_OPTIONS.map((option) => (
+                <SelectItem key={option} value={option}>
+                  {option}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </label>
 
         {actionDisabled && (
