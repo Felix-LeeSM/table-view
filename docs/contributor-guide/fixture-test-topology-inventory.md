@@ -34,7 +34,7 @@ Required inventory commands:
 
 | Command | Result |
 |---|---|
-| `rg --files fixtures tests/fixtures e2e/fixtures` | 27 tracked fixture-root paths. |
+| `rg --files fixtures tests/fixtures e2e/fixtures` | 26 tracked fixture-root paths. |
 | `rg -n "FixtureHarness\|dbms-seeds\|seed\\." src-tauri tests e2e --glob '!src-tauri/target/**' --glob '!target/**' --glob '!node_modules/**'` | 71 tracked-source matches; cache and dependency hits are excluded from topology decisions by the repository topology SOT. |
 | `pnpm exec vitest run tests/fixtures/*.test.ts` | Fixture contract tests. |
 
@@ -42,7 +42,7 @@ Supporting checks:
 
 | Command | Result |
 |---|---|
-| `git ls-files fixtures tests/fixtures e2e/fixtures` | Same 27 tracked fixture-root paths. |
+| `git ls-files fixtures tests/fixtures e2e/fixtures` | Same 26 tracked fixture-root paths. |
 | `git check-ignore -v fixtures tests/fixtures e2e/fixtures tests/fixtures/data-source-profile-parity.report.json` | No ignored tracked fixture roots reported. |
 | `rg -n "data-source-profile-parity\\.report\|PROFILE_PARITY_REPORT\|profile parity report\|reportVersion" . --glob '!src-tauri/target/**' --glob '!target/**' --glob '!node_modules/**'` | Report fixture is consumed by TS and Rust parity tests; no writer was found in the repo. |
 | `rg -n "writeFile\|writeFileSync\|fixture.*report\|report\\.json" src src-tauri tests package.json --glob '!src-tauri/target/**' --glob '!target/**' --glob '!node_modules/**'` | No `writeFile`/`writeFileSync` hit at all; the four matches are the parity report's own consumers and two unrelated Rust test names. Nothing in tracked source writes a fixture-root file. |
