@@ -1,9 +1,9 @@
 ---
 title: Delivery — 커밋 → 푸시 → PR → 리뷰 → 머지 구간의 node 별 행동 계약
 type: workflow-rule
-updated: 2026-07-31
+updated: 2026-08-01
 task: delivery, commit, push, pr, review, merge
-keywords: 커밋, commit, push, PR 생성, squash, 머지 정책, review:approved, reflect:done, 자율 실행, 중단 조건, GPG, pinentry, 노드 표
+keywords: 커밋, commit, push, PR 생성, squash, squash body, --body-file, 낡은 수치, staleness, 머지 정책, review:approved, reflect:done, 자율 실행, 중단 조건, GPG, pinentry, 노드 표
 trigger:
   signal: implementation 완료 / 사용자가 "마무리해" / sprint 종료
   layer: none — 자동 로드 없음, 직접 열어야 함
@@ -66,8 +66,8 @@ mergeable, 사용자 거부 없음)은 종결자가 종합한다.
 
 ## PR body
 
-형식 요구는 없다. 유일한 제약은 근거의 이식성 — PR body / comment 는 GitHub 에서
-열리는 repo-relative path 와 URL 만 쓴다. `/Users`, `/tmp`, `file://`,
+형식 요구는 없다. CI 가 집행하는 유일한 제약은 근거의 이식성 — PR body / comment 는
+GitHub 에서 열리는 repo-relative path 와 URL 만 쓴다. `/Users`, `/tmp`, `file://`,
 `worktrees/`, `clones/` 금지. 문서화 판단은 [documentation](../documentation/memory.md).
 
 2026-07-31 부터 PR body 는 CI 가 실제로 검사한다 — `PR Body Contract` job 이
@@ -75,6 +75,16 @@ mergeable, 사용자 거부 없음)은 종결자가 종합한다.
 (빈 body 는 pass). 게이트라 **금지 패턴을 인용만 해도 걸린다** — 예시를 들 때는
 문자열을 쪼개거나 이름으로 부르고 그대로 붙이지 마라. 해소는 새 commit 뿐이다
 (body 편집으로는 재검사되지 않음 — [pr-merge-gates](../../runbook/pr-merge-gates/memory.md)).
+
+**PR body 와 squash 커밋 메시지는 다음 노드가 읽는 입력이다** — 노드는 죽고 산출물만
+남으니 거짓이거나 낡은 수치는 미래 구현자·디버깅 세션의 거짓 전제가 된다 (정량 주장에
+재현 명령을 붙이는 제약은 [implementation](../implementation/memory.md) §5 표가 SOT).
+수정 라운드에서 코드가 바뀌어 body 의 기존 주장이 낡으면 fix commit 과 같은 턴에
+body 도 갱신한다 — body 편집 단독은 재검사되지 않으니 commit + push 와 한 세트로 간다.
+기본 squash body 는 커밋 메시지에서 오므로 중간 커밋의 낡은 수치가 main 기록에 들어갈
+수 있다 — 종결자는 머지 시점에 `--body-file` 교정본으로 대체할 수 있고, 교정본에도 위
+수치 제약이 그대로 걸린다 (2026-07-31 PR #2023: 커밋 606c426e 의 통과 수치가 작성 뒤
+스위트 확장으로 낡아, 종결자가 교정본으로 머지했다 — 2007be88).
 
 ## Agent spawn — reviewer 독립
 
