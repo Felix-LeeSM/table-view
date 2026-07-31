@@ -12,7 +12,7 @@ keywords: 행동 계약, phase, 방 지도, workflow
 ## 원칙
 
 - Workflow memory는 "언제 agent가 무엇을 해야 하는가"를 저장한다.
-- 긴 절차는 이 방들이 아니라 `.agents/skills/` 가 갖는다 —
+- 긴 절차는 `.agents/skills/` 에도 있다 —
   [diagnosing-bugs](../../.agents/skills/diagnosing-bugs/SKILL.md) ·
   [resolving-merge-conflicts](../../.agents/skills/resolving-merge-conflicts/SKILL.md).
   `AGENTS.md` 매트릭스가 작업 type 에서 그 경로로 보낸다. 계약이 더 필요하면

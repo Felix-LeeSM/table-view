@@ -28,7 +28,7 @@ keywords: 팔레스, 방 지도, index, by-surface, by-task, 200줄, 12000 chars
 
 - `memory/memory.md` 는 memory 진입 라우터만 소유한다. 세부 규칙은 각 방의
   `memory.md` 가 소유한다.
-- workflow 는 행동 계약만 둔다. 긴 절차는 `.agents/skills/` 가 소유하고
+- workflow 는 행동 계약만 둔다. 긴 절차는 `.agents/skills/` 에도 있고
   `AGENTS.md` 매트릭스가 그 경로를 준다. 계약이 더 필요하면 memory 를 쪼개서
   여기 적는다.
 - 제품 상태와 지원 범위는 [docs/product](../docs/product/README.md) 가 소유한다.
