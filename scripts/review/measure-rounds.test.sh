@@ -121,22 +121,57 @@ echo "round definition (#1968):"
 # 둘 다 내야 #1968 이 이 파일에서 기본값 한 줄만 바꾸면 된다 — 게이트 쪽
 # (`review-gate.yml` 의 조건식) 은 별도로 바뀐다.
 #
-# 기본 정의는 게이트와 묶여 있다. 게이트(`Stop at review round 3`)는 웹훅 payload 의
-# `github.event.pull_request.comments` 를 조건식에서 직접 읽으므로, 그 리터럴이
-# 워크플로에 있는 한 이 도구의 기본값도 `comments` 여야 둘이 같은 것을 잰다.
-# 아래 단계가 그 정합을 검사한다. RED 재현:
-#   d="$(mktemp -d)"; grep -v 'pull_request.comments' \
-#     .github/workflows/review-gate.yml > "$d/gate.yml"
-#   MEASURE_ROUNDS_GATE_WORKFLOW="$d/gate.yml" bash scripts/review/measure-rounds.test.sh
+# 기본 정의는 게이트와 묶여 있다. 아래 두 단언이 그 짝을 양쪽에서 고정한다 —
+# 게이트가 라운드를 세는 신호가 코멘트 수인가 / 이 도구의 기본 정의가 그 신호인가.
+# 한쪽만 움직이면 그쪽이 red 다.
 measure --since 2026-07-25 --until 2026-07-26
-if [ ! -f "$GATE_WORKFLOW" ]; then
-	fail "gate coupling: 게이트 워크플로가 없다: $GATE_WORKFLOW"
-elif grep -qF 'github.event.pull_request.comments' "$GATE_WORKFLOW"; then
-	assert_has "round_def=comments" "기본 정의가 게이트 신호(payload 의 comments)와 같다"
-else
-	fail "gate coupling: $GATE_WORKFLOW 가 pull_request.comments 를 더 이상 안 읽는다" \
-		"게이트가 세는 신호가 바뀌었다. measure-rounds.sh 의 기본 ROUND_DEF 를 그 신호에 맞춰라 (#1968)."
-fi
+
+# 게이트 쪽. 검사 범위는 `Stop at review round 3` 스텝의 `if:` **표현식뿐**이다.
+# 파일 전체를 grep 하면 같은 리터럴이 사람용 에러 문구(`run:` 안)에도 있어서, 집행
+# 조건만 갈아치우고 문구를 남긴 편집 — 즉 #1968 이 할 일의 형태 — 을 못 잡는다.
+#
+# RED 재현 2종. 둘 다 이 단계에서 red 가 나야 한다:
+#   d="$(mktemp -d)"; git archive HEAD | tar -x -C "$d"
+#   # (a) 집행 조건만 label 신호로 교체하고 에러 문구는 남긴다
+#   perl -0pi -e "s/\Q&& github.event.pull_request.comments >= 3\E/\
+#&& contains(github.event.pull_request.labels.*.name, 'round:3')/" \
+#     "$d/.github/workflows/review-gate.yml"
+#   # (b) 집행 조건 줄만 지운다
+#   #     perl -ni -e 'print unless /pull_request.comments >= 3/' \
+#   #       "$d/.github/workflows/review-gate.yml"
+#   ( cd "$d" && bash scripts/review/measure-rounds.test.sh )
+gate_condition() {
+	awk '/- name: Stop at review round 3/{f=1}
+	     f && /^[[:space:]]*if:/{g=1}
+	     g && /^[[:space:]]*run:/{exit}
+	     g' "$GATE_WORKFLOW"
+}
+
+check_gate_signal() {
+	# 이 단언만 대상이 스크립트가 아니라 저장소의 워크플로 파일이다. 그래서
+	# 스크립트 변조본을 물리는 mutation 서브런에서는 끈다 — 안 그러면 게이트가
+	# 바뀐 날 자식 실행이 같은 이유로 red 가 되어 양성 대조가 "harness 가 깨졌다"
+	# 로 오보한다. 기본 경로(env 없음)에서는 항상 돈다.
+	[ "${MEASURE_ROUNDS_SKIP_GATE_CHECK:-0}" = "1" ] && return 0
+
+	if [ ! -f "$GATE_WORKFLOW" ]; then
+		fail "gate coupling: 게이트 워크플로가 없다: $GATE_WORKFLOW"
+	elif [ -z "$(gate_condition)" ]; then
+		fail "gate coupling: 'Stop at review round 3' 스텝의 if: 조건을 못 찾았다" \
+			"스텝 이름이나 워크플로 구조가 바뀌었다. 이 스위트의 gate_condition() 을 같이 고쳐라."
+	elif gate_condition | grep -qF 'github.event.pull_request.comments'; then
+		pass "게이트 집행 조건이 코멘트 수를 읽는다 (기본 round_def 의 짝)"
+	else
+		fail "gate coupling: 게이트 집행 조건이 pull_request.comments 를 안 읽는다" \
+			"게이트가 세는 신호가 바뀌었다. measure-rounds.sh 의 기본 ROUND_DEF 를 그 신호에 맞춰라 (#1968).
+현재 조건:
+$(gate_condition)"
+	fi
+}
+check_gate_signal
+
+# 도구 쪽 짝. 변조본에도 적용된다 — 기본값을 뒤집는 편집은 여기서 죽는다.
+assert_has "round_def=comments" "기본 라운드 정의가 comments"
 assert_has "rounds_per_merge_by_def=comments:8.17 head-oid:5.5" "comments 모드가 두 정의를 다 낸다"
 
 measure --since 2026-07-25 --until 2026-07-26 --round-def head-oid
@@ -236,7 +271,11 @@ if [ "${MEASURE_ROUNDS_SKIP_MUTATION:-0}" != "1" ]; then
 	}
 
 	run_suite_against() {
-		MEASURE_ROUNDS_SCRIPT="$1" MEASURE_ROUNDS_SKIP_MUTATION=1 bash "$SELF" >/dev/null 2>&1
+		# `MEASURE_ROUNDS_SKIP_GATE_CHECK=1` — 자식 실행이 판정하는 것은 변조된
+		# 스크립트이지 저장소의 워크플로가 아니다. 켜 두면 게이트가 바뀐 날
+		# 양성 대조와 변조 6종이 전부 같은 이유로 red 가 되어 결과가 무의미해진다.
+		MEASURE_ROUNDS_SCRIPT="$1" MEASURE_ROUNDS_SKIP_MUTATION=1 \
+			MEASURE_ROUNDS_SKIP_GATE_CHECK=1 bash "$SELF" >/dev/null 2>&1
 	}
 
 	# 양성 대조.
