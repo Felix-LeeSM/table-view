@@ -219,10 +219,16 @@ check_gate_signal
 # 위 단계들과 달리 여기서는 스텝의 `run:` 블록을 **실제로 실행한다** — grep 만으로는
 # "DELETE 는 하는데 실패를 삼킨다" 는 편집을 못 잡는다. gh 는 스텁이 가로챈다.
 #
-# RED 재현 1종:
+# RED 재현 3종. 각각 아래 ①~③ 중 하나를 죽인다:
 #   d="$(mktemp -d)"; git archive HEAD | tar -x -C "$d"
+#   # (a) 해제 검증이 다른 label 을 본다 — 잔존 경로가 통과가 된다
 #   perl -0pi -e "s/grep -qxF 'reflect:done'/grep -qxF 'reflect:never'/" \
 #     "$d/.github/workflows/review-gate.yml"
+#   # (b) 해제 스텝의 always() 를 뗀다 — dismissal 의 exit 1 뒤라 영영 안 돈다
+#   perl -0pi -e "s/\Qif: always() && github.event_name\E/if: github.event_name/" \
+#     "$d/.github/workflows/review-gate.yml"
+#   # (c) 두 스텝 블록의 순서를 손으로 맞바꾼다 (해제 스텝을 dismissal 앞으로)
+#   #     — 그러면 해제의 exit 1 이 dismissal 을 skip 시킨다
 #   MEASURE_ROUNDS_GATE_WORKFLOW="$d/.github/workflows/review-gate.yml" \
 #     bash scripts/review/measure-rounds.test.sh
 # 위 두 추출기와 달리 `run: |` 줄을 빼고 본문만 낸다 — 실행할 것이라서다. 다음
@@ -235,6 +241,15 @@ gate_release_step() {
 	     g' "$GATE_WORKFLOW"
 }
 
+# 해제 스텝의 실행 조건. 본문(run:)이 아니라 `if:` 를 보는 단언이 있어서 따로 뽑는다
+# — 이 스텝은 `if:` 다음이 `env:` 라 거기서 끊는다.
+gate_release_condition() {
+	awk '/- name: Release reflect:done on a new round/{f=1}
+	     f && /^[[:space:]]*if:/{g=1}
+	     g && /^[[:space:]]*env:/{exit}
+	     g' "$GATE_WORKFLOW"
+}
+
 check_reflect_release() {
 	# check_gate_signal() 과 같은 이유로 mutation 서브런에서는 끈다 — 대상이
 	# 스크립트가 아니라 저장소의 워크플로다.
@@ -242,19 +257,31 @@ check_reflect_release() {
 
 	echo "reflect:done release (#1968):"
 
-	# ① 해제 스텝이 dismissal 보다 **앞**에 있는가. dismissal 은 의도적으로 exit 1
-	#    하므로 뒤에 두면 이 스텝이 영영 안 돈다 — 그러면 label 이 영구히 남는다.
+	# ① 해제 스텝이 dismissal 보다 **뒤**에 있는가. 앞에 두면 이 스텝의 exit 1 이
+	#    dismissal 을 skip 시켜(뒤 스텝의 `if:` 는 암묵 `success()`) 유일한
+	#    stale-approval 가드가 사라진다 — PR #2081 라운드 2 가 잡은 결함이다.
 	local rel_line dis_line
 	rel_line="$(grep -nF -- '- name: Release reflect:done on a new round' "$GATE_WORKFLOW" | head -1 | cut -d: -f1)"
 	dis_line="$(grep -nF -- '- name: Dismiss stale approval on new commits' "$GATE_WORKFLOW" | head -1 | cut -d: -f1)"
-	if [ -n "$rel_line" ] && [ -n "$dis_line" ] && [ "$rel_line" -lt "$dis_line" ]; then
-		pass "해제 스텝이 dismissal(의도적 exit 1)보다 앞에 있다"
+	if [ -n "$rel_line" ] && [ -n "$dis_line" ] && [ "$dis_line" -lt "$rel_line" ]; then
+		pass "해제 스텝이 dismissal(의도적 exit 1) 뒤에 있다"
 	else
-		fail "gate coupling: reflect:done 해제 스텝이 없거나 dismissal 뒤에 있다" \
-			"Release=${rel_line:-없음} Dismiss=${dis_line:-없음} — 뒤에 두면 dismissal 의 exit 1 때문에 실행되지 않는다."
+		fail "gate coupling: reflect:done 해제 스텝이 없거나 dismissal 앞에 있다" \
+			"Release=${rel_line:-없음} Dismiss=${dis_line:-없음} — 앞에 두면 이 스텝의 exit 1 이 dismissal 을 skip 시킨다."
 	fi
 
-	# ② 그 스텝의 run: 블록을 실제로 돌린다. 남는 들여쓰기는 bash 가 무시한다.
+	# ② 그 뒤에서 실제로 도는가. dismissal 이 exit 1 한 뒤라 `always()` 가 없으면
+	#    이 스텝은 영영 안 돌고 label 이 영구히 남는다. 순서만으로는 부족하다.
+	if gate_release_condition | grep -qF 'always()'; then
+		pass "해제 스텝이 always() 라 dismissal 의 exit 1 뒤에도 돈다"
+	else
+		fail "gate coupling: reflect:done 해제 스텝의 if: 에 always() 가 없다" \
+			"dismissal 이 의도적으로 exit 1 하므로 always() 없이는 실행되지 않는다.
+현재 조건:
+$(gate_release_condition)"
+	fi
+
+	# ③ 그 스텝의 run: 블록을 실제로 돌린다. 남는 들여쓰기는 bash 가 무시한다.
 	local script
 	script="$(gate_release_step)"
 	if [ -z "$script" ]; then
