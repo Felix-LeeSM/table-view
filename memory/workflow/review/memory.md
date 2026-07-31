@@ -3,7 +3,7 @@ title: PR Review Behavior
 type: workflow-rule
 updated: 2026-08-01
 task: review, pr, delivery
-keywords: scorecard, verdict, blocking, non-blocking, review:approved, review:changes-requested, reflect:done, Stop at review round 3, fan-out, subreviewer, 재리뷰, label 순서, 회고 모드, 라운드 3, 유형 재발 표
+keywords: scorecard, verdict, blocking, non-blocking, review:approved, review:changes-requested, reflect:done, Stop at review round 3, head OID, head-oid, fan-out, subreviewer, 재리뷰, label 순서, 회고 모드, 라운드 3, 유형 재발 표
 trigger:
   signal: PR 생성 / 사용자가 "리뷰해" / 수정 push 후 재리뷰
   layer: index
@@ -81,7 +81,7 @@ trigger:
   2026-07-31 실측 — #2035).
   `review:approved`는 `review-gate` required check의 pass 조건이다
   (계정 1개 = GitHub review approval 불가의 label 우회). **label 만으로 pass 가
-  되지는 않는다** — PR comment 가 3개 이상인데 `reflect:done` 이 없으면 label 을
+  되지는 않는다** — 라운드가 3 이상인데 `reflect:done` 이 없으면 label 을
   붙여도 `Stop at review round 3` step 이 fail 시킨다
   ([pr-merge-gates](../../runbook/pr-merge-gates/memory.md) 「review-gate run 상태 함정」).
 - 결함이 있으면 orchestrator가 `review:changes-requested` label을 보고 구현자를
@@ -95,8 +95,11 @@ trigger:
   `review:approved` label이 있어야 pass — branch protection required check +
   enforce_admins라 우회 불가. 새 commit push 시 label이 자동 해제되므로
   fix 후에는 재리뷰가 필수다.
-- PR comment 가 3개 이상이면 `reflect:done` label 도 있어야 한다 — 없으면
-  `review:approved` 가 붙어 있어도 `review-gate` 가 fail 한다. 누가 붙이는지와
+- 라운드가 3 이상이면 `reflect:done` label 도 있어야 한다 — 없으면
+  `review:approved` 가 붙어 있어도 `review-gate` 가 fail 한다. 라운드는 서로 다른
+  head 커밋에 붙은 리뷰 인계의 수이고 코멘트 수는 그 **상한**이다 — 같은 커밋에
+  코멘트가 셋 달려도 1라운드라 게이트가 안 막는다. `reflect:done` 은 새 커밋이
+  오면 자동으로 떨어지므로 그 라운드에만 유효하다. 누가 붙이는지와
   진단은 [pr-merge-gates](../../runbook/pr-merge-gates/memory.md).
 - 정성 차원에 blocking 이 없어야 한다 — 위 행동 계약의 blocking 정의를 그대로
   쓴다. 이 절은 별도 기준을 세우지 않는다.

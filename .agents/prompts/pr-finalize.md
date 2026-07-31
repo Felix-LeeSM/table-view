@@ -46,20 +46,27 @@ test "$(git rev-parse --show-toplevel)" != "$CLONE" \
 
 ## 1단계 — 라운드 게이트 (관문보다 **먼저**)
 
-`comments >= 3` 인 PR 은 `reflect:done` 이 없으면 `review-gate` 가 red 다.
-그래서 이 절이 「머지 전 확인」보다 앞에 있다 — 관문부터 보면 바로 그 red 때문에
-부착 지점에 도달하지 못한다.
+라운드 3 이상인 PR 은 `reflect:done` 이 없으면 `review-gate` 가 red 다. 그래서 이
+절이 「머지 전 확인」보다 앞에 있다 — 관문부터 보면 바로 그 red 때문에 부착 지점에
+도달하지 못한다.
+
+**라운드는 코멘트 수가 아니라 서로 다른 head 커밋에 붙은 리뷰 인계의 수다**
+(#1968). 이 수를 세는 것은 게이트의 `Count review rounds by head OID` 스텝이고,
+종결자는 다시 세지 않는다 — 게이트가 낸 판정을 읽는다.
 
 1. verdict 를 먼저 본다. `review:approved` 가 있고 `review:changes-requested`
    가 없어야 한다. red 면 여기서 종료한다 — 종결자는 red 를 진행시키지 않는다.
-2. 코멘트 수가 **3 이상이면** `gh pr edit <N> --add-label reflect:done`.
+2. 코멘트 수가 **3 미만이면 라운드도 3 미만이다** (라운드 ≤ 코멘트 수) — 부착 없이
+   2단계로 간다. 3 이상이면 최신 `review-gate` run 을 본다: `Stop at review round 3`
+   에서 red 면 라운드 3 이상이고, 그 스텝이 `rounds=N` 을 에러로 찍는다.
+3. 라운드 3 이상 + green verdict 이면 `gh pr edit <N> --add-label reflect:done`.
    green 일 때 붙이는 것이 종결자다. red 면 붙이지 않는다 — 회고 모드 리뷰어와
    interface 를 거친다.
-3. 부착이 만드는 `labeled` run 이 green 이 될 때까지 기다린다. 확인은 최신 run
+4. 부착이 만드는 `labeled` run 이 green 이 될 때까지 기다린다. 확인은 최신 run
    하나만 보여 주는 `gh pr checks` 가 아니라 rollup 으로 한다.
 
 ```bash
-gh pr view <N> --json comments -q .comments
+gh pr view <N> --json comments -q .comments   # 라운드의 상한. 3 미만이면 부착 불필요
 # rollup 은 review-gate run 이 쌓였는지 보려고만 쓴다 — required 판정 수단이 아니다
 gh pr view <N> --json statusCheckRollup \
   -q '.statusCheckRollup[] | select(.name == "review-gate") | {status, conclusion}'
@@ -140,7 +147,7 @@ gh pr merge <N> --squash --delete-branch --body-file <교정본 경로>  # 교�
 ```
 - PR: #<번호> — merged <머지 SHA> (squash)
 - squash body: 기본 / 교정(사유)
-- reflect:done: 부착 / 불필요 (코멘트 <N>건) — 부착했으면 labeled run 결과
+- reflect:done: 부착 / 불필요 (라운드 <N>) — 부착했으면 labeled run 결과
 - required: 머지 시점 전부 green (확인: `gh pr checks` + `mergeStateStatus`)
 - PR body 재검사: clean / dirty → 머지 중단하고 새 commit 요구
 - 브랜치: remote 삭제 완료 / 로컬 삭제 실패(무해)
