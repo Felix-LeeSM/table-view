@@ -1,8 +1,8 @@
 ---
 title: Architecture
 type: memory
-updated: 2026-06-12
-keywords: 기술 스택, 디렉토리 구조, Tauri 2.0, React 19, Zustand, IPC 경계, tauri::command, invoke(), ActiveAdapter, DbAdapter, AppError::DbMismatch, src/lib/runtime/**
+updated: 2026-08-01
+keywords: 기술 스택, 디렉토리 구조, Tauri 2.0, React 19, Zustand, IPC 경계, tauri::command, invoke(), ActiveAdapter, DbAdapter, AppError::DbMismatch, src/lib/runtime/**, table-view-core, path dependency, headless core
 ---
 
 # 시스템 구조
@@ -29,15 +29,18 @@ keywords: 기술 스택, 디렉토리 구조, Tauri 2.0, React 19, Zustand, IPC 
 
 ```
 table-view/
-├── src-tauri/           # Rust 백엔드
-│   ├── src/
-│   │   ├── main.rs      # Tauri 진입점
-│   │   ├── db/          # DB lifecycle + paradigm adapter traits
-│   │   ├── commands/    # Tauri IPC 명령 핸들러
-│   │   ├── storage/     # 연결 설정 I/O + 암호화
-│   │   ├── models/      # 데이터 모델 (struct)
-│   │   └── error.rs     # 공통 에러 타입 (AppError)
-│   └── tests/           # 통합 테스트
+├── src-tauri/                # Rust 백엔드 — crate 둘 (#1769)
+│   ├── src/                  # 앱 crate `table-view` (Tauri 의존)
+│   │   ├── main.rs           # Tauri 진입점
+│   │   ├── commands/         # Tauri IPC 명령 핸들러
+│   │   ├── state/            # 프로세스 수명 런타임 상태
+│   │   └── storage/          # boot 글루만 (history audit / retention)
+│   ├── table-view-core/src/  # 코어 crate — path dep, Tauri 비의존
+│   │   ├── db/               # DB lifecycle + paradigm adapter traits
+│   │   ├── storage/          # 연결 설정 I/O + 암호화
+│   │   ├── models/           # 데이터 모델 (struct)
+│   │   └── error.rs          # 공통 에러 타입 (AppError)
+│   └── tests/                # 통합 테스트 (앱 crate 소속)
 ├── src/                 # React 프론트엔드
 │   ├── components/      # UI 컴포넌트 (PascalCase, 1파일=1컴포넌트)
 │   ├── hooks/           # 커스텀 훅
@@ -51,13 +54,24 @@ table-view/
 
 ## 계층
 
-- **Rust 백엔드** (`src-tauri/src/`) — Tauri IPC commands, adapter traits, storage
+- **Rust 백엔드** — 앱 crate (`src-tauri/src/`) 가 Tauri IPC commands · state ·
+  boot 글루를, 코어 crate (`src-tauri/table-view-core/`) 가 adapter traits ·
+  storage · models · error 를 갖는다. 앱이 `db` / `models` / `error` 를
+  re-export 하므로 `crate::db::…` 경로는 분리 전 그대로다
 - **React 프론트엔드** (`src/`) — Zustand stores, components, hooks
 - **IPC 경계** — `#[tauri::command]` 함수가 프론트 `invoke()` 호출 진입점
 
 ## Rust 주요 모듈
 
+앱 crate — `src-tauri/src/`:
+
 - `commands/` — IPC 핸들러 (connection, query, schema)
+- `state/` — 프로세스 수명 런타임 상태 (introspection pool 등)
+- `storage/` — boot 글루 `history_audit` · `history_retention_boot` 뿐. 저장소
+  본체는 아래 core 다 (`crate::commands::` 역참조 때문에 못 내려왔다)
+
+코어 crate — `src-tauri/table-view-core/src/`:
+
 - `db/` — `ActiveAdapter` + common `DbAdapter` lifecycle + paradigm traits
   (`RdbAdapter`, `DocumentAdapter`, `KvAdapter`, `SearchAdapter`) + 사용자 DB
   구현체 (PostgreSQL, MySQL/MariaDB, SQLite, DuckDB, MongoDB, Redis/Valkey,
@@ -65,6 +79,11 @@ table-view/
 - `storage/` — 연결 설정 파일 I/O + 암호화 (AES-256-GCM, OsRng)
 - `models/` — 공용 구조체 (ConnectionConfig, ConnectionGroup, DatabaseType 등)
 - `error.rs` — `AppError` (thiserror) + `Result<T, AppError>`
+
+core 는 Tauri 에 의존하지 않는 것이 계약이다 — `cargo tree -i tauri` 가 빈
+결과여야 하고, 그래서 workspace member 가 아니라 path dependency 다. **테스트
+명령도 manifest 가 둘이다** — `src-tauri/Cargo.toml` 의 `--lib` 은 core 에
+안 닿는다 (README 「Rust 백엔드 단위 테스트」).
 
 ## Frontend 상태 관리
 

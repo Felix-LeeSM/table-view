@@ -124,9 +124,15 @@ Required local evidence:
   `run -- --run --coverage ...` and treats everything after `--` as non-flag
   arguments. It exited 0 without collecting coverage or applying the
   vite.config.ts thresholds, so this lane produced no coverage evidence.
-- Rust lane: `cargo test --manifest-path src-tauri/Cargo.toml --lib --test storage_integration`,
+- Rust lane, four commands in this order:
+  `cargo test --manifest-path src-tauri/Cargo.toml --lib --test storage_integration`,
+  `cargo test --manifest-path src-tauri/table-view-core/Cargo.toml --lib`,
   `cargo test --manifest-path src-tauri/sql-parser-core/Cargo.toml --lib`, and
   `cargo test --manifest-path src-tauri/Cargo.toml --test parse_sql_backend`.
+  `table-view-core` and `sql-parser-core` are path dependencies, not workspace
+  members, so the app manifest's `--lib` never reaches either one. Drop a line
+  and the lane still exits 0 with those crates' unit tests unrun — the same
+  reason CI wires them as separate steps (`.github/workflows/ci.yml:358-382`).
 - Docker integration lane: with required services available,
   `cargo test --manifest-path src-tauri/Cargo.toml --test schema_integration --test query_integration --test mongo_integration --test fixture_loading --test redis_integration`.
 - Documentation lane: `git diff --check` on the touched docs plus local

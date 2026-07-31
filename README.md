@@ -207,9 +207,17 @@ pnpm exec vitest run --coverage
 
 ### 2. Rust 백엔드 단위 테스트
 
+manifest가 둘이라 **두 명령을 다 돌려야** 백엔드 lib 테스트 전체가 돕니다.
+
 ```bash
 cargo test --manifest-path src-tauri/Cargo.toml --lib
+cargo test --manifest-path src-tauri/table-view-core/Cargo.toml --lib
 ```
+
+> `table-view-core`는 workspace member가 아니라 path dependency입니다. 앱
+> manifest의 `--lib`은 거기까지 안 닿으므로, 두 번째 줄을 빼면 명령은 exit 0으로
+> 끝나면서 core 쪽 단위 테스트는 한 개도 안 돕니다. CI도 같은 이유로 스텝을
+> 나눠 걸어 뒀습니다 (`.github/workflows/ci.yml`의 `Run table-view-core unit tests`).
 
 ### 3. 통합 테스트 (Docker 필요)
 
