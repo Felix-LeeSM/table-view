@@ -14,8 +14,9 @@
 //          (AC-234-02) — replaces the Sprint 228 verbose form.
 //
 // Per AC-234 contract Test Requirements: ≥ 2 new cases live here.
-import { describe, it, expect, vi } from "vitest";
-import { render, fireEvent, screen, within } from "@testing-library/react";
+
+import { fireEvent, render, screen, within } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 
 import IndexesTabBody, { type IndexDraft } from "./IndexesTabBody";
 

@@ -16,17 +16,18 @@
  * 경로는 sprint-361 이후 deprecated. 본 파일은 새 라벨 패턴에 대한
  * 회귀 가드.
  */
+
+import { cleanup, render, screen } from "@testing-library/react";
 import {
-  describe,
-  it,
-  expect,
-  vi,
-  beforeEach,
   afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
   type Mock,
+  vi,
 } from "vitest";
 import { setupTauriMock } from "@/test-utils/tauriMock";
-import { render, screen, cleanup } from "@testing-library/react";
 
 vi.mock("@lib/window-label", async () => {
   // Reuse real `parseWorkspaceLabel` / `formatWorkspaceLabel` while keeping

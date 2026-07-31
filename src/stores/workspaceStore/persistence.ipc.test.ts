@@ -11,10 +11,11 @@
  * camelCase or object-vs-string drift against the Rust `PersistWorkspaceRequest`
  * fails here (guards the #1190-class shape mismatch).
  */
+
+import { toast } from "@lib/runtime/toast";
+import { invoke } from "@tauri-apps/api/core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConnectionId, TabId } from "@/types/branded";
-import { invoke } from "@tauri-apps/api/core";
-import { toast } from "@lib/runtime/toast";
 import { persistWorkspaces, type WorkspacesShape } from "./persistence";
 import type { WorkspaceState } from "./types";
 

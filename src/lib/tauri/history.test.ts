@@ -19,12 +19,12 @@ vi.mock("@tauri-apps/api/core", () => ({
 }));
 
 import {
+  type AddHistoryEntryRequest,
   addHistoryEntry,
   clearHistory,
   getHistoryDetail,
-  listHistory,
-  type AddHistoryEntryRequest,
   type ListHistoryRequest,
+  listHistory,
 } from "./history";
 
 describe("history wrappers (Phase 5 sprint-371)", () => {

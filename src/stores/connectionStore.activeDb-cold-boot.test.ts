@@ -23,7 +23,7 @@
  * temptation the reporter feared) cannot silently break decision A.
  */
 import { renderHook } from "@testing-library/react";
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { setupTauriMock } from "@/test-utils/tauriMock";
 
 vi.mock("@tauri-apps/api/event", () => ({
@@ -56,13 +56,13 @@ vi.mock("@lib/window-label", async () => {
   return { ...actual, getCurrentWindowLabel: vi.fn() };
 });
 
-import { useConnectionStore } from "./connectionStore";
-import { useCurrentWorkspaceKey, useWorkspaceStore } from "./workspaceStore";
-import type { WorkspaceState } from "./workspaceStore";
 import {
-  setFakeWindowConnectionId,
   resetFakeWindowConnectionId,
+  setFakeWindowConnectionId,
 } from "./__tests__/fakeWindowConnectionId";
+import { useConnectionStore } from "./connectionStore";
+import type { WorkspaceState } from "./workspaceStore";
+import { useCurrentWorkspaceKey, useWorkspaceStore } from "./workspaceStore";
 
 function seedRdbConnection(defaultDb: string): void {
   useConnectionStore.setState({
@@ -134,7 +134,7 @@ describe("#1414 — cold boot resets activeDb to the connection default", () => 
     // First activation after boot.
     await useConnectionStore.getState().connectToDatabase("c1");
 
-    const status = useConnectionStore.getState().activeStatuses["c1"];
+    const status = useConnectionStore.getState().activeStatuses.c1;
     expect(status?.type).toBe("connected");
     if (status?.type === "connected") {
       expect(status.activeDb).toBe("test");

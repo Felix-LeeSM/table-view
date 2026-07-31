@@ -21,20 +21,20 @@
  *     기존 dropdown 의 UX 가 필요해지면 sprint-374 ADR 에서 처리.
  */
 
-import { useEffect, useState } from "react";
-import { useTranslation } from "react-i18next";
-import { Search, X, CheckCircle2, XCircle, CircleSlash } from "lucide-react";
-import { useQueryHistory } from "@hooks/useQueryHistory";
+import ClearHistoryButton from "@components/settings/ClearHistoryButton";
+import QueryHistorySourceBadge from "@components/shared/QueryHistorySourceBadge";
+import QuerySyntax from "@components/shared/QuerySyntax";
 import { Button } from "@components/ui/button";
 import { Input } from "@components/ui/input";
-import QuerySyntax from "@components/shared/QuerySyntax";
-import QueryHistorySourceBadge from "@components/shared/QueryHistorySourceBadge";
+import { useQueryHistory } from "@hooks/useQueryHistory";
+import { cn } from "@lib/utils";
 import type { QueryHistorySource } from "@stores/queryHistoryStore";
 import { toQueryLanguageLabel } from "@stores/workspaceStore/queryMode";
-import ClearHistoryButton from "@components/settings/ClearHistoryButton";
+import { CheckCircle2, CircleSlash, Search, X, XCircle } from "lucide-react";
+import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import QueryHistoryDetailModal from "./QueryHistoryDetailModal";
-import { cn } from "@lib/utils";
-import { truncateSql, formatRelativeTime } from "./queryLogFormat";
+import { formatRelativeTime, truncateSql } from "./queryLogFormat";
 
 interface GlobalQueryLogPanelProps {
   visible: boolean;

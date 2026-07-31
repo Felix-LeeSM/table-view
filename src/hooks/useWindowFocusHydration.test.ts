@@ -1,15 +1,15 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { ConnectionId, TabId } from "@/types/branded";
+import { hydrateConnectionSession } from "@lib/runtime/connection/hydrateConnectionSession";
+import { useConnectionStore } from "@stores/connectionStore";
+import { useDataGridEditStore } from "@stores/dataGridEditStore";
+import { useWorkspaceStore } from "@stores/workspaceStore";
+import { act, renderHook } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   getTestWorkspace,
   seedWorkspace,
 } from "@/stores/__tests__/workspaceStoreTestHelpers";
-import { renderHook, act } from "@testing-library/react";
-import { useConnectionStore } from "@stores/connectionStore";
-import { useDataGridEditStore } from "@stores/dataGridEditStore";
 import { makeEntryKey } from "@/test-utils/brandedKeys";
-import { useWorkspaceStore } from "@stores/workspaceStore";
-import { hydrateConnectionSession } from "@lib/runtime/connection/hydrateConnectionSession";
+import type { ConnectionId, TabId } from "@/types/branded";
 import { useWindowFocusHydration } from "./useWindowFocusHydration";
 
 // Mock scopedLocalStorage so hydrateConnectionSession's readConnectionSession
@@ -193,7 +193,7 @@ describe("useWindowFocusHydration", () => {
     });
 
     expect(useConnectionStore.getState().focusedConnId).toBe("c2");
-    expect(useConnectionStore.getState().activeStatuses["c2"]).toEqual({
+    expect(useConnectionStore.getState().activeStatuses.c2).toEqual({
       type: "connected",
       activeDb: "mydb",
     });

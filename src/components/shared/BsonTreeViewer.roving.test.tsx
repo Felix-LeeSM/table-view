@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { describe, expect, it } from "vitest";
 import BsonTreeViewer from "./BsonTreeViewer";
 
 /**

@@ -1,22 +1,22 @@
 import type { ConnectionId } from "@/types/branded";
 import type { Paradigm } from "@/types/connection";
 import type { QueryState } from "@/types/query";
-import type {
-  QueryTab,
-  WorkspaceQueryMode,
-  WorkspaceState,
-  WorkspaceStoreState,
-} from "../types";
 import { toWorkspaceQueryLanguage, toWorkspaceQueryMode } from "../queryMode";
 import {
   nextQueryTabIdentity,
   patchExistingWorkspace,
   resolveActiveDb,
   resolveParadigmForConnection,
-  withWorkspace,
   type WorkspaceGet,
   type WorkspaceSet,
+  withWorkspace,
 } from "../shared";
+import type {
+  QueryTab,
+  WorkspaceQueryMode,
+  WorkspaceState,
+  WorkspaceStoreState,
+} from "../types";
 
 type QuerySlice = Pick<
   WorkspaceStoreState,

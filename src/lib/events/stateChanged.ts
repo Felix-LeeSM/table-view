@@ -156,6 +156,7 @@ export function setStateChangedHandlers(handlers: PartialHandlerSet): void {
     if (!incoming) continue;
     // Shallow-merge per-domain. Using `any` here once at the boundary —
     // the type-level guarantee is the function signature.
+    // biome-ignore lint/suspicious/noExplicitAny: `key` is a union over every domain, so TypeScript widens the spread to the union of all domain handler sets and cannot see that the branch matching `key` is the one produced. The `PartialHandlerSet` parameter type is what keeps callers honest.
     registry[key] = { ...(registry[key] ?? {}), ...incoming } as any;
   }
 }

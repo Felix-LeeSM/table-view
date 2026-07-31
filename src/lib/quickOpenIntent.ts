@@ -24,8 +24,9 @@
  * focuses/creates reliably). Guaranteed delivery to a fresh window would need a
  * persisted replay-on-mount and is left as follow-up.
  */
-import { emit, listen } from "@tauri-apps/api/event";
+
 import type { UnlistenFn } from "@tauri-apps/api/event";
+import { emit, listen } from "@tauri-apps/api/event";
 
 /** Serializable description of a Quick Open selection. */
 export type QuickOpenIntent =

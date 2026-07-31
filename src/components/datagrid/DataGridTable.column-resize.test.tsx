@@ -3,10 +3,10 @@
 // 본 테스트는 drag → mouseup 시 `--cols` 의 첫 column px 가 증가했고
 // 두 번째 column px 는 변하지 않았다는 사실을 잡는다.
 
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, act } from "@testing-library/react";
-import DataGridTable from "./DataGridTable";
+import { act, render } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { TableData } from "@/types/schema";
+import DataGridTable from "./DataGridTable";
 
 const MOCK_DATA: TableData = {
   columns: [

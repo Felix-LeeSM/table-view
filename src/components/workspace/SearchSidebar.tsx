@@ -1,5 +1,19 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useTranslation } from "react-i18next";
+import { DriverErrorHint } from "@components/errors/DriverErrorHint";
+import {
+  type TreeRovingRow,
+  useTreeRoving,
+} from "@components/shared/tree/useTreeRoving";
+import { Button } from "@components/ui/button";
+import { Checkbox } from "@components/ui/checkbox";
+import { Skeleton } from "@components/ui/skeleton";
+import {
+  formatSearchUiError,
+  type SearchUiError,
+} from "@lib/search/searchUiError";
+import { listSearchCatalogSummary } from "@lib/tauri/search";
+import { useConnectionStore } from "@stores/connectionStore";
+import { useMruStore } from "@stores/mruStore";
+import { useWorkspaceStore } from "@stores/workspaceStore";
 import {
   Boxes,
   ChevronDown,
@@ -10,29 +24,15 @@ import {
   RefreshCw,
   Search,
 } from "lucide-react";
-import { Button } from "@components/ui/button";
-import {
-  useTreeRoving,
-  type TreeRovingRow,
-} from "@components/shared/tree/useTreeRoving";
-import { Checkbox } from "@components/ui/checkbox";
-import { Skeleton } from "@components/ui/skeleton";
-import { useConnectionStore } from "@stores/connectionStore";
-import { useMruStore } from "@stores/mruStore";
-import { useWorkspaceStore } from "@stores/workspaceStore";
-import {
-  formatSearchUiError,
-  type SearchUiError,
-} from "@lib/search/searchUiError";
-import { DriverErrorHint } from "@components/errors/DriverErrorHint";
-import { listSearchCatalogSummary } from "@lib/tauri/search";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { DATABASE_TYPE_LABELS } from "@/types/connection";
 import type {
   SearchAliasInfo,
   SearchCatalogSummary,
   SearchDataStreamInfo,
   SearchIndexInfo,
 } from "@/types/search";
-import { DATABASE_TYPE_LABELS } from "@/types/connection";
 
 export interface SearchSidebarProps {
   connectionId: string;

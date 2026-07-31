@@ -5,12 +5,12 @@
 // (b) badge + Show all 이 노출/복원하며 (c) localStorage key
 // `hidden-columns:document:<db>:<coll>` 에 persist 되는 회귀를 lock.
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { setupTauriMock } from "@/test-utils/tauriMock";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import DocumentDataGrid from "./DocumentDataGrid";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { __resetDocumentStoreForTests } from "@/test-utils/documentStore";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import type { DocumentQueryResult } from "@/types/document";
+import DocumentDataGrid from "./DocumentDataGrid";
 
 function buildResult(): DocumentQueryResult {
   return {

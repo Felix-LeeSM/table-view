@@ -16,10 +16,9 @@
  * `dehydrate()` 를 호출하고, 결과를 `JSON.stringify` 해서 LS 에 write 한다.
  */
 import { describe, expect, it } from "vitest";
-
+import type { ConnectionId, TabId } from "@/types/branded";
 import { dehydrate, migrateLoadedWorkspaces } from "./persistence";
 import type { QueryTab, WorkspaceState } from "./types";
-import type { ConnectionId, TabId } from "@/types/branded";
 
 function makeQueryTab({
   id = "q1",

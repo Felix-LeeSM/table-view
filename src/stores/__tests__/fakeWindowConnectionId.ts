@@ -26,8 +26,9 @@
  * the top of the importer's file — the helper exposes the *setter* once
  * the mock is in place.
  */
-import { vi } from "vitest";
+
 import { formatWorkspaceLabel, getCurrentWindowLabel } from "@lib/window-label";
+import { vi } from "vitest";
 
 /**
  * Stub `getCurrentWindowLabel()` to return a synthetic workspace label

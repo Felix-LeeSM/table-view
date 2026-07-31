@@ -5,18 +5,19 @@
 //  (b) the Execute button is disabled for a 150ms arm window after open, so a
 //      reflexive Enter/click (right after Cmd+Enter) is absorbed.
 //  (c) a second Enter/click while the first commit is in flight is a no-op.
-import { describe, it, expect, vi, afterEach } from "vitest";
+
+import type { DataGridEditState } from "@components/datagrid/useDataGridEdit";
 import {
-  render,
-  screen,
-  fireEvent,
   act,
   cleanup,
+  fireEvent,
+  render,
+  screen,
   waitFor,
 } from "@testing-library/react";
 import { userEvent } from "@testing-library/user-event";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { SqlPreviewDialog } from "./SqlPreviewDialog";
-import type { DataGridEditState } from "@components/datagrid/useDataGridEdit";
 
 type PreviewEditState = Pick<
   DataGridEditState,

@@ -1,10 +1,10 @@
-import { Check, Copy } from "lucide-react";
-import { useTranslation } from "react-i18next";
 import { Button } from "@components/ui/button";
 import {
-  useCopyToClipboard,
   type CopyStatus,
+  useCopyToClipboard,
 } from "@lib/runtime/useCopyToClipboard";
+import { Check, Copy } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 
 // ---------------------------------------------------------------------------

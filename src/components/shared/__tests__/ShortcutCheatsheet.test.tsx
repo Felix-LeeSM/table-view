@@ -1,4 +1,3 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   act,
   cleanup,
@@ -6,6 +5,7 @@ import {
   render,
   screen,
 } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import ShortcutCheatsheet from "../ShortcutCheatsheet";
 
 function fireGlobalKey(

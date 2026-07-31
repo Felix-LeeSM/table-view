@@ -100,27 +100,27 @@ export function ejsonToEditableString(type: BsonType, value: unknown): string {
   if (!isPlainRecord(value)) return "";
   switch (type) {
     case "objectId": {
-      const v = value["$oid"];
+      const v = value.$oid;
       return typeof v === "string" ? v : "";
     }
     case "date": {
-      const v = value["$date"];
+      const v = value.$date;
       if (typeof v === "string") return v;
       // canonical EJSON v2 numberLong shape
-      if (isPlainRecord(v) && typeof v["$numberLong"] === "string") {
-        const ms = Number.parseInt(v["$numberLong"] as string, 10);
+      if (isPlainRecord(v) && typeof v.$numberLong === "string") {
+        const ms = Number.parseInt(v.$numberLong as string, 10);
         if (Number.isInteger(ms)) return new Date(ms).toISOString();
       }
       return "";
     }
     case "decimal128": {
-      const v = value["$numberDecimal"];
+      const v = value.$numberDecimal;
       return typeof v === "string" ? v : "";
     }
     case "binData": {
-      const v = value["$binary"];
-      if (isPlainRecord(v) && typeof v["base64"] === "string") {
-        return v["base64"] as string;
+      const v = value.$binary;
+      if (isPlainRecord(v) && typeof v.base64 === "string") {
+        return v.base64 as string;
       }
       return "";
     }

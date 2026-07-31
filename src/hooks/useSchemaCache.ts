@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { useSchemaStore } from "@stores/schemaStore";
-import { toast } from "@/lib/runtime/toast";
 import i18n from "@lib/i18n";
+import { useSchemaStore } from "@stores/schemaStore";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { logger } from "@/lib/logger";
+import { toast } from "@/lib/runtime/toast";
 import type { SchemaInfo } from "@/types/schema";
 
 /**

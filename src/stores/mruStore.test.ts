@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // 작성 2026-05-16 (Phase 4 W2→W3 sprint-370)
 //
@@ -19,7 +19,7 @@ vi.mock("@tauri-apps/api/core", () => ({
 }));
 
 import { invoke } from "@tauri-apps/api/core";
-import { useMruStore, __resetMruStoreForTests, SYNCED_KEYS } from "./mruStore";
+import { __resetMruStoreForTests, SYNCED_KEYS, useMruStore } from "./mruStore";
 
 const invokeMock = vi.mocked(invoke);
 

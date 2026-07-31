@@ -10,19 +10,7 @@
 // `vi.mock(...)` factories cannot live here because ES module hoisting
 // pulls them above any import; each axis file declares the 7 factories at
 // its module top-level instead.
-import { vi } from "vitest";
-import type { ConnectionId, TabId } from "@/types/branded";
-import {
-  useWorkspaceStore,
-  type QueryTab as QueryTabType,
-} from "@stores/workspaceStore";
-import { useQueryHistoryStore } from "@stores/queryHistoryStore";
-import { useConnectionStore } from "@stores/connectionStore";
-import { useSafeModeStore } from "@stores/safeModeStore";
-import { __resetDocumentStoreForTests } from "@/test-utils/documentStore";
-import type { ConnectionConfig, DatabaseType } from "@/types/connection";
-import type { QueryResult } from "@/types/query";
-import { useToastStore } from "@stores/toastStore";
+
 import type { SQLDialect } from "@codemirror/lang-sql";
 import type { Extension } from "@codemirror/state";
 import type {
@@ -30,6 +18,19 @@ import type {
   RedisKeySuggestion,
   SqlCompletionContext,
 } from "@features/completion";
+import { useConnectionStore } from "@stores/connectionStore";
+import { useQueryHistoryStore } from "@stores/queryHistoryStore";
+import { useSafeModeStore } from "@stores/safeModeStore";
+import { useToastStore } from "@stores/toastStore";
+import {
+  type QueryTab as QueryTabType,
+  useWorkspaceStore,
+} from "@stores/workspaceStore";
+import { vi } from "vitest";
+import { __resetDocumentStoreForTests } from "@/test-utils/documentStore";
+import type { ConnectionId, TabId } from "@/types/branded";
+import type { ConnectionConfig, DatabaseType } from "@/types/connection";
+import type { QueryResult } from "@/types/query";
 
 // ---------------------------------------------------------------------------
 // Fixture constants

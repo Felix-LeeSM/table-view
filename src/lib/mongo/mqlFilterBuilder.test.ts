@@ -1,8 +1,8 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
   buildMqlFilter,
-  stringifyMqlFilter,
   type MqlCondition,
+  stringifyMqlFilter,
 } from "./mqlFilterBuilder";
 
 function condition(

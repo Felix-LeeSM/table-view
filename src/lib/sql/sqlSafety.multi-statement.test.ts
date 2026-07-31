@@ -5,7 +5,7 @@
 // aware `splitSqlStatements` and the worst-severity classification wins, so a
 // trailing destructive statement can never pass as `info` on the leading
 // keyword alone — while single-statement input stays bit-identical.
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import { analyzeStatement } from "./sqlSafety";
 
 describe("sqlSafety.analyzeStatement — multi-statement defense (#1118)", () => {

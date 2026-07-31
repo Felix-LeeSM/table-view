@@ -1,5 +1,4 @@
-import { useTranslation } from "react-i18next";
-import { ChevronDown, ChevronUp, Loader2 } from "lucide-react";
+import SqlSyntax from "@components/shared/SqlSyntax";
 import { Button } from "@components/ui/button";
 import { Dialog, DialogFooter } from "@components/ui/dialog";
 import { DialogShell } from "@components/ui/dialog-shell";
@@ -12,16 +11,17 @@ import {
 } from "@components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@components/ui/tabs";
 import { ConfirmDestructiveDialog } from "@features/workspace";
-import SqlSyntax from "@components/shared/SqlSyntax";
+import { ChevronDown, ChevronUp, Loader2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
+import ColumnsTabBody from "./CreateTableDialog/ColumnsTabBody";
+import ForeignKeysTabBody from "./CreateTableDialog/ForeignKeysTabBody";
 import CreateTableDialogHeader from "./CreateTableDialog/Header";
 import IndexesTabBody from "./CreateTableDialog/IndexesTabBody";
-import ForeignKeysTabBody from "./CreateTableDialog/ForeignKeysTabBody";
-import ColumnsTabBody from "./CreateTableDialog/ColumnsTabBody";
 import KeysTabBody from "./CreateTableDialog/KeysTabBody";
 import { indexMatchesPk } from "./CreateTableDialog/types";
 import {
-  useCreateTableForm,
   type UseCreateTableFormArgs,
+  useCreateTableForm,
 } from "./CreateTableDialog/useCreateTableForm";
 
 /**

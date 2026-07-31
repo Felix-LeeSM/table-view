@@ -1,8 +1,8 @@
-import { useTranslation } from "react-i18next";
-import PreviewDialog from "@components/ui/dialog/PreviewDialog";
-import SqlSyntax from "@components/shared/SqlSyntax";
-import ExecuteButton from "@components/ui/ExecuteButton";
 import SchemaGraphMigrationImpactSummary from "@components/schema/SchemaGraphMigrationImpactSummary";
+import SqlSyntax from "@components/shared/SqlSyntax";
+import PreviewDialog from "@components/ui/dialog/PreviewDialog";
+import ExecuteButton from "@components/ui/ExecuteButton";
+import { useTranslation } from "react-i18next";
 import type { SchemaGraphMigrationImpactSummary as MigrationImpactSummary } from "@/lib/schemaGraphSelectors";
 
 /**

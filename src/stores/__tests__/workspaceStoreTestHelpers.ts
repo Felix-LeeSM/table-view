@@ -1,12 +1,12 @@
+import { formatWorkspaceLabel, getCurrentWindowLabel } from "@lib/window-label";
 import { vi } from "vitest";
 import type { ConnectionId } from "@/types/branded";
-import { formatWorkspaceLabel, getCurrentWindowLabel } from "@lib/window-label";
 import { useConnectionStore } from "../connectionStore";
 import {
-  useWorkspaceStore,
   type QueryTab,
   type Tab,
   type TableTab,
+  useWorkspaceStore,
   type WorkspaceState,
   type WorkspaceStoreState,
 } from "../workspaceStore";

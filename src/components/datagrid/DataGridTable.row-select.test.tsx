@@ -3,10 +3,10 @@
 // (onSelectRow) — modifier 는 click 과 동일하게 전달. Document 그리드는 이미
 // aria-selected 를 노출하므로 RDB 를 맞춰 일관성 확보. (2026-07-03)
 
-import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent, act } from "@testing-library/react";
-import DataGridTable from "./DataGridTable";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 import type { TableData } from "@/types/schema";
+import DataGridTable from "./DataGridTable";
 
 const MOCK_DATA: TableData = {
   columns: [

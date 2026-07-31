@@ -23,8 +23,9 @@
  * recompute under normal operation — re-mounting the hook in a different
  * window naturally picks up the new label.
  */
-import { useMemo } from "react";
+
 import { getCurrentWindowLabel, parseWorkspaceLabel } from "@lib/window-label";
+import { useMemo } from "react";
 
 export function useCurrentWindowConnectionId(): string | null {
   // Read the label once per render; `getCurrentWindowLabel` already

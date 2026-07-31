@@ -1,10 +1,11 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import i18n from "@lib/i18n";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@lib/tauri/settings", () => ({
   persistSettingValue: vi.fn().mockResolvedValue(undefined),
 }));
+
 import { persistSettingValue } from "@lib/tauri/settings";
 import LanguageSwitcher from "./LanguageSwitcher";
 

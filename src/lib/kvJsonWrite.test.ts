@@ -1,6 +1,6 @@
-import { describe, it, expect } from "vitest";
-import { applyTreeEdits, parseTreePath } from "./kvJsonWrite";
+import { describe, expect, it } from "vitest";
 import { UNSET_OP } from "@/components/document/DocumentTreePanel/types";
+import { applyTreeEdits, parseTreePath } from "./kvJsonWrite";
 
 // Purpose: `applyTreeEdits` is the write core of the KV JSON tree editor —
 // PR3 (2026-07-18). It takes the original parsed value + the panel's per-path

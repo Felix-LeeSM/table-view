@@ -1,15 +1,15 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { useConnectionStore } from "@stores/connectionStore";
 import {
+  act,
+  fireEvent,
   render,
   screen,
-  fireEvent,
-  act,
   waitFor,
 } from "@testing-library/react";
-import ConnectionDialog from "./ConnectionDialog";
-import { useConnectionStore } from "@stores/connectionStore";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConnectionConfig, ConnectionDraft } from "@/types/connection";
 import * as dataSourceProfiles from "@/types/dataSource";
+import ConnectionDialog from "./ConnectionDialog";
 
 // #1366 — mock the toast lib boundary (P6: mock only at lib boundaries) so the
 // dialog's real `useConnectionMutations` success path doesn't push into the

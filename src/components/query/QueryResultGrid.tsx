@@ -1,41 +1,41 @@
+import { DriverErrorHint } from "@components/errors/DriverErrorHint";
+import { SearchResultView } from "@components/search/SearchResultView";
+import { CopyTextButton } from "@components/shared/CopyTextButton";
+import { ExportButton } from "@components/shared/ExportButton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@components/ui/tabs";
+import { DB_TYPE_META } from "@lib/db-meta";
+import { classifyDriverError } from "@lib/errors/driverErrorHints";
+import {
+  analyzeResultEditability,
+  NOT_SINGLE_TABLE_REASON,
+  parseSingleTableSelect,
+  resolveDefaultSchema,
+} from "@lib/sql/queryAnalyzer";
+import type { RawEditPlan } from "@lib/sql/rawQuerySqlBuilder";
+import { preloadSqlWasm } from "@lib/sql/sqlAst";
+import { dialectFromDbType } from "@lib/sql/sqlLiteral";
+import { useConnectionStore } from "@stores/connectionStore";
+import { useSchemaStore } from "@stores/schemaStore";
+import { AlertTriangle, Info, Pencil } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { AlertTriangle, Info, Pencil } from "lucide-react";
+import type { DatabaseName, SchemaName, TableName } from "@/types/branded";
+import { getDataSourceProfile } from "@/types/dataSource";
 import type {
   QueryResult,
   QueryState,
   QueryStatementResult,
   QueryType,
 } from "@/types/query";
-import type { DatabaseName, SchemaName, TableName } from "@/types/branded";
-import {
-  analyzeResultEditability,
-  parseSingleTableSelect,
-  resolveDefaultSchema,
-  NOT_SINGLE_TABLE_REASON,
-} from "@lib/sql/queryAnalyzer";
-import { dialectFromDbType } from "@lib/sql/sqlLiteral";
-import type { RawEditPlan } from "@lib/sql/rawQuerySqlBuilder";
-import { preloadSqlWasm } from "@lib/sql/sqlAst";
-import { useMultiTableResultEditability } from "./useMultiTableResultEditability";
-import { formatCopyJson, formatNonGridCopyText } from "./queryResultCopy";
-import { useSchemaStore } from "@stores/schemaStore";
-import { useConnectionStore } from "@stores/connectionStore";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@components/ui/tabs";
-import { CopyTextButton } from "@components/shared/CopyTextButton";
-import { ExportButton } from "@components/shared/ExportButton";
-import { getDataSourceProfile } from "@/types/dataSource";
-import { DB_TYPE_META } from "@lib/db-meta";
-import { SearchResultView } from "@components/search/SearchResultView";
-import { DriverErrorHint } from "@components/errors/DriverErrorHint";
-import { classifyDriverError } from "@lib/errors/driverErrorHints";
-import { QueryErrorDetail } from "./QueryErrorDetail";
 import EditableQueryResultGrid from "./EditableQueryResultGrid";
+import { QueryErrorDetail } from "./QueryErrorDetail";
 import { QueryResultTable } from "./QueryResultTable";
-import ScalarOrListPanel from "./ScalarOrListPanel";
-import WriteSummaryPanel from "./WriteSummaryPanel";
 import { QueryRunningState } from "./QueryRunningState";
 import { resolveQueryExportBoundary } from "./queryExportBoundary";
+import { formatCopyJson, formatNonGridCopyText } from "./queryResultCopy";
+import ScalarOrListPanel from "./ScalarOrListPanel";
+import { useMultiTableResultEditability } from "./useMultiTableResultEditability";
+import WriteSummaryPanel from "./WriteSummaryPanel";
 
 const NON_GRID_SQL_EXPORT_REASON =
   "SQL INSERT export requires a single-table SQL result.";

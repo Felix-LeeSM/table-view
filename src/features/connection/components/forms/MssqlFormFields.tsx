@@ -1,8 +1,3 @@
-import { useTranslation } from "react-i18next";
-import {
-  getMssqlConnectionUnsupportedMessage,
-  type ConnectionDraft,
-} from "../../model";
 import {
   Select,
   SelectContent,
@@ -10,10 +5,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@components/ui/select";
+import { useTranslation } from "react-i18next";
+import {
+  type ConnectionDraft,
+  getMssqlConnectionUnsupportedMessage,
+} from "../../model";
 import {
   CONNECTION_ERROR_ID,
-  fieldValidationProps,
   type ConnFieldKey,
+  fieldValidationProps,
 } from "./fieldValidation";
 
 export interface MssqlFormFieldsProps {

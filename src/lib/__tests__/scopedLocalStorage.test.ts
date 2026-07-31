@@ -9,7 +9,7 @@
  * `session-storage.ts` to `scopedLocalStorage.ts`. Tests now import via
  * `@lib/scopedLocalStorage`; describe block label updated.
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockInvoke = vi.fn();
 const mockIsTauri = vi.fn(() => true);

@@ -5,14 +5,15 @@
 // route mongosh expressions without invoking a JS evaluator. Tests cover the
 // AC matrix from Sprint 307 contract: 13 happy-path methods,
 // 6 BSON literal reifications, and 13 refusal kinds. (2026-05-14)
-import { describe, it, expect } from "vitest";
+
 import {
   MONGOSH_METHOD_WHITELIST,
-  parseMongoshExpression,
   type MongoshMethod,
   type ParsedMongoshCall,
   type ParsedMongoshError,
+  parseMongoshExpression,
 } from "@features/query";
+import { describe, expect, it } from "vitest";
 import { MONGOSH_DB_METHODS } from "./mongoShellCompletionVocabulary";
 
 const WHITELIST_EXAMPLES = {

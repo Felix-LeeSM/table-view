@@ -3,10 +3,11 @@
 // explaining the cause (row cap hit) and the fix (add LIMIT / raise the cap
 // in settings). Uniform across every DBMS (consistency principle), so the
 // test drives the shared `QueryResultGrid` render, not a per-paradigm path.
-import { describe, it, expect } from "vitest";
+
 import { render, screen } from "@testing-library/react";
-import QueryResultGrid from "./QueryResultGrid";
+import { describe, expect, it } from "vitest";
 import type { QueryResult } from "@/types/query";
+import QueryResultGrid from "./QueryResultGrid";
 
 function selectResult(truncated: boolean, rows: number): QueryResult {
   return {

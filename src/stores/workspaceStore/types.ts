@@ -10,12 +10,13 @@ import type {
   QueryState,
   QueryStatementResult,
 } from "@/types/query";
-import type { SearchResultEnvelope } from "@/types/search";
 import type { FilterCondition, SortInfo } from "@/types/schema";
+import type { SearchResultEnvelope } from "@/types/search";
 import type {
   DocumentWorkspaceQueryModeInput,
   WorkspaceQueryMode,
 } from "./queryMode";
+
 export type { WorkspaceQueryMode } from "./queryMode";
 
 // ---------------------------------------------------------------------------

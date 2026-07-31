@@ -3,11 +3,15 @@
 // component. PostgreSQL plans render a compact summary/tree, with raw JSON
 // retained for fallback and troubleshooting.
 
+import { Loader2, RefreshCw, Square } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Loader2, RefreshCw, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { cancelQuery } from "@/lib/tauri";
+import {
+  type ExplainMongoFindArgs,
+  explainMongoFind,
+  explainRdbQuery,
+} from "@/lib/api/explain";
 import {
   describePostgresPlanNode,
   describePostgresPlanTiming,
@@ -16,16 +20,12 @@ import {
   type PlanMetric,
   type PostgresPlanNode,
 } from "@/lib/explain/postgresPlan";
-import {
-  explainMongoFind,
-  explainRdbQuery,
-  type ExplainMongoFindArgs,
-} from "@/lib/api/explain";
 import { safeStringifyCell } from "@/lib/jsonCell";
+import { cancelQuery } from "@/lib/tauri";
 import {
   DATABASE_TYPE_LABELS,
-  paradigmOf,
   type DatabaseType,
+  paradigmOf,
 } from "@/types/connection";
 
 export interface ExplainViewerProps {

@@ -11,11 +11,11 @@
  * Date: 2026-04-30 (sprint-176, generator phase)
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, act } from "@testing-library/react";
-import StructurePanel from "./StructurePanel";
 import { useSchemaStore } from "@stores/schemaStore";
-import type { ColumnInfo, IndexInfo, ConstraintInfo } from "@/types/schema";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { ColumnInfo, ConstraintInfo, IndexInfo } from "@/types/schema";
+import StructurePanel from "./StructurePanel";
 
 // Hoisted promise resolvers so tests can resolve the never-resolving fetch
 // later in the same test (e.g. to prove the gate releases when the data

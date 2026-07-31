@@ -1,30 +1,3 @@
-import { useState, useRef, useEffect, type DragEvent } from "react";
-import { useTranslation } from "react-i18next";
-import {
-  ChevronRight,
-  ChevronDown,
-  Trash2,
-  Pencil,
-  Palette,
-  UnfoldVertical,
-} from "lucide-react";
-import { Input } from "@components/ui/input";
-import { Button } from "@components/ui/button";
-import type {
-  ConnectionConfig,
-  ConnectionGroup as ConnectionGroupType,
-} from "../model";
-import { useConnectionStore } from "../store";
-import ConnectionItem, { draggedConnectionId } from "./ConnectionItem";
-import {
-  ContextMenu,
-  ContextMenuTrigger,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuSeparator,
-} from "@components/ui/context-menu";
-import { logger } from "@lib/logger";
-import { toast } from "@lib/runtime/toast";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -35,7 +8,34 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@components/ui/alert-dialog";
+import { Button } from "@components/ui/button";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from "@components/ui/context-menu";
+import { Input } from "@components/ui/input";
+import { logger } from "@lib/logger";
+import { toast } from "@lib/runtime/toast";
 import { setGroupCollapsed } from "@lib/tauri/groups";
+import {
+  ChevronDown,
+  ChevronRight,
+  Palette,
+  Pencil,
+  Trash2,
+  UnfoldVertical,
+} from "lucide-react";
+import { type DragEvent, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
+import type {
+  ConnectionConfig,
+  ConnectionGroup as ConnectionGroupType,
+} from "../model";
+import { useConnectionStore } from "../store";
+import ConnectionItem, { draggedConnectionId } from "./ConnectionItem";
 import GroupDialog from "./GroupDialog";
 
 // ---------------------------------------------------------------------------

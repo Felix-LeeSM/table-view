@@ -12,11 +12,12 @@
  * Re-subscribes both stores so the chrome / button colour update on the
  * very next render whenever `activeTabId` or the connection list mutates.
  */
-import type { ConnectionConfig } from "@/types/connection";
+
 import { useConnectionStore } from "@stores/connectionStore";
 // #1447 — sql-free read: only `connectionId` is consumed, so App (the
 // subscriber driving the prod border) must not re-render per keystroke.
 import { useActiveTabSansSql } from "@stores/workspaceStore";
+import type { ConnectionConfig } from "@/types/connection";
 
 export function useActiveTabConnection(): ConnectionConfig | null {
   const activeTab = useActiveTabSansSql();

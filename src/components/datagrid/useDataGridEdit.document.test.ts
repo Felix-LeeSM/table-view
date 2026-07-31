@@ -1,8 +1,8 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { act, renderHook } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { setupTauriMock } from "@/test-utils/tauriMock";
-import { renderHook, act } from "@testing-library/react";
-import { useDocumentDataGridEdit } from "./useDocumentDataGridEdit";
 import type { TableData } from "@/types/schema";
+import { useDocumentDataGridEdit } from "./useDocumentDataGridEdit";
 
 // Sprint 86 — document paradigm dispatch tests. These exercise the MQL
 // generator + Tauri wrapper branch introduced in `handleCommit` /

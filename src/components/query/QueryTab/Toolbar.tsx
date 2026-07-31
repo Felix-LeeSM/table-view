@@ -1,31 +1,31 @@
-import { useTranslation } from "react-i18next";
 import { Button } from "@components/ui/button";
-import {
-  Play,
-  Square,
-  Loader2,
-  Paintbrush,
-  Star,
-  Save,
-  X,
-  FlaskConical,
-  FileSearch,
-  SearchCode,
-  Upload,
-  Code2,
-} from "lucide-react";
-import FavoritesPanel from "../FavoritesPanel";
-import SnippetsPanel from "../SnippetsPanel";
-import TabDbChip from "./TabDbChip";
-import { supportsNativeCancel } from "./useQueryContext";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useSnippetsStore } from "@stores/snippetsStore";
 import type { QueryTab } from "@stores/workspaceStore";
-import type { QueryFavoritesState } from "./useQueryFavorites";
+import {
+  Code2,
+  FileSearch,
+  FlaskConical,
+  Loader2,
+  Paintbrush,
+  Play,
+  Save,
+  SearchCode,
+  Square,
+  Star,
+  Upload,
+  X,
+} from "lucide-react";
+import { useTranslation } from "react-i18next";
 import {
   classifyMongoStatement,
   statementAllowsMissingDatabase,
 } from "@/lib/mongo/runCommandParser";
+import FavoritesPanel from "../FavoritesPanel";
+import SnippetsPanel from "../SnippetsPanel";
+import TabDbChip from "./TabDbChip";
+import { supportsNativeCancel } from "./useQueryContext";
+import type { QueryFavoritesState } from "./useQueryFavorites";
 
 /**
  * `QueryTab` 의 toolbar 컴포넌트.

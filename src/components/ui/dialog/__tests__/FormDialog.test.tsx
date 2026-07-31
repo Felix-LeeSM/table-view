@@ -1,6 +1,6 @@
-import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
 import FormDialog from "@components/ui/dialog/FormDialog";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 
 describe("FormDialog (sprint-96 preset)", () => {
   it("renders title + description + body + submit/cancel footer", () => {

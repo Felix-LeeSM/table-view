@@ -34,6 +34,10 @@ vi.mock("@lib/window-label", async () => {
   };
 });
 
+import {
+  resetFakeWindowConnectionId,
+  setFakeWindowConnectionId,
+} from "./__tests__/fakeWindowConnectionId";
 import { useConnectionStore } from "./connectionStore";
 import {
   useConnectionHasDirtyTabs,
@@ -42,10 +46,6 @@ import {
   useWorkspaceStore,
   type WorkspaceState,
 } from "./workspaceStore";
-import {
-  setFakeWindowConnectionId,
-  resetFakeWindowConnectionId,
-} from "./__tests__/fakeWindowConnectionId";
 import type { TableTabInit } from "./workspaceStore/types";
 
 function makeInit(overrides: Partial<TableTabInit> = {}): TableTabInit {

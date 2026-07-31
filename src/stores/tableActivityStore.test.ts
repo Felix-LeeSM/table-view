@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // #1218 — table pin + recent store. Mirrors mruStore/favoritesStore contract:
 // synchronous in-memory mutate + fire-and-forget IPC persist through the typed
@@ -18,23 +18,23 @@ vi.mock("@lib/tauri/tableActivity", () => ({
 }));
 
 import {
-  persistTableActivity,
   listTableActivity,
+  persistTableActivity,
 } from "@lib/tauri/tableActivity";
 // `getCurrentWindowLabel` is globally mocked in `test-setup.ts`; persist reads
 // it to scope writes to the owning connection, so each test points it at the
 // window under test.
 import { getCurrentWindowLabel } from "@lib/window-label";
 import {
-  useTableActivityStore,
   __resetTableActivityStoreForTests,
-  selectRecentTables,
-  selectPinnedTables,
-  selectTableActivitySignals,
-  tableActivityKey,
-  RECENT_CAP,
-  type TableRef,
   type PersistTableActivityPayload,
+  RECENT_CAP,
+  selectPinnedTables,
+  selectRecentTables,
+  selectTableActivitySignals,
+  type TableRef,
+  tableActivityKey,
+  useTableActivityStore,
 } from "./tableActivityStore";
 
 const persistMock = vi.mocked(persistTableActivity);

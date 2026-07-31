@@ -6,10 +6,11 @@
 // `tls_enabled=true, trust=None` combo the backend now hard-rejects — with no
 // in-form control to recover. These lock the carryover + the edit-form
 // normalization of pre-existing bug residue.
-import { describe, it, expect } from "vitest";
-import { renderHook, act } from "@testing-library/react";
-import { useConnectionDraftForm } from "./useConnectionDraftForm";
+
+import { act, renderHook } from "@testing-library/react";
+import { describe, expect, it } from "vitest";
 import type { ConnectionConfig, DatabaseType } from "../../model";
+import { useConnectionDraftForm } from "./useConnectionDraftForm";
 
 function storedConnection(
   overrides: Partial<ConnectionConfig> & { dbType: DatabaseType },

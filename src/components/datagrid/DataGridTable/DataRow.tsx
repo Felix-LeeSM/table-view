@@ -1,23 +1,23 @@
-import { memo, type CSSProperties } from "react";
-import { useTranslation } from "react-i18next";
-import Decimal from "decimal.js";
-import { Binary, ArrowUpRight } from "lucide-react";
 import { Button } from "@components/ui/button";
-import { safeStringifyCell, renderCellValue } from "@lib/jsonCell";
+import { INLINE_EDIT_CELL_RING } from "@components/ui/inlineEdit";
+import { renderCellValue, safeStringifyCell } from "@lib/jsonCell";
 import { isArrayColumn, isJsonbColumn } from "@lib/sql/structuralSqlEdit";
-import { getTextAlign, type ColumnCategory } from "@/lib/columnCategory";
+import { cn } from "@lib/utils";
+import Decimal from "decimal.js";
+import { ArrowUpRight, Binary } from "lucide-react";
+import { type CSSProperties, memo } from "react";
+import { useTranslation } from "react-i18next";
+import { type ColumnCategory, getTextAlign } from "@/lib/columnCategory";
 import type { TableData } from "@/types/schema";
 import {
-  editKey,
   cellToEditValue,
   deriveEditorSeed,
+  editKey,
   getInputTypeForColumn,
   isPendingEditActive,
   pendingEditAnchorMatches,
   rowIdentityKey,
 } from "../dataGridEditFsm";
-import { cn } from "@lib/utils";
-import { INLINE_EDIT_CELL_RING } from "@components/ui/inlineEdit";
 import { isBlobColumn, parseFkReference } from "./columnUtils";
 import type { CellNavigationDirection } from "./useCellNavigation";
 

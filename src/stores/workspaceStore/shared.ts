@@ -1,11 +1,10 @@
 import type { TabId } from "@/types/branded";
-import { paradigmOf, type Paradigm } from "@/types/connection";
-import type { WorkspaceState, WorkspaceStoreState } from "./types";
-
+import { type Paradigm, paradigmOf } from "@/types/connection";
 // `workspaceStore` reads `connectionStore` only at resolver/selector seams.
 // Write actions still take `(connId, db)` explicitly.
 /* eslint-disable no-restricted-imports */
 import { useConnectionStore } from "../connectionStore";
+import type { WorkspaceState, WorkspaceStoreState } from "./types";
 /* eslint-enable no-restricted-imports */
 
 export type WorkspaceSet = (

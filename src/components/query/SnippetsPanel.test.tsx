@@ -1,10 +1,10 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
-import SnippetsPanel from "./SnippetsPanel";
 import {
-  useSnippetsStore,
   __resetSnippetCounterForTests,
+  useSnippetsStore,
 } from "@stores/snippetsStore";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import SnippetsPanel from "./SnippetsPanel";
 
 vi.mock("lucide-react", () => ({
   Code2: () => <span data-testid="icon-code" />,

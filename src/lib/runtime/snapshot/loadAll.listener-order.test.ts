@@ -14,18 +14,16 @@
 
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-
-import {
-  resetSnapshotBufferForTests,
-  __pushFakeBufferedEvent,
-} from "./loadAll";
 import {
   resetStateChangedRegistryForTests,
-  setStateChangedHandlers,
   type StateChangedPayload,
+  setStateChangedHandlers,
 } from "@lib/events/stateChanged";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  __pushFakeBufferedEvent,
+  resetSnapshotBufferForTests,
+} from "./loadAll";
 
 const invokeMock = vi.fn();
 

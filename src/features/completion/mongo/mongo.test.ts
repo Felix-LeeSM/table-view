@@ -1,9 +1,9 @@
 // AC-144-1, AC-144-4, AC-144-5 — Mongo completion module assertions.
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
-  dbMethodCandidates,
   createDbMethodCompletionSource,
   createMongoCompletionSource,
+  dbMethodCandidates,
 } from "./mongo";
 
 describe("mongo.dbMethodCandidates", () => {

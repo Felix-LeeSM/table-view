@@ -8,12 +8,12 @@ import type {
   SchemaGraphSource,
   SchemaGraphTableNode,
 } from "@/types/schemaGraph";
-import { compareText, schemaGraphTableId } from "./schemaGraphSupport";
 import {
-  selectSchemaGraphIntelligence,
   type SchemaGraphForeignKeySelection,
   type SchemaGraphIntelligenceSelectors,
+  selectSchemaGraphIntelligence,
 } from "./schemaGraphSelectors";
+import { compareText, schemaGraphTableId } from "./schemaGraphSupport";
 
 export type SchemaGraphDiffEntityKind =
   | "table"

@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
-import type { TableData } from "@/types/schema";
 import type { DatabaseType } from "@/types/connection";
 import {
   DATA_SOURCE_PROFILES,
   dialectRequiresPrimaryKeyForEdit,
   getDataSourceProfile,
 } from "@/types/dataSource";
-import { generateSql, type CoerceError } from "./sqlGenerator";
+import type { TableData } from "@/types/schema";
+import { type CoerceError, generateSql } from "./sqlGenerator";
 
 // Issue #1356 — the "which DBMS require a primary key to edit a row (all-column
 // WHERE fallback disabled)" rule used to be hand-encoded in three consumers

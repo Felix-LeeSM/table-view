@@ -1,7 +1,7 @@
-import type { ConnectionConfig, ConnectionStatus } from "@/types/connection";
-import { canonicalEnvironmentTag } from "@/features/connection/model";
 import { sanitizeMessage } from "@/features/connection/components/ConnectionDialog/sanitize";
+import { canonicalEnvironmentTag } from "@/features/connection/model";
 import { logger } from "@/lib/logger";
+import type { ConnectionConfig, ConnectionStatus } from "@/types/connection";
 import type {
   DocumentColumn,
   DocumentQueryResult,

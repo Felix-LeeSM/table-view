@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import { formatTableRefLabel, formatTableRefTitle } from "./tableRefLabel";
 
 // #1218 AC4 — per-shape naming rule. Same section, three qualifications.

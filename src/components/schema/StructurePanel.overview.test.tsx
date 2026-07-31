@@ -4,16 +4,17 @@
 // handling + clear-error-on-tab-switch (25 cases) plus the nested
 // Sprint 179 paradigm-aware vocabulary describe (3 cases). Cases are
 // byte-equivalent to the originals — no behaviour change.
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, act } from "@testing-library/react";
-import StructurePanel from "./StructurePanel";
+
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   mockGetTableColumns,
-  mockGetTableIndexes,
   mockGetTableConstraints,
+  mockGetTableIndexes,
   renderPanel,
   resetStructurePanelMocks,
 } from "./__tests__/structurePanelTestHelpers";
+import StructurePanel from "./StructurePanel";
 
 describe("StructurePanel", () => {
   beforeEach(() => {

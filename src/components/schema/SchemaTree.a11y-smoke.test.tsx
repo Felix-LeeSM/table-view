@@ -1,12 +1,12 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
-import SchemaTree from "./SchemaTree";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   mockLoadSchemas,
   mockLoadTables,
   resetStores,
   setSchemaStoreState,
 } from "./__tests__/schemaTreeTestHelpers";
+import SchemaTree from "./SchemaTree";
 
 describe("SchemaTree critical accessibility smoke", () => {
   beforeEach(() => {

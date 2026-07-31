@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { QueryResult } from "@/types/query";
 import type { ConnectionId, TabId } from "@/types/branded";
+import type { QueryResult } from "@/types/query";
 import {
   analyzeKvCommandSafety,
   executeKvCommandNow,

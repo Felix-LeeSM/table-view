@@ -10,33 +10,43 @@
 // diff view toggle (shows original vs pending side-by-side), structural
 // edits (add key on objects, push item on arrays, delete leaf).
 
-import { useMemo, useState, useCallback, useRef } from "react";
-import { useTranslation } from "react-i18next";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
-  ChevronRight,
   ChevronDown,
-  X,
+  ChevronRight,
   Search,
   Trash2,
   Undo2,
+  X,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { useCallback, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
+import BsonTypeEditor from "@/components/document/BsonTypeEditor";
+import {
+  type TreeRovingRow,
+  useTreeRoving,
+} from "@/components/shared/tree/useTreeRoving";
 import {
   TREE_ROW_HEIGHT_ESTIMATE,
   TREE_VIRTUALIZE_THRESHOLD,
 } from "@/components/shared/tree/virtualize";
+import { Button } from "@/components/ui/button";
 import {
   buildTreeNodesWithGhosts,
   computeTreeStats,
   filterTreeNodes,
   renderLeafValue,
 } from "@/lib/jsonTree";
-import BsonTypeEditor from "@/components/document/BsonTypeEditor";
+import { useTreeAdd, useTreeEditing } from "./DocumentTreePanel/hooks";
 import {
-  useTreeRoving,
-  type TreeRovingRow,
-} from "@/components/shared/tree/useTreeRoving";
+  AddItemRow,
+  AddKeyRow,
+  NewBadge,
+  PlainLeafInput,
+  StatPill,
+  TagBadge,
+  VirtualTreeRows,
+} from "./DocumentTreePanel/rows";
 import {
   computeAffordances,
   type DocumentTreePanelProps,
@@ -48,16 +58,6 @@ import {
   renderPendingText,
   UNSET_OP,
 } from "./DocumentTreePanel/types";
-import {
-  AddItemRow,
-  AddKeyRow,
-  NewBadge,
-  PlainLeafInput,
-  StatPill,
-  TagBadge,
-  VirtualTreeRows,
-} from "./DocumentTreePanel/rows";
-import { useTreeAdd, useTreeEditing } from "./DocumentTreePanel/hooks";
 
 export function DocumentTreePanel({
   value,

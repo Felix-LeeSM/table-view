@@ -1,6 +1,6 @@
-import { useCallback } from "react";
-import { useSchemaStore } from "@stores/schemaStore";
 import * as tauri from "@lib/tauri";
+import { useSchemaStore } from "@stores/schemaStore";
+import { useCallback } from "react";
 
 /**
  * The hook owns the Tauri mutation + reload policy: try `tauri.listTables`

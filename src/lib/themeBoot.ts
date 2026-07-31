@@ -1,5 +1,5 @@
-import { DEFAULT_THEME_ID, isThemeId, type ThemeId } from "./themeCatalog";
 import { getSetting } from "./tauri/settings";
+import { DEFAULT_THEME_ID, isThemeId, type ThemeId } from "./themeCatalog";
 
 export type ThemeMode = "system" | "light" | "dark";
 
@@ -10,8 +10,8 @@ export interface ThemeState {
 
 export const THEME_STORAGE_KEY = "table-view-theme";
 
-export { DEFAULT_THEME_ID } from "./themeCatalog";
 export type { ThemeId } from "./themeCatalog";
+export { DEFAULT_THEME_ID } from "./themeCatalog";
 
 const DEFAULT_STATE: ThemeState = {
   themeId: DEFAULT_THEME_ID,

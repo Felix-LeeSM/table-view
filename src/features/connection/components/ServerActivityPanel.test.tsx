@@ -4,7 +4,6 @@
 // (b) refresh 클릭, (c) Kill 클릭 → kill + re-fetch, (d) empty state,
 // (e) error state.
 
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   act,
   fireEvent,
@@ -13,6 +12,7 @@ import {
   waitFor,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ServerActivityPanel } from "./ServerActivityPanel";
 
 const listServerActivityMock = vi.fn();

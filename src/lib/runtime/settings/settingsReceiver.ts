@@ -23,9 +23,9 @@
  */
 
 import { setStateChangedHandlers } from "@lib/events/stateChanged";
-import { applyThemeSettingFromBackend } from "@stores/themeStore";
-import { applySafeModeSettingFromBackend } from "@stores/safeModeStore";
 import { applyHistorySettingsFromBackend } from "@stores/historySettingsStore";
+import { applySafeModeSettingFromBackend } from "@stores/safeModeStore";
+import { applyThemeSettingFromBackend } from "@stores/themeStore";
 
 let registered = false;
 

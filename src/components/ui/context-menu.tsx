@@ -1,6 +1,6 @@
-import type * as React from "react";
 import { ChevronRight } from "lucide-react";
 import { ContextMenu as ContextMenuPrimitive } from "radix-ui";
+import type * as React from "react";
 import { cn } from "@/lib/utils";
 
 const ContextMenu = ContextMenuPrimitive.Root;
@@ -103,11 +103,11 @@ function ContextMenuSubContent({
 
 export {
   ContextMenu,
-  ContextMenuTrigger,
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuSeparator,
   ContextMenuSub,
-  ContextMenuSubTrigger,
   ContextMenuSubContent,
+  ContextMenuSubTrigger,
+  ContextMenuTrigger,
 };

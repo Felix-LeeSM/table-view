@@ -1,14 +1,14 @@
-import { useTranslation } from "react-i18next";
 import { ToggleGroup, ToggleGroupItem } from "@components/ui/toggle-group";
 import i18nInstance, {
-  SUPPORTED_LOCALES,
   isSupportedLocale,
   LOCALE_SETTING_KEY,
   type Locale,
+  SUPPORTED_LOCALES,
 } from "@lib/i18n";
-import { persistSettingValue } from "@lib/tauri/settings";
 import { logger } from "@lib/logger";
 import { toast } from "@lib/runtime/toast";
+import { persistSettingValue } from "@lib/tauri/settings";
+import { useTranslation } from "react-i18next";
 
 // 언어명은 각 언어 자체 표기 — 관례상 번역하지 않는다.
 const LOCALE_LABELS: Record<Locale, string> = {

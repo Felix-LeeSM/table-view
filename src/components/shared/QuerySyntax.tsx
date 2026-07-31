@@ -1,7 +1,7 @@
-import type { Paradigm } from "@/types/connection";
 import type { HistoryQueryMode } from "@lib/tauri/history";
-import SqlSyntax from "./SqlSyntax";
+import type { Paradigm } from "@/types/connection";
 import MongoSyntax from "./MongoSyntax";
+import SqlSyntax from "./SqlSyntax";
 
 interface QuerySyntaxProps {
   sql: string;

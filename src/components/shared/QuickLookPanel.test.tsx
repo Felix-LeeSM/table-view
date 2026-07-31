@@ -1,8 +1,8 @@
-import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
-import QuickLookPanel from "./QuickLookPanel";
-import type { TableData } from "@/types/schema";
 import type { DataGridEditState } from "@components/datagrid/useDataGridEdit";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
+import type { TableData } from "@/types/schema";
+import QuickLookPanel from "./QuickLookPanel";
 
 // Sprint 194 — minimal `DataGridEditState` factory for QuickLook edit-mode
 // tests. Only the surface QuickLook actually consumes is filled in; the rest

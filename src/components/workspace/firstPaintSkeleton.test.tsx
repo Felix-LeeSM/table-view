@@ -1,11 +1,11 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { setupTauriMock } from "@/test-utils/tauriMock";
-import { act, render, screen } from "@testing-library/react";
-import WorkspaceSidebar from "./WorkspaceSidebar";
-import MainArea from "@/components/layout/MainArea";
 import { useConnectionStore } from "@stores/connectionStore";
-import { useWorkspaceStore } from "@stores/workspaceStore";
 import { __resetMruStoreForTests } from "@stores/mruStore";
+import { useWorkspaceStore } from "@stores/workspaceStore";
+import { act, render, screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import MainArea from "@/components/layout/MainArea";
+import { setupTauriMock } from "@/test-utils/tauriMock";
+import WorkspaceSidebar from "./WorkspaceSidebar";
 
 // Sprint 270 (2026-05-13) — AC-270-03 swap-order regression.
 //

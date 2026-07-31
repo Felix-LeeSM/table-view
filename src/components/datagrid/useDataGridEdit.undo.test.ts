@@ -8,13 +8,14 @@
 // stack via `clearAllPending`. Out of scope for this file: keyboard
 // wiring (covered in `DataGrid.undo.test.tsx`), toolbar button
 // (covered in `DataGridToolbar.test.tsx`).
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { renderHook, act } from "@testing-library/react";
-import { setupTauriMock } from "@/test-utils/tauriMock";
-import { useToastStore } from "@stores/toastStore";
+
 import i18n from "@lib/i18n";
-import { useDataGridEdit, UNDO_STACK_MAX } from "./useDataGridEdit";
+import { useToastStore } from "@stores/toastStore";
+import { act, renderHook } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import type { TableData } from "@/types/schema";
+import { UNDO_STACK_MAX, useDataGridEdit } from "./useDataGridEdit";
 
 const mockExecuteQuery = vi.fn();
 const mockExecuteQueryBatch = vi.fn();

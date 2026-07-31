@@ -1,24 +1,24 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Search, X, Table2 } from "lucide-react";
-import { useTranslation } from "react-i18next";
 import { Button } from "@components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
 } from "@components/ui/dialog";
-import { useSchemaStore } from "@stores/schemaStore";
-import { useConnectionStore } from "@stores/connectionStore";
 import { useCurrentWindowConnectionId } from "@hooks/useCurrentWindowConnectionId";
-import { dispatchLocalIntent } from "@lib/quickOpenIntent";
 import { logger } from "@lib/logger";
+import { dispatchLocalIntent } from "@lib/quickOpenIntent";
 import {
-  pgSearchValues,
   cancelQuery,
+  pgSearchValues,
   type ValueSearchResult,
 } from "@lib/tauri";
+import { useConnectionStore } from "@stores/connectionStore";
+import { useSchemaStore } from "@stores/schemaStore";
+import { Search, Table2, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 /**
  * Issue #1525 — read-only cross-table value search dialog (PostgreSQL).

@@ -25,10 +25,11 @@
  *   - `max-w-[260px] truncate` ensures the visible label never blows up
  *     a tight footer.
  */
-import type { Ref } from "react";
-import { Loader2, Play } from "lucide-react";
-import { useTranslation } from "react-i18next";
+
 import { Button } from "@components/ui/button";
+import { Loader2, Play } from "lucide-react";
+import type { Ref } from "react";
+import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 
 export type ExecuteSeverity = "warn" | "danger";

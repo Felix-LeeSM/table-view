@@ -1,15 +1,15 @@
-import { useMemo } from "react";
-import { useTranslation } from "react-i18next";
-import { Pin, PinOff, Table2, Clock, Eraser } from "lucide-react";
-import { cn } from "@lib/utils";
 import HistoryCollapseToggle from "@components/shared/HistoryCollapseToggle";
 import { useCollapsibleHistory } from "@hooks/useCollapsibleHistory";
+import { cn } from "@lib/utils";
 import {
-  useTableActivityStore,
   selectPinnedTables,
   selectRecentTables,
   type TableActivityEntry,
+  useTableActivityStore,
 } from "@stores/tableActivityStore";
+import { Clock, Eraser, Pin, PinOff, Table2 } from "lucide-react";
+import { useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import type { RdbTreeShape } from "../treeShape";
 import { formatTableRefLabel, formatTableRefTitle } from "./tableRefLabel";
 

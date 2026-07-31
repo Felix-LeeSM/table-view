@@ -17,9 +17,10 @@
 // Issue #1735 — adds the `editColumnComment` axis: the comment cell reads its
 // OWN capability, not `alterTable`, so an engine that runs structural ALTERs
 // but does not emit `COMMENT ON COLUMN` keeps the cell read-only.
-import { describe, it, expect, beforeEach } from "vitest";
-import { screen, act, fireEvent } from "@testing-library/react";
+
 import { useConnectionStore } from "@stores/connectionStore";
+import { act, fireEvent, screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it } from "vitest";
 import type { DatabaseType } from "@/types/connection";
 import {
   renderPanel,

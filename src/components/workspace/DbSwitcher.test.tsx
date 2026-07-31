@@ -1,14 +1,14 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { ConnectionId, TabId } from "@/types/branded";
-import { seedWorkspace } from "@/stores/__tests__/workspaceStoreTestHelpers";
 import {
+  act,
+  fireEvent,
   render,
   screen,
-  fireEvent,
   waitFor,
   within,
-  act,
 } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { seedWorkspace } from "@/stores/__tests__/workspaceStoreTestHelpers";
+import type { ConnectionId, TabId } from "@/types/branded";
 
 // Hoisted mocks must precede the imports of the modules under test.
 const listDatabasesMock = vi.fn();
@@ -22,21 +22,21 @@ vi.mock("@/lib/api/switchActiveDb", () => ({
   switchActiveDb: (...args: unknown[]) => switchActiveDbMock(...args),
 }));
 
-import DbSwitcher from "./DbSwitcher";
-import {
-  useWorkspaceStore,
-  type TableTab,
-  type QueryTab,
-} from "@stores/workspaceStore";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useSchemaStore } from "@stores/schemaStore";
+import {
+  type QueryTab,
+  type TableTab,
+  useWorkspaceStore,
+} from "@stores/workspaceStore";
+import { useToastStore } from "@/stores/toastStore";
 import { useDocumentStore } from "@/test-utils/documentStore";
 import type {
   ConnectionConfig,
   ConnectionStatus,
   Paradigm,
 } from "@/types/connection";
-import { useToastStore } from "@/stores/toastStore";
+import DbSwitcher from "./DbSwitcher";
 
 function makeTableTab(overrides: Partial<TableTab> = {}): TableTab {
   return {
@@ -478,7 +478,7 @@ describe("DbSwitcher", () => {
     await act(async () => {
       fireEvent.click(warehouse);
     });
-    const status = useConnectionStore.getState().activeStatuses["c1"];
+    const status = useConnectionStore.getState().activeStatuses.c1;
     expect(status?.type).toBe("connected");
     if (status?.type === "connected") {
       expect(status.activeDb).toBe("warehouse");
@@ -568,7 +568,7 @@ describe("DbSwitcher", () => {
     await act(async () => {
       fireEvent.click(warehouse);
     });
-    expect(useDocumentStore.getState().databases["mongo"]).toEqual([
+    expect(useDocumentStore.getState().databases.mongo).toEqual([
       { name: "analytics" },
     ]);
   });
@@ -653,7 +653,7 @@ describe("DbSwitcher", () => {
     expect(toasts[0]!.variant).toBe("error");
     expect(toasts[0]!.message).toMatch(/Failed to switch DB/);
     // activeDb should not have moved.
-    const status = useConnectionStore.getState().activeStatuses["c1"];
+    const status = useConnectionStore.getState().activeStatuses.c1;
     expect(status?.type).toBe("connected");
     if (status?.type === "connected") {
       expect(status.activeDb).toBe("postgres");

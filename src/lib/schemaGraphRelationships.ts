@@ -8,9 +8,9 @@ import type {
 import type { TableRef } from "./schemaGraphCatalog";
 import {
   formatReferenceTable,
+  type ParsedFkReference,
   parseFkReference,
   parseReferenceTable,
-  type ParsedFkReference,
 } from "./schemaGraphSupport";
 
 interface RelationshipDiagnostic {

@@ -2,8 +2,9 @@
 // former bare-`Loader2` initial-load block lacked: the shared grid skeleton
 // exposes a labelled `role="status"` region and renders `animate-pulse`
 // placeholder bars (never a spinner).
-import { describe, it, expect } from "vitest";
+
 import { render, screen } from "@testing-library/react";
+import { describe, expect, it } from "vitest";
 import DataGridSkeleton from "./DataGridSkeleton";
 
 describe("DataGridSkeleton", () => {

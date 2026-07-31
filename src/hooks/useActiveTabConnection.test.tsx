@@ -10,15 +10,15 @@
 // AC mapping: AC-256-01 (chrome stripe data source), AC-256-03 (instant
 // activation on tab switch).
 
-import { describe, it, expect, beforeEach } from "vitest";
-import type { ConnectionId, TabId } from "@/types/branded";
-import { seedWorkspace } from "@/stores/__tests__/workspaceStoreTestHelpers";
-import { renderHook, act } from "@testing-library/react";
-import { useActiveTabConnection } from "./useActiveTabConnection";
-import { useWorkspaceStore } from "@stores/workspaceStore";
 import { useConnectionStore } from "@stores/connectionStore";
-import type { ConnectionConfig } from "@/types/connection";
 import type { Tab } from "@stores/workspaceStore";
+import { useWorkspaceStore } from "@stores/workspaceStore";
+import { act, renderHook } from "@testing-library/react";
+import { beforeEach, describe, expect, it } from "vitest";
+import { seedWorkspace } from "@/stores/__tests__/workspaceStoreTestHelpers";
+import type { ConnectionId, TabId } from "@/types/branded";
+import type { ConnectionConfig } from "@/types/connection";
+import { useActiveTabConnection } from "./useActiveTabConnection";
 
 function makeConnection(
   id: string,

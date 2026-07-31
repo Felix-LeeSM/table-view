@@ -11,9 +11,10 @@
 //     affordance-preserving fallback as `supportsRowEditing`).
 //   - `initialSubTab` pointing at a gated tab falls back to Columns and
 //     never fires the gated fetch (SQLite constraints is still gated).
-import { describe, it, expect, beforeEach } from "vitest";
-import { screen, act } from "@testing-library/react";
+
 import { useConnectionStore } from "@stores/connectionStore";
+import { act, screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it } from "vitest";
 import type { DatabaseType } from "@/types/connection";
 import {
   mockGetTableColumns,

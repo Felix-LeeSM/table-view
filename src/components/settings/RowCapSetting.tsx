@@ -12,9 +12,6 @@
  * not need it. ponytail: add a store + settingsReceiver route if that changes.
  */
 
-import { useEffect, useState } from "react";
-import { useTranslation } from "react-i18next";
-import { Rows3 } from "lucide-react";
 import { Button } from "@components/ui/button";
 import { Input } from "@components/ui/input";
 import {
@@ -28,6 +25,9 @@ import {
   persistSettingValue,
   resetSetting,
 } from "@lib/tauri/settings";
+import { Rows3 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 // Keep in sync with `src-tauri/src/db/row_cap.rs`.
 const DEFAULT_ROW_CAP = 10_000;

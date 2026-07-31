@@ -1,8 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { setupTauriMock } from "@/test-utils/tauriMock";
-import { renderHook, act } from "@testing-library/react";
-import { useDataGridEdit } from "./useDataGridEdit";
-import type { TableData } from "@/types/schema";
+import { act, renderHook } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 // `?raw` is a Vite-supported query suffix that imports a file's text as a
 // string. We use it for the static regression guard so the test verifies the
 // SQL branch catch block is not empty without depending on Node fs APIs
@@ -11,6 +8,9 @@ import type { TableData } from "@/types/schema";
 // reads from there to keep the silent-swallow guard pinned to the actual
 // catch block.
 import paradigmEditAdapterSource from "@/lib/datagrid/paradigmEditAdapter.ts?raw";
+import { setupTauriMock } from "@/test-utils/tauriMock";
+import type { TableData } from "@/types/schema";
+import { useDataGridEdit } from "./useDataGridEdit";
 
 // Sprint 93 — handleExecuteCommit's SQL branch must surface commit failures
 // instead of swallowing them. Sprint 183 (date 2026-05-01) flipped the call

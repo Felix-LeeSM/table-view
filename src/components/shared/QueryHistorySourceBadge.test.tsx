@@ -4,8 +4,8 @@
 // `raw` is suppressed (the default for editor execution) to keep the row
 // visually quiet — only non-default sources light up. 2026-05-02.
 
-import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
+import { describe, expect, it } from "vitest";
 import QueryHistorySourceBadge from "./QueryHistorySourceBadge";
 
 describe("QueryHistorySourceBadge", () => {

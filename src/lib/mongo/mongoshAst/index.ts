@@ -23,17 +23,17 @@
 //생긴다. sprint-401 contract `Decision Lock` 에서 본 trade-off 를 명시.
 
 import type {
-  MongoshErrorKind,
   MongoshAdminCommand,
   MongoshCollectionCommand,
+  MongoshErrorKind,
   MongoshParseError,
   MongoshStatementResult,
 } from "./types";
 
 export type {
-  MongoshErrorKind,
   MongoshAdminCommand,
   MongoshCollectionCommand,
+  MongoshErrorKind,
   MongoshParseError,
   MongoshStatementResult,
 };

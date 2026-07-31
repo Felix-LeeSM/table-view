@@ -1,14 +1,11 @@
-import { useState } from "react";
-import { useTranslation } from "react-i18next";
-import { Loader2, Key, Shield, Plus, Trash2, X, Eye } from "lucide-react";
 import { Button } from "@components/ui/button";
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
-  DialogTitle,
   DialogDescription,
   DialogFooter,
+  DialogHeader,
+  DialogTitle,
 } from "@components/ui/dialog";
 import {
   Select,
@@ -17,33 +14,36 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@components/ui/select";
-import type { ColumnInfo, IndexInfo } from "@/types/schema";
-import * as tauri from "@lib/tauri";
-import { useSchemaStore } from "@stores/schemaStore";
-import type { DatabaseName, SchemaName, TableName } from "@/types/branded";
-import SqlPreviewDialog from "./SqlPreviewDialog";
-import { useDdlPreviewExecution } from "./useDdlPreviewExecution";
-import { useConnectionStore } from "@stores/connectionStore";
-import { ConfirmDestructiveDialog } from "@features/workspace";
 import { OrderedColumnPicker } from "@features/catalog";
+import { ConfirmDestructiveDialog } from "@features/workspace";
+import * as tauri from "@lib/tauri";
+import { useConnectionStore } from "@stores/connectionStore";
+import { useSchemaStore } from "@stores/schemaStore";
+import { Eye, Key, Loader2, Plus, Shield, Trash2, X } from "lucide-react";
+import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useSchemaGraphIntelligence } from "@/hooks/useSchemaGraphIntelligence";
 import {
-  selectSchemaGraphMigrationImpact,
   type SchemaGraphMigrationImpactSummary,
+  selectSchemaGraphMigrationImpact,
 } from "@/lib/schemaGraphSelectors";
 import { schemaGraphIndexId } from "@/lib/schemaGraphSupport";
+import type { DatabaseName, SchemaName, TableName } from "@/types/branded";
+import type { ColumnInfo, IndexInfo } from "@/types/schema";
+import SqlPreviewDialog from "./SqlPreviewDialog";
 import {
-  StructureShell,
-  StructureActionBar,
-  StructureTable,
-  StructureEmpty,
-  STRUCTURE_THEAD,
-  STRUCTURE_TH,
-  STRUCTURE_TH_ACTIONS,
-  STRUCTURE_TR,
   STRUCTURE_TD,
   STRUCTURE_TD_ACTIONS,
+  STRUCTURE_TH,
+  STRUCTURE_TH_ACTIONS,
+  STRUCTURE_THEAD,
+  STRUCTURE_TR,
+  StructureActionBar,
+  StructureEmpty,
+  StructureShell,
+  StructureTable,
 } from "./shared/structureUI";
+import { useDdlPreviewExecution } from "./useDdlPreviewExecution";
 
 // ---------------------------------------------------------------------------
 // Constants

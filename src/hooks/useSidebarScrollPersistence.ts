@@ -6,8 +6,8 @@
 // `no-restricted-syntax` bans `store.getState()` in component files
 // precisely to push these one-shot reads behind a hook seam.
 
-import { useCallback, useEffect, useRef } from "react";
 import { useWorkspaceStore, type WorkspaceKey } from "@stores/workspaceStore";
+import { useCallback, useEffect, useRef } from "react";
 
 /**
  * Wire a scroll container to `workspace.sidebar.scrollTop` for the given

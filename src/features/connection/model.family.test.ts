@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
-  SUPPORTED_DATABASE_TYPES,
   isKvFamily,
   isSearchFamily,
   paradigmOf,
+  SUPPORTED_DATABASE_TYPES,
 } from "./model";
 
 // #1370 — characterize the family predicates against paradigmOf so the two

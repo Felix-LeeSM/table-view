@@ -11,21 +11,22 @@
 // 적용되는지, (c) PG double-quoted identifier 가 `text-syntax-string` 이 아닌
 // `text-foreground` (identifier) 로 분류되는지 (sqlTokenize.ts:213-220 분기)
 // 를 확인한다.
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { setupTauriMock } from "@/test-utils/tauriMock";
+
 import { screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import type { SortInfo, TableData } from "@/types/schema";
 import {
   MOCK_DATA,
-  mockQueryTableData,
+  mockAddTab,
   mockExecuteQuery,
   mockExecuteQueryBatch,
   mockPromoteTab,
-  mockUpdateTabSorts,
+  mockQueryTableData,
   mockSetTabDirty,
-  mockAddTab,
-  resetDataGridMocks,
+  mockUpdateTabSorts,
   renderDataGrid,
+  resetDataGridMocks,
 } from "./__tests__/dataGridTestHelpers";
 
 // Mock FilterBar — test DataGrid in isolation
@@ -69,7 +70,9 @@ const mockTabStoreState: {
 };
 const subscribers = new Set<() => void>();
 function notify() {
-  subscribers.forEach((fn) => fn());
+  subscribers.forEach((fn) => {
+    fn();
+  });
 }
 mockUpdateTabSorts.mockImplementation((tabId: string, next: SortInfo[]) => {
   const tab = mockTabStoreState.tabs.find((t) => t.id === tabId);

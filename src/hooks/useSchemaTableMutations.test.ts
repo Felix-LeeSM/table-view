@@ -1,8 +1,8 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { setupTauriMock } from "@/test-utils/tauriMock";
-import { renderHook, act } from "@testing-library/react";
-import type { TableInfo } from "@/types/schema";
 import { useSchemaStore } from "@stores/schemaStore";
+import { act, renderHook } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
+import type { TableInfo } from "@/types/schema";
 
 // Pins the user-visible cache outcome for table drop/rename orchestration:
 // mutation succeeds, listTables either refreshes server truth or the store

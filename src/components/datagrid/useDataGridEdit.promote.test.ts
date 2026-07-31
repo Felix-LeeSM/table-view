@@ -1,7 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { renderHook, act } from "@testing-library/react";
-import { useDataGridEdit } from "./useDataGridEdit";
+import { act, renderHook } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { TableData } from "@/types/schema";
+import { useDataGridEdit } from "./useDataGridEdit";
 
 // Sprint 77 — cover the promotion-trigger gaps that existed before.
 // The sort/filter/page promotion lives in the DataGrid effect, but

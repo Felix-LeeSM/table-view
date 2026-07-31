@@ -8,7 +8,7 @@
 //     partial: boolean, stores: { connections, workspaces, mru, theme, safeMode },
 //     runtime: { activeStatuses } }
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const invokeMock = vi.fn();
 

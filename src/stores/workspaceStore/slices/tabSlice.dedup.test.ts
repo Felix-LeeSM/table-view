@@ -4,8 +4,9 @@
 // `workspaces[connId][db]` bucket, so `schema` is the real missing axis;
 // these tests lock both the fix and the preserved "reopen focuses existing"
 // behavior for the same schema+table.
-import { beforeEach, describe, expect, it } from "vitest";
+
 import { useWorkspaceStore } from "@stores/workspaceStore";
+import { beforeEach, describe, expect, it } from "vitest";
 import type { TableTabInit } from "../types";
 
 function tableInit(overrides: Partial<TableTabInit>): TableTabInit {

@@ -1,5 +1,5 @@
-import { useTranslation } from "react-i18next";
 import type { QueryHistorySource } from "@stores/queryHistoryStore";
+import { useTranslation } from "react-i18next";
 
 // Small badge that surfaces non-`raw` history sources. `raw` (the default
 // for editor-driven queries) is suppressed to keep the row visually quiet
@@ -90,7 +90,7 @@ export function QueryHistorySourceBadge({
       title: t("historyBadge.mongoTitle"),
     },
     explain: {
-      ...META_STATIC["explain"],
+      ...META_STATIC.explain,
       title: t("historyBadge.explainTitle"),
     },
     "file-analytics": {

@@ -1,8 +1,3 @@
-import { useEffect, useMemo, useState } from "react";
-import { useTranslation } from "react-i18next";
-import { open } from "@tauri-apps/plugin-dialog";
-import { FileSpreadsheet, Loader2 } from "lucide-react";
-
 import { Button } from "@components/ui/button";
 import {
   Dialog,
@@ -19,13 +14,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@components/ui/select";
+import { cancelQuery, executeQueryBatch } from "@lib/tauri";
 import {
   buildCsvImportStatements,
-  previewCsvImport,
   type CsvPreview,
+  previewCsvImport,
 } from "@lib/tauri/import";
-import { cancelQuery, executeQueryBatch } from "@lib/tauri";
 import { useSchemaStore } from "@stores/schemaStore";
+import { open } from "@tauri-apps/plugin-dialog";
+import { FileSpreadsheet, Loader2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { DatabaseName, SchemaName, TableName } from "@/types/branded";
 import type { ColumnInfo } from "@/types/schema";
 

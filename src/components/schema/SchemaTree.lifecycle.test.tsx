@@ -4,17 +4,18 @@
 // fallback, the static `Schemas` header, and the root `select-none`
 // class. Cases are byte-equivalent to the originals — no behaviour
 // change.
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, act } from "@testing-library/react";
-import type React from "react";
-import SchemaTree from "./SchemaTree";
+
 import { useConnectionStore } from "@stores/connectionStore";
+import { act, render, screen } from "@testing-library/react";
+import type React from "react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   mockLoadSchemas,
   mockLoadTables,
-  setSchemaStoreState,
   resetStores,
+  setSchemaStoreState,
 } from "./__tests__/schemaTreeTestHelpers";
+import SchemaTree from "./SchemaTree";
 
 // ---------------------------------------------------------------------------
 // Tests

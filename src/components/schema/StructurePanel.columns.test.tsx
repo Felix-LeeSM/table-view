@@ -16,16 +16,17 @@
 // assertions. The dialog internals themselves are exhaustively covered
 // by `AddColumnDialog.test.tsx` / `DropColumnDialog.test.tsx`.
 // Date: 2026-05-07.
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, fireEvent, act } from "@testing-library/react";
-import StructurePanel from "./StructurePanel";
+
+import { invalidatePostgresTypesCache } from "@hooks/usePostgresTypes";
 import * as tauri from "@lib/tauri";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   mockGetTableColumns,
   renderPanel,
   resetStructurePanelMocks,
 } from "./__tests__/structurePanelTestHelpers";
-import { invalidatePostgresTypesCache } from "@hooks/usePostgresTypes";
+import StructurePanel from "./StructurePanel";
 
 // Helper: drives the inline-MODIFY path (Edit pencil → change data_type
 // → save) so a pending change is queued without using the trash icon.

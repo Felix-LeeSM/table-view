@@ -19,11 +19,12 @@ import {
   collectTables,
   constraintPayload,
   sortedTableRefs,
+  type TableRef,
   tableColumns,
   tableConstraints,
   tableIndexes,
-  type TableRef,
 } from "./schemaGraphCatalog";
+import { normalizeForeignKeyRelationship } from "./schemaGraphRelationships";
 import {
   addSchemaGraphDiagnostic as addDiagnostic,
   addSchemaGraphEdge as addEdge,
@@ -40,7 +41,6 @@ import {
   sortById,
   sortByName,
 } from "./schemaGraphSupport";
-import { normalizeForeignKeyRelationship } from "./schemaGraphRelationships";
 
 interface Context {
   readonly snapshot: SchemaGraphCatalogSnapshot;
@@ -116,8 +116,10 @@ function addTable(table: TableRef, context: Context) {
     tableId,
   );
 
-  sortByName(tableColumns(context.snapshot, table)).forEach((column, ordinal) =>
-    addColumn(table, column, ordinal, context),
+  sortByName(tableColumns(context.snapshot, table)).forEach(
+    (column, ordinal) => {
+      addColumn(table, column, ordinal, context);
+    },
   );
 }
 

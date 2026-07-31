@@ -1,33 +1,33 @@
-import { useState, useEffect, useCallback, useRef } from "react";
-import { useTranslation } from "react-i18next";
-import { Plus, Trash2 } from "lucide-react";
+import AsyncProgressOverlay from "@components/feedback/AsyncProgressOverlay";
+import ColumnsEditor from "@components/structure/ColumnsEditor";
+import ConstraintsEditor from "@components/structure/ConstraintsEditor";
+import IndexesEditor from "@components/structure/IndexesEditor";
+import {
+  StructureActionBar,
+  StructureEmpty,
+  StructureShell,
+} from "@components/structure/shared/structureUI";
+import { Button } from "@components/ui/button";
+import { Tabs, TabsList, TabsTrigger } from "@components/ui/tabs";
+import { cancelQuery } from "@lib/tauri";
+import { useConnectionStore } from "@stores/connectionStore";
 import { useSchemaStore } from "@stores/schemaStore";
+import { Plus, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { useDelayedFlag } from "@/hooks/useDelayedFlag";
+import { getParadigmVocabulary } from "@/lib/strings/paradigm-vocabulary";
+import type { DatabaseName, SchemaName, TableName } from "@/types/branded";
+import type { Paradigm } from "@/types/connection";
+import { supportsCatalogFeature, supportsDdl } from "@/types/dataSource";
 import type {
   ColumnInfo,
   ConstraintInfo,
   IndexInfo,
   TriggerInfo,
 } from "@/types/schema";
-import type { Paradigm } from "@/types/connection";
-import type { DatabaseName, SchemaName, TableName } from "@/types/branded";
-import { getParadigmVocabulary } from "@/lib/strings/paradigm-vocabulary";
-import ColumnsEditor from "@components/structure/ColumnsEditor";
-import IndexesEditor from "@components/structure/IndexesEditor";
-import ConstraintsEditor from "@components/structure/ConstraintsEditor";
-import {
-  StructureShell,
-  StructureActionBar,
-  StructureEmpty,
-} from "@components/structure/shared/structureUI";
-import AsyncProgressOverlay from "@components/feedback/AsyncProgressOverlay";
-import { useDelayedFlag } from "@/hooks/useDelayedFlag";
-import { cancelQuery } from "@lib/tauri";
-import { Tabs, TabsList, TabsTrigger } from "@components/ui/tabs";
-import { Button } from "@components/ui/button";
 import CreateTriggerDialog from "./CreateTriggerDialog";
 import DropTriggerDialog from "./DropTriggerDialog";
-import { useConnectionStore } from "@stores/connectionStore";
-import { supportsCatalogFeature, supportsDdl } from "@/types/dataSource";
 
 interface StructurePanelProps {
   connectionId: string;

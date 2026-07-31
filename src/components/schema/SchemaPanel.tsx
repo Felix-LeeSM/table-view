@@ -1,7 +1,7 @@
-import { Database, MousePointerClick, Plug } from "lucide-react";
-import { useTranslation } from "react-i18next";
 import { Button } from "@components/ui/button";
 import { useConnectionStore } from "@stores/connectionStore";
+import { Database, MousePointerClick, Plug } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { useConnectionLifecycle } from "@/hooks/useConnectionLifecycle";
 import DocumentDatabaseTree from "./DocumentDatabaseTree";
 import SchemaTree from "./SchemaTree";

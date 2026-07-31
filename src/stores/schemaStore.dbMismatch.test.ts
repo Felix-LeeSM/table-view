@@ -8,13 +8,13 @@
 //       Out-of-Scope per contract).
 // 을 한꺼번에 단언. 대표 case 는 #744 typed envelope 로 mock 한다.
 
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { setupTauriMock } from "@/test-utils/tauriMock";
-import type { DatabaseName, SchemaName, TableName } from "@/types/branded";
 import {
   registerSchemaStoreDbMismatchRecovery,
   resetSchemaStoreDbMismatchRecoveryForTests,
 } from "@lib/runtime/recovery/syncMismatchedActiveDb";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
+import type { DatabaseName, SchemaName, TableName } from "@/types/branded";
 
 const setActiveDbMock = vi.hoisted(() => vi.fn());
 const toastWarningMock = vi.hoisted(() => vi.fn());

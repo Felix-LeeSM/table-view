@@ -1,7 +1,7 @@
+import { Popover, PopoverAnchor, PopoverContent } from "@components/ui/popover";
+import { ChevronDown } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ChevronDown } from "lucide-react";
-import { Popover, PopoverAnchor, PopoverContent } from "@components/ui/popover";
 import {
   expandParametricDefault,
   filterPostgresTypes,

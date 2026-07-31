@@ -5,21 +5,22 @@
 // per-tab sort state (AC-02 / AC-03 — store action route, mount-time
 // restoration, multi-column restoration, cross-tab isolation).
 // Cases are byte-equivalent to the originals — no behaviour change.
-import { describe, it, expect, vi, beforeEach } from "vitest";
+
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { setupTauriMock } from "@/test-utils/tauriMock";
-import { screen, fireEvent, act, waitFor } from "@testing-library/react";
 import type { SortInfo, TableData } from "@/types/schema";
 import {
   MOCK_DATA,
-  mockQueryTableData,
+  mockAddTab,
   mockExecuteQuery,
   mockExecuteQueryBatch,
   mockPromoteTab,
-  mockUpdateTabSorts,
+  mockQueryTableData,
   mockSetTabDirty,
-  mockAddTab,
-  resetDataGridMocks,
+  mockUpdateTabSorts,
   renderDataGrid,
+  resetDataGridMocks,
 } from "./__tests__/dataGridTestHelpers";
 
 // Mock FilterBar — test DataGrid in isolation
@@ -68,7 +69,9 @@ const mockTabStoreState: {
 };
 const subscribers = new Set<() => void>();
 function notify() {
-  subscribers.forEach((fn) => fn());
+  subscribers.forEach((fn) => {
+    fn();
+  });
 }
 mockUpdateTabSorts.mockImplementation(
   (_connId: string, _db: string, tabId: string, next: SortInfo[]) => {

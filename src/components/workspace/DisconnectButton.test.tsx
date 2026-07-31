@@ -1,24 +1,24 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
-import type { ConnectionId, TabId } from "@/types/branded";
-import {
-  render,
-  screen,
-  fireEvent,
-  act,
-  waitFor,
-} from "@testing-library/react";
-import DisconnectButton from "./DisconnectButton";
 import { useConnectionStore } from "@stores/connectionStore";
+import { useDataGridEditStore } from "@stores/dataGridEditStore";
+import {
+  rawEntryKey,
+  useRawQueryGridEditStore,
+} from "@stores/rawQueryGridEditStore";
 import { useToastStore } from "@stores/toastStore";
 import { useWorkspaceStore } from "@stores/workspaceStore";
-import { useDataGridEditStore } from "@stores/dataGridEditStore";
-import { makeEntryKey } from "@/test-utils/brandedKeys";
 import {
-  useRawQueryGridEditStore,
-  rawEntryKey,
-} from "@stores/rawQueryGridEditStore";
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { emptyWorkspace } from "@/stores/__tests__/workspaceStoreTestHelpers";
+import { makeEntryKey } from "@/test-utils/brandedKeys";
+import type { ConnectionId, TabId } from "@/types/branded";
 import type { ConnectionConfig, ConnectionStatus } from "@/types/connection";
+import DisconnectButton from "./DisconnectButton";
 
 function makeConnection(
   id: string,

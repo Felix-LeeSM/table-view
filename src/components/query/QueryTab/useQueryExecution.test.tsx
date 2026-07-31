@@ -1,25 +1,25 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { act, renderHook, waitFor } from "@testing-library/react";
-import { setupTauriMock } from "@/test-utils/tauriMock";
-import {
-  seedWorkspace,
-  getTestWorkspace,
-} from "@/stores/__tests__/workspaceStoreTestHelpers";
-import { useWorkspaceStore } from "@stores/workspaceStore";
 import { useConnectionStore } from "@stores/connectionStore";
+import { useHistorySettingsStore } from "@stores/historySettingsStore";
 import { useQueryHistoryStore } from "@stores/queryHistoryStore";
 import { useSafeModeStore } from "@stores/safeModeStore";
-import { useHistorySettingsStore } from "@stores/historySettingsStore";
-import { useToastStore } from "@stores/toastStore";
 import { useSchemaStore } from "@stores/schemaStore";
-import { useQueryExecution } from "./useQueryExecution";
+import { useToastStore } from "@stores/toastStore";
+import { useWorkspaceStore } from "@stores/workspaceStore";
+import { act, renderHook, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  makeQueryTab,
-  makeDocTab,
-  makeConn,
-} from "../__tests__/queryTabTestHelpers";
+  getTestWorkspace,
+  seedWorkspace,
+} from "@/stores/__tests__/workspaceStoreTestHelpers";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import type { DocumentQueryResult } from "@/types/document";
 import type { QueryResult } from "@/types/query";
+import {
+  makeConn,
+  makeDocTab,
+  makeQueryTab,
+} from "../__tests__/queryTabTestHelpers";
+import { useQueryExecution } from "./useQueryExecution";
 
 const verifyActiveDbMock = vi.hoisted(() => vi.fn().mockResolvedValue(""));
 

@@ -1,35 +1,35 @@
-import { useRef, useEffect, useId, forwardRef } from "react";
-import { useTranslation } from "react-i18next";
+import { acceptCompletion, autocompletion } from "@codemirror/autocomplete";
+import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
+import {
+  type SQLDialect,
+  type SQLNamespace,
+  StandardSQL,
+  sql as sqlLanguage,
+} from "@codemirror/lang-sql";
+import {
+  bracketMatching,
+  defaultHighlightStyle,
+  indentOnInput,
+  syntaxHighlighting,
+} from "@codemirror/language";
 import { Compartment, EditorState, type Extension } from "@codemirror/state";
 import {
   EditorView,
+  highlightActiveLine,
   keymap,
   lineNumbers,
-  highlightActiveLine,
 } from "@codemirror/view";
-import {
-  sql as sqlLanguage,
-  StandardSQL,
-  type SQLDialect,
-  type SQLNamespace,
-} from "@codemirror/lang-sql";
-import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
-import {
-  syntaxHighlighting,
-  defaultHighlightStyle,
-  bracketMatching,
-  indentOnInput,
-} from "@codemirror/language";
-import { autocompletion, acceptCompletion } from "@codemirror/autocomplete";
 import {
   createSqlHybridCompletionSource,
   type SqlCompletionContext,
 } from "@features/completion";
-import { viewTableHighlightStyle } from "@lib/editor/highlightStyle";
 import { autocompleteTooltipTheme } from "@lib/editor/autocompleteTheme";
 import { editorContentAria } from "@lib/editor/editorContentAria";
 import { hideGutterFromA11y } from "@lib/editor/hideGutterFromA11y";
+import { viewTableHighlightStyle } from "@lib/editor/highlightStyle";
 import { setForwardedRef } from "@lib/editor/setForwardedRef";
+import { forwardRef, useEffect, useId, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { syncEditorDocument } from "./editorDocumentSync";
 
 /**

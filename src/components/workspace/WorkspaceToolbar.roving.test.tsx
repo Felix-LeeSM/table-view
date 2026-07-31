@@ -1,9 +1,9 @@
-import { describe, it, expect, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
-import WorkspaceToolbar from "./WorkspaceToolbar";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useWorkspaceStore } from "@stores/workspaceStore";
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { beforeEach, describe, expect, it } from "vitest";
+import WorkspaceToolbar from "./WorkspaceToolbar";
 
 // Enabled `<button>` controls of the toolbar, in DOM order. With no active
 // connection the DbSwitcher renders a read-only `<span role="button">` (not a

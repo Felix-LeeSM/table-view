@@ -1,17 +1,17 @@
-import { useConnectionStore } from "@stores/connectionStore";
-import { useSchemaStore } from "@stores/schemaStore";
+import { type CursorChainStep, parseMongoshExpression } from "@features/query";
+import { verifyActiveDb } from "@lib/api/verifyActiveDb";
+import { toast } from "@lib/runtime/toast";
 import {
   extractDbMutation,
   type SqlMutationDialect,
 } from "@lib/sql/sqlDialectMutations";
-import { verifyActiveDb } from "@lib/api/verifyActiveDb";
-import { toast } from "@lib/runtime/toast";
-import type { Paradigm } from "@/types/connection";
-import type { QueryTab } from "@stores/workspaceStore";
-import type { FindBody } from "@/types/document";
 import type { CreateMongoIndexRequest, MongoIndexDirection } from "@lib/tauri";
-import { parseMongoshExpression, type CursorChainStep } from "@features/query";
+import { useConnectionStore } from "@stores/connectionStore";
+import { useSchemaStore } from "@stores/schemaStore";
+import type { QueryTab } from "@stores/workspaceStore";
 import type { ExplainMongoFindArgs } from "@/lib/api/explain";
+import type { Paradigm } from "@/types/connection";
+import type { FindBody } from "@/types/document";
 
 /**
  * `QueryTab` module-top helpers:

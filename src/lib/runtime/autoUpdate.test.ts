@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { DownloadEvent } from "@tauri-apps/plugin-updater";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { checkForUpdatesOnLaunch } from "./autoUpdate";
 
 const isTauri = vi.fn(() => true);

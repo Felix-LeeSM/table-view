@@ -5,8 +5,8 @@ import {
   type DataSourceProfile,
 } from "./dataSource";
 import {
-  getVersionAwareDataSourceCapabilities,
   type DataSourceVersionInput,
+  getVersionAwareDataSourceCapabilities,
 } from "./dataSourceVersionCapabilities";
 
 export type ConformanceArea =

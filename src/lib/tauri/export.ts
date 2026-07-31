@@ -1,9 +1,8 @@
 // ── Export grid rows ───────────────────────────────────────────────────────
 
 import { invoke } from "@tauri-apps/api/core";
-
-import { toIpcSafeRows } from "@/lib/jsonCell";
 import type { ColumnCategory } from "@/lib/columnCategory";
+import { toIpcSafeRows } from "@/lib/jsonCell";
 import type { DdlDialect } from "@/lib/sql/ddlGenerator";
 
 export type ExportFormat = "csv" | "tsv" | "sql" | "json";

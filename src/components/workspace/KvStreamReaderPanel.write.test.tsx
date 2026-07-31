@@ -1,4 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { executeKvCommand } from "@lib/tauri/kv";
+import { useConnectionStore } from "@stores/connectionStore";
+import { useSafeModeStore } from "@stores/safeModeStore";
 import {
   fireEvent,
   render,
@@ -6,12 +8,10 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
-import { KvStreamReaderPanel } from "./KvStreamReaderPanel";
-import { executeKvCommand } from "@lib/tauri/kv";
-import { useConnectionStore } from "@stores/connectionStore";
-import { useSafeModeStore } from "@stores/safeModeStore";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConnectionConfig } from "@/types/connection";
 import type { KvStreamReadResult } from "@/types/kv";
+import { KvStreamReaderPanel } from "./KvStreamReaderPanel";
 
 // Purpose: the append-only stream write surface (PR5b, #1683) — XADD add form,
 // per-row XDEL, XTRIM MAXLEN, and copy-to-form. Streams have no in-place entry

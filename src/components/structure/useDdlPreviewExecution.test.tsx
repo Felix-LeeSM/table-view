@@ -1,10 +1,10 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { useDdlPreviewExecution } from "./useDdlPreviewExecution";
 import { useConnectionStore } from "@stores/connectionStore";
-import { useSafeModeStore } from "@stores/safeModeStore";
-import { useQueryHistoryStore } from "@stores/queryHistoryStore";
 import { useHistorySettingsStore } from "@stores/historySettingsStore";
+import { useQueryHistoryStore } from "@stores/queryHistoryStore";
+import { useSafeModeStore } from "@stores/safeModeStore";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { useDdlPreviewExecution } from "./useDdlPreviewExecution";
 
 const PLAN_SQL = [
   'CREATE TABLE "public"."issue_868_plan" ("id" integer, "label" text)',

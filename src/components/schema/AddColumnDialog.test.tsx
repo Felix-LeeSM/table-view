@@ -19,16 +19,16 @@
 // - AC-236-10: DEFAULT/CHECK passthrough verbatim — no escaping, no
 //   syntax check, embedded `'` preserved.
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { setupTauriMock } from "@/test-utils/tauriMock";
 import {
-  render,
-  screen,
-  fireEvent,
-  waitFor,
   act,
   cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
 } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 
 const { mockAddColumnRequest, mockListPostgresTypes } = vi.hoisted(() => ({
   mockAddColumnRequest: vi.fn(),
@@ -44,11 +44,11 @@ beforeEach(() => {
   });
 });
 
-import AddColumnDialog from "./AddColumnDialog";
-import { useConnectionStore } from "@stores/connectionStore";
-import { useSafeModeStore } from "@stores/safeModeStore";
-import { useQueryHistoryStore } from "@stores/queryHistoryStore";
 import { invalidatePostgresTypesCache } from "@hooks/usePostgresTypes";
+import { useConnectionStore } from "@stores/connectionStore";
+import { useQueryHistoryStore } from "@stores/queryHistoryStore";
+import { useSafeModeStore } from "@stores/safeModeStore";
+import AddColumnDialog from "./AddColumnDialog";
 
 function setDevConnection() {
   useConnectionStore.setState({

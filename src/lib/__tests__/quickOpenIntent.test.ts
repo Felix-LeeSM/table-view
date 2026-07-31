@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // Mock the Tauri event lib boundary (IPC): capture emit + the listen callback.
 const mockEmit = vi.fn().mockResolvedValue(undefined);
@@ -16,9 +16,9 @@ vi.mock("@tauri-apps/api/event", () => ({
 import {
   dispatchLocalIntent,
   forwardIntent,
-  subscribeIntents,
   QUICK_OPEN_INTENT_CHANNEL,
   type QuickOpenIntent,
+  subscribeIntents,
 } from "@lib/quickOpenIntent";
 
 describe("quickOpenIntent", () => {

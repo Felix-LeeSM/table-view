@@ -1,4 +1,3 @@
-import type { ReactNode } from "react";
 import {
   Dialog,
   DialogContent,
@@ -8,6 +7,7 @@ import {
   type DialogTone,
 } from "@components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@components/ui/tabs";
+import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
 // ---------------------------------------------------------------------------

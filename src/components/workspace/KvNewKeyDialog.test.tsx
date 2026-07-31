@@ -1,11 +1,11 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import KvNewKeyDialog from "./KvNewKeyDialog";
 import { executeKvCommand, getKvValue, setKvStringValue } from "@lib/tauri/kv";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useSafeModeStore } from "@stores/safeModeStore";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConnectionConfig } from "@/types/connection";
 import type { KvValueEnvelope } from "@/types/kv";
+import KvNewKeyDialog from "./KvNewKeyDialog";
 
 // Purpose: the new-key composer must block creation when the target key already
 // exists (aggregate writes MERGE into an existing key) and, on success, hand the

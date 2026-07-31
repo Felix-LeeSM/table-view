@@ -20,24 +20,25 @@
  *     `QueryTab.queryState` to idle and backfills `sidebar` defaults so
  *     downstream consumers can drop guards.
  */
+
+import i18n from "@lib/i18n";
 import { logger } from "@lib/logger";
 import { toast } from "@lib/runtime/toast";
-import i18n from "@lib/i18n";
 import {
-  persistWorkspace,
   type PersistWorkspaceRequest,
+  persistWorkspace,
 } from "@lib/tauri/workspaces";
 import type { Paradigm } from "@/types/connection";
+import {
+  sanitizeWorkspaceQueryMode,
+  toWorkspaceQueryLanguage,
+} from "./queryMode";
 import type {
   Tab,
   TabSubView,
   WorkspaceQueryMode,
   WorkspaceState,
 } from "./types";
-import {
-  sanitizeWorkspaceQueryMode,
-  toWorkspaceQueryLanguage,
-} from "./queryMode";
 
 export const STORAGE_KEY = "table-view-workspaces";
 

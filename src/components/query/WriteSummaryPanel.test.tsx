@@ -10,10 +10,10 @@
 // The panel is purely presentational — no IPC, no store reads. Tests
 // pass the discriminated `WriteSummaryData` shape directly.
 
-import { describe, it, expect } from "vitest";
-import { render, screen, fireEvent, act } from "@testing-library/react";
-import WriteSummaryPanel from "./WriteSummaryPanel";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, it } from "vitest";
 import type { WriteSummaryData } from "@/types/query";
+import WriteSummaryPanel from "./WriteSummaryPanel";
 
 describe("WriteSummaryPanel — insert variant", () => {
   it('renders "Inserted N document(s)" headline + chevron-expandable id list', () => {

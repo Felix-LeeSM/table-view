@@ -1,13 +1,4 @@
 import {
-  completionCursorOffsets,
-  type CompletionCursorOffsets,
-  type CompletionLanguage,
-} from "@/lib/completion/coreContract";
-import {
-  parseDataSourceVersion,
-  type ParsedDataSourceVersion,
-} from "@/types/dataSourceVersionCapabilities";
-import {
   getSqlDialectProfile,
   SQL_SHELL_PROFILES,
   type SqlDialectCapabilities,
@@ -17,6 +8,15 @@ import {
   type SqlShellId,
   type SqlShellProfile,
 } from "@lib/sql/sqlDialectProfile";
+import {
+  type CompletionCursorOffsets,
+  type CompletionLanguage,
+  completionCursorOffsets,
+} from "@/lib/completion/coreContract";
+import {
+  type ParsedDataSourceVersion,
+  parseDataSourceVersion,
+} from "@/types/dataSourceVersionCapabilities";
 import type {
   SqlCompletionCacheState,
   SqlCompletionCatalogSnapshot,

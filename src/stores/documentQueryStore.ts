@@ -1,14 +1,14 @@
-import { create } from "zustand";
-import type { DocumentQueryResult, FindBody } from "@/types/document";
 import * as tauri from "@lib/tauri";
 import { normalizeDocumentQueryResult } from "@lib/wireCamelCase";
+import { create } from "zustand";
+import type { DocumentQueryResult, FindBody } from "@/types/document";
 import {
-  setNested3,
-  setNested4,
-  withoutConnection,
   type ByCollection,
   type ByConn,
   type ByDb,
+  setNested3,
+  setNested4,
+  withoutConnection,
 } from "./documentStoreMaps";
 import { createRequestGuard } from "./requestGuard";
 

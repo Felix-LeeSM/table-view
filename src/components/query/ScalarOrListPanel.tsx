@@ -11,8 +11,8 @@
 //   - `resultKind === "scalar"` + columns.length === 0        → "findOne-empty"
 //   - `resultKind === "list"`                                 → "list"
 
-import { useTranslation } from "react-i18next";
 import { safeStringifyCell } from "@lib/jsonCell";
+import { useTranslation } from "react-i18next";
 import type { QueryResult } from "@/types/query";
 
 export interface ScalarOrListPanelProps {

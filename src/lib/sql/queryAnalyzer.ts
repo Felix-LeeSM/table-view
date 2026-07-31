@@ -9,11 +9,9 @@
  * single source row.
  */
 
-import type { ColumnInfo } from "@/types/schema";
-import type { QueryColumn } from "@/types/query";
 import type { DatabaseType } from "@/types/connection";
-import { tokenizeSql } from "./sqlTokenize";
-import { parseSqlPreloaded, type SqlSelectStatement } from "./sqlAst";
+import type { QueryColumn } from "@/types/query";
+import type { ColumnInfo } from "@/types/schema";
 import {
   resolveResultColumns,
   type SchemaColumnLookup,
@@ -23,6 +21,8 @@ import type {
   MultiTableInstance,
   MultiTablePlan,
 } from "./rawQuerySqlBuilder";
+import { parseSqlPreloaded, type SqlSelectStatement } from "./sqlAst";
+import { tokenizeSql } from "./sqlTokenize";
 
 export interface SingleTableSelectInfo {
   schema: string | null;

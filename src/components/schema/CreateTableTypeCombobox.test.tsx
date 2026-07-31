@@ -7,9 +7,10 @@
 //   suggestion, free-text fallback on blur).
 // - Decouples combobox-only assertions from the modal-level tests so
 //   the modal suite can stay focused on tab/preview/IPC orchestration.
+
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { useState } from "react";
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import CreateTableTypeCombobox from "./CreateTableTypeCombobox";
 

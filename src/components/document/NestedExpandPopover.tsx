@@ -1,18 +1,18 @@
-import { useMemo, useState } from "react";
-import { useTranslation } from "react-i18next";
-import { ChevronRight, Pencil } from "lucide-react";
+import BsonTypeEditor from "@components/document/BsonTypeEditor";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@components/ui/popover";
-import { safeStringifyCell } from "@lib/jsonCell";
 import {
   getNestedExpansion,
   type NestedEntry,
 } from "@lib/document/nestedExpansion";
+import { safeStringifyCell } from "@lib/jsonCell";
 import { detectBsonType } from "@lib/mongo/bsonTypes";
-import BsonTypeEditor from "@components/document/BsonTypeEditor";
+import { ChevronRight, Pencil } from "lucide-react";
+import { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 /**
  * Sprint 321 — Slice F.1: sentinel cell 의 1-depth 내용을 popover 로
@@ -140,19 +140,19 @@ export default function NestedExpandPopover({
   ): string => {
     if (typeof pending === "string") return pending;
     const type = detectBsonType(pending);
-    if (type === "objectId") return `ObjectId("${pending["$oid"] as string}")`;
+    if (type === "objectId") return `ObjectId("${pending.$oid as string}")`;
     if (type === "date") {
-      const d = pending["$date"];
+      const d = pending.$date;
       return typeof d === "string"
         ? `ISODate("${d}")`
         : safeStringifyCell(pending);
     }
     if (type === "decimal128") {
-      return `NumberDecimal("${pending["$numberDecimal"] as string}")`;
+      return `NumberDecimal("${pending.$numberDecimal as string}")`;
     }
     if (type === "binData") {
-      const b = pending["$binary"] as Record<string, unknown>;
-      return `BinData("${b["base64"] as string}")`;
+      const b = pending.$binary as Record<string, unknown>;
+      return `BinData("${b.base64 as string}")`;
     }
     return safeStringifyCell(pending);
   };

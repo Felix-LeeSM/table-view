@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { DocumentQueryResult } from "@/types/document";
 
 vi.mock("@tauri-apps/api/event", () => ({
@@ -21,13 +21,13 @@ vi.mock("@lib/window-label", async () => {
   };
 });
 
-import { cleanupConnectionFrontendState } from "./connectionCleanup";
-import { useSchemaStore } from "@stores/schemaStore";
+import { useDataGridEditStore } from "@stores/dataGridEditStore";
 import { useDocumentCatalogStore } from "@stores/documentCatalogStore";
 import { useDocumentQueryStore } from "@stores/documentQueryStore";
-import { useDataGridEditStore } from "@stores/dataGridEditStore";
-import { makeEntryKey } from "@/test-utils/brandedKeys";
+import { useSchemaStore } from "@stores/schemaStore";
 import { useWorkspaceStore } from "@stores/workspaceStore";
+import { makeEntryKey } from "@/test-utils/brandedKeys";
+import { cleanupConnectionFrontendState } from "./connectionCleanup";
 
 const RESULT: DocumentQueryResult = {
   columns: [],

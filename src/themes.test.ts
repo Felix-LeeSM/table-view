@@ -23,9 +23,9 @@
 //
 // 작성 일자: 2026-05-09 (Sprint 253, /tdd 흐름)
 
-import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { describe, expect, it } from "vitest";
 
 // process.cwd() at vitest invocation = repo root (where vite.config.ts
 // lives). `src/themes.css` is the canonical SoT path for theme tokens.

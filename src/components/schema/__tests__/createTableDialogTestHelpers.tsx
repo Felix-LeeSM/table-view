@@ -1,9 +1,10 @@
 // Shared harness for CreateTableDialog contract suites.
 // Split from CreateTableDialog.test.tsx for issue #773.
-import { vi, beforeEach } from "vitest";
-import { setupTauriMock } from "@/test-utils/tauriMock";
+
 import { configure, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { beforeEach, vi } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 
 // Sprint 385 (2026-05-17) — `waitFor` default timeout 1000ms 가 전체 스위트
 // coverage 실행 (`pnpm test --coverage`, instrumentation + 4000+ test 병렬
@@ -155,8 +156,8 @@ beforeEach(() => {
   });
 });
 
-import CreateTableDialog from "../CreateTableDialog";
 import { useConnectionStore } from "@stores/connectionStore";
+import CreateTableDialog from "../CreateTableDialog";
 
 export function setProductionConnection() {
   useConnectionStore.setState({

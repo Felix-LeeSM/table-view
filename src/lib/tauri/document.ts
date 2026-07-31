@@ -4,6 +4,12 @@
 // against an RDB connection surfaces `AppError::Unsupported` rather than
 // silently returning empty results.
 
+import {
+  normalizeBulkWriteResult,
+  normalizeDocumentId,
+  normalizeDocumentQueryResult,
+  normalizeDocumentRow,
+} from "@lib/wireCamelCase";
 import { invoke } from "@tauri-apps/api/core";
 import type {
   CollectionInfo,
@@ -18,12 +24,6 @@ import type {
   DocumentId,
 } from "@/types/documentMutate";
 import type { ColumnInfo, IndexInfo } from "@/types/schema";
-import {
-  normalizeDocumentId,
-  normalizeDocumentQueryResult,
-  normalizeDocumentRow,
-  normalizeBulkWriteResult,
-} from "@lib/wireCamelCase";
 
 import { wrapNumericCells } from "./numericWrap";
 

@@ -1,12 +1,12 @@
-import { create } from "zustand";
+import i18n from "@lib/i18n";
 import { logger } from "@lib/logger";
 import { toast } from "@lib/runtime/toast";
-import i18n from "@lib/i18n";
 import {
   listSnippets,
-  persistSnippets as persistSnippetsRemote,
   type PersistSnippetPayload,
+  persistSnippets as persistSnippetsRemote,
 } from "@lib/tauri/snippets";
+import { create } from "zustand";
 
 // ---------------------------------------------------------------------------
 // SQL snippet/template store (#1528).

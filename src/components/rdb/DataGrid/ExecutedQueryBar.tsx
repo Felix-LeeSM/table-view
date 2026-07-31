@@ -1,7 +1,7 @@
+import SqlSyntax from "@components/shared/SqlSyntax";
+import { ChevronRight } from "lucide-react";
 import { useId, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ChevronRight } from "lucide-react";
-import SqlSyntax from "@components/shared/SqlSyntax";
 
 interface ExecutedQueryBarProps {
   sql: string;

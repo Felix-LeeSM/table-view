@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
-  ORACLE_SQL_SAFETY_BOUNDARY,
   analyzeOracleStatement,
   decideOracleSafeModeAction,
+  ORACLE_SQL_SAFETY_BOUNDARY,
 } from "./oracleSafety";
 
 describe("oracleSafety", () => {

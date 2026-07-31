@@ -6,27 +6,28 @@
 // (AC-VIS-03), schema separators (AC-SEP-01), category icons
 // (AC-ICON-02..04), and the views/functions count badge mix. Cases are
 // byte-equivalent to the originals.
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { ConnectionId, TabId } from "@/types/branded";
+
+import { useWorkspaceStore } from "@stores/workspaceStore";
 import {
-  seedWorkspace,
-  getTestWorkspace,
-} from "@/stores/__tests__/workspaceStoreTestHelpers";
-import {
+  act,
+  fireEvent,
   render,
   screen,
-  fireEvent,
   waitFor,
-  act,
 } from "@testing-library/react";
-import SchemaTree from "./SchemaTree";
-import { useWorkspaceStore } from "@stores/workspaceStore";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  getTestWorkspace,
+  seedWorkspace,
+} from "@/stores/__tests__/workspaceStoreTestHelpers";
+import type { ConnectionId, TabId } from "@/types/branded";
 import {
   mockLoadSchemas,
   mockLoadTables,
-  setSchemaStoreState,
   resetStores,
+  setSchemaStoreState,
 } from "./__tests__/schemaTreeTestHelpers";
+import SchemaTree from "./SchemaTree";
 
 // ---------------------------------------------------------------------------
 // Tests

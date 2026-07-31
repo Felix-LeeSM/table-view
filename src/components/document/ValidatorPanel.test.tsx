@@ -7,10 +7,10 @@
 // 에디터 초기화, (c) edit + Save → setMongoValidator 호출 인자, (d) Clear
 // → setMongoValidator(null), (e) error surfaces, (f) invalid JSON 가드.
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { setupTauriMock } from "@/test-utils/tauriMock";
-import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import { ValidatorPanel } from "./ValidatorPanel";
 
 const getMongoValidatorMock = vi.fn();

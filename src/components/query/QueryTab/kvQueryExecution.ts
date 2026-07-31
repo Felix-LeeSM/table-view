@@ -1,9 +1,9 @@
-import { executeKvCommand } from "@lib/tauri";
-import { parseRedisDatabaseIndex } from "@lib/redis/redisDatabase";
 import type { SafeModeGate } from "@hooks/useSafeModeGate";
+import { parseRedisDatabaseIndex } from "@lib/redis/redisDatabase";
 import type { StatementAnalysis } from "@lib/sql/sqlSafety";
-import type { QueryResult, QueryState } from "@/types/query";
+import { executeKvCommand } from "@lib/tauri";
 import type { QueryTab } from "@stores/workspaceStore";
+import type { QueryResult, QueryState } from "@/types/query";
 import {
   KV_CONFIRM_COMMANDS,
   kvCommandConfirmationKey,

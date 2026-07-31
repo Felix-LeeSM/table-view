@@ -8,14 +8,14 @@
 // Reason: issue #1130 AC1/AC2/AC4 — exactly one cell is a tab stop, Arrow keys move
 //   focus + tabIndex in 2D; Enter/F2 activate per paradigm.
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { setupTauriMock } from "@/test-utils/tauriMock";
-import { render, screen, fireEvent, act } from "@testing-library/react";
 import type { QueryResult } from "@/types/query";
 import {
+  EDITABLE_VARIANT,
   QUERY_GRID_VARIANTS,
   READONLY_VARIANT,
-  EDITABLE_VARIANT,
 } from "./__tests__/queryGridPrimitiveVariants";
 
 beforeEach(() => {

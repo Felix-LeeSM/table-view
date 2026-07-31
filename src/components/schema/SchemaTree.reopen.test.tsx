@@ -8,14 +8,15 @@
 // pins it: rehydrate must preserve the marker (null → seed the single
 // implicit schema; a real array — including `[]` — is respected) and the flat
 // file-analytics source must render without a mount-time throw.
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, act } from "@testing-library/react";
-import SchemaTree from "./SchemaTree";
-import { useSchemaStore } from "@stores/schemaStore";
+
 import { useConnectionStore } from "@stores/connectionStore";
+import { useSchemaStore } from "@stores/schemaStore";
 import { useWorkspaceStore } from "@stores/workspaceStore";
 import { migrateLoadedWorkspaces } from "@stores/workspaceStore/persistence";
+import { act, render, screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConnectionConfig } from "@/types/connection";
+import SchemaTree from "./SchemaTree";
 
 const mockLoadSchemas = vi.fn().mockResolvedValue(undefined);
 const mockLoadTables = vi.fn().mockResolvedValue(undefined);

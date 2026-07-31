@@ -30,8 +30,8 @@ import {
   type EventOp,
   resetStateChangedRegistryForTests,
   STATE_CHANGED_EVENT,
-  setStateChangedHandlers,
   type StateChangedPayload,
+  setStateChangedHandlers,
 } from "./stateChanged";
 
 const BASE: Omit<

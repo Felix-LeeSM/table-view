@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { renderHook, act } from "@testing-library/react";
+import { act, renderHook } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConnectionConfig, ConnectionDraft } from "@/types/connection";
 
 // 2026-05-06 — Sprint 219 (P10 step 1). The 3 mutation toasts (added /

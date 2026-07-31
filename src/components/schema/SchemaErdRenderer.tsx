@@ -1,5 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useTranslation } from "react-i18next";
+import { Button } from "@components/ui/button";
 import {
   AlertTriangle,
   Crosshair,
@@ -11,13 +10,14 @@ import {
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
-import { Button } from "@components/ui/button";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
-  selectSchemaGraphIntelligence,
   type SchemaGraphForeignKeySelection,
   type SchemaGraphIntelligenceSelectors,
   type SchemaGraphTableForeignKeys,
   type SchemaGraphTableMetadataReadiness,
+  selectSchemaGraphIntelligence,
 } from "@/lib/schemaGraphSelectors";
 import type {
   SchemaGraph,

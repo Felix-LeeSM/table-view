@@ -1,13 +1,13 @@
-import { useMemo } from "react";
 import { autocompletion } from "@codemirror/autocomplete";
 import type { Extension } from "@codemirror/state";
+import { useMemo } from "react";
 import {
   createMongoCompletionSource,
   createMongoOperatorHighlight,
 } from "./mongo";
 import {
-  createMongoshDbSource,
   createMongoAdminCommandSource,
+  createMongoshDbSource,
 } from "./mongoAutocomplete";
 
 export interface UseMongoAutocompleteOptions {

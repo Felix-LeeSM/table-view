@@ -1,13 +1,13 @@
-import { useEffect, useMemo } from "react";
+import type { SchemaColumnLookup } from "@lib/sql/multiTableResolver";
 import {
   analyzeMultiTableEditability,
-  parseSelectInstances,
   type MultiTableEditability,
+  parseSelectInstances,
 } from "@lib/sql/queryAnalyzer";
-import type { SchemaColumnLookup } from "@lib/sql/multiTableResolver";
 import { useSchemaStore } from "@stores/schemaStore";
-import type { QueryColumn } from "@/types/query";
+import { useEffect, useMemo } from "react";
 import type { DatabaseName, SchemaName, TableName } from "@/types/branded";
+import type { QueryColumn } from "@/types/query";
 
 interface UseMultiTableResultEditabilityParams {
   /** When true the multi-table path is skipped entirely (document result,

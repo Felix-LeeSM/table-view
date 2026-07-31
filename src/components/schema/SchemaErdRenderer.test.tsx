@@ -8,8 +8,8 @@ import {
 import { describe, expect, it, vi } from "vitest";
 import { extractSchemaGraph } from "@/lib/schemaGraph";
 import { selectSchemaGraphIntelligence } from "@/lib/schemaGraphSelectors";
-import type { SchemaGraphCatalogSnapshot } from "@/types/schemaGraph";
 import type { ColumnInfo, TableInfo } from "@/types/schema";
+import type { SchemaGraphCatalogSnapshot } from "@/types/schemaGraph";
 import SchemaErdRenderer from "./SchemaErdRenderer";
 
 describe("SchemaErdRenderer", () => {

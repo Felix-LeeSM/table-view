@@ -8,8 +8,8 @@
  * Date: 2026-04-30
  */
 
-import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent, createEvent } from "@testing-library/react";
+import { createEvent, fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 import AsyncProgressOverlay from "./AsyncProgressOverlay";
 
 describe("AsyncProgressOverlay", () => {

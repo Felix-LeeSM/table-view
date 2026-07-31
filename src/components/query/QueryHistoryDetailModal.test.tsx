@@ -7,8 +7,8 @@
  * 마지막 outcome (sql 텍스트가 보이는가) 까지 따라가서 lock.
  */
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const invokeMock = vi.fn();
 vi.mock("@tauri-apps/api/core", () => ({

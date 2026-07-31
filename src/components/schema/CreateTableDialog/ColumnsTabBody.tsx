@@ -1,11 +1,11 @@
+import { Button } from "@components/ui/button";
+import type { usePostgresTypes } from "@hooks/usePostgresTypes";
 import { ArrowDown, ArrowUp, Minus, Plus } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { Button } from "@components/ui/button";
+import type { SchemaName, TableName } from "@/types/branded";
 import CreateTableTypeCombobox from "../CreateTableTypeCombobox";
 import InlineFkPopover from "./InlineFkPopover";
 import type { ColumnDraft } from "./types";
-import type { usePostgresTypes } from "@hooks/usePostgresTypes";
-import type { SchemaName, TableName } from "@/types/branded";
 
 type PgTypes = ReturnType<typeof usePostgresTypes>["types"];
 type PgTypesByName = ReturnType<typeof usePostgresTypes>["typesByName"];

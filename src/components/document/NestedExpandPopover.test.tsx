@@ -5,8 +5,8 @@
 // type subtitle 로 렌더되며 (c) trigger 클릭의 row-selection
 // propagation 이 stop 되는지를 회귀 가드.
 
-import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 import NestedExpandPopover from "./NestedExpandPopover";
 
 describe("NestedExpandPopover (Sprint 321 F.1)", () => {

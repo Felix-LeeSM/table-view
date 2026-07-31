@@ -5,12 +5,12 @@ import type {
   SchemaGraphIndexNode,
   SchemaGraphTableNode,
 } from "@/types/schemaGraph";
-import { compareText, schemaGraphTableId } from "./schemaGraphSupport";
 import type {
   SchemaGraphForeignKeySelection,
   SchemaGraphIntelligenceSelectors,
   SchemaGraphTableMetadataReadiness,
 } from "./schemaGraphSelectorTypes";
+import { compareText, schemaGraphTableId } from "./schemaGraphSupport";
 
 export type SchemaGraphMigrationRemovalTarget =
   | { readonly kind: "table"; readonly tableId: string }
@@ -130,15 +130,15 @@ export function selectSchemaGraphMigrationImpact(
     switch (node.kind) {
       case "table":
         addTable(node.id);
-        selectors.columnsByTableId
-          .get(node.id)
-          ?.forEach(({ id }) => addColumn(id));
-        selectors.indexesByTableId
-          .get(node.id)
-          ?.forEach(({ id }) => addIndex(id));
-        selectors.constraintsByTableId
-          .get(node.id)
-          ?.forEach(({ id }) => addConstraint(id));
+        selectors.columnsByTableId.get(node.id)?.forEach(({ id }) => {
+          addColumn(id);
+        });
+        selectors.indexesByTableId.get(node.id)?.forEach(({ id }) => {
+          addIndex(id);
+        });
+        selectors.constraintsByTableId.get(node.id)?.forEach(({ id }) => {
+          addConstraint(id);
+        });
         selectors.foreignKeysByTableId
           .get(node.id)
           ?.incomingForeignKeys.forEach(addForeignKey);

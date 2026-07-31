@@ -1,12 +1,12 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { parseMongoshExpression } from "@features/query";
 import {
   REDIS_COMMAND_COMPLETIONS,
   REDIS_UNSUPPORTED_COMMAND_FAMILIES,
   VALKEY_COMMAND_COMPLETIONS,
 } from "@features/completion/redis/redisCommandCompletion";
+import { parseMongoshExpression } from "@features/query";
 import { describe, expect, it } from "vitest";
 
 const THIS_TEST = "tests/fixtures/unsupported_boundary_contracts.test.ts";

@@ -1,13 +1,13 @@
-import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import type { QueryColumn } from "@/types/query";
+import type { ColumnInfo } from "@/types/schema";
 import {
-  parseSingleTableSelect,
-  analyzeResultEditability,
   analyzeMultiTableEditability,
+  analyzeResultEditability,
+  parseSingleTableSelect,
   resolveDefaultSchema,
 } from "./queryAnalyzer";
-import { preloadSqlWasm, __resetSqlWasmModuleForTests } from "./sqlAst";
-import type { ColumnInfo } from "@/types/schema";
-import type { QueryColumn } from "@/types/query";
+import { __resetSqlWasmModuleForTests, preloadSqlWasm } from "./sqlAst";
 
 // Issue #1297 — the editability gate now consumes the real sql-parser-core
 // WASM AST (via `parseSqlPreloaded`). Load the checked-in `.wasm` bytes so

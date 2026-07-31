@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useId, useState } from "react";
-import { Copy, Loader2, Plus, RefreshCw, Trash2, X } from "lucide-react";
-import { useTranslation } from "react-i18next";
 import { Button } from "@components/ui/button";
 import { useSafeModeGate } from "@hooks/useSafeModeGate";
 import { executeKvCommand, readKvStream } from "@lib/tauri/kv";
 import { useConnectionStore } from "@stores/connectionStore";
+import { Copy, Loader2, Plus, RefreshCw, Trash2, X } from "lucide-react";
+import { useCallback, useEffect, useId, useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { KvStreamEntry, KvStreamReadResult } from "@/types/kv";
 import ConfirmDestructiveDialog from "./ConfirmDestructiveDialog";
 import { KvJsonValueCell } from "./KvJsonValueCell";

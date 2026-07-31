@@ -1,15 +1,15 @@
+import { Loader2, Plus, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Loader2, Plus, Trash2 } from "lucide-react";
-import { useDelayedFlag } from "@/hooks/useDelayedFlag";
-import { useRefreshEvent } from "@/hooks/useRefreshEvent";
-import { useDocumentCatalogStore } from "@/stores/documentCatalogStore";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { useDelayedFlag } from "@/hooks/useDelayedFlag";
+import { useRefreshEvent } from "@/hooks/useRefreshEvent";
+import { useDocumentCatalogStore } from "@/stores/documentCatalogStore";
 import type { IndexInfo } from "@/types/schema";
 
 import { CreateMongoIndexDialog } from "./CreateMongoIndexDialog";

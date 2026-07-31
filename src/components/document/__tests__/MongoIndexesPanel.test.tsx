@@ -8,20 +8,20 @@
 // 차단, (d) drop 성공 시 list refresh 가 일어남을 검증한다. Sprint 350 의 5
 // RO 시나리오는 그대로 유지하면서 추가.
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { setupTauriMock } from "@/test-utils/tauriMock";
 import {
+  act,
+  fireEvent,
   render,
   screen,
   waitFor,
-  act,
-  fireEvent,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   __resetDocumentCatalogStoreForTests,
   useDocumentCatalogStore,
 } from "@/stores/documentCatalogStore";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import { MongoIndexesPanel } from "../MongoIndexesPanel";
 
 const listMongoIndexesMock = vi.fn();

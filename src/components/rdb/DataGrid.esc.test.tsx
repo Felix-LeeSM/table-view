@@ -19,20 +19,21 @@
 // `__tests__/dataGridTestHelpers.tsx`, mirroring `DataGrid.undo.test.tsx`
 // so the renderDataGrid pipeline matches the existing editing-axis tests
 // verbatim.
-import { describe, it, expect, vi, beforeEach } from "vitest";
+
+import { act, fireEvent, screen, within } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { setupTauriMock } from "@/test-utils/tauriMock";
-import { screen, fireEvent, act, within } from "@testing-library/react";
 import type { SortInfo } from "@/types/schema";
 import {
-  mockQueryTableData,
+  mockAddTab,
   mockExecuteQuery,
   mockExecuteQueryBatch,
   mockPromoteTab,
-  mockUpdateTabSorts,
+  mockQueryTableData,
   mockSetTabDirty,
-  mockAddTab,
-  resetDataGridMocks,
+  mockUpdateTabSorts,
   renderDataGrid,
+  resetDataGridMocks,
 } from "./__tests__/dataGridTestHelpers";
 
 vi.mock("./FilterBar", () => ({
@@ -75,7 +76,9 @@ const mockTabStoreState: {
 };
 const subscribers = new Set<() => void>();
 function notify() {
-  subscribers.forEach((fn) => fn());
+  subscribers.forEach((fn) => {
+    fn();
+  });
 }
 mockUpdateTabSorts.mockImplementation((tabId: string, next: SortInfo[]) => {
   const tab = mockTabStoreState.tabs.find((t) => t.id === tabId);

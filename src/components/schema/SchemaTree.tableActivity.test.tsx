@@ -2,23 +2,23 @@
 // table-open handlers in `useSchemaTreeActions` must record table activity so
 // the Pinned/Recent sections populate. Without this test the recording call
 // could be dropped and every other spec would still pass green.
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { setupTauriMock } from "@/test-utils/tauriMock";
-import { render, screen, fireEvent, act } from "@testing-library/react";
 
-import SchemaTree from "./SchemaTree";
 import { useSafeModeStore } from "@stores/safeModeStore";
 import {
-  useTableActivityStore,
-  selectRecentTables,
   __resetTableActivityStoreForTests,
+  selectRecentTables,
+  useTableActivityStore,
 } from "@stores/tableActivityStore";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import {
   mockLoadSchemas,
   mockLoadTables,
-  setSchemaStoreState,
   resetStores,
+  setSchemaStoreState,
 } from "./__tests__/schemaTreeTestHelpers";
+import SchemaTree from "./SchemaTree";
 
 beforeEach(() => {
   vi.clearAllMocks();

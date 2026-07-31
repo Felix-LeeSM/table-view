@@ -7,9 +7,9 @@
 //   its own `--cols` px track (neighbour unchanged); query results have no stable
 //   identity so neither mount persists widths to localStorage.
 
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { act, render } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { setupTauriMock } from "@/test-utils/tauriMock";
-import { render, act } from "@testing-library/react";
 import type { QueryResult } from "@/types/query";
 import { QUERY_GRID_VARIANTS } from "./__tests__/queryGridPrimitiveVariants";
 

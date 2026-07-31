@@ -1,6 +1,28 @@
-import { useState, useEffect, useRef } from "react";
-import { useTranslation } from "react-i18next";
-import TabBar from "./TabBar";
+import DocumentDataGrid from "@components/document/DocumentDataGrid";
+import {
+  MongoStructurePanel,
+  type MongoStructureSubTab,
+} from "@components/document/MongoStructurePanel";
+import GlobalQueryLogPanel from "@components/query/GlobalQueryLogPanel";
+import QueryTab from "@components/query/QueryTab";
+import DataGrid from "@components/rdb/DataGrid";
+import SearchIndexDetailPanel from "@components/search/SearchIndexDetailPanel";
+import ErrorBoundary from "@components/shared/ErrorBoundary";
+import { LogoWordmark } from "@components/shared/Logo";
+import { useTablistRoving } from "@components/shared/tablist/useTablistRoving";
+import { Button } from "@components/ui/button";
+import { Skeleton } from "@components/ui/skeleton";
+import KvKeyDetailPanel from "@components/workspace/KvKeyDetailPanel";
+import OperationsPanel from "@components/workspace/OperationsPanel";
+import WorkspaceToolbar from "@components/workspace/WorkspaceToolbar";
+import {
+  SchemaErdPanel,
+  StructurePanel,
+  ViewStructurePanel,
+} from "@features/catalog";
+import { useCurrentWindowConnectionId } from "@hooks/useCurrentWindowConnectionId";
+import { useConnectionStore } from "@stores/connectionStore";
+import { useMruStore } from "@stores/mruStore";
 import type { TableTab, TabSubView } from "@stores/workspaceStore";
 import {
   resolveActiveDb,
@@ -9,33 +31,11 @@ import {
   useCurrentWorkspaceKey,
   useWorkspaceStore,
 } from "@stores/workspaceStore";
-import { useConnectionStore } from "@stores/connectionStore";
-import { useMruStore } from "@stores/mruStore";
-import { useCurrentWindowConnectionId } from "@hooks/useCurrentWindowConnectionId";
 import { Plus } from "lucide-react";
-import DataGrid from "@components/rdb/DataGrid";
-import DocumentDataGrid from "@components/document/DocumentDataGrid";
-import {
-  MongoStructurePanel,
-  type MongoStructureSubTab,
-} from "@components/document/MongoStructurePanel";
-import {
-  SchemaErdPanel,
-  StructurePanel,
-  ViewStructurePanel,
-} from "@features/catalog";
-import QueryTab from "@components/query/QueryTab";
-import GlobalQueryLogPanel from "@components/query/GlobalQueryLogPanel";
-import { Button } from "@components/ui/button";
-import { Skeleton } from "@components/ui/skeleton";
-import { LogoWordmark } from "@components/shared/Logo";
-import ErrorBoundary from "@components/shared/ErrorBoundary";
-import SearchIndexDetailPanel from "@components/search/SearchIndexDetailPanel";
-import KvKeyDetailPanel from "@components/workspace/KvKeyDetailPanel";
-import OperationsPanel from "@components/workspace/OperationsPanel";
+import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { assertNever, type Paradigm } from "@/lib/paradigm";
-import WorkspaceToolbar from "@components/workspace/WorkspaceToolbar";
-import { useTablistRoving } from "@components/shared/tablist/useTablistRoving";
+import TabBar from "./TabBar";
 
 interface TableTabProps {
   tab: TableTab;

@@ -1,15 +1,15 @@
 import { describe, expect, it } from "vitest";
-import {
-  DATABASE_TYPE_LABELS,
-  paradigmOf,
-  type DatabaseType,
-  type Paradigm,
-} from "./connection";
 import { ADAPTER_CONFORMANCE_MATRIX } from "./adapterConformance";
 import {
   ADAPTER_CONTRACT_TEST_MATRIX,
   type AdapterContractDeltaAxis,
 } from "./adapterContractTestMatrix";
+import {
+  DATABASE_TYPE_LABELS,
+  type DatabaseType,
+  type Paradigm,
+  paradigmOf,
+} from "./connection";
 import {
   DATA_SOURCE_PROFILES,
   getConnectionSupportedDatabaseTypes,

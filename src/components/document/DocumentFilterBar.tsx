@@ -1,22 +1,16 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useTranslation } from "react-i18next";
-import { Ban, Plus, Trash2, X } from "lucide-react";
+import { acceptCompletion } from "@codemirror/autocomplete";
+import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
+import { json as jsonLanguage } from "@codemirror/lang-json";
+import {
+  bracketMatching,
+  defaultHighlightStyle,
+  indentOnInput,
+  syntaxHighlighting,
+} from "@codemirror/language";
 import { Compartment, EditorState, type Extension } from "@codemirror/state";
 import { EditorView, keymap, lineNumbers } from "@codemirror/view";
-import { json as jsonLanguage } from "@codemirror/lang-json";
-import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
-import {
-  syntaxHighlighting,
-  defaultHighlightStyle,
-  bracketMatching,
-  indentOnInput,
-} from "@codemirror/language";
-import { acceptCompletion } from "@codemirror/autocomplete";
-import { autocompleteTooltipTheme } from "@lib/editor/autocompleteTheme";
-import { hideGutterFromA11y } from "@lib/editor/hideGutterFromA11y";
 import { Button } from "@components/ui/button";
 import { Input } from "@components/ui/input";
-import { ToggleGroup, ToggleGroupItem } from "@components/ui/toggle-group";
 import {
   Select,
   SelectContent,
@@ -24,15 +18,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@components/ui/select";
+import { ToggleGroup, ToggleGroupItem } from "@components/ui/toggle-group";
 import { useMongoAutocomplete } from "@features/completion";
+import { autocompleteTooltipTheme } from "@lib/editor/autocompleteTheme";
+import { hideGutterFromA11y } from "@lib/editor/hideGutterFromA11y";
 import {
   buildMqlFilter,
-  stringifyMqlFilter,
-  MQL_OPERATORS,
   type MatchMode,
+  MQL_OPERATORS,
   type MqlCondition,
   type MqlOperator,
+  stringifyMqlFilter,
 } from "@lib/mongo/mqlFilterBuilder";
+import { Ban, Plus, Trash2, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { syncEditorDocument } from "../query/editorDocumentSync";
 
 /**

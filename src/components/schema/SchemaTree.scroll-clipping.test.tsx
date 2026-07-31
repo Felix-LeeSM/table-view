@@ -1,12 +1,12 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { render, screen, act, cleanup } from "@testing-library/react";
-import SchemaTree from "./SchemaTree";
+import { act, cleanup, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  setSchemaStoreState,
   resetStores,
+  setSchemaStoreState,
 } from "./__tests__/schemaTreeTestHelpers";
-import { makeSchemaTreePerfTables } from "./SchemaTree.perfFixtures";
+import SchemaTree from "./SchemaTree";
 import { ROW_HEIGHT_ESTIMATE } from "./SchemaTree/treeRows";
+import { makeSchemaTreePerfTables } from "./SchemaTree.perfFixtures";
 
 /**
  * Regression for #1222 — the sidebar SchemaTree virtualized list clipped its

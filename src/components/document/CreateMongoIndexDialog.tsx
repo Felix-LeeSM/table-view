@@ -1,6 +1,7 @@
+import { Loader2, Plus, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Loader2, Plus, Trash2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -9,9 +10,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { createMongoIndex } from "@/lib/tauri";
 import { toast } from "@/lib/runtime/toast";
+import { createMongoIndex } from "@/lib/tauri";
 import type {
   CreateMongoIndexRequest,
   MongoIndexDirection,

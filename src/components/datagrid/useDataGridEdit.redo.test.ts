@@ -6,11 +6,12 @@
 //
 // The harness focus is the *pending-state* boundary: undo populates the
 // redo stack, redo restores from it, and a fresh edit invalidates it.
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { renderHook, act } from "@testing-library/react";
+
+import { act, renderHook } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { setupTauriMock } from "@/test-utils/tauriMock";
-import { useDataGridEdit } from "./useDataGridEdit";
 import type { TableData } from "@/types/schema";
+import { useDataGridEdit } from "./useDataGridEdit";
 
 const mockExecuteQuery = vi.fn();
 const mockExecuteQueryBatch = vi.fn();

@@ -11,7 +11,7 @@
 //   - AC-363-04-FE-01 close-requested → hideWindow('launcher') 호출 1회.
 //   - AC-363-04-FE-02 close-requested → exitApp() 호출 0회 (pre-sprint-363 회귀 가드).
 //   - AC-363-04-FE-03 close-requested → workspace 라벨 hide/show 호출 0회.
-import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
+import { beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 
 const hideWindowMock = vi.fn((label: string) => {
   void label;

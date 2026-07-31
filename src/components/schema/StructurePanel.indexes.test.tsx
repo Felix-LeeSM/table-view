@@ -5,9 +5,10 @@
 // createIndex preview error + dropIndex preview error + dropIndex
 // execute error + Preview SQL disabled validation. Cases are
 // byte-equivalent to the originals — no behaviour change.
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { screen, fireEvent, act } from "@testing-library/react";
+
 import * as tauri from "@lib/tauri";
+import { act, fireEvent, screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   renderPanel,
   resetStructurePanelMocks,

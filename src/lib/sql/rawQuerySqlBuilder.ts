@@ -1,9 +1,9 @@
-import type { ColumnInfo } from "@/types/schema";
 import { safeStringifyCell } from "@lib/jsonCell";
+import type { ColumnInfo } from "@/types/schema";
 import {
   coerceToSqlLiteral,
-  sqlIdentifier,
   type SqlDialect,
+  sqlIdentifier,
 } from "./sqlLiteral";
 
 /**

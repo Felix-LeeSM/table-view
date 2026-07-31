@@ -4,10 +4,10 @@
 // happy path 시 dropMongoIndex 호출 + onDropped/toast + 모달 닫힘, driver
 // error 시 모달 유지 + role=alert inline.
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { setupTauriMock } from "@/test-utils/tauriMock";
-import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import { DropMongoIndexDialog } from "../DropMongoIndexDialog";
 
 const dropMongoIndexMock = vi.fn();

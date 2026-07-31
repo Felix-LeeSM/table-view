@@ -6,10 +6,11 @@
 // test stays resilient to color-token / copy iteration; the user-facing
 // copy ("Dry Run — rolled back. No data was changed.") is asserted as
 // well so accidental wording drift is caught here, not at QA time.
-import { describe, it, expect } from "vitest";
+
 import { render, screen } from "@testing-library/react";
-import QueryResultGrid from "./QueryResultGrid";
+import { describe, expect, it } from "vitest";
 import type { QueryResult } from "@/types/query";
+import QueryResultGrid from "./QueryResultGrid";
 
 const DML_RESULT: QueryResult = {
   columns: [],

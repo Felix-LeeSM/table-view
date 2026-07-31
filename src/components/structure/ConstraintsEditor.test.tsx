@@ -3,16 +3,18 @@
 // the dangerous path and surface as `ALTER TABLE … DROP CONSTRAINT …`,
 // which the Sprint 187 analyzer extension flags as ddl-alter-drop /
 // danger. Date: 2026-05-01.
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { setupTauriMock } from "@/test-utils/tauriMock";
+
 import {
+  act,
+  fireEvent,
   render,
   screen,
-  fireEvent,
   waitFor,
-  act,
 } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import ConstraintsEditor from "./ConstraintsEditor";
+
 beforeEach(() => {
   setupTauriMock({
     dropConstraint: vi.fn(() =>
@@ -35,12 +37,12 @@ import * as tauri from "@lib/tauri";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useSafeModeStore } from "@stores/safeModeStore";
 import { useSchemaStore } from "@stores/schemaStore";
-import type { ConstraintInfo } from "@/types/schema";
 import {
   SCHEMA_GRAPH_IMPACT_SESSION_FK,
   SCHEMA_GRAPH_IMPACT_USER_EMAIL_CONSTRAINT,
   seedSchemaGraphMigrationImpactFixture,
 } from "@/test-utils/schemaGraphImpactFixture";
+import type { ConstraintInfo } from "@/types/schema";
 
 const SAMPLE_CONSTRAINT: ConstraintInfo = {
   name: "fk_users_org",

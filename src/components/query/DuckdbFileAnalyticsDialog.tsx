@@ -1,8 +1,3 @@
-import { useState } from "react";
-import { useTranslation } from "react-i18next";
-import { open } from "@tauri-apps/plugin-dialog";
-import { FileSearch, Loader2, Play } from "lucide-react";
-
 import { Button } from "@components/ui/button";
 import {
   Dialog,
@@ -12,14 +7,18 @@ import {
   DialogTitle,
 } from "@components/ui/dialog";
 import { DialogShell } from "@components/ui/dialog-shell";
+import { recordHistoryEntry } from "@lib/runtime/history/recordHistoryEntry";
+import { sqlIdentifier } from "@lib/sql/sqlLiteral";
 import {
   executeFileAnalyticsQuery,
   previewFileAnalyticsSource,
   registerFileAnalyticsSource,
 } from "@lib/tauri/fileAnalytics";
-import { recordHistoryEntry } from "@lib/runtime/history/recordHistoryEntry";
-import { sqlIdentifier } from "@lib/sql/sqlLiteral";
 import { useSchemaStore } from "@stores/schemaStore";
+import { open } from "@tauri-apps/plugin-dialog";
+import { FileSearch, Loader2, Play } from "lucide-react";
+import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import type {
   FileAnalyticsPreview,
   FileAnalyticsQueryResponse,

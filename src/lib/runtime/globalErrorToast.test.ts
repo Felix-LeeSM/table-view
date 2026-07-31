@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { installGlobalErrorToast } from "./globalErrorToast";
 import { useToastStore } from "@stores/toastStore";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { installGlobalErrorToast } from "./globalErrorToast";
 
 // #1312 — the global safety net surfaces failures that never reach a React
 // ErrorBoundary (silent async rejections, uncaught/commit-phase throws) as an

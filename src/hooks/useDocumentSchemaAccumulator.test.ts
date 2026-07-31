@@ -5,10 +5,10 @@
 // (c) type first-wins, (d) `(connId, db, coll)` 변경시 auto-reset
 // 회귀를 lock.
 
-import { describe, it, expect } from "vitest";
-import { renderHook, act } from "@testing-library/react";
-import { useDocumentSchemaAccumulator } from "./useDocumentSchemaAccumulator";
+import { act, renderHook } from "@testing-library/react";
+import { describe, expect, it } from "vitest";
 import type { DocumentColumn } from "@/types/document";
+import { useDocumentSchemaAccumulator } from "./useDocumentSchemaAccumulator";
 
 function col(name: string, dataType = "string"): DocumentColumn {
   return { name, dataType, category: "unknown" };

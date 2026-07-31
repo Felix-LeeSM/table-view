@@ -1,4 +1,10 @@
 import { describe, expect, it } from "vitest";
+import {
+  schemaGraphColumnId,
+  schemaGraphConstraintId,
+  schemaGraphIndexId,
+  schemaGraphTableId,
+} from "@/test-utils/schemaGraphIds";
 import type { RuntimeRdbmsDatabaseType } from "@/types/rdbmsDataSources";
 import type {
   ColumnInfo,
@@ -7,16 +13,10 @@ import type {
   TableInfo,
 } from "@/types/schema";
 import type { SchemaGraphCatalogSnapshot } from "@/types/schemaGraph";
-import {
-  schemaGraphColumnId,
-  schemaGraphConstraintId,
-  schemaGraphIndexId,
-  schemaGraphTableId,
-} from "@/test-utils/schemaGraphIds";
 import { extractSchemaGraph } from "./schemaGraph";
 import {
-  selectSchemaGraphMigrationImpact,
   selectSchemaGraphIntelligence,
+  selectSchemaGraphMigrationImpact,
   selectSchemaGraphNodeMaps,
 } from "./schemaGraphSelectors";
 

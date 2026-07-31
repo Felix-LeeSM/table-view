@@ -1,14 +1,14 @@
-import { useEffect, useRef, useState } from "react";
-import { useTranslation } from "react-i18next";
-import { Monitor, Moon, Sun } from "lucide-react";
-import { useThemeStore } from "@stores/themeStore";
+import { ToggleGroup, ToggleGroupItem } from "@components/ui/toggle-group";
+import { applyTheme, type ThemeMode } from "@lib/themeBoot";
 import {
   FEATURED_THEME_IDS,
   THEME_CATALOG,
   type ThemeId,
 } from "@lib/themeCatalog";
-import { applyTheme, type ThemeMode } from "@lib/themeBoot";
-import { ToggleGroup, ToggleGroupItem } from "@components/ui/toggle-group";
+import { useThemeStore } from "@stores/themeStore";
+import { Monitor, Moon, Sun } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 
 const FEATURED_ID_SET = new Set<ThemeId>(FEATURED_THEME_IDS);

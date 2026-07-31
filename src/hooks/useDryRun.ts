@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from "react";
 import { cancelQuery, executeQueryDryRun } from "@lib/tauri";
 import { normalizeQueryResult } from "@lib/wireCamelCase";
+import { useEffect, useRef, useState } from "react";
 import type { QueryResult } from "@/types/query";
 
 /**

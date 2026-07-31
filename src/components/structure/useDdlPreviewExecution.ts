@@ -1,12 +1,12 @@
-import { useCallback, useRef, useState } from "react";
 import i18n from "@lib/i18n";
-import { analyzeStatement } from "@/lib/sql/sqlSafety";
-import { splitSqlStatements } from "@lib/sql/sqlUtils";
-import { useSafeModeGate } from "@/hooks/useSafeModeGate";
 import { recordHistoryEntry } from "@lib/runtime/history/recordHistoryEntry";
 import { syncMismatchedActiveDb } from "@lib/runtime/recovery/syncMismatchedActiveDb";
 import { toast } from "@lib/runtime/toast";
+import { splitSqlStatements } from "@lib/sql/sqlUtils";
 import { getDbMismatchInfo, getTauriErrorMessage } from "@lib/tauri/error";
+import { useCallback, useRef, useState } from "react";
+import { useSafeModeGate } from "@/hooks/useSafeModeGate";
+import { analyzeStatement } from "@/lib/sql/sqlSafety";
 
 /**
  * Shared DDL preview/execute lifecycle for the Structure-surface editors

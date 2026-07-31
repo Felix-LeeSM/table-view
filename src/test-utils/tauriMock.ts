@@ -1,5 +1,5 @@
-import { vi, type Mock } from "vitest";
 import type * as Tauri from "@lib/tauri";
+import { type Mock, vi } from "vitest";
 
 const TAURI_FUNCTIONS = [
   "addColumnRequest",

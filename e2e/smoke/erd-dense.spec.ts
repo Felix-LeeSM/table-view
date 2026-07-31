@@ -1,6 +1,6 @@
-import { $, browser, expect } from "@wdio/globals";
 import { mkdir, stat, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { $, browser, expect } from "@wdio/globals";
 import {
   createPostgresConnection,
   expandIfCollapsed,

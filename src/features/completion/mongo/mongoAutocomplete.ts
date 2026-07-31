@@ -5,7 +5,7 @@ import type {
   CompletionSource,
 } from "@codemirror/autocomplete";
 import { syntaxTree } from "@codemirror/language";
-import { RangeSetBuilder, type Extension } from "@codemirror/state";
+import { type Extension, RangeSetBuilder } from "@codemirror/state";
 import {
   Decoration,
   type DecorationSet,
@@ -18,16 +18,17 @@ import {
   type MongoCompletionPositionKind,
 } from "@lib/mongo/mongoCompletionPosition";
 import { getMongoCompletionVocabulary } from "@lib/mongo/mongoCompletionVocabulary";
+import { MONGO_OPERATOR_META } from "@lib/mongo/mongoOperatorMeta";
 import {
   getMongoAdminCommandCompletions,
   getMongoshCollectionMethodCompletions,
   getMongoshDbLevelMethodCompletions,
 } from "@lib/mongo/mongoShellCompletionVocabulary";
-import { MONGO_OPERATOR_META } from "@lib/mongo/mongoOperatorMeta";
 
-export { classifyMongoCompletionPosition } from "@lib/mongo/mongoCompletionPosition";
 export type { MongoCompletionPositionKind } from "@lib/mongo/mongoCompletionPosition";
+export { classifyMongoCompletionPosition } from "@lib/mongo/mongoCompletionPosition";
 export {
+  getMongoCompletionVocabulary,
   MONGO_ACCUMULATORS,
   MONGO_AGGREGATE_STAGES,
   MONGO_ALL_OPERATORS,
@@ -36,7 +37,6 @@ export {
   MONGO_QUERY_OPERATORS,
   MONGO_TYPE_TAGS,
   MONGO_UPDATE_OPERATORS,
-  getMongoCompletionVocabulary,
 } from "@lib/mongo/mongoCompletionVocabulary";
 export {
   getMongoAdminCommandCompletions,

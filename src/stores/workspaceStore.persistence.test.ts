@@ -17,11 +17,11 @@
  * LS seed 로부터의 read/rehydrate 경로만 검증한다.
  */
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { useWorkspaceStore } from "./workspaceStore";
 import {
   installFakeLocalStorage,
   restoreLocalStorage,
 } from "./__tests__/workspaceStoreTestHelpers";
+import { useWorkspaceStore } from "./workspaceStore";
 
 describe("workspaceStore — persistence", () => {
   beforeEach(() => {
@@ -72,7 +72,7 @@ describe("workspaceStore — persistence", () => {
     useWorkspaceStore.setState({ workspaces: {} });
 
     useWorkspaceStore.getState().loadPersistedWorkspaces();
-    const ws = useWorkspaceStore.getState().workspaces["conn1"]?.["dbA"];
+    const ws = useWorkspaceStore.getState().workspaces.conn1?.dbA;
     expect(ws).toBeDefined();
     expect(ws!.tabs).toHaveLength(1);
     expect((ws!.tabs[0] as { table?: string }).table).toBe("users");
@@ -123,7 +123,7 @@ describe("workspaceStore — persistence", () => {
 
     useWorkspaceStore.getState().loadPersistedWorkspaces();
 
-    const ws = useWorkspaceStore.getState().workspaces["conn1"]?.["dbA"];
+    const ws = useWorkspaceStore.getState().workspaces.conn1?.dbA;
     expect(ws?.tabs[0]).toMatchObject({ type: "table", database: "dbA" });
     expect(ws?.closedTabHistory[0]).toMatchObject({
       type: "table",

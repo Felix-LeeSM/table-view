@@ -3,21 +3,22 @@
 // event listener + cleanup (AC-10), per-schema right-click Refresh
 // (AC-CM-17, AC-CM-18), and the loadSchemas-rejection cleanup path.
 // Cases are byte-equivalent to the originals.
-import { describe, it, expect, vi, beforeEach } from "vitest";
+
 import {
+  act,
+  fireEvent,
   render,
   screen,
-  fireEvent,
   waitFor,
-  act,
 } from "@testing-library/react";
-import SchemaTree from "./SchemaTree";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   mockLoadSchemas,
   mockLoadTables,
-  setSchemaStoreState,
   resetStores,
+  setSchemaStoreState,
 } from "./__tests__/schemaTreeTestHelpers";
+import SchemaTree from "./SchemaTree";
 
 // ---------------------------------------------------------------------------
 // Tests

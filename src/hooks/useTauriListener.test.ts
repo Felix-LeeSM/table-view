@@ -4,9 +4,10 @@
  * must still unlisten the moment it does, never leak a listener onto a
  * torn-down webview.
  */
-import { describe, it, expect, vi } from "vitest";
-import { renderHook } from "@testing-library/react";
+
 import type { UnlistenFn } from "@tauri-apps/api/event";
+import { renderHook } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 import { useTauriListener } from "./useTauriListener";
 
 const flush = () => new Promise((r) => setTimeout(r, 0));

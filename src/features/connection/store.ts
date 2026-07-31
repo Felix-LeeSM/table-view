@@ -1,22 +1,22 @@
-import { create } from "zustand";
+import { cleanupConnectionFrontendState } from "@lib/runtime/connection/cleanup";
+import {
+  persistActiveStatuses,
+  persistFocusedConnId,
+  readConnectionSession,
+} from "@lib/scopedLocalStorage";
+import * as tauri from "@lib/tauri";
+import { getCurrentWindowLabel } from "@lib/window-label";
+import { normalizeActiveStatuses } from "@lib/wireCamelCase";
+import { attachZustandIpcBridge } from "@lib/zustand-ipc-bridge";
 import { listen } from "@tauri-apps/api/event";
+import { create } from "zustand";
+import { sanitizeMessage } from "./components/ConnectionDialog/sanitize";
 import type {
   ConnectionConfig,
   ConnectionDraft,
   ConnectionGroup,
   ConnectionStatus,
 } from "./model";
-import * as tauri from "@lib/tauri";
-import { attachZustandIpcBridge } from "@lib/zustand-ipc-bridge";
-import { getCurrentWindowLabel } from "@lib/window-label";
-import {
-  persistFocusedConnId,
-  persistActiveStatuses,
-  readConnectionSession,
-} from "@lib/scopedLocalStorage";
-import { normalizeActiveStatuses } from "@lib/wireCamelCase";
-import { cleanupConnectionFrontendState } from "@lib/runtime/connection/cleanup";
-import { sanitizeMessage } from "./components/ConnectionDialog/sanitize";
 
 export interface ConnectionState {
   connections: ConnectionConfig[];

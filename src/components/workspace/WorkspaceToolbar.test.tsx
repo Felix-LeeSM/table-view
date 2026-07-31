@@ -1,15 +1,15 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
-import type { ConnectionId, TabId } from "@/types/branded";
-import { seedWorkspace } from "@/stores/__tests__/workspaceStoreTestHelpers";
-import { render, screen, fireEvent } from "@testing-library/react";
-import WorkspaceToolbar from "./WorkspaceToolbar";
 import { useConnectionStore } from "@stores/connectionStore";
 import {
-  useWorkspaceStore,
-  type TableTab,
   type QueryTab,
+  type TableTab,
+  useWorkspaceStore,
 } from "@stores/workspaceStore";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { seedWorkspace } from "@/stores/__tests__/workspaceStoreTestHelpers";
+import type { ConnectionId, TabId } from "@/types/branded";
 import type { ConnectionConfig, ConnectionStatus } from "@/types/connection";
+import WorkspaceToolbar from "./WorkspaceToolbar";
 
 function makeConnection(
   id: string,

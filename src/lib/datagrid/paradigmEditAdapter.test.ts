@@ -16,10 +16,10 @@
 //     2. preparePreview 빈 commands → session: null
 //     3. execute → 명령 N개 순차 dispatch
 //     4. execute failure → ok:false (failedIndex 미정)
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { SafeModeGate } from "@/hooks/useSafeModeGate";
 import { setupTauriMock } from "@/test-utils/tauriMock";
 import type { TableData } from "@/types/schema";
-import type { SafeModeGate } from "@/hooks/useSafeModeGate";
 import {
   buildRdbSession,
   classifyRdbRisk,

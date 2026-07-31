@@ -1,11 +1,11 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
-import { PinnedRecentSections } from "./PinnedRecentSections";
 import {
-  useTableActivityStore,
   __resetTableActivityStoreForTests,
   type TableActivityEntry,
+  useTableActivityStore,
 } from "@stores/tableActivityStore";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { PinnedRecentSections } from "./PinnedRecentSections";
 
 // #1218 — sidebar Pinned/Recent sections. IPC is mocked so store mutates stay
 // window-local; i18n keys fall back to the key name under the test i18n stub.

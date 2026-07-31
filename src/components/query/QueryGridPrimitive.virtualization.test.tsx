@@ -9,14 +9,15 @@
 //   virtualizes), and #1477 B2 scroll preservation (same-SQL refetch keeps position, a
 //   different executed SQL resets to top). jsdom reports 0 offsetWidth/Height so the
 //   virtualizer sees no viewport — the prototype patch below stands one up.
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+
+import { fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { setupTauriMock } from "@/test-utils/tauriMock";
-import { render, screen, fireEvent } from "@testing-library/react";
 import type { QueryResult } from "@/types/query";
 import {
+  EDITABLE_VARIANT,
   QUERY_GRID_VARIANTS,
   READONLY_VARIANT,
-  EDITABLE_VARIANT,
 } from "./__tests__/queryGridPrimitiveVariants";
 
 const VIEWPORT_HEIGHT = 600;

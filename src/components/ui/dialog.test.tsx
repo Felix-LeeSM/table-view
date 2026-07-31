@@ -1,5 +1,15 @@
-import { describe, it, expect, vi } from "vitest";
+import ConnectionDialog from "@components/connection/ConnectionDialog";
+import GroupDialog from "@components/connection/GroupDialog";
+import ImportExportDialog from "@components/connection/ImportExportDialog";
+import BlobViewerDialog from "@components/datagrid/BlobViewerDialog";
+import CellDetailDialog from "@components/datagrid/CellDetailDialog";
+import AddDocumentModal from "@components/document/AddDocumentModal";
+import MqlPreviewModal from "@components/document/MqlPreviewModal";
+import SqlPreviewDialog from "@components/structure/SqlPreviewDialog";
+import ConfirmDialog from "@components/ui/dialog/ConfirmDialog";
+import { useConnectionStore } from "@stores/connectionStore";
 import { render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 import {
   Dialog,
   DialogContent,
@@ -7,16 +17,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "./dialog";
-import ConnectionDialog from "@components/connection/ConnectionDialog";
-import GroupDialog from "@components/connection/GroupDialog";
-import ImportExportDialog from "@components/connection/ImportExportDialog";
-import BlobViewerDialog from "@components/datagrid/BlobViewerDialog";
-import CellDetailDialog from "@components/datagrid/CellDetailDialog";
-import SqlPreviewDialog from "@components/structure/SqlPreviewDialog";
-import MqlPreviewModal from "@components/document/MqlPreviewModal";
-import AddDocumentModal from "@components/document/AddDocumentModal";
-import ConfirmDialog from "@components/ui/dialog/ConfirmDialog";
-import { useConnectionStore } from "@stores/connectionStore";
 
 // ---------------------------------------------------------------------------
 // Sprint 91 — DialogHeader row layout + close-button parity

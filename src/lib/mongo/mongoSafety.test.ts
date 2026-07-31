@@ -6,7 +6,7 @@
 // severity (`info` / `warn` / `danger`) 로 split. read-only aggregate /
 // find → INFO, write *-many (non-empty filter) → WARN, *-all / $out / $merge /
 // drop → DANGER. ADR 0023 grill Q2-(a).
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
   analyzeMongoOperation,
   analyzeMongoPipeline,

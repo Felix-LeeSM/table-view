@@ -4,10 +4,10 @@
 // (SchemaTree) 와 "편집 중 방향키 무시" 가드도 확인한다. virtualization sync
 // 는 useGridRoving.test.tsx 가 결정적으로 커버, 실제 render 는 E2E 담당. (2026-07-01)
 
-import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent, act } from "@testing-library/react";
-import DataGridTable from "./DataGridTable";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 import type { TableData } from "@/types/schema";
+import DataGridTable from "./DataGridTable";
 
 const MOCK_DATA: TableData = {
   columns: [

@@ -1,8 +1,8 @@
-import { describe, it, expect } from "vitest";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { useState } from "react";
-import { render, screen, fireEvent, act } from "@testing-library/react";
-import SelectionTree from "./SelectionTree";
+import { describe, expect, it } from "vitest";
 import type { ConnectionConfig, ConnectionGroup } from "@/types/connection";
+import SelectionTree from "./SelectionTree";
 
 function makeConn(id: string, groupId: string | null = null): ConnectionConfig {
   return {

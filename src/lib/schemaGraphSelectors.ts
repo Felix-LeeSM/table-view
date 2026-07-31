@@ -16,11 +16,13 @@ import {
   schemaGraphColumnId,
   schemaGraphTableId,
 } from "./schemaGraphSupport";
+
 export {
-  selectSchemaGraphMigrationImpact,
   type SchemaGraphMigrationImpactSummary,
   type SchemaGraphMigrationRemovalTarget,
+  selectSchemaGraphMigrationImpact,
 } from "./schemaGraphMigrationImpact";
+
 // #1370 — selector types live in the leaf module so migrationImpact can import
 // them without a cross-import back into this value-bearing facade. Re-exported
 // here so existing consumers keep importing these off schemaGraphSelectors.
@@ -34,6 +36,7 @@ import type {
   SchemaGraphNodeMaps,
   SchemaGraphTableMetadataReadiness,
 } from "./schemaGraphSelectorTypes";
+
 export type {
   SchemaGraphForeignKeySelection,
   SchemaGraphForeignKeySelectors,

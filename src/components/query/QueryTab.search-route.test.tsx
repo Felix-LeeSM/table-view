@@ -1,12 +1,12 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { ConnectionId, TabId } from "@/types/branded";
-import { seedWorkspace } from "@/stores/__tests__/workspaceStoreTestHelpers";
 import { useConnectionStore } from "@stores/connectionStore";
 import {
-  useWorkspaceStore,
   type QueryTab as QueryTabType,
+  useWorkspaceStore,
 } from "@stores/workspaceStore";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { seedWorkspace } from "@/stores/__tests__/workspaceStoreTestHelpers";
+import type { ConnectionId, TabId } from "@/types/branded";
 import type { ConnectionConfig } from "@/types/connection";
 import type { SearchCatalogSummary, SearchIndexMapping } from "@/types/search";
 import QueryTab from "./QueryTab";

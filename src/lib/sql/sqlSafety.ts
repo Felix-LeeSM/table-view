@@ -16,14 +16,14 @@
  * their concern (a blanket `export *` would leak them into the public API).
  */
 
+export {
+  analyzeStatement,
+  isDangerous,
+  isInfoStatement,
+} from "./sqlSafetyClassifier";
 export type {
   Severity,
   StatementAnalysis,
   StatementAnalysisOptions,
   StatementKind,
 } from "./sqlSafetyTypes";
-export {
-  analyzeStatement,
-  isDangerous,
-  isInfoStatement,
-} from "./sqlSafetyClassifier";

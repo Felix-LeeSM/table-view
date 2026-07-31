@@ -1,6 +1,6 @@
+import PreviewDialog from "@components/ui/dialog/PreviewDialog";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import PreviewDialog from "@components/ui/dialog/PreviewDialog";
 import { isEditableTarget } from "@/lib/keyboard/isEditableTarget";
 
 // ---------------------------------------------------------------------------

@@ -1,13 +1,13 @@
-import { useCallback } from "react";
-import { useSafeModeStore } from "@stores/safeModeStore";
 import { useConnectionStore } from "@stores/connectionStore";
-import type { StatementAnalysis } from "@/lib/sql/sqlSafety";
-import { decideSafeModeAction, type SafeModeDecision } from "@/lib/safeMode";
-import type { ConnectionConfig } from "@/types/connection";
+import { useSafeModeStore } from "@stores/safeModeStore";
+import { useCallback } from "react";
 import {
   canonicalEnvironmentTag,
   type EnvironmentTag,
 } from "@/features/connection/model";
+import { decideSafeModeAction, type SafeModeDecision } from "@/lib/safeMode";
+import type { StatementAnalysis } from "@/lib/sql/sqlSafety";
+import type { ConnectionConfig } from "@/types/connection";
 
 /**
  * Paradigm-agnostic Safe Mode gate. Pure store wiring around

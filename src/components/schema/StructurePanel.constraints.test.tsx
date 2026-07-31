@@ -5,10 +5,11 @@
 // row buttons + drop modal preview/execute/cancel) + Actions header +
 // dropConstraint preview error + Preview SQL disabled validation. Cases
 // are byte-equivalent to the originals — no behaviour change.
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { screen, fireEvent, act } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
+
 import * as tauri from "@lib/tauri";
+import { act, fireEvent, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   renderPanel,
   resetStructurePanelMocks,

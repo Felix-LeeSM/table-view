@@ -25,16 +25,16 @@
  *      shortcut never crashes tab creation.
  */
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { useConnectionStore } from "./connectionStore";
-import { useWorkspaceStore } from "./workspaceStore";
+import type { ConnectionConfig, DatabaseType } from "@/types/connection";
+import { paradigmOf } from "@/types/connection";
 import {
   getQueryTab,
   getTestWorkspace,
   installFakeLocalStorage,
   restoreLocalStorage,
 } from "./__tests__/workspaceStoreTestHelpers";
-import type { ConnectionConfig, DatabaseType } from "@/types/connection";
-import { paradigmOf } from "@/types/connection";
+import { useConnectionStore } from "./connectionStore";
+import { useWorkspaceStore } from "./workspaceStore";
 
 function makeConnection(
   id: string,

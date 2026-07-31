@@ -1,6 +1,5 @@
-import { useEffect, useId, useMemo, useState } from "react";
-import { useTranslation } from "react-i18next";
-import { ChevronDown, ChevronUp, Loader2 } from "lucide-react";
+import SqlSyntax from "@components/shared/SqlSyntax";
+import { useDdlPreviewExecution } from "@components/structure/useDdlPreviewExecution";
 import { Button } from "@components/ui/button";
 import {
   Dialog,
@@ -10,15 +9,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@components/ui/dialog";
-import * as tauri from "@lib/tauri";
-import { useDdlPreviewExecution } from "@components/structure/useDdlPreviewExecution";
 import { ConfirmDestructiveDialog } from "@features/workspace";
-import SqlSyntax from "@components/shared/SqlSyntax";
-import CreateTableTypeCombobox from "./CreateTableTypeCombobox";
 import { usePostgresTypes } from "@hooks/usePostgresTypes";
+import * as tauri from "@lib/tauri";
 import { useConnectionStore } from "@stores/connectionStore";
+import { ChevronDown, ChevronUp, Loader2 } from "lucide-react";
+import { useEffect, useId, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { supportsDdl } from "@/types/dataSource";
 import type { ColumnInfo } from "@/types/schema";
+import CreateTableTypeCombobox from "./CreateTableTypeCombobox";
 import { validateIdentifier } from "./identifier";
 
 /**

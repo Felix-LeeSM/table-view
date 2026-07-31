@@ -4,12 +4,13 @@
 //   - running state advertises `aria-busy` in a live region (loading transition)
 //   - completed SELECT routes the "— N rows" summary through `role="status"`
 //     so SR users hear the result scale, matching the error `role="alert"`.
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { setupTauriMock } from "@/test-utils/tauriMock";
-import { render, screen } from "@testing-library/react";
-import QueryResultGrid from "./QueryResultGrid";
-import type { QueryResult } from "@/types/query";
+
 import { useSchemaStore } from "@stores/schemaStore";
+import { render, screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
+import type { QueryResult } from "@/types/query";
+import QueryResultGrid from "./QueryResultGrid";
 
 beforeEach(() => {
   setupTauriMock({

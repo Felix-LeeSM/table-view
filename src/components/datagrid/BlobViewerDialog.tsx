@@ -1,7 +1,7 @@
-import { useMemo } from "react";
-import { useTranslation } from "react-i18next";
 import TabsDialog from "@components/ui/dialog/TabsDialog";
 import { safeStringifyCell } from "@lib/jsonCell";
+import { useMemo } from "react";
+import { useTranslation } from "react-i18next";
 
 export interface BlobViewerDialogProps {
   open: boolean;

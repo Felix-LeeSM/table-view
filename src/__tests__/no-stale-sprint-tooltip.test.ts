@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 
 /**
  * Sprint 135 — AC-S135-06: stale "Coming in Sprint 1XX" copy guard.

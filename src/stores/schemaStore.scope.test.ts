@@ -15,7 +15,7 @@
  *
  * grep CI (AC-354-05) 는 별도 test (scope-grep) 으로 호출 사이트 0 검증.
  */
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { useSchemaStore } from "./schemaStore";

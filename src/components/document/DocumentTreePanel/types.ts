@@ -2,9 +2,9 @@
 // DocumentTreePanel. No React state — the panel and its sub-components import
 // these so the main component file stays focused on wiring/render.
 
-import type { TreeNode } from "@/lib/jsonTree";
-import { detectBsonType, type BsonType } from "@/lib/mongo/bsonTypes";
 import { safeStringifyCell } from "@/lib/jsonCell";
+import type { TreeNode } from "@/lib/jsonTree";
+import { type BsonType, detectBsonType } from "@/lib/mongo/bsonTypes";
 
 export const BSON_TAG = "__bson__:";
 

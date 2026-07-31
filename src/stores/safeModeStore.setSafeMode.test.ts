@@ -13,14 +13,14 @@
  * (b) IPC reject 시 store 가 optimistic 으로 갱신돼 SQLite 와 불일치.
  */
 
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
 }));
 
 import { invoke } from "@tauri-apps/api/core";
-import { useSafeModeStore, SAFE_MODE_STORAGE_KEY } from "./safeModeStore";
+import { SAFE_MODE_STORAGE_KEY, useSafeModeStore } from "./safeModeStore";
 
 const invokeMock = vi.mocked(invoke);
 

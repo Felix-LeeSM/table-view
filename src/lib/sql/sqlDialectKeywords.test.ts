@@ -1,7 +1,7 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
-  getKeywordsForDialect,
   COMMON_SQL_KEYWORDS,
+  getKeywordsForDialect,
 } from "./sqlDialectKeywords";
 
 describe("getKeywordsForDialect (Sprint 139)", () => {

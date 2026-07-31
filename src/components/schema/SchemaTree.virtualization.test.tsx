@@ -1,26 +1,26 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { getTestWorkspace } from "@/stores/__tests__/workspaceStoreTestHelpers";
-import {
-  render,
-  screen,
-  fireEvent,
-  act,
-  cleanup,
-} from "@testing-library/react";
-import SchemaTree from "./SchemaTree";
+import { useConnectionStore } from "@stores/connectionStore";
 import { useSchemaStore } from "@stores/schemaStore";
 import { useWorkspaceStore } from "@stores/workspaceStore";
-import { useConnectionStore } from "@stores/connectionStore";
 import {
-  SCHEMA_TREE_PERF_FIXTURE_COUNTS,
-  makeSchemaTreePerfFixture,
-  makeSchemaTreePerfTables,
-  type SchemaTreePerfTableCount,
-} from "./SchemaTree.perfFixtures";
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   emitAdvisoryTiming,
   measureAdvisoryTiming,
 } from "@/lib/perf/advisoryTiming";
+import { getTestWorkspace } from "@/stores/__tests__/workspaceStoreTestHelpers";
+import SchemaTree from "./SchemaTree";
+import {
+  makeSchemaTreePerfFixture,
+  makeSchemaTreePerfTables,
+  SCHEMA_TREE_PERF_FIXTURE_COUNTS,
+  type SchemaTreePerfTableCount,
+} from "./SchemaTree.perfFixtures";
 
 /**
  * Sprint-115 (#PERF-2, #TREE-4) — virtualization regression tests.

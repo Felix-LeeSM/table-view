@@ -1,28 +1,28 @@
-import { useState, useCallback, useEffect, useRef } from "react";
-import { ChevronDown, Database, Loader2 } from "lucide-react";
-import { useTranslation } from "react-i18next";
-// #1447 — sql-free active-tab read (connectionId / type / database / schema).
-import { useActiveTabSansSql } from "@stores/workspaceStore";
-import { useConnectionStore } from "@stores/connectionStore";
-import { useDocumentCatalogStore } from "@stores/documentCatalogStore";
-import { useDocumentQueryStore } from "@stores/documentQueryStore";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@components/ui/popover";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@components/ui/tooltip";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@components/ui/popover";
+import { useConnectionStore } from "@stores/connectionStore";
+import { useDocumentCatalogStore } from "@stores/documentCatalogStore";
+import { useDocumentQueryStore } from "@stores/documentQueryStore";
+// #1447 — sql-free active-tab read (connectionId / type / database / schema).
+import { useActiveTabSansSql } from "@stores/workspaceStore";
+import { ChevronDown, Database, Loader2 } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { listDatabases } from "@/lib/api/listDatabases";
 import { switchActiveDb } from "@/lib/api/switchActiveDb";
 import { toast } from "@/lib/runtime/toast";
-import type { DatabaseInfo } from "@/types/document";
 import type { DatabaseType, Paradigm } from "@/types/connection";
 import { hasConnectionCapability } from "@/types/dataSource";
+import type { DatabaseInfo } from "@/types/document";
 
 /**
  * DB switcher in the workspace toolbar. For connected profiles that expose the

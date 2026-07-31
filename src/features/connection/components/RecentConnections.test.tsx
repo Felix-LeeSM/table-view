@@ -1,9 +1,9 @@
 // Purpose: Recent Connections UI 컴포넌트 테스트 — Phase 16 Sprint 167 (2026-04-28)
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, act } from "@testing-library/react";
-import RecentConnections, { relativeTime } from "./RecentConnections";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConnectionConfig } from "@/types/connection";
+import RecentConnections, { relativeTime } from "./RecentConnections";
 
 // ---------------------------------------------------------------------------
 // Store mocks

@@ -5,13 +5,14 @@
  * `database` column on `ConnectionDraft` carries the chosen path so the
  * backend `connection_test`/`addConnection` command shapes don't change.
  */
-import { useState } from "react";
-import { useTranslation } from "react-i18next";
+
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { Database, FolderOpen, LockKeyhole } from "lucide-react";
+import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { createSqliteDatabaseFile } from "@/lib/tauri/connection";
 import type { ConnectionDraft } from "../../model";
-import { fieldValidationProps, type ConnFieldKey } from "./fieldValidation";
+import { type ConnFieldKey, fieldValidationProps } from "./fieldValidation";
 
 export interface SqliteFormFieldsProps {
   draft: ConnectionDraft;

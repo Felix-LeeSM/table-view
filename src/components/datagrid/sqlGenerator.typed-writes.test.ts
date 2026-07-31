@@ -1,7 +1,7 @@
-import { describe, it, expect, vi } from "vitest";
-import { generateSql, type CoerceError } from "./sqlGenerator";
-import { BASE_DATA, TYPED_DATA } from "./sqlGenerator.fixtures";
+import { describe, expect, it, vi } from "vitest";
 import type { TableData } from "@/types/schema";
+import { type CoerceError, generateSql } from "./sqlGenerator";
+import { BASE_DATA, TYPED_DATA } from "./sqlGenerator.fixtures";
 
 // ---------------------------------------------------------------------------
 // Sprint 75 — generateSql integration: UPDATE emits type-aware literals and

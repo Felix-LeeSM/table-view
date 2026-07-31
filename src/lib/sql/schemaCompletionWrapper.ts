@@ -1,13 +1,13 @@
-import {
-  schemaCompletionSource,
-  type SQLDialect,
-  type SQLNamespace,
-} from "@codemirror/lang-sql";
 import type {
   CompletionContext,
   CompletionResult,
   CompletionSource,
 } from "@codemirror/autocomplete";
+import {
+  type SQLDialect,
+  type SQLNamespace,
+  schemaCompletionSource,
+} from "@codemirror/lang-sql";
 import { detectCursorClause } from "./cursorClause";
 
 /**

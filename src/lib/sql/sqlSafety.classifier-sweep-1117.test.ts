@@ -11,7 +11,7 @@
 //     benign PRAGMA) — explicitly registered as `known-safe`/info so
 //     "classified as safe" is distinguishable from "unrecognised → fail-open
 //     info". This list is the precondition for any future fallback re-eval.
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import { analyzeStatement, isDangerous, isInfoStatement } from "./sqlSafety";
 
 describe("Issue #1117 — session integrity switches → config-write / warn", () => {

@@ -1,11 +1,11 @@
+import { logger } from "@lib/logger";
+import { openWorkspaceWindow } from "@lib/tauri/window";
+import { Database, GripVertical } from "lucide-react";
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useConnectionStore } from "../store";
-import { openWorkspaceWindow } from "@lib/tauri/window";
-import { logger } from "@lib/logger";
-import ConnectionItem, { draggedConnectionId } from "./ConnectionItem";
 import ConnectionGroup from "./ConnectionGroup";
-import { Database, GripVertical } from "lucide-react";
+import ConnectionItem, { draggedConnectionId } from "./ConnectionItem";
 
 interface ConnectionListProps {
   environmentFilter?: string | null;

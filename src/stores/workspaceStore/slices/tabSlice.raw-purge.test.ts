@@ -6,15 +6,16 @@
 //     `handleActivate` calls `clearForConnection` directly, bypassing
 //     `cleanupConnectionFrontendState`, so the raw purge must live in the
 //     slice itself — this is the T5/A1 regression these tests lock.
-import { beforeEach, describe, expect, it } from "vitest";
-import { useWorkspaceStore } from "@stores/workspaceStore";
+
 import {
-  useRawQueryGridEditStore,
-  rawEntryKey,
   EMPTY_RAW_ENTRY,
+  rawEntryKey,
+  useRawQueryGridEditStore,
 } from "@stores/rawQueryGridEditStore";
-import type { QueryTab, WorkspaceState } from "../types";
+import { useWorkspaceStore } from "@stores/workspaceStore";
+import { beforeEach, describe, expect, it } from "vitest";
 import type { ConnectionId, TabId } from "@/types/branded";
+import type { QueryTab, WorkspaceState } from "../types";
 
 function makeQueryTab({
   id = "q1",

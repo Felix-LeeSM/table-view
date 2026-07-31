@@ -1,8 +1,7 @@
-import { describe, it, expect } from "vitest";
-import { render, screen } from "@testing-library/react";
-
-import { DriverErrorHint } from "./DriverErrorHint";
 import { classifyDriverError } from "@lib/errors/driverErrorHints";
+import { render, screen } from "@testing-library/react";
+import { describe, expect, it } from "vitest";
+import { DriverErrorHint } from "./DriverErrorHint";
 
 // Purpose: 분류된 힌트가 errors namespace 문구(요약 + 행동)로 렌더되고, 미분류
 //          (null)이면 아무것도 렌더하지 않음을 잠근다 (issue #1056)

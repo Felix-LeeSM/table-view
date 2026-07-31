@@ -1,7 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, act } from "@testing-library/react";
-import SqliteFormFields from "./SqliteFormFields";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConnectionDraft } from "@/types/connection";
+import SqliteFormFields from "./SqliteFormFields";
 
 // Sprint 146 (AC-143-3) — the Browse button calls into
 // `@tauri-apps/plugin-dialog`. We mock the module so jsdom tests don't

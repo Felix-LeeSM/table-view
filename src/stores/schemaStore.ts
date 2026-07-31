@@ -1,4 +1,9 @@
+import * as tauri from "@lib/tauri";
+import { getTauriErrorMessage } from "@lib/tauri/error";
 import { create } from "zustand";
+import type { DatabaseName, SchemaName, TableName } from "@/types/branded";
+import type { DatabaseInfo } from "@/types/document";
+import type { FileAnalyticsSourceMetadata } from "@/types/fileAnalytics";
 import type {
   ColumnInfo,
   ConstraintInfo,
@@ -11,12 +16,11 @@ import type {
   TriggerInfo,
   ViewInfo,
 } from "@/types/schema";
-import type { FileAnalyticsSourceMetadata } from "@/types/fileAnalytics";
-import type { DatabaseInfo } from "@/types/document";
-import type { DatabaseName, SchemaName, TableName } from "@/types/branded";
-import * as tauri from "@lib/tauri";
-import { getTauriErrorMessage } from "@lib/tauri/error";
+import { createRequestGuard } from "./requestGuard";
 import {
+  type ByConn,
+  type BySchema,
+  type ByTable,
   deleteConn,
   deleteConnDb,
   deleteConnDbSchema,
@@ -26,11 +30,7 @@ import {
   setConnDb,
   setConnDbSchema,
   setConnDbSchemaTable,
-  type ByConn,
-  type BySchema,
-  type ByTable,
 } from "./schemaStoreMaps";
-import { createRequestGuard } from "./requestGuard";
 
 /**
  * Sprint 263 (ADR 0027 extension) — schemaStore 의 캐시 차원을

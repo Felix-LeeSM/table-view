@@ -1,9 +1,9 @@
-import { useMemo } from "react";
 import { useSchemaStore } from "@stores/schemaStore";
+import { useMemo } from "react";
 import CreateTableDialog from "../CreateTableDialog";
-import RenameTableDialog from "../RenameTableDialog";
 import DropTableDialog from "../DropTableDialog";
 import ImportCsvDialog from "../ImportCsvDialog";
+import RenameTableDialog from "../RenameTableDialog";
 
 /**
  * Dialog mount slots for `SchemaTree`. Sprint 235 collapses the legacy

@@ -1,18 +1,18 @@
-import { useCallback, useEffect, useMemo, useRef } from "react";
-import { useTranslation } from "react-i18next";
-import { Plus, RotateCcw, FoldVertical, UnfoldVertical } from "lucide-react";
-import { getSidebarObjectLabel } from "@lib/dbTypeLabels";
-import { useConnectionStore } from "@stores/connectionStore";
-import { resolveActiveDb, useWorkspaceStore } from "@stores/workspaceStore";
-import { useSchemaStore } from "@stores/schemaStore";
-import type { SchemaInfo } from "@/types/schema";
-import { useMruStore } from "@stores/mruStore";
-import { useResizablePanel } from "@hooks/useResizablePanel";
-import { useCurrentWindowConnectionId } from "@hooks/useCurrentWindowConnectionId";
 import { Button } from "@components/ui/button";
 import WorkspaceSidebar from "@components/workspace/WorkspaceSidebar";
-import { persistSettingValue, resetSetting } from "@lib/tauri/settings";
+import { useCurrentWindowConnectionId } from "@hooks/useCurrentWindowConnectionId";
+import { useResizablePanel } from "@hooks/useResizablePanel";
+import { getSidebarObjectLabel } from "@lib/dbTypeLabels";
 import { logger } from "@lib/logger";
+import { persistSettingValue, resetSetting } from "@lib/tauri/settings";
+import { useConnectionStore } from "@stores/connectionStore";
+import { useMruStore } from "@stores/mruStore";
+import { useSchemaStore } from "@stores/schemaStore";
+import { resolveActiveDb, useWorkspaceStore } from "@stores/workspaceStore";
+import { FoldVertical, Plus, RotateCcw, UnfoldVertical } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useTranslation } from "react-i18next";
+import type { SchemaInfo } from "@/types/schema";
 
 // Sprint 369 (Phase 4, Q20.2) — `table-view.sidebar.width` localStorage 영속
 // 폐기. boot snapshot 이 차후 sprint 에서 `settings.sidebar_width` 를 hydrate

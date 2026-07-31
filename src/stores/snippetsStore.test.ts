@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
@@ -15,11 +15,11 @@ vi.mock("@lib/runtime/toast", () => ({
   },
 }));
 
-import { invoke } from "@tauri-apps/api/core";
 import { toast } from "@lib/runtime/toast";
+import { invoke } from "@tauri-apps/api/core";
 import {
-  useSnippetsStore,
   __resetSnippetCounterForTests,
+  useSnippetsStore,
 } from "./snippetsStore";
 
 const invokeMock = vi.mocked(invoke);

@@ -1,9 +1,9 @@
-import { useCallback, useMemo } from "react";
-import type { SortInfo } from "@/types/schema";
 import {
   useCurrentWorkspaceKey,
   useWorkspaceStore,
 } from "@stores/workspaceStore";
+import { useCallback, useMemo } from "react";
+import type { SortInfo } from "@/types/schema";
 
 type SortsUpdater = SortInfo[] | ((prev: SortInfo[]) => SortInfo[]);
 

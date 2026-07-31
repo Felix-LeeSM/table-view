@@ -6,30 +6,28 @@
 // command should land in the matching domain file (or a new one) rather
 // than here.
 
-export * from "./connection";
-export * from "./schema";
-export * from "./query";
-export * from "./ddl";
-export * from "./document";
-export * from "./kv";
-export * from "./search";
-export * from "./export";
-export * from "./import";
-export * from "./fileAnalytics";
-export * from "./favorites";
-export * from "./mru";
-export * from "./tableActivity";
-// Sprint 361 (Phase 3, Q13) — per-conn workspace window launcher.
-export * from "./window";
-
-// Sprint 247 (ADR 0022 Phase 3) — explicit re-export so a verbatim grep
-// against this barrel surfaces the dry-run symbol used by Phase 3 wiring.
-// The `export * from "./query"` line above already re-exports it
-// transitively; this line is the canonical, symbol-by-name landing.
-export { executeQueryDryRun } from "./query";
-
 // Issue #1230 — native query cancel wiring. Only the two IPC wrappers the
 // query-cancel path uses are surfaced through the barrel (so the test mock
 // intercepts them); `parseCancelError` / `releaseTabConnection` stay
 // module-local imports.
 export { cancelQueryNative, getQueryServerPid } from "./cancel";
+export * from "./connection";
+export * from "./ddl";
+export * from "./document";
+export * from "./export";
+export * from "./favorites";
+export * from "./fileAnalytics";
+export * from "./import";
+export * from "./kv";
+export * from "./mru";
+export * from "./query";
+// Sprint 247 (ADR 0022 Phase 3) — explicit re-export so a verbatim grep
+// against this barrel surfaces the dry-run symbol used by Phase 3 wiring.
+// The `export * from "./query"` line above already re-exports it
+// transitively; this line is the canonical, symbol-by-name landing.
+export { executeQueryDryRun } from "./query";
+export * from "./schema";
+export * from "./search";
+export * from "./tableActivity";
+// Sprint 361 (Phase 3, Q13) — per-conn workspace window launcher.
+export * from "./window";

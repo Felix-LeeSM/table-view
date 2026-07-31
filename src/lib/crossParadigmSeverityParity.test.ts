@@ -42,13 +42,13 @@
 // This table is the lock: adding a paradigm or a new destructive syntax
 // means adding its row here. A drifted classifier fails the matching bucket.
 import { describe, expect, it } from "vitest";
-import { analyzeStatement, type Severity } from "./sql/sqlSafety";
-import { analyzeOracleStatement } from "./sql/oracleSafety";
+import { analyzeKvCommandSafety } from "@/components/query/QueryTab/kvQueryExecution";
 import {
   analyzeMongoOperation,
   analyzeMongoPipeline,
 } from "./mongo/mongoSafety";
-import { analyzeKvCommandSafety } from "@/components/query/QueryTab/kvQueryExecution";
+import { analyzeOracleStatement } from "./sql/oracleSafety";
+import { analyzeStatement, type Severity } from "./sql/sqlSafety";
 
 const sql = (stmt: string): Severity => analyzeStatement(stmt).severity;
 const oracle = (stmt: string): Severity =>

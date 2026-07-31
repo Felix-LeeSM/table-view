@@ -1,9 +1,9 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import type { ConnectionId, TabId } from "@/types/branded";
-import { render, act } from "@testing-library/react";
-import App from "./App";
+import { act, render } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { seedWorkspace } from "@/stores/__tests__/workspaceStoreTestHelpers";
-import { useWorkspaceStore, type TableTab } from "./stores/workspaceStore";
+import type { ConnectionId, TabId } from "@/types/branded";
+import App from "./App";
+import { type TableTab, useWorkspaceStore } from "./stores/workspaceStore";
 
 // Issue #1705 — the backend intercepts the OS window *close* (prevent_close →
 // `window:close-requested` → discard confirm), but a webview *reload* (Cmd+R /

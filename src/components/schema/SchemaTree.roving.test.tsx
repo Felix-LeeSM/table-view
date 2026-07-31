@@ -1,4 +1,3 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   act,
   fireEvent,
@@ -7,19 +6,20 @@ import {
   screen,
   within,
 } from "@testing-library/react";
-import SchemaTree from "./SchemaTree";
-import {
-  __test,
-  useTreeRoving,
-  type TreeRoving,
-} from "./SchemaTree/useTreeRoving";
-import type { VisibleRow } from "./SchemaTree/treeRows";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   mockLoadSchemas,
   mockLoadTables,
   resetStores,
   setSchemaStoreState,
 } from "./__tests__/schemaTreeTestHelpers";
+import SchemaTree from "./SchemaTree";
+import type { VisibleRow } from "./SchemaTree/treeRows";
+import {
+  __test,
+  type TreeRoving,
+  useTreeRoving,
+} from "./SchemaTree/useTreeRoving";
 
 /**
  * WAI-ARIA tree roving-tabindex + arrow-key navigation (#3). Asserts the

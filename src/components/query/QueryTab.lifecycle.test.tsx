@@ -3,32 +3,34 @@
 // empty-SQL guard, cancel-query event handling, the result-area flex
 // column shape, and the resize-handle layout. Cases are byte-equivalent
 // to the originals — no behaviour change.
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { setupTauriMock } from "@/test-utils/tauriMock";
-import {
-  seedWorkspace,
-  getTestWorkspace,
-} from "@/stores/__tests__/workspaceStoreTestHelpers";
-import { render, screen, waitFor, act } from "@testing-library/react";
-import QueryTab from "./QueryTab";
-import { useWorkspaceStore } from "@stores/workspaceStore";
-import {
-  MOCK_RESULT,
-  mockExecuteQuery,
-  mockCancelQuery,
-  mockFindDocuments,
-  mockAggregateDocuments,
-  mockVerifyActiveDb,
-  mockEditorProps,
-  makeConn,
-  makeQueryTab,
-  resetQueryTabStores,
-} from "./__tests__/queryTabTestHelpers";
+
 import type { SQLDialect } from "@codemirror/lang-sql";
 import type { Extension } from "@codemirror/state";
 import type { SqlCompletionContext } from "@features/completion";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useSchemaStore } from "@stores/schemaStore";
+import { useWorkspaceStore } from "@stores/workspaceStore";
+import { act, render, screen, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  getTestWorkspace,
+  seedWorkspace,
+} from "@/stores/__tests__/workspaceStoreTestHelpers";
+import { setupTauriMock } from "@/test-utils/tauriMock";
+import {
+  MOCK_RESULT,
+  makeConn,
+  makeQueryTab,
+  mockAggregateDocuments,
+  mockCancelQuery,
+  mockEditorProps,
+  mockExecuteQuery,
+  mockFindDocuments,
+  mockVerifyActiveDb,
+  resetQueryTabStores,
+} from "./__tests__/queryTabTestHelpers";
+import QueryTab from "./QueryTab";
+
 beforeEach(() => {
   setupTauriMock({
     executeQuery: (...args: unknown[]) => mockExecuteQuery(...args),

@@ -1,11 +1,11 @@
-import { describe, it, expect } from "vitest";
-import { generateSql, type CoerceError } from "./sqlGenerator";
+import { describe, expect, it } from "vitest";
+import type { TableData } from "@/types/schema";
+import { type CoerceError, generateSql } from "./sqlGenerator";
 import {
   BASE_DATA,
   JSONB_ARRAY_DATA,
   JSONB_DATA,
 } from "./sqlGenerator.fixtures";
-import type { TableData } from "@/types/schema";
 
 // ---------------------------------------------------------------------------
 // Sprint 343 (2026-05-15) — inline JSON tree edits: jsonb + Postgres ARRAY.

@@ -1,7 +1,9 @@
+// biome-ignore-all lint/suspicious/noTemplateCurlyInString: every `${...}` in this file is a CodeMirror snippet placeholder passed to `snippetCompletion`, which defines that syntax. A template literal here would interpolate at module load and destroy the placeholder.
+
 import {
-  snippetCompletion,
   type CompletionResult,
   type CompletionSource,
+  snippetCompletion,
 } from "@codemirror/autocomplete";
 import type { KvKeyType } from "@/types/kv";
 

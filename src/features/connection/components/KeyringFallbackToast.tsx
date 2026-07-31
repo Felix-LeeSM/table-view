@@ -21,12 +21,11 @@
  * 가 아직 없음). Phase 후속 sprint 에서 link 추가 예정.
  */
 
+import { logger } from "@lib/logger";
+import { AlertTriangle, X } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { AlertTriangle, X } from "lucide-react";
-
 import { setKeyringFallbackDismissed } from "@/lib/keyringFallback";
-import { logger } from "@lib/logger";
 import { cn } from "@/lib/utils";
 
 export interface KeyringFallbackToastProps {

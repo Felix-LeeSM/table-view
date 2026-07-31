@@ -6,9 +6,9 @@
 // 한다. _id filter / $set update / insertOne document 의 3 카드를
 // 가드.
 
-import { describe, it, expect } from "vitest";
-import { mqlCommandsToBulkOps } from "./mqlToBulk";
+import { describe, expect, it } from "vitest";
 import type { MqlCommand } from "./mqlGenerator";
+import { mqlCommandsToBulkOps } from "./mqlToBulk";
 
 const DB = "app";
 const COLL = "users";

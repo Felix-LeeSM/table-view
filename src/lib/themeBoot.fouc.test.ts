@@ -18,13 +18,13 @@
  * dark 모드 사용자 화면이 light flash → 즉시 dark 로 바뀜.
  */
 
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
 }));
 
-import { bootTheme, THEME_STORAGE_KEY, DEFAULT_THEME_ID } from "@lib/themeBoot";
+import { bootTheme, DEFAULT_THEME_ID, THEME_STORAGE_KEY } from "@lib/themeBoot";
 import { useThemeStore } from "@stores/themeStore";
 
 const localStorageMock = (() => {

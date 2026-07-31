@@ -17,17 +17,18 @@
  * label dispatch — Sprint 154 will extend it with real lifecycle wiring, but
  * Sprint 150 only proves the static dispatch.
  */
+
+import { cleanup, render, screen } from "@testing-library/react";
 import {
-  describe,
-  it,
-  expect,
-  vi,
-  beforeEach,
   afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
   type Mock,
+  vi,
 } from "vitest";
 import { setupTauriMock } from "@/test-utils/tauriMock";
-import { render, screen, cleanup } from "@testing-library/react";
 
 // The label-resolution seam lives in `src/lib/window-label.ts`. We mock it so
 // each case can simulate `getCurrentWebviewWindow().label` returning the
@@ -98,9 +99,9 @@ vi.mock("@features/workspace", () => ({
 }));
 
 import { getCurrentWindowLabel } from "@lib/window-label";
+import { useConnectionStore } from "@stores/connectionStore";
 import { listen } from "@tauri-apps/api/event";
 import AppRouter from "@/AppRouter";
-import { useConnectionStore } from "@stores/connectionStore";
 import type { ConnectionConfig } from "@/types/connection";
 
 const mockedGetLabel = getCurrentWindowLabel as Mock;

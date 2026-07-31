@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import type { ColumnInfo, ConstraintInfo, TableInfo } from "@/types/schema";
-import type { SchemaGraphCatalogSnapshot } from "@/types/schemaGraph";
 import {
   schemaGraphColumnId,
   schemaGraphConstraintId,
   schemaGraphTableId,
 } from "@/test-utils/schemaGraphIds";
+import type { ColumnInfo, ConstraintInfo, TableInfo } from "@/types/schema";
+import type { SchemaGraphCatalogSnapshot } from "@/types/schemaGraph";
 import { extractSchemaGraph } from "./schemaGraph";
 
 describe("SchemaGraph relationship normalizer", () => {

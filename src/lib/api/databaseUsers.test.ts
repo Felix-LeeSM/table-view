@@ -10,7 +10,7 @@ vi.mock("@tauri-apps/api/core", () => ({
   invoke: (...args: unknown[]) => invokeMock(...args),
 }));
 
-import { listDatabaseUsers, type DatabaseUserRow } from "./databaseUsers";
+import { type DatabaseUserRow, listDatabaseUsers } from "./databaseUsers";
 
 describe("listDatabaseUsers API wrapper", () => {
   beforeEach(() => {

@@ -2,8 +2,9 @@
 // bare-`Loader2` initial-load blocks lacked: the shared tree/sidebar skeleton
 // exposes a labelled `role="status"` region and renders `animate-pulse`
 // placeholder bars (never a spinner).
-import { describe, it, expect } from "vitest";
+
 import { render, screen } from "@testing-library/react";
+import { describe, expect, it } from "vitest";
 import TreeSkeleton from "./TreeSkeleton";
 
 describe("TreeSkeleton", () => {

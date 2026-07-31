@@ -7,7 +7,6 @@
  * detail modal 노출까지 outcome 단위로 따라간다.
  */
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   act,
   fireEvent,
@@ -15,17 +14,18 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const invokeMock = vi.fn();
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: (...args: unknown[]) => invokeMock(...args),
 }));
 
-import QueryLog from "./QueryLog";
 import {
   dispatchStateChangedPayload,
   resetStateChangedRegistryForTests,
 } from "@lib/events/stateChanged";
+import QueryLog from "./QueryLog";
 
 const row = (id: number, sqlRedacted = `SELECT ${id}`) => ({
   id,

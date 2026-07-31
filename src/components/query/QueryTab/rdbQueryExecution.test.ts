@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { SafeModeDecision } from "@/lib/safeMode";
+import type { ConnectionId, TabId } from "@/types/branded";
 import {
   executeRdbQuery,
   executeRdbSingleStatement,
   executeRdbStatementBatch,
 } from "./rdbQueryExecution";
-import type { SafeModeDecision } from "@/lib/safeMode";
-import type { ConnectionId, TabId } from "@/types/branded";
 
 const executeQueryMock = vi.hoisted(() => vi.fn());
 const executeQueryDryRunMock = vi.hoisted(() => vi.fn());

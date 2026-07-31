@@ -1,15 +1,15 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  getTestWorkspace,
+  seedWorkspace,
+} from "@/stores/__tests__/workspaceStoreTestHelpers";
 import type { ConnectionId, TabId } from "@/types/branded";
-import { render, fireEvent, act, screen } from "@testing-library/react";
 import App, { PERSIST_FLUSH_TIMEOUT_MS } from "./App";
 import {
-  seedWorkspace,
-  getTestWorkspace,
-} from "@/stores/__tests__/workspaceStoreTestHelpers";
-import {
-  useWorkspaceStore,
   type QueryTab,
   type TableTab,
+  useWorkspaceStore,
 } from "./stores/workspaceStore";
 
 // #1101 — the unsaved-changes ("dirty tab") guard used to live only on the

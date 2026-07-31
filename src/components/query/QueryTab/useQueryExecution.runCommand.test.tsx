@@ -7,19 +7,19 @@
 // 정확히 admin path 로 흐르는지를 lock. sprint-382 의 AST 가 본 분기를
 // promote 한 뒤에도 이 케이스들은 dispatch 단언 부분이 그대로 lock 유지.
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { setupTauriMock } from "@/test-utils/tauriMock";
-import {
-  seedWorkspace,
-  getTestWorkspace,
-} from "@/stores/__tests__/workspaceStoreTestHelpers";
-import { act, renderHook, waitFor } from "@testing-library/react";
-import { useWorkspaceStore } from "@stores/workspaceStore";
-import { useQueryHistoryStore } from "@stores/queryHistoryStore";
 import { useConnectionStore } from "@stores/connectionStore";
+import { useQueryHistoryStore } from "@stores/queryHistoryStore";
 import { useSafeModeStore } from "@stores/safeModeStore";
+import { useWorkspaceStore } from "@stores/workspaceStore";
+import { act, renderHook, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  getTestWorkspace,
+  seedWorkspace,
+} from "@/stores/__tests__/workspaceStoreTestHelpers";
+import { setupTauriMock } from "@/test-utils/tauriMock";
+import { makeConn, makeDocTab } from "../__tests__/queryTabTestHelpers";
 import { useQueryExecution } from "./useQueryExecution";
-import { makeDocTab, makeConn } from "../__tests__/queryTabTestHelpers";
 
 const executeQueryMock = vi.fn();
 const cancelQueryMock = vi.fn();

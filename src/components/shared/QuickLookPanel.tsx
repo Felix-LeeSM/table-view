@@ -9,16 +9,17 @@
 // - Three named props types (`QuickLookPanelProps`,
 //   `QuickLookPanelRdbProps`, `QuickLookPanelDocumentProps`) are exported
 //   from this entry file.
-import { useState, useCallback, useMemo } from "react";
-import type { TableData } from "@/types/schema";
+
 import type { DataGridEditState } from "@components/datagrid/useDataGridEdit";
-import RdbQuickLookBody from "./QuickLookPanel/RdbQuickLookBody";
+import { useCallback, useMemo, useState } from "react";
+import type { TableData } from "@/types/schema";
 import DocumentQuickLookBody from "./QuickLookPanel/DocumentQuickLookBody";
 import {
+  clampHeight,
   DEFAULT_HEIGHT,
   KEYBOARD_RESIZE_STEP,
-  clampHeight,
 } from "./QuickLookPanel/helpers";
+import RdbQuickLookBody from "./QuickLookPanel/RdbQuickLookBody";
 
 // ── QuickLookPanel Props ──────────────────────────────────────────────
 

@@ -3,23 +3,24 @@
 // Functions/Procedures), keyboard toggling, schema/category loading
 // spinners, auto-expand on mount, and rendering of view/function/
 // procedure rows. Cases are byte-equivalent to the originals.
-import { describe, it, expect, vi, beforeEach } from "vitest";
+
+import { useWorkspaceStore } from "@stores/workspaceStore";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  getTestWorkspace,
+  seedWorkspace,
+} from "@/stores/__tests__/workspaceStoreTestHelpers";
 import type { ConnectionId, TabId } from "@/types/branded";
 import {
-  seedWorkspace,
-  getTestWorkspace,
-} from "@/stores/__tests__/workspaceStoreTestHelpers";
-import { render, screen, fireEvent, act } from "@testing-library/react";
-import SchemaTree from "./SchemaTree";
-import { useWorkspaceStore } from "@stores/workspaceStore";
-import {
+  mockLoadFunctions,
   mockLoadSchemas,
   mockLoadTables,
   mockLoadViews,
-  mockLoadFunctions,
-  setSchemaStoreState,
   resetStores,
+  setSchemaStoreState,
 } from "./__tests__/schemaTreeTestHelpers";
+import SchemaTree from "./SchemaTree";
 
 // ---------------------------------------------------------------------------
 // Tests

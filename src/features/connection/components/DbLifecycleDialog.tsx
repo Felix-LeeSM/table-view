@@ -5,9 +5,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
-import { createRdbDatabase, dropRdbDatabase } from "@/lib/tauri/ddl";
 import { dropMongoDatabase } from "@/lib/tauri";
-import { DATABASE_TYPE_LABELS, paradigmOf, type DatabaseType } from "../model";
+import { createRdbDatabase, dropRdbDatabase } from "@/lib/tauri/ddl";
+import { DATABASE_TYPE_LABELS, type DatabaseType, paradigmOf } from "../model";
 
 export type DbLifecycleMode = "create" | "drop";
 

@@ -1,26 +1,26 @@
-import { useEffect, useRef } from "react";
-import { useTranslation } from "react-i18next";
-import { ArrowLeft, Sun, Moon, Monitor } from "lucide-react";
-import Sidebar from "@components/layout/Sidebar";
 import MainArea from "@components/layout/MainArea";
+import Sidebar from "@components/layout/Sidebar";
 import ErrorBoundary from "@components/shared/ErrorBoundary";
-import { useCurrentWindowConnectionId } from "@hooks/useCurrentWindowConnectionId";
-import { useConnectionStore } from "@stores/connectionStore";
+import LanguageSwitcher from "@components/theme/LanguageSwitcher";
+import ThemePicker from "@components/theme/ThemePicker";
 import { Button } from "@components/ui/button";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@components/ui/popover";
-import ThemePicker from "@components/theme/ThemePicker";
-import LanguageSwitcher from "@components/theme/LanguageSwitcher";
-import { useThemeStore } from "@stores/themeStore";
-import { THEME_CATALOG } from "@lib/themeCatalog";
-import { subscribeSystemModeChange } from "@lib/themeBoot";
-import { logger } from "@lib/logger";
-import { useWindowFocusHydration } from "@hooks/useWindowFocusHydration";
 import { useAutoResolveActiveDb } from "@hooks/useAutoResolveActiveDb";
+import { useCurrentWindowConnectionId } from "@hooks/useCurrentWindowConnectionId";
+import { useWindowFocusHydration } from "@hooks/useWindowFocusHydration";
+import { logger } from "@lib/logger";
+import { subscribeSystemModeChange } from "@lib/themeBoot";
+import { THEME_CATALOG } from "@lib/themeCatalog";
 import { destroyCurrentWindow, focusWindow } from "@lib/window-controls";
+import { useConnectionStore } from "@stores/connectionStore";
+import { useThemeStore } from "@stores/themeStore";
+import { ArrowLeft, Monitor, Moon, Sun } from "lucide-react";
+import { useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 
 /**
  * WorkspacePage — multi-paradigm tab + sidebar work surface.

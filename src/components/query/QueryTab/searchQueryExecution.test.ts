@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { SearchResultEnvelope } from "@/types/search";
 import type { ConnectionId, TabId } from "@/types/branded";
+import type { SearchResultEnvelope } from "@/types/search";
 import {
   executeSearchDslQuery,
   parseSearchDslRequest,
