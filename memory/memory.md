@@ -47,7 +47,7 @@ keywords: 팔레스, 방 지도, index, by-surface, by-task, 200줄, 12000 chars
   - [engineering/conventions/e2e-scenarios](./engineering/conventions/e2e-scenarios/memory.md) — E2E 시나리오 설계
   - [engineering/conventions/rust](./engineering/conventions/rust/memory.md) — Rust 컨벤션 전체
   - [engineering/conventions/react](./engineering/conventions/react/memory.md) — React/TS 컨벤션 전체
-- [workflow](./workflow/memory.md) — 사용자-agent 협업 phase 행동 계약 (bug-fix / implementation / delivery / review / orchestration / interface / git-policy)
+- [workflow](./workflow/memory.md) — 사용자-agent 협업 phase 행동 계약
   - [workflow/git-policy](./workflow/git-policy/memory.md) — git 안전 규율 (집행 훅 없음)
 - [product](./product/memory.md) — 제품/UX 머지 기준 (영속 상태 reset 등)
 - [runbook](./runbook/memory.md) — 절차 (작업 사본 격리 등)
