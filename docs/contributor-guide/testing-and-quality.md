@@ -141,7 +141,17 @@ Required remote evidence on the exact release SHA:
 
 - Every required context in the `pr_to_main` ruleset passes. That list lives in
   one place, `memory/runbook/pr-merge-gates/memory.md`. Do not copy it here — a
-  copy kept here once listed five of the eight.
+  copy kept here once listed five of the then-eight. The count is not stable
+  either: #2037 took it to **seven** by deleting the name-only
+  `Detect Change Scope` job, and no stub context is left — `PR Body Contract`
+  became a real check in that same PR, so all seven required contexts now
+  assert something. Read the list from GitHub rather than from prose:
+
+  ```bash
+  gh api repos/{owner}/{repo}/rulesets/15755265 \
+    --jq '.rules[] | select(.type=="required_status_checks")
+          | .parameters.required_status_checks[].context'
+  ```
 - Runtime smoke runs in CI, scoped to the change.
   `.github/workflows/e2e-smoke.yml` maps the PR's changed paths to a spec subset
   through `e2e/scope-map.mjs` and runs only those, so a green PR proves the
