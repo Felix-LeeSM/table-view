@@ -44,8 +44,8 @@ decision logs.
 - [`source-root-migration-constraints.md`](source-root-migration-constraints.md) —
   Refactor 02/03 source-root movement, compatibility export, test, fixture, and
   committed-generated-input constraints.
-- [`pr-review.md`](pr-review.md) — reviewer output contract and red/green
-  threshold.
+- [`pr-review.md`](pr-review.md) — reviewer output contract, red/green
+  threshold, and the round/merge-rate instrumentation.
 - [`release/release-notes-support-matrix.md`](release/release-notes-support-matrix.md) —
   release-note support summary, support matrix, and fixture/smoke coverage.
 - [`release/versioning-and-artifacts.md`](release/versioning-and-artifacts.md) —

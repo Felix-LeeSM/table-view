@@ -51,23 +51,25 @@ The first three lines are the contract (`rounds_per_merge`, `merge_rate`,
 `merge_rate_by_files`). After them come the round definition in force, the
 window, whether the scan was truncated, the distribution of the gap *between*
 rounds, a per-day series, and the command that produced the output. Quote that
-command next to the number so a reader can rerun it. A number quoted without one
-is note or issue material, not a blocking finding.
+command next to the number so a reader can rerun it — a number nobody else can
+reproduce cannot back a blocking finding, so it stays a scorecard note.
 
 Two round definitions exist and both are printed on every run:
 
-- `comments` (default) — one PR comment is one round. Same proxy the
-  `Stop at review round 3` gate in `.github/workflows/review-gate.yml` uses.
+- `comments` (default) — one PR comment is one round. This is the count the
+  `Stop at review round 3` gate acts on: `.github/workflows/review-gate.yml`
+  reads `github.event.pull_request.comments` straight off the webhook payload.
 - `head-oid` — one distinct head commit carrying review is one round. This is
   the definition issue #1968 wants to move the gate to.
 
-Inside that script both definitions are computed in one place, the
-`round_events()` jq function. The gate does not run that function: the workflow
-reads `github.event.pull_request.comments` straight off the webhook payload, and
-`scripts/hooks/policy/test-review-gate-round.sh` requires it to keep reading the
-payload instead of calling the API. So #1968 has to change the workflow and that
-guard as well as this script's default, and the payload carries no head-OID
-count for the workflow to switch to.
+The script computes both in its `round_events()` jq function, but the gate never
+calls it — the gate carries its own copy of the `comments` definition in that
+workflow condition. The "gate coupling" step of
+`scripts/review/measure-rounds.test.sh` keeps the two in step: it fails if the
+workflow stops reading `pull_request.comments` while the script still defaults
+to `comments`. So #1968 has to change the workflow condition as well as this
+script's default, and the payload carries no head-OID count for the condition to
+switch to.
 
 Run `bash scripts/review/measure-rounds.sh --help` for the flags, and read the
 "못 재는 것" comment at the bottom of the script before quoting a number: it
