@@ -73,7 +73,7 @@ gh pr view <N> --json statusCheckRollup \
 ```
 
 rollup 은 이 한 곳에서만 쓴다 — **required 판정 수단이 아니다.** required 는
-2단계의 이름별 최신 판정으로 확인한다. 그 구분과 라운드 게이트의 조건 · 누가
+2단계의 `mergeStateStatus` 로 확인한다. 그 구분과 라운드 게이트의 조건 · 누가
 붙이는가 · 여기서 rollup 을 봐야 하는 이유는
 `memory/runbook/pr-merge-gates/memory.md` 가 SOT 다.
 
@@ -81,15 +81,17 @@ rollup 은 이 한 곳에서만 쓴다 — **required 판정 수단이 아니다
 
 ```bash
 gh pr view <N> --json mergeable,mergeStateStatus,labels
+# BLOCKED 일 때 어느 이름이 red 인지 좁히는 보조 — 최신 run 하나만 보여 주므로
+# required 가 green 이라는 판정 근거로는 쓰지 않는다
 gh pr checks <N>
 ```
 
-1. required check 가 전부 green 이다. `review-gate` 포함.
-2. `mergeStateStatus` 가 `CLEAN` 또는 `UNSTABLE` 이다. 두 값의 뜻과 `BLOCKED`
-   진단 순서는 `memory/runbook/pr-merge-gates/memory.md` 가 SOT — `BLOCKED` 면
-   머지를 시도하지 말고 그 방으로 간다.
-3. `needs:user` label 이 없고 사용자 명시 거부가 없다.
-4. **PR body 를 저장된 값으로 1회 재검사한다.** `PR Body Contract` 는 push 시점
+1. `mergeStateStatus` 가 `CLEAN` 또는 `UNSTABLE` 이다 — required(`review-gate`
+   포함) 충족 판정은 이 값으로 읽는다. 두 값의 뜻과 `BLOCKED` 진단 순서는
+   `memory/runbook/pr-merge-gates/memory.md` 가 SOT — `BLOCKED` 면 머지를
+   시도하지 말고 그 방으로 간다.
+2. `needs:user` label 이 없고 사용자 명시 거부가 없다.
+3. **PR body 를 저장된 값으로 1회 재검사한다.** `PR Body Contract` 는 push 시점
    payload 의 body 로만 돌고 body 편집으로는 다시 돌지 않는다 (기전 SOT:
    `memory/runbook/pr-merge-gates/memory.md`, 계약 SOT:
    `memory/workflow/delivery/memory.md` 「PR body」). check 가 green 이어도 그
@@ -148,7 +150,7 @@ gh pr merge <N> --squash --delete-branch --body-file <교정본 경로>  # 교�
 - PR: #<번호> — merged <머지 SHA> (squash)
 - squash body: 기본 / 교정(사유)
 - reflect:done: 부착 / 불필요 (라운드 <N>) — 부착했으면 labeled run 결과
-- required: 머지 시점 전부 green (확인: `gh pr checks` + `mergeStateStatus`)
+- required: 머지 시점 충족 — `mergeStateStatus` = CLEAN / UNSTABLE
 - PR body 재검사: clean / dirty → 머지 중단하고 새 commit 요구
 - 브랜치: remote 삭제 완료 / 로컬 삭제 실패(무해)
 - 사본: 삭제 / 보존(사유)
