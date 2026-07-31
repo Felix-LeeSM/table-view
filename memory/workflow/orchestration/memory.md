@@ -102,9 +102,12 @@ script 도 대체물도 없다.
 ## 7. 도달은 spawn 하는 쪽이 책임진다
 
 노드가 memory 를 스스로 읽으러 오리라 기대하지 않는다 — 안 읽는 것이 실측이다.
-spawn 프롬프트에 넣는다: 행동 계약(구현자는 implementation §5 표)은 **본문
-인라인**, 절차는 read 명령, 그리고 MANDATORY 첫 명령으로 사본 경로 검증.
-형식은 `.agents/prompts/orchestrator.md` 의 "Spawn 규칙".
+그래서 고정부를 파일로 두고 **spawn 하는 쪽이 그대로 첨부**한다: 역할 preamble
+`.agents/prompts/<role>.md` (Claude Code 네이티브 spawn 은 `.claude/agents/<role>.md`
+정의가 그 파일을 첫 행동으로 읽는다). preamble 은 MANDATORY 첫 명령(사본 경로
+검증)과 착수 전 MANDATORY read 목록을 싣고, **계약 본문은 복제하지 않는다** —
+읽는 것이 노드의 첫 행동이다. spawn 메시지는 가변부만 싣는다. 형식은
+`.agents/prompts/orchestrator.md` 의 "Spawn 규칙".
 
 ## 관련
 
