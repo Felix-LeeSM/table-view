@@ -68,7 +68,6 @@ Current evidence:
 
 - `e2e/smoke/mariadb.spec.ts`
 - `e2e/fixtures/mariadb/query/seed.sql`
-- `scripts/e2e-smoke-ci.sh`
 - `.github/workflows/e2e-smoke.yml`
 - `src/components/datagrid/useDataGridEdit.mixed-batch.test.ts`
 - `src/lib/sql/ddlGenerator.test.ts`
@@ -204,7 +203,6 @@ is current SOT.
 
 Current evidence:
 
-- `scripts/e2e-smoke-ci.sh`
 - `.github/workflows/e2e-smoke.yml`
 - `e2e/fixtures/redis/kv/seed.json`
 - `e2e/smoke/redis.spec.ts`
@@ -218,7 +216,6 @@ Current evidence:
 - `src/components/query/QueryTab.dialect.test.tsx`
 - `src/components/query/QueryTab/useQueryExecution.kvDispatch.test.tsx`
 - `src/components/workspace/KvSidebar.test.tsx`
-- `src/components/workspace/KvSidebar.mutations.test.tsx`
 
 Gap routing:
 
@@ -250,8 +247,9 @@ Current evidence:
 `src-tauri/src/db/search_live_query.rs`, `src-tauri/src/db/search/tests.rs`,
 `src-tauri/src/db/search/tests/live_query.rs`,
 `src-tauri/src/commands/connection/crud.rs`, `src/types/dataSource.test.ts`,
-`src/types/search.ts`, `src/components/connection/ConnectionDialog.test.tsx`,
-`src/components/connection/ConnectionDialog.urlInput.test.tsx`,
+`src/types/search.ts`,
+`src/features/connection/components/ConnectionDialog.test.tsx`,
+`src/features/connection/components/ConnectionDialog.urlInput.test.tsx`,
 `e2e/fixtures/elasticsearch/search/seed.json`,
 `e2e/fixtures/opensearch/search/seed.json`, `src-tauri/src/commands/search.rs`,
 `src/lib/tauri/search.test.ts`, `src/lib/search/searchDslCompletion.ts`,
@@ -295,7 +293,6 @@ Current evidence:
 - `e2e/smoke/duckdb.spec.ts`
 - `e2e/smoke/duckdb-file-analytics.spec.ts`
 - `e2e/fixtures/duckdb/query/seed.sql`
-- `scripts/e2e-smoke-ci.sh`
 - `src/components/query/DuckdbFileAnalyticsDialog.test.tsx`
 - `src/components/query/QueryTab/useQueryExecution.test.tsx`
 - `src/components/query/QueryHistoryPanel.per-tab.test.tsx`
@@ -321,21 +318,20 @@ structured DDL/write UI, and admin parity remain unpromoted.
 
 Current evidence:
 
-- `scripts/fixtures/dbms-seeds.test.ts`
 - `e2e/fixtures/**/seed.*`
 - `e2e/fixtures/seed.mssql.sql`
 - `e2e/fixtures/seed.oracle.sql`
 - `e2e/fixtures/valkey.redis-compatibility.json`
-- `e2e/fixtures/smoke-routing-decisions.json`
 
 Gap routing:
 
-Fixture existence is contract/evidence inventory only unless the runtime smoke
-script wires the matching spec. Valkey's seed is wired into Runtime Happy Path
-smoke; its compatibility matrix still only separates proven local-runtime rows
-from candidate/rejected command families and is not full compatibility evidence.
-Issue #753 keeps fixture tiers and smoke-routing cost/risk rationale in
-`e2e/fixtures/smoke-routing-decisions.json`; #870 adds MySQL/MariaDB bounded
+Fixture existence is contract/evidence inventory only until a spec exercises it.
+Valkey's seed is wired into Runtime Happy Path smoke; its compatibility matrix
+still only separates proven local-runtime rows from candidate/rejected command
+families and is not full compatibility evidence. Issue #753 fixture tiers and
+smoke-routing cost/risk rationale live in
+[`fixture-test-topology-inventory.md`](../fixture-test-topology-inventory.md);
+#870 adds MySQL/MariaDB bounded
 Structure table/index/FK DDL smoke impact to those routed rows. Add
 DBMS-specific runtime smoke when each remaining parity lane becomes active.
 

@@ -1,6 +1,6 @@
 // Sprint 251 — `useDataGridEdit` persistence across unmount/remount via
 // `dataGridEditStore`. Maps to AC-251-H1..H5 from
-// `docs/sprints/sprint-251/contract.md`. Date 2026-05-09.
+// Sprint 251 contract. Date 2026-05-09.
 //
 // The hook used to keep its four pending slices (`pendingEdits`,
 // `pendingNewRows`, `pendingDeletedRowKeys`, `undoStack`) in `useState`,

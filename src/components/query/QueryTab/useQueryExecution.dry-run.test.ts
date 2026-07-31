@@ -1,7 +1,7 @@
 // Sprint 248 (ADR 0022 Phase 4) — `useQueryExecution.handleDryRun`
 // contract. The hook owns the explicit "Dry Run" dispatch path the
 // new toolbar button + Cmd+Shift+Enter shortcut both call into; this
-// test pins the 7 acceptance criteria from `docs/sprints/sprint-248/contract.md`
+// test pins the 7 acceptance criteria from Sprint 248 contract
 // (`AC-248-E1..E7`). date 2026-05-09.
 //
 // We exercise the hook via `renderHook` rather than mounting QueryTab

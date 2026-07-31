@@ -67,7 +67,7 @@ pub(crate) fn backoff_for_attempt(attempt: u32) -> Duration {
 
 /// Sprint 175 — captured once on the very first `get_session_id` call. The
 /// delta `rust:first-ipc - rust:entry` is the "Tauri startup overhead" line
-/// item in `docs/sprints/sprint-175/baseline.md`. `OnceLock::set` returns
+/// item in Sprint 175 baseline. `OnceLock::set` returns
 /// `Ok(())` only on the first call, guaranteeing the `info!` line is emitted
 /// exactly once regardless of how many windows race to invoke this command.
 static FIRST_IPC_INSTANT: OnceLock<Instant> = OnceLock::new();

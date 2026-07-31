@@ -11,26 +11,25 @@ updated: 2026-07-29
 ## 원칙
 
 - Workflow memory는 "언제 agent가 무엇을 해야 하는가"를 저장한다.
-- 긴 절차, 평가 매트릭스, 대화 방식, 구현 방법론은 `.agents/skills/*`로 둔다.
-- Workflow는 필요한 skill을 가리키되, skill 본문을 복제하지 않는다.
+- 긴 절차, 평가 매트릭스, 대화 방식, 구현 방법론은 repo 에 없다. 계약을 넘는
+  내용이 필요하면 방을 쪼개 여기 적는다.
 
 ## 방 지도
 
 - [bug-fix](./bug-fix/memory.md) — 사용자 버그/회귀/UX 이슈 보고 시 처리 순서 (Red 먼저)
 - [implementation](./implementation/memory.md) — 구현 phase 의 agent 자율성 + tool output noise 차단
-- [tdd](./tdd/memory.md) — code-profile sprint 의 RED evidence / pre-push TDD gate 해석
+- [tdd](./tdd/memory.md) — code-profile sprint 의 RED evidence 판정
 - [delivery](./delivery/memory.md) — 커밋 → 푸시 → PR → 리뷰 → 머지 구간의 node 별 계약 (구현자는 PR 생성에서 끝난다)
 - [review](./review/memory.md) — PR 생성 후 독립 read-only review pack을 붙이는 행동 계약
 - [orchestration](./orchestration/memory.md) — 병렬 작업 spawn · 리뷰 큐 직렬화 · 사이클 정지 · 이슈 수용기준
 - [documentation](./documentation/memory.md) — 문서화 필요 여부 판단 + 기존 SOT 라우팅 + PR evidence portability
-- [git-policy](./git-policy/memory.md) — hook 회피 금지 룰 (commit / push 강제 메커니즘)
-- [hooks](./hooks/memory.md) — hook 은 read-only 검증 게이트라는 작성 원칙
+- [git-policy](./git-policy/memory.md) — commit / push 금지 명령과 push reject 복구
 
 ## phase 식별
 
 | 신호                                      | phase          | 진입 룰                                                                               |
 | ----------------------------------------- | -------------- | ------------------------------------------------------------------------------------- |
-| 사용자가 새 기능 빌드 지시                | implementation | 티켓부터 — `issue-refine` 이 범위·수용 기준을 채우고 `issue-implement` 가 [implementation](./implementation/memory.md) 을 따른다 |
+| 사용자가 새 기능 빌드 지시                | implementation | 티켓부터 — 범위·수용 기준을 이슈에 채운 뒤 [implementation](./implementation/memory.md) 을 따른다 |
 | 사용자가 버그/회귀/UX 이슈 보고           | bug-fix        | 즉시 [bug-fix](./bug-fix/memory.md) 본문 읽고 Red test 부터                           |
 | 사용자가 코드 작성/구현 지시              | implementation | [implementation](./implementation/memory.md) — narration 최소, tool output noise 차단 |
 | code-profile sprint 에서 테스트/기능 변경 | tdd            | [tdd](./tdd/memory.md) — 작업 방식 강제가 아니라 delivery evidence 사전 확인          |
@@ -43,10 +42,4 @@ updated: 2026-07-29
 
 - [engineering/conventions](../engineering/conventions/memory.md) — 코드 룰 (Rust/TS/테스트/주석)
 - [product](../product/memory.md) — 제품 UX 머지 기준
-- 기능 빌드의 planner→generator→evaluator 하네스는 2026-07-30 폐기 (#1987) —
-  import 이후 672커밋 동안 산출물 0(전 히스토리 798)이었고 node 모델(#1918)이
-  `issue-refine` → `issue-implement` → `pr-reviewer` 로 대체한다.
-- 결정 / grill 은 workflow memory 가 아니라
-  `.agents/skills/grill-with-memory/SKILL.md` 가 source.
-- PR review 방법론은 workflow memory 가 아니라 `.agents/skills/pr-review/SKILL.md`
-  가 source.
+- 결정 / grill 절차와 PR review 방법론은 두 주제 모두 SOT 가 없다.

@@ -1,6 +1,6 @@
-# E2E profile — compiled but currently dormant (tauri-driver cold-start
-# / OOM blocks the WebDriver flow). Once unblocked, e2e specs run
-# `db:reset e2e` per cycle; until then the profile is a static contract.
+# E2E profile — a static contract (seed, row counts, connection ids) for a
+# fixture load. No loader in the repo reads it; the WebDriver flow stays
+# blocked by tauri-driver cold-start / OOM.
 seed: 42
 database:
   pg: table_view_e2e

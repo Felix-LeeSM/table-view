@@ -5,7 +5,7 @@ updated: 2026-07-27
 task: implementation, code-writing, refactor, agent-autonomy
 trigger:
   signal: 사용자가 코드 작성/구현/refactor 지시
-  layer: agent-prompt (issue-implement)
+  layer: none — 자동 로드 없음, 직접 열어야 함
 ---
 
 # Implementation — agent 자율성 + noise 차단
@@ -44,7 +44,7 @@ trigger:
 ## 4. 적용 phase
 
 - **적용** — implementation 작업 전반 (코드 작성, 테스트 실행, 빌드, 검증)
-- **미적용 (사용자 인풋 매 step 필요)** — planning / decision-making / grill-with-memory skill
+- **미적용 (사용자 인풋 매 step 필요)** — planning / decision-making / grill
 
 ## 5. 착수 전 체크리스트 — 반복 재발한 결함 유형
 
@@ -62,11 +62,10 @@ trigger:
 
 **Why**: 이 여섯이 2026-07 리뷰 라운드 폭증의 finding 공급원이었다. 리뷰어
 컨텍스트에 두면 blocking 사유가 계속 늘고, 저자 컨텍스트에 두면 라운드가 줄어든다.
-blocking 판정은 `.agents/skills/pr-review/SKILL.md` Verdict 원칙 1 의 세 사유로
-고정이고 이 표는 거기에 추가되지 않는다.
+blocking 판정은 [review](../review/memory.md) 의 세 사유로 고정이고 이 표는
+거기에 추가되지 않는다.
 
 ## 관련
 
-- `grill-with-memory` skill — narration 권장 phase (반대)
 - [bug-fix](../bug-fix/memory.md) — Red→Green 진행 시 본 룰 적용
 - [delivery](../delivery/memory.md) — 완료 phase. 본 룰의 연속

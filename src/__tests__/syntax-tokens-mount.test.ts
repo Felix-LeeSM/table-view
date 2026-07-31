@@ -34,9 +34,8 @@ const SYNTAX_TOKENS = [
  * 서버 / build 에서 vite 가 처리. 그래서 fallback 블록을 직접 inject
  * 하고 `data-mode` 토글로 cascade 가 작동하는지만 단언한다.
  *
- * 실제 themes.css 의 144 블록 × 12 토큰 = 1728 값의 무결성은
- * `scripts/check-theme-contrast.ts` 가 별도 검사. 본 테스트는 토큰이
- * "어디서든 cascade 로 발동하는지" 만 본다.
+ * 실제 themes.css 의 144 블록 × 12 토큰 = 1728 값의 무결성은 아무것도
+ * 검사하지 않는다. 본 테스트는 토큰이 "어디서든 cascade 로 발동하는지" 만 본다.
  */
 function injectFallback(): HTMLStyleElement {
   const style = document.createElement("style");

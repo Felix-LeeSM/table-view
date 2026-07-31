@@ -82,7 +82,7 @@ smoke or measurement gates:
 - Narrow-column display for `pendingEditErrors`.
 - ERD desktop+narrow screenshot smoke. Dense-view smoke evidence is a future H4
   matrix gate; there is no current dense-view smoke claim.
-- Internal-doc link checking is advisory, and Node package audit is deferred.
+- There is no internal-doc link checking, and Node package audit is deferred.
   Rust dependency security is covered by blocking PR/main `cargo deny check`;
   runtime dependency upgrades remain separate PRs.
 - Broader E2E fixture reset coverage. Current runtime smoke separates app data

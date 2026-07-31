@@ -13,7 +13,7 @@ SQLite desktop smoke now wired into the GitHub Runtime Happy Path.
 
 Current evidence:
 
-`scripts/e2e-smoke-ci.sh`, `e2e/smoke/sqlite.spec.ts`,
+`e2e/smoke/sqlite.spec.ts`,
 `e2e/fixtures/sqlite/query/seed.sql`, #456
 
 Current gap / routing:
@@ -30,7 +30,7 @@ Current evidence:
 
 - `src-tauri/src/db/adapters/sqlite/connection.rs`
 - `src-tauri/tests/sqlite_connection_command.rs`
-- `src/components/connection/forms/SqliteFormFields.test.tsx`
+- `src/features/connection/components/forms/SqliteFormFields.test.tsx`
 - `src/types/dataSource.test.ts`
 
 Current gap / routing:
@@ -159,8 +159,8 @@ Current evidence:
 `src-tauri/sql-parser-core/src/completion/completion_tests.rs`,
 `src/features/completion/sql/sqlCompletionContext.test.ts`,
 `src/features/completion/sql/sqlCompletionRequest.test.ts`,
-`src/lib/sql/sqlWasmArtifact.test.ts`, `scripts/fixtures/sqlite.test.ts`,
-`scripts/e2e-smoke-ci.sh`, `e2e/smoke/sqlite.spec.ts`, #534
+`src/lib/sql/sqlWasmArtifact.test.ts`,
+`e2e/smoke/sqlite.spec.ts`, #534
 
 Current gap / routing:
 
@@ -191,17 +191,11 @@ Current evidence:
 - `e2e/fixtures/sqlite/query/seed.sql`
 - `e2e/fixtures/seed.mssql.sql`
 - `e2e/fixtures/seed.oracle.sql`
-- `scripts/fixtures/spec.test.ts`
-- `scripts/fixtures/sqlite.test.ts`
-- `scripts/fixtures/mssql.test.ts`
-- `scripts/fixtures/oracle.test.ts`
-- `scripts/e2e-pre-smoke-release-gate.ts`
-- `scripts/e2e-smoke-ci.sh`
 
 Current gap / routing:
 
-SQLite fixtures are deterministic local files and pre-smoke validates fixture
-presence/path. MSSQL fixture rows stay bounded to the promoted runtime and #907
+SQLite fixtures are deterministic local files; nothing validates their presence
+or path before a run. MSSQL fixture rows stay bounded to the promoted runtime and #907
 smoke slice. Oracle fixture rows now pin the #905/#906 service-name
 catalog/query/cancel/tabular/edit-row runtime boundary plus #907 representative
 smoke (`host:port/serviceName`, default `XEPDB1`) while rejecting

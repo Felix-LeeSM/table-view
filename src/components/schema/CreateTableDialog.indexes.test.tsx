@@ -10,7 +10,7 @@ import { useConnectionStore } from "@stores/connectionStore";
 import { useSafeModeStore } from "@stores/safeModeStore";
 import { useQueryHistoryStore } from "@stores/queryHistoryStore";
 import {
-  PRE_PUSH_LOAD_TEST_TIMEOUT_MS,
+  HEAVY_LOAD_TEST_TIMEOUT_MS,
   activateTab,
   getColumnsPanel,
   getKeysPanel,
@@ -49,7 +49,7 @@ import {
 //   `columns` array exactly matches the declared PK array, the chain
 //   skips `tauri.createIndex` for that row (PG implicitly indexes PKs).
 //
-// Source: `docs/sprints/sprint-228/contract.md` AC-228-01..AC-228-11.
+// Source: Sprint 228 contract AC-228-01..AC-228-11.
 
 describe("Sprint 228 — Indexes tab functional", () => {
   beforeEach(() => {
@@ -468,7 +468,7 @@ describe("Sprint 228 — Indexes tab functional", () => {
       panel = getIndexesPanel();
       expect(mockDropIndex).not.toHaveBeenCalled();
     },
-    PRE_PUSH_LOAD_TEST_TIMEOUT_MS,
+    HEAVY_LOAD_TEST_TIMEOUT_MS,
   );
 
   // ── AC-228-08 PK auto-emission deduplication ─────────────────────

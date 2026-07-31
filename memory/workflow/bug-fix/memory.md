@@ -5,7 +5,7 @@ updated: 2026-05-17
 task: bug-fix, regression-test, user-report
 trigger:
   signal: 사용자가 버그/회귀/UX 이슈 보고
-  layer: agent-prompt (issue-implement — 버그/회귀 경로에서 먼저 read)
+  layer: none — 자동 로드 없음, 직접 열어야 함
 ---
 
 # 버그 fix — Red test 먼저
@@ -41,8 +41,8 @@ trigger:
 
 ## 관련
 
-- [diagnose skill](../../../.agents/skills/diagnose/SKILL.md) — 재현/원인 어려운 버그·성능 회귀는 진단 루프 (피드백 신호 구축 → 이분법 → 계측 → 회귀 test) 진입점.
-- `grill-with-memory` skill — 사용자 보고가 명확하지 않으면 먼저 증상 lock
+- 진단 루프(피드백 신호 구축 → 이분법 → 계측 → 회귀 test)와 증상 lock 절차의
+  본문은 repo 에 없다 — 위 순서가 전부다
 - [implementation](../implementation/memory.md) — Red 작성 후 Green 단계 narration / noise 룰
 - [delivery](../delivery/memory.md) — fix 끝나면 자율 commit/push
 - [engineering/conventions/testing-scenarios](../../engineering/conventions/testing-scenarios/memory.md) — 시나리오 9원칙

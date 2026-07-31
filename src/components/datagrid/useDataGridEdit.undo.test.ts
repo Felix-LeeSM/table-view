@@ -1,6 +1,6 @@
 // Sprint 249 (ADR 0022 Phase 5) — pending-edit undo stack on
 // `useDataGridEdit`. Maps to AC-249-U1..U9 from
-// `docs/sprints/sprint-249/contract.md`. Date 2026-05-09.
+// Sprint 249 contract. Date 2026-05-09.
 //
 // The harness focus is the *pending-state* boundary: cell edits, Add /
 // Delete / Duplicate row gestures push deep snapshots so a Cmd+Z (or

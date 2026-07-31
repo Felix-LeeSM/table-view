@@ -28,9 +28,10 @@ Known limits to state in release notes:
   role/user/permission management, server activity dashboards, and broad admin
   execution remain future gates unless a row below says otherwise.
 - Completion is editor assistance. It does not widen runtime execution support.
-- Fixture inventory is not live support evidence unless wired by Runtime Happy
-  Path or focused runtime tests.
-- Runtime Happy Path is the Ubuntu/Linux CI desktop smoke surface. macOS and
+- Fixture inventory is not live support evidence unless a smoke spec or focused
+  runtime test exercises it.
+- Desktop runtime smoke runs on a Linux host by hand. No CI job runs it, and the
+  `Runtime Happy Path` context reports without executing a spec. macOS and
   Windows desktop runtime smoke remain deferred.
 - Search live admin execution, Redis/Valkey full CLI/admin parity, MongoDB
   arbitrary JavaScript shell behavior, MSSQL full T-SQL/SQLCMD/admin support,
@@ -55,17 +56,18 @@ Known limits to state in release notes:
 | MongoDB | Whitelisted document workflow supports collection browse, MQL query/edit preview, selected admin/destructive confirmations, autocomplete, bulk/index/validator focused paths, and cancellation. Arbitrary JavaScript shell and native document-first result parity remain future work. | [`docs/product/README.md`](../../product/README.md), [`query-language-support.md`](../../product/query-language-support.md) |
 | Redis | KV profile supports connection, key scan, typed value preview/edit, guarded string write, TTL, exact-key delete, bounded command dispatch, and bounded command/key completion. Full CLI/admin/cluster/pubsub/modules/consumer-group parity remains out of scope. | [`docs/product/README.md`](../../product/README.md), [`known-limitations.md`](../../product/known-limitations.md) |
 | Valkey | Active KV runtime slice for connection, key scan/value preview, selected stream reads, selected Redis-compatible command query rows, bounded SET/EXPIRE, destructive/unsupported guards, the same string plus hash/list/set/zset KvMutationPanel write controls as Redis (#1075), and proven-row command completion. Valkey collection-write smoke coverage and full Redis compatibility are not claimed. | [`docs/product/README.md`](../../product/README.md), [`query-language-support.md`](../../product/query-language-support.md) |
-| Elasticsearch | Live URL/auth/TLS root probe, live catalog, bounded `_search`, Search DSL validation, Runtime Happy Path smoke, and delete-by-query safety planning are active. Actual live admin execution and broader observability/profile/explain workflows remain deferred. | [`docs/product/README.md`](../../product/README.md), [`known-limitations.md`](../../product/known-limitations.md) |
-| OpenSearch | OpenSearch-specific live root probe, Elasticsearch endpoint rejection, live catalog, bounded `_search`, mapping-aware completion, Runtime Happy Path smoke, and delete-by-query safety planning are active. Actual live admin execution remains deferred. | [`docs/product/README.md`](../../product/README.md), [`query-language-support.md`](../../product/query-language-support.md) |
-| MSSQL | Bounded SQL authentication, catalog/query/cancel/tabular runtime, primary-key row edit through frontend SQL batch, bounded T-SQL editor guardrails, and representative Runtime Happy Path smoke are active. Structured DDL, SQLCMD/admin/security/backup/jobs/users/roles, broad parser/completion semantics, and full T-SQL semantics remain unsupported. | [`docs/product/README.md`](../../product/README.md), [`known-limitations.md`](../../product/known-limitations.md) |
-| Oracle | Service-name lifecycle, bounded catalog/query/cancel/tabular runtime, primary-key row edit through frontend SQL batch, bounded Safe Mode classification, bounded editor assistance, and representative Runtime Happy Path smoke are supported for `host:port/serviceName` with default fixture service `XEPDB1`. SID, TNS, wallet, advanced auth, structured DDL, raw DDL/admin, full parser/completion promotion, and PL/SQL body/package work remain unsupported until Oracle-specific evidence lands. | [`docs/product/README.md`](../../product/README.md), [`known-limitations.md`](../../product/known-limitations.md) |
+| Elasticsearch | Live URL/auth/TLS root probe, live catalog, bounded `_search`, Search DSL validation, hand-run smoke coverage, and delete-by-query safety planning are active. Actual live admin execution and broader observability/profile/explain workflows remain deferred. | [`docs/product/README.md`](../../product/README.md), [`known-limitations.md`](../../product/known-limitations.md) |
+| OpenSearch | OpenSearch-specific live root probe, Elasticsearch endpoint rejection, live catalog, bounded `_search`, mapping-aware completion, hand-run smoke coverage, and delete-by-query safety planning are active. Actual live admin execution remains deferred. | [`docs/product/README.md`](../../product/README.md), [`query-language-support.md`](../../product/query-language-support.md) |
+| MSSQL | Bounded SQL authentication, catalog/query/cancel/tabular runtime, primary-key row edit through frontend SQL batch, bounded T-SQL editor guardrails, and representative hand-run smoke coverage are active. Structured DDL, SQLCMD/admin/security/backup/jobs/users/roles, broad parser/completion semantics, and full T-SQL semantics remain unsupported. | [`docs/product/README.md`](../../product/README.md), [`known-limitations.md`](../../product/known-limitations.md) |
+| Oracle | Service-name lifecycle, bounded catalog/query/cancel/tabular runtime, primary-key row edit through frontend SQL batch, bounded Safe Mode classification, bounded editor assistance, and representative hand-run smoke coverage are supported for `host:port/serviceName` with default fixture service `XEPDB1`. SID, TNS, wallet, advanced auth, structured DDL, raw DDL/admin, full parser/completion promotion, and PL/SQL body/package work remain unsupported until Oracle-specific evidence lands. | [`docs/product/README.md`](../../product/README.md), [`known-limitations.md`](../../product/known-limitations.md) |
 
 ## Fixture And Smoke Coverage
 
-The current Runtime Happy Path workflow is
-[`.github/workflows/e2e-smoke.yml`](../../../.github/workflows/e2e-smoke.yml).
-The release gate requires the aggregate `Runtime Happy Path` check plus each
-wired matrix leg to pass.
+No workflow runs these specs.
+[`.github/workflows/e2e-smoke.yml`](../../../.github/workflows/e2e-smoke.yml)
+reports the `Runtime Happy Path` context without executing one, so a green PR is
+no evidence for any row below. Run the suite by hand on the release SHA — the
+sequence is in README 「E2E Smoke」.
 
 | Source | Runtime smoke | Fixture or seed evidence | Release-note wording |
 |---|---|---|---|
@@ -89,7 +91,8 @@ Before publishing release notes:
 - Link the notes back to
   [`docs/product/README.md`](../../product/README.md) and
   [`docs/product/known-limitations.md`](../../product/known-limitations.md).
-- Mention the Runtime Happy Path matrix only for specs wired by the workflow.
+- Mention smoke coverage only for the specs listed above, and only when they
+  were run by hand on the release SHA.
 - Mention changed fixture/smoke coverage only when the fixture is wired to a
   runtime or focused test path.
 - Keep deferred support visible instead of turning limitations into omissions.

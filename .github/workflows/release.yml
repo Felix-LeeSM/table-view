@@ -65,12 +65,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      # REMOVED GATE (#1431) — tag ↔ conf version. scripts/release/
-      # verify-tag-version.mjs failed every leg before any build work when a
-      # manually pushed tag disagreed with the checked-out tauri.conf.json
-      # version. auto-tag-release.yml still checks this before *creating* a tag,
-      # so the hole is the manual `git push origin vX.Y.Z` path: it can now
-      # publish the checked-out bundle under a mismatched tag.
+      # UNGUARDED (#1431) — nothing checks the tag against the checked-out
+      # tauri.conf.json version here. auto-tag-release.yml checks it before
+      # *creating* a tag, so the hole is the manual `git push origin vX.Y.Z`
+      # path: it publishes the checked-out bundle under a mismatched tag.
 
       # Linux Tauri bundles depend on webkit2gtk + librsvg + patchelf. macOS &
       # Windows runners come with everything Tauri needs preinstalled (libwebview2
@@ -195,13 +193,11 @@ jobs:
           grep -q "Sealed Resources version=2" /tmp/cs.txt || { echo "FAIL: no Sealed Resources — bundle not signed, would be 'damaged'"; cat /tmp/cs.txt; exit 1; }
           echo "OK: macOS bundle carries Sealed Resources (proper ad-hoc signature)"
 
-      # REMOVED GATE (#1430) — updater signature verification.
-      # scripts/release/verify-updater-sigs.mjs checked every produced `.sig`
-      # against the pubkey committed in src-tauri/tauri.conf.json before the
-      # draft was published. If the signing key and the committed pubkey drift
-      # (e.g. a rotation updates only one side), every client's auto-update now
-      # fails silently: updater errors are DEV-log-only and there is no
-      # telemetry (ADR 0036), so nothing else catches it.
+      # UNGUARDED (#1430) — nothing verifies the produced `.sig` files against
+      # the pubkey committed in src-tauri/tauri.conf.json. If the signing key and
+      # that pubkey drift (e.g. a rotation updates only one side), every client's
+      # auto-update fails silently: updater errors are DEV-log-only and there is
+      # no telemetry (ADR 0036), so nothing else catches it.
 
       # tauri-action exposes `artifactPaths` — the JSON array of bundles it just
       # uploaded as release assets. We hash each one with sha256 and upload the
@@ -223,23 +219,20 @@ jobs:
             gh release upload "$TAG" "${f}.sha256" --clobber
           done
 
-  # #1429 — latest.json platform completeness gate. The build matrix runs with
+  # #1429 — why the manifest matters. The build matrix runs with
   # `fail-fast: false`, and tauri-action merges each leg's updater entry into
   # the draft release's latest.json via read-merge-write. A failed leg (v0.3.1:
   # the Windows leg) — or a lost concurrent merge — leaves that platform's key
   # out of the manifest; publishing it makes `check()` on that OS report
   # "up to date" forever, swallowed silently client-side (ADR 0036, no
-  # telemetry). Verify the merged manifest lists every matrix platform after
-  # all legs finish, so an incomplete draft fails this run before a maintainer
-  # can publish it. Expected keys are derived from this workflow's matrix
-  # `target:` triples, so adding a leg automatically extends the gate.
+  # telemetry). This job proves only that a manifest exists. Checking that it
+  # carries one key per matrix platform is a manual step in
+  # docs/contributor-guide/release/versioning-and-artifacts.md.
   verify-latest-json:
-    # Only the presence check survives — the platform-completeness assertion it
-    # was named after lived in the removed script. See the step comments below.
     name: Verify latest.json is present
     needs: build
-    # Run even when a build leg failed — that is exactly the case that
-    # produces an incomplete latest.json worth failing loudly on.
+    # Run even when a build leg failed — a dead leg is exactly the case that can
+    # leave the draft with no manifest at all.
     if: always()
     runs-on: ubuntu-22.04
     timeout-minutes: 10
@@ -248,15 +241,14 @@ jobs:
         uses: actions/checkout@v6
 
       # Fails if the draft has no latest.json at all (e.g. every leg died
-      # before upload) — fail-closed, same as an incomplete manifest.
+      # before upload). An incomplete manifest downloads fine and passes.
       - name: Download merged latest.json from draft release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ github.ref_type == 'tag' && github.ref_name || format('manual-{0}', github.sha) }}
         run: gh release download "$TAG" --pattern latest.json --output latest.json
 
-      # REMOVED GATE — scripts/release/verify-latest-json.mjs asserted that the
-      # merged updater manifest carried one platform key per build-matrix leg.
-      # The download above still fails closed when the draft has no latest.json
-      # at all, but an INCOMPLETE manifest (a leg that died after upload) now
-      # publishes unnoticed.
+      # UNGUARDED — nothing asserts that the merged updater manifest carries one
+      # platform key per build-matrix leg. The download above fails closed when
+      # the draft has no latest.json at all, but an INCOMPLETE manifest (a leg
+      # that died after upload) publishes unnoticed.

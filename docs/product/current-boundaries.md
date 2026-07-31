@@ -105,7 +105,7 @@
   Elasticsearch, OpenSearch, MSSQL, and Oracle. MSSQL/Oracle smoke is bounded to
   representative connect, seeded catalog browse, SELECT/DML, destructive Safe
   Mode confirmation, cancellation, and grid edit paths. Other smoke specs or
-  source inventories do not widen product support until the CI script and
+  source inventories do not widen product support until a smoke runner and
   support docs promote them.
 - Destructive/security behavior is source-specific. RDB DDL preview/confirm,
   RDB Safe Mode confirmations, MongoDB safety confirmations, Redis typed

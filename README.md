@@ -90,17 +90,20 @@ Contributor/agent routing:
 - [mise](https://mise.jdx.dev/) 또는 asdf — `.tool-versions` 기반 런타임 관리
 - OS별 Tauri 2 시스템 의존성
 
-버전 기준은 [`.tool-versions`](./.tool-versions)입니다. Node.js, pnpm, Rust, lefthook, direnv 버전이 이 파일에 고정되어 있습니다.
+버전 기준은 [`.tool-versions`](./.tool-versions)입니다. Node.js, pnpm, Rust, direnv 버전이 이 파일에 고정되어 있습니다.
 
 ### 2. 초기 셋업
 
-신규 클론 후 런타임, cargo 보조 도구, git hook, npm 의존성을 한 번에 준비합니다.
+한 번에 준비해 주는 셋업 스크립트는 없습니다. 아래를 각각 준비하세요.
 
 ```bash
-bash scripts/setup.sh
+mise install          # 또는 asdf install — .tool-versions 기준
+pnpm install
 ```
 
-이미 도구가 준비된 상태에서 JavaScript 의존성만 다시 받으려면:
+Rust 보조 도구는 필요할 때 직접 설치합니다 (`cargo install cargo-nextest cargo-llvm-cov cargo-deny`). git hook 은 설치할 것이 없습니다.
+
+JavaScript 의존성만 다시 받으려면:
 
 ```bash
 pnpm install
@@ -109,7 +112,8 @@ pnpm install
 ### 3. 개발용 데이터베이스 실행
 
 PostgreSQL, MongoDB, MySQL, MariaDB, MSSQL, Oracle, Redis compose 컨테이너를
-띄우고 health check를 기다립니다.
+띄웁니다. `docker compose up -d`는 health check 통과를 기다리지 않으므로,
+연결 전에 `docker compose ps`로 `healthy`를 확인하세요.
 
 ```bash
 pnpm db:up
@@ -117,14 +121,18 @@ pnpm db:up
 
 MSSQL과 Oracle 컨테이너는 수동 연결과 explicit fixture load에 사용됩니다.
 Oracle은 #905 focused catalog/query/cancel/tabular evidence만 갖고, routine
-Runtime Happy Path smoke wiring은 #907 전까지 넓히지 않습니다. Fixture CLI의 기본 `all/default` target은
-PostgreSQL/MongoDB/MySQL/SQLite/DuckDB/Redis만 로드하므로 MariaDB/MSSQL/Oracle은
-필요할 때 명시 target으로 실행합니다.
+Runtime Happy Path smoke wiring은 #907 전까지 넓히지 않습니다.
+
+**Fixture seeding CLI(`pnpm db:seed`)는 없습니다.** 남아 있는 `pnpm fixtures:start`
+/ `fixtures:stop`은 컨테이너 기동·정지일 뿐 seed를 넣지 않습니다 —
+`fixtures:stop`은 `docker compose down -v`라 볼륨까지 지웁니다. seed 데이터 자체는
+`e2e/fixtures/<dbms>/` 아래에 남아 있으므로, 컨테이너에 직접 먹이거나
+`e2e/fixtures/seed-smoke.ts`로 smoke seeding을 돌릴 수 있습니다.
 
 ```bash
-pnpm fixtures:load development --target mariadb
-pnpm fixtures:load development --target mssql
-pnpm fixtures:load development --target oracle
+pnpm db:up            # 컨테이너 기동 (docker compose up -d)
+docker compose exec -T mariadb mysql -utestuser -ptestpass table_view_test \
+  < e2e/fixtures/mariadb/query/seed.sql
 ```
 
 Oracle은 서비스명 기반 `XEPDB1` 경로가 기준입니다. #905 범위는 catalog metadata,
@@ -175,13 +183,12 @@ pnpm dev                # Vite dev 서버 (Tauri 데스크톱 없이 브라우�
 pnpm build              # TypeScript 타입 체크 + Vite production build
 pnpm lint               # ESLint
 pnpm format             # Prettier (src/)
-pnpm format:docs        # Prettier (README, CLAUDE, docs, .claude markdown)
+pnpm format:docs        # Prettier (README, CLAUDE, AGENTS, docs)
 pnpm tauri dev          # Tauri 데스크톱 dev
 pnpm tauri build        # Tauri 데스크톱 production build
-pnpm wasm:size          # SQL/Mongo parser WASM gzip budget check
 ```
 
-Parser WASM 산출물은 `src/lib/**/wasm/` 아래에 체크인되어 있어 로컬 `wasm-pack` 없이도 앱을 빌드할 수 있습니다. 해당 산출물이나 Rust parser crate를 바꾸면 `pnpm wasm:size`가 계속 통과해야 합니다. SQL parser WASM은 gzip 200 KiB, Mongo parser WASM은 gzip 53 KiB가 상한입니다.
+Parser WASM 산출물은 `src/lib/**/wasm/` 아래에 체크인되어 있어 로컬 `wasm-pack` 없이도 앱을 빌드할 수 있습니다. gzip 상한(SQL parser 200 KiB, Mongo parser 53 KiB)을 재는 검사가 없으므로, 산출물이나 Rust parser crate를 바꾸면 크기를 직접 확인하세요.
 
 ---
 
@@ -212,25 +219,32 @@ cargo test --manifest-path src-tauri/Cargo.toml --lib
 cargo test --manifest-path src-tauri/Cargo.toml --test schema_integration --test query_integration
 ```
 
-### 4. E2E Smoke 테스트 (Linux host / CI)
+### 4. E2E Smoke 테스트 (Linux host, 수동 실행)
 
 WebdriverIO + tauri-driver로 실제 Tauri 앱을 부팅해 PostgreSQL, MySQL,
 MariaDB, MSSQL, SQLite, DuckDB, MongoDB, Redis, Valkey,
 Elasticsearch, OpenSearch runtime happy path를 검증합니다. Oracle은 #905 focused
-runtime evidence만 갖고 routine smoke wiring은 #907 소유입니다. GitHub Actions에서는
-PR과 `main` push의 blocking check로 실행됩니다.
+runtime evidence만 갖고 routine smoke wiring은 #907 소유입니다.
 
-로컬 Linux 환경에서는 필요한 서비스를 띄운 뒤 단일 spec을 지정해 실행합니다.
-`pnpm db:up`은 PostgreSQL/MySQL/MariaDB/MongoDB/MSSQL/Oracle/Redis를
-준비합니다. Valkey, Elasticsearch, OpenSearch까지 포함한 전체 matrix는 GitHub
-Actions workflow가 기준입니다.
+**CI에서는 실행되지 않습니다.** `.github/workflows/e2e-smoke.yml`은 required
+context만 보고하는 껍데기이고 뒤에 실행되는 spec이 없습니다. spec과 fixture는
+그대로이므로 직접 구동할 수 있습니다.
 
 ```bash
 pnpm db:up
-E2E_SPEC=e2e/smoke/postgres.spec.ts E2E_SPEC_KEY=postgres bash scripts/e2e-smoke-ci.sh
+pnpm tauri build --debug --no-bundle --config src-tauri/tauri.e2e.conf.json
+TABLE_VIEW_TEST_DATA_DIR=/tmp/table-view-smoke \
+  E2E_SPEC_KEY=postgres pnpm exec tsx e2e/fixtures/seed-smoke.ts
+TABLE_VIEW_TEST_DATA_DIR=/tmp/table-view-smoke \
+  pnpm exec wdio run wdio.smoke.conf.ts --spec e2e/smoke/postgres.spec.ts
 ```
 
-macOS/Windows 로컬에서는 tauri-driver의 Linux/GTK 의존성 차이 때문에 CI 검증을 기준으로 봅니다.
+`pnpm db:up`은 PostgreSQL/MySQL/MariaDB/MongoDB/MSSQL/Oracle/Redis를 준비합니다.
+헤드리스 Linux에서는 `WEBKIT_DISABLE_DMABUF_RENDERER=1`,
+`WEBKIT_DISABLE_COMPOSITING_MODE=1`, `LIBGL_ALWAYS_SOFTWARE=1`을 직접 export해야
+합니다 (#1261/#1293).
+
+macOS/Windows 로컬에서는 tauri-driver의 Linux/GTK 의존성 차이가 있습니다.
 
 ---
 
@@ -258,8 +272,8 @@ macOS debug 앱 번들은 `src-tauri/target/debug/bundle/macos/Table View.app`�
 
 ## 🍺 Homebrew 배포 (Homebrew)
 
-`release` 이벤트가 `published`로 바뀌면 이 저장소의 워크플로가 Homebrew tap을 갱신합니다.
-현재 절차는 `publish` 수동 승인 후 반영됩니다.
+이 저장소에는 cask를 갱신하는 워크플로가 없습니다. draft 릴리스를 손으로 publish한 뒤
+`Felix-LeeSM/homebrew-table-view` tap의 `Casks/table-view.rb`를 직접 갱신합니다.
 
 ```bash
 brew tap Felix-LeeSM/table-view

@@ -5,7 +5,7 @@ updated: 2026-07-29
 task: merge, pr, review-gate, ci, blocked, ruleset, e2e, synchronize-rerun, cancelled-rollup, round-gate
 trigger:
   signal: PR 이 mergeable 인데 mergeState=BLOCKED / merge 가 base branch policy 로 거부
-  layer: agent-prompt (orchestrator / 종결 스크립트)
+  layer: none — 자동 로드 없음, 직접 열어야 함
 ---
 
 # PR merge 게이트 진단 / 처리
@@ -25,8 +25,8 @@ label 메커니즘 자체는 [delivery](../../workflow/delivery/memory.md) 의 �
    (2026-07-03 #1183 delivery 실측 — 이전 서술 "E2E 만" 은 불완전했음.)
 
 **이 블록이 repo 유일의 required context 목록이다.** 다른 문서는 열거하지 말고 여기를
-가리킨다 — `scripts/static-policy/ci-gate-enumeration.ts` (`pnpm lint`) 가 강제하고,
-여기 적힌 이름이 실제 workflow job context 와 어긋나면 CI 가 RED 다.
+가리킨다. 이름이 실제 workflow job context 와 어긋나도 CI 는 조용하므로, 워크플로를
+고칠 때 여기를 같이 고쳐라.
 
 <!-- ci-gates:required-contexts -->
 
@@ -37,12 +37,22 @@ label 메커니즘 자체는 [delivery](../../workflow/delivery/memory.md) 의 �
 
 <!-- /ci-gates -->
 
-2차 등록분 fail 도 BLOCKED 다 — 대응은 fix (PR body 정정 / clippy fix) 지 회피 아님.
-신규 required context 등록은 workflow 가 main 에 올라간 **뒤에** 한다 — 아무 run 도
-만들지 않는 required context 는 열린 PR 전부를 BLOCKED 로 고착시킨다.
+**8종 중 3종은 빈 껍데기다.** `Detect Change Scope` 와 `PR Body Contract` 는
+`exit 0` 한 줄, `Runtime Happy Path` 는 echo 한 줄인 name-only job 이다 — **항상 green 이고
+아무것도 보증하지 않는다.** 이름을 지우면 컨텍스트가 영영 `expected` 로 남아 모든
+머지가 막히므로 job 만 남겼다. 순서는 ruleset 에서 먼저 빼고 그다음 job 삭제다
+(ruleset 은 GitHub 라이브 상태라 별도 결정).
 
-→ protection API 만 보고 "required 는 review-gate 뿐" 이라 단정하지 말 것. E2E 가 진짜
-blocker 인 경우가 많다 (docs/hook 변경이어도 ruleset 이 E2E 를 요구).
+**BLOCKED 진단은 이 셋을 먼저 배제해라** — 세 이름은 실패할 수 없으므로 원인이
+아니다. 나머지 5종(`Frontend Checks`, `Rust Unit And Storage Tests`,
+`Integration Tests (Docker)`, `Dependency Security`, `Rust Static Analysis`) 과
+`review-gate` 만 red 가 될 수 있고, 대응은 fix (clippy fix / 테스트 수정) 지 회피
+아님. 신규 required context 등록은 workflow 가 main 에 올라간 **뒤에** 한다 —
+아무 run 도 만들지 않는 required context 는 열린 PR 전부를 BLOCKED 로 고착시킨다.
+
+→ protection API 만 보고 "required 는 review-gate 뿐" 이라 단정하지 말 것. ruleset
+8종은 별도 계층이고 docs 만 바꾼 PR 에도 전부 요구된다. 단 `Runtime Happy Path` 는
+위 stub 셋에 속하므로 E2E 를 blocker 로 의심하지 마라 — 실패할 수 없다.
 
 ## 잘못된 대응이 만드는 함정
 
@@ -66,8 +76,8 @@ blocker 인 경우가 많다 (docs/hook 변경이어도 ruleset 이 E2E 를 요�
 - **synchronize run 은 `gh run rerun` 해도 영원히 fail** — push(synchronize) 마다
   "Dismiss stale approval on new commits" step 이 `review:approved` 를 DELETE + 의도적
   exit 1. rerun 은 같은 dismissal 로직을 재실행해 다시 `exit 1` — synchronize run 은
-  절대 pass 로 못 뒤집는다. watcher 의 자동 rerun 1회가 여기 낭비되면 watcher 가
-  포기(exit 2)하니, 부착 전 review-gate bucket 이 pass 인지 확인한다 (#1523).
+  절대 pass 로 못 뒤집는다. 자동 rerun 을 대신 돌려 주는 watcher 는 없으니, label
+  부착 전에 review-gate bucket 이 pass 인지 손으로 확인한다 (#1523).
 - **CANCELLED 고착 (#1515, 2h timeout 원인)**: `labeled` run 이 concurrency 로 CANCELLED
   되면 rollup 에 non-success 로 남아 BLOCKED 가 고착된다. `gh pr checks` 는 최신 run 만
   보여줘 all-pass 처럼 보인다 — 진단은 `statusCheckRollup`(GraphQL) 또는 commit
@@ -81,7 +91,7 @@ blocker 인 경우가 많다 (docs/hook 변경이어도 ruleset 이 E2E 를 요�
   `comments >= 3` 이고 `reflect:done` label 이 없으면 exit 1 한다. rerun 도 label
   재발화도 같은 payload 를 재생하므로 계속 fail — 해소는 `reflect:done` 뿐이다
   (`enforce_admins=true` 라 `--admin` 우회 없음). **누가 붙이냐는 verdict 가 가른다** —
-  green 이면 종결자(`pr-finalize`)가 바로 붙이고, red 면 회고자(`round-reflect`)가
+  green 이면 종결자가 바로 붙이고, red 면 회고자가
   사용자에게 올려 받는다 ([delivery](../../workflow/delivery/memory.md)). 저자는
   붙이지 않는다. 게이트는 라운드만 세고
   verdict 를 안 보므로 green 도 걸린다.
@@ -121,4 +131,4 @@ merge 막히면 위 "두 곳 분산" → "함정" → "올바른 순서" 순으�
 
 - [delivery](../../workflow/delivery/memory.md) — 리뷰~정리 구간의 review-gate label / enforce_admins 계약
 - [worktree](../worktree/memory.md) — merge 후 worktree cleanup
-- `.claude/rules/git-policy.md` — hook 회피 / force push 금지
+- [git-policy](../../workflow/git-policy/memory.md) — force push 금지 (집행 훅 없음)

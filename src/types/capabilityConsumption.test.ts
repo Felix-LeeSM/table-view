@@ -19,11 +19,8 @@ import { createEmptyDataSourceCapabilities } from "./dataSource";
 
 const PROJECT_ROOT = process.cwd();
 const SRC_ROOT = resolve(PROJECT_ROOT, "src");
-// This used to scan `src/` AND `scripts/`, because a capability flag could be
-// consumed by a build/CI script too. `scripts/` no longer exists, and its one
-// known reader — `scripts/e2e-pre-smoke-release-gate.ts` — was in
-// EXCLUDED_FILES anyway (a self-describe smoke-lock, never counted as a
-// consumer), so dropping the root removes no consumer from the scan.
+// `src/` is the whole scan surface: no build or CI script reads a capability
+// flag. Add a root here if that ever changes.
 const SCAN_ROOTS = [SRC_ROOT];
 
 // Reflective/self-describe files read EVERY flag via `Object.entries` /

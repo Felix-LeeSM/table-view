@@ -3,7 +3,7 @@ import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { useSchemaStore } from "@stores/schemaStore";
 import { useSafeModeStore } from "@stores/safeModeStore";
 import {
-  PRE_PUSH_LOAD_TEST_TIMEOUT_MS,
+  HEAVY_LOAD_TEST_TIMEOUT_MS,
   mockAddConstraint,
   mockCreateTable,
   renderDialog,
@@ -41,7 +41,7 @@ import {
 // gains `on_delete` / `on_update` (`#[serde(default)]`), whitelist
 // `{NO ACTION | RESTRICT | CASCADE | SET NULL | SET DEFAULT}`.
 //
-// Source: `docs/sprints/sprint-229/contract.md` AC-229-01..AC-229-12.
+// Source: Sprint 229 contract AC-229-01..AC-229-12.
 
 describe("Sprint 229 — Foreign Keys + CHECK + UNIQUE tab functional", () => {
   beforeEach(resetCreateTableDialogConstraintState);
@@ -254,7 +254,7 @@ describe("Sprint 229 — Foreign Keys + CHECK + UNIQUE tab functional", () => {
         'FOREIGN KEY ("order_id", "user_id") REFERENCES "orders" ("id", "line_no")',
       );
     },
-    PRE_PUSH_LOAD_TEST_TIMEOUT_MS,
+    HEAVY_LOAD_TEST_TIMEOUT_MS,
   );
 
   // ── AC-229-04 CHECK preview ───────────────────────────────────────

@@ -20,8 +20,8 @@
 //      그대로 가능 — 강등 경로 불필요.
 //   8. 진단성: 각 step 에 라벨 + screenshot 가능.
 //
-// 본 spec 은 `pnpm test:e2e:docker` 환경에서 실행. host docker daemon 이
-// PG / Mongo 컨테이너를 띄우고 있어야 함 (다른 e2e 와 동일 전제).
+// 본 spec 은 host docker daemon 이 PG / Mongo 컨테이너를 띄우고 있어야
+// 함 (다른 e2e 와 동일 전제).
 //
 // 의도적으로 직접 SQLite 를 열어 `source` 컬럼을 grep 하지 않는다 — 사용자
 // visible API 만 사용해 lego 가 맞물려 동작하는지 검증한다는 8 원칙 #2

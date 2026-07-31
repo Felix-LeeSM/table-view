@@ -10,7 +10,7 @@ import { useSchemaStore } from "@stores/schemaStore";
 import { useSafeModeStore } from "@stores/safeModeStore";
 import { useQueryHistoryStore } from "@stores/queryHistoryStore";
 import {
-  PRE_PUSH_LOAD_TEST_TIMEOUT_MS,
+  HEAVY_LOAD_TEST_TIMEOUT_MS,
   mockAddConstraint,
   mockCreateIndex,
   mockCreateTable,
@@ -50,7 +50,7 @@ import {
 // gains `on_delete` / `on_update` (`#[serde(default)]`), whitelist
 // `{NO ACTION | RESTRICT | CASCADE | SET NULL | SET DEFAULT}`.
 //
-// Source: `docs/sprints/sprint-229/contract.md` AC-229-01..AC-229-12.
+// Source: Sprint 229 contract AC-229-01..AC-229-12.
 
 describe("Sprint 229 — Constraint chain and cache contracts", () => {
   beforeEach(resetCreateTableDialogConstraintState);
@@ -170,7 +170,7 @@ describe("Sprint 229 — Constraint chain and cache contracts", () => {
       // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
       // 2026-05-11 — intermediate debounce flushes (FK, FK+CHECK, FK+CHECK+UNIQUE)
       // fire during real-timer awaits, so exact call counts are non-deterministic
-      // under heavy parallel pre-push load (rust-coverage 동시 실행 시 reproducible).
+      // under heavy parallel load (full-suite coverage runs reproduce it).
       // Assert on terminal state instead — every constraint name eventually shows
       // up in a preview call, matching the `018455a` fix applied at AC-229-08.
       await waitFor(() => {
@@ -199,7 +199,7 @@ describe("Sprint 229 — Constraint chain and cache contracts", () => {
         expect((c[0] as { preview_only: boolean }).preview_only).toBe(true);
       }
     },
-    PRE_PUSH_LOAD_TEST_TIMEOUT_MS,
+    HEAVY_LOAD_TEST_TIMEOUT_MS,
   );
 
   // ── AC-229-07 chained Execute happy path ─────────────────────────
@@ -359,7 +359,7 @@ describe("Sprint 229 — Constraint chain and cache contracts", () => {
         ),
       ).toEqual(["fk_orders_user", "chk_age", "uq_orders_user"]);
     },
-    PRE_PUSH_LOAD_TEST_TIMEOUT_MS,
+    HEAVY_LOAD_TEST_TIMEOUT_MS,
   );
 
   // ── AC-229-08 constraint failure mid-chain ───────────────────────
@@ -518,7 +518,7 @@ describe("Sprint 229 — Constraint chain and cache contracts", () => {
       expect(onClose).not.toHaveBeenCalled();
       expect(mockDropConstraint).not.toHaveBeenCalled();
     },
-    PRE_PUSH_LOAD_TEST_TIMEOUT_MS,
+    HEAVY_LOAD_TEST_TIMEOUT_MS,
   );
 
   // ── AC-229-09 reference table picker — schemaStore-cached + lazy load
@@ -663,6 +663,6 @@ describe("Sprint 229 — Constraint chain and cache contracts", () => {
         "Safe Mode (warn): confirmation cancelled — no changes committed",
       );
     },
-    PRE_PUSH_LOAD_TEST_TIMEOUT_MS,
+    HEAVY_LOAD_TEST_TIMEOUT_MS,
   );
 });

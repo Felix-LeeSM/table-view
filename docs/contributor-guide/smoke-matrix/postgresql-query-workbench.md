@@ -13,7 +13,6 @@ future smoke evidence.
 
 Current evidence:
 
-- `scripts/e2e-smoke-ci.sh`
 - `e2e/smoke/postgres.spec.ts`
 - `e2e/smoke/postgres-explain.spec.ts`
 - `e2e/smoke/postgres-extension-completion.spec.ts`
@@ -52,7 +51,6 @@ Current evidence:
 - `src/features/completion/sql/sqlCompletionRequest.test.ts`
 - `src/lib/sql/sqlCompletionWasm.test.ts`
 - `src-tauri/sql-parser-core/src/completion/completion_tests.rs`
-- `scripts/e2e-smoke-ci.sh`
 
 Current gap / routing:
 
@@ -191,6 +189,5 @@ Current evidence:
 
 Current gap / routing:
 
-These can inform local/manual regression and future CI wiring. They do not
-expand the GitHub Runtime Happy Path unless `scripts/e2e-smoke-ci.sh` invokes
-them.
+These can inform local/manual regression and future CI wiring. Nothing invokes
+them automatically, so they expand no runtime claim.

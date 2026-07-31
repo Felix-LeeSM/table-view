@@ -2,16 +2,16 @@ name: CI
 
 # Trigger policy:
 # - `push` on `main` only: validates what actually landed (post-merge gate).
-# - `pull_request`: validates feature branches before they merge and reruns
-#   when the GitHub-visible PR body changes.
+# - `pull_request`: validates feature branches before they merge.
 # This avoids the duplicate run that fires when an open PR's branch is
 # pushed (push + pull_request would each schedule a separate workflow on
-# the same SHA).
+# the same SHA). No `edited`: no job reads the PR body, so a body edit would
+# re-run all eight required checks (~20 min) for nothing.
 on:
   push:
     branches: [main]
   pull_request:
-    types: [opened, edited, reopened, synchronize]
+    types: [opened, reopened, synchronize]
 
 # Cancel policy differs by event (audit 2026-07-03):
 # - pull_request: cancel in-flight runs when a newer commit arrives — the old
@@ -32,37 +32,29 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  # The change-detection gate that used to classify each push/PR into
-  # code_changed / docs_changed lived in scripts/hooks/detect-change-scope.sh,
-  # removed together with the rest of the agent workflow structure. Every job
-  # below now runs unconditionally: without a classifier the only safe default
-  # is "verify everything", and a skipped required check counts as successful on
-  # GitHub, so guessing would be the unsafe direction.
-  #
-  # The job survives as a reporting stub because `Detect Change Scope` is one of
-  # the eight required status checks in the `pr_to_main` ruleset — that list is
-  # live GitHub state, not repo state, so deleting the job here would leave the
-  # context permanently "expected" and block every merge.
+  # Name-only, same as `pr-body` below: `Detect Change Scope` is a required
+  # context in the `pr_to_main` ruleset (live GitHub state); a name that stops
+  # reporting stays "expected" and blocks every merge. Drop the ruleset entry
+  # before deleting this job, and keep this the only job anywhere that carries
+  # the name. No job is change-gated — everything below runs on every event.
   changes:
     name: Detect Change Scope
     runs-on: ubuntu-latest
     timeout-minutes: 5
 
     steps:
-      - name: Report change scope
-        run: echo "change-scope classification removed; all jobs run unconditionally"
+      - run: exit 0
 
-  # Reporting stub for the same reason as `changes` above: the PR body contract
-  # checker (scripts/hooks/check-pr-body.mjs and its test harness) is gone, but
-  # `PR Body Contract` is a required context in the ruleset.
+  # Name-only. `PR Body Contract` is a required context in the `pr_to_main`
+  # ruleset (live GitHub state); a name that stops reporting stays "expected" and
+  # blocks every merge. Drop the ruleset entry before deleting this job.
   pr-body:
     name: PR Body Contract
     runs-on: ubuntu-latest
     timeout-minutes: 5
 
     steps:
-      - name: Report PR body contract
-        run: echo "PR body contract check removed"
+      - run: exit 0
 
   dependency-security:
     name: Dependency Security
@@ -152,14 +144,11 @@ jobs:
         working-directory: src-tauri
         run: cargo deny check advisories --hide-inclusion-graph
 
-  # The vitest suite (634 files / 6,765 cases) was the `Frontend Checks`
-  # bottleneck at 437s of a 532s job. It splits across this matrix; each shard
-  # emits a `blob` report carrying its own coverage slice (~8MB on disk,
-  # 1.6-1.9MB zipped as an artifact). `Frontend Checks` below merges the blobs
-  # and grades the MERGED coverage, so no threshold is weakened by the split —
-  # verified locally: a single run and a 2-shard merge of the same scope both
-  # reported 225/24539 statements, 219/21747 lines. Verified in CI: the merged
-  # report covers the same `634 passed (634)` file set as the undivided run.
+  # The vitest suite dominated `Frontend Checks` (437s of 532s), so it runs here
+  # instead. Each shard emits a `blob` coverage slice as an artifact; `Frontend
+  # Checks` merges them and grades the MERGED total, so the split weakens no
+  # threshold (verified: merged and undivided runs report the same file set and
+  # the same statement/line counts).
   frontend-shard:
     name: Frontend Tests (shard ${{ matrix.shard }}/3)
     runs-on: ubuntu-latest
@@ -192,18 +181,12 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Test (shard ${{ matrix.shard }}/3)
-        # The `--coverage.thresholds.* 0` overrides zero out vite.config.ts's
-        # GLOBAL thresholds for this PARTIAL run only — a 1/3 slice can never
-        # clear an 85% global floor, and a shard that failed on that would say
-        # nothing about the suite. Enforcement is not dropped, only relocated:
-        # the `Frontend Checks` merge step below runs with the config's real
-        # thresholds over the merged coverage of all three shards, and that job
-        # (not these shards) is the name in the `pr_to_main` ruleset.
-        #
-        # `blob` writes results to a file and prints nothing else, so a red
-        # shard's log held one line — `blob report written` — and no assertion.
-        # `default` restores the failure text. `--outputFile` stays bare: only
-        # blob/json/junit/benchmark read it, and `default` is not one of them.
+        # `--coverage.thresholds.* 0` zeroes the global floors for this PARTIAL
+        # run only: a 1/3 slice can never clear 85%. Enforcement moves to the
+        # `Frontend Checks` merge step, which uses the config's real thresholds.
+        # `default` is needed alongside `blob` — `blob` prints nothing, so a red
+        # shard's log carried no assertion text. `--outputFile` applies to `blob`
+        # only; `default` does not read it.
         run: |
           pnpm exec vitest run \
             --shard=${{ matrix.shard }}/3 \
@@ -263,10 +246,6 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # The coverage ratchet (scripts/check-coverage-ratchet.ts) and the WASM
-      # size budget (scripts/check-wasm-size.sh) were removed with the rest of
-      # the script tree. The coverage FLOOR is unaffected: vite.config.ts's
-      # global thresholds are still enforced by the merge step below.
       - name: Lint
         run: pnpm lint
 
@@ -292,11 +271,6 @@ jobs:
 
       - name: Build
         run: pnpm build
-
-  # The former `Frontend Advisory (non-blocking)` job ran `pnpm docs:links`
-  # (scripts/check-doc-links.ts) and `pnpm contrast:check`
-  # (scripts/check-theme-contrast.ts). Both scripts were removed, so the job had
-  # nothing left to run.
 
   rust:
     name: Rust Unit And Storage Tests
@@ -357,9 +331,9 @@ jobs:
       # the WebKitGTK/GTK system libraries to compile on Linux. Mirrors the
       # integration-tests job's apt step.
       - name: Install Tauri Linux dependencies
-        # Retry wrapper: transient apt mirror failures (e.g. packages.microsoft.com
-        # 403) fail the whole setup. Up to 3 attempts with linear backoff.
-        # Mirrors the e2e-smoke workflow's install_deps retry loop (#1293).
+        # Retry wrapper (#1293): transient apt mirror failures (e.g.
+        # packages.microsoft.com 403) fail the whole setup. Up to 3 attempts
+        # with linear backoff.
         run: |
           install_deps() {
             sudo apt-get update && sudo apt-get install -y \
@@ -386,9 +360,7 @@ jobs:
           cache-bin: false
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
-      # These two used to mirror lefthook.yml's pre-commit rust-format /
-      # rust-clippy commands. lefthook.yml and the .githooks wrapper that ran it
-      # are gone, so CI is now the only place either check runs.
+      # There are no local git hooks, so CI is the only place either check runs.
       - name: Rustfmt
         working-directory: src-tauri
         run: cargo fmt --check
@@ -414,9 +386,8 @@ jobs:
   integration-tests:
     name: Integration Tests (Docker)
     runs-on: ubuntu-latest
-    # Raised 40 -> 60: this job now runs instrumented `cargo llvm-cov nextest`
-    # coverage (promoted from pre-push) plus MySQL/MSSQL testcontainers, both
-    # heavier than the former plain `cargo test`.
+    # 60, not 40: the instrumented `cargo llvm-cov nextest` build plus the
+    # MySQL/MSSQL testcontainers do not fit a plain-test budget.
     timeout-minutes: 60
 
     # Sprint 237 P5+ (2026-05-08) — PG/Mongo 둘 다 GHA service container 로
@@ -457,9 +428,10 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Install Tauri Linux dependencies
-        # Retry wrapper: transient apt mirror failures (e.g. packages.microsoft.com
-        # 403) fail the whole setup. Up to 3 attempts with linear backoff.
-        # Mirrors the e2e-smoke workflow's install_deps retry loop (#1293).
+        # Retry wrapper (#1293): transient apt mirror failures (e.g.
+        # packages.microsoft.com 403) fail the whole setup. Up to 3 attempts
+        # with linear backoff. The `Rust Static Analysis` job above runs the
+        # same loop.
         run: |
           install_deps() {
             sudo apt-get update && sudo apt-get install -y \
@@ -480,10 +452,9 @@ jobs:
           # llvm-tools-preview backs `cargo llvm-cov`'s source-based coverage.
           components: llvm-tools-preview
 
-      # cargo-llvm-cov + cargo-nextest back the promoted integration coverage
-      # gate below. taiki-e/install-action downloads pinned prebuilt binaries
-      # (versions match the local pre-push toolchain from scripts/setup.sh) and
-      # caches them, so no per-run source build lands on the 40m+ critical path.
+      # cargo-llvm-cov + cargo-nextest back the integration coverage gate below.
+      # taiki-e/install-action downloads pinned prebuilt binaries and caches
+      # them, so no per-run source build lands on the 40m+ critical path.
       - name: Install cargo-llvm-cov and cargo-nextest
         uses: taiki-e/install-action@v2
         with:
@@ -495,16 +466,11 @@ jobs:
           du -sh src-tauri/target 2>/dev/null || true
           docker system df || true
 
-      # 2026-07-25 — this step used to also `rm -rf /usr/local/lib/android
-      # /usr/share/dotnet /opt/ghc` and `docker system prune -af`, costing 135s
-      # (~13% of the job). The measured numbers say it bought nothing: the
-      # runner reports 145G total / 86G AVAILABLE before any cleanup, and the
-      # prune reclaimed 1.765GB of that. Deleting ~15G of preinstalled SDKs to
-      # go from 86G to 103G free is 130s spent on headroom the instrumented
-      # build never needed — and the prune additionally evicts preloaded base
-      # images that the MySQL/MSSQL/Redis/Oracle testcontainers then re-pull.
-      # `apt-get clean` stays (sub-second). If disk pressure ever returns, the
-      # `Show disk usage` step above is the signal to restore the deletions.
+      # Do not add SDK deletions or `docker system prune -af` here (measured
+      # 2026-07-25): they cost 135s, the runner already reports 86G free of 145G,
+      # the prune reclaimed 1.765GB, and it evicts preloaded base images the
+      # MySQL/MSSQL/Redis/Oracle testcontainers then re-pull. `apt-get clean` is
+      # sub-second. `Show disk usage` above is the signal if pressure returns.
       - name: Free disk headroom before integration build
         run: |
           sudo apt-get clean
@@ -517,20 +483,12 @@ jobs:
           cache-bin: false
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
-      # Rust integration coverage gate (audit 2026-07-03 #6). Promoted here from
-      # the local pre-push rust route so a required *remote* check — not just the
-      # dev machine's hook — owns the integration coverage floor. Thresholds
-      # (lines 80 / functions 75 / regions 80) are now literals in the command
-      # below: scripts/coverage-ratchet-targets.json and the ratchet script that
-      # read them are gone. This coverage run REPLACES the former plain
-      # `cargo test` step (no reason to run the same tests twice): it adds the
-      # nine push-profile integration binaries + --lib, and keeps
-      # redis_integration — which the plain test ran and the old pre-push
-      # coverage command omitted — so no test signal is lost. PG/Mongo reuse the
-      # GHA services via PGHOST/MONGO_HOST; MySQL/MSSQL/Redis fall back to their
-      # self-owned testcontainers (Docker is present on the runner). Instrumented
-      # build + extra testcontainers cost more wall-clock than the old plain
-      # test — the accepted promotion trade-off (timeout raised 40 -> 60m).
+      # Rust integration coverage gate (audit 2026-07-03 #6) — this is the only
+      # thing enforcing the integration coverage floor, and it both runs the
+      # tests and grades them, so there is no separate plain `cargo test` step.
+      # Thresholds are literals below; nothing else stores them. PG/Mongo reuse
+      # the GHA services via PGHOST/MONGO_HOST, MySQL/MSSQL/Redis fall back to
+      # their own testcontainers.
       - name: Run integration coverage
         working-directory: src-tauri
         env:
@@ -561,26 +519,7 @@ jobs:
             --fail-under-functions 75 \
             --fail-under-regions 80
 
-  # Runtime E2E smoke lives in .github/workflows/e2e-smoke.yml, which now only
-  # reports the required `Runtime Happy Path` context — its runner
-  # (scripts/e2e-smoke-ci.sh) was removed. This workflow keeps the non-runtime
-  # correctness gates.
-  #
-  # No job is change-gated any more. The classifier that fed the `if:`
-  # conditions (scripts/hooks/detect-change-scope.sh) is gone, and so is the
-  # test that asserted which jobs carried the docs clause
-  # (scripts/hooks/test-ci-workflow-cache.sh). Everything runs on every event:
-  # slower on docs-only PRs, but never a skipped check standing in for an
-  # unverified one.
-  #
   # Job `name:` values are load-bearing: the `pr_to_main` ruleset lists required
-  # contexts by name, so renaming a job silently un-gates main (a context that
-  # never reports is not a context that fails). That list is live GitHub state,
-  # not derivable from this repo — memory/runbook/pr-merge-gates/memory.md
-  # tracks it. `changes` and `pr-body` above exist ONLY to keep two of those
-  # names reporting; their checkers were removed.
-  #
-  # `Frontend Checks` is an AGGREGATION job (2026-07-25) — the vitest suite runs
-  # in the `frontend-shard` matrix and this job merges the shards' blob reports
-  # and applies the coverage thresholds. `Integration Tests (Docker)` was
-  # measured under the same split and reverted — see the comment on that job.
+  # contexts by name, so renaming one silently un-gates main. That list is live
+  # GitHub state — memory/runbook/pr-merge-gates/memory.md tracks it.
+  # `Runtime Happy Path` comes from .github/workflows/e2e-smoke.yml.

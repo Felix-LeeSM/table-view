@@ -1,6 +1,6 @@
 // Sprint 250 — DataGrid window Esc keydown listener (modal-aware
 // pending discard). Maps to AC-250-02 / AC-250-03 / AC-250-04 from
-// `docs/sprints/sprint-250/contract.md`. Date 2026-05-09.
+// Sprint 250 contract. Date 2026-05-09.
 //
 // Asserted scenarios (component layer):
 // - AC-250-02 (superseded → gated): Esc on document.body now opens the

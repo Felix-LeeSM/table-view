@@ -15,8 +15,8 @@ import OrderedColumnPicker from "./OrderedColumnPicker";
  *
  * Why a sub-component:
  *   - Sprint 228's editor body grew the parent `CreateTableDialog.tsx`
- *     past the project's 700-LOC threshold (`docs/sprints/sprint-228/
- *     contract.md` → "no anticipatory abstraction" + Generator's call
+ *     past the project's 700-LOC threshold (Sprint 228
+ *     contract → "no anticipatory abstraction" + Generator's call
  *     to extract). Pulling the JSX out keeps the parent under that
  *     ceiling without changing any state ownership: index drafts +
  *     handlers + dedup logic still live in the parent. This file is
