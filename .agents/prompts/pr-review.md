@@ -61,14 +61,14 @@ test "$(git rev-parse --show-toplevel)" = "<사본 경로>" \
 새 shell 을 띄우면 쪼개지 말고 이 블록 전체를 한 번에 넘겨라. queue 에 상한이
 없으니 **도구가 허용하는 최대 timeout 으로** 넘긴다 (Claude Code Bash 도구 기준
 `timeout` 기본 120000ms · 최대 600000ms — 값은 쓰는 도구의 설명에서 확인한다).
-기본값이면 remove 와 add **사이**가 잘려 verdict label 이 하나도 없는 PR 이
-남는다. 잘렸으면 새 shell 에 `$NEW` 가 없으니, 게이트 run 이 끝난 것을 확인하고
-표의 `NEW` 값을 `gh pr edit <N> --add-label` 로 직접 붙여 마무리한다.
+기본값이면 remove 와 add **사이**가 잘릴 수 있고, 그러면 verdict label 이 하나도
+없는 PR 이 남는다. 잘렸으면 새 shell 에 `$NEW` 가 없으니, 게이트 run 이 끝난 것을
+확인하고 표의 `NEW` 값을 `gh pr edit <N> --add-label` 로 직접 붙여 마무리한다.
 
 치환할 자리는 `<N>`(PR 번호) · `<head-branch>` · 표에서 오는 `OLD`/`NEW` 다.
 **`<head-branch>` 는 PR 의 head ref 다.** base 를 넣으면 조회가 `event=push` run
 만 돌려주므로(2026-08-01 실측: `gh run list --workflow review-gate.yml --branch
-main --limit 5 --json event` → 5건 전부 `push`) 루프가 24회를 다 돌고 abort 한다.
+main --limit 5 --json event` → 5건 전부 `push`) 루프가 25회를 다 돌고 abort 한다.
 
 ```bash
 OLD=<위 표의 값>
@@ -79,12 +79,13 @@ gate_run() { gh run list --workflow review-gate.yml --branch <head-branch> --lim
 if gh pr view <N> --json labels -q '.labels[].name' | grep -qx "$OLD"; then
   # run 없음(rc 0)과 조회 실패(rc≠0)가 똑같이 빈 문자열로 온다 — 값이 아니라 rc 로 가른다.
   # 실패를 삼켜 PREV="" 가 되면 첫 회차가 옛 완료 run 과 달라 보여 0초 만에 break 한다
-  PREV=$(gate_run) || { echo "ABORT: gate_run 조회 실패 — label 안 떼고 멈춘다" >&2; exit 1; }
-  gh pr edit <N> --remove-label "$OLD"
-  for _ in {1..24}; do
+  PREV=$(gate_run); RC=$?
+  gh pr edit <N> --remove-label "$OLD"   # 조회가 실패했어도 뗀 다음에 멈춘다 — 아래 문단
+  [ "$RC" = 0 ] || { echo "ABORT: gate_run 조회 실패 — OLD 를 뗀 채 멈춘다" >&2; exit 1; }
+  for _ in {1..25}; do
+    sleep 5           # 조회는 sleep 뒤에 — 마지막 sleep 동안 뜬 run 도 본다
     NOW=$(gate_run)   # 폴링 중엔 실패도 빈 문자열도 "아직 안 떴다" — 어느 쪽도 break 시키지 않는다
     [ -n "$NOW" ] && [ "$NOW" != "$PREV" ] && break
-    sleep 5
   done
   [ -n "$NOW" ] && [ "$NOW" != "$PREV" ] \
     || { echo "ABORT: review-gate run 이 안 떴다(또는 조회 실패)" >&2; exit 1; }
@@ -93,11 +94,23 @@ fi
 gh pr edit <N> --add-label "$NEW"
 ```
 
+**abort 는 어느 쪽이든 `OLD` 를 뗀 뒤에 한다.** 그래서 멈춘 PR 에는 verdict label
+이 하나도 없고, 그 상태가 fail-closed 다 — `review-gate` 는 `review:approved`
+없이 pass 하지 않고, verdict label 이 없는 PR 은 orchestrator 가 리뷰어 재spawn
+으로 라우팅하므로(`.agents/prompts/orchestrator.md` 「라우팅」) 실패한 그 단계가
+다시 돈다. 조회 실패를 remove **앞**에서 멈추면 red 방향(`OLD` =
+`review:approved`)에서 approved 가 남고, 뒤 라우팅은 label 만 읽으니 리뷰어가 red
+로 판정한 PR 이 머지 자격을 유지한다 (fail-open). 멈췄으면 「orchestrator 에게
+돌려줄 요약」의 부착 완료 여부에 그대로 적는다 — 뗀 명령이 만든 run 이 아직
+in-flight 일 수 있으니, 이어받는 리뷰어는 아래의 `review-gate` 상태 확인부터 한다.
+
 **시간이 아니라 run 의 상태를 기다린다.** run 의 벽시계 시간은 job 실행(2-3초)이
 아니라 runner queue 가 지배하고 queue 에는 상한이 없다 — 고정 초를 쓰면 첫 run 이
 아직 in-flight 인 채로 두 번째 label 이벤트가 나가고 `cancel-in-progress` 가 그
-run 을 죽인다 (#1907). 위 `sleep 5` 는 폴링 간격, `{1..24}` 는 run 이 끝내 안 뜰
-때의 abort 상한이고, 완료 판정 자체는 `gh run watch` 가 한다.
+run 을 죽인다 (#1907). 위 `sleep 5` 는 폴링 간격, `{1..25}` 는 run 이 끝내 안 뜰
+때의 abort 상한이다. 조회는 sleep **뒤**에 둔다 — 뗀 직후 0초의 조회는 run 이
+아직 없어 늘 헛돌고, 마지막 sleep 동안 뜬 run 을 볼 마지막 조회가 사라진다.
+완료 판정 자체는 `gh run watch` 가 한다.
 
 **기다리는 대상은 conclusion 이 아니라 완료다.** 뗀 직후에는 대개
 `review:approved` 가 없어 그 run 이 red 로 끝나므로, green 을 기다리면 영영 안
