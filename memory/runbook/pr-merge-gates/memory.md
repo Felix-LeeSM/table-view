@@ -84,8 +84,9 @@ N 개 중 `FAIL <key>` 를 찍은 spec 이 원인이다.
   낼 수 있고 opened/synchronize/rerun 은 fail run 을 남긴다 — `labeled` 라도 라운드
   게이트에 걸리면 fail 한다 (아래).
 - **update-branch(main pull) 불필요**: branch protection `strict`(up-to-date)=false →
-  behind 여도 merge 된다. update-branch 는 synchronize 이벤트로 `review:approved` 를
-  떨구기만 하고 이득 없음.
+  behind 여도 merge 된다. update-branch 는 synchronize 이벤트로 `review:approved` 와
+  `review:changes-requested` 를 떨구기만 하고 이득 없음 (떼는 label 집합의 SOT 는
+  `.github/workflows/review-gate.yml` 의 "Dismiss stale approval on new commits").
 - **CLEAN 만 기다리지 말 것**: `mergeState=UNSTABLE` = required 전부 pass +
   non-required 만 fail → **merge 가능**. ※ `Dependency Security`(cargo deny / RUSTSEC)는
   2026-07-05 부터 **required 로 승격** — fail 이면 BLOCKED. RUSTSEC 신규 advisory 로

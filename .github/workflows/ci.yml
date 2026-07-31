@@ -8,7 +8,9 @@ name: CI
 # the same SHA).
 #
 # No `edited`, even though `pr-body` below now reads the PR body: adding it
-# would re-run all seven required checks (~20 min) on every body edit. The
+# would re-run the six required checks this workflow reports (~20 min) on every
+# body edit. Six, not seven — the seventh required context, `Runtime Happy
+# Path`, lives in e2e-smoke.yml, which does not listen for `edited` either. The
 # cost of leaving it off is that a red `PR Body Contract` clears only on the
 # next commit — a job re-run replays the original event payload, so it
 # re-reads the OLD body and fails again. Fix the body, then push.
