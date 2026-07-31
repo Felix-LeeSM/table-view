@@ -18,10 +18,13 @@ labels: ["task"]
 ## 파일 범위
 
 <!-- 착수 전에 전수 명령을 실제로 돌리고, 그 명령과 출력을 여기 붙인다.
-그 출력이 곧 범위다 — 예측으로 채우지 않는다. hit 수가 곧 작업 크기다. -->
+그 출력이 곧 범위다 — 예측으로 채우지 않는다. hit 수가 곧 작업 크기다.
+도구는 `git grep` 이다. 기본 `rg` 는 `.ignore` 와 dotfile 기본 제외 때문에
+전수가 아니다 — `rg` 를 쓰려면 `--no-ignore-dot --hidden` 을 붙인다.
+SOT: memory/workflow/orchestration/memory.md §1. -->
 
 ```
-$ <전수 명령>
+$ git grep -n '<패턴>'
 <출력 그대로>
 ```
 
