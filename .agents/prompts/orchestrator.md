@@ -49,7 +49,9 @@ gh issue list --state open --label task --json number,title,labels
   착수 전 표를 **본문 인라인**으로 넣고, 작업 유형에 맞는 read 목록
   (AGENTS.md 매트릭스)을 명령으로 적는다.
 - 사본 생성·회수는 `memory/runbook/worktree/memory.md` 절차.
-- 점유 기록: spawn 시 해당 이슈에 `착수: <branch> / <사본 경로>` 코멘트.
+- 점유 기록: spawn 시 해당 이슈에 `착수: <branch>` 코멘트 — 사본 경로는
+  규약(`../table-view-clones/<branch-sanitized>`)에서 파생되므로 로컬 경로를
+  GitHub 에 적지 않는다.
 - model 은 작업에 맞춰 고른다(탐색 haiku / 판단 sonnet / 꼼꼼 opus).
   fable 은 사용자가 명시 요청할 때만.
 

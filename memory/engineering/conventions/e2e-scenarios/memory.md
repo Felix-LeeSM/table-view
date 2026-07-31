@@ -36,7 +36,8 @@ task: e2e, testing, scenario
   3. Home ↔ Workspace 왕복 + tab persistence
   4. Schema 트리 → 데이터 그리드 → 셀 편집 commit
   5. 멀티 윈도우 라이프사이클 (workspace 종료/재오픈)
-- CUJ 회귀는 최우선 등급이다. 단 CI 에 e2e 실행기가 없어 머지를 막지 못한다.
+- CUJ 회귀는 최우선 등급이다. `Runtime Happy Path` 가 변경 경로로 고른 spec 을
+  돌려 머지를 막는다 — 어떤 변경이 어떤 spec 을 고르는지는 `e2e/scope-map.mjs`.
 
 ### P4. DBMS × paradigm 매트릭스 (필요 최소)
 - PG는 풀 시나리오, Mongo는 paradigm 분기점에서만. MySQL/SQLite 추가 시점에

@@ -46,17 +46,19 @@ trigger:
   죽이고, 죽은 run이 rollup에 non-success로 남아 BLOCKED가 고착된다(#1879 실측).
 
   ```
-  green: gh pr edit <N> --add-label review:approved
+  green: gh pr edit <N> --remove-label review:changes-requested
          30초 이상 대기
-         gh pr edit <N> --remove-label review:changes-requested
+         gh pr edit <N> --add-label review:approved
   red:   gh pr edit <N> --remove-label review:approved
          30초 이상 대기
          gh pr edit <N> --add-label review:changes-requested
   ```
 
-  red가 `review:approved`를 먼저 떼는 것이 필수다. 안 떼면 같은 SHA를 재리뷰해
-  green이 red로 뒤집혀도 label이 남아 게이트가 통과한다 — `Dismiss stale
-  approval`은 `synchronize` 전용이라 push 없는 뒤집기를 못 잡는다(#1884).
+  두 방향 모두 **기존 verdict 를 먼저 떼고 새 verdict 를 나중에 붙인다.**
+  red 에서 안 떼면 같은 SHA 재리뷰로 green 이 red 로 뒤집혀도 approved 가 남아
+  게이트가 통과하고(`Dismiss stale approval`은 `synchronize` 전용 — #1884),
+  green 에서 approved 를 먼저 붙이면 두 label 공존 창에서 red 표식이 남은 채
+  게이트가 통과한다 (2026-07-31 #2036 라운드 2 정리).
 - reviewer의 write는 scorecard comment 와 verdict label **둘이 전부다**
   (그 외 write 금지 — 이슈 발행 포함). non-blocking 발견은 scorecard 가
   기록이고, 이슈화는 스윕이 유형 단위(10건=1이슈, [orchestration](../orchestration/memory.md) §4)로
