@@ -638,7 +638,6 @@ function setDocumentConnection(dbType: DatabaseType) {
         color: null,
         hasPassword: false,
         paradigm: "document",
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any,
     ],
   });

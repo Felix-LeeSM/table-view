@@ -1,11 +1,12 @@
 ---
 title: Documentation Impact Gate
 type: workflow-rule
-updated: 2026-05-19
+updated: 2026-07-31
 task: documentation, docs, pr, review, delivery
+keywords: 문서화, documentation impact, SOT 라우팅, evidence portability, repo-relative, retire 조건
 trigger:
   signal: PR 작성 / 문서 추가 / workflow·contract·user-facing 변경
-  layer: agent-prompt (delivery + pr-reviewer)
+  layer: none — 자동 로드 없음, 직접 열어야 함
 ---
 
 # Documentation Impact Gate
@@ -13,48 +14,23 @@ trigger:
 모든 PR 은 "문서가 필요한가?" 와 "기존 SOT 어디에 반영했나?" 를 먼저
 판단한다. 새 문서 생성은 마지막 선택지이며, 기존 체계 우회 금지.
 
-## PR body contract
+## Documentation impact 판단
 
-모든 PR body 는 `scripts/hooks/policy/check-pr-body.mjs` (CI `PR Body Contract` job) 가
-강제하는 7 섹션을 포함해야 머지 가능. agent 는 `pr-create` skill
-(`.agents/skills/pr-create/SKILL.md`) 로 template 기반 조립 + 로컬 검증 후 생성 —
-push 전 통과로 CI re-push 낭비 차단. template: `.github/PULL_REQUEST_TEMPLATE.md`.
+PR body 형식 요구는 없다. 아래 세 질문에 스스로 답하고, 답을 남길 곳은
+PR body / 커밋 메시지 / 리뷰 코멘트 중 아무 곳이나 고른다.
 
-| 섹션 | 요구 |
-|---|---|
-| Summary | 한두 문장 |
-| Changes | repo-relative path 또는 bullet |
-| Invariants | 보존할 사용자 동작/data/API/workflow invariant |
-| Test plan | 실행 check 또는 해당 없음 사유 |
-| Smoke impact | `Smoke-Test-Plan:` **같은 줄** — Added/updated · Covered by existing · Not required(사유) |
-| Documentation impact | 아래 4 필드 |
-| Links | issue/ADR/sprint/CI/PR |
-
-상세 검증 로직은 `check-pr-body.mjs` 가 소유(본 방은 중복不). 금지: 절대경로
-(`/Users`, `/tmp`, `file://`, `worktrees/`) — Evidence portability 참조.
-
-## Documentation impact 필수 판단
-
-PR body 에 다음 섹션을 포함:
-
-```markdown
-## Documentation impact
-- Required: yes|no
-- Trigger: <user-facing|contract|workflow|safety|ops|architecture|risk|none>
-- Updated SOT: <repo-relative paths, or n/a>
-- Reason: <필요/불필요 판단 근거>
-```
-
-`Required: no` 도 근거 필수. "작아서" 가 아니라 "test-only, public behavior
-0" 처럼 문서화 트리거가 없음을 명시.
+- 문서화가 필요한가 (아래 트리거 목록).
+- 필요하면 기존 SOT 중 어디를 갱신했나 (repo-relative path).
+- 불필요하다면 왜인가 — "작아서" 가 아니라 "test-only, public behavior 0"
+  처럼 트리거가 없음을 짚는다.
 
 ## 문서화 필요 트리거
 
 - 사용자 가시 동작 변경: UI flow, shortcut, warning/confirm, default 값.
 - contract 변경: IPC payload, store/hook API, enum, SQL kind/severity.
-- workflow/rule 변경: agent, review, delivery, git, hook 정책.
+- workflow/rule 변경: agent, review, delivery, git 정책.
 - safety/security 변경: password, signing, destructive command, safe mode.
-- 운영/검증 변경: CI, pre-push, test strategy, coverage threshold.
+- 운영/검증 변경: CI, test strategy, coverage threshold.
 - architecture/invariant 변경: 앞으로 지켜야 할 설계 제약.
 - deferred risk/follow-up 발생: 지금 안 고치는 이유와 추적 위치 필요.
 
@@ -63,7 +39,6 @@ PR body 에 다음 섹션을 포함:
 | 내용 | SOT |
 |---|---|
 | sequencing / 다음 sprint 후보 | `docs/ROADMAP.md` |
-| 실제 sprint 범위 / AC / handoff | `docs/sprints/sprint-N/` |
 | 반복 적용 규칙 / workflow / product / engineering | `memory/**/memory.md` |
 | 현재 사용자-visible 제한 | `docs/product/**` — per-source 행은 `known-limitations-{rdbms,non-rdbms,cross-cutting}.md` |
 | 미래 follow-up | `docs/roadmap/follow-up-queue.md` |
@@ -81,20 +56,22 @@ retire 조건, 흡수 계획을 적고 사용자 승인을 받는다.
 PR body / review comment / handoff 는 GitHub 에서 확인 가능한 증거만 사용:
 
 - 허용: repo-relative `path:line`, GitHub PR/commit/check URL.
-- 금지: `/Users/...`, `/tmp/...`, `file://...`, `worktrees/...`, 로컬 plan path.
+- 금지: `/Users/...`, `/tmp/...`, `file://...`, `worktrees/...`, `clones/...`,
+  로컬 plan path.
 - 로컬 임시 로그는 요약을 붙이고, 재현 명령 또는 repo artifact 로 대체.
 
-## Reviewer gate
+## Reviewer 판정
 
-pr-reviewer 는 다음을 blocking finding 으로 본다:
+리뷰어는 다음을 blocking finding 으로 본다. 셋 다 **내용**에 관한 것이고,
+body 에 어떤 섹션이 있는지는 판정 대상이 아니다:
 
-- 문서화 트리거가 있는데 `Required: no` 이거나 Updated SOT 없음.
+- 문서화 트리거가 있는데 어떤 SOT 도 갱신되지 않음.
 - 기존 SOT 대신 새 backlog/plan 디렉토리를 만들고 retire 조건 없음.
-- PR 에서 볼 수 없는 로컬 절대경로를 body/comment 근거로 사용.
-- workflow/rule 변경인데 `memory/workflow/**` 또는 관련 wrapper 갱신 없음.
+- PR 에서 볼 수 없는 로컬 절대경로를 근거로 사용.
+- workflow/rule 변경인데 `memory/workflow/**` 갱신 없음.
 
 ## 관련
 
-- [delivery](../delivery/memory.md) — PR body + merge gate
+- [delivery](../delivery/memory.md) — commit → push → PR 행동 계약
 - [review](../review/memory.md) — documentation topology 평가
-- [git-policy](../git-policy/memory.md) — hook / signing safety
+- [git-policy](../git-policy/memory.md) — 검증 우회 / signing safety

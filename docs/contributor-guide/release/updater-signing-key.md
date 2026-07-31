@@ -25,7 +25,7 @@ the signing key lifecycle.
 | Private key | GitHub Actions secret `TAURI_SIGNING_PRIVATE_KEY` | CI-only, write-only |
 | Key password | GitHub Actions secret `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | CI-only, write-only |
 | Signing step | [`.github/workflows/release.yml`](../../../.github/workflows/release.yml) "Build + upload to draft release" | `tauri-action` signs each updater bundle |
-| Drift gate | [`.github/workflows/release.yml`](../../../.github/workflows/release.yml) "Verify updater signatures against committed pubkey" → [`scripts/release/verify-updater-sigs.mjs`](../../../scripts/release/verify-updater-sigs.mjs) | Fails the release if the signing key ID differs from the committed pubkey |
+| Drift gate | **없음** | 서명 키 ID 가 커밋된 pubkey 와 어긋나도 릴리스가 통과한다. 키 회전 시 양쪽을 손으로 맞춰라 |
 
 To print the key ID the committed pubkey belongs to (useful for eyeball checks
 during rotation), run from the repo root:
@@ -34,9 +34,10 @@ during rotation), run from the repo root:
 node -e 'const c=require("./src-tauri/tauri.conf.json");const b=Buffer.from(Buffer.from(c.plugins.updater.pubkey,"base64").toString().split("\n")[1],"base64");console.log(Buffer.from(b.subarray(2,10)).reverse().toString("hex").toUpperCase())'
 ```
 
-The `verify-updater-sigs.mjs` gate compares this ID against every produced
-`.sig` on every release, so a key that no longer matches the committed pubkey
-fails the run before a draft can be published.
+Nothing compares that ID against the produced `.sig` files. The release run has
+no such check (`release.yml:196`), so a signing key that stops matching the
+committed pubkey still builds a green draft — one that every installed client
+will reject. Compare the ID by hand whenever either side of the pair changes.
 
 ## The reason this key is special: clients trust one baked-in public key
 
@@ -130,16 +131,12 @@ Order matters — do not skip a step:
    baked-in pubkey is now the new one.
 
    This is the single release where committed pubkey (new) and signing key (old)
-   intentionally disagree, so the `verify-updater-sigs.mjs` drift gate will go
-   red for it — that red is expected. Handle the bridge deliberately: run it,
-   confirm the signature is the old key over the new-pubkey binary, and note the
-   expected-red gate in the release PR. To actually ship it: the build/upload
-   step runs before the drift gate, so the signed bundle is already attached to
-   the draft release when the gate goes red — publish that draft by hand for this
-   one release (`gh release edit <tag> --draft=false`, or the GitHub Release
-   **Publish** button) rather than turning the gate off. Do **not** turn the gate
-   off for normal releases; it exists to catch the *accidental* version of exactly
-   this mismatch.
+   intentionally disagree. Nothing in CI notices the mismatch, so the run goes
+   green like any other and the drift is yours to confirm: after the draft is
+   built, check by hand that the attached `.sig` was produced by the **old** key
+   over a binary carrying the **new** pubkey, and record that in the release PR.
+   Then publish the draft (`gh release edit <tag> --draft=false`, or the GitHub
+   Release **Publish** button).
 4. **Give clients time to install the bridge.** Auto-update reaches a client
    only when it launches and the user approves, and there is no telemetry to
    confirm adoption. Leave the bridge as the `latest` release long enough for
@@ -147,8 +144,8 @@ Order matters — do not skip a step:
    in the release notes.
 5. **Cut over CI signing to the new key** by updating the two GitHub Actions
    secrets to the new private key + password. From the next release on, the
-   signing key (new) matches the committed pubkey (new), the drift gate is green
-   again, and clients that took the bridge verify normally.
+   signing key (new) matches the committed pubkey (new), and clients that took
+   the bridge verify normally.
 6. **Retire the old key** only after the cutover release is out and verified.
    The old private key was overwritten in the CI secret at step 5; delete the
    old escrow copies and record the retirement date. Any client that never took
@@ -182,8 +179,8 @@ Response:
    This time, verify at least two independent offline copies exist before the
    first release.
 3. **Ship a new release** with the new public key committed to
-   `src-tauri/tauri.conf.json` and CI signing set to the new key. The drift gate
-   passes (new == new). This protects *new* installs.
+   `src-tauri/tauri.conf.json` and CI signing set to the new key — the pair
+   agrees again (new == new). This protects *new* installs.
 4. **Migrate stranded clients out-of-band**, because auto-update cannot reach
    them:
    - Release notes on the new release and the repository README must state that
@@ -237,12 +234,14 @@ Response:
 
 ## Periodic checks (fold into the release runbook)
 
-- **Every release** already verifies key health for free: the
-  `verify-updater-sigs.mjs` drift gate fails the run if the signing key stops
-  matching the committed pubkey, and `verify-latest-json.mjs` fails if a
-  platform is missing from the manifest. Do not bypass either — a bypass ships a
-  silently broken updater (see
-  [`versioning-and-artifacts.md`](versioning-and-artifacts.md) rollback notes).
+- **Every release, by hand.** No job checks key health. Nothing compares the
+  signing key against the committed pubkey (`release.yml:196`), and
+  `Verify latest.json is present` only fails when the draft carries no manifest
+  at all (`release.yml:251`) — a manifest missing a platform passes. Run both
+  checks yourself before publishing a draft; skipping them ships a silently
+  broken updater (see
+  [`versioning-and-artifacts.md`](versioning-and-artifacts.md) Post-Release
+  Verification).
 - **Quarterly (or when the release-maintainer list changes):** confirm both
   offline escrow copies still exist and open, and that the access lists for the
   escrow and the two GitHub Actions secrets still match the current release
@@ -257,10 +256,10 @@ Response:
   [`docs/archives/decisions/0049-auto-update-full-tauri-updater/memory.md`](../../archives/decisions/0049-auto-update-full-tauri-updater/memory.md)
   (why minisign is the trust anchor; private key in CI secret only).
 - ADR 0036 — telemetry zero: updater failures are silent client-side, which is
-  why a key mistake is invisible without these gates.
+  why a key mistake stays invisible until someone checks by hand.
 - [`versioning-and-artifacts.md`](versioning-and-artifacts.md) — release
   mechanics, artifact verification, rollback.
 - [`.github/workflows/release.yml`](../../../.github/workflows/release.yml) —
-  signing env + drift/manifest gates.
+  signing env, bundle upload, and the latest.json presence check.
 - [`src/lib/runtime/autoUpdate.ts`](../../../src/lib/runtime/autoUpdate.ts) —
   client-side check/download/verify/relaunch.

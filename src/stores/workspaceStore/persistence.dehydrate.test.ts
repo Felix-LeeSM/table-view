@@ -195,7 +195,7 @@ describe("dehydrate — Sprint 353 (AC-353-06 LS payload budget < 50KB)", () => 
     // fits the LS budget agreed in Q19 / Phase 0.
     const heavyRow = Array.from(
       { length: 10 },
-      (_, c) => `value-${c}-` + "x".repeat(18),
+      (_, c) => `value-${c}-${"x".repeat(18)}`,
     );
     const heavyResult = {
       columns: Array.from({ length: 10 }, (_, c) => ({

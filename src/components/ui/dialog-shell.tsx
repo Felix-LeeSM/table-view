@@ -31,7 +31,7 @@
 //
 // Date: 2026-05-08.
 
-import * as React from "react";
+import type * as React from "react";
 import { DialogContent } from "@components/ui/dialog";
 import { cn } from "@/lib/utils";
 

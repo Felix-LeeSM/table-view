@@ -1,6 +1,6 @@
 // Sprint 251 — `dataGridEditStore` (in-memory zustand) lift of the four
 // pending-edit slices. Maps to AC-251-S1..S5 from
-// `docs/sprints/sprint-251/contract.md`. Date 2026-05-09.
+// Sprint 251 contract. Date 2026-05-09.
 //
 // Sprint 433 extends the key to
 // `${connectionId}::${database}::${schema}::${table}` so same-name RDB

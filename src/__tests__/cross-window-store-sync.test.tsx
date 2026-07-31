@@ -405,8 +405,9 @@ describe("cross-window store sync (Sprint 153)", () => {
       });
       doMockTauriModule();
 
-      const { useWorkspaceStore: launcherWorkspaceStore } =
-        await import("@stores/workspaceStore");
+      const { useWorkspaceStore: launcherWorkspaceStore } = await import(
+        "@stores/workspaceStore"
+      );
       // Reset the freshly-imported store to a known clean baseline.
       launcherWorkspaceStore.setState({ workspaces: {} });
       await Promise.resolve();
@@ -528,8 +529,9 @@ describe("cross-window store sync (Sprint 153)", () => {
       });
       doMockTauriModule();
 
-      const { useWorkspaceStore: bareWorkspaceStore } =
-        await import("@stores/workspaceStore");
+      const { useWorkspaceStore: bareWorkspaceStore } = await import(
+        "@stores/workspaceStore"
+      );
       bareWorkspaceStore.setState({ workspaces: {} });
       await Promise.resolve();
       await Promise.resolve();

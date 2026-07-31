@@ -7,7 +7,7 @@ import type { SafeModeGate } from "@hooks/useSafeModeGate";
 import type { QueryTab } from "@stores/workspaceStore";
 import type { DocumentRecordHistoryQueryMode } from "@lib/runtime/history/recordHistoryEntry";
 import type { FindBody } from "@/types/document";
-import { type QueryResult, type QueryState } from "@/types/query";
+import type { QueryResult, QueryState } from "@/types/query";
 import {
   parseMongoshExpression,
   type MongoWriteDispatchers,
@@ -83,7 +83,9 @@ export interface ExecuteMongoAggregateRequest extends MongoLifecycleActions {
 }
 
 export interface ExecuteMongoQueryRequest
-  extends MongoLifecycleActions, MongoGateActions, MongoWriteDispatchers {
+  extends MongoLifecycleActions,
+    MongoGateActions,
+    MongoWriteDispatchers {
   tab: MongoTabContext;
   sql: string;
   runMongoAggregate: (

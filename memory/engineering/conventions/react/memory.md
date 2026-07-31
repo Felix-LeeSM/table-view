@@ -6,12 +6,12 @@ surface: src/**/*.ts, src/**/*.tsx
 task: react-impl, refactor, frontend
 trigger:
   signal: src/**/*.{ts,tsx} 편집 시
-  layer: hook (.claude/rules/react-conventions.md paths frontmatter)
+  layer: none — 자동 로드 없음, 직접 열어야 함
 ---
 
 # React / TypeScript 컨벤션
 
-`.claude/rules/react-conventions.md` wrapper 가 가리키는 source. 모든 brain 공통.
+모든 brain 공통 source. 자동 배달은 없으므로 직접 열어야 한다.
 
 ## 컴포넌트
 

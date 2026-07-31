@@ -1,8 +1,9 @@
 //! Sprint 296 (2026-05-14) — MySQL adapter 통합 게이트 합류.
 //!
 //! 작성 이유: `db/mysql/{queries,schema,mutations,connection}.rs` 의 IO
-//! 본체가 unit-mock 으로 cover 되지 않아 pre-push `6_rust-coverage` 게이트
-//! 임계 (83/76/81) 가 baseline drift (77.77/72.96/77.39) 로 만성 미달.
+//! 본체가 unit-mock 으로 cover 되지 않아 Rust 통합 커버리지 게이트
+//! (`.github/workflows/ci.yml` 의 `Run integration coverage`) 임계가
+//! baseline drift (77.77/72.96/77.39) 로 만성 미달.
 //! PG (`query_integration` + `schema_integration`) 시나리오를 MySQL 로
 //! mirror — adapter parity 강제 (X+ 정책: 1:1 mirror + 양쪽 추가 + dialect).
 //!
@@ -3722,8 +3723,9 @@ async fn test_mysql_query_table_data_tinyint_value_is_number_not_bool() {
 // =============================================================================
 // Batch 6 (Slice B-4, 2026-05-14) — mutation preview + trait dispatch coverage
 // =============================================================================
-// 작성 이유: pre-push `6_rust-coverage` 게이트 lines/functions 임계가 baseline
-// drift 로 -1.79/-0.72 미달 (Sprint 296 측정). 본 batch 는 두 갭을 채운다:
+// 작성 이유: Rust 통합 커버리지 게이트 (`.github/workflows/ci.yml` 의
+// `Run integration coverage`) 의 lines/functions 임계가 baseline drift 로
+// -1.79/-0.72 미달 (Sprint 296 측정). 본 batch 는 두 갭을 채운다:
 // 1) `db/mysql/mutations.rs` 의 emission/validation 분기를 preview_only path
 //    로 hit — DB connection 불필요. PK constraint emission / FK on_delete /
 //    Unique / Check / index types / drop column / drop constraint / alter table

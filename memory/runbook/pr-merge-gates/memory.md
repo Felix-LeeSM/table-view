@@ -1,11 +1,12 @@
 ---
 title: PR merge 게이트 진단 / 처리
 type: runbook
-updated: 2026-07-29
+updated: 2026-07-31
 task: merge, pr, review-gate, ci, blocked, ruleset, e2e, synchronize-rerun, cancelled-rollup, round-gate
+keywords: BLOCKED, base branch policy prohibits, mergeStateStatus, UNSTABLE, CLEAN, review-gate, reflect:done, required check, check-runs, rerun, cancelled, expected, Dismiss stale approval
 trigger:
   signal: PR 이 mergeable 인데 mergeState=BLOCKED / merge 가 base branch policy 로 거부
-  layer: agent-prompt (delivery agent)
+  layer: none — 자동 로드 없음, 직접 열어야 함
 ---
 
 # PR merge 게이트 진단 / 처리
@@ -25,24 +26,54 @@ label 메커니즘 자체는 [delivery](../../workflow/delivery/memory.md) 의 �
    (2026-07-03 #1183 delivery 실측 — 이전 서술 "E2E 만" 은 불완전했음.)
 
 **이 블록이 repo 유일의 required context 목록이다.** 다른 문서는 열거하지 말고 여기를
-가리킨다 — `scripts/static-policy/ci-gate-enumeration.ts` (`pnpm lint`) 가 강제하고,
-여기 적힌 이름이 실제 workflow job context 와 어긋나면 CI 가 RED 다.
+가리킨다. 이름이 실제 workflow job context 와 어긋나도 CI 는 조용하므로, 워크플로를
+고칠 때 여기를 같이 고쳐라.
 
 <!-- ci-gates:required-contexts -->
 
 - 2026-07-05 1차: `Frontend Checks` · `Rust Unit And Storage Tests` ·
   `Integration Tests (Docker)` · `Runtime Happy Path` · `Dependency Security`
-- 2026-07-10 2차: `Rust Static Analysis` · `PR Body Contract` ·
-  `Detect Change Scope` (셋 다 무조건 실행 + 40여 PR green 관측 근거로 일괄 등록)
+- 2026-07-10 2차: `Rust Static Analysis` · `PR Body Contract` (무조건 실행 +
+  40여 PR green 관측 근거로 등록)
+- 2026-07-31: `Detect Change Scope` 를 ruleset 과 `ci.yml` 양쪽에서 **제거**.
+  현재 required context 는 **7종**이다.
 
 <!-- /ci-gates -->
 
-2차 등록분 fail 도 BLOCKED 다 — 대응은 fix (PR body 정정 / clippy fix) 지 회피 아님.
-신규 required context 등록은 workflow 가 main 에 올라간 **뒤에** 한다 — 아무 run 도
-만들지 않는 required context 는 열린 PR 전부를 BLOCKED 로 고착시킨다.
+**7종 전부가 실검사다 — 빈 껍데기는 0종이다.** 마지막 name-only job 둘이
+2026-07-31 에 같이 사라졌다: `Detect Change Scope` 는 ruleset 과 `ci.yml` 양쪽에서
+제거됐고, `PR Body Contract` 는 실검사가 됐다. 순서는 ruleset 에서 먼저 빼고
+그다음 job 삭제다 (ruleset 은 GitHub 라이브 상태라 별도 결정) — `Detect Change
+Scope` 제거가 그 순서를 그대로 밟았다. 남은 job 의 `name:` 은 건드리지 마라.
+이름을 지우면 컨텍스트가 영영 `expected` 로 남아 모든 머지가 막힌다.
 
-→ protection API 만 보고 "required 는 review-gate 뿐" 이라 단정하지 말 것. E2E 가 진짜
-blocker 인 경우가 많다 (docs/hook 변경이어도 ruleset 이 E2E 를 요구).
+`Runtime Happy Path` 는 2026-07-31 부터 실검사다 (#2035 wave 5). `e2e/scope-map.mjs`
+가 변경 경로에서 spec 부분집합을 고르고 그것만 돌린다 — e2e 와 무관한 PR 은
+`selected 0 specs` 를 찍고 green, 나머지는 red 가 될 수 있다.
+
+`PR Body Contract` 도 2026-07-31 부터 실검사다. PR body 에 `/Users/` · `/tmp/` ·
+`file://` · `worktrees/` · `clones/` 가 있으면 그 줄을 찍고 fail 한다 (빈 body 는
+pass). 계약 SOT 는 [delivery](../../workflow/delivery/memory.md) 「PR body」.
+**`ci.yml` 은 `edited` 를 안 듣는다** — body 만 고치고 `gh run rerun` 해도 원래
+payload 의 옛 body 를 다시 읽어 같은 자리에서 fail 한다. **해소는 새 commit 뿐이다.**
+
+**BLOCKED 진단에서 먼저 배제할 이름은 이제 없다.** required 7종(`Frontend
+Checks`, `Rust Unit And Storage Tests`, `Integration Tests (Docker)`,
+`Dependency Security`, `Rust Static Analysis`, `Runtime Happy Path`,
+`PR Body Contract`) 과 `review-gate` 가 전부 red 가 될 수 있고, 대응은 fix (clippy
+fix / 테스트 수정 / body 고쳐 재push) 지 회피 아님. 신규 required context 등록은
+workflow 가 main 에 올라간 **뒤에** 한다 — 아무 run 도 만들지 않는 required
+context 는 열린 PR 전부를 BLOCKED 로 고착시킨다.
+
+→ protection API 만 보고 "required 는 review-gate 뿐" 이라 단정하지 말 것. ruleset
+7종은 별도 계층이고 docs 만 바꾼 PR 에도 전부 요구된다.
+
+→ `Runtime Happy Path` 가 red 면 job 로그의 `selected N specs` 를 먼저 봐라.
+**N=0 인데 red 면 spec 실패가 아니다** — spec 은 하나도 안 돌았고, 원인은
+`if:` 없이 항상 도는 앞 두 step 이다: `Self-test the scope map` (누가 매핑 안 된
+`e2e/smoke/*.spec.ts` 를 머지하면 그 뒤 docs-only PR 까지 전부 여기서 죽는다) 이나
+`Select specs for this change` (base ref 미해결 · checkout). **N>0 red 면** 그
+N 개 중 `FAIL <key>` 를 찍은 spec 이 원인이다.
 
 ## 잘못된 대응이 만드는 함정
 
@@ -53,8 +84,9 @@ blocker 인 경우가 많다 (docs/hook 변경이어도 ruleset 이 E2E 를 요�
   낼 수 있고 opened/synchronize/rerun 은 fail run 을 남긴다 — `labeled` 라도 라운드
   게이트에 걸리면 fail 한다 (아래).
 - **update-branch(main pull) 불필요**: branch protection `strict`(up-to-date)=false →
-  behind 여도 merge 된다. update-branch 는 synchronize 이벤트로 `review:approved` 를
-  떨구기만 하고 이득 없음.
+  behind 여도 merge 된다. update-branch 는 synchronize 이벤트로 `review:approved` 와
+  `review:changes-requested` 를 떨구기만 하고 이득 없음 (떼는 label 집합의 SOT 는
+  `.github/workflows/review-gate.yml` 의 "Dismiss stale approval on new commits").
 - **CLEAN 만 기다리지 말 것**: `mergeState=UNSTABLE` = required 전부 pass +
   non-required 만 fail → **merge 가능**. ※ `Dependency Security`(cargo deny / RUSTSEC)는
   2026-07-05 부터 **required 로 승격** — fail 이면 BLOCKED. RUSTSEC 신규 advisory 로
@@ -64,10 +96,12 @@ blocker 인 경우가 많다 (docs/hook 변경이어도 ruleset 이 E2E 를 요�
 ## review-gate run 상태 함정 (#1523/#1515 실측, 2026-07-16)
 
 - **synchronize run 은 `gh run rerun` 해도 영원히 fail** — push(synchronize) 마다
-  "Dismiss stale approval on new commits" step 이 `review:approved` 를 DELETE + 의도적
-  exit 1. rerun 은 같은 dismissal 로직을 재실행해 다시 `exit 1` — synchronize run 은
-  절대 pass 로 못 뒤집는다. watcher 의 자동 rerun 1회가 여기 낭비되면 watcher 가
-  포기(exit 2)하니, 부착 전 review-gate bucket 이 pass 인지 확인한다 (#1523).
+  "Dismiss stale approval on new commits" step 이 `review:approved` 와
+  `review:changes-requested` 를 DELETE + 의도적 exit 1 (2026-07-31 부터 대칭 —
+  고친 commit 이 올라와도 red verdict label 이 남던 문제). rerun 은 같은 dismissal
+  로직을 재실행해 다시 `exit 1` — synchronize run 은 절대 pass 로 못 뒤집는다.
+  자동 rerun 을 대신 돌려 주는 watcher 는 없으니, label 부착 전에 review-gate
+  bucket 이 pass 인지 손으로 확인한다 (#1523).
 - **CANCELLED 고착 (#1515, 2h timeout 원인)**: `labeled` run 이 concurrency 로 CANCELLED
   되면 rollup 에 non-success 로 남아 BLOCKED 가 고착된다. `gh pr checks` 는 최신 run 만
   보여줘 all-pass 처럼 보인다 — 진단은 `statusCheckRollup`(GraphQL) 또는 commit
@@ -81,8 +115,9 @@ blocker 인 경우가 많다 (docs/hook 변경이어도 ruleset 이 E2E 를 요�
   `comments >= 3` 이고 `reflect:done` label 이 없으면 exit 1 한다. rerun 도 label
   재발화도 같은 payload 를 재생하므로 계속 fail — 해소는 `reflect:done` 뿐이다
   (`enforce_admins=true` 라 `--admin` 우회 없음). **누가 붙이냐는 verdict 가 가른다** —
-  green 이면 종결자(`pr-finalize`)가 바로 붙이고, red 면 회고자(`round-reflect`)가
-  사용자에게 올려 받는다 ([delivery](../../workflow/delivery/memory.md)). 저자는
+  green 이면 종결자가 바로 붙이고, red 면 회고 모드 리뷰어가
+  interface 를 거쳐 사용자에게 올려 받는다
+  ([delivery](../../workflow/delivery/memory.md)). 저자는
   붙이지 않는다. 게이트는 라운드만 세고
   verdict 를 안 보므로 green 도 걸린다.
   최근 머지 30건 중 16건이 승인 시점에 `comments >= 3` 이었다.
@@ -120,5 +155,5 @@ merge 막히면 위 "두 곳 분산" → "함정" → "올바른 순서" 순으�
 ## 관련
 
 - [delivery](../../workflow/delivery/memory.md) — 리뷰~정리 구간의 review-gate label / enforce_admins 계약
-- [worktree](../worktree/memory.md) — merge 후 worktree cleanup
-- `.claude/rules/git-policy.md` — hook 회피 / force push 금지
+- [worktree](../worktree/memory.md) — merge 후 사본(clone) 회수
+- [git-policy](../../workflow/git-policy/memory.md) — force push 금지 (집행 훅 없음)

@@ -78,7 +78,6 @@ function setProductionConnection() {
         username: "u",
         password: null,
         environment: "production",
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any,
     ],
   });
@@ -343,7 +342,6 @@ describe("ColumnsEditor — Sprint 187 Safe Mode gate (inline MODIFY path)", () 
           username: "u",
           password: null,
           environment: "development",
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
         } as any,
       ],
     });
@@ -387,7 +385,6 @@ describe("ColumnsEditor — Sprint 187 Safe Mode gate (inline MODIFY path)", () 
           username: "u",
           password: null,
           environment: "development",
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
         } as any,
       ],
     });
@@ -432,7 +429,6 @@ describe("ColumnsEditor — Sprint 236 modal entrypoints", () => {
           username: "u",
           password: null,
           environment: "development",
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
         } as any,
       ],
     });
@@ -503,7 +499,6 @@ describe("ColumnsEditor — Sprint 237 USING + null-rows probe", () => {
           username: "u",
           password: null,
           environment: "development",
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
         } as any,
       ],
     });

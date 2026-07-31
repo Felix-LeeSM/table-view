@@ -1,67 +1,156 @@
 name: E2E Smoke
 
+# `Runtime Happy Path` is a required context in the `pr_to_main` ruleset (live
+# GitHub state). Three things follow, and breaking any of them freezes every
+# merge on the repository:
+#
+#   - The job `name:` is the context name. Renaming it leaves the required
+#     context "expected" forever.
+#   - No workflow-level `paths:` filter. A filtered-out PR produces no run at
+#     all, and a required context with no run also stays "expected" forever.
+#     The job always starts and works out its own scope inside, from
+#     `e2e/scope-map.mjs`.
+#   - A PR with nothing e2e-relevant in it still runs this job. It selects 0
+#     specs, says so, and exits 0 — it is never skipped. GitHub counts a
+#     skipped required check as a success, which is a hole rather than a
+#     signal.
+#
+# Scope: a PR runs only the specs its changed paths map to; push to main,
+# `workflow_dispatch`, the nightly `schedule`, and any PR labelled `e2e:full`
+# run the whole suite.
+
 on:
   push:
     branches: [main]
+  # No `labeled` type on purpose: every label add/remove would re-run the
+  # suite and collide with review-gate.yml. `e2e:full` is read from the
+  # payload of the events below, so apply the label first and then push (or
+  # re-run this workflow) to widen the scope.
+  # The collision also runs the other way: review-gate.yml DOES listen to
+  # `labeled`, so applying `e2e:full` before approval leaves a failed
+  # review-gate run on that SHA. It heals when the approval label re-runs it.
   pull_request:
+    types: [opened, reopened, synchronize]
   workflow_dispatch:
+  schedule:
+    # 18:00 UTC / 03:00 KST. The nightly full suite is the safety net for
+    # everything the scoped PR runs left out.
+    - cron: "0 18 * * *"
 
-# Cancel on PR (newer commit makes the old run stale), but never on main push:
+# Cancel on PR (a newer commit makes the old run stale), never on main push:
 # let the post-merge run finish so a merge wave still lands the rust-cache main
-# save and a full post-merge verification, instead of cancelling every main run
-# (audit 2026-07-03). GitHub keeps one running + one pending, so N merges
-# converge to first-run + last-run.
+# save. GitHub keeps one running + one pending, so N merges converge to
+# first-run + last-run.
 concurrency:
   group: e2e-smoke-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   TAURI_DRIVER_VERSION: "2.0.6"
 
 jobs:
-  # Change-detection gate (audit 2026-07-03 #5). docs/memory-only PRs skip the
-  # ~30m runtime matrix. Mirrors ci.yml: job-level `if:` skip (not workflow
-  # paths-ignore) so the required `Runtime Happy Path` context stays satisfied
-  # via skipped-job semantics. workflow_dispatch and any non-PR/push event fall
-  # through to code_changed=true (full run) in detect-change-scope.sh.
-  changes:
-    name: Detect Change Scope
+  e2e-smoke-required:
+    name: Runtime Happy Path
     runs-on: ubuntu-latest
-    timeout-minutes: 5
-    outputs:
-      code_changed: ${{ steps.detect.outputs.code_changed }}
+    # Selected specs run one after another inside this single job, because the
+    # required context has to be one always-present job and a matrix would
+    # split the name. A scoped PR run is 1-8 specs; a full run is 26 and can
+    # take hours. If full-scope PRs become the bottleneck, the upgrade is a
+    # `fromJSON` matrix job plus an aggregation job that keeps this name.
+    timeout-minutes: 330
 
     steps:
       - name: Checkout
         uses: actions/checkout@v6
         with:
+          # Full history: the scope map diffs this PR against its base branch.
           fetch-depth: 0
 
-      - name: Detect change scope
-        id: detect
+      # First step, and node-only, so a broken mapping fails in seconds instead
+      # of after a 20-minute build.
+      - name: Self-test the scope map
+        run: node e2e/scope-map.mjs --self-test
+
+      - name: Select specs for this change
+        id: select
+        shell: bash
         env:
-          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          PUSH_BEFORE_SHA: ${{ github.event.before }}
-        run: bash scripts/hooks/analyze/detect-change-scope.sh
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+          FULL_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'e2e:full') }}
+        run: |
+          set -euo pipefail
+          changed="$RUNNER_TEMP/changed.txt"
+          : > "$changed"
+          # A plain string, not an array: `"${arr[@]}"` on an empty array is an
+          # unbound-variable error under `set -u` in bash < 4.4. The only two
+          # values are "--all" and "", so word splitting is what is wanted.
+          mode="--all"
+          reason="full suite (${EVENT_NAME})"
 
-  e2e-smoke-prepare:
-    name: Prepare E2E runtime artifacts
-    runs-on: ubuntu-latest
-    timeout-minutes: 40
-    needs: changes
-    # Fail-closed: build the runtime binary unless `changes` succeeded AND said
-    # docs-only. A failed/cancelled detector (empty outputs, result != success)
-    # runs full so the required Runtime Happy Path stays truly verified.
-    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.code_changed == 'true')
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            if [ "$FULL_LABEL" = "true" ]; then
+              reason="full suite (e2e:full label)"
+            else
+              # `fetch-depth: 0` above already brings every branch, so this
+              # fetch is a no-op belt: without a base ref the run falls all the
+              # way back to the full suite, which is a very expensive way to be
+              # safe.
+              git rev-parse --verify --quiet "origin/${BASE_REF}^{commit}" >/dev/null ||
+                git fetch --no-tags origin \
+                  "+refs/heads/${BASE_REF}:refs/remotes/origin/${BASE_REF}" || true
 
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
+              if git rev-parse --verify --quiet "origin/${BASE_REF}^{commit}" >/dev/null; then
+                # Three-dot against the base branch tip, not against
+                # `pull_request.base.sha`: with the merge-ref checkout the
+                # latter also drags in whatever landed on the base branch after
+                # this PR last synced.
+                git diff --name-only "origin/${BASE_REF}...HEAD" > "$changed"
+                mode=""
+                reason="changed paths vs origin/${BASE_REF}"
+              else
+                # Fail-closed: an unresolvable base means run everything rather
+                # than guess a narrower scope.
+                reason="full suite (cannot resolve origin/${BASE_REF})"
+              fi
+            fi
+          fi
+
+          node e2e/scope-map.mjs $mode < "$changed" > "$RUNNER_TEMP/specs.txt"
+          node e2e/scope-map.mjs $mode --services < "$changed" > "$RUNNER_TEMP/services.txt"
+          count="$(grep -c . "$RUNNER_TEMP/specs.txt" || true)"
+          services="$(tr '\n' ' ' < "$RUNNER_TEMP/services.txt")"
+
+          echo "count=${count}" >> "$GITHUB_OUTPUT"
+          echo "scope: ${reason}"
+          echo "::group::changed paths"
+          cat "$changed"
+          echo "::endgroup::"
+
+          if [ "$count" -eq 0 ]; then
+            echo "selected 0 specs — no e2e-relevant changes"
+          else
+            echo "selected ${count} specs:"
+            sed 's/^/  /' "$RUNNER_TEMP/specs.txt"
+            echo "services: ${services:-none}"
+          fi
+
+          {
+            echo "### Runtime Happy Path"
+            echo ""
+            echo "- scope: ${reason}"
+            echo "- selected: ${count} spec(s)"
+            echo "- services: ${services:-none}"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Install Tauri Linux dependencies
-        # Retry wrapper: transient apt mirror failures (e.g. packages.microsoft.com
-        # 403) fail the whole setup. Up to 3 attempts with linear backoff.
+        if: steps.select.outputs.count != '0'
+        # Retry wrapper: transient apt mirror failures (e.g.
+        # packages.microsoft.com 403) otherwise fail the whole setup.
         run: |
           install_deps() {
             sudo apt-get update && sudo apt-get install -y \
@@ -81,11 +170,13 @@ jobs:
           exit 1
 
       - name: Setup pnpm
+        if: steps.select.outputs.count != '0'
         uses: pnpm/action-setup@v6
         with:
           version: 10.20.0
 
       - name: Setup Node.js
+        if: steps.select.outputs.count != '0'
         uses: actions/setup-node@v6
         with:
           node-version: 22.14.0
@@ -93,770 +184,187 @@ jobs:
           cache-dependency-path: pnpm-lock.yaml
 
       - name: Install Node dependencies
+        if: steps.select.outputs.count != '0'
         run: pnpm install --frozen-lockfile
 
       - name: Setup Rust
+        if: steps.select.outputs.count != '0'
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: 1.91.0
 
-      - name: Show disk usage before E2E build
-        run: |
-          echo "::group::Filesystem usage"
-          df -h /
-          df -h "$GITHUB_WORKSPACE" || true
-          echo "::endgroup::"
-          echo "::group::Build cache usage"
-          du -sh src-tauri/target 2>/dev/null || true
-          du -sh node_modules 2>/dev/null || true
-          du -sh ~/.cargo 2>/dev/null || true
-          echo "::endgroup::"
-
-      - name: Free disk headroom before E2E build
-        run: |
-          sudo apt-get clean
-          docker system prune -af || true
-          sudo rm -rf \
-            /usr/local/lib/android \
-            /usr/share/dotnet \
-            /opt/ghc
-          echo "::group::Filesystem usage after cleanup"
-          df -h /
-          df -h "$GITHUB_WORKSPACE" || true
-          echo "::endgroup::"
-          echo "::group::Build cache usage after cleanup"
-          du -sh src-tauri/target 2>/dev/null || true
-          echo "::endgroup::"
-
       - name: Cache Rust dependencies and build output
+        if: steps.select.outputs.count != '0'
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri -> target
           cache-workspace-crates: false
           cache-bin: false
-          # No cache-on-failure (audit 2026-07-03): main cancels in-flight runs
-          # every merge wave, so failed/cancelled runs saving a partial target
-          # would freeze a broken snapshot until the lockfile changes (observed:
-          # a 178MB entry from 2026-06-10 stuck ~3 weeks, forcing full 579-crate
-          # recompiles despite "cache hit"). Default = save only on success.
           shared-key: e2e-smoke-linux
+          # Only main writes the shared cache; PR runs read it. The default
+          # save-on-success-only behaviour keeps a partial target dir out.
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
-      - name: Build E2E smoke binary
-        env:
-          E2E_BUILD_ONLY: "1"
-        run: bash scripts/e2e-smoke-ci.sh
-
-      - name: Upload tauri binary
-        uses: actions/upload-artifact@v4
-        with:
-          name: e2e-smoke-tauri-binary
-          path: src-tauri/target/debug/table-view
-          if-no-files-found: error
-
-  e2e-smoke:
-    name: Runtime Happy Path (${{ matrix.spec_key }}, ${{ matrix.spec }})
-    needs: e2e-smoke-prepare
-    runs-on: ubuntu-latest
-    timeout-minutes: 40
-
-    strategy:
-      fail-fast: false
-      # Perf (audit 2026-07-03 #7): 15 specs in a single wave. Was 5 → 3 waves
-      # (~14m). Public-repo free runners allow 20 concurrent jobs; this matrix
-      # tops out at 15, leaving headroom for the file-backed (2) + enterprise
-      # (max-parallel 1) jobs that share the concurrency budget.
-      max-parallel: 15
-      matrix:
-        # `needs_*` flags scope service containers per spec: an unset flag makes
-        # the corresponding `services.*.image` evaluate to '' below, which the
-        # runner skips (empty image = no container). Conservative: include a
-        # service whenever a spec touches it — omitting one flakes the run, an
-        # extra one only wastes boot time. duckdb (embedded) and opensearch
-        # (started via `docker run` step) need no `services:` container.
-        include:
-          - spec_key: postgres
-            spec: e2e/smoke/postgres.spec.ts
-            needs_postgres: true
-          - spec_key: postgres-safe-mode
-            spec: e2e/smoke/postgres-safe-mode.spec.ts
-            needs_postgres: true
-          - spec_key: postgres-safe-mode-matrix
-            spec: e2e/smoke/postgres-safe-mode-matrix.spec.ts
-            needs_postgres: true
-          - spec_key: postgres-explain
-            spec: e2e/smoke/postgres-explain.spec.ts
-            needs_postgres: true
-          - spec_key: postgres-extension-completion
-            spec: e2e/smoke/postgres-extension-completion.spec.ts
-            needs_postgres: true
-          - spec_key: postgres-cancellation
-            spec: e2e/smoke/postgres-cancellation.spec.ts
-            needs_postgres: true
-          - spec_key: postgres-structure-ddl
-            spec: e2e/smoke/postgres-structure-ddl.spec.ts
-            needs_postgres: true
-          - spec_key: erd-dense
-            spec: e2e/smoke/erd-dense.spec.ts
-            needs_postgres: true
-          - spec_key: mysql
-            spec: e2e/smoke/mysql.spec.ts
-            needs_mysql: true
-          - spec_key: mariadb
-            spec: e2e/smoke/mariadb.spec.ts
-            needs_mariadb: true
-          - spec_key: duckdb
-            spec: e2e/smoke/duckdb.spec.ts
-          - spec_key: duckdb-schema-filter
-            spec: e2e/smoke/duckdb-schema-filter.spec.ts
-          - spec_key: mongodb
-            spec: e2e/smoke/mongodb.spec.ts
-            needs_mongodb: true
-          - spec_key: redis
-            spec: e2e/smoke/redis.spec.ts
-            needs_redis: true
-          - spec_key: redis-key-detail-panel
-            spec: e2e/smoke/redis-key-detail-panel.spec.ts
-            needs_redis: true
-          - spec_key: redis-empty-state-window
-            spec: e2e/smoke/redis-empty-state-window.spec.ts
-            needs_redis: true
-          - spec_key: valkey
-            spec: e2e/smoke/valkey.spec.ts
-            needs_valkey: true
-          - spec_key: elasticsearch
-            spec: e2e/smoke/elasticsearch.spec.ts
-            needs_elasticsearch: true
-          - spec_key: opensearch
-            spec: e2e/smoke/opensearch.spec.ts
-
-    services:
-      postgres:
-        image: "${{ matrix.needs_postgres && 'postgres:16-alpine' || '' }}"
-        env:
-          POSTGRES_USER: testuser
-          POSTGRES_PASSWORD: testpass
-          POSTGRES_DB: table_view_test
-        ports:
-          - 15432:5432
-        options: >-
-          --health-cmd "pg_isready -U testuser -d table_view_test"
-          --health-interval 2s
-          --health-timeout 3s
-          --health-retries 20
-      mongodb:
-        image: "${{ matrix.needs_mongodb && 'mongo:7' || '' }}"
-        env:
-          MONGO_INITDB_ROOT_USERNAME: testuser
-          MONGO_INITDB_ROOT_PASSWORD: testpass
-        ports:
-          - 37017:27017
-        options: >-
-          --health-cmd "mongosh --quiet -u testuser -p testpass --authenticationDatabase admin --eval 'db.runCommand({ ping: 1 }).ok' || exit 1"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 15
-      mysql:
-        image: "${{ matrix.needs_mysql && 'mysql:8.0' || '' }}"
-        env:
-          MYSQL_ROOT_PASSWORD: testroot
-          MYSQL_USER: testuser
-          MYSQL_PASSWORD: testpass
-          MYSQL_DATABASE: table_view_test
-        ports:
-          - 13306:3306
-        options: >-
-          --health-cmd "mysqladmin ping -h localhost -u root -ptestroot --silent"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 20
-          --health-start-period 10s
-      mariadb:
-        image: "${{ matrix.needs_mariadb && 'mariadb:11' || '' }}"
-        env:
-          MARIADB_ROOT_PASSWORD: testroot
-          MARIADB_USER: testuser
-          MARIADB_PASSWORD: testpass
-          MARIADB_DATABASE: table_view_test
-        ports:
-          - 23306:3306
-        options: >-
-          --health-cmd "healthcheck.sh --connect --innodb_initialized"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 20
-          --health-start-period 10s
-      redis:
-        image: "${{ matrix.needs_redis && 'redis:7-alpine' || '' }}"
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 5s
-          --health-timeout 3s
-          --health-retries 10
-      valkey:
-        image: "${{ matrix.needs_valkey && 'valkey/valkey:8.0-alpine' || '' }}"
-        ports:
-          - 16379:6379
-        options: >-
-          --health-cmd "valkey-cli ping"
-          --health-interval 5s
-          --health-timeout 3s
-          --health-retries 10
-      elasticsearch:
-        image: "${{ matrix.needs_elasticsearch && 'docker.elastic.co/elasticsearch/elasticsearch:8.12.2' || '' }}"
-        env:
-          discovery.type: single-node
-          ELASTIC_PASSWORD: TableViewSearch1!
-          xpack.security.enabled: true
-          xpack.security.http.ssl.enabled: false
-          xpack.security.transport.ssl.enabled: false
-          ES_JAVA_OPTS: -Xms512m -Xmx512m
-        ports:
-          - 19200:9200
-        options: >-
-          --health-cmd "curl -fsS -u elastic:TableViewSearch1! http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=1s || exit 1"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 20
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Install Tauri Linux dependencies
-        # Retry wrapper: transient apt mirror failures (e.g. packages.microsoft.com
-        # 403) fail the whole setup. Up to 3 attempts with linear backoff.
-        run: |
-          install_deps() {
-            sudo apt-get update && sudo apt-get install -y \
-              libwebkit2gtk-4.1-dev \
-              libgtk-3-dev \
-              libayatana-appindicator3-dev \
-              librsvg2-dev \
-              webkit2gtk-driver \
-              xvfb
-          }
-          for i in 1 2 3; do
-            install_deps && exit 0
-            echo "apt install attempt $i failed; retrying in $((i * 10))s" >&2
-            sleep "$((i * 10))"
-          done
-          echo "apt install failed after 3 attempts" >&2
-          exit 1
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6
-        with:
-          version: 10.20.0
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: 22.14.0
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
-
-      - name: Install Node dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Restore tauri binary
-        uses: actions/download-artifact@v5
-        with:
-          name: e2e-smoke-tauri-binary
-          path: src-tauri/target/debug
-
-      - name: Make tauri binary executable
-        run: chmod +x src-tauri/target/debug/table-view
-
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: 1.91.0
-
       - name: Cache tauri-driver binary
-        id: cache-tauri-driver
+        if: steps.select.outputs.count != '0'
         uses: actions/cache@v4
         with:
-          path: |
-            ~/.cargo/bin/tauri-driver
-            ~/.cargo/bin/tauri-driver.version
+          path: ~/.cargo/bin/tauri-driver
+          # The version is in the key, so a bump misses the cache and installs.
           key: tauri-driver-${{ runner.os }}-v${{ env.TAURI_DRIVER_VERSION }}
 
-      - name: Ensure tauri-driver cache contract
+      - name: Install tauri-driver
+        if: steps.select.outputs.count != '0'
         run: |
-          marker="${HOME}/.cargo/bin/tauri-driver.version"
-          needs_install=0
-
-          if [ ! -x "${HOME}/.cargo/bin/tauri-driver" ]; then
-            needs_install=1
-          elif [ ! -f "$marker" ] || [ "$(cat "$marker")" != "${TAURI_DRIVER_VERSION}" ]; then
-            needs_install=1
-          fi
-
-          if [ "$needs_install" -eq 1 ]; then
-            cargo install tauri-driver --version "${TAURI_DRIVER_VERSION}" --locked --force
-            printf '%s\n' "${TAURI_DRIVER_VERSION}" > "$marker"
-          fi
-
+          tauri-driver --help >/dev/null 2>&1 \
+            || cargo install tauri-driver --version "${TAURI_DRIVER_VERSION}" --locked
           tauri-driver --help >/dev/null
-          cached_version="$(cat "$marker")"
-          case "$cached_version" in
-            "${TAURI_DRIVER_VERSION}") ;;
-            *)
-              echo "ERROR: tauri-driver cache drift: expected ${TAURI_DRIVER_VERSION}, got ${cached_version}" >&2
-              exit 1
+
+      - name: Build E2E smoke binary
+        if: steps.select.outputs.count != '0'
+        run: pnpm tauri build --debug --no-bundle --config src-tauri/tauri.e2e.conf.json
+
+      - name: Start the database services the selected specs need
+        if: steps.select.outputs.count != '0'
+        shell: bash
+        run: |
+          set -euo pipefail
+          services="$(tr '\n' ' ' < "$RUNNER_TEMP/services.txt")"
+          echo "services: ${services:-none}"
+
+          wait_for() { # container, probe command...
+            local container="$1"; shift
+            for _ in $(seq 1 90); do
+              if "$@" >/dev/null 2>&1; then
+                echo "${container} is ready"
+                return 0
+              fi
+              sleep 5
+            done
+            docker logs "$container" || true
+            echo "${container} did not become ready" >&2
+            return 1
+          }
+
+          # docker-compose.yml owns the ports and credentials for these, and
+          # they are the same defaults e2e/fixtures/seed-smoke.ts and
+          # e2e/smoke/_helpers.ts fall back to, so nothing is duplicated here.
+          # `--wait` blocks on the compose healthchecks.
+          # A space-separated string rather than an array, for the same reason
+          # as in the select step: empty arrays are unbound under `set -u` in
+          # bash < 4.4. Service names never contain spaces.
+          compose=""
+          for svc in $services; do
+            case "$svc" in
+              # compose calls the MongoDB service `mongo`.
+              mongodb) compose="${compose} mongo" ;;
+              postgres | mysql | mariadb | mssql | redis) compose="${compose} ${svc}" ;;
+            esac
+          done
+          if [ -n "$compose" ]; then
+            docker compose up -d --wait $compose
+          fi
+
+          # Four services compose cannot supply here: valkey, elasticsearch and
+          # opensearch have no compose service at all, and compose's oracle
+          # uses the plain `gvenzl/oracle-xe:21` image whose first boot outlives
+          # its own healthcheck budget. The recipes below are the ones the
+          # pre-6cced3ab workflow ran green.
+          case " $services " in
+            *" valkey "*)
+              docker run -d --name tv-valkey --publish 16379:6379 \
+                valkey/valkey:8.0-alpine
+              wait_for tv-valkey docker exec tv-valkey valkey-cli ping
               ;;
           esac
 
-      - name: Start OpenSearch service
-        if: matrix.spec_key == 'opensearch'
-        run: |
-          docker run -d \
-            --name table-view-opensearch \
-            --publish 29200:9200 \
-            --env "discovery.type=single-node" \
-            --env "OPENSEARCH_INITIAL_ADMIN_PASSWORD=TableViewSearch1!" \
-            --env "plugins.security.ssl.http.enabled=false" \
-            --env "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m" \
-            --ulimit memlock=-1:-1 \
-            --ulimit nofile=65536:65536 \
-            opensearchproject/opensearch:2.13.0
+          case " $services " in
+            *" elasticsearch "*)
+              docker run -d --name tv-elasticsearch --publish 19200:9200 \
+                --env "discovery.type=single-node" \
+                --env "ELASTIC_PASSWORD=TableViewSearch1!" \
+                --env "xpack.security.enabled=true" \
+                --env "xpack.security.http.ssl.enabled=false" \
+                --env "xpack.security.transport.ssl.enabled=false" \
+                --env "ES_JAVA_OPTS=-Xms512m -Xmx512m" \
+                docker.elastic.co/elasticsearch/elasticsearch:8.12.2
+              wait_for tv-elasticsearch curl -fsS -u "elastic:TableViewSearch1!" \
+                "http://localhost:19200/_cluster/health?wait_for_status=yellow&timeout=1s"
+              ;;
+          esac
 
-          for attempt in {1..40}; do
-            if curl -fsS -u admin:TableViewSearch1! "http://localhost:29200/_cluster/health?wait_for_status=yellow&timeout=1s"; then
-              exit 0
-            fi
-            echo "OpenSearch is not ready yet (attempt ${attempt}/40)."
-            sleep 5
-          done
+          case " $services " in
+            *" opensearch "*)
+              docker run -d --name tv-opensearch --publish 29200:9200 \
+                --env "discovery.type=single-node" \
+                --env "OPENSEARCH_INITIAL_ADMIN_PASSWORD=TableViewSearch1!" \
+                --env "plugins.security.ssl.http.enabled=false" \
+                --env "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m" \
+                --ulimit memlock=-1:-1 \
+                --ulimit nofile=65536:65536 \
+                opensearchproject/opensearch:2.13.0
+              wait_for tv-opensearch curl -fsS -u "admin:TableViewSearch1!" \
+                "http://localhost:29200/_cluster/health?wait_for_status=yellow&timeout=1s"
+              ;;
+          esac
 
-          docker logs table-view-opensearch || true
-          exit 1
+          case " $services " in
+            *" oracle "*)
+              docker run -d --name tv-oracle --publish 1521:1521 \
+                --env "ORACLE_PASSWORD=OracleTest123!" \
+                --env "APP_USER=testuser" \
+                --env "APP_USER_PASSWORD=testpass" \
+                gvenzl/oracle-xe:21-slim-faststart
+              wait_for tv-oracle docker exec tv-oracle healthcheck.sh
+              ;;
+          esac
 
-      - name: Run E2E smoke
+      - name: Run selected smoke specs
+        if: steps.select.outputs.count != '0'
+        shell: bash
         env:
-          E2E_PG_HOST: localhost
-          E2E_PG_PORT: 15432
-          PGUSER: testuser
-          PGPASSWORD: testpass
-          PGDATABASE: table_view_test
-          E2E_MONGO_HOST: localhost
-          E2E_MONGO_PORT: 37017
-          MONGO_USER: testuser
-          MONGO_PASSWORD: testpass
-          E2E_MONGO_DB: table_view_test
-          E2E_MONGO_AUTH_DB: admin
-          E2E_MYSQL_HOST: localhost
-          E2E_MYSQL_PORT: 13306
-          MYSQL_USER: testuser
-          MYSQL_PASSWORD: testpass
-          MYSQL_DATABASE: table_view_test
-          E2E_MARIADB_HOST: localhost
-          E2E_MARIADB_PORT: 23306
-          MARIADB_USER: testuser
-          MARIADB_PASSWORD: testpass
-          MARIADB_DATABASE: table_view_test
-          E2E_MSSQL_HOST: localhost
-          E2E_MSSQL_PORT: 14333
-          MSSQL_USER: sa
-          MSSQL_PASSWORD: Testpass123!
-          MSSQL_DATABASE: table_view_test
-          E2E_ORACLE_HOST: localhost
-          E2E_ORACLE_PORT: 1521
-          ORACLE_USER: testuser
-          ORACLE_PASSWORD: testpass
-          E2E_ORACLE_SERVICE: XEPDB1
-          E2E_REDIS_HOST: localhost
-          E2E_REDIS_PORT: 6379
-          E2E_REDIS_DB: 2
-          E2E_VALKEY_HOST: localhost
-          E2E_VALKEY_PORT: 16379
-          E2E_VALKEY_DB: 2
-          E2E_ELASTICSEARCH_HOST: localhost
-          E2E_ELASTICSEARCH_PORT: 19200
+          # wdio.smoke.conf.ts documents that nothing exports these and that a
+          # headless Linux run needs them: under xvfb the WebKitGTK compositor
+          # hard-crashes without software rendering (#1261 / #1200 / #1293).
+          WEBKIT_DISABLE_DMABUF_RENDERER: "1"
+          WEBKIT_DISABLE_COMPOSITING_MODE: "1"
+          LIBGL_ALWAYS_SOFTWARE: "1"
+          # Hosts, ports, users and databases already default to the
+          # docker-compose values inside e2e/fixtures/seed-smoke.ts and
+          # e2e/smoke/_helpers.ts. Only the two search services have no usable
+          # default credential.
           ELASTICSEARCH_USER: elastic
           ELASTICSEARCH_PASSWORD: TableViewSearch1!
-          E2E_OPENSEARCH_HOST: localhost
-          E2E_OPENSEARCH_PORT: 29200
           OPENSEARCH_USER: admin
           OPENSEARCH_PASSWORD: TableViewSearch1!
-          E2E_SKIP_BUILD: "1"
-          E2E_SPEC: ${{ matrix.spec }}
-          E2E_SPEC_KEY: ${{ matrix.spec_key }}
-          E2E_REPORT_DIR: e2e/wdio-report/${{ matrix.spec_key }}
-        # `shell: bash` + explicit pipefail so the `| tee` capture does NOT mask
-        # a real E2E failure (tee would otherwise swallow the script's exit code).
-        shell: bash
+        # No `set -e`: one failing spec must not hide the verdict of the ones
+        # after it. Failures are collected and re-raised at the end.
         run: |
-          set -o pipefail
-          bash scripts/e2e-smoke-ci.sh 2>&1 | tee "$RUNNER_TEMP/e2e-smoke.log"
-
-      - name: Summarize masked E2E flake markers (#1293)
-        if: always()
-        shell: bash
-        run: bash scripts/e2e-smoke-flake-summary.sh "$RUNNER_TEMP/e2e-smoke.log" "${{ matrix.spec_key }}"
-
-      - name: Stop OpenSearch service
-        if: always() && matrix.spec_key == 'opensearch'
-        run: docker rm --force table-view-opensearch || true
-
-      - name: Upload E2E artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: e2e-smoke-artifacts-${{ matrix.spec_key }}
-          path: e2e/wdio-report
-          if-no-files-found: ignore
-
-  e2e-smoke-file-backed:
-    name: Runtime Happy Path (${{ matrix.spec_key }}, ${{ matrix.spec }})
-    needs: e2e-smoke-prepare
-    runs-on: ubuntu-latest
-    timeout-minutes: 40
-
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - spec_key: sqlite
-            spec: e2e/smoke/sqlite.spec.ts
-          - spec_key: duckdb-file-analytics
-            spec: e2e/smoke/duckdb-file-analytics.spec.ts
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Install Tauri Linux dependencies
-        # Retry wrapper: transient apt mirror failures (e.g. packages.microsoft.com
-        # 403) fail the whole setup. Up to 3 attempts with linear backoff.
-        run: |
-          install_deps() {
-            sudo apt-get update && sudo apt-get install -y \
-              libwebkit2gtk-4.1-dev \
-              libgtk-3-dev \
-              libayatana-appindicator3-dev \
-              librsvg2-dev \
-              webkit2gtk-driver \
-              xvfb
-          }
-          for i in 1 2 3; do
-            install_deps && exit 0
-            echo "apt install attempt $i failed; retrying in $((i * 10))s" >&2
-            sleep "$((i * 10))"
-          done
-          echo "apt install failed after 3 attempts" >&2
-          exit 1
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6
-        with:
-          version: 10.20.0
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: 22.14.0
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
-
-      - name: Install Node dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Restore tauri binary
-        uses: actions/download-artifact@v5
-        with:
-          name: e2e-smoke-tauri-binary
-          path: src-tauri/target/debug
-
-      - name: Make tauri binary executable
-        run: chmod +x src-tauri/target/debug/table-view
-
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: 1.91.0
-
-      - name: Cache tauri-driver binary
-        id: cache-tauri-driver
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/bin/tauri-driver
-            ~/.cargo/bin/tauri-driver.version
-          key: tauri-driver-${{ runner.os }}-v${{ env.TAURI_DRIVER_VERSION }}
-
-      - name: Ensure tauri-driver cache contract
-        run: |
-          marker="${HOME}/.cargo/bin/tauri-driver.version"
-          needs_install=0
-
-          if [ ! -x "${HOME}/.cargo/bin/tauri-driver" ]; then
-            needs_install=1
-          elif [ ! -f "$marker" ] || [ "$(cat "$marker")" != "${TAURI_DRIVER_VERSION}" ]; then
-            needs_install=1
-          fi
-
-          if [ "$needs_install" -eq 1 ]; then
-            cargo install tauri-driver --version "${TAURI_DRIVER_VERSION}" --locked --force
-            printf '%s\n' "${TAURI_DRIVER_VERSION}" > "$marker"
-          fi
-
-          tauri-driver --help >/dev/null
-          cached_version="$(cat "$marker")"
-          case "$cached_version" in
-            "${TAURI_DRIVER_VERSION}") ;;
-            *)
-              echo "ERROR: tauri-driver cache drift: expected ${TAURI_DRIVER_VERSION}, got ${cached_version}" >&2
-              exit 1
-              ;;
-          esac
-
-      - name: Run E2E smoke
-        env:
-          E2E_SKIP_BUILD: "1"
-          E2E_SPEC: ${{ matrix.spec }}
-          E2E_SPEC_KEY: ${{ matrix.spec_key }}
-          E2E_REPORT_DIR: e2e/wdio-report/${{ matrix.spec_key }}
-        # `shell: bash` + explicit pipefail so the `| tee` capture does NOT mask
-        # a real E2E failure (tee would otherwise swallow the script's exit code).
-        shell: bash
-        run: |
-          set -o pipefail
-          bash scripts/e2e-smoke-ci.sh 2>&1 | tee "$RUNNER_TEMP/e2e-smoke.log"
-
-      - name: Summarize masked E2E flake markers (#1293)
-        if: always()
-        shell: bash
-        run: bash scripts/e2e-smoke-flake-summary.sh "$RUNNER_TEMP/e2e-smoke.log" "${{ matrix.spec_key }}"
-
-      - name: Upload E2E artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: e2e-smoke-artifacts-${{ matrix.spec_key }}
-          path: e2e/wdio-report
-          if-no-files-found: ignore
-
-  e2e-smoke-enterprise-rdbms:
-    name: Runtime Happy Path (${{ matrix.spec_key }}, ${{ matrix.spec }})
-    needs: e2e-smoke-prepare
-    runs-on: ubuntu-latest
-    timeout-minutes: 40
-
-    strategy:
-      fail-fast: false
-      max-parallel: 1
-      matrix:
-        include:
-          - spec_key: mssql
-            spec: e2e/smoke/mssql.spec.ts
-          - spec_key: mssql-schema-filter
-            spec: e2e/smoke/mssql-schema-filter.spec.ts
-          - spec_key: oracle
-            spec: e2e/smoke/oracle.spec.ts
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Install Tauri Linux dependencies
-        # Retry wrapper: transient apt mirror failures (e.g. packages.microsoft.com
-        # 403) fail the whole setup. Up to 3 attempts with linear backoff.
-        run: |
-          install_deps() {
-            sudo apt-get update && sudo apt-get install -y \
-              libwebkit2gtk-4.1-dev \
-              libgtk-3-dev \
-              libayatana-appindicator3-dev \
-              librsvg2-dev \
-              webkit2gtk-driver \
-              xvfb
-          }
-          for i in 1 2 3; do
-            install_deps && exit 0
-            echo "apt install attempt $i failed; retrying in $((i * 10))s" >&2
-            sleep "$((i * 10))"
-          done
-          echo "apt install failed after 3 attempts" >&2
-          exit 1
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6
-        with:
-          version: 10.20.0
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: 22.14.0
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
-
-      - name: Install Node dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Restore tauri binary
-        uses: actions/download-artifact@v5
-        with:
-          name: e2e-smoke-tauri-binary
-          path: src-tauri/target/debug
-
-      - name: Make tauri binary executable
-        run: chmod +x src-tauri/target/debug/table-view
-
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: 1.91.0
-
-      - name: Cache tauri-driver binary
-        id: cache-tauri-driver
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/bin/tauri-driver
-            ~/.cargo/bin/tauri-driver.version
-          key: tauri-driver-${{ runner.os }}-v${{ env.TAURI_DRIVER_VERSION }}
-
-      - name: Ensure tauri-driver cache contract
-        run: |
-          marker="${HOME}/.cargo/bin/tauri-driver.version"
-          needs_install=0
-
-          if [ ! -x "${HOME}/.cargo/bin/tauri-driver" ]; then
-            needs_install=1
-          elif [ ! -f "$marker" ] || [ "$(cat "$marker")" != "${TAURI_DRIVER_VERSION}" ]; then
-            needs_install=1
-          fi
-
-          if [ "$needs_install" -eq 1 ]; then
-            cargo install tauri-driver --version "${TAURI_DRIVER_VERSION}" --locked --force
-            printf '%s\n' "${TAURI_DRIVER_VERSION}" > "$marker"
-          fi
-
-          tauri-driver --help >/dev/null
-          cached_version="$(cat "$marker")"
-          case "$cached_version" in
-            "${TAURI_DRIVER_VERSION}") ;;
-            *)
-              echo "ERROR: tauri-driver cache drift: expected ${TAURI_DRIVER_VERSION}, got ${cached_version}" >&2
-              exit 1
-              ;;
-          esac
-
-      - name: Start MSSQL service
-        if: matrix.spec_key == 'mssql' || matrix.spec_key == 'mssql-schema-filter'
-        run: |
-          docker run -d \
-            --name table-view-mssql \
-            --publish 14333:1433 \
-            --env "ACCEPT_EULA=Y" \
-            --env "MSSQL_PID=Developer" \
-            --env "MSSQL_SA_PASSWORD=Testpass123!" \
-            mcr.microsoft.com/mssql/server:2022-latest
-
-          for attempt in {1..60}; do
-            if docker exec table-view-mssql bash -lc "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'Testpass123!' -C -Q 'SELECT 1' >/dev/null 2>&1 || /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P 'Testpass123!' -Q 'SELECT 1' >/dev/null 2>&1"; then
-              exit 0
+          set -uo pipefail
+          status=0
+          while read -r spec; do
+            [ -n "$spec" ] || continue
+            key="$(basename "$spec" .spec.ts)"
+            data_dir="$RUNNER_TEMP/table-view-smoke/$key"
+            mkdir -p "$data_dir"
+            echo "::group::${key}"
+            if E2E_SPEC_KEY="$key" E2E_SPEC="$spec" pnpm exec tsx e2e/fixtures/seed-smoke.ts &&
+              TABLE_VIEW_TEST_DATA_DIR="$data_dir" xvfb-run -a \
+                pnpm exec wdio run wdio.smoke.conf.ts --spec "$spec"; then
+              echo "::endgroup::"
+              echo "PASS ${key}"
+            else
+              echo "::endgroup::"
+              echo "FAIL ${key}"
+              status=1
             fi
-            echo "MSSQL is not ready yet (attempt ${attempt}/60)."
-            sleep 5
-          done
-
-          docker logs table-view-mssql || true
-          exit 1
-
-      - name: Start Oracle service
-        if: matrix.spec_key == 'oracle'
-        run: |
-          docker run -d \
-            --name table-view-oracle \
-            --publish 1521:1521 \
-            --env "ORACLE_PASSWORD=OracleTest123!" \
-            --env "APP_USER=testuser" \
-            --env "APP_USER_PASSWORD=testpass" \
-            gvenzl/oracle-xe:21-slim-faststart
-
-          for attempt in {1..90}; do
-            status="$(docker inspect --format='{{.State.Health.Status}}' table-view-oracle 2>/dev/null || true)"
-            if [ "$status" = "healthy" ] || docker logs table-view-oracle 2>&1 | grep -q "DATABASE IS READY TO USE"; then
-              exit 0
-            fi
-            echo "Oracle is not ready yet (attempt ${attempt}/90, status=${status:-unknown})."
-            sleep 5
-          done
-
-          docker logs table-view-oracle || true
-          exit 1
-
-      - name: Run E2E smoke
-        env:
-          E2E_MSSQL_HOST: localhost
-          E2E_MSSQL_PORT: 14333
-          MSSQL_USER: sa
-          MSSQL_PASSWORD: Testpass123!
-          MSSQL_DATABASE: table_view_test
-          E2E_ORACLE_HOST: localhost
-          E2E_ORACLE_PORT: 1521
-          ORACLE_USER: testuser
-          ORACLE_PASSWORD: testpass
-          E2E_ORACLE_SERVICE: XEPDB1
-          E2E_SKIP_BUILD: "1"
-          E2E_SPEC: ${{ matrix.spec }}
-          E2E_SPEC_KEY: ${{ matrix.spec_key }}
-          E2E_REPORT_DIR: e2e/wdio-report/${{ matrix.spec_key }}
-        run: bash scripts/e2e-smoke-ci.sh
-
-      - name: Stop MSSQL service
-        if: always() && (matrix.spec_key == 'mssql' || matrix.spec_key == 'mssql-schema-filter')
-        run: docker rm --force table-view-mssql || true
-
-      - name: Stop Oracle service
-        if: always() && matrix.spec_key == 'oracle'
-        run: docker rm --force table-view-oracle || true
+          done < "$RUNNER_TEMP/specs.txt"
+          exit "$status"
 
       - name: Upload E2E artifacts
-        if: always()
+        if: failure() && steps.select.outputs.count != '0'
         uses: actions/upload-artifact@v4
         with:
-          name: e2e-smoke-artifacts-${{ matrix.spec_key }}
+          name: e2e-smoke-artifacts
           path: e2e/wdio-report
           if-no-files-found: ignore
-
-  e2e-smoke-required:
-    name: Runtime Happy Path
-    needs:
-      - changes
-      - e2e-smoke
-      - e2e-smoke-file-backed
-      - e2e-smoke-enterprise-rdbms
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    # `always()` keeps this aggregation running so a failed/cancelled matrix job
-    # still fails the required check. Skip the WHOLE aggregation ONLY when
-    # `changes` succeeded AND said docs-only — a skipped required job satisfies
-    # the `Runtime Happy Path` context (GitHub: skipped checks count as
-    # successful), matching the skipped upstream matrix. If `changes` failed
-    # (result != 'success'), the fail-closed prepare/matrix ran full, so this
-    # aggregation runs and grades the real matrix result instead of skipping.
-    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.code_changed == 'true')
-
-    steps:
-      - name: Require runtime matrix success
-        run: |
-          if [ "${{ needs.e2e-smoke.result }}" != "success" ]; then
-            echo "Runtime matrix result: ${{ needs.e2e-smoke.result }}"
-            exit 1
-          fi
-          if [ "${{ needs.e2e-smoke-file-backed.result }}" != "success" ]; then
-            echo "File-backed runtime result: ${{ needs.e2e-smoke-file-backed.result }}"
-            exit 1
-          fi
-          if [ "${{ needs.e2e-smoke-enterprise-rdbms.result }}" != "success" ]; then
-            echo "Enterprise RDBMS runtime result: ${{ needs.e2e-smoke-enterprise-rdbms.result }}"
-            exit 1
-          fi
-          echo "Runtime matrix passed."

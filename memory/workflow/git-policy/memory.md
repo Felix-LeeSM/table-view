@@ -1,57 +1,52 @@
 ---
 title: Git 정책
 type: workflow-rule
-updated: 2026-06-18
-task: commit, push, hook, lefthook, push-reject, pr-close, race-trace
+updated: 2026-07-31
+task: commit, push, signing, push-reject, pr-close, race-trace
+keywords: non-fast-forward, push reject, force-push, --no-verify, --no-gpg-sign, FETCH_HEAD, ORIG_HEAD, update-ref, ls-remote, stale ref, pinentry, gpg failed
 trigger:
-  signal: git commit / git push / hook 실패 / push reject / PR close 시
-  layer: hook (scripts/hooks/apply/pre-tool-use.sh wrapper → check-edit-policy.sh + check-dangerous-bash.sh)
+  signal: git commit / git push / push reject / PR close 시
+  layer: none — 집행 훅 없음, 규율만
 ---
 
 # Git 정책
 
-이 파일이 git/hook 정책 source. `.claude/rules/git-policy.md` 와 runtime agent
-wrappers 는 이 룰을 가리키거나 hook script 로 위임한다.
+이 파일이 git 정책의 **유일한 SOT** 다 — 절차, 근거, 차단 목록 전부.
 
-## 절대 금지 — Hook 회피
+**집행 장치는 없다.** 아래 금지 항목을 **아무도 막지 않는다** — 실행되기 전에
+스스로 멈춰야 한다. 이 방은 `CLAUDE.md` → `AGENTS.md` import 를 타고 오는 포인터를
+보고 직접 열어야 닿는다.
+
+## 절대 금지 — 검증 우회
 
 **`git commit --no-verify` / `git push --no-verify` 어떤 상황에서도 사용 금지.**
 **`--no-gpg-sign` / `commit.gpgsign=false` 등 signing 우회도 금지.**
-**환경 변수 `LEFTHOOK=0`, `LEFTHOOK_SKIP=...`, `HUSKY=0` 등 hook 비활성화도 금지.**
 
 ### Why
 
-- pre-commit (`cargo fmt`, `cargo clippy -D warnings`, `prettier`, `eslint`,
-  secret scan) = 품질 기준선.
-- pre-push (`cargo test`, `npm run test`, `npm run lint`, `cargo check`) =
-  로컬 회귀 가드.
+- push 직전 로컬 검증은 **lefthook pre-push 3종이 전부다** (`lefthook.yml`):
+  ① `biome check . --error-on-warnings` (포맷 + 일반 lint, 전체 트리)
+  ② push 대상 변경 파일 한정 `eslint --quiet` (repo 고유 가드)
+  ③ `cargo fmt --manifest-path src-tauri/Cargo.toml --check`.
+  `--no-verify` 는 이 셋을 통째로 끈다.
+- 나머지 — `cargo clippy -D warnings`, `cargo test`, vitest, 커버리지 —
+  는 여전히 **CI 에서만 돈다.** 깨진 코드를 push 하면 CI 에서 처음 드러난다.
+- pre-commit 훅은 없다. 커밋은 게이트 없이 지나가고 push 에서 한 번 잡힌다.
+- hook 설치는 `pnpm install` → `package.json` 의 `prepare` 가
+  `git config --unset-all core.hooksPath` 후 `lefthook install`. 지워진
+  `.githooks/` 를 가리키는 dangling `core.hooksPath` 가 남아 있어 unset 이
+  선행되지 않으면 lefthook 훅이 아예 안 걸린다.
+- 서명은 `commit.gpgsign` 설정이 건다.
 - [ADR 0044](../../../docs/archives/decisions/0044-e2e-smoke-remote-required/memory.md)
-  이후 runtime e2e smoke 는 GitHub Actions PR/main blocking check 가 source of
-  truth. hook 우회 시 로컬 가드가 빠지므로 여전히 production 빌드 위험으로 본다.
+  의 runtime e2e smoke blocking check 는 2026-07-31 (#2038) 부터 다시 실검사다.
+  `Runtime Happy Path` 가 변경 경로에서 spec 부분집합을 골라 돌린다 — 로컬에서
+  안 돌려도 CI 가 잡지만, 잡히는 범위는 네 변경이 고른 spec 뿐이다.
 
-## 강제 메커니즘 (3 레이어)
+## 실패 시 — 회피 X, 근본 fix
 
-1. **PreToolUse neutral wrapper** (`scripts/hooks/apply/pre-tool-use.sh`, Claude/codex 공유) — policy 스크립트 exit 1 → JSON `permissionDecision:"deny"` 변환. Claude Code 는 exit 2 만 block; 직접 호출 시 차단 무시.
-2. **policy check 스크립트** — `check-dangerous-bash.sh`(`--no-verify`/`LEFTHOOK=0`/force-push) + `check-edit-policy.sh`/`check-main-worktree-source-edit.sh`(source/`.env`/primary-worktree). exit 1. 상세: README.md.
-3. **본 정책 문서** — 사람/agent 명문화 룰.
-
-## Hook 한계 + Worktree (sprint-387)
-
-본 hook 은 **부주의 방지** layer. 변수 substitution / 문자열 concat / bin
-alias / PATH override 같은 의도적 우회는 **차단 불가능** — hook 통과 =
-"agent 가 자기도 모르게 위반하지 않는다" 보장만. 정책 (본 문서) + git log 가
-최종 source of truth.
-
-차단 가능 케이스: 평문 명령 / `bash -c "..."` 안 평문 / `$(echo ...)` 안 평문
-/ alias 정의 본문 / heredoc / nohup / background / `base64 -d | bash` 류 script-smuggling / `eval $(...)` / remote-upstream target-only `git reset/checkout`.
-
-Worktree: runtime wrapper 는 사본의 `scripts/hooks/*.sh` 호출. PreToolUse wrapper
-(`scripts/hooks/apply/pre-tool-use.sh`) Claude/codex 공유(과거 `.codex/hooks/pre-tool-use.sh` 흡수); post-tool-use.sh만 `.codex/hooks/` 잔존(advisory 위임).
-
-## Hook 실패 시 — 회피 X, 근본 fix
-
-- 포맷 실패 → `cargo fmt` / `npx prettier --write`.
-- 린트 실패 → 경고 수정. `eslint-disable` 은 사유 코멘트와 함께만.
+- 포맷 실패 → `cargo fmt` / `pnpm format` (= `biome format --write .`).
+- 린트 실패 → 경고 수정. 억제는 사유 코멘트와 함께만 —
+  일반 규칙은 `biome-ignore`, repo 고유 가드는 `eslint-disable`.
 - 테스트 실패 → 코드 수정 또는 (테스트가 틀렸으면) 테스트 + ADR 수정.
 - e2e timeout → `e2e/smoke/_helpers.ts` + `wdio.smoke.conf.ts` timeout, docker daemon 확인.
 - GPG pinentry timeout → 즉시 중단. 사용자에게 signing cache warm-up 필요를
@@ -59,18 +54,17 @@ Worktree: runtime wrapper 는 사본의 `scripts/hooks/*.sh` 호출. PreToolUse 
 
 ## Hard block — 승인으로도 우회 불가
 
-`scripts/hooks/policy/check-dangerous-bash.sh` 가 hard-block 하는 명령은 사용자 승인
-요청 대상이 아니라 수행 금지다. 특히 다음은 어떤 상황에서도 쓰지 않는다.
+아래는 사용자 승인 요청 대상이 아니라 **수행 금지**다. **이 목록이 SOT 이고
+집행자는 agent 자신이다** — 차단하는 장치는 없다.
 
 - `git commit --no-verify` / `git push --no-verify`
 - `--no-gpg-sign` / `commit.gpgsign=false`
-- `LEFTHOOK=0`, `LEFTHOOK_SKIP=...`, `HUSKY=0`
-- hook 이 destructive bash 로 차단하는 source/app destructive command
-- hook 이 force-push 또는 fetch/reset/pull recovery hazard 로 차단하는 명령
+- `git push --force` / `--force-with-lease` 등 force-push 전 변종
+- `git reset --hard` 의 remote-upstream target 형(아래 fetch/reset/pull 절)
+- 소스/앱 자산을 지우는 destructive command (`rm -rf` 로 트래킹 파일 제거 등)
 
-긴급 복구도 hard-block 명령 승인 우회가 아니라 별도 hook/script 정책 변경으로
-기록한다. 실제 차단 목록과 판정은 `scripts/hooks/policy/check-dangerous-bash.sh` 와 테스트가
-source of truth다. GPG signing 불가 시 unsigned commit 으로 진행하지 않는다.
+긴급 복구도 hard-block 명령을 승인으로 우회하지 말고 사용자와 합의해 정책 자체를
+바꾸고 여기에 기록한다. GPG signing 불가 시 unsigned commit 으로 진행하지 않는다.
 
 ## 책임 주체 — Assistant 직접 실행
 
@@ -79,12 +73,12 @@ merge 자율 실행. 사용자에게 "이제 커밋해 주세요" 안내 금지 
 lock).
 
 - 자율 범위 / 예외 / spawn 패턴: [delivery](../delivery/memory.md)
-- 본 정책 (hook 회피 금지) 은 자율 실행의 조건 — hook 통과 안 되면 commit/
-  push 자체 안 됨. agent 가 hook 실패 회피 시도 = 본 정책 위반.
+- 본 정책은 자율 실행의 조건 — 우회 금지와 hard block 은 아무도 막지 않으므로
+  agent 가 스스로 지킨다.
 
 ## 외부 race 가짜 신호 (sprint-402)
 
-`diag/race-trace` agent 결과: push reject / 알 수 없는 remote SHA 를 "외부
+push reject / 알 수 없는 remote SHA 를 "외부
 race" (다른 작업자 / 다른 brain 의 동시 push) 로 오인하는 사례 = 거의 100%
 **본인 (agent) 의 fetch + reset 또는 pull 자체가 진범**. 즉, race 가
 _감지되는 시점_ 에는 이미 본인 명령이 원인. 외부 race 가설은 가짜 신호.
@@ -97,15 +91,15 @@ reset 으로 ref 가 옮겨진 결과_ 의 push reject.
 
 push 가 non-fast-forward 로 튕겼을 때 **절대** `git reset --hard FETCH_HEAD`
 / `git pull --rebase` 하지 말 것 — 본인 commit wipe 또는 silent rebase.
-sprint-402 부터 hook 이 다음 단독 명령도 모두 block (이전엔 `git fetch &&
-git reset --hard FETCH_HEAD` sequence 만 차단 → agent 가 2 단계 분리로
-우회 → race-trace 가 진범 확정):
+금지 대상 — 시퀀스로 쓰든 두 단계로 쪼개 쓰든 같다. race-trace 가 그 2 단계
+분리를 push reject 의 진범으로 확정했다:
 
 - `git reset --hard FETCH_HEAD` / `ORIG_HEAD` / `@{u}` / `origin/<branch>`
   / `refs/remotes/<...>`
 - `git pull` 모든 변종 (`--rebase`, `origin <branch>` 포함)
 
-agent 는 위 명령 _어느 것으로도_ 본 hook 우회 불가능 — single-cmd 도 block.
+막아 주는 장치는 없다. 위 명령이 손에 떠오르면 그 자체가 진단 신호다 —
+아래 4-step 으로 간다.
 
 ### 회복 정답 (4-step)
 
@@ -136,15 +130,14 @@ agent 는 위 명령 _어느 것으로도_ 본 hook 우회 불가능 — single-
 
 closed-PR stale ref 가 의심되면 (PR close 시 `--delete-branch` 누락):
 `gh api -X DELETE repos/<owner>/<repo>/git/refs/heads/<branch>` 후 재시도.
-여전히 안 풀리면 force/reset/hook-bypass 를 시도하지 말고 상황 보고 후 별도
+여전히 안 풀리면 force/reset 을 시도하지 말고 상황 보고 후 별도
 복구 절차를 합의한다.
 
 ## PR close cleanup (sprint-389)
 
 `gh pr close` 시 **반드시** `--delete-branch` 동반. closed-PR 의 head ref 가
-remote 에 stale 로 남으면, 같은 sprint 가 재 spawn 될 때 새 branch 의 SHA 와
-non-fast-forward 충돌 → push reject. hook 이 본 호출을 detection 해 stderr
-WARNING 출력 (block 아님, exit 0).
+remote 에 stale 로 남으면, 같은 작업이 재 spawn 될 때 새 branch 의 SHA 와
+non-fast-forward 충돌 → push reject. 누락을 경고해 주는 것은 없다.
 
 ```bash
 gh pr close <N> --delete-branch --comment "<reason>"
@@ -152,7 +145,7 @@ gh pr close <N> --delete-branch --comment "<reason>"
 
 ### 재 spawn 시 stale ref 검증
 
-새 worktree / 새 branch 작업 시작 전:
+새 사본(clone) / 새 branch 작업 시작 전:
 
 ```bash
 # remote 에 같은 branch ref 가 살아있는지 검사
@@ -191,8 +184,5 @@ zsh 는 word 안의 `:` 를 modifier 로 해석 → `<sha>:refs/heads/foo` 가
 
 - [ADR 0044](../../../docs/archives/decisions/0044-e2e-smoke-remote-required/memory.md) — E2E smoke remote PR/main blocking check
 - [ADR 0019](../../../docs/archives/decisions/0019-e2e-pre-push-not-ci/memory.md) / [ADR 0020](../../../docs/archives/decisions/0020-e2e-pre-push-host-docker/memory.md) — superseded 된 pre-push e2e 정책
-- `scripts/hooks/policy/check-dangerous-bash.sh`, `scripts/hooks/README.md` — hook script ownership
-- `.claude/settings.json` / `.codex/hooks.json` → `scripts/hooks/apply/pre-tool-use.sh` (PreToolUse wrapper), `.codex/hooks/post-tool-use.sh` → `scripts/hooks/apply/post-tool-use.sh` — runtime hook 매니페스트
-- `lefthook.yml` — hook 정의
 - [delivery](../delivery/memory.md) — 자율 pipeline
-- `.claude/agents/delivery.md` / `.codex/agents/delivery.md` — delivery wrappers
+- [worktree](../../runbook/worktree/memory.md) — 사본 격리 lifecycle, 같은 무집행 상태

@@ -69,7 +69,6 @@ beforeEach(() => {
   // dbType, so seed the MongoDB connection this grid renders against to keep
   // nested cell editing enabled via the real capability.
   useConnectionStore.setState({
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     connections: [{ id: "conn-mongo", dbType: "mongodb" } as any],
   });
 });

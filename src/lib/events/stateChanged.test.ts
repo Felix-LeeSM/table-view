@@ -289,11 +289,7 @@ describe("Missing handler safety", () => {
     const onCrudChanged = vi.fn();
     setStateChangedHandlers({ connection: { onCrudChanged } });
     // missing `op`
-    dispatchStateChangedPayload(
-      "self",
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      { domain: "connection" } as any,
-    );
+    dispatchStateChangedPayload("self", { domain: "connection" } as any);
     expect(onCrudChanged).not.toHaveBeenCalled();
   });
 });

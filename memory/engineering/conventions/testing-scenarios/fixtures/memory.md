@@ -25,16 +25,13 @@ fixture 또는 emulator/testcontainer/embedded sample 로 재현 가능한 증�
   증거가 생길 때 같은 DBMS-first 규칙으로 추가한다.
 - `e2e/fixtures/seed-smoke.ts` — external service seed orchestrator. SQLite/DuckDB
   file smoke 는 spec 이 local SQL seed 를 직접 읽는다.
-- `e2e/fixtures/smoke-routing-decisions.json` — fixture promotion tier 와
-  smoke-routing decision 의 machine-readable SOT.
 - `tests/fixtures/**` — shared TS/Rust/parser/support-boundary contract fixtures.
   제품 runtime support claim 으로 승격하지 않는다.
 - `src-tauri/src/db/fixtures.rs` — backend adapter fixture harness. 현재 Search
   embedded fixtures 만 등록한다; missing RDBMS fixture diagnostic 은 의도된 guard 다.
 - `fixtures/**` — fixture generator/profile spec. Runtime support evidence 가 아니다.
 - Frontend unit/component tests stay near their domain under `src/**`; Rust
-  integration tests stay under `src-tauri/tests`; E2E smoke stays under `e2e/smoke`;
-  fixture tooling tests stay under `scripts/fixtures`.
+  integration tests stay under `src-tauri/tests`; E2E smoke stays under `e2e/smoke`.
 
 ## 기본 원칙
 
@@ -104,9 +101,11 @@ evidence requires all of these:
 
 - fixture path exists in the canonical topology
 - a consumer test/spec reads it
-- `e2e/fixtures/smoke-routing-decisions.json` records the tier and cost/risk
-- `.github/workflows/e2e-smoke.yml` and `scripts/e2e-smoke-ci.sh` wire the spec
-  when the tier is `blocking E2E`
+- the tier and its cost/risk are recorded somewhere reviewable
+- a workflow actually runs the spec when the tier is `blocking E2E` —
+  `Runtime Happy Path` does, for the changes `e2e/scope-map.mjs` maps to that
+  spec, so the tier is reachable: promoting one means naming the paths that
+  select it
 
 Unsupported/partial-support fixtures are negative evidence. They protect support
 boundaries and must not be cited as runtime support.

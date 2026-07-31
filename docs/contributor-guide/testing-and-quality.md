@@ -22,11 +22,10 @@ the product-facing support boundary stays in `docs/product/**`.
 | Surface | Owner | Rule |
 |---|---|---|
 | DBMS-first E2E seeds | `e2e/fixtures/<dbms>/<function>/...` | Runtime seed topology is DBMS-first, then capability/function. Existing active functions are `query`, `document`, `kv`, and `search`; future `completion`, `catalog`, `explain`, `errors`, `edit`, `safety`, or `metadata` roots need a consuming test and promotion decision. |
-| Smoke promotion decisions | `e2e/fixtures/smoke-routing-decisions.json` | Every fixture/root records `unit-only`, `integration-backed`, `dormant E2E`, or `blocking E2E` with cost/risk/support-claim impact before it can be cited in smoke evidence. |
 | Shared contract fixtures | `tests/fixtures/**` | Shared TS/Rust/parser/support-boundary fixtures are contract evidence only. Unsupported-boundary fixtures are negative evidence and do not widen runtime support. |
 | Backend adapter fixture harness | `src-tauri/src/db/fixtures.rs`, `src-tauri/tests/fixture_harness.rs` | Adapter fixtures are requested by profile/family/paradigm/capability. Missing fixture diagnostics are failures, not silent skips. Current embedded harness coverage is Search-only. |
-| Generator/profile specs | `fixtures/**`, `scripts/fixtures/*.test.ts` | Generator/profile specs validate fixture tooling and local setup. Profile existence is not runtime support. |
-| Test placement | `src/**`, `src-tauri/tests`, `e2e/smoke`, `scripts/fixtures` | Frontend unit/component tests stay near their feature/domain; Rust integration stays under `src-tauri/tests`; routine desktop smoke stays under script-wired `e2e/smoke`; fixture tooling tests stay under `scripts/fixtures`. |
+| Generator/profile specs | `fixtures/**` | Profile existence is not runtime support. |
+| Test placement | `src/**`, `src-tauri/tests`, `e2e/smoke` | Frontend unit/component tests stay near their feature/domain; Rust integration stays under `src-tauri/tests`; desktop smoke stays under `e2e/smoke`, which nothing wires automatically. |
 
 Promotion gate: fixture path + consuming contract/integration/E2E test +
 product docs or known-limitation review + smoke-routing decision. Fixture
@@ -45,7 +44,7 @@ landed and live GitHub showed no open Refactor 04 child issues.
 | Integration skip policy | Normalize skip behavior between query and schema integration tests. |
 | Docker-backed integration | Document or automate local DB service bootstrap for schema integration tests. |
 | MariaDB deltas | Keep `RETURNING` returned-row runtime support, routine/default behavior, procedure-management, trigger CRUD, completion-runtime, admin/import/export, and full workbench claims behind separate MariaDB-specific promotion gates. Current `RETURNING` evidence is profile/completion plus a version-aware completion suggestion gate, structural parser/Safe Mode classification, and focused `mariadb:11` runtime characterization showing server-accepted `DELETE ... RETURNING` side effect with no returned-row or affected-row-count adapter support claim; current row-edit and bounded table/index/constraint DDL evidence is limited to the tested MySQL-family path under MariaDB identity, with smoke coverage for the bounded Structure DDL path. |
-| Fixture inventory | Keep `scripts/fixtures/dbms-seeds.test.ts` aligned with every static DBMS fixture before product docs mention fixture evidence. |
+| Fixture inventory | Nothing checks that the fixture inventory matches the docs. Read `e2e/fixtures/<dbms>/` before product docs cite fixture evidence. |
 
 ## Local Development And CI
 
@@ -54,27 +53,36 @@ landed and live GitHub showed no open Refactor 04 child issues.
 | Local DB ports | Make local DB service ports deterministic or self-allocating instead of relying on partial env override. |
 | macOS smoke | Keep macOS E2E deferred until tauri-driver WKWebView support or an alternate mac smoke path exists. |
 | Right-click E2E | Add an alternate context-menu trigger or wait for tauri-driver W3C Actions support. |
-| E2E isolation | App-local state (`connections.json`, prefs, safe-mode flags) is emptied per session by `beforeSession` in `wdio.smoke.conf.ts` (`scripts/e2e-smoke-data-dir.ts`), so a `specFileRetries` retry no longer inherits the previous attempt's connections (#1836). Remaining: DB-server fixtures are still seeded once per spec-file run, not per retry. |
-| Masked E2E flakes | `wdio.smoke.conf.ts` sets `specFileRetries: 1`, so a first-attempt `no such window` crash is recovered in the same run and never shows in the workflow pass/fail tally. The `e2e-smoke` and `e2e-smoke-file-backed` jobs tee their run log and a post-step (`scripts/e2e-smoke-flake-summary.sh`) counts `no such window` + `RETRYING` markers into the job summary with a non-failing warning annotation. Read that summary on green runs; tracked in #1293. |
+| E2E isolation | App-local state (`connections.json`, prefs, safe-mode flags) is emptied per session by `beforeSession` in `wdio.smoke.conf.ts` (`e2e/support/smoke-data-dir.ts`), so a `specFileRetries` retry no longer inherits the previous attempt's connections (#1836). Remaining: DB-server fixtures are still seeded once per spec-file run, not per retry. |
+| Masked E2E flakes | `wdio.smoke.conf.ts` sets `specFileRetries: 1`, so a first-attempt `no such window` crash is recovered in the same run and never shows in that run's pass/fail tally. No flake tally exists — nothing counts `no such window` or `RETRYING` markers; tracked in #1293. |
 | Link checker | Add an internal-doc link checker after archive routing settles. |
 | Dependency security | Track `hickory-proto` advisory exposure through `mongodb 3.6.0`, `rustls-pemfile` exposure through `oracle-rs 0.1.7`, and `quick-xml` DoS advisories (RUSTSEC-2026-0194/0195) through `plist 1.8.0`; remove deny ignores when upstream dependency updates make it possible. |
 
 ## Static Lint Gate
 
-`pnpm lint` runs `scripts/check-eslint-static-policy.ts`. The wrapper runs the
-full ESLint config and then enforces the Refactor 00 static policy from
-`docs/archives/audits/refactor-00-static-hardening-2026-06-09.md`:
+`pnpm lint` runs two engines with disjoint policy spaces: `biome check .`
+(formatter + the generic lint rules, configured in `biome.json`) and then
+`eslint .` (the repo-specific guards only — `tv-local/*`, the
+`no-restricted-syntax`/`no-restricted-imports` blocks, react-hooks,
+`@typescript-eslint/no-deprecated`, `no-console`, `max-lines`). A rule belongs
+to exactly one engine; `eslint.config.js` deliberately extends no preset.
+`eslint.config.js` keeps `max-lines` as a warning and
+the feature-import rule as an error. **Nothing enforces the rules below** — they
+come from the Refactor 00 static policy in
+`docs/archives/audits/refactor-00-static-hardening-2026-06-09.md`, and no check
+reads the allowlists:
 
 | Gate | Current policy | Triage owner |
 |---|---|---|
-| `max-lines` | Existing 22 warnings are an exact allowlist. New entries and stale entries fail. | The PR touching the file removes new debt or shrinks the allowlist. |
+| `max-lines` | Existing 19 warnings are an exact allowlist. New entries and stale entries fail. `src/components/search/SearchIndexDetailPanel.tsx` joined the list at 705 effective lines when the Biome format migration expanded it past 700; splitting it is follow-up work, not lint adoption. | The PR touching the file removes new debt or shrinks the allowlist. |
 | Hidden TS/TSX lint candidates | Only generated wasm artifacts under `src/lib/sql/wasm/**` and `src/lib/mongo/wasm/**` may be ignored. | The PR adding a broad ignore must either narrow it or document generated-artifact ownership. |
 | `src/features/**` imports | Feature production modules may use feature-local code, feature public APIs, `@lib`, `@/types`, and `@components/ui`; cross-feature internal imports fail and must route through `src/features/<domain>/index.ts`. Imports from legacy components, hooks, stores, pages, router, or app shell still fail unless they are an explicit public-facade exception. | The PR adding a feature dependency owns reusable extraction, public API export, or removal of the dependency. |
 
-Coverage thresholds are governed by
-[`docs/quality/coverage-ratchet.md`](../quality/coverage-ratchet.md), E2E
-breadth stays with #581, and CI cache or parallelism with #582. Static lint
-changes should not edit those gates.
+Coverage thresholds are governed by `vite.config.ts` (frontend) and the
+`--fail-under-*` literals in `.github/workflows/ci.yml` (Rust integration) —
+those two files are the only places the numbers live. E2E breadth stays with #581, and
+CI cache or parallelism with #582. Static lint changes should not edit those
+gates.
 
 ## Smoke Matrix Bands
 
@@ -92,10 +100,10 @@ this page stays the index plus the cross-band policy sections.
 | [`h4-rdbms-intelligence.md`](smoke-matrix/h4-rdbms-intelligence.md) | Schema metadata cache, ERD graph input and renderer, dependency view, migration impact, schema diff, FK row navigation |
 | [`h5-non-rdbms.md`](smoke-matrix/h5-non-rdbms.md) | Non-RDBMS paradigms: MongoDB, Redis/Valkey, and Elasticsearch/OpenSearch Search, with their closure audits |
 | [`h6-wider-source-candidates.md`](smoke-matrix/h6-wider-source-candidates.md) | MSSQL and Oracle runtime/smoke guardrails plus unpromoted wide-column, cloud-document, graph, vector, and stream candidates |
-| [`h7-ops-security-reliability.md`](smoke-matrix/h7-ops-security-reliability.md) | CI/hook gate surface, destructive-operation safety, credential and local-first privacy, dependency security, a11y, performance, platform smoke, E2E isolation |
+| [`h7-ops-security-reliability.md`](smoke-matrix/h7-ops-security-reliability.md) | CI gate surface, destructive-operation safety, credential and local-first privacy, dependency security, a11y, performance, platform smoke, E2E isolation |
 
-Band sizes are not restated here — `scripts/hooks/policy/check-doc-size.sh` owns that
-number, so duplicating it would only create a claim nothing verifies.
+Band sizes are not restated here. No size gate exists, so a band size written
+here would be a number nothing verifies.
 
 ## Pre-Release Verification Gate
 
@@ -107,9 +115,9 @@ Required local evidence:
 
 - Source state: record the intended release SHA and confirm the release worktree
   has no unrelated source changes with `git status --short --branch`.
-- Hook path: normal signed commit and pre-push path-routed gates must pass. Hook
+- Commit path: there are no local hooks. Commits must still be signed, and
   bypass flags remain forbidden by git policy.
-- Frontend/build lane: `pnpm wasm:size`, `pnpm lint`,
+- Frontend/build lane: `pnpm lint`,
   `pnpm exec vitest run --coverage --coverage.reporter=text-summary`, and
   `pnpm build`. The former `pnpm test -- --run --coverage ...` form did NOT
   measure coverage: pnpm 10 forwards the `--`, so vitest received
@@ -121,18 +129,41 @@ Required local evidence:
   `cargo test --manifest-path src-tauri/Cargo.toml --test parse_sql_backend`.
 - Docker integration lane: with required services available,
   `cargo test --manifest-path src-tauri/Cargo.toml --test schema_integration --test query_integration --test mongo_integration --test fixture_loading --test redis_integration`.
-- Documentation lane: docs changed for the release must pass Prettier and local
-  link/target review for the touched docs.
+- Documentation lane: `git diff --check` on the touched docs plus local
+  link/target review. **No formatter covers docs markdown, on purpose.**
+  Prettier was removed when Biome landed, `biome.json` excludes `docs/`
+  outright, and Biome 2.5.6 does not format markdown at all — so there is
+  nothing to run and this lane must not be written as if there were. Reviewer
+  judgement is the whole gate here; do not treat a docs-only change as
+  machine-verified.
 
 Required remote evidence on the exact release SHA:
 
 - Every required context in the `pr_to_main` ruleset passes. That list lives in
-  one place, `memory/runbook/pr-merge-gates/memory.md`; do not copy it here,
-  because the copy that used to live here listed five of the eight.
-- The runtime smoke matrix passes: Prepare E2E runtime artifacts plus the wired
-  PostgreSQL, MySQL, MariaDB, SQLite, DuckDB `.duckdb`, DuckDB file analytics,
-  MongoDB, Redis, Valkey, Elasticsearch, OpenSearch, MSSQL, and Oracle matrix
-  checks.
+  one place, `memory/runbook/pr-merge-gates/memory.md`. Do not copy it here — a
+  copy kept here once listed five of the then-eight. The count is not stable
+  either: #2037 took it to **seven** by deleting the name-only
+  `Detect Change Scope` job, and no stub context is left — `PR Body Contract`
+  became a real check in that same PR, so all seven required contexts now
+  assert something. Read the list from GitHub rather than from prose:
+
+  ```bash
+  gh api repos/{owner}/{repo}/rulesets/15755265 \
+    --jq '.rules[] | select(.type=="required_status_checks")
+          | .parameters.required_status_checks[].context'
+  ```
+- Runtime smoke runs in CI, scoped to the change.
+  `.github/workflows/e2e-smoke.yml` maps the PR's changed paths to a spec subset
+  through `e2e/scope-map.mjs` and runs only those, so a green PR proves the
+  specs its own paths select and nothing else — a PR that selects 0 specs proves
+  no desktop runtime behavior at all. The full suite runs on push to main, on
+  the nightly schedule, and on a PR carrying `e2e:full` once a push follows the
+  label — the workflow does not listen to label events. Run the suite by hand
+  on the release SHA when the release needs evidence the PR runs did not
+  produce — the full sequence (debug build, seed, then
+  `TABLE_VIEW_TEST_DATA_DIR=/tmp/table-view-smoke pnpm test:e2e:smoke`) is in
+  README 「E2E Smoke」. Without that variable the specs drive the app against
+  your real connection store (`src-tauri/src/storage/mod.rs` `data_dir_override`).
 - `main` push checks pass on the merge commit before a release tag is pushed.
 - Release workflow output is packaging evidence only. Draft bundle creation and
   checksum upload do not replace CI or runtime smoke evidence.
@@ -145,11 +176,12 @@ Deferred or non-blocking checks must stay explicit:
   not routine release blockers unless a release issue explicitly promotes one of
   them. (Rust llvm-cov integration cutoffs became a routine blocking check on
   2026-07-03 — the CI `Integration Tests (Docker)` job enforces them.)
-- Non-routine E2E specs remain scenario inventory or manual regression evidence
-  until a workflow/script invokes them.
+- An E2E spec is CI evidence for the changes that select it and manual evidence
+  otherwise. `e2e/scope-map.mjs` decides which specs a PR runs; the full suite
+  runs on push to `main`, on the nightly schedule, and on `workflow_dispatch`.
 - No support claim can ship on fixture-only evidence. Fixture files, profile
   rows, generator tests, and compatibility inventories become live runtime
-  evidence only when the matching workflow/script/test path is wired and green.
+  evidence only when a matching workflow or test path runs them green.
   Exceptions require a visible issue or release note entry; they must not be
   hidden as a flaky pass.
 

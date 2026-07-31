@@ -169,7 +169,6 @@ export function deriveEditorSeed(dataType: string, key: string): EditorSeed {
     case "uuid": {
       return { seed: "", accept: true };
     }
-    case "text":
     default:
       return { seed: key, accept: true };
   }

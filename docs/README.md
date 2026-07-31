@@ -7,7 +7,7 @@ updated: 2026-05-28
 # Docs Index
 
 `docs/` 는 사람이 읽는 제품/프로젝트 문서다. Agent 실행 규칙과 협업 룰은
-`memory/`, skill 본문은 `.agents/skills/` 에 둔다.
+`memory/` 에 둔다.
 
 ## 빠른 진입
 
@@ -19,16 +19,15 @@ updated: 2026-05-28
 | GitHub milestone / issue 실행 상태 | GitHub milestones/issues, `ROADMAP.md` 요약 | 실행 bucket 은 GitHub, 순서/경계 요약은 `ROADMAP.md` |
 | 구조 / 설계 규칙 | `memory/engineering/architecture/**` | agent 가 적용해야 하는 active engineering SOT |
 | 개발 / 검증 / 기여 | `contributor-guide/`, `memory/engineering/**` | 사람용 절차는 docs, 코딩 규칙은 memory |
-| 스프린트 산출물 | `sprints/` | 그대로 유지 |
 | 과거 기록 | `archives/`, retired risk registers, historical `explorations/` | `archives/` 아래로 수렴 |
 
 ## 분량 cap
 
 지속 참조 문서(`product/`, `contributor-guide/`, `roadmap/`, `ROADMAP.md`,
-`quality/`, `phases/`, docs root)는 120,000 chars 분량 cap 을 둔다 — agent 가
-읽을 때 context 부하를 가두기 위함. 일회성 산출물(`sprints/`, `archives/`,
+`phases/`, docs root)는 120,000 chars 분량 cap 을 둔다 — agent 가
+읽을 때 context 부하를 가두기 위함. 일회성 산출물(`archives/`,
 `table_plus/`, `explorations/`)은 cap 에서 제외한다 (다시 읽을 일이 거의 없음).
-검사는 `scripts/hooks/policy/check-doc-size.sh`. 현재 회귀 0, threshold 는 추후 ratchet.
+cap 은 규율로만 남았고 자동 검사가 없다.
 
 ## 유지할 최상위 묶음
 
@@ -39,11 +38,9 @@ updated: 2026-05-28
 - `PLAN.md` - 기존 링크 호환용 roadmap/product 인덱스. backlog 나 product
   claim ledger 를 두지 않는다.
 - `contributor-guide/` - 개발자가 변경을 넣을 때 읽는 사람용 절차.
-- `sprints/` - sprint contract, evidence, handoff.
 - `archives/` - 더 이상 active SOT 가 아닌 기록.
 - `phases/` - active phase planning 만 둔다. 보류/완료/비활성 phase 는
   `archives/phases/` 로 이동한다.
-- `quality/` - coverage ratchet, hook performance 같은 품질 게이트 정책.
 
 `RISKS.md` 는 독립 active 문서로 유지하지 않는다. 위험/제약은 소유 문서로
 라우팅한다:
@@ -61,8 +58,7 @@ updated: 2026-05-28
 - `memory/` - agent 가 작업 중 자동으로 읽는 active product/engineering/workflow/runbook 규칙.
 - `memory/engineering/` - 코드 구조, architecture, convention, fixture, UI 규칙 SOT.
 - `docs/archives/decisions/`, `docs/archives/incidents/` - 과거 결정과 사건 기록. 기본 agent memory 탐색 대상이 아니다.
-- `.agents/skills/` - agent skill 본문과 slash command source.
-- `docs/` - 사람이 탐색하는 제품/프로젝트 문서와 sprint evidence.
+- `docs/` - 사람이 탐색하는 제품/프로젝트 문서.
 
 같은 내용을 둘 이상에 복제하지 않는다. 한쪽에 본문을 두고 다른 쪽은 링크만 둔다.
 
@@ -79,7 +75,7 @@ rg '<term>' docs memory README.md AGENTS.md
 직접 지정이 더 안전하다 — 아래 주의 참조.
 
 ```sh
-rg '<term>' docs/sprints docs/archives          # 기록만
+rg '<term>' docs/archives                       # 기록만
 rg --no-ignore-dot '<term>' docs memory README.md AGENTS.md   # active + 기록
 ```
 

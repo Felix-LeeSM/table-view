@@ -61,7 +61,6 @@ function setProductionConnection() {
         username: "u",
         password: null,
         environment: "production",
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any,
     ],
   });
@@ -80,7 +79,6 @@ function setDevConnection() {
         username: "u",
         password: null,
         environment: "development",
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any,
     ],
   });

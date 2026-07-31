@@ -211,5 +211,5 @@ function randomAlphaSuffix() {
   const alpha = Math.random()
     .toString(36)
     .replace(/[^a-z]/g, "");
-  return (alpha + "mssql").slice(0, 6);
+  return `${alpha}mssql`.slice(0, 6);
 }

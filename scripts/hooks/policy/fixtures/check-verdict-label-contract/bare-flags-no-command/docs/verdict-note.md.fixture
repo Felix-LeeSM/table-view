@@ -1,3 +1,0 @@
-# 접두사 없는 결합 형태
-
-green → `--add-label review:approved --remove-label review:changes-requested`

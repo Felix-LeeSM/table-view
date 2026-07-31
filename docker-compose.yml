@@ -5,7 +5,7 @@ services:
     environment:
       # default `testuser`/`testpass` — 같은 한 쌍을 CI workflow,
       # `src-tauri/tests/common/mod.rs` 통합 테스트, smoke e2e UI 폼,
-      # `scripts/wait-for-test-db.sh`, Mongo 서비스가 모두 사용한다.
+      # Mongo 서비스가 모두 사용한다.
       POSTGRES_USER: ${PGUSER:-testuser}
       POSTGRES_PASSWORD: ${PGPASSWORD:-testpass}
       POSTGRES_DB: ${PGDATABASE:-table_view_test}
@@ -33,8 +33,8 @@ services:
   mysql:
     # Sprint 250 — MySQL seed infrastructure for Phase 17 (Sprint 251-256
     # MySQL adapter). Mirrors the postgres/mongo pattern: testuser/testpass
-    # credentials shared across CI workflow, src-tauri integration helpers,
-    # e2e form fixtures, scripts/db/wait.sh, and scripts/fixtures/mysql.ts.
+    # credentials shared across CI workflow, src-tauri integration helpers and
+    # e2e form fixtures.
     image: mysql:8.0
     container_name: table_view_mysql
     environment:

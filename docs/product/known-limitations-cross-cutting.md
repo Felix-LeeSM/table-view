@@ -185,7 +185,7 @@ SQL/MongoDB/Redis/Valkey/Search seed contracts, but other specs under
 `e2e/smoke/**`, reset-to-default audits, ERD scenarios, additional file
 analytics scenarios beyond the wired `duckdb-file-analytics` spec, broader
 Search scenarios, and macOS/Windows runtime smoke are future promotion gates
-unless the CI script wires them.
+unless a smoke runner wires them.
 
 ### Adapter / workspace boundary
 

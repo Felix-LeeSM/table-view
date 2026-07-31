@@ -143,7 +143,7 @@ duplicate catalog parsing before support claims widen.
 
 Current evidence:
 
-This matrix, `scripts/e2e-smoke-ci.sh`, `.github/workflows/e2e-smoke.yml`,
+This matrix, `.github/workflows/e2e-smoke.yml`,
 `e2e/fixtures/postgresql/query/seed.sql`, and `e2e/smoke/erd-dense.spec.ts`
 
 Current gap / routing:

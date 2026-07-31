@@ -66,8 +66,9 @@ describe("registerLauncherCloseHandler — sprint-363 close → hide", () => {
       },
     );
 
-    const { registerLauncherCloseHandler } =
-      await import("@lib/window-lifecycle-boot");
+    const { registerLauncherCloseHandler } = await import(
+      "@lib/window-lifecycle-boot"
+    );
     await registerLauncherCloseHandler();
 
     expect(onCloseRequestedMock).toHaveBeenCalledWith(
@@ -93,8 +94,9 @@ describe("registerLauncherCloseHandler — sprint-363 close → hide", () => {
       },
     );
 
-    const { registerLauncherCloseHandler } =
-      await import("@lib/window-lifecycle-boot");
+    const { registerLauncherCloseHandler } = await import(
+      "@lib/window-lifecycle-boot"
+    );
     await registerLauncherCloseHandler();
     await captured!();
 

@@ -1,7 +1,0 @@
-# 접힌 인라인 span
-
-- Verdict는 label로 공표한다: green이면 `gh pr edit <N> --add-label
-  review:approved --remove-label review:changes-requested`, red면
-  `--add-label review:changes-requested`. reviewer의 write는 scorecard
-  comment, verdict label, non-blocking 발견의 `gh issue create` 세 가지가
-  전부다(그 외 write 금지).

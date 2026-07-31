@@ -13,7 +13,6 @@ backlog, product claim ledger 는 여기 두지 않는다. 미래 순서와 승�
 | GitHub milestone / issue execution buckets | [`docs/ROADMAP.md`](ROADMAP.md) + live GitHub milestones/issues |
 | 개발/검증 follow-up | [`docs/contributor-guide/testing-and-quality.md`](contributor-guide/testing-and-quality.md) |
 | phase specs | [`docs/phases/`](phases/) |
-| sprint evidence | [`docs/sprints/`](sprints/) |
 | 완료/비활성 planning 기록 | [`docs/archives/plans/`](archives/plans/) |
 | 과거 risk register | [`docs/archives/risks/`](archives/risks/) |
 

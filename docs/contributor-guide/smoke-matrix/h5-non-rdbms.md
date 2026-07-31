@@ -67,7 +67,7 @@ deployments must fail clearly rather than silently commit partial work.
 
 Current evidence:
 
-`scripts/e2e-smoke-ci.sh`, `e2e/smoke/mongodb.spec.ts`,
+`e2e/smoke/mongodb.spec.ts`,
 `src-tauri/tests/mongo_integration.rs`, `src-tauri/tests/cancel_mongo.rs`,
 `src/lib/mongo/mongoshAst.test.ts`, `src/lib/mongo/mongoshParser.test.ts`,
 `src/lib/mongo/mongoSafety.test.ts`,
@@ -110,7 +110,6 @@ Current evidence:
 
 - `e2e/fixtures/redis/kv/seed.json`
 - `e2e/smoke/redis.spec.ts`
-- `scripts/e2e-smoke-ci.sh`
 - `src-tauri/src/db/redis/mod.rs`
 - `src-tauri/src/db/redis/tests.rs`
 - `src-tauri/tests/redis_integration.rs`
@@ -129,7 +128,6 @@ Current evidence:
 
 - `e2e/smoke/redis.spec.ts`
 - `src/components/workspace/KvSidebar.test.tsx`
-- `src/components/workspace/KvSidebar.mutations.test.tsx`
 - `src/lib/tauri/kv.test.ts`
 
 Current gap / routing:
@@ -144,7 +142,7 @@ CLI/admin parity remain future promotion gates.
 
 Current evidence:
 
-`.github/workflows/e2e-smoke.yml`, `scripts/e2e-smoke-ci.sh`,
+`.github/workflows/e2e-smoke.yml`,
 `e2e/fixtures/redis/kv/seed.json`, `e2e/smoke/redis.spec.ts`,
 `src-tauri/src/commands/kv.rs`, `src-tauri/src/db/kv_types.rs`,
 `src-tauri/src/db/redis/mod.rs`, `src-tauri/src/db/redis/command.rs`,
@@ -156,8 +154,7 @@ Current evidence:
 `src/components/query/QueryTab/useQueryExecution.kvDispatch.test.tsx`,
 `src/components/query/QueryTab.dialect.test.tsx`,
 `src/components/query/QueryEditor.tsx`, `src/types/queryLanguage.docs.test.ts`,
-`src/components/workspace/KvSidebar.test.tsx`,
-`src/components/workspace/KvSidebar.mutations.test.tsx`, #540/#481/#482/#483
+`src/components/workspace/KvSidebar.test.tsx`, #540/#481/#482/#483
 
 Current gap / routing:
 
@@ -175,9 +172,8 @@ Current evidence:
 
 `src/types/connection.test.ts`, `src/types/dataSource.test.ts`,
 `src/types/adapterConformance.test.ts`,
-`src/components/connection/ConnectionDialog/ConnectionDialogBody.tsx`,
+`src/features/connection/components/ConnectionDialog/ConnectionDialogBody.tsx`,
 `src/components/workspace/KvSidebar.test.tsx`,
-`src/components/workspace/KvSidebar.mutations.test.tsx`,
 `src/components/query/QueryTab/useQueryExecution.kvDispatch.test.tsx`,
 `src/features/completion/redis/redisCommandCompletion.test.ts`,
 `src/components/query/RedisCommandEditor.test.tsx`,
@@ -185,8 +181,8 @@ Current evidence:
 `src-tauri/src/commands/connection.rs`, `src-tauri/src/db/redis/mod.rs`,
 `src-tauri/tests/backend_adapter_contract_profile.rs`,
 `src-tauri/tests/redis_integration.rs`, `e2e/fixtures/valkey/kv/seed.json`,
-`e2e/smoke/valkey.spec.ts`, `scripts/e2e-smoke-ci.sh`,
-`.github/workflows/e2e-smoke.yml`, `scripts/fixtures/dbms-seeds.test.ts`,
+`e2e/smoke/valkey.spec.ts`,
+`.github/workflows/e2e-smoke.yml`,
 `docs/product/README.md`, `docs/product/query-language-support.md`,
 `docs/product/known-limitations.md`, `docs/ROADMAP.md`, #488/#489/#490/#491/#890
 
@@ -211,7 +207,7 @@ against local Valkey.
 Current evidence:
 
 `e2e/fixtures/valkey/kv/seed.json`, `e2e/smoke/valkey.spec.ts`,
-`scripts/fixtures/dbms-seeds.test.ts`, `src-tauri/tests/redis_integration.rs`,
+`src-tauri/tests/redis_integration.rs`,
 this matrix, #486/#488/#489/#490/#491/#890
 
 Current gap / routing:
@@ -230,7 +226,7 @@ supplement local fixture/testcontainer/smoke evidence, not replace it.
 Current evidence:
 
 `e2e/fixtures/valkey.redis-compatibility.json`,
-`scripts/fixtures/dbms-seeds.test.ts`, `docs/product/query-language-support.md`,
+`docs/product/query-language-support.md`,
 `src/features/completion/redis/redisCommandCompletion.test.ts`,
 #487/#489/#490/#491
 
@@ -252,7 +248,7 @@ promotion.
 
 Current evidence:
 
-`.github/workflows/e2e-smoke.yml`, `scripts/e2e-smoke-ci.sh`,
+`.github/workflows/e2e-smoke.yml`,
 `e2e/fixtures/valkey/kv/seed.json`,
 `e2e/fixtures/valkey.redis-compatibility.json`, `e2e/smoke/valkey.spec.ts`,
 `src-tauri/tests/redis_integration.rs`,
@@ -334,7 +330,6 @@ Current evidence:
 - `e2e/fixtures/elasticsearch/search/seed.json`
 - `e2e/fixtures/opensearch/search/seed.json`
 - `.github/workflows/e2e-smoke.yml`
-- `scripts/e2e-smoke-ci.sh`
 - `e2e/fixtures/seed-smoke.ts`
 - `e2e/smoke/elasticsearch.spec.ts`
 - `e2e/smoke/opensearch.spec.ts`
@@ -353,7 +348,6 @@ Current evidence:
 - `src/components/search/SearchIndexDetailPanel.test.tsx`
 - `src/components/search/SearchResultView.test.tsx`
 - `src/components/query/QueryTab.search-route.test.tsx`
-- `scripts/fixtures/dbms-seeds.test.ts`
 
 Current gap / routing:
 
@@ -471,10 +465,10 @@ separated before parity closure.
 
 Current evidence:
 
-`docs/ROADMAP.md`, `.github/workflows/e2e-smoke.yml`, `scripts/e2e-smoke-ci.sh`,
+`docs/ROADMAP.md`, `.github/workflows/e2e-smoke.yml`,
 `e2e/smoke/opensearch.spec.ts`, `e2e/smoke/search-runtime-smoke.ts`,
 `e2e/fixtures/opensearch/search/seed.json`, `e2e/fixtures/seed-smoke.ts`,
-`scripts/fixtures/dbms-seeds.test.ts`, `src-tauri/src/db/search/tests.rs`,
+`src-tauri/src/db/search/tests.rs`,
 `src-tauri/src/db/search/tests/live_query.rs`,
 `src-tauri/src/db/search/tests/destructive.rs`,
 `src-tauri/src/db/search_dsl.rs`, `src-tauri/src/db/search_live_destructive.rs`,
@@ -521,7 +515,7 @@ remain separate future gates.
 
 Current evidence:
 
-`docs/ROADMAP.md`, `.github/workflows/e2e-smoke.yml`, `scripts/e2e-smoke-ci.sh`,
+`docs/ROADMAP.md`, `.github/workflows/e2e-smoke.yml`,
 `e2e/smoke/elasticsearch.spec.ts`, `e2e/smoke/opensearch.spec.ts`,
 `e2e/smoke/search-runtime-smoke.ts`,
 `e2e/fixtures/elasticsearch/search/seed.json`,

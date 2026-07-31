@@ -457,8 +457,8 @@ export function buildTreeNodesWithGhosts(
             if (rj === undefined) break;
             if (
               rj.path === parent ||
-              rj.path.startsWith(parent + ".") ||
-              rj.path.startsWith(parent + "[")
+              rj.path.startsWith(`${parent}.`) ||
+              rj.path.startsWith(`${parent}[`)
             ) {
               j += 1;
               continue;

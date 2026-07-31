@@ -19,11 +19,9 @@ import { createEmptyDataSourceCapabilities } from "./dataSource";
 
 const PROJECT_ROOT = process.cwd();
 const SRC_ROOT = resolve(PROJECT_ROOT, "src");
-// Scan `src/` AND `scripts/`: a capability flag can be consumed by a build/CI
-// script too (#1464 review found `scripts/e2e-pre-smoke-release-gate.ts` reads
-// the profile flags), so a `src`-only scan would miss those consumers and let a
-// still-referenced flag look dead.
-const SCAN_ROOTS = [SRC_ROOT, resolve(PROJECT_ROOT, "scripts")];
+// `src/` is the whole scan surface: no build or CI script reads a capability
+// flag. Add a root here if that ever changes.
+const SCAN_ROOTS = [SRC_ROOT];
 
 // Reflective/self-describe files read EVERY flag via `Object.entries` /
 // group spreads (adapterConformance's ADAPTER_CONFORMANCE_MATRIX,
@@ -36,13 +34,6 @@ const SCAN_ROOTS = [SRC_ROOT, resolve(PROJECT_ROOT, "scripts")];
 const EXCLUDED_FILES = new Set([
   resolve(SRC_ROOT, "types/adapterConformance.ts"),
   resolve(SRC_ROOT, "types/dataSourceVersionCapabilities.ts"),
-  // #1464 — the CI release gate asserts the *declared* capability shape of the
-  // mssql/oracle/search release slices (a self-describe smoke-lock on the
-  // profile constants), it does not branch runtime behavior on a flag. Counting
-  // it as a consumer would let a dead flag masquerade as live purely by being
-  // smoke-locked — same reflexive-read exclusion rationale as the two files
-  // above.
-  resolve(PROJECT_ROOT, "scripts/e2e-pre-smoke-release-gate.ts"),
 ]);
 
 // Groups whose flags are consumed by extracting the whole group object and

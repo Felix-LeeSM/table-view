@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import type { QueryTab } from "@stores/workspaceStore";
+// Aliased: the default export below is also named `QueryTab`, and the bare
+// import would shadow-redeclare it in module scope (biome noRedeclare).
+import type { QueryTab as QueryTabModel } from "@stores/workspaceStore";
 import {
   resolveActiveDb,
   useCurrentWorkspaceKey,
@@ -63,7 +65,7 @@ import { resolveSafeModeEnvironment } from "@hooks/useSafeModeGate";
  */
 
 interface QueryTabProps {
-  tab: QueryTab;
+  tab: QueryTabModel;
 }
 
 export default function QueryTab({ tab }: QueryTabProps) {

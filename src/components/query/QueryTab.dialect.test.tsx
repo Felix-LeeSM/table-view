@@ -234,8 +234,9 @@ describe("QueryTab — dialect", () => {
   });
 
   it("loads PostgreSQL extension inventory for PostgreSQL query tabs only", async () => {
-    const { listPostgresExtensions, listSqliteCapabilities } =
-      await import("@lib/tauri");
+    const { listPostgresExtensions, listSqliteCapabilities } = await import(
+      "@lib/tauri"
+    );
     useConnectionStore.setState({
       connections: [makeConn({ id: "conn1", dbType: "postgresql" })],
     });
@@ -261,8 +262,9 @@ describe("QueryTab — dialect", () => {
   });
 
   it("loads SQLite capability inventory for SQLite query tabs only", async () => {
-    const { listPostgresExtensions, listSqliteCapabilities } =
-      await import("@lib/tauri");
+    const { listPostgresExtensions, listSqliteCapabilities } = await import(
+      "@lib/tauri"
+    );
     useConnectionStore.setState({
       connections: [makeConn({ id: "conn1", dbType: "sqlite" })],
     });

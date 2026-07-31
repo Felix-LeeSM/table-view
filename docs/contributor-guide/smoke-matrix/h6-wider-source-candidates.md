@@ -46,7 +46,7 @@ Current evidence:
 `src/types/adapterConformance.test.ts`,
 `src/components/rdb/DataGrid.editing.test.tsx`,
 `src-tauri/tests/backend_adapter_contract_profile.rs`,
-`.github/workflows/e2e-smoke.yml`, `scripts/e2e-smoke-ci.sh`,
+`.github/workflows/e2e-smoke.yml`,
 `e2e/fixtures/seed.mssql.sql`, `e2e/smoke/mssql.spec.ts`, `docs/ROADMAP.md`,
 `docs/product/README.md`, `docs/product/query-language-support.md`,
 `docs/product/known-limitations.md`, #903/#907
@@ -67,15 +67,14 @@ unclaimed until separate evidence lands.
 
 Current evidence:
 
-`docker-compose.yml`, `scripts/fixtures/oracle.ts`,
-`scripts/fixtures/oracle.test.ts`, `src/types/dataSource.ts`,
+`docker-compose.yml`,
+`src/types/dataSource.ts`,
 `src/types/connection.ts`, `src/types/adapterConformance.test.ts`,
 `src/components/rdb/DataGrid.editing.test.tsx`,
 `src-tauri/tests/backend_adapter_contract_profile.rs`,
-`src-tauri/src/db/oracle/connection_only.rs`,
 `src/lib/sql/oracleSafety.test.ts`,
 `src/components/datagrid/sqlGenerator.dialects.test.ts`,
-`.github/workflows/e2e-smoke.yml`, `scripts/e2e-smoke-ci.sh`,
+`.github/workflows/e2e-smoke.yml`,
 `e2e/fixtures/seed.oracle.sql`, `e2e/smoke/oracle.spec.ts`, `docs/ROADMAP.md`,
 `docs/product/README.md`, `docs/product/query-language-support.md`,
 `docs/product/known-limitations.md`, #905/#906/#907

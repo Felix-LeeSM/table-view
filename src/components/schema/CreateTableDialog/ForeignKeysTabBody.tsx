@@ -47,7 +47,7 @@ import OrderedColumnPicker from "./OrderedColumnPicker";
  *     dashed-border "No <name> declared. Click '+ <button>' to add
  *     one." pattern from Sprint 228 `IndexesTabBody.tsx`.
  *
- * Source: Sprint 229 contract `docs/sprints/sprint-229/contract.md`
+ * Source: Sprint 229 contract
  * "Design Bar / Quality Bar".
  */
 

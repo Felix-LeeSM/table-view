@@ -6,7 +6,7 @@ surface: src/**/*.ts, src/**/*.tsx, src/**/*.css
 task: frontend, ui, react-impl
 trigger:
   signal: src frontend/UI 편집 시
-  layer: agent-prompt
+  layer: none — 자동 로드 없음, 직접 열어야 함
 ---
 
 # Frontend Guidance

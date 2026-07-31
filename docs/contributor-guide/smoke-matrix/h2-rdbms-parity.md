@@ -136,10 +136,8 @@ Current evidence:
 - `src/lib/sql/sqlCompletionWasm.test.ts`
 - `src/features/completion/sql/sqlHybridCompletionSource.test.ts`
 - `src-tauri/sql-parser-core/src/completion/completion_tests.rs`
-- `scripts/e2e-smoke-ci.sh`
 - `e2e/smoke/mysql.spec.ts`
 - `e2e/fixtures/mysql/query/seed.sql`
-- `scripts/fixtures/dbms-seeds.test.ts`
 
 Current gap / routing:
 
@@ -147,8 +145,8 @@ Current gap / routing:
 runtime/query/catalog/cancel coverage, source-equivalent edit/DDL coverage,
 parser/safety and unsupported scripting boundary coverage including broad CALL
 expression rejection, autocomplete vocabulary/context coverage, and fixture/live
-smoke routing. Fixture inventory remains contract evidence only unless the
-runtime smoke script wires the matching spec.
+smoke routing. Fixture inventory remains contract evidence only until a spec
+exercises it.
 
 ## MySQL smoke scenario inventory
 
@@ -189,7 +187,6 @@ Current evidence:
 
 - `e2e/smoke/mariadb.spec.ts`
 - `e2e/fixtures/mariadb/query/seed.sql`
-- `scripts/e2e-smoke-ci.sh`
 - `.github/workflows/e2e-smoke.yml`
 - `src/types/dataSource.test.ts`
 - `src-tauri/tests/backend_adapter_contract_profile.rs`
@@ -376,7 +373,6 @@ Current evidence:
 - `src/features/completion/sql/sqlCodeMirrorCompletionAdapter.test.ts`
 - `src/lib/sql/sqlCompletionWasm.test.ts`
 - `src-tauri/sql-parser-core/src/completion/completion_tests.rs`
-- `scripts/e2e-smoke-ci.sh`
 
 Current gap / routing:
 
@@ -384,15 +380,14 @@ Current gap / routing:
 parser/Safe Mode unsupported-boundary behavior, autocomplete vocabulary/context
 behavior, the focused MariaDB `RETURNING` server-resolved/no-returned-row
 boundary, and fixture/live smoke routing before parity closure. Fixture
-inventory remains contract evidence only unless the runtime smoke script wires
-the matching spec.
+inventory remains contract evidence only until a spec exercises it.
 
 ## SQLite file DBMS read/write boundary
 
 Current evidence:
 
 `e2e/smoke/sqlite.spec.ts`, `e2e/fixtures/sqlite/query/seed.sql`,
-`scripts/e2e-smoke-ci.sh`, `src-tauri/tests/sqlite_connection_command.rs`,
+`src-tauri/tests/sqlite_connection_command.rs`,
 `src-tauri/tests/sqlite_browse_query_adapter.rs`,
 `src-tauri/tests/workspace_sqlite_only.rs`, #456
 
@@ -432,8 +427,8 @@ Current evidence:
 `src-tauri/sql-parser-core/src/completion/completion_tests.rs`,
 `src/features/completion/sql/sqlCompletionContext.test.ts`,
 `src/features/completion/sql/sqlCompletionRequest.test.ts`,
-`src/lib/sql/sqlWasmArtifact.test.ts`, `scripts/fixtures/sqlite.test.ts`,
-`scripts/e2e-smoke-ci.sh`, `e2e/smoke/sqlite.spec.ts`, #534
+`src/lib/sql/sqlWasmArtifact.test.ts`,
+`e2e/smoke/sqlite.spec.ts`, #534
 
 Current gap / routing:
 
@@ -464,7 +459,7 @@ separation.
 Current evidence:
 
 `e2e/smoke/duckdb.spec.ts`, `e2e/fixtures/duckdb/query/seed.sql`,
-`scripts/e2e-smoke-ci.sh`, `src-tauri/tests/duckdb_browse_query_adapter.rs`,
+`src-tauri/tests/duckdb_browse_query_adapter.rs`,
 #463
 
 Current gap / routing:

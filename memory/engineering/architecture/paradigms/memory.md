@@ -16,8 +16,8 @@ Current SOT:
 - Architecture boundary: [data-source](../data-source/memory.md)
 - Future promotion order: [docs/ROADMAP.md](../../../../docs/ROADMAP.md)
 
-Historical source: 구 `docs/paradigm-ui-map.md` (2026-04-24) 압축본. Old Phase
-7/8 sprint labels, "P0/P2" labels, and frozen wording are historical context only.
+Old Phase 7/8 sprint labels, "P0/P2" labels, and frozen wording below are
+historical context only.
 
 ## Durable Heuristics
 
@@ -47,4 +47,4 @@ Historical source: 구 `docs/paradigm-ui-map.md` (2026-04-24) 압축본. Old Pha
 
 - [architecture](../memory.md)
 - [conventions](../../conventions/memory.md)
-- [product/ui-parity](../../../product/ui-parity/memory.md) — cross-paradigm UI parity merge gate (이 방 heuristic 의 게이트 버전; heuristic 은 머지를 막지 않지만 ui-parity rule 은 막는다)
+- [product/ui-parity](../../../product/ui-parity/memory.md) — cross-paradigm UI parity merge rule (이 방 heuristic 의 룰 버전; 자동 게이트는 없고 리뷰어가 머지를 보류한다)

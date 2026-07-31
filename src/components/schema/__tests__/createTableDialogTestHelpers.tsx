@@ -5,17 +5,17 @@ import { setupTauriMock } from "@/test-utils/tauriMock";
 import { configure, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
-// Sprint 385 (2026-05-17) — `waitFor` default timeout 1000ms 가 pre-push 의
-// `pnpm test --coverage` (instrumentation + 4000+ test 병렬 부하) 하에서 본
-// 파일의 AC-229 긴 DDL-chain 시나리오에 부족. 본 파일만 5000ms 로 늘려 CI
-// 부하 hidden margin 회복. 다른 test 파일 영향 0.
+// Sprint 385 (2026-05-17) — `waitFor` default timeout 1000ms 가 전체 스위트
+// coverage 실행 (`pnpm test --coverage`, instrumentation + 4000+ test 병렬
+// 부하) 하에서 본 파일의 AC-229 긴 DDL-chain 시나리오에 부족. 본 파일만
+// 5000ms 로 늘려 CI 부하 hidden margin 회복. 다른 test 파일 영향 0.
 configure({ asyncUtilTimeout: 5000 });
 
 // These AC-229 cases intentionally drive multi-step tab switching, debounced
 // preview, and chained IPC mocks. Full-suite coverage instrumentation can push
 // them past Vitest's global 10s test timeout even though the assertions pass in
 // isolated runs.
-export const PRE_PUSH_LOAD_TEST_TIMEOUT_MS = 30000;
+export const HEAVY_LOAD_TEST_TIMEOUT_MS = 30000;
 export const STALE_INDEX_PLACEHOLDER = ["Available in", "Sprint 228"].join(" ");
 export const STALE_CONSTRAINTS_PLACEHOLDER = [
   "Available in",
@@ -171,7 +171,6 @@ export function setProductionConnection() {
         username: "u",
         password: null,
         environment: "production",
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any,
     ],
   });
@@ -190,7 +189,6 @@ export function setDevConnection() {
         username: "u",
         password: null,
         environment: "development",
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any,
     ],
   });

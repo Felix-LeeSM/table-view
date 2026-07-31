@@ -519,12 +519,10 @@ describe("SchemaTree — highlight", () => {
     // sibling div 로 이동 — row 전체 (wrapper) textContent 검사.
     const tablesRow = screen.getByLabelText("Tables in public").parentElement!;
     const viewsRow = screen.getByLabelText("Views in public").parentElement!;
-    const functionsRow = screen.getByLabelText(
-      "Functions in public",
-    ).parentElement!;
-    const proceduresRow = screen.getByLabelText(
-      "Procedures in public",
-    ).parentElement!;
+    const functionsRow = screen.getByLabelText("Functions in public")
+      .parentElement!;
+    const proceduresRow = screen.getByLabelText("Procedures in public")
+      .parentElement!;
 
     expect(tablesRow.textContent).toContain("1");
     expect(viewsRow.textContent).toContain("2");

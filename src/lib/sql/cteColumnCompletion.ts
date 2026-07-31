@@ -637,7 +637,7 @@ function resolveBaseTableColumns(
   }
   const entries = Object.entries(schema as Record<string, unknown>);
   const lower = tableName.toLowerCase();
-  let match: unknown = undefined;
+  let match: unknown;
   for (const [key, value] of entries) {
     if (key === tableName || key.toLowerCase() === lower) {
       match = value;

@@ -69,11 +69,13 @@ export function useRowPending(
     pendingEdits.forEach((v, k) => ensure(rowOfKey(k)).edits.set(k, v));
     pendingEditErrors?.forEach((v, k) => {
       const e = ensure(rowOfKey(k));
-      (e.errors ??= new Map()).set(k, v);
+      e.errors ??= new Map();
+      e.errors.set(k, v);
     });
     pendingEditRowSnapshots?.forEach((v, k) => {
       const e = ensure(rowOfKey(k));
-      (e.snapshots ??= new Map()).set(k, v);
+      e.snapshots ??= new Map();
+      e.snapshots.set(k, v);
     });
 
     const prev = prevRef.current;

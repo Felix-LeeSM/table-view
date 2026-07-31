@@ -1,26 +1,25 @@
-# Homebrew Cask 자동 배포
+# Homebrew Cask 배포
 
 이 저장소의 릴리스는 기본적으로 `draft`로 생성됩니다. `release` 탭에서 `Publish`
-버튼을 눌러 공개(published) 릴리스로 바꾸면, 배포용 워크플로가 실행되어
-Homebrew cask tap 저장소의 `Casks/table-view.rb`를 갱신하고 PR을 만듭니다.
+버튼을 눌러 공개(published) 릴리스로 바꾼 뒤, Homebrew cask tap 저장소의
+`Casks/table-view.rb`를 손으로 갱신합니다. 이 저장소에는 cask를 갱신하는
+워크플로가 없습니다.
 
-## 필요 조건
+## tap 준비
 
-- 별도 Homebrew tap 저장소 준비: `Felix-LeeSM/homebrew-table-view`
-- 워크플로에서 `vars.HOMEBREW_TAP_REPO` 변수 지정: `Felix-LeeSM/homebrew-table-view`
-- `vars.HOMEBREW_TAP_BASE_BRANCH` 지정 (옵션, 기본값 `main`)
-- `secrets.HOMEBREW_TAP_TOKEN` 등록
-  - 권한: `public_repo` 또는 private tap 이면 `repo`
-  - 값: Homebrew tap에 push 가능한 PAT
+- 별도 Homebrew tap 저장소: `Felix-LeeSM/homebrew-table-view`
+- 기본 브랜치는 `main`
+- tap에 push 할 수 있는 계정 또는 PAT (private tap이면 `repo` 권한, 공개 tap이면
+  `public_repo`)
 
-## 동작
+## 갱신 절차
 
-릴리스 퍼블리시 시 `.github/workflows/homebrew-cask.yml`가 실행되어 다음을 처리합니다.
+릴리스를 퍼블리시한 뒤 직접 수행합니다.
 
-1. 현재 릴리스의 자산 목록 조회 (`.dmg`, `.sha256`)
+1. 현재 릴리스의 자산 목록 확인 (`.dmg`, `.sha256`)
 2. macOS arm64 `.dmg` 파일과 checksum 추출
-3. tap 저장소에서 `Casks/table-view.rb`를 갱신
-4. 변경이 있으면 tap 브랜치와 PR 생성
+3. tap 저장소에서 `Casks/table-view.rb`의 버전, URL, checksum 갱신
+4. tap 브랜치를 만들고 PR 올리기
 
 ## 지원하는 아키텍처
 
@@ -47,12 +46,14 @@ brew upgrade --cask table-view
 - GitHub Release를 `Publish`하기 전에는
   [`../testing-and-quality.md`](../testing-and-quality.md)의 Pre-Release
   Verification Gate가 같은 release SHA에서 통과해야 합니다. Draft bundle과
-  checksum은 packaging evidence일 뿐, CI/Runtime Happy Path나 live support claim
-  evidence를 대체하지 않습니다.
+  checksum은 packaging evidence일 뿐, CI 결과나 live support claim evidence를
+  대체하지 않습니다. `Runtime Happy Path` 는 변경 경로가 고른 spec 만 돌리므로,
+  release SHA 의 runtime 근거로는 전체를 돌리는 `main` push run 이나 야간 run
+  을 보거나 직접 수동 실행하십시오.
 - 릴리스 노트의 support claim은
   [`release-notes-support-matrix.md`](release-notes-support-matrix.md)를 기준으로
   작성하고, product docs와 known limitations 링크를 함께 둡니다.
 - 버전/tag와 artifact 검증은
   [`versioning-and-artifacts.md`](versioning-and-artifacts.md)를 기준으로 확인합니다.
-- `HOMEBREW_TAP_REPO`가 비어 있거나, tap 저장소 접근 권한이 없으면 워크플로가 실패합니다.
-- 릴리스 `.dmg`의 파일명이 정책이 바뀌면 script 탐색 패턴을 함께 수정해야 합니다.
+- tap 저장소 push 권한이 없으면 4번에서 막힙니다.
+- 릴리스 `.dmg` 파일명 정책이 바뀌면 cask의 URL 패턴도 함께 고쳐야 합니다.

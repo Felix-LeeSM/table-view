@@ -5,7 +5,7 @@ import { Client as PgClient } from "pg";
 import Redis from "ioredis";
 import sql from "mssql";
 import oracledb from "oracledb";
-import { readE2eSeedFixture } from "../../scripts/fixtures/e2e-seed-paths.js";
+import { readE2eSeedFixture } from "./seed-paths.js";
 
 const pgConfig = {
   host: process.env.E2E_PG_HOST ?? process.env.PGHOST ?? "localhost",

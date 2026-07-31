@@ -353,8 +353,6 @@ export function coerceToSqlLiteral(
       }
       return { kind: "error", message: `Expected UUID, got "${value}"` };
     }
-    case "textual":
-    case "unknown":
     default:
       // Legacy path: single-quote escape. ADR 0009 preserves empty-string
       // textual cells via the `value === ""` branch above.

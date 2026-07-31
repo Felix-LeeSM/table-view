@@ -9,12 +9,12 @@ updated: 2026-06-11
 Sprint 189–198 의 refactor / feature 커밋이 일관되게 따를 **코드 작성
 기준** (product axis). 4 카테고리 (B / D / C / A) 로 sub-room 분할.
 
-작업 sequencing 은 2026-05-02 Sprint 198 종료로 완료. 각 sprint 의
-contract / findings / handoff 는 `docs/sprints/sprint-189` ~ `sprint-198`
-가 source of truth. 본 룰셋은 **영속** — 198 이후 신규 refactor 에도 동일
-적용.
+작업 sequencing 은 2026-05-02 Sprint 198 종료로 완료. 본 룰셋은 **영속** —
+198 이후 신규 refactor 에도 동일 적용.
 
-이미 정해진 룰 (`react-conventions.md`, `testing.md`, `test-scenarios.md`,
+이미 정해진 룰 (`memory/engineering/conventions/react/memory.md`,
+`memory/engineering/conventions/testing-scenarios/memory.md`,
+`memory/engineering/conventions/e2e-scenarios/memory.md`,
 `memory/engineering/conventions/memory.md`) 은 그대로 상속. 본 방은 **리팩토링 sprint
 에서 추가로 강제하는 항목** 만 다룬다.
 
@@ -62,7 +62,7 @@ Phase 2 ESLint 룰 도입 시점: 현재 legacy debt 를 store action 또는
 
 ## 관련 방
 
-- [improve-codebase-architecture skill](../../../../.agents/skills/improve-codebase-architecture/SKILL.md) — 리팩토링/아키텍처 작업 진입점. deepening opportunity (shallow→deep 모듈) 발견 루프.
+- 이 방이 리팩토링 진입점이다. shallow→deep 모듈 발견 루프를 담은 별도 SOT 는 없다.
 - [conventions](../memory.md) — Rust/TS 기본 컨벤션 + 금지 사항.
 - [architecture](../../architecture/memory.md) — 모듈 구조 (lib / hooks /
   components / stores).

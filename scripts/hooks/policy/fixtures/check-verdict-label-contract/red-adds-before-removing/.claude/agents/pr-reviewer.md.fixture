@@ -1,2 +1,0 @@
-Verdict label 필수. green → `gh pr edit <N> --add-label review:approved` → 30초 이상 대기 → `gh pr edit <N> --remove-label review:changes-requested`.
-red 판정에서는 `--remove-label review:approved` 가 먼저라고 위에 적었지만, 절차는 `gh pr edit <N> --add-label review:changes-requested` → 30초 이상 대기 → `gh pr edit <N> --remove-label review:approved`.

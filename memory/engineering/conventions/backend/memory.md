@@ -6,7 +6,7 @@ surface: src-tauri/**/*.rs
 task: backend, rust-impl, tauri
 trigger:
   signal: src-tauri backend 편집 시
-  layer: agent-prompt
+  layer: none — 자동 로드 없음, 직접 열어야 함
 ---
 
 # Backend Guidance

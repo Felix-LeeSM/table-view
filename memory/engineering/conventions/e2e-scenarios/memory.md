@@ -9,8 +9,7 @@ task: e2e, testing, scenario
 # E2E 시나리오 설계 원칙
 
 `e2e/**/*.spec.ts`를 새로 작성·수정하기 전에 이 방을 읽는다.
-자동 로드: `.claude/rules/e2e-scenarios.md` 가 같은 paths를 매처로 가지고 있으므로
-e2e 파일을 만지는 모든 작업은 이 원칙을 컨텍스트로 받는다.
+자동 로드는 없다 — 직접 열어야 한다.
 
 기준점: **"끊김 없는 전환"** (`docs/product/README.md`). E2E는 그 기준이 깨졌는지를
 사용자 시점에서 검증하는 마지막 그물이다.
@@ -37,7 +36,8 @@ e2e 파일을 만지는 모든 작업은 이 원칙을 컨텍스트로 받는다
   3. Home ↔ Workspace 왕복 + tab persistence
   4. Schema 트리 → 데이터 그리드 → 셀 편집 commit
   5. 멀티 윈도우 라이프사이클 (workspace 종료/재오픈)
-- CUJ 실패 = 머지 차단. 위치/태깅 방식은 Step 2(`docs/sprints/`)에서 확정.
+- CUJ 회귀는 최우선 등급이다. `Runtime Happy Path` 가 변경 경로로 고른 spec 을
+  돌려 머지를 막는다 — 어떤 변경이 어떤 spec 을 고르는지는 `e2e/scope-map.mjs`.
 
 ### P4. DBMS × paradigm 매트릭스 (필요 최소)
 - PG는 풀 시나리오, Mongo는 paradigm 분기점에서만. MySQL/SQLite 추가 시점에
@@ -53,8 +53,7 @@ e2e 파일을 만지는 모든 작업은 이 원칙을 컨텍스트로 받는다
 - 스캐폴드만 두고 deferred면 (a) GitHub issue 링크를 spec 코멘트에 박거나
   (b) 한 sprint 안에 본문을 채우거나 (c) spec을 지운다.
 - "그대로 두기"는 금지. stale skip은 선택지 행세하는 노이즈다.
-- 새 `skip()`을 추가할 때마다 `docs/sprints/{현재}/handoff.md`에 사유와 만료
-  조건을 기록한다.
+- 새 `skip()`을 추가할 때마다 사유와 만료 조건을 코멘트로 남긴다.
 
 ### P7. tauri-driver 한계와 화해
 - tauri-driver로 못 잡는 것: OS 컨텍스트 메뉴, Radix Select portal, 마우스
@@ -81,7 +80,7 @@ e2e 파일을 만지는 모든 작업은 이 원칙을 컨텍스트로 받는다
    워크스페이스 라이프사이클
 4. **Flakiness 잡기** — step 라벨 헬퍼, 실패 시 스크린샷, helpers timeout 표준화
 
-각 단계는 별도 sprint로 진행한다 (`docs/sprints/sprint-N/`).
+각 단계는 따로 진행한다.
 
 ---
 
@@ -101,4 +100,3 @@ e2e 파일을 만지는 모든 작업은 이 원칙을 컨텍스트로 받는다
 - [conventions](../memory.md) — 코딩 컨벤션 (테스트 일반)
 - [docs/archives/decisions/0014-e2e-switchwindow-multi-window](../../../../docs/archives/decisions/0014-e2e-switchwindow-multi-window/memory.md) — 멀티 윈도우 e2e 패턴
 - [docs/ROADMAP.md](../../../../docs/ROADMAP.md) — 어떤 목표의 어떤 기능까지 e2e 대상인지
-- 자동 로드 stub: `.claude/rules/e2e-scenarios.md`

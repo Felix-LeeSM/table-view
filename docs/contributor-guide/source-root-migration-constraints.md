@@ -18,19 +18,17 @@ placement rules live in `memory/engineering/conventions/frontend/memory.md`,
 `memory/engineering/conventions/refactoring/memory.md`.
 
 This document is constraints-only. It does not move source roots, rename import
-paths, change hook routing, change ignore rules, or migrate frontend/backend
-domains.
+paths, change ignore rules, or migrate frontend/backend domains.
 
 The scoped surfaces are source roots, test roots, fixture roots, public API
 roots, compatibility exports, and committed generated inputs.
 
 ## Inputs
 
-- Refactor 01 final repository topology and lifecycle SOT:
-  [`repository-topology-inventory.md`](repository-topology-inventory.md).
+- Refactor 01 final repository topology and lifecycle SOT: [`repository-topology-inventory.md`](repository-topology-inventory.md).
 - #729 generated/cache/tmp/worktree fencing is a prerequisite when a later move
   relies on root-local cache/tmp/worktree paths staying outside source routing.
-  This document does not duplicate #729 ignore or hook-router rules.
+  This document does not duplicate #729 ignore rules.
 - Refactor 02 was the domain-first frontend migration. Its final SOT is the
   frontend/react/refactoring memory listed above; this document remains the
   Refactor 01 phase contract.
@@ -49,8 +47,8 @@ state the compatibility export plan before moving files.
 
 - No `src/**` moves.
 - No `src-tauri/**` moves.
-- No test-root, fixture-root, generated-artifact, hook, script, config, package,
-  Vite, ESLint, or `.gitignore` changes.
+- No test-root, fixture-root, generated-artifact, config, package, Vite, ESLint,
+  or `.gitignore` changes.
 - No domain-first frontend implementation.
 - No backend adapter module implementation.
 - No product support-claim change.
@@ -66,9 +64,9 @@ state the compatibility export plan before moving files.
 | Parser crates                     | `src-tauri/sql-parser-core/`, `src-tauri/mongosh-parser-core/`       | Forbidden                                                                           | Forbidden unless the parser crate itself is the issue scope                     | Parser crate moves require separate WASM build and generated-artifact evidence.                                                          |
 | Committed generated inputs        | `src/lib/*/wasm/`, `src-tauri/gen/`, `src-tauri/icons/`              | Forbidden as disposable cache; allowed only through generator-owner PRs             | Forbidden as disposable cache; allowed only through generator-owner PRs         | These are generated but committed inputs. They must stay source-visible and must not be hidden by cache/tmp/worktree policies.           |
 | Frontend tests                    | `src/**/*.test.ts`, `src/**/*.test.tsx`, `tests/`                    | Move with the frontend contract they prove                                          | Move only for shared contract updates caused by backend API changes             | Keep assertions on user-facing invariants and import compatibility, not old directory trivia.                                            |
-| Fixtures and fixture generators   | `fixtures/`, `tests/fixtures/`, `e2e/fixtures/`, `scripts/fixtures/` | Forbidden unless the issue explicitly owns fixture routing                          | Forbidden unless the issue explicitly owns fixture routing                      | Fixture data and generator code are committed inputs. Do not treat them as tmp output or support-claim promotion by themselves.          |
+| Fixtures and fixture generators   | `fixtures/`, `tests/fixtures/`, `e2e/fixtures/` | Forbidden unless the issue explicitly owns fixture routing                          | Forbidden unless the issue explicitly owns fixture routing                      | Fixture data and generator code are committed inputs. Do not treat them as tmp output or support-claim promotion by themselves.          |
 | E2E smoke source and report mount | `e2e/`                                                               | Smoke spec moves require smoke routing proof                                        | Smoke spec moves require smoke routing proof                                    | Preserve `e2e/wdio-report/.gitkeep`; report output remains local generated output.                                                       |
-| Tooling, hooks, CI, and docs      | `scripts/`, `.githooks/`, `.github/`, `docs/`, `memory/`             | Forbidden unless the migration issue names that policy surface                      | Forbidden unless the migration issue names that policy surface                  | Keep hook/path-router, workflow memory, and docs SOT changes out of source moves unless they are required and documented in the PR body. |
+| Tooling, CI, and docs             | `.github/`, `docs/`, `memory/`             | Forbidden unless the migration issue names that policy surface                      | Forbidden unless the migration issue names that policy surface                  | Keep CI workflow, workflow memory, and docs SOT changes out of source moves unless they are required and documented in the PR body. |
 
 ## Compatibility Export Constraints
 

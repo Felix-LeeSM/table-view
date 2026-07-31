@@ -30,7 +30,6 @@ Current evidence:
 - `src-tauri/tests/duckdb_browse_query_adapter.rs`
 - `e2e/fixtures/duckdb/query/seed.sql`
 - `e2e/smoke/duckdb.spec.ts`
-- `scripts/e2e-smoke-ci.sh`
 
 Current gap / routing:
 
@@ -144,8 +143,6 @@ Current evidence:
 `src/components/shared/QueryHistorySourceBadge.test.tsx`,
 `src/lib/tauri/fileAnalytics.test.ts`,
 `src/components/schema/SchemaTree.dbms-shape.test.tsx`,
-`scripts/fixtures/duckdb.test.ts`, `scripts/fixtures/connections.test.ts`,
-`scripts/fixtures/dbms-seeds.test.ts`, `scripts/e2e-smoke-ci.sh`,
 `e2e/fixtures/duckdb/query/seed.sql`,
 `e2e/fixtures/duckdb/file-analytics/sales.csv`, `e2e/smoke/duckdb.spec.ts`,
 `e2e/smoke/duckdb-file-analytics.spec.ts`, #536/#875/#877/#879

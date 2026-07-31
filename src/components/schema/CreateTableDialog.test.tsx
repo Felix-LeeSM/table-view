@@ -53,7 +53,7 @@ import {
   getColumnsPanel,
   getKeysPanel,
   mockCreateTable,
-  PRE_PUSH_LOAD_TEST_TIMEOUT_MS,
+  HEAVY_LOAD_TEST_TIMEOUT_MS,
   renderDialog,
   setDevConnection,
   setProductionConnection,
@@ -220,7 +220,7 @@ describe("CreateTableDialog (Sprint 226 carry-over → Sprint 227 tab migration)
         ).toBe(true);
       });
     },
-    PRE_PUSH_LOAD_TEST_TIMEOUT_MS,
+    HEAVY_LOAD_TEST_TIMEOUT_MS,
   );
 
   it(
@@ -266,7 +266,7 @@ describe("CreateTableDialog (Sprint 226 carry-over → Sprint 227 tab migration)
         ),
       ).toBe(false);
     },
-    PRE_PUSH_LOAD_TEST_TIMEOUT_MS,
+    HEAVY_LOAD_TEST_TIMEOUT_MS,
   );
 
   it("opens confirm dialog (does not commit) when Safe Mode is strict and statement is dangerous", async () => {

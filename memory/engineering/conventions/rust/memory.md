@@ -6,12 +6,12 @@ surface: src-tauri/**/*.rs
 task: rust-impl, refactor
 trigger:
   signal: src-tauri/**/*.rs 편집 시
-  layer: hook (.claude/rules/rust-conventions.md paths frontmatter)
+  layer: none — 자동 로드 없음, 직접 열어야 함
 ---
 
 # Rust 컨벤션
 
-`.claude/rules/rust-conventions.md` wrapper 가 가리키는 source. 모든 brain 공통.
+모든 brain 공통 source. 자동 배달은 없으므로 직접 열어야 한다.
 
 ## 포맷팅 / 린트
 
@@ -63,7 +63,7 @@ fn get_user(id: u64) -> Result<User, AppError> {
 - 모든 공개 함수에 테스트 필수
 - 커버리지: Rust local target 은 sprint/contract 에 명시한다. Parser/adapter/command
   처럼 위험한 surface 는 기존 high-coverage 선례를 참고한다. Frontend/Rust shared
-  coverage floor 는 `docs/quality/coverage-ratchet.md` 와 hook/CI config 가 소유한다.
+  coverage floor 는 `.github/workflows/ci.yml` 의 `--fail-under-*` 리터럴이 소유한다.
 
 ## 보안
 

@@ -81,17 +81,22 @@ export default function SearchIndexDetailPanel({
 }: SearchIndexDetailPanelProps) {
   const { t } = useTranslation("search");
   const [active, setActive] = useState<DetailTab>("overview");
-  const [catalog, setCatalog] =
-    useState<AsyncSlot<SearchCatalogSummary>>(idle());
+  const [catalog, setCatalog] = useState<AsyncSlot<SearchCatalogSummary>>(
+    idle(),
+  );
   const [mapping, setMapping] = useState<AsyncSlot<SearchIndexMapping>>(idle());
-  const [settings, setSettings] =
-    useState<AsyncSlot<SearchIndexSettings>>(idle());
-  const [templates, setTemplates] =
-    useState<AsyncSlot<SearchIndexTemplateInfo[]>>(idle());
-  const [samples, setSamples] =
-    useState<AsyncSlot<SearchResultEnvelope>>(idle());
-  const [stats, setStats] =
-    useState<AsyncSlot<SearchFieldStatsEnvelope>>(idle());
+  const [settings, setSettings] = useState<AsyncSlot<SearchIndexSettings>>(
+    idle(),
+  );
+  const [templates, setTemplates] = useState<
+    AsyncSlot<SearchIndexTemplateInfo[]>
+  >(idle());
+  const [samples, setSamples] = useState<AsyncSlot<SearchResultEnvelope>>(
+    idle(),
+  );
+  const [stats, setStats] = useState<AsyncSlot<SearchFieldStatsEnvelope>>(
+    idle(),
+  );
   const [deletePreviewOpen, setDeletePreviewOpen] = useState(false);
   const detailRequestGeneration = useRef(0);
   const tablistRef = useRef<HTMLDivElement>(null);

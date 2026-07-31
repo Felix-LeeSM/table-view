@@ -1,4 +1,10 @@
-import js from "@eslint/js";
+// Policy split (wave 4, #2035 결정 6): Biome owns the generic rules
+// (formatter + recommended lint preset) and this config owns only the
+// repo-specific guards that no off-the-shelf engine ships — the four
+// `tv-local` rules, the no-restricted-syntax/imports blocks, react-hooks,
+// `@typescript-eslint/no-deprecated`, no-console and max-lines. Do not
+// re-add `js.configs.recommended` or `tseslint.configs.recommended`: a rule
+// living in both engines gets reported twice and drifts out of sync.
 import reactHooks from "eslint-plugin-react-hooks";
 import globals from "globals";
 import tseslint from "typescript-eslint";
@@ -355,16 +361,18 @@ export default tseslint.config(
       // sub-agent worktree 디렉토리. main repo 의 lint 가 안의 partial
       // 변경을 collect 하지 않도록 차단.
       ".claude/**",
-      ".codex/**",
       "worktrees/**",
-      // wasm-pack generated JS glue + d.ts. The allowlist is mirrored by
-      // scripts/check-eslint-static-policy.ts so generated ignores do not hide
-      // source max-lines debt.
+      // wasm-pack generated JS glue + d.ts. Nothing asserts that these ignores
+      // do not hide source max-lines debt — keep the list narrow.
       ...GENERATED_WASM_ESLINT_IGNORES,
     ],
   },
   {
-    extends: [js.configs.recommended, ...tseslint.configs.recommended],
+    // `configs.base` is the parser + plugin registration only — zero rules.
+    // The blocks below still need it: `@typescript-eslint/no-deprecated` is a
+    // plugin rule, and `no-restricted-imports`'s `allowTypeImports` option is
+    // parsed from TS syntax. Dropping it fails with "could not find plugin".
+    extends: [tseslint.configs.base],
     files: ["**/*.{ts,tsx}"],
     languageOptions: {
       ecmaVersion: 2021,
@@ -426,8 +434,7 @@ export default tseslint.config(
       "src/lib/perf/bootInstrumentation.ts",
       // Test files — `console.*` 은 mock spy 대상 또는 stderr 검증.
       "**/*.test.{ts,tsx}",
-      // CLI / 빌드 / e2e / wdio — CLI 출력은 console 이 정상.
-      "scripts/**/*.{ts,tsx}",
+      // e2e / wdio — 러너 출력은 console 이 정상.
       "e2e/**/*.{ts,tsx}",
       "wdio*.ts",
     ],
@@ -595,21 +602,20 @@ export default tseslint.config(
       ],
     },
   },
-  // #1403 (2026-07-16) — `@deprecated` JSDoc 심볼 사용을 pre-push + CI 에서
-  // 자동 차단. deprecated API 는 에디터 취소선으로만 보이고 tsc/CI 어디서도
+  // #1403 (2026-07-16) — `@deprecated` JSDoc 심볼 사용을 CI lint 에서 자동
+  // 차단. deprecated API 는 에디터 취소선으로만 보이고 tsc/CI 어디서도
   // 안 잡히다가, upstream 이 심볼을 실제 제거하는 순간 한꺼번에 tsc 에러로
   // 터진다. type-aware 룰이므로 projectService(typed lint) 를 켠다. scope 는
-  // tsconfig.json 의 include: ["src"] 에 맞춰 src 로 한정 — e2e/scripts/wdio 등
+  // tsconfig.json 의 include: ["src"] 에 맞춰 src 로 한정 — e2e/wdio 등
   // tsconfig 밖 파일에 projectService 를 걸면 "not found by the project
   // service" 로 실패한다.
   {
     files: ["src/**/*.{ts,tsx}"],
-    // scripts/check-eslint-static-policy.ts validates the feature-import rule
-    // with a synthetic `lintText` on the non-existent path
-    // `src/features/demo/Feature.tsx`. projectService parses against tsconfig,
-    // which `include: ["src"]` would match, so a file that is not on disk
-    // becomes a fatal parse error. Exclude that scratch path from typed lint so
-    // the self-test keeps using the syntactic parser.
+    // src/lib/i18n/hardcoded-string-guard.test.ts lints the non-existent path
+    // `src/features/demo/HardcodedStringFixture.tsx` with `lintText`.
+    // projectService turns a path that is not on disk but matches tsconfig's
+    // `include: ["src"]` into a fatal parse error, so that scratch path must
+    // stay on the syntactic parser. Removing this ignore turns that test red.
     ignores: ["src/features/demo/**"],
     languageOptions: {
       parserOptions: {

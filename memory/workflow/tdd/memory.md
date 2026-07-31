@@ -1,28 +1,27 @@
 ---
 title: TDD Evidence
 type: workflow-rule
-updated: 2026-07-03
-task: tdd, delivery, pre-push, sprint
+updated: 2026-07-31
+task: tdd, delivery, sprint
+keywords: RED, GREEN, evidence, failing test, commit subject, 권고
 trigger:
-  signal: code-profile sprint, RED commit, TDD-cycle hook
-  layer: agent-prompt + pre-push
+  signal: code-profile sprint, RED commit
+  layer: none — 자동 로드 없음, 직접 열어야 함
 ---
 
 # TDD Evidence
 
-본 문서는 작업 방식을 마이크로매니징하지 않는다. 역할은 `review-profile: code`
-sprint 의 delivery gate 가 요구하는 evidence 를 작업 초반에 보이게 하는 것.
+본 문서는 작업 방식을 마이크로매니징하지 않는다. 역할은 RED evidence 를 작업
+초반에 보이게 하는 것.
 
-## 적용 조건
+## 강제하지 않는다 — 권고다 (2026-07-30 사용자 결정, #1987)
 
-- branch 이름이 `sprint-N/...`
-- `docs/sprints/sprint-N/contract.md` frontmatter 가 `review-profile: code`
-- pre-push `scripts/hooks/policy/check-tdd-cycle.sh` 가 `merge-base..HEAD` 에 RED commit
-  subject 를 요구
+**실패하는 테스트를 먼저 커밋하는 것은 품질 수단이지 통과 조건이 아니다.**
+먼저 커밋하지 않아도, 먼저 작성하지 않아도 문제가 되지 않는다.
 
-## 요구 evidence
+**RED 를 강제하는 장치는 없다.** 이 방을 읽은 agent 가 스스로 판단한다.
 
-code-profile sprint 는 push 전에 RED commit 이 있어야 한다.
+## 권장 evidence
 
 허용 subject 패턴:
 
@@ -37,10 +36,7 @@ GREEN 으로 통과시킨다.
 ## 작업자 재량
 
 - 어떤 테스트 레벨(unit/integration/component)을 쓸지는 작업자가 정한다.
-- sprint contract 는 작업 방식이 아니라 scope/profile 만 선언한다.
-- harness sprint 루프는 TDD 를 강제 적용하지 않는다. delivery gate evidence 를
-  사전에 확인할 뿐이다. (sprint-build 는 2026-07-02 폐기 — harness 로 표준화,
-  둘 다 plan→implement→evaluate 루프로 목적 중복.)
+- 티켓은 작업 방식이 아니라 scope 와 수용 기준만 선언한다.
 
 ## Push 전 확인
 
@@ -49,18 +45,15 @@ base="$(git merge-base HEAD origin/main 2>/dev/null || git merge-base HEAD main)
 git log "$base..HEAD" --format="%s"
 ```
 
-위 범위에 RED subject 가 없으면 push 전에 commit history 를 고친다. hook 실패
-후 `SKIP_TDD_CYCLE=1` 같은 skip env 는 사용자 명시 승인 없이는 금지.
+위 범위에 RED subject 가 없다고 해서 push 를 미루지는 않는다 — 권고이지 조건이
+아니다.
 
 ## 예외
 
-- `review-profile` 이 `docs`, `infra`, `security` 등 code 가 아니면 적용하지 않는다.
-- 긴급 hotfix 에서 skip 이 필요하면 사용자가 명시해야 한다. 이후 follow-up 에서
-  검증 근거를 남긴다.
+- 긴급 hotfix 에서 RED 를 건너뛰면 이후 follow-up 에서 검증 근거를 남긴다.
 
 ## 관련
 
 - [delivery](../delivery/memory.md) — push/PR/merge pipeline
-- [review](../review/memory.md) — profile 별 review matrix
-- [git-policy](../git-policy/memory.md) — hook 회피 금지
-- `scripts/hooks/policy/check-tdd-cycle.sh` — pre-push enforcement
+- [review](../review/memory.md) — PR review 행동 계약
+- [git-policy](../git-policy/memory.md) — 검증 우회 금지

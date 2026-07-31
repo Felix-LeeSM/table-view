@@ -141,10 +141,8 @@ export interface ConnectionConfig {
  * - `""`       → explicitly clear the stored password
  * - non-empty  → set/replace the stored password
  */
-export interface ConnectionDraft extends Omit<
-  ConnectionConfig,
-  "hasPassword" | "hasWalletPassword"
-> {
+export interface ConnectionDraft
+  extends Omit<ConnectionConfig, "hasPassword" | "hasWalletPassword"> {
   password: string | null;
   /** Oracle wallet password (#1065). Same three-way save semantics as
    * `password`: `null` keep / `""` clear / non-empty set. Optional so the

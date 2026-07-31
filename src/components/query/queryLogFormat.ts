@@ -6,7 +6,7 @@
 /** Truncate SQL to `maxLen`, appending an ellipsis when it overflows. */
 export function truncateSql(sql: string, maxLen: number): string {
   if (sql.length <= maxLen) return sql;
-  return sql.slice(0, maxLen) + "...";
+  return `${sql.slice(0, maxLen)}...`;
 }
 
 /** Human-readable "time since" label for a millisecond epoch timestamp. */

@@ -445,9 +445,9 @@ describe("App global shortcuts", () => {
     // ADR 0027 — tab lands in workspace ("c1", <activeDb>) which the
     // test never seeds; flatten across all `c1` slots so the assertion
     // doesn't depend on the exact `db` autofill.
-    const tab = getAllTabsForConnection("c1").find(
-      (t) => t.type === "table",
-    ) as TableTab | undefined;
+    const tab = getAllTabsForConnection("c1").find((t) => t.type === "table") as
+      | TableTab
+      | undefined;
     expect(tab).toBeDefined();
     expect(tab!.objectKind).toBe("table");
     expect(tab!.subView).toBe("records");
@@ -468,9 +468,9 @@ describe("App global shortcuts", () => {
         }),
       );
     });
-    const tab = getAllTabsForConnection("c1").find(
-      (t) => t.type === "table",
-    ) as TableTab | undefined;
+    const tab = getAllTabsForConnection("c1").find((t) => t.type === "table") as
+      | TableTab
+      | undefined;
     expect(tab).toBeDefined();
     expect(tab!.objectKind).toBe("view");
     useWorkspaceStore.setState({ workspaces: {} });
@@ -489,9 +489,9 @@ describe("App global shortcuts", () => {
         }),
       );
     });
-    const tab = getAllTabsForConnection("c1").find(
-      (t) => t.type === "query",
-    ) as QueryTab | undefined;
+    const tab = getAllTabsForConnection("c1").find((t) => t.type === "query") as
+      | QueryTab
+      | undefined;
     expect(tab).toBeDefined();
     expect(tab!.sql).toBe("BEGIN RETURN 1; END");
     useWorkspaceStore.setState({ workspaces: {} });
