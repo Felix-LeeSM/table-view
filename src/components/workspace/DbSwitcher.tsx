@@ -299,7 +299,7 @@ export default function DbSwitcher() {
   // `switchDatabase` capability → `enabled` is false) with a tab-local
   // tooltip, instead of the former `return null` that violated the
   // ui-parity gate (same action = same entry point, unsupported shown with
-  // a reason). See `docs/explorations/mongo-db-scope-patterns.html`.
+  // a reason). See `docs/archives/decisions/0030-mongo-db-scope-tab-local/memory.md`.
 
   // Read-only fallback — fixed-scope profiles, no connection, or disconnected
   // tab. KV profiles do not belong here when connected; Redis/Valkey expose the
