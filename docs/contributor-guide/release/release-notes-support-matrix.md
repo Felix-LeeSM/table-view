@@ -30,9 +30,11 @@ Known limits to state in release notes:
 - Completion is editor assistance. It does not widen runtime execution support.
 - Fixture inventory is not live support evidence unless a smoke spec or focused
   runtime test exercises it.
-- Desktop runtime smoke runs on a Linux host by hand. No CI job runs it, and the
-  `Runtime Happy Path` context reports without executing a spec. macOS and
-  Windows desktop runtime smoke remain deferred.
+- Desktop runtime smoke runs on Linux. In CI the `Runtime Happy Path` context
+  runs the spec subset the PR's changed paths select, and the full suite on push
+  to main, on the nightly schedule, and under the `e2e:full` label; anything
+  outside that runs on a Linux host by hand. macOS and Windows desktop runtime
+  smoke remain deferred.
 - Search live admin execution, Redis/Valkey full CLI/admin parity, MongoDB
   arbitrary JavaScript shell behavior, MSSQL full T-SQL/SQLCMD/admin support,
   and Oracle SID/TNS/wallet/TLS/DDL/raw-admin/full PL/SQL support remain out of
@@ -63,11 +65,17 @@ Known limits to state in release notes:
 
 ## Fixture And Smoke Coverage
 
-No workflow runs these specs.
 [`.github/workflows/e2e-smoke.yml`](../../../.github/workflows/e2e-smoke.yml)
-reports the `Runtime Happy Path` context without executing one, so a green PR is
-no evidence for any row below. Run the suite by hand on the release SHA — the
-sequence is in README 「E2E Smoke」.
+runs these specs under the `Runtime Happy Path` context, but a PR only runs the
+subset its changed paths select, so a green PR is evidence for the rows those
+specs cover and for no other row. The full suite covers every row below, with
+one exception: `postgres-multi-table-edit.spec.ts` matches the PostgreSQL row's
+glob but is outside the suite (`UNMAPPED_SPECS` in `e2e/scope-map.mjs` — 27
+spec files on disk, 26 in the suite), so JOIN-result editing is hand-run
+evidence only. The full suite runs on push to main, on the nightly schedule,
+and on a PR carrying `e2e:full` once a push follows the label. For a release
+SHA, either take the main-push run or run the suite by hand — the sequence is
+in README 「E2E Smoke」.
 
 | Source | Runtime smoke | Fixture or seed evidence | Release-note wording |
 |---|---|---|---|
@@ -91,8 +99,10 @@ Before publishing release notes:
 - Link the notes back to
   [`docs/product/README.md`](../../product/README.md) and
   [`docs/product/known-limitations.md`](../../product/known-limitations.md).
-- Mention smoke coverage only for the specs listed above, and only when they
-  were run by hand on the release SHA.
+- Mention smoke coverage only for the specs listed above, and only when a run
+  on the release SHA actually covered them — the `main` push run and the nightly
+  cover every spec, a PR run covers only what its changed paths selected, and a
+  hand run covers what you invoked.
 - Mention changed fixture/smoke coverage only when the fixture is wired to a
   runtime or focused test path.
 - Keep deferred support visible instead of turning limitations into omissions.

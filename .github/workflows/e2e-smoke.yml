@@ -1,34 +1,370 @@
 name: E2E Smoke
 
-# There is no runtime E2E smoke. This workflow is a reporting shell: it exists
-# because `Runtime Happy Path` is a required context in the `pr_to_main` ruleset
-# (live GitHub state), and a name that stops reporting stays "expected" and
-# blocks every merge. THIS JOB VERIFIES NOTHING.
+# `Runtime Happy Path` is a required context in the `pr_to_main` ruleset (live
+# GitHub state). Three things follow, and breaking any of them freezes every
+# merge on the repository:
 #
-# `Detect Change Scope`, the ruleset's other name-only context, is reported by
-# ci.yml — one workflow per required name, or the ruleset cannot tell which run
-# satisfied it.
+#   - The job `name:` is the context name. Renaming it leaves the required
+#     context "expected" forever.
+#   - No workflow-level `paths:` filter. A filtered-out PR produces no run at
+#     all, and a required context with no run also stays "expected" forever.
+#     The job always starts and works out its own scope inside, from
+#     `e2e/scope-map.mjs`.
+#   - A PR with nothing e2e-relevant in it still runs this job. It selects 0
+#     specs, says so, and exits 0 — it is never skipped. GitHub counts a
+#     skipped required check as a success, which is a hole rather than a
+#     signal.
 #
-# The e2e sources (`e2e/`, `wdio.smoke.conf.ts`) still work by hand — see
-# README 「E2E Smoke」. Wiring them back means writing a runner, then registering
-# the contexts.
+# Scope: a PR runs only the specs its changed paths map to; push to main,
+# `workflow_dispatch`, the nightly `schedule`, and any PR labelled `e2e:full`
+# run the whole suite.
 
 on:
   push:
     branches: [main]
+  # No `labeled` type on purpose: every label add/remove would re-run the
+  # suite and collide with review-gate.yml. `e2e:full` is read from the
+  # payload of the events below, so apply the label first and then push (or
+  # re-run this workflow) to widen the scope.
+  # The collision also runs the other way: review-gate.yml DOES listen to
+  # `labeled`, so applying `e2e:full` before approval leaves a failed
+  # review-gate run on that SHA. It heals when the approval label re-runs it.
   pull_request:
+    types: [opened, reopened, synchronize]
   workflow_dispatch:
+  schedule:
+    # 18:00 UTC / 03:00 KST. The nightly full suite is the safety net for
+    # everything the scoped PR runs left out.
+    - cron: "0 18 * * *"
 
+# Cancel on PR (a newer commit makes the old run stale), never on main push:
+# let the post-merge run finish so a merge wave still lands the rust-cache main
+# save. GitHub keeps one running + one pending, so N merges converge to
+# first-run + last-run.
 concurrency:
   group: e2e-smoke-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  TAURI_DRIVER_VERSION: "2.0.6"
 
 jobs:
   e2e-smoke-required:
     name: Runtime Happy Path
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # Selected specs run one after another inside this single job, because the
+    # required context has to be one always-present job and a matrix would
+    # split the name. A scoped PR run is 1-8 specs; a full run is 26 and can
+    # take hours. If full-scope PRs become the bottleneck, the upgrade is a
+    # `fromJSON` matrix job plus an aggregation job that keeps this name.
+    timeout-minutes: 330
 
     steps:
-      - name: Report runtime smoke status
-        run: echo "runtime e2e smoke removed; no runtime coverage behind this context"
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          # Full history: the scope map diffs this PR against its base branch.
+          fetch-depth: 0
+
+      # First step, and node-only, so a broken mapping fails in seconds instead
+      # of after a 20-minute build.
+      - name: Self-test the scope map
+        run: node e2e/scope-map.mjs --self-test
+
+      - name: Select specs for this change
+        id: select
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+          FULL_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'e2e:full') }}
+        run: |
+          set -euo pipefail
+          changed="$RUNNER_TEMP/changed.txt"
+          : > "$changed"
+          # A plain string, not an array: `"${arr[@]}"` on an empty array is an
+          # unbound-variable error under `set -u` in bash < 4.4. The only two
+          # values are "--all" and "", so word splitting is what is wanted.
+          mode="--all"
+          reason="full suite (${EVENT_NAME})"
+
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            if [ "$FULL_LABEL" = "true" ]; then
+              reason="full suite (e2e:full label)"
+            else
+              # `fetch-depth: 0` above already brings every branch, so this
+              # fetch is a no-op belt: without a base ref the run falls all the
+              # way back to the full suite, which is a very expensive way to be
+              # safe.
+              git rev-parse --verify --quiet "origin/${BASE_REF}^{commit}" >/dev/null ||
+                git fetch --no-tags origin \
+                  "+refs/heads/${BASE_REF}:refs/remotes/origin/${BASE_REF}" || true
+
+              if git rev-parse --verify --quiet "origin/${BASE_REF}^{commit}" >/dev/null; then
+                # Three-dot against the base branch tip, not against
+                # `pull_request.base.sha`: with the merge-ref checkout the
+                # latter also drags in whatever landed on the base branch after
+                # this PR last synced.
+                git diff --name-only "origin/${BASE_REF}...HEAD" > "$changed"
+                mode=""
+                reason="changed paths vs origin/${BASE_REF}"
+              else
+                # Fail-closed: an unresolvable base means run everything rather
+                # than guess a narrower scope.
+                reason="full suite (cannot resolve origin/${BASE_REF})"
+              fi
+            fi
+          fi
+
+          node e2e/scope-map.mjs $mode < "$changed" > "$RUNNER_TEMP/specs.txt"
+          node e2e/scope-map.mjs $mode --services < "$changed" > "$RUNNER_TEMP/services.txt"
+          count="$(grep -c . "$RUNNER_TEMP/specs.txt" || true)"
+          services="$(tr '\n' ' ' < "$RUNNER_TEMP/services.txt")"
+
+          echo "count=${count}" >> "$GITHUB_OUTPUT"
+          echo "scope: ${reason}"
+          echo "::group::changed paths"
+          cat "$changed"
+          echo "::endgroup::"
+
+          if [ "$count" -eq 0 ]; then
+            echo "selected 0 specs — no e2e-relevant changes"
+          else
+            echo "selected ${count} specs:"
+            sed 's/^/  /' "$RUNNER_TEMP/specs.txt"
+            echo "services: ${services:-none}"
+          fi
+
+          {
+            echo "### Runtime Happy Path"
+            echo ""
+            echo "- scope: ${reason}"
+            echo "- selected: ${count} spec(s)"
+            echo "- services: ${services:-none}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Install Tauri Linux dependencies
+        if: steps.select.outputs.count != '0'
+        # Retry wrapper: transient apt mirror failures (e.g.
+        # packages.microsoft.com 403) otherwise fail the whole setup.
+        run: |
+          install_deps() {
+            sudo apt-get update && sudo apt-get install -y \
+              libwebkit2gtk-4.1-dev \
+              libgtk-3-dev \
+              libayatana-appindicator3-dev \
+              librsvg2-dev \
+              webkit2gtk-driver \
+              xvfb
+          }
+          for i in 1 2 3; do
+            install_deps && exit 0
+            echo "apt install attempt $i failed; retrying in $((i * 10))s" >&2
+            sleep "$((i * 10))"
+          done
+          echo "apt install failed after 3 attempts" >&2
+          exit 1
+
+      - name: Setup pnpm
+        if: steps.select.outputs.count != '0'
+        uses: pnpm/action-setup@v6
+        with:
+          version: 10.20.0
+
+      - name: Setup Node.js
+        if: steps.select.outputs.count != '0'
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22.14.0
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install Node dependencies
+        if: steps.select.outputs.count != '0'
+        run: pnpm install --frozen-lockfile
+
+      - name: Setup Rust
+        if: steps.select.outputs.count != '0'
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.91.0
+
+      - name: Cache Rust dependencies and build output
+        if: steps.select.outputs.count != '0'
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+          cache-workspace-crates: false
+          cache-bin: false
+          shared-key: e2e-smoke-linux
+          # Only main writes the shared cache; PR runs read it. The default
+          # save-on-success-only behaviour keeps a partial target dir out.
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Cache tauri-driver binary
+        if: steps.select.outputs.count != '0'
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/tauri-driver
+          # The version is in the key, so a bump misses the cache and installs.
+          key: tauri-driver-${{ runner.os }}-v${{ env.TAURI_DRIVER_VERSION }}
+
+      - name: Install tauri-driver
+        if: steps.select.outputs.count != '0'
+        run: |
+          tauri-driver --help >/dev/null 2>&1 \
+            || cargo install tauri-driver --version "${TAURI_DRIVER_VERSION}" --locked
+          tauri-driver --help >/dev/null
+
+      - name: Build E2E smoke binary
+        if: steps.select.outputs.count != '0'
+        run: pnpm tauri build --debug --no-bundle --config src-tauri/tauri.e2e.conf.json
+
+      - name: Start the database services the selected specs need
+        if: steps.select.outputs.count != '0'
+        shell: bash
+        run: |
+          set -euo pipefail
+          services="$(tr '\n' ' ' < "$RUNNER_TEMP/services.txt")"
+          echo "services: ${services:-none}"
+
+          wait_for() { # container, probe command...
+            local container="$1"; shift
+            for _ in $(seq 1 90); do
+              if "$@" >/dev/null 2>&1; then
+                echo "${container} is ready"
+                return 0
+              fi
+              sleep 5
+            done
+            docker logs "$container" || true
+            echo "${container} did not become ready" >&2
+            return 1
+          }
+
+          # docker-compose.yml owns the ports and credentials for these, and
+          # they are the same defaults e2e/fixtures/seed-smoke.ts and
+          # e2e/smoke/_helpers.ts fall back to, so nothing is duplicated here.
+          # `--wait` blocks on the compose healthchecks.
+          # A space-separated string rather than an array, for the same reason
+          # as in the select step: empty arrays are unbound under `set -u` in
+          # bash < 4.4. Service names never contain spaces.
+          compose=""
+          for svc in $services; do
+            case "$svc" in
+              # compose calls the MongoDB service `mongo`.
+              mongodb) compose="${compose} mongo" ;;
+              postgres | mysql | mariadb | mssql | redis) compose="${compose} ${svc}" ;;
+            esac
+          done
+          if [ -n "$compose" ]; then
+            docker compose up -d --wait $compose
+          fi
+
+          # Four services compose cannot supply here: valkey, elasticsearch and
+          # opensearch have no compose service at all, and compose's oracle
+          # uses the plain `gvenzl/oracle-xe:21` image whose first boot outlives
+          # its own healthcheck budget. The recipes below are the ones the
+          # pre-6cced3ab workflow ran green.
+          case " $services " in
+            *" valkey "*)
+              docker run -d --name tv-valkey --publish 16379:6379 \
+                valkey/valkey:8.0-alpine
+              wait_for tv-valkey docker exec tv-valkey valkey-cli ping
+              ;;
+          esac
+
+          case " $services " in
+            *" elasticsearch "*)
+              docker run -d --name tv-elasticsearch --publish 19200:9200 \
+                --env "discovery.type=single-node" \
+                --env "ELASTIC_PASSWORD=TableViewSearch1!" \
+                --env "xpack.security.enabled=true" \
+                --env "xpack.security.http.ssl.enabled=false" \
+                --env "xpack.security.transport.ssl.enabled=false" \
+                --env "ES_JAVA_OPTS=-Xms512m -Xmx512m" \
+                docker.elastic.co/elasticsearch/elasticsearch:8.12.2
+              wait_for tv-elasticsearch curl -fsS -u "elastic:TableViewSearch1!" \
+                "http://localhost:19200/_cluster/health?wait_for_status=yellow&timeout=1s"
+              ;;
+          esac
+
+          case " $services " in
+            *" opensearch "*)
+              docker run -d --name tv-opensearch --publish 29200:9200 \
+                --env "discovery.type=single-node" \
+                --env "OPENSEARCH_INITIAL_ADMIN_PASSWORD=TableViewSearch1!" \
+                --env "plugins.security.ssl.http.enabled=false" \
+                --env "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m" \
+                --ulimit memlock=-1:-1 \
+                --ulimit nofile=65536:65536 \
+                opensearchproject/opensearch:2.13.0
+              wait_for tv-opensearch curl -fsS -u "admin:TableViewSearch1!" \
+                "http://localhost:29200/_cluster/health?wait_for_status=yellow&timeout=1s"
+              ;;
+          esac
+
+          case " $services " in
+            *" oracle "*)
+              docker run -d --name tv-oracle --publish 1521:1521 \
+                --env "ORACLE_PASSWORD=OracleTest123!" \
+                --env "APP_USER=testuser" \
+                --env "APP_USER_PASSWORD=testpass" \
+                gvenzl/oracle-xe:21-slim-faststart
+              wait_for tv-oracle docker exec tv-oracle healthcheck.sh
+              ;;
+          esac
+
+      - name: Run selected smoke specs
+        if: steps.select.outputs.count != '0'
+        shell: bash
+        env:
+          # wdio.smoke.conf.ts documents that nothing exports these and that a
+          # headless Linux run needs them: under xvfb the WebKitGTK compositor
+          # hard-crashes without software rendering (#1261 / #1200 / #1293).
+          WEBKIT_DISABLE_DMABUF_RENDERER: "1"
+          WEBKIT_DISABLE_COMPOSITING_MODE: "1"
+          LIBGL_ALWAYS_SOFTWARE: "1"
+          # Hosts, ports, users and databases already default to the
+          # docker-compose values inside e2e/fixtures/seed-smoke.ts and
+          # e2e/smoke/_helpers.ts. Only the two search services have no usable
+          # default credential.
+          ELASTICSEARCH_USER: elastic
+          ELASTICSEARCH_PASSWORD: TableViewSearch1!
+          OPENSEARCH_USER: admin
+          OPENSEARCH_PASSWORD: TableViewSearch1!
+        # No `set -e`: one failing spec must not hide the verdict of the ones
+        # after it. Failures are collected and re-raised at the end.
+        run: |
+          set -uo pipefail
+          status=0
+          while read -r spec; do
+            [ -n "$spec" ] || continue
+            key="$(basename "$spec" .spec.ts)"
+            data_dir="$RUNNER_TEMP/table-view-smoke/$key"
+            mkdir -p "$data_dir"
+            echo "::group::${key}"
+            if E2E_SPEC_KEY="$key" E2E_SPEC="$spec" pnpm exec tsx e2e/fixtures/seed-smoke.ts &&
+              TABLE_VIEW_TEST_DATA_DIR="$data_dir" xvfb-run -a \
+                pnpm exec wdio run wdio.smoke.conf.ts --spec "$spec"; then
+              echo "::endgroup::"
+              echo "PASS ${key}"
+            else
+              echo "::endgroup::"
+              echo "FAIL ${key}"
+              status=1
+            fi
+          done < "$RUNNER_TEMP/specs.txt"
+          exit "$status"
+
+      - name: Upload E2E artifacts
+        if: failure() && steps.select.outputs.count != '0'
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-smoke-artifacts
+          path: e2e/wdio-report
+          if-no-files-found: ignore

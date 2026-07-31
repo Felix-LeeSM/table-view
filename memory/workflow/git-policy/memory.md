@@ -29,8 +29,9 @@ trigger:
   CI 에서 처음 드러난다. `prettier` 는 CI 에도 없다.
 - 서명은 `commit.gpgsign` 설정이 건다.
 - [ADR 0044](../../../docs/archives/decisions/0044-e2e-smoke-remote-required/memory.md)
-  는 runtime e2e smoke 를 GitHub Actions blocking check 로 승격했지만, 그 워크플로는
-  이름만 보고하는 stub 이다 — e2e 는 어디서도 안 돈다.
+  의 runtime e2e smoke blocking check 는 2026-07-31 (#2038) 부터 다시 실검사다.
+  `Runtime Happy Path` 가 변경 경로에서 spec 부분집합을 골라 돌린다 — 로컬에서
+  안 돌려도 CI 가 잡지만, 잡히는 범위는 네 변경이 고른 spec 뿐이다.
 
 ## 실패 시 — 회피 X, 근본 fix
 
