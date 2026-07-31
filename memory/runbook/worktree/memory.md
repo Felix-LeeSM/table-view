@@ -1,9 +1,9 @@
 ---
 title: 작업 사본 격리 — clone
 type: runbook
-updated: 2026-07-31
+updated: 2026-08-01
 task: clone, worktree, multi-agent, parallel, spawn-verify, agent-hard-rule
-keywords: index.lock, FETCH_HEAD, git clone --local, 사본, 격리, cross-worktree, getcwd, 회수, dirty, 브랜치 점유, non-fast-forward, push reject
+keywords: index.lock, FETCH_HEAD, git clone --local, 사본, 격리, cross-worktree, getcwd, 회수, dirty, 브랜치 점유, non-fast-forward, push reject, stalled, timeout, respawn, npx, pnpm exec, cargo clean, stale path
 ---
 
 # 작업 사본 격리 — clone
@@ -47,8 +47,12 @@ cd "$DEST" && pnpm install --frozen-lockfile --prefer-offline
   rg·Tailwind source scan·lint 글롭이 사본을 훑는 함정이 생기고 `.gitignore`
   로는 도구 전부를 못 막는다.
 - `src-tauri/target/`·`node_modules/` 복사 금지 — 복사본 stale path 가 tauri
-  빌드를 깨뜨린 전력. 사본은 cold 로 시작한다.
+  빌드를 깨뜨린 전력. 사본은 cold 로 시작한다. 이미 warm-copy 잔재로 tauri 검사가
+  stale path 를 물면 `cargo clean` 이 근본 fix 다.
 - hook 설정(core.hooksPath 등)도 사본별 독립 — 한 사본의 변경이 남을 못 건드린다.
+- 사본 안에서 도구는 **버전을 고정해** 실행한다 — `pnpm exec <도구>` 또는
+  `npx <pkg>@<버전>`. bare `npx biome` 가 동명의 무관 패키지를 끌어와 false green
+  을 낸 실측이 있다 (2026-07-31).
 
 ## 점유 — 같은 브랜치에 사본 둘 금지
 
@@ -61,6 +65,8 @@ worktree 가 공짜로 주던 "같은 브랜치 이중 체크아웃 방지"가 c
 - spawn 전 확인 둘: 이슈에 살아 있는 점유 코멘트가 없는가,
   `git ls-remote origin <branch>` 가 stale ref 를 내지 않는가
   (stale 이면 [git-policy](../../workflow/git-policy/memory.md) 의 재spawn 절차).
+- **stalled/timeout 알림은 사망 확정이 아니다.** 확인 없이 respawn 하면 같은
+  사본에 노드가 둘 붙는다 — 점유 코멘트와 살아 있는 프로세스를 먼저 확인한다.
 
 ## 첫 turn 검증 (MANDATORY)
 
