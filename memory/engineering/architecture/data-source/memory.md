@@ -38,7 +38,7 @@ interface DataSourceProfile {
 runtime support claim 이 아니다. Connection dialog/runtime 노출은
 `capabilities.connection.test` 로 gate 한다.
 
-TS/Rust strict profile parity 는 `tests/fixtures/data-source-profile-parity.report.json` 을 SOT 로 `src/types/dataSourceProfileParity.test.ts` 가 CI 에서 검증한다. Rust 쪽 `src-tauri/tests/data_source_profile_parity.rs` 는 CI `--test` 목록 밖이라 `cargo test --manifest-path src-tauri/Cargo.toml --test data_source_profile_parity` 로 손으로 돌린다.
+TS/Rust strict profile parity 는 `tests/fixtures/data-source-profile-parity.report.json` 을 SOT 로 `src/types/dataSourceProfileParity.test.ts` 가 CI 에서 검증한다. Rust 쪽 `src-tauri/tests/data_source_profile_parity.rs` 는 CI `--test` 목록 밖이라 어디서도 실행되지 않는다 — parity 는 TS 한쪽만 잡힌다.
 TS `capabilities`/Rust `adapter_contract` 는 strict parity field 가 아닌 runtime/support posture 이며 소유는 `src/types/adapterConformance.ts` + Rust profile contract tests + `docs/contributor-guide/testing-and-quality.md` 다.
 Rust `adapter_contract.capabilities` 선언의 SOT 는 `make_adapter` 가 wiring 하는 production adapter 다 (dormant full adapter 아님):
 SQLite 는 wired `SqliteAdapter.create_table` 구현 → `RelationalSchemaMutation` 선언, Oracle 은 wired `OracleRuntimeAdapter` DDL Unsupported → 미선언 (full `OracleAdapter` 승격 #1072).

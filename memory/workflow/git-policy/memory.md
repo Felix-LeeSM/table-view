@@ -24,42 +24,12 @@ trigger:
 ### Why
 
 - `cargo fmt` / `cargo clippy -D warnings` / `eslint` / 테스트는 **CI 에서만
-  돈다.** 로컬에서 깨진 코드를 push 하면 CI 에서 처음 드러나므로 아래 세트를
-  스스로 돌리고 push 한다. `prettier` 는 CI 에도 없다 — 손으로 `pnpm format`.
+  돈다.** 로컬 검증을 대신 걸어 주는 장치가 없으므로 깨진 코드를 push 하면
+  CI 에서 처음 드러난다. `prettier` 는 CI 에도 없다.
 - 서명은 `commit.gpgsign` 설정이 건다.
 - [ADR 0044](../../../docs/archives/decisions/0044-e2e-smoke-remote-required/memory.md)
   는 runtime e2e smoke 를 GitHub Actions blocking check 로 승격했지만, 그 워크플로는
   이름만 보고하는 stub 이다 — e2e 는 어디서도 안 돈다.
-
-## push 전에 스스로 돌려라
-
-CI 가 돌릴 검사의 최소 세트. commit/push 전에 바꾼 영역만:
-
-루트에 `Cargo.toml` 이 없다 — cargo 명령은 `--manifest-path` 없이 돌면
-`could not find Cargo.toml` 로 죽는다.
-
-```bash
-# 프론트엔드를 건드렸으면
-pnpm lint && pnpm test && pnpm build
-
-# Rust 를 건드렸으면 — Rust Static Analysis + Rust Unit And Storage Tests
-cargo fmt --check --manifest-path src-tauri/Cargo.toml
-cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings
-cargo test --manifest-path src-tauri/Cargo.toml --lib --test storage_integration
-cargo test --manifest-path src-tauri/sql-parser-core/Cargo.toml --lib
-cargo test --manifest-path src-tauri/Cargo.toml --test parse_sql_backend
-```
-
-위 세트로도 못 덮는 두 가지:
-
-- **커버리지 임계값.** `pnpm test` 는 `vitest run` 이라 `--coverage` 가 없다.
-  `vite.config.ts` 의 statements 85 / lines 87 / functions 87 / branches 78 은
-  `Frontend Checks` 가 3개 shard 를 병합해 `--coverage` 로 돌 때만 걸린다.
-  로컬 green 이 그 임계값 통과를 뜻하지 않는다.
-- **testcontainer 통합 11종.** `Integration Tests (Docker)` 가 도는 13개 중
-  `storage_integration` 은 위 세트와 macOS job 에도 있고 `fixture_loading` 은
-  `include_str!` + serde 뿐이라 컨테이너가 필요 없다. 나머지 11개가 그 job 에서만
-  돈다.
 
 ## 실패 시 — 회피 X, 근본 fix
 
@@ -91,8 +61,8 @@ merge 자율 실행. 사용자에게 "이제 커밋해 주세요" 안내 금지 
 lock).
 
 - 자율 범위 / 예외 / spawn 패턴: [delivery](../delivery/memory.md)
-- 본 정책은 자율 실행의 조건 — 위 최소 세트가 로컬에서 green 이어야 push 한다.
-  아무도 막지 않으므로 agent 가 스스로 지킨다.
+- 본 정책은 자율 실행의 조건 — 우회 금지와 hard block 은 아무도 막지 않으므로
+  agent 가 스스로 지킨다.
 
 ## 외부 race 가짜 신호 (sprint-402)
 

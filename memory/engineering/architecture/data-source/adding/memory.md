@@ -43,8 +43,8 @@ Feature enablement 은 profile/capability contract 에서 온다. `DatabaseType`
 
 Backend adapter capability (`BackendAdapterCapability`) 를 flip 하면 4곳을 함께
 갱신한다. 1-3 누락은 `cargo test --lib` 의 contract assertion 과
-`src/types/dataSourceProfileParity.test.ts` 가 CI 에서 잡는다. 4 는 잡아 주는
-게이트가 없으니 손으로 확인한다:
+`src/types/dataSourceProfileParity.test.ts` 가 CI 에서 잡는다. 4 를 잡는 것은
+없다:
 
 1. Rust adapter contract — `src-tauri/src/models/data_source.rs` 의 `adapter_contract`
    capability set (+ `src-tauri/src/db/adapters/tests.rs` contract assertion).
