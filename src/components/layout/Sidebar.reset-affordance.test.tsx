@@ -144,8 +144,8 @@ describe("Sidebar reset affordances (Q21 #3-a + #7)", () => {
     const btn = screen.getByRole("button", { name: /collapse all/i });
     fireEvent.click(btn);
 
-    const connWs = useWorkspaceStore.getState().workspaces["c1"];
-    const ws = connWs?.["db1"];
+    const connWs = useWorkspaceStore.getState().workspaces.c1;
+    const ws = connWs?.db1;
     expect(ws?.sidebar.expanded).toEqual([]);
   });
 

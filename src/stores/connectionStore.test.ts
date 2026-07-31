@@ -269,7 +269,7 @@ describe("connectionStore", () => {
 
   it("sets connected status on connect", async () => {
     await useConnectionStore.getState().connectToDatabase("c1");
-    expect(useConnectionStore.getState().activeStatuses["c1"]).toEqual({
+    expect(useConnectionStore.getState().activeStatuses.c1).toEqual({
       type: "connected",
     });
   });
@@ -286,7 +286,7 @@ describe("connectionStore", () => {
 
     // Start connecting — should immediately set "connecting"
     const connectCall = useConnectionStore.getState().connectToDatabase("c1");
-    expect(useConnectionStore.getState().activeStatuses["c1"]).toEqual({
+    expect(useConnectionStore.getState().activeStatuses.c1).toEqual({
       type: "connecting",
     });
 
@@ -295,7 +295,7 @@ describe("connectionStore", () => {
     await connectCall;
 
     // Should now be "connected"
-    expect(useConnectionStore.getState().activeStatuses["c1"]).toEqual({
+    expect(useConnectionStore.getState().activeStatuses.c1).toEqual({
       type: "connected",
     });
   });
@@ -308,7 +308,7 @@ describe("connectionStore", () => {
 
     await useConnectionStore.getState().connectToDatabase("c1");
 
-    expect(useConnectionStore.getState().activeStatuses["c1"]).toEqual({
+    expect(useConnectionStore.getState().activeStatuses.c1).toEqual({
       type: "error",
       message: "Error: Connection refused",
     });
@@ -326,7 +326,7 @@ describe("connectionStore", () => {
 
     await useConnectionStore.getState().connectToDatabase("c1");
 
-    expect(useConnectionStore.getState().activeStatuses["c1"]).toEqual({
+    expect(useConnectionStore.getState().activeStatuses.c1).toEqual({
       type: "error",
       message:
         "Connection error: could not connect to postgres://app:***@db:5432/x password=***",
@@ -360,7 +360,7 @@ describe("connectionStore", () => {
       },
     });
 
-    expect(useConnectionStore.getState().activeStatuses["c1"]).toEqual({
+    expect(useConnectionStore.getState().activeStatuses.c1).toEqual({
       type: "error",
       message: "Reconnection failed: mongodb://app:***@mongo:27017",
     });
@@ -373,7 +373,7 @@ describe("connectionStore", () => {
     const pendingKey = seedWorkspaceAndPendingEdit("c1");
 
     await useConnectionStore.getState().disconnectFromDatabase("c1");
-    expect(useConnectionStore.getState().activeStatuses["c1"]).toEqual({
+    expect(useConnectionStore.getState().activeStatuses.c1).toEqual({
       type: "disconnected",
     });
     expect(useWorkspaceStore.getState().workspaces.c1).toBeUndefined();
@@ -458,7 +458,7 @@ describe("connectionStore", () => {
     expect(disconnectFromDatabase).toHaveBeenCalledWith("c1");
     expect(deleteConnection).toHaveBeenCalledWith("c1");
     expect(useConnectionStore.getState().connections).toHaveLength(0);
-    expect(useConnectionStore.getState().activeStatuses["c1"]).toBeUndefined();
+    expect(useConnectionStore.getState().activeStatuses.c1).toBeUndefined();
   });
 
   it("does not disconnect when removing a non-connected connection", async () => {
@@ -643,9 +643,7 @@ describe("connectionStore", () => {
 
       expect(useConnectionStore.getState().focusedConnId).toBeNull();
       expect(useConnectionStore.getState().activeStatuses).toEqual({});
-      expect(
-        useConnectionStore.getState().activeStatuses["c1"],
-      ).toBeUndefined();
+      expect(useConnectionStore.getState().activeStatuses.c1).toBeUndefined();
     });
 
     it("falls back to another connected connection when the focused one is removed", async () => {
@@ -709,7 +707,7 @@ describe("connectionStore", () => {
 
     handler({ payload: { id: "c1", status: { type: "connected" } } });
 
-    expect(useConnectionStore.getState().activeStatuses["c1"]).toEqual({
+    expect(useConnectionStore.getState().activeStatuses.c1).toEqual({
       type: "connected",
     });
     expect(mockPersistActiveStatuses).toHaveBeenLastCalledWith({
@@ -747,7 +745,7 @@ describe("connectionStore", () => {
     }) => void;
     handler({ payload: { id: "c1", status: { type: "disconnected" } } });
 
-    expect(useConnectionStore.getState().activeStatuses["c1"]).toEqual({
+    expect(useConnectionStore.getState().activeStatuses.c1).toEqual({
       type: "disconnected",
     });
     expect(useWorkspaceStore.getState().workspaces.c1).toBeUndefined();
@@ -759,7 +757,7 @@ describe("connectionStore", () => {
     useConnectionStore.setState({ activeStatuses: {} });
     useConnectionStore.getState().hydrateFromSession();
 
-    expect(useConnectionStore.getState().activeStatuses["c1"]).toEqual({
+    expect(useConnectionStore.getState().activeStatuses.c1).toEqual({
       type: "disconnected",
     });
   });
@@ -786,7 +784,7 @@ describe("connectionStore", () => {
       activeStatuses: {},
     });
     await useConnectionStore.getState().connectToDatabase("c1");
-    const status = useConnectionStore.getState().activeStatuses["c1"];
+    const status = useConnectionStore.getState().activeStatuses.c1;
     expect(status?.type).toBe("connected");
     if (status?.type === "connected") {
       expect(status.activeDb).toBe("analytics");
@@ -813,7 +811,7 @@ describe("connectionStore", () => {
       activeStatuses: {},
     });
     await useConnectionStore.getState().connectToDatabase("c1");
-    expect(useConnectionStore.getState().activeStatuses["c1"]).toEqual({
+    expect(useConnectionStore.getState().activeStatuses.c1).toEqual({
       type: "connected",
     });
   });
@@ -846,7 +844,7 @@ describe("connectionStore", () => {
       activeStatuses: {},
     });
     await useConnectionStore.getState().connectToDatabase("m1");
-    const status = useConnectionStore.getState().activeStatuses["m1"];
+    const status = useConnectionStore.getState().activeStatuses.m1;
     expect(status?.type).toBe("connected");
     if (status?.type === "connected") {
       expect(status.activeDb).toBe("analytics");
@@ -877,7 +875,7 @@ describe("connectionStore", () => {
       activeStatuses: {},
     });
     await useConnectionStore.getState().connectToDatabase("m1");
-    const status = useConnectionStore.getState().activeStatuses["m1"];
+    const status = useConnectionStore.getState().activeStatuses.m1;
     expect(status?.type).toBe("connected");
     if (status?.type === "connected") {
       expect(status.activeDb).toBeUndefined();
@@ -889,7 +887,7 @@ describe("connectionStore", () => {
       activeStatuses: { c1: { type: "connected", activeDb: "postgres" } },
     });
     useConnectionStore.getState().setActiveDb("c1", "warehouse");
-    const status = useConnectionStore.getState().activeStatuses["c1"];
+    const status = useConnectionStore.getState().activeStatuses.c1;
     expect(status?.type).toBe("connected");
     if (status?.type === "connected") {
       expect(status.activeDb).toBe("warehouse");
@@ -901,7 +899,7 @@ describe("connectionStore", () => {
       activeStatuses: { c1: { type: "disconnected" } },
     });
     useConnectionStore.getState().setActiveDb("c1", "warehouse");
-    expect(useConnectionStore.getState().activeStatuses["c1"]).toEqual({
+    expect(useConnectionStore.getState().activeStatuses.c1).toEqual({
       type: "disconnected",
     });
   });
@@ -911,7 +909,7 @@ describe("connectionStore", () => {
       activeStatuses: { c1: { type: "error", message: "boom" } },
     });
     useConnectionStore.getState().setActiveDb("c1", "warehouse");
-    expect(useConnectionStore.getState().activeStatuses["c1"]).toEqual({
+    expect(useConnectionStore.getState().activeStatuses.c1).toEqual({
       type: "error",
       message: "boom",
     });
@@ -955,7 +953,7 @@ describe("connectionStore", () => {
     });
     try {
       await useConnectionStore.getState().connectToDatabase("m1");
-      const status = useConnectionStore.getState().activeStatuses["m1"];
+      const status = useConnectionStore.getState().activeStatuses.m1;
       expect(status?.type).toBe("connected");
       if (status?.type === "connected") {
         expect(status.activeDb).toBe("test");
@@ -1132,8 +1130,8 @@ describe("connectionStore", () => {
       await connectToDatabase("c2");
 
       const statuses = useConnectionStore.getState().activeStatuses;
-      expect(statuses["c1"]?.type).toBe("connected");
-      expect(statuses["c2"]?.type).toBe("connected");
+      expect(statuses.c1?.type).toBe("connected");
+      expect(statuses.c2?.type).toBe("connected");
 
       // persistActiveStatuses should have been called after each connect.
       expect(mockPersistActiveStatuses).toHaveBeenCalledTimes(2);
@@ -1141,8 +1139,8 @@ describe("connectionStore", () => {
       const lastCall = mockPersistActiveStatuses.mock.calls[
         mockPersistActiveStatuses.mock.calls.length - 1
       ]![0] as Record<string, unknown>;
-      expect(lastCall["c1"]).toBeDefined();
-      expect(lastCall["c2"]).toBeDefined();
+      expect(lastCall.c1).toBeDefined();
+      expect(lastCall.c2).toBeDefined();
     });
 
     it("disconnecting c1 after connecting both leaves only c2 in session", async () => {
@@ -1155,15 +1153,15 @@ describe("connectionStore", () => {
       await disconnectFromDatabase("c1");
 
       const statuses = useConnectionStore.getState().activeStatuses;
-      expect(statuses["c1"]?.type).toBe("disconnected");
-      expect(statuses["c2"]?.type).toBe("connected");
+      expect(statuses.c1?.type).toBe("disconnected");
+      expect(statuses.c2?.type).toBe("connected");
 
       // Final session persist must reflect c1 disconnected, c2 connected.
       const lastCall = mockPersistActiveStatuses.mock.calls[
         mockPersistActiveStatuses.mock.calls.length - 1
       ]![0] as Record<string, unknown>;
-      expect((lastCall["c1"] as { type: string }).type).toBe("disconnected");
-      expect((lastCall["c2"] as { type: string }).type).toBe("connected");
+      expect((lastCall.c1 as { type: string }).type).toBe("disconnected");
+      expect((lastCall.c2 as { type: string }).type).toBe("connected");
     });
 
     it("full switch cycle: focus c1 → connect c1 → focus c2 → connect c2", async () => {
@@ -1182,10 +1180,10 @@ describe("connectionStore", () => {
       // Store must reflect c2 as focused.
       expect(useConnectionStore.getState().focusedConnId).toBe("c2");
       // Both connections must be in connected state.
-      expect(useConnectionStore.getState().activeStatuses["c1"]?.type).toBe(
+      expect(useConnectionStore.getState().activeStatuses.c1?.type).toBe(
         "connected",
       );
-      expect(useConnectionStore.getState().activeStatuses["c2"]?.type).toBe(
+      expect(useConnectionStore.getState().activeStatuses.c2?.type).toBe(
         "connected",
       );
       // Session must have been updated with c2 as focused.
@@ -1195,7 +1193,7 @@ describe("connectionStore", () => {
       const lastStatuses = mockPersistActiveStatuses.mock.calls[
         mockPersistActiveStatuses.mock.calls.length - 1
       ]![0] as Record<string, unknown>;
-      expect((lastStatuses["c2"] as { type: string }).type).toBe("connected");
+      expect((lastStatuses.c2 as { type: string }).type).toBe("connected");
     });
 
     it("hydrateFromSession restores focusedConnId and activeStatuses", () => {
@@ -1212,11 +1210,11 @@ describe("connectionStore", () => {
       useConnectionStore.getState().hydrateFromSession();
 
       expect(useConnectionStore.getState().focusedConnId).toBe("c2");
-      expect(useConnectionStore.getState().activeStatuses["c1"]).toEqual({
+      expect(useConnectionStore.getState().activeStatuses.c1).toEqual({
         type: "connected",
         activeDb: "prod",
       });
-      expect(useConnectionStore.getState().activeStatuses["c2"]).toEqual({
+      expect(useConnectionStore.getState().activeStatuses.c2).toEqual({
         type: "connected",
         activeDb: "dev",
       });
@@ -1281,7 +1279,7 @@ describe("connectionStore", () => {
       useConnectionStore.getState().hydrateFromSession();
 
       expect(useConnectionStore.getState().focusedConnId).toBe("previous");
-      expect(useConnectionStore.getState().activeStatuses["c1"]).toEqual({
+      expect(useConnectionStore.getState().activeStatuses.c1).toEqual({
         type: "connected",
       });
     });
@@ -1296,7 +1294,7 @@ describe("connectionStore", () => {
       await useConnectionStore.getState().connectToDatabase("c1");
 
       // Error state must be set.
-      expect(useConnectionStore.getState().activeStatuses["c1"]?.type).toBe(
+      expect(useConnectionStore.getState().activeStatuses.c1?.type).toBe(
         "error",
       );
       // persistActiveStatuses must NOT have been called (error path skips it).

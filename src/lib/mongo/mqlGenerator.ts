@@ -173,12 +173,12 @@ function tryFormatBsonLiteral(value: unknown): string | null {
   const obj = value as Record<string, unknown>;
   switch (type) {
     case "objectId": {
-      const oid = obj["$oid"];
+      const oid = obj.$oid;
       if (typeof oid !== "string") return null;
       return `ObjectId("${oid}")`;
     }
     case "date": {
-      const d = obj["$date"];
+      const d = obj.$date;
       if (typeof d === "string") return `ISODate("${d}")`;
       // canonical EJSON v2 numberLong shape — preserve roundtrip readability.
       if (
@@ -186,7 +186,7 @@ function tryFormatBsonLiteral(value: unknown): string | null {
         d !== null &&
         "$numberLong" in (d as Record<string, unknown>)
       ) {
-        const ms = (d as Record<string, unknown>)["$numberLong"];
+        const ms = (d as Record<string, unknown>).$numberLong;
         if (typeof ms === "string") {
           const iso = new Date(Number.parseInt(ms, 10)).toISOString();
           return `ISODate("${iso}")`;
@@ -195,16 +195,16 @@ function tryFormatBsonLiteral(value: unknown): string | null {
       return null;
     }
     case "decimal128": {
-      const n = obj["$numberDecimal"];
+      const n = obj.$numberDecimal;
       if (typeof n !== "string") return null;
       return `NumberDecimal("${n}")`;
     }
     case "binData": {
-      const b = obj["$binary"];
+      const b = obj.$binary;
       if (typeof b !== "object" || b === null) return null;
       const inner = b as Record<string, unknown>;
-      const base64 = inner["base64"];
-      const subType = inner["subType"];
+      const base64 = inner.base64;
+      const subType = inner.subType;
       if (typeof base64 !== "string" || typeof subType !== "string") {
         return null;
       }

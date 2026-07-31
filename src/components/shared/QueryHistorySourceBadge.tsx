@@ -90,7 +90,7 @@ export function QueryHistorySourceBadge({
       title: t("historyBadge.mongoTitle"),
     },
     explain: {
-      ...META_STATIC["explain"],
+      ...META_STATIC.explain,
       title: t("historyBadge.explainTitle"),
     },
     "file-analytics": {

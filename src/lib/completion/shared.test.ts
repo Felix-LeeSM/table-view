@@ -43,12 +43,12 @@ describe("shared.parseFromContext", () => {
 
   it("captures aliases via AS", () => {
     const ctx = parseFromContext("SELECT * FROM users AS u WHERE 1=1");
-    expect(ctx.aliases["u"]).toBe("users");
+    expect(ctx.aliases.u).toBe("users");
   });
 
   it("captures aliases without AS", () => {
     const ctx = parseFromContext("SELECT * FROM users u WHERE 1=1");
-    expect(ctx.aliases["u"]).toBe("users");
+    expect(ctx.aliases.u).toBe("users");
   });
 
   it("returns empty tables when no FROM", () => {
@@ -66,8 +66,8 @@ describe("shared.parseFromContext", () => {
       "SELECT * FROM users u JOIN orders o ON u.id = o.user_id",
     );
     expect(ctx.tables).toEqual(expect.arrayContaining(["users", "orders"]));
-    expect(ctx.aliases["u"]).toBe("users");
-    expect(ctx.aliases["o"]).toBe("orders");
+    expect(ctx.aliases.u).toBe("users");
+    expect(ctx.aliases.o).toBe("orders");
   });
 
   it("tolerates empty input", () => {

@@ -22,7 +22,7 @@ describe("workspaceStore — sidebar", () => {
   it("toggleExpand — lazy-creates workspace and appends nodeId", () => {
     useWorkspaceStore.getState().toggleExpand("conn1", "dbA", "schema:public");
 
-    const ws = useWorkspaceStore.getState().workspaces["conn1"]?.["dbA"];
+    const ws = useWorkspaceStore.getState().workspaces.conn1?.dbA;
     expect(ws).toBeDefined();
     expect(ws!.sidebar.expanded).toEqual(["schema:public"]);
     expect(ws!.tabs).toEqual([]);
@@ -34,7 +34,7 @@ describe("workspaceStore — sidebar", () => {
     store.toggleExpand("conn1", "dbA", "schema:public");
     store.toggleExpand("conn1", "dbA", "schema:public");
 
-    const ws = useWorkspaceStore.getState().workspaces["conn1"]!["dbA"]!;
+    const ws = useWorkspaceStore.getState().workspaces.conn1!.dbA!;
     expect(ws.sidebar.expanded).toEqual([]);
   });
 
@@ -44,7 +44,7 @@ describe("workspaceStore — sidebar", () => {
     store.toggleExpand("conn1", "dbA", "schema:tenant");
     store.toggleExpand("conn1", "dbA", "schema:audit");
 
-    const ws = useWorkspaceStore.getState().workspaces["conn1"]!["dbA"]!;
+    const ws = useWorkspaceStore.getState().workspaces.conn1!.dbA!;
     expect(ws.sidebar.expanded).toEqual([
       "schema:public",
       "schema:tenant",
@@ -57,8 +57,8 @@ describe("workspaceStore — sidebar", () => {
     store.setScrollTop("conn1", "dbA", 120);
     store.setScrollTop("conn1", "dbB", 40);
 
-    const a = useWorkspaceStore.getState().workspaces["conn1"]!["dbA"]!;
-    const b = useWorkspaceStore.getState().workspaces["conn1"]!["dbB"]!;
+    const a = useWorkspaceStore.getState().workspaces.conn1!.dbA!;
+    const b = useWorkspaceStore.getState().workspaces.conn1!.dbB!;
     expect(a.sidebar.scrollTop).toBe(120);
     expect(b.sidebar.scrollTop).toBe(40);
   });
@@ -67,14 +67,12 @@ describe("workspaceStore — sidebar", () => {
     const store = useWorkspaceStore.getState();
     store.setSelectedNode("conn1", "dbA", "table:public.users");
     expect(
-      useWorkspaceStore.getState().workspaces["conn1"]!["dbA"]!.sidebar
-        .selectedNode,
+      useWorkspaceStore.getState().workspaces.conn1!.dbA!.sidebar.selectedNode,
     ).toBe("table:public.users");
 
     store.setSelectedNode("conn1", "dbA", null);
     expect(
-      useWorkspaceStore.getState().workspaces["conn1"]!["dbA"]!.sidebar
-        .selectedNode,
+      useWorkspaceStore.getState().workspaces.conn1!.dbA!.sidebar.selectedNode,
     ).toBeNull();
   });
 });

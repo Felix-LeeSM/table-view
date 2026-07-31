@@ -260,7 +260,7 @@ describe("AC-154-*: Window lifecycle wiring", () => {
 
     // The pool MUST be preserved — Back is not Disconnect.
     expect(disconnectMock).not.toHaveBeenCalled();
-    expect(useConnectionStore.getState().activeStatuses["c1"]).toEqual({
+    expect(useConnectionStore.getState().activeStatuses.c1).toEqual({
       type: "connected",
     });
   });
@@ -289,7 +289,7 @@ describe("AC-154-*: Window lifecycle wiring", () => {
     });
 
     expect(disconnectMock).toHaveBeenCalledWith("c1");
-    expect(useConnectionStore.getState().activeStatuses["c1"]).toEqual({
+    expect(useConnectionStore.getState().activeStatuses.c1).toEqual({
       type: "disconnected",
     });
 

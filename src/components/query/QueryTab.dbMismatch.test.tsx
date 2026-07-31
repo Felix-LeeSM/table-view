@@ -428,9 +428,9 @@ describe("QueryTab — DbMismatch auto-sync (Sprint 267)", () => {
     // `queryState.status !== "running"` guard fires.
     act(() => {
       useWorkspaceStore.setState((state) => {
-        const conn = state.workspaces["conn1"];
+        const conn = state.workspaces.conn1;
         if (!conn) return state;
-        const ws = conn["db1"];
+        const ws = conn.db1;
         if (!ws) return state;
         return {
           workspaces: {

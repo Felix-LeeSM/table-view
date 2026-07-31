@@ -334,9 +334,7 @@ describe("DocumentDatabaseTree", () => {
     await waitFor(() => {
       // Sprint 265 — nested `(connId, db)` cache shape.
       expect(
-        useDocumentStore.getState().collections["conn-mongo"]?.[
-          "table_view_test"
-        ],
+        useDocumentStore.getState().collections["conn-mongo"]?.table_view_test,
       ).toBeDefined();
     });
   });
@@ -658,9 +656,7 @@ describe("DocumentDatabaseTree", () => {
     );
     // Cache populated under the nested (conn, table_view_test) path.
     expect(
-      useDocumentStore.getState().collections["conn-mongo"]?.[
-        "table_view_test"
-      ],
+      useDocumentStore.getState().collections["conn-mongo"]?.table_view_test,
     ).toBeDefined();
 
     // DbSwitcher swap pipeline — clear cache then flip activeDb.

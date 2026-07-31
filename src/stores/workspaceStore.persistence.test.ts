@@ -72,7 +72,7 @@ describe("workspaceStore — persistence", () => {
     useWorkspaceStore.setState({ workspaces: {} });
 
     useWorkspaceStore.getState().loadPersistedWorkspaces();
-    const ws = useWorkspaceStore.getState().workspaces["conn1"]?.["dbA"];
+    const ws = useWorkspaceStore.getState().workspaces.conn1?.dbA;
     expect(ws).toBeDefined();
     expect(ws!.tabs).toHaveLength(1);
     expect((ws!.tabs[0] as { table?: string }).table).toBe("users");
@@ -123,7 +123,7 @@ describe("workspaceStore — persistence", () => {
 
     useWorkspaceStore.getState().loadPersistedWorkspaces();
 
-    const ws = useWorkspaceStore.getState().workspaces["conn1"]?.["dbA"];
+    const ws = useWorkspaceStore.getState().workspaces.conn1?.dbA;
     expect(ws?.tabs[0]).toMatchObject({ type: "table", database: "dbA" });
     expect(ws?.closedTabHistory[0]).toMatchObject({
       type: "table",

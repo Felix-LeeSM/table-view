@@ -243,7 +243,7 @@ describe("AC-141-*: Launcher/Workspace lifecycle (real-window, post-Phase 12)", 
 
     // Pool MUST be preserved — Back is not Disconnect.
     expect(disconnectMock).not.toHaveBeenCalled();
-    expect(useConnectionStore.getState().activeStatuses["c1"]).toEqual({
+    expect(useConnectionStore.getState().activeStatuses.c1).toEqual({
       type: "connected",
     });
   });
@@ -293,10 +293,10 @@ describe("AC-141-*: Launcher/Workspace lifecycle (real-window, post-Phase 12)", 
       "launcher",
       expect.any(Function),
     );
-    expect(handlers["launcher"]).toBeTruthy();
+    expect(handlers.launcher).toBeTruthy();
 
     await act(async () => {
-      await handlers["launcher"]!();
+      await handlers.launcher!();
     });
 
     // Sprint 363: launcher is hidden, not exited.
@@ -380,7 +380,7 @@ describe("AC-141-*: Launcher/Workspace lifecycle (real-window, post-Phase 12)", 
     const backFocus = focusWindowMock.mock.invocationCallOrder[0]!;
     const backClose = destroyCurrentWindowMock.mock.invocationCallOrder[0]!;
     expect(backFocus).toBeLessThan(backClose);
-    expect(useConnectionStore.getState().activeStatuses["c1"]).toEqual({
+    expect(useConnectionStore.getState().activeStatuses.c1).toEqual({
       type: "connected",
     });
     expect(disconnectMock).not.toHaveBeenCalled();
@@ -399,7 +399,7 @@ describe("AC-141-*: Launcher/Workspace lifecycle (real-window, post-Phase 12)", 
       await useConnectionStore.getState().disconnectFromDatabase("c1");
     });
     expect(disconnectMock).toHaveBeenCalledWith("c1");
-    expect(useConnectionStore.getState().activeStatuses["c1"]).toEqual({
+    expect(useConnectionStore.getState().activeStatuses.c1).toEqual({
       type: "disconnected",
     });
     expect(showWindowMock).not.toHaveBeenCalled();

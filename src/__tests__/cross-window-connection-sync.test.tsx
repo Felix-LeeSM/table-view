@@ -225,7 +225,7 @@ describe("cross-window connection-store sync (Sprint 152)", () => {
     await Promise.resolve();
     await Promise.resolve();
 
-    expect(useConnectionStore.getState().activeStatuses["c1"]).toEqual({
+    expect(useConnectionStore.getState().activeStatuses.c1).toEqual({
       type: "connected",
     });
   });
@@ -333,7 +333,7 @@ describe("cross-window connection-store sync (Sprint 152)", () => {
     await Promise.resolve();
     await Promise.resolve();
 
-    expect(useConnectionStore.getState().activeStatuses["c1"]).toEqual({
+    expect(useConnectionStore.getState().activeStatuses.c1).toEqual({
       type: "connected",
     });
     expect(useConnectionStore.getState().focusedConnId).toBe("c1");
@@ -362,7 +362,7 @@ describe("cross-window connection-store sync (Sprint 152)", () => {
     // Store state untouched.
     const s = useConnectionStore.getState();
     expect(s.connections).toHaveLength(1);
-    expect(s.activeStatuses["c1"]).toEqual({ type: "connected" });
+    expect(s.activeStatuses.c1).toEqual({ type: "connected" });
     expect(s.focusedConnId).toBe("c1");
     expect(s.error).toBeNull();
   });
@@ -395,7 +395,7 @@ describe("cross-window connection-store sync (Sprint 152)", () => {
     await Promise.resolve();
 
     // Launcher's own origin id, so the inbound apply must be skipped.
-    expect(useConnectionStore.getState().activeStatuses["c1"]).toEqual({
+    expect(useConnectionStore.getState().activeStatuses.c1).toEqual({
       type: "connected",
     });
   });

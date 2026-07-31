@@ -478,7 +478,7 @@ describe("DbSwitcher", () => {
     await act(async () => {
       fireEvent.click(warehouse);
     });
-    const status = useConnectionStore.getState().activeStatuses["c1"];
+    const status = useConnectionStore.getState().activeStatuses.c1;
     expect(status?.type).toBe("connected");
     if (status?.type === "connected") {
       expect(status.activeDb).toBe("warehouse");
@@ -568,7 +568,7 @@ describe("DbSwitcher", () => {
     await act(async () => {
       fireEvent.click(warehouse);
     });
-    expect(useDocumentStore.getState().databases["mongo"]).toEqual([
+    expect(useDocumentStore.getState().databases.mongo).toEqual([
       { name: "analytics" },
     ]);
   });
@@ -653,7 +653,7 @@ describe("DbSwitcher", () => {
     expect(toasts[0]!.variant).toBe("error");
     expect(toasts[0]!.message).toMatch(/Failed to switch DB/);
     // activeDb should not have moved.
-    const status = useConnectionStore.getState().activeStatuses["c1"];
+    const status = useConnectionStore.getState().activeStatuses.c1;
     expect(status?.type).toBe("connected");
     if (status?.type === "connected") {
       expect(status.activeDb).toBe("postgres");

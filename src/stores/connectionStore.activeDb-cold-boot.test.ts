@@ -134,7 +134,7 @@ describe("#1414 — cold boot resets activeDb to the connection default", () => 
     // First activation after boot.
     await useConnectionStore.getState().connectToDatabase("c1");
 
-    const status = useConnectionStore.getState().activeStatuses["c1"];
+    const status = useConnectionStore.getState().activeStatuses.c1;
     expect(status?.type).toBe("connected");
     if (status?.type === "connected") {
       expect(status.activeDb).toBe("test");

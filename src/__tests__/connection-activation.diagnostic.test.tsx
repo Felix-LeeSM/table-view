@@ -235,7 +235,7 @@ describe("AC-156-*: Connection activation diagnostic", () => {
       await useConnectionStore.getState().disconnectFromDatabase("c1");
     });
 
-    expect(useConnectionStore.getState().activeStatuses["c1"]).toEqual({
+    expect(useConnectionStore.getState().activeStatuses.c1).toEqual({
       type: "disconnected",
     });
 

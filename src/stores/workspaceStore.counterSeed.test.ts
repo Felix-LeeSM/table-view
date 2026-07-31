@@ -100,7 +100,7 @@ describe("workspaceStore — counter seed (M-2 fix)", () => {
       permanent: true,
     });
 
-    const ws = useWorkspaceStore.getState().workspaces["conn1"]?.["dbB"];
+    const ws = useWorkspaceStore.getState().workspaces.conn1?.dbB;
     expect(ws).toBeDefined();
     expect(ws!.tabs).toHaveLength(1);
     expect(ws!.tabs[0]!.id).toBe("tab-13");
@@ -123,7 +123,7 @@ describe("workspaceStore — counter seed (M-2 fix)", () => {
       permanent: true,
     });
 
-    let ws = useWorkspaceStore.getState().workspaces["conn1"]?.["dbA"];
+    let ws = useWorkspaceStore.getState().workspaces.conn1?.dbA;
     expect(ws).toBeDefined();
     expect(ws!.tabs).toHaveLength(1);
     expect(ws!.tabs[0]!.id).toBe("tab-1");
@@ -134,7 +134,7 @@ describe("workspaceStore — counter seed (M-2 fix)", () => {
       database: "dbA",
     });
 
-    ws = useWorkspaceStore.getState().workspaces["conn1"]?.["dbA"];
+    ws = useWorkspaceStore.getState().workspaces.conn1?.dbA;
     expect(ws).toBeDefined();
     expect(ws!.tabs).toHaveLength(2);
     expect(ws!.tabs[1]!.id).toBe("query-1");
@@ -174,8 +174,7 @@ describe("workspaceStore — counter seed (M-2 fix)", () => {
       permanent: true,
     });
 
-    const tabs =
-      useWorkspaceStore.getState().workspaces["conn1"]?.["dbA"]?.tabs;
+    const tabs = useWorkspaceStore.getState().workspaces.conn1?.dbA?.tabs;
     expect(tabs).toBeDefined();
     const ids = tabs!.map((t) => t.id);
     // No id collision — every tab id is unique.
@@ -214,7 +213,7 @@ describe("workspaceStore — counter seed (M-2 fix)", () => {
       database: "dbA",
     });
 
-    const ws = useWorkspaceStore.getState().workspaces["conn1"]?.["dbA"];
+    const ws = useWorkspaceStore.getState().workspaces.conn1?.dbA;
     expect(ws).toBeDefined();
     // 3 persisted + 1 new = 4 tabs.
     expect(ws!.tabs).toHaveLength(4);

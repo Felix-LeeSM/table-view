@@ -120,8 +120,8 @@ describe("documentStore", () => {
       .getState()
       .loadCollections("conn-1", "table_view_test");
     const state = useDocumentStore.getState();
-    expect(state.collections["conn-1"]?.["table_view_test"]).toHaveLength(1);
-    expect(state.collections["conn-1"]?.["table_view_test"]?.[0]?.name).toBe(
+    expect(state.collections["conn-1"]?.table_view_test).toHaveLength(1);
+    expect(state.collections["conn-1"]?.table_view_test?.[0]?.name).toBe(
       "users",
     );
   });
@@ -139,14 +139,14 @@ describe("documentStore", () => {
     const p2 = useDocumentStore.getState().loadCollections("conn-1", "db");
     await p2; // fresh write lands
     expect(
-      useDocumentStore.getState().collections["conn-1"]?.["db"]?.[0]?.name,
+      useDocumentStore.getState().collections["conn-1"]?.db?.[0]?.name,
     ).toBe("fresh");
 
     // Now let the slow call resolve — its stale write should be dropped.
     resolveSlow([collectionFixture("stale", "db", 0)]);
     await p1;
     expect(
-      useDocumentStore.getState().collections["conn-1"]?.["db"]?.[0]?.name,
+      useDocumentStore.getState().collections["conn-1"]?.db?.[0]?.name,
     ).toBe("fresh");
   });
 
@@ -157,7 +157,7 @@ describe("documentStore", () => {
     expect(returned).toHaveLength(1);
     expect(returned[0]?.name).toBe("_id");
     expect(
-      useDocumentStore.getState().fieldsCache["conn-1"]?.["db"]?.["users"],
+      useDocumentStore.getState().fieldsCache["conn-1"]?.db?.users,
     ).toHaveLength(1);
   });
 
@@ -173,7 +173,7 @@ describe("documentStore", () => {
       "users",
     );
     expect(
-      useDocumentStore.getState().indexesCache["conn-1"]?.["db"]?.["users"],
+      useDocumentStore.getState().indexesCache["conn-1"]?.db?.users,
     ).toHaveLength(2);
   });
 
@@ -198,7 +198,7 @@ describe("documentStore", () => {
     expect(tauri.listMongoIndexes).toHaveBeenCalledTimes(2);
     expect(refreshed[0]?.name).toBe("created_at_1");
     expect(
-      useDocumentStore.getState().indexesCache["conn-1"]?.["db"]?.["users"],
+      useDocumentStore.getState().indexesCache["conn-1"]?.db?.users,
     ).toEqual(refreshed);
   });
 
@@ -208,8 +208,7 @@ describe("documentStore", () => {
       .runFind("conn-1", "db", "users");
     expect(result.totalCount).toBe(1);
     expect(
-      useDocumentStore.getState().queryResults["conn-1"]?.["db"]?.["users"]
-        ?.rows,
+      useDocumentStore.getState().queryResults["conn-1"]?.db?.users?.rows,
     ).toHaveLength(1);
   });
 
@@ -230,8 +229,7 @@ describe("documentStore", () => {
     expect(result.columns[0]?.dataType).toBe("objectId");
     expect(result.rawDocuments[0]?._id).toBe(1);
     expect(
-      useDocumentStore.getState().queryResults["conn-1"]?.["db"]?.["users"]
-        ?.totalCount,
+      useDocumentStore.getState().queryResults["conn-1"]?.db?.users?.totalCount,
     ).toBe(7);
   });
 
@@ -255,8 +253,7 @@ describe("documentStore", () => {
     const p2 = useDocumentStore.getState().runFind("conn-1", "db", "users");
     await p2;
     expect(
-      useDocumentStore.getState().queryResults["conn-1"]?.["db"]?.["users"]
-        ?.totalCount,
+      useDocumentStore.getState().queryResults["conn-1"]?.db?.users?.totalCount,
     ).toBe(42);
 
     resolveSlow({
@@ -268,8 +265,7 @@ describe("documentStore", () => {
     });
     await p1;
     expect(
-      useDocumentStore.getState().queryResults["conn-1"]?.["db"]?.["users"]
-        ?.totalCount,
+      useDocumentStore.getState().queryResults["conn-1"]?.db?.users?.totalCount,
     ).toBe(42);
   });
 
@@ -297,8 +293,8 @@ describe("documentStore", () => {
     await findPromise;
 
     const state = useDocumentStore.getState();
-    expect(state.collections["conn-1"]?.["db"]?.[0]?.name).toBe("users");
-    expect(state.queryResults["conn-1"]?.["db"]?.["users"]?.totalCount).toBe(5);
+    expect(state.collections["conn-1"]?.db?.[0]?.name).toBe("users");
+    expect(state.queryResults["conn-1"]?.db?.users?.totalCount).toBe(5);
   });
 
   it("clearConnection removes every cache entry scoped to that connection", async () => {
@@ -338,9 +334,9 @@ describe("documentStore", () => {
 
     const pipelineKey = JSON.stringify(pipeline);
     expect(
-      useDocumentStore.getState().aggregateResults["conn-1"]?.["db"]?.[
-        "users"
-      ]?.[pipelineKey]?.rows,
+      useDocumentStore.getState().aggregateResults["conn-1"]?.db?.users?.[
+        pipelineKey
+      ]?.rows,
     ).toHaveLength(1);
   });
 
@@ -371,9 +367,9 @@ describe("documentStore", () => {
 
     const pipelineKey = JSON.stringify(pipeline);
     expect(
-      useDocumentStore.getState().aggregateResults["conn-1"]?.["db"]?.[
-        "users"
-      ]?.[pipelineKey]?.totalCount,
+      useDocumentStore.getState().aggregateResults["conn-1"]?.db?.users?.[
+        pipelineKey
+      ]?.totalCount,
     ).toBe(77);
 
     resolveSlow({
@@ -385,9 +381,9 @@ describe("documentStore", () => {
     });
     await p1;
     expect(
-      useDocumentStore.getState().aggregateResults["conn-1"]?.["db"]?.[
-        "users"
-      ]?.[pipelineKey]?.totalCount,
+      useDocumentStore.getState().aggregateResults["conn-1"]?.db?.users?.[
+        pipelineKey
+      ]?.totalCount,
     ).toBe(77);
   });
 
@@ -414,12 +410,11 @@ describe("documentStore", () => {
 
     const s = useDocumentStore.getState();
     // find caches under queryResults at the (connId, db, collection) path.
-    expect(s.queryResults["conn-1"]?.["db"]?.["users"]?.totalCount).toBe(3);
+    expect(s.queryResults["conn-1"]?.db?.users?.totalCount).toBe(3);
     // aggregate caches under its own axis so the two never alias.
     const pipelineKey = JSON.stringify([{ $match: {} }]);
     expect(
-      s.aggregateResults["conn-1"]?.["db"]?.["users"]?.[pipelineKey]
-        ?.totalCount,
+      s.aggregateResults["conn-1"]?.db?.users?.[pipelineKey]?.totalCount,
     ).toBe(7);
   });
 
@@ -429,9 +424,9 @@ describe("documentStore", () => {
       .runAggregate("conn-1", "db", "users", [{ $match: {} }]);
     const pipelineKey = JSON.stringify([{ $match: {} }]);
     expect(
-      useDocumentStore.getState().aggregateResults["conn-1"]?.["db"]?.[
-        "users"
-      ]?.[pipelineKey],
+      useDocumentStore.getState().aggregateResults["conn-1"]?.db?.users?.[
+        pipelineKey
+      ],
     ).toBeDefined();
 
     useDocumentStore.getState().clearConnection("conn-1");
@@ -452,8 +447,8 @@ describe("documentStore", () => {
     await useDocumentStore.getState().loadCollections("conn-B", "db");
 
     const s = useDocumentStore.getState();
-    expect(s.collections["conn-A"]?.["db"]?.[0]?.name).toBe("users");
-    expect(s.collections["conn-B"]?.["db"]?.[0]?.name).toBe("products");
+    expect(s.collections["conn-A"]?.db?.[0]?.name).toBe("users");
+    expect(s.collections["conn-B"]?.db?.[0]?.name).toBe("products");
   });
 
   it("clearConnection preserves other connections' caches (AC-265-01)", async () => {
@@ -464,6 +459,6 @@ describe("documentStore", () => {
 
     const s = useDocumentStore.getState();
     expect(s.collections["conn-A"]).toBeUndefined();
-    expect(s.collections["conn-B"]?.["db"]).toBeDefined();
+    expect(s.collections["conn-B"]?.db).toBeDefined();
   });
 });

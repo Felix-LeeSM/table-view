@@ -434,12 +434,11 @@ describe("cross-window store sync (Sprint 153)", () => {
 
       // Launcher's tabs MUST stay empty.
       expect(
-        launcherWorkspaceStore.getState().workspaces["conn1"]?.["db1"]?.tabs ??
-          [],
+        launcherWorkspaceStore.getState().workspaces.conn1?.db1?.tabs ?? [],
       ).toHaveLength(0);
       expect(
-        launcherWorkspaceStore.getState().workspaces["conn1"]?.["db1"]
-          ?.activeTabId ?? null,
+        launcherWorkspaceStore.getState().workspaces.conn1?.db1?.activeTabId ??
+          null,
       ).toBeNull();
 
       vi.doUnmock("@lib/window-label");

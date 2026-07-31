@@ -130,7 +130,7 @@ function normalizeBulkWriteOperation(
     };
   }
 
-  const internalOp = raw["op"];
+  const internalOp = raw.op;
   if (typeof internalOp === "string") {
     if (!isBulkWriteOpName(internalOp)) {
       return {

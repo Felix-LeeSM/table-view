@@ -156,7 +156,7 @@ describe("Sidebar collapse/expand-all toggle per DB type (sprint-379)", () => {
     expect(btn).toBeInTheDocument();
     fireEvent.click(btn);
     expect(
-      useWorkspaceStore.getState().workspaces["c1"]?.["db1"]?.sidebar.expanded,
+      useWorkspaceStore.getState().workspaces.c1?.db1?.sidebar.expanded,
     ).toEqual([]);
   });
 
@@ -181,7 +181,7 @@ describe("Sidebar collapse/expand-all toggle per DB type (sprint-379)", () => {
     const btn = screen.getByRole("button", { name: /expand all schemas/i });
     fireEvent.click(btn);
     expect(
-      useWorkspaceStore.getState().workspaces["c1"]?.["db1"]?.sidebar.expanded,
+      useWorkspaceStore.getState().workspaces.c1?.db1?.sidebar.expanded,
     ).toEqual(["public", "analytics"]);
   });
 
@@ -219,7 +219,7 @@ describe("Sidebar collapse/expand-all toggle per DB type (sprint-379)", () => {
     expect(btn).toBeInTheDocument();
     fireEvent.click(btn);
     expect(
-      useWorkspaceStore.getState().workspaces["c1"]?.["db1"]?.sidebar.expanded,
+      useWorkspaceStore.getState().workspaces.c1?.db1?.sidebar.expanded,
     ).toEqual([]);
   });
 
@@ -243,7 +243,7 @@ describe("Sidebar collapse/expand-all toggle per DB type (sprint-379)", () => {
     expect(btn).toBeInTheDocument();
     fireEvent.click(btn);
     expect(
-      useWorkspaceStore.getState().workspaces["c1"]?.["db1"]?.sidebar.expanded,
+      useWorkspaceStore.getState().workspaces.c1?.db1?.sidebar.expanded,
     ).toEqual([]);
   });
 
@@ -269,7 +269,7 @@ describe("Sidebar collapse/expand-all toggle per DB type (sprint-379)", () => {
     expect(btn).toBeInTheDocument();
     fireEvent.click(btn);
     expect(
-      useWorkspaceStore.getState().workspaces["c1"]?.["db1"]?.sidebar.expanded,
+      useWorkspaceStore.getState().workspaces.c1?.db1?.sidebar.expanded,
     ).toEqual([]);
   });
 

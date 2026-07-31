@@ -263,7 +263,7 @@ describe("AC-142-*: Connection SoT + Disconnect regression locks", () => {
     });
 
     expect(disconnectMock).toHaveBeenCalledWith("c1");
-    expect(useConnectionStore.getState().activeStatuses["c1"]).toEqual({
+    expect(useConnectionStore.getState().activeStatuses.c1).toEqual({
       type: "disconnected",
     });
   });
@@ -287,7 +287,7 @@ describe("AC-142-*: Connection SoT + Disconnect regression locks", () => {
     await act(async () => {
       await useConnectionStore.getState().disconnectFromDatabase("c1");
     });
-    expect(useConnectionStore.getState().activeStatuses["c1"]).toEqual({
+    expect(useConnectionStore.getState().activeStatuses.c1).toEqual({
       type: "disconnected",
     });
     expect(disconnectMock).toHaveBeenCalledTimes(1);
@@ -298,7 +298,7 @@ describe("AC-142-*: Connection SoT + Disconnect regression locks", () => {
     });
     expect(connectMock).toHaveBeenCalledWith("c1");
     expect(connectMock).toHaveBeenCalledTimes(1);
-    const status = useConnectionStore.getState().activeStatuses["c1"];
+    const status = useConnectionStore.getState().activeStatuses.c1;
     expect(status?.type).toBe("connected");
   });
 });

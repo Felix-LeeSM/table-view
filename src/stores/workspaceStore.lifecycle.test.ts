@@ -40,7 +40,7 @@ describe("workspaceStore — lifecycle", () => {
   it("tracer bullet — addTab puts the tab into workspaces[connId][db] and sets activeTabId", () => {
     useWorkspaceStore.getState().addTab("conn1", makeTableInit());
 
-    const ws = useWorkspaceStore.getState().workspaces["conn1"]?.["dbA"];
+    const ws = useWorkspaceStore.getState().workspaces.conn1?.dbA;
     expect(ws).toBeDefined();
     expect(ws!.tabs).toHaveLength(1);
     expect(ws!.tabs[0]!.type).toBe("table");
@@ -59,8 +59,8 @@ describe("workspaceStore — lifecycle", () => {
     );
 
     const { workspaces } = useWorkspaceStore.getState();
-    const dbA = workspaces["conn1"]?.["dbA"];
-    const dbB = workspaces["conn1"]?.["dbB"];
+    const dbA = workspaces.conn1?.dbA;
+    const dbB = workspaces.conn1?.dbB;
 
     expect(dbA).toBeDefined();
     expect(dbB).toBeDefined();
@@ -93,16 +93,15 @@ describe("workspaceStore — lifecycle", () => {
       }),
     );
 
-    const tabsBefore =
-      useWorkspaceStore.getState().workspaces["conn1"]!["dbA"]!.tabs;
+    const tabsBefore = useWorkspaceStore.getState().workspaces.conn1!.dbA!.tabs;
     const activeId = tabsBefore[1]!.id;
     expect(
-      useWorkspaceStore.getState().workspaces["conn1"]!["dbA"]!.activeTabId,
+      useWorkspaceStore.getState().workspaces.conn1!.dbA!.activeTabId,
     ).toBe(activeId);
 
     useWorkspaceStore.getState().removeTab("conn1", "dbA", activeId);
 
-    const ws = useWorkspaceStore.getState().workspaces["conn1"]!["dbA"]!;
+    const ws = useWorkspaceStore.getState().workspaces.conn1!.dbA!;
     expect(ws.tabs).toHaveLength(1);
     expect(ws.activeTabId).toBe(ws.tabs[0]!.id);
   });
@@ -115,10 +114,10 @@ describe("workspaceStore — lifecycle", () => {
     );
 
     const tabId =
-      useWorkspaceStore.getState().workspaces["conn1"]!["dbA"]!.tabs[0]!.id;
+      useWorkspaceStore.getState().workspaces.conn1!.dbA!.tabs[0]!.id;
     useWorkspaceStore.getState().removeTab("conn1", "dbA", tabId);
 
-    const ws = useWorkspaceStore.getState().workspaces["conn1"]!["dbA"]!;
+    const ws = useWorkspaceStore.getState().workspaces.conn1!.dbA!;
     expect(ws.tabs).toHaveLength(0);
     expect(ws.activeTabId).toBeNull();
   });
@@ -144,17 +143,17 @@ describe("workspaceStore — lifecycle", () => {
       }),
     );
 
-    const tabs = useWorkspaceStore.getState().workspaces["conn1"]!["dbA"]!.tabs;
+    const tabs = useWorkspaceStore.getState().workspaces.conn1!.dbA!.tabs;
     const firstId = tabs[0]!.id;
     const secondId = tabs[1]!.id;
     expect(
-      useWorkspaceStore.getState().workspaces["conn1"]!["dbA"]!.activeTabId,
+      useWorkspaceStore.getState().workspaces.conn1!.dbA!.activeTabId,
     ).toBe(secondId);
 
     useWorkspaceStore.getState().setActiveTab("conn1", "dbA", firstId);
 
     expect(
-      useWorkspaceStore.getState().workspaces["conn1"]!["dbA"]!.activeTabId,
+      useWorkspaceStore.getState().workspaces.conn1!.dbA!.activeTabId,
     ).toBe(firstId);
   });
 
@@ -170,14 +169,14 @@ describe("workspaceStore — lifecycle", () => {
     );
 
     const dbBActiveBefore =
-      useWorkspaceStore.getState().workspaces["conn1"]!["dbB"]!.activeTabId;
+      useWorkspaceStore.getState().workspaces.conn1!.dbB!.activeTabId;
     const dbATabId =
-      useWorkspaceStore.getState().workspaces["conn1"]!["dbA"]!.tabs[0]!.id;
+      useWorkspaceStore.getState().workspaces.conn1!.dbA!.tabs[0]!.id;
 
     useWorkspaceStore.getState().setActiveTab("conn1", "dbA", dbATabId);
 
     const dbBActiveAfter =
-      useWorkspaceStore.getState().workspaces["conn1"]!["dbB"]!.activeTabId;
+      useWorkspaceStore.getState().workspaces.conn1!.dbB!.activeTabId;
     expect(dbBActiveAfter).toBe(dbBActiveBefore);
   });
 
@@ -214,9 +213,9 @@ describe("workspaceStore — lifecycle", () => {
     useWorkspaceStore.getState().clearForConnection("conn1");
 
     const { workspaces } = useWorkspaceStore.getState();
-    expect(workspaces["conn1"]).toBeUndefined();
-    expect(workspaces["conn2"]).toBeDefined();
-    expect(workspaces["conn2"]!["dbA"]!.tabs).toHaveLength(1);
+    expect(workspaces.conn1).toBeUndefined();
+    expect(workspaces.conn2).toBeDefined();
+    expect(workspaces.conn2!.dbA!.tabs).toHaveLength(1);
   });
 
   it("clearForConnection — unknown connId is a no-op (preserves identity)", () => {
@@ -254,13 +253,13 @@ describe("workspaceStore — lifecycle", () => {
       }),
     );
 
-    const tabs = useWorkspaceStore.getState().workspaces["conn1"]!["dbA"]!.tabs;
+    const tabs = useWorkspaceStore.getState().workspaces.conn1!.dbA!.tabs;
     const inactiveId = tabs[0]!.id;
     const activeId = tabs[1]!.id;
 
     useWorkspaceStore.getState().removeTab("conn1", "dbA", inactiveId);
 
-    const ws = useWorkspaceStore.getState().workspaces["conn1"]!["dbA"]!;
+    const ws = useWorkspaceStore.getState().workspaces.conn1!.dbA!;
     expect(ws.tabs).toHaveLength(1);
     expect(ws.tabs[0]!.id).toBe(activeId);
     expect(ws.activeTabId).toBe(activeId);
@@ -291,7 +290,7 @@ describe("workspaceStore — lifecycle", () => {
     );
 
     const dbATabId =
-      useWorkspaceStore.getState().workspaces["conn1"]!["dbA"]!.tabs[0]!.id;
+      useWorkspaceStore.getState().workspaces.conn1!.dbA!.tabs[0]!.id;
     const dbAKey = makeEntryKey("conn1", "dbA", "public", "users");
     const dbBKey = makeEntryKey("conn1", "dbB", "public", "users");
     useDataGridEditStore
@@ -328,7 +327,7 @@ describe("workspaceStore — lifecycle", () => {
           permanent: true,
         }),
       );
-      const ws = useWorkspaceStore.getState().workspaces["conn1"]?.["dbA"];
+      const ws = useWorkspaceStore.getState().workspaces.conn1?.dbA;
       ids.push(ws!.tabs[ws!.tabs.length - 1]!.id);
     }
 
@@ -338,7 +337,7 @@ describe("workspaceStore — lifecycle", () => {
       useWorkspaceStore.getState().removeTab("conn1", "dbA", id);
     }
 
-    const ws = useWorkspaceStore.getState().workspaces["conn1"]!["dbA"]!;
+    const ws = useWorkspaceStore.getState().workspaces.conn1!.dbA!;
     expect(ws.closedTabHistory).toHaveLength(25);
     // Newest-first: index 0 is the most recently closed (id[25]).
     expect(ws.closedTabHistory[0]!.id).toBe(ids[25]);
@@ -354,7 +353,7 @@ describe("workspaceStore — lifecycle", () => {
   it("#1088 — closing a running query tab and reopening restores it as idle", () => {
     const store = useWorkspaceStore.getState();
     store.addQueryTab("conn1", "dbA", { title: "run", sql: "SELECT 1" });
-    const opened = useWorkspaceStore.getState().workspaces["conn1"]!["dbA"]!;
+    const opened = useWorkspaceStore.getState().workspaces.conn1!.dbA!;
     const tabId = opened.tabs[0]!.id;
 
     // Drive the tab into a running state (query in flight).
@@ -365,8 +364,7 @@ describe("workspaceStore — lifecycle", () => {
     store.removeTab("conn1", "dbA", tabId);
 
     // History must not carry the live running state.
-    const afterClose =
-      useWorkspaceStore.getState().workspaces["conn1"]!["dbA"]!;
+    const afterClose = useWorkspaceStore.getState().workspaces.conn1!.dbA!;
     expect(afterClose.closedTabHistory[0]!.type).toBe("query");
     expect((afterClose.closedTabHistory[0] as QueryTab).queryState).toEqual({
       status: "idle",
@@ -374,8 +372,7 @@ describe("workspaceStore — lifecycle", () => {
 
     store.reopenLastClosedTab("conn1", "dbA");
 
-    const reopenedWs =
-      useWorkspaceStore.getState().workspaces["conn1"]!["dbA"]!;
+    const reopenedWs = useWorkspaceStore.getState().workspaces.conn1!.dbA!;
     const reopened = reopenedWs.tabs[reopenedWs.tabs.length - 1] as QueryTab;
     expect(reopened.type).toBe("query");
     expect(reopened.queryState).toEqual({ status: "idle" });
@@ -390,7 +387,7 @@ describe("workspaceStore — lifecycle", () => {
     function addRunningTab() {
       const store = useWorkspaceStore.getState();
       store.addQueryTab("conn1", "dbA", { title: "run", sql: "SELECT 1" });
-      const ws = useWorkspaceStore.getState().workspaces["conn1"]!["dbA"]!;
+      const ws = useWorkspaceStore.getState().workspaces.conn1!.dbA!;
       return ws.tabs[0]!.id;
     }
 
@@ -403,8 +400,7 @@ describe("workspaceStore — lifecycle", () => {
       });
       const after = Date.now();
       const state = (
-        useWorkspaceStore.getState().workspaces["conn1"]!["dbA"]!
-          .tabs[0] as QueryTab
+        useWorkspaceStore.getState().workspaces.conn1!.dbA!.tabs[0] as QueryTab
       ).queryState;
       expect(state.status).toBe("running");
       if (state.status !== "running") throw new Error("expected running");
@@ -419,8 +415,7 @@ describe("workspaceStore — lifecycle", () => {
         queryId: "q-1057",
       });
       const stamped = (
-        useWorkspaceStore.getState().workspaces["conn1"]!["dbA"]!
-          .tabs[0] as QueryTab
+        useWorkspaceStore.getState().workspaces.conn1!.dbA!.tabs[0] as QueryTab
       ).queryState;
       if (stamped.status !== "running") throw new Error("expected running");
       const anchor = stamped.startedAt;
@@ -430,8 +425,7 @@ describe("workspaceStore — lifecycle", () => {
         .setRunningQueryServerPid("conn1", "dbA", tabId, "q-1057", 4242);
 
       const after = (
-        useWorkspaceStore.getState().workspaces["conn1"]!["dbA"]!
-          .tabs[0] as QueryTab
+        useWorkspaceStore.getState().workspaces.conn1!.dbA!.tabs[0] as QueryTab
       ).queryState;
       expect(after.status).toBe("running");
       if (after.status !== "running") throw new Error("expected running");

@@ -331,9 +331,8 @@ describe("DocumentDataGrid", () => {
     await waitFor(() => {
       // Sprint 265 — nested `(connId, db, collection)` cache path.
       expect(
-        useDocumentStore.getState().queryResults["conn-mongo"]?.[
-          "table_view_test"
-        ]?.["users"],
+        useDocumentStore.getState().queryResults["conn-mongo"]?.table_view_test
+          ?.users,
       ).toBeDefined();
     });
   });

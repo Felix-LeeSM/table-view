@@ -193,7 +193,7 @@ describe("useWindowFocusHydration", () => {
     });
 
     expect(useConnectionStore.getState().focusedConnId).toBe("c2");
-    expect(useConnectionStore.getState().activeStatuses["c2"]).toEqual({
+    expect(useConnectionStore.getState().activeStatuses.c2).toEqual({
       type: "connected",
       activeDb: "mydb",
     });
