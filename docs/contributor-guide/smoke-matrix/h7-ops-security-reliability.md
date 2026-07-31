@@ -41,15 +41,24 @@ What the individual jobs own:
   (`cargo llvm-cov nextest --profile push`). The cutoff numbers stay in the
   workflow's `--fail-under-*` literals and are not restated here.
 
-- `Detect Change Scope` and `PR Body Contract` are name-only jobs: required
-  contexts that cannot fail and verify nothing. `Runtime Happy Path` is not one
-  of them — it runs the smoke specs `e2e/scope-map.mjs` selects from the changed
-  paths, and it fails when they fail.
+- `PR Body Contract` rejects a PR body carrying a path only the author can open
+  — an absolute home or temp path, a `file:` URL, or a path inside a work copy.
+  An empty body passes. The workflow does not listen for `edited`, so a red
+  verdict clears on the next commit, not on a body edit.
 
-No job is change-gated — every job runs on every push and pull request, so a
-docs-only PR pays for the full suite and no skipped check ever stands in for an
-unverified one. Full a11y, perf, and macOS/Windows runtime smoke are not routine
-blocking checks.
+- `Runtime Happy Path` runs the smoke specs `e2e/scope-map.mjs` selects from the
+  changed paths, and it fails when they fail.
+
+Every required context above can fail. The last two name-only jobs went on
+2026-07-31: `Detect Change Scope` was dropped from both the `pr_to_main` ruleset
+and `ci.yml`, and `PR Body Contract` became the real check described above.
+
+No job is skipped by a `paths:` filter — every job starts on every push and pull
+request, so no skipped check ever stands in for an unverified one. Work inside a
+job can still be change-scoped: `Runtime Happy Path` always starts, then selects
+its spec set from the changed paths and reports `selected 0 specs` when none
+apply. Full a11y, perf, and macOS/Windows runtime smoke are not routine blocking
+checks.
 
 ## Runtime Happy Path E2E
 
@@ -264,8 +273,9 @@ Current evidence:
 
 Current gap / routing:
 
-No desktop runtime gate blocks a merge: the `Runtime Happy Path` required
-context reports without running anything. The opt-in `workflow_dispatch`
+The desktop runtime gate is Linux-only: `Runtime Happy Path` runs its selected
+smoke specs on `ubuntu-latest`, so no macOS or Windows runtime failure can block
+a merge. The opt-in `workflow_dispatch`
 platform canary runs separate
 macOS arm64 and Windows x86_64 install/Tauri no-bundle build jobs for evidence
 gathering only; the Windows canary is pinned to `windows-2022` and sets

@@ -39,9 +39,14 @@ Thumbs.db
 # doesn't walk into them and resolve sibling `<img src="...">` paths against
 # stale worktree roots.
 /.claude/worktrees/
-# Multi-agent / multi-brain worktrees (Claude / Codex / Cursor 공통, platform-neutral).
-# `git worktree add` 로 손수 만든 것도 같은 자리에 놓인다.
+# 둘 다 방어용이다 — 작업 사본의 규약 위치는 repo **밖** 형제 디렉토리
+# `../table-view-clones/` 이고 (2026-07-31 #2035 결정 7,
+# memory/runbook/worktree/memory.md), 여기 걸리는 건 repo 안에 실수로 사본을
+# 만들었을 때뿐이다. .gitignore 로는 rg · Tailwind source scan · lint 글롭까지
+# 막지 못하므로 이 항목을 믿고 repo 안에 두지 마라.
+# `/worktrees/`: linked worktree 를 쓰던 옛 규약의 잔재 (clone 으로 대체됨).
 /worktrees/
+/clones/
 
 # Test
 /coverage/

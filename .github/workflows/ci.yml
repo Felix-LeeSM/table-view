@@ -5,8 +5,15 @@ name: CI
 # - `pull_request`: validates feature branches before they merge.
 # This avoids the duplicate run that fires when an open PR's branch is
 # pushed (push + pull_request would each schedule a separate workflow on
-# the same SHA). No `edited`: no job reads the PR body, so a body edit would
-# re-run all eight required checks (~20 min) for nothing.
+# the same SHA).
+#
+# No `edited`, even though `pr-body` below now reads the PR body: adding it
+# would re-run the six required checks this workflow reports (~20 min) on every
+# body edit. Six, not seven — the seventh required context, `Runtime Happy
+# Path`, lives in e2e-smoke.yml, which does not listen for `edited` either. The
+# cost of leaving it off is that a red `PR Body Contract` clears only on the
+# next commit — a job re-run replays the original event payload, so it
+# re-reads the OLD body and fails again. Fix the body, then push.
 on:
   push:
     branches: [main]
@@ -32,29 +39,39 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  # Name-only, same as `pr-body` below: `Detect Change Scope` is a required
-  # context in the `pr_to_main` ruleset (live GitHub state); a name that stops
-  # reporting stays "expected" and blocks every merge. Drop the ruleset entry
-  # before deleting this job, and keep this the only job anywhere that carries
-  # the name. No job is change-gated — everything below runs on every event.
-  changes:
-    name: Detect Change Scope
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-
-    steps:
-      - run: exit 0
-
-  # Name-only. `PR Body Contract` is a required context in the `pr_to_main`
-  # ruleset (live GitHub state); a name that stops reporting stays "expected" and
-  # blocks every merge. Drop the ruleset entry before deleting this job.
+  # `PR Body Contract` is a required context in the `pr_to_main` ruleset (live
+  # GitHub state); a name that stops reporting stays "expected" and blocks every
+  # merge, so the `name:` is load-bearing — do not rename it. Drop the ruleset
+  # entry before deleting this job. No job is change-gated — everything below
+  # runs on every event.
   pr-body:
     name: PR Body Contract
     runs-on: ubuntu-latest
     timeout-minutes: 5
 
     steps:
-      - run: exit 0
+      # The PR body is the evidence a reviewer reads on github.com, so a path
+      # that only resolves on the author's machine is evidence nobody else can
+      # open. SOT for the rule: memory/workflow/delivery/memory.md 「PR body」.
+      #
+      # The body arrives through `env:`, never interpolated into the script: a
+      # PR body is attacker-controlled text, and `${{ ... }}` inside `run:` is
+      # substituted before bash parses the line, so a body containing `$(...)`
+      # or a backtick would execute here.
+      - name: Reject non-portable paths in PR body
+        env:
+          BODY: ${{ github.event.pull_request.body }}
+        run: |
+          if [ -z "$BODY" ]; then
+            echo "no PR body on this event — nothing to check"
+            exit 0
+          fi
+          if printf '%s\n' "$BODY" | grep -n -F \
+            -e '/Users/' -e '/tmp/' -e 'file://' -e 'worktrees/' -e 'clones/'; then
+            echo "::error::PR body carries a non-portable path (matching lines above, numbered from the top of the body). Use repo-relative paths and URLs that open on github.com. SOT: memory/workflow/delivery/memory.md 「PR body」. This check re-runs on the next commit, not on a body edit."
+            exit 1
+          fi
+          echo "PR body clean — no non-portable path patterns."
 
   dependency-security:
     name: Dependency Security
