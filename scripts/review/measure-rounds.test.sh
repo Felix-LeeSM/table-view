@@ -438,12 +438,19 @@ if [ "${MEASURE_ROUNDS_SKIP_MUTATION:-0}" != "1" ]; then
 		' "$SCRIPT" "$old" "$new" >"$dst"
 	}
 
+	# 서브런 출력. 버리면 양성 대조가 red 일 때 "harness 가 깨졌다" 한 줄만 남고
+	# 어느 단언이 깨졌는지가 사라진다 — issue #2085 의 shard flake 가 정확히 그
+	# 상태로 진단 불가였다. 변조 6종의 red 는 기대된 결과라 안 찍는다.
+	SUB_OUT=""
 	run_suite_against() {
 		# `MEASURE_ROUNDS_SKIP_GATE_CHECK=1` — 자식 실행이 판정하는 것은 변조된
 		# 스크립트이지 저장소의 워크플로가 아니다. 켜 두면 게이트가 바뀐 날
 		# 양성 대조와 변조 6종이 전부 같은 이유로 red 가 되어 결과가 무의미해진다.
-		MEASURE_ROUNDS_SCRIPT="$1" MEASURE_ROUNDS_SKIP_MUTATION=1 \
-			MEASURE_ROUNDS_SKIP_GATE_CHECK=1 bash "$SELF" >/dev/null 2>&1
+		#
+		# 대입문의 exit status 는 명령 치환의 것이다 — `local` 로 받으면 `local`
+		# 의 0 에 가려지므로 전역이다 (이 파일의 OUT/RC 와 같은 이유).
+		SUB_OUT="$(MEASURE_ROUNDS_SCRIPT="$1" MEASURE_ROUNDS_SKIP_MUTATION=1 \
+			MEASURE_ROUNDS_SKIP_GATE_CHECK=1 bash "$SELF" 2>&1)"
 	}
 
 	# 양성 대조.
@@ -452,7 +459,8 @@ if [ "${MEASURE_ROUNDS_SKIP_MUTATION:-0}" != "1" ]; then
 		if run_suite_against "$MUT_DIR/control.sh"; then
 			pass "positive control: 미변조 사본은 green"
 		else
-			fail "positive control: 미변조 사본이 red — harness 가 깨졌다"
+			fail "positive control: 미변조 사본이 red — harness 가 깨졌다" \
+				"$SUB_OUT"
 		fi
 	else
 		fail "positive control: 사본이 원본과 다르다"
