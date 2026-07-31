@@ -214,6 +214,100 @@ $(gate_count_step)"
 }
 check_gate_signal
 
+# ── reflect:done 해제 (#1968) ────────────────────────────────────────────
+# 새 head OID = 새 라운드이므로 `reflect:done` 도 라운드마다 다시 받아야 한다.
+# 위 단계들과 달리 여기서는 스텝의 `run:` 블록을 **실제로 실행한다** — grep 만으로는
+# "DELETE 는 하는데 실패를 삼킨다" 는 편집을 못 잡는다. gh 는 스텁이 가로챈다.
+#
+# RED 재현 1종:
+#   d="$(mktemp -d)"; git archive HEAD | tar -x -C "$d"
+#   perl -0pi -e "s/grep -qxF 'reflect:done'/grep -qxF 'reflect:never'/" \
+#     "$d/.github/workflows/review-gate.yml"
+#   MEASURE_ROUNDS_GATE_WORKFLOW="$d/.github/workflows/review-gate.yml" \
+#     bash scripts/review/measure-rounds.test.sh
+# 위 두 추출기와 달리 `run: |` 줄을 빼고 본문만 낸다 — 실행할 것이라서다. 다음
+# 스텝의 `- name:` 앞에는 그 스텝의 주석이 먼저 오므로 이름이 아니라 들여쓰기로
+# 끊는다: 블록 본문은 10칸 이상이고 스텝 주석은 6칸이다.
+gate_release_step() {
+	awk '/- name: Release reflect:done on a new round/{f=1}
+	     f && /^[[:space:]]*run:/{g=1; next}
+	     g && NF && substr($0, 1, 10) != "          " {exit}
+	     g' "$GATE_WORKFLOW"
+}
+
+check_reflect_release() {
+	# check_gate_signal() 과 같은 이유로 mutation 서브런에서는 끈다 — 대상이
+	# 스크립트가 아니라 저장소의 워크플로다.
+	[ "${MEASURE_ROUNDS_SKIP_GATE_CHECK:-0}" = "1" ] && return 0
+
+	echo "reflect:done release (#1968):"
+
+	# ① 해제 스텝이 dismissal 보다 **앞**에 있는가. dismissal 은 의도적으로 exit 1
+	#    하므로 뒤에 두면 이 스텝이 영영 안 돈다 — 그러면 label 이 영구히 남는다.
+	local rel_line dis_line
+	rel_line="$(grep -nF -- '- name: Release reflect:done on a new round' "$GATE_WORKFLOW" | head -1 | cut -d: -f1)"
+	dis_line="$(grep -nF -- '- name: Dismiss stale approval on new commits' "$GATE_WORKFLOW" | head -1 | cut -d: -f1)"
+	if [ -n "$rel_line" ] && [ -n "$dis_line" ] && [ "$rel_line" -lt "$dis_line" ]; then
+		pass "해제 스텝이 dismissal(의도적 exit 1)보다 앞에 있다"
+	else
+		fail "gate coupling: reflect:done 해제 스텝이 없거나 dismissal 뒤에 있다" \
+			"Release=${rel_line:-없음} Dismiss=${dis_line:-없음} — 뒤에 두면 dismissal 의 exit 1 때문에 실행되지 않는다."
+	fi
+
+	# ② 그 스텝의 run: 블록을 실제로 돌린다. 남는 들여쓰기는 bash 가 무시한다.
+	local script
+	script="$(gate_release_step)"
+	if [ -z "$script" ]; then
+		fail "gate coupling: 'Release reflect:done on a new round' 스텝의 run: 블록을 못 찾았다" \
+			"스텝 이름이나 워크플로 구조가 바뀌었다. 이 스위트의 gate_release_step() 을 같이 고쳐라."
+		return
+	fi
+
+	local dir
+	dir="$(mktemp -d "${TMPDIR:-/tmp}/reflect-release.XXXXXX")"
+	# 가짜 gh. `-X` 가 있으면 DELETE, 없으면 label 조회다.
+	cat >"$dir/gh" <<'STUB'
+#!/usr/bin/env bash
+for a in "$@"; do
+	[ "$a" = "-X" ] && exit "${STUB_DELETE_RC:-0}"
+done
+[ "${STUB_LIST_RC:-0}" = 0 ] || exit "$STUB_LIST_RC"
+printf '%s\n' $STUB_LABELS
+STUB
+	chmod +x "$dir/gh"
+
+	release_case() {
+		OUT="$(PATH="$dir:$PATH" GITHUB_REPOSITORY="o/r" PR=1 \
+			STUB_DELETE_RC="$1" STUB_LIST_RC="$2" STUB_LABELS="$3" \
+			bash -e -c "$script" 2>&1)"
+		RC=$?
+	}
+
+	# 라벨 있음 — DELETE 성공, 재조회에 없다.
+	release_case 0 0 "review:approved"
+	assert_rc 0 "해제: 붙어 있던 reflect:done 을 뗀다"
+	assert_has "::notice::reflect:done released" "해제 성공을 로그에 남긴다"
+
+	# 라벨 없음 — DELETE 가 404 로 실패해도 결과는 같으니 통과다.
+	release_case 1 0 "review:approved"
+	assert_rc 0 "해제: 애초에 안 붙어 있으면 404 를 실패로 보지 않는다"
+
+	# API 실패 — 재조회가 죽으면 남았는지 알 수 없다. 통과로 강등하지 않는다.
+	release_case 0 1 ""
+	assert_rc 1 "fail-closed: label 조회 실패는 통과가 아니다"
+	assert_has "::error::reflect:done 해제를 확인하지 못했다" "조회 실패를 에러로 찍는다"
+
+	# 해제 실패 — DELETE 는 0 인데 label 이 남았다. 여기서 안 막으면 다음 라운드가
+	# 사용자 승인 없이 게이트를 통과한다.
+	release_case 0 0 "reflect:done review:approved"
+	assert_rc 1 "fail-closed: label 이 남으면 실패다"
+	assert_has "::error::reflect:done 해제 실패" "잔존을 에러로 찍는다"
+
+	rm -rf "$dir"
+}
+# 호출은 아래 "도구 쪽 짝" 뒤다 — release_case() 가 공용 OUT/RC 를 덮어쓰는데,
+# 그 단언들은 위 measure() 가 남긴 OUT 을 아직 읽는다.
+
 # 도구 쪽 짝. 변조본에도 적용된다 — 기본값을 뒤집는 편집은 여기서 죽는다.
 assert_has "round_def=head-oid" "기본 라운드 정의가 head-oid"
 assert_nth_line 1 "rounds_per_merge=5.5" "기본 정의는 같은 커밋의 코멘트를 접는다"
@@ -224,6 +318,8 @@ measure --since 2026-07-25 --until 2026-07-26 --round-def comments
 assert_nth_line 1 "rounds_per_merge=8.17" "옛 정의는 플래그로 계속 잴 수 있다"
 assert_has "round_def=comments" "round_def label follows the flag"
 assert_has "rounds_per_merge_by_def=comments:8.17 head-oid:5.5" "comments 모드도 두 정의를 다 낸다"
+
+check_reflect_release
 
 echo "window:"
 

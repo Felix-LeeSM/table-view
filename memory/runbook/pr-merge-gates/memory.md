@@ -3,7 +3,7 @@ title: PR merge 게이트 진단 / 처리
 type: runbook
 updated: 2026-08-01
 task: merge, pr, review-gate, ci, blocked, ruleset, e2e, synchronize-rerun, cancelled-rollup, round-gate
-keywords: BLOCKED, base branch policy prohibits, mergeStateStatus, UNSTABLE, CLEAN, DIRTY, review-gate, reflect:done, required check, check-runs, check suite, merge ref, rerun, cancelled, cancel-in-progress, expected, Dismiss stale approval, statusCheckRollup, auto-merge, 체크 0개
+keywords: BLOCKED, base branch policy prohibits, mergeStateStatus, UNSTABLE, CLEAN, DIRTY, review-gate, reflect:done, required check, check-runs, check suite, merge ref, rerun, cancelled, cancel-in-progress, expected, Dismiss stale approval, Release reflect:done on a new round, Count review rounds by head OID, head-oid, head OID, rounds=, round-def, statusCheckRollup, auto-merge, 체크 0개
 trigger:
   signal: PR 이 mergeable 인데 mergeState=BLOCKED / merge 가 base branch policy 로 거부
   layer: none — 자동 로드 없음, 직접 열어야 함
@@ -102,9 +102,11 @@ N 개 중 `FAIL <key>` 를 찍은 spec 이 원인이다.
 - **체크가 0개면 워크플로 문제부터 보지 않는다.** `mergeStateStatus` 를 먼저 봐라 —
   `DIRTY`(충돌)면 CI 는 아예 안 돈다.
 - **update-branch(main pull) 불필요**: branch protection `strict`(up-to-date)=false →
-  behind 여도 merge 된다. update-branch 는 synchronize 이벤트로 `review:approved` 와
-  `review:changes-requested` 를 떨구기만 하고 이득 없음 (떼는 label 집합의 SOT 는
-  `.github/workflows/review-gate.yml` 의 "Dismiss stale approval on new commits").
+  behind 여도 merge 된다. update-branch 는 synchronize 이벤트로 `review:approved` ·
+  `review:changes-requested` · `reflect:done` 을 떨구기만 하고 이득이 없다 — 라운드 3
+  이상에서는 사용자 진행 승인까지 날아간다. 떼는 label 집합의 SOT 는
+  `.github/workflows/review-gate.yml` 의 "Release reflect:done on a new round" 와
+  "Dismiss stale approval on new commits" 두 스텝이다.
 - **CLEAN 만 기다리지 말 것**: `mergeState=UNSTABLE` = required 전부 pass +
   non-required 만 fail → **merge 가능**. ※ `Dependency Security`(cargo deny / RUSTSEC)는
   2026-07-05 부터 **required 로 승격** — fail 이면 BLOCKED. RUSTSEC 신규 advisory 로
@@ -138,11 +140,12 @@ N 개 중 `FAIL <key>` 를 찍은 spec 이 원인이다.
   라운드 3 이상이고 `reflect:done` label 이 없으면 exit 1 한다. rerun 도 label
   재발화도 같은 상태를 재생하므로 계속 fail — 해소는 `reflect:done` 뿐이다
   (`enforce_admins=true` 라 `--admin` 우회 없음). **누가 붙이냐는 verdict 가 가른다** —
-  green 이면 종결자가 바로 붙이고, red 면 회고 모드 리뷰어가
-  interface 를 거쳐 사용자에게 올려 받는다
-  ([delivery](../../workflow/delivery/memory.md)). 저자는
-  붙이지 않는다. 게이트는 라운드만 세고
-  verdict 를 안 보므로 green 도 걸린다.
+  green 이면 종결자가 바로 붙이고, red 면 회고 모드 리뷰어가 interface 를 거쳐
+  사용자에게 올려 받는다 ([delivery](../../workflow/delivery/memory.md)). 저자는 붙이지
+  않는다. 게이트는 라운드만 세고 verdict 를 안 보므로 green 도 걸린다.
+  **label 은 라운드 단위다 (#1968)** — `Release reflect:done on a new round` 스텝이
+  synchronize 마다 떼므로(해제를 재조회로 확인하고 확인 실패도 exit 1), 승인을 받고
+  fix 를 더 push 하면 다음 라운드에서 다시 받아야 한다.
 - **라운드 = 서로 다른 head 커밋에 붙은 리뷰 인계의 수다 (#1968, 2026-08-01).**
   앞 스텝 `Count review rounds by head OID` 가 GraphQL 로 세서 output 으로 넘기고
   `Stop at review round 3` 이 그것을 읽는다 — 웹훅 payload 에는 이 집계가 없다.

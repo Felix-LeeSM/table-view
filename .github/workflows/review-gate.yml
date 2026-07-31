@@ -25,6 +25,36 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      # 새 head OID = 새 라운드다 (#1968). `reflect:done` 은 그 라운드에 대한 사용자
+      # 진행 승인이라 다음 라운드로 넘기지 않는다 — 안 떼면 한 번 붙은 label 이
+      # 라운드 4·5·6 을 영구 skip 시킨다. 아래 "Dismiss stale approval" 이 같은
+      # synchronize 에서 verdict label 을 떼는 것과 같은 패턴이다.
+      #
+      # **이 스텝은 그 dismissal 보다 먼저 와야 한다** — dismissal 은 의도적으로
+      # exit 1 하므로 뒤에 두면 영영 실행되지 않는다. 순서는
+      # scripts/review/measure-rounds.test.sh 의 "reflect:done 해제" 절이 본다.
+      #
+      # 해제 실패는 통과가 아니라 실패다. label 이 남은 채로 넘어가면 다음 라운드가
+      # 사용자 승인 없이 게이트를 통과한다 — DELETE 뒤에 실제로 사라졌는지 재조회로
+      # 확인하고, 확인 자체가 안 되면(API 실패) 판정 불가로 보고 exit 1 한다.
+      - name: Release reflect:done on a new round
+        if: github.event_name == 'pull_request' && github.event.action == 'synchronize'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          # 안 붙어 있으면 404 라 실패가 정상이다 — 판정은 아래 재조회가 한다.
+          gh api -X DELETE "repos/${GITHUB_REPOSITORY}/issues/${PR}/labels/reflect%3Adone" >/dev/null 2>&1 || true
+          labels="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/issues/${PR}/labels" --jq '.[].name')" || {
+            echo "::error::reflect:done 해제를 확인하지 못했다 (label 조회 실패) — 남아 있으면 다음 라운드가 사용자 승인 없이 통과한다"
+            exit 1
+          }
+          if printf '%s\n' "$labels" | grep -qxF 'reflect:done'; then
+            echo "::error::reflect:done 해제 실패 — label 이 그대로 남아 있다. 손으로 떼라: gh pr edit ${PR} --remove-label reflect:done"
+            exit 1
+          fi
+          echo "::notice::reflect:done released — 새 head OID 는 새 라운드다"
+
       # 새 commit 이 push 되면 기존 verdict 는 양쪽 다 무효 — stale approval 로 미리뷰
       # 코드가 머지되는 것을 막고 (dismiss stale approvals 대응), 대칭으로 stale
       # changes-requested 도 떨군다. 지적을 고친 commit 이 올라와도 red verdict label 이
@@ -100,14 +130,15 @@ jobs:
       # 3라운드부터는 red 면 fix 를 더 쌓지 말고 근본 원인을 재평가한다 (delivery
       # 「자율 실행 vs 중단」). green 이면 재평가 대상이 아니라 종결자가 label 붙이고 머지한다.
       # 임계값 3 은 완화 대상이 아니라 지켜야 할 선이다 — 걸리면 라운드를 줄여라.
-      # `reflect:done` 은 여전히 일회성 탈출구다 — 한 번 붙으면 그 뒤 라운드도 통과한다.
+      # `reflect:done` 은 라운드 단위 탈출구다 — 위 "Release reflect:done on a new round"
+      # 가 새 head OID 마다 떼므로 다음 라운드는 승인을 다시 받아야 한다 (#1968).
       - name: Stop at review round 3
         if: >-
           github.event_name == 'pull_request'
           && steps.rounds.outputs.rounds >= 3
           && !contains(github.event.pull_request.labels.*.name, 'reflect:done')
         run: |
-          echo "::error::rounds=${{ steps.rounds.outputs.rounds }} (서로 다른 head 커밋에 붙은 리뷰 인계 수) — 리뷰 3라운드. green 이면 reflect:done 을 붙이고 머지해라 (게이트는 라운드만 세고 verdict 는 안 본다). red 면 같은 유형에 fix 를 더 쌓지 말고 재발 유형 / 라운드별 건수 / 시도한 것을 사용자에게 올려라 — 진행 승인이 reflect:done 이다."
+          echo "::error::rounds=${{ steps.rounds.outputs.rounds }} (서로 다른 head 커밋에 붙은 리뷰 인계 수) — 리뷰 3라운드. green 이면 reflect:done 을 붙이고 머지해라 (게이트는 라운드만 세고 verdict 는 안 본다). red 면 같은 유형에 fix 를 더 쌓지 말고 재발 유형 / 라운드별 건수 / 시도한 것을 사용자에게 올려라 — 진행 승인이 reflect:done 이다. 그 승인은 이 라운드에만 유효하다: 새 커밋이 오면 자동으로 떨어진다."
           exit 1
 
       - name: Require review:approved label
