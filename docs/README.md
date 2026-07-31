@@ -38,6 +38,7 @@ cap 은 규율로만 남았고 자동 검사가 없다.
 - `PLAN.md` - 기존 링크 호환용 roadmap/product 인덱스. backlog 나 product
   claim ledger 를 두지 않는다.
 - `contributor-guide/` - 개발자가 변경을 넣을 때 읽는 사람용 절차.
+- `decisions/` - ADR. 살아 있는 정책이라 `archives/` 로 내리지 않는다.
 - `archives/` - 더 이상 active SOT 가 아닌 기록.
 - `phases/` - active phase planning 만 둔다. 보류/완료/비활성 phase 는
   `archives/phases/` 로 이동한다.
@@ -51,13 +52,15 @@ cap 은 규율로만 남았고 자동 검사가 없다.
   `ROADMAP.md`).
 - 구조적 제약이면 `memory/engineering/architecture/**`.
 - 개발/운영 절차 제약이면 `memory/engineering/**` 또는 `contributor-guide/`.
-- 과거 사건/결정/retired register 는 `archives/`.
+- 결정으로 굳으면 ADR 로 `decisions/`.
+- 과거 사건/retired register 는 `archives/`.
 
 ## Memory 와 Docs 경계
 
 - `memory/` - agent 가 작업 중 직접 열어 읽는 active product/engineering/workflow/runbook 규칙. 자동 로드는 없다.
 - `memory/engineering/` - 코드 구조, architecture, convention, fixture, UI 규칙 SOT.
-- `docs/decisions/` - Accepted ADR. 살아 있는 정책이라 기본 검색에 잡힌다.
+- `docs/decisions/` - ADR. Accepted 가 살아 있는 정책이라 기본 검색에 잡히고,
+  Superseded 판은 같은 자리에 남아 frontmatter `status` 로 갈린다.
 - `docs/archives/incidents/` - 과거 사건 기록. 기본 agent memory 탐색 대상이 아니다.
 - `docs/` - 사람이 탐색하는 제품/프로젝트 문서.
 
@@ -87,8 +90,9 @@ rg -j1 --no-ignore-dot '<term>' docs memory README.md AGENTS.md   # active + 기
 
 **주의 — 루트를 둘 이상 주면서 `-j1` 을 빼면 ignore 적용이 비결정적이다.**
 병렬 walker 가 경합해 같은 명령이 실행마다 다른 결과를 낸다. 아래 재현 명령을
-2026-08-01 에 다섯 번 돌린 결과(총 100 실행), 나오는 값은 기록 0건 아니면 10건
-둘뿐인데 20회 중 0건이 4~10회로 갈렸다 — 비율도 고정이 아니다. 같은 명령에
+2026-08-01 에 다섯 번 돌린 결과(총 100 실행), 나오는 값은 기록 0건 아니면 전량
+(측정 시점 7건) 둘뿐이고 중간값이 없었다. 대신 20회 중 0건이 몇 번인지는 라운드마다
+달랐다 — 비율이 고정이 아니라 재현해도 같은 분포가 안 나온다. 같은 명령에
 `-j1` 만 넣으면 다섯 번 다 20회 전부 0건이었다.
 
 ```sh

@@ -35,7 +35,8 @@ issues, with `docs/ROADMAP.md` carrying only the durable routing summary.
 | `test-plans/` | retired test improvement plans |
 | `workflows/` | inactive workflow handoffs |
 
-ADR 은 여기 없다. Accepted ADR 은 살아 있는 정책이라 `docs/decisions/` 가 소유한다.
+ADR 은 여기 없다 — Accepted 도 Superseded 도 `docs/decisions/` 가 소유한다.
+Accepted 가 살아 있는 정책이라 그 디렉터리를 `archives/` 밖에 둔다.
 
 ## Naming
 
