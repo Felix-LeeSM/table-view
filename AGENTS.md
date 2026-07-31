@@ -4,24 +4,23 @@ Claude Code / Codex / Cursor 모두 본 파일 1번 read. 본문 lazy, 작업 �
 
 ## 작업 체계 선언 — 이 repo 의 작업은 노드 워크플로로 돈다
 
-**모든 작업이 이 체계를 지난다.** 노드는 자기 몫의 행동 하나만 끝내고, 결과를
-label 과 GitHub 산출물(이슈·PR·코멘트)로 남긴 뒤 종료한다. 다음 노드는 그 상태를
-보고 뜨므로, 노드가 노드를 직접 부르지 않는다.
+**모든 작업이 이 체계를 지난다.** 노드는 행동 하나만 끝내고 결과를 label 과
+GitHub 산출물로 남긴 뒤 종료한다 — 다음 노드는 그 상태를 보고 뜬다.
 
-- **interface** — 사용자와 대화하는 top-level 세션. 설계 결정과 `raw` → `task`
-  승격을 맡는다. 계약: `memory/workflow/interface/memory.md`.
-- **orchestrator** — label 을 보고 다음 노드를 spawn 한다. 커밋된 프롬프트
-  `.agents/prompts/orchestrator.md` 로 기동한다.
-- **구현자 · 리뷰 coordinator · 종결자(pr-finalize)** — 고정부는
-  `.agents/prompts/<role>.md` preamble, 행동 계약은 `memory/workflow/` 의
+- **interface** — 사용자와 대화하는 top-level 세션. 설계 결정 · `raw` → `task`
+  승격. 계약 `memory/workflow/interface/memory.md`.
+- **orchestrator** — label 을 보고 다음 노드를 spawn. 커밋된 프롬프트
+  `.agents/prompts/orchestrator.md` 로 기동.
+- **구현자 · 리뷰 coordinator · 종결자(pr-finalize)** — 고정부
+  `.agents/prompts/<role>.md`, 계약은 `memory/workflow/` 의
   implementation · delivery · review 방.
 
-**신선한 세션의 기본 가정: 사용자와 대화하고 있으면 너는 interface 다** —
-먼저 `memory/workflow/interface/memory.md` 를 읽어라.
+**역할 preamble 을 못 받았는데 사용자와 대화 중이면 너는 interface 다** — 먼저
+`memory/workflow/interface/memory.md` 를 읽어라.
 
-소스 수정은 독립 clone 사본에서만 한다 (`memory/runbook/worktree/memory.md`).
-모든 변경은 `task` 이슈 → PR → required gate 를 지난다. **예외 없다** — 다만
-집행 장치가 없으므로 지키는 것은 agent 자신이다.
+소스 수정은 독립 clone 사본에서만 하고(`memory/runbook/worktree/memory.md`), 모든
+변경은 `task` 이슈 → PR → required gate 를 지난다. **예외 없다** — 집행 장치가
+없으니 지키는 것은 agent 자신이다.
 
 ## 작업 type → 먼저 read
 
@@ -52,9 +51,12 @@ label 과 GitHub 산출물(이슈·PR·코멘트)로 남긴 뒤 종료한다. �
 surface 디렉토리(`src/` 등)의 `AGENTS.md` 는 해당 surface rule 로 가는 3~5줄
 포인터만 둔다. 규칙 본문은 `memory/` 에 — 본문을 옮겨 심으면 SOT 가 갈라진다.
 
-**spawn 된 subagent 에 자동으로 닿는 채널은 하나뿐이다** — `CLAUDE.md` 와
-그것의 `@` import (이 파일이 그렇게 온다). **마크다운 링크는 안 따라간다** —
-매트릭스의 경로는 agent 가 스스로 읽어야 한다.
+**spawn 된 subagent 에 자동으로 닿는 채널은 둘이다.** ① `CLAUDE.md` 와 그것의
+`@` import — 범용이라 harness 도 spawn 방식도 안 가린다 (이 파일이 그렇게 온다).
+② `.claude/agents/<role>.md` 정의 body — Claude Code 가 `subagent_type` 을 지정해
+띄운 subagent 의 system prompt 로 실린다. **②가 ①을 대체하지 않는다**: 역할을
+지정하지 않은 spawn 과 다른 harness 에는 여전히 ①뿐이다. **마크다운 링크는 안
+따라간다** — 매트릭스의 경로는 agent 가 스스로 읽어야 한다.
 
 `.agents/skills/` 에는 긴 절차를 담은 skill 이 있다. 매트릭스가 가리키는 것이
 전부다. **어떤 harness 도 자동으로 읽지 않는다** — Claude Code 가 스캔하는 skill
