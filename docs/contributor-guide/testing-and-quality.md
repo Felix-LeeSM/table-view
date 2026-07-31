@@ -129,8 +129,13 @@ Required local evidence:
   `cargo test --manifest-path src-tauri/Cargo.toml --test parse_sql_backend`.
 - Docker integration lane: with required services available,
   `cargo test --manifest-path src-tauri/Cargo.toml --test schema_integration --test query_integration --test mongo_integration --test fixture_loading --test redis_integration`.
-- Documentation lane: docs changed for the release must pass Prettier and local
-  link/target review for the touched docs.
+- Documentation lane: `git diff --check` on the touched docs plus local
+  link/target review. **No formatter covers docs markdown, on purpose.**
+  Prettier was removed when Biome landed, `biome.json` excludes `docs/`
+  outright, and Biome 2.5.6 does not format markdown at all — so there is
+  nothing to run and this lane must not be written as if there were. Reviewer
+  judgement is the whole gate here; do not treat a docs-only change as
+  machine-verified.
 
 Required remote evidence on the exact release SHA:
 

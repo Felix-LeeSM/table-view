@@ -178,7 +178,7 @@ The short form:
 | `wdio-report/`, `e2e/wdio-report/` | report contents gitignored; `.gitkeep` tracked | Written only by a local `TABLE_VIEW_TEST_DATA_DIR=/tmp/table-view-smoke pnpm test:e2e:smoke` run; nothing uploads them | Delete report contents only | Host-only report output |
 | `target/`, `src-tauri/target/`, `cargo-target/` | gitignored | `src-tauri/target/` is required for local warm-start but not a tracked source root | Clean only for cache repair or disk pressure; never delete as #728 evidence | Cache boundary; later fencing may add policy, #728 does not delete |
 | `tmp/` | gitignored | Not a CI input unless a workflow explicitly names a file inside it | Safe to delete only after confirming no running process depends on it | Scratch, not issue evidence SOT |
-| `worktrees/`, `.claude/worktrees/` | gitignored; excluded from Vite, Vitest, ESLint, and dev-server fs access | Not a CI input | Clean only through the worktree cleanup runbook; dirty worktrees are preserved and reported | Local state, not source, cache, fixture, or planning surface |
+| `worktrees/`, `.claude/worktrees/` | gitignored; excluded from Vite, Vitest, ESLint, Biome, and dev-server fs access | Not a CI input | Clean only through the worktree cleanup runbook; dirty worktrees are preserved and reported | Local state, not source, cache, fixture, or planning surface |
 | `.env`, `.env.*`, `.env.example` | `.env*` gitignored except `.env.example` | Not inspected by agents; `.dockerignore` excludes local secrets | Do not delete or read local secrets; update only `.env.example` for documented defaults | Secret boundary |
 
 ## Verification Notes
@@ -186,5 +186,8 @@ The short form:
 - `git status --short` before worktree edits was clean.
 - No directory moves, source moves, cache deletion, tmp deletion, or worktree
   cleanup happened in this PR.
-- No dedicated internal markdown link checker exists in the repo today; use
-  Prettier and `git diff --check` for this docs-only inventory.
+- No dedicated internal markdown link checker exists in the repo today, and no
+  markdown formatter either: Prettier was removed when Biome landed, `biome.json`
+  excludes `docs/`, and Biome 2.5.6 does not format markdown. `git diff --check`
+  plus reading the diff is the whole mechanical check for this docs-only
+  inventory.
