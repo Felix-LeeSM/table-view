@@ -58,23 +58,37 @@ test "$(git rev-parse --show-toplevel)" = "<사본 경로>" \
 | red   | `review:approved`          | `review:changes-requested` |
 
 변수와 함수를 공유하므로 **한 shell 에서 통째로** 돌린다. 도구가 Bash 호출마다
-새 shell 을 띄우면 쪼개지 말고 이 블록 전체를 한 번에 넘겨라.
+새 shell 을 띄우면 쪼개지 말고 이 블록 전체를 한 번에 넘겨라. queue 에 상한이
+없으니 **도구가 허용하는 최대 timeout 으로** 넘긴다 (Claude Code Bash 도구 기준
+`timeout` 기본 120000ms · 최대 600000ms — 값은 쓰는 도구의 설명에서 확인한다).
+기본값이면 remove 와 add **사이**가 잘려 verdict label 이 하나도 없는 PR 이
+남는다. 잘렸으면 새 shell 에 `$NEW` 가 없으니, 게이트 run 이 끝난 것을 확인하고
+표의 `NEW` 값을 `gh pr edit <N> --add-label` 로 직접 붙여 마무리한다.
+
+치환할 자리는 `<N>`(PR 번호) · `<head-branch>` · 표에서 오는 `OLD`/`NEW` 다.
+**`<head-branch>` 는 PR 의 head ref 다.** base 를 넣으면 조회가 `event=push` run
+만 돌려주므로(2026-08-01 실측: `gh run list --workflow review-gate.yml --branch
+main --limit 5 --json event` → 5건 전부 `push`) 루프가 24회를 다 돌고 abort 한다.
 
 ```bash
 OLD=<위 표의 값>
 NEW=<위 표의 값>
-gate_run() { gh run list --workflow review-gate.yml --branch <브랜치> --limit 1 \
+gate_run() { gh run list --workflow review-gate.yml --branch <head-branch> --limit 1 \
   --json databaseId -q '.[0].databaseId'; }
 
 if gh pr view <N> --json labels -q '.labels[].name' | grep -qx "$OLD"; then
-  PREV=$(gate_run)
+  # run 없음(rc 0)과 조회 실패(rc≠0)가 똑같이 빈 문자열로 온다 — 값이 아니라 rc 로 가른다.
+  # 실패를 삼켜 PREV="" 가 되면 첫 회차가 옛 완료 run 과 달라 보여 0초 만에 break 한다
+  PREV=$(gate_run) || { echo "ABORT: gate_run 조회 실패 — label 안 떼고 멈춘다" >&2; exit 1; }
   gh pr edit <N> --remove-label "$OLD"
   for _ in {1..24}; do
-    [ "$(gate_run)" != "$PREV" ] && break
+    NOW=$(gate_run)   # 폴링 중엔 실패도 빈 문자열도 "아직 안 떴다" — 어느 쪽도 break 시키지 않는다
+    [ -n "$NOW" ] && [ "$NOW" != "$PREV" ] && break
     sleep 5
   done
-  [ "$(gate_run)" != "$PREV" ] || { echo "ABORT: review-gate run 이 안 떴다" >&2; exit 1; }
-  gh run watch "$(gate_run)" >/dev/null   # queue 포함 완료까지. 결과는 안 본다
+  [ -n "$NOW" ] && [ "$NOW" != "$PREV" ] \
+    || { echo "ABORT: review-gate run 이 안 떴다(또는 조회 실패)" >&2; exit 1; }
+  gh run watch "$NOW" >/dev/null   # queue 포함 완료까지. 결과는 안 본다
 fi
 gh pr edit <N> --add-label "$NEW"
 ```
