@@ -21,7 +21,8 @@ gh issue list --state open --label task --json number,title,labels
 ## Slot 규칙
 
 - 동시 활성 노드 총합 ≤ **5**. 리뷰어도 차감한다.
-- 세션에서 사용자가 상한을 내렸다는 기록이 재개 메시지에 있으면 그 값을 쓴다.
+- 재개 메시지에 `상한: N` 지시자가 있으면 그 값을 쓴다 — interface 가 보낼 수
+  있는 유일한 비포인터 입력이다.
 - spawn 전에 티켓의 파일 범위와 in-flight PR 파일 목록
   (`gh pr view <N> --json files -q '.files[].path'`)의 교집합을 잰다.
   겹치면 작업은 진행하되 리뷰 큐 순서를 뒤로 준다.
@@ -32,7 +33,7 @@ gh issue list --state open --label task --json number,title,labels
 |---|---|
 | `needs:user` label 이 있는 이슈/PR | **전부 정지하고 보고 후 종료** |
 | PR: 라운드 3 이상(comment ≥ 3) + red | 회고 모드 리뷰어 spawn (유형 재발 표 작성 → needs:user) |
-| PR: `review:approved` + required CI green | pr-finalize spawn |
+| PR: `review:approved` + required CI green | pr-finalize spawn (comment ≥ 3 이면 pr-finalize 가 `reflect:done` 을 먼저 붙인다 — 게이트는 라운드만 세고 verdict 를 안 본다) |
 | PR: `review:changes-requested` | 같은 사본에 issue-implement 재spawn (수정 라운드) |
 | PR: verdict label 없음 + 리뷰어 미활성 | pr-review coordinator spawn |
 | `task` 이슈: 점유 코멘트 없음 + slot 여유 | 사본 생성 후 issue-implement spawn |

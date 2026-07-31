@@ -112,5 +112,5 @@ spawn 프롬프트에 넣는다: 행동 계약(구현자는 implementation §5 �
 - [review](../review/memory.md) — reviewer 행동 계약
 - [delivery](../delivery/memory.md) — 커밋 → 푸시 → PR → 리뷰 → 머지 구간의 node 별 계약
 - [git-policy](../git-policy/memory.md) — force-push 금지, rebase 대신 merge
-- [worktree](../../runbook/worktree/memory.md) — linked worktree spawn
+- [worktree](../../runbook/worktree/memory.md) — 작업 사본(clone) 생성·점유·회수
 - [pr-merge-gates](../../runbook/pr-merge-gates/memory.md) — merge 게이트 진단

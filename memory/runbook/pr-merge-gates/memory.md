@@ -132,5 +132,5 @@ merge 막히면 위 "두 곳 분산" → "함정" → "올바른 순서" 순으�
 ## 관련
 
 - [delivery](../../workflow/delivery/memory.md) — 리뷰~정리 구간의 review-gate label / enforce_admins 계약
-- [worktree](../worktree/memory.md) — merge 후 worktree cleanup
+- [worktree](../worktree/memory.md) — merge 후 사본(clone) 회수
 - [git-policy](../../workflow/git-policy/memory.md) — force push 금지 (집행 훅 없음)

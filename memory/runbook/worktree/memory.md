@@ -28,17 +28,23 @@ worktree 는 `.git` 을 공유해 index.lock 겹침·FETCH_HEAD 등 공유 자�
 ## 생성
 
 ```bash
+# primary 루트에서 실행 — 사본은 primary "밖" 형제 디렉토리에 만든다
+PRIMARY="$(git rev-parse --show-toplevel)"
+DEST="$PRIMARY/../table-view-clones/<branch 의 / 를 __ 로>"
 # 1) 로컬 객체를 hardlink 로 공유하는 clone — 수 초, 디스크 저렴
-git clone --local /Users/felix/Desktop/study/table-view clones/<branch-sanitized>
-# 2) origin 을 GitHub 으로 — 이후 fetch/push 는 GitHub 과 직접
-git -C clones/<dir> remote set-url origin git@github.com:Felix-LeeSM/table-view.git
-git -C clones/<dir> fetch origin main
-git -C clones/<dir> checkout -b <branch> origin/main
+git clone --local "$PRIMARY" "$DEST"
+# 2) origin 을 GitHub 으로 — 이후 fetch/push 는 GitHub 과 직접 (https — 이
+#    머신의 ssh 는 GitHub 인증이 없어 fetch 가 실패한다, 2026-07-31 실측)
+git -C "$DEST" remote set-url origin https://github.com/Felix-LeeSM/table-view.git
+git -C "$DEST" fetch origin main
+git -C "$DEST" checkout -b <branch> origin/main
 # 3) 의존성 — cold 시작
-cd clones/<dir> && pnpm install --frozen-lockfile --prefer-offline
+cd "$DEST" && pnpm install --frozen-lockfile --prefer-offline
 ```
 
-- 디렉토리: `clones/<branch 의 / 를 __ 로>` — repo 안, gitignored.
+- 위치: primary **밖** 형제 디렉토리 `../table-view-clones/`. repo 안에 두면
+  rg·Tailwind source scan·lint 글롭이 사본을 훑는 함정이 생기고 `.gitignore`
+  로는 도구 전부를 못 막는다.
 - `src-tauri/target/`·`node_modules/` 복사 금지 — 복사본 stale path 가 tauri
   빌드를 깨뜨린 전력. 사본은 cold 로 시작한다.
 - hook 설정(core.hooksPath 등)도 사본별 독립 — 한 사본의 변경이 남을 못 건드린다.
@@ -48,7 +54,9 @@ cd clones/<dir> && pnpm install --frozen-lockfile --prefer-offline
 worktree 가 공짜로 주던 "같은 브랜치 이중 체크아웃 방지"가 clone 에는 없다.
 대신 상태를 GitHub 에 둔다:
 
-- spawn 시 orchestrator 가 해당 이슈에 `착수: <branch> / clones/<dir>` 코멘트.
+- spawn 시 orchestrator 가 해당 이슈에 `착수: <branch>` 코멘트를 남긴다. 사본
+  경로는 규약(`../table-view-clones/<branch-sanitized>`)에서 파생되므로 로컬
+  경로를 GitHub 에 적지 않는다.
 - spawn 전 확인 둘: 이슈에 살아 있는 점유 코멘트가 없는가,
   `git ls-remote origin <branch>` 가 stale ref 를 내지 않는가
   (stale 이면 [git-policy](../../workflow/git-policy/memory.md) 의 재spawn 절차).
