@@ -147,8 +147,10 @@ Current gap / routing:
 
 Current safety is source-specific: RDB DDL preview/confirm, RDB Safe Mode
 confirmation paths, Mongo safety confirmation, Redis typed confirmation keys,
-and Search fixture/live delete-by-query preview plan estimates with actual
-execution unsupported. There is no universal dry-run, actual live Search admin
+and Search fixture/live delete-by-query preview plan estimates followed by live
+`_delete_by_query` execution behind `safe_mode::enforce_search_danger`, a
+backend IPC chokepoint that runs the same danger-tier matrix as the RDB paths
+(#1076). There is no universal dry-run, actual live Search index/settings admin
 execution, admin audit log, role/user/permission UI, or security dashboard
 claim.
 

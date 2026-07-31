@@ -91,8 +91,8 @@ surface and redact credentials/full URLs; this is not a global audit log or
 security dashboard. Search live HTTP/admin promotion remains owned by the Search
 roadmap/milestone, not non-RDBMS lazy-loading workbench hardening. Global audit
 logs, role/user/permission UI, credential rotation UI, keyring diagnostics,
-actual live Search admin execution, and a general security dashboard are not
-implemented. PostgreSQL and MySQL/MariaDB connections honor
+actual live Search index/settings admin execution, and a general security
+dashboard are not implemented. PostgreSQL and MySQL/MariaDB connections honor
 `tls_enabled`/`trustServerCertificate` when set (encryption required with full
 certificate verification, or verification skipped when the certificate is
 trusted) and reject contradictory combinations instead of silently downgrading

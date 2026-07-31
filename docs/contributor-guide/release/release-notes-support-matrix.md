@@ -35,10 +35,11 @@ Known limits to state in release notes:
   to main, on the nightly schedule, and under the `e2e:full` label; anything
   outside that runs on a Linux host by hand. macOS and Windows desktop runtime
   smoke remain deferred.
-- Search live admin execution, Redis/Valkey full CLI/admin parity, MongoDB
-  arbitrary JavaScript shell behavior, MSSQL full T-SQL/SQLCMD/admin support,
-  and Oracle SID/TNS/wallet/TLS/DDL/raw-admin/full PL/SQL support remain out of
-  scope.
+- Search live index/settings admin execution, Redis/Valkey full CLI/admin
+  parity, MongoDB arbitrary JavaScript shell behavior, MSSQL full
+  T-SQL/SQLCMD/admin support, and Oracle SID/TNS/wallet/TLS/DDL/raw-admin/full
+  PL/SQL support remain out of scope. Live `_delete_by_query` execution is not
+  in this list — #1076 promoted it behind the Safe Mode confirm gate.
 - DuckDB COPY/ATTACH/DETACH, extension install/load, raw external-file SQL
   functions, automatic import/export workflow, and admin parity remain out of
   scope. Native structural DDL (table create/drop/rename, column
@@ -58,8 +59,8 @@ Known limits to state in release notes:
 | MongoDB | Whitelisted document workflow supports collection browse, MQL query/edit preview, selected admin/destructive confirmations, autocomplete, bulk/index/validator focused paths, and cancellation. Arbitrary JavaScript shell and native document-first result parity remain future work. | [`docs/product/README.md`](../../product/README.md), [`query-language-support.md`](../../product/query-language-support.md) |
 | Redis | KV profile supports connection, key scan, typed value preview/edit, guarded string write, TTL, exact-key delete, bounded command dispatch, and bounded command/key completion. Full CLI/admin/cluster/pubsub/modules/consumer-group parity remains out of scope. | [`docs/product/README.md`](../../product/README.md), [`known-limitations.md`](../../product/known-limitations.md) |
 | Valkey | Active KV runtime slice for connection, key scan/value preview, selected stream reads, selected Redis-compatible command query rows, bounded SET/EXPIRE, destructive/unsupported guards, the same string plus hash/list/set/zset KvMutationPanel write controls as Redis (#1075), and proven-row command completion. Valkey collection-write smoke coverage and full Redis compatibility are not claimed. | [`docs/product/README.md`](../../product/README.md), [`query-language-support.md`](../../product/query-language-support.md) |
-| Elasticsearch | Live URL/auth/TLS root probe, live catalog, bounded `_search`, Search DSL validation, hand-run smoke coverage, and delete-by-query safety planning are active. Actual live admin execution and broader observability/profile/explain workflows remain deferred. | [`docs/product/README.md`](../../product/README.md), [`known-limitations.md`](../../product/known-limitations.md) |
-| OpenSearch | OpenSearch-specific live root probe, Elasticsearch endpoint rejection, live catalog, bounded `_search`, mapping-aware completion, hand-run smoke coverage, and delete-by-query safety planning are active. Actual live admin execution remains deferred. | [`docs/product/README.md`](../../product/README.md), [`query-language-support.md`](../../product/query-language-support.md) |
+| Elasticsearch | Live URL/auth/TLS root probe, live catalog, bounded `_search`, Search DSL validation, hand-run smoke coverage, delete-by-query safety planning, and live `_delete_by_query` execution behind the Safe Mode confirm gate (#1076) are active. Actual live index/settings admin execution and broader observability/profile/explain workflows remain deferred. | [`docs/product/README.md`](../../product/README.md), [`known-limitations.md`](../../product/known-limitations.md) |
+| OpenSearch | OpenSearch-specific live root probe, Elasticsearch endpoint rejection, live catalog, bounded `_search`, mapping-aware completion, hand-run smoke coverage, delete-by-query safety planning, and live `_delete_by_query` execution behind the Safe Mode confirm gate (#1076) are active. Actual live index/settings admin execution remains deferred. | [`docs/product/README.md`](../../product/README.md), [`query-language-support.md`](../../product/query-language-support.md) |
 | MSSQL | Bounded SQL authentication, catalog/query/cancel/tabular runtime, primary-key row edit through frontend SQL batch, bounded T-SQL editor guardrails, and representative hand-run smoke coverage are active. Structured DDL, SQLCMD/admin/security/backup/jobs/users/roles, broad parser/completion semantics, and full T-SQL semantics remain unsupported. | [`docs/product/README.md`](../../product/README.md), [`known-limitations.md`](../../product/known-limitations.md) |
 | Oracle | Service-name lifecycle, bounded catalog/query/cancel/tabular runtime, primary-key row edit through frontend SQL batch, bounded Safe Mode classification, bounded editor assistance, and representative hand-run smoke coverage are supported for `host:port/serviceName` with default fixture service `XEPDB1`. SID, TNS, wallet, advanced auth, structured DDL, raw DDL/admin, full parser/completion promotion, and PL/SQL body/package work remain unsupported until Oracle-specific evidence lands. | [`docs/product/README.md`](../../product/README.md), [`known-limitations.md`](../../product/known-limitations.md) |
 

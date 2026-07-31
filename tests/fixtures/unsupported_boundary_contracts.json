@@ -7,7 +7,7 @@
       "id": "search-live-http-deferred-admin-boundaries",
       "minimumRow": "Search live HTTP non-claim",
       "products": ["elasticsearch", "opensearch"],
-      "claimBoundary": "Live Search support stays bounded to connect/catalog/_search/render/delete-plan/scoped-error slices. Fixture and live evidence do not promote broader admin, global audit/security dashboards, profile/explain, raw target, or actual delete-by-query execution.",
+      "claimBoundary": "Live Search support stays bounded to connect/catalog/_search/render/delete-plan/delete-execute/scoped-error slices. Live `_delete_by_query` execution is promoted (#1076) behind the Safe Mode backend gate for a single concrete index target. Fixture and live evidence do not promote index/settings admin execution, global audit/security dashboards, profile/explain, raw target, or wildcard/`_all` delete targets.",
       "docs": [
         {
           "path": "docs/product/known-limitations-non-rdbms.md",
