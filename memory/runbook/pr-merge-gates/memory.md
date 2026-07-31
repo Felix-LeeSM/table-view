@@ -3,7 +3,7 @@ title: PR merge 게이트 진단 / 처리
 type: runbook
 updated: 2026-08-01
 task: merge, pr, review-gate, ci, blocked, ruleset, e2e, synchronize-rerun, cancelled-rollup, round-gate
-keywords: BLOCKED, base branch policy prohibits, mergeStateStatus, UNSTABLE, CLEAN, DIRTY, review-gate, reflect:done, required check, check-runs, check suite, rerun, cancelled, expected, Dismiss stale approval, statusCheckRollup, auto-merge, 체크 0개
+keywords: BLOCKED, base branch policy prohibits, mergeStateStatus, UNSTABLE, CLEAN, DIRTY, review-gate, reflect:done, required check, check-runs, check suite, merge ref, rerun, cancelled, cancel-in-progress, expected, Dismiss stale approval, statusCheckRollup, auto-merge, 체크 0개
 trigger:
   signal: PR 이 mergeable 인데 mergeState=BLOCKED / merge 가 base branch policy 로 거부
   layer: none — 자동 로드 없음, 직접 열어야 함
@@ -123,12 +123,17 @@ N 개 중 `FAIL <key>` 를 찍은 spec 이 원인이다.
 - **CANCELLED 고착 (#1515, 2h timeout 원인)**: `labeled` run 이 concurrency 로 CANCELLED
   되면 rollup 에 non-success 로 남아 BLOCKED 가 고착된다. `gh pr checks` 는 최신 run 만
   보여줘 all-pass 처럼 보인다 — 진단은 `statusCheckRollup`(GraphQL) 또는 commit
-  check-runs API. 해소는 해당 labeled run `gh run rerun`(labeled 라 유효) 또는 label
-  재발화.
-- **delta GREEN 후 고착 해소**: 재push→delta 리뷰 GREEN 인데 gate 가 fail 로 고착이면
-  리뷰어 label 유무와 무관하게 `gh pr edit <pr> --remove-label "review:approved"` →
-  `--add-label "review:approved"` 로 재발화해야 새 labeled run 이 pass 로 뜬다.
-  단 `comments >= 3` 이면 재발화해도 라운드 게이트에서 다시 막힌다 (아래).
+  check-runs API. 해소는 아래 재발화뿐이다 — CANCELLED 된 그 run 을 `gh run rerun`
+  해도 같은 suite 를 재사용해 판정을 못 바꾼다 (위 「함정」의 최신 suite 판정, #1967).
+- **재push 뒤 판정이 `review:approved` 인데 고착**: delta 리뷰가 `review:approved` 인데
+  gate 가 fail 로 고착이면, 리뷰어 label 유무와 무관하게 아래 재발화로 새 labeled run 을
+  만들어야 pass 로 뜬다.
+- **재발화 절차 — 위 두 고착 공통**: `gh pr edit <pr> --remove-label "review:approved"`
+  → **뗀 명령이 만든 review-gate run 이 완료될 때까지 대기** →
+  `--add-label "review:approved"`. 대기 없이 연속으로 치면 `cancel-in-progress` 가
+  run 하나를 죽여 위 CANCELLED 고착이 재발한다 (#1879). 대기 계약의 SOT 는
+  [review](../../workflow/review/memory.md) 「행동 계약」.
+  `comments >= 3` 이면 **두 고착 다** 재발화만으로 안 풀린다 — `reflect:done` 이 먼저다 (아래).
 - **라운드 3 이상은 `labeled` 도 fail (2026-07-29)**: `Stop at review round 3` step 이
   `comments >= 3` 이고 `reflect:done` label 이 없으면 exit 1 한다. rerun 도 label
   재발화도 같은 payload 를 재생하므로 계속 fail — 해소는 `reflect:done` 뿐이다
@@ -139,6 +144,11 @@ N 개 중 `FAIL <key>` 를 찍은 spec 이 원인이다.
   붙이지 않는다. 게이트는 라운드만 세고
   verdict 를 안 보므로 green 도 걸린다.
   최근 머지 30건 중 16건이 승인 시점에 `comments >= 3` 이었다.
+- **새로 머지한 게이트 스텝은 이미 열린 PR 에 바로 안 걸린다** — `pull_request` run 은
+  PR 의 merge ref 에서 workflow 정의를 읽고, 그 merge ref 는 base 보다 낡아 있을 수 있다
+  (#1868: merge ref 에 `Stop at review round 3` 이 아예 없어 두 run 이 그 스텝 없이
+  success). 게이트 도입 직후에는 초록을 믿지 말고 `gh run view <id> --json jobs` 로
+  step 목록을 확인한다.
 
 ## 올바른 순서
 
@@ -147,7 +157,8 @@ N 개 중 `FAIL <key>` 를 찍은 spec 이 원인이다.
    그 뒤로 push/rerun/update-branch 로 SHA·run 을 건드리지 않는다.
    `comments >= 3` 이면 `reflect:done` 이 먼저 필요하다 — green 은 종결자가 붙이고,
    red 는 [delivery](../../workflow/delivery/memory.md) 의 라운드 회고를 거친다.
-3. E2E flaky fail 은 workflow run 완료 후 `gh run rerun <id> --failed` 1회.
+3. E2E flaky fail 은 workflow run 완료 후 `gh run rerun <id> --failed` 1회 — 그 run 이
+   그 이름의 최신 suite 일 때만 판정이 바뀐다 (위 「함정」).
 4. `mergeState` 가 `UNSTABLE` 또는 `CLEAN` 이 되면 `gh pr merge`.
    (`--admin` 은 `enforce_admins=true` + ruleset 이라 우회 불가 — required 를 실제로
    충족시켜야 한다.)
