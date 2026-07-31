@@ -1,7 +1,8 @@
 ---
 title: Runbook
 type: index
-updated: 2026-06-12
+updated: 2026-07-31
+keywords: 절차, runbook, 명령 시퀀스
 ---
 
 # Runbook
@@ -22,7 +23,7 @@ updated: 2026-06-12
 
 ## 방 지도
 
-- [worktree](./worktree/memory.md) — 다중 agent / brain 병렬 작업용 git worktree 사용 룰
+- [worktree](./worktree/memory.md) — 다중 agent 병렬 작업의 독립 clone 사본 격리 룰 (생성·점유·회수)
 - [pr-merge-gates](./pr-merge-gates/memory.md) — PR merge BLOCKED/UNSTABLE 진단 (review-gate + ruleset required context, 트리거 함정. `Runtime Happy Path` 는 실검사라 blocker 가 될 수 있다)
 
 ## 진입 규칙

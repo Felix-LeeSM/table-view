@@ -13,7 +13,7 @@ separate PR comments.
 
 The comment must use GitHub-visible evidence only: repo-relative paths, PR URLs,
 commit URLs, or check URLs. Local absolute paths, temporary files, and worktree
-paths are not valid evidence.
+or clone paths are not valid evidence.
 
 ## Red / Green Rule
 
@@ -24,14 +24,15 @@ such cases and no others:
 2. A false statement this PR is responsible for lands in a source of truth.
 3. An automatic gate (required check) fails.
 
-Everything else is non-blocking. The reviewer files it as an issue and records
-the issue number on the scorecard.
+Everything else is non-blocking. The reviewer records it on the scorecard only
+— the reviewer does not file issues. Type-level issue emission happens in a
+separate sweep (`memory/workflow/review/memory.md`).
 
 A blocking finding must be backed by a counter-example, a command's output, or
 a gate result. "Insufficient evidence" and "not verified for every case" are
 not blocking. Rounds after the first judge only whether the previous round's
-blocking findings were resolved; anything newly discovered becomes an issue,
-except case 1 which blocks regardless of round.
+blocking findings were resolved; anything newly discovered is recorded on the
+scorecard, except case 1 which blocks regardless of round.
 
 Scores are not used. Blocking is decided once, in the integrated scorecard
 comment; per-perspective notes report findings and evidence, not severity.

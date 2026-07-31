@@ -1,8 +1,9 @@
 ---
 title: Git 정책
 type: workflow-rule
-updated: 2026-07-30
+updated: 2026-07-31
 task: commit, push, signing, push-reject, pr-close, race-trace
+keywords: non-fast-forward, push reject, force-push, --no-verify, --no-gpg-sign, FETCH_HEAD, ORIG_HEAD, update-ref, ls-remote, stale ref, pinentry, gpg failed
 trigger:
   signal: git commit / git push / push reject / PR close 시
   layer: none — 집행 훅 없음, 규율만
@@ -134,7 +135,7 @@ gh pr close <N> --delete-branch --comment "<reason>"
 
 ### 재 spawn 시 stale ref 검증
 
-새 worktree / 새 branch 작업 시작 전:
+새 사본(clone) / 새 branch 작업 시작 전:
 
 ```bash
 # remote 에 같은 branch ref 가 살아있는지 검사
@@ -174,4 +175,4 @@ zsh 는 word 안의 `:` 를 modifier 로 해석 → `<sha>:refs/heads/foo` 가
 - [ADR 0044](../../../docs/archives/decisions/0044-e2e-smoke-remote-required/memory.md) — E2E smoke remote PR/main blocking check
 - [ADR 0019](../../../docs/archives/decisions/0019-e2e-pre-push-not-ci/memory.md) / [ADR 0020](../../../docs/archives/decisions/0020-e2e-pre-push-host-docker/memory.md) — superseded 된 pre-push e2e 정책
 - [delivery](../delivery/memory.md) — 자율 pipeline
-- [worktree](../../runbook/worktree/memory.md) — worktree lifecycle 과 같은 무집행 상태
+- [worktree](../../runbook/worktree/memory.md) — 사본 격리 lifecycle, 같은 무집행 상태
