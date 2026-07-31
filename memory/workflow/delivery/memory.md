@@ -25,7 +25,7 @@ SOT 는 없다.
 
 | node | 이 구간에서 하는 일 | 안 하는 일 |
 |---|---|---|
-| interface | 사용자 대화 · grill · 결정 기록 · raw→task 승격 · `needs:user` 중계 ([interface](../interface/memory.md)) | 코드 수정, 스케줄링, 머지 |
+| interface | 사용자 대화 · grill · 결정 기록 · raw→task 승격 · `needs:user` 중계. orchestration(spawn · 리뷰 큐 · 머지) 겸무 가능 — 조건은 [interface](../interface/memory.md) §3 | 코드 수정 — 쓰기 범위는 [interface](../interface/memory.md) §4 |
 | orchestrator | label 을 보고 다음 node spawn (`.agents/prompts/orchestrator.md` 그대로 기동) | 판단. 사용자와 대화하지 않는다. 코멘트를 읽지 않는다 |
 | 구현자 | 커밋 · 푸시 · PR 생성 · 수정 라운드 반영. **파일을 쓰는 유일한 역할** | 리뷰어 부착, 라운드 판정, 머지 |
 | 리뷰어 | 판정 + scorecard + verdict label. 라운드 3부터는 회고 모드 — 개별 지적 대신 유형 반복 표 | commit / push / merge / branch 수정, 이슈 발행 |
