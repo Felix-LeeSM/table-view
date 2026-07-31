@@ -65,7 +65,6 @@ function setProductionConnection() {
         username: "u",
         password: null,
         environment: "production",
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any,
     ],
   });
@@ -233,7 +232,6 @@ describe("IndexesEditor — Sprint 187 Safe Mode gate", () => {
           username: "u",
           password: null,
           environment: "development",
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
         } as any,
       ],
     });
@@ -267,7 +265,6 @@ describe("IndexesEditor — Sprint 187 Safe Mode gate", () => {
           username: "u",
           password: null,
           environment: "development",
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
         } as any,
       ],
     });
@@ -309,7 +306,6 @@ describe("IndexesEditor — Sprint 187 Safe Mode gate", () => {
           username: "u",
           password: null,
           environment: "development",
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
         } as any,
       ],
     });

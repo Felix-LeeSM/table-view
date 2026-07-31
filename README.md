@@ -181,9 +181,9 @@ pnpm tauri dev
 ```bash
 pnpm dev                # Vite dev 서버 (Tauri 데스크톱 없이 브라우저 전용)
 pnpm build              # TypeScript 타입 체크 + Vite production build
-pnpm lint               # ESLint
-pnpm format             # Prettier (src/)
-pnpm format:docs        # Prettier (README, CLAUDE, AGENTS, docs)
+pnpm lint               # Biome (일반 규칙) + ESLint (repo 고유 가드)
+pnpm format             # Biome 포맷 적용
+pnpm format:check       # Biome 포맷 검사 (쓰기 없음)
 pnpm tauri dev          # Tauri 데스크톱 dev
 pnpm tauri build        # Tauri 데스크톱 production build
 ```

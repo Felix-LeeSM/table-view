@@ -12,7 +12,7 @@ import {
   type AdapterContractTestArea,
   type AdapterContractTestJudgement,
 } from "./adapterContractTestMatrix";
-import { type DataSourceCapabilities } from "./dataSource";
+import type { DataSourceCapabilities } from "./dataSource";
 import { getVersionAwareDataSourceCapabilities } from "./dataSourceVersionCapabilities";
 
 describe("adapter conformance matrix", () => {

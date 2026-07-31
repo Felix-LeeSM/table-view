@@ -32,8 +32,8 @@ const SENTINEL_KEY = "legacy_column_prefs_drop_dismissed";
 // itself — this is the one allowed location that knows the prefix
 // (boot-time cleanup), and the grep pattern is intentionally
 // over-broad to lock all *write* sites.
-const COLUMN_WIDTHS_PREFIX = ["column", "widths"].join("-") + ":";
-const HIDDEN_COLUMNS_PREFIX = ["hidden", "columns"].join("-") + ":";
+const COLUMN_WIDTHS_PREFIX = `${["column", "widths"].join("-")}:`;
+const HIDDEN_COLUMNS_PREFIX = `${["hidden", "columns"].join("-")}:`;
 
 function collectLegacyKeys(): string[] {
   const out: string[] = [];

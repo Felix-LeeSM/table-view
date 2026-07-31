@@ -168,7 +168,6 @@ function VariantIcon({ variant }: { variant: ToastVariant }) {
       return <AlertCircle className="size-4" />;
     case "warning":
       return <AlertTriangle className="size-4" />;
-    case "info":
     default:
       return <Info className="size-4" />;
   }

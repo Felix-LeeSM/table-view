@@ -416,9 +416,9 @@ export function formatSql(sql: string): string {
       if (nextToken) {
         const nextUpper = nextToken.toUpperCase();
         if (KEYWORDS_TO_UPPERCASE.has(nextUpper)) {
-          currentLine += " " + nextUpper;
+          currentLine += ` ${nextUpper}`;
         } else {
-          currentLine += " " + nextToken;
+          currentLine += ` ${nextToken}`;
         }
       }
     }

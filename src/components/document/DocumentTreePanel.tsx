@@ -135,8 +135,8 @@ export function DocumentTreePanel({
       for (const collapsedPath of collapsed) {
         if (path === collapsedPath) continue;
         if (
-          path.startsWith(collapsedPath + ".") ||
-          path.startsWith(collapsedPath + "[")
+          path.startsWith(`${collapsedPath}.`) ||
+          path.startsWith(`${collapsedPath}[`)
         ) {
           return true;
         }
@@ -174,7 +174,7 @@ export function DocumentTreePanel({
     const underCollapsed = (path: string) =>
       collapsedList.some(
         (cp) =>
-          path === cp || path.startsWith(cp + ".") || path.startsWith(cp + "["),
+          path === cp || path.startsWith(`${cp}.`) || path.startsWith(`${cp}[`),
       );
     for (let idx = 0; idx < nodes.length; idx += 1) {
       const node = nodes[idx];

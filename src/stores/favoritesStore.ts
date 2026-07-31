@@ -193,7 +193,7 @@ export const useFavoritesStore = create<FavoritesState>((set, get) => ({
       for (const f of favorites) {
         const numPart = f.id.replace("fav-", "");
         const num = parseInt(numPart, 10);
-        if (!isNaN(num) && num > favoriteCounter) {
+        if (!Number.isNaN(num) && num > favoriteCounter) {
           favoriteCounter = num;
         }
       }

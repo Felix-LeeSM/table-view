@@ -74,8 +74,9 @@ export function initMongoshWasm(
       // `src/lib/mongo/mongoshAst/index.ts` and the wasm-pack output
       // dir is `src/lib/mongo/wasm/` — sibling of the `mongoshAst/`
       // directory, not of this file.
-      const mod =
-        (await import("../wasm/mongosh_parser_core.js")) as unknown as MongoshWasmModule;
+      const mod = (await import(
+        "../wasm/mongosh_parser_core.js"
+      )) as unknown as MongoshWasmModule;
       if (precompiledBytes !== undefined) {
         // Synchronous instantiation against bytes we already have — used
         // by vitest where `fetch()` is not available.

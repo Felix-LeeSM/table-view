@@ -19,7 +19,10 @@ import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const SMOKE_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "smoke");
+const SMOKE_DIR = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "smoke",
+);
 
 // spec key -> external services the spec needs alive.
 //
@@ -151,7 +154,8 @@ export const specPath = (key) => `e2e/smoke/${key}.spec.ts`;
 
 export function servicesFor(specKeys) {
   const services = new Set();
-  for (const key of specKeys) for (const s of SPEC_SERVICES[key]) services.add(s);
+  for (const key of specKeys)
+    for (const s of SPEC_SERVICES[key]) services.add(s);
   return [...services].sort();
 }
 
@@ -242,7 +246,9 @@ function selfTest() {
   const missing = onDisk.filter((k) => !known.includes(k));
   const stale = known.filter((k) => !onDisk.includes(k));
   if (missing.length)
-    failures.push(`e2e/smoke specs missing from SPEC_SERVICES: ${missing.join(", ")}`);
+    failures.push(
+      `e2e/smoke specs missing from SPEC_SERVICES: ${missing.join(", ")}`,
+    );
   if (stale.length)
     failures.push(`SPEC_SERVICES keys with no spec file: ${stale.join(", ")}`);
 

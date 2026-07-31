@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { X, Table2, Code2, Leaf, Network } from "lucide-react";
-import { type Tab, type TableTab } from "@stores/workspaceStore";
+import type { Tab, TableTab } from "@stores/workspaceStore";
 import { Button } from "@components/ui/button";
 import type { TabDragHandlers } from "./useTabDrag";
 

@@ -220,115 +220,113 @@ export default function Sidebar() {
     !!focusedConnId && activeStatuses[focusedConnId]?.type === "connected";
 
   return (
-    <>
-      <div
-        ref={sidebarRef}
-        className="relative flex h-full shrink-0 select-none flex-col border-r border-border bg-secondary"
-        style={{ width: sidebarWidth }}
-      >
-        {/* Header strip — connection name + "+ Query" action. data-testid is
+    <div
+      ref={sidebarRef}
+      className="relative flex h-full shrink-0 select-none flex-col border-r border-border bg-secondary"
+      style={{ width: sidebarWidth }}
+    >
+      {/* Header strip — connection name + "+ Query" action. data-testid is
             kept stable for e2e tests (`sidebar-connection-header`).
 
             Sprint 376 (Phase 6 Q21 #7) — header "Collapse all" 가시
             버튼이 추가됨. Q21 직관적 위치 contract — 우클릭 메뉴 대신
             가시 버튼 (키보드 사용자 발견 가능). */}
-        <div className="flex items-center justify-between border-b border-border py-1 pl-3 pr-1">
-          <span
-            data-testid="sidebar-connection-header"
-            className="block truncate text-xs font-semibold text-foreground"
-          >
-            {focusedConnId
-              ? (connections.find((c) => c.id === focusedConnId)?.name ??
-                t("sidebar.schemasLabel"))
-              : t("sidebar.schemasLabel")}
-          </span>
-          <div className="flex items-center gap-1">
-            {/* Sprint 379 — DB type 별 객체 이름 + 토글. PG → schemas,
+      <div className="flex items-center justify-between border-b border-border py-1 pl-3 pr-1">
+        <span
+          data-testid="sidebar-connection-header"
+          className="block truncate text-xs font-semibold text-foreground"
+        >
+          {focusedConnId
+            ? (connections.find((c) => c.id === focusedConnId)?.name ??
+              t("sidebar.schemasLabel"))
+            : t("sidebar.schemasLabel")}
+        </span>
+        <div className="flex items-center gap-1">
+          {/* Sprint 379 — DB type 별 객체 이름 + 토글. PG → schemas,
                 MySQL/SQLite → tables, Mongo → collections. expanded 가
                 비어 있으면 동일 버튼이 "Expand all *" 라벨로 전환된다.
                 #1737 — expand path 가 로드된 스키마 캐시를 채우도록 구현됨. */}
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              className="shrink-0 text-muted-foreground hover:text-secondary-foreground"
-              aria-label={toggleLabel}
-              title={toggleLabel}
-              disabled={!focusedConnId}
-              onClick={handleToggleExpansion}
-              data-testid="sidebar-collapse-all"
-            >
-              <ToggleIcon />
-            </Button>
-            <Button
-              variant="ghost"
-              size="xs"
-              className="shrink-0 text-muted-foreground hover:text-secondary-foreground"
-              aria-label={t("sidebar.newQueryTabAria")}
-              title={t("sidebar.newQueryTabAria")}
-              disabled={!selectedConnected}
-              onClick={() => {
-                if (selectedConnected && focusedConnId) {
-                  const db = resolveActiveDb(focusedConnId);
-                  addQueryTab(focusedConnId, db);
-                  markConnectionUsed(focusedConnId);
-                }
-              }}
-            >
-              <Plus />
-              {t("sidebar.query")}
-            </Button>
-          </div>
-        </div>
-
-        {/* Body — paradigm-aware sidebar slot. `WorkspaceSidebar` resolves
-            the driving connection with active-tab priority and falls back
-            to `focusedConnId`. */}
-        <div className="flex flex-1 flex-col overflow-auto">
-          <WorkspaceSidebar selectedId={focusedConnId} />
-        </div>
-
-        {/* Sidebar footer. #1738 (2026-07-25) — the duplicate theme popover +
-            LanguageSwitcher were removed from here; theme/language now live in
-            the single top area (`WorkspacePage` header). Only the "Reset
-            width" affordance remains. */}
-        <div className="border-t border-border px-3 py-2">
-          {/* Sprint 376 (Phase 6 Q21 #3-a) — "Reset sidebar width" 가시
-              버튼. 우클릭 컨텍스트 메뉴 대신 직관적 위치 (sidebar
-              하단, drag handle 과 시각 근접) 에 노출. */}
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            className="shrink-0 text-muted-foreground hover:text-secondary-foreground"
+            aria-label={toggleLabel}
+            title={toggleLabel}
+            disabled={!focusedConnId}
+            onClick={handleToggleExpansion}
+            data-testid="sidebar-collapse-all"
+          >
+            <ToggleIcon />
+          </Button>
           <Button
             variant="ghost"
             size="xs"
-            type="button"
-            className="mt-1 w-full justify-start text-muted-foreground"
-            aria-label={t("sidebar.resetWidthAria")}
-            title={t("sidebar.resetWidthTitle")}
-            onClick={handleResetSidebarWidth}
-            data-testid="sidebar-reset-width"
+            className="shrink-0 text-muted-foreground hover:text-secondary-foreground"
+            aria-label={t("sidebar.newQueryTabAria")}
+            title={t("sidebar.newQueryTabAria")}
+            disabled={!selectedConnected}
+            onClick={() => {
+              if (selectedConnected && focusedConnId) {
+                const db = resolveActiveDb(focusedConnId);
+                addQueryTab(focusedConnId, db);
+                markConnectionUsed(focusedConnId);
+              }
+            }}
           >
-            <RotateCcw className="h-3 w-3" aria-hidden="true" />
-            <span className="ml-1 text-3xs">{t("sidebar.resetWidth")}</span>
+            <Plus />
+            {t("sidebar.query")}
           </Button>
         </div>
+      </div>
 
-        {/* Resize handle.
+      {/* Body — paradigm-aware sidebar slot. `WorkspaceSidebar` resolves
+            the driving connection with active-tab priority and falls back
+            to `focusedConnId`. */}
+      <div className="flex flex-1 flex-col overflow-auto">
+        <WorkspaceSidebar selectedId={focusedConnId} />
+      </div>
+
+      {/* Sidebar footer. #1738 (2026-07-25) — the duplicate theme popover +
+            LanguageSwitcher were removed from here; theme/language now live in
+            the single top area (`WorkspacePage` header). Only the "Reset
+            width" affordance remains. */}
+      <div className="border-t border-border px-3 py-2">
+        {/* Sprint 376 (Phase 6 Q21 #3-a) — "Reset sidebar width" 가시
+              버튼. 우클릭 컨텍스트 메뉴 대신 직관적 위치 (sidebar
+              하단, drag handle 과 시각 근접) 에 노출. */}
+        <Button
+          variant="ghost"
+          size="xs"
+          type="button"
+          className="mt-1 w-full justify-start text-muted-foreground"
+          aria-label={t("sidebar.resetWidthAria")}
+          title={t("sidebar.resetWidthTitle")}
+          onClick={handleResetSidebarWidth}
+          data-testid="sidebar-reset-width"
+        >
+          <RotateCcw className="h-3 w-3" aria-hidden="true" />
+          <span className="ml-1 text-3xs">{t("sidebar.resetWidth")}</span>
+        </Button>
+      </div>
+
+      {/* Resize handle.
             Sprint 378 (2026-05-17) — 더블클릭 = width reset. `handleResetSidebarWidth`
             는 sprint-376 #3-a 의 IPC wrapper (`reset_setting("sidebar_width")`).
             단일 클릭/drag-start 는 mousedown 만 트리거하므로 reset 과는
             독립이다. */}
-        <div
-          className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-primary/90 active:bg-primary/90 focus-visible:outline-1 focus-visible:outline-ring"
-          onMouseDown={handleResizeMouseDown}
-          onKeyDown={handleResizeKeyDown}
-          onDoubleClick={handleResetSidebarWidth}
-          tabIndex={0}
-          role="separator"
-          aria-orientation="vertical"
-          aria-label={t("sidebar.resizeAria")}
-          aria-valuemin={sidebarMinWidth}
-          aria-valuemax={sidebarMaxWidth}
-          aria-valuenow={Math.round(sidebarWidth)}
-        />
-      </div>
-    </>
+      <div
+        className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-primary/90 active:bg-primary/90 focus-visible:outline-1 focus-visible:outline-ring"
+        onMouseDown={handleResizeMouseDown}
+        onKeyDown={handleResizeKeyDown}
+        onDoubleClick={handleResetSidebarWidth}
+        tabIndex={0}
+        role="separator"
+        aria-orientation="vertical"
+        aria-label={t("sidebar.resizeAria")}
+        aria-valuemin={sidebarMinWidth}
+        aria-valuemax={sidebarMaxWidth}
+        aria-valuenow={Math.round(sidebarWidth)}
+      />
+    </div>
   );
 }

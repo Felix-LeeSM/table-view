@@ -394,9 +394,9 @@ describe("KvSidebar", () => {
       );
       expect(scanCall).toBeTruthy();
       expect(cancelCall).toBeTruthy();
-      const scanQueryId = (scanCall?.[1] as { queryId?: string }).queryId;
+      const scanQueryId = (scanCall![1] as { queryId?: string }).queryId;
       expect(scanQueryId).toEqual(expect.any(String));
-      expect((cancelCall?.[1] as { queryId?: string }).queryId).toBe(
+      expect((cancelCall![1] as { queryId?: string }).queryId).toBe(
         scanQueryId,
       );
     });

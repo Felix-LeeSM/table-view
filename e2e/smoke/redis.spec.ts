@@ -56,9 +56,9 @@ describe("Redis smoke", () => {
         // sidebar no longer renders an inline value/mutation surface).
         await clickRedisKey("tv:string");
         await switchToWorkspaceWindow();
-        await (
-          await $(DETAIL_PANEL_SELECTOR)
-        ).waitForDisplayed({ timeout: 15000 });
+        await (await $(DETAIL_PANEL_SELECTOR)).waitForDisplayed({
+          timeout: 15000,
+        });
         await waitForWorkspaceTextAll(
           ["tv:string", INITIAL_VALUE, "string", "Mutation"],
           15000,
@@ -86,9 +86,9 @@ describe("Redis smoke", () => {
       // so re-select the key to bring the panel back into the main area.
       await clickRedisKey("tv:string");
       await switchToWorkspaceWindow();
-      await (
-        await $(DETAIL_PANEL_SELECTOR)
-      ).waitForDisplayed({ timeout: 15000 });
+      await (await $(DETAIL_PANEL_SELECTOR)).waitForDisplayed({
+        timeout: 15000,
+      });
       await setField("Expire seconds", "120");
       await clickButton("Preview expire");
       await waitForWorkspaceTextAll(
@@ -110,9 +110,9 @@ describe("Redis smoke", () => {
       // TTL step ran a query, so re-select the key to restore the detail tab.
       await clickRedisKey("tv:string");
       await switchToWorkspaceWindow();
-      await (
-        await $(DETAIL_PANEL_SELECTOR)
-      ).waitForDisplayed({ timeout: 15000 });
+      await (await $(DETAIL_PANEL_SELECTOR)).waitForDisplayed({
+        timeout: 15000,
+      });
 
       await setField("Delete confirm key", "wrong");
       await clickButton("Preview delete");

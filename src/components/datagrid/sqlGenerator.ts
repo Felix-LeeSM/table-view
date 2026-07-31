@@ -381,8 +381,9 @@ export function generateSqlWithKeys(
     // Issue #1081 — prefer the row-identity snapshot captured at edit time,
     // keyed by the CELL key so a cross-page edit on the same rowIdx but a
     // different column resolves its own anchor.
-    const row = (options.editRowSnapshots?.get(cellKey) ??
-      data.rows[rowIdx]) as unknown[] | undefined;
+    const row = (options.editRowSnapshots?.get(cellKey) ?? data.rows[rowIdx]) as
+      | unknown[]
+      | undefined;
     if (!row) return;
 
     const topLevel = entries.find((e) => e.path === null);

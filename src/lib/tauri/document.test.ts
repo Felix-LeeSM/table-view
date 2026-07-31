@@ -67,7 +67,7 @@ describe("document Tauri wrappers", () => {
     expect(result.columns[1]?.dataType).toBe("Int64");
     expect(result.rows[0]?.[1]).toBe(9007199254740993n);
     expect(result.rows[0]?.[2]).toBeInstanceOf(Decimal);
-    expect((result.rows[0]?.[2] as Decimal).toString()).toBe("12.34");
+    expect((result.rows[0]![2] as Decimal).toString()).toBe("12.34");
     expect(result.rawDocuments[0]?._id).toEqual({
       $oid: "507f1f77bcf86cd799439011",
     });

@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { SQLNamespace, type SQLDialect } from "@codemirror/lang-sql";
+import type { SQLNamespace, SQLDialect } from "@codemirror/lang-sql";
 import type { Completion } from "@codemirror/autocomplete";
 import { useSchemaStore } from "@stores/schemaStore";
 import type { DatabaseType } from "@/types/connection";
@@ -163,7 +163,8 @@ export function useSqlAutocomplete(
         const colNs: Record<string, SQLNamespace> = {};
         for (const c of columns) colNs[c.name] = {};
         byQualified[`${schemaName}.${tableName}`] = colNs;
-        (byBareName[tableName] ??= []).push(colNs);
+        byBareName[tableName] ??= [];
+        byBareName[tableName].push(colNs);
       }
     }
 
@@ -279,7 +280,9 @@ export function useSqlAutocomplete(
         ns[qualified] = colNs;
         addQuotedAlias(table.name, colNs);
         addFullyQuotedAlias(schemaName, table.name, colNs);
-        (bareTableCandidates[table.name] ??= []).push(colNs);
+        const tableBucket = bareTableCandidates[table.name] ?? [];
+        tableBucket.push(colNs);
+        bareTableCandidates[table.name] = tableBucket;
       }
     }
 
@@ -293,7 +296,9 @@ export function useSqlAutocomplete(
         if (!ns[qualified]) ns[qualified] = colNs;
         addQuotedAlias(v.name, colNs);
         addFullyQuotedAlias(schemaName, v.name, colNs);
-        (bareViewCandidates[v.name] ??= []).push(colNs);
+        const viewBucket = bareViewCandidates[v.name] ?? [];
+        viewBucket.push(colNs);
+        bareViewCandidates[v.name] = viewBucket;
       }
     }
 

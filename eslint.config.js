@@ -1,4 +1,10 @@
-import js from "@eslint/js";
+// Policy split (wave 4, #2035 결정 6): Biome owns the generic rules
+// (formatter + recommended lint preset) and this config owns only the
+// repo-specific guards that no off-the-shelf engine ships — the four
+// `tv-local` rules, the no-restricted-syntax/imports blocks, react-hooks,
+// `@typescript-eslint/no-deprecated`, no-console and max-lines. Do not
+// re-add `js.configs.recommended` or `tseslint.configs.recommended`: a rule
+// living in both engines gets reported twice and drifts out of sync.
 import reactHooks from "eslint-plugin-react-hooks";
 import globals from "globals";
 import tseslint from "typescript-eslint";
@@ -362,7 +368,11 @@ export default tseslint.config(
     ],
   },
   {
-    extends: [js.configs.recommended, ...tseslint.configs.recommended],
+    // `configs.base` is the parser + plugin registration only — zero rules.
+    // The blocks below still need it: `@typescript-eslint/no-deprecated` is a
+    // plugin rule, and `no-restricted-imports`'s `allowTypeImports` option is
+    // parsed from TS syntax. Dropping it fails with "could not find plugin".
+    extends: [tseslint.configs.base],
     files: ["**/*.{ts,tsx}"],
     languageOptions: {
       ecmaVersion: 2021,

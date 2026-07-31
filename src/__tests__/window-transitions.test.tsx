@@ -326,8 +326,9 @@ describe("AC-154-*: Window lifecycle wiring", () => {
       },
     );
 
-    const { registerLauncherCloseHandler } =
-      await import("@lib/window-lifecycle-boot");
+    const { registerLauncherCloseHandler } = await import(
+      "@lib/window-lifecycle-boot"
+    );
     await registerLauncherCloseHandler();
 
     expect(onCloseRequestedMock).toHaveBeenCalledWith(

@@ -429,8 +429,9 @@ describe("connectionStore", () => {
   });
 
   it("disconnects before removing a connected connection", async () => {
-    const { disconnectFromDatabase, deleteConnection } =
-      await import("@lib/tauri");
+    const { disconnectFromDatabase, deleteConnection } = await import(
+      "@lib/tauri"
+    );
 
     useConnectionStore.setState({
       connections: [

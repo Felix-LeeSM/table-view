@@ -156,7 +156,6 @@ export function setStateChangedHandlers(handlers: PartialHandlerSet): void {
     if (!incoming) continue;
     // Shallow-merge per-domain. Using `any` here once at the boundary —
     // the type-level guarantee is the function signature.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     registry[key] = { ...(registry[key] ?? {}), ...incoming } as any;
   }
 }

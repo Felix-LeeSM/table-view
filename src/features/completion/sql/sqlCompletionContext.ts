@@ -36,7 +36,8 @@ export interface SqlCompletionCatalogStoreSnapshot {
   fileAnalyticsSources?: Record<string, FileAnalyticsSourceMetadata[]>;
 }
 
-export interface BuildSqlCompletionContextInput extends SqlCompletionCatalogStoreSnapshot {
+export interface BuildSqlCompletionContextInput
+  extends SqlCompletionCatalogStoreSnapshot {
   connectionId: string;
   database: string;
   dbType?: DatabaseType;

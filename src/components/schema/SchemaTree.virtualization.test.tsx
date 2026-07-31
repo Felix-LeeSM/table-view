@@ -215,8 +215,8 @@ describe("SchemaTree virtualization (sprint-115)", () => {
         return VIEWPORT_HEIGHT;
       },
     });
-    HTMLElement.prototype.getBoundingClientRect = function () {
-      return {
+    HTMLElement.prototype.getBoundingClientRect = () =>
+      ({
         x: 0,
         y: 0,
         top: 0,
@@ -228,8 +228,7 @@ describe("SchemaTree virtualization (sprint-115)", () => {
         toJSON() {
           return {};
         },
-      } as DOMRect;
-    };
+      }) as DOMRect;
   });
 
   afterEach(() => {

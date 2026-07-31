@@ -316,8 +316,9 @@ describe("ImportExportDialog", () => {
     });
 
     it("plain JSON path (regression): non-envelope payload routes to importConnections without password", async () => {
-      const { importConnections, importConnectionsEncrypted } =
-        await import("@lib/tauri");
+      const { importConnections, importConnectionsEncrypted } = await import(
+        "@lib/tauri"
+      );
       (importConnections as ReturnType<typeof vi.fn>).mockResolvedValue({
         imported: ["new-1"],
         renamed: [],

@@ -193,20 +193,19 @@ export function ExplainViewer({
         </div>
       )}
 
-      {!loading && error === null && plan !== null && (
-        <>
-          {postgresPlan !== null ? (
-            <PostgresPlanView plan={postgresPlan} rawPlan={plan} />
-          ) : (
-            <pre
-              data-testid="explain-plan"
-              className="max-h-96 overflow-auto rounded-md border border-border bg-secondary/30 p-2 font-mono text-xs leading-relaxed text-foreground"
-            >
-              {safeStringifyCell(plan, 2)}
-            </pre>
-          )}
-        </>
-      )}
+      {!loading &&
+        error === null &&
+        plan !== null &&
+        (postgresPlan !== null ? (
+          <PostgresPlanView plan={postgresPlan} rawPlan={plan} />
+        ) : (
+          <pre
+            data-testid="explain-plan"
+            className="max-h-96 overflow-auto rounded-md border border-border bg-secondary/30 p-2 font-mono text-xs leading-relaxed text-foreground"
+          >
+            {safeStringifyCell(plan, 2)}
+          </pre>
+        ))}
     </section>
   );
 }

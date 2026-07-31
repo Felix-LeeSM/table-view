@@ -4,7 +4,7 @@
 // props so only one add UI is visible across the whole tree at a time.
 
 import { useTranslation } from "react-i18next";
-import { useVirtualizer } from "@tanstack/react-virtual";
+import type { useVirtualizer } from "@tanstack/react-virtual";
 import { Plus } from "lucide-react";
 import { type RenderRow, renderRowKey } from "./types";
 

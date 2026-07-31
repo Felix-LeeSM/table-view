@@ -60,7 +60,13 @@ landed and live GitHub showed no open Refactor 04 child issues.
 
 ## Static Lint Gate
 
-`pnpm lint` runs ESLint. `eslint.config.js` keeps `max-lines` as a warning and
+`pnpm lint` runs two engines with disjoint policy spaces: `biome check .`
+(formatter + the generic lint rules, configured in `biome.json`) and then
+`eslint .` (the repo-specific guards only — `tv-local/*`, the
+`no-restricted-syntax`/`no-restricted-imports` blocks, react-hooks,
+`@typescript-eslint/no-deprecated`, `no-console`, `max-lines`). A rule belongs
+to exactly one engine; `eslint.config.js` deliberately extends no preset.
+`eslint.config.js` keeps `max-lines` as a warning and
 the feature-import rule as an error. **Nothing enforces the rules below** — they
 come from the Refactor 00 static policy in
 `docs/archives/audits/refactor-00-static-hardening-2026-06-09.md`, and no check
@@ -68,7 +74,7 @@ reads the allowlists:
 
 | Gate | Current policy | Triage owner |
 |---|---|---|
-| `max-lines` | Existing 18 warnings are an exact allowlist. New entries and stale entries fail. | The PR touching the file removes new debt or shrinks the allowlist. |
+| `max-lines` | Existing 19 warnings are an exact allowlist. New entries and stale entries fail. `src/components/search/SearchIndexDetailPanel.tsx` joined the list at 705 effective lines when the Biome format migration expanded it past 700; splitting it is follow-up work, not lint adoption. | The PR touching the file removes new debt or shrinks the allowlist. |
 | Hidden TS/TSX lint candidates | Only generated wasm artifacts under `src/lib/sql/wasm/**` and `src/lib/mongo/wasm/**` may be ignored. | The PR adding a broad ignore must either narrow it or document generated-artifact ownership. |
 | `src/features/**` imports | Feature production modules may use feature-local code, feature public APIs, `@lib`, `@/types`, and `@components/ui`; cross-feature internal imports fail and must route through `src/features/<domain>/index.ts`. Imports from legacy components, hooks, stores, pages, router, or app shell still fail unless they are an explicit public-facade exception. | The PR adding a feature dependency owns reusable extraction, public API export, or removal of the dependency. |
 
@@ -123,14 +129,29 @@ Required local evidence:
   `cargo test --manifest-path src-tauri/Cargo.toml --test parse_sql_backend`.
 - Docker integration lane: with required services available,
   `cargo test --manifest-path src-tauri/Cargo.toml --test schema_integration --test query_integration --test mongo_integration --test fixture_loading --test redis_integration`.
-- Documentation lane: docs changed for the release must pass Prettier and local
-  link/target review for the touched docs.
+- Documentation lane: `git diff --check` on the touched docs plus local
+  link/target review. **No formatter covers docs markdown, on purpose.**
+  Prettier was removed when Biome landed, `biome.json` excludes `docs/`
+  outright, and Biome 2.5.6 does not format markdown at all — so there is
+  nothing to run and this lane must not be written as if there were. Reviewer
+  judgement is the whole gate here; do not treat a docs-only change as
+  machine-verified.
 
 Required remote evidence on the exact release SHA:
 
 - Every required context in the `pr_to_main` ruleset passes. That list lives in
   one place, `memory/runbook/pr-merge-gates/memory.md`. Do not copy it here — a
-  copy kept here once listed five of the eight.
+  copy kept here once listed five of the then-eight. The count is not stable
+  either: #2037 took it to **seven** by deleting the name-only
+  `Detect Change Scope` job, and no stub context is left — `PR Body Contract`
+  became a real check in that same PR, so all seven required contexts now
+  assert something. Read the list from GitHub rather than from prose:
+
+  ```bash
+  gh api repos/{owner}/{repo}/rulesets/15755265 \
+    --jq '.rules[] | select(.type=="required_status_checks")
+          | .parameters.required_status_checks[].context'
+  ```
 - Runtime smoke runs in CI, scoped to the change.
   `.github/workflows/e2e-smoke.yml` maps the PR's changed paths to a spec subset
   through `e2e/scope-map.mjs` and runs only those, so a green PR proves the

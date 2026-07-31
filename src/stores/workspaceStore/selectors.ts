@@ -134,7 +134,7 @@ export function useActiveTabSansSql(): ActiveTabSansSql | null {
       if (!ws?.activeTabId) return null;
       const tab = ws.tabs.find((t) => t.id === ws.activeTabId) ?? null;
       if (!tab || tab.type !== "query") return tab;
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars -- rest-omit drops the per-keystroke `sql` field
+      // rest-omit drops the per-keystroke `sql` field.
       const { sql: _sql, ...sansSql } = tab;
       return sansSql;
     }),

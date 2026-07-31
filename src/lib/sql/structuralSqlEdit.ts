@@ -33,8 +33,7 @@ function jsonbPathLiteral(path: string): string {
   for (const part of path.split(".")) {
     if (part === "") continue;
     const re = /([^[\]]+)|\[(\d+)\]/g;
-    let m: RegExpExecArray | null;
-    while ((m = re.exec(part)) !== null) {
+    for (const m of part.matchAll(re)) {
       if (m[1] !== undefined) segments.push(m[1]);
       else if (m[2] !== undefined) segments.push(m[2]);
     }

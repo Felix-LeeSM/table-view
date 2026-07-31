@@ -39,7 +39,6 @@ function setConnection(dbType: DatabaseType) {
         username: "u",
         password: null,
         environment: "development",
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any,
     ],
   });

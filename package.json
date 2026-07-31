@@ -11,10 +11,9 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "lint": "eslint .",
-    "format": "prettier --write \"src/**/*.{ts,tsx,css}\" package.json .prettierrc \"src-tauri/**/*.json\"",
-    "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\" package.json .prettierrc \"src-tauri/**/*.json\"",
-    "format:docs": "prettier --write README.md CLAUDE.md AGENTS.md \"docs/**/*.md\"",
+    "lint": "biome check . --error-on-warnings && eslint .",
+    "format": "biome format --write .",
+    "format:check": "biome format .",
     "format:rust": "cargo fmt --manifest-path src-tauri/Cargo.toml",
     "build:sql-wasm": "cd src-tauri/sql-parser-core && wasm-pack build --target web --out-dir ../../src/lib/sql/wasm --features wasm",
     "build:mongosh-wasm": "cd src-tauri/mongosh-parser-core && wasm-pack build --target web --out-dir ../../src/lib/mongo/wasm --features wasm",
@@ -26,7 +25,8 @@
     "db:up": "docker compose up -d",
     "db:down": "docker compose down -v",
     "fixtures:start": "docker compose up -d",
-    "fixtures:stop": "docker compose down -v"
+    "fixtures:stop": "docker compose down -v",
+    "prepare": "git config --unset-all core.hooksPath || true; lefthook install"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.1",
@@ -56,6 +56,7 @@
     "zustand": "^5.0.3"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.5.6",
     "@eslint/js": "^9.39.4",
     "@faker-js/faker": "^10.4.0",
     "@tailwindcss/vite": "^4",
@@ -82,12 +83,12 @@
     "globals": "^15.14.0",
     "ioredis": "^5.10.1",
     "jsdom": "^29.0.2",
+    "lefthook": "2.1.10",
     "mongodb": "^7.2.0",
     "mssql": "^12.5.4",
     "mysql2": "^3.11.0",
     "oracledb": "^6.10.0",
     "pg": "^8.20.0",
-    "prettier": "^3.4.2",
     "tailwindcss": "^4",
     "tsx": "^4.21.0",
     "typescript": "~5.7.0",

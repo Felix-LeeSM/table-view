@@ -115,7 +115,8 @@ interface PrepareRdbStatementsResult {
   scriptingViolationMessage: string | null;
 }
 
-export interface ExecuteRdbSingleStatementRequest extends RdbSingleLifecycleActions {
+export interface ExecuteRdbSingleStatementRequest
+  extends RdbSingleLifecycleActions {
   tab: RdbTabContext;
   stmt: string;
   history?: RdbHistoryOverrides;
@@ -130,7 +131,8 @@ export interface ExecuteRdbSingleStatementRequest extends RdbSingleLifecycleActi
   safetyConfirmed?: boolean;
 }
 
-export interface ExecuteRdbStatementBatchRequest extends RdbBatchLifecycleActions {
+export interface ExecuteRdbStatementBatchRequest
+  extends RdbBatchLifecycleActions {
   tab: RdbTabContext;
   statements: string[];
   joinedSql: string;

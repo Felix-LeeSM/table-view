@@ -134,8 +134,7 @@ describe("themes.css — Sprint 257 syntax palette derivation (AC-257-01..04)", 
   it("produces a diverse syntax-keyword palette across themes", () => {
     const re = /--tv-syntax-keyword:\s*(#[0-9a-fA-F]{3,6})/g;
     const seen = new Set<string>();
-    let m: RegExpExecArray | null;
-    while ((m = re.exec(themes)) !== null) {
+    for (const m of themes.matchAll(re)) {
       const hex = m[1];
       if (hex) seen.add(hex.toLowerCase());
     }
@@ -154,8 +153,7 @@ describe("themes.css — Sprint 257 syntax palette derivation (AC-257-01..04)", 
     const blockRe =
       /\[data-theme="([^"]+)"\]\[data-mode="(light|dark)"\]\s*\{([^}]+)\}/g;
     const bodyByPair = new Map<string, string>();
-    let m: RegExpExecArray | null;
-    while ((m = blockRe.exec(themes)) !== null) {
+    for (const m of themes.matchAll(blockRe)) {
       const key = `${m[1]}|${m[2]}`;
       const prev = bodyByPair.get(key) ?? "";
       bodyByPair.set(key, `${prev}${m[3] ?? ""}`);
