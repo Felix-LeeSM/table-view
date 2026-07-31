@@ -12,6 +12,9 @@ on:
 
 permissions:
   pull-requests: write
+  # 라운드 집계가 PR 의 커밋(oid + committedDate)을 읽는다. `permissions:` 블록을
+  # 쓰면 여기 없는 scope 는 none 이므로 읽는 것을 적어 둔다.
+  contents: read
 
 concurrency:
   group: review-gate-${{ github.event.pull_request.number || github.sha }}
@@ -37,20 +40,74 @@ jobs:
           echo "::error::new commits pushed — review:approved / review:changes-requested dismissed, re-review required"
           exit 1
 
+      # 라운드 = 서로 다른 head 커밋에 붙은 리뷰 인계의 수 (#1968). 옛 프록시는 PR
+      # 코멘트 수였는데 이 저장소는 계정이 하나라 리뷰어 scorecard 와 구현자 응답 ·
+      # 세션 공지를 API 로 못 가른다 — #1968 실측에서 코멘트 168건 중 최소 27건이
+      # 라운드가 아니었고 8개 PR 에서 카운터가 실제 라운드를 앞질렀다.
+      #
+      # 웹훅 payload 에는 head OID 별 집계가 없다. 그래서 `if:` 가 읽을 값을 이
+      # 스텝이 GraphQL 로 만들어 output 으로 넘긴다.
+      #
+      # 세는 것은 scripts/review/measure-rounds.sh 의 `round_events("head-oid")` 와
+      # 같다 — 코멘트 시각 이하의 마지막 커밋을 그 코멘트의 head 로 보고, 서로 다른
+      # head 의 수를 센다. 두 구현이 어긋나는지는
+      # scripts/review/measure-rounds.test.sh 의 "gate coupling" 단계가 본다.
+      # 근사의 한계는 그 스크립트 하단 「못 재는 것」이 SOT 이고 여기에도 그대로
+      # 걸린다: ① `committedDate` 는 push 시각이 아니라 rebase / 옛 커밋 지연 push 는
+      # 코멘트를 실제와 다른 커밋에 붙인다 ② 코멘트 · 커밋이 100건을 넘으면 페이지가
+      # 잘려 라운드가 낮게 나온다 ③ 누가 쓴 코멘트인지는 여전히 모른다 — 같은 커밋에
+      # 달린 응답을 접을 뿐 없애지는 못한다.
+      #
+      # 집계 실패는 통과가 아니라 실패다. 조용히 0 으로 강등되면 라운드 게이트가
+      # 열린 채로 남는다.
+      - name: Count review rounds by head OID
+        id: rounds
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -o pipefail
+          rounds="$(gh api graphql \
+            -F owner="${GITHUB_REPOSITORY%%/*}" \
+            -F name="${GITHUB_REPOSITORY##*/}" \
+            -F pr="${PR}" \
+            -f query='
+              query($owner:String!, $name:String!, $pr:Int!) {
+                repository(owner:$owner, name:$name) {
+                  pullRequest(number:$pr) {
+                    comments(first:100) { nodes { createdAt } }
+                    commits(last:100) { nodes { commit { oid committedDate } } }
+                  }
+                }
+              }' | jq '
+            .data.repository.pullRequest
+            | (.comments.nodes | map(.createdAt) | sort) as $ts
+            | (.commits.nodes | map(.commit) | sort_by(.committedDate)) as $cs
+            | [ $ts[]
+                | . as $t
+                | (([ $cs[] | select(.committedDate <= $t) ] | last | .oid) // "before-first-commit") ]
+            | unique | length')"
+          case "$rounds" in
+          '' | *[!0-9]*)
+            echo "::error::head OID 라운드 집계 실패 — 게이트를 통과로 강등하지 않는다"
+            exit 1
+            ;;
+          esac
+          echo "rounds=$rounds" >>"$GITHUB_OUTPUT"
+          echo "::notice::review rounds (distinct head OIDs) = $rounds"
+
       # 3라운드부터는 red 면 fix 를 더 쌓지 말고 근본 원인을 재평가한다 (delivery
-      # 「자율 실행 vs 중단」). green 이면 재평가 대상이 아니라 owner 가 label 붙이고 머지한다.
-      # 라운드 프록시는 PR comment 수 — reviewer 가 라운드마다 scorecard 를 하나
-      # 남기고 저자는 comment 를 남기지 않는다. payload 에 이미 정수로
-      # 오므로 API 조회도 본문 파싱도 필요 없다.
-      # 실측 2026-07-29: 최근 머지 30건 중 16건이 승인 시점에 comments >= 3 이었다.
+      # 「자율 실행 vs 중단」). green 이면 재평가 대상이 아니라 종결자가 label 붙이고 머지한다.
       # 임계값 3 은 완화 대상이 아니라 지켜야 할 선이다 — 걸리면 라운드를 줄여라.
+      # `reflect:done` 은 여전히 일회성 탈출구다 — 한 번 붙으면 그 뒤 라운드도 통과한다.
       - name: Stop at review round 3
         if: >-
           github.event_name == 'pull_request'
-          && github.event.pull_request.comments >= 3
+          && steps.rounds.outputs.rounds >= 3
           && !contains(github.event.pull_request.labels.*.name, 'reflect:done')
         run: |
-          echo "::error::comments=${{ github.event.pull_request.comments }} — 리뷰 3라운드. green 이면 reflect:done 을 붙이고 머지해라 (게이트는 라운드만 세고 verdict 는 안 본다). red 면 같은 유형에 fix 를 더 쌓지 말고 재발 유형 / 라운드별 건수 / 시도한 것을 사용자에게 올려라 — 진행 승인이 reflect:done 이다."
+          echo "::error::rounds=${{ steps.rounds.outputs.rounds }} (서로 다른 head 커밋에 붙은 리뷰 인계 수) — 리뷰 3라운드. green 이면 reflect:done 을 붙이고 머지해라 (게이트는 라운드만 세고 verdict 는 안 본다). red 면 같은 유형에 fix 를 더 쌓지 말고 재발 유형 / 라운드별 건수 / 시도한 것을 사용자에게 올려라 — 진행 승인이 reflect:done 이다."
           exit 1
 
       - name: Require review:approved label

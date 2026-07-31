@@ -128,24 +128,31 @@ N 개 중 `FAIL <key>` 를 찍은 spec 이 원인이다.
 - **delta GREEN 후 고착 해소**: 재push→delta 리뷰 GREEN 인데 gate 가 fail 로 고착이면
   리뷰어 label 유무와 무관하게 `gh pr edit <pr> --remove-label "review:approved"` →
   `--add-label "review:approved"` 로 재발화해야 새 labeled run 이 pass 로 뜬다.
-  단 `comments >= 3` 이면 재발화해도 라운드 게이트에서 다시 막힌다 (아래).
+  단 라운드 3 이상이면 재발화해도 라운드 게이트에서 다시 막힌다 (아래).
 - **라운드 3 이상은 `labeled` 도 fail (2026-07-29)**: `Stop at review round 3` step 이
-  `comments >= 3` 이고 `reflect:done` label 이 없으면 exit 1 한다. rerun 도 label
-  재발화도 같은 payload 를 재생하므로 계속 fail — 해소는 `reflect:done` 뿐이다
+  라운드 3 이상이고 `reflect:done` label 이 없으면 exit 1 한다. rerun 도 label
+  재발화도 같은 상태를 재생하므로 계속 fail — 해소는 `reflect:done` 뿐이다
   (`enforce_admins=true` 라 `--admin` 우회 없음). **누가 붙이냐는 verdict 가 가른다** —
   green 이면 종결자가 바로 붙이고, red 면 회고 모드 리뷰어가
   interface 를 거쳐 사용자에게 올려 받는다
   ([delivery](../../workflow/delivery/memory.md)). 저자는
   붙이지 않는다. 게이트는 라운드만 세고
   verdict 를 안 보므로 green 도 걸린다.
-  최근 머지 30건 중 16건이 승인 시점에 `comments >= 3` 이었다.
+- **라운드 = 서로 다른 head 커밋에 붙은 리뷰 인계의 수다 (#1968, 2026-08-01).**
+  앞 스텝 `Count review rounds by head OID` 가 GraphQL 로 세서 output 으로 넘기고
+  `Stop at review round 3` 이 그것을 읽는다 — 웹훅 payload 에는 이 집계가 없다.
+  집계가 실패하면 그 스텝이 exit 1 하므로 게이트는 열리지 않고 red 로 닫힌다.
+  라운드 수는 다시 세지 말고 그 스텝의 `rounds=N` 을 읽어라. 코멘트 수는
+  라운드의 **상한**이라 3 미만이면 라운드도 3 미만이다.
+  옛 정의(코멘트 1건 = 1라운드)로 잰 "최근 머지 30건 중 16건이 승인 시점에
+  `comments >= 3`" 은 그 정의의 수치다 — 새 정의로는 다시 재지 않았다.
 
 ## 올바른 순서
 
 1. 리뷰 green 확보 → CI 를 자연히 다 돌게 둔다 (트리거 추가 X).
 2. **맨 마지막에** `review:approved` label 부착 (labeled → review-gate success).
    그 뒤로 push/rerun/update-branch 로 SHA·run 을 건드리지 않는다.
-   `comments >= 3` 이면 `reflect:done` 이 먼저 필요하다 — green 은 종결자가 붙이고,
+   라운드 3 이상이면 `reflect:done` 이 먼저 필요하다 — green 은 종결자가 붙이고,
    red 는 [delivery](../../workflow/delivery/memory.md) 의 라운드 회고를 거친다.
 3. E2E flaky fail 은 workflow run 완료 후 `gh run rerun <id> --failed` 1회.
 4. `mergeState` 가 `UNSTABLE` 또는 `CLEAN` 이 되면 `gh pr merge`.

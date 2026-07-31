@@ -4,7 +4,7 @@
 # 사용:
 #   bash scripts/review/measure-rounds.sh --since 2026-06-01
 #   bash scripts/review/measure-rounds.sh --since 2026-07-25 --until 2026-07-26
-#   bash scripts/review/measure-rounds.sh --since 2026-07-25 --until 2026-07-26 --round-def head-oid
+#   bash scripts/review/measure-rounds.sh --since 2026-07-25 --until 2026-07-26 --round-def comments
 #
 # 출력 첫 3줄은 issue #1856 완료 조건이 지정한 계약이다:
 #   rounds_per_merge=<숫자>
@@ -32,7 +32,7 @@ review/measure-rounds.sh — 리뷰 라운드 / 머지율 계측
 옵션:
   --since <DATE>        (필수) 윈도 시작. 포함. YYYY-MM-DD 또는 ISO-8601 Z
   --until <DATE>        윈도 끝. 제외. 기본: 제한 없음
-  --round-def <DEF>     comments | head-oid. 기본 comments
+  --round-def <DEF>     comments | head-oid. 기본 head-oid
   --limit <N>           스캔할 PR 상한. 기본 1000. 걸리면 truncated=yes
   --repo <OWNER/NAME>   기본 Felix-LeeSM/table-view
   --top <N>             가장 긴 라운드 공백 N건 출력. 기본 5
@@ -44,15 +44,14 @@ review/measure-rounds.sh — 리뷰 라운드 / 머지율 계측
 "이 날 연 PR 이 어떻게 됐나" 를 묻는 지표라서 그렇다.
 
 이 스크립트가 세는 라운드는 `round_events()` jq 함수가 계산한다. 게이트
-(`.github/workflows/review-gate.yml`) 는 그 함수를 안 쓰고 웹훅 payload 의
-`pull_request.comments` 를 직접 읽는다 — 자세히는 그 함수 위 주석 참고
-(#1968 이 정의를 교체하려는 중이다).
+(`.github/workflows/review-gate.yml`) 는 그 함수를 안 쓰고 GraphQL 로 같은 것을
+따로 센다 — 자세히는 그 함수 위 주석 참고.
 EOF
 }
 
 SINCE=""
 UNTIL=""
-ROUND_DEF="comments"
+ROUND_DEF="head-oid"
 LIMIT="$DEFAULT_LIMIT"
 REPO="$DEFAULT_REPO"
 TOP=5
@@ -275,27 +274,28 @@ fi
 # 말고 여기에 정의를 추가해라.
 #
 # 게이트는 여기를 안 지난다. `.github/workflows/review-gate.yml` 의
-# `Stop at review round 3` 은 웹훅 payload 의 `pull_request.comments` 를 조건식에서
-# 직접 읽는다. 즉 `comments` 정의의 집행 구현은 저 워크플로에 따로 있고, 이 파일의
-# 기본값은 그 수와 같은 것을 재도록 맞춰 둔 것이다. 짝이 어긋나는지는
-# `scripts/review/measure-rounds.test.sh` 의 "gate coupling" 단계가 본다 — 저 스텝의
-# `if:` 표현식이 여전히 코멘트 수를 읽는지, 이 파일의 기본값이 여전히 `comments` 인지를
-# 각각 단언한다. 파일 전체 grep 이 아니다 — 같은 리터럴이 에러 문구에도 있어서
-# 조건식만 갈아치운 편집을 놓친다.
+# `Count review rounds by head OID` 스텝이 GraphQL 로 같은 것을 따로 세고,
+# `Stop at review round 3` 은 그 스텝의 output 을 조건식에서 읽는다 — 웹훅 payload 에
+# head OID 별 집계가 없어서 조건식이 직접 읽을 값이 없다. 즉 head-oid 정의의 구현이
+# 둘이고, 짝이 어긋나는지는 `scripts/review/measure-rounds.test.sh` 의
+# "gate coupling" 단계가 본다 — 저 스텝의 `if:` 표현식이 여전히 집계 output 을 읽는지,
+# 집계 스텝이 여전히 서로 다른 head OID 를 세는지, 그 jq 가 아래 `round_events` 의
+# head 배정과 같은 표기인지를 각각 단언한다. 파일 전체 grep 이 아니다 — 같은 리터럴이
+# 에러 문구에도 있어서 조건식만 갈아치운 편집을 놓친다.
 #
-#   comments  현행 프록시. PR 코멘트 1건 = 1라운드. 위 게이트가 조건식에서 읽는
-#             값과 같은 수다. 리뷰어는 라운드마다 scorecard 코멘트를 하나 남기지만
+#   head-oid  기본값 (#1968). 서로 다른 head 커밋에 붙은 리뷰 인계의 수. 같은
+#             커밋에 코멘트가 여러 개 달리면 1라운드다. 위 게이트가 세는 값과
+#             같은 수다. 근사: 코멘트 시각 이하의 마지막 커밋을 그 코멘트의 head 로
+#             본다. 한계는 이 파일 하단 "못 재는 것" 주석에 적었다.
+#
+#   comments  옛 프록시 (#1968 이전 기본값). PR 코멘트 1건 = 1라운드. 리뷰어는
+#             라운드마다 scorecard 코멘트를 하나 남기지만
 #             (memory/workflow/review/memory.md), 코멘트 작성자를 API 로 구분할 수
-#             없어서 구현자 응답 / 세션 공지 / "닫는다" 코멘트까지 라운드로 센다.
+#             없어서 구현자 응답 / 세션 공지 / "닫는다" 코멘트까지 라운드로 셌다.
+#             과거 수치와 대조할 때 쓰라고 남겨 둔다.
 #
-#   head-oid  #1968 이 교체하자고 제안한 정의. 서로 다른 head 커밋에 붙은
-#             리뷰 인계의 수. 같은 커밋에 코멘트가 여러 개 달리면 1라운드다.
-#             근사: 코멘트 시각 이하의 마지막 커밋을 그 코멘트의 head 로 본다.
-#             한계는 이 파일 하단 "못 재는 것" 주석에 적었다.
-#
-# #1968 이 착지해도 이 파일에서 할 일은 기본값 한 줄 교체다. 그게 전부는 아니다 —
-# `review-gate.yml` 의 조건식도 같이 바꿔야 하는데 웹훅 payload 에는 head OID 별
-# 집계가 없어서 조건식이 읽을 값 자체가 없다. 산정할 때 이 파일만 보지 마라.
+# 정의를 또 바꿀 때 이 파일만 고치면 절반이다 — `review-gate.yml` 의 집계 스텝이
+# 같이 바뀌어야 게이트가 실제로 그 수를 센다.
 # ─────────────────────────────────────────────────────────────────────────
 # `win` 도 여기 있다. 두 번 도는 jq (건수 확인 / 본 집계) 가 같은 윈도를 봐야
 # 하는데, 정의를 양쪽에 복사하면 한쪽만 고쳐지는 날이 온다.
