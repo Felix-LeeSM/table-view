@@ -10,8 +10,7 @@ import { Button } from "@components/ui/button";
 import { useTranslation } from "react-i18next";
 
 // ---------------------------------------------------------------------------
-// `ConfirmDialog` preset (Layer 2 of the dialog 2-layer system; see
-// `memory/engineering/conventions/frontend/dialogs/memory.md`).
+// `ConfirmDialog` preset (Layer 2 of the dialog 2-layer system).
 //
 // Uses Layer-1 primitives only — `<AlertDialog*>` from
 // `src/components/ui/alert-dialog.tsx`. It does not reach into Radix
