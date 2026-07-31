@@ -28,7 +28,10 @@ on:
   # re-run this workflow) to widen the scope.
   # The collision also runs the other way: review-gate.yml DOES listen to
   # `labeled`, so applying `e2e:full` before approval leaves a failed
-  # review-gate run on that SHA. It heals when the approval label re-runs it.
+  # review-gate run on that SHA. It heals when the approval label re-runs it,
+  # unless the round gate holds it: at rounds >= 3 (distinct head OIDs carrying
+  # a review handoff, #1968) without `reflect:done`, the re-run fails too at
+  # `Stop at review round 3`.
   pull_request:
     types: [opened, reopened, synchronize]
   workflow_dispatch:

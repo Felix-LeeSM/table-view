@@ -72,7 +72,8 @@ Checks`, `Rust Unit And Storage Tests`, `Integration Tests (Docker)`,
 `PR Body Contract`) 과 `review-gate` 가 전부 red 가 될 수 있고, 대응은 fix (clippy
 fix / 테스트 수정 / body 고쳐 재push / `CLAUDE.md` import 줄 원복) 지 회피 아님.
 신규 required context 등록은 workflow 가 main 에 올라간 **뒤에** 한다 — 아무 run 도 만들지 않는 required
-context 는 열린 PR 전부를 BLOCKED 로 고착시킨다.
+context 는 열린 PR 전부를 BLOCKED 로 고착시킨다. main 착지도 충분조건이 아니다: 열린 PR 은
+merge ref 가 갱신돼야 새 workflow 정의를 읽는다 (#1868, 아래 「review-gate run 상태 함정」).
 
 → protection API 만 보고 "required 는 review-gate 뿐" 이라 단정하지 말 것. ruleset
 7종은 별도 계층이고 docs 만 바꾼 PR 에도 전부 요구된다.
@@ -123,10 +124,11 @@ N 개 중 `FAIL <key>` 를 찍은 spec 이 원인이다.
   자동 rerun 을 대신 돌려 주는 watcher 는 없으니, label 부착 전에 review-gate
   bucket 이 pass 인지 손으로 확인한다 (#1523).
 - **CANCELLED 고착 (#1515, 2h timeout 원인)**: `labeled` run 이 concurrency 로 CANCELLED
-  되면 rollup 에 non-success 로 남아 BLOCKED 가 고착된다. `gh pr checks` 는 최신 run 만
-  보여줘 all-pass 처럼 보인다 — 진단은 `statusCheckRollup`(GraphQL) 또는 commit
-  check-runs API. 해소는 아래 재발화뿐이다 — CANCELLED 된 그 run 을 `gh run rerun`
-  해도 같은 suite 를 재사용해 판정을 못 바꾼다 (위 「함정」의 최신 suite 판정, #1967).
+  되면 그 이름의 최신 suite 가 non-success 인 채 남아 BLOCKED 가 고착된다. `gh pr checks`
+  는 최신 run 만 보여줘 all-pass 처럼 보인다 — 쌓인 run 을 **열거**할 때만
+  `statusCheckRollup`(GraphQL)·commit check-runs API 를 쓰고, required 판정은 위
+  「함정」대로 최신 suite 로 읽는다 (집계는 판정이 아니다, #1967). 해소는 아래 재발화뿐 —
+  CANCELLED 된 그 run 을 `gh run rerun` 해도 같은 suite 를 재사용해 판정을 못 바꾼다.
 - **재push 뒤 판정이 `review:approved` 인데 고착**: delta 리뷰가 `review:approved` 인데
   gate 가 fail 로 고착이면, 리뷰어 label 유무와 무관하게 아래 재발화로 새 labeled run 을
   만들어야 pass 로 뜬다.

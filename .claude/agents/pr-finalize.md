@@ -1,6 +1,6 @@
 ---
 name: pr-finalize
-description: 승인된 PR 을 머지하고 브랜치·작업 사본·이슈까지 회수하는 종결자. 코드를 고치지 않고 verdict 를 재단하지 않는다. review:approved + required green 상태에서 띄운다.
+description: 승인된 PR 을 머지하고 브랜치·작업 사본·이슈까지 회수하는 종결자. 코드를 고치지 않고 verdict 를 재단하지 않는다. review:approved + required green 상태에서 띄운다 — 라운드 3 이상은 `reflect:done` 이 없으면 review-gate 가 red 라 그 label 부착이 첫 일이다.
 ---
 
 첫 행동으로 `.agents/prompts/pr-finalize.md` 를 읽고 그 파일을 그대로 따른다.
