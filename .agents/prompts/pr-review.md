@@ -37,20 +37,20 @@ test "$(git rev-parse --show-toplevel)" = "<사본 경로>" \
 ## 금지 / Write 예산
 
 - **read-only 다.** commit · push · merge · branch 수정 금지.
-- test · lint · build 를 재실행하지 않는다. 자동 gate 결과, PR diff, PR body,
-  필요한 active SOT 만 읽는다.
-- 이슈를 발행하지 않는다. non-blocking 발견은 scorecard 가 기록이다.
+- test · lint · build 를 재실행하지 않는다. 읽어도 되는 것의 목록은
+  `memory/workflow/review/memory.md` 「행동 계약」에 있다.
+- 이슈를 발행하지 않는다 — non-blocking 을 어디에 남기는지는 review 「행동 계약」.
 - **write 는 둘뿐이다: scorecard comment 1개 + verdict label.** 그 외 GitHub
   write 금지.
-- subreviewer 는 발견과 근거만 낸다. severity 를 붙이지 않고, blocking 판정은
-  coordinator 단독 권한이다. 같은 관점 중복 spawn 금지.
+- subreviewer 는 발견과 근거만 낸다. severity 를 붙이지 않는다. blocking 은
+  coordinator 만 정한다. 같은 관점 중복 spawn 금지.
 
 출처: `memory/workflow/review/memory.md` 「행동 계약」.
 
 ## Verdict label — 순서와 대기
 
-label 은 **기존 verdict 를 먼저 떼고 30초 이상 기다린 뒤 새 verdict 를 붙인다.**
-add 와 remove 를 한 명령에 같이 쓰지 않는다.
+순서는 **뗀다 → 30초 이상 기다린다 → 붙인다** 이고, 두 방향이 같다.
+한 명령에 add 와 remove 를 같이 쓰지 않는다.
 
 ```bash
 # green
@@ -64,23 +64,24 @@ sleep 30
 gh pr edit <N> --add-label review:changes-requested
 ```
 
-두 방향 모두 순서가 같다. 왜 이 순서와 대기가 필요한지, 어기면 무엇이 깨지는지는
+왜 이 순서와 대기가 필요한지, 어기면 무엇이 깨지는지는
 `memory/workflow/review/memory.md` 「행동 계약」 이 SOT 다.
 
-label 을 붙이기 전에 `review-gate` bucket 이 pass 인지 손으로 확인한다.
-게이트가 엉켰을 때 진단은 `memory/runbook/pr-merge-gates/memory.md`.
+label 을 붙이기 전에 `review-gate` 상태를 직접 확인한다 — 확인 방법과 엉켰을 때의
+진단은 `memory/runbook/pr-merge-gates/memory.md`.
 
 ## 라운드 3 이상 — 회고 모드
 
 라운드가 3 이상이면 개별 지적 대신 유형 반복 표를 만든다. 사이클로 판정되면
-리뷰를 멈추고 `needs:user` 로 올린다. 트리거 정의와 보고 항목은
+리뷰를 멈추고 **interface 를 거쳐** 사용자에게 올린다 — `needs:user` 를 리뷰어가
+직접 걸지 않는다. write 예산은 위의 둘뿐이다. 트리거 정의와 보고 항목은
 `memory/workflow/orchestration/memory.md` §3 이 SOT 다.
 
 ## 반환 형식 — scorecard
 
-PR 코멘트로 남기는 통합 scorecard 하나. **차원별 판정 표는 어떤 경우에도 생략
-금지** — 요청자가 반환 형식을 GREEN/RED 로 좁게 지정해도, delta 재검증이어도
-표를 출력한다. 점수는 쓰지 않는다.
+PR 코멘트로 남기는 통합 scorecard 하나. **차원별 판정 표를 빼지 않는다** —
+요청 프롬프트가 반환 형식을 좁게 지정했어도, 델타만 다시 보는 라운드여도 표를
+낸다. 점수는 쓰지 않는다.
 
 ```
 ## Scorecard (라운드 N)
@@ -99,8 +100,8 @@ PR 코멘트로 남기는 통합 scorecard 하나. **차원별 판정 표는 어
 - fan-out: 관점 목록 / 불가로 단독 강등했으면 그 사실
 ```
 
-근거 경로는 GitHub 에서 열리는 repo-relative path 만 쓴다.
-출처: `memory/workflow/review/memory.md` 「행동 계약」.
+근거 경로는 `memory/workflow/delivery/memory.md` 「PR body」의 이식성 제약을
+따른다. 출처: `memory/workflow/review/memory.md` 「행동 계약」.
 
 ## orchestrator 에게 돌려줄 요약
 

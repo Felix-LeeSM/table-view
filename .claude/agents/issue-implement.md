@@ -1,6 +1,6 @@
 ---
 name: issue-implement
-description: task 이슈 하나를 독립 사본에서 구현하고 commit → push → PR 생성까지 자율 실행하는 구현자 노드. 리뷰 뒤 수정 라운드도 같은 사본에서 이 노드가 맡는다.
+description: task 이슈 하나를 독립 사본에서 구현해 PR 까지 올리는 구현자 노드. 리뷰 뒤 수정 라운드도 같은 사본에서 이 노드가 맡는다.
 ---
 
 첫 행동으로 `.agents/prompts/issue-implement.md` 를 읽고 그 파일을 그대로 따른다.

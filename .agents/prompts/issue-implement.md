@@ -25,8 +25,8 @@ test "$(git rev-parse --show-toplevel)" = "<사본 경로>" \
 
 파일 도구로 **전문을 읽는다.** 요약본이나 grep 으로 대신하지 않는다.
 
-- `memory/workflow/implementation/memory.md` — §5 착수 전 체크리스트가 이 역할의
-  핵심이다. 리뷰어가 요구하기 전에 저자가 통과시킨다.
+- `memory/workflow/implementation/memory.md` — §5 착수 전 체크리스트. 이 역할의
+  필수 read 다.
 - `memory/workflow/delivery/memory.md` — 커밋~PR 구간 행동 계약 · 중단 조건 ·
   PR body 제약.
 - `memory/workflow/git-policy/memory.md` — hard block 목록과 push reject 회복.
@@ -67,9 +67,9 @@ test "$(git rev-parse --show-toplevel)" = "<사본 경로>" \
 4. commit (Conventional Commits) → push. push 는 SHA refspec 으로 하고,
    `git ls-remote origin <branch>` 로 원격 SHA 를 대조해 성공을 확인한다.
    출처: `memory/workflow/git-policy/memory.md` 「SHA refspec push 패턴」.
-5. PR 생성 (base main, 본문에 `Closes #<이슈>`). 수치 주장에는 그것을 만든
-   명령을 붙인다. PR body 의 경로는 GitHub 에서 열리는 것만 쓴다 — 금지 패턴과
-   해소 방법은 `memory/workflow/delivery/memory.md` 「PR body」.
+5. PR 생성 (base main, 본문에 `Closes #<이슈>`). body 를 쓰기 전에 read 목록의
+   두 제약을 그대로 적용한다 — 정량 주장은 implementation §5 표, 근거의 이식성은
+   `memory/workflow/delivery/memory.md` 「PR body」. 두 제약의 본문은 그 방에 있다.
 6. 보고하고 종료한다. CI 를 기다리지 않고, 다음 노드를 부르지 않는다.
    리뷰 부착은 orchestrator 가 label 을 보고 한다.
 
@@ -77,10 +77,17 @@ test "$(git rev-parse --show-toplevel)" = "<사본 경로>" \
 
 ## 중단 조건
 
-`needs:user` label · GPG/push 이상 · 사용자 명시 거부 · 라운드 회고 트리거.
-라운드가 3 이상이면 같은 유형에 fix 를 더 쌓지 말고 상태를 보고하고 종료한다 —
-판정은 회고 모드 리뷰어 몫이다.
-출처: `memory/workflow/delivery/memory.md` 「자율 실행 vs 중단」.
+- 라운드 회고 트리거 · 사용자 명시 거부 · main 직접 push 요구 · 머지 방식이
+  기본값과 다르게 지시됨 — `memory/workflow/delivery/memory.md`
+  「자율 실행 vs 중단」.
+- GPG pinentry 실패 — 같은 방 「검증 — 절대 회피 금지」. unsigned 로 진행하지
+  않는다.
+- push reject — **즉시 중단이 아니다.** `memory/workflow/git-policy/memory.md`
+  「Push reject 응급 처치」의 4-step 을 먼저 밟고, 그래도 안 풀리면 보고하고 멈춘다.
+- `needs:user` 가 걸린 이슈/PR — `memory/workflow/orchestration/memory.md` §3.
+
+라운드가 3 이상이면 fix 를 더 얹지 않고 상태만 보고하고 종료한다 — 판정은 회고
+모드 리뷰어 몫이다.
 
 ## 반환 형식
 

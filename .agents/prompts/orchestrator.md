@@ -32,7 +32,7 @@ gh issue list --state open --label task --json number,title,labels
 | 상태 | 행동 |
 |---|---|
 | `needs:user` label 이 있는 이슈/PR | **전부 정지하고 보고 후 종료** |
-| PR: 라운드 3 이상(comment ≥ 3) + red | 회고 모드 리뷰어 spawn (유형 재발 표 작성 → needs:user) |
+| PR: 라운드 3 이상(comment ≥ 3) + red | 회고 모드 리뷰어 spawn (유형 재발 표 작성 → interface 경유 `needs:user`) |
 | PR: `review:approved` + required CI green | pr-finalize spawn (comment ≥ 3 이면 pr-finalize 가 `reflect:done` 을 먼저 붙인다 — 게이트는 라운드만 세고 verdict 를 안 본다) |
 | PR: `review:changes-requested` | 같은 사본에 issue-implement 재spawn (수정 라운드) |
 | PR: verdict label 없음 + 리뷰어 미활성 | pr-review coordinator spawn |

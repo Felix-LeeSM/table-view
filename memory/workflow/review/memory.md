@@ -12,8 +12,10 @@ trigger:
 # PR Review Behavior
 
 이 방은 PR review phase에서 agent가 반드시 취해야 할 행동 계약을 둔다.
-**review 방법론에는 SOT 가 없다** — 평가 차원, profile 분기, scorecard 형식은
-어디에도 없고, 리뷰어는 아래 계약만 받는다.
+**review 방법론에는 SOT 가 없다** — 평가 차원과 profile 분기는 어디에도 없고,
+리뷰어는 아래 계약만 받는다. scorecard 의 **형식 틀**만
+`.agents/prompts/pr-review.md` 「반환 형식」이 갖는다 (무엇을 평가할지는 여전히
+리뷰어가 세운다).
 
 ## 행동 계약
 
