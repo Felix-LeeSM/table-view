@@ -44,9 +44,15 @@ export function collectSchemaNames(
   tables: Map<string, TableInfo>,
 ): readonly SchemaName[] {
   const names = new Set(snapshot.schemas.map((schema) => schema.name));
-  Object.keys(snapshot.tablesBySchema).forEach((schema) => names.add(schema));
-  Object.keys(snapshot.columnsByTable).forEach((schema) => names.add(schema));
-  [...tables.values()].forEach((table) => names.add(table.schema));
+  Object.keys(snapshot.tablesBySchema).forEach((schema) => {
+    names.add(schema);
+  });
+  Object.keys(snapshot.columnsByTable).forEach((schema) => {
+    names.add(schema);
+  });
+  [...tables.values()].forEach((table) => {
+    names.add(table.schema);
+  });
   return [...names].sort(compareText) as SchemaName[];
 }
 

@@ -19,6 +19,7 @@ function documentIdToFilterValue(id: DocumentId): unknown {
 export function mqlCommandsToBulkOps(
   commands: ReadonlyArray<MqlCommand>,
 ): BulkWriteOp[] {
+  // biome-ignore lint/suspicious/useIterableCallbackReturn: the switch is exhaustive over MqlCommand["kind"], so no path falls through without returning. tsc enforces that — adding a fourth kind to the union makes the callback infer `... | undefined` and fails this function's BulkWriteOp[] return type.
   return commands.map((cmd) => {
     switch (cmd.kind) {
       case "insertOne":

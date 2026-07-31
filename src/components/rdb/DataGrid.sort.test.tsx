@@ -69,7 +69,9 @@ const mockTabStoreState: {
 };
 const subscribers = new Set<() => void>();
 function notify() {
-  subscribers.forEach((fn) => fn());
+  subscribers.forEach((fn) => {
+    fn();
+  });
 }
 mockUpdateTabSorts.mockImplementation(
   (_connId: string, _db: string, tabId: string, next: SortInfo[]) => {

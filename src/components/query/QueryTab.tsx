@@ -250,8 +250,14 @@ export default function QueryTab({ tab }: QueryTabProps) {
     const fromFields = fieldsCache[tab.connectionId]?.[tab.database];
     if (!fromList && !fromFields) return undefined;
     const names = new Set<string>();
-    fromList?.forEach((c) => names.add(c.name));
-    if (fromFields) Object.keys(fromFields).forEach((name) => names.add(name));
+    fromList?.forEach((c) => {
+      names.add(c.name);
+    });
+    if (fromFields) {
+      Object.keys(fromFields).forEach((name) => {
+        names.add(name);
+      });
+    }
     return Array.from(names);
   }, [
     collectionsCache,

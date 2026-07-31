@@ -206,13 +206,13 @@ function defaultExpandedPaths(root: unknown): Set<string> {
     // work — and an unbounded stack risk on pathological nesting.
     if (depth >= 1) return;
     if (isArray) {
-      (value as unknown[]).forEach((c, i) =>
-        walk(joinArrayPath(path, i), c, depth + 1),
-      );
+      (value as unknown[]).forEach((c, i) => {
+        walk(joinArrayPath(path, i), c, depth + 1);
+      });
     } else {
-      Object.entries(value as Record<string, unknown>).forEach(([k, v]) =>
-        walk(joinObjectPath(path, k), v, depth + 1),
-      );
+      Object.entries(value as Record<string, unknown>).forEach(([k, v]) => {
+        walk(joinObjectPath(path, k), v, depth + 1);
+      });
     }
   };
   walk("", root, 0);
@@ -258,7 +258,7 @@ function flattenBson(
     if (hasChildren && expanded) {
       if (isArray) {
         const arr = value as unknown[];
-        arr.forEach((c, i) =>
+        arr.forEach((c, i) => {
           walk(
             String(i),
             joinArrayPath(path, i),
@@ -267,11 +267,11 @@ function flattenBson(
             true,
             i + 1,
             arr.length,
-          ),
-        );
+          );
+        });
       } else {
         const entries = Object.entries(value as Record<string, unknown>);
-        entries.forEach(([k, v], i) =>
+        entries.forEach(([k, v], i) => {
           walk(
             k,
             joinObjectPath(path, k),
@@ -280,8 +280,8 @@ function flattenBson(
             false,
             i + 1,
             entries.length,
-          ),
-        );
+          );
+        });
       }
     }
   };

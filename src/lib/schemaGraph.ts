@@ -116,8 +116,10 @@ function addTable(table: TableRef, context: Context) {
     tableId,
   );
 
-  sortByName(tableColumns(context.snapshot, table)).forEach((column, ordinal) =>
-    addColumn(table, column, ordinal, context),
+  sortByName(tableColumns(context.snapshot, table)).forEach(
+    (column, ordinal) => {
+      addColumn(table, column, ordinal, context);
+    },
   );
 }
 

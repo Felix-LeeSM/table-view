@@ -76,7 +76,9 @@ const mockTabStoreState: {
 };
 const subscribers = new Set<() => void>();
 function notify() {
-  subscribers.forEach((fn) => fn());
+  subscribers.forEach((fn) => {
+    fn();
+  });
 }
 mockUpdateTabSorts.mockImplementation((tabId: string, next: SortInfo[]) => {
   const tab = mockTabStoreState.tabs.find((t) => t.id === tabId);

@@ -130,15 +130,15 @@ export function selectSchemaGraphMigrationImpact(
     switch (node.kind) {
       case "table":
         addTable(node.id);
-        selectors.columnsByTableId
-          .get(node.id)
-          ?.forEach(({ id }) => addColumn(id));
-        selectors.indexesByTableId
-          .get(node.id)
-          ?.forEach(({ id }) => addIndex(id));
-        selectors.constraintsByTableId
-          .get(node.id)
-          ?.forEach(({ id }) => addConstraint(id));
+        selectors.columnsByTableId.get(node.id)?.forEach(({ id }) => {
+          addColumn(id);
+        });
+        selectors.indexesByTableId.get(node.id)?.forEach(({ id }) => {
+          addIndex(id);
+        });
+        selectors.constraintsByTableId.get(node.id)?.forEach(({ id }) => {
+          addConstraint(id);
+        });
         selectors.foreignKeysByTableId
           .get(node.id)
           ?.incomingForeignKeys.forEach(addForeignKey);

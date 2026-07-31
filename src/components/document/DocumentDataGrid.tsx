@@ -192,7 +192,9 @@ export default function DocumentDataGrid({
     if (!backendData) return null;
     if (schemaAccumulator.columns.length === 0) return backendData;
     const backendIdx = new Map<string, number>();
-    backendData.columns.forEach((c, i) => backendIdx.set(c.name, i));
+    backendData.columns.forEach((c, i) => {
+      backendIdx.set(c.name, i);
+    });
     const effectiveColumns: ColumnInfo[] = schemaAccumulator.columns.map(
       (c) => ({
         name: c.name,
