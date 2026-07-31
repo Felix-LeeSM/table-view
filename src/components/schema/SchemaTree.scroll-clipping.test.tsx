@@ -100,8 +100,7 @@ describe("SchemaTree scroll clipping (#1222)", () => {
         return VIEWPORT;
       },
     });
-    HTMLElement.prototype.getBoundingClientRect = function () {
-      return {
+    HTMLElement.prototype.getBoundingClientRect = () => ({
         x: 0,
         y: 0,
         top: 0,
@@ -113,8 +112,7 @@ describe("SchemaTree scroll clipping (#1222)", () => {
         toJSON() {
           return {};
         },
-      } as DOMRect;
-    };
+      } as DOMRect);
   });
 
   afterEach(() => {

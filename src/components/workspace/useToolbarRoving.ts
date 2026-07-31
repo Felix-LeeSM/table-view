@@ -66,10 +66,14 @@ export function useToolbarRoving(containerRef: RefObject<HTMLElement | null>): {
       if (list.length === 0) return;
 
       e.preventDefault();
-      const cur = Math.max(
-        0,
-        list.findIndex((el) => el === document.activeElement),
-      );
+      // `list` only ever holds <button> nodes, so narrowing activeElement to
+      // HTMLButtonElement loses nothing and keeps indexOf's parameter type
+      // honest (Element | null would not typecheck).
+      const active = document.activeElement;
+      const cur =
+        active instanceof HTMLButtonElement
+          ? Math.max(0, list.indexOf(active))
+          : 0;
       const last = list.length - 1;
       const next =
         key === "Home"

@@ -1,8 +1,8 @@
-import path from "path";
-import fs from "fs";
-import net from "net";
-import { spawn, spawnSync } from "child_process";
-import { fileURLToPath } from "url";
+import path from "node:path";
+import fs from "node:fs";
+import net from "node:net";
+import { spawn, spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import type { Options } from "@wdio/types";
 import { resetSmokeDataDir } from "./e2e/support/smoke-data-dir.js";
 
@@ -173,7 +173,7 @@ export const config: Options.Testrunner = {
       );
     }
   },
-  afterTest: async function (test, _context, { passed }) {
+  afterTest: async (test, _context, { passed }) => {
     if (!passed) await dumpFailureArtifacts(test.title, test.parent);
   },
   beforeSession: async () => {

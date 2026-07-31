@@ -6,7 +6,7 @@
 // change.
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, act } from "@testing-library/react";
-import React from "react";
+import type React from "react";
 import SchemaTree from "./SchemaTree";
 import { useConnectionStore } from "@stores/connectionStore";
 import {

@@ -186,7 +186,7 @@ describe("QueryLog visual + UX invariants (sprint-372 rewrite)", () => {
     toggleVisible();
 
     await waitFor(() => {
-      expect(getByJoinedText("A".repeat(80) + "...")).toBeInTheDocument();
+      expect(getByJoinedText(`${"A".repeat(80)}...`)).toBeInTheDocument();
     });
   });
 

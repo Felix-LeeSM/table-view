@@ -194,8 +194,7 @@ export function ExplainViewer({
       )}
 
       {!loading && error === null && plan !== null && (
-        <>
-          {postgresPlan !== null ? (
+        postgresPlan !== null ? (
             <PostgresPlanView plan={postgresPlan} rawPlan={plan} />
           ) : (
             <pre
@@ -204,8 +203,7 @@ export function ExplainViewer({
             >
               {safeStringifyCell(plan, 2)}
             </pre>
-          )}
-        </>
+          )
       )}
     </section>
   );

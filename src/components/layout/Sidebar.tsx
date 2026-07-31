@@ -220,8 +220,7 @@ export default function Sidebar() {
     !!focusedConnId && activeStatuses[focusedConnId]?.type === "connected";
 
   return (
-    <>
-      <div
+    <div
         ref={sidebarRef}
         className="relative flex h-full shrink-0 select-none flex-col border-r border-border bg-secondary"
         style={{ width: sidebarWidth }}
@@ -329,6 +328,5 @@ export default function Sidebar() {
           aria-valuenow={Math.round(sidebarWidth)}
         />
       </div>
-    </>
   );
 }

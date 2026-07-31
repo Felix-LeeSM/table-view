@@ -108,7 +108,7 @@ export const useSnippetsStore = create<SnippetsState>((set) => ({
       // Ratchet the counter past any persisted id so new snippets don't collide.
       for (const s of snippets) {
         const num = parseInt(s.id.replace("snip-", ""), 10);
-        if (!isNaN(num) && num > snippetCounter) snippetCounter = num;
+        if (!Number.isNaN(num) && num > snippetCounter) snippetCounter = num;
       }
 
       set({ snippets });

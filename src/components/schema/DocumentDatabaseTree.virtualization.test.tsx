@@ -87,8 +87,7 @@ describe("DocumentDatabaseTree virtualization (#1445)", () => {
         return VIEWPORT_HEIGHT;
       },
     });
-    HTMLElement.prototype.getBoundingClientRect = function () {
-      return {
+    HTMLElement.prototype.getBoundingClientRect = () => ({
         x: 0,
         y: 0,
         top: 0,
@@ -100,8 +99,7 @@ describe("DocumentDatabaseTree virtualization (#1445)", () => {
         toJSON() {
           return {};
         },
-      } as DOMRect;
-    };
+      } as DOMRect);
   });
 
   afterEach(() => {

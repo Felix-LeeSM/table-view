@@ -81,7 +81,6 @@ describe("useDdlPreviewExecution — PostgreSQL structure DDL plan", () => {
           username: "u",
           password: null,
           environment: "production",
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
         } as any,
       ],
     });

@@ -23,9 +23,18 @@ trigger:
 
 ### Why
 
-- `cargo fmt` / `cargo clippy -D warnings` / `eslint` / 테스트는 **CI 에서만
-  돈다.** 로컬 검증을 대신 걸어 주는 장치가 없으므로 깨진 코드를 push 하면
-  CI 에서 처음 드러난다. `prettier` 는 CI 에도 없다.
+- push 직전 로컬 검증은 **lefthook pre-push 3종이 전부다** (`lefthook.yml`):
+  ① `biome check . --error-on-warnings` (포맷 + 일반 lint, 전체 트리)
+  ② push 대상 변경 파일 한정 `eslint --quiet` (repo 고유 가드)
+  ③ `cargo fmt --manifest-path src-tauri/Cargo.toml --check`.
+  `--no-verify` 는 이 셋을 통째로 끈다.
+- 나머지 — `cargo clippy -D warnings`, `cargo test`, vitest, 커버리지 —
+  는 여전히 **CI 에서만 돈다.** 깨진 코드를 push 하면 CI 에서 처음 드러난다.
+- pre-commit 훅은 없다. 커밋은 게이트 없이 지나가고 push 에서 한 번 잡힌다.
+- hook 설치는 `pnpm install` → `package.json` 의 `prepare` 가
+  `git config --unset-all core.hooksPath` 후 `lefthook install`. 지워진
+  `.githooks/` 를 가리키는 dangling `core.hooksPath` 가 남아 있어 unset 이
+  선행되지 않으면 lefthook 훅이 아예 안 걸린다.
 - 서명은 `commit.gpgsign` 설정이 건다.
 - [ADR 0044](../../../docs/archives/decisions/0044-e2e-smoke-remote-required/memory.md)
   는 runtime e2e smoke 를 GitHub Actions blocking check 로 승격했지만, 그 워크플로는
@@ -33,8 +42,9 @@ trigger:
 
 ## 실패 시 — 회피 X, 근본 fix
 
-- 포맷 실패 → `cargo fmt` / `npx prettier --write`.
-- 린트 실패 → 경고 수정. `eslint-disable` 은 사유 코멘트와 함께만.
+- 포맷 실패 → `cargo fmt` / `pnpm format` (= `biome format --write .`).
+- 린트 실패 → 경고 수정. 억제는 사유 코멘트와 함께만 —
+  일반 규칙은 `biome-ignore`, repo 고유 가드는 `eslint-disable`.
 - 테스트 실패 → 코드 수정 또는 (테스트가 틀렸으면) 테스트 + ADR 수정.
 - e2e timeout → `e2e/smoke/_helpers.ts` + `wdio.smoke.conf.ts` timeout, docker daemon 확인.
 - GPG pinentry timeout → 즉시 중단. 사용자에게 signing cache warm-up 필요를

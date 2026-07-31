@@ -38,8 +38,7 @@ export interface TreeEditResult {
 export function parseTreePath(path: string): TreePathSegment[] {
   const segments: TreePathSegment[] = [];
   const token = /\[(\d+)\]|([^.[\]]+)/g;
-  let match: RegExpExecArray | null;
-  while ((match = token.exec(path)) !== null) {
+  for (const match of path.matchAll(token)) {
     if (match[1] !== undefined) segments.push(Number.parseInt(match[1], 10));
     else if (match[2] !== undefined) segments.push(match[2]);
   }

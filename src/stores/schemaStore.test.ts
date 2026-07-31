@@ -248,8 +248,8 @@ describe("schemaStore", () => {
     await useSchemaStore.getState().loadSchemas("conn1", "db1");
     const state = useSchemaStore.getState();
     expect(state.schemas.conn1?.db1).toHaveLength(2);
-    expect(state.schemas.conn1?.db1![0]!.name).toBe("public");
-    expect(state.schemas.conn1?.db1![1]!.name).toBe("test_schema");
+    expect(state.schemas.conn1!.db1![0]!.name).toBe("public");
+    expect(state.schemas.conn1!.db1![1]!.name).toBe("test_schema");
   });
 
   it("loads tables for schema", async () => {
@@ -307,7 +307,7 @@ describe("schemaStore", () => {
     const state = useSchemaStore.getState();
     expect(state.tableColumnsCache.conn1?.db1?.public?.users).toBeDefined();
     expect(state.tableColumnsCache.conn1?.db1?.public?.users).toHaveLength(1);
-    expect(state.tableColumnsCache.conn1?.db1?.public?.users![0]!.name).toBe(
+    expect(state.tableColumnsCache.conn1!.db1!.public!.users![0]!.name).toBe(
       "id",
     );
   });

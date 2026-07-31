@@ -79,7 +79,7 @@ describe("DuckDB file analytics wrappers", () => {
     expect(preview.result.executionTimeMs).toBe(3);
     expect(preview.result.rows[0]?.[0]).toBe(9007199254740993n);
     expect(preview.result.rows[0]?.[1]).toBeInstanceOf(Decimal);
-    expect((preview.result.rows[0]?.[1] as Decimal).toString()).toBe("12.34");
+    expect((preview.result.rows[0]![1] as Decimal).toString()).toBe("12.34");
   });
 
   it("sends null preview limit when omitted", async () => {

@@ -60,7 +60,13 @@ landed and live GitHub showed no open Refactor 04 child issues.
 
 ## Static Lint Gate
 
-`pnpm lint` runs ESLint. `eslint.config.js` keeps `max-lines` as a warning and
+`pnpm lint` runs two engines with disjoint policy spaces: `biome check .`
+(formatter + the generic lint rules, configured in `biome.json`) and then
+`eslint .` (the repo-specific guards only — `tv-local/*`, the
+`no-restricted-syntax`/`no-restricted-imports` blocks, react-hooks,
+`@typescript-eslint/no-deprecated`, `no-console`, `max-lines`). A rule belongs
+to exactly one engine; `eslint.config.js` deliberately extends no preset.
+`eslint.config.js` keeps `max-lines` as a warning and
 the feature-import rule as an error. **Nothing enforces the rules below** — they
 come from the Refactor 00 static policy in
 `docs/archives/audits/refactor-00-static-hardening-2026-06-09.md`, and no check

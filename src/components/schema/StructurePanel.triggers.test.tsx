@@ -289,7 +289,6 @@ describe("StructurePanel Triggers tab (Sprint 272)", () => {
           username: "u",
           password: null,
           environment: "development",
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
         } as any,
       ],
     });
@@ -326,7 +325,6 @@ describe("StructurePanel Triggers tab (Sprint 272)", () => {
           username: "u",
           password: null,
           environment: "development",
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
         } as any,
       ],
     });

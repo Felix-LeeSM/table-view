@@ -975,7 +975,6 @@ describe("ConnectionItem", () => {
 
   it("does not render environment badge when environment is undefined", () => {
     setStoreState({});
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { environment: _, ...connWithoutEnv } = makeConnection();
     render(<ConnectionItem connection={connWithoutEnv as ConnectionConfig} />);
     expect(screen.queryByText("Local")).not.toBeInTheDocument();

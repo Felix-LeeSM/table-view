@@ -140,7 +140,6 @@ beforeEach(async () => {
 // crypto.randomUUID polyfill for jsdom (used by FilterBar)
 if (typeof crypto.randomUUID !== "function") {
   let counter = 0;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (crypto as any).randomUUID = () => `test-uuid-${++counter}`;
 }
 
@@ -198,14 +197,12 @@ if (typeof Element !== "undefined") {
   globalThis.setTimeout = ((
     handler: Parameters<typeof setTimeout>[0],
     timeout?: number,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ...args: any[]
   ) => {
     if (typeof handler !== "function") {
       return realSetTimeout(handler, timeout, ...args);
     }
     const id: ReturnType<typeof setTimeout> = realSetTimeout(
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (...cbArgs: any[]) => {
         liveTimers.delete(id);
         handler(...cbArgs);

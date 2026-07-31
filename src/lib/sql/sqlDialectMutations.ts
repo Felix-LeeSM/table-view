@@ -331,7 +331,6 @@ export function extractDbMutation(
             targetSchema: cleaned,
           };
         }
-        continue;
       }
     } else if (dialect === "mysql") {
       const useMatch = MYSQL_USE.exec(stmt.masked);
@@ -342,7 +341,6 @@ export function extractDbMutation(
           dialect: "mysql",
           targetDb: stripIdentifierQuotes(raw),
         };
-        continue;
       }
     } else if (dialect === "redis") {
       const sel = REDIS_SELECT.exec(stmt.masked);
@@ -352,7 +350,6 @@ export function extractDbMutation(
         if (Number.isFinite(idx) && idx >= 0) {
           last = { kind: "redis_select", databaseIndex: idx };
         }
-        continue;
       }
     }
   }

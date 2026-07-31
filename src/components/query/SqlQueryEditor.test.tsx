@@ -419,7 +419,6 @@ describe("SqlQueryEditor (Sprint 139)", () => {
         sql="SELECT 1"
         onSqlChange={onSqlChange}
         onExecute={onExecute}
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         schemaNamespace={{ users: {} } as any}
       />,
     );

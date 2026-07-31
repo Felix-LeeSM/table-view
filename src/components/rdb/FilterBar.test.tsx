@@ -56,7 +56,7 @@ function renderFilterBar(
 describe("FilterBar", () => {
   beforeEach(() => {
     vi.stubGlobal("crypto", {
-      randomUUID: () => "test-uuid-" + Math.random().toString(36).slice(2, 8),
+      randomUUID: () => `test-uuid-${Math.random().toString(36).slice(2, 8)}`,
     });
   });
 

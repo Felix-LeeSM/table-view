@@ -1,0 +1,31 @@
+# Local pre-push gate. Before this file existed, `cargo fmt`, `eslint` and the
+# formatter ran in CI only, so a broken tree first showed up ~20 minutes after
+# the push (memory/workflow/git-policy/memory.md). There is no pre-commit hook
+# on purpose: commits stay cheap and the gate fires once per push.
+#
+# Install: `pnpm install` runs the `prepare` script, which unsets the dangling
+# `core.hooksPath` left over from the deleted `.githooks/` directory and then
+# runs `lefthook install`. Without the unset, git looks for hooks in a path
+# that no longer exists and lefthook's own hooks never fire.
+#
+# `--no-verify` to skip this is a hard block, not a shortcut — see
+# memory/workflow/git-policy/memory.md.
+pre-push:
+  parallel: true
+  jobs:
+    # Whole tree, not just the pushed files: the formatter and the generic lint
+    # rules are cheap (~0.5s over 1300 files) and a partial run would let a
+    # rename or a config edit land unformatted.
+    - name: biome
+      run: pnpm exec biome check . --error-on-warnings
+
+    # Changed files only: eslint here carries the repo-specific guards, and
+    # typed linting (`@typescript-eslint/no-deprecated` uses projectService)
+    # makes a whole-tree run cost minutes. `{push_files}` expands to the files
+    # this push actually adds relative to the remote ref.
+    - name: eslint
+      glob: "*.{ts,tsx}"
+      run: pnpm exec eslint --quiet {push_files}
+
+    - name: cargo-fmt
+      run: cargo fmt --manifest-path src-tauri/Cargo.toml --check

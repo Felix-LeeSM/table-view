@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { MongoIndexesPanel } from "./MongoIndexesPanel";
 import { ValidatorPanel } from "./ValidatorPanel";
 import { CollectionStatsPanel } from "./CollectionStatsPanel";
-import { type DatabaseType } from "@/types/connection";
+import type { DatabaseType } from "@/types/connection";
 
 export type MongoStructureSubTab = "indexes" | "validator" | "stats";
 

@@ -1,4 +1,4 @@
-import * as React from "react";
+import type * as React from "react";
 import { XIcon, Loader2, CheckCircle, AlertCircle } from "lucide-react";
 import { Dialog as DialogPrimitive } from "radix-ui";
 import { useTranslation } from "react-i18next";

@@ -97,7 +97,7 @@ export function generateMigrationDDL(
     sections.push(["-- Foreign keys", ...fkLines].join("\n"));
   }
 
-  return sections.join("\n\n") + "\n";
+  return `${sections.join("\n\n")}\n`;
 }
 
 // ── Header ─────────────────────────────────────────────────────────────

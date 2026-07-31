@@ -291,7 +291,6 @@ describe("Missing handler safety", () => {
     // missing `op`
     dispatchStateChangedPayload(
       "self",
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       { domain: "connection" } as any,
     );
     expect(onCrudChanged).not.toHaveBeenCalled();

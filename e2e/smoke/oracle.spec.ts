@@ -198,5 +198,5 @@ function randomAlphaSuffix() {
   const alpha = Math.random()
     .toString(36)
     .replace(/[^a-z]/g, "");
-  return (alpha + "oracle").slice(0, 6);
+  return (`${alpha}oracle`).slice(0, 6);
 }
