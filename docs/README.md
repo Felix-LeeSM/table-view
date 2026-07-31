@@ -75,8 +75,8 @@ rg -j1 '<term>' docs memory README.md AGENTS.md
 과거 기록만 볼 때는 그 디렉터리를 직접 지정한다. 명령줄에 직접 준 경로에는
 `.ignore` 가 걸리지 않으므로 플래그가 필요 없다 — 루트의 `.ignore` 도 같은
 형태를 권한다. active 와 기록을 한 번에 훑을 때만 `--no-ignore-dot` 을 쓴다.
-`--no-ignore` 는 쓰지 않는다 — `.gitignore` 까지 꺼 버려서 `node_modules` 가
-딸려 온다. `--no-ignore-dot` 은 `.ignore`·`.rgignore` 만 끄고 `.gitignore` 는
+`--no-ignore` 는 쓰지 않는다 — 기록만 보려는데 `.gitignore` 까지 꺼서
+범위가 넘친다. `--no-ignore-dot` 은 `.ignore`·`.rgignore` 만 끄고 `.gitignore` 는
 남긴다.
 
 ```sh
