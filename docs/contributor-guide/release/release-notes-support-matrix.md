@@ -30,9 +30,11 @@ Known limits to state in release notes:
 - Completion is editor assistance. It does not widen runtime execution support.
 - Fixture inventory is not live support evidence unless a smoke spec or focused
   runtime test exercises it.
-- Desktop runtime smoke runs on a Linux host by hand. No CI job runs it, and the
-  `Runtime Happy Path` context reports without executing a spec. macOS and
-  Windows desktop runtime smoke remain deferred.
+- Desktop runtime smoke runs on Linux. In CI the `Runtime Happy Path` context
+  runs the spec subset the PR's changed paths select, and the full suite on push
+  to main, on the nightly schedule, and under the `e2e:full` label; anything
+  outside that runs on a Linux host by hand. macOS and Windows desktop runtime
+  smoke remain deferred.
 - Search live admin execution, Redis/Valkey full CLI/admin parity, MongoDB
   arbitrary JavaScript shell behavior, MSSQL full T-SQL/SQLCMD/admin support,
   and Oracle SID/TNS/wallet/TLS/DDL/raw-admin/full PL/SQL support remain out of
@@ -63,10 +65,12 @@ Known limits to state in release notes:
 
 ## Fixture And Smoke Coverage
 
-No workflow runs these specs.
 [`.github/workflows/e2e-smoke.yml`](../../../.github/workflows/e2e-smoke.yml)
-reports the `Runtime Happy Path` context without executing one, so a green PR is
-no evidence for any row below. Run the suite by hand on the release SHA — the
+runs these specs under the `Runtime Happy Path` context, but a PR only runs the
+subset its changed paths select, so a green PR is evidence for the rows those
+specs cover and for no other row. Every row is covered by the full suite, which
+runs on push to main, on the nightly schedule, and under the `e2e:full` label.
+For a release SHA, either take the main-push run or run the suite by hand — the
 sequence is in README 「E2E Smoke」.
 
 | Source | Runtime smoke | Fixture or seed evidence | Release-note wording |

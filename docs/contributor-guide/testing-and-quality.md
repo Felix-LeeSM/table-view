@@ -131,10 +131,14 @@ Required remote evidence on the exact release SHA:
 - Every required context in the `pr_to_main` ruleset passes. That list lives in
   one place, `memory/runbook/pr-merge-gates/memory.md`. Do not copy it here — a
   copy kept here once listed five of the eight.
-- No runtime smoke runs in CI. `.github/workflows/e2e-smoke.yml` reports the
-  `Runtime Happy Path` context without executing a spec, so a green PR proves no
-  desktop runtime behavior. Run the suite by hand on the release SHA if the
-  release needs runtime evidence — the full sequence (debug build, seed, then
+- Runtime smoke runs in CI, scoped to the change.
+  `.github/workflows/e2e-smoke.yml` maps the PR's changed paths to a spec subset
+  through `e2e/scope-map.mjs` and runs only those, so a green PR proves the
+  specs its own paths select and nothing else — a PR that selects 0 specs proves
+  no desktop runtime behavior at all. The full suite runs on push to main, on
+  the nightly schedule, and on any PR labelled `e2e:full`. Run the suite by hand
+  on the release SHA when the release needs evidence the PR runs did not
+  produce — the full sequence (debug build, seed, then
   `TABLE_VIEW_TEST_DATA_DIR=/tmp/table-view-smoke pnpm test:e2e:smoke`) is in
   README 「E2E Smoke」. Without that variable the specs drive the app against
   your real connection store (`src-tauri/src/storage/mod.rs` `data_dir_override`).

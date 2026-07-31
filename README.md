@@ -219,16 +219,18 @@ cargo test --manifest-path src-tauri/Cargo.toml --lib
 cargo test --manifest-path src-tauri/Cargo.toml --test schema_integration --test query_integration
 ```
 
-### 4. E2E Smoke 테스트 (Linux host, 수동 실행)
+### 4. E2E Smoke 테스트 (Linux host)
 
 WebdriverIO + tauri-driver로 실제 Tauri 앱을 부팅해 PostgreSQL, MySQL,
 MariaDB, MSSQL, SQLite, DuckDB, MongoDB, Redis, Valkey,
 Elasticsearch, OpenSearch runtime happy path를 검증합니다. Oracle은 #905 focused
 runtime evidence만 갖고 routine smoke wiring은 #907 소유입니다.
 
-**CI에서는 실행되지 않습니다.** `.github/workflows/e2e-smoke.yml`은 required
-context만 보고하는 껍데기이고 뒤에 실행되는 spec이 없습니다. spec과 fixture는
-그대로이므로 직접 구동할 수 있습니다.
+**CI에서는 변경 영역만큼 실행됩니다.** `.github/workflows/e2e-smoke.yml`의
+`Runtime Happy Path` job이 `e2e/scope-map.mjs`로 PR의 변경 경로를 spec 부분집합에
+매핑해 그것만 돌립니다. e2e와 무관한 PR은 `selected 0 specs`를 찍고 green이고,
+main push · 야간 schedule · `e2e:full` label은 전체를 돌립니다. 아래처럼 직접
+구동하는 경로도 그대로입니다.
 
 ```bash
 pnpm db:up
