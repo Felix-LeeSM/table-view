@@ -4,12 +4,24 @@
 // TTL with compound-aware gate, partialFilterExpression JSON validation,
 // collation locale+strength) + Save 동작 (happy / driver-error inline
 // alert) 을 검증한다. createMongoIndex 는 vi.mock 으로 캡처.
+//
+// #1791 (2026-08-01) — 필드 방향 / collation strength 가 native `<select>` 에서
+// Radix `<Select>` 로 옮겨갔다. Radix 는 trigger 버튼(role="combobox") + portal
+// listbox 라 `fireEvent.change` 가 닿지 않는다: trigger 클릭 → `role="option"`
+// 클릭으로 고른다.
 
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { setupTauriMock } from "@/test-utils/tauriMock";
 import { CreateMongoIndexDialog } from "../CreateMongoIndexDialog";
+
+/** Open a Radix `<Select>` by its trigger accessible name and click one of the
+ *  portaled options. Replaces the `fireEvent.change` the native `<select>` took. */
+async function pickOption(triggerName: string, optionName: string) {
+  fireEvent.click(screen.getByRole("combobox", { name: triggerName }));
+  fireEvent.click(await screen.findByRole("option", { name: optionName }));
+}
 
 const createMongoIndexMock = vi.fn();
 beforeEach(() => {
@@ -54,7 +66,10 @@ describe("CreateMongoIndexDialog", () => {
       screen.getByTestId("mongo-create-index-collation-locale"),
     ).toBeInTheDocument();
     expect(
-      screen.getByTestId("mongo-create-index-collation-strength"),
+      screen.getByRole("combobox", { name: "Collation strength" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("combobox", { name: "Field 1 direction" }),
     ).toBeInTheDocument();
   });
 
@@ -242,10 +257,7 @@ describe("CreateMongoIndexDialog", () => {
       screen.getByTestId("mongo-create-index-collation-locale"),
       { target: { value: "en" } },
     );
-    fireEvent.change(
-      screen.getByTestId("mongo-create-index-collation-strength"),
-      { target: { value: "2" } },
-    );
+    await pickOption("Collation strength", "strength 2");
     await userEvent.click(screen.getByTestId("mongo-create-index-save"));
     await waitFor(() => {
       expect(createMongoIndexMock).toHaveBeenCalledTimes(1);
@@ -253,5 +265,52 @@ describe("CreateMongoIndexDialog", () => {
     const call = createMongoIndexMock.mock.calls[0];
     if (!call) throw new Error("createMongoIndex was not called");
     expect(call[3].collation).toEqual({ locale: "en", strength: 2 });
+  });
+
+  // #1791 — the direction control moved to Radix; the picked value still has to
+  // land on the right field row of the request. RED if `onValueChange` is not
+  // wired back into `updateField`.
+  it("#1791 — the per-row direction Select forwards the picked direction", async () => {
+    createMongoIndexMock.mockResolvedValueOnce({ name: "email_-1" });
+    render(
+      <CreateMongoIndexDialog
+        {...baseProps}
+        open
+        onClose={vi.fn()}
+        onCreated={vi.fn()}
+      />,
+    );
+    fireEvent.change(screen.getByTestId("mongo-create-index-field-name-0"), {
+      target: { value: "email" },
+    });
+
+    await pickOption("Field 1 direction", "desc");
+    expect(
+      screen.getByRole("combobox", { name: "Field 1 direction" }),
+    ).toHaveTextContent("desc");
+
+    await userEvent.click(screen.getByTestId("mongo-create-index-save"));
+    await waitFor(() => {
+      expect(createMongoIndexMock).toHaveBeenCalledTimes(1);
+    });
+    const call = createMongoIndexMock.mock.calls[0];
+    if (!call) throw new Error("createMongoIndex was not called");
+    expect(call[3].fields).toEqual([{ name: "email", direction: "desc" }]);
+  });
+
+  // #1791 — the sprint-112 rule the eslint guard encodes: this dialog must not
+  // fall back to a native `<select>`. Fails RED the moment one is reintroduced.
+  it("#1791 — renders no native <select> (sprint-112 normalize)", () => {
+    render(
+      <CreateMongoIndexDialog
+        {...baseProps}
+        open
+        onClose={vi.fn()}
+        onCreated={vi.fn()}
+      />,
+    );
+    expect(
+      screen.getByTestId("mongo-create-index-dialog").querySelector("select"),
+    ).toBeNull();
   });
 });

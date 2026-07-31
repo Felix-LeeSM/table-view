@@ -10,6 +10,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { toast } from "@/lib/runtime/toast";
 import { createMongoIndex } from "@/lib/tauri";
 import type {
@@ -261,23 +268,26 @@ export function CreateMongoIndexDialog({
                     data-testid={`mongo-create-index-field-name-${i}`}
                     className="flex-1 rounded border border-border bg-background px-2 py-1.5 text-sm outline-none focus:border-primary"
                   />
-                  {/* eslint-disable-next-line no-restricted-syntax -- 기존 native <select>. cell-domain override 로 sprint-112 규칙이 무력화돼 있던 선재 부채, Radix <Select> 전환은 이 i18n 슬라이스(#1074) 밖 별도 후속 */}
-                  <select
+                  <Select
                     value={field.direction}
-                    onChange={(e) =>
+                    onValueChange={(next) =>
                       updateField(i, {
-                        direction: e.target.value as MongoIndexDirection,
+                        direction: next as MongoIndexDirection,
                       })
                     }
-                    aria-label={t("createIndex.fieldDirectionAriaLabel", {
-                      n: i + 1,
-                    })}
-                    data-testid={`mongo-create-index-field-dir-${i}`}
-                    className="rounded border border-border bg-background px-2 py-1.5 text-sm outline-none focus:border-primary"
                   >
-                    <option value="asc">asc</option>
-                    <option value="desc">desc</option>
-                  </select>
+                    <SelectTrigger
+                      aria-label={t("createIndex.fieldDirectionAriaLabel", {
+                        n: i + 1,
+                      })}
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="asc">asc</SelectItem>
+                      <SelectItem value="desc">desc</SelectItem>
+                    </SelectContent>
+                  </Select>
                   <button
                     type="button"
                     onClick={() => removeField(i)}
@@ -401,20 +411,25 @@ export function CreateMongoIndexDialog({
                 data-testid="mongo-create-index-collation-locale"
                 className="flex-1 rounded border border-border bg-background px-2 py-1.5 text-sm outline-none focus:border-primary"
               />
-              {/* eslint-disable-next-line no-restricted-syntax -- 기존 native <select>. cell-domain override 로 sprint-112 규칙이 무력화돼 있던 선재 부채, Radix <Select> 전환은 이 i18n 슬라이스(#1074) 밖 별도 후속 */}
-              <select
-                value={collationStrength}
-                onChange={(e) => setCollationStrength(Number(e.target.value))}
-                aria-label={t("createIndex.collationStrengthAriaLabel")}
-                data-testid="mongo-create-index-collation-strength"
-                className="rounded border border-border bg-background px-2 py-1.5 text-sm outline-none focus:border-primary"
+              {/* Radix <Select> is string-valued; `collationStrength` stays a
+                  number in state and on the wire, so cast at the boundary. */}
+              <Select
+                value={String(collationStrength)}
+                onValueChange={(next) => setCollationStrength(Number(next))}
               >
-                {[1, 2, 3, 4, 5].map((s) => (
-                  <option key={s} value={s}>
-                    {t("createIndex.collationStrengthOption", { n: s })}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger
+                  aria-label={t("createIndex.collationStrengthAriaLabel")}
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {[1, 2, 3, 4, 5].map((s) => (
+                    <SelectItem key={s} value={String(s)}>
+                      {t("createIndex.collationStrengthOption", { n: s })}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
 
