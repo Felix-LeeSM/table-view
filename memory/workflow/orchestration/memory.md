@@ -24,6 +24,12 @@ Orchestrator 의 행동 계약 — interface 가 `.agents/prompts/orchestrator.m
 티켓을 쓰는 쪽이 착수 전에 전수 명령을 **실제로 돌려서** 티켓에 파일 범위를
 박는다. 그 출력이 곧 범위다 — 범위를 예측으로 채우지 않는다.
 
+**전수 명령의 도구는 `git grep` 이다.** 기본 `rg` 는 전수가 아니다 — 루트
+`.ignore` 가 `docs/{archives,explorations}` 를 빼고, dotfile 기본 제외가
+`.agents/` · `.claude/` · `.github/` 등 dot 경로를 뺀다. `rg` 로 같은 모집단을
+세려면 `--no-ignore-dot --hidden` 이 둘 다 필요하다. 제외 목록과 rg 레시피는
+[docs/README.md](../../../docs/README.md) 「검색 팁」이 SOT 다.
+
 그래서 spawn 전에 티켓의 파일 범위로 겹침을 재고, PR 이 열린 뒤에는 사실로 다시
 대조한다.
 
