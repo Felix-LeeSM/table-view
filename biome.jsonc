@@ -1,0 +1,170 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.5.6/schema.json",
+  // JSONC, not JSON: Biome parses `biome.json` strictly and rejects `//`.
+  // The file needs comments because every `"off"` below has to carry the
+  // reason it is off, next to the rule rather than in a PR body.
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
+  },
+  "files": {
+    "includes": [
+      "**",
+      "!**/node_modules",
+      "!dist",
+      "!coverage",
+      "!docs",
+      "!src-tauri/target",
+      "!src-tauri/gen",
+      "!src-tauri/AppIcon.icon",
+      "!e2e/wdio-report",
+      "!src/lib/sql/wasm",
+      "!src/lib/mongo/wasm",
+      "!.claude",
+      "!worktrees"
+    ]
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 80
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "double",
+      "trailingCommas": "all",
+      "semicolons": "always"
+    }
+  },
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
+    }
+  },
+  "assist": {
+    "actions": {
+      "source": {
+        "organizeImports": "on"
+      }
+    }
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "preset": "recommended",
+      // Every a11y rule below is off for one shared reason: its fix edits
+      // rendered DOM, ARIA semantics, or focus/keyboard behaviour, which is
+      // a product change with e2e surface rather than lint adoption. The
+      // counts are from the 2026-07-31 re-measurement (#2043).
+      "a11y": {
+        // 10 sites. The fix deletes `autoFocus`; every one is a deliberate
+        // focus decision (ConnectionDialog, SnippetsPanel, Toolbar, TabDbChip).
+        "noAutofocus": "off",
+        // 1 site. The fix rewrites a `role`, changing the accessibility tree.
+        "noInteractiveElementToNoninteractiveRole": "off",
+        // 23 sites. The fix pairs a <label> to a control — new markup, and
+        // the pairing has to be chosen per form.
+        "noLabelWithoutControl": "off",
+        // 3 sites. The fix rewrites a `role`, changing the accessibility tree.
+        "noNoninteractiveElementToInteractiveRole": "off",
+        // 6 sites. The fix deletes `tabIndex`, changing the tab order.
+        "noNoninteractiveTabindex": "off",
+        // 3 sites. The fix deletes explicit `role` attributes, and
+        // e2e/reset-to-default-audit.e2e.ts selects on `[role="button"]`.
+        "noRedundantRoles": "off",
+        // 11 sites. The fix adds a `role` plus keyboard handlers.
+        "noStaticElementInteractions": "off",
+        // 8 sites, 7 of them standalone .svg assets (public/logo-*.svg,
+        // src-tauri/icons-src/*.svg) where a <title> is meaningless. The 8th
+        // is an inline decorative overlay in SchemaErdRenderer.tsx that
+        // already sets aria-hidden conditionally.
+        "noSvgWithoutTitle": "off",
+        // 4 sites. The fix adds required ARIA props, changing what screen
+        // readers announce.
+        "useAriaPropsForRole": "off",
+        // 28 sites. The fix removes ARIA props a role does not support.
+        "useAriaPropsSupportedByRole": "off",
+        // 45 sites. Adding type="button" changes submit behaviour for any of
+        // them that sits inside a <form>.
+        "useButtonType": "off",
+        // 27 sites. The fix adds `tabIndex`, changing the tab order.
+        "useFocusableInteractive": "off",
+        // 7 sites. The fix adds keyboard handlers — new behaviour.
+        "useKeyWithClickEvents": "off",
+        // 76 sites. The fix swaps div+role for a semantic element, changing
+        // both the rendered tag and the default keyboard behaviour.
+        "useSemanticElements": "off"
+      },
+      "complexity": {
+        "noUselessContinue": "error",
+        "noUselessFragments": "error",
+        "noUselessSwitchCase": "error",
+        "noUselessUndefinedInitialization": "error",
+        "useArrowFunction": "error",
+        "useIndexOf": "error",
+        "useLiteralKeys": "error",
+        // 60 sites. `a && a.b` and `a?.b` differ when `a` is falsy but not
+        // nullish (0, ""), so the rewrite is per-site type reading, not a
+        // mechanical pass. Biome marks its own fix unsafe for that reason.
+        "useOptionalChain": "off"
+      },
+      "correctness": {
+        "noUnusedVariables": "error",
+        // Owned by eslint-plugin-react-hooks. Off by policy, not by count —
+        // two engines disagreeing on dependency arrays is the drift the
+        // engine split exists to prevent. 108 sites here, 0 for the rule
+        // below; both stay off so ownership does not follow the count.
+        "useExhaustiveDependencies": "off",
+        "useHookAtTopLevel": "off"
+      },
+      "style": {
+        "noDescendingSpecificity": "error",
+        // 1620 sites, overwhelmingly in tests. `!` is the repo's idiom;
+        // removing it is a typing project, not a lint fix.
+        "noNonNullAssertion": "off",
+        "useImportType": "error",
+        "useNodejsImportProtocol": "error",
+        "useTemplate": "error"
+      },
+      "suspicious": {
+        // 39 sites. Real bug class, but each needs a stable id chosen by hand
+        // — a key redesign, not a lint fix.
+        "noArrayIndexKey": "off",
+        // On for production, off for test files — see `overrides` below.
+        "noExplicitAny": "error",
+        "noGlobalIsNan": "error",
+        // 9 sites, all already written as the safe
+        // `Object.prototype.hasOwnProperty.call(x, k)`. The only fix Biome
+        // offers is `Object.hasOwn`, ES2022, while tsconfig.json sets lib
+        // ES2021 — it fails TS2550 at all 9. Enabling the rule would tax the
+        // pattern that is already correct. Re-enable when lib moves.
+        "noPrototypeBuiltins": "off",
+        "noTemplateCurlyInString": "error",
+        "useIterableCallbackReturn": "error"
+      }
+    }
+  },
+  "overrides": [
+    {
+      // Test files keep `any`: 42 of the 43 sites are mock objects and
+      // vi.fn() casts where the shape under test is deliberately partial.
+      // Production code carries exactly one `any`, suppressed at the line
+      // with its reason (src/lib/events/stateChanged.ts).
+      "includes": [
+        "**/*.test.ts",
+        "**/*.test.tsx",
+        "**/__tests__/**",
+        "src/test-setup.ts"
+      ],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noExplicitAny": "off"
+          }
+        }
+      }
+    }
+  ]
+}

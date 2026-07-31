@@ -61,7 +61,7 @@ landed and live GitHub showed no open Refactor 04 child issues.
 ## Static Lint Gate
 
 `pnpm lint` runs two engines with disjoint policy spaces: `biome check .`
-(formatter + the generic lint rules, configured in `biome.json`) and then
+(formatter + the generic lint rules, configured in `biome.jsonc`) and then
 `eslint .` (the repo-specific guards only — `tv-local/*`, the
 `no-restricted-syntax`/`no-restricted-imports` blocks, react-hooks,
 `@typescript-eslint/no-deprecated`, `no-console`, `max-lines`). A rule belongs
@@ -131,7 +131,7 @@ Required local evidence:
   `cargo test --manifest-path src-tauri/Cargo.toml --test schema_integration --test query_integration --test mongo_integration --test fixture_loading --test redis_integration`.
 - Documentation lane: `git diff --check` on the touched docs plus local
   link/target review. **No formatter covers docs markdown, on purpose.**
-  Prettier was removed when Biome landed, `biome.json` excludes `docs/`
+  Prettier was removed when Biome landed, `biome.jsonc` excludes `docs/`
   outright, and Biome 2.5.6 does not format markdown at all — so there is
   nothing to run and this lane must not be written as if there were. Reviewer
   judgement is the whole gate here; do not treat a docs-only change as
