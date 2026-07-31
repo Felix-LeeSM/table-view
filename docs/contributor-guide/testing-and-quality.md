@@ -74,7 +74,7 @@ reads the allowlists:
 
 | Gate | Current policy | Triage owner |
 |---|---|---|
-| `max-lines` | Existing 18 warnings are an exact allowlist. New entries and stale entries fail. | The PR touching the file removes new debt or shrinks the allowlist. |
+| `max-lines` | Existing 19 warnings are an exact allowlist. New entries and stale entries fail. `src/components/search/SearchIndexDetailPanel.tsx` joined the list at 705 effective lines when the Biome format migration expanded it past 700; splitting it is follow-up work, not lint adoption. | The PR touching the file removes new debt or shrinks the allowlist. |
 | Hidden TS/TSX lint candidates | Only generated wasm artifacts under `src/lib/sql/wasm/**` and `src/lib/mongo/wasm/**` may be ignored. | The PR adding a broad ignore must either narrow it or document generated-artifact ownership. |
 | `src/features/**` imports | Feature production modules may use feature-local code, feature public APIs, `@lib`, `@/types`, and `@components/ui`; cross-feature internal imports fail and must route through `src/features/<domain>/index.ts`. Imports from legacy components, hooks, stores, pages, router, or app shell still fail unless they are an explicit public-facade exception. | The PR adding a feature dependency owns reusable extraction, public API export, or removal of the dependency. |
 
