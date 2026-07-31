@@ -73,6 +73,24 @@ jobs:
           fi
           echo "PR body clean — no non-portable path patterns."
 
+      # A second, unrelated contract rides in this job: CLAUDE.md's
+      # `@AGENTS.md` line. That one line is what loads the agent rules into
+      # every harness and every spawned subagent — rewritten as a markdown link
+      # it stopped being delivered (#1865), and #2033 removed the last checker
+      # that would have noticed it vanishing. It lives here because this is the
+      # cheapest job with no change gate, so the guard runs on every PR and
+      # every push to main; the job `name:` is a required context, so it cannot
+      # be renamed to match. Checkout is needed only by this step — the PR body
+      # step above reads its input from the event payload.
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      # `-x` pins the whole line and `-F` keeps the `.` literal, so the import
+      # must survive verbatim; `test -f` covers the other half, an import
+      # pointing at a file nobody kept.
+      - name: CLAUDE.md import intact
+        run: grep -qxF '@AGENTS.md' CLAUDE.md && test -f AGENTS.md
+
   dependency-security:
     name: Dependency Security
     runs-on: ubuntu-latest
