@@ -41,7 +41,7 @@ SOT 는 없다.
 - `git push --force` / `--force-with-lease`: agent path 에서 수행 금지
   ([git-policy](../git-policy/memory.md)).
 - main 직접 push (PR 우회).
-- `gh pr merge` 의 squash/merge/rebase 정책이 명시 안 됐을 때 — 종결자.
+- 머지 방식이 아래 기본값과 다르게 지시됐을 때 — 종결자가 사용자에게 확인.
 - 라운드 회고 트리거(라운드 3 이상 / 유형 재발 / 리뷰어 사이클 보고) — 구현자는
   같은 유형에 fix 를 더 쌓지 말고 종료한다. 판정은 회고 모드 리뷰어가,
   재설계는 interface 를 거쳐 사용자가 한다(`reflect:done` label). 단 verdict 가 green 이면 중단이 아니다 — 라운드 3
@@ -51,6 +51,11 @@ SOT 는 없다.
 
 머지 자율 조건(정성 차원에 blocking 없음, CI SUCCESS + `review:approved`,
 mergeable, 사용자 거부 없음)은 종결자가 종합한다.
+
+**머지 방식은 squash 가 기본값이다.** 사본 회수의 head-OID 대조와 브랜치 삭제
+흐름이 squash 를 전제하고([worktree](../../runbook/worktree/memory.md) 「회수」),
+2026-07-30 재건 이후 머지 9건이 전부 squash 였다 — 각 머지 SHA 의 부모가 1개다
+(`git rev-list --parents -n1 <sha>`). 다른 방식은 사용자 명시 지시가 있을 때만.
 
 ## 검증 — 절대 회피 금지
 
