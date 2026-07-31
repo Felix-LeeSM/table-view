@@ -65,11 +65,14 @@ Two round definitions exist and both are printed on every run:
 The script computes both in its `round_events()` jq function, but the gate never
 calls it — the gate carries its own copy of the `comments` definition in that
 workflow condition. The "gate coupling" step of
-`scripts/review/measure-rounds.test.sh` keeps the two in step: it fails if the
-workflow stops reading `pull_request.comments` while the script still defaults
-to `comments`. So #1968 has to change the workflow condition as well as this
-script's default, and the payload carries no head-OID count for the condition to
-switch to.
+`scripts/review/measure-rounds.test.sh` pins the pair with one assertion on each
+side: the gate's `Stop at review round 3` step must still name
+`pull_request.comments` inside its `if:` expression, and the script must still
+default to `comments`. The step reads that expression alone rather than the
+whole workflow file, because the same literal also appears in the step's error
+message and a file-wide match would sleep through a condition swap. So #1968 has
+to change the workflow condition as well as this script's default, and the
+payload carries no head-OID count for the condition to switch to.
 
 Run `bash scripts/review/measure-rounds.sh --help` for the flags, and read the
 "못 재는 것" comment at the bottom of the script before quoting a number: it

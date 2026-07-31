@@ -277,8 +277,11 @@ fi
 # 게이트는 여기를 안 지난다. `.github/workflows/review-gate.yml` 의
 # `Stop at review round 3` 은 웹훅 payload 의 `pull_request.comments` 를 조건식에서
 # 직접 읽는다. 즉 `comments` 정의의 집행 구현은 저 워크플로에 따로 있고, 이 파일의
-# 기본값은 그 수와 같은 것을 재도록 맞춰 둔 것이다. 그 정합을
-# `scripts/review/measure-rounds.test.sh` 의 "gate coupling" 단계가 검사한다.
+# 기본값은 그 수와 같은 것을 재도록 맞춰 둔 것이다. 짝이 어긋나는지는
+# `scripts/review/measure-rounds.test.sh` 의 "gate coupling" 단계가 본다 — 저 스텝의
+# `if:` 표현식이 여전히 코멘트 수를 읽는지, 이 파일의 기본값이 여전히 `comments` 인지를
+# 각각 단언한다. 파일 전체 grep 이 아니다 — 같은 리터럴이 에러 문구에도 있어서
+# 조건식만 갈아치운 편집을 놓친다.
 #
 #   comments  현행 프록시. PR 코멘트 1건 = 1라운드. 위 게이트가 조건식에서 읽는
 #             값과 같은 수다. 리뷰어는 라운드마다 scorecard 코멘트를 하나 남기지만
@@ -431,7 +434,9 @@ exit 0
 #    재발은 여기서 안 나온다. scorecard 가 산문이라 blocking 항목을 기계로 셀 수
 #    없다. 이 스크립트는 라운드 수와 간격까지만 낸다 — 유형 판정은 리뷰어 몫이다.
 # 2. 누가 쓴 코멘트인지. 이 저장소는 계정이 하나라 리뷰어 코멘트와 구현자 응답을
-#    API 로 구분할 수 없다. 2026-07-31 실측 143/143 동일 계정:
+#    API 로 구분할 수 없다. 아래 명령의 결과가 **원소 1개** — login 이 한 종류 —
+#    라는 것이 요지다. `n` 은 인용하지 마라: `first:60` 창이 새 PR 이 열릴 때마다
+#    미끄러져 코멘트가 많은 뒤쪽 PR 을 떨군다 (2026-07-31 안에서만 143 → 131).
 #      gh api graphql -f query='{repository(owner:"Felix-LeeSM",name:"table-view"){
 #        pullRequests(first:60,orderBy:{field:CREATED_AT,direction:DESC}){nodes{
 #        comments(first:50){nodes{author{login}}}}}}}' \
