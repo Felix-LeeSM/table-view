@@ -136,7 +136,8 @@ Required remote evidence on the exact release SHA:
   through `e2e/scope-map.mjs` and runs only those, so a green PR proves the
   specs its own paths select and nothing else — a PR that selects 0 specs proves
   no desktop runtime behavior at all. The full suite runs on push to main, on
-  the nightly schedule, and on any PR labelled `e2e:full`. Run the suite by hand
+  the nightly schedule, and on a PR carrying `e2e:full` once a push follows the
+  label — the workflow does not listen to label events. Run the suite by hand
   on the release SHA when the release needs evidence the PR runs did not
   produce — the full sequence (debug build, seed, then
   `TABLE_VIEW_TEST_DATA_DIR=/tmp/table-view-smoke pnpm test:e2e:smoke`) is in
@@ -154,8 +155,9 @@ Deferred or non-blocking checks must stay explicit:
   not routine release blockers unless a release issue explicitly promotes one of
   them. (Rust llvm-cov integration cutoffs became a routine blocking check on
   2026-07-03 — the CI `Integration Tests (Docker)` job enforces them.)
-- Every E2E spec is manual regression evidence. Nothing invokes them
-  automatically.
+- An E2E spec is CI evidence for the changes that select it and manual evidence
+  otherwise. `e2e/scope-map.mjs` decides which specs a PR runs; the full suite
+  runs on push to `main`, on the nightly schedule, and on `workflow_dispatch`.
 - No support claim can ship on fixture-only evidence. Fixture files, profile
   rows, generator tests, and compatibility inventories become live runtime
   evidence only when a matching workflow or test path runs them green.

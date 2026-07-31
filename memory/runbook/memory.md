@@ -23,7 +23,7 @@ updated: 2026-06-12
 ## 방 지도
 
 - [worktree](./worktree/memory.md) — 다중 agent / brain 병렬 작업용 git worktree 사용 룰
-- [pr-merge-gates](./pr-merge-gates/memory.md) — PR merge BLOCKED/UNSTABLE 진단 (review-gate + ruleset required context, 트리거 함정. E2E 이름은 stub 이라 blocker 가 아니다)
+- [pr-merge-gates](./pr-merge-gates/memory.md) — PR merge BLOCKED/UNSTABLE 진단 (review-gate + ruleset required context, 트리거 함정. `Runtime Happy Path` 는 실검사라 blocker 가 될 수 있다)
 
 ## 진입 규칙
 

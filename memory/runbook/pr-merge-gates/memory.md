@@ -56,8 +56,14 @@ fix / 테스트 수정) 지 회피 아님. 신규 required context 등록은 wor
 BLOCKED 로 고착시킨다.
 
 → protection API 만 보고 "required 는 review-gate 뿐" 이라 단정하지 말 것. ruleset
-8종은 별도 계층이고 docs 만 바꾼 PR 에도 전부 요구된다. docs 만 바꾼 PR 의
-`Runtime Happy Path` 는 spec 0개를 선택하고 green 이므로, red 면 실제 e2e 실패다.
+8종은 별도 계층이고 docs 만 바꾼 PR 에도 전부 요구된다.
+
+→ `Runtime Happy Path` 가 red 면 job 로그의 `selected N specs` 를 먼저 봐라.
+**N=0 인데 red 면 spec 실패가 아니다** — spec 은 하나도 안 돌았고, 원인은
+`if:` 없이 항상 도는 앞 두 step 이다: `Self-test the scope map` (누가 매핑 안 된
+`e2e/smoke/*.spec.ts` 를 머지하면 그 뒤 docs-only PR 까지 전부 여기서 죽는다) 이나
+`Select specs for this change` (base ref 미해결 · checkout). **N>0 red 면** 그
+N 개 중 `FAIL <key>` 를 찍은 spec 이 원인이다.
 
 ## 잘못된 대응이 만드는 함정
 

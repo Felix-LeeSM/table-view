@@ -229,7 +229,8 @@ runtime evidence만 갖고 routine smoke wiring은 #907 소유입니다.
 **CI에서는 변경 영역만큼 실행됩니다.** `.github/workflows/e2e-smoke.yml`의
 `Runtime Happy Path` job이 `e2e/scope-map.mjs`로 PR의 변경 경로를 spec 부분집합에
 매핑해 그것만 돌립니다. e2e와 무관한 PR은 `selected 0 specs`를 찍고 green이고,
-main push · 야간 schedule · `e2e:full` label은 전체를 돌립니다. 아래처럼 직접
+main push · 야간 schedule · `workflow_dispatch`는 전체를 돌립니다. `e2e:full`
+label은 label 이벤트를 안 듣기 때문에, 붙인 뒤 push 해야 전체가 돕니다. 아래처럼 직접
 구동하는 경로도 그대로입니다.
 
 ```bash

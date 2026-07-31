@@ -102,8 +102,10 @@ evidence requires all of these:
 - fixture path exists in the canonical topology
 - a consumer test/spec reads it
 - the tier and its cost/risk are recorded somewhere reviewable
-- a workflow actually runs the spec when the tier is `blocking E2E` — nothing
-  does today, so `blocking E2E` is currently unreachable
+- a workflow actually runs the spec when the tier is `blocking E2E` —
+  `Runtime Happy Path` does, for the changes `e2e/scope-map.mjs` maps to that
+  spec, so the tier is reachable: promoting one means naming the paths that
+  select it
 
 Unsupported/partial-support fixtures are negative evidence. They protect support
 boundaries and must not be cited as runtime support.

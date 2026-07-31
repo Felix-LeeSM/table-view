@@ -26,6 +26,9 @@ on:
   # suite and collide with review-gate.yml. `e2e:full` is read from the
   # payload of the events below, so apply the label first and then push (or
   # re-run this workflow) to widen the scope.
+  # The collision also runs the other way: review-gate.yml DOES listen to
+  # `labeled`, so applying `e2e:full` before approval leaves a failed
+  # review-gate run on that SHA. It heals when the approval label re-runs it.
   pull_request:
     types: [opened, reopened, synchronize]
   workflow_dispatch:
