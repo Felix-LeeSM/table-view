@@ -71,8 +71,9 @@ describe("module-scope reset APIs (sprint-375 Phase 6 cleanup)", () => {
   //         본 sprint 는 회귀 가드 — addTab 두 번 호출 후 reset → 다음
   //         addTab 의 id 가 fresh sequential 인지.
   it("__resetCountersForTests rewinds tab id allocation (#26, #27)", async () => {
-    const { useWorkspaceStore, __resetCountersForTests } =
-      await import("./workspaceStore");
+    const { useWorkspaceStore, __resetCountersForTests } = await import(
+      "./workspaceStore"
+    );
     // 첫 두 tab 은 counter mutate. `permanent: true` 로 추가해 preview-slot
     // replacement 경로를 우회 — 본 테스트의 invariant 는 counter 의 monotonic
     // 증가 + reset 후 1, preview semantics 가 아님.
@@ -130,8 +131,9 @@ describe("module-scope reset APIs (sprint-375 Phase 6 cleanup)", () => {
   // --- (4) favoriteCounter — 새 reset API. addFavorite 한 번 호출 후
   //         reset → 다음 addFavorite id 가 `fav-1` 부터.
   it("__resetFavoriteCounterForTests rewinds favorite id allocation (#29)", async () => {
-    const { useFavoritesStore, __resetFavoriteCounterForTests } =
-      await import("./favoritesStore");
+    const { useFavoritesStore, __resetFavoriteCounterForTests } = await import(
+      "./favoritesStore"
+    );
     // backend `persist_favorites` IPC 는 fire-and-forget 으로 reject 해도
     // store mutate 는 동기 — 본 테스트는 IPC 결과를 기다리지 않는다.
     vi.mocked(invoke).mockResolvedValue(undefined);
@@ -156,8 +158,9 @@ describe("module-scope reset APIs (sprint-375 Phase 6 cleanup)", () => {
   //         guard 가 의존. `__resetDocumentStoreForTests` 는 store +
   //         counter 둘 다 clear.
   it("__resetDocumentStoreForTests clears request counters + store (#30)", async () => {
-    const { useDocumentStore, __resetDocumentStoreForTests } =
-      await import("../test-utils/documentStore");
+    const { useDocumentStore, __resetDocumentStoreForTests } = await import(
+      "../test-utils/documentStore"
+    );
     useDocumentStore.setState({
       databases: { "conn-A": [] },
       collections: { "conn-A": { db1: [] } },
@@ -236,8 +239,9 @@ describe("module-scope reset APIs (sprint-375 Phase 6 cleanup)", () => {
       },
     });
 
-    const { useThemeStore, __resetLastAppliedForTests } =
-      await import("./themeStore");
+    const { useThemeStore, __resetLastAppliedForTests } = await import(
+      "./themeStore"
+    );
 
     // initial 시점의 state 가 그대로면 subscriber 가 dedup → setItem 0.
     // 강제로 state 를 다른 값으로 set 한 뒤 다시 동일 값으로 set → 두 번째는

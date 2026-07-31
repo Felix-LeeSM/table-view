@@ -132,8 +132,9 @@ beforeEach(async () => {
   // jsdom, queuing a stray `storageWriteFailed` error toast that flakes a
   // sibling test's `toHaveLength` toast assertion. Drain the timers so a
   // persist scheduled by one test can't fire during the next.
-  const { __resetPersistTimerForTests } =
-    await import("@stores/workspaceStore/persistence");
+  const { __resetPersistTimerForTests } = await import(
+    "@stores/workspaceStore/persistence"
+  );
   __resetPersistTimerForTests();
 });
 

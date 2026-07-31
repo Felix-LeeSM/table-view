@@ -213,10 +213,8 @@ function DialogDescription({
 
 export type DialogFeedbackState = "idle" | "loading" | "success" | "error";
 
-export interface DialogFeedbackProps extends Omit<
-  React.HTMLAttributes<HTMLDivElement>,
-  "children"
-> {
+export interface DialogFeedbackProps
+  extends Omit<React.HTMLAttributes<HTMLDivElement>, "children"> {
   state: DialogFeedbackState;
   message?: string;
   loadingText?: string;

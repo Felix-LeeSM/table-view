@@ -28,8 +28,9 @@ let loadedModule: SqlCompletionWasmModule | null = null;
 async function loadCompletionWasm(): Promise<SqlCompletionWasmModule> {
   if (modulePromise === null) {
     modulePromise = (async () => {
-      const mod =
-        (await import("./wasm/sql_parser_core.js")) as unknown as SqlCompletionWasmModule;
+      const mod = (await import(
+        "./wasm/sql_parser_core.js"
+      )) as unknown as SqlCompletionWasmModule;
       await mod.default();
       loadedModule = mod;
       return mod;

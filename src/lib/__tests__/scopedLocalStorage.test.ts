@@ -60,16 +60,18 @@ describe("scopedLocalStorage", () => {
   // sessionSet/sessionGet calls use it. (2026-04-28)
   it("initSession caches the session ID from Rust", async () => {
     mockInvoke.mockResolvedValue("test-uuid-123");
-    const { initSession, getSessionId } =
-      await import("@lib/scopedLocalStorage");
+    const { initSession, getSessionId } = await import(
+      "@lib/scopedLocalStorage"
+    );
     await initSession();
     expect(getSessionId()).toBe("test-uuid-123");
   });
 
   it("falls back to a browser session ID when Tauri IPC is unavailable", async () => {
     mockIsTauri.mockReturnValue(false);
-    const { initSession, getSessionId, sessionSet, sessionGet } =
-      await import("@lib/scopedLocalStorage");
+    const { initSession, getSessionId, sessionSet, sessionGet } = await import(
+      "@lib/scopedLocalStorage"
+    );
 
     await expect(initSession()).resolves.toBeUndefined();
 
@@ -84,8 +86,9 @@ describe("scopedLocalStorage", () => {
   // same session ID. (2026-04-28)
   it("sessionSet then sessionGet returns data for same session", async () => {
     mockInvoke.mockResolvedValue("aaa");
-    const { initSession, sessionSet, sessionGet } =
-      await import("@lib/scopedLocalStorage");
+    const { initSession, sessionSet, sessionGet } = await import(
+      "@lib/scopedLocalStorage"
+    );
     await initSession();
     sessionSet("key1", { connId: "c1" });
     expect(sessionGet("key1")).toEqual({ connId: "c1" });
@@ -127,8 +130,9 @@ describe("scopedLocalStorage", () => {
   // (2026-04-28)
   it("sessionRemove deletes the key", async () => {
     mockInvoke.mockResolvedValue("sid");
-    const { initSession, sessionSet, sessionGet, sessionRemove } =
-      await import("@lib/scopedLocalStorage");
+    const { initSession, sessionSet, sessionGet, sessionRemove } = await import(
+      "@lib/scopedLocalStorage"
+    );
     await initSession();
     sessionSet("k", "v");
     expect(sessionGet("k")).toBe("v");

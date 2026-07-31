@@ -110,7 +110,8 @@ export interface MongoWriteDispatchers {
   ) => Promise<void>;
 }
 
-export interface CreateMongoWriteDispatchersRequest extends MongoWriteExecutionActions {
+export interface CreateMongoWriteDispatchersRequest
+  extends MongoWriteExecutionActions {
   tabId: string;
 }
 

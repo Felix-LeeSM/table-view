@@ -123,8 +123,9 @@ async function boot() {
   // here outside the React tree.
   await import("@features/connection");
   markBootMilestone("connectionStore:imported");
-  const { hydrateConnectionSession } =
-    await import("@lib/runtime/connection/hydrateConnectionSession");
+  const { hydrateConnectionSession } = await import(
+    "@lib/runtime/connection/hydrateConnectionSession"
+  );
   hydrateConnectionSession();
   markBootMilestone("connectionStore:hydrated");
 

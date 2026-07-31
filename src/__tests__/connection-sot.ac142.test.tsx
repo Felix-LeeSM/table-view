@@ -269,8 +269,9 @@ describe("AC-142-*: Connection SoT + Disconnect regression locks", () => {
   });
 
   it("AC-142-4: after disconnect, reactivating the same connection re-invokes the backend connect command and lands in 'connected'", async () => {
-    const { connectToDatabase, disconnectFromDatabase } =
-      await import("@lib/tauri");
+    const { connectToDatabase, disconnectFromDatabase } = await import(
+      "@lib/tauri"
+    );
     const connectMock = connectToDatabase as ReturnType<typeof vi.fn>;
     const disconnectMock = disconnectFromDatabase as ReturnType<typeof vi.fn>;
     connectMock.mockResolvedValue(undefined);

@@ -70,8 +70,9 @@ const ENCRYPTED_PAYLOAD =
 
 describe("ImportExportDialog — AC-149-* regression locks", () => {
   it("AC-149-1: selecting exactly one connection sends a single-id array to exportConnectionsEncrypted", async () => {
-    const { exportConnectionsEncrypted, exportConnections } =
-      await import("@lib/tauri");
+    const { exportConnectionsEncrypted, exportConnections } = await import(
+      "@lib/tauri"
+    );
     (exportConnectionsEncrypted as ReturnType<typeof vi.fn>).mockResolvedValue({
       password: MNEMONIC,
       json: ENCRYPTED_PAYLOAD,
@@ -180,8 +181,9 @@ describe("ImportExportDialog — AC-149-* regression locks", () => {
   });
 
   it("AC-149-4: password-bearing connections are not stripped from the envelope ids and the legacy plaintext exportConnections is never called", async () => {
-    const { exportConnectionsEncrypted, exportConnections } =
-      await import("@lib/tauri");
+    const { exportConnectionsEncrypted, exportConnections } = await import(
+      "@lib/tauri"
+    );
     (exportConnectionsEncrypted as ReturnType<typeof vi.fn>).mockResolvedValue({
       password: MNEMONIC,
       json: ENCRYPTED_PAYLOAD,

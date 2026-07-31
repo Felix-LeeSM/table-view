@@ -90,7 +90,8 @@ describe("DataGridTable virtualization (sprint-114)", () => {
         return VIEWPORT_HEIGHT;
       },
     });
-    HTMLElement.prototype.getBoundingClientRect = () => ({
+    HTMLElement.prototype.getBoundingClientRect = () =>
+      ({
         x: 0,
         y: 0,
         top: 0,
@@ -102,7 +103,7 @@ describe("DataGridTable virtualization (sprint-114)", () => {
         toJSON() {
           return {};
         },
-      } as DOMRect);
+      }) as DOMRect;
   });
 
   afterEach(() => {
@@ -264,7 +265,8 @@ describe("DataGridTable virtualization + inline tree (Sprint 349)", () => {
         return VIEWPORT_HEIGHT;
       },
     });
-    HTMLElement.prototype.getBoundingClientRect = () => ({
+    HTMLElement.prototype.getBoundingClientRect = () =>
+      ({
         x: 0,
         y: 0,
         top: 0,
@@ -276,7 +278,7 @@ describe("DataGridTable virtualization + inline tree (Sprint 349)", () => {
         toJSON() {
           return {};
         },
-      } as DOMRect);
+      }) as DOMRect;
   });
 
   afterEach(() => {

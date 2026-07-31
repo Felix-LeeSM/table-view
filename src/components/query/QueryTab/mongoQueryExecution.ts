@@ -83,7 +83,9 @@ export interface ExecuteMongoAggregateRequest extends MongoLifecycleActions {
 }
 
 export interface ExecuteMongoQueryRequest
-  extends MongoLifecycleActions, MongoGateActions, MongoWriteDispatchers {
+  extends MongoLifecycleActions,
+    MongoGateActions,
+    MongoWriteDispatchers {
   tab: MongoTabContext;
   sql: string;
   runMongoAggregate: (

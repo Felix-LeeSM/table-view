@@ -50,7 +50,8 @@ describe("BsonTreeViewer virtualization (#1445)", () => {
         return VIEWPORT_HEIGHT;
       },
     });
-    HTMLElement.prototype.getBoundingClientRect = () => ({
+    HTMLElement.prototype.getBoundingClientRect = () =>
+      ({
         x: 0,
         y: 0,
         top: 0,
@@ -62,7 +63,7 @@ describe("BsonTreeViewer virtualization (#1445)", () => {
         toJSON() {
           return {};
         },
-      } as DOMRect);
+      }) as DOMRect;
   });
 
   afterEach(() => {

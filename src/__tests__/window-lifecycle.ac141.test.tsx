@@ -284,8 +284,9 @@ describe("AC-141-*: Launcher/Workspace lifecycle (real-window, post-Phase 12)", 
     // 1. Launcher close path — `bootWindowLifecycle` is workspace-aware:
     //    it only registers when `getCurrentWindowLabel() === "launcher"`.
     //    Inside the test we exercise the registration helper directly.
-    const { registerLauncherCloseHandler } =
-      await import("@lib/window-lifecycle-boot");
+    const { registerLauncherCloseHandler } = await import(
+      "@lib/window-lifecycle-boot"
+    );
     await registerLauncherCloseHandler();
 
     expect(onCloseRequestedMock).toHaveBeenCalledWith(
@@ -331,8 +332,9 @@ describe("AC-141-*: Launcher/Workspace lifecycle (real-window, post-Phase 12)", 
   // invariants.
   // ---------------------------------------------------------------------------
   it("AC-141-5 (real): boot → activate → back → disconnect emits the expected seam-call sequence end-to-end", async () => {
-    const { connectToDatabase, disconnectFromDatabase } =
-      await import("@lib/tauri");
+    const { connectToDatabase, disconnectFromDatabase } = await import(
+      "@lib/tauri"
+    );
     const connectMock = connectToDatabase as Mock;
     const disconnectMock = disconnectFromDatabase as Mock;
     connectMock.mockResolvedValue(undefined);
