@@ -42,12 +42,22 @@ gh issue list --state open --label task --json number,title,labels
 
 ## Spawn 규칙 (모든 노드 공통)
 
-- 프롬프트는 자기완결로 쓴다: 배경 + 정확한 과업 + 반환 형식.
-- **MANDATORY 첫 명령**으로 사본 경로 검증을 넣는다:
-  `test "$(git rev-parse --show-toplevel)" = "<사본 경로>" || { echo "ABORT: wrong checkout"; exit 1; }`
-- issue-implement 프롬프트에는 `memory/workflow/implementation/memory.md` §5
-  착수 전 표를 **본문 인라인**으로 넣고, 작업 유형에 맞는 read 목록
-  (AGENTS.md 매트릭스)을 명령으로 적는다.
+프롬프트는 **고정부 + 가변부**이고 둘을 합쳐 자기완결이어야 한다 — 노드는 이
+대화를 못 본다. 고정부는 다시 타이핑하지 않는다 — 전사할 때마다 drift 하고,
+순서 하나만 틀려도 노드가 틀린 계약을 받는다.
+
+- **고정부 = 역할 preamble 파일을 그대로 첨부한다.** MANDATORY 첫 명령, 금지
+  목록, 착수 전 read 목록, verdict label 절차, write 예산, 반환 형식 틀이 전부
+  거기 있다. 요약하거나 고쳐 쓰지 않는다 — 바꿀 것이 있으면 파일을 고친다.
+  - 구현자 — `.agents/prompts/issue-implement.md`
+  - 리뷰 coordinator — `.agents/prompts/pr-review.md`
+  - 종결자 — `.agents/prompts/pr-finalize.md`
+
+  Claude Code 네이티브 spawn(`subagent_type`)으로 띄우면 `.claude/agents/<role>.md`
+  정의가 같은 파일을 첫 행동으로 읽게 하므로 첨부를 생략한다.
+- **가변부 = spawn 메시지에는 이것만 싣는다.** 이슈/PR 번호, 브랜치, 사본 경로
+  (preamble 의 `<사본 경로>` 를 채운다), 라운드 번호와 맥락, 이전 scorecard
+  포인터, 작업 유형에 맞는 추가 read 경로(AGENTS.md 매트릭스).
 - 사본 생성·회수는 `memory/runbook/worktree/memory.md` 절차.
 - 점유 기록: spawn 시 해당 이슈에 `착수: <branch>` 코멘트 — 사본 경로는
   규약(`../table-view-clones/<branch-sanitized>`)에서 파생되므로 로컬 경로를

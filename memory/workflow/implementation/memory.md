@@ -69,8 +69,9 @@ trigger:
 기존 여섯 행이 못 덮는다 — 방법과 수치는 #2035 결정 5 가 소유한다.
 리뷰어 컨텍스트에 두면 blocking 사유가 계속 늘고, 저자 컨텍스트에 두면 라운드가
 줄어든다. blocking 판정은 [review](../review/memory.md) 의 세 사유로 고정이고
-이 표는 거기에 추가되지 않는다. **도달**: orchestrator 가 구현자 spawn
-프롬프트에 이 표를 인라인한다 — 읽으러 오지 않아도 닿는다.
+이 표는 거기에 추가되지 않는다. **도달**: 구현자 preamble
+(`.agents/prompts/issue-implement.md`)이 이 방을 착수 전 MANDATORY read 로
+지정한다 — 첨부되는 고정부라 읽으라는 명령이 반드시 닿는다.
 
 ## 관련
 
