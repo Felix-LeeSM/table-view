@@ -6,18 +6,18 @@
 // 비활성 — MongoDB 가 level off 일 때 action 을 무시하므로 hint 와 함께
 // 시각적으로 차단한다.
 
+import { Loader2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useRefreshEvent } from "@/hooks/useRefreshEvent";
 import { safeStringifyCell } from "@/lib/jsonCell";
 import {
   getMongoValidator,
-  setMongoValidator,
   type MongoValidationAction,
   type MongoValidationLevel,
   type MongoValidatorRead,
+  setMongoValidator,
 } from "@/lib/tauri";
 
 export interface ValidatorPanelProps {

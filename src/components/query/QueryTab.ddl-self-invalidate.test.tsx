@@ -14,20 +14,20 @@
 //   AC-360-05: wide drop — `views`, `functions`, `triggers`,
 //              `tableColumnsCache` 모두 비워진다 (narrow scope 금지).
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { setupTauriMock } from "@/test-utils/tauriMock";
-import { act, renderHook, waitFor } from "@testing-library/react";
-import { seedWorkspace } from "@/stores/__tests__/workspaceStoreTestHelpers";
-import { useWorkspaceStore } from "@stores/workspaceStore";
+import { useSchemaCache } from "@hooks/useSchemaCache";
 import { useConnectionStore } from "@stores/connectionStore";
+import { useQueryHistoryStore } from "@stores/queryHistoryStore";
 import { useSafeModeStore } from "@stores/safeModeStore";
 import { useSchemaStore } from "@stores/schemaStore";
-import { useQueryHistoryStore } from "@stores/queryHistoryStore";
-import { useSchemaCache } from "@hooks/useSchemaCache";
-import { useQueryExecution } from "./QueryTab/useQueryExecution";
-import { makeQueryTab, makeConn } from "./__tests__/queryTabTestHelpers";
+import { useWorkspaceStore } from "@stores/workspaceStore";
+import { act, renderHook, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { seedWorkspace } from "@/stores/__tests__/workspaceStoreTestHelpers";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import type { QueryResult } from "@/types/query";
 import type { SchemaInfo, TableInfo } from "@/types/schema";
+import { makeConn, makeQueryTab } from "./__tests__/queryTabTestHelpers";
+import { useQueryExecution } from "./QueryTab/useQueryExecution";
 
 const executeQueryMock = vi.fn();
 const executeQueryDryRunMock = vi.fn();

@@ -1,8 +1,14 @@
-import { describe, it, expect } from "vitest";
-import { EditorState } from "@codemirror/state";
 import { CompletionContext } from "@codemirror/autocomplete";
 import { json as jsonLanguage } from "@codemirror/lang-json";
+import { EditorState } from "@codemirror/state";
+import { MONGOSH_METHOD_WHITELIST } from "@features/query";
+import { describe, expect, it } from "vitest";
 import {
+  classifyMongoCompletionPosition,
+  createMongoAdminCommandSource,
+  createMongoCompletionSource,
+  createMongoOperatorHighlight,
+  createMongoshDbSource,
   MONGO_ACCUMULATORS,
   MONGO_ADMIN_COMMANDS,
   MONGO_AGGREGATE_STAGES,
@@ -12,16 +18,10 @@ import {
   MONGO_QUERY_OPERATORS,
   MONGO_TYPE_TAGS,
   MONGO_UPDATE_OPERATORS,
-  MONGOSH_DB_METHODS,
   MONGOSH_DB_LEVEL_METHODS,
-  createMongoAdminCommandSource,
-  createMongoCompletionSource,
-  createMongoOperatorHighlight,
-  createMongoshDbSource,
-  classifyMongoCompletionPosition,
+  MONGOSH_DB_METHODS,
   type MongoQueryMode,
 } from "./mongoAutocomplete";
-import { MONGOSH_METHOD_WHITELIST } from "@features/query";
 
 /**
  * Build an EditorState with the JSON language loaded and invoke the source

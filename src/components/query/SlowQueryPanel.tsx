@@ -9,20 +9,20 @@
 // sparkline tracks the tracked slow-query count over time. Same
 // `slow_queries` IPC on a timer, no new backend.
 
+import { DataGridSkeleton } from "@components/datagrid";
+import { Loader2, Pause, Play, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Loader2, Pause, Play, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sparkline } from "@/components/ui/Sparkline";
+import { type SlowQueryRow, slowQueries } from "@/lib/api/slowQueries";
 import { useAutoRefresh, useTrendBuffer } from "@/lib/dashboard/opsPolling";
-import { DataGridSkeleton } from "@components/datagrid";
-import { slowQueries, type SlowQueryRow } from "@/lib/api/slowQueries";
-import { getCapabilityNotEnabledInfo } from "@/lib/tauri/error";
 import { safeStringifyCell } from "@/lib/jsonCell";
+import { getCapabilityNotEnabledInfo } from "@/lib/tauri/error";
 import {
   DATABASE_TYPE_LABELS,
-  paradigmOf,
   type DatabaseType,
+  paradigmOf,
 } from "@/types/connection";
 
 export interface SlowQueryPanelProps {

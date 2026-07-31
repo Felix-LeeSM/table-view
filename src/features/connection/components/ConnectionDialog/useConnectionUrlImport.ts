@@ -1,12 +1,12 @@
 import { useState } from "react";
+import * as dataSourceProfiles from "@/types/dataSource";
 import type { ConnectionDraft, DatabaseType } from "../../model";
 import {
   DATABASE_TYPE_LABELS,
-  parseFileConnectionPath,
   parseConnectionUrl,
+  parseFileConnectionPath,
   unreflectedTlsParam,
 } from "../../model";
-import * as dataSourceProfiles from "@/types/dataSource";
 
 // Sprint 276 — URL parser 가 인식한 scheme 의 DBMS 가 아직 wire-up 되지
 // 않았을 때 사용자에게 보여줄 거부 메시지. Sprint 447 이후 profile

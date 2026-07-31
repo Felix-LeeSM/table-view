@@ -1,6 +1,6 @@
-import { useTranslation } from "react-i18next";
-import { Database, ListTree } from "lucide-react";
 import { ToggleGroup, ToggleGroupItem } from "@components/ui/toggle-group";
+import { Database, ListTree } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 export type SidebarMode = "connections" | "schemas";
 

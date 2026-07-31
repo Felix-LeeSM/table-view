@@ -1,10 +1,10 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, act } from "@testing-library/react";
-import SchemaTree from "./SchemaTree";
-import { useSchemaStore } from "@stores/schemaStore";
 import { useConnectionStore } from "@stores/connectionStore";
+import { useSchemaStore } from "@stores/schemaStore";
 import { useWorkspaceStore } from "@stores/workspaceStore";
+import { act, render, screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConnectionConfig, DatabaseType } from "@/types/connection";
+import SchemaTree from "./SchemaTree";
 
 /**
  * Sprint 380 — MySQL/SQLite sidebar 의 "Schemas" 헤더 + 잉여 한 단계

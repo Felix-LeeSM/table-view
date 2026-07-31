@@ -1,20 +1,20 @@
+import i18n from "@lib/i18n";
 import {
-  parseMongoshStatement,
   type MongoshCollectionCommand,
   type MongoshParseError,
+  parseMongoshStatement,
 } from "@lib/mongo/mongoshAst/index";
 import {
-  MONGOSH_METHOD_WHITELIST,
   isMongoshMethod,
+  MONGOSH_METHOD_WHITELIST,
   type MongoshMethod,
 } from "@lib/mongo/mongoshMethods";
-import i18n from "@lib/i18n";
 
 const t = (key: string, vars?: Record<string, string>) =>
   i18n.t(`featuresMisc:${key}`, vars);
 
-export { MONGOSH_METHOD_WHITELIST };
 export type { MongoshMethod };
+export { MONGOSH_METHOD_WHITELIST };
 
 const CURSOR_METHODS: ReadonlySet<MongoshMethod> = new Set([
   "find",

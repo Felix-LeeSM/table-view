@@ -23,24 +23,25 @@
 // (oracle/runtime.rs, #1674). Every other engine — DuckDB — rejects DML/Full
 // dumps as `Unsupported`, so callers gate the export UI via
 // `supportsMigrationExport`.
-import { useCallback, useState } from "react";
-import { save } from "@tauri-apps/plugin-dialog";
-import { useSchemaStore } from "@stores/schemaStore";
+
+import i18n from "@lib/i18n";
 import { useConnectionStore } from "@stores/connectionStore";
-import type { DatabaseName, SchemaName, TableName } from "@/types/branded";
+import { useSchemaStore } from "@stores/schemaStore";
+import { save } from "@tauri-apps/plugin-dialog";
+import { useCallback, useState } from "react";
+import { toast } from "@/lib/runtime/toast";
 import {
-  generateMigrationDDL,
   buildSequenceResets,
   type DdlDialect,
   type DdlExportTable,
+  generateMigrationDDL,
 } from "@/lib/sql/ddlGenerator";
 import {
-  writeTextFileExport,
   exportSchemaDump,
   type SchemaDumpTable,
+  writeTextFileExport,
 } from "@/lib/tauri";
-import { toast } from "@/lib/runtime/toast";
-import i18n from "@lib/i18n";
+import type { DatabaseName, SchemaName, TableName } from "@/types/branded";
 
 export type ExportInclude = "ddl" | "dml" | "both";
 

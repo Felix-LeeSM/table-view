@@ -1,5 +1,23 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useTranslation } from "react-i18next";
+import MqlPreviewModal from "@components/document/MqlPreviewModal";
+import { SearchResultView } from "@components/search/SearchResultView";
+import SqlPreviewDialog from "@components/structure/SqlPreviewDialog";
+import {
+  buildSqlCompletionContext,
+  useMongoAutocomplete,
+} from "@features/completion";
+import { ConfirmDestructiveDialog } from "@features/workspace";
+import { useRedisKeySuggestions } from "@hooks/useRedisKeySuggestions";
+import { useResizablePanel } from "@hooks/useResizablePanel";
+import { resolveSafeModeEnvironment } from "@hooks/useSafeModeGate";
+import { useSearchAutocomplete } from "@hooks/useSearchAutocomplete";
+import { useSqlAutocomplete } from "@hooks/useSqlAutocomplete";
+import { recordHistoryEntryAsync } from "@lib/runtime/history/recordHistoryEntry";
+import { toast } from "@lib/runtime/toast";
+import { databaseTypeToSqlDialect } from "@lib/sql/sqlDialect";
+import { readTextFileImport } from "@lib/tauri";
+import { useConnectionStore } from "@stores/connectionStore";
+import { useDocumentCatalogStore } from "@stores/documentCatalogStore";
+import { useSchemaStore } from "@stores/schemaStore";
 // Aliased: the default export below is also named `QueryTab`, and the bare
 // import would shadow-redeclare it in module scope (biome noRedeclare).
 import type { QueryTab as QueryTabModel } from "@stores/workspaceStore";
@@ -8,45 +26,27 @@ import {
   useCurrentWorkspaceKey,
   useWorkspaceStore,
 } from "@stores/workspaceStore";
-import { useConnectionStore } from "@stores/connectionStore";
-import { databaseTypeToSqlDialect } from "@lib/sql/sqlDialect";
-import { getDataSourceProfile } from "@/types/dataSource";
-import {
-  buildSqlCompletionContext,
-  useMongoAutocomplete,
-} from "@features/completion";
-import { deriveMongoExplainSpec } from "./QueryTab/queryHelpers";
-import { toast } from "@lib/runtime/toast";
 import { open } from "@tauri-apps/plugin-dialog";
-import { readTextFileImport } from "@lib/tauri";
-import { useSqlAutocomplete } from "@hooks/useSqlAutocomplete";
-import { useRedisKeySuggestions } from "@hooks/useRedisKeySuggestions";
-import { useSearchAutocomplete } from "@hooks/useSearchAutocomplete";
-import { useDocumentCatalogStore } from "@stores/documentCatalogStore";
-import { useSchemaStore } from "@stores/schemaStore";
-import { useResizablePanel } from "@hooks/useResizablePanel";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { assertNever } from "@/lib/paradigm";
-import SqlQueryEditor from "./SqlQueryEditor";
-import MongoQueryEditor from "./MongoQueryEditor";
-import RedisCommandEditor from "./RedisCommandEditor";
-import SearchQueryEditor from "./SearchQueryEditor";
-import QueryResultGrid from "./QueryResultGrid";
-import { SearchResultView } from "@components/search/SearchResultView";
-import { ExplainViewer } from "./ExplainViewer";
-import { ConfirmDestructiveDialog } from "@features/workspace";
-import SqlPreviewDialog from "@components/structure/SqlPreviewDialog";
-import MqlPreviewModal from "@components/document/MqlPreviewModal";
-import QueryTabToolbar from "./QueryTab/Toolbar";
+import { getDataSourceProfile } from "@/types/dataSource";
 import DuckdbFileAnalyticsDialog from "./DuckdbFileAnalyticsDialog";
+import { ExplainViewer } from "./ExplainViewer";
+import MongoQueryEditor from "./MongoQueryEditor";
 // sprint-373 (2026-05-17) — legacy in-memory HistoryPanel retired. The
 // sprint-372 backend-driven `QueryHistoryPanel` consumes `list_history`
 // IPC via `useQueryHistory` hook + cross-window events.
 import QueryHistoryPanel from "./QueryHistoryPanel";
-import { useQueryExecution } from "./QueryTab/useQueryExecution";
+import QueryResultGrid from "./QueryResultGrid";
+import { deriveMongoExplainSpec } from "./QueryTab/queryHelpers";
+import QueryTabToolbar from "./QueryTab/Toolbar";
 import { useQueryEvents } from "./QueryTab/useQueryEvents";
+import { useQueryExecution } from "./QueryTab/useQueryExecution";
 import { useQueryFavorites } from "./QueryTab/useQueryFavorites";
-import { recordHistoryEntryAsync } from "@lib/runtime/history/recordHistoryEntry";
-import { resolveSafeModeEnvironment } from "@hooks/useSafeModeGate";
+import RedisCommandEditor from "./RedisCommandEditor";
+import SearchQueryEditor from "./SearchQueryEditor";
+import SqlQueryEditor from "./SqlQueryEditor";
 
 /**
  * `QueryTab` — RDB / Document paradigm 의 단일 query tab shell. 책임은

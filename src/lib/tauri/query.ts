@@ -1,12 +1,12 @@
+import { normalizeQueryResult } from "@lib/wireCamelCase";
 import { invoke } from "@tauri-apps/api/core";
 import {
   createTabularResultEnvelope,
-  requireCompatibleQueryResult,
   type QueryResult,
+  requireCompatibleQueryResult,
   type TabularResultEnvelope,
 } from "@/types/query";
 import type { FilterCondition, TableData } from "@/types/schema";
-import { normalizeQueryResult } from "@lib/wireCamelCase";
 
 import { wrapNumericCells } from "./numericWrap";
 

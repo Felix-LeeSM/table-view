@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Hoisted lib-boundary mocks — the auto-resolve path calls these Tauri
 // bridges. Everything else (real connectionStore, real capability profiles)
@@ -21,18 +21,18 @@ vi.mock("@lib/window-label", async () => {
   return { ...actual, getCurrentWindowLabel: vi.fn() };
 });
 
-import { useAutoResolveActiveDb } from "./useAutoResolveActiveDb";
-import { useConnectionStore } from "@stores/connectionStore";
 import {
-  setFakeWindowConnectionId,
   resetFakeWindowConnectionId,
+  setFakeWindowConnectionId,
 } from "@stores/__tests__/fakeWindowConnectionId";
+import { useConnectionStore } from "@stores/connectionStore";
 import type {
   ConnectionConfig,
   ConnectionStatus,
   DatabaseType,
   Paradigm,
 } from "@/types/connection";
+import { useAutoResolveActiveDb } from "./useAutoResolveActiveDb";
 
 // Purpose: default-DB auto-resolve for connected switch-capable RDB windows —
 // bug fix (2026-07-07). A PG connection created with an empty `database` field

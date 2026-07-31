@@ -7,14 +7,15 @@
 // grid being mounted — so it must SURVIVE unmount as long as the store entry
 // holds pending content. Cleanup happens through `removeTab` /
 // `clearForConnection` (explicit close), not through React unmount.
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { renderHook, act } from "@testing-library/react";
-import { useRawQueryGridEdit } from "./useRawQueryGridEdit";
+
+import type { RawEditPlan } from "@lib/sql/rawQuerySqlBuilder";
 import { useRawQueryGridEditStore } from "@stores/rawQueryGridEditStore";
 import { useWorkspaceStore } from "@stores/workspaceStore";
+import { act, renderHook } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { emptyWorkspace } from "@/stores/__tests__/workspaceStoreTestHelpers";
 import type { QueryResult } from "@/types/query";
-import type { RawEditPlan } from "@lib/sql/rawQuerySqlBuilder";
+import { useRawQueryGridEdit } from "./useRawQueryGridEdit";
 
 vi.mock("@lib/tauri", () => ({ executeQueryBatch: vi.fn() }));
 vi.mock("@lib/runtime/history/recordHistoryEntry", () => ({

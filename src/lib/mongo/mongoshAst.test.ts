@@ -5,13 +5,13 @@
 // 를 covers; `runCommandParser.test.ts` 는 sprint-381 contract 가 본 AST
 // 위에서 동일하게 유지됨을 회귀-lock 한다.
 
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
-  parseMongoshStatement,
-  type MongoshStatementResult,
   type MongoshAdminCommand,
   type MongoshCollectionCommand,
   type MongoshParseError,
+  type MongoshStatementResult,
+  parseMongoshStatement,
 } from "./mongoshAst/index";
 
 function expectAdmin(

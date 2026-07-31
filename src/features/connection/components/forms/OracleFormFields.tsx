@@ -1,5 +1,3 @@
-import { useTranslation } from "react-i18next";
-import type { ConnectionDraft } from "../../model";
 import {
   Select,
   SelectContent,
@@ -7,7 +5,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@components/ui/select";
-import { fieldValidationProps, type ConnFieldKey } from "./fieldValidation";
+import { useTranslation } from "react-i18next";
+import type { ConnectionDraft } from "../../model";
+import { type ConnFieldKey, fieldValidationProps } from "./fieldValidation";
 
 export interface OracleFormFieldsProps {
   draft: ConnectionDraft;

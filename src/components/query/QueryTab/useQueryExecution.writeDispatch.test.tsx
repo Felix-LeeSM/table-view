@@ -11,20 +11,20 @@
 // Sprint 475 tightens single-document writes: `updateOne` / `deleteOne` /
 // `replaceOne` require `_id`-only filters for deterministic identity.
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { setupTauriMock } from "@/test-utils/tauriMock";
-import {
-  seedWorkspace,
-  getTestWorkspace,
-} from "@/stores/__tests__/workspaceStoreTestHelpers";
-import { act, renderHook, waitFor } from "@testing-library/react";
-import { useWorkspaceStore } from "@stores/workspaceStore";
-import { useQueryHistoryStore } from "@stores/queryHistoryStore";
 import { useConnectionStore } from "@stores/connectionStore";
+import { useQueryHistoryStore } from "@stores/queryHistoryStore";
 import { useSafeModeStore } from "@stores/safeModeStore";
-import { useQueryExecution } from "./useQueryExecution";
-import { makeDocTab, makeConn } from "../__tests__/queryTabTestHelpers";
+import { useWorkspaceStore } from "@stores/workspaceStore";
+import { act, renderHook, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  getTestWorkspace,
+  seedWorkspace,
+} from "@/stores/__tests__/workspaceStoreTestHelpers";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import type { BulkWriteResult } from "@/types/documentMutate";
+import { makeConn, makeDocTab } from "../__tests__/queryTabTestHelpers";
+import { useQueryExecution } from "./useQueryExecution";
 
 const insertDocumentMock = vi.fn();
 const insertManyDocumentsMock = vi.fn();

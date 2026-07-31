@@ -1,8 +1,8 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { setupTauriMock } from "@/test-utils/tauriMock";
-import { useConnectionStore, SYNCED_KEYS } from "./connectionStore";
-import { useDataGridEditStore } from "./dataGridEditStore";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { makeEntryKey } from "@/test-utils/brandedKeys";
+import { setupTauriMock } from "@/test-utils/tauriMock";
+import { SYNCED_KEYS, useConnectionStore } from "./connectionStore";
+import { useDataGridEditStore } from "./dataGridEditStore";
 import { useWorkspaceStore } from "./workspaceStore";
 
 // Mock @tauri-apps/api/event. The Sprint 152 bridge attach inside

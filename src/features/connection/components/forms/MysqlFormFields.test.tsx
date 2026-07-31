@@ -1,8 +1,8 @@
-import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent, act } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import MysqlFormFields from "./MysqlFormFields";
+import { describe, expect, it, vi } from "vitest";
 import type { ConnectionDraft } from "@/types/connection";
+import MysqlFormFields from "./MysqlFormFields";
 
 function makeDraft(overrides: Partial<ConnectionDraft> = {}): ConnectionDraft {
   return {

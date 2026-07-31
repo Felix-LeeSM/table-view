@@ -1,10 +1,14 @@
-export { default as WorkspaceApp } from "@/App";
-export { default as WorkspacePage } from "@/pages/WorkspacePage";
 export { default as MainArea } from "@components/layout/MainArea";
 export { default as Sidebar } from "@components/layout/Sidebar";
 export { default as SidebarModeToggle } from "@components/layout/SidebarModeToggle";
 export { default as TabBar } from "@components/layout/TabBar";
 export { default as TabItem } from "@components/layout/TabItem";
+export type {
+  GhostStyle,
+  TabDragHandlers,
+  UseTabDragResult,
+} from "@components/layout/useTabDrag";
+export { useTabDrag } from "@components/layout/useTabDrag";
 export { default as ConfirmDestructiveDialog } from "@components/workspace/ConfirmDestructiveDialog";
 export { default as DbSwitcher } from "@components/workspace/DbSwitcher";
 export { default as DisconnectButton } from "@components/workspace/DisconnectButton";
@@ -12,37 +16,14 @@ export { default as DocumentSidebar } from "@components/workspace/DocumentSideba
 export { default as DryRunPreview } from "@components/workspace/DryRunPreview";
 export { KvMutationPanel } from "@components/workspace/KvMutationPanel";
 export { default as KvSidebar } from "@components/workspace/KvSidebar";
+export type { SidebarKind } from "@components/workspace/pickSidebar";
+export { pickSidebar } from "@components/workspace/pickSidebar";
 export { default as RdbSidebar } from "@components/workspace/RdbSidebar";
 export { default as SafeModeToggle } from "@components/workspace/SafeModeToggle";
 export { default as SearchSidebar } from "@components/workspace/SearchSidebar";
 export { default as UnsupportedShellNotice } from "@components/workspace/UnsupportedShellNotice";
 export { default as WorkspaceSidebar } from "@components/workspace/WorkspaceSidebar";
 export { default as WorkspaceToolbar } from "@components/workspace/WorkspaceToolbar";
-export { pickSidebar } from "@components/workspace/pickSidebar";
-export type { SidebarKind } from "@components/workspace/pickSidebar";
-export { useTabDrag } from "@components/layout/useTabDrag";
-export type {
-  GhostStyle,
-  TabDragHandlers,
-  UseTabDragResult,
-} from "@components/layout/useTabDrag";
-export {
-  SYNCED_KEYS,
-  __resetCountersForTests,
-  resolveActiveDb,
-  useActiveTab,
-  useActiveTabId,
-  useActiveTabSansSql,
-  useClosedTabHistory,
-  useCurrentTabIds,
-  useCurrentTabs,
-  useCurrentWorkspace,
-  useCurrentWorkspaceKey,
-  useDirtyTabIds,
-  useWorkspaceFor,
-  useWorkspaceKeyForConnection,
-  useWorkspaceStore,
-} from "@stores/workspaceStore";
 export type {
   ActiveTabSansSql,
   QueryTab,
@@ -57,3 +38,22 @@ export type {
   WorkspaceState,
   WorkspaceStoreState,
 } from "@stores/workspaceStore";
+export {
+  __resetCountersForTests,
+  resolveActiveDb,
+  SYNCED_KEYS,
+  useActiveTab,
+  useActiveTabId,
+  useActiveTabSansSql,
+  useClosedTabHistory,
+  useCurrentTabIds,
+  useCurrentTabs,
+  useCurrentWorkspace,
+  useCurrentWorkspaceKey,
+  useDirtyTabIds,
+  useWorkspaceFor,
+  useWorkspaceKeyForConnection,
+  useWorkspaceStore,
+} from "@stores/workspaceStore";
+export { default as WorkspaceApp } from "@/App";
+export { default as WorkspacePage } from "@/pages/WorkspacePage";

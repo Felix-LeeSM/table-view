@@ -1,7 +1,7 @@
-import { describe, it, expect, vi } from "vitest";
 import { render } from "@testing-library/react";
-import DataGridTable from "./DataGridTable";
+import { describe, expect, it, vi } from "vitest";
 import type { TableData } from "@/types/schema";
+import DataGridTable from "./DataGridTable";
 
 // Issue #1174 — the pending-edit render overlay must follow the row it was
 // anchored to (PK/row identity), not the visual row index. After pagination

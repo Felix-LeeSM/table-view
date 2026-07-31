@@ -1,5 +1,5 @@
+import { type WorkspaceSet, withWorkspace } from "../shared";
 import type { WorkspaceStoreState } from "../types";
-import { withWorkspace, type WorkspaceSet } from "../shared";
 
 type SidebarSlice = Pick<
   WorkspaceStoreState,

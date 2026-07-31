@@ -4,28 +4,29 @@
 // component-local approach reset. Pre-fix, a JOIN result whose editor was later
 // edited to a single-table SELECT could flip to falsely-editable after a
 // remount → wrong-row write. User report + PR #1236 review, issue #1226.
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { setupTauriMock } from "@/test-utils/tauriMock";
-import {
-  seedWorkspace,
-  getTestWorkspace,
-} from "@/stores/__tests__/workspaceStoreTestHelpers";
-import { render, screen, act } from "@testing-library/react";
-import QueryTab from "./QueryTab";
-import { useWorkspaceStore } from "@stores/workspaceStore";
+
 import { useConnectionStore } from "@stores/connectionStore";
 import { useSchemaStore } from "@stores/schemaStore";
+import { useWorkspaceStore } from "@stores/workspaceStore";
+import { act, render, screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  getTestWorkspace,
+  seedWorkspace,
+} from "@/stores/__tests__/workspaceStoreTestHelpers";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import {
   MOCK_RESULT,
-  mockExecuteQuery,
-  mockCancelQuery,
-  mockFindDocuments,
-  mockAggregateDocuments,
-  mockVerifyActiveDb,
   makeConn,
   makeQueryTab,
+  mockAggregateDocuments,
+  mockCancelQuery,
+  mockExecuteQuery,
+  mockFindDocuments,
+  mockVerifyActiveDb,
   resetQueryTabStores,
 } from "./__tests__/queryTabTestHelpers";
+import QueryTab from "./QueryTab";
 
 // Issue #1297 — the editability gate parses through the real sql-parser-core
 // WASM AST; load the checked-in bytes so `preloadSqlWasm` resolves in jsdom.

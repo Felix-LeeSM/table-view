@@ -1,9 +1,9 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { act, renderHook } from "@testing-library/react";
 import { connectToDatabase, disconnectFromDatabase } from "@lib/tauri";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useSchemaStore } from "@stores/schemaStore";
 import { useWorkspaceStore } from "@stores/workspaceStore";
+import { act, renderHook } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   buildRunningQueryWorkspaceState,
   getQueryTab,

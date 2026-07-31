@@ -6,9 +6,10 @@
 // 인덱싱 컨벤션 (connId-only → (connId, db) 네스트) 마이그레이션 후
 // 동등한 케이스가 그곳에서 다시 검증된다.
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { setupTauriMock } from "@/test-utils/tauriMock";
 import { useSchemaStore } from "./schemaStore";
+
 beforeEach(() => {
   setupTauriMock({
     listSchemas: vi.fn(() => Promise.resolve([{ name: "public" }])),

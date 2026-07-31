@@ -7,12 +7,12 @@
 // ASC, (b) 같은 column click → DESC, (c) 다시 click → clear,
 // (d) shift+click → secondary 추가 4 경로를 lock.
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { setupTauriMock } from "@/test-utils/tauriMock";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import DocumentDataGrid from "./DocumentDataGrid";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { __resetDocumentStoreForTests } from "@/test-utils/documentStore";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import type { DocumentQueryResult } from "@/types/document";
+import DocumentDataGrid from "./DocumentDataGrid";
 
 function buildResult(): DocumentQueryResult {
   return {

@@ -24,11 +24,11 @@
  */
 /* eslint-disable @typescript-eslint/no-deprecated -- #1403: this whole suite exercises the deliberately-deprecated QueryTab.queryMode contract; it is deleted wholesale when sprint-311 A5 lands */
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { useWorkspaceStore } from "./workspaceStore";
 import {
   installFakeLocalStorage,
   restoreLocalStorage,
 } from "./__tests__/workspaceStoreTestHelpers";
+import { useWorkspaceStore } from "./workspaceStore";
 
 describe("workspaceStore — Sprint 309 queryMode backward-compat", () => {
   beforeEach(() => {

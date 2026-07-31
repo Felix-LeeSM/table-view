@@ -1,10 +1,10 @@
 import { readFile } from "node:fs/promises";
-import { MongoClient, type Document } from "mongodb";
-import { createConnection } from "mysql2/promise";
-import { Client as PgClient } from "pg";
 import Redis from "ioredis";
+import { type Document, MongoClient } from "mongodb";
 import sql from "mssql";
+import { createConnection } from "mysql2/promise";
 import oracledb from "oracledb";
+import { Client as PgClient } from "pg";
 import { readE2eSeedFixture } from "./seed-paths.js";
 
 const pgConfig = {

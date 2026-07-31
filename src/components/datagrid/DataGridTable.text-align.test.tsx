@@ -4,10 +4,10 @@
 // 검증; 본 파일은 grid renderer wiring 의 회귀 가드.
 // 작성일 2026-05-10.
 
-import { describe, it, expect, vi } from "vitest";
 import { render } from "@testing-library/react";
-import DataGridTable from "./DataGridTable";
+import { describe, expect, it, vi } from "vitest";
 import type { TableData } from "@/types/schema";
+import DataGridTable from "./DataGridTable";
 
 function makeData(): TableData {
   return {

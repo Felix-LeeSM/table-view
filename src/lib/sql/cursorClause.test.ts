@@ -1,6 +1,6 @@
-import { describe, it, expect } from "vitest";
+import { StandardSQL, sql as sqlLanguage } from "@codemirror/lang-sql";
 import { EditorState } from "@codemirror/state";
-import { sql as sqlLanguage, StandardSQL } from "@codemirror/lang-sql";
+import { describe, expect, it } from "vitest";
 import { detectCursorClause } from "./cursorClause";
 
 // Sprint 304 (2026-05-14) — column = table dup 해소를 위한 cursor clause

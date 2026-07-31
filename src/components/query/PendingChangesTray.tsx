@@ -1,9 +1,9 @@
-import { X } from "lucide-react";
-import { useTranslation } from "react-i18next";
-import type { QueryResult } from "@/types/query";
 import { cellToEditString, editKey } from "@components/datagrid";
 import { buildRawEditSql, type RawEditPlan } from "@lib/sql/rawQuerySqlBuilder";
 import { coerceToSqlLiteral } from "@lib/sql/sqlLiteral";
+import { X } from "lucide-react";
+import { useTranslation } from "react-i18next";
+import type { QueryResult } from "@/types/query";
 
 export interface PendingChangesTrayProps {
   result: QueryResult;

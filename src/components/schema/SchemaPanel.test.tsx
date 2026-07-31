@@ -1,9 +1,9 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
-import SchemaPanel from "./SchemaPanel";
-import { useConnectionStore } from "@stores/connectionStore";
 import { normalizeActiveStatuses } from "@lib/wireCamelCase";
+import { useConnectionStore } from "@stores/connectionStore";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConnectionConfig, ConnectionStatus } from "@/types/connection";
+import SchemaPanel from "./SchemaPanel";
 
 vi.mock("./SchemaTree", () => ({
   default: ({ connectionId }: { connectionId: string }) => (

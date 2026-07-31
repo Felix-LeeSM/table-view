@@ -14,16 +14,16 @@
 // - AC-236-09: invalid-column-name rejection (defense-in-depth — the
 //   typing-confirm input is the user-visible gate).
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { setupTauriMock } from "@/test-utils/tauriMock";
 import {
-  render,
-  screen,
-  fireEvent,
-  waitFor,
   act,
   cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
 } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 
 const { mockDropColumnRequest } = vi.hoisted(() => ({
   mockDropColumnRequest: vi.fn(),
@@ -37,16 +37,16 @@ beforeEach(() => {
   });
 });
 
-import DropColumnDialog from "./DropColumnDialog";
 import { useConnectionStore } from "@stores/connectionStore";
-import { useSafeModeStore } from "@stores/safeModeStore";
 import { useQueryHistoryStore } from "@stores/queryHistoryStore";
+import { useSafeModeStore } from "@stores/safeModeStore";
 import { useSchemaStore } from "@stores/schemaStore";
 import {
   SCHEMA_GRAPH_IMPACT_DB,
   SCHEMA_GRAPH_IMPACT_SESSION_FK,
   seedSchemaGraphMigrationImpactFixture,
 } from "@/test-utils/schemaGraphImpactFixture";
+import DropColumnDialog from "./DropColumnDialog";
 
 function setProductionConnection() {
   useConnectionStore.setState({

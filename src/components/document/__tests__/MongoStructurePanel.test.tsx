@@ -8,17 +8,17 @@
 // state 보존은 sprint scope 외이므로 component 가 unmount 되지 않는지로
 // 가드), (e) Validator sub-sub-tab 이 `validator-panel` testid 를 mount.
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { setupTauriMock } from "@/test-utils/tauriMock";
 import {
-  render,
-  screen,
-  fireEvent,
   act,
   cleanup,
+  fireEvent,
+  render,
+  screen,
   waitFor,
 } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { __resetDocumentStoreForTests } from "@/test-utils/documentStore";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import { MongoStructurePanel } from "../MongoStructurePanel";
 
 const listMongoIndexesMock = vi.fn();

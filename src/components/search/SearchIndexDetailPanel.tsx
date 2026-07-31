@@ -1,5 +1,20 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useTranslation } from "react-i18next";
+import { DriverErrorHint } from "@components/errors/DriverErrorHint";
+import { SearchResultView } from "@components/search/SearchResultView";
+import { useTablistRoving } from "@components/shared/tablist/useTablistRoving";
+import { Button } from "@components/ui/button";
+import { Skeleton } from "@components/ui/skeleton";
+import {
+  formatSearchUiError,
+  type SearchUiError,
+} from "@lib/search/searchUiError";
+import {
+  getSearchIndexFieldStats,
+  getSearchIndexMapping,
+  getSearchIndexSettings,
+  listSearchCatalogSummary,
+  listSearchIndexTemplates,
+  sampleSearchDocuments,
+} from "@lib/tauri/search";
 import {
   BarChart3,
   Braces,
@@ -9,22 +24,8 @@ import {
   type LucideIcon,
   Settings2,
 } from "lucide-react";
-import { Button } from "@components/ui/button";
-import { Skeleton } from "@components/ui/skeleton";
-import {
-  formatSearchUiError,
-  type SearchUiError,
-} from "@lib/search/searchUiError";
-import { DriverErrorHint } from "@components/errors/DriverErrorHint";
-import {
-  getSearchIndexFieldStats,
-  getSearchIndexMapping,
-  getSearchIndexSettings,
-  listSearchCatalogSummary,
-  listSearchIndexTemplates,
-  sampleSearchDocuments,
-} from "@lib/tauri/search";
-import { SearchResultView } from "@components/search/SearchResultView";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useRefreshEvent } from "@/hooks/useRefreshEvent";
 import type {
   SearchCatalogSummary,
@@ -35,7 +36,6 @@ import type {
   SearchResultEnvelope,
 } from "@/types/search";
 import { SearchDeleteByQueryPreviewDialog } from "./SearchDeleteByQueryPreviewDialog";
-import { useTablistRoving } from "@components/shared/tablist/useTablistRoving";
 
 export interface SearchIndexDetailPanelProps {
   connectionId: string;

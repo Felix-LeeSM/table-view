@@ -1,10 +1,10 @@
-import { useTranslation } from "react-i18next";
-import { FileEdit, Trash2 } from "lucide-react";
 import { Button } from "@components/ui/button";
 import type { SafeModeGate } from "@hooks/useSafeModeGate";
-import { useMongoBulkOps } from "./useMongoBulkOps";
+import { FileEdit, Trash2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import DocumentBulkDeleteDialog from "./DocumentBulkDeleteDialog";
 import DocumentBulkUpdateDialog from "./DocumentBulkUpdateDialog";
+import { useMongoBulkOps } from "./useMongoBulkOps";
 
 export interface DocumentBulkOpsProps {
   connectionId: string;

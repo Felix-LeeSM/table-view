@@ -1,8 +1,8 @@
-import { describe, it, expect } from "vitest";
 import { MySQL, PostgreSQL, SQLite, StandardSQL } from "@codemirror/lang-sql";
+import { describe, expect, it } from "vitest";
+import type { DatabaseType } from "@/types/connection";
 import { databaseTypeToSqlDialect } from "./sqlDialect";
 import { SQLITE_COMPLETION_DIALECT } from "./sqlDialectProfile";
-import type { DatabaseType } from "@/types/connection";
 
 describe("databaseTypeToSqlDialect", () => {
   // AC-01: Postgres resolution

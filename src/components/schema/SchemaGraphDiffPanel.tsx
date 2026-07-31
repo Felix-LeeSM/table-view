@@ -1,5 +1,5 @@
-import { useTranslation } from "react-i18next";
 import { GitCompareArrows } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import type {
   SchemaGraphDiffChangeKind,
   SchemaGraphDiffEntry,

@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useRef } from "react";
 import type { EditorView } from "@codemirror/view";
-import { useWorkspaceStore } from "@stores/workspaceStore";
-import { cancelQuery } from "@lib/tauri";
 import { formatSql, uglifySql } from "@lib/sql/sqlUtils";
+import { cancelQuery } from "@lib/tauri";
 import type { QueryTab } from "@stores/workspaceStore";
+import { useWorkspaceStore } from "@stores/workspaceStore";
+import { useCallback, useEffect, useRef } from "react";
 
 /**
  * `QueryTab` 의 window event listener + handleFormat 캡슐화.

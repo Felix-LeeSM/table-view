@@ -17,17 +17,17 @@
 //      라는 사실 자체가 boundary 의 책임.
 //   2. unknown mode 도 동일하게 "system" 으로 fallback (이미 존재하던 분기).
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const invokeMock = vi.fn();
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: (...args: unknown[]) => invokeMock(...args),
 }));
 
-import { loadAllFromSnapshot, resetSnapshotBufferForTests } from "./loadAll";
-import { useThemeStore } from "@stores/themeStore";
-import { DEFAULT_THEME_ID } from "@lib/themeCatalog";
 import type { InitialAppState } from "@lib/tauri/snapshot";
+import { DEFAULT_THEME_ID } from "@lib/themeCatalog";
+import { useThemeStore } from "@stores/themeStore";
+import { loadAllFromSnapshot, resetSnapshotBufferForTests } from "./loadAll";
 
 function makeSnapshotWithTheme(theme: {
   themeId: string;

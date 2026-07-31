@@ -1,12 +1,12 @@
 import {
   __resetDocumentCatalogStoreForTests,
-  useDocumentCatalogStore,
   type DocumentCatalogState,
+  useDocumentCatalogStore,
 } from "@stores/documentCatalogStore";
 import {
   __resetDocumentQueryStoreForTests,
-  useDocumentQueryStore,
   type DocumentQueryState,
+  useDocumentQueryStore,
 } from "@stores/documentQueryStore";
 
 type DocumentStoreTestState = Omit<DocumentCatalogState, "clearConnection"> &

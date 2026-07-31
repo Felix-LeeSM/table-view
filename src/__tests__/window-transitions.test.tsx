@@ -21,21 +21,22 @@
  * Plus one error-path locking the activation recovery when
  * `workspace.show()` rejects (AC-154 contract Test Requirements).
  */
-import {
-  describe,
-  it,
-  expect,
-  vi,
-  beforeEach,
-  afterEach,
-  type Mock,
-} from "vitest";
-import { setupTauriMock } from "@/test-utils/tauriMock";
-import { render, screen, fireEvent, act } from "@testing-library/react";
-import HomePage from "@/pages/HomePage";
+
 import { WorkspacePage } from "@features/workspace";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useWorkspaceStore } from "@stores/workspaceStore";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  type Mock,
+  vi,
+} from "vitest";
+import HomePage from "@/pages/HomePage";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import type { ConnectionConfig } from "@/types/connection";
 
 // -----------------------------------------------------------------------------

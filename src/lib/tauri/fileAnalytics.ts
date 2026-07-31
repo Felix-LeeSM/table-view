@@ -1,3 +1,4 @@
+import { normalizeQueryResult } from "@lib/wireCamelCase";
 import { invoke } from "@tauri-apps/api/core";
 import type {
   FileAnalyticsPreview,
@@ -5,7 +6,6 @@ import type {
   FileAnalyticsSource,
   FileAnalyticsSourceMetadata,
 } from "@/types/fileAnalytics";
-import { normalizeQueryResult } from "@lib/wireCamelCase";
 
 import { wrapNumericCells } from "./numericWrap";
 

@@ -3,12 +3,12 @@
 // document → --cols 첫 token 만 증가, 인접 column 불변). Document grid 의
 // resize 결과는 `document:<db>:<coll>` localStorage 에 persist.
 
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { setupTauriMock } from "@/test-utils/tauriMock";
-import { render, act, waitFor } from "@testing-library/react";
-import DocumentDataGrid from "./DocumentDataGrid";
+import { act, render, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { __resetDocumentStoreForTests } from "@/test-utils/documentStore";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import type { DocumentQueryResult } from "@/types/document";
+import DocumentDataGrid from "./DocumentDataGrid";
 
 const findMock =
   vi.fn<

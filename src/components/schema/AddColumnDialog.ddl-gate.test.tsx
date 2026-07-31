@@ -11,9 +11,10 @@
 // #1046 says unsupported = hidden, never click-then-error, so both read the
 // capability (`ddl.alterConstraint` / `ddl.identityColumn`). PostgreSQL keeps
 // both (regression guard).
-import { describe, it, expect, vi, beforeEach } from "vitest";
+
+import { cleanup, render, screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { setupTauriMock } from "@/test-utils/tauriMock";
-import { render, screen, cleanup } from "@testing-library/react";
 
 const { mockAddColumnRequest, mockListPostgresTypes } = vi.hoisted(() => ({
   mockAddColumnRequest: vi.fn(),
@@ -28,11 +29,11 @@ beforeEach(() => {
   });
 });
 
-import AddColumnDialog from "./AddColumnDialog";
+import { invalidatePostgresTypesCache } from "@hooks/usePostgresTypes";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useSafeModeStore } from "@stores/safeModeStore";
-import { invalidatePostgresTypesCache } from "@hooks/usePostgresTypes";
 import type { DatabaseType } from "@/types/connection";
+import AddColumnDialog from "./AddColumnDialog";
 
 function setConnection(dbType: DatabaseType) {
   useConnectionStore.setState({

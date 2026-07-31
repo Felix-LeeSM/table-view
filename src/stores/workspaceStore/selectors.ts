@@ -1,18 +1,5 @@
-import { useShallow } from "zustand/react/shallow";
 import { useCurrentWindowConnectionId } from "@hooks/useCurrentWindowConnectionId";
-// Same-store internal leaf: the store instance lives in `./store`, not the root
-// barrel, so selectors no longer import back through `../workspaceStore` (the
-// old runtime cycle — #1361). Still flagged by the store-boundary rule because
-// its path sits under the `workspaceStore` dir, so keep a justified line disable.
-// eslint-disable-next-line no-restricted-imports -- same-store internal: store instance leaf, no cycle (#1361)
-import { useWorkspaceStore } from "./store";
-import type {
-  QueryTab,
-  Tab,
-  WorkspaceState,
-  WorkspaceStoreState,
-} from "./types";
-
+import { useShallow } from "zustand/react/shallow";
 // Selector hooks are the intentional read seam between workspaceStore and the
 // sibling stores below. They stay co-located with workspaceStore to keep ADR
 // 0027's `(connId, db)` key derivation visible. The store-boundary rule
@@ -25,6 +12,18 @@ import { useConnectionStore } from "../connectionStore";
 import { useDataGridEditStore } from "../dataGridEditStore";
 // eslint-disable-next-line no-restricted-imports -- read seam: OR raw-query grid pending edits into connection dirtiness
 import { useRawQueryGridEditStore } from "../rawQueryGridEditStore";
+// Same-store internal leaf: the store instance lives in `./store`, not the root
+// barrel, so selectors no longer import back through `../workspaceStore` (the
+// old runtime cycle — #1361). Still flagged by the store-boundary rule because
+// its path sits under the `workspaceStore` dir, so keep a justified line disable.
+// eslint-disable-next-line no-restricted-imports -- same-store internal: store instance leaf, no cycle (#1361)
+import { useWorkspaceStore } from "./store";
+import type {
+  QueryTab,
+  Tab,
+  WorkspaceState,
+  WorkspaceStoreState,
+} from "./types";
 
 export type WorkspaceKey = { connId: string; db: string };
 

@@ -1,6 +1,5 @@
-import { decideSafeModeAction, type SafeModeDecision } from "@/lib/safeMode";
 import type { EnvironmentTag } from "@/features/connection/model";
-import { stripSqlComments } from "./stripSqlComments";
+import { decideSafeModeAction, type SafeModeDecision } from "@/lib/safeMode";
 import {
   analyzeStatement,
   type Severity,
@@ -8,6 +7,7 @@ import {
   type StatementAnalysisOptions,
   type StatementKind,
 } from "./sqlSafety";
+import { stripSqlComments } from "./stripSqlComments";
 
 export type OracleSafetySupport = "supported" | "unsupported";
 export type OracleSafetySlice =

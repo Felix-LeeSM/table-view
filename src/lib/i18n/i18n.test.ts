@@ -1,8 +1,8 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import i18n, {
-  SUPPORTED_LOCALES,
   DEFAULT_LOCALE,
   isSupportedLocale,
+  SUPPORTED_LOCALES,
 } from "./index";
 
 describe("i18n foundation", () => {

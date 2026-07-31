@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useDocumentCatalogStore } from "@stores/documentCatalogStore";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  isMongoSystemDatabase,
-  MONGO_SYSTEM_DATABASES,
   type CollectionInfo,
   type DatabaseInfo,
+  isMongoSystemDatabase,
+  MONGO_SYSTEM_DATABASES,
 } from "@/types/document";
 
 /**

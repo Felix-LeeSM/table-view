@@ -1,10 +1,10 @@
-import type { VisibleRow } from "./treeRows";
 import {
   findParent as coreFindParent,
-  useTreeRoving as useCoreTreeRoving,
   type TreeRoving,
   type TreeRovingRow,
+  useTreeRoving as useCoreTreeRoving,
 } from "@components/shared/tree/useTreeRoving";
+import type { VisibleRow } from "./treeRows";
 
 /**
  * SchemaTree adapter over the shared WAI-ARIA tree roving hook

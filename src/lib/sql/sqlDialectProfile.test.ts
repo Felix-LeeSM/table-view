@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { CompletionContext } from "@codemirror/autocomplete";
 import {
   keywordCompletionSource,
   MySQL,
@@ -6,18 +6,18 @@ import {
   SQLite,
   StandardSQL,
 } from "@codemirror/lang-sql";
-import { CompletionContext } from "@codemirror/autocomplete";
 import { EditorState } from "@codemirror/state";
+import { describe, expect, it } from "vitest";
 import {
   COMMON_SQL_FUNCTIONS,
   COMMON_SQL_KEYWORDS,
-  SQLITE_COMPLETION_DIALECT,
-  SQL_DIALECT_PROFILES,
-  SQL_SHELL_PROFILES,
   codeMirrorDialectForDatabaseType,
   getSqlDialectProfileForDatabaseType,
   getSqlFunctionsForDatabaseType,
   getSqlKeywordsForDatabaseType,
+  SQL_DIALECT_PROFILES,
+  SQL_SHELL_PROFILES,
+  SQLITE_COMPLETION_DIALECT,
   sqlDialectIdForDatabaseType,
 } from "./sqlDialectProfile";
 

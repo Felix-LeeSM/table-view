@@ -1,5 +1,5 @@
-import Decimal from "decimal.js";
 import { safeStringifyCell } from "@lib/jsonCell";
+import Decimal from "decimal.js";
 
 /**
  * Edit key helper: maps row/col indices to a unique string key.

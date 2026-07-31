@@ -1,13 +1,29 @@
-import { useEffect, useRef } from "react";
-import ErrorBoundary from "./components/shared/ErrorBoundary";
-import WorkspacePage from "./pages/WorkspacePage";
-import QuickOpen from "./components/shared/QuickOpen";
-import PgValueSearch from "./components/shared/PgValueSearch";
-import ShortcutCheatsheet from "./components/shared/ShortcutCheatsheet";
-import QueryLog from "./components/query/QueryLog";
-import { Toaster } from "./components/ui/toaster";
 import { useConnectionStore } from "@features/connection";
+import { listen } from "@tauri-apps/api/event";
+import { useEffect, useRef } from "react";
+import QueryLog from "./components/query/QueryLog";
+import ErrorBoundary from "./components/shared/ErrorBoundary";
+import PgValueSearch from "./components/shared/PgValueSearch";
+import QuickOpen from "./components/shared/QuickOpen";
+import ShortcutCheatsheet from "./components/shared/ShortcutCheatsheet";
+import { Toaster } from "./components/ui/toaster";
+import { useActiveTabConnection } from "./hooks/useActiveTabConnection";
+import { useCurrentWindowConnectionId } from "./hooks/useCurrentWindowConnectionId";
+import { useDiscardConfirm } from "./hooks/useDiscardConfirm";
+import { useTauriListener } from "./hooks/useTauriListener";
+import { isEditableTarget } from "./lib/keyboard/isEditableTarget";
+import { markBootMilestone } from "./lib/perf/bootInstrumentation";
+import { useHardRefresh } from "./lib/runtime/connection/hardRefresh";
+import { destroyCurrentWindow } from "./lib/window-controls";
+import { getCurrentWindowLabel, parseWorkspaceLabel } from "./lib/window-label";
+import WorkspacePage from "./pages/WorkspacePage";
+import { useFavoritesStore } from "./stores/favoritesStore";
+import { useMruStore } from "./stores/mruStore";
+import { useSnippetsStore } from "./stores/snippetsStore";
+import { useTableActivityStore } from "./stores/tableActivityStore";
+import { useThemeStore } from "./stores/themeStore";
 import {
+  flushPersistWorkspaces,
   resolveActiveDb,
   useActiveTabId,
   useActiveTabSansSql,
@@ -16,23 +32,7 @@ import {
   useCurrentWorkspaceKey,
   useDirtyTabIds,
   useWorkspaceStore,
-  flushPersistWorkspaces,
 } from "./stores/workspaceStore";
-import { useCurrentWindowConnectionId } from "./hooks/useCurrentWindowConnectionId";
-import { useDiscardConfirm } from "./hooks/useDiscardConfirm";
-import { useFavoritesStore } from "./stores/favoritesStore";
-import { useSnippetsStore } from "./stores/snippetsStore";
-import { useMruStore } from "./stores/mruStore";
-import { useTableActivityStore } from "./stores/tableActivityStore";
-import { isEditableTarget } from "./lib/keyboard/isEditableTarget";
-import { useThemeStore } from "./stores/themeStore";
-import { markBootMilestone } from "./lib/perf/bootInstrumentation";
-import { useActiveTabConnection } from "./hooks/useActiveTabConnection";
-import { useHardRefresh } from "./lib/runtime/connection/hardRefresh";
-import { destroyCurrentWindow } from "./lib/window-controls";
-import { getCurrentWindowLabel, parseWorkspaceLabel } from "./lib/window-label";
-import { listen } from "@tauri-apps/api/event";
-import { useTauriListener } from "./hooks/useTauriListener";
 
 // #1621 G3a — the window-close flush persists the last edit before destroy, but
 // `persist_workspace` is a Tauri IPC that can hang (backend stall / lost reply).

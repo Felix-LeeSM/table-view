@@ -1,9 +1,9 @@
-import { useState, useCallback } from "react";
+import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
+import type { DatabaseType } from "@/types/connection";
+import { CollectionStatsPanel } from "./CollectionStatsPanel";
 import { MongoIndexesPanel } from "./MongoIndexesPanel";
 import { ValidatorPanel } from "./ValidatorPanel";
-import { CollectionStatsPanel } from "./CollectionStatsPanel";
-import type { DatabaseType } from "@/types/connection";
 
 export type MongoStructureSubTab = "indexes" | "validator" | "stats";
 

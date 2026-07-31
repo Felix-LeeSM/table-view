@@ -17,11 +17,11 @@
  * LS seed 로부터의 read/rehydrate 경로만 검증한다.
  */
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { useWorkspaceStore } from "./workspaceStore";
 import {
   installFakeLocalStorage,
   restoreLocalStorage,
 } from "./__tests__/workspaceStoreTestHelpers";
+import { useWorkspaceStore } from "./workspaceStore";
 
 describe("workspaceStore — persistence", () => {
   beforeEach(() => {

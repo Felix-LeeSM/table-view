@@ -1,11 +1,11 @@
-import { describe, it, expect, vi } from "vitest";
-import { useMemo } from "react";
-import { render, act } from "@testing-library/react";
-import { EditorView } from "@codemirror/view";
 import { undo } from "@codemirror/commands";
-import { useQueryEvents } from "./useQueryEvents";
+import { EditorView } from "@codemirror/view";
+import { act, render } from "@testing-library/react";
+import { useMemo } from "react";
+import { describe, expect, it, vi } from "vitest";
 import { makeQueryTab } from "../__tests__/queryTabTestHelpers";
 import SqlQueryEditor from "../SqlQueryEditor";
+import { useQueryEvents } from "./useQueryEvents";
 
 // #1248 review — the original test manually injected `editorRef.current = view`,
 // which hid a production seam: the query editors exposed the view via

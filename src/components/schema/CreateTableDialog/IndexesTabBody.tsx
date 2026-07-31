@@ -1,5 +1,3 @@
-import { ArrowDown, ArrowUp, Minus, Plus } from "lucide-react";
-import { useTranslation } from "react-i18next";
 import { Button } from "@components/ui/button";
 import {
   Select,
@@ -8,6 +6,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@components/ui/select";
+import { ArrowDown, ArrowUp, Minus, Plus } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import OrderedColumnPicker from "./OrderedColumnPicker";
 
 /**

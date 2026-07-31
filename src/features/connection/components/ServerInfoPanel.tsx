@@ -4,13 +4,13 @@
 // (Mongo). All paradigm-specific fields land in `extras` so the grid stays
 // paradigm-stable.
 
+import { Loader2, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { serverInfo, type ServerInfoRow } from "@/lib/api/serverInfo";
+import { type ServerInfoRow, serverInfo } from "@/lib/api/serverInfo";
 import { safeStringifyCell } from "@/lib/jsonCell";
-import { DATABASE_TYPE_LABELS, paradigmOf, type DatabaseType } from "../model";
+import { DATABASE_TYPE_LABELS, type DatabaseType, paradigmOf } from "../model";
 import { PanelLoadingSkeleton } from "./PanelLoadingSkeleton";
 
 export interface ServerInfoPanelProps {

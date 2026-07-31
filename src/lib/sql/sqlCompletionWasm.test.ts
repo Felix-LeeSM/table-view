@@ -1,11 +1,11 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { CompletionResult } from "@/lib/completion/coreContract";
 import {
   buildSqlCompletionContext,
   buildSqlCompletionRequest,
-  type SqlCompletionRequest,
   type SqlCompletionCatalogStoreSnapshot,
+  type SqlCompletionRequest,
 } from "@features/completion";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { CompletionResult } from "@/lib/completion/coreContract";
 import {
   __resetSqlCompletionWasmModuleForTests,
   completeSqlWithPreloadedWasm,

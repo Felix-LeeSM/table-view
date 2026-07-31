@@ -18,10 +18,10 @@
  * 에서는 컴포넌트 정의만 — placement 는 sprint-376 의 UI audit.
  */
 
-import { useTranslation } from "react-i18next";
-import { Power, PowerOff } from "lucide-react";
 import { Button } from "@components/ui/button";
 import { useHistorySettingsStore } from "@stores/historySettingsStore";
+import { Power, PowerOff } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 export default function HistorySettings() {
   const { t } = useTranslation("settings");

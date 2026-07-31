@@ -18,13 +18,14 @@
 // is unified across paradigms via the optional
 // `resizeHandleClassName` prop so the document body can preserve its
 // existing `dark:bg-muted/20` variant byte-for-byte.
-import { X, GripHorizontal, Pencil, PencilOff } from "lucide-react";
-import type { ReactNode, MouseEvent, KeyboardEvent } from "react";
-import { useTranslation } from "react-i18next";
+
+import type { DataGridEditState } from "@components/datagrid/useDataGridEdit";
 import { Button } from "@components/ui/button";
 import { cn } from "@lib/utils";
-import { MIN_HEIGHT, MAX_HEIGHT } from "./helpers";
-import type { DataGridEditState } from "@components/datagrid/useDataGridEdit";
+import { GripHorizontal, Pencil, PencilOff, X } from "lucide-react";
+import type { KeyboardEvent, MouseEvent, ReactNode } from "react";
+import { useTranslation } from "react-i18next";
+import { MAX_HEIGHT, MIN_HEIGHT } from "./helpers";
 
 export interface QuickLookShellProps {
   /** Region label that screen-readers announce when focus enters the panel. */

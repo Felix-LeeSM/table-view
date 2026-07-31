@@ -11,8 +11,8 @@
  * 본 sprint 의 contract — confirm dialog 없음 + 직접 IPC.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { invokeMock } = vi.hoisted(() => ({
   invokeMock: vi.fn<(cmd: string, args?: unknown) => Promise<unknown>>(() =>
@@ -28,12 +28,12 @@ vi.mock("./GroupDialog", () => ({
   default: () => <div data-testid="group-dialog-mock" />,
 }));
 
-import ConnectionGroup from "./ConnectionGroup";
 import { useConnectionStore } from "@stores/connectionStore";
 import type {
   ConnectionConfig,
   ConnectionGroup as ConnectionGroupType,
 } from "@/types/connection";
+import ConnectionGroup from "./ConnectionGroup";
 
 function makeGroup(
   id: string,

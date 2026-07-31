@@ -1,21 +1,21 @@
-import { useCallback, useEffect, useState } from "react";
-import type { FilterCondition, SortInfo, TableData } from "@/types/schema";
+import { supportsNativeCancel } from "@components/query/QueryTab/useQueryContext";
+import {
+  type GridDataLoaderRunContext,
+  useGridDataLoader,
+} from "@hooks/useGridDataLoader";
+import i18n from "@lib/i18n";
+import { recordHistoryEntry } from "@lib/runtime/history/recordHistoryEntry";
+import { syncMismatchedActiveDb } from "@lib/runtime/recovery/syncMismatchedActiveDb";
+import { toast } from "@lib/runtime/toast";
 import {
   cancelQueryNative,
   getQueryServerPid,
   queryTableData,
 } from "@lib/tauri";
-import { useConnectionStore } from "@stores/connectionStore";
-import { supportsNativeCancel } from "@components/query/QueryTab/useQueryContext";
 import { getDbMismatchInfo, getTauriErrorMessage } from "@lib/tauri/error";
-import { syncMismatchedActiveDb } from "@lib/runtime/recovery/syncMismatchedActiveDb";
-import { recordHistoryEntry } from "@lib/runtime/history/recordHistoryEntry";
-import { toast } from "@lib/runtime/toast";
-import i18n from "@lib/i18n";
-import {
-  type GridDataLoaderRunContext,
-  useGridDataLoader,
-} from "@hooks/useGridDataLoader";
+import { useConnectionStore } from "@stores/connectionStore";
+import { useCallback, useEffect, useState } from "react";
+import type { FilterCondition, SortInfo, TableData } from "@/types/schema";
 
 interface UseRdbTableDataParams {
   connectionId: string;

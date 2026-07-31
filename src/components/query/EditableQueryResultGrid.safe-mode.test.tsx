@@ -18,21 +18,22 @@
 //   - dialog Cancel → batch NOT run, cancellation surfaced (security path)
 //
 // date 2026-05-01 (initial), 2026-07-24 (#1623 matrix dedup).
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { setupTauriMock } from "@/test-utils/tauriMock";
+
+import type { RawEditPlan } from "@lib/sql/rawQuerySqlBuilder";
+import { useConnectionStore } from "@stores/connectionStore";
+import { useSafeModeStore } from "@stores/safeModeStore";
 import {
+  act,
+  fireEvent,
   render,
   screen,
-  fireEvent,
-  act,
   waitFor,
 } from "@testing-library/react";
-import EditableQueryResultGrid from "./EditableQueryResultGrid";
-import { useSafeModeStore } from "@stores/safeModeStore";
-import { useConnectionStore } from "@stores/connectionStore";
-import type { QueryResult } from "@/types/query";
-import type { RawEditPlan } from "@lib/sql/rawQuerySqlBuilder";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import type { ConnectionConfig } from "@/types/connection";
+import type { QueryResult } from "@/types/query";
+import EditableQueryResultGrid from "./EditableQueryResultGrid";
 
 const mockExecuteQueryBatch = vi.fn();
 const mockToastError = vi.fn();

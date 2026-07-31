@@ -9,20 +9,20 @@
  * 기대해 양쪽이 동시에 깨지도록 lego 한다.
  */
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
 import { act, renderHook, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const invokeMock = vi.fn();
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: (...args: unknown[]) => invokeMock(...args),
 }));
 
-import { useQueryHistory } from "./useQueryHistory";
 import {
   dispatchStateChangedPayload,
   resetStateChangedRegistryForTests,
 } from "@lib/events/stateChanged";
 import { QUERY_HISTORY_LOCAL_CREATED_EVENT } from "@stores/queryHistoryStore";
+import { useQueryHistory } from "./useQueryHistory";
 
 const row = (id: number, sqlRedacted = `SELECT ${id}`) => ({
   id,

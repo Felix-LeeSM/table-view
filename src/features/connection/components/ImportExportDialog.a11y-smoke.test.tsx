@@ -1,5 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { setupTauriMock } from "@/test-utils/tauriMock";
+import { useConnectionStore } from "@stores/connectionStore";
 import {
   act,
   fireEvent,
@@ -7,9 +6,10 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react";
-import ImportExportDialog from "./ImportExportDialog";
-import { useConnectionStore } from "@stores/connectionStore";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import type { ConnectionConfig } from "@/types/connection";
+import ImportExportDialog from "./ImportExportDialog";
 
 const ENCRYPTED_PAYLOAD =
   '{"v":1,"kdf":"argon2id","salt":"AAAA","nonce":"AAAA","alg":"aes-256-gcm","ciphertext":"AAAA","tag_attached":true}';

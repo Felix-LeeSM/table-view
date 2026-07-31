@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
 import { cancelQuery } from "@lib/tauri";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 /**
  * Shared read-flow plumbing for grid browses (rdb `useRdbTableData`,

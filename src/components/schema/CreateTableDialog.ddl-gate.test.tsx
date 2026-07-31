@@ -14,11 +14,12 @@
 // rendering unconditionally. PostgreSQL keeps every control (regression guard)
 // and an unknown / still-loading dbType keeps them too (affordance-preserving
 // fallback, same as the rest of `supportsDdl`).
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { screen, within } from "@testing-library/react";
+
 import { useConnectionStore } from "@stores/connectionStore";
-import { useSafeModeStore } from "@stores/safeModeStore";
 import { useQueryHistoryStore } from "@stores/queryHistoryStore";
+import { useSafeModeStore } from "@stores/safeModeStore";
+import { screen, within } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { DatabaseType } from "@/types/connection";
 import {
   getColumnsPanel,

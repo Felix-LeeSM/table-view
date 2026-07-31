@@ -1,6 +1,6 @@
 // AC-185-01 — sqlSafety analyzer baseline and fallback-severity contract.
 // Split from the former giant sqlSafety scenario suite for issue #752.
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import { analyzeStatement, isDangerous, isInfoStatement } from "./sqlSafety";
 
 describe("sqlSafety.analyzeStatement — fallback and severity contracts", () => {

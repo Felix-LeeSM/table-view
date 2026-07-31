@@ -5,9 +5,8 @@
 // same body now — adapter `kind` is only consulted at the return
 // boundary so the facade's legacy `sqlPreview` / `mqlPreview` fields
 // stay populated for downstream UI components.
-import { useCallback, useMemo, useState } from "react";
-import { useConnectionStore } from "@stores/connectionStore";
-import { useSafeModeGate } from "@/hooks/useSafeModeGate";
+
+import i18n from "@lib/i18n";
 import { recordHistoryEntry } from "@lib/runtime/history/recordHistoryEntry";
 // Sprint 354 (L2 fix, 2026-05-16) — `executeQueryBatch` lives in
 // `@lib/tauri`; use namespace import so a test that stubs `@lib/tauri`
@@ -15,22 +14,24 @@ import { recordHistoryEntry } from "@lib/runtime/history/recordHistoryEntry";
 // is only reached on the RDB commit path; document commits never read
 // `tauri.executeQueryBatch`.
 import * as tauri from "@lib/tauri";
-import { toast } from "@/lib/runtime/toast";
-import i18n from "@lib/i18n";
+import { useConnectionStore } from "@stores/connectionStore";
+import { useCallback, useMemo, useState } from "react";
+import type { CommitError } from "@/components/datagrid/dataGridEditFsm";
+import { useSafeModeGate } from "@/hooks/useSafeModeGate";
 import {
-  buildRdbSession,
-  documentEditAdapter,
-  rdbEditAdapter,
   type AppliedPendingOps,
+  buildRdbSession,
+  type DocumentAdapterDeps,
+  documentEditAdapter,
   type Paradigm,
   type PreviewSession,
   type RdbAdapterDeps,
-  type DocumentAdapterDeps,
+  rdbEditAdapter,
 } from "@/lib/datagrid/paradigmEditAdapter";
 import type { MqlPreview } from "@/lib/mongo/mqlGenerator";
+import { toast } from "@/lib/runtime/toast";
 import { dialectFromDbType } from "@/lib/sql/sqlLiteral";
 import type { TableData } from "@/types/schema";
-import type { CommitError } from "@/components/datagrid/dataGridEditFsm";
 
 export interface UseDataGridPreviewCommitParams {
   data: TableData | null;

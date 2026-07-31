@@ -1,12 +1,12 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import type { ConnectionId, TabId } from "@/types/branded";
-import { render, fireEvent, act, screen } from "@testing-library/react";
-import App from "./App";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  seedWorkspace,
   getTestWorkspace,
+  seedWorkspace,
 } from "@/stores/__tests__/workspaceStoreTestHelpers";
-import { useWorkspaceStore, type TableTab } from "./stores/workspaceStore";
+import type { ConnectionId, TabId } from "@/types/branded";
+import App from "./App";
+import { type TableTab, useWorkspaceStore } from "./stores/workspaceStore";
 
 // Issue #1718 (Stage 1, Part of #1717) — a records-grid soft refresh (Cmd+R)
 // refetches the active resource AND drops the active cell editor

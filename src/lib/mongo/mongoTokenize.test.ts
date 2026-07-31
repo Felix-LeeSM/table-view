@@ -1,6 +1,6 @@
-import { describe, it, expect } from "vitest";
-import { tokenizeMongo } from "./mongoTokenize";
+import { describe, expect, it } from "vitest";
 import { MONGO_ALL_OPERATORS } from "./mongoCompletionVocabulary";
+import { tokenizeMongo } from "./mongoTokenize";
 
 describe("tokenizeMongo", () => {
   it("returns an empty array for empty input", () => {

@@ -10,11 +10,12 @@
  * icon, and non-FK columns must not render it either, otherwise the user
  * would see a dead-link hint where no jump is possible.
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import DataGridTable from "./DataGridTable";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { TableData } from "@/types/schema";
+import DataGridTable from "./DataGridTable";
 
 const FK_DATA: TableData = {
   columns: [

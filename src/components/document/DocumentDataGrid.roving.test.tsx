@@ -3,8 +3,7 @@
 // focus + tabIndex=0 anchor 를 옮긴다. onFocus=state-only / keyboard=focus split
 // 회귀 (SchemaTree focus-steal) 도 가드. (2026-07-01)
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { setupTauriMock } from "@/test-utils/tauriMock";
+import { useConnectionStore } from "@stores/connectionStore";
 import {
   act,
   fireEvent,
@@ -13,10 +12,11 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
-import DocumentDataGrid from "./DocumentDataGrid";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { __resetDocumentStoreForTests } from "@/test-utils/documentStore";
-import { useConnectionStore } from "@stores/connectionStore";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import type { DocumentQueryResult } from "@/types/document";
+import DocumentDataGrid from "./DocumentDataGrid";
 
 const findMock =
   vi.fn<

@@ -1,12 +1,12 @@
-import { describe, expect, it, vi } from "vitest";
-import { createRef } from "react";
-import { render, screen, act, waitFor } from "@testing-library/react";
 import { EditorView } from "@codemirror/view";
-import RedisCommandEditor from "./RedisCommandEditor";
+import { act, render, screen, waitFor } from "@testing-library/react";
+import { createRef } from "react";
+import { describe, expect, it, vi } from "vitest";
 import {
   expectUndoRevertsEdit,
   getKeymapBindings,
 } from "./__tests__/editorHistoryHelpers";
+import RedisCommandEditor from "./RedisCommandEditor";
 
 // #1133 — the accessible name now lives on CodeMirror's real `.cm-content`;
 // walk up to the editor wrapper (carries data-paradigm) for DOM queries.

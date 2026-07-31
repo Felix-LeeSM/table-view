@@ -24,17 +24,17 @@
  * 캐싱 없이도 정확.
  */
 
-import type { Paradigm } from "@/types/connection";
-import {
-  useQueryHistoryStore,
-  type QueryHistorySource,
-} from "@stores/queryHistoryStore";
-import { useHistorySettingsStore } from "@stores/historySettingsStore";
 import type {
   AddHistoryEntryRequest,
   DocumentQueryMode,
   RdbQueryMode,
 } from "@lib/tauri/history";
+import { useHistorySettingsStore } from "@stores/historySettingsStore";
+import {
+  type QueryHistorySource,
+  useQueryHistoryStore,
+} from "@stores/queryHistoryStore";
+import type { Paradigm } from "@/types/connection";
 
 export type DocumentRecordHistoryQueryMode =
   | DocumentQueryMode

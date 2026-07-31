@@ -1,18 +1,18 @@
-import type { ReactNode } from "react";
-import { Database, MousePointerClick, Plug } from "lucide-react";
-import { useTranslation } from "react-i18next";
 import { Button } from "@components/ui/button";
 import { Skeleton } from "@components/ui/skeleton";
+import { assertNever } from "@lib/paradigm";
 import { useConnectionStore } from "@stores/connectionStore";
 // #1447 — sql-free active-tab read (only `connectionId` is consumed).
 import { useActiveTabSansSql } from "@stores/workspaceStore";
+import { Database, MousePointerClick, Plug } from "lucide-react";
+import type { ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import { useConnectionLifecycle } from "@/hooks/useConnectionLifecycle";
-import { assertNever } from "@lib/paradigm";
 import DocumentSidebar from "./DocumentSidebar";
 import KvSidebar from "./KvSidebar";
+import { pickSidebar, type SidebarKind } from "./pickSidebar";
 import RdbSidebar from "./RdbSidebar";
 import SearchSidebar from "./SearchSidebar";
-import { pickSidebar, type SidebarKind } from "./pickSidebar";
 
 export interface WorkspaceSidebarProps {
   /**

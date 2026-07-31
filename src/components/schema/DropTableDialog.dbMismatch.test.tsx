@@ -13,15 +13,15 @@
 // 하고 나머지 sync 경로는 production code 가 실제 실행 - toast +
 // connectionStore.setActiveDb side-effect 로 end-to-end 단언.
 
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { setupTauriMock } from "@/test-utils/tauriMock";
 import {
+  act,
+  fireEvent,
   render,
   screen,
-  fireEvent,
   waitFor,
-  act,
 } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 
 const {
   mockDropTableRequest,
@@ -58,10 +58,10 @@ vi.mock("@lib/api/verifyActiveDb", () => ({
   verifyActiveDb: verifyActiveDbMock,
 }));
 
-import DropTableDialog from "./DropTableDialog";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useSafeModeStore } from "@stores/safeModeStore";
 import { useSchemaStore } from "@stores/schemaStore";
+import DropTableDialog from "./DropTableDialog";
 
 const DB_MISMATCH_ERROR =
   "Database mismatch: expected 'db-1', but found 'db-2'";

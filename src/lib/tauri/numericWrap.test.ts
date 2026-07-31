@@ -4,9 +4,8 @@
 
 import Decimal from "decimal.js";
 import { describe, expect, it } from "vitest";
-
-import { wrapNumericCells } from "./numericWrap";
 import type { QueryColumn } from "@/types/query";
+import { wrapNumericCells } from "./numericWrap";
 
 function col(name: string, dataType: string): QueryColumn {
   // category 는 wrap 결정과 무관 (dataType 만 single source of truth) —

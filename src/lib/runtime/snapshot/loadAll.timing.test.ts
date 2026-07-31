@@ -8,22 +8,22 @@
 // AC-367-02: fake 50ms IPC 응답 + store mutate < 50ms total — 전체 hydrate
 // duration < 100ms. p50/p95 측정에 충분한 budget.
 
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const invokeMock = vi.fn();
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: (...args: unknown[]) => invokeMock(...args),
 }));
 
-import { loadAllFromSnapshot, resetSnapshotBufferForTests } from "./loadAll";
-import { useConnectionStore } from "@stores/connectionStore";
-import { useWorkspaceStore } from "@stores/workspaceStore";
-import { useMruStore } from "@stores/mruStore";
-import { useThemeStore } from "@stores/themeStore";
-import { useSafeModeStore } from "@stores/safeModeStore";
-import { useFavoritesStore } from "@stores/favoritesStore";
-import { useQueryHistoryStore } from "@stores/queryHistoryStore";
 import type { InitialAppState } from "@lib/tauri/snapshot";
+import { useConnectionStore } from "@stores/connectionStore";
+import { useFavoritesStore } from "@stores/favoritesStore";
+import { useMruStore } from "@stores/mruStore";
+import { useQueryHistoryStore } from "@stores/queryHistoryStore";
+import { useSafeModeStore } from "@stores/safeModeStore";
+import { useThemeStore } from "@stores/themeStore";
+import { useWorkspaceStore } from "@stores/workspaceStore";
+import { loadAllFromSnapshot, resetSnapshotBufferForTests } from "./loadAll";
 
 function makeSnapshot(): InitialAppState {
   return {

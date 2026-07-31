@@ -36,7 +36,10 @@
 // Mock pattern: `vi.hoisted` + factory mock for `@lib/tauri` so
 // `tauri.createTable` is re-bindable inside test bodies. Pattern source:
 // Sprint 219/223/224 (`useConnectionMutations.test.ts`).
-import { describe, it, expect, vi, beforeEach } from "vitest";
+
+import { useConnectionStore } from "@stores/connectionStore";
+import { useQueryHistoryStore } from "@stores/queryHistoryStore";
+import { useSafeModeStore } from "@stores/safeModeStore";
 import {
   act,
   fireEvent,
@@ -44,21 +47,19 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
-import { useConnectionStore } from "@stores/connectionStore";
-import { useSafeModeStore } from "@stores/safeModeStore";
-import { useQueryHistoryStore } from "@stores/queryHistoryStore";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   activateConstraintSubTab,
   activateTab,
   getColumnsPanel,
   getKeysPanel,
-  mockCreateTable,
   HEAVY_LOAD_TEST_TIMEOUT_MS,
+  mockCreateTable,
   renderDialog,
-  setDevConnection,
-  setProductionConnection,
   STALE_CONSTRAINTS_PLACEHOLDER,
   STALE_INDEX_PLACEHOLDER,
+  setDevConnection,
+  setProductionConnection,
 } from "./__tests__/createTableDialogTestHelpers";
 
 describe("CreateTableDialog (Sprint 226 carry-over → Sprint 227 tab migration)", () => {

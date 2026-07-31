@@ -1,11 +1,11 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import {
   act,
-  render,
-  screen,
   cleanup,
   fireEvent,
+  render,
+  screen,
 } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { DocumentTreePanel } from "./DocumentTreePanel";
 
 function flushRaf() {

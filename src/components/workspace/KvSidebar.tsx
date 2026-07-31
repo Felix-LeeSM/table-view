@@ -1,5 +1,14 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useTranslation } from "react-i18next";
+import TreeSkeleton from "@components/shared/tree/TreeSkeleton";
+import {
+  type TreeRovingRow,
+  useTreeRoving,
+} from "@components/shared/tree/useTreeRoving";
+import { Button } from "@components/ui/button";
+import { currentKvDatabase, scanKvKeys } from "@lib/tauri/kv";
+import { cancelQuery } from "@lib/tauri/query";
+import { useConnectionStore } from "@stores/connectionStore";
+import { useSafeModeStore } from "@stores/safeModeStore";
+import { useWorkspaceStore } from "@stores/workspaceStore";
 import {
   Hash,
   KeyRound,
@@ -12,22 +21,13 @@ import {
   Square,
   Timer,
 } from "lucide-react";
-import { Button } from "@components/ui/button";
-import KvNewKeyDialog from "./KvNewKeyDialog";
-import { kvKeyDetailTab } from "./kvKeyTab";
-import {
-  useTreeRoving,
-  type TreeRovingRow,
-} from "@components/shared/tree/useTreeRoving";
-import TreeSkeleton from "@components/shared/tree/TreeSkeleton";
-import { useConnectionStore } from "@stores/connectionStore";
-import { useSafeModeStore } from "@stores/safeModeStore";
-import { useWorkspaceStore } from "@stores/workspaceStore";
-import { cancelQuery } from "@lib/tauri/query";
-import { currentKvDatabase, scanKvKeys } from "@lib/tauri/kv";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { DATABASE_TYPE_LABELS } from "@/types/connection";
 import type { KvKeyMetadata } from "@/types/kv";
 import { formatKvTtl } from "@/types/kv";
-import { DATABASE_TYPE_LABELS } from "@/types/connection";
+import KvNewKeyDialog from "./KvNewKeyDialog";
+import { kvKeyDetailTab } from "./kvKeyTab";
 import { formatBytes, formatCount } from "./kvValueFormat";
 
 const KEY_SCAN_LIMIT = 100;

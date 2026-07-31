@@ -10,13 +10,7 @@
 // (`getEntry`, `setSlice`, `clearEntry`, `purgeKey`, `purgeForConnection`)
 // must produce immutable Map / Set / Array replacements so React selectors
 // detect the change.
-import { describe, it, expect, beforeEach } from "vitest";
-import {
-  useDataGridEditStore,
-  entryKey,
-  EMPTY_ENTRY,
-  type EditSnapshot,
-} from "./dataGridEditStore";
+import { beforeEach, describe, expect, it } from "vitest";
 import { makeEntryKey } from "@/test-utils/brandedKeys";
 import type {
   ConnectionId,
@@ -24,6 +18,12 @@ import type {
   SchemaName,
   TableName,
 } from "@/types/branded";
+import {
+  type EditSnapshot,
+  EMPTY_ENTRY,
+  entryKey,
+  useDataGridEditStore,
+} from "./dataGridEditStore";
 
 function resetStore(): void {
   useDataGridEditStore.setState({ entries: new Map() });

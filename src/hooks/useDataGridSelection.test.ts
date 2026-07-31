@@ -3,8 +3,9 @@
 // 직접 단언. 기존 `useDataGridEdit.multi-select.test.ts` 가 통합 단언을
 // 보존하지만 본 테스트는 hook 단의 selection state 머신을 격리한다.
 // date 2026-05-02.
-import { describe, it, expect } from "vitest";
-import { renderHook, act } from "@testing-library/react";
+
+import { act, renderHook } from "@testing-library/react";
+import { describe, expect, it } from "vitest";
 import { useDataGridSelection } from "./useDataGridSelection";
 
 describe("useDataGridSelection", () => {

@@ -1,19 +1,4 @@
-import { useTranslation } from "react-i18next";
-import type { ConnectionDraft, DatabaseType } from "../../model";
-import {
-  DATABASE_TYPE_LABELS,
-  ENVIRONMENT_META,
-  ENVIRONMENT_OPTIONS,
-} from "../../model";
-import {
-  getConnectionSupportedDatabaseTypes,
-  hasConnectionCapability,
-  isConnectionSupportedDatabaseType,
-  getDataSourceProfile,
-} from "@/types/dataSource";
-import type { ConnectionKind } from "@/types/dataSource";
 import { Button } from "@components/ui/button";
-import { ToggleGroup, ToggleGroupItem } from "@components/ui/toggle-group";
 import {
   Select,
   SelectContent,
@@ -21,20 +6,35 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@components/ui/select";
-import { assertNever } from "@/lib/paradigm";
+import { ToggleGroup, ToggleGroupItem } from "@components/ui/toggle-group";
 import { Link, List, LockKeyhole } from "lucide-react";
-import PgFormFields from "../forms/PgFormFields";
-import MysqlFormFields from "../forms/MysqlFormFields";
-import MssqlFormFields from "../forms/MssqlFormFields";
-import OracleFormFields from "../forms/OracleFormFields";
-import SqliteFormFields from "../forms/SqliteFormFields";
+import { useTranslation } from "react-i18next";
+import { assertNever } from "@/lib/paradigm";
+import type { ConnectionKind } from "@/types/dataSource";
+import {
+  getConnectionSupportedDatabaseTypes,
+  getDataSourceProfile,
+  hasConnectionCapability,
+  isConnectionSupportedDatabaseType,
+} from "@/types/dataSource";
+import type { ConnectionDraft, DatabaseType } from "../../model";
+import {
+  DATABASE_TYPE_LABELS,
+  ENVIRONMENT_META,
+  ENVIRONMENT_OPTIONS,
+} from "../../model";
+import {
+  type ConnFieldKey,
+  fieldValidationProps,
+} from "../forms/fieldValidation";
 import MongoFormFields from "../forms/MongoFormFields";
+import MssqlFormFields from "../forms/MssqlFormFields";
+import MysqlFormFields from "../forms/MysqlFormFields";
+import OracleFormFields from "../forms/OracleFormFields";
+import PgFormFields from "../forms/PgFormFields";
 import RedisFormFields from "../forms/RedisFormFields";
 import SearchFormFields from "../forms/SearchFormFields";
-import {
-  fieldValidationProps,
-  type ConnFieldKey,
-} from "../forms/fieldValidation";
+import SqliteFormFields from "../forms/SqliteFormFields";
 
 // Sprint-112: Radix `<SelectItem>` cannot have an empty value, so we use
 // sentinel string `__none__` to represent the "None" environment option.

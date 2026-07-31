@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { DATABASE_TYPE_LABELS, type DatabaseType } from "./connection";
 import {
   ADAPTER_CONFORMANCE_MATRIX,
   CONFORMANCE_CHECKS,
@@ -12,6 +11,7 @@ import {
   type AdapterContractTestArea,
   type AdapterContractTestJudgement,
 } from "./adapterContractTestMatrix";
+import { DATABASE_TYPE_LABELS, type DatabaseType } from "./connection";
 import type { DataSourceCapabilities } from "./dataSource";
 import { getVersionAwareDataSourceCapabilities } from "./dataSourceVersionCapabilities";
 

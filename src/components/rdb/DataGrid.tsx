@@ -1,13 +1,18 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { useHiddenColumns } from "@/hooks/useHiddenColumns";
-import { useWorkspaceStore } from "@stores/workspaceStore";
-import { useConnectionStore } from "@stores/connectionStore";
-import { useMruStore } from "@stores/mruStore";
-import FilterBar from "@components/rdb/FilterBar";
-import type { FilterCondition } from "@/types/schema";
 import { useRdbDataGridEdit } from "@components/datagrid/useRdbDataGridEdit";
+import FilterBar from "@components/rdb/FilterBar";
 import QuickLookPanel from "@components/shared/QuickLookPanel";
 import { DEFAULT_PAGE_SIZE } from "@lib/gridPolicy";
+import { useConnectionStore } from "@stores/connectionStore";
+import { useMruStore } from "@stores/mruStore";
+import { useWorkspaceStore } from "@stores/workspaceStore";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useHiddenColumns } from "@/hooks/useHiddenColumns";
+import {
+  getDataSourceProfile,
+  hasConnectionCapability,
+  supportsRowEditing,
+} from "@/types/dataSource";
+import type { FilterCondition } from "@/types/schema";
 import { ExecutedQueryBar } from "./DataGrid/ExecutedQueryBar";
 import { HiddenColumnsBadge } from "./DataGrid/HiddenColumnsBadge";
 import { RdbDataGridContent } from "./DataGrid/RdbDataGridContent";
@@ -19,11 +24,6 @@ import { useRdbDataGridShortcuts } from "./DataGrid/useRdbDataGridShortcuts";
 import { useRdbDataGridSortHandlers } from "./DataGrid/useRdbDataGridSortHandlers";
 import { useRdbDataGridSorts } from "./DataGrid/useRdbDataGridSorts";
 import { useRdbTableData } from "./DataGrid/useRdbTableData";
-import {
-  getDataSourceProfile,
-  hasConnectionCapability,
-  supportsRowEditing,
-} from "@/types/dataSource";
 
 interface DataGridProps {
   connectionId: string;

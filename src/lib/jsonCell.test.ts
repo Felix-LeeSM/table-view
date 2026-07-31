@@ -5,9 +5,9 @@
 // undefined / Symbol 에만 유지.
 
 import Decimal from "decimal.js";
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 
-import { safeStringifyCell, renderCellValue } from "./jsonCell";
+import { renderCellValue, safeStringifyCell } from "./jsonCell";
 
 describe("safeStringifyCell", () => {
   it("serializes a flat object as compact JSON", () => {

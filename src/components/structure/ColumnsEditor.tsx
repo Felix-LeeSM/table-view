@@ -1,29 +1,29 @@
-import { useEffect, useState } from "react";
-import { useTranslation } from "react-i18next";
-import { Key, Link2, Plus, Pencil, Trash2, X, Check, Eye } from "lucide-react";
-import type { ColumnInfo, ColumnChange } from "@/types/schema";
-import type { Paradigm } from "@/types/connection";
-import { getParadigmVocabulary } from "@/lib/strings/paradigm-vocabulary";
-import * as tauri from "@lib/tauri";
-import SqlPreviewDialog from "./SqlPreviewDialog";
-import { useDdlPreviewExecution } from "./useDdlPreviewExecution";
 import { Button } from "@components/ui/button";
 import { INLINE_EDIT_INPUT } from "@components/ui/inlineEdit";
-import { useConnectionStore } from "@stores/connectionStore";
-import { ConfirmDestructiveDialog } from "@features/workspace";
 import { AddColumnDialog, DropColumnDialog } from "@features/catalog";
+import { ConfirmDestructiveDialog } from "@features/workspace";
+import * as tauri from "@lib/tauri";
+import { useConnectionStore } from "@stores/connectionStore";
+import { Check, Eye, Key, Link2, Pencil, Plus, Trash2, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { getParadigmVocabulary } from "@/lib/strings/paradigm-vocabulary";
+import type { Paradigm } from "@/types/connection";
+import type { ColumnChange, ColumnInfo } from "@/types/schema";
+import SqlPreviewDialog from "./SqlPreviewDialog";
 import {
-  StructureShell,
-  StructureActionBar,
-  StructureTable,
-  StructureEmpty,
-  STRUCTURE_THEAD,
-  STRUCTURE_TH,
-  STRUCTURE_TH_ACTIONS,
-  STRUCTURE_TR,
   STRUCTURE_TD,
   STRUCTURE_TD_ACTIONS,
+  STRUCTURE_TH,
+  STRUCTURE_TH_ACTIONS,
+  STRUCTURE_THEAD,
+  STRUCTURE_TR,
+  StructureActionBar,
+  StructureEmpty,
+  StructureShell,
+  StructureTable,
 } from "./shared/structureUI";
+import { useDdlPreviewExecution } from "./useDdlPreviewExecution";
 
 // Sprint 237 — debounce window for the SET-NOT-NULL conflict probe. The
 // user toggles the checkbox; we wait 500 ms with no further change

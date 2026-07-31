@@ -29,19 +29,19 @@
  * timers, then switch them on for the threshold advance.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { setupTauriMock } from "@/test-utils/tauriMock";
 import {
   act,
+  createEvent,
+  fireEvent,
   render,
   screen,
   waitFor,
-  fireEvent,
-  createEvent,
 } from "@testing-library/react";
-import DocumentDataGrid from "./DocumentDataGrid";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { __resetDocumentStoreForTests } from "@/test-utils/documentStore";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import type { DocumentQueryResult } from "@/types/document";
+import DocumentDataGrid from "./DocumentDataGrid";
 
 // Programmable resolver so we can keep `runFind` pending mid-test, then
 // resolve on demand. Pending state is the only way to surface the refetch

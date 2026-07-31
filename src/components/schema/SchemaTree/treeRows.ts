@@ -1,16 +1,16 @@
-import type { TableInfo, ViewInfo, FunctionInfo } from "@/types/schema";
-import type { FileAnalyticsSourceMetadata } from "@/types/fileAnalytics";
-import type { RdbTreeShape } from "../treeShape";
-import {
-  LayoutGrid,
-  Eye,
-  Code2,
-  Terminal,
-  ListOrdered,
-  Link2,
-  type LucideIcon,
-} from "lucide-react";
 import i18n from "@lib/i18n";
+import {
+  Code2,
+  Eye,
+  LayoutGrid,
+  Link2,
+  ListOrdered,
+  type LucideIcon,
+  Terminal,
+} from "lucide-react";
+import type { FileAnalyticsSourceMetadata } from "@/types/fileAnalytics";
+import type { FunctionInfo, TableInfo, ViewInfo } from "@/types/schema";
+import type { RdbTreeShape } from "../treeShape";
 
 /**
  * Pure helper module for `SchemaTree`. No React or store imports — only

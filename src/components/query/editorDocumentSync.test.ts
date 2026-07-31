@@ -1,7 +1,7 @@
-import { describe, it, expect } from "vitest";
+import { history, undo } from "@codemirror/commands";
 import { EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
-import { history, undo } from "@codemirror/commands";
+import { describe, expect, it } from "vitest";
 import { syncEditorDocument } from "./editorDocumentSync";
 
 function makeView(doc: string): EditorView {

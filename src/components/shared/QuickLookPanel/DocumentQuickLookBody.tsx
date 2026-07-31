@@ -15,15 +15,16 @@
 //   columns, so `onBlobView` is a no-op.
 // - FieldRows render iff `editing && editState && data` are all present;
 //   otherwise the BSON tree stays mounted.
+
+import type { DataGridEditState } from "@components/datagrid/useDataGridEdit";
+import BsonTreeViewer from "@components/shared/BsonTreeViewer";
+import type { KeyboardEvent, MouseEvent } from "react";
 import { useMemo } from "react";
-import type { MouseEvent, KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 import type { TableData } from "@/types/schema";
-import BsonTreeViewer from "@components/shared/BsonTreeViewer";
-import type { DataGridEditState } from "@components/datagrid/useDataGridEdit";
-import QuickLookShell from "./QuickLookShell";
 import { FieldRow } from "./FieldRow";
 import { selectedRowIsDirty } from "./helpers";
+import QuickLookShell from "./QuickLookShell";
 
 export interface DocumentQuickLookBodyProps {
   rawDocuments: Record<string, unknown>[];

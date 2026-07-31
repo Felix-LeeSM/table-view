@@ -8,22 +8,23 @@
 //       Sprint 269 Retry toast 가 표면화된다.
 // 를 한꺼번에 단언. typed envelope 의 `message` 가 inline error 박스에
 // 그대로 보임을 함께 검증.
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { setupTauriMock } from "@/test-utils/tauriMock";
+
 import { screen, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
+import type { SortInfo } from "@/types/schema";
 import {
   MOCK_DATA,
-  mockQueryTableData,
+  mockAddTab,
   mockExecuteQuery,
   mockExecuteQueryBatch,
   mockPromoteTab,
-  mockUpdateTabSorts,
+  mockQueryTableData,
   mockSetTabDirty,
-  mockAddTab,
-  resetDataGridMocks,
+  mockUpdateTabSorts,
   renderDataGrid,
+  resetDataGridMocks,
 } from "./__tests__/dataGridTestHelpers";
-import type { SortInfo } from "@/types/schema";
 
 // Hoisted hooks 가 vi.mock factory 안에서 참조될 수 있도록 vi.hoisted 로
 // 선언. 대표 mismatch mock 은 #744 typed envelope 형식.

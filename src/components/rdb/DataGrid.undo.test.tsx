@@ -13,20 +13,21 @@
 // We share the helper-mocked schema/tab stores from
 // `__tests__/dataGridTestHelpers.tsx` so the renderDataGrid
 // pipeline matches the existing editing-axis tests verbatim.
-import { describe, it, expect, vi, beforeEach } from "vitest";
+
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { setupTauriMock } from "@/test-utils/tauriMock";
-import { screen, fireEvent, act, waitFor } from "@testing-library/react";
 import type { SortInfo } from "@/types/schema";
 import {
-  mockQueryTableData,
+  mockAddTab,
   mockExecuteQuery,
   mockExecuteQueryBatch,
   mockPromoteTab,
-  mockUpdateTabSorts,
+  mockQueryTableData,
   mockSetTabDirty,
-  mockAddTab,
-  resetDataGridMocks,
+  mockUpdateTabSorts,
   renderDataGrid,
+  resetDataGridMocks,
 } from "./__tests__/dataGridTestHelpers";
 
 vi.mock("./FilterBar", () => ({

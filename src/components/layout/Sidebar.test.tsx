@@ -1,10 +1,10 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import type { ConnectionId, TabId } from "@/types/branded";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  seedWorkspace,
   getTestWorkspace,
+  seedWorkspace,
 } from "@/stores/__tests__/workspaceStoreTestHelpers";
-import { render, screen, fireEvent, act } from "@testing-library/react";
+import type { ConnectionId, TabId } from "@/types/branded";
 
 // sprint-366 (2026-05-16) — Sidebar reads its window's connection identity
 // from `useCurrentWindowConnectionId()` (which delegates to
@@ -22,14 +22,14 @@ vi.mock("@lib/window-label", async () => {
   };
 });
 
-import Sidebar from "./Sidebar";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useWorkspaceStore } from "@stores/workspaceStore";
 import {
-  setFakeWindowConnectionId,
   resetFakeWindowConnectionId,
+  setFakeWindowConnectionId,
 } from "@/stores/__tests__/fakeWindowConnectionId";
 import type { ConnectionConfig, ConnectionStatus } from "@/types/connection";
+import Sidebar from "./Sidebar";
 
 // jsdom in this project's setup ships an incomplete localStorage (getItem etc.
 // are undefined). Provide a working in-memory shim so persistence tests run.

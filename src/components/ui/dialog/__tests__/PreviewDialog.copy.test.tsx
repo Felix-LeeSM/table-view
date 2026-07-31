@@ -16,9 +16,10 @@
 // - AC-252-03 → "성공 path → Copied 라벨", "실패 path → Copy failed 라벨"
 // - AC-252-04 → "trim → 빈 문자열 → 미렌더"
 // - 추가 회귀 → "unmount 시 setTimeout cleanup (warning 미발생)"
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, fireEvent, act } from "@testing-library/react";
+
 import PreviewDialog from "@components/ui/dialog/PreviewDialog";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Helper — install a controllable clipboard carrier on `navigator.clipboard`.
 // jsdom doesn't ship `navigator.clipboard`, so we define it before each test.

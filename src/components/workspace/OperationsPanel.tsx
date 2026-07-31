@@ -19,21 +19,21 @@
 // capability. The kill action inside `ServerActivityPanel` routes through
 // `ConfirmDestructiveDialog` per AC.
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { useTranslation } from "react-i18next";
-import { X } from "lucide-react";
+import { SlowQueryPanel } from "@components/query/SlowQueryPanel";
 import { Button } from "@components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@components/ui/tabs";
-import ConfirmDestructiveDialog from "./ConfirmDestructiveDialog";
 import {
   DatabaseUsersPanel,
   ServerActivityPanel,
   ServerInfoPanel,
 } from "@features/connection";
-import type { ServerActivityRow } from "@/lib/api/serverActivity";
-import { SlowQueryPanel } from "@components/query/SlowQueryPanel";
-import { useOperationsConnection } from "./useOperationsConnection";
+import { X } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { paradigmOf } from "@/features/connection/model";
+import type { ServerActivityRow } from "@/lib/api/serverActivity";
+import ConfirmDestructiveDialog from "./ConfirmDestructiveDialog";
+import { useOperationsConnection } from "./useOperationsConnection";
 
 type OpsTab = "activity" | "serverInfo" | "slowQueries" | "users";
 

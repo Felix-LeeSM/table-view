@@ -30,13 +30,13 @@
  * same test process see each other.
  */
 import {
-  describe,
-  it,
-  expect,
-  vi,
-  beforeEach,
   afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
   type Mock,
+  vi,
 } from "vitest";
 import { setupTauriMock } from "@/test-utils/tauriMock";
 
@@ -130,10 +130,10 @@ vi.mock("@lib/window-label", async () => {
   };
 });
 
+import * as tauri from "@lib/tauri";
+import { useConnectionStore } from "@stores/connectionStore";
 // Import AFTER all mocks are registered.
 import { emit, listen } from "@tauri-apps/api/event";
-import { useConnectionStore } from "@stores/connectionStore";
-import * as tauri from "@lib/tauri";
 import type { ConnectionConfig, ConnectionStatus } from "@/types/connection";
 
 const mockedEmit = emit as unknown as Mock;

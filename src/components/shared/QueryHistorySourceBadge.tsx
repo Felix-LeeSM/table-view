@@ -1,5 +1,5 @@
-import { useTranslation } from "react-i18next";
 import type { QueryHistorySource } from "@stores/queryHistoryStore";
+import { useTranslation } from "react-i18next";
 
 // Small badge that surfaces non-`raw` history sources. `raw` (the default
 // for editor-driven queries) is suppressed to keep the row visually quiet

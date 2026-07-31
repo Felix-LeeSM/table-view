@@ -4,17 +4,6 @@ import type {
   SchemaName,
   TableName,
 } from "@/types/branded";
-import type { ErdTab, Tab, TableTab, WorkspaceStoreState } from "../types";
-import {
-  nextQueryId,
-  nextTabId,
-  patchExistingWorkspace,
-  resolveActiveDb,
-  withWorkspace,
-  type WorkspaceGet,
-  type WorkspaceSet,
-} from "../shared";
-
 // dataGridEditStore / rawQueryGridEditStore purge is a one-way lifecycle
 // write at `removeTab` / `clearForConnection`, matching the pre-split
 // workspaceStore contract.
@@ -27,6 +16,17 @@ import {
   rawEntryKey as makeRawQueryGridEditKey,
   useRawQueryGridEditStore,
 } from "../../rawQueryGridEditStore";
+import {
+  nextQueryId,
+  nextTabId,
+  patchExistingWorkspace,
+  resolveActiveDb,
+  type WorkspaceGet,
+  type WorkspaceSet,
+  withWorkspace,
+} from "../shared";
+import type { ErdTab, Tab, TableTab, WorkspaceStoreState } from "../types";
+
 /* eslint-enable no-restricted-imports */
 
 type TabSlice = Pick<

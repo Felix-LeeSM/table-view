@@ -1,12 +1,12 @@
 import { $, browser, expect } from "@wdio/globals";
 import {
-  clickDomSelector,
   clickDialogAction,
+  clickDomSelector,
   createOracleConnection,
   editGridCellInRow,
   executeSqlPreview,
-  expectNoVisibleDialogText,
   expandIfCollapsed,
+  expectNoVisibleDialogText,
   openConnection,
   openNewQueryTab,
   runQuery,

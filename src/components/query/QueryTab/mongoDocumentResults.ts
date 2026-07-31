@@ -1,3 +1,4 @@
+import type { DocumentRecordHistoryQueryMode } from "@lib/runtime/history/recordHistoryEntry";
 import {
   aggregateDocuments,
   countDocuments,
@@ -7,12 +8,11 @@ import {
   findOneDocument,
 } from "@lib/tauri";
 import { getTauriErrorMessage } from "@lib/tauri/error";
-import type { DocumentRecordHistoryQueryMode } from "@lib/runtime/history/recordHistoryEntry";
 import type { FindBody } from "@/types/document";
 import {
   createDocumentResultEnvelope,
-  requireCompatibleQueryResult,
   type QueryResult,
+  requireCompatibleQueryResult,
 } from "@/types/query";
 import type {
   ExecuteMongoAggregateRequest,

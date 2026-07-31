@@ -9,9 +9,10 @@
 // relies on: a subsequent edit must never mutate a captured snapshot. The
 // behavioural undo semantics (LIFO restore, cap, commit-span restage) stay
 // covered by `useDataGridEdit.undo.test.ts` — unchanged by this refactor.
-import { describe, it, expect, beforeEach } from "vitest";
-import { renderHook, act } from "@testing-library/react";
+
 import { useDataGridEditStore } from "@stores/dataGridEditStore";
+import { act, renderHook } from "@testing-library/react";
+import { beforeEach, describe, expect, it } from "vitest";
 import { makeEntryKey } from "@/test-utils/brandedKeys";
 import { useDataGridEditPendingState } from "./useDataGridEditPendingState";
 

@@ -1,16 +1,16 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { CONNECTION_COLOR_PALETTE } from "@lib/connectionColor";
+import { useConnectionStore } from "@stores/connectionStore";
 import {
+  act,
+  fireEvent,
   render,
   screen,
-  fireEvent,
   waitFor,
-  act,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import GroupDialog from "./GroupDialog";
-import { useConnectionStore } from "@stores/connectionStore";
-import { CONNECTION_COLOR_PALETTE } from "@lib/connectionColor";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConnectionGroup } from "@/types/connection";
+import GroupDialog from "./GroupDialog";
 
 const mockAddGroup = vi.fn();
 const mockUpdateGroup = vi.fn();

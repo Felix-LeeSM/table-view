@@ -1,54 +1,54 @@
-import { useState, useRef } from "react";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@components/ui/alert-dialog";
+import { Button } from "@components/ui/button";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
+  ContextMenuTrigger,
+} from "@components/ui/context-menu";
+import { DB_TYPE_META } from "@lib/db-meta";
+import { classifyDriverError } from "@lib/errors/driverErrorHints";
+import { useConnectionLifecycle } from "@lib/runtime/connection/useConnectionLifecycle";
+import { useConnectionMutations } from "@lib/runtime/connection/useConnectionMutations";
+import { toast } from "@lib/runtime/toast";
+import {
+  Check,
+  Circle,
+  CircleAlert,
+  CircleCheck,
+  Database,
+  FolderInput,
+  GripVertical,
+  Loader2,
+  Pencil,
+  Plug,
+  Trash2,
+  Unplug,
+  X,
+} from "lucide-react";
+import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type {
   ConnectionConfig,
   ConnectionStatus,
   EnvironmentTag,
 } from "../model";
-import { Button } from "@components/ui/button";
 import { ENVIRONMENT_META } from "../model";
 import { useConnectionStore } from "../store";
-import { useConnectionLifecycle } from "@lib/runtime/connection/useConnectionLifecycle";
-import { useConnectionMutations } from "@lib/runtime/connection/useConnectionMutations";
-import { toast } from "@lib/runtime/toast";
-import {
-  ContextMenu,
-  ContextMenuTrigger,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuSub,
-  ContextMenuSubContent,
-  ContextMenuSubTrigger,
-  ContextMenuSeparator,
-} from "@components/ui/context-menu";
 import ConnectionDialog from "./ConnectionDialog";
 import { sanitizeMessage } from "./ConnectionDialog/sanitize";
-import { classifyDriverError } from "@lib/errors/driverErrorHints";
-import { DB_TYPE_META } from "@lib/db-meta";
-import {
-  AlertDialog,
-  AlertDialogContent,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogCancel,
-} from "@components/ui/alert-dialog";
-import {
-  Database,
-  GripVertical,
-  Plug,
-  Unplug,
-  Pencil,
-  Trash2,
-  Loader2,
-  X,
-  FolderInput,
-  Check,
-  Circle,
-  CircleCheck,
-  CircleAlert,
-} from "lucide-react";
 
 /** Module-level drag state shared between ConnectionItem, ConnectionGroup, ConnectionList */
 export let draggedConnectionId: string | null = null;

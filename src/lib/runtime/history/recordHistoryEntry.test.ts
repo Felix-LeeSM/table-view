@@ -5,12 +5,12 @@ vi.mock("@tauri-apps/api/core", () => ({
   invoke: (...args: unknown[]) => invokeMock(...args),
 }));
 
-import {
-  recordHistoryEntry,
-  type RecordHistoryEntryArgs,
-} from "./recordHistoryEntry";
 import { useHistorySettingsStore } from "@stores/historySettingsStore";
 import { useQueryHistoryStore } from "@stores/queryHistoryStore";
+import {
+  type RecordHistoryEntryArgs,
+  recordHistoryEntry,
+} from "./recordHistoryEntry";
 
 function acceptsRecordHistoryArgs(args: RecordHistoryEntryArgs): void {
   void args;

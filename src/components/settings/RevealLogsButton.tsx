@@ -12,13 +12,13 @@
  * launcher footer 등 어느 settings surface 에서도 재사용 가능.
  */
 
+import { Button } from "@components/ui/button";
+import { logger } from "@lib/logger";
+import { toast } from "@lib/runtime/toast";
+import { openLogDir } from "@lib/tauri/diagnostics";
+import { FolderOpen } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { FolderOpen } from "lucide-react";
-import { Button } from "@components/ui/button";
-import { openLogDir } from "@lib/tauri/diagnostics";
-import { toast } from "@lib/runtime/toast";
-import { logger } from "@lib/logger";
 
 export interface RevealLogsButtonProps {
   /** Optional className passthrough so callers can tune size/layout. */

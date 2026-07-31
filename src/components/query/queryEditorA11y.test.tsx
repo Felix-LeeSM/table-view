@@ -1,10 +1,10 @@
-import { render, cleanup } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { cleanup, render } from "@testing-library/react";
 import type { ReactElement } from "react";
-import SqlQueryEditor from "./SqlQueryEditor";
+import { afterEach, describe, expect, it } from "vitest";
 import MongoQueryEditor from "./MongoQueryEditor";
 import RedisCommandEditor from "./RedisCommandEditor";
 import SearchQueryEditor from "./SearchQueryEditor";
+import SqlQueryEditor from "./SqlQueryEditor";
 
 /**
  * #1133 — the accessible name and autocomplete-combobox announcement must

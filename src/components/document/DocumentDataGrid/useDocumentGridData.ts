@@ -1,15 +1,15 @@
-import { useCallback, useMemo } from "react";
-import { useDocumentQueryStore } from "@stores/documentQueryStore";
-import { cancelQueryNative } from "@lib/tauri";
-import type { CancelError } from "@lib/tauri/cancel";
-import { toast } from "@lib/runtime/toast";
-import i18n from "@lib/i18n";
-import type { ColumnInfo, SortInfo, TableData } from "@/types/schema";
-import type { DocumentQueryResult } from "@/types/document";
 import {
   type GridDataLoaderRunContext,
   useGridDataLoader,
 } from "@hooks/useGridDataLoader";
+import i18n from "@lib/i18n";
+import { toast } from "@lib/runtime/toast";
+import { cancelQueryNative } from "@lib/tauri";
+import type { CancelError } from "@lib/tauri/cancel";
+import { useDocumentQueryStore } from "@stores/documentQueryStore";
+import { useCallback, useMemo } from "react";
+import type { DocumentQueryResult } from "@/types/document";
+import type { ColumnInfo, SortInfo, TableData } from "@/types/schema";
 
 /**
  * Read-flow plumbing for `DocumentDataGrid`. Supplies the `runFind`

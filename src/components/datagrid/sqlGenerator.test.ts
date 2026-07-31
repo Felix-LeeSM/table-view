@@ -1,7 +1,7 @@
-import { describe, it, expect } from "vitest";
-import { generateSql, type CoerceError } from "./sqlGenerator";
-import { BASE_DATA } from "./sqlGenerator.fixtures";
+import { describe, expect, it } from "vitest";
 import type { TableData } from "@/types/schema";
+import { type CoerceError, generateSql } from "./sqlGenerator";
+import { BASE_DATA } from "./sqlGenerator.fixtures";
 
 describe("generateSql — UPDATE tri-state (null vs empty string vs text)", () => {
   it("emits no row-write SQL when row writes are disabled", () => {

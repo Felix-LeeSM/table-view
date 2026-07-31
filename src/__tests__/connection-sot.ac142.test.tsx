@@ -9,20 +9,22 @@
  *
  * Each `it(...)` name embeds the AC label (AC-142-N) for grep-ability.
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { ConnectionId, TabId } from "@/types/branded";
-import { setupTauriMock } from "@/test-utils/tauriMock";
-import {
-  seedWorkspace,
-  getTestWorkspace,
-} from "@/stores/__tests__/workspaceStoreTestHelpers";
-import { render, screen, fireEvent, act, within } from "@testing-library/react";
-import HomePage from "@/pages/HomePage";
+
 import { WorkspaceToolbar } from "@features/workspace";
+import * as windowControls from "@lib/window-controls";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useWorkspaceStore } from "@stores/workspaceStore";
-import * as windowControls from "@lib/window-controls";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import HomePage from "@/pages/HomePage";
+import {
+  getTestWorkspace,
+  seedWorkspace,
+} from "@/stores/__tests__/workspaceStoreTestHelpers";
+import { setupTauriMock } from "@/test-utils/tauriMock";
+import type { ConnectionId, TabId } from "@/types/branded";
 import type { ConnectionConfig } from "@/types/connection";
+
 beforeEach(() => {
   setupTauriMock({
     connectToDatabase: vi.fn().mockResolvedValue(undefined),

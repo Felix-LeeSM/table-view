@@ -1,14 +1,14 @@
-import { CompletionContext } from "@codemirror/autocomplete";
 import type { CompletionResult } from "@codemirror/autocomplete";
+import { CompletionContext } from "@codemirror/autocomplete";
 import { EditorState } from "@codemirror/state";
 import { describe, expect, it } from "vitest";
 import {
+  createRedisCommandCompletionSource,
   REDIS_COMMAND_COMPLETIONS,
   REDIS_UNSUPPORTED_COMMAND_FAMILIES,
-  VALKEY_COMMAND_COMPLETIONS,
-  createRedisCommandCompletionSource,
   type RedisCommandCompletionTarget,
   type RedisKeySuggestion,
+  VALKEY_COMMAND_COMPLETIONS,
 } from "./redisCommandCompletion";
 
 const BACKEND_ALLOWLIST = [

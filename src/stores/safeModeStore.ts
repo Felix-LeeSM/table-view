@@ -1,6 +1,6 @@
+import { getSetting, persistSettingValue } from "@lib/tauri/settings";
 import { create } from "zustand";
 import type { SafeMode } from "@/lib/safeMode";
-import { getSetting, persistSettingValue } from "@lib/tauri/settings";
 
 // `SafeMode` type lives in `src/lib/safeMode.ts` so the pure decision
 // matrix can reference it without dragging a store dep into the lib

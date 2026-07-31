@@ -9,7 +9,7 @@
 // (Strict / Warn / Off heading + canonical danger statement examples for
 // strict + non-production scoping note) so the help text stays in sync with
 // the contract. date 2026-05-01.
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // Sprint 368 (Phase 4 Q12) — safe-mode toggle now invokes `persist_setting`.
 // Mock so jsdom click handlers can await the async toggle.
@@ -17,12 +17,12 @@ vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(() => Promise.resolve()),
 }));
 
+import { SAFE_MODE_STORAGE_KEY, useSafeModeStore } from "@stores/safeModeStore";
+import { useToastStore } from "@stores/toastStore";
 import { invoke } from "@tauri-apps/api/core";
 import { render, screen, waitFor } from "@testing-library/react";
 import { userEvent } from "@testing-library/user-event";
 import SafeModeToggle from "./SafeModeToggle";
-import { useSafeModeStore, SAFE_MODE_STORAGE_KEY } from "@stores/safeModeStore";
-import { useToastStore } from "@stores/toastStore";
 
 describe("SafeModeToggle", () => {
   beforeEach(() => {

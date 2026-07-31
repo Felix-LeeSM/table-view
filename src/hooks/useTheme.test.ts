@@ -2,17 +2,18 @@
 // 2026-05-16 update (Phase 4 sprint-368) — `setMode` 가 IPC 호출이 된 후
 // `@tauri-apps/api/core` 를 mock 해 jsdom 에서 await 가능. `setTheme` 호출
 // 후 LS write 단언은 subscriber 의 sync write 를 기다리도록 await 추가.
-import { describe, it, expect, beforeEach, vi } from "vitest";
-import { renderHook, act } from "@testing-library/react";
+
+import { act, renderHook } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
 }));
 
+import { THEME_STORAGE_KEY } from "@lib/themeBoot";
+import { useThemeStore } from "@stores/themeStore";
 import { invoke } from "@tauri-apps/api/core";
 import { useTheme } from "./useTheme";
-import { useThemeStore } from "@stores/themeStore";
-import { THEME_STORAGE_KEY } from "@lib/themeBoot";
 
 const invokeMock = vi.mocked(invoke);
 

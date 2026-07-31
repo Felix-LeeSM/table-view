@@ -1,11 +1,11 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, act } from "@testing-library/react";
-import App from "./App";
 import type { ConnectionConfig } from "@features/connection";
+import { getCurrentWindowLabel } from "@lib/window-label";
+import { act, render } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import App from "./App";
+import { destroyCurrentWindow } from "./lib/window-controls";
 import { useConnectionStore } from "./stores/connectionStore";
 import { useWorkspaceStore } from "./stores/workspaceStore";
-import { destroyCurrentWindow } from "./lib/window-controls";
-import { getCurrentWindowLabel } from "@lib/window-label";
 
 // #1583 — deleting a connection (from the launcher) removed it from the
 // synced `connections` list, and the connection-sync bridge purged the

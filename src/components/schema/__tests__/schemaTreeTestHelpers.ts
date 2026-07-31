@@ -13,11 +13,12 @@
 // or `tables: { "conn1:public": [...] }`) into the new nested form under
 // the default db sentinel `"db1"`. New tests can pass the nested shape
 // directly — passthrough leaves it intact.
-import { vi } from "vitest";
+
 import { formatWorkspaceLabel, getCurrentWindowLabel } from "@lib/window-label";
-import { useSchemaStore } from "@stores/schemaStore";
 import { useConnectionStore } from "@stores/connectionStore";
+import { useSchemaStore } from "@stores/schemaStore";
 import { useWorkspaceStore } from "@stores/workspaceStore";
+import { vi } from "vitest";
 import type {
   ColumnInfo,
   FunctionInfo,

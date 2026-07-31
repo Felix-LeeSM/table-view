@@ -9,16 +9,16 @@
 // 단일 surface 의 mismatch 경로를 박제 — DDL 11 commands 중 가장
 // 두꺼운 wrapper.
 
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { setupTauriMock } from "@/test-utils/tauriMock";
 import {
+  act,
+  fireEvent,
   render,
   screen,
-  fireEvent,
   waitFor,
-  act,
   within,
 } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 
 const {
   mockCreateTablePlan,
@@ -57,9 +57,9 @@ vi.mock("@lib/api/verifyActiveDb", () => ({
   verifyActiveDb: verifyActiveDbMock,
 }));
 
-import CreateTableDialog from "./CreateTableDialog";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useSafeModeStore } from "@stores/safeModeStore";
+import CreateTableDialog from "./CreateTableDialog";
 
 const DB_MISMATCH_ERROR =
   "Database mismatch: expected 'db-1', but found 'db-2'";

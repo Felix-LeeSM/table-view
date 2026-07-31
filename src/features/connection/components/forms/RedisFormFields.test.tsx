@@ -1,7 +1,7 @@
-import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent, act } from "@testing-library/react";
-import RedisFormFields from "./RedisFormFields";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 import type { ConnectionDraft } from "@/types/connection";
+import RedisFormFields from "./RedisFormFields";
 
 function makeDraft(overrides: Partial<ConnectionDraft> = {}): ConnectionDraft {
   return {

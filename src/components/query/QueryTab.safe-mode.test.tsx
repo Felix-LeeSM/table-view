@@ -23,31 +23,33 @@
 // error/history contract.
 //
 // date 2026-05-07 (initial), 2026-07-24 (#1623 matrix dedup).
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { setupTauriMock } from "@/test-utils/tauriMock";
-import {
-  seedWorkspace,
-  getTestWorkspace,
-} from "@/stores/__tests__/workspaceStoreTestHelpers";
-import { render, screen, waitFor, act } from "@testing-library/react";
-import QueryTab from "./QueryTab";
-import { useWorkspaceStore } from "@stores/workspaceStore";
-import { useQueryHistoryStore } from "@stores/queryHistoryStore";
-import { useConnectionStore } from "@stores/connectionStore";
-import { useSafeModeStore } from "@stores/safeModeStore";
-import {
-  MOCK_RESULT,
-  mockExecuteQuery,
-  mockCancelQuery,
-  mockFindDocuments,
-  mockAggregateDocuments,
-  mockEditorProps,
-  makeQueryTab,
-  makeConn,
-  resetQueryTabStores,
-} from "./__tests__/queryTabTestHelpers";
+
 import type { SQLDialect } from "@codemirror/lang-sql";
 import type { Extension } from "@codemirror/state";
+import { useConnectionStore } from "@stores/connectionStore";
+import { useQueryHistoryStore } from "@stores/queryHistoryStore";
+import { useSafeModeStore } from "@stores/safeModeStore";
+import { useWorkspaceStore } from "@stores/workspaceStore";
+import { act, render, screen, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  getTestWorkspace,
+  seedWorkspace,
+} from "@/stores/__tests__/workspaceStoreTestHelpers";
+import { setupTauriMock } from "@/test-utils/tauriMock";
+import {
+  MOCK_RESULT,
+  makeConn,
+  makeQueryTab,
+  mockAggregateDocuments,
+  mockCancelQuery,
+  mockEditorProps,
+  mockExecuteQuery,
+  mockFindDocuments,
+  resetQueryTabStores,
+} from "./__tests__/queryTabTestHelpers";
+import QueryTab from "./QueryTab";
+
 beforeEach(() => {
   setupTauriMock({
     executeQuery: (...args: unknown[]) => mockExecuteQuery(...args),

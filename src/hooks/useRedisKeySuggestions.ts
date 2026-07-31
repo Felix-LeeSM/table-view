@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
 import { parseRedisDatabaseIndex } from "@lib/redis/redisDatabase";
 import { scanKvKeys } from "@lib/tauri/kv";
+import { useEffect, useMemo, useState } from "react";
 import type { KvKeyMetadata } from "@/types/kv";
 
 export const REDIS_KEY_SUGGESTION_SCAN_LIMIT = 100;

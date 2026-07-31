@@ -10,14 +10,15 @@
  * the Tauri window label plus `connectionStore.activeStatuses`. Mutating actions
  * still take `(connId, db)` explicitly (Q7 'a' lock).
  */
+
+import { getCurrentWindowLabel, parseWorkspaceLabel } from "@lib/window-label";
+import { attachZustandIpcBridge } from "@lib/zustand-ipc-bridge";
 import { create } from "zustand";
 import { combine } from "zustand/middleware";
-import { attachZustandIpcBridge } from "@lib/zustand-ipc-bridge";
-import { getCurrentWindowLabel, parseWorkspaceLabel } from "@lib/window-label";
 import {
-  STORAGE_KEY,
   debouncePersistWorkspaces,
   migrateLoadedWorkspaces,
+  STORAGE_KEY,
 } from "./persistence";
 import {
   seedCountersFromWorkspaces,

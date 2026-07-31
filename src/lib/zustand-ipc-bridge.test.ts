@@ -22,13 +22,13 @@
  *    store state.
  */
 import {
-  describe,
-  it,
-  expect,
-  vi,
-  beforeEach,
   afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
   type Mock,
+  vi,
 } from "vitest";
 import { createStore, type StoreApi } from "zustand/vanilla";
 

@@ -3,9 +3,10 @@
 // the sibling `FieldRow.tsx`; both bodies (`RdbQuickLookBody`,
 // `DocumentQuickLookBody`) import the renderers from `./FieldRow`, and
 // `FieldRow` itself imports the helpers below.
+
+import { safeStringifyCell } from "@lib/jsonCell";
 import Decimal from "decimal.js";
 import type { ColumnInfo } from "@/types/schema";
-import { safeStringifyCell } from "@lib/jsonCell";
 
 // ── Resize constants ─────────────────────────────────────────────────
 

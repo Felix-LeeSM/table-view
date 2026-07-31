@@ -1,14 +1,14 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { useSchemaStore } from "@stores/schemaStore";
 import {
+  act,
+  fireEvent,
   render,
   screen,
-  fireEvent,
-  act,
   waitFor,
 } from "@testing-library/react";
-import ViewStructurePanel from "./ViewStructurePanel";
-import { useSchemaStore } from "@stores/schemaStore";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ColumnInfo } from "@/types/schema";
+import ViewStructurePanel from "./ViewStructurePanel";
 
 const VIEW_COLUMNS: ColumnInfo[] = [
   {

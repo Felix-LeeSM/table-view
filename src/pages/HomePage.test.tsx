@@ -1,10 +1,10 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, act } from "@testing-library/react";
-import HomePage from "./HomePage";
+import * as windowControls from "@lib/window-controls";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useWorkspaceStore } from "@stores/workspaceStore";
-import * as windowControls from "@lib/window-controls";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConnectionConfig } from "@/types/connection";
+import HomePage from "./HomePage";
 
 // Sprint 154 — HomePage's activation handler routes through
 // `@lib/window-controls` (workspace.show / focus / launcher.hide). Stub the

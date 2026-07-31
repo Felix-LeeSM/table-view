@@ -1,8 +1,8 @@
-import { Component } from "react";
-import type { ReactNode, ErrorInfo } from "react";
 import { Button } from "@components/ui/button";
-import { logger } from "@lib/logger";
 import i18n from "@lib/i18n";
+import { logger } from "@lib/logger";
+import type { ErrorInfo, ReactNode } from "react";
+import { Component } from "react";
 
 interface ErrorBoundaryProps {
   children: ReactNode;

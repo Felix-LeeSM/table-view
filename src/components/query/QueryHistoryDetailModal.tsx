@@ -14,8 +14,7 @@
  *   - `QueryHistoryDetailModal.test.tsx` — IPC 호출 1회, sql display, close.
  */
 
-import { useEffect, useState } from "react";
-import { useTranslation } from "react-i18next";
+import { Button } from "@components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -23,12 +22,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@components/ui/dialog";
-import { Button } from "@components/ui/button";
+import { logger } from "@lib/logger";
 import {
   getHistoryDetail,
   type HistoryDetailResponse,
 } from "@lib/tauri/history";
-import { logger } from "@lib/logger";
+import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 export interface QueryHistoryDetailModalProps {
   /** Numeric history row id (backend pk). */

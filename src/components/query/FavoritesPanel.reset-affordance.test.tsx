@@ -10,8 +10,8 @@
  * `favorites` array 에서 해당 entry 가 사라짐.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { invokeMock } = vi.hoisted(() => ({
   invokeMock: vi.fn<(cmd: string, args?: unknown) => Promise<unknown>>(() =>
@@ -22,8 +22,8 @@ vi.mock("@tauri-apps/api/core", () => ({
   invoke: invokeMock,
 }));
 
-import FavoritesPanel from "./FavoritesPanel";
 import { useFavoritesStore } from "@stores/favoritesStore";
+import FavoritesPanel from "./FavoritesPanel";
 
 describe("FavoritesPanel reset affordance (Q21 #9 — audit)", () => {
   beforeEach(() => {

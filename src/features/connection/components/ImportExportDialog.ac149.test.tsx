@@ -12,12 +12,14 @@
  * ImportExportDialog.test.tsx suite. The test names retain the AC label
  * (AC-149-N) for grep-ability even though the call signature changed.
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { setupTauriMock } from "@/test-utils/tauriMock";
-import { render, screen, fireEvent, act } from "@testing-library/react";
-import ImportExportDialog from "./ImportExportDialog";
+
 import { useConnectionStore } from "@stores/connectionStore";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import type { ConnectionConfig, ConnectionGroup } from "@/types/connection";
+import ImportExportDialog from "./ImportExportDialog";
+
 beforeEach(() => {
   setupTauriMock({
     exportConnections: vi.fn(),

@@ -1,22 +1,22 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { setupTauriMock } from "@/test-utils/tauriMock";
+import { EditorView } from "@codemirror/view";
+import { useConnectionStore } from "@stores/connectionStore";
 import {
+  act,
+  fireEvent,
   render,
   screen,
-  fireEvent,
   waitFor,
   within,
-  act,
 } from "@testing-library/react";
-import { EditorView } from "@codemirror/view";
-import DocumentDataGrid from "./DocumentDataGrid";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  useDocumentStore,
   __resetDocumentStoreForTests,
+  useDocumentStore,
 } from "@/test-utils/documentStore";
-import { useConnectionStore } from "@stores/connectionStore";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import type { DatabaseType } from "@/types/connection";
 import type { DocumentQueryResult } from "@/types/document";
+import DocumentDataGrid from "./DocumentDataGrid";
 
 // Canned results used by the mocked store. Shaped to mirror the backend's
 // flattening: `rows` carry sentinels, `rawDocuments` keep the nested

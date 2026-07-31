@@ -20,13 +20,13 @@
  *     자체를 호출 안 함으로써 enforce — store 내부 분기 없음.
  */
 
-import { create } from "zustand";
+import { logger } from "@lib/logger";
 import {
-  addHistoryEntry as addHistoryEntryIpc,
   type AddHistoryEntryRequest,
+  addHistoryEntry as addHistoryEntryIpc,
   type HistoryListRow,
 } from "@lib/tauri/history";
-import { logger } from "@lib/logger";
+import { create } from "zustand";
 
 export const QUERY_HISTORY_LOCAL_CREATED_EVENT = "query-history:local-created";
 

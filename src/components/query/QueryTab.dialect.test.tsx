@@ -6,38 +6,39 @@
 // document tabs, queryMode-driven identity rebuild, fieldsCache feed,
 // fieldsCache isolation from RDB tabs). Cases are byte-equivalent to
 // the originals — no behaviour change.
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { setupTauriMock } from "@/test-utils/tauriMock";
-import { seedWorkspace } from "@/stores/__tests__/workspaceStoreTestHelpers";
-import { render, act, waitFor } from "@testing-library/react";
+
 import {
   MySQL,
   PostgreSQL,
-  StandardSQL,
   type SQLDialect,
+  StandardSQL,
 } from "@codemirror/lang-sql";
 import type { Extension } from "@codemirror/state";
-import { SQLITE_COMPLETION_DIALECT } from "@/lib/sql/sqlDialectProfile";
 import type {
   RedisCommandCompletionTarget,
   RedisKeySuggestion,
 } from "@features/completion";
-import QueryTab from "./QueryTab";
-import { useWorkspaceStore } from "@stores/workspaceStore";
 import { useConnectionStore } from "@stores/connectionStore";
+import { useWorkspaceStore } from "@stores/workspaceStore";
+import { act, render, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { SQLITE_COMPLETION_DIALECT } from "@/lib/sql/sqlDialectProfile";
+import { seedWorkspace } from "@/stores/__tests__/workspaceStoreTestHelpers";
 import { useDocumentStore } from "@/test-utils/documentStore";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import {
-  mockExecuteQuery,
-  mockCancelQuery,
-  mockFindDocuments,
-  mockAggregateDocuments,
-  mockVerifyActiveDb,
-  mockEditorProps,
-  makeQueryTab,
   makeConn,
   makeDocTab,
+  makeQueryTab,
+  mockAggregateDocuments,
+  mockCancelQuery,
+  mockEditorProps,
+  mockExecuteQuery,
+  mockFindDocuments,
+  mockVerifyActiveDb,
   resetQueryTabStores,
 } from "./__tests__/queryTabTestHelpers";
+import QueryTab from "./QueryTab";
 
 const redisKeySuggestionFixture = vi.hoisted(
   () =>

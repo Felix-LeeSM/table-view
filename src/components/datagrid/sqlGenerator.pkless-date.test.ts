@@ -1,6 +1,6 @@
-import { describe, it, expect } from "vitest";
-import { generateSql } from "./sqlGenerator";
+import { describe, expect, it } from "vitest";
 import type { TableData } from "@/types/schema";
+import { generateSql } from "./sqlGenerator";
 
 // #1441 P3-1 — the PK-less all-column WHERE fallback used to emit a `Date`
 // cell as an unquoted JS locale string (`ts = Wed Jul 16 2026 …`), which fails

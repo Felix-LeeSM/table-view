@@ -1,4 +1,4 @@
-import { useCallback, useEffect, type RefObject } from "react";
+import { type RefObject, useCallback, useEffect } from "react";
 
 /**
  * WAI-ARIA `role="toolbar"` roving-tabindex + arrow navigation for a

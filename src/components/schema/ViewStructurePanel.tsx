@@ -1,12 +1,12 @@
+import { DataGridSkeleton } from "@components/datagrid";
+import { Button } from "@components/ui/button";
+import { Tabs, TabsList, TabsTrigger } from "@components/ui/tabs";
+import { useCopyToClipboard } from "@lib/runtime/useCopyToClipboard";
+import { useSchemaStore } from "@stores/schemaStore";
+import { Check, Copy } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Check, Copy } from "lucide-react";
-import { useSchemaStore } from "@stores/schemaStore";
 import type { ColumnInfo } from "@/types/schema";
-import { DataGridSkeleton } from "@components/datagrid";
-import { Tabs, TabsList, TabsTrigger } from "@components/ui/tabs";
-import { Button } from "@components/ui/button";
-import { useCopyToClipboard } from "@lib/runtime/useCopyToClipboard";
 
 interface ViewStructurePanelProps {
   connectionId: string;

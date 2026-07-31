@@ -28,7 +28,7 @@
  * "외부 origin 의 emit" 을 흉내낸다. 진짜 cross-webview broadcast 의
  * Tauri 측 transport 검증은 e2e + backend integration test 가 담당.
  */
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // In-memory bus mock — `@tauri-apps/api/event` 가 process-spanning 인 척.
 // `vi.mock` factory 는 hoist 되어 themeStore.ts 의 module-load 보다 먼저
@@ -99,8 +99,8 @@ const localStorageMock = (() => {
 
 Object.defineProperty(window, "localStorage", { value: localStorageMock });
 
+import { DEFAULT_THEME_ID, THEME_STORAGE_KEY } from "@lib/themeBoot";
 import { useThemeStore } from "./themeStore";
-import { THEME_STORAGE_KEY, DEFAULT_THEME_ID } from "@lib/themeBoot";
 
 // `attachZustandIpcBridge` 의 listen 등록은 비동기. module-load 시 fire-and-
 // forget 으로 시작되므로, 첫 inbound emit 흉내 전에 listener 가 bus 에

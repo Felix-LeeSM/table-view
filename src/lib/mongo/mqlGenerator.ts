@@ -26,14 +26,14 @@
  *   null, composite) drop with a `missing-id` error.
  */
 
-import {
-  documentIdFromRow,
-  formatDocumentIdForMql,
-  type DocumentId,
-} from "@/types/documentMutate";
-import { isDocumentSentinel } from "@/types/document";
 import { safeStringifyCell } from "@lib/jsonCell";
 import { detectBsonType } from "@lib/mongo/bsonTypes";
+import { isDocumentSentinel } from "@/types/document";
+import {
+  type DocumentId,
+  documentIdFromRow,
+  formatDocumentIdForMql,
+} from "@/types/documentMutate";
 
 /** Column shape the generator needs — structurally compatible with the
  *  `ColumnInfo` used by the RDB path, but intentionally narrower so callers

@@ -11,11 +11,11 @@
 //   - `parseWorkspaceLabel("launcher")` → `null`
 //
 // AC-361-05 KnownWindowLabel exhaustiveness 도 본 파일에서 type-check 한다.
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
-  parseWorkspaceLabel,
   formatWorkspaceLabel,
   type KnownWindowLabel,
+  parseWorkspaceLabel,
 } from "./window-label";
 
 describe("parseWorkspaceLabel — AC-361-04 round-trip", () => {

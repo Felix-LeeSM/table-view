@@ -11,15 +11,16 @@
 // - Schema prefix shows iff `schema` is non-empty.
 // - `BlobViewerDialog` mounts iff a BLOB cell was clicked; closing it via
 //   `onOpenChange(false)` clears the local state.
-import { useCallback, useMemo, useState } from "react";
-import type { MouseEvent, KeyboardEvent } from "react";
-import { useTranslation } from "react-i18next";
-import type { TableData } from "@/types/schema";
+
 import BlobViewerDialog from "@components/datagrid/BlobViewerDialog";
 import type { DataGridEditState } from "@components/datagrid/useDataGridEdit";
-import QuickLookShell from "./QuickLookShell";
+import type { KeyboardEvent, MouseEvent } from "react";
+import { useCallback, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
+import type { TableData } from "@/types/schema";
 import { FieldRow } from "./FieldRow";
 import { selectedRowIsDirty } from "./helpers";
+import QuickLookShell from "./QuickLookShell";
 
 export interface RdbQuickLookBodyProps {
   data: TableData;

@@ -1,7 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
-import FavoritesPanel from "./FavoritesPanel";
 import { useFavoritesStore } from "@stores/favoritesStore";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import FavoritesPanel from "./FavoritesPanel";
 
 // Mock lucide-react icons
 vi.mock("lucide-react", () => ({

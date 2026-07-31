@@ -1,4 +1,4 @@
-import { documentIdFromRow, type DocumentId } from "@/types/documentMutate";
+import { type DocumentId, documentIdFromRow } from "@/types/documentMutate";
 
 export function idOnlyFilter(
   filter: Record<string, unknown>,

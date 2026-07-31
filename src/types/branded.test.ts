@@ -1,17 +1,17 @@
-import { describe, expect, it } from "vitest";
-import { rawEntryKey } from "@stores/rawQueryGridEditStore";
-import { entryKey } from "@stores/dataGridEditStore";
-import { schemaGraphTableId } from "@/lib/schemaGraphSupport";
-import type { SchemaState } from "@stores/schemaStore";
 import type { ExecuteRdbSingleStatementRequest } from "@components/query/QueryTab/rdbQueryExecution";
 import type { InlineFkPopoverProps } from "@components/schema/CreateTableDialog/InlineFkPopover";
+import { entryKey } from "@stores/dataGridEditStore";
+import { rawEntryKey } from "@stores/rawQueryGridEditStore";
+import type { SchemaState } from "@stores/schemaStore";
 import type { QueryTab, TableTab } from "@stores/workspaceStore";
+import { describe, expect, it } from "vitest";
+import { schemaGraphTableId } from "@/lib/schemaGraphSupport";
 import type {
   ConnectionId,
   DatabaseName,
   SchemaName,
-  TableName,
   TabId,
+  TableName,
 } from "./branded";
 
 /**

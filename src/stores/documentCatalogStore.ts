@@ -1,14 +1,14 @@
-import { create, type StoreApi, type UseBoundStore } from "zustand";
-import type { ColumnInfo, IndexInfo } from "@/types/schema";
-import type { CollectionInfo, DatabaseInfo } from "@/types/document";
 import * as tauri from "@lib/tauri";
+import { create, type StoreApi, type UseBoundStore } from "zustand";
+import type { CollectionInfo, DatabaseInfo } from "@/types/document";
+import type { ColumnInfo, IndexInfo } from "@/types/schema";
 import {
-  setNested2,
-  setNested3,
-  withoutConnection,
   type ByCollection,
   type ByConn,
   type ByDb,
+  setNested2,
+  setNested3,
+  withoutConnection,
 } from "./documentStoreMaps";
 import { createRequestGuard } from "./requestGuard";
 

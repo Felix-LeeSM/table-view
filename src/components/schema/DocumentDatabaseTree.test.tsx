@@ -1,21 +1,21 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { setupTauriMock } from "@/test-utils/tauriMock";
-import { getAllTabsForConnection } from "@/stores/__tests__/workspaceStoreTestHelpers";
+import { useConnectionStore } from "@stores/connectionStore";
+import { type TableTab, useWorkspaceStore } from "@stores/workspaceStore";
 import {
   act,
+  fireEvent,
   render,
   screen,
-  fireEvent,
   waitFor,
 } from "@testing-library/react";
-import DocumentDatabaseTree from "./DocumentDatabaseTree";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { getAllTabsForConnection } from "@/stores/__tests__/workspaceStoreTestHelpers";
 import {
-  useDocumentStore,
   __resetDocumentStoreForTests,
+  useDocumentStore,
 } from "@/test-utils/documentStore";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import type { CollectionInfo } from "@/types/document";
-import { useWorkspaceStore, type TableTab } from "@stores/workspaceStore";
-import { useConnectionStore } from "@stores/connectionStore";
+import DocumentDatabaseTree from "./DocumentDatabaseTree";
 
 function collectionFixture(
   name: string,

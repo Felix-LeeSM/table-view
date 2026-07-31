@@ -1,21 +1,4 @@
 import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type CSSProperties,
-} from "react";
-import { useTranslation } from "react-i18next";
-import Decimal from "decimal.js";
-import { X, Save, Trash2, Maximize2, Pencil } from "lucide-react";
-import { useVirtualizer } from "@tanstack/react-virtual";
-import { Button } from "@components/ui/button";
-import { INLINE_EDIT_CELL_RING } from "@components/ui/inlineEdit";
-import { safeStringifyCell } from "@lib/jsonCell";
-import type { QueryResult } from "@/types/query";
-import { useColumnWidths } from "@/hooks/useColumnWidths";
-import {
   CellDetailDialog,
   cellToEditString,
   editKey,
@@ -25,7 +8,11 @@ import {
   useGridRoving,
   VIRTUALIZE_THRESHOLD,
 } from "@components/datagrid";
-import { getDefaultRem } from "@/lib/columnCategory";
+import {
+  ContextMenu,
+  type ContextMenuItem,
+} from "@components/shared/ContextMenu";
+import { Button } from "@components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -34,18 +21,31 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@components/ui/dialog";
-import {
-  ContextMenu,
-  type ContextMenuItem,
-} from "@components/shared/ContextMenu";
-import { ConfirmDestructiveDialog } from "@features/workspace";
 import ExecuteButton from "@components/ui/ExecuteButton";
+import { INLINE_EDIT_CELL_RING } from "@components/ui/inlineEdit";
+import { ConfirmDestructiveDialog } from "@features/workspace";
+import { safeStringifyCell } from "@lib/jsonCell";
 import {
   multiCellReadonlyReason,
   multiPkColumnIndices,
   type RawEditPlan,
 } from "@lib/sql/rawQuerySqlBuilder";
 import { useConnectionStore } from "@stores/connectionStore";
+import { useVirtualizer } from "@tanstack/react-virtual";
+import Decimal from "decimal.js";
+import { Maximize2, Pencil, Save, Trash2, X } from "lucide-react";
+import {
+  type CSSProperties,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { useTranslation } from "react-i18next";
+import { useColumnWidths } from "@/hooks/useColumnWidths";
+import { getDefaultRem } from "@/lib/columnCategory";
+import type { QueryResult } from "@/types/query";
 import PendingChangesTray from "./PendingChangesTray";
 import { useRawQueryGridEdit } from "./useRawQueryGridEdit";
 

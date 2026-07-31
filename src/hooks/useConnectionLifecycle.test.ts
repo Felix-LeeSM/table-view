@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { renderHook, act } from "@testing-library/react";
+import { act, renderHook } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // 2026-05-05 — AC-148-4 retire sprint. connect/disconnect 시 schema/document
 // cache가 함께 invalidate되어야 재진입 화면에서 stale schema가 "초기 DB"로

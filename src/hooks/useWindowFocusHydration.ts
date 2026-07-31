@@ -1,5 +1,5 @@
-import { useEffect } from "react";
 import { hydrateConnectionSession } from "@lib/runtime/connection/hydrateConnectionSession";
+import { useEffect } from "react";
 
 /**
  * Re-hydrate connection state from session-scoped localStorage on mount

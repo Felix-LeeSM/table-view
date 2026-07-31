@@ -1,8 +1,7 @@
-import type * as React from "react";
 import { AlertDialog as AlertDialogPrimitive } from "radix-ui";
-
-import { cn } from "@/lib/utils";
+import type * as React from "react";
 import type { DialogTone } from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
 
 // AlertDialogContent re-exposes the same tone tokens as DialogContent so
 // destructive/warning confirm dialogs (e.g. ConfirmDialog) can apply a single
@@ -168,14 +167,14 @@ function AlertDialogCancel({
 
 export {
   AlertDialog,
-  AlertDialogPortal,
-  AlertDialogOverlay,
-  AlertDialogTrigger,
-  AlertDialogContent,
-  AlertDialogHeader,
-  AlertDialogFooter,
-  AlertDialogTitle,
-  AlertDialogDescription,
   AlertDialogAction,
   AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogOverlay,
+  AlertDialogPortal,
+  AlertDialogTitle,
+  AlertDialogTrigger,
 };

@@ -1,9 +1,9 @@
+import { Button } from "@components/ui/button";
+import { cn } from "@lib/utils";
+import { type FavoriteScope, useFavoritesStore } from "@stores/favoritesStore";
+import { Globe, Link, Star, Trash2, X } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Star, Trash2, Globe, Link, X } from "lucide-react";
-import { cn } from "@lib/utils";
-import { useFavoritesStore, type FavoriteScope } from "@stores/favoritesStore";
-import { Button } from "@components/ui/button";
 
 interface FavoritesPanelProps {
   /** Active connection ID — used for "This Connection" filter and saving */

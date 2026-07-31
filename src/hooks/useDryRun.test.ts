@@ -8,9 +8,10 @@
 // best-effort. We test these via `renderHook` with a controllable
 // `executeQueryDryRun` mock; the dialog integration is covered in
 // `ConfirmDestructiveDialog.test.tsx`.
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { setupTauriMock } from "@/test-utils/tauriMock";
+
 import { act, renderHook, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 
 const executeQueryDryRunMock = vi.fn();
 const cancelQueryMock = vi.fn();

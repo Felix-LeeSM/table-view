@@ -1,8 +1,8 @@
-import { useCallback } from "react";
 import { disconnectFromDatabase } from "@lib/tauri";
 import { useDataGridEditStore } from "@stores/dataGridEditStore";
 import { useRawQueryGridEditStore } from "@stores/rawQueryGridEditStore";
 import { useWorkspaceStore } from "@stores/workspaceStore";
+import { useCallback } from "react";
 import { useConnectionLifecycle } from "./useConnectionLifecycle";
 
 /**

@@ -1,8 +1,8 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { act, renderHook } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { setupTauriMock } from "@/test-utils/tauriMock";
-import { renderHook, act } from "@testing-library/react";
-import { useDataGridEdit } from "./useDataGridEdit";
 import type { TableData } from "@/types/schema";
+import { useDataGridEdit } from "./useDataGridEdit";
 
 // Sprint 75 — validation gate tests. When a pending edit can't be coerced
 // to its column's data_type, it should be excluded from SQL preview and a

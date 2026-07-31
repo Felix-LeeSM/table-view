@@ -14,16 +14,17 @@
 //
 // `useQueryExecution` 직접 mount (renderHook) 가 가능한지는 다른 dry-run.test.ts
 // 의 패턴 (full QueryTab mount 회피) 을 따른다.
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { setupTauriMock } from "@/test-utils/tauriMock";
-import { seedWorkspace } from "@/stores/__tests__/workspaceStoreTestHelpers";
-import { act, renderHook, waitFor } from "@testing-library/react";
-import { useWorkspaceStore } from "@stores/workspaceStore";
+
 import { useConnectionStore } from "@stores/connectionStore";
 import { useSafeModeStore } from "@stores/safeModeStore";
-import { useQueryExecution } from "./useQueryExecution";
-import { makeQueryTab, makeConn } from "../__tests__/queryTabTestHelpers";
+import { useWorkspaceStore } from "@stores/workspaceStore";
+import { act, renderHook, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { seedWorkspace } from "@/stores/__tests__/workspaceStoreTestHelpers";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import type { QueryResult } from "@/types/query";
+import { makeConn, makeQueryTab } from "../__tests__/queryTabTestHelpers";
+import { useQueryExecution } from "./useQueryExecution";
 
 const executeQueryMock = vi.fn();
 const executeQueryDryRunMock = vi.fn();

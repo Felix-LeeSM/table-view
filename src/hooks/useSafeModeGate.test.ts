@@ -15,13 +15,14 @@
 // dialog. Cmd+Z undoes uncommitted grid edits only; committed safe
 // writes are not recoverable yet (Phase 5 compensating-commit undo
 // pending, #1126). date 2026-05-08.
-import { describe, it, expect, beforeEach } from "vitest";
-import { renderHook } from "@testing-library/react";
-import { useSafeModeGate } from "./useSafeModeGate";
-import { useSafeModeStore, SAFE_MODE_STORAGE_KEY } from "@stores/safeModeStore";
+
 import { useConnectionStore } from "@stores/connectionStore";
+import { SAFE_MODE_STORAGE_KEY, useSafeModeStore } from "@stores/safeModeStore";
+import { renderHook } from "@testing-library/react";
+import { beforeEach, describe, expect, it } from "vitest";
 import type { StatementAnalysis } from "@/lib/sql/sqlSafety";
 import type { ConnectionConfig } from "@/types/connection";
+import { useSafeModeGate } from "./useSafeModeGate";
 
 const DANGER: StatementAnalysis = {
   kind: "ddl-drop",

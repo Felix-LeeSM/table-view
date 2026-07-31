@@ -1,19 +1,19 @@
-import { useMemo, useState } from "react";
-import { useTranslation } from "react-i18next";
-import { Plus, X } from "lucide-react";
 import { Button } from "@components/ui/button";
 import FormDialog from "@components/ui/dialog/FormDialog";
 import { useSafeModeGate } from "@hooks/useSafeModeGate";
-import { getKvValue, executeKvCommand, setKvStringValue } from "@lib/tauri/kv";
+import { executeKvCommand, getKvValue, setKvStringValue } from "@lib/tauri/kv";
 import { useConnectionStore } from "@stores/connectionStore";
+import { Plus, X } from "lucide-react";
+import { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import ConfirmDestructiveDialog from "./ConfirmDestructiveDialog";
-import { analyzeKvMutationSafety } from "./kvMutationCommands";
 import {
   buildCreateKeyPlan,
   emptyCreateForm,
   KV_CREATE_TYPES,
   type KvCreatePlan,
 } from "./kvCreateKeyCommands";
+import { analyzeKvMutationSafety } from "./kvMutationCommands";
 
 interface KvNewKeyDialogProps {
   connectionId: string;

@@ -30,19 +30,19 @@
  * contract.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { setStateChangedHandlers } from "@lib/events/stateChanged";
+import { logger } from "@lib/logger";
 import {
-  listHistory,
   type HistoryListRow,
   type HistoryQueryModeFilter,
   type ListHistoryRequest,
+  listHistory,
 } from "@lib/tauri/history";
-import { setStateChangedHandlers } from "@lib/events/stateChanged";
-import { logger } from "@lib/logger";
 import {
   QUERY_HISTORY_LOCAL_CREATED_EVENT,
   type QueryHistoryLocalCreatedDetail,
 } from "@stores/queryHistoryStore";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 /**
  * 호출자가 hook 에 넘기는 filter — `list_history` IPC 의 인자 shape.

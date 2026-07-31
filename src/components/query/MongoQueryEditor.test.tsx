@@ -1,5 +1,13 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { createRef } from "react";
+import { CompletionContext } from "@codemirror/autocomplete";
+import { json as jsonLanguage } from "@codemirror/lang-json";
+import { language } from "@codemirror/language";
+import { EditorState } from "@codemirror/state";
+import { EditorView } from "@codemirror/view";
+import {
+  createMongoCompletionSource,
+  createMongoOperatorHighlight,
+  useMongoAutocomplete,
+} from "@features/completion";
 import {
   act,
   render,
@@ -7,21 +15,13 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react";
-import { EditorView } from "@codemirror/view";
-import { language } from "@codemirror/language";
-import { CompletionContext } from "@codemirror/autocomplete";
-import { EditorState } from "@codemirror/state";
-import { json as jsonLanguage } from "@codemirror/lang-json";
-import MongoQueryEditor from "./MongoQueryEditor";
+import { createRef } from "react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   expectUndoRevertsEdit,
   getKeymapBindings,
 } from "./__tests__/editorHistoryHelpers";
-import {
-  createMongoCompletionSource,
-  createMongoOperatorHighlight,
-  useMongoAutocomplete,
-} from "@features/completion";
+import MongoQueryEditor from "./MongoQueryEditor";
 
 /**
  * Sprint 139 — MongoQueryEditor unit tests.

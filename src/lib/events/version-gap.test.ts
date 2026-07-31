@@ -13,8 +13,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   dispatchStateChangedPayload,
   resetStateChangedRegistryForTests,
-  setStateChangedHandlers,
   type StateChangedPayload,
+  setStateChangedHandlers,
 } from "./stateChanged";
 
 const BASE = {

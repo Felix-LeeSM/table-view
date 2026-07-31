@@ -2,8 +2,8 @@
 // Locks the per-dialect quoting + escaping so the 5-way consolidation
 // (completion / ddl / rawQuery / duckdb) can route through this one helper
 // without changing any call site's output.
-import { describe, it, expect } from "vitest";
-import { sqlIdentifier, qualifiedTableName } from "./sqlLiteral";
+import { describe, expect, it } from "vitest";
+import { qualifiedTableName, sqlIdentifier } from "./sqlLiteral";
 
 describe("sqlIdentifier — canonical per-dialect quoting", () => {
   it("mysql wraps in backticks and doubles embedded backticks", () => {

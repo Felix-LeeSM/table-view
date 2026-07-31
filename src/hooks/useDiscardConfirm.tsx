@@ -1,6 +1,6 @@
+import ConfirmDialog from "@components/ui/dialog/ConfirmDialog";
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
-import ConfirmDialog from "@components/ui/dialog/ConfirmDialog";
 
 /**
  * #1101 — shared "Discard unsaved changes?" gate for the close paths that

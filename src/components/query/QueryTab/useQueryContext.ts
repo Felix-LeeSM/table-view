@@ -1,16 +1,16 @@
-import { useCallback, useMemo } from "react";
-import { useConnectionStore } from "@stores/connectionStore";
-import { resolveActiveDb, useWorkspaceStore } from "@stores/workspaceStore";
-import { useSchemaStore } from "@stores/schemaStore";
-import {
-  recordHistoryEntry,
-  type DocumentRecordHistoryQueryMode,
-} from "@lib/runtime/history/recordHistoryEntry";
 import { useSafeModeGate } from "@hooks/useSafeModeGate";
-import { getDataSourceProfile } from "@/types/dataSource";
-import { DATABASE_TYPE_LABELS } from "@/types/connection";
-import type { DatabaseType } from "@/types/connection";
+import {
+  type DocumentRecordHistoryQueryMode,
+  recordHistoryEntry,
+} from "@lib/runtime/history/recordHistoryEntry";
+import { useConnectionStore } from "@stores/connectionStore";
+import { useSchemaStore } from "@stores/schemaStore";
 import type { QueryTab } from "@stores/workspaceStore";
+import { resolveActiveDb, useWorkspaceStore } from "@stores/workspaceStore";
+import { useCallback, useMemo } from "react";
+import type { DatabaseType } from "@/types/connection";
+import { DATABASE_TYPE_LABELS } from "@/types/connection";
+import { getDataSourceProfile } from "@/types/dataSource";
 import type { RdbHistoryOverrides } from "./rdbQueryExecution";
 
 /**

@@ -1,22 +1,22 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
+  type ConnectionState,
+  useConnectionStore,
+} from "@stores/connectionStore";
+import {
+  act,
+  fireEvent,
   render,
   screen,
-  fireEvent,
   waitFor,
   within,
-  act,
 } from "@testing-library/react";
-import ConnectionGroup from "./ConnectionGroup";
-import {
-  useConnectionStore,
-  type ConnectionState,
-} from "@stores/connectionStore";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { resetStore } from "@/test-utils";
 import type {
   ConnectionConfig,
   ConnectionGroup as ConnectionGroupType,
 } from "@/types/connection";
+import ConnectionGroup from "./ConnectionGroup";
 
 // ---------------------------------------------------------------------------
 // Mutable drag state — tests can set this to simulate active drag

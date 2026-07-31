@@ -6,8 +6,9 @@
 // 본 테스트는 hook 의 4 가지 분기 (초기 / 동기 set / safety expiry /
 // 연속 호출 cancel) 를 hook 단위로 고정한다.
 // date 2026-05-02.
-import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
-import { renderHook, act } from "@testing-library/react";
+
+import { act, renderHook } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useCommitFlash } from "./useCommitFlash";
 
 beforeEach(() => {

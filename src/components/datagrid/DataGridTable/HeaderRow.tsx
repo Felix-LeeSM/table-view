@@ -1,7 +1,3 @@
-import { useRef, useState } from "react";
-import { useTranslation } from "react-i18next";
-import { Key } from "lucide-react";
-import type { SortInfo, TableData } from "@/types/schema";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -9,6 +5,10 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@components/ui/context-menu";
+import { Key } from "lucide-react";
+import { useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
+import type { SortInfo, TableData } from "@/types/schema";
 
 /**
  * Sprint 258 — `<thead>` 폐기, `<div role="rowgroup">` + sticky header

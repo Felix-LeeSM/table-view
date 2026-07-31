@@ -15,16 +15,16 @@
  *     workflow.
  */
 
-import { useEffect, useState } from "react";
-import { useTranslation } from "react-i18next";
-import { Search, X } from "lucide-react";
+import ClearHistoryButton from "@components/settings/ClearHistoryButton";
+import QuerySyntax from "@components/shared/QuerySyntax";
 import { Button } from "@components/ui/button";
 import { Input } from "@components/ui/input";
-import QuerySyntax from "@components/shared/QuerySyntax";
 import { useQueryHistory } from "@hooks/useQueryHistory";
+import { Search, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import QueryHistoryDetailModal from "./QueryHistoryDetailModal";
-import ClearHistoryButton from "@components/settings/ClearHistoryButton";
-import { truncateSql, formatRelativeTime } from "./queryLogFormat";
+import { formatRelativeTime, truncateSql } from "./queryLogFormat";
 
 export default function QueryLog() {
   const { t } = useTranslation("query");

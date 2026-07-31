@@ -11,7 +11,7 @@
  * Author intent (2026-05-12): vertical slice. Each behavior is a separate
  * RED→GREEN cycle.
  */
-import { describe, it, expect, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { useWorkspaceStore } from "./workspaceStore";
 
 describe("workspaceStore — sidebar", () => {

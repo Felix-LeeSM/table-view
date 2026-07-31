@@ -1,13 +1,13 @@
-import { create } from "zustand";
+import i18n from "@lib/i18n";
 import { logger } from "@lib/logger";
 import { toast } from "@lib/runtime/toast";
-import i18n from "@lib/i18n";
-import { getCurrentWindowLabel, parseWorkspaceLabel } from "@lib/window-label";
 import {
   listTableActivity,
-  persistTableActivity,
   type PersistTableActivityPayload,
+  persistTableActivity,
 } from "@lib/tauri/tableActivity";
+import { getCurrentWindowLabel, parseWorkspaceLabel } from "@lib/window-label";
+import { create } from "zustand";
 
 /**
  * Table-level pin + recent-usage store (#1218). Unlike `favoritesStore`

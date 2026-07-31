@@ -16,25 +16,25 @@
 //   AC-156-05  Single-click does NOT trigger window swap
 //   AC-156-06  Sequential activation (A → B): B focused, A's stale tabs cleared
 
-import {
-  describe,
-  it,
-  expect,
-  vi,
-  beforeEach,
-  afterEach,
-  type Mock,
-} from "vitest";
-import type { ConnectionId, TabId } from "@/types/branded";
-import { setupTauriMock } from "@/test-utils/tauriMock";
-import {
-  seedWorkspace,
-  getTestWorkspace,
-} from "@/stores/__tests__/workspaceStoreTestHelpers";
-import { render, screen, fireEvent, act } from "@testing-library/react";
-import HomePage from "@/pages/HomePage";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useWorkspaceStore } from "@stores/workspaceStore";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  type Mock,
+  vi,
+} from "vitest";
+import HomePage from "@/pages/HomePage";
+import {
+  getTestWorkspace,
+  seedWorkspace,
+} from "@/stores/__tests__/workspaceStoreTestHelpers";
+import { setupTauriMock } from "@/test-utils/tauriMock";
+import type { ConnectionId, TabId } from "@/types/branded";
 import type { ConnectionConfig } from "@/types/connection";
 
 // ── Mocks ──────────────────────────────────────────────────────────────────

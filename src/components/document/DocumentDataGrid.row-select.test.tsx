@@ -2,8 +2,6 @@
 // 셀에서 Space 로 행을 선택하면 그 행이 aria-selected="true" 로 반영된다. row
 // aria-selected 노출은 이미 존재 — Space 키 경로만 추가한다. (2026-07-03)
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { setupTauriMock } from "@/test-utils/tauriMock";
 import {
   act,
   fireEvent,
@@ -11,9 +9,11 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react";
-import DocumentDataGrid from "./DocumentDataGrid";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { __resetDocumentStoreForTests } from "@/test-utils/documentStore";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import type { DocumentQueryResult } from "@/types/document";
+import DocumentDataGrid from "./DocumentDataGrid";
 
 const findMock =
   vi.fn<

@@ -1,14 +1,7 @@
 import type { VirtualItem, Virtualizer } from "@tanstack/react-virtual";
-import type { TableInfo, ViewInfo, FunctionInfo } from "@/types/schema";
 import type { FileAnalyticsSourceMetadata } from "@/types/fileAnalytics";
+import type { FunctionInfo, TableInfo, ViewInfo } from "@/types/schema";
 import type { RdbTreeShape } from "../treeShape";
-import {
-  CATEGORIES,
-  nodeIdToString,
-  type Category,
-  type CategoryKey,
-  type VisibleRow,
-} from "./treeRows";
 import {
   renderCategoryRow,
   renderEmptyRow,
@@ -19,6 +12,13 @@ import {
   renderVisibleRow,
   type SchemaTreeRowsContext,
 } from "./rows";
+import {
+  CATEGORIES,
+  type Category,
+  type CategoryKey,
+  nodeIdToString,
+  type VisibleRow,
+} from "./treeRows";
 
 /**
  * Eager-nested vs virtualized branch dispatch. Both call into

@@ -3,13 +3,13 @@
 // Sprint 192 의 lib pure 책임을 격리해 회귀 가드 — useMigrationExport
 // hook 이나 SchemaTree 진입점이 변해도 본 lib 의 출력은 안정.
 // date 2026-05-02.
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
+import type { ColumnInfo, ConstraintInfo, IndexInfo } from "@/types/schema";
 import {
-  generateMigrationDDL,
   buildSequenceResets,
   type DdlExportTable,
+  generateMigrationDDL,
 } from "./ddlGenerator";
-import type { ColumnInfo, IndexInfo, ConstraintInfo } from "@/types/schema";
 
 const FIXED_DATE = new Date("2026-05-02T12:00:00.000Z");
 

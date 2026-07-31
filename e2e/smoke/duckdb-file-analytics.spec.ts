@@ -1,7 +1,7 @@
-import { $, browser, expect } from "@wdio/globals";
 import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
+import { $, browser, expect } from "@wdio/globals";
 import {
   createDuckdbConnection,
   openConnection,

@@ -1,9 +1,9 @@
-import { ensureSyntaxTree, syntaxTree } from "@codemirror/language";
 import type {
   CompletionContext,
   CompletionResult,
 } from "@codemirror/autocomplete";
 import type { SQLNamespace } from "@codemirror/lang-sql";
+import { ensureSyntaxTree, syntaxTree } from "@codemirror/language";
 
 /**
  * Auxiliary completion source for `UPDATE` / `INSERT INTO` / `DELETE FROM`

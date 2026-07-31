@@ -12,7 +12,7 @@
  */
 import { useTranslation } from "react-i18next";
 import type { ConnectionDraft } from "../../model";
-import { fieldValidationProps, type ConnFieldKey } from "./fieldValidation";
+import { type ConnFieldKey, fieldValidationProps } from "./fieldValidation";
 import TlsSkipVerifyToggle from "./TlsSkipVerifyToggle";
 
 export interface MongoFormFieldsProps {

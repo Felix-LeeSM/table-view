@@ -1,15 +1,16 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { setupTauriMock } from "@/test-utils/tauriMock";
+import { useConnectionStore } from "@stores/connectionStore";
 import {
+  act,
+  fireEvent,
   render,
   screen,
-  fireEvent,
-  act,
   waitFor,
 } from "@testing-library/react";
-import ImportExportDialog from "./ImportExportDialog";
-import { useConnectionStore } from "@stores/connectionStore";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import type { ConnectionConfig } from "@/types/connection";
+import ImportExportDialog from "./ImportExportDialog";
+
 beforeEach(() => {
   setupTauriMock({
     exportConnections: vi.fn(),

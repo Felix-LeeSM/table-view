@@ -1,10 +1,9 @@
-import type * as React from "react";
-import { XIcon, Loader2, CheckCircle, AlertCircle } from "lucide-react";
+import { AlertCircle, CheckCircle, Loader2, XIcon } from "lucide-react";
 import { Dialog as DialogPrimitive } from "radix-ui";
+import type * as React from "react";
 import { useTranslation } from "react-i18next";
-
-import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 function Dialog({
   ...props

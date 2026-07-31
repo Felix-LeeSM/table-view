@@ -27,28 +27,30 @@
  *
  * Each `it(...)` name embeds the AC label (AC-141-N) for grep-ability.
  */
+
+import { WorkspacePage } from "@features/workspace";
+import * as windowControls from "@lib/window-controls";
+import { useConnectionStore } from "@stores/connectionStore";
+import { useWorkspaceStore } from "@stores/workspaceStore";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import {
-  describe,
-  it,
-  expect,
-  vi,
-  beforeEach,
   afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
   type Mock,
+  vi,
 } from "vitest";
+import HomePage from "@/pages/HomePage";
 import { setupTauriMock } from "@/test-utils/tauriMock";
+import type { ConnectionConfig } from "@/types/connection";
 // Sprint 155 — `tauri.conf.json` is the source of truth for AC-141-1's
 // fixed launcher / resizable workspace dimensions. Vite's JSON import gives
 // us a synchronous, type-friendly read without dragging `@types/node` into
 // the strict tsconfig just for this assertion.
 import tauriConf from "../../src-tauri/tauri.conf.json";
-import { render, screen, fireEvent, act } from "@testing-library/react";
-import HomePage from "@/pages/HomePage";
-import { WorkspacePage } from "@features/workspace";
-import { useConnectionStore } from "@stores/connectionStore";
-import { useWorkspaceStore } from "@stores/workspaceStore";
-import * as windowControls from "@lib/window-controls";
-import type { ConnectionConfig } from "@/types/connection";
+
 beforeEach(() => {
   setupTauriMock({
     connectToDatabase: vi.fn().mockResolvedValue(undefined),

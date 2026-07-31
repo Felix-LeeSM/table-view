@@ -9,12 +9,12 @@
 //
 // Document grid 는 column reorder 없음 → visual order == data order.
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { setupTauriMock } from "@/test-utils/tauriMock";
 import { render, screen, waitFor, within } from "@testing-library/react";
-import DocumentDataGrid from "./DocumentDataGrid";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { __resetDocumentStoreForTests } from "@/test-utils/documentStore";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import type { DocumentQueryResult } from "@/types/document";
+import DocumentDataGrid from "./DocumentDataGrid";
 
 const findMock =
   vi.fn<

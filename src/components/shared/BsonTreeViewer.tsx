@@ -1,17 +1,17 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronRight, ChevronDown, Copy } from "lucide-react";
-import { useTranslation } from "react-i18next";
-import { useVirtualizer } from "@tanstack/react-virtual";
-import { cn } from "@lib/utils";
-import { safeStringifyCell } from "@lib/jsonCell";
 import {
-  useTreeRoving,
   type TreeRovingRow,
+  useTreeRoving,
 } from "@components/shared/tree/useTreeRoving";
 import {
   TREE_ROW_HEIGHT_ESTIMATE,
   TREE_VIRTUALIZE_THRESHOLD,
 } from "@components/shared/tree/virtualize";
+import { safeStringifyCell } from "@lib/jsonCell";
+import { cn } from "@lib/utils";
+import { useVirtualizer } from "@tanstack/react-virtual";
+import { ChevronDown, ChevronRight, Copy } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 // ── BSON wrapper whitelist ──────────────────────────────────────────────
 

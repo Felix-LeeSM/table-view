@@ -7,11 +7,12 @@
 //
 // 2026-05-12 — Sprint 263. hook signature 가 `(connId, db)` 로 확장됐고
 // schemaStore 가 `(connId, db, schema)` 로 nested 됐다.
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { setupTauriMock } from "@/test-utils/tauriMock";
-import { renderHook, act, waitFor } from "@testing-library/react";
-import { useSchemaCache } from "./useSchemaCache";
+
 import { useSchemaStore } from "@stores/schemaStore";
+import { act, renderHook, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
+import { useSchemaCache } from "./useSchemaCache";
 
 // `@lib/runtime/toast` is the canonical sink for hook failures (Sprint 191
 // AC-191-03). The store mocks below already use vi.fn() for tauri

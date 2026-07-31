@@ -1,13 +1,13 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, within, act } from "@testing-library/react";
-import ConnectionItem from "./ConnectionItem";
-import {
-  useConnectionStore,
-  type ConnectionState,
-} from "@stores/connectionStore";
-import { resetStore } from "@/test-utils";
 import { toast } from "@lib/runtime/toast";
+import {
+  type ConnectionState,
+  useConnectionStore,
+} from "@stores/connectionStore";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { resetStore } from "@/test-utils";
 import type { ConnectionConfig } from "@/types/connection";
+import ConnectionItem from "./ConnectionItem";
 
 // Narrow the mock to the toast lib boundary so we can assert the IPC-failure
 // feedback path without touching the toast store internals.

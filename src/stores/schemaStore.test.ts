@@ -1,7 +1,8 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { setupTauriMock } from "@/test-utils/tauriMock";
 import type { DatabaseName, SchemaName, TableName } from "@/types/branded";
 import { useSchemaStore } from "./schemaStore";
+
 beforeEach(() => {
   setupTauriMock({
     listDatabases: vi.fn(() =>

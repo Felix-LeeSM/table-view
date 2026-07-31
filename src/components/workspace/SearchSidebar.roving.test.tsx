@@ -1,7 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useWorkspaceStore } from "@stores/workspaceStore";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getAllTabsForConnection } from "@/stores/__tests__/workspaceStoreTestHelpers";
 import type { SearchCatalogSummary } from "@/types/search";
 import SearchSidebar from "./SearchSidebar";

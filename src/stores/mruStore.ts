@@ -1,10 +1,10 @@
-import { create } from "zustand";
-import { attachZustandIpcBridge } from "@lib/zustand-ipc-bridge";
-import { getCurrentWindowLabel } from "@lib/window-label";
+import i18n from "@lib/i18n";
 import { logger } from "@lib/logger";
 import { toast } from "@lib/runtime/toast";
-import i18n from "@lib/i18n";
-import { clearMru, persistMru, type PersistMruPayload } from "@lib/tauri/mru";
+import { clearMru, type PersistMruPayload, persistMru } from "@lib/tauri/mru";
+import { getCurrentWindowLabel } from "@lib/window-label";
+import { attachZustandIpcBridge } from "@lib/zustand-ipc-bridge";
+import { create } from "zustand";
 
 /**
  * MRU entry. `lastUsed` is a `Date.now()` epoch ms so the launcher's

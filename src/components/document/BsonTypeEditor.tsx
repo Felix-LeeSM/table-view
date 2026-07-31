@@ -1,10 +1,10 @@
-import { useState } from "react";
-import { useTranslation } from "react-i18next";
 import {
   type BsonType,
   coerceToEjson,
   ejsonToEditableString,
 } from "@lib/mongo/bsonTypes";
+import { useState } from "react";
+import { useTranslation } from "react-i18next";
 
 /**
  * Sprint 323 — Slice G.1: type-aware inline editor for BSON wrappers.

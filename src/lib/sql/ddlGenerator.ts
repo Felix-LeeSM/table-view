@@ -9,8 +9,8 @@
 // Out of scope: views, functions, sequences, generated columns. The
 // `column.data_type` and DEFAULT values are emitted verbatim from the
 // backend — no normalisation.
-import type { ColumnInfo, IndexInfo, ConstraintInfo } from "@/types/schema";
-import { sqlIdentifier, type SqlDialect } from "./sqlLiteral";
+import type { ColumnInfo, ConstraintInfo, IndexInfo } from "@/types/schema";
+import { type SqlDialect, sqlIdentifier } from "./sqlLiteral";
 
 export type DdlDialect =
   | "postgresql"

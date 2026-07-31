@@ -1,5 +1,5 @@
-import { useTranslation } from "react-i18next";
 import { Skeleton } from "@components/ui/skeleton";
+import { useTranslation } from "react-i18next";
 
 // Varying widths so the placeholder reads as a list of tree rows rather than a
 // solid block. Full class strings keep them scannable by Tailwind's JIT.

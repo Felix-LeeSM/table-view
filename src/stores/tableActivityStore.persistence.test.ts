@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // #1218 persist round-trip + #1091 hydrate-crash guard.
 //
@@ -18,16 +18,16 @@ vi.mock("@lib/tauri/tableActivity", () => ({
 }));
 
 import {
-  persistTableActivity,
   listTableActivity,
+  persistTableActivity,
 } from "@lib/tauri/tableActivity";
 import { getCurrentWindowLabel } from "@lib/window-label";
 import {
-  useTableActivityStore,
   __resetTableActivityStoreForTests,
+  type PersistTableActivityPayload,
   selectPinnedTables,
   selectRecentTables,
-  type PersistTableActivityPayload,
+  useTableActivityStore,
 } from "./tableActivityStore";
 
 const persistMock = vi.mocked(persistTableActivity);

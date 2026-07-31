@@ -1,9 +1,5 @@
-import { useEffect, useId, useRef, useState } from "react";
-import { useTranslation } from "react-i18next";
-import { Plus, Trash2, X } from "lucide-react";
 import { Button } from "@components/ui/button";
 import { Input } from "@components/ui/input";
-import { ToggleGroup, ToggleGroupItem } from "@components/ui/toggle-group";
 import {
   Select,
   SelectContent,
@@ -11,6 +7,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@components/ui/select";
+import { ToggleGroup, ToggleGroupItem } from "@components/ui/toggle-group";
+import { Plus, Trash2, X } from "lucide-react";
+import { useEffect, useId, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import type {
   ColumnInfo,
   FilterCondition,

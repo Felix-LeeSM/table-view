@@ -6,10 +6,10 @@
 // happy path + invalid input 케이스를 회귀 가드. F.2 의 plain-string
 // commit 흐름과 분리된 path 임.
 
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
-  detectBsonType,
   coerceToEjson,
+  detectBsonType,
   ejsonToEditableString,
 } from "./bsonTypes";
 

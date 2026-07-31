@@ -19,11 +19,11 @@
  *    and the initial launcher bundle never pull the updater IPC glue.
  */
 
+import { logger } from "@lib/logger";
+import { toast } from "@lib/runtime/toast";
 import { isTauri } from "@tauri-apps/api/core";
 import type { DownloadEvent } from "@tauri-apps/plugin-updater";
 import i18n from "i18next";
-import { logger } from "@lib/logger";
-import { toast } from "@lib/runtime/toast";
 
 /** Single toast slot reused across the update lifecycle so progress → result
  *  replaces in place (toast store gives caller-supplied ids update semantics)

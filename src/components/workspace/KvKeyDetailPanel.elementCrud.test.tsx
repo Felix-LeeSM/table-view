@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { useConnectionStore } from "@stores/connectionStore";
+import { useSafeModeStore } from "@stores/safeModeStore";
 import {
   fireEvent,
   render,
@@ -6,11 +7,10 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
-import KvKeyDetailPanel from "./KvKeyDetailPanel";
-import { useConnectionStore } from "@stores/connectionStore";
-import { useSafeModeStore } from "@stores/safeModeStore";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConnectionConfig } from "@/types/connection";
 import type { KvValueEnvelope } from "@/types/kv";
+import KvKeyDetailPanel from "./KvKeyDetailPanel";
 
 // Purpose: #1466 element-level hash/list/set/zSet CRUD. New verbs (HDEL, LPUSH,
 // LSET, LREM, SREM, ZREM) ride the same preview -> confirm -> executeKvCommand

@@ -1,28 +1,23 @@
-import { runMongoCommand } from "@lib/tauri";
+import {
+  type MongoWriteDispatchers,
+  type MongoWriteRunnerRef,
+  type ParsedMongoshCall,
+  parseMongoshExpression,
+} from "@features/query";
+import type { SafeModeGate } from "@hooks/useSafeModeGate";
 import {
   analyzeMongoPipeline,
   analyzeMongoRunCommand,
 } from "@lib/mongo/mongoSafety";
-import type { SafeModeGate } from "@hooks/useSafeModeGate";
-import type { QueryTab } from "@stores/workspaceStore";
-import type { DocumentRecordHistoryQueryMode } from "@lib/runtime/history/recordHistoryEntry";
-import type { FindBody } from "@/types/document";
-import type { QueryResult, QueryState } from "@/types/query";
-import {
-  parseMongoshExpression,
-  type MongoWriteDispatchers,
-  type MongoWriteRunnerRef,
-  type ParsedMongoshCall,
-} from "@features/query";
 import {
   classifyMongoStatement,
   extractAdminCommandBody,
 } from "@lib/mongo/runCommandParser";
-import {
-  applyAggregateCursorChain,
-  applyFindCursorChain,
-  isRecord,
-} from "./queryHelpers";
+import type { DocumentRecordHistoryQueryMode } from "@lib/runtime/history/recordHistoryEntry";
+import { runMongoCommand } from "@lib/tauri";
+import type { QueryTab } from "@stores/workspaceStore";
+import type { FindBody } from "@/types/document";
+import type { QueryResult, QueryState } from "@/types/query";
 import {
   handleMongoRunnerError,
   runDocumentCount,
@@ -32,6 +27,11 @@ import {
   runDocumentFindOne,
 } from "./mongoDocumentResults";
 import { dispatchMongoWriteCall } from "./mongoWriteDispatch";
+import {
+  applyAggregateCursorChain,
+  applyFindCursorChain,
+  isRecord,
+} from "./queryHelpers";
 
 type MongoHistoryStatus = "success" | "error" | "cancelled";
 

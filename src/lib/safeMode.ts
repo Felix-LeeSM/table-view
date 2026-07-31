@@ -1,5 +1,5 @@
-import type { StatementAnalysis } from "@/lib/sql/sqlSafety";
 import type { EnvironmentTag } from "@/features/connection/model";
+import type { StatementAnalysis } from "@/lib/sql/sqlSafety";
 
 /**
  * Paradigm-agnostic Safe Mode decision matrix as a pure function.

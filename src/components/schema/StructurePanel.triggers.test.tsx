@@ -20,10 +20,11 @@
 //   - After Create / Drop, `refreshTableTriggers` is invoked so the
 //     schemaStore cache + the panel list both refresh.
 //   - Closing each dialog clears its local state slot.
-import { describe, it, expect, beforeEach, vi } from "vitest";
-import { screen, act, fireEvent } from "@testing-library/react";
-import { useSchemaStore } from "@stores/schemaStore";
+
 import { useConnectionStore } from "@stores/connectionStore";
+import { useSchemaStore } from "@stores/schemaStore";
+import { act, fireEvent, screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   MOCK_TRIGGERS,
   mockGetTableTriggers,

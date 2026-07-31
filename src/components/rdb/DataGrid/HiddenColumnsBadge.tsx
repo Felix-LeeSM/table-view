@@ -1,5 +1,5 @@
-import { useTranslation } from "react-i18next";
 import { Button } from "@components/ui/button";
+import { useTranslation } from "react-i18next";
 
 interface HiddenColumnsBadgeProps {
   hiddenCount: number;

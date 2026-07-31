@@ -12,14 +12,14 @@
 // 전이(strict→warn / warn→off / off→strict)와 reversibility(full-cycle
 // 복귀)는 `safeModeStore.setSafeMode.test.ts` 의 full-cycle SOT 로 통합됨.
 // 이 파일은 default 앵커(#1113)와 setMode 기본 계약만 남긴다.
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
 }));
 
 import { invoke } from "@tauri-apps/api/core";
-import { useSafeModeStore, SAFE_MODE_STORAGE_KEY } from "./safeModeStore";
+import { SAFE_MODE_STORAGE_KEY, useSafeModeStore } from "./safeModeStore";
 
 const invokeMock = vi.mocked(invoke);
 

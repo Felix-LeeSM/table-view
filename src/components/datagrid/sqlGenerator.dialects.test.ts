@@ -1,6 +1,6 @@
-import { describe, it, expect } from "vitest";
-import { generateSql, type CoerceError } from "./sqlGenerator";
+import { describe, expect, it } from "vitest";
 import type { TableData } from "@/types/schema";
+import { type CoerceError, generateSql } from "./sqlGenerator";
 
 describe("generateSql — MSSQL row edit SQL", () => {
   const MSSQL_DATA: TableData = {

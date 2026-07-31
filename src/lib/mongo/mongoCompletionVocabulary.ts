@@ -1,12 +1,12 @@
 import {
-  getMongoshCompletionVocabulary,
-  type MongoshCompletionVocabulary,
-} from "./mongoshAst/index";
-import {
   MONGO_ADMIN_COMMANDS,
   MONGOSH_DB_LEVEL_METHODS,
   MONGOSH_DB_METHODS,
 } from "./mongoShellCompletionVocabulary";
+import {
+  getMongoshCompletionVocabulary,
+  type MongoshCompletionVocabulary,
+} from "./mongoshAst/index";
 
 /**
  * MongoDB MQL completion vocabulary.

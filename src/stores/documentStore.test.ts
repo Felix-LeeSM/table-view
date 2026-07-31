@@ -3,12 +3,12 @@
 // stale-guard / clearConnection semantics preserved; assertions migrated
 // to the nested form. Aggregate results moved to a dedicated axis
 // (`aggregateResults`) so find / aggregate caches can never alias.
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { setupTauriMock } from "@/test-utils/tauriMock";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  useDocumentStore,
   __resetDocumentStoreForTests,
+  useDocumentStore,
 } from "@/test-utils/documentStore";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import type { CollectionInfo } from "@/types/document";
 import type { IndexInfo } from "@/types/schema";
 

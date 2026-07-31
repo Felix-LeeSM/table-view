@@ -1,10 +1,10 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { setupTauriMock } from "@/test-utils/tauriMock";
-import type { SchemaGraphIntelligenceSelectors } from "@/lib/schemaGraphSelectors";
-import type { SchemaGraph } from "@/types/schemaGraph";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useSchemaStore } from "@stores/schemaStore";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { SchemaGraphIntelligenceSelectors } from "@/lib/schemaGraphSelectors";
+import { setupTauriMock } from "@/test-utils/tauriMock";
+import type { SchemaGraph } from "@/types/schemaGraph";
 
 vi.mock("./SchemaErdRenderer", () => ({
   default: ({

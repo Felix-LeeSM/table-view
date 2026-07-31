@@ -2,13 +2,13 @@
 // AC-258-03: column 별 default rem * rootFontSize → px (컨테이너 fit 폐기).
 // 작성일 2026-05-10, 갱신 2026-05-11 (sprint-258 (c) 산식 단순화).
 
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import {
+  type ColumnCategory,
   computeInitialWidths,
   getDefaultRem,
   getTextAlign,
-  type ColumnCategory,
 } from "./columnCategory";
 
 describe("getDefaultRem", () => {

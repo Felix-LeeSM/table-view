@@ -30,24 +30,24 @@
  *    context is never sent on any channel).
  */
 import {
-  describe,
-  it,
-  expect,
-  vi,
-  beforeEach,
   afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
   type Mock,
+  vi,
 } from "vitest";
-import type { ConnectionId, TabId } from "@/types/branded";
+import {
+  getTestWorkspace,
+  seedWorkspace,
+} from "@/stores/__tests__/workspaceStoreTestHelpers";
 import {
   doMockTauriModule,
   doUnmockTauriModule,
   setupTauriMock,
 } from "@/test-utils/tauriMock";
-import {
-  seedWorkspace,
-  getTestWorkspace,
-} from "@/stores/__tests__/workspaceStoreTestHelpers";
+import type { ConnectionId, TabId } from "@/types/branded";
 
 // ---------------------------------------------------------------------------
 // Shared in-process event bus mock for `@tauri-apps/api/event`.
@@ -147,14 +147,6 @@ vi.mock("@lib/window-label", async () => {
   };
 });
 
-// Import AFTER all mocks are registered.
-import { emit } from "@tauri-apps/api/event";
-import { invoke } from "@tauri-apps/api/core";
-import { useWorkspaceStore } from "@stores/workspaceStore";
-import { useMruStore } from "@stores/mruStore";
-import { useThemeStore } from "@stores/themeStore";
-import { useFavoritesStore } from "@stores/favoritesStore";
-import { useSafeModeStore } from "@stores/safeModeStore";
 import {
   dispatchStateChangedPayload,
   resetStateChangedRegistryForTests,
@@ -164,6 +156,14 @@ import {
   registerSettingReceiver,
   resetSettingReceiverForTests,
 } from "@lib/runtime/settings/settingsReceiver";
+import { useFavoritesStore } from "@stores/favoritesStore";
+import { useMruStore } from "@stores/mruStore";
+import { useSafeModeStore } from "@stores/safeModeStore";
+import { useThemeStore } from "@stores/themeStore";
+import { useWorkspaceStore } from "@stores/workspaceStore";
+import { invoke } from "@tauri-apps/api/core";
+// Import AFTER all mocks are registered.
+import { emit } from "@tauri-apps/api/event";
 
 const mockedEmit = emit as unknown as Mock;
 const mockedInvoke = invoke as unknown as Mock;

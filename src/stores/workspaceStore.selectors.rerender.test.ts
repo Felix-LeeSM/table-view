@@ -31,6 +31,10 @@ vi.mock("@lib/window-label", async () => {
   };
 });
 
+import {
+  resetFakeWindowConnectionId,
+  setFakeWindowConnectionId,
+} from "./__tests__/fakeWindowConnectionId";
 import { useConnectionStore } from "./connectionStore";
 import {
   __resetCountersForTests,
@@ -42,10 +46,6 @@ import {
   useDirtyTabIds,
   useWorkspaceStore,
 } from "./workspaceStore";
-import {
-  resetFakeWindowConnectionId,
-  setFakeWindowConnectionId,
-} from "./__tests__/fakeWindowConnectionId";
 
 const CONN = "conn1";
 const DB = "dbA";

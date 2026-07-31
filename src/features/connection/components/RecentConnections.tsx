@@ -1,7 +1,7 @@
-import { useTranslation } from "react-i18next";
 import { DB_TYPE_META } from "@lib/db-meta";
 import { useRecentConnections } from "@lib/runtime/connection/useRecentConnections";
-import { Database, Clock, X } from "lucide-react";
+import { Clock, Database, X } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 /**
  * Sprint 167 — format a `Date.now()` epoch ms timestamp as a short relative

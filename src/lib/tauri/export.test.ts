@@ -12,8 +12,8 @@ import {
   EXPORT_IPC_CHUNK_ROWS,
   exportGridRows,
   exportSchemaDump,
-  writeTextFileExport,
   type SchemaDumpOptions,
+  writeTextFileExport,
 } from "./export";
 
 describe("export Tauri wrappers", () => {

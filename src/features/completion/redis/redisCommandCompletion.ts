@@ -1,7 +1,7 @@
 import {
-  snippetCompletion,
   type CompletionResult,
   type CompletionSource,
+  snippetCompletion,
 } from "@codemirror/autocomplete";
 import type { KvKeyType } from "@/types/kv";
 

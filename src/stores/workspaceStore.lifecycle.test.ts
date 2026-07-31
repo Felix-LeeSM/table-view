@@ -11,9 +11,9 @@
  * Author intent (2026-05-12): vertical slice. One test → minimal store
  * code → next test. No batch test authoring.
  */
-import { describe, it, expect, beforeEach } from "vitest";
-import { useDataGridEditStore } from "./dataGridEditStore";
+import { beforeEach, describe, expect, it } from "vitest";
 import { makeEntryKey } from "@/test-utils/brandedKeys";
+import { useDataGridEditStore } from "./dataGridEditStore";
 import { useWorkspaceStore } from "./workspaceStore";
 import type { QueryTab, TableTabInit } from "./workspaceStore/types";
 

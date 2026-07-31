@@ -1,8 +1,8 @@
-import { useCallback } from "react";
 import { useConnectionStore } from "@stores/connectionStore";
-import { useSchemaStore } from "@stores/schemaStore";
 import { useDocumentCatalogStore } from "@stores/documentCatalogStore";
 import { useDocumentQueryStore } from "@stores/documentQueryStore";
+import { useSchemaStore } from "@stores/schemaStore";
+import { useCallback } from "react";
 
 /**
  * connect 시 schema/document cache를 함께 invalidate. connectionStore action을

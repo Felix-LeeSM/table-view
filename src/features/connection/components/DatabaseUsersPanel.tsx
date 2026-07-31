@@ -4,15 +4,15 @@
 // step (breadth-first). No secret column crosses the wire — the backend
 // sources pg_roles, never pg_authid/pg_shadow.
 
+import { Loader2, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
-  listDatabaseUsers,
   type DatabaseUserRow,
+  listDatabaseUsers,
 } from "@/lib/api/databaseUsers";
-import { DATABASE_TYPE_LABELS, paradigmOf, type DatabaseType } from "../model";
+import { DATABASE_TYPE_LABELS, type DatabaseType, paradigmOf } from "../model";
 import { PanelLoadingSkeleton } from "./PanelLoadingSkeleton";
 
 export interface DatabaseUsersPanelProps {

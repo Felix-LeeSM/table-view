@@ -12,11 +12,11 @@
 import { useConnectionStore } from "@stores/connectionStore";
 // #1447 — sql-free active-tab read (only `connectionId` is consumed).
 import { useActiveTabSansSql } from "@stores/workspaceStore";
-import { getDataSourceProfile } from "@/types/dataSource";
 import type {
   ConnectionConfig,
   DatabaseType,
 } from "@/features/connection/model";
+import { getDataSourceProfile } from "@/types/dataSource";
 
 export interface OperationsConnection {
   connectionId: string;

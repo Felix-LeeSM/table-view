@@ -1,10 +1,10 @@
-import { useEffect, useRef } from "react";
-import { useConnectionStore } from "@stores/connectionStore";
 import { useCurrentWindowConnectionId } from "@hooks/useCurrentWindowConnectionId";
-import { hasConnectionCapability } from "@/types/dataSource";
+import { useConnectionStore } from "@stores/connectionStore";
+import { useEffect, useRef } from "react";
 import { listDatabases } from "@/lib/api/listDatabases";
 import { switchActiveDb } from "@/lib/api/switchActiveDb";
 import { logger } from "@/lib/logger";
+import { hasConnectionCapability } from "@/types/dataSource";
 
 /**
  * Heal a connected switch-capable RDB window that has no active database.

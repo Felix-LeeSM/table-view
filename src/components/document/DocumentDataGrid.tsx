@@ -1,47 +1,47 @@
 import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type CSSProperties,
-} from "react";
-import { useDocumentCatalogStore } from "@stores/documentCatalogStore";
-import { useConnectionStore } from "@stores/connectionStore";
-import { supportsBulkWrite, supportsDocumentEditing } from "@/types/dataSource";
-import { recordHistoryEntry } from "@lib/runtime/history/recordHistoryEntry";
-import { isDocumentSentinel } from "@/types/document";
-import { safeStringifyCell } from "@lib/jsonCell";
-import { useColumnWidths } from "@/hooks/useColumnWidths";
-import { useHiddenColumns } from "@/hooks/useHiddenColumns";
-import { useDocumentSchemaAccumulator } from "@/hooks/useDocumentSchemaAccumulator";
-import { getDefaultRem, type ColumnCategory } from "@/lib/columnCategory";
-import type { ColumnInfo, SortInfo } from "@/types/schema";
-import QuickLookPanel from "@components/shared/QuickLookPanel";
-import AsyncProgressOverlay from "@components/feedback/AsyncProgressOverlay";
-import {
-  DataGridHeaderRow as HeaderRow,
   cellToEditValue,
   editKey,
+  DataGridHeaderRow as HeaderRow,
   isPendingEditActive,
   rowIdentityKey,
   useColumnResize,
   useDocumentDataGridEdit,
   useGridRoving,
 } from "@components/datagrid";
+import AddDocumentModal from "@components/document/AddDocumentModal";
 import MqlPreviewModal from "@components/document/MqlPreviewModal";
 import ProjectionDialog from "@components/document/ProjectionDialog";
-import AddDocumentModal from "@components/document/AddDocumentModal";
-import { useDelayedFlag } from "@/hooks/useDelayedFlag";
-import { useRefreshEvent } from "@/hooks/useRefreshEvent";
+import AsyncProgressOverlay from "@components/feedback/AsyncProgressOverlay";
+import QuickLookPanel from "@components/shared/QuickLookPanel";
 import { useSafeModeGate } from "@hooks/useSafeModeGate";
-import { insertDocument } from "@lib/tauri";
 import { DEFAULT_PAGE_SIZE } from "@lib/gridPolicy";
-import { useDocumentGridData } from "./DocumentDataGrid/useDocumentGridData";
-import DocumentGridControls from "./DocumentDataGrid/DocumentGridControls";
+import { safeStringifyCell } from "@lib/jsonCell";
+import { recordHistoryEntry } from "@lib/runtime/history/recordHistoryEntry";
+import { insertDocument } from "@lib/tauri";
+import { useConnectionStore } from "@stores/connectionStore";
+import { useDocumentCatalogStore } from "@stores/documentCatalogStore";
+import {
+  type CSSProperties,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { useColumnWidths } from "@/hooks/useColumnWidths";
+import { useDelayedFlag } from "@/hooks/useDelayedFlag";
+import { useDocumentSchemaAccumulator } from "@/hooks/useDocumentSchemaAccumulator";
+import { useHiddenColumns } from "@/hooks/useHiddenColumns";
+import { useRefreshEvent } from "@/hooks/useRefreshEvent";
+import { type ColumnCategory, getDefaultRem } from "@/lib/columnCategory";
+import { supportsBulkWrite, supportsDocumentEditing } from "@/types/dataSource";
+import { isDocumentSentinel } from "@/types/document";
+import type { ColumnInfo, SortInfo } from "@/types/schema";
 import DocumentGridRows, {
   type ExpandedNestedCell,
 } from "./DocumentDataGrid/cellRenderers/DocumentGridRows";
+import DocumentGridControls from "./DocumentDataGrid/DocumentGridControls";
+import { useDocumentGridData } from "./DocumentDataGrid/useDocumentGridData";
 
 export interface DocumentDataGridProps {
   connectionId: string;

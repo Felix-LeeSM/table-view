@@ -1,12 +1,12 @@
-import { useState } from "react";
-import { useTranslation } from "react-i18next";
-import { Code2, Trash2, Save, X, ArrowLeft } from "lucide-react";
-import { useSnippetsStore, type Snippet } from "@stores/snippetsStore";
+import { Button } from "@components/ui/button";
 import {
   extractPlaceholders,
   substitutePlaceholders,
 } from "@lib/sql/snippetTemplate";
-import { Button } from "@components/ui/button";
+import { type Snippet, useSnippetsStore } from "@stores/snippetsStore";
+import { ArrowLeft, Code2, Save, Trash2, X } from "lucide-react";
+import { useState } from "react";
+import { useTranslation } from "react-i18next";
 
 interface SnippetsPanelProps {
   /** Current editor SQL — saved verbatim as a new snippet body. */

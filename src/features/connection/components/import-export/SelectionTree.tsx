@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import type { ConnectionConfig, ConnectionGroup } from "../../model";
 import { cn } from "@/lib/utils";
+import type { ConnectionConfig, ConnectionGroup } from "../../model";
 
 export interface SelectionTreeProps {
   connections: ConnectionConfig[];

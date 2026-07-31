@@ -1,15 +1,15 @@
-import { describe, it, expect, beforeEach } from "vitest";
-import type { ConnectionId, TabId } from "@/types/branded";
+import { useConnectionStore } from "@stores/connectionStore";
+import { type TableTab, useWorkspaceStore } from "@stores/workspaceStore";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it } from "vitest";
 import {
   getTestWorkspace,
   seedConnection,
   seedWorkspace,
 } from "@/stores/__tests__/workspaceStoreTestHelpers";
-import { render, screen, fireEvent, act } from "@testing-library/react";
-import TabBar from "./TabBar";
-import { useWorkspaceStore, type TableTab } from "@stores/workspaceStore";
-import { useConnectionStore } from "@stores/connectionStore";
+import type { ConnectionId, TabId } from "@/types/branded";
 import type { ConnectionConfig } from "@/types/connection";
+import TabBar from "./TabBar";
 
 function addTableTab(
   overrides: Partial<Omit<TableTab, "id" | "connectionId">> & {

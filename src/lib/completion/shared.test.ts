@@ -1,11 +1,11 @@
 // AC-144-2 — shared module smoke tests (prefixMatch, identifier-quote, FROM-context parser).
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
-  prefixMatch,
+  CompletionPairingError,
   parseFromContext,
+  prefixMatch,
   splitSqlStatements,
   tokenizeSql,
-  CompletionPairingError,
 } from "./shared";
 
 describe("shared.prefixMatch", () => {

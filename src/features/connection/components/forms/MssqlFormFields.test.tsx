@@ -1,7 +1,7 @@
-import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
-import MssqlFormFields from "./MssqlFormFields";
+import { describe, expect, it, vi } from "vitest";
 import type { ConnectionDraft } from "@/types/connection";
+import MssqlFormFields from "./MssqlFormFields";
 
 // Purpose: #1063 — SQL Server defaults to trust=true (encrypt-by-default), an
 // encrypted-but-unverified posture that is easy to keep by accident. The form

@@ -31,16 +31,16 @@
  * remain load-bearing.
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
+  act,
+  createEvent,
+  fireEvent,
   render,
   screen,
-  fireEvent,
-  createEvent,
-  act,
 } from "@testing-library/react";
-import DataGridTable from "./DataGridTable";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { TableData } from "@/types/schema";
+import DataGridTable from "./DataGridTable";
 
 const MOCK_DATA: TableData = {
   columns: [

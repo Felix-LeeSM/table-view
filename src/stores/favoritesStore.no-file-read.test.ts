@@ -16,9 +16,9 @@
  * (b) IPC reject 시 store 가 partial hydrate 로 stale 값을 유지.
  */
 
-import { describe, it, expect, beforeEach, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),

@@ -11,14 +11,14 @@
  * (testing scenarios 원칙 — 동작 검증, 모양 검증 X).
  */
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { __resetCountersForTests, useWorkspaceStore } from "./workspaceStore";
+import type { ConnectionId, TabId } from "@/types/branded";
 import {
   installFakeLocalStorage,
   restoreLocalStorage,
 } from "./__tests__/workspaceStoreTestHelpers";
+import { __resetCountersForTests, useWorkspaceStore } from "./workspaceStore";
 import { STORAGE_KEY } from "./workspaceStore/persistence";
-import type { TableTab, QueryTab } from "./workspaceStore/types";
-import type { ConnectionId, TabId } from "@/types/branded";
+import type { QueryTab, TableTab } from "./workspaceStore/types";
 
 function makeTableTab(id: string): TableTab {
   return {

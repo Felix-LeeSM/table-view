@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // 작성 2026-05-16 (Phase 4 W2→W3 sprint-370)
 //
@@ -22,11 +22,11 @@ vi.mock("@lib/runtime/toast", () => ({
   },
 }));
 
-import { invoke } from "@tauri-apps/api/core";
-import { toast } from "@lib/runtime/toast";
-import { useFavoritesStore, SYNCED_KEYS } from "./favoritesStore";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { toast } from "@lib/runtime/toast";
+import { invoke } from "@tauri-apps/api/core";
+import { SYNCED_KEYS, useFavoritesStore } from "./favoritesStore";
 
 const invokeMock = vi.mocked(invoke);
 const toastErrorMock = vi.mocked(toast.error);

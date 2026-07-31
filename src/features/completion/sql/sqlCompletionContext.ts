@@ -1,3 +1,11 @@
+import {
+  getSqlDialectProfile,
+  getSqlDialectProfileForDatabaseType,
+  SQL_SHELL_PROFILES,
+  type SqlDialectFamily,
+  type SqlDialectId,
+  type SqlShellId,
+} from "@lib/sql/sqlDialectProfile";
 import type { DatabaseType } from "@/types/connection";
 import type { DatabaseInfo } from "@/types/document";
 import type { FileAnalyticsSourceMetadata } from "@/types/fileAnalytics";
@@ -10,14 +18,6 @@ import type {
   TableInfo,
   ViewInfo,
 } from "@/types/schema";
-import {
-  SQL_SHELL_PROFILES,
-  getSqlDialectProfile,
-  getSqlDialectProfileForDatabaseType,
-  type SqlDialectFamily,
-  type SqlDialectId,
-  type SqlShellId,
-} from "@lib/sql/sqlDialectProfile";
 
 type ByDb<V> = Record<string, V>;
 type ByConn<V> = Record<string, ByDb<V>>;

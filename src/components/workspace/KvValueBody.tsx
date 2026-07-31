@@ -1,8 +1,8 @@
-import { useState } from "react";
-import { useTranslation } from "react-i18next";
-import { Maximize2 } from "lucide-react";
 import { CellDetailDialog } from "@components/datagrid";
 import { DocumentTreePanel } from "@components/document/DocumentTreePanel";
+import { Maximize2 } from "lucide-react";
+import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { KvValueEnvelope } from "@/types/kv";
 import { KvJsonTreeEditor } from "./KvJsonTreeEditor";
 import {

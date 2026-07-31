@@ -1,21 +1,21 @@
-import { useEffect, useLayoutEffect, useRef } from "react";
-import { useTranslation } from "react-i18next";
-import { listen } from "@tauri-apps/api/event";
-import ErrorBoundary from "./components/shared/ErrorBoundary";
-import LauncherPage from "./pages/LauncherPage";
-import QuickOpen from "./components/shared/QuickOpen";
-import ShortcutCheatsheet from "./components/shared/ShortcutCheatsheet";
-import QueryLog from "./components/query/QueryLog";
-import { Toaster } from "./components/ui/toaster";
 import { useConnectionStore } from "@features/connection";
 import { WorkspaceApp, WorkspacePage } from "@features/workspace";
+import { logger } from "@lib/logger";
+import { markBootMilestone } from "@lib/perf/bootInstrumentation";
+import { checkForUpdatesOnLaunch } from "@lib/runtime/autoUpdate";
+import { installGlobalErrorToast } from "@lib/runtime/globalErrorToast";
+import { getCurrentWindowLabel, parseWorkspaceLabel } from "@lib/window-label";
+import { listen } from "@tauri-apps/api/event";
+import { useEffect, useLayoutEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
+import QueryLog from "./components/query/QueryLog";
+import ErrorBoundary from "./components/shared/ErrorBoundary";
+import QuickOpen from "./components/shared/QuickOpen";
+import ShortcutCheatsheet from "./components/shared/ShortcutCheatsheet";
+import { Toaster } from "./components/ui/toaster";
+import LauncherPage from "./pages/LauncherPage";
 import { useFavoritesStore } from "./stores/favoritesStore";
 import { useMruStore } from "./stores/mruStore";
-import { getCurrentWindowLabel, parseWorkspaceLabel } from "@lib/window-label";
-import { markBootMilestone } from "@lib/perf/bootInstrumentation";
-import { installGlobalErrorToast } from "@lib/runtime/globalErrorToast";
-import { checkForUpdatesOnLaunch } from "@lib/runtime/autoUpdate";
-import { logger } from "@lib/logger";
 
 /**
  * Bridge the macOS native menu click (`File > New Connection`, Cmd+N) into

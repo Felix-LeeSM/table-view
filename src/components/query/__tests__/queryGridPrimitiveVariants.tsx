@@ -10,12 +10,13 @@
 // `QueryResultGrid` (the router) delegates its read-only SELECT path to
 // `QueryResultTable`, so the primitive is tested here directly — the router's
 // read-only branch stays covered by QueryResultGrid.routing.test.tsx.
-import type { ReactElement } from "react";
-import { render } from "@testing-library/react";
-import { QueryResultTable } from "../QueryResultTable";
-import EditableQueryResultGrid from "../EditableQueryResultGrid";
-import type { QueryResult } from "@/types/query";
+
 import type { RawEditPlan } from "@lib/sql/rawQuerySqlBuilder";
+import { render } from "@testing-library/react";
+import type { ReactElement } from "react";
+import type { QueryResult } from "@/types/query";
+import EditableQueryResultGrid from "../EditableQueryResultGrid";
+import { QueryResultTable } from "../QueryResultTable";
 
 /** Editable variant needs a plan; derive it from the result so callers only
  *  pass the shared fixture. A single `id` PK matches every fixture below. */

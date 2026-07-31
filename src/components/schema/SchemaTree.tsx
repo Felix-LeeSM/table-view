@@ -1,3 +1,27 @@
+import { Button } from "@components/ui/button";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@components/ui/popover";
+import { Skeleton } from "@components/ui/skeleton";
+import { useConnectionStore } from "@stores/connectionStore";
+import { useSchemaStore } from "@stores/schemaStore";
+// #1447 — sql-free active-tab read (type / schema / table for highlight).
+import { useActiveTabSansSql, useWorkspaceStore } from "@stores/workspaceStore";
+import { useVirtualizer } from "@tanstack/react-virtual";
+import {
+  Database,
+  Download,
+  FileText,
+  Loader2,
+  Network,
+  Plus,
+  RefreshCw,
+  Rows3,
+  Search,
+  X,
+} from "lucide-react";
 import {
   useDeferredValue,
   useEffect,
@@ -7,37 +31,22 @@ import {
   useState,
 } from "react";
 import { useTranslation } from "react-i18next";
-import { useVirtualizer } from "@tanstack/react-virtual";
 import {
-  RefreshCw,
-  Loader2,
-  Download,
-  Database,
-  FileText,
-  Rows3,
-  Plus,
-  Search,
-  X,
-  Network,
-} from "lucide-react";
-import { useSchemaStore } from "@stores/schemaStore";
-// #1447 — sql-free active-tab read (type / schema / table for highlight).
-import { useActiveTabSansSql, useWorkspaceStore } from "@stores/workspaceStore";
-import { useConnectionStore } from "@stores/connectionStore";
-import {
-  useMigrationExport,
   supportsMigrationExport,
+  useMigrationExport,
 } from "@/hooks/useMigrationExport";
 import { useSidebarScrollPersistence } from "@/hooks/useSidebarScrollPersistence";
 import { getDataSourceProfile, supportsDdl } from "@/types/dataSource";
+import type { FileAnalyticsSourceMetadata } from "@/types/fileAnalytics";
+import { SchemaTreeBody } from "./SchemaTree/body";
 import {
-  Popover,
-  PopoverTrigger,
-  PopoverContent,
-} from "@components/ui/popover";
-import { Button } from "@components/ui/button";
-import { Skeleton } from "@components/ui/skeleton";
-import { resolveRdbTreeProfile, type RdbTreeShape } from "./treeShape";
+  CreateTableDialogSlot,
+  DropTableDialogSlot,
+  ImportCsvDialogSlot,
+  RenameTableDialogSlot,
+} from "./SchemaTree/dialogs";
+import { PinnedRecentSections } from "./SchemaTree/PinnedRecentSections";
+import type { SchemaTreeRowsContext } from "./SchemaTree/rows";
 import {
   applyGlobalFilter,
   getVisibleRows,
@@ -45,18 +54,9 @@ import {
   ROW_HEIGHT_ESTIMATE,
   VIRTUALIZE_THRESHOLD,
 } from "./SchemaTree/treeRows";
-import { SchemaTreeBody } from "./SchemaTree/body";
-import type { SchemaTreeRowsContext } from "./SchemaTree/rows";
-import { PinnedRecentSections } from "./SchemaTree/PinnedRecentSections";
-import { useTreeRoving } from "./SchemaTree/useTreeRoving";
-import type { FileAnalyticsSourceMetadata } from "@/types/fileAnalytics";
-import {
-  CreateTableDialogSlot,
-  DropTableDialogSlot,
-  ImportCsvDialogSlot,
-  RenameTableDialogSlot,
-} from "./SchemaTree/dialogs";
 import { useSchemaTreeActions } from "./SchemaTree/useSchemaTreeActions";
+import { useTreeRoving } from "./SchemaTree/useTreeRoving";
+import { type RdbTreeShape, resolveRdbTreeProfile } from "./treeShape";
 
 /**
  * Entry shell for the relational schema tree. Owns cross-slice state

@@ -1,18 +1,18 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { setupTauriMock } from "@/test-utils/tauriMock";
+import { useConnectionStore } from "@stores/connectionStore";
+import { useSchemaStore } from "@stores/schemaStore";
 import {
+  act,
+  fireEvent,
   render,
   screen,
-  fireEvent,
-  act,
   waitFor,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
+import type { QueryResult } from "@/types/query";
 import QueryResultGrid from "./QueryResultGrid";
 import * as queryResultCopy from "./queryResultCopy";
-import type { QueryResult } from "@/types/query";
-import { useSchemaStore } from "@stores/schemaStore";
-import { useConnectionStore } from "@stores/connectionStore";
 
 // Issue #1297 — the editability gate parses through the real sql-parser-core
 // WASM AST; load the checked-in bytes so `preloadSqlWasm` resolves in jsdom

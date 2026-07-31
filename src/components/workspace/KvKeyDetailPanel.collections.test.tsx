@@ -1,10 +1,10 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, within } from "@testing-library/react";
-import KvKeyDetailPanel from "./KvKeyDetailPanel";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useSafeModeStore } from "@stores/safeModeStore";
+import { render, screen, within } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConnectionConfig } from "@/types/connection";
 import type { KvKeyType, KvValue, KvValueEnvelope } from "@/types/kv";
+import KvKeyDetailPanel from "./KvKeyDetailPanel";
 
 // Purpose: Redis collection types (hash/list/set/zSet) render as structured
 // tables in the KV key detail panel instead of the degraded flattened <pre>

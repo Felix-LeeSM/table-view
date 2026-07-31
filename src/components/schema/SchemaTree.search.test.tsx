@@ -4,15 +4,16 @@
 // always-empty placeholders, isolation from non-tables categories,
 // per-schema state independence, and placeholder text. Cases are
 // byte-equivalent to the originals.
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, act } from "@testing-library/react";
-import SchemaTree from "./SchemaTree";
+
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   mockLoadSchemas,
   mockLoadTables,
-  setSchemaStoreState,
   resetStores,
+  setSchemaStoreState,
 } from "./__tests__/schemaTreeTestHelpers";
+import SchemaTree from "./SchemaTree";
 
 // ---------------------------------------------------------------------------
 // Tests

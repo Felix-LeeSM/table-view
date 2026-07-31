@@ -1,10 +1,10 @@
-import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent, act } from "@testing-library/react";
 import { EditorView } from "@codemirror/view";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
+import { expectUndoRevertsEdit } from "../query/__tests__/editorHistoryHelpers";
 import DocumentFilterBar, {
   type DocumentFilterBarProps,
 } from "./DocumentFilterBar";
-import { expectUndoRevertsEdit } from "../query/__tests__/editorHistoryHelpers";
 
 function renderBar(overrides: Partial<DocumentFilterBarProps> = {}) {
   const props: DocumentFilterBarProps = {

@@ -11,9 +11,10 @@
 //
 // Maps:
 // - AC-252-02 / AC-252-07 → "Copy carrier 호출 + plain fallback"
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, fireEvent, act } from "@testing-library/react";
+
 import MqlPreviewModal from "@components/document/MqlPreviewModal";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 function installClipboard(impl: (text: string) => Promise<void>) {
   const writeText = vi.fn(impl);

@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
-import { resolveActiveDb, useWorkspaceStore } from "@stores/workspaceStore";
 import { useFavoritesStore } from "@stores/favoritesStore";
 import type { QueryTab } from "@stores/workspaceStore";
+import { resolveActiveDb, useWorkspaceStore } from "@stores/workspaceStore";
+import { useCallback, useEffect, useState } from "react";
 
 /**
  * `QueryTab` 의 favorites state + handler + toggle event 캡슐화.

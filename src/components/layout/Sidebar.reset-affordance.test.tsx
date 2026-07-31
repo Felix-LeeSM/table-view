@@ -12,8 +12,8 @@
  * Confirm dialog 없음 — Q21 contract.
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { invokeMock } = vi.hoisted(() => ({
   invokeMock: vi.fn<(cmd: string, args?: unknown) => Promise<unknown>>(() =>
@@ -67,14 +67,14 @@ vi.mock("./WorkspaceSidebar", () => ({
   ),
 }));
 
-import Sidebar from "./Sidebar";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useWorkspaceStore } from "@stores/workspaceStore";
 import {
-  setFakeWindowConnectionId,
   resetFakeWindowConnectionId,
+  setFakeWindowConnectionId,
 } from "@/stores/__tests__/fakeWindowConnectionId";
 import type { ConnectionConfig } from "@/types/connection";
+import Sidebar from "./Sidebar";
 
 function makeConnection(id: string): ConnectionConfig {
   return {

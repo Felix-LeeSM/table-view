@@ -14,13 +14,13 @@
 //   AC-156-04d  Click different table after promoting one → new preview slot
 //   AC-156-04e  Click a view (not table) → tab behavior
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { getTestWorkspace } from "@/stores/__tests__/workspaceStoreTestHelpers";
-import { render, screen, fireEvent, act } from "@testing-library/react";
-import SchemaTree from "./SchemaTree";
-import { useSchemaStore } from "@stores/schemaStore";
 import { useConnectionStore } from "@stores/connectionStore";
-import { useWorkspaceStore, type TableTab } from "@stores/workspaceStore";
+import { useSchemaStore } from "@stores/schemaStore";
+import { type TableTab, useWorkspaceStore } from "@stores/workspaceStore";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { getTestWorkspace } from "@/stores/__tests__/workspaceStoreTestHelpers";
+import SchemaTree from "./SchemaTree";
 
 // ── Store mocks ────────────────────────────────────────────────────────────
 

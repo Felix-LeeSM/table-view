@@ -1,15 +1,15 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { createRef, useState } from "react";
-import { act, render, screen, waitFor } from "@testing-library/react";
-import { EditorView } from "@codemirror/view";
-import { ensureSyntaxTree, language } from "@codemirror/language";
 import { undo } from "@codemirror/commands";
 import { MySQL, PostgreSQL, SQLite } from "@codemirror/lang-sql";
-import SqlQueryEditor from "./SqlQueryEditor";
+import { ensureSyntaxTree, language } from "@codemirror/language";
+import { EditorView } from "@codemirror/view";
+import { act, render, screen, waitFor } from "@testing-library/react";
+import { createRef, useState } from "react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   expectUndoRevertsEdit,
   getKeymapBindings,
 } from "./__tests__/editorHistoryHelpers";
+import SqlQueryEditor from "./SqlQueryEditor";
 
 /**
  * Sprint 139 — SqlQueryEditor unit tests.

@@ -8,7 +8,7 @@
 // 정확도에 직접 의존한다. 본 파일은 sprint-381 baseline 13 case + sprint-382
 // 의 AST promotion 이 신규로 lock 하는 시나리오를 함께 검증한다.
 
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
   classifyMongoStatement,
   extractAdminCommandBody,

@@ -1,8 +1,8 @@
+import i18n from "@lib/i18n";
+import { toast } from "@lib/runtime/toast";
+import { useConnectionStore } from "@stores/connectionStore";
 import { useCallback } from "react";
 import type { ConnectionConfig, ConnectionDraft } from "@/types/connection";
-import { useConnectionStore } from "@stores/connectionStore";
-import { toast } from "@lib/runtime/toast";
-import i18n from "@lib/i18n";
 
 /**
  * Sprint 219 (P10 step 1) — moves the user-facing toast notifications for

@@ -1,6 +1,6 @@
-import { act } from "@testing-library/react";
 import { undo } from "@codemirror/commands";
-import { keymap, type EditorView, type KeyBinding } from "@codemirror/view";
+import { type EditorView, type KeyBinding, keymap } from "@codemirror/view";
+import { act } from "@testing-library/react";
 import { expect } from "vitest";
 
 // #1248 — hoisted from the six editor test files (query 4 + document 2) so the

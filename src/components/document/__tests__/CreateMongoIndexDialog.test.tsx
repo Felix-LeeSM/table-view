@@ -5,10 +5,10 @@
 // collation locale+strength) + Save 동작 (happy / driver-error inline
 // alert) 을 검증한다. createMongoIndex 는 vi.mock 으로 캡처.
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { setupTauriMock } from "@/test-utils/tauriMock";
-import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import { CreateMongoIndexDialog } from "../CreateMongoIndexDialog";
 
 const createMongoIndexMock = vi.fn();

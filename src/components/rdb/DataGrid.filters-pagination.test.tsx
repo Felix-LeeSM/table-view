@@ -4,24 +4,25 @@
 // Sprint 26) + props-change page reset + props-change column-width
 // reset. Cases are byte-equivalent to the originals — no behaviour
 // change.
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { setupTauriMock } from "@/test-utils/tauriMock";
-import { screen, fireEvent, act } from "@testing-library/react";
+
+import { act, fireEvent, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import DataGrid from "./DataGrid";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import type { SortInfo, TableData } from "@/types/schema";
 import {
   MOCK_DATA,
-  mockQueryTableData,
+  mockAddTab,
   mockExecuteQuery,
   mockExecuteQueryBatch,
   mockPromoteTab,
-  mockUpdateTabSorts,
+  mockQueryTableData,
   mockSetTabDirty,
-  mockAddTab,
-  resetDataGridMocks,
+  mockUpdateTabSorts,
   renderDataGrid,
+  resetDataGridMocks,
 } from "./__tests__/dataGridTestHelpers";
+import DataGrid from "./DataGrid";
 
 // Mock FilterBar — test DataGrid in isolation
 vi.mock("./FilterBar", () => ({

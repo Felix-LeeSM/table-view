@@ -1,11 +1,11 @@
+import { useSafeModeGate } from "@hooks/useSafeModeGate";
+import { analyzeMongoOperation } from "@lib/mongo/mongoSafety";
+import { recordHistoryEntry } from "@lib/runtime/history/recordHistoryEntry";
+import { dropCollection } from "@lib/tauri";
+import { useDocumentCatalogStore } from "@stores/documentCatalogStore";
 import { useCallback, useState } from "react";
 import { logger } from "@/lib/logger";
 import { toast } from "@/lib/runtime/toast";
-import { dropCollection } from "@lib/tauri";
-import { analyzeMongoOperation } from "@lib/mongo/mongoSafety";
-import { useSafeModeGate } from "@hooks/useSafeModeGate";
-import { useDocumentCatalogStore } from "@stores/documentCatalogStore";
-import { recordHistoryEntry } from "@lib/runtime/history/recordHistoryEntry";
 
 interface DropDialogState {
   database: string;

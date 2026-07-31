@@ -1,15 +1,15 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { useConnectionStore } from "@stores/connectionStore";
+import { useSchemaStore } from "@stores/schemaStore";
 import {
-  render,
-  screen,
   act,
   fireEvent,
+  render,
+  screen,
   waitFor,
 } from "@testing-library/react";
-import QuickOpen from "./QuickOpen";
-import { useSchemaStore } from "@stores/schemaStore";
-import { useConnectionStore } from "@stores/connectionStore";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConnectionConfig, ConnectionStatus } from "@/types/connection";
+import QuickOpen from "./QuickOpen";
 
 // Mock lucide-react icons used by QuickOpen
 vi.mock("lucide-react", () => ({

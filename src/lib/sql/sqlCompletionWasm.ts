@@ -1,5 +1,5 @@
-import type { CompletionResult } from "@/lib/completion/coreContract";
 import type { SqlCompletionRequest } from "@features/completion";
+import type { CompletionResult } from "@/lib/completion/coreContract";
 
 interface SqlCompletionWasmModule {
   default: (input?: unknown) => Promise<unknown>;

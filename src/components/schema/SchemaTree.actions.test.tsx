@@ -32,16 +32,17 @@
 // The other context-menu / view / function / F2 / Export-popover / Create
 // Table cases remain byte-equivalent in intent — only the post-action
 // dialog assertions are mechanically updated.
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { setupTauriMock } from "@/test-utils/tauriMock";
-import { getTestWorkspace } from "@/stores/__tests__/workspaceStoreTestHelpers";
+
 import {
+  act,
+  fireEvent,
   render,
   screen,
-  fireEvent,
   waitFor,
-  act,
 } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { getTestWorkspace } from "@/stores/__tests__/workspaceStoreTestHelpers";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 
 // Sprint 235 — mock `@lib/tauri` so the new modals' DDL preview +
 // commit paths short-circuit. `dropTableRequest` and
@@ -107,16 +108,16 @@ beforeEach(() => {
   });
 });
 
-import SchemaTree from "./SchemaTree";
-import { useSchemaStore } from "@stores/schemaStore";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useSafeModeStore } from "@stores/safeModeStore";
+import { useSchemaStore } from "@stores/schemaStore";
 import {
   mockLoadSchemas,
   mockLoadTables,
-  setSchemaStoreState,
   resetStores,
+  setSchemaStoreState,
 } from "./__tests__/schemaTreeTestHelpers";
+import SchemaTree from "./SchemaTree";
 
 // ---------------------------------------------------------------------------
 // Tests

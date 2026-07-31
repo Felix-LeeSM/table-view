@@ -1,8 +1,8 @@
-import { describe, it, expect } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { KvCollectionValueTable } from "./KvCollectionValueTable";
+import { describe, expect, it } from "vitest";
 import type { KvHashValue } from "@/types/kv";
+import { KvCollectionValueTable } from "./KvCollectionValueTable";
 
 // Purpose: the collection value table routes each value cell through the
 // read-only JSON chip — a JSON object value shows a `{…}` chip that opens a

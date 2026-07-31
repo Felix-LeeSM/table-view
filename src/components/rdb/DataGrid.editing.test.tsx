@@ -11,28 +11,29 @@
 // last case verbatim — helper integration would break the spy
 // install/restore lifecycle. Dynamic `await import(...)` calls in
 // the last two cases stay inline (vi.mock-avoidance is intentional).
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { setupTauriMock } from "@/test-utils/tauriMock";
-import {
-  screen,
-  fireEvent,
-  act,
-  within,
-  waitFor,
-} from "@testing-library/react";
+
 import { useConnectionStore } from "@stores/connectionStore";
+import {
+  act,
+  fireEvent,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import type { SortInfo, TableData } from "@/types/schema";
 import {
   MOCK_DATA,
-  mockQueryTableData,
+  mockAddTab,
   mockExecuteQuery,
   mockExecuteQueryBatch,
   mockPromoteTab,
-  mockUpdateTabSorts,
+  mockQueryTableData,
   mockSetTabDirty,
-  mockAddTab,
-  resetDataGridMocks,
+  mockUpdateTabSorts,
   renderDataGrid,
+  resetDataGridMocks,
 } from "./__tests__/dataGridTestHelpers";
 
 // Mock FilterBar — test DataGrid in isolation

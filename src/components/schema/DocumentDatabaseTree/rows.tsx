@@ -1,4 +1,10 @@
-import { useTranslation } from "react-i18next";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from "@components/ui/context-menu";
+import { cn } from "@lib/utils";
 import {
   ChevronDown,
   ChevronRight,
@@ -9,17 +15,11 @@ import {
   Lock,
   Settings2,
 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuTrigger,
-} from "@components/ui/context-menu";
-import { cn } from "@lib/utils";
-import {
-  isMongoSystemDatabase,
   type CollectionInfo,
   type DatabaseInfo,
+  isMongoSystemDatabase,
 } from "@/types/document";
 
 /**

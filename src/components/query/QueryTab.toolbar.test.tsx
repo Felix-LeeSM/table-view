@@ -2,28 +2,29 @@
 // step 2). Covers Sprint 25 Run / Cancel button visibility, disabled
 // state, shortcut hint, and the Run button click → handleExecute path.
 // Cases are byte-equivalent to the originals — no behaviour change.
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { setupTauriMock } from "@/test-utils/tauriMock";
-import { seedWorkspace } from "@/stores/__tests__/workspaceStoreTestHelpers";
-import { render, screen, act } from "@testing-library/react";
-import QueryTab from "./QueryTab";
-import { useWorkspaceStore } from "@stores/workspaceStore";
-import { useConnectionStore } from "@stores/connectionStore";
-import { useHistorySettingsStore } from "@stores/historySettingsStore";
-import {
-  MOCK_RESULT,
-  mockExecuteQuery,
-  mockCancelQuery,
-  mockFindDocuments,
-  mockAggregateDocuments,
-  mockVerifyActiveDb,
-  mockEditorProps,
-  makeConn,
-  makeQueryTab,
-  resetQueryTabStores,
-} from "./__tests__/queryTabTestHelpers";
+
 import type { SQLDialect } from "@codemirror/lang-sql";
 import type { Extension } from "@codemirror/state";
+import { useConnectionStore } from "@stores/connectionStore";
+import { useHistorySettingsStore } from "@stores/historySettingsStore";
+import { useWorkspaceStore } from "@stores/workspaceStore";
+import { act, render, screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { seedWorkspace } from "@/stores/__tests__/workspaceStoreTestHelpers";
+import { setupTauriMock } from "@/test-utils/tauriMock";
+import {
+  MOCK_RESULT,
+  makeConn,
+  makeQueryTab,
+  mockAggregateDocuments,
+  mockCancelQuery,
+  mockEditorProps,
+  mockExecuteQuery,
+  mockFindDocuments,
+  mockVerifyActiveDb,
+  resetQueryTabStores,
+} from "./__tests__/queryTabTestHelpers";
+import QueryTab from "./QueryTab";
 
 // Sprint 248 — `executeQueryDryRun` mock for the new "Dry Run" button
 // path. `vi.fn()` lives at module scope so individual tests can read

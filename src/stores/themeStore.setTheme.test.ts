@@ -18,7 +18,7 @@
  * stuck 회귀 (Wave 9.5 회귀 6).
  */
 
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // `@tauri-apps/api/core` 의 invoke 를 mock — Tauri runtime 없는 jsdom 에서도
 // IPC 호출을 단언할 수 있도록 module-load 전에 가로채야 한다. `vi.mock` 는
@@ -27,9 +27,9 @@ vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
 }));
 
+import { DEFAULT_THEME_ID, THEME_STORAGE_KEY } from "@lib/themeBoot";
 import { invoke } from "@tauri-apps/api/core";
 import { useThemeStore } from "./themeStore";
-import { THEME_STORAGE_KEY, DEFAULT_THEME_ID } from "@lib/themeBoot";
 
 const invokeMock = vi.mocked(invoke);
 

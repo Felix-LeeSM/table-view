@@ -31,8 +31,8 @@
 //
 // Date: 2026-05-08.
 
-import type * as React from "react";
 import { DialogContent } from "@components/ui/dialog";
+import type * as React from "react";
 import { cn } from "@/lib/utils";
 
 type DialogContentProps = React.ComponentProps<typeof DialogContent>;
@@ -131,8 +131,8 @@ const DialogShell = Object.assign(DialogShellRoot, {
 
 export {
   DialogShell,
-  DialogShellRoot,
-  DialogShellHeader,
   DialogShellBody,
   DialogShellFooter,
+  DialogShellHeader,
+  DialogShellRoot,
 };

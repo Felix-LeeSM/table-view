@@ -1,11 +1,9 @@
-import type { ColumnInfo, TableData } from "@/types/schema";
-import { dialectRequiresPrimaryKeyForEdit } from "@/types/dataSource";
 import { safeStringifyCell } from "@lib/jsonCell";
 import {
   coerceToSqlLiteral,
   qualifiedTableName,
-  sqlIdentifier,
   type SqlDialect,
+  sqlIdentifier,
 } from "@lib/sql/sqlLiteral";
 import {
   emitArrayUpdate,
@@ -16,10 +14,16 @@ import {
   isStructuralJsonColumn,
   type NestedSqlEdit,
 } from "@lib/sql/structuralSqlEdit";
+import { dialectRequiresPrimaryKeyForEdit } from "@/types/dataSource";
+import type { ColumnInfo, TableData } from "@/types/schema";
 
-export { coerceToSqlLiteral };
-export { isArrayColumn, isJsonbColumn, isStructuralJsonColumn };
 export type { CoerceResult, SqlDialect } from "@lib/sql/sqlLiteral";
+export {
+  coerceToSqlLiteral,
+  isArrayColumn,
+  isJsonbColumn,
+  isStructuralJsonColumn,
+};
 
 type WhereClauseResult =
   | { kind: "sql"; sql: string }

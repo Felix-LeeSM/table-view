@@ -14,9 +14,8 @@
  * `src/features/connection/components/ConnectionItem.tsx` 의 error detail 블록도 맞춰라.
  */
 
-import { useTranslation } from "react-i18next";
-
 import type { DriverErrorHint as DriverErrorHintData } from "@lib/errors/driverErrorHints";
+import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 
 export interface DriverErrorHintProps {

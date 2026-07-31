@@ -2,8 +2,8 @@
 // extracted from QueryLog.tsx / GlobalQueryLogPanel.tsx (previously copy-pasted
 // module-private functions with no direct coverage).
 
-import { describe, it, expect, afterEach, vi } from "vitest";
-import { truncateSql, formatRelativeTime } from "./queryLogFormat";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { formatRelativeTime, truncateSql } from "./queryLogFormat";
 
 describe("truncateSql", () => {
   it("returns the string unchanged when at or under the limit", () => {

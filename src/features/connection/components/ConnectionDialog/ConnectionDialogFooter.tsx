@@ -1,10 +1,10 @@
-import { useTranslation } from "react-i18next";
 import { Button } from "@components/ui/button";
-import { Loader2, Plug } from "lucide-react";
 import {
   DialogFeedback,
   type DialogFeedbackState,
 } from "@components/ui/dialog";
+import { Loader2, Plug } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { CONNECTION_ERROR_ID } from "../forms/fieldValidation";
 
 export interface ConnectionDialogFooterProps {

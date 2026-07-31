@@ -6,10 +6,10 @@
 // 기존 동작이 바뀌지 않는지 회귀 가드. RDB DataGrid 차원의 wire-up
 // (배지 + persist) 은 `rdb/DataGrid.hide.test.tsx` 가 검증.
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, within } from "@testing-library/react";
-import DataGridTable from "./DataGridTable";
+import { fireEvent, render, screen, within } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { TableData } from "@/types/schema";
+import DataGridTable from "./DataGridTable";
 
 const MOCK_DATA: TableData = {
   columns: [

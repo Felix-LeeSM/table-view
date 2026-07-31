@@ -1,15 +1,15 @@
-import {
-  useEffect,
-  useRef,
-  useState,
-  type PointerEvent as ReactPointerEvent,
-  type RefObject,
-} from "react";
 import type { Tab } from "@stores/workspaceStore";
 import {
   useCurrentWorkspaceKey,
   useWorkspaceStore,
 } from "@stores/workspaceStore";
+import {
+  type PointerEvent as ReactPointerEvent,
+  type RefObject,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 
 // 8px drag-start threshold. The pre-2026-05-11 4px floor produced phantom
 // ghosts when a high-DPI trackpad click drifted 2–6px; 8px matches the de

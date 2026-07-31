@@ -1,3 +1,4 @@
+import type { SchemaName, TableName } from "@/types/branded";
 import type {
   ColumnInfo,
   ConstraintInfo,
@@ -8,7 +9,6 @@ import type {
   SchemaGraphCatalogSnapshot,
   SchemaGraphConstraintPayload,
 } from "@/types/schemaGraph";
-import type { SchemaName, TableName } from "@/types/branded";
 import { compareText, schemaGraphTableId } from "./schemaGraphSupport";
 
 export interface TableRef {

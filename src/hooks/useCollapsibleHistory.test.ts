@@ -1,8 +1,8 @@
-import { describe, it, expect } from "vitest";
 import { act, renderHook } from "@testing-library/react";
+import { describe, expect, it } from "vitest";
 import {
-  useCollapsibleHistory,
   HISTORY_DEFAULT_VISIBLE,
+  useCollapsibleHistory,
 } from "./useCollapsibleHistory";
 
 const range = (n: number) => Array.from({ length: n }, (_, i) => i);

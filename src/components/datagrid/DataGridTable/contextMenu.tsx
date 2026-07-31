@@ -1,24 +1,24 @@
-import { useCallback, useRef, useState } from "react";
-import {
-  Pencil,
-  Trash2,
-  Copy,
-  Clipboard,
-  FileJson,
-  FileText,
-  Database,
-  Maximize2,
-  CircleSlash,
-} from "lucide-react";
-import i18n from "@lib/i18n";
 import type { ContextMenuItem } from "@components/shared/ContextMenu";
 import type { CopyRowData } from "@lib/format";
 import {
-  rowsToPlainText,
-  rowsToJson,
   rowsToCsv,
+  rowsToJson,
+  rowsToPlainText,
   rowsToSqlInsert,
 } from "@lib/format";
+import i18n from "@lib/i18n";
+import {
+  CircleSlash,
+  Clipboard,
+  Copy,
+  Database,
+  FileJson,
+  FileText,
+  Maximize2,
+  Pencil,
+  Trash2,
+} from "lucide-react";
+import { useCallback, useRef, useState } from "react";
 import type { TableData } from "@/types/schema";
 import { cellToEditValue } from "../dataGridEditFsm";
 

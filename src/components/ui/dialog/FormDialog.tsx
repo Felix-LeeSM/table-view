@@ -1,5 +1,4 @@
-import type { ReactNode } from "react";
-import { useTranslation } from "react-i18next";
+import { Button } from "@components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -8,11 +7,12 @@ import {
   type DialogFeedbackState,
   DialogFooter,
   DialogHeader,
+  type DialogHeaderLayout,
   DialogTitle,
   type DialogTone,
-  type DialogHeaderLayout,
 } from "@components/ui/dialog";
-import { Button } from "@components/ui/button";
+import type { ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 
 // ---------------------------------------------------------------------------

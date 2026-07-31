@@ -6,20 +6,20 @@
 // `hidden-columns:rdb:<schema>:<table>` 인지를 lock. `DataGridTable.hide`
 // 는 prop 차원 회귀를, 이 파일은 RDB shell 차원의 통합 회귀를 검증.
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { setupTauriMock } from "@/test-utils/tauriMock";
-import { screen, fireEvent, act, waitFor } from "@testing-library/react";
 import type { SortInfo } from "@/types/schema";
 import {
-  mockQueryTableData,
+  mockAddTab,
   mockExecuteQuery,
   mockExecuteQueryBatch,
   mockPromoteTab,
-  mockUpdateTabSorts,
+  mockQueryTableData,
   mockSetTabDirty,
-  mockAddTab,
-  resetDataGridMocks,
+  mockUpdateTabSorts,
   renderDataGrid,
+  resetDataGridMocks,
 } from "./__tests__/dataGridTestHelpers";
 
 vi.mock("./FilterBar", () => ({

@@ -1,9 +1,9 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import type { ConnectionId, TabId } from "@/types/branded";
-import { render, fireEvent, act, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { seedWorkspace } from "@/stores/__tests__/workspaceStoreTestHelpers";
-import { useWorkspaceStore, type TableTab } from "./stores/workspaceStore";
+import type { ConnectionId, TabId } from "@/types/branded";
 import App from "./App";
+import { type TableTab, useWorkspaceStore } from "./stores/workspaceStore";
 
 // #1719 (Part of #1717) — Stage 2 hard refresh (Cmd+Shift+R). The key
 // (previously `reset-column-widths`, now moved to the grid header context

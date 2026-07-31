@@ -1,9 +1,9 @@
-import { useMemo } from "react";
-import type { SQLNamespace, SQLDialect } from "@codemirror/lang-sql";
 import type { Completion } from "@codemirror/autocomplete";
-import { useSchemaStore } from "@stores/schemaStore";
-import type { DatabaseType } from "@/types/connection";
+import type { SQLDialect, SQLNamespace } from "@codemirror/lang-sql";
 import { getSqlFunctionsForDatabaseType } from "@lib/sql/sqlDialectProfile";
+import { useSchemaStore } from "@stores/schemaStore";
+import { useMemo } from "react";
+import type { DatabaseType } from "@/types/connection";
 
 // Sprint 302 (2026-05-14) — keyword 책임은 lang-sql 의
 // `keywordCompletionSource` 가 dialect.dialect.words 기반으로 단독 수행.

@@ -2,13 +2,13 @@
 // Focused on the lifecycle contract the grid + tabStore cleanup depend on:
 // getEntry fallback, single-slice writes, and the two purge paths (tab close
 // via `purgeKey`, connection drop via `purgeForConnection`).
-import { describe, it, expect, beforeEach } from "vitest";
-import {
-  useRawQueryGridEditStore,
-  rawEntryKey,
-  EMPTY_RAW_ENTRY,
-} from "./rawQueryGridEditStore";
+import { beforeEach, describe, expect, it } from "vitest";
 import type { ConnectionId, TabId } from "@/types/branded";
+import {
+  EMPTY_RAW_ENTRY,
+  rawEntryKey,
+  useRawQueryGridEditStore,
+} from "./rawQueryGridEditStore";
 
 const KEY_A = rawEntryKey("conn1" as ConnectionId, "tab-1" as TabId);
 const KEY_B = rawEntryKey("conn1" as ConnectionId, "tab-2" as TabId);

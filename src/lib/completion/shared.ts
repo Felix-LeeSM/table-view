@@ -8,16 +8,15 @@
 // surface for completion callers.
 
 import {
-  tokenizeSql,
   type SqlToken,
   type SqlTokenKind,
+  tokenizeSql,
 } from "@lib/sql/sqlTokenize";
-import { splitSqlStatements, formatSql, uglifySql } from "@lib/sql/sqlUtils";
-import type { Paradigm } from "@/types/connection";
-import type { DatabaseType } from "@/types/connection";
+import { formatSql, splitSqlStatements, uglifySql } from "@lib/sql/sqlUtils";
+import type { DatabaseType, Paradigm } from "@/types/connection";
 
-export { tokenizeSql, splitSqlStatements, formatSql, uglifySql };
 export type { SqlToken, SqlTokenKind };
+export { formatSql, splitSqlStatements, tokenizeSql, uglifySql };
 
 // ── prefix matcher ─────────────────────────────────────────────────────────
 

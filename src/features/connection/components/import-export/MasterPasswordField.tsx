@@ -1,7 +1,7 @@
+import { Input } from "@components/ui/input";
+import { Eye, EyeOff } from "lucide-react";
 import { useId, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Eye, EyeOff } from "lucide-react";
-import { Input } from "@components/ui/input";
 import { cn } from "@/lib/utils";
 
 export interface MasterPasswordFieldProps {

@@ -1,8 +1,8 @@
 import {
-  snippetCompletion,
   type Completion,
   type CompletionResult,
   type CompletionSource,
+  snippetCompletion,
 } from "@codemirror/autocomplete";
 import type {
   SearchCatalogSummary,

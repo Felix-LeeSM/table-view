@@ -5,7 +5,7 @@
 // Quick Look 으로 도달하는 직렬화 경로를 명시적으로 단언한다. 컨트랙트가
 // 변경되면 즉시 회귀.
 
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import { type DocumentRow, isDocumentSentinel } from "./document";
 
 describe("DocumentRow wire shape (Sprint 308)", () => {

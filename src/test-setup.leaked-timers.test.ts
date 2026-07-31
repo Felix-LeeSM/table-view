@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 
 // #1293 — regression guard for the `test-setup.ts` leaked-timer drain.
 //

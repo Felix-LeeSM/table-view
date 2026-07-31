@@ -10,11 +10,11 @@
 // `QueryResultGrid` router branches on `result.resultKind === "writeSummary"`
 // and forwards `result.writeSummary` to this surface.
 
+import { ChevronDown, ChevronRight } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ChevronDown, ChevronRight } from "lucide-react";
-import type { WriteSummaryData } from "@/types/query";
 import { formatDocumentIdForMql } from "@/types/documentMutate";
+import type { WriteSummaryData } from "@/types/query";
 
 export interface WriteSummaryPanelProps {
   summary: WriteSummaryData;

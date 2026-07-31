@@ -1,11 +1,11 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
-import { KvValueBody } from "./KvValueBody";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useSafeModeStore } from "@stores/safeModeStore";
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConnectionConfig } from "@/types/connection";
 import type { KvValueEnvelope } from "@/types/kv";
+import { KvValueBody } from "./KvValueBody";
 
 // Purpose: KV JSON tree write core (PR3, 2026-07-18) — a single-value key whose
 // value is JSON (`string` JSON or native `json`/ReJSON) is node-editable in the

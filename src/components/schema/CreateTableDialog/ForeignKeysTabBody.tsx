@@ -1,5 +1,3 @@
-import { ArrowDown, ArrowUp, Minus, Plus } from "lucide-react";
-import { useTranslation } from "react-i18next";
 import { Button } from "@components/ui/button";
 import {
   Select,
@@ -9,6 +7,8 @@ import {
   SelectValue,
 } from "@components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@components/ui/tabs";
+import { ArrowDown, ArrowUp, Minus, Plus } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import OrderedColumnPicker from "./OrderedColumnPicker";
 
 // Sprint 241 — sub-tabs split FK / CHECK / UNIQUE. The active panel

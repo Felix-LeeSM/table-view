@@ -6,22 +6,23 @@
 // PK icon / data-type sub-label / schema.table fallback / Sprint 101
 // MongoDB beta-banner regression / legacy tab without `sorts`.
 // Cases are byte-equivalent to the originals — no behaviour change.
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { setupTauriMock } from "@/test-utils/tauriMock";
-import { screen, fireEvent, act, waitFor } from "@testing-library/react";
+
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import type { SortInfo, TableData } from "@/types/schema";
 import {
   MOCK_DATA,
-  mockQueryTableData,
+  mockAddTab,
   mockExecuteQuery,
   mockExecuteQueryBatch,
   mockPromoteTab,
-  mockUpdateTabSorts,
+  mockQueryTableData,
   mockSetTabDirty,
-  mockAddTab,
-  resetDataGridMocks,
+  mockUpdateTabSorts,
   renderDataGrid,
+  resetDataGridMocks,
 } from "./__tests__/dataGridTestHelpers";
 
 // Mock FilterBar — test DataGrid in isolation

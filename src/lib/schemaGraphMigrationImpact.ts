@@ -5,12 +5,12 @@ import type {
   SchemaGraphIndexNode,
   SchemaGraphTableNode,
 } from "@/types/schemaGraph";
-import { compareText, schemaGraphTableId } from "./schemaGraphSupport";
 import type {
   SchemaGraphForeignKeySelection,
   SchemaGraphIntelligenceSelectors,
   SchemaGraphTableMetadataReadiness,
 } from "./schemaGraphSelectorTypes";
+import { compareText, schemaGraphTableId } from "./schemaGraphSupport";
 
 export type SchemaGraphMigrationRemovalTarget =
   | { readonly kind: "table"; readonly tableId: string }

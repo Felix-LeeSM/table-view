@@ -16,9 +16,9 @@
 // Pattern source: Sprint 219/223/224/229
 // (`useConnectionMutations.test.ts` / `CreateTableDialog.test.tsx`).
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { act, renderHook, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { setupTauriMock } from "@/test-utils/tauriMock";
-import { renderHook, act, waitFor } from "@testing-library/react";
 
 import type { PostgresTypeInfo } from "@/types/schema";
 
@@ -31,15 +31,15 @@ beforeEach(() => {
   });
 });
 
+import { POSTGRES_COMMON_TYPES } from "@/lib/sql/postgresTypes";
 // Imported AFTER the mock so the hook resolves to the mocked wrapper.
 // `invalidatePostgresTypesCache` is a free function exported alongside
 // the hook; test cases call it in `beforeEach` to reset the module
 // memo between cases.
 import {
-  usePostgresTypes,
   invalidatePostgresTypesCache,
+  usePostgresTypes,
 } from "./usePostgresTypes";
-import { POSTGRES_COMMON_TYPES } from "@/lib/sql/postgresTypes";
 
 function pgType(
   schema: string,

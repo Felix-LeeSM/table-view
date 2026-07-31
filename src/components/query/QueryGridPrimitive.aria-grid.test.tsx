@@ -9,9 +9,9 @@
 //   guard, empty-state single gridcell). Read-only + editable share visual==data
 //   order (no reorder), so a single parametrized contract covers both.
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { setupTauriMock } from "@/test-utils/tauriMock";
 import { render, screen, within } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import type { QueryResult } from "@/types/query";
 import { QUERY_GRID_VARIANTS } from "./__tests__/queryGridPrimitiveVariants";
 

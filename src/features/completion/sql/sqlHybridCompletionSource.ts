@@ -5,6 +5,10 @@ import type {
   CompletionSource,
 } from "@codemirror/autocomplete";
 import type { SQLDialect, SQLNamespace } from "@codemirror/lang-sql";
+import {
+  completeSqlWithPreloadedWasm,
+  completeSqlWithWasm,
+} from "@lib/sql/sqlCompletionWasm";
 import type {
   CompletionItem,
   CompletionResult as CoreCompletionResult,
@@ -12,10 +16,6 @@ import type {
 import { buildSqlCompletionRequestFromCodeMirror } from "./sqlCodeMirrorCompletionAdapter";
 import type { SqlCompletionContext } from "./sqlCompletionContext";
 import type { SqlCompletionRequest } from "./sqlCompletionRequest";
-import {
-  completeSqlWithPreloadedWasm,
-  completeSqlWithWasm,
-} from "@lib/sql/sqlCompletionWasm";
 
 type CompleteSqlSync = (
   request: SqlCompletionRequest,

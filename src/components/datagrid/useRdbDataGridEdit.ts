@@ -1,7 +1,7 @@
 import {
-  useDataGridEdit,
   type DataGridEditState,
   type UseDataGridEditParams,
+  useDataGridEdit,
 } from "./useDataGridEdit";
 
 export type UseRdbDataGridEditParams = Omit<UseDataGridEditParams, "paradigm">;

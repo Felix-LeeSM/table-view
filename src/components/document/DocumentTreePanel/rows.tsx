@@ -3,9 +3,9 @@
 // small stat/tag/new badges. All are state-free — the panel drives them via
 // props so only one add UI is visible across the whole tree at a time.
 
-import { useTranslation } from "react-i18next";
 import type { useVirtualizer } from "@tanstack/react-virtual";
 import { Plus } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { type RenderRow, renderRowKey } from "./types";
 
 // #1448 — windowed row list with top/bottom `aria-hidden` spacers that keep the

@@ -22,13 +22,12 @@
  * non-self-echo 의 origin 만 바꿔 검증한다.
  */
 
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
 }));
 
-import { invoke } from "@tauri-apps/api/core";
 import {
   dispatchStateChangedPayload,
   resetStateChangedRegistryForTests,
@@ -38,9 +37,10 @@ import {
   registerSettingReceiver,
   resetSettingReceiverForTests,
 } from "@lib/runtime/settings/settingsReceiver";
-import { THEME_STORAGE_KEY, DEFAULT_THEME_ID } from "@lib/themeBoot";
-import { useThemeStore } from "./themeStore";
+import { DEFAULT_THEME_ID, THEME_STORAGE_KEY } from "@lib/themeBoot";
+import { invoke } from "@tauri-apps/api/core";
 import { useSafeModeStore } from "./safeModeStore";
+import { useThemeStore } from "./themeStore";
 
 const invokeMock = vi.mocked(invoke);
 

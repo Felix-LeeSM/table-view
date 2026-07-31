@@ -5,8 +5,8 @@
 // 시나리오를 회귀 가드. Mongo find body 의 `projection` shape (`{
 // field: 1 }` / `{ field: 0 }`) 으로 정확히 변환되어야 한다.
 
-import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 import ProjectionDialog from "./ProjectionDialog";
 
 const COLUMNS = [

@@ -6,16 +6,16 @@
  * `src-tauri/src/commands/open_log_dir.rs` 단위 테스트가 책임.
  */
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
 import { act, render, screen, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const invokeMock = vi.fn();
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: (...args: unknown[]) => invokeMock(...args),
 }));
 
-import RevealLogsButton from "./RevealLogsButton";
 import { useToastStore } from "@stores/toastStore";
+import RevealLogsButton from "./RevealLogsButton";
 
 describe("RevealLogsButton (#1566)", () => {
   beforeEach(() => {
