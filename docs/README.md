@@ -26,7 +26,9 @@ updated: 2026-05-28
 지속 참조 문서(`product/`, `contributor-guide/`, `roadmap/`, `ROADMAP.md`,
 `phases/`, docs root)는 120,000 chars 분량 cap 을 둔다 — agent 가
 읽을 때 context 부하를 가두기 위함. 일회성 산출물(`archives/`, `explorations/`)은
-cap 에서 제외한다 (다시 읽을 일이 거의 없음).
+cap 에서 제외한다 (다시 읽을 일이 거의 없음). `decisions/` 도 제외한다 — cap 은 살아
+있는 산문이 비대해지는 것을 막는 장치인데 ADR 본문은 동결이라 줄일 수 없고,
+`archives/` 밑에 있던 시절에도 같은 이유로 (포괄 제외를 타고) cap 밖이었다.
 cap 은 규율로만 남았고 자동 검사가 없다.
 
 ## 유지할 최상위 묶음
