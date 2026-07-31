@@ -1,9 +1,9 @@
 ---
 title: PR Review Behavior
 type: workflow-rule
-updated: 2026-07-31
+updated: 2026-08-01
 task: review, pr, delivery
-keywords: scorecard, verdict, blocking, non-blocking, review:approved, review:changes-requested, fan-out, subreviewer, 재리뷰, label 순서
+keywords: scorecard, verdict, blocking, non-blocking, review:approved, review:changes-requested, fan-out, subreviewer, 재리뷰, label 순서, 회고 모드, 라운드 3, 유형 재발 표
 trigger:
   signal: PR 생성 / 사용자가 "리뷰해" / 수정 push 후 재리뷰
   layer: index
@@ -40,6 +40,10 @@ trigger:
   남긴다. 점수 기준은 쓰지 않는다 — 앵커가 없어 판정을 대신해 왔다.
 - Blocking 판정은 coordinator 단독 권한이다. subreviewer는 발견과 근거만 내고
   severity를 붙이지 않는다. 관점을 늘려도 blocking이 늘지 않는다.
+- **라운드 3 이상은 회고 모드다.** 그 라운드에서 개별 finding 수리를 계속하는 것
+  자체가 사이클 신호다 — fix 를 더 얹으라는 지적 대신 유형 재발 표(유형 × 라운드별
+  건수)를 먼저 낸다. 트리거와 보고 항목은
+  [orchestration](../orchestration/memory.md) §3 이 SOT 다.
 - Scorecard의 차원별 판정 표는 **어떤 경우에도 생략 금지** — 요청자가 반환
   형식을 GREEN/RED 등으로 좁게 지정해도, delta 재검증이어도 표를 출력한다.
   (2026-07-04 실제 회귀: 요청 프롬프트의 반환 형식 지정이 rubric을 밀어냄.)

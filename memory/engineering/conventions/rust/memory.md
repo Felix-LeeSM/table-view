@@ -1,7 +1,7 @@
 ---
 title: Rust 컨벤션
 type: convention
-updated: 2026-06-12
+updated: 2026-08-01
 surface: src-tauri/**/*.rs
 task: rust-impl, refactor
 trigger:
@@ -64,6 +64,8 @@ fn get_user(id: u64) -> Result<User, AppError> {
 - 커버리지: Rust local target 은 sprint/contract 에 명시한다. Parser/adapter/command
   처럼 위험한 surface 는 기존 high-coverage 선례를 참고한다. Frontend/Rust shared
   coverage floor 는 `.github/workflows/ci.yml` 의 `--fail-under-*` 리터럴이 소유한다.
+- cargo-mutants 는 `--in-place` 로 돌린다 — crate 밖 `include_str!` 때문에 기본 copy
+  모드는 전량 실패한다. `safety.rs` mutation score baseline 은 63.5% (2026-07-28).
 
 ## 보안
 

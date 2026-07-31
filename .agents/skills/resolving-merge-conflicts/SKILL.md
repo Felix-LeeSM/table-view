@@ -85,6 +85,11 @@ git add -A
 git commit          # merge commit 메시지에 트레이드오프를 남긴다
 ```
 
+merge 로 온 이상 결과 트리가 의도와 같다는 것은 **트리 비교로 증명한다** —
+`git diff <merge-commit> <의도한 트리>` 가 비어야 한다. 커밋 목록이나 diff 요약은
+증명이 아니다. rebase 로 되돌아가지 마라: push 된 브랜치의 rebase 는 force-push 를
+요구하므로 금지다 (위 「여기 오는 길」).
+
 푸시는 `memory/workflow/delivery/memory.md` 의 계약을 따른다. push 가
 non-fast-forward 로 튕기면 `git reset --hard` 나 `git pull --rebase` 로 가지 말고
 `git-policy` 의 4-step 회복으로 간다. 그래도 안 풀리면 force 를 시도하지 말고

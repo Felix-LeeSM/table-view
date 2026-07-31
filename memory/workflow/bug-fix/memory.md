@@ -1,9 +1,9 @@
 ---
 title: 버그 fix — Red test 먼저
 type: workflow-rule
-updated: 2026-07-31
+updated: 2026-08-01
 task: bug-fix, regression-test, user-report
-keywords: 버그, 회귀, regression, Red, failing test, 증상 재현, 깨졌다, 터진다
+keywords: 버그, 회귀, regression, Red, failing test, 증상 재현, 깨졌다, 터진다, 스택트레이스, exit code, 인과 분리
 trigger:
   signal: 사용자가 버그/회귀/UX 이슈 보고
   layer: none — 자동 로드 없음, 직접 열어야 함
@@ -17,6 +17,8 @@ trigger:
 
 1. **Red** — failing test 작성. 사용자 보고 증상 그대로 재현. assertion 이 사용자가 본 wrong behavior 를 직접 포착해야 함.
    - 예: "launcher window 가 connection 켠 후에도 visible == true" 라는 증상을 그대로 assertion 으로.
+   - 로그에 보이는 유일한 스택트레이스가 실패 원인이라는 보장은 없다. 그 에러를
+     없앤 뒤 다시 돌려 실패가 유지되는지로 exit code 와의 인과를 실측으로 가른다.
 2. **Green** — fix 구현.
 3. **Verify** — test 가 green 으로 전환, 다른 test 회귀 없음 확인.
 4. **Commit** — regression test + fix 한 commit 에. (delivery 의 직접 commit 룰 적용 — [delivery](../delivery/memory.md))

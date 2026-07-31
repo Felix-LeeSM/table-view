@@ -1,9 +1,9 @@
 ---
 title: Git 정책
 type: workflow-rule
-updated: 2026-07-31
+updated: 2026-08-01
 task: commit, push, signing, push-reject, pr-close, race-trace
-keywords: non-fast-forward, push reject, force-push, --no-verify, --no-gpg-sign, FETCH_HEAD, ORIG_HEAD, update-ref, ls-remote, stale ref, pinentry, gpg failed
+keywords: non-fast-forward, push reject, force-push, --no-verify, --no-gpg-sign, FETCH_HEAD, ORIG_HEAD, update-ref, ls-remote, stale ref, pinentry, gpg failed, exit code, 파이프, stash, stash pop
 trigger:
   signal: git commit / git push / push reject / PR close 시
   layer: none — 집행 훅 없음, 규율만
@@ -179,6 +179,16 @@ git push origin '<literal-sha>':'refs/heads/<branch-name>'  # 2) literal SHA →
 zsh 는 word 안의 `:` 를 modifier 로 해석 → `<sha>:refs/heads/foo` 가
 깨짐. **single-quote escape 필수** (bash 에선 무해): `git push origin
 'abc1234':'refs/heads/feat/foo'`.
+
+## push 결과 확인 · stash 취급
+
+- 파이프(`git push | tail` 등)는 실패 exit code 를 삼킨다 — 성공 보고 전에
+  `git ls-remote origin <branch>` 로 원격 SHA 를 대조해 확인한다.
+- **`git stash push` 는 저장할 게 없어도 exit 0 이다** ("No local changes to save").
+  exit 1 은 매칭 안 되는 pathspec 과 초기 커밋 없는 repo 에서만 나므로, 저장
+  여부를 exit code 로 못 가른다. 아무것도 안 쌓였는데 무조건 `stash pop` 하면 스택
+  맨 위의 남의 옛 entry 가 나온다 — `stash push` 전후로 `git stash list | wc -l`
+  을 대조해 실제로 쌓였는지 확인하고, pop 은 `stash@{N}` 으로 대상을 명시한다.
 
 ## 관련
 

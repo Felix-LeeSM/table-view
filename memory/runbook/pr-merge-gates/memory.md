@@ -1,9 +1,9 @@
 ---
 title: PR merge 게이트 진단 / 처리
 type: runbook
-updated: 2026-07-31
+updated: 2026-08-01
 task: merge, pr, review-gate, ci, blocked, ruleset, e2e, synchronize-rerun, cancelled-rollup, round-gate
-keywords: BLOCKED, base branch policy prohibits, mergeStateStatus, UNSTABLE, CLEAN, review-gate, reflect:done, required check, check-runs, rerun, cancelled, expected, Dismiss stale approval
+keywords: BLOCKED, base branch policy prohibits, mergeStateStatus, UNSTABLE, CLEAN, DIRTY, review-gate, reflect:done, required check, check-runs, check suite, rerun, cancelled, expected, Dismiss stale approval, statusCheckRollup, auto-merge, 체크 0개
 trigger:
   signal: PR 이 mergeable 인데 mergeState=BLOCKED / merge 가 base branch policy 로 거부
   layer: none — 자동 로드 없음, 직접 열어야 함
@@ -83,6 +83,15 @@ N 개 중 `FAIL <key>` 를 찍은 spec 이 원인이다.
   판정을 못 풀어 BLOCKED 가 고착된다. review-gate 는 `labeled` 이벤트에서만 success 를
   낼 수 있고 opened/synchronize/rerun 은 fail run 을 남긴다 — `labeled` 라도 라운드
   게이트에 걸리면 fail 한다 (아래).
+- **required 판정은 이름별 "최신 생성 check suite" 를 따른다** (#1967 실측 판정).
+  `gh run rerun` 은 원래 suite 를 재사용하므로 옛 run 의 rerun 은 판정을 어느
+  방향으로도 못 바꾼다 — 게이트를 풀려면 새 이벤트(label 부착 등)로 **새 suite** 를
+  만든다. `statusCheckRollup` 은 동명 run 전부의 집계라 required 판정과 다르고,
+  `/commits/<sha>/status` 는 legacy Status 전용이라 이 repo 에선 항상 비어 있다.
+- **auto-merge 가 켜진 PR 에 커밋을 더할 거면 먼저 끈다** — 수정 push 가 올라가기
+  전에 머지된 사례가 있다 (#1860).
+- **체크가 0개면 워크플로 문제부터 보지 않는다.** `mergeStateStatus` 를 먼저 봐라 —
+  `DIRTY`(충돌)면 CI 는 아예 안 돈다.
 - **update-branch(main pull) 불필요**: branch protection `strict`(up-to-date)=false →
   behind 여도 merge 된다. update-branch 는 synchronize 이벤트로 `review:approved` 와
   `review:changes-requested` 를 떨구기만 하고 이득 없음 (떼는 label 집합의 SOT 는
