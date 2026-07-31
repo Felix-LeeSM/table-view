@@ -72,7 +72,7 @@ surface 디렉토리(`src/` 등)의 `AGENTS.md` 는 해당 surface rule 로 가�
 - `memory/` 트리: `memory.md` 만, 200줄 / 12,000 chars cap (둘 다).
 - workflow memory 는 행동 계약만 둔다. 긴 절차는 `.agents/skills/` 로 내리고
   memory 에는 계약과 그 경로만 남긴다.
-- ADR 동결. 결정 뒤집기 = 새 ADR + `Superseded`. 본문은
+- ADR 본문 동결. 결정 뒤집기 = 새 ADR + `Superseded`. 본문은
   `docs/archives/decisions/`.
 - git/hook 회피 금지: 대표 예 `--no-verify` / force-push. SOT 는
   `memory/workflow/git-policy/memory.md` 하나이고 차단은 일어나지 않는다.
