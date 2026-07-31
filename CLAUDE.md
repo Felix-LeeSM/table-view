@@ -21,6 +21,9 @@ subagent 에 배달되지 않았다 (#1865 측정). 지우면 배달이 끊긴�
 - [`memory/index/by-surface.md`](memory/index/by-surface.md) — 코드/문서 수정 전
   해당 surface active rule 묶음. 링크이므로 직접 열어야 한다.
 - [`docs/PLAN.md`](docs/PLAN.md) — product/roadmap/contributor SOT 인덱스.
+- [`docs/README.md`](docs/README.md) — docs 인덱스이자 검색 팁 SOT. 루트 `.ignore`
+  가 제외 목록을 걸어 두므로 **기본 `rg` 결과는 저장소 전수가 아니다** — 전수는
+  `git grep` 으로 재고, 제외 목록과 되살리는 법은 저 문서에서 읽는다.
 - git/hook 회피 금지는 `memory/workflow/git-policy/memory.md` 가 SOT. 위 링크를
   스스로 열지 않으면 아무것도 오지 않고, 어겨도 막히지 않는다.
 
