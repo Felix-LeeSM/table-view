@@ -57,12 +57,21 @@ pass). 계약 SOT 는 [delivery](../../workflow/delivery/memory.md) 「PR body�
 **`ci.yml` 은 `edited` 를 안 듣는다** — body 만 고치고 `gh run rerun` 해도 원래
 payload 의 옛 body 를 다시 읽어 같은 자리에서 fail 한다. **해소는 새 commit 뿐이다.**
 
+**같은 job 이 body 와 무관한 두 번째 계약도 검사한다 (#2059 부터).**
+`CLAUDE.md import intact` 스텝이 `CLAUDE.md` 의 `@AGENTS.md` import 줄과
+`AGENTS.md` 파일 존재를 본다 — body 가 깨끗해도 둘 중 하나가 깨지면 같은
+required context 가 red 다. 스텝은 실패해도 메시지를 안 찍으므로(`grep -q` +
+`test -f`) 로그엔 exit code 만 남는다. red 면 두 가지를 직접 확인해라: `CLAUDE.md`
+에 `@AGENTS.md` 하나만 있는 줄이 그대로인가(들여쓰기·트레일링 CR 도 red),
+`AGENTS.md` 가 있는가. fix 는 body 가 아니라 그 줄 · 그 파일 복구다. 이 스텝은
+body 스텝 뒤라 body 가 red 면 skip 된다 — body 를 먼저 고쳐야 import 판정이 나온다.
+
 **BLOCKED 진단에서 먼저 배제할 이름은 이제 없다.** required 7종(`Frontend
 Checks`, `Rust Unit And Storage Tests`, `Integration Tests (Docker)`,
 `Dependency Security`, `Rust Static Analysis`, `Runtime Happy Path`,
 `PR Body Contract`) 과 `review-gate` 가 전부 red 가 될 수 있고, 대응은 fix (clippy
-fix / 테스트 수정 / body 고쳐 재push) 지 회피 아님. 신규 required context 등록은
-workflow 가 main 에 올라간 **뒤에** 한다 — 아무 run 도 만들지 않는 required
+fix / 테스트 수정 / body 고쳐 재push / `CLAUDE.md` import 줄 원복) 지 회피 아님.
+신규 required context 등록은 workflow 가 main 에 올라간 **뒤에** 한다 — 아무 run 도 만들지 않는 required
 context 는 열린 PR 전부를 BLOCKED 로 고착시킨다.
 
 → protection API 만 보고 "required 는 review-gate 뿐" 이라 단정하지 말 것. ruleset
