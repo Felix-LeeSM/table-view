@@ -112,17 +112,22 @@ git grep -n '<term>'                                # 전수 — 추적 파일 �
 rg -n --no-ignore-dot --hidden -g '!.git' '<term>'  # rg 로 같은 모집단에 근사
 ```
 
-**둘은 근사지 등식이 아니다.** 어긋나는 방향이 둘 다 있고, 아래가 차이 파일을
-그대로 뽑는다 (2026-08-01 실측). 건수를 적지 않는 이유는 이 문서가 두 검색어를
-품고 있어 자기 자신을 세기 때문이다 — 차이 집합만 안정적이다.
+**둘은 근사지 등식이 아니다.** 아래가 차이 파일을 그대로 뽑는다 — 위 레시피와
+같이 `-g '!.git'` 을 붙인 형태다. 건수를 적지 않는 이유는 이 문서가 두 검색어를
+품고 있어 자기 자신을 세기 때문이다.
 
 ```sh
-diff <(git grep -l lefthook | sort) <(rg -l --no-ignore-dot --hidden lefthook | sort)
-diff <(git grep -l sql_parser_core | sort) <(rg -l --no-ignore-dot --hidden sql_parser_core | sort)
+diff <(git grep -l lefthook | sort) <(rg -l --no-ignore-dot --hidden -g '!.git' lefthook | sort)
+diff <(git grep -l sql_parser_core | sort) <(rg -l --no-ignore-dot --hidden -g '!.git' sql_parser_core | sort)
 ```
 
-첫 줄은 rg 쪽 여분으로 `.git/packed-refs` 와 `.git/hooks/pre-push` 를 낸다 — git 은
-자기 내부 파일을 추적하지 않는다. rg 에 `-g '!.git'` 을 붙이면 두 집합이 같아진다
-(`.git/hooks/pre-push` 는 `pnpm install` 이 lefthook 훅을 깔았을 때만 있다).
-둘째 줄은 git grep 쪽 여분으로 `src/lib/sql/wasm/sql_parser_core_bg.wasm` 을 낸다 —
-git grep 은 추적 바이너리 안을 맞히고 rg 는 바이너리를 건너뛴다.
+첫 줄은 차이가 없다 — `lefthook` 은 추적된 텍스트 파일에만 있어서 `-g '!.git'` 만
+붙이면 두 집합이 맞는다. 둘째 줄은 git grep 쪽 여분 한 줄,
+`src/lib/sql/wasm/sql_parser_core_bg.wasm` 이다 — git grep 은 추적 바이너리 안을
+맞히고 rg 는 재귀 탐색에서 바이너리를 건너뛴다. 두 줄 다 작업 중인 사본과 갓
+clone 한 사본에서 같은 결과였다 (2026-08-01 실측).
+
+반대 방향인 **rg 쪽 여분은 사본 상태에 달렸다.** rg 는 추적 여부를 안 보므로
+`.gitignore` 에 안 걸린 미추적 파일을 같이 세고, `-g '!.git'` 을 빼면 `.git/` 안까지
+얹힌다 — `packed-refs` 의 ref 이름, `COMMIT_EDITMSG` 의 직전 커밋 메시지, 설치된
+훅이 검색어에 걸린다. 검색어와 사본에 따라 달라지므로 파일 이름을 못 박지 않는다.
