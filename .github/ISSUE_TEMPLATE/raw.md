@@ -8,8 +8,7 @@ labels: ["raw"]
 raw 는 관찰을 잃어버리지 않기 위한 보관함이다. 수용 기준도 파일 범위도 여기서는
 요구하지 않는다 — 그것을 갖추는 순간 task 다.
 
-task 승격은 interface 전담 (memory/workflow/interface/memory.md — 이 방은 아직
-없다. 계약이 내려오기 전까지 raw 승격은 사람이 판단한다).
+task 승격은 interface 전담 (memory/workflow/interface/memory.md).
 구현자가 raw 를 보고 바로 착수하지 않는다.
 -->
 

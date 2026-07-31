@@ -26,7 +26,7 @@ generator: none — 손으로 갱신한다
 
 ### agent-hard-rule
 
-- [Multi-agent worktree](../../memory/runbook/worktree/memory.md)
+- [작업 사본 격리 — clone](../../memory/runbook/worktree/memory.md)
 
 ### architecture
 
@@ -61,6 +61,10 @@ generator: none — 손으로 갱신한다
 ### ci
 
 - [PR merge 게이트 진단 / 처리](../../memory/runbook/pr-merge-gates/memory.md)
+
+### clone
+
+- [작업 사본 격리 — clone](../../memory/runbook/worktree/memory.md)
 
 ### code-writing
 
@@ -101,6 +105,10 @@ generator: none — 손으로 갱신한다
 
 - [Fixture strategy — support claims need local evidence](../../memory/engineering/conventions/testing-scenarios/fixtures/memory.md)
 
+### decision-record
+
+- [Interface — 사용자 대화 전담 · 티켓 승격 · orchestrator 운용](../../memory/workflow/interface/memory.md)
+
 ### decomposition
 
 - [God file 시퀀스](../../memory/engineering/conventions/refactoring/god-file/memory.md)
@@ -139,10 +147,18 @@ generator: none — 손으로 갱신한다
 
 - [God file 시퀀스](../../memory/engineering/conventions/refactoring/god-file/memory.md)
 
+### grill
+
+- [Interface — 사용자 대화 전담 · 티켓 승격 · orchestrator 운용](../../memory/workflow/interface/memory.md)
+
 ### implementation
 
 - [Engineering](../../memory/engineering/memory.md)
 - [Implementation — agent 자율성 + noise 차단](../../memory/workflow/implementation/memory.md)
+
+### interface
+
+- [Interface — 사용자 대화 전담 · 티켓 승격 · orchestrator 운용](../../memory/workflow/interface/memory.md)
 
 ### issue-authoring
 
@@ -172,7 +188,11 @@ generator: none — 손으로 갱신한다
 
 ### multi-agent
 
-- [Multi-agent worktree](../../memory/runbook/worktree/memory.md)
+- [작업 사본 격리 — clone](../../memory/runbook/worktree/memory.md)
+
+### needs-user
+
+- [Interface — 사용자 대화 전담 · 티켓 승격 · orchestrator 운용](../../memory/workflow/interface/memory.md)
 
 ### orchestration
 
@@ -180,7 +200,7 @@ generator: none — 손으로 갱신한다
 
 ### parallel
 
-- [Multi-agent worktree](../../memory/runbook/worktree/memory.md)
+- [작업 사본 격리 — clone](../../memory/runbook/worktree/memory.md)
 
 ### parallel-pr
 
@@ -306,7 +326,7 @@ generator: none — 손으로 갱신한다
 
 ### spawn-verify
 
-- [Multi-agent worktree](../../memory/runbook/worktree/memory.md)
+- [작업 사본 격리 — clone](../../memory/runbook/worktree/memory.md)
 
 ### sprint
 
@@ -351,6 +371,10 @@ generator: none — 손으로 갱신한다
 
 - [E2E 시나리오 설계 원칙](../../memory/engineering/conventions/e2e-scenarios/memory.md)
 
+### ticket-promotion
+
+- [Interface — 사용자 대화 전담 · 티켓 승격 · orchestrator 운용](../../memory/workflow/interface/memory.md)
+
 ### ui
 
 - [Frontend Guidance](../../memory/engineering/conventions/frontend/memory.md)
@@ -362,6 +386,10 @@ generator: none — 손으로 갱신한다
 ### unsupported-convention
 
 - [Cross-paradigm UI Parity 머지 기준](../../memory/product/ui-parity/memory.md)
+
+### user-dialogue
+
+- [Interface — 사용자 대화 전담 · 티켓 승격 · orchestrator 운용](../../memory/workflow/interface/memory.md)
 
 ### user-report
 
@@ -377,4 +405,4 @@ generator: none — 손으로 갱신한다
 
 ### worktree
 
-- [Multi-agent worktree](../../memory/runbook/worktree/memory.md)
+- [작업 사본 격리 — clone](../../memory/runbook/worktree/memory.md)
