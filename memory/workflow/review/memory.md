@@ -49,8 +49,8 @@ trigger:
   delta 재검증이어도 표를 출력한다.
   (2026-07-04 실제 회귀: 요청 프롬프트의 반환 형식 지정이 rubric을 밀어냄.)
 - Verdict는 label로 공표한다. add와 remove를 한 명령에 같이 쓰지 않는다 — 같은
-  초에 label 이벤트가 둘 나면 `cancel-in-progress`가 `review-gate` run 하나를
-  죽이고, 죽은 run이 rollup에 non-success로 남아 BLOCKED가 고착된다(#1879 실측).
+  초에 label 이벤트가 둘 나면 `cancel-in-progress`가 `review-gate` run 하나를 죽이고,
+  그 이름의 최신 suite가 non-success인 채 남아 BLOCKED가 고착된다(#1879 실측).
 
   ```
   green: gh pr edit <N> --remove-label review:changes-requested

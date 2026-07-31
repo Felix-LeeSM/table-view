@@ -66,11 +66,9 @@ required context 가 red 다. 스텝은 실패해도 메시지를 안 찍으므�
 `AGENTS.md` 가 있는가. fix 는 body 가 아니라 그 줄 · 그 파일 복구다. 이 스텝은
 body 스텝 뒤라 body 가 red 면 skip 된다 — body 를 먼저 고쳐야 import 판정이 나온다.
 
-**BLOCKED 진단에서 먼저 배제할 이름은 이제 없다.** required 7종(`Frontend
-Checks`, `Rust Unit And Storage Tests`, `Integration Tests (Docker)`,
-`Dependency Security`, `Rust Static Analysis`, `Runtime Happy Path`,
-`PR Body Contract`) 과 `review-gate` 가 전부 red 가 될 수 있고, 대응은 fix (clippy
-fix / 테스트 수정 / body 고쳐 재push / `CLAUDE.md` import 줄 원복) 지 회피 아님.
+**BLOCKED 진단에서 먼저 배제할 이름은 이제 없다.** 위 `ci-gates` 블록의 required 7종과
+`review-gate` 가 전부 red 가 될 수 있고, 대응은 fix (clippy fix / 테스트 수정 /
+body 고쳐 재push / `CLAUDE.md` import 줄 원복) 지 회피 아님.
 신규 required context 등록은 workflow 가 main 에 올라간 **뒤에** 한다 — 아무 run 도 만들지 않는 required
 context 는 열린 PR 전부를 BLOCKED 로 고착시킨다. main 착지도 충분조건이 아니다: 열린 PR 은
 merge ref 가 갱신돼야 새 workflow 정의를 읽는다 (#1868, 아래 「review-gate run 상태 함정」).
@@ -177,7 +175,8 @@ N 개 중 `FAIL <key>` 를 찍은 spec 이 원인이다.
 ## 진단 명령
 
 - `gh pr view <n> --json mergeable,mergeStateStatus` — BLOCKED/UNSTABLE/CLEAN 판별
-- `gh pr checks <n>` 에서 `Runtime Happy Path` 상태 + `review-gate` 확인
+- `gh pr checks <n>` 에서 `Runtime Happy Path` 상태 + `review-gate` 확인 — 단 **최신 run
+  만 보여준다**: 쌓인 CANCELLED 고착을 가려 all-pass 처럼 나온다 (「review-gate run 상태 함정」)
 - `gh api .../commits/<headSha>/check-runs` — review-gate run 이 여러 개 쌓였는지
 
 ## Why
