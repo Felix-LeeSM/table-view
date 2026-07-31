@@ -44,7 +44,8 @@ trigger:
 
 ## 실패 시 — 회피 X, 근본 fix
 
-- 포맷 실패 → `cargo fmt` / `pnpm format` (= `biome format --write .`).
+- 포맷 실패 → `pnpm format` (= `biome format --write .`) / rust 는 `pnpm format:rust`
+  — 맨 `cargo fmt` 는 루트에 `Cargo.toml` 이 없어 실패한다. manifest 경로는 그 스크립트에 있다.
 - 린트 실패 → 경고 수정. 억제는 사유 코멘트와 함께만 —
   일반 규칙은 `biome-ignore`, repo 고유 가드는 `eslint-disable`.
 - 테스트 실패 → 코드 수정 또는 (테스트가 틀렸으면) 테스트 + ADR 수정.
