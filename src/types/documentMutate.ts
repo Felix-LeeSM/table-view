@@ -68,7 +68,7 @@ const OBJECT_ID_HEX_RE = /^[0-9a-fA-F]{24}$/;
 export function parseObjectIdLiteral(value: unknown): DocumentId | null {
   if (!value || typeof value !== "object") return null;
   const record = value as Record<string, unknown>;
-  const oid = record["$oid"];
+  const oid = record.$oid;
   if (typeof oid !== "string") return null;
   if (!OBJECT_ID_HEX_RE.test(oid)) return null;
   return { objectId: oid };
@@ -94,7 +94,7 @@ export function documentIdFromRow(
   row: Record<string, unknown>,
 ): DocumentId | null {
   if (!Object.prototype.hasOwnProperty.call(row, "_id")) return null;
-  const raw = row["_id"];
+  const raw = row._id;
   if (raw === null || raw === undefined) return null;
 
   // Canonical EJSON `{ "$oid": "<hex>" }` wrapper.

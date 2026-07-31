@@ -1,7 +1,7 @@
+import { useConnectionStore } from "@stores/connectionStore";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { setupTauriMock } from "@/test-utils/tauriMock";
-import { useConnectionStore } from "@stores/connectionStore";
 import type { ConnectionConfig, DatabaseType } from "@/types/connection";
 import type { TableData } from "@/types/schema";
 import { useRdbTableData } from "./useRdbTableData";

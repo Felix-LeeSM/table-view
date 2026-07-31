@@ -1,8 +1,8 @@
 import Decimal from "decimal.js";
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
-  cellToEditValue,
   cellToEditString,
+  cellToEditValue,
   deriveEditorSeed,
   getInputTypeForColumn,
 } from "./useDataGridEdit";

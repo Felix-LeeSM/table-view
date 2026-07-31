@@ -1,5 +1,5 @@
-import { useEffect, type DependencyList } from "react";
 import type { UnlistenFn } from "@tauri-apps/api/event";
+import { type DependencyList, useEffect } from "react";
 
 /**
  * Register a Tauri event listener with a cancel-safe teardown (#1370).

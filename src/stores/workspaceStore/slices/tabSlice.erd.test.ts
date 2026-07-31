@@ -3,11 +3,12 @@
 // by (connId, db), so a second open for the same database must re-focus the
 // existing erd tab rather than duplicate it. These tests lock both the
 // creation shape and that dedup/re-focus behavior.
-import { beforeEach, describe, expect, it } from "vitest";
+
 import {
   __resetCountersForTests,
   useWorkspaceStore,
 } from "@stores/workspaceStore";
+import { beforeEach, describe, expect, it } from "vitest";
 
 describe("tabSlice — openErdTab (database-level ERD tab)", () => {
   beforeEach(() => {

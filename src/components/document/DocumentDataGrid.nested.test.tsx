@@ -9,13 +9,13 @@
 //   - inline edit on a tree leaf records the dot-path pendingEdit, and
 //     the MQL preview emits `$set: { "<col>.<path>": <value> }`.
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { setupTauriMock } from "@/test-utils/tauriMock";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import DocumentDataGrid from "./DocumentDataGrid";
-import { __resetDocumentStoreForTests } from "@/test-utils/documentStore";
 import { useConnectionStore } from "@stores/connectionStore";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { __resetDocumentStoreForTests } from "@/test-utils/documentStore";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import type { DocumentQueryResult } from "@/types/document";
+import DocumentDataGrid from "./DocumentDataGrid";
 
 function buildResult(): DocumentQueryResult {
   return {

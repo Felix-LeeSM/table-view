@@ -1,10 +1,10 @@
+import { normalizeConnectionConfig } from "@lib/wireCamelCase";
 import { invoke } from "@tauri-apps/api/core";
 import type {
   ConnectionConfig,
   ConnectionDraft,
   ConnectionGroup,
 } from "./model";
-import { normalizeConnectionConfig } from "@lib/wireCamelCase";
 
 export async function listConnections(): Promise<ConnectionConfig[]> {
   const connections = await invoke<unknown[]>("list_connections");

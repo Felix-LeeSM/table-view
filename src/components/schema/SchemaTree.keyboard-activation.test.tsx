@@ -3,14 +3,15 @@
 // (table/view/function via the shared handler, and metadata/sequence rows)
 // only handled Enter. WAI-ARIA `treeitem` expects Space to activate too.
 // Regression: Space on a leaf/metadata row must run the same handler as Enter.
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, act, fireEvent } from "@testing-library/react";
-import SchemaTree from "./SchemaTree";
-import { useSchemaStore } from "@stores/schemaStore";
+
 import { useConnectionStore } from "@stores/connectionStore";
+import { useSchemaStore } from "@stores/schemaStore";
 import { useWorkspaceStore } from "@stores/workspaceStore";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConnectionConfig, DatabaseType } from "@/types/connection";
-import type { TableInfo, FunctionInfo } from "@/types/schema";
+import type { FunctionInfo, TableInfo } from "@/types/schema";
+import SchemaTree from "./SchemaTree";
 
 const mockLoadSchemas = vi.fn().mockResolvedValue(undefined);
 const mockLoadTables = vi.fn().mockResolvedValue(undefined);

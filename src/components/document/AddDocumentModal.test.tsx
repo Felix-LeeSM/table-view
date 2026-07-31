@@ -1,17 +1,17 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, act } from "@testing-library/react";
-import { EditorView } from "@codemirror/view";
 import { CompletionContext } from "@codemirror/autocomplete";
-import { EditorState } from "@codemirror/state";
 import { json as jsonLanguage } from "@codemirror/lang-json";
-import AddDocumentModal, {
-  type AddDocumentModalProps,
-} from "./AddDocumentModal";
+import { EditorState } from "@codemirror/state";
+import { EditorView } from "@codemirror/view";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useDocumentStore } from "@/test-utils/documentStore";
 import {
   expectUndoRevertsEdit,
   getKeymapBindings,
 } from "../query/__tests__/editorHistoryHelpers";
+import AddDocumentModal, {
+  type AddDocumentModalProps,
+} from "./AddDocumentModal";
 
 function getEditorContainer(): HTMLElement {
   return screen.getByLabelText("Document JSON");

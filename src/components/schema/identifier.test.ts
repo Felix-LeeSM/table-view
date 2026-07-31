@@ -7,8 +7,8 @@
 // keep only a representative wire-up case (invalid -> error + Apply
 // disabled).
 
-import { describe, it, expect } from "vitest";
-import { validateIdentifier, IDENTIFIER_MAX_BYTES } from "./identifier";
+import { describe, expect, it } from "vitest";
+import { IDENTIFIER_MAX_BYTES, validateIdentifier } from "./identifier";
 
 describe("validateIdentifier", () => {
   // Reason: rejection matrix — every invalid class the two schema

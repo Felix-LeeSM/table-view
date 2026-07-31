@@ -4,20 +4,21 @@
 //   3. 전역 필터 — 전 스키마 대상, 매치 자동 펼침, views/functions 포함.
 //   4. flat(SQLite)/no-schema(MySQL) 동일 필터 UX.
 // mock 은 lib boundary (schema store actions) 만; 렌더는 실제 SchemaTree.
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, act } from "@testing-library/react";
-import SchemaTree from "./SchemaTree";
+
 import { useConnectionStore } from "@stores/connectionStore";
 import { useWorkspaceStore } from "@stores/workspaceStore";
 import {
   dehydrate,
   migrateLoadedWorkspaces,
 } from "@stores/workspaceStore/persistence";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConnectionConfig, DatabaseType } from "@/types/connection";
 import {
-  setSchemaStoreState,
   resetStores,
+  setSchemaStoreState,
 } from "./__tests__/schemaTreeTestHelpers";
+import SchemaTree from "./SchemaTree";
 
 function makeConn(id: string, dbType: DatabaseType): ConnectionConfig {
   return {

@@ -1,6 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, within, fireEvent } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import BsonTreeViewer, { detectBsonBadge } from "./BsonTreeViewer";
 
 // `userEvent.setup()` (used by the keyboard test) installs its own

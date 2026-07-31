@@ -1,11 +1,11 @@
-import { describe, it, expect } from "vitest";
-import { EditorState } from "@codemirror/state";
 import { CompletionContext } from "@codemirror/autocomplete";
 import {
-  sql as sqlLanguage,
-  StandardSQL,
   type SQLNamespace,
+  StandardSQL,
+  sql as sqlLanguage,
 } from "@codemirror/lang-sql";
+import { EditorState } from "@codemirror/state";
+import { describe, expect, it } from "vitest";
 import { cteColumnCompletionSource } from "./cteColumnCompletion";
 
 /**

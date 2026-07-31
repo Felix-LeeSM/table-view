@@ -3,16 +3,16 @@
 // when buildTreeNodes is reordered (e.g., depth-first vs breadth-first
 // changes would break path order assertions in the UI).
 
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
   buildTreeNodes,
   buildTreeNodesWithGhosts,
   coerceTreeAddValue,
   computeTreeStats,
-  renderLeafValue,
   filterTreeNodes,
   MAX_TREE_DEPTH,
   MAX_TREE_NODES,
+  renderLeafValue,
 } from "./jsonTree";
 
 const GLOSSARY = {

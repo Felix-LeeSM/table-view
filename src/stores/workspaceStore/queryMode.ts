@@ -1,11 +1,11 @@
-import type { Paradigm } from "@/types/connection";
-import type { QueryLanguageId } from "@/types/dataSource";
-import { getQueryLanguageMetadata } from "@/types/queryLanguage";
 import type {
   DocumentQueryMode,
   HistoryQueryMode,
   RdbQueryMode,
 } from "@lib/tauri/history";
+import type { Paradigm } from "@/types/connection";
+import type { QueryLanguageId } from "@/types/dataSource";
+import { getQueryLanguageMetadata } from "@/types/queryLanguage";
 
 export type WorkspaceQueryMode = "sql" | "find" | "aggregate";
 

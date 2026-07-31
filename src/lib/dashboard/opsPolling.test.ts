@@ -2,8 +2,8 @@
 // polling primitives: deterministic auto-refresh cadence, ring-buffer
 // capacity clamp, and reset-on-connection-change.
 
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { act, renderHook } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useAutoRefresh, useTrendBuffer } from "./opsPolling";
 
 describe("useAutoRefresh", () => {

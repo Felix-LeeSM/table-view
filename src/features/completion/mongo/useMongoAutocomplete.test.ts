@@ -1,7 +1,7 @@
-import { describe, it, expect } from "vitest";
-import { renderHook } from "@testing-library/react";
-import { EditorState } from "@codemirror/state";
 import { json as jsonLanguage } from "@codemirror/lang-json";
+import { EditorState } from "@codemirror/state";
+import { renderHook } from "@testing-library/react";
+import { describe, expect, it } from "vitest";
 import { useMongoAutocomplete } from "./useMongoAutocomplete";
 
 /**

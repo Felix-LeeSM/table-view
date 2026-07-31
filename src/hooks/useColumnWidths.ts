@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 
 import {
-  computeInitialWidths,
   type ColumnCategory,
+  computeInitialWidths,
 } from "@/lib/columnCategory";
 import {
   type ColumnPrefsPk,

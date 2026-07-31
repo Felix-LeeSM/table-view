@@ -1,9 +1,9 @@
-import type { IndexDraft } from "./IndexesTabBody";
 import type {
-  ForeignKeyDraft,
   CheckDraft,
+  ForeignKeyDraft,
   UniqueDraft,
 } from "./ForeignKeysTabBody";
+import type { IndexDraft } from "./IndexesTabBody";
 
 export type TabKey = "columns" | "keys" | "indexes" | "foreign_keys";
 

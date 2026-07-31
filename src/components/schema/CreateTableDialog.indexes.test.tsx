@@ -1,4 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { useConnectionStore } from "@stores/connectionStore";
+import { useQueryHistoryStore } from "@stores/queryHistoryStore";
+import { useSafeModeStore } from "@stores/safeModeStore";
 import {
   act,
   fireEvent,
@@ -6,21 +8,19 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
-import { useConnectionStore } from "@stores/connectionStore";
-import { useSafeModeStore } from "@stores/safeModeStore";
-import { useQueryHistoryStore } from "@stores/queryHistoryStore";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  HEAVY_LOAD_TEST_TIMEOUT_MS,
   activateTab,
   getColumnsPanel,
   getKeysPanel,
+  HEAVY_LOAD_TEST_TIMEOUT_MS,
   mockCreateIndex,
   mockCreateTable,
   mockDropIndex,
   renderDialog,
+  STALE_INDEX_PLACEHOLDER,
   setDevConnection,
   setProductionConnection,
-  STALE_INDEX_PLACEHOLDER,
 } from "./__tests__/createTableDialogTestHelpers";
 
 // ── Sprint 228 — Indexes tab functional ─────────────────────────────────

@@ -1,9 +1,9 @@
-import { vi } from "vitest";
-import { fireEvent, screen, within } from "@testing-library/react";
 import { useConnectionStore } from "@stores/connectionStore";
-import { useSafeModeStore } from "@stores/safeModeStore";
 import { useQueryHistoryStore } from "@stores/queryHistoryStore";
+import { useSafeModeStore } from "@stores/safeModeStore";
 import { useSchemaStore } from "@stores/schemaStore";
+import { fireEvent, screen, within } from "@testing-library/react";
+import { vi } from "vitest";
 import {
   activateConstraintSubTab,
   activateTab,

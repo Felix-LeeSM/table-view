@@ -1,11 +1,11 @@
+import { getSearchDslTargetError } from "@lib/search/searchTargetPolicy";
 import { executeSearchQuery } from "@lib/tauri";
 import { getTauriErrorMessage } from "@lib/tauri/error";
-import { getSearchDslTargetError } from "@lib/search/searchTargetPolicy";
+import type { QueryTab } from "@stores/workspaceStore";
 import type { QueryState } from "@/types/query";
 import type { SearchQueryRequest, SearchResultEnvelope } from "@/types/search";
-import type { QueryTab } from "@stores/workspaceStore";
-import { isRecord } from "./queryHelpers";
 import { isQueryCancellationMessage } from "./queryCancellation";
+import { isRecord } from "./queryHelpers";
 
 type SearchTabContext = Pick<QueryTab, "id" | "connectionId" | "searchTarget">;
 

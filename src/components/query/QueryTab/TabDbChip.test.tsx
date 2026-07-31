@@ -11,21 +11,21 @@
 //   3. 클릭 → popover 열림 → `listDatabases(connectionId)` 호출.
 //   4. 항목 선택 → `setQueryTabDatabase(connId, db, tabId, target)` 호출.
 
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import type { ConnectionId, TabId } from "@/types/branded";
 import {
-  render,
-  screen,
-  fireEvent,
-  waitFor,
-  cleanup,
-} from "@testing-library/react";
+  resetFakeWindowConnectionId,
+  setFakeWindowConnectionId,
+} from "@stores/__tests__/fakeWindowConnectionId";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useWorkspaceStore } from "@stores/workspaceStore";
 import {
-  setFakeWindowConnectionId,
-  resetFakeWindowConnectionId,
-} from "@stores/__tests__/fakeWindowConnectionId";
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { ConnectionId, TabId } from "@/types/branded";
 import TabDbChip from "./TabDbChip";
 
 vi.mock("@/lib/api/listDatabases", () => ({

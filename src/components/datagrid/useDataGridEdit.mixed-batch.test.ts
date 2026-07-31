@@ -1,8 +1,8 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { act, renderHook } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { setupTauriMock } from "@/test-utils/tauriMock";
-import { renderHook, act } from "@testing-library/react";
-import { useDataGridEdit } from "./useDataGridEdit";
 import type { TableData } from "@/types/schema";
+import { useDataGridEdit } from "./useDataGridEdit";
 
 // Sprint 184 (Phase 22 closer, 2026-05-01) — gate-consistency regression +
 // performance smoke. Sprint 182 introduced the PendingChangesTray + PK guard

@@ -1,8 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-
 import * as tauri from "@lib/tauri";
-import { POSTGRES_COMMON_TYPES } from "@/lib/sql/postgresTypes";
 import { resolveActiveDb } from "@stores/workspaceStore";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { POSTGRES_COMMON_TYPES } from "@/lib/sql/postgresTypes";
 import type { PostgresTypeInfo } from "@/types/schema";
 
 /**

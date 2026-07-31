@@ -1,4 +1,3 @@
-import { useTranslation } from "react-i18next";
 import { Button } from "@components/ui/button";
 import {
   Dialog,
@@ -8,8 +7,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@components/ui/dialog";
-import { cn } from "@lib/utils";
 import { safeStringifyCell } from "@lib/jsonCell";
+import { cn } from "@lib/utils";
+import { useTranslation } from "react-i18next";
 
 /**
  * Presentational `Update matching documents` dialog. Stateless: the

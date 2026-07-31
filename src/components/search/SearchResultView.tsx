@@ -1,3 +1,8 @@
+import { DriverErrorHint } from "@components/errors/DriverErrorHint";
+import { CopyTextButton } from "@components/shared/CopyTextButton";
+import { ExportButton } from "@components/shared/ExportButton";
+import { Skeleton } from "@components/ui/skeleton";
+import { formatSearchUiError } from "@lib/search/searchUiError";
 import {
   AlertTriangle,
   BarChart3,
@@ -5,17 +10,12 @@ import {
   Database,
   FileJson,
   Loader2,
-  Search,
   type LucideIcon,
+  Search,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { CopyTextButton } from "@components/shared/CopyTextButton";
-import { ExportButton } from "@components/shared/ExportButton";
-import { Skeleton } from "@components/ui/skeleton";
 import type { QueryState } from "@/types/query";
-import { formatSearchUiError } from "@lib/search/searchUiError";
-import { DriverErrorHint } from "@components/errors/DriverErrorHint";
 import type {
   SearchAggregationEnvelope,
   SearchHitEnvelope,

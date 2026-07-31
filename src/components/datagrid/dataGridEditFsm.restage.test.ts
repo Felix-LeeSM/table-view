@@ -3,7 +3,7 @@
 // post-commit Cmd+Z re-stages the pre-commit values as a NEW pending edit.
 // The reversal never touches the DB — it only rebuilds Maps/Sets, so a
 // commit-span undo is pure local-state manipulation (ADR 0048 core).
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import { buildRestageSnapshot } from "./dataGridEditFsm";
 import { generateSqlWithKeys } from "./sqlGenerator";
 import { BASE_DATA } from "./sqlGenerator.fixtures";

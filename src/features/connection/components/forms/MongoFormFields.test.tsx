@@ -1,7 +1,7 @@
-import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent, act } from "@testing-library/react";
-import MongoFormFields from "./MongoFormFields";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 import type { ConnectionDraft } from "@/types/connection";
+import MongoFormFields from "./MongoFormFields";
 
 function makeDraft(overrides: Partial<ConnectionDraft> = {}): ConnectionDraft {
   return {

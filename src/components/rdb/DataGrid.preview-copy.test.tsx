@@ -16,20 +16,21 @@
 //   span 포함" (SqlSyntax wrap)
 // - AC-252-02 / AC-252-08 → "Copy 버튼 동작 + DataGrid commit-path 회귀
 //   없음"
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+
+import { act, fireEvent, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { setupTauriMock } from "@/test-utils/tauriMock";
-import { screen, fireEvent, act } from "@testing-library/react";
 import type { SortInfo } from "@/types/schema";
 import {
-  mockQueryTableData,
+  mockAddTab,
   mockExecuteQuery,
   mockExecuteQueryBatch,
   mockPromoteTab,
-  mockUpdateTabSorts,
+  mockQueryTableData,
   mockSetTabDirty,
-  mockAddTab,
-  resetDataGridMocks,
+  mockUpdateTabSorts,
   renderDataGrid,
+  resetDataGridMocks,
 } from "./__tests__/dataGridTestHelpers";
 
 vi.mock("./FilterBar", () => ({
@@ -72,7 +73,9 @@ const mockTabStoreState: {
 };
 const subscribers = new Set<() => void>();
 function notify() {
-  subscribers.forEach((fn) => fn());
+  subscribers.forEach((fn) => {
+    fn();
+  });
 }
 mockUpdateTabSorts.mockImplementation((tabId: string, next: SortInfo[]) => {
   const tab = mockTabStoreState.tabs.find((t) => t.id === tabId);

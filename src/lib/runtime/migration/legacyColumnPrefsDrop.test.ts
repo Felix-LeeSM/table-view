@@ -14,8 +14,8 @@ import {
   describe,
   expect,
   it,
-  vi,
   type Mock,
+  vi,
 } from "vitest";
 
 vi.mock("@/lib/tauri/meta_sentinel", () => ({
@@ -32,9 +32,9 @@ vi.mock("@/lib/runtime/toast", () => ({
   },
 }));
 
-import { dropLegacyColumnPrefs } from "./legacyColumnPrefsDrop";
-import { getMetaSentinel, setMetaSentinel } from "@/lib/tauri/meta_sentinel";
 import { toast } from "@/lib/runtime/toast";
+import { getMetaSentinel, setMetaSentinel } from "@/lib/tauri/meta_sentinel";
+import { dropLegacyColumnPrefs } from "./legacyColumnPrefsDrop";
 
 beforeEach(() => {
   window.localStorage.clear();

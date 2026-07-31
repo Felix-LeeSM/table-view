@@ -1,14 +1,14 @@
-import { useEffect, useMemo, useState } from "react";
 import { autocompletion } from "@codemirror/autocomplete";
 import type { Extension } from "@codemirror/state";
-import {
-  getSearchIndexMapping,
-  listSearchCatalogSummary,
-} from "@lib/tauri/search";
 import {
   createSearchDslCompletionSource,
   readSearchDslTarget,
 } from "@lib/search/searchDslCompletion";
+import {
+  getSearchIndexMapping,
+  listSearchCatalogSummary,
+} from "@lib/tauri/search";
+import { useEffect, useMemo, useState } from "react";
 import type {
   SearchCatalogSummary,
   SearchIndexMapping,

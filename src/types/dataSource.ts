@@ -1,19 +1,18 @@
+import type { SqlDialect } from "@lib/sql/sqlLiteral";
 import type { DatabaseType, Paradigm } from "./connection";
 import { paradigmOf } from "./connection";
-import type { SqlDialect } from "@lib/sql/sqlLiteral";
-import {
-  DUCKDB_FILE_CONNECTION,
-  SQLITE_FILE_CONNECTION,
-  type FileConnectionContract,
-} from "./fileConnection";
 import {
   BACKEND_ADAPTER_BY_TYPE,
-  DIALECT_METADATA,
   type BackendAdapterProfile,
   type DataSourceDialectMetadata,
+  DIALECT_METADATA,
 } from "./dataSourceRuntime";
+import {
+  DUCKDB_FILE_CONNECTION,
+  type FileConnectionContract,
+  SQLITE_FILE_CONNECTION,
+} from "./fileConnection";
 
-export type { FileConnectionContract } from "./fileConnection";
 export type {
   BackendAdapterCapabilitySource,
   BackendAdapterProfile,
@@ -23,6 +22,7 @@ export type {
   DataSourceDialectMetadata,
   ServerVersionProbeId,
 } from "./dataSourceRuntime";
+export type { FileConnectionContract } from "./fileConnection";
 
 export type DataParadigm = Paradigm;
 export type ConnectionKind =

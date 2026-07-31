@@ -1,6 +1,5 @@
-import { useCallback } from "react";
-
 import { useSchemaStore } from "@stores/schemaStore";
+import { useCallback } from "react";
 import type { DatabaseName, SchemaName, TableName } from "@/types/branded";
 
 /**

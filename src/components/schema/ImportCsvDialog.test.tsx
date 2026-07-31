@@ -1,9 +1,8 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-
-import ImportCsvDialog, { autoMapColumns, SKIP } from "./ImportCsvDialog";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ColumnInfo } from "@/types/schema";
+import ImportCsvDialog, { autoMapColumns, SKIP } from "./ImportCsvDialog";
 
 const mockOpen = vi.fn();
 vi.mock("@tauri-apps/plugin-dialog", () => ({

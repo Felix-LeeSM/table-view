@@ -21,32 +21,34 @@
 //
 // `severity: "warn"` 인 non-INFO 만 WARN dialog 발동. INFO/STOP 분기는
 // 위와 같이 회귀 테스트로 가드.
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { setupTauriMock } from "@/test-utils/tauriMock";
-import {
-  seedWorkspace,
-  getTestWorkspace,
-} from "@/stores/__tests__/workspaceStoreTestHelpers";
-import { render, screen, waitFor, act } from "@testing-library/react";
-import QueryTab from "./QueryTab";
-import { useWorkspaceStore } from "@stores/workspaceStore";
-import { useConnectionStore } from "@stores/connectionStore";
-import { useSafeModeStore } from "@stores/safeModeStore";
-import {
-  MOCK_RESULT,
-  MOCK_DOC_RESULT,
-  mockExecuteQuery,
-  mockCancelQuery,
-  mockFindDocuments,
-  mockAggregateDocuments,
-  mockEditorProps,
-  makeQueryTab,
-  makeConn,
-  makeDocTab,
-  resetQueryTabStores,
-} from "./__tests__/queryTabTestHelpers";
+
 import type { SQLDialect } from "@codemirror/lang-sql";
 import type { Extension } from "@codemirror/state";
+import { useConnectionStore } from "@stores/connectionStore";
+import { useSafeModeStore } from "@stores/safeModeStore";
+import { useWorkspaceStore } from "@stores/workspaceStore";
+import { act, render, screen, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  getTestWorkspace,
+  seedWorkspace,
+} from "@/stores/__tests__/workspaceStoreTestHelpers";
+import { setupTauriMock } from "@/test-utils/tauriMock";
+import {
+  MOCK_DOC_RESULT,
+  MOCK_RESULT,
+  makeConn,
+  makeDocTab,
+  makeQueryTab,
+  mockAggregateDocuments,
+  mockCancelQuery,
+  mockEditorProps,
+  mockExecuteQuery,
+  mockFindDocuments,
+  resetQueryTabStores,
+} from "./__tests__/queryTabTestHelpers";
+import QueryTab from "./QueryTab";
+
 beforeEach(() => {
   setupTauriMock({
     executeQuery: (...args: unknown[]) => mockExecuteQuery(...args),

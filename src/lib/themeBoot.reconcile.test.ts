@@ -22,7 +22,7 @@
  *   - IPC throw (Tauri 없는 환경) → graceful fallback, throw 안 함.
  *   - SQLite 값 malformed → no-op, throw 안 함.
  */
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
@@ -30,10 +30,10 @@ vi.mock("@tauri-apps/api/core", () => ({
 
 import { invoke } from "@tauri-apps/api/core";
 import {
-  reconcileThemeFromBackend,
-  readStoredState,
-  THEME_STORAGE_KEY,
   DEFAULT_THEME_ID,
+  readStoredState,
+  reconcileThemeFromBackend,
+  THEME_STORAGE_KEY,
 } from "./themeBoot";
 
 const invokeMock = vi.mocked(invoke);

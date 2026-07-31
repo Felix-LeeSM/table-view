@@ -1,6 +1,6 @@
-import { useMemo } from "react";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useSchemaStore } from "@stores/schemaStore";
+import { useMemo } from "react";
 import { selectSchemaGraphIntelligence } from "@/lib/schemaGraphSelectors";
 import { buildSchemaGraphCatalogSnapshot } from "@/lib/schemaGraphSnapshot";
 import {

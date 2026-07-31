@@ -24,11 +24,11 @@
  */
 /* eslint-disable @typescript-eslint/no-deprecated -- #1403: this whole suite exercises the deliberately-deprecated QueryTab.queryMode contract; it is deleted wholesale when sprint-311 A5 lands */
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { useWorkspaceStore } from "./workspaceStore";
 import {
   installFakeLocalStorage,
   restoreLocalStorage,
 } from "./__tests__/workspaceStoreTestHelpers";
+import { useWorkspaceStore } from "./workspaceStore";
 
 describe("workspaceStore — Sprint 309 queryMode backward-compat", () => {
   beforeEach(() => {
@@ -47,7 +47,7 @@ describe("workspaceStore — Sprint 309 queryMode backward-compat", () => {
       collection: "users",
     });
 
-    const ws = useWorkspaceStore.getState().workspaces["conn-mongo"]?.["appdb"];
+    const ws = useWorkspaceStore.getState().workspaces["conn-mongo"]?.appdb;
     expect(ws).toBeDefined();
     const tab = ws!.tabs[0]!;
     expect(tab.type).toBe("query");
@@ -71,7 +71,7 @@ describe("workspaceStore — Sprint 309 queryMode backward-compat", () => {
       paradigm: "rdb",
     });
 
-    const ws = useWorkspaceStore.getState().workspaces["conn-pg"]?.["appdb"];
+    const ws = useWorkspaceStore.getState().workspaces["conn-pg"]?.appdb;
     const tab = ws!.tabs[0]!;
     if (tab.type === "query") {
       expect(tab.queryMode).toBe("sql");
@@ -122,7 +122,7 @@ describe("workspaceStore — Sprint 309 queryMode backward-compat", () => {
       useWorkspaceStore.getState().loadPersistedWorkspaces(),
     ).not.toThrow();
 
-    const ws = useWorkspaceStore.getState().workspaces["conn-mongo"]?.["appdb"];
+    const ws = useWorkspaceStore.getState().workspaces["conn-mongo"]?.appdb;
     expect(ws).toBeDefined();
     expect(ws!.tabs).toHaveLength(1);
     const tab = ws!.tabs[0]!;
@@ -182,7 +182,7 @@ describe("workspaceStore — Sprint 309 queryMode backward-compat", () => {
     ).not.toThrow();
 
     const tab =
-      useWorkspaceStore.getState().workspaces["conn-mongo"]?.["appdb"]?.tabs[0];
+      useWorkspaceStore.getState().workspaces["conn-mongo"]?.appdb?.tabs[0];
     if (tab?.type === "query") {
       expect(tab.queryMode).toBe("find");
     }
@@ -260,9 +260,9 @@ describe("workspaceStore — Sprint 309 queryMode backward-compat", () => {
     useWorkspaceStore.getState().loadPersistedWorkspaces();
 
     const rdbTab =
-      useWorkspaceStore.getState().workspaces["conn-pg"]?.["appdb"]?.tabs[0];
+      useWorkspaceStore.getState().workspaces["conn-pg"]?.appdb?.tabs[0];
     const documentWs =
-      useWorkspaceStore.getState().workspaces["conn-mongo"]?.["appdb"];
+      useWorkspaceStore.getState().workspaces["conn-mongo"]?.appdb;
     const documentTab = documentWs?.tabs[0];
     const closedDocumentTab = documentWs?.closedTabHistory[0];
 
@@ -326,8 +326,7 @@ describe("workspaceStore — Sprint 309 queryMode backward-compat", () => {
       useWorkspaceStore.getState().loadPersistedWorkspaces();
 
       const tab =
-        useWorkspaceStore.getState().workspaces["conn-mongo"]?.["appdb"]
-          ?.tabs[0];
+        useWorkspaceStore.getState().workspaces["conn-mongo"]?.appdb?.tabs[0];
       if (tab?.type !== "query") throw new Error("Expected query tab");
       expect(tab.queryMode).toBe(expectedQueryMode);
     },
@@ -368,7 +367,7 @@ describe("workspaceStore — Sprint 309 queryMode backward-compat", () => {
     useWorkspaceStore.getState().loadPersistedWorkspaces();
 
     const tab =
-      useWorkspaceStore.getState().workspaces["conn-pg"]?.["appdb"]?.tabs[0];
+      useWorkspaceStore.getState().workspaces["conn-pg"]?.appdb?.tabs[0];
     if (tab?.type !== "query") throw new Error("Expected query tab");
     expect(tab.queryMode).toBe("sql");
   });
@@ -386,8 +385,7 @@ describe("workspaceStore — Sprint 309 queryMode backward-compat", () => {
       });
 
       const tab =
-        useWorkspaceStore.getState().workspaces["conn-mongo"]?.["appdb"]
-          ?.tabs[0];
+        useWorkspaceStore.getState().workspaces["conn-mongo"]?.appdb?.tabs[0];
       if (tab?.type !== "query") throw new Error("Expected query tab");
       expect(tab.queryMode).toBeUndefined();
       expect(tab.queryLanguage).toBe("mongosh");

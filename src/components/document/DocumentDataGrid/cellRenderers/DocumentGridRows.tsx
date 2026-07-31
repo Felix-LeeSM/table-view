@@ -1,18 +1,18 @@
-import { Fragment } from "react";
-import { useTranslation } from "react-i18next";
-import Decimal from "decimal.js";
-import { isDocumentSentinel, type DocumentQueryResult } from "@/types/document";
-import type { ColumnInfo, TableData } from "@/types/schema";
 import {
+  type DataGridEditState,
   editKey,
   pendingEditAnchorMatches,
   rowIdentityKey,
-  type DataGridEditState,
 } from "@components/datagrid";
-import { safeStringifyCell, renderCellValue } from "@lib/jsonCell";
-import { cn } from "@lib/utils";
-import { INLINE_EDIT_CELL_RING } from "@components/ui/inlineEdit";
 import { DocumentTreePanel } from "@components/document/DocumentTreePanel";
+import { INLINE_EDIT_CELL_RING } from "@components/ui/inlineEdit";
+import { renderCellValue, safeStringifyCell } from "@lib/jsonCell";
+import { cn } from "@lib/utils";
+import Decimal from "decimal.js";
+import { Fragment } from "react";
+import { useTranslation } from "react-i18next";
+import { type DocumentQueryResult, isDocumentSentinel } from "@/types/document";
+import type { ColumnInfo, TableData } from "@/types/schema";
 
 export interface ExpandedNestedCell {
   rowIdx: number;

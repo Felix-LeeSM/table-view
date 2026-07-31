@@ -1,11 +1,11 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
-import { KvCollectionValueTable } from "./KvCollectionValueTable";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useSafeModeStore } from "@stores/safeModeStore";
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConnectionConfig } from "@/types/connection";
 import type { KvHashValue, KvListValue, KvSetValue } from "@/types/kv";
+import { KvCollectionValueTable } from "./KvCollectionValueTable";
 
 // Purpose: KV JSON tree write for collections (PR4, 2026-07-18) — a mutable hash
 // field / list element whose value is JSON is tree-editable in the chip dialog

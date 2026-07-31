@@ -1,27 +1,27 @@
-import { useRef, useEffect, useId, forwardRef } from "react";
-import { useTranslation } from "react-i18next";
+import { acceptCompletion, autocompletion } from "@codemirror/autocomplete";
+import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
+import { json as jsonLanguage } from "@codemirror/lang-json";
+import {
+  bracketMatching,
+  defaultHighlightStyle,
+  indentOnInput,
+  syntaxHighlighting,
+} from "@codemirror/language";
 import { Compartment, EditorState, type Extension } from "@codemirror/state";
 import {
   EditorView,
+  highlightActiveLine,
   keymap,
   lineNumbers,
-  highlightActiveLine,
   placeholder,
 } from "@codemirror/view";
-import { json as jsonLanguage } from "@codemirror/lang-json";
-import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
-import {
-  syntaxHighlighting,
-  defaultHighlightStyle,
-  bracketMatching,
-  indentOnInput,
-} from "@codemirror/language";
-import { autocompletion, acceptCompletion } from "@codemirror/autocomplete";
-import { viewTableHighlightStyle } from "@lib/editor/highlightStyle";
 import { autocompleteTooltipTheme } from "@lib/editor/autocompleteTheme";
 import { editorContentAria } from "@lib/editor/editorContentAria";
 import { hideGutterFromA11y } from "@lib/editor/hideGutterFromA11y";
+import { viewTableHighlightStyle } from "@lib/editor/highlightStyle";
 import { setForwardedRef } from "@lib/editor/setForwardedRef";
+import { forwardRef, useEffect, useId, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { syncEditorDocument } from "./editorDocumentSync";
 
 /**

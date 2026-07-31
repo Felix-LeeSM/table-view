@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import type { DatabaseInfo } from "@/types/document";
 import type {
   ColumnInfo,
   ConstraintInfo,
@@ -12,7 +13,6 @@ import type {
   TriggerInfo,
   ViewInfo,
 } from "@/types/schema";
-import type { DatabaseInfo } from "@/types/document";
 
 /**
  * Sprint 271a (2026-05-13) — every wrapper accepts an optional

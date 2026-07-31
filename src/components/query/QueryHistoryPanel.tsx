@@ -14,15 +14,15 @@
  *   - 원문 sql 0 표시 — 본 panel 내 어디에도 detail modal 외에서 sql 안 노출.
  */
 
+import HistoryCollapseToggle from "@components/shared/HistoryCollapseToggle";
+import QueryHistorySourceBadge from "@components/shared/QueryHistorySourceBadge";
+import QuerySyntax from "@components/shared/QuerySyntax";
+import { Button } from "@components/ui/button";
+import { useCollapsibleHistory } from "@hooks/useCollapsibleHistory";
+import { useQueryHistory } from "@hooks/useQueryHistory";
+import { ChevronDown, ChevronRight, Clock, RefreshCw } from "lucide-react";
 import { useId, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ChevronDown, ChevronRight, Clock, RefreshCw } from "lucide-react";
-import { Button } from "@components/ui/button";
-import QuerySyntax from "@components/shared/QuerySyntax";
-import QueryHistorySourceBadge from "@components/shared/QueryHistorySourceBadge";
-import HistoryCollapseToggle from "@components/shared/HistoryCollapseToggle";
-import { useQueryHistory } from "@hooks/useQueryHistory";
-import { useCollapsibleHistory } from "@hooks/useCollapsibleHistory";
 import QueryHistoryDetailModal from "./QueryHistoryDetailModal";
 
 export interface QueryHistoryPanelProps {

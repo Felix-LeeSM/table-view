@@ -16,14 +16,14 @@
  *     재사용 가능한 standalone unit.
  */
 
-import { useState } from "react";
-import { useTranslation } from "react-i18next";
-import { Trash2 } from "lucide-react";
 import { Button } from "@components/ui/button";
 import ConfirmDialog from "@components/ui/dialog/ConfirmDialog";
-import { clearHistory } from "@lib/tauri/history";
-import { toast } from "@lib/runtime/toast";
 import { logger } from "@lib/logger";
+import { toast } from "@lib/runtime/toast";
+import { clearHistory } from "@lib/tauri/history";
+import { Trash2 } from "lucide-react";
+import { useState } from "react";
+import { useTranslation } from "react-i18next";
 
 export interface ClearHistoryButtonProps {
   /** Visible label; defaults to t("clearHistory.label"). */

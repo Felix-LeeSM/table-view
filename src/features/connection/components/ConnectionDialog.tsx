@@ -49,6 +49,18 @@
 // `ConnectionDialog.urlInput.test.tsx` (697 lines) keeps passing.
 // ---------------------------------------------------------------------------
 
+import { Button } from "@components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  type DialogFeedbackState,
+  DialogHeader,
+  DialogTitle,
+} from "@components/ui/dialog";
+import ConfirmDialog from "@components/ui/dialog/ConfirmDialog";
+import { useConnectionMutations } from "@lib/runtime/connection/useConnectionMutations";
+import { X } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { ConnectionConfig, ConnectionDraft } from "../model";
@@ -56,24 +68,12 @@ import {
   DATABASE_DEFAULTS,
   getMssqlConnectionUnsupportedMessage,
 } from "../model";
-import { Button } from "@components/ui/button";
 import { useConnectionStore } from "../store";
-import { useConnectionMutations } from "@lib/runtime/connection/useConnectionMutations";
-import { X } from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-  type DialogFeedbackState,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@components/ui/dialog";
-import ConfirmDialog from "@components/ui/dialog/ConfirmDialog";
+import ConnectionDialogBody from "./ConnectionDialog/ConnectionDialogBody";
+import ConnectionDialogFooter from "./ConnectionDialog/ConnectionDialogFooter";
 import { sanitizeMessage } from "./ConnectionDialog/sanitize";
 import { useConnectionDraftForm } from "./ConnectionDialog/useConnectionDraftForm";
 import { useConnectionUrlImport } from "./ConnectionDialog/useConnectionUrlImport";
-import ConnectionDialogBody from "./ConnectionDialog/ConnectionDialogBody";
-import ConnectionDialogFooter from "./ConnectionDialog/ConnectionDialogFooter";
 import type { ConnFieldKey } from "./forms/fieldValidation";
 
 // Sprint 213 — re-export the (relocated) `sanitizeMessage` helper so

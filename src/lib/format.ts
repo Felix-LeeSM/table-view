@@ -1,8 +1,8 @@
 // Sprint 238 — `CELL_DISPLAY_LIMIT` + `truncateCell` 폐기 (AC-238-05).
 // 가로 폭 통제는 `useColumnWidths` + CSS ellipsis 가 담당.
 
-import Decimal from "decimal.js";
 import { safeStringifyCell } from "@lib/jsonCell";
+import Decimal from "decimal.js";
 
 // Sprint 305 — copy format 의 cell rendering 헬퍼. ADR 0026 의 BigInt /
 // Decimal cell 이 raw `JSON.stringify` 를 만나면 throw / `{}` 로 망가지므로

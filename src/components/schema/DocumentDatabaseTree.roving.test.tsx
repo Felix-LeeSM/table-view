@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { setupTauriMock } from "@/test-utils/tauriMock";
+import { useConnectionStore } from "@stores/connectionStore";
+import { useWorkspaceStore } from "@stores/workspaceStore";
 import {
   act,
   fireEvent,
@@ -8,11 +8,11 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
-import DocumentDatabaseTree from "./DocumentDatabaseTree";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { __resetDocumentStoreForTests } from "@/test-utils/documentStore";
-import { useWorkspaceStore } from "@stores/workspaceStore";
-import { useConnectionStore } from "@stores/connectionStore";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import type { CollectionInfo } from "@/types/document";
+import DocumentDatabaseTree from "./DocumentDatabaseTree";
 
 /**
  * WAI-ARIA tree roving-tabindex + arrow-key navigation for the two-level

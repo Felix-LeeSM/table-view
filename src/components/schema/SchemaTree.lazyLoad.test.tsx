@@ -6,15 +6,16 @@
 // mock 은 lib boundary (schema store actions) 만; 렌더는 실제 SchemaTree.
 // (AC-2 자동완성 회귀 방지 = expandSchema 의 컬럼 prefetch → useSchemaCache
 //  단위 테스트 [AC-1219-3] 에서 lock.)
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, act, fireEvent } from "@testing-library/react";
-import SchemaTree from "./SchemaTree";
+
 import { useWorkspaceStore } from "@stores/workspaceStore";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   mockLoadTables,
-  setSchemaStoreState,
   resetStores,
+  setSchemaStoreState,
 } from "./__tests__/schemaTreeTestHelpers";
+import SchemaTree from "./SchemaTree";
 
 function manySchemas(n: number): Array<{ name: string }> {
   return Array.from({ length: n }, (_, i) => ({ name: `s${i}` }));

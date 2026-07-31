@@ -1,6 +1,6 @@
-import type { ConnectionConfig } from "@/types/connection";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useMruStore } from "@stores/mruStore";
+import type { ConnectionConfig } from "@/types/connection";
 
 export interface RecentConnectionViewModel {
   connectionId: string;

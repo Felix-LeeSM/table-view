@@ -1,25 +1,25 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { ConnectionId, TabId } from "@/types/branded";
 import {
-  seedWorkspace,
-  getTestWorkspace,
-} from "@/stores/__tests__/workspaceStoreTestHelpers";
-import { render, screen, fireEvent, act } from "@testing-library/react";
-import { useEffect } from "react";
-import MainArea from "./MainArea";
-import {
-  useWorkspaceStore,
-  type TableTab,
-  type QueryTab as QueryTabType,
-  type ErdTab as ErdTabType,
-} from "@stores/workspaceStore";
-import { useConnectionStore } from "@stores/connectionStore";
-import { useMruStore, __resetMruStoreForTests } from "@stores/mruStore";
-import {
-  setFakeWindowConnectionId,
   resetFakeWindowConnectionId,
+  setFakeWindowConnectionId,
 } from "@stores/__tests__/fakeWindowConnectionId";
+import { useConnectionStore } from "@stores/connectionStore";
+import { __resetMruStoreForTests, useMruStore } from "@stores/mruStore";
+import {
+  type ErdTab as ErdTabType,
+  type QueryTab as QueryTabType,
+  type TableTab,
+  useWorkspaceStore,
+} from "@stores/workspaceStore";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { useEffect } from "react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  getTestWorkspace,
+  seedWorkspace,
+} from "@/stores/__tests__/workspaceStoreTestHelpers";
+import type { ConnectionId, TabId } from "@/types/branded";
 import type { ConnectionConfig, ConnectionStatus } from "@/types/connection";
+import MainArea from "./MainArea";
 
 // Sprint 142 (AC-147-4) — mount counter so tests can assert that
 // `<TableTabView>` is remounted (not just re-rendered with new props)

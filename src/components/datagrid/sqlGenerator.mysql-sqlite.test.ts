@@ -1,7 +1,7 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
+import type { TableData } from "@/types/schema";
 import { generateSql } from "./sqlGenerator";
 import { JSONB_DATA, MYSQL_JSON_DATA } from "./sqlGenerator.fixtures";
-import type { TableData } from "@/types/schema";
 
 // Sprint 347 (2026-05-15) — MySQL / SQLite JSON dispatch. `dialect` option
 // routes nested edits to per-DBMS emit. MySQL uses JSON_SET / JSON_REMOVE

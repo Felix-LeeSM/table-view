@@ -3,9 +3,10 @@
 // (`${prefix} picker`, "Move earlier", "No columns available"). This test
 // renders the picker under the ko locale and asserts the scaffolding follows
 // the active language, interpolating the caller-provided (localized) prefix.
-import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+
 import i18n from "@lib/i18n";
+import { render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import OrderedColumnPicker from "./OrderedColumnPicker";
 
 // The picker is a global singleton consumer of i18n — restore en so this file

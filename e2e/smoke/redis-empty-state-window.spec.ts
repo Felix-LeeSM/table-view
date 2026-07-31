@@ -1,6 +1,6 @@
-import { $, browser, expect } from "@wdio/globals";
-import { resolve } from "node:path";
 import { tmpdir } from "node:os";
+import { resolve } from "node:path";
+import { $, browser, expect } from "@wdio/globals";
 import {
   createDuckdbConnection,
   createRedisConnection,

@@ -14,17 +14,18 @@
 // calls in `beforeEach` are not hoisted by ES module rules and live in
 // `resetStructurePanelMocks()` here without disturbing the original
 // behaviour.
-import { vi } from "vitest";
-import { render } from "@testing-library/react";
-import StructurePanel from "../StructurePanel";
+
+import * as tauri from "@lib/tauri";
 import { useSchemaStore } from "@stores/schemaStore";
+import { render } from "@testing-library/react";
+import { vi } from "vitest";
 import type {
   ColumnInfo,
   ConstraintInfo,
   IndexInfo,
   TriggerInfo,
 } from "@/types/schema";
-import * as tauri from "@lib/tauri";
+import StructurePanel from "../StructurePanel";
 
 // ---------------------------------------------------------------------------
 // Mock data

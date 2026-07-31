@@ -66,7 +66,9 @@ export function useRowPending(
       }
       return e;
     };
-    pendingEdits.forEach((v, k) => ensure(rowOfKey(k)).edits.set(k, v));
+    pendingEdits.forEach((v, k) => {
+      ensure(rowOfKey(k)).edits.set(k, v);
+    });
     pendingEditErrors?.forEach((v, k) => {
       const e = ensure(rowOfKey(k));
       e.errors ??= new Map();

@@ -10,8 +10,8 @@
 //
 // AC-369-08 매핑.
 
-import { describe, it, expect, beforeEach, vi, type Mock } from "vitest";
 import { act, renderHook, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 
 import type { ColumnCategory } from "@/lib/columnCategory";
 
@@ -45,8 +45,8 @@ vi.mock("@/lib/tauri/datagrid_prefs", () => ({
 
 import {
   getDatagridPrefs,
-  setDatagridPrefs,
   resetDatagridPrefs,
+  setDatagridPrefs,
 } from "@/lib/tauri/datagrid_prefs";
 
 beforeEach(() => {

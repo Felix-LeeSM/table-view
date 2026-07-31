@@ -7,18 +7,18 @@
 // session-local sparkline tracks the active-session count over time. No new
 // backend/IPC — same `list_server_activity` on a timer.
 
+import { Loader2, Pause, Play, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Loader2, Pause, Play, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sparkline } from "@/components/ui/Sparkline";
-import { useAutoRefresh, useTrendBuffer } from "@/lib/dashboard/opsPolling";
 import {
   killServerActivity,
   listServerActivity,
   type ServerActivityRow,
 } from "@/lib/api/serverActivity";
-import { DATABASE_TYPE_LABELS, paradigmOf, type DatabaseType } from "../model";
+import { useAutoRefresh, useTrendBuffer } from "@/lib/dashboard/opsPolling";
+import { DATABASE_TYPE_LABELS, type DatabaseType, paradigmOf } from "../model";
 import { PanelLoadingSkeleton } from "./PanelLoadingSkeleton";
 
 const POLL_MS = 5000;

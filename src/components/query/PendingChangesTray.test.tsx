@@ -1,8 +1,8 @@
-import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
-import PendingChangesTray from "./PendingChangesTray";
-import type { QueryResult } from "@/types/query";
 import type { RawEditPlan } from "@lib/sql/rawQuerySqlBuilder";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
+import type { QueryResult } from "@/types/query";
+import PendingChangesTray from "./PendingChangesTray";
 
 // Sprint 182 — pending-changes tray is the per-AC visible surface for
 // AC-182-01, 02, 04, 05. The tray is stateless: every assertion below

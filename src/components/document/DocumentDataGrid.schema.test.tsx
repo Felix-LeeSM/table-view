@@ -7,12 +7,12 @@
 // collection 전환시 accumulator 가 자동 reset (sprint 319 D-43) 하여
 // 다른 collection 의 schema 가 leak 되지 않는지 단언.
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { setupTauriMock } from "@/test-utils/tauriMock";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import DocumentDataGrid from "./DocumentDataGrid";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { __resetDocumentStoreForTests } from "@/test-utils/documentStore";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import type { DocumentQueryResult } from "@/types/document";
+import DocumentDataGrid from "./DocumentDataGrid";
 
 function buildPage1(): DocumentQueryResult {
   return {

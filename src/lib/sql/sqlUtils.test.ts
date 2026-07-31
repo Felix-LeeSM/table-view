@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { splitSqlStatements, formatSql, uglifySql } from "./sqlUtils";
+import { describe, expect, it } from "vitest";
+import { formatSql, splitSqlStatements, uglifySql } from "./sqlUtils";
 
 describe("splitSqlStatements", () => {
   it("splits simple statements", () => {

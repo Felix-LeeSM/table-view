@@ -5,16 +5,16 @@
 // warning toast 로 사용자에게 알린다. `recovered=false` 면 미발화 — 정상 boot
 // 에서는 조용해야 한다.
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const invokeMock = vi.fn();
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: (...args: unknown[]) => invokeMock(...args),
 }));
 
-import { loadAllFromSnapshot, resetSnapshotBufferForTests } from "./loadAll";
-import { useToastStore } from "@stores/toastStore";
 import type { InitialAppState } from "@lib/tauri/snapshot";
+import { useToastStore } from "@stores/toastStore";
+import { loadAllFromSnapshot, resetSnapshotBufferForTests } from "./loadAll";
 
 function makeSnapshot(
   overrides: Partial<InitialAppState> = {},

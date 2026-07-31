@@ -1,8 +1,8 @@
 // #1077 admin-parity Stage 3 (2026-07-25) — Sparkline renders a trend
 // polyline only once there are >= 2 samples.
 
-import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
+import { describe, expect, it } from "vitest";
 import { Sparkline } from "./Sparkline";
 
 describe("Sparkline", () => {

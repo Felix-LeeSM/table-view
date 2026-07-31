@@ -1,3 +1,5 @@
+// biome-ignore-all lint/suspicious/noTemplateCurlyInString: the `${...}` is inside a test name that quotes the composite key's shape. Interpolating it would name the test after four undefined variables.
+
 // Sprint 251 — `dataGridEditStore` (in-memory zustand) lift of the four
 // pending-edit slices. Maps to AC-251-S1..S5 from
 // Sprint 251 contract. Date 2026-05-09.
@@ -10,13 +12,7 @@
 // (`getEntry`, `setSlice`, `clearEntry`, `purgeKey`, `purgeForConnection`)
 // must produce immutable Map / Set / Array replacements so React selectors
 // detect the change.
-import { describe, it, expect, beforeEach } from "vitest";
-import {
-  useDataGridEditStore,
-  entryKey,
-  EMPTY_ENTRY,
-  type EditSnapshot,
-} from "./dataGridEditStore";
+import { beforeEach, describe, expect, it } from "vitest";
 import { makeEntryKey } from "@/test-utils/brandedKeys";
 import type {
   ConnectionId,
@@ -24,6 +20,12 @@ import type {
   SchemaName,
   TableName,
 } from "@/types/branded";
+import {
+  type EditSnapshot,
+  EMPTY_ENTRY,
+  entryKey,
+  useDataGridEditStore,
+} from "./dataGridEditStore";
 
 function resetStore(): void {
   useDataGridEditStore.setState({ entries: new Map() });

@@ -5,7 +5,7 @@
 // 하며 (c) BSON canonical singleton (`$oid` 등) 은 composite 으로
 // 취급하지 않고 (d) scalar 는 null 반환 하는지 회귀 가드.
 
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import { getNestedExpansion } from "./nestedExpansion";
 
 describe("getNestedExpansion (Sprint 321 F.1)", () => {

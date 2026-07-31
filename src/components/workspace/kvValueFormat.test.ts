@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import { isJsonTreeCapable, jsonTreeValue } from "./kvValueFormat";
 
 // Purpose: lock the JSON-tree eligibility boundary for the read-only KV value

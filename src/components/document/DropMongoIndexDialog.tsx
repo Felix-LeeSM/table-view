@@ -1,6 +1,7 @@
+import { Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -9,9 +10,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { dropMongoIndex } from "@/lib/tauri";
 import { toast } from "@/lib/runtime/toast";
+import { dropMongoIndex } from "@/lib/tauri";
 
 export interface DropMongoIndexDialogProps {
   connectionId: string;

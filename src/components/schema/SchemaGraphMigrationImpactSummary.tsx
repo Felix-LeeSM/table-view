@@ -1,8 +1,8 @@
-import { useTranslation } from "react-i18next";
 import { AlertTriangle, GitBranch, KeyRound } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import type {
-  SchemaGraphForeignKeySelection,
   SchemaGraphMigrationImpactSummary as MigrationImpactSummary,
+  SchemaGraphForeignKeySelection,
   SchemaGraphTableMetadataReadiness,
 } from "@/lib/schemaGraphSelectors";
 import type {

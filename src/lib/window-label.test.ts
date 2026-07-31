@@ -1,3 +1,5 @@
+// biome-ignore-all lint/suspicious/noTemplateCurlyInString: the one `${string}` is inside a test name and spells a TypeScript template-literal type, not an interpolation.
+
 // 작성 2026-05-16 (Phase 3 sprint-361)
 //
 // 사유: sprint-361 의 per-conn 윈도우 라벨 (`workspace-{connection_id}`)
@@ -11,11 +13,11 @@
 //   - `parseWorkspaceLabel("launcher")` → `null`
 //
 // AC-361-05 KnownWindowLabel exhaustiveness 도 본 파일에서 type-check 한다.
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
-  parseWorkspaceLabel,
   formatWorkspaceLabel,
   type KnownWindowLabel,
+  parseWorkspaceLabel,
 } from "./window-label";
 
 describe("parseWorkspaceLabel — AC-361-04 round-trip", () => {

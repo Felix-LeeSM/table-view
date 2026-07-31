@@ -1,15 +1,15 @@
-import { describe, it, expect } from "vitest";
-import { EditorState } from "@codemirror/state";
 import {
   CompletionContext,
-  type CompletionSource,
   type CompletionResult,
+  type CompletionSource,
 } from "@codemirror/autocomplete";
 import {
-  sql as sqlLanguage,
-  StandardSQL,
   type SQLNamespace,
+  StandardSQL,
+  sql as sqlLanguage,
 } from "@codemirror/lang-sql";
+import { EditorState } from "@codemirror/state";
+import { describe, expect, it } from "vitest";
 import { updateColumnCompletionSource } from "./updateColumnCompletion";
 
 /**

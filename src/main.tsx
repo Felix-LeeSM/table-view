@@ -1,21 +1,15 @@
 // Issue #1307 — install the global BigInt → decimal-string JSON patch BEFORE
 // anything (React/react-dom included) can hit a stringify site with a BigInt.
 import "@lib/bigintJson";
-import React from "react";
-import ReactDOM from "react-dom/client";
-import { isTauri } from "@tauri-apps/api/core";
-import AppRouter from "./AppRouter";
-import { bootTheme, reconcileThemeFromBackend } from "@lib/themeBoot";
-import { bootWindowLifecycle } from "@lib/window-lifecycle-boot";
-import { initSession } from "@lib/scopedLocalStorage";
-import { importLegacyLocalStorage } from "@lib/tauri/legacyImport";
-import { getCurrentWindowLabel } from "@lib/window-label";
+import { applyPersistedLocale } from "@lib/i18n";
+import { logger } from "@lib/logger";
 import {
   markBootMilestone,
   markT0,
   scheduleBootSummary,
 } from "@lib/perf/bootInstrumentation";
-import { logger } from "@lib/logger";
+import { registerSchemaStoreDbMismatchRecovery } from "@lib/runtime/recovery/syncMismatchedActiveDb";
+import { registerSettingReceiver } from "@lib/runtime/settings/settingsReceiver";
 // CRITICAL (sprint-367 AC-367-03): the listener-register call below MUST
 // precede `loadAllFromSnapshot()` in the boot flow. That ordering is also
 // regression-locked by `src/lib/runtime/snapshot/loadAll.listener-order.test.ts`,
@@ -24,9 +18,15 @@ import {
   loadAllFromSnapshot,
   registerSnapshotListener,
 } from "@lib/runtime/snapshot/loadAll";
-import { registerSettingReceiver } from "@lib/runtime/settings/settingsReceiver";
-import { registerSchemaStoreDbMismatchRecovery } from "@lib/runtime/recovery/syncMismatchedActiveDb";
-import { applyPersistedLocale } from "@lib/i18n";
+import { initSession } from "@lib/scopedLocalStorage";
+import { importLegacyLocalStorage } from "@lib/tauri/legacyImport";
+import { bootTheme, reconcileThemeFromBackend } from "@lib/themeBoot";
+import { getCurrentWindowLabel } from "@lib/window-label";
+import { bootWindowLifecycle } from "@lib/window-lifecycle-boot";
+import { isTauri } from "@tauri-apps/api/core";
+import React from "react";
+import ReactDOM from "react-dom/client";
+import AppRouter from "./AppRouter";
 import "./index.css";
 
 // Boot sequence: theme → session → hydrate stores → render.

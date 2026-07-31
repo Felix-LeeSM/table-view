@@ -1,9 +1,9 @@
-import { describe, it, expect } from "vitest";
-import {
-  getConnectionColor,
-  CONNECTION_COLOR_PALETTE,
-} from "./connectionColor";
+import { describe, expect, it } from "vitest";
 import type { ConnectionConfig } from "@/types/connection";
+import {
+  CONNECTION_COLOR_PALETTE,
+  getConnectionColor,
+} from "./connectionColor";
 
 function makeConn(overrides: Partial<ConnectionConfig> = {}): ConnectionConfig {
   return {

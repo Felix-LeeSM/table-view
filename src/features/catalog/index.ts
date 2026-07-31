@@ -1,17 +1,16 @@
-export { default as SchemaTree } from "@components/schema/SchemaTree";
+export { default as AddColumnDialog } from "@components/schema/AddColumnDialog";
+export { default as OrderedColumnPicker } from "@components/schema/CreateTableDialog/OrderedColumnPicker";
 export { default as DocumentDatabaseTree } from "@components/schema/DocumentDatabaseTree";
+export { default as DropColumnDialog } from "@components/schema/DropColumnDialog";
+export { default as SchemaErdPanel } from "@components/schema/SchemaErdPanel";
+export { default as SchemaTree } from "@components/schema/SchemaTree";
 export { default as StructurePanel } from "@components/schema/StructurePanel";
 export { default as ViewStructurePanel } from "@components/schema/ViewStructurePanel";
-export { default as SchemaErdPanel } from "@components/schema/SchemaErdPanel";
-export { default as AddColumnDialog } from "@components/schema/AddColumnDialog";
-export { default as DropColumnDialog } from "@components/schema/DropColumnDialog";
-export { default as OrderedColumnPicker } from "@components/schema/CreateTableDialog/OrderedColumnPicker";
-
+export type { SchemaDbMismatchRecoveryHandler } from "@stores/schemaStore";
 export {
   registerSchemaDbMismatchRecoveryHandler,
   useSchemaStore,
 } from "@stores/schemaStore";
-export type { SchemaDbMismatchRecoveryHandler } from "@stores/schemaStore";
 
 // SchemaGraph extraction stays shared-library owned; catalog exposes the contract.
 export { extractSchemaGraph } from "@/lib/schemaGraph";

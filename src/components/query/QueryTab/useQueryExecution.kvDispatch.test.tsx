@@ -1,18 +1,18 @@
-import { act, renderHook, waitFor } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { TabId } from "@/types/branded";
-import { setupTauriMock } from "@/test-utils/tauriMock";
-import {
-  getTestWorkspace,
-  seedWorkspace,
-} from "@/stores/__tests__/workspaceStoreTestHelpers";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useQueryHistoryStore } from "@stores/queryHistoryStore";
 import { useSafeModeStore } from "@stores/safeModeStore";
 import { useWorkspaceStore } from "@stores/workspaceStore";
-import { useQueryExecution } from "./useQueryExecution";
-import { makeConn, makeQueryTab } from "../__tests__/queryTabTestHelpers";
+import { act, renderHook, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  getTestWorkspace,
+  seedWorkspace,
+} from "@/stores/__tests__/workspaceStoreTestHelpers";
+import { setupTauriMock } from "@/test-utils/tauriMock";
+import type { TabId } from "@/types/branded";
 import type { QueryResult } from "@/types/query";
+import { makeConn, makeQueryTab } from "../__tests__/queryTabTestHelpers";
+import { useQueryExecution } from "./useQueryExecution";
 
 const executeKvCommandMock = vi.fn();
 const cancelQueryMock = vi.fn();

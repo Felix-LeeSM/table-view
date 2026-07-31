@@ -4,7 +4,7 @@
 // scope (backend sends `hasPassword` only), so URI-userinfo / key=value
 // masking must work with zero known secrets. Patterns mirror
 // `redact_connection_message` in the Rust backend (storage/sql_redact.rs).
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import { sanitizeMessage } from "./sanitize";
 
 describe("sanitizeMessage", () => {

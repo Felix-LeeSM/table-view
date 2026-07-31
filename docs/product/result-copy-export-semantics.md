@@ -85,9 +85,9 @@ explain/profile/destructive plan 을 가져오지 않는다. Selected-index
 mappings/settings/templates/field stats/samples 는 lazy detail tab 또는 explicit
 action 에서만 로드한다. Search live HTTP/admin promotion remains owned by the
 Search roadmap/milestone, not non-RDBMS lazy-loading workbench hardening.
-Elasticsearch/OpenSearch actual live admin execution, broader observability,
-profile/explain request workflow, full language-core parser/completion ownership 은
-아직 deferred 다.
+Elasticsearch/OpenSearch actual live index/settings admin execution, broader
+observability, profile/explain request workflow, full language-core
+parser/completion ownership 은 아직 deferred 다.
 
 Cassandra/Scylla, DynamoDB, graph, vector, stream 은 active `DatabaseType`,
 profile, runtime, parser/completion, fixture/live evidence, E2E smoke claim 이

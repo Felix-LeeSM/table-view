@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { SUPPORTED_DATABASE_TYPES } from "../features/connection/model";
 import { QUERY_LANGUAGE_REGISTRY } from "./queryLanguage";
@@ -51,6 +51,42 @@ const ACTIVE_CLAIM_PATTERNS = [
 
 function matchesAnyActiveClaim(text: string): boolean {
   return ACTIVE_CLAIM_PATTERNS.some((pattern) => pattern.test(text));
+}
+
+// Issue #1812. The inverse of ACTIVE_CLAIM_PATTERNS: not an overclaim, a
+// *retired* non-claim. #1076 promoted live `_delete_by_query` behind the Safe
+// Mode backend gate (`safe_mode::enforce_search_danger` in
+// `src-tauri/src/commands/search.rs`) and updated three docs/product pages, but
+// the wording it retired stayed hand-copied in ten other files for months.
+// Nothing caught it: `docs[].mustContain` in
+// `tests/fixtures/unsupported_boundary_contracts.json` only pins that the NEW
+// wording ARRIVED in a listed file, so it cannot see OLD wording sitting in a
+// file no row lists. This is the absence half.
+//
+// Replayed against the pre-fix tree these matched 32 times in 10 of the 39
+// swept files, and 0 times after; see the PR for #1812.
+const RETIRED_SEARCH_NONCLAIM_PATTERNS = [
+  /delete[- ]by[- ]query planning is preview[- ]only/i,
+  /delete[- ]by[- ]query[^.\n|]{0,90}as (?:a )?preview[- ]only plans?/i,
+  // Never existed: `validate_search_destructive_request` rejects wildcard/`_all`
+  // targets and a missing query body, and nothing rejects on `preview_only`.
+  /preview[- ]only execution rejection/i,
+  /actual (?:live )?`?_?delete[_ -]by[_ -]query`? (?:execution|and broader admin APIs)/i,
+  /delete[- ]by[- ]query[^.\n|]{0,60}with actual execution unsupported/i,
+  // Ceiling: this bans the *unqualified* phrase everywhere in the swept set,
+  // not just in Search prose, because "actual live admin execution remains
+  // deferred" is how the delete-by-query non-claim was usually written — the
+  // half that names no delete-by-query at all and so cannot be found by any
+  // narrower pattern. Deferred admin execution is still real, so write
+  // "index/settings admin execution". False-positive control: the all-vendor
+  // "broad admin execution remain future gates unless a row below says
+  // otherwise" line in release-notes-support-matrix.md is not "actual", stays
+  // unqualified, and passes.
+  /actual (?:live )?(?:Search )?admin execution/i,
+];
+
+function matchesAnyRetiredNonClaim(text: string): boolean {
+  return RETIRED_SEARCH_NONCLAIM_PATTERNS.some((pattern) => pattern.test(text));
 }
 
 describe("query language support documentation", () => {
@@ -142,6 +178,76 @@ describe("query language support documentation", () => {
       "MSSQL/Oracle/Search 는 Pg form reuse claim 을 하지 않는다.",
     );
     expect(productDocs).toMatch(/line-number references are\s+not stable SOT/);
+  });
+
+  it("keeps no retired Search delete-by-query non-claim in live prose", () => {
+    // Wider than the enterprise sweep above on purpose: the stale wording was
+    // found in the smoke matrix, the release matrix, the README, and two
+    // architecture memory rooms, none of which docs/product covers.
+    const searchDocs = readDocs(
+      "docs/product",
+      "docs/roadmap",
+      "docs/contributor-guide/smoke-matrix",
+      "docs/contributor-guide/release",
+      "docs/ROADMAP.md",
+      "README.md",
+      "memory/engineering/architecture/data-source/memory.md",
+      "memory/engineering/architecture/data-source/posture/memory.md",
+    );
+
+    // Shipped, so it must be stated somewhere rather than merely not denied.
+    expect(searchDocs).toMatch(
+      /live `_delete_by_query` execution[\s\S]{0,80}Safe Mode/i,
+    );
+
+    for (const pattern of RETIRED_SEARCH_NONCLAIM_PATTERNS) {
+      expect(searchDocs).not.toMatch(pattern);
+    }
+  });
+
+  // Reason: a `not.toMatch` set is green both when the docs are correct and
+  // when the patterns have quietly rotted into matching nothing, and only the
+  // first is worth having. This fails if a pattern stops seeing the exact
+  // sentence it was written for. Same shape as the enterprise overclaim check
+  // above, including the re-flow case.
+  it("still recognizes each delete-by-query non-claim it retired", () => {
+    // Verbatim from the pre-fix tree — one per pattern, so a pattern that rots
+    // into matching nothing fails here instead of passing the sweep silently.
+    for (const retired of [
+      "Delete-by-query planning is preview-only for both Search products.",
+      "live delete-by-query planning estimates through safe `_search` as a preview-only plan",
+      "scoped/redacted preview errors, and explicit preview-only execution rejection",
+      "Actual live `_delete_by_query` execution, live admin smoke, and global audit/admin/security dashboards remain outside this scope.",
+      "actual live `_delete_by_query` and broader admin APIs remain deferred",
+      "Search fixture/live delete-by-query preview plan estimates with actual execution unsupported",
+      "Actual live Search admin execution remains unsupported.",
+    ]) {
+      expect(matchesAnyRetiredNonClaim(retired), retired).toBe(true);
+    }
+
+    // The wording that replaced it must pass, or the guard bans its own fix.
+    for (const corrected of [
+      "Delete-by-query planning produces a preview plan for both Search products, and #1076 promoted the live `_delete_by_query` execution that follows it behind the Safe Mode confirm gate.",
+      "live delete-by-query planning estimates through safe `_search` as a preview plan before the confirmed live `_delete_by_query` runs",
+      "Actual live index/settings admin execution, live admin smoke, and global audit/admin/security dashboards remain outside this scope.",
+      "Actual live Search index/settings admin execution remains unsupported.",
+      // False-positive control: the all-vendor line that legitimately keeps an
+      // unqualified "admin execution".
+      "role/user/permission management, server activity dashboards, and broad admin execution remain future gates unless a row below says otherwise.",
+    ]) {
+      expect(matchesAnyRetiredNonClaim(corrected), corrected).toBe(false);
+    }
+
+    // Re-flow: a claim wrapped across a line break is still one claim, but a
+    // blank line stays a hard bound.
+    const wrapped = "Delete-by-query planning is\npreview-only for both.\n";
+    expect(matchesAnyRetiredNonClaim(wrapped)).toBe(false);
+    expect(matchesAnyRetiredNonClaim(normalizeDocProse(wrapped))).toBe(true);
+    expect(
+      matchesAnyRetiredNonClaim(
+        normalizeDocProse(wrapped.replace("\n", "\n\n")),
+      ),
+    ).toBe(false);
   });
 
   it("keeps Search fixture contracts separate from live runtime evidence", () => {

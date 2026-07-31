@@ -6,8 +6,8 @@
 // Mocks: none — the hook attaches a real `window` keydown listener, so we
 // dispatch real KeyboardEvents. (2026-07-01)
 
-import { afterEach, describe, expect, it, vi } from "vitest";
 import { renderHook } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { useRdbDataGridShortcuts } from "./useRdbDataGridShortcuts";
 
 type Overrides = Partial<Parameters<typeof useRdbDataGridShortcuts>[0]>;

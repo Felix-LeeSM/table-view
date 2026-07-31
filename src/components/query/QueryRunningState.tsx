@@ -1,6 +1,6 @@
+import { Loader2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Loader2 } from "lucide-react";
 
 /**
  * Issue #1057 — formats an elapsed duration for the running-state timer.

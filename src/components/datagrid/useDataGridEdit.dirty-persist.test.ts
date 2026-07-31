@@ -7,13 +7,14 @@
 // Contract: the marker tracks *pending edits existing* (store-backed), not the
 // grid being mounted — it must SURVIVE unmount. Cleanup is `removeTab` /
 // `clearForConnection` (explicit close), not React unmount.
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { renderHook, act } from "@testing-library/react";
-import { useDataGridEdit } from "./useDataGridEdit";
+
 import { useDataGridEditStore } from "@stores/dataGridEditStore";
 import { useWorkspaceStore } from "@stores/workspaceStore";
+import { act, renderHook } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { emptyWorkspace } from "@/stores/__tests__/workspaceStoreTestHelpers";
 import type { TableData } from "@/types/schema";
+import { useDataGridEdit } from "./useDataGridEdit";
 
 vi.mock("@stores/schemaStore", () => ({
   useSchemaStore: (selector: (state: Record<string, unknown>) => unknown) =>

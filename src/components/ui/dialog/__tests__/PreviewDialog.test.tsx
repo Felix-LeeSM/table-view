@@ -1,6 +1,6 @@
-import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
 import PreviewDialog from "@components/ui/dialog/PreviewDialog";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 
 describe("PreviewDialog (sprint-96 preset)", () => {
   it("renders title + preview body and a confirm/cancel footer", () => {

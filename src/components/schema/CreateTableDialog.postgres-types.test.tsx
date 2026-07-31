@@ -1,4 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { invalidatePostgresTypesCache } from "@hooks/usePostgresTypes";
+import { useConnectionStore } from "@stores/connectionStore";
+import { useQueryHistoryStore } from "@stores/queryHistoryStore";
+import { useSafeModeStore } from "@stores/safeModeStore";
 import {
   act,
   fireEvent,
@@ -6,10 +9,7 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
-import { invalidatePostgresTypesCache } from "@hooks/usePostgresTypes";
-import { useConnectionStore } from "@stores/connectionStore";
-import { useSafeModeStore } from "@stores/safeModeStore";
-import { useQueryHistoryStore } from "@stores/queryHistoryStore";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   getColumnsPanel,
   mockListPostgresTypes,

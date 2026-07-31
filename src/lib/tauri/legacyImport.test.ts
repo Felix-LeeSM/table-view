@@ -2,7 +2,7 @@
 // 단위 검증. backend IPC 호출 contract (command 이름, payload shape, error
 // propagation) 만 확인 — 실제 SQLite write 는 Rust 통합 테스트 책임.
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const invokeMock = vi.fn();
 

@@ -1,16 +1,16 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
+  createEmptyDraft,
+  DATABASE_DEFAULT_FIELDS,
+  DATABASE_DEFAULTS,
+  DATABASE_TYPE_LABELS,
+  isSupportedDatabaseType,
   parseConnectionUrl,
   parseSqliteFilePath,
-  createEmptyDraft,
-  isSupportedDatabaseType,
+  SUPPORTED_DATABASE_TYPES,
   sslModeFields,
   sslModeFromFields,
   unreflectedTlsParam,
-  DATABASE_DEFAULTS,
-  DATABASE_DEFAULT_FIELDS,
-  DATABASE_TYPE_LABELS,
-  SUPPORTED_DATABASE_TYPES,
 } from "./connection";
 
 describe("parseConnectionUrl", () => {

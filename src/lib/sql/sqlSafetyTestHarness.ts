@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, expect, vi } from "vitest";
-import type { StatementAnalysis } from "./sqlSafety";
 import { __resetSqlWasmModuleForTests, preloadSqlWasm } from "./sqlAst";
+import type { StatementAnalysis } from "./sqlSafety";
 
 vi.mock("./wasm/sql_parser_core.js", () => {
   return {

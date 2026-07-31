@@ -10,7 +10,6 @@
  * 는 sibling `QueryLog.list-history.test.tsx` 에서 다룬다.
  */
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   act,
   fireEvent,
@@ -18,6 +17,7 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const invokeMock = vi.fn();
 vi.mock("@tauri-apps/api/core", () => ({
@@ -32,9 +32,9 @@ vi.mock("lucide-react", () => ({
   RefreshCw: () => <span data-testid="icon-refresh" />,
 }));
 
-import QueryLog from "./QueryLog";
 import { resetStateChangedRegistryForTests } from "@lib/events/stateChanged";
 import type { HistoryListRow } from "@lib/tauri/history";
+import QueryLog from "./QueryLog";
 
 /**
  * sprint-177 matcher helper — `QuerySyntax` 가 SQL 을 span tree 로 토큰화하므로

@@ -4,10 +4,10 @@
 // 교체한다. paradigm × mode 4 case 각각 dispatch 인자 + close + Mongo
 // create 의 informational copy 가드.
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { setupTauriMock } from "@/test-utils/tauriMock";
-import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import { DbLifecycleDialog } from "./DbLifecycleDialog";
 
 const createRdbDatabaseMock = vi.fn();

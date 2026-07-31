@@ -1,6 +1,6 @@
-import { useTranslation } from "react-i18next";
-import { ChevronDown, ChevronUp } from "lucide-react";
 import { Button } from "@components/ui/button";
+import { ChevronDown, ChevronUp } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 export interface HistoryCollapseToggleProps {
   expanded: boolean;

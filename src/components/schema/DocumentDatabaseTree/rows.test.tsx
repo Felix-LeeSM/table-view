@@ -1,7 +1,7 @@
-import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
-import { CollectionRow } from "./rows";
+import { describe, expect, it, vi } from "vitest";
 import type { CollectionInfo } from "@/types/document";
+import { CollectionRow } from "./rows";
 
 // #1140 — guard the aria-override fix. The collection treeitem keeps its
 // identifying aria-label (stable SR name + 200+ test queries depend on it) but

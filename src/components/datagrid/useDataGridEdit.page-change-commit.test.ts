@@ -13,13 +13,14 @@
 // the CURRENT page's `data.rows[rowIdx]`, so the UPDATE/DELETE silently hit
 // the wrong row on page 2. These tests assert the emitted statement targets
 // the ORIGINAL page-1 row identity.
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { setupTauriMock } from "@/test-utils/tauriMock";
-import { renderHook, act } from "@testing-library/react";
-import { useDataGridEdit } from "./useDataGridEdit";
+
 import { useDataGridEditStore } from "@stores/dataGridEditStore";
+import { act, renderHook } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { makeEntryKey } from "@/test-utils/brandedKeys";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import type { TableData } from "@/types/schema";
+import { useDataGridEdit } from "./useDataGridEdit";
 
 const { mockExecuteQuery, mockExecuteQueryBatch } = vi.hoisted(() => ({
   mockExecuteQuery: vi.fn(),

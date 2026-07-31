@@ -22,8 +22,8 @@
 // dispatch 된다.
 
 import { executeQueryDryRun } from "@lib/tauri";
-import type { QueryResult } from "@/types/query";
 import type { Severity } from "@/lib/sql/sqlSafety";
+import type { QueryResult } from "@/types/query";
 
 /** 2s timeout for dry-run row-count probe. */
 export const DRY_RUN_ESCALATION_TIMEOUT_MS = 2000;

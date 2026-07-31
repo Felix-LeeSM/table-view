@@ -7,16 +7,16 @@
  * `src/lib/tauri/history.test.ts` 와 lego (invoke "clear_history" no req).
  */
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
 import { act, render, screen, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const invokeMock = vi.fn();
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: (...args: unknown[]) => invokeMock(...args),
 }));
 
-import ClearHistoryButton from "./ClearHistoryButton";
 import { useToastStore } from "@stores/toastStore";
+import ClearHistoryButton from "./ClearHistoryButton";
 
 describe("ClearHistoryButton (sprint-372)", () => {
   beforeEach(() => {

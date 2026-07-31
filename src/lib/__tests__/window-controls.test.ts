@@ -6,7 +6,7 @@
  * `getByLabel` API which proved unreliable. These tests lock the Rust
  * command invocation + workspace_ensure fallback behavior. (2026-04-28)
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockInvoke = vi.fn();
 

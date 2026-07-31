@@ -1,6 +1,6 @@
+import { Button } from "@components/ui/button";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { Button } from "@components/ui/button";
 import type { KvMutationActionIntent } from "./KvMutationPanel";
 
 interface KvKeyActionsProps {

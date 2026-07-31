@@ -17,7 +17,7 @@
  * snapshot.
  */
 
-import { describe, expect, it, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { useQueryHistoryStore } from "./queryHistoryStore";
 
 describe("queryHistoryStore retire (sprint-373)", () => {

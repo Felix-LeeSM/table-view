@@ -1,22 +1,23 @@
-import { executeQuery, executeQueryDryRun } from "@lib/tauri";
-import { syncMismatchedActiveDb } from "@lib/runtime/recovery/syncMismatchedActiveDb";
-import { getDbMismatchInfo, getTauriErrorMessage } from "@lib/tauri/error";
-import { splitSqlStatements } from "@lib/sql/sqlUtils";
-import { stripSqlComments } from "@lib/sql/stripSqlComments";
+import type { SafeModeGate } from "@hooks/useSafeModeGate";
 import { parseFromContext, tokenizeSql } from "@lib/completion/shared";
+import { syncMismatchedActiveDb } from "@lib/runtime/recovery/syncMismatchedActiveDb";
+import { toast } from "@lib/runtime/toast";
+import {
+  type EscalationCause,
+  escalateWarnIfLargeImpact,
+} from "@lib/sql/escalateWarnIfLargeImpact";
 import { findMysqlScriptingBoundaryViolation } from "@lib/sql/mysqlScriptingBoundary";
 import {
   analyzeRdbStatementForDialect,
   decideOracleOrGenericSafeMode,
 } from "@lib/sql/oracleSafety";
-import {
-  escalateWarnIfLargeImpact,
-  type EscalationCause,
-} from "@lib/sql/escalateWarnIfLargeImpact";
-import { toast } from "@lib/runtime/toast";
-import { dispatchDbMutationHint } from "./queryHelpers";
-import { isQueryCancellationMessage } from "./queryCancellation";
-import type { SafeModeGate } from "@hooks/useSafeModeGate";
+import { splitSqlStatements } from "@lib/sql/sqlUtils";
+import { stripSqlComments } from "@lib/sql/stripSqlComments";
+import { executeQuery, executeQueryDryRun } from "@lib/tauri";
+import { getDbMismatchInfo, getTauriErrorMessage } from "@lib/tauri/error";
+import type { QueryHistorySource } from "@stores/queryHistoryStore";
+import type { QueryTab } from "@stores/workspaceStore";
+import type { MultiStatementPayload } from "@stores/workspaceStore/types";
 import type { ConnectionId, TabId } from "@/types/branded";
 import type { DatabaseType } from "@/types/connection";
 import type { FileAnalyticsSourceMetadata } from "@/types/fileAnalytics";
@@ -25,9 +26,8 @@ import type {
   QueryState,
   QueryStatementResult,
 } from "@/types/query";
-import type { QueryHistorySource } from "@stores/queryHistoryStore";
-import type { QueryTab } from "@stores/workspaceStore";
-import type { MultiStatementPayload } from "@stores/workspaceStore/types";
+import { isQueryCancellationMessage } from "./queryCancellation";
+import { dispatchDbMutationHint } from "./queryHelpers";
 
 type RdbHistoryStatus = "success" | "error" | "cancelled";
 

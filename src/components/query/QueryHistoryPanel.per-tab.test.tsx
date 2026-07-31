@@ -7,19 +7,19 @@
  * invariant (AC-372-08) — sqlRedacted 가 보이고 원문 sql 은 0 노출.
  */
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
 import { act, render, screen, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const invokeMock = vi.fn();
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: (...args: unknown[]) => invokeMock(...args),
 }));
 
-import QueryHistoryPanel from "./QueryHistoryPanel";
 import {
   dispatchStateChangedPayload,
   resetStateChangedRegistryForTests,
 } from "@lib/events/stateChanged";
+import QueryHistoryPanel from "./QueryHistoryPanel";
 
 const row = (id: number, sqlRedacted = `SELECT ${id}`) => ({
   id,

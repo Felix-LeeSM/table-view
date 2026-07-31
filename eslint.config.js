@@ -5,11 +5,12 @@
 // `@typescript-eslint/no-deprecated`, no-console and max-lines. Do not
 // re-add `js.configs.recommended` or `tseslint.configs.recommended`: a rule
 // living in both engines gets reported twice and drifts out of sync.
+
+import { existsSync, readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 import reactHooks from "eslint-plugin-react-hooks";
 import globals from "globals";
 import tseslint from "typescript-eslint";
-import { readFileSync, existsSync } from "node:fs";
-import { dirname, resolve } from "node:path";
 
 // Flags Tailwind arbitrary pixel values on size-class prefixes — the
 // reason they exist is almost always a missing design token. Prefixes

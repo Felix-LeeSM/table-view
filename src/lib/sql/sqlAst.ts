@@ -14,6 +14,6 @@
  * see `src-tauri/sql-parser-core/src/ast.rs`.
  */
 
-export * from "./sqlAstTypes";
-export * from "./sqlAstStatementTypes";
 export * from "./sqlAstParser";
+export * from "./sqlAstStatementTypes";
+export * from "./sqlAstTypes";

@@ -1,13 +1,13 @@
-import { useTranslation } from "react-i18next";
 import {
   AlertDialog,
   AlertDialogContent,
-  AlertDialogHeader,
-  AlertDialogTitle,
   AlertDialogDescription,
   AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
 } from "@components/ui/alert-dialog";
 import { Button } from "@components/ui/button";
+import { useTranslation } from "react-i18next";
 
 // ---------------------------------------------------------------------------
 // `ConfirmDialog` preset (Layer 2 of the dialog 2-layer system; see

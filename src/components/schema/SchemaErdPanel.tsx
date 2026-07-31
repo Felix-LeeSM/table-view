@@ -1,6 +1,3 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useTranslation } from "react-i18next";
-import { Network } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -10,17 +7,20 @@ import {
 } from "@components/ui/select";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useSchemaStore } from "@stores/schemaStore";
+import { Network } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { selectSchemaGraphDiff } from "@/lib/schemaGraphDiff";
 import { selectSchemaGraphIntelligence } from "@/lib/schemaGraphSelectors";
 import { buildSchemaGraphCatalogSnapshot } from "@/lib/schemaGraphSnapshot";
+import type { DatabaseName, SchemaName, TableName } from "@/types/branded";
 import {
   RUNTIME_RDBMS_DATABASE_TYPES,
   type RuntimeRdbmsDatabaseType,
 } from "@/types/rdbmsDataSources";
 import type { SchemaGraphCatalogSnapshot } from "@/types/schemaGraph";
-import type { DatabaseName, SchemaName, TableName } from "@/types/branded";
-import SchemaGraphDiffPanel from "./SchemaGraphDiffPanel";
 import SchemaErdRenderer from "./SchemaErdRenderer";
+import SchemaGraphDiffPanel from "./SchemaGraphDiffPanel";
 
 interface SchemaErdPanelProps {
   connectionId: string;

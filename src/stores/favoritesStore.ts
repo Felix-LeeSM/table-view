@@ -1,14 +1,14 @@
-import { create } from "zustand";
-import { attachZustandIpcBridge } from "@lib/zustand-ipc-bridge";
-import { getCurrentWindowLabel } from "@lib/window-label";
+import i18n from "@lib/i18n";
 import { logger } from "@lib/logger";
 import { toast } from "@lib/runtime/toast";
-import i18n from "@lib/i18n";
 import {
   listFavorites,
-  persistFavorites as persistFavoritesRemote,
   type PersistFavoritePayload,
+  persistFavorites as persistFavoritesRemote,
 } from "@lib/tauri/favorites";
+import { getCurrentWindowLabel } from "@lib/window-label";
+import { attachZustandIpcBridge } from "@lib/zustand-ipc-bridge";
+import { create } from "zustand";
 
 // ---------------------------------------------------------------------------
 // Types

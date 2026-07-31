@@ -6,8 +6,8 @@
 // message 를 노출하는지를 회귀 가드. wire-up 은 Sprint 324 (G.2)
 // 가 진행.
 
-import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 import BsonTypeEditor from "./BsonTypeEditor";
 
 describe("BsonTypeEditor (Sprint 323 G.1)", () => {

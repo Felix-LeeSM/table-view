@@ -1,8 +1,8 @@
+import { useConnectionStore } from "@stores/connectionStore";
+import { useSafeModeStore } from "@stores/safeModeStore";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ComponentProps } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { useConnectionStore } from "@stores/connectionStore";
-import { useSafeModeStore } from "@stores/safeModeStore";
 import type { ConnectionConfig } from "@/types/connection";
 import { SearchDeleteByQueryPreviewDialog } from "./SearchDeleteByQueryPreviewDialog";
 

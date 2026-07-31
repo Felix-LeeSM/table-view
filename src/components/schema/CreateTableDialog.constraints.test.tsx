@@ -1,15 +1,7 @@
-import { describe, it, expect, beforeEach } from "vitest";
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
-import { useSchemaStore } from "@stores/schemaStore";
 import { useSafeModeStore } from "@stores/safeModeStore";
-import {
-  HEAVY_LOAD_TEST_TIMEOUT_MS,
-  mockAddConstraint,
-  mockCreateTable,
-  renderDialog,
-  setDevConnection,
-  STALE_CONSTRAINTS_PLACEHOLDER,
-} from "./__tests__/createTableDialogTestHelpers";
+import { useSchemaStore } from "@stores/schemaStore";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { beforeEach, describe, expect, it } from "vitest";
 import {
   activateConstraintSubTab,
   activateTab,
@@ -20,6 +12,14 @@ import {
   getForeignKeysPanel,
   resetCreateTableDialogConstraintState,
 } from "./__tests__/createTableDialogConstraintTestHelpers";
+import {
+  HEAVY_LOAD_TEST_TIMEOUT_MS,
+  mockAddConstraint,
+  mockCreateTable,
+  renderDialog,
+  STALE_CONSTRAINTS_PLACEHOLDER,
+  setDevConnection,
+} from "./__tests__/createTableDialogTestHelpers";
 
 // ── Sprint 229 — Foreign Keys + CHECK + UNIQUE tab functional ─────────
 //

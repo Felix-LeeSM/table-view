@@ -189,7 +189,8 @@ The short form:
 - No directory moves, source moves, cache deletion, tmp deletion, or worktree
   cleanup happened in this PR.
 - No dedicated internal markdown link checker exists in the repo today, and no
-  markdown formatter either: Prettier was removed when Biome landed, `biome.json`
-  excludes `docs/`, and Biome 2.5.6 does not format markdown. `git diff --check`
+  markdown formatter either: Prettier was removed when Biome landed,
+  `biome.jsonc` excludes `docs/`, and Biome 2.5.6 does not format markdown.
+  `git diff --check`
   plus reading the diff is the whole mechanical check for this docs-only
   inventory.

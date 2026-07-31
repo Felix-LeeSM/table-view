@@ -2,7 +2,7 @@
 // documentQueryStore (supersede-on-request) and schemaStore
 // (invalidate-on-teardown). Both flavors ride the same guard, so the unit test
 // pins the two semantics that must never drift.
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import { createRequestGuard } from "./requestGuard";
 
 describe("createRequestGuard", () => {

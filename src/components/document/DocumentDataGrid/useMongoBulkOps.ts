@@ -1,13 +1,13 @@
-import { useCallback, useState } from "react";
-import { toast } from "@/lib/runtime/toast";
+import type { SafeModeGate } from "@hooks/useSafeModeGate";
+import { safeStringifyCell } from "@lib/jsonCell";
+import { analyzeMongoOperation } from "@lib/mongo/mongoSafety";
 import { recordHistoryEntry } from "@lib/runtime/history/recordHistoryEntry";
 import {
   deleteMany as invokeDeleteMany,
   updateMany as invokeUpdateMany,
 } from "@lib/tauri";
-import { analyzeMongoOperation } from "@lib/mongo/mongoSafety";
-import { safeStringifyCell } from "@lib/jsonCell";
-import type { SafeModeGate } from "@hooks/useSafeModeGate";
+import { useCallback, useState } from "react";
+import { toast } from "@/lib/runtime/toast";
 
 /**
  * Mongo bulk-write decision flow for `DocumentDataGrid`. Owns:

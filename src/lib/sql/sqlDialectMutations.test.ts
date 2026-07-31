@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import { extractDbMutation } from "./sqlDialectMutations";
 
 describe("extractDbMutation (sprint 132)", () => {

@@ -1,11 +1,11 @@
+import { DocumentTreePanel } from "@components/document/DocumentTreePanel";
+import { Button } from "@components/ui/button";
+import { useSafeModeGate } from "@hooks/useSafeModeGate";
+import { applyTreeEdits } from "@lib/kvJsonWrite";
+import { executeKvCommand, setKvStringValue } from "@lib/tauri/kv";
+import { useConnectionStore } from "@stores/connectionStore";
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Button } from "@components/ui/button";
-import { DocumentTreePanel } from "@components/document/DocumentTreePanel";
-import { useSafeModeGate } from "@hooks/useSafeModeGate";
-import { executeKvCommand, setKvStringValue } from "@lib/tauri/kv";
-import { applyTreeEdits } from "@lib/kvJsonWrite";
-import { useConnectionStore } from "@stores/connectionStore";
 import ConfirmDestructiveDialog from "./ConfirmDestructiveDialog";
 import {
   analyzeKvMutationSafety,

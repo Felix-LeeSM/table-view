@@ -1,12 +1,12 @@
-import { describe, it, expect } from "vitest";
 import Decimal from "decimal.js";
+import { describe, expect, it } from "vitest";
+import type { CopyRowData } from "./format";
 import {
-  rowsToPlainText,
-  rowsToJson,
   rowsToCsv,
+  rowsToJson,
+  rowsToPlainText,
   rowsToSqlInsert,
 } from "./format";
-import type { CopyRowData } from "./format";
 
 // Sprint 238 — `truncateCell` / `CELL_DISPLAY_LIMIT` 테스트 폐기 (AC-238-05).
 // CSS ellipsis 로 대체됨.

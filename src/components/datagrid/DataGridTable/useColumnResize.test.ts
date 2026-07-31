@@ -3,8 +3,8 @@
 // 리사이즈 드래그 한정 요구를 useColumnResize 레이어에서 고정한다.
 // 컴포넌트 wiring (HeaderRow grip → hook) 은 DataGridTable.column-resize.test.tsx 담당.
 
-import { describe, it, expect, vi, afterEach } from "vitest";
-import { renderHook, act } from "@testing-library/react";
+import { act, renderHook } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { useColumnResize } from "./useColumnResize";
 
 function parseCols(outer: HTMLElement): number[] {

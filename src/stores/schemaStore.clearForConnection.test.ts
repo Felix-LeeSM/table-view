@@ -13,9 +13,10 @@
 // sibling, drops-every, no-op)를 이 canonical 11-slot suite 로 이관.
 // schemaStore.test.ts 는 fetch/delegate 전용으로 슬림화.
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { setupTauriMock } from "@/test-utils/tauriMock";
 import { useSchemaStore } from "./schemaStore";
+
 beforeEach(() => {
   setupTauriMock({
     listSchemas: vi.fn(() => Promise.resolve([{ name: "public" }])),

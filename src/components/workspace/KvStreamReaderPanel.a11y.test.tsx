@@ -1,8 +1,8 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
-import { KvStreamReaderPanel } from "./KvStreamReaderPanel";
 import { readKvStream } from "@lib/tauri/kv";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { KvStreamReadResult } from "@/types/kv";
+import { KvStreamReaderPanel } from "./KvStreamReaderPanel";
 
 // #1333 follow-up — the count input's `aria-invalid` (driven by the live
 // limit validity) and its `aria-describedby` (previously driven by any stream

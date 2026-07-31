@@ -19,10 +19,11 @@
 // useDryRun.test.ts. Here we verify the dialog wires the IPC mock
 // correctly: success row, error message, document disclaimer, and
 // IPC-not-called when `open=false`.
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { setupTauriMock } from "@/test-utils/tauriMock";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { userEvent } from "@testing-library/user-event";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import ConfirmDestructiveDialog from "./ConfirmDestructiveDialog";
 
 // Mock the entire @lib/tauri barrel so the `useDryRun` hook (consumed by

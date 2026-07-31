@@ -1,4 +1,4 @@
-import { useCallback, useEffect, type RefObject } from "react";
+import { type RefObject, useCallback, useEffect } from "react";
 
 /**
  * WAI-ARIA `role="toolbar"` roving-tabindex + arrow navigation for a
@@ -34,14 +34,18 @@ export function useToolbarRoving(containerRef: RefObject<HTMLElement | null>): {
       ).filter((b) => !b.disabled);
 
     // Initial single tab stop: only the first enabled control is tabbable.
-    items().forEach((el, i) => (el.tabIndex = i === 0 ? 0 : -1));
+    items().forEach((el, i) => {
+      el.tabIndex = i === 0 ? 0 : -1;
+    });
 
     // Reassert on focus entry so a control that (un)mounted or flipped
     // enabled between renders can't leave a stray second tab stop.
     const onFocusIn = (e: FocusEvent) => {
       const list = items();
       if (!list.includes(e.target as HTMLButtonElement)) return;
-      list.forEach((el) => (el.tabIndex = el === e.target ? 0 : -1));
+      list.forEach((el) => {
+        el.tabIndex = el === e.target ? 0 : -1;
+      });
     };
     container.addEventListener("focusin", onFocusIn);
     return () => container.removeEventListener("focusin", onFocusIn);
@@ -88,7 +92,9 @@ export function useToolbarRoving(containerRef: RefObject<HTMLElement | null>): {
                 ? last
                 : cur - 1;
 
-      list.forEach((el, i) => (el.tabIndex = i === next ? 0 : -1));
+      list.forEach((el, i) => {
+        el.tabIndex = i === next ? 0 : -1;
+      });
       list[next]!.focus();
     },
     [containerRef],

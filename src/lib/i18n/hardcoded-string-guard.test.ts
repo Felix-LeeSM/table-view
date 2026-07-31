@@ -1,6 +1,6 @@
-import { describe, it, expect } from "vitest";
-import { ESLint } from "eslint";
 import path from "node:path";
+import { ESLint } from "eslint";
+import { describe, expect, it } from "vitest";
 
 /**
  * #1074 — 하드코딩 UI 문자열 lint 가드가 실제로 신규 하드코딩을 잡는지 회귀

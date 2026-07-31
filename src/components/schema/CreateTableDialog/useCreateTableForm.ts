@@ -1,20 +1,25 @@
-import { useEffect, useMemo, useState } from "react";
-import * as tauri from "@lib/tauri";
 import { useDdlPreviewExecution } from "@components/structure/useDdlPreviewExecution";
-import { useSchemaStore } from "@stores/schemaStore";
-import { useConnectionStore } from "@stores/connectionStore";
-import { supportsDdl } from "@/types/dataSource";
 import { useFkReferencePicker } from "@hooks/useFkReferencePicker";
 import { usePostgresTypes } from "@hooks/usePostgresTypes";
-import type { IndexDraft } from "./IndexesTabBody";
+import * as tauri from "@lib/tauri";
+import { useConnectionStore } from "@stores/connectionStore";
+import { useSchemaStore } from "@stores/schemaStore";
+import { useEffect, useMemo, useState } from "react";
+import type { SchemaName, TableName } from "@/types/branded";
+import { supportsDdl } from "@/types/dataSource";
 import type {
-  ForeignKeyDraft,
   CheckDraft,
+  ForeignKeyDraft,
   UniqueDraft,
 } from "./ForeignKeysTabBody";
+import type { IndexDraft } from "./IndexesTabBody";
+import {
+  buildPlanRequest,
+  computeDeclaredConstraints,
+  type DeclaredConstraint,
+} from "./planBuilders";
 import {
   type ColumnDraft,
-  type TabKey,
   indexMatchesPk,
   moveByTrackingId,
   newCheckDraft,
@@ -22,13 +27,8 @@ import {
   newFkDraft,
   newIndexDraft,
   newUniqueDraft,
+  type TabKey,
 } from "./types";
-import {
-  buildPlanRequest,
-  computeDeclaredConstraints,
-  type DeclaredConstraint,
-} from "./planBuilders";
-import type { SchemaName, TableName } from "@/types/branded";
 
 export interface UseCreateTableFormArgs {
   /** Connection id used by the Safe Mode gate + history record. */

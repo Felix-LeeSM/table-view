@@ -9,10 +9,10 @@
 // The panel is purely presentational. `count` / `list` source their data
 // from `QueryResult.rows`; `findOne-empty` ignores rows entirely.
 
-import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
-import ScalarOrListPanel from "./ScalarOrListPanel";
+import { describe, expect, it } from "vitest";
 import type { QueryResult } from "@/types/query";
+import ScalarOrListPanel from "./ScalarOrListPanel";
 
 describe("ScalarOrListPanel — count mode", () => {
   it('renders the big numeric + "Count" label', () => {

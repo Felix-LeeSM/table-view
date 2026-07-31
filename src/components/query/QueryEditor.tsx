@@ -1,13 +1,13 @@
-import { forwardRef } from "react";
+import type { SQLDialect, SQLNamespace } from "@codemirror/lang-sql";
 import type { Extension } from "@codemirror/state";
 import type { EditorView } from "@codemirror/view";
-import type { SQLDialect, SQLNamespace } from "@codemirror/lang-sql";
-import type { Paradigm } from "@/types/connection";
+import { forwardRef } from "react";
 import { assertNever } from "@/lib/paradigm";
-import SqlQueryEditor from "./SqlQueryEditor";
+import type { Paradigm } from "@/types/connection";
 import MongoQueryEditor from "./MongoQueryEditor";
 import RedisCommandEditor from "./RedisCommandEditor";
 import SearchQueryEditor from "./SearchQueryEditor";
+import SqlQueryEditor from "./SqlQueryEditor";
 
 /**
  * Paradigm-aware editor router. `rdb` → `SqlQueryEditor`, `document` →

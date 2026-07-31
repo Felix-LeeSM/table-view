@@ -10,15 +10,15 @@
 // 워크스페이스 격리 + 라운드트립 보존을 한 번에 본다. selectedNode 와
 // scrollTop 의 더 좁은 케이스는 후속 RED→GREEN 사이클에서 다룬다.
 
-import { describe, it, expect, beforeEach, vi } from "vitest";
-import { render, screen, fireEvent, act } from "@testing-library/react";
-import SchemaTree from "./SchemaTree";
-import { useWorkspaceStore } from "@stores/workspaceStore";
 import { useConnectionStore } from "@stores/connectionStore";
+import { useWorkspaceStore } from "@stores/workspaceStore";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  setSchemaStoreState,
   resetStores,
+  setSchemaStoreState,
 } from "./__tests__/schemaTreeTestHelpers";
+import SchemaTree from "./SchemaTree";
 
 describe("SchemaTree — workspace-keyed sidebar state (Slice B)", () => {
   beforeEach(() => {

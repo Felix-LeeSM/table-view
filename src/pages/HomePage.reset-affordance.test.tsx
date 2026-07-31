@@ -16,8 +16,8 @@
  * 두 버튼 부재 회귀 가드.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { invokeMock } = vi.hoisted(() => ({
   invokeMock: vi.fn<(cmd: string, args?: unknown) => Promise<unknown>>(() =>
@@ -81,8 +81,8 @@ vi.mock("@lib/window-controls", () => ({
   onCurrentWindowCloseRequested: vi.fn(() => Promise.resolve(() => {})),
 }));
 
-import HomePage from "./HomePage";
 import { useMruStore } from "@stores/mruStore";
+import HomePage from "./HomePage";
 
 describe("HomePage reset affordances (Q21 #2 + #8)", () => {
   beforeEach(() => {

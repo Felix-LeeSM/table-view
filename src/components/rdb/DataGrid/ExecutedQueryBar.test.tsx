@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, it } from "vitest";
 import { ExecutedQueryBar } from "./ExecutedQueryBar";
 
 // #1339 follow-up — while collapsed the toggle kept `aria-controls` pointing at

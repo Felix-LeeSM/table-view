@@ -15,10 +15,15 @@
 // - `Set NULL` dispatches `handleStartEdit → setEditValue(null) →
 //   saveCurrentEdit` and clears the local draft to "".
 // - PK / BLOB / `_id` cells emit a `(read-only)` marker when editing.
-import { useCallback, useMemo, useState } from "react";
-import { Binary } from "lucide-react";
-import { useTranslation } from "react-i18next";
+
+import {
+  cellToEditValue,
+  editKey,
+  getInputTypeForColumn,
+} from "@components/datagrid/dataGridEditFsm";
+import type { DataGridEditState } from "@components/datagrid/useDataGridEdit";
 import { Button } from "@components/ui/button";
+import { INLINE_EDIT_INPUT } from "@components/ui/inlineEdit";
 import {
   Select,
   SelectContent,
@@ -27,14 +32,10 @@ import {
   SelectValue,
 } from "@components/ui/select";
 import { cn } from "@lib/utils";
-import { INLINE_EDIT_INPUT } from "@components/ui/inlineEdit";
+import { Binary } from "lucide-react";
+import { useCallback, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { ColumnInfo } from "@/types/schema";
-import {
-  cellToEditValue,
-  editKey,
-  getInputTypeForColumn,
-} from "@components/datagrid/dataGridEditFsm";
-import type { DataGridEditState } from "@components/datagrid/useDataGridEdit";
 import {
   formatCellValue,
   isBlobColumn,

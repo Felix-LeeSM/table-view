@@ -7,8 +7,8 @@
  * Date: 2026-04-30
  */
 
-import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
-import { renderHook, act } from "@testing-library/react";
+import { act, renderHook } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useDelayedFlag } from "./useDelayedFlag";
 
 beforeEach(() => {

@@ -5,11 +5,12 @@
 // 가 admin command (`db.runCommand({...})` / `db.adminCommand({...})`)
 // 시 Run 을 enabled 해야 하므로 statement-kind 분기를 toolbar 가 어떻게
 // 반영하는지 lock 한다. AST 는 sprint-382 — 본 sprint 는 정규식 기반.
-import { describe, it, expect, vi } from "vitest";
-import type { ConnectionId, TabId } from "@/types/branded";
-import { render, screen } from "@testing-library/react";
-import QueryTabToolbar from "./Toolbar";
+
 import type { QueryTab } from "@stores/workspaceStore";
+import { render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
+import type { ConnectionId, TabId } from "@/types/branded";
+import QueryTabToolbar from "./Toolbar";
 import type { QueryFavoritesState } from "./useQueryFavorites";
 
 // Mock the workspaceStore-derived TabDbChip dependency surface so the

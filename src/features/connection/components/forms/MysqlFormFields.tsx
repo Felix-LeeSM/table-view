@@ -11,7 +11,7 @@
  */
 import { useTranslation } from "react-i18next";
 import type { ConnectionDraft } from "../../model";
-import { fieldValidationProps, type ConnFieldKey } from "./fieldValidation";
+import { type ConnFieldKey, fieldValidationProps } from "./fieldValidation";
 import SslModeField from "./SslModeField";
 
 export interface MysqlFormFieldsProps {

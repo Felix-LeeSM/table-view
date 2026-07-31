@@ -1,6 +1,6 @@
-import { describe, it, expect } from "vitest";
 import { EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
+import { describe, expect, it } from "vitest";
 import { autocompleteTooltipTheme } from "./autocompleteTheme";
 
 // Sprint 303 (2026-05-14) — autocomplete popup 의 다크모드 토큰 매핑 가드.

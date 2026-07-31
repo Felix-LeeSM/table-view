@@ -1,8 +1,8 @@
-import { useTranslation } from "react-i18next";
 import PreviewDialog, {
   type PreviewDialogCommitError,
 } from "@components/ui/dialog/PreviewDialog";
 import ExecuteButton from "@components/ui/ExecuteButton";
+import { useTranslation } from "react-i18next";
 
 /**
  * MQL preview modal for the document paradigm. Mirrors the RDB SQL

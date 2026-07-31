@@ -1,8 +1,8 @@
 import {
   MySQL,
   PostgreSQL,
-  SQLite,
   SQLDialect,
+  SQLite,
   StandardSQL,
 } from "@codemirror/lang-sql";
 import type { DatabaseType } from "@/types/connection";

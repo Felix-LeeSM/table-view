@@ -1,8 +1,8 @@
-import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { KvValueBody } from "./KvValueBody";
+import { describe, expect, it } from "vitest";
 import type { KvValueEnvelope } from "@/types/kv";
+import { KvValueBody } from "./KvValueBody";
 
 // Purpose: the read-only KV value body renders a JSON object/array as a tree
 // and everything else (scalars, non-JSON text, hex) as raw text — KV JSON tree

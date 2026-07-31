@@ -1,28 +1,28 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Search, X, Table2, Eye, Code2, Terminal, Folder } from "lucide-react";
-import { useTranslation } from "react-i18next";
+import { resolveRdbTreeShape } from "@components/schema/treeShape";
 import { Button } from "@components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
 } from "@components/ui/dialog";
-import { useTauriListener } from "@hooks/useTauriListener";
-import { useSchemaStore } from "@stores/schemaStore";
-import { useConnectionStore } from "@stores/connectionStore";
-import { resolveRdbTreeShape } from "@components/schema/treeShape";
 import { useCurrentWindowConnectionId } from "@hooks/useCurrentWindowConnectionId";
-import { openWorkspaceWindow } from "@lib/tauri/window";
+import { useTauriListener } from "@hooks/useTauriListener";
 import { logger } from "@lib/logger";
 import {
   dispatchLocalIntent,
   forwardIntent,
-  subscribeIntents,
   type QuickOpenIntent,
+  subscribeIntents,
 } from "@lib/quickOpenIntent";
-import { rankQuickOpen, type RankableFields } from "./quickOpenRanking";
+import { openWorkspaceWindow } from "@lib/tauri/window";
+import { useConnectionStore } from "@stores/connectionStore";
+import { useSchemaStore } from "@stores/schemaStore";
+import { Code2, Eye, Folder, Search, Table2, Terminal, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { type RankableFields, rankQuickOpen } from "./quickOpenRanking";
 
 type QuickOpenItemKind = "schema" | "table" | "view" | "function" | "procedure";
 

@@ -8,7 +8,7 @@
  * (mysql-sidebar-naming) 과 공유되므로 *단일 모듈* + *순수 함수* 로 격리한다.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import { getSidebarObjectLabel } from "./dbTypeLabels";
 
 describe("getSidebarObjectLabel", () => {

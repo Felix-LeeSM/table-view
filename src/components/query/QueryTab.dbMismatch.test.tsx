@@ -7,30 +7,32 @@
 // 작성 위치 분리: execution.test.tsx 와 같은 module 에 두니 toast.warning
 // + connectionStore 변경의 async chain 이 직전 테스트(uglify) 의 SQL 변경
 // 이벤트 처리와 race. 본 sprint 의 신규 case 들만 격리해 격동 차단.
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { setupTauriMock } from "@/test-utils/tauriMock";
-import {
-  seedWorkspace,
-  getTestWorkspace,
-} from "@/stores/__tests__/workspaceStoreTestHelpers";
-import { render, screen, waitFor, act } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
-import QueryTab from "./QueryTab";
-import { Toaster } from "@/components/ui/toaster";
-import { useWorkspaceStore } from "@stores/workspaceStore";
-import { useConnectionStore } from "@stores/connectionStore";
-import { useToastStore } from "@stores/toastStore";
-import {
-  mockExecuteQuery,
-  mockCancelQuery,
-  mockFindDocuments,
-  mockAggregateDocuments,
-  mockVerifyActiveDb,
-  makeQueryTab,
-  resetQueryTabStores,
-} from "./__tests__/queryTabTestHelpers";
+
 import type { SQLDialect } from "@codemirror/lang-sql";
 import type { Extension } from "@codemirror/state";
+import { useConnectionStore } from "@stores/connectionStore";
+import { useToastStore } from "@stores/toastStore";
+import { useWorkspaceStore } from "@stores/workspaceStore";
+import { act, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { Toaster } from "@/components/ui/toaster";
+import {
+  getTestWorkspace,
+  seedWorkspace,
+} from "@/stores/__tests__/workspaceStoreTestHelpers";
+import { setupTauriMock } from "@/test-utils/tauriMock";
+import {
+  makeQueryTab,
+  mockAggregateDocuments,
+  mockCancelQuery,
+  mockExecuteQuery,
+  mockFindDocuments,
+  mockVerifyActiveDb,
+  resetQueryTabStores,
+} from "./__tests__/queryTabTestHelpers";
+import QueryTab from "./QueryTab";
+
 beforeEach(() => {
   setupTauriMock({
     executeQuery: (...args: unknown[]) => mockExecuteQuery(...args),
@@ -428,9 +430,9 @@ describe("QueryTab — DbMismatch auto-sync (Sprint 267)", () => {
     // `queryState.status !== "running"` guard fires.
     act(() => {
       useWorkspaceStore.setState((state) => {
-        const conn = state.workspaces["conn1"];
+        const conn = state.workspaces.conn1;
         if (!conn) return state;
-        const ws = conn["db1"];
+        const ws = conn.db1;
         if (!ws) return state;
         return {
           workspaces: {

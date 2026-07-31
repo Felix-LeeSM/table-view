@@ -1,23 +1,3 @@
-import {
-  ChevronLeft,
-  ChevronRight,
-  ChevronsLeft,
-  ChevronsRight,
-  Check,
-  Loader2,
-  X,
-  Plus,
-  Trash2,
-  Copy,
-  Filter,
-  Eye,
-  Undo2,
-  Redo2,
-} from "lucide-react";
-import { useEffect, useState } from "react";
-import { useTranslation } from "react-i18next";
-import type { SortInfo, TableData } from "@/types/schema";
-import { PARADIGM_VOCABULARY } from "@/lib/strings/paradigm-vocabulary";
 import { Button } from "@components/ui/button";
 import ConfirmDialog from "@components/ui/dialog/ConfirmDialog";
 import {
@@ -27,6 +7,26 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@components/ui/select";
+import {
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+  Copy,
+  Eye,
+  Filter,
+  Loader2,
+  Plus,
+  Redo2,
+  Trash2,
+  Undo2,
+  X,
+} from "lucide-react";
+import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { PARADIGM_VOCABULARY } from "@/lib/strings/paradigm-vocabulary";
+import type { SortInfo, TableData } from "@/types/schema";
 
 const PAGE_SIZE_OPTIONS = [100, 300, 500, 1000];
 

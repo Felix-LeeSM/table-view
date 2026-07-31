@@ -1,25 +1,25 @@
+import i18n from "@lib/i18n";
 import {
-  generateSqlWithKeys,
   type CoerceError,
   type GeneratedSqlStatement,
+  generateSqlWithKeys,
   type SqlDialect,
 } from "@/components/datagrid/sqlGenerator";
+import type { SafeModeGate } from "@/hooks/useSafeModeGate";
+import { detectBatchRowsAffectedMismatch } from "@/lib/datagrid/batchRowsAffected";
 import {
   generateMqlPreview,
   type MqlCommand,
   type MqlCommandSource,
   type MqlPreview,
 } from "@/lib/mongo/mqlGenerator";
+import { mqlCommandsToBulkOps } from "@/lib/mongo/mqlToBulk";
+import { toast } from "@/lib/runtime/toast";
 import {
   analyzeRdbStatementForDialect,
   decideOracleOrGenericSafeMode,
 } from "@/lib/sql/oracleSafety";
 import { bulkWriteDocuments } from "@/lib/tauri";
-import { mqlCommandsToBulkOps } from "@/lib/mongo/mqlToBulk";
-import { detectBatchRowsAffectedMismatch } from "@/lib/datagrid/batchRowsAffected";
-import { toast } from "@/lib/runtime/toast";
-import i18n from "@lib/i18n";
-import type { SafeModeGate } from "@/hooks/useSafeModeGate";
 import type { TableData } from "@/types/schema";
 
 /**

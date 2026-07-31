@@ -1,10 +1,10 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, act } from "@testing-library/react";
-import SchemaTree from "./SchemaTree";
-import { useSchemaStore } from "@stores/schemaStore";
 import { useConnectionStore } from "@stores/connectionStore";
+import { useSchemaStore } from "@stores/schemaStore";
 import { useWorkspaceStore } from "@stores/workspaceStore";
+import { act, render, screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConnectionConfig, DatabaseType } from "@/types/connection";
+import SchemaTree from "./SchemaTree";
 
 // Sprint 263 — flat-key seeds (`{ pg1: [...] }`, `{ "pg1:public": [...] }`)
 // are translated into the new `(connId, db)`-nested cache shape under the

@@ -6,20 +6,20 @@
 //   3. listener 는 등록된 채로 유지 (다음 retry 후 적용 가능).
 //   4. orchestrator 가 reject 를 throw 해서 caller (main.tsx) 가 인지.
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const invokeMock = vi.fn();
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: (...args: unknown[]) => invokeMock(...args),
 }));
 
-import {
-  loadAllFromSnapshot,
-  resetSnapshotBufferForTests,
-  isSnapshotBufferActive,
-} from "./loadAll";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useToastStore } from "@stores/toastStore";
+import {
+  isSnapshotBufferActive,
+  loadAllFromSnapshot,
+  resetSnapshotBufferForTests,
+} from "./loadAll";
 
 describe("AC-367-05 snapshot failure path", () => {
   beforeEach(() => {

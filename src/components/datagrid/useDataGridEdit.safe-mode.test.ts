@@ -18,12 +18,13 @@
 //     flow); safe writes / SELECT pass.
 //   - non-production + warn / off: bypass.
 // date 2026-05-01 (initial), 2026-05-08 (Sprint 244 → Sprint 245).
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { setupTauriMock } from "@/test-utils/tauriMock";
-import { renderHook, act } from "@testing-library/react";
-import { useDataGridEdit } from "./useDataGridEdit";
+
 import { useSafeModeStore } from "@stores/safeModeStore";
+import { act, renderHook } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import type { TableData } from "@/types/schema";
+import { useDataGridEdit } from "./useDataGridEdit";
 
 const { mockExecuteQueryBatch } = vi.hoisted(() => ({
   mockExecuteQueryBatch: vi.fn(),

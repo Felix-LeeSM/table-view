@@ -30,13 +30,13 @@
  * same test process see each other.
  */
 import {
-  describe,
-  it,
-  expect,
-  vi,
-  beforeEach,
   afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
   type Mock,
+  vi,
 } from "vitest";
 import { setupTauriMock } from "@/test-utils/tauriMock";
 
@@ -130,10 +130,10 @@ vi.mock("@lib/window-label", async () => {
   };
 });
 
+import * as tauri from "@lib/tauri";
+import { useConnectionStore } from "@stores/connectionStore";
 // Import AFTER all mocks are registered.
 import { emit, listen } from "@tauri-apps/api/event";
-import { useConnectionStore } from "@stores/connectionStore";
-import * as tauri from "@lib/tauri";
 import type { ConnectionConfig, ConnectionStatus } from "@/types/connection";
 
 const mockedEmit = emit as unknown as Mock;
@@ -225,7 +225,7 @@ describe("cross-window connection-store sync (Sprint 152)", () => {
     await Promise.resolve();
     await Promise.resolve();
 
-    expect(useConnectionStore.getState().activeStatuses["c1"]).toEqual({
+    expect(useConnectionStore.getState().activeStatuses.c1).toEqual({
       type: "connected",
     });
   });
@@ -333,7 +333,7 @@ describe("cross-window connection-store sync (Sprint 152)", () => {
     await Promise.resolve();
     await Promise.resolve();
 
-    expect(useConnectionStore.getState().activeStatuses["c1"]).toEqual({
+    expect(useConnectionStore.getState().activeStatuses.c1).toEqual({
       type: "connected",
     });
     expect(useConnectionStore.getState().focusedConnId).toBe("c1");
@@ -362,7 +362,7 @@ describe("cross-window connection-store sync (Sprint 152)", () => {
     // Store state untouched.
     const s = useConnectionStore.getState();
     expect(s.connections).toHaveLength(1);
-    expect(s.activeStatuses["c1"]).toEqual({ type: "connected" });
+    expect(s.activeStatuses.c1).toEqual({ type: "connected" });
     expect(s.focusedConnId).toBe("c1");
     expect(s.error).toBeNull();
   });
@@ -395,7 +395,7 @@ describe("cross-window connection-store sync (Sprint 152)", () => {
     await Promise.resolve();
 
     // Launcher's own origin id, so the inbound apply must be skipped.
-    expect(useConnectionStore.getState().activeStatuses["c1"]).toEqual({
+    expect(useConnectionStore.getState().activeStatuses.c1).toEqual({
       type: "connected",
     });
   });

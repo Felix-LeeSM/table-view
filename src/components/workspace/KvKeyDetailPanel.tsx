@@ -1,28 +1,28 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { useTranslation } from "react-i18next";
-import { Loader2, Timer } from "lucide-react";
+import { getKvValue } from "@lib/tauri/kv";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useWorkspaceStore } from "@stores/workspaceStore";
+import { Loader2, Timer } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useRefreshEvent } from "@/hooks/useRefreshEvent";
-import { getKvValue } from "@lib/tauri/kv";
-import type { KvValueEnvelope } from "@/types/kv";
-import { formatKvTtl } from "@/types/kv";
 import { DATABASE_TYPE_LABELS } from "@/types/connection";
 import { getDataSourceProfile } from "@/types/dataSource";
+import type { KvValueEnvelope } from "@/types/kv";
+import { formatKvTtl } from "@/types/kv";
+import { KvCollectionValueTable } from "./KvCollectionValueTable";
+import { KvKeyActions } from "./KvKeyActions";
 import {
   canMutateKvEntries,
   canRenderKvMutationPanel,
-  KvMutationPanel,
   type KvEntryActionIntent,
   type KvEntryPayload,
   type KvMutationActionIntent,
+  KvMutationPanel,
 } from "./KvMutationPanel";
-import { KvCollectionValueTable } from "./KvCollectionValueTable";
-import { KvKeyActions } from "./KvKeyActions";
 import KvNewKeyDialog from "./KvNewKeyDialog";
-import { kvKeyDetailTab } from "./kvKeyTab";
 import { KvStreamReaderPanel } from "./KvStreamReaderPanel";
 import { KvValueBody } from "./KvValueBody";
+import { kvKeyDetailTab } from "./kvKeyTab";
 import { formatBytes, formatCount } from "./kvValueFormat";
 
 const VALUE_READ_LIMIT = 100;

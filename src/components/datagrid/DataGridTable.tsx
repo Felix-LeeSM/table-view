@@ -1,40 +1,40 @@
+import { DocumentTreePanel } from "@components/document/DocumentTreePanel";
+import AsyncProgressOverlay from "@components/feedback/AsyncProgressOverlay";
+import { ContextMenu } from "@components/shared/ContextMenu";
+import { Button } from "@components/ui/button";
+import { safeStringifyCell } from "@lib/jsonCell";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import {
+  type CSSProperties,
   Fragment,
   useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
-  type CSSProperties,
 } from "react";
 import { useTranslation } from "react-i18next";
-import { useVirtualizer } from "@tanstack/react-virtual";
-import { Button } from "@components/ui/button";
-import AsyncProgressOverlay from "@components/feedback/AsyncProgressOverlay";
-import { DocumentTreePanel } from "@components/document/DocumentTreePanel";
-import { safeStringifyCell } from "@lib/jsonCell";
 import { useColumnWidths } from "@/hooks/useColumnWidths";
 import { useDelayedFlag } from "@/hooks/useDelayedFlag";
+import { type ColumnCategory, getDefaultRem } from "@/lib/columnCategory";
 import type { ColumnPrefsPk } from "@/lib/tauri/datagrid_prefs";
-import { getDefaultRem, type ColumnCategory } from "@/lib/columnCategory";
 import type { SortInfo, TableData } from "@/types/schema";
-import { ContextMenu } from "@components/shared/ContextMenu";
 import BlobViewerDialog from "./BlobViewerDialog";
 import CellDetailDialog from "./CellDetailDialog";
 import {
-  VIRTUALIZE_THRESHOLD,
-  ROW_HEIGHT_ESTIMATE,
   COLUMN_VIRTUALIZE_THRESHOLD,
   computeColumnWindow,
+  ROW_HEIGHT_ESTIMATE,
+  VIRTUALIZE_THRESHOLD,
 } from "./DataGridTable/columnUtils";
+import {
+  buildContextMenuItems,
+  useContextMenu,
+} from "./DataGridTable/contextMenu";
+import DataRow, { type DataGridRowContext } from "./DataGridTable/DataRow";
+import HeaderRow from "./DataGridTable/HeaderRow";
 import { useCellNavigation } from "./DataGridTable/useCellNavigation";
 import { useColumnResize } from "./DataGridTable/useColumnResize";
-import {
-  useContextMenu,
-  buildContextMenuItems,
-} from "./DataGridTable/contextMenu";
-import HeaderRow from "./DataGridTable/HeaderRow";
-import DataRow, { type DataGridRowContext } from "./DataGridTable/DataRow";
 import { useRowPending } from "./DataGridTable/useRowPending";
 import { useGridRoving } from "./useGridRoving";
 

@@ -1,6 +1,7 @@
 // Issue #1231 — RowCapSetting persists the clamped cap and resets to default.
-import { beforeEach, describe, expect, it, vi } from "vitest";
+
 import { act, fireEvent, render, screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const invokeMock = vi.fn();
 vi.mock("@tauri-apps/api/core", () => ({

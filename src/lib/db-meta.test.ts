@@ -1,6 +1,6 @@
-import { describe, it, expect } from "vitest";
-import { DB_TYPE_META } from "./db-meta";
+import { describe, expect, it } from "vitest";
 import type { DatabaseType } from "@/types/connection";
+import { DB_TYPE_META } from "./db-meta";
 
 describe("DB_TYPE_META", () => {
   const expectedTypes: DatabaseType[] = [

@@ -1,16 +1,16 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen } from "@testing-library/react";
-import DataGridTable from "./DataGridTable";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  emitAdvisoryTiming,
+  measureAdvisoryTiming,
+} from "@/lib/perf/advisoryTiming";
 import type { TableData } from "@/types/schema";
+import DataGridTable from "./DataGridTable";
 import {
   DATAGRID_PERF_PAGE_SIZE,
   makeDataGridPageSize1000Fixture,
   makeDataGridPerfTable,
 } from "./DataGridTable.perfFixtures";
-import {
-  emitAdvisoryTiming,
-  measureAdvisoryTiming,
-} from "@/lib/perf/advisoryTiming";
 
 /**
  * Sprint-114 (#PERF-1, #GRID-3) — virtualization regression tests.

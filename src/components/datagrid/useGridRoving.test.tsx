@@ -4,9 +4,9 @@
 // (2) virtualization sync — off-DOM row 로 이동 시 scrollRowIntoView 로
 // row 를 render 시킨 뒤 focus 가 새 cell 에 안착, (3) edge clamp. (2026-07-01)
 
-import { describe, it, expect, vi } from "vitest";
 import { act, renderHook } from "@testing-library/react";
 import { createRef } from "react";
+import { describe, expect, it, vi } from "vitest";
 import { useGridRoving } from "./useGridRoving";
 
 // rAF 를 N 프레임 flush. onKeyDown → focusCell 이 `.focus()` 를 프레임 단위로

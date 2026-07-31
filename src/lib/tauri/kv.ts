@@ -1,9 +1,5 @@
+import { normalizeQueryResult } from "@lib/wireCamelCase";
 import { invoke } from "@tauri-apps/api/core";
-import {
-  createTabularResultEnvelope,
-  requireCompatibleQueryResult,
-  type QueryResult,
-} from "@/types/query";
 import type {
   KvCommandRequest,
   KvDeleteRequest,
@@ -17,7 +13,11 @@ import type {
   KvValueEnvelope,
   KvValueReadRequest,
 } from "@/types/kv";
-import { normalizeQueryResult } from "@lib/wireCamelCase";
+import {
+  createTabularResultEnvelope,
+  type QueryResult,
+  requireCompatibleQueryResult,
+} from "@/types/query";
 
 import { wrapNumericCells } from "./numericWrap";
 

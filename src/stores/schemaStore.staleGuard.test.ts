@@ -4,11 +4,11 @@
 // short-circuits to that stale list. `clearForConnection` bumps a per-connection
 // generation so the shared write guard drops superseded responses.
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { setupTauriMock } from "@/test-utils/tauriMock";
 import {
-  useSchemaStore,
   __resetSchemaGenerationsForTests,
+  useSchemaStore,
 } from "./schemaStore";
 
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {

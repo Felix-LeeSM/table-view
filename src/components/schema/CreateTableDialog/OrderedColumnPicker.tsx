@@ -1,5 +1,5 @@
-import { useTranslation } from "react-i18next";
 import { ChevronLeft, ChevronRight, Plus, X } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 /**
  * `OrderedColumnPicker` — replaces the flat checkbox grid that

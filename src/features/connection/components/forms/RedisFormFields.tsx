@@ -13,8 +13,8 @@
  *     maps to `rediss://` in the Redis adapter.
  */
 import { useTranslation } from "react-i18next";
-import { DATABASE_TYPE_LABELS, type ConnectionDraft } from "../../model";
-import { fieldValidationProps, type ConnFieldKey } from "./fieldValidation";
+import { type ConnectionDraft, DATABASE_TYPE_LABELS } from "../../model";
+import { type ConnFieldKey, fieldValidationProps } from "./fieldValidation";
 import TlsSkipVerifyToggle from "./TlsSkipVerifyToggle";
 
 export interface RedisFormFieldsProps {

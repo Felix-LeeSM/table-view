@@ -19,8 +19,8 @@
 //     `is_identity` with `Unsupported`, so the Identity checkbox is hidden.
 //   - Unknown / still-loading dbType — true for every action (same
 //     affordance-preserving fallback as `supportsRowEditing`).
-import { describe, it, expect } from "vitest";
-import { supportsDdl, type DdlCapabilityName } from "./dataSource";
+import { describe, expect, it } from "vitest";
+import { type DdlCapabilityName, supportsDdl } from "./dataSource";
 
 const ACTIONS: readonly DdlCapabilityName[] = [
   "createTable",

@@ -5,11 +5,11 @@
 // component tests so Sprint 179 doesn't regress them, and (c) the
 // `getParadigmVocabulary(undefined)` fallback returns the rdb entry.
 // Date: 2026-04-30.
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import type { Paradigm } from "@/types/connection";
 import {
-  PARADIGM_VOCABULARY,
   getParadigmVocabulary,
+  PARADIGM_VOCABULARY,
   type ParadigmVocabulary,
 } from "./paradigm-vocabulary";
 

@@ -1,9 +1,9 @@
+import { mkdirSync, readFileSync, rmSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 import duckdb, {
   type Connection as NativeDuckdbConnection,
   type Database as NativeDuckdbDatabase,
 } from "duckdb";
-import { mkdirSync, readFileSync, rmSync } from "node:fs";
-import { dirname, resolve } from "node:path";
 
 export async function prepareDuckdbFixture(
   path: string,

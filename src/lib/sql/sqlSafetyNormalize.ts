@@ -1,5 +1,5 @@
-import { scanDollarQuoteEnd, skipQuotedLiteral } from "./sqlTokenize";
 import type { Dialect, StatementAnalysisOptions } from "./sqlSafetyTypes";
+import { scanDollarQuoteEnd, skipQuotedLiteral } from "./sqlTokenize";
 
 const WHITESPACE_RE = /\s+/g;
 

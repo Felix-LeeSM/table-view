@@ -16,9 +16,10 @@
  * Boundary mock (mock-scope rule): only `@tauri-apps/api/core` `invoke` and the
  * toast surface are stubbed; dehydration + request shaping run for real.
  */
+
+import { invoke } from "@tauri-apps/api/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConnectionId, TabId } from "@/types/branded";
-import { invoke } from "@tauri-apps/api/core";
 import {
   __resetPersistTimerForTests,
   debouncePersistWorkspaces,

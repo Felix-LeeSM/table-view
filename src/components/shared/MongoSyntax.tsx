@@ -1,6 +1,6 @@
-import { useMemo } from "react";
-import { tokenizeMongo, type MongoTokenKind } from "@lib/mongo/mongoTokenize";
+import { type MongoTokenKind, tokenizeMongo } from "@lib/mongo/mongoTokenize";
 import { cn } from "@lib/utils";
+import { useMemo } from "react";
 
 interface MongoSyntaxProps {
   sql: string;

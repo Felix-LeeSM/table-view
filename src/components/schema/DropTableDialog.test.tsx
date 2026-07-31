@@ -18,16 +18,16 @@
 // `tauri.dropTable` (compat), and `tauri.listTables` (Sprint 223
 // reload path).
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { setupTauriMock } from "@/test-utils/tauriMock";
 import {
-  render,
-  screen,
-  fireEvent,
-  waitFor,
   act,
   cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
 } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 
 const { mockDropTableRequest, mockDropTable, mockListTables } = vi.hoisted(
   () => ({
@@ -47,15 +47,15 @@ beforeEach(() => {
   });
 });
 
-import DropTableDialog from "./DropTableDialog";
 import { useConnectionStore } from "@stores/connectionStore";
-import { useSafeModeStore } from "@stores/safeModeStore";
 import { useQueryHistoryStore } from "@stores/queryHistoryStore";
+import { useSafeModeStore } from "@stores/safeModeStore";
 import { useSchemaStore } from "@stores/schemaStore";
 import {
   SCHEMA_GRAPH_IMPACT_SESSION_FK,
   seedSchemaGraphMigrationImpactFixture,
 } from "@/test-utils/schemaGraphImpactFixture";
+import DropTableDialog from "./DropTableDialog";
 
 function setProductionConnection() {
   useConnectionStore.setState({

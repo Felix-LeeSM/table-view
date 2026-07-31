@@ -1,17 +1,17 @@
+import { Button } from "@components/ui/button";
 import { Copy, Pencil, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { Button } from "@components/ui/button";
 import type {
   KvHashValue,
   KvListValue,
   KvSetValue,
   KvZSetValue,
 } from "@/types/kv";
+import { KvJsonValueCell } from "./KvJsonValueCell";
 import {
   type KvEntryPayload,
   treeWriteTargetForEntry,
 } from "./kvMutationCommands";
-import { KvJsonValueCell } from "./KvJsonValueCell";
 import { formatCount } from "./kvValueFormat";
 
 // Structured render for Redis collection values (#1465). The envelope arrives

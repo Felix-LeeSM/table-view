@@ -19,10 +19,10 @@
  * 접근성 계약으로 쿼리한다.
  */
 
-import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
-import HeaderRow from "./HeaderRow";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 import type { SortInfo, TableData } from "@/types/schema";
+import HeaderRow from "./HeaderRow";
 
 function buildData(): TableData {
   return {

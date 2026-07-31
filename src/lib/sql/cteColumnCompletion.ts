@@ -1,10 +1,10 @@
-import { syntaxTree } from "@codemirror/language";
 import type {
   CompletionContext,
   CompletionResult,
 } from "@codemirror/autocomplete";
 import type { SQLNamespace } from "@codemirror/lang-sql";
-import { tokenizeSql, type SqlToken } from "@lib/sql/sqlTokenize";
+import { syntaxTree } from "@codemirror/language";
+import { type SqlToken, tokenizeSql } from "@lib/sql/sqlTokenize";
 
 /**
  * Sprint 295 (2026-05-14) — Slice B — CTE / derived subquery column source.

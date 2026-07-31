@@ -1,12 +1,12 @@
-import { useState } from "react";
-import { Loader2, Unplug } from "lucide-react";
-import { useTranslation } from "react-i18next";
 import { Button } from "@components/ui/button";
+import { toast } from "@lib/runtime/toast";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useConnectionHasDirtyTabs } from "@stores/workspaceStore";
+import { Loader2, Unplug } from "lucide-react";
+import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useConnectionLifecycle } from "@/hooks/useConnectionLifecycle";
 import { useDiscardConfirm } from "@/hooks/useDiscardConfirm";
-import { toast } from "@lib/runtime/toast";
 
 /**
  * Workspace-toolbar control that drops the focused connection's adapter

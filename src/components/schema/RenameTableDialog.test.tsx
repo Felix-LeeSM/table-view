@@ -18,16 +18,16 @@
 // Mock pattern: `vi.hoisted` + factory mock for `@lib/tauri` so
 // `tauri.renameTableRequest` is re-bindable inside test bodies.
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { setupTauriMock } from "@/test-utils/tauriMock";
 import {
-  render,
-  screen,
-  fireEvent,
-  waitFor,
   act,
   cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
 } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 
 const { mockRenameTableRequest, mockListTables, mockRenameTable } = vi.hoisted(
   () => ({
@@ -44,11 +44,11 @@ beforeEach(() => {
   });
 });
 
-import RenameTableDialog from "./RenameTableDialog";
 import { useConnectionStore } from "@stores/connectionStore";
-import { useSafeModeStore } from "@stores/safeModeStore";
 import { useQueryHistoryStore } from "@stores/queryHistoryStore";
+import { useSafeModeStore } from "@stores/safeModeStore";
 import { useSchemaStore } from "@stores/schemaStore";
+import RenameTableDialog from "./RenameTableDialog";
 
 function setDevConnection() {
   useConnectionStore.setState({

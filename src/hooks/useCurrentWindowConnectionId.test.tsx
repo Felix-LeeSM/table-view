@@ -17,8 +17,8 @@
 //   - 빈/누락 입력: label === null (Tauri 비활성) → null
 //   - 상태 전이: 두 다른 label 로 hook 재마운트 → 새 결과
 
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@lib/window-label", async () => {
   const actual =

@@ -8,15 +8,15 @@
 // receiver path) is byte-equivalent to the pre-368 behavior because the
 // subscriber still owns the write — the action just no longer double-
 // writes.
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
 }));
 
-import { invoke } from "@tauri-apps/api/core";
-import { useThemeStore, SYNCED_KEYS } from "./themeStore";
 import { DEFAULT_THEME_ID, THEME_STORAGE_KEY } from "@lib/themeBoot";
+import { invoke } from "@tauri-apps/api/core";
+import { SYNCED_KEYS, useThemeStore } from "./themeStore";
 
 const invokeMock = vi.mocked(invoke);
 

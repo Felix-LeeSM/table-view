@@ -1,7 +1,4 @@
-export {
-  MONGOSH_METHOD_WHITELIST,
-  parseMongoshExpression,
-} from "./mongo/mongoshParser";
+export { initMongoshWasm } from "@lib/mongo/mongoshAst/index";
 export type {
   CursorChainStep,
   MongoshErrorKind,
@@ -10,10 +7,13 @@ export type {
   ParsedMongoshError,
 } from "./mongo/mongoshParser";
 export {
+  MONGOSH_METHOD_WHITELIST,
+  parseMongoshExpression,
+} from "./mongo/mongoshParser";
+export {
   createMongoWriteDispatchers,
   type MongoWriteDispatchers,
   type MongoWriteExecutionActions,
   type MongoWriteRunner,
   type MongoWriteRunnerRef,
 } from "./mongo/mongoWriteExecution";
-export { initMongoshWasm } from "@lib/mongo/mongoshAst/index";

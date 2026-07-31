@@ -38,27 +38,26 @@
 // appears at a lower line number. Do NOT swap the imports or relocate the
 // `registerSnapshotListener` body below the IPC call site.
 
-import { getInitialAppState, type InitialAppState } from "@lib/tauri/snapshot";
 import { dispatchStateChangedPayload } from "@lib/events/stateChanged";
-import { getCurrentWindowLabel } from "@lib/window-label";
-import { toast } from "@lib/runtime/toast";
 import i18n from "@lib/i18n";
 import { logger } from "@lib/logger";
-
-import { useConnectionStore } from "@stores/connectionStore";
-import { useWorkspaceStore, type WorkspaceState } from "@stores/workspaceStore";
-import { toWorkspaceQueryLanguage } from "@stores/workspaceStore/queryMode";
-import { useMruStore, type MruEntry } from "@stores/mruStore";
-import { useThemeStore } from "@stores/themeStore";
-import { useSafeModeStore, type SafeMode } from "@stores/safeModeStore";
-import type { Paradigm } from "@/types/connection";
+import { toast } from "@lib/runtime/toast";
+import { getInitialAppState, type InitialAppState } from "@lib/tauri/snapshot";
 import type { ThemeMode } from "@lib/themeBoot";
 import { DEFAULT_THEME_ID, isThemeId } from "@lib/themeCatalog";
+import { getCurrentWindowLabel } from "@lib/window-label";
 import {
   normalizeActiveStatuses,
   normalizeConnectionConfig,
   normalizeQueryState,
 } from "@lib/wireCamelCase";
+import { useConnectionStore } from "@stores/connectionStore";
+import { type MruEntry, useMruStore } from "@stores/mruStore";
+import { type SafeMode, useSafeModeStore } from "@stores/safeModeStore";
+import { useThemeStore } from "@stores/themeStore";
+import { useWorkspaceStore, type WorkspaceState } from "@stores/workspaceStore";
+import { toWorkspaceQueryLanguage } from "@stores/workspaceStore/queryMode";
+import type { Paradigm } from "@/types/connection";
 
 // ---------------------------------------------------------------------------
 // Listener buffer — collects `state-changed` events that arrive while a

@@ -4,16 +4,18 @@
 // the SQL) because index drops surface their preview through a ref rather
 // than a re-runnable buildAlterRequest. The drop path is the dangerous one;
 // CREATE INDEX stays analyzer-safe. Date: 2026-05-01.
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { setupTauriMock } from "@/test-utils/tauriMock";
+
 import {
+  act,
+  fireEvent,
   render,
   screen,
-  fireEvent,
   waitFor,
-  act,
 } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import IndexesEditor from "./IndexesEditor";
+
 beforeEach(() => {
   setupTauriMock({
     dropIndex: vi.fn(() =>

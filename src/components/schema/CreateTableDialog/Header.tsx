@@ -1,11 +1,11 @@
-import { X } from "lucide-react";
-import { useTranslation } from "react-i18next";
 import { Button } from "@components/ui/button";
 import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@components/ui/dialog";
+import { X } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 /**
  * `CreateTableDialogHeader` — extracted 2026-05-07 (Sprint 227 redesign)

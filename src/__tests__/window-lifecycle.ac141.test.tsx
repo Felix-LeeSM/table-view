@@ -27,28 +27,30 @@
  *
  * Each `it(...)` name embeds the AC label (AC-141-N) for grep-ability.
  */
+
+import { WorkspacePage } from "@features/workspace";
+import * as windowControls from "@lib/window-controls";
+import { useConnectionStore } from "@stores/connectionStore";
+import { useWorkspaceStore } from "@stores/workspaceStore";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import {
-  describe,
-  it,
-  expect,
-  vi,
-  beforeEach,
   afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
   type Mock,
+  vi,
 } from "vitest";
+import HomePage from "@/pages/HomePage";
 import { setupTauriMock } from "@/test-utils/tauriMock";
+import type { ConnectionConfig } from "@/types/connection";
 // Sprint 155 — `tauri.conf.json` is the source of truth for AC-141-1's
 // fixed launcher / resizable workspace dimensions. Vite's JSON import gives
 // us a synchronous, type-friendly read without dragging `@types/node` into
 // the strict tsconfig just for this assertion.
 import tauriConf from "../../src-tauri/tauri.conf.json";
-import { render, screen, fireEvent, act } from "@testing-library/react";
-import HomePage from "@/pages/HomePage";
-import { WorkspacePage } from "@features/workspace";
-import { useConnectionStore } from "@stores/connectionStore";
-import { useWorkspaceStore } from "@stores/workspaceStore";
-import * as windowControls from "@lib/window-controls";
-import type { ConnectionConfig } from "@/types/connection";
+
 beforeEach(() => {
   setupTauriMock({
     connectToDatabase: vi.fn().mockResolvedValue(undefined),
@@ -243,7 +245,7 @@ describe("AC-141-*: Launcher/Workspace lifecycle (real-window, post-Phase 12)", 
 
     // Pool MUST be preserved — Back is not Disconnect.
     expect(disconnectMock).not.toHaveBeenCalled();
-    expect(useConnectionStore.getState().activeStatuses["c1"]).toEqual({
+    expect(useConnectionStore.getState().activeStatuses.c1).toEqual({
       type: "connected",
     });
   });
@@ -293,10 +295,10 @@ describe("AC-141-*: Launcher/Workspace lifecycle (real-window, post-Phase 12)", 
       "launcher",
       expect.any(Function),
     );
-    expect(handlers["launcher"]).toBeTruthy();
+    expect(handlers.launcher).toBeTruthy();
 
     await act(async () => {
-      await handlers["launcher"]!();
+      await handlers.launcher!();
     });
 
     // Sprint 363: launcher is hidden, not exited.
@@ -380,7 +382,7 @@ describe("AC-141-*: Launcher/Workspace lifecycle (real-window, post-Phase 12)", 
     const backFocus = focusWindowMock.mock.invocationCallOrder[0]!;
     const backClose = destroyCurrentWindowMock.mock.invocationCallOrder[0]!;
     expect(backFocus).toBeLessThan(backClose);
-    expect(useConnectionStore.getState().activeStatuses["c1"]).toEqual({
+    expect(useConnectionStore.getState().activeStatuses.c1).toEqual({
       type: "connected",
     });
     expect(disconnectMock).not.toHaveBeenCalled();
@@ -399,7 +401,7 @@ describe("AC-141-*: Launcher/Workspace lifecycle (real-window, post-Phase 12)", 
       await useConnectionStore.getState().disconnectFromDatabase("c1");
     });
     expect(disconnectMock).toHaveBeenCalledWith("c1");
-    expect(useConnectionStore.getState().activeStatuses["c1"]).toEqual({
+    expect(useConnectionStore.getState().activeStatuses.c1).toEqual({
       type: "disconnected",
     });
     expect(showWindowMock).not.toHaveBeenCalled();

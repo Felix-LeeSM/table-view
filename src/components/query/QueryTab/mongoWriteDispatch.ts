@@ -1,14 +1,14 @@
-import { analyzeMongoOperation } from "@lib/mongo/mongoSafety";
-import { idOnlyFilter } from "@lib/mongo/documentIdentity";
 import type { ParsedMongoshCall } from "@features/query";
+import { idOnlyFilter } from "@lib/mongo/documentIdentity";
+import { analyzeMongoOperation } from "@lib/mongo/mongoSafety";
 import type { BulkWriteOp } from "@/types/documentMutate";
+import type { ExecuteMongoQueryRequest } from "./mongoQueryExecution";
 import {
   buildCreateMongoIndexRequest,
   extractDollarSet,
   isRecord,
   parseReplaceOneOptions,
 } from "./queryHelpers";
-import type { ExecuteMongoQueryRequest } from "./mongoQueryExecution";
 
 const BULK_WRITE_OP_NAMES = [
   "insertOne",
@@ -130,7 +130,7 @@ function normalizeBulkWriteOperation(
     };
   }
 
-  const internalOp = raw["op"];
+  const internalOp = raw.op;
   if (typeof internalOp === "string") {
     if (!isBulkWriteOpName(internalOp)) {
       return {

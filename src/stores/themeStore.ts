@@ -1,19 +1,19 @@
-import { create } from "zustand";
+import i18n from "@lib/i18n";
+import { logger } from "@lib/logger";
+import { toast } from "@lib/runtime/toast";
+import { getSetting, persistSettingValue } from "@lib/tauri/settings";
 import {
   applyTheme,
   readStoredState,
   resolveMode,
-  writeStoredState,
-  type ThemeMode,
   type ThemeId,
+  type ThemeMode,
   type ThemeState,
+  writeStoredState,
 } from "@lib/themeBoot";
-import { attachZustandIpcBridge } from "@lib/zustand-ipc-bridge";
 import { getCurrentWindowLabel } from "@lib/window-label";
-import { logger } from "@lib/logger";
-import { toast } from "@lib/runtime/toast";
-import i18n from "@lib/i18n";
-import { getSetting, persistSettingValue } from "@lib/tauri/settings";
+import { attachZustandIpcBridge } from "@lib/zustand-ipc-bridge";
+import { create } from "zustand";
 
 interface ThemeStoreState {
   themeId: ThemeId;

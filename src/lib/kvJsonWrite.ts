@@ -11,8 +11,8 @@
 // Pure + deterministic: no React, no I/O. The Safe Mode confirm dialog shows
 // the exact command this produces before it ever reaches Redis.
 
-import { coerceTreeAddValue } from "@/lib/jsonTree";
 import { UNSET_OP } from "@/components/document/DocumentTreePanel/types";
+import { coerceTreeAddValue } from "@/lib/jsonTree";
 
 export type TreePathSegment = string | number;
 

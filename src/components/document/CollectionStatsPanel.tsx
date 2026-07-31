@@ -2,22 +2,22 @@
 // BackendPendingPlaceholder with a live stats grid sourced from
 // `pg_stat_user_tables` (RDB) or `runCommand({collStats})` (Mongo).
 
+import { DataGridSkeleton } from "@components/datagrid";
+import { Loader2, RefreshCw } from "lucide-react";
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useRefreshEvent } from "@/hooks/useRefreshEvent";
-import { DataGridSkeleton } from "@components/datagrid";
 import {
+  type CollectionStatsRow,
   collectionStatsMongo,
   collectionStatsRdb,
-  type CollectionStatsRow,
 } from "@/lib/api/collectionStats";
 import { safeStringifyCell } from "@/lib/jsonCell";
 import {
   DATABASE_TYPE_LABELS,
-  paradigmOf,
   type DatabaseType,
+  paradigmOf,
 } from "@/types/connection";
 
 export interface CollectionStatsPanelProps {

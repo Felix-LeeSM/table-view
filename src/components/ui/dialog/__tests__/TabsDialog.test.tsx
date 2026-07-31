@@ -1,6 +1,6 @@
-import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent, act } from "@testing-library/react";
 import TabsDialog from "@components/ui/dialog/TabsDialog";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 
 describe("TabsDialog (sprint-96 preset)", () => {
   const tabs = [

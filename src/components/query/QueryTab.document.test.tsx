@@ -8,40 +8,42 @@
 // aggregate safe-mode gate (verbatim with its own `beforeEach` for
 // localStorage + safe-mode reset). Cases are byte-equivalent to the
 // originals — no behaviour change.
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { ConnectionId, TabId } from "@/types/branded";
-import { setupTauriMock } from "@/test-utils/tauriMock";
-import {
-  seedWorkspace,
-  getTestWorkspace,
-} from "@/stores/__tests__/workspaceStoreTestHelpers";
-import { render, screen, waitFor, act } from "@testing-library/react";
-import QueryTab from "./QueryTab";
-import {
-  useWorkspaceStore,
-  type QueryTab as QueryTabType,
-} from "@stores/workspaceStore";
-import { useConnectionStore } from "@stores/connectionStore";
-import { useSchemaStore } from "@stores/schemaStore";
-import { useSafeModeStore, SAFE_MODE_STORAGE_KEY } from "@stores/safeModeStore";
-import { useToastStore } from "@stores/toastStore";
-import { userEvent } from "@testing-library/user-event";
-import {
-  MOCK_RESULT,
-  MOCK_DOC_RESULT,
-  mockExecuteQuery,
-  mockCancelQuery,
-  mockFindDocuments,
-  mockAggregateDocuments,
-  mockVerifyActiveDb,
-  mockEditorProps,
-  makeQueryTab,
-  makeConn,
-  makeDocTab,
-  resetQueryTabStores,
-} from "./__tests__/queryTabTestHelpers";
+
 import type { SQLDialect } from "@codemirror/lang-sql";
 import type { Extension } from "@codemirror/state";
+import { useConnectionStore } from "@stores/connectionStore";
+import { SAFE_MODE_STORAGE_KEY, useSafeModeStore } from "@stores/safeModeStore";
+import { useSchemaStore } from "@stores/schemaStore";
+import { useToastStore } from "@stores/toastStore";
+import {
+  type QueryTab as QueryTabType,
+  useWorkspaceStore,
+} from "@stores/workspaceStore";
+import { act, render, screen, waitFor } from "@testing-library/react";
+import { userEvent } from "@testing-library/user-event";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  getTestWorkspace,
+  seedWorkspace,
+} from "@/stores/__tests__/workspaceStoreTestHelpers";
+import { setupTauriMock } from "@/test-utils/tauriMock";
+import type { ConnectionId, TabId } from "@/types/branded";
+import {
+  MOCK_DOC_RESULT,
+  MOCK_RESULT,
+  makeConn,
+  makeDocTab,
+  makeQueryTab,
+  mockAggregateDocuments,
+  mockCancelQuery,
+  mockEditorProps,
+  mockExecuteQuery,
+  mockFindDocuments,
+  mockVerifyActiveDb,
+  resetQueryTabStores,
+} from "./__tests__/queryTabTestHelpers";
+import QueryTab from "./QueryTab";
+
 beforeEach(() => {
   setupTauriMock({
     executeQuery: (...args: unknown[]) => mockExecuteQuery(...args),

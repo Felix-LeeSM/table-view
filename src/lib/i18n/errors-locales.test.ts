@@ -1,7 +1,6 @@
-import { describe, it, expect } from "vitest";
-
-import i18n from "./index";
 import { DRIVER_ERROR_CATEGORIES } from "@lib/errors/driverErrorHints";
+import { describe, expect, it } from "vitest";
+import i18n from "./index";
 
 // Purpose: en/ko 로케일 드리프트를 잠그는 두 가드를 둔다.
 //   1) errors ns 의 classifyDriverError 파생 키가 en/ko 양쪽에 존재하고

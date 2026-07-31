@@ -1,27 +1,27 @@
-import { useCallback, useEffect, useRef, useState } from "react";
 import { cellToEditString, editKey } from "@components/datagrid";
+import { detectBatchRowsAffectedMismatch } from "@lib/datagrid/batchRowsAffected";
+import { recordHistoryEntry } from "@lib/runtime/history/recordHistoryEntry";
+import { toast } from "@lib/runtime/toast";
 import {
   buildRawEditSql,
   isMultiCellEditable,
   type RawEditPlan,
 } from "@lib/sql/rawQuerySqlBuilder";
-import { executeQueryBatch } from "@lib/tauri";
-import { detectBatchRowsAffectedMismatch } from "@lib/datagrid/batchRowsAffected";
 import { analyzeStatement } from "@lib/sql/sqlSafety";
-import { recordHistoryEntry } from "@lib/runtime/history/recordHistoryEntry";
-import { useSafeModeGate } from "@/hooks/useSafeModeGate";
-import { toast } from "@lib/runtime/toast";
+import { executeQueryBatch } from "@lib/tauri";
 import {
-  useRawQueryGridEditStore,
-  rawEntryKey,
   EMPTY_RAW_ENTRY,
+  rawEntryKey,
+  useRawQueryGridEditStore,
 } from "@stores/rawQueryGridEditStore";
 import {
   useCurrentWorkspaceKey,
   useWorkspaceStore,
 } from "@stores/workspaceStore";
-import type { QueryResult } from "@/types/query";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useSafeModeGate } from "@/hooks/useSafeModeGate";
 import type { ConnectionId, TabId } from "@/types/branded";
+import type { QueryResult } from "@/types/query";
 
 /**
  * Raw-query result grid edit state machine + commit lifecycle hook. 8

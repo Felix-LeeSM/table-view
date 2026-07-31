@@ -1,22 +1,22 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useMruStore } from "@stores/mruStore";
 import { useSchemaStore } from "@stores/schemaStore";
+import {
+  tableActivityKey,
+  useTableActivityStore,
+} from "@stores/tableActivityStore";
 import {
   resolveActiveDb,
   useWorkspaceKeyForConnection,
   useWorkspaceStore,
   type WorkspaceKey,
 } from "@stores/workspaceStore";
-import { useMruStore } from "@stores/mruStore";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  useTableActivityStore,
-  tableActivityKey,
-} from "@stores/tableActivityStore";
-import { shouldEagerLoadSchemas, useSchemaCache } from "@/hooks/useSchemaCache";
-import {
-  useMigrationExport,
   type ExportInclude,
+  useMigrationExport,
 } from "@/hooks/useMigrationExport";
-import { DEFAULT_EXPANDED, nodeIdToString, type CategoryKey } from "./treeRows";
+import { shouldEagerLoadSchemas, useSchemaCache } from "@/hooks/useSchemaCache";
+import { type CategoryKey, DEFAULT_EXPANDED, nodeIdToString } from "./treeRows";
 
 const EMPTY_EXPANDED: readonly string[] = Object.freeze([]);
 

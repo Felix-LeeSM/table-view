@@ -9,20 +9,20 @@
 // 는 건드리지 않는다 — Mongo 는 RDB 의 active sub-pool 개념이 없어서
 // 전역 chip 으로 바인딩하면 다른 탭에 부수효과가 생긴다).
 
-import { useState, useCallback, useEffect, useRef } from "react";
-import { useTranslation } from "react-i18next";
-import { ChevronDown, Database, Loader2 } from "lucide-react";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@components/ui/popover";
-import { listDatabases } from "@/lib/api/listDatabases";
-import { toast } from "@/lib/runtime/toast";
 import {
   useCurrentWorkspaceKey,
   useWorkspaceStore,
 } from "@stores/workspaceStore";
+import { ChevronDown, Database, Loader2 } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { listDatabases } from "@/lib/api/listDatabases";
+import { toast } from "@/lib/runtime/toast";
 import type { DatabaseInfo } from "@/types/document";
 
 export interface TabDbChipProps {

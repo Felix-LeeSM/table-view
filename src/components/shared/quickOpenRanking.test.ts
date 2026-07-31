@@ -1,8 +1,8 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
+  type RankableFields,
   rankQuickOpen,
   scoreItem,
-  type RankableFields,
 } from "./quickOpenRanking";
 
 // Fields are pre-lowercased by contract (the component lowercases once when it

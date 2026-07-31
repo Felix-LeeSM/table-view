@@ -1,9 +1,9 @@
-import { syntaxTree } from "@codemirror/language";
 import type {
   CompletionContext,
   CompletionResult,
 } from "@codemirror/autocomplete";
 import type { SQLNamespace } from "@codemirror/lang-sql";
+import { syntaxTree } from "@codemirror/language";
 import { parseFromContext } from "@lib/completion/shared";
 
 /**

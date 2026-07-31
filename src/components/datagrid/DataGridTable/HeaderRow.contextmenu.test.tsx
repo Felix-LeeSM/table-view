@@ -4,10 +4,10 @@
 // callback 호출을 lock 하면 RDB+Mongo 양쪽 grid 가 자동 보장.
 // Radix ContextMenu 는 portal → screen 검색이 동작.
 
-import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
-import HeaderRow from "./HeaderRow";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 import type { SortInfo, TableData } from "@/types/schema";
+import HeaderRow from "./HeaderRow";
 
 function buildData(): TableData {
   return {

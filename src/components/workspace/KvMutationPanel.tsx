@@ -1,5 +1,3 @@
-import { type ChangeEvent, type Ref, useEffect, useRef, useState } from "react";
-import { useTranslation } from "react-i18next";
 import { Button } from "@components/ui/button";
 import { useSafeModeGate } from "@hooks/useSafeModeGate";
 import {
@@ -9,6 +7,8 @@ import {
   updateKvTtl,
 } from "@lib/tauri/kv";
 import { useConnectionStore } from "@stores/connectionStore";
+import { type ChangeEvent, type Ref, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { KvValueEnvelope } from "@/types/kv";
 import ConfirmDestructiveDialog from "./ConfirmDestructiveDialog";
 import {

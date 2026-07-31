@@ -1,11 +1,11 @@
-import { useRef, useState } from "react";
-import { DropdownMenu } from "radix-ui";
 import { Download, Loader2, Square } from "lucide-react";
+import { DropdownMenu } from "radix-ui";
+import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { runExport } from "@/lib/runtime/export";
-import { cancelQuery } from "@/lib/tauri";
 import type { ExportContext, ExportFormat } from "@/lib/tauri";
+import { cancelQuery } from "@/lib/tauri";
 import { cn } from "@/lib/utils";
 
 const FORMATS_BY_KIND: Record<ExportContext["kind"], ExportFormat[]> = {

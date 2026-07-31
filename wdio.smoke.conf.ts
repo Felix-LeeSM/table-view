@@ -1,7 +1,7 @@
-import path from "node:path";
+import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import net from "node:net";
-import { spawn, spawnSync } from "node:child_process";
+import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Options } from "@wdio/types";
 import { resetSmokeDataDir } from "./e2e/support/smoke-data-dir.js";

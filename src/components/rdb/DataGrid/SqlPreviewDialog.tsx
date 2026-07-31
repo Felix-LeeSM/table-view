@@ -1,7 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { X } from "lucide-react";
-import { useTranslation } from "react-i18next";
 import type { DataGridEditState } from "@components/datagrid/useDataGridEdit";
+import SqlSyntax from "@components/shared/SqlSyntax";
 import {
   Dialog,
   DialogContent,
@@ -12,7 +10,9 @@ import {
 } from "@components/ui/dialog";
 import PreviewCopyButton from "@components/ui/dialog/PreviewCopyButton";
 import ExecuteButton from "@components/ui/ExecuteButton";
-import SqlSyntax from "@components/shared/SqlSyntax";
+import { X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useDelayedFlag } from "@/hooks/useDelayedFlag";
 
 // Issue #1111/#1141 — same reflexive-Enter absorption window as

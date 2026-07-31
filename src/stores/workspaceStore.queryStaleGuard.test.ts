@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type { QueryResult, QueryStatementResult } from "@/types/query";
-import { useWorkspaceStore } from "./workspaceStore";
 import {
   buildRunningQueryWorkspaceState,
   DEFAULT_TEST_CONN,
   DEFAULT_TEST_DB,
   getQueryTab,
 } from "./__tests__/workspaceStoreTestHelpers";
+import { useWorkspaceStore } from "./workspaceStore";
 
 const TAB_ID = "query-1";
 const CURRENT_QUERY_ID = "query-current";

@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
-import { useTranslation } from "react-i18next";
-import { Table2, Code2, Network } from "lucide-react";
+import { useTablistRoving } from "@components/shared/tablist/useTablistRoving";
+import ConfirmDialog from "@components/ui/dialog/ConfirmDialog";
+import type { Tab, TableTab } from "@stores/workspaceStore";
 import {
   useActiveTabId,
   useCurrentTabs,
@@ -8,11 +8,11 @@ import {
   useDirtyTabIds,
   useWorkspaceStore,
 } from "@stores/workspaceStore";
-import type { Tab, TableTab } from "@stores/workspaceStore";
-import ConfirmDialog from "@components/ui/dialog/ConfirmDialog";
+import { Code2, Network, Table2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import TabItem from "./TabItem";
 import { useTabDrag } from "./useTabDrag";
-import { useTablistRoving } from "@components/shared/tablist/useTablistRoving";
 
 /**
  * 2026-05-11 — split into `useTabDrag` (pointer-capture-backed drag

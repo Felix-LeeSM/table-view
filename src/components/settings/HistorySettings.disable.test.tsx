@@ -24,8 +24,8 @@
  * 가 완전히 맞물려 동작하는지 검증.
  */
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // hoisted mock — module-level invoke. 6 source caller 마다 어떤 IPC 가
 // 호출되는지 단언하기 위해 spy 화.
@@ -34,10 +34,10 @@ vi.mock("@tauri-apps/api/core", () => ({
   invoke: (...args: unknown[]) => invokeMock(...args),
 }));
 
-import HistorySettings from "./HistorySettings";
+import { recordHistoryEntry } from "@lib/runtime/history/recordHistoryEntry";
 import { useHistorySettingsStore } from "@stores/historySettingsStore";
 import { useQueryHistoryStore } from "@stores/queryHistoryStore";
-import { recordHistoryEntry } from "@lib/runtime/history/recordHistoryEntry";
+import HistorySettings from "./HistorySettings";
 
 /**
  * 6 source caller 의 동일 입력 시뮬레이터. 본 helper 는 `recordHistoryEntry`

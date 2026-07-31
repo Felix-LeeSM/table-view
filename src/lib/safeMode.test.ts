@@ -16,7 +16,7 @@
 // WARN / WARN 으로 매핑. 매트릭스 *결과* 회귀 0 — INFO 는 allow, WARN 는 raw
 // editor WARN dialog 가 QueryTab-level 에서 처리하므로 `decideSafeModeAction`
 // 은 여전히 allow 반환. DANGER 는 기존 confirm 분기 그대로.
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import { decideSafeModeAction } from "./safeMode";
 import type { StatementAnalysis } from "./sql/sqlSafety";
 

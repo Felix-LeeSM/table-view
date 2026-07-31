@@ -16,16 +16,18 @@
 // (Edit pencil → change → save → Review SQL → Execute) stays UNCHANGED,
 // so the Sprint 187 Safe Mode gate regressions are migrated to drive
 // the modify path instead of the trash path. Date: 2026-05-07.
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { setupTauriMock } from "@/test-utils/tauriMock";
+
 import {
+  act,
+  fireEvent,
   render,
   screen,
-  fireEvent,
   waitFor,
-  act,
 } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import ColumnsEditor from "./ColumnsEditor";
+
 beforeEach(() => {
   setupTauriMock({
     alterTable: vi.fn(() =>

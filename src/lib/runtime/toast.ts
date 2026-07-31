@@ -1,4 +1,4 @@
-import { useToastStore, type ToastOptions } from "@stores/toastStore";
+import { type ToastOptions, useToastStore } from "@stores/toastStore";
 
 export type {
   Toast,

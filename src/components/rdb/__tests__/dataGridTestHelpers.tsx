@@ -21,11 +21,12 @@
 // uses **type-only** imports from `@stores/*`/`@/types/*`. No runtime
 // store handle is imported — the dynamic `await import(...)` calls
 // in the last two cases stay inline in the editing axis file.
-import { vi } from "vitest";
-import { render } from "@testing-library/react";
-import DataGrid from "../DataGrid";
+
 import { useConnectionStore } from "@stores/connectionStore";
+import { render } from "@testing-library/react";
+import { vi } from "vitest";
 import type { TableData } from "@/types/schema";
+import DataGrid from "../DataGrid";
 
 // ---------------------------------------------------------------------------
 // Mock fixture data — byte-equivalent to the original DataGrid.test.tsx

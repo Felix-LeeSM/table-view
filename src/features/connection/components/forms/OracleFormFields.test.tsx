@@ -1,7 +1,7 @@
-import { describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen } from "@testing-library/react";
-import OracleFormFields from "./OracleFormFields";
+import { describe, expect, it, vi } from "vitest";
 import type { ConnectionDraft } from "@/types/connection";
+import OracleFormFields from "./OracleFormFields";
 
 // Purpose: Oracle connection form — service-name/SID method switch + wallet
 // mTLS fields (#1065). (2026-07-17)

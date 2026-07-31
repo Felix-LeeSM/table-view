@@ -1,13 +1,13 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { ConnectionId, TabId } from "@/types/branded";
-import { seedWorkspace } from "@/stores/__tests__/workspaceStoreTestHelpers";
-import { render, screen, fireEvent } from "@testing-library/react";
-import WorkspaceSidebar from "./WorkspaceSidebar";
-import { useConnectionStore } from "@stores/connectionStore";
-import { useWorkspaceStore } from "@stores/workspaceStore";
 import { normalizeActiveStatuses } from "@lib/wireCamelCase";
-import type { ConnectionConfig, ConnectionStatus } from "@/types/connection";
+import { useConnectionStore } from "@stores/connectionStore";
 import type { TableTab } from "@stores/workspaceStore";
+import { useWorkspaceStore } from "@stores/workspaceStore";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { seedWorkspace } from "@/stores/__tests__/workspaceStoreTestHelpers";
+import type { ConnectionId, TabId } from "@/types/branded";
+import type { ConnectionConfig, ConnectionStatus } from "@/types/connection";
+import WorkspaceSidebar from "./WorkspaceSidebar";
 
 const invokeMock = vi.fn();
 

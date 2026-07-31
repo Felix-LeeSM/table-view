@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { RUNTIME_RDBMS_DATABASE_TYPES } from "@/types/rdbmsDataSources";
+import {
+  schemaGraphColumnId,
+  schemaGraphConstraintId,
+  schemaGraphSchemaId,
+  schemaGraphTableId,
+} from "@/test-utils/schemaGraphIds";
 import type { RuntimeRdbmsDatabaseType } from "@/types/rdbmsDataSources";
+import { RUNTIME_RDBMS_DATABASE_TYPES } from "@/types/rdbmsDataSources";
 import type {
   ColumnInfo,
   ConstraintInfo,
@@ -12,12 +18,6 @@ import type {
   SchemaGraphCatalogSnapshot,
   SchemaGraphNode,
 } from "@/types/schemaGraph";
-import {
-  schemaGraphColumnId,
-  schemaGraphConstraintId,
-  schemaGraphSchemaId,
-  schemaGraphTableId,
-} from "@/test-utils/schemaGraphIds";
 import { extractSchemaGraph } from "./schemaGraph";
 
 describe("SchemaGraph extraction", () => {

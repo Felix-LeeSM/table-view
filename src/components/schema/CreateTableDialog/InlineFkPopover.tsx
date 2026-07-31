@@ -20,8 +20,7 @@
 // target — same affordance pattern TablePlus uses on its inline
 // `foreign_key` cell.
 
-import { useId } from "react";
-import { useTranslation } from "react-i18next";
+import { Button } from "@components/ui/button";
 import {
   Popover,
   PopoverContent,
@@ -34,8 +33,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@components/ui/select";
-import { Button } from "@components/ui/button";
 import { X } from "lucide-react";
+import { useId } from "react";
+import { useTranslation } from "react-i18next";
 import type { SchemaName, TableName } from "@/types/branded";
 
 const REFERENTIAL_ACTIONS = [

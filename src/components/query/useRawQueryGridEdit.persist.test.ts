@@ -9,16 +9,17 @@
 //   (a) edit → unmount (tab switch) → remount same tab → edit preserved.
 //   (b) edit present → tab registered dirty (`setTabDirty(..., true)`).
 //   (c) discard / successful commit → dirty cleared (`setTabDirty(..., false)`).
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { ConnectionId, TabId } from "@/types/branded";
-import { renderHook, act } from "@testing-library/react";
-import { useRawQueryGridEdit } from "./useRawQueryGridEdit";
-import {
-  useRawQueryGridEditStore,
-  rawEntryKey,
-} from "@stores/rawQueryGridEditStore";
-import type { QueryResult } from "@/types/query";
+
 import type { RawEditPlan } from "@lib/sql/rawQuerySqlBuilder";
+import {
+  rawEntryKey,
+  useRawQueryGridEditStore,
+} from "@stores/rawQueryGridEditStore";
+import { act, renderHook } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { ConnectionId, TabId } from "@/types/branded";
+import type { QueryResult } from "@/types/query";
+import { useRawQueryGridEdit } from "./useRawQueryGridEdit";
 
 const mockExecuteQueryBatch = vi.fn();
 const mockSetTabDirty = vi.fn();

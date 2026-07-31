@@ -7,7 +7,7 @@
  * stored `(tlsEnabled, trustServerCertificate)` fields (see `sslModeFromFields`
  * / `sslModeFields`), so no new persisted field is introduced.
  */
-import { useTranslation } from "react-i18next";
+
 import {
   Select,
   SelectContent,
@@ -15,12 +15,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@components/ui/select";
+import { useTranslation } from "react-i18next";
 import {
+  type ConnectionDraft,
   SSL_MODE_OPTIONS,
+  type SslMode,
   sslModeFields,
   sslModeFromFields,
-  type ConnectionDraft,
-  type SslMode,
 } from "../../model";
 
 const SSL_MODE_LABEL_KEYS: Record<SslMode, string> = {

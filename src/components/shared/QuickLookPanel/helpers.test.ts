@@ -1,7 +1,7 @@
-import { describe, it, expect } from "vitest";
 import Decimal from "decimal.js";
-import { formatCellValue } from "./helpers";
+import { describe, expect, it } from "vitest";
 import type { ColumnInfo } from "@/types/schema";
+import { formatCellValue } from "./helpers";
 
 // Sprint 306 (2026-05-14) — QuickLook BigInt/Decimal 회귀 가드. sprint-305
 // 핫픽스 이전에는 `typeof === "object"` branch 가 raw JSON.stringify 라

@@ -1,7 +1,7 @@
+import type { SafeModeGate } from "@hooks/useSafeModeGate";
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { setupTauriMock } from "@/test-utils/tauriMock";
-import type { SafeModeGate } from "@hooks/useSafeModeGate";
 import { useMongoBulkOps } from "./useMongoBulkOps";
 
 const mockRecordHistoryEntry = vi.hoisted(() => vi.fn());

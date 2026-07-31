@@ -13,13 +13,14 @@
 // These tests cover the sub-component's render shape, aria labels,
 // add/remove row callback wiring, and three-section layout. Per AC-229
 // contract: ≥ 5 cases + ≥ 70% line coverage on the new file.
-import { describe, it, expect, vi } from "vitest";
-import { render, fireEvent, screen, within } from "@testing-library/react";
+
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { describe, expect, it, vi } from "vitest";
 
 import ForeignKeysTabBody, {
-  type ForeignKeyDraft,
   type CheckDraft,
+  type ForeignKeyDraft,
   type UniqueDraft,
 } from "./ForeignKeysTabBody";
 

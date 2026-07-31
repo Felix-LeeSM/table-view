@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { useConnectionStore } from "@stores/connectionStore";
+import { useSafeModeStore } from "@stores/safeModeStore";
 import {
   act,
   fireEvent,
@@ -6,11 +7,10 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react";
-import KvKeyDetailPanel from "./KvKeyDetailPanel";
-import { useConnectionStore } from "@stores/connectionStore";
-import { useSafeModeStore } from "@stores/safeModeStore";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConnectionConfig } from "@/types/connection";
 import type { KvValueEnvelope } from "@/types/kv";
+import KvKeyDetailPanel from "./KvKeyDetailPanel";
 
 // Purpose: the right-hand KV key detail panel loads the selected key's value
 // and hosts the mutation surface (KV UX redesign, 2026-07-07). This is the new

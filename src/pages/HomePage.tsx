@@ -1,22 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { useTranslation } from "react-i18next";
-import {
-  ArrowDownUp,
-  ChevronDown,
-  ChevronRight,
-  Clock,
-  FolderPlus,
-  Monitor,
-  Moon,
-  Plus,
-  Sun,
-} from "lucide-react";
-import { useWorkspaceStore } from "@stores/workspaceStore";
-import { useThemeStore } from "@stores/themeStore";
-import { THEME_CATALOG } from "@lib/themeCatalog";
-import { useWindowFocusHydration } from "@hooks/useWindowFocusHydration";
-import { subscribeSystemModeChange } from "@lib/themeBoot";
-import { persistSettingValue } from "@lib/tauri/settings";
+import RevealLogsButton from "@components/settings/RevealLogsButton";
+import ThemePicker from "@components/theme/ThemePicker";
 import { Button } from "@components/ui/button";
 import {
   Popover,
@@ -31,14 +14,31 @@ import {
   RecentConnections,
   useConnectionStore,
 } from "@features/connection";
-import ThemePicker from "@components/theme/ThemePicker";
-import RevealLogsButton from "@components/settings/RevealLogsButton";
-import { resetSetting } from "@lib/tauri/settings";
-import { useMruStore } from "@stores/mruStore";
+import { useWindowFocusHydration } from "@hooks/useWindowFocusHydration";
+import i18n from "@lib/i18n";
 import { logger } from "@lib/logger";
 import { toast } from "@lib/runtime/toast";
-import i18n from "@lib/i18n";
-import { RotateCcw, Eraser } from "lucide-react";
+import { persistSettingValue, resetSetting } from "@lib/tauri/settings";
+import { subscribeSystemModeChange } from "@lib/themeBoot";
+import { THEME_CATALOG } from "@lib/themeCatalog";
+import { useMruStore } from "@stores/mruStore";
+import { useThemeStore } from "@stores/themeStore";
+import { useWorkspaceStore } from "@stores/workspaceStore";
+import {
+  ArrowDownUp,
+  ChevronDown,
+  ChevronRight,
+  Clock,
+  Eraser,
+  FolderPlus,
+  Monitor,
+  Moon,
+  Plus,
+  RotateCcw,
+  Sun,
+} from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 /**
  * HomePage — paradigm-agnostic connection management screen (sprint 125).

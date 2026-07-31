@@ -1,15 +1,16 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { setupTauriMock } from "@/test-utils/tauriMock";
+import { useSchemaStore } from "@stores/schemaStore";
 import {
+  fireEvent,
   render,
   screen,
-  fireEvent,
   waitFor,
   within,
 } from "@testing-library/react";
-import QueryResultGrid from "./QueryResultGrid";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 import type { QueryResult, QueryStatementResult } from "@/types/query";
-import { useSchemaStore } from "@stores/schemaStore";
+import QueryResultGrid from "./QueryResultGrid";
+
 beforeEach(() => {
   setupTauriMock({
     getTableColumns: vi.fn(async () => []),

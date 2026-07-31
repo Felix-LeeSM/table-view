@@ -1,10 +1,10 @@
-import { useMemo, useRef, useState } from "react";
-import { useTranslation } from "react-i18next";
 import FormDialog from "@components/ui/dialog/FormDialog";
 import { Input } from "@components/ui/input";
+import { useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { CONNECTION_COLOR_PALETTE } from "../color";
-import { useConnectionStore } from "../store";
 import type { ConnectionGroup } from "../model";
+import { useConnectionStore } from "../store";
 
 interface GroupDialogProps {
   /** Existing group for rename/recolor; undefined for create. */

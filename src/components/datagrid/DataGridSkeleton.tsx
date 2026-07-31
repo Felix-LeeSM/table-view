@@ -1,5 +1,5 @@
-import { useTranslation } from "react-i18next";
 import { Skeleton } from "@components/ui/skeleton";
+import { useTranslation } from "react-i18next";
 
 /**
  * Issue #1058 — loading-state convention. A known-structure grid on its

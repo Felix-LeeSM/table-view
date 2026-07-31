@@ -1,6 +1,4 @@
-import { useTranslation } from "react-i18next";
 import { Button } from "@components/ui/button";
-import { safeStringifyCell } from "@lib/jsonCell";
 import {
   Dialog,
   DialogContent,
@@ -9,6 +7,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@components/ui/dialog";
+import { safeStringifyCell } from "@lib/jsonCell";
+import { useTranslation } from "react-i18next";
 
 /**
  * Presentational `Delete matching documents` confirm dialog. Stateless:

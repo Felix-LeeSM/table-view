@@ -1,6 +1,6 @@
-import { describe, it, expect } from "vitest";
-import { generateSql } from "./sqlGenerator";
+import { describe, expect, it } from "vitest";
 import type { TableData } from "@/types/schema";
+import { generateSql } from "./sqlGenerator";
 
 // Issue #1080 — a NULL row-identity value must produce `col IS NULL`, never
 // `col = NULL`. In SQL three-valued logic `x = NULL` evaluates to UNKNOWN and

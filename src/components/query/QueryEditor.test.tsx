@@ -1,17 +1,17 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor, act } from "@testing-library/react";
-import { EditorView, keymap } from "@codemirror/view";
-import { ensureSyntaxTree, language } from "@codemirror/language";
-import { MySQL, PostgreSQL, SQLite } from "@codemirror/lang-sql";
 import { CompletionContext } from "@codemirror/autocomplete";
-import { EditorState } from "@codemirror/state";
 import { json as jsonLanguage } from "@codemirror/lang-json";
+import { MySQL, PostgreSQL, SQLite } from "@codemirror/lang-sql";
+import { ensureSyntaxTree, language } from "@codemirror/language";
+import { EditorState } from "@codemirror/state";
 import type { KeyBinding } from "@codemirror/view";
-import QueryEditor from "./QueryEditor";
+import { EditorView, keymap } from "@codemirror/view";
 import {
   createMongoCompletionSource,
   createMongoOperatorHighlight,
 } from "@features/completion";
+import { act, render, screen, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import QueryEditor from "./QueryEditor";
 
 // CodeMirror works in jsdom, so we do NOT mock it.
 // Note: CodeMirror's .cm-content div also has role="textbox", so we use

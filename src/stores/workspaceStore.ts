@@ -15,6 +15,33 @@
  * under `workspaceStore`), so each value re-export carries a justified line
  * disable — the guardrail stays live for genuine sibling-store imports.
  */
+
+// eslint-disable-next-line no-restricted-imports -- same-store internal: persistence flush (#1580)
+export { flushPersistWorkspaces } from "./workspaceStore/persistence";
+// eslint-disable-next-line no-restricted-imports -- same-store internal: derived read hooks
+export {
+  type ActiveTabSansSql,
+  useActiveTab,
+  useActiveTabId,
+  useActiveTabSansSql,
+  useClosedTabHistory,
+  useConnectionHasDirtyTabs,
+  useCurrentTabIds,
+  useCurrentTabs,
+  useCurrentWorkspace,
+  useCurrentWorkspaceKey,
+  useDirtyTabIds,
+  useWorkspaceFor,
+  useWorkspaceKeyForConnection,
+  type WorkspaceKey,
+} from "./workspaceStore/selectors";
+// eslint-disable-next-line no-restricted-imports -- same-store internal: shared helpers
+export {
+  __resetCountersForTests,
+  resolveActiveDb,
+} from "./workspaceStore/shared";
+// eslint-disable-next-line no-restricted-imports -- same-store internal: store instance leaf
+export { SYNCED_KEYS, useWorkspaceStore } from "./workspaceStore/store";
 export type {
   ErdTab,
   QueryTab,
@@ -28,30 +55,3 @@ export type {
   WorkspaceState,
   WorkspaceStoreState,
 } from "./workspaceStore/types";
-
-// eslint-disable-next-line no-restricted-imports -- same-store internal: store instance leaf
-export { SYNCED_KEYS, useWorkspaceStore } from "./workspaceStore/store";
-// eslint-disable-next-line no-restricted-imports -- same-store internal: persistence flush (#1580)
-export { flushPersistWorkspaces } from "./workspaceStore/persistence";
-// eslint-disable-next-line no-restricted-imports -- same-store internal: shared helpers
-export {
-  __resetCountersForTests,
-  resolveActiveDb,
-} from "./workspaceStore/shared";
-// eslint-disable-next-line no-restricted-imports -- same-store internal: derived read hooks
-export {
-  useActiveTab,
-  useActiveTabId,
-  useActiveTabSansSql,
-  useClosedTabHistory,
-  useConnectionHasDirtyTabs,
-  useCurrentTabIds,
-  useCurrentTabs,
-  useCurrentWorkspace,
-  useCurrentWorkspaceKey,
-  useDirtyTabIds,
-  useWorkspaceFor,
-  useWorkspaceKeyForConnection,
-  type ActiveTabSansSql,
-  type WorkspaceKey,
-} from "./workspaceStore/selectors";

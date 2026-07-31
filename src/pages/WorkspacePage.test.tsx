@@ -1,15 +1,15 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { ConnectionId, TabId } from "@/types/branded";
-import {
-  seedWorkspace,
-  getTestWorkspace,
-} from "@/stores/__tests__/workspaceStoreTestHelpers";
-import { render, screen, fireEvent, act } from "@testing-library/react";
-import WorkspacePage from "./WorkspacePage";
-import { useWorkspaceStore } from "@stores/workspaceStore";
-import { useThemeStore } from "@stores/themeStore";
 import { hydrateConnectionSession } from "@lib/runtime/connection/hydrateConnectionSession";
 import * as windowControls from "@lib/window-controls";
+import { useThemeStore } from "@stores/themeStore";
+import { useWorkspaceStore } from "@stores/workspaceStore";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  getTestWorkspace,
+  seedWorkspace,
+} from "@/stores/__tests__/workspaceStoreTestHelpers";
+import type { ConnectionId, TabId } from "@/types/branded";
+import WorkspacePage from "./WorkspacePage";
 
 // Wrap the runtime implementation in a spy so the workspace's mount + focus
 // call counts can still be asserted while preserving store behavior.

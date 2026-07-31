@@ -14,12 +14,13 @@
 // - Cross-window sync / localStorage persistence — intentionally excluded.
 // - tabStore wire-up (`removeTab` / `clearTabsForConnection` purge) —
 //   covered in `tabStore.purge.test.ts`.
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { renderHook, act } from "@testing-library/react";
-import { useDataGridEdit } from "./useDataGridEdit";
+
 import { useDataGridEditStore } from "@stores/dataGridEditStore";
+import { act, renderHook } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { makeEntryKey } from "@/test-utils/brandedKeys";
 import type { TableData } from "@/types/schema";
+import { useDataGridEdit } from "./useDataGridEdit";
 
 const mockExecuteQuery = vi.fn();
 const mockExecuteQueryBatch = vi.fn();

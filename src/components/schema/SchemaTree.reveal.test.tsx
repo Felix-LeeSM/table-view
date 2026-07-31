@@ -3,15 +3,16 @@
 // schema AND focuses/scrolls its row into view via the shared roving
 // `focusByKey`. Asserted on the RENDERED tree (aria-expanded + focus), not on a
 // store value, so an invisible no-op regresses these.
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, act } from "@testing-library/react";
-import SchemaTree from "./SchemaTree";
+
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   mockLoadSchemas,
   mockLoadTables,
-  setSchemaStoreState,
   resetStores,
+  setSchemaStoreState,
 } from "./__tests__/schemaTreeTestHelpers";
+import SchemaTree from "./SchemaTree";
 
 // Flush one animation frame — `focusByKey` defers `.focus()` to rAF.
 async function flushFrame() {

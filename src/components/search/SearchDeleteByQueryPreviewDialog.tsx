@@ -1,12 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
-import { useTranslation } from "react-i18next";
-import {
-  AlertTriangle,
-  FileSearch,
-  Loader2,
-  ShieldAlert,
-  Trash2,
-} from "lucide-react";
+import { DriverErrorHint } from "@components/errors/DriverErrorHint";
 import { Button } from "@components/ui/button";
 import {
   Dialog,
@@ -18,19 +10,27 @@ import {
   DialogTitle,
 } from "@components/ui/dialog";
 import ConfirmDestructiveDialog from "@components/workspace/ConfirmDestructiveDialog";
-import {
-  executeSearchDeleteByQuery,
-  planSearchDeleteByQuery,
-} from "@lib/tauri/search";
-import { getTauriErrorMessage } from "@lib/tauri/error";
+import { useSafeModeGate } from "@hooks/useSafeModeGate";
+import { getDeleteByQueryPreviewTargetError } from "@lib/search/searchTargetPolicy";
 import {
   formatSearchUiError,
   type SearchUiError,
 } from "@lib/search/searchUiError";
-import { DriverErrorHint } from "@components/errors/DriverErrorHint";
-import { getDeleteByQueryPreviewTargetError } from "@lib/search/searchTargetPolicy";
-import { useSafeModeGate } from "@hooks/useSafeModeGate";
+import { getTauriErrorMessage } from "@lib/tauri/error";
+import {
+  executeSearchDeleteByQuery,
+  planSearchDeleteByQuery,
+} from "@lib/tauri/search";
 import { useConnectionStore } from "@stores/connectionStore";
+import {
+  AlertTriangle,
+  FileSearch,
+  Loader2,
+  ShieldAlert,
+  Trash2,
+} from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { StatementAnalysis } from "@/lib/sql/sqlSafety";
 import type {
   SearchDeleteByQueryResult,

@@ -1,8 +1,8 @@
-import { ShieldCheck, ShieldAlert, ShieldOff } from "lucide-react";
-import { useTranslation } from "react-i18next";
 import { Button } from "@components/ui/button";
-import { useSafeModeStore, type SafeMode } from "@stores/safeModeStore";
 import { toast } from "@lib/runtime/toast";
+import { type SafeMode, useSafeModeStore } from "@stores/safeModeStore";
+import { ShieldAlert, ShieldCheck, ShieldOff } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 /**
  * Safe Mode toggle — workspace-toolbar control that cycles

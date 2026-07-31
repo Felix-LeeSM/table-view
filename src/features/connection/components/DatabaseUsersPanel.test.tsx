@@ -2,9 +2,9 @@
 // panel: (a) initial fetch + row render, (b) refresh re-fetch, (c) empty
 // state, (d) error state, (e) it is read-only (no kill/edit/delete control).
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DatabaseUsersPanel } from "./DatabaseUsersPanel";
 
 const listDatabaseUsersMock = vi.fn();

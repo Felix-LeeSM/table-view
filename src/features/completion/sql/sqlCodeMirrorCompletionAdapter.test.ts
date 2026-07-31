@@ -1,11 +1,11 @@
 import { CompletionContext } from "@codemirror/autocomplete";
 import { EditorState } from "@codemirror/state";
 import { describe, expect, it } from "vitest";
+import { buildSqlCompletionRequestFromCodeMirror } from "./sqlCodeMirrorCompletionAdapter";
 import {
   buildSqlCompletionContext,
   type SqlCompletionCatalogStoreSnapshot,
 } from "./sqlCompletionContext";
-import { buildSqlCompletionRequestFromCodeMirror } from "./sqlCodeMirrorCompletionAdapter";
 
 const emptySnapshot = (): SqlCompletionCatalogStoreSnapshot => ({
   schemas: {},

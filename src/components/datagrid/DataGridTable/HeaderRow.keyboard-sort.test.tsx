@@ -4,10 +4,10 @@
 // aria-sort 노출도 회귀 가드. HeaderRow 는 RDB + Document 그리드 공유
 // (DataGridHeaderRow)라 한 곳 고치면 둘 다 커버. (2026-07-03)
 
-import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent, act } from "@testing-library/react";
-import HeaderRow from "./HeaderRow";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 import type { SortInfo, TableData } from "@/types/schema";
+import HeaderRow from "./HeaderRow";
 
 function col(name: string) {
   return {

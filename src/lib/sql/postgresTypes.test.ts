@@ -9,12 +9,12 @@
 //   on rendering / keyboard nav rather than filter semantics.
 // - Pins the canonical-list cardinality at ≥ 25 entries (spec
 //   AC-227-03 lower bound).
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
-  POSTGRES_COMMON_TYPES,
-  filterPostgresTypes,
   expandParametricDefault,
+  filterPostgresTypes,
   PARAMETRIC_TYPE_DEFAULTS,
+  POSTGRES_COMMON_TYPES,
 } from "./postgresTypes";
 
 describe("postgresTypes", () => {

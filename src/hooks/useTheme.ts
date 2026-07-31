@@ -1,6 +1,6 @@
-import { useEffect } from "react";
-import { useThemeStore } from "@stores/themeStore";
 import { subscribeSystemModeChange, type ThemeMode } from "@lib/themeBoot";
+import { useThemeStore } from "@stores/themeStore";
+import { useEffect } from "react";
 
 type Theme = ThemeMode;
 

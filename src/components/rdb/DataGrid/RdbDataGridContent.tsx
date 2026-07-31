@@ -1,6 +1,6 @@
-import type { DataGridEditState } from "@components/datagrid/useDataGridEdit";
-import DataGridTable from "@components/datagrid/DataGridTable";
 import DataGridSkeleton from "@components/datagrid/DataGridSkeleton";
+import DataGridTable from "@components/datagrid/DataGridTable";
+import type { DataGridEditState } from "@components/datagrid/useDataGridEdit";
 import type { SortInfo, TableData } from "@/types/schema";
 
 interface RdbDataGridContentProps {

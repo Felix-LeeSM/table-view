@@ -1,24 +1,24 @@
 import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type CSSProperties,
-} from "react";
-import { useTranslation } from "react-i18next";
-import Decimal from "decimal.js";
-import { useVirtualizer } from "@tanstack/react-virtual";
-import {
   CellDetailDialog,
   ROW_HEIGHT_ESTIMATE,
   useColumnResize,
   useGridRoving,
   VIRTUALIZE_THRESHOLD,
 } from "@components/datagrid";
-import { getDefaultRem } from "@/lib/columnCategory";
-import { useColumnWidths } from "@/hooks/useColumnWidths";
 import { safeStringifyCell } from "@lib/jsonCell";
+import { useVirtualizer } from "@tanstack/react-virtual";
+import Decimal from "decimal.js";
+import {
+  type CSSProperties,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { useTranslation } from "react-i18next";
+import { useColumnWidths } from "@/hooks/useColumnWidths";
+import { getDefaultRem } from "@/lib/columnCategory";
 import type { QueryResult } from "@/types/query";
 
 function formatCell(cell: unknown): string {

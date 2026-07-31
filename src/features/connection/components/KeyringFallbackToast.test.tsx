@@ -15,8 +15,8 @@
  *   5. dismiss IPC 실패해도 UI 는 hide (다음 boot 에서 재시도 — best-effort).
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { KeyringFallbackToast } from "./KeyringFallbackToast";
 

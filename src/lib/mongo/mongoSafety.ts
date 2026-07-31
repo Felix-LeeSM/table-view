@@ -88,7 +88,7 @@ function scanNestedDestructive(
     return null;
   }
   if (op === "$lookup" && isPipelineStage(payload)) {
-    const sub = payload["pipeline"];
+    const sub = payload.pipeline;
     if (!Array.isArray(sub)) return null;
     return scanPipeline(sub, depth);
   }

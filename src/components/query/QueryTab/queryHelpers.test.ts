@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import { deriveMongoExplainSpec } from "./queryHelpers";
 
 // Purpose: `deriveMongoExplainSpec` — derive the Mongo explain find-spec from a

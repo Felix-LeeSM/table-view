@@ -11,15 +11,15 @@
 // (7) DbMismatch (Sprint 271c wire format) 에 대해 syncMismatchedActiveDb
 // + Sprint 269 passive Retry toast 가 emit.
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { setupTauriMock } from "@/test-utils/tauriMock";
 import {
+  act,
+  fireEvent,
   render,
   screen,
-  fireEvent,
   waitFor,
-  act,
 } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { setupTauriMock } from "@/test-utils/tauriMock";
 
 const { mockDropTrigger, toastWarningMock, verifyActiveDbMock } = vi.hoisted(
   () => ({
@@ -44,9 +44,9 @@ vi.mock("@lib/api/verifyActiveDb", () => ({
   verifyActiveDb: verifyActiveDbMock,
 }));
 
-import DropTriggerDialog from "./DropTriggerDialog";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useSafeModeStore } from "@stores/safeModeStore";
+import DropTriggerDialog from "./DropTriggerDialog";
 
 const DB_MISMATCH_ERROR =
   "Database mismatch: expected 'db-1', but found 'db-2'";

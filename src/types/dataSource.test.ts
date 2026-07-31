@@ -1,11 +1,11 @@
+import { toWorkspaceQueryLanguage } from "@stores/workspaceStore/queryMode";
 import { describe, expect, it } from "vitest";
 import {
   DATABASE_TYPE_LABELS,
-  SUPPORTED_DATABASE_TYPES,
   type DatabaseType,
   paradigmOf,
+  SUPPORTED_DATABASE_TYPES,
 } from "./connection";
-import { toWorkspaceQueryLanguage } from "@stores/workspaceStore/queryMode";
 import {
   createEmptyDataSourceCapabilities,
   DATA_SOURCE_PROFILES,

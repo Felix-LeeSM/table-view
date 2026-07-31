@@ -1,9 +1,9 @@
-import { describe, expect, it, vi } from "vitest";
-import { createRef } from "react";
-import { render, screen, waitFor } from "@testing-library/react";
 import { EditorView } from "@codemirror/view";
-import SearchQueryEditor from "./SearchQueryEditor";
+import { render, screen, waitFor } from "@testing-library/react";
+import { createRef } from "react";
+import { describe, expect, it, vi } from "vitest";
 import { expectUndoRevertsEdit } from "./__tests__/editorHistoryHelpers";
+import SearchQueryEditor from "./SearchQueryEditor";
 
 // Purpose: SearchQueryEditor 회귀 커버리지 신설 — #1225 (2026-07-03).
 // 검색(Elasticsearch/OpenSearch) 에디터도 다른 세 에디터와 동일하게

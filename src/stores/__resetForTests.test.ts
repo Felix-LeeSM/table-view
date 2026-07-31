@@ -30,7 +30,7 @@
  * 단언만 — internal `let` 값을 직접 read 하지 않고 다음 호출의 결과로 검증.
  */
 
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // IPC bridge 와 invoke 는 module-load side-effect 가 강해 mock 필수.
 // scopedLocalStorage 는 `invoke("get_session_id")` 를 호출하므로 mock 으로

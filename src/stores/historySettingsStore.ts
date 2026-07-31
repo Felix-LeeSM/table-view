@@ -24,11 +24,11 @@
  * receiver 가 sync 함).
  */
 
-import { create } from "zustand";
+import i18n from "@lib/i18n";
 import { logger } from "@lib/logger";
 import { toast } from "@lib/runtime/toast";
-import i18n from "@lib/i18n";
 import { getSetting, persistSettingValue } from "@lib/tauri/settings";
+import { create } from "zustand";
 
 /**
  * "forever" 보존을 0 로 인코딩. `boot_vacuum_old_history` 가 retention

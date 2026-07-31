@@ -1,6 +1,6 @@
-import { describe, it, expect, vi } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { useRef, useState } from "react";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 import { useTablistRoving } from "./useTablistRoving";
 
 const VALUES = ["one", "two", "three"] as const;

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { schemaName, tableName } from "@/test-utils/brandedKeys";
 import type {
   ColumnInfo,
   ConstraintInfo,
@@ -10,7 +11,6 @@ import type {
   SchemaGraphCatalogSnapshot,
   SchemaGraphForeignKeyEndpoint,
 } from "@/types/schemaGraph";
-import { schemaName, tableName } from "@/test-utils/brandedKeys";
 import { selectSchemaGraphDiff } from "./schemaGraphDiff";
 
 describe("SchemaGraph diff", () => {

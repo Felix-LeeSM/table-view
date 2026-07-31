@@ -6,8 +6,8 @@
  * 형태로 보내 backend 가 실제 BSON ObjectId 로 복원할 수 있게 한다.
  */
 
-import type { MqlCommand } from "./mqlGenerator";
 import type { BulkWriteOp, DocumentId } from "@/types/documentMutate";
+import type { MqlCommand } from "./mqlGenerator";
 
 function documentIdToFilterValue(id: DocumentId): unknown {
   if ("objectId" in id) return { $oid: id.objectId };
@@ -19,6 +19,7 @@ function documentIdToFilterValue(id: DocumentId): unknown {
 export function mqlCommandsToBulkOps(
   commands: ReadonlyArray<MqlCommand>,
 ): BulkWriteOp[] {
+  // biome-ignore lint/suspicious/useIterableCallbackReturn: the switch is exhaustive over MqlCommand["kind"], so no path falls through without returning. tsc enforces that — adding a fourth kind to the union makes the callback infer `... | undefined` and fails this function's BulkWriteOp[] return type.
   return commands.map((cmd) => {
     switch (cmd.kind) {
       case "insertOne":

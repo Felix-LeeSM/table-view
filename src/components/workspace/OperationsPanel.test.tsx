@@ -7,13 +7,13 @@
 // (d) the Server Activity tab mounts ServerActivityPanel,
 // (e) close callback fires.
 
-import { describe, it, expect, beforeEach, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
-import OperationsPanel from "./OperationsPanel";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useWorkspaceStore } from "@stores/workspaceStore";
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConnectionConfig, ConnectionStatus } from "@/types/connection";
+import OperationsPanel from "./OperationsPanel";
 
 const listServerActivityMock = vi.fn();
 const killServerActivityMock = vi.fn();

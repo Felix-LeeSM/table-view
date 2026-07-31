@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { useConnectionStore } from "@stores/connectionStore";
+import { useWorkspaceStore } from "@stores/workspaceStore";
 import {
   fireEvent,
   render,
@@ -6,9 +7,8 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
-import { useConnectionStore } from "@stores/connectionStore";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getAllTabsForConnection } from "@/stores/__tests__/workspaceStoreTestHelpers";
-import { useWorkspaceStore } from "@stores/workspaceStore";
 import type { SearchCatalogSummary } from "@/types/search";
 import SearchSidebar from "./SearchSidebar";
 

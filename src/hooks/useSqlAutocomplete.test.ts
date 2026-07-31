@@ -2,11 +2,12 @@
 // Sprint 263 (2026-05-12) — schemaStore caches now nest by `(connId, db)`,
 // so the hook signature is `(connectionId, db, arg?)` and store seeds use
 // `{ conn1: { db1: { schema: [...] } } }`.
-import { describe, it, expect, beforeEach } from "vitest";
-import { renderHook } from "@testing-library/react";
+
 import { MySQL, PostgreSQL, SQLite } from "@codemirror/lang-sql";
-import { useSqlAutocomplete } from "./useSqlAutocomplete";
 import { useSchemaStore } from "@stores/schemaStore";
+import { renderHook } from "@testing-library/react";
+import { beforeEach, describe, expect, it } from "vitest";
+import { useSqlAutocomplete } from "./useSqlAutocomplete";
 
 describe("useSqlAutocomplete", () => {
   beforeEach(() => {

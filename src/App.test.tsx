@@ -1,19 +1,19 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { ConnectionId, TabId } from "@/types/branded";
+import { act, fireEvent, render } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  seedWorkspace,
-  getTestWorkspace,
   getAllTabsForConnection,
+  getTestWorkspace,
+  seedWorkspace,
 } from "@/stores/__tests__/workspaceStoreTestHelpers";
-import { render, fireEvent, act } from "@testing-library/react";
+import type { ConnectionId, TabId } from "@/types/branded";
 import App from "./App";
-import {
-  useWorkspaceStore,
-  type TableTab,
-  type QueryTab,
-} from "./stores/workspaceStore";
 import { useConnectionStore } from "./stores/connectionStore";
 import { useThemeStore } from "./stores/themeStore";
+import {
+  type QueryTab,
+  type TableTab,
+  useWorkspaceStore,
+} from "./stores/workspaceStore";
 
 // Mock page components to isolate shortcut testing — App.tsx now mounts only
 // `WorkspacePage` (Sprint 154 — `AppRouter` picks the per-window shell at

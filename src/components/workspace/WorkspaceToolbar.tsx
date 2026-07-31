@@ -1,13 +1,13 @@
-import { useRef } from "react";
-import { History, Activity } from "lucide-react";
-import { useTranslation } from "react-i18next";
+import RowCapSetting from "@components/settings/RowCapSetting";
 import { Button } from "@components/ui/button";
+import { Activity, History } from "lucide-react";
+import { useRef } from "react";
+import { useTranslation } from "react-i18next";
 import DbSwitcher from "./DbSwitcher";
 import DisconnectButton from "./DisconnectButton";
 import SafeModeToggle from "./SafeModeToggle";
-import RowCapSetting from "@components/settings/RowCapSetting";
-import { useToolbarRoving } from "./useToolbarRoving";
 import { useOperationsConnection } from "./useOperationsConnection";
+import { useToolbarRoving } from "./useToolbarRoving";
 
 /**
  * Workspace toolbar — top-of-pane container that hosts the `[DB ▼]` chip

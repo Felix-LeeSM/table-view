@@ -1,8 +1,8 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, act } from "@testing-library/react";
-import ConnectionDialog from "./ConnectionDialog";
 import { useConnectionStore } from "@stores/connectionStore";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConnectionConfig } from "@/types/connection";
+import ConnectionDialog from "./ConnectionDialog";
 import { CONNECTION_ERROR_ID } from "./forms/fieldValidation";
 
 // #1366 — mock the toast lib boundary (P6: mock only at lib boundaries) so the

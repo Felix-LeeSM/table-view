@@ -1,16 +1,16 @@
 import { describe, expect, it } from "vitest";
-import type { DocumentQueryResult } from "./document";
 import { getDataSourceProfile } from "./dataSource";
-import { RUNTIME_RDBMS_DATABASE_TYPES } from "./rdbmsDataSources";
+import type { DocumentQueryResult } from "./document";
 import {
   createDocumentResultEnvelope,
   createSearchHitsResultEnvelope,
   createTabularResultEnvelope,
-  requireCompatibleQueryResult,
-  toCompatibleQueryResult,
   type OpaqueResultEnvelope,
   type QueryResult,
+  requireCompatibleQueryResult,
+  toCompatibleQueryResult,
 } from "./query";
+import { RUNTIME_RDBMS_DATABASE_TYPES } from "./rdbmsDataSources";
 import type { SearchResultEnvelope } from "./search";
 
 const tabularResult: QueryResult = {

@@ -1,10 +1,3 @@
-import type { IndexDraft } from "./IndexesTabBody";
-import type {
-  ForeignKeyDraft,
-  CheckDraft,
-  UniqueDraft,
-} from "./ForeignKeysTabBody";
-import type { ColumnDraft } from "./types";
 import type {
   ColumnDefinition,
   ConstraintDefinition,
@@ -12,6 +5,13 @@ import type {
   CreateTablePlanIndex,
   CreateTablePlanRequest,
 } from "@/types/schema";
+import type {
+  CheckDraft,
+  ForeignKeyDraft,
+  UniqueDraft,
+} from "./ForeignKeysTabBody";
+import type { IndexDraft } from "./IndexesTabBody";
+import type { ColumnDraft } from "./types";
 
 export interface DeclaredConstraint {
   trackingId: string;

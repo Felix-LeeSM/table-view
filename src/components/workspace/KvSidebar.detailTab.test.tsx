@@ -1,4 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { useConnectionStore } from "@stores/connectionStore";
+import { useSafeModeStore } from "@stores/safeModeStore";
+import { useWorkspaceStore } from "@stores/workspaceStore";
 import {
   fireEvent,
   render,
@@ -6,11 +8,9 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
-import KvSidebar from "./KvSidebar";
-import { useConnectionStore } from "@stores/connectionStore";
-import { useSafeModeStore } from "@stores/safeModeStore";
-import { useWorkspaceStore } from "@stores/workspaceStore";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConnectionConfig } from "@/types/connection";
+import KvSidebar from "./KvSidebar";
 
 // Purpose: KV key selection navigates to a right-hand detail tab instead of an
 // inline sidebar preview — Redis/Valkey KV UX redesign (2026-07-07). Mirrors
