@@ -153,4 +153,4 @@ contract.md 24개 작성 + 4회 codex 5.5 medium consistency review.
 ## 관련 방
 
 - [architecture](../../../../memory/engineering/architecture/memory.md)
-- [decisions](../../decisions/memory.md)
+- [decisions](../../../decisions/memory.md)

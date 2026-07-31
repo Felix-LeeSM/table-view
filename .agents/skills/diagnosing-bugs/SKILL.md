@@ -12,7 +12,7 @@ description: 어려운 버그와 성능 회귀의 진단 루프. 사용자가 "�
 `memory/workflow/bug-fix/memory.md` 가 SOT 다. 단계를 건너뛰려면 근거를 대라.
 
 탐색 전에 읽을 것: `memory/index/by-surface.md` 의 해당 surface 묶음,
-건드릴 영역의 ADR (`docs/archives/decisions/`).
+건드릴 영역의 ADR (`docs/decisions/`).
 
 ## Phase 1 — 피드백 루프를 만든다
 

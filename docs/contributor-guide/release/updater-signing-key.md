@@ -253,7 +253,7 @@ Response:
 ## Related
 
 - ADR 0049 —
-  [`docs/archives/decisions/0049-auto-update-full-tauri-updater/memory.md`](../../archives/decisions/0049-auto-update-full-tauri-updater/memory.md)
+  [`docs/decisions/0049-auto-update-full-tauri-updater/memory.md`](../../decisions/0049-auto-update-full-tauri-updater/memory.md)
   (why minisign is the trust anchor; private key in CI secret only).
 - ADR 0036 — telemetry zero: updater failures are silent client-side, which is
   why a key mistake stays invisible until someone checks by hand.

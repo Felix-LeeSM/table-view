@@ -26,7 +26,7 @@ superseded_by: 0043
 
 **관련**:
 
-- Phase 28 grill: [phase-28-mongo-full-support](../../roadmaps/memory-roadmap/phase-28-mongo-full-support/memory.md) Q14, R28.1
-- Sprint 307 contract: [`docs/sprints/sprint-307/contract.md`](../../../sprints/sprint-307/contract.md)
+- Phase 28 grill: [phase-28-mongo-full-support](../../archives/roadmaps/memory-roadmap/phase-28-mongo-full-support/memory.md) Q14, R28.1
+- Sprint 307 contract: [`docs/sprints/sprint-307/contract.md`](../../sprints/sprint-307/contract.md)
 - ADR 0006 (queryAnalyzer gate 일관성)
 - ADR 0022 (Safe Mode — destructive 만 confirm)

@@ -8,11 +8,11 @@ related:
   - issue #1064 (SSH 터널 tracker)
   - issue #1453 (연결 에러 마스킹 갭)
   - issue #1056 (드라이버 에러 힌팅 레이어)
-  - docs/archives/decisions/0052-ssh-tunnel-connection-scoped-tofu/memory.md
-  - docs/archives/decisions/0040-file-key-os-keyring/memory.md
-  - docs/archives/decisions/0005-plaintext-password-never-leaves-backend/memory.md
-  - docs/archives/decisions/0021-export-envelope-auto-mnemonic-no-ttl/memory.md
-  - docs/archives/decisions/0036-telemetry-zero-collection/memory.md
+  - docs/decisions/0052-ssh-tunnel-connection-scoped-tofu/memory.md
+  - docs/decisions/0040-file-key-os-keyring/memory.md
+  - docs/decisions/0005-plaintext-password-never-leaves-backend/memory.md
+  - docs/decisions/0021-export-envelope-auto-mnemonic-no-ttl/memory.md
+  - docs/decisions/0036-telemetry-zero-collection/memory.md
 ---
 
 # SSH 터널 지원 (#1064) — Threat-Model Handoff (2026-07-17)

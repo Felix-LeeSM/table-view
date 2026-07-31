@@ -182,5 +182,5 @@ suite green, (c) 보안·데이터무결성 테스트(redact/injection/escape/cr
 - [conventions](../memory.md) — Rust/TS/테스트 메커니즘 룰
 - [e2e-scenarios](../e2e-scenarios/memory.md) — 같은 P-시리즈, e2e 레이어
 - [fixtures](fixtures/memory.md) — fixture strategy / support claim evidence
-- [docs/archives/decisions](../../../../docs/archives/decisions/memory.md) — historical ADR archive
+- [docs/decisions](../../../../docs/decisions/memory.md) — ADR 인덱스. Accepted 가 live policy, Superseded 는 「역사」 절
 - 자동 로드 없음 — 직접 열어야 한다

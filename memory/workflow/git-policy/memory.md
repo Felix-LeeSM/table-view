@@ -37,7 +37,7 @@ trigger:
   `.githooks/` 를 가리키는 dangling `core.hooksPath` 가 남아 있어 unset 이
   선행되지 않으면 lefthook 훅이 아예 안 걸린다.
 - 서명은 `commit.gpgsign` 설정이 건다.
-- [ADR 0044](../../../docs/archives/decisions/0044-e2e-smoke-remote-required/memory.md)
+- [ADR 0044](../../../docs/decisions/0044-e2e-smoke-remote-required/memory.md)
   의 runtime e2e smoke blocking check 는 2026-07-31 (#2038) 부터 다시 실검사다.
   `Runtime Happy Path` 가 변경 경로에서 spec 부분집합을 골라 돌린다 — 로컬에서
   안 돌려도 CI 가 잡지만, 잡히는 범위는 네 변경이 고른 spec 뿐이다.
@@ -192,7 +192,7 @@ zsh 는 word 안의 `:` 를 modifier 로 해석 → `<sha>:refs/heads/foo` 가
 
 ## 관련
 
-- [ADR 0044](../../../docs/archives/decisions/0044-e2e-smoke-remote-required/memory.md) — E2E smoke remote PR/main blocking check
-- [ADR 0019](../../../docs/archives/decisions/0019-e2e-pre-push-not-ci/memory.md) / [ADR 0020](../../../docs/archives/decisions/0020-e2e-pre-push-host-docker/memory.md) — superseded 된 pre-push e2e 정책
+- [ADR 0044](../../../docs/decisions/0044-e2e-smoke-remote-required/memory.md) — E2E smoke remote PR/main blocking check
+- [ADR 0019](../../../docs/decisions/0019-e2e-pre-push-not-ci/memory.md) / [ADR 0020](../../../docs/decisions/0020-e2e-pre-push-host-docker/memory.md) — superseded 된 pre-push e2e 정책
 - [delivery](../delivery/memory.md) — 자율 pipeline
 - [worktree](../../runbook/worktree/memory.md) — 사본 격리 lifecycle, 같은 무집행 상태
