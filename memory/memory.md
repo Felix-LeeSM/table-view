@@ -1,7 +1,8 @@
 ---
 title: Table View — 팔레스 입구
 type: index
-updated: 2026-07-26
+updated: 2026-07-31
+keywords: 팔레스, 방 지도, index, by-surface, by-task, 200줄, 12000 chars, wc -m
 ---
 
 # 팔레스 입구
@@ -46,11 +47,11 @@ updated: 2026-07-26
   - [engineering/conventions/e2e-scenarios](./engineering/conventions/e2e-scenarios/memory.md) — E2E 시나리오 설계
   - [engineering/conventions/rust](./engineering/conventions/rust/memory.md) — Rust 컨벤션 전체
   - [engineering/conventions/react](./engineering/conventions/react/memory.md) — React/TS 컨벤션 전체
-- [workflow](./workflow/memory.md) — 사용자-agent 협업 phase 행동 계약 (bug-fix / implementation / delivery / review / git-policy)
+- [workflow](./workflow/memory.md) — 사용자-agent 협업 phase 행동 계약 (bug-fix / implementation / delivery / review / orchestration / interface / git-policy)
   - [workflow/git-policy](./workflow/git-policy/memory.md) — git 안전 규율 (집행 훅 없음)
 - [product](./product/memory.md) — 제품/UX 머지 기준 (영속 상태 reset 등)
-- [runbook](./runbook/memory.md) — 절차 (multi-agent worktree 등)
-  - [runbook/worktree](./runbook/worktree/memory.md) — git worktree 다중 agent 격리 룰
+- [runbook](./runbook/memory.md) — 절차 (작업 사본 격리 등)
+  - [runbook/worktree](./runbook/worktree/memory.md) — 독립 clone 사본 격리 룰 (생성·점유·회수)
 - [index/by-task](./index/by-task.md) — 작업 type → 관련 룰/방 묶음 (읽는 자용 cross-link)
 - [index/by-surface](./index/by-surface.md) — 코드 surface → 관련 active rule 묶음
 
@@ -69,8 +70,8 @@ updated: 2026-07-26
     한글 본문은 UTF-8 에서 문자당 3 byte 라 `wc -c` 와 크게 벌어진다. 크기를
     인용할 때는 단위를 함께 적는다.
 - `memory/index/by-task.md`, `memory/index/by-surface.md` 는 cross-link 예외다.
-  rule SOT 가 아니다. 손으로 갱신한다 — 방을 추가/삭제하면 두 인덱스를 같이
-  고친다.
+  rule SOT 가 아니다. 손으로 갱신한다 — 방을 추가/삭제하면 by-task 를 갱신하고,
+  `surface:` 필드가 있는 방이면 by-surface 도 같이 고친다.
 - 새 non-`memory.md` 파일 추가 금지. index 예외 변경은 별도 memory/tooling 결정으로
   다룬다.
 - `docs/` 파일과 내용 중복 금지. 링크로 포인터만.

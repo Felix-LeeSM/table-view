@@ -1,8 +1,9 @@
 ---
 title: PR Review Behavior
 type: workflow-rule
-updated: 2026-07-30
+updated: 2026-07-31
 task: review, pr, delivery
+keywords: scorecard, verdict, blocking, non-blocking, review:approved, review:changes-requested, fan-out, subreviewer, 재리뷰, label 순서
 trigger:
   signal: PR 생성 / 사용자가 "리뷰해" / 수정 push 후 재리뷰
   layer: index
@@ -33,8 +34,8 @@ trigger:
 - Subreview 결과는 coordinator의 입력이다. Coordinator는 PR에 직접 하나의
   통합 scorecard와 action items를 repo-relative evidence로 comment한다.
 - Blocking은 세 사유뿐이다: 런타임·보안 / 이 PR 귀책의 거짓이 SOT에 들어감 /
-  자동 layer 실패. 그 외 발견은 non-blocking이고 이슈로
-  배출한다. 점수 기준은 쓰지 않는다 — 앵커가 없어 판정을 대신해 왔다.
+  자동 layer 실패. 그 외 발견은 non-blocking이고 scorecard 에
+  남긴다. 점수 기준은 쓰지 않는다 — 앵커가 없어 판정을 대신해 왔다.
 - Blocking 판정은 coordinator 단독 권한이다. subreviewer는 발견과 근거만 내고
   severity를 붙이지 않는다. 관점을 늘려도 blocking이 늘지 않는다.
 - Scorecard의 차원별 판정 표는 **어떤 경우에도 생략 금지** — 요청자가 반환
@@ -56,10 +57,11 @@ trigger:
   red가 `review:approved`를 먼저 떼는 것이 필수다. 안 떼면 같은 SHA를 재리뷰해
   green이 red로 뒤집혀도 label이 남아 게이트가 통과한다 — `Dismiss stale
   approval`은 `synchronize` 전용이라 push 없는 뒤집기를 못 잡는다(#1884).
-- reviewer의 write는 scorecard
-  comment, verdict label, non-blocking 발견의 `gh issue create` 세 가지가
-  전부다(그 외 write 금지). 원칙 1이 blocking을 좁히므로 배출구가 없으면
-  발견이 기록 없이 증발한다.
+- reviewer의 write는 scorecard comment 와 verdict label **둘이 전부다**
+  (그 외 write 금지 — 이슈 발행 포함). non-blocking 발견은 scorecard 가
+  기록이고, 이슈화는 스윕이 유형 단위(10건=1이슈, [orchestration](../orchestration/memory.md) §4)로
+  한다. finding 별 개별 발행이 이슈 noise 의 주범이었다(#2005~#2022 연번,
+  2026-07-31 실측 — #2035).
   `review:approved`는 `review-gate` required check의 pass 조건이다
   (계정 1개 = GitHub review approval 불가의 label 우회).
 - 결함이 있으면 orchestrator가 `review:changes-requested` label을 보고 구현자를

@@ -1,8 +1,9 @@
 ---
 title: PR merge 게이트 진단 / 처리
 type: runbook
-updated: 2026-07-29
+updated: 2026-07-31
 task: merge, pr, review-gate, ci, blocked, ruleset, e2e, synchronize-rerun, cancelled-rollup, round-gate
+keywords: BLOCKED, base branch policy prohibits, mergeStateStatus, UNSTABLE, CLEAN, review-gate, reflect:done, required check, check-runs, rerun, cancelled, expected, Dismiss stale approval
 trigger:
   signal: PR 이 mergeable 인데 mergeState=BLOCKED / merge 가 base branch policy 로 거부
   layer: none — 자동 로드 없음, 직접 열어야 함
@@ -91,8 +92,9 @@ label 메커니즘 자체는 [delivery](../../workflow/delivery/memory.md) 의 �
   `comments >= 3` 이고 `reflect:done` label 이 없으면 exit 1 한다. rerun 도 label
   재발화도 같은 payload 를 재생하므로 계속 fail — 해소는 `reflect:done` 뿐이다
   (`enforce_admins=true` 라 `--admin` 우회 없음). **누가 붙이냐는 verdict 가 가른다** —
-  green 이면 종결자가 바로 붙이고, red 면 회고자가
-  사용자에게 올려 받는다 ([delivery](../../workflow/delivery/memory.md)). 저자는
+  green 이면 종결자가 바로 붙이고, red 면 회고 모드 리뷰어가
+  interface 를 거쳐 사용자에게 올려 받는다
+  ([delivery](../../workflow/delivery/memory.md)). 저자는
   붙이지 않는다. 게이트는 라운드만 세고
   verdict 를 안 보므로 green 도 걸린다.
   최근 머지 30건 중 16건이 승인 시점에 `comments >= 3` 이었다.
@@ -130,5 +132,5 @@ merge 막히면 위 "두 곳 분산" → "함정" → "올바른 순서" 순으�
 ## 관련
 
 - [delivery](../../workflow/delivery/memory.md) — 리뷰~정리 구간의 review-gate label / enforce_admins 계약
-- [worktree](../worktree/memory.md) — merge 후 worktree cleanup
+- [worktree](../worktree/memory.md) — merge 후 사본(clone) 회수
 - [git-policy](../../workflow/git-policy/memory.md) — force push 금지 (집행 훅 없음)
