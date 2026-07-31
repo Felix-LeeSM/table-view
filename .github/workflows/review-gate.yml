@@ -22,8 +22,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      # 새 commit 이 push 되면 기존 승인은 무효 — stale approval 로 미리뷰 코드가
-      # 머지되는 것을 막는다 (dismiss stale approvals 대응)
+      # 새 commit 이 push 되면 기존 verdict 는 양쪽 다 무효 — stale approval 로 미리뷰
+      # 코드가 머지되는 것을 막고 (dismiss stale approvals 대응), 대칭으로 stale
+      # changes-requested 도 떨군다. 지적을 고친 commit 이 올라와도 red verdict label 이
+      # 남아 있으면 다음 라운드가 이미 해소된 finding 을 근거로 시작한다.
       - name: Dismiss stale approval on new commits
         if: github.event_name == 'pull_request' && github.event.action == 'synchronize'
         env:
@@ -31,7 +33,8 @@ jobs:
           PR: ${{ github.event.pull_request.number }}
         run: |
           gh api -X DELETE "repos/${GITHUB_REPOSITORY}/issues/${PR}/labels/review%3Aapproved" || true
-          echo "::error::new commits pushed — review:approved dismissed, re-review required"
+          gh api -X DELETE "repos/${GITHUB_REPOSITORY}/issues/${PR}/labels/review%3Achanges-requested" || true
+          echo "::error::new commits pushed — review:approved / review:changes-requested dismissed, re-review required"
           exit 1
 
       # 3라운드부터는 red 면 fix 를 더 쌓지 말고 근본 원인을 재평가한다 (delivery

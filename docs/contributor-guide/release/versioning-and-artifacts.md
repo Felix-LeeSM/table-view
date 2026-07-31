@@ -108,8 +108,10 @@ After the draft release is created:
   [`docs/product/README.md`](../../product/README.md), and
   [`docs/product/known-limitations.md`](../../product/known-limitations.md).
 - Before publishing, confirm the exact release SHA has green CI. `Runtime Happy
-  Path` reports without running a spec, so it is not evidence — run the smoke
-  suite by hand if the release needs runtime proof (see
+  Path` on a PR only ran the specs that PR's changed paths selected; the run
+  that covers every spec is the `main` push run on the merge commit, or the
+  nightly. Take that run, or run the smoke suite by hand, when the release needs
+  full runtime proof (see
   [`testing-and-quality.md`](../testing-and-quality.md)).
 
 Updater artifacts — the auto-update path, which reaches every installed client,
@@ -181,8 +183,9 @@ stays put. The only way to move users off a bad published release is to ship a
 **higher** version that fixes (or reverts) it. That is the superseding patch.
 
 1. **Fix or revert on `main`.** Land the fix — or a straight revert of the bad
-   change — on `main`, and rerun CI on the merge commit. If the release needs
-   runtime proof, run the smoke suite by hand; no CI job does. If the fix is a
+   change — on `main`, and rerun CI on the merge commit. The `main` push run of
+   `Runtime Happy Path` covers every spec; run the suite by hand only when you
+   need evidence sooner than that run lands. If the fix is a
    pure revert, it can be small and fast; correctness still gates it.
 2. **Bump to the next patch.** In one `chore/release-X.Y.Z+1` PR, bump
    `package.json`, `src-tauri/tauri.conf.json`, and `src-tauri/Cargo.toml`

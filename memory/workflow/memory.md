@@ -1,7 +1,8 @@
 ---
 title: Workflow
 type: index
-updated: 2026-07-29
+updated: 2026-07-31
+keywords: 행동 계약, phase, 방 지도, workflow
 ---
 
 # Workflow
@@ -22,6 +23,7 @@ updated: 2026-07-29
 - [delivery](./delivery/memory.md) — 커밋 → 푸시 → PR → 리뷰 → 머지 구간의 node 별 계약 (구현자는 PR 생성에서 끝난다)
 - [review](./review/memory.md) — PR 생성 후 독립 read-only review pack을 붙이는 행동 계약
 - [orchestration](./orchestration/memory.md) — 병렬 작업 spawn · 리뷰 큐 직렬화 · 사이클 정지 · 이슈 수용기준
+- [interface](./interface/memory.md) — 사용자 대화 전담 · grill · 결정 기록 · raw→task 승격 · orchestrator 운용 (top-level 세션)
 - [documentation](./documentation/memory.md) — 문서화 필요 여부 판단 + 기존 SOT 라우팅 + PR evidence portability
 - [git-policy](./git-policy/memory.md) — commit / push 금지 명령과 push reject 복구
 
@@ -37,9 +39,11 @@ updated: 2026-07-29
 | 구현 끝 / 사용자가 "마무리해"             | delivery       | [delivery](./delivery/memory.md) — 구현자가 커밋 → 푸시 → PR 생성까지. 리뷰·머지·정리는 다른 node |
 | PR 생성 / 사용자가 "리뷰해"               | review         | [review](./review/memory.md) — 독립 read-only review pack, 판정은 label 로 공표      |
 | 여러 작업 동시 진행 / 이슈 발행 / 리뷰 라운드가 안 끝남 | orchestration | [orchestration](./orchestration/memory.md) — 티켓의 파일 범위로 교집합 측정, 리뷰 큐 직렬화, 사이클이면 정지·보고 |
+| 사용자와 설계/범위 논의, needs:user, 티켓 승격            | interface      | [interface](./interface/memory.md) — 반대 근거 1회 제시 → 결정 기록 → 닫힌 티켓으로 배출 |
 
 ## 관련 방
 
 - [engineering/conventions](../engineering/conventions/memory.md) — 코드 룰 (Rust/TS/테스트/주석)
 - [product](../product/memory.md) — 제품 UX 머지 기준
-- 결정 / grill 절차와 PR review 방법론은 두 주제 모두 SOT 가 없다.
+- PR review 방법론은 SOT 가 없다. 결정 / grill 절차는
+  [interface](./interface/memory.md) 가 소유한다.

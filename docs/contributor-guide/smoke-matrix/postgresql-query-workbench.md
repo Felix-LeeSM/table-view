@@ -189,5 +189,7 @@ Current evidence:
 
 Current gap / routing:
 
-These can inform local/manual regression and future CI wiring. Nothing invokes
-them automatically, so they expand no runtime claim.
+`history-source-5.spec.ts` is in the scope map under
+`src/components/datagrid/**` and in the full suite, so CI does invoke it. Being
+run is not a support claim: what it proves is the query-history source coverage
+described above, and nothing wider.

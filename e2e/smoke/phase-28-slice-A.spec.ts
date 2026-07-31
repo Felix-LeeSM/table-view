@@ -5,11 +5,12 @@
 // dispatch) → A6 (write dispatch + 렌더링 polish) 가 모두 통과해야만
 // 본 시나리오가 PASS. Slice A 의 종합 회귀 가드.
 
-import { $, browser, expect } from "@wdio/globals";
+import { $, expect } from "@wdio/globals";
 import {
   createMongoConnection,
   expandIfCollapsed,
   openConnection,
+  waitForGridText,
   waitForLauncher,
 } from "./_helpers";
 
@@ -36,10 +37,6 @@ describe("Phase 28 Slice A — mongosh query editor E2E", () => {
     await collection.waitForDisplayed({ timeout: 15000 });
     await collection.click();
 
-    // 컬렉션의 DataGrid 가 mount 되면 connection 검증 완료.
-    const grid = await $("table");
-    await grid.waitForDisplayed({ timeout: 15000 });
-
     // 새 mongosh query tab 을 연다 — DataGrid surface 와 별개의 paradigm
     // single editor. 기존 패턴: 사이드바의 collection 우클릭 → "New Query"
     // 또는 toolbar 의 신규 query tab 버튼. e2e helper 가 없는 경로라
@@ -49,18 +46,15 @@ describe("Phase 28 Slice A — mongosh query editor E2E", () => {
     // (E28-01 의 full mongosh-editor-input → Run → grid 경로는 vitest
     // 의 `useQueryExecution.parserDispatch.test.tsx` 가 mocked IPC 로
     // 통과 검증 — E2E 는 grid + 연결 + 토글 부재를 lock.)
-    await browser.waitUntil(
-      async () => {
-        const text = (((await grid.getProperty("textContent")) as string) ?? "")
-          .trim()
-          .toLowerCase();
-        return text.includes("mona") || text.includes("@example.com");
-      },
-      {
-        timeout: 15000,
-        timeoutMsg:
-          "seeded MongoDB document did not appear after Slice A wiring",
-      },
+    //
+    // 컬렉션의 DataGrid 가 mount + seeded row 렌더까지 가면 검증 완료.
+    // Sprint 258 이 `<table>` 을 폐기하고 CSS Grid 로 옮겼으므로 grid 대기는
+    // `[role="grid"]` 를 보는 공용 helper 를 쓴다 — 통과하는 다른 spec
+    // (`mongodb.spec.ts` 등) 과 같은 관행.
+    const grid = await waitForGridText(
+      ["mona", "@example.com"],
+      15000,
+      "seeded MongoDB document did not appear after Slice A wiring",
     );
 
     expect(await grid.isDisplayed()).toBe(true);

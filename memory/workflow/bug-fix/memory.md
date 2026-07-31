@@ -1,8 +1,9 @@
 ---
 title: 버그 fix — Red test 먼저
 type: workflow-rule
-updated: 2026-05-17
+updated: 2026-07-31
 task: bug-fix, regression-test, user-report
+keywords: 버그, 회귀, regression, Red, failing test, 증상 재현, 깨졌다, 터진다
 trigger:
   signal: 사용자가 버그/회귀/UX 이슈 보고
   layer: none — 자동 로드 없음, 직접 열어야 함

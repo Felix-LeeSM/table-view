@@ -41,13 +41,24 @@ What the individual jobs own:
   (`cargo llvm-cov nextest --profile push`). The cutoff numbers stay in the
   workflow's `--fail-under-*` literals and are not restated here.
 
-- `Detect Change Scope`, `PR Body Contract` and `Runtime Happy Path` are
-  name-only jobs: required contexts that cannot fail and verify nothing.
+- `PR Body Contract` rejects a PR body carrying a path only the author can open
+  — an absolute home or temp path, a `file:` URL, or a path inside a work copy.
+  An empty body passes. The workflow does not listen for `edited`, so a red
+  verdict clears on the next commit, not on a body edit.
 
-No job is change-gated — every job runs on every push and pull request, so a
-docs-only PR pays for the full suite and no skipped check ever stands in for an
-unverified one. Full a11y, perf, and macOS/Windows runtime smoke are not routine
-blocking checks.
+- `Runtime Happy Path` runs the smoke specs `e2e/scope-map.mjs` selects from the
+  changed paths, and it fails when they fail.
+
+Every required context above can fail. The last two name-only jobs went on
+2026-07-31: `Detect Change Scope` was dropped from both the `pr_to_main` ruleset
+and `ci.yml`, and `PR Body Contract` became the real check described above.
+
+No job is skipped by a `paths:` filter — every job starts on every push and pull
+request, so no skipped check ever stands in for an unverified one. Work inside a
+job can still be change-scoped: `Runtime Happy Path` always starts, then selects
+its spec set from the changed paths and reports `selected 0 specs` when none
+apply. Full a11y, perf, and macOS/Windows runtime smoke are not routine blocking
+checks.
 
 ## Runtime Happy Path E2E
 
@@ -76,13 +87,15 @@ Current evidence:
 
 Current gap / routing:
 
-No CI job runs these specs. `.github/workflows/e2e-smoke.yml` only reports the
-`Runtime Happy Path` required context; nothing executes behind it. The specs
-still run by hand: build the debug binary, seed through
+`.github/workflows/e2e-smoke.yml` runs these specs under the `Runtime Happy
+Path` required context, but a PR only runs the subset `e2e/scope-map.mjs`
+selects from its changed paths; the full set runs on push to `main`, on the
+nightly schedule, and on `workflow_dispatch`. A spec your change does not select
+still runs by hand: build the debug binary, seed through
 `e2e/fixtures/seed-smoke.ts`, then
 `TABLE_VIEW_TEST_DATA_DIR=/tmp/table-view-smoke pnpm test:e2e:smoke` — without
 that variable the specs write into your real connection store. The bounds below
-describe what such a manual run proves, not a merge gate.
+describe what a run of these specs proves, whichever way it was started.
 
 MSSQL/Oracle smoke is bounded to representative connect, seeded catalog browse,
 SELECT/DML, destructive Safe Mode confirmation, cancellation, and grid edit paths
@@ -110,8 +123,13 @@ Current evidence:
 
 Current gap / routing:
 
-Nothing invokes these automatically. They are scenario inventory or manual
-regression assets and do not expand any runtime support claim.
+The two `e2e/smoke/*.spec.ts` files are in the scope map
+(`history-source-5` under `src/components/datagrid/**`, `phase-28-slice-A` under
+`src/components/document/**`, both in the full suite), so CI does run them —
+neither had ever run in CI before #2038, and neither expands a runtime support
+claim on its own. `e2e/reset-to-default-audit.e2e.ts` is invoked by nothing: it
+is outside `wdio.smoke.conf.ts`'s `e2e/smoke/**/*.spec.ts` glob and remains
+scenario inventory.
 
 ## Destructive/admin operation safety
 
@@ -255,8 +273,9 @@ Current evidence:
 
 Current gap / routing:
 
-No desktop runtime gate blocks a merge: the `Runtime Happy Path` required
-context reports without running anything. The opt-in `workflow_dispatch`
+The desktop runtime gate is Linux-only: `Runtime Happy Path` runs its selected
+smoke specs on `ubuntu-latest`, so no macOS or Windows runtime failure can block
+a merge. The opt-in `workflow_dispatch`
 platform canary runs separate
 macOS arm64 and Windows x86_64 install/Tauri no-bundle build jobs for evidence
 gathering only; the Windows canary is pinned to `windows-2022` and sets

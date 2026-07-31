@@ -86,8 +86,12 @@ Supporting checks:
 
 ## Smoke Routing Notes
 
-- No CI job runs a smoke spec. `.github/workflows/e2e-smoke.yml` reports the
-  `Runtime Happy Path` context and executes nothing behind it.
+- CI runs the smoke specs a change selects. `.github/workflows/e2e-smoke.yml`
+  maps a PR's changed paths to a spec subset through `e2e/scope-map.mjs` and
+  runs the `Runtime Happy Path` context over exactly those; a PR that selects
+  none logs `selected 0 specs` and passes. The whole suite runs on push to
+  `main`, on the nightly schedule, on `workflow_dispatch`, and on a PR carrying
+  `e2e:full` once a push follows the label.
 - `TABLE_VIEW_TEST_DATA_DIR=/tmp/table-view-smoke pnpm test:e2e:smoke` runs the
   specs by hand through `wdio.smoke.conf.ts`, whose `specs` glob is
   `e2e/smoke/**/*.spec.ts` — it picks up every spec file present. MSSQL and
@@ -127,8 +131,10 @@ This table is the promotion SOT. Nothing checks it against
 current by hand when a spec or seed target changes.
 
 Allowed tiers: `unit-only`, `integration-backed`, `dormant E2E`, `blocking E2E`.
-The `blocking E2E` tier records the intended promotion level, not a merge gate:
-no smoke spec blocks a merge today.
+The `blocking E2E` tier records the intended promotion level. A smoke spec does
+block a merge once a PR's changed paths select it — `Runtime Happy Path` is a
+required context — but no spec blocks every merge, so the tier and the routing
+are still separate facts.
 
 | fixture | spec/test | tier | in the smoke suite | runtime cost | flake risk | support claim impact | action |
 |---|---|---|---|---|---|---|---|
@@ -155,7 +161,12 @@ no smoke spec blocks a merge today.
 
 ## Scenario Test Topology
 
-Every spec under `e2e/smoke/**` is manual. Nothing runs them for you.
+CI runs the specs under `e2e/smoke/**` that a change selects, and the full set
+on push to `main`, on the nightly schedule, and on `workflow_dispatch`
+(`e2e/scope-map.mjs`). Running one by hand stays the way to get evidence for a
+spec your change does not select. `postgres-multi-table-edit.spec.ts` is the one
+spec no CI run covers — it has no `SEED_TARGETS_BY_SPEC_KEY` entry, so the map
+leaves it out.
 
 | scenario surface | current files | fixture dependency | action |
 |---|---|---|---|
