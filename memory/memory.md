@@ -1,7 +1,7 @@
 ---
 title: Table View — 팔레스 입구
 type: index
-updated: 2026-07-31
+updated: 2026-08-01
 keywords: 팔레스, 방 지도, index, by-surface, by-task, 200줄, 12000 chars, wc -m
 ---
 
@@ -28,8 +28,9 @@ keywords: 팔레스, 방 지도, index, by-surface, by-task, 200줄, 12000 chars
 
 - `memory/memory.md` 는 memory 진입 라우터만 소유한다. 세부 규칙은 각 방의
   `memory.md` 가 소유한다.
-- workflow 는 행동 계약만 둔다. 긴 절차·평가 매트릭스·대화 방식·구현 방법론은
-  repo 어디에도 없다. 계약을 넘는 절차가 필요하면 memory 를 쪼개서 여기 적는다.
+- workflow 는 행동 계약만 둔다. 긴 절차는 `.agents/skills/` 가 소유하고
+  `AGENTS.md` 매트릭스가 그 경로를 준다. 계약이 더 필요하면 memory 를 쪼개서
+  여기 적는다.
 - 제품 상태와 지원 범위는 [docs/product](../docs/product/README.md) 가 소유한다.
   memory 는 product merge gate 와 agent rule 만 둔다.
 - 미래 목표와 sequencing 은 [docs/ROADMAP.md](../docs/ROADMAP.md) 가 소유한다.
