@@ -44,8 +44,9 @@ trigger:
 
 ## 관련
 
-- 진단 루프(피드백 신호 구축 → 이분법 → 계측 → 회귀 test)와 증상 lock 절차의
-  본문은 repo 에 없다 — 위 순서가 전부다
+- [diagnosing-bugs SKILL](../../../.agents/skills/diagnosing-bugs/SKILL.md) — 원인을
+  찾는 진단 루프(Phase 1~6). 위 Red→Green 순서는 원인을 찾은 뒤이고, 원인이 안
+  잡히면 그 skill 로 간다
 - [implementation](../implementation/memory.md) — Red 작성 후 Green 단계 narration / noise 룰
 - [delivery](../delivery/memory.md) — fix 끝나면 자율 commit/push
 - [engineering/conventions/testing-scenarios](../../engineering/conventions/testing-scenarios/memory.md) — 시나리오 9원칙
