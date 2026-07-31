@@ -316,7 +316,20 @@ jobs:
   rust:
     name: Rust Unit And Storage Tests
     runs-on: macos-latest
-    timeout-minutes: 20
+    # 20 -> 35 (#1769). Adding `src-tauri/table-view-core -> target` to the
+    # rust-cache workspaces below changes the actions/cache *version* — that
+    # version is a hash of the cached path list, and an entry only restores
+    # into a run whose version matches. Every entry saved before this PR was
+    # therefore invisible to it: run 30658756471 logged "No cache found" and
+    # cold-compiled both manifests (10m21s + 8m43s), hitting the old 20-minute
+    # cap at 20m20s and skipping the two steps behind it. Same run's
+    # `Integration Tests (Docker)`, whose path list this PR does not touch,
+    # restored on the prefix key ("full match: false") — that is the control.
+    # A full cold pass measures ~23m; 35 keeps the headroom ratio the sibling
+    # rust-static job already carries (30 for a 21m03s cold run). Warm runs are
+    # unaffected (4m14s on main): once this merges, main saves under the new
+    # version and later PRs restore it.
+    timeout-minutes: 35
 
     steps:
       - name: Checkout
@@ -412,7 +425,9 @@ jobs:
           cache-bin: false
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
-      # There are no local git hooks, so CI is the only place either check runs.
+      # `lefthook.yml` runs the same `cargo fmt --check` on pre-push for both
+      # manifests, so formatting is caught locally first and this is the second
+      # line of defence. Clippy has no local counterpart and only runs here.
       - name: Rustfmt
         working-directory: src-tauri
         run: cargo fmt --check

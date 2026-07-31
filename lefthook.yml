@@ -27,5 +27,15 @@ pre-push:
       glob: "*.{ts,tsx}"
       run: pnpm exec eslint --quiet {push_files}
 
+    # One invocation per manifest: `cargo fmt` only touches the package it is
+    # called on, never its path dependencies, and #1769 moved db/models/storage
+    # /error into the `table-view-core` path crate. The pair mirrors the two
+    # Rustfmt steps in .github/workflows/ci.yml — the other path crates
+    # (sql-parser-core, mongosh-parser-core) are absent here because CI does not
+    # fmt-check them either, and a local gate stricter than CI blocks pushes on
+    # something no review would have failed.
     - name: cargo-fmt
       run: cargo fmt --manifest-path src-tauri/Cargo.toml --check
+
+    - name: cargo-fmt-core
+      run: cargo fmt --manifest-path src-tauri/table-view-core/Cargo.toml --check
