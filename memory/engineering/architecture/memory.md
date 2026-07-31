@@ -102,4 +102,4 @@ React 밖에서 여러 store action 과 Tauri boundary 를 묶는 orchestration 
 - [paradigms](paradigms/memory.md) — RDB / Document / Search / KV UI heuristic; support state SOT 아님
 - [docs/ROADMAP.md](../../../docs/ROADMAP.md) — 미래 목표와 승격 후보
 - [conventions](../conventions/memory.md) — Rust/TS 코딩 규칙, 테스트, 커밋
-- [docs/archives/decisions](../../../docs/archives/decisions/memory.md) — historical ADR archive
+- [docs/decisions](../../../docs/decisions/memory.md) — Accepted ADR (live policy)

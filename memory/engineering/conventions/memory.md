@@ -93,4 +93,4 @@ Sprint 189–198 의 모든 refactor / feature 커밋은 본 표준의 규칙을
 - [fixture strategy](testing-scenarios/fixtures/memory.md) — fixture-backed support claim / conformance evidence
 - [rust](./rust/memory.md) — Rust 컨벤션 전체
 - [react](./react/memory.md) — React/TS 컨벤션 전체
-- [docs/archives/decisions](../../../docs/archives/decisions/memory.md) — historical ADR archive
+- [docs/decisions](../../../docs/decisions/memory.md) — Accepted ADR (live policy)

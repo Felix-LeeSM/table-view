@@ -24,7 +24,6 @@ issues, with `docs/ROADMAP.md` carrying only the durable routing summary.
 | `action-plans/` | retired action plans replaced by sprint work or active SOT docs |
 | `audits/` | completed audits still useful as reference |
 | `backlogs/` | retired backlog drafts and refactor scans |
-| `decisions/` | historical ADR archive |
 | `design-snapshots/` | legacy architecture/design snapshots |
 | `incidents/` | historical lesson/incident archive |
 | `phases/completed/` | completed phase specs |
@@ -35,6 +34,8 @@ issues, with `docs/ROADMAP.md` carrying only the durable routing summary.
 | `roadmaps/` | retired memory roadmap snapshots |
 | `test-plans/` | retired test improvement plans |
 | `workflows/` | inactive workflow handoffs |
+
+ADR 은 여기 없다. Accepted ADR 은 살아 있는 정책이라 `docs/decisions/` 가 소유한다.
 
 ## Naming
 

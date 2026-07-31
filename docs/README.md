@@ -57,7 +57,8 @@ cap 은 규율로만 남았고 자동 검사가 없다.
 
 - `memory/` - agent 가 작업 중 직접 열어 읽는 active product/engineering/workflow/runbook 규칙. 자동 로드는 없다.
 - `memory/engineering/` - 코드 구조, architecture, convention, fixture, UI 규칙 SOT.
-- `docs/archives/decisions/`, `docs/archives/incidents/` - 과거 결정과 사건 기록. 기본 agent memory 탐색 대상이 아니다.
+- `docs/decisions/` - Accepted ADR. 살아 있는 정책이라 기본 검색에 잡힌다.
+- `docs/archives/incidents/` - 과거 사건 기록. 기본 agent memory 탐색 대상이 아니다.
 - `docs/` - 사람이 탐색하는 제품/프로젝트 문서.
 
 같은 내용을 둘 이상에 복제하지 않는다. 한쪽에 본문을 두고 다른 쪽은 링크만 둔다.

@@ -67,4 +67,4 @@ Phase 2 ESLint 룰 도입 시점: 현재 legacy debt 를 store action 또는
 - [conventions](../memory.md) — Rust/TS 기본 컨벤션 + 금지 사항.
 - [architecture](../../architecture/memory.md) — 모듈 구조 (lib / hooks /
   components / stores).
-- [docs/archives/decisions](../../../../docs/archives/decisions/memory.md) — historical ADR archive.
+- [docs/decisions](../../../../docs/decisions/memory.md) — Accepted ADR (live policy).

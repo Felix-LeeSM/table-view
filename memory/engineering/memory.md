@@ -3,7 +3,7 @@ title: Engineering
 type: index
 updated: 2026-05-27
 task: implementation, refactor, bug-fix, review
-keywords: 방 지도, 진입 규칙, architecture, conventions, 모듈 경계, 코드 작성 규칙, 기술 스택, IPC, 상태 흐름, docs/archives/decisions
+keywords: 방 지도, 진입 규칙, architecture, conventions, 모듈 경계, 코드 작성 규칙, 기술 스택, IPC, 상태 흐름, docs/decisions
 ---
 
 # Engineering
@@ -20,5 +20,6 @@ keywords: 방 지도, 진입 규칙, architecture, conventions, 모듈 경계, �
 
 - 구조를 이해하거나 모듈 경계를 바꾸면 [architecture](./architecture/memory.md) 먼저.
 - 코드를 작성, 테스트, 리팩토링하면 [conventions](./conventions/memory.md) 먼저.
-- 과거 ADR/incident 는 기본 탐색 대상이 아니다. 필요할 때만
-  `docs/archives/decisions/`, `docs/archives/incidents/` 를 historical context 로 본다.
+- Accepted ADR 은 살아 있는 제약이다 — 건드릴 영역의 `docs/decisions/` 를 본다.
+- 과거 incident 는 기본 탐색 대상이 아니다. 필요할 때만
+  `docs/archives/incidents/` 를 historical context 로 본다.

@@ -1,9 +1,12 @@
 # ripgrep / fd 전용 제외 목록 (git 은 이 파일을 보지 않는다).
 #
-# 아래 둘은 과거 기록이다. 에이전트가 `rg` 로 현재 규칙을 찾을 때 폐기된 결정이
-# 같은 우선순위로 딸려 오는 것을 막는다. 실측 2026-08-01: 이 파일이 없으면 훅
-# 규칙을 찾는 `rg -l lefthook` 에 폐기분 10건이 얹힌다 —
-# `rg -l lefthook docs/archives` 9건, `rg -l lefthook docs/explorations` 1건.
+# 아래 둘은 과거 기록이다. 에이전트가 `rg` 로 현재 규칙을 찾을 때 폐기된 기록이
+# 같은 우선순위로 딸려 오는 것을 막는다. 실측 2026-08-01 (ADR carve-out 이후):
+# 이 파일이 없으면 훅 규칙을 찾는 `rg -l lefthook` 에 기록분 7건이 얹힌다 —
+# `rg -l lefthook docs/archives` 6건, `rg -l lefthook docs/explorations` 1건.
+#
+# ADR 은 여기서 빠져 있다. `docs/decisions/` 는 살아 있는 정책이라 일부러 기본
+# 검색에 잡히게 둔다 — Superseded 판은 frontmatter `status` 로 가른다.
 #
 # 과거 기록을 일부러 볼 때는 그 디렉터리를 직접 지정한다 — `rg <패턴> docs/archives/`.
 # 명령줄에 직접 준 경로에는 이 파일이 안 걸리므로 플래그가 필요 없다.

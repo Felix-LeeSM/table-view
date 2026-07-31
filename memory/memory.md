@@ -35,9 +35,10 @@ keywords: 팔레스, 방 지도, index, by-surface, by-task, 200줄, 12000 chars
   memory 는 product merge gate 와 agent rule 만 둔다.
 - 미래 목표와 sequencing 은 [docs/ROADMAP.md](../docs/ROADMAP.md) 가 소유한다.
   live 실행 상태는 GitHub milestones/issues 가 소유한다.
-- 과거 결정과 사건 기록은 기본 memory 탐색 대상이 아니다. 필요할 때만
-  `docs/archives/decisions/`, `docs/archives/incidents/`,
-  `docs/archives/roadmaps/` 를 historical context 로 본다.
+- Accepted ADR 은 살아 있는 정책이고 `docs/decisions/` 가 소유한다 — 기본 검색에
+  잡히고, 뒤집으려면 새 ADR + `Superseded` 다.
+- 과거 사건 기록은 기본 memory 탐색 대상이 아니다. 필요할 때만
+  `docs/archives/incidents/`, `docs/archives/roadmaps/` 를 historical context 로 본다.
 
 ## 방 지도
 
