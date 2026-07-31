@@ -49,20 +49,46 @@ test "$(git rev-parse --show-toplevel)" = "<사본 경로>" \
 
 ## Verdict label — 순서와 대기
 
-순서는 **뗀다 → 30초 이상 기다린다 → 붙인다** 이고, 두 방향이 같다.
-한 명령에 add 와 remove 를 같이 쓰지 않는다.
+순서는 **뗀다 → 뗀 명령이 만든 run 이 끝나기를 기다린다 → 붙인다** 이고, 두
+방향이 같다. 한 명령에 add 와 remove 를 같이 쓰지 않는다.
+
+| 방향  | 먼저 뗀다 (`OLD`)          | 나중에 붙인다 (`NEW`)      |
+| ----- | -------------------------- | -------------------------- |
+| green | `review:changes-requested` | `review:approved`          |
+| red   | `review:approved`          | `review:changes-requested` |
+
+변수와 함수를 공유하므로 **한 shell 에서 통째로** 돌린다. 도구가 Bash 호출마다
+새 shell 을 띄우면 쪼개지 말고 이 블록 전체를 한 번에 넘겨라.
 
 ```bash
-# green
-gh pr edit <N> --remove-label review:changes-requested
-sleep 30
-gh pr edit <N> --add-label review:approved
+OLD=<위 표의 값>
+NEW=<위 표의 값>
+gate_run() { gh run list --workflow review-gate.yml --branch <브랜치> --limit 1 \
+  --json databaseId -q '.[0].databaseId'; }
 
-# red
-gh pr edit <N> --remove-label review:approved
-sleep 30
-gh pr edit <N> --add-label review:changes-requested
+if gh pr view <N> --json labels -q '.labels[].name' | grep -qx "$OLD"; then
+  PREV=$(gate_run)
+  gh pr edit <N> --remove-label "$OLD"
+  for _ in {1..24}; do
+    [ "$(gate_run)" != "$PREV" ] && break
+    sleep 5
+  done
+  [ "$(gate_run)" != "$PREV" ] || { echo "ABORT: review-gate run 이 안 떴다" >&2; exit 1; }
+  gh run watch "$(gate_run)" >/dev/null   # queue 포함 완료까지. 결과는 안 본다
+fi
+gh pr edit <N> --add-label "$NEW"
 ```
+
+**시간이 아니라 run 의 상태를 기다린다.** run 의 벽시계 시간은 job 실행(2-3초)이
+아니라 runner queue 가 지배하고 queue 에는 상한이 없다 — 고정 초를 쓰면 첫 run 이
+아직 in-flight 인 채로 두 번째 label 이벤트가 나가고 `cancel-in-progress` 가 그
+run 을 죽인다 (#1907). 위 `sleep 5` 는 폴링 간격, `{1..24}` 는 run 이 끝내 안 뜰
+때의 abort 상한이고, 완료 판정 자체는 `gh run watch` 가 한다.
+
+**기다리는 대상은 conclusion 이 아니라 완료다.** 뗀 직후에는 대개
+`review:approved` 가 없어 그 run 이 red 로 끝나므로, green 을 기다리면 영영 안
+끝난다. `OLD` 이 애초에 안 붙어 있으면 label 이벤트가 안 나서 기다릴 run 도 없고,
+`if` 가 통째로 건너뛴다.
 
 왜 이 순서와 대기가 필요한지, 어기면 무엇이 깨지는지는
 `memory/workflow/review/memory.md` 「행동 계약」 이 SOT 다.

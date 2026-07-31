@@ -49,12 +49,20 @@ trigger:
 
   ```
   green: gh pr edit <N> --remove-label review:changes-requested
-         30초 이상 대기
+         뗀 명령이 만든 review-gate run 이 완료될 때까지 대기
          gh pr edit <N> --add-label review:approved
   red:   gh pr edit <N> --remove-label review:approved
-         30초 이상 대기
+         뗀 명령이 만든 review-gate run 이 완료될 때까지 대기
          gh pr edit <N> --add-label review:changes-requested
   ```
+
+  **기다리는 것은 시간이 아니라 run 의 상태다.** 고정 초는 조건이 못 된다 —
+  run 의 벽시계 시간은 job 실행(2-3초)이 아니라 runner queue 가 지배하고 queue 에는
+  상한이 없다 (2026-07-29 실측 25건 중 2건이 queue 만 35s / 84s — #1907).
+  **기다릴 대상은 conclusion 이 아니라 완료다** — 뗀 직후에는 대개
+  `review:approved` 가 없어 그 run 이 red 로 끝난다. 뗄 label 이 애초에 없으면
+  label 이벤트가 안 나서 기다릴 run 도 없다.
+  명령 형태는 `.agents/prompts/pr-review.md` 「Verdict label」.
 
   두 방향 모두 **기존 verdict 를 먼저 떼고 새 verdict 를 나중에 붙인다.**
   red 에서 안 떼면 같은 SHA 재리뷰로 green 이 red 로 뒤집혀도 approved 가 남아
