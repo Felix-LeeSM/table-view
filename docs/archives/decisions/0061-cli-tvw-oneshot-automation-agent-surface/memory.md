@@ -1,5 +1,5 @@
 ---
-id: 0058
+id: 0061
 title: tvw CLI surface — one-shot v0.1, 자동화+에이전트 목적지, TUI non-goal
 status: Accepted
 date: 2026-07-25

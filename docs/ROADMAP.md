@@ -107,7 +107,7 @@ Product support-claim wording stays in #759.
 | Security | Credential/key handling, role/user management, auth mechanism expansion, destructive action policy. | `docs/contributor-guide/testing-and-quality.md` |
 | App state | SQLite-backed durable app state, query history, settings, keyring, cross-window sync. | `memory/engineering/architecture/state-management/memory.md` |
 | Quality | CI, E2E smoke, perf/a11y baseline, testing reliability, refactor backlog burn-down. | `docs/contributor-guide/testing-and-quality.md`, `docs/archives/audits/code-smell-audit-2026-05-15.md` |
-| CLI surface (`tvw`) | 자동화 + 에이전트 표면. one-shot v0.1 (SQL 코어 4종: PostgreSQL/MySQL/MariaDB/SQLite) → REPL + completion → 앱 지원 DBMS 확장 (CLI claim ⊆ 앱 claim 원칙) → `tvw mcp` 서버 모드. TUI 는 영구 non-goal. 새 DBMS claim 을 만들지 않는 surface 트랙이라 runtime promotion freeze (순서 규칙 3) 와 독립. | ADR 0058, GitHub milestone 33.00 |
+| CLI surface (`tvw`) | 자동화 + 에이전트 표면. one-shot v0.1 (SQL 코어 4종: PostgreSQL/MySQL/MariaDB/SQLite) → REPL + completion → 앱 지원 DBMS 확장 (CLI claim ⊆ 앱 claim 원칙) → `tvw mcp` 서버 모드. TUI 는 영구 non-goal. 새 DBMS claim 을 만들지 않는 surface 트랙이라 runtime promotion freeze (순서 규칙 3) 와 독립. | ADR 0061, GitHub milestone 33.00 |
 
 ## 순서 규칙
 
@@ -171,7 +171,7 @@ Roadmap item 을 active implementation 으로 승격하기 전 필요한 것:
 | 더 넓은 paradigm | Cassandra/DynamoDB/graph/vector/stream 중 무엇을 먼저 승격하나? | H6 기본값은 candidate-only. Workflow value, contract readiness, fixture/live evidence, smoke/E2E cost, safety risk 가 분명해질 때까지 승격 금지. |
 | App state | State-management migration 은 언제 재개하나? | DB support 작업이 storage/schema surface 와 충돌하지 않을 때. |
 | Security | Users/roles/auth mechanism UI 는 언제 추가하나? | RDBMS/DuckDB/non-RDBMS source order 가 명확해진 뒤. |
-| CLI (`tvw`) | REPL/completion, CLI DBMS 확장, `tvw mcp` 는 언제 승격하나? | v0.1 배포 + SQL 코어 4종 evidence 뒤. CLI DBMS claim 은 항상 앱 claim 의 부분집합 (ADR 0058). |
+| CLI (`tvw`) | REPL/completion, CLI DBMS 확장, `tvw mcp` 는 언제 승격하나? | v0.1 배포 + SQL 코어 4종 evidence 뒤. CLI DBMS claim 은 항상 앱 claim 의 부분집합 (ADR 0061). |
 
 ## 승격 후보
 
@@ -193,7 +193,7 @@ Roadmap item 을 active implementation 으로 승격하기 전 필요한 것:
 7. Redis/Valkey parity hardening.
 8. Search admin HTTP promotion and OpenSearch smoke expansion.
 9. Remaining MSSQL + Oracle enterprise RDBMS widening.
-10. `tvw` CLI v0.1 — one-shot surface (ADR 0058). `table-view-core` crate 분리
+10. `tvw` CLI v0.1 — one-shot surface (ADR 0061). `table-view-core` crate 분리
     선행. Surface 트랙이라 순서 규칙 3 의 runtime freeze 대상이 아니며 기존
     DBMS lane 과 병행 가능. 실행 bucket 은 GitHub milestone 33.00.
 
