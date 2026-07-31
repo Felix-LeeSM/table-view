@@ -65,24 +65,32 @@ cap 은 규율로만 남았고 자동 검사가 없다.
 ## 검색 팁
 
 루트의 `.ignore` 가 `docs/{archives,explorations}` 를 빼 두므로
-기본 검색이 곧 active 문서 검색이다:
-
-```sh
-rg '<term>' docs memory README.md AGENTS.md
-```
-
-과거 기록까지 볼 때는 `--no-ignore-dot` 을 붙이거나 그 디렉터리를 직접 지정한다.
-직접 지정이 더 안전하다 — 아래 주의 참조.
-
-```sh
-rg '<term>' docs/archives                       # 기록만
-rg --no-ignore-dot '<term>' docs memory README.md AGENTS.md   # active + 기록
-```
-
-**주의 — 루트를 둘 이상 주면 ignore 적용이 비결정적이다.** 병렬 walker 경합이라
-같은 명령이 실행마다 다른 결과를 낸다 (실측: 10회 중 5회 0건, 5회 53건). 전수
-주장의 근거로 쓸 명령이면 `-j1` 을 붙이거나 루트를 하나만 줘라.
+기본 검색이 곧 active 문서 검색이다. 단 루트를 둘 이상 주는 형태라
+`-j1` 이 함께 붙어야 한다 — 이유는 아래 주의를 보라.
 
 ```sh
 rg -j1 '<term>' docs memory README.md AGENTS.md
+```
+
+과거 기록만 볼 때는 그 디렉터리를 직접 지정한다. 명령줄에 직접 준 경로에는
+`.ignore` 가 걸리지 않으므로 플래그가 필요 없다 — 루트의 `.ignore` 도 같은
+형태를 권한다. active 와 기록을 한 번에 훑을 때만 `--no-ignore-dot` 을 쓴다.
+`--no-ignore` 는 쓰지 않는다 — `.gitignore` 까지 꺼 버려서 `node_modules` 가
+딸려 온다. `--no-ignore-dot` 은 `.ignore`·`.rgignore` 만 끄고 `.gitignore` 는
+남긴다.
+
+```sh
+rg '<term>' docs/archives                                         # 기록만
+rg -j1 --no-ignore-dot '<term>' docs memory README.md AGENTS.md   # active + 기록
+```
+
+**주의 — 루트를 둘 이상 주면서 `-j1` 을 빼면 ignore 적용이 비결정적이다.**
+병렬 walker 가 경합해 같은 명령이 실행마다 다른 결과를 낸다. 아래 재현 명령을
+2026-08-01 에 다섯 번 돌린 결과(총 100 실행), 나오는 값은 기록 0건 아니면 10건
+둘뿐인데 20회 중 0건이 4~10회로 갈렸다 — 비율도 고정이 아니다. 같은 명령에
+`-j1` 만 넣으면 다섯 번 다 20회 전부 0건이었다.
+
+```sh
+# -j1 을 뺀 형태다. 비결정성 재현용이고 레시피가 아니다.
+for i in $(seq 20); do rg -l 'lefthook' docs memory README.md AGENTS.md | grep -cE '^docs/(archives|explorations)/'; done | sort | uniq -c
 ```
