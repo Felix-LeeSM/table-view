@@ -4,7 +4,7 @@
 # Every exclusion added here MUST be checked against those three readers first.
 # In particular:
 #   - tests/fixtures/** is REQUIRED whenever the crate's tests compile —
-#     src-tauri/src/db/postgres/schema.rs (inside `#[cfg(test)]`) and
+#     src-tauri/table-view-core/src/db/postgres/schema.rs (inside `#[cfg(test)]`) and
 #     src-tauri/tests/fixture_loading.rs both
 #     include_str! tests/fixtures/fk_reference_samples.json.
 #   - e2e/**/*.spec.ts is REQUIRED at runtime — keep the e2e/ tree included
@@ -13,6 +13,9 @@
 # ---- Generated / cache artefacts (regenerated inside the image) ----
 node_modules
 src-tauri/target
+# #1769 — `table-view-core` builds standalone into its own target dir, which
+# `src-tauri/target` above does not cover.
+src-tauri/table-view-core/target
 target
 dist
 coverage

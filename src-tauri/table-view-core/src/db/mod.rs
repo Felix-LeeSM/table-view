@@ -227,5 +227,8 @@ mod single_row_guard_tests {
 #[cfg(test)]
 mod tests;
 
-#[cfg(test)]
-pub(crate) mod testing;
+/// Stub adapter 묶음. `table-view` 의 command 테스트가 crate 경계 너머로 쓰기
+/// 때문에 `pub` 이고, 릴리스 빌드에 안 들어가도록 `testing` feature 로 막는다
+/// (`src-tauri/Cargo.toml` 의 `[dev-dependencies]` 만 켠다, #1769).
+#[cfg(any(test, feature = "testing"))]
+pub mod testing;

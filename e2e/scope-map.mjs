@@ -6,7 +6,7 @@
 // scope without paying for a toolchain first.
 //
 //   git diff --name-only "origin/main...HEAD" | node e2e/scope-map.mjs
-//   node e2e/scope-map.mjs src-tauri/src/db/postgres.rs   # paths as args
+//   node e2e/scope-map.mjs src-tauri/table-view-core/src/db/postgres.rs  # paths as args
 //   node e2e/scope-map.mjs --services <paths>             # services those specs need
 //   node e2e/scope-map.mjs --all                          # every mapped spec
 //   node e2e/scope-map.mjs --self-test                    # mapping fixtures
@@ -122,15 +122,22 @@ const RULES = [
   [/^src-tauri\/(sql|mongosh)-parser-core\//, PARSER_REPS],
   [/^src\/lib\/(sql|mongo)\/wasm\//, PARSER_REPS],
 
-  [/^src-tauri\/src\/db\/postgres(\/|\.rs$)/, POSTGRES],
-  [/^src-tauri\/src\/db\/mysql(\/|\.rs$)/, MYSQL_FAMILY],
-  [/^src-tauri\/src\/db\/mongodb(\/|\.rs$)/, MONGODB],
-  [/^src-tauri\/src\/db\/redis(\/|\.rs$)/, REDIS_FAMILY],
-  [/^src-tauri\/src\/db\/search/, SEARCH_FAMILY],
-  [/^src-tauri\/src\/db\/mssql(\/|\.rs$)/, MSSQL],
-  [/^src-tauri\/src\/db\/oracle(\/|\.rs$)/, ORACLE],
-  [/^src-tauri\/src\/db\/duckdb(\/|\.rs$)/, DUCKDB],
-  [/^src-tauri\/src\/db\/(sqlite\.rs$|adapters\/sqlite\/)/, SQLITE],
+  // #1769 moved the adapter tree from `src-tauri/src/db/` into the
+  // `table-view-core` path crate. The rules are fail-closed (an unmatched path
+  // runs the whole suite), so a stale prefix here would not break the gate —
+  // it would silently stop narrowing and run everything on every adapter edit.
+  [/^src-tauri\/table-view-core\/src\/db\/postgres(\/|\.rs$)/, POSTGRES],
+  [/^src-tauri\/table-view-core\/src\/db\/mysql(\/|\.rs$)/, MYSQL_FAMILY],
+  [/^src-tauri\/table-view-core\/src\/db\/mongodb(\/|\.rs$)/, MONGODB],
+  [/^src-tauri\/table-view-core\/src\/db\/redis(\/|\.rs$)/, REDIS_FAMILY],
+  [/^src-tauri\/table-view-core\/src\/db\/search/, SEARCH_FAMILY],
+  [/^src-tauri\/table-view-core\/src\/db\/mssql(\/|\.rs$)/, MSSQL],
+  [/^src-tauri\/table-view-core\/src\/db\/oracle(\/|\.rs$)/, ORACLE],
+  [/^src-tauri\/table-view-core\/src\/db\/duckdb(\/|\.rs$)/, DUCKDB],
+  [
+    /^src-tauri\/table-view-core\/src\/db\/(sqlite\.rs$|adapters\/sqlite\/)/,
+    SQLITE,
+  ],
 
   [/^src\/components\/datagrid\//, GRID],
   [/^src\/components\/document\//, DOCUMENT],
@@ -178,15 +185,19 @@ const CASES = [
   [[".github/workflows/e2e-smoke.yml"], TOOLING],
   [["e2e/scope-map.mjs", "docs/PLAN.md"], TOOLING],
   // Adapters.
-  [["src-tauri/src/db/postgres/schema.rs"], POSTGRES],
-  [["src-tauri/src/db/mysql.rs"], MYSQL_FAMILY],
-  [["src-tauri/src/db/mongodb/query.rs"], MONGODB],
-  [["src-tauri/src/db/redis.rs"], REDIS_FAMILY],
-  [["src-tauri/src/db/search_executor.rs"], SEARCH_FAMILY],
-  [["src-tauri/src/db/mssql/mod.rs"], MSSQL],
-  [["src-tauri/src/db/oracle.rs"], ORACLE],
-  [["src-tauri/src/db/duckdb.rs"], DUCKDB],
-  [["src-tauri/src/db/adapters/sqlite/mod.rs"], SQLITE],
+  [["src-tauri/table-view-core/src/db/postgres/schema.rs"], POSTGRES],
+  [["src-tauri/table-view-core/src/db/mysql.rs"], MYSQL_FAMILY],
+  [["src-tauri/table-view-core/src/db/mongodb/query.rs"], MONGODB],
+  [["src-tauri/table-view-core/src/db/redis.rs"], REDIS_FAMILY],
+  [["src-tauri/table-view-core/src/db/search_executor.rs"], SEARCH_FAMILY],
+  [["src-tauri/table-view-core/src/db/mssql/mod.rs"], MSSQL],
+  [["src-tauri/table-view-core/src/db/oracle.rs"], ORACLE],
+  [["src-tauri/table-view-core/src/db/duckdb.rs"], DUCKDB],
+  [["src-tauri/table-view-core/src/db/adapters/sqlite/mod.rs"], SQLITE],
+  // Guard against the pre-#1769 prefix silently coming back: those paths no
+  // longer exist, so they must fall through to the full suite, not to an
+  // adapter subset.
+  [["src-tauri/src/db/postgres/schema.rs"], ALL],
   // Parser core + generated wasm bindings.
   [["src-tauri/sql-parser-core/src/lib.rs"], PARSER_REPS],
   [["src/lib/mongo/wasm/mongosh_parser_core.js"], PARSER_REPS],
@@ -202,9 +213,12 @@ const CASES = [
   [["e2e/smoke/postgres.spec.ts"], ALL],
   [["src/lib/sql/sqlSafety.ts"], ALL],
   // Union across files, and services derived from the selection.
-  [["docs/PLAN.md", "src-tauri/src/db/oracle.rs"], ORACLE],
+  [["docs/PLAN.md", "src-tauri/table-view-core/src/db/oracle.rs"], ORACLE],
   [
-    ["src-tauri/src/db/postgres.rs", "src-tauri/src/db/mysql/ddl.rs"],
+    [
+      "src-tauri/table-view-core/src/db/postgres.rs",
+      "src-tauri/table-view-core/src/db/mysql/ddl.rs",
+    ],
     [...POSTGRES, ...MYSQL_FAMILY],
   ],
 ];
@@ -224,8 +238,8 @@ function selfTest() {
   }
 
   const servicePairs = [
-    [["src-tauri/src/db/redis.rs"], ["redis", "valkey"]],
-    [["src-tauri/src/db/adapters/sqlite/mod.rs"], []],
+    [["src-tauri/table-view-core/src/db/redis.rs"], ["redis", "valkey"]],
+    [["src-tauri/table-view-core/src/db/adapters/sqlite/mod.rs"], []],
     [["src/components/datagrid/DataGridTable.tsx"], ["mongodb", "postgres"]],
   ];
   for (const [paths, want] of servicePairs) {

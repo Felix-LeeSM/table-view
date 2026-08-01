@@ -21,7 +21,7 @@ import { resolve } from "node:path";
  *
  * Deliberately narrow, because this deletes files:
  * - No override (unset/empty) means the binary falls back to
- *   `dirs::data_local_dir()/table-view` (src-tauri/src/storage/mod.rs
+ *   `dirs::data_local_dir()/table-view` (src-tauri/table-view-core/src/storage/mod.rs
  *   `data_dir_override`) — a developer's real connection store. Wipe nothing.
  * - Only the *contents* of that exact directory are removed. The parent and the
  *   sibling `<dataDir>-fixtures` (e2e/smoke/_helpers.ts `smokeFixtureRoot`,

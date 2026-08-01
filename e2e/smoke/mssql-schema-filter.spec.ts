@@ -7,7 +7,7 @@ import {
 } from "./_helpers";
 
 // Regression pin (E2E P5): the backend schema-list query
-// (`src-tauri/src/db/mssql/catalog/queries.rs::USER_SCHEMAS_SQL`) used to
+// (`src-tauri/table-view-core/src/db/mssql/catalog/queries.rs::USER_SCHEMAS_SQL`) used to
 // exclude only `sys` and `INFORMATION_SCHEMA`. SQL Server auto-creates one
 // schema per fixed database role (`db_datareader`, `db_owner`, …) plus `guest`
 // in EVERY database, so those leaked into the `with-schema` sidebar next to the

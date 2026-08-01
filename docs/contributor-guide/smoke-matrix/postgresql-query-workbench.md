@@ -64,8 +64,8 @@ support.
 
 Current evidence:
 
-- `src-tauri/src/db/postgres/queries.rs`
-- `src-tauri/src/db/postgres/schema.rs`
+- `src-tauri/table-view-core/src/db/postgres/queries.rs`
+- `src-tauri/table-view-core/src/db/postgres/schema.rs`
 - `src-tauri/tests/query_integration.rs`
 - `src-tauri/tests/cancel_pg.rs`
 
@@ -80,7 +80,7 @@ body authoring remain outside current parity claims.
 
 Current evidence:
 
-- `src-tauri/src/db/postgres/schema.rs`
+- `src-tauri/table-view-core/src/db/postgres/schema.rs`
 - `src-tauri/tests/schema_integration.rs`
 - `src/components/schema/SchemaTree*`
 - `src/components/rdb/DataGrid*`
@@ -116,7 +116,7 @@ arbitrary nested expressions, and arbitrary extension semantics are not modeled.
 
 Current evidence:
 
-- `src-tauri/src/db/postgres/schema.rs`
+- `src-tauri/table-view-core/src/db/postgres/schema.rs`
 - `src/features/completion/sql/sqlCompletionContext.test.ts`
 - `src/features/completion/sql/sqlCompletionRequest.test.ts`
 - `src/lib/sql/sqlCompletionWasm.test.ts`
@@ -139,7 +139,7 @@ Current evidence:
 - `src/components/datagrid/sqlGenerator.test.ts`
 - `src/components/query/EditableQueryResultGrid.safe-mode.test.tsx`
 - `src/components/query/useRawQueryGridEdit.ts`
-- `src-tauri/src/db/postgres/queries.rs`
+- `src-tauri/table-view-core/src/db/postgres/queries.rs`
 
 Current gap / routing:
 
@@ -151,7 +151,7 @@ and bulk/admin edit workflows are future work.
 
 Current evidence:
 
-- `src-tauri/src/db/postgres/schema.rs`
+- `src-tauri/table-view-core/src/db/postgres/schema.rs`
 - `src/lib/api/explain.ts`
 - `src/components/query/ExplainViewer.test.tsx`
 - `src/components/query/QueryTab.toolbar.test.tsx`

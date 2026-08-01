@@ -51,7 +51,7 @@ Supporting checks:
 
 | Classification | Current paths | Evidence |
 |---|---:|---|
-| consumed | tracked paths under `tests/fixtures/**` and `e2e/fixtures/**`, plus `src-tauri/src/db/fixtures.rs` harness source | Each is read by a loader test, smoke seed path, smoke spec, parity test, support-boundary test, or product support matrix test. |
+| consumed | tracked paths under `tests/fixtures/**` and `e2e/fixtures/**`, plus `src-tauri/table-view-core/src/db/fixtures.rs` harness source | Each is read by a loader test, smoke seed path, smoke spec, parity test, support-boundary test, or product support matrix test. |
 | dormant | `fixtures/profiles/e2e.yaml` | Documented in the file itself as a compiled but currently dormant static contract. |
 | generated | none in tracked fixture roots | No tracked fixture-root writer found. Generator/runtime outputs are DB rows, local SQLite/DuckDB files, or app-storage connection state outside these roots. |
 | unread | `fixtures/base.yaml`, `fixtures/profiles/development.yaml`, `fixtures/profiles/e2e.yaml` | Nothing in the repo loads the generator specs under `fixtures/**`. Keep or delete them through an owning issue, not as incidental cleanup. |
@@ -64,7 +64,7 @@ Supporting checks:
 | `fixtures/profiles/development.yaml` | `development` profile | authored static generator profile | nothing reads it | generator/profile contract only | none | none | unread; keep pending an owning issue |
 | `fixtures/profiles/e2e.yaml` | `e2e` profile | authored static generator profile; file comment marks it dormant until WebDriver cold-start/OOM blocker is cleared | nothing reads it | dormant static contract; not a Runtime Happy Path seed | none | none; the DBMS/function topology paths under `e2e/fixtures/**` carry the seeds instead | dormant and unread; keep pending an owning issue |
 | `tests/fixtures/data-source-profile-parity.report.json` | all `DatabaseType` profiles | authored static JSON report | `src/types/dataSourceProfileParity.test.ts`, `src-tauri/tests/data_source_profile_parity.rs` | TS/Rust strict profile parity contract; profile presence is not runtime support | none; product rows depend on profile/runtime evidence, not this report alone | none | consumed; keep |
-| `tests/fixtures/fk_reference_samples.json` | RDB FK reference parser/serializer sample | authored static JSON fixture | `tests/fixtures/fk_reference_samples.test.ts`, `src-tauri/tests/fixture_loading.rs`, `src/components/datagrid/DataGridTable.parseFkReference.test.ts`, `src-tauri/src/db/postgres/schema.rs` tests | shared parser/serializer fixture; not product/runtime evidence | none | none | consumed; keep |
+| `tests/fixtures/fk_reference_samples.json` | RDB FK reference parser/serializer sample | authored static JSON fixture | `tests/fixtures/fk_reference_samples.test.ts`, `src-tauri/tests/fixture_loading.rs`, `src/components/datagrid/DataGridTable.parseFkReference.test.ts`, `src-tauri/table-view-core/src/db/postgres/schema.rs` tests | shared parser/serializer fixture; not product/runtime evidence | none | none | consumed; keep |
 | `tests/fixtures/fk_reference_samples.test.ts` | RDB FK reference loader test | authored Vitest loader test colocated with fixture | `pnpm exec vitest run tests/fixtures/fk_reference_samples.test.ts` when selected by frontend tests | fixture loader evidence | none | none | consumed; keep as test source |
 | `tests/fixtures/unsupported_boundary_contracts.json` | unsupported/partial-support support-boundary rows | authored static JSON fixture | `tests/fixtures/unsupported_boundary_contracts.test.ts` | negative support-boundary evidence only; not runtime support | known-limitations/query-language boundary rows | none | consumed; keep |
 | `tests/fixtures/unsupported_boundary_contracts.test.ts` | unsupported-boundary loader/contract test | authored Vitest contract test colocated with fixture | `pnpm exec vitest run tests/fixtures/unsupported_boundary_contracts.test.ts` | support-boundary guard | none | none | consumed; keep as test source |
@@ -82,7 +82,7 @@ Supporting checks:
 | `e2e/fixtures/valkey.redis-compatibility.json` | Valkey Redis compatibility matrix | authored static compatibility matrix | product/query-language docs | static matrix plus focused-runtime boundary; not full Redis compatibility evidence | Valkey row; Fixture Coverage Snapshot Valkey row; `docs/product/query-language-support.md` Valkey boundary row | no direct smoke execution; paired with `e2e/fixtures/valkey/kv/seed.json` evidence | consumed; keep |
 | `e2e/fixtures/elasticsearch/search/seed.json` | Elasticsearch | authored Search seed JSON | `e2e/fixtures/seed-smoke.ts` | embedded Search fixture contract plus wired Runtime Happy Path seed | Elasticsearch/OpenSearch row; Fixture Coverage Snapshot Elasticsearch row | `elasticsearch` spec via seed target `elasticsearch` | consumed; keep |
 | `e2e/fixtures/opensearch/search/seed.json` | OpenSearch | authored Search seed JSON | `e2e/fixtures/seed-smoke.ts` | embedded Search fixture contract plus wired Runtime Happy Path seed | Elasticsearch/OpenSearch row; Fixture Coverage Snapshot OpenSearch row | `opensearch` spec via seed target `opensearch` | consumed; keep |
-| `src-tauri/src/db/fixtures.rs` | Elasticsearch/OpenSearch fixture harness | authored Rust fixture harness with embedded static Search fixtures | `src-tauri/tests/fixture_harness.rs`, internal `#[cfg(test)]` module | local-first embedded fixture harness; DBMS seed files are separate | Search DSL / Elasticsearch/OpenSearch rows; Fixture Coverage Snapshot Search rows | none directly; the harness backs focused adapter fixture tests, not smoke specs | consumed; keep; do not infer MSSQL/Oracle fixture presence from DBMS seed files |
+| `src-tauri/table-view-core/src/db/fixtures.rs` | Elasticsearch/OpenSearch fixture harness | authored Rust fixture harness with embedded static Search fixtures | `src-tauri/tests/fixture_harness.rs`, internal `#[cfg(test)]` module | local-first embedded fixture harness; DBMS seed files are separate | Search DSL / Elasticsearch/OpenSearch rows; Fixture Coverage Snapshot Search rows | none directly; the harness backs focused adapter fixture tests, not smoke specs | consumed; keep; do not infer MSSQL/Oracle fixture presence from DBMS seed files |
 
 ## Smoke Routing Notes
 
@@ -101,7 +101,7 @@ Supporting checks:
   smoke specs create local files and read their SQL seeds directly.
 - A fixture is runtime evidence only when someone runs the matching spec green
   and records it; fixture presence alone proves nothing.
-- `src-tauri/src/db/fixtures.rs` currently registers embedded Search fixtures
+- `src-tauri/table-view-core/src/db/fixtures.rs` currently registers embedded Search fixtures
   for Elasticsearch and OpenSearch only. Missing RDBMS fixture diagnostics are
   intentional and tested.
 
@@ -157,7 +157,7 @@ are still separate facts.
 | `e2e/fixtures/elasticsearch/search/seed.json` | `elasticsearch` | blocking E2E | yes | existing service-backed matrix route; no new #753 cost | existing Elasticsearch JVM/runtime risk | bounded Search connect/catalog/query/delete-plan only | keep blocking |
 | `e2e/fixtures/opensearch/search/seed.json` | `opensearch` | blocking E2E | yes | existing on-demand OpenSearch route; no new #753 cost | higher cold-start JVM risk | bounded OpenSearch connect/catalog/query/delete-plan only | keep blocking |
 | `e2e/fixtures/valkey.redis-compatibility.json` | Valkey compatibility fixture test | integration-backed | no | no routine WDIO cost | low static matrix risk | separates proven/candidate/rejected Redis compatibility rows | keep below blocking E2E |
-| `src-tauri/src/db/fixtures.rs` | Search fixture harness tests | integration-backed | no | no routine WDIO cost | low embedded fixture risk | focused integration-backed Search fixture harness only | keep below blocking E2E |
+| `src-tauri/table-view-core/src/db/fixtures.rs` | Search fixture harness tests | integration-backed | no | no routine WDIO cost | low embedded fixture risk | focused integration-backed Search fixture harness only | keep below blocking E2E |
 
 ## Scenario Test Topology
 

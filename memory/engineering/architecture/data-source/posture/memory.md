@@ -2,7 +2,7 @@
 title: Data Source Runtime Posture
 type: memory
 updated: 2026-07-17
-surface: src-tauri/src/db/**
+surface: src-tauri/table-view-core/src/db/**
 task: data-source, posture, support-claim, capability
 keywords: Runtime Posture, separate contracts, MSSQL, T-SQL, Oracle, PL/SQL, Redis, Valkey, Elasticsearch/OpenSearch, _delete_by_query, Safe Mode confirm gate, Runtime Happy Path
 trigger:

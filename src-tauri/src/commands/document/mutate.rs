@@ -31,7 +31,7 @@
 //!     `delete_one`).
 //!
 //! These flow to the frontend via the standard Tauri error-serialisation
-//! pathway (`AppError: Serialize` in `src-tauri/src/error.rs`).
+//! pathway (`AppError: Serialize` in `src-tauri/table-view-core/src/error.rs`).
 //!
 //! ## Threat model — capability re-check (Issue #1618, D7)
 //!

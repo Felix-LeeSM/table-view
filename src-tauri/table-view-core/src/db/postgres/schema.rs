@@ -2277,7 +2277,7 @@ mod tests {
         // drift between the Rust serializer and the JSON contract is caught
         // by `cargo test`. The TS side does the inverse direction.
         const FIXTURE_RAW: &str =
-            include_str!("../../../../tests/fixtures/fk_reference_samples.json");
+            include_str!("../../../../../tests/fixtures/fk_reference_samples.json");
 
         #[derive(serde::Deserialize)]
         struct Sample {

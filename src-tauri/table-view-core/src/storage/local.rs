@@ -251,7 +251,8 @@ fn is_migration_error(e: &AppError) -> bool {
     matches!(e, AppError::Migration(_))
 }
 
-/// Migration runner — `sqlx::migrate!()` 로 `src-tauri/migrations/*.sql` 적용.
+/// Migration runner — `sqlx::migrate!()` 로
+/// `src-tauri/table-view-core/migrations/*.sql` 적용.
 /// 재실행 안전 (sqlx 가 `_sqlx_migrations` table 로 적용 이력 관리).
 pub async fn run_migrations(pool: &SqlitePool) -> Result<(), AppError> {
     use sqlx::migrate::MigrateError;

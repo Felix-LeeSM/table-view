@@ -44,7 +44,7 @@ const PG_IDENTIFIER_MAX_BYTES: usize = 63;
 /// "<col>" IS NULL` SQL with interpolated identifiers) can reuse the
 /// same validator as the rest of the DDL family. The body and rules are
 /// unchanged.
-pub(crate) fn validate_identifier(name: &str, label: &str) -> Result<(), AppError> {
+pub fn validate_identifier(name: &str, label: &str) -> Result<(), AppError> {
     let trimmed = name.trim();
     if trimmed.is_empty() {
         return Err(AppError::Validation(format!("{} must not be empty", label)));

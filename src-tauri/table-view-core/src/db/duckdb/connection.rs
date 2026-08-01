@@ -71,7 +71,7 @@ impl DuckdbAdapter {
         }
     }
 
-    pub(crate) fn validate_user_database_path(path: &str) -> Result<&str, AppError> {
+    pub fn validate_user_database_path(path: &str) -> Result<&str, AppError> {
         let path = path.trim();
         if path.is_empty() {
             return Err(AppError::Validation(

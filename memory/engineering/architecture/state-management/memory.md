@@ -2,7 +2,7 @@
 title: State Management Architecture
 type: memory
 updated: 2026-06-12
-surface: src/stores/**, src/hooks/useCurrentWindowConnectionId.ts, src-tauri/src/storage/**, src-tauri/src/events.rs
+surface: src/stores/**, src/hooks/useCurrentWindowConnectionId.ts, src-tauri/table-view-core/src/storage/**, src-tauri/src/storage/**, src-tauri/src/events.rs
 task: state-management, persistence, cross-window, local-storage, sqlite
 keywords: cross-window, localStorage, SQLite, FOUC, Workspace Identity, focusedConnId, dirtyTabIds, dataGridEditStore, prevent_close, workspace_close, closedTabHistory, reset-to-default
 trigger:

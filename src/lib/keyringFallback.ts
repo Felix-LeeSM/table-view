@@ -1,7 +1,7 @@
 /**
  * Sprint 356 (Phase 1, Q22) — Linux keyring fallback sentinel writer.
  *
- * Backend lives in `src-tauri/src/storage/key_migration.rs`. The toast lives
+ * Backend lives in `src-tauri/table-view-core/src/storage/key_migration.rs`. The toast lives
  * outside any SQLite migration so it can't use the `meta` table; instead a
  * **file sidecar** (`.keyring-fallback-dismissed`, AC-356-06) marks the
  * "user has dismissed this notice" state. The Tauri command writes that

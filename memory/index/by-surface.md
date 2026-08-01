@@ -50,21 +50,28 @@ generator: none — 손으로 갱신한다
 - [Backend Guidance](../../memory/engineering/conventions/backend/memory.md)
 - [Rust 컨벤션](../../memory/engineering/conventions/rust/memory.md)
 
-### `src-tauri/src/db/**`
-
-- [Adding A Data Source](../../memory/engineering/architecture/data-source/adding/memory.md)
-- [Data Source Architecture](../../memory/engineering/architecture/data-source/memory.md)
-- [Data Source Runtime Posture](../../memory/engineering/architecture/data-source/posture/memory.md)
-
-### `src-tauri/src/db/fixtures.rs`
-
-- [Fixture strategy — support claims need local evidence](../../memory/engineering/conventions/testing-scenarios/fixtures/memory.md)
-
 ### `src-tauri/src/events.rs`
 
 - [State Management Architecture](../../memory/engineering/architecture/state-management/memory.md)
 
 ### `src-tauri/src/storage/**`
+
+앱 쪽에 남은 boot 글루 두 파일 (`history_audit` · `history_retention_boot`).
+저장소 본체는 아래 `table-view-core` 항목이다 (#1769).
+
+- [State Management Architecture](../../memory/engineering/architecture/state-management/memory.md)
+
+### `src-tauri/table-view-core/src/db/**`
+
+- [Adding A Data Source](../../memory/engineering/architecture/data-source/adding/memory.md)
+- [Data Source Architecture](../../memory/engineering/architecture/data-source/memory.md)
+- [Data Source Runtime Posture](../../memory/engineering/architecture/data-source/posture/memory.md)
+
+### `src-tauri/table-view-core/src/db/fixtures.rs`
+
+- [Fixture strategy — support claims need local evidence](../../memory/engineering/conventions/testing-scenarios/fixtures/memory.md)
+
+### `src-tauri/table-view-core/src/storage/**`
 
 - [State Management Architecture](../../memory/engineering/architecture/state-management/memory.md)
 

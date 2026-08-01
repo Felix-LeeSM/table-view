@@ -18,7 +18,10 @@
 //!   - DDL (`drop_table`, `add_column`, …): `Ok(SchemaChangeResult { sql:
 //!     "<method-name>".into() })` — wiring 테스트가 default 만으로 동작.
 //!
-//! `cfg(test)` 게이트만 적용 (이 모듈 자체는 production 에 컴파일되지 않음).
+//! `cfg(any(test, feature = "testing"))` 게이트 (이 모듈 자체는 production 에
+//! 컴파일되지 않음). `table-view` 는 `[dev-dependencies]` 에서만 `testing`
+//! feature 를 켠다 — #1769 의 crate 분리로 `pub(crate)` 로는 앱 테스트가 못
+//! 닿게 됐다.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -46,9 +49,9 @@ use crate::models::{
 /// is satisfied; takes a single ref-typed input (`&Req`) and produces a
 /// `Result<Out, AppError>` synchronously (the wrapper wraps it in
 /// `async move`).
-pub(crate) type FnZero<Out> = Box<dyn Fn() -> Result<Out, AppError> + Send + Sync>;
-pub(crate) type FnOne<I, Out> = Box<dyn Fn(&I) -> Result<Out, AppError> + Send + Sync>;
-pub(crate) type FnTwo<I1, I2, Out> = Box<dyn Fn(&I1, &I2) -> Result<Out, AppError> + Send + Sync>;
+pub type FnZero<Out> = Box<dyn Fn() -> Result<Out, AppError> + Send + Sync>;
+pub type FnOne<I, Out> = Box<dyn Fn(&I) -> Result<Out, AppError> + Send + Sync>;
+pub type FnTwo<I1, I2, Out> = Box<dyn Fn(&I1, &I2) -> Result<Out, AppError> + Send + Sync>;
 
 // ── StubRdbAdapter ────────────────────────────────────────────────────────
 
@@ -58,7 +61,7 @@ pub(crate) type FnTwo<I1, I2, Out> = Box<dyn Fn(&I1, &I2) -> Result<Out, AppErro
 /// method returns the documented default (`Ok(empty)` for read paths,
 /// `Ok(SchemaChangeResult { sql: "<method>" })` for DDL paths). When
 /// `Some`, the closure decides the outcome.
-pub(crate) struct StubRdbAdapter {
+pub struct StubRdbAdapter {
     pub kind_value: DatabaseType,
     pub namespace_label_value: NamespaceLabel,
 
@@ -807,7 +810,7 @@ impl RdbAdapter for StubRdbAdapter {
 
 // ── StubDocumentAdapter ──────────────────────────────────────────────────
 
-pub(crate) struct StubDocumentAdapter {
+pub struct StubDocumentAdapter {
     pub kind_value: DatabaseType,
 
     pub connect_fn: Option<FnZero<()>>,
@@ -1418,7 +1421,7 @@ impl DocumentAdapter for StubDocumentAdapter {
 
 // ── StubSearchAdapter / StubKvAdapter ─────────────────────────────────────
 
-pub(crate) struct StubSearchAdapter {
+pub struct StubSearchAdapter {
     pub kind_value: DatabaseType,
 }
 
@@ -1447,7 +1450,7 @@ impl DbAdapter for StubSearchAdapter {
 
 impl SearchAdapter for StubSearchAdapter {}
 
-pub(crate) struct StubKvAdapter {
+pub struct StubKvAdapter {
     pub kind_value: DatabaseType,
     pub list_databases_fn: Option<FnZero<Vec<KvDatabaseInfo>>>,
     pub current_database_fn: Option<FnZero<Option<u16>>>,
@@ -1549,7 +1552,7 @@ impl KvAdapter for StubKvAdapter {
 
 /// Clone an `AppError` (which is not `Clone` natively). Used inside
 /// closures that need to return the same error multiple times.
-pub(crate) fn clone_app_error(e: &AppError) -> AppError {
+pub fn clone_app_error(e: &AppError) -> AppError {
     match e {
         AppError::NotFound(s) => AppError::NotFound(s.clone()),
         AppError::Unsupported(s) => AppError::Unsupported(s.clone()),
