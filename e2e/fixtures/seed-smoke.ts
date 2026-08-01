@@ -206,6 +206,9 @@ const SEED_TARGETS_BY_SPEC_KEY: Record<string, readonly SeedTarget[]> = {
   elasticsearch: ["elasticsearch"],
   opensearch: ["opensearch"],
   "history-source-5": ["postgres", "mongodb"],
+  // #1815 — the Import/Export dialog spec creates its connection through the
+  // UI and never connects, so nothing has to be seeded.
+  "connection-export-import": [],
   sqlite: [],
   duckdb: [],
   "duckdb-schema-filter": [],

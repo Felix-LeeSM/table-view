@@ -600,20 +600,28 @@ export async function createOpenSearchConnection(name = "E2E OpenSearch") {
   await expectConnectionVisible(name);
 }
 
-async function setInput(selector: string, value: string) {
+// React tracks the DOM value through the prototype descriptor, so a plain
+// `element.value = x` is swallowed on the next render. `<textarea>` needs
+// `HTMLTextAreaElement.prototype` for the same reason `<input>` needs
+// `HTMLInputElement.prototype` — picking the wrong one leaves the setter
+// undefined and the field silently empty.
+export async function setInput(selector: string, value: string) {
   const input = await $(selector);
   await input.waitForDisplayed({ timeout: 5000 });
   await browser.execute(
     (sel, nextValue) => {
-      const element = document.querySelector<HTMLInputElement>(sel);
-      if (!element) throw new Error(`${sel} input did not appear`);
+      const element = document.querySelector<
+        HTMLInputElement | HTMLTextAreaElement
+      >(sel);
+      if (!element) throw new Error(`${sel} field did not appear`);
       element.focus();
 
-      const setter = Object.getOwnPropertyDescriptor(
-        window.HTMLInputElement.prototype,
-        "value",
-      )?.set;
-      if (!setter) throw new Error("HTMLInputElement value setter missing");
+      const prototype =
+        element instanceof HTMLTextAreaElement
+          ? window.HTMLTextAreaElement.prototype
+          : window.HTMLInputElement.prototype;
+      const setter = Object.getOwnPropertyDescriptor(prototype, "value")?.set;
+      if (!setter) throw new Error(`${sel} value setter missing`);
 
       setter.call(element, nextValue);
       element.dispatchEvent(new InputEvent("input", { bubbles: true }));
@@ -627,7 +635,8 @@ async function setInput(selector: string, value: string) {
     async () =>
       await browser.execute(
         (sel, expected) =>
-          document.querySelector<HTMLInputElement>(sel)?.value === expected,
+          document.querySelector<HTMLInputElement | HTMLTextAreaElement>(sel)
+            ?.value === expected,
         selector,
         value,
       ),
@@ -638,7 +647,25 @@ async function setInput(selector: string, value: string) {
   );
 }
 
-async function saveConnectionDialog(dialog: WebdriverIO.Element) {
+/** Read the current value of an `<input>` / `<textarea>` by selector. */
+export async function readFieldValue(selector: string): Promise<string> {
+  await browser.waitUntil(
+    async () =>
+      await browser.execute(
+        (sel) => Boolean(document.querySelector(sel)),
+        selector,
+      ),
+    { timeout: 10000, timeoutMsg: `${selector} did not appear in the DOM` },
+  );
+  return await browser.execute(
+    (sel) =>
+      document.querySelector<HTMLInputElement | HTMLTextAreaElement>(sel)
+        ?.value ?? "",
+    selector,
+  );
+}
+
+export async function saveConnectionDialog(dialog: WebdriverIO.Element) {
   await (await $("button=Save")).click();
   try {
     await dialog.waitForDisplayed({ timeout: 10000, reverse: true });

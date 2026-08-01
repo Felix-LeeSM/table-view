@@ -57,6 +57,10 @@ const SPEC_SERVICES = {
   valkey: ["valkey"],
   elasticsearch: ["elasticsearch"],
   opensearch: ["opensearch"],
+  // #1815 — drives the Import/Export dialog only. `save_connection` persists
+  // without opening an adapter, so the spec's connection never has to reach a
+  // server.
+  "connection-export-import": [],
   sqlite: [],
   duckdb: [],
   "duckdb-schema-filter": [],
