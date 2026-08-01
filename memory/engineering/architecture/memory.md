@@ -81,9 +81,12 @@ table-view/
 - `error.rs` — `AppError` (thiserror) + `Result<T, AppError>`
 
 core 는 Tauri 에 의존하지 않는 것이 계약이다 — `cargo tree -i tauri` 가 빈
-결과여야 하고, 그래서 workspace member 가 아니라 path dependency 다. **테스트
-명령도 manifest 가 둘이다** — `src-tauri/Cargo.toml` 의 `--lib` 은 core 에
-안 닿는다 (README 「Rust 백엔드 단위 테스트」).
+결과여야 하고, 그래서 workspace member 가 아니라 path dependency 다. **그래서
+테스트 명령이 manifest 하나로 안 닫힌다** — `src-tauri/Cargo.toml` 의 `--lib` 은
+core 에 안 닿고, 빠져도 exit 0 이다. 돌려야 하는 목록의 SOT 는
+`docs/contributor-guide/testing-and-quality.md` 의 Pre-Release Verification Gate
+Rust lane 이고, CI 도 같은 이유로 그 명령들을 `Rust Unit And Storage Tests` 잡의
+스텝으로 나눠 건다.
 
 ## Frontend 상태 관리
 
