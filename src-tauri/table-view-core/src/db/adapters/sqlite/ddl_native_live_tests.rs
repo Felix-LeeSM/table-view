@@ -134,9 +134,12 @@ async fn a_column_added_in_this_session_can_be_dropped_again() {
     // guaranteed a different connection — one that never saw the ADD. Releasing
     // them after the ADD instead would let the DROP pick the ADD's own
     // connection back up, and the test would pass with the refresh removed.
+    // The loop reads the pool constant rather than repeating its value: raising
+    // the pool without filling it leaves a spare permit, `pool.begin()` never
+    // parks, and this guard would silently stop discriminating.
     let pool = adapter.active_pool().await.unwrap();
     let mut warm = Vec::new();
-    for _ in 0..5 {
+    for _ in 0..crate::db::adapters::sqlite::connection::SQLITE_POOL_MAX_CONNECTIONS {
         let mut conn = pool.acquire().await.unwrap();
         sqlx::query("SELECT * FROM users")
             .fetch_all(&mut *conn)
@@ -275,7 +278,7 @@ async fn drop_column_restrictions_surface_the_column_and_the_blocking_object() {
     // Each `expected` needle must be advice this module wrote. A needle that
     // also appears in the driver text appended afterwards would pass with the
     // matching arm deleted, which is how these assertions used to read.
-    let cases: [(&str, &[&str], &str, &[&str]); 7] = [
+    let cases: [(&str, &[&str], &str, &[&str]); 9] = [
         (
             "primary key",
             &["CREATE TABLE t (id INTEGER PRIMARY KEY, name TEXT)"],
@@ -336,18 +339,51 @@ async fn drop_column_restrictions_surface_the_column_and_the_blocking_object() {
             ],
         ),
         (
-            // The `error in table …` arm. A generated column is the reachable
-            // trigger for it; a child table's FOREIGN KEY reports the same
-            // shape with the child's name, which is why the remedy says the
-            // named table may not be the one being altered.
+            // The `error in table …` arm, first of its two engine texts:
+            // `no such column: <col>`, driven here by a generated column and
+            // by the CHECK case below.
             "generated column",
             &["CREATE TABLE t (id INTEGER, name TEXT, tag TEXT GENERATED ALWAYS AS (name || 'x') VIRTUAL)"],
             "name",
             &[
                 "Cannot drop column \"name\"",
                 "a definition in table \"t\" still references it",
+                "Remove or redefine it in table \"t\" first",
                 "FOREIGN KEY",
-                "not necessarily the table you are altering",
+            ],
+        ),
+        (
+            // Same arm, same engine text, other definition: a CHECK over the
+            // dropped column. The remedy names CHECK as one of three blockers,
+            // so one case drives it rather than leaving that word unbacked.
+            "check constraint",
+            &["CREATE TABLE t (id INTEGER, name TEXT, CHECK (length(name) > 0))"],
+            "name",
+            &[
+                "Cannot drop column \"name\"",
+                "a definition in table \"t\" still references it",
+                "Remove or redefine it in table \"t\" first",
+                "CHECK",
+            ],
+        ),
+        (
+            // Same arm, other engine text: `unknown column "<col>" in foreign
+            // key definition`. The FOREIGN KEY the remedy names is the one in
+            // the altered table. A *child* table's FK into the dropped column
+            // does not reach this arm: an FK's parent column is a PRIMARY KEY
+            // or UNIQUE column, whose own arm fires first, and when it is
+            // neither (SQLite does not require it) the drop simply succeeds.
+            // All three shapes were run against 3.46.0 while writing this.
+            "foreign key clause",
+            &[
+                "CREATE TABLE other (x TEXT PRIMARY KEY)",
+                "CREATE TABLE t (id INTEGER, name TEXT, FOREIGN KEY(name) REFERENCES other(x))",
+            ],
+            "name",
+            &[
+                "Cannot drop column \"name\"",
+                "a definition in table \"t\" still references it",
+                "Remove or redefine it in table \"t\" first",
             ],
         ),
         (
@@ -473,7 +509,7 @@ async fn the_wired_trait_methods_delegate_to_the_native_builders() {
             &alter_table_req(
                 "users",
                 vec![ColumnChange::Drop {
-                    name: "note".to_string(),
+                    name: "name".to_string(),
                 }],
             ),
         )
@@ -500,7 +536,11 @@ async fn the_wired_trait_methods_delegate_to_the_native_builders() {
     let expected = [
         "DROP TABLE \"users\"",
         "ALTER TABLE \"users\" RENAME TO \"people\"",
-        "ALTER TABLE \"users\" DROP COLUMN \"note\"",
+        // `alter_table`'s Drop leg targets a different column than the direct
+        // `drop_column` below on purpose — identical expectations here would
+        // make the two delegations indistinguishable, which is the one thing
+        // this test exists to catch.
+        "ALTER TABLE \"users\" DROP COLUMN \"name\"",
         "ALTER TABLE \"users\" ADD COLUMN \"nickname\" TEXT",
         "ALTER TABLE \"users\" DROP COLUMN \"note\"",
         "CREATE INDEX \"idx_users_name\" ON \"users\" (\"name\")",
@@ -672,4 +712,35 @@ async fn a_plan_preview_writes_nothing() {
 
     assert!(result.sql.contains("CREATE INDEX"), "{}", result.sql);
     assert!(!table_exists(&adapter, "people").await);
+}
+
+/// Fail-open across statement kinds. SQLite reuses the `error in <kind> <name>`
+/// opener whenever a schema change makes some other object stop re-parsing, and
+/// the DROP COLUMN advice is applied to every failed DDL statement — so the
+/// mapper must require the ` after drop column` marker as well. Here a RENAME
+/// trips a view that was already broken; dressing that as a dependency of a
+/// column the user never touched would name `v1: no such table: main.t2` as the
+/// blocking view and send them to fix it.
+#[tokio::test]
+async fn a_rename_that_breaks_another_object_is_not_dressed_as_a_drop_column_restriction() {
+    let (_dir, adapter) = connected(
+        &[
+            "CREATE TABLE t1 (a TEXT)",
+            "CREATE TABLE t2 (b TEXT)",
+            "CREATE VIEW v1 AS SELECT a, b FROM t1, t2",
+            "DROP TABLE t2",
+        ],
+        false,
+    )
+    .await;
+
+    let mut req = rename_table_req("t1", "t3");
+    req.preview_only = false;
+
+    let message = database_error(adapter.rename_table(&req).await);
+
+    assert!(message.contains("error in view v1"), "{message}");
+    assert!(message.starts_with("SQLite DDL failed:"), "{message}");
+    assert!(!message.contains("Cannot drop"), "{message}");
+    assert!(!message.contains("still selects it"), "{message}");
 }

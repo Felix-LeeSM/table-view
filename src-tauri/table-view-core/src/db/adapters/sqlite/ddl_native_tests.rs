@@ -299,10 +299,13 @@ fn index_methods_other_than_the_btree_default_are_refused() {
     let mut empty = create_index_req("users", "idx_users_email", &["email"]);
     empty.index_type = String::new();
 
-    assert!(
-        matches!(build_create_index_sql(&gin), Err(AppError::Validation(_))),
-        "a non-btree method must be refused, not silently dropped"
-    );
+    let refused = build_create_index_sql(&gin);
+    let Err(AppError::Validation(message)) = &refused else {
+        panic!("a non-btree method must be refused, not silently dropped: {refused:?}");
+    };
+    // The message has to name the method it turned down, or the user cannot
+    // tell which of the row's fields to change.
+    assert!(message.contains("gin"), "{message}");
     assert!(build_create_index_sql(&empty).is_ok());
 }
 
@@ -336,6 +339,10 @@ fn reserved_sqlite_objects_are_out_of_reach() {
         ))
         .map(|_| ()),
         build_create_index_sql(&create_index_req("sqlite_sequence", "idx_seq", &["seq"]))
+            .map(|_| ()),
+        // The index *name* has its own guard next to the table one, and only
+        // this case reaches it — every other entry point above names a table.
+        build_create_index_sql(&create_index_req("users", "sqlite_idx_users", &["name"]))
             .map(|_| ()),
     ];
 

@@ -76,17 +76,22 @@ fn drop_column_advice(column: Option<&str>, raw: &str) -> Option<String> {
                 format!("trigger \"{name}\" still reads it"),
                 format!("Drop or redefine trigger \"{name}\" first."),
             ),
-            // `error in table <name> …`. The blocker is a definition SQLite
-            // cannot re-resolve: a generated column, a CHECK, or a FOREIGN KEY
-            // clause. It is NOT necessarily in the table being altered — a
-            // child table's FK into this column reports the child's name — so
-            // the message must not tell the user to look only where they are.
+            // `error in table <name> …`. The blocker is a definition in that
+            // same table which SQLite cannot re-resolve. Two engine texts reach
+            // here, both driven by the live cases: a generated column or a
+            // CHECK gives `no such column: <col>`, a FOREIGN KEY clause naming
+            // the dropped column gives `unknown column "<col>" in foreign key
+            // definition`. Only the second names the kind of definition, and
+            // none of them names the remedy, which is why all three are spelled
+            // out below. `<name>` is the table being altered: a *child* table's
+            // FK into the dropped column does not arrive here, because an FK's
+            // parent column is a PRIMARY KEY or UNIQUE column whose own arm
+            // fires first, and where it is neither the drop just succeeds.
             "table" => (
                 format!("a definition in table \"{name}\" still references it"),
                 format!(
                     "Remove or redefine it in table \"{name}\" first — a generated column, a \
-                     CHECK, or a FOREIGN KEY clause. Note that \"{name}\" is not necessarily the \
-                     table you are altering."
+                     CHECK, or a FOREIGN KEY clause."
                 ),
             ),
             _ => return None,
@@ -126,7 +131,7 @@ fn add_column_advice(column: Option<&str>, raw: &str) -> Option<String> {
         return Some(format!(
             "{subject}: the table already has rows, and SQLite backfills them with one stored \
              value, so the DEFAULT must be a constant. Expressions such as CURRENT_TIMESTAMP or \
-             datetime('now') are rejected — use a literal default."
+             (datetime('now')) are rejected — use a literal default."
         ));
     }
     None
@@ -148,9 +153,14 @@ fn quoted_after(raw: &str, needle: &str) -> Option<String> {
 /// `error in <kind> <name> after drop column: …` — the object whose definition
 /// would break. Returns the kind (`index` / `view` / `trigger` / `table`) and
 /// its name.
+///
+/// Both markers are required. SQLite emits the same `error in <kind> <name>: …`
+/// opener when re-parsing the schema after a RENAME too, and this advice is
+/// applied to every failed statement the DDL runner sees, so matching on the
+/// opener alone would dress an unrelated failure as a DROP COLUMN restriction.
 fn dependent_object(raw: &str) -> Option<(&str, &str)> {
     let rest = raw.split("error in ").nth(1)?;
-    let head = rest.split(" after drop column").next()?;
+    let (head, _) = rest.split_once(" after drop column")?;
     head.split_once(' ')
 }
 
@@ -172,6 +182,8 @@ mod tests {
          error in trigger tg after drop column: no such column: NEW.name";
     const DROP_GENERATED: &str = "error returned from database: (code: 1) \
          error in table t after drop column: no such column: name";
+    const DROP_FOREIGN_KEY: &str = "error returned from database: (code: 1) \
+         error in table t after drop column: unknown column \"name\" in foreign key definition";
     const DROP_LAST_COLUMN: &str = "error returned from database: (code: 1) \
          cannot drop column \"name\": no other columns exist";
     const ADD_NOT_NULL: &str = "error returned from database: (code: 1) \
@@ -223,18 +235,22 @@ mod tests {
         }
     }
 
-    /// The `table` arm's blocker can live in a different table than the one
-    /// being altered (a child table's FOREIGN KEY), so the remedy must not send
-    /// the user to look only where they are.
+    /// The `table` arm names all three definitions that can reach it. SQLite's
+    /// own text names at most the FOREIGN KEY one and never says what to do, so
+    /// a user who is given only the engine's sentence has to guess which of the
+    /// three to go looking for.
     #[test]
-    fn the_table_arm_does_not_pin_the_blocker_to_the_altered_table() {
-        let message = advice(Some("legacy"), DROP_GENERATED);
+    fn the_table_arm_names_every_definition_that_can_block_the_drop() {
+        for raw in [DROP_GENERATED, DROP_FOREIGN_KEY] {
+            let message = advice(Some("legacy"), raw);
 
-        assert!(message.contains("FOREIGN KEY"), "{message}");
-        assert!(
-            message.contains("not necessarily the table you are altering"),
-            "{message}"
-        );
+            assert!(message.contains("generated column"), "{message}");
+            assert!(message.contains("CHECK"), "{message}");
+            assert!(message.contains("FOREIGN KEY"), "{message}");
+            // The remedy points at the table SQLite named and nowhere else.
+            // That it is the altered table is the live module's case to make.
+            assert!(message.contains("in table \"t\" first"), "{message}");
+        }
     }
 
     #[test]
