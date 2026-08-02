@@ -450,9 +450,11 @@ Current gap / routing:
 
 Final support-claim audit confirms product docs and evidence docs agree on
 file-backed SQLite runtime/query/edit support, deterministic Runtime Happy Path
-coverage, unsupported DDL/ALTER/nested JSON/sqlite-cli execution/extension
-semantics, fixture-only evidence boundaries, and DuckDB/file analytics
-separation.
+coverage, a product-visible DDL claim of table creation plus the indexes declared
+with the table while the adapter runs the wider native set behind flags that have
+not flipped (#1804), raw SQL DDL / ALTER rebuilds / nested JSON / sqlite-cli
+execution / extension semantics still unsupported, fixture-only evidence
+boundaries, and DuckDB/file analytics separation.
 
 ## DuckDB `.duckdb` runtime smoke
 

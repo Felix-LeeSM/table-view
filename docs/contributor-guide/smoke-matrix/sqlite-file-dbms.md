@@ -113,8 +113,15 @@ column's type, nullability or default — SQLite expresses those only by
 rebuilding the table, which is a future ADR-backed implementation decision.
 
 The per-action `ddl.*` capability flags in `src/types/dataSource.ts` still claim
-`createTable` alone, so the Structure and schema-tree entry points for the
-newly opened operations stay hidden until the capability flip lands.
+`createTable` alone, so the standalone Structure and schema-tree entry points for
+the newly opened operations stay hidden until the capability flip lands. Index
+creation is already reachable and needs no flip: the Create Table dialog's
+Indexes tab has no capability gate of its own, so it opens with the dialog that
+`createTable` allows, and its rows reach the adapter, which now creates them in
+the same transaction as the table instead of rejecting the plan. The tab offers
+PostgreSQL's hash/gin/gist methods to every engine, so only a btree row (the
+default) succeeds here; the others are refused before the file is touched and
+fail the whole plan.
 
 ## Completion and extension boundary
 
@@ -147,9 +154,10 @@ Product-visible SQLite docs now agree that runtime support is the wired file
 smoke plus adapter evidence, parser/Safe Mode remains bounded, sqlite-cli dot
 commands are non-executable completion vocabulary, and extension/capability,
 rebuild-only ALTER, constraint DDL, and nested JSON support stay unsupported or
-future. The structured DDL the adapter gained in #1804 is not yet a
+future. Most of the structured DDL the adapter gained in #1804 is not yet a
 product-visible claim: the `ddl.*` capability flags still expose table creation
-alone.
+alone. The one part that is already product-visible is index creation inside the
+Create Table dialog, whose Indexes tab has no capability gate of its own.
 
 ## Test coverage recheck
 
@@ -187,9 +195,10 @@ Current gap / routing:
 
 Product-visible support claims match this evidence map: SQLite support is
 file-backed DBMS runtime/query/edit plus deterministic file smoke and bounded
-structured table creation, not admin or vendor CLI parity. The adapter reaches
-further than that claim after #1804 (see the routing section above) — the
-capability flags, not the adapter, are what the product claim tracks. DuckDB/file analytics remains a separate H3 lane,
+structured table creation with its indexes, not admin or vendor CLI parity. The
+adapter reaches further than that claim after #1804 (see the routing section
+above) — for every surface but the Create Table dialog's ungated Indexes tab it
+is the capability flags, not the adapter, that the product claim tracks. DuckDB/file analytics remains a separate H3 lane,
 and fixture-only inventory does not become live runtime evidence.
 
 ## Fixture inventory

@@ -135,7 +135,14 @@ write rejection, and internal app-state DB rejection. Raw SQL DDL execution
 remains rejected by the query adapter. Since #1804 the adapter also runs the
 structured DDL SQLite performs natively — table drop/rename, column add/drop,
 index create/drop — but the `ddl.*` capability flags still claim table creation
-alone, so those entry points stay hidden in the UI. Not implemented at all:
+alone, so those standalone entry points stay hidden in the UI. Index creation is
+the exception already reachable: the Create Table dialog's Indexes tab carries no
+capability gate of its own, so it opens whenever the dialog does and `createTable`
+is what opens the dialog. A row left on the default btree method is created in
+the same transaction as the CREATE TABLE; the tab still offers PostgreSQL's
+hash/gin/gist methods to every engine, and SQLite rejects those before touching
+the file, which fails the whole plan rather than half-applying it. Not
+implemented at all:
 `ALTER TABLE` rebuilds (a column's type, nullability or default), standalone
 constraint changes, nested JSON edits, sqlite-cli execution, and
 JSON1/FTS/RTREE/loadable-extension semantics remain separate gates. Read-only file connections reject writes and table creation.

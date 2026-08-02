@@ -110,18 +110,21 @@ completion-runtime claims still need separate tests/docs before promotion.
 
 **Current support**: File connection, table browsing, raw read queries,
 writable-file DML, transactional DML batches, dry-run rollback,
-primary-key-scoped row edits, and bounded structured table creation for writable
-files are supported. Opening a SQLite file probes a bounded JSON1/FTS5/RTREE
-capability inventory without enabling loadable extensions. Completion covers
+primary-key-scoped row edits, and bounded structured table creation — including
+the indexes declared with the table — for writable files are supported. Opening a
+SQLite file probes a bounded JSON1/FTS5/RTREE capability inventory without
+enabling loadable extensions. Completion covers
 built-in SQLite keywords/functions, cached schema objects, sqlite-cli
 dot-command vocabulary as non-executable suggestions, and detected-only
 JSON1/FTS5 read-query assistance.
 
 **Current boundary**: Raw SQL DDL is rejected by the SQLite adapter, and
-structured DDL is limited to `CREATE TABLE` through the Structure dialog. The
-adapter itself runs more since #1804 (table drop/rename, column add/drop, index
-create/drop), but the `ddl.*` capability flags have not flipped, so the dialog
-boundary above is what a user meets. Structured `ALTER TABLE` rebuilds — a
+structured DDL is limited to `CREATE TABLE` plus the btree indexes declared
+inside the Create Table dialog, which run in the same transaction as the table
+(the dialog's hash/gin/gist methods are refused before the file is touched). The
+adapter itself runs more since #1804 (table drop/rename, column add/drop,
+standalone index create/drop), but the `ddl.*` flags have not flipped, so the
+dialog boundary above is what a user meets. Structured `ALTER TABLE` rebuilds — a
 column's type, nullability or default — and standalone constraint changes are
 not implemented anywhere. Row edits require key/projected row identity, read-only file
 connections reject writes and table creation, nested JSON edits are deferred,
