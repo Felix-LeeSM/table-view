@@ -592,7 +592,9 @@ export const ko = {
     rowVersion: "버전",
     rowDeployment: "배포 형태",
     topologyStandalone: "단일 노드",
-    topologyReplicaSet: "복제 세트",
+    // 아래 `labelReplicaSet` 과 같은 낱말 — 연결 폼과 서버 패널이 같은 개념을
+    // 다르게 부르지 않게 맞춘다.
+    topologyReplicaSet: "레플리카 셋",
     topologySharded: "샤드 클러스터",
     topologyUnknown: "확인 불가",
     rowHost: "호스트",
