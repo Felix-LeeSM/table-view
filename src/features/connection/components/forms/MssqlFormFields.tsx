@@ -8,7 +8,9 @@ import {
 import { useTranslation } from "react-i18next";
 import {
   type ConnectionDraft,
+  draftSslMode,
   getMssqlConnectionUnsupportedMessage,
+  sslModeTlsOn,
 } from "../../model";
 import {
   CONNECTION_ERROR_ID,
@@ -196,14 +198,21 @@ export default function MssqlFormFields({
             id="conn-tls-enabled"
             type="checkbox"
             className="cursor-pointer"
-            checked={draft.tlsEnabled ?? true}
-            onChange={(e) => {
-              const tlsEnabled = e.target.checked;
+            checked={sslModeTlsOn(draft.sslMode)}
+            onChange={(e) =>
+              // #1649 — encrypt on keeps whichever verification posture is
+              // already selected (default skip-verify, SQL Server's
+              // encrypt-by-default UX); off is the explicit forced-plaintext
+              // `disable`, which is what the old (tls=false, trust=false) pair
+              // folded to.
               onChange({
-                tlsEnabled,
-                ...(tlsEnabled ? {} : { trustServerCertificate: false }),
-              });
-            }}
+                sslMode: e.target.checked
+                  ? sslModeTlsOn(draft.sslMode)
+                    ? draftSslMode(draft)
+                    : "require"
+                  : "disable",
+              })
+            }
           />
           {t("form.enableTls")}
         </label>
@@ -212,10 +221,12 @@ export default function MssqlFormFields({
             id="conn-trust-server-certificate"
             type="checkbox"
             className="cursor-pointer"
-            checked={draft.trustServerCertificate === true}
-            disabled={!(draft.tlsEnabled ?? true)}
+            checked={draftSslMode(draft) === "require"}
+            disabled={!sslModeTlsOn(draft.sslMode)}
             onChange={(e) =>
-              onChange({ trustServerCertificate: e.target.checked })
+              onChange({
+                sslMode: e.target.checked ? "require" : "verify-full",
+              })
             }
           />
           {t("form.trustServerCert")}
@@ -227,7 +238,7 @@ export default function MssqlFormFields({
           Surface the MITM exposure when it is active. Persistent advisory copy
           (not a live alert region, which is reserved for the auth-combo error
           below). */}
-      {(draft.tlsEnabled ?? true) && draft.trustServerCertificate === true && (
+      {draftSslMode(draft) === "require" && (
         <p className="text-2xs text-destructive">{t("form.trustWarning")}</p>
       )}
 

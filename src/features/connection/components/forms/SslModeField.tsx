@@ -1,11 +1,15 @@
 /**
  * #1063 — shared sslmode dropdown for the trust-dependent RDB engines
  * (PostgreSQL / MySQL / MariaDB). These route through the backend
- * `resolve_tls_decision` boundary, so their TLS posture is a four-way choice
- * (disable / prefer / require / verify-full) rather than the plain on/off +
- * trust checkbox the on/off engines use. The dropdown is a pure view over the
- * stored `(tlsEnabled, trustServerCertificate)` fields (see `sslModeFromFields`
- * / `sslModeFields`), so no new persisted field is introduced.
+ * `resolve_tls_decision` boundary, so their TLS posture is a multi-way choice
+ * rather than the plain on/off + trust checkbox the on/off engines use.
+ *
+ * #1649 — the dropdown now binds directly to the persisted `sslMode` field
+ * instead of deriving a view over a boolean pair. `verify-ca` is not among the
+ * offered options: it needs a CA file, and the file picker is the follow-up
+ * slice. A connection already stored as `verify-ca` still renders its own
+ * value (see `sslModeChoices`) so opening the dialog cannot silently rewrite
+ * a posture the form cannot yet author.
  */
 
 import {
@@ -18,16 +22,16 @@ import {
 import { useTranslation } from "react-i18next";
 import {
   type ConnectionDraft,
-  SSL_MODE_OPTIONS,
+  draftSslMode,
   type SslMode,
-  sslModeFields,
-  sslModeFromFields,
+  sslModeChoices,
 } from "../../model";
 
 const SSL_MODE_LABEL_KEYS: Record<SslMode, string> = {
   disable: "form.sslModeDisable",
   prefer: "form.sslModePrefer",
   require: "form.sslModeRequire",
+  "verify-ca": "form.sslModeVerifyCa",
   "verify-full": "form.sslModeVerifyFull",
 };
 
@@ -45,10 +49,7 @@ export default function SslModeField({
   labelClass,
 }: SslModeFieldProps) {
   const { t } = useTranslation("featuresConnection");
-  const mode = sslModeFromFields(
-    draft.tlsEnabled,
-    draft.trustServerCertificate,
-  );
+  const mode = draftSslMode(draft);
   return (
     <div>
       <label htmlFor="conn-ssl-mode" className={labelClass}>
@@ -56,7 +57,7 @@ export default function SslModeField({
       </label>
       <Select
         value={mode}
-        onValueChange={(value) => onChange(sslModeFields(value as SslMode))}
+        onValueChange={(value) => onChange({ sslMode: value as SslMode })}
       >
         <SelectTrigger
           id="conn-ssl-mode"
@@ -66,7 +67,7 @@ export default function SslModeField({
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
-          {SSL_MODE_OPTIONS.map((option) => (
+          {sslModeChoices(mode).map((option) => (
             <SelectItem key={option} value={option}>
               {t(SSL_MODE_LABEL_KEYS[option])}
             </SelectItem>

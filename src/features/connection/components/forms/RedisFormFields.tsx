@@ -9,11 +9,15 @@
  *     configuration). Stored as string in `ConnectionDraft.database` for
  *     parity with the existing schema; the input type is `number` and we
  *     clamp to the 0–15 range.
- *   - `tlsEnabled` is shared with Mongo's TLS toggle for code reuse and
+ *   - the `sslMode` posture is shared with Mongo's TLS toggle for code reuse and
  *     maps to `rediss://` in the Redis adapter.
  */
 import { useTranslation } from "react-i18next";
-import { type ConnectionDraft, DATABASE_TYPE_LABELS } from "../../model";
+import {
+  type ConnectionDraft,
+  DATABASE_TYPE_LABELS,
+  sslModeTlsOn,
+} from "../../model";
 import { type ConnFieldKey, fieldValidationProps } from "./fieldValidation";
 import TlsSkipVerifyToggle from "./TlsSkipVerifyToggle";
 
@@ -181,15 +185,16 @@ export default function RedisFormFields({
           id="conn-tls-enabled"
           type="checkbox"
           className="cursor-pointer"
-          checked={!!draft.tlsEnabled}
-          onChange={(e) => {
-            const tlsEnabled = e.target.checked;
+          checked={sslModeTlsOn(draft.sslMode)}
+          onChange={(e) =>
             onChange({
-              tlsEnabled,
-              // #1063 — clear a stale skip-verify choice when TLS is turned off.
-              ...(tlsEnabled ? {} : { trustServerCertificate: null }),
-            });
-          }}
+              // #1649 — on selects the verifying posture, off returns to the
+              // driver default. Turning TLS off drops any skip-verify choice
+              // and the CA reference with it (#1063 behavior, new vocabulary).
+              sslMode: e.target.checked ? "verify-full" : "prefer",
+              ...(e.target.checked ? {} : { caCertPath: null }),
+            })
+          }
         />
         {t("form.enableTlsRedis")}
       </label>

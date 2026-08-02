@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
 import type { ConnectionDraft } from "../../model";
+import { sslModeTlsOn } from "../../model";
 import { type ConnFieldKey, fieldValidationProps } from "./fieldValidation";
 import TlsSkipVerifyToggle from "./TlsSkipVerifyToggle";
 
@@ -128,15 +129,16 @@ export default function SearchFormFields({
           id="conn-tls-enabled"
           type="checkbox"
           className="cursor-pointer"
-          checked={!!draft.tlsEnabled}
-          onChange={(e) => {
-            const tlsEnabled = e.target.checked;
+          checked={sslModeTlsOn(draft.sslMode)}
+          onChange={(e) =>
             onChange({
-              tlsEnabled,
-              // #1063 — clear a stale skip-verify choice when TLS is turned off.
-              ...(tlsEnabled ? {} : { trustServerCertificate: null }),
-            });
-          }}
+              // #1649 — on selects the verifying posture, off returns to the
+              // driver default. Turning TLS off drops any skip-verify choice
+              // and the CA reference with it (#1063 behavior, new vocabulary).
+              sslMode: e.target.checked ? "verify-full" : "prefer",
+              ...(e.target.checked ? {} : { caCertPath: null }),
+            })
+          }
         />
         {t("form.enableTlsSearch")}
       </label>

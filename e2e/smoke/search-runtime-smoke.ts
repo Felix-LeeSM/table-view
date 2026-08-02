@@ -55,7 +55,11 @@ type SearchProbeConfig = {
   paradigm: "search";
   authSource: null;
   replicaSet: null;
-  tlsEnabled: boolean;
+  // #1649 (ADR 0058) — the wire carries the uniform posture, not the legacy
+  // `tlsEnabled` boolean. `tsconfig.json` only includes `src`, so nothing
+  // typechecks this payload against the backend struct; keeping the field name
+  // in step with `ConnectionConfigPublic` is manual.
+  sslMode: "disable" | "prefer" | "require" | "verify-ca" | "verify-full";
 };
 
 type SearchRuntimeSmokeOptions = {
@@ -123,7 +127,7 @@ export function runSearchRuntimeSmoke(options: SearchRuntimeSmokeOptions) {
             "test_connection",
             {
               req: {
-                config: { ...baseConfig, tlsEnabled: true },
+                config: { ...baseConfig, sslMode: "verify-full" },
                 password: probePassword,
                 existing_id: null,
               },
@@ -347,7 +351,7 @@ function makeSearchProbeConfig(
     paradigm: "search",
     authSource: null,
     replicaSet: null,
-    tlsEnabled: false,
+    sslMode: "prefer",
   };
 }
 

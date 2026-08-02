@@ -7,7 +7,12 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { ConnectionConfig, ConnectionDraft } from "@/types/connection";
+import type {
+  ConnectionConfig,
+  ConnectionDraft,
+  SslMode,
+} from "@/types/connection";
+import { sslModeTlsOn } from "@/types/connection";
 import * as dataSourceProfiles from "@/types/dataSource";
 import ConnectionDialog from "./ConnectionDialog";
 
@@ -134,8 +139,9 @@ interface PasteCase {
     user?: string;
     database?: string;
     password?: string;
-    tlsEnabled?: boolean;
-    trustServerCertificate?: boolean;
+    /** #1649 — the TLS posture the paste is expected to land on. Absent means
+     *  the form keeps the driver default (`prefer`, i.e. TLS controls off). */
+    sslMode?: SslMode;
   };
 }
 
@@ -199,8 +205,8 @@ const PASTE_CASES: PasteCase[] = [
       user: "sa",
       database: "master",
       password: "p",
-      tlsEnabled: false,
-      trustServerCertificate: false,
+      // encrypt=false + trust=false folds onto forced plaintext.
+      sslMode: "disable",
     },
   },
   {
@@ -296,7 +302,7 @@ const PASTE_CASES: PasteCase[] = [
       user: "rediu",
       database: "5",
       password: "redip",
-      tlsEnabled: true,
+      sslMode: "verify-full",
     },
   },
   {
@@ -402,16 +408,16 @@ describe("[AC-178-01] form-mode host paste detection", () => {
       if (isMssql) {
         expect(screen.getByLabelText("Enable encryption (TLS)")).toHaveProperty(
           "checked",
-          !!c.expected.tlsEnabled,
+          sslModeTlsOn(c.expected.sslMode),
         );
         expect(
           screen.getByLabelText("Trust server certificate"),
-        ).toHaveProperty("checked", !!c.expected.trustServerCertificate);
+        ).toHaveProperty("checked", c.expected.sslMode === "require");
       } else if (isKvProtocol || isSearchProtocol) {
         const tlsInput = screen.getByLabelText(
           "Enable TLS",
         ) as HTMLInputElement;
-        expect(tlsInput.checked).toBe(!!c.expected.tlsEnabled);
+        expect(tlsInput.checked).toBe(sslModeTlsOn(c.expected.sslMode));
       }
       // Password is not directly readable — we save and inspect the
       // outgoing payload instead. Skip here unless the AC explicitly

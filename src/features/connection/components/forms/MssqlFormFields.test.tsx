@@ -3,8 +3,8 @@ import { describe, expect, it, vi } from "vitest";
 import type { ConnectionDraft } from "@/types/connection";
 import MssqlFormFields from "./MssqlFormFields";
 
-// Purpose: #1063 — SQL Server defaults to trust=true (encrypt-by-default), an
-// encrypted-but-unverified posture that is easy to keep by accident. The form
+// Purpose: #1063 — SQL Server defaults to `require` (encrypt-by-default,
+// certificate unverified), a posture that is easy to keep by accident. The form
 // must warn while that posture is active. (2026-07-17)
 function makeDraft(overrides: Partial<ConnectionDraft> = {}): ConnectionDraft {
   return {
@@ -41,22 +41,22 @@ function renderMssql(overrides: Partial<ConnectionDraft> = {}) {
 }
 
 describe("MssqlFormFields trust warning (#1063)", () => {
-  it("warns while the default trust=true (skip-verify) posture is active", () => {
-    renderMssql({ tlsEnabled: true, trustServerCertificate: true });
+  it("warns while the default require (skip-verify) posture is active", () => {
+    renderMssql({ sslMode: "require" });
     expect(
       screen.getByText(/Certificate verification is skipped/),
     ).toBeInTheDocument();
   });
 
-  it("does not warn when the certificate is verified (trust=false)", () => {
-    renderMssql({ tlsEnabled: true, trustServerCertificate: false });
+  it("does not warn when the certificate is verified (verify-full)", () => {
+    renderMssql({ sslMode: "verify-full" });
     expect(
       screen.queryByText(/Certificate verification is skipped/),
     ).not.toBeInTheDocument();
   });
 
   it("does not warn when TLS is off", () => {
-    renderMssql({ tlsEnabled: false, trustServerCertificate: true });
+    renderMssql({ sslMode: "disable" });
     expect(
       screen.queryByText(/Certificate verification is skipped/),
     ).not.toBeInTheDocument();

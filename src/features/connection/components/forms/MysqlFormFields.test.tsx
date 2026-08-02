@@ -101,15 +101,12 @@ describe("MysqlFormFields", () => {
       expect(screen.getByLabelText("SSL mode")).toHaveTextContent(/Prefer/);
     });
 
-    it("maps a Verify full selection onto encrypt + verify", async () => {
+    it("maps a Verify full selection onto the verify-full posture", async () => {
       const user = userEvent.setup();
       const onChange = renderMysql({});
       await user.click(screen.getByLabelText("SSL mode"));
       await user.click(screen.getByRole("option", { name: /Verify full/ }));
-      expect(onChange).toHaveBeenCalledWith({
-        tlsEnabled: true,
-        trustServerCertificate: false,
-      });
+      expect(onChange).toHaveBeenCalledWith({ sslMode: "verify-full" });
     });
   });
 });

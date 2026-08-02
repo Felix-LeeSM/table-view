@@ -301,6 +301,7 @@ export const en = {
     sslModeDisable: "Disable (no encryption)",
     sslModePrefer: "Prefer (opportunistic)",
     sslModeRequire: "Require (encrypt, skip verification)",
+    sslModeVerifyCa: "Verify CA (encrypt + verify against a CA file)",
     sslModeVerifyFull: "Verify full (encrypt + verify)",
     tlsHintSslMode:
       "Prefer keeps the driver's opportunistic default and may connect without encryption. Require forces TLS but skips certificate verification (exposed to a man-in-the-middle). Verify full forces TLS and validates the certificate chain and hostname. Disable forces plaintext.",
@@ -645,6 +646,7 @@ export const ko = {
     sslModeDisable: "Disable (암호화 없음)",
     sslModePrefer: "Prefer (기회적)",
     sslModeRequire: "Require (암호화, 검증 생략)",
+    sslModeVerifyCa: "Verify CA (암호화 + CA 파일로 검증)",
     sslModeVerifyFull: "Verify full (암호화 + 검증)",
     tlsHintSslMode:
       "Prefer는 드라이버 기본값(기회적 암호화)을 유지하여 암호화 없이 연결될 수 있습니다. Require는 TLS를 강제하지만 인증서 검증을 건너뜁니다(중간자 공격에 노출). Verify full은 TLS를 강제하고 인증서 체인과 호스트명을 검증합니다. Disable은 평문을 강제합니다.",
