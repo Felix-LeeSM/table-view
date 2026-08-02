@@ -26,9 +26,10 @@ Current evidence:
 Gap routing:
 
 H2/H4 strongest RDBMS parity lane. Structure DDL smoke covers table creation
-plus index creation only, and dense ERD smoke covers local diagram interactions
-only, not FK row navigation, roles/users, extensions, profiler, import/export,
-or broad admin flows.
+plus index creation only, and dense ERD smoke covers local canvas interactions
+only (render, layering, search, selection, node drag, zoom/fit), not FK row
+navigation, roles/users, extensions, profiler, import/export, or broad admin
+flows.
 
 ## MySQL connect -> browse/edit -> SELECT/CALL/DML batch -> cancellation + history evidence
 
@@ -206,8 +207,8 @@ Current evidence:
 - `.github/workflows/e2e-smoke.yml`
 - `e2e/fixtures/redis/kv/seed.json`
 - `e2e/smoke/redis.spec.ts`
-- `src-tauri/src/db/redis/command_parser.rs`
-- `src-tauri/src/db/redis/command.rs`
+- `src-tauri/table-view-core/src/db/redis/command_parser.rs`
+- `src-tauri/table-view-core/src/db/redis/command.rs`
 - `src-tauri/tests/redis_integration.rs`
 - `src/lib/tauri/kv.test.ts`
 - `src/hooks/useRedisKeySuggestions.test.ts`
@@ -241,11 +242,11 @@ hash/list/set/zset writes remain future H5 Redis/Valkey work.
 
 Current evidence:
 
-`src-tauri/src/db/search_destructive.rs`, `src-tauri/src/db/search_dsl.rs`,
-`src-tauri/src/db/search_http.rs`,
-`src-tauri/src/db/search_live_destructive.rs`,
-`src-tauri/src/db/search_live_query.rs`, `src-tauri/src/db/search/tests.rs`,
-`src-tauri/src/db/search/tests/live_query.rs`,
+`src-tauri/table-view-core/src/db/search_destructive.rs`, `src-tauri/table-view-core/src/db/search_dsl.rs`,
+`src-tauri/table-view-core/src/db/search_http.rs`,
+`src-tauri/table-view-core/src/db/search_live_destructive.rs`,
+`src-tauri/table-view-core/src/db/search_live_query.rs`, `src-tauri/table-view-core/src/db/search/tests.rs`,
+`src-tauri/table-view-core/src/db/search/tests/live_query.rs`,
 `src-tauri/src/commands/connection/crud.rs`, `src/types/dataSource.test.ts`,
 `src/types/search.ts`,
 `src/features/connection/components/ConnectionDialog.test.tsx`,
@@ -304,7 +305,7 @@ Current evidence:
 - `src/lib/tauri/fileAnalytics.test.ts`
 - `src-tauri/tests/duckdb_browse_query_adapter.rs`
 - `src-tauri/tests/duckdb_file_analytics.rs`
-- `src-tauri/src/db/duckdb.rs`
+- `src-tauri/table-view-core/src/db/duckdb.rs`
 
 Gap routing:
 

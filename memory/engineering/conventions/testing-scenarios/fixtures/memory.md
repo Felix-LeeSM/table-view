@@ -3,7 +3,7 @@ title: Fixture strategy — support claims need local evidence
 type: convention
 updated: 2026-07-26
 task: test-writing, fixture, data-source-promotion, support-claim
-surface: src-tauri/src/db/fixtures.rs, src-tauri/tests, tests/fixtures, e2e/fixtures
+surface: src-tauri/table-view-core/src/db/fixtures.rs, src-tauri/tests, tests/fixtures, e2e/fixtures
 keywords: fixture-backed, fixture-only, support claim, Local-first, Selector-based, Missing fixture = diagnostic failure, table_view_lib::db::fixtures, schema_version, unsupported_boundary_contracts.json, mustContain, Promotion gate, Runtime Happy Path
 trigger:
   signal: fixture 추가 / DBMS support claim / adapter conformance test
@@ -28,7 +28,7 @@ fixture 또는 emulator/testcontainer/embedded sample 로 재현 가능한 증�
   file smoke 는 spec 이 local SQL seed 를 직접 읽는다.
 - `tests/fixtures/**` — shared TS/Rust/parser/support-boundary contract fixtures.
   제품 runtime support claim 으로 승격하지 않는다.
-- `src-tauri/src/db/fixtures.rs` — backend adapter fixture harness. 현재 Search
+- `src-tauri/table-view-core/src/db/fixtures.rs` — backend adapter fixture harness. 현재 Search
   embedded fixtures 만 등록한다; missing RDBMS fixture diagnostic 은 의도된 guard 다.
 - `fixtures/**` — fixture generator/profile spec. Runtime support evidence 가 아니다.
 - Frontend unit/component tests stay near their domain under `src/**`; Rust

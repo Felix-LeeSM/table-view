@@ -110,8 +110,8 @@ Current evidence:
 
 - `e2e/fixtures/redis/kv/seed.json`
 - `e2e/smoke/redis.spec.ts`
-- `src-tauri/src/db/redis/mod.rs`
-- `src-tauri/src/db/redis/tests.rs`
+- `src-tauri/table-view-core/src/db/redis/mod.rs`
+- `src-tauri/table-view-core/src/db/redis/tests.rs`
 - `src-tauri/tests/redis_integration.rs`
 - `src/lib/tauri/kv.test.ts`
 
@@ -144,9 +144,9 @@ Current evidence:
 
 `.github/workflows/e2e-smoke.yml`,
 `e2e/fixtures/redis/kv/seed.json`, `e2e/smoke/redis.spec.ts`,
-`src-tauri/src/commands/kv.rs`, `src-tauri/src/db/kv_types.rs`,
-`src-tauri/src/db/redis/mod.rs`, `src-tauri/src/db/redis/command.rs`,
-`src-tauri/src/db/redis/command_parser.rs`, `src-tauri/src/db/redis/tests.rs`,
+`src-tauri/src/commands/kv.rs`, `src-tauri/table-view-core/src/db/kv_types.rs`,
+`src-tauri/table-view-core/src/db/redis/mod.rs`, `src-tauri/table-view-core/src/db/redis/command.rs`,
+`src-tauri/table-view-core/src/db/redis/command_parser.rs`, `src-tauri/table-view-core/src/db/redis/tests.rs`,
 `src-tauri/tests/redis_integration.rs`, `src/lib/tauri/kv.test.ts`,
 `src/hooks/useRedisKeySuggestions.test.ts`,
 `src/features/completion/redis/redisCommandCompletion.test.ts`,
@@ -178,7 +178,7 @@ Current evidence:
 `src/features/completion/redis/redisCommandCompletion.test.ts`,
 `src/components/query/RedisCommandEditor.test.tsx`,
 `src/components/query/QueryTab.dialect.test.tsx`,
-`src-tauri/src/commands/connection.rs`, `src-tauri/src/db/redis/mod.rs`,
+`src-tauri/src/commands/connection.rs`, `src-tauri/table-view-core/src/db/redis/mod.rs`,
 `src-tauri/tests/backend_adapter_contract_profile.rs`,
 `src-tauri/tests/redis_integration.rs`, `e2e/fixtures/valkey/kv/seed.json`,
 `e2e/smoke/valkey.spec.ts`,
@@ -334,11 +334,11 @@ Current evidence:
 - `e2e/smoke/elasticsearch.spec.ts`
 - `e2e/smoke/opensearch.spec.ts`
 - `e2e/smoke/search-runtime-smoke.ts`
-- `src-tauri/src/db/search.rs`
-- `src-tauri/src/db/search_destructive.rs`
-- `src-tauri/src/db/search_dsl.rs`
-- `src-tauri/src/db/search_live_destructive.rs`
-- `src-tauri/src/db/search_live_query.rs`
+- `src-tauri/table-view-core/src/db/search.rs`
+- `src-tauri/table-view-core/src/db/search_destructive.rs`
+- `src-tauri/table-view-core/src/db/search_dsl.rs`
+- `src-tauri/table-view-core/src/db/search_live_destructive.rs`
+- `src-tauri/table-view-core/src/db/search_live_query.rs`
 - `src-tauri/src/commands/search.rs`
 - `src-tauri/tests/fixture_harness.rs`
 - `src/lib/tauri/search.test.ts`
@@ -378,13 +378,13 @@ language-core Search DSL parser/completion ownership.
 
 Current evidence:
 
-- `src-tauri/src/models/search.rs`
-- `src-tauri/src/db/search.rs`
-- `src-tauri/src/db/search_destructive.rs`
-- `src-tauri/src/db/search_dsl.rs`
-- `src-tauri/src/db/search_http.rs`
-- `src-tauri/src/db/search_live_destructive.rs`
-- `src-tauri/src/db/search_live_query.rs`
+- `src-tauri/table-view-core/src/models/search.rs`
+- `src-tauri/table-view-core/src/db/search.rs`
+- `src-tauri/table-view-core/src/db/search_destructive.rs`
+- `src-tauri/table-view-core/src/db/search_dsl.rs`
+- `src-tauri/table-view-core/src/db/search_http.rs`
+- `src-tauri/table-view-core/src/db/search_live_destructive.rs`
+- `src-tauri/table-view-core/src/db/search_live_query.rs`
 - `src/lib/search/searchDslCompletion.ts`
 - `src/hooks/useSearchAutocomplete.ts`
 - `src-tauri/tests/backend_adapter_contract_profile.rs`
@@ -472,11 +472,11 @@ Current evidence:
 `docs/ROADMAP.md`, `.github/workflows/e2e-smoke.yml`,
 `e2e/smoke/opensearch.spec.ts`, `e2e/smoke/search-runtime-smoke.ts`,
 `e2e/fixtures/opensearch/search/seed.json`, `e2e/fixtures/seed-smoke.ts`,
-`src-tauri/src/db/search/tests.rs`,
-`src-tauri/src/db/search/tests/live_query.rs`,
-`src-tauri/src/db/search/tests/destructive.rs`,
-`src-tauri/src/db/search_dsl.rs`, `src-tauri/src/db/search_live_destructive.rs`,
-`src-tauri/src/db/search_live_query.rs`, `src/lib/tauri/search.test.ts`,
+`src-tauri/table-view-core/src/db/search/tests.rs`,
+`src-tauri/table-view-core/src/db/search/tests/live_query.rs`,
+`src-tauri/table-view-core/src/db/search/tests/destructive.rs`,
+`src-tauri/table-view-core/src/db/search_dsl.rs`, `src-tauri/table-view-core/src/db/search_live_destructive.rs`,
+`src-tauri/table-view-core/src/db/search_live_query.rs`, `src/lib/tauri/search.test.ts`,
 `src/lib/search/searchDslCompletion.test.ts`,
 `src/hooks/useSearchAutocomplete.test.ts`,
 `src/components/workspace/SearchSidebar.test.tsx`,
@@ -525,10 +525,10 @@ Current evidence:
 `e2e/smoke/elasticsearch.spec.ts`, `e2e/smoke/opensearch.spec.ts`,
 `e2e/smoke/search-runtime-smoke.ts`,
 `e2e/fixtures/elasticsearch/search/seed.json`,
-`e2e/fixtures/opensearch/search/seed.json`, `src-tauri/src/db/search/tests.rs`,
-`src-tauri/src/db/search/tests/live_query.rs`,
-`src-tauri/src/db/search_executor.rs`, `src-tauri/src/db/search_dsl.rs`,
-`src-tauri/src/db/search_live_destructive.rs`,
+`e2e/fixtures/opensearch/search/seed.json`, `src-tauri/table-view-core/src/db/search/tests.rs`,
+`src-tauri/table-view-core/src/db/search/tests/live_query.rs`,
+`src-tauri/table-view-core/src/db/search_executor.rs`, `src-tauri/table-view-core/src/db/search_dsl.rs`,
+`src-tauri/table-view-core/src/db/search_live_destructive.rs`,
 `src-tauri/tests/fixture_harness.rs`,
 `src/lib/search/searchDslCompletion.test.ts`,
 `src/hooks/useSearchAutocomplete.test.ts`, `src/lib/tauri/search.test.ts`,

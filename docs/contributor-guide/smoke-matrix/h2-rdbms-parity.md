@@ -49,8 +49,9 @@ info/warn/destructive, raw DDL, and grid-edit preview paths; cancellation smoke
 covers the query toolbar UI/API boundary, cancelled history status, stale-grid
 clearing, and retry. Structure DDL smoke covers the preview/execute path for one
 table plus one index and schema/index refresh proof only. Dense ERD smoke covers
-local graph render/search/selection/zoom/fit/screenshot evidence only, not FK
-row navigation, schema diff, migration impact, or data compare. Future parity
+local canvas evidence only — graph render, FK-direction layering, search,
+selection, node drag, canvas zoom/fit, screenshot — not FK row navigation,
+schema diff, migration impact, or data compare. Future parity
 hardening must add a scoped issue with matching tests and smoke routing before
 claims widen.
 
@@ -123,10 +124,10 @@ Current evidence:
 
 - `src-tauri/tests/mysql_integration.rs`
 - `src-tauri/tests/cancel_mysql.rs`
-- `src-tauri/src/db/mysql/queries.rs`
-- `src-tauri/src/db/mysql/mutations.rs`
-- `src-tauri/src/db/mysql/version.rs`
-- `src-tauri/src/db/mysql/checks.rs`
+- `src-tauri/table-view-core/src/db/mysql/queries.rs`
+- `src-tauri/table-view-core/src/db/mysql/mutations.rs`
+- `src-tauri/table-view-core/src/db/mysql/version.rs`
+- `src-tauri/table-view-core/src/db/mysql/checks.rs`
 - `src-tauri/sql-parser-core/src/parser/tests.rs`
 - `src/lib/sql/mysqlScriptingBoundary.test.ts`
 - `src/components/query/QueryTab/useQueryExecution.test.tsx`
@@ -217,12 +218,12 @@ Current evidence:
 - `src/features/completion/sql/sqlCompletionRequest.test.ts`
 - `src-tauri/tests/backend_adapter_contract_profile.rs`
 - `src-tauri/src/commands/connection.rs`
-- `src-tauri/src/db/mysql/**`
+- `src-tauri/table-view-core/src/db/mysql/**`
 
 Current gap / routing:
 
 #450 locks the intentional shared path inventory: `MysqlAdapter::new_mariadb()`
-dispatch, shared `src-tauri/src/db/mysql/**` catalog/query/edit/cancel
+dispatch, shared `src-tauri/table-view-core/src/db/mysql/**` catalog/query/edit/cancel
 implementation, MySQL CodeMirror/parser/Safe Mode/completion family, and shared
 capability/conformance family. It also keeps MariaDB deltas explicit: `mariadb`
 identity/dialect, MariaDB version evidence for CHECK/constraint catalog
@@ -296,7 +297,7 @@ Current evidence:
 - `e2e/smoke/mysql-family-baseline.ts`
 - `src/components/schema/SchemaTree.dbms-shape.test.tsx`
 - `src/types/adapterConformance.test.ts`
-- `src-tauri/src/db/mysql/schema.rs`
+- `src-tauri/table-view-core/src/db/mysql/schema.rs`
 
 Current gap / routing:
 
@@ -418,8 +419,8 @@ Current evidence:
 
 `src-tauri/tests/sqlite_connection_command.rs`,
 `src-tauri/tests/sqlite_browse_query_adapter.rs`,
-`src-tauri/src/db/adapters/sqlite/queries_tests.rs`,
-`src-tauri/src/db/adapters/sqlite/batch_tests.rs`,
+`src-tauri/table-view-core/src/db/adapters/sqlite/queries_tests.rs`,
+`src-tauri/table-view-core/src/db/adapters/sqlite/batch_tests.rs`,
 `src/components/datagrid/sqlGenerator.test.ts`,
 `src/components/datagrid/useDataGridEdit.safe-mode.test.ts`,
 `src-tauri/sql-parser-core/src/parser/tests.rs`,
@@ -468,7 +469,7 @@ Runtime smoke now covers deterministic `.duckdb` open, catalog/table browse, raw
 SELECT tabular result/history evidence, writable DML readback, and read-only
 write rejection. Native structural DDL (table create/drop/rename, column
 add/drop/type, index create/drop) landed as ADR 0051 Stage 2 (#1070) with Rust
-round-trip evidence in `src-tauri/src/db/duckdb/ddl.rs`; a DuckDB structured-DDL
+round-trip evidence in `src-tauri/table-view-core/src/db/duckdb/ddl.rs`; a DuckDB structured-DDL
 runtime smoke, constraint add/drop + identity columns (Stage 2b), DuckDB
 extension semantics, and file analytics automatic import/export remain separate
 H3 promotion gates.

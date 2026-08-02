@@ -28,7 +28,7 @@ than broadening this smoke.
 
 Current evidence:
 
-- `src-tauri/src/db/adapters/sqlite/connection.rs`
+- `src-tauri/table-view-core/src/db/adapters/sqlite/connection.rs`
 - `src-tauri/tests/sqlite_connection_command.rs`
 - `src/features/connection/components/forms/SqliteFormFields.test.tsx`
 - `src/types/dataSource.test.ts`
@@ -43,10 +43,10 @@ Server auth, switch-database, and multi-namespace flows are not SQLite claims.
 
 Current evidence:
 
-`src-tauri/src/db/adapters/sqlite/queries.rs`,
-`src-tauri/src/db/adapters/sqlite/batch.rs`,
-`src-tauri/src/db/adapters/sqlite/queries_tests.rs`,
-`src-tauri/src/db/adapters/sqlite/batch_tests.rs`,
+`src-tauri/table-view-core/src/db/adapters/sqlite/queries.rs`,
+`src-tauri/table-view-core/src/db/adapters/sqlite/batch.rs`,
+`src-tauri/table-view-core/src/db/adapters/sqlite/queries_tests.rs`,
+`src-tauri/table-view-core/src/db/adapters/sqlite/batch_tests.rs`,
 `src-tauri/tests/sqlite_browse_query_adapter.rs`, #458
 
 Current gap / routing:
@@ -59,7 +59,7 @@ evidence. Raw SQL DDL is rejected by the adapter.
 
 Current evidence:
 
-`src-tauri/src/db/adapters/sqlite/connection.rs`,
+`src-tauri/table-view-core/src/db/adapters/sqlite/connection.rs`,
 `src-tauri/tests/sqlite_browse_query_adapter.rs`,
 `src/components/schema/SchemaTree.dbms-shape.test.tsx`,
 `src/components/schema/SchemaTree.rowcount.test.tsx`, #457
@@ -77,10 +77,10 @@ Current evidence:
 
 `src/types/dataSource.ts`, `src/components/datagrid/sqlGenerator.test.ts`,
 `src/components/datagrid/useDataGridEdit.safe-mode.test.ts`,
-`src-tauri/src/db/adapters/sqlite/queries.rs`,
-`src-tauri/src/db/adapters/sqlite/connection_tests.rs`,
-`src-tauri/src/db/adapters/sqlite/queries_tests.rs`,
-`src-tauri/src/db/adapters/sqlite/batch_tests.rs`, #459
+`src-tauri/table-view-core/src/db/adapters/sqlite/queries.rs`,
+`src-tauri/table-view-core/src/db/adapters/sqlite/connection_tests.rs`,
+`src-tauri/table-view-core/src/db/adapters/sqlite/queries_tests.rs`,
+`src-tauri/table-view-core/src/db/adapters/sqlite/batch_tests.rs`, #459
 
 Current gap / routing:
 
@@ -94,10 +94,10 @@ not supported.
 
 Current evidence:
 
-`src-tauri/src/db/adapters/sqlite/mod.rs`,
-`src-tauri/src/db/adapters/sqlite/ddl.rs`,
-`src-tauri/src/db/adapters/sqlite/queries_tests.rs`,
-`src-tauri/src/db/adapters/sqlite/batch_tests.rs`,
+`src-tauri/table-view-core/src/db/adapters/sqlite/mod.rs`,
+`src-tauri/table-view-core/src/db/adapters/sqlite/ddl.rs`,
+`src-tauri/table-view-core/src/db/adapters/sqlite/queries_tests.rs`,
+`src-tauri/table-view-core/src/db/adapters/sqlite/batch_tests.rs`,
 `src-tauri/tests/sqlite_browse_query_adapter.rs`,
 `docs/product/known-limitations.md`, #460
 
@@ -150,8 +150,8 @@ Current evidence:
 
 `src-tauri/tests/sqlite_connection_command.rs`,
 `src-tauri/tests/sqlite_browse_query_adapter.rs`,
-`src-tauri/src/db/adapters/sqlite/queries_tests.rs`,
-`src-tauri/src/db/adapters/sqlite/batch_tests.rs`,
+`src-tauri/table-view-core/src/db/adapters/sqlite/queries_tests.rs`,
+`src-tauri/table-view-core/src/db/adapters/sqlite/batch_tests.rs`,
 `src/components/datagrid/sqlGenerator.test.ts`,
 `src/components/datagrid/useDataGridEdit.safe-mode.test.ts`,
 `src-tauri/sql-parser-core/src/parser/tests.rs`,

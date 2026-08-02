@@ -297,6 +297,36 @@ pub async fn collection_stats_mongo(
     collection_stats_mongo_inner(state.inner(), &connection_id, &database, &collection).await
 }
 
+async fn mongo_runtime_capabilities_inner(
+    state: &AppState,
+    connection_id: &str,
+) -> Result<crate::models::MongoRuntimeCapabilities, AppError> {
+    let active = state
+        .active_adapter(connection_id)
+        .await
+        .ok_or_else(|| not_connected(connection_id))?;
+    Ok(active.as_document()?.mongo_runtime_capabilities().await)
+}
+
+/// Issue #1821 — the connected MongoDB server's runtime capability
+/// (deployment topology + parsed server version).
+///
+/// Read-only and cheap: the adapter probed `hello` + `buildInfo` once during
+/// `connect()`, so this returns a cached value with no admin round trip. It is
+/// deliberately fallible only on *routing* (`NotFound` for a dead connection
+/// id, `Unsupported` for a non-document paradigm) — a MongoDB connection whose
+/// probe was refused answers with the fail-closed `unknown` capability instead
+/// of an error, because "we could not identify the server" is a normal outcome
+/// for a locked-down account and must close features rather than break the
+/// call.
+#[tauri::command]
+pub async fn mongo_runtime_capabilities(
+    state: tauri::State<'_, AppState>,
+    connection_id: String,
+) -> Result<crate::models::MongoRuntimeCapabilities, AppError> {
+    mongo_runtime_capabilities_inner(state.inner(), &connection_id).await
+}
+
 async fn server_info_inner(
     state: &AppState,
     connection_id: &str,

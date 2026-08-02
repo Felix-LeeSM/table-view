@@ -23,7 +23,7 @@ the product-facing support boundary stays in `docs/product/**`.
 |---|---|---|
 | DBMS-first E2E seeds | `e2e/fixtures/<dbms>/<function>/...` | Runtime seed topology is DBMS-first, then capability/function. Existing active functions are `query`, `document`, `kv`, and `search`; future `completion`, `catalog`, `explain`, `errors`, `edit`, `safety`, or `metadata` roots need a consuming test and promotion decision. |
 | Shared contract fixtures | `tests/fixtures/**` | Shared TS/Rust/parser/support-boundary fixtures are contract evidence only. Unsupported-boundary fixtures are negative evidence and do not widen runtime support. |
-| Backend adapter fixture harness | `src-tauri/src/db/fixtures.rs`, `src-tauri/tests/fixture_harness.rs` | Adapter fixtures are requested by profile/family/paradigm/capability. Missing fixture diagnostics are failures, not silent skips. Current embedded harness coverage is Search-only. |
+| Backend adapter fixture harness | `src-tauri/table-view-core/src/db/fixtures.rs`, `src-tauri/tests/fixture_harness.rs` | Adapter fixtures are requested by profile/family/paradigm/capability. Missing fixture diagnostics are failures, not silent skips. Current embedded harness coverage is Search-only. |
 | Generator/profile specs | `fixtures/**` | Profile existence is not runtime support. |
 | Test placement | `src/**`, `src-tauri/tests`, `e2e/smoke` | Frontend unit/component tests stay near their feature/domain; Rust integration stays under `src-tauri/tests`; desktop smoke stays under `e2e/smoke`, which nothing wires automatically. |
 
@@ -97,7 +97,7 @@ this page stays the index plus the cross-band policy sections.
 | [`postgresql-query-workbench.md`](smoke-matrix/postgresql-query-workbench.md) | PostgreSQL lane detail: query execution, catalog/workbench metadata, parser and Safe Mode, completion and installed extensions, edit semantics, Explain, cancellation |
 | [`sqlite-file-dbms.md`](smoke-matrix/sqlite-file-dbms.md) | SQLite lane detail: file connection lifecycle, writable-file DML, catalog browse, row edit, DDL and unsupported `ALTER` behavior |
 | [`h3-duckdb-file-analytics.md`](smoke-matrix/h3-duckdb-file-analytics.md) | DuckDB `.duckdb` runtime plus registered CSV/Parquet/JSON/NDJSON analytics, and the local-file privacy/export and extension/`COPY` gates |
-| [`h4-rdbms-intelligence.md`](smoke-matrix/h4-rdbms-intelligence.md) | Schema metadata cache, ERD graph input and renderer, dependency view, migration impact, schema diff, FK row navigation |
+| [`h4-rdbms-intelligence.md`](smoke-matrix/h4-rdbms-intelligence.md) | Schema metadata cache, ERD graph input and React Flow canvas, dependency view, migration impact, schema diff, FK row navigation |
 | [`h5-non-rdbms.md`](smoke-matrix/h5-non-rdbms.md) | Non-RDBMS paradigms: MongoDB, Redis/Valkey, and Elasticsearch/OpenSearch Search, with their closure audits |
 | [`h6-wider-source-candidates.md`](smoke-matrix/h6-wider-source-candidates.md) | MSSQL and Oracle runtime/smoke guardrails plus unpromoted wide-column, cloud-document, graph, vector, and stream candidates |
 | [`h7-ops-security-reliability.md`](smoke-matrix/h7-ops-security-reliability.md) | CI gate surface, destructive-operation safety, credential and local-first privacy, dependency security, a11y, performance, platform smoke, E2E isolation |
@@ -124,9 +124,15 @@ Required local evidence:
   `run -- --run --coverage ...` and treats everything after `--` as non-flag
   arguments. It exited 0 without collecting coverage or applying the
   vite.config.ts thresholds, so this lane produced no coverage evidence.
-- Rust lane: `cargo test --manifest-path src-tauri/Cargo.toml --lib --test storage_integration`,
+- Rust lane, four commands in this order:
+  `cargo test --manifest-path src-tauri/Cargo.toml --lib --test storage_integration`,
+  `cargo test --manifest-path src-tauri/table-view-core/Cargo.toml --lib`,
   `cargo test --manifest-path src-tauri/sql-parser-core/Cargo.toml --lib`, and
   `cargo test --manifest-path src-tauri/Cargo.toml --test parse_sql_backend`.
+  `table-view-core` and `sql-parser-core` are path dependencies, not workspace
+  members, so the app manifest's `--lib` never reaches either one. Drop a line
+  and the lane still exits 0 with those crates' unit tests unrun — the same
+  reason CI wires them as separate steps (`.github/workflows/ci.yml:358-382`).
 - Docker integration lane: with required services available,
   `cargo test --manifest-path src-tauri/Cargo.toml --test schema_integration --test query_integration --test mongo_integration --test fixture_loading --test redis_integration`.
 - Documentation lane: `git diff --check` on the touched docs plus local
@@ -163,7 +169,7 @@ Required remote evidence on the exact release SHA:
   produce — the full sequence (debug build, seed, then
   `TABLE_VIEW_TEST_DATA_DIR=/tmp/table-view-smoke pnpm test:e2e:smoke`) is in
   README 「E2E Smoke」. Without that variable the specs drive the app against
-  your real connection store (`src-tauri/src/storage/mod.rs` `data_dir_override`).
+  your real connection store (`src-tauri/table-view-core/src/storage/mod.rs` `data_dir_override`).
 - `main` push checks pass on the merge commit before a release tag is pushed.
 - Release workflow output is packaging evidence only. Draft bundle creation and
   checksum upload do not replace CI or runtime smoke evidence.

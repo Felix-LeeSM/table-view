@@ -182,10 +182,10 @@ native document-first panels, MSSQL DDL/admin/full T-SQL widening, Oracle
 SID/TNS/wallet/advanced-auth/DDL/admin/PLSQL widening, and additional desktop
 smoke scenarios remain separate gates. Static fixture inventory covers
 SQL/MongoDB/Redis/Valkey/Search seed contracts, but other specs under
-`e2e/smoke/**`, reset-to-default audits, ERD scenarios, additional file
-analytics scenarios beyond the wired `duckdb-file-analytics` spec, broader
-Search scenarios, and macOS/Windows runtime smoke are future promotion gates
-unless a smoke runner wires them.
+`e2e/smoke/**`, reset-to-default audits, additional file analytics scenarios
+beyond the wired `duckdb-file-analytics` spec, broader Search scenarios, and
+macOS/Windows runtime smoke are future promotion gates unless a smoke runner
+wires them. The dense ERD scenario is wired — see the ERD paragraph below.
 
 ### Adapter / workspace boundary
 
@@ -232,15 +232,17 @@ schema diff is read-only; it does not apply migrations, compare data,
 import/export, expose admin workflows, or include DuckDB registered file
 aliases. The ERD is opened as a database-level diagram tab from the schema-tree
 header action (gated on the engine's `intelligence.erd` capability), not from a
-per-table sub-tab. Data compare and dense-view smoke remain future promotion
-gates in the H4 smoke matrix.
+per-table sub-tab. The diagram is a `@xyflow/react` canvas with `elkjs`
+`layered` auto-layout: referenced tables rank above the tables that reference
+them, and nodes can be dragged, but positions are not persisted across tab
+reopen. Data compare remains a future promotion gate in the H4 smoke matrix.
 
 ### FK navigation
 
 Current FK navigation is the DataGrid foreign-key cell/icon path that opens the
-referenced row with filters. ERD selection, search, zoom, fit, focus, and
-relationship highlighting are local diagram interactions, not FK row navigation
-claims.
+referenced row with filters. ERD selection, search, node drag, canvas zoom/pan,
+fit, focus, and relationship highlighting are local diagram interactions, not FK
+row navigation claims.
 
 ### CHECK constraints
 

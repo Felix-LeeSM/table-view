@@ -207,9 +207,19 @@ pnpm exec vitest run --coverage
 
 ### 2. Rust 백엔드 단위 테스트
 
+**백엔드 lib 테스트는 manifest 하나로 닫히지 않습니다.** 돌려야 하는 명령과 순서는
+[`docs/contributor-guide/testing-and-quality.md`](./docs/contributor-guide/testing-and-quality.md)의
+Pre-Release Verification Gate Rust lane이 SOT입니다. 앱 crate 몫만 빠르게 볼 때:
+
 ```bash
 cargo test --manifest-path src-tauri/Cargo.toml --lib
 ```
+
+> 이 한 줄은 앱 crate의 lib 테스트까지입니다. `table-view-core` 같은 path
+> dependency crate는 workspace member가 아니라서 앱 manifest의 `--lib`이 거기까지
+> 안 닿습니다. 빼먹은 crate가 있어도 명령은 exit 0으로 끝나 통과처럼 보이므로,
+> 위 lane의 목록을 그대로 돌리세요. CI도 같은 이유로 그 명령들을 스텝으로 나눠
+> 걸어 뒀습니다 (`.github/workflows/ci.yml`의 `Rust Unit And Storage Tests` 잡).
 
 ### 3. 통합 테스트 (Docker 필요)
 

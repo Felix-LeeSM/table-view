@@ -135,7 +135,7 @@ describe("StructurePanel DDL capability gate (#1460)", () => {
   // owns the rendering rule and its own suite injects `canEditColumnComment`
   // directly, so only this layer can catch a mis-wire in
   // `StructurePanel.tsx` (e.g. reusing `canAlterTable`). A mis-wire is
-  // silent-data-loss shaped: `src-tauri/src/db/mysql/mutations.rs` matches
+  // silent-data-loss shaped: `src-tauri/table-view-core/src/db/mysql/mutations.rs` matches
   // `new_comment: _` and drops the value with no error, so the user would see
   // "saved" and no change. (2026-07-25)
   it("shows the comment input in edit mode for PostgreSQL (editColumnComment true)", async () => {

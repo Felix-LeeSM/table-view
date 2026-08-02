@@ -6,14 +6,18 @@
 #![warn(clippy::unwrap_used)]
 
 pub mod commands;
-pub mod db;
 pub mod diagnostics;
-pub mod error;
 pub mod events;
 pub mod launcher;
-pub mod models;
 pub mod state;
 pub mod storage;
+
+// #1769 — `db` / `error` / `models` 본체는 `table-view-core` path crate 에 산다.
+// 여기서 crate root 로 되꽂아 두면 `crate::db::…` / `table_view_lib::models::…`
+// 를 쓰는 command·state·통합 테스트가 그대로 컴파일된다. `storage` 만 위의 shim
+// 모듈이 따로 받는다 — boot 글루 두 파일이 `crate::commands::` 를 역참조해서
+// core 로 못 내려갔다.
+pub use table_view_core::{db, error, models};
 
 use commands::connection::AppState;
 use std::sync::OnceLock;
@@ -342,14 +346,17 @@ pub fn run() {
         // fresh install the key is born in the keyring; an existing plaintext
         // `.key` is imported into the keyring, verified, then retired; a
         // headless Linux / locked keychain falls back to the disk key
-        // explicitly (ADR 0040). A key-lost fatal outcome logs and skips
+        // explicitly (ADR 0040). A boot that finds a healthy keyring *and* a
+        // leftover disk `.key` retires that exposed key and re-encrypts
+        // `connections.json` under a fresh one (#1814), reporting it via
+        // `rekeyed_after_disk_exposure`. A key-lost fatal outcome logs and skips
         // seeding, so the decrypt path refuses (safe mode) instead of
         // orphaning ciphertext.
         match storage::boot_wire_master_key() {
             Ok(outcome) => info!(
                 target: "boot",
-                "key_migration wired: source={:?} fallback_to_disk={}",
-                outcome.source, outcome.fallback_to_disk
+                "key_migration wired: source={:?} fallback_to_disk={} rekeyed_after_disk_exposure={}",
+                outcome.source, outcome.fallback_to_disk, outcome.rekeyed_after_disk_exposure
             ),
             Err(e) => tracing::error!(
                 target: "boot",

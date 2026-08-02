@@ -29,7 +29,8 @@ GitHub Runtime Happy Path proves connect, browse seeded `users`, edit Alice's
 with an Explain history source label, verify seeded `pgcrypto`/`fuzzystrmatch`
 installed-extension completion gating, cover Safe Mode info/warn/destructive,
 raw DDL preview, grid-edit confirmation paths, cancel/retry a long query,
-execute a bounded Structure table-plus-index DDL path, and render a dense ERD on
+execute a bounded Structure table-plus-index DDL path, and render and interact
+with a dense ERD canvas (layering, search, selection, node drag, zoom/fit) on
 desktop and narrow viewports on Ubuntu. It does not prove broader structured DDL
 flows, broader history-source labeling, FK row navigation through ERD, schema
 diff, migration impact, data compare, admin, arbitrary extension semantics, or
@@ -64,8 +65,8 @@ support.
 
 Current evidence:
 
-- `src-tauri/src/db/postgres/queries.rs`
-- `src-tauri/src/db/postgres/schema.rs`
+- `src-tauri/table-view-core/src/db/postgres/queries.rs`
+- `src-tauri/table-view-core/src/db/postgres/schema.rs`
 - `src-tauri/tests/query_integration.rs`
 - `src-tauri/tests/cancel_pg.rs`
 
@@ -80,7 +81,7 @@ body authoring remain outside current parity claims.
 
 Current evidence:
 
-- `src-tauri/src/db/postgres/schema.rs`
+- `src-tauri/table-view-core/src/db/postgres/schema.rs`
 - `src-tauri/tests/schema_integration.rs`
 - `src/components/schema/SchemaTree*`
 - `src/components/rdb/DataGrid*`
@@ -116,7 +117,7 @@ arbitrary nested expressions, and arbitrary extension semantics are not modeled.
 
 Current evidence:
 
-- `src-tauri/src/db/postgres/schema.rs`
+- `src-tauri/table-view-core/src/db/postgres/schema.rs`
 - `src/features/completion/sql/sqlCompletionContext.test.ts`
 - `src/features/completion/sql/sqlCompletionRequest.test.ts`
 - `src/lib/sql/sqlCompletionWasm.test.ts`
@@ -139,7 +140,7 @@ Current evidence:
 - `src/components/datagrid/sqlGenerator.test.ts`
 - `src/components/query/EditableQueryResultGrid.safe-mode.test.tsx`
 - `src/components/query/useRawQueryGridEdit.ts`
-- `src-tauri/src/db/postgres/queries.rs`
+- `src-tauri/table-view-core/src/db/postgres/queries.rs`
 
 Current gap / routing:
 
@@ -151,7 +152,7 @@ and bulk/admin edit workflows are future work.
 
 Current evidence:
 
-- `src-tauri/src/db/postgres/schema.rs`
+- `src-tauri/table-view-core/src/db/postgres/schema.rs`
 - `src/lib/api/explain.ts`
 - `src/components/query/ExplainViewer.test.tsx`
 - `src/components/query/QueryTab.toolbar.test.tsx`

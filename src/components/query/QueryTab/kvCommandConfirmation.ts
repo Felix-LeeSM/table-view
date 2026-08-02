@@ -1,6 +1,6 @@
 /**
  * Redis commands the backend gates with a `required_confirmation_key`
- * (`src-tauri/src/db/redis/command.rs`): KEYS pattern-confirm + the
+ * (`src-tauri/table-view-core/src/db/redis/command.rs`): KEYS pattern-confirm + the
  * Destructive/Ttl commands DEL / PERSIST. That backend allowlist is the
  * authoritative safety boundary; this map mirrors its *set* so the frontend
  * routes these commands to the same confirm dialog SQL destructive

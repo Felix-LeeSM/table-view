@@ -1,0 +1,97 @@
+[package]
+name = "table-view-core"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.91.0"
+# 데스크톱 앱의 내부 crate — crates.io 에 publish 되지 않음. `table-view` 와 같은
+# 표식이라 cargo deny 가 `[licenses.private]` 로 license 검사를 건너뛴다.
+publish = false
+description = "Headless core for table-view: DB adapters, wire models, and local storage. No Tauri dependency, so a CLI/daemon surface can link it without a webview."
+
+# #1769 — `sql-parser-core` 와 같은 **path dependency** 이고 Cargo workspace
+# member 가 아니다 (`src-tauri/Cargo.toml` 에 `[workspace]` 가 없다). 앱이 실제로
+# 의존하는 path crate 전례는 `sql-parser-core` 하나다 — `mongosh-parser-core` 는
+# 아직 wasm 전용이라 앱 manifest 에 없다. 격리 이유:
+#   - `cargo llvm-cov --lib` for `table-view` 가 이 crate 의 coverage profile 과
+#     섞이지 않는다 (실측: path dep 소스는 root package 리포트에 안 들어온다).
+#   - 이 crate 를 단독으로 빌드할 때 Tauri transitive dep 이 하나도 안 딸려온다
+#     — ADR 0061 의 `tvw` CLI 트랙이 요구하는 성질이다.
+#
+# 대가: `table-view-core/Cargo.lock` 이 `src-tauri/Cargo.lock` 과 별도라 단독
+# 빌드가 다른 버전으로 resolve 될 수 있다. 실제로 첫 resolve 가 duckdb 를
+# 1.10503.1 → 1.10505.0 으로 올려 `db/duckdb/value.rs` 의 match 가 E0004 로
+# 깨졌다. 두 lock 은 같은 버전으로 유지한다 — 새로 만들 때는
+# `cp src-tauri/Cargo.lock src-tauri/table-view-core/Cargo.lock` 후 cargo 가
+# 잉여 항목을 쳐내게 하면 된다.
+
+[lib]
+name = "table_view_core"
+
+[features]
+default = []
+# `db::testing` 의 stub adapter 묶음을 노출한다. `table-view` 의 command 테스트가
+# 쓰던 `crate::db::testing::Stub*` 를 crate 경계 너머로 살리기 위한 게이트 —
+# `src-tauri/Cargo.toml` 이 `[dev-dependencies]` 쪽에서만 켜므로 릴리스 빌드에는
+# 안 들어간다.
+testing = []
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["arbitrary_precision"] }
+sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "postgres", "mysql", "sqlite", "migrate", "json", "uuid", "chrono", "bigdecimal"] }
+mongodb = "3"
+bson = "2"
+futures-util = "0.3"
+tokio = { version = "1", features = ["full", "test-util"] }
+tokio-util = { version = "0.7", features = ["rt", "compat"] }
+aes-gcm = "0.10"
+argon2 = "0.5"
+zeroize = { version = "1", features = ["derive"] }
+bip39 = { version = "2", default-features = false, features = ["std"] }
+base64 = "0.22"
+thiserror = "2"
+tracing = "0.1"
+dirs = "6"
+# Sprint 371 (Phase 5 F.5) — storage/sql_redact.rs 의 query_history
+# `sql_redacted` regex masking (quoted/numeric literal → `?`). 같은 crate 가
+# `mongodb` 의 transitive 로 이미 잠겨 있어 build cost 추가 0.
+regex = "1"
+# #1107 — db/search_http.rs 가 ES/OpenSearch index 이름을 URL path segment 로
+# percent-encode 해서 검증된 index 가 segment 를 탈출하지 못하게 한다. reqwest/url
+# transitive 로 이미 2.3.2 에 잠겨 있어 direct dep 으로 올려도 build cost 0.
+percent-encoding = "2"
+# Sprint 466 — Redis/Valkey KV adapter. `tokio-rustls-comp` 가 기존 Tokio
+# 런타임 위의 async command 지원과 `rediss://` TLS 를 준다.
+redis = { version = "0.32", features = ["tokio-rustls-comp"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+tiberius = { version = "0.12.3", default-features = false, features = ["tds73", "native-tls", "tokio", "chrono", "bigdecimal"] }
+# Sprint 356 (2026-05-16) — Q22 keyring file-key migration.
+# Cross-platform 추상화는 `storage::crypto::KeyringBackend` 에 있고, 테스트가
+# in-memory backend 를 쓰므로 테스트 시점에 실제 OS keyring 과 링크하지 않는다.
+# 플랫폼별 feature 는 아래 target 블록에서만 켜서 단일 OS 빌드가 나머지 둘의
+# native backend 를 안 끌게 한다.
+keyring = { version = "3", default-features = false }
+# db/raw_where.rs 의 AST allowlist. 범프 시 재감사 규칙은
+# memory/engineering/conventions/rust/memory.md 참조.
+sqlparser = "0.62.0"
+duckdb = { version = "1.10503.1", features = ["bundled", "json", "parquet"] }
+oracle-rs = "0.1.7"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+keyring = { version = "3", default-features = false, features = ["apple-native"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+keyring = { version = "3", default-features = false, features = ["windows-native"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+keyring = { version = "3", default-features = false, features = ["sync-secret-service", "crypto-rust"] }
+
+[dev-dependencies]
+tempfile = "3"
+serial_test = "3"
+
+[profile.dev]
+# `src-tauri/Cargo.toml` 과 같은 이유 — duckdb 정적 링크 × debuginfo 가 계측
+# 빌드에서 디스크를 고갈시킨다. profile 은 root package 것만 적용되므로 이
+# 블록은 `--manifest-path table-view-core/Cargo.toml` 단독 빌드에서만 산다.
+debug = 0

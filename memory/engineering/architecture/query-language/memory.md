@@ -27,13 +27,13 @@ claim 하지 않는다.
   SOT 다.
 - TypeScript fallback mirror 는 compatibility/loading fallback 이며 SOT 가 아니다.
 - `redis-command` 는 Redis/Valkey bounded command query slice 가 active 다.
-  Backend allowlist parser/dispatch 는 `src-tauri/src/db/redis/command_parser.rs`
-  와 `src-tauri/src/db/redis/command.rs` 가 소유한다. TypeScript completion 은
+  Backend allowlist parser/dispatch 는 `src-tauri/table-view-core/src/db/redis/command_parser.rs`
+  와 `src-tauri/table-view-core/src/db/redis/command.rs` 가 소유한다. TypeScript completion 은
   proven command rows + current-keyspace editor assistance 다. Full Redis CLI
   parsing / language-core completion ownership 은 future contract 다.
 - `search-dsl` 은 Elasticsearch/OpenSearch bounded live query 와 destructive-plan
   safety slice 가 active 다. Backend validator/dispatch 는
-  `src-tauri/src/db/search_dsl.rs` 와 `src-tauri/src/db/search_live_query.rs` 가
+  `src-tauri/table-view-core/src/db/search_dsl.rs` 와 `src-tauri/table-view-core/src/db/search_live_query.rs` 가
   소유한다. TypeScript completion 은 catalog/mapping-context editor assistance 다.
   Full language-core parser/completion ownership and broad admin DSL support 는
   future contract 다.

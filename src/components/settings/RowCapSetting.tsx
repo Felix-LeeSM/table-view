@@ -29,7 +29,7 @@ import { Rows3 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-// Keep in sync with `src-tauri/src/db/row_cap.rs`.
+// Keep in sync with `src-tauri/table-view-core/src/db/row_cap.rs`.
 const DEFAULT_ROW_CAP = 10_000;
 const MIN_ROW_CAP = 100;
 const MAX_ROW_CAP = 1_000_000;

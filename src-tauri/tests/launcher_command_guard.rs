@@ -181,6 +181,9 @@ const LAUNCHER_ALLOWLIST: &[&str] = &[
     "explain_mongo_find",
     "collection_stats_rdb",
     "collection_stats_mongo",
+    // Issue #1821 — reads the connect-time `hello`/`buildInfo` probe result
+    // from the adapter cache. No DB access, no mutation, no exfil.
+    "mongo_runtime_capabilities",
     "server_info",
     "slow_queries",
     "list_database_users",

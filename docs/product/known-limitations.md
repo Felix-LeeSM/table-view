@@ -80,8 +80,10 @@ smoke or measurement gates:
 - Tauri production shortcut audit for `Cmd+Shift+I`.
 - `MainArea` empty-state MRU policy.
 - Narrow-column display for `pendingEditErrors`.
-- ERD desktop+narrow screenshot smoke. Dense-view smoke evidence is a future H4
-  matrix gate; there is no current dense-view smoke claim.
+- ERD layout persistence, semantic zoom, viewport virtualization, virtual FKs,
+  focus filters, and diagram export. The React Flow + elkjs canvas ships without
+  them; each is a separate follow-up issue. Dragged node positions are lost when
+  the ERD tab is reopened.
 - There is no internal-doc link checking, and Node package audit is deferred.
   Rust dependency security is covered by blocking PR/main `cargo deny check`;
   runtime dependency upgrades remain separate PRs.

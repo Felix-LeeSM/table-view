@@ -62,17 +62,21 @@ gh issue view <N> --comments
 
 ## 4. 자동 검사를 돌린다
 
-merge 가 깨뜨린 것을 찾는다. 이 저장소의 검사는 넷이다.
+merge 가 깨뜨린 것을 찾는다. 이 저장소의 검사는 다섯이다.
 
 ```bash
 pnpm lint
 pnpm test
 pnpm build
 cargo fmt --check --manifest-path src-tauri/Cargo.toml
+cargo fmt --check --manifest-path src-tauri/table-view-core/Cargo.toml
 ```
 
-충돌 파일이 Rust 였으면 `cargo clippy --manifest-path src-tauri/Cargo.toml` 도
-돌린다. 파서 코어를 건드렸으면 WASM 을 다시 만든다 (`pnpm build:sql-wasm` /
+충돌 파일이 Rust 였으면 `cargo clippy --manifest-path src-tauri/Cargo.toml` 과
+`cargo clippy --manifest-path src-tauri/table-view-core/Cargo.toml` 도 돌린다 —
+fmt 도 clippy 도 호출된 package 만 보고 path dependency 는 건너뛰므로, #1769 이
+core 로 옮긴 db/models/storage/error 는 앱 manifest 호출로 한 번도 안 걸린다.
+파서 코어를 건드렸으면 WASM 을 다시 만든다 (`pnpm build:sql-wasm` /
 `pnpm build:mongosh-wasm`) — 소스만 고치고 WASM 산출물을 그대로 두면 런타임에서
 갈린다.
 

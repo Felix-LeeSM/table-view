@@ -4,6 +4,7 @@
 /src-tauri/target/
 /src-tauri/sql-parser-core/target/
 /src-tauri/mongosh-parser-core/target/
+/src-tauri/table-view-core/target/
 **/*.rs.bk
 *.pdb
 

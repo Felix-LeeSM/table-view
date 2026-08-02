@@ -16,13 +16,13 @@ Grill(소유자 결정 인터뷰) 진입 전 informed consent 용 임시 산출�
 
 | 수준 | 엔진 | 근거 |
 |---|---|---|
-| 0단 (컨트롤 없음) | mysql/mariadb (`MysqlFormFields.tsx:6-7` "SSL reserved for future"), oracle (`src-tauri/src/db/oracle.rs:193-195` TLS 요청 자체를 hard-reject, #904) | 폼 |
+| 0단 (컨트롤 없음) | mysql/mariadb (`MysqlFormFields.tsx:6-7` "SSL reserved for future"), oracle (`src-tauri/table-view-core/src/db/oracle.rs:193-195` TLS 요청 자체를 hard-reject, #904) | 폼 |
 | 1단 (boolean) | mongo (`MongoFormFields.tsx:190-194`), redis/valkey (`RedisFormFields.tsx:177-184`), es/os (`SearchFormFields.tsx:127-130`) | 폼 |
 | 2단 (TLS + trustServerCertificate) | mssql (`MssqlFormFields.tsx:193-222`), **pg** (`PgFormFields.tsx:160-201`, #1526) | 폼 |
 
 sslmode 세분화(disable/prefer/require/verify-ca/verify-full), CA 인증서,
 클라이언트 인증서는 여전히 전 DBMS 부재. 선행 #1062 는 pg/mysql 결선 완료
-(`src-tauri/src/db/tls.rs`), 단 mysql 은 UI 미노출이라 도달 불가.
+(`src-tauri/table-view-core/src/db/tls.rs`), 단 mysql 은 UI 미노출이라 도달 불가.
 
 ## 1. 자산
 
@@ -33,7 +33,7 @@ sslmode 세분화(disable/prefer/require/verify-ca/verify-full), CA 인증서,
 - **연결 무결성** — MITM 이 결과 위조/쿼리 변조 가능 (read 도청보다 넓은 위협).
 - **저장된 연결 설정** — SQLite `connections` 테이블. `password_enc` 만 암호문,
   나머지 컬럼 (`tls_enabled`, `trust_server_certificate` 포함) 평문
-  (`src-tauri/src/storage/reconcile.rs:264-292`).
+  (`src-tauri/table-view-core/src/storage/reconcile.rs:264-292`).
 - **(미래) 클라이언트 인증서 개인키 + passphrase** — 도입 시 password 와 동급
   secret 클래스.
 - **사용자의 보안 멘탈 모델** — "TLS 켰다 = 안전하다" 라는 믿음 자체가 자산.
@@ -61,7 +61,7 @@ sslmode 세분화(disable/prefer/require/verify-ca/verify-full), CA 인증서,
 
 ## 3. 현재 인프라 정밀 분석
 
-**공통 결정 경로** — `src-tauri/src/db/tls.rs` `resolve_tls_decision()`:
+**공통 결정 경로** — `src-tauri/table-view-core/src/db/tls.rs` `resolve_tls_decision()`:
 `(tls_enabled, trust)` → `Default | RequireSkipVerify | RequireVerifyFull`.
 불가 조합 (`tls=true, trust=None` / `tls=false, trust=true`) 은 조용한 무시가
 아닌 Validation 거부. pg/mysql 어댑터가 이를 소비.

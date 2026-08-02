@@ -56,7 +56,7 @@ claims separate.
   path with MariaDB-specific test evidence.
 - Shared MySQL-family paths: MariaDB intentionally routes through
   `MysqlAdapter::new_mariadb()` from `make_adapter`, the runtime
-  `src-tauri/src/db/mysql/**` catalog/query/edit/cancel implementation, the
+  `src-tauri/table-view-core/src/db/mysql/**` catalog/query/edit/cancel implementation, the
   shared `src-tauri/src/commands/connection/crud.rs` connection-test path, the
   MySQL CodeMirror dialect, the MySQL-family parser/Safe Mode scripting
   boundary, the `mysql-client` completion shell family, and the
