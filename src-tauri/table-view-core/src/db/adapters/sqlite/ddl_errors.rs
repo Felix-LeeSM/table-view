@@ -6,14 +6,16 @@
 //! `sqlite_schema` parser would only duplicate — less accurately — a judgement
 //! the engine already makes. What the engine's text does not carry is what the
 //! user should do next, so this module prepends the cause and the remedy and
-//! keeps the driver text appended: the frontend classifier
-//! (`src/lib/errors/driverErrorHints.ts`) does not match these strings and
-//! fails open, so whatever this returns is what the user reads.
+//! keeps the driver text appended. Nothing downstream rewrites it: the frontend
+//! classifier (`src/lib/errors/driverErrorHints.ts`) matches none of these
+//! strings and fails open. `AppError::Database`'s `Display` does prefix
+//! `"Database error: "` (`crate::error`), so the sentence reaches the user with
+//! that prefix but otherwise intact.
 //!
 //! Every arm below is pinned to a string emitted by the bundled SQLite
 //! (3.46.0, `libsqlite3-sys 0.30.1`) and is driven through a real database file
-//! by `ddl_native_tests.rs`. An unrecognised failure returns `None` and keeps
-//! its raw text — a mis-classified error is worse than an unadorned one.
+//! by `ddl_native_live_tests.rs`. An unrecognised failure returns `None` and
+//! keeps its raw text — a mis-classified error is worse than an unadorned one.
 
 use crate::error::AppError;
 
@@ -30,12 +32,14 @@ pub(super) fn ddl_failure(column: Option<&str>, raw: &str) -> AppError {
 /// Cause + remedy for the documented restrictions, or `None` when the failure
 /// is something else (a missing table, a syntax error, a busy file …).
 fn restriction_advice(column: Option<&str>, raw: &str) -> Option<String> {
-    drop_column_advice(raw).or_else(|| add_column_advice(column, raw))
+    drop_column_advice(column, raw).or_else(|| add_column_advice(column, raw))
 }
 
-/// `DROP COLUMN` restrictions. SQLite names the column in every arm, so these
-/// do not need the request's column.
-fn drop_column_advice(raw: &str) -> Option<String> {
+/// `DROP COLUMN` restrictions. The first three arms read the column out of
+/// SQLite's own text; the dependent-object arms do not get one there, so they
+/// take the request's column — AC2 asks for the blocking reason *and* the
+/// column in the sentence, not only in the driver text appended after it.
+fn drop_column_advice(column: Option<&str>, raw: &str) -> Option<String> {
     if let Some(column) = quoted_after(raw, "cannot drop PRIMARY KEY column:") {
         return Some(format!(
             "Cannot drop column \"{column}\": it belongs to the table's PRIMARY KEY. \
@@ -62,27 +66,38 @@ fn drop_column_advice(raw: &str) -> Option<String> {
         let (subject, remedy) = match kind {
             "index" => (
                 format!("index \"{name}\" still indexes it"),
-                "Drop or redefine that index first.",
+                format!("Drop or redefine index \"{name}\" first."),
             ),
             "view" => (
                 format!("view \"{name}\" still selects it"),
-                "Drop or redefine that view first.",
+                format!("Drop or redefine view \"{name}\" first."),
             ),
             "trigger" => (
                 format!("trigger \"{name}\" still reads it"),
-                "Drop or redefine that trigger first.",
+                format!("Drop or redefine trigger \"{name}\" first."),
             ),
-            // `error in table <name> …` — a generated column or another
-            // table-level expression in the same table names the column.
+            // `error in table <name> …`. The blocker is a definition SQLite
+            // cannot re-resolve: a generated column, a CHECK, or a FOREIGN KEY
+            // clause. It is NOT necessarily in the table being altered — a
+            // child table's FK into this column reports the child's name — so
+            // the message must not tell the user to look only where they are.
             "table" => (
-                format!("another definition in table \"{name}\" still references it"),
-                "Remove that generated column or table-level expression first.",
+                format!("a definition in table \"{name}\" still references it"),
+                format!(
+                    "Remove or redefine it in table \"{name}\" first — a generated column, a \
+                     CHECK, or a FOREIGN KEY clause. Note that \"{name}\" is not necessarily the \
+                     table you are altering."
+                ),
             ),
             _ => return None,
         };
+        let subject_column = match column {
+            Some(name) => format!("Cannot drop column \"{name}\""),
+            None => "Cannot drop the column".to_string(),
+        };
         return Some(format!(
-            "Cannot drop the column: {subject}. {remedy} SQLite refuses the drop because the \
-             leftover definition would no longer resolve."
+            "{subject_column}: {subject}. {remedy} SQLite refuses the drop because the leftover \
+             definition would no longer resolve."
         ));
     }
     None
@@ -185,20 +200,41 @@ mod tests {
     }
 
     #[test]
-    fn drop_column_arms_name_the_dependent_object() {
+    fn drop_column_arms_name_the_dependent_object_and_the_request_column() {
         for (raw, kind, name) in [
             (DROP_INDEXED, "index", "ix"),
             (DROP_VIEWED, "view", "v"),
             (DROP_TRIGGERED, "trigger", "tg"),
             (DROP_GENERATED, "table", "t"),
         ] {
-            let message = advice(None, raw);
+            let message = advice(Some("legacy"), raw);
             assert!(message.contains(kind), "{kind}: {message}");
             assert!(
                 message.contains(&format!("\"{name}\"")),
                 "{kind}: {message}"
             );
+            // AC2 — the sentence itself names the column, not just the driver
+            // text appended after it. SQLite never names it in these four arms.
+            assert!(
+                message.starts_with("Cannot drop column \"legacy\":"),
+                "{kind}: {message}"
+            );
+            assert!(!raw.contains("legacy"), "{kind}: needle leaked from raw");
         }
+    }
+
+    /// The `table` arm's blocker can live in a different table than the one
+    /// being altered (a child table's FOREIGN KEY), so the remedy must not send
+    /// the user to look only where they are.
+    #[test]
+    fn the_table_arm_does_not_pin_the_blocker_to_the_altered_table() {
+        let message = advice(Some("legacy"), DROP_GENERATED);
+
+        assert!(message.contains("FOREIGN KEY"), "{message}");
+        assert!(
+            message.contains("not necessarily the table you are altering"),
+            "{message}"
+        );
     }
 
     #[test]
