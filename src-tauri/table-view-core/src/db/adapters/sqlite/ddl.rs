@@ -16,6 +16,7 @@ use crate::models::{
 
 use super::connection::{quote_identifier, validate_namespace, SqliteAdapter};
 use super::ddl_errors::ddl_failure;
+use super::ddl_native::build_create_index_sql;
 
 const SQLITE_IDENTIFIER_MAX_BYTES: usize = 128;
 const SQLITE_DATA_TYPE_UNSUPPORTED_TOKENS: &[&str] = &[
@@ -181,48 +182,50 @@ impl SqliteAdapter {
             ));
         }
 
-        let table_req = CreateTableRequest {
-            connection_id: req.connection_id.clone(),
-            schema: req.schema.clone(),
-            name: req.name.clone(),
-            columns: req.columns.clone(),
-            primary_key: req.primary_key.clone(),
-            preview_only: req.preview_only,
-            table_comment: req.table_comment.clone(),
-            expected_database: None,
-        };
-        let table = self.create_table(&table_req).await?;
-
-        // Indexes are native (#1804), so their chain is kept rather than
-        // rejected. Each `CREATE INDEX` is its own transaction: an index
-        // failure does not roll back the table, matching the peer plan
-        // builders.
-        let mut sql_parts = vec![table.sql];
+        // Indexes are native (#1804), so the plan carries them instead of being
+        // refused for having any. Every statement is built before any of them
+        // runs, and they all run in the one transaction `run_ddl_or_preview`
+        // opens: a rejected plan touches nothing, and an index that fails at
+        // execution (a name that collides with an existing object, say — which
+        // no preview can predict) takes the CREATE TABLE back with it. Chaining
+        // separate transactions here would have replaced the pre-#1804
+        // all-or-nothing refusal with a table that outlives its failed plan.
+        let mut statements = vec![SqliteDdlStatement::plain(build_create_table_sql(
+            &CreateTableRequest {
+                connection_id: req.connection_id.clone(),
+                schema: req.schema.clone(),
+                name: req.name.clone(),
+                columns: req.columns.clone(),
+                primary_key: req.primary_key.clone(),
+                preview_only: req.preview_only,
+                table_comment: req.table_comment.clone(),
+                expected_database: None,
+            },
+        )?)];
         for index in &req.indexes {
-            let created = self
-                .create_index(&CreateIndexRequest {
-                    connection_id: req.connection_id.clone(),
-                    schema: req.schema.clone(),
-                    table: req.name.clone(),
-                    index_name: index.index_name.clone(),
-                    columns: index.columns.clone(),
-                    index_type: index.index_type.clone(),
-                    is_unique: index.is_unique,
-                    preview_only: req.preview_only,
-                    expected_database: None,
-                })
-                .await
-                // Surface the failing index name so the dialog's preview pane
-                // shows which row blocked the chain.
-                .map_err(|e| {
-                    AppError::Database(format!("Index \"{}\" failed: {}", index.index_name, e))
-                })?;
-            sql_parts.push(created.sql);
+            let sql = build_create_index_sql(&CreateIndexRequest {
+                connection_id: req.connection_id.clone(),
+                schema: req.schema.clone(),
+                table: req.name.clone(),
+                index_name: index.index_name.clone(),
+                columns: index.columns.clone(),
+                index_type: index.index_type.clone(),
+                is_unique: index.is_unique,
+                preview_only: req.preview_only,
+                expected_database: None,
+            })
+            // Name the failing row so the dialog can point at it — the builder
+            // errors describe the fault, not which index carried it.
+            .map_err(|e| match e {
+                AppError::Validation(message) => {
+                    AppError::Validation(format!("Index \"{}\": {message}", index.index_name))
+                }
+                other => other,
+            })?;
+            statements.push(SqliteDdlStatement::plain(sql));
         }
 
-        Ok(SchemaChangeResult {
-            sql: sql_parts.join(";\n"),
-        })
+        self.run_ddl_or_preview(req.preview_only, statements).await
     }
 }
 

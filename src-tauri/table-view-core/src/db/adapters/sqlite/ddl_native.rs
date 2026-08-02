@@ -223,7 +223,7 @@ fn build_alter_statement(
     }
 }
 
-fn build_create_index_sql(req: &CreateIndexRequest) -> Result<String, AppError> {
+pub(super) fn build_create_index_sql(req: &CreateIndexRequest) -> Result<String, AppError> {
     validate_namespace(&req.schema)?;
     validate_target_table(&req.table)?;
     validate_identifier(&req.index_name, "Index name")?;
