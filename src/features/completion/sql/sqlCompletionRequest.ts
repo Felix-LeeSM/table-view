@@ -13,10 +13,8 @@ import {
   type CompletionLanguage,
   completionCursorOffsets,
 } from "@/lib/completion/coreContract";
-import {
-  type ParsedDataSourceVersion,
-  parseDataSourceVersion,
-} from "@/types/dataSourceVersionCapabilities";
+import { parseDataSourceVersion } from "@/types/dataSourceVersionCapabilities";
+import { isVersionAtLeast } from "@/types/versionOrder";
 import type {
   SqlCompletionCacheState,
   SqlCompletionCatalogSnapshot,
@@ -134,19 +132,5 @@ function mariadbServerVersionSupportsReturning(
 ): boolean {
   const version = parseDataSourceVersion(serverVersion);
   if (!version.known) return true;
-  return isParsedVersionAtLeast(version, 10, 0, 5);
-}
-
-function isParsedVersionAtLeast(
-  version: Extract<ParsedDataSourceVersion, { known: true }>,
-  major: number,
-  minor: number,
-  patch: number,
-): boolean {
-  return (
-    version.major > major ||
-    (version.major === major &&
-      (version.minor > minor ||
-        (version.minor === minor && version.patch >= patch)))
-  );
+  return isVersionAtLeast(version, 10, 0, 5);
 }

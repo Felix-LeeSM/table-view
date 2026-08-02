@@ -12,6 +12,7 @@ import {
   type FileConnectionContract,
   SQLITE_FILE_CONNECTION,
 } from "./fileConnection";
+import { isVersionAtLeast } from "./versionOrder";
 
 export type {
   BackendAdapterCapabilitySource,
@@ -239,7 +240,10 @@ export type KnownMongoTopology = Exclude<MongoTopology, "unknown">;
  *
  * The field shape deliberately matches the object form of
  * `DataSourceVersionInput` (`./dataSourceVersionCapabilities`), so this value
- * can be handed to `parseDataSourceVersion` unchanged.
+ * can be handed to `parseDataSourceVersion` unchanged. Ordering does not go
+ * through that module, though: it imports `getDataSourceProfile` from this
+ * file, so the reverse edge would be a cycle. `./versionOrder` is the leaf
+ * both sides reach instead.
  */
 export interface MongoServerVersion {
   readonly major: number;
@@ -311,10 +315,7 @@ export function meetsMongoRuntimeRequirement(
   if (minVersion) {
     const version = capabilities.version;
     if (!version) return false;
-    const [major, minor, patch] = minVersion;
-    if (version.major !== major) return version.major > major;
-    if (version.minor !== minor) return version.minor > minor;
-    return version.patch >= patch;
+    return isVersionAtLeast(version, ...minVersion);
   }
 
   return true;
