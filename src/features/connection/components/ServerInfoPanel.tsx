@@ -8,10 +8,33 @@ import { Loader2, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
+import { mongoRuntimeCapabilities } from "@/lib/api/mongoRuntimeCapabilities";
 import { type ServerInfoRow, serverInfo } from "@/lib/api/serverInfo";
 import { safeStringifyCell } from "@/lib/jsonCell";
+import type {
+  MongoRuntimeCapabilities,
+  MongoTopology,
+} from "@/types/dataSource";
 import { DATABASE_TYPE_LABELS, type DatabaseType, paradigmOf } from "../model";
 import { PanelLoadingSkeleton } from "./PanelLoadingSkeleton";
+
+/**
+ * Issue #1821 — deployment shape is the one server fact this panel could not
+ * show. The version row above already renders `buildInfo.version`; topology
+ * lives only in the capability the adapter probed at `connect()`, so it needs
+ * its own (cached, round-trip-free) read.
+ *
+ * `"unknown"` gets a row of its own rather than being hidden: it is the state
+ * in which every later version/topology gate closes, and a blank row would
+ * leave the user with no way to tell "not a cluster" from "the server never
+ * answered".
+ */
+const TOPOLOGY_LABEL_KEY: Record<MongoTopology, string> = {
+  standalone: "serverInfo.topologyStandalone",
+  replicaSet: "serverInfo.topologyReplicaSet",
+  sharded: "serverInfo.topologySharded",
+  unknown: "serverInfo.topologyUnknown",
+};
 
 export interface ServerInfoPanelProps {
   connectionId: string;
@@ -24,7 +47,9 @@ export function ServerInfoPanel({
 }: ServerInfoPanelProps) {
   const { t } = useTranslation("featuresConnection");
   const paradigm = paradigmOf(dbType);
+  const isMongo = dbType === "mongodb";
   const [info, setInfo] = useState<ServerInfoRow | null>(null);
+  const [runtime, setRuntime] = useState<MongoRuntimeCapabilities | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -32,14 +57,23 @@ export function ServerInfoPanel({
     setLoading(true);
     setError(null);
     try {
-      const next = await serverInfo(connectionId);
+      // The capability read is a cache hit on the adapter (probed once during
+      // `connect()`), so pairing it with `server_info` adds no admin round
+      // trip. It also never rejects — a refused probe resolves to the
+      // fail-closed `unknown` — so it cannot turn a healthy `server_info`
+      // into a panel-wide error.
+      const [next, capabilities] = await Promise.all([
+        serverInfo(connectionId),
+        isMongo ? mongoRuntimeCapabilities(connectionId) : null,
+      ]);
       setInfo(next);
+      setRuntime(capabilities);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
     }
-  }, [connectionId]);
+  }, [connectionId, isMongo]);
 
   useEffect(() => {
     void refresh();
@@ -93,6 +127,16 @@ export function ServerInfoPanel({
             {t("serverInfo.rowVersion")}
           </dt>
           <dd className="font-mono break-all">{info.version}</dd>
+          {runtime !== null && (
+            <>
+              <dt className="text-muted-foreground">
+                {t("serverInfo.rowDeployment")}
+              </dt>
+              <dd data-testid="server-info-deployment">
+                {t(TOPOLOGY_LABEL_KEY[runtime.topology])}
+              </dd>
+            </>
+          )}
           {info.host !== null && (
             <>
               <dt className="text-muted-foreground">
