@@ -9,9 +9,12 @@
 // SQLite 처럼 제약 카탈로그가 없어 컬럼 플래그에서 합성된 FK 는 그래프가 이미
 // 실제 edge 로 만들어 두므로 그대로 실린다.
 //
-// 두 포맷의 문법 판단은 라운드 1 리뷰가 실제 파서(mermaid@11.16.0 `mermaid.parse`,
-// `@dbml/core` `Parser.parse`)로 잰 결과가 근거다. 이 저장소에는 두 파서가 없어
-// 여기 테스트는 산출 텍스트를 문자열로만 단언한다.
+// **이 파일의 문법 단정은 전부 실측이다.** `mermaid` 와 `@dbml/core` 가
+// devDependency 로 들어와 있고, `schemaGraphTextExport.test.ts` 의
+// "exporter output parses with the real parsers" 가 이 모듈의 산출물을
+// `mermaid.parse()` / `Parser.parse(…, "dbml")` 에 그대로 먹인다. 문자 클래스나
+// fallback 을 건드리면 그 왕복 테스트로 다시 재라 — 추측으로 고친 이스케이프가
+// 두 라운드 연속 blocking 이었다 (#2097 라운드 1·2).
 import type {
   SchemaGraph,
   SchemaGraphCatalogSnapshot,
@@ -25,7 +28,7 @@ import {
   selectSchemaGraphNodeMaps,
 } from "./schemaGraphSelectors";
 import type { SchemaGraphForeignKeySelection } from "./schemaGraphSelectorTypes";
-import { sortById } from "./schemaGraphSupport";
+import { schemaGraphTableId, sortById } from "./schemaGraphSupport";
 
 export type SchemaGraphTextExportInput =
   | SchemaGraph
@@ -39,7 +42,7 @@ export type SchemaGraphTextExportInput =
  * 하나라도 NULL 이면 FK 가 검사되지 않기 때문이다.
  *
  * 컬럼이 아직 안 올라온 테이블은 빈 엔티티 블록으로 남는다 — mermaid 는 빈
- * 블록을 받는다(라운드 1 실측). 같은 상황에서 DBML 은 블록을 못 받아
+ * 블록을 받는다(왕복 테스트 실측). 같은 상황에서 DBML 은 블록을 못 받아
  * `schemaGraphToDbml` 이 다르게 처리한다.
  */
 export function schemaGraphToMermaid(
@@ -92,43 +95,88 @@ export function schemaGraphToMermaid(
 export function schemaGraphToDbml(input: SchemaGraphTextExportInput): string {
   const model = toExportModel(input);
   const blocks: string[] = [];
-  const exportedTableIds = new Set<string>();
+  const declared = new Map<string, DeclaredDbmlTable>();
+  const tableNamesBySchema = new Map<string, Set<string>>();
 
   for (const { node, columns } of model.tables) {
     if (columns.length === 0) {
       blocks.push(dbmlSkipsColumnlessTable(node));
       continue;
     }
-    exportedTableIds.add(node.id);
+    const schema = dbmlIdentifier(node.schema);
+    const takenTables = tableNamesBySchema.get(schema) ?? new Set<string>();
+    tableNamesBySchema.set(schema, takenTables);
+    const table = takeUniqueDbmlName(takenTables, dbmlIdentifier(node.table));
+    const takenColumns = new Set<string>();
+    const columnNames = new Map<string, string>();
+
     const body = columns.map((column) => {
+      const name = takeUniqueDbmlName(
+        takenColumns,
+        dbmlIdentifier(column.column),
+      );
+      columnNames.set(column.column, name);
       const settings: string[] = [];
       if (column.data.is_primary_key) settings.push("pk");
       if (!column.data.nullable) settings.push("not null");
       const suffix = settings.length > 0 ? ` [${settings.join(", ")}]` : "";
-      return `  ${dbmlQuoted(column.column)} ${dbmlType(
-        column.data.data_type,
-      )}${suffix}`;
+      return `  "${name}" ${dbmlType(column.data.data_type)}${suffix}`;
     });
-    blocks.push([`Table ${dbmlTableName(node)} {`, ...body, "}"].join("\n"));
+
+    declared.set(node.id, { schema, table, columnNames });
+    blocks.push([`Table "${schema}"."${table}" {`, ...body, "}"].join("\n"));
   }
 
-  const refs = model.foreignKeys
-    // 선언되지 않은 테이블을 가리키는 `Ref:` 는 파서가 문서 전체를 거부하게
-    // 만든다 — 위에서 생략한 테이블과 그래프에 없는 테이블을 같이 건너뛴다.
-    .filter(
-      (foreignKey) =>
-        exportedTableIds.has(foreignKey.sourceTableId) &&
-        exportedTableIds.has(foreignKey.targetTableId),
-    )
-    .map(
-      (foreignKey) =>
-        `Ref: ${dbmlEndpoint(foreignKey.relationship.source)} > ${dbmlEndpoint(
-          foreignKey.relationship.target,
-        )}`,
-    );
+  // 선언되지 않은 테이블·컬럼을 가리키는 `Ref:` 는 파서가 문서 전체를 거부한다
+  // (실측: `Can't find field "x" in table "t"`). 위에서 실제로 인쇄한 이름만
+  // 통과시키므로, 생략된 테이블 · 그래프에 없는 테이블 · 카탈로그가 안 준 컬럼이
+  // 한 판정으로 걸린다.
+  const refLines = model.foreignKeys.map((foreignKey) =>
+    dbmlRefLine(declared, foreignKey),
+  );
+  // 완전히 같은 `Ref:` 두 줄도 파서가 거부한다(실측). 같은 컬럼쌍에 이름만 다른
+  // FK 제약이 둘 있으면 이 모듈은 제약 이름을 안 실으므로 두 줄이 바이트 단위로
+  // 같아진다 — 중복을 접는다.
+  const refs = [...new Set(refLines.filter((line) => line !== null))];
   if (refs.length > 0) blocks.push(refs.join("\n"));
 
+  const omitted = refLines.filter((line) => line === null).length;
+  if (omitted > 0) {
+    // 생략된 테이블 주석은 테이블만 알린다 — 같이 사라진 관계도 세어 둔다.
+    blocks.push(
+      `// omitted ${omitted} reference(s) to tables or columns that are not declared above`,
+    );
+  }
+
   return blocks.length > 0 ? `${blocks.join("\n\n")}\n` : "";
+}
+
+interface DeclaredDbmlTable {
+  readonly schema: string;
+  readonly table: string;
+  /** 카탈로그 원본 컬럼명 → 실제로 인쇄한 이름. `Ref:` 가 이 표를 통해서만 쓴다. */
+  readonly columnNames: ReadonlyMap<string, string>;
+}
+
+// 한 스코프 안에서 이름이 겹치면 파서가 문서를 통째로 거부한다 — 실측:
+// `Field "a" existed in table "t"`, `Table "t" existed`. 정리 과정에서 서로 다른
+// 원본이 같은 문자열로 접힐 수 있으므로(예: `a"b` 와 `a_b`) 접미사로 가른다.
+function takeUniqueDbmlName(taken: Set<string>, candidate: string): string {
+  let name = candidate;
+  for (let suffix = 2; taken.has(name); suffix += 1) {
+    name = `${candidate}_${suffix}`;
+  }
+  taken.add(name);
+  return name;
+}
+
+function dbmlRefLine(
+  declared: ReadonlyMap<string, DeclaredDbmlTable>,
+  foreignKey: SchemaGraphForeignKeySelection,
+): string | null {
+  const source = dbmlEndpoint(declared, foreignKey.relationship.source);
+  const target = dbmlEndpoint(declared, foreignKey.relationship.target);
+  return source && target ? `Ref: ${source} > ${target}` : null;
 }
 
 // DBML 은 본문 없는 `Table` 블록을 파싱하지 못한다 — `@dbml/core` 가
@@ -159,8 +207,13 @@ interface ExportModel {
 }
 
 function toExportModel(input: SchemaGraphTextExportInput): ExportModel {
-  // 스냅샷은 여기서 한 번만 그래프로 편다. selector 두 개에 같은 그래프를
-  // 넘겨야 `extractSchemaGraph` 가 두 번 돌지 않는다.
+  // 무거운 `selectSchemaGraphIntelligence` 대신 필요한 selector 둘만 부른다 —
+  // 그쪽도 그래프를 한 번만 펴지만, 이 모듈이 안 읽는 diagnostics 색인과 테이블별
+  // metadata readiness 두 패스를 더 돈다.
+  // ponytail: `"nodes" in input` 은 `schemaGraphSelectors` 의 비공개
+  // `isCatalogSnapshot` 을 반대 키로 다시 판별하는 것이다 — 셋째 선언이 나온
+  // 지금(같은 union 이 selectors · diff · 여기) 판별과 타입을 한쪽에서 export 해
+  // 모으는 편이 낫고, 그건 이 PR 밖 파일을 건드린다.
   const graph: SchemaGraph =
     "nodes" in input ? input : extractSchemaGraph(input);
   const nodeMaps = selectSchemaGraphNodeMaps(graph);
@@ -204,11 +257,10 @@ function mermaidEntityName(node: SchemaGraphTableNode): string {
   return `"${mermaidSafeText(node.schema)}.${mermaidSafeText(node.table)}"`;
 }
 
-// mermaid 의 따옴표 문자열 토큰은 `"` · `%` · `\` 와 제어문자를 받지 않고
-// (11.x 렉서: `["][^"%\r\n\v\b\\]+["]`), escape 문법도 없다. 라운드 1 이 실제
-// 파서로 `"public.we%ird"` 와 `"public.a\b"` 의 Parse error 를 실측했고,
-// Postgres 는 따옴표 식별자 안에서 셋 다 허용하므로 사용자 데이터로 도달한다.
-// 그래서 denylist 가 아니라 토큰이 거부하는 문자 전체를 `_` 로 내린다.
+// mermaid 의 따옴표 문자열 토큰은 `"` · `%` · `\` 와 제어문자를 받지 않고 escape
+// 문법도 없다 — 셋 다 파서 테스트가 직접 잰 값이고, 나머지 기호(`{} : ; | # & <`)와
+// 공백·유니코드는 따옴표 안에서 그대로 통과한다. Postgres 는 따옴표 식별자 안에서
+// 셋 다 허용하므로 사용자 데이터로 도달한다.
 // ponytail: `a"b` · `a%b` · `a\b` 가 한 이름으로 접힌다. 다이어그램 라벨이라
 // 허용하고, 구분이 필요해지면 별칭(`entity["label"]`) 표기로 올린다.
 const MERMAID_STRING_REJECTS = /["%\\]/g;
@@ -227,38 +279,57 @@ function mermaidSafeText(value: string): string {
   return safe.length > 0 ? safe : "unnamed";
 }
 
-// mermaid 의 attribute 는 따옴표를 못 쓰는 단어 토큰이다. 렉서가 실제로 받는
-// 문자만 남기는 allowlist — 라운드 1 이 파서로 잰 결과가 근거다: `numeric(10,2)`
-// `text[]` `full_name` 통과, `a@b` 와 선행 숫자 `2fa_enabled` 는 Parse error.
-// 확인되지 않은 문자(`-` 등)는 뺐다 — 빼면 라벨만 뭉개지고 넣었다 틀리면 다이어그램
-// 전체가 파싱 실패다.
-// ponytail 천장: 비ASCII 식별자(한글 컬럼명 등)도 전부 `_` 로 내려간다. 렉서의
-// 문자 클래스가 ASCII 기준이라 그대로 실으면 산출물이 무효가 된다. mermaid 를
-// dev 의존성으로 들여 실측할 수 있게 되면(2차 PR) 클래스를 넓혀라.
-const MERMAID_WORD_REJECTS = /[^A-Za-z0-9_()[\],]/g;
+// mermaid 의 attribute 는 따옴표를 못 쓰는 단어 토큰이다. 아래 경계는 전부
+// `schemaGraphTextExport.parsers.test.ts` 가 devDependency `mermaid` 로 직접 잰
+// 값이다 — 타입 자리와 이름 자리 양쪽에서 같은 결과였다.
+//
+// 받는다: 유니코드 letter/mark/digit(`이름` · `日本語` · `naïve_café`), `_`(선두
+// 포함), `-`, `.`, `,`, `()`, `[]`, `*`.
+// 거부한다: `$ @ { } : ; | # % & + / = < > ! ? ~ ^ ' \`` · 공백 · 선행 숫자.
+//
+// 그래서 letter 계열은 코드포인트를 안 가리고 통과시키고, 기호는 실측으로 통과한
+// 것만 남긴다. 미측정 기호를 `_` 로 내리면 라벨만 뭉개지지만, 잘못 통과시키면
+// 다이어그램 전체가 파싱 실패다.
+// ponytail: `a@b` 와 `a$b` 는 둘 다 `a_b` 로 접힌다. 이름이 서로 달라지는 것이
+// 중요해지면 별칭(`entity["label"]`) 표기로 올린다.
+const MERMAID_WORD_REJECTS = /[^\p{L}\p{M}\p{N}_\-.,()[\]*]/gu;
+const MERMAID_WORD_HEAD = /^[\p{L}_]/u;
 
 function mermaidWord(value: string): string {
   // 공백만 있는 타입/이름은 `_` 로 채우지 말고 placeholder 로 보낸다 —
   // `dbmlType` 의 빈 값 처리와 같은 기준이다.
   const cleaned = value.trim().replace(MERMAID_WORD_REJECTS, "_");
   if (cleaned.length === 0) return "unknown";
-  // 토큰은 letter 로 시작해야 한다.
-  return /^[A-Za-z]/.test(cleaned) ? cleaned : `x_${cleaned}`;
+  // 토큰 선두는 letter 나 `_` 여야 한다 — `2fa`·`-lead`·`.lead` 는 Parse error 고
+  // `_` 를 앞에 붙인 `_2fa`·`_-dash`·`_.dot` 은 통과한다(실측).
+  return MERMAID_WORD_HEAD.test(cleaned) ? cleaned : `_${cleaned}`;
 }
 
 function dbmlTableName(node: SchemaGraphTableNode): string {
   return `${dbmlQuoted(node.schema)}.${dbmlQuoted(node.table)}`;
 }
 
-function dbmlEndpoint(endpoint: SchemaGraphForeignKeyEndpoint): string {
-  const qualifier = `${dbmlQuoted(endpoint.schema)}.${dbmlQuoted(
-    endpoint.table,
-  )}`;
-  const columns = endpoint.columns.map(dbmlQuoted);
+function endpointTableId(endpoint: SchemaGraphForeignKeyEndpoint): string {
+  return schemaGraphTableId(endpoint.schema, endpoint.table);
+}
+
+function dbmlEndpoint(
+  declared: ReadonlyMap<string, DeclaredDbmlTable>,
+  endpoint: SchemaGraphForeignKeyEndpoint,
+): string | null {
+  const table = declared.get(endpointTableId(endpoint));
+  if (!table) return null;
+  const columns = endpoint.columns.map((column) =>
+    table.columnNames.get(column),
+  );
+  if (columns.some((column) => column === undefined)) return null;
+
+  const qualifier = `"${table.schema}"."${table.table}"`;
+  const quoted = columns.map((column) => `"${column}"`);
   // 단일 컬럼은 평문 형태, 복합 키만 괄호 목록 — dbdiagram.io 문서의 두 형태다.
-  return columns.length === 1
-    ? `${qualifier}.${columns[0]}`
-    : `${qualifier}.(${columns.join(", ")})`;
+  return quoted.length === 1
+    ? `${qualifier}.${quoted[0]}`
+    : `${qualifier}.(${quoted.join(", ")})`;
 }
 
 const DBML_BARE_TYPE = /^[A-Za-z_][A-Za-z0-9_]*(\([A-Za-z0-9_, ]*\))?$/;
@@ -269,13 +340,18 @@ function dbmlType(dataType: string): string {
   return DBML_BARE_TYPE.test(trimmed) ? trimmed : dbmlQuoted(trimmed);
 }
 
-// DBML 의 따옴표 식별자는 backslash escape 를 받는다. 줄바꿈은 문자열 안에서
-// 못 쓰므로 공백으로 접고, mermaid 쪽과 같은 기준으로 양끝 공백을 턴다.
+// DBML 의 따옴표 식별자에는 **escape 문법이 없다** — 실측: `"a\"b"` 도 `"a""b"` 도
+// `@dbml/core` 가 거부하고, `\` 는 escape 가 아니라 그냥 문자라 `"a\b"` 는 이름이
+// `a\b` 인 채로 통과한다. 그래서 backslash 는 그대로 두고 `"` 만 mermaid 와 같은
+// 기준으로 `_` 로 내린다.
+//
+// 빈 식별자(`""`)와 줄바꿈은 파서가 거부하므로, 줄바꿈·제어문자는 공백으로 접고
+// 양끝을 턴 뒤 비면 placeholder 를 쓴다 — `mermaidSafeText` 와 같은 낱말이다.
 function dbmlQuoted(value: string): string {
-  const escaped = value
-    .replace(CONTROL_OR_SPACE, " ")
-    .trim()
-    .replaceAll("\\", "\\\\")
-    .replaceAll('"', '\\"');
-  return `"${escaped}"`;
+  return `"${dbmlIdentifier(value)}"`;
+}
+
+function dbmlIdentifier(value: string): string {
+  const safe = value.replace(CONTROL_OR_SPACE, " ").replaceAll('"', "_").trim();
+  return safe.length > 0 ? safe : "unnamed";
 }

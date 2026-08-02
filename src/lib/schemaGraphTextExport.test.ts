@@ -1,3 +1,5 @@
+import { Parser } from "@dbml/core";
+import mermaid from "mermaid";
 import { describe, expect, it } from "vitest";
 import { schemaName, tableName } from "@/test-utils/brandedKeys";
 import { schemaGraphTableId } from "@/test-utils/schemaGraphIds";
@@ -9,6 +11,7 @@ import type {
 } from "@/types/schemaGraph";
 import { extractSchemaGraph } from "./schemaGraph";
 import {
+  type SchemaGraphTextExportInput,
   schemaGraphToDbml,
   schemaGraphToMermaid,
 } from "./schemaGraphTextExport";
@@ -115,13 +118,36 @@ describe("schemaGraphToMermaid", () => {
       [
         "erDiagram",
         '    "public.we_ird_a_b tbl" {',
-        "        boolean x_2fa_enabled",
+        "        boolean _2fa_enabled",
         "        integer a_b",
         "        character_varying(255) full_name",
         "    }",
         "",
       ].join("\n"),
     );
+  });
+
+  // Reason: 라운드 2 blocking ④ — ASCII 밖을 전부 `_` 로 내리던 라운드 2 코드는
+  // 한 엔티티 안의 `이름`·`나이` 를 같은 토큰으로 접어 다이어그램이 가리키는
+  // 대상을 소멸시켰다. mermaid 는 유니코드 식별자를 그대로 받는다 (2026-08-02)
+  it("keeps non-ASCII identifiers intact and distinct", () => {
+    const diagram = schemaGraphToMermaid(koreanSnapshot());
+
+    expect(diagram).toContain("        문자열 이름");
+    expect(diagram).toContain("        integer 나이");
+    expect(diagram).toContain('    "public.사용자" {');
+  });
+
+  // Reason: 컬럼 순서는 id(퍼센트 인코딩) 순이 아니라 `ordinal` 순이어야 한다.
+  // 한글 컬럼은 두 순서가 어긋나는 조합이라 정렬을 지워도 안 걸리던 구멍을 막는다
+  // (라운드 2 non-blocking 2, 2026-08-02)
+  it("orders columns by graph ordinal even when the encoded ids sort differently", () => {
+    const columns = schemaGraphToMermaid(koreanSnapshot())
+      .split("\n")
+      .filter((line) => line.startsWith("        "))
+      .map((line) => line.trim().split(" ")[1]);
+
+    expect(columns).toEqual(["ab", "나이", "이름"]);
   });
 
   // Reason: 이름이 통째로 비면 빈 따옴표 / 빈 단어가 나가 파싱이 깨진다 (2026-08-02)
@@ -150,6 +176,14 @@ describe("schemaGraphToMermaid", () => {
   it("trims surrounding whitespace from an entity name", () => {
     expect(schemaGraphToMermaid(paddedNameSnapshot())).toContain(
       '    "public.spaced" {',
+    );
+  });
+
+  // Reason: 이름이 통째로 비면 `""` 가 나가고 mermaid 가 Parse error 다.
+  // 라운드 2 에서 이 fallback 을 지워도 25개가 전부 통과했다 (2026-08-02)
+  it("names an entity whose catalog name is empty", () => {
+    expect(schemaGraphToMermaid(unnamedTableSnapshot())).toContain(
+      '    "public.unnamed" {',
     );
   });
 
@@ -220,20 +254,35 @@ describe("schemaGraphToDbml", () => {
     expect(dbml).toContain('Table "public"."orders" {');
   });
 
-  // Reason: 그래프에 없는 테이블을 가리키는 edge 도 같은 이유로 빠져야 한다 (2026-08-02)
-  it("drops a Ref whose endpoint table is absent from the graph", () => {
+  // Reason: 선언 안 된 **컬럼**을 가리키는 `Ref:` 도 파서가 문서 전체를 거부한다
+  // (`Can't find field "user_id" in table "orders"`). 이 그래프는 없는 테이블과
+  // 없는 컬럼을 하나씩 담고, 둘 다 빠지고 개수가 주석에 남아야 한다 (2026-08-02)
+  it("drops Refs to tables or columns that were never declared", () => {
     const dbml = schemaGraphToDbml(handBuiltGraph());
 
     expect(dbml).not.toContain("dangling");
-    expect(dbml.match(/^Ref: /gm)).toHaveLength(1);
+    expect(dbml).not.toContain("Ref:");
+    expect(dbml).toContain(
+      "// omitted 2 reference(s) to tables or columns that are not declared above",
+    );
   });
 
-  // Reason: 따옴표 식별자의 backslash escape — 리뷰어 변조가 이 escape 를 지우고
-  // 생존했다 (라운드 1 non-blocking 1, 2026-08-02)
-  it("escapes backslashes and quotes inside quoted identifiers", () => {
+  // Reason: 정리 뒤 이름이 겹치면 파서가 `Field "a_b" existed in table` 로 문서를
+  // 거부한다 — 서로 다른 원본은 산출물에서도 달라야 한다 (2026-08-02)
+  it("keeps sanitised identifiers unique inside their scope", () => {
+    const dbml = schemaGraphToDbml(collidingNameSnapshot());
+
+    expect(dbml).toContain('  "a_b" integer');
+    expect(dbml).toContain('  "a_b_2" integer');
+  });
+
+  // Reason: 라운드 2 blocking ③ — DBML 식별자에는 escape 문법이 없다. `\"` 도
+  // `""` 도 파서가 거부하므로 `"` 는 내리고 backslash 는 문자 그대로 둔다.
+  // 라운드 1·2 의 기대값은 파싱 불가능한 문자열을 정답으로 박아 뒀다 (2026-08-02)
+  it("lowers quotes and leaves backslashes alone inside quoted identifiers", () => {
     expect(schemaGraphToDbml(hostileSnapshot())).toBe(
       [
-        'Table "public"."we\\"ird\\\\a%b tbl" {',
+        'Table "public"."we_ird\\a%b tbl" {',
         '  "2fa_enabled" boolean',
         '  "a@b" integer',
         '  "full name" "character varying(255)"',
@@ -243,17 +292,35 @@ describe("schemaGraphToDbml", () => {
     );
   });
 
-  // Reason: 빈 타입이 따옴표 없이 나가면 파싱이 깨진다 (2026-08-02)
-  it("falls back to a placeholder type when the catalog type is blank", () => {
+  // Reason: 라운드 2 blocking ③ — 빈 식별자 `""` 를 파서가 거부한다. 공백뿐인
+  // 이름은 trim 뒤 비므로 placeholder 가 필요하다 (2026-08-02)
+  it("falls back to placeholders for a blank identifier and a blank type", () => {
     expect(schemaGraphToDbml(blankNameSnapshot())).toBe(
       [
         'Table "public"."blanks" {',
-        '  "" "unknown"',
+        '  "unnamed" "unknown"',
         '  "ok_column" "unknown"',
         "}",
         "",
       ].join("\n"),
     );
+  });
+
+  // Reason: 라운드 2 blocking ③ — 이름 전체가 비면 테이블 식별자도 비어 파서가
+  // 거부한다. mermaid 쪽 placeholder 의 DBML 대응물 (2026-08-02)
+  it("names a table whose catalog name is empty", () => {
+    expect(schemaGraphToDbml(unnamedTableSnapshot())).toContain(
+      'Table "public"."unnamed" {',
+    );
+  });
+
+  // Reason: 완전히 같은 `Ref:` 두 줄을 @dbml/core 가 거부한다. 같은 컬럼쌍에
+  // 이름만 다른 FK 제약이 둘이면 이 모듈은 이름을 안 실어 두 줄이 같아진다
+  // (라운드 1 non-blocking 4 를 실측으로 승격, 2026-08-02)
+  it("folds byte-identical Ref lines into one", () => {
+    const dbml = schemaGraphToDbml(duplicateForeignKeySnapshot());
+
+    expect(dbml.match(/^Ref: /gm)).toHaveLength(1);
   });
 
   // Reason: mermaid 와 같은 기준으로 양끝 공백을 턴다 (라운드 1 non-blocking 13, 2026-08-02)
@@ -589,5 +656,132 @@ function handBuiltGraph(): SchemaGraph {
       },
     ],
     diagnostics: [],
+  };
+}
+
+/**
+ * 왕복 검증에 넣는 입력 전체. 문자열 단언이 고정하는 산출물이 **실제 파서를
+ * 통과하는지**를 이 목록이 증명한다 — 라운드 1·2 의 blocking 4건이 전부
+ * 「추측한 문법으로 만든 텍스트」였고, 그때는 저장소에 파서가 없어 문자열 단언이
+ * 무효 출력을 정답으로 고정할 수 있었다.
+ */
+const ROUND_TRIP_INPUTS: ReadonlyArray<[string, SchemaGraphTextExportInput]> = [
+  ["shop", shopSnapshot()],
+  ["shop with a NOT NULL fk", shopSnapshot({ userIdNullable: false })],
+  ["shop with a PK+FK column", shopSnapshot({ userIdPrimaryKey: true })],
+  ["shop without constraints", shopSnapshot({ constraints: {} })],
+  ["shop with a column-less parent", shopSnapshot({ columnsForUsers: [] })],
+  ["composite fk", compositeSnapshot()],
+  ["sqlite-like synthesised fk", sqliteLikeSnapshot()],
+  ["duplicate fk constraints", duplicateForeignKeySnapshot()],
+  ["hostile names and types", hostileSnapshot()],
+  ["colliding sanitised names", collidingNameSnapshot()],
+  ["non-ASCII names", koreanSnapshot()],
+  ["blank column name and type", blankNameSnapshot()],
+  ["unnamed table", unnamedTableSnapshot()],
+  ["column-less table", columnlessSnapshot()],
+  ["padded names", paddedNameSnapshot()],
+  ["empty catalog", emptySnapshot()],
+  ["hand-built graph with dangling edges", handBuiltGraph()],
+];
+
+// Purpose: exporter 산출물을 실제 파서에 먹여 문법 판단을 추측에서 실측으로
+// 바꾼다 — devDependency `mermaid` · `@dbml/core` (2026-08-02, 라운드 2 결정)
+describe("exporter output parses with the real parsers", () => {
+  // Reason: mermaid 가 산출물을 렌더 대상으로 받는지가 이 포맷의 유일한 합격
+  // 기준이다. 라운드 1·2 blocking ②④ 가 여기서 잡혔을 결함이다 (2026-08-02)
+  it.each(ROUND_TRIP_INPUTS)(
+    "mermaid.parse accepts %s",
+    async (_name, input) => {
+      await expect(
+        mermaid.parse(schemaGraphToMermaid(input)),
+      ).resolves.toMatchObject({
+        diagramType: "er",
+      });
+    },
+  );
+
+  // Reason: DBML 은 토큰 하나가 깨지면 문서 전체가 무효라 부분 통과가 없다.
+  // 라운드 1 blocking ① 과 라운드 2 blocking ③ 이 이 검사의 대상이다 (2026-08-02)
+  it.each(ROUND_TRIP_INPUTS)("Parser.parse accepts %s", (_name, input) => {
+    expect(() => Parser.parse(schemaGraphToDbml(input), "dbml")).not.toThrow();
+  });
+
+  // Reason: 파서가 이름을 되돌려 준다는 것까지 봐야 "파싱은 되는데 다른 것이
+  // 됐다"(예: backslash 이중화)를 잡는다 (2026-08-02)
+  it("round-trips non-ASCII table and column names through @dbml/core", () => {
+    const database = Parser.parse(schemaGraphToDbml(koreanSnapshot()), "dbml");
+    const table = database.schemas[0]?.tables[0];
+
+    expect(table?.name).toBe("사용자");
+    expect(table?.fields.map((field) => field.name)).toEqual([
+      "ab",
+      "나이",
+      "이름",
+    ]);
+  });
+});
+
+/** 한글 식별자 + id 정렬과 ordinal 정렬이 어긋나는 조합. */
+function koreanSnapshot(): SchemaGraphCatalogSnapshot {
+  return {
+    source: { dbType: "postgresql", database: "shop" },
+    schemas: [{ name: "public" }],
+    tablesBySchema: {
+      public: [{ name: "사용자", schema: "public", row_count: null }],
+    },
+    columnsByTable: {
+      public: {
+        사용자: [
+          column("이름", { data_type: "문자열" }),
+          column("나이"),
+          column("ab", { data_type: "text" }),
+        ],
+      },
+    },
+  };
+}
+
+function unnamedTableSnapshot(): SchemaGraphCatalogSnapshot {
+  return {
+    source: { dbType: "postgresql", database: "shop" },
+    schemas: [{ name: "public" }],
+    tablesBySchema: {
+      public: [{ name: "", schema: "public", row_count: null }],
+    },
+    columnsByTable: { public: { "": [column("id", { nullable: false })] } },
+  };
+}
+
+/** 정리 뒤 같은 문자열로 접히는 컬럼 둘 — DBML 은 같은 이름 필드 둘을 거부한다. */
+function collidingNameSnapshot(): SchemaGraphCatalogSnapshot {
+  return {
+    source: { dbType: "postgresql", database: "shop" },
+    schemas: [{ name: "public" }],
+    tablesBySchema: {
+      public: [{ name: "collide", schema: "public", row_count: null }],
+    },
+    columnsByTable: {
+      public: { collide: [column('a"b'), column("a_b")] },
+    },
+  };
+}
+
+/** 같은 컬럼쌍에 이름만 다른 FK 제약 둘 — 산출 `Ref:` 두 줄이 바이트 단위로 같다. */
+function duplicateForeignKeySnapshot(): SchemaGraphCatalogSnapshot {
+  return {
+    ...shopSnapshot(),
+    constraintsByTable: {
+      public: {
+        orders: [
+          foreignKey("orders_user_id_fkey", ["user_id"], "public.users", [
+            "id",
+          ]),
+          foreignKey("orders_user_id_fkey2", ["user_id"], "public.users", [
+            "id",
+          ]),
+        ],
+      },
+    },
   };
 }
