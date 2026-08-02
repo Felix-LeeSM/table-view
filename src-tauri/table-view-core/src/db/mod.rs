@@ -43,6 +43,7 @@ pub mod sqlite;
 pub(crate) mod tls;
 pub mod traits;
 pub mod types;
+pub(crate) mod version;
 
 pub use adapters::sqlite::SqliteAdapter;
 pub use duckdb::DuckdbAdapter;
