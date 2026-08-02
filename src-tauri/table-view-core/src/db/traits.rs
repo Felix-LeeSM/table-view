@@ -927,6 +927,23 @@ pub trait DocumentAdapter: DbAdapter {
         Box::pin(async { Ok(None) })
     }
 
+    /// Issue #1821 — the connected server's runtime capability (deployment
+    /// topology + version), resolved during `connect()` rather than declared
+    /// statically by the data-source profile.
+    ///
+    /// Mongo-shaped on purpose: MongoDB is the only document engine in the
+    /// registry, and inventing a paradigm-neutral shape for one implementor
+    /// would be a contract nobody can validate. A second document engine is
+    /// the trigger to generalise.
+    ///
+    /// The default is `unknown()` — the fail-closed value — so an adapter that
+    /// never probes cannot accidentally open a version-gated feature.
+    fn mongo_runtime_capabilities<'a>(
+        &'a self,
+    ) -> BoxFuture<'a, crate::models::MongoRuntimeCapabilities> {
+        Box::pin(async { crate::models::MongoRuntimeCapabilities::unknown() })
+    }
+
     fn list_databases<'a>(&'a self) -> BoxFuture<'a, Result<Vec<NamespaceInfo>, AppError>>;
 
     /// Sprint 180 (AC-180-04): cancel-token cooperation. Adapters observe

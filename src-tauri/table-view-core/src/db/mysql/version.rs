@@ -1,3 +1,4 @@
+use crate::db::version::{is_at_least, parse_version_triplet};
 use crate::models::DatabaseType;
 
 const MYSQL_CHECK_CONSTRAINT_MIN: (u32, u32, u32) = (8, 0, 16);
@@ -61,35 +62,6 @@ pub(super) fn parse_mysql_server_version(
         minor,
         patch,
     })
-}
-
-fn parse_version_triplet(raw: &str) -> Option<(u32, u32, u32)> {
-    let mut start = None;
-    let mut end = raw.len();
-    for (idx, ch) in raw.char_indices() {
-        if ch.is_ascii_digit() {
-            start.get_or_insert(idx);
-            continue;
-        }
-        if start.is_some() && ch != '.' {
-            end = idx;
-            break;
-        }
-    }
-
-    let version = &raw[start?..end];
-    let mut parts = version
-        .split('.')
-        .take(3)
-        .map(|part| part.parse::<u32>().ok());
-    let major = parts.next().flatten()?;
-    let minor = parts.next().flatten().unwrap_or(0);
-    let patch = parts.next().flatten().unwrap_or(0);
-    Some((major, minor, patch))
-}
-
-fn is_at_least(major: u32, minor: u32, patch: u32, minimum: (u32, u32, u32)) -> bool {
-    (major, minor, patch) >= minimum
 }
 
 #[cfg(test)]

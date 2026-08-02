@@ -202,6 +202,124 @@ export interface DataSourceCapabilities {
   // information `paradigm` cannot).
 }
 
+/* ── Runtime capability (MongoDB) ─────────────────────────────────────────
+ *
+ * Issue #1821. The rest of this file declares STATIC profile capabilities:
+ * compile-time claims keyed by `DatabaseType`, identical for every connection
+ * to that engine, readable before any connection exists. The types below are
+ * the opposite kind of value — per-connection facts the backend resolves from
+ * the server's `hello` + `buildInfo` handshake during `connect()`. Two MongoDB
+ * connections open at the same time can legitimately disagree (a 4.4
+ * standalone next to a 7.0 sharded cluster), which is why these never live on
+ * `DataSourceProfile` and are not merged into `DataSourceCapabilities`.
+ *
+ * They are also *absent* until a connection is established, so every consumer
+ * must handle "not known yet" — see `meetsMongoRuntimeRequirement`, which
+ * treats it the same as "server said no".
+ */
+
+/**
+ * MongoDB deployment shape as reported by the server's `hello` handshake.
+ * Mirrors the Rust `MongoTopology` (`src-tauri/table-view-core/src/models/
+ * mongo_runtime.rs`) literal-for-literal; the two are one wire contract.
+ *
+ * `"unknown"` is not a topology — it is the absence of an answer (probe
+ * refused, handshake missing the discriminating fields, or no connection yet)
+ * and never satisfies a requirement.
+ */
+export type MongoTopology = "standalone" | "replicaSet" | "sharded" | "unknown";
+
+/** A topology the server actually identified — `"unknown"` excluded. */
+export type KnownMongoTopology = Exclude<MongoTopology, "unknown">;
+
+/**
+ * Parsed `buildInfo.version`. `raw` keeps the server's own string (including
+ * any pre-release tag such as `"4.9.0-rc0"`) for display; the numeric triplet
+ * is what comparisons use.
+ *
+ * The field shape deliberately matches the object form of
+ * `DataSourceVersionInput` (`./dataSourceVersionCapabilities`), so this value
+ * can be handed to `parseDataSourceVersion` unchanged.
+ */
+export interface MongoServerVersion {
+  readonly major: number;
+  readonly minor: number;
+  readonly patch: number;
+  readonly raw: string;
+}
+
+/** Per-connection MongoDB runtime capability, as it arrives over the wire. */
+export interface MongoRuntimeCapabilities {
+  readonly topology: MongoTopology;
+  /** Absent when `buildInfo` was unavailable or its version was unparsable. */
+  readonly version?: MongoServerVersion;
+}
+
+/**
+ * The fail-closed value: nothing known about the server. Satisfies no
+ * requirement. Used for a connection that has not been probed yet and as the
+ * fallback whenever the backend read fails.
+ */
+export const UNKNOWN_MONGO_RUNTIME_CAPABILITIES: MongoRuntimeCapabilities =
+  Object.freeze({ topology: "unknown" });
+
+/**
+ * What a version/topology-gated feature demands of the connected server.
+ * Both axes are optional and an omitted axis is not checked, but at least one
+ * must be present — see {@link meetsMongoRuntimeRequirement} for why an empty
+ * requirement closes rather than passes.
+ */
+export interface MongoRuntimeRequirement {
+  /** Inclusive minimum `[major, minor, patch]`, e.g. `[4, 0, 0]`. */
+  readonly minVersion?: readonly [number, number, number];
+  /** Deployment shapes that can serve the feature. */
+  readonly topologies?: readonly KnownMongoTopology[];
+}
+
+/**
+ * Whether the connected server satisfies `requirement`. **Fail-closed**: the
+ * answer is `false` for a missing capability (not connected / not probed
+ * yet), an `"unknown"` topology, and an absent version — an unidentified
+ * server closes the feature instead of opening it.
+ *
+ * This is the gate primitive the version-dependent MongoDB axes (change
+ * streams, transactions, version-gated aggregation stages) build on. It is
+ * deliberately the only place the comparison lives: the backend reports facts
+ * and does not re-check them, per the single-layer capability-gate decision in
+ * `memory/engineering/architecture/data-source/memory.md` (#1618).
+ */
+export function meetsMongoRuntimeRequirement(
+  capabilities: MongoRuntimeCapabilities | null | undefined,
+  requirement: MongoRuntimeRequirement,
+): boolean {
+  if (!capabilities) return false;
+
+  const { minVersion, topologies } = requirement;
+  // A requirement that constrains nothing is a caller bug — a misspelled key
+  // (`{ minversion: [...] }`) reads as `{}` at runtime, and opening the
+  // feature is the wrong way for that mistake to surface. Callers that need
+  // nothing from the server should not consult the gate at all.
+  if (!minVersion && !topologies) return false;
+
+  if (topologies) {
+    // Widened so `"unknown"` can be compared at all: the requirement type
+    // excludes it, so an unidentified server matches no allowed set.
+    const allowed: readonly MongoTopology[] = topologies;
+    if (!allowed.includes(capabilities.topology)) return false;
+  }
+
+  if (minVersion) {
+    const version = capabilities.version;
+    if (!version) return false;
+    const [major, minor, patch] = minVersion;
+    if (version.major !== major) return version.major > major;
+    if (version.minor !== minor) return version.minor > minor;
+    return version.patch >= patch;
+  }
+
+  return true;
+}
+
 export interface DataSourceProfile {
   readonly id: DatabaseType;
   readonly paradigm: DataParadigm;

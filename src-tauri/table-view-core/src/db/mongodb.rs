@@ -49,6 +49,7 @@
 //! whether to render a muted/read-only cell and block inline edit; the
 //! frontend regex is `^\[\d+ items\]$` / exact match `"{...}"`.
 
+mod capability;
 mod category;
 mod connection;
 mod mutations;
@@ -443,6 +444,14 @@ impl DocumentAdapter for MongoAdapter {
 
     fn server_info<'a>(&'a self) -> BoxFuture<'a, Result<crate::models::ServerInfoRow, AppError>> {
         Box::pin(async move { self.server_info_impl().await })
+    }
+
+    /// Issue #1821 — surface the capability probed at connect. Cache read
+    /// only; the admin round trips happened once, inside `connect()`.
+    fn mongo_runtime_capabilities<'a>(
+        &'a self,
+    ) -> BoxFuture<'a, crate::models::MongoRuntimeCapabilities> {
+        Box::pin(async move { self.runtime_capabilities().await })
     }
 
     fn slow_queries<'a>(
