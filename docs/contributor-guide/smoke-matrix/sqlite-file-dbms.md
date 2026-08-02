@@ -20,9 +20,9 @@ Current gap / routing:
 
 GitHub Runtime Happy Path now runs a SQLite desktop smoke for deterministic file
 create/open, table browse, read query, writable DML, row edit, read-only write
-rejection, and internal app-state DB rejection. Structured DDL beyond bounded
-table creation and extension-boundary non-claims stay routed to #460/#461 rather
-than broadening this smoke.
+rejection, and internal app-state DB rejection. The structured DDL #1804 opened
+in the adapter is not in this smoke, and extension-boundary non-claims stay
+routed to #460/#461, rather than broadening it.
 
 ## File connection lifecycle
 
@@ -146,8 +146,10 @@ Current gap / routing:
 Product-visible SQLite docs now agree that runtime support is the wired file
 smoke plus adapter evidence, parser/Safe Mode remains bounded, sqlite-cli dot
 commands are non-executable completion vocabulary, and extension/capability,
-structured DDL beyond bounded table creation, ALTER, and nested JSON support
-stays unsupported or future.
+rebuild-only ALTER, constraint DDL, and nested JSON support stay unsupported or
+future. The structured DDL the adapter gained in #1804 is not yet a
+product-visible claim: the `ddl.*` capability flags still expose table creation
+alone.
 
 ## Test coverage recheck
 
@@ -185,8 +187,9 @@ Current gap / routing:
 
 Product-visible support claims match this evidence map: SQLite support is
 file-backed DBMS runtime/query/edit plus deterministic file smoke and bounded
-structured table creation, not structured DDL parity beyond table creation,
-admin, or vendor CLI parity. DuckDB/file analytics remains a separate H3 lane,
+structured table creation, not admin or vendor CLI parity. The adapter reaches
+further than that claim after #1804 (see the routing section above) — the
+capability flags, not the adapter, are what the product claim tracks. DuckDB/file analytics remains a separate H3 lane,
 and fixture-only inventory does not become live runtime evidence.
 
 ## Fixture inventory

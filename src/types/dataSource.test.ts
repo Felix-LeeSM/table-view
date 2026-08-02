@@ -326,8 +326,10 @@ describe("DataSourceProfile registry", () => {
     expect(sqlite.connectionKind).toBe("file");
     expect(sqlite.capabilities).toEqual(expectedCapabilitiesByType.sqlite);
     expect(sqlite.capabilities.edit.editRows).toBe(true);
-    // Issue #1460 — only create_table is wired in the adapter; alter/index/drop
-    // return Unsupported, so their flags stay false and the UI hides them.
+    // Issue #1460 / #1804 — the adapter runs the natively supported
+    // drop/rename/column/index DDL, but these flags stay false until the
+    // Structure column editor has its own gate, so the UI still hides them.
+    // See SQLITE_CAPABILITIES in dataSource.ts for the full reason.
     expect(sqlite.capabilities.ddl.createTable).toBe(true);
     expect(sqlite.capabilities.ddl.alterTable).toBe(false);
     expect(sqlite.capabilities.ddl.createIndex).toBe(false);

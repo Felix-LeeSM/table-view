@@ -105,7 +105,7 @@ pub(super) fn validate_sqlite_write_guardrails(
 ) -> Result<(), AppError> {
     match query_type {
         QueryType::Ddl => Err(AppError::Unsupported(
-            "Raw SQLite DDL is not supported by the SQLite query adapter; use structured CREATE TABLE for the bounded table-creation slice or a future explicit rebuild workflow.".into(),
+            "Raw SQLite DDL is not supported by the SQLite query adapter; use the Structure dialog for structured DDL, or a future explicit rebuild workflow for changes SQLite cannot make in place.".into(),
         )),
         QueryType::Dml { .. } if read_only => Err(AppError::Unsupported(
             "Cannot execute write statements on a read-only SQLite connection.".into(),

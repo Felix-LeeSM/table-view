@@ -132,11 +132,13 @@ separated from internal app SQLite state. GitHub Runtime Happy Path now wires a
 SQLite desktop smoke for file create/open, table browse, read query, writable
 DML, row edit, structured table creation with schema refresh proof, read-only
 write rejection, and internal app-state DB rejection. Raw SQL DDL execution
-remains rejected by the query adapter, and broader structured DDL parity is not
-implemented: unsupported `ALTER TABLE` rebuilds, table/index removal or rename,
-index creation, standalone constraint changes, nested JSON edits, sqlite-cli
-execution, and JSON1/FTS/RTREE/loadable-extension semantics remain separate
-gates. Read-only file connections reject writes and table creation.
+remains rejected by the query adapter. Since #1804 the adapter also runs the
+structured DDL SQLite performs natively — table drop/rename, column add/drop,
+index create/drop — but the `ddl.*` capability flags still claim table creation
+alone, so those entry points stay hidden in the UI. Not implemented at all:
+`ALTER TABLE` rebuilds (a column's type, nullability or default), standalone
+constraint changes, nested JSON edits, sqlite-cli execution, and
+JSON1/FTS/RTREE/loadable-extension semantics remain separate gates. Read-only file connections reject writes and table creation.
 
 ### DuckDB
 

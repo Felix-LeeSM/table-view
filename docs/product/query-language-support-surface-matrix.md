@@ -118,10 +118,12 @@ dot-command vocabulary as non-executable suggestions, and detected-only
 JSON1/FTS5 read-query assistance.
 
 **Current boundary**: Raw SQL DDL is rejected by the SQLite adapter, and
-structured DDL is limited to `CREATE TABLE` through the Structure dialog.
-Structured `ALTER TABLE` rebuilds, table/index removal or rename, index
-creation, standalone constraint changes, and broader DDL parity are not
-implemented. Row edits require key/projected row identity, read-only file
+structured DDL is limited to `CREATE TABLE` through the Structure dialog. The
+adapter itself runs more since #1804 (table drop/rename, column add/drop, index
+create/drop), but the `ddl.*` capability flags have not flipped, so the dialog
+boundary above is what a user meets. Structured `ALTER TABLE` rebuilds — a
+column's type, nullability or default — and standalone constraint changes are
+not implemented anywhere. Row edits require key/projected row identity, read-only file
 connections reject writes and table creation, nested JSON edits are deferred,
 sqlite-cli dot commands and `load_extension()` are not executed, virtual-table
 CRUD and broad extension semantics are unsupported, and RTREE inventory is

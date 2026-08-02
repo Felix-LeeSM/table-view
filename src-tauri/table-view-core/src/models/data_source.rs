@@ -292,9 +292,14 @@ const RDB_CAPABILITIES: &[BackendAdapterCapability] = &[
     BackendAdapterCapability::RelationalSchemaMutation,
 ];
 // Wired production SQLite adapter (`make_adapter` -> `SqliteAdapter`) implements
-// bounded structured DDL via `create_table` / `create_table_plan`, so the
-// declaration claims `RelationalSchemaMutation` to match the wired path (#1044).
-// Other DDL surfaces stay `Unsupported`; the flag reflects support, not full DDL.
+// structured DDL — `create_table` / `create_table_plan` (#1044) and, since
+// #1804, everything SQLite performs natively: table drop/rename, column
+// add/drop, index create/drop. So the declaration claims
+// `RelationalSchemaMutation` to match the wired path. What stays `Unsupported`
+// is what needs a table rebuild: `add_constraint` / `drop_constraint` and an
+// in-place column type/nullability/default change. This flag means "some
+// structural DDL", not full DDL — the exact surface is the per-action
+// `ddl.*` capability set in `src/types/dataSource.ts`.
 const SQLITE_RDB_CAPABILITIES: &[BackendAdapterCapability] = &[
     BackendAdapterCapability::Lifecycle,
     BackendAdapterCapability::RelationalCatalog,

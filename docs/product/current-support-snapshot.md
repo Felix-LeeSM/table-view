@@ -95,9 +95,11 @@ DML/PK-projected row edit 로 제한된다. GitHub Runtime Happy Path now runs a
 deterministic SQLite desktop smoke for file create/open, table browse, read
 query, writable DML, row edit, bounded structured table creation with schema
 refresh proof, read-only write rejection, and internal app-state DB rejection.
-raw SQL DDL, unsupported `ALTER TABLE` rebuild, table/index removal or rename,
-index creation, standalone constraint changes, nested JSON edit, sqlite-cli
-execution, extension/capability semantics 는 unsupported
+raw SQL DDL, rebuild 이 필요한 `ALTER TABLE` (타입/nullable/DEFAULT 변경), standalone
+constraint 변경, nested JSON edit, sqlite-cli execution, extension/capability
+semantics 는 unsupported. 테이블 drop/rename, 컬럼 add/drop, 인덱스 create/drop 은
+#1804 이후 어댑터가 실행하지만 `ddl.*` capability 가 아직 table creation 만 주장하므로
+UI 진입점은 가려져 있다
 
 ## DuckDB
 
