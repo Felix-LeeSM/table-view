@@ -65,14 +65,14 @@ fn connection_config_validation_and_lifecycle_errors_are_local() {
     // config. The two combinations `build_tds_config` used to reject ("TLS on
     // without a trust decision", "trust without TLS") cannot be spelled in
     // `SslMode`, so a rejection on any of these variants would be a regression.
-    // tiberius keeps
+    // `verify-ca` is excluded here because it carries a companion requirement
+    // and is covered by its own test below. tiberius keeps
     // `Config::encryption`/`trust` private with no getter, so the posture itself
     // is not assertable from here — only that the config builds. (2026-08-02)
     for ssl_mode in [
         SslMode::Disable,
         SslMode::Prefer,
         SslMode::Require,
-        SslMode::VerifyCa,
         SslMode::VerifyFull,
     ] {
         let tds_config = MssqlAdapter::build_tds_config(&ConnectionConfig {
@@ -84,6 +84,37 @@ fn connection_config_validation_and_lifecycle_errors_are_local() {
         .unwrap_or_else(|err| panic!("{ssl_mode:?} must build a TDS config, got {err:?}"));
         assert_eq!(tds_config.get_addr(), "sqlserver.local:1445");
     }
+}
+
+#[test]
+fn build_tds_config_verify_ca_needs_a_ca_file_and_accepts_one() {
+    // Reason: #1649 — MSSQL routes `verify-ca` through
+    // `TdsConfig::trust_cert_ca`, which under the `native-tls` feature adds the
+    // user's CA to the system roots and keeps hostname verification on. Both
+    // halves are pinned: no CA file must fail closed with the shared message
+    // (the adapter must not dial an unanchored `verify-ca`), and a CA file must
+    // build. Dropping the `trust_cert_ca` call would leave the second half
+    // passing, so the first half is what proves the posture is not silently
+    // downgraded to `verify-full`. (2026-08-02)
+    let err = MssqlAdapter::build_tds_config(&ConnectionConfig {
+        ssl_mode: SslMode::VerifyCa,
+        ca_cert_path: None,
+        ..config()
+    })
+    .expect_err("verify-ca without a CA file must not reach tiberius");
+    assert!(
+        matches!(err, AppError::Validation(ref msg) if msg.contains("verify-ca")
+            && msg.contains("CA certificate")),
+        "the rejection must name the missing CA file, got: {err:?}"
+    );
+
+    let tds_config = MssqlAdapter::build_tds_config(&ConnectionConfig {
+        ssl_mode: SslMode::VerifyCa,
+        ca_cert_path: Some("/etc/ssl/private-ca.pem".into()),
+        ..config()
+    })
+    .expect("verify-ca with a CA file must build");
+    assert_eq!(tds_config.get_addr(), "localhost:1433");
 }
 
 // Reason: #1649 — this test used to also cover two TLS rejections ("TLS on

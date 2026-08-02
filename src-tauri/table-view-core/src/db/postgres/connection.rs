@@ -788,6 +788,23 @@ mod tests {
     }
 
     #[test]
+    fn connect_options_verify_ca_without_ca_fails_closed() {
+        // Reason: #1649 — a `verify-ca` posture with no CA file names a trust
+        // anchor it does not have, making it byte-for-byte the verify-full it
+        // advertises itself as stricter than. Rejected before it reaches sqlx
+        // (libpq semantics). (2026-08-02)
+        let mut config = sample_config();
+        config.ssl_mode = SslMode::VerifyCa;
+        config.ca_cert_path = None;
+        let err = PostgresAdapter::connect_options(&config)
+            .expect_err("verify-ca without a CA file must not reach sqlx");
+        assert!(
+            matches!(err, AppError::Validation(_)),
+            "expected a validation rejection, got: {err}"
+        );
+    }
+
+    #[test]
     fn connect_options_disable_forces_plaintext() {
         // Reason: #1063 — the sslmode `disable` selection must reach
         // `PgSslMode::Disable`, distinct from the opportunistic Prefer default

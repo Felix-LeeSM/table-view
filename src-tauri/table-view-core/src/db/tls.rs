@@ -9,9 +9,6 @@
 //! names a private/self-signed CA ([`ConnectionConfig::ca_cert_path`]) so a
 //! server whose certificate no public CA signs can still be authenticated,
 //! closing the MITM-substitution gap that `require` (skip-verify) leaves open.
-//!
-//! The posture's companion requirement — a `verify-ca` that names no CA file
-//! must not reach the driver — is not enforced yet; see #1649.
 //! This helper resolves the model into an explicit, driver-neutral decision that
 //! each adapter maps onto its concrete driver `SslMode`.
 //!
@@ -52,6 +49,13 @@
 use crate::error::AppError;
 use crate::models::{ConnectionConfig, SslMode};
 
+/// Fail-closed rejection for `verify-ca` without a CA file. Surfaced verbatim
+/// by the storage write boundary and by the pg/mysql connect path, so the user
+/// reads the same actionable sentence wherever the posture is caught.
+pub(crate) const VERIFY_CA_REQUIRES_CA_MESSAGE: &str =
+    "sslmode=verify-ca requires a CA certificate file: select the CA that signs the server \
+     certificate, or switch to verify-full to verify against the built-in public CA list";
+
 /// Driver-neutral outcome of the [`SslMode`] posture. Each sqlx adapter maps
 /// this onto its own driver enum:
 ///
@@ -87,7 +91,41 @@ pub(crate) enum TlsDecision {
     /// rustls trusts it *in addition to* the bundled public roots. `None` is
     /// plain `verify-full`.
     ///
+    /// The path is **not** optional for `verify-ca`: a posture that names a
+    /// trust anchor it does not have is indistinguishable from `verify-full`, so
+    /// [`resolve_tls_decision`] rejects it (libpq does the same) instead of
+    /// silently re-labelling the user's choice.
     RequireVerifyFull { extra_ca_cert_path: Option<String> },
+}
+
+/// The CA path a `verify-ca` posture must carry, or the fail-closed error.
+/// Whitespace-only counts as absent — the form writes `null` for an empty input,
+/// but a hand-edited `connections.json` or a raw IPC payload can carry `" "`.
+fn require_ca_cert_path(ca_cert_path: Option<&str>) -> Result<String, AppError> {
+    ca_cert_path
+        .map(str::trim)
+        .filter(|path| !path.is_empty())
+        .map(str::to_owned)
+        .ok_or_else(|| AppError::Validation(VERIFY_CA_REQUIRES_CA_MESSAGE.into()))
+}
+
+/// Write-boundary half of the fail-closed `verify-ca` contract: a stored
+/// connection never carries `verify-ca` without a CA file.
+///
+/// Called from `storage::save_connection_with_wallet`, the single chokepoint
+/// through which every file-SOT writer introduces a posture (the
+/// `save_connection` IPC, the dual-write `persist_connection` IPC, and import).
+/// Guarding the chokepoint instead of each caller is what makes the invariant
+/// hold at *every* boundary. It runs for every engine: the on/off engines ignore
+/// `ca_cert_path`, but storing an unanchored `verify-ca` there would still
+/// travel to pg/mysql through an export or a `dbType` switch.
+/// [`resolve_tls_decision`] repeats the check at connect time for rows written
+/// before this gate existed.
+pub fn validate_tls_posture(config: &ConnectionConfig) -> Result<(), AppError> {
+    if config.ssl_mode == SslMode::VerifyCa {
+        require_ca_cert_path(config.ca_cert_path.as_deref())?;
+    }
+    Ok(())
 }
 
 /// Resolve the model's [`SslMode`] posture into a driver-neutral decision.
@@ -96,17 +134,17 @@ pub(crate) enum TlsDecision {
 /// the former just carries an extra trust anchor. See the module docs for why we
 /// never select the drivers' own `VerifyCa` mode.
 ///
-/// The [`SslMode`] enum makes the old invalid combinations (TLS on without a
-/// trust decision, trust without TLS) unrepresentable, so this no longer has an
-/// error case; the fallible signature is kept for the callers that already
-/// propagate it.
+/// The only error since #1649 is the fail-closed `verify-ca`-without-a-CA-file
+/// rejection: the [`SslMode`] enum makes the old invalid combinations (TLS on
+/// without a trust decision, trust without TLS) unrepresentable, but a posture
+/// that names a trust anchor it does not have must not reach the driver.
 pub(crate) fn resolve_tls_decision(config: &ConnectionConfig) -> Result<TlsDecision, AppError> {
     Ok(match config.ssl_mode {
         SslMode::Disable => TlsDecision::Disable,
         SslMode::Prefer => TlsDecision::Default,
         SslMode::Require => TlsDecision::RequireSkipVerify,
         SslMode::VerifyCa => TlsDecision::RequireVerifyFull {
-            extra_ca_cert_path: config.ca_cert_path.clone(),
+            extra_ca_cert_path: Some(require_ca_cert_path(config.ca_cert_path.as_deref())?),
         },
         SslMode::VerifyFull => TlsDecision::RequireVerifyFull {
             extra_ca_cert_path: None,
@@ -202,6 +240,41 @@ mod tests {
                 extra_ca_cert_path: None
             }
         );
+    }
+
+    #[test]
+    fn verify_ca_without_a_ca_file_fails_closed() {
+        // Reason: #1649 — a `verify-ca` posture with no CA file names a trust
+        // anchor it does not have, so it is byte-for-byte the `verify-full` it
+        // claims to be stricter than. libpq hard-errors on the same combination
+        // rather than silently re-labelling the user's choice; so do we.
+        // Whitespace-only counts as absent (hand-edited JSON / raw IPC).
+        // (2026-08-02)
+        for missing in [None, Some(""), Some("   ")] {
+            let err = resolve_tls_decision(&config(SslMode::VerifyCa, missing))
+                .expect_err("verify-ca without a CA file must not reach the driver");
+            assert!(
+                matches!(err, AppError::Validation(ref msg) if msg == VERIFY_CA_REQUIRES_CA_MESSAGE),
+                "ca_cert_path {missing:?} must fail closed with the shared message, got: {err}"
+            );
+            assert!(
+                validate_tls_posture(&config(SslMode::VerifyCa, missing)).is_err(),
+                "the write boundary must reject ca_cert_path {missing:?} too"
+            );
+        }
+        assert!(validate_tls_posture(&config(SslMode::VerifyCa, Some("/ca.pem"))).is_ok());
+        // Every other posture is unaffected — no CA file is required.
+        for mode in [
+            SslMode::Disable,
+            SslMode::Prefer,
+            SslMode::Require,
+            SslMode::VerifyFull,
+        ] {
+            assert!(
+                validate_tls_posture(&config(mode, None)).is_ok(),
+                "{mode:?} must not require a CA file"
+            );
+        }
     }
 
     #[test]

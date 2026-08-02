@@ -204,6 +204,42 @@ async fn test_connection_dispatches_mssql_validation_instead_of_declared_only_re
     }
 }
 
+/// #1649 — the pre-#1649 version of this test pinned "TLS on without an
+/// explicit trustServerCertificate decision is rejected before the network".
+/// `SslMode` cannot express that combination, so the property moved into the
+/// type. What still needs pinning at this boundary is the one posture that
+/// carries a companion requirement: `verify-ca` with no CA file names a trust
+/// anchor the machine does not have, and must be rejected before a socket is
+/// opened rather than quietly dialed as the `verify-full` the user did not
+/// pick. The port is unused, so reaching the network would surface as a
+/// connection error instead of a validation error — that difference is the
+/// assertion. (2026-08-02)
+#[tokio::test]
+async fn test_connection_rejects_verify_ca_without_a_ca_file_before_network() {
+    let port = unused_tcp_port().await;
+
+    let result = test_connection(TestConnectionRequest {
+        config: mssql_public("127.0.0.1", port, Some(1), SslMode::VerifyCa, None),
+        password: Some("pw".into()),
+        wallet_password: None,
+        existing_id: None,
+    })
+    .await;
+
+    match result {
+        Err(AppError::Validation(msg)) => {
+            assert!(
+                msg.contains("verify-ca") && msg.contains("CA certificate"),
+                "the rejection must name the missing CA file so the user can fix it, got: {msg}"
+            );
+        }
+        other => panic!(
+            "verify-ca without a CA file must be rejected as invalid configuration, \
+             not dialed, got: {other:?}"
+        ),
+    }
+}
+
 #[tokio::test]
 async fn mssql_login_uses_configured_connection_timeout() {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
