@@ -15,12 +15,39 @@ import {
   UNKNOWN_MONGO_RUNTIME_CAPABILITIES,
 } from "@/types/dataSource";
 
-const KNOWN_TOPOLOGIES: readonly MongoTopology[] = [
-  "standalone",
-  "replicaSet",
-  "sharded",
-  "unknown",
-];
+/**
+ * Every value the wire enum can carry.
+ *
+ * A map rather than a `readonly MongoTopology[]`, because an array that is
+ * *missing* a member still satisfies that type: dropping `"standalone"` would
+ * compile, pass every test here, and silently narrow every single-node
+ * `mongod` to `"unknown"` — closing gates on servers that are fine. As a
+ * `Record<MongoTopology, true>` the same omission is a compile error, which is
+ * what `ServerInfoPanel`'s `Record<MongoTopology, string>` label map already
+ * relies on one file over.
+ */
+const KNOWN_TOPOLOGIES: Record<MongoTopology, true> = {
+  standalone: true,
+  replicaSet: true,
+  sharded: true,
+  unknown: true,
+};
+
+/** Own-property lookup — an unrecognised key reads as `undefined`, never `true`. */
+const isKnownTopology = (value: string): value is MongoTopology =>
+  (KNOWN_TOPOLOGIES as Record<string, true>)[value] === true;
+
+/**
+ * Rust serializes the triplet as three `u32`s, so a component outside that
+ * range is not something this app can have produced. The upper bound is not
+ * cosmetic: `Number.isInteger(1e21)` is `true`, and a `major` of `1e21` would
+ * *open* every `minVersion` gate rather than close it.
+ */
+const isU32 = (value: unknown): value is number =>
+  typeof value === "number" &&
+  Number.isInteger(value) &&
+  value >= 0 &&
+  value <= 0xffff_ffff;
 
 /**
  * Narrow the raw IPC payload to the wire contract.
@@ -44,14 +71,11 @@ function narrowCapabilities(payload: unknown): MongoRuntimeCapabilities {
     topology?: unknown;
     version?: unknown;
   };
-  if (
-    typeof topology !== "string" ||
-    !KNOWN_TOPOLOGIES.includes(topology as MongoTopology)
-  ) {
+  if (typeof topology !== "string" || !isKnownTopology(topology)) {
     return UNKNOWN_MONGO_RUNTIME_CAPABILITIES;
   }
   return {
-    topology: topology as MongoTopology,
+    topology,
     version: narrowVersion(version),
   };
 }
@@ -61,19 +85,14 @@ function narrowVersion(version: unknown): MongoServerVersion | undefined {
   if (typeof version !== "object" || version === null) return undefined;
   const { major, minor, patch, raw } = version as Record<string, unknown>;
   if (
-    !Number.isInteger(major) ||
-    !Number.isInteger(minor) ||
-    !Number.isInteger(patch) ||
+    !isU32(major) ||
+    !isU32(minor) ||
+    !isU32(patch) ||
     typeof raw !== "string"
   ) {
     return undefined;
   }
-  return {
-    major: major as number,
-    minor: minor as number,
-    patch: patch as number,
-    raw,
-  };
+  return { major, minor, patch, raw };
 }
 
 /**

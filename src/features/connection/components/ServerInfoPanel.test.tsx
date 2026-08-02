@@ -158,11 +158,16 @@ describe("ServerInfoPanel (Sprint 339 U4 live wire)", () => {
       );
     });
 
-    it("does not fail the panel when the capability read degrades", async () => {
-      // `mongoRuntimeCapabilities` never rejects, so a refused probe must not
-      // steal the rest of the grid.
+    it("keeps the rest of the grid when the capability read rejects outright", async () => {
+      // PR #2105 review, non-blocking 3: this test used to stub a *resolved*
+      // `{ topology: "unknown" }`, which is the default stub — it exercised no
+      // degradation at all. A rejection is the case that matters, because
+      // `Promise.all` rejects as a whole: without the panel's own `catch`,
+      // host, uptime and connections would disappear along with the deployment
+      // row. The wrapper is contracted never to reject; this pins the panel to
+      // survive it anyway.
       infoMock.mockResolvedValueOnce(mongoStub);
-      runtimeMock.mockResolvedValueOnce({ topology: "unknown" });
+      runtimeMock.mockRejectedValueOnce(new Error("capability read failed"));
 
       render(<ServerInfoPanel connectionId="conn-m" dbType="mongodb" />);
 
@@ -171,6 +176,9 @@ describe("ServerInfoPanel (Sprint 339 U4 live wire)", () => {
       );
       expect(screen.queryByRole("alert")).toBeNull();
       expect(screen.getByText("mongo-primary:27017")).toBeInTheDocument();
+      expect(screen.getByTestId("server-info-deployment")).toHaveTextContent(
+        "Not identified",
+      );
     });
   });
 

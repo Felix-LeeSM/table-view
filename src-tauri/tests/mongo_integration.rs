@@ -132,8 +132,15 @@ async fn test_mongo_adapter_connect_ping_list_disconnect_happy_path() {
     // fail-closed by design: a misspelled command or a renamed field degrades
     // to `unknown` instead of erroring, so every other assertion in this file
     // stays green while the capability is permanently blank. Nothing but a
-    // live assertion catches that, and this is the one test that already has
-    // a real server on the wire.
+    // live assertion catches that, and this test already has a real server on
+    // the wire.
+    //
+    // The expected topology is pinned to the server this suite provisions, not
+    // to MongoDB in general: `common::mongo_endpoint()` prefers `MONGO_HOST` /
+    // `MONGO_PORT` over the testcontainer when they are set, so a developer who
+    // points those at a replica-set instance (to exercise transactions or
+    // change streams) will see this assertion go red — correctly, since the
+    // probe is then reporting a different deployment.
     let capabilities = adapter.runtime_capabilities().await;
     assert_eq!(
         capabilities.topology,
@@ -148,17 +155,36 @@ async fn test_mongo_adapter_connect_ping_list_disconnect_happy_path() {
     // Deliberately not pinned to a major: CI runs `mongo:7`
     // (`.github/workflows/ci.yml:497`) while the local testcontainers default
     // is `mongo:5.0.6` (`testcontainers-modules` 0.15.0 `mongo::TAG`), so an
-    // `== 7` would be green on one and red on the other. The floor plus the
-    // raw/triplet cross-check is what actually proves the probe parsed this
-    // server's own answer rather than a default.
+    // `== 7` would be green on one and red on the other.
+    //
+    // What the three checks are each worth, since they are easy to over-read:
+    // the `expect` above is what excludes the fail-closed default
+    // (`MongoRuntimeCapabilities::unknown()` carries `version: None`), the
+    // floor excludes a parse that collapsed to zeros, and the comparison below
+    // excludes a parser that answers with constants instead of this server's
+    // numbers. `raw` and the triplet come from the same `buildInfo.version`
+    // string, so the comparison proves parser/source agreement — not that the
+    // string itself was fetched live.
     assert!(
         version.major >= 4,
         "implausible major version {} parsed from buildInfo (raw {:?})",
         version.major,
         version.raw
     );
+    // Re-derive the numeric run the way `db::version::parse_version_triplet`
+    // documents it — scan to the first digit, keep digits and `.`, fill absent
+    // components with 0 — rather than calling that function, so a parser
+    // returning constants still turns this red. Comparing the triplet against
+    // an unpadded `raw` would instead go red on `"5.2"`, a shape the parser's
+    // own unit tests bless.
+    let numeric_run = version
+        .raw
+        .trim_start_matches(|c: char| !c.is_ascii_digit())
+        .split(|c: char| !(c.is_ascii_digit() || c == '.'))
+        .next()
+        .unwrap_or_default();
     assert!(
-        version.raw.starts_with(&format!(
+        format!("{numeric_run}.0.0").starts_with(&format!(
             "{}.{}.{}",
             version.major, version.minor, version.patch
         )),

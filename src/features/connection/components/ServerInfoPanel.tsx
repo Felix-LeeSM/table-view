@@ -11,9 +11,10 @@ import { Button } from "@/components/ui/button";
 import { mongoRuntimeCapabilities } from "@/lib/api/mongoRuntimeCapabilities";
 import { type ServerInfoRow, serverInfo } from "@/lib/api/serverInfo";
 import { safeStringifyCell } from "@/lib/jsonCell";
-import type {
-  MongoRuntimeCapabilities,
-  MongoTopology,
+import {
+  type MongoRuntimeCapabilities,
+  type MongoTopology,
+  UNKNOWN_MONGO_RUNTIME_CAPABILITIES,
 } from "@/types/dataSource";
 import { DATABASE_TYPE_LABELS, type DatabaseType, paradigmOf } from "../model";
 import { PanelLoadingSkeleton } from "./PanelLoadingSkeleton";
@@ -28,6 +29,10 @@ import { PanelLoadingSkeleton } from "./PanelLoadingSkeleton";
  * in which every later version/topology gate closes, and a blank row would
  * leave the user with no way to tell "not a cluster" from "the server never
  * answered".
+ *
+ * Its value cell is the one in this grid without `font-mono`, on purpose: it
+ * renders a translated label, not a verbatim server string like the version,
+ * host and counters around it.
  */
 const TOPOLOGY_LABEL_KEY: Record<MongoTopology, string> = {
   standalone: "serverInfo.topologyStandalone",
@@ -59,12 +64,18 @@ export function ServerInfoPanel({
     try {
       // The capability read is a cache hit on the adapter (probed once during
       // `connect()`), so pairing it with `server_info` adds no admin round
-      // trip. It also never rejects — a refused probe resolves to the
-      // fail-closed `unknown` — so it cannot turn a healthy `server_info`
-      // into a panel-wide error.
+      // trip. The `catch` is not redundant with the wrapper's own fail-closed
+      // contract: `Promise.all` rejects as a whole, so were that contract ever
+      // to regress, a refused probe would blank the entire grid — host, uptime
+      // and connections included. Degrading here keeps the panel's behaviour a
+      // property of this file.
       const [next, capabilities] = await Promise.all([
         serverInfo(connectionId),
-        isMongo ? mongoRuntimeCapabilities(connectionId) : null,
+        isMongo
+          ? mongoRuntimeCapabilities(connectionId).catch(
+              () => UNKNOWN_MONGO_RUNTIME_CAPABILITIES,
+            )
+          : null,
       ]);
       setInfo(next);
       setRuntime(capabilities);
@@ -127,7 +138,11 @@ export function ServerInfoPanel({
             {t("serverInfo.rowVersion")}
           </dt>
           <dd className="font-mono break-all">{info.version}</dd>
-          {runtime !== null && (
+          {/* Gated on `isMongo` as well as on the value: when the driving
+              connection changes, props arrive one render before the effect
+              replaces `runtime`, and without this the frame in between paints
+              a Mongo topology under a PostgreSQL connection. */}
+          {isMongo && runtime !== null && (
             <>
               <dt className="text-muted-foreground">
                 {t("serverInfo.rowDeployment")}

@@ -114,12 +114,36 @@ describe("mongoRuntimeCapabilities (#1821 wire)", () => {
     expect(capabilities.version).toBeUndefined();
   });
 
+  // PR #2105 review, non-blocking 2: `KNOWN_TOPOLOGIES` is typed so that a
+  // dropped member is a compile error, but nothing in the type system stops a
+  // member from being deleted together with its union entry. Every value the
+  // backend can send has to survive narrowing, or that server's gates all
+  // close on a capability it actually reported.
+  it.each(["standalone", "replicaSet", "sharded", "unknown"])(
+    "keeps `%s` — the whole wire enum passes narrowing",
+    async (topology) => {
+      invokeMock.mockResolvedValueOnce({ topology });
+
+      const capabilities = await mongoRuntimeCapabilities("conn-1");
+
+      expect(capabilities.topology).toBe(topology);
+    },
+  );
+
   it.each([
     ["a partial triplet", { major: 7, patch: 5, raw: "7.0.5" }],
     [
       "a non-integer component",
       { major: 7, minor: 0.5, patch: 5, raw: "7.0.5" },
     ],
+    // PR #2105 review, non-blocking 12: `Number.isInteger` alone accepts both
+    // of these, and the huge one is the dangerous direction — it *opens* every
+    // `minVersion` gate. Rust serializes `u32`, so neither can arrive.
+    [
+      "a component past Rust's u32 range",
+      { major: 1e21, minor: 0, patch: 5, raw: "7.0.5" },
+    ],
+    ["a negative component", { major: 7, minor: -1, patch: 5, raw: "7.0.5" }],
     [
       "a numeric string component",
       { major: "7", minor: 0, patch: 5, raw: "7.0.5" },

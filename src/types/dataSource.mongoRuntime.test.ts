@@ -112,6 +112,28 @@ describe("meetsMongoRuntimeRequirement — version axis", () => {
     ).toBe(true);
   });
 
+  // PR #2105 review, non-blocking 11: this combination is not hypothetical —
+  // the Rust probes degrade independently, so an account allowed to run
+  // `buildInfo` but not `hello` reports a real version under an unidentified
+  // topology. A version-only requirement asks nothing about the deployment, so
+  // it opens. Pinned because the alternative reading (any `"unknown"` closes
+  // everything) is the one a reader assumes.
+  it("clears a version-only requirement even on an unidentified topology", () => {
+    expect(
+      meetsMongoRuntimeRequirement(
+        { topology: "unknown", version: REPLICA_SET_7_0.version },
+        { minVersion: [4, 0, 0] },
+      ),
+    ).toBe(true);
+    // Naming the deployment is what closes it.
+    expect(
+      meetsMongoRuntimeRequirement(
+        { topology: "unknown", version: REPLICA_SET_7_0.version },
+        { minVersion: [4, 0, 0], topologies: ["replicaSet", "sharded"] },
+      ),
+    ).toBe(false);
+  });
+
   it("closes when the server version could not be determined", () => {
     expect(
       meetsMongoRuntimeRequirement(
