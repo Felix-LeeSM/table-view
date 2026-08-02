@@ -113,10 +113,13 @@ catalog/query/cancel/tabular/edit-row runtime support with bounded Safe
 Mode/editor assistance and #907 representative smoke. Future promotion must add
 matching DDL, full parser/completion, docs, and smoke evidence without hiding
 SQL Server and Oracle auth/dialect differences behind a shared abstraction. Keep
-full admin parity, import/export, profiler/activity, role/user/permission UI,
+full admin parity, import/export, profiler/activity, user/role write management
+(create/alter/drop), permission-editing UI,
 broad scripting, MSSQL admin/full T-SQL semantics, and Oracle
 SID/TNS/wallet/advanced auth/structured DDL/raw DDL/admin/TLS/PLSQL semantics
-out of scope until separately proven.
+out of scope until separately proven, with one exception: SQL Server serves a
+read-only users/roles listing from `sys.server_principals` behind a `VIEW ANY
+DEFINITION` probe (#1077 Stage 2). Oracle keeps the whole boundary.
 
 ### Wider source candidates
 

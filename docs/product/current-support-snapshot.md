@@ -54,7 +54,18 @@ routine bodies or scripting. CHECK/constraint catalog metadata uses live MySQL
 routine/event bodies, broad CALL expressions, control-flow scripting,
 `DELIMITER`, and `LOAD DATA` are explicit unsupported editor/backend boundaries.
 Trigger metadata is read-only in Structure; structured trigger create/drop and
-DB-level import/export/dump parity remain unsupported/follow-up
+DB-level import/export/dump parity remain unsupported/follow-up. #1077 Stage 2
+adds a read-only users/roles listing from `mysql.user` (`User`/`Host` +
+privilege flags; `authentication_string`/`Password` are never selected). It
+reports `can_login` from `account_locked` plus the `mysql_no_login` plugin —
+reading `account_locked` requires MySQL 5.7.8+ / MariaDB 10.4.2+ and fails loud
+on older builds rather than mislabelling a locked account as loginable — and
+normalises `max_user_connections` onto the PG `rolconnlimit` wire sentinel
+(`0` = unlimited becomes `-1`, a negative MariaDB cap becomes `0`). Role
+membership (`mysql.role_edges`), MySQL 8 dynamic privileges, password expiry,
+per-schema grants, and user/role write management (create/alter/drop) stay
+unsupported; `can_create_db` over-reports and is documented in
+[known-limitations-rdbms](known-limitations-rdbms.md)
 
 ## MariaDB
 
@@ -83,7 +94,10 @@ server-accepted, but the app exposes it only as a DML envelope with no returned
 rows and no affected-row count. The app does not claim a MariaDB `RETURNING`
 runtime/version returned-row gate; raw execution remains server-resolved.
 MySQL-only evidence does not become a MariaDB runtime/admin/import/export claim
-without MariaDB-specific tests/docs
+without MariaDB-specific tests/docs. The #1077 Stage 2 read-only `mysql.user`
+users/roles listing is shared with MySQL through the same adapter; MariaDB 10.4+
+roles appear in that view under their bare name (empty `Host`) and are reported
+as non-loginable, but MariaDB-specific role-graph coverage is not claimed
 
 ## SQLite
 

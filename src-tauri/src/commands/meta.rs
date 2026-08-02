@@ -399,9 +399,10 @@ async fn list_database_users_inner(
         .await
         .ok_or_else(|| not_connected(connection_id))?;
     // Read-only accounts/permissions surface. Only the RDB arm serves it, and
-    // only for engines whose adapter overrides the trait default (PG-first
-    // parity lane) — the non-PG default and the non-RDB arms below are the
-    // backend capability gate, so a missing frontend guard cannot leak data.
+    // only for engines whose adapter overrides the trait default (PG,
+    // MySQL/MariaDB, SQL Server) — the Oracle-inherited default and the
+    // non-RDB arms below are the backend capability gate, so a missing
+    // frontend guard cannot leak data.
     match active.as_ref() {
         ActiveAdapter::Rdb(adapter) => adapter.list_database_users().await,
         ActiveAdapter::Document(_) => Err(AppError::Unsupported(

@@ -168,8 +168,10 @@ pub struct ServerInfoRow {
 /// is deliberately the source (NOT `pg_authid` / `pg_shadow`): it masks
 /// `rolpassword` as `********` and never exposes the password hash, so this
 /// struct carries no secret column. `member_of` lists the roles this role is
-/// a member of (the "permissions" surface). Non-PG RDB engines and non-RDB
-/// paradigms are unsupported for now (PG-first parity lane).
+/// a member of (the "permissions" surface). MySQL/MariaDB (`mysql.user`) and
+/// SQL Server (`sys.server_principals`) fill the same shape under the same
+/// no-secret-column rule; Oracle and every non-RDB paradigm are still
+/// unsupported.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DatabaseUserRow {

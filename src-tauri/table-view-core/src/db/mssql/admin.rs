@@ -22,7 +22,7 @@
 //! `USERS_PERMISSION_PROBE_SQL`. The probe closes the server-wide truncation,
 //! not every truncation: a per-principal `DENY VIEW DEFINITION ON LOGIN::x`
 //! still hides that one row from a caller that holds the server-scope grant
-//! (recorded in `docs/product/known-limitations.md`).
+//! (recorded in `docs/product/known-limitations-rdbms.md`).
 
 use tiberius::Row;
 
@@ -76,7 +76,7 @@ FROM sys.dm_os_sys_info si";
 /// single principal that carries `DENY VIEW DEFINITION ON LOGIN::x` for it —
 /// probe `1`, row silently absent. Detecting that needs per-principal
 /// permission reads that are themselves metadata-filtered; the boundary is
-/// recorded in `docs/product/known-limitations.md` instead.
+/// recorded in `docs/product/known-limitations-rdbms.md` instead.
 const USERS_PERMISSION_PROBE_SQL: &str =
     "SELECT CAST(ISNULL(HAS_PERMS_BY_NAME(NULL, NULL, 'VIEW ANY DEFINITION'), 0) AS BIGINT)";
 
@@ -286,7 +286,7 @@ impl MssqlAdapter {
     /// the SERVER scope, so it closes the server-wide truncation and not every
     /// truncation: a principal carrying `DENY VIEW DEFINITION ON LOGIN::x`
     /// against the connected login stays silently absent even when the probe
-    /// returns `1` (recorded in `docs/product/known-limitations.md`).
+    /// returns `1` (recorded in `docs/product/known-limitations-rdbms.md`).
     pub async fn list_database_users(&self) -> Result<Vec<DatabaseUserRow>, AppError> {
         let probe = self
             .admin_query(

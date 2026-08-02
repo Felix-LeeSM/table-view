@@ -267,9 +267,10 @@ population, so the listing now returns every non-`##MS_*` principal whatever its
 type. Internal `##MS_*` principals are filtered out, and database-scoped
 users/permissions, per-login connection caps, password expiry, and server-role
 membership arrays are not exposed. Parser/completion support is bounded editor
-assistance and unsupported-boundary recognition only. Named instances, Windows authentication, Azure AD/authSource
-modes, backup/restore, and broader SQL Server operational workflows remain out
-of scope until a source-specific promotion issue proves them.
+assistance and unsupported-boundary recognition only. Named instances, Windows
+authentication, Azure AD/authSource modes, backup/restore, and broader SQL
+Server operational workflows remain out of scope until a source-specific
+promotion issue proves them.
 
 ### Oracle
 

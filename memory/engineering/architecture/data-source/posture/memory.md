@@ -1,7 +1,7 @@
 ---
 title: Data Source Runtime Posture
 type: memory
-updated: 2026-07-17
+updated: 2026-08-02
 surface: src-tauri/table-view-core/src/db/**
 task: data-source, posture, support-claim, capability
 keywords: Runtime Posture, separate contracts, MSSQL, T-SQL, Oracle, PL/SQL, Redis, Valkey, Elasticsearch/OpenSearch, _delete_by_query, Safe Mode confirm gate, Runtime Happy Path, list_database_users, users listing, users/roles, sys.server_principals, VIEW ANY DEFINITION, HAS_PERMS_BY_NAME, CapabilityNotEnabled, mysql.user, IS_SRVROLEMEMBER, Entra

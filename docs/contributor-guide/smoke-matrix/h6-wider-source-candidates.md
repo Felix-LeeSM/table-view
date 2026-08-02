@@ -49,7 +49,9 @@ Current evidence:
 `.github/workflows/e2e-smoke.yml`,
 `e2e/fixtures/seed.mssql.sql`, `e2e/smoke/mssql.spec.ts`, `docs/ROADMAP.md`,
 `docs/product/README.md`, `docs/product/query-language-support.md`,
-`docs/product/known-limitations.md`, #903/#907
+`docs/product/known-limitations.md`,
+`src-tauri/table-view-core/src/db/mssql/admin.rs`,
+`src-tauri/tests/mssql_integration.rs`, #903/#907/#1077
 
 Current gap / routing:
 
@@ -60,7 +62,15 @@ representative Runtime Happy Path smoke for connect, seeded catalog browse,
 SELECT/DML, destructive Safe Mode confirmation, cancellation, and grid edit.
 A read-only users/roles listing from `sys.server_principals` behind a `VIEW ANY
 DEFINITION` probe is active (#1077 Stage 2), on its own docker-gated
-`src-tauri/tests/mssql_integration.rs` evidence rather than the smoke row.
+`src-tauri/tests/mssql_integration.rs` evidence rather than the smoke row —
+`test_mssql_list_database_users_row_shape_1077`,
+`test_mssql_users_null_role_membership_and_non_login_principals_1077`, and
+`test_mssql_users_listing_drops_no_principal_type_1077`, with the `USERS_SQL`
+credential/type/flag guards as `db/mssql/admin.rs` units. Those three gates skip
+when no SQL Server endpoint is reachable, so `src-tauri/tests/common/mod.rs`
+fails loud instead of skipping when `CI` is set — a green
+`Integration Tests (Docker)` therefore proves the container started and the
+gates ran, which a silent skip under nextest's `push` profile could not.
 Structured DDL, admin/security/jobs and user/role write management
 (create/alter/drop), import/export,
 profiler/activity, full T-SQL semantics, SQLCMD/procedure scripting, full

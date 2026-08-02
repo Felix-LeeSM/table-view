@@ -180,7 +180,7 @@ file:
 
 | current large scenario/test file | observed line count | reason to track |
 |---|---:|---|
-| `src-tauri/tests/mysql_integration.rs` | 4977 | MySQL runtime/query/catalog/cancel evidence shares one large integration file. |
+| `src-tauri/tests/mysql_integration.rs` | 5031 | MySQL runtime/query/catalog/cancel evidence shares one large integration file, now including the #1077 Stage 2 users-listing gate. |
 | `src-tauri/tests/schema_integration.rs` | 2512 | PostgreSQL schema/catalog evidence is broad and smoke-adjacent. |
 | `src-tauri/tests/query_integration.rs` | 2249 | PostgreSQL query/edit/runtime evidence is broad and smoke-adjacent. |
 | `src/lib/sql/sqlAst.test.ts` | 2171 | SQL AST/parser fixture-style examples are concentrated in one frontend test. |
