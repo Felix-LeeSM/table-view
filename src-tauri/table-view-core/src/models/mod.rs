@@ -1,6 +1,7 @@
 pub mod connection;
 pub mod data_source;
 pub mod file_analytics;
+pub mod mongo_runtime;
 pub mod query;
 pub mod rdbms_data_sources;
 pub mod schema;
@@ -24,6 +25,7 @@ pub use file_analytics::{
     FileAnalyticsPreview, FileAnalyticsQueryResponse, FileAnalyticsSource, FileAnalyticsSourceKind,
     FileAnalyticsSourceMetadata,
 };
+pub use mongo_runtime::{MongoRuntimeCapabilities, MongoServerVersion, MongoTopology};
 pub use query::{
     CollectionStatsRow, ColumnCategory, DatabaseUserRow, QueryColumn, QueryResult, QueryType,
     ServerActivityRow, ServerInfoRow, SlowQueryRow, ValueSearchMatch, ValueSearchResult,

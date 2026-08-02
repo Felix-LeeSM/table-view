@@ -19,9 +19,10 @@ use tokio::sync::Mutex;
 use tracing::{info, warn};
 
 use crate::error::AppError;
-use crate::models::{ConnectionConfig, DatabaseType};
+use crate::models::{ConnectionConfig, DatabaseType, MongoRuntimeCapabilities};
 
 use super::super::{BoxFuture, DbAdapter};
+use super::capability::detect_runtime_capabilities;
 
 /// Document-paradigm adapter backed by the official `mongodb` driver.
 pub struct MongoAdapter {
@@ -37,6 +38,18 @@ pub struct MongoAdapter {
     /// queries through the active tab's `database`, which is kept in
     /// sync with this field via `connectionStore.activeStatuses[id].activeDb`.
     pub(super) active_db: Arc<Mutex<Option<String>>>,
+    /// Issue #1821 — deployment topology + server version, probed once during
+    /// `connect()` and held for the life of the session.
+    ///
+    /// Same lifecycle as `default_db`: seeded on connect, cleared on
+    /// disconnect. `None` here means "never connected"; a connected session
+    /// whose probe was refused holds `Some(MongoRuntimeCapabilities::unknown())`
+    /// — both read as fail-closed at the accessor, but the distinction keeps
+    /// `disconnect()` honest.
+    ///
+    /// Lock order is after `client`, matching `active_db` (see
+    /// `switch_active_db`). Nothing takes two of these at once today.
+    pub(super) runtime_capabilities: Arc<Mutex<Option<MongoRuntimeCapabilities>>>,
 }
 
 impl Default for MongoAdapter {
@@ -51,6 +64,7 @@ impl MongoAdapter {
             client: Arc::new(Mutex::new(None)),
             default_db: Arc::new(Mutex::new(None)),
             active_db: Arc::new(Mutex::new(None)),
+            runtime_capabilities: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -244,6 +258,21 @@ impl MongoAdapter {
     /// should surface that as an `AppError::Validation` so the frontend
     /// gets an actionable error instead of a silent empty list.
     ///
+    /// Issue #1821 — the runtime capability probed during `connect()`.
+    ///
+    /// Reads the cached value; never hits the driver, so UI gates can call it
+    /// per render without a round trip. Fail-closed on every "we do not know"
+    /// path: a disconnected adapter and a connected-but-unprobed session both
+    /// answer `MongoRuntimeCapabilities::unknown()`, which no positive gate
+    /// matches.
+    pub async fn runtime_capabilities(&self) -> MongoRuntimeCapabilities {
+        self.runtime_capabilities
+            .lock()
+            .await
+            .clone()
+            .unwrap_or_else(MongoRuntimeCapabilities::unknown)
+    }
+
     /// Pure helper — no driver round-trip — so it is unit-testable
     /// without a live MongoDB instance.
     pub async fn resolved_db_name(&self, requested: Option<&str>) -> Option<String> {
@@ -283,9 +312,21 @@ impl DbAdapter for MongoAdapter {
                 .await
                 .map_err(|e| mongo_connection_error("MongoDB ping failed", e))?;
 
+            // Issue #1821 — probe topology + server version while the client
+            // is still local, so every later gate reads a cached value instead
+            // of paying an admin round trip. Deliberately NOT fault-propagating:
+            // a locked-down account that cannot run `hello`/`buildInfo` still
+            // gets a working connection, it just carries the fail-closed
+            // `unknown` capability. Same rule as MySQL's `detect_server_version`.
+            let capabilities = detect_runtime_capabilities(&client).await;
+
             {
                 let mut guard = self.client.lock().await;
                 *guard = Some(client);
+            }
+            {
+                let mut guard = self.runtime_capabilities.lock().await;
+                *guard = Some(capabilities);
             }
             // Seed both `default_db` and `active_db` from the connection's
             // configured database. Sprint 131 — `active_db` mirrors
@@ -322,6 +363,11 @@ impl DbAdapter for MongoAdapter {
             // selection from the previous session.
             let mut active_guard = self.active_db.lock().await;
             *active_guard = None;
+            // Issue #1821 — drop the probed capability with the session. A
+            // reconnect to a different (or upgraded) server must re-probe
+            // rather than gate on the previous server's version.
+            let mut capability_guard = self.runtime_capabilities.lock().await;
+            *capability_guard = None;
             Ok(())
         })
     }
@@ -573,6 +619,54 @@ mod tests {
     async fn disconnect_without_connection_is_ok() {
         let adapter = MongoAdapter::new();
         assert!(adapter.disconnect().await.is_ok());
+    }
+
+    // -- Issue #1821 — runtime capability cache lifecycle --------------------
+
+    /// A never-connected adapter has probed nothing, so the accessor must
+    /// answer with the fail-closed value rather than an optimistic guess —
+    /// otherwise a gate consulted before/without a connection would open.
+    #[tokio::test]
+    async fn runtime_capabilities_start_fail_closed() {
+        let adapter = MongoAdapter::new();
+        assert_eq!(
+            adapter.runtime_capabilities().await,
+            MongoRuntimeCapabilities::unknown()
+        );
+    }
+
+    /// `disconnect()` clears the probed capability. Without this, reconnecting
+    /// the same adapter to an upgraded (or entirely different) server would
+    /// gate features on the previous server's version until the next probe
+    /// happened to overwrite it.
+    #[tokio::test]
+    async fn disconnect_clears_the_probed_capability() {
+        use crate::models::MongoTopology;
+
+        let adapter = MongoAdapter::new();
+        {
+            let mut guard = adapter.runtime_capabilities.lock().await;
+            *guard = Some(MongoRuntimeCapabilities {
+                topology: MongoTopology::ReplicaSet,
+                version: None,
+            });
+        }
+        assert_eq!(
+            adapter.runtime_capabilities().await.topology,
+            MongoTopology::ReplicaSet,
+            "seeded value must be readable before disconnect"
+        );
+
+        adapter
+            .disconnect()
+            .await
+            .expect("disconnect is infallible");
+
+        assert_eq!(
+            adapter.runtime_capabilities().await,
+            MongoRuntimeCapabilities::unknown(),
+            "a torn-down session must not keep gating on the old server"
+        );
     }
 
     // -- Sprint 131 — switch_active_db ---------------------------------------
