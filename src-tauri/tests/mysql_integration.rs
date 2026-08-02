@@ -4975,3 +4975,57 @@ async fn test_mysql_create_drop_database_round_trip_1067() {
 
     adapter.disconnect_pool().await.ok();
 }
+
+/// Issue #1077 Stage 2 — row-shape gate for `list_database_users`. The unit
+/// guards in `db/mysql/schema.rs` only assert the SQL text and the pure
+/// mapper; two failure modes are only observable against a live server:
+///   1. `mysql.user.User`/`Host` are utf8mb3 `_bin` columns, which sqlx sees as
+///      VARBINARY — a raw `SELECT User` fails the whole panel with
+///      `mismatched types ... is not compatible with SQL type VARBINARY`.
+///   2. `max_user_connections = 0` means *unlimited* on MySQL, while the wire
+///      contract (`models::query::DatabaseUserRow::conn_limit`) is the PG
+///      `rolconnlimit` sentinel where `-1` is unlimited and `0` means "no
+///      connections allowed". A raw passthrough inverts the panel for
+///      practically every account.
+#[tokio::test]
+#[serial_test::serial]
+async fn test_mysql_list_database_users_row_shape_1077() {
+    let adapter = match common::setup_mysql_adapter().await {
+        Some(a) => a,
+        None => return,
+    };
+
+    let rows = match adapter.list_database_users().await {
+        Ok(rows) => rows,
+        // An external MYSQL_HOST may point at a least-privilege login without
+        // SELECT on `mysql.user` — a grant gap, not a regression.
+        Err(AppError::Database(msg)) if msg.to_ascii_lowercase().contains("denied") => {
+            println!("SKIP: the test login lacks SELECT on mysql.user ({msg})");
+            adapter.disconnect_pool().await.ok();
+            return;
+        }
+        Err(e) => panic!("mysql.user listing must decode: {e}"),
+    };
+
+    assert!(
+        !rows.is_empty(),
+        "mysql.user always carries at least the root account"
+    );
+    assert!(
+        rows.iter().all(|r| !r.name.is_empty()),
+        "every account identity must decode to non-empty text"
+    );
+
+    let root = rows
+        .iter()
+        .find(|r| r.name.starts_with("root@"))
+        .expect("the root account must be listed");
+    assert!(root.is_superuser, "root holds Super_priv");
+    assert!(root.can_login, "root is not locked in the test image");
+    assert_eq!(
+        root.conn_limit, -1,
+        "max_user_connections = 0 (unlimited) must normalise to the PG -1 sentinel"
+    );
+
+    adapter.disconnect_pool().await.ok();
+}

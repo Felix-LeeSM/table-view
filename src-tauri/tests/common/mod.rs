@@ -759,6 +759,49 @@ pub async fn setup_mssql_adapter() -> Option<MssqlAdapter> {
     None
 }
 
+/// Issue #1077 Stage 2 (2026-07-25) — run a server-scoped T-SQL batch
+/// (`CREATE LOGIN`, `CREATE CERTIFICATE`, `ALTER SERVER ROLE`, …) against the
+/// same SQL Server `setup_mssql_adapter` uses. The adapter classifies every
+/// non-SELECT/DML statement as `QueryType::Ddl` and refuses it by design
+/// (#903), so a server-principal fixture needs its own TDS client. Same
+/// `EncryptionLevel::NotSupported` admin-client idiom as
+/// `tests/mssql_connection_routing.rs`. Call only after
+/// `setup_mssql_adapter()` returned `Some` — an absent endpoint is an error
+/// here, not a skip.
+#[allow(dead_code)]
+pub async fn mssql_admin_batch(sql: &str) -> Result<(), String> {
+    use tiberius::{AuthMethod, Client, Config as TdsConfig, EncryptionLevel};
+    use tokio::net::TcpStream;
+    use tokio_util::compat::TokioAsyncWriteCompatExt;
+
+    let endpoint = mssql_endpoint()
+        .await
+        .ok_or_else(|| "no SQL Server endpoint".to_string())?;
+    let mut config = TdsConfig::new();
+    config.host(&endpoint.host);
+    config.port(endpoint.port);
+    config.database(&endpoint.database);
+    config.authentication(AuthMethod::sql_server(&endpoint.user, &endpoint.password));
+    config.encryption(EncryptionLevel::NotSupported);
+
+    let tcp = TcpStream::connect(config.get_addr())
+        .await
+        .map_err(|error| format!("connect admin TDS: {error}"))?;
+    tcp.set_nodelay(true)
+        .map_err(|error| format!("configure admin TDS socket: {error}"))?;
+    let mut client = Client::connect(config, tcp.compat_write())
+        .await
+        .map_err(|error| format!("login admin TDS: {error}"))?;
+    client
+        .simple_query(sql)
+        .await
+        .map_err(|error| format!("run admin SQL: {error}"))?
+        .into_results()
+        .await
+        .map_err(|error| format!("consume admin SQL: {error}"))?;
+    Ok(())
+}
+
 #[derive(Clone, Debug)]
 #[allow(dead_code)]
 struct OracleEndpoint {
