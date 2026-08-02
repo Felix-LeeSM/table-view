@@ -16,6 +16,10 @@
 //!     생기고 디스크 .key 는 그대로 살아남는다 (decrypt 는 disk fallback).
 //!   - 이주 후 `connections.json` 의 모든 `password_enc` 가 새 key 로
 //!     decrypt 된다 (envelope 호환).
+//!
+//! 2026-08-01 (#1814) 추가 — 디스크 `.key` 를 거친 키는 keyring 이 돌아왔을 때
+//! 그대로 살리지 않고 새 키로 갈아탄다 (재키잉). 파일 아래쪽 「#1814」 절이
+//! 재키잉 자체와 중단 지점 3곳의 다음 부팅 복구를 단언한다.
 
 use std::fs;
 use std::path::Path;
@@ -23,8 +27,9 @@ use std::path::Path;
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use tempfile::TempDir;
 
+use table_view_lib::models::StorageData;
 use table_view_lib::storage::crypto::{
-    encrypt, InMemoryKeyringBackend, KeyringBackend, KEYRING_ENTRY_NAME,
+    decrypt, encrypt, InMemoryKeyringBackend, KeyringBackend, KEYRING_ENTRY_NAME,
 };
 use table_view_lib::storage::key_migration::{
     disk_key_path, fallback_dismissed_sentinel_path, migrate_or_initialize,
@@ -230,4 +235,239 @@ fn ac_356_07_keyring_write_readback_byte_equality_in_path_a() {
         .expect("keyring set");
     assert_eq!(stored, outcome.key, "AC-356-07 byte equality after Path A");
     assert_eq!(stored.len(), 32);
+}
+
+// --------------------- #1814 재키잉 ------------------------------------
+//
+// Path C 는 file-key 를 디스크 `.key` 평문으로 떨어뜨린다. keyring 이 돌아온
+// 부팅에서 그 키를 그대로 살리면 디스크 사본을 가진 쪽이 계속 모든 password 를
+// 푼다. 그래서 「keyring hit + 디스크 `.key` 존재」 부팅은 새 키로 갈아탄다:
+//   ① 새 키 생성 → keyring 덮어쓰기
+//   ② `connections.json` 재암호화 → 임시 파일 → atomic rename
+//   ③ 디스크 `.key` secure delete
+// 디스크 `.key` 가 복구 앵커다 — ①/②/③ 어디서 죽어도 다음 부팅이 이어받는다.
+
+/// `connections.json` 을 실제 on-disk 모양으로 seed 한다. `ConnectionConfig`
+/// 에는 `rename_all` 이 없어 저장 key 가 snake_case 이고, master key 로 감싸이는
+/// 필드는 `password` 와 `wallet_password` 둘이다 (`storage::mod.rs` 의 `resolve`
+/// 가 유일한 `crypto::encrypt` 호출자다). 재키잉은 둘 다 갈아입혀야 한다.
+fn conn_json(id: &str, password: &str, wallet_password: &str) -> serde_json::Value {
+    serde_json::json!({
+        "id": id,
+        "name": format!("DB-{id}"),
+        "db_type": "postgresql",
+        "host": "localhost",
+        "port": 5432,
+        "user": "u",
+        "password": password,
+        "database": "d",
+        "group_id": null,
+        "color": null,
+        "wallet_password": wallet_password,
+    })
+}
+
+const SECRET_PW: &str = "db-secret-0";
+const SECRET_WALLET: &str = "wallet-secret-0";
+
+/// secret 이 있는 연결 1개 + secret 이 없는 연결 1개를 `key` 로 암호화해 seed.
+fn seed_secret_connections(data_dir: &Path, key: &[u8]) {
+    let doc = serde_json::json!({
+        "connections": [
+            conn_json(
+                "c0",
+                &encrypt(SECRET_PW, key).unwrap(),
+                &encrypt(SECRET_WALLET, key).unwrap(),
+            ),
+            conn_json("c1", "", ""),
+        ],
+        "groups": [],
+    });
+    fs::write(
+        data_dir.join("connections.json"),
+        serde_json::to_string_pretty(&doc).unwrap(),
+    )
+    .unwrap();
+}
+
+fn read_doc(data_dir: &Path) -> serde_json::Value {
+    let raw = fs::read_to_string(data_dir.join("connections.json")).unwrap();
+    serde_json::from_str(&raw).expect("connections.json must stay valid JSON")
+}
+
+/// 두 secret 이 `key` 로 풀리고 평문이 보존됐는지, 빈 secret 은 빈 채인지,
+/// 그리고 파일이 여전히 `StorageData` 로 역직렬화되는지 단언한다.
+fn assert_secrets_readable_under(data_dir: &Path, key: &[u8]) {
+    let raw = fs::read_to_string(data_dir.join("connections.json")).unwrap();
+    serde_json::from_str::<StorageData>(&raw)
+        .expect("rekey must preserve the connections.json schema");
+    let doc: serde_json::Value = serde_json::from_str(&raw).unwrap();
+    let conns = doc["connections"].as_array().unwrap();
+    assert_eq!(conns.len(), 2, "connection count must survive the rekey");
+    assert_eq!(
+        decrypt(conns[0]["password"].as_str().unwrap(), key).unwrap(),
+        SECRET_PW
+    );
+    assert_eq!(
+        decrypt(conns[0]["wallet_password"].as_str().unwrap(), key).unwrap(),
+        SECRET_WALLET,
+        "the Oracle wallet password rides the same envelope and must be rekeyed too"
+    );
+    assert_eq!(conns[1]["password"], "", "empty secret must stay empty");
+    assert_eq!(conns[1]["wallet_password"], "");
+}
+
+/// 은퇴한 키로는 더 이상 아무것도 못 푼다 — 이 단언이 재키잉의 보안 목적이다.
+fn assert_secrets_unreadable_under(data_dir: &Path, retired: &[u8]) {
+    let doc = read_doc(data_dir);
+    let conns = doc["connections"].as_array().unwrap();
+    for field in ["password", "wallet_password"] {
+        let enc = conns[0][field].as_str().unwrap();
+        assert!(
+            decrypt(enc, retired).is_err(),
+            "{field}: the disk-exposed key must not decrypt anything after the rekey"
+        );
+    }
+}
+
+/// 디스크 노출을 거친 키는 keyring 이 돌아온 부팅에서 폐기된다. 이 상태는
+/// Path B 가 keyring write 까지 성공하고 secure delete 전에 죽었을 때 남는다
+/// (keyring 과 디스크에 같은 키).
+#[test]
+fn issue_1814_rekeys_when_keyring_returns_with_disk_key_present() {
+    let dir = TempDir::new().unwrap();
+    let exposed_key: Vec<u8> = (0..32u8).collect();
+    seed_disk_key(dir.path(), &exposed_key);
+    seed_secret_connections(dir.path(), &exposed_key);
+    let backend = InMemoryKeyringBackend::new_available();
+    backend.set(KEYRING_ENTRY_NAME, &exposed_key).unwrap();
+
+    let outcome =
+        migrate_or_initialize(&backend, dir.path()).expect("rekey must not fail the boot");
+
+    assert!(
+        outcome.rekeyed_after_disk_exposure,
+        "the outcome must report that this boot rekeyed"
+    );
+    assert_ne!(
+        outcome.key, exposed_key,
+        "the disk-exposed key must be retired, not reused"
+    );
+    assert_eq!(outcome.key.len(), 32);
+    assert_eq!(outcome.source, KeySource::FromKeyring);
+    assert!(!outcome.fallback_to_disk);
+    assert_eq!(
+        backend.get(KEYRING_ENTRY_NAME).unwrap().unwrap(),
+        outcome.key,
+        "keyring must hold the new key"
+    );
+    assert!(
+        !disk_key_path(dir.path()).exists(),
+        "the plaintext .key must be secure-deleted once the rekey lands"
+    );
+    assert_secrets_readable_under(dir.path(), &outcome.key);
+    assert_secrets_unreadable_under(dir.path(), &exposed_key);
+}
+
+/// 중단 지점 ① — 새 키가 keyring 에 들어간 직후 죽었다. 파일은 아직 구 키
+/// 암호문이고 디스크 `.key` 가 구 키를 들고 있다. 다음 부팅은 앵커로 복구해
+/// 재키잉을 끝내야 한다 (keyring 키로 복호화 실패 → 디스크 `.key` 재시도).
+#[test]
+fn issue_1814_crash_after_keyring_overwrite_recovers_on_next_boot() {
+    let dir = TempDir::new().unwrap();
+    let exposed_key: Vec<u8> = (0..32u8).collect();
+    let half_written_key: Vec<u8> = (100..132u8).collect();
+    seed_disk_key(dir.path(), &exposed_key);
+    seed_secret_connections(dir.path(), &exposed_key);
+    let backend = InMemoryKeyringBackend::new_available();
+    backend.set(KEYRING_ENTRY_NAME, &half_written_key).unwrap();
+
+    let outcome = migrate_or_initialize(&backend, dir.path()).expect("recovery must not fail boot");
+
+    assert!(outcome.rekeyed_after_disk_exposure);
+    assert_secrets_readable_under(dir.path(), &outcome.key);
+    assert_ne!(outcome.key, exposed_key, "exposed key must stay retired");
+    assert_eq!(
+        backend.get(KEYRING_ENTRY_NAME).unwrap().unwrap(),
+        outcome.key,
+        "keyring and connections.json must agree after recovery"
+    );
+    assert!(
+        !disk_key_path(dir.path()).exists(),
+        "recovery must finish the rekey and drop the anchor"
+    );
+}
+
+/// 중단 지점 ② — 재암호화 rename 까지 끝나고 죽었다. 파일도 keyring 도 새 키라
+/// 정상이고, 남은 디스크 `.key` 는 아무것도 못 여는 잔재다. 다음 부팅은 데이터를
+/// 그대로 읽을 수 있어야 한다.
+#[test]
+fn issue_1814_crash_after_reencrypt_rename_keeps_data_readable() {
+    let dir = TempDir::new().unwrap();
+    let retired_key: Vec<u8> = (0..32u8).collect();
+    let live_key: Vec<u8> = (100..132u8).collect();
+    seed_disk_key(dir.path(), &retired_key);
+    seed_secret_connections(dir.path(), &live_key);
+    let backend = InMemoryKeyringBackend::new_available();
+    backend.set(KEYRING_ENTRY_NAME, &live_key).unwrap();
+
+    let outcome = migrate_or_initialize(&backend, dir.path()).expect("boot must not fail");
+
+    assert_secrets_readable_under(dir.path(), &outcome.key);
+    assert_eq!(
+        backend.get(KEYRING_ENTRY_NAME).unwrap().unwrap(),
+        outcome.key
+    );
+    assert!(
+        !outcome.rekeyed_after_disk_exposure,
+        "the file is already under the keyring key; there is nothing left to rekey"
+    );
+}
+
+/// 중단 지점 ③ — secure delete 직전에 죽었다 (②와 같은 on-disk 상태). 다음
+/// 부팅이 남은 평문 `.key` 를 반드시 치운다. 이미 새 키로 재암호화된 파일을
+/// 또 갈아입힐 이유는 없으므로 keyring 키는 그대로다.
+#[test]
+fn issue_1814_crash_before_secure_delete_removes_leftover_key_file() {
+    let dir = TempDir::new().unwrap();
+    let retired_key: Vec<u8> = (0..32u8).collect();
+    let live_key: Vec<u8> = (100..132u8).collect();
+    seed_disk_key(dir.path(), &retired_key);
+    seed_secret_connections(dir.path(), &live_key);
+    let backend = InMemoryKeyringBackend::new_available();
+    backend.set(KEYRING_ENTRY_NAME, &live_key).unwrap();
+
+    let outcome = migrate_or_initialize(&backend, dir.path()).expect("boot must not fail");
+
+    assert!(
+        !disk_key_path(dir.path()).exists(),
+        "a leftover plaintext .key must never survive a healthy keyring boot"
+    );
+    assert_eq!(
+        outcome.key, live_key,
+        "the leftover .key opens nothing, so there is nothing to rekey away from"
+    );
+    assert!(!outcome.rekeyed_after_disk_exposure);
+}
+
+/// secure delete 도중 죽으면 `.key` 가 zero-overwrite 된 채 남는다 (base64 로
+/// 디코드되지 않는다). 다음 부팅은 그 잔재에 걸려 넘어지지 않고 치워야 한다.
+#[test]
+fn issue_1814_unreadable_leftover_key_file_does_not_break_boot() {
+    let dir = TempDir::new().unwrap();
+    let live_key: Vec<u8> = (100..132u8).collect();
+    seed_secret_connections(dir.path(), &live_key);
+    fs::write(disk_key_path(dir.path()), vec![0u8; 44]).unwrap();
+    let backend = InMemoryKeyringBackend::new_available();
+    backend.set(KEYRING_ENTRY_NAME, &live_key).unwrap();
+
+    let outcome =
+        migrate_or_initialize(&backend, dir.path()).expect("a corrupt .key must not fail the boot");
+
+    assert_secrets_readable_under(dir.path(), &outcome.key);
+    assert!(!outcome.rekeyed_after_disk_exposure);
+    assert!(
+        !disk_key_path(dir.path()).exists(),
+        "the zeroed .key residue must be removed"
+    );
 }
