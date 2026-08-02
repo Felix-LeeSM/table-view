@@ -9,11 +9,14 @@
 // SQLite 처럼 제약 카탈로그가 없어 컬럼 플래그에서 합성된 FK 는 그래프가 이미
 // 실제 edge 로 만들어 두므로 그대로 실린다.
 //
-// **이 파일의 문법 단정은 전부 실측이다.** `mermaid` 와 `@dbml/core` 가
-// devDependency 로 들어와 있고, `schemaGraphTextExport.test.ts` 의
+// **이 파일에 추측으로 쓴 문법 단정은 없다.** 근거는 두 종류고 어느 쪽인지
+// 상수마다 밝혀 뒀다: mermaid attribute 정리는 고정한 `mermaid@11.16.0` 의 렉서
+// 규칙을 옮겨 적은 것(`mermaidWord` 위 주석)이고, 나머지 — 따옴표 문자열이
+// 거부하는 문자, DBML 의 escape 부재 — 는 파서로 잰 값이다. `mermaid` 와
+// `@dbml/core` 가 devDependency 로 들어와 있고 `schemaGraphTextExport.test.ts` 의
 // "exporter output parses with the real parsers" 가 이 모듈의 산출물을
 // `mermaid.parse()` / `Parser.parse(…, "dbml")` 에 그대로 먹인다. 문자 클래스나
-// fallback 을 건드리면 그 왕복 테스트로 다시 재라 — 추측으로 고친 이스케이프가
+// fallback 을 건드리면 그 왕복·스윕 테스트로 다시 재라 — 추측으로 고친 이스케이프가
 // 두 라운드 연속 blocking 이었다 (#2097 라운드 1·2).
 import type {
   SchemaGraph,
@@ -262,12 +265,16 @@ function mermaidEntityName(node: SchemaGraphTableNode): string {
   return `${mermaidSafeText(node.schema)}.${mermaidSafeText(node.table)}`;
 }
 
-// mermaid 의 따옴표 문자열 토큰은 `"` · `%` · `\` 와 제어문자를 받지 않고 escape
-// 문법도 없다 — 셋 다 파서 테스트가 직접 잰 값이고, 나머지 기호(`{} : ; | # & <`)와
-// 공백·유니코드는 따옴표 안에서 그대로 통과한다. Postgres 는 따옴표 식별자 안에서
+// 엔티티 이름과 관계선 라벨은 따옴표 문자열 토큰이라 attribute 와 사정이 다르다.
+// 렉서 규칙이 `/^(?:"[^"]*")/i` — 구분자 `"` 하나만 토큰을 끝내고 그 안은 무엇이든
+// 받는다. 그래서 여기는 "위험 문자가 몇 개나 더 있나"(attribute 를 네 라운드 돌린
+// 열린 질문)가 아니라 **구분자 하나 + 렉싱 전에 도는 전처리**로 닫힌다:
+// `%` 는 주석(`%%`), `\` 는 전처리에서 걸리고 제어문자는 줄을 끊는다 — 셋 다 파서로
+// 잰 값이고 스윕이 다섯 자리에서 매 실행 다시 잰다. Postgres 는 따옴표 식별자 안에서
 // 셋 다 허용하므로 사용자 데이터로 도달한다.
-// ponytail: `a"b` · `a%b` · `a\b` 가 한 이름으로 접힌다. 다이어그램 라벨이라
-// 허용하고, 구분이 필요해지면 별칭(`entity["label"]`) 표기로 올린다.
+// ponytail: 그래서 라벨은 `numeric(10,2)` 같은 원문을 그대로 유지한다 — attribute
+// 처럼 문법 부분집합으로 좁힐 이유가 없다. `a"b` · `a%b` · `a\b` 만 한 이름으로
+// 접히고, 구분이 필요해지면 별칭(`entity["label"]`) 표기로 올린다.
 const MERMAID_STRING_REJECTS = /["%\\]/g;
 const CONTROL_OR_SPACE = /[\p{Cc}\p{Cf}\s]+/gu;
 
@@ -284,35 +291,52 @@ function mermaidSafeText(value: string): string {
   return safe.length > 0 ? safe : "unnamed";
 }
 
-// mermaid 의 attribute 는 따옴표를 못 쓰는 단어 토큰이다. 아래 경계는 전부
-// `schemaGraphTextExport.test.ts` 의 왕복·스윕 블록이 devDependency `mermaid` 로 잰
-// 값이다 — 타입 자리와 이름 자리 양쪽에서 같은 결과였다.
+// mermaid 의 attribute 는 따옴표를 못 쓰는 단어 토큰이다. 아래 셋은 이 PR 이
+// 고정한 `mermaid@11.16.0` 의 erDiagram 렉서 규칙을 **그대로 옮긴 것**이지
+// 실측으로 고른 목록이 아니다. 원본은 그 패키지의
+// `dist/chunks/mermaid.esm/erDiagram-*.mjs` 안 lexer `rules` 배열이고, attribute
+// 자리에서 우리 산출물에 닿을 수 있는 규칙은 둘뿐이다:
 //
-// 받는다: 유니코드 letter/mark/digit(`이름` · `日本語` · `naïve_café`), `_`(선두
-// 포함), `-`, `.`, `,`, `()`, `[]`, `*`.
-// 거부한다: `$ @ { } : ; | # % & + / = < > ! ? ~ ^ ' \`` · 공백 · 선행 숫자.
+//   ATTRIBUTE_KEY   /^(?:\b((?:PK)|(?:FK)|(?:UK))\b)/i
+//   ATTRIBUTE_WORD  /^(?:([*A-Za-z_\u00C0-\uFFFF][A-Za-z0-9\-_[\]().,\u00C0-\uFFFF*]*))/i
 //
-// 그래서 letter 계열은 코드포인트를 안 가리고 통과시키고, 기호는 실측으로 통과한
-// 것만 남긴다. 미측정 기호를 `_` 로 내리면 라벨만 뭉개지지만, 잘못 통과시키면
-// 다이어그램 전체가 파싱 실패다.
-// ponytail: `a@b` 와 `a$b` 는 둘 다 `a_b` 로 접힌다. 이름이 서로 달라지는 것이
-// 중요해지면 별칭(`entity["label"]`) 표기로 올린다.
-const MERMAID_WORD_REJECTS = /[^\p{L}\p{M}\p{N}_\-.,()[\]*]/gu;
-const MERMAID_WORD_HEAD = /^[\p{L}_]/u;
-// mermaid 는 attribute 자리에서 이 셋을 **대소문자 불문** 키 표시자로 예약한다 —
-// 토큰이 정확히 그 낱말이면 이름 자리든 타입 자리든 Parse error 고, `pk` 는 흔한
-// 컬럼명이다. 낱말 축은 문자 클래스로는 안 걸리므로 따로 본다. 스윕 테스트가
-// 예약어 후보를 네 자리에 전수로 꽂아 거부 집합이 이 셋뿐임을 매 실행 확인한다.
-const MERMAID_RESERVED_WORDS = /^(pk|fk|uk)$/i;
+// (그 사이의 `([^\s]*)[~].*[~]([^\s]*)` 는 `~` 를 요구하는데 `~` 는 아래에서
+// 내려가므로 절대 안 맞는다.)
+//
+// **위험 문자를 열거해 빼는 방식은 폐기했다.** 그 구조는 반례가 나올 때마다
+// 목록에 한 줄을 더하는 열린 집합이라 #2097 에서 네 라운드 연속 반례가 나왔다.
+// 대신 산출 토큰을 위 두 규칙이 받는 언어의 부분집합으로 **구성으로** 가둔다 —
+// 남는 질문이 "이 문자가 위험한가"(끝이 없다)에서 "문법 클래스를 옮겨 적었나"
+// (파일 하나를 보면 끝난다)로 바뀐다.
+//
+// ponytail: 라벨은 뭉개진다 — `numeric(10,2)` 가 `numeric_10_2_`, `a@b` 와 `a$b`
+// 가 둘 다 `a_b` 다. 산출물이 무효가 되느니 라벨을 잃는 쪽을 택한 오너 결정이고
+// (2026-08-02, PR #2097), 원문 보존은 본가의 backtick 표기
+// (mermaid-js/mermaid#5138)가 머지되면 다시 연다.
+
+// ATTRIBUTE_WORD 의 tail 클래스에서 구분자(`- . , ( ) [ ] *`)를 뺀 나머지.
+// 구분자는 문법상 합법이지만 렉서가 ATTRIBUTE_KEY 를 먼저 시도하므로 `pk-a` 처럼
+// 앞머리가 예약어면 토큰이 쪼개져 문서 전체가 깨진다 (라운드 4 blocking ⑥).
+// `u` 플래그를 일부러 안 붙인다 — 문법이 코드유닛 범위(`\u00C0-\uFFFF`)로 쓰여
+// 있어서, 그래야 astral 문자를 surrogate 쌍째로 렉서와 똑같이 통과시킨다.
+const MERMAID_WORD_REJECTS = /[^A-Za-z0-9_\u00C0-\uFFFF]/g;
+// ATTRIBUTE_WORD 의 head 클래스에서 `*`(위에서 이미 내려감)를 뺀 것. 위 치환을
+// 거친 토큰 중 여기 안 걸리는 것은 숫자로 시작하는 토큰뿐이다.
+const MERMAID_WORD_HEAD = /^[A-Za-z_\u00C0-\uFFFF]/;
+// ATTRIBUTE_KEY 규칙 그대로. `\b` 는 ASCII 단어 경계라 토큰이 그 낱말**로 시작만
+// 해도** 뒤 문자가 `[A-Za-z0-9_]` 가 아니면 키 표시자로 떨어져 나간다 —
+// `pk`(단독)·`pk이름`·`pḱ` 전부 여기 걸리고, `pka`·`pk_`·`pk1` 은 안 걸린다.
+// 완전 일치(`^(pk|fk|uk)$`)로 보던 라운드 4 코드가 앞의 둘을 통과시켰다.
+const MERMAID_RESERVED_WORDS = /^(?:PK|FK|UK)\b/i;
 
 function mermaidWord(value: string): string {
   // 공백만 있는 타입/이름은 `_` 로 채우지 말고 placeholder 로 보낸다 —
   // `dbmlType` 의 빈 값 처리와 같은 기준이다.
   const cleaned = value.trim().replace(MERMAID_WORD_REJECTS, "_");
   if (cleaned.length === 0) return "unknown";
+  // 선두 `_` 하나가 두 보정을 동시에 끝낸다: ATTRIBUTE_KEY 의 `\b(PK|FK|UK)\b` 가
+  // 더 이상 안 맞고, `_` 자체가 head 클래스 안이다.
   if (MERMAID_RESERVED_WORDS.test(cleaned)) return `_${cleaned}`;
-  // 토큰 선두는 letter 나 `_` 여야 한다 — `2fa`·`-lead`·`.lead` 는 Parse error 고
-  // `_` 를 앞에 붙인 `_2fa`·`_-dash`·`_.dot` 은 통과한다(실측).
   return MERMAID_WORD_HEAD.test(cleaned) ? cleaned : `_${cleaned}`;
 }
 

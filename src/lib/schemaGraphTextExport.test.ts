@@ -26,7 +26,7 @@ describe("schemaGraphToMermaid", () => {
         "erDiagram",
         '    "public.orders" {',
         "        integer id PK",
-        "        numeric(10,2) total",
+        "        numeric_10_2_ total",
         "        integer user_id FK",
         "    }",
         '    "public.users" {',
@@ -39,12 +39,18 @@ describe("schemaGraphToMermaid", () => {
     );
   });
 
-  // Reason: 라운드 1 non-blocking 2 — mermaid 는 타입 안 콤마를 그대로 받는다.
-  // `numeric(10,2)` 를 `numeric(10_2)` 로 낮추던 손실을 되돌리고 고정한다 (2026-08-02)
-  it("keeps commas inside a column type instead of lowering them", () => {
-    expect(schemaGraphToMermaid(shopSnapshot())).toContain(
-      "        numeric(10,2) total",
-    );
+  // Reason: 라운드 4 blocking ⑥ — `pk` 로 **시작**하고 뒤에 ASCII 단어 문자가 아닌
+  // 것이 오면 mermaid 렉서가 키 표시자를 떼어 내 문서 전체가 Parse error 다.
+  // 구분자(`pk-id`)와 비ASCII 글자(`pk이름`)가 같은 한 규칙에서 나오므로 둘 다
+  // 고정한다 — 라운드 4 코드는 완전 일치만 봐서 둘 다 통과시켰다 (2026-08-03)
+  it("keeps an attribute name that starts with a reserved key marker parseable", async () => {
+    const diagram = schemaGraphToMermaid(reservedPrefixSnapshot());
+
+    expect(diagram).toContain("        integer pk_id");
+    expect(diagram).toContain("        integer _pk이름");
+    await expect(mermaid.parse(diagram)).resolves.toMatchObject({
+      diagramType: "er",
+    });
   });
 
   // Reason: PR body 가 문법 위험으로 지목한 `PK, FK` 콤마 나열에 fixture 가 하나도
@@ -120,7 +126,7 @@ describe("schemaGraphToMermaid", () => {
         '    "public.we_ird_a_b tbl" {',
         "        boolean _2fa_enabled",
         "        integer a_b",
-        "        character_varying(255) full_name",
+        "        character_varying_255_ full_name",
         "    }",
         "",
       ].join("\n"),
@@ -521,6 +527,30 @@ function hostileSnapshot(): SchemaGraphCatalogSnapshot {
   };
 }
 
+/**
+ * mermaid 의 ATTRIBUTE_KEY 규칙(`\b(PK|FK|UK)\b`)에 걸리는 이름들. `\b` 가 ASCII
+ * 단어 경계라 `pk` 뒤에 오는 것이 구분자든 한글이든 결합기호든 똑같이 걸린다.
+ */
+function reservedPrefixSnapshot(): SchemaGraphCatalogSnapshot {
+  return {
+    source: { dbType: "postgresql", database: "shop" },
+    schemas: [{ name: "public" }],
+    tablesBySchema: {
+      public: [{ name: "keys", schema: "public", row_count: null }],
+    },
+    columnsByTable: {
+      public: {
+        keys: [
+          column("pk-id"),
+          column("pk이름"),
+          column("fk.value", { data_type: "uk-type" }),
+          column("pk"),
+        ],
+      },
+    },
+  };
+}
+
 function blankNameSnapshot(): SchemaGraphCatalogSnapshot {
   return {
     source: { dbType: "postgresql", database: "shop" },
@@ -694,6 +724,7 @@ const ROUND_TRIP_INPUTS: ReadonlyArray<[string, SchemaGraphTextExportInput]> = [
   ["sqlite-like synthesised fk", sqliteLikeSnapshot()],
   ["duplicate fk constraints", duplicateForeignKeySnapshot()],
   ["hostile names and types", hostileSnapshot()],
+  ["reserved key marker prefixes", reservedPrefixSnapshot()],
   ["colliding sanitised names", collidingNameSnapshot()],
   ["colliding table names", collidingTableSnapshot()],
   ["non-ASCII names", koreanSnapshot()],
@@ -708,20 +739,34 @@ const ROUND_TRIP_INPUTS: ReadonlyArray<[string, SchemaGraphTextExportInput]> = [
 /**
  * 입력 공간 스윕 — 예시가 아니라 공간을 쓴다. 라운드 3 blocking ⑤(`pk`·`fk`·`uk`
  * 예약어)는 fixture 를 더 붙이는 방식으로는 안 잡혔고, 위험 문자와 예약어 후보를
- * 식별자 네 자리에 전수로 꽂아 두 파서에 먹이는 이 스윕이 집어냈다. 새 문자·낱말
+ * 식별자 자리에 전수로 꽂아 두 파서에 먹이는 이 스윕이 집어냈다. 새 문자·낱말
  * 축이 생기면 여기에 토큰을 더해라 — fixture 하나를 더 만들 이유가 없다.
+ *
+ * 식별자는 이 목록의 토큰 **두 개를 이어 붙여** 만든다. 라운드 4 blocking ⑥ 은
+ * 토큰을 식별자 전체로만 꽂던 생성기가 `pk` + 구분자 모양을 아예 못 만들어
+ * 통과했다 — 리뷰어가 쓴 케이스 모양을 생성기가 그대로 물려받아 사각까지 복제한
+ * 것이 라운드 4 회고의 진단이었다. 쌍으로 만들면 접두(`pk` + `-`)·접미(`-` +
+ * `pk`)·중위(`a-b` + `pk`)가 전부 나오고, 빈 문자열이 토큰에 있으므로 낱개 토큰
+ * 케이스도 그대로 포함된다.
  */
 const SWEEP_TOKENS: readonly string[] = [
   // 문자 축 — ASCII 기호 전수 + 공백
   ..."!\"#$%&'()*+,-./:;<=>?@[\\]^`{|}~ ".split(""),
-  // 낱말 축 — 두 문법에서 뜻을 가질 만한 후보
+  // 낱말 축 — 두 문법에서 뜻을 가질 만한 후보. 예약어 후보는 대소문자 조합을
+  // 전부 싣는다 — 가드가 `/i` 라 지금은 안 걸리지만 목록이 비대칭이면 가드를
+  // 대소문자 구분으로 좁혔을 때 스윕이 그 사실을 반만 말한다 (라운드 4 nb2)
   "pk",
   "PK",
   "Pk",
+  "pK",
   "fk",
   "FK",
+  "Fk",
+  "fK",
   "uk",
   "UK",
+  "Uk",
+  "uK",
   "one",
   "many",
   "zero",
@@ -755,20 +800,59 @@ const SWEEP_TOKENS: readonly string[] = [
   "日本語",
   "a-b",
   "a.b",
+  // 정리가 통과시키는 유니코드 클래스 중 letter/digit 이 아닌 것 — 결합기호가
+  // 선두에 오는 모양(`́` 단독)까지 이 축이 만든다
+  "́",
+  // `\p{L}`·`\p{N}` 은 받지만 문법의 `\u00C0-\uFFFF` 범위는 안 받는 구간(U+0080~U+00BF).
+  // 유니코드 property 로 화이트리스트를 쓰면 이 둘이 그대로 새 나가 Parse error 다
+  "²",
+  "ª",
 ];
 
-const SWEEP_POSITIONS = ["schema", "table", "column", "type"] as const;
+// `schema`·`table` 은 따옴표 문자열 토큰(`mermaidSafeText`), `column`·`type` 은
+// 따옴표 못 쓰는 단어 토큰(`mermaidWord`), `constraint` 는 관계선 라벨이다.
+// 다섯째 자리는 FK 를 걸어야 나오므로 그 자리를 쓸 때만 대상 테이블을 붙인다
+// (라운드 4 nb1 — 자리 목록에 한 줄이 빠져 있었다).
+const SWEEP_POSITIONS = [
+  "schema",
+  "table",
+  "column",
+  "type",
+  "constraint",
+] as const;
 
 type SweepPosition = (typeof SWEEP_POSITIONS)[number];
 
 function sweepSnapshot(
   position: SweepPosition,
-  token: string,
+  identifier: string,
 ): SchemaGraphCatalogSnapshot {
-  const schema = position === "schema" ? token : "public";
-  const table = position === "table" ? token : "t";
-  const columnName = position === "column" ? token : "c";
-  const dataType = position === "type" ? token : "integer";
+  if (position === "constraint") {
+    return {
+      source: { dbType: "postgresql", database: "shop" },
+      schemas: [{ name: "public" }],
+      tablesBySchema: {
+        public: [
+          { name: "t", schema: "public", row_count: null },
+          { name: "u", schema: "public", row_count: null },
+        ],
+      },
+      columnsByTable: {
+        public: {
+          t: [column("c", { is_foreign_key: true })],
+          u: [column("id", { is_primary_key: true, nullable: false })],
+        },
+      },
+      constraintsByTable: {
+        public: { t: [foreignKey(identifier, ["c"], "public.u", ["id"])] },
+      },
+    };
+  }
+
+  const schema = position === "schema" ? identifier : "public";
+  const table = position === "table" ? identifier : "t";
+  const columnName = position === "column" ? identifier : "c";
+  const dataType = position === "type" ? identifier : "integer";
 
   return {
     source: { dbType: "postgresql", database: "shop" },
@@ -813,35 +897,62 @@ describe("exporter output parses with the real parsers", () => {
 
   // Reason: 라운드 3 blocking ⑤ — 문자 클래스는 맞았는데 `pk`·`fk`·`uk` 라는 낱말
   // 축이 통째로 빠져 있었다. 예시 fixture 는 다음 예약어를 못 잡으므로 입력 공간을
-  // 쓴다: 위험 문자·예약어 후보 전부를 네 자리에 꽂아 두 파서에 먹인다 (2026-08-02)
-  it("keeps every sweep token parseable in all four identifier positions", async () => {
+  // 쓴다. 라운드 4 blocking ⑥ 은 그 공간이 낱개 토큰뿐이라 `pk` + 구분자를 못
+  // 만들어 통과했다 — 토큰 쌍을 이어 붙여 다섯 자리에 꽂는다 (2026-08-02)
+  it("keeps every sweep token pair parseable in all five identifier positions", async () => {
     const failures: string[] = [];
+    // 정리를 거치면 서로 다른 토큰 쌍이 같은 산출물이 된다 — ASCII 기호 32종이
+    // 전부 `_` 로 내려가므로 대부분의 쌍이 이미 본 문서로 접힌다. 같은 문서를
+    // 다시 먹여도 답이 같으니 처음 한 번만 파싱한다. 이 dedupe 가 없으면 파스
+    // 호출이 여섯 자리로 늘어 10초 testTimeout 을 넘긴다.
+    const parsed = new Set<string>();
     let cases = 0;
 
     for (const position of SWEEP_POSITIONS) {
-      for (const token of SWEEP_TOKENS) {
-        const input = sweepSnapshot(position, token);
-        cases += 1;
-        try {
-          await mermaid.parse(schemaGraphToMermaid(input));
-        } catch (error) {
-          failures.push(
-            `mermaid ${position}=${JSON.stringify(token)}: ${parserError(error)}`,
-          );
-        }
-        try {
-          Parser.parse(schemaGraphToDbml(input), "dbml");
-        } catch (error) {
-          failures.push(
-            `dbml ${position}=${JSON.stringify(token)}: ${parserError(error)}`,
-          );
+      for (const head of SWEEP_TOKENS) {
+        for (const tail of SWEEP_TOKENS) {
+          const identifier = `${head}${tail}`;
+          // 스냅샷을 그래프로 한 번만 편다 — 두 exporter 에 스냅샷을 각각 주면
+          // 같은 추출을 두 번 돌린다. 두 입력이 같은 텍스트를 낸다는 것은
+          // "produces the same text for a SchemaGraph and for the snapshot" 이
+          // 두 포맷 모두에서 고정한다.
+          const input = extractSchemaGraph(sweepSnapshot(position, identifier));
+          cases += 1;
+
+          const mermaidText = schemaGraphToMermaid(input);
+          if (!parsed.has(mermaidText)) {
+            parsed.add(mermaidText);
+            try {
+              await mermaid.parse(mermaidText);
+            } catch (error) {
+              failures.push(
+                `mermaid ${position}=${JSON.stringify(identifier)}: ${parserError(error)}`,
+              );
+            }
+          }
+
+          const dbmlText = schemaGraphToDbml(input);
+          if (!parsed.has(dbmlText)) {
+            parsed.add(dbmlText);
+            try {
+              Parser.parse(dbmlText, "dbml");
+            } catch (error) {
+              failures.push(
+                `dbml ${position}=${JSON.stringify(identifier)}: ${parserError(error)}`,
+              );
+            }
+          }
         }
       }
     }
 
     expect(failures).toEqual([]);
-    expect(cases).toBe(SWEEP_POSITIONS.length * SWEEP_TOKENS.length);
-  });
+    expect(cases).toBe(SWEEP_POSITIONS.length * SWEEP_TOKENS.length ** 2);
+    // 이 스위트에서 제일 비싼 테스트다 — 이 머신 실측 33s 라 기본 testTimeout
+    // (vite.config.ts 의 10s)을 넘긴다. 공간을 줄이는 쪽은 일부러 안 골랐다:
+    // 라운드 4 는 생성기를 "이 축은 안 중요하다"는 논증으로 좁혔다가 그 축에서
+    // blocking 이 나왔다. 느린 러너를 감안해 4배를 준다.
+  }, 120_000);
 
   // Reason: 파서가 이름을 되돌려 준다는 것까지 봐야 "파싱은 되는데 다른 것이
   // 됐다"(예: backslash 이중화)를 잡는다 (2026-08-02)
