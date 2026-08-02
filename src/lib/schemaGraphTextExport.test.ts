@@ -150,6 +150,25 @@ describe("schemaGraphToMermaid", () => {
     expect(columns).toEqual(["ab", "나이", "이름"]);
   });
 
+  // Reason: 라운드 3 non-blocking 3 — 정리 뒤 이름이 겹치면 mermaid 는 파싱은
+  // 하지만 컬럼 둘이 한 줄로, 테이블 둘이 한 엔티티로 합쳐진다. DBML 과 같은
+  // 규칙으로 가른다는 결정을 두 포맷 모두에서 고정한다 (2026-08-02)
+  it("keeps sanitised attribute names unique inside an entity", () => {
+    const diagram = schemaGraphToMermaid(collidingNameSnapshot());
+
+    expect(diagram).toContain("        integer a_b\n");
+    expect(diagram).toContain("        integer a_b_2\n");
+  });
+
+  // Reason: 엔티티 이름도 같은 이유로 갈라야 한다 — 합쳐지면 관계선이 엉뚱한
+  // 테이블을 가리킨다 (2026-08-02)
+  it("keeps sanitised entity names unique", () => {
+    const diagram = schemaGraphToMermaid(collidingTableSnapshot());
+
+    expect(diagram).toContain('    "public.a_b" {');
+    expect(diagram).toContain('    "public.a_b_2" {');
+  });
+
   // Reason: 이름이 통째로 비면 빈 따옴표 / 빈 단어가 나가 파싱이 깨진다 (2026-08-02)
   it("falls back to a placeholder word when a name or type is empty", () => {
     expect(schemaGraphToMermaid(blankNameSnapshot())).toBe(
@@ -676,6 +695,7 @@ const ROUND_TRIP_INPUTS: ReadonlyArray<[string, SchemaGraphTextExportInput]> = [
   ["duplicate fk constraints", duplicateForeignKeySnapshot()],
   ["hostile names and types", hostileSnapshot()],
   ["colliding sanitised names", collidingNameSnapshot()],
+  ["colliding table names", collidingTableSnapshot()],
   ["non-ASCII names", koreanSnapshot()],
   ["blank column name and type", blankNameSnapshot()],
   ["unnamed table", unnamedTableSnapshot()],
@@ -684,6 +704,90 @@ const ROUND_TRIP_INPUTS: ReadonlyArray<[string, SchemaGraphTextExportInput]> = [
   ["empty catalog", emptySnapshot()],
   ["hand-built graph with dangling edges", handBuiltGraph()],
 ];
+
+/**
+ * 입력 공간 스윕 — 예시가 아니라 공간을 쓴다. 라운드 3 blocking ⑤(`pk`·`fk`·`uk`
+ * 예약어)는 fixture 를 더 붙이는 방식으로는 안 잡혔고, 위험 문자와 예약어 후보를
+ * 식별자 네 자리에 전수로 꽂아 두 파서에 먹이는 이 스윕이 집어냈다. 새 문자·낱말
+ * 축이 생기면 여기에 토큰을 더해라 — fixture 하나를 더 만들 이유가 없다.
+ */
+const SWEEP_TOKENS: readonly string[] = [
+  // 문자 축 — ASCII 기호 전수 + 공백
+  ..."!\"#$%&'()*+,-./:;<=>?@[\\]^`{|}~ ".split(""),
+  // 낱말 축 — 두 문법에서 뜻을 가질 만한 후보
+  "pk",
+  "PK",
+  "Pk",
+  "fk",
+  "FK",
+  "uk",
+  "UK",
+  "one",
+  "many",
+  "zero",
+  "only",
+  "key",
+  "unique",
+  "primary",
+  "foreign",
+  "index",
+  "class",
+  "style",
+  "title",
+  "direction",
+  "erDiagram",
+  "Table",
+  "Ref",
+  "Enum",
+  "Note",
+  "note",
+  "as",
+  "not null",
+  "int",
+  "type",
+  "default",
+  // 경계값 축
+  "",
+  " ",
+  "2fa",
+  "_",
+  "이름",
+  "日本語",
+  "a-b",
+  "a.b",
+];
+
+const SWEEP_POSITIONS = ["schema", "table", "column", "type"] as const;
+
+type SweepPosition = (typeof SWEEP_POSITIONS)[number];
+
+function sweepSnapshot(
+  position: SweepPosition,
+  token: string,
+): SchemaGraphCatalogSnapshot {
+  const schema = position === "schema" ? token : "public";
+  const table = position === "table" ? token : "t";
+  const columnName = position === "column" ? token : "c";
+  const dataType = position === "type" ? token : "integer";
+
+  return {
+    source: { dbType: "postgresql", database: "shop" },
+    schemas: [{ name: schema }],
+    tablesBySchema: { [schema]: [{ name: table, schema, row_count: null }] },
+    columnsByTable: {
+      [schema]: { [table]: [column(columnName, { data_type: dataType })] },
+    },
+  };
+}
+
+function parserError(error: unknown): string {
+  const diagnostics = (error as { diags?: { message?: string }[] }).diags;
+  return (
+    diagnostics?.[0]?.message ??
+    (error as Error).message?.split("\n")[0] ??
+    String(error)
+  );
+}
 
 // Purpose: exporter 산출물을 실제 파서에 먹여 문법 판단을 추측에서 실측으로
 // 바꾼다 — devDependency `mermaid` · `@dbml/core` (2026-08-02, 라운드 2 결정)
@@ -705,6 +809,38 @@ describe("exporter output parses with the real parsers", () => {
   // 라운드 1 blocking ① 과 라운드 2 blocking ③ 이 이 검사의 대상이다 (2026-08-02)
   it.each(ROUND_TRIP_INPUTS)("Parser.parse accepts %s", (_name, input) => {
     expect(() => Parser.parse(schemaGraphToDbml(input), "dbml")).not.toThrow();
+  });
+
+  // Reason: 라운드 3 blocking ⑤ — 문자 클래스는 맞았는데 `pk`·`fk`·`uk` 라는 낱말
+  // 축이 통째로 빠져 있었다. 예시 fixture 는 다음 예약어를 못 잡으므로 입력 공간을
+  // 쓴다: 위험 문자·예약어 후보 전부를 네 자리에 꽂아 두 파서에 먹인다 (2026-08-02)
+  it("keeps every sweep token parseable in all four identifier positions", async () => {
+    const failures: string[] = [];
+    let cases = 0;
+
+    for (const position of SWEEP_POSITIONS) {
+      for (const token of SWEEP_TOKENS) {
+        const input = sweepSnapshot(position, token);
+        cases += 1;
+        try {
+          await mermaid.parse(schemaGraphToMermaid(input));
+        } catch (error) {
+          failures.push(
+            `mermaid ${position}=${JSON.stringify(token)}: ${parserError(error)}`,
+          );
+        }
+        try {
+          Parser.parse(schemaGraphToDbml(input), "dbml");
+        } catch (error) {
+          failures.push(
+            `dbml ${position}=${JSON.stringify(token)}: ${parserError(error)}`,
+          );
+        }
+      }
+    }
+
+    expect(failures).toEqual([]);
+    expect(cases).toBe(SWEEP_POSITIONS.length * SWEEP_TOKENS.length);
   });
 
   // Reason: 파서가 이름을 되돌려 준다는 것까지 봐야 "파싱은 되는데 다른 것이
@@ -750,6 +886,23 @@ function unnamedTableSnapshot(): SchemaGraphCatalogSnapshot {
       public: [{ name: "", schema: "public", row_count: null }],
     },
     columnsByTable: { public: { "": [column("id", { nullable: false })] } },
+  };
+}
+
+/** 정리 뒤 같은 문자열로 접히는 테이블 둘. */
+function collidingTableSnapshot(): SchemaGraphCatalogSnapshot {
+  return {
+    source: { dbType: "postgresql", database: "shop" },
+    schemas: [{ name: "public" }],
+    tablesBySchema: {
+      public: [
+        { name: 'a"b', schema: "public", row_count: null },
+        { name: "a_b", schema: "public", row_count: null },
+      ],
+    },
+    columnsByTable: {
+      public: { 'a"b': [column("id")], a_b: [column("id")] },
+    },
   };
 }
 

@@ -50,34 +50,42 @@ export function schemaGraphToMermaid(
 ): string {
   const model = toExportModel(input);
   const lines: string[] = ["erDiagram"];
+  // 정리를 거치면 서로 다른 원본이 같은 문자열이 될 수 있다(`a@b` 와 `a$b` 는 둘 다
+  // `a_b`). mermaid 는 중복 엔티티·attribute 를 파싱은 하지만, 그러면 두 테이블이 한
+  // 엔티티로 합쳐지고 컬럼 둘이 한 줄로 보인다 — DBML 쪽과 같은 규칙으로 가른다.
+  const takenEntityNames = new Set<string>();
+  const entityNameByTableId = new Map<string, string>();
 
   for (const { node, columns } of model.tables) {
-    lines.push(`    ${mermaidEntityName(node)} {`);
+    const entity = takeUniqueName(takenEntityNames, mermaidEntityName(node));
+    entityNameByTableId.set(node.id, entity);
+    lines.push(`    "${entity}" {`);
+
+    const takenColumnNames = new Set<string>();
     for (const column of columns) {
       const keys: string[] = [];
       if (column.data.is_primary_key) keys.push("PK");
       if (model.foreignKeyColumnIds.has(column.id)) keys.push("FK");
       const suffix = keys.length > 0 ? ` ${keys.join(", ")}` : "";
+      const name = takeUniqueName(takenColumnNames, mermaidWord(column.column));
       lines.push(
-        `        ${mermaidWord(column.data.data_type)} ${mermaidWord(
-          column.column,
-        )}${suffix}`,
+        `        ${mermaidWord(column.data.data_type)} ${name}${suffix}`,
       );
     }
     lines.push("    }");
   }
 
   for (const foreignKey of model.foreignKeys) {
-    const source = model.tablesById.get(foreignKey.sourceTableId);
-    const target = model.tablesById.get(foreignKey.targetTableId);
-    // 양끝 테이블 노드가 다 있을 때만 선을 긋는다. 스냅샷 입력에서는 그래프가
+    const source = entityNameByTableId.get(foreignKey.sourceTableId);
+    const target = entityNameByTableId.get(foreignKey.targetTableId);
+    // 양끝 테이블이 실제로 인쇄됐을 때만 선을 긋는다. 스냅샷 입력에서는 그래프가
     // 이미 걸러 주지만 `SchemaGraph` 직접 주입은 이 모듈의 공개 입력이다.
     if (!source || !target) continue;
     const parentSide = isOptionalForeignKey(model, foreignKey) ? "|o" : "||";
     lines.push(
-      `    ${mermaidEntityName(source)} }o--${parentSide} ${mermaidEntityName(
-        target,
-      )} : ${mermaidQuoted(foreignKey.relationship.rawMetadata.constraintName)}`,
+      `    "${source}" }o--${parentSide} "${target}" : ${mermaidQuoted(
+        foreignKey.relationship.rawMetadata.constraintName,
+      )}`,
     );
   }
 
@@ -106,15 +114,12 @@ export function schemaGraphToDbml(input: SchemaGraphTextExportInput): string {
     const schema = dbmlIdentifier(node.schema);
     const takenTables = tableNamesBySchema.get(schema) ?? new Set<string>();
     tableNamesBySchema.set(schema, takenTables);
-    const table = takeUniqueDbmlName(takenTables, dbmlIdentifier(node.table));
+    const table = takeUniqueName(takenTables, dbmlIdentifier(node.table));
     const takenColumns = new Set<string>();
     const columnNames = new Map<string, string>();
 
     const body = columns.map((column) => {
-      const name = takeUniqueDbmlName(
-        takenColumns,
-        dbmlIdentifier(column.column),
-      );
+      const name = takeUniqueName(takenColumns, dbmlIdentifier(column.column));
       columnNames.set(column.column, name);
       const settings: string[] = [];
       if (column.data.is_primary_key) settings.push("pk");
@@ -161,7 +166,7 @@ interface DeclaredDbmlTable {
 // 한 스코프 안에서 이름이 겹치면 파서가 문서를 통째로 거부한다 — 실측:
 // `Field "a" existed in table "t"`, `Table "t" existed`. 정리 과정에서 서로 다른
 // 원본이 같은 문자열로 접힐 수 있으므로(예: `a"b` 와 `a_b`) 접미사로 가른다.
-function takeUniqueDbmlName(taken: Set<string>, candidate: string): string {
+function takeUniqueName(taken: Set<string>, candidate: string): string {
   let name = candidate;
   for (let suffix = 2; taken.has(name); suffix += 1) {
     name = `${candidate}_${suffix}`;
@@ -254,7 +259,7 @@ function isOptionalForeignKey(
 function mermaidEntityName(node: SchemaGraphTableNode): string {
   // 스키마와 테이블을 각각 정리한 뒤 잇는다 — 이어 붙인 뒤 다듬으면 `public. tbl`
   // 처럼 안쪽 공백이 그대로 남는다.
-  return `"${mermaidSafeText(node.schema)}.${mermaidSafeText(node.table)}"`;
+  return `${mermaidSafeText(node.schema)}.${mermaidSafeText(node.table)}`;
 }
 
 // mermaid 의 따옴표 문자열 토큰은 `"` · `%` · `\` 와 제어문자를 받지 않고 escape
@@ -280,7 +285,7 @@ function mermaidSafeText(value: string): string {
 }
 
 // mermaid 의 attribute 는 따옴표를 못 쓰는 단어 토큰이다. 아래 경계는 전부
-// `schemaGraphTextExport.parsers.test.ts` 가 devDependency `mermaid` 로 직접 잰
+// `schemaGraphTextExport.test.ts` 의 왕복·스윕 블록이 devDependency `mermaid` 로 잰
 // 값이다 — 타입 자리와 이름 자리 양쪽에서 같은 결과였다.
 //
 // 받는다: 유니코드 letter/mark/digit(`이름` · `日本語` · `naïve_café`), `_`(선두
@@ -294,12 +299,18 @@ function mermaidSafeText(value: string): string {
 // 중요해지면 별칭(`entity["label"]`) 표기로 올린다.
 const MERMAID_WORD_REJECTS = /[^\p{L}\p{M}\p{N}_\-.,()[\]*]/gu;
 const MERMAID_WORD_HEAD = /^[\p{L}_]/u;
+// mermaid 는 attribute 자리에서 이 셋을 **대소문자 불문** 키 표시자로 예약한다 —
+// 토큰이 정확히 그 낱말이면 이름 자리든 타입 자리든 Parse error 고, `pk` 는 흔한
+// 컬럼명이다. 낱말 축은 문자 클래스로는 안 걸리므로 따로 본다. 스윕 테스트가
+// 예약어 후보를 네 자리에 전수로 꽂아 거부 집합이 이 셋뿐임을 매 실행 확인한다.
+const MERMAID_RESERVED_WORDS = /^(pk|fk|uk)$/i;
 
 function mermaidWord(value: string): string {
   // 공백만 있는 타입/이름은 `_` 로 채우지 말고 placeholder 로 보낸다 —
   // `dbmlType` 의 빈 값 처리와 같은 기준이다.
   const cleaned = value.trim().replace(MERMAID_WORD_REJECTS, "_");
   if (cleaned.length === 0) return "unknown";
+  if (MERMAID_RESERVED_WORDS.test(cleaned)) return `_${cleaned}`;
   // 토큰 선두는 letter 나 `_` 여야 한다 — `2fa`·`-lead`·`.lead` 는 Parse error 고
   // `_` 를 앞에 붙인 `_2fa`·`_-dash`·`_.dot` 은 통과한다(실측).
   return MERMAID_WORD_HEAD.test(cleaned) ? cleaned : `_${cleaned}`;
