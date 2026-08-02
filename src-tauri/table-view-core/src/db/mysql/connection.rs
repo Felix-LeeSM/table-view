@@ -86,11 +86,18 @@ impl MysqlAdapter {
     /// `MySqlConnectOptions` 를 builder 로 안전 조합 — string interpolation
     /// 회피로 injection 차단.
     ///
-    /// Issue #1062 — `tls_enabled` / `trust_server_certificate` 를
-    /// `MySqlSslMode` 로 결선. TLS 를 켠 operator 가 sqlx 기본
-    /// `ssl-mode=PREFERRED` 로 조용히 평문 downgrade 되지 않도록 한다.
-    /// 결선 불가 조합 (`resolve_tls_decision`) 은 조용히 무시하지 않고 거부 —
-    /// fallible signature 가 pool 을 여는 모든 caller 로 전파된다.
+    /// Issue #1062 / #1649 — 모델의 sslmode posture 를 `MySqlSslMode` 로 결선.
+    /// TLS 를 켠 operator 가 sqlx 기본 `ssl-mode=PREFERRED` 로 조용히 평문
+    /// downgrade 되지 않도록 한다. #1649 (ADR 0058) 는 `verify-ca` 를 추가 —
+    /// 사용자 CA (`ca_cert_path`) 를 `ssl_ca` 로 넘겨 **추가** 신뢰 앵커로
+    /// 삼는다.
+    ///
+    /// `MySqlSslMode::VerifyCa` 는 의도적으로 절대 선택하지 않는다 — 그 모드는
+    /// hostname 검증을 끄면서 (`sqlx-mysql-0.8.6/src/connection/tls.rs:64`)
+    /// 번들 Mozilla 루트를 하나도 빼지 않으므로
+    /// (`sqlx-core-0.8.6/src/net/tls/tls_rustls.rs:141`) `VerifyIdentity` 보다
+    /// 약해질 뿐 좁아지지 않는다. 근거는 `db::tls` 모듈 문서. fallible 인 유일한
+    /// 이유는 CA 없는 `verify-ca` 의 fail-closed 거부다.
     fn connect_options(config: &ConnectionConfig) -> Result<MySqlConnectOptions, AppError> {
         let options = MySqlConnectOptions::new()
             .host(&config.host)
@@ -102,7 +109,13 @@ impl MysqlAdapter {
             TlsDecision::Disable => options.ssl_mode(MySqlSslMode::Disabled),
             TlsDecision::Default => options,
             TlsDecision::RequireSkipVerify => options.ssl_mode(MySqlSslMode::Required),
-            TlsDecision::RequireVerifyFull => options.ssl_mode(MySqlSslMode::VerifyIdentity),
+            TlsDecision::RequireVerifyFull { extra_ca_cert_path } => {
+                let options = options.ssl_mode(MySqlSslMode::VerifyIdentity);
+                match extra_ca_cert_path {
+                    Some(ca_cert_path) => options.ssl_ca(ca_cert_path),
+                    None => options,
+                }
+            }
         })
     }
 
@@ -411,7 +424,7 @@ mod tests {
     //! ping/active_pool 의 disconnect 경로, LRU eviction selector) 만 검증.
     //! 실 DB 통합 test 는 Sprint 280+ 에서 `mysql_test_config` opt-in 으로.
     use super::*;
-    use crate::models::{ConnectionConfig, DatabaseType};
+    use crate::models::{ConnectionConfig, DatabaseType, SslMode};
 
     fn sample_config() -> ConnectionConfig {
         ConnectionConfig {
@@ -431,8 +444,8 @@ mod tests {
             environment: None,
             auth_source: None,
             replica_set: None,
-            tls_enabled: None,
-            trust_server_certificate: None,
+            ssl_mode: SslMode::Prefer,
+            ca_cert_path: None,
             oracle_use_sid: None,
             wallet_path: None,
             wallet_password: String::new(),
@@ -521,62 +534,104 @@ mod tests {
         );
     }
 
-    // Issue #1062 — regression guard for the silent TLS downgrade. Before the
-    // fix, `connect_options` never set `ssl_mode`, so `tls_enabled = Some(true)`
-    // fell back to sqlx's default `Preferred` ("encrypt if possible, else
-    // plaintext"). These lock the mapping in.
+    // Issue #1062 / #1649 — regression guard for the silent TLS downgrade and
+    // for the sslmode → MySqlSslMode mapping. Before #1062 `connect_options`
+    // never set `ssl_mode`, so an encrypting posture fell back to sqlx's default
+    // `Preferred` ("encrypt if possible, else plaintext"). These pin each
+    // posture's mapping.
 
     #[test]
-    fn connect_options_default_when_tls_unset_preserves_preferred() {
+    fn connect_options_prefer_preserves_preferred() {
         let config = sample_config();
         let opts = MysqlAdapter::connect_options(&config).unwrap();
         assert!(
             matches!(opts.get_ssl_mode(), MySqlSslMode::Preferred),
-            "tls_enabled unset must leave the default Preferred ssl_mode"
+            "ssl_mode=prefer must leave the default Preferred ssl_mode"
         );
     }
 
     #[test]
-    fn connect_options_tls_with_trust_maps_to_required() {
+    fn connect_options_require_maps_to_required() {
         let mut config = sample_config();
-        config.tls_enabled = Some(true);
-        config.trust_server_certificate = Some(true);
+        config.ssl_mode = SslMode::Require;
         let opts = MysqlAdapter::connect_options(&config).unwrap();
         assert!(
             matches!(opts.get_ssl_mode(), MySqlSslMode::Required),
-            "tls_enabled + trust must force encryption without cert verification"
+            "ssl_mode=require must force encryption without cert verification"
         );
     }
 
     #[test]
-    fn connect_options_tls_without_trust_maps_to_verify_identity() {
+    fn connect_options_verify_full_maps_to_verify_identity() {
         let mut config = sample_config();
-        config.tls_enabled = Some(true);
-        config.trust_server_certificate = Some(false);
+        config.ssl_mode = SslMode::VerifyFull;
         let opts = MysqlAdapter::connect_options(&config).unwrap();
         assert!(
             matches!(opts.get_ssl_mode(), MySqlSslMode::VerifyIdentity),
-            "tls_enabled without trust must verify CA + host identity"
+            "ssl_mode=verify-full must verify CA + host identity"
         );
     }
 
     #[test]
-    fn connect_options_tls_without_trust_decision_is_rejected() {
+    fn connect_options_verify_ca_keeps_hostname_verification_and_adds_the_ca() {
+        // Reason: #1649 — `MySqlSslMode::VerifyCa` sets
+        // `accept_invalid_hostnames = true`
+        // (`sqlx-mysql-0.8.6/src/connection/tls.rs:64`) on a root store that
+        // still holds every bundled Mozilla root — `ssl_ca` is `add()`ed on top
+        // of `certs_from_webpki()`, never substituted for it
+        // (`sqlx-core-0.8.6/src/net/tls/tls_rustls.rs:141` + `:153`). The posture
+        // must land on `VerifyIdentity` with the CA as an *extra* anchor. The
+        // path assertion is load-bearing: the mode alone would still pass if the
+        // `ssl_ca` call were dropped, which is the whole feature. (2026-08-02)
         let mut config = sample_config();
-        config.tls_enabled = Some(true);
-        config.trust_server_certificate = None;
-        let err = MysqlAdapter::connect_options(&config).unwrap_err();
-        assert!(matches!(err, AppError::Validation(_)));
+        config.ssl_mode = SslMode::VerifyCa;
+        config.ca_cert_path = Some("/etc/ssl/private-ca.pem".into());
+        let opts = MysqlAdapter::connect_options(&config).unwrap();
+        assert!(
+            matches!(opts.get_ssl_mode(), MySqlSslMode::VerifyIdentity),
+            "ssl_mode=verify-ca must keep hostname verification on, got {:?}",
+            opts.get_ssl_mode()
+        );
+        let opts_str = format!("{opts:?}");
+        assert!(
+            opts_str.contains("private-ca.pem"),
+            "verify-ca must forward the CA path to ssl_ca: {opts_str}"
+        );
+    }
+
+    #[test]
+    fn connect_options_never_select_the_hostname_skipping_mode() {
+        // Reason: #1649 — PG parity guard. `MySqlSslMode::VerifyCa` is the one
+        // verifying mode sqlx routes through `NoHostnameTlsVerifier`
+        // (`sqlx-core-0.8.6/src/net/tls/tls_rustls.rs:165`); no posture may reach
+        // it. (2026-08-02)
+        for mode in [
+            SslMode::Disable,
+            SslMode::Prefer,
+            SslMode::Require,
+            SslMode::VerifyCa,
+            SslMode::VerifyFull,
+        ] {
+            let mut config = sample_config();
+            config.ssl_mode = mode;
+            config.ca_cert_path = Some("/etc/ssl/private-ca.pem".into());
+            let opts = MysqlAdapter::connect_options(&config)
+                .unwrap_or_else(|e| panic!("{mode:?} must resolve, got: {e}"));
+            assert!(
+                !matches!(opts.get_ssl_mode(), MySqlSslMode::VerifyCa),
+                "{mode:?} reached MySqlSslMode::VerifyCa, which disables hostname \
+                 verification while still trusting every bundled public root"
+            );
+        }
     }
 
     #[test]
     fn connect_options_disable_forces_plaintext() {
-        // Reason: #1063 — the sslmode `disable` selection (tls=false,
-        // trust=false) must reach `MySqlSslMode::Disabled`, distinct from the
-        // opportunistic Preferred default an unset config keeps. (2026-07-17)
+        // Reason: #1063 — the sslmode `disable` selection must reach
+        // `MySqlSslMode::Disabled`, distinct from the opportunistic Preferred
+        // default an unset config keeps. (2026-07-17)
         let mut config = sample_config();
-        config.tls_enabled = Some(false);
-        config.trust_server_certificate = Some(false);
+        config.ssl_mode = SslMode::Disable;
         let opts = MysqlAdapter::connect_options(&config).unwrap();
         assert!(
             matches!(opts.get_ssl_mode(), MySqlSslMode::Disabled),

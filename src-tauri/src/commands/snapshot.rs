@@ -362,8 +362,15 @@ impl ConnectionRow {
             paradigm,
             auth_source: self.auth_source,
             replica_set: self.replica_set,
-            tls_enabled: self.tls_enabled.map(|v| v != 0),
-            trust_server_certificate: self.trust_server_certificate.map(|v| v != 0),
+            // #1649 — the mirror keeps the legacy integer columns, so the
+            // posture is folded back out of them. `read_connections` then
+            // overlays the authoritative `ssl_mode`/`ca_cert_path` from the file
+            // SOT, which is the only store that holds the CA path.
+            ssl_mode: crate::models::SslMode::from_legacy(
+                self.tls_enabled.map(|v| v != 0),
+                self.trust_server_certificate.map(|v| v != 0),
+            ),
+            ca_cert_path: None,
             oracle_use_sid: None,
             wallet_path: None,
             // Default; `read_connections` overrides from the file-SOT presence
@@ -529,6 +536,8 @@ mod tests {
     //!
     //! Pool 이 필요 없는 pure-shape 테스트만 — DB-touching 시나리오는 통합
     //! 테스트에 위임.
+
+    use crate::models::SslMode;
 
     use super::*;
     use serde_json::json;
@@ -1039,8 +1048,8 @@ mod tests {
             environment: None,
             auth_source: None,
             replica_set: None,
-            tls_enabled: None,
-            trust_server_certificate: None,
+            ssl_mode: SslMode::Prefer,
+            ca_cert_path: None,
             oracle_use_sid: None,
             wallet_path: None,
             wallet_password: String::new(),

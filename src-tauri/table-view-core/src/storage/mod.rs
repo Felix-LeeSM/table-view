@@ -478,6 +478,7 @@ pub fn move_connection_to_group(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::models::SslMode;
     use crate::models::{ConnectionConfig, ConnectionGroup, DatabaseType};
     use serial_test::serial;
     use tempfile::TempDir;
@@ -540,8 +541,8 @@ mod tests {
             environment: None,
             auth_source: None,
             replica_set: None,
-            tls_enabled: None,
-            trust_server_certificate: None,
+            ssl_mode: SslMode::Prefer,
+            ca_cert_path: None,
             oracle_use_sid: None,
             wallet_path: None,
             wallet_password: String::new(),

@@ -1,4 +1,5 @@
 use std::mem;
+use table_view_lib::models::SslMode;
 
 use table_view_lib::{
     db::{
@@ -658,8 +659,8 @@ fn valkey_config(port: u16, database: &str) -> ConnectionConfig {
         environment: None,
         auth_source: None,
         replica_set: None,
-        tls_enabled: None,
-        trust_server_certificate: None,
+        ssl_mode: SslMode::Prefer,
+        ca_cert_path: None,
         oracle_use_sid: None,
         wallet_path: None,
         wallet_password: String::new(),
@@ -684,8 +685,8 @@ fn redis_config(port: u16, database: &str) -> ConnectionConfig {
         environment: None,
         auth_source: None,
         replica_set: None,
-        tls_enabled: None,
-        trust_server_certificate: None,
+        ssl_mode: SslMode::Prefer,
+        ca_cert_path: None,
         oracle_use_sid: None,
         wallet_path: None,
         wallet_password: String::new(),

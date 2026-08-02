@@ -13,7 +13,7 @@ use table_view_lib::models::{
     ConnectionConfig, ConstraintDefinition, CreateIndexRequest, CreateTablePlanConstraint,
     CreateTablePlanIndex, CreateTablePlanRequest, CreateTableRequest, DatabaseType,
     DropColumnRequest, DropConstraintRequest, DropIndexRequest, DropTableRequest,
-    RenameTableRequest, SchemaChangeResult,
+    RenameTableRequest, SchemaChangeResult, SslMode,
 };
 use table_view_lib::storage::local as app_sqlite_state;
 use tempfile::TempDir;
@@ -36,8 +36,8 @@ fn sqlite_config(path: &str) -> ConnectionConfig {
         environment: None,
         auth_source: None,
         replica_set: None,
-        tls_enabled: None,
-        trust_server_certificate: None,
+        ssl_mode: SslMode::Prefer,
+        ca_cert_path: None,
         oracle_use_sid: None,
         wallet_path: None,
         wallet_password: String::new(),

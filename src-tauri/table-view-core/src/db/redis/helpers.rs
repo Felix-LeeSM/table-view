@@ -85,14 +85,16 @@ pub(super) fn connection_info_for(
 ) -> Result<(ConnectionInfo, u16), AppError> {
     let database = parse_database_index(product_label, &config.database)?;
     let host = tcp_host(&config.host);
-    let addr = if config.tls_enabled.unwrap_or(false) {
+    let addr = if config.ssl_mode.tls_on() {
         ConnectionAddr::TcpTls {
             host,
             port: config.port,
-            // #1063 — `trust_server_certificate = true` opts into skip-verify;
-            // for redis-rs this is the `insecure` flag on the TLS address.
-            // Absent/false trust keeps full certificate verification.
-            insecure: config.trust_server_certificate.unwrap_or(false),
+            // #1063 / #1649 — the `require` posture opts into skip-verify; for
+            // redis-rs this is the `insecure` flag on the TLS address. Every
+            // verifying posture keeps full certificate verification. redis-rs
+            // takes no CA-file option here, so `verify-ca` verifies against the
+            // public roots — never weaker than `verify-full`.
+            insecure: config.ssl_mode.skip_verify(),
             tls_params: None,
         }
     } else {

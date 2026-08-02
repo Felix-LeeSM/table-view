@@ -182,6 +182,7 @@ mod tests {
     use super::*;
     use crate::db::{ActiveAdapter, DbAdapter, DuckdbAdapter, PostgresAdapter};
     use crate::models::ConnectionConfig;
+    use crate::models::SslMode;
     use std::fs;
 
     fn duckdb_config(path: &str) -> ConnectionConfig {
@@ -202,8 +203,8 @@ mod tests {
             environment: None,
             auth_source: None,
             replica_set: None,
-            tls_enabled: None,
-            trust_server_certificate: None,
+            ssl_mode: SslMode::Prefer,
+            ca_cert_path: None,
             oracle_use_sid: None,
             wallet_path: None,
             wallet_password: String::new(),
