@@ -11,7 +11,6 @@ import {
   ERD_TABLE_WIDTH,
   erdModelFingerprint,
   erdReferenceCounts,
-  erdSchemaToneIndex,
   erdTableHeight,
   filterErdTables,
   layoutErdModel,
@@ -79,28 +78,61 @@ describe("erdModelFingerprint", () => {
   // The ERD panel keeps fetching indexes/constraints per table after first
   // paint, so a fresh SchemaGraph object arrives many times for the same
   // diagram. Re-laying out on each one would throw away every node the user
-  // dragged, so only the table set and the FK edge set may change the identity.
-  it("ignores metadata that arrives after the tables and FKs are known", () => {
+  // dragged, so metadata that elkjs never reads must not change the identity.
+  it("ignores index and constraint metadata that arrives after first paint", () => {
     const bare = buildErdModel(extractSchemaGraph(ordersSnapshot()));
     const enriched = buildErdModel(
       extractSchemaGraph(ordersSnapshotWithMetadata()),
     );
 
-    const columnCount = (
-      model: ReturnType<typeof buildErdModel>,
-      qualifiedName: string,
-    ) =>
-      model.tables.find((entry) => entry.qualifiedName === qualifiedName)
-        ?.columns.length;
-
-    expect(columnCount(bare, "public.users")).toBe(2);
-    expect(columnCount(enriched, "public.users")).toBe(3);
+    expect(enriched.tables.map((entry) => entry.height)).toEqual(
+      bare.tables.map((entry) => entry.height),
+    );
     // The FK constraint landing renames the edge id (synthetic -> real
     // constraint name) without changing which tables the edge joins.
     expect(bare.relationships.map((entry) => entry.edge.id)).not.toEqual(
       enriched.relationships.map((entry) => entry.edge.id),
     );
     expect(erdModelFingerprint(enriched)).toBe(erdModelFingerprint(bare));
+  });
+
+  // PR #2100 review round 1: `SchemaErdPanel` prefetches columns per schema
+  // after first paint, and columns decide card height. A schema with no FKs at
+  // all gains no edges when they land, so a fingerprint that skipped height
+  // held — the one layout that ever ran was sized for empty cards and every
+  // card then overlapped the one below it.
+  it("changes when late columns grow the cards of an FK-less schema", () => {
+    const beforeColumns = buildErdModel(
+      extractSchemaGraph(fkFreeSnapshot({ withColumns: false })),
+    );
+    const afterColumns = buildErdModel(
+      extractSchemaGraph(fkFreeSnapshot({ withColumns: true })),
+    );
+
+    expect(beforeColumns.relationships).toEqual([]);
+    expect(afterColumns.relationships).toEqual([]);
+    expect(afterColumns.tables).toHaveLength(3);
+    for (const [index, entry] of afterColumns.tables.entries()) {
+      expect(entry.height).toBeGreaterThan(beforeColumns.tables[index]!.height);
+    }
+
+    expect(erdModelFingerprint(afterColumns)).not.toBe(
+      erdModelFingerprint(beforeColumns),
+    );
+  });
+
+  it("distinguishes one foreign key from two between the same table pair", () => {
+    const single = buildErdModel(extractSchemaGraph(ordersSnapshot()));
+    const doubled = buildErdModel(extractSchemaGraph(parallelFkSnapshot()));
+
+    // Same tables, same directed pair, two FK columns instead of one. elkjs
+    // weights a layer sweep by incident edge count, so this is a different
+    // layout input — the fingerprint lists every edge rather than the set of
+    // pairs, and the extra edge also raises the target's `elk.priority`.
+    expect(doubled.relationships).toHaveLength(single.relationships.length + 1);
+    expect(erdReferenceCounts(doubled).get("table:public.users")).toBe(2);
+    expect(erdReferenceCounts(single).get("table:public.users")).toBe(1);
+    expect(erdModelFingerprint(doubled)).not.toBe(erdModelFingerprint(single));
   });
 
   it("changes when a table or a foreign key enters the graph", () => {
@@ -170,18 +202,26 @@ describe("buildErdElkGraph", () => {
       ["table:public.b", "0"],
       ["table:public.c", "0"],
     ]);
-    expect(elkGraph.layoutOptions?.["elk.algorithm"]).toBe("layered");
-    expect(elkGraph.layoutOptions?.["elk.layered.cycleBreaking.strategy"]).toBe(
-      "GREEDY",
-    );
   });
 
-  it("carries every node size elkjs needs to place a table", () => {
-    const model = buildErdModel(extractSchemaGraph(ordersSnapshot()));
+  it("gives elkjs the height each card will actually occupy", () => {
+    const model = buildErdModel(extractSchemaGraph(mixedColumnCountSnapshot()));
+    const heightById = new Map(
+      (buildErdElkGraph(model).children ?? []).map((child) => [
+        child.id,
+        child.height,
+      ]),
+    );
 
+    // A two-column card and a nine-column card must not be handed over as the
+    // same box, or elkjs spaces the layers for the wrong size.
+    expect(heightById.get("table:main.narrow")).toBe(erdTableHeight(2, 0));
+    expect(heightById.get("table:main.wide")).toBe(erdTableHeight(6, 3));
+    expect(heightById.get("table:main.narrow")).not.toBe(
+      heightById.get("table:main.wide"),
+    );
     for (const child of buildErdElkGraph(model).children ?? []) {
       expect(child.width).toBe(ERD_TABLE_WIDTH);
-      expect(child.height).toBeGreaterThan(0);
     }
   });
 });
@@ -229,7 +269,43 @@ describe("layoutErdModel", () => {
     expect(positions.get("table:public.employees")).toBeDefined();
   });
 
-  it("returns nothing to place for an empty graph", async () => {
+  // The overlap this guards against is what PR #2100 round 1 measured: cards
+  // laid out at one height and rendered at another sat on top of each other.
+  it("places FK-less tables without overlapping once their columns arrive", async () => {
+    const model = buildErdModel(
+      extractSchemaGraph(fkFreeSnapshot({ withColumns: true })),
+    );
+    const positions = await layoutErdModel(model);
+
+    const boxes = model.tables.map((entry) => {
+      const position = positions.get(entry.table.id);
+      expect(position).toBeDefined();
+      return {
+        id: entry.table.id,
+        left: position?.x ?? 0,
+        top: position?.y ?? 0,
+        right: (position?.x ?? 0) + entry.width,
+        bottom: (position?.y ?? 0) + entry.height,
+      };
+    });
+
+    expect(boxes).toHaveLength(3);
+    for (const [index, box] of boxes.entries()) {
+      for (const other of boxes.slice(index + 1)) {
+        const overlaps =
+          box.left < other.right &&
+          other.left < box.right &&
+          box.top < other.bottom &&
+          other.top < box.bottom;
+        expect({ pair: [box.id, other.id], overlaps }).toEqual({
+          pair: [box.id, other.id],
+          overlaps: false,
+        });
+      }
+    }
+  });
+
+  it("resolves with nothing to place instead of throwing on an empty graph", async () => {
     const positions = await layoutErdModel(
       buildErdModel(extractSchemaGraph(emptySnapshot())),
     );
@@ -274,14 +350,27 @@ describe("filterErdTables", () => {
   });
 });
 
-describe("erdSchemaToneIndex", () => {
-  it("is deterministic and stays inside the defined tone set", () => {
-    for (const schema of ["public", "sales", "analytics", "main", "", "x"]) {
-      const tone = erdSchemaToneIndex(schema);
-      expect(tone).toBe(erdSchemaToneIndex(schema));
-      expect(tone).toBeGreaterThanOrEqual(0);
-      expect(tone).toBeLessThan(ERD_SCHEMA_TONE_COUNT);
-    }
+describe("schema badge tones", () => {
+  it("gives every schema its own tone until the palette wraps", () => {
+    const model = buildErdModel(extractSchemaGraph(manySchemaSnapshot()));
+    const toneBySchema = new Map(
+      model.tables.map((entry) => [
+        String(entry.table.schema),
+        entry.schemaToneIndex,
+      ]),
+    );
+
+    // Sorted schema order: analytics, app, main, public, sales.
+    expect([...toneBySchema.entries()].sort()).toEqual([
+      ["analytics", 0],
+      ["app", 1],
+      ["main", 2],
+      ["public", 3],
+      ["sales", 0],
+    ]);
+    expect(new Set([...toneBySchema.values()]).size).toBe(
+      ERD_SCHEMA_TONE_COUNT,
+    );
   });
 });
 
@@ -323,20 +412,11 @@ function ordersSnapshot(): SchemaGraphCatalogSnapshot {
   };
 }
 
+/** Same columns as `ordersSnapshot`; only indexes and constraints land late. */
 function ordersSnapshotWithMetadata(): SchemaGraphCatalogSnapshot {
   const base = ordersSnapshot();
   return {
     ...base,
-    columnsByTable: {
-      public: {
-        ...base.columnsByTable.public,
-        users: [
-          column("id", { is_primary_key: true }),
-          column("email", { data_type: "text" }),
-          column("age", { data_type: "integer" }),
-        ],
-      },
-    },
     indexesByTable: {
       public: {
         users: [
@@ -505,6 +585,97 @@ function emptySnapshot(): SchemaGraphCatalogSnapshot {
     schemas: [],
     tablesBySchema: {},
     columnsByTable: {},
+    indexesByTable: {},
+    constraintsByTable: {},
+  };
+}
+
+function fkFreeSnapshot({
+  withColumns,
+}: {
+  withColumns: boolean;
+}): SchemaGraphCatalogSnapshot {
+  const names = ["alpha", "beta", "gamma"];
+  return {
+    source: { dbType: "duckdb", database: "warehouse.duckdb" },
+    schemas: [{ name: "main" }],
+    tablesBySchema: { main: names.map((name) => table("main", name)) },
+    columnsByTable: {
+      main: Object.fromEntries(
+        names.map((name) => [
+          name,
+          withColumns
+            ? [
+                column("id", { is_primary_key: true }),
+                column("label", { data_type: "text" }),
+                column("amount", { data_type: "numeric" }),
+              ]
+            : [],
+        ]),
+      ),
+    },
+    indexesByTable: {},
+    constraintsByTable: {},
+  };
+}
+
+function parallelFkSnapshot(): SchemaGraphCatalogSnapshot {
+  const base = ordersSnapshot();
+  return {
+    ...base,
+    columnsByTable: {
+      public: {
+        ...base.columnsByTable.public,
+        orders: [
+          column("id", { is_primary_key: true }),
+          column("user_id", {
+            is_foreign_key: true,
+            fk_reference: "public.users(id)",
+          }),
+          column("billing_user_id", {
+            is_foreign_key: true,
+            fk_reference: "public.users(id)",
+          }),
+        ],
+      },
+    },
+  };
+}
+
+function mixedColumnCountSnapshot(): SchemaGraphCatalogSnapshot {
+  return {
+    source: { dbType: "duckdb", database: "mixed.duckdb" },
+    schemas: [{ name: "main" }],
+    tablesBySchema: {
+      main: [table("main", "narrow"), table("main", "wide")],
+    },
+    columnsByTable: {
+      main: {
+        narrow: [column("id", { is_primary_key: true }), column("label")],
+        wide: Array.from({ length: 9 }, (_unused, index) =>
+          column(`c${index + 1}`),
+        ),
+      },
+    },
+    indexesByTable: {},
+    constraintsByTable: {},
+  };
+}
+
+function manySchemaSnapshot(): SchemaGraphCatalogSnapshot {
+  const schemas = ["public", "sales", "analytics", "main", "app"];
+  return {
+    source: { dbType: "postgresql", database: "app" },
+    schemas: schemas.map((name) => ({ name })),
+    tablesBySchema: Object.fromEntries(
+      schemas.map((schema) => [schema, [table(schema, "t")]]),
+    ),
+    columnsByTable: Object.fromEntries(
+      schemas.map((schema) => [
+        schema,
+        { t: [column("id", { is_primary_key: true })] },
+      ]),
+    ),
     indexesByTable: {},
     constraintsByTable: {},
   };

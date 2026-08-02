@@ -1,7 +1,6 @@
 import { Handle, type NodeProps, Position } from "@xyflow/react";
 import { useTranslation } from "react-i18next";
 import { type ErdTableFlowNode, useErdCanvasView } from "./erdCanvasContext";
-import { erdSchemaToneIndex } from "./erdGraphModel";
 
 /**
  * One badge tone per index of `erdSchemaToneIndex`. Written out as whole class
@@ -40,8 +39,7 @@ export default function SchemaErdTableNode({
     ? searchMatchTableIds.has(id)
     : true;
   const toneClass =
-    SCHEMA_TONE_CLASSES[erdSchemaToneIndex(model.table.schema)] ??
-    SCHEMA_TONE_CLASSES[0];
+    SCHEMA_TONE_CLASSES[model.schemaToneIndex] ?? SCHEMA_TONE_CLASSES[0];
 
   return (
     <button

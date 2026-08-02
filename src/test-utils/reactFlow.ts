@@ -62,7 +62,12 @@ export function installReactFlowJsdomShims(): () => void {
   }
 
   class StubDomMatrixReadOnly {
-    // Only the vertical scale is read, and the test viewport is never zoomed.
+    // `@xyflow/system` reads only the vertical scale off the viewport
+    // transform. Pinning it to 1 means jsdom always reports 100% zoom, so the
+    // zoom-percent readout in `SchemaErdCanvas` has no unit coverage: the
+    // controls are proven by `e2e/smoke/erd-dense.spec.ts` alone. Driving a
+    // real zoom here would need d3-zoom's transitions to run under fake
+    // timers, which buys a flaky test for a value e2e already asserts.
     readonly m22 = 1;
   }
 

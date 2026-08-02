@@ -360,7 +360,7 @@ describe("SchemaErdCanvas", () => {
     expect(within(wide).getByText(/\+3 more columns/i)).toBeInTheDocument();
   });
 
-  it("re-runs the elkjs layout only when the table or FK set changes", async () => {
+  it("re-runs the elkjs layout only when the layout input changes", async () => {
     vi.mocked(layoutErdModel).mockClear();
     const { rerender } = render(
       <SchemaErdCanvas graph={extractSchemaGraph(ordersSnapshot())} />,
@@ -389,7 +389,99 @@ describe("SchemaErdCanvas", () => {
     await findTableCard(/public\.refunds table/i);
     expect(layoutErdModel).toHaveBeenCalledTimes(2);
   });
+
+  // PR #2100 review round 1: the panel prefetches columns per schema after
+  // first paint. A schema with no FKs gains no edges when they land, so a
+  // fingerprint that ignored card height left the first-paint layout in place
+  // and every card overlapped the one below it.
+  it("re-lays out when late columns grow the cards of an FK-less schema", async () => {
+    vi.mocked(layoutErdModel).mockClear();
+    const { rerender } = render(
+      <SchemaErdCanvas
+        graph={extractSchemaGraph(fkFreeSnapshot({ withColumns: false }))}
+      />,
+    );
+    await findTableCard(/main\.alpha table/i);
+    expect(layoutErdModel).toHaveBeenCalledTimes(1);
+
+    rerender(
+      <SchemaErdCanvas
+        graph={extractSchemaGraph(fkFreeSnapshot({ withColumns: true }))}
+      />,
+    );
+    await waitFor(() =>
+      expect(
+        within(
+          screen.getByRole("button", { name: /main\.alpha table/i }),
+        ).getByText("label"),
+      ).toBeInTheDocument(),
+    );
+    await waitFor(() => expect(layoutErdModel).toHaveBeenCalledTimes(2));
+  });
+
+  // Regression cover carried over from the deleted renderer's suite.
+  it("shows the selected-table dependency empty state without row links", async () => {
+    const intelligence = selectSchemaGraphIntelligence(
+      dependencyEmptySnapshotWithMetadata(),
+    );
+
+    render(
+      <SchemaErdCanvas
+        graph={intelligence.graph}
+        intelligence={intelligence}
+        selectedTableId="table:main.event_log"
+      />,
+    );
+
+    const dependencies = await screen.findByRole("region", {
+      name: /dependencies for main\.event_log/i,
+    });
+    expect(dependencies).toHaveTextContent(/no dependencies/i);
+    expect(within(dependencies).queryByRole("link")).not.toBeInTheDocument();
+  });
 });
+
+function fkFreeSnapshot({
+  withColumns,
+}: {
+  withColumns: boolean;
+}): SchemaGraphCatalogSnapshot {
+  const names = ["alpha", "beta", "gamma"];
+  return {
+    source: { dbType: "duckdb", database: "warehouse.duckdb" },
+    schemas: [{ name: "main" }],
+    tablesBySchema: { main: names.map((name) => table("main", name)) },
+    columnsByTable: {
+      main: Object.fromEntries(
+        names.map((name) => [
+          name,
+          withColumns
+            ? [
+                column("id", { is_primary_key: true }),
+                column("label", { data_type: "text" }),
+                column("amount", { data_type: "numeric" }),
+              ]
+            : [],
+        ]),
+      ),
+    },
+    constraintsByTable: {},
+    indexesByTable: {},
+  };
+}
+
+function dependencyEmptySnapshotWithMetadata(): SchemaGraphCatalogSnapshot {
+  return {
+    source: { dbType: "duckdb", database: "events.duckdb" },
+    schemas: [{ name: "main" }],
+    tablesBySchema: { main: [table("main", "event_log")] },
+    columnsByTable: {
+      main: { event_log: [column("payload", { data_type: "json" })] },
+    },
+    indexesByTable: { main: { event_log: [] } },
+    constraintsByTable: { main: { event_log: [] } },
+  };
+}
 
 function badgeToneClass(tableButton: HTMLElement): string {
   const badge = tableButton.querySelector('[class*="text-erd-schema-"]');

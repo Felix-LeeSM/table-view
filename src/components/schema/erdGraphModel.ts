@@ -1,3 +1,4 @@
+import { logger } from "@lib/logger";
 import type { ELK, ElkNode, LayoutOptions } from "elkjs/lib/elk-api";
 import type {
   SchemaGraph,
@@ -28,12 +29,17 @@ export const ERD_MAX_VISIBLE_COLUMNS = 6;
 /** Number of distinct schema badge tones (`--color-erd-schema-*` in index.css). */
 export const ERD_SCHEMA_TONE_COUNT = 4;
 
+/** Vertical gap of the single-column fallback used when elkjs rejects. */
+const ERD_FALLBACK_STACK_GAP = 48;
+
 export interface ErdTableModel {
   readonly table: SchemaGraphTableNode;
   readonly columns: readonly SchemaGraphColumnNode[];
   readonly visibleColumns: readonly SchemaGraphColumnNode[];
   readonly hiddenColumnCount: number;
   readonly qualifiedName: string;
+  /** Index into the `--color-erd-schema-*` tones, assigned in `buildErdModel`. */
+  readonly schemaToneIndex: number;
   readonly width: number;
   readonly height: number;
 }
@@ -79,6 +85,22 @@ export function buildErdModel(graph: SchemaGraph): ErdModel {
     columnsByTable.set(tableId, columns);
   }
 
+  // Tones go by position in the sorted list of schemas the graph actually
+  // holds, so up to ERD_SCHEMA_TONE_COUNT schemas always get distinct badges.
+  // Hashing the name instead collided on ordinary names (`public`, `analytics`,
+  // `main` and `app` all landed on the same tone).
+  const schemaTones = new Map(
+    [
+      ...new Set(
+        graph.nodes
+          .filter((node): node is SchemaGraphTableNode => node.kind === "table")
+          .map((table) => String(table.schema)),
+      ),
+    ]
+      .sort()
+      .map((schema, index) => [schema, index % ERD_SCHEMA_TONE_COUNT] as const),
+  );
+
   const tables = graph.nodes
     .filter((node): node is SchemaGraphTableNode => node.kind === "table")
     .map((table) => {
@@ -93,6 +115,7 @@ export function buildErdModel(graph: SchemaGraph): ErdModel {
         visibleColumns,
         hiddenColumnCount,
         qualifiedName: `${table.schema}.${table.table}`,
+        schemaToneIndex: schemaTones.get(String(table.schema)) ?? 0,
         width: ERD_TABLE_WIDTH,
         height: erdTableHeight(visibleColumns.length, hiddenColumnCount),
       };
@@ -117,33 +140,35 @@ export function buildErdModel(graph: SchemaGraph): ErdModel {
 }
 
 /**
- * Identity of the layout *input*. `SchemaErdPanel` keeps fetching indexes and
- * constraints after first paint, so a fresh `SchemaGraph` object arrives many
- * times for the same diagram; re-running elkjs on each one would throw away
- * every node the user dragged.
+ * Identity of the layout *input*, serialized straight off the graph handed to
+ * elkjs so the trigger set and the input set cannot drift apart. Anything that
+ * would make elkjs place a table differently — the table set, each card's size,
+ * the hub priorities, and every FK edge with its endpoints and input order —
+ * changes this string; nothing else does.
  *
- * Only what elkjs actually consumes counts: the table set and the set of
- * directed table pairs. Edge *ids* deliberately do not — an FK edge id embeds
- * its constraint id, and that flips from the synthetic placeholder to the real
- * constraint name the moment `getTableConstraints` resolves, while the diagram
- * itself is unchanged.
+ * Why it matters in both directions:
+ *
+ * - `SchemaErdPanel` fetches indexes and constraints per table after first
+ *   paint, so a fresh `SchemaGraph` object keeps arriving for the same diagram.
+ *   Those carry no layout input, so the fingerprint holds and a dragged layout
+ *   survives. Edge *ids* are excluded for the same reason: an FK edge id embeds
+ *   its constraint id, which flips from the synthetic placeholder to the real
+ *   constraint name when `getTableConstraints` resolves.
+ * - The panel also prefetches columns per schema after first paint, and columns
+ *   decide card height. Leaving height out let a schema with no FKs at all keep
+ *   its first-paint layout while every card grew, so the cards overlapped
+ *   (PR #2100 review round 1).
  */
 export function erdModelFingerprint(model: ErdModel): string {
-  const tables = model.tables
-    .map((entry) => entry.table.id)
-    .sort()
-    .join(" ");
-  const edges = [
-    ...new Set(
-      model.relationships.map(
-        (relationship) =>
-          `${relationship.sourceTableId}>${relationship.targetTableId}`,
-      ),
-    ),
-  ]
-    .sort()
-    .join(" ");
-  return `tables:${tables} edges:${edges}`;
+  const elkGraph = buildErdElkGraph(model);
+  const nodes = (elkGraph.children ?? []).map(
+    (child) =>
+      `${child.id}@${child.width}x${child.height}p${child.layoutOptions?.["elk.priority"]}`,
+  );
+  const edges = (elkGraph.edges ?? []).map(
+    (edge) => `${edge.sources.join(",")}>${edge.targets.join(",")}`,
+  );
+  return `nodes:[${nodes.join(" ")}] edges:[${edges.join(" ")}]`;
 }
 
 /**
@@ -245,10 +270,28 @@ export async function layoutErdModel(
   const positions = new Map<string, ErdPosition>();
   if (model.tables.length === 0) return positions;
 
-  const elk = await getElk();
-  const laidOut = await elk.layout(buildErdElkGraph(model));
-  for (const child of laidOut.children ?? []) {
-    positions.set(child.id, { x: child.x ?? 0, y: child.y ?? 0 });
+  try {
+    const elk = await getElk();
+    const laidOut = await elk.layout(buildErdElkGraph(model));
+    for (const child of laidOut.children ?? []) {
+      positions.set(child.id, { x: child.x ?? 0, y: child.y ?? 0 });
+    }
+    return positions;
+  } catch (error) {
+    // A rejected layout must not leave the canvas blank with no explanation —
+    // the caller only paints nodes once this resolves. Fall back to a readable
+    // single column so every table is still reachable.
+    logger.error("[erd] elkjs layout failed, falling back to a column:", error);
+    return stackErdTables(model);
+  }
+}
+
+function stackErdTables(model: ErdModel): ReadonlyMap<string, ErdPosition> {
+  const positions = new Map<string, ErdPosition>();
+  let y = 0;
+  for (const entry of model.tables) {
+    positions.set(entry.table.id, { x: 0, y });
+    y += entry.height + ERD_FALLBACK_STACK_GAP;
   }
   return positions;
 }
@@ -288,19 +331,6 @@ export function filterErdTables(
   return tables.filter((entry) =>
     entry.qualifiedName.toLocaleLowerCase().includes(term),
   );
-}
-
-/**
- * Deterministic badge tone for a schema on the flat multi-schema canvas
- * (ADR 0054 (4)). The badge always prints the schema name too — colour is never
- * the only encoding.
- */
-export function erdSchemaToneIndex(schema: string): number {
-  let hash = 0;
-  for (let index = 0; index < schema.length; index += 1) {
-    hash = (hash * 31 + schema.charCodeAt(index)) % 0xffffffff;
-  }
-  return hash % ERD_SCHEMA_TONE_COUNT;
 }
 
 export function erdRelationshipLabel(edge: SchemaGraphEdge): string {
