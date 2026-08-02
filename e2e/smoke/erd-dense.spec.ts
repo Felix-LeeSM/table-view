@@ -28,8 +28,13 @@ const EDGE_LABELS = [
   "public.erd_refunds.payment_id references public.erd_payments.id",
 ] as const;
 
+// React Flow keys each node element by the SchemaGraph table id.
+const CUSTOMERS_NODE_ID = "table:public.erd_customers";
+const ORDERS_NODE_ID = "table:public.erd_orders";
+const ORDER_ITEMS_NODE_ID = "table:public.erd_order_items";
+
 describe("Dense ERD smoke", () => {
-  it("renders dense SchemaGraph ERD evidence on desktop and narrow viewports", async () => {
+  it("renders the React Flow + elkjs ERD canvas on desktop and narrow viewports", async () => {
     await step("create Postgres connection and open workspace", async () => {
       await browser.setWindowSize(1440, 1000);
       await waitForLauncher();
@@ -56,7 +61,7 @@ describe("Dense ERD smoke", () => {
     await step(
       "verify dense ERD desktop interactions and screenshot",
       async () => {
-        await verifyDenseErdSurface("desktop", "payments");
+        await verifyDenseErdCanvas("desktop", "payments");
         await saveNonEmptyScreenshot("desktop");
       },
     );
@@ -65,14 +70,14 @@ describe("Dense ERD smoke", () => {
       "verify dense ERD narrow interactions and screenshot",
       async () => {
         await browser.setWindowSize(390, 900);
-        await verifyDenseErdSurface("narrow", "refunds");
+        await verifyDenseErdCanvas("narrow", "refunds");
         await saveNonEmptyScreenshot("narrow");
       },
     );
   });
 });
 
-async function verifyDenseErdSurface(
+async function verifyDenseErdCanvas(
   viewportName: "desktop" | "narrow",
   searchTerm: string,
 ) {
@@ -80,51 +85,19 @@ async function verifyDenseErdSurface(
   await figure.waitForDisplayed({ timeout: 30000 });
 
   await waitForDenseGraphLabels(viewportName);
+  await expectLayeredByForeignKeyDirection(viewportName);
+
   await selectTable("public.erd_orders table");
   await expectSelected("public.erd_orders table");
   await waitForMetadataStable(viewportName);
+
+  await expectNodeIsDraggable(viewportName, "public.erd_orders table");
 
   await setErdSearch(searchTerm);
   await clickSearchResult(`public.erd_${searchTerm}`);
   await expectSelected(`public.erd_${searchTerm} table`);
 
-  const zoomBefore = await waitForZoomPercent(viewportName);
-  await clickButton("Zoom in ERD");
-  await browser.waitUntil(
-    async () => {
-      const zoom = await readZoomPercent();
-      return zoom !== null && zoom > zoomBefore;
-    },
-    {
-      timeout: 5000,
-      timeoutMsg: `${viewportName} ERD zoom-in did not change the zoom percent`,
-    },
-  );
-
-  await clickButton("Zoom out ERD");
-  await clickButton("Fit ERD");
-  await browser.waitUntil(
-    async () => {
-      const zoom = await readZoomPercent();
-      return zoom === 85;
-    },
-    {
-      timeout: 5000,
-      timeoutMsg: `${viewportName} ERD fit did not set the expected zoom percent`,
-    },
-  );
-
-  await clickButton("Fit selected table");
-  await browser.waitUntil(
-    async () => {
-      const zoom = await readZoomPercent();
-      return zoom === 100;
-    },
-    {
-      timeout: 5000,
-      timeoutMsg: `${viewportName} ERD fit-selected did not restore 100% zoom`,
-    },
-  );
+  await expectViewportControls(viewportName);
 
   await setErdSearch("");
 }
@@ -148,6 +121,95 @@ async function waitForDenseGraphLabels(viewportName: string) {
       timeout: 30000,
       timeoutMsg: `${viewportName} ERD did not expose dense table nodes and FK edges`,
     },
+  );
+}
+
+/**
+ * elkjs `layered` with `elk.direction: UP` has to put a referenced table above
+ * the table that references it. The seeded chain is
+ * erd_order_items -> erd_orders -> erd_customers, so canvas y must decrease
+ * along it. The old fixed 3-column grid could not satisfy this.
+ */
+async function expectLayeredByForeignKeyDirection(viewportName: string) {
+  await browser.waitUntil(
+    async () => (await readNodeY(CUSTOMERS_NODE_ID)) !== null,
+    {
+      timeout: 30000,
+      timeoutMsg: `${viewportName} ERD nodes never received an elkjs position`,
+    },
+  );
+
+  const customersY = await readNodeY(CUSTOMERS_NODE_ID);
+  const ordersY = await readNodeY(ORDERS_NODE_ID);
+  const orderItemsY = await readNodeY(ORDER_ITEMS_NODE_ID);
+  if (customersY === null || ordersY === null || orderItemsY === null) {
+    throw new Error(`${viewportName} ERD is missing a laid-out FK chain node`);
+  }
+
+  expect(customersY).toBeLessThan(ordersY);
+  expect(ordersY).toBeLessThan(orderItemsY);
+}
+
+/**
+ * Node drag is the capability the hand-rolled renderer never had. React Flow
+ * writes the position back onto the node element's inline transform, so a real
+ * pointer drag has to move it.
+ */
+async function expectNodeIsDraggable(viewportName: string, ariaLabel: string) {
+  const before = await readNodeTransform(ORDERS_NODE_ID);
+  const card = await $(`[aria-label="${ariaLabel}"]`);
+  await card.waitForDisplayed({ timeout: 10000 });
+  await card.dragAndDrop({ x: 120, y: 80 });
+
+  await browser.waitUntil(
+    async () => {
+      const after = await readNodeTransform(ORDERS_NODE_ID);
+      return after !== null && after !== before;
+    },
+    {
+      timeout: 10000,
+      timeoutMsg: `${viewportName} ERD node did not move when dragged`,
+    },
+  );
+}
+
+/**
+ * Zoom/fit are React Flow viewport operations now, so the exact zoom factor is
+ * graph-dependent. What holds regardless: zoom-in raises the readout, and
+ * fitting one table zooms in further than fitting the whole graph.
+ */
+async function expectViewportControls(viewportName: string) {
+  const zoomBefore = await waitForZoomPercent(viewportName);
+  await clickButton("Zoom in ERD");
+  await waitForZoom(
+    viewportName,
+    (zoom) => zoom > zoomBefore,
+    "zoom-in did not raise the zoom percent",
+  );
+
+  await clickButton("Zoom out ERD");
+  await waitForZoom(
+    viewportName,
+    (zoom) => zoom <= zoomBefore,
+    "zoom-out did not lower the zoom percent",
+  );
+
+  await clickButton("Fit ERD");
+  await waitForZoom(
+    viewportName,
+    (zoom) => zoom >= 15 && zoom <= 200,
+    "fit-all left the zoom outside the canvas bounds",
+  );
+  const fitAllZoom = await readZoomPercent();
+  if (fitAllZoom === null) {
+    throw new Error(`${viewportName} ERD zoom percent disappeared after fit`);
+  }
+
+  await clickButton("Fit selected table");
+  await waitForZoom(
+    viewportName,
+    (zoom) => zoom > fitAllZoom,
+    "fit-selected did not zoom in past the whole-graph fit",
   );
 }
 
@@ -263,15 +325,50 @@ async function waitForZoomPercent(viewportName: string): Promise<number> {
   return zoom;
 }
 
+async function waitForZoom(
+  viewportName: string,
+  predicate: (zoom: number) => boolean,
+  reason: string,
+) {
+  await browser.waitUntil(
+    async () => {
+      const zoom = await readZoomPercent();
+      return zoom !== null && predicate(zoom);
+    },
+    {
+      timeout: 10000,
+      timeoutMsg: `${viewportName} ERD ${reason}`,
+    },
+  );
+}
+
 async function readZoomPercent(): Promise<number | null> {
   await switchToWorkspaceWindow();
   return await browser.execute(() => {
     const label = document.querySelector<HTMLElement>(
       '[aria-label="ERD zoom percent"]',
     );
-    const match = label?.textContent?.trim().match(/^(\d{2,3})%$/);
+    const match = label?.textContent?.trim().match(/^(\d{1,3})%$/);
     return match ? Number(match[1]) : null;
   });
+}
+
+async function readNodeTransform(nodeId: string): Promise<string | null> {
+  await switchToWorkspaceWindow();
+  return await browser.execute((id) => {
+    const node = document.querySelector<HTMLElement>(
+      `.react-flow__node[data-id="${id}"]`,
+    );
+    return node ? node.style.transform : null;
+  }, nodeId);
+}
+
+async function readNodeY(nodeId: string): Promise<number | null> {
+  const transform = await readNodeTransform(nodeId);
+  const match = transform?.match(
+    /translate\(\s*(-?[\d.]+)px\s*,\s*(-?[\d.]+)px\s*\)/,
+  );
+  return match ? Number(match[2]) : null;
 }
 
 async function saveNonEmptyScreenshot(viewportName: string) {
