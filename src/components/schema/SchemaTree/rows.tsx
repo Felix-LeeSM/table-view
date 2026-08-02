@@ -81,8 +81,9 @@ export interface SchemaTreeRowsContext {
   dbType: string | undefined;
   // #1460 — per-action DDL capability gates. Each entry point reads the flag
   // for the SQL it emits (`createTable` → Create Table, `alterTable` → Rename,
-  // `dropObject` → Drop) so an engine that supports only some DDL surfaces only
-  // those affordances. Unsupported = HIDDEN, not shown-then-erroring (#1046).
+  // `dropObject` → Drop), and the flag is the ceiling on what the UI may offer
+  // — it can sit below what the adapter executes (see `supportsDdl`), which is
+  // where SQLite has been since #1804. Not offered = HIDDEN (#1046).
   // All true while dbType is still loading so entries aren't stripped early.
   canCreateTable: boolean;
   canAlterTable: boolean;
@@ -575,8 +576,9 @@ export function renderItemRow(
             } else if (e.key === "F2" && isTableItem && ctx.canAlterTable) {
               // #1460 — F2 rename is an ALTER TABLE RENAME entry point: gate it
               // on `canAlterTable` (same flag as the context-menu Rename item),
-              // else an engine whose adapter rejects rename opens
-              // RenameTableDialog then errors on the backend (click-then-error).
+              // else a keystroke reaches past the `ddl.alterTable` ceiling and
+              // opens RenameTableDialog on an engine whose menu deliberately
+              // hides Rename.
               e.preventDefault();
               ctx.handleStartRename(item.name, row.schemaName);
             }

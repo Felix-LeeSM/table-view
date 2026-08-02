@@ -1,7 +1,12 @@
 // Issue #1460 — the Columns / Indexes editors keep their read-only listing for
 // every RDB engine, but their mutation affordances read the per-action `ddl.*`
-// capability (`supportsDdl(dbType, ...)`) so an engine whose adapter rejects the
+// capability (`supportsDdl(dbType, ...)`) so an engine that has not opened the
 // write hides the control instead of surfacing a click-then-error path (#1046).
+// The flag is the UI ceiling, not a statement about the adapter: SQLite's
+// adapter has run standalone index create/drop since #1804 while `createIndex` /
+// `dropObject` still withhold them. `alterTable` is not the same case — the
+// per-row Edit it gates emits `ColumnChange::Modify`, which SQLite genuinely
+// cannot do without a table rebuild.
 // Asserts:
 //   - SQLite (createTable only) — Columns tab hides `+ Column` + per-row
 //     Edit/Delete; Indexes tab hides `Create index` + drop-index. The listings

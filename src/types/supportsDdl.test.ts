@@ -1,7 +1,8 @@
 // Issue #1460 — `supportsDdl(dbType, action)` reads the per-action `ddl.*`
-// capability so the four schema-mutation entry points (Create Table / Alter
-// Table / Create Index / Drop object) surface only where the wired backend
-// adapter can actually execute that DDL. Grounds (adapter code):
+// capability, the ceiling on where the four schema-mutation entry points
+// (Create Table / Alter Table / Create Index / Drop object) may surface. The
+// ceiling usually equals what the wired backend adapter can execute, but it may
+// deliberately sit below it (#1804, SQLite below). Grounds (adapter code):
 //   - PostgreSQL / MySQL / MariaDB / MSSQL / Oracle — every DDL trait method
 //     delegates to a real executor → all four true (MSSQL wired by #1071,
 //     Oracle by #1072).

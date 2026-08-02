@@ -479,7 +479,12 @@ export const SQLITE_CAPABILITIES = capabilities({
     // table. Flipping `alterTable` before that editor has its own gate would
     // put back the click-then-error this file exists to prevent (#1046), so the
     // flip waits for the Structure gate + tooltip slice and every flag but
-    // `createTable` stays false — the matching UI entry points stay hidden.
+    // `createTable` stays false — the matching STANDALONE entry points stay
+    // hidden. Index creation is not one of them: the Create Table dialog's
+    // Indexes tab carries no capability gate (`CreateTableDialog.tsx`, unlike
+    // the Constraints tab next to it), so it rides on `createTable` and SQLite
+    // users can declare indexes there today. `createIndex: false` hides only
+    // the standalone Structure "Create index" button (`StructurePanel.tsx`).
     // `alterConstraint` and `identityColumn` stay false for a stronger reason:
     // the adapter rejects standalone constraints and `is_identity` outright,
     // and both need the same table rebuild.
@@ -857,8 +862,9 @@ export function hasConnectionCapability(
  *
  * Issue #1460 — schema-tree DDL entries (Create / Rename / Drop) no longer ride
  * on this flag; they read the per-action `ddl.*` capability via `supportsDdl`
- * (each grounded on whether the wired adapter's DDL trait method executes vs.
- * returns `Unsupported`). This flag now gates only the DataGrid row editor.
+ * (a UI ceiling that usually tracks whether the wired adapter's DDL trait method
+ * executes vs. returns `Unsupported`, but may deliberately lag it — see
+ * `supportsDdl`). This flag now gates only the DataGrid row editor.
  */
 export function supportsRowEditing(
   dbType: DatabaseType | null | undefined,
@@ -918,14 +924,20 @@ export function supportsBulkWrite(
 export type DdlCapabilityName = keyof DataSourceCapabilities["ddl"];
 
 /**
- * Issue #1460 — whether the engine's wired backend adapter can actually execute
- * a given structured DDL action. Reads the per-action `capabilities.ddl.*` flag
- * (single source of truth) instead of the coarse `editRows` proxy, so a partial
- * roster (e.g. SQLite: `createTable` true, alter/index/drop false) surfaces only
- * the entry points the adapter really supports. Unsupported actions are HIDDEN,
- * not shown-then-erroring (#1046). An unknown / still-loading dbType returns
- * true so affordances aren't stripped before the connection resolves (same
- * fallback as `supportsRowEditing` / `supportsCatalogFeature`).
+ * Issue #1460 — whether the UI may offer a given structured DDL action for this
+ * engine. Reads the per-action `capabilities.ddl.*` flag (single source of
+ * truth) instead of the coarse `editRows` proxy, so a partial roster surfaces
+ * only the entry points that roster grants. Unsupported actions are HIDDEN, not
+ * shown-then-erroring (#1046). An unknown / still-loading dbType returns true so
+ * affordances aren't stripped before the connection resolves (same fallback as
+ * `supportsRowEditing` / `supportsCatalogFeature`).
+ *
+ * Issue #1804 — a `false` flag is a ceiling on the UI, not a statement about the
+ * adapter. The flag may deliberately lag what the adapter executes when opening
+ * the entry point needs UI work of its own: SQLite keeps every flag but
+ * `createTable` false while its adapter already runs the native DDL (see the
+ * `ddl` block of `SQLITE_CAPABILITIES`). Read it as "may the UI show this", and
+ * never as "can the adapter do this".
  */
 export function supportsDdl(
   dbType: DatabaseType | null | undefined,
