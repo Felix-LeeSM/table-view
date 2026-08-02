@@ -58,7 +58,11 @@ labels/defaults, URL parsing, and seed/spec inventory. It has bounded
 connection/catalog/query/cancel/tabular/edit-row runtime support plus
 representative Runtime Happy Path smoke for connect, seeded catalog browse,
 SELECT/DML, destructive Safe Mode confirmation, cancellation, and grid edit.
-Structured DDL, admin/security/jobs/users/roles, import/export,
+A read-only users/roles listing from `sys.server_principals` behind a `VIEW ANY
+DEFINITION` probe is active (#1077 Stage 2), on its own docker-gated
+`src-tauri/tests/mssql_integration.rs` evidence rather than the smoke row.
+Structured DDL, admin/security/jobs and user/role write management
+(create/alter/drop), import/export,
 profiler/activity, full T-SQL semantics, SQLCMD/procedure scripting, full
 parser/completion promotion, and full workbench parity remain unsupported or
 unclaimed until separate evidence lands.

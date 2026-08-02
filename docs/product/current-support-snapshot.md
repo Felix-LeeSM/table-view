@@ -256,9 +256,14 @@ Runtime Happy Path smoke for connect, seeded catalog browse, SELECT/DML,
 destructive Safe Mode confirmation, cancellation, and grid edit.
 `switchDatabase` remains disabled under the current connection contract. Named
 instances, Windows authentication, Azure AD/authSource modes, structured DDL,
-admin/security/jobs/users/roles, import/export, profiler/activity, full T-SQL
+admin/security/jobs and user/role write management (create/alter/drop),
+import/export, profiler/activity, full T-SQL
 semantic parity, full workbench parity, and sqlcmd/meta-command/procedure-body
-scripting remain unclaimed.
+scripting remain unclaimed. A read-only users/roles listing from
+`sys.server_principals` (principal name + capability flags, never
+`sys.sql_logins.password_hash`) is active behind a `VIEW ANY DEFINITION` probe
+that fails loud as `CapabilityNotEnabled` rather than serving the silently
+truncated list an unprivileged login would see (#1077 Stage 2).
 
 ## Oracle
 

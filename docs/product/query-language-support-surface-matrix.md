@@ -301,10 +301,12 @@ Parser/Safe Mode and completion own bounded editor assistance plus
 unsupported-boundary recognition for tested T-SQL scripting/admin heads.
 
 **Current boundary**: SQL Server structured DDL,
-admin/security/backup/jobs/users/roles, broad parser/completion semantics,
+admin/security/backup/jobs and user/role write management (create/alter/drop),
+broad parser/completion semantics,
 SQLCMD/batch scripting, procedure-body scripting, import/export,
 profiler/activity, full workbench parity, and full T-SQL semantics remain out of
-scope.
+scope. A read-only users/roles listing from `sys.server_principals` behind a
+`VIEW ANY DEFINITION` probe is in scope (#1077 Stage 2).
 
 ## Oracle SQL
 

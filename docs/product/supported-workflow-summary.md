@@ -73,11 +73,19 @@
   #907 wires representative Runtime Happy Path smoke for connect, seeded catalog
   browse, SELECT/DML, destructive Safe Mode confirmation, cancellation, and grid
   edit.
-  Structured DDL, admin/security/jobs/users/roles, import/export,
+  Structured DDL, admin/security/jobs and user/role write management
+  (create/alter/drop), import/export,
   full profiler/activity admin parity, full T-SQL semantic parity, full workbench
   parity, and SQLCMD/meta-command/procedure-body scripting stay out of scope; the
   shared server activity/slow-query (profiler) panels are capability-gated
-  auto-polling dashboards with a session-local, non-persistent trend.
+  auto-polling dashboards with a session-local, non-persistent trend, and a
+  read-only users/roles listing from `sys.server_principals` is available
+  (#1077 Stage 2) — it requires `VIEW ANY DEFINITION` and fails loud without it,
+  because that catalog view silently truncates for an unprivileged login. That
+  probe answers for the server scope only, so a principal that denies
+  `VIEW DEFINITION` to the connected login individually is still missing from
+  the list without an error
+  ([known-limitations-rdbms](known-limitations-rdbms.md)).
   Parser/completion support is bounded editor assistance only.
 - Oracle: bounded catalog/query/cancel/tabular/edit-row runtime support is active
   for issues #905/#906. Its profile exposes source-specific service-name lifecycle,
@@ -95,8 +103,11 @@
   users/roles/grants/session/storage, and full workbench
   parity stay unsupported or unclaimed.
   Full admin parity, import/export, full profiler/activity admin parity,
-  role/user/permission UI, and broad scripting remain out of scope for both
-  enterprise RDBMS profiles; the shared server activity/slow-query (profiler)
+  user/role write management (create/alter/drop), permission-editing UI, and
+  broad scripting remain out of scope for both enterprise RDBMS profiles, with
+  one exception: SQL Server serves the read-only users/roles listing described
+  in the MSSQL bullet above (#1077 Stage 2). Oracle keeps the whole boundary.
+  The shared server activity/slow-query (profiler)
   panels are capability-gated auto-polling dashboards with a session-local,
   non-persistent trend, and no activity/slow-query history is persisted to
   disk or DB (ADR 0036/0042).
