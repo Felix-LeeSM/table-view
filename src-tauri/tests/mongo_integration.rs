@@ -48,7 +48,7 @@ use table_view_lib::db::{
     MongoIndexCollation, MongoIndexDirection, MongoIndexField,
 };
 use table_view_lib::error::AppError;
-use table_view_lib::models::ConnectionConfig;
+use table_view_lib::models::{ConnectionConfig, MongoTopology};
 
 /// Build a raw mongodb `Client` from the shared test config so the
 /// integration test can seed / drop fixture collections directly without
@@ -128,6 +128,47 @@ async fn test_mongo_adapter_connect_ping_list_disconnect_happy_path() {
     // 를 셋팅하므로 빈 string 이 fallback 분기로 흘러 Ok([]) 가 정당
     // 결과. 환경 독립성을 위해 이 검증은 unit-level 에 위임.
 
+    // Issue #1821 — the `hello` + `buildInfo` probe that `connect()` fires is
+    // fail-closed by design: a misspelled command or a renamed field degrades
+    // to `unknown` instead of erroring, so every other assertion in this file
+    // stays green while the capability is permanently blank. Nothing but a
+    // live assertion catches that, and this is the one test that already has
+    // a real server on the wire.
+    let capabilities = adapter.runtime_capabilities().await;
+    assert_eq!(
+        capabilities.topology,
+        MongoTopology::Standalone,
+        "single-node test server must be identified as standalone, got {:?} \
+         (an `unknown` here means the `hello` probe never reached the server)",
+        capabilities.topology
+    );
+    let version = capabilities
+        .version
+        .expect("buildInfo probe must yield a parsed server version");
+    // Deliberately not pinned to a major: CI runs `mongo:7`
+    // (`.github/workflows/ci.yml:497`) while the local testcontainers default
+    // is `mongo:5.0.6` (`testcontainers-modules` 0.15.0 `mongo::TAG`), so an
+    // `== 7` would be green on one and red on the other. The floor plus the
+    // raw/triplet cross-check is what actually proves the probe parsed this
+    // server's own answer rather than a default.
+    assert!(
+        version.major >= 4,
+        "implausible major version {} parsed from buildInfo (raw {:?})",
+        version.major,
+        version.raw
+    );
+    assert!(
+        version.raw.starts_with(&format!(
+            "{}.{}.{}",
+            version.major, version.minor, version.patch
+        )),
+        "parsed triplet {}.{}.{} does not match the server's own version string {:?}",
+        version.major,
+        version.minor,
+        version.patch,
+        version.raw
+    );
+
     // Clean disconnect must succeed and must leave the adapter in a state
     // where subsequent calls fail with a Connection error.
     adapter
@@ -138,6 +179,11 @@ async fn test_mongo_adapter_connect_ping_list_disconnect_happy_path() {
     assert!(
         post_disconnect.is_err(),
         "ping after disconnect should fail"
+    );
+    assert_eq!(
+        adapter.runtime_capabilities().await.topology,
+        MongoTopology::Unknown,
+        "disconnect must drop the probed capability so a reconnect re-probes"
     );
 }
 
