@@ -1,7 +1,9 @@
-// Issue #1077 Stage 2 — read-only users/roles listing. PG →
-// `pg_roles` (password-masked catalog view). The wire shape carries no
-// secret column: the backend sources `pg_roles`, never `pg_authid` /
-// `pg_shadow`. Other engines return `Unsupported` (PG-first parity lane).
+// Issue #1077 Stage 2 — read-only users/roles listing. PG → `pg_roles`
+// (password-masked catalog view), MySQL/MariaDB → `mysql.user`, SQL Server →
+// `sys.server_principals`. The wire shape carries no secret column: no adapter
+// selects `pg_authid`/`pg_shadow`, `authentication_string`/`Password`, or
+// `sys.sql_logins.password_hash`. Oracle and every non-RDB paradigm still
+// return `Unsupported`.
 
 import { invoke } from "@tauri-apps/api/core";
 

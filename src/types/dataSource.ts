@@ -185,7 +185,8 @@ export interface DataSourceCapabilities {
     // stats, unrelated). Re-declare when the #1077 profiler dashboard promotes
     // a server-stats surface.
     readonly serverInfo: boolean;
-    // Issue #1077 Stage 2 — read-only users/roles listing (PG-first).
+    // Issue #1077 Stage 2 — read-only users/roles listing. True for PG,
+    // MySQL/MariaDB, and SQL Server; Oracle is the remaining RDB gap.
     // #1462 — consumed by the OperationsPanel flyout's Users tab.
     readonly users: boolean;
   };
@@ -457,9 +458,11 @@ export const ORACLE_CAPABILITIES = capabilities({
   // Issue #1073 — Oracle admin ops parity. Backed by the OracleAdapter v$
   // sources (v$session / v$sql / v$instance; ALTER SYSTEM KILL SESSION). The
   // v$ reads fail loud when the login lacks catalog-read privilege rather than
-  // returning a silent empty list. `users` stays false (#1077 Stage 2 is
-  // PG-first); `locks` has no adapter override on any engine. Same shape as
-  // MySQL/MongoDB, so the OperationsPanel flyout surfaces the tabs unchanged.
+  // returning a silent empty list. `users` stays false — Oracle users listing
+  // (`dba_users` with an `all_users` fallback) is the remaining #1077 Stage 2
+  // slice; MySQL/SQL Server ship in Stage 2. `locks` has no adapter override on
+  // any engine. Same shape as MySQL/MongoDB, so the OperationsPanel flyout
+  // surfaces the tabs unchanged.
   operations: {
     activity: true,
     slowQueries: true,
@@ -554,14 +557,17 @@ export const MYSQL_FAMILY_CAPABILITIES = capabilities({
   // Issue #1073 — MySQL/MariaDB admin ops parity. Backed by the shared
   // MysqlAdapter (information_schema.processlist / KILL /
   // performance_schema.events_statements_summary_by_digest / SHOW GLOBAL
-  // STATUS+VARIABLES). `users` stays false (that is #1077 Stage 2, PG-first);
-  // `locks` has no adapter override on any engine. Same shape as MongoDB, so
-  // the OperationsPanel flyout surfaces the activity/serverInfo/slowQueries
-  // tabs without a panel change.
+  // STATUS+VARIABLES). Issue #1077 Stage 2 — `users` now sourced from the
+  // `mysql.user` catalog (User/Host + privilege flags only; the
+  // `authentication_string`/`Password` credential columns are never selected —
+  // see the `MYSQL_USERS_QUERY` guard fixture). `locks` has no adapter override
+  // on any engine. Same shape as MongoDB, so the OperationsPanel flyout
+  // surfaces activity/serverInfo/slowQueries/users without a panel change.
   operations: {
     activity: true,
     slowQueries: true,
     serverInfo: true,
+    users: true,
   },
 });
 
@@ -696,13 +702,17 @@ export const MSSQL_CAPABILITIES = capabilities({
   // Issue #1073 — SQL Server admin ops parity. Backed by the MssqlAdapter
   // sys.dm_exec_* DMVs (dm_exec_sessions / dm_exec_query_stats / dm_os_sys_info;
   // KILL). The server-scoped DMVs fail loud without VIEW SERVER STATE rather
-  // than returning a silent empty list. `users` stays false (#1077 Stage 2 is
-  // PG-first); `locks` has no adapter override on any engine. Same shape as
-  // MySQL/MongoDB, so the OperationsPanel flyout surfaces the tabs unchanged.
+  // than returning a silent empty list. Issue #1077 Stage 2 — `users` now
+  // sourced from `sys.server_principals` (login/role name + flags only; the
+  // `sys.sql_logins.password_hash` credential is never read — see the
+  // `USERS_SQL` guard fixture). `locks` has no adapter override on any engine.
+  // Same shape as MySQL/MongoDB, so the OperationsPanel flyout surfaces the
+  // tabs unchanged.
   operations: {
     activity: true,
     slowQueries: true,
     serverInfo: true,
+    users: true,
   },
 });
 
