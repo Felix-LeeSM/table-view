@@ -357,6 +357,16 @@ async fn mysql_endpoint() -> Option<MysqlEndpoint> {
 ///   2) else, unless `MSSQL_DISABLE=1`, lazily spawn the official
 ///      `mcr.microsoft.com/mssql/server` testcontainer (amd64-only; on Apple
 ///      silicon it needs Rosetta and otherwise fails → silent-skip).
+///
+/// Issue #1077 Stage 2 (2026-08-02) — the silent skip is local-only. Every
+/// docker-gated caller does `match setup_mssql_adapter().await { Some(a) => a,
+/// None => return }`, and CI runs `--profile push`, which sets
+/// `success-output = "never"` and `status-level = "slow"`: the `SKIP:` println
+/// below is swallowed and the test name is never printed. "The container never
+/// started" and "every gate ran" are therefore indistinguishable in the CI log,
+/// so a green `Integration Tests (Docker)` proved nothing about these tests.
+/// Under `CI` an absent endpoint is a failure. `MSSQL_DISABLE=1` is checked
+/// first and stays an explicit, deliberate opt-out.
 #[allow(dead_code)]
 async fn mssql_endpoint() -> Option<MssqlEndpoint> {
     if std::env::var("MSSQL_DISABLE")
@@ -367,6 +377,19 @@ async fn mssql_endpoint() -> Option<MssqlEndpoint> {
         return None;
     }
 
+    let endpoint = mssql_endpoint_available().await;
+    assert!(
+        endpoint.is_some() || std::env::var_os("CI").is_none(),
+        "SQL Server endpoint unavailable under CI: the docker-gated mssql tests \
+         would silently no-op and still report PASS. Start the container (or set \
+         MSSQL_HOST), or set MSSQL_DISABLE=1 to opt out on purpose."
+    );
+    endpoint
+}
+
+/// The resolver proper. Returns `None` on every unavailable path so
+/// [`mssql_endpoint`] owns the single CI fail-loud decision.
+async fn mssql_endpoint_available() -> Option<MssqlEndpoint> {
     if let Ok(host) = std::env::var("MSSQL_HOST") {
         let port = std::env::var("MSSQL_PORT")
             .ok()
