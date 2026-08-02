@@ -48,7 +48,12 @@ pub struct MongoAdapter {
     /// `disconnect()` honest.
     ///
     /// Lock order is after `client`, matching `active_db` (see
-    /// `switch_active_db`). Nothing takes two of these at once today.
+    /// `switch_active_db`). `disconnect()` does hold all four guards at the
+    /// same time — `client` → `default_db` → `active_db` →
+    /// `runtime_capabilities` are `let`-bound into one scope and stay alive
+    /// until the end of it — so this ordering is load-bearing, not decorative.
+    /// Acquire these four in declaration order everywhere or the next
+    /// multi-guard site deadlocks against `disconnect()`.
     pub(super) runtime_capabilities: Arc<Mutex<Option<MongoRuntimeCapabilities>>>,
 }
 

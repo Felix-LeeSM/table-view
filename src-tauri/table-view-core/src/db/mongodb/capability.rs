@@ -93,6 +93,11 @@ pub(super) fn runtime_capabilities_from(
 /// `hello` is the modern handshake (server 4.4+); servers older than that only
 /// answer the legacy `isMaster` spelling, so a failed `hello` retries once
 /// before giving up. Both carry the same `msg` / `setName` fields.
+///
+/// Cost, stated exactly because PR #2099's body rounded it down: **two round
+/// trips on the happy path, three when `hello` is refused** (`hello` →
+/// `isMaster` → `buildInfo`). Paid once per `connect()`; every later read is a
+/// cache hit on `MongoAdapter::runtime_capabilities`.
 pub(super) async fn detect_runtime_capabilities(client: &Client) -> MongoRuntimeCapabilities {
     let admin = client.database("admin");
 
