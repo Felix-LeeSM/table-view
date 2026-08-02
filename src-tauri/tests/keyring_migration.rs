@@ -342,8 +342,13 @@ fn issue_1814_rekeys_when_keyring_returns_with_disk_key_present() {
     let backend = InMemoryKeyringBackend::new_available();
     backend.set(KEYRING_ENTRY_NAME, &exposed_key).unwrap();
 
-    let outcome = migrate_or_initialize(&backend, dir.path()).expect("rekey must not fail the boot");
+    let outcome =
+        migrate_or_initialize(&backend, dir.path()).expect("rekey must not fail the boot");
 
+    assert!(
+        outcome.rekeyed_after_disk_exposure,
+        "the outcome must report that this boot rekeyed"
+    );
     assert_ne!(
         outcome.key, exposed_key,
         "the disk-exposed key must be retired, not reused"
@@ -379,6 +384,7 @@ fn issue_1814_crash_after_keyring_overwrite_recovers_on_next_boot() {
 
     let outcome = migrate_or_initialize(&backend, dir.path()).expect("recovery must not fail boot");
 
+    assert!(outcome.rekeyed_after_disk_exposure);
     assert_secrets_readable_under(dir.path(), &outcome.key);
     assert_ne!(outcome.key, exposed_key, "exposed key must stay retired");
     assert_eq!(
@@ -412,6 +418,10 @@ fn issue_1814_crash_after_reencrypt_rename_keeps_data_readable() {
         backend.get(KEYRING_ENTRY_NAME).unwrap().unwrap(),
         outcome.key
     );
+    assert!(
+        !outcome.rekeyed_after_disk_exposure,
+        "the file is already under the keyring key; there is nothing left to rekey"
+    );
 }
 
 /// 중단 지점 ③ — secure delete 직전에 죽었다 (②와 같은 on-disk 상태). 다음
@@ -437,6 +447,7 @@ fn issue_1814_crash_before_secure_delete_removes_leftover_key_file() {
         outcome.key, live_key,
         "the leftover .key opens nothing, so there is nothing to rekey away from"
     );
+    assert!(!outcome.rekeyed_after_disk_exposure);
 }
 
 /// secure delete 도중 죽으면 `.key` 가 zero-overwrite 된 채 남는다 (base64 로
@@ -454,6 +465,7 @@ fn issue_1814_unreadable_leftover_key_file_does_not_break_boot() {
         migrate_or_initialize(&backend, dir.path()).expect("a corrupt .key must not fail the boot");
 
     assert_secrets_readable_under(dir.path(), &outcome.key);
+    assert!(!outcome.rekeyed_after_disk_exposure);
     assert!(
         !disk_key_path(dir.path()).exists(),
         "the zeroed .key residue must be removed"

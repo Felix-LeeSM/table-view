@@ -13,6 +13,11 @@
 //!     `.key.migration-failed`. AC-356-02..04.
 //!   - **Path B 후속 boot**: 디스크 `.key` 없음 + keyring 있음 → keyring
 //!     read. AC-356-03.
+//!   - **재키잉 (#1814)**: 디스크 `.key` 있음 + keyring 있음 → 디스크를 거친
+//!     키는 노출된 키다. 새 키 생성 → keyring 덮어쓰기 → `connections.json`
+//!     재암호화 (임시 파일 + atomic rename) → 디스크 `.key` secure delete.
+//!     디스크 `.key` 가 복구 앵커라 어느 단계에서 죽어도 다음 부팅이 이어받는다.
+//!     `KeyOutcome::rekeyed_after_disk_exposure` 로 수행 여부가 드러난다.
 //!   - **Path C (Linux fallback)**: keyring `is_available()` 가 false →
 //!     디스크 `.key` mode 유지 (현재 0o600), frontend 에 toast event
 //!     emit. AC-356-05..06.
@@ -26,6 +31,7 @@ use aes_gcm::aead::KeyInit;
 use aes_gcm::Aes256Gcm;
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use tracing::{info, warn};
+use zeroize::Zeroizing;
 
 use crate::error::AppError;
 use crate::storage::crypto::{create_key_file, KeyringBackend, KEYRING_ENTRY_NAME};
@@ -92,6 +98,13 @@ pub struct KeyOutcome {
     pub source: KeySource,
     /// `true` = Path C (Linux fallback). `false` = 그 외.
     pub fallback_to_disk: bool,
+    /// #1814 — 이번 부팅이 디스크 노출을 거친 키를 폐기하고 새 키로 갈아탔는가.
+    /// `true` 면 `key` 는 이번 부팅에 새로 만든 키이고 `connections.json` 은 그
+    /// 키로 재암호화됐다. 재키잉을 시도했다가 실패한 부팅은 `false` 이고, 그때
+    /// `key` 는 (`source` 가 `FromKeyring` 이어도) 현재 암호문을 여는 키 —
+    /// 디스크 `.key` 앵커의 값일 수 있다. 다음 부팅이 같은 조건을 다시 만나
+    /// 재시도한다.
+    pub rekeyed_after_disk_exposure: bool,
 }
 
 impl KeyOutcome {
@@ -127,17 +140,20 @@ pub fn migrate_or_initialize<B: KeyringBackend>(
     // ---------------- Path B 후속 boot — keyring hit ----------------
     if let Some(bytes) = backend.get(KEYRING_ENTRY_NAME)? {
         validate_key_len(&bytes)?;
-        // 디스크 `.key` 가 (예: Path B 의 secure-delete 가 부분 실패해)
-        // 남아있을 가능성이 있으므로 best-effort cleanup. 이미 keyring 에
-        // 정합한 key 가 있으므로 디스크 잔재는 leakage surface 일 뿐.
+        // 디스크 `.key` 가 남아 있다 = 이 프로필이 Path C 디스크 fallback 을
+        // 거쳤거나 Path B 의 secure delete 가 부분 실패했다. 둘 다 master key
+        // 평문이 디스크에 앉아 있던 상태다. 잔재만 지우고 같은 키를 계속 쓰면
+        // 그 파일을 백업·rsync·스냅샷으로 가져간 쪽이 여전히 모든 password 를
+        // 푼다 — 새 키로 갈아탄다 (#1814).
         let disk_path = disk_key_path(data_dir);
         if disk_path.exists() {
-            let _ = secure_delete(&disk_path);
+            return rekey_after_disk_exposure(backend, data_dir, &disk_path, bytes);
         }
         return Ok(KeyOutcome {
             key: bytes,
             source: KeySource::FromKeyring,
             fallback_to_disk: false,
+            rekeyed_after_disk_exposure: false,
         });
     }
 
@@ -156,6 +172,7 @@ pub fn migrate_or_initialize<B: KeyringBackend>(
             key: Vec::new(),
             source: KeySource::Fatal,
             fallback_to_disk: false,
+            rekeyed_after_disk_exposure: false,
         });
     }
 
@@ -183,6 +200,7 @@ pub fn migrate_or_initialize<B: KeyringBackend>(
         key: key_bytes,
         source: KeySource::Generated,
         fallback_to_disk: false,
+        rekeyed_after_disk_exposure: false,
     })
 }
 
@@ -209,6 +227,7 @@ fn path_b_migrate_from_disk<B: KeyringBackend>(
             key: disk_key,
             source: KeySource::DiskFallback,
             fallback_to_disk: true,
+            rekeyed_after_disk_exposure: false,
         });
     }
 
@@ -228,6 +247,7 @@ fn path_b_migrate_from_disk<B: KeyringBackend>(
                 key: disk_key,
                 source: KeySource::DiskFallback,
                 fallback_to_disk: true,
+                rekeyed_after_disk_exposure: false,
             });
         }
     }
@@ -245,6 +265,7 @@ fn path_b_migrate_from_disk<B: KeyringBackend>(
             key: disk_key,
             source: KeySource::DiskFallback,
             fallback_to_disk: true,
+            rekeyed_after_disk_exposure: false,
         });
     }
 
@@ -264,6 +285,7 @@ fn path_b_migrate_from_disk<B: KeyringBackend>(
         key: disk_key,
         source: KeySource::MigratedFromDisk,
         fallback_to_disk: false,
+        rekeyed_after_disk_exposure: false,
     })
 }
 
@@ -278,6 +300,7 @@ fn path_c_disk_fallback(data_dir: &Path) -> Result<KeyOutcome, AppError> {
             key,
             source: KeySource::DiskFallback,
             fallback_to_disk: true,
+            rekeyed_after_disk_exposure: false,
         })
     } else {
         // #1555 — keyring-only 프로필이 keyring 없는 환경으로 이전/소실되면
@@ -294,6 +317,7 @@ fn path_c_disk_fallback(data_dir: &Path) -> Result<KeyOutcome, AppError> {
                 key: Vec::new(),
                 source: KeySource::Fatal,
                 fallback_to_disk: false,
+                rekeyed_after_disk_exposure: false,
             });
         }
         // 신규 사용자 + Linux fallback — 디스크에 새 key. write_disk_key 가
@@ -309,8 +333,260 @@ fn path_c_disk_fallback(data_dir: &Path) -> Result<KeyOutcome, AppError> {
             key: key_bytes,
             source: KeySource::DiskFallback,
             fallback_to_disk: true,
+            rekeyed_after_disk_exposure: false,
         })
     }
+}
+
+/// `connections.json` 안에서 master key 봉투로 감싸이는 필드. `storage::mod.rs`
+/// 의 `save_connection_with_wallet` 이 유일한 `crypto::encrypt` 호출자이고 거기서
+/// 봉투를 타는 값은 이 둘뿐이다. `ConnectionConfig` 에 `rename_all` 이 없어 저장
+/// key 는 필드 이름 그대로다. **새 secret 필드를 추가하면 여기에도 넣어야 한다** —
+/// 빠진 필드는 재키잉 뒤 복호화 불가로 남는다.
+const SECRET_FIELDS: [&str; 2] = ["password", "wallet_password"];
+
+fn connections_path(data_dir: &Path) -> PathBuf {
+    data_dir.join("connections.json")
+}
+
+/// 재키잉이 새 암호문을 먼저 떨어뜨리는 임시 파일. 이름을 고정한 이유는 boot 에
+/// 1회만 도는 경로라 경합이 없고, 앞선 부팅이 남긴 잔재를 매번 회수하기 위해서다.
+fn rekey_tmp_path(data_dir: &Path) -> PathBuf {
+    data_dir.join("connections.json.rekey.tmp")
+}
+
+/// `connections.json` 의 상태. `Corrupt` 는 파싱 실패 — `load_storage_raw()` 가
+/// 다음 호출에서 격리한다.
+enum ConnectionsDoc {
+    Absent,
+    Corrupt,
+    Parsed(serde_json::Value),
+}
+
+fn read_connections_doc(data_dir: &Path) -> Result<ConnectionsDoc, AppError> {
+    let path = connections_path(data_dir);
+    if !path.exists() {
+        return Ok(ConnectionsDoc::Absent);
+    }
+    let raw = fs::read_to_string(&path)?;
+    Ok(match serde_json::from_str(&raw) {
+        Ok(value) => ConnectionsDoc::Parsed(value),
+        Err(_) => ConnectionsDoc::Corrupt,
+    })
+}
+
+/// 문서 안의 비어있지 않은 secret 암호문들.
+fn secret_values(doc: &serde_json::Value) -> impl Iterator<Item = &str> {
+    doc.get("connections")
+        .and_then(|v| v.as_array())
+        .map(|a| a.as_slice())
+        .unwrap_or_default()
+        .iter()
+        .flat_map(|conn| {
+            SECRET_FIELDS
+                .iter()
+                .filter_map(move |field| conn.get(*field).and_then(|v| v.as_str()))
+        })
+        .filter(|enc| !enc.is_empty())
+}
+
+/// 지켜야 할 암호문이 하나라도 있는가. 없으면 재키잉이 잃을 것도 없다.
+fn has_secrets(doc: &serde_json::Value) -> bool {
+    secret_values(doc).next().is_some()
+}
+
+/// 문서의 모든 secret 이 `key` 로 풀리는가. 하나라도 실패하면 false — 부분 성공을
+/// 성공으로 강등하지 않는다.
+fn secrets_decrypt_under(doc: &serde_json::Value, key: &[u8]) -> bool {
+    secret_values(doc).all(|enc| crate::storage::crypto::decrypt(enc, key).is_ok())
+}
+
+/// 모든 secret 을 `old` 로 풀어 `new` 로 다시 감싼다. 하나라도 실패하면 `Err` 이고
+/// 호출자는 원본 파일을 건드리지 않은 채 다음 부팅으로 넘긴다. 평문은 `Zeroizing`
+/// 안에서만 살아 재암호화 직후 지워진다 (ADR 0040 이 재암호화의 비용으로 지목한
+/// "plaintext 메모리 노출 윈도우" 를 최소화).
+fn reencrypt_secrets(doc: &mut serde_json::Value, old: &[u8], new: &[u8]) -> Result<(), AppError> {
+    let Some(connections) = doc.get_mut("connections").and_then(|v| v.as_array_mut()) else {
+        return Ok(());
+    };
+    for conn in connections {
+        for field in SECRET_FIELDS {
+            let Some(enc) = conn.get(field).and_then(|v| v.as_str()) else {
+                continue;
+            };
+            if enc.is_empty() {
+                continue;
+            }
+            let plaintext = Zeroizing::new(crate::storage::crypto::decrypt(enc, old)?);
+            let rewrapped = crate::storage::crypto::encrypt(plaintext.as_str(), new)?;
+            conn[field] = serde_json::Value::String(rewrapped);
+        }
+    }
+    Ok(())
+}
+
+/// 재암호화된 문서를 원자적으로 발행한다 — create-time 0600 임시 파일에 쓰고
+/// `fsync` 한 뒤 rename. `storage::mod.rs` 의 `save_storage_raw()` 와 같은 절차다.
+/// rename 이 성공하기 전에는 원본이 한 바이트도 안 바뀐다.
+fn publish_connections_atomically(
+    data_dir: &Path,
+    doc: &serde_json::Value,
+) -> Result<(), AppError> {
+    let path = connections_path(data_dir);
+    let tmp_path = rekey_tmp_path(data_dir);
+    let json = serde_json::to_string_pretty(doc)?;
+
+    // 앞선 부팅의 잔재를 먼저 회수한다. `create_new` 로 열어야 mode(0600) 이 실제로
+    // 걸린다 — 이미 있는 파일을 열면 그 파일의 permission 이 그대로 쓰인다.
+    let _ = fs::remove_file(&tmp_path);
+    {
+        let mut opts = fs::OpenOptions::new();
+        opts.create_new(true).write(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            opts.mode(0o600);
+        }
+        let mut f = opts.open(&tmp_path)?;
+        use std::io::Write;
+        f.write_all(json.as_bytes())?;
+        f.sync_all()?;
+    }
+
+    if let Err(e) = fs::rename(&tmp_path, &path) {
+        let _ = fs::remove_file(&tmp_path); // best-effort: leave no orphan
+        return Err(e.into());
+    }
+    Ok(())
+}
+
+/// #1814 — 디스크 노출을 거친 file-key 를 폐기하고 새 키로 갈아탄다.
+///
+/// 진입 조건은 「keyring 에 키가 있는데 디스크 `.key` 도 있다」 하나다. 별도 마커를
+/// 두지 않는 이유는 디스크 `.key` 의 존재 자체가 노출의 증거이기 때문이다. 사용자
+/// confirm 없이 자동으로 수행한다 (2026-07-25 오너 결정).
+///
+/// 3단계: ① 새 키 생성 → keyring 덮어쓰기 ② `connections.json` 재암호화 → 임시
+/// 파일 → atomic rename ③ 디스크 `.key` secure delete.
+///
+/// **복구 앵커** — ① 이 keyring 의 구 키를 덮어쓰므로, 그 구 키가 유일본이면 ①과
+/// ② 사이의 crash 가 모든 password 를 복구 불가로 만든다. 그래서 ① 앞에서 「현재
+/// 암호문을 여는 키가 디스크 `.key` 에 있다」(또는 지킬 암호문이 아예 없다) 를
+/// 확인하고, 아니면 재키잉을 시작하지 않는다. 그 조건이 서면 ①②③ 어디서 죽어도
+/// 다음 부팅이 디스크 `.key` 로 복호화해 이어받는다.
+fn rekey_after_disk_exposure<B: KeyringBackend>(
+    backend: &B,
+    data_dir: &Path,
+    disk_path: &Path,
+    keyring_key: Vec<u8>,
+) -> Result<KeyOutcome, AppError> {
+    let from_keyring = |key: Vec<u8>, rekeyed: bool| KeyOutcome {
+        key,
+        source: KeySource::FromKeyring,
+        fallback_to_disk: false,
+        rekeyed_after_disk_exposure: rekeyed,
+    };
+
+    // 읽히지 않는 `.key` — secure delete 도중 죽어 zero-overwrite 만 된 잔재 —
+    // 는 앵커가 못 된다.
+    let disk_key = read_disk_key(disk_path).ok();
+
+    let mut doc = match read_connections_doc(data_dir)? {
+        ConnectionsDoc::Corrupt => {
+            // 격리 전이라 어느 키가 맞는지 판정할 수 없다. 아무것도 지우지 않고
+            // 다음 부팅으로 넘긴다 (`load_storage_raw()` 가 격리한 뒤 재시도된다).
+            warn!(
+                target: "boot",
+                "key_migration: rekey deferred — connections.json does not parse; leaving the disk .key in place"
+            );
+            return Ok(from_keyring(keyring_key, false));
+        }
+        ConnectionsDoc::Absent => None,
+        ConnectionsDoc::Parsed(value) if !has_secrets(&value) => None,
+        ConnectionsDoc::Parsed(value) => Some(value),
+    };
+
+    // 현재 암호문을 여는 키. 디스크 `.key` 를 먼저 물어보는 이유는 그게 앵커이기
+    // 때문이다 — 노출 시나리오에서는 keyring 키와 같은 값인 경우가 대부분이다.
+    let current = match doc.as_ref() {
+        None => keyring_key.clone(),
+        Some(parsed) => match disk_key
+            .as_ref()
+            .filter(|k| secrets_decrypt_under(parsed, k))
+        {
+            Some(anchor) => anchor.clone(),
+            None if secrets_decrypt_under(parsed, &keyring_key) => {
+                // 디스크 `.key` 는 현재 암호문과 무관한 잔재다 (예: 재키잉이
+                // rename 까지 끝내고 secure delete 전에 죽은 부팅이 남긴 구 키).
+                // 갈아탈 대상이 없으니 잔재만 치운다.
+                if let Err(e) = secure_delete(disk_path) {
+                    warn!(target: "boot", "key_migration: stale disk .key cleanup failed: {e}");
+                }
+                return Ok(from_keyring(keyring_key, false));
+            }
+            None => {
+                // 어느 키로도 안 열린다. 여기서 무엇이든 지우면 복구 가능성만
+                // 줄어든다 — 둘 다 보존하고 아무것도 하지 않는다.
+                warn!(
+                    target: "boot",
+                    "key_migration: rekey skipped — neither the keyring key nor the disk .key decrypts connections.json; preserving both"
+                );
+                return Ok(from_keyring(keyring_key, false));
+            }
+        },
+    };
+    // 이 지점의 불변식: 지킬 암호문이 있다면 `current` 는 디스크 `.key` 안에 그대로
+    // 남아 있다. 아래 ①이 keyring 을 덮어써도 복구가 가능한 근거다.
+
+    // ① 새 키 생성 → keyring 덮어쓰기 + readback 검증.
+    let new_key = Aes256Gcm::generate_key(aes_gcm::aead::OsRng)
+        .as_slice()
+        .to_vec();
+    if let Err(e) = backend.set(KEYRING_ENTRY_NAME, &new_key) {
+        warn!(
+            target: "boot",
+            "key_migration: rekey step 1 keyring write failed ({e}); disk .key preserved, retrying next boot"
+        );
+        return Ok(from_keyring(current, false));
+    }
+    match backend.get(KEYRING_ENTRY_NAME)? {
+        Some(stored) if stored == new_key => {}
+        _ => {
+            warn!(
+                target: "boot",
+                "key_migration: rekey step 1 keyring readback mismatch; disk .key preserved, retrying next boot"
+            );
+            return Ok(from_keyring(current, false));
+        }
+    }
+
+    // ② connections.json 재암호화 → 임시 파일 → atomic rename.
+    if let Some(parsed) = doc.as_mut() {
+        if let Err(e) = reencrypt_secrets(parsed, &current, &new_key)
+            .and_then(|()| publish_connections_atomically(data_dir, parsed))
+        {
+            warn!(
+                target: "boot",
+                "key_migration: rekey step 2 re-encrypt failed ({e}); connections.json untouched and disk .key preserved, retrying next boot"
+            );
+            return Ok(from_keyring(current, false));
+        }
+    }
+
+    // ③ 디스크 `.key` secure delete. 실패해도 남은 파일은 이제 아무 암호문도 못
+    // 여는 잔재이고, 다음 부팅이 같은 경로에서 다시 치운다.
+    if let Err(e) = secure_delete(disk_path) {
+        warn!(
+            target: "boot",
+            "key_migration: rekey step 3 secure delete failed ({e}); the leftover .key no longer opens anything, retrying next boot"
+        );
+    }
+
+    info!(
+        target: "boot",
+        "key_migration: rekeyed after disk exposure — new key published to the keyring, connections.json re-encrypted, disk .key retired"
+    );
+    Ok(from_keyring(new_key, true))
 }
 
 /// Validate that every non-empty `password_enc` in `connections.json`
@@ -1015,8 +1291,7 @@ mod tests {
     /// 디스크 `.key` 도 남는다 (복구 앵커). 이번 부팅은 구 키로 계속 동작하고
     /// 다음 부팅이 앵커를 보고 재키잉을 다시 시도한다.
     ///
-    /// 실패 주입: 재암호화가 쓰는 임시 파일 자리를 디렉토리로 막는다. 이름은
-    /// 구현의 `rekey_tmp_path()` 와 같아야 한다.
+    /// 실패 주입: 재암호화가 쓰는 임시 파일 자리를 디렉토리로 막는다.
     #[test]
     fn rekey_reencrypt_failure_preserves_connections_json_and_anchor() {
         let dir = TempDir::new().unwrap();
@@ -1031,7 +1306,7 @@ mod tests {
         fs::write(&conn_path, serde_json::to_string_pretty(&doc).unwrap()).unwrap();
         let before = fs::read(&conn_path).unwrap();
 
-        fs::create_dir(dir.path().join("connections.json.rekey.tmp")).unwrap();
+        fs::create_dir(rekey_tmp_path(dir.path())).unwrap();
 
         let backend = InMemoryKeyringBackend::new_available();
         backend.set(KEYRING_ENTRY_NAME, &exposed_key).unwrap();
@@ -1039,6 +1314,7 @@ mod tests {
         let outcome = migrate_or_initialize(&backend, dir.path())
             .expect("a failed rekey must not fail the boot");
 
+        assert!(!outcome.rekeyed_after_disk_exposure);
         assert_eq!(
             fs::read(&conn_path).unwrap(),
             before,
@@ -1059,6 +1335,112 @@ mod tests {
         );
     }
 
+    /// 성공한 재키잉은 flag 를 세우고 임시 파일을 남기지 않는다.
+    #[test]
+    fn rekey_reports_the_flag_and_leaves_no_temp_file() {
+        let dir = TempDir::new().unwrap();
+        let exposed_key: Vec<u8> = (0..32u8).collect();
+        seed_disk_key(dir.path(), &exposed_key);
+        let doc = serde_json::json!({
+            "connections": [{
+                "id": "c1",
+                "password": encrypt("db-pw", &exposed_key).unwrap(),
+                "wallet_password": encrypt("wallet-pw", &exposed_key).unwrap(),
+            }],
+            "groups": [],
+        });
+        fs::write(dir.path().join("connections.json"), doc.to_string()).unwrap();
+        let backend = InMemoryKeyringBackend::new_available();
+        backend.set(KEYRING_ENTRY_NAME, &exposed_key).unwrap();
+
+        let outcome = migrate_or_initialize(&backend, dir.path()).unwrap();
+
+        assert!(outcome.rekeyed_after_disk_exposure);
+        assert_ne!(outcome.key, exposed_key);
+        assert!(
+            !rekey_tmp_path(dir.path()).exists(),
+            "the rekey temp file must not survive the boot"
+        );
+        assert!(!disk_key_path(dir.path()).exists());
+    }
+
+    /// 재키잉하지 않은 부팅은 flag 를 세우지 않는다 — 디스크 `.key` 가 없는
+    /// 평범한 keyring hit.
+    #[test]
+    fn keyring_hit_without_disk_key_does_not_report_a_rekey() {
+        let dir = TempDir::new().unwrap();
+        let key: Vec<u8> = (0..32u8).collect();
+        let backend = InMemoryKeyringBackend::new_available();
+        backend.set(KEYRING_ENTRY_NAME, &key).unwrap();
+
+        let outcome = migrate_or_initialize(&backend, dir.path()).unwrap();
+
+        assert_eq!(outcome.key, key);
+        assert!(!outcome.rekeyed_after_disk_exposure);
+    }
+
+    /// 어느 키로도 안 열리는 암호문 앞에서는 아무것도 파괴하지 않는다. 지우면
+    /// 복구 가능성만 줄어든다 (fail-closed).
+    #[test]
+    fn rekey_preserves_everything_when_no_key_decrypts() {
+        let dir = TempDir::new().unwrap();
+        let disk_only: Vec<u8> = (0..32u8).collect();
+        let keyring_only: Vec<u8> = (50..82u8).collect();
+        let lost_key: Vec<u8> = (100..132u8).collect();
+        seed_disk_key(dir.path(), &disk_only);
+        let doc = serde_json::json!({
+            "connections": [{ "id": "c1", "password": encrypt("pw", &lost_key).unwrap() }],
+            "groups": [],
+        });
+        fs::write(dir.path().join("connections.json"), doc.to_string()).unwrap();
+        let before = fs::read(dir.path().join("connections.json")).unwrap();
+        let backend = InMemoryKeyringBackend::new_available();
+        backend.set(KEYRING_ENTRY_NAME, &keyring_only).unwrap();
+
+        let outcome = migrate_or_initialize(&backend, dir.path()).unwrap();
+
+        assert!(!outcome.rekeyed_after_disk_exposure);
+        assert_eq!(outcome.key, keyring_only);
+        assert!(
+            disk_key_path(dir.path()).exists(),
+            "an unreadable ciphertext is no reason to destroy a key"
+        );
+        assert_eq!(
+            backend.get(KEYRING_ENTRY_NAME).unwrap().unwrap(),
+            keyring_only,
+            "the keyring entry must not be overwritten when the rekey cannot start"
+        );
+        assert_eq!(
+            fs::read(dir.path().join("connections.json")).unwrap(),
+            before
+        );
+    }
+
+    /// `connections.json` 이 파싱되지 않으면 어느 키가 맞는지 판정할 수 없다.
+    /// 격리(`load_storage_raw()`) 뒤 다음 부팅으로 미룬다.
+    #[test]
+    fn rekey_defers_when_connections_json_is_corrupt() {
+        let dir = TempDir::new().unwrap();
+        let exposed_key: Vec<u8> = (0..32u8).collect();
+        seed_disk_key(dir.path(), &exposed_key);
+        fs::write(dir.path().join("connections.json"), "{ not json").unwrap();
+        let backend = InMemoryKeyringBackend::new_available();
+        backend.set(KEYRING_ENTRY_NAME, &exposed_key).unwrap();
+
+        let outcome = migrate_or_initialize(&backend, dir.path()).unwrap();
+
+        assert!(!outcome.rekeyed_after_disk_exposure);
+        assert_eq!(outcome.key, exposed_key);
+        assert!(
+            disk_key_path(dir.path()).exists(),
+            "the anchor must stay until the corrupt file is quarantined"
+        );
+        assert_eq!(
+            backend.get(KEYRING_ENTRY_NAME).unwrap().unwrap(),
+            exposed_key
+        );
+    }
+
     // ---------------- KeyOutcome helper ----------------
 
     #[test]
@@ -1067,6 +1449,7 @@ mod tests {
             key: Vec::new(),
             source: KeySource::Fatal,
             fallback_to_disk: false,
+            rekeyed_after_disk_exposure: false,
         };
         assert!(fatal.is_fatal());
 
@@ -1080,6 +1463,7 @@ mod tests {
                 key: vec![0u8; 32],
                 source: src.clone(),
                 fallback_to_disk: false,
+                rekeyed_after_disk_exposure: false,
             };
             assert!(!outcome.is_fatal(), "{:?} should not be fatal", src);
         }
