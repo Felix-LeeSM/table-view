@@ -49,8 +49,9 @@ info/warn/destructive, raw DDL, and grid-edit preview paths; cancellation smoke
 covers the query toolbar UI/API boundary, cancelled history status, stale-grid
 clearing, and retry. Structure DDL smoke covers the preview/execute path for one
 table plus one index and schema/index refresh proof only. Dense ERD smoke covers
-local graph render/search/selection/zoom/fit/screenshot evidence only, not FK
-row navigation, schema diff, migration impact, or data compare. Future parity
+local canvas evidence only — graph render, FK-direction layering, search,
+selection, node drag, canvas zoom/fit, screenshot — not FK row navigation,
+schema diff, migration impact, or data compare. Future parity
 hardening must add a scoped issue with matching tests and smoke routing before
 claims widen.
 

@@ -76,10 +76,12 @@
         "noRedundantRoles": "off",
         // 11 sites. The fix adds a `role` plus keyboard handlers.
         "noStaticElementInteractions": "off",
-        // 8 sites, 7 of them standalone .svg assets (public/logo-*.svg,
+        // 7 sites, all standalone .svg assets (public/logo-*.svg,
         // src-tauri/icons-src/*.svg) where a <title> is meaningless. The 8th
-        // is an inline decorative overlay in SchemaErdRenderer.tsx that
-        // already sets aria-hidden conditionally.
+        // site the 2026-07-31 count reported was the hand-rolled ERD's inline
+        // SVG overlay; #1655 deleted it with the renderer, and React Flow owns
+        // the edge layer now. Re-measure by flipping this to "error" and
+        // running `pnpm exec biome check .`.
         "noSvgWithoutTitle": "off",
         // 4 sites. The fix adds required ARIA props, changing what screen
         // readers announce.

@@ -97,7 +97,7 @@ this page stays the index plus the cross-band policy sections.
 | [`postgresql-query-workbench.md`](smoke-matrix/postgresql-query-workbench.md) | PostgreSQL lane detail: query execution, catalog/workbench metadata, parser and Safe Mode, completion and installed extensions, edit semantics, Explain, cancellation |
 | [`sqlite-file-dbms.md`](smoke-matrix/sqlite-file-dbms.md) | SQLite lane detail: file connection lifecycle, writable-file DML, catalog browse, row edit, DDL and unsupported `ALTER` behavior |
 | [`h3-duckdb-file-analytics.md`](smoke-matrix/h3-duckdb-file-analytics.md) | DuckDB `.duckdb` runtime plus registered CSV/Parquet/JSON/NDJSON analytics, and the local-file privacy/export and extension/`COPY` gates |
-| [`h4-rdbms-intelligence.md`](smoke-matrix/h4-rdbms-intelligence.md) | Schema metadata cache, ERD graph input and renderer, dependency view, migration impact, schema diff, FK row navigation |
+| [`h4-rdbms-intelligence.md`](smoke-matrix/h4-rdbms-intelligence.md) | Schema metadata cache, ERD graph input and React Flow canvas, dependency view, migration impact, schema diff, FK row navigation |
 | [`h5-non-rdbms.md`](smoke-matrix/h5-non-rdbms.md) | Non-RDBMS paradigms: MongoDB, Redis/Valkey, and Elasticsearch/OpenSearch Search, with their closure audits |
 | [`h6-wider-source-candidates.md`](smoke-matrix/h6-wider-source-candidates.md) | MSSQL and Oracle runtime/smoke guardrails plus unpromoted wide-column, cloud-document, graph, vector, and stream candidates |
 | [`h7-ops-security-reliability.md`](smoke-matrix/h7-ops-security-reliability.md) | CI gate surface, destructive-operation safety, credential and local-first privacy, dependency security, a11y, performance, platform smoke, E2E isolation |

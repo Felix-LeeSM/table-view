@@ -29,7 +29,8 @@ GitHub Runtime Happy Path proves connect, browse seeded `users`, edit Alice's
 with an Explain history source label, verify seeded `pgcrypto`/`fuzzystrmatch`
 installed-extension completion gating, cover Safe Mode info/warn/destructive,
 raw DDL preview, grid-edit confirmation paths, cancel/retry a long query,
-execute a bounded Structure table-plus-index DDL path, and render a dense ERD on
+execute a bounded Structure table-plus-index DDL path, and render and interact
+with a dense ERD canvas (layering, search, selection, node drag, zoom/fit) on
 desktop and narrow viewports on Ubuntu. It does not prove broader structured DDL
 flows, broader history-source labeling, FK row navigation through ERD, schema
 diff, migration impact, data compare, admin, arbitrary extension semantics, or
