@@ -778,6 +778,13 @@ impl RdbAdapter for MssqlAdapter {
     fn server_info<'a>(&'a self) -> BoxFuture<'a, Result<crate::models::ServerInfoRow, AppError>> {
         Box::pin(async move { MssqlAdapter::server_info(self).await })
     }
+
+    // ── Issue #1077 Stage 2 — read-only users listing (sys.server_principals) ──
+    fn list_database_users<'a>(
+        &'a self,
+    ) -> BoxFuture<'a, Result<Vec<crate::models::DatabaseUserRow>, AppError>> {
+        Box::pin(async move { MssqlAdapter::list_database_users(self).await })
+    }
 }
 
 fn cancellable_metadata<'a, T>(

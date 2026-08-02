@@ -13,11 +13,21 @@
 //! without it makes the query error out — surfaced verbatim rather than
 //! swallowed into a silently empty list (parity with the MySQL
 //! performance_schema-off fail-loud contract).
+//!
+//! Issue #1077 Stage 2 adds the read-only users/roles listing, whose source
+//! (`sys.server_principals`) is deliberately NOT a DMV and therefore does NOT
+//! share that fail-loud property: a catalog view is metadata-visibility
+//! filtered, so an under-privileged login silently receives a truncated row set.
+//! That path is gated by its own `VIEW ANY DEFINITION` probe instead — see
+//! `USERS_PERMISSION_PROBE_SQL`. The probe closes the server-wide truncation,
+//! not every truncation: a per-principal `DENY VIEW DEFINITION ON LOGIN::x`
+//! still hides that one row from a caller that holds the server-scope grant
+//! (recorded in `docs/product/known-limitations.md`).
 
 use tiberius::Row;
 
 use crate::error::AppError;
-use crate::models::{ServerActivityRow, ServerInfoRow, SlowQueryRow};
+use crate::models::{DatabaseUserRow, ServerActivityRow, ServerInfoRow, SlowQueryRow};
 
 use super::MssqlAdapter;
 
@@ -53,6 +63,104 @@ SELECT CAST(SERVERPROPERTY('ProductVersion') AS NVARCHAR(128)), \
        CAST(SERVERPROPERTY('ProductLevel') AS NVARCHAR(128)), \
        CAST(SERVERPROPERTY('Collation') AS NVARCHAR(128)) \
 FROM sys.dm_os_sys_info si";
+
+/// Issue #1077 Stage 2 — `sys.server_principals` is a catalog view, NOT a DMV.
+/// SQL Server applies metadata-visibility filtering to it, so a login without
+/// `VIEW ANY DEFINITION` gets a silently TRUNCATED principal list instead of an
+/// error: `classify_view_server_state_error` never fires on that path and an
+/// account-audit screen would render a partial list as complete. Probing the
+/// effective permission first turns that into a loud `CapabilityNotEnabled`.
+///
+/// Residual, measured on SQL Server 2022 (16.0.4265.3): the probe answers for
+/// the SERVER scope, so a caller holding `VIEW ANY DEFINITION` still loses a
+/// single principal that carries `DENY VIEW DEFINITION ON LOGIN::x` for it —
+/// probe `1`, row silently absent. Detecting that needs per-principal
+/// permission reads that are themselves metadata-filtered; the boundary is
+/// recorded in `docs/product/known-limitations.md` instead.
+const USERS_PERMISSION_PROBE_SQL: &str =
+    "SELECT CAST(ISNULL(HAS_PERMS_BY_NAME(NULL, NULL, 'VIEW ANY DEFINITION'), 0) AS BIGINT)";
+
+/// Issue #1077 Stage 2 — read-only logins/roles from `sys.server_principals`.
+/// Only the principal name + coarse capability flags are projected;
+/// `sys.sql_logins.password_hash` (the only server-login credential) is never
+/// joined or selected, mirroring the PG `pg_roles`-only posture (see the
+/// `users_sql_*` guard tests).
+///
+/// Every flag is `CAST(... AS BIGINT)` for the same reason `ACTIVITY_SQL`
+/// documents above: tiberius' `i64` `FromSql` rejects a non-NULL `I32` with
+/// `Error::Conversion`, and `opt_i64` swallows that into `None`, so a T-SQL
+/// `int` projection would render every row as "No" with no error anywhere.
+///
+/// Every privilege flag is the OR of two independent sources, never a lone
+/// `ISNULL(IS_SRVROLEMEMBER(...), 0)`. Measured on SQL Server 2022
+/// (16.0.4265.3): `IS_SRVROLEMEMBER` returns NULL for a certificate-mapped
+/// (`type = 'C'`) or asymmetric-key-mapped (`'K'`) principal and for a caller
+/// that cannot resolve the membership, so collapsing NULL to 0 turns "cannot
+/// resolve" into "not a member" — a false negative on an account-audit screen
+/// (a `dbcreator` member rendered as unable to create databases). The recursive
+/// `sys.server_role_members` walk is the NULL-free second source, while
+/// `IS_SRVROLEMEMBER` still contributes the Windows-group-derived membership
+/// that the catalog does not record (e.g. `NT AUTHORITY\\SYSTEM` via
+/// `BUILTIN\\Administrators`), so OR-ing the two can only ever raise a flag.
+/// `can_create_db` / `can_create_role` follow the fixed roles that actually
+/// confer the right (`dbcreator` / `securityadmin`, plus `sysadmin`, which
+/// implies both).
+///
+/// `can_login` whitelists the principal types that are an authentication path:
+/// `'S'` SQL login, `'U'` Windows login, `'G'` Windows group, `'E'` Microsoft
+/// Entra (Azure AD) login, `'X'` Entra group. A server role (`'R'`) never logs
+/// in, and neither does a `'C'`/`'K'` principal — those exist only to carry
+/// permissions for signed modules, so `type <> 'R'` reported them as loginable
+/// accounts (false positive).
+///
+/// The row filter carries NO type predicate, only the `##MS_*` name filter.
+/// An earlier `sp.type IN ('S', 'U', 'G', 'R', 'C', 'K')` whitelist dropped
+/// every `'E'`/`'X'` Entra principal with no row and no error — on an
+/// Entra-authenticated server those are the primary login subjects, so the
+/// account-audit screen lost its main population silently. A type whitelist has
+/// to be re-edited for every principal type SQL Server adds; listing every row
+/// and deciding loginability per type cannot lose one. `##MS_*` internal
+/// principals stay filtered — they are audit noise, never real accounts. Server
+/// principals expose no per-login connection cap or password expiry.
+const USERS_SQL: &str = "\
+WITH fixed_role_members AS ( \
+    SELECT r.name AS role_name, rm.member_principal_id \
+    FROM sys.server_role_members rm \
+    JOIN sys.server_principals r ON r.principal_id = rm.role_principal_id \
+    WHERE r.name IN ('sysadmin', 'dbcreator', 'securityadmin') \
+    UNION ALL \
+    SELECT m.role_name, rm.member_principal_id \
+    FROM sys.server_role_members rm \
+    JOIN fixed_role_members m ON m.member_principal_id = rm.role_principal_id \
+), principal_flags AS ( \
+    SELECT sp.name AS name, \
+           CASE WHEN sp.is_disabled = 0 AND sp.type IN ('S', 'U', 'G', 'E', 'X') \
+                THEN 1 ELSE 0 END AS can_login, \
+           CASE WHEN IS_SRVROLEMEMBER('sysadmin', sp.name) = 1 \
+                     OR EXISTS (SELECT 1 FROM fixed_role_members fm \
+                                WHERE fm.role_name = 'sysadmin' \
+                                  AND fm.member_principal_id = sp.principal_id) \
+                THEN 1 ELSE 0 END AS is_sysadmin, \
+           CASE WHEN IS_SRVROLEMEMBER('dbcreator', sp.name) = 1 \
+                     OR EXISTS (SELECT 1 FROM fixed_role_members fm \
+                                WHERE fm.role_name = 'dbcreator' \
+                                  AND fm.member_principal_id = sp.principal_id) \
+                THEN 1 ELSE 0 END AS is_dbcreator, \
+           CASE WHEN IS_SRVROLEMEMBER('securityadmin', sp.name) = 1 \
+                     OR EXISTS (SELECT 1 FROM fixed_role_members fm \
+                                WHERE fm.role_name = 'securityadmin' \
+                                  AND fm.member_principal_id = sp.principal_id) \
+                THEN 1 ELSE 0 END AS is_securityadmin \
+    FROM sys.server_principals sp \
+    WHERE sp.name NOT LIKE '##MS_%' \
+) \
+SELECT name, \
+       CAST(can_login AS BIGINT), \
+       CAST(is_sysadmin AS BIGINT), \
+       CAST(CASE WHEN is_sysadmin = 1 OR is_dbcreator = 1 THEN 1 ELSE 0 END AS BIGINT), \
+       CAST(CASE WHEN is_sysadmin = 1 OR is_securityadmin = 1 THEN 1 ELSE 0 END AS BIGINT) \
+FROM principal_flags \
+ORDER BY name";
 
 impl MssqlAdapter {
     /// Issue #1073 — list backend sessions from `sys.dm_exec_sessions`
@@ -154,6 +262,71 @@ impl MssqlAdapter {
             connections_active: opt_i64(row, 3),
             extras,
         })
+    }
+
+    /// Issue #1077 Stage 2 — read-only logins/roles from `sys.server_principals`
+    /// (`USERS_SQL`). No credential column is read. The PG-shaped
+    /// `DatabaseUserRow` is reused: `name` is the principal name, `can_login`
+    /// marks an enabled principal whose type is an authentication path (SQL /
+    /// Windows / Entra login, Windows / Entra group — see `USERS_SQL`; a role
+    /// and a certificate-/key-mapped principal are listed as non-loginable),
+    /// `is_superuser` reflects `sysadmin` membership, and `can_create_db` /
+    /// `can_create_role` follow the `dbcreator` / `securityadmin` fixed roles.
+    /// Every principal reaches the list regardless of type. SQL Server exposes no
+    /// per-login connection cap, password expiry, or portable role-membership
+    /// array on the server principal, so `conn_limit` is -1 (unlimited),
+    /// `valid_until` is None, and `member_of` is empty (the server-role graph
+    /// is a later #1077 depth step).
+    ///
+    /// `sys.server_principals` is a catalog view, so a login without `VIEW ANY
+    /// DEFINITION` would receive a silently truncated list rather than an
+    /// error. The permission is probed first and a denial surfaces as
+    /// `CapabilityNotEnabled` — an account-audit screen must never render a
+    /// partial principal list as if it were complete. That probe answers for
+    /// the SERVER scope, so it closes the server-wide truncation and not every
+    /// truncation: a principal carrying `DENY VIEW DEFINITION ON LOGIN::x`
+    /// against the connected login stays silently absent even when the probe
+    /// returns `1` (recorded in `docs/product/known-limitations.md`).
+    pub async fn list_database_users(&self) -> Result<Vec<DatabaseUserRow>, AppError> {
+        let probe = self
+            .admin_query(
+                "VIEW ANY DEFINITION probe failed",
+                USERS_PERMISSION_PROBE_SQL,
+            )
+            .await?;
+        let metadata_visible = probe.first().and_then(|row| opt_i64(row, 0)).unwrap_or(0) == 1;
+        if !metadata_visible {
+            return Err(AppError::CapabilityNotEnabled {
+                code: "mssql_view_any_definition".into(),
+                message: "This login lacks VIEW ANY DEFINITION, so SQL Server would return a \
+                          silently truncated sys.server_principals list. Ask an administrator \
+                          for: GRANT VIEW ANY DEFINITION TO [<login>];"
+                    .into(),
+            });
+        }
+
+        let rows = self
+            .admin_query("sys.server_principals query failed", USERS_SQL)
+            .await?;
+        rows.iter()
+            .map(|row| {
+                // Every flag projection is a `CASE`/`ISNULL` that cannot be
+                // NULL, so `req_i64` fails loud if a future edit reintroduces a
+                // nullable (or non-BIGINT) expression instead of silently
+                // reporting the account as unprivileged.
+                Ok(DatabaseUserRow {
+                    name: opt_str(row, 0, "principal name")?.unwrap_or_default(),
+                    can_login: req_i64(row, 1, "can_login flag")? == 1,
+                    is_superuser: req_i64(row, 2, "sysadmin flag")? == 1,
+                    can_create_db: req_i64(row, 3, "dbcreator flag")? == 1,
+                    can_create_role: req_i64(row, 4, "securityadmin flag")? == 1,
+                    replication: false,
+                    conn_limit: -1,
+                    valid_until: None,
+                    member_of: Vec::new(),
+                })
+            })
+            .collect()
     }
 
     /// Open a fresh client (same as the catalog surface) and return the first
@@ -264,6 +437,167 @@ mod tests {
             adapter.list_server_activity().await,
             Err(AppError::Connection(_))
         ));
+    }
+
+    // Issue #1077 Stage 2 (2026-07-25) — the sys.server_principals row shape
+    // needs a live SQL Server (integration); the pool-acquisition guard is the
+    // branch reachable without a server, mirroring the admin-op guards above.
+    #[tokio::test]
+    async fn list_database_users_without_connection_fails() {
+        let adapter = MssqlAdapter::new();
+        assert!(matches!(
+            adapter.list_database_users().await,
+            Err(AppError::Connection(_))
+        ));
+    }
+
+    // Issue #1077 Stage 2 SECURITY (2026-07-25) — the users query must read
+    // `sys.server_principals` and must NEVER touch `sys.sql_logins` or select a
+    // `password_hash`, the only server-login credential. Fails if the query
+    // regresses toward a secret source.
+    #[test]
+    fn users_sql_never_reads_login_credential() {
+        assert!(
+            USERS_SQL.contains("sys.server_principals"),
+            "must source sys.server_principals"
+        );
+        let lower = USERS_SQL.to_ascii_lowercase();
+        assert!(
+            !lower.contains("sql_logins"),
+            "sys.sql_logins carries password_hash — must not be referenced"
+        );
+        assert!(
+            !lower.contains("password"),
+            "no password_hash credential column may be selected"
+        );
+    }
+
+    // Issue #1077 Stage 2 (2026-07-25) — GREEN half 1 of
+    // `users_sql_projects_tsql_int_and_collapses_null_sysadmin_pre_impl`.
+    // tiberius' `i64` FromSql rejects a non-NULL `I32` with `Error::Conversion`
+    // and `opt_i64` swallows it into `None`, so a T-SQL `int` projection
+    // renders EVERY row as "No" with no error anywhere. `ACTIVITY_SQL` already
+    // documents the `CAST(... AS BIGINT)` discipline in this file.
+    #[test]
+    fn users_sql_casts_flag_projections_to_bigint() {
+        assert!(
+            !USERS_SQL.contains(" AS INT)"),
+            "a T-SQL int projection decodes as I32 and is swallowed by opt_i64 — \
+             every integer flag must CAST(... AS BIGINT)"
+        );
+        assert_eq!(
+            USERS_SQL.matches("AS BIGINT").count(),
+            4,
+            "can_login / is_superuser / can_create_db / can_create_role must each \
+             cast to BIGINT"
+        );
+    }
+
+    // Issue #1077 Stage 2 SECURITY (2026-07-25) — GREEN half 2, widened to all
+    // three fixed roles after the re-review (PR #1786). Verified against SQL
+    // Server 2022 (16.0.4265.3): `IS_SRVROLEMEMBER` returns NULL for a
+    // certificate-/asymmetric-key-mapped principal, so a lone `ISNULL(..., 0)`
+    // reports "cannot resolve" as "not a member" — a real `dbcreator` renders
+    // as unable to create databases. The catalog membership walk is the
+    // NULL-free second source; OR-ing the two can only ever raise a flag, never
+    // lower it (`IS_SRVROLEMEMBER` still contributes the Windows-group-derived
+    // membership that `sys.server_role_members` does not record — e.g.
+    // `NT AUTHORITY\SYSTEM` via `BUILTIN\Administrators`). The behavioral gate
+    // is `test_mssql_users_null_role_membership_and_non_login_principals_1077`
+    // in `tests/mssql_integration.rs`.
+    #[test]
+    fn users_sql_backs_every_privilege_flag_with_a_null_free_source() {
+        assert!(
+            USERS_SQL.contains("sys.server_role_members"),
+            "the catalog membership walk is the NULL-free membership source"
+        );
+        assert!(
+            !USERS_SQL.contains("ISNULL(IS_SRVROLEMEMBER"),
+            "collapsing IS_SRVROLEMEMBER's NULL to 0 turns 'cannot resolve' into \
+             'not a member' — a privilege false negative"
+        );
+        for role in ["sysadmin", "dbcreator", "securityadmin"] {
+            assert!(
+                USERS_SQL.contains(&format!("IS_SRVROLEMEMBER('{role}'")),
+                "{role}: IS_SRVROLEMEMBER still contributes Windows-group-derived \
+                 membership"
+            );
+            assert!(
+                USERS_SQL.contains(&format!("WHERE fm.role_name = '{role}'")),
+                "{role}: the two membership sources must be OR-ed, not a lone \
+                 IS_SRVROLEMEMBER answer"
+            );
+        }
+    }
+
+    // Issue #1077 Stage 2 SECURITY (2026-07-25) — re-review (PR #1786): a
+    // certificate-mapped (`'C'`) or asymmetric-key-mapped (`'K'`) principal
+    // carries permissions for signed modules and can never authenticate, so
+    // `type <> 'R'` reported it as a loginable account. 3rd review B4 widened
+    // the whitelist to the Entra principals: `'E'` (Microsoft Entra login) and
+    // `'X'` (Entra group) authenticate exactly like a Windows login/group, and
+    // on an Entra-enabled server they are the primary login subjects.
+    #[test]
+    fn users_sql_limits_can_login_to_authenticatable_principal_types() {
+        assert!(
+            USERS_SQL.contains("sp.is_disabled = 0 AND sp.type IN ('S', 'U', 'G', 'E', 'X')"),
+            "can_login must whitelist every authenticatable principal type \
+             (Entra 'E'/'X' included), not exclude roles only"
+        );
+    }
+
+    // Issue #1077 Stage 2 SECURITY (2026-07-25) — PR #1786 3rd review B4, data
+    // loss. The row filter used to be `sp.type IN ('S', 'U', 'G', 'R', 'C', 'K')`,
+    // which dropped every `'E'`/`'X'` Entra principal with no row and no error —
+    // on an Entra-authenticated server that is the whole account population,
+    // silently missing from an audit screen. A type whitelist has to be
+    // re-edited for every principal type SQL Server adds, so the row filter must
+    // stay name-only; loginability is decided per type in the projection above.
+    // The live completeness gate is
+    // `test_mssql_users_listing_drops_no_principal_type_1077` in
+    // `tests/mssql_integration.rs`.
+    #[test]
+    fn users_sql_row_filter_drops_no_principal_type() {
+        // The whole WHERE clause, up to the CTE's closing paren: nothing else
+        // may be ANDed in, so a re-added type predicate fails here.
+        assert!(
+            USERS_SQL.contains("WHERE sp.name NOT LIKE '##MS_%' )"),
+            "the listed-row filter must be the ##MS_* name filter only — a type \
+             predicate would silently drop every type it forgets"
+        );
+    }
+
+    // Issue #1077 Stage 2 SECURITY (2026-07-25) — `sys.server_principals` is a
+    // catalog view, not a DMV: metadata-visibility filtering silently returns a
+    // TRUNCATED row set to a login without `VIEW ANY DEFINITION` instead of
+    // erroring, so `classify_view_server_state_error` never fires and an
+    // account-audit screen would render a partial list as complete. The probe
+    // must run first and fail loud as a capability gap.
+    #[test]
+    fn users_permission_probe_gates_metadata_visibility() {
+        assert!(
+            USERS_PERMISSION_PROBE_SQL.contains("HAS_PERMS_BY_NAME"),
+            "the probe must ask the server for the effective permission"
+        );
+        assert!(
+            USERS_PERMISSION_PROBE_SQL.contains("VIEW ANY DEFINITION"),
+            "VIEW ANY DEFINITION is the permission that lifts metadata filtering"
+        );
+        assert!(
+            USERS_PERMISSION_PROBE_SQL.contains("AS BIGINT"),
+            "the probe answer decodes through opt_i64 like every other flag"
+        );
+    }
+
+    // Issue #1077 Stage 2 (2026-07-25) — `##MS_*` are internal certificate/role
+    // principals. They are audit noise, and the certificate-mapped ones are
+    // exactly the rows where `IS_SRVROLEMEMBER` returns NULL.
+    #[test]
+    fn users_sql_filters_internal_ms_principals() {
+        assert!(
+            USERS_SQL.contains("NOT LIKE '##MS_%'"),
+            "internal ##MS_* principals must not reach the panel"
+        );
     }
 
     #[tokio::test]

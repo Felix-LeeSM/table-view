@@ -508,6 +508,15 @@ impl RdbAdapter for MysqlAdapter {
     {
         Box::pin(async move { self.server_info().await })
     }
+
+    // ── Issue #1077 Stage 2 — read-only users listing (mysql.user) ──
+    fn list_database_users<'a>(
+        &'a self,
+    ) -> Pin<
+        Box<dyn Future<Output = Result<Vec<crate::models::DatabaseUserRow>, AppError>> + Send + 'a>,
+    > {
+        Box::pin(async move { self.list_database_users().await })
+    }
 }
 
 #[cfg(test)]

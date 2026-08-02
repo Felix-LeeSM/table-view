@@ -24,6 +24,93 @@ use crate::models::{
 use super::checks::{build_check_map, is_check_metadata_unavailable};
 use super::MysqlAdapter;
 
+/// Issue #1077 Stage 2 — read-only users listing from the `mysql.user` grant
+/// table. Only the account identity (`User`/`Host`), the authentication plugin
+/// and non-secret privilege flags are projected — the `authentication_string` /
+/// `Password` credential columns are NEVER selected (mirrors the PG
+/// `pg_roles`-only posture; see the `mysql_users_query_*` guard tests).
+///
+/// Every text column goes through `CONVERT(... USING utf8mb4)` for the same
+/// reason `MysqlAdapter::list_schemas` documents below: `mysql.user` exposes
+/// `User`/`Host` (and the `enum('N','Y')` grant columns) with a utf8mb3 `_bin`
+/// collation that sqlx decodes as binary, so a raw select fails the entire
+/// listing with `mismatched types ... is not compatible with SQL type BINARY`.
+/// `max_user_connections` is `CAST(... AS SIGNED)` for the wire i64.
+/// `account_locked` exists on MySQL 5.7.8+/MariaDB 10.4.2+ — older builds fail
+/// loud rather than silently mislabel a locked account as loginable.
+pub(crate) const MYSQL_USERS_QUERY: &str = "SELECT CONVERT(User USING utf8mb4), \
+     CONVERT(Host USING utf8mb4), CONVERT(Super_priv USING utf8mb4), \
+     CONVERT(Create_priv USING utf8mb4), CONVERT(Create_user_priv USING utf8mb4), \
+     CONVERT(Repl_slave_priv USING utf8mb4), CONVERT(account_locked USING utf8mb4), \
+     CONVERT(plugin USING utf8mb4), \
+     CAST(max_user_connections AS SIGNED) \
+     FROM mysql.user ORDER BY User, Host";
+
+/// One decoded `MYSQL_USERS_QUERY` row: `User`, `Host`, the four
+/// `enum('N','Y')` grant flags, `account_locked`, `plugin`, and the raw
+/// `max_user_connections`.
+pub(super) type MysqlUserRow = (
+    String,
+    String,
+    String,
+    String,
+    String,
+    String,
+    String,
+    String,
+    i64,
+);
+
+/// Pure `mysql.user` row → wire `DatabaseUserRow`. Extracted from the IO body
+/// so the two mappings that are easy to get silently wrong stay unit-testable
+/// without a live server:
+///
+/// - **`conn_limit`** — the wire contract is PG's `rolconnlimit`
+///   (`crate::models::DatabaseUserRow::conn_limit`): `-1` means unlimited and
+///   `0` means "no connections allowed", which is exactly how
+///   `DatabaseUsersPanel` renders it. MySQL inverts the sentinel —
+///   `max_user_connections = 0` means *unlimited* (defer to the global cap) —
+///   and MariaDB uses a negative value for "this account may not connect at
+///   all". A raw passthrough would show practically every account as "0
+///   connections allowed" and a banned MariaDB account as "Unlimited".
+/// - **`can_login`** — `account_locked` alone over-reports. The `mysql_no_login`
+///   plugin exists precisely to make an account non-loginable, and a MariaDB
+///   10.4+ role lives in the same view with an empty `Host` (it is rendered
+///   under its bare role name, not `role@`).
+pub(super) fn map_mysql_user_row(row: MysqlUserRow) -> crate::models::DatabaseUserRow {
+    let (
+        user,
+        host,
+        super_priv,
+        create_priv,
+        create_user_priv,
+        repl_slave_priv,
+        account_locked,
+        plugin,
+        max_user_connections,
+    ) = row;
+
+    crate::models::DatabaseUserRow {
+        name: if host.is_empty() {
+            user
+        } else {
+            format!("{user}@{host}")
+        },
+        can_login: account_locked != "Y" && plugin != "mysql_no_login" && !host.is_empty(),
+        is_superuser: super_priv == "Y",
+        can_create_db: create_priv == "Y",
+        can_create_role: create_user_priv == "Y",
+        replication: repl_slave_priv == "Y",
+        conn_limit: match max_user_connections {
+            0 => -1,
+            n if n < 0 => 0,
+            n => n,
+        },
+        valid_until: None,
+        member_of: Vec::new(),
+    }
+}
+
 async fn mysql_check_rows_or_empty<T>(
     supported: bool,
     result: impl Future<Output = Result<Vec<T>, sqlx::Error>>,
@@ -1180,6 +1267,28 @@ impl MysqlAdapter {
             extras,
         })
     }
+
+    /// Issue #1077 Stage 2 — read-only users listing from `mysql.user`
+    /// (`MYSQL_USERS_QUERY` + the pure `map_mysql_user_row`). No credential
+    /// column crosses the IPC boundary. The PG-shaped `DatabaseUserRow` is
+    /// reused: `name` is `user@host` (MySQL scopes accounts by host, unlike
+    /// PG's flat role name), the boolean flags map from the `enum('N','Y')`
+    /// grant columns, and `max_user_connections` is normalised onto the PG
+    /// `rolconnlimit` sentinel. `valid_until` and `member_of` have no
+    /// widely-portable `mysql.user` source — the MySQL role graph
+    /// (`mysql.role_edges`, 8.0+) is a later #1077 depth step — so they stay
+    /// empty.
+    pub async fn list_database_users(
+        &self,
+    ) -> Result<Vec<crate::models::DatabaseUserRow>, AppError> {
+        let pool = self.active_pool().await?;
+        let rows: Vec<MysqlUserRow> = sqlx::query_as(MYSQL_USERS_QUERY)
+            .fetch_all(&pool)
+            .await
+            .map_err(|e| AppError::Database(format!("mysql.user listing failed: {e}")))?;
+
+        Ok(rows.into_iter().map(map_mysql_user_row).collect())
+    }
 }
 
 /// Classify a `performance_schema` digest-query failure:
@@ -1400,5 +1509,134 @@ mod tests {
             }
             other => panic!("expected Connection, got ok? {}", other.is_ok()),
         }
+    }
+
+    // Issue #1077 Stage 2 (2026-07-25) — list_database_users has no params, so
+    // only the no-connection path is unit-reachable; the mysql.user row shape is
+    // covered by the integration suite. Mirrors the PG/MySQL admin-op guards.
+    #[tokio::test]
+    async fn list_database_users_without_connection_fails() {
+        let adapter = MysqlAdapter::new();
+        match adapter.list_database_users().await {
+            Err(AppError::Connection(msg)) => {
+                assert!(msg.contains("Not connected"), "unexpected: {msg}");
+            }
+            other => panic!("expected Connection, got ok? {}", other.is_ok()),
+        }
+    }
+
+    // Issue #1077 Stage 2 SECURITY (2026-07-25) — the users query must read the
+    // account identity + privilege flags from `mysql.user` and must NEVER
+    // select a credential column (`authentication_string` / `Password`). This
+    // fixture fails if the query ever regresses toward a secret column.
+    #[test]
+    fn mysql_users_query_never_selects_credential_column() {
+        assert!(
+            MYSQL_USERS_QUERY.contains("mysql.user"),
+            "must source the mysql.user grant table"
+        );
+        let lower = MYSQL_USERS_QUERY.to_ascii_lowercase();
+        assert!(
+            !lower.contains("authentication_string"),
+            "authentication_string is the credential column — must not be selected"
+        );
+        assert!(
+            !lower.contains("password"),
+            "no password credential column may be selected"
+        );
+    }
+
+    // Issue #1077 Stage 2 (2026-07-25) — GREEN for
+    // `mysql_users_query_selects_identifiers_raw_pre_impl`. MySQL 8 exposes
+    // `mysql.user.User`/`Host` (and the `enum('N','Y')` grant columns) with a
+    // utf8mb3 `_bin` collation that sqlx decodes as binary, so a raw select
+    // fails the WHOLE listing (`mismatched types ... is not compatible with SQL
+    // type BINARY`, reproduced against the MySQL 8 testcontainer).
+    // `MysqlAdapter::list_schemas` documents the repo-wide rule; this guard
+    // pins it for the users query so the discipline cannot regress into a
+    // runtime-only failure again.
+    #[test]
+    fn mysql_users_query_converts_text_columns_to_utf8mb4() {
+        for column in [
+            "User",
+            "Host",
+            "Super_priv",
+            "Create_priv",
+            "Create_user_priv",
+            "Repl_slave_priv",
+            "account_locked",
+            "plugin",
+        ] {
+            assert!(
+                MYSQL_USERS_QUERY.contains(&format!("CONVERT({column} USING utf8mb4)")),
+                "`{column}` must be wrapped in CONVERT(... USING utf8mb4) — a raw \
+                 select decodes as binary and fails the whole listing"
+            );
+        }
+    }
+
+    fn user_row(host: &str, account_locked: &str, plugin: &str, conns: i64) -> MysqlUserRow {
+        (
+            "app".into(),
+            host.into(),
+            "N".into(),
+            "N".into(),
+            "N".into(),
+            "N".into(),
+            account_locked.into(),
+            plugin.into(),
+            conns,
+        )
+    }
+
+    // Issue #1077 Stage 2 (2026-07-25) — `conn_limit` crosses the wire as PG's
+    // `rolconnlimit` and `DatabaseUsersPanel` renders `< 0` as "Unlimited".
+    // MySQL inverts the sentinel (`0` = unlimited) and MariaDB uses a negative
+    // value for "may not connect at all", so a raw passthrough mislabels
+    // practically every account and inverts the MariaDB ban.
+    #[test]
+    fn map_mysql_user_row_normalises_conn_limit_onto_the_pg_sentinel() {
+        assert_eq!(
+            map_mysql_user_row(user_row("%", "N", "caching_sha2_password", 0)).conn_limit,
+            -1,
+            "MySQL 0 = unlimited → PG -1"
+        );
+        assert_eq!(
+            map_mysql_user_row(user_row("%", "N", "caching_sha2_password", -1)).conn_limit,
+            0,
+            "MariaDB negative = no connections allowed → PG 0"
+        );
+        assert_eq!(
+            map_mysql_user_row(user_row("%", "N", "caching_sha2_password", 5)).conn_limit,
+            5,
+            "a real cap passes through unchanged"
+        );
+    }
+
+    // Issue #1077 Stage 2 (2026-07-25) — `account_locked` alone over-reports
+    // login capability: `mysql_no_login` exists to make an account
+    // non-loginable, and a MariaDB 10.4+ role sits in the same view with an
+    // empty `Host` (rendered under its bare name, not `role@`).
+    #[test]
+    fn map_mysql_user_row_reports_login_capability_and_identity() {
+        let normal = map_mysql_user_row(user_row("%", "N", "caching_sha2_password", 0));
+        assert_eq!(normal.name, "app@%");
+        assert!(normal.can_login);
+
+        assert!(
+            !map_mysql_user_row(user_row("%", "Y", "caching_sha2_password", 0)).can_login,
+            "a locked account cannot log in"
+        );
+        assert!(
+            !map_mysql_user_row(user_row("%", "N", "mysql_no_login", 0)).can_login,
+            "the mysql_no_login plugin makes the account non-loginable"
+        );
+
+        let mariadb_role = map_mysql_user_row(user_row("", "N", "", 0));
+        assert_eq!(
+            mariadb_role.name, "app",
+            "an empty Host is a role, not app@"
+        );
+        assert!(!mariadb_role.can_login, "a MariaDB role cannot log in");
     }
 }
