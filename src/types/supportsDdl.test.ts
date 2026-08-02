@@ -5,8 +5,12 @@
 //   - PostgreSQL / MySQL / MariaDB / MSSQL / Oracle — every DDL trait method
 //     delegates to a real executor → all four true (MSSQL wired by #1071,
 //     Oracle by #1072).
-//   - SQLite — only `create_table` delegates; drop/rename/alter/index/constraint
-//     return `sqlite_unsupported(...)` → `createTable` true, the rest false.
+//   - SQLite — #1804 wired the natively supported DDL (drop/rename table,
+//     add/drop column, create/drop index), but the flags still claim
+//     `createTable` alone: `alterTable` also gates the Structure column editor,
+//     and SQLite cannot change a column's type/nullability/default without a
+//     table rebuild, so the flip waits for that editor's own gate. Constraint
+//     DDL is still `sqlite_unsupported(...)`.
 //   - DuckDB — #1070 (ADR 0051 Stage 2) wires native structural DDL: table
 //     create/drop/rename, column add/drop/type, index create/drop → the four
 //     base actions true. `alterConstraint` stays false (DuckDB `ALTER TABLE`
@@ -46,7 +50,7 @@ describe("supportsDdl (#1460)", () => {
     }
   });
 
-  it("claims only createTable for SQLite (adapter wires create_table alone)", () => {
+  it("claims only createTable for SQLite (flags trail the wired native DDL)", () => {
     expect(supportsDdl("sqlite", "createTable")).toBe(true);
     expect(supportsDdl("sqlite", "alterTable")).toBe(false);
     expect(supportsDdl("sqlite", "createIndex")).toBe(false);

@@ -103,13 +103,18 @@ Current evidence:
 
 Current gap / routing:
 
-Raw SQL DDL is rejected by the SQLite query adapter. Structured DDL is a bounded
-slice: `create_table` / `create_table_plan` build and run `CREATE TABLE` for
-writable files (the wired adapter declares the `RelationalSchemaMutation`
-capability), while every other structured DDL trait method (drop/rename/alter
-table, add/drop column, index, constraint) returns explicit `Unsupported`.
-Unsupported ALTER behavior is adapter rejection today; automatic table rebuild
-remains a future ADR-backed implementation decision.
+Raw SQL DDL is rejected by the SQLite query adapter. Structured DDL is bounded
+by what SQLite performs natively (#1804): `create_table` / `create_table_plan`,
+`drop_table`, `rename_table`, `add_column`, `drop_column`, `create_index` and
+`drop_index` build and run their statement for writable files, and `alter_table`
+carries column adds and drops. `add_constraint` / `drop_constraint` return
+explicit `Unsupported`, and so does an `alter_table` change that edits a
+column's type, nullability or default — SQLite expresses those only by
+rebuilding the table, which is a future ADR-backed implementation decision.
+
+The per-action `ddl.*` capability flags in `src/types/dataSource.ts` still claim
+`createTable` alone, so the Structure and schema-tree entry points for the
+newly opened operations stay hidden until the capability flip lands.
 
 ## Completion and extension boundary
 

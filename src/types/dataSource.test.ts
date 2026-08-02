@@ -114,8 +114,10 @@ describe("DataSourceProfile registry", () => {
       // introspection is live); constraints remains a stub → false.
       catalog: { indexes: true },
       edit: { editRows: true, requiresPrimaryKeyForEdit: true },
-      // Issue #1460 — wired SqliteAdapter executes only create_table; other DDL
-      // trait methods return Unsupported, so createTable is the sole claim.
+      // Issue #1460 / #1804 — the wired SqliteAdapter now runs native
+      // drop/rename/column/index DDL too, but the flags stay behind it: see
+      // SQLITE_CAPABILITIES in dataSource.ts for why the flip waits for the
+      // Structure column-editor gate.
       ddl: { createTable: true },
       intelligence: { erd: true },
     }),

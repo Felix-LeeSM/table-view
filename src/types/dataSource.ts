@@ -469,17 +469,20 @@ export const SQLITE_CAPABILITIES = capabilities({
     requiresPrimaryKeyForEdit: true,
   },
   ddl: {
-    // Issue #1460 — the wired production `SqliteAdapter` implements only
-    // `create_table` / `create_table_plan`
-    // (src-tauri/table-view-core/src/db/adapters/sqlite/mod.rs delegates `create_table` to a
-    // real BEGIN/execute/COMMIT path; ddl.rs). Every other structured DDL
-    // trait method (`drop_table`, `rename_table`, `alter_table`, `add_column`,
-    // `create_index`, `drop_index`) returns `sqlite_unsupported(...)`, so only
-    // `createTable` is claimed — the alter/index/drop flags stay false and the
-    // matching UI entry points are hidden (#1046) rather than click-then-error.
-    // `identityColumn` (#1070) also stays at the base `false`: SQLite's
-    // `build_column_definition` rejects `is_identity` with `Unsupported`, so
-    // the Identity checkbox is hidden here too.
+    // Issue #1460 / #1804. The backend moved ahead of these flags on purpose:
+    // the wired `SqliteAdapter` now runs `drop_table`, `rename_table`,
+    // `add_column`, `drop_column`, `create_index`, `drop_index` and the
+    // add/drop legs of `alter_table` natively
+    // (src-tauri/table-view-core/src/db/adapters/sqlite/ddl_native.rs), but
+    // `alterTable` also gates the Structure column *editor*, and SQLite cannot
+    // change a column's type, nullability or default without rebuilding the
+    // table. Flipping `alterTable` before that editor has its own gate would
+    // put back the click-then-error this file exists to prevent (#1046), so the
+    // flip waits for the Structure gate + tooltip slice and every flag but
+    // `createTable` stays false — the matching UI entry points stay hidden.
+    // `alterConstraint` and `identityColumn` stay false for a stronger reason:
+    // the adapter rejects standalone constraints and `is_identity` outright,
+    // and both need the same table rebuild.
     createTable: true,
   },
   intelligence: {

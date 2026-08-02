@@ -22,9 +22,11 @@ matching tests and smoke routing. Keep MySQL/MariaDB runtime smoke baselines
 narrow to connect/browse/query/edit/cancel/history/result-envelope behavior; add
 broader MySQL/MariaDB operation-level UI/runtime consumers only with matching
 evidence. Keep SQLite file-DBMS work scoped to writable-file DML, PK row edits,
-bounded structured table creation, raw SQL DDL rejection, and the current
-deterministic file smoke baseline. SQLite adapter 가 전면 차단하던 DDL 중 **SQLite 가
-네이티브로 지원하는 축**의 개방은 #1804 로 승격됐다. 12-step ALTER rebuild 는 미도입 결정이고 (2026-07-25
+structured DDL limited to the natively supported axis, raw SQL DDL rejection,
+and the current deterministic file smoke baseline. SQLite adapter 가 전면
+차단하던 DDL 중 **SQLite 가 네이티브로 지원하는 축**은 #1804 로 열렸다 — 어댑터는 테이블
+drop/rename, 컬럼 add/drop, 인덱스 create/drop 을 실행한다. 사용자에게 보이는 `ddl.*`
+capability 는 아직 `createTable` 만 주장하므로 UI 진입점은 flip 전까지 가려져 있다. 12-step ALTER rebuild 는 미도입 결정이고 (2026-07-25
 오너 grill), rebuild 가 필요한 변경 (타입/제약 변경) 은 Structure UI 에서 disable + 사유 tooltip 을
 유지한다. 실행 후 에러 매핑은 네이티브로 지원되는 `ADD COLUMN`/`DROP COLUMN` 의 조건부 실패에만 적용된다. raw SQL
 DDL 거부와 extension semantics 는 그대로 자체 구현 근거를 요구한다. Keep DuckDB split between
