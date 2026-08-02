@@ -152,14 +152,20 @@ async function expectLayeredByForeignKeyDirection(viewportName: string) {
 
 /**
  * Node drag is the capability the hand-rolled renderer never had. React Flow
- * writes the position back onto the node element's inline transform, so a real
- * pointer drag has to move it.
+ * writes the position back onto the node element's inline transform, so a drag
+ * has to move it.
+ *
+ * The pointer sequence is synthesized in-page, the pattern every other spec
+ * here uses (`e2e/smoke/grid-edit.ts`, `e2e/smoke/postgres-structure-ddl.spec.ts`).
+ * WebdriverIO's Actions-API `dragAndDrop` was tried first and moved the node 0px
+ * under tauri-driver — twice, in the first run and the retry (PR #2100 review
+ * round 1).
  */
 async function expectNodeIsDraggable(viewportName: string, ariaLabel: string) {
   const before = await readNodeTransform(ORDERS_NODE_ID);
   const card = await $(`[aria-label="${ariaLabel}"]`);
   await card.waitForDisplayed({ timeout: 10000 });
-  await card.dragAndDrop({ x: 120, y: 80 });
+  await dispatchNodeDrag(ORDERS_NODE_ID, 140, 90);
 
   await browser.waitUntil(
     async () => {
@@ -174,9 +180,84 @@ async function expectNodeIsDraggable(viewportName: string, ariaLabel: string) {
 }
 
 /**
+ * React Flow drags with d3-drag, which binds `mousedown` on the node element and
+ * then `mousemove` / `mouseup` on `event.view` — so the mousedown must carry
+ * `view: window` and the moves must be dispatched at the window, not the node.
+ * `nodeDragThreshold` is 1, so the first move both starts and applies the drag;
+ * a second move is sent so the assertion does not sit on the threshold.
+ */
+async function dispatchNodeDrag(
+  nodeId: string,
+  deltaX: number,
+  deltaY: number,
+) {
+  await browser.execute(
+    (id, dx, dy) => {
+      const node = document.querySelector<HTMLElement>(
+        `.react-flow__node[data-id="${id}"]`,
+      );
+      if (!node) throw new Error(`${id} node did not appear`);
+
+      const rect = node.getBoundingClientRect();
+      const startX = rect.left + rect.width / 2;
+      const startY = rect.top + rect.height / 2;
+
+      const dispatch = (
+        target: EventTarget,
+        mouseType: string,
+        pointerType: string,
+        x: number,
+        y: number,
+        buttons: number,
+      ) => {
+        const eventInit = {
+          bubbles: true,
+          cancelable: true,
+          view: window,
+          button: 0,
+          buttons,
+          clientX: x,
+          clientY: y,
+        };
+        const Pointer = window.PointerEvent;
+        if (Pointer) {
+          target.dispatchEvent(
+            new Pointer(pointerType, {
+              ...eventInit,
+              isPrimary: true,
+              pointerId: 1,
+              pointerType: "mouse",
+            }),
+          );
+        }
+        target.dispatchEvent(new MouseEvent(mouseType, eventInit));
+      };
+
+      dispatch(node, "mousedown", "pointerdown", startX, startY, 1);
+      dispatch(
+        window,
+        "mousemove",
+        "pointermove",
+        startX + dx / 2,
+        startY + dy / 2,
+        1,
+      );
+      dispatch(window, "mousemove", "pointermove", startX + dx, startY + dy, 1);
+      dispatch(window, "mouseup", "pointerup", startX + dx, startY + dy, 0);
+    },
+    nodeId,
+    deltaX,
+    deltaY,
+  );
+}
+
+/**
  * Zoom/fit are React Flow viewport operations now, so the exact zoom factor is
- * graph-dependent. What holds regardless: zoom-in raises the readout, and
- * fitting one table zooms in further than fitting the whole graph.
+ * graph-dependent. What holds regardless: each control moves the readout in its
+ * own direction, and fitting one table zooms in further than fitting the whole
+ * graph. Every assertion here fails if its button stops doing anything — a
+ * bounds check would not, because the readout is already clamped to
+ * `ERD_MIN_ZOOM`/`ERD_MAX_ZOOM`.
  */
 async function expectViewportControls(viewportName: string) {
   const zoomBefore = await waitForZoomPercent(viewportName);
@@ -186,24 +267,28 @@ async function expectViewportControls(viewportName: string) {
     (zoom) => zoom > zoomBefore,
     "zoom-in did not raise the zoom percent",
   );
+  await clickButton("Zoom in ERD");
+  const zoomedIn = await waitForZoomSettled(viewportName);
+  if (zoomedIn <= zoomBefore) {
+    throw new Error(
+      `${viewportName} ERD second zoom-in did not raise the zoom`,
+    );
+  }
 
   await clickButton("Zoom out ERD");
   await waitForZoom(
     viewportName,
-    (zoom) => zoom <= zoomBefore,
+    (zoom) => zoom < zoomedIn,
     "zoom-out did not lower the zoom percent",
   );
 
   await clickButton("Fit ERD");
   await waitForZoom(
     viewportName,
-    (zoom) => zoom >= 15 && zoom <= 200,
-    "fit-all left the zoom outside the canvas bounds",
+    (zoom) => zoom < zoomedIn,
+    "fit-all did not pull the zoom back below the zoomed-in level",
   );
-  const fitAllZoom = await readZoomPercent();
-  if (fitAllZoom === null) {
-    throw new Error(`${viewportName} ERD zoom percent disappeared after fit`);
-  }
+  const fitAllZoom = await waitForZoomSettled(viewportName);
 
   await clickButton("Fit selected table");
   await waitForZoom(
@@ -323,6 +408,30 @@ async function waitForZoomPercent(viewportName: string): Promise<number> {
   if (zoom === null)
     throw new Error(`${viewportName} ERD zoom percent missing`);
   return zoom;
+}
+
+/**
+ * Zoom transitions run for `ERD_TRANSITION_MS`, so a value read the instant a
+ * predicate first holds can be a mid-animation frame. Wait until two reads in a
+ * row agree before using the number as a baseline.
+ */
+async function waitForZoomSettled(viewportName: string): Promise<number> {
+  let previous = await waitForZoomPercent(viewportName);
+  await browser.waitUntil(
+    async () => {
+      const current = await readZoomPercent();
+      if (current === null) return false;
+      const settled = current === previous;
+      previous = current;
+      return settled;
+    },
+    {
+      timeout: 10000,
+      interval: 250,
+      timeoutMsg: `${viewportName} ERD zoom percent never settled`,
+    },
+  );
+  return previous;
 }
 
 async function waitForZoom(
