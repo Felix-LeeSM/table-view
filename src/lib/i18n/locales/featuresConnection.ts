@@ -260,6 +260,16 @@ export const en = {
     yes: "Yes",
     no: "No",
     unlimited: "Unlimited",
+    // Keyed by the `AppError::CapabilityNotEnabled` code, same contract as
+    // `query:slowQuery.unavailable.<code>`. An unmodelled code falls back to
+    // the backend message rather than rendering a raw key.
+    unavailable: {
+      mssql_view_any_definition: {
+        title: "VIEW ANY DEFINITION permission is required",
+        body: "sys.server_principals is metadata-visibility filtered, so a login without this permission would receive a silently truncated account list instead of an error. Ask an administrator to grant it.",
+        sql: "GRANT VIEW ANY DEFINITION TO [<login>];",
+      },
+    },
   },
   // Shared form fields (used across PgFormFields, MysqlFormFields, etc.)
   form: {
@@ -607,6 +617,13 @@ export const ko = {
     yes: "예",
     no: "아니오",
     unlimited: "무제한",
+    unavailable: {
+      mssql_view_any_definition: {
+        title: "VIEW ANY DEFINITION 권한이 필요합니다",
+        body: "sys.server_principals 는 metadata-visibility 필터가 걸리는 카탈로그 뷰라, 이 권한이 없는 로그인은 오류 대신 잘린 계정 목록을 받습니다. 관리자에게 권한 부여를 요청하세요.",
+        sql: "GRANT VIEW ANY DEFINITION TO [<login>];",
+      },
+    },
   },
   form: {
     labelHost: "호스트",
