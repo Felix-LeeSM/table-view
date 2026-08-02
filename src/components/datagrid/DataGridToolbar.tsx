@@ -331,13 +331,19 @@ export default function DataGridToolbar({
         {bulkOpsSlot}
         {exportSlot}
         {/* Issue #1734 owner decision 2 — Quick Look leaves the icon crowd
-            (add / delete / duplicate / export / filter). A rule separates it
-            and it carries a text label plus its shortcut badge, so the entry
-            point is discoverable without hovering every icon. Cmd/Ctrl+L
-            still toggles the same state; the cluster in the workspace
-            toolbar deliberately does NOT hold it — Quick Look is scoped to
-            this grid, not to the workspace layout. */}
-        <span aria-hidden="true" className="h-4 w-px shrink-0 bg-border" />
+            (add / delete / duplicate / export / filter). Rules on BOTH sides
+            take it out of the crowd — filter is on the crowd's list too and
+            sits immediately to the right, so a left rule alone would leave
+            Quick Look glued to it. It carries a text label plus its shortcut
+            badge, so the entry point is discoverable without hovering every
+            icon. Cmd/Ctrl+L still toggles the same state; the cluster in the
+            workspace toolbar deliberately does NOT hold it — Quick Look is
+            scoped to this grid, not to the workspace layout. `border-l` is
+            this repo's vertical rule (see `ExplainViewer`). */}
+        <span
+          aria-hidden="true"
+          className="h-4 shrink-0 border-l border-border"
+        />
         <Button
           variant="ghost"
           size="xs"
@@ -353,10 +359,17 @@ export default function DataGridToolbar({
               button's `aria-label` already wins over its contents in the
               accessible-name computation, and `title` spells the combo out
               for pointer users. */}
-          <kbd className="rounded border border-border bg-background px-1 font-mono text-3xs text-muted-foreground">
+          {/* Same token set as the repo's other `<kbd>`
+              (`ShortcutCheatsheet`), only the padding/size scaled down for a
+              toolbar row. */}
+          <kbd className="rounded border border-border bg-background px-1 font-mono text-3xs text-foreground shadow-sm dark:bg-muted/30">
             {t("quickLookShortcut")}
           </kbd>
         </Button>
+        <span
+          aria-hidden="true"
+          className="h-4 shrink-0 border-l border-border"
+        />
         <Button
           variant="ghost"
           size="icon-xs"

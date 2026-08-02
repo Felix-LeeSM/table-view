@@ -210,12 +210,27 @@ export default function WorkspacePage() {
           </Popover>
         </div>
         {/* #1312 — a sidebar render crash must not take down the whole
-            workspace; isolate it so MainArea keeps working. */}
-        {!sidebarCollapsed && (
+            workspace; isolate it so MainArea keeps working.
+
+            #1734 — collapsing HIDES this column, it never unmounts it. The
+            subtree owns state the user built by hand and cannot get back:
+            the dragged width (`useResizablePanel` starts from
+            `DEFAULT_WIDTH` and nothing reads the persisted `sidebar_width`
+            back — see `Sidebar.tsx` top-of-file note), the debounced width
+            commit still in flight, the schema-tree filter text and expanded
+            categories, the Redis SCAN pattern/cursor, the search filters,
+            and any dialog opened from the tree. `display: contents` keeps
+            the expanded layout byte-identical (the wrapper generates no
+            box), and the `hidden` attribute beats it when collapsed —
+            Tailwind's preflight declares `[hidden]` as
+            `display: none !important`. `display: none` also drops the
+            column from the accessibility tree and the tab order, which is
+            what collapsing should mean. */}
+        <div className="contents" hidden={sidebarCollapsed}>
           <ErrorBoundary variant="panel" label={t("workspaceSidebarAria")}>
             <Sidebar />
           </ErrorBoundary>
-        )}
+        </div>
       </nav>
       <MainArea />
     </div>

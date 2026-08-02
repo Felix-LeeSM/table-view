@@ -10,8 +10,12 @@ export const en = {
     ariaLabel: "Workspace toolbar",
     layout: {
       groupAriaLabel: "Layout panels",
-      sidebarAriaLabel: "Toggle the sidebar panel",
-      sidebarTitle: "Show or hide the schema sidebar",
+      // The tooltip is a prefix of the accessible name, matching the
+      // `history` entry below. A different phrasing would make the tooltip
+      // unusable as a voice-control target and make a screen reader read two
+      // sentences for one button.
+      sidebarAriaLabel: "Toggle the schema sidebar",
+      sidebarTitle: "Schema sidebar",
     },
     history: {
       ariaLabel: "Toggle query history",
@@ -348,8 +352,8 @@ export const ko = {
     ariaLabel: "워크스페이스 도구 모음",
     layout: {
       groupAriaLabel: "레이아웃 패널",
-      sidebarAriaLabel: "사이드바 패널 토글",
-      sidebarTitle: "스키마 사이드바 보이기/숨기기",
+      sidebarAriaLabel: "스키마 사이드바 토글",
+      sidebarTitle: "스키마 사이드바",
     },
     history: {
       ariaLabel: "쿼리 기록 토글",

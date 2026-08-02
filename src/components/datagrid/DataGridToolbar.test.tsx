@@ -523,10 +523,13 @@ describe("DataGridToolbar — Quick Look entry point (#1734)", () => {
     expect(within(button).getByText("Details")).toBeInTheDocument();
   });
 
-  it("shows the Cmd+L shortcut badge without polluting the accessible name", () => {
+  // The badge names both modifiers: the binding accepts `metaKey || ctrlKey`
+  // and the repo does not branch key labels per platform, so a bare `Cmd+L`
+  // would name the wrong key on Windows/Linux.
+  it("shows the Cmd/Ctrl+L shortcut badge without polluting the accessible name", () => {
     renderToolbar();
     const button = quickLookButton();
-    expect(within(button).getByText("Cmd+L")).toBeInTheDocument();
+    expect(within(button).getByText("Cmd/Ctrl+L")).toBeInTheDocument();
     expect(button).toHaveAccessibleName("Toggle row details");
   });
 

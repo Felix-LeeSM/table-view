@@ -33,11 +33,8 @@ describe("WorkspaceToolbar — Layout cluster (#1734)", () => {
       activeStatuses: {},
       focusedConnId: null,
     });
-    useLayoutStore.setState({
-      sidebarCollapsed: false,
-      globalLogVisible: false,
-      operationsVisible: false,
-    });
+    // `layoutStore` itself is reset by the global `beforeEach` in
+    // `src/test-setup.ts` (`__resetLayoutStoreForTests`).
   });
 
   it("renders a role=group cluster inside the toolbar", () => {
@@ -52,7 +49,7 @@ describe("WorkspaceToolbar — Layout cluster (#1734)", () => {
     render(<WorkspaceToolbar />);
     const group = cluster();
     expect(
-      within(group).getByRole("button", { name: /toggle the sidebar panel/i }),
+      within(group).getByRole("button", { name: /toggle the schema sidebar/i }),
     ).toBeInTheDocument();
     expect(
       within(group).getByRole("button", { name: /toggle query history/i }),
@@ -63,7 +60,7 @@ describe("WorkspaceToolbar — Layout cluster (#1734)", () => {
     const user = userEvent.setup();
     render(<WorkspaceToolbar />);
     const toggle = screen.getByRole("button", {
-      name: /toggle the sidebar panel/i,
+      name: /toggle the schema sidebar/i,
     });
 
     expect(toggle).toHaveAttribute("aria-pressed", "true");
@@ -95,7 +92,7 @@ describe("WorkspaceToolbar — Layout cluster (#1734)", () => {
     expect(history()).toHaveAttribute("aria-pressed", "true");
   });
 
-  it("keeps the toolbar a single tab stop and reaches the cluster toggles by keyboard", async () => {
+  it("keeps the toolbar a single tab stop even though the cluster nests buttons", async () => {
     const user = userEvent.setup();
     render(<WorkspaceToolbar />);
     const toolbar = screen.getByRole("toolbar", {
@@ -104,24 +101,50 @@ describe("WorkspaceToolbar — Layout cluster (#1734)", () => {
     const buttons = Array.from(
       toolbar.querySelectorAll<HTMLButtonElement>("button"),
     ).filter((b) => !b.disabled);
-    const sidebarToggle = screen.getByRole<HTMLButtonElement>("button", {
-      name: /toggle the sidebar panel/i,
-    });
+    expect(buttons.length).toBeGreaterThan(2);
 
-    // One Tab enters the toolbar; the cluster's nested buttons must not add
-    // extra tab stops of their own.
     await user.tab();
-    expect(buttons[0]).toHaveFocus();
-    for (const b of buttons.slice(1)) {
-      expect(b).toHaveAttribute("tabindex", "-1");
-    }
+    expect(buttons.filter((b) => b.tabIndex === 0)).toHaveLength(1);
+  });
 
-    // Arrow keys walk into the cluster and can activate its toggle.
-    const steps = buttons.indexOf(sidebarToggle);
-    expect(steps).toBeGreaterThanOrEqual(0);
-    for (let i = 0; i < steps; i++) await user.keyboard("{ArrowRight}");
+  /**
+   * The nesting hazard, pinned at concrete positions. `useToolbarRoving`
+   * enumerates `<button>` **descendants** of the toolbar; if it ever stopped
+   * descending into `role="group"`, the cluster's toggles would drop out of
+   * the roving order entirely.
+   *
+   * The expected order is written out by accessible name instead of being
+   * read back from the same `querySelectorAll("button")` the hook uses —
+   * otherwise the implementation would be defining its own expectation and
+   * any traversal order would pass.
+   */
+  it("puts the cluster's nested toggles at the head of the roving order", async () => {
+    const user = userEvent.setup();
+    render(<WorkspaceToolbar />);
+    const byName = (name: RegExp) =>
+      screen.getByRole<HTMLButtonElement>("button", { name });
+    const sidebarToggle = byName(/toggle the schema sidebar/i);
+    const historyToggle = byName(/toggle query history/i);
+    const rowCap = byName(/query row cap/i);
+
+    // Tab lands on the cluster's FIRST nested button — reachable only if the
+    // hook descends past `role="group"`.
+    await user.tab();
     expect(sidebarToggle).toHaveFocus();
+    expect(sidebarToggle).toHaveAttribute("tabindex", "0");
 
+    // One ArrowRight moves to the cluster's second nested button, a second
+    // one leaves the cluster for the next toolbar control.
+    await user.keyboard("{ArrowRight}");
+    expect(historyToggle).toHaveFocus();
+    expect(sidebarToggle).toHaveAttribute("tabindex", "-1");
+
+    await user.keyboard("{ArrowRight}");
+    expect(rowCap).toHaveFocus();
+
+    // Home walks back into the cluster and Enter activates the toggle.
+    await user.keyboard("{Home}");
+    expect(sidebarToggle).toHaveFocus();
     await user.keyboard("{Enter}");
     expect(useLayoutStore.getState().sidebarCollapsed).toBe(true);
   });

@@ -37,10 +37,27 @@ export interface LayoutState {
   setOperationsVisible: (visible: boolean) => void;
 }
 
-export const useLayoutStore = create<LayoutState>((set) => ({
+/**
+ * Every non-action field, in one place. `__resetLayoutStoreForTests` spreads
+ * it so a fourth panel flag cannot leave a stale value behind in tests —
+ * `setState` merges, so a hand-written literal would silently go incomplete
+ * without a type error.
+ */
+const INITIAL_PANELS = {
   sidebarCollapsed: false,
   globalLogVisible: false,
   operationsVisible: false,
+} as const satisfies Omit<
+  LayoutState,
+  | "toggleSidebar"
+  | "toggleGlobalLog"
+  | "toggleOperations"
+  | "setGlobalLogVisible"
+  | "setOperationsVisible"
+>;
+
+export const useLayoutStore = create<LayoutState>((set) => ({
+  ...INITIAL_PANELS,
   toggleSidebar: () =>
     set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
   toggleGlobalLog: () =>
@@ -50,3 +67,14 @@ export const useLayoutStore = create<LayoutState>((set) => ({
   setGlobalLogVisible: (visible) => set({ globalLogVisible: visible }),
   setOperationsVisible: (visible) => set({ operationsVisible: visible }),
 }));
+
+/**
+ * Reset hook for tests — same escape hatch as `__resetMruStoreForTests` /
+ * `__resetTableActivityStoreForTests`. Called from the global `beforeEach`
+ * in `src/test-setup.ts` rather than per-file, so a collapse in one spec
+ * cannot leak into the next (`src/test-setup.ts` retired the per-file
+ * bandaid for the other process singletons for the same reason).
+ */
+export function __resetLayoutStoreForTests(): void {
+  useLayoutStore.setState({ ...INITIAL_PANELS });
+}
