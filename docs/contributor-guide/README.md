@@ -26,8 +26,8 @@ decision logs.
   DuckDB `.duckdb` runtime, registered CSV/Parquet/JSON/NDJSON analytics, and
   the local-file privacy/export and extension/`COPY` gates.
 - [`smoke-matrix/h4-rdbms-intelligence.md`](smoke-matrix/h4-rdbms-intelligence.md) —
-  schema metadata cache, ERD graph and renderer, dependency view, migration
-  impact, schema diff, FK row navigation.
+  schema metadata cache, ERD graph and React Flow canvas, dependency view,
+  migration impact, schema diff, FK row navigation.
 - [`smoke-matrix/h5-non-rdbms.md`](smoke-matrix/h5-non-rdbms.md) — non-RDBMS
   paradigms: MongoDB, Redis/Valkey, Elasticsearch/OpenSearch Search.
 - [`smoke-matrix/h6-wider-source-candidates.md`](smoke-matrix/h6-wider-source-candidates.md) —
