@@ -110,8 +110,9 @@ support. The PostgreSQL Structure DDL smoke is scoped to one table plus one
 index with history/source and schema refresh proof. The dense ERD smoke is
 scoped to canvas evidence — graph render, FK-direction layering, search,
 selection, node drag, canvas zoom/fit, desktop+narrow screenshot — and does not
-claim FK row navigation, schema diff, migration impact, or data compare. `wdio.smoke.conf.ts` globs `e2e/smoke/**/*.spec.ts`, so a manual
-run picks up every spec file present.
+claim FK row navigation, schema diff, migration impact, or data compare.
+`wdio.smoke.conf.ts` globs `e2e/smoke/**/*.spec.ts`, so a manual run picks up
+every spec file present.
 
 ## Non-routine E2E smoke specs
 
