@@ -1009,6 +1009,56 @@ mod tests {
         assert!(backend.dump().is_empty());
     }
 
+    // ---------------- #1814 재키잉 — 실패 시 원본 보존 ----------------
+
+    /// 재암호화가 실패하면 원본 `connections.json` 은 한 바이트도 안 바뀌고
+    /// 디스크 `.key` 도 남는다 (복구 앵커). 이번 부팅은 구 키로 계속 동작하고
+    /// 다음 부팅이 앵커를 보고 재키잉을 다시 시도한다.
+    ///
+    /// 실패 주입: 재암호화가 쓰는 임시 파일 자리를 디렉토리로 막는다. 이름은
+    /// 구현의 `rekey_tmp_path()` 와 같아야 한다.
+    #[test]
+    fn rekey_reencrypt_failure_preserves_connections_json_and_anchor() {
+        let dir = TempDir::new().unwrap();
+        let exposed_key: Vec<u8> = (0..32u8).collect();
+        seed_disk_key(dir.path(), &exposed_key);
+        let enc = encrypt("secret-pw", &exposed_key).unwrap();
+        let doc = serde_json::json!({
+            "connections": [{ "id": "c1", "password": enc, "wallet_password": "" }],
+            "groups": [],
+        });
+        let conn_path = dir.path().join("connections.json");
+        fs::write(&conn_path, serde_json::to_string_pretty(&doc).unwrap()).unwrap();
+        let before = fs::read(&conn_path).unwrap();
+
+        fs::create_dir(dir.path().join("connections.json.rekey.tmp")).unwrap();
+
+        let backend = InMemoryKeyringBackend::new_available();
+        backend.set(KEYRING_ENTRY_NAME, &exposed_key).unwrap();
+
+        let outcome = migrate_or_initialize(&backend, dir.path())
+            .expect("a failed rekey must not fail the boot");
+
+        assert_eq!(
+            fs::read(&conn_path).unwrap(),
+            before,
+            "a failed re-encrypt must leave connections.json byte-identical"
+        );
+        assert_eq!(
+            outcome.key, exposed_key,
+            "this boot keeps working under the key the ciphertext is already under"
+        );
+        assert!(
+            disk_key_path(dir.path()).exists(),
+            "the recovery anchor must survive a failed rekey"
+        );
+        assert_ne!(
+            backend.get(KEYRING_ENTRY_NAME).unwrap().unwrap(),
+            exposed_key,
+            "step ① already published the new key; the anchor is what makes that recoverable"
+        );
+    }
+
     // ---------------- KeyOutcome helper ----------------
 
     #[test]
