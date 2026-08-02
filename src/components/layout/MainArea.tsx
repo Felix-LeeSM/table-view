@@ -22,6 +22,7 @@ import {
 } from "@features/catalog";
 import { useCurrentWindowConnectionId } from "@hooks/useCurrentWindowConnectionId";
 import { useConnectionStore } from "@stores/connectionStore";
+import { useLayoutStore } from "@stores/layoutStore";
 import { useMruStore } from "@stores/mruStore";
 import type { TableTab, TabSubView } from "@stores/workspaceStore";
 import {
@@ -365,31 +366,34 @@ export default function MainArea() {
   // hydrate) and `EmptyState` (post-hydrate). Once flipped to true the
   // skeleton never re-renders for the remainder of the session.
   const hasLoadedOnce = useConnectionStore((s) => s.hasLoadedOnce);
-  const [showGlobalLog, setShowGlobalLog] = useState(false);
+  // #1734 — the two bottom flyout flags live in `layoutStore` (they used to
+  // be local `useState` here) so the toolbar's Layout cluster can render
+  // `aria-pressed` for them. The custom-event channel below is unchanged.
+  const showGlobalLog = useLayoutStore((s) => s.globalLogVisible);
+  const toggleGlobalLog = useLayoutStore((s) => s.toggleGlobalLog);
+  const setShowGlobalLog = useLayoutStore((s) => s.setGlobalLogVisible);
   // #1054 — workspace operations flyout (U1/U4/U5). Toggled from the
   // toolbar via the same custom-event channel as the query log so both
   // workspace-level flyouts share one discovery pattern.
-  const [showOperations, setShowOperations] = useState(false);
+  const showOperations = useLayoutStore((s) => s.operationsVisible);
+  const toggleOperations = useLayoutStore((s) => s.toggleOperations);
+  const setShowOperations = useLayoutStore((s) => s.setOperationsVisible);
 
   const activeTab = tabs.find((t) => t.id === activeTabId);
 
   // Listen for toggle-global-query-log custom event
   useEffect(() => {
-    const handler = () => {
-      setShowGlobalLog((prev) => !prev);
-    };
-    window.addEventListener("toggle-global-query-log", handler);
-    return () => window.removeEventListener("toggle-global-query-log", handler);
-  }, []);
+    window.addEventListener("toggle-global-query-log", toggleGlobalLog);
+    return () =>
+      window.removeEventListener("toggle-global-query-log", toggleGlobalLog);
+  }, [toggleGlobalLog]);
 
   // Listen for toggle-operations-panel custom event
   useEffect(() => {
-    const handler = () => {
-      setShowOperations((prev) => !prev);
-    };
-    window.addEventListener("toggle-operations-panel", handler);
-    return () => window.removeEventListener("toggle-operations-panel", handler);
-  }, []);
+    window.addEventListener("toggle-operations-panel", toggleOperations);
+    return () =>
+      window.removeEventListener("toggle-operations-panel", toggleOperations);
+  }, [toggleOperations]);
 
   return (
     <main

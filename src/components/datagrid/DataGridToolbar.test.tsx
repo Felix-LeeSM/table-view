@@ -503,3 +503,46 @@ describe("DataGridToolbar — Issue #1061 row range summary", () => {
     expect(screen.getByText("1–2 of 2 documents")).toBeInTheDocument();
   });
 });
+
+/**
+ * Issue #1734 owner decision 2 — Quick Look leaves the icon crowd.
+ * It is now a labelled button carrying its shortcut badge, and the badge is
+ * decorative so the accessible name stays the aria-label. `Cmd/Ctrl+L` is
+ * untouched and keeps driving the same `onToggleQuickLook` handler
+ * (registered in `useRdbDataGridShortcuts`).
+ */
+describe("DataGridToolbar — Quick Look entry point (#1734)", () => {
+  function quickLookButton(): HTMLElement {
+    return screen.getByRole("button", { name: /toggle row details/i });
+  }
+
+  it("renders a labelled button, not a bare icon", () => {
+    renderToolbar();
+    const button = quickLookButton();
+    // The visible label is inside the accessible name (WCAG 2.5.3).
+    expect(within(button).getByText("Details")).toBeInTheDocument();
+  });
+
+  it("shows the Cmd+L shortcut badge without polluting the accessible name", () => {
+    renderToolbar();
+    const button = quickLookButton();
+    expect(within(button).getByText("Cmd+L")).toBeInTheDocument();
+    expect(button).toHaveAccessibleName("Toggle row details");
+  });
+
+  it("advertises the panel state through aria-pressed", () => {
+    const { unmount } = renderToolbar({ showQuickLook: false });
+    expect(quickLookButton()).toHaveAttribute("aria-pressed", "false");
+    unmount();
+
+    renderToolbar({ showQuickLook: true });
+    expect(quickLookButton()).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("calls onToggleQuickLook on click", () => {
+    const onToggleQuickLook = vi.fn();
+    renderToolbar({ onToggleQuickLook });
+    fireEvent.click(quickLookButton());
+    expect(onToggleQuickLook).toHaveBeenCalledTimes(1);
+  });
+});

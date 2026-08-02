@@ -330,16 +330,32 @@ export default function DataGridToolbar({
         )}
         {bulkOpsSlot}
         {exportSlot}
+        {/* Issue #1734 owner decision 2 — Quick Look leaves the icon crowd
+            (add / delete / duplicate / export / filter). A rule separates it
+            and it carries a text label plus its shortcut badge, so the entry
+            point is discoverable without hovering every icon. Cmd/Ctrl+L
+            still toggles the same state; the cluster in the workspace
+            toolbar deliberately does NOT hold it — Quick Look is scoped to
+            this grid, not to the workspace layout. */}
+        <span aria-hidden="true" className="h-4 w-px shrink-0 bg-border" />
         <Button
           variant="ghost"
-          size="icon-xs"
-          className={`relative ${showQuickLook ? "text-primary" : "text-muted-foreground"}`}
+          size="xs"
+          className={showQuickLook ? "text-primary" : "text-muted-foreground"}
           onClick={onToggleQuickLook}
           aria-pressed={showQuickLook}
-          aria-label={t("toggleQuickLookAria")}
-          title={t("toggleQuickLookTitle")}
+          aria-label={t("quickLookAria")}
+          title={t("quickLookTitle")}
         >
           <Eye />
+          <span>{t("quickLookLabel")}</span>
+          {/* The badge is decorative for AT without needing aria-hidden: the
+              button's `aria-label` already wins over its contents in the
+              accessible-name computation, and `title` spells the combo out
+              for pointer users. */}
+          <kbd className="rounded border border-border bg-background px-1 font-mono text-3xs text-muted-foreground">
+            {t("quickLookShortcut")}
+          </kbd>
         </Button>
         <Button
           variant="ghost"

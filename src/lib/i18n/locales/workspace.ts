@@ -8,6 +8,11 @@
 export const en = {
   toolbar: {
     ariaLabel: "Workspace toolbar",
+    layout: {
+      groupAriaLabel: "Layout panels",
+      sidebarAriaLabel: "Toggle the sidebar panel",
+      sidebarTitle: "Show or hide the schema sidebar",
+    },
     history: {
       ariaLabel: "Toggle query history",
       title: "Query history (Cmd/Ctrl+Shift+C)",
@@ -341,6 +346,11 @@ export const en = {
 export const ko = {
   toolbar: {
     ariaLabel: "워크스페이스 도구 모음",
+    layout: {
+      groupAriaLabel: "레이아웃 패널",
+      sidebarAriaLabel: "사이드바 패널 토글",
+      sidebarTitle: "스키마 사이드바 보이기/숨기기",
+    },
     history: {
       ariaLabel: "쿼리 기록 토글",
       title: "쿼리 기록 (Cmd/Ctrl+Shift+C)",

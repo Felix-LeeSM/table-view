@@ -1,5 +1,6 @@
 import { hydrateConnectionSession } from "@lib/runtime/connection/hydrateConnectionSession";
 import * as windowControls from "@lib/window-controls";
+import { useLayoutStore } from "@stores/layoutStore";
 import { useThemeStore } from "@stores/themeStore";
 import { useWorkspaceStore } from "@stores/workspaceStore";
 import { act, fireEvent, render, screen } from "@testing-library/react";
@@ -65,6 +66,13 @@ function resetStores() {
     mode: "dark",
     resolvedMode: "dark",
   });
+  // #1734 — panel visibility is a module singleton now, so it has to be
+  // reset here or a collapse test leaks into every later case.
+  useLayoutStore.setState({
+    sidebarCollapsed: false,
+    globalLogVisible: false,
+    operationsVisible: false,
+  });
 }
 
 describe("WorkspacePage", () => {
@@ -80,6 +88,40 @@ describe("WorkspacePage", () => {
     render(<WorkspacePage />);
     expect(screen.getByTestId("sidebar-mock")).toBeInTheDocument();
     expect(screen.getByTestId("main-area-mock")).toBeInTheDocument();
+  });
+
+  // #1734 owner decision 1 — the Layout cluster's left-panel toggle drives
+  // this. Collapsing drops the schema-tree column but must keep the header
+  // rail, which owns the only route back to the launcher and the only
+  // theme / language control (#1738) — otherwise a collapsed user is
+  // stranded with neither.
+  describe("collapsed left panel (#1734)", () => {
+    it("unmounts the sidebar while keeping back-to-connections and the theme control", () => {
+      useLayoutStore.setState({ sidebarCollapsed: true });
+      render(<WorkspacePage />);
+
+      expect(screen.queryByTestId("sidebar-mock")).not.toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: /back to connections/i }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: /theme|테마/i }),
+      ).toBeInTheDocument();
+      expect(screen.getByTestId("main-area-mock")).toBeInTheDocument();
+    });
+
+    it("restores the sidebar when the panel is expanded again", () => {
+      useLayoutStore.setState({ sidebarCollapsed: true });
+      const { rerender } = render(<WorkspacePage />);
+      expect(screen.queryByTestId("sidebar-mock")).not.toBeInTheDocument();
+
+      act(() => {
+        useLayoutStore.setState({ sidebarCollapsed: false });
+      });
+      rerender(<WorkspacePage />);
+
+      expect(screen.getByTestId("sidebar-mock")).toBeInTheDocument();
+    });
   });
 
   it("renders the [← Connections] back button with the contract aria-label", () => {
