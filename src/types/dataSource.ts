@@ -282,9 +282,17 @@ export interface MongoRuntimeRequirement {
 
 /**
  * Whether the connected server satisfies `requirement`. **Fail-closed**: the
- * answer is `false` for a missing capability (not connected / not probed
- * yet), an `"unknown"` topology, and an absent version — an unidentified
- * server closes the feature instead of opening it.
+ * answer is `false` for a missing capability (not connected / not probed yet),
+ * for an absent version against a `minVersion`, and for an `"unknown"`
+ * topology against any `topologies` set — an unidentified server closes the
+ * feature instead of opening it.
+ *
+ * Each axis is judged only when the requirement names it, which keeps the two
+ * probes as independent here as they are on the Rust side. A locked-down
+ * account whose `hello` was refused but whose `buildInfo` answered arrives as
+ * `{ topology: "unknown", version: … }` and does clear a version-only
+ * requirement; a feature that cannot run on an unidentified deployment says so
+ * by naming its `topologies`.
  *
  * This is the gate primitive the version-dependent MongoDB axes (change
  * streams, transactions, version-gated aggregation stages) build on. It is

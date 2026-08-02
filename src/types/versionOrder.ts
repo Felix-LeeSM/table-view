@@ -10,7 +10,11 @@
  *   - `./dataSourceVersionCapabilities` — MySQL/MariaDB catalog gates
  *   - `@features/completion/sql/sqlCompletionRequest` — MariaDB `RETURNING`
  *
- * All three now call this.
+ * All three now call this. The count is `src/` only: the Rust side keeps its
+ * own twins — `db::version::is_at_least` in `table-view-core`, and the
+ * nested-OR copy in `sql-parser-core`'s `completion::vocabulary`, which gates
+ * the same MariaDB `RETURNING` at the same `(10, 0, 5)`. Neither can import a
+ * TypeScript module, so collapsing those is a separate change on that side.
  */
 
 /** The comparable part of any parsed version — the numeric triplet. */
@@ -23,8 +27,14 @@ export interface ComparableVersion {
 /**
  * Whether `version` is at least `major.minor.patch` (inclusive).
  *
- * Pure lexicographic order on the triplet: a higher `major` wins outright, a
- * lower one loses outright, and only ties fall through to the next component.
+ * Component-wise order, most significant first: a higher `major` wins
+ * outright, a lower one loses outright, and only ties fall through to the next
+ * component. Each component is compared as a number, which is what separates
+ * this from the two shapes that look equivalent and are not — a string compare
+ * of the joined triplet (`"10.0.0" < "9.0.0"`) and a fixed-radix fold
+ * (`major * 10000 + …`, which overflows into the next component past 99).
+ * `versionOrder.test.ts` pins inputs where each of those disagrees.
+ *
  * Pre-release tags are not considered — callers that care must strip or
  * compare them before parsing, since `4.9.0-rc0` and `4.9.0` produce the same
  * triplet.
