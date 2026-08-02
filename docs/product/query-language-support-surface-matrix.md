@@ -109,10 +109,12 @@ the server remains the final judge. Broader MariaDB-only syntax, routine
 execution beyond the seeded narrow CALL probe, broad CALL expressions, procedure
 body authoring/management, trigger create/drop, admin/import/export, and
 completion-runtime claims still need separate tests/docs before promotion. The
-`mysql.user` read-only users/roles listing (#1077 Stage 2) is shared with MySQL
-through the same adapter; MariaDB 10.4+ roles appear in that view under their
-bare name (empty `Host`) and are reported as non-loginable, and MariaDB-specific
-role-graph coverage is not claimed.
+`mysql.user` read-only users/roles listing (#1077 Stage 2) runs through the same
+adapter as MySQL but not the same SQL: MariaDB 10.4 made `mysql.user` a view over
+`mysql.global_priv`, dropping `account_locked` and adding `is_role`, so the
+adapter branches on the connection's engine. MariaDB roles appear under their
+bare name and are reported as non-loginable, and MariaDB-specific role-graph
+coverage is not claimed.
 
 ## SQLite SQL
 

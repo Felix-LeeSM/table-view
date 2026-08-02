@@ -26,8 +26,11 @@ separate contracts.
 
 Read-only users/roles listing (`list_database_users`, #1077 Stage 2) 은 이제 PG
 + MySQL/MariaDB (`mysql.user`) + SQL Server (`sys.server_principals`) 에서
-active. trait default `Unsupported` 게이트는 Oracle 과 non-RDB paradigm 에만
-남는다. 어느 adapter 도 credential 컬럼을 select 하지 않는다
+active. MySQL 과 MariaDB 는 어댑터를 공유하지만 SQL 은 벤더별로 갈린다 —
+MariaDB 의 `mysql.user` 는 `mysql.global_priv` 위의 뷰라 `account_locked` 가
+없다. trait default `Unsupported` 게이트는 override 가 없는 나머지 RDB
+어댑터(Oracle · SQLite · DuckDB · `MssqlConnectionOnlyAdapter`)와 non-RDB
+paradigm 에 남는다. 어느 adapter 도 credential 컬럼을 select 하지 않는다
 (`pg_authid`/`authentication_string`/`sys.sql_logins.password_hash` 미조회).
 SQL Server 는 `sys.server_principals` 가 metadata-visibility 필터가 걸리는
 catalog view 라 `VIEW ANY DEFINITION` 을 먼저 probe 하고 없으면

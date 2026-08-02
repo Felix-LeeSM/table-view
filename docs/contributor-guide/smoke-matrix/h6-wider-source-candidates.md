@@ -67,10 +67,17 @@ DEFINITION` probe is active (#1077 Stage 2), on its own docker-gated
 `test_mssql_users_null_role_membership_and_non_login_principals_1077`, and
 `test_mssql_users_listing_drops_no_principal_type_1077`, with the `USERS_SQL`
 credential/type/flag guards as `db/mssql/admin.rs` units. Those three gates skip
-when no SQL Server endpoint is reachable, so `src-tauri/tests/common/mod.rs`
-fails loud instead of skipping when `CI` is set — a green
-`Integration Tests (Docker)` therefore proves the container started and the
-gates ran, which a silent skip under nextest's `push` profile could not.
+when SQL Server is unreachable, so `src-tauri/tests/common/mod.rs` fails loud
+instead of skipping when `CI` is set. The guard covers both ways the suite can
+become unavailable, which is what makes the claim below hold: `mssql_endpoint`
+fails when no endpoint resolves, and `setup_mssql_adapter` fails when the
+connect exhausts its five retries. Since a gate reaches its body exactly when
+`setup_mssql_adapter` returned `Some`, a green `Integration Tests (Docker)`
+proves the three gates ran — which a silent skip under nextest's `push` profile
+(`success-output = "never"`, `status-level = "slow"`, so the `SKIP:` println and
+the test name are both swallowed) could not. The workflow sets neither
+`MSSQL_HOST` nor `MSSQL_DISABLE`, so neither branch is bypassed in CI
+(`git grep -n MSSQL_DISABLE -- .github/` is empty).
 Structured DDL, admin/security/jobs and user/role write management
 (create/alter/drop), import/export,
 profiler/activity, full T-SQL semantics, SQLCMD/procedure scripting, full

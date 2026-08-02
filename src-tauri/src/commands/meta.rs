@@ -400,9 +400,9 @@ async fn list_database_users_inner(
         .ok_or_else(|| not_connected(connection_id))?;
     // Read-only accounts/permissions surface. Only the RDB arm serves it, and
     // only for engines whose adapter overrides the trait default (PG,
-    // MySQL/MariaDB, SQL Server) — the Oracle-inherited default and the
-    // non-RDB arms below are the backend capability gate, so a missing
-    // frontend guard cannot leak data.
+    // MySQL/MariaDB, SQL Server) — the inherited default (Oracle, SQLite,
+    // DuckDB, `MssqlConnectionOnlyAdapter`) and the non-RDB arms below are the
+    // backend capability gate, so a missing frontend guard cannot leak data.
     match active.as_ref() {
         ActiveAdapter::Rdb(adapter) => adapter.list_database_users().await,
         ActiveAdapter::Document(_) => Err(AppError::Unsupported(
@@ -1038,7 +1038,8 @@ mod tests {
     }
 
     // Backend capability gate: an RDB engine without a `list_database_users`
-    // override (non-PG parity lane) must be refused, not served an empty list.
+    // override (the Oracle-inherited default) must be refused, not served an
+    // empty list.
     #[tokio::test]
     async fn list_database_users_rdb_without_override_is_gated() {
         let connections = map_with("c", rdb_default());

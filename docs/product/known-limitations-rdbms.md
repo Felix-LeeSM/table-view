@@ -72,14 +72,21 @@ expressions, stored routine/event bodies, control-flow scripting, `DELIMITER`,
 and `LOAD DATA` are explicit unsupported editor/backend boundaries. A read-only
 users/roles listing from `mysql.user` (`User`/`Host` plus the privilege flags;
 the `authentication_string`/`Password` credential columns are never selected) is
-available on both MySQL and MariaDB (#1077 Stage 2). It reads `account_locked`,
-so it requires MySQL 5.7.8+ / MariaDB 10.4.2+ and fails loud on older builds
-rather than mislabelling a locked account as loginable; `can_login` also
-accounts for the `mysql_no_login` plugin, and `max_user_connections` is
-normalised onto the PG `rolconnlimit` wire sentinel (MySQL `0` = unlimited
-becomes `-1`, a negative MariaDB cap becomes `0`). MariaDB 10.4+ roles live in
-the same view with an empty `Host` and are listed under their bare name as
-non-loginable. `can_create_db` over-reports: it renders `mysql.user.Create_priv`,
+available on both MySQL and MariaDB (#1077 Stage 2). The two vendors need
+different SQL and the adapter branches on the connection's engine: `mysql.user`
+is a real table on MySQL with an `account_locked` column (added in MySQL 5.7.6;
+an older build fails loud rather than mislabelling a locked account as
+loginable), whereas MariaDB 10.4 replaced it with a view over
+`mysql.global_priv` that has never carried that column — there the lock flag is
+read from the `Priv` JSON document (`$.account_locked` only; that document also
+holds `authentication_string`, which is never projected), so MariaDB requires
+10.4+ and fails loud below it. `can_login` also accounts for the
+`mysql_no_login` plugin, and `max_user_connections` is normalised onto the PG
+`rolconnlimit` wire sentinel (MySQL `0` = unlimited becomes `-1`, a negative
+MariaDB cap becomes `0`). MariaDB roles live in the same view under their bare
+name and are listed as non-loginable; the role test is the `is_role` column, not
+an empty `Host`, because `CREATE USER x@''` is an ordinary loginable account
+with an empty host. `can_create_db` over-reports: it renders `mysql.user.Create_priv`,
 MySQL's global `CREATE` privilege, in the PG `rolcreatedb` ("may create
 databases") wire slot, but global `CREATE` also covers `CREATE TABLE`/`CREATE
 INDEX`, so an account holding it for table DDL alone still shows as a database

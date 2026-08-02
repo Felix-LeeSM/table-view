@@ -170,7 +170,8 @@ pub struct ServerInfoRow {
 /// struct carries no secret column. `member_of` lists the roles this role is
 /// a member of (the "permissions" surface). MySQL/MariaDB (`mysql.user`) and
 /// SQL Server (`sys.server_principals`) fill the same shape under the same
-/// no-secret-column rule; Oracle and every non-RDB paradigm are still
+/// no-secret-column rule; every other RDB adapter (Oracle, SQLite, DuckDB,
+/// `MssqlConnectionOnlyAdapter`) and every non-RDB paradigm are still
 /// unsupported.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

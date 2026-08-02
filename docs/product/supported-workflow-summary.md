@@ -15,10 +15,14 @@
   boundary 를 분리해서 좁힌다. Read-only users/roles listing 은 PostgreSQL
   (`pg_roles`) 에 더해 MySQL/MariaDB (`mysql.user` — `User`/`Host` + 권한 flag
   만, `authentication_string`/`Password` 미조회) 와 SQL Server 에서도 지원한다
-  (#1077 Stage 2). MySQL/MariaDB 쪽은 `account_locked` 를 읽으므로 MySQL 5.7.8+
-  / MariaDB 10.4.2+ 가 필요하고, 구버전에서는 잠긴 계정을 로그인 가능으로
-  잘못 표시하는 대신 fail loud 한다. MariaDB 10.4+ 역할은 같은 뷰에 빈 `Host`
-  로 올라와 non-loginable 로 표시된다. `max_user_connections` 는 PG
+  (#1077 Stage 2). 잠금 상태는 두 벤더가 저장하는 곳이 달라 어댑터가 SQL 을 나눠
+  보낸다 — MySQL 은 `mysql.user.account_locked` 컬럼(MySQL 5.7.6+), MariaDB 는
+  같은 이름의 뷰가 그 컬럼을 가진 적이 없어 `mysql.global_priv` 의 `Priv` JSON 에서
+  `$.account_locked` 만 뽑는다(MariaDB 10.4+). 둘 다 그보다 낮은 버전에서는 잠긴
+  계정을 로그인 가능으로 잘못 표시하는 대신 fail loud 한다. MariaDB 역할은 같은 뷰에
+  올라와 bare name 으로 non-loginable 표시되는데, 판별은 빈 `Host` 가 아니라
+  `is_role` 컬럼이다 — `CREATE USER x@''` 도 `Host` 가 비어 있지만 정상 로그인
+  계정이기 때문이다. `max_user_connections` 는 PG
   `rolconnlimit` sentinel 로 정규화한다 (`0` = 무제한 → `-1`, MariaDB 의 음수
   cap → `0`). role membership (`mysql.role_edges`), MySQL 8 dynamic privilege,
   password expiry, per-schema grant, user/role write management
