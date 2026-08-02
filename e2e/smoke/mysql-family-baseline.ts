@@ -1,5 +1,6 @@
 import { $, browser, expect } from "@wdio/globals";
 import {
+  activateTab,
   editGridCellInRow,
   executeSqlPreview,
   expandIfCollapsed,
@@ -91,83 +92,7 @@ async function openSeededUsersTable(database: string, dbLabel: string) {
 
 async function activateVisibleTab(label: string) {
   await switchToWorkspaceWindow();
-  await browser.waitUntil(
-    async () =>
-      await browser.execute((expectedLabel) => {
-        return Array.from(
-          document.querySelectorAll<HTMLElement>('[role="tab"]'),
-        ).some(
-          (candidate) =>
-            candidate.offsetParent !== null &&
-            candidate.textContent?.trim() === expectedLabel,
-        );
-      }, label),
-    {
-      timeout: 10000,
-      timeoutMsg: `${label} tab did not appear in the workspace`,
-    },
-  );
-
-  await browser.execute((expectedLabel) => {
-    const tab = Array.from(
-      document.querySelectorAll<HTMLElement>('[role="tab"]'),
-    ).find(
-      (candidate) =>
-        candidate.offsetParent !== null &&
-        candidate.textContent?.trim() === expectedLabel,
-    );
-    if (!tab) return;
-
-    tab.focus();
-
-    const pointerInit = {
-      bubbles: true,
-      cancelable: true,
-      pointerType: "mouse",
-      button: 0,
-    };
-    if (typeof PointerEvent === "function") {
-      tab.dispatchEvent(
-        new PointerEvent("pointerdown", { ...pointerInit, buttons: 1 }),
-      );
-      tab.dispatchEvent(new PointerEvent("pointerup", pointerInit));
-    }
-
-    tab.dispatchEvent(
-      new MouseEvent("mousedown", {
-        bubbles: true,
-        cancelable: true,
-        button: 0,
-        buttons: 1,
-      }),
-    );
-    tab.dispatchEvent(
-      new MouseEvent("mouseup", {
-        bubbles: true,
-        cancelable: true,
-        button: 0,
-      }),
-    );
-    tab.click();
-  }, label);
-
-  await browser.waitUntil(
-    async () =>
-      await browser.execute((expectedLabel) => {
-        const tab = Array.from(
-          document.querySelectorAll<HTMLElement>('[role="tab"]'),
-        ).find(
-          (candidate) =>
-            candidate.offsetParent !== null &&
-            candidate.textContent?.trim() === expectedLabel,
-        );
-        return tab?.getAttribute("aria-selected") === "true";
-      }, label),
-    {
-      timeout: 10000,
-      timeoutMsg: `${label} tab did not become active in the workspace`,
-    },
-  );
+  await activateTab(label);
 }
 
 async function browseMariaDbCatalogMetadata(database: string) {

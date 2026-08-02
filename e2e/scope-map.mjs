@@ -57,6 +57,10 @@ const SPEC_SERVICES = {
   valkey: ["valkey"],
   elasticsearch: ["elasticsearch"],
   opensearch: ["opensearch"],
+  // #1815 — drives the Import/Export dialog only. `save_connection` persists
+  // without opening an adapter, so the spec's connection never has to reach a
+  // server.
+  "connection-export-import": [],
   sqlite: [],
   duckdb: [],
   "duckdb-schema-filter": [],
@@ -105,7 +109,8 @@ const GRID = ["postgres", "postgres-safe-mode", "history-source-5"];
 const DOCUMENT = MONGODB;
 // Tooling changes get one representative smoke, not the suite: a PR that only
 // edits the selector or the workflow that runs it must not be held hostage by
-// all 26 specs, and one real spec still proves the runner works end to end.
+// the whole mapped suite, and one real spec still proves the runner works end
+// to end. (Deliberately not a number: `--self-test` prints the live count.)
 const TOOLING = ["postgres"];
 
 // First match wins, so order is load-bearing: the two tooling files sit above
