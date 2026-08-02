@@ -538,7 +538,7 @@ async fn sqlite_contract_create_table_plan_supports_table_only_slice() {
 }
 
 #[tokio::test]
-async fn sqlite_contract_create_table_plan_chains_native_index_creation() {
+async fn sqlite_contract_create_table_plan_applies_native_index_creation_with_the_table() {
     let (_dir, adapter) = connected_fixture().await;
 
     let result = adapter

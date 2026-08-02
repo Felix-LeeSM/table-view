@@ -44,7 +44,10 @@ import {
 // chain. Atomic policy C — table+COMMENT in one transaction, indexes
 // then constraints sequentially each in its own transaction; failures
 // do NOT roll back earlier-applied work. The failing constraint name
-// surfaces verbatim in the inline preview pane error slot.
+// surfaces verbatim in the inline preview pane error slot. Policy C is
+// the adapter's choice, not the dialog's. SQLite is outside this block
+// entirely: it hides this tab (`alterConstraint` false) and refuses a
+// constraint-carrying plan before emitting any statement.
 //
 // Path A backend extension landed: `ConstraintDefinition::ForeignKey`
 // gains `on_delete` / `on_update` (`#[serde(default)]`), whitelist

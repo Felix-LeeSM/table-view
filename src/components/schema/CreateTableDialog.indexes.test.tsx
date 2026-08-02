@@ -45,6 +45,9 @@ import {
 // - Index failure halts the chain but does NOT roll back the CREATE
 //   TABLE; the failing index name surfaces verbatim in the inline
 //   preview pane error slot (`Index "<name>" failed: <pg error>`).
+//   Policy C is per adapter, not universal: SQLite has run the whole
+//   plan in one transaction since #1804, so a failing index leaves no
+//   table there. This block covers the policy-C engines.
 // - PK auto-emission deduplication — when an Indexes-tab row's
 //   `columns` array exactly matches the declared PK array, the chain
 //   skips `tauri.createIndex` for that row (PG implicitly indexes PKs).
