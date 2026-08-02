@@ -96,6 +96,7 @@ pub fn register_all(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<tauri
         commands::document::query::explain_mongo_find,
         commands::meta::collection_stats_rdb,
         commands::meta::collection_stats_mongo,
+        commands::meta::mongo_runtime_capabilities,
         commands::meta::server_info,
         commands::meta::slow_queries,
         commands::meta::list_database_users,
