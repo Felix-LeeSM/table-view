@@ -29,6 +29,7 @@ use table_view_lib::models::{ConnectionConfig, DatabaseType};
 use testcontainers::core::ImageExt;
 use testcontainers::runners::AsyncRunner;
 use testcontainers::ContainerAsync;
+use testcontainers_modules::mariadb::Mariadb as MariadbImage;
 use testcontainers_modules::mongo::Mongo as MongoImage;
 use testcontainers_modules::mssql_server::MssqlServer as MssqlImage;
 use testcontainers_modules::mysql::Mysql as MysqlImage;
@@ -104,9 +105,36 @@ struct MssqlEndpoint {
 static PG_CONTAINER: OnceCell<Option<Arc<ContainerAsync<PostgresImage>>>> = OnceCell::const_new();
 static MONGO_CONTAINER: OnceCell<Option<Arc<ContainerAsync<MongoImage>>>> = OnceCell::const_new();
 static MYSQL_CONTAINER: OnceCell<Option<Arc<ContainerAsync<MysqlImage>>>> = OnceCell::const_new();
+static MARIADB_CONTAINER: OnceCell<Option<Arc<ContainerAsync<MariadbImage>>>> =
+    OnceCell::const_new();
 static MSSQL_CONTAINER: OnceCell<Option<Arc<ContainerAsync<MssqlImage>>>> = OnceCell::const_new();
 #[cfg(not(any(target_arch = "arm", target_arch = "aarch64")))]
 static ORACLE_CONTAINER: OnceCell<Option<Arc<ContainerAsync<OracleImage>>>> = OnceCell::const_new();
+
+/// Issue #1077 Stage 2 (2026-08-02) — the CI fail-loud rule for docker-gated
+/// suites, in one place.
+///
+/// Every docker-gated caller is shaped `match setup_x().await { Some(a) => a,
+/// None => return }`, and CI runs nextest `--profile push`, which sets
+/// `success-output = "never"` and `status-level = "slow"`: a `SKIP:` println is
+/// swallowed and the test name is never printed. "The container never started"
+/// and "every gate ran" are therefore indistinguishable in the CI log, so a
+/// green `Integration Tests (Docker)` proves nothing about the suites that
+/// skipped. Under `CI` any unavailability is a failure instead.
+///
+/// This covers BOTH unavailability paths — an unresolved endpoint and a
+/// connect that exhausts its retries. Guarding only the endpoint would leave
+/// the second one silent, which is the same hole in a different function.
+///
+/// The `*_DISABLE=1` opt-outs are checked before this and stay deliberate.
+fn fail_loud_under_ci(engine: &str, disable_var: &str, reason: &str) {
+    assert!(
+        std::env::var_os("CI").is_none(),
+        "{engine} unavailable under CI ({reason}): the docker-gated {engine} tests \
+         would silently no-op and still report PASS. Start the container (or point \
+         the *_HOST env var at one), or set {disable_var}=1 to opt out on purpose."
+    );
+}
 
 async fn pg_endpoint() -> Option<PgEndpoint> {
     // 1) 외부 PG 재사용 — `PGHOST`/`PGPORT`/... 가 모두 있으면 그 값을 그대로.
@@ -351,6 +379,96 @@ async fn mysql_endpoint() -> Option<MysqlEndpoint> {
     })
 }
 
+/// Issue #1077 Stage 2 (2026-08-02) — MariaDB endpoint resolver.
+///
+/// MariaDB shares `MysqlAdapter`, so for most surfaces the MySQL container is
+/// representative and a second container would be pure cost. `mysql.user` is
+/// the exception: MariaDB 10.4 replaced it with a view over
+/// `mysql.global_priv`, dropping `account_locked` and adding `is_role`, so the
+/// users listing is the one code path where the two vendors run different SQL
+/// and only a real MariaDB can grade it.
+///
+/// Same two stages as MySQL — `MARIADB_HOST` reuses an external server
+/// (docker-compose publishes `mariadb:11` on 13307), otherwise testcontainers
+/// spawns `mariadb:11.3`, the module default. `MARIADB_DISABLE=1` opts out.
+/// The two root env vars mirror the MySQL helper's: `MARIADB_ROOT_HOST=%` so
+/// the grant table matches through Docker Desktop's NAT, and an explicit
+/// password because sqlx's handshake needs one.
+#[allow(dead_code)]
+async fn mariadb_endpoint() -> Option<MysqlEndpoint> {
+    if std::env::var("MARIADB_DISABLE")
+        .ok()
+        .filter(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .is_some()
+    {
+        return None;
+    }
+
+    if let Ok(host) = std::env::var("MARIADB_HOST") {
+        return Some(MysqlEndpoint {
+            host,
+            port: std::env::var("MARIADB_PORT")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(13307),
+            user: std::env::var("MARIADB_USER").unwrap_or_else(|_| "testuser".into()),
+            password: std::env::var("MARIADB_PASSWORD").unwrap_or_else(|_| "testpass".into()),
+            database: std::env::var("MARIADB_DATABASE")
+                .unwrap_or_else(|_| "table_view_test".into()),
+        });
+    }
+
+    ensure_sweep_once().await;
+    let pid = current_pid_label();
+    let cell = MARIADB_CONTAINER
+        .get_or_init(|| async {
+            match MariadbImage::default()
+                .with_env_var("MARIADB_ROOT_HOST", "%")
+                .with_env_var("MARIADB_ROOT_PASSWORD", "testpass")
+                .with_label(OWNED_LABEL, "1")
+                .with_label(OWNER_PID_LABEL, &pid)
+                .start()
+                .await
+            {
+                Ok(c) => {
+                    register_container_for_process_cleanup(c.id().to_string());
+                    Some(Arc::new(c))
+                }
+                Err(e) => {
+                    println!("SKIP: MariaDB testcontainer 시작 실패 ({})", e);
+                    None
+                }
+            }
+        })
+        .await
+        .as_ref();
+
+    let cell = match cell {
+        Some(c) => c,
+        None => {
+            fail_loud_under_ci("MariaDB", "MARIADB_DISABLE", "container failed to start");
+            return None;
+        }
+    };
+
+    let port = match cell.get_host_port_ipv4(3306).await {
+        Ok(p) => p,
+        Err(e) => {
+            println!("SKIP: MariaDB container 포트 매핑 실패 ({})", e);
+            fail_loud_under_ci("MariaDB", "MARIADB_DISABLE", &format!("port mapping: {e}"));
+            return None;
+        }
+    };
+
+    Some(MysqlEndpoint {
+        host: "127.0.0.1".to_string(),
+        port,
+        user: "root".to_string(),
+        password: "testpass".to_string(),
+        database: "test".to_string(),
+    })
+}
+
 /// Issue #1642 — SQL Server endpoint resolver. Two-stage like MySQL:
 ///   1) `MSSQL_HOST` set → reuse an external SQL Server (host-native or
 ///      compose). PORT/USER/PASSWORD/DATABASE override the container defaults.
@@ -358,15 +476,11 @@ async fn mysql_endpoint() -> Option<MysqlEndpoint> {
 ///      `mcr.microsoft.com/mssql/server` testcontainer (amd64-only; on Apple
 ///      silicon it needs Rosetta and otherwise fails → silent-skip).
 ///
-/// Issue #1077 Stage 2 (2026-08-02) — the silent skip is local-only. Every
-/// docker-gated caller does `match setup_mssql_adapter().await { Some(a) => a,
-/// None => return }`, and CI runs `--profile push`, which sets
-/// `success-output = "never"` and `status-level = "slow"`: the `SKIP:` println
-/// below is swallowed and the test name is never printed. "The container never
-/// started" and "every gate ran" are therefore indistinguishable in the CI log,
-/// so a green `Integration Tests (Docker)` proved nothing about these tests.
-/// Under `CI` an absent endpoint is a failure. `MSSQL_DISABLE=1` is checked
-/// first and stays an explicit, deliberate opt-out.
+/// Issue #1077 Stage 2 (2026-08-02) — the silent skip is local-only; under `CI`
+/// an absent endpoint is a failure. See [`fail_loud_under_ci`] for why, and
+/// [`setup_mssql_adapter`] for the second half of the same guard (a connect
+/// that exhausts its retries). `MSSQL_DISABLE=1` is checked first and stays an
+/// explicit, deliberate opt-out.
 #[allow(dead_code)]
 async fn mssql_endpoint() -> Option<MssqlEndpoint> {
     if std::env::var("MSSQL_DISABLE")
@@ -378,12 +492,9 @@ async fn mssql_endpoint() -> Option<MssqlEndpoint> {
     }
 
     let endpoint = mssql_endpoint_available().await;
-    assert!(
-        endpoint.is_some() || std::env::var_os("CI").is_none(),
-        "SQL Server endpoint unavailable under CI: the docker-gated mssql tests \
-         would silently no-op and still report PASS. Start the container (or set \
-         MSSQL_HOST), or set MSSQL_DISABLE=1 to opt out on purpose."
-    );
+    if endpoint.is_none() {
+        fail_loud_under_ci("SQL Server", "MSSQL_DISABLE", "no endpoint resolved");
+    }
     endpoint
 }
 
@@ -733,6 +844,60 @@ pub async fn setup_mysql_adapter() -> Option<MysqlAdapter> {
     None
 }
 
+/// Issue #1077 Stage 2 (2026-08-02) — MariaDB lifecycle helper. Same shape as
+/// [`setup_mysql_adapter`] with two differences that carry the whole point of
+/// the file: the adapter is built by `MysqlAdapter::new_mariadb()`, which is
+/// what `commands/connection.rs` does for a MariaDB connection and what selects
+/// the MariaDB users projection, and unavailability is fail-loud under `CI` so
+/// a green `Integration Tests (Docker)` cannot mean "the gate never ran".
+#[allow(dead_code)]
+pub async fn setup_mariadb_adapter() -> Option<MysqlAdapter> {
+    let endpoint = mariadb_endpoint().await?;
+    let config = ConnectionConfig {
+        id: "test-conn".to_string(),
+        name: "TestMariadb".to_string(),
+        db_type: DatabaseType::Mariadb,
+        host: endpoint.host,
+        port: endpoint.port,
+        user: endpoint.user,
+        password: endpoint.password,
+        database: endpoint.database,
+        read_only: false,
+        group_id: None,
+        color: None,
+        connection_timeout: Some(10),
+        keep_alive_interval: None,
+        environment: None,
+        auth_source: None,
+        replica_set: None,
+        tls_enabled: None,
+        trust_server_certificate: None,
+        oracle_use_sid: None,
+        wallet_path: None,
+        wallet_password: String::new(),
+    };
+
+    let adapter = MysqlAdapter::new_mariadb();
+    for attempt in 0..5 {
+        match adapter.connect_pool(&config).await {
+            Ok(()) => return Some(adapter),
+            Err(_) if attempt < 4 => {
+                tokio::time::sleep(Duration::from_millis(200 * (attempt + 1))).await;
+            }
+            Err(e) => {
+                println!("SKIP: MariaDB connect_pool failed after retries ({})", e);
+                fail_loud_under_ci(
+                    "MariaDB",
+                    "MARIADB_DISABLE",
+                    &format!("connect failed: {e}"),
+                );
+                return None;
+            }
+        }
+    }
+    None
+}
+
 /// Issue #1642 — SQL Server lifecycle helper. `MssqlAdapter` has no sqlx pool;
 /// `connect` runs a version probe and stores the config, so each connected
 /// adapter opens fresh tiberius clients per query (two adapters over the same
@@ -775,11 +940,56 @@ pub async fn setup_mssql_adapter() -> Option<MssqlAdapter> {
             }
             Err(e) => {
                 println!("SKIP: SQL Server connect failed after retries ({})", e);
+                // The endpoint resolved, so the container is up and its port is
+                // mapped — but every gate below still returns on `None`. Without
+                // this the CI guard would cover only half the unavailability
+                // surface (issue #1077 round-2 B2-b).
+                fail_loud_under_ci(
+                    "SQL Server",
+                    "MSSQL_DISABLE",
+                    &format!("connect failed: {e}"),
+                );
                 return None;
             }
         }
     }
     None
+}
+
+/// Issue #1077 Stage 2 (2026-08-02) — run server-scoped MariaDB DDL
+/// (`CREATE ROLE`, `ALTER USER … ACCOUNT LOCK`) against the same server
+/// [`setup_mariadb_adapter`] uses. The adapter classifies these as
+/// `QueryType::Ddl` and refuses them by design (#903), so the fixture needs its
+/// own pool. Call only after `setup_mariadb_adapter()` returned `Some` — an
+/// absent endpoint is an error here, not a skip.
+#[allow(dead_code)]
+pub async fn mariadb_admin_sql(statements: &[&str]) -> Result<(), String> {
+    use sqlx::mysql::{MySqlConnectOptions, MySqlPoolOptions};
+
+    let endpoint = mariadb_endpoint()
+        .await
+        .ok_or_else(|| "no MariaDB endpoint".to_string())?;
+    let pool = MySqlPoolOptions::new()
+        .max_connections(1)
+        .connect_with(
+            MySqlConnectOptions::new()
+                .host(&endpoint.host)
+                .port(endpoint.port)
+                .username(&endpoint.user)
+                .password(&endpoint.password)
+                .database(&endpoint.database),
+        )
+        .await
+        .map_err(|e| format!("MariaDB admin pool: {e}"))?;
+
+    for sql in statements {
+        sqlx::query(sql)
+            .execute(&pool)
+            .await
+            .map_err(|e| format!("MariaDB admin statement failed ({sql}): {e}"))?;
+    }
+    pool.close().await;
+    Ok(())
 }
 
 /// Issue #1077 Stage 2 (2026-07-25) — run a server-scoped T-SQL batch

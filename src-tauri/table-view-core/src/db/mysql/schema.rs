@@ -36,19 +36,60 @@ use super::MysqlAdapter;
 /// collation that sqlx decodes as binary, so a raw select fails the entire
 /// listing with `mismatched types ... is not compatible with SQL type BINARY`.
 /// `max_user_connections` is `CAST(... AS SIGNED)` for the wire i64.
-/// `account_locked` exists on MySQL 5.7.8+/MariaDB 10.4.2+ — older builds fail
-/// loud rather than silently mislabel a locked account as loginable.
+///
+/// **MySQL only — MariaDB takes [`MARIADB_USERS_QUERY`].** `account_locked` was
+/// added to `mysql.user` in MySQL 5.7.6, and no MariaDB release has ever carried
+/// that column, so this text fails the whole panel there with `1054 (42S22):
+/// Unknown column 'account_locked' in 'field list'`.
+/// [`MysqlAdapter::users_query`](MysqlAdapter::users_query) picks the arm.
+/// The trailing `'N'` fills the `is_role` slot both queries share: MySQL has no
+/// such column because `CREATE ROLE` there produces an ordinary account that is
+/// already `account_locked = 'Y'`.
 pub(crate) const MYSQL_USERS_QUERY: &str = "SELECT CONVERT(User USING utf8mb4), \
      CONVERT(Host USING utf8mb4), CONVERT(Super_priv USING utf8mb4), \
      CONVERT(Create_priv USING utf8mb4), CONVERT(Create_user_priv USING utf8mb4), \
      CONVERT(Repl_slave_priv USING utf8mb4), CONVERT(account_locked USING utf8mb4), \
      CONVERT(plugin USING utf8mb4), \
-     CAST(max_user_connections AS SIGNED) \
+     CAST(max_user_connections AS SIGNED), 'N' \
      FROM mysql.user ORDER BY User, Host";
 
-/// One decoded `MYSQL_USERS_QUERY` row: `User`, `Host`, the four
-/// `enum('N','Y')` grant flags, `account_locked`, `plugin`, and the raw
-/// `max_user_connections`.
+/// Issue #1077 Stage 2 — the MariaDB arm of [`MYSQL_USERS_QUERY`]. Same
+/// projected shape, so both decode into [`MysqlUserRow`].
+///
+/// MariaDB 10.4 turned `mysql.user` into a view over `mysql.global_priv` and
+/// never added an `account_locked` column; the lock flag lives in the
+/// `global_priv` `Priv` JSON document. Only the one key is extracted — that
+/// same document also holds `authentication_string`, so selecting `Priv`
+/// itself would put a credential on the wire (guard test:
+/// `users_queries_never_select_a_credential_column`).
+///
+/// `is_role` is a real column here and is the only reliable role discriminator:
+/// a MariaDB role has an empty `Host`, but so does an ordinary
+/// `CREATE USER x@''` account, so keying off the host reports a real account as
+/// non-loginable.
+///
+/// The `LEFT JOIN` is deliberate. `mysql.user` is a view over `global_priv` so
+/// the two are 1:1 today, but an account-audit screen must never drop a
+/// principal silently — an unmatched row surfaces as "not locked" instead of
+/// disappearing.
+///
+/// MariaDB before 10.4 has no `mysql.global_priv` and fails loud with `1146
+/// Table 'mysql.global_priv' doesn't exist`, which is the intended posture: no
+/// MariaDB build reports account locking any other way.
+pub(crate) const MARIADB_USERS_QUERY: &str = "SELECT CONVERT(u.User USING utf8mb4), \
+     CONVERT(u.Host USING utf8mb4), CONVERT(u.Super_priv USING utf8mb4), \
+     CONVERT(u.Create_priv USING utf8mb4), CONVERT(u.Create_user_priv USING utf8mb4), \
+     CONVERT(u.Repl_slave_priv USING utf8mb4), \
+     IF(JSON_VALUE(g.Priv, '$.account_locked') IN ('true', '1'), 'Y', 'N'), \
+     CONVERT(u.plugin USING utf8mb4), \
+     CAST(u.max_user_connections AS SIGNED), CONVERT(u.is_role USING utf8mb4) \
+     FROM mysql.user u \
+     LEFT JOIN mysql.global_priv g ON g.User = u.User AND g.Host = u.Host \
+     ORDER BY u.User, u.Host";
+
+/// One decoded users row: `User`, `Host`, the four `enum('N','Y')` grant flags,
+/// the account-locked flag, `plugin`, the raw `max_user_connections`, and the
+/// role flag (always `'N'` on MySQL). Both vendor queries project this shape.
 pub(super) type MysqlUserRow = (
     String,
     String,
@@ -59,6 +100,7 @@ pub(super) type MysqlUserRow = (
     String,
     String,
     i64,
+    String,
 );
 
 /// Pure `mysql.user` row → wire `DatabaseUserRow`. Extracted from the IO body
@@ -75,8 +117,10 @@ pub(super) type MysqlUserRow = (
 ///   connections allowed" and a banned MariaDB account as "Unlimited".
 /// - **`can_login`** — `account_locked` alone over-reports. The `mysql_no_login`
 ///   plugin exists precisely to make an account non-loginable, and a MariaDB
-///   10.4+ role lives in the same view with an empty `Host` (it is rendered
-///   under its bare role name, not `role@`).
+///   10.4+ role lives in the same view (rendered under its bare role name, not
+///   `role@`) yet can never log in. The role test is the `is_role` column, NOT
+///   an empty `Host`: `CREATE USER x@''` is a perfectly loginable account with
+///   an empty host, so the host is not a role discriminator.
 pub(super) fn map_mysql_user_row(row: MysqlUserRow) -> crate::models::DatabaseUserRow {
     let (
         user,
@@ -88,6 +132,7 @@ pub(super) fn map_mysql_user_row(row: MysqlUserRow) -> crate::models::DatabaseUs
         account_locked,
         plugin,
         max_user_connections,
+        is_role,
     ) = row;
 
     crate::models::DatabaseUserRow {
@@ -96,7 +141,7 @@ pub(super) fn map_mysql_user_row(row: MysqlUserRow) -> crate::models::DatabaseUs
         } else {
             format!("{user}@{host}")
         },
-        can_login: account_locked != "Y" && plugin != "mysql_no_login" && !host.is_empty(),
+        can_login: account_locked != "Y" && plugin != "mysql_no_login" && is_role != "Y",
         is_superuser: super_priv == "Y",
         can_create_db: create_priv == "Y",
         can_create_role: create_user_priv == "Y",
@@ -1282,12 +1327,26 @@ impl MysqlAdapter {
         &self,
     ) -> Result<Vec<crate::models::DatabaseUserRow>, AppError> {
         let pool = self.active_pool().await?;
-        let rows: Vec<MysqlUserRow> = sqlx::query_as(MYSQL_USERS_QUERY)
+        let rows: Vec<MysqlUserRow> = sqlx::query_as(self.users_query())
             .fetch_all(&pool)
             .await
             .map_err(|e| AppError::Database(format!("mysql.user listing failed: {e}")))?;
 
         Ok(rows.into_iter().map(map_mysql_user_row).collect())
+    }
+
+    /// The vendor arm of the users projection. `mysql.user` is not one schema:
+    /// MySQL has `account_locked` and no `is_role`, MariaDB has `is_role` and
+    /// keeps the lock flag in `mysql.global_priv`. Routing on the constructed
+    /// `kind` rather than on a runtime version probe keeps this unit-testable
+    /// (`users_query_routes_on_the_constructed_vendor`) and costs no round trip;
+    /// `MysqlAdapter::new_mariadb` is the only way a MariaDB connection is
+    /// built (`commands/connection.rs`).
+    pub(super) fn users_query(&self) -> &'static str {
+        match self.kind {
+            crate::models::DatabaseType::Mariadb => MARIADB_USERS_QUERY,
+            _ => MYSQL_USERS_QUERY,
+        }
     }
 }
 
@@ -1525,24 +1584,78 @@ mod tests {
         }
     }
 
-    // Issue #1077 Stage 2 SECURITY (2026-07-25) — the users query must read the
-    // account identity + privilege flags from `mysql.user` and must NEVER
-    // select a credential column (`authentication_string` / `Password`). This
-    // fixture fails if the query ever regresses toward a secret column.
+    // Issue #1077 Stage 2 SECURITY (2026-07-25, both vendor arms 2026-08-02) —
+    // the users queries must read the account identity + privilege flags from
+    // `mysql.user` and must NEVER select a credential column
+    // (`authentication_string` / `Password`). MariaDB raises the stake: its
+    // lock flag lives in the `mysql.global_priv` `Priv` JSON document, which
+    // ALSO holds `authentication_string`, so selecting `Priv` whole — the
+    // obvious shortcut — would ship a password hash to the frontend. The
+    // projection must name the one JSON key.
     #[test]
-    fn mysql_users_query_never_selects_credential_column() {
+    fn users_queries_never_select_a_credential_column() {
+        for (vendor, query) in [
+            ("MySQL", MYSQL_USERS_QUERY),
+            ("MariaDB", MARIADB_USERS_QUERY),
+        ] {
+            assert!(
+                query.contains("mysql.user"),
+                "{vendor}: must source the mysql.user grant table"
+            );
+            let lower = query.to_ascii_lowercase();
+            assert!(
+                !lower.contains("authentication_string"),
+                "{vendor}: authentication_string is the credential column — must not be selected"
+            );
+            assert!(
+                !lower.contains("password"),
+                "{vendor}: no password credential column may be selected"
+            );
+        }
         assert!(
-            MYSQL_USERS_QUERY.contains("mysql.user"),
-            "must source the mysql.user grant table"
+            MARIADB_USERS_QUERY.contains("JSON_VALUE(g.Priv, '$.account_locked')")
+                && !MARIADB_USERS_QUERY.contains("CONVERT(g.Priv"),
+            "MariaDB must extract only the account_locked key — the surrounding \
+             global_priv document carries authentication_string"
         );
-        let lower = MYSQL_USERS_QUERY.to_ascii_lowercase();
+    }
+
+    // Issue #1077 Stage 2 (2026-08-02) — B1 regression guard. `mysql.user` is
+    // not one schema across the family: MariaDB 10.4 made it a view over
+    // `mysql.global_priv` and never carried `account_locked`, so sending the
+    // MySQL text to MariaDB fails the whole panel with `1054 (42S22): Unknown
+    // column 'account_locked' in 'field list'` (reproduced through the adapter
+    // on mariadb:11.3, and by hand on 11.8 and 10.4). A shared constant is
+    // exactly the regression this
+    // pins, so the assertions are written against each vendor's real column
+    // vocabulary rather than against the routing function alone.
+    #[test]
+    fn users_query_routes_on_the_constructed_vendor() {
+        assert_eq!(
+            MysqlAdapter::new().users_query(),
+            MYSQL_USERS_QUERY,
+            "MySQL must keep the account_locked projection"
+        );
+        assert_eq!(
+            MysqlAdapter::new_mariadb().users_query(),
+            MARIADB_USERS_QUERY,
+            "MariaDB must not be sent the account_locked projection"
+        );
+
         assert!(
-            !lower.contains("authentication_string"),
-            "authentication_string is the credential column — must not be selected"
+            MYSQL_USERS_QUERY.contains("account_locked")
+                && !MYSQL_USERS_QUERY.contains("global_priv"),
+            "MySQL has the column and no global_priv table"
         );
         assert!(
-            !lower.contains("password"),
-            "no password credential column may be selected"
+            !MARIADB_USERS_QUERY.contains("CONVERT(account_locked")
+                && !MARIADB_USERS_QUERY.contains("CONVERT(u.account_locked"),
+            "MariaDB has no account_locked column — selecting it is error 1054"
+        );
+        assert!(
+            MARIADB_USERS_QUERY.contains("mysql.global_priv")
+                && MARIADB_USERS_QUERY.contains("u.is_role"),
+            "MariaDB reads the lock flag from global_priv and roles from is_role"
         );
     }
 
@@ -1575,7 +1688,40 @@ mod tests {
         }
     }
 
+    // Issue #1077 Stage 2 (2026-08-02) — the same binary-decode trap applies to
+    // the MariaDB arm; its columns are alias-qualified, and `is_role` joins the
+    // list. The lock flag is an `IF(...)` literal, so it is already utf8mb4.
+    #[test]
+    fn mariadb_users_query_converts_text_columns_to_utf8mb4() {
+        for column in [
+            "u.User",
+            "u.Host",
+            "u.Super_priv",
+            "u.Create_priv",
+            "u.Create_user_priv",
+            "u.Repl_slave_priv",
+            "u.plugin",
+            "u.is_role",
+        ] {
+            assert!(
+                MARIADB_USERS_QUERY.contains(&format!("CONVERT({column} USING utf8mb4)")),
+                "`{column}` must be wrapped in CONVERT(... USING utf8mb4) — a raw \
+                 select decodes as binary and fails the whole listing"
+            );
+        }
+    }
+
     fn user_row(host: &str, account_locked: &str, plugin: &str, conns: i64) -> MysqlUserRow {
+        role_row(host, account_locked, plugin, conns, "N")
+    }
+
+    fn role_row(
+        host: &str,
+        account_locked: &str,
+        plugin: &str,
+        conns: i64,
+        is_role: &str,
+    ) -> MysqlUserRow {
         (
             "app".into(),
             host.into(),
@@ -1586,6 +1732,7 @@ mod tests {
             account_locked.into(),
             plugin.into(),
             conns,
+            is_role.into(),
         )
     }
 
@@ -1615,8 +1762,8 @@ mod tests {
 
     // Issue #1077 Stage 2 (2026-07-25) — `account_locked` alone over-reports
     // login capability: `mysql_no_login` exists to make an account
-    // non-loginable, and a MariaDB 10.4+ role sits in the same view with an
-    // empty `Host` (rendered under its bare name, not `role@`).
+    // non-loginable, and a MariaDB 10.4+ role sits in the same view (rendered
+    // under its bare name, not `role@`).
     #[test]
     fn map_mysql_user_row_reports_login_capability_and_identity() {
         let normal = map_mysql_user_row(user_row("%", "N", "caching_sha2_password", 0));
@@ -1632,11 +1779,30 @@ mod tests {
             "the mysql_no_login plugin makes the account non-loginable"
         );
 
-        let mariadb_role = map_mysql_user_row(user_row("", "N", "", 0));
-        assert_eq!(
-            mariadb_role.name, "app",
-            "an empty Host is a role, not app@"
-        );
+        let mariadb_role = map_mysql_user_row(role_row("", "N", "", 0, "Y"));
+        assert_eq!(mariadb_role.name, "app", "a role renders bare, not app@");
         assert!(!mariadb_role.can_login, "a MariaDB role cannot log in");
+    }
+
+    // Issue #1077 Stage 2 (2026-08-02) — round-2 B1 side finding. The role test
+    // used to be `!host.is_empty()`, which is not a role discriminator:
+    // `CREATE USER x@''` is an ordinary, loginable account with an empty host,
+    // and MariaDB records roles with the dedicated `is_role` column. The old
+    // rule reported such an account as unable to log in on BOTH vendors,
+    // because the mapper has no vendor branch.
+    #[test]
+    fn map_mysql_user_row_uses_is_role_not_an_empty_host_to_deny_login() {
+        let empty_host_account =
+            map_mysql_user_row(role_row("", "N", "mysql_native_password", 0, "N"));
+        assert!(
+            empty_host_account.can_login,
+            "an empty Host is not a role — CREATE USER x@'' can log in"
+        );
+
+        let role_with_a_host = map_mysql_user_row(role_row("%", "N", "", 0, "Y"));
+        assert!(
+            !role_with_a_host.can_login,
+            "is_role decides, independent of Host"
+        );
     }
 }
