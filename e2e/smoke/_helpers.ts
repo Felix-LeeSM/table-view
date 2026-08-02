@@ -647,21 +647,110 @@ export async function setInput(selector: string, value: string) {
   );
 }
 
-/** Read the current value of an `<input>` / `<textarea>` by selector. */
+/**
+ * Read the current value of an `<input>` / `<textarea>` by selector, or `""`
+ * when the element is absent. Deliberately does not wait: every caller polls
+ * this inside its own `waitUntil`, and a nested wait would reject the outer
+ * one with the inner message and throw the caller's `timeoutMsg` away.
+ */
 export async function readFieldValue(selector: string): Promise<string> {
-  await browser.waitUntil(
-    async () =>
-      await browser.execute(
-        (sel) => Boolean(document.querySelector(sel)),
-        selector,
-      ),
-    { timeout: 10000, timeoutMsg: `${selector} did not appear in the DOM` },
-  );
   return await browser.execute(
     (sel) =>
       document.querySelector<HTMLInputElement | HTMLTextAreaElement>(sel)
         ?.value ?? "",
     selector,
+  );
+}
+
+/**
+ * Activate a `[role="tab"]` by its visible label, in whatever window the
+ * driver is currently on (the caller picks the window).
+ *
+ * Radix `TabsTrigger` has no `onClick` — it changes the active value from
+ * `onMouseDown` / `onKeyDown` / `onFocus`, so a bare `HTMLElement.click()`
+ * fires a `click` event that nothing listens to and the tab never activates
+ * (#1815, PR #2095 round 1). The focus + pointer + mouse + click sequence
+ * below is the one `postgres-structure-ddl.spec.ts` and
+ * `mysql-family-baseline.ts` proved out; both now call this instead of
+ * keeping their own copy.
+ */
+export async function activateTab(label: string) {
+  await browser.waitUntil(
+    async () =>
+      await browser.execute((expectedLabel) => {
+        return Array.from(
+          document.querySelectorAll<HTMLElement>('[role="tab"]'),
+        ).some(
+          (candidate) =>
+            candidate.offsetParent !== null &&
+            candidate.textContent?.trim() === expectedLabel,
+        );
+      }, label),
+    {
+      timeout: 10000,
+      timeoutMsg: `${label} tab did not appear`,
+    },
+  );
+
+  await browser.execute((expectedLabel) => {
+    const tab = Array.from(
+      document.querySelectorAll<HTMLElement>('[role="tab"]'),
+    ).find(
+      (candidate) =>
+        candidate.offsetParent !== null &&
+        candidate.textContent?.trim() === expectedLabel,
+    );
+    if (!tab) throw new Error(`${expectedLabel} tab did not appear`);
+
+    tab.focus();
+
+    const pointerInit = {
+      bubbles: true,
+      cancelable: true,
+      pointerType: "mouse",
+      button: 0,
+    };
+    if (typeof PointerEvent === "function") {
+      tab.dispatchEvent(
+        new PointerEvent("pointerdown", { ...pointerInit, buttons: 1 }),
+      );
+      tab.dispatchEvent(new PointerEvent("pointerup", pointerInit));
+    }
+
+    tab.dispatchEvent(
+      new MouseEvent("mousedown", {
+        bubbles: true,
+        cancelable: true,
+        button: 0,
+        buttons: 1,
+      }),
+    );
+    tab.dispatchEvent(
+      new MouseEvent("mouseup", {
+        bubbles: true,
+        cancelable: true,
+        button: 0,
+      }),
+    );
+    tab.click();
+  }, label);
+
+  await browser.waitUntil(
+    async () =>
+      await browser.execute((expectedLabel) => {
+        const tab = Array.from(
+          document.querySelectorAll<HTMLElement>('[role="tab"]'),
+        ).find(
+          (candidate) =>
+            candidate.offsetParent !== null &&
+            candidate.textContent?.trim() === expectedLabel,
+        );
+        return tab?.getAttribute("aria-selected") === "true";
+      }, label),
+    {
+      timeout: 10000,
+      timeoutMsg: `${label} tab did not become active`,
+    },
   );
 }
 

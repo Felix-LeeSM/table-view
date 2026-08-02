@@ -1,5 +1,6 @@
 import { $, browser, expect } from "@wdio/globals";
 import {
+  activateTab,
   clickDomSelector,
   expectConnectionVisible,
   openNewConnectionDialog,
@@ -33,8 +34,9 @@ import {
 
 const SOURCE_NAME = "E2E Export Source";
 const IMPORTED_NAME = `${SOURCE_NAME} (imported)`;
-// Distinctive enough that a substring hit in base64 ciphertext is not a
-// realistic flake.
+// Distinctive so the absence check below cannot pass on an accidental
+// substring. Its absence from the payload is weak evidence on its own — see
+// the comment on that assertion.
 const SOURCE_PASSWORD = "e2e-export-needle-Zq7v";
 // A syntactically valid BIP39 phrase that is not the generated one.
 const WRONG_PHRASE =
@@ -45,6 +47,9 @@ const INCORRECT_PHRASE_MESSAGE =
   "Incorrect master password — the file could not be decrypted";
 const IMPORT_SUCCESS_TEXT = "Imported 1 connection";
 const REENTER_PASSWORD_TEXT = "re-enter its password";
+// `selectionTree.counterLabel` after the round trip: the original plus one
+// imported copy, both preselected.
+const CONNECTION_COUNT_AFTER_IMPORT = "2 connections,";
 
 const DIALOG = '[role="dialog"]';
 const RECOVERY_PHRASE_OUTPUT = "#export-recovery-phrase";
@@ -105,20 +110,26 @@ describe("connection export / import round trip", () => {
       },
     );
 
-    await step("the payload is an envelope and leaks no secret", async () => {
+    await step("the payload is an envelope, not a plain export", async () => {
       const parsed = JSON.parse(envelopeJson) as Record<string, unknown>;
-      // The backend detects an envelope by exactly these two keys
-      // (`import_connections_encrypted`), so asserting them here fails if the
-      // Export pane ever falls back to the plain `export_connections` path.
+      // Pins the `EncryptedEnvelope` schema (src-tauri/src/storage/crypto.rs)
+      // — the two keys the backend's own envelope detection keys off. A
+      // regression to the plain `export_connections` path would already have
+      // died at the recovery-phrase wait above, which is why this is a schema
+      // guard and not the plain-export guard.
       expect(typeof parsed.kdf).toBe("string");
       expect(typeof parsed.ciphertext).toBe("string");
       expect(Object.keys(parsed)).not.toContain("connections");
+      // Cheap tripwires against the payload textarea rendering the wrong
+      // thing. Neither proves the ciphertext is sound: `ConnectionConfigPublic`
+      // has no password field to begin with, so a degraded AEAD would pass
+      // both. The real integrity check is the wrong-phrase rejection below.
       expect(envelopeJson).not.toContain(SOURCE_PASSWORD);
       expect(envelopeJson).not.toContain(phrase);
     });
 
     await step("the wrong recovery phrase is refused", async () => {
-      await selectTab("Import");
+      await activateTab("Import");
       await setInput(IMPORT_JSON_INPUT, envelopeJson);
       await setInput(IMPORT_PHRASE_INPUT, WRONG_PHRASE);
       await clickDialogButton("Import");
@@ -127,7 +138,6 @@ describe("connection export / import round trip", () => {
         30000,
         "the wrong recovery phrase was not refused",
       );
-      expect(await dialogText()).not.toContain(IMPORT_SUCCESS_TEXT);
     });
 
     await step("the displayed recovery phrase imports", async () => {
@@ -138,7 +148,11 @@ describe("connection export / import round trip", () => {
         30000,
         "the correct recovery phrase did not import the connection",
       );
-      // The dialog tells the user the password did not come along.
+      // Copy check only: `resultFooter` is a static locale string that renders
+      // on every successful import, so it would survive a regression that
+      // carried the password across. It catches the footer going missing,
+      // nothing more — the badge comparison below is what holds the
+      // "password is not re-imported" property.
       expect(await dialogText()).toContain(REENTER_PASSWORD_TEXT);
       await clickDialogButton("Done");
     });
@@ -152,6 +166,11 @@ describe("connection export / import round trip", () => {
         expect(await selectionTreeRowText(IMPORTED_NAME)).not.toContain(
           PW_SET_BADGE,
         );
+        // Exactly one import reached storage. The picker preselects every
+        // connection on open, so its own counter (`selectionTree.counterLabel`)
+        // is the connection count — a wrong phrase that decrypted anyway would
+        // make this read "3 connections".
+        expect(await dialogText()).toContain(CONNECTION_COUNT_AFTER_IMPORT);
       },
     );
   });
@@ -181,32 +200,6 @@ async function waitForDialogText(
     timeout,
     timeoutMsg,
   });
-}
-
-/** Activate a dialog tab by its visible label. */
-async function selectTab(label: string) {
-  await browser.execute((text) => {
-    const tab = Array.from(
-      document.querySelectorAll<HTMLElement>('[role="tab"]'),
-    ).find((candidate) => (candidate.textContent ?? "").trim() === text);
-    if (!tab) throw new Error(`${text} tab did not appear`);
-    tab.click();
-  }, label);
-  await browser.waitUntil(
-    async () =>
-      await browser.execute(
-        (text) =>
-          Array.from(
-            document.querySelectorAll<HTMLElement>('[role="tab"]'),
-          ).some(
-            (candidate) =>
-              (candidate.textContent ?? "").trim() === text &&
-              candidate.getAttribute("aria-selected") === "true",
-          ),
-        label,
-      ),
-    { timeout: 10000, timeoutMsg: `${label} tab did not activate` },
-  );
 }
 
 /**
