@@ -131,14 +131,17 @@ Required local evidence:
   `cargo test --manifest-path src-tauri/Cargo.toml --test parse_sql_backend`,
   `cargo test --manifest-path src-tauri/Cargo.toml --test keyring_migration --test keyring_new_user --test keyring_linux_fallback`,
   and `cargo test --manifest-path src-tauri/mongosh-parser-core/Cargo.toml --lib`.
-  `table-view-core`, `sql-parser-core` and `mongosh-parser-core` are path
-  dependencies, not workspace members, so the app manifest's `--lib` reaches
-  none of them — that is how `mongosh-parser-core`'s lib tests stayed outside
-  every gate until #2098. `--test` is an allowlist on top of that: an
-  integration binary that no line names never runs, which is how the three
-  `keyring_*` binaries stayed outside CI until #1815. Drop a line and the lane
-  still exits 0 with those crates' unit tests — or those binaries — unrun, the
-  same reason CI wires them as separate steps (the `rust` job in
+  `table-view-core` and `sql-parser-core` are path dependencies, not workspace
+  members: the app manifest's `--lib` compiles them but never runs their own
+  unit tests. `mongosh-parser-core` sits one step further out — it is not in
+  the app's dependency graph at all (`git grep -n mongosh -- src-tauri/Cargo.lock`
+  returns 0 hits), so no flag on the app manifest can reach it and only its own
+  `--manifest-path` line runs it. That is how its lib tests stayed outside every
+  gate until #2098. `--test` is an allowlist on top of that: an integration
+  binary that no line names never runs, which is how the three `keyring_*`
+  binaries stayed outside CI until #1815. Drop a line and the lane still exits 0
+  with those crates' unit tests — or those binaries — unrun, the same reason CI
+  wires them as separate steps (the `Rust Unit And Storage Tests` job in
   `.github/workflows/ci.yml`).
 - Docker integration lane: with required services available,
   `cargo test --manifest-path src-tauri/Cargo.toml --test schema_integration --test query_integration --test mongo_integration --test fixture_loading --test redis_integration`.
