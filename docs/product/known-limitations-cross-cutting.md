@@ -150,9 +150,9 @@ the dbType never carries a skip-verify choice onto the next engine. Export strip
 is re-selected on the importing machine exactly as the password is re-entered.
 Oracle rejects any posture above `prefer` — its mTLS wallet is the only Oracle
 TLS trigger. The CA reference follows the posture that named it: the sslmode
-dropdown, the engine TLS on/off checkboxes, a dbType switch, and a pasted URL
-that states a posture all clear `caCertPath` along with the move off
-`verify-ca`. The skip-verify checkbox is the deliberate exception — it keeps the
+dropdown, the engine TLS on/off checkboxes (both directions), a dbType switch,
+and a pasted URL that states a posture all clear `caCertPath` whenever they move
+the posture. The skip-verify checkbox is the deliberate exception — it keeps the
 anchor while the posture sits at `require`, so unchecking it restores
 `verify-ca` instead of demoting the connection to `verify-full`. A connection
 saved while that box is checked therefore stores `require` with its CA path
