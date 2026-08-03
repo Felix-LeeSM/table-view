@@ -48,28 +48,11 @@ landed and live GitHub showed no open Refactor 04 child issues.
 
 ## What The Rust Coverage Gate Grades
 
-The `Integration Tests (Docker)` llvm-cov gate grades targets of the root
-package of `src-tauri/Cargo.toml` and no other package. `table-view-core` is a
-path dependency, not a workspace member, so none of its files enter the report:
-the app's own tests execute that code, but it counts toward neither the
-denominator nor the `--fail-under-*` floors. The same split is why the Rust lane
-under Pre-Release Verification Gate below needs its own `--manifest-path` line
-to run the crate's unit tests at all.
+On job `91580953608` (head `44beea9c`) the `Integration Tests (Docker)` llvm-cov
+gate's per-file table carries 65 rows, none under `table-view-core`, over a
+`TOTAL` of 30,195 regions / 2,831 functions / 21,550 lines.
 
-The gate prints the proof itself: with no format flag, `cargo llvm-cov` puts a
-per-file table on stdout. (`--summary-only` is not what produces it — on the
-pinned 0.8.7, `cargo llvm-cov --help` says that flag "can only be used together
-with --json, --lcov, or --cobertura", and the gate passes none of the three.) On
-job `91580953608` (head `44beea9c`) that table carries 65 rows, all of them under
-`src-tauri/src/` and none under `table-view-core`, over a `TOTAL` of 30,195
-regions / 2,831 functions / 21,550 lines. Those rows cover the gate's whole
-target set — `--lib` plus the thirteen `--test` binaries it names — which is not
-the package's whole test surface: `ls src-tauri/tests/*.rs | wc -l` returns 75.
-Nor is the 65 a file census of the root:
-`git ls-files -- src-tauri/src | wc -l` returns 70.
-
-Job logs expire, so the same boundary is reproducible locally with the gate's
-own tool, profile, and working directory. Measured on `dd1d9d0a` (macOS):
+Measured on `dd1d9d0a` (macOS):
 
 ```bash
 cd src-tauri
@@ -81,13 +64,7 @@ cargo llvm-cov nextest --profile push --lib --ignore-run-fail --json \
 ```
 
 It reports 64 files, 0 of them under `table-view-core`, over totals of 30,475
-regions / 2,842 functions / 21,694 lines. This is not the gate command — it adds
-`--ignore-run-fail`, swaps `--summary-only` for `--json`, and drops the three
-`--fail-under-*` floors along with the thirteen `--test` targets, which need the
-Docker services — so its file count differs from the gate's 65 by platform and
-target set. Do not copy it as a way to reproduce the gate's grade; it answers
-only the narrower question of which files enter the report, and on that the two
-agree: zero `table-view-core`.
+regions / 2,842 functions / 21,694 lines.
 
 The crate's own unit coverage on `dd1d9d0a` is 69.17% regions / 65.76%
 functions / 69.54% lines over 1,204 tests, and its `TOTAL` row counts 65,446
@@ -98,20 +75,10 @@ block above leaves you in:
 cargo llvm-cov --manifest-path src-tauri/table-view-core/Cargo.toml --lib --summary-only
 ```
 
-The #2082 split shows the same boundary in aggregate: the gate's region
-denominator fell 94,742 -> 30,173 across that merge (jobs `91279800567` on
-`04c2090e` and `91381908683` on `91724b2c`), a 64,569-region drop the size of
-the crate's own 65,446. The two are close rather than equal — they are measured
-on different commits and platforms. Read a job with
+Read a job with
 `gh api --allow-escape-sequences repos/{owner}/{repo}/actions/jobs/<job-id>/logs`
 while GitHub still retains that run's logs; without that flag `gh` prints a
 one-line notice instead of the log.
-
-The crate's percentages are measurements, not floors: the `--fail-under-*`
-literals grade a report this crate is not in, and
-`git grep -n 'llvm-cov\|tarpaulin' -- .github/workflows` reaches no job but that
-one, so nothing fails when its coverage drops. Whether to widen the gate to
-cover it is an open decision this page does not settle.
 
 ## Local Development And CI
 
