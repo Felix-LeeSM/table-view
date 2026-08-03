@@ -144,30 +144,28 @@ export default function DataGrid({
   const prevPropsRef = useRef({ connectionId, table, schema });
   const totalPages = data ? Math.ceil(data.total_count / pageSize) : 0;
 
-  // #1734 (5) — F6 walks focus grid ↔ panel, and every close path hands focus
-  // back to the grid cell the user came from. `focusAnchorRef` is what the grid
-  // publishes its virtualization-aware focuser into; without it the RDB grid's
-  // anchor row can be scrolled out of the DOM and the restore silently no-ops.
+  // #1734 (5) — F6 walks focus grid ↔ panel. Handing focus back when the panel
+  // disappears is NOT wired here: `useQuickLookFocus` hangs it off `panelRef`
+  // being detached, so it covers the paths below and equally the ones that
+  // never touch them (a commit that empties the selection, a refetch that drops
+  // the selected row out of range). `focusAnchorRef` is what the grid publishes
+  // its virtualization-aware focuser into; without it the RDB grid's anchor row
+  // can be scrolled out of the DOM and the restore silently no-ops.
   const focusAnchorRef = useRef<(() => void) | null>(null);
   const quickLookOpen =
     showQuickLook && editState.selectedRowIds.size > 0 && data !== null;
-  const { rootRef, panelRef, focusGridCell } = useQuickLookFocus(
+  const { rootRef, panelRef } = useQuickLookFocus(
     quickLookOpen,
     focusAnchorRef,
   );
 
-  // Branches on the MOUNT condition, not on `showQuickLook`: with the flag on
-  // but no row selected the panel is not rendered, and restoring focus then
-  // would yank it out of whatever the user is actually in (FilterBar, toolbar).
   const toggleQuickLook = useCallback(() => {
-    if (quickLookOpen) focusGridCell();
     setShowQuickLook((visible) => !visible);
-  }, [quickLookOpen, focusGridCell]);
+  }, []);
 
   const closeQuickLook = useCallback(() => {
     setShowQuickLook(false);
-    focusGridCell();
-  }, [focusGridCell]);
+  }, []);
 
   const handleSetPageSize = useCallback(
     (size: number) => {

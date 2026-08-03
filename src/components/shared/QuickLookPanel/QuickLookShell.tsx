@@ -32,7 +32,7 @@ import type { DataGridEditState } from "@components/datagrid/useDataGridEdit";
 import { Button } from "@components/ui/button";
 import { cn } from "@lib/utils";
 import { GripHorizontal, Pencil, PencilOff, X } from "lucide-react";
-import type { KeyboardEvent, MouseEvent, ReactNode, RefObject } from "react";
+import type { KeyboardEvent, MouseEvent, ReactNode, Ref } from "react";
 import { useTranslation } from "react-i18next";
 import { MAX_HEIGHT, MIN_HEIGHT } from "./helpers";
 
@@ -64,7 +64,7 @@ export interface QuickLookShellProps {
   /** Optional — gates the Edit toggle together with `onToggleEdit`. */
   editState?: DataGridEditState;
   /** `F6` focus target (#1734 (5)) — see `useQuickLookFocus`. */
-  panelRef?: RefObject<HTMLDivElement | null>;
+  panelRef?: Ref<HTMLDivElement>;
   /** Body content (FieldRow list / BSON tree / etc.). */
   children: ReactNode;
 }

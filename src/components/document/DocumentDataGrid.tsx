@@ -248,24 +248,20 @@ export default function DocumentDataGrid({
   const showQuickLookMounted =
     showQuickLook && editState.selectedRowIds.size > 0 && !!queryResult;
 
-  // #1734 (5) — F6 walks focus grid ↔ panel; closing hands it back to the cell.
-  const { rootRef, panelRef, focusGridCell } =
-    useQuickLookFocus(showQuickLookMounted);
+  // #1734 (5) — F6 walks focus grid ↔ panel. Handing focus back when the panel
+  // disappears is not wired into these two handlers: `useQuickLookFocus` hangs
+  // it off `panelRef` being detached, which is the one thing every way of
+  // removing the panel has in common — including a commit that empties the
+  // selection this grid's mount gate reads.
+  const { rootRef, panelRef } = useQuickLookFocus(showQuickLookMounted);
 
   const closeQuickLook = useCallback(() => {
     setShowQuickLook(false);
-    focusGridCell();
-  }, [focusGridCell]);
+  }, []);
 
-  // Every path that closes the panel goes through here, so none of them can
-  // drop focus on `<body>`. Branching on the MOUNT condition rather than on
-  // `showQuickLook` matters: with the flag on but no row selected the panel is
-  // not rendered, and restoring focus then would yank it out of whatever the
-  // user is actually in.
   const toggleQuickLook = useCallback(() => {
-    if (showQuickLookMounted) focusGridCell();
     setShowQuickLook((prev) => !prev);
-  }, [showQuickLookMounted, focusGridCell]);
+  }, []);
 
   // Cmd+L (Mac) / Ctrl+L (other) toggles the Quick Look panel. Same shape
   // as `DataGrid.tsx` so keyboard behaviour stays consistent across

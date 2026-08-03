@@ -17,7 +17,7 @@
 
 import BlobViewerDialog from "@components/datagrid/BlobViewerDialog";
 import type { DataGridEditState } from "@components/datagrid/useDataGridEdit";
-import type { KeyboardEvent, MouseEvent, RefObject } from "react";
+import type { KeyboardEvent, MouseEvent, Ref } from "react";
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { TableData } from "@/types/schema";
@@ -36,7 +36,7 @@ export interface RdbQuickLookBodyProps {
   onResizeMouseDown: (e: MouseEvent) => void;
   onResizeKeyDown: (e: KeyboardEvent) => void;
   editState?: DataGridEditState;
-  panelRef?: RefObject<HTMLDivElement | null>;
+  panelRef?: Ref<HTMLDivElement>;
 }
 
 export default function RdbQuickLookBody({

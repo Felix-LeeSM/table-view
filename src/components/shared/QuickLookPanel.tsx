@@ -11,7 +11,7 @@
 //   from this entry file.
 
 import type { DataGridEditState } from "@components/datagrid/useDataGridEdit";
-import type { RefObject } from "react";
+import type { Ref } from "react";
 import { useCallback, useMemo, useState } from "react";
 import type { TableData } from "@/types/schema";
 import DocumentQuickLookBody from "./QuickLookPanel/DocumentQuickLookBody";
@@ -46,7 +46,7 @@ export interface QuickLookPanelRdbProps {
   onClose: () => void;
   editState?: DataGridEditState;
   /** `F6` focus target (#1734 (5)) — supplied by `useQuickLookFocus`. */
-  panelRef?: RefObject<HTMLDivElement | null>;
+  panelRef?: Ref<HTMLDivElement>;
 }
 
 export interface QuickLookPanelDocumentProps {
@@ -63,7 +63,7 @@ export interface QuickLookPanelDocumentProps {
   data?: TableData;
   editState?: DataGridEditState;
   /** `F6` focus target (#1734 (5)) — supplied by `useQuickLookFocus`. */
-  panelRef?: RefObject<HTMLDivElement | null>;
+  panelRef?: Ref<HTMLDivElement>;
 }
 
 export type QuickLookPanelProps =

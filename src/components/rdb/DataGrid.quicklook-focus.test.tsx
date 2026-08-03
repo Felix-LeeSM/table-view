@@ -3,9 +3,15 @@
 // The grid publishes a single tab stop (roving tabindex), so Tab reaches the
 // panel only by walking its controls and re-enters the grid at that one tab
 // stop rather than at the cell the user left. `F6` is the direct walk in both
-// directions, and every path that closes the panel returns focus to the grid
-// cell the user came from — otherwise focus falls to `<body>` and the next
-// arrow key goes nowhere.
+// directions, and the panel disappearing must not leave focus on `<body>`,
+// where the next arrow key goes nowhere.
+//
+// Round 2 tried to hold that second half by calling a restore from each close
+// handler; the two cases at the bottom of this file are the ones that reach no
+// handler. `useQuickLookFocus` now hangs the restore off the panel node leaving
+// the DOM, so the close-button and `Cmd+L` cases below prove the same one
+// mechanism the commit and refetch cases do — neutering it reds 9 of the 17
+// tests across this file and `useQuickLookFocus.test.tsx`.
 //
 // Also pins the owner's stated default from the 2026-08-02 decision comment:
 // moving the row selection while the panel is open re-syncs the detail body.
@@ -14,11 +20,18 @@
 // live in `__tests__/dataGridTestHelpers.tsx`, so each axis file re-declares
 // them (see that helper's header).
 
-import { act, fireEvent, screen, within } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { setupTauriMock } from "@/test-utils/tauriMock";
 import type { SortInfo } from "@/types/schema";
 import {
+  MOCK_DATA,
   mockAddTab,
   mockExecuteQuery,
   mockExecuteQueryBatch,
@@ -332,6 +345,94 @@ describe("DataGrid — Quick Look focus exchange (#1734 (5))", () => {
     });
 
     expect(document.activeElement).toBe(cell);
+  });
+
+  // Reason: round 2 blocking — the two paths that remove the panel without
+  // going through any close handler. Both were live regressions of the same
+  // shape round 1 fixed for the handler paths: the panel vanishes and focus is
+  // left on `<body>`, so the next arrow key goes nowhere. They are here rather
+  // than in `useQuickLookFocus.test.tsx` because what they pin is the real
+  // wiring — a commit and a refetch, neither of which knows Quick Look exists.
+  describe("paths that remove the panel without a close handler", () => {
+    /** Grid-cell edit on the selected row, so a commit has something to write. */
+    async function makePendingEdit() {
+      const nameCell = document.querySelector<HTMLElement>(
+        '[data-grid-row="0"][data-grid-col="1"]',
+      );
+      if (!nameCell) throw new Error("no name cell");
+      await act(async () => {
+        fireEvent.dblClick(nameCell);
+      });
+      const input = nameCell.querySelector("input");
+      if (!input) throw new Error("cell did not enter edit mode");
+      await act(async () => {
+        fireEvent.change(input, { target: { value: "Bob" } });
+        fireEvent.keyDown(input, { key: "Enter" });
+      });
+    }
+
+    // Reason: commit success runs `clearPendingAfterCommit` →`clearSelection`,
+    // and the panel's mount gate is `selectedRowIds.size > 0`. No close handler
+    // is involved, so before round 2's fix the restore simply never ran.
+    it("a successful commit empties the selection and the panel it unmounts hands focus back", async () => {
+      renderDataGrid();
+      await screen.findByText("3 rows");
+      await selectRowAndOpenPanel(0);
+      await makePendingEdit();
+
+      await act(async () => {
+        fireEvent.keyDown(window, { key: "F6" });
+      });
+      expect(document.activeElement).toBe(panel());
+
+      // Same event `Cmd/Ctrl+S` dispatches from `App` — the panel region is not
+      // an editable target, so the global commit shortcut fires from there.
+      await act(async () => {
+        window.dispatchEvent(new Event("commit-changes"));
+      });
+      const executeBtn = await screen.findByLabelText("Execute SQL");
+      await waitFor(() => {
+        expect(executeBtn).not.toBeDisabled();
+      });
+      await act(async () => {
+        fireEvent.click(executeBtn);
+      });
+
+      expect(
+        screen.queryByRole("region", { name: "Row Details" }),
+      ).not.toBeInTheDocument();
+      expect(document.activeElement).toBe(rovingAnchor());
+    });
+
+    // Reason: a refetch that returns fewer rows than the selected index makes
+    // `RdbQuickLookBody` render `null` while `showQuickLook` is still true —
+    // the panel disappears with no state change to hang a restore on. The
+    // reviewer's page-1 page-size shrink is the same class; a refresh is the
+    // instance that keeps focus inside the panel while the rows change.
+    it("a refetch that drops the selected row out of range hands focus back", async () => {
+      renderDataGrid();
+      await screen.findByText("3 rows");
+      await selectRowAndOpenPanel(2);
+
+      await act(async () => {
+        fireEvent.keyDown(window, { key: "F6" });
+      });
+      expect(document.activeElement).toBe(panel());
+
+      mockQueryTableData.mockResolvedValue({
+        ...MOCK_DATA,
+        rows: MOCK_DATA.rows.slice(0, 1),
+        total_count: 1,
+      });
+      await act(async () => {
+        window.dispatchEvent(new Event("refresh-data"));
+      });
+
+      expect(
+        screen.queryByRole("region", { name: "Row Details" }),
+      ).not.toBeInTheDocument();
+      expect(document.activeElement).toBe(rovingAnchor());
+    });
   });
 
   // Reason: F6 is a new global binding — it must stay inert when the panel is

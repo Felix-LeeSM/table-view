@@ -27,19 +27,35 @@
 // virtualize (the document grid) pass nothing and get the live-lookup fallback,
 // which is also what keeps the anchor correct when the user moves the selection
 // while the panel is open.
+//
+// The second trap is WHERE the restore hangs. Round 2 wired it into each close
+// handler and wrote that every close path went through them; two did not, and
+// neither was a handler at all — a successful commit empties the selection the
+// panel's mount gate reads, and a refetch that returns fewer rows than the
+// selected index makes the body render `null`. Enumerating close handlers can
+// only ever be as complete as the last audit, so the restore hangs off the one
+// event all of them share instead: the panel node leaving the DOM, which React
+// reports by calling `panelRef` with `null`. Nothing a call site does (or
+// forgets to do) can bypass it — there is no longer a `focusGridCell` to
+// forget. The condition is on focus, not on the reason: if the panel held focus
+// when it went away, focus goes back to the grid; otherwise it is left alone.
+//
+// Two things this still does NOT promise. Escape and `F6` move focus without
+// removing the panel, so they stay explicit below. And when the whole grid goes
+// away with the panel (tab close), there is no anchor cell left to hand focus
+// to — `focusAnchorCell` finds nothing and gives up after its bounded retries.
 
 import { useCallback, useEffect, useRef } from "react";
 
 export interface QuickLookFocus {
   /** Goes on the element wrapping BOTH the grid and the panel. */
   rootRef: React.RefObject<HTMLDivElement | null>;
-  /** Goes on `QuickLookPanel`'s `panelRef` prop. */
-  panelRef: React.RefObject<HTMLDivElement | null>;
   /**
-   * Moves focus to the grid's roving anchor cell. Call it from every path that
-   * closes the panel so focus never falls back to `<body>`.
+   * Goes on `QuickLookPanel`'s `panelRef` prop. A callback ref rather than an
+   * object ref on purpose — see the note above on why the restore hangs off the
+   * panel node going away instead of off each close handler.
    */
-  focusGridCell: () => void;
+  panelRef: React.RefCallback<HTMLDivElement>;
 }
 
 /** Is this event target a text field that owns its own Escape handling? */
@@ -62,7 +78,7 @@ export function useQuickLookFocus(
   focusAnchorRef?: React.RefObject<(() => void) | null>,
 ): QuickLookFocus {
   const rootRef = useRef<HTMLDivElement>(null);
-  const panelRef = useRef<HTMLDivElement>(null);
+  const panelNodeRef = useRef<HTMLDivElement | null>(null);
 
   const focusGridCell = useCallback(() => {
     const viaGrid = focusAnchorRef?.current;
@@ -75,10 +91,54 @@ export function useQuickLookFocus(
       ?.focus();
   }, [focusAnchorRef]);
 
+  const panelWentAwayRef = useRef(false);
+
+  const panelRef = useCallback<React.RefCallback<HTMLDivElement>>((node) => {
+    const previous = panelNodeRef.current;
+    panelNodeRef.current = node;
+    if (previous !== null && node === null) panelWentAwayRef.current = true;
+    // `useCallback([])` only avoids the detach/re-attach churn React performs
+    // on a callback ref whose identity changed. It is not what keeps that churn
+    // from reading as "the panel went away" — the effect's focus condition is
+    // (measured: rebuilding this per render leaves every test in this suite
+    // green).
+  }, []);
+
+  // Runs on every commit, and deliberately not inside the ref callback: the
+  // detach happens mid-mutation, before the rest of the commit has landed.
+  // Focusing from there picks a cell React is about to replace and reads a
+  // `focusAnchorRef` the grid republishes in its own effect — measured landing
+  // straight back on `<body>` in both of the paths this fixes. By here the DOM
+  // is final and the child grid's effect has already run.
+  useEffect(() => {
+    if (!panelWentAwayRef.current) return;
+    // A modal owns focus while it is open (same guard as F6/Escape below), so
+    // where focus belongs is not settled yet — keep the flag and re-check on
+    // the commit that closes it. Commit-success is exactly this shape: the
+    // panel and the SQL preview go in separate commits, and the dialog's own
+    // restore then aims at the element it captured before it opened, which was
+    // inside the panel and no longer exists.
+    if (
+      document.querySelector('[role="dialog"], [role="alertdialog"]') !== null
+    ) {
+      return;
+    }
+    panelWentAwayRef.current = false;
+    // The condition is on where focus ENDED UP, not on why the panel went away
+    // or on where focus was before. Anything still holding focus keeps it: the
+    // FilterBar the user is typing in, a toolbar button, another cell. This
+    // restores, it never yanks. Only focus that ended up nowhere is rescued,
+    // and "nowhere" is the whole bug — the panel took the focused element down
+    // with it.
+    const active = document.activeElement;
+    if (active !== null && active !== document.body) return;
+    focusGridCell();
+  });
+
   useEffect(() => {
     if (!open) return;
     const handler = (e: KeyboardEvent) => {
-      const panel = panelRef.current;
+      const panel = panelNodeRef.current;
       if (!panel) return;
       // A modal owns focus while it is open — and one of them, the cell
       // `BlobViewerDialog`, mounts INSIDE the panel. Same guard the grid's
@@ -116,5 +176,5 @@ export function useQuickLookFocus(
     return () => window.removeEventListener("keydown", handler);
   }, [open, focusGridCell]);
 
-  return { rootRef, panelRef, focusGridCell };
+  return { rootRef, panelRef };
 }

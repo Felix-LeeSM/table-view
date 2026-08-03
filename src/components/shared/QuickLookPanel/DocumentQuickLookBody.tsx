@@ -23,7 +23,7 @@
 
 import type { DataGridEditState } from "@components/datagrid/useDataGridEdit";
 import BsonTreeViewer from "@components/shared/BsonTreeViewer";
-import type { KeyboardEvent, MouseEvent, RefObject } from "react";
+import type { KeyboardEvent, MouseEvent, Ref } from "react";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import type { TableData } from "@/types/schema";
@@ -45,7 +45,7 @@ export interface DocumentQuickLookBodyProps {
   data?: TableData;
   editing: boolean;
   onToggleEdit: () => void;
-  panelRef?: RefObject<HTMLDivElement | null>;
+  panelRef?: Ref<HTMLDivElement>;
 }
 
 export default function DocumentQuickLookBody({

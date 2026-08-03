@@ -1,5 +1,4 @@
-// Issue #1734 (5), round 2 — the seam between Quick Look and the grid's own
-// focuser.
+// Issue #1734 (5) — the seam between Quick Look and the grid's own focuser.
 //
 // Round 1 restored focus with a bare
 // `querySelector('[data-grid-row][tabindex="0"]')?.focus()`. That is a silent
@@ -10,29 +9,34 @@
 // retries). These tests pin that delegation from the panel's side; the
 // scroll-in + retry itself is `useGridRoving.test.tsx:67`, and the grid's end
 // of the wire is `DataGridTable.roving.test.tsx`.
+//
+// Round 2 moved WHERE the restore hangs, and that is what the harness below
+// encodes: nothing calls a restore function — the panel is simply unmounted,
+// the same way a commit or a shrinking refetch removes it. The two real paths
+// are in `DataGrid.quicklook-focus.test.tsx`.
 
-import { act, fireEvent, render } from "@testing-library/react";
-import { useRef } from "react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { useRef, useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { useQuickLookFocus } from "./useQuickLookFocus";
 
 /**
  * Grid + panel under one root, exactly as `DataGrid` mounts them. `hasAnchor`
  * false renders the grid WITHOUT its anchor cell — what a virtualized-out row
- * looks like to the DOM.
+ * looks like to the DOM. "remove panel" unmounts the panel and nothing else:
+ * no close handler, no restore call.
  */
 function Harness({
-  open = true,
   hasAnchor = true,
   gridFocuser,
 }: {
-  open?: boolean;
   hasAnchor?: boolean;
   gridFocuser?: () => void;
 }) {
+  const [mounted, setMounted] = useState(true);
   const focusAnchorRef = useRef<(() => void) | null>(gridFocuser ?? null);
-  const { rootRef, panelRef, focusGridCell } = useQuickLookFocus(
-    open,
+  const { rootRef, panelRef } = useQuickLookFocus(
+    mounted,
     gridFocuser ? focusAnchorRef : undefined,
   );
   return (
@@ -42,25 +46,38 @@ function Harness({
           cell
         </div>
       )}
-      {open && (
+      {mounted && (
         <div
           ref={panelRef}
           tabIndex={-1}
           role="region"
           aria-label="Row Details"
         >
-          panel
+          <button type="button">in panel</button>
         </div>
       )}
-      <button type="button" onClick={focusGridCell}>
-        close
+      <button type="button" onClick={() => setMounted(false)}>
+        remove panel
       </button>
+      {/* Outlives the panel — stands in for the FilterBar / a toolbar button. */}
+      <button type="button">outside</button>
     </div>
   );
 }
 
-const panel = () => document.querySelector<HTMLElement>('[role="region"]')!;
-const closeButton = () => document.querySelector<HTMLElement>("button")!;
+const panel = () => screen.getByRole("region", { name: "Row Details" });
+const anchor = () =>
+  document.querySelector<HTMLElement>('[data-grid-row][tabindex="0"]');
+const click = (name: string) => {
+  act(() => {
+    screen.getByRole("button", { name }).click();
+  });
+};
+const focusPanel = () => {
+  act(() => {
+    panel().focus();
+  });
+};
 
 describe("useQuickLookFocus", () => {
   // Reason: THE round-1 bug. With the anchor row unmounted the DOM lookup finds
@@ -68,10 +85,9 @@ describe("useQuickLookFocus", () => {
   it("restores focus through the grid's focuser when the anchor row is not in the DOM", () => {
     const gridFocuser = vi.fn();
     render(<Harness hasAnchor={false} gridFocuser={gridFocuser} />);
+    focusPanel();
 
-    act(() => {
-      closeButton().click();
-    });
+    click("remove panel");
 
     expect(gridFocuser).toHaveBeenCalledTimes(1);
   });
@@ -82,29 +98,61 @@ describe("useQuickLookFocus", () => {
   it("prefers the grid's focuser over the DOM anchor lookup", () => {
     const gridFocuser = vi.fn();
     render(<Harness gridFocuser={gridFocuser} />);
-    const anchor = document.querySelector<HTMLElement>("[data-grid-row]")!;
+    const cell = anchor();
+    focusPanel();
 
-    act(() => {
-      closeButton().click();
-    });
+    click("remove panel");
 
     expect(gridFocuser).toHaveBeenCalledTimes(1);
     // The fallback did NOT also run — the grid owns the restore.
-    expect(document.activeElement).not.toBe(anchor);
+    expect(document.activeElement).not.toBe(cell);
   });
 
   // Reason: the document grid never virtualizes and publishes no focuser, so
   // the fallback has to keep working on its own.
   it("falls back to the live roving anchor when no focuser is published", () => {
     render(<Harness />);
+    focusPanel();
 
+    click("remove panel");
+
+    expect(document.activeElement).toBe(anchor());
+  });
+
+  // Reason: round 2 blocking — the restore has to survive paths that remove the
+  // panel without calling anything. Nothing here calls a restore; the panel is
+  // taken out of the tree and the hook sees only its ref detaching, which is
+  // what a successful commit and a shrinking refetch look like from here.
+  it("restores focus from a nested control with no close handler in the path", () => {
+    render(<Harness />);
+    const inside = screen.getByRole("button", { name: "in panel" });
     act(() => {
-      closeButton().click();
+      inside.focus();
     });
 
-    expect(document.activeElement).toBe(
-      document.querySelector('[data-grid-row][tabindex="0"]'),
-    );
+    click("remove panel");
+
+    expect(document.activeElement).toBe(anchor());
+  });
+
+  // Reason: the counterweight. Hanging the restore on unmount would be a focus
+  // thief if it fired unconditionally — the panel can disappear while the user
+  // is typing in the FilterBar, and yanking them into the grid mid-keystroke is
+  // worse than the bug being fixed. This is also the guard that keeps a
+  // re-render of the panel (React re-attaching the callback ref) from reading
+  // as "the panel went away".
+  it("leaves focus alone when something else still holds it", () => {
+    const gridFocuser = vi.fn();
+    render(<Harness gridFocuser={gridFocuser} />);
+    const outside = screen.getByRole("button", { name: "outside" });
+    act(() => {
+      outside.focus();
+    });
+
+    click("remove panel");
+
+    expect(gridFocuser).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(outside);
   });
 
   // Reason: `BlobViewerDialog` mounts inside the panel, so without this guard
