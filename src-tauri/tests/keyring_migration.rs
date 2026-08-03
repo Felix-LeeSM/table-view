@@ -494,8 +494,8 @@ fn issue_1814_unreadable_leftover_key_file_does_not_break_boot() {
 /// 열려 있다 — `validate_ciphertexts_decrypt` 가 `wallet_password` 도 읽게 한 것과
 /// wallet 뿐인 프로필이 같은 보존 경로로 빠지는 회귀는 #2124 가
 /// `src-tauri/table-view-core/src/storage/key_migration.rs` 인라인 테스트로 잠갔다.
-/// 같은 유형의 다른 절반인 Path A/C 의 orphan 가드 `data_has_password_ciphertext`
-/// 는 #2111 이 먼저 같은 집합으로 넓혔다.
+/// 같은 유형의 다른 절반인 orphan 가드 `data_has_password_ciphertext` 는 #2111 이
+/// 먼저 같은 집합으로 넓혔다.
 #[test]
 fn path_b_ciphertext_probe_failure_preserves_the_key_and_leaves_a_sentinel() {
     let dir = TempDir::new().unwrap();
