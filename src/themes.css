@@ -3610,6 +3610,568 @@
   --tv-status-idle: #64748b;
 }
 
+/* === AuthKit — frosted glass violet === */
+[data-theme="authkit"][data-mode="light"] {
+  --tv-background: #e9edf6;
+  --tv-foreground: #05060f;
+  --tv-card: #f5f7fb;
+  --tv-card-foreground: #05060f;
+  --tv-popover: #fbfcfd;
+  --tv-popover-foreground: #05060f;
+  --tv-primary: #663af3;
+  --tv-primary-foreground: #ffffff;
+  --tv-secondary: #dde1ea;
+  --tv-secondary-foreground: #05060f;
+  --tv-muted: #dcdfe8;
+  --tv-muted-foreground: #4b5468;
+  --tv-accent: #d9d7f6;
+  --tv-accent-foreground: #05060f;
+  --tv-border: #cdd1da;
+  --tv-input: #cdd1da;
+  --tv-ring: #663af3;
+  --tv-primary-tint: 102 58 243;
+  --tv-status-connected: #1c7b6e;
+  --tv-status-connecting: #0568bd;
+  --tv-status-error: #c94d30;
+  --tv-status-idle: #4b5468;
+  --tv-radius: 0.375rem;
+  --tv-font-sans:
+    "Untitled Sans", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Roboto, "Helvetica Neue", Arial, "Apple SD Gothic Neo", "Malgun Gothic",
+    sans-serif;
+  --tv-font-mono:
+    "dotDigital", "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono",
+    Menlo, Consolas, "Liberation Mono", monospace;
+}
+[data-theme="authkit"][data-mode="dark"] {
+  --tv-background: #05060f;
+  --tv-foreground: #d1e4fa;
+  --tv-card: #0b0d16;
+  --tv-card-foreground: #d1e4fa;
+  --tv-popover: #05060f;
+  --tv-popover-foreground: #d1e4fa;
+  --tv-primary: #663af3;
+  --tv-primary-foreground: #ffffff;
+  --tv-secondary: #10121d;
+  --tv-secondary-foreground: #ffffff;
+  --tv-muted: #1d1f2a;
+  --tv-muted-foreground: #9da7ba;
+  --tv-accent: #150e34;
+  --tv-accent-foreground: #d1e4fa;
+  --tv-border: #1b1f2b;
+  --tv-input: #1b1f2b;
+  --tv-ring: #663af3;
+  --tv-primary-tint: 102 58 243;
+  --tv-status-connected: #269684;
+  --tv-status-connecting: #027dea;
+  --tv-status-error: #e46d4c;
+  --tv-status-idle: #9da7ba;
+  --tv-radius: 0.375rem;
+  --tv-font-sans:
+    "Untitled Sans", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Roboto, "Helvetica Neue", Arial, "Apple SD Gothic Neo", "Malgun Gothic",
+    sans-serif;
+  --tv-font-mono:
+    "dotDigital", "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono",
+    Menlo, Consolas, "Liberation Mono", monospace;
+}
+
+/* === Lattice — botanical field notes === */
+[data-theme="lattice"][data-mode="light"] {
+  --tv-background: #f7f6f2;
+  --tv-foreground: #001f1f;
+  --tv-card: #ffffff;
+  --tv-card-foreground: #001f1f;
+  --tv-popover: #ffffff;
+  --tv-popover-foreground: #001f1f;
+  --tv-primary: #001f1f;
+  --tv-primary-foreground: #ffffff;
+  --tv-secondary: #e5e6e2;
+  --tv-secondary-foreground: #5c7070;
+  --tv-muted: #dbdcd8;
+  --tv-muted-foreground: #6a7878;
+  --tv-accent: #e0e4e4;
+  --tv-accent-foreground: #001f1f;
+  --tv-border: #455252;
+  --tv-input: #455252;
+  --tv-ring: #001f1f;
+  --tv-primary-tint: 0 31 31;
+  --tv-status-connected: #cdface;
+  --tv-status-connecting: #fff3c2;
+  --tv-status-error: #ef4444;
+  --tv-status-idle: #889494;
+  --tv-radius: 0.75rem;
+  --tv-font-sans:
+    "Matter", "DM Sans", -apple-system, BlinkMacSystemFont,
+    "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --tv-font-mono:
+    "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas,
+    "Malgun Gothic", monospace;
+}
+[data-theme="lattice"][data-mode="dark"] {
+  --tv-background: #001f1f;
+  --tv-foreground: #f7f6f2;
+  --tv-card: #0a2626;
+  --tv-card-foreground: #f7f6f2;
+  --tv-popover: #0e2b2b;
+  --tv-popover-foreground: #f7f6f2;
+  --tv-primary: #f7f6f2;
+  --tv-primary-foreground: #001f1f;
+  --tv-secondary: #0d2a2a;
+  --tv-secondary-foreground: #889494;
+  --tv-muted: #0c2828;
+  --tv-muted-foreground: #6a7878;
+  --tv-accent: #123232;
+  --tv-accent-foreground: #f7f6f2;
+  --tv-border: #2f4a48;
+  --tv-input: #2f4a48;
+  --tv-ring: #f7f6f2;
+  --tv-primary-tint: 247 246 242;
+  --tv-status-connected: #71977f;
+  --tv-status-connecting: #8c9479;
+  --tv-status-error: #f87171;
+  --tv-status-idle: #5c7070;
+  --tv-destructive-foreground: #001f1f;
+  --tv-radius: 0.75rem;
+  --tv-font-sans:
+    "Matter", "DM Sans", -apple-system, BlinkMacSystemFont,
+    "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --tv-font-mono:
+    "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas,
+    "Malgun Gothic", monospace;
+}
+
+/* === Visual — warm editorial serif === */
+[data-theme="visual"][data-mode="light"] {
+  --tv-background: #f6f6f4;
+  --tv-foreground: #000000;
+  --tv-card: #ffffff;
+  --tv-card-foreground: #000000;
+  --tv-popover: #ffffff;
+  --tv-popover-foreground: #000000;
+  --tv-primary: #2c2c26;
+  --tv-primary-foreground: #ffffff;
+  --tv-secondary: #e8e7d9;
+  --tv-secondary-foreground: #57584b;
+  --tv-muted: #d0d0c8;
+  --tv-muted-foreground: #6d6e5e;
+  --tv-accent: #e8e7d9;
+  --tv-accent-foreground: #000000;
+  --tv-border: #d0d0c8;
+  --tv-input: #d0d0c8;
+  --tv-ring: #2c2c26;
+  --tv-primary-tint: 44 44 38;
+  --tv-status-connected: #16a34a;
+  --tv-status-connecting: #f59e0b;
+  --tv-status-error: #ef4444;
+  --tv-status-idle: #aaab9c;
+  --tv-radius: 0.1875rem;
+  --tv-font-sans:
+    "IBM Plex Mono", "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo,
+    Consolas, "Liberation Mono", "Apple SD Gothic Neo", "Malgun Gothic",
+    monospace;
+  --tv-font-mono:
+    "IBM Plex Mono", "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo,
+    Consolas, "Liberation Mono", "Apple SD Gothic Neo", "Malgun Gothic",
+    monospace;
+}
+[data-theme="visual"][data-mode="dark"] {
+  --tv-background: #2c2c26;
+  --tv-foreground: #f6f6f4;
+  --tv-card: #2c2c26;
+  --tv-card-foreground: #f6f6f4;
+  --tv-popover: #35352e;
+  --tv-popover-foreground: #f6f6f4;
+  --tv-primary: #f6f6f4;
+  --tv-primary-foreground: #2c2c26;
+  --tv-secondary: #57584b;
+  --tv-secondary-foreground: #e8e7d9;
+  --tv-muted: #3e3e35;
+  --tv-muted-foreground: #979886;
+  --tv-accent: #3e3e35;
+  --tv-accent-foreground: #f6f6f4;
+  --tv-border: #57584b;
+  --tv-input: #57584b;
+  --tv-ring: #f6f6f4;
+  --tv-primary-tint: 246 246 244;
+  --tv-status-connected: #22c55e;
+  --tv-status-connecting: #f59e0b;
+  --tv-status-error: #ef4444;
+  --tv-status-idle: #aaab9c;
+  --tv-radius: 0.1875rem;
+  --tv-font-sans:
+    "IBM Plex Mono", "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo,
+    Consolas, "Liberation Mono", "Apple SD Gothic Neo", "Malgun Gothic",
+    monospace;
+  --tv-font-mono:
+    "IBM Plex Mono", "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo,
+    Consolas, "Liberation Mono", "Apple SD Gothic Neo", "Malgun Gothic",
+    monospace;
+}
+
+/* === Shop — marble pill commerce === */
+[data-theme="shop"][data-mode="light"] {
+  --tv-background: #f2f4f5;
+  --tv-foreground: #000000;
+  --tv-card: #ffffff;
+  --tv-card-foreground: #000000;
+  --tv-popover: #ffffff;
+  --tv-popover-foreground: #000000;
+  --tv-primary: #5433eb;
+  --tv-primary-foreground: #ffffff;
+  --tv-secondary: #f2f4f5;
+  --tv-secondary-foreground: #000000;
+  --tv-muted: #f2f4f5;
+  --tv-muted-foreground: #787574;
+  --tv-accent: #f2f4f5;
+  --tv-accent-foreground: #000000;
+  --tv-border: #ebebeb;
+  --tv-input: #ebebeb;
+  --tv-ring: #5433eb;
+  --tv-primary-tint: 84 51 235;
+  --tv-status-connected: #16a34a;
+  --tv-status-connecting: #f59e0b;
+  --tv-status-error: #ef4444;
+  --tv-status-idle: #cccccc;
+  --tv-radius: 9999px;
+  --tv-font-sans:
+    "GT Standard", "Inter", system-ui, -apple-system, BlinkMacSystemFont,
+    "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+}
+[data-theme="shop"][data-mode="dark"] {
+  --tv-background: #1e1b1a;
+  --tv-foreground: #f1ede9;
+  --tv-card: #332f2d;
+  --tv-card-foreground: #f1ede9;
+  --tv-popover: #3a3532;
+  --tv-popover-foreground: #f1ede9;
+  --tv-primary: #9a8bfb;
+  --tv-primary-foreground: #1c1917;
+  --tv-secondary: #665a54;
+  --tv-secondary-foreground: #f1ede9;
+  --tv-muted: #282422;
+  --tv-muted-foreground: #a89f98;
+  --tv-accent: #2f2b29;
+  --tv-accent-foreground: #f1ede9;
+  --tv-border: #433e3b;
+  --tv-input: #433e3b;
+  --tv-ring: #9a8bfb;
+  --tv-primary-tint: 154 139 251;
+  --tv-status-connected: #22c55e;
+  --tv-status-connecting: #f59e0b;
+  --tv-status-error: #f87171;
+  --tv-status-idle: #8a8179;
+  --tv-radius: 9999px;
+  --tv-font-sans:
+    "GT Standard", "Inter", system-ui, -apple-system, BlinkMacSystemFont,
+    "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+}
+
+/* === 099 SUPPLY — gallery wall neutral === */
+[data-theme="supply"][data-mode="light"] {
+  --tv-background: #ffffff;
+  --tv-foreground: #101010;
+  --tv-card: #ffffff;
+  --tv-card-foreground: #101010;
+  --tv-popover: #222222;
+  --tv-popover-foreground: #ffffff;
+  --tv-primary: #101010;
+  --tv-primary-foreground: #ffffff;
+  --tv-secondary: #ffffff;
+  --tv-secondary-foreground: #101010;
+  --tv-muted: #e0e0e0;
+  --tv-muted-foreground: #555555;
+  --tv-accent: #e0e0e0;
+  --tv-accent-foreground: #101010;
+  --tv-border: #e0e0e0;
+  --tv-input: #c8c8c8;
+  --tv-ring: #101010;
+  --tv-primary-tint: 16 16 16;
+  --tv-status-connected: #101010;
+  --tv-status-connecting: #555555;
+  --tv-status-error: #000000;
+  --tv-status-idle: #c8c8c8;
+  --tv-destructive: #000000;
+}
+[data-theme="supply"][data-mode="dark"] {
+  --tv-background: #101010;
+  --tv-foreground: #ffffff;
+  --tv-card: #101010;
+  --tv-card-foreground: #ffffff;
+  --tv-popover: #222222;
+  --tv-popover-foreground: #ffffff;
+  --tv-primary: #ffffff;
+  --tv-primary-foreground: #101010;
+  --tv-secondary: #101010;
+  --tv-secondary-foreground: #ffffff;
+  --tv-muted: #222222;
+  --tv-muted-foreground: #999999;
+  --tv-accent: #222222;
+  --tv-accent-foreground: #ffffff;
+  --tv-border: #222222;
+  --tv-input: #555555;
+  --tv-ring: #ffffff;
+  --tv-primary-tint: 255 255 255;
+  --tv-status-connected: #ffffff;
+  --tv-status-connecting: #999999;
+  --tv-status-error: #000000;
+  --tv-status-idle: #555555;
+  --tv-destructive: #ffffff;
+  --tv-destructive-foreground: #101010;
+}
+
+/* === Henry — gothic broadside mono === */
+[data-theme="henry"][data-mode="light"] {
+  --tv-background: #fafafa;
+  --tv-foreground: #2a2722;
+  --tv-card: #fafafa;
+  --tv-card-foreground: #2a2722;
+  --tv-popover: #2a2722;
+  --tv-popover-foreground: #fafafa;
+  --tv-primary: #2a2722;
+  --tv-primary-foreground: #fafafa;
+  --tv-secondary: #fafafa;
+  --tv-secondary-foreground: #2a2722;
+  --tv-muted: #fafafa;
+  --tv-muted-foreground: #666666;
+  --tv-accent: #eeeeee;
+  --tv-accent-foreground: #2a2722;
+  --tv-border: #eeeeee;
+  --tv-input: #666666;
+  --tv-ring: #2a2722;
+  --tv-primary-tint: 42 39 34;
+  --tv-status-connected: #2a2722;
+  --tv-status-connecting: #666666;
+  --tv-status-error: #2a2722;
+  --tv-status-idle: #b3b3b3;
+  --tv-destructive: #2a2722;
+  --tv-success: #2a2722;
+  --tv-warning: #2a2722;
+  --tv-highlight: #2a2722;
+  --tv-radius: 12px;
+  --tv-font-sans:
+    "Neue Montreal", Inter, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+}
+[data-theme="henry"][data-mode="dark"] {
+  --tv-background: #2a2722;
+  --tv-foreground: #fafafa;
+  --tv-card: #2a2722;
+  --tv-card-foreground: #fafafa;
+  --tv-popover: #fafafa;
+  --tv-popover-foreground: #2a2722;
+  --tv-primary: #fafafa;
+  --tv-primary-foreground: #2a2722;
+  --tv-secondary: #2a2722;
+  --tv-secondary-foreground: #fafafa;
+  --tv-muted: #2a2722;
+  --tv-muted-foreground: #9f9f9f;
+  --tv-accent: #3e3b36;
+  --tv-accent-foreground: #fafafa;
+  --tv-border: #3e3b36;
+  --tv-input: #9f9f9f;
+  --tv-ring: #fafafa;
+  --tv-primary-tint: 250 250 250;
+  --tv-status-connected: #fafafa;
+  --tv-status-connecting: #b3b3b3;
+  --tv-status-error: #fafafa;
+  --tv-status-idle: #9f9f9f;
+  --tv-destructive: #fafafa;
+  --tv-success: #fafafa;
+  --tv-warning: #fafafa;
+  --tv-highlight: #fafafa;
+  --tv-radius: 12px;
+  --tv-font-sans:
+    "Neue Montreal", Inter, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+}
+
+/* === Ease Health — greenhouse cream === */
+[data-theme="ease"][data-mode="light"] {
+  --tv-background: #fffefc;
+  --tv-foreground: #222222;
+  --tv-card: #e1f4df;
+  --tv-card-foreground: #222222;
+  --tv-popover: #b6ced5;
+  --tv-popover-foreground: #222222;
+  --tv-primary: #0f3e17;
+  --tv-primary-foreground: #fffefc;
+  --tv-secondary: #b1dbb8;
+  --tv-secondary-foreground: #222222;
+  --tv-muted: #efeeeb;
+  --tv-muted-foreground: #54655a;
+  --tv-accent: #cfe7d3;
+  --tv-accent-foreground: #222222;
+  --tv-border: #efeeeb;
+  --tv-input: #dfe6df;
+  --tv-ring: #0f3e17;
+  --tv-primary-tint: 15 62 23;
+  --tv-status-connected: #1f7a34;
+  --tv-status-connecting: #b8790f;
+  --tv-status-error: #ef4444;
+  --tv-status-idle: #5f7267;
+  --tv-radius: 0.875rem;
+  --tv-font-sans:
+    "Suisse Intl", "Inter", -apple-system, BlinkMacSystemFont,
+    "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --tv-font-mono:
+    "IBM Plex Mono", ui-monospace, SFMono-Regular, Consolas, "Liberation Mono",
+    monospace;
+}
+[data-theme="ease"][data-mode="dark"] {
+  --tv-background: #0c2f10;
+  --tv-foreground: #eef6ea;
+  --tv-card: #17381b;
+  --tv-card-foreground: #eef6ea;
+  --tv-popover: #37625d;
+  --tv-popover-foreground: #eef6ea;
+  --tv-primary: #8ee2a0;
+  --tv-primary-foreground: #0c2f10;
+  --tv-secondary: #2b5730;
+  --tv-secondary-foreground: #eef6ea;
+  --tv-muted: #1d251e;
+  --tv-muted-foreground: #9fb3a2;
+  --tv-accent: #1f4924;
+  --tv-accent-foreground: #eef6ea;
+  --tv-border: #2b3b2d;
+  --tv-input: #2b3b2d;
+  --tv-ring: #8ee2a0;
+  --tv-primary-tint: 142 226 160;
+  --tv-status-connected: #5fd67e;
+  --tv-status-connecting: #e0a940;
+  --tv-status-error: #f87171;
+  --tv-status-idle: #7c9382;
+  --tv-radius: 0.875rem;
+  --tv-font-sans:
+    "Suisse Intl", "Inter", -apple-system, BlinkMacSystemFont,
+    "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --tv-font-mono:
+    "IBM Plex Mono", ui-monospace, SFMono-Regular, Consolas, "Liberation Mono",
+    monospace;
+}
+
+/* === Karl — sunlit popup diorama === */
+[data-theme="karl"][data-mode="light"] {
+  --tv-background: #ffffff;
+  --tv-foreground: #333333;
+  --tv-card: #ffffff;
+  --tv-card-foreground: #333333;
+  --tv-popover: #ffffff;
+  --tv-popover-foreground: #333333;
+  --tv-primary: #007fff;
+  --tv-primary-foreground: #ffffff;
+  --tv-secondary: #ffffff;
+  --tv-secondary-foreground: #333333;
+  --tv-muted: #f4f4f4;
+  --tv-muted-foreground: #737373;
+  --tv-accent: #e0f0ff;
+  --tv-accent-foreground: #333333;
+  --tv-border: #333333;
+  --tv-input: #333333;
+  --tv-ring: #007fff;
+  --tv-primary-tint: 0 127 255;
+  --tv-status-connected: #16a34a;
+  --tv-status-connecting: #f59e0b;
+  --tv-status-error: #ef4444;
+  --tv-status-idle: #94a3b8;
+  --tv-radius: 0px;
+  --tv-font-sans:
+    Arial, Helvetica, Inter, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Roboto, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --tv-font-mono:
+    ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+}
+[data-theme="karl"][data-mode="dark"] {
+  --tv-background: #333333;
+  --tv-foreground: #ffffff;
+  --tv-card: #333333;
+  --tv-card-foreground: #ffffff;
+  --tv-popover: #333333;
+  --tv-popover-foreground: #ffffff;
+  --tv-primary: #ffe600;
+  --tv-primary-foreground: #333333;
+  --tv-secondary: #333333;
+  --tv-secondary-foreground: #ffffff;
+  --tv-muted: #454545;
+  --tv-muted-foreground: #a3a3a3;
+  --tv-accent: #4a4020;
+  --tv-accent-foreground: #ffffff;
+  --tv-border: #ffffff;
+  --tv-input: #ffffff;
+  --tv-ring: #ffe600;
+  --tv-primary-tint: 255 230 0;
+  --tv-status-connected: #22c55e;
+  --tv-status-connecting: #f59e0b;
+  --tv-status-error: #ef4444;
+  --tv-status-idle: #64748b;
+  --tv-radius: 0px;
+  --tv-font-sans:
+    Arial, Helvetica, Inter, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Roboto, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --tv-font-mono:
+    ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+}
+
+/* === Linear Console — dark observatory === */
+[data-theme="console"][data-mode="light"] {
+  --tv-background: #f7f8f8;
+  --tv-foreground: #08090a;
+  --tv-card: #ffffff;
+  --tv-card-foreground: #08090a;
+  --tv-popover: #ffffff;
+  --tv-popover-foreground: #08090a;
+  --tv-primary: #08090a;
+  --tv-primary-foreground: #f7f8f8;
+  --tv-secondary: #ffffff;
+  --tv-secondary-foreground: #494b52;
+  --tv-muted: #eef0f2;
+  --tv-muted-foreground: #62666d;
+  --tv-accent: #e7e9ec;
+  --tv-accent-foreground: #08090a;
+  --tv-border: #e4e5e9;
+  --tv-input: #e4e5e9;
+  --tv-ring: #d0d6e0;
+  --tv-primary-tint: 8 9 10;
+  --tv-status-connected: #16a34a;
+  --tv-status-connecting: #f59e0b;
+  --tv-status-error: #ef4444;
+  --tv-status-idle: #8a8f98;
+  --tv-font-sans:
+    "Inter Variable", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Roboto, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --tv-font-mono:
+    "Berkeley Mono", "JetBrains Mono", "IBM Plex Mono", ui-monospace,
+    SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+}
+[data-theme="console"][data-mode="dark"] {
+  --tv-background: #08090a;
+  --tv-foreground: #f7f8f8;
+  --tv-card: #141516;
+  --tv-card-foreground: #f7f8f8;
+  --tv-popover: #1c1c1f;
+  --tv-popover-foreground: #f7f8f8;
+  --tv-primary: #f7f8f8;
+  --tv-primary-foreground: #08090a;
+  --tv-secondary: #141516;
+  --tv-secondary-foreground: #d0d6e0;
+  --tv-muted: #1c1c1f;
+  --tv-muted-foreground: #8a8f98;
+  --tv-accent: #23252a;
+  --tv-accent-foreground: #e4e5e9;
+  --tv-border: #34343a;
+  --tv-input: #34343a;
+  --tv-ring: #3e3e44;
+  --tv-primary-tint: 247 248 248;
+  --tv-status-connected: #22c55e;
+  --tv-status-connecting: #f59e0b;
+  --tv-status-error: #ef4444;
+  --tv-status-idle: #62666d;
+  --tv-font-sans:
+    "Inter Variable", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Roboto, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --tv-font-mono:
+    "Berkeley Mono", "JetBrains Mono", "IBM Plex Mono", ui-monospace,
+    SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+}
+
 /* ============================================================
  * Common tokens — invariant across all 72 themes.
  * Defined on :root so every [data-theme] inherits them; dark-mode
@@ -5970,6 +6532,276 @@
   --tv-syntax-number: #fdba74;
   --tv-syntax-atom: #f9a8d4;
   --tv-syntax-comment: #64748b;
+  --tv-syntax-error: #f87171;
+}
+
+/* === authkit === */
+[data-theme="authkit"][data-mode="light"] {
+  --tv-syntax-keyword: #7c3aed;
+  --tv-syntax-operator: #475569;
+  --tv-syntax-punct: #64748b;
+  --tv-syntax-type: #2563eb;
+  --tv-syntax-builtin: #0a7a95;
+  --tv-syntax-function: #0a7a95;
+  --tv-syntax-property: #0f766e;
+  --tv-syntax-string: #15803d;
+  --tv-syntax-number: #c2410c;
+  --tv-syntax-atom: #be185d;
+  --tv-syntax-comment: #64748b;
+  --tv-syntax-error: #dc2626;
+}
+[data-theme="authkit"][data-mode="dark"] {
+  --tv-syntax-keyword: #c4b5fd;
+  --tv-syntax-operator: #cbd5e1;
+  --tv-syntax-punct: #94a3b8;
+  --tv-syntax-type: #93c5fd;
+  --tv-syntax-builtin: #67e8f9;
+  --tv-syntax-function: #67e8f9;
+  --tv-syntax-property: #5eead4;
+  --tv-syntax-string: #86efac;
+  --tv-syntax-number: #fdba74;
+  --tv-syntax-atom: #f9a8d4;
+  --tv-syntax-comment: #64748b;
+  --tv-syntax-error: #f87171;
+}
+
+/* === lattice === */
+[data-theme="lattice"][data-mode="light"] {
+  --tv-syntax-keyword: #652ea3;
+  --tv-syntax-operator: #455252;
+  --tv-syntax-punct: #6a7878;
+  --tv-syntax-type: #a36a14;
+  --tv-syntax-builtin: #4c7777;
+  --tv-syntax-function: #7a2251;
+  --tv-syntax-property: #2a4e1c;
+  --tv-syntax-string: #515c0b;
+  --tv-syntax-number: #047857;
+  --tv-syntax-atom: #0369a1;
+  --tv-syntax-comment: #889494;
+  --tv-syntax-error: #ef4444;
+}
+[data-theme="lattice"][data-mode="dark"] {
+  --tv-syntax-keyword: #baa1d6;
+  --tv-syntax-operator: #889494;
+  --tv-syntax-punct: #6a7878;
+  --tv-syntax-type: #d6bc95;
+  --tv-syntax-builtin: #8ca8a8;
+  --tv-syntax-function: #c39cb1;
+  --tv-syntax-property: #9faf99;
+  --tv-syntax-string: #b1b691;
+  --tv-syntax-number: #6ee7b7;
+  --tv-syntax-atom: #7dd3fc;
+  --tv-syntax-comment: #5c7070;
+  --tv-syntax-error: #f87171;
+}
+
+/* === visual === */
+[data-theme="visual"][data-mode="light"] {
+  --tv-syntax-keyword: #86741f;
+  --tv-syntax-operator: #777920;
+  --tv-syntax-punct: #73794a;
+  --tv-syntax-type: #588037;
+  --tv-syntax-builtin: #867342;
+  --tv-syntax-function: #7c773a;
+  --tv-syntax-property: #697c29;
+  --tv-syntax-string: #5a8029;
+  --tv-syntax-number: #976d26;
+  --tv-syntax-atom: #458326;
+  --tv-syntax-comment: #6c7a4e;
+  --tv-syntax-error: #ba592f;
+}
+[data-theme="visual"][data-mode="dark"] {
+  --tv-syntax-keyword: #a99328;
+  --tv-syntax-operator: #969929;
+  --tv-syntax-punct: #91995d;
+  --tv-syntax-type: #6fa245;
+  --tv-syntax-builtin: #a89253;
+  --tv-syntax-function: #9c9749;
+  --tv-syntax-property: #859e34;
+  --tv-syntax-string: #72a233;
+  --tv-syntax-number: #bf8a30;
+  --tv-syntax-atom: #57a630;
+  --tv-syntax-comment: #889b63;
+  --tv-syntax-error: #d57d57;
+}
+
+/* === shop === */
+[data-theme="shop"][data-mode="light"] {
+  --tv-syntax-keyword: #5b4b9e;
+  --tv-syntax-operator: #55524d;
+  --tv-syntax-punct: #706c66;
+  --tv-syntax-type: #3f6076;
+  --tv-syntax-builtin: #3f7a6e;
+  --tv-syntax-function: #8a6a3f;
+  --tv-syntax-property: #6b6f3f;
+  --tv-syntax-string: #4f7a52;
+  --tv-syntax-number: #a15c3f;
+  --tv-syntax-atom: #96556f;
+  --tv-syntax-comment: #7d7a73;
+  --tv-syntax-error: #b3453f;
+}
+[data-theme="shop"][data-mode="dark"] {
+  --tv-syntax-keyword: #b3a4e8;
+  --tv-syntax-operator: #cbc6bd;
+  --tv-syntax-punct: #a39d93;
+  --tv-syntax-type: #9dc3d9;
+  --tv-syntax-builtin: #8fd9c4;
+  --tv-syntax-function: #d9b581;
+  --tv-syntax-property: #c9cd8f;
+  --tv-syntax-string: #a3d9a8;
+  --tv-syntax-number: #e0a183;
+  --tv-syntax-atom: #d99cb3;
+  --tv-syntax-comment: #a39d93;
+  --tv-syntax-error: #e0857a;
+}
+
+/* === supply === */
+[data-theme="supply"][data-mode="light"] {
+  --tv-syntax-keyword: #101010;
+  --tv-syntax-operator: #999999;
+  --tv-syntax-punct: #c8c8c8;
+  --tv-syntax-type: #222222;
+  --tv-syntax-builtin: #222222;
+  --tv-syntax-function: #101010;
+  --tv-syntax-property: #555555;
+  --tv-syntax-string: #555555;
+  --tv-syntax-number: #222222;
+  --tv-syntax-atom: #555555;
+  --tv-syntax-comment: #999999;
+  --tv-syntax-error: #000000;
+}
+[data-theme="supply"][data-mode="dark"] {
+  --tv-syntax-keyword: #ffffff;
+  --tv-syntax-operator: #555555;
+  --tv-syntax-punct: #555555;
+  --tv-syntax-type: #c8c8c8;
+  --tv-syntax-builtin: #c8c8c8;
+  --tv-syntax-function: #ffffff;
+  --tv-syntax-property: #999999;
+  --tv-syntax-string: #999999;
+  --tv-syntax-number: #c8c8c8;
+  --tv-syntax-atom: #999999;
+  --tv-syntax-comment: #555555;
+  --tv-syntax-error: #ffffff;
+}
+
+/* === henry === */
+[data-theme="henry"][data-mode="light"] {
+  --tv-syntax-keyword: #2a2722;
+  --tv-syntax-operator: #666666;
+  --tv-syntax-punct: #666666;
+  --tv-syntax-type: #2a2722;
+  --tv-syntax-builtin: #3e3b36;
+  --tv-syntax-function: #3e3b36;
+  --tv-syntax-property: #3e3b36;
+  --tv-syntax-string: #3e3b36;
+  --tv-syntax-number: #666666;
+  --tv-syntax-atom: #2a2722;
+  --tv-syntax-comment: #666666;
+  --tv-syntax-error: #2a2722;
+}
+[data-theme="henry"][data-mode="dark"] {
+  --tv-syntax-keyword: #fafafa;
+  --tv-syntax-operator: #9f9f9f;
+  --tv-syntax-punct: #9f9f9f;
+  --tv-syntax-type: #fafafa;
+  --tv-syntax-builtin: #b3b3b3;
+  --tv-syntax-function: #b3b3b3;
+  --tv-syntax-property: #b3b3b3;
+  --tv-syntax-string: #b3b3b3;
+  --tv-syntax-number: #9f9f9f;
+  --tv-syntax-atom: #fafafa;
+  --tv-syntax-comment: #9f9f9f;
+  --tv-syntax-error: #fafafa;
+}
+
+/* === ease === */
+[data-theme="ease"][data-mode="light"] {
+  --tv-syntax-keyword: #0f3e17;
+  --tv-syntax-operator: #5c5115;
+  --tv-syntax-punct: #4a564f;
+  --tv-syntax-type: #0d6459;
+  --tv-syntax-builtin: #6d3564;
+  --tv-syntax-function: #256b32;
+  --tv-syntax-property: #78681f;
+  --tv-syntax-string: #96375a;
+  --tv-syntax-number: #8a5a12;
+  --tv-syntax-atom: #227b6d;
+  --tv-syntax-comment: #5f6d63;
+  --tv-syntax-error: #b3261e;
+}
+[data-theme="ease"][data-mode="dark"] {
+  --tv-syntax-keyword: #8ee2a0;
+  --tv-syntax-operator: #e0c565;
+  --tv-syntax-punct: #9fb3a2;
+  --tv-syntax-type: #6fd1c4;
+  --tv-syntax-builtin: #e0a0d0;
+  --tv-syntax-function: #a8e08a;
+  --tv-syntax-property: #d9c877;
+  --tv-syntax-string: #f0a8c0;
+  --tv-syntax-number: #e8b978;
+  --tv-syntax-atom: #7fd6c8;
+  --tv-syntax-comment: #8aa090;
+  --tv-syntax-error: #f87171;
+}
+
+/* === karl === */
+[data-theme="karl"][data-mode="light"] {
+  --tv-syntax-keyword: #0057b3;
+  --tv-syntax-operator: #525252;
+  --tv-syntax-punct: #737373;
+  --tv-syntax-type: #0d7490;
+  --tv-syntax-builtin: #0369a1;
+  --tv-syntax-function: #0369a1;
+  --tv-syntax-property: #0f766e;
+  --tv-syntax-string: #15803d;
+  --tv-syntax-number: #c2410c;
+  --tv-syntax-atom: #9f1239;
+  --tv-syntax-comment: #6b7280;
+  --tv-syntax-error: #dc2626;
+}
+[data-theme="karl"][data-mode="dark"] {
+  --tv-syntax-keyword: #6cb6ff;
+  --tv-syntax-operator: #d4d4d4;
+  --tv-syntax-punct: #a3a3a3;
+  --tv-syntax-type: #5fd0e8;
+  --tv-syntax-builtin: #7dd3fc;
+  --tv-syntax-function: #7dd3fc;
+  --tv-syntax-property: #5eead4;
+  --tv-syntax-string: #4ade80;
+  --tv-syntax-number: #fb923c;
+  --tv-syntax-atom: #fb7185;
+  --tv-syntax-comment: #9ca3af;
+  --tv-syntax-error: #f87171;
+}
+
+/* === console === */
+[data-theme="console"][data-mode="light"] {
+  --tv-syntax-keyword: #6b5ca3;
+  --tv-syntax-operator: #52565e;
+  --tv-syntax-punct: #797d84;
+  --tv-syntax-type: #3d6f96;
+  --tv-syntax-builtin: #2f7e83;
+  --tv-syntax-function: #2f7e83;
+  --tv-syntax-property: #3f7a5f;
+  --tv-syntax-string: #4d7a2e;
+  --tv-syntax-number: #91591c;
+  --tv-syntax-atom: #9c4a72;
+  --tv-syntax-comment: #7f7f80;
+  --tv-syntax-error: #ef4444;
+}
+[data-theme="console"][data-mode="dark"] {
+  --tv-syntax-keyword: #b3a9d6;
+  --tv-syntax-operator: #9a9fa8;
+  --tv-syntax-punct: #6f737c;
+  --tv-syntax-type: #8fb6d9;
+  --tv-syntax-builtin: #7fc4c9;
+  --tv-syntax-function: #7fc4c9;
+  --tv-syntax-property: #7fb89e;
+  --tv-syntax-string: #9bc78a;
+  --tv-syntax-number: #d1a877;
+  --tv-syntax-atom: #d493b3;
+  --tv-syntax-comment: #62666d;
   --tv-syntax-error: #f87171;
 }
 
