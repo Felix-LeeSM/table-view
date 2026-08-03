@@ -298,8 +298,10 @@ const RDB_CAPABILITIES: &[BackendAdapterCapability] = &[
 // `RelationalSchemaMutation` to match the wired path. What stays `Unsupported`
 // is what needs a table rebuild: `add_constraint` / `drop_constraint` and an
 // in-place column type/nullability/default change. This flag means "some
-// structural DDL", not full DDL — the exact surface is the per-action
-// `ddl.*` capability set in `src/types/dataSource.ts`.
+// structural DDL", not full DDL. It is not the product-visible surface either:
+// the per-action `ddl.*` set in `src/types/dataSource.ts` still claims
+// create_table alone for SQLite, so the paths #1804 opened here stay hidden in
+// the UI until that ledger moves.
 const SQLITE_RDB_CAPABILITIES: &[BackendAdapterCapability] = &[
     BackendAdapterCapability::Lifecycle,
     BackendAdapterCapability::RelationalCatalog,

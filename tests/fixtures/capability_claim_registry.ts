@@ -3,10 +3,10 @@ import type { DatabaseType } from "@/types/connection";
 /**
  * Issue #2116 — `src/types/adapterConformance.ts` is the single ledger for
  * adapter capability/DDL claims. Prose that restates a ledger fact is a copy,
- * and a copy goes stale the moment the ledger moves: PR #2103 spent three
- * review rounds on exactly that, and each round's sweep missed a different
- * slice (no command at all, then a line-wrap blind spot, then a contraction
- * blind spot). This file is destination (c) of that issue — the committed
+ * and a copy goes stale the moment the ledger moves. PR #2103 kept turning up
+ * stale copies it had no way to enumerate: a hand-written grep only sees the
+ * wording it was written against, and that one missed line wraps and
+ * contractions. This file is destination (c) of that issue — the committed
  * registry every surviving copy must be listed in, with the reason it survives
  * and the ledger facts it depends on.
  *
@@ -107,22 +107,26 @@ export const CLAIM_PATTERNS: readonly ClaimPattern[] = [
  * Strip comment leaders, then collapse each block to one line.
  *
  * A capability claim is a sentence, and a sentence in this repo wraps: across
- * ~80-column markdown, across `///` in Rust, across ` * ` in JSDoc. A
- * line-bounded sweep stops seeing the claim at the wrap, which is how PR
- * #2103's second round missed a slice. Leaders come off first so a
- * comment-only line (`///`, ` *`) becomes empty and then bounds a block the
- * same way a markdown blank line does — otherwise two unrelated doc-comment
- * paragraphs would fuse into one match window.
+ * ~80-column markdown, across `///` and `//!` in Rust, across ` * ` in JSDoc. A
+ * line-bounded sweep stops seeing the claim at the wrap, which is the miss
+ * mechanism PR #2103 hit. Leaders come off first so a comment-only line
+ * (`///`, `//!`, ` *`) becomes empty and then bounds a block the same way a
+ * markdown blank line does — otherwise two unrelated doc-comment paragraphs
+ * would fuse into one match window.
+ *
+ * The `!` is part of the leader alternative rather than an alternative of its
+ * own: listing `//!` after `\/{2,3}` would never match, because the shorter
+ * alternative wins first and leaves a bare `!` behind — which is neither empty
+ * (so a `//!` line stops bounding blocks) nor strippable (so a claim wrapped
+ * inside a `//!` block stays invisible). `src-tauri/` carries ~3000 `//!`
+ * lines, one of them the SQLite native-DDL module header.
  *
  * Same contract as `src/types/queryLanguage.docs.test.ts` and
  * `unsupported_boundary_contracts.test.ts`, extended to source comments.
  */
 export function normalizeProse(text: string): string {
   return text
-    .replace(
-      /^[^\S\n]*(?:\/{2,3}|\/\*+|\*\/|\*|#+|--|\/{2}!|\/{3}!)[^\S\n]?/gm,
-      "",
-    )
+    .replace(/^[^\S\n]*(?:\/{2,3}!?|\/\*+|\*\/|\*|#+|--)[^\S\n]?/gm, "")
     .split(/\n(?:[^\S\n]*\n)+/)
     .map((block) => block.replace(/\s+/g, " ").trim())
     .filter((block) => block.length > 0)
@@ -215,11 +219,38 @@ const SQLITE_BEYOND_CREATE_TABLE: readonly ClaimFact[] = [
   { dbType: "sqlite", check: "ddl.alterConstraint", state: "unsupported" },
 ];
 
+/**
+ * The three checks #1804 opened in the Rust SQLite adapter without moving the
+ * flag: the UI half of that slice has not landed, so the adapter executes what
+ * the ledger still calls unsupported. `ddl.alterConstraint` is deliberately not
+ * here — SQLite cannot add or drop a constraint without a table rebuild, so
+ * that one is unsupported on both sides.
+ */
+const SQLITE_ADAPTER_AHEAD_OF_LEDGER: readonly ClaimFact[] = [
+  { dbType: "sqlite", check: "ddl.alterTable", state: "unsupported" },
+  { dbType: "sqlite", check: "ddl.createIndex", state: "unsupported" },
+  { dbType: "sqlite", check: "ddl.dropObject", state: "unsupported" },
+];
+
 /** DuckDB's ADR 0051 Stage 2b slices — planned, so deferred, not unsupported. */
 const DUCKDB_STAGE_2B: readonly ClaimFact[] = [
   { dbType: "duckdb", check: "ddl.alterConstraint", state: "deferred" },
   { dbType: "duckdb", check: "ddl.identityColumn", state: "deferred" },
 ];
+
+/**
+ * The three engines the schema tree's comment contrasts with SQLite — each
+ * claims all three of the tree's DDL entries, so every entry shows.
+ */
+const SCHEMA_TREE_FULL_DDL_ENGINES: readonly ClaimFact[] = (
+  ["duckdb", "mssql", "oracle"] as const
+).flatMap((dbType) =>
+  ["ddl.createTable", "ddl.alterTable", "ddl.dropObject"].map((check) => ({
+    dbType,
+    check,
+    state: "supported" as const,
+  })),
+);
 
 /** The two engines whose hidden constraint/identity controls the docs name. */
 const HIDDEN_CONSTRAINT_CONTROLS: readonly ClaimFact[] = [
@@ -283,24 +314,47 @@ export const CAPABILITY_CLAIM_REGISTRY: readonly CapabilityClaimRow[] = [
     path: "docs/product/current-support-snapshot.md",
     phrases: [
       "bounded structured table creation",
-      "structured ddl parity",
       "table/index removal or rename",
     ],
     disposition: "ledger-dependent",
     claims: [...SQLITE_CREATE_TABLE, ...SQLITE_BEYOND_CREATE_TABLE],
     reason:
-      "Per-engine support snapshot; the SQLite section is where a reader " +
-      "looks for the current boundary, so the sentence stays and the ledger " +
-      "link keeps it honest.",
+      "Both phrases sit in the `## SQLite` section (:96 and :98), which is " +
+      "where a reader looks for the current boundary, so the sentences stay " +
+      "and these claims are what a ledger move measures them against.",
+  },
+  {
+    path: "docs/product/current-support-snapshot.md",
+    phrases: ["structured ddl parity"],
+    disposition: "not-a-claim",
+    reason:
+      "The file's only 'structured DDL parity' is :33, under `## PostgreSQL`, " +
+      "listing what PostgreSQL support does not guarantee (roles/users, " +
+      "extension management, DB-level import/export). The matrix models no " +
+      "`ddl` area for postgres at all, so there is no fact to bind — and " +
+      "binding it to the SQLite claims, as this row used to, made a ledger " +
+      "flip name a file section that never mentioned SQLite.",
   },
   {
     path: "docs/product/known-limitations-cross-cutting.md",
-    phrases: ["bounded structured table creation", "structured ddl parity"],
+    phrases: ["bounded structured table creation"],
     disposition: "ledger-dependent",
-    claims: [...SQLITE_CREATE_TABLE, ...SQLITE_BEYOND_CREATE_TABLE],
+    claims: SQLITE_CREATE_TABLE,
     reason:
-      "Cross-cutting limitations page enumerates what each smoke does not " +
-      "widen; the SQLite clause restates the ledger's DDL boundary.",
+      "The SQLite smoke sentence (:127) in `### Runtime E2E smoke coverage` " +
+      "restates the shipped slice. The surrounding non-widening list is " +
+      "phrased per smoke rather than per capability, so only the table " +
+      "creation claim maps onto a ledger check.",
+  },
+  {
+    path: "docs/product/known-limitations-cross-cutting.md",
+    phrases: ["structured ddl parity"],
+    disposition: "not-a-claim",
+    reason:
+      "Same section, but :122 is the PostgreSQL smoke sentence — 'it does not " +
+      "widen roles/users, extension management, profiler, import/export, " +
+      "broader admin, or broader structured DDL parity'. The matrix models no " +
+      "`ddl` area for postgres, so nothing binds.",
   },
   {
     path: "docs/product/known-limitations-rdbms.md",
@@ -314,20 +368,20 @@ export const CAPABILITY_CLAIM_REGISTRY: readonly CapabilityClaimRow[] = [
     claims: [
       ...SQLITE_CREATE_TABLE,
       ...SQLITE_BEYOND_CREATE_TABLE,
-      ...HIDDEN_CONSTRAINT_CONTROLS,
+      ...DUCKDB_STAGE_2B,
     ],
     reason:
-      "Carries both the SQLite DDL boundary and the constraint/Identity " +
-      "hidden-control claim that names ddl.alterConstraint and " +
-      "ddl.identityColumn. The same 'stay hidden' phrase also covers the " +
-      "MySQL-family trigger controls, which the ledger models no check for; " +
-      "one phrase cannot separate the two uses.",
+      "The three scope-narrowing phrases sit in `### SQLite` (:127-:136). " +
+      "'stay hidden' occurs twice and in neither case for SQLite: :79 is the " +
+      "MySQL-family trigger controls, which the ledger models no check for, " +
+      "and :167 is DuckDB's Constraints/Identity pair. The SQLite " +
+      "identityColumn fact this row used to carry appears nowhere in the " +
+      "file, so a flip named a page with no basis for it.",
   },
   {
     path: "docs/product/query-language-support-surface-matrix.md",
     phrases: [
       "bounded structured table creation",
-      "structured ddl parity",
       "table/index removal or rename",
       "stay hidden",
     ],
@@ -338,10 +392,20 @@ export const CAPABILITY_CLAIM_REGISTRY: readonly CapabilityClaimRow[] = [
       ...DUCKDB_STAGE_2B,
     ],
     reason:
-      "Per-language surface matrix: the SQLite section states the CREATE " +
-      "TABLE-only boundary and the DuckDB section ties hidden controls to " +
-      "ddl.alterConstraint / ddl.identityColumn. The page also uses 'stay " +
-      "hidden' for Redis completion families, which is not a DDL claim.",
+      "`## SQLite SQL` (:113, :122) states the CREATE TABLE-only boundary, " +
+      "and `## DuckDB SQL` (:162) ties hidden controls to ddl.alterConstraint " +
+      "/ ddl.identityColumn. The page's second 'stay hidden' (:240) is under " +
+      "`## Valkey redis-command target` for unpromoted completion families, " +
+      "which is not a DDL claim; one phrase cannot separate the two uses.",
+  },
+  {
+    path: "docs/product/query-language-support-surface-matrix.md",
+    phrases: ["structured ddl parity"],
+    disposition: "not-a-claim",
+    reason:
+      "The file's only 'structured DDL parity' is :41, under `## PostgreSQL " +
+      "SQL`, saying roles/users and broader parity are not modeled. The " +
+      "matrix models no `ddl` area for postgres, so nothing binds.",
   },
   {
     path: "docs/roadmap/follow-up-queue.md",
@@ -376,28 +440,28 @@ export const CAPABILITY_CLAIM_REGISTRY: readonly CapabilityClaimRow[] = [
       "product no longer offers.",
   },
   {
-    path: "src-tauri/table-view-core/src/db/adapters/sqlite/ddl.rs",
+    path: "src-tauri/table-view-core/src/db/adapters/sqlite/ddl_native.rs",
     phrases: ["sqlite structured ddl"],
     disposition: "ledger-dependent",
-    claims: [
-      ...SQLITE_CREATE_TABLE,
-      { dbType: "sqlite", check: "ddl.createIndex", state: "unsupported" },
-      { dbType: "sqlite", check: "ddl.alterConstraint", state: "unsupported" },
-    ],
+    claims: SQLITE_ADAPTER_AHEAD_OF_LEDGER,
     reason:
-      "The adapter that makes the ledger true, plus the two user-visible " +
-      "`Unsupported` error strings ('does not support index creation' / " +
-      "'standalone constraints'). Wiring either path without moving the " +
-      "ledger is the drift this row exists to catch.",
+      "Module header for the DDL #1804 opened natively. It states what the " +
+      "adapter executes, which is currently wider than what the ledger " +
+      "claims, so the row pins the three checks that differ. Moving any of " +
+      "them turns this row red, which is the reread this header and the " +
+      "SQLite `ddl` block in src/types/dataSource.ts have to get together.",
   },
   {
     path: "src-tauri/table-view-core/src/db/adapters/sqlite/queries.rs",
-    phrases: ["bounded table-creation slice"],
-    disposition: "ledger-dependent",
-    claims: SQLITE_CREATE_TABLE,
+    phrases: [],
+    disposition: "not-a-claim",
     reason:
-      "Raw-DDL rejection message points the user at the structured slice the " +
-      "ledger claims; the sentence is user-facing error copy.",
+      "Retired copy. The raw-DDL rejection message used to name the 'bounded " +
+      "table-creation slice'; #1804 reworded it to 'the structured DDL that " +
+      "is open today', which no pattern class matches. The sentence still " +
+      "makes a boundary claim, so the path keeps a row rather than leaving " +
+      "the frozen inventory — and a phrase-less row is only legal while the " +
+      "file really sweeps clean, which the frozen-inventory test asserts.",
   },
   {
     path: "src-tauri/table-view-core/src/db/duckdb/ddl.rs",
@@ -414,45 +478,60 @@ export const CAPABILITY_CLAIM_REGISTRY: readonly CapabilityClaimRow[] = [
   {
     path: "src-tauri/table-view-core/src/db/duckdb/ddl.rs",
     phrases: ["atomic policy", "roll back the create table"],
-    disposition: "not-a-claim",
+    disposition: "ledger-dependent",
+    claims: [
+      { dbType: "duckdb", check: "ddl.alterConstraint", state: "deferred" },
+    ],
     reason:
-      "Transaction semantics of the CREATE TABLE chain (an index failure does " +
-      "not roll back the table). Identical for every adapter and unaffected " +
-      "by any capability flag, so the ledger holds no fact to bind it to.",
+      "Not the shared chain contract, despite the wording: :99-107 documents " +
+      "why DuckDB overrides `create_table_plan` instead of inheriting it, and " +
+      "the reason is that `add_constraint` is Unsupported until Stage 2b, so " +
+      "the default body would create the table and only then fail. Promoting " +
+      "ddl.alterConstraint removes the override's justification.",
   },
   {
     path: "src-tauri/table-view-core/src/db/postgres/mutations.rs",
     phrases: ["atomic policy"],
     disposition: "not-a-claim",
     reason:
-      "Same partial-atomic chain contract as duckdb/ddl.rs — transaction " +
-      "semantics, not an adapter capability claim.",
+      "PostgreSQL's own `COMMENT ON COLUMN` chain runs under policy C. It " +
+      "names one engine and is true of it, but CONFORMANCE_CHECKS models no " +
+      "atomicity check, so no ledger move can falsify it.",
   },
   {
     path: "src-tauri/table-view-core/src/db/traits.rs",
-    phrases: ["atomic policy"],
+    phrases: ["atomic policy", "policy c"],
     disposition: "not-a-claim",
     reason:
-      "Trait-level default impl documenting the partial-atomic chain every " +
-      "adapter inherits; describes ordering, not support.",
+      "Trait-level default impl for the partial-atomic chain, plus the #1804 " +
+      "note that SQLite overrides it with a stricter single transaction. It " +
+      "does name an engine, but what it says about that engine is transaction " +
+      "semantics, and CONFORMANCE_CHECKS models no atomicity check — there is " +
+      "no ledger fact a move could break.",
   },
   {
     path: "src-tauri/table-view-core/src/models/data_source.rs",
-    phrases: ["other ddl surfaces"],
+    phrases: ["create_table alone", "stay hidden"],
     disposition: "ledger-dependent",
-    claims: [...SQLITE_CREATE_TABLE, ...SQLITE_BEYOND_CREATE_TABLE],
+    claims: [...SQLITE_CREATE_TABLE, ...SQLITE_ADAPTER_AHEAD_OF_LEDGER],
     reason:
-      "Rust-side SQLITE_RDB_CAPABILITIES declaration comment. This is the " +
-      "backend half of the same claim the TypeScript ledger holds, so the two " +
-      "must move together.",
+      "SQLITE_RDB_CAPABILITIES declaration comment. It used to end 'the exact " +
+      "surface is the per-action ddl.* capability set in " +
+      "src/types/dataSource.ts', which #1804 made false — the adapter is now " +
+      "wider than that set. It instead records that the ledger claims " +
+      "create_table alone and the rest stay hidden in the UI, which is the " +
+      "sentence a ledger move falsifies.",
   },
   {
     path: "src-tauri/table-view-core/src/models/schema/ddl.rs",
     phrases: ["atomic policy", "partial-atomic"],
     disposition: "not-a-claim",
     reason:
-      "DDL request/response model docs for the partial-atomic commit chain — " +
-      "transaction semantics shared by every engine.",
+      "DDL request/response model docs, and since #1804 the SOT for who owns " +
+      "the atomic policy: C is the default and an adapter may be stricter, " +
+      "which SQLite now is. It names an engine, but what it says about that " +
+      "engine is transaction semantics, and CONFORMANCE_CHECKS models no " +
+      "atomicity check — no ledger move can falsify it.",
   },
   {
     path: "src-tauri/tests/schema_integration.rs",
@@ -478,32 +557,41 @@ export const CAPABILITY_CLAIM_REGISTRY: readonly CapabilityClaimRow[] = [
     phrases: ["atomic policy"],
     disposition: "not-a-claim",
     reason:
-      "Test header describing the partial-atomic commit chain under test — " +
-      "transaction semantics, engine-independent.",
+      "Test header describing the chain this suite mocks and asserts: table " +
+      "plus COMMENT in one transaction, then indexes and constraints each in " +
+      "their own. It reports the mocked scenario, not an engine's capability.",
   },
   {
     path: "src/components/schema/CreateTableDialog.constraints.test.tsx",
     phrases: ["atomic policy"],
     disposition: "not-a-claim",
     reason:
-      "Same partial-atomic chain header as the constraints-chain test — " +
-      "transaction semantics, engine-independent.",
+      "Same mocked-chain header as the constraints-chain suite; it reports " +
+      "what these tests drive, not an engine's capability.",
   },
   {
     path: "src/components/schema/CreateTableDialog.indexes.test.tsx",
     phrases: ["partial-atomic", "policy c", "roll back the create table"],
     disposition: "not-a-claim",
     reason:
-      "Test header for the declared-index leg of the partial-atomic chain " +
-      "(the DataGrip pattern); describes rollback behaviour, not support.",
+      "Header for the declared-index leg of the mocked chain (the DataGrip " +
+      "pattern), down to the PostgreSQL-shaped error text it asserts. " +
+      "Rollback behaviour of a mocked call, not a capability.",
   },
   {
     path: "src/components/schema/CreateTableDialog.tsx",
-    phrases: ["partial-atomic", "policy c", "roll back the create table"],
+    phrases: [
+      "atomic policy",
+      "partial-atomic",
+      "policy c",
+      "roll back the create table",
+    ],
     disposition: "not-a-claim",
     reason:
-      "Component doc comment for the commit path's rollback contract — " +
-      "transaction semantics, identical for every engine that reaches it.",
+      "Component doc for the commit path's rollback contract. It used to " +
+      "state policy C flatly; #1804 made that false for SQLite, so it now " +
+      "defers to the adapter and names SQLite as the stricter one. " +
+      "Transaction semantics, which the ledger models no check for.",
   },
   {
     path: "src/components/schema/CreateTableDialog/useCreateTableForm.ts",
@@ -515,16 +603,27 @@ export const CAPABILITY_CLAIM_REGISTRY: readonly CapabilityClaimRow[] = [
     ],
     disposition: "not-a-claim",
     reason:
-      "Hook doc comments for the preview/commit closures under the same " +
-      "partial-atomic contract — transaction semantics, not capability.",
+      "Hook docs for the preview/commit closures under the same contract, " +
+      "corrected the same way: the adapter owns the policy and SQLite is " +
+      "stricter since #1804. Transaction semantics, not capability.",
   },
   {
     path: "src/components/schema/SchemaTree.tsx",
     phrases: ["adapter can execute"],
-    disposition: "not-a-claim",
+    disposition: "ledger-dependent",
+    claims: [
+      ...SQLITE_CREATE_TABLE,
+      { dbType: "sqlite", check: "ddl.alterTable", state: "unsupported" },
+      { dbType: "sqlite", check: "ddl.dropObject", state: "unsupported" },
+      ...SCHEMA_TREE_FULL_DDL_ENGINES,
+    ],
     reason:
-      "Describes the gate itself — each schema-tree DDL entry reads its own " +
-      "`ddl.*` flag. Names no engine, so no ledger move can falsify it.",
+      "The comment states the gate rule and then works four engines through " +
+      "it (:135-140): 'SQLite claims only createTable, so its Rename/Drop " +
+      "entries are hidden … DuckDB (#1070), MSSQL (#1071) and Oracle (#1072) " +
+      "claim all three, so every entry shows.' Each of those is a ledger " +
+      "fact, which is why this row is not the engine-agnostic gate note it " +
+      "was first registered as.",
   },
   {
     path: "src/components/schema/SchemaTree/rows.tsx",
@@ -552,8 +651,8 @@ export const CAPABILITY_CLAIM_REGISTRY: readonly CapabilityClaimRow[] = [
     disposition: "not-a-claim",
     reason:
       "Same header's statement of the gate rule for every RDB engine. Found " +
-      "only after normalization — it wraps across 'the' / '// write', which " +
-      "is one of the two blind spots #2103 lost a round to.",
+      "only after normalization — it wraps across 'the' / '// write', the " +
+      "line-wrap blind spot #2103's sweeps could not see.",
   },
   {
     path: "src/components/schema/StructurePanel.triggers.test.tsx",
@@ -595,7 +694,9 @@ export const CAPABILITY_CLAIM_REGISTRY: readonly CapabilityClaimRow[] = [
       "Prop docs and JSX comments for the `canAlterConstraint` gate. The " +
       "contraction here wraps across a line as well ('adapter can't' / '// " +
       "run ALTER TABLE ADD CONSTRAINT'), so both #2103 blind spots stack on " +
-      "one sentence.",
+      "one sentence. The block names DuckDB as the engine the gate exists " +
+      "for, but only as the reason `alterConstraint` split off " +
+      "`alterTable` — the gate rule it states holds for every engine.",
   },
   {
     path: "src/components/structure/IndexesEditor.tsx",
@@ -612,16 +713,20 @@ export const CAPABILITY_CLAIM_REGISTRY: readonly CapabilityClaimRow[] = [
     disposition: "ledger-dependent",
     claims: [...SQLITE_CREATE_TABLE, ...SQLITE_BEYOND_CREATE_TABLE],
     reason:
-      "Both comments justify the SQLite ddl flag literals the test asserts: " +
-      "'wired SqliteAdapter executes only create_table; other DDL trait " +
-      "methods return Unsupported'.",
+      "Both comments justify the SQLite `ddl` flag literals the test " +
+      "asserts. They used to ground those literals on the adapter refusing " +
+      "everything but create_table, which #1804 falsified; they now say the " +
+      "ledger claims only create_table and the flags are what pin the gap.",
   },
   {
     path: "src/types/dataSource.ts",
     phrases: [
+      "adapter can actually execute",
+      "adapter can run",
+      "create_table alone",
+      "entry points the adapter really supports",
       "stay hidden",
       "stays hidden",
-      "entry points the adapter really supports",
     ],
     disposition: "ledger-dependent",
     claims: [
@@ -630,31 +735,32 @@ export const CAPABILITY_CLAIM_REGISTRY: readonly CapabilityClaimRow[] = [
       ...HIDDEN_CONSTRAINT_CONTROLS,
     ],
     reason:
-      "Capability declarations name their engines: 'SQLite/DuckDB keep this " +
-      "false so the constraint controls stay hidden' and 'e.g. SQLite: " +
-      "createTable true, alter/index/drop false'. This file feeds the ledger, " +
-      "so its comments and the matrix must move together.",
+      "This file feeds the ledger, and every one of these phrases sits in a " +
+      "block that names engines: the alterConstraint and identityColumn docs " +
+      "('SQLite/DuckDB keep this false so the constraint controls stay " +
+      "hidden'), the `supportsDdl` doc ('e.g. SQLite: createTable true, " +
+      "alter/index/drop false'), and SQLite's own `ddl` block, which since " +
+      "#1804 records why the ledger claims create_table alone while the Rust " +
+      "adapter executes more.",
   },
   {
     path: "src/types/dataSource.ts",
-    phrases: [
-      "adapter can actually execute",
-      "adapter can run",
-      "adapter's ddl trait method executes",
-    ],
+    phrases: ["adapter's ddl trait method executes"],
     disposition: "not-a-claim",
     reason:
-      "Doc comments defining what a `ddl.*` flag means — grounded on whether " +
-      "the trait method executes or returns Unsupported. Definitions of the " +
-      "ledger's own vocabulary, not copies of a per-engine fact.",
+      "`supportsRowEditing`'s doc, in the paragraph explaining that " +
+      "schema-tree DDL entries left this flag for `supportsDdl`. A blank " +
+      "comment line bounds it away from the DuckDB paragraph above, so what " +
+      "is left states how `ddl.*` is grounded in general and names no engine.",
   },
   {
     path: "src/types/schema.ts",
     phrases: ["atomic policy", "partial-atomic"],
     disposition: "not-a-claim",
     reason:
-      "Schema DTO doc for the commit-time rollback contract — transaction " +
-      "semantics shared across engines.",
+      "Schema DTO doc for the commit-time rollback contract, corrected to " +
+      "say the adapter owns the policy and SQLite runs the whole plan in one " +
+      "transaction since #1804. Transaction semantics, not capability.",
   },
   {
     path: "src/types/supportsDdl.test.ts",
@@ -662,8 +768,8 @@ export const CAPABILITY_CLAIM_REGISTRY: readonly CapabilityClaimRow[] = [
     disposition: "ledger-dependent",
     claims: [...SQLITE_CREATE_TABLE, ...SQLITE_BEYOND_CREATE_TABLE],
     reason:
-      "The guard test for `supportsDdl`; its header lists per-engine grounds " +
-      "and one case is named 'claims only createTable for SQLite (adapter " +
-      "wires create_table alone)'.",
+      "The guard test for `supportsDdl`. Its header lists per-engine grounds " +
+      "— SQLite's corrected for #1804 — and one case is named 'claims only " +
+      "createTable for SQLite (adapter wires create_table alone)'.",
   },
 ];

@@ -114,8 +114,9 @@ describe("DataSourceProfile registry", () => {
       // introspection is live); constraints remains a stub → false.
       catalog: { indexes: true },
       edit: { editRows: true, requiresPrimaryKeyForEdit: true },
-      // Issue #1460 — wired SqliteAdapter executes only create_table; other DDL
-      // trait methods return Unsupported, so createTable is the sole claim.
+      // Issue #1460 / #1804 — the ledger claims only create_table for SQLite.
+      // Narrower than the adapter on purpose: #1804 wired native drop/rename/
+      // column/index without the UI half, so the flags stay put until it lands.
       ddl: { createTable: true },
       intelligence: { erd: true },
     }),
@@ -324,8 +325,10 @@ describe("DataSourceProfile registry", () => {
     expect(sqlite.connectionKind).toBe("file");
     expect(sqlite.capabilities).toEqual(expectedCapabilitiesByType.sqlite);
     expect(sqlite.capabilities.edit.editRows).toBe(true);
-    // Issue #1460 — only create_table is wired in the adapter; alter/index/drop
-    // return Unsupported, so their flags stay false and the UI hides them.
+    // Issue #1460 / #1804 — the ledger claims only create_table for SQLite, so
+    // the alter/index/drop flags stay false and the UI hides those entry
+    // points. The Rust adapter executes them natively; the UI half has not
+    // landed, and these literals are what pin that gap in place.
     expect(sqlite.capabilities.ddl.createTable).toBe(true);
     expect(sqlite.capabilities.ddl.alterTable).toBe(false);
     expect(sqlite.capabilities.ddl.createIndex).toBe(false);

@@ -242,6 +242,29 @@ describe("capability claim registry (#2116)", () => {
         `in the same commit:\n${missing.join("\n")}`,
     ).toEqual([]);
     expect(FROZEN_INVENTORY_PATHS).toHaveLength(33);
+
+    // The other way a frozen path stays accounted for. An upstream rewrite can
+    // leave a file whose claim prose no pattern class matches any more, and
+    // then this check (which wants a row) and the dead-row check (which
+    // forbids a phrase that no longer matches) contradict each other — the
+    // failure message above would be telling you to drop a path the length
+    // assertion pins. A phrase-less row records the retirement instead, and it
+    // is legal only while the file really does sweep clean.
+    const texts = new Map(
+      trackedTextFiles().map((file) => [file.path, file.text]),
+    );
+    const emptyButLive = CAPABILITY_CLAIM_REGISTRY.filter(
+      (row) => row.phrases.length === 0,
+    )
+      .filter((row) => findClaimHits(texts.get(row.path) ?? "").length > 0)
+      .map((row) => row.path)
+      .sort();
+
+    expect(
+      emptyButLive,
+      `Phrase-less rows whose file still matches a pattern — register the ` +
+        `phrases instead of retiring the path:\n${emptyButLive.join("\n")}`,
+    ).toEqual([]);
   });
 
   it("catches a seeded violation of each pattern class", () => {
@@ -270,8 +293,8 @@ describe("capability claim registry (#2116)", () => {
 
   it("widens the frozen inventory pattern where #2103 lost a slice", () => {
     // Contraction. Verbatim from the tree at rev dd1d9d0a
-    // (`src/components/structure/IndexesEditor.tsx`), which all three #2103
-    // rounds swept and none of them saw.
+    // (`src/components/structure/IndexesEditor.tsx`), which #2103's sweeps
+    // covered and never matched.
     const contraction =
       "// #1460 — Create Index hidden when the engine's adapter can't run it.";
     const adapterExecution = CLAIM_PATTERNS.find(
@@ -340,6 +363,21 @@ describe("capability claim registry (#2116)", () => {
     );
     expect(normalizeProse("adapter cannot\n\nrun ALTER")).toBe(
       "adapter cannot\nrun ALTER",
+    );
+
+    // Rust module docs use `//!`, and the `!` has to come off with the slashes.
+    // Leave it behind and the leader strips to a bare `!`, which is neither
+    // empty (so a `//!` line stops bounding blocks) nor absent (so it sits in
+    // the middle of a wrapped claim and the pattern misses it). The SQLite
+    // native-DDL module this registry now covers is written entirely in `//!`.
+    expect(normalizeProse("//! the adapter cannot\n//! run ALTER TABLE")).toBe(
+      "the adapter cannot run ALTER TABLE",
+    );
+    expect(seeded("//! the adapter cannot\n//! run ALTER TABLE")).toHaveLength(
+      1,
+    );
+    expect(seeded("//! the adapter cannot\n//!\n//! run ALTER TABLE")).toEqual(
+      [],
     );
   });
 });
