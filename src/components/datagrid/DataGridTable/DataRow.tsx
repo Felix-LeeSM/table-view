@@ -633,10 +633,12 @@ function DataRow({
       // both.
       //
       // #1734 (3) moved the selection fill off `accent`, which sat within a
-      // hair of `--tv-background` in every theme (`bg-accent/20` peaks at 1.046
-      // across all 162 theme x mode blocks) — the owner measured it as
-      // invisible. The replacement and the reason it is a neutral rather than a
-      // hue live in `datagrid/rowState.ts`.
+      // hair of `--tv-background` in every theme — the owner measured it as
+      // invisible. `DataGridTable.selection-contrast.test.tsx` pins the bound
+      // rather than a peak that goes stale on the next theme added: across all
+      // 162 theme x mode blocks, `bg-accent/20` never clears the separation
+      // floor the shipped fill never falls to. The replacement and the reason
+      // it is a neutral rather than a hue live in `datagrid/rowState.ts`.
       //
       // Channels stay separate: ring token = roving focus, `SELECTED_ROW_FILL`
       // = selection, `bg-primary/10` + `ring-1 ring-inset ring-primary`

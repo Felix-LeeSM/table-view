@@ -3920,7 +3920,22 @@
   --tv-destructive-foreground: #101010;
 }
 
-/* === Henry — gothic broadside mono === */
+/* === Henry — gothic broadside mono ===
+ * Two tokens diverge from the prototype, both because a paint rule this
+ * codebase has and the prototype page does not:
+ *   - `--tv-destructive` / `--tv-success` / `--tv-warning` are left to the
+ *     universal values instead of the prototype's monochrome Ink/Paper. The
+ *     prototype carries danger on weight + inversion + underline, but
+ *     `ExecuteButton` (ADR 0023 (d)) encodes `severity x env` on colour alone
+ *     — one fill under `--tv-<token>-foreground`, no weight or underline
+ *     channel — so monochrome collapses its four cells to one colour and, in
+ *     dark, puts a near-white label on a near-white fill.
+ *   - `--tv-accent` takes the theme's hairline tone rather than the
+ *     prototype's ink, which as a 20% row wash cleared the separation floor
+ *     that fill must stay under; `--tv-accent-foreground` follows it.
+ * `--tv-highlight` and `--tv-status-*` do stay monochrome — washes and text
+ * colours, no paired foreground. Both divergences are measured, by
+ * `ExecuteButton.test.tsx` and `DataGridTable.selection-contrast.test.tsx`. */
 [data-theme="henry"][data-mode="light"] {
   --tv-background: #fafafa;
   --tv-foreground: #2a2722;
@@ -3944,9 +3959,6 @@
   --tv-status-connecting: #666666;
   --tv-status-error: #2a2722;
   --tv-status-idle: #b3b3b3;
-  --tv-destructive: #2a2722;
-  --tv-success: #2a2722;
-  --tv-warning: #2a2722;
   --tv-highlight: #2a2722;
   --tv-radius: 12px;
   --tv-font-sans:
@@ -3975,9 +3987,6 @@
   --tv-status-connecting: #b3b3b3;
   --tv-status-error: #fafafa;
   --tv-status-idle: #9f9f9f;
-  --tv-destructive: #fafafa;
-  --tv-success: #fafafa;
-  --tv-warning: #fafafa;
   --tv-highlight: #fafafa;
   --tv-radius: 12px;
   --tv-font-sans:
@@ -4173,9 +4182,15 @@
 }
 
 /* ============================================================
- * Common tokens — invariant across all 81 themes.
- * Defined on :root so every [data-theme] inherits them; dark-mode
- * override only where the token actually differs.
+ * Common tokens — the default every [data-theme] inherits, with the
+ * dark-mode override below carrying only what actually differs.
+ * "Default", not "invariant": a theme block may override any of these,
+ * and the refero 9 (#2117) are the first that do — --tv-radius,
+ * --tv-font-sans, --tv-font-mono, --tv-destructive,
+ * --tv-destructive-foreground, --tv-highlight. The --tv-env-* six and
+ * the --tv-success / --tv-warning pairs are the ones no theme block
+ * touches; the sweeps in `src/components/ui/ExecuteButton.test.tsx`
+ * resolve this cascade rather than trusting the block alone.
  * ============================================================ */
 :root {
   --tv-destructive: #ef4444;
@@ -4190,9 +4205,13 @@
   --tv-warning-foreground: #ffffff;
   /* Sprint 253 (ADR 0023) — `--tv-warning` deepened from amber #f59e0b
    * to #ea580c so warning/staging chrome and STOP-tier red form a clear
-   * visual gradient (amber → orange → red). `--tv-status-connecting`
-   * intentionally retains amber #f59e0b in every theme block to keep the
-   * "connecting" state semantically distinct from "warning/staging". */
+   * visual gradient (amber → orange → red). Amber stays the default for
+   * `--tv-status-connecting` so "connecting" reads as a different state
+   * from "warning/staging"; a theme may substitute its own palette tone
+   * for that state, and #2117 added the first ones that do. What holds
+   * without exception is the other direction — `--tv-warning` never goes
+   * back to amber. `src/themes.test.ts` asserts both, and carries the
+   * command that counts the amber blocks. */
   --tv-warning: #ea580c;
   /* Sprint 253 (ADR 0023, AC-253-01) — environment-specific tokens for
    * the upcoming Chrome H stripe (Sprint 256) + ConfirmDestructiveDialog
@@ -4218,11 +4237,14 @@
   --tv-success: #22c55e;
   --tv-highlight: #facc15;
   /* Lighten warning for dark backgrounds (orange-600 #ea580c ≈ 4.2:1 on dark
-   * — borderline for small text). orange-400 clears AA in every real usage:
-   * warning is only ever `text-warning` / `border-warning` / `bg-warning/N`
-   * washes, never a solid fill under white text, so lightening only helps.
-   * Stays in the orange family — ADR 0023's amber→orange→red gradient holds
-   * and #f59e0b amber is never reintroduced. */
+   * — borderline for small text). Most usage is a `text-warning` /
+   * `border-warning` / `bg-warning/N` wash, where lightening only helps.
+   * The one solid fill under white text is `ExecuteButton`'s staging cell,
+   * which this value leaves at the catalog's lowest label ratio — measured,
+   * with its floor, in `src/components/ui/ExecuteButton.test.tsx`. Note the
+   * `text-warning` family does not read this token at all: `--color-warning`
+   * aliases `--tv-status-connecting` (`src/index.css`). Stays in the orange
+   * family and #f59e0b amber is never reintroduced. */
   --tv-warning: #fb923c;
 }
 /* ============================================================

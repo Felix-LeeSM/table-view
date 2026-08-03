@@ -11,11 +11,16 @@
  *   - `<EditableQueryResultGrid>`     (raw query toolbar Execute)
  *   - `<ConfirmDestructiveDialog>`    (footer Confirm / Execute)
  *
- *   severity × environment matrix:
- *     WARN + dev|null|local|testing|development  → `--tv-success`     (green)
- *     WARN + staging                              → `--tv-warning`     (orange)
- *     WARN + production                           → `--tv-destructive` (red)
- *     STOP + any                                  → `--tv-destructive` (red)
+ *   severity × environment matrix — the cells are named by token, not by
+ *   colour word: a theme may repaint any of the three, and the supply
+ *   theme (#2117) does exactly that with a monochrome `--tv-destructive`.
+ *   What the matrix guarantees is that the three resolve to three
+ *   different colours in every theme, and that each stays legible under
+ *   its own `-foreground` — both swept in `ExecuteButton.test.tsx`.
+ *     WARN + dev|null|local|testing|development  → `--tv-success`
+ *     WARN + staging                              → `--tv-warning`
+ *     WARN + production                           → `--tv-destructive`
+ *     STOP + any                                  → `--tv-destructive`
  *
  * Label format:
  *   - env null/dev (local/testing/development) → "Execute"
@@ -37,8 +42,8 @@ export type ExecuteSeverity = "warn" | "danger";
 export interface ExecuteButtonProps {
   /**
    * Statement severity. `warn` = proceed-with-confirm; `danger` = STOP
-   * tier (always red regardless of env). Maps to ADR 0023's 3-tier
-   * classifier (info / warn / danger).
+   * tier (always `--tv-destructive` regardless of env). Maps to ADR
+   * 0023's 3-tier classifier (info / warn / danger).
    */
   severity: ExecuteSeverity;
   /**
