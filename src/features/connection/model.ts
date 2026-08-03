@@ -668,13 +668,19 @@ export function parseConnectionUrl(
 
 /**
  * #1649 — fold SQL Server's own `encrypt` / `trustServerCertificate` URL params
- * onto the uniform posture. Preserves the pre-#1649 mapping exactly: encrypt off
- * was `(tls=false, trust=…)`, which the backend folds to `disable`/`prefer`;
- * encrypt on with trust was skip-verify (`require`), and without it full
- * verification (`verify-full`).
+ * onto the uniform posture, matching `SslMode::from_legacy` cell for cell so a
+ * pasted URL and a migrated stored row land on the same posture.
+ *
+ * `encrypt=false` with `trustServerCertificate=true` is the contradictory pair:
+ * a common legacy SQL Server connection string that the pre-#1649 backend
+ * refused to connect at all ("SQL Server trustServerCertificate requires
+ * TLS/encryption"). It folds to `require` — encrypt, and honor the trust
+ * decision the string does state — because the alternative reading (`prefer`)
+ * turns a refusal into a silent plaintext connection, and on SQL Server into
+ * `EncryptionLevel::NotSupported`, i.e. forced plaintext with no notice.
  */
 function sqlServerSslMode(encrypt: boolean, trust: boolean): SslMode {
-  if (!encrypt) return trust ? "prefer" : "disable";
+  if (!encrypt) return trust ? "require" : "disable";
   return trust ? "require" : "verify-full";
 }
 

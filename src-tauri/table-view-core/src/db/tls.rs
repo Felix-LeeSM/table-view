@@ -283,23 +283,28 @@ mod tests {
         // pair onto the exact postures the pre-#1649 resolve_tls_decision
         // produced, so stored connections migrate with zero downgrade. The table
         // is the full 3x3 `(tls_enabled, trust_server_certificate)` matrix — the
-        // two cells the old code rejected with `AppError::Validation`
-        // ((unset|false, true)) are the ones this migration changes behavior on,
-        // so they are pinned here rather than left to inference. (2026-08-02)
+        // three cells the old code rejected with `AppError::Validation`
+        // ((unset|false, true) and (true, None)) are the ones this migration
+        // changes behavior on, so they are pinned here rather than left to
+        // inference. (2026-08-02)
         let cells: [(Option<bool>, Option<bool>, SslMode); 9] = [
             // tls unset
             (None, None, SslMode::Prefer),
             (None, Some(false), SslMode::Disable),
-            // Was `Err("trustServerCertificate requires TLS to be enabled")`;
-            // now the opportunistic default. `tls_enabled` unset is the user's
-            // "no TLS choice" state, so `prefer` — never weaker than the old
-            // behavior, which refused to connect at all.
-            (None, Some(true), SslMode::Prefer),
+            // Was `Err("trustServerCertificate requires TLS to be enabled")` on
+            // pg/mysql/mssql and `Err(… mTLS wallet …)` on Oracle. A refusal is
+            // not representable, so the fold takes the only posture that cannot
+            // be a silent downgrade: encrypt, and honor the `trust=true` the
+            // user did state. `prefer` here would let an attacker strip TLS and
+            // would make MSSQL force plaintext outright.
+            (None, Some(true), SslMode::Require),
             // tls off — explicit forced-plaintext marker (#1063).
             (Some(false), None, SslMode::Prefer),
             (Some(false), Some(false), SslMode::Disable),
             // Same previously-rejected combination with an explicit `tls=false`.
-            (Some(false), Some(true), SslMode::Prefer),
+            // This is the one the SQL Server URL paste could store
+            // (`?encrypt=false&trustServerCertificate=true`).
+            (Some(false), Some(true), SslMode::Require),
             // tls on
             (Some(true), None, SslMode::VerifyFull),
             (Some(true), Some(false), SslMode::VerifyFull),
@@ -310,6 +315,18 @@ mod tests {
                 SslMode::from_legacy(tls_enabled, trust),
                 expected,
                 "legacy cell (tls_enabled={tls_enabled:?}, trust={trust:?}) must fold to {expected:?}"
+            );
+        }
+        // The security property the table encodes, asserted directly so a future
+        // edit to a cell cannot quietly re-open the downgrade: no legacy pair
+        // that names an explicit `trust` decision may fold onto a posture that
+        // leaves plaintext on the table.
+        for tls_enabled in [None, Some(false), Some(true)] {
+            let folded = SslMode::from_legacy(tls_enabled, Some(true));
+            assert!(
+                folded.tls_on(),
+                "trust=true with tls_enabled={tls_enabled:?} folded to {folded:?}, which does not \
+                 force encryption"
             );
         }
     }

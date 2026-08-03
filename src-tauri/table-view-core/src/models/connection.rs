@@ -149,6 +149,14 @@ impl SslMode {
     /// reinterprets as verify-full — the behavior those adapters already had,
     /// so zero downgrade). Applied at the deserialize boundaries only; there is
     /// no dual-write, the next save writes `ssl_mode` and the legacy keys go.
+    ///
+    /// **No cell folds a refusal into weaker-than-plaintext-refusal.** The two
+    /// combinations the pre-#1649 code rejected outright are the only ones whose
+    /// runtime behavior this migration can change, so they fold upward:
+    ///
+    /// * `(tls=true, trust=None)` → `verify-full` — the on/off engines already
+    ///   connected with verification in this state, and pg/mysql/mssql refused.
+    /// * `(tls=off/unset, trust=true)` → `require` — see below.
     pub fn from_legacy(tls_enabled: Option<bool>, trust: Option<bool>) -> Self {
         match (tls_enabled.unwrap_or(false), trust) {
             (true, Some(true)) => SslMode::Require,
@@ -159,10 +167,25 @@ impl SslMode {
             (true, None) => SslMode::VerifyFull,
             // Explicit forced-plaintext marker (#1063).
             (false, Some(false)) => SslMode::Disable,
-            // Unset, or the nonsensical trust-without-tls combo that the old
-            // pg/mysql path rejected outright — driver default, never weaker
-            // than refusing to connect.
-            (false, _) => SslMode::Prefer,
+            // Trust-without-TLS. pg/mysql, MSSQL and Oracle all *refused to
+            // connect* on this pair before #1649; `SslMode` cannot express a
+            // refusal, so the fold picks a posture instead. `require` is the
+            // only choice that cannot be a silent downgrade: it honors the one
+            // thing the user did state (`trust=true`, meaningful only under
+            // encryption) and keeps the ADR 0053 promise that a contradictory
+            // pair never quietly becomes plaintext. `prefer` would let an
+            // active attacker strip TLS and MSSQL would go further and force
+            // `EncryptionLevel::NotSupported`.
+            //
+            // Reachable from the pre-#1649 UI only through the SQL Server URL
+            // paste (`?encrypt=false&trustServerCertificate=true`); every form
+            // cleared `trust` when TLS went off. On the on/off engines
+            // (mongo/redis/valkey/ES/OpenSearch) `trust` was ignored while TLS
+            // was off, so a hand-edited or imported row there moves from a
+            // plaintext connect to a forced-TLS handshake that fails loudly if
+            // the server has no TLS — visible, never weaker.
+            (false, Some(true)) => SslMode::Require,
+            (false, None) => SslMode::Prefer,
         }
     }
 

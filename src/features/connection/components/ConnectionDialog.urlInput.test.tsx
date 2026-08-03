@@ -210,6 +210,26 @@ const PASTE_CASES: PasteCase[] = [
     },
   },
   {
+    // #1649 — the contradictory legacy pair, and a common one in the wild. The
+    // pre-#1649 backend refused to connect on it ("SQL Server
+    // trustServerCertificate requires TLS/encryption"), so no working
+    // connection depends on the old reading. It must land on `require`, not on
+    // an opportunistic or plaintext posture: `prefer` would resolve to
+    // `EncryptionLevel::NotSupported` on SQL Server, turning a refusal into a
+    // silent forced-plaintext connection. (2026-08-03)
+    scheme: "sqlserver",
+    url: "sqlserver://sa:p@mssql.local:1433/master?encrypt=false&trustServerCertificate=true",
+    expected: {
+      dbType: "mssql",
+      host: "mssql.local",
+      port: 1433,
+      user: "sa",
+      database: "master",
+      password: "p",
+      sslMode: "require",
+    },
+  },
+  {
     scheme: "oracle",
     url: "oracle://system:p@oracle.local:1521/FREEPDB1",
     expected: {
