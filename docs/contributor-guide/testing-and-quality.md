@@ -46,6 +46,56 @@ landed and live GitHub showed no open Refactor 04 child issues.
 | MariaDB deltas | Keep `RETURNING` returned-row runtime support, routine/default behavior, procedure-management, trigger CRUD, completion-runtime, admin/import/export, and full workbench claims behind separate MariaDB-specific promotion gates. Current `RETURNING` evidence is profile/completion plus a version-aware completion suggestion gate, structural parser/Safe Mode classification, and focused `mariadb:11` runtime characterization showing server-accepted `DELETE ... RETURNING` side effect with no returned-row or affected-row-count adapter support claim; current row-edit and bounded table/index/constraint DDL evidence is limited to the tested MySQL-family path under MariaDB identity, with smoke coverage for the bounded Structure DDL path. |
 | Fixture inventory | Nothing checks that the fixture inventory matches the docs. Read `e2e/fixtures/<dbms>/` before product docs cite fixture evidence. |
 
+### What The Rust Coverage Gate Grades
+
+The `Integration Tests (Docker)` llvm-cov gate grades the root package of
+`src-tauri/Cargo.toml` and nothing else. `table-view-core` is a path dependency,
+not a workspace member, so none of its files enter the report: the app's own
+tests execute that code, but it counts toward neither the denominator nor the
+`--fail-under-*` floors. Measured on `dd1d9d0a` (macOS) with the gate's own
+tool, profile, and working directory:
+
+```bash
+cd src-tauri
+cargo llvm-cov nextest --profile push --lib --ignore-run-fail --json \
+  | jq '{files: [.data[0].files[].filename]
+           | {total: length, core: map(select(test("table-view-core"))) | length},
+         totals: .data[0].totals
+           | {regions: .regions.count, functions: .functions.count, lines: .lines.count}}'
+```
+
+It reports 64 files, 0 of them under `table-view-core`, over totals of 30,475
+regions / 2,842 functions / 21,694 lines. All 64 sit under `src-tauri/src/`.
+
+That run covers `--lib` only, because the gate's thirteen `--test` binaries need
+the Docker services. Those binaries still bring no source of their own: on the
+same commit the CI gate reports a *smaller* `TOTAL` than the local run — 30,195
+regions / 2,831 functions / 21,550 lines, job `91570800918` — and a test binary
+that pulled extra files into the report could only push that number up. The
+sub-1% gap runs the other way, from Linux-vs-macOS `cfg`.
+
+The crate's own unit coverage on `dd1d9d0a` is 69.17% regions / 65.76%
+functions / 69.54% lines over 1,204 tests, and its `TOTAL` row counts 65,446
+regions:
+
+```bash
+cargo llvm-cov --manifest-path src-tauri/table-view-core/Cargo.toml --lib --summary-only
+```
+
+The #2082 split shows the same boundary in aggregate: the gate's region
+denominator fell 94,742 -> 30,173 across that merge (jobs `91279800567` on
+`04c2090e` and `91381908683` on `91724b2c`), a 64,569-region drop the size of
+the crate's own 65,446. The two are close rather than equal — they are measured
+on different commits and platforms. Read a job with
+`gh api repos/{owner}/{repo}/actions/jobs/<job-id>/logs`, which works only while
+GitHub still retains that run's logs — the two local commands above are the
+reproducible evidence.
+
+The crate's percentages are measurements, not floors: the `--fail-under-*`
+literals grade a report this crate is not in, and no other Rust coverage gate
+exists, so nothing fails when its coverage drops. Whether to widen the gate to
+cover it is an open decision this page does not settle.
+
 ## Local Development And CI
 
 | Area | Follow-up |
