@@ -400,6 +400,24 @@ jobs:
             --test keyring_new_user \
             --test keyring_linux_fallback
 
+      # #2098 — the same omission once more, this time on the third standalone
+      # manifest. Pinned to the base commit,
+      # `git grep -n mongosh-parser dd1d9d0a -- .github` returns 0 hits: the
+      # crate's lib tests had never run under any gate, and lefthook says so
+      # itself in the comment above its cargo-fmt jobs. They pass and always
+      # did (55 tests: parser 38, lexer 12, lib 4, completion 1) — they simply
+      # gated nothing.
+      # Deliberately left out of the rust-cache `workspaces:` list above, so
+      # this crate recompiles cold every run. The step below, run against an
+      # absent target dir, measures 11s locally (its native dep graph is serde
+      # + serde_json; the wasm-bindgen deps sit behind the off-by-default
+      # `wasm` feature).
+      # Adding the path would change the actions/cache version and make every
+      # entry saved so far unrestorable — the ~23m cold pass this job's
+      # timeout comment records. 11s per run is the cheaper side of that trade.
+      - name: Run mongosh-parser-core unit tests
+        run: cargo test --manifest-path src-tauri/mongosh-parser-core/Cargo.toml --lib
+
   rust-static:
     name: Rust Static Analysis
     runs-on: ubuntu-latest
