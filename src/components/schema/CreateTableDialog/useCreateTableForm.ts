@@ -59,8 +59,7 @@ export interface UseCreateTableFormArgs {
  * component owns only the tab layout JSX. The lifecycle hook
  * (`useDdlPreviewExecution`) is reused unchanged — this hook owns the draft
  * lists, the auto-refresh debounce, and the single-IPC `createTablePlan`
- * preview/commit closures (partial-atomic policy C: index/constraint
- * failures do not roll back the CREATE TABLE).
+ * preview/commit closures.
  */
 export function useCreateTableForm({
   connectionId,

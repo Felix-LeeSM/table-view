@@ -7,8 +7,8 @@ decision logs.
 ## Entries
 
 - [`testing-and-quality.md`](testing-and-quality.md) — developer-facing
-  verification gaps, quality follow-ups, the pre-release verification gate, and
-  the index of the smoke matrix bands below.
+  verification gaps, quality follow-ups, what the Rust coverage gate grades, the
+  pre-release verification gate, and the index of the smoke matrix bands below.
 - [`smoke-matrix/h1-data-source.md`](smoke-matrix/h1-data-source.md) —
   cross-adapter architecture boundary: profile/capability/adapter-contract
   registry, query-language and result-envelope ownership, per-DBMS

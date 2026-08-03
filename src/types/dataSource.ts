@@ -587,15 +587,7 @@ export const SQLITE_CAPABILITIES = capabilities({
     requiresPrimaryKeyForEdit: true,
   },
   ddl: {
-    // Issue #1460 — the wired production `SqliteAdapter` implements only
-    // `create_table` / `create_table_plan`
-    // (src-tauri/table-view-core/src/db/adapters/sqlite/mod.rs delegates `create_table` to a
-    // real BEGIN/execute/COMMIT path; ddl.rs). Every other structured DDL
-    // trait method (`drop_table`, `rename_table`, `alter_table`, `add_column`,
-    // `create_index`, `drop_index`) returns `sqlite_unsupported(...)`, so only
-    // `createTable` is claimed — the alter/index/drop flags stay false and the
-    // matching UI entry points are hidden (#1046) rather than click-then-error.
-    // `identityColumn` (#1070) also stays at the base `false`: SQLite's
+    // `identityColumn` (#1070) stays at the base `false`: SQLite's
     // `build_column_definition` rejects `is_identity` with `Unsupported`, so
     // the Identity checkbox is hidden here too.
     createTable: true,
@@ -971,9 +963,8 @@ export function hasConnectionCapability(
  * DDL entries.
  *
  * Issue #1460 — schema-tree DDL entries (Create / Rename / Drop) no longer ride
- * on this flag; they read the per-action `ddl.*` capability via `supportsDdl`
- * (each grounded on whether the wired adapter's DDL trait method executes vs.
- * returns `Unsupported`). This flag now gates only the DataGrid row editor.
+ * on this flag; they read the per-action `ddl.*` capability via `supportsDdl`.
+ * This flag now gates only the DataGrid row editor.
  */
 export function supportsRowEditing(
   dbType: DatabaseType | null | undefined,
@@ -1033,14 +1024,10 @@ export function supportsBulkWrite(
 export type DdlCapabilityName = keyof DataSourceCapabilities["ddl"];
 
 /**
- * Issue #1460 — whether the engine's wired backend adapter can actually execute
- * a given structured DDL action. Reads the per-action `capabilities.ddl.*` flag
- * (single source of truth) instead of the coarse `editRows` proxy, so a partial
- * roster (e.g. SQLite: `createTable` true, alter/index/drop false) surfaces only
- * the entry points the adapter really supports. Unsupported actions are HIDDEN,
- * not shown-then-erroring (#1046). An unknown / still-loading dbType returns
- * true so affordances aren't stripped before the connection resolves (same
- * fallback as `supportsRowEditing` / `supportsCatalogFeature`).
+ * Issue #1460 — reads the per-action `capabilities.ddl.*` flag (single source
+ * of truth) instead of the coarse `editRows` proxy. An unknown / still-loading
+ * dbType returns true so affordances aren't stripped before the connection
+ * resolves (same fallback as `supportsRowEditing` / `supportsCatalogFeature`).
  */
 export function supportsDdl(
   dbType: DatabaseType | null | undefined,
