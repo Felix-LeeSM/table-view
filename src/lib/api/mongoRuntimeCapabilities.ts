@@ -19,12 +19,14 @@ import {
  * Every value the wire enum can carry.
  *
  * A map rather than a `readonly MongoTopology[]`, because an array that is
- * *missing* a member still satisfies that type: dropping `"standalone"` would
- * compile, pass every test here, and silently narrow every single-node
- * `mongod` to `"unknown"` — closing gates on servers that are fine. As a
- * `Record<MongoTopology, true>` the same omission is a compile error, which is
- * what `ServerInfoPanel`'s `Record<MongoTopology, string>` label map already
- * relies on one file over.
+ * *missing* a member still satisfies that type: under that typing, dropping
+ * `"standalone"` would compile and silently narrow every single-node `mongod`
+ * to `"unknown"` — closing gates on servers that are fine. As a
+ * `Record<MongoTopology, true>` the same omission is a compile error (TS2741),
+ * which is what `ServerInfoPanel`'s `Record<MongoTopology, string>` label map
+ * already relies on one file over. The type is the primary guard; the
+ * `keeps %s` cases in `mongoRuntimeCapabilities.test.ts` go red on the same
+ * omission under either typing, since vitest transpiles without typechecking.
  */
 const KNOWN_TOPOLOGIES: Record<MongoTopology, true> = {
   standalone: true,
@@ -33,9 +35,13 @@ const KNOWN_TOPOLOGIES: Record<MongoTopology, true> = {
   unknown: true,
 };
 
-/** Own-property lookup — an unrecognised key reads as `undefined`, never `true`. */
+/**
+ * Own-property lookup, so inherited members (`toString`, `constructor`,
+ * `valueOf`, …) are not topologies. Bracket indexing would read them through
+ * the prototype chain and leave the rejection resting on the comparison.
+ */
 const isKnownTopology = (value: string): value is MongoTopology =>
-  (KNOWN_TOPOLOGIES as Record<string, true>)[value] === true;
+  Object.prototype.hasOwnProperty.call(KNOWN_TOPOLOGIES, value);
 
 /**
  * Rust serializes the triplet as three `u32`s, so a component outside that

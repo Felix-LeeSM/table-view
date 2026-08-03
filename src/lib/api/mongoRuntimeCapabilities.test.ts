@@ -105,6 +105,13 @@ describe("mongoRuntimeCapabilities (#1821 wire)", () => {
       "a missing topology",
       { version: { major: 7, minor: 0, patch: 5, raw: "7.0.5" } },
     ],
+    // PR #2105 review round 2, blocking (b): `KNOWN_TOPOLOGIES` is an object
+    // literal, so it inherits `Object.prototype`. Any membership test that
+    // walks the prototype chain — `value in KNOWN_TOPOLOGIES`, or a bracket
+    // read reduced to a truthiness check — accepts these and lets a key that
+    // is not a topology reach `ServerInfoPanel`'s label map.
+    ["a prototype method name", { topology: "toString" }],
+    ["a prototype accessor name", { topology: "__proto__" }],
   ])("degrades %s to the fail-closed value", async (_label, payload) => {
     invokeMock.mockResolvedValueOnce(payload);
 
