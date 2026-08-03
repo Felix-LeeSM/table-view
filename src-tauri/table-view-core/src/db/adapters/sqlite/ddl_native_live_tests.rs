@@ -3,7 +3,9 @@
 //! are the engine's rather than the author's.
 
 use super::*;
-use crate::models::{ConnectionConfig, CreateTablePlanIndex, CreateTablePlanRequest, DatabaseType};
+use crate::models::{
+    ConnectionConfig, CreateTablePlanIndex, CreateTablePlanRequest, DatabaseType, SslMode,
+};
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 
 fn sqlite_config(path: &str, read_only: bool) -> ConnectionConfig {
@@ -24,8 +26,8 @@ fn sqlite_config(path: &str, read_only: bool) -> ConnectionConfig {
         environment: None,
         auth_source: None,
         replica_set: None,
-        tls_enabled: None,
-        trust_server_certificate: None,
+        ssl_mode: SslMode::Prefer,
+        ca_cert_path: None,
         oracle_use_sid: None,
         wallet_path: None,
         wallet_password: String::new(),
