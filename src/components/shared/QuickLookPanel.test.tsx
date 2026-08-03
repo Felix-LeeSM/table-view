@@ -34,6 +34,7 @@ function makeEditState(
     hasPendingChanges: false,
     isCommitFlashing: false,
     saveCurrentEdit: vi.fn(),
+    stageEdit: vi.fn(),
     cancelEdit: vi.fn(),
     handleStartEdit: vi.fn(),
     handleSelectRow: vi.fn(),
@@ -428,15 +429,21 @@ describe("QuickLookPanel", () => {
         ).toBeInTheDocument();
       });
 
-      it("[AC-194-01-5] Enter on a text input dispatches handleStartEdit + setEditValue + saveCurrentEdit (in that order)", () => {
+      // #1734 (4) round 2 — this used to pin the `handleStartEdit` →
+      // `setEditValue` → `saveCurrentEdit` trio and its ordering, all three
+      // mocked. Against the real hook the trio is a no-op: `saveCurrentEdit`
+      // reads `editingCell` from the render closure and it is still `null` one
+      // tick after `handleStartEdit`, so nothing was ever staged. Mocks made
+      // that invisible, which is why the order assertions stayed green while
+      // the feature did not work. The panel now makes one call, and
+      // `DataGrid.editing.test.tsx` pins the effect against the real hook.
+      it("[AC-194-01-5] Enter on a text input stages the typed value in one call", () => {
+        const stageEdit = vi.fn();
         const handleStartEdit = vi.fn();
-        const setEditValue = vi.fn();
-        const saveCurrentEdit = vi.fn();
         const editState = makeEditState({
           selectedRowIds: new Set([0]),
+          stageEdit,
           handleStartEdit,
-          setEditValue,
-          saveCurrentEdit,
         });
 
         render(<QuickLookPanel {...defaultProps} editState={editState} />);
@@ -447,28 +454,18 @@ describe("QuickLookPanel", () => {
         fireEvent.change(nameInput, { target: { value: "Bob" } });
         fireEvent.keyDown(nameInput, { key: "Enter" });
 
-        // QuickLook dispatches the hook's start→set→save trio. colIdx for
-        // `name` is 1.
-        expect(handleStartEdit).toHaveBeenCalledWith(0, 1, "Alice");
-        expect(setEditValue).toHaveBeenCalledWith("Bob");
-        expect(saveCurrentEdit).toHaveBeenCalledOnce();
-        // Order: start before set before save.
-        const startOrder = handleStartEdit.mock.invocationCallOrder[0]!;
-        const setOrder = setEditValue.mock.invocationCallOrder[0]!;
-        const saveOrder = saveCurrentEdit.mock.invocationCallOrder[0]!;
-        expect(startOrder).toBeLessThan(setOrder);
-        expect(setOrder).toBeLessThan(saveOrder);
+        // colIdx for `name` is 1.
+        expect(stageEdit).toHaveBeenCalledExactlyOnceWith(0, 1, "Bob");
+        // The grid's inline editor is never opened — opening it is what left
+        // `editingCell` set and stole focus back into the grid.
+        expect(handleStartEdit).not.toHaveBeenCalled();
       });
 
       it("[AC-194-01-6] Esc on an input cancels the local edit (no dispatch)", () => {
-        const handleStartEdit = vi.fn();
-        const setEditValue = vi.fn();
-        const saveCurrentEdit = vi.fn();
+        const stageEdit = vi.fn();
         const editState = makeEditState({
           selectedRowIds: new Set([0]),
-          handleStartEdit,
-          setEditValue,
-          saveCurrentEdit,
+          stageEdit,
         });
 
         render(<QuickLookPanel {...defaultProps} editState={editState} />);
@@ -479,20 +476,15 @@ describe("QuickLookPanel", () => {
         fireEvent.change(nameInput, { target: { value: "Bob" } });
         fireEvent.keyDown(nameInput, { key: "Escape" });
 
-        // Esc → no save dispatched, value reverts to original on next render.
-        expect(saveCurrentEdit).not.toHaveBeenCalled();
-        expect(handleStartEdit).not.toHaveBeenCalled();
+        // Esc → nothing staged, value reverts to original on next render.
+        expect(stageEdit).not.toHaveBeenCalled();
       });
 
-      it("[AC-194-01-7] Set NULL button dispatches handleStartEdit + setEditValue(null) + saveCurrentEdit", () => {
-        const handleStartEdit = vi.fn();
-        const setEditValue = vi.fn();
-        const saveCurrentEdit = vi.fn();
+      it("[AC-194-01-7] Set NULL button stages null", () => {
+        const stageEdit = vi.fn();
         const editState = makeEditState({
           selectedRowIds: new Set([0]),
-          handleStartEdit,
-          setEditValue,
-          saveCurrentEdit,
+          stageEdit,
         });
 
         render(<QuickLookPanel {...defaultProps} editState={editState} />);
@@ -502,18 +494,14 @@ describe("QuickLookPanel", () => {
         const setNullBtn = screen.getByLabelText("Set NULL for name");
         fireEvent.click(setNullBtn);
 
-        expect(handleStartEdit).toHaveBeenCalledWith(0, 1, "Alice");
-        expect(setEditValue).toHaveBeenCalledWith(null);
-        expect(saveCurrentEdit).toHaveBeenCalledOnce();
+        expect(stageEdit).toHaveBeenCalledExactlyOnceWith(0, 1, null);
       });
 
       it("[AC-194-02-1] textarea (jsonb) Cmd+Enter saves; plain Enter does not", () => {
-        const setEditValue = vi.fn();
-        const saveCurrentEdit = vi.fn();
+        const stageEdit = vi.fn();
         const editState = makeEditState({
           selectedRowIds: new Set([0]),
-          setEditValue,
-          saveCurrentEdit,
+          stageEdit,
         });
 
         render(<QuickLookPanel {...defaultProps} editState={editState} />);
@@ -526,12 +514,11 @@ describe("QuickLookPanel", () => {
         // user's intent).
         fireEvent.change(metaTextarea, { target: { value: '{"a":1}' } });
         fireEvent.keyDown(metaTextarea, { key: "Enter" });
-        expect(saveCurrentEdit).not.toHaveBeenCalled();
+        expect(stageEdit).not.toHaveBeenCalled();
 
         // Cmd+Enter → save.
         fireEvent.keyDown(metaTextarea, { key: "Enter", metaKey: true });
-        expect(saveCurrentEdit).toHaveBeenCalledOnce();
-        expect(setEditValue).toHaveBeenCalledWith('{"a":1}');
+        expect(stageEdit).toHaveBeenCalledExactlyOnceWith(0, 3, '{"a":1}');
       });
 
       it("[AC-194-04-1] dirty pill renders when pendingEdits has an entry for the selected row", () => {
@@ -890,15 +877,11 @@ describe("QuickLookPanel", () => {
         ).not.toBeInTheDocument();
       });
 
-      it("[AC-194-03-4] saving a field dispatches handleStartEdit + setEditValue + saveCurrentEdit on the synthesized column index", () => {
-        const handleStartEdit = vi.fn();
-        const setEditValue = vi.fn();
-        const saveCurrentEdit = vi.fn();
+      it("[AC-194-03-4] saving a field stages on the synthesized column index", () => {
+        const stageEdit = vi.fn();
         const editState = makeEditState({
           selectedRowIds: new Set([0]),
-          handleStartEdit,
-          setEditValue,
-          saveCurrentEdit,
+          stageEdit,
         });
 
         render(<QuickLookPanel {...baseEditableProps} editState={editState} />);
@@ -911,9 +894,7 @@ describe("QuickLookPanel", () => {
         fireEvent.keyDown(nameInput, { key: "Enter" });
 
         // colIdx for `name` in docColumns is 1.
-        expect(handleStartEdit).toHaveBeenCalledWith(0, 1, "Alice");
-        expect(setEditValue).toHaveBeenCalledWith("Alicia");
-        expect(saveCurrentEdit).toHaveBeenCalledOnce();
+        expect(stageEdit).toHaveBeenCalledExactlyOnceWith(0, 1, "Alicia");
       });
     });
 

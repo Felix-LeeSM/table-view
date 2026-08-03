@@ -23,8 +23,9 @@
 // - Esc reverts the local draft string without dispatching.
 // - Plain `Enter` saves on input; on textarea plain `Enter` is a newline
 //   and `Cmd/Ctrl+Enter` saves.
-// - `Set NULL` dispatches `handleStartEdit → setEditValue(null) →
-//   saveCurrentEdit` and clears the local draft to "".
+// - Saving dispatches `editState.stageEdit(row, col, value)` — one call that
+//   writes straight to `pendingEdits`. `Set NULL` stages `null` and clears the
+//   local draft to "".
 // - PK / BLOB / `_id` cells emit a `(read-only)` marker when editing.
 
 import {
@@ -215,14 +216,16 @@ export function EditableValue({
 
   const [draft, setDraft] = useState<string>(initialString);
 
+  // One call, not the `handleStartEdit → setEditValue → saveCurrentEdit` trio
+  // this used to fire. The trio saved nothing: `saveCurrentEdit` reads
+  // `editingCell` from the render closure and it is still `null` in the same
+  // tick, so the typed value never reached `pendingEdits` while the leftover
+  // `editingCell` pulled focus into a grid editor the user never opened.
   const dispatchSave = useCallback(
     (next: string | null) => {
-      const original = cellToEditValue(value);
-      editState.handleStartEdit(rowIdx, colIdx, original);
-      editState.setEditValue(next);
-      editState.saveCurrentEdit();
+      editState.stageEdit(rowIdx, colIdx, next);
     },
-    [editState, rowIdx, colIdx, value],
+    [editState, rowIdx, colIdx],
   );
 
   const dispatchSetNull = useCallback(() => {
