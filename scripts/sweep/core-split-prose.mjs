@@ -349,6 +349,7 @@ function armD() {
 // 좁힌다.
 
 const CI_GATES = new Set([".github/workflows/ci.yml", "lefthook.yml"]);
+const SELF_TEST = "scripts/__tests__/core-split-prose.test.ts";
 
 // 이슈 본문이 N3 를 #2091 로 넘겼다 — "여기가 아니라 #2091 범위다, 중복 수리 금지".
 const OWNED_BY_2091 = new Set([
@@ -375,6 +376,15 @@ function tailResolvesTo(tail) {
 }
 
 const DISPOSITIONS = [
+  {
+    id: "self/generator-vocabulary",
+    // 이 규칙은 생성기를 커밋한 순간 `git grep` 이 자기 소스를 보기 시작해서
+    // 생겼다 — `--check` 가 그 커밋에서 바로 잡았다. 여기 있는 옛 경로·맨 파일
+    // 이름·cargo 명령은 배치에 대한 주장이 아니라 검색 대상 어휘와 테스트
+    // 픽스처다. 고치면 생성기가 찾아야 할 것을 못 찾는다.
+    why: "생성기와 그 테스트가 검색 어휘를 정의하는 자리다. 여기 적힌 옛 경로·파일 이름·cargo 명령은 주장이 아니라 패턴과 픽스처이고, 고치면 생성기가 대상을 못 찾는다",
+    test: (h) => h.path.startsWith("scripts/sweep/") || h.path === SELF_TEST,
+  },
   {
     id: "owned-by-2091",
     why: "이슈 본문이 이 두 파일의 crate 행 누락(N3)을 #2091 로 넘겼다. 중복 수리 금지",
