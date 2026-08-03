@@ -66,10 +66,12 @@ surface 디렉토리(`src/` 등)의 `AGENTS.md` 는 해당 surface rule 로 가�
 
 ## 강제 룰
 
-아래 룰에는 **집행 장치가 없다.** 어기면 아무도 막지 않으므로 agent 가 스스로
-지킨다.
+아래 룰에서 **기계가 잡는 것은 하나뿐이다** — memory cap 의 크기 절반을 CI 가
+검사한다(`bash scripts/check-memory-doc-size.sh`, #2128). 나머지는 어겨도 아무도
+막지 않으므로 agent 가 스스로 지킨다.
 
-- `memory/` 트리: `memory.md` 만, 200줄 / 12,000 chars cap (둘 다).
+- `memory/` 트리: `memory.md` 만, 200줄 / 12,000 chars cap (둘 다). 크기 두 상한은
+  CI 가 잡고, `memory.md` 만 두라는 쪽은 규율뿐이다.
 - workflow memory 는 행동 계약만 둔다. 긴 절차는 `.agents/skills/` 로 내리고
   memory 에는 계약과 그 경로만 남긴다.
 - ADR 본문 동결. 결정 뒤집기 = 새 ADR + `Superseded`. 본문은
