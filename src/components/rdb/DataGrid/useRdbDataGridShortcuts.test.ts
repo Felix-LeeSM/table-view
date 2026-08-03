@@ -14,13 +14,15 @@ type Overrides = Partial<Parameters<typeof useRdbDataGridShortcuts>[0]>;
 
 function setup(overrides: Overrides = {}) {
   const onRequestDiscard = vi.fn();
+  const onToggleQuickLook = vi.fn();
+  const onToggleFilters = vi.fn();
   const params = {
     editingCell: null,
     canUndo: false,
     canRedo: false,
     hasPendingChanges: true,
-    onToggleFilters: vi.fn(),
-    onToggleQuickLook: vi.fn(),
+    onToggleFilters,
+    onToggleQuickLook,
     onCancelEdit: vi.fn(),
     onRequestDiscard,
     onUndo: vi.fn(),
@@ -30,7 +32,17 @@ function setup(overrides: Overrides = {}) {
   const view = renderHook((p: typeof params) => useRdbDataGridShortcuts(p), {
     initialProps: params,
   });
-  return { onRequestDiscard, ...view };
+  return { onRequestDiscard, onToggleQuickLook, onToggleFilters, ...view };
+}
+
+function pressKey(key: string, init: KeyboardEventInit = {}) {
+  const event = new KeyboardEvent("keydown", {
+    key,
+    cancelable: true,
+    ...init,
+  });
+  document.dispatchEvent(event);
+  return event;
 }
 
 function pressEscape() {
@@ -75,5 +87,40 @@ describe("useRdbDataGridShortcuts — Escape discard gate", () => {
     document.body.appendChild(dialog);
     pressEscape();
     expect(onRequestDiscard).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Issue #1734 owner decision 2 — the Quick Look toggle moved out of the
+ * toolbar's icon crowd into a labelled button, and `Cmd/Ctrl+L` stays its
+ * keyboard path. This pins the binding so the button restyle can't quietly
+ * take the shortcut with it, and pins the neighbouring Cmd+F so the two
+ * grid-level bindings don't cross-fire.
+ */
+describe("useRdbDataGridShortcuts — Quick Look shortcut (#1734)", () => {
+  it("Cmd+L toggles Quick Look and consumes the event", () => {
+    const { onToggleQuickLook } = setup();
+    const event = pressKey("l", { metaKey: true });
+    expect(onToggleQuickLook).toHaveBeenCalledTimes(1);
+    expect(event.defaultPrevented).toBe(true);
+  });
+
+  it("Ctrl+L toggles Quick Look on non-mac keyboards", () => {
+    const { onToggleQuickLook } = setup();
+    pressKey("l", { ctrlKey: true });
+    expect(onToggleQuickLook).toHaveBeenCalledTimes(1);
+  });
+
+  it("a bare L types normally — no modifier, no toggle", () => {
+    const { onToggleQuickLook } = setup();
+    pressKey("l");
+    expect(onToggleQuickLook).not.toHaveBeenCalled();
+  });
+
+  it("Cmd+F still toggles filters only — the two bindings don't cross-fire", () => {
+    const { onToggleFilters, onToggleQuickLook } = setup();
+    pressKey("f", { metaKey: true });
+    expect(onToggleFilters).toHaveBeenCalledTimes(1);
+    expect(onToggleQuickLook).not.toHaveBeenCalled();
   });
 });

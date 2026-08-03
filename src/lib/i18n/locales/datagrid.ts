@@ -47,8 +47,17 @@ export const en = {
   resizeColumnTitle: "Drag to resize · double-click to reset width",
 
   // DataGridToolbar — column / view controls
-  toggleQuickLookAria: "Toggle Quick Look",
-  toggleQuickLookTitle: "Quick Look (Cmd+L)",
+  // #1734 — the Quick Look toggle became a labelled button. The visible
+  // label is contained in the accessible name (WCAG 2.5.3 Label in Name).
+  // The binding accepts `metaKey || ctrlKey` (`useRdbDataGridShortcuts.ts`),
+  // and the repo does not branch key labels per platform
+  // (`ShortcutCheatsheet.tsx`), so the badge spells both out the way the
+  // sibling `workspace.toolbar.history.title` already does — a bare `Cmd+L`
+  // names the wrong key on Windows/Linux.
+  quickLookLabel: "Details",
+  quickLookAria: "Toggle row details",
+  quickLookTitle: "Row details (Cmd/Ctrl+L)",
+  quickLookShortcut: "Cmd/Ctrl+L",
   toggleFiltersAria: "Toggle filters",
   toggleFiltersTitle: "Toggle filters",
 
@@ -200,8 +209,10 @@ export const ko = {
   resizeColumnTitle: "드래그하여 크기 조절 · 더블클릭하면 너비 초기화",
 
   // DataGridToolbar — column / view controls
-  toggleQuickLookAria: "Quick Look 전환",
-  toggleQuickLookTitle: "Quick Look (Cmd+L)",
+  quickLookLabel: "상세",
+  quickLookAria: "행 상세 전환",
+  quickLookTitle: "행 상세 (Cmd/Ctrl+L)",
+  quickLookShortcut: "Cmd/Ctrl+L",
   toggleFiltersAria: "필터 전환",
   toggleFiltersTitle: "필터 전환",
 

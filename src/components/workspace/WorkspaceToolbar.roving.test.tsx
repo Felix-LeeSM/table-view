@@ -8,7 +8,10 @@ import WorkspaceToolbar from "./WorkspaceToolbar";
 // Enabled `<button>` controls of the toolbar, in DOM order. With no active
 // connection the DbSwitcher renders a read-only `<span role="button">` (not a
 // real button) and Disconnect is disabled, so the roving set is the always-on
-// trio: History, RowCap, SafeMode.
+// quartet: the Layout cluster's sidebar toggle (#1734, first in DOM order),
+// History, RowCap, SafeMode. `useToolbarRoving` reaches the first two through
+// the cluster's `role="group"` wrapper — the concrete traversal positions are
+// pinned in `WorkspaceToolbar.layout-cluster.test.tsx`.
 function toolbarButtons(): HTMLButtonElement[] {
   const toolbar = screen.getByRole("toolbar", { name: /workspace toolbar/i });
   return Array.from(toolbar.querySelectorAll("button")).filter(
