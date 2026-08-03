@@ -44,8 +44,6 @@ describe("ServerInfoPanel (Sprint 339 U4 live wire)", () => {
   beforeEach(() => {
     infoMock.mockReset();
     runtimeMock.mockReset();
-    // The real wrapper never rejects and always resolves a capability, so the
-    // default stub matches that contract; tests that care override it.
     runtimeMock.mockResolvedValue({ topology: "unknown" });
   });
 
@@ -82,9 +80,6 @@ describe("ServerInfoPanel (Sprint 339 U4 live wire)", () => {
     expect(screen.getByText(/wiredTiger/)).toBeInTheDocument();
   });
 
-  // Issue #1821 (2/2) — the runtime capability the backend probes at connect()
-  // reaches a user-visible row here. Before this, `mongo_runtime_capabilities`
-  // had no production consumer at all.
   describe("Mongo deployment row (#1821)", () => {
     it.each([
       ["standalone", "Standalone"],
@@ -110,10 +105,6 @@ describe("ServerInfoPanel (Sprint 339 U4 live wire)", () => {
     });
 
     it("shows an explicit unidentified row rather than hiding it (fail-closed is visible)", async () => {
-      // This is the state in which every gate naming a topology closes; a
-      // version-only requirement can still open, which the gate's own suite
-      // pins. A hidden row would leave the user unable to tell "not a cluster"
-      // from "the server never answered the handshake".
       infoMock.mockResolvedValueOnce(mongoStub);
       runtimeMock.mockResolvedValueOnce({ topology: "unknown" });
 
@@ -140,9 +131,6 @@ describe("ServerInfoPanel (Sprint 339 U4 live wire)", () => {
     });
 
     it("keeps the version row, which already carries the server version", async () => {
-      // The two halves of "expose topology + version" have different sources:
-      // version comes from `server_info`'s live `buildInfo`, deployment from
-      // the capability cached at connect(). Both must be on screen together.
       infoMock.mockResolvedValueOnce(mongoStub);
       runtimeMock.mockResolvedValueOnce({
         topology: "sharded",
@@ -160,13 +148,6 @@ describe("ServerInfoPanel (Sprint 339 U4 live wire)", () => {
     });
 
     it("keeps the rest of the grid when the capability read rejects outright", async () => {
-      // PR #2105 review, non-blocking 3: this test used to stub a *resolved*
-      // `{ topology: "unknown" }`, which is the default stub — it exercised no
-      // degradation at all. A rejection is the case that matters, because
-      // `Promise.all` rejects as a whole: without the panel's own `catch`,
-      // host, uptime and connections would disappear along with the deployment
-      // row. The wrapper is contracted never to reject; this pins the panel to
-      // survive it anyway.
       infoMock.mockResolvedValueOnce(mongoStub);
       runtimeMock.mockRejectedValueOnce(new Error("capability read failed"));
 

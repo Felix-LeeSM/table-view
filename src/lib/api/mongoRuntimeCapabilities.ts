@@ -16,17 +16,8 @@ import {
 } from "@/types/dataSource";
 
 /**
- * Every value the wire enum can carry.
- *
- * A map rather than a `readonly MongoTopology[]`, because an array that is
- * *missing* a member still satisfies that type: under that typing, dropping
- * `"standalone"` would compile and silently narrow every single-node `mongod`
- * to `"unknown"` — closing gates on servers that are fine. As a
- * `Record<MongoTopology, true>` the same omission is a compile error (TS2741),
- * which is what `ServerInfoPanel`'s `Record<MongoTopology, string>` label map
- * already relies on one file over. The type is the primary guard; the
- * `keeps %s` cases in `mongoRuntimeCapabilities.test.ts` go red on the same
- * omission under either typing, since vitest transpiles without typechecking.
+ * The wire enum, as a `Record` rather than an array so that a missing member
+ * is a compile error (TS2741) instead of a silently narrower check.
  */
 const KNOWN_TOPOLOGIES: Record<MongoTopology, true> = {
   standalone: true,
@@ -35,20 +26,11 @@ const KNOWN_TOPOLOGIES: Record<MongoTopology, true> = {
   unknown: true,
 };
 
-/**
- * Own-property lookup, so inherited members (`toString`, `constructor`,
- * `valueOf`, …) are not topologies. Bracket indexing would read them through
- * the prototype chain and leave the rejection resting on the comparison.
- */
+/** Own-property lookup, so inherited members are not topologies. */
 const isKnownTopology = (value: string): value is MongoTopology =>
   Object.prototype.hasOwnProperty.call(KNOWN_TOPOLOGIES, value);
 
-/**
- * Rust serializes the triplet as three `u32`s, so a component outside that
- * range is not something this app can have produced. The upper bound is not
- * cosmetic: `Number.isInteger(1e21)` is `true`, and a `major` of `1e21` would
- * *open* every `minVersion` gate rather than close it.
- */
+/** Rust serializes the triplet as three `u32`s. */
 const isU32 = (value: unknown): value is number =>
   typeof value === "number" &&
   Number.isInteger(value) &&
@@ -56,18 +38,9 @@ const isU32 = (value: unknown): value is number =>
   value <= 0xffff_ffff;
 
 /**
- * Narrow the raw IPC payload to the wire contract.
- *
- * `invoke<T>()` is a cast, not a check — the returned value wears
- * `MongoRuntimeCapabilities` whether or not it is one. Everything downstream
- * (the gate in `meetsMongoRuntimeRequirement`, the deployment row in
- * `ServerInfoPanel`) then trusts fields that may not be there. A payload with
- * `minor`/`patch` missing happens to close gates (`undefined > n` is `false`)
- * but renders as a hole in the UI, and it disagrees with
- * `parseDataSourceVersion`, which coerces the same gaps to `0`. Rather than
- * leave the two readings to diverge, anything that is not the exact shape Rust
- * serializes degrades here to the fail-closed value — same direction as a
- * rejected call.
+ * Narrow the raw IPC payload to the wire contract — `invoke<T>()` is a cast,
+ * not a check. Anything off-contract degrades to the fail-closed value, the
+ * same exit a rejected call takes.
  */
 function narrowCapabilities(payload: unknown): MongoRuntimeCapabilities {
   if (typeof payload !== "object" || payload === null) {

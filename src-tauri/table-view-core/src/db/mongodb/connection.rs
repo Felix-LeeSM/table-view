@@ -48,16 +48,6 @@ pub struct MongoAdapter {
     /// whose probe was refused holds `Some(MongoRuntimeCapabilities::unknown())`
     /// — both read as fail-closed at the accessor, but the distinction keeps
     /// `disconnect()` honest.
-    ///
-    /// The invariant these four mutexes actually rely on is about *concurrent
-    /// holding*, not acquisition order: no site holds two of them at once,
-    /// except `disconnect()`, which holds all four — `client` → `default_db` →
-    /// `active_db` → `runtime_capabilities` are `let`-bound into one scope and
-    /// stay alive until the end of it. Everywhere else takes one guard and
-    /// drops it before taking the next, which is why `connect()` and
-    /// `resolved_db_name` are free to touch them in an order of their own.
-    /// A future site that needs two at once must take them in declaration
-    /// order, the way `disconnect()` does, or it deadlocks against it.
     pub(super) runtime_capabilities: Arc<Mutex<Option<MongoRuntimeCapabilities>>>,
 }
 
@@ -241,12 +231,6 @@ impl MongoAdapter {
     }
 
     /// Issue #1821 — the runtime capability probed during `connect()`.
-    ///
-    /// Reads the cached value; never hits the driver, so UI gates can call it
-    /// per render without a round trip. Fail-closed on every "we do not know"
-    /// path: a disconnected adapter and a connected-but-unprobed session both
-    /// answer `MongoRuntimeCapabilities::unknown()`, which no positive gate
-    /// matches.
     pub async fn runtime_capabilities(&self) -> MongoRuntimeCapabilities {
         self.runtime_capabilities
             .lock()

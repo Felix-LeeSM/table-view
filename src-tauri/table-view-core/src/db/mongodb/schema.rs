@@ -642,18 +642,6 @@ impl MongoAdapter {
     /// Sprint 339 (U4 live wire) — server identity (`buildInfo`) +
     /// runtime info (`serverStatus`). Two `adminCommand` round trips
     /// merged into the same `ServerInfoRow` slot.
-    ///
-    /// Issue #1821 review asked whether the `buildInfo` half could be served
-    /// from the capability cached at `connect()` and the round trip dropped.
-    /// It cannot, as things stand: the cache holds only the parsed
-    /// `major.minor.patch` plus the raw string, while the `extras` block below
-    /// reads four more `buildInfo` fields off the same document —
-    /// `gitVersion`, `modules`, `openssl`, `javascriptEngine`. Substituting
-    /// the cache would silently drop them from the panel. `serverStatus` is
-    /// live-by-nature (uptime, active connections) and cannot be cached at
-    /// all. Widening the cached struct to carry the extras is a real option,
-    /// but it trades a per-open round trip for permanently held memory and a
-    /// snapshot that goes stale — a decision this issue does not own.
     pub(super) async fn server_info_impl(&self) -> Result<crate::models::ServerInfoRow, AppError> {
         let client = self.current_client().await?;
         let build = client

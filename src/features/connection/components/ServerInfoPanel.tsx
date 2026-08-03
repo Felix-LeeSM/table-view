@@ -1,10 +1,7 @@
 // Sprint 339 (2026-05-15) — U4 live wire. Replaces the
 // BackendPendingPlaceholder with a paradigm-neutral identity grid sourced
 // from `version()` + `pg_settings` (PG) or `buildInfo` + `serverStatus`
-// (Mongo). `server_info`'s paradigm-specific fields all land in `extras`, so
-// the rows it feeds are paradigm-stable; the Mongo deployment row added for
-// #1821 is the one row outside that, and it renders only for a document
-// connection.
+// (Mongo).
 
 import { Loader2, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
@@ -21,21 +18,7 @@ import {
 import { DATABASE_TYPE_LABELS, type DatabaseType, paradigmOf } from "../model";
 import { PanelLoadingSkeleton } from "./PanelLoadingSkeleton";
 
-/**
- * Issue #1821 — deployment shape is the one server fact this panel could not
- * show. The version row above already renders `buildInfo.version`; topology
- * lives only in the capability the adapter probed at `connect()`, so it needs
- * its own (cached, round-trip-free) read.
- *
- * `"unknown"` gets a row of its own rather than being hidden: it closes every
- * gate that names a topology — a version-only requirement can still open, which
- * `dataSource.mongoRuntime.test.ts` pins — and a blank row would leave the user
- * with no way to tell "not a cluster" from "the server never answered".
- *
- * Its value cell is the one in this grid without `font-mono`, on purpose: it
- * renders a translated label, not a verbatim server string like the version,
- * host and counters around it.
- */
+/** Issue #1821 — labels for the Mongo deployment row. */
 const TOPOLOGY_LABEL_KEY: Record<MongoTopology, string> = {
   standalone: "serverInfo.topologyStandalone",
   replicaSet: "serverInfo.topologyReplicaSet",
@@ -64,13 +47,8 @@ export function ServerInfoPanel({
     setLoading(true);
     setError(null);
     try {
-      // The capability read is a cache hit on the adapter (probed once during
-      // `connect()`), so pairing it with `server_info` adds no admin round
-      // trip. The `catch` is not redundant with the wrapper's own fail-closed
-      // contract: `Promise.all` rejects as a whole, so were that contract ever
-      // to regress, a refused probe would blank the entire grid — host, uptime
-      // and connections included. Degrading here keeps the panel's behaviour a
-      // property of this file.
+      // `Promise.all` rejects as a whole, so the capability read gets its own
+      // `catch` — a refused probe must not blank the rest of the grid.
       const [next, capabilities] = await Promise.all([
         serverInfo(connectionId),
         isMongo
@@ -140,10 +118,8 @@ export function ServerInfoPanel({
             {t("serverInfo.rowVersion")}
           </dt>
           <dd className="font-mono break-all">{info.version}</dd>
-          {/* Gated on `isMongo` as well as on the value: when the driving
-              connection changes, props arrive one render before the effect
-              replaces `runtime`, and without this the frame in between paints
-              a Mongo topology under a PostgreSQL connection. */}
+          {/* Gated on `isMongo` too: on a connection switch, props arrive one
+              render before the effect replaces `runtime`. */}
           {isMongo && runtime !== null && (
             <>
               <dt className="text-muted-foreground">

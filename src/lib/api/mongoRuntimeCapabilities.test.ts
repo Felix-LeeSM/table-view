@@ -93,10 +93,6 @@ describe("mongoRuntimeCapabilities (#1821 wire)", () => {
     ).toBe(true);
   });
 
-  // PR #2099 review, non-blocking 3: `invoke<T>()` is a cast, not a check.
-  // Each case below is a payload the type says cannot happen; every one must
-  // land on the same fail-closed value a rejection does, so no gate and no
-  // rendered row ever reads a field that is not there.
   it.each([
     ["a non-object payload", "sharded"],
     ["null", null],
@@ -105,11 +101,6 @@ describe("mongoRuntimeCapabilities (#1821 wire)", () => {
       "a missing topology",
       { version: { major: 7, minor: 0, patch: 5, raw: "7.0.5" } },
     ],
-    // PR #2105 review round 2, blocking (b): `KNOWN_TOPOLOGIES` is an object
-    // literal, so it inherits `Object.prototype`. Any membership test that
-    // walks the prototype chain — `value in KNOWN_TOPOLOGIES`, or a bracket
-    // read reduced to a truthiness check — accepts these and lets a key that
-    // is not a topology reach `ServerInfoPanel`'s label map.
     ["a prototype method name", { topology: "toString" }],
     ["a prototype accessor name", { topology: "__proto__" }],
   ])("degrades %s to the fail-closed value", async (_label, payload) => {
@@ -121,11 +112,6 @@ describe("mongoRuntimeCapabilities (#1821 wire)", () => {
     expect(capabilities.version).toBeUndefined();
   });
 
-  // PR #2105 review, non-blocking 2: `KNOWN_TOPOLOGIES` is typed so that a
-  // dropped member is a compile error, but nothing in the type system stops a
-  // member from being deleted together with its union entry. Every value the
-  // backend can send has to survive narrowing, or that server's gates all
-  // close on a capability it actually reported.
   it.each(["standalone", "replicaSet", "sharded", "unknown"])(
     "keeps `%s` — the whole wire enum passes narrowing",
     async (topology) => {
@@ -143,9 +129,6 @@ describe("mongoRuntimeCapabilities (#1821 wire)", () => {
       "a non-integer component",
       { major: 7, minor: 0.5, patch: 5, raw: "7.0.5" },
     ],
-    // PR #2105 review, non-blocking 12: `Number.isInteger` alone accepts both
-    // of these, and the huge one is the dangerous direction — it *opens* every
-    // `minVersion` gate. Rust serializes `u32`, so neither can arrive.
     [
       "a component past Rust's u32 range",
       { major: 1e21, minor: 0, patch: 5, raw: "7.0.5" },
@@ -163,8 +146,6 @@ describe("mongoRuntimeCapabilities (#1821 wire)", () => {
 
       const capabilities = await mongoRuntimeCapabilities("conn-1");
 
-      // The topology half survives — the two probes degrade independently on
-      // the Rust side too, so the wire narrowing must not couple them.
       expect(capabilities.topology).toBe("replicaSet");
       expect(capabilities.version).toBeUndefined();
       expect(

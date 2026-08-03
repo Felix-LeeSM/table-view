@@ -5,9 +5,7 @@
  * must close on each axis it names whenever that axis is unknown. A green
  * `meetsMongoRuntimeRequirement` that returned `true` on unknown input would
  * be worse than no gate at all — it would look like a check while letting
- * every unidentified server through. The axes are judged independently, so an
- * unidentified topology still clears a *version-only* requirement; that is
- * pinned below as intended behaviour, not treated as a leak.
+ * every unidentified server through.
  */
 import { describe, expect, it } from "vitest";
 import {
@@ -114,12 +112,6 @@ describe("meetsMongoRuntimeRequirement — version axis", () => {
     ).toBe(true);
   });
 
-  // PR #2105 review, non-blocking 11: this combination is not hypothetical —
-  // the Rust probes degrade independently, so an account allowed to run
-  // `buildInfo` but not `hello` reports a real version under an unidentified
-  // topology. A version-only requirement asks nothing about the deployment, so
-  // it opens. Pinned because the alternative reading (any `"unknown"` closes
-  // everything) is the one a reader assumes.
   it("clears a version-only requirement even on an unidentified topology", () => {
     expect(
       meetsMongoRuntimeRequirement(

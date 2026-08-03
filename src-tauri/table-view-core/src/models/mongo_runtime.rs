@@ -21,13 +21,6 @@
 //! model): the command layer enforces paradigm + safety, not capability. This
 //! module therefore carries facts only — no `supports_*` predicate that would
 //! have to stay in lockstep with the TypeScript one.
-//!
-//! The same paragraph carries a second clause the first draft of this comment
-//! dropped: "mutation entry points do not trust button hide alone — they keep
-//! one layer of defense-in-depth local guard". It does not bind the consumers
-//! shipped so far (reading topology/version and rendering it is read-only),
-//! but any later axis that gates a *write* on these values — transactions,
-//! `runCommand` — owes that local guard on top of the UI gate.
 
 use serde::{Deserialize, Serialize};
 
