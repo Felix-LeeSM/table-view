@@ -3,6 +3,7 @@ import type {
   ConnectionConfig,
   ConnectionDraft,
   DatabaseType,
+  SslMode,
 } from "../../model";
 import {
   createEmptyDraft,
@@ -12,6 +13,7 @@ import {
   exposesTlsToggle,
   isSearchFamily,
   paradigmOf,
+  sslModeTlsOn,
 } from "../../model";
 
 /**
@@ -89,28 +91,33 @@ export interface UseConnectionDraftFormReturn {
 }
 
 /**
- * #1062/#1063 — the TLS sanitize rule shared by the dbType dropdown
+ * #1062/#1063/#1649 — the TLS sanitize rule shared by the dbType dropdown
  * (`applyDbTypeChange`) and the URL-paste path (`applyParsedConnection`).
- * MSSQL forces encryption on with trust seeded; the other TLS-toggle engines
- * (mongo/redis/valkey/search) may carry the prior encryption flag but never a
- * skip-verify choice; the trust-boundary engines (pg/mysql/mariadb) and the
- * no-TLS engines reset both. This keeps two invariants on any engine switch:
- * no `tls_enabled=true, trust=None` residue the backend hard-rejects (#1062),
- * and no leaked skip-verify (`trust=true`) onto the new engine (#1063).
+ * MSSQL forces its encrypt-by-default posture; the other on/off engines
+ * (mongo/redis/valkey/search) carry whether encryption was on but never a
+ * skip-verify choice; the sslmode engines (pg/mysql/mariadb) and the no-TLS
+ * engines reset to the driver default. The surviving invariant is #1063's: a
+ * skip-verify posture never leaks onto the new engine.
+ *
+ * #1649 — MSSQL seeds `require` because the pre-#1649 rule seeded
+ * `(tls=true, trust=true)`, which is exactly that posture. The other #1062
+ * invariant (no `tls_enabled=true, trust=None` residue) is gone because
+ * `SslMode` cannot express it. The CA path never survives an engine switch —
+ * it is bound to the server whose CA it names.
  */
 function tlsFieldsForDbType(
   dbType: DatabaseType,
-  prevTlsEnabled: ConnectionDraft["tlsEnabled"],
-): Pick<ConnectionDraft, "tlsEnabled" | "trustServerCertificate"> {
-  return {
-    tlsEnabled:
-      dbType === "mssql"
-        ? true
-        : exposesTlsToggle(dbType)
-          ? prevTlsEnabled
-          : null,
-    trustServerCertificate: dbType === "mssql" ? true : null,
-  };
+  prevSslMode: SslMode | undefined,
+): Pick<ConnectionDraft, "sslMode" | "caCertPath"> {
+  if (dbType === "mssql") return { sslMode: "require", caCertPath: null };
+  if (exposesTlsToggle(dbType)) {
+    // Carry encryption on/off, but drop skip-verify onto the safe side.
+    return {
+      sslMode: sslModeTlsOn(prevSslMode) ? "verify-full" : "prefer",
+      caCertPath: null,
+    };
+  }
+  return { sslMode: "prefer", caCertPath: null };
 }
 
 export function useConnectionDraftForm(
@@ -164,7 +171,7 @@ export function useConnectionDraftForm(
         user: defaults.user,
         database: defaults.database,
         readOnly: false,
-        ...tlsFieldsForDbType(dbType, f.tlsEnabled),
+        ...tlsFieldsForDbType(dbType, f.sslMode),
         paradigm: paradigmOf(dbType),
       };
     });
@@ -258,7 +265,7 @@ export function useConnectionDraftForm(
       // still win.
       const tlsSanitize =
         rest.dbType != null && rest.dbType !== f.dbType
-          ? tlsFieldsForDbType(rest.dbType, f.tlsEnabled)
+          ? tlsFieldsForDbType(rest.dbType, f.sslMode)
           : {};
       return {
         ...f,

@@ -287,11 +287,31 @@ async fn read_connections(
     // from the same presence map `list_connections` uses instead of hardcoding
     // false — otherwise a wallet-secured connection reads as unset on boot.
     let wallet_presence = crate::storage::wallet_password_presence_map()?;
+    // #1649 — the mirror has no CA column, so `into_public` reconstructs
+    // `verify-ca` as `verify-full` with `ca_cert_path: None`. Nothing connects
+    // from the snapshot, so that is safe to *dial* with — but the boot window is
+    // editable: a user who edits and saves a connection before
+    // `loadConnections()` replaces the snapshot would write the null CA path
+    // back to the file SOT and lose it (`storage::save_connection_with_wallet`
+    // replaces the whole entry), and the next save would then be rejected by the
+    // fail-closed `verify-ca` gate. Take the authoritative posture from the file
+    // SOT — the same store the wallet presence map above reads — and close the
+    // window instead of documenting it.
+    let sot_posture: std::collections::HashMap<String, (crate::models::SslMode, Option<String>)> =
+        crate::storage::load_storage_redacted()?
+            .connections
+            .into_iter()
+            .map(|c| (c.id, (c.ssl_mode, c.ca_cert_path)))
+            .collect();
     let items: Vec<ConnectionConfigPublic> = conn_rows
         .into_iter()
         .map(|row| {
             let mut p = row.into_public();
             p.has_wallet_password = *wallet_presence.get(&p.id).unwrap_or(&false);
+            if let Some((ssl_mode, ca_cert_path)) = sot_posture.get(&p.id) {
+                p.ssl_mode = *ssl_mode;
+                p.ca_cert_path = ca_cert_path.clone();
+            }
             p
         })
         .collect();
@@ -362,8 +382,15 @@ impl ConnectionRow {
             paradigm,
             auth_source: self.auth_source,
             replica_set: self.replica_set,
-            tls_enabled: self.tls_enabled.map(|v| v != 0),
-            trust_server_certificate: self.trust_server_certificate.map(|v| v != 0),
+            // #1649 — the mirror keeps the legacy integer columns, so the
+            // posture is folded back out of them. `read_connections` then
+            // overlays the authoritative `ssl_mode`/`ca_cert_path` from the file
+            // SOT, which is the only store that holds the CA path.
+            ssl_mode: crate::models::SslMode::from_legacy(
+                self.tls_enabled.map(|v| v != 0),
+                self.trust_server_certificate.map(|v| v != 0),
+            ),
+            ca_cert_path: None,
             oracle_use_sid: None,
             wallet_path: None,
             // Default; `read_connections` overrides from the file-SOT presence
@@ -529,6 +556,8 @@ mod tests {
     //!
     //! Pool 이 필요 없는 pure-shape 테스트만 — DB-touching 시나리오는 통합
     //! 테스트에 위임.
+
+    use crate::models::SslMode;
 
     use super::*;
     use serde_json::json;
@@ -1039,8 +1068,8 @@ mod tests {
             environment: None,
             auth_source: None,
             replica_set: None,
-            tls_enabled: None,
-            trust_server_certificate: None,
+            ssl_mode: SslMode::Prefer,
+            ca_cert_path: None,
             oracle_use_sid: None,
             wallet_path: None,
             wallet_password: String::new(),

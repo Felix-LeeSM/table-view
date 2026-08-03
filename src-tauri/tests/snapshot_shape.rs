@@ -24,8 +24,8 @@ use serial_test::serial;
 use sqlx::SqlitePool;
 use std::collections::HashMap;
 use table_view_lib::commands::snapshot::get_initial_app_state_inner;
-use table_view_lib::models::ConnectionStatus;
-use table_view_lib::storage::local;
+use table_view_lib::models::{ConnectionConfig, ConnectionStatus, DatabaseType, SslMode};
+use table_view_lib::storage::{self, local};
 use tempfile::TempDir;
 
 async fn setup() -> (TempDir, SqlitePool) {
@@ -532,5 +532,96 @@ async fn test_snapshot_reads_theme_and_safe_mode_from_settings() {
     assert_eq!(json["stores"]["theme"]["mode"], "dark");
     // 영속된 유효 3-tier 값은 wire 로 그대로 round-trip (#1113 하위 호환).
     assert_eq!(json["stores"]["safeMode"]["mode"], "strict");
+    cleanup();
+}
+
+/// #1649 (ADR 0058) — the SQLite mirror has no CA column, so a `verify-ca`
+/// connection reconstructs from it as `verify-full` with `caCertPath: null`.
+/// Nothing connects from the snapshot, so that is harmless to *dial* — but the
+/// boot window is editable, and a user who opens and saves the connection before
+/// `loadConnections()` replaces the snapshot would write the null CA path back
+/// to the file SOT and lose it, after which every save is rejected by the
+/// fail-closed gate. `read_connections` therefore overlays the authoritative
+/// posture from the file SOT. Seeding the mirror with the *lossy* projection is
+/// what makes this test bite: drop the overlay and the assertions below read
+/// back `verify-full` / null.
+#[tokio::test]
+#[serial]
+async fn test_snapshot_restores_verify_ca_and_ca_path_from_the_file_sot() {
+    let (_dir, pool) = setup().await;
+    let now = 1_700_000_000_000i64;
+    let ca_path = "/opt/corp/private/corp-ca.pem";
+
+    storage::save_connection(
+        ConnectionConfig {
+            id: "c-ca".into(),
+            name: "PG private CA".into(),
+            db_type: DatabaseType::Postgresql,
+            host: "localhost".into(),
+            port: 5432,
+            user: "postgres".into(),
+            password: String::new(),
+            database: "postgres".into(),
+            read_only: false,
+            group_id: None,
+            color: None,
+            connection_timeout: None,
+            keep_alive_interval: None,
+            environment: None,
+            auth_source: None,
+            replica_set: None,
+            ssl_mode: SslMode::VerifyCa,
+            ca_cert_path: Some(ca_path.into()),
+            oracle_use_sid: None,
+            wallet_path: None,
+            wallet_password: String::new(),
+        },
+        Some(String::new()),
+    )
+    .expect("file SOT write");
+
+    // The mirror row carries only the legacy integer columns, exactly as
+    // `SslMode::to_legacy` projects `verify-ca`: (tls_enabled=1, trust=0), which
+    // folds back to `verify-full` — the loss this overlay exists to repair.
+    sqlx::query(
+        "INSERT INTO connections(id, name, db_type, host, port, user, password_enc, database, \
+         tls_enabled, trust_server_certificate, sort_order, created_at, updated_at) \
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    )
+    .bind("c-ca")
+    .bind("PG private CA")
+    .bind("postgresql")
+    .bind("localhost")
+    .bind(5432i64)
+    .bind("postgres")
+    .bind("")
+    .bind("postgres")
+    .bind(1i64)
+    .bind(0i64)
+    .bind(0i64)
+    .bind(now)
+    .bind(now)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let snap = get_initial_app_state_inner(&pool, "launcher", &empty_status())
+        .await
+        .unwrap();
+    let json = serde_json::to_value(&snap).unwrap();
+    let items = json["stores"]["connections"]["items"].as_array().unwrap();
+    assert_eq!(items.len(), 1);
+    assert_eq!(
+        items[0]["sslMode"],
+        Value::String("verify-ca".into()),
+        "the boot snapshot must carry the file-SOT posture, not the mirror's \
+         lossy projection"
+    );
+    assert_eq!(
+        items[0]["caCertPath"],
+        Value::String(ca_path.into()),
+        "the CA path lives only in the file SOT — the snapshot must restore it"
+    );
+
     cleanup();
 }

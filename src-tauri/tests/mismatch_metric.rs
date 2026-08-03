@@ -8,7 +8,7 @@
 
 use serial_test::serial;
 use sqlx::SqlitePool;
-use table_view_lib::models::{ConnectionConfig, DatabaseType};
+use table_view_lib::models::{ConnectionConfig, DatabaseType, SslMode};
 use table_view_lib::storage::local;
 use table_view_lib::storage::local_files::{
     save_favorites_file, save_mru_file, save_settings_file, FavoriteRecord, MruRecord,
@@ -54,8 +54,8 @@ async fn ac_370_01_no_drift_when_all_four_domains_match() {
         environment: None,
         auth_source: None,
         replica_set: None,
-        tls_enabled: None,
-        trust_server_certificate: None,
+        ssl_mode: SslMode::Prefer,
+        ca_cert_path: None,
         oracle_use_sid: None,
         wallet_path: None,
         wallet_password: String::new(),
@@ -181,8 +181,8 @@ async fn ac_370_01_drift_in_all_four_domains_triggers_four_increments() {
         environment: None,
         auth_source: None,
         replica_set: None,
-        tls_enabled: None,
-        trust_server_certificate: None,
+        ssl_mode: SslMode::Prefer,
+        ca_cert_path: None,
         oracle_use_sid: None,
         wallet_path: None,
         wallet_password: String::new(),

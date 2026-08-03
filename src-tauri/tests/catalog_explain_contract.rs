@@ -7,6 +7,7 @@ use catalog_explain_contract::{
     RdbExplainUnsupportedContract, ViewContract,
 };
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
+use table_view_lib::models::SslMode;
 use table_view_lib::{
     db::{DbAdapter, DuckdbAdapter, SqliteAdapter},
     models::{ConnectionConfig, DatabaseType},
@@ -31,8 +32,8 @@ fn sqlite_config(path: &str) -> ConnectionConfig {
         environment: None,
         auth_source: None,
         replica_set: None,
-        tls_enabled: None,
-        trust_server_certificate: None,
+        ssl_mode: SslMode::Prefer,
+        ca_cert_path: None,
         oracle_use_sid: None,
         wallet_path: None,
         wallet_password: String::new(),
@@ -57,8 +58,8 @@ fn duckdb_config(path: &str) -> ConnectionConfig {
         environment: None,
         auth_source: None,
         replica_set: None,
-        tls_enabled: None,
-        trust_server_certificate: None,
+        ssl_mode: SslMode::Prefer,
+        ca_cert_path: None,
         oracle_use_sid: None,
         wallet_path: None,
         wallet_password: String::new(),

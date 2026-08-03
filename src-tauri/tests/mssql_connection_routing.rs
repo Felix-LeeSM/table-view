@@ -4,7 +4,7 @@ use table_view_lib::commands::connection::{test_connection, TestConnectionReques
 use table_view_lib::db::{DbAdapter, MssqlAdapter, RdbAdapter};
 use table_view_lib::error::AppError;
 use table_view_lib::models::{
-    ConnectionConfig, ConnectionConfigPublic, DatabaseType, DropTableRequest, QueryType,
+    ConnectionConfig, ConnectionConfigPublic, DatabaseType, DropTableRequest, QueryType, SslMode,
 };
 use testcontainers::core::{IntoContainerPort, WaitFor};
 use testcontainers::runners::AsyncRunner;
@@ -23,8 +23,8 @@ fn mssql_public(
     host: &str,
     port: u16,
     timeout: Option<u32>,
-    tls_enabled: Option<bool>,
-    trust_server_certificate: Option<bool>,
+    ssl_mode: SslMode,
+    ca_cert_path: Option<&str>,
 ) -> ConnectionConfigPublic {
     ConnectionConfigPublic {
         id: "mssql-c1".into(),
@@ -44,8 +44,8 @@ fn mssql_public(
         paradigm: DatabaseType::Mssql.paradigm(),
         auth_source: None,
         replica_set: None,
-        tls_enabled,
-        trust_server_certificate,
+        ssl_mode,
+        ca_cert_path: ca_cert_path.map(String::from),
         oracle_use_sid: None,
         wallet_path: None,
         has_wallet_password: false,
@@ -56,8 +56,7 @@ fn mssql_config(
     port: u16,
     password: &str,
     timeout: Option<u32>,
-    tls_enabled: Option<bool>,
-    trust_server_certificate: Option<bool>,
+    ssl_mode: SslMode,
 ) -> ConnectionConfig {
     ConnectionConfig {
         id: "mssql-live".into(),
@@ -76,8 +75,8 @@ fn mssql_config(
         environment: None,
         auth_source: None,
         replica_set: None,
-        tls_enabled,
-        trust_server_certificate,
+        ssl_mode,
+        ca_cert_path: None,
         oracle_use_sid: None,
         wallet_path: None,
         wallet_password: String::new(),
@@ -184,7 +183,13 @@ async fn test_connection_dispatches_mssql_validation_instead_of_declared_only_re
     let port = unused_tcp_port().await;
 
     let result = test_connection(TestConnectionRequest {
-        config: mssql_public("localhost\\SQLEXPRESS", port, Some(1), Some(false), None),
+        config: mssql_public(
+            "localhost\\SQLEXPRESS",
+            port,
+            Some(1),
+            SslMode::Disable,
+            None,
+        ),
         password: Some("pw".into()),
         wallet_password: None,
         existing_id: None,
@@ -199,12 +204,22 @@ async fn test_connection_dispatches_mssql_validation_instead_of_declared_only_re
     }
 }
 
+/// #1649 — the pre-#1649 version of this test pinned "TLS on without an
+/// explicit trustServerCertificate decision is rejected before the network".
+/// `SslMode` cannot express that combination, so the property moved into the
+/// type. What still needs pinning at this boundary is the one posture that
+/// carries a companion requirement: `verify-ca` with no CA file names a trust
+/// anchor the machine does not have, and must be rejected before a socket is
+/// opened rather than quietly dialed as the `verify-full` the user did not
+/// pick. The port is unused, so reaching the network would surface as a
+/// connection error instead of a validation error — that difference is the
+/// assertion. (2026-08-02)
 #[tokio::test]
-async fn test_connection_requires_tls_trust_decision_before_network() {
+async fn test_connection_rejects_verify_ca_without_a_ca_file_before_network() {
     let port = unused_tcp_port().await;
 
     let result = test_connection(TestConnectionRequest {
-        config: mssql_public("127.0.0.1", port, Some(1), Some(true), None),
+        config: mssql_public("127.0.0.1", port, Some(1), SslMode::VerifyCa, None),
         password: Some("pw".into()),
         wallet_password: None,
         existing_id: None,
@@ -213,9 +228,15 @@ async fn test_connection_requires_tls_trust_decision_before_network() {
 
     match result {
         Err(AppError::Validation(msg)) => {
-            assert!(msg.contains("trustServerCertificate"));
+            assert!(
+                msg.contains("verify-ca") && msg.contains("CA certificate"),
+                "the rejection must name the missing CA file so the user can fix it, got: {msg}"
+            );
         }
-        other => panic!("Expected SQL Server TLS validation rejection, got: {other:?}"),
+        other => panic!(
+            "verify-ca without a CA file must be rejected as invalid configuration, \
+             not dialed, got: {other:?}"
+        ),
     }
 }
 
@@ -231,7 +252,7 @@ async fn mssql_login_uses_configured_connection_timeout() {
     });
 
     let start = Instant::now();
-    let result = MssqlAdapter::test(&mssql_config(port, "pw", Some(1), Some(false), None)).await;
+    let result = MssqlAdapter::test(&mssql_config(port, "pw", Some(1), SslMode::Disable)).await;
     listener_task.abort();
 
     assert!(
@@ -259,8 +280,7 @@ async fn mssql_adapter_inventory_probe_succeeds_against_live_mssql_serverpropert
         port,
         MSSQL_PASSWORD,
         Some(15),
-        Some(false),
-        None,
+        SslMode::Disable,
     ))
     .await
     .expect("live SQL Server connection test probe should succeed");
@@ -283,8 +303,7 @@ async fn mssql_runtime_slice_covers_catalog_query_batch_and_cancel() {
             port,
             MSSQL_PASSWORD,
             Some(20),
-            Some(false),
-            None,
+            SslMode::Disable,
         ))
         .await
         .expect("connect MSSQL runtime adapter");

@@ -213,9 +213,9 @@ impl OracleAdapter {
         // driver's `danger_accept_invalid_certs` is a no-op (threat model
         // §0.1/D1), so honoring them would be a lie. The wallet field is the
         // only Oracle TLS trigger.
-        if config.tls_enabled.unwrap_or(false) || config.trust_server_certificate.unwrap_or(false) {
+        if config.ssl_mode.tls_on() {
             return Err(AppError::Validation(
-                "Oracle uses an mTLS wallet, not the trust-server-certificate toggle; leave those MSSQL options unset (#1065)".into(),
+                "Oracle uses an mTLS wallet, not the sslmode toggle; leave the TLS posture at disable or prefer (#1065)".into(),
             ));
         }
 

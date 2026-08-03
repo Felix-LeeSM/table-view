@@ -6,7 +6,7 @@ use common::query_result_contracts::{
 };
 use table_view_lib::db::{DbAdapter, DuckdbAdapter, RdbAdapter};
 use table_view_lib::error::AppError;
-use table_view_lib::models::{ConnectionConfig, DatabaseType};
+use table_view_lib::models::{ConnectionConfig, DatabaseType, SslMode};
 use tempfile::TempDir;
 
 fn duckdb_config(path: &str, read_only: bool) -> ConnectionConfig {
@@ -27,8 +27,8 @@ fn duckdb_config(path: &str, read_only: bool) -> ConnectionConfig {
         environment: None,
         auth_source: None,
         replica_set: None,
-        tls_enabled: None,
-        trust_server_certificate: None,
+        ssl_mode: SslMode::Prefer,
+        ca_cert_path: None,
         oracle_use_sid: None,
         wallet_path: None,
         wallet_password: String::new(),

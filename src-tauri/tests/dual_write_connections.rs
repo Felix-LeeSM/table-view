@@ -28,6 +28,7 @@ use table_view_lib::commands::persist_favorites::{persist_favorite_inner, Persis
 use table_view_lib::commands::persist_mru::{persist_mru_inner, PersistMruRequest};
 use table_view_lib::commands::persist_settings::{persist_setting_inner, PersistSettingRequest};
 use table_view_lib::error::AppError;
+use table_view_lib::models::SslMode;
 use table_view_lib::storage::local;
 use table_view_lib::storage::meta::{set_legacy_import_state, LegacyImportState};
 use table_view_lib::storage::reconcile::mismatch_counter;
@@ -72,8 +73,8 @@ fn sample_connection_req(id: &str, name: &str) -> PersistConnectionRequest {
         environment: None,
         auth_source: None,
         replica_set: None,
-        tls_enabled: None,
-        trust_server_certificate: None,
+        ssl_mode: SslMode::Prefer,
+        ca_cert_path: None,
         sort_order: 0,
     }
 }

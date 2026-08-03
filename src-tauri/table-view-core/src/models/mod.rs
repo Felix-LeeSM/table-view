@@ -9,7 +9,7 @@ pub mod search;
 
 pub use connection::{
     ConnectionConfig, ConnectionConfigPublic, ConnectionGroup, ConnectionStatus, DatabaseType,
-    Paradigm, StorageData,
+    Paradigm, SslMode, StorageData,
 };
 pub use data_source::{
     get_data_source_profile, BackendAdapterCapability, BackendAdapterCapabilitySource,

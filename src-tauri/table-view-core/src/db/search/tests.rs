@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 
 use super::*;
-use crate::models::{SearchDeleteByQueryRequest, SearchDestructiveSafety};
+use crate::models::{SearchDeleteByQueryRequest, SearchDestructiveSafety, SslMode};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 use tokio::task::JoinHandle;
@@ -300,9 +300,13 @@ async fn search_root_network_errors_redact_url_and_credentials() {
 #[tokio::test]
 async fn elasticsearch_root_probe_tls_errors_are_classified_without_url() {
     // Reason: issue #898 requires Search HTTP TLS failures to be distinct and redacted (2026-06-16).
+    // Reason: #1649 — the TLS-on posture is now `SslMode::VerifyFull`, which
+    // selects the `https` base-URL scheme and keeps reqwest's certificate
+    // verification, so a plaintext server on that port still fails as a TLS
+    // error rather than a plain network error. (2026-08-02)
     let (port, server) = spawn_plain_tcp_server().await;
     let mut config = search_config(port);
-    config.tls_enabled = Some(true);
+    config.ssl_mode = SslMode::VerifyFull;
 
     let result = SearchEngineAdapter::test(&config).await;
     server.abort();
@@ -1189,8 +1193,8 @@ fn search_config_for(port: u16, db_type: DatabaseType) -> ConnectionConfig {
         environment: None,
         auth_source: None,
         replica_set: None,
-        tls_enabled: Some(false),
-        trust_server_certificate: None,
+        ssl_mode: SslMode::Prefer,
+        ca_cert_path: None,
         oracle_use_sid: None,
         wallet_path: None,
         wallet_password: String::new(),

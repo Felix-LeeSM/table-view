@@ -16,7 +16,7 @@ function makeDraft(overrides: Partial<ConnectionDraft> = {}): ConnectionDraft {
     groupId: null,
     color: null,
     paradigm: "kv",
-    tlsEnabled: false,
+    sslMode: "prefer",
     ...overrides,
   };
 }
@@ -114,27 +114,24 @@ describe("RedisFormFields", () => {
     }
 
     it("reveals the trust checkbox only once TLS is on", () => {
-      renderRedis({ tlsEnabled: false });
+      renderRedis({ sslMode: "prefer" });
       expect(
         screen.queryByLabelText("Trust server certificate"),
       ).not.toBeInTheDocument();
-      renderRedis({ tlsEnabled: true });
+      renderRedis({ sslMode: "verify-full" });
       expect(
         screen.getByLabelText("Trust server certificate"),
       ).toBeInTheDocument();
     });
 
-    it("clears a stale trust choice when TLS is turned off", () => {
-      const onChange = renderRedis({
-        tlsEnabled: true,
-        trustServerCertificate: true,
-      });
+    it("clears a stale skip-verify choice when TLS is turned off", () => {
+      const onChange = renderRedis({ sslMode: "require" });
       act(() => {
         fireEvent.click(screen.getByLabelText("Enable TLS"));
       });
       expect(onChange).toHaveBeenCalledWith({
-        tlsEnabled: false,
-        trustServerCertificate: null,
+        sslMode: "prefer",
+        caCertPath: null,
       });
     });
   });
