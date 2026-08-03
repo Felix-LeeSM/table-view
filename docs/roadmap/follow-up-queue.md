@@ -147,9 +147,12 @@ source order is clear.
 
 ### Quality gates
 
-**Follow-up**: Promote a11y, perf, E2E isolation, link checking, dependency
-security CI, and platform smoke gaps from `testing-and-quality.md` only when
-they block an active feature lane and have owner/runtime-cost/triage paths.
+**Follow-up**: Promote a11y, perf, E2E isolation, dependency security CI, and
+platform smoke gaps from `testing-and-quality.md` only when they block an active
+feature lane and have owner/runtime-cost/triage paths. Link checking left this
+list in #2125: internal markdown link targets are now checked by
+`scripts/docs-links.ts` as a blocking frontend test. External URLs were not part
+of that promotion and stay unchecked.
 
 ### Refactor backlog
 

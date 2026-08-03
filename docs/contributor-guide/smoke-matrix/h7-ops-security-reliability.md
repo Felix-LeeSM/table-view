@@ -259,12 +259,24 @@ FPS/latency budgets only with owner, runtime cost, and failure triage.
 
 ## Link checking
 
+Current evidence:
+
+- `scripts/docs-links.ts`
+- `scripts/__tests__/docs-links.test.ts`
+- `tests/fixtures/docs-links/`
+
 Current gap / routing:
 
-No link checker exists. Nothing verifies that a relative markdown target or
-anchor resolves, in any doc root, so touched links are reviewed by hand.
-Introducing a check remains future work after owner, runtime cost, and
-actionability settle.
+Internal markdown link targets are automated and blocking. The gate runs as a
+vitest file inside `Frontend Tests (shard N/3)`, so a relative target or heading
+anchor that does not resolve turns `Frontend Checks` red; it reads every `*.md`
+git tracks except frozen `docs/archives` and its own fixture directory. What
+stays manual: external URLs are never fetched, an anchor that only one of the
+two slugger conventions resolves is not reported, and whether a resolving link
+points at the *right* document is still reviewer judgement. Dead links inside
+frozen ADR bodies are parked in a named allowlist in `scripts/docs-links.ts`
+rather than repaired. Promoting any of those needs the same owner, runtime cost,
+and actionability this one had to show.
 
 ## Platform smoke
 
