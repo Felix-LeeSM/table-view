@@ -20,6 +20,12 @@
 //! 2026-08-01 (#1814) 추가 — 디스크 `.key` 를 거친 키는 keyring 이 돌아왔을 때
 //! 그대로 살리지 않고 새 키로 갈아탄다 (재키잉). 파일 아래쪽 「#1814」 절이
 //! 재키잉 자체와 중단 지점 3곳의 다음 부팅 복구를 단언한다.
+//!
+//! 2026-08-02 (#1815) 추가 — 위 invariant 목록 중 실제로 단언되지 않던 셋을
+//! 파일 아래쪽 「#1815」 절이 메운다: ciphertext probe 실패의 fail-closed,
+//! sentinel 이 다음 부팅에서 회수되는 재시도 계약, 그리고 secure delete 가
+//! unlink 전에 실제로 바이트를 덮어썼는지. 셋 다 `KeyOutcome` 이 아니라
+//! 파일시스템에 남은 상태로만 판별된다.
 
 use std::fs;
 use std::path::Path;
@@ -469,5 +475,149 @@ fn issue_1814_unreadable_leftover_key_file_does_not_break_boot() {
     assert!(
         !disk_key_path(dir.path()).exists(),
         "the zeroed .key residue must be removed"
+    );
+}
+
+// --------------------- #1815 잔여 공백 -----------------------------------
+//
+// Path B 는 네 단계다 — (a) keyring write, (b) readback, (c) ciphertext probe,
+// (d) secure delete. (a) 의 실패만 `ac_356_04_*` 가 덮고 있었고, (c) 의 실패와
+// (d) 의 실제 덮어쓰기, 그리고 (a) 가 남긴 sentinel 을 다음 부팅이 회수하는
+// 계약은 어디에서도 단언되지 않았다. 셋 다 반환값이 아니라 디스크에 남은
+// 상태가 진실이라 통합 테스트에서만 판별된다.
+
+/// (c) ciphertext probe 실패는 fail-closed 다 — 디스크 `.key` 로 열리지 않는
+/// 암호문 앞에서 migration 을 완주하면 (d) 가 그 `.key` 를 지우고, 그 순간
+/// 저장된 password 전량이 영구 복호화 불가가 된다. probe 는 그 파괴를 막는
+/// 유일한 관문이므로 「디스크 `.key` 가 읽을 수 있는 채로 남았는가」까지 본다.
+/// 단 그 관문은 `password` 필드에만 열려 있다 — probe 도
+/// `data_has_password_ciphertext` 도 `conn.get("password")` 만 읽어
+/// `SECRET_FIELDS` 의 `wallet_password` 를 안 본다. wallet password 만 가진
+/// 프로필은 probe 를 통과해 (d) 까지 간다 (프로덕션 결함, raw #2111).
+#[test]
+fn path_b_ciphertext_probe_failure_preserves_the_key_and_leaves_a_sentinel() {
+    let dir = TempDir::new().unwrap();
+    let disk_key: Vec<u8> = (0..32u8).collect();
+    // 이 프로필의 암호문은 이 머신 어디에도 없는 키로 감싸여 있다 — 디스크
+    // `.key` 를 그대로 이주시켜도 데이터는 안 열린다.
+    let lost_key: Vec<u8> = (200..232u8).collect();
+    seed_disk_key(dir.path(), &disk_key);
+    seed_connections_json(dir.path(), &lost_key, &["alpha"]);
+    let backend = InMemoryKeyringBackend::new_available();
+
+    let outcome =
+        migrate_or_initialize(&backend, dir.path()).expect("a failed probe must not fail the boot");
+
+    assert_eq!(outcome.source, KeySource::DiskFallback);
+    assert!(outcome.fallback_to_disk);
+    assert_eq!(outcome.key, disk_key);
+
+    let disk_path = disk_key_path(dir.path());
+    assert!(
+        disk_path.exists(),
+        "probe failure must not reach the secure delete"
+    );
+    assert_eq!(
+        BASE64
+            .decode(fs::read_to_string(&disk_path).unwrap().trim())
+            .expect("the preserved .key must still decode"),
+        disk_key,
+        "the preserved .key must be intact, not zero-overwritten"
+    );
+    assert!(
+        migration_failed_sentinel_path(dir.path()).exists(),
+        "the next boot needs the retry marker"
+    );
+    // (a) 는 이미 성공한 뒤라 keyring 은 롤백되지 않는다. 다음 부팅이
+    // 「keyring hit + 디스크 `.key` 존재」로 들어가고, 거기서도 어느 키도
+    // 암호문을 못 여니 #1814 재키잉이 둘 다 보존한 채 넘어간다.
+    assert_eq!(
+        backend.get(KEYRING_ENTRY_NAME).unwrap().unwrap(),
+        disk_key,
+        "the keyring write from step (a) is not rolled back"
+    );
+}
+
+/// sentinel 의 존재 이유는 「다음 부팅이 재시도한다」이고, 재시도가 성공하면
+/// 회수돼야 한다. 회수가 빠지면 이주가 끝난 프로필이 영구히 실패로 보인다.
+/// 실패 부팅과 성공 부팅을 연달아 돌려 그 전이를 통째로 잠근다.
+#[test]
+fn path_b_successful_retry_clears_the_sentinel_left_by_a_failed_boot() {
+    let dir = TempDir::new().unwrap();
+    let original_key: Vec<u8> = (0..32u8).collect();
+    seed_disk_key(dir.path(), &original_key);
+    let backend = InMemoryKeyringBackend::new_available();
+    let sentinel = migration_failed_sentinel_path(dir.path());
+
+    // 부팅 1 — keyring write 실패.
+    backend.set_set_should_fail(true);
+    let failed = migrate_or_initialize(&backend, dir.path()).expect("failure must not panic");
+    assert_eq!(failed.source, KeySource::DiskFallback);
+    assert!(sentinel.exists(), "precondition: the failed boot marked it");
+
+    // 부팅 2 — keyring 이 다시 쓰기 가능해졌다.
+    backend.set_set_should_fail(false);
+    let retried = migrate_or_initialize(&backend, dir.path()).expect("retry must succeed");
+
+    assert_eq!(retried.source, KeySource::MigratedFromDisk);
+    assert_eq!(retried.key, original_key);
+    assert!(
+        !sentinel.exists(),
+        "a successful retry must reclaim the marker, or the profile looks broken forever"
+    );
+    assert!(
+        !disk_key_path(dir.path()).exists(),
+        "the retry completes the migration it deferred"
+    );
+    assert_eq!(
+        backend.get(KEYRING_ENTRY_NAME).unwrap().unwrap(),
+        original_key
+    );
+}
+
+/// AC-356-02 의 secure delete 는 unlink 하나가 아니라 세 동작이다 — zero
+/// overwrite, 0o000 mode, 그리고 unlink. 기존 테스트는 전부 `!path.exists()`
+/// 만 봐서 앞의 둘이 통째로 빠져도 green 이었다 — unlink 는 블록을 지우지
+/// 않으므로 그 차이가 곧 디스크에 남는 master key 평문이다.
+///
+/// 같은 inode 를 가리키는 두 번째 이름을 미리 걸어두면 unlink 뒤에도 그 inode
+/// 가 살아남아, secure delete 가 남긴 바이트와 mode 를 그대로 읽을 수 있다.
+#[cfg(unix)]
+#[test]
+fn path_b_secure_delete_zeroes_the_key_bytes_and_marks_the_inode() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let dir = TempDir::new().unwrap();
+    let original_key: Vec<u8> = (0..32u8).collect();
+    seed_disk_key(dir.path(), &original_key);
+    let disk_path = disk_key_path(dir.path());
+    let witness = dir.path().join("key-inode-witness");
+    fs::hard_link(&disk_path, &witness).expect("a second name for the same inode");
+    let seeded_len = fs::metadata(&disk_path).unwrap().len();
+    assert!(seeded_len > 0, "precondition: the seeded .key has content");
+
+    let backend = InMemoryKeyringBackend::new_available();
+    let outcome = migrate_or_initialize(&backend, dir.path()).expect("Path B must succeed");
+    assert_eq!(outcome.source, KeySource::MigratedFromDisk);
+    assert!(!disk_path.exists(), "precondition: the .key name is gone");
+
+    // 0o000 마커 — unlink 를 앞지른 프로세스가 handle 을 들고 있어도 쓸모없게 만든다.
+    assert_eq!(
+        fs::metadata(&witness).unwrap().permissions().mode() & 0o777,
+        0o000,
+        "secure_delete must leave the 0o000 marker on the inode"
+    );
+
+    // 0o000 이면 소유자도 못 읽는다 — 마커를 확인한 뒤 되돌려 잔재를 본다.
+    fs::set_permissions(&witness, fs::Permissions::from_mode(0o600)).unwrap();
+    let residue = fs::read(&witness).unwrap();
+    assert_eq!(
+        residue.len() as u64,
+        seeded_len,
+        "the overwrite is length-matched, so an empty read would be a false pass"
+    );
+    assert!(
+        residue.iter().all(|byte| *byte == 0),
+        "the key bytes must be overwritten before the unlink, not merely unlinked"
     );
 }

@@ -381,6 +381,25 @@ jobs:
       - name: Run parse_sql_backend integration test
         run: cargo test --manifest-path src-tauri/Cargo.toml --test parse_sql_backend
 
+      # #1815 (2026-08-02) — the same omission as the two comments above, found
+      # again on the master-key lifecycle. `--test` is an allowlist, so the
+      # `keyring_*` binaries had never run in CI: pinned to the base commit,
+      # `git grep -i keyring c085c31b -- .github/workflows/` still returns 0
+      # hits, and the coverage job below names its integration targets one by
+      # one with no keyring among them. They pass and always did — they
+      # simply gated nothing, which is why a `secure_delete` gutted to a bare
+      # unlink stays green across the whole pre-existing suite.
+      # Wired into this plain-test job rather than the coverage job on purpose:
+      # the coverage job carries `--fail-under-*` ratchets and adding targets
+      # there moves the denominator. Promote them if the key lifecycle ever
+      # needs a coverage floor of its own.
+      - name: Run keyring lifecycle integration tests
+        run: |
+          cargo test --manifest-path src-tauri/Cargo.toml \
+            --test keyring_migration \
+            --test keyring_new_user \
+            --test keyring_linux_fallback
+
   rust-static:
     name: Rust Static Analysis
     runs-on: ubuntu-latest
