@@ -97,6 +97,29 @@ const gitGrep = (argv) => {
 const excludes = NO_EXCLUDE ? [] : FROZEN;
 const lines = (s) => s.split("\n").filter(Boolean);
 
+// M 의 name-status. arm A(R 행)와 arm D(A 행)가 같은 것을 읽으므로 한 번만 돈다.
+//
+// M 은 히스토리에 있는 커밋이라 **얕은 클론에는 객체가 없다** — `actions/checkout`
+// 의 기본값이 depth 1 이고, 그 위에서 이 스크립트는 `fatal: bad object` 로 죽으면서
+// stdout 을 한 글자도 안 낸다. 원인이 안 보이는 실패라서 여기서 진단 문장으로 바꾼다.
+// CI 쪽 대응은 이 스크립트를 돌리는 잡의 `fetch-depth: 0` 이다.
+let nameStatusCache = null;
+function nameStatus() {
+  if (nameStatusCache) return nameStatusCache;
+  try {
+    nameStatusCache = lines(
+      git(["diff-tree", "-r", "-M", "--name-status", MERGE]),
+    );
+  } catch (err) {
+    throw new Error(
+      `merge commit ${MERGE} is not in this checkout — shallow clone? ` +
+        "fetch the full history (CI: actions/checkout with fetch-depth: 0), " +
+        `or pass --merge <SHA>. git said: ${String(err.stderr ?? err.message).trim()}`,
+    );
+  }
+  return nameStatusCache;
+}
+
 // ── arm A — 이동 경로를 언급하는 자리 ────────────────────────────────────
 //
 // 용어 집합은 M 의 rename(R) 행에서 나온다. old 경로 하나마다
@@ -107,7 +130,7 @@ const lines = (s) => s.split("\n").filter(Boolean);
 // 는 옛 배치에서 `src-tauri/src/` 상대였고 지금은 core crate 상대라, 전체 경로
 // grep 으로는 구조적으로 안 잡힌다.
 function movedPaths() {
-  const rows = lines(git(["diff-tree", "-r", "-M", "--name-status", MERGE]))
+  const rows = nameStatus()
     .filter((l) => l.startsWith("R"))
     .map((l) => l.split("\t"));
   return { olds: rows.map((r) => r[1]), news: rows.map((r) => r[2]) };
@@ -140,9 +163,12 @@ function armATerms(olds) {
 }
 
 // 매치를 감싼 "경로처럼 생긴 토큰". 백틱/괄호/문장부호 안에서 경로만 떼어낸다.
+// `.` 이 문자셋에 있어서 앞뒤 문장부호가 토큰에 붙어 온다. 정규화가 그것을 벗긴다 —
+// 벗기지 않으면 `git ls-files` 로 푸는 처분 규칙이 0건을 받고 불발한다.
 const PATH_TOKEN = /[A-Za-z0-9_.*{}-]+(?:\/[A-Za-z0-9_.*{}-]+)+\/?\**/g;
-const normalizeToken = (t) =>
+export const normalizeToken = (t) =>
   t
+    .replace(/^\.{3,}\//, "") // `.../db/mysql/connection.rs` → 생략 표기를 벗긴다
     .replace(/[).,:;'"`]+$/, "")
     .replace(/(\/\*+)+$/, "") // `src-tauri/src/**` → `src-tauri/src`
     .replace(/\/$/, "");
@@ -216,7 +242,14 @@ function armA() {
       return !existsSync(abs(n)) || terms.has(n);
     });
     if (!evidence && tokens.length > 0) continue;
-    hits.push({ arm: "A", path, no, evidence: evidence ?? term, text });
+    // 정규화한 형태로 담는다 — 처분 규칙이 evidence 를 경로로 다시 푼다.
+    hits.push({
+      arm: "A",
+      path,
+      no,
+      evidence: evidence ? normalizeToken(evidence) : term,
+      text,
+    });
   }
   return hits;
 }
@@ -255,8 +288,17 @@ const armB = () =>
 // 그 근처가 이 서술이 사는 자리다.
 // 뒤쪽 경계를 두지 않는다. 한국어 수량사는 조사가 바로 붙어서 (`4종이 전부다`)
 // 경계를 요구하면 이 클래스의 대표 문장이 통째로 빠진다.
+//
+// 명사는 **분리가 바꾼 집합의 이름**만 담는다. `step` 은 뺐다 — 이 저장소에서
+// 수사+step 은 전부 절차·잡 step 을 가리키고(`4-step contract`, `the two steps
+// above`) 분리와 무관한데, `sits one step further out` 같은 부사구를 오탐한다.
+// 반증 명령 (스윕 범위, `\b` 는 git grep -E 에서 안 통해 쓰지 않는다):
+//   git grep -nE '(one|two|three|four|five|[0-9]+)[ -]?steps?' -- . \
+//     ':!docs/archives/**' ':!docs/explorations/**' ':!docs/decisions/**'
+// 출력을 전수로 읽으면 절차 step 과 잡 step 뿐이고, 분리가 바꾼 집합을 세는
+// 문장은 하나도 없다. 개수는 여기 안 적는다 — 이 주석 자체가 그 출력에 잡힌다.
 const CARDINAL =
-  /(^|[^\p{L}\p{N}])(one|two|three|four|five|six|seven|eight|nine|ten|하나|둘|셋|넷|다섯|여섯|일곱|여덟|\d+)[ -]?(개|종|벌|곳|가지|commands?|manifests?|crates?|lanes?|steps?|files?|invocations?|packages?)/u;
+  /(^|[^\p{L}\p{N}])(one|two|three|four|five|six|seven|eight|nine|ten|하나|둘|셋|넷|다섯|여섯|일곱|여덟|\d+)[ -]?(개|종|벌|곳|가지|commands?|manifests?|crates?|lanes?|files?|invocations?|packages?)/u;
 const WINDOW = 3;
 
 function armC() {
@@ -303,7 +345,7 @@ function armC() {
 // 생긴 `lib.rs` · `mod.rs` 는 원래 저장소에 수십 벌이라 분리가 만든 모호함이
 // 아니다.
 function armD() {
-  const added = lines(git(["diff-tree", "-r", "-M", "--name-status", MERGE]))
+  const added = nameStatus()
     .filter((l) => l.startsWith("A"))
     .map((l) => l.split("\t")[1]);
   const names = new Set();
@@ -347,6 +389,11 @@ function armD() {
 // 이 부류에 가려졌다. 줄·문구 단위 술어로 좁힐 수 있지만 줄이 밀리면 같이 썩는다.
 // 그 파일들에 manifest 없는 **실행 지시**가 새로 들어오는 일이 실제로 생기면 그때
 // 좁힌다.
+//
+// ponytail: arm C 의 ±3 줄 창도 같은 부류의 천장이다 — cargo 줄에서 먼 닫힌 개수
+// 서술은 안 보인다. `docs/contributor-guide/testing-and-quality.md` 의 llvm-cov
+// 절이 그렇고(거리 7), 그 개수들은 잡 id 와 커밋 SHA 로 시점을 박은 측정 기록이라
+// 지금은 안 썩는다. 창을 넓히면 무관한 산문이 같이 딸려 온다.
 
 const CI_GATES = new Set([".github/workflows/ci.yml", "lefthook.yml"]);
 const SELF_TEST = "scripts/__tests__/core-split-prose.test.ts";
@@ -365,6 +412,29 @@ function enclosingCrate(path) {
     if (existsSync(abs(join(dir, "Cargo.toml")))) return dir;
   }
   return null;
+}
+
+// 펜스 블록이 세운 작업 디렉토리. arm B 는 줄 단위라 블록 첫 줄의 `cd <dir>` 를 못
+// 보는데, 그 블록 안에서 맨 cargo 는 그 디렉토리의 manifest 로 풀린다.
+// 줄 배열을 받는 순수 함수다 — 픽스처 파일 없이 단언할 수 있고, 픽스처를 두면
+// 그 파일이 다시 이 스윕의 hit 이 된다.
+export function cwdFromBlock(src, lineNo) {
+  let open = false;
+  let cwd = null;
+  for (let n = 1; n <= lineNo && n <= src.length; n++) {
+    const line = src[n - 1];
+    // 펜스를 지날 때마다 리셋한다 — 닫힌 뒤의 `cd` 는 산문이라 문맥이 아니고,
+    // 다음 블록이 앞 블록의 `cd` 를 물려받지도 않는다.
+    if (/^\s*```/.test(line)) {
+      open = !open;
+      cwd = null;
+      continue;
+    }
+    if (!open) continue;
+    const m = /^\s*cd\s+(\S+)/.exec(line);
+    if (m) cwd = m[1];
+  }
+  return cwd;
 }
 
 // crate 상대 tail 이 저장소에서 몇 개로 풀리나. `*/x` 글롭은 세그먼트 경계를 안
@@ -416,12 +486,27 @@ const DISPOSITIONS = [
     test: (h) => h.arm === "B" && enclosingCrate(h.path) !== null,
   },
   {
+    id: "B/block-sets-working-directory",
+    why: "그 줄을 감싼 펜스 블록이 `cd <crate>` 로 작업 디렉토리를 세운다 — 블록 안에서 맨 cargo 는 그 디렉토리의 manifest 로 풀린다. arm B 는 줄 단위라 그 문맥을 못 본다",
+    test: (h) => {
+      if (h.arm !== "B") return false;
+      const dir = cwdFromBlock(
+        readFileSync(abs(h.path), "utf8").split("\n"),
+        Number(h.no),
+      );
+      return dir !== null && existsSync(abs(join(dir, "Cargo.toml")));
+    },
+  },
+  {
     id: "B/gate-passes-manifest",
-    why: "실제 step 은 `--manifest-path` 를 주거나 `working-directory` 를 건다. hit 은 그 step 을 설명하는 주석·이름이라 명령이 아니다",
+    why: "게이트 배선 파일이고, 그 hit 이 실행 줄이면 감싼 step 이 `--manifest-path` 나 `working-directory` 로 crate 를 고른다 — 나머지는 그 step 을 설명하는 주석·이름이다",
     test: (h) => h.arm === "B" && CI_GATES.has(h.path),
   },
   {
     id: "B/names-the-lane",
+    // 경로 목록은 각 항목이 실제로 hit 을 덮는지 재고 넣는다. `docs/roadmap/h7.md`
+    // 가 처음엔 있었는데 0건이었다 — 그 파일의 cargo 줄에는 `--manifest-path` 가
+    // 같이 있어 arm B 가 애초에 안 내보낸다.
     why: "cargo 를 돌리라는 지시가 아니라 lane·도구·소비자를 이름으로 부르는 산문이다. manifest 를 붙이면 문장이 명령으로 오독된다",
     test: (h) =>
       h.arm === "B" &&
@@ -429,7 +514,6 @@ const DISPOSITIONS = [
         h.path.startsWith("tests/fixtures/") ||
         [
           "docs/contributor-guide/smoke-matrix/h7-ops-security-reliability.md",
-          "docs/roadmap/h7.md",
           "memory/engineering/architecture/memory.md",
           "memory/workflow/git-policy/memory.md",
         ].includes(h.path)),

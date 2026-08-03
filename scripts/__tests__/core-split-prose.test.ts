@@ -2,7 +2,12 @@ import { spawnSync } from "node:child_process";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { classify, segmentAligned } from "../sweep/core-split-prose.mjs";
+import {
+  classify,
+  cwdFromBlock,
+  normalizeToken,
+  segmentAligned,
+} from "../sweep/core-split-prose.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "..", "..");
@@ -49,6 +54,49 @@ describe("core-split-prose sweep", () => {
     ).toBe(true);
   });
 
+  // Reason: arm B 는 줄 단위라 펜스 블록 첫 줄의 `cd <dir>` 를 못 본다. 그 문맥을
+  // 안 읽으면 정상 문서가 미처분 hit 으로 남아 게이트가 red 로 굳는다.
+  it("reads the working directory a fenced block sets", () => {
+    const block = [
+      "```bash",
+      "cd src-tauri",
+      "cargo llvm-cov nextest --profile push --lib",
+      "```",
+      "cd src-tauri",
+    ];
+    expect(cwdFromBlock(block, 3)).toBe("src-tauri");
+    // 블록이 닫힌 뒤의 `cd` 는 문맥을 안 세운다.
+    expect(cwdFromBlock(block, 5)).toBeNull();
+  });
+
+  // Reason: `PATH_TOKEN` 문자셋에 `.` 가 있어서 생략 표기와 문장부호가 토큰에 붙어
+  // 온다. 안 벗기면 evidence 가 `git ls-files` 로 안 풀려 처분 규칙이 불발한다.
+  it("strips ellipsis and trailing punctuation off a path token", () => {
+    expect(normalizeToken(".../db/mysql/connection.rs")).toBe(
+      "db/mysql/connection.rs",
+    );
+    expect(normalizeToken("src-tauri/src/**")).toBe("src-tauri/src");
+    // 상대 경로 `../` 는 생략 표기가 아니다 — 건드리지 않는다.
+    expect(normalizeToken("../review/memory.md")).toBe("../review/memory.md");
+  });
+
+  // Reason: 얕은 체크아웃(`actions/checkout` 기본값 depth 1)에는 그 커밋 객체가
+  // 없다. 예전엔 `fatal: bad object` 만 남고 stdout 이 비어서, 게이트가 red 인데
+  // 원인이 안 보였다.
+  it("names the shallow-clone cause when the merge commit is missing", () => {
+    const run = spawnSync(
+      "node",
+      [sweep, "--check", "--merge", "0".repeat(40)],
+      {
+        cwd: repoRoot,
+        encoding: "utf8",
+        timeout: 50_000,
+      },
+    );
+    expect(run.status).not.toBe(0);
+    expect(run.stderr).toContain("fetch-depth: 0");
+  });
+
   // Reason: 처분 규칙은 저장소 상태를 읽는다 (감싸는 crate, tail 이 몇 개로 풀리나).
   // 다음 이동이 규칙 밖 자리를 만들면 여기서 red 가 나야 그때 처분이 붙는다.
   it("has a disposition for every hit in the current tree", {
@@ -62,6 +110,14 @@ describe("core-split-prose sweep", () => {
       encoding: "utf8",
       timeout: 50_000,
     });
+    // 죽은 경우를 먼저 가른다 — stdout 이 비면 아래 두 단언은 원인을 못 보여준다
+    // (`not.toContain` 은 빈 문자열에서 무조건 통과한다). `merge=` 는 `--check` 가
+    // 무조건 내는 첫 줄이라, 이 단언은 "돌기는 했나" 만 묻는다.
+    expect(run.error ?? null).toBeNull();
+    expect(
+      run.stdout,
+      `sweep produced no output; stderr: ${run.stderr}`,
+    ).toContain("merge=");
     expect(run.stdout).not.toContain("UNCLASSIFIED");
     expect(run.stdout).toContain("unclassified=0");
     expect(run.status).toBe(0);
