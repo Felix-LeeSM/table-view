@@ -93,7 +93,23 @@ generator: none — 손으로 갱신한다
 - [Frontend Guidance](../../memory/engineering/conventions/frontend/memory.md)
 - [React / TypeScript 컨벤션](../../memory/engineering/conventions/react/memory.md)
 
+### `src/components/datagrid/**`
+
+- [Cross-paradigm UI Parity 머지 기준](../../memory/product/ui-parity/memory.md)
+
+### `src/components/document/**`
+
+- [Cross-paradigm UI Parity 머지 기준](../../memory/product/ui-parity/memory.md)
+
 ### `src/components/query/**`
+
+- [Cross-paradigm UI Parity 머지 기준](../../memory/product/ui-parity/memory.md)
+
+### `src/components/rdb/**`
+
+- [Cross-paradigm UI Parity 머지 기준](../../memory/product/ui-parity/memory.md)
+
+### `src/components/shared/QuickLookPanel/**`
 
 - [Cross-paradigm UI Parity 머지 기준](../../memory/product/ui-parity/memory.md)
 

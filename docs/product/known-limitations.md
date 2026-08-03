@@ -78,10 +78,12 @@ smoke or measurement gates:
   binding is not listed in the in-app shortcut cheatsheet — neither is the
   `Cmd/Ctrl+L` that opens the panel. Tab does reach the panel because it is the
   grid's next sibling, but the grid's roving tabindex means Tab re-enters the
-  grid at its single tab stop, not at the cell the user left. With pending
-  edits, Escape inside the panel also opens the grid's discard confirm: the
-  discard gate has no focus-position condition, and the panel's Escape
-  deliberately does not consume the event.
+  grid at its single tab stop, not at the cell the user left. In the RDB grid
+  with pending edits, Escape inside the panel also opens the discard confirm:
+  that gate has no focus-position condition and the panel's Escape deliberately
+  does not consume the event, so the collision fires from inside a panel field
+  editor too — those do not stop propagation either. The document grid has no
+  Escape discard gate at all, so it does not have the collision.
 - Quick Look grows its long-value editors to fit their content with the CSS
   `field-sizing` property, which needs Chromium 123+ or WebKit 26+. On an older
   engine those editors fall back to their fixed `rows` height and scroll, as

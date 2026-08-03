@@ -1,10 +1,10 @@
 ---
 title: Cross-paradigm UI Parity 머지 기준
 type: product-rule
-updated: 2026-07-17
-surface: src/components/workspace/**, src/components/query/**
+updated: 2026-08-03
+surface: src/components/workspace/**, src/components/query/**, src/components/rdb/**, src/components/document/**, src/components/datagrid/**, src/components/shared/QuickLookPanel/**
 task: ui-parity, review, merge-gate, unsupported-convention
-keywords: UI parity, 같은 진입점, 머지 보류, DbSwitcher, ConfirmDestructiveDialog, OperationsPanel, KvMutationPanel, 예외 등록, Unsupported 표현 규약, return null, hasConnectionCapability, switchDatabase
+keywords: UI parity, 같은 진입점, 머지 보류, DbSwitcher, ConfirmDestructiveDialog, OperationsPanel, KvMutationPanel, 예외 등록, Unsupported 표현 규약, return null, hasConnectionCapability, switchDatabase, Quick Look, 상세 패널, 상시 편집, Edit 토글, SELECTED_ROW_FILL, 선택 행 표시, rowState
 ---
 
 # Cross-paradigm UI Parity 머지 기준
@@ -79,12 +79,8 @@ type-aware 패널) 예외로 등록한다. 형식:
   아니라 BSON 트리 ↔ 필드 목록 **보기 전환**이다 — 두 paradigm 이 같은 컨트롤을
   다르게 쓰는 것이 아니라 애초에 다른 작업이고, 지우면 중첩 문서 읽기 뷰가
   사라진다. 되돌리려면 `DocumentQuickLookBody` 에서 `editing`/`onToggleEdit` 두
-  prop 을 빼면 rdb 와 같아진다.
-- **선택 행 표시 / rdb·document 공통 / `SELECTED_ROW_FILL` 한 상수
-  (`src/components/datagrid/rowState.ts`) / 사유**: 예외가 아니라 분기 해소
-  기록이다. 두 그리드가 같은 상태를 다른 클래스(`bg-accent/20` vs
-  `bg-accent dark:bg-accent/60`)로 그렸고 한쪽만 측정돼 있었다. 새 그리드 표면도
-  이 상수를 쓴다.
+  prop 과 그 둘을 읽는 `showFieldRows` 분기를 함께 걷어내야 rdb 와 같아진다 —
+  prop 만 빼면 타입 에러다.
 
 ## 4. Unsupported 표현 규약 (2026-07-10 소유자 결정)
 
@@ -148,6 +144,13 @@ KV 진입점 3건은 #1050(파괴 게이트) · #1415/#1466(CRUD UI) · #1051(db
   네 paradigm 이 여전히 다른 model(connection-active / tab-local / synthetic)이나
   이는 의미상 별개 scope 라 억지 수렴 대상 아님(§3 예외/정합으로 대체).
 - **값 편집** — kv type-aware 패널(`KvMutationPanel`) → **§3 예외 등록 완료 (#1051)**.
+- **선택 행 표시** — 두 그리드가 같은 상태를 다른 클래스(`bg-accent/20` vs
+  `bg-accent dark:bg-accent/60`)로 그렸고 한쪽만 대비가 측정돼 있었다. #1734 로
+  `SELECTED_ROW_FILL` 한 상수(`src/components/datagrid/rowState.ts`)로 수렴 —
+  **분기 해소 완료**, 예외가 아니다. 새 그리드 표면도 이 상수를 쓴다. 다만 선택 +
+  pending-deleted 의 **합성**은 아직 다르다: document 는 `bg-destructive/10` 이
+  twMerge 로 선택 fill 을 밀어내고(`DocumentGridRows.tsx`), rdb 는
+  `line-through opacity-50` 만 얹어 fill 을 유지한다(`DataRow.tsx`).
 - **새 항목 생성** — kv `KvKeyActions` [+ New key] 툴바 버튼으로 기준표(`[+]`) 위치·
   모델 정합; type-first 생성 폼(`KvNewKeyDialog`, 형 선택 → 첫 값 → command preview →
   Safe Mode confirm)이 #1697 로 개방 완료 — 종전 disabled dead 버튼 + #1075 대기 해소.
