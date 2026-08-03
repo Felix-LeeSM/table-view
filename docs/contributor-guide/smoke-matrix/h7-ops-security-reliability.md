@@ -44,7 +44,11 @@ What the individual jobs own:
 - `PR Body Contract` rejects a PR body carrying a path only the author can open
   — an absolute home or temp path, a `file:` URL, or a path inside a work copy.
   An empty body passes. The workflow does not listen for `edited`, so a red
-  verdict clears on the next commit, not on a body edit.
+  verdict clears on the next commit, not on a body edit. The job also carries
+  two contracts that have nothing to do with the body — the `CLAUDE.md` import
+  line and the `memory/` doc-size cap — so a red verdict here is not always
+  about the body. `memory/runbook/pr-merge-gates/memory.md` names all three and
+  is where a red one is diagnosed.
 
 - `Runtime Happy Path` runs the smoke specs `e2e/scope-map.mjs` selects from the
   changed paths, and it fails when they fail.

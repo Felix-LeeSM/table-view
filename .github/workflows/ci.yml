@@ -97,6 +97,23 @@ jobs:
       - name: CLAUDE.md import intact
         run: grep -qxF '@AGENTS.md' CLAUDE.md && test -f AGENTS.md
 
+      # A third contract rides here for the same reason the second one does
+      # (#2128). AGENTS.md 「강제 룰」 caps every `memory/**/memory.md` at 200
+      # lines and 12,000 CHARACTERS, and until now nothing measured it. It lands
+      # in this job rather than a job of its own because a required context is
+      # registered in the `pr_to_main` ruleset — live GitHub state this PR
+      # cannot change — and a freshly registered context that has never
+      # reported pins every open PR at BLOCKED
+      # (memory/runbook/pr-merge-gates/memory.md). Riding a context that is
+      # already required makes the cap blocking the day this merges. The script
+      # needs no toolchain, so it adds no setup to the cheapest job: 0.17s over
+      # 40 files, median of 9 local runs of
+      # `/usr/bin/time -p bash scripts/check-memory-doc-size.sh` (the shell
+      # builtin `time` prints no `real` line under zsh, so the command is
+      # spelled with the binary).
+      - name: memory/ doc size cap
+        run: bash scripts/check-memory-doc-size.sh
+
   dependency-security:
     name: Dependency Security
     runs-on: ubuntu-latest
