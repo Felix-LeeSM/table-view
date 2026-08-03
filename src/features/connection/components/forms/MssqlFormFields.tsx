@@ -200,17 +200,20 @@ export default function MssqlFormFields({
             className="cursor-pointer"
             checked={sslModeTlsOn(draft.sslMode)}
             onChange={(e) =>
-              // #1649 — encrypt on keeps whichever verification posture is
-              // already selected (default skip-verify, SQL Server's
-              // encrypt-by-default UX); off is the explicit forced-plaintext
-              // `disable`, which is what the old (tls=false, trust=false) pair
-              // folded to.
+              // #1649 — the checkbox is controlled by the posture itself, so
+              // `e.target.checked === true` means the draft posture is
+              // currently *off*: the handler can never read back the
+              // verification posture that was selected before encryption was
+              // turned off. Encrypt on therefore lands on the verifying
+              // posture — the same place the pre-#1649 pair landed, since
+              // turning encryption off wrote `trust: false` and turning it back
+              // on restored `(tls=true, trust=false)` = verify-full. Skip-verify
+              // stays one deliberate click away on the adjacent checkbox.
+              // Off is the explicit forced-plaintext `disable` and drops the CA
+              // reference with it, matching the mongo/redis/search toggles.
               onChange({
-                sslMode: e.target.checked
-                  ? sslModeTlsOn(draft.sslMode)
-                    ? draftSslMode(draft)
-                    : "require"
-                  : "disable",
+                sslMode: e.target.checked ? "verify-full" : "disable",
+                ...(e.target.checked ? {} : { caCertPath: null }),
               })
             }
           />

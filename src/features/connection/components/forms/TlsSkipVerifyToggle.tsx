@@ -9,9 +9,9 @@
  *
  * #1649 — the checkbox now selects between two `sslMode` postures rather than
  * setting a separate boolean: checked is `require` (skip-verify), unchecked is
- * `verify-full`. A stored `verify-ca` stays `verify-ca` when unchecked, because
- * it is already a verifying posture and rewriting it would silently drop the CA
- * the user selected.
+ * `verify-full`. It is controlled by the posture, so unchecking is only
+ * reachable from `require` — there is no pre-toggle `verify-ca` for the
+ * unchecked branch to preserve.
  */
 import { useTranslation } from "react-i18next";
 import type { ConnectionDraft } from "../../model";
@@ -42,13 +42,7 @@ export default function TlsSkipVerifyToggle({
           className="cursor-pointer"
           checked={trust}
           onChange={(e) =>
-            onChange({
-              sslMode: e.target.checked
-                ? "require"
-                : mode === "verify-ca"
-                  ? "verify-ca"
-                  : "verify-full",
-            })
+            onChange({ sslMode: e.target.checked ? "require" : "verify-full" })
           }
         />
         {t("form.trustServerCert")}

@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { ConnectionDraft } from "@/types/connection";
 import MssqlFormFields from "./MssqlFormFields";
@@ -24,10 +24,11 @@ function makeDraft(overrides: Partial<ConnectionDraft> = {}): ConnectionDraft {
 }
 
 function renderMssql(overrides: Partial<ConnectionDraft> = {}) {
-  render(
+  const onChange = vi.fn();
+  const fields = (draft: Partial<ConnectionDraft>) => (
     <MssqlFormFields
-      draft={makeDraft(overrides)}
-      onChange={vi.fn()}
+      draft={makeDraft(draft)}
+      onChange={onChange}
       passwordInput=""
       setPasswordInput={vi.fn()}
       isEditing={false}
@@ -36,8 +37,14 @@ function renderMssql(overrides: Partial<ConnectionDraft> = {}) {
       setClearPassword={vi.fn()}
       inputClass="input"
       labelClass="label"
-    />,
+    />
   );
+  const { rerender } = render(fields(overrides));
+  return {
+    onChange,
+    /** Re-render with the next draft, the way the dialog's reducer would. */
+    apply: (draft: Partial<ConnectionDraft>) => rerender(fields(draft)),
+  };
 }
 
 describe("MssqlFormFields trust warning (#1063)", () => {
@@ -60,5 +67,58 @@ describe("MssqlFormFields trust warning (#1063)", () => {
     expect(
       screen.queryByText(/Certificate verification is skipped/),
     ).not.toBeInTheDocument();
+  });
+});
+
+// Purpose: #1649 — the encryption checkbox is controlled by `sslMode` itself,
+// so its onChange cannot read the posture that was selected before the flip.
+// The first version of this handler tried to, which made the "on" branch
+// constant-fold to `require`: two clicks silently demoted a stored `verify-full`
+// connection to encrypted-but-unverified. The pre-#1649 pair restored
+// `verify-full` on the same two clicks. Round trips, not single clicks, are what
+// pin the posture. (2026-08-03)
+describe("MssqlFormFields encryption toggle posture (#1649)", () => {
+  function clickEncryption() {
+    fireEvent.click(screen.getByLabelText("Enable encryption (TLS)"));
+  }
+
+  it.each(["verify-full", "require", "verify-ca"] as const)(
+    "turning encryption off from %s forces plaintext and drops the CA reference",
+    (sslMode) => {
+      const { onChange } = renderMssql({
+        sslMode,
+        caCertPath: "/etc/ssl/ca.pem",
+      });
+      clickEncryption();
+      expect(onChange).toHaveBeenCalledWith({
+        sslMode: "disable",
+        caCertPath: null,
+      });
+    },
+  );
+
+  it.each(["disable", "prefer"] as const)(
+    "turning encryption on from %s selects the verifying posture, never skip-verify",
+    (sslMode) => {
+      const { onChange } = renderMssql({ sslMode });
+      clickEncryption();
+      expect(onChange).toHaveBeenCalledWith({ sslMode: "verify-full" });
+    },
+  );
+
+  it("does not demote verify-full across an off/on round trip", () => {
+    // The regression this pins: click one wrote `disable`, click two wrote
+    // `require`, so a stored `verify-full` connection came back encrypted but
+    // unverified. Only a round trip catches it — either click alone looks right.
+    let draft: Partial<ConnectionDraft> = { sslMode: "verify-full" };
+    const { onChange, apply } = renderMssql(draft);
+    for (let click = 0; click < 2; click++) {
+      clickEncryption();
+      draft = { ...draft, ...onChange.mock.calls[click]![0] };
+      apply(draft);
+    }
+    expect(onChange).toHaveBeenCalledTimes(2);
+    expect(draft.sslMode).toBe("verify-full");
+    expect(screen.getByLabelText("Enable encryption (TLS)")).toBeChecked();
   });
 });
