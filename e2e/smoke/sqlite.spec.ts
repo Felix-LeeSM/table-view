@@ -12,6 +12,9 @@ import {
   openNewQueryTab,
   runQuery,
   selectDatabaseType,
+  setInput,
+  setInputByAria,
+  setNthInputByAria,
   smokeFixtureRoot,
   step,
   switchToLauncherWindow,
@@ -256,56 +259,6 @@ async function waitForElementTextAll(
       return snippets.every((snippet) => text.includes(snippet.toLowerCase()));
     },
     { timeout, timeoutMsg },
-  );
-}
-
-async function setInput(selector: string, value: string) {
-  const input = await $(selector);
-  await input.waitForDisplayed({ timeout: 5000 });
-  await input.clearValue();
-  await input.setValue(value);
-}
-
-async function setInputByAria(label: string, value: string) {
-  await setNthInputByAria(label, 0, value);
-}
-
-async function setNthInputByAria(label: string, index: number, value: string) {
-  await browser.waitUntil(
-    async () =>
-      await browser.execute(
-        (ariaLabel, nth) =>
-          document.querySelectorAll<HTMLInputElement>(
-            `input[aria-label="${ariaLabel}"]`,
-          ).length > nth,
-        label,
-        index,
-      ),
-    {
-      timeout: 10000,
-      timeoutMsg: `${label} input #${index} did not appear`,
-    },
-  );
-  await browser.execute(
-    (ariaLabel, nth, nextValue) => {
-      const input = document.querySelectorAll<HTMLInputElement>(
-        `input[aria-label="${ariaLabel}"]`,
-      )[nth];
-      if (!input) throw new Error(`${ariaLabel} input #${nth} did not appear`);
-      const setter = Object.getOwnPropertyDescriptor(
-        window.HTMLInputElement.prototype,
-        "value",
-      )?.set;
-      if (!setter) throw new Error("HTMLInputElement value setter missing");
-      input.focus();
-      setter.call(input, nextValue);
-      input.dispatchEvent(new InputEvent("input", { bubbles: true }));
-      input.dispatchEvent(new Event("change", { bubbles: true }));
-      input.blur();
-    },
-    label,
-    index,
-    value,
   );
 }
 
