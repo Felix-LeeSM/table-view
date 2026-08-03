@@ -95,7 +95,8 @@ fn backend_profiles_encode_current_database_type_contracts() {
         BackendAdapterContractState::FactoryBacked
     );
     assert!(sqlite.has_backend_capability(BackendAdapterCapability::RelationalQuery));
-    // Wired SqliteAdapter implements bounded structured DDL (create_table) (#1044).
+    // Wired SqliteAdapter implements structured DDL — create_table (#1044) plus
+    // the natively supported drop/rename/column/index surfaces (#1804).
     assert!(sqlite.has_backend_capability(BackendAdapterCapability::RelationalSchemaMutation));
 
     let mssql = get_data_source_profile(&DatabaseType::Mssql);

@@ -126,8 +126,8 @@ fn dbms_specific_unsupported_capability_deltas_are_declared() {
     // #1072 — the full OracleAdapter wires structured table/index/constraint DDL.
     assert!(oracle.has_backend_capability(BackendAdapterCapability::RelationalSchemaMutation));
 
-    // SQLite's wired adapter implements create_table, so it declares schema
-    // mutation (#1044). DuckDB used to be the counter-example here; #1070
+    // SQLite's wired adapter runs native structural DDL, so it declares schema
+    // mutation (#1044, widened by #1804). DuckDB used to be the counter-example here; #1070
     // (ADR 0051 Stage 2) wired native structural DDL in `duckdb/ddl.rs`, so it
     // declares the capability too — its remaining unsupported delta is
     // constraint DDL, asserted in the sibling test below.
@@ -142,16 +142,19 @@ fn dbms_specific_unsupported_capability_deltas_are_declared() {
 }
 
 /// Regression for #1044: the wired SQLite production adapter (`make_adapter`
-/// constructs `SqliteAdapter`) implements bounded structured DDL through
-/// `create_table`, so its profile must declare `RelationalSchemaMutation`.
-/// Binds the capability declaration to the wired implementation so the two
-/// cannot drift (the declaration used to say "no DDL" while the engine did DDL).
+/// constructs `SqliteAdapter`) implements structured DDL — `create_table` plus
+/// the natively supported drops, renames, column changes and indexes opened by
+/// #1804 — so its profile must declare `RelationalSchemaMutation`. Binds the
+/// capability declaration to the wired implementation so the two cannot drift
+/// (the declaration used to say "no DDL" while the engine did DDL). The coarse
+/// flag means "some structural DDL"; the exact surface lives in the per-action
+/// frontend `ddl.*` capabilities.
 #[tokio::test]
-async fn sqlite_schema_mutation_declaration_matches_wired_create_table() {
+async fn sqlite_schema_mutation_declaration_matches_wired_structured_ddl() {
     let profile = get_data_source_profile(&DatabaseType::Sqlite);
     assert!(
         profile.has_backend_capability(BackendAdapterCapability::RelationalSchemaMutation),
-        "wired SqliteAdapter implements create_table, so the profile must declare RelationalSchemaMutation"
+        "wired SqliteAdapter runs structured DDL, so the profile must declare RelationalSchemaMutation"
     );
 
     // preview_only returns the DDL text without a live pool, proving the wired
