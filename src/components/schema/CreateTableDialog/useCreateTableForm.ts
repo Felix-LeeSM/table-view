@@ -59,9 +59,8 @@ export interface UseCreateTableFormArgs {
  * component owns only the tab layout JSX. The lifecycle hook
  * (`useDdlPreviewExecution`) is reused unchanged — this hook owns the draft
  * lists, the auto-refresh debounce, and the single-IPC `createTablePlan`
- * preview/commit closures. Commit atomicity belongs to the adapter — policy
- * C (index/constraint failures do not roll back the CREATE TABLE) for most,
- * one transaction for the whole plan on SQLite since #1804.
+ * preview/commit closures (partial-atomic policy C: index/constraint
+ * failures do not roll back the CREATE TABLE).
  */
 export function useCreateTableForm({
   connectionId,
@@ -503,8 +502,8 @@ export function useCreateTableForm({
 
   // Auto-refresh debounced + single-IPC unified plan. One
   // `tauri.createTablePlan` call per debounce flush; the backend builds the
-  // joined preview SQL (or executes the plan under the adapter's atomic policy)
-  // and returns it verbatim — the preview pane renders the result with zero
+  // joined preview SQL (or executes the chain under atomic policy C) and
+  // returns it verbatim — the preview pane renders the result with zero
   // client-side composition.
   useEffect(() => {
     if (!open) return;

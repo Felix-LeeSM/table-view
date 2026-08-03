@@ -375,13 +375,11 @@ describe("SchemaTree — actions", () => {
     expect(screen.getByText("Rename Table")).toBeInTheDocument();
   });
 
-  // #1460 — SQLite claims PARTIAL DDL: `createTable` only. So the table context
-  // menu must hide Rename (alterTable) + Drop (dropObject) and inert F2, while
-  // the flat "+" Create Table entry (createTable) stays. This locks per-action
-  // gating, not the coarse all-or-nothing `editRows` proxy the entries used to
-  // ride on. Since #1804 the adapter itself does run rename / drop natively —
-  // the flags are the UI ceiling and deliberately lag it, so this stays the
-  // expected menu until the flip slice lands.
+  // #1460 — SQLite has PARTIAL DDL: the wired adapter runs `create_table` but
+  // rejects rename / drop (`sqlite_unsupported`). So the table context menu must
+  // hide Rename (alterTable) + Drop (dropObject) and inert F2, while the flat
+  // "+" Create Table entry (createTable) stays. This locks per-action gating,
+  // not the coarse all-or-nothing `editRows` proxy the entries used to ride on.
   it("[#1460] SQLite hides table Rename/Drop + inerts F2 but keeps the Create Table entry (partial DDL)", async () => {
     useConnectionStore.setState({
       connections: [

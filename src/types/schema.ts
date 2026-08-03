@@ -444,12 +444,9 @@ export interface CreateTablePlanConstraint {
  * server-side IPC: the backend builds the full SQL plan once and the
  * frontend renders it in one preview pane.
  *
- * Atomic policy on commit is the adapter's, not this payload's. The
- * default is C (partial-atomic) — parent CREATE TABLE runs in its own
- * transaction (with COMMENTs) and each child runs in its own. An
- * adapter may be stricter: SQLite runs the whole plan in one
- * transaction since #1804, so a failing index rolls the CREATE TABLE
- * back. Preview mode joins child SQL with `;\n`.
+ * Atomic policy = C (partial-atomic) on commit — parent CREATE TABLE
+ * runs in its own transaction (with COMMENTs); each child runs in its
+ * own transaction. Preview mode joins child SQL with `;\n`.
  */
 export interface CreateTablePlanRequest {
   connectionId: string;

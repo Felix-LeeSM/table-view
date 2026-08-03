@@ -114,10 +114,8 @@ describe("DataSourceProfile registry", () => {
       // introspection is live); constraints remains a stub → false.
       catalog: { indexes: true },
       edit: { editRows: true, requiresPrimaryKeyForEdit: true },
-      // Issue #1460 / #1804 — the wired SqliteAdapter now runs native
-      // drop/rename/column/index DDL too, but the flags stay behind it: see
-      // SQLITE_CAPABILITIES in dataSource.ts for why the flip waits for the
-      // Structure column-editor gate.
+      // Issue #1460 — wired SqliteAdapter executes only create_table; other DDL
+      // trait methods return Unsupported, so createTable is the sole claim.
       ddl: { createTable: true },
       intelligence: { erd: true },
     }),
@@ -326,10 +324,8 @@ describe("DataSourceProfile registry", () => {
     expect(sqlite.connectionKind).toBe("file");
     expect(sqlite.capabilities).toEqual(expectedCapabilitiesByType.sqlite);
     expect(sqlite.capabilities.edit.editRows).toBe(true);
-    // Issue #1460 / #1804 — the adapter runs the natively supported
-    // drop/rename/column/index DDL, but these flags stay false until the
-    // Structure column editor has its own gate, so the UI still hides them.
-    // See SQLITE_CAPABILITIES in dataSource.ts for the full reason.
+    // Issue #1460 — only create_table is wired in the adapter; alter/index/drop
+    // return Unsupported, so their flags stay false and the UI hides them.
     expect(sqlite.capabilities.ddl.createTable).toBe(true);
     expect(sqlite.capabilities.ddl.alterTable).toBe(false);
     expect(sqlite.capabilities.ddl.createIndex).toBe(false);

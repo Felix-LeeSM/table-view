@@ -22,16 +22,9 @@ matching tests and smoke routing. Keep MySQL/MariaDB runtime smoke baselines
 narrow to connect/browse/query/edit/cancel/history/result-envelope behavior; add
 broader MySQL/MariaDB operation-level UI/runtime consumers only with matching
 evidence. Keep SQLite file-DBMS work scoped to writable-file DML, PK row edits,
-structured DDL limited to the natively supported axis, raw SQL DDL rejection,
-and the current deterministic file smoke baseline. SQLite adapter 가 전면
-차단하던 DDL 중 **SQLite 가 네이티브로 지원하는 축**은 #1804 로 열렸다 — 어댑터는 테이블
-drop/rename, 컬럼 add/drop, 인덱스 create/drop 을 실행한다. 사용자에게 보이는 `ddl.*`
-capability 는 아직 `createTable` 만 주장하므로 독립 UI 진입점은 flip 전까지 가려져 있다. 인덱스
-생성만 예외로 이미 열려 있다 — Create Table 다이얼로그의 Indexes 탭에는 capability 게이트가
-없어 `createTable` 이 여는 다이얼로그와 함께 열리고, 기본값 btree 로 선언된 인덱스는 CREATE
-TABLE 과 같은 트랜잭션에서 실행된다 (탭이 함께 내주는 hash/gin/gist 는 SQLite 가 파일에 손대기
-전에 거절해 plan 전체가 실패한다).
-12-step ALTER rebuild 는 미도입 결정이고 (2026-07-25
+bounded structured table creation, raw SQL DDL rejection, and the current
+deterministic file smoke baseline. SQLite adapter 가 전면 차단하던 DDL 중 **SQLite 가
+네이티브로 지원하는 축**의 개방은 #1804 로 승격됐다. 12-step ALTER rebuild 는 미도입 결정이고 (2026-07-25
 오너 grill), rebuild 가 필요한 변경 (타입/제약 변경) 은 Structure UI 에서 disable + 사유 tooltip 을
 유지한다. 실행 후 에러 매핑은 네이티브로 지원되는 `ADD COLUMN`/`DROP COLUMN` 의 조건부 실패에만 적용된다. raw SQL
 DDL 거부와 extension semantics 는 그대로 자체 구현 근거를 요구한다. Keep DuckDB split between

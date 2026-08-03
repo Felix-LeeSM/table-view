@@ -75,9 +75,9 @@ interface EditableColumnRowProps {
   schema?: string;
   tableName?: string;
   /**
-   * Issue #1460 — when false (the engine does not offer ALTER TABLE in the UI)
-   * the per-row Edit / Delete affordances are hidden; the row stays a read-only
-   * view of the column. Not offered = hidden, not click-then-error (#1046).
+   * Issue #1460 — when false (engine's adapter cannot run ALTER TABLE) the
+   * per-row Edit / Delete affordances are hidden; the row stays a read-only
+   * view of the column. Unsupported = hidden, not click-then-error (#1046).
    */
   canAlterTable: boolean;
   /**
@@ -377,8 +377,7 @@ function EditableColumnRow({
       </td>
       <td className={STRUCTURE_TD_ACTIONS}>
         {/* #1460 — Edit / Delete are ALTER TABLE operations; hidden when the
-            engine does not offer ALTER TABLE (`ddl.alterTable`) so the row
-            stays read-only. */}
+            engine's adapter cannot run them so the row stays read-only. */}
         {canAlterTable && (
           <div className="flex items-center justify-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
             {isEditing ? (
@@ -468,10 +467,8 @@ interface ColumnsEditorProps {
    */
   paradigm?: Paradigm;
   /**
-   * Issue #1460 — whether the UI may offer ALTER TABLE for this engine (the
-   * `ddl.alterTable` ceiling, which can deliberately lag what the adapter
-   * executes — see `supportsDdl`). Gates the `+ Column` toolbar button and the
-   * per-row Edit / Delete actions. Defaults
+   * Issue #1460 — whether the engine's adapter can run ALTER TABLE. Gates the
+   * `+ Column` toolbar button and the per-row Edit / Delete actions. Defaults
    * to `true` so callers that don't gate (and the loading fallback in
    * `StructurePanel`) keep the pre-#1460 editable surface; the sole production
    * caller passes `supportsDdl(dbType, "alterTable")`.
@@ -645,7 +642,7 @@ export default function ColumnsEditor({
         actions={
           <>
             {/* #1460 — `+ Column` is an ALTER TABLE ADD COLUMN entry point;
-                hidden when the engine does not offer `ddl.alterTable`. */}
+                hidden when the engine's adapter cannot run it. */}
             {canAlterTable && (
               <Button
                 variant="ghost"

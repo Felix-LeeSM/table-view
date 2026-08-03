@@ -1,17 +1,12 @@
 // Issue #1460 — `supportsDdl(dbType, action)` reads the per-action `ddl.*`
-// capability, the ceiling on where the four schema-mutation entry points
-// (Create Table / Alter Table / Create Index / Drop object) may surface. The
-// ceiling usually equals what the wired backend adapter can execute, but it may
-// deliberately sit below it (#1804, SQLite below). Grounds (adapter code):
+// capability so the four schema-mutation entry points (Create Table / Alter
+// Table / Create Index / Drop object) surface only where the wired backend
+// adapter can actually execute that DDL. Grounds (adapter code):
 //   - PostgreSQL / MySQL / MariaDB / MSSQL / Oracle — every DDL trait method
 //     delegates to a real executor → all four true (MSSQL wired by #1071,
 //     Oracle by #1072).
-//   - SQLite — #1804 wired the natively supported DDL (drop/rename table,
-//     add/drop column, create/drop index), but the flags still claim
-//     `createTable` alone: `alterTable` also gates the Structure column editor,
-//     and SQLite cannot change a column's type/nullability/default without a
-//     table rebuild, so the flip waits for that editor's own gate. Constraint
-//     DDL is still `sqlite_unsupported(...)`.
+//   - SQLite — only `create_table` delegates; drop/rename/alter/index/constraint
+//     return `sqlite_unsupported(...)` → `createTable` true, the rest false.
 //   - DuckDB — #1070 (ADR 0051 Stage 2) wires native structural DDL: table
 //     create/drop/rename, column add/drop/type, index create/drop → the four
 //     base actions true. `alterConstraint` stays false (DuckDB `ALTER TABLE`
@@ -51,7 +46,7 @@ describe("supportsDdl (#1460)", () => {
     }
   });
 
-  it("claims only createTable for SQLite (flags trail the wired native DDL)", () => {
+  it("claims only createTable for SQLite (adapter wires create_table alone)", () => {
     expect(supportsDdl("sqlite", "createTable")).toBe(true);
     expect(supportsDdl("sqlite", "alterTable")).toBe(false);
     expect(supportsDdl("sqlite", "createIndex")).toBe(false);

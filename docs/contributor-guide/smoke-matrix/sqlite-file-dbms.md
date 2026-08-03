@@ -20,9 +20,9 @@ Current gap / routing:
 
 GitHub Runtime Happy Path now runs a SQLite desktop smoke for deterministic file
 create/open, table browse, read query, writable DML, row edit, read-only write
-rejection, and internal app-state DB rejection. The structured DDL #1804 opened
-in the adapter is not in this smoke, and extension-boundary non-claims stay
-routed to #460/#461, rather than broadening it.
+rejection, and internal app-state DB rejection. Structured DDL beyond bounded
+table creation and extension-boundary non-claims stay routed to #460/#461 rather
+than broadening this smoke.
 
 ## File connection lifecycle
 
@@ -103,25 +103,13 @@ Current evidence:
 
 Current gap / routing:
 
-Raw SQL DDL is rejected by the SQLite query adapter. Structured DDL is bounded
-by what SQLite performs natively (#1804): `create_table` / `create_table_plan`,
-`drop_table`, `rename_table`, `add_column`, `drop_column`, `create_index` and
-`drop_index` build and run their statement for writable files, and `alter_table`
-carries column adds and drops. `add_constraint` / `drop_constraint` return
-explicit `Unsupported`, and so does an `alter_table` change that edits a
-column's type, nullability or default — SQLite expresses those only by
-rebuilding the table, which is a future ADR-backed implementation decision.
-
-The per-action `ddl.*` capability flags in `src/types/dataSource.ts` still claim
-`createTable` alone, so the standalone Structure and schema-tree entry points for
-the newly opened operations stay hidden until the capability flip lands. Index
-creation is already reachable and needs no flip: the Create Table dialog's
-Indexes tab has no capability gate of its own, so it opens with the dialog that
-`createTable` allows, and its rows reach the adapter, which now creates them in
-the same transaction as the table instead of rejecting the plan. The tab offers
-PostgreSQL's hash/gin/gist methods to every engine, so only a btree row (the
-default) succeeds here; the others are refused before the file is touched and
-fail the whole plan.
+Raw SQL DDL is rejected by the SQLite query adapter. Structured DDL is a bounded
+slice: `create_table` / `create_table_plan` build and run `CREATE TABLE` for
+writable files (the wired adapter declares the `RelationalSchemaMutation`
+capability), while every other structured DDL trait method (drop/rename/alter
+table, add/drop column, index, constraint) returns explicit `Unsupported`.
+Unsupported ALTER behavior is adapter rejection today; automatic table rebuild
+remains a future ADR-backed implementation decision.
 
 ## Completion and extension boundary
 
@@ -153,11 +141,8 @@ Current gap / routing:
 Product-visible SQLite docs now agree that runtime support is the wired file
 smoke plus adapter evidence, parser/Safe Mode remains bounded, sqlite-cli dot
 commands are non-executable completion vocabulary, and extension/capability,
-rebuild-only ALTER, constraint DDL, and nested JSON support stay unsupported or
-future. Most of the structured DDL the adapter gained in #1804 is not yet a
-product-visible claim: the `ddl.*` capability flags still expose table creation
-alone. The one part that is already product-visible is index creation inside the
-Create Table dialog, whose Indexes tab has no capability gate of its own.
+structured DDL beyond bounded table creation, ALTER, and nested JSON support
+stays unsupported or future.
 
 ## Test coverage recheck
 
@@ -195,10 +180,8 @@ Current gap / routing:
 
 Product-visible support claims match this evidence map: SQLite support is
 file-backed DBMS runtime/query/edit plus deterministic file smoke and bounded
-structured table creation with its indexes, not admin or vendor CLI parity. The
-adapter reaches further than that claim after #1804 (see the routing section
-above) — for every surface but the Create Table dialog's ungated Indexes tab it
-is the capability flags, not the adapter, that the product claim tracks. DuckDB/file analytics remains a separate H3 lane,
+structured table creation, not structured DDL parity beyond table creation,
+admin, or vendor CLI parity. DuckDB/file analytics remains a separate H3 lane,
 and fixture-only inventory does not become live runtime evidence.
 
 ## Fixture inventory

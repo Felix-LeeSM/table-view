@@ -246,17 +246,13 @@ interface IndexesEditorProps {
   /** Called after a successful execute to trigger data refresh */
   onRefresh: () => Promise<void>;
   /**
-   * Issue #1460 — whether the UI may offer CREATE INDEX for this engine (the
-   * `ddl.createIndex` ceiling, which can deliberately lag what the adapter
-   * executes — see `supportsDdl`). Gates this panel's standalone
-   * `Create Index` button only; index rows declared inside the Create Table
-   * dialog ride on `createTable` instead. Defaults to `true` so non-gating
-   * callers keep the pre-#1460 surface; production passes
-   * `supportsDdl(dbType, "createIndex")`.
+   * Issue #1460 — whether the engine's adapter can run CREATE INDEX. Gates the
+   * `Create Index` button. Defaults to `true` so non-gating callers keep the
+   * pre-#1460 surface; production passes `supportsDdl(dbType, "createIndex")`.
    */
   canCreateIndex?: boolean;
   /**
-   * Issue #1460 — whether the UI may offer DROP INDEX for this engine (a
+   * Issue #1460 — whether the engine's adapter can run DROP INDEX (a
    * `dropObject` action). Gates the per-row drop-index trash icon. Defaults to
    * `true`; production passes `supportsDdl(dbType, "dropObject")`.
    */
@@ -485,8 +481,8 @@ export default function IndexesEditor({
                 <td className={STRUCTURE_TD_ACTIONS}>
                   <div className="flex items-center justify-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                     {/* #1460 — drop-index is a DROP object action; hidden when
-                        the engine does not offer `ddl.dropObject`. PK indexes
-                        are never droppable regardless. */}
+                        the engine's adapter cannot run it. PK indexes are never
+                        droppable regardless. */}
                     {!idx.is_primary && canDropObject && (
                       <Button
                         variant="ghost"

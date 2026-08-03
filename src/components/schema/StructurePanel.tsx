@@ -114,15 +114,11 @@ export default function StructurePanel({
   const showConstraintsTab = supportsCatalogFeature(dbType, "constraints");
   // Issue #1460 — the Columns / Indexes editors keep rendering their read-only
   // listing for every RDB engine, but their mutation affordances (Add/Edit/Drop
-  // column, Create Index, Drop index) read the per-action DDL capability, so an
-  // engine that has not opened the write hides the control instead of
+  // column, Create Index, Drop index) read the per-action DDL capability so an
+  // engine whose adapter rejects the write hides the control instead of
   // click-then-error (#1046). SQLite claims only `createTable`, so its column /
-  // index editors are view-only. Two different reasons sit behind that after
-  // #1804: `createIndex` / `dropObject` are pure UI ceilings the flags hold
-  // while the adapter already executes those, whereas `alterTable` also gates
-  // the per-row Edit, whose `ColumnChange::Modify` the adapter really does
-  // refuse (SQLite needs a table rebuild for it). DuckDB (#1070), MSSQL (#1071)
-  // and Oracle (#1072) claim these four, so their editors are live.
+  // index editors are view-only; DuckDB (#1070), MSSQL (#1071) and Oracle
+  // (#1072) now claim these four, so their editors are live.
   const canAlterTable = supportsDdl(dbType, "alterTable");
   const canCreateIndex = supportsDdl(dbType, "createIndex");
   const canDropObject = supportsDdl(dbType, "dropObject");
