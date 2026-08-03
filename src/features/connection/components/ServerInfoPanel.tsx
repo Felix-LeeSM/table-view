@@ -1,17 +1,28 @@
 // Sprint 339 (2026-05-15) — U4 live wire. Replaces the
-// BackendPendingPlaceholder with a paradigm-neutral identity grid sourced
-// from `version()` + `pg_settings` (PG) or `buildInfo` + `serverStatus`
-// (Mongo). All paradigm-specific fields land in `extras` so the grid stays
-// paradigm-stable.
+// BackendPendingPlaceholder.
 
 import { Loader2, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
+import { mongoRuntimeCapabilities } from "@/lib/api/mongoRuntimeCapabilities";
 import { type ServerInfoRow, serverInfo } from "@/lib/api/serverInfo";
 import { safeStringifyCell } from "@/lib/jsonCell";
+import {
+  type MongoRuntimeCapabilities,
+  type MongoTopology,
+  UNKNOWN_MONGO_RUNTIME_CAPABILITIES,
+} from "@/types/dataSource";
 import { DATABASE_TYPE_LABELS, type DatabaseType, paradigmOf } from "../model";
 import { PanelLoadingSkeleton } from "./PanelLoadingSkeleton";
+
+/** Issue #1821 — labels for the Mongo deployment row. */
+const TOPOLOGY_LABEL_KEY: Record<MongoTopology, string> = {
+  standalone: "serverInfo.topologyStandalone",
+  replicaSet: "serverInfo.topologyReplicaSet",
+  sharded: "serverInfo.topologySharded",
+  unknown: "serverInfo.topologyUnknown",
+};
 
 export interface ServerInfoPanelProps {
   connectionId: string;
@@ -24,7 +35,9 @@ export function ServerInfoPanel({
 }: ServerInfoPanelProps) {
   const { t } = useTranslation("featuresConnection");
   const paradigm = paradigmOf(dbType);
+  const isMongo = dbType === "mongodb";
   const [info, setInfo] = useState<ServerInfoRow | null>(null);
+  const [runtime, setRuntime] = useState<MongoRuntimeCapabilities | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -32,14 +45,24 @@ export function ServerInfoPanel({
     setLoading(true);
     setError(null);
     try {
-      const next = await serverInfo(connectionId);
+      // `Promise.all` rejects as a whole, so the capability read gets its own
+      // `catch` — a refused probe must not blank the rest of the grid.
+      const [next, capabilities] = await Promise.all([
+        serverInfo(connectionId),
+        isMongo
+          ? mongoRuntimeCapabilities(connectionId).catch(
+              () => UNKNOWN_MONGO_RUNTIME_CAPABILITIES,
+            )
+          : null,
+      ]);
       setInfo(next);
+      setRuntime(capabilities);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
     }
-  }, [connectionId]);
+  }, [connectionId, isMongo]);
 
   useEffect(() => {
     void refresh();
@@ -93,6 +116,18 @@ export function ServerInfoPanel({
             {t("serverInfo.rowVersion")}
           </dt>
           <dd className="font-mono break-all">{info.version}</dd>
+          {/* Gated on `isMongo` too: on a connection switch, props arrive one
+              render before the effect replaces `runtime`. */}
+          {isMongo && runtime !== null && (
+            <>
+              <dt className="text-muted-foreground">
+                {t("serverInfo.rowDeployment")}
+              </dt>
+              <dd data-testid="server-info-deployment">
+                {t(TOPOLOGY_LABEL_KEY[runtime.topology])}
+              </dd>
+            </>
+          )}
           {info.host !== null && (
             <>
               <dt className="text-muted-foreground">

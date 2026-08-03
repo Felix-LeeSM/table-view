@@ -1,9 +1,11 @@
 //! MongoAdapter struct + connection lifecycle + `impl DbAdapter`.
 //!
 //! Sprint 197 split — extracted from `db/mongodb.rs`. Holds:
-//!   * the adapter struct (shared `(client, default_db, active_db)` slots)
+//!   * the adapter struct (shared `(client, default_db, active_db,
+//!     runtime_capabilities)` slots)
 //!   * `build_options` / `test` / `current_client` / `switch_active_db`
-//!     / `current_active_db` / `resolved_db_name` (lifecycle inherent)
+//!     / `current_active_db` / `runtime_capabilities` / `resolved_db_name`
+//!     (lifecycle inherent)
 //!   * `impl DbAdapter for MongoAdapter` (`kind` / `connect` / `disconnect`
 //!     / `ping`)
 //!
@@ -46,9 +48,6 @@ pub struct MongoAdapter {
     /// whose probe was refused holds `Some(MongoRuntimeCapabilities::unknown())`
     /// — both read as fail-closed at the accessor, but the distinction keeps
     /// `disconnect()` honest.
-    ///
-    /// Lock order is after `client`, matching `active_db` (see
-    /// `switch_active_db`). Nothing takes two of these at once today.
     pub(super) runtime_capabilities: Arc<Mutex<Option<MongoRuntimeCapabilities>>>,
 }
 
@@ -231,6 +230,15 @@ impl MongoAdapter {
         self.active_db.lock().await.clone()
     }
 
+    /// Issue #1821 — the runtime capability probed during `connect()`.
+    pub async fn runtime_capabilities(&self) -> MongoRuntimeCapabilities {
+        self.runtime_capabilities
+            .lock()
+            .await
+            .clone()
+            .unwrap_or_else(MongoRuntimeCapabilities::unknown)
+    }
+
     /// Sprint 137 (AC-S137-01) — resolve which Mongo database name a
     /// metadata fetch should run against.
     ///
@@ -258,21 +266,6 @@ impl MongoAdapter {
     /// should surface that as an `AppError::Validation` so the frontend
     /// gets an actionable error instead of a silent empty list.
     ///
-    /// Issue #1821 — the runtime capability probed during `connect()`.
-    ///
-    /// Reads the cached value; never hits the driver, so UI gates can call it
-    /// per render without a round trip. Fail-closed on every "we do not know"
-    /// path: a disconnected adapter and a connected-but-unprobed session both
-    /// answer `MongoRuntimeCapabilities::unknown()`, which no positive gate
-    /// matches.
-    pub async fn runtime_capabilities(&self) -> MongoRuntimeCapabilities {
-        self.runtime_capabilities
-            .lock()
-            .await
-            .clone()
-            .unwrap_or_else(MongoRuntimeCapabilities::unknown)
-    }
-
     /// Pure helper — no driver round-trip — so it is unit-testable
     /// without a live MongoDB instance.
     pub async fn resolved_db_name(&self, requested: Option<&str>) -> Option<String> {

@@ -93,6 +93,72 @@ describe("mongoRuntimeCapabilities (#1821 wire)", () => {
     ).toBe(true);
   });
 
+  it.each([
+    ["a non-object payload", "sharded"],
+    ["null", null],
+    ["a topology outside the wire enum", { topology: "mongos" }],
+    [
+      "a missing topology",
+      { version: { major: 7, minor: 0, patch: 5, raw: "7.0.5" } },
+    ],
+    ["a prototype method name", { topology: "toString" }],
+    ["a prototype accessor name", { topology: "__proto__" }],
+  ])("degrades %s to the fail-closed value", async (_label, payload) => {
+    invokeMock.mockResolvedValueOnce(payload);
+
+    const capabilities = await mongoRuntimeCapabilities("conn-1");
+
+    expect(capabilities.topology).toBe("unknown");
+    expect(capabilities.version).toBeUndefined();
+  });
+
+  it.each(["standalone", "replicaSet", "sharded", "unknown"])(
+    "keeps `%s` — the whole wire enum passes narrowing",
+    async (topology) => {
+      invokeMock.mockResolvedValueOnce({ topology });
+
+      const capabilities = await mongoRuntimeCapabilities("conn-1");
+
+      expect(capabilities.topology).toBe(topology);
+    },
+  );
+
+  it.each([
+    ["a partial triplet", { major: 7, patch: 5, raw: "7.0.5" }],
+    [
+      "a non-integer component",
+      { major: 7, minor: 0.5, patch: 5, raw: "7.0.5" },
+    ],
+    [
+      "a component past Rust's u32 range",
+      { major: 1e21, minor: 0, patch: 5, raw: "7.0.5" },
+    ],
+    ["a negative component", { major: 7, minor: -1, patch: 5, raw: "7.0.5" }],
+    [
+      "a numeric string component",
+      { major: "7", minor: 0, patch: 5, raw: "7.0.5" },
+    ],
+    ["a missing raw string", { major: 7, minor: 0, patch: 5 }],
+  ])(
+    "drops %s while keeping the topology it did establish",
+    async (_label, version) => {
+      invokeMock.mockResolvedValueOnce({ topology: "replicaSet", version });
+
+      const capabilities = await mongoRuntimeCapabilities("conn-1");
+
+      expect(capabilities.topology).toBe("replicaSet");
+      expect(capabilities.version).toBeUndefined();
+      expect(
+        meetsMongoRuntimeRequirement(capabilities, { minVersion: [4, 0, 0] }),
+      ).toBe(false);
+      expect(
+        meetsMongoRuntimeRequirement(capabilities, {
+          topologies: ["replicaSet"],
+        }),
+      ).toBe(true);
+    },
+  );
+
   it("resolves fail-closed when the backend rejects", async () => {
     // `Unsupported` (connection is not MongoDB) and `NotFound` (connection is
     // gone) are routine, not exceptional. The wrapper must convert them into

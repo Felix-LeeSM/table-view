@@ -30,9 +30,9 @@
 //!
 //! ## State
 //!
-//! The adapter holds `(Option<Client>, Option<String>, Option<String>)`
-//! under three `tokio::sync::Mutex`es — see `connection.rs` for the
-//! struct + lock discipline rationale.
+//! The adapter holds `(Option<Client>, Option<String>, Option<String>,
+//! Option<MongoRuntimeCapabilities>)` under four `tokio::sync::Mutex`es — see
+//! `connection.rs` for the struct + lock discipline rationale.
 //!
 //! ## BSON → row cell flattening
 //!

@@ -7,9 +7,14 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const infoMock = vi.fn();
+const runtimeMock = vi.fn();
 
 vi.mock("@/lib/api/serverInfo", () => ({
   serverInfo: (...args: unknown[]) => infoMock(...args),
+}));
+
+vi.mock("@/lib/api/mongoRuntimeCapabilities", () => ({
+  mongoRuntimeCapabilities: (...args: unknown[]) => runtimeMock(...args),
 }));
 
 import { ServerInfoPanel } from "./ServerInfoPanel";
@@ -38,6 +43,8 @@ const mongoStub = {
 describe("ServerInfoPanel (Sprint 339 U4 live wire)", () => {
   beforeEach(() => {
     infoMock.mockReset();
+    runtimeMock.mockReset();
+    runtimeMock.mockResolvedValue({ topology: "unknown" });
   });
 
   it("shows a loading skeleton while the initial fetch is pending (#1587)", () => {
@@ -71,6 +78,90 @@ describe("ServerInfoPanel (Sprint 339 U4 live wire)", () => {
     expect(infoMock).toHaveBeenCalledWith("conn-m");
     expect(screen.getByText("7.0.5")).toBeInTheDocument();
     expect(screen.getByText(/wiredTiger/)).toBeInTheDocument();
+  });
+
+  describe("Mongo deployment row (#1821)", () => {
+    it.each([
+      ["standalone", "Standalone"],
+      ["replicaSet", "Replica Set"],
+      ["sharded", "Sharded cluster"],
+    ])("renders the %s topology as a labelled row", async (topology, label) => {
+      infoMock.mockResolvedValueOnce(mongoStub);
+      runtimeMock.mockResolvedValueOnce({
+        topology,
+        version: { major: 7, minor: 0, patch: 5, raw: "7.0.5" },
+      });
+
+      render(<ServerInfoPanel connectionId="conn-m" dbType="mongodb" />);
+
+      await waitFor(() =>
+        expect(screen.getByTestId("server-info-grid")).toBeInTheDocument(),
+      );
+      expect(runtimeMock).toHaveBeenCalledWith("conn-m");
+      expect(screen.getByText("Deployment")).toBeInTheDocument();
+      expect(screen.getByTestId("server-info-deployment")).toHaveTextContent(
+        label,
+      );
+    });
+
+    it("shows an explicit unidentified row rather than hiding it (fail-closed is visible)", async () => {
+      infoMock.mockResolvedValueOnce(mongoStub);
+      runtimeMock.mockResolvedValueOnce({ topology: "unknown" });
+
+      render(<ServerInfoPanel connectionId="conn-m" dbType="mongodb" />);
+
+      await waitFor(() =>
+        expect(screen.getByTestId("server-info-deployment")).toHaveTextContent(
+          "Not identified",
+        ),
+      );
+    });
+
+    it("does not query or render deployment for a non-Mongo connection", async () => {
+      infoMock.mockResolvedValueOnce(pgStub);
+
+      render(<ServerInfoPanel connectionId="conn-pg" dbType="postgresql" />);
+
+      await waitFor(() =>
+        expect(screen.getByTestId("server-info-grid")).toBeInTheDocument(),
+      );
+      expect(runtimeMock).not.toHaveBeenCalled();
+      expect(screen.queryByTestId("server-info-deployment")).toBeNull();
+      expect(screen.queryByText("Deployment")).toBeNull();
+    });
+
+    it("keeps the version row, which already carries the server version", async () => {
+      infoMock.mockResolvedValueOnce(mongoStub);
+      runtimeMock.mockResolvedValueOnce({
+        topology: "sharded",
+        version: { major: 7, minor: 0, patch: 5, raw: "7.0.5" },
+      });
+
+      render(<ServerInfoPanel connectionId="conn-m" dbType="mongodb" />);
+
+      await waitFor(() =>
+        expect(screen.getByText("7.0.5")).toBeInTheDocument(),
+      );
+      expect(screen.getByTestId("server-info-deployment")).toHaveTextContent(
+        "Sharded cluster",
+      );
+    });
+
+    it("keeps the rest of the grid when the capability read rejects outright", async () => {
+      infoMock.mockResolvedValueOnce(mongoStub);
+      runtimeMock.mockRejectedValueOnce(new Error("capability read failed"));
+
+      render(<ServerInfoPanel connectionId="conn-m" dbType="mongodb" />);
+
+      await waitFor(() =>
+        expect(screen.getByTestId("server-info-grid")).toBeInTheDocument(),
+      );
+      expect(screen.queryByRole("alert")).toBeNull();
+      expect(screen.getByText("mongo-primary:27017")).toBeInTheDocument();
+      expect(screen.getByTestId("server-info-deployment")).toHaveTextContent(
+        "Not identified",
+      );
+    });
   });
 
   it("renders error alert when fetch rejects", async () => {
