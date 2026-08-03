@@ -309,6 +309,7 @@ impl Default for AppState {
 #[cfg(test)]
 pub(super) mod test_helpers {
     use super::*;
+    use crate::models::SslMode;
     use crate::models::{ConnectionConfig, ConnectionGroup};
     use crate::storage;
     use tempfile::TempDir;
@@ -341,8 +342,8 @@ pub(super) mod test_helpers {
             environment: None,
             auth_source: None,
             replica_set: None,
-            tls_enabled: None,
-            trust_server_certificate: None,
+            ssl_mode: SslMode::Prefer,
+            ca_cert_path: None,
             oracle_use_sid: None,
             wallet_path: None,
             wallet_password: String::new(),

@@ -85,10 +85,9 @@ describe("PgFormFields", () => {
   });
 
   // #1063 — PG's TLS control is the sslmode dropdown (disable/prefer/require/
-  // verify-full), a pure view over the stored (tlsEnabled, trust) pair. It
-  // routes through the same `resolve_tls_decision` boundary as MSSQL, so every
-  // selectable option maps to a valid combo — the invalid `trust=None` while
-  // TLS is on can never be authored.
+  // verify-full). #1649 made `sslMode` the persisted field, so the dropdown
+  // binds to it directly and every selection patches one posture; `verify-ca`
+  // stays out of the offered options until its CA-file picker lands.
   describe("sslmode dropdown (#1063)", () => {
     function renderPg(draft: Partial<ConnectionDraft>, onChange = vi.fn()) {
       render(
@@ -114,36 +113,62 @@ describe("PgFormFields", () => {
     });
 
     it("reflects a stored verify-full posture", () => {
-      renderPg({ tlsEnabled: true, trustServerCertificate: false });
+      renderPg({ sslMode: "verify-full" });
       expect(screen.getByLabelText("SSL mode")).toHaveTextContent(
         /Verify full/,
       );
     });
 
-    it("selecting Disable maps to the forced-plaintext combo (tls=false, trust=false)", async () => {
+    it("selecting Disable patches the forced-plaintext posture", async () => {
       const user = userEvent.setup();
       const onChange = renderPg({});
       await user.click(screen.getByLabelText("SSL mode"));
       await user.click(screen.getByRole("option", { name: /Disable/ }));
       expect(onChange).toHaveBeenCalledWith({
-        tlsEnabled: false,
-        trustServerCertificate: false,
+        sslMode: "disable",
+        caCertPath: null,
       });
     });
 
-    it("selecting Require maps to encrypt-but-skip-verify (tls=true, trust=true)", async () => {
+    it("selecting Require patches the encrypt-but-skip-verify posture", async () => {
       const user = userEvent.setup();
       const onChange = renderPg({});
       await user.click(screen.getByLabelText("SSL mode"));
       await user.click(screen.getByRole("option", { name: /Require/ }));
       expect(onChange).toHaveBeenCalledWith({
-        tlsEnabled: true,
-        trustServerCertificate: true,
+        sslMode: "require",
+        caCertPath: null,
+      });
+    });
+
+    // Purpose: #1649 — the dropdown never offers `verify-ca`, but it renders it
+    // for a connection already stored that way (`sslModeChoices`). Moving off it
+    // must take the anchor with it: leaving `caCertPath` behind would let the
+    // skip-verify round trip (`draftVerifyingSslMode`) resurrect the posture the
+    // user just left, and would persist an anchor no posture reads. Re-picking
+    // `verify-ca` is not a case to cover — it is only ever the already-selected
+    // value here, and the assertion below measures that no patch is emitted for
+    // it. (2026-08-03)
+    it("drops the CA anchor when a stored verify-ca leaves for another posture", async () => {
+      const user = userEvent.setup();
+      const onChange = renderPg({
+        sslMode: "verify-ca",
+        caCertPath: "/opt/corp-ca.pem",
+      });
+      await user.click(screen.getByLabelText("SSL mode"));
+      await user.click(screen.getByRole("option", { name: /Verify CA/ }));
+      expect(onChange).not.toHaveBeenCalled();
+
+      await user.click(screen.getByLabelText("SSL mode"));
+      await user.click(screen.getByRole("option", { name: /Verify full/ }));
+      expect(onChange).toHaveBeenCalledWith({
+        sslMode: "verify-full",
+        caCertPath: null,
       });
     });
 
     it("warns about skipped verification while Require is selected", () => {
-      renderPg({ tlsEnabled: true, trustServerCertificate: true });
+      renderPg({ sslMode: "require" });
       // Require = skip-verify: the MITM exposure is surfaced as an alert so the
       // choice is deliberate, not silent.
       expect(
@@ -152,7 +177,7 @@ describe("PgFormFields", () => {
     });
 
     it("does not warn for Verify full", () => {
-      renderPg({ tlsEnabled: true, trustServerCertificate: false });
+      renderPg({ sslMode: "verify-full" });
       expect(
         screen.queryByText(/Certificate verification is skipped/),
       ).not.toBeInTheDocument();

@@ -1045,6 +1045,7 @@ fn mssql_query_error(context: &'static str, err: impl std::fmt::Display) -> AppE
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::models::SslMode;
     use crate::models::{ConnectionConfig, DatabaseType};
     use std::borrow::Cow;
     use tiberius::{numeric::Numeric, xml::XmlData, Uuid};
@@ -1067,8 +1068,8 @@ mod tests {
             environment: None,
             auth_source: None,
             replica_set: None,
-            tls_enabled: Some(false),
-            trust_server_certificate: None,
+            ssl_mode: SslMode::Prefer,
+            ca_cert_path: None,
             oracle_use_sid: None,
             wallet_path: None,
             wallet_password: String::new(),

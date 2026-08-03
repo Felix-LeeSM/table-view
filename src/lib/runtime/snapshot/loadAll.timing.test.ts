@@ -164,7 +164,7 @@ describe("AC-367-01 boot-critical 5 store hydrate shape", () => {
           paradigm: "document",
           auth_source: "admin",
           replica_set: "rs0",
-          tls_enabled: true,
+          ssl_mode: "verify-full",
         },
       ],
       groups: [
@@ -191,7 +191,7 @@ describe("AC-367-01 boot-critical 5 store hydrate shape", () => {
       hasPassword: true,
       authSource: "admin",
       replicaSet: "rs0",
-      tlsEnabled: true,
+      sslMode: "verify-full",
     });
     expect(conn.activeStatuses["legacy-c1"]).toEqual({
       type: "connected",

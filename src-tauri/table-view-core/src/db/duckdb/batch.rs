@@ -103,6 +103,7 @@ fn run_commit_batch(
 
 #[cfg(test)]
 mod tests {
+    use crate::models::SslMode;
     // Purpose: DuckDB Stage 1 transactional row-edit batch (ADR 0051, #1070) —
     // commit atomicity, statement-failure rollback, single-row guard, read-only
     // rejection, and blank-statement validation (2026-07-24).
@@ -129,8 +130,8 @@ mod tests {
             environment: None,
             auth_source: None,
             replica_set: None,
-            tls_enabled: None,
-            trust_server_certificate: None,
+            ssl_mode: SslMode::Prefer,
+            ca_cert_path: None,
             oracle_use_sid: None,
             wallet_path: None,
             wallet_password: String::new(),

@@ -478,6 +478,8 @@ mod tests {
     //! 때 counter 변경 없음 + 불일치 시 counter += 1 — 을 unit 레벨에서 lock.
     //! E2E 시나리오 (lib.rs setup 호출) 는 `tests/mismatch_metric.rs` 가 담당.
 
+    use crate::models::SslMode;
+
     use super::*;
     use crate::models::{ConnectionConfig, DatabaseType};
     use crate::storage::local;
@@ -678,8 +680,8 @@ mod tests {
             environment: None,
             auth_source: None,
             replica_set: None,
-            tls_enabled: None,
-            trust_server_certificate: None,
+            ssl_mode: SslMode::Prefer,
+            ca_cert_path: None,
             oracle_use_sid: None,
             wallet_path: None,
             wallet_password: String::new(),

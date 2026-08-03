@@ -13,7 +13,7 @@
 use crate::commands::connection::AppState;
 use crate::commands::guard::guard_legacy_import_done;
 use crate::error::AppError;
-use crate::models::{ConnectionConfig, DatabaseType};
+use crate::models::{ConnectionConfig, DatabaseType, SslMode};
 use crate::storage::reconcile::{is_force_failure_for_tests, record_sqlite_result};
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
@@ -51,10 +51,28 @@ pub struct PersistConnectionRequest {
     pub auth_source: Option<String>,
     #[serde(default)]
     pub replica_set: Option<String>,
+    /// #1649 (ADR 0058) — the uniform TLS posture. Replaces the legacy
+    /// `(tlsEnabled, trustServerCertificate)` pair; `#[serde(default)]` yields
+    /// `prefer` so a payload that omits it behaves exactly as the omitted
+    /// booleans did.
+    ///
+    /// Unlike [`ConnectionConfig`] there is deliberately no legacy-pair fold
+    /// here: that shim exists to migrate *stored* rows, and an IPC request is
+    /// not stored data. This struct also has no `deny_unknown_fields` (a caller
+    /// passing a whole frontend connection object carries keys this request does
+    /// not model), so a payload that sent the legacy pair instead of `sslMode`
+    /// would have both keys dropped and persist `prefer`. No such payload can
+    /// exist today — the frontend types no longer carry those keys, Tauri ships
+    /// both halves together so there is no version skew, and nothing calls this
+    /// IPC yet (`git grep -n "persistConnection" -- src/ e2e/`). A frontend
+    /// caller must send `sslMode`; wire the fold here if that ever stops being
+    /// guaranteed.
     #[serde(default)]
-    pub tls_enabled: Option<bool>,
+    pub ssl_mode: SslMode,
+    /// #1649 (ADR 0058) — CA path for `verify-ca`. Rejected by the storage write
+    /// boundary when the posture is `verify-ca` and this is absent.
     #[serde(default)]
-    pub trust_server_certificate: Option<bool>,
+    pub ca_cert_path: Option<String>,
     #[serde(default)]
     pub sort_order: i64,
 }
@@ -89,8 +107,8 @@ pub async fn persist_connection_inner(
         environment: req.environment.clone(),
         auth_source: req.auth_source.clone(),
         replica_set: req.replica_set.clone(),
-        tls_enabled: req.tls_enabled,
-        trust_server_certificate: req.trust_server_certificate,
+        ssl_mode: req.ssl_mode,
+        ca_cert_path: req.ca_cert_path.clone(),
         oracle_use_sid: None,
         wallet_path: None,
         wallet_password: String::new(),
@@ -131,6 +149,7 @@ async fn write_sqlite_mirror(
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_millis() as i64)
         .unwrap_or(0);
+    let (legacy_tls, legacy_trust) = req.ssl_mode.to_legacy();
     sqlx::query(
         "INSERT INTO connections \
          (id, name, db_type, host, port, user, password_enc, database, read_only, group_id, color, \
@@ -166,11 +185,11 @@ async fn write_sqlite_mirror(
     .bind(&req.environment)
     .bind(&req.auth_source)
     .bind(&req.replica_set)
-    .bind(req.tls_enabled.map(|v| if v { 1i64 } else { 0i64 }))
-    .bind(
-        req.trust_server_certificate
-            .map(|v| if v { 1i64 } else { 0i64 }),
-    )
+    // #1649 — the mirror keeps the legacy integer columns; the posture is
+    // projected onto them (`verify-ca` lands as `verify-full`, the CA path is
+    // file-SOT-only). See `SslMode::to_legacy`.
+    .bind(legacy_tls.map(|v| if v { 1i64 } else { 0i64 }))
+    .bind(legacy_trust.map(|v| if v { 1i64 } else { 0i64 }))
     .bind(req.sort_order)
     .bind(now_ms)
     .bind(now_ms)
@@ -233,8 +252,8 @@ mod tests {
             environment: None,
             auth_source: None,
             replica_set: None,
-            tls_enabled: None,
-            trust_server_certificate: None,
+            ssl_mode: SslMode::Prefer,
+            ca_cert_path: None,
             sort_order: 0,
         }
     }

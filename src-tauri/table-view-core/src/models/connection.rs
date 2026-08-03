@@ -77,7 +77,136 @@ pub enum Paradigm {
     Kv,
 }
 
+/// #1649 (ADR 0058) — the uniform, all-engine TLS posture vocabulary. Promotes
+/// the ADR 0053 `(tls_enabled, trust_server_certificate)` boolean pair — the
+/// persisted SOT on pg/mysql and the plain on/off toggle on the 1-stage engines
+/// — into a single `sslmode` enum stored on every engine. The five variants
+/// mirror the PostgreSQL `sslmode` vocabulary so a pasted `?sslmode=` value maps
+/// one-to-one:
+///
+/// | variant      | wire (`kebab`) | encrypts                       | verifies cert | needs CA             |
+/// |--------------|----------------|--------------------------------|---------------|----------------------|
+/// | `Disable`    | `disable`      | never                          | —             | no                   |
+/// | `Prefer`     | `prefer`       | opportunistic (driver default) | no            | no                   |
+/// | `Require`    | `require`      | always                         | no            | no                   |
+/// | `VerifyCa`   | `verify-ca`    | always                         | yes           | yes (`ca_cert_path`) |
+/// | `VerifyFull` | `verify-full`  | always                         | yes           | no (public roots)    |
+///
+/// `VerifyCa` is the new advanced-depth posture: it adds a user-supplied
+/// private/self-signed CA (`ca_cert_path`) to the trust anchors so a server no
+/// public CA signs can still be authenticated, closing the MITM-substitution gap
+/// that `Require` (skip-verify) leaves open. It is an **addition**, not a
+/// restriction — see the [`crate::db::tls`] module docs for why sqlx cannot
+/// narrow the anchor set, and why both verifying postures keep hostname
+/// verification on.
+///
+/// It is the one variant with a companion requirement: `ca_cert_path` must be
+/// set. That is enforced at the storage write boundary and again at connect
+/// time (`db::tls::validate_tls_posture` / `resolve_tls_decision`). libpq is
+/// one-to-one here too — it rejects `sslmode=verify-ca` without a root
+/// certificate rather than silently treating it as the built-in-public-roots
+/// posture (`verify-full`) the user did not pick.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum SslMode {
+    /// Force plaintext — never negotiate TLS (`sslmode=disable`).
+    Disable,
+    /// Driver default — opportunistic encryption (`sslmode=prefer`). The
+    /// pre-#1062 posture for legacy connections that set no TLS fields.
+    #[default]
+    Prefer,
+    /// Force encryption, skip certificate verification (`sslmode=require`).
+    /// MITM-exposed: encrypts but does not authenticate the server.
+    Require,
+    /// Force encryption + full chain **and hostname** verification, with the CA
+    /// at `ca_cert_path` (**required** for this posture) trusted in addition to
+    /// the built-in public roots (`sslmode=verify-ca`).
+    VerifyCa,
+    /// Force encryption + full chain + hostname verification against the
+    /// built-in public roots only (`sslmode=verify-full`).
+    VerifyFull,
+}
+
+impl SslMode {
+    /// Whether the adapter should negotiate TLS at all. Used by the engines
+    /// that only need an encrypt-or-not decision (MSSQL, mongo, redis/valkey,
+    /// ES/OpenSearch) rather than the full sslmode ladder.
+    pub fn tls_on(self) -> bool {
+        !matches!(self, SslMode::Disable | SslMode::Prefer)
+    }
+
+    /// Whether certificate verification is skipped (the MITM-exposed
+    /// `require` posture). Only `Require` skips verification —
+    /// `VerifyCa`/`VerifyFull` authenticate the server.
+    pub fn skip_verify(self) -> bool {
+        matches!(self, SslMode::Require)
+    }
+
+    /// Migrate the legacy ADR 0053 `(tls_enabled, trust_server_certificate)`
+    /// pair into an `SslMode`. Preserves the exact pre-#1649
+    /// `resolve_tls_decision` semantics for the pg/mysql path and applies the
+    /// ADR 0053 derived rule for the on/off engines (`tls=true, trust=None`
+    /// reinterprets as verify-full — the behavior those adapters already had,
+    /// so zero downgrade). Applied at the deserialize boundaries only; there is
+    /// no dual-write, the next save writes `ssl_mode` and the legacy keys go.
+    ///
+    /// **No cell folds a refusal into weaker-than-plaintext-refusal.** The two
+    /// combinations the pre-#1649 code rejected outright are the only ones whose
+    /// runtime behavior this migration can change, so they fold upward:
+    ///
+    /// * `(tls=true, trust=None)` → `verify-full` — the on/off engines already
+    ///   connected with verification in this state, and pg/mysql/mssql refused.
+    /// * `(tls=off/unset, trust=true)` → `require` — see below.
+    pub fn from_legacy(tls_enabled: Option<bool>, trust: Option<bool>) -> Self {
+        match (tls_enabled.unwrap_or(false), trust) {
+            (true, Some(true)) => SslMode::Require,
+            (true, Some(false)) => SslMode::VerifyFull,
+            // ADR 0053 derived rule: the on/off engines stored `tls=true,
+            // trust=None` and connected with verification — reinterpret as
+            // verify-full rather than the pg/mysql-only hard error.
+            (true, None) => SslMode::VerifyFull,
+            // Explicit forced-plaintext marker (#1063).
+            (false, Some(false)) => SslMode::Disable,
+            // Trust-without-TLS. pg/mysql, MSSQL and Oracle all *refused to
+            // connect* on this pair before #1649; `SslMode` cannot express a
+            // refusal, so the fold picks a posture instead. `require` is the
+            // only choice that cannot be a silent downgrade: it honors the one
+            // thing the user did state (`trust=true`, meaningful only under
+            // encryption) and keeps the ADR 0053 promise that a contradictory
+            // pair never quietly becomes plaintext. `prefer` would let an
+            // active attacker strip TLS and MSSQL would go further and force
+            // `EncryptionLevel::NotSupported`.
+            //
+            // Reachable from the pre-#1649 UI only through the SQL Server URL
+            // paste (`?encrypt=false&trustServerCertificate=true`); every form
+            // cleared `trust` when TLS went off. On the on/off engines
+            // (mongo/redis/valkey/ES/OpenSearch) `trust` was ignored while TLS
+            // was off, so a hand-edited or imported row there moves from a
+            // plaintext connect to a forced-TLS handshake that fails loudly if
+            // the server has no TLS — visible, never weaker.
+            (false, Some(true)) => SslMode::Require,
+            (false, None) => SslMode::Prefer,
+        }
+    }
+
+    /// Project back onto the legacy boolean pair for the SQLite snapshot mirror,
+    /// whose `tls_enabled`/`trust_server_certificate` integer columns stay as
+    /// they are (the mirror is a lossy read-cache, not the SOT — it already
+    /// drops `wallet_path`/`oracle_use_sid`). `VerifyCa` projects as
+    /// `VerifyFull`; the cold-boot reconstruct restores the real posture and
+    /// `ca_cert_path` from the file SOT.
+    pub fn to_legacy(self) -> (Option<bool>, Option<bool>) {
+        match self {
+            SslMode::Prefer => (None, None),
+            SslMode::Disable => (Some(false), Some(false)),
+            SslMode::Require => (Some(true), Some(true)),
+            SslMode::VerifyCa | SslMode::VerifyFull => (Some(true), Some(false)),
+        }
+    }
+}
+
 #[derive(Clone, Serialize, Deserialize)]
+#[serde(from = "ConnectionConfigDe")]
 pub struct ConnectionConfig {
     pub id: String,
     pub name: String,
@@ -108,14 +237,20 @@ pub struct ConnectionConfig {
     /// MongoDB replica set name. Ignored by non-mongo adapters.
     #[serde(default)]
     pub replica_set: Option<String>,
-    /// Whether to enable TLS/encryption for adapters that support it.
+    /// #1649 (ADR 0058) — the uniform all-engine TLS posture. Replaces the
+    /// legacy `(tls_enabled, trust_server_certificate)` boolean pair; legacy
+    /// persisted JSON migrates through [`ConnectionConfigDe`] in one stage, with
+    /// no dual-write. `#[serde(default)]` yields `Prefer` for a payload that
+    /// carries neither the key nor the legacy pair.
     #[serde(default)]
-    pub tls_enabled: Option<bool>,
-    /// SQL Server trust-server-certificate decision. `None` means the caller
-    /// did not make an explicit certificate decision; MSSQL TLS paths require
-    /// an explicit value.
+    pub ssl_mode: SslMode,
+    /// #1649 (ADR 0058) — filesystem path to the CA certificate (PEM) that
+    /// [`SslMode::VerifyCa`] trusts *in addition to* the driver's built-in
+    /// public roots. A path *reference* only — never the certificate contents
+    /// (ADR 0052 file-credential precedent). Stripped from export envelopes like
+    /// `wallet_path`. Ignored by every posture other than `verify-ca`.
     #[serde(default)]
-    pub trust_server_certificate: Option<bool>,
+    pub ca_cert_path: Option<String>,
     /// Oracle-only (#1065): connect using a SID instead of a service name.
     /// `Some(true)` selects the driver's `Config::with_sid`; `None` /
     /// `Some(false)` use a service name. Ignored by non-Oracle adapters.
@@ -133,6 +268,92 @@ pub struct ConnectionConfig {
     /// the IPC boundary in plaintext (ADR 0005). Empty means "none stored".
     #[serde(default)]
     pub wallet_password: String,
+}
+
+/// #1649 (ADR 0058) — deserialize shim that migrates the legacy
+/// `(tls_enabled, trust_server_certificate)` boolean pair into `ssl_mode` in a
+/// single stage. [`ConnectionConfig`] deserializes *through* this type
+/// (`#[serde(from = ...)]`): a payload carrying an explicit `ssl_mode` uses it
+/// verbatim, a legacy payload (booleans only) folds via
+/// [`SslMode::from_legacy`]. Serialization is one-way — `ConnectionConfig` only
+/// ever writes `ssl_mode`/`ca_cert_path`, so the next save drops the legacy keys
+/// and no dual-write window exists.
+///
+/// Every other field mirrors `ConnectionConfig` with identical serde attributes
+/// so the persisted shape round-trips unchanged. A field added to
+/// `ConnectionConfig` without being added here is a compile error in the
+/// `From` impl below, not a silent data loss.
+#[derive(Deserialize)]
+struct ConnectionConfigDe {
+    id: String,
+    name: String,
+    db_type: DatabaseType,
+    host: String,
+    port: u16,
+    password: String,
+    user: String,
+    database: String,
+    #[serde(default)]
+    read_only: bool,
+    group_id: Option<String>,
+    color: Option<String>,
+    #[serde(default)]
+    connection_timeout: Option<u32>,
+    #[serde(default)]
+    keep_alive_interval: Option<u32>,
+    #[serde(default)]
+    environment: Option<String>,
+    #[serde(default)]
+    auth_source: Option<String>,
+    #[serde(default)]
+    replica_set: Option<String>,
+    /// New SOT posture. Absent for legacy payloads → folded from the pair below.
+    #[serde(default)]
+    ssl_mode: Option<SslMode>,
+    #[serde(default)]
+    ca_cert_path: Option<String>,
+    /// Legacy (ADR 0053) — read only to migrate; never re-serialized.
+    #[serde(default)]
+    tls_enabled: Option<bool>,
+    #[serde(default)]
+    trust_server_certificate: Option<bool>,
+    #[serde(default)]
+    oracle_use_sid: Option<bool>,
+    #[serde(default)]
+    wallet_path: Option<String>,
+    #[serde(default)]
+    wallet_password: String,
+}
+
+impl From<ConnectionConfigDe> for ConnectionConfig {
+    fn from(de: ConnectionConfigDe) -> Self {
+        let ssl_mode = de
+            .ssl_mode
+            .unwrap_or_else(|| SslMode::from_legacy(de.tls_enabled, de.trust_server_certificate));
+        ConnectionConfig {
+            id: de.id,
+            name: de.name,
+            db_type: de.db_type,
+            host: de.host,
+            port: de.port,
+            user: de.user,
+            password: de.password,
+            database: de.database,
+            read_only: de.read_only,
+            group_id: de.group_id,
+            color: de.color,
+            connection_timeout: de.connection_timeout,
+            keep_alive_interval: de.keep_alive_interval,
+            environment: de.environment,
+            auth_source: de.auth_source,
+            replica_set: de.replica_set,
+            ssl_mode,
+            ca_cert_path: de.ca_cert_path,
+            oracle_use_sid: de.oracle_use_sid,
+            wallet_path: de.wallet_path,
+            wallet_password: de.wallet_password,
+        }
+    }
 }
 
 /// P3-2 (#1455) — manual `Debug` so an accidental `{:?}` (log line, error
@@ -160,8 +381,8 @@ impl std::fmt::Debug for ConnectionConfig {
             .field("environment", &self.environment)
             .field("auth_source", &self.auth_source)
             .field("replica_set", &self.replica_set)
-            .field("tls_enabled", &self.tls_enabled)
-            .field("trust_server_certificate", &self.trust_server_certificate)
+            .field("ssl_mode", &self.ssl_mode)
+            .field("ca_cert_path", &self.ca_cert_path)
             .field("oracle_use_sid", &self.oracle_use_sid)
             .field("wallet_path", &self.wallet_path)
             .field("wallet_password", &"***")
@@ -174,7 +395,7 @@ impl std::fmt::Debug for ConnectionConfig {
 /// `hasPassword` is the only signal the UI gets about whether a password is
 /// stored. The plaintext never leaves the backend.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", from = "ConnectionConfigPublicDe")]
 pub struct ConnectionConfigPublic {
     pub id: String,
     pub name: String,
@@ -210,10 +431,17 @@ pub struct ConnectionConfigPublic {
     pub auth_source: Option<String>,
     #[serde(default, alias = "replica_set")]
     pub replica_set: Option<String>,
-    #[serde(default, alias = "tls_enabled")]
-    pub tls_enabled: Option<bool>,
-    #[serde(default, alias = "trust_server_certificate")]
-    pub trust_server_certificate: Option<bool>,
+    /// #1649 (ADR 0058) — the uniform all-engine TLS posture on the wire. A
+    /// pre-#1649 payload (an export envelope, a hand-authored IPC call) carries
+    /// the legacy boolean pair instead and folds through
+    /// [`ConnectionConfigPublicDe`], so importing an old export keeps its
+    /// posture rather than silently dropping to `prefer`.
+    #[serde(default, alias = "ssl_mode")]
+    pub ssl_mode: SslMode,
+    /// #1649 (ADR 0058) — CA path for `verify-ca`. Stripped on export like
+    /// `wallet_path`; the user re-selects it after import.
+    #[serde(default, alias = "ca_cert_path")]
+    pub ca_cert_path: Option<String>,
     #[serde(default, alias = "oracle_use_sid")]
     pub oracle_use_sid: Option<bool>,
     #[serde(default, alias = "wallet_path")]
@@ -222,6 +450,93 @@ pub struct ConnectionConfigPublic {
     /// the plaintext wallet password never leaves the backend (#1065, ADR 0005).
     #[serde(default, alias = "has_wallet_password")]
     pub has_wallet_password: bool,
+}
+
+/// #1649 (ADR 0058) — deserialize shim for the public wire shape, mirroring
+/// [`ConnectionConfigDe`]. `ConnectionConfigPublic` already keeps snake_case
+/// aliases so older stored/exported payloads parse; this extends the same
+/// promise to the TLS posture, folding the legacy
+/// `(tlsEnabled, trustServerCertificate)` pair when `sslMode` is absent.
+/// Without it a pre-#1649 export envelope would import as `prefer` — a silent
+/// downgrade from a stored `require`/`verify-full`. Serialization is one-way:
+/// `ConnectionConfigPublic` only ever writes `sslMode`/`caCertPath`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ConnectionConfigPublicDe {
+    id: String,
+    name: String,
+    #[serde(alias = "db_type")]
+    db_type: DatabaseType,
+    host: String,
+    port: u16,
+    user: String,
+    database: String,
+    #[serde(default, alias = "read_only")]
+    read_only: bool,
+    #[serde(alias = "group_id")]
+    group_id: Option<String>,
+    color: Option<String>,
+    #[serde(default, alias = "connection_timeout")]
+    connection_timeout: Option<u32>,
+    #[serde(default, alias = "keep_alive_interval")]
+    keep_alive_interval: Option<u32>,
+    #[serde(default)]
+    environment: Option<String>,
+    #[serde(default, alias = "has_password")]
+    has_password: bool,
+    paradigm: Paradigm,
+    #[serde(default, alias = "auth_source")]
+    auth_source: Option<String>,
+    #[serde(default, alias = "replica_set")]
+    replica_set: Option<String>,
+    /// New SOT posture. Absent for legacy payloads → folded from the pair below.
+    #[serde(default, alias = "ssl_mode")]
+    ssl_mode: Option<SslMode>,
+    #[serde(default, alias = "ca_cert_path")]
+    ca_cert_path: Option<String>,
+    /// Legacy (ADR 0053) — read only to migrate; never re-serialized.
+    #[serde(default, alias = "tls_enabled")]
+    tls_enabled: Option<bool>,
+    #[serde(default, alias = "trust_server_certificate")]
+    trust_server_certificate: Option<bool>,
+    #[serde(default, alias = "oracle_use_sid")]
+    oracle_use_sid: Option<bool>,
+    #[serde(default, alias = "wallet_path")]
+    wallet_path: Option<String>,
+    #[serde(default, alias = "has_wallet_password")]
+    has_wallet_password: bool,
+}
+
+impl From<ConnectionConfigPublicDe> for ConnectionConfigPublic {
+    fn from(de: ConnectionConfigPublicDe) -> Self {
+        let ssl_mode = de
+            .ssl_mode
+            .unwrap_or_else(|| SslMode::from_legacy(de.tls_enabled, de.trust_server_certificate));
+        ConnectionConfigPublic {
+            id: de.id,
+            name: de.name,
+            db_type: de.db_type,
+            host: de.host,
+            port: de.port,
+            user: de.user,
+            database: de.database,
+            read_only: de.read_only,
+            group_id: de.group_id,
+            color: de.color,
+            connection_timeout: de.connection_timeout,
+            keep_alive_interval: de.keep_alive_interval,
+            environment: de.environment,
+            has_password: de.has_password,
+            paradigm: de.paradigm,
+            auth_source: de.auth_source,
+            replica_set: de.replica_set,
+            ssl_mode,
+            ca_cert_path: de.ca_cert_path,
+            oracle_use_sid: de.oracle_use_sid,
+            wallet_path: de.wallet_path,
+            has_wallet_password: de.has_wallet_password,
+        }
+    }
 }
 
 impl From<&ConnectionConfig> for ConnectionConfigPublic {
@@ -244,8 +559,8 @@ impl From<&ConnectionConfig> for ConnectionConfigPublic {
             has_password: !c.password.is_empty(),
             auth_source: c.auth_source.clone(),
             replica_set: c.replica_set.clone(),
-            tls_enabled: c.tls_enabled,
-            trust_server_certificate: c.trust_server_certificate,
+            ssl_mode: c.ssl_mode,
+            ca_cert_path: c.ca_cert_path.clone(),
             oracle_use_sid: c.oracle_use_sid,
             wallet_path: c.wallet_path.clone(),
             has_wallet_password: !c.wallet_password.is_empty(),
@@ -276,8 +591,8 @@ impl ConnectionConfigPublic {
             environment: self.environment,
             auth_source: self.auth_source,
             replica_set: self.replica_set,
-            tls_enabled: self.tls_enabled,
-            trust_server_certificate: self.trust_server_certificate,
+            ssl_mode: self.ssl_mode,
+            ca_cert_path: self.ca_cert_path,
             oracle_use_sid: self.oracle_use_sid,
             wallet_path: self.wallet_path,
             // Wallet password, like the DB password, never crosses IPC — the
@@ -362,8 +677,8 @@ mod tests {
             environment: None,
             auth_source: None,
             replica_set: None,
-            tls_enabled: None,
-            trust_server_certificate: None,
+            ssl_mode: SslMode::Prefer,
+            ca_cert_path: None,
             oracle_use_sid: None,
             wallet_path: None,
             wallet_password: String::new(),
@@ -404,8 +719,8 @@ mod tests {
             environment: None,
             auth_source: None,
             replica_set: None,
-            tls_enabled: None,
-            trust_server_certificate: None,
+            ssl_mode: SslMode::Prefer,
+            ca_cert_path: None,
             oracle_use_sid: Some(true),
             wallet_path: Some("/home/u/wallet".into()),
             wallet_password: "wpass@42XY".into(),
@@ -446,8 +761,8 @@ mod tests {
             environment: None,
             auth_source: None,
             replica_set: None,
-            tls_enabled: None,
-            trust_server_certificate: None,
+            ssl_mode: SslMode::Prefer,
+            ca_cert_path: None,
             oracle_use_sid: Some(true),
             wallet_path: Some("/home/u/wallet".into()),
             wallet_password: "wpass@42XY".into(),
@@ -538,8 +853,8 @@ mod tests {
             environment: None,
             auth_source: None,
             replica_set: None,
-            tls_enabled: None,
-            trust_server_certificate: None,
+            ssl_mode: SslMode::Prefer,
+            ca_cert_path: None,
             oracle_use_sid: None,
             wallet_path: None,
             wallet_password: String::new(),
@@ -589,8 +904,8 @@ mod tests {
             environment: None,
             auth_source: Some("admin".into()),
             replica_set: Some("rs0".into()),
-            tls_enabled: Some(true),
-            trust_server_certificate: None,
+            ssl_mode: SslMode::VerifyFull,
+            ca_cert_path: None,
             oracle_use_sid: None,
             wallet_path: None,
             wallet_password: String::new(),
@@ -615,14 +930,22 @@ mod tests {
             json
         );
         assert!(
-            json.contains("\"tlsEnabled\":true"),
-            "tlsEnabled missing from payload: {}",
+            json.contains("\"sslMode\":\"verify-full\""),
+            "sslMode missing from payload: {}",
+            json
+        );
+        // Reason: #1649 — the legacy pair is deserialize-only. Serializing it
+        // alongside `sslMode` would put the same fact on the wire twice and let
+        // a stale boolean win a round trip. (2026-08-02)
+        assert!(
+            !json.contains("tlsEnabled") && !json.contains("trustServerCertificate"),
+            "the legacy TLS booleans must not be re-serialized: {}",
             json
         );
         assert!(
             !json.contains("auth_source")
                 && !json.contains("replica_set")
-                && !json.contains("tls_enabled"),
+                && !json.contains("ssl_mode"),
             "public connection wire shape must not expose snake_case keys: {}",
             json
         );
@@ -659,12 +982,16 @@ mod tests {
         assert!(public.has_password);
         assert_eq!(public.auth_source.as_deref(), Some("admin"));
         assert_eq!(public.replica_set.as_deref(), Some("rs0"));
-        assert_eq!(public.tls_enabled, Some(true));
-        assert_eq!(public.trust_server_certificate, None);
+        // Reason: #1649 — a pre-#1649 export envelope carries only the legacy
+        // booleans. It must fold to the posture they encoded, not silently drop
+        // to the `prefer` default. `tls_enabled=true` with no trust decision is
+        // the ADR 0053 on/off-engine encoding for "verify". (2026-08-02)
+        assert_eq!(public.ssl_mode, SslMode::VerifyFull);
+        assert_eq!(public.ca_cert_path, None);
     }
 
     #[test]
-    fn connection_config_public_deserializes_trust_server_certificate_wire_keys() {
+    fn connection_config_public_deserializes_ssl_mode_wire_keys_and_legacy_fold() {
         let camel = r#"{
             "id": "c1",
             "name": "SQL Server",
@@ -676,10 +1003,12 @@ mod tests {
             "groupId": null,
             "color": null,
             "paradigm": "rdb",
-            "trustServerCertificate": true
+            "sslMode": "verify-ca",
+            "caCertPath": "/etc/ssl/corp-ca.pem"
         }"#;
         let public: ConnectionConfigPublic = serde_json::from_str(camel).unwrap();
-        assert_eq!(public.trust_server_certificate, Some(true));
+        assert_eq!(public.ssl_mode, SslMode::VerifyCa);
+        assert_eq!(public.ca_cert_path.as_deref(), Some("/etc/ssl/corp-ca.pem"));
 
         let snake = r#"{
             "id": "c1",
@@ -692,10 +1021,35 @@ mod tests {
             "group_id": null,
             "color": null,
             "paradigm": "rdb",
-            "trust_server_certificate": false
+            "ssl_mode": "require"
         }"#;
         let public: ConnectionConfigPublic = serde_json::from_str(snake).unwrap();
-        assert_eq!(public.trust_server_certificate, Some(false));
+        assert_eq!(public.ssl_mode, SslMode::Require);
+
+        // Reason: #1649 — an explicit `sslMode` wins over the legacy pair, so a
+        // client that sends both (a partially-migrated caller) cannot be
+        // downgraded by its own stale booleans. (2026-08-02)
+        let both = r#"{
+            "id": "c1",
+            "name": "SQL Server",
+            "dbType": "mssql",
+            "host": "localhost",
+            "port": 1433,
+            "user": "sa",
+            "database": "master",
+            "groupId": null,
+            "color": null,
+            "paradigm": "rdb",
+            "sslMode": "verify-full",
+            "tlsEnabled": true,
+            "trustServerCertificate": true
+        }"#;
+        let public: ConnectionConfigPublic = serde_json::from_str(both).unwrap();
+        assert_eq!(
+            public.ssl_mode,
+            SslMode::VerifyFull,
+            "an explicit sslMode must win over the legacy pair, which folds to require"
+        );
     }
 
     #[test]
@@ -761,7 +1115,7 @@ mod tests {
     #[test]
     fn connection_config_optional_fields_default_to_none() {
         // Simulates data saved before timeout/keep_alive/environment were added
-        // — and, from Sprint 65, before auth_source/replica_set/tls_enabled.
+        // — and, from Sprint 65, before auth_source/replica_set/ssl_mode.
         let json = r#"{
             "id": "test",
             "name": "test",
@@ -781,8 +1135,78 @@ mod tests {
         // Sprint 65 additions remain None for legacy payloads.
         assert_eq!(config.auth_source, None);
         assert_eq!(config.replica_set, None);
-        assert_eq!(config.tls_enabled, None);
-        assert_eq!(config.trust_server_certificate, None);
+        // Reason: #1649 — a payload carrying neither `ssl_mode` nor the legacy
+        // pair must land on `prefer`, the pre-#1062 driver default, so upgrading
+        // never changes an untouched connection's posture. (2026-08-02)
+        assert_eq!(config.ssl_mode, SslMode::Prefer);
+        assert_eq!(config.ca_cert_path, None);
+    }
+
+    #[test]
+    fn connection_config_folds_the_legacy_tls_pair_and_stops_writing_it() {
+        // Reason: #1649 — the file SOT migrates in one stage: a stored payload
+        // with only the legacy booleans deserializes to the folded posture, and
+        // the next save writes `ssl_mode` alone. Pinning both halves is what
+        // makes it a migration rather than a dual-write. (2026-08-02)
+        let legacy = r#"{
+            "id": "test",
+            "name": "test",
+            "db_type": "postgresql",
+            "host": "localhost",
+            "port": 5432,
+            "user": "postgres",
+            "password": "",
+            "database": "test",
+            "group_id": null,
+            "color": null,
+            "tls_enabled": true,
+            "trust_server_certificate": true
+        }"#;
+        let config: ConnectionConfig = serde_json::from_str(legacy).unwrap();
+        assert_eq!(config.ssl_mode, SslMode::Require);
+
+        let rewritten = serde_json::to_string(&config).unwrap();
+        assert!(
+            rewritten.contains("\"ssl_mode\":\"require\""),
+            "the re-save must carry the folded posture: {rewritten}"
+        );
+        assert!(
+            !rewritten.contains("tls_enabled") && !rewritten.contains("trust_server_certificate"),
+            "the legacy keys must not survive the re-save: {rewritten}"
+        );
+    }
+
+    #[test]
+    fn connection_config_round_trips_the_verify_ca_ca_path() {
+        // Reason: #1649 — `ca_cert_path` is the file SOT's only copy of the CA
+        // reference (the SQLite mirror has no column for it), so losing it on a
+        // round trip is silent data loss that the fail-closed gate then turns
+        // into a hard save failure. (2026-08-02)
+        let json = r#"{
+            "id": "test",
+            "name": "test",
+            "db_type": "postgresql",
+            "host": "localhost",
+            "port": 5432,
+            "user": "postgres",
+            "password": "",
+            "database": "test",
+            "group_id": null,
+            "color": null,
+            "ssl_mode": "verify-ca",
+            "ca_cert_path": "/etc/ssl/corp-ca.pem"
+        }"#;
+        let config: ConnectionConfig = serde_json::from_str(json).unwrap();
+        assert_eq!(config.ssl_mode, SslMode::VerifyCa);
+        assert_eq!(config.ca_cert_path.as_deref(), Some("/etc/ssl/corp-ca.pem"));
+
+        let reparsed: ConnectionConfig =
+            serde_json::from_str(&serde_json::to_string(&config).unwrap()).unwrap();
+        assert_eq!(reparsed.ssl_mode, SslMode::VerifyCa);
+        assert_eq!(
+            reparsed.ca_cert_path.as_deref(),
+            Some("/etc/ssl/corp-ca.pem")
+        );
     }
 
     #[test]
@@ -804,8 +1228,8 @@ mod tests {
             environment: None,
             auth_source: Some("admin".into()),
             replica_set: Some("rs0".into()),
-            tls_enabled: Some(true),
-            trust_server_certificate: None,
+            ssl_mode: SslMode::VerifyFull,
+            ca_cert_path: None,
             oracle_use_sid: None,
             wallet_path: None,
             wallet_password: String::new(),
@@ -814,7 +1238,7 @@ mod tests {
         let deserialized: ConnectionConfig = serde_json::from_str(&json).unwrap();
         assert_eq!(deserialized.auth_source.as_deref(), Some("admin"));
         assert_eq!(deserialized.replica_set.as_deref(), Some("rs0"));
-        assert_eq!(deserialized.tls_enabled, Some(true));
+        assert_eq!(deserialized.ssl_mode, SslMode::VerifyFull);
     }
 
     #[test]
@@ -870,8 +1294,8 @@ mod tests {
             paradigm: Paradigm::Document,
             auth_source: Some("admin".into()),
             replica_set: Some("rs0".into()),
-            tls_enabled: Some(true),
-            trust_server_certificate: Some(false),
+            ssl_mode: SslMode::VerifyFull,
+            ca_cert_path: None,
             oracle_use_sid: None,
             wallet_path: None,
             has_wallet_password: false,
@@ -890,7 +1314,7 @@ mod tests {
         assert_eq!(config.environment.as_deref(), Some("prod"));
         assert_eq!(config.auth_source.as_deref(), Some("admin"));
         assert_eq!(config.replica_set.as_deref(), Some("rs0"));
-        assert_eq!(config.tls_enabled, Some(true));
-        assert_eq!(config.trust_server_certificate, Some(false));
+        assert_eq!(config.ssl_mode, SslMode::VerifyFull);
+        assert_eq!(config.ca_cert_path, None);
     }
 }
