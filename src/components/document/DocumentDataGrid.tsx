@@ -13,6 +13,7 @@ import MqlPreviewModal from "@components/document/MqlPreviewModal";
 import ProjectionDialog from "@components/document/ProjectionDialog";
 import AsyncProgressOverlay from "@components/feedback/AsyncProgressOverlay";
 import QuickLookPanel from "@components/shared/QuickLookPanel";
+import { useQuickLookFocus } from "@components/shared/QuickLookPanel/useQuickLookFocus";
 import { useSafeModeGate } from "@hooks/useSafeModeGate";
 import { DEFAULT_PAGE_SIZE } from "@lib/gridPolicy";
 import { safeStringifyCell } from "@lib/jsonCell";
@@ -220,20 +221,6 @@ export default function DocumentDataGrid({
     };
   }, [backendData, schemaAccumulator.columns]);
 
-  // Cmd+L (Mac) / Ctrl+L (other) toggles the Quick Look panel. Same shape
-  // as `DataGrid.tsx` so keyboard behaviour stays consistent across
-  // paradigms.
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "l" && (e.metaKey || e.ctrlKey)) {
-        e.preventDefault();
-        setShowQuickLook((prev) => !prev);
-      }
-    };
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, []);
-
   // Editing state managed by the document-specific hook. It treats `schema`
   // as the Mongo database name and `table` as the collection name.
   const editState = useDocumentDataGridEdit({
@@ -260,6 +247,30 @@ export default function DocumentDataGrid({
 
   const showQuickLookMounted =
     showQuickLook && editState.selectedRowIds.size > 0 && !!queryResult;
+
+  // #1734 (5) — F6 walks focus grid ↔ panel; closing hands it back to the cell.
+  const { rootRef, panelRef, focusGridCell } =
+    useQuickLookFocus(showQuickLookMounted);
+
+  const closeQuickLook = useCallback(() => {
+    setShowQuickLook(false);
+    focusGridCell();
+  }, [focusGridCell]);
+
+  // Cmd+L (Mac) / Ctrl+L (other) toggles the Quick Look panel. Same shape
+  // as `DataGrid.tsx` so keyboard behaviour stays consistent across
+  // paradigms.
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "l" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        if (showQuickLook) focusGridCell();
+        setShowQuickLook((prev) => !prev);
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [showQuickLook, focusGridCell]);
 
   const rowKeyOf = useCallback(
     (rowIdx: number) => `row-${page}-${rowIdx}`,
@@ -578,7 +589,7 @@ export default function DocumentDataGrid({
   );
 
   return (
-    <div className="flex flex-1 flex-col overflow-hidden">
+    <div ref={rootRef} className="flex flex-1 flex-col overflow-hidden">
       <DocumentGridControls
         data={data}
         database={database}
@@ -689,9 +700,10 @@ export default function DocumentDataGrid({
           selectedRowIds={editState.selectedRowIds}
           database={database}
           collection={collection}
-          onClose={() => setShowQuickLook(false)}
+          onClose={closeQuickLook}
           editState={editState}
           data={data ?? undefined}
+          panelRef={panelRef}
         />
       )}
 

@@ -9,6 +9,17 @@
 //   / `<span>` (plain).
 // - Edit path swaps in: 3-way `<Select>` (boolean) / `<textarea>` (jsonb /
 //   object / json-string / large text) / `<input>` (everything else).
+// - #1734 (4): editing is always on when the call-site supplies `editState`.
+//   There is no Edit toggle to flip, so an editable column renders its editor
+//   the moment the panel opens.
+// - #1734 (3): long values render in full. The `<pre>` dropped its
+//   `max-h-48 overflow-auto` clamp — that was the only clamp actually binding,
+//   since a `rows={3}`/`rows={4}` textarea never reached 192px. The textareas
+//   grow with their content via `field-sizing-content` instead.
+//   ponytail: `field-sizing` is Chromium 123+ / WebKit 26+, so on an older
+//   WebKitGTK or WKWebView the textareas fall back to `rows` and scroll — the
+//   height they have today, no regression. Swap in a scrollHeight-measuring
+//   effect only if a supported-platform floor makes that fallback unacceptable.
 // - Esc reverts the local draft string without dispatching.
 // - Plain `Enter` saves on input; on textarea plain `Enter` is a newline
 //   and `Cmd/Ctrl+Enter` saves.
@@ -51,7 +62,10 @@ interface FieldRowProps {
   rowIdx: number;
   colIdx: number;
   onBlobView: (data: unknown, columnName: string) => void;
-  editing: boolean;
+  /**
+   * Presence of `editState` is the only edit gate (#1734 (4)). Read-only
+   * call-sites omit it; call-sites that pass it get always-on editing.
+   */
   editState?: DataGridEditState;
 }
 
@@ -61,7 +75,6 @@ export function FieldRow({
   rowIdx,
   colIdx,
   onBlobView,
-  editing,
   editState,
 }: FieldRowProps) {
   const { t } = useTranslation("shared");
@@ -79,7 +92,7 @@ export function FieldRow({
     [value, column],
   );
 
-  const editable = editing && !!editState && isEditableColumn(column);
+  const editable = !!editState && isEditableColumn(column);
 
   return (
     <div className="flex border-b border-border last:border-b-0">
@@ -135,12 +148,12 @@ export function FieldRow({
             <span>{t("fieldRow.blob")}</span>
           </Button>
         ) : isObject || isJsonString ? (
-          <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-all font-mono text-foreground">
+          <pre className="whitespace-pre-wrap break-all font-mono text-foreground">
             {displayValue}
           </pre>
         ) : isLargeText ? (
           <textarea
-            className="max-h-48 w-full resize-y bg-transparent font-mono text-foreground outline-none"
+            className="field-sizing-content w-full resize-y bg-transparent font-mono text-foreground outline-none"
             value={String(value)}
             rows={3}
             readOnly
@@ -153,7 +166,7 @@ export function FieldRow({
         {/* Read-only marker for PK / BLOB so the user understands the input
             is intentionally absent in edit mode. Stays out of the DOM in
             read-only call-sites. */}
-        {editing && !!editState && !isEditableColumn(column) && (
+        {!!editState && !isEditableColumn(column) && (
           <span
             className="ml-2 text-3xs italic text-muted-foreground"
             aria-disabled
@@ -266,7 +279,10 @@ export function EditableValue({
     return (
       <div className="flex flex-col gap-1">
         <textarea
-          className={cn("max-h-48 resize-y font-mono", INLINE_EDIT_INPUT)}
+          className={cn(
+            "field-sizing-content resize-y font-mono",
+            INLINE_EDIT_INPUT,
+          )}
           value={draft}
           rows={4}
           aria-label={t("fieldRow.editValueFor", { column: column.name })}

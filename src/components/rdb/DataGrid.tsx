@@ -1,6 +1,7 @@
 import { useRdbDataGridEdit } from "@components/datagrid/useRdbDataGridEdit";
 import FilterBar from "@components/rdb/FilterBar";
 import QuickLookPanel from "@components/shared/QuickLookPanel";
+import { useQuickLookFocus } from "@components/shared/QuickLookPanel/useQuickLookFocus";
 import { DEFAULT_PAGE_SIZE } from "@lib/gridPolicy";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useMruStore } from "@stores/mruStore";
@@ -143,13 +144,21 @@ export default function DataGrid({
   const prevPropsRef = useRef({ connectionId, table, schema });
   const totalPages = data ? Math.ceil(data.total_count / pageSize) : 0;
 
+  // #1734 (5) — F6 walks focus grid ↔ panel, and every close path hands focus
+  // back to the grid cell the user came from.
+  const quickLookOpen =
+    showQuickLook && editState.selectedRowIds.size > 0 && data !== null;
+  const { rootRef, panelRef, focusGridCell } = useQuickLookFocus(quickLookOpen);
+
   const toggleQuickLook = useCallback(() => {
+    if (showQuickLook) focusGridCell();
     setShowQuickLook((visible) => !visible);
-  }, []);
+  }, [showQuickLook, focusGridCell]);
 
   const closeQuickLook = useCallback(() => {
     setShowQuickLook(false);
-  }, []);
+    focusGridCell();
+  }, [focusGridCell]);
 
   const handleSetPageSize = useCallback(
     (size: number) => {
@@ -215,7 +224,7 @@ export default function DataGrid({
   });
 
   return (
-    <div className="flex flex-1 flex-col overflow-hidden">
+    <div ref={rootRef} className="flex flex-1 flex-col overflow-hidden">
       <RdbDataGridToolbar
         data={data}
         schema={schema}
@@ -284,7 +293,7 @@ export default function DataGrid({
         onCancelRefetch={handleCancelRefetch}
       />
 
-      {showQuickLook && editState.selectedRowIds.size > 0 && data && (
+      {quickLookOpen && data && (
         <QuickLookPanel
           data={data}
           selectedRowIds={editState.selectedRowIds}
@@ -292,6 +301,7 @@ export default function DataGrid({
           table={table}
           onClose={closeQuickLook}
           editState={editState}
+          panelRef={panelRef}
         />
       )}
 

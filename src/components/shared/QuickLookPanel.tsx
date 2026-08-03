@@ -11,6 +11,7 @@
 //   from this entry file.
 
 import type { DataGridEditState } from "@components/datagrid/useDataGridEdit";
+import type { RefObject } from "react";
 import { useCallback, useMemo, useState } from "react";
 import type { TableData } from "@/types/schema";
 import DocumentQuickLookBody from "./QuickLookPanel/DocumentQuickLookBody";
@@ -44,6 +45,8 @@ export interface QuickLookPanelRdbProps {
   table: string;
   onClose: () => void;
   editState?: DataGridEditState;
+  /** `F6` focus target (#1734 (5)) — supplied by `useQuickLookFocus`. */
+  panelRef?: RefObject<HTMLDivElement | null>;
 }
 
 export interface QuickLookPanelDocumentProps {
@@ -59,6 +62,8 @@ export interface QuickLookPanelDocumentProps {
    */
   data?: TableData;
   editState?: DataGridEditState;
+  /** `F6` focus target (#1734 (5)) — supplied by `useQuickLookFocus`. */
+  panelRef?: RefObject<HTMLDivElement | null>;
 }
 
 export type QuickLookPanelProps =
@@ -67,6 +72,8 @@ export type QuickLookPanelProps =
 
 export default function QuickLookPanel(props: QuickLookPanelProps) {
   const [height, setHeight] = useState(DEFAULT_HEIGHT);
+  // Document-mode only (#1734 (4)): the BSON tree ↔ field list view switch.
+  // RDB has no toggle — `editState` alone makes its fields editable.
   const [editing, setEditing] = useState(false);
 
   // Shared selection arithmetic — both paradigms use the smallest-index
@@ -150,6 +157,7 @@ export default function QuickLookPanel(props: QuickLookPanelProps) {
         data={props.data}
         editing={editing}
         onToggleEdit={() => setEditing((v) => !v)}
+        panelRef={props.panelRef}
       />
     );
   }
@@ -166,8 +174,7 @@ export default function QuickLookPanel(props: QuickLookPanelProps) {
       onResizeMouseDown={handleMouseDown}
       onResizeKeyDown={handleResizeKeyDown}
       editState={props.editState}
-      editing={editing}
-      onToggleEdit={() => setEditing((v) => !v)}
+      panelRef={props.panelRef}
     />
   );
 }

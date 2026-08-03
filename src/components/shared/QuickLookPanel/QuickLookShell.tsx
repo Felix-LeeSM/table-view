@@ -2,16 +2,25 @@
 // (`RdbQuickLookBody`, `DocumentQuickLookBody`):
 //
 //   * panel container (`role="region"` + configurable `aria-label`,
-//     `border-t border-border bg-background`, `style={{ height }}`),
+//     `border-t border-border bg-background`, `style={{ height }}`). #1734 (5)
+//     made it a programmatic focus target (`tabIndex={-1}` + `panelRef`) with a
+//     visible `--color-ring` outline, so `F6` can hand focus to the panel and
+//     the user can see that it landed there,
 //   * keyboard-accessible resize handle (`role="separator"`, `tabIndex=0`,
 //     `aria-orientation="horizontal"`, `aria-valuemin={120}` /
 //     `aria-valuemax={600}` / `aria-valuenow={height}`,
 //     `aria-label="Resize Quick Look panel"`, `GripHorizontal` icon,
 //     `cursor-row-resize`, `hover:bg-muted`,
 //     `focus-visible:outline-1 focus-visible:outline-ring`),
-//   * header bar (title node + inline `HeaderControls`: dirty pill + Edit
-//     toggle + Close button),
+//   * header bar (title node + inline `HeaderControls`: dirty pill + optional
+//     Edit toggle + Close button),
 //   * children slot for the body content.
+//
+// The Edit toggle is opt-in (#1734 (4)): it renders only for a body that
+// passes `onToggleEdit`. RDB dropped it — its fields are always editable when
+// `editState` is present. Document mode keeps it because there the control is
+// a *view* switch (BSON tree ↔ field list), not an edit on/off switch, and
+// dropping it would delete the nested-document read view.
 //
 // The shell holds NO paradigm-specific decisions: no RDB-vs-document
 // branching, no ownership of `editState` or `height`. Resize handle styling
@@ -23,7 +32,7 @@ import type { DataGridEditState } from "@components/datagrid/useDataGridEdit";
 import { Button } from "@components/ui/button";
 import { cn } from "@lib/utils";
 import { GripHorizontal, Pencil, PencilOff, X } from "lucide-react";
-import type { KeyboardEvent, MouseEvent, ReactNode } from "react";
+import type { KeyboardEvent, MouseEvent, ReactNode, RefObject } from "react";
 import { useTranslation } from "react-i18next";
 import { MAX_HEIGHT, MIN_HEIGHT } from "./helpers";
 
@@ -45,11 +54,17 @@ export interface QuickLookShellProps {
   /** Per-mode close button accessible label. */
   closeLabel: "Close row details" | "Close document details";
   isDirty: boolean;
-  editing: boolean;
-  onToggleEdit: () => void;
+  /**
+   * Edit toggle. Both are required together — omit them (RDB, #1734 (4)) and
+   * no toggle renders; supply them (document view switch) and it does.
+   */
+  editing?: boolean;
+  onToggleEdit?: () => void;
   onClose: () => void;
-  /** Optional — when present, the Edit toggle is rendered. */
+  /** Optional — gates the Edit toggle together with `onToggleEdit`. */
   editState?: DataGridEditState;
+  /** `F6` focus target (#1734 (5)) — see `useQuickLookFocus`. */
+  panelRef?: RefObject<HTMLDivElement | null>;
   /** Body content (FieldRow list / BSON tree / etc.). */
   children: ReactNode;
 }
@@ -70,15 +85,20 @@ export default function QuickLookShell({
   onToggleEdit,
   onClose,
   editState,
+  panelRef,
   children,
 }: QuickLookShellProps) {
   const { t } = useTranslation("shared");
   return (
     <div
-      className="flex shrink-0 flex-col border-t border-border bg-background"
+      ref={panelRef}
+      className="flex shrink-0 flex-col border-t border-border bg-background focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
       style={{ height }}
       role="region"
       aria-label={regionLabel}
+      // #1734 (5) — not in the tab order (the grid keeps its single cell tab
+      // stop); `F6` moves focus here programmatically.
+      tabIndex={-1}
     >
       {/* Resize handle */}
       <div
@@ -105,7 +125,7 @@ export default function QuickLookShell({
               {t("shell.modified")}
             </span>
           )}
-          {editState && (
+          {editState && onToggleEdit && (
             <Button
               variant="ghost"
               size="icon-xs"

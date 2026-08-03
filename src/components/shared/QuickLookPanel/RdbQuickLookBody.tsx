@@ -6,6 +6,9 @@
 // External invariants:
 // - Region `aria-label` = `"Row Details"`.
 // - Close button `aria-label` = `"Close row details"`.
+// - No Edit toggle (#1734 (4)): passing `editState` is what makes the fields
+//   editable, so every editable column shows its editor as soon as the panel
+//   opens. Read-only call-sites simply omit `editState`.
 // - Multi-select suffix = `({n} selected, showing first)` when
 //   `selectedRowIds.size > 1`.
 // - Schema prefix shows iff `schema` is non-empty.
@@ -14,7 +17,7 @@
 
 import BlobViewerDialog from "@components/datagrid/BlobViewerDialog";
 import type { DataGridEditState } from "@components/datagrid/useDataGridEdit";
-import type { KeyboardEvent, MouseEvent } from "react";
+import type { KeyboardEvent, MouseEvent, RefObject } from "react";
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { TableData } from "@/types/schema";
@@ -33,8 +36,7 @@ export interface RdbQuickLookBodyProps {
   onResizeMouseDown: (e: MouseEvent) => void;
   onResizeKeyDown: (e: KeyboardEvent) => void;
   editState?: DataGridEditState;
-  editing: boolean;
-  onToggleEdit: () => void;
+  panelRef?: RefObject<HTMLDivElement | null>;
 }
 
 export default function RdbQuickLookBody({
@@ -48,8 +50,7 @@ export default function RdbQuickLookBody({
   onResizeMouseDown,
   onResizeKeyDown,
   editState,
-  editing,
-  onToggleEdit,
+  panelRef,
 }: RdbQuickLookBodyProps) {
   const { t } = useTranslation("shared");
   const [blobViewer, setBlobViewer] = useState<{
@@ -102,22 +103,26 @@ export default function RdbQuickLookBody({
       title={title}
       closeLabel="Close row details"
       isDirty={isDirty}
-      editing={editing}
-      onToggleEdit={onToggleEdit}
       onClose={onClose}
       editState={editState}
+      panelRef={panelRef}
     >
       {data.columns.map((col, idx) => {
         const cellValue = (row as unknown[])[idx];
         return (
           <FieldRow
-            key={col.name}
+            // Row index is part of the key so moving the selection remounts the
+            // fields (same idiom as the grid's `row-${page}-${rowIdx}`).
+            // `EditableValue` seeds a local draft from the cell on mount; with a
+            // row-independent key the draft would survive the switch and show
+            // the previous row's text over the new row's value. Always-on
+            // editing (#1734 (4)) makes that visible on every selection move.
+            key={`${firstSelectedId}-${col.name}`}
             column={col}
             value={cellValue}
             rowIdx={firstSelectedId ?? 0}
             colIdx={idx}
             onBlobView={handleBlobView}
-            editing={editing}
             editState={editState}
           />
         );

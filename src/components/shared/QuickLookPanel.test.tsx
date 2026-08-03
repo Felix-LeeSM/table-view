@@ -243,6 +243,48 @@ describe("QuickLookPanel", () => {
       expect(textarea).toHaveAttribute("readonly");
     });
 
+    // ── #1734 (3) long values render in full ──────────────────────────
+    //
+    // jsdom runs no layout, so height is not observable here. What IS
+    // observable is the two things that capped the height: the `max-h-48`
+    // clamp on the `<pre>` and the fixed `rows` on the textareas. The clamp is
+    // gone and `field-sizing-content` overrides `rows` as the sizing input, so
+    // both assertions below are the class-level proxy for "no inner scroll".
+    // E2E owns the rendered pixels.
+    describe("long values render in full (#1734 (3))", () => {
+      it("the read-only large-text box sizes to its content, not to a clamp", () => {
+        render(
+          <QuickLookPanel {...defaultProps} selectedRowIds={new Set([1])} />,
+        );
+
+        const textarea = screen.getByLabelText("Value for bio");
+        expect(textarea.className).not.toContain("max-h-");
+        expect(textarea.className).toContain("field-sizing-content");
+        // Whole value is present — nothing truncated on the way in.
+        expect((textarea as HTMLTextAreaElement).value).toHaveLength(300);
+      });
+
+      it("the read-only JSON block has no height clamp and no inner scroller", () => {
+        const { container } = render(<QuickLookPanel {...defaultProps} />);
+
+        // Row 0: meta = { key: "value" } → the object/json `<pre>` branch.
+        const pre = container.querySelector("pre");
+        expect(pre).not.toBeNull();
+        expect(pre?.className).not.toContain("max-h-");
+        expect(pre?.className).not.toContain("overflow-auto");
+      });
+
+      it("the editable textarea sizes to its content, not to a clamp", () => {
+        const editState = makeEditState({ selectedRowIds: new Set([0]) });
+        render(<QuickLookPanel {...defaultProps} editState={editState} />);
+
+        // `meta` (jsonb) takes the textarea branch of `EditableValue`.
+        const textarea = screen.getByLabelText("Edit value for meta");
+        expect(textarea.className).not.toContain("max-h-");
+        expect(textarea.className).toContain("field-sizing-content");
+      });
+    });
+
     it("close button calls onClose", () => {
       const onClose = vi.fn();
       render(<QuickLookPanel {...defaultProps} onClose={onClose} />);
@@ -303,27 +345,39 @@ describe("QuickLookPanel", () => {
     });
 
     // ── Sprint 194 — FB-4 edit mode (RDB) ────────────────────────────
+    // #1734 (4) turned this always-on: RDB has no Edit toggle any more, and
+    // supplying `editState` is the whole gate. The dispatch / column-family /
+    // key-handling contracts below are unchanged — only the entry step is gone.
     describe("edit mode (sprint-194 FB-4 RDB)", () => {
-      it("[AC-194-01-1] does not render the edit toggle when editState is absent", () => {
-        // Read-only call-site (existing): no editState prop → no toggle.
+      it("[AC-194-01-1] renders no editor when editState is absent", () => {
+        // Read-only call-site (existing): no editState prop → static values.
         render(<QuickLookPanel {...defaultProps} />);
+        expect(
+          screen.queryByLabelText("Edit value for name"),
+        ).not.toBeInTheDocument();
         expect(
           screen.queryByLabelText(/Toggle edit mode/i),
         ).not.toBeInTheDocument();
       });
 
-      it("[AC-194-01-2] renders the edit toggle when editState is provided", () => {
+      // Reason: #1734 (4) — the toggle is the thing being removed, so assert
+      // its absence *and* that editing still works without it. Asserting only
+      // the editors would stay green if the toggle came back.
+      it("[AC-194-01-2 / #1734] editState alone makes fields editable — no Edit toggle is rendered", () => {
         const editState = makeEditState({ selectedRowIds: new Set([0]) });
         render(<QuickLookPanel {...defaultProps} editState={editState} />);
-        expect(screen.getByLabelText(/Toggle edit mode/i)).toBeInTheDocument();
+        expect(
+          screen.queryByLabelText(/Toggle edit mode/i),
+        ).not.toBeInTheDocument();
+        // No click anywhere: the editor is already mounted.
+        expect(screen.getByLabelText("Edit value for name").tagName).toBe(
+          "INPUT",
+        );
       });
 
-      it("[AC-194-01-3] entering edit mode swaps editable values into <input> / <textarea> / <select> by column family", () => {
+      it("[AC-194-01-3] editable values render as <input> / <textarea> / <select> by column family", () => {
         const editState = makeEditState({ selectedRowIds: new Set([0]) });
         render(<QuickLookPanel {...defaultProps} editState={editState} />);
-
-        // Toggle on
-        fireEvent.click(screen.getByLabelText(/Toggle edit mode/i));
 
         // name (text) → input
         const nameInput = screen.getByLabelText("Edit value for name");
@@ -348,7 +402,6 @@ describe("QuickLookPanel", () => {
       it("[#1739] edit input dissolves into the cell — no permanent border box, unified primary focus ring", () => {
         const editState = makeEditState({ selectedRowIds: new Set([0]) });
         render(<QuickLookPanel {...defaultProps} editState={editState} />);
-        fireEvent.click(screen.getByLabelText(/Toggle edit mode/i));
 
         const nameInput = screen.getByLabelText("Edit value for name");
         // No always-on border box — the "floating card" the refactor removes.
@@ -357,11 +410,9 @@ describe("QuickLookPanel", () => {
         expect(nameInput.className).toMatch(/focus:ring-primary/);
       });
 
-      it("[AC-194-01-4] PK / BLOB columns stay read-only in edit mode (no input rendered)", () => {
+      it("[AC-194-01-4] PK / BLOB columns stay read-only (no input rendered)", () => {
         const editState = makeEditState({ selectedRowIds: new Set([0]) });
         render(<QuickLookPanel {...defaultProps} editState={editState} />);
-
-        fireEvent.click(screen.getByLabelText(/Toggle edit mode/i));
 
         // id (PK) — no editable input
         expect(
@@ -389,7 +440,6 @@ describe("QuickLookPanel", () => {
         });
 
         render(<QuickLookPanel {...defaultProps} editState={editState} />);
-        fireEvent.click(screen.getByLabelText(/Toggle edit mode/i));
 
         const nameInput = screen.getByLabelText(
           "Edit value for name",
@@ -422,7 +472,6 @@ describe("QuickLookPanel", () => {
         });
 
         render(<QuickLookPanel {...defaultProps} editState={editState} />);
-        fireEvent.click(screen.getByLabelText(/Toggle edit mode/i));
 
         const nameInput = screen.getByLabelText(
           "Edit value for name",
@@ -447,7 +496,6 @@ describe("QuickLookPanel", () => {
         });
 
         render(<QuickLookPanel {...defaultProps} editState={editState} />);
-        fireEvent.click(screen.getByLabelText(/Toggle edit mode/i));
 
         // The "Set NULL" button is per-row inside the FieldRow; pick the one
         // for `name` column.
@@ -469,7 +517,6 @@ describe("QuickLookPanel", () => {
         });
 
         render(<QuickLookPanel {...defaultProps} editState={editState} />);
-        fireEvent.click(screen.getByLabelText(/Toggle edit mode/i));
 
         const metaTextarea = screen.getByLabelText(
           "Edit value for meta",
