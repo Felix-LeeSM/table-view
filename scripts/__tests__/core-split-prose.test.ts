@@ -3,6 +3,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
+  CARDINAL,
   classify,
   cwdFromBlock,
   normalizeToken,
@@ -78,6 +79,35 @@ describe("core-split-prose sweep", () => {
     expect(normalizeToken("src-tauri/src/**")).toBe("src-tauri/src");
     // 상대 경로 `../` 는 생략 표기가 아니다 — 건드리지 않는다.
     expect(normalizeToken("../review/memory.md")).toBe("../review/memory.md");
+  });
+
+  // Reason: 명사 목록에서 `step` 을 빼는 것이 오탐을 없애는 가장 짧은 길이지만,
+  // 그러면 이 스윕이 실제로 고친 `without these two steps` 를 놓친다. 잡는 쪽은
+  // 넓게 두고 부사구만 처분으로 걷는다 — 양쪽을 같이 잠근다.
+  it("keeps counted steps detectable and disposes only the adverbial one", () => {
+    expect(
+      CARDINAL.test(
+        "# db/models/storage/error tree, so without these two steps ~60% of the",
+      ),
+    ).toBe(true);
+    expect(
+      classify({
+        arm: "C",
+        path: "docs/contributor-guide/testing-and-quality.md",
+        no: "170",
+        evidence: "one step",
+        text: "`mongosh-parser-core` sits one step further out — it is not in",
+      })?.id,
+    ).toBe("C/adverbial-distance");
+    expect(
+      classify({
+        arm: "C",
+        path: ".github/workflows/ci.yml",
+        no: "460",
+        evidence: "two steps",
+        text: "# db/models/storage/error tree, so without these two steps ~60% of the",
+      }),
+    ).toBeNull();
   });
 
   // Reason: 얕은 체크아웃(`actions/checkout` 기본값 depth 1)에는 그 커밋 객체가

@@ -289,16 +289,12 @@ const armB = () =>
 // 뒤쪽 경계를 두지 않는다. 한국어 수량사는 조사가 바로 붙어서 (`4종이 전부다`)
 // 경계를 요구하면 이 클래스의 대표 문장이 통째로 빠진다.
 //
-// 명사는 **분리가 바꾼 집합의 이름**만 담는다. `step` 은 뺐다 — 이 저장소에서
-// 수사+step 은 전부 절차·잡 step 을 가리키고(`4-step contract`, `the two steps
-// above`) 분리와 무관한데, `sits one step further out` 같은 부사구를 오탐한다.
-// 반증 명령 (스윕 범위, `\b` 는 git grep -E 에서 안 통해 쓰지 않는다):
-//   git grep -nE '(one|two|three|four|five|[0-9]+)[ -]?steps?' -- . \
-//     ':!docs/archives/**' ':!docs/explorations/**' ':!docs/decisions/**'
-// 출력을 전수로 읽으면 절차 step 과 잡 step 뿐이고, 분리가 바꾼 집합을 세는
-// 문장은 하나도 없다. 개수는 여기 안 적는다 — 이 주석 자체가 그 출력에 잡힌다.
-const CARDINAL =
-  /(^|[^\p{L}\p{N}])(one|two|three|four|five|six|seven|eight|nine|ten|하나|둘|셋|넷|다섯|여섯|일곱|여덟|\d+)[ -]?(개|종|벌|곳|가지|commands?|manifests?|crates?|lanes?|files?|invocations?|packages?)/u;
+// 명사 목록의 `step` 은 오탐을 하나 만든다 (`sits one step further out`). 그래도
+// 빼지 않는다 — 이 스윕이 고친 자리 하나가 `without these two steps` 였고, 빼면
+// 그 자리를 놓친다. 잡는 쪽을 넓게 두고 부사구는 아래 `C/adverbial-distance` 처분이
+// 사유와 함께 걷는다 (필터로 숨기지 않는다는 이 파일의 기조와 같다).
+export const CARDINAL =
+  /(^|[^\p{L}\p{N}])(one|two|three|four|five|six|seven|eight|nine|ten|하나|둘|셋|넷|다섯|여섯|일곱|여덟|\d+)[ -]?(개|종|벌|곳|가지|commands?|manifests?|crates?|lanes?|steps?|files?|invocations?|packages?)/u;
 const WINDOW = 3;
 
 function armC() {
@@ -394,6 +390,10 @@ function armD() {
 // 서술은 안 보인다. `docs/contributor-guide/testing-and-quality.md` 의 llvm-cov
 // 절이 그렇고(거리 7), 그 개수들은 잡 id 와 커밋 SHA 로 시점을 박은 측정 기록이라
 // 지금은 안 썩는다. 창을 넓히면 무관한 산문이 같이 딸려 온다.
+
+// `<수사> step(s) <방향어>` — 거리를 재는 부사구다. 집합의 개수가 아니다.
+const ADVERBIAL_DISTANCE =
+  /\b(?:one|two|three|a|\d+)[ -]?steps?\s+(?:further|closer|deeper|back|up|down|out|away|beyond|ahead|behind)\b/i;
 
 const CI_GATES = new Set([".github/workflows/ci.yml", "lefthook.yml"]);
 const SELF_TEST = "scripts/__tests__/core-split-prose.test.ts";
@@ -517,6 +517,11 @@ const DISPOSITIONS = [
           "memory/engineering/architecture/memory.md",
           "memory/workflow/git-policy/memory.md",
         ].includes(h.path)),
+  },
+  {
+    id: "C/adverbial-distance",
+    why: "수사+명사가 집합의 개수가 아니라 거리·방향을 가리키는 부사구다 (`sits one step further out`). 명사 목록의 `step` 은 `these two steps` 류를 잡으려고 남겨 둔다",
+    test: (h) => h.arm === "C" && ADVERBIAL_DISTANCE.test(h.text),
   },
   {
     id: "C/set-predates-the-split",
