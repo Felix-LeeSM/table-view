@@ -68,7 +68,7 @@ skip 된다 — body 를 먼저 고쳐야 나머지 판정이 나온다.
 
 **BLOCKED 진단에서 먼저 배제할 이름은 이제 없다.** 위 `ci-gates` 블록의 required 7종과
 `review-gate` 가 전부 red 가 될 수 있고, 대응은 fix (clippy fix / 테스트 수정 /
-body 고쳐 재push / `CLAUDE.md` import 줄 원복) 지 회피 아님.
+body 고쳐 재push / `CLAUDE.md` import 줄 원복 / cap 넘은 방 쪼개기) 지 회피 아님.
 신규 required context 등록은 workflow 가 main 에 올라간 **뒤에** 한다 — 아무 run 도 만들지 않는 required
 context 는 열린 PR 전부를 BLOCKED 로 고착시킨다. main 착지도 충분조건이 아니다: 열린 PR 은
 merge ref 가 갱신돼야 새 workflow 정의를 읽는다 (#1868, 아래 「review-gate run 상태 함정」).

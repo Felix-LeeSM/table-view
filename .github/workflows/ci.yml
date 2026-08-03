@@ -106,9 +106,11 @@ jobs:
       # reported pins every open PR at BLOCKED
       # (memory/runbook/pr-merge-gates/memory.md). Riding a context that is
       # already required makes the cap blocking the day this merges. The script
-      # needs no toolchain, so it adds no setup to the cheapest job: 0.14s over
-      # 40 files, median of 5 local runs of
-      # `time bash scripts/check-memory-doc-size.sh`.
+      # needs no toolchain, so it adds no setup to the cheapest job: 0.17s over
+      # 40 files, median of 9 local runs of
+      # `/usr/bin/time -p bash scripts/check-memory-doc-size.sh` (the shell
+      # builtin `time` prints no `real` line under zsh, so the command is
+      # spelled with the binary).
       - name: memory/ doc size cap
         run: bash scripts/check-memory-doc-size.sh
 
