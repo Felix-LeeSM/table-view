@@ -71,6 +71,21 @@ type-aware 패널) 예외로 등록한다. 형식:
   달라 단일 그리드 셀 inline 편집이 성립하지 않는다 — 형별 패널이 사용자에게 더
   명확하다. 생성·삭제 진입점은 예외가 아니라 기준 정합이다(아래 Known debt 참조).
 
+### 등록된 예외 (#1734, 2026-08-03)
+
+- **Quick Look 상세 편집 / rdb / 패널을 열면 편집 가능한 컬럼이 곧바로 에디터 /
+  사유**: 토글을 한 번 더 누르게 하는 단계가 값 하나 고치는 데 드는 조작을 늘리기만
+  했다. document 패널에는 같은 자리에 연필 버튼이 남지만 그것은 편집 on/off 가
+  아니라 BSON 트리 ↔ 필드 목록 **보기 전환**이다 — 두 paradigm 이 같은 컨트롤을
+  다르게 쓰는 것이 아니라 애초에 다른 작업이고, 지우면 중첩 문서 읽기 뷰가
+  사라진다. 되돌리려면 `DocumentQuickLookBody` 에서 `editing`/`onToggleEdit` 두
+  prop 을 빼면 rdb 와 같아진다.
+- **선택 행 표시 / rdb·document 공통 / `SELECTED_ROW_FILL` 한 상수
+  (`src/components/datagrid/rowState.ts`) / 사유**: 예외가 아니라 분기 해소
+  기록이다. 두 그리드가 같은 상태를 다른 클래스(`bg-accent/20` vs
+  `bg-accent dark:bg-accent/60`)로 그렸고 한쪽만 측정돼 있었다. 새 그리드 표면도
+  이 상수를 쓴다.
+
 ## 4. Unsupported 표현 규약 (2026-07-10 소유자 결정)
 
 미지원을 UI 로 표현하는 방식은 **숨김 우선 + 상태성 예외** 단일 규약을 따른다.

@@ -45,7 +45,11 @@ smoke or measurement gates:
 - Critical component smoke covers SchemaTree tree/treeitem roles, DataGrid
   grid/gridcell/edit feedback, Connection and Import/Export dialog labels/error
   regions, and secret-free alert/status/aria-live credential feedback.
-- Full 72-theme light/dark WCAG AA measurement.
+- Full 72-theme light/dark WCAG AA measurement. One surface is swept: the
+  selected data-row fill is asserted per theme and mode by
+  `src/components/datagrid/DataGridTable.selection-contrast.test.tsx`. That is a
+  separation floor between the fill and its own row background, not a WCAG
+  criterion, and it covers no other pairing.
 - SchemaTree 1k/10k table scroll FPS remains ungated. Current evidence is
   deterministic component fixtures plus advisory render p50/p95/env and
   virtualization DOM bounds only. SchemaTree now virtualizes by visible-row
@@ -69,6 +73,21 @@ smoke or measurement gates:
   evidence is a deterministic page-size 1000 fixture plus advisory render
   p50/p95/env and virtualization DOM bounds only.
 - VoiceOver/NVDA paths for Quick Open, DataGrid, and SchemaTree.
+- The Quick Look panel is keyboard-reachable through `F6` (grid cell ↔ panel,
+  and Escape inside the panel hands focus back without closing it), but that
+  binding is not listed in the in-app shortcut cheatsheet — neither is the
+  `Cmd/Ctrl+L` that opens the panel. Tab does reach the panel because it is the
+  grid's next sibling, but the grid's roving tabindex means Tab re-enters the
+  grid at its single tab stop, not at the cell the user left. With pending
+  edits, Escape inside the panel also opens the grid's discard confirm: the
+  discard gate has no focus-position condition, and the panel's Escape
+  deliberately does not consume the event.
+- Quick Look grows its long-value editors to fit their content with the CSS
+  `field-sizing` property, which needs Chromium 123+ or WebKit 26+. On an older
+  engine those editors fall back to their fixed `rows` height and scroll, as
+  they did before — no regression, just no improvement. The `<pre>` branch drops
+  its height clamp regardless of engine. Raising this to a measured floor waits
+  on a declared minimum supported platform.
 - Quick Open cross-connection results are global (every connected source) and
   selecting another connection's result jumps to that connection's workspace
   window. The window focus/create is reliable, but the forwarded action (open
