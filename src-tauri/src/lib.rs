@@ -346,14 +346,17 @@ pub fn run() {
         // fresh install the key is born in the keyring; an existing plaintext
         // `.key` is imported into the keyring, verified, then retired; a
         // headless Linux / locked keychain falls back to the disk key
-        // explicitly (ADR 0040). A key-lost fatal outcome logs and skips
+        // explicitly (ADR 0040). A boot that finds a healthy keyring *and* a
+        // leftover disk `.key` retires that exposed key and re-encrypts
+        // `connections.json` under a fresh one (#1814), reporting it via
+        // `rekeyed_after_disk_exposure`. A key-lost fatal outcome logs and skips
         // seeding, so the decrypt path refuses (safe mode) instead of
         // orphaning ciphertext.
         match storage::boot_wire_master_key() {
             Ok(outcome) => info!(
                 target: "boot",
-                "key_migration wired: source={:?} fallback_to_disk={}",
-                outcome.source, outcome.fallback_to_disk
+                "key_migration wired: source={:?} fallback_to_disk={} rekeyed_after_disk_exposure={}",
+                outcome.source, outcome.fallback_to_disk, outcome.rekeyed_after_disk_exposure
             ),
             Err(e) => tracing::error!(
                 target: "boot",

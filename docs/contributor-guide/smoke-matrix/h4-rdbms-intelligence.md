@@ -52,26 +52,30 @@ Current gap / routing:
 RDB catalog/FK semantics are current scope. Other paradigms may expose catalog
 graphs later, but must not pretend to be RDB schemas.
 
-## ERD renderer local interactions
+## ERD canvas interactions
 
 Current evidence:
 
-- `src/components/schema/SchemaErdRenderer.test.tsx`
-- `src/components/schema/SchemaErdLayout.ts`
+- `src/components/schema/SchemaErdCanvas.test.tsx`
+- `src/components/schema/erdGraphModel.test.ts`
 - `e2e/smoke/erd-dense.spec.ts`
 
 Current gap / routing:
 
-Table cards, FK edges, search, select, zoom, fit, focus, and highlight are local
-diagram interactions. The dense ERD smoke opens a seeded PostgreSQL graph on
-desktop and narrow viewports, asserts nodes/FK edges/search/selection/zoom/fit,
-and captures non-empty screenshot artifacts.
+The canvas is `@xyflow/react` with `elkjs` `layered` auto-layout (ADR 0054).
+Table cards, FK edges, search, select, node drag, canvas zoom/pan, fit, focus,
+and highlight are local diagram interactions. The dense ERD smoke opens a seeded
+PostgreSQL graph on desktop and narrow viewports, asserts nodes, FK edges,
+FK-direction layering, search, selection, node drag, zoom and fit, and captures
+non-empty screenshot artifacts. Layout persistence, semantic zoom, viewport
+virtualization, and focus filters are separate follow-up issues.
 
 ## Read-only dependency view
 
 Current evidence:
 
-- `src/components/schema/SchemaErdRenderer.test.tsx`
+- `src/components/schema/SchemaErdDependencyView.tsx`
+- `src/components/schema/SchemaErdCanvas.test.tsx`
 - `src/components/schema/SchemaErdPanel.test.tsx`
 
 Current gap / routing:
@@ -149,7 +153,7 @@ This matrix, `.github/workflows/e2e-smoke.yml`,
 Current gap / routing:
 
 The wired dense ERD smoke opens a seeded PostgreSQL schema, verifies table
-nodes, FK edges, search, selection, zoom, fit, desktop and narrow viewport
-behavior, metadata fetch stability, and non-empty screenshot artifacts. It does
-not claim FK row navigation through ERD, schema diff, migration impact, or data
-compare.
+nodes, FK edges, elkjs FK-direction layering, search, selection, node drag,
+canvas zoom and fit, desktop and narrow viewport behavior, metadata fetch
+stability, and non-empty screenshot artifacts. It does not claim FK row
+navigation through ERD, schema diff, migration impact, or data compare.

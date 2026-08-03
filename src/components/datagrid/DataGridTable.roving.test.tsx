@@ -8,6 +8,7 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { TableData } from "@/types/schema";
 import DataGridTable from "./DataGridTable";
+import { SELECTED_ROW_FILL } from "./rowState";
 
 const MOCK_DATA: TableData = {
   columns: [
@@ -309,13 +310,38 @@ describe("DataGridTable roving-focus visual affordance", () => {
   });
 
   // Reason: selection + focus use different paint channels so a row that is
-  // both selected and focused must read both (bug fix must not clobber the
-  // pre-existing `bg-accent/20` selection highlight). (2026-07-17)
+  // both selected and focused must read both (the focus bar must not clobber
+  // the selection fill). (2026-07-17; the fill itself moved to
+  // `datagrid/rowState.ts` in #1734 (3) and is measured per theme by
+  // `DataGridTable.selection-contrast.test.tsx`.)
   it("a selected + focused row keeps both the selection bg and the focus bar", () => {
     render(<DataGridTable {...makeProps({ selectedRowIds: new Set([0]) })} />);
     const row0 = rowOf(0);
-    expect(row0.className).toContain("bg-accent/20"); // selection channel
+    expect(row0.className).toContain(SELECTED_ROW_FILL); // selection channel
     expect(row0.className).toContain(FOCUS_BAR); // focus channel (row 0 anchor)
+  });
+
+  // Reason: #1734 (5) — Quick Look restores focus through this handle. If the
+  // grid stops publishing it the panel silently falls back to a DOM lookup that
+  // cannot see a virtualized-out anchor row, so the wiring needs its own guard.
+  // The scroll-in + retry behind it is covered by `useGridRoving.test.tsx`.
+  it("publishes a focuser for the current roving anchor", async () => {
+    const focusAnchorRef = { current: null as (() => void) | null };
+    render(<DataGridTable {...makeProps({ focusAnchorRef })} />);
+    expect(focusAnchorRef.current).toBeTypeOf("function");
+
+    // Move the anchor, blur, then use the handle: it must land on the anchor,
+    // not on wherever focus happened to be.
+    act(() => cell(0, 0).focus());
+    fireEvent.keyDown(cell(0, 0), { key: "ArrowDown" });
+    await flushRaf();
+    act(() => (document.activeElement as HTMLElement | null)?.blur());
+    expect(cell(1, 0)).not.toHaveFocus();
+
+    await act(async () => {
+      focusAnchorRef.current?.();
+    });
+    expect(cell(1, 0)).toHaveFocus();
   });
 
   // Reason: regression — the editing cell's `ring-primary` highlight must

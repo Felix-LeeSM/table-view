@@ -17,6 +17,7 @@ use tokio::time::timeout;
 use tokio_util::compat::{Compat, TokioAsyncWriteCompatExt};
 use tokio_util::sync::CancellationToken;
 
+use crate::db::tls::{resolve_tls_decision, TlsDecision};
 use crate::error::AppError;
 use crate::models::{
     AddColumnRequest, AddConstraintRequest, AlterTableRequest, ColumnInfo, ConnectionConfig,
@@ -151,26 +152,36 @@ impl MssqlAdapter {
         }
         tds_config.authentication(AuthMethod::sql_server(user, config.password.as_str()));
 
-        if config.tls_enabled.unwrap_or(false) {
-            match config.trust_server_certificate {
-                Some(true) | Some(false) => {}
-                None => {
-                    return Err(AppError::Validation(
-                        "SQL Server TLS requires an explicit trustServerCertificate decision"
-                            .into(),
-                    ));
-                }
-            }
+        // #1649 (ADR 0058) — the sslmode posture replaces the
+        // `(tls_enabled, trust_server_certificate)` pair. The two combinations
+        // this branch used to reject at runtime (TLS on without a trust
+        // decision, trust without TLS) are unrepresentable in `SslMode`, so the
+        // validation arms are gone rather than moved.
+        //
+        // `verify-ca` hands the user's CA to `Config::trust_cert_ca`. Under the
+        // `native-tls` feature this repo builds with, that reaches
+        // `TlsConnector::add_root_certificate`
+        // (`tiberius-0.12.3/src/client/tls_stream/native_tls_stream.rs:35`) —
+        // an *additional* anchor on top of the system store, with hostname
+        // verification untouched (`danger_accept_invalid_hostnames` is set only
+        // on the `TrustAll` arm, `:50`). Same widening semantics as the sqlx
+        // adapters, so the `db::tls` reasoning carries over unchanged.
+        //
+        // `trust_cert_ca` panics if `trust_cert` ran first
+        // (`config.rs:152-158`); it cannot here, because `trust_cert` is reached
+        // only for `skip_verify()` (`require`) and `verify-ca` is a verifying
+        // posture. The two arms are mutually exclusive by construction.
+        if config.ssl_mode.tls_on() {
             tds_config.encryption(EncryptionLevel::Required);
-            if config.trust_server_certificate == Some(true) {
+            if config.ssl_mode.skip_verify() {
                 tds_config.trust_cert();
+            } else if let TlsDecision::RequireVerifyFull {
+                extra_ca_cert_path: Some(ca_cert_path),
+            } = resolve_tls_decision(config)?
+            {
+                tds_config.trust_cert_ca(ca_cert_path);
             }
         } else {
-            if config.trust_server_certificate == Some(true) {
-                return Err(AppError::Validation(
-                    "SQL Server trustServerCertificate requires TLS/encryption".into(),
-                ));
-            }
             tds_config.encryption(EncryptionLevel::NotSupported);
         }
 

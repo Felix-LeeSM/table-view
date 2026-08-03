@@ -101,14 +101,16 @@ describe("MysqlFormFields", () => {
       expect(screen.getByLabelText("SSL mode")).toHaveTextContent(/Prefer/);
     });
 
-    it("maps a Verify full selection onto encrypt + verify", async () => {
+    it("maps a Verify full selection onto the verify-full posture", async () => {
       const user = userEvent.setup();
       const onChange = renderMysql({});
       await user.click(screen.getByLabelText("SSL mode"));
       await user.click(screen.getByRole("option", { name: /Verify full/ }));
+      // #1649 — the dropdown drops the CA anchor with any non-`verify-ca`
+      // pick, so the anchor cannot outlive the posture that named it.
       expect(onChange).toHaveBeenCalledWith({
-        tlsEnabled: true,
-        trustServerCertificate: false,
+        sslMode: "verify-full",
+        caCertPath: null,
       });
     });
   });

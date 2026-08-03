@@ -1,5 +1,6 @@
 use oracle_rs::{Config as OracleDriverConfig, Value};
 use serial_test::serial;
+use table_view_lib::models::SslMode;
 use table_view_lib::{
     db::{DbAdapter, OracleAdapter, RdbAdapter},
     error::AppError,
@@ -36,8 +37,8 @@ fn oracle_config() -> ConnectionConfig {
         environment: None,
         auth_source: None,
         replica_set: None,
-        tls_enabled: None,
-        trust_server_certificate: None,
+        ssl_mode: SslMode::Prefer,
+        ca_cert_path: None,
         oracle_use_sid: None,
         wallet_path: None,
         wallet_password: String::new(),

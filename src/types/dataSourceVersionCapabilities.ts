@@ -3,6 +3,7 @@ import {
   type DataSourceCapabilities,
   getDataSourceProfile,
 } from "./dataSource";
+import { isVersionAtLeast } from "./versionOrder";
 
 export type DataSourceVersionInput =
   | string
@@ -110,22 +111,8 @@ function applyMysqlFamilyCheckConstraintGate(
   capabilities.catalog.constraints =
     version.known &&
     (dbType === "mysql"
-      ? isAtLeast(version, 8, 0, 16)
-      : isAtLeast(version, 10, 2, 1));
-}
-
-function isAtLeast(
-  version: Extract<ParsedDataSourceVersion, { known: true }>,
-  major: number,
-  minor: number,
-  patch: number,
-): boolean {
-  return (
-    version.major > major ||
-    (version.major === major &&
-      (version.minor > minor ||
-        (version.minor === minor && version.patch >= patch)))
-  );
+      ? isVersionAtLeast(version, 8, 0, 16)
+      : isVersionAtLeast(version, 10, 2, 1));
 }
 
 function cloneCapabilities(

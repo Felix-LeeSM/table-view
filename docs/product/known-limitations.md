@@ -45,7 +45,11 @@ smoke or measurement gates:
 - Critical component smoke covers SchemaTree tree/treeitem roles, DataGrid
   grid/gridcell/edit feedback, Connection and Import/Export dialog labels/error
   regions, and secret-free alert/status/aria-live credential feedback.
-- Full 72-theme light/dark WCAG AA measurement.
+- Full 72-theme light/dark WCAG AA measurement. One surface is swept: the
+  selected data-row fill is asserted per theme and mode by
+  `src/components/datagrid/DataGridTable.selection-contrast.test.tsx`. That is a
+  separation floor between the fill and its own row background, not a WCAG
+  criterion, and it covers no other pairing.
 - SchemaTree 1k/10k table scroll FPS remains ungated. Current evidence is
   deterministic component fixtures plus advisory render p50/p95/env and
   virtualization DOM bounds only. SchemaTree now virtualizes by visible-row
@@ -69,6 +73,21 @@ smoke or measurement gates:
   evidence is a deterministic page-size 1000 fixture plus advisory render
   p50/p95/env and virtualization DOM bounds only.
 - VoiceOver/NVDA paths for Quick Open, DataGrid, and SchemaTree.
+- The Quick Look panel is keyboard-reachable through `F6` (grid cell ↔ panel,
+  and Escape inside the panel hands focus back without closing it), but that
+  binding is not listed in the in-app shortcut cheatsheet — neither is the
+  `Cmd/Ctrl+L` that opens the panel. In the RDB grid
+  with pending edits, Escape inside the panel also opens the discard confirm:
+  that gate has no focus-position condition and the panel's Escape deliberately
+  does not consume the event, so the collision fires from inside a panel field
+  editor too — those do not stop propagation either. The document grid has no
+  Escape discard gate at all, so it does not have the collision.
+- Quick Look grows its long-value editors to fit their content with the CSS
+  `field-sizing` property, which needs Chromium 123+ or WebKit 26+. On an older
+  engine those editors fall back to their fixed `rows` height and scroll, as
+  they did before — no regression, just no improvement. The `<pre>` branch drops
+  its height clamp regardless of engine. Raising this to a measured floor waits
+  on a declared minimum supported platform.
 - Quick Open cross-connection results are global (every connected source) and
   selecting another connection's result jumps to that connection's workspace
   window. The window focus/create is reliable, but the forwarded action (open
@@ -76,12 +95,19 @@ smoke or measurement gates:
   window because of a Tauri-event mount race; guaranteed replay-on-mount for a
   fresh window is a follow-up.
 - Candidate-source UI accessibility smoke.
-- 1024x600 minimum viewport with max sidebar and dialog overlap.
+- 1024x600 minimum viewport with max sidebar and dialog overlap. The workspace
+  toolbar's Layout cluster collapses the schema sidebar, so a user cramped at
+  that size can reclaim the column by hand. The collapsed state is session-only
+  — reopening the workspace window starts expanded again, and the sidebar width
+  the user dragged is likewise not restored across a restart. The overlap
+  itself stays ungated.
 - Tauri production shortcut audit for `Cmd+Shift+I`.
 - `MainArea` empty-state MRU policy.
 - Narrow-column display for `pendingEditErrors`.
-- ERD desktop+narrow screenshot smoke. Dense-view smoke evidence is a future H4
-  matrix gate; there is no current dense-view smoke claim.
+- ERD layout persistence, semantic zoom, viewport virtualization, virtual FKs,
+  focus filters, and diagram export. The React Flow + elkjs canvas ships without
+  them; each is a separate follow-up issue. Dragged node positions are lost when
+  the ERD tab is reopened.
 - There is no internal-doc link checking, and Node package audit is deferred.
   Rust dependency security is covered by blocking PR/main `cargo deny check`;
   runtime dependency upgrades remain separate PRs.

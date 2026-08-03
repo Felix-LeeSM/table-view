@@ -7,8 +7,9 @@ import {
 
 // Purpose: backend wire payload camelCase normalization for connection fields (2026-06-17)
 describe("normalizeConnectionConfig", () => {
-  // Reason: issue #901 adds SQL Server trust_server_certificate on the Rust wire (2026-06-17)
-  it("normalizes SQL Server trust_server_certificate from snake_case", () => {
+  // Reason: #1649 — the boolean pair is gone from the wire; the TLS posture
+  // arrives as `ssl_mode` plus an optional `ca_cert_path`. (2026-08-02)
+  it("normalizes ssl_mode and ca_cert_path from snake_case", () => {
     expect(
       normalizeConnectionConfig({
         id: "mssql-1",
@@ -20,18 +21,18 @@ describe("normalizeConnectionConfig", () => {
         database: "master",
         has_password: true,
         paradigm: "rdb",
-        tls_enabled: true,
-        trust_server_certificate: false,
+        ssl_mode: "verify-ca",
+        ca_cert_path: "/etc/ssl/certs/corp-ca.pem",
       }),
     ).toMatchObject({
       dbType: "mssql",
-      tlsEnabled: true,
-      trustServerCertificate: false,
+      sslMode: "verify-ca",
+      caCertPath: "/etc/ssl/certs/corp-ca.pem",
     });
   });
 
   // Reason: camelCase IPC snapshots should round-trip the same MSSQL trust decision (2026-06-17)
-  it("preserves camelCase trustServerCertificate", () => {
+  it("preserves camelCase sslMode and caCertPath", () => {
     expect(
       normalizeConnectionConfig({
         id: "mssql-2",
@@ -43,19 +44,24 @@ describe("normalizeConnectionConfig", () => {
         database: "master",
         hasPassword: true,
         paradigm: "rdb",
-        tlsEnabled: true,
-        trustServerCertificate: true,
+        // A CA path outlives a switch away from verify-ca (the skip-verify
+        // toggle keeps it), so this pairing is representable on the wire.
+        sslMode: "require",
+        caCertPath: "/opt/corp-ca.pem",
       }),
     ).toMatchObject({
       dbType: "mssql",
-      tlsEnabled: true,
-      trustServerCertificate: true,
+      sslMode: "require",
+      caCertPath: "/opt/corp-ca.pem",
     });
   });
 
-  // Reason: existing MSSQL records without trust_server_certificate must not silently hydrate to true (2026-06-17)
-  it("does not default missing trustServerCertificate to true", () => {
-    const connection = normalizeConnectionConfig({
+  // Reason: #1649 — a payload with no posture, or one this build does not know
+  // (hand-edited store row, a future backend value), must degrade to the driver
+  // default instead of throwing or masquerading as a verifying posture.
+  // `prefer` is never weaker than the pre-#1062 behavior. (2026-08-02)
+  it("falls back to prefer for a missing or unknown wire sslMode", () => {
+    const base = {
       id: "mssql-legacy",
       name: "SQL Server legacy",
       db_type: "mssql",
@@ -65,10 +71,15 @@ describe("normalizeConnectionConfig", () => {
       database: "master",
       has_password: true,
       paradigm: "rdb",
-      tls_enabled: true,
-    });
+    };
 
-    expect(connection.trustServerCertificate).toBeUndefined();
+    expect(normalizeConnectionConfig(base).sslMode).toBe("prefer");
+    expect(
+      normalizeConnectionConfig({ ...base, ssl_mode: "verify_ca" }).sslMode,
+    ).toBe("prefer");
+    expect(normalizeConnectionConfig({ ...base, ssl_mode: true }).sslMode).toBe(
+      "prefer",
+    );
   });
 });
 

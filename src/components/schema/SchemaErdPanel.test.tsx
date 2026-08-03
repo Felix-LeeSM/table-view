@@ -6,7 +6,7 @@ import type { SchemaGraphIntelligenceSelectors } from "@/lib/schemaGraphSelector
 import { setupTauriMock } from "@/test-utils/tauriMock";
 import type { SchemaGraph } from "@/types/schemaGraph";
 
-vi.mock("./SchemaErdRenderer", () => ({
+vi.mock("./SchemaErdCanvas", () => ({
   default: ({
     graph,
     intelligence,

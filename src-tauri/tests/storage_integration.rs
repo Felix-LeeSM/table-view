@@ -2,7 +2,9 @@ use std::fs;
 
 use serial_test::serial;
 use table_view_lib::error::AppError;
-use table_view_lib::models::{ConnectionConfig, ConnectionGroup, DatabaseType, StorageData};
+use table_view_lib::models::{
+    ConnectionConfig, ConnectionGroup, DatabaseType, SslMode, StorageData,
+};
 use table_view_lib::storage;
 use tempfile::TempDir;
 
@@ -56,8 +58,8 @@ fn sample_connection(id: &str, name: &str) -> ConnectionConfig {
         environment: None,
         auth_source: None,
         replica_set: None,
-        tls_enabled: None,
-        trust_server_certificate: None,
+        ssl_mode: SslMode::Prefer,
+        ca_cert_path: None,
         oracle_use_sid: None,
         wallet_path: None,
         wallet_password: String::new(),

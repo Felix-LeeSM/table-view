@@ -1,5 +1,6 @@
 import { hydrateConnectionSession } from "@lib/runtime/connection/hydrateConnectionSession";
 import * as windowControls from "@lib/window-controls";
+import { useLayoutStore } from "@stores/layoutStore";
 import { useThemeStore } from "@stores/themeStore";
 import { useWorkspaceStore } from "@stores/workspaceStore";
 import { act, fireEvent, render, screen } from "@testing-library/react";
@@ -23,8 +24,15 @@ vi.mock("@lib/runtime/connection/hydrateConnectionSession", async () => {
   };
 });
 
+// #1734 — the stub carries a focusable control so the collapse cases can
+// assert the hidden column leaves the accessibility tree and the tab order,
+// not just that it stopped painting.
 vi.mock("@components/layout/Sidebar", () => ({
-  default: () => <div data-testid="sidebar-mock" />,
+  default: () => (
+    <div data-testid="sidebar-mock">
+      <button type="button">Sidebar stub control</button>
+    </div>
+  ),
 }));
 
 vi.mock("@components/layout/MainArea", () => ({
@@ -65,6 +73,8 @@ function resetStores() {
     mode: "dark",
     resolvedMode: "dark",
   });
+  // #1734 — `layoutStore` is reset by the global `beforeEach` in
+  // `src/test-setup.ts` (`__resetLayoutStoreForTests`), not here.
 }
 
 describe("WorkspacePage", () => {
@@ -80,6 +90,86 @@ describe("WorkspacePage", () => {
     render(<WorkspacePage />);
     expect(screen.getByTestId("sidebar-mock")).toBeInTheDocument();
     expect(screen.getByTestId("main-area-mock")).toBeInTheDocument();
+  });
+
+  // #1734 owner decision 1 — the Layout cluster's left-panel toggle drives
+  // this. Collapsing hides the schema-tree column but must keep the header
+  // rail, which owns the only route back to the launcher and the only
+  // theme / language control (#1738) — otherwise a collapsed user is
+  // stranded with neither.
+  describe("collapsed left panel (#1734)", () => {
+    it("hides the sidebar while keeping back-to-connections and the theme control", () => {
+      useLayoutStore.setState({ sidebarCollapsed: true });
+      render(<WorkspacePage />);
+
+      expect(screen.getByTestId("sidebar-mock")).not.toBeVisible();
+      expect(
+        screen.getByRole("button", { name: /back to connections/i }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: /theme|테마/i }),
+      ).toBeInTheDocument();
+      expect(screen.getByTestId("main-area-mock")).toBeInTheDocument();
+    });
+
+    // The regression this pins: an earlier revision gated the column with
+    // `{!sidebarCollapsed && <Sidebar/>}`, so every collapse threw the
+    // subtree away. Node identity is the proof — React destroys and
+    // recreates the DOM node on unmount, so a surviving node means every
+    // piece of React state inside survived too (the dragged width, the
+    // schema-tree filter text, the Redis SCAN cursor, an open dialog).
+    it("keeps the same sidebar DOM node across a collapse → expand cycle (no unmount)", () => {
+      render(<WorkspacePage />);
+      const beforeCollapse = screen.getByTestId("sidebar-mock");
+      expect(beforeCollapse).toBeVisible();
+
+      act(() => {
+        useLayoutStore.setState({ sidebarCollapsed: true });
+      });
+      expect(screen.getByTestId("sidebar-mock")).toBe(beforeCollapse);
+      expect(beforeCollapse).not.toBeVisible();
+
+      act(() => {
+        useLayoutStore.setState({ sidebarCollapsed: false });
+      });
+      expect(screen.getByTestId("sidebar-mock")).toBe(beforeCollapse);
+      expect(beforeCollapse).toBeVisible();
+    });
+
+    // The hidden column must also leave the accessibility tree and the tab
+    // order — otherwise "collapsed" is only a visual claim and a screen
+    // reader still walks a panel the user closed.
+    it("drops the hidden column out of the accessibility tree", () => {
+      render(<WorkspacePage />);
+      // The mock stands in for the real sidebar's focusable controls.
+      expect(
+        screen.getByRole("button", { name: /sidebar stub/i }),
+      ).toBeVisible();
+
+      act(() => {
+        useLayoutStore.setState({ sidebarCollapsed: true });
+      });
+
+      expect(
+        screen.queryByRole("button", { name: /sidebar stub/i }),
+      ).toBeNull();
+    });
+
+    // The rail drops the button's text but not its accessible name, so the
+    // route back to the launcher stays reachable by name and by voice.
+    it("narrows the back button to an icon rail without losing its name", () => {
+      render(<WorkspacePage />);
+      expect(screen.getByText("Connections")).toBeInTheDocument();
+
+      act(() => {
+        useLayoutStore.setState({ sidebarCollapsed: true });
+      });
+
+      expect(screen.queryByText("Connections")).toBeNull();
+      expect(
+        screen.getByRole("button", { name: /back to connections/i }),
+      ).toBeInTheDocument();
+    });
   });
 
   it("renders the [← Connections] back button with the contract aria-label", () => {

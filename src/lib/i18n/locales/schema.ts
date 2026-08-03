@@ -93,7 +93,7 @@ export const en = {
   noComparison: "No comparison",
   schemaDiffAria: "Schema diff",
 
-  // SchemaErdRenderer
+  // SchemaErdCanvas / SchemaErdTableNode / SchemaErdDependencyView
   noTablesToDiagram: "No tables to diagram",
   noTablesHint:
     "Expand or refresh a relational schema to build an ERD from cached table metadata.",
@@ -331,7 +331,7 @@ export const ko = {
   noComparison: "비교 없음",
   schemaDiffAria: "스키마 비교",
 
-  // SchemaErdRenderer
+  // SchemaErdCanvas / SchemaErdTableNode / SchemaErdDependencyView
   noTablesToDiagram: "다이어그램에 표시할 테이블 없음",
   noTablesHint:
     "관계형 스키마를 펼치거나 새로고침해 캐시된 테이블 메타데이터로 ERD를 생성하세요.",

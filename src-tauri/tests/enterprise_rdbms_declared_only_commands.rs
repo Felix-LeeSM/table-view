@@ -1,6 +1,6 @@
 use table_view_lib::commands::connection::{test_connection, TestConnectionRequest};
 use table_view_lib::error::AppError;
-use table_view_lib::models::{ConnectionConfigPublic, DatabaseType};
+use table_view_lib::models::{ConnectionConfigPublic, DatabaseType, SslMode};
 
 fn oracle_public() -> ConnectionConfigPublic {
     ConnectionConfigPublic {
@@ -21,8 +21,8 @@ fn oracle_public() -> ConnectionConfigPublic {
         paradigm: DatabaseType::Oracle.paradigm(),
         auth_source: Some("SID=ORCL".into()),
         replica_set: None,
-        tls_enabled: None,
-        trust_server_certificate: None,
+        ssl_mode: SslMode::Prefer,
+        ca_cert_path: None,
         oracle_use_sid: None,
         wallet_path: None,
         has_wallet_password: false,

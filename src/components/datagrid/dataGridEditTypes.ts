@@ -54,6 +54,15 @@ export interface DataGridEditState {
   isCommitFlashing: boolean;
 
   saveCurrentEdit: () => void;
+  /**
+   * Issue #1734 (4) — stage one cell's value straight into `pendingEdits`,
+   * without opening (and having to close) the inline grid editor. For a
+   * call-site that owns its own editor and already has the value: the Quick
+   * Look panel's `FieldRow`. `saveCurrentEdit` cannot serve that case — it
+   * reads `editingCell` from the render closure, so a same-tick
+   * start→set→save trio saves nothing.
+   */
+  stageEdit: (rowIdx: number, colIdx: number, value: string | null) => void;
   cancelEdit: () => void;
   handleStartEdit: (
     rowIdx: number,

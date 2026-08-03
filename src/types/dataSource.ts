@@ -12,6 +12,7 @@ import {
   type FileConnectionContract,
   SQLITE_FILE_CONNECTION,
 } from "./fileConnection";
+import { isVersionAtLeast } from "./versionOrder";
 
 export type {
   BackendAdapterCapabilitySource,
@@ -279,9 +280,11 @@ export interface MongoRuntimeRequirement {
 
 /**
  * Whether the connected server satisfies `requirement`. **Fail-closed**: the
- * answer is `false` for a missing capability (not connected / not probed
- * yet), an `"unknown"` topology, and an absent version — an unidentified
- * server closes the feature instead of opening it.
+ * answer is `false` for a missing capability (not connected / not probed yet),
+ * for an absent version against a `minVersion`, and for an `"unknown"`
+ * topology against any `topologies` set — an unidentified server closes the
+ * feature instead of opening it. Each axis is judged only when the
+ * requirement names it.
  *
  * This is the gate primitive the version-dependent MongoDB axes (change
  * streams, transactions, version-gated aggregation stages) build on. It is
@@ -312,10 +315,7 @@ export function meetsMongoRuntimeRequirement(
   if (minVersion) {
     const version = capabilities.version;
     if (!version) return false;
-    const [major, minor, patch] = minVersion;
-    if (version.major !== major) return version.major > major;
-    if (version.minor !== minor) return version.minor > minor;
-    return version.patch >= patch;
+    return isVersionAtLeast(version, ...minVersion);
   }
 
   return true;

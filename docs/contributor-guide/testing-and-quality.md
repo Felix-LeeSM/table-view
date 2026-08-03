@@ -97,7 +97,7 @@ this page stays the index plus the cross-band policy sections.
 | [`postgresql-query-workbench.md`](smoke-matrix/postgresql-query-workbench.md) | PostgreSQL lane detail: query execution, catalog/workbench metadata, parser and Safe Mode, completion and installed extensions, edit semantics, Explain, cancellation |
 | [`sqlite-file-dbms.md`](smoke-matrix/sqlite-file-dbms.md) | SQLite lane detail: file connection lifecycle, writable-file DML, catalog browse, row edit, DDL and unsupported `ALTER` behavior |
 | [`h3-duckdb-file-analytics.md`](smoke-matrix/h3-duckdb-file-analytics.md) | DuckDB `.duckdb` runtime plus registered CSV/Parquet/JSON/NDJSON analytics, and the local-file privacy/export and extension/`COPY` gates |
-| [`h4-rdbms-intelligence.md`](smoke-matrix/h4-rdbms-intelligence.md) | Schema metadata cache, ERD graph input and renderer, dependency view, migration impact, schema diff, FK row navigation |
+| [`h4-rdbms-intelligence.md`](smoke-matrix/h4-rdbms-intelligence.md) | Schema metadata cache, ERD graph input and React Flow canvas, dependency view, migration impact, schema diff, FK row navigation |
 | [`h5-non-rdbms.md`](smoke-matrix/h5-non-rdbms.md) | Non-RDBMS paradigms: MongoDB, Redis/Valkey, and Elasticsearch/OpenSearch Search, with their closure audits |
 | [`h6-wider-source-candidates.md`](smoke-matrix/h6-wider-source-candidates.md) | MSSQL and Oracle runtime/smoke guardrails plus unpromoted wide-column, cloud-document, graph, vector, and stream candidates |
 | [`h7-ops-security-reliability.md`](smoke-matrix/h7-ops-security-reliability.md) | CI gate surface, destructive-operation safety, credential and local-first privacy, dependency security, a11y, performance, platform smoke, E2E isolation |
@@ -124,15 +124,25 @@ Required local evidence:
   `run -- --run --coverage ...` and treats everything after `--` as non-flag
   arguments. It exited 0 without collecting coverage or applying the
   vite.config.ts thresholds, so this lane produced no coverage evidence.
-- Rust lane, four commands in this order:
+- Rust lane, in this order:
   `cargo test --manifest-path src-tauri/Cargo.toml --lib --test storage_integration`,
   `cargo test --manifest-path src-tauri/table-view-core/Cargo.toml --lib`,
-  `cargo test --manifest-path src-tauri/sql-parser-core/Cargo.toml --lib`, and
-  `cargo test --manifest-path src-tauri/Cargo.toml --test parse_sql_backend`.
+  `cargo test --manifest-path src-tauri/sql-parser-core/Cargo.toml --lib`,
+  `cargo test --manifest-path src-tauri/Cargo.toml --test parse_sql_backend`,
+  `cargo test --manifest-path src-tauri/Cargo.toml --test keyring_migration --test keyring_new_user --test keyring_linux_fallback`,
+  and `cargo test --manifest-path src-tauri/mongosh-parser-core/Cargo.toml --lib`.
   `table-view-core` and `sql-parser-core` are path dependencies, not workspace
-  members, so the app manifest's `--lib` never reaches either one. Drop a line
-  and the lane still exits 0 with those crates' unit tests unrun — the same
-  reason CI wires them as separate steps (`.github/workflows/ci.yml:358-382`).
+  members: the app manifest's `--lib` compiles them but never runs their own
+  unit tests. `mongosh-parser-core` sits one step further out — it is not in
+  the app's dependency graph at all (`git grep -n mongosh -- src-tauri/Cargo.lock`
+  returns 0 hits), so no flag on the app manifest can reach it and only its own
+  `--manifest-path` line runs it. That is how its lib tests stayed outside every
+  gate until #2098. `--test` is an allowlist on top of that: an integration
+  binary that no line names never runs, which is how the three `keyring_*`
+  binaries stayed outside CI until #1815. Drop a line and the lane still exits 0
+  with those crates' unit tests — or those binaries — unrun, the same reason CI
+  wires them as separate steps (the `Rust Unit And Storage Tests` job in
+  `.github/workflows/ci.yml`).
 - Docker integration lane: with required services available,
   `cargo test --manifest-path src-tauri/Cargo.toml --test schema_integration --test query_integration --test mongo_integration --test fixture_loading --test redis_integration`.
 - Documentation lane: `git diff --check` on the touched docs plus local

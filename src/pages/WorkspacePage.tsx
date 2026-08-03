@@ -17,6 +17,7 @@ import { subscribeSystemModeChange } from "@lib/themeBoot";
 import { THEME_CATALOG } from "@lib/themeCatalog";
 import { destroyCurrentWindow, focusWindow } from "@lib/window-controls";
 import { useConnectionStore } from "@stores/connectionStore";
+import { useLayoutStore } from "@stores/layoutStore";
 import { useThemeStore } from "@stores/themeStore";
 import { ArrowLeft, Monitor, Moon, Sun } from "lucide-react";
 import { useEffect, useRef } from "react";
@@ -122,6 +123,13 @@ export default function WorkspacePage() {
     headingRef.current?.focus();
   }, []);
 
+  // #1734 — Layout cluster, left panel. Collapsing hides the schema-tree
+  // column only; the header strip above it stays as a narrow rail because
+  // it holds the sole route back to the launcher and the sole theme /
+  // language control (`WorkspacePage` header, #1738). Dropping the whole
+  // <nav> would strand a collapsed user with neither.
+  const sidebarCollapsed = useLayoutStore((s) => s.sidebarCollapsed);
+
   return (
     <div className="flex h-full w-full overflow-hidden bg-background">
       {/* Sidebar column — back button + theme picker stacked above the
@@ -141,7 +149,13 @@ export default function WorkspacePage() {
         >
           {connectionName ?? t("workspaceHeading")}
         </h1>
-        <div className="flex items-center justify-between border-b border-border bg-secondary px-2 py-1.5">
+        <div
+          className={
+            sidebarCollapsed
+              ? "flex flex-col items-center gap-1 border-b border-border bg-secondary px-1 py-1.5"
+              : "flex items-center justify-between border-b border-border bg-secondary px-2 py-1.5"
+          }
+        >
           <Button
             variant="ghost"
             size="xs"
@@ -151,7 +165,9 @@ export default function WorkspacePage() {
             onClick={handleBackToConnections}
           >
             <ArrowLeft />
-            <span className="text-xs">{t("connections")}</span>
+            {!sidebarCollapsed && (
+              <span className="text-xs">{t("connections")}</span>
+            )}
           </Button>
 
           {/* #1738 (2026-07-25) — single top area for appearance controls.
@@ -194,10 +210,27 @@ export default function WorkspacePage() {
           </Popover>
         </div>
         {/* #1312 — a sidebar render crash must not take down the whole
-            workspace; isolate it so MainArea keeps working. */}
-        <ErrorBoundary variant="panel" label={t("workspaceSidebarAria")}>
-          <Sidebar />
-        </ErrorBoundary>
+            workspace; isolate it so MainArea keeps working.
+
+            #1734 — collapsing HIDES this column, it never unmounts it. The
+            subtree owns state the user built by hand and cannot get back:
+            the dragged width (`useResizablePanel` starts from
+            `DEFAULT_WIDTH` and nothing reads the persisted `sidebar_width`
+            back — see `Sidebar.tsx` top-of-file note), the debounced width
+            commit still in flight, the schema-tree filter text and expanded
+            categories, the Redis SCAN pattern/cursor, the search filters,
+            and any dialog opened from the tree. `display: contents` keeps
+            the expanded layout byte-identical (the wrapper generates no
+            box), and the `hidden` attribute beats it when collapsed —
+            Tailwind's preflight declares `[hidden]` as
+            `display: none !important`. `display: none` also drops the
+            column from the accessibility tree and the tab order, which is
+            what collapsing should mean. */}
+        <div className="contents" hidden={sidebarCollapsed}>
+          <ErrorBoundary variant="panel" label={t("workspaceSidebarAria")}>
+            <Sidebar />
+          </ErrorBoundary>
+        </div>
       </nav>
       <MainArea />
     </div>

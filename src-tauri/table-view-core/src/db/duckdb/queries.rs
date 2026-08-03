@@ -443,7 +443,7 @@ mod interrupt_tests {
     use super::DuckdbAdapter;
     use crate::db::row_cap::DEFAULT_ROW_CAP;
     use crate::error::AppError;
-    use crate::models::{ConnectionConfig, DatabaseType};
+    use crate::models::{ConnectionConfig, DatabaseType, SslMode};
     use std::time::Duration;
     use tokio_util::sync::CancellationToken;
 
@@ -465,8 +465,8 @@ mod interrupt_tests {
             environment: None,
             auth_source: None,
             replica_set: None,
-            tls_enabled: None,
-            trust_server_certificate: None,
+            ssl_mode: SslMode::Prefer,
+            ca_cert_path: None,
             oracle_use_sid: None,
             wallet_path: None,
             wallet_password: String::new(),

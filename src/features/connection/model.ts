@@ -108,10 +108,25 @@ export interface ConnectionConfig {
    */
   paradigm: Paradigm;
   // ── Connection/auth optional fields ───────────────────────────────
-  /** Whether TLS/encryption is enabled for DBMS forms that expose it. */
-  tlsEnabled?: boolean | null;
-  /** SQL Server: trust the server certificate instead of validating it. */
-  trustServerCertificate?: boolean | null;
+  /**
+   * #1649 (ADR 0058) — the uniform TLS posture for every engine. Replaces the
+   * `(tlsEnabled, trustServerCertificate)` boolean pair: the backend stores
+   * this enum and folds any legacy pair on read, so the frontend never sees
+   * the booleans again.
+   *
+   * Optional for the same reason `walletPassword` is — the backend always emits
+   * it, but the many connection fixtures need not carry it. Read it through
+   * `draftSslMode` so the absent case resolves to the driver default rather
+   * than being handled ad hoc at each call site.
+   */
+  sslMode?: SslMode;
+  /**
+   * #1649 (ADR 0058) — filesystem path to the CA certificate that `verify-ca`
+   * trusts in addition to the built-in public roots. A path reference only,
+   * stripped from exports. Required whenever `sslMode` is `verify-ca` — the
+   * backend rejects the combination without it.
+   */
+  caCertPath?: string | null;
 
   // ── MongoDB-specific optional fields ──────────────────────────────
   // Serialised by the backend only when the user fills them in; the
@@ -271,29 +286,24 @@ export const isSearchFamily = (dbType: DatabaseType): boolean =>
   paradigmOf(dbType) === "search";
 
 /**
- * Membership gate for `tlsEnabled` carry (`applyDbTypeChange`) and verbatim
- * preservation (`resolveDraftTlsEnabled`). Members: `mssql`, `mongodb`,
- * `redis`, `valkey`, `elasticsearch`, `opensearch`.
+ * Membership gate for carrying the TLS posture across a `dbType` switch
+ * (`applyDbTypeChange`). Members: `mssql`, `mongodb`, `redis`, `valkey`,
+ * `elasticsearch`, `opensearch` — the engines whose form renders a plain
+ * on/off encryption toggle rather than the sslmode dropdown.
  *
- * `mssql` is a member but its behavior never depends on the membership: both
- * consumers special-case `dbType === "mssql"` first (seed `trust=true` /
- * `tlsEnabled ?? true`), so those branches win before `exposesTlsToggle` is
- * ever consulted. Its presence here is therefore inert. mongo/redis/valkey/
- * search are the types that genuinely rely on membership — their TLS toggle is
- * a plain on/off with no trust dependency, so `tls_enabled=true, trust=None`
- * is a legitimate stored state that must be carried/preserved verbatim.
+ * `mssql` is a member but its behavior never depends on the membership: the
+ * consumer special-cases `dbType === "mssql"` first (encrypt-by-default seed),
+ * so that branch wins before `exposesTlsToggle` is ever consulted.
  *
- * `postgresql` renders a TLS toggle (#1526) but is deliberately kept OUT.
- * Unlike mongo/redis it routes through the trust-dependent
- * `resolve_tls_decision` boundary where `tls_enabled=true, trust=None` is a
- * backend hard-reject (#1062). Staying out of the set keeps its two required
- * behaviors: `resolveDraftTlsEnabled` heals that reject-residue instead of
- * preserving it, and `applyDbTypeChange` resets TLS to null on `dbType` switch
- * instead of carrying a `true` that would leave `trust=None`. The PG form
- * itself seeds `trust=false` on enable so the invalid combo is never authored.
+ * `postgresql` renders a TLS control (#1526) but is deliberately kept OUT,
+ * along with the no-TLS-control types (mysql/mariadb/oracle/sqlite/duckdb):
+ * a posture must not be carried onto — or persisted for — those drafts, so the
+ * switch resets them to `prefer`.
  *
- * The no-TLS-control types (mysql/mariadb/oracle/sqlite/duckdb) also stay out:
- * `tlsEnabled` must not be carried onto — or persisted for — those drafts.
+ * #1649 note: the pre-#1649 rationale for this split was the
+ * `tls_enabled=true, trust=None` combination that the backend hard-rejected
+ * (#1062). `SslMode` makes that combination unrepresentable, so what survives
+ * here is only the "don't leak a skip-verify posture onto the new engine" rule.
  */
 export const TLS_TOGGLE_DATABASE_TYPES: readonly DatabaseType[] = [
   "mssql",
@@ -309,22 +319,43 @@ export function exposesTlsToggle(dbType: DatabaseType): boolean {
 }
 
 /**
- * #1063 — the sslmode dropdown vocabulary for the trust-dependent RDB engines
- * (pg/mysql/mariadb). This is a *view* over the stored `(tlsEnabled,
- * trustServerCertificate)` pair, not a new persisted field, so existing
- * connections reinterpret without a migration:
+ * #1649 (ADR 0058) — the TLS posture vocabulary, mirroring the PostgreSQL
+ * `sslmode` values. Since #1649 this is the **persisted** field on every
+ * engine, not a derived view over a boolean pair:
  *
- * | mode          | tlsEnabled | trust  | backend decision  |
- * |---------------|------------|--------|-------------------|
- * | `disable`     | false      | false  | force plaintext   |
- * | `prefer`      | null       | null   | driver default    |
- * | `require`     | true       | true   | encrypt, skip verify |
- * | `verify-full` | true       | false  | encrypt + verify  |
- *
- * `verify-ca` is intentionally omitted (needs a CA file — follow-up).
+ * | mode          | encrypts                       | verifies cert | needs CA      |
+ * |---------------|--------------------------------|---------------|---------------|
+ * | `disable`     | never                          | —             | no            |
+ * | `prefer`      | opportunistic (driver default) | no            | no            |
+ * | `require`     | always                         | no            | no            |
+ * | `verify-ca`   | always                         | yes           | yes (`caCertPath`) |
+ * | `verify-full` | always                         | yes           | no (public roots) |
  */
-export type SslMode = "disable" | "prefer" | "require" | "verify-full";
+export type SslMode =
+  | "disable"
+  | "prefer"
+  | "require"
+  | "verify-ca"
+  | "verify-full";
 
+/** Every representable posture, in ladder order. The runtime counterpart of
+ *  the `SslMode` union — used to narrow untrusted wire values. */
+export const SSL_MODES: readonly SslMode[] = [
+  "disable",
+  "prefer",
+  "require",
+  "verify-ca",
+  "verify-full",
+];
+
+/**
+ * The postures the dropdown offers. `verify-ca` is deliberately absent: it is
+ * only usable with a CA file, and the file picker (plus its validation) is the
+ * follow-up slice of #1649. Selecting it today would produce a draft the user
+ * cannot complete, since the backend rejects `verify-ca` with no `caCertPath`.
+ * A connection already stored as `verify-ca` still renders — see
+ * `sslModeChoices`.
+ */
 export const SSL_MODE_OPTIONS: readonly SslMode[] = [
   "disable",
   "prefer",
@@ -332,37 +363,62 @@ export const SSL_MODE_OPTIONS: readonly SslMode[] = [
   "verify-full",
 ];
 
+/** Whether the posture negotiates TLS at all. Mirrors `SslMode::tls_on`. */
+export function sslModeTlsOn(mode: SslMode | undefined): boolean {
+  return mode !== undefined && mode !== "disable" && mode !== "prefer";
+}
+
+/** The posture a draft/connection is in, defaulting an absent field to the
+ *  driver default. The single place the optional-field fallback lives. */
+export function draftSslMode(
+  source: Pick<ConnectionConfig, "sslMode">,
+): SslMode {
+  return source.sslMode ?? "prefer";
+}
+
+/**
+ * The verifying posture a draft belongs in: `verify-ca` while it carries a CA
+ * anchor, plain `verify-full` otherwise.
+ *
+ * #1649 — the skip-verify checkboxes (`TlsSkipVerifyToggle`, the SQL Server
+ * "trust server certificate" box) are controlled by `sslMode` alone, so their
+ * handler cannot read back the posture that preceded the flip. Hard-coding
+ * `verify-full` on the unchecked branch demoted a stored `verify-ca` on a
+ * single check/uncheck round trip and left its `caCertPath` attached to a
+ * posture that ignores it. Deriving the branch from the anchor restores the
+ * posture instead, and it reads the right one because those two checkboxes are
+ * the only controls that move `sslMode` while keeping `caCertPath` — so a
+ * non-null anchor means `verify-ca`, or the `require` they park it in.
+ * Check with `git grep -n -A3 "sslMode:" -- src/features/connection ':!*test*'`:
+ * every other patch that moves the posture carries `caCertPath: null` with it,
+ * and the two hits that carry neither seed a draft rather than move one
+ * (`emptyDraft` has no anchor, `draftFromConnection` copies the stored pair
+ * intact).
+ *
+ * Whitespace-only is treated as absent, matching the backend's
+ * `require_ca_cert_path`.
+ */
+export function draftVerifyingSslMode(
+  source: Pick<ConnectionConfig, "caCertPath">,
+): SslMode {
+  return source.caCertPath?.trim() ? "verify-ca" : "verify-full";
+}
+
+/**
+ * The options a dropdown must render for `current` — `SSL_MODE_OPTIONS` plus
+ * `current` itself when it is not offered. Without this a connection stored as
+ * `verify-ca` would render with an empty select and a save would silently
+ * rewrite its posture.
+ */
+export function sslModeChoices(current: SslMode): readonly SslMode[] {
+  return SSL_MODE_OPTIONS.includes(current)
+    ? SSL_MODE_OPTIONS
+    : [...SSL_MODE_OPTIONS, current];
+}
+
 /** True for the engines that render the sslmode dropdown (pg/mysql/mariadb). */
 export function usesSslModeSelect(dbType: DatabaseType): boolean {
   return dbType === "postgresql" || dbType === "mysql" || dbType === "mariadb";
-}
-
-/** Derive the dropdown value from the stored TLS fields. The invalid residue
- *  `(tls=true, trust=null)` collapses to the secure `verify-full` rather than
- *  skip-verify. */
-export function sslModeFromFields(
-  tlsEnabled: boolean | null | undefined,
-  trust: boolean | null | undefined,
-): SslMode {
-  if (tlsEnabled === true) return trust === true ? "require" : "verify-full";
-  if (tlsEnabled === false && trust === false) return "disable";
-  return "prefer";
-}
-
-/** Map a dropdown selection back onto the stored TLS fields. */
-export function sslModeFields(
-  mode: SslMode,
-): Pick<ConnectionDraft, "tlsEnabled" | "trustServerCertificate"> {
-  switch (mode) {
-    case "disable":
-      return { tlsEnabled: false, trustServerCertificate: false };
-    case "prefer":
-      return { tlsEnabled: null, trustServerCertificate: null };
-    case "require":
-      return { tlsEnabled: true, trustServerCertificate: true };
-    case "verify-full":
-      return { tlsEnabled: true, trustServerCertificate: false };
-  }
 }
 
 export type FileConnectionDatabaseType = Extract<
@@ -403,32 +459,29 @@ export function createEmptyDraft(): ConnectionDraft {
     groupId: null,
     color: null,
     paradigm: "rdb",
+    // #1649 — the driver default. Every engine's form seeds its own posture
+    // from here; `prefer` is the pre-#1062 behavior for a brand-new draft.
+    sslMode: "prefer",
     walletPassword: "",
   };
 }
 
 /**
- * Resolve the `tlsEnabled` value the edit form should start from.
+ * Resolve the `sslMode` the edit form should start from.
  *
- * - MSSQL defaults an unset toggle to `true` (encrypt-by-default UX).
- * - Other TLS-toggle forms (mongo/redis/valkey/search) carry the stored
- *   value verbatim — it is genuinely user-settable there.
- * - No-TLS-toggle types (pg/mysql/mariadb/oracle/sqlite/duckdb) have no TLS
- *   control, so a stored `tls_enabled=true` with no explicit trust decision
- *   is the invalid #1062 reject residue (only creatable by the pre-fix
- *   MSSQL→RDB carryover bug). Drop it to `null` so opening + saving the
- *   connection heals the stored entry. A valid explicit-trust combo
- *   (`trust=true|false`, rare hand-authored JSON) is preserved unchanged.
+ * MSSQL keeps its encrypt-by-default UX: a connection that never chose a
+ * posture (`prefer`) opens with encryption on. Every other engine carries the
+ * stored posture verbatim.
+ *
+ * #1649 — the pre-#1649 version of this function also *healed* the invalid
+ * `tls_enabled=true, trust=None` residue that the backend rejected (#1062).
+ * `SslMode` makes that state unrepresentable and the backend folds any stored
+ * legacy pair on read, so the healing branch is gone rather than ported.
  */
-function resolveDraftTlsEnabled(
-  conn: ConnectionConfig,
-): boolean | null | undefined {
-  if (conn.dbType === "mssql") return conn.tlsEnabled ?? true;
-  if (exposesTlsToggle(conn.dbType)) return conn.tlsEnabled;
-  if (conn.tlsEnabled === true && conn.trustServerCertificate == null) {
-    return null;
-  }
-  return conn.tlsEnabled;
+function resolveDraftSslMode(conn: ConnectionConfig): SslMode {
+  const stored = draftSslMode(conn);
+  if (conn.dbType === "mssql" && stored === "prefer") return "verify-full";
+  return stored;
 }
 
 /** Derive a draft from an existing connection. Password starts as `null`
@@ -452,8 +505,8 @@ export function draftFromConnection(conn: ConnectionConfig): ConnectionDraft {
     paradigm: conn.paradigm,
     authSource: conn.authSource,
     replicaSet: conn.replicaSet,
-    tlsEnabled: resolveDraftTlsEnabled(conn),
-    trustServerCertificate: conn.trustServerCertificate,
+    sslMode: resolveDraftSslMode(conn),
+    caCertPath: conn.caCertPath,
     oracleUseSid: conn.oracleUseSid,
     walletPath: conn.walletPath,
     password: null,
@@ -502,23 +555,38 @@ function findParamCaseInsensitive(
 }
 
 interface UrlTlsResolution {
-  fields: Pick<ConnectionDraft, "tlsEnabled" | "trustServerCertificate">;
+  fields: Partial<Pick<ConnectionDraft, "sslMode" | "caCertPath">>;
   /** Raw `key=value` of a TLS parameter that could not be reflected onto the
    *  form (e.g. `sslmode=verify-ca`), or `null` when nothing was dropped. */
   unreflected: string | null;
 }
 
 /**
- * #1063 — resolve a pasted URL's TLS parameter onto the draft's
- * `(tlsEnabled, trust)` fields. `prefer`/`preferred` is treated as "unset"
- * (same posture as no parameter) so it is neither applied nor flagged.
- * Values we cannot represent (verify-ca, allow, garbage) leave the fields
- * untouched and are surfaced via `unreflected` so the paste handler can warn.
+ * #1063 — resolve a pasted URL's TLS parameter onto the draft's `sslMode`.
+ * `prefer`/`preferred` is treated as "unset" (same posture as no parameter) so
+ * it is neither applied nor flagged. Values the form cannot complete leave the
+ * field untouched and are surfaced via `unreflected` so the paste handler can
+ * warn.
+ *
+ * #1649 — `verify-ca` is now a representable posture, but it is deliberately
+ * still reported as unreflected: it is unusable without a CA file, and the CA
+ * file picker is the follow-up slice. Reflecting it would seed a draft the user
+ * cannot complete and whose save the backend rejects. It becomes reflectable in
+ * the same change that adds the picker.
  */
 function resolveUrlTls(
   dbType: DatabaseType,
   searchParams: URLSearchParams,
 ): UrlTlsResolution {
+  // A reflected parameter replaces the posture, and no value this function can
+  // reflect is `verify-ca`, so the anchor a prior `verify-ca` draft carried is
+  // dropped with it. Leaving it would make a later skip-verify round trip
+  // resurrect a `verify-ca` the pasted URL moved away from
+  // (see `draftVerifyingSslMode`).
+  const reflected = (sslMode: SslMode): UrlTlsResolution => ({
+    fields: { sslMode, caCertPath: null },
+    unreflected: null,
+  });
   if (usesSslModeSelect(dbType)) {
     const found = findParamCaseInsensitive(searchParams, SSLMODE_PARAM_KEYS);
     if (!found) return { fields: {}, unreflected: null };
@@ -526,20 +594,20 @@ function resolveUrlTls(
     switch (rawValue.toLowerCase()) {
       case "disable":
       case "disabled":
-        return { fields: sslModeFields("disable"), unreflected: null };
+        return reflected("disable");
       case "prefer":
       case "preferred":
         return { fields: {}, unreflected: null };
       case "require":
       case "required":
-        return { fields: sslModeFields("require"), unreflected: null };
+        return reflected("require");
       case "verify-full":
       case "verify_full":
       case "verify-identity":
       case "verify_identity":
-        return { fields: sslModeFields("verify-full"), unreflected: null };
+        return reflected("verify-full");
       default:
-        // verify-ca, allow, and any unknown value are not representable.
+        // verify-ca (no CA picker yet), allow, and any unknown value.
         return { fields: {}, unreflected: `${key}=${rawValue}` };
     }
   }
@@ -548,12 +616,8 @@ function resolveUrlTls(
   if (!found) return { fields: {}, unreflected: null };
   const [key, rawValue] = found;
   const value = rawValue.toLowerCase();
-  if (["true", "1", "yes"].includes(value)) {
-    return { fields: { tlsEnabled: true }, unreflected: null };
-  }
-  if (["false", "0", "no"].includes(value)) {
-    return { fields: { tlsEnabled: false }, unreflected: null };
-  }
+  if (["true", "1", "yes"].includes(value)) return reflected("verify-full");
+  if (["false", "0", "no"].includes(value)) return reflected("prefer");
   return { fields: {}, unreflected: `${key}=${rawValue}` };
 }
 
@@ -604,7 +668,7 @@ export function parseConnectionUrl(
       "encrypt",
       true,
     );
-    const sqlServerTrustServerCertificate = sqlServerBooleanParam(
+    const sqlServerTrust = sqlServerBooleanParam(
       searchParams,
       "trustServerCertificate",
       true,
@@ -621,11 +685,15 @@ export function parseConnectionUrl(
       password: decodeURIComponent(parsed.password),
       database: isKvFamily(dbType) && database === "" ? "0" : database,
       ...urlTls.fields,
-      ...(parsed.protocol === "rediss:" ? { tlsEnabled: true } : {}),
+      // Both overrides state a posture, and neither can state `verify-ca`, so
+      // they drop the anchor for the same reason `resolveUrlTls` does.
+      ...(parsed.protocol === "rediss:"
+        ? { sslMode: "verify-full" as SslMode, caCertPath: null }
+        : {}),
       ...(dbType === "mssql"
         ? {
-            tlsEnabled: sqlServerEncrypt,
-            trustServerCertificate: sqlServerTrustServerCertificate,
+            sslMode: sqlServerSslMode(sqlServerEncrypt, sqlServerTrust),
+            caCertPath: null,
           }
         : {}),
       paradigm: paradigmOf(dbType),
@@ -634,6 +702,24 @@ export function parseConnectionUrl(
     // Input is not a parseable URL — caller will try other connection-string forms.
     return null;
   }
+}
+
+/**
+ * #1649 — fold SQL Server's own `encrypt` / `trustServerCertificate` URL params
+ * onto the uniform posture, matching `SslMode::from_legacy` cell for cell so a
+ * pasted URL and a migrated stored row land on the same posture.
+ *
+ * `encrypt=false` with `trustServerCertificate=true` is the contradictory pair:
+ * a common legacy SQL Server connection string that the pre-#1649 backend
+ * refused to connect at all ("SQL Server trustServerCertificate requires
+ * TLS/encryption"). It folds to `require` — encrypt, and honor the trust
+ * decision the string does state — because the alternative reading (`prefer`)
+ * turns a refusal into a silent plaintext connection, and on SQL Server into
+ * `EncryptionLevel::NotSupported`, i.e. forced plaintext with no notice.
+ */
+function sqlServerSslMode(encrypt: boolean, trust: boolean): SslMode {
+  if (!encrypt) return trust ? "require" : "disable";
+  return trust ? "require" : "verify-full";
 }
 
 function sqlServerBooleanParam(

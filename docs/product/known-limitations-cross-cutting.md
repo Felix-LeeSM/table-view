@@ -92,24 +92,85 @@ security dashboard. Search live HTTP/admin promotion remains owned by the Search
 roadmap/milestone, not non-RDBMS lazy-loading workbench hardening. Global audit
 logs, role/user/permission UI, credential rotation UI, keyring diagnostics,
 actual live Search index/settings admin execution, and a general security
-dashboard are not implemented. PostgreSQL and MySQL/MariaDB connections honor
-`tls_enabled`/`trustServerCertificate` when set (encryption required with full
-certificate verification, or verification skipped when the certificate is
-trusted) and reject contradictory combinations instead of silently downgrading
-to plaintext. Per ADR 0053 (#1063), the connection form now exposes an sslmode
-dropdown (`disable`/`prefer`/`require`/`verify-full`) for
-PostgreSQL/MySQL/MariaDB — a view over the stored `(tls_enabled,
-trust_server_certificate)` pair, unset staying the opportunistic driver `prefer`
-default with a hint; the on/off TLS engines
+dashboard are not implemented. Per ADR 0058 (#1649), every TLS-capable engine
+now stores one uniform posture — `sslMode`, one of
+`disable`/`prefer`/`require`/`verify-ca`/`verify-full`, plus an optional
+`caCertPath` — replacing the ADR 0053 (#1063) `(tls_enabled,
+trust_server_certificate)` boolean pair, which `connections.json` reads only to
+migrate stored connections and never writes back. The SQLite snapshot mirror is
+the exception: it keeps both legacy integer columns and projects the posture
+onto them on every save, so `verify-ca` lands in the mirror as `verify-full` and
+`caCertPath` stays file-SOT-only. Unset stays the opportunistic driver `prefer`
+default with a hint. Two combinations that the pre-#1649 backend refused to
+connect at all cannot stay refusals, because the enum has no way to express one;
+both fold upward. TLS on with no explicit trust decision folds to `verify-full`.
+Trust the certificate with encryption off — which a pasted
+`sqlserver://…?encrypt=false&trustServerCertificate=true` could store — folds to
+`require` (encryption forced, certificate verification skipped), so a
+contradictory combination still never becomes a plaintext connection. That
+second fold is the one migration step that can stop a working connection: on the
+five on/off TLS engines (MongoDB, Redis/Valkey, Elasticsearch/OpenSearch) the
+adapters ignored `trust_server_certificate` while TLS was off, so a row stored
+that way connected in plaintext before #1649 and now forces a TLS handshake that
+fails loudly against a server with no TLS. Recovery is to set that connection's
+posture back to `disable` or `prefer` by hand; on
+PostgreSQL/MySQL/MariaDB/SQL Server/Oracle the pair was already refused at
+connect time, so nothing that previously connected changed there. `verify-ca`
+adds the CA file the user selects to the driver's trust anchors *in addition to*
+the roots that driver already trusts, with hostname verification kept on; it is
+wired that way on PostgreSQL/MySQL/MariaDB and SQL Server only, and what it
+widens differs by driver — PostgreSQL/MySQL/MariaDB go through sqlx/rustls and
+add the CA on top of the bundled public root list, SQL Server goes through
+tiberius/native-tls and adds it on top of the OS system trust store. On MongoDB,
+Redis/Valkey, and Elasticsearch/OpenSearch the CA file is ignored and
+`verify-ca` verifies
+against the built-in public roots alone — never weaker than `verify-full`, but a
+private-CA server stays unreachable on those five until their drivers' own CA
+options are wired (#1649 follow-up). A `verify-ca` posture with no CA file is
+rejected at the storage write boundary for every engine, and again at connect
+time on PostgreSQL/MySQL/MariaDB and SQL Server — the three adapters that
+resolve the full posture. The five on/off TLS engines have only the
+write-boundary rejection, so a row hand-edited into `connections.json` still
+reaches those drivers as plain `verify-full`; the connection *test* action also
+runs without the write-boundary check, so on those five it can report success
+for a posture the save then rejects. The sslmode
+dropdown for PostgreSQL/MySQL/MariaDB offers four of the five values
+(`disable`/`prefer`/`require`/`verify-full`); `verify-ca` renders only for a
+connection already stored with it, because the CA file picker is the follow-up
+slice, so URL paste still reports `sslmode=verify-ca` as a parameter it could not
+reflect rather than dropping it silently. The on/off TLS engines
 (MongoDB/Redis/Valkey/Elasticsearch/OpenSearch) expose an explicit opt-in "trust
-server certificate" (skip-verify) checkbox, gated on TLS being on and carrying
-an in-form warning; SQL Server keeps its `trust=true` default with an added
-skip-verify warning; and URL paste honors `sslmode`/`ssl-mode`/`tls` parameters,
-surfacing a notice for values it cannot map (e.g. `verify-ca`) rather than
-dropping them silently. Switching the dbType never carries a skip-verify choice
-onto the next engine. Advanced depth — CA files, client certificates,
-`verify-ca`, 1-stage-engine sslmode expansion, and TOFU certificate pinning —
-remains a follow-up (#1649).
+server certificate" (skip-verify) checkbox, gated on TLS being on and carrying an
+in-form warning; SQL Server keeps its skip-verify default when the engine is
+first selected, with the same warning, and turning its encryption checkbox off
+and back on returns to full verification rather than to skip-verify. Switching
+the dbType never carries a skip-verify choice onto the next engine. Export strips
+`caCertPath` the way it strips the Oracle wallet path, and import folds a
+`verify-ca` envelope to `verify-full` and drops the CA reference, so the CA file
+is re-selected on the importing machine exactly as the password is re-entered.
+Oracle rejects any posture above `prefer` — its mTLS wallet is the only Oracle
+TLS trigger. The CA reference follows the posture that named it: the sslmode
+dropdown, the engine TLS on/off checkboxes (both directions), a dbType switch,
+and a pasted URL that states a posture all clear `caCertPath` whenever they move
+the posture. The skip-verify checkbox is the deliberate exception — it keeps the
+anchor while the posture sits at `require`, so unchecking it restores
+`verify-ca` instead of demoting the connection to `verify-full`. A connection
+saved while that box is checked therefore stores `require` with its CA path
+still attached, and no posture reads that path until the box is cleared again.
+Three posture-lifecycle limits ride along with the new vocabulary.
+Rolling back to a pre-#1649 build loses the posture permanently: the storage
+envelope carries no version field and does not reject unknown keys, so an older
+build reads every connection as the legacy `(unset, unset)` pair and the first
+save from that build drops `sslMode` and `caCertPath` for good. A CA path is
+validated for presence only — a path that does not exist, or points at
+something that is not a certificate, is stored and only surfaces as the driver's
+raw error at connect time. One unrecognized `sslMode` string quarantines the
+whole connection store: the enum has no catch-all variant, so the parse fails,
+`connections.json` is moved aside with a timestamped suffix, and the app boots
+with zero connections until the backup is restored by hand. Advanced
+depth — client certificates, TOFU certificate pinning, the in-form CA file
+picker, and private trust anchors on the five on/off TLS engines — remains a
+follow-up (#1649).
 
 ### Runtime E2E smoke coverage
 
@@ -182,10 +243,10 @@ native document-first panels, MSSQL DDL/admin/full T-SQL widening, Oracle
 SID/TNS/wallet/advanced-auth/DDL/admin/PLSQL widening, and additional desktop
 smoke scenarios remain separate gates. Static fixture inventory covers
 SQL/MongoDB/Redis/Valkey/Search seed contracts, but other specs under
-`e2e/smoke/**`, reset-to-default audits, ERD scenarios, additional file
-analytics scenarios beyond the wired `duckdb-file-analytics` spec, broader
-Search scenarios, and macOS/Windows runtime smoke are future promotion gates
-unless a smoke runner wires them.
+`e2e/smoke/**`, reset-to-default audits, additional file analytics scenarios
+beyond the wired `duckdb-file-analytics` spec, broader Search scenarios, and
+macOS/Windows runtime smoke are future promotion gates unless a smoke runner
+wires them. The dense ERD scenario is wired — see the ERD paragraph below.
 
 ### Adapter / workspace boundary
 
@@ -232,15 +293,17 @@ schema diff is read-only; it does not apply migrations, compare data,
 import/export, expose admin workflows, or include DuckDB registered file
 aliases. The ERD is opened as a database-level diagram tab from the schema-tree
 header action (gated on the engine's `intelligence.erd` capability), not from a
-per-table sub-tab. Data compare and dense-view smoke remain future promotion
-gates in the H4 smoke matrix.
+per-table sub-tab. The diagram is a `@xyflow/react` canvas with `elkjs`
+`layered` auto-layout: referenced tables rank above the tables that reference
+them, and nodes can be dragged, but positions are not persisted across tab
+reopen. Data compare remains a future promotion gate in the H4 smoke matrix.
 
 ### FK navigation
 
 Current FK navigation is the DataGrid foreign-key cell/icon path that opens the
-referenced row with filters. ERD selection, search, zoom, fit, focus, and
-relationship highlighting are local diagram interactions, not FK row navigation
-claims.
+referenced row with filters. ERD selection, search, node drag, canvas zoom/pan,
+fit, focus, and relationship highlighting are local diagram interactions, not FK
+row navigation claims.
 
 ### CHECK constraints
 

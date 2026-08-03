@@ -422,11 +422,15 @@ pub trait RdbAdapter: DbAdapter {
 
     /// Sprint 240 — unified `CREATE TABLE + indexes + constraints` in a
     /// single round trip. Preview mode joins child SQL with `;\n`;
-    /// execute mode runs CREATE TABLE first (in its own tx with
-    /// COMMENTs), then indexes / constraints each in their own tx
-    /// (atomic policy = C). Default impl synthesises the behaviour by
+    /// in execute mode the default impl runs CREATE TABLE first (in its
+    /// own tx with COMMENTs), then indexes / constraints each in their
+    /// own tx (atomic policy = C), synthesising the behaviour by
     /// chaining `create_table` + `create_index` + `add_constraint` so
-    /// non-PG adapters compile without a custom override.
+    /// non-PG adapters compile without a custom override. Policy C is
+    /// the default, not the contract — an override may be stricter, and
+    /// the SQLite one is: it runs the whole plan in a single
+    /// transaction since #1804, rolling the CREATE TABLE back when a
+    /// child index fails (`db/adapters/sqlite/ddl.rs`).
     fn create_table_plan<'a>(
         &'a self,
         req: &'a CreateTablePlanRequest,

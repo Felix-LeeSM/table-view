@@ -53,6 +53,10 @@
   --color-typekind-domain: var(--tv-typekind-domain);
   --color-typekind-range: var(--tv-typekind-range);
   --color-typekind-composite: var(--tv-typekind-composite);
+  --color-erd-schema-1: var(--tv-erd-schema-1);
+  --color-erd-schema-2: var(--tv-erd-schema-2);
+  --color-erd-schema-3: var(--tv-erd-schema-3);
+  --color-erd-schema-4: var(--tv-erd-schema-4);
   --radius-sm: calc(var(--tv-radius) - 4px);
   --radius-md: calc(var(--tv-radius) - 2px);
   --radius-lg: var(--tv-radius);
@@ -166,6 +170,14 @@
   --tv-typekind-domain: #22c55e; /* green-500 */
   --tv-typekind-range: #a855f7; /* purple-500 */
   --tv-typekind-composite: #f97316; /* orange-500 */
+  /* ERD schema badge tones (ADR 0054 (4)): the flat multi-schema canvas gives
+     each schema a badge whose hue repeats every 4 schemas. The badge always
+     prints the schema name, so the hue is redundant encoding, never the only
+     one. Mode-invariant like the typekind dots. */
+  --tv-erd-schema-1: #2563eb; /* blue-600 */
+  --tv-erd-schema-2: #16a34a; /* green-600 */
+  --tv-erd-schema-3: #9333ea; /* purple-600 */
+  --tv-erd-schema-4: #ea580c; /* orange-600 */
 }
 :where(:root[data-mode="dark"]) {
   /* UI base (slate dark mirror) */
@@ -214,6 +226,12 @@
   --tv-typekind-domain: #22c55e; /* green-500 */
   --tv-typekind-range: #a855f7; /* purple-500 */
   --tv-typekind-composite: #f97316; /* orange-500 */
+  /* ERD schema badge tones (dark): lighter 400-level hues so the badge text
+     stays legible on the dark card. */
+  --tv-erd-schema-1: #60a5fa; /* blue-400 */
+  --tv-erd-schema-2: #4ade80; /* green-400 */
+  --tv-erd-schema-3: #c084fc; /* purple-400 */
+  --tv-erd-schema-4: #fb923c; /* orange-400 */
 }
 
 body {
