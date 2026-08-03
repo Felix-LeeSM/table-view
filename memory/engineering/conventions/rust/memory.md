@@ -21,8 +21,10 @@ trigger:
   에는 안 닿는다 — 돌 manifest 목록은 `package.json` 의 `format:rust` 가 갖는다.
 - clippy 는 manifest 마다 한 번씩
   `cargo clippy --manifest-path <manifest> --all-targets --all-features -- -D warnings`.
-  로컬 훅이 없어 이 줄이 유일한 지시이고, 대상 manifest 목록은
-  `.github/workflows/ci.yml` 의 `Rust Static Analysis` 잡이 갖는다.
+  로컬 훅이 없어 이 줄이 유일한 지시이고, 대상 목록은
+  `.github/workflows/ci.yml` 의 `Rust Static Analysis` 잡이 갖는다 — 그 잡은
+  `--manifest-path` 대신 `working-directory` 로 고르니 디렉토리 하나가 manifest
+  하나다.
 - 들여쓰기: 4 spaces
 
 ## 에러 처리
