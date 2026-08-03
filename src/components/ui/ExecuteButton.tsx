@@ -160,7 +160,7 @@ export default function ExecuteButton({
       className={cn(
         "min-w-0 transition-colors",
         // The Button base owns paddings + height; we layer color via
-        // inline style so all 72 themes inherit the env tokens.
+        // inline style so all 81 themes inherit the env tokens.
         className,
       )}
       style={{

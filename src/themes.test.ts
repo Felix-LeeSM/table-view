@@ -40,7 +40,7 @@ describe("themes.css — Sprint 253 token foundation (AC-253-01, AC-253-02)", ()
 
   // AC-253-01 — 6 env-specific 토큰이 universal scope (theme-independent)
   // 에 정의된다. 정의 위치는 :root 또는 globally-applied selector 어디든
-  // 가능하며, 모든 72 theme variant 가 inherit 가능해야 한다.
+  // 가능하며, 모든 81 theme variant 가 inherit 가능해야 한다.
   it("defines --tv-env-prod with the spec value (#dc2626)", () => {
     expect(themes).toMatch(/--tv-env-prod:\s*#dc2626/);
   });
@@ -75,8 +75,11 @@ describe("themes.css — Sprint 253 token foundation (AC-253-01, AC-253-02)", ()
 
   // AC-253-02 — `--tv-status-connecting` 은 amber `#f59e0b` 그대로 보존.
   // "connecting" 의미와 "warning/staging" 의미를 시각적으로 분리한다.
-  it("preserves --tv-status-connecting amber (#f59e0b) in every theme", () => {
-    // 144 theme variants (72 themes × 2 modes) 모두에서 amber 유지.
+  it("keeps --tv-status-connecting amber (#f59e0b) across the theme blocks", () => {
+    // 바닥값 72 는 "amber 가 통째로 사라지지 않았다" 를 보는 하한이지 전수가
+    // 아니다. refero 9종(#2117) 중 유채색을 아예 안 쓰는 supply·henry 와, 자기
+    // 팔레트 톤으로 갈아 끼운 authkit·lattice·ease 는 amber 를 쓰지 않는다.
+    // 현재 건수: grep -c -- '--tv-status-connecting: #f59e0b' src/themes.css
     const matches = themes.match(/--tv-status-connecting:\s*#f59e0b/g) ?? [];
     expect(matches.length).toBeGreaterThanOrEqual(72);
   });
@@ -106,7 +109,7 @@ describe("themes.css — Sprint 257 syntax palette derivation (AC-257-01..04)", 
   const PRE_DARK = ["#c4b5fd", "#86efac", "#fca5a5"] as const;
 
   // AC-257-01 — derivation 적용 후, default-light triple 이 *전체*
-  // 144 block 에서 dominant 하게 살아 있지 않아야 한다 (사전 ≥ 50,
+  // 162 block 에서 dominant 하게 살아 있지 않아야 한다 (사전 ≥ 50,
   // post derivation 은 ≤ 5 — clickhouse 등 collision theme 이 우연히
   // default 와 일치할 수 있어 0 이 아닌 작은 상한).
   it("does not leave the pre-derivation light default palette dominant", () => {

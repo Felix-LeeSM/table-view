@@ -232,7 +232,7 @@ Critical component smoke covers SchemaTree tree/treeitem roles, DataGrid
 grid/gridcell/edit feedback, ConnectionDialog labels/error feedback,
 Import/Export labels/error feedback, and secret-free alert/status/aria-live
 regions for credential/recovery paths. Routine VoiceOver/NVDA, focus-order,
-Quick Open, candidate-source UI, and 72-theme strict WCAG gates are not wired.
+Quick Open, candidate-source UI, and 81-theme strict WCAG gates are not wired.
 Promote from the follow-up table only when a feature lane gives the check a
 concrete owner and budget.
 

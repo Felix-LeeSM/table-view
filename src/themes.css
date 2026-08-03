@@ -1,5 +1,5 @@
 /* ============================================================
- * Table View — 72 theme sets (light + dark)
+ * Table View — 81 theme sets (light + dark)
  * Generated. Each [data-theme="x"][data-mode="y"] overrides --tv-* tokens.
  * Drop onto <html> or any wrapper to retheme the whole app.
  * ============================================================ */
@@ -4173,7 +4173,7 @@
 }
 
 /* ============================================================
- * Common tokens — invariant across all 72 themes.
+ * Common tokens — invariant across all 81 themes.
  * Defined on :root so every [data-theme] inherits them; dark-mode
  * override only where the token actually differs.
  * ============================================================ */
@@ -4183,7 +4183,7 @@
   /* Sprint 256 (ADR 0023, AC-256-05) — common `--tv-success` for the
    * ExecuteButton WARN + dev|null|local|testing|development cell. Alias
    * to `--tv-status-connected` so light/dark mode still inherits the
-   * theme's green; redeclared at the `:root` level so all 72 themes
+   * theme's green; redeclared at the `:root` level so all 81 themes
    * resolve the same token uniformly without per-theme overrides. */
   --tv-success: #16a34a;
   --tv-success-foreground: #ffffff;
@@ -4197,7 +4197,7 @@
   /* Sprint 253 (ADR 0023, AC-253-01) — environment-specific tokens for
    * the upcoming Chrome H stripe (Sprint 256) + ConfirmDestructiveDialog
    * header alignment + Button F color × env matrix. Universal (theme-
-   * independent) so all 72 theme variants inherit identically. */
+   * independent) so all 81 theme variants inherit identically. */
   --tv-env-prod: #dc2626;
   --tv-env-prod-wash: #fef2f2;
   --tv-env-prod-text: #7f1d1d;
@@ -4226,7 +4226,7 @@
   --tv-warning: #fb923c;
 }
 /* ============================================================
- * Table View — syntax tokens · 72 themes × 2 modes × 12 roles
+ * Table View — syntax tokens · 81 themes × 2 modes × 12 roles
  * Design-only decision (no user lock-in, design judgment).
  * Append to existing theme blocks in src/themes.css.
  * ============================================================ */
@@ -6805,4 +6805,4 @@
   --tv-syntax-error: #f87171;
 }
 
-/* === total: 1728 hex (72 × 2 × 12) === */
+/* === total: 1944 hex (81 × 2 × 12) === */

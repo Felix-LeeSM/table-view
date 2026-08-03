@@ -634,7 +634,7 @@ function DataRow({
       //
       // #1734 (3) moved the selection fill off `accent`, which sat within a
       // hair of `--tv-background` in every theme (`bg-accent/20` peaks at 1.046
-      // across all 144 theme x mode blocks) — the owner measured it as
+      // across all 162 theme x mode blocks) — the owner measured it as
       // invisible. The replacement and the reason it is a neutral rather than a
       // hue live in `datagrid/rowState.ts`.
       //

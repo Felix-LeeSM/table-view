@@ -10,7 +10,7 @@
 // (clickhouse, miro, binance, voltagent, renault) is nearly as bright as the
 // white background it tints. Measuring only the default palette is what let
 // that through, so the sweep below covers every block in `src/themes.css` plus
-// the two `:where(:root[data-mode="…"])` fallbacks in `src/index.css` — 146
+// the two `:where(:root[data-mode="…"])` fallbacks in `src/index.css` — 164
 // palettes in total, all of them derived from the files rather than listed
 // here.
 //
@@ -182,7 +182,7 @@ function palettes(): Palette[] {
  * second regex over the same file instead, and that regex was a PREFIX of the
  * sweep's: changing the selector shape (swapping the two attributes, say) sent
  * both to zero at once, leaving `expected` = 2 and `found` = 2 (the `index.css`
- * fallbacks) — green while measuring 2 palettes instead of 146.
+ * fallbacks) — green while measuring 2 palettes instead of 164.
  *
  * Names, not just the count: a theme in the catalog with no block in
  * `themes.css` is unmeasured, and a block with no catalog entry is unreachable

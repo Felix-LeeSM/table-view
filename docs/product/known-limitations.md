@@ -45,7 +45,7 @@ smoke or measurement gates:
 - Critical component smoke covers SchemaTree tree/treeitem roles, DataGrid
   grid/gridcell/edit feedback, Connection and Import/Export dialog labels/error
   regions, and secret-free alert/status/aria-live credential feedback.
-- Full 72-theme light/dark WCAG AA measurement. One surface is swept: the
+- Full 81-theme light/dark WCAG AA measurement. One surface is swept: the
   selected data-row fill is asserted per theme and mode by
   `src/components/datagrid/DataGridTable.selection-contrast.test.tsx`. That is a
   separation floor between the fill and its own row background, not a WCAG
