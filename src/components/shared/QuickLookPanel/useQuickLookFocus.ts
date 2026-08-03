@@ -37,8 +37,14 @@
 // event all of them share instead: the panel node leaving the DOM, which React
 // reports by calling `panelRef` with `null`. Nothing a call site does (or
 // forgets to do) can bypass it — there is no longer a `focusGridCell` to
-// forget. The condition is on focus, not on the reason: if the panel held focus
-// when it went away, focus goes back to the grid; otherwise it is left alone.
+// forget.
+//
+// The condition is on where focus ENDED UP, not on why the panel went away and
+// not on where focus was before: after the panel is gone, focus that landed
+// nowhere (`<body>`) goes to the grid, and focus anything else is holding stays
+// put. "Where it was before" was the obvious rule and it is wrong — a
+// successful commit unmounts the SQL preview in a later commit than the panel,
+// so the button the user pressed dies too, one step after the panel did.
 //
 // Two things this still does NOT promise. Escape and `F6` move focus without
 // removing the panel, so they stay explicit below. And when the whole grid goes
