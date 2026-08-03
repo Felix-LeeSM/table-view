@@ -76,9 +76,7 @@ smoke or measurement gates:
 - The Quick Look panel is keyboard-reachable through `F6` (grid cell ↔ panel,
   and Escape inside the panel hands focus back without closing it), but that
   binding is not listed in the in-app shortcut cheatsheet — neither is the
-  `Cmd/Ctrl+L` that opens the panel. Tab does reach the panel because it is the
-  grid's next sibling, but the grid's roving tabindex means Tab re-enters the
-  grid at its single tab stop, not at the cell the user left. In the RDB grid
+  `Cmd/Ctrl+L` that opens the panel. In the RDB grid
   with pending edits, Escape inside the panel also opens the discard confirm:
   that gate has no focus-position condition and the panel's Escape deliberately
   does not consume the event, so the collision fires from inside a panel field
