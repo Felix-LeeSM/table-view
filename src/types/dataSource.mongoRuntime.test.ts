@@ -2,10 +2,7 @@
  * Issue #1821 — the MongoDB runtime capability gate.
  *
  * These assertions pin the *fail-closed* half of the contract: a requirement
- * must close on each axis it names whenever that axis is unknown. A green
- * `meetsMongoRuntimeRequirement` that returned `true` on unknown input would
- * be worse than no gate at all — it would look like a check while letting
- * every unidentified server through.
+ * must close on each axis it names whenever that axis is unknown.
  */
 import { describe, expect, it } from "vitest";
 import {

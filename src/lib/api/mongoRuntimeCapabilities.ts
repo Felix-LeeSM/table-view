@@ -39,8 +39,7 @@ const isU32 = (value: unknown): value is number =>
 
 /**
  * Narrow the raw IPC payload to the wire contract — `invoke<T>()` is a cast,
- * not a check. Anything off-contract degrades to the fail-closed value, the
- * same exit a rejected call takes.
+ * not a check.
  */
 function narrowCapabilities(payload: unknown): MongoRuntimeCapabilities {
   if (typeof payload !== "object" || payload === null) {
@@ -89,9 +88,6 @@ function narrowVersion(version: unknown): MongoServerVersion | undefined {
  * Backend rejections that land here:
  *   - `NotFound`    — no live adapter for this connection id
  *   - `Unsupported` — the connection is not a document (MongoDB) connection
- *
- * A payload that resolves but does not match the wire contract takes the same
- * exit — see {@link narrowCapabilities}.
  */
 export async function mongoRuntimeCapabilities(
   connectionId: string,

@@ -1,7 +1,5 @@
 // Sprint 339 (2026-05-15) — U4 live wire. Replaces the
-// BackendPendingPlaceholder with a paradigm-neutral identity grid sourced
-// from `version()` + `pg_settings` (PG) or `buildInfo` + `serverStatus`
-// (Mongo).
+// BackendPendingPlaceholder.
 
 import { Loader2, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
