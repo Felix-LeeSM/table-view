@@ -238,19 +238,27 @@ const DUCKDB_STAGE_2B: readonly ClaimFact[] = [
   { dbType: "duckdb", check: "ddl.identityColumn", state: "deferred" },
 ];
 
+/** The four DDL actions a gate comment means by "all four" / "these four". */
+const BASE_DDL_ACTIONS = [
+  "ddl.createTable",
+  "ddl.alterTable",
+  "ddl.createIndex",
+  "ddl.dropObject",
+] as const;
+
 /**
- * The three engines the schema tree's comment contrasts with SQLite — each
- * claims all three of the tree's DDL entries, so every entry shows.
+ * `supported` facts for one check set across the engines a comment contrasts
+ * with SQLite. Each call site lists exactly the engines and checks its prose
+ * names, so a row can be read against the sentence it is registered for.
  */
-const SCHEMA_TREE_FULL_DDL_ENGINES: readonly ClaimFact[] = (
-  ["duckdb", "mssql", "oracle"] as const
-).flatMap((dbType) =>
-  ["ddl.createTable", "ddl.alterTable", "ddl.dropObject"].map((check) => ({
-    dbType,
-    check,
-    state: "supported" as const,
-  })),
-);
+function supportedDdl(
+  dbTypes: readonly DatabaseType[],
+  checks: readonly string[],
+): readonly ClaimFact[] {
+  return dbTypes.flatMap((dbType) =>
+    checks.map((check) => ({ dbType, check, state: "supported" as const })),
+  );
+}
 
 /** The two engines whose hidden constraint/identity controls the docs name. */
 const HIDDEN_CONSTRAINT_CONTROLS: readonly ClaimFact[] = [
@@ -264,6 +272,13 @@ const HIDDEN_CONSTRAINT_CONTROLS: readonly ClaimFact[] = [
  * ("when the flag is false the control hides"), which is true for every engine
  * and stays true whatever the ledger says. Only prose that names an engine can
  * be falsified by a ledger move, and that prose is what carries `claims`.
+ *
+ * What the guard checks is placement, not truthfulness. It proves a matched
+ * sentence is registered and that a `ledger-dependent` row's `claims` still
+ * hold in the matrix — it never reads the sentence. A `not-a-claim` row is
+ * taken at its word, and nothing compares a `ledger-dependent` row's `claims`
+ * against the prose they were chosen for, so both stay a human judgement
+ * recorded in `reason` and reviewable by opening the cited lines.
  *
  * ponytail: the key is (path, phrase), so a second copy of an
  * already-registered phrase inside an already-registered file is not caught —
@@ -330,8 +345,9 @@ export const CAPABILITY_CLAIM_REGISTRY: readonly CapabilityClaimRow[] = [
     reason:
       "The file's only 'structured DDL parity' is :33, under `## PostgreSQL`, " +
       "listing what PostgreSQL support does not guarantee (roles/users, " +
-      "extension management, DB-level import/export). The matrix models no " +
-      "`ddl` area for postgres at all, so there is no fact to bind — and " +
+      "extension management, DB-level import/export). None of those has a " +
+      "CONFORMANCE_CHECKS id — the seven `ddl.*` checks cover table, column, " +
+      "index and constraint actions only — so there is no fact to bind, and " +
       "binding it to the SQLite claims, as this row used to, made a ledger " +
       "flip name a file section that never mentioned SQLite.",
   },
@@ -353,8 +369,9 @@ export const CAPABILITY_CLAIM_REGISTRY: readonly CapabilityClaimRow[] = [
     reason:
       "Same section, but :122 is the PostgreSQL smoke sentence — 'it does not " +
       "widen roles/users, extension management, profiler, import/export, " +
-      "broader admin, or broader structured DDL parity'. The matrix models no " +
-      "`ddl` area for postgres, so nothing binds.",
+      "broader admin, or broader structured DDL parity'. None of those " +
+      "surfaces has a CONFORMANCE_CHECKS id, so nothing binds; postgresql's " +
+      "own seven `ddl.*` checks are all supported and say nothing about them.",
   },
   {
     path: "docs/product/known-limitations-rdbms.md",
@@ -404,8 +421,8 @@ export const CAPABILITY_CLAIM_REGISTRY: readonly CapabilityClaimRow[] = [
     disposition: "not-a-claim",
     reason:
       "The file's only 'structured DDL parity' is :41, under `## PostgreSQL " +
-      "SQL`, saying roles/users and broader parity are not modeled. The " +
-      "matrix models no `ddl` area for postgres, so nothing binds.",
+      "SQL`, saying roles/users and broader parity are not modeled. Neither " +
+      "has a CONFORMANCE_CHECKS id, so nothing binds.",
   },
   {
     path: "docs/roadmap/follow-up-queue.md",
@@ -454,14 +471,16 @@ export const CAPABILITY_CLAIM_REGISTRY: readonly CapabilityClaimRow[] = [
   {
     path: "src-tauri/table-view-core/src/db/adapters/sqlite/queries.rs",
     phrases: [],
-    disposition: "not-a-claim",
+    disposition: "ledger-dependent",
+    claims: SQLITE_CREATE_TABLE,
     reason:
-      "Retired copy. The raw-DDL rejection message used to name the 'bounded " +
-      "table-creation slice'; #1804 reworded it to 'the structured DDL that " +
-      "is open today', which no pattern class matches. The sentence still " +
-      "makes a boundary claim, so the path keeps a row rather than leaving " +
-      "the frozen inventory — and a phrase-less row is only legal while the " +
-      "file really sweeps clean, which the frozen-inventory test asserts.",
+      "Retired phrase, live claim. The raw-DDL rejection message used to name " +
+      "the 'bounded table-creation slice'; #1804 reworded it to 'use the " +
+      "Create Table dialog for the structured DDL that is open today' (:108), " +
+      "which no pattern class matches. That sentence points the user at what " +
+      "ddl.createTable claims, so the row carries the fact and a flip still " +
+      "names the file — a phrase-less row is legal only while the file really " +
+      "sweeps clean, which the frozen-inventory test asserts.",
   },
   {
     path: "src-tauri/table-view-core/src/db/duckdb/ddl.rs",
@@ -615,7 +634,10 @@ export const CAPABILITY_CLAIM_REGISTRY: readonly CapabilityClaimRow[] = [
       ...SQLITE_CREATE_TABLE,
       { dbType: "sqlite", check: "ddl.alterTable", state: "unsupported" },
       { dbType: "sqlite", check: "ddl.dropObject", state: "unsupported" },
-      ...SCHEMA_TREE_FULL_DDL_ENGINES,
+      ...supportedDdl(
+        ["duckdb", "mssql", "oracle"],
+        ["ddl.createTable", "ddl.alterTable", "ddl.dropObject"],
+      ),
     ],
     reason:
       "The comment states the gate rule and then works four engines through " +
@@ -639,11 +661,20 @@ export const CAPABILITY_CLAIM_REGISTRY: readonly CapabilityClaimRow[] = [
     disposition: "ledger-dependent",
     claims: [
       { dbType: "duckdb", check: "ddl.alterConstraint", state: "deferred" },
+      ...SQLITE_CREATE_TABLE,
+      { dbType: "sqlite", check: "ddl.alterTable", state: "unsupported" },
+      { dbType: "sqlite", check: "ddl.createIndex", state: "unsupported" },
+      { dbType: "sqlite", check: "ddl.dropObject", state: "unsupported" },
+      ...supportedDdl(["postgresql"], BASE_DDL_ACTIONS),
     ],
     reason:
-      "The DuckDB case in this test's header states 'Add constraint stays " +
-      "hidden (alterConstraint false)', which is the ledger fact the test " +
-      "asserts.",
+      "The header (:1-15) names three engines and asserts a ledger fact for " +
+      "each: 'SQLite (createTable only) — Columns tab hides + Column …; " +
+      "Indexes tab hides Create index + drop-index', 'PostgreSQL (all DDL " +
+      "true) — both editors keep their mutation controls', and 'DuckDB — Add " +
+      "constraint stays hidden (alterConstraint false)'. Carrying only the " +
+      "DuckDB one, as this row used to, left a sqlite ddl.alterTable flip " +
+      "unable to name the file whose header asserts it.",
   },
   {
     path: "src/components/schema/StructurePanel.ddl-gate.test.tsx",
@@ -667,11 +698,17 @@ export const CAPABILITY_CLAIM_REGISTRY: readonly CapabilityClaimRow[] = [
     path: "src/components/schema/StructurePanel.tsx",
     phrases: ["adapter rejects the write"],
     disposition: "ledger-dependent",
-    claims: [...SQLITE_CREATE_TABLE, ...SQLITE_BEYOND_CREATE_TABLE],
+    claims: [
+      ...SQLITE_CREATE_TABLE,
+      ...SQLITE_BEYOND_CREATE_TABLE,
+      ...supportedDdl(["duckdb", "mssql", "oracle"], BASE_DDL_ACTIONS),
+    ],
     reason:
-      "The comment states the gate rule and then names SQLite: 'SQLite claims " +
-      "only createTable'. The engine-specific half is what a ledger move " +
-      "falsifies.",
+      "The comment states the gate rule and then works four engines through " +
+      "it (:114-122), the same shape as the SchemaTree one: 'SQLite claims " +
+      "only createTable, so its column / index editors are view-only; DuckDB " +
+      "(#1070), MSSQL (#1071) and Oracle (#1072) now claim these four, so " +
+      "their editors are live.' Every one of those is a ledger fact.",
   },
   {
     path: "src/components/structure/ColumnsEditor.tsx",

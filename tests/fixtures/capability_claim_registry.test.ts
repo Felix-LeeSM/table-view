@@ -23,7 +23,7 @@ import {
 // registered copy must still say something the ledger agrees with.
 //
 // Run it alone with:
-//   pnpm vitest run tests/fixtures/capability_claim_registry.test.ts
+//   pnpm exec vitest run tests/fixtures/capability_claim_registry.test.ts
 //
 // It rides the `Frontend Tests (shard N/3)` matrix, which the required
 // `Frontend Checks` context grades — so this is a required lane, not advisory.

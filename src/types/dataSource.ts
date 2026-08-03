@@ -976,8 +976,8 @@ export function hasConnectionCapability(
  * Issue #1460 — schema-tree DDL entries (Create / Rename / Drop) no longer ride
  * on this flag; they read the per-action `ddl.*` capability via `supportsDdl`
  * (each grounded on whether the wired adapter's DDL trait method executes vs.
- * returns `Unsupported` — never claiming more than the adapter does, and
- * sometimes less). This flag now gates only the DataGrid row editor.
+ * returns `Unsupported`, and sometimes narrower than that — `supportsDdl`'s
+ * doc carries the scope). This flag now gates only the DataGrid row editor.
  */
 export function supportsRowEditing(
   dbType: DatabaseType | null | undefined,
@@ -1038,9 +1038,12 @@ export type DdlCapabilityName = keyof DataSourceCapabilities["ddl"];
 
 /**
  * Issue #1460 — whether the product opens a given structured DDL action for the
- * engine. A flag is never wider than what the engine's wired backend adapter can
- * actually execute; it may sit narrower while a backend slice waits for its UI
- * half, which is where SQLite has been since #1804. Reads the per-action
+ * engine. The flag is per action, not per request: an opened action still
+ * rejects options its adapter has not implemented — today SQLite table
+ * comments, MSSQL default-constraint changes, and `DROP … CASCADE` on MSSQL /
+ * Oracle. A flag may also sit narrower than what the engine's wired backend
+ * adapter can actually execute, while a backend slice waits for its UI half,
+ * which is where SQLite has been since #1804. Reads the per-action
  * `capabilities.ddl.*` flag (single source of truth) instead of the coarse
  * `editRows` proxy, so a partial roster (e.g. SQLite: `createTable` true,
  * alter/index/drop false) surfaces only a subset of
