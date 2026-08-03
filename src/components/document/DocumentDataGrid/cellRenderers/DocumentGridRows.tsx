@@ -3,6 +3,7 @@ import {
   editKey,
   pendingEditAnchorMatches,
   rowIdentityKey,
+  SELECTED_ROW_FILL,
 } from "@components/datagrid";
 import { DocumentTreePanel } from "@components/document/DocumentTreePanel";
 import { INLINE_EDIT_CELL_RING } from "@components/ui/inlineEdit";
@@ -125,13 +126,13 @@ export default function DocumentGridRows({
               }
               className={cn(
                 "min-h-8 cursor-pointer border-b border-border hover:bg-muted",
-                // #1734 (3) — same selection fill as the RDB row
-                // (`DataGridTable/DataRow.tsx`), which owns the reasoning and
-                // the measured contrast. Before this the two paradigms drew the
-                // same state with different classes (`bg-accent dark:bg-accent/60`
-                // here vs `bg-accent/20` there), both off the near-background
-                // `accent` token.
-                selected && "bg-primary/15",
+                // #1734 (3) — the shared selected-row fill. Before this the two
+                // paradigms drew the same state with different classes
+                // (`bg-accent dark:bg-accent/60` here vs `bg-accent/20` there),
+                // both off the near-background `accent` token, and only the RDB
+                // one was ever measured. `datagrid/rowState.ts` owns the value
+                // and the reasoning.
+                selected && SELECTED_ROW_FILL,
                 isDeleted &&
                   "bg-destructive/10 line-through opacity-60 hover:bg-destructive/20",
               )}

@@ -1,22 +1,34 @@
-// Purpose: #1734 (3) — the selected data row must actually be *visible*. The
-// owner's report was "`bg-accent/20` 은 실측상 거의 안 보인다", so asserting that
-// the row carries some selection class would pass on exactly the bug being
-// fixed. This test measures instead.
+// Purpose: #1734 (3) — the selected data row must actually be *visible*, and it
+// must stay visible in every theme the app ships. The owner's report was
+// "`bg-accent/20` 은 실측상 거의 안 보인다", so asserting that the row carries
+// some selection class would pass on exactly the bug being fixed. This test
+// measures instead.
 //
-// It takes the selection class from the rendered DOM (the className delta
-// between a selected and an unselected row — no literal is hand-copied here),
-// reads the matching `--tv-*` token out of `src/index.css`, composites the
-// tint over the row background at its Tailwind alpha, and asserts the WCAG
-// contrast ratio in BOTH default modes.
+// Round 1 of PR #2115 shipped `bg-primary/15`, which improved the default
+// palette (1.018 -> 1.255) while making six `theme x mode` combinations WORSE
+// than the fill it replaced, because a saturated-yellow `--tv-primary`
+// (clickhouse, miro, binance, voltagent, renault) is nearly as bright as the
+// white background it tints. Measuring only the default palette is what let
+// that through, so the sweep below covers every block in `src/themes.css` plus
+// the two `:where(:root[data-mode="…"])` fallbacks in `src/index.css` — 146
+// palettes in total, all of them derived from the files rather than listed
+// here.
 //
-// Scope: the `:where(:root[data-mode="…"])` fallbacks in `src/index.css`, i.e.
-// the default palette. `src/themes.css` reskins `--tv-primary` across 72 theme
-// pairs and a luminance ratio is the wrong yardstick for some of them (a
-// saturated yellow primary is nearly as bright as white), so per-theme
-// verification stays with the E2E/visual pass rather than being faked here.
+// The selection class itself comes from the rendered DOM (the className delta
+// between a selected and an unselected row), not from a literal typed here, so
+// changing `DataRow` moves what gets measured.
 //
-// jsdom computes no Tailwind styles, so the class → token → hex chain is the
-// only observable channel; E2E owns the pixels.
+// "Contrast ratio" below is the WCAG 2.x relative-luminance formula. The
+// THRESHOLD is not a WCAG criterion — WCAG has no requirement for a selected
+// row's fill against its own background, and 3:1 (SC 1.4.11) is unreachable for
+// any tint subtle enough to keep the row's text legible. It is a separation
+// floor picked between two measured bounds, both asserted below: the rejected
+// `bg-accent/20` never exceeds it in any palette, and the shipped fill never
+// falls to it in any palette.
+//
+// jsdom computes no Tailwind styles, so the class -> token -> hex chain is the
+// only observable channel; whether the painted pixels please the eye is an
+// E2E/visual question this cannot answer.
 
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -24,6 +36,7 @@ import { render } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { TableData } from "@/types/schema";
 import DataGridTable from "./DataGridTable";
+import { SELECTED_ROW_FILL } from "./rowState";
 
 const MOCK_DATA: TableData = {
   columns: [
@@ -99,24 +112,87 @@ function selectionClassFromDom(): string {
   return fill;
 }
 
-/** `bg-primary/15` → `{ token: "primary", alpha: 0.15 }`. */
+/** `bg-foreground/12` → `{ token: "foreground", alpha: 0.12 }`. */
 function parseTint(cls: string): { token: string; alpha: number } {
   const m = cls.match(/^bg-([a-z-]+)(?:\/(\d+))?$/);
   if (!m) throw new Error(`unparseable tint class: ${cls}`);
   return { token: m[1]!, alpha: m[2] ? Number(m[2]) / 100 : 1 };
 }
 
-/** `--tv-<name>` inside the `:where(:root[data-mode="<mode>"])` fallback block. */
-function readToken(css: string, mode: "light" | "dark", name: string): string {
-  const block = css.match(
-    new RegExp(`:where\\(:root\\[data-mode="${mode}"\\]\\)\\s*\\{([^}]*)\\}`),
+interface Palette {
+  /** `slate light`, `(fallback) dark`, … — only used in failure messages. */
+  name: string;
+  tokens: Map<string, string>;
+}
+
+const CSS_DIR = resolve(__dirname, "../..");
+
+function tokensOf(body: string): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const m of body.matchAll(
+    /--tv-([a-z0-9-]+):\s*(#[0-9a-fA-F]{3,6})\b/g,
+  )) {
+    out.set(m[1]!, m[2]!);
+  }
+  return out;
+}
+
+/**
+ * Every palette the app can render a row against.
+ *
+ * `src/themes.css` emits two blocks per `[data-theme][data-mode]` pair — one
+ * carrying the UI tokens and a second carrying only `--tv-syntax-*`. Only the
+ * first defines `--tv-background`, so requiring that token is what selects the
+ * UI blocks; `assertSweepIsComplete` then proves the selection dropped nothing
+ * by re-deriving the expected count from the theme names in the file.
+ */
+function palettes(): Palette[] {
+  const themes = readFileSync(resolve(CSS_DIR, "themes.css"), "utf8");
+  const index = readFileSync(resolve(CSS_DIR, "index.css"), "utf8");
+  const out: Palette[] = [];
+
+  for (const m of themes.matchAll(
+    /\[data-theme="([^"]+)"\]\[data-mode="(light|dark)"\]\s*\{([^}]*)\}/g,
+  )) {
+    const tokens = tokensOf(m[3]!);
+    if (!tokens.has("background")) continue;
+    out.push({ name: `${m[1]} ${m[2]}`, tokens });
+  }
+
+  for (const mode of ["light", "dark"] as const) {
+    const block = index.match(
+      new RegExp(`:where\\(:root\\[data-mode="${mode}"\\]\\)\\s*\\{([^}]*)\\}`),
+    );
+    if (!block) throw new Error(`no ${mode} fallback block in src/index.css`);
+    out.push({ name: `(fallback) ${mode}`, tokens: tokensOf(block[1]!) });
+  }
+
+  assertSweepIsComplete(themes, out.length);
+  return out;
+}
+
+/**
+ * The sweep is only evidence if it really covers the file. A regex that quietly
+ * stops matching, or a `--tv-background` filter that drops a real theme, would
+ * turn every assertion below green — so the expected count is re-derived from a
+ * different anchor: the distinct theme names on the selectors themselves, times
+ * the two modes, plus the two fallbacks. The two agree only if the token filter
+ * kept exactly one block per theme and mode.
+ */
+function assertSweepIsComplete(themesCss: string, found: number): void {
+  const names = new Set(
+    [
+      ...themesCss.matchAll(
+        /\[data-theme="([^"]+)"\]\[data-mode="(?:light|dark)"\]/g,
+      ),
+    ].map((m) => m[1]!),
   );
-  if (!block) throw new Error(`no ${mode} fallback block in src/index.css`);
-  const hex = block[1]!.match(
-    new RegExp(`--tv-${name}:\\s*(#[0-9a-fA-F]{3,6})`),
-  );
-  if (!hex) throw new Error(`no --tv-${name} in the ${mode} block`);
-  return hex[1]!;
+  const expected = names.size * 2 + 2;
+  if (found !== expected) {
+    throw new Error(
+      `palette sweep covers ${found} blocks but src/themes.css names ${names.size} themes (expected ${expected})`,
+    );
+  }
 }
 
 function toRgb(hex: string): [number, number, number] {
@@ -164,36 +240,55 @@ function contrast(
   return (hi + 0.05) / (lo + 0.05);
 }
 
-// The owner-rejected `bg-accent/20` measures 1.018 (light) / 1.015 (dark).
-// 1.10 sits an order of magnitude above that floor and below the 1.25 the
-// shipped `bg-primary/15` reaches, so the guard fails on a revert without
-// pinning the exact shipped value.
-const MIN_RATIO = 1.1;
+/**
+ * Contrast of `bg-<token>/<alpha*100>` against that palette's row background.
+ * A palette missing either token throws rather than being skipped — a silent
+ * skip is how a sweep reports "no failures" on a palette it never measured.
+ */
+function tintRatio(p: Palette, token: string, alpha: number): number {
+  const background = p.tokens.get("background");
+  if (!background) throw new Error(`${p.name}: no --tv-background`);
+  const tint = p.tokens.get(token);
+  if (!tint) throw new Error(`${p.name}: no --tv-${token}`);
+  const bg = toRgb(background);
+  return contrast(composite(toRgb(tint), alpha, bg), bg);
+}
+
+// See the header: a separation floor, not a WCAG criterion. Both bounds that
+// justify it are asserted below rather than quoted.
+const MIN_RATIO = 1.15;
+
+// What the owner rejected, kept as the discriminator for the floor above.
+const REJECTED_FILL = { token: "accent", alpha: 0.2 };
 
 describe("selected data row contrast (#1734 (3))", () => {
-  const css = readFileSync(resolve(__dirname, "../../index.css"), "utf8");
+  const all = palettes();
 
-  it.each(["light", "dark"] as const)(
-    "the selection fill is measurably distinct from the row background (%s)",
-    (mode) => {
-      const { token, alpha } = parseTint(selectionClassFromDom());
-      const background = toRgb(readToken(css, mode, "background"));
-      const tint = toRgb(readToken(css, mode, token));
-      const ratio = contrast(composite(tint, alpha, background), background);
-      expect(ratio).toBeGreaterThan(MIN_RATIO);
-    },
-  );
+  it("the DOM paints the shared selected-row fill", () => {
+    expect(selectionClassFromDom()).toBe(SELECTED_ROW_FILL);
+  });
 
-  // Reason: the token this moved off is still in the palette and still used for
-  // hover. Pin why it cannot carry selection so a future "just go back to
-  // accent" lands on a red test instead of an invisible row. (#1734 (3))
-  it.each(["light", "dark"] as const)(
-    "the accent token cannot carry selection at any alpha (%s)",
-    (mode) => {
-      const background = toRgb(readToken(css, mode, "background"));
-      const accent = toRgb(readToken(css, mode, "accent"));
-      // Fully opaque accent — the strongest that token can possibly paint.
-      expect(contrast(accent, background)).toBeLessThan(MIN_RATIO);
-    },
-  );
+  it("the selection fill clears the floor in every theme and mode", () => {
+    const { token, alpha } = parseTint(selectionClassFromDom());
+    const failures = all
+      .map((p) => ({ name: p.name, ratio: tintRatio(p, token, alpha) }))
+      .filter((r) => r.ratio <= MIN_RATIO)
+      .map((r) => `${r.name}=${r.ratio.toFixed(3)}`);
+    expect(failures).toEqual([]);
+  });
+
+  // Reason: without this the floor could be met by a fill no better than the
+  // one the owner rejected. Pinning that `bg-accent/20` fails the SAME floor in
+  // every palette is what makes the assertion above mean "visible" rather than
+  // "some number". It also lands a future "just go back to accent" on red.
+  it("the rejected accent fill fails that floor in every theme and mode", () => {
+    const passing = all
+      .map((p) => ({
+        name: p.name,
+        ratio: tintRatio(p, REJECTED_FILL.token, REJECTED_FILL.alpha),
+      }))
+      .filter((r) => r.ratio > MIN_RATIO)
+      .map((r) => `${r.name}=${r.ratio.toFixed(3)}`);
+    expect(passing).toEqual([]);
+  });
 });

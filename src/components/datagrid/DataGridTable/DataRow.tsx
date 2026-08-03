@@ -18,6 +18,7 @@ import {
   pendingEditAnchorMatches,
   rowIdentityKey,
 } from "../dataGridEditFsm";
+import { SELECTED_ROW_FILL } from "../rowState";
 import { isBlobColumn, parseFkReference } from "./columnUtils";
 import type { CellNavigationDirection } from "./useCellNavigation";
 
@@ -631,25 +632,19 @@ function DataRow({
       // paint channel from the selection fill, so a selected+focused row reads
       // both.
       //
-      // #1734 (3) moved the selection fill off `accent`. On the default theme
-      // `--tv-accent` sits within a hair of `--tv-background` in BOTH modes, so
-      // `bg-accent/20` composited to 1.018 (light) / 1.015 (dark) against the
-      // row background — the owner measured it as invisible. `primary` is the
-      // only token in the palette with real chroma, and `bg-primary/*` is
-      // already this repo's list-selection idiom (`SchemaTree/rows.tsx:518`,
-      // `DocumentDatabaseTree/rows.tsx:172`); at /15 it composites to
-      // 1.255 / 1.249. Numbers reproduce via
-      // `DataGridTable.selection-contrast.test.ts`.
+      // #1734 (3) moved the selection fill off `accent`, which sat within a
+      // hair of `--tv-background` in every theme (`bg-accent/20` peaks at 1.046
+      // across all 144 theme x mode blocks) — the owner measured it as
+      // invisible. The replacement and the reason it is a neutral rather than a
+      // hue live in `datagrid/rowState.ts`.
       //
-      // Selection and editing now share the `primary` hue but not the paint
-      // channel: an editing cell stacks its own `bg-primary/10` ON TOP of the
-      // row fill plus a full-strength `ring-1 ring-inset ring-primary`
-      // (`inlineEdit.ts`), so it still reads as "more" than its row. Channels:
-      // ring token = focus, primary fill = select, primary fill + primary ring
-      // = edit, highlight = pending.
+      // Channels stay separate: ring token = roving focus, `SELECTED_ROW_FILL`
+      // = selection, `bg-primary/10` + `ring-1 ring-inset ring-primary`
+      // (`inlineEdit.ts`, stacked on top of the row fill) = editing cell,
+      // highlight = pending.
       className={`min-h-8 border-b border-border hover:bg-muted${
         tabCol !== null ? " shadow-[inset_2px_0_0_0_var(--color-ring)]" : ""
-      }${isSelected ? " bg-primary/15" : ""}${isDeleted ? " line-through opacity-50" : ""}`}
+      }${isSelected ? ` ${SELECTED_ROW_FILL}` : ""}${isDeleted ? " line-through opacity-50" : ""}`}
       style={mergedStyle}
       onClick={(e) => onSelectRow(rowIdx, e.metaKey || e.ctrlKey, e.shiftKey)}
       onContextMenu={(e) => {

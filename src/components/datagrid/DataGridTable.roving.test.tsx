@@ -8,6 +8,7 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { TableData } from "@/types/schema";
 import DataGridTable from "./DataGridTable";
+import { SELECTED_ROW_FILL } from "./rowState";
 
 const MOCK_DATA: TableData = {
   columns: [
@@ -310,12 +311,13 @@ describe("DataGridTable roving-focus visual affordance", () => {
 
   // Reason: selection + focus use different paint channels so a row that is
   // both selected and focused must read both (the focus bar must not clobber
-  // the selection fill). (2026-07-17; fill re-tokenized to `bg-primary/15` by
-  // #1734 (3) — see `DataRow.tsx` for the measured contrast.)
+  // the selection fill). (2026-07-17; the fill itself moved to
+  // `datagrid/rowState.ts` in #1734 (3) and is measured per theme by
+  // `DataGridTable.selection-contrast.test.tsx`.)
   it("a selected + focused row keeps both the selection bg and the focus bar", () => {
     render(<DataGridTable {...makeProps({ selectedRowIds: new Set([0]) })} />);
     const row0 = rowOf(0);
-    expect(row0.className).toContain("bg-primary/15"); // selection channel
+    expect(row0.className).toContain(SELECTED_ROW_FILL); // selection channel
     expect(row0.className).toContain(FOCUS_BAR); // focus channel (row 0 anchor)
   });
 
