@@ -1,9 +1,11 @@
 //! MongoAdapter struct + connection lifecycle + `impl DbAdapter`.
 //!
 //! Sprint 197 split — extracted from `db/mongodb.rs`. Holds:
-//!   * the adapter struct (shared `(client, default_db, active_db)` slots)
+//!   * the adapter struct (shared `(client, default_db, active_db,
+//!     runtime_capabilities)` slots)
 //!   * `build_options` / `test` / `current_client` / `switch_active_db`
-//!     / `current_active_db` / `resolved_db_name` (lifecycle inherent)
+//!     / `current_active_db` / `runtime_capabilities` / `resolved_db_name`
+//!     (lifecycle inherent)
 //!   * `impl DbAdapter for MongoAdapter` (`kind` / `connect` / `disconnect`
 //!     / `ping`)
 //!

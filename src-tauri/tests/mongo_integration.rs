@@ -136,11 +136,12 @@ async fn test_mongo_adapter_connect_ping_list_disconnect_happy_path() {
     // the wire.
     //
     // The expected topology is pinned to the server this suite provisions, not
-    // to MongoDB in general: `common::mongo_endpoint()` prefers `MONGO_HOST` /
-    // `MONGO_PORT` over the testcontainer when they are set, so a developer who
-    // points those at a replica-set instance (to exercise transactions or
-    // change streams) will see this assertion go red — correctly, since the
-    // probe is then reporting a different deployment.
+    // to MongoDB in general: the `common::setup_mongo_adapter()` this test
+    // already called prefers `MONGO_HOST` / `MONGO_PORT` over the testcontainer
+    // when both are set, so a developer who points those at a replica-set
+    // instance (to exercise transactions or change streams) will see this
+    // assertion go red — correctly, since the probe is then reporting a
+    // different deployment.
     let capabilities = adapter.runtime_capabilities().await;
     assert_eq!(
         capabilities.topology,
@@ -173,10 +174,11 @@ async fn test_mongo_adapter_connect_ping_list_disconnect_happy_path() {
     );
     // Re-derive the numeric run the way `db::version::parse_version_triplet`
     // documents it — scan to the first digit, keep digits and `.`, fill absent
-    // components with 0 — rather than calling that function, so a parser
-    // returning constants still turns this red. Comparing the triplet against
-    // an unpadded `raw` would instead go red on `"5.2"`, a shape the parser's
-    // own unit tests bless.
+    // components with 0. That function is `pub(crate)` to `table-view-core`, so
+    // an integration test could not call it in any case; the independence it
+    // forces is what keeps a parser returning constants red here. Comparing the
+    // triplet against an unpadded `raw` would instead go red on `"5.2"`, a
+    // shape the parser's own unit tests bless.
     let numeric_run = version
         .raw
         .trim_start_matches(|c: char| !c.is_ascii_digit())
