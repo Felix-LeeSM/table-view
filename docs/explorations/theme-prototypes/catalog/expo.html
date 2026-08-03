@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="ko" data-theme="expo" data-mode="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Expo — table-view 테마 프로토타입</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+/* common tokens — fixed values, verified against src/themes.css :root / src/index.css */
+
+:root {
+  --tv-destructive: #ef4444;
+  --tv-destructive-foreground: #ffffff;
+  --tv-success: #16a34a;
+  --tv-success-foreground: #ffffff;
+  --tv-warning: #ea580c;
+  --tv-warning-foreground: #ffffff;
+  --tv-highlight: #eab308;
+  --tv-radius: 0.5rem;
+  --tv-font-sans: "Space Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --tv-font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", "Apple SD Gothic Neo", "Malgun Gothic", monospace;
+}
+[data-mode="dark"] {
+  --tv-destructive: #f87171;
+  --tv-success: #22c55e;
+  --tv-warning: #fb923c;
+  --tv-highlight: #facc15;
+}
+
+
+
+/* Expo — UI tokens (light/dark), verified against src/themes.css */
+
+[data-theme="expo"][data-mode="light"] {
+  --tv-background: #ffffff;
+  --tv-foreground: #0f172a;
+  --tv-card: #ffffff;
+  --tv-card-foreground: #0f172a;
+  --tv-popover: #ffffff;
+  --tv-popover-foreground: #0f172a;
+  --tv-primary: #000020;
+  --tv-primary-foreground: #fff;
+  --tv-secondary: #f8fafc;
+  --tv-secondary-foreground: #475569;
+  --tv-muted: #f1f5f9;
+  --tv-muted-foreground: #94a3b8;
+  --tv-accent: #f1f5f9;
+  --tv-accent-foreground: #0f172a;
+  --tv-border: #e2e8f0;
+  --tv-input: #e2e8f0;
+  --tv-ring: #000020;
+  --tv-primary-tint: 0 0 32;
+  --tv-status-connected: #16a34a;
+  --tv-status-connecting: #f59e0b;
+  --tv-status-error: #ef4444;
+  --tv-status-idle: #94a3b8;
+  --tv-value-key: #0369a1;
+  --tv-value-leaf: #047857;
+  --tv-value-delete: #f43f5e;
+}
+
+[data-theme="expo"][data-mode="dark"] {
+  --tv-background: #000020;
+  --tv-foreground: #f1f5f9;
+  --tv-card: #000020;
+  --tv-card-foreground: #f1f5f9;
+  --tv-popover: #050525;
+  --tv-popover-foreground: #f1f5f9;
+  --tv-primary: #818cf8;
+  --tv-primary-foreground: #ffffff;
+  --tv-secondary: #050525;
+  --tv-secondary-foreground: #cbd5e1;
+  --tv-muted: #080828;
+  --tv-muted-foreground: #94a3b8;
+  --tv-accent: #080828;
+  --tv-accent-foreground: #f1f5f9;
+  --tv-border: #0f0f2f;
+  --tv-input: #0f0f2f;
+  --tv-ring: #818cf8;
+  --tv-primary-tint: 129 140 248;
+  --tv-status-connected: #22c55e;
+  --tv-status-connecting: #f59e0b;
+  --tv-status-error: #ef4444;
+  --tv-status-idle: #64748b;
+  --tv-value-key: #7dd3fc;
+  --tv-value-leaf: #6ee7b7;
+  --tv-value-delete: #f43f5e;
+}
+
+
+
+/* Expo — syntax tokens (light/dark), verified against src/themes.css */
+
+[data-theme="expo"][data-mode="light"] {
+  --tv-syntax-keyword: #7c3aed;
+  --tv-syntax-operator: #475569;
+  --tv-syntax-punct: #64748b;
+  --tv-syntax-type: #2563eb;
+  --tv-syntax-builtin: #0891b2;
+  --tv-syntax-function: #0891b2;
+  --tv-syntax-property: #0f766e;
+  --tv-syntax-string: #15803d;
+  --tv-syntax-number: #c2410c;
+  --tv-syntax-atom: #be185d;
+  --tv-syntax-comment: #64748b;
+  --tv-syntax-error: #dc2626;
+}
+
+[data-theme="expo"][data-mode="dark"] {
+  --tv-syntax-keyword: #c4b5fd;
+  --tv-syntax-operator: #cbd5e1;
+  --tv-syntax-punct: #94a3b8;
+  --tv-syntax-type: #93c5fd;
+  --tv-syntax-builtin: #67e8f9;
+  --tv-syntax-function: #67e8f9;
+  --tv-syntax-property: #5eead4;
+  --tv-syntax-string: #86efac;
+  --tv-syntax-number: #fdba74;
+  --tv-syntax-atom: #f9a8d4;
+  --tv-syntax-comment: #64748b;
+  --tv-syntax-error: #f87171;
+}
+
+
+
+/* Expo — vibe tweaks (mobile RN) */
+
+[data-theme="expo"] { --tv-radius: 0.875rem; }
+[data-theme="expo"] body { font-family: "Space Grotesk", var(--tv-font-sans); }
+[data-theme="expo"] .tab-bar { position: relative; padding-top: 16px; }
+[data-theme="expo"] .tab-bar::before {
+  content: ""; position: absolute; top: 6px; left: 50%; transform: translateX(-50%);
+  width: 72px; height: 5px; border-radius: 999px; background: var(--tv-border);
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+[data-mode="dark"] { color-scheme: dark; }
+[data-mode="light"] { color-scheme: light; }
+body {
+  background: var(--tv-background);
+  color: var(--tv-foreground);
+  font-family: var(--tv-font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: inherit; }
+kbd { font-family: var(--tv-font-mono); font-size: 11px; padding: 1px 6px; border-radius: 4px; }
+.btn-primary kbd { background: color-mix(in srgb, var(--tv-primary-foreground) 22%, transparent); }
+.container { max-width: 1280px; margin: 0 auto; padding: 0 24px 64px; }
+
+/* (A) header */
+.page-header {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 16px; padding: 18px 24px; border-bottom: 1px solid var(--tv-border);
+  background: var(--tv-card); position: sticky; top: 0; z-index: 20;
+}
+.page-header .titles h1 { margin: 0; font-size: 21px; font-weight: 700; letter-spacing: -.01em; }
+.page-header .titles p { margin: 3px 0 0; color: var(--tv-muted-foreground); font-size: 13px; }
+.header-actions { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.back-link { color: var(--tv-muted-foreground); text-decoration: none; font-size: 13px; padding: 6px 4px; }
+.back-link:hover { color: var(--tv-foreground); text-decoration: underline; }
+.mode-toggle {
+  display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px;
+  border-radius: var(--tv-radius); border: 1px solid var(--tv-border);
+  background: var(--tv-secondary); color: var(--tv-secondary-foreground);
+  cursor: pointer; font: inherit; font-size: 13px; font-weight: 500;
+}
+.mode-toggle:hover { background: var(--tv-accent); }
+.mode-toggle:focus-visible { outline: 2px solid var(--tv-ring); outline-offset: 2px; }
+
+/* shared section titles */
+.section { margin-top: 36px; }
+.section-title {
+  font-size: 12px; text-transform: uppercase; letter-spacing: .07em;
+  color: var(--tv-muted-foreground); margin: 0 0 14px; font-weight: 700;
+}
+.section-title .letter { color: var(--tv-primary); margin-right: 6px; }
+
+/* (B) swatches */
+.swatches { display: flex; flex-wrap: wrap; gap: 14px 16px; }
+.swatch { width: 104px; }
+.swatch-chip { height: 52px; border-radius: var(--tv-radius); border: 1px solid var(--tv-border); }
+.swatch-name { display: block; font-size: 11.5px; font-weight: 600; margin-top: 7px; }
+.swatch-hex { display: block; font-family: var(--tv-font-mono); font-size: 11px; color: var(--tv-muted-foreground); }
+
+/* (C) app shell */
+.app-shell {
+  display: flex; flex-direction: column; min-height: 620px; border: 1px solid var(--tv-border);
+  border-radius: var(--tv-radius); overflow: hidden; background: var(--tv-background);
+  box-shadow: 0 1px 3px rgba(0,0,0,.08);
+}
+.shell-body { display: flex; flex: 1 1 auto; min-height: 0; }
+.shell-sidebar {
+  width: 248px; flex: 0 0 248px; background: var(--tv-card);
+  border-right: 1px solid var(--tv-border); display: flex; flex-direction: column; overflow-y: auto;
+}
+.sidebar-search { padding: 10px; border-bottom: 1px solid var(--tv-border); }
+.sidebar-search input {
+  width: 100%; padding: 6px 9px; font-size: 12.5px; border-radius: var(--tv-radius);
+  border: 1px solid var(--tv-input); background: var(--tv-background); color: var(--tv-foreground);
+}
+.sidebar-search input::placeholder { color: var(--tv-muted-foreground); }
+.conn-tree { padding: 6px; flex: 1; }
+.conn-item { margin-bottom: 2px; }
+.conn-row {
+  display: flex; align-items: center; gap: 7px; padding: 6px 8px;
+  border-radius: var(--tv-radius); font-size: 12.5px; cursor: default;
+}
+.conn-item.is-expanded > .conn-row { font-weight: 600; }
+.status-dot { width: 7px; height: 7px; border-radius: 50%; flex: 0 0 auto; }
+.conn-name { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.conn-kind { font-size: 10.5px; color: var(--tv-muted-foreground); font-family: var(--tv-font-mono); }
+.schema-tree { padding: 2px 0 6px 15px; font-size: 12.5px; }
+.schema-node { color: var(--tv-muted-foreground); padding: 3px 8px; font-family: var(--tv-font-mono); font-size: 11.5px; }
+.schema-group { padding: 5px 0 2px 10px; color: var(--tv-muted-foreground); font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em; }
+.schema-leaf {
+  padding: 4px 8px 4px 20px; border-radius: var(--tv-radius); color: var(--tv-foreground);
+  font-size: 12.5px; cursor: default; margin: 1px 0;
+}
+.schema-leaf.is-selected {
+  background: rgb(var(--tv-primary-tint) / .14);
+  color: var(--tv-primary); font-weight: 600;
+  box-shadow: inset 2px 0 0 var(--tv-primary);
+}
+
+.shell-center { flex: 1 1 auto; display: flex; flex-direction: column; min-width: 0; }
+.tab-bar { display: flex; background: var(--tv-secondary); border-bottom: 1px solid var(--tv-border); }
+.tab {
+  padding: 9px 18px; font-size: 12.5px; color: var(--tv-muted-foreground);
+  border-right: 1px solid var(--tv-border); cursor: default; white-space: nowrap;
+}
+.tab.active { background: var(--tv-background); color: var(--tv-foreground); font-weight: 600; box-shadow: inset 0 -2px 0 var(--tv-primary); }
+.tab.is-add { color: var(--tv-muted-foreground); font-weight: 600; padding: 9px 14px; }
+
+.toolbar { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--tv-border); background: var(--tv-card); }
+.toolbar .filter-input {
+  flex: 0 1 240px; padding: 6px 10px; font-size: 12.5px; border-radius: var(--tv-radius);
+  border: 1px solid var(--tv-input); background: var(--tv-background); color: var(--tv-foreground);
+}
+.toolbar .filter-input::placeholder { color: var(--tv-muted-foreground); }
+.row-count { margin-left: auto; font-size: 11.5px; color: var(--tv-muted-foreground); font-family: var(--tv-font-mono); }
+
+.grid-scroll { flex: 1 1 auto; overflow: auto; min-height: 0; }
+table.data-grid { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.data-grid thead th {
+  position: sticky; top: 0; background: var(--tv-secondary); text-align: left;
+  border-bottom: 1px solid var(--tv-border); padding: 6px 10px; white-space: nowrap; z-index: 1;
+}
+.data-grid thead th.num { text-align: right; }
+.col-head { display: flex; flex-direction: column; gap: 1px; }
+.col-name { font-weight: 600; color: var(--tv-foreground); display: inline-flex; align-items: center; gap: 5px; }
+.col-type { font-family: var(--tv-font-mono); font-size: 10.5px; color: var(--tv-muted-foreground); font-weight: 400; }
+.col-badge {
+  font-size: 9px; font-weight: 700; padding: 1px 4px; border-radius: 3px;
+  border: 1px solid var(--tv-border); color: var(--tv-muted-foreground);
+}
+.sort-arrow { color: var(--tv-primary); font-size: 10px; }
+.data-grid td { padding: 7px 10px; border-bottom: 1px solid var(--tv-border); vertical-align: middle; }
+.data-grid .num { text-align: right; font-family: var(--tv-font-mono); }
+.data-grid .mono { font-family: var(--tv-font-mono); }
+.cell-null { color: var(--tv-muted-foreground); font-style: italic; }
+.grid-row.is-selected td { background: rgb(var(--tv-primary-tint) / .12); box-shadow: inset 2px 0 0 var(--tv-primary); }
+.cell-editor {
+  display: inline-flex; align-items: center; gap: 6px; padding: 3px 7px;
+  border: 1px solid var(--tv-primary); border-radius: calc(var(--tv-radius) - 2px);
+  background: var(--tv-background); box-shadow: 0 0 0 3px rgb(var(--tv-primary-tint) / .18);
+}
+.cell-editor input { border: none; background: transparent; color: var(--tv-foreground); font: inherit; width: 84px; outline: none; }
+.edit-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--tv-warning); flex: 0 0 auto; }
+
+.sql-panel { height: 190px; flex: 0 0 190px; border-top: 1px solid var(--tv-border); background: var(--tv-card); display: flex; flex-direction: column; }
+.sql-titlebar { display: flex; align-items: center; justify-content: space-between; padding: 6px 12px; border-bottom: 1px solid var(--tv-border); font-size: 11px; color: var(--tv-muted-foreground); }
+.sql-body { flex: 1 1 auto; display: flex; overflow: auto; font-family: var(--tv-font-mono); font-size: 12.5px; line-height: 1.6; }
+.sql-lines { padding: 10px 0; text-align: right; color: var(--tv-muted-foreground); user-select: none; background: var(--tv-secondary); border-right: 1px solid var(--tv-border); min-width: 30px; }
+.sql-lines div { padding: 0 10px; }
+.sql-code { padding: 10px 14px; }
+.sql-line { white-space: pre; }
+.sql-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 12px; border-top: 1px solid var(--tv-border); }
+.sql-diagnostic { font-size: 11px; display: flex; align-items: center; gap: 6px; color: var(--tv-muted-foreground); }
+.sql-diagnostic .sql-error { font-weight: 700; }
+
+.shell-inspector { width: 264px; flex: 0 0 264px; background: var(--tv-card); border-left: 1px solid var(--tv-border); padding: 14px; overflow-y: auto; font-size: 12.5px; }
+.inspector-heading { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--tv-muted-foreground); margin: 0 0 10px; font-weight: 700; }
+.inspector-list { margin: 0 0 16px; }
+.insp-row { display: flex; flex-direction: column; gap: 2px; padding: 6px 0; border-bottom: 1px solid var(--tv-border); }
+.insp-row dt { font-size: 10.5px; color: var(--tv-muted-foreground); font-family: var(--tv-font-mono); }
+.insp-row dd { margin: 0; font-size: 12.5px; }
+.col-type-inline { font-size: 10px; color: var(--tv-muted-foreground); font-weight: 400; }
+.json-tree { font-family: var(--tv-font-mono); font-size: 11.5px; background: var(--tv-background); border: 1px solid var(--tv-border); border-radius: var(--tv-radius); padding: 10px; }
+.json-line { white-space: pre; }
+.json-indent-1 { padding-left: 14px; }
+.json-indent-2 { padding-left: 28px; }
+.json-key { color: var(--tv-value-key); }
+.json-leaf { color: var(--tv-value-leaf); }
+.json-deleted, .json-deleted .json-key, .json-deleted .json-leaf { color: var(--tv-value-delete); text-decoration: line-through; }
+.json-deleted-tag { color: var(--tv-muted-foreground); text-decoration: none; font-style: italic; }
+
+/* (D) status bar */
+.status-bar {
+  display: flex; align-items: center; gap: 16px; padding: 6px 14px;
+  border-top: 1px solid var(--tv-border); background: var(--tv-secondary);
+  font-size: 11.5px; color: var(--tv-muted-foreground); font-family: var(--tv-font-mono);
+}
+.status-bar .status-right { margin-left: auto; }
+
+/* syntax */
+.sql-kw { color: var(--tv-syntax-keyword); font-weight: 600; }
+.sql-op { color: var(--tv-syntax-operator); }
+.sql-punct { color: var(--tv-syntax-punct); }
+.sql-type { color: var(--tv-syntax-type); }
+.sql-builtin { color: var(--tv-syntax-builtin); }
+.sql-fn { color: var(--tv-syntax-function); }
+.sql-prop { color: var(--tv-syntax-property); }
+.sql-str { color: var(--tv-syntax-string); }
+.sql-num { color: var(--tv-syntax-number); }
+.sql-atom { color: var(--tv-syntax-atom); font-weight: 600; }
+.sql-comment { color: var(--tv-syntax-comment); font-style: italic; }
+.sql-error { color: var(--tv-syntax-error); }
+
+/* (E) components */
+.component-group { margin-bottom: 18px; }
+.component-group-label { font-size: 11px; color: var(--tv-muted-foreground); margin: 0 0 8px; text-transform: uppercase; letter-spacing: .05em; }
+.component-row { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; padding: 16px; border: 1px solid var(--tv-border); border-radius: var(--tv-radius); background: var(--tv-card); }
+
+.btn {
+  display: inline-flex; align-items: center; gap: 6px; padding: 7px 16px; font: inherit; font-size: 13px;
+  font-weight: 600; border-radius: var(--tv-radius); border: 1px solid transparent; cursor: pointer;
+}
+.btn:focus-visible { outline: 2px solid var(--tv-ring); outline-offset: 2px; }
+.btn-primary { background: var(--tv-primary); color: var(--tv-primary-foreground); }
+.btn-secondary { background: var(--tv-secondary); color: var(--tv-secondary-foreground); border-color: var(--tv-border); }
+.btn-ghost { background: transparent; color: var(--tv-foreground); }
+.btn-ghost:hover { background: var(--tv-accent); }
+.btn-destructive { background: var(--tv-destructive); color: var(--tv-destructive-foreground); }
+[data-mode="dark"] .btn-destructive { background: color-mix(in srgb, var(--tv-destructive) 60%, var(--tv-card)); }
+
+.field { display: flex; flex-direction: column; gap: 4px; }
+.field input {
+  padding: 7px 10px; font: inherit; font-size: 13px; border-radius: var(--tv-radius);
+  border: 1px solid var(--tv-input); background: var(--tv-background); color: var(--tv-foreground);
+}
+.field input::placeholder { color: var(--tv-muted-foreground); }
+.field input:focus { outline: none; border-color: var(--tv-primary); box-shadow: 0 0 0 3px rgb(var(--tv-primary-tint) / .2); }
+.field.is-focus-demo input { border-color: var(--tv-primary); box-shadow: 0 0 0 3px rgb(var(--tv-primary-tint) / .2); }
+.field.is-error input { border-color: var(--tv-destructive); }
+.field-help { font-size: 11px; margin: 0; }
+.field-help.is-error-text { color: var(--tv-destructive); }
+.field-label { font-size: 11px; color: var(--tv-muted-foreground); }
+
+.badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; }
+.badge-success { background: var(--tv-success); color: var(--tv-success-foreground); }
+.badge-warning { background: var(--tv-warning); color: var(--tv-warning-foreground); }
+.badge-error { background: var(--tv-destructive); color: var(--tv-destructive-foreground); }
+.badge-neutral { background: var(--tv-muted); color: var(--tv-muted-foreground); }
+[data-mode="dark"] .badge-success { background: color-mix(in srgb, var(--tv-success) 60%, var(--tv-card)); }
+[data-mode="dark"] .badge-warning { background: color-mix(in srgb, var(--tv-warning) 60%, var(--tv-card)); }
+[data-mode="dark"] .badge-error { background: color-mix(in srgb, var(--tv-destructive) 60%, var(--tv-card)); }
+
+.switch { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; position: relative; }
+.switch input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.switch-track { width: 34px; height: 20px; border-radius: 999px; background: var(--tv-muted); border: 1px solid var(--tv-border); position: relative; transition: background .15s; flex: 0 0 auto; }
+.switch-thumb { position: absolute; top: 1px; left: 1px; width: 16px; height: 16px; border-radius: 50%; background: var(--tv-card); box-shadow: 0 1px 2px rgba(0,0,0,.25); transition: transform .15s; }
+.switch input:checked + .switch-track { background: var(--tv-primary); }
+.switch input:checked + .switch-track .switch-thumb { transform: translateX(14px); }
+.switch input:focus-visible + .switch-track { box-shadow: 0 0 0 3px rgb(var(--tv-primary-tint) / .3); }
+
+.check-field { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; }
+.check-field input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--tv-primary); }
+
+.select-native {
+  padding: 7px 10px; font: inherit; font-size: 13px; border-radius: var(--tv-radius);
+  border: 1px solid var(--tv-input); background: var(--tv-background); color: var(--tv-foreground);
+}
+
+/* (F) modal */
+.modal-backdrop-mock { background: var(--tv-muted); border-radius: var(--tv-radius); padding: 56px 24px; display: flex; justify-content: center; }
+.modal-card {
+  width: 420px; max-width: 100%; background: var(--tv-popover); color: var(--tv-popover-foreground);
+  border-radius: var(--tv-radius); border: 1px solid var(--tv-border); box-shadow: 0 20px 48px rgba(0,0,0,.28); padding: 22px;
+}
+.modal-card h2 { margin: 0 0 8px; font-size: 16px; font-weight: 700; }
+.modal-card p { margin: 0 0 18px; font-size: 13px; color: var(--tv-muted-foreground); line-height: 1.6; }
+.modal-card code { font-family: var(--tv-font-mono); background: var(--tv-muted); padding: 1px 5px; border-radius: 4px; color: var(--tv-foreground); }
+.modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+/* (G) footer */
+.proto-footer { margin-top: 44px; padding: 20px 24px 4px; border-top: 1px solid var(--tv-border); color: var(--tv-muted-foreground); font-size: 12.5px; line-height: 1.75; }
+.proto-footer h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--tv-foreground); margin: 0 0 8px; }
+.proto-footer ul { margin: 0; padding-left: 18px; }
+.proto-footer code { font-family: var(--tv-font-mono); background: var(--tv-muted); padding: 1px 5px; border-radius: 4px; color: var(--tv-foreground); }
+
+@media (max-width: 900px) {
+  .shell-body { flex-wrap: wrap; }
+  .shell-sidebar, .shell-inspector { width: 100%; flex-basis: 100%; }
+}
+
+</style>
+</head>
+<body>
+<header class="page-header">
+  <div class="titles">
+    <h1>Expo</h1>
+    <p>mobile RN</p>
+  </div>
+  <div class="header-actions">
+    <a class="back-link" href="../index.html">← 전체 목록</a>
+    <button id="modeToggle" class="mode-toggle" type="button" aria-pressed="true">Light 로 보기</button>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- (B) 팔레트 스와치 -->
+  <section class="section" id="palette">
+    <h2 class="section-title"><span class="letter">B</span>팔레트 스와치</h2>
+    <div class="swatches">
+      <div class="swatch" data-token="--tv-background"><div class="swatch-chip" style="background: var(--tv-background);"></div><span class="swatch-name">Background</span><span class="swatch-hex"></span></div>
+      <div class="swatch" data-token="--tv-foreground"><div class="swatch-chip" style="background: var(--tv-foreground);"></div><span class="swatch-name">Foreground</span><span class="swatch-hex"></span></div>
+      <div class="swatch" data-token="--tv-card"><div class="swatch-chip" style="background: var(--tv-card);"></div><span class="swatch-name">Card</span><span class="swatch-hex"></span></div>
+      <div class="swatch" data-token="--tv-popover"><div class="swatch-chip" style="background: var(--tv-popover);"></div><span class="swatch-name">Popover</span><span class="swatch-hex"></span></div>
+      <div class="swatch" data-token="--tv-primary"><div class="swatch-chip" style="background: var(--tv-primary);"></div><span class="swatch-name">Primary</span><span class="swatch-hex"></span></div>
+      <div class="swatch" data-token="--tv-primary-foreground"><div class="swatch-chip" style="background: var(--tv-primary-foreground);"></div><span class="swatch-name">Primary FG</span><span class="swatch-hex"></span></div>
+      <div class="swatch" data-token="--tv-secondary"><div class="swatch-chip" style="background: var(--tv-secondary);"></div><span class="swatch-name">Secondary</span><span class="swatch-hex"></span></div>
+      <div class="swatch" data-token="--tv-accent"><div class="swatch-chip" style="background: var(--tv-accent);"></div><span class="swatch-name">Accent</span><span class="swatch-hex"></span></div>
+      <div class="swatch" data-token="--tv-muted"><div class="swatch-chip" style="background: var(--tv-muted);"></div><span class="swatch-name">Muted</span><span class="swatch-hex"></span></div>
+      <div class="swatch" data-token="--tv-border"><div class="swatch-chip" style="background: var(--tv-border);"></div><span class="swatch-name">Border</span><span class="swatch-hex"></span></div>
+      <div class="swatch" data-token="--tv-status-connected"><div class="swatch-chip" style="background: var(--tv-status-connected);"></div><span class="swatch-name">Status · 연결됨</span><span class="swatch-hex"></span></div>
+      <div class="swatch" data-token="--tv-status-connecting"><div class="swatch-chip" style="background: var(--tv-status-connecting);"></div><span class="swatch-name">Status · 연결 중</span><span class="swatch-hex"></span></div>
+      <div class="swatch" data-token="--tv-status-error"><div class="swatch-chip" style="background: var(--tv-status-error);"></div><span class="swatch-name">Status · 오류</span><span class="swatch-hex"></span></div>
+      <div class="swatch" data-token="--tv-status-idle"><div class="swatch-chip" style="background: var(--tv-status-idle);"></div><span class="swatch-name">Status · 유휴</span><span class="swatch-hex"></span></div>
+      <div class="swatch" data-token="--tv-destructive"><div class="swatch-chip" style="background: var(--tv-destructive);"></div><span class="swatch-name">Destructive</span><span class="swatch-hex"></span></div>
+      <div class="swatch" data-token="--tv-success"><div class="swatch-chip" style="background: var(--tv-success);"></div><span class="swatch-name">Success</span><span class="swatch-hex"></span></div>
+      <div class="swatch" data-token="--tv-warning"><div class="swatch-chip" style="background: var(--tv-warning);"></div><span class="swatch-name">Warning</span><span class="swatch-hex"></span></div>
+      <div class="swatch" data-token="--tv-highlight"><div class="swatch-chip" style="background: var(--tv-highlight);"></div><span class="swatch-name">Highlight</span><span class="swatch-hex"></span></div>
+      <div class="swatch" data-token="--tv-value-key"><div class="swatch-chip" style="background: var(--tv-value-key);"></div><span class="swatch-name">Value · Key</span><span class="swatch-hex"></span></div>
+      <div class="swatch" data-token="--tv-value-leaf"><div class="swatch-chip" style="background: var(--tv-value-leaf);"></div><span class="swatch-name">Value · Leaf</span><span class="swatch-hex"></span></div>
+      <div class="swatch" data-token="--tv-value-delete"><div class="swatch-chip" style="background: var(--tv-value-delete);"></div><span class="swatch-name">Value · Delete</span><span class="swatch-hex"></span></div>
+    </div>
+  </section>
+
+  <!-- (C) 앱 셸 목업 -->
+  <section class="section" id="app-shell">
+    <h2 class="section-title"><span class="letter">C</span>앱 셸 목업</h2>
+    <div class="app-shell">
+      <div class="shell-body">
+        <aside class="shell-sidebar">
+          <div class="sidebar-search">
+            <input type="text" placeholder="커넥션 검색..." aria-label="커넥션 검색" />
+          </div>
+          <nav class="conn-tree" aria-label="커넥션 목록">
+            <div class="conn-item is-expanded">
+              <div class="conn-row">
+                <span class="status-dot" style="background: var(--tv-status-connected);"></span>
+                <span class="conn-name">prod-analytics</span>
+                <span class="conn-kind">PostgreSQL</span>
+              </div>
+              <div class="schema-tree">
+                <div class="schema-node">public</div>
+                <div class="schema-group">Tables</div>
+                <div class="schema-leaf">users</div>
+                <div class="schema-leaf is-selected">orders</div>
+                <div class="schema-leaf">order_items</div>
+                <div class="schema-leaf">payments</div>
+                <div class="schema-leaf">sessions</div>
+                <div class="schema-group">Views</div>
+                <div class="schema-leaf">v_revenue_daily</div>
+                <div class="schema-group">Functions</div>
+                <div class="schema-leaf">calc_ltv()</div>
+              </div>
+            </div>
+            <div class="conn-item">
+              <div class="conn-row">
+                <span class="status-dot" style="background: var(--tv-status-connecting);"></span>
+                <span class="conn-name">staging-cache</span>
+                <span class="conn-kind">Redis</span>
+              </div>
+            </div>
+            <div class="conn-item">
+              <div class="conn-row">
+                <span class="status-dot" style="background: var(--tv-status-error);"></span>
+                <span class="conn-name">legacy-orders</span>
+                <span class="conn-kind">MySQL</span>
+              </div>
+            </div>
+          </nav>
+        </aside>
+
+        <div class="shell-center">
+          <div class="tab-bar">
+            <div class="tab active">orders</div>
+            <div class="tab">users</div>
+            <div class="tab">Query 1</div>
+            <div class="tab is-add">+</div>
+          </div>
+          <div class="toolbar">
+            <input class="filter-input" type="text" placeholder="필터 (예: status = 'completed')" aria-label="행 필터" />
+            <button class="btn btn-secondary" type="button">Refresh</button>
+            <button class="btn btn-secondary" type="button">Add row</button>
+            <button class="btn btn-primary" type="button">Commit</button>
+            <span class="row-count">1,248 rows</span>
+          </div>
+          <div class="grid-scroll">
+            <table class="data-grid">
+              <thead>
+                <tr>
+                  <th class="num"><div class="col-head"><span class="col-name">id <span class="col-badge">PK</span></span><span class="col-type">int8</span></div></th>
+                  <th class="num"><div class="col-head"><span class="col-name">customer_id <span class="col-badge">FK</span></span><span class="col-type">int8</span></div></th>
+                  <th><div class="col-head"><span class="col-name">status</span><span class="col-type">text</span></div></th>
+                  <th class="num"><div class="col-head"><span class="col-name">total_amount</span><span class="col-type">numeric</span></div></th>
+                  <th><div class="col-head"><span class="col-name">created_at <span class="sort-arrow">▼</span></span><span class="col-type">timestamptz</span></div></th>
+                  <th><div class="col-head"><span class="col-name">note</span><span class="col-type">text</span></div></th>
+                </tr>
+              </thead>
+              <tbody>
+<tr class="grid-row"><td class="num mono">10231</td><td class="num mono">88231</td><td><span class="badge badge-success">completed</span></td><td class="num mono">128.50</td><td class="mono">2026-07-05 09:12:03</td><td class="cell-null">NULL</td></tr>
+<tr class="grid-row"><td class="num mono">10232</td><td class="num mono">88190</td><td><span class="badge badge-warning">pending</span></td><td class="num mono">64.00</td><td class="mono">2026-07-05 09:14:41</td><td>선물 포장 요청</td></tr>
+<tr class="grid-row"><td class="num mono">10233</td><td class="num mono">88231</td><td><span class="badge badge-success">completed</span></td><td class="num mono">342.10</td><td class="mono">2026-07-05 09:20:18</td><td class="cell-null">NULL</td></tr>
+<tr class="grid-row"><td class="num mono">10234</td><td class="num mono">87910</td><td><span class="badge badge-neutral">refunded</span></td><td class="num mono">19.99</td><td class="mono">2026-07-05 09:22:55</td><td>사이즈 오류</td></tr>
+<tr class="grid-row is-selected"><td class="num mono">10235</td><td class="num mono">88402</td><td><span class="badge badge-success">completed</span></td><td class="num mono">501.25</td><td class="mono">2026-07-05 09:31:07</td><td class="cell-null">NULL</td></tr>
+<tr class="grid-row is-editing"><td class="num mono">10236</td><td class="num mono">88402</td><td><span class="cell-editor"><input type="text" value="cancelled" aria-label="status 편집" /><span class="edit-dot" title="저장되지 않은 변경"></span></span></td><td class="num mono">76.40</td><td class="mono">2026-07-05 09:33:12</td><td>고객 요청</td></tr>
+<tr class="grid-row"><td class="num mono">10237</td><td class="num mono">88510</td><td><span class="badge badge-warning">pending</span></td><td class="num mono">210.00</td><td class="mono">2026-07-05 09:40:29</td><td class="cell-null">NULL</td></tr>
+<tr class="grid-row"><td class="num mono">10238</td><td class="num mono">88110</td><td><span class="badge badge-success">completed</span></td><td class="num mono">88.75</td><td class="mono">2026-07-05 09:45:03</td><td>loyalty discount applied</td></tr>
+<tr class="grid-row"><td class="num mono">10239</td><td class="num mono">88671</td><td><span class="badge badge-success">completed</span></td><td class="num mono">1024.00</td><td class="mono">2026-07-05 09:52:47</td><td class="cell-null">NULL</td></tr>
+<tr class="grid-row"><td class="num mono">10240</td><td class="num mono">88671</td><td><span class="badge badge-warning">pending</span></td><td class="num mono">45.20</td><td class="mono">2026-07-05 10:01:19</td><td class="cell-null">NULL</td></tr>
+<tr class="grid-row"><td class="num mono">10241</td><td class="num mono">87910</td><td><span class="badge badge-success">completed</span></td><td class="num mono">302.60</td><td class="mono">2026-07-05 10:05:52</td><td class="cell-null">NULL</td></tr>
+<tr class="grid-row"><td class="num mono">10242</td><td class="num mono">88910</td><td><span class="badge badge-neutral">refunded</span></td><td class="num mono">12.00</td><td class="mono">2026-07-05 10:12:33</td><td>중복 결제</td></tr>
+<tr class="grid-row"><td class="num mono">10243</td><td class="num mono">88231</td><td><span class="badge badge-success">completed</span></td><td class="num mono">640.15</td><td class="mono">2026-07-05 10:20:04</td><td class="cell-null">NULL</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="sql-panel">
+            <div class="sql-titlebar">
+              <span>Query 1</span>
+              <span>PostgreSQL · public</span>
+            </div>
+            <div class="sql-body">
+              <div class="sql-lines">
+<div>1</div>
+<div>2</div>
+<div>3</div>
+<div>4</div>
+<div>5</div>
+<div>6</div>
+<div>7</div>
+<div>8</div>
+<div>9</div>
+<div>10</div>
+              </div>
+              <div class="sql-code">
+<div class="sql-line"><span class="sql-comment">-- 최근 30일 고객별 매출</span></div>
+<div class="sql-line"><span class="sql-kw">SELECT</span> c.<span class="sql-prop">id</span><span class="sql-punct">,</span> c.<span class="sql-prop">name</span><span class="sql-punct">,</span> <span class="sql-fn">SUM</span><span class="sql-punct">(</span>o.<span class="sql-prop">total_amount</span><span class="sql-punct">)</span> <span class="sql-kw">AS</span> revenue</div>
+<div class="sql-line"><span class="sql-kw">FROM</span> <span class="sql-type">orders</span> o</div>
+<div class="sql-line">  <span class="sql-kw">JOIN</span> <span class="sql-type">customers</span> c <span class="sql-kw">ON</span> c.<span class="sql-prop">id</span> <span class="sql-op">=</span> o.<span class="sql-prop">customer_id</span></div>
+<div class="sql-line"><span class="sql-kw">WHERE</span> o.<span class="sql-prop">created_at</span> <span class="sql-op">&gt;=</span> <span class="sql-builtin">NOW</span><span class="sql-punct">()</span> <span class="sql-op">-</span> <span class="sql-kw">INTERVAL</span> <span class="sql-str">'30 days'</span></div>
+<div class="sql-line">  <span class="sql-kw">AND</span> o.<span class="sql-prop">status</span> <span class="sql-op">&lt;&gt;</span> <span class="sql-str">'cancelled'</span></div>
+<div class="sql-line"><span class="sql-kw">GROUP BY</span> c.<span class="sql-prop">id</span><span class="sql-punct">,</span> c.<span class="sql-prop">name</span></div>
+<div class="sql-line"><span class="sql-kw">HAVING</span> <span class="sql-fn">SUM</span><span class="sql-punct">(</span>o.<span class="sql-prop">total_amount</span><span class="sql-punct">)</span> <span class="sql-op">&gt;</span> <span class="sql-num">1000</span></div>
+<div class="sql-line"><span class="sql-kw">ORDER BY</span> revenue <span class="sql-atom">DESC</span></div>
+<div class="sql-line"><span class="sql-kw">LIMIT</span> <span class="sql-num">50</span><span class="sql-punct">;</span></div>
+              </div>
+            </div>
+            <div class="sql-footer">
+              <div class="sql-diagnostic"><span class="sql-error">1개 문제</span><span>· HAVING 집계식이 SELECT 목록과 일치해야 합니다 (8행)</span></div>
+              <button class="btn btn-primary run-btn" type="button">Run <kbd>⌘↵</kbd></button>
+            </div>
+          </div>
+        </div>
+
+        <aside class="shell-inspector">
+          <h3 class="inspector-heading">선택한 행 · orders</h3>
+          <dl class="inspector-list">
+            <div class="insp-row"><dt>id</dt><dd class="mono">10235</dd></div>
+            <div class="insp-row"><dt>customer_id</dt><dd class="mono">88402</dd></div>
+            <div class="insp-row"><dt>status</dt><dd><span class="badge badge-success">completed</span></dd></div>
+            <div class="insp-row"><dt>total_amount</dt><dd class="mono">501.25</dd></div>
+            <div class="insp-row"><dt>created_at</dt><dd class="mono">2026-07-05 09:31:07+00</dd></div>
+            <div class="insp-row"><dt>note</dt><dd class="cell-null">NULL</dd></div>
+            <div class="insp-row"><dt>metadata <span class="col-type-inline">jsonb</span></dt><dd></dd></div>
+          </dl>
+          <div class="json-tree" aria-label="metadata JSON 트리">
+            <div class="json-line">{</div>
+            <div class="json-line json-indent-1"><span class="json-key">"shipping"</span>: {</div>
+            <div class="json-line json-indent-2"><span class="json-key">"carrier"</span>: <span class="json-leaf">"fedex"</span>,</div>
+            <div class="json-line json-indent-2"><span class="json-key">"priority"</span>: <span class="json-leaf">true</span></div>
+            <div class="json-line json-indent-1">},</div>
+            <div class="json-line json-indent-1"><span class="json-key">"tags"</span>: [<span class="json-leaf">"vip"</span>, <span class="json-leaf">"recurring"</span>],</div>
+            <div class="json-line json-indent-1 json-deleted"><span class="json-key">"legacy_id"</span>: <span class="json-leaf">null</span> <span class="json-deleted-tag">// deprecated</span></div>
+            <div class="json-line">}</div>
+          </div>
+        </aside>
+      </div>
+
+      <div class="status-bar">
+        <span class="status-dot" style="background: var(--tv-status-connected);"></span>
+        <span>prod-analytics · public</span>
+        <span>1,248 rows</span>
+        <span>실행 42ms</span>
+        <span class="status-right">PostgreSQL 16.2</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- (E) 컴포넌트 표본 -->
+  <section class="section" id="components">
+    <h2 class="section-title"><span class="letter">E</span>컴포넌트 표본</h2>
+
+    <div class="component-group">
+      <p class="component-group-label">버튼</p>
+      <div class="component-row">
+        <button class="btn btn-primary" type="button">저장</button>
+        <button class="btn btn-secondary" type="button">취소</button>
+        <button class="btn btn-ghost" type="button">더 보기</button>
+        <button class="btn btn-destructive" type="button">삭제</button>
+      </div>
+    </div>
+
+    <div class="component-group">
+      <p class="component-group-label">인풋</p>
+      <div class="component-row">
+        <div class="field">
+          <span class="field-label">기본</span>
+          <input type="text" placeholder="검색..." aria-label="기본 상태 입력 예시" />
+        </div>
+        <div class="field is-focus-demo">
+          <span class="field-label">포커스</span>
+          <input type="text" value="orders" readonly aria-label="포커스 상태 입력 예시" />
+        </div>
+        <div class="field is-error">
+          <span class="field-label">에러</span>
+          <input type="text" value="not-an-email" aria-label="에러 상태 입력 예시" aria-invalid="true" aria-describedby="err-help-expo" />
+          <p class="field-help is-error-text" id="err-help-expo">올바른 이메일 형식이 아닙니다</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="component-group">
+      <p class="component-group-label">배지</p>
+      <div class="component-row">
+        <span class="badge badge-success">연결됨</span>
+        <span class="badge badge-warning">동기화 지연</span>
+        <span class="badge badge-error">오류</span>
+        <span class="badge badge-neutral">초안</span>
+      </div>
+    </div>
+
+    <div class="component-group">
+      <p class="component-group-label">토글 · 체크박스 · 셀렉트</p>
+      <div class="component-row">
+        <label class="switch">
+          <input type="checkbox" checked />
+          <span class="switch-track"><span class="switch-thumb"></span></span>
+          자동 새로고침
+        </label>
+        <label class="check-field"><input type="checkbox" checked /> NULL 포함</label>
+        <label class="check-field"><input type="checkbox" /> 읽기 전용</label>
+        <select class="select-native" aria-label="DB 엔진 선택">
+          <option>PostgreSQL 16.2</option>
+          <option>MySQL 8.0</option>
+          <option>SQLite 3.45</option>
+        </select>
+      </div>
+    </div>
+  </section>
+
+  <!-- (F) 모달 -->
+  <section class="section" id="modal">
+    <h2 class="section-title"><span class="letter">F</span>확인 다이얼로그</h2>
+    <div class="modal-backdrop-mock">
+      <div class="modal-card" role="alertdialog" aria-labelledby="modal-title-expo">
+        <h2 id="modal-title-expo">테이블 삭제</h2>
+        <p>정말로 <code>orders</code> 테이블을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.</p>
+        <div class="modal-actions">
+          <button class="btn btn-secondary" type="button">취소</button>
+          <button class="btn btn-destructive" type="button">삭제</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<footer class="proto-footer">
+  <div class="container" style="padding-left:0;padding-right:0;">
+    <h2><span class="letter" style="color:var(--tv-primary);">G</span> 디자인 노트 — Expo (mobile RN)</h2>
+    <ul>
+      <li>카드·팝오버·모달 반경을 0.875rem 로 키워 모바일 앱 아이콘 같은 둥근 인상을 주고, 본문 폰트는 Space Grotesk 로 바꿔 기술적인 느낌을 냈다.</li>
+      <li>탭 바 위에 얇은 pill 바를 하나 그려 모바일 기기 노치를 은유했다 — 순수 장식이고 인터랙션은 없다.</li>
+      <li>light/dark 모두 <code>src/themes.css</code> 실측값이며, dark 배경이 Expo 고유의 네이비라 별도 보정 없이 그대로 썼다 — 정확한 값은 위 (B) 스와치에서 확인된다.</li>
+    </ul>
+  </div>
+</footer>
+
+<script>
+(function () {
+  var root = document.documentElement;
+  var btn = document.getElementById('modeToggle');
+  function syncSwatchLabels() {
+    var computed = getComputedStyle(root);
+    document.querySelectorAll('[data-token]').forEach(function (el) {
+      var token = el.getAttribute('data-token');
+      var val = computed.getPropertyValue(token).trim();
+      var out = el.querySelector('.swatch-hex');
+      if (out) { out.textContent = val; }
+    });
+  }
+  function setMode(mode) {
+    root.setAttribute('data-mode', mode);
+    btn.textContent = mode === 'dark' ? 'Light 로 보기' : 'Dark 로 보기';
+    btn.setAttribute('aria-pressed', String(mode === 'dark'));
+    syncSwatchLabels();
+  }
+  btn.addEventListener('click', function () {
+    var next = root.getAttribute('data-mode') === 'dark' ? 'light' : 'dark';
+    setMode(next);
+  });
+  syncSwatchLabels();
+})();
+
+</script>
+</body>
+</html>

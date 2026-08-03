@@ -1,0 +1,886 @@
+<!DOCTYPE html>
+<html lang="ko" data-theme="shop" data-mode="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shop — table-view 테마 프로토타입</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400&amp;display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+ * TOKENS — identical to shop.tokens.css (kept inline so this file
+ * stays a single self-contained document per SPEC §1).
+ * ============================================================ */
+[data-theme="shop"][data-mode="light"] {
+  --tv-background: #f2f4f5;
+  --tv-foreground: #000000;
+  --tv-card: #ffffff;
+  --tv-card-foreground: #000000;
+  --tv-popover: #ffffff;
+  --tv-popover-foreground: #000000;
+  --tv-primary: #5433eb;
+  --tv-primary-foreground: #ffffff;
+  --tv-secondary: #f2f4f5;
+  --tv-secondary-foreground: #000000;
+  --tv-muted: #f2f4f5;
+  --tv-muted-foreground: #787574;
+  --tv-accent: #f2f4f5;
+  --tv-accent-foreground: #000000;
+  --tv-border: #ebebeb;
+  --tv-input: #ebebeb;
+  --tv-ring: #5433eb;
+  --tv-primary-tint: 84 51 235;
+  --tv-status-connected: #16a34a;
+  --tv-status-connecting: #f59e0b;
+  --tv-status-error: #ef4444;
+  --tv-status-idle: #cccccc;
+  --tv-syntax-keyword: #5b4b9e;
+  --tv-syntax-operator: #55524d;
+  --tv-syntax-punct: #706c66;
+  --tv-syntax-type: #3f6076;
+  --tv-syntax-builtin: #3f7a6e;
+  --tv-syntax-function: #8a6a3f;
+  --tv-syntax-property: #6b6f3f;
+  --tv-syntax-string: #4f7a52;
+  --tv-syntax-number: #a15c3f;
+  --tv-syntax-atom: #96556f;
+  --tv-syntax-comment: #7d7a73;
+  --tv-syntax-error: #b3453f;
+  --tv-destructive: #ef4444;
+  --tv-success: #16a34a;
+  --tv-warning: #ea580c;
+  --tv-highlight: #eab308;
+  --tv-radius: 9999px;
+  --tv-font-sans: "GT Standard", "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --tv-font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --tv-value-key: #0369a1;
+  --tv-value-leaf: #047857;
+  --tv-value-delete: #f43f5e;
+}
+[data-theme="shop"][data-mode="dark"] {
+  --tv-background: #1e1b1a;
+  --tv-foreground: #f1ede9;
+  --tv-card: #332f2d;
+  --tv-card-foreground: #f1ede9;
+  --tv-popover: #3a3532;
+  --tv-popover-foreground: #f1ede9;
+  --tv-primary: #9a8bfb;
+  --tv-primary-foreground: #1c1917;
+  --tv-secondary: #665a54;
+  --tv-secondary-foreground: #f1ede9;
+  --tv-muted: #282422;
+  --tv-muted-foreground: #a89f98;
+  --tv-accent: #2f2b29;
+  --tv-accent-foreground: #f1ede9;
+  --tv-border: #433e3b;
+  --tv-input: #433e3b;
+  --tv-ring: #9a8bfb;
+  --tv-primary-tint: 154 139 251;
+  --tv-status-connected: #22c55e;
+  --tv-status-connecting: #f59e0b;
+  --tv-status-error: #f87171;
+  --tv-status-idle: #8a8179;
+  --tv-syntax-keyword: #b3a4e8;
+  --tv-syntax-operator: #cbc6bd;
+  --tv-syntax-punct: #a39d93;
+  --tv-syntax-type: #9dc3d9;
+  --tv-syntax-builtin: #8fd9c4;
+  --tv-syntax-function: #d9b581;
+  --tv-syntax-property: #c9cd8f;
+  --tv-syntax-string: #a3d9a8;
+  --tv-syntax-number: #e0a183;
+  --tv-syntax-atom: #d99cb3;
+  --tv-syntax-comment: #a39d93;
+  --tv-syntax-error: #e0857a;
+  --tv-destructive: #f87171;
+  --tv-success: #22c55e;
+  --tv-warning: #fb923c;
+  --tv-highlight: #facc15;
+  --tv-radius: 9999px;
+  --tv-font-sans: "GT Standard", "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --tv-font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --tv-value-key: #7dd3fc;
+  --tv-value-leaf: #6ee7b7;
+  --tv-value-delete: #f43f5e;
+}
+
+/* Shop-local helpers — page-authoring only, NOT part of the --tv-* contract
+ * (kept out of shop.tokens.css so that file stays a pure drop-in). */
+[data-theme="shop"][data-mode="light"] {
+  --shop-placeholder: #cccccc;      /* Cool Stone */
+  --shop-avatar-fill: #acb0aa;      /* Warm Fog */
+  --shop-switch-thumb: #ffffff;
+  --shop-sql-gutter: #f2f4f5;
+}
+[data-theme="shop"][data-mode="dark"] {
+  --shop-placeholder: #6b6560;
+  --shop-avatar-fill: #57504b;
+  --shop-switch-thumb: #f1ede9;
+  --shop-sql-gutter: #282422;
+}
+:root {
+  /* Mode-invariant reference palette — swatch legend only (§B). Functional
+     surfaces always resolve through --tv-*, never through these directly. */
+  --shop-color-canvas-mist: #f2f4f5;
+  --shop-color-pure-white: #ffffff;
+  --shop-color-ink-black: #000000;
+  --shop-color-faint-border: #ebebeb;
+  --shop-color-muted-gray: #787574;
+  --shop-color-cool-stone: #cccccc;
+  --shop-color-warm-fog: #acb0aa;
+  --shop-color-shop-violet: #5433eb;
+  --shop-color-violet-wash: #c0b5f3;
+  --shop-color-slate-ink: #332f2d;
+  --shop-color-ash-veil: #665a54;
+  --shop-space-7: 16px;
+  --shop-space-8: 20px;
+  --shop-space-9: 24px;
+  --shop-space-12: 40px;
+  --shop-space-14: 64px;
+  --shop-shadow-sm: rgba(0, 0, 0, 0.06) 0px 2px 8px 0px;
+  --shop-shadow-sm2: rgba(0, 0, 0, 0.1) 0px 4px 6px -1px, rgba(0, 0, 0, 0.1) 0px 2px 4px -2px;
+  --shop-shadow-lg: rgba(0, 0, 0, 0.12) 0px 4px 24px 0px;
+  --shop-shadow-lg2: rgba(69, 36, 219, 0.34) 0px 4px 24px 0px;
+  --shop-destructive-foreground: #ffffff;
+}
+
+/* ============================================================
+ * BASE
+ * ============================================================ */
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: var(--tv-background);
+  color: var(--tv-foreground);
+  font-family: var(--tv-font-sans);
+  font-weight: 400;
+  font-size: 16px;
+  line-height: 1.38;
+  letter-spacing: -0.031em;
+  transition: background-color .15s ease, color .15s ease;
+}
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+h1, h2, h3, p, dl, dd, ul, table { margin: 0; padding: 0; }
+ul { list-style: none; }
+code { font-family: var(--tv-font-mono); }
+
+.tv-mono { font-family: var(--tv-font-mono); }
+.tv-system { font-family: "Shopify Sans", "Inter", system-ui, sans-serif; } /* 시스템 메시지·배너 전용 */
+.tv-heading { font-size: 20px; line-height: 1.10; letter-spacing: -0.05em; }
+.tv-body-lg { font-size: 16px; line-height: 1.38; letter-spacing: -0.031em; }
+.tv-body { font-size: 14px; line-height: 1.29; letter-spacing: -0.014em; }
+.tv-body-sm { font-size: 12px; line-height: 1.33; letter-spacing: -0.017em; }
+.tv-caption { font-size: 11px; line-height: 1.33; letter-spacing: -0.058em; }
+.tv-micro { font-size: 10px; line-height: 1.20; }
+.tv-tiny { font-size: 9px; line-height: 1.33; }
+.tv-muted-text { color: var(--tv-muted-foreground); }
+
+.tv-page { max-width: 1280px; margin: 0 auto; padding: var(--shop-space-12) var(--shop-space-9) 80px; }
+.tv-block { margin-top: var(--shop-space-14); }
+.tv-block:first-child { margin-top: 0; }
+.tv-block-title { font-size: 14px; letter-spacing: -0.014em; color: var(--tv-muted-foreground); margin-bottom: var(--shop-space-7); }
+
+/* ============================================================
+ * (A) HEADER
+ * ============================================================ */
+.tv-header { display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+.tv-header-left { display: flex; align-items: center; gap: 20px; }
+.tv-wordmark { font-size: 24px; letter-spacing: -0.05em; }
+.tv-wordmark-dot { color: var(--tv-primary); }
+.tv-header-vibe { color: var(--tv-muted-foreground); margin-top: 2px; }
+.tv-header-right { display: flex; align-items: center; gap: 16px; }
+.tv-back-link { color: var(--tv-muted-foreground); text-decoration: none; font-size: 14px; letter-spacing: -0.014em; }
+.tv-back-link:hover { color: var(--tv-foreground); }
+
+/* ============================================================
+ * (B) PALETTE SWATCHES
+ * ============================================================ */
+.tv-swatch-row { display: flex; flex-wrap: wrap; gap: 20px; }
+.tv-swatch { display: flex; flex-direction: column; align-items: center; gap: 8px; width: 96px; }
+.tv-swatch-chip { width: 48px; height: 48px; border-radius: 9999px; box-shadow: var(--shop-shadow-sm); }
+.tv-swatch-label { font-size: 11px; line-height: 1.33; letter-spacing: -0.017em; text-align: center; color: var(--tv-muted-foreground); }
+.tv-swatch-role { font-size: 11px; letter-spacing: -0.017em; color: var(--tv-foreground); }
+.tv-swatch-sub { margin-top: 24px; }
+
+/* ============================================================
+ * (C) APP SHELL
+ * ============================================================ */
+.tv-appshell-outer {
+  background: var(--tv-card);
+  border-radius: 28px;
+  box-shadow: var(--shop-shadow-lg);
+  overflow: hidden;
+}
+.tv-appshell { display: flex; min-height: 620px; }
+
+/* --- rail (64px icon-only) --- */
+.tv-rail {
+  width: 64px;
+  flex: 0 0 64px;
+  background: var(--tv-card);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 0;
+}
+.tv-rail-top { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.tv-rail-btn {
+  width: 48px; height: 48px; border-radius: 20px;
+  border: none; background: transparent; color: var(--tv-muted-foreground);
+  display: flex; align-items: center; justify-content: center;
+}
+.tv-rail-btn svg { width: 22px; height: 22px; }
+.tv-rail-btn-active { background: var(--tv-accent); color: var(--tv-foreground); }
+.tv-avatar {
+  width: 32px; height: 32px; border-radius: 9999px;
+  background: var(--shop-avatar-fill); color: var(--tv-foreground);
+  border: 1px solid var(--tv-border);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; letter-spacing: -0.017em;
+}
+
+/* --- sidebar panel (connection tree, ~180px) --- */
+.tv-sidebar-panel {
+  width: 180px; flex: 0 0 180px;
+  background: var(--tv-muted);
+  padding: 14px 12px;
+  display: flex; flex-direction: column; gap: 12px;
+  overflow-y: auto;
+}
+.tv-search-pill {
+  display: flex; align-items: center;
+  background: var(--tv-card);
+  border: 1px solid color-mix(in srgb, var(--tv-foreground) 10%, transparent);
+  border-radius: 9999px;
+  padding: 6px 6px 6px 14px;
+  box-shadow: var(--shop-shadow-lg2);
+  position: relative;
+}
+.tv-search-pill input {
+  border: none; background: transparent; outline: none;
+  font-size: 12px; letter-spacing: -0.017em; width: 78px; color: var(--tv-foreground);
+}
+.tv-search-pill input::placeholder { color: var(--shop-placeholder); }
+.tv-search-submit {
+  width: 30px; height: 30px; border-radius: 9999px; border: none;
+  background: var(--tv-primary); color: var(--tv-primary-foreground);
+  display: flex; align-items: center; justify-content: center; flex: 0 0 auto;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--shop-color-violet-wash) 55%, transparent);
+}
+.tv-search-submit svg { width: 13px; height: 13px; }
+
+.tv-conn-list { display: flex; flex-direction: column; gap: 4px; }
+.tv-conn-row {
+  display: flex; align-items: center; gap: 8px;
+  width: 100%; border: none; background: var(--tv-card);
+  border-radius: 9999px; padding: 7px 12px;
+  box-shadow: var(--shop-shadow-sm2);
+  text-align: left;
+}
+.tv-conn-item + .tv-conn-item { margin-top: 4px; }
+.tv-status-dot { width: 7px; height: 7px; border-radius: 9999px; flex: 0 0 auto; }
+.tv-status-connected { background: var(--tv-status-connected); }
+.tv-status-connecting { background: var(--tv-status-connecting); }
+.tv-status-error { background: var(--tv-status-error); }
+.tv-status-idle { background: var(--tv-status-idle); }
+.tv-conn-name { font-size: 12px; letter-spacing: -0.017em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tv-conn-kind { color: var(--tv-muted-foreground); margin-left: auto; }
+
+.tv-tree { margin: 4px 0 0 4px; display: flex; flex-direction: column; }
+.tv-tree-schema { font-size: 11px; letter-spacing: -0.017em; color: var(--tv-muted-foreground); padding: 5px 8px 2px; }
+.tv-tree-group { font-size: 10px; line-height: 1.2; letter-spacing: 0.02em; text-transform: uppercase; color: var(--tv-muted-foreground); padding: 6px 8px 2px 16px; }
+.tv-tree-row {
+  font-size: 12px; letter-spacing: -0.017em; color: var(--tv-foreground);
+  padding: 5px 8px 5px 24px; border-radius: 9999px; cursor: default;
+}
+.tv-tree-row:hover { background: var(--tv-card); }
+.tv-tree-row-selected {
+  background: rgba(var(--tv-primary-tint), 0.1);
+  color: var(--tv-primary);
+}
+
+/* --- center column --- */
+.tv-center { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; background: var(--tv-card); }
+
+.tv-tabs { display: flex; align-items: center; gap: 4px; background: var(--tv-muted); padding: 8px 16px; }
+.tv-tab { font-size: 12px; letter-spacing: -0.017em; padding: 7px 16px; border-radius: 9999px; color: var(--tv-muted-foreground); }
+.tv-tab-active { background: var(--tv-card); color: var(--tv-foreground); box-shadow: var(--shop-shadow-sm); }
+.tv-tab-add { padding: 7px 12px; color: var(--tv-muted-foreground); }
+
+.tv-toolbar { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--tv-border); }
+.tv-filter-pill {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--tv-card); border: 1px solid var(--tv-input);
+  border-radius: 9999px; padding: 7px 16px; width: 260px;
+}
+.tv-filter-pill svg { width: 14px; height: 14px; color: var(--tv-muted-foreground); flex: 0 0 auto; }
+.tv-filter-pill input { border: none; background: transparent; outline: none; font-size: 12px; letter-spacing: -0.017em; width: 100%; }
+.tv-filter-pill input::placeholder { color: var(--shop-placeholder); }
+.tv-toolbar-actions { display: flex; gap: 8px; }
+.tv-row-count { margin-left: auto; color: var(--tv-muted-foreground); }
+
+.tv-grid-scroll { overflow: auto; }
+.tv-grid { width: 100%; border-collapse: collapse; }
+.tv-grid thead th {
+  text-align: left; background: var(--tv-card); border-bottom: 1px solid var(--tv-border);
+  padding: 6px 12px 7px; vertical-align: top; white-space: nowrap;
+}
+.tv-th-top { display: flex; align-items: center; gap: 4px; font-size: 12px; letter-spacing: -0.017em; }
+.tv-th-key { font-size: 9px; line-height: 1.33; letter-spacing: 0; color: var(--tv-primary); border: 1px solid color-mix(in srgb, var(--tv-primary) 35%, transparent); border-radius: 4px; padding: 0 3px; }
+.tv-th-fk { color: var(--tv-muted-foreground); border-color: var(--tv-border); }
+.tv-th-type { font-size: 10px; line-height: 1.2; color: var(--tv-muted-foreground); margin-top: 2px; }
+.tv-sort-arrow { width: 8px; height: 8px; color: var(--tv-foreground); }
+.tv-grid tbody td {
+  padding: 8px 12px; font-size: 12px; letter-spacing: -0.017em;
+  border-bottom: 1px solid var(--tv-border); white-space: nowrap;
+}
+.tv-grid tbody tr:last-child td { border-bottom: none; }
+.tv-grid tbody tr:hover td { background: var(--tv-muted); }
+.tv-num-col { text-align: right; }
+.tv-null { color: var(--tv-muted-foreground); font-style: italic; }
+.tv-json-preview { color: var(--tv-muted-foreground); }
+.tv-row-selected td { background: rgba(var(--tv-primary-tint), 0.12); }
+.tv-row-selected td:first-child { box-shadow: inset 3px 0 0 var(--tv-primary); }
+.tv-row-selected:hover td { background: rgba(var(--tv-primary-tint), 0.17); }
+.tv-row-editing td { position: relative; }
+.tv-cell-edited {
+  background: color-mix(in srgb, var(--tv-highlight) 16%, var(--tv-card)) !important;
+  box-shadow: inset 2px 0 0 var(--tv-highlight);
+}
+.tv-edited-dot { display: inline-block; width: 5px; height: 5px; border-radius: 9999px; background: var(--tv-highlight); margin-right: 5px; }
+
+.tv-badge { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 9999px; font-size: 12px; letter-spacing: -0.017em; }
+.tv-badge-success { background: color-mix(in srgb, var(--tv-success) 14%, var(--tv-card)); color: var(--tv-success); }
+.tv-badge-warning { background: color-mix(in srgb, var(--tv-warning) 14%, var(--tv-card)); color: var(--tv-warning); }
+.tv-badge-error { background: color-mix(in srgb, var(--tv-destructive) 14%, var(--tv-card)); color: var(--tv-destructive); }
+.tv-badge-neutral { background: var(--tv-muted); color: var(--tv-muted-foreground); }
+
+.tv-sql-panel { border-top: 1px solid var(--tv-border); position: relative; height: 196px; flex: 0 0 auto; overflow: hidden; }
+.tv-sql-editor { height: 100%; display: flex; overflow: auto; background: var(--tv-card); }
+.tv-sql-gutter {
+  flex: 0 0 auto; padding: 6px 10px 6px 14px; text-align: right;
+  background: var(--shop-sql-gutter); color: var(--tv-muted-foreground);
+  font-size: 11px; line-height: 18px; user-select: none;
+}
+.tv-sql-code { flex: 1 1 auto; margin: 0; padding: 6px 76px 6px 16px; font-size: 12px; line-height: 18px; white-space: pre; }
+.syn-keyword { color: var(--tv-syntax-keyword); }
+.syn-operator { color: var(--tv-syntax-operator); }
+.syn-punct { color: var(--tv-syntax-punct); }
+.syn-type { color: var(--tv-syntax-type); }
+.syn-builtin { color: var(--tv-syntax-builtin); }
+.syn-function { color: var(--tv-syntax-function); }
+.syn-property { color: var(--tv-syntax-property); }
+.syn-string { color: var(--tv-syntax-string); }
+.syn-number { color: var(--tv-syntax-number); }
+.syn-atom { color: var(--tv-syntax-atom); }
+.syn-comment { color: var(--tv-syntax-comment); }
+.syn-lint {
+  text-decoration: underline wavy var(--tv-syntax-error);
+  text-underline-offset: 1px; text-decoration-thickness: 1px;
+}
+.tv-sql-run-float { position: absolute; right: 12px; bottom: 12px; }
+.tv-kbd { font-family: var(--tv-font-mono); font-size: 11px; background: color-mix(in srgb, var(--tv-primary-foreground) 20%, transparent); padding: 1px 5px; border-radius: 4px; }
+
+/* --- inspector --- */
+.tv-inspector { width: 260px; flex: 0 0 260px; background: var(--tv-muted); padding: 16px; overflow-y: auto; }
+.tv-inspector-title { color: var(--tv-muted-foreground); margin-bottom: 12px; }
+.tv-kv-list { display: flex; flex-direction: column; gap: 10px; }
+.tv-kv-row { display: flex; flex-direction: column; gap: 3px; }
+.tv-kv-row dt { font-size: 10px; line-height: 1.2; color: var(--tv-muted-foreground); }
+.tv-kv-row dd { font-size: 12px; letter-spacing: -0.017em; }
+.tv-json-tree {
+  background: var(--tv-card); border-radius: 12px; padding: 10px 12px;
+  box-shadow: var(--shop-shadow-sm); font-size: 11px; line-height: 1.6;
+}
+.tv-json-line { font-family: var(--tv-font-mono); white-space: pre; }
+.tv-json-indent { padding-left: 14px; }
+.tv-json-key { color: var(--tv-value-key); }
+.tv-json-leaf { color: var(--tv-value-leaf); }
+.tv-json-deleted .tv-json-key, .tv-json-deleted .tv-json-leaf { color: var(--tv-value-delete); text-decoration: line-through; }
+.tv-json-brace, .tv-json-colon, .tv-json-comma { color: var(--tv-muted-foreground); }
+
+/* --- (D) status bar --- */
+.tv-statusbar {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--tv-muted); color: var(--tv-muted-foreground);
+  padding: 7px 16px; font-size: 11px; letter-spacing: 0;
+}
+.tv-statusbar .tv-sep { opacity: .5; }
+.tv-statusbar-right { margin-left: auto; }
+
+/* ============================================================
+ * (E) COMPONENT SAMPLES
+ * ============================================================ */
+.tv-comp-row { display: flex; align-items: center; gap: 16px; padding: 14px 0; border-bottom: 1px solid var(--tv-border); flex-wrap: wrap; }
+.tv-comp-row:last-child { border-bottom: none; }
+.tv-comp-label { width: 88px; flex: 0 0 88px; color: var(--tv-muted-foreground); font-size: 14px; letter-spacing: -0.014em; }
+
+.tv-btn {
+  font-family: var(--tv-font-sans); font-size: 14px; letter-spacing: -0.014em; font-weight: 400;
+  padding: 10px 22px; border-radius: 9999px; border: none; display: inline-flex; align-items: center; gap: 8px;
+}
+.tv-btn-primary { background: var(--tv-primary); color: var(--tv-primary-foreground); box-shadow: var(--shop-shadow-lg2); }
+.tv-btn-secondary { background: var(--tv-card); color: var(--tv-foreground); box-shadow: var(--shop-shadow-sm); }
+.tv-btn-ghost { background: transparent; color: var(--tv-foreground); }
+.tv-btn-ghost:hover { background: var(--tv-accent); }
+.tv-btn-destructive { background: var(--tv-destructive); color: var(--shop-destructive-foreground); box-shadow: var(--shop-shadow-sm); }
+.tv-btn-sm { padding: 7px 16px; font-size: 12px; }
+
+.tv-input {
+  font-family: var(--tv-font-sans); font-size: 14px; letter-spacing: -0.014em;
+  padding: 9px 18px; border-radius: 9999px; border: 1px solid var(--tv-input);
+  background: var(--tv-card); color: var(--tv-foreground); outline: none;
+}
+.tv-input::placeholder { color: var(--shop-placeholder); }
+.tv-input-focus { border-color: var(--tv-ring); box-shadow: 0 0 0 3px rgba(var(--tv-primary-tint), 0.18); }
+.tv-input-error { border-color: var(--tv-destructive); box-shadow: 0 0 0 3px color-mix(in srgb, var(--tv-destructive) 16%, transparent); }
+
+.tv-switch { width: 40px; height: 24px; border-radius: 9999px; background: var(--tv-input); border: none; padding: 2px; display: inline-flex; align-items: center; justify-content: flex-start; }
+.tv-switch-on { background: var(--tv-primary); justify-content: flex-end; }
+.tv-switch-thumb { width: 20px; height: 20px; border-radius: 9999px; background: var(--shop-switch-thumb); box-shadow: var(--shop-shadow-sm); display: block; }
+
+.tv-checkbox { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
+.tv-checkbox input { position: absolute; opacity: 0; width: 0; height: 0; }
+.tv-checkbox-box { width: 20px; height: 20px; border-radius: 9999px; border: 1px solid var(--tv-input); background: var(--tv-card); display: inline-flex; align-items: center; justify-content: center; }
+.tv-checkbox input:checked + .tv-checkbox-box { background: var(--tv-primary); border-color: var(--tv-primary); }
+.tv-checkbox input:checked + .tv-checkbox-box::after { content: ""; width: 5px; height: 9px; border: solid var(--tv-primary-foreground); border-width: 0 2px 2px 0; transform: rotate(45deg) translate(-1px, -1px); }
+
+.tv-select-wrap { position: relative; display: inline-block; }
+.tv-select {
+  appearance: none; font-family: var(--tv-font-sans); font-size: 14px; letter-spacing: -0.014em;
+  padding: 9px 38px 9px 18px; border-radius: 9999px; border: 1px solid var(--tv-input);
+  background: var(--tv-card); color: var(--tv-foreground);
+}
+.tv-select-caret { position: absolute; right: 15px; top: 50%; transform: translateY(-50%); width: 10px; height: 10px; color: var(--tv-muted-foreground); pointer-events: none; }
+
+/* ============================================================
+ * (F) MODAL
+ * ============================================================ */
+.tv-modal-stage { background: var(--tv-muted); border-radius: 28px; padding: 56px 24px; display: flex; justify-content: center; }
+.tv-modal { width: 400px; background: var(--tv-popover); color: var(--tv-popover-foreground); border-radius: 28px; box-shadow: var(--shop-shadow-lg); padding: 28px; display: flex; flex-direction: column; gap: 14px; }
+.tv-modal-body { color: var(--tv-muted-foreground); }
+.tv-modal-confirm-label { color: var(--tv-muted-foreground); }
+.tv-modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
+
+/* ============================================================
+ * (G) FOOTER
+ * ============================================================ */
+.tv-footer { color: var(--tv-muted-foreground); font-size: 12px; letter-spacing: -0.017em; line-height: 1.7; max-width: 860px; }
+.tv-footer li::before { content: "— "; }
+</style>
+</head>
+<body>
+<div class="tv-page">
+
+  <!-- (A) 헤더 바 -->
+  <header class="tv-header tv-block">
+    <div class="tv-header-left">
+      <span class="tv-wordmark">shop<span class="tv-wordmark-dot">.</span></span>
+      <div>
+        <div class="tv-body">Shop 테마</div>
+        <div class="tv-header-vibe tv-body-sm">흰 대리석 위에 떠 있는 쇼핑 성좌 — 크고 둥근 카드, 채도 높은 바이올렛 하나</div>
+      </div>
+    </div>
+    <div class="tv-header-right">
+      <button id="mode-toggle" class="tv-btn tv-btn-secondary tv-btn-sm" type="button">🌙 Dark</button>
+      <a class="tv-back-link" href="../index.html">← 전체 목록</a>
+    </div>
+  </header>
+
+  <!-- (B) 팔레트 스와치 -->
+  <section class="tv-block">
+    <div class="tv-block-title">팔레트 — 코어 토큰</div>
+    <div class="tv-swatch-row">
+      <div class="tv-swatch"><span class="tv-swatch-chip" style="background:var(--tv-background)"></span><span class="tv-swatch-role">background</span><span class="tv-swatch-label">L #f2f4f5<br>D #1e1b1a</span></div>
+      <div class="tv-swatch"><span class="tv-swatch-chip" style="background:var(--tv-foreground)"></span><span class="tv-swatch-role">foreground</span><span class="tv-swatch-label">L #000000<br>D #f1ede9</span></div>
+      <div class="tv-swatch"><span class="tv-swatch-chip" style="background:var(--tv-card); box-shadow:var(--shop-shadow-sm), inset 0 0 0 1px var(--tv-border);"></span><span class="tv-swatch-role">card</span><span class="tv-swatch-label">L #ffffff<br>D #332f2d</span></div>
+      <div class="tv-swatch"><span class="tv-swatch-chip" style="background:var(--tv-primary)"></span><span class="tv-swatch-role">primary</span><span class="tv-swatch-label">L #5433eb<br>D #9a8bfb</span></div>
+      <div class="tv-swatch"><span class="tv-swatch-chip" style="background:var(--tv-border); box-shadow:none;"></span><span class="tv-swatch-role">border</span><span class="tv-swatch-label">L #ebebeb<br>D #433e3b</span></div>
+      <div class="tv-swatch"><span class="tv-swatch-chip" style="background:var(--tv-muted-foreground)"></span><span class="tv-swatch-role">muted-fg</span><span class="tv-swatch-label">L #787574<br>D #a89f98</span></div>
+      <div class="tv-swatch"><span class="tv-swatch-chip" style="background:var(--tv-status-connected)"></span><span class="tv-swatch-role">status·connected</span><span class="tv-swatch-label">L #16a34a<br>D #22c55e</span></div>
+      <div class="tv-swatch"><span class="tv-swatch-chip" style="background:var(--tv-status-connecting)"></span><span class="tv-swatch-role">status·connecting</span><span class="tv-swatch-label">#f59e0b<br>(L=D)</span></div>
+      <div class="tv-swatch"><span class="tv-swatch-chip" style="background:var(--tv-status-error)"></span><span class="tv-swatch-role">status·error</span><span class="tv-swatch-label">L #ef4444<br>D #f87171</span></div>
+      <div class="tv-swatch"><span class="tv-swatch-chip" style="background:var(--tv-status-idle)"></span><span class="tv-swatch-role">status·idle</span><span class="tv-swatch-label">L #cccccc<br>D #8a8179</span></div>
+    </div>
+
+    <div class="tv-block-title tv-swatch-sub">팔레트 — 전체 브랜드 색</div>
+    <div class="tv-swatch-row">
+      <div class="tv-swatch"><span class="tv-swatch-chip" style="background:var(--shop-color-canvas-mist)"></span><span class="tv-swatch-label">Canvas Mist<br>#f2f4f5</span></div>
+      <div class="tv-swatch"><span class="tv-swatch-chip" style="background:var(--shop-color-pure-white); box-shadow:var(--shop-shadow-sm), inset 0 0 0 1px var(--tv-border);"></span><span class="tv-swatch-label">Pure White<br>#ffffff</span></div>
+      <div class="tv-swatch"><span class="tv-swatch-chip" style="background:var(--shop-color-ink-black)"></span><span class="tv-swatch-label">Ink Black<br>#000000</span></div>
+      <div class="tv-swatch"><span class="tv-swatch-chip" style="background:var(--shop-color-faint-border)"></span><span class="tv-swatch-label">Faint Border<br>#ebebeb</span></div>
+      <div class="tv-swatch"><span class="tv-swatch-chip" style="background:var(--shop-color-muted-gray)"></span><span class="tv-swatch-label">Muted Gray<br>#787574</span></div>
+      <div class="tv-swatch"><span class="tv-swatch-chip" style="background:var(--shop-color-cool-stone)"></span><span class="tv-swatch-label">Cool Stone<br>#cccccc</span></div>
+      <div class="tv-swatch"><span class="tv-swatch-chip" style="background:var(--shop-color-warm-fog)"></span><span class="tv-swatch-label">Warm Fog<br>#acb0aa</span></div>
+      <div class="tv-swatch"><span class="tv-swatch-chip" style="background:var(--shop-color-shop-violet)"></span><span class="tv-swatch-label">Shop Violet<br>#5433eb</span></div>
+      <div class="tv-swatch"><span class="tv-swatch-chip" style="background:var(--shop-color-violet-wash)"></span><span class="tv-swatch-label">Violet Wash<br>#c0b5f3</span></div>
+      <div class="tv-swatch"><span class="tv-swatch-chip" style="background:var(--shop-color-slate-ink)"></span><span class="tv-swatch-label">Slate Ink<br>#332f2d</span></div>
+      <div class="tv-swatch"><span class="tv-swatch-chip" style="background:var(--shop-color-ash-veil)"></span><span class="tv-swatch-label">Ash Veil<br>#665a54</span></div>
+    </div>
+  </section>
+
+  <!-- (C) 앱 셸 목업 -->
+  <section class="tv-block">
+    <div class="tv-block-title">앱 셸</div>
+    <div class="tv-appshell-outer">
+      <div class="tv-appshell">
+
+        <!-- 사이드바 레일 -->
+        <nav class="tv-rail" aria-label="주 메뉴">
+          <div class="tv-rail-top">
+            <button class="tv-rail-btn tv-rail-btn-active" title="커넥션" aria-current="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v6c0 1.66 3.58 3 8 3s8-1.34 8-3V6"/><path d="M4 12v6c0 1.66 3.58 3 8 3s8-1.34 8-3v-6"/></svg>
+            </button>
+            <button class="tv-rail-btn" title="쿼리">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M7 9l3 3-3 3"/><line x1="12" y1="15" x2="16" y2="15"/></svg>
+            </button>
+            <button class="tv-rail-btn" title="ERD">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="6" height="6" rx="1.5"/><rect x="15" y="3" width="6" height="6" rx="1.5"/><rect x="9" y="15" width="6" height="6" rx="1.5"/><path d="M6 9v3a3 3 0 0 0 3 3M18 9v3a3 3 0 0 1-3 3"/></svg>
+            </button>
+            <button class="tv-rail-btn" title="설정">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="7" x2="20" y2="7"/><circle cx="14" cy="7" r="2"/><line x1="4" y1="12" x2="20" y2="12"/><circle cx="8" cy="12" r="2"/><line x1="4" y1="17" x2="20" y2="17"/><circle cx="16" cy="17" r="2"/></svg>
+            </button>
+          </div>
+          <span class="tv-avatar" title="felix">FL</span>
+        </nav>
+
+        <!-- 사이드바 패널: 커넥션 트리 -->
+        <aside class="tv-sidebar-panel">
+          <div class="tv-search-pill">
+            <input type="text" placeholder="검색" />
+            <button class="tv-search-submit" type="button" aria-label="검색 실행">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+            </button>
+          </div>
+
+          <ul class="tv-conn-list">
+            <li class="tv-conn-item">
+              <button class="tv-conn-row" type="button">
+                <span class="tv-status-dot tv-status-connected"></span>
+                <span class="tv-conn-name">prod-analytics</span>
+                <span class="tv-conn-kind tv-tiny">PG</span>
+              </button>
+              <ul class="tv-tree">
+                <li class="tv-tree-schema">public</li>
+                <li class="tv-tree-group">Tables</li>
+                <li class="tv-tree-row">users</li>
+                <li class="tv-tree-row tv-tree-row-selected">orders</li>
+                <li class="tv-tree-row">order_items</li>
+                <li class="tv-tree-row">payments</li>
+                <li class="tv-tree-row">sessions</li>
+                <li class="tv-tree-group">Views</li>
+                <li class="tv-tree-row">v_revenue_daily</li>
+                <li class="tv-tree-group">Functions</li>
+                <li class="tv-tree-row">calc_ltv()</li>
+              </ul>
+            </li>
+            <li class="tv-conn-item">
+              <button class="tv-conn-row" type="button">
+                <span class="tv-status-dot tv-status-connecting"></span>
+                <span class="tv-conn-name">staging-cache</span>
+                <span class="tv-conn-kind tv-tiny">RD</span>
+              </button>
+            </li>
+            <li class="tv-conn-item">
+              <button class="tv-conn-row" type="button">
+                <span class="tv-status-dot tv-status-error"></span>
+                <span class="tv-conn-name">legacy-orders</span>
+                <span class="tv-conn-kind tv-tiny">MY</span>
+              </button>
+            </li>
+          </ul>
+        </aside>
+
+        <!-- 중앙: 탭 / 툴바 / 그리드 / SQL 에디터 -->
+        <main class="tv-center">
+          <div class="tv-tabs">
+            <div class="tv-tab tv-tab-active">orders</div>
+            <div class="tv-tab">users</div>
+            <div class="tv-tab">Query 1</div>
+            <div class="tv-tab tv-tab-add">+</div>
+          </div>
+
+          <div class="tv-toolbar">
+            <div class="tv-filter-pill">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <input type="text" placeholder="필터 (예: status = 'paid')" />
+            </div>
+            <div class="tv-toolbar-actions">
+              <button class="tv-btn tv-btn-secondary tv-btn-sm" type="button">Refresh</button>
+              <button class="tv-btn tv-btn-secondary tv-btn-sm" type="button">Add row</button>
+              <button class="tv-btn tv-btn-primary tv-btn-sm" type="button">Commit</button>
+            </div>
+            <span class="tv-row-count tv-mono">1,248 rows</span>
+          </div>
+
+          <div class="tv-grid-scroll">
+            <table class="tv-grid">
+              <colgroup>
+                <col style="width:70px"><col style="width:96px"><col style="width:92px">
+                <col style="width:118px"><col style="width:186px"><col>
+              </colgroup>
+              <thead>
+                <tr>
+                  <th class="tv-num-col">
+                    <div class="tv-th-top" style="justify-content:flex-end"><span class="tv-th-key">PK</span><span>id</span></div>
+                    <div class="tv-th-type tv-mono">int8</div>
+                  </th>
+                  <th class="tv-num-col">
+                    <div class="tv-th-top" style="justify-content:flex-end"><span class="tv-th-key tv-th-fk">FK</span><span>customer_id</span></div>
+                    <div class="tv-th-type tv-mono">int8</div>
+                  </th>
+                  <th><div class="tv-th-top">status</div><div class="tv-th-type tv-mono">text</div></th>
+                  <th class="tv-num-col"><div class="tv-th-top" style="justify-content:flex-end">total_amount</div><div class="tv-th-type tv-mono">numeric</div></th>
+                  <th>
+                    <div class="tv-th-top">created_at
+                      <svg class="tv-sort-arrow" viewBox="0 0 24 24" fill="currentColor"><path d="M12 16l-6-7h12z"/></svg>
+                    </div>
+                    <div class="tv-th-type tv-mono">timestamptz</div>
+                  </th>
+                  <th><div class="tv-th-top">note</div><div class="tv-th-type tv-mono">text</div></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="tv-num-col tv-mono">8821</td><td class="tv-num-col tv-mono">4102</td>
+                  <td><span class="tv-badge tv-badge-success">paid</span></td>
+                  <td class="tv-num-col tv-mono">₩128,400</td><td class="tv-mono">2026-07-14 09:22:11+00</td>
+                  <td><span class="tv-null">NULL</span></td>
+                </tr>
+                <tr>
+                  <td class="tv-num-col tv-mono">8822</td><td class="tv-num-col tv-mono">4103</td>
+                  <td><span class="tv-badge tv-badge-success">paid</span></td>
+                  <td class="tv-num-col tv-mono">₩54,200</td><td class="tv-mono">2026-07-14 10:03:47+00</td>
+                  <td>선물포장 요청</td>
+                </tr>
+                <tr>
+                  <td class="tv-num-col tv-mono">8823</td><td class="tv-num-col tv-mono">4098</td>
+                  <td><span class="tv-badge tv-badge-warning">pending</span></td>
+                  <td class="tv-num-col tv-mono">₩12,000</td><td class="tv-mono">2026-07-14 11:45:02+00</td>
+                  <td><span class="tv-null">NULL</span></td>
+                </tr>
+                <tr>
+                  <td class="tv-num-col tv-mono">8824</td><td class="tv-num-col tv-mono">4110</td>
+                  <td><span class="tv-badge tv-badge-neutral">refunded</span></td>
+                  <td class="tv-num-col tv-mono">₩98,000</td><td class="tv-mono">2026-07-15 02:12:39+00</td>
+                  <td>고객 요청으로 환불</td>
+                </tr>
+                <tr class="tv-row-selected">
+                  <td class="tv-num-col tv-mono">8825</td><td class="tv-num-col tv-mono">4102</td>
+                  <td><span class="tv-badge tv-badge-success">paid</span></td>
+                  <td class="tv-num-col tv-mono">₩340,500</td><td class="tv-mono">2026-07-15 08:55:00+00</td>
+                  <td><span class="tv-json-preview tv-mono">{ 3 keys }</span></td>
+                </tr>
+                <tr>
+                  <td class="tv-num-col tv-mono">8826</td><td class="tv-num-col tv-mono">4121</td>
+                  <td><span class="tv-badge tv-badge-error">cancelled</span></td>
+                  <td class="tv-num-col tv-mono">₩15,000</td><td class="tv-mono">2026-07-15 09:10:22+00</td>
+                  <td><span class="tv-null">NULL</span></td>
+                </tr>
+                <tr class="tv-row-editing">
+                  <td class="tv-num-col tv-mono">8827</td><td class="tv-num-col tv-mono">4098</td>
+                  <td><span class="tv-badge tv-badge-success">paid</span></td>
+                  <td class="tv-num-col tv-mono tv-cell-edited"><span class="tv-edited-dot"></span>₩76,300</td>
+                  <td class="tv-mono">2026-07-15 13:40:18+00</td>
+                  <td>재구매 고객</td>
+                </tr>
+                <tr>
+                  <td class="tv-num-col tv-mono">8828</td><td class="tv-num-col tv-mono">4133</td>
+                  <td><span class="tv-badge tv-badge-success">paid</span></td>
+                  <td class="tv-num-col tv-mono">₩22,100</td><td class="tv-mono">2026-07-16 01:02:55+00</td>
+                  <td><span class="tv-null">NULL</span></td>
+                </tr>
+                <tr>
+                  <td class="tv-num-col tv-mono">8829</td><td class="tv-num-col tv-mono">4110</td>
+                  <td><span class="tv-badge tv-badge-warning">pending</span></td>
+                  <td class="tv-num-col tv-mono">₩61,200</td><td class="tv-mono">2026-07-16 04:20:09+00</td>
+                  <td><span class="tv-null">NULL</span></td>
+                </tr>
+                <tr>
+                  <td class="tv-num-col tv-mono">8830</td><td class="tv-num-col tv-mono">4102</td>
+                  <td><span class="tv-badge tv-badge-success">paid</span></td>
+                  <td class="tv-num-col tv-mono">₩183,900</td><td class="tv-mono">2026-07-16 06:47:31+00</td>
+                  <td>VIP</td>
+                </tr>
+                <tr>
+                  <td class="tv-num-col tv-mono">8831</td><td class="tv-num-col tv-mono">4145</td>
+                  <td><span class="tv-badge tv-badge-success">paid</span></td>
+                  <td class="tv-num-col tv-mono">₩45,000</td><td class="tv-mono">2026-07-16 09:59:44+00</td>
+                  <td><span class="tv-null">NULL</span></td>
+                </tr>
+                <tr>
+                  <td class="tv-num-col tv-mono">8832</td><td class="tv-num-col tv-mono">4098</td>
+                  <td><span class="tv-badge tv-badge-neutral">refunded</span></td>
+                  <td class="tv-num-col tv-mono">₩8,900</td><td class="tv-mono">2026-07-16 12:15:03+00</td>
+                  <td><span class="tv-null">NULL</span></td>
+                </tr>
+                <tr>
+                  <td class="tv-num-col tv-mono">8833</td><td class="tv-num-col tv-mono">4121</td>
+                  <td><span class="tv-badge tv-badge-success">paid</span></td>
+                  <td class="tv-num-col tv-mono">₩271,000</td><td class="tv-mono">2026-07-16 15:33:27+00</td>
+                  <td><span class="tv-null">NULL</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="tv-sql-panel">
+            <div class="tv-sql-editor">
+              <div class="tv-sql-gutter">
+                <div>1</div><div>2</div><div>3</div><div>4</div><div>5</div><div>6</div><div>7</div><div>8</div><div>9</div><div>10</div>
+              </div>
+              <pre class="tv-sql-code tv-mono"><code><span class="syn-comment">-- 최근 30일 고객별 매출</span>
+<span class="syn-keyword">SELECT</span> <span class="syn-atom">c</span><span class="syn-operator">.</span><span class="syn-property">id</span><span class="syn-punct">,</span> <span class="syn-atom">c</span><span class="syn-operator">.</span><span class="syn-property">name</span><span class="syn-punct">,</span> <span class="syn-function">SUM</span><span class="syn-punct">(</span><span class="syn-atom">o</span><span class="syn-operator">.</span><span class="syn-property">total_amount</span><span class="syn-punct">)</span> <span class="syn-keyword">AS</span> <span class="syn-property">revenue</span>
+<span class="syn-keyword">FROM</span> <span class="syn-type">orders</span> <span class="syn-atom">o</span>
+  <span class="syn-keyword">JOIN</span> <span class="syn-type">customers</span> <span class="syn-atom">c</span> <span class="syn-keyword">ON</span> <span class="syn-atom">c</span><span class="syn-operator">.</span><span class="syn-property">id</span> <span class="syn-operator">=</span> <span class="syn-atom">o</span><span class="syn-operator">.</span><span class="syn-property">customer_id</span>
+<span class="syn-keyword">WHERE</span> <span class="syn-atom">o</span><span class="syn-operator">.</span><span class="syn-property">created_at</span> <span class="syn-operator">&gt;=</span> <span class="syn-builtin">NOW</span><span class="syn-punct">()</span> <span class="syn-operator">-</span> <span class="syn-keyword">INTERVAL</span> <span class="syn-string">'30 days'</span>
+  <span class="syn-keyword">AND</span> <span class="syn-atom">o</span><span class="syn-operator">.</span><span class="syn-property">status</span> <span class="syn-operator syn-lint" title="lint: != 권장">&lt;&gt;</span> <span class="syn-string">'cancelled'</span>
+<span class="syn-keyword">GROUP BY</span> <span class="syn-atom">c</span><span class="syn-operator">.</span><span class="syn-property">id</span><span class="syn-punct">,</span> <span class="syn-atom">c</span><span class="syn-operator">.</span><span class="syn-property">name</span>
+<span class="syn-keyword">HAVING</span> <span class="syn-function">SUM</span><span class="syn-punct">(</span><span class="syn-atom">o</span><span class="syn-operator">.</span><span class="syn-property">total_amount</span><span class="syn-punct">)</span> <span class="syn-operator">&gt;</span> <span class="syn-number">1000</span>
+<span class="syn-keyword">ORDER BY</span> <span class="syn-property">revenue</span> <span class="syn-keyword">DESC</span>
+<span class="syn-keyword">LIMIT</span> <span class="syn-number">50</span><span class="syn-punct">;</span></code></pre>
+            </div>
+            <div class="tv-sql-run-float">
+              <button class="tv-btn tv-btn-primary tv-btn-sm" type="button">Run <span class="tv-kbd">⌘↵</span></button>
+            </div>
+          </div>
+        </main>
+
+        <!-- 인스펙터 -->
+        <aside class="tv-inspector">
+          <div class="tv-inspector-title tv-caption">선택한 행 · orders #8825</div>
+          <dl class="tv-kv-list">
+            <div class="tv-kv-row"><dt>id</dt><dd class="tv-mono">8825</dd></div>
+            <div class="tv-kv-row"><dt>customer_id</dt><dd class="tv-mono">4102</dd></div>
+            <div class="tv-kv-row"><dt>status</dt><dd><span class="tv-badge tv-badge-success">paid</span></dd></div>
+            <div class="tv-kv-row"><dt>total_amount</dt><dd class="tv-mono">₩340,500</dd></div>
+            <div class="tv-kv-row"><dt>created_at</dt><dd class="tv-mono">2026-07-15 08:55:00+00</dd></div>
+            <div class="tv-kv-row">
+              <dt>note (jsonb)</dt>
+              <dd class="tv-json-tree">
+                <div class="tv-json-line"><span class="tv-json-brace">{</span></div>
+                <div class="tv-json-line tv-json-indent"><span class="tv-json-key">"tags"</span><span class="tv-json-colon">:</span> <span class="tv-json-brace">[</span><span class="tv-json-leaf">"vip"</span><span class="tv-json-comma">,</span> <span class="tv-json-leaf">"recurring"</span><span class="tv-json-brace">]</span><span class="tv-json-comma">,</span></div>
+                <div class="tv-json-line tv-json-indent"><span class="tv-json-key">"gift_wrap"</span><span class="tv-json-colon">:</span> <span class="tv-json-leaf">true</span><span class="tv-json-comma">,</span></div>
+                <div class="tv-json-line tv-json-indent tv-json-deleted"><span class="tv-json-key">"legacy_code"</span><span class="tv-json-colon">:</span> <span class="tv-json-leaf">null</span></div>
+                <div class="tv-json-line"><span class="tv-json-brace">}</span></div>
+              </dd>
+            </div>
+          </dl>
+        </aside>
+      </div>
+
+      <!-- (D) 상태 바 -->
+      <div class="tv-statusbar tv-system">
+        <span class="tv-status-dot tv-status-connected"></span>
+        <span>prod-analytics · public</span>
+        <span class="tv-sep">·</span>
+        <span class="tv-mono">1,248 rows</span>
+        <span class="tv-sep">·</span>
+        <span>실행 42ms</span>
+        <span class="tv-statusbar-right tv-mono">PostgreSQL 16.2</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- (E) 컴포넌트 표본 -->
+  <section class="tv-block">
+    <div class="tv-block-title">컴포넌트 표본</div>
+
+    <div class="tv-comp-row">
+      <span class="tv-comp-label">버튼</span>
+      <button class="tv-btn tv-btn-primary" type="button">Primary</button>
+      <button class="tv-btn tv-btn-secondary" type="button">Secondary</button>
+      <button class="tv-btn tv-btn-ghost" type="button">Ghost</button>
+      <button class="tv-btn tv-btn-destructive" type="button">Destructive</button>
+    </div>
+
+    <div class="tv-comp-row">
+      <span class="tv-comp-label">인풋</span>
+      <input class="tv-input" placeholder="기본" />
+      <input class="tv-input tv-input-focus" placeholder="포커스" />
+      <input class="tv-input tv-input-error" placeholder="에러" />
+    </div>
+
+    <div class="tv-comp-row">
+      <span class="tv-comp-label">배지</span>
+      <span class="tv-badge tv-badge-success">성공</span>
+      <span class="tv-badge tv-badge-warning">경고</span>
+      <span class="tv-badge tv-badge-error">오류</span>
+      <span class="tv-badge tv-badge-neutral">중립</span>
+    </div>
+
+    <div class="tv-comp-row">
+      <span class="tv-comp-label">토글 스위치</span>
+      <button class="tv-switch tv-switch-on" type="button" role="switch" aria-checked="true"><span class="tv-switch-thumb"></span></button>
+      <button class="tv-switch" type="button" role="switch" aria-checked="false"><span class="tv-switch-thumb"></span></button>
+    </div>
+
+    <div class="tv-comp-row">
+      <span class="tv-comp-label">체크박스</span>
+      <label class="tv-checkbox"><input type="checkbox" checked /><span class="tv-checkbox-box"></span></label>
+      <label class="tv-checkbox"><input type="checkbox" /><span class="tv-checkbox-box"></span></label>
+    </div>
+
+    <div class="tv-comp-row">
+      <span class="tv-comp-label">셀렉트</span>
+      <div class="tv-select-wrap">
+        <select class="tv-select">
+          <option>public</option>
+          <option>analytics</option>
+          <option>reporting</option>
+        </select>
+        <svg class="tv-select-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </div>
+    </div>
+  </section>
+
+  <!-- (F) 모달 -->
+  <section class="tv-block">
+    <div class="tv-block-title">모달 — 테이블 삭제 확인</div>
+    <div class="tv-modal-stage">
+      <div class="tv-modal">
+        <div class="tv-body-lg">테이블 삭제</div>
+        <p class="tv-modal-body tv-body-sm"><code class="tv-mono">orders</code> 테이블을 삭제하시겠습니까? 1,248개 행이 영구적으로 삭제되며 되돌릴 수 없습니다.</p>
+        <div>
+          <label class="tv-modal-confirm-label tv-caption">확인을 위해 테이블 이름 <code class="tv-mono">orders</code> 를 입력하세요</label>
+          <div style="margin-top:8px;">
+            <input class="tv-input" style="width:100%" placeholder="orders" />
+          </div>
+        </div>
+        <div class="tv-modal-actions">
+          <button class="tv-btn tv-btn-secondary tv-btn-sm" type="button">취소</button>
+          <button class="tv-btn tv-btn-destructive tv-btn-sm" type="button">테이블 삭제</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- (G) 푸터 -->
+  <footer class="tv-block tv-footer">
+    <ul>
+      <li>바이올렛은 검색 제출·워드마크 점 전용이 원칙이지만, 선택 행·토글 on·체크박스·포커스 링처럼 시스템에 "강조가 필요한 상태"가 새로 생기는 자리엔 같은 바이올렛을 그대로 재사용했다 — 두 번째 색을 들이는 게 아니라 하나뿐인 강조색의 적용 범위를 넓힌 것이다.</li>
+      <li>조밀한 그리드와 28px radius는 층을 나눠 화해시켰다: 그리드 행·셀 자체는 0 radius로 남기고, 그 그리드를 담는 앱 셸 바깥 카드만 28px로 감싸 overflow:hidden으로 모서리를 잘라낸다. 버튼·인풋 같은 상호작용 요소는 pill(9999px)로, 16px 바디가 "주력"인 브랜드 파트(헤더·모달·컴포넌트 표본)와 달리 그리드·트리·상태바는 12px 안팎으로 낮춰 밀도를 지켰다.</li>
+      <li>dark 모드는 Slate Ink(#332f2d)를 카드로, Ash Veil(#665a54)을 secondary로 올린 해석이다. 바이올렛은 대비를 위해 밝혔고(#5433eb → #9a8bfb) 그 위 글자는 흰색 대신 잉크에 가까운 어두운 색을 썼다 — 같은 pill, 같은 그림자 분리 규칙은 유지.</li>
+      <li>구문 강조 12종은 채도를 낮춰 하나뿐인 브랜드 색 옆에서도 튀지 않게 만들었다(위반이 아니라 SPEC이 코드 블록에 명시적으로 허용한 예외). keyword만 바이올렛 계열로 남겨 브랜드와의 연결고리를 살렸다.</li>
+      <li>타이포 규정의 &lt;12px 금지·weight 700+ 금지는 글자 그대로 지켰다: caption/micro/tiny(11·10·9px)는 컬럼 타입, 상태바, 스와치 라벨 같은 메타데이터에만 쓰고 본문에는 쓰지 않았고, Shopify Sans의 700 컷은 존재하되 실제로는 어디서도 굵기를 올리지 않았다(400 고정).</li>
+    </ul>
+  </footer>
+
+</div>
+
+<script>
+(function () {
+  var toggle = document.getElementById('mode-toggle');
+  var html = document.documentElement;
+  toggle.addEventListener('click', function () {
+    var next = html.getAttribute('data-mode') === 'light' ? 'dark' : 'light';
+    html.setAttribute('data-mode', next);
+    toggle.textContent = next === 'light' ? '🌙 Dark' : '☀️ Light';
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,836 @@
+<!DOCTYPE html>
+<html lang="ko" data-theme="visual" data-mode="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Visual — table-view 테마 프로토타입</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400&family=IBM+Plex+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  /* ============ 0. 토큰 — visual.tokens.css 와 값 동일, src/themes.css 로 그대로 이식 ============ */
+  [data-mode="light"] { color-scheme: light; }
+  [data-mode="dark"] { color-scheme: dark; }
+
+  [data-theme="visual"][data-mode="light"] {
+    --tv-background: #f6f6f4;
+    --tv-foreground: #000000;
+    --tv-card: #ffffff;
+    --tv-card-foreground: #000000;
+    --tv-popover: #ffffff;
+    --tv-popover-foreground: #000000;
+    --tv-primary: #2c2c26;
+    --tv-primary-foreground: #ffffff;
+    --tv-secondary: #e8e7d9;
+    --tv-secondary-foreground: #57584b;
+    --tv-muted: #d0d0c8;
+    --tv-muted-foreground: #6d6e5e;
+    --tv-accent: #e8e7d9;
+    --tv-accent-foreground: #000000;
+    --tv-border: #d0d0c8;
+    --tv-input: #d0d0c8;
+    --tv-ring: #2c2c26;
+    --tv-primary-tint: 44 44 38;
+    --tv-status-connected: #16a34a;
+    --tv-status-connecting: #f59e0b;
+    --tv-status-error: #ef4444;
+    --tv-status-idle: #aaab9c;
+
+    --tv-syntax-keyword: #86741f;
+    --tv-syntax-operator: #777920;
+    --tv-syntax-punct: #73794a;
+    --tv-syntax-type: #588037;
+    --tv-syntax-builtin: #867342;
+    --tv-syntax-function: #7c773a;
+    --tv-syntax-property: #697c29;
+    --tv-syntax-string: #5a8029;
+    --tv-syntax-number: #976d26;
+    --tv-syntax-atom: #458326;
+    --tv-syntax-comment: #6c7a4e;
+    --tv-syntax-error: #ba592f;
+
+    --tv-destructive: #ef4444;
+    --tv-success: #16a34a;
+    --tv-warning: #ea580c;
+    --tv-highlight: #eab308;
+    --tv-radius: 0.1875rem;
+    --tv-radius-card: 0.5rem;
+    --tv-font-sans: "IBM Plex Mono", "JetBrains Mono", ui-monospace,
+      SFMono-Regular, Menlo, Consolas, "Liberation Mono",
+      "Apple SD Gothic Neo", "Malgun Gothic", monospace;
+    --tv-font-mono: "IBM Plex Mono", "JetBrains Mono", ui-monospace,
+      SFMono-Regular, Menlo, Consolas, "Liberation Mono",
+      "Apple SD Gothic Neo", "Malgun Gothic", monospace;
+    --tv-font-display: "Fraunces", "Instrument Serif", Georgia,
+      "Apple SD Gothic Neo", "Malgun Gothic", serif;
+
+    --tv-value-key: #0369a1;
+    --tv-value-leaf: #047857;
+    --tv-value-delete: #f43f5e;
+
+    --tv-border-strong: #57584b;
+    --tv-highlighter: #fff347;
+    --tv-footer-bg: #2c2c26;
+    --tv-tag-border: #aaa674;
+    --tv-sage: #979886;
+    --tv-paper: #ffffff;
+    --tv-ink: #000000;
+    --tv-vellum: #f6f6f4;
+    --tv-ash: #d0d0c8;
+    --tv-olive-char: #57584b;
+    --tv-lichen: #6d6e5e;
+    --tv-bone: #e8e7d9;
+  }
+
+  [data-theme="visual"][data-mode="dark"] {
+    --tv-background: #2c2c26;
+    --tv-foreground: #f6f6f4;
+    --tv-card: #2c2c26;
+    --tv-card-foreground: #f6f6f4;
+    --tv-popover: #35352e;
+    --tv-popover-foreground: #f6f6f4;
+    --tv-primary: #f6f6f4;
+    --tv-primary-foreground: #2c2c26;
+    --tv-secondary: #57584b;
+    --tv-secondary-foreground: #e8e7d9;
+    --tv-muted: #3e3e35;
+    --tv-muted-foreground: #979886;
+    --tv-accent: #3e3e35;
+    --tv-accent-foreground: #f6f6f4;
+    --tv-border: #57584b;
+    --tv-input: #57584b;
+    --tv-ring: #f6f6f4;
+    --tv-primary-tint: 246 246 244;
+    --tv-status-connected: #22c55e;
+    --tv-status-connecting: #f59e0b;
+    --tv-status-error: #ef4444;
+    --tv-status-idle: #aaab9c;
+
+    --tv-syntax-keyword: #a99328;
+    --tv-syntax-operator: #969929;
+    --tv-syntax-punct: #91995d;
+    --tv-syntax-type: #6fa245;
+    --tv-syntax-builtin: #a89253;
+    --tv-syntax-function: #9c9749;
+    --tv-syntax-property: #859e34;
+    --tv-syntax-string: #72a233;
+    --tv-syntax-number: #bf8a30;
+    --tv-syntax-atom: #57a630;
+    --tv-syntax-comment: #889b63;
+    --tv-syntax-error: #d57d57;
+
+    --tv-destructive: #f87171;
+    --tv-success: #22c55e;
+    --tv-warning: #fb923c;
+    --tv-highlight: #facc15;
+    --tv-radius: 0.1875rem;
+    --tv-radius-card: 0.5rem;
+    --tv-font-sans: "IBM Plex Mono", "JetBrains Mono", ui-monospace,
+      SFMono-Regular, Menlo, Consolas, "Liberation Mono",
+      "Apple SD Gothic Neo", "Malgun Gothic", monospace;
+    --tv-font-mono: "IBM Plex Mono", "JetBrains Mono", ui-monospace,
+      SFMono-Regular, Menlo, Consolas, "Liberation Mono",
+      "Apple SD Gothic Neo", "Malgun Gothic", monospace;
+    --tv-font-display: "Fraunces", "Instrument Serif", Georgia,
+      "Apple SD Gothic Neo", "Malgun Gothic", serif;
+
+    --tv-value-key: #7dd3fc;
+    --tv-value-leaf: #6ee7b7;
+    --tv-value-delete: #f43f5e;
+
+    --tv-border-strong: #979886;
+    --tv-highlighter: #fff347;
+    --tv-footer-bg: #2c2c26;
+    --tv-tag-border: #aaa674;
+    --tv-sage: #979886;
+    --tv-paper: #ffffff;
+    --tv-ink: #000000;
+    --tv-vellum: #f6f6f4;
+    --tv-ash: #d0d0c8;
+    --tv-olive-char: #57584b;
+    --tv-lichen: #6d6e5e;
+    --tv-bone: #e8e7d9;
+  }
+
+  /* ============ 1. 리셋 · 베이스 · 타입 스케일 ============ */
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--tv-background);
+    color: var(--tv-foreground);
+    font-family: var(--tv-font-sans);
+    font-size: 16px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    transition: background-color .15s ease, color .15s ease;
+  }
+  a { color: inherit; }
+  .page { max-width: 1280px; margin: 0 auto; padding: 0 24px 128px; }
+
+  /* 세리프(디스플레이·헤딩 전용) / 모노(그 외 전부) 두 축 스케일 */
+  .tv-caption   { font-family: var(--tv-font-mono); font-size: 12px; font-weight: 400; line-height: 1.41; letter-spacing: -.8px; }
+  .tv-body-sm   { font-family: var(--tv-font-mono); font-size: 14px; font-weight: 400; line-height: 1.35; letter-spacing: -.94px; }
+  .tv-body      { font-family: var(--tv-font-mono); font-size: 16px; font-weight: 400; line-height: 1.5;  letter-spacing: -1.07px; }
+  .tv-subheading{ font-family: var(--tv-font-mono); font-size: 20px; font-weight: 500; line-height: 1.5;  letter-spacing: -.5px; }
+  .tv-heading-sm{ font-family: var(--tv-font-display); font-size: 24px; font-weight: 400; line-height: 1;     letter-spacing: -1.2px; }
+  .tv-heading   { font-family: var(--tv-font-display); font-size: 32px; font-weight: 400; line-height: 1;     letter-spacing: -1.6px; }
+  .tv-heading-lg{ font-family: var(--tv-font-display); font-size: 48px; font-weight: 300; line-height: 1.125; letter-spacing: -2.4px; }
+  .tv-display-sm{ font-family: var(--tv-font-display); font-size: 64px; font-weight: 300; line-height: 1;     letter-spacing: -3.2px; }
+  .tv-display   { font-family: var(--tv-font-display); font-size: 96px; font-weight: 300; line-height: .94;   letter-spacing: -4.8px; }
+  h1, h2, h3 { margin: 0; font-weight: inherit; }
+
+  .eyebrow {
+    display: block; font-family: var(--tv-font-mono); font-size: 12px; font-weight: 500;
+    letter-spacing: -.8px; text-transform: uppercase; color: var(--tv-muted-foreground);
+  }
+
+  .mark {
+    background: var(--tv-highlighter); color: var(--tv-ink); padding: 0 6px;
+    box-decoration-break: clone; -webkit-box-decoration-break: clone;
+  }
+
+  .block { margin-top: 80px; padding-top: 80px; border-top: 1px solid var(--tv-border); }
+  .block:first-of-type { margin-top: 64px; padding-top: 0; border-top: none; }
+  .block-heading { margin-bottom: 8px; }
+  .block-sub { max-width: 640px; margin: 0 0 32px; color: var(--tv-muted-foreground); }
+
+  /* ============ 2. (A) 상단 내비 바 + 히어로 ============ */
+  .topnav {
+    height: 56px; display: flex; align-items: center; justify-content: space-between;
+    border-bottom: 1px solid var(--tv-border); margin-bottom: 64px;
+  }
+  .back-link { font-family: var(--tv-font-mono); font-size: 14px; text-decoration: none; }
+  .back-link:hover { text-decoration: underline; }
+
+  .mode-toggle {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: transparent; color: var(--tv-foreground);
+    border: 1px solid var(--tv-foreground); border-radius: var(--tv-radius);
+    padding: 8px 16px; font-family: var(--tv-font-mono); font-size: 14px; font-weight: 500;
+    cursor: pointer;
+  }
+  .mode-toggle:hover { background: var(--tv-accent); }
+  .mode-toggle:focus-visible { outline: 2px solid var(--tv-ring); outline-offset: 2px; }
+  .mode-toggle__dot { width: 8px; height: 8px; border-radius: 999px; background: var(--tv-foreground); }
+
+  .hero { display: flex; flex-direction: column; gap: 16px; padding-bottom: 8px; }
+  .hero .tv-display { color: var(--tv-foreground); }
+  .hero .tagline { max-width: 720px; color: var(--tv-muted-foreground); }
+
+  /* ============ 3. (B) 팔레트 ============ */
+  .swatch-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); gap: 16px; }
+  .swatch {
+    background: var(--tv-card); border: 1px solid var(--tv-border);
+    border-radius: var(--tv-radius-card); padding: 16px;
+  }
+  .swatch__chip { height: 56px; border-radius: var(--tv-radius); margin-bottom: 12px; border: 1px solid var(--tv-border); }
+  .swatch__name { display: block; font-family: var(--tv-font-mono); font-size: 14px; font-weight: 500; margin-bottom: 2px; }
+  .swatch__hex { display: block; font-family: var(--tv-font-mono); font-size: 12px; color: var(--tv-muted-foreground); margin-bottom: 8px; }
+  .swatch__role { display: block; font-family: var(--tv-font-mono); font-size: 11px; font-weight: 500; letter-spacing: -.6px; text-transform: uppercase; color: var(--tv-primary); }
+  .swatch-grid--status .swatch__chip { height: 36px; }
+
+  /* ============ 4. (C)+(D) 앱 셸 ============ */
+  .app-window {
+    min-height: 660px; display: flex; flex-direction: column;
+    border: 1px solid var(--tv-border-strong); border-radius: var(--tv-radius-card);
+    overflow: hidden; background: var(--tv-card);
+  }
+  .app-row { display: flex; flex: 1; min-height: 620px; }
+
+  .sidebar {
+    width: 252px; flex-shrink: 0; background: var(--tv-card);
+    border-right: 1px solid var(--tv-border-strong); display: flex; flex-direction: column;
+  }
+  .sidebar__search { padding: 12px; }
+  .sidebar__search input {
+    width: 100%; border: 1px solid var(--tv-input); border-radius: var(--tv-radius);
+    background: var(--tv-background); color: var(--tv-foreground);
+    padding: 6px 10px; font-family: var(--tv-font-mono); font-size: 13px;
+  }
+  .sidebar__search input:focus-visible { outline: 2px solid var(--tv-ring); outline-offset: 1px; }
+  .tree, .tree-children { list-style: none; margin: 0; padding: 0; }
+  .tree { padding-bottom: 12px; overflow-y: auto; }
+  .tree-item__row { display: flex; align-items: center; gap: 6px; padding: 6px 12px; font-family: var(--tv-font-mono); font-size: 13px; }
+  .tree-item__caret { width: 10px; color: var(--tv-muted-foreground); font-size: 9px; flex-shrink: 0; }
+  .tree-item__dot { width: 6px; height: 6px; border-radius: 999px; flex-shrink: 0; }
+  .tree-item__dot--connected { background: var(--tv-status-connected); }
+  .tree-item__dot--connecting { background: var(--tv-status-connecting); animation: pulse 1.6s ease-in-out infinite; }
+  .tree-item__dot--error { background: var(--tv-status-error); }
+  @media (prefers-reduced-motion: reduce) { .tree-item__dot--connecting { animation: none; } }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .3; } }
+  .tree-item__name { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tree-item__type { margin-left: auto; font-size: 11px; color: var(--tv-muted-foreground); flex-shrink: 0; }
+
+  .schema-node > .tree-item__row { padding-left: 26px; }
+  .schema-group { padding: 8px 12px 3px 40px; }
+  .tree-leaf { padding: 6px 12px 6px 54px; font-family: var(--tv-font-mono); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tree-leaf--selected {
+    background: var(--tv-accent); color: var(--tv-accent-foreground); font-weight: 500;
+    border-left: 2px solid var(--tv-primary); padding-left: 52px;
+  }
+
+  .center-col { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+
+  .tabbar { display: flex; align-items: flex-end; border-bottom: 1px solid var(--tv-border-strong); padding: 0 12px; gap: 2px; }
+  .tab { padding: 8px 16px; font-family: var(--tv-font-mono); font-size: 13px; color: var(--tv-muted-foreground); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+  .tab--active { color: var(--tv-foreground); font-weight: 500; border-bottom-color: var(--tv-primary); }
+  .tab--add { color: var(--tv-muted-foreground); font-weight: 500; padding: 8px 12px; }
+
+  .toolbar {
+    display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+    border-bottom: 1px solid var(--tv-border-strong); background: var(--tv-background);
+  }
+  .toolbar__filter {
+    border: 1px solid var(--tv-input); border-radius: var(--tv-radius);
+    background: var(--tv-card); color: var(--tv-foreground);
+    padding: 6px 10px; font-family: var(--tv-font-mono); font-size: 13px; width: 200px; max-width: 40%;
+  }
+  .toolbar__filter:focus-visible { outline: 2px solid var(--tv-ring); outline-offset: 1px; }
+  .toolbar__actions { display: flex; gap: 8px; }
+  .toolbar__count { margin-left: auto; font-family: var(--tv-font-mono); font-size: 12px; color: var(--tv-muted-foreground); }
+
+  .btn {
+    font-family: var(--tv-font-mono); font-size: 14px; font-weight: 500;
+    border-radius: var(--tv-radius); padding: 8px 16px; border: 1px solid transparent;
+    cursor: pointer; line-height: 1.2;
+  }
+  .btn:focus-visible { outline: 2px solid var(--tv-ring); outline-offset: 2px; }
+  .btn-primary { background: var(--tv-primary); color: var(--tv-primary-foreground); }
+  .btn-secondary { background: var(--tv-secondary); color: var(--tv-secondary-foreground); }
+  .btn-ghost { background: transparent; color: var(--tv-foreground); border-color: var(--tv-foreground); }
+  .btn-ghost:hover { background: var(--tv-accent); }
+  /* destructive 는 SPEC 고정값(#ef4444/dark #f87171) — 흰 텍스트는 라이트 3.76:1 로
+     AA 미달이라 foreground/background 로 다크앵커링한다(라이트 5.58:1, 다크 5.08:1). */
+  .btn-destructive { background: var(--tv-destructive); color: var(--tv-foreground); }
+  [data-mode="dark"] .btn-destructive { color: var(--tv-background); }
+
+  .grid-panel { padding: 24px; flex: 1; min-height: 0; display: flex; }
+  .grid-scroll { flex: 1; overflow: auto; border: 1px solid var(--tv-border); border-radius: var(--tv-radius); max-height: 360px; }
+  table.data-grid { border-collapse: collapse; width: 100%; font-family: var(--tv-font-mono); font-size: 13px; }
+  .data-grid thead th {
+    position: sticky; top: 0; background: var(--tv-secondary); color: var(--tv-secondary-foreground);
+    text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--tv-border-strong); white-space: nowrap;
+  }
+  .col-head { display: flex; flex-direction: column; gap: 2px; }
+  .col-name { font-weight: 500; font-size: 13px; display: inline-flex; align-items: center; gap: 5px; }
+  .col-type { font-size: 10px; color: var(--tv-muted-foreground); font-weight: 400; }
+  .col-pk, .col-fk {
+    font-size: 9px; font-weight: 500; letter-spacing: .02em; padding: 1px 5px;
+    border-radius: var(--tv-radius); background: var(--tv-secondary); color: var(--tv-secondary-foreground);
+    border: 1px solid var(--tv-tag-border);
+  }
+  .sort-arrow { font-size: 9px; color: var(--tv-primary); margin-left: 2px; }
+  .data-grid th.col-num, .data-grid td.num { text-align: right; }
+  .data-grid td {
+    padding: 7px 10px; line-height: 16px; border-bottom: 1px solid var(--tv-border);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px;
+  }
+  .data-grid tbody tr:nth-child(even) td { background: var(--tv-background); }
+  .data-grid tbody tr:last-child td { border-bottom: none; }
+  .cell-null { color: var(--tv-muted-foreground); font-style: italic; }
+  tr.row--selected td { background: var(--tv-accent); color: var(--tv-accent-foreground); }
+  tr.row--selected:nth-child(even) td { background: var(--tv-accent); }
+  td.cell--dirty { position: relative; background: var(--tv-muted); }
+  .dirty-dot { display: inline-block; width: 6px; height: 6px; border-radius: 999px; background: var(--tv-highlighter); margin-right: 6px; vertical-align: middle; border: 1px solid var(--tv-foreground); }
+
+  .editor-panel { border-top: 1px solid var(--tv-border-strong); padding: 16px 24px; height: 190px; flex-shrink: 0; position: relative; background: var(--tv-card); }
+  .editor-body { display: flex; height: 100%; overflow-y: auto; font-family: var(--tv-font-mono); font-size: 13px; line-height: 20px; }
+  .editor-gutter { flex-shrink: 0; text-align: right; padding-right: 14px; color: var(--tv-muted-foreground); user-select: none; }
+  .editor-code { flex: 1; min-width: 0; }
+  .code-line { white-space: pre; }
+  .code-line--indent { padding-left: 20px; }
+  .editor-run { position: absolute; right: 24px; bottom: 16px; }
+  .editor-run kbd {
+    font-family: var(--tv-font-mono); font-size: 11px; font-weight: 500;
+    background: var(--tv-highlighter); color: var(--tv-ink);
+    padding: 1px 5px; border-radius: 3px; margin-left: 2px;
+  }
+
+  .tok-keyword { color: var(--tv-syntax-keyword); font-weight: 500; }
+  .tok-operator { color: var(--tv-syntax-operator); }
+  .tok-punct { color: var(--tv-syntax-punct); }
+  .tok-type { color: var(--tv-syntax-type); }
+  .tok-builtin { color: var(--tv-syntax-builtin); }
+  .tok-function { color: var(--tv-syntax-function); }
+  .tok-property { color: var(--tv-syntax-property); }
+  .tok-string { color: var(--tv-syntax-string); }
+  .tok-number { color: var(--tv-syntax-number); }
+  .tok-atom { color: var(--tv-syntax-atom); }
+  .tok-comment { color: var(--tv-syntax-comment); font-style: italic; }
+  /* 유효한 SQL 이라 실제 오류가 없다 — 구식 <> 연산자에 린트성 물결 밑줄로 error 토큰을 시연 */
+  .tok-error { text-decoration: wavy underline var(--tv-syntax-error); text-underline-offset: 3px; }
+
+  .inspector {
+    width: 264px; flex-shrink: 0; background: var(--tv-popover); color: var(--tv-popover-foreground);
+    border-left: 1px solid var(--tv-border-strong); padding: 16px; overflow-y: auto;
+  }
+  .inspector__head { margin-bottom: 12px; }
+  .inspector__list { margin: 0; }
+  .inspector__row { display: flex; flex-direction: column; gap: 2px; padding: 6px 0; border-bottom: 1px solid var(--tv-border); font-family: var(--tv-font-mono); }
+  .inspector__row dt { font-size: 11px; color: var(--tv-muted-foreground); }
+  .inspector__row dd { margin: 0; font-size: 13px; }
+  .inspector__row--tree { border-bottom: none; }
+
+  .json-tree { font-family: var(--tv-font-mono); font-size: 12px; line-height: 1.7; background: var(--tv-background); color: var(--tv-foreground); border-radius: var(--tv-radius); padding: 8px 10px; margin-top: 4px; }
+  .json-row { white-space: pre; }
+  .json-indent { padding-left: 14px; }
+  .json-key { color: var(--tv-value-key); }
+  .json-leaf { color: var(--tv-value-leaf); }
+  .json-null { color: var(--tv-muted-foreground); font-style: italic; }
+  .json-punct { color: var(--tv-muted-foreground); }
+  .json-remove { color: var(--tv-value-delete); font-weight: 700; margin-left: 6px; cursor: default; }
+
+  .status-bar {
+    display: flex; align-items: center; gap: 10px; padding: 6px 12px;
+    background: var(--tv-secondary); color: var(--tv-secondary-foreground);
+    font-family: var(--tv-font-mono); font-size: 12px; border-top: 1px solid var(--tv-border-strong);
+  }
+  .status-bar__dot { width: 6px; height: 6px; border-radius: 999px; background: var(--tv-status-connected); flex-shrink: 0; }
+  .status-bar__sep { color: var(--tv-muted-foreground); }
+  .status-bar__right { margin-left: auto; }
+
+  /* ============ 5. (E) 컴포넌트 표본 ============ */
+  .component-card { background: var(--tv-card); border: 1px solid var(--tv-border); border-radius: var(--tv-radius-card); padding: 24px; }
+  .component-row { display: flex; align-items: center; gap: 20px; padding: 12px 0; border-bottom: 1px solid var(--tv-border); flex-wrap: wrap; }
+  .component-row:last-child { border-bottom: none; padding-bottom: 0; }
+  .component-row:first-child { padding-top: 0; }
+  .component-row__label { width: 88px; flex-shrink: 0; font-family: var(--tv-font-mono); font-size: 11px; font-weight: 500; letter-spacing: .02em; text-transform: uppercase; color: var(--tv-muted-foreground); }
+  .component-row__samples { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+
+  .field { border: 1px solid var(--tv-input); border-radius: var(--tv-radius); background: var(--tv-background); color: var(--tv-foreground); padding: 8px 12px; font-family: var(--tv-font-mono); font-size: 14px; width: 168px; }
+  .field.is-focus { outline: 2px solid var(--tv-ring); outline-offset: 2px; border-color: var(--tv-ring); }
+  .field.is-error { border-color: var(--tv-destructive); }
+  .field-wrap { display: flex; flex-direction: column; gap: 5px; }
+  .field-hint { font-family: var(--tv-font-mono); font-size: 11px; display: flex; align-items: center; gap: 5px; color: var(--tv-foreground); }
+  .field-hint__dot { width: 6px; height: 6px; border-radius: 999px; background: var(--tv-destructive); flex-shrink: 0; }
+
+  /* 배지: destructive/success/warning 는 SPEC 고정 색이라 같은 다크앵커 패턴을 쓴다 */
+  .badge {
+    display: inline-flex; align-items: center; font-family: var(--tv-font-mono); font-size: 11px; font-weight: 500;
+    padding: 4px 10px; border-radius: var(--tv-radius); color: var(--tv-foreground);
+  }
+  [data-mode="dark"] .badge { color: var(--tv-background); }
+  .badge--success { background: var(--tv-success); }
+  .badge--warning { background: var(--tv-warning); }
+  .badge--error { background: var(--tv-destructive); }
+  .badge.badge--neutral { background: var(--tv-muted); color: var(--tv-muted-foreground); }
+
+  .switch { display: inline-flex; align-items: center; gap: 8px; font-family: var(--tv-font-mono); font-size: 13px; }
+  .switch__track { width: 32px; height: 18px; border-radius: 999px; position: relative; flex-shrink: 0; background: var(--tv-input); }
+  .switch__track::after { content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 999px; background: var(--tv-card); transition: left .15s ease; }
+  .switch--on .switch__track { background: var(--tv-primary); }
+  .switch--on .switch__track::after { left: 16px; background: var(--tv-primary-foreground); }
+
+  .checkbox { display: inline-flex; align-items: center; gap: 8px; font-family: var(--tv-font-mono); font-size: 13px; }
+  .checkbox__box {
+    width: 16px; height: 16px; border-radius: 3px; border: 1px solid var(--tv-input);
+    display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+    background: var(--tv-background); font-size: 11px; color: var(--tv-primary-foreground);
+  }
+  .checkbox--checked .checkbox__box { background: var(--tv-primary); border-color: var(--tv-primary); }
+
+  .select {
+    appearance: none; -webkit-appearance: none;
+    border: 1px solid var(--tv-input); border-radius: var(--tv-radius);
+    background-color: var(--tv-background);
+    background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 6"><path d="M1 1l4 4 4-4" fill="none" stroke="%236d6e5e" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>');
+    background-repeat: no-repeat; background-position: right 10px center;
+    color: var(--tv-foreground); padding: 8px 30px 8px 12px; font-family: var(--tv-font-mono); font-size: 14px;
+    width: 180px;
+  }
+  /* 화살표는 data-URI SVG라 var() 를 못 받는다 — Lichen(#6d6e5e)은 Paper 위에선
+     읽히지만 다크 배경(Carbon)에서 2.7:1 로 안 보여서 다크는 Ash(#d0d0c8)로 재정의. */
+  [data-mode="dark"] .select {
+    background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 6"><path d="M1 1l4 4 4-4" fill="none" stroke="%23d0d0c8" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>');
+  }
+  .select:focus-visible { outline: 2px solid var(--tv-ring); outline-offset: 2px; }
+
+  /* ============ 6. (F) 모달 ============ */
+  .modal-demo { position: relative; height: 340px; border-radius: var(--tv-radius-card); overflow: hidden; border: 1px solid var(--tv-border); }
+  .modal-demo__backdrop { position: absolute; inset: 0; background: rgba(0, 0, 0, .38); }
+  .modal-demo__dialog {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    width: 380px; max-width: calc(100% - 56px);
+    background: var(--tv-popover); color: var(--tv-popover-foreground);
+    border: 1px solid var(--tv-border-strong); border-radius: var(--tv-radius-card); padding: 32px;
+  }
+  .modal-demo__dialog h3 { font-family: var(--tv-font-display); font-size: 24px; font-weight: 400; letter-spacing: -1.2px; margin-bottom: 12px; color: var(--tv-popover-foreground); }
+  .modal-demo__dialog p { margin: 0 0 24px; font-family: var(--tv-font-mono); font-size: 14px; line-height: 1.5; letter-spacing: -.94px; color: var(--tv-muted-foreground); }
+  .modal-demo__dialog p strong { color: var(--tv-popover-foreground); font-weight: 500; }
+  .modal-demo__actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+  /* ============ 7. (G) 푸터 ============ */
+  .footer-block { margin-top: 80px; padding: 64px 0; background: var(--tv-footer-bg); border-top: 1px solid var(--tv-border-strong); }
+  .footer-block .page-inner { max-width: 1280px; margin: 0 auto; padding: 0 24px; }
+  .footer-block .eyebrow { color: var(--tv-sage); }
+  .footer-block h2 { color: var(--tv-paper); margin-bottom: 24px; }
+  .footer-block ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 12px; }
+  .footer-block li { font-family: var(--tv-font-mono); font-size: 14px; line-height: 1.6; letter-spacing: -.94px; max-width: 880px; color: var(--tv-sage); }
+  .footer-block li strong { color: var(--tv-paper); font-weight: 500; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- (A) 상단 내비 바 + 히어로 -->
+  <header>
+    <div class="topnav">
+      <a class="back-link" href="../index.html">← 전체 목록</a>
+      <button class="mode-toggle" id="modeToggle" type="button" aria-pressed="false">
+        <span class="mode-toggle__dot" aria-hidden="true"></span>
+        <span id="modeToggleLabel">Dark mode</span>
+      </button>
+    </div>
+    <div class="hero">
+      <span class="eyebrow">table-view · theme prototype · visual</span>
+      <h1 class="tv-display">Visual</h1>
+      <p class="tagline tv-subheading">따뜻한 편집 잡지. 크림 종이, 세리프 포스터,
+        모노 여백주석, <span class="mark">노란 형광펜 자국 하나</span>.</p>
+    </div>
+  </header>
+
+  <!-- (B) 팔레트 -->
+  <section class="block" aria-labelledby="palette-heading">
+    <span class="eyebrow">palette</span>
+    <h2 class="block-heading tv-heading" id="palette-heading">팔레트</h2>
+    <p class="block-sub tv-body-sm">거의 단색에 선명한 노랑 하나. 위계는 그림자가 아니라 1px 실선과
+      색 대비로만 낸다.</p>
+
+    <div class="swatch-grid">
+      <div class="swatch"><div class="swatch__chip" style="background:var(--tv-vellum)"></div><span class="swatch__name">Vellum</span><code class="swatch__hex">#f6f6f4</code><span class="swatch__role">background</span></div>
+      <div class="swatch"><div class="swatch__chip" style="background:var(--tv-paper)"></div><span class="swatch__name">Paper</span><code class="swatch__hex">#ffffff</code><span class="swatch__role">card</span></div>
+      <div class="swatch"><div class="swatch__chip" style="background:var(--tv-ink)"></div><span class="swatch__name">Ink</span><code class="swatch__hex">#000000</code><span class="swatch__role">foreground</span></div>
+      <div class="swatch"><div class="swatch__chip" style="background:var(--tv-footer-bg)"></div><span class="swatch__name">Carbon</span><code class="swatch__hex">#2c2c26</code><span class="swatch__role">primary</span></div>
+      <div class="swatch"><div class="swatch__chip" style="background:var(--tv-ash)"></div><span class="swatch__name">Ash</span><code class="swatch__hex">#d0d0c8</code><span class="swatch__role">border</span></div>
+      <div class="swatch"><div class="swatch__chip" style="background:var(--tv-olive-char)"></div><span class="swatch__name">Olive Char</span><code class="swatch__hex">#57584b</code><span class="swatch__role">구조 경계</span></div>
+      <div class="swatch"><div class="swatch__chip" style="background:var(--tv-lichen)"></div><span class="swatch__name">Lichen</span><code class="swatch__hex">#6d6e5e</code><span class="swatch__role">muted-foreground</span></div>
+      <div class="swatch"><div class="swatch__chip" style="background:var(--tv-sage)"></div><span class="swatch__name">Sage</span><code class="swatch__hex">#979886</code><span class="swatch__role">다크 muted · 푸터</span></div>
+      <div class="swatch"><div class="swatch__chip" style="background:var(--tv-status-idle)"></div><span class="swatch__name">Moss</span><code class="swatch__hex">#aaab9c</code><span class="swatch__role">status-idle</span></div>
+      <div class="swatch"><div class="swatch__chip" style="background:var(--tv-bone)"></div><span class="swatch__name">Bone</span><code class="swatch__hex">#e8e7d9</code><span class="swatch__role">secondary · muted</span></div>
+      <div class="swatch"><div class="swatch__chip" style="background:var(--tv-highlighter)"></div><span class="swatch__name">Highlighter Yellow</span><code class="swatch__hex">#fff347</code><span class="swatch__role">장식 강조 · ≤4/화면</span></div>
+      <div class="swatch"><div class="swatch__chip" style="background:var(--tv-tag-border)"></div><span class="swatch__name">Khaki Olive</span><code class="swatch__hex">#aaa674</code><span class="swatch__role">태그 테두리</span></div>
+    </div>
+
+    <div class="swatch-grid swatch-grid--status" style="margin-top:16px">
+      <div class="swatch"><div class="swatch__chip" style="background:var(--tv-status-connected)"></div><span class="swatch__name">status-connected</span><code class="swatch__hex">#16a34a</code><span class="swatch__role">연결됨</span></div>
+      <div class="swatch"><div class="swatch__chip" style="background:var(--tv-status-connecting)"></div><span class="swatch__name">status-connecting</span><code class="swatch__hex">#f59e0b</code><span class="swatch__role">연결 중</span></div>
+      <div class="swatch"><div class="swatch__chip" style="background:var(--tv-status-error)"></div><span class="swatch__name">status-error</span><code class="swatch__hex">#ef4444</code><span class="swatch__role">오류</span></div>
+      <div class="swatch"><div class="swatch__chip" style="background:var(--tv-muted)"></div><span class="swatch__name">muted</span><code class="swatch__hex">#d0d0c8</code><span class="swatch__role">muted surface</span></div>
+    </div>
+  </section>
+
+  <!-- (C)+(D) 앱 셸 -->
+  <section class="block" aria-labelledby="shell-heading">
+    <span class="eyebrow">app shell</span>
+    <h2 class="block-heading tv-heading" id="shell-heading">앱 셸 미리보기</h2>
+    <p class="block-sub tv-body-sm">그리드 행 높이 30px 안팎. 숫자·타임스탬프·SQL 은 전부 등폭이다.</p>
+
+    <div class="app-window">
+      <div class="app-row">
+        <!-- 사이드바 -->
+        <nav class="sidebar" aria-label="커넥션 목록">
+          <div class="sidebar__search">
+            <input type="search" placeholder="커넥션 검색" aria-label="커넥션 검색">
+          </div>
+          <ul class="tree" role="tree">
+            <li role="treeitem" aria-expanded="true">
+              <div class="tree-item__row">
+                <span class="tree-item__caret" aria-hidden="true">▾</span>
+                <span class="tree-item__dot tree-item__dot--connected" aria-hidden="true"></span>
+                <span class="tree-item__name">prod-analytics</span>
+                <span class="tree-item__type">PostgreSQL</span>
+              </div>
+              <ul class="tree-children">
+                <li class="schema-node">
+                  <div class="tree-item__row">
+                    <span class="tree-item__caret" aria-hidden="true">▾</span>
+                    <span class="tree-item__name">public</span>
+                  </div>
+                  <ul class="tree-children">
+                    <li class="schema-group eyebrow">Tables</li>
+                    <li class="tree-leaf">users</li>
+                    <li class="tree-leaf tree-leaf--selected">orders</li>
+                    <li class="tree-leaf">order_items</li>
+                    <li class="tree-leaf">payments</li>
+                    <li class="tree-leaf">sessions</li>
+                    <li class="schema-group eyebrow">Views</li>
+                    <li class="tree-leaf">v_revenue_daily</li>
+                    <li class="schema-group eyebrow">Functions</li>
+                    <li class="tree-leaf">calc_ltv()</li>
+                  </ul>
+                </li>
+              </ul>
+            </li>
+            <li role="treeitem" aria-expanded="false">
+              <div class="tree-item__row">
+                <span class="tree-item__caret" aria-hidden="true">▸</span>
+                <span class="tree-item__dot tree-item__dot--connecting" aria-hidden="true"></span>
+                <span class="tree-item__name">staging-cache</span>
+                <span class="tree-item__type">Redis</span>
+              </div>
+            </li>
+            <li role="treeitem" aria-expanded="false">
+              <div class="tree-item__row">
+                <span class="tree-item__caret" aria-hidden="true">▸</span>
+                <span class="tree-item__dot tree-item__dot--error" aria-hidden="true"></span>
+                <span class="tree-item__name">legacy-orders</span>
+                <span class="tree-item__type">MySQL</span>
+              </div>
+            </li>
+          </ul>
+        </nav>
+
+        <!-- 중앙 -->
+        <div class="center-col">
+          <div class="tabbar">
+            <span class="tab tab--active">orders</span>
+            <span class="tab">users</span>
+            <span class="tab">Query 1</span>
+            <span class="tab tab--add" aria-hidden="true">+</span>
+          </div>
+
+          <div class="toolbar">
+            <input class="toolbar__filter" type="text" placeholder="Filter rows" aria-label="행 필터">
+            <div class="toolbar__actions">
+              <button class="btn btn-secondary" type="button">Refresh</button>
+              <button class="btn btn-secondary" type="button">Add row</button>
+              <button class="btn btn-primary" type="button">Commit</button>
+            </div>
+            <span class="toolbar__count">1,248 rows</span>
+          </div>
+
+          <div class="grid-panel">
+            <div class="grid-scroll">
+              <table class="data-grid">
+                <thead>
+                  <tr>
+                    <th class="col-num"><div class="col-head"><span class="col-name">id <span class="col-pk" title="Primary Key">PK</span><span class="sort-arrow" aria-hidden="true">▲</span></span><span class="col-type">int8</span></div></th>
+                    <th class="col-num"><div class="col-head"><span class="col-name">customer_id <span class="col-fk" title="Foreign Key">FK</span></span><span class="col-type">int8</span></div></th>
+                    <th><div class="col-head"><span class="col-name">status</span><span class="col-type">text</span></div></th>
+                    <th class="col-num"><div class="col-head"><span class="col-name">total_amount</span><span class="col-type">numeric</span></div></th>
+                    <th><div class="col-head"><span class="col-name">created_at</span><span class="col-type">timestamptz</span></div></th>
+                    <th><div class="col-head"><span class="col-name">note</span><span class="col-type">text</span></div></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr><td class="num">48210</td><td class="num">3391</td><td>completed</td><td class="num">128.50</td><td>2026-07-14 09:22:10+00</td><td class="cell-null">NULL</td></tr>
+                  <tr><td class="num">48211</td><td class="num">2207</td><td>pending</td><td class="num">64.00</td><td>2026-07-14 09:24:55+00</td><td>Gift wrap requested</td></tr>
+                  <tr><td class="num">48212</td><td class="num">3391</td><td>completed</td><td class="num">342.10</td><td>2026-07-14 09:31:02+00</td><td class="cell-null">NULL</td></tr>
+                  <tr><td class="num">48213</td><td class="num">1188</td><td>refunded</td><td class="num">89.99</td><td>2026-07-14 09:45:18+00</td><td>Customer changed mind</td></tr>
+                  <tr><td class="num">48214</td><td class="num">4402</td><td>completed</td><td class="num">15.00</td><td>2026-07-14 10:02:47+00</td><td class="cell-null">NULL</td></tr>
+                  <tr><td class="num">48215</td><td class="num">2207</td><td>cancelled</td><td class="num">220.00</td><td>2026-07-14 10:11:09+00</td><td class="cell-null">NULL</td></tr>
+                  <tr class="row--selected"><td class="num">48216</td><td class="num">3391</td><td>completed</td><td class="num">58.25</td><td>2026-07-14 10:19:33+00</td><td class="cell-null">NULL</td></tr>
+                  <tr><td class="num">48217</td><td class="num">5510</td><td class="cell--dirty"><span class="dirty-dot" aria-hidden="true"></span>pending</td><td class="num">410.75</td><td>2026-07-14 10:27:41+00</td><td>VIP priority shipping</td></tr>
+                  <tr><td class="num">48218</td><td class="num">1188</td><td>completed</td><td class="num">76.40</td><td>2026-07-14 10:35:02+00</td><td class="cell-null">NULL</td></tr>
+                  <tr><td class="num">48219</td><td class="num">4402</td><td>completed</td><td class="num">132.00</td><td>2026-07-14 10:41:58+00</td><td>Repeat customer</td></tr>
+                  <tr><td class="num">48220</td><td class="num">2207</td><td>completed</td><td class="num">44.10</td><td>2026-07-14 10:50:14+00</td><td class="cell-null">NULL</td></tr>
+                  <tr><td class="num">48221</td><td class="num">3391</td><td>pending</td><td class="num">199.99</td><td>2026-07-14 10:58:36+00</td><td class="cell-null">NULL</td></tr>
+                  <tr><td class="num">48222</td><td class="num">5510</td><td>completed</td><td class="num">88.00</td><td>2026-07-14 11:05:20+00</td><td class="cell-null">NULL</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="editor-panel">
+            <div class="editor-body">
+              <div class="editor-gutter">
+                <div>1</div><div>2</div><div>3</div><div>4</div><div>5</div><div>6</div><div>7</div><div>8</div><div>9</div><div>10</div>
+              </div>
+              <div class="editor-code">
+                <div class="code-line"><span class="tok-comment">-- 최근 30일 고객별 매출</span></div>
+                <div class="code-line"><span class="tok-keyword">SELECT</span> <span class="tok-atom">c</span><span class="tok-punct">.</span><span class="tok-property">id</span><span class="tok-punct">,</span> <span class="tok-atom">c</span><span class="tok-punct">.</span><span class="tok-property">name</span><span class="tok-punct">,</span> <span class="tok-function">SUM</span><span class="tok-punct">(</span><span class="tok-atom">o</span><span class="tok-punct">.</span><span class="tok-property">total_amount</span><span class="tok-punct">)</span> <span class="tok-keyword">AS</span> revenue</div>
+                <div class="code-line"><span class="tok-keyword">FROM</span> <span class="tok-type">orders</span> <span class="tok-atom">o</span></div>
+                <div class="code-line code-line--indent"><span class="tok-keyword">JOIN</span> <span class="tok-type">customers</span> <span class="tok-atom">c</span> <span class="tok-keyword">ON</span> <span class="tok-atom">c</span><span class="tok-punct">.</span><span class="tok-property">id</span> <span class="tok-operator">=</span> <span class="tok-atom">o</span><span class="tok-punct">.</span><span class="tok-property">customer_id</span></div>
+                <div class="code-line"><span class="tok-keyword">WHERE</span> <span class="tok-atom">o</span><span class="tok-punct">.</span><span class="tok-property">created_at</span> <span class="tok-operator">&gt;=</span> <span class="tok-builtin">NOW</span><span class="tok-punct">()</span> <span class="tok-operator">-</span> <span class="tok-keyword">INTERVAL</span> <span class="tok-string">'30 days'</span></div>
+                <div class="code-line code-line--indent"><span class="tok-keyword">AND</span> <span class="tok-atom">o</span><span class="tok-punct">.</span><span class="tok-property">status</span> <span class="tok-operator tok-error">&lt;&gt;</span> <span class="tok-string">'cancelled'</span></div>
+                <div class="code-line"><span class="tok-keyword">GROUP BY</span> <span class="tok-atom">c</span><span class="tok-punct">.</span><span class="tok-property">id</span><span class="tok-punct">,</span> <span class="tok-atom">c</span><span class="tok-punct">.</span><span class="tok-property">name</span></div>
+                <div class="code-line"><span class="tok-keyword">HAVING</span> <span class="tok-function">SUM</span><span class="tok-punct">(</span><span class="tok-atom">o</span><span class="tok-punct">.</span><span class="tok-property">total_amount</span><span class="tok-punct">)</span> <span class="tok-operator">&gt;</span> <span class="tok-number">1000</span></div>
+                <div class="code-line"><span class="tok-keyword">ORDER BY</span> revenue <span class="tok-keyword">DESC</span></div>
+                <div class="code-line"><span class="tok-keyword">LIMIT</span> <span class="tok-number">50</span><span class="tok-punct">;</span></div>
+              </div>
+            </div>
+            <div class="editor-run">
+              <button class="btn btn-primary" type="button">Run <kbd>⌘↵</kbd></button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 인스펙터 -->
+        <aside class="inspector" aria-label="선택된 행 상세">
+          <div class="inspector__head eyebrow">선택된 행 · orders #48216</div>
+          <dl class="inspector__list">
+            <div class="inspector__row"><dt>id</dt><dd>48216</dd></div>
+            <div class="inspector__row"><dt>customer_id</dt><dd>3391</dd></div>
+            <div class="inspector__row"><dt>status</dt><dd>completed</dd></div>
+            <div class="inspector__row"><dt>total_amount</dt><dd>58.25</dd></div>
+            <div class="inspector__row"><dt>created_at</dt><dd>2026-07-14 10:19:33+00</dd></div>
+            <div class="inspector__row"><dt>note</dt><dd class="cell-null">NULL</dd></div>
+            <div class="inspector__row inspector__row--tree">
+              <dt>metadata</dt>
+              <dd>
+                <div class="json-tree">
+                  <div class="json-row"><span class="json-key">channel</span><span class="json-punct">:</span> <span class="json-leaf">"web"</span></div>
+                  <div class="json-row"><span class="json-key">referrer</span><span class="json-punct">:</span> <span class="json-null">null</span></div>
+                  <div class="json-row"><span class="json-key">tags</span><span class="json-punct">: [</span></div>
+                  <div class="json-row json-indent"><span class="json-leaf">"priority"</span><span class="json-remove" title="필드 제거">×</span></div>
+                  <div class="json-row"><span class="json-punct">]</span></div>
+                </div>
+              </dd>
+            </div>
+          </dl>
+        </aside>
+      </div>
+
+      <!-- (D) 상태 바 -->
+      <div class="status-bar">
+        <span class="status-bar__dot" aria-hidden="true"></span>
+        <span>prod-analytics · public</span>
+        <span class="status-bar__sep">·</span>
+        <span>1,248 rows</span>
+        <span class="status-bar__sep">·</span>
+        <span>실행 42ms</span>
+        <span class="status-bar__right">PostgreSQL 16.2</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- (E) 컴포넌트 표본 -->
+  <section class="block" aria-labelledby="components-heading">
+    <span class="eyebrow">components</span>
+    <h2 class="block-heading tv-heading" id="components-heading">컴포넌트</h2>
+    <p class="block-sub tv-body-sm">그림자 없이 hairline 과 색 대비만으로 상태를 구분한다.</p>
+
+    <div class="component-card">
+      <div class="component-row">
+        <span class="component-row__label">버튼</span>
+        <div class="component-row__samples">
+          <button class="btn btn-primary" type="button">Primary</button>
+          <button class="btn btn-secondary" type="button">Secondary</button>
+          <button class="btn btn-ghost" type="button">Ghost</button>
+          <button class="btn btn-destructive" type="button">Destructive</button>
+        </div>
+      </div>
+
+      <div class="component-row">
+        <span class="component-row__label">인풋</span>
+        <div class="component-row__samples">
+          <div class="field-wrap">
+            <input class="field" type="text" placeholder="기본" aria-label="기본 인풋">
+          </div>
+          <div class="field-wrap">
+            <input class="field is-focus" type="text" value="포커스" aria-label="포커스 인풋">
+          </div>
+          <div class="field-wrap">
+            <input class="field is-error" type="text" value="orders_v2" aria-label="에러 인풋">
+            <span class="field-hint"><span class="field-hint__dot" aria-hidden="true"></span>이미 존재하는 테이블 이름입니다</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="component-row">
+        <span class="component-row__label">배지</span>
+        <div class="component-row__samples">
+          <span class="badge badge--success">성공</span>
+          <span class="badge badge--warning">경고</span>
+          <span class="badge badge--error">오류</span>
+          <span class="badge badge--neutral">중립</span>
+        </div>
+      </div>
+
+      <div class="component-row">
+        <span class="component-row__label">토글</span>
+        <div class="component-row__samples">
+          <span class="switch switch--on"><span class="switch__track" aria-hidden="true"></span>자동 커밋</span>
+          <span class="switch"><span class="switch__track" aria-hidden="true"></span>읽기 전용</span>
+        </div>
+      </div>
+
+      <div class="component-row">
+        <span class="component-row__label">체크박스</span>
+        <div class="component-row__samples">
+          <span class="checkbox checkbox--checked"><span class="checkbox__box" aria-hidden="true">✓</span>NULL 포함</span>
+          <span class="checkbox"><span class="checkbox__box" aria-hidden="true"></span>대소문자 구분</span>
+        </div>
+      </div>
+
+      <div class="component-row">
+        <span class="component-row__label">셀렉트</span>
+        <div class="component-row__samples">
+          <select class="select" aria-label="스키마 선택">
+            <option>public</option>
+            <option>analytics</option>
+            <option>staging</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- (F) 모달 -->
+  <section class="block" aria-labelledby="modal-heading">
+    <span class="eyebrow">modal</span>
+    <h2 class="block-heading tv-heading" id="modal-heading">모달</h2>
+    <p class="block-sub tv-body-sm">popover 표면 + destructive 강조. 실제 오버레이가 아니라 페이지에 고정해 그렸다.</p>
+
+    <div class="modal-demo">
+      <div class="modal-demo__backdrop"></div>
+      <div class="modal-demo__dialog" role="alertdialog" aria-labelledby="modalTitle" aria-describedby="modalDesc">
+        <h3 id="modalTitle">테이블 삭제</h3>
+        <p id="modalDesc"><strong>orders</strong> 테이블을 삭제하면 되돌릴 수 없습니다. 1,248개 행과 연결된 인덱스가 모두 제거됩니다.</p>
+        <div class="modal-demo__actions">
+          <button class="btn btn-ghost" type="button">취소</button>
+          <button class="btn btn-destructive" type="button">테이블 삭제</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+  <!-- (G) 푸터 -->
+  <footer class="footer-block" aria-labelledby="footer-heading">
+    <div class="page-inner">
+      <span class="eyebrow">design notes</span>
+      <h2 class="tv-heading" id="footer-heading">디자인 노트</h2>
+      <ul>
+        <li><strong>두 축 타이포.</strong> Fraunces 세리프 96px/300 은 헤딩·디스플레이 전용이고, 앱 셸
+          안쪽은 탭·툴바·그리드·에디터·인스펙터·상태바까지 전부 IBM Plex Mono 로 통일했다. DB 툴의
+          조밀함은 등폭에서 나온다.</li>
+        <li><strong>노란 형광펜, 4번만.</strong> Highlighter Yellow(#fff347)는 히어로 태그라인의 강조
+          구절, 데이터 그리드의 편집 중 셀 마커, 팔레트 스와치, SQL 에디터 Run 버튼의 <code>⌘↵</code>
+          칩까지 화면당 정확히 4번 썼다 — 텍스트 색·큰 배경·채운 버튼에는 한 번도 쓰지 않았다.</li>
+        <li><strong>그림자 없음.</strong> box-shadow 는 페이지 전체에 하나도 없다. 위계는 1px hairline
+          두 단(Ash 기본, Olive Char/Sage 구조 경계)과 80px 섹션 간격으로만 세웠다.</li>
+        <li><strong>뺀 것.</strong> 카드/버튼 드롭섀도, 그라디언트, 차가운 회색, 파란·보라 계열 강조색,
+          16px 이하 세리프 본문 — 전부 의도적으로 뺐다.</li>
+        <li><strong>다크 모드 = 밤 인쇄판.</strong> 반전이 아니라 Carbon(#2c2c26)을 배경으로 올린
+          해석이다 — 같은 올리브-세이지 색군, 같은 평면성, 같은 노랑 절제(≤4회)를 그대로 지켰다. Sage/Moss
+          는 라이트에서는 대비 미달이라 쓰지 않았던 색인데, 다크에서는 배경이 어두워지며 그대로
+          muted-foreground/status-idle 로 자연스럽게 재사용됐다. primary 만 Carbon → Vellum 으로
+          뒤집어 어두운 배경 위에서 버튼이 읽히게 했다.</li>
+      </ul>
+    </div>
+  </footer>
+
+<script>
+  (function () {
+    var html = document.documentElement;
+    var btn = document.getElementById('modeToggle');
+    var label = document.getElementById('modeToggleLabel');
+
+    function sync() {
+      var isDark = html.getAttribute('data-mode') === 'dark';
+      btn.setAttribute('aria-pressed', String(isDark));
+      label.textContent = isDark ? 'Light mode' : 'Dark mode';
+    }
+
+    btn.addEventListener('click', function () {
+      html.setAttribute('data-mode', html.getAttribute('data-mode') === 'dark' ? 'light' : 'dark');
+      sync();
+    });
+
+    sync();
+  })();
+</script>
+</body>
+</html>

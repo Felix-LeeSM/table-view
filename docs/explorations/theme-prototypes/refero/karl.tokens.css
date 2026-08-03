@@ -1,0 +1,145 @@
+/* ============================================================
+ * Karl — "화창한 오후의 팝업북 디오라마"
+ *
+ * 5색 고정 (그대로 복사, 이 파일 안에서 새 hue 추가 없음):
+ *   Signal Yellow #ffe600 · Globe Azure #007fff · Roof Coral #ef3b2c
+ *   (UI 크롬 절대 금지 — 어떤 --tv-* 에도 안 씀, 일러스트 레이어 전용)
+ *   Charcoal Ink #333333 · Cloud White #ffffff
+ *
+ * light = 정본(노란 하늘 위 앱 셸). dark = "해질녘/밤의 디오라마" —
+ *   하늘이 Azure 로 넘어가고 Yellow 가 내부 primary(창문/달빛)로 자리를 바꾼다.
+ *   앱 셸 내부(표면/텍스트/보더)는 항상 White+Ink 두 무채색만 쓴다 — 명도만
+ *   반전(light: 흰 면+잉크 선, dark: 잉크 면+흰 선), 새 회색을 만들지 않는다.
+ *
+ * muted / accent 는 White-Ink 축 보간(무채색) 또는 primary 색조의 저채도
+ * wash 이며 다섯 색 hue 를 벗어나지 않는다 — 새 hue 추가 아님.
+ *
+ * 아래 "공통 고정값"·"정체성 색" 블록은 실제 앱에서 :root/index.css 전역
+ * 1회 정의값과 동일하다. 이 파일은 단독 프로토타입 실행을 위해 테마 블록
+ * 안에 그대로 복제해 두었다 — src/themes.css 통합 시 중복분은 정리 가능.
+ *
+ * radius: 1440px 규칙은 사각 컨테이너(카드/버튼/뱃지/인풋 = 시스템이 명시한
+ * "카드 0·pill 0·버튼 0")에는 적용하지 않는다. --tv-radius 는 0px 로 고정하고,
+ * 원형 전용 요소(상태 점/탭 인디케이터/토글 손잡이/모드 스위치)는 karl.html
+ * 쪽 로컬 유틸(.karl-round { border-radius: 1440px }) 로 별도 적용한다.
+ * ============================================================ */
+
+[data-theme="karl"][data-mode="light"] {
+  /* 표면 / 텍스트 — 앱 셸 내부는 흰 면 + 잉크 텍스트/선.
+     "노란 하늘"은 셸 바깥 페이지 캔버스 몫이라 --tv-* 에는 등장하지 않는다. */
+  --tv-background: #ffffff;
+  --tv-foreground: #333333;
+  --tv-card: #ffffff;
+  --tv-card-foreground: #333333;
+  --tv-popover: #ffffff;
+  --tv-popover-foreground: #333333;
+  --tv-primary: #007fff;
+  --tv-primary-foreground: #ffffff;
+  --tv-secondary: #ffffff;
+  --tv-secondary-foreground: #333333;
+  --tv-muted: #f4f4f4;
+  --tv-muted-foreground: #737373;
+  --tv-accent: #e0f0ff;
+  --tv-accent-foreground: #333333;
+  --tv-border: #333333;
+  --tv-input: #333333;
+  --tv-ring: #007fff;
+  --tv-primary-tint: 0 127 255;
+  --tv-status-connected: #16a34a;
+  --tv-status-connecting: #f59e0b;
+  --tv-status-error: #ef4444;
+  --tv-status-idle: #94a3b8;
+
+  /* 구문 강조 12종 — Azure 계단(진한 파랑 keyword → 틸 type → 하늘색
+     builtin/function/property) + Charcoal 그레이 축(operator/punct/comment)
+     + 이 파일에 이미 고정으로 존재하는 시스템 토큰 재사용
+     (number ← orange-700, error ← red-600, atom ← rose-800 계열을 AA로 재조정).
+     Coral 은 여기서도 0회 — 일러스트 전용 금지를 syntax 에도 관철.
+     전부 카드 배경(#ffffff) 기준 AA 4.5:1 이상 실측 완료. */
+  --tv-syntax-keyword: #0057b3;
+  --tv-syntax-operator: #525252;
+  --tv-syntax-punct: #737373;
+  --tv-syntax-type: #0d7490;
+  --tv-syntax-builtin: #0369a1;
+  --tv-syntax-function: #0369a1;
+  --tv-syntax-property: #0f766e;
+  --tv-syntax-string: #15803d;
+  --tv-syntax-number: #c2410c;
+  --tv-syntax-atom: #9f1239;
+  --tv-syntax-comment: #6b7280;
+  --tv-syntax-error: #dc2626;
+
+  /* 공통 (테마 무관, SPEC 값 그대로) */
+  --tv-destructive: #ef4444;
+  --tv-success: #16a34a;
+  --tv-warning: #ea580c;
+  --tv-highlight: #eab308;
+  --tv-radius: 0px; /* 시스템 "카드 0 · pill 0 · 버튼 0" — 1440px 은 원형 전용, 위 헤더 노트 참고 */
+  --tv-font-sans:
+    Arial, Helvetica, Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --tv-font-mono: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+
+  /* 정체성 색 (테마 무관, SPEC 값 그대로 복사) */
+  --tv-value-key: #0369a1;
+  --tv-value-leaf: #047857;
+  --tv-value-delete: #f43f5e;
+}
+
+[data-theme="karl"][data-mode="dark"] {
+  /* 해질녘/밤의 디오라마 — 하늘은 Azure 로, 앱 셸 내부는 Ink 면 + White 텍스트/선
+     (light 의 흰 면+잉크 선을 그대로 반전 — 새 회색 발명 없음). primary 는 Yellow —
+     낮의 "하늘"이 밤엔 자리를 비우니 그 노랑이 실내 강조(창문/달빛)로 넘어온다. */
+  --tv-background: #333333;
+  --tv-foreground: #ffffff;
+  --tv-card: #333333;
+  --tv-card-foreground: #ffffff;
+  --tv-popover: #333333;
+  --tv-popover-foreground: #ffffff;
+  --tv-primary: #ffe600;
+  --tv-primary-foreground: #333333;
+  --tv-secondary: #333333;
+  --tv-secondary-foreground: #ffffff;
+  --tv-muted: #454545;
+  --tv-muted-foreground: #a3a3a3;
+  --tv-accent: #4a4020;
+  --tv-accent-foreground: #ffffff;
+  --tv-border: #ffffff;
+  --tv-input: #ffffff;
+  --tv-ring: #ffe600;
+  --tv-primary-tint: 255 230 0;
+  --tv-status-connected: #22c55e;
+  --tv-status-connecting: #f59e0b;
+  --tv-status-error: #ef4444;
+  --tv-status-idle: #64748b;
+
+  /* 구문 강조 12종 — light 계단의 명도 반전(카드 배경 #333333 기준 AA 4.5:1↑ 실측). */
+  --tv-syntax-keyword: #6cb6ff;
+  --tv-syntax-operator: #d4d4d4;
+  --tv-syntax-punct: #a3a3a3;
+  --tv-syntax-type: #5fd0e8;
+  --tv-syntax-builtin: #7dd3fc;
+  --tv-syntax-function: #7dd3fc;
+  --tv-syntax-property: #5eead4;
+  --tv-syntax-string: #4ade80;
+  --tv-syntax-number: #fb923c;
+  --tv-syntax-atom: #fb7185;
+  --tv-syntax-comment: #9ca3af;
+  --tv-syntax-error: #f87171;
+
+  /* 공통 (테마 무관, SPEC 값 그대로) */
+  --tv-destructive: #f87171;
+  --tv-success: #22c55e;
+  --tv-warning: #fb923c;
+  --tv-highlight: #facc15;
+  --tv-radius: 0px;
+  --tv-font-sans:
+    Arial, Helvetica, Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --tv-font-mono: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+
+  /* 정체성 색 (테마 무관, SPEC 값 그대로 복사) */
+  --tv-value-key: #7dd3fc;
+  --tv-value-leaf: #6ee7b7;
+  --tv-value-delete: #f43f5e;
+}

@@ -1,0 +1,1416 @@
+<!doctype html>
+<html lang="ko" data-theme="supply" data-mode="light">
+<head>
+<meta charset="utf-8" />
+<title>099 SUPPLY — table-view theme prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link
+  href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap"
+  rel="stylesheet"
+/>
+<style>
+  /* ============================================================
+   * 099 SUPPLY — tokens
+   * light/dark 블록은 supply.tokens.css 와 동일 값(그 파일이 SOT).
+   * 이 파일은 완전 독립 실행을 위해 같은 값을 인라인으로도 갖는다.
+   * ============================================================ */
+  [data-theme="supply"][data-mode="light"] {
+    --tv-background: #ffffff;
+    --tv-foreground: #101010;
+    --tv-card: #ffffff;
+    --tv-card-foreground: #101010;
+    --tv-popover: #222222;
+    --tv-popover-foreground: #ffffff;
+    --tv-primary: #101010;
+    --tv-primary-foreground: #ffffff;
+    --tv-secondary: #ffffff;
+    --tv-secondary-foreground: #101010;
+    --tv-muted: #e0e0e0;
+    --tv-muted-foreground: #555555;
+    --tv-accent: #e0e0e0;
+    --tv-accent-foreground: #101010;
+    --tv-border: #e0e0e0;
+    --tv-input: #c8c8c8;
+    --tv-ring: #101010;
+    --tv-primary-tint: 16 16 16;
+    --tv-status-connected: #101010;
+    --tv-status-connecting: #555555;
+    --tv-status-error: #000000;
+    --tv-status-idle: #c8c8c8;
+    --tv-destructive: #000000;
+    --tv-destructive-foreground: #ffffff;
+    --tv-syntax-keyword: #101010;
+    --tv-syntax-function: #101010;
+    --tv-syntax-builtin: #222222;
+    --tv-syntax-type: #222222;
+    --tv-syntax-number: #222222;
+    --tv-syntax-property: #555555;
+    --tv-syntax-atom: #555555;
+    --tv-syntax-string: #555555;
+    --tv-syntax-operator: #999999;
+    --tv-syntax-comment: #999999;
+    --tv-syntax-punct: #c8c8c8;
+    --tv-syntax-error: #000000;
+    --tv-radius: 0.5rem;
+    --tv-value-key: #0369a1;
+    --tv-value-leaf: #047857;
+    --tv-value-delete: #f43f5e;
+    color-scheme: light;
+  }
+  [data-theme="supply"][data-mode="dark"] {
+    --tv-background: #101010;
+    --tv-foreground: #ffffff;
+    --tv-card: #101010;
+    --tv-card-foreground: #ffffff;
+    --tv-popover: #222222;
+    --tv-popover-foreground: #ffffff;
+    --tv-primary: #ffffff;
+    --tv-primary-foreground: #101010;
+    --tv-secondary: #101010;
+    --tv-secondary-foreground: #ffffff;
+    --tv-muted: #222222;
+    --tv-muted-foreground: #999999;
+    --tv-accent: #222222;
+    --tv-accent-foreground: #ffffff;
+    --tv-border: #222222;
+    --tv-input: #555555;
+    --tv-ring: #ffffff;
+    --tv-primary-tint: 255 255 255;
+    --tv-status-connected: #ffffff;
+    --tv-status-connecting: #999999;
+    --tv-status-error: #000000;
+    --tv-status-idle: #555555;
+    --tv-destructive: #ffffff;
+    --tv-destructive-foreground: #101010;
+    --tv-syntax-keyword: #ffffff;
+    --tv-syntax-function: #ffffff;
+    --tv-syntax-builtin: #c8c8c8;
+    --tv-syntax-type: #c8c8c8;
+    --tv-syntax-number: #c8c8c8;
+    --tv-syntax-property: #999999;
+    --tv-syntax-atom: #999999;
+    --tv-syntax-string: #999999;
+    --tv-syntax-operator: #555555;
+    --tv-syntax-comment: #555555;
+    --tv-syntax-punct: #555555;
+    --tv-syntax-error: #ffffff;
+    --tv-radius: 0.5rem;
+    --tv-value-key: #7dd3fc;
+    --tv-value-leaf: #6ee7b7;
+    --tv-value-delete: #f43f5e;
+    color-scheme: dark;
+  }
+
+  /* ============================================================
+   * 로컬 상수 — 팔레트 스와치(B)는 모드를 타지 않는 "고정 8색 표"라서
+   * --tv-* (모드마다 역할이 바뀜)로는 못 그린다. 이 8개는 SPEC 표의
+   * 원색 그대로, 프로토타입 전용, --tv-* 계약과 무관.
+   * radius 4종도 --tv-radius 하나로 못 담아 로컬로 분리했다
+   * (버튼 pill / 카드 8 / 인풋 4 / 배지 0).
+   * ============================================================ */
+  :root {
+    --swatch-canvas: #ffffff;
+    --swatch-ink: #101010;
+    --swatch-charcoal: #000000;
+    --swatch-muted-hard: #222222;
+    --swatch-muted: #555555;
+    --swatch-muted-soft: #999999;
+    --swatch-border-soft: #c8c8c8;
+    --swatch-border-subtle: #e0e0e0;
+    --radius-pill: 9999px;
+    --radius-input: 4px;
+    --radius-badge: 0px;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+  html,
+  body {
+    margin: 0;
+    padding: 0;
+  }
+  body {
+    background: var(--tv-background);
+    color: var(--tv-foreground);
+    font-family:
+      "Soehne Mono",
+      "JetBrains Mono",
+      "IBM Plex Mono",
+      "Space Mono",
+      ui-monospace,
+      "SFMono-Regular",
+      "Apple SD Gothic Neo",
+      "Malgun Gothic",
+      sans-serif;
+    font-weight: 400;
+    -webkit-font-smoothing: antialiased;
+  }
+  :focus-visible {
+    outline: 2px solid var(--tv-ring);
+    outline-offset: 2px;
+  }
+
+  /* ---- 타입 스케일 (SPEC 4절, 6단 고정) ---- */
+  .t-display {
+    font-size: 54px;
+    font-weight: 400;
+    line-height: 1;
+    letter-spacing: 0.025em;
+  }
+  .t-label {
+    font-size: 26px;
+    font-weight: 500;
+    line-height: 1.2;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+  .t-body {
+    font-size: 16px;
+    font-weight: 400;
+    line-height: 1.2;
+  }
+  .t-badge {
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 1.2;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .t-caption {
+    font-size: 11px;
+    font-weight: 400;
+    line-height: 1.5;
+  }
+  .t-micro {
+    font-size: 8px;
+    font-weight: 400;
+    line-height: 1.2;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+  }
+  .num {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ---- 레이아웃 ---- */
+  .page {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 0 24px 80px;
+  }
+  .section {
+    padding-top: 80px;
+  }
+  .section-heading {
+    color: var(--tv-muted-foreground);
+    margin: 0 0 16px;
+  }
+
+  /* ---- 카탈로그 메타데이터 패턴 — 이 시스템의 서명 ---- */
+  .catalog-row {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+  }
+  .catalog-sep {
+    color: var(--tv-muted-foreground);
+  }
+
+  /* ---- (A) 헤더 ---- */
+  .header {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 40px 0;
+    border-bottom: 1px solid var(--tv-border);
+  }
+  .header-vibe {
+    margin: 10px 0 0;
+    color: var(--tv-muted-foreground);
+  }
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .link-back {
+    color: var(--tv-muted-foreground);
+    text-decoration: none;
+  }
+  .link-back:hover {
+    color: var(--tv-foreground);
+  }
+
+  /* ---- 버튼 (전부 pill, hairline 으로만 구분) ---- */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 30px;
+    padding: 0 16px;
+    border-radius: var(--radius-pill);
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--tv-foreground);
+    font: inherit;
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    cursor: pointer;
+  }
+  .btn-primary {
+    background: var(--tv-primary);
+    color: var(--tv-primary-foreground);
+  }
+  .btn-secondary {
+    background: var(--tv-secondary);
+    color: var(--tv-secondary-foreground);
+    border-color: var(--tv-border);
+  }
+  .btn-secondary:hover {
+    border-color: var(--tv-foreground);
+  }
+  .btn-ghost {
+    color: var(--tv-muted-foreground);
+  }
+  .btn-ghost:hover {
+    color: var(--tv-foreground);
+    background: var(--tv-accent);
+  }
+  .btn-destructive {
+    background: var(--tv-destructive);
+    color: var(--tv-destructive-foreground);
+  }
+
+  /* ---- (B) 팔레트 스와치 ---- */
+  .swatch-grid {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    gap: 12px;
+  }
+  .swatch-chip {
+    height: 64px;
+    border-radius: 8px;
+    border: 1px solid var(--tv-border);
+  }
+  .swatch-canvas .swatch-chip {
+    background: var(--swatch-canvas);
+  }
+  .swatch-ink .swatch-chip {
+    background: var(--swatch-ink);
+  }
+  .swatch-charcoal .swatch-chip {
+    background: var(--swatch-charcoal);
+  }
+  .swatch-muted-hard .swatch-chip {
+    background: var(--swatch-muted-hard);
+  }
+  .swatch-muted .swatch-chip {
+    background: var(--swatch-muted);
+  }
+  .swatch-muted-soft .swatch-chip {
+    background: var(--swatch-muted-soft);
+  }
+  .swatch-border-soft .swatch-chip {
+    background: var(--swatch-border-soft);
+  }
+  .swatch-border-subtle .swatch-chip {
+    background: var(--swatch-border-subtle);
+  }
+  .swatch-label {
+    margin: 8px 0 0;
+  }
+  .swatch-role {
+    display: block;
+    color: var(--tv-muted-foreground);
+    margin-top: 2px;
+  }
+  .status-grid {
+    display: flex;
+    gap: 40px;
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid var(--tv-border);
+  }
+  .status-sample {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  /* ---- 상태 도형 어휘 — 점 / 삼각 / 빗금사각 / 빈사각 ----
+     hatch 는 라이트/다크 모드와 무관하게 흑백 이색으로 고정한다.
+     이유: supply.html footer (G) 참고 — 단색 톤 하나는 다크 배경(#101010)에
+     근접해 사라지는 역설이 생기지만, 흑백 패턴은 항상 최대 자기대비. */
+  .shape {
+    display: inline-block;
+    flex: none;
+  }
+  .shape-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--tv-status-connected);
+  }
+  .shape-triangle {
+    width: 0;
+    height: 0;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-bottom: 9px solid var(--tv-status-connecting);
+    animation: supply-pulse 1.6s ease-in-out infinite;
+  }
+  .shape-hatch {
+    width: 9px;
+    height: 9px;
+    border: 1px solid var(--tv-status-error);
+    background-image: repeating-linear-gradient(
+      45deg,
+      #000 0,
+      #000 2px,
+      #fff 2px,
+      #fff 4px
+    );
+  }
+  .shape-hollow {
+    width: 9px;
+    height: 9px;
+    border: 1.5px solid var(--tv-status-idle);
+    background: transparent;
+  }
+  .shape.small {
+    transform: scale(0.75);
+  }
+  @keyframes supply-pulse {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.35;
+    }
+  }
+
+  /* ---- (C) 앱 셸 ---- */
+  .shell {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--tv-border);
+    border-radius: var(--tv-radius);
+    overflow: hidden;
+    min-height: 620px;
+    background: var(--tv-card);
+    color: var(--tv-card-foreground);
+  }
+  .shell-main {
+    display: grid;
+    grid-template-columns: 240px 1fr 260px;
+    height: 600px;
+  }
+
+  /* -- 사이드바 -- */
+  .sidebar {
+    border-right: 1px solid var(--tv-border);
+    padding: 16px 12px;
+    overflow-y: auto;
+    min-height: 0; /* grid item content-size gotcha, see .center comment */
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .search-input {
+    width: 100%;
+  }
+  .conn-item {
+    margin-bottom: 4px;
+  }
+  .conn-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  .conn-row:hover {
+    background: var(--tv-accent);
+  }
+  .conn-caret {
+    width: 10px;
+    color: var(--tv-muted-foreground);
+  }
+  .conn-name {
+    flex: 1;
+  }
+  .conn-kind {
+    color: var(--tv-muted-foreground);
+  }
+  .tree {
+    padding-left: 16px;
+    margin-top: 2px;
+  }
+  .tree-group {
+    color: var(--tv-muted-foreground);
+    padding: 6px 8px 2px;
+  }
+  .tree-item {
+    display: block;
+    padding: 5px 8px 5px 20px;
+    border-radius: 4px;
+    color: var(--tv-foreground);
+    cursor: pointer;
+  }
+  .tree-item:hover {
+    background: var(--tv-accent);
+  }
+  .tree-item.is-selected {
+    background: var(--tv-accent);
+    color: var(--tv-accent-foreground);
+    box-shadow: inset 2px 0 0 var(--tv-primary);
+  }
+
+  /* -- 중앙 -- */
+  .center {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0; /* grid item + flex column: without this, content height
+      (13-row table) overrides the 600px shell-main track and the sql-panel
+      overflows past the shell into the statusbar below it. */
+  }
+  .tabs {
+    display: flex;
+    border-bottom: 1px solid var(--tv-border);
+    padding: 0 8px;
+  }
+  .tab {
+    padding: 10px 14px;
+    color: var(--tv-muted-foreground);
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+  }
+  .tab.is-active {
+    color: var(--tv-foreground);
+    border-bottom-color: var(--tv-primary);
+  }
+  .tab-add {
+    padding: 10px 12px;
+    color: var(--tv-muted-foreground);
+  }
+
+  .toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--tv-border);
+  }
+  .toolbar-input {
+    flex: 1;
+    max-width: 260px;
+  }
+  .toolbar-spacer {
+    flex: 1;
+  }
+  .row-count {
+    color: var(--tv-muted-foreground);
+  }
+
+  .input {
+    height: 28px;
+    padding: 0 10px;
+    border-radius: var(--radius-input);
+    border: 1px solid var(--tv-input);
+    background: var(--tv-background);
+    color: var(--tv-foreground);
+    font: inherit;
+    font-size: 11px;
+  }
+  .input::placeholder {
+    color: var(--tv-muted-foreground);
+  }
+  .input-focus {
+    border-color: var(--tv-ring);
+    box-shadow: 0 0 0 3px rgb(var(--tv-primary-tint) / 0.18);
+  }
+  .input-error {
+    border-width: 2px;
+    border-color: var(--tv-foreground);
+  }
+
+  .grid-wrap {
+    flex: 1;
+    min-height: 0; /* flex item content-size gotcha, see .center comment */
+    overflow: auto;
+  }
+  table.data-grid {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11px;
+  }
+  .data-grid col.col-id {
+    width: 64px;
+  }
+  .data-grid col.col-cust {
+    width: 96px;
+  }
+  .data-grid col.col-status {
+    width: 96px;
+  }
+  .data-grid col.col-amount {
+    width: 110px;
+  }
+  .data-grid col.col-created {
+    width: 172px;
+  }
+  .data-grid thead th {
+    text-align: left;
+    vertical-align: top;
+    padding: 6px 10px 7px;
+    border-bottom: 1px solid var(--tv-border);
+    background: var(--tv-card);
+    position: sticky;
+    top: 0;
+  }
+  .th-name {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .th-tag {
+    font-size: 8px;
+    letter-spacing: 0.02em;
+    color: var(--tv-muted-foreground);
+    border: 1px solid var(--tv-border);
+    border-radius: var(--radius-badge);
+    padding: 0 3px;
+  }
+  .th-sort {
+    color: var(--tv-foreground);
+  }
+  .th-type {
+    display: block;
+    margin-top: 2px;
+    font-size: 8px;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: var(--tv-muted-foreground);
+  }
+  .data-grid td {
+    padding: 6px 10px;
+    line-height: 18px;
+    border-bottom: 1px solid var(--tv-border);
+    white-space: nowrap;
+  }
+  .data-grid td.num {
+    text-align: right;
+  }
+  .cell-null {
+    color: var(--tv-muted-foreground);
+    font-style: italic;
+  }
+  tr.row-selected td {
+    background: var(--tv-accent);
+    color: var(--tv-accent-foreground);
+  }
+  tr.row-selected td.cell-null {
+    color: var(--tv-muted-foreground);
+  }
+  td.cell-editing {
+    outline: 1.5px dashed var(--tv-foreground);
+    outline-offset: -1.5px;
+    background: var(--tv-accent);
+    position: relative;
+  }
+  td.cell-editing::after {
+    content: "•";
+    margin-left: 6px;
+    color: var(--tv-foreground);
+  }
+
+  .sql-panel {
+    border-top: 1px solid var(--tv-border);
+    height: 190px;
+    display: flex;
+    flex-direction: column;
+    background: var(--tv-card);
+  }
+  .sql-panel-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 12px;
+    color: var(--tv-muted-foreground);
+    border-bottom: 1px solid var(--tv-border);
+  }
+  .sql-body {
+    flex: 1;
+    display: flex;
+    overflow: auto;
+    padding: 8px 0;
+  }
+  .sql-gutter {
+    flex: none;
+    width: 30px;
+    text-align: right;
+    padding-right: 10px;
+    background: var(--tv-muted);
+    color: var(--tv-syntax-punct);
+    font-size: 11px;
+    line-height: 18px;
+    user-select: none;
+  }
+  .sql-code {
+    flex: 1;
+    font-size: 11px;
+    line-height: 18px;
+    white-space: pre;
+    padding-right: 12px;
+  }
+  .sql-panel-foot {
+    display: flex;
+    justify-content: flex-end;
+    padding: 8px 12px;
+    border-top: 1px solid var(--tv-border);
+  }
+
+  /* ---- 구문 강조 12종 ----
+     톤은 --tv-syntax-* (5→4단 사다리), 굵기는 항상 400(500 은 헤딩
+     하나에 예약이라 여기선 못 씀) — italic/underline/tracking 으로
+     추가 구분한다. error 는 톤이 아니라 흑백 빗금 글리프. */
+  .syn-kw {
+    color: var(--tv-syntax-keyword);
+    letter-spacing: 0.04em;
+  }
+  .syn-op {
+    color: var(--tv-syntax-operator);
+  }
+  .syn-pu {
+    color: var(--tv-syntax-punct);
+  }
+  .syn-ty {
+    color: var(--tv-syntax-type);
+    font-style: italic;
+  }
+  .syn-bi {
+    color: var(--tv-syntax-builtin);
+    text-decoration: underline dotted;
+    text-underline-offset: 2px;
+  }
+  .syn-fn {
+    color: var(--tv-syntax-function);
+    text-decoration: underline dotted;
+    text-underline-offset: 2px;
+  }
+  .syn-pr {
+    color: var(--tv-syntax-property);
+  }
+  .syn-st {
+    color: var(--tv-syntax-string);
+    font-style: italic;
+  }
+  .syn-nu {
+    color: var(--tv-syntax-number);
+  }
+  .syn-at {
+    color: var(--tv-syntax-atom);
+    text-decoration: underline solid;
+    text-underline-offset: 2px;
+  }
+  .syn-cm {
+    color: var(--tv-syntax-comment);
+    font-style: italic;
+  }
+  .syn-er {
+    color: var(--tv-syntax-error);
+    text-decoration: underline solid;
+    text-underline-offset: 2px;
+  }
+  .syn-er::before {
+    content: "";
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    margin-right: 4px;
+    background-image: repeating-linear-gradient(
+      45deg,
+      #000 0,
+      #000 2px,
+      #fff 2px,
+      #fff 4px
+    );
+    border: 1px solid currentColor;
+    vertical-align: -1px;
+  }
+
+  /* -- 인스펙터 -- */
+  .inspector {
+    border-left: 1px solid var(--tv-border);
+    padding: 16px 14px;
+    overflow-y: auto;
+    min-height: 0; /* grid item content-size gotcha, see .center comment */
+  }
+  .kv-list {
+    margin: 12px 0 0;
+  }
+  .kv-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--tv-border);
+    font-size: 11px;
+  }
+  .kv-row dt {
+    color: var(--tv-muted-foreground);
+  }
+  .kv-row dd {
+    margin: 0;
+    text-align: right;
+  }
+  .kv-json {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .kv-json dd {
+    text-align: left;
+    margin-top: 6px;
+  }
+  .json-tree {
+    font-size: 11px;
+    line-height: 1.7;
+  }
+  .json-line.json-indent {
+    padding-left: 14px;
+  }
+  .json-key {
+    color: var(--tv-value-key);
+  }
+  .json-leaf {
+    color: var(--tv-value-leaf);
+  }
+  .json-punct {
+    color: var(--tv-muted-foreground);
+  }
+  .json-delete {
+    color: var(--tv-value-delete);
+    text-decoration: line-through;
+  }
+
+  /* ---- (D) 상태 바 ---- */
+  .statusbar {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 0 14px;
+    height: 32px;
+    border-top: 1px solid var(--tv-border);
+    font-size: 11px;
+    color: var(--tv-muted-foreground);
+  }
+  .statusbar-main {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .statusbar strong {
+    font-weight: 400;
+    color: var(--tv-foreground);
+  }
+  .statusbar-spacer {
+    flex: 1;
+  }
+
+  /* ---- (E) 컴포넌트 표본 ---- */
+  .component-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 0;
+    border-bottom: 1px solid var(--tv-border);
+  }
+  .component-row:last-child {
+    border-bottom: none;
+  }
+  .component-label {
+    width: 96px;
+    flex: none;
+    color: var(--tv-muted-foreground);
+  }
+  .input-error-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .input-error-msg {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin: 0;
+    color: var(--tv-foreground);
+  }
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 8px;
+    border-radius: var(--radius-badge);
+    border: 1px solid var(--tv-border);
+    font-size: 11px;
+  }
+  .toggle {
+    display: inline-flex;
+    align-items: center;
+    width: 34px;
+    height: 18px;
+    border-radius: var(--radius-pill);
+    border: 1px solid var(--tv-input);
+    background: var(--tv-background);
+    padding: 2px;
+    cursor: pointer;
+  }
+  .toggle-knob {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--tv-muted-foreground);
+    transition: transform 0.15s ease;
+  }
+  .toggle.is-on {
+    background: var(--tv-primary);
+    border-color: var(--tv-primary);
+  }
+  .toggle.is-on .toggle-knob {
+    background: var(--tv-primary-foreground);
+    transform: translateX(16px);
+  }
+  .checkbox {
+    width: 16px;
+    height: 16px;
+    border: 1px solid var(--tv-input);
+    border-radius: 3px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    cursor: pointer;
+  }
+  .checkbox.is-checked {
+    background: var(--tv-primary);
+    border-color: var(--tv-primary);
+    color: var(--tv-primary-foreground);
+  }
+  .select {
+    display: inline-flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    height: 28px;
+    padding: 0 10px;
+    min-width: 160px;
+    border-radius: var(--radius-input);
+    border: 1px solid var(--tv-input);
+    font-size: 11px;
+  }
+  .select-caret {
+    color: var(--tv-muted-foreground);
+  }
+
+  .syntax-legend {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px 24px;
+    padding: 16px 0 0;
+  }
+  .syntax-tag {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    font-size: 11px;
+  }
+  .legend-id {
+    color: var(--tv-muted-foreground);
+  }
+
+  /* ---- (F) 모달 ---- */
+  .modal-scrim {
+    background: rgba(0, 0, 0, 0.45);
+    border-radius: var(--tv-radius);
+    padding: 48px 24px;
+    display: flex;
+    justify-content: center;
+  }
+  .modal-card {
+    width: 380px;
+    background: var(--tv-popover);
+    color: var(--tv-popover-foreground);
+    border-radius: var(--tv-radius);
+    border: 1px solid var(--swatch-muted-hard);
+    padding: 24px;
+  }
+  .modal-title {
+    margin: 0 0 12px;
+  }
+  .modal-body {
+    margin: 0 0 20px;
+    color: var(--tv-popover-foreground);
+    opacity: 0.82;
+  }
+  .modal-table-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 8px;
+    border: 1px solid var(--swatch-muted);
+    border-radius: var(--radius-badge);
+    margin-bottom: 20px;
+  }
+  .modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+  .modal-card .btn-secondary {
+    background: transparent;
+    border-color: var(--swatch-muted);
+    color: var(--tv-popover-foreground);
+  }
+
+  /* ---- (G) 푸터 ---- */
+  .footer {
+    color: var(--tv-muted-foreground);
+  }
+  .footer-list {
+    margin: 16px 0 0;
+    padding-left: 20px;
+  }
+  .footer-list li {
+    margin-bottom: 10px;
+  }
+  .footer-list strong {
+    font-weight: 400;
+    color: var(--tv-foreground);
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- (A) 헤더 바 -->
+  <header class="header">
+    <div>
+      <div class="catalog-row">
+        <span class="t-display">099</span>
+        <span class="catalog-sep" aria-hidden="true">———</span>
+        <span class="t-label">SUPPLY</span>
+      </div>
+      <p class="t-body header-vibe">검은 오브젝트가 걸린 흰 갤러리 벽</p>
+    </div>
+    <div class="header-actions">
+      <button type="button" class="btn btn-secondary" id="mode-toggle" aria-pressed="false">dark 모드</button>
+      <a class="t-caption link-back" href="../index.html">← 전체 목록</a>
+    </div>
+  </header>
+
+  <!-- (B) 팔레트 스와치 -->
+  <section class="section palette">
+    <h2 class="t-badge section-heading">PALETTE — 무채색 8단</h2>
+    <div class="swatch-grid">
+      <div class="swatch swatch-canvas">
+        <div class="swatch-chip"></div>
+        <p class="t-caption swatch-label">Canvas White · #ffffff<span class="swatch-role">background / card</span></p>
+      </div>
+      <div class="swatch swatch-ink">
+        <div class="swatch-chip"></div>
+        <p class="t-caption swatch-label">Ink · #101010<span class="swatch-role">foreground / primary</span></p>
+      </div>
+      <div class="swatch swatch-charcoal">
+        <div class="swatch-chip"></div>
+        <p class="t-caption swatch-label">Charcoal · #000000<span class="swatch-role">destructive fill</span></p>
+      </div>
+      <div class="swatch swatch-muted-hard">
+        <div class="swatch-chip"></div>
+        <p class="t-caption swatch-label">Muted Hard · #222222<span class="swatch-role">popover / modal</span></p>
+      </div>
+      <div class="swatch swatch-muted">
+        <div class="swatch-chip"></div>
+        <p class="t-caption swatch-label">Muted · #555555<span class="swatch-role">muted-foreground</span></p>
+      </div>
+      <div class="swatch swatch-muted-soft">
+        <div class="swatch-chip"></div>
+        <p class="t-caption swatch-label">Muted Soft · #999999<span class="swatch-role">아이콘 / hover 테두리</span></p>
+      </div>
+      <div class="swatch swatch-border-soft">
+        <div class="swatch-chip"></div>
+        <p class="t-caption swatch-label">Border Soft · #c8c8c8<span class="swatch-role">인풋 외곽선</span></p>
+      </div>
+      <div class="swatch swatch-border-subtle">
+        <div class="swatch-chip"></div>
+        <p class="t-caption swatch-label">Border Subtle · #e0e0e0<span class="swatch-role">border / muted</span></p>
+      </div>
+    </div>
+
+    <div class="status-grid">
+      <div class="status-sample"><span class="shape shape-dot"></span><span class="t-caption">connected · 연결됨</span></div>
+      <div class="status-sample"><span class="shape shape-triangle"></span><span class="t-caption">connecting · 연결 중</span></div>
+      <div class="status-sample"><span class="shape shape-hatch"></span><span class="t-caption">error · 오류</span></div>
+      <div class="status-sample"><span class="shape shape-hollow"></span><span class="t-caption">idle · 대기</span></div>
+    </div>
+  </section>
+
+  <!-- (C) 앱 셸 목업 + (D) 상태 바 -->
+  <section class="section">
+    <h2 class="t-badge section-heading">APP SHELL</h2>
+    <div class="shell">
+      <div class="shell-main">
+
+        <!-- 좌측 사이드바 -->
+        <aside class="sidebar">
+          <input class="input search-input" placeholder="검색" />
+
+          <div>
+            <div class="conn-item">
+              <div class="conn-row">
+                <span class="conn-caret">▾</span>
+                <span class="shape shape-dot"></span>
+                <span class="t-caption conn-name">prod-analytics</span>
+                <span class="t-micro conn-kind">PG</span>
+              </div>
+              <div class="tree">
+                <div class="tree-group t-micro">public</div>
+                <div class="tree-group t-micro" style="padding-left:12px">Tables</div>
+                <a class="tree-item t-caption" style="padding-left:32px">users</a>
+                <a class="tree-item t-caption is-selected" style="padding-left:32px">orders</a>
+                <a class="tree-item t-caption" style="padding-left:32px">order_items</a>
+                <a class="tree-item t-caption" style="padding-left:32px">payments</a>
+                <a class="tree-item t-caption" style="padding-left:32px">sessions</a>
+                <div class="tree-group t-micro" style="padding-left:12px">Views</div>
+                <a class="tree-item t-caption" style="padding-left:32px">v_revenue_daily</a>
+                <div class="tree-group t-micro" style="padding-left:12px">Functions</div>
+                <a class="tree-item t-caption" style="padding-left:32px">calc_ltv()</a>
+              </div>
+            </div>
+
+            <div class="conn-item">
+              <div class="conn-row">
+                <span class="conn-caret">▸</span>
+                <span class="shape shape-triangle"></span>
+                <span class="t-caption conn-name">staging-cache</span>
+                <span class="t-micro conn-kind">REDIS</span>
+              </div>
+            </div>
+
+            <div class="conn-item">
+              <div class="conn-row">
+                <span class="conn-caret">▸</span>
+                <span class="shape shape-hatch"></span>
+                <span class="t-caption conn-name">legacy-orders</span>
+                <span class="t-micro conn-kind">MYSQL</span>
+              </div>
+            </div>
+          </div>
+        </aside>
+
+        <!-- 중앙 -->
+        <div class="center">
+          <div class="tabs">
+            <span class="t-caption tab is-active">orders</span>
+            <span class="t-caption tab">users</span>
+            <span class="t-caption tab">Query 1</span>
+            <span class="t-caption tab-add">+</span>
+          </div>
+
+          <div class="toolbar">
+            <input class="input toolbar-input" placeholder="필터 (예: status = 'completed')" />
+            <button type="button" class="btn btn-secondary">Refresh</button>
+            <button type="button" class="btn btn-secondary">Add row</button>
+            <button type="button" class="btn btn-primary">Commit</button>
+            <span class="toolbar-spacer"></span>
+            <span class="t-caption row-count num">1,248 rows</span>
+          </div>
+
+          <div class="grid-wrap">
+            <table class="data-grid">
+              <colgroup>
+                <col class="col-id" /><col class="col-cust" /><col class="col-status" />
+                <col class="col-amount" /><col class="col-created" /><col />
+              </colgroup>
+              <thead>
+                <tr>
+                  <th>
+                    <span class="th-name">id <span class="th-tag">PK</span> <span class="th-sort">↑</span></span>
+                    <span class="th-type">int8</span>
+                  </th>
+                  <th>
+                    <span class="th-name">customer_id <span class="th-tag">FK</span></span>
+                    <span class="th-type">int8</span>
+                  </th>
+                  <th><span class="th-name">status</span><span class="th-type">text</span></th>
+                  <th><span class="th-name">total_amount</span><span class="th-type">numeric</span></th>
+                  <th><span class="th-name">created_at</span><span class="th-type">timestamptz</span></th>
+                  <th><span class="th-name">note</span><span class="th-type">text</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="num">8841</td><td class="num">1024</td><td>completed</td>
+                  <td class="num">128.50</td><td>2026-07-29 09:12:03+00</td>
+                  <td class="cell-null">NULL</td>
+                </tr>
+                <tr>
+                  <td class="num">8840</td><td class="num">1187</td><td>completed</td>
+                  <td class="num">64.00</td><td>2026-07-29 08:55:41+00</td>
+                  <td>Gift wrap requested</td>
+                </tr>
+                <tr>
+                  <td class="num">8839</td><td class="num">1024</td><td>pending</td>
+                  <td class="num">212.75</td><td>2026-07-29 08:40:12+00</td>
+                  <td class="cell-null">NULL</td>
+                </tr>
+                <tr>
+                  <td class="num">8838</td><td class="num">1305</td><td>refunded</td>
+                  <td class="num">45.20</td><td>2026-07-28 22:18:57+00</td>
+                  <td>Wrong size</td>
+                </tr>
+                <tr class="row-selected">
+                  <td class="num">8837</td><td class="num">1442</td><td>completed</td>
+                  <td class="num">302.00</td><td>2026-07-28 21:05:33+00</td>
+                  <td class="cell-null">NULL</td>
+                </tr>
+                <tr>
+                  <td class="num">8836</td><td class="num">1024</td><td>completed</td>
+                  <td class="num">89.99</td><td>2026-07-28 19:47:02+00</td>
+                  <td class="cell-null">NULL</td>
+                </tr>
+                <tr>
+                  <td class="num">8835</td><td class="num">1560</td><td class="cell-editing">cancelled</td>
+                  <td class="num">156.30</td><td>2026-07-28 18:22:19+00</td>
+                  <td>Customer request</td>
+                </tr>
+                <tr>
+                  <td class="num">8834</td><td class="num">1187</td><td>completed</td>
+                  <td class="num">73.40</td><td>2026-07-28 15:03:51+00</td>
+                  <td class="cell-null">NULL</td>
+                </tr>
+                <tr>
+                  <td class="num">8833</td><td class="num">1610</td><td>pending</td>
+                  <td class="num">410.00</td><td>2026-07-28 12:11:08+00</td>
+                  <td class="cell-null">NULL</td>
+                </tr>
+                <tr>
+                  <td class="num">8832</td><td class="num">1442</td><td>completed</td>
+                  <td class="num">55.60</td><td>2026-07-28 09:59:44+00</td>
+                  <td class="cell-null">NULL</td>
+                </tr>
+                <tr>
+                  <td class="num">8831</td><td class="num">1305</td><td>completed</td>
+                  <td class="num">198.20</td><td>2026-07-27 23:41:15+00</td>
+                  <td>Leave at door</td>
+                </tr>
+                <tr>
+                  <td class="num">8830</td><td class="num">1024</td><td>completed</td>
+                  <td class="num">121.00</td><td>2026-07-27 20:08:29+00</td>
+                  <td class="cell-null">NULL</td>
+                </tr>
+                <tr>
+                  <td class="num">8829</td><td class="num">1187</td><td>refunded</td>
+                  <td class="num">33.00</td><td>2026-07-27 17:52:06+00</td>
+                  <td class="cell-null">NULL</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="sql-panel">
+            <div class="sql-panel-head">
+              <span class="t-micro">QUERY 1</span>
+              <span class="t-micro">SQL</span>
+            </div>
+            <div class="sql-body">
+              <div class="sql-gutter">
+                <div>1</div><div>2</div><div>3</div><div>4</div><div>5</div>
+                <div>6</div><div>7</div><div>8</div><div>9</div><div>10</div>
+              </div>
+              <div class="sql-code"
+><span class="syn-cm">-- 최근 30일 고객별 매출</span>
+<span class="syn-kw">SELECT</span> <span class="syn-at">c</span><span class="syn-pu">.</span><span class="syn-pr">id</span><span class="syn-pu">,</span> <span class="syn-at">c</span><span class="syn-pu">.</span><span class="syn-pr">name</span><span class="syn-pu">,</span> <span class="syn-fn">SUM</span><span class="syn-pu">(</span><span class="syn-at">o</span><span class="syn-pu">.</span><span class="syn-pr">total_amount</span><span class="syn-pu">)</span> <span class="syn-kw">AS</span> <span class="syn-pr">revenue</span>
+<span class="syn-kw">FROM</span> <span class="syn-ty">orders</span> <span class="syn-at">o</span>
+  <span class="syn-kw">JOIN</span> <span class="syn-ty">customers</span> <span class="syn-at">c</span> <span class="syn-kw">ON</span> <span class="syn-at">c</span><span class="syn-pu">.</span><span class="syn-pr">id</span> <span class="syn-op">=</span> <span class="syn-at">o</span><span class="syn-pu">.</span><span class="syn-pr">customer_id</span>
+<span class="syn-kw">WHERE</span> <span class="syn-at">o</span><span class="syn-pu">.</span><span class="syn-pr">created_at</span> <span class="syn-op">&gt;=</span> <span class="syn-bi">NOW</span><span class="syn-pu">()</span> <span class="syn-op">-</span> <span class="syn-kw">INTERVAL</span> <span class="syn-st">'30 days'</span>
+  <span class="syn-kw">AND</span> <span class="syn-at">o</span><span class="syn-pu">.</span><span class="syn-pr">status</span> <span class="syn-op">&lt;&gt;</span> <span class="syn-st">'cancelled'</span>
+<span class="syn-kw">GROUP BY</span> <span class="syn-at">c</span><span class="syn-pu">.</span><span class="syn-pr">id</span><span class="syn-pu">,</span> <span class="syn-at">c</span><span class="syn-pu">.</span><span class="syn-pr">name</span>
+<span class="syn-kw">HAVING</span> <span class="syn-fn">SUM</span><span class="syn-pu">(</span><span class="syn-at">o</span><span class="syn-pu">.</span><span class="syn-pr">total_amount</span><span class="syn-pu">)</span> <span class="syn-op">&gt;</span> <span class="syn-nu">1000</span>
+<span class="syn-kw">ORDER BY</span> <span class="syn-pr">revenue</span> <span class="syn-kw">DESC</span>
+<span class="syn-kw">LIMIT</span> <span class="syn-nu">50</span><span class="syn-pu">;</span></div>
+            </div>
+            <div class="sql-panel-foot">
+              <button type="button" class="btn btn-primary">Run ⌘↵</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 우측 인스펙터 -->
+        <aside class="inspector">
+          <p class="t-badge section-heading" style="margin:0">SELECTED · #8837</p>
+          <dl class="kv-list">
+            <div class="kv-row"><dt>id</dt><dd class="num">8837</dd></div>
+            <div class="kv-row"><dt>customer_id</dt><dd class="num">1442</dd></div>
+            <div class="kv-row"><dt>status</dt><dd>completed</dd></div>
+            <div class="kv-row"><dt>total_amount</dt><dd class="num">302.00</dd></div>
+            <div class="kv-row"><dt>created_at</dt><dd class="num">2026-07-28 21:05:33+00</dd></div>
+            <div class="kv-row"><dt>note</dt><dd class="cell-null">NULL</dd></div>
+            <div class="kv-row kv-json">
+              <dt>metadata</dt>
+              <dd>
+                <div class="json-tree">
+                  <div class="json-line"><span class="json-punct">{</span></div>
+                  <div class="json-line json-indent"><span class="json-key">channel</span><span class="json-punct">: </span><span class="json-leaf">"web"</span><span class="json-punct">,</span></div>
+                  <div class="json-line json-indent"><span class="json-key">campaign</span><span class="json-punct">: </span><span class="json-leaf">null</span><span class="json-punct">,</span></div>
+                  <div class="json-line json-indent"><span class="json-key">tags</span><span class="json-punct">: [</span><span class="json-leaf">"vip"</span><span class="json-punct">, </span><span class="json-leaf">"repeat"</span><span class="json-punct">]</span><span class="json-punct">,</span></div>
+                  <div class="json-line json-indent"><span class="json-delete">— legacy_source</span></div>
+                  <div class="json-line"><span class="json-punct">}</span></div>
+                </div>
+              </dd>
+            </div>
+          </dl>
+        </aside>
+      </div>
+
+      <!-- (D) 상태 바 -->
+      <div class="statusbar">
+        <div class="statusbar-main">
+          <span class="shape shape-dot"></span>
+          <span><strong>prod-analytics</strong> · public</span>
+        </div>
+        <span class="num">1,248 rows</span>
+        <span class="num">실행 42ms</span>
+        <span class="statusbar-spacer"></span>
+        <span>PostgreSQL 16.2</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- (E) 컴포넌트 표본 -->
+  <section class="section components">
+    <h2 class="t-badge section-heading">COMPONENTS</h2>
+
+    <div class="component-row">
+      <span class="t-caption component-label">Button</span>
+      <button type="button" class="btn btn-primary">Primary</button>
+      <button type="button" class="btn btn-secondary">Secondary</button>
+      <button type="button" class="btn btn-ghost">Ghost</button>
+      <button type="button" class="btn btn-destructive"><span class="shape shape-hatch small"></span>Delete</button>
+    </div>
+
+    <div class="component-row">
+      <span class="t-caption component-label">Input</span>
+      <input class="input" placeholder="기본" />
+      <input class="input input-focus" value="포커스" readonly />
+      <div class="input-error-wrap">
+        <input class="input input-error" value="felix@" readonly />
+        <p class="t-micro input-error-msg"><span class="shape shape-hatch small"></span>형식을 확인하세요</p>
+      </div>
+    </div>
+
+    <div class="component-row">
+      <span class="t-caption component-label">Badge</span>
+      <span class="badge"><span class="shape shape-dot small"></span>성공</span>
+      <span class="badge"><span class="shape shape-triangle small"></span>경고</span>
+      <span class="badge"><span class="shape shape-hatch small"></span>오류</span>
+      <span class="badge"><span class="shape shape-hollow small"></span>중립</span>
+    </div>
+
+    <div class="component-row">
+      <span class="t-caption component-label">Toggle</span>
+      <span class="toggle is-on" role="switch" aria-checked="true"><span class="toggle-knob"></span></span>
+      <span class="toggle" role="switch" aria-checked="false"><span class="toggle-knob"></span></span>
+    </div>
+
+    <div class="component-row">
+      <span class="t-caption component-label">Checkbox</span>
+      <span class="checkbox is-checked" role="checkbox" aria-checked="true">✓</span>
+      <span class="checkbox" role="checkbox" aria-checked="false"></span>
+    </div>
+
+    <div class="component-row">
+      <span class="t-caption component-label">Select</span>
+      <span class="select">PostgreSQL 16.2 <span class="select-caret">▾</span></span>
+    </div>
+
+    <div class="component-row" style="flex-direction:column;align-items:stretch">
+      <span class="t-caption component-label" style="margin-bottom:4px">Syntax — 12</span>
+      <div class="syntax-legend">
+        <div class="syntax-tag"><span class="t-caption legend-id">01</span><span class="syn-kw">KEYWORD</span></div>
+        <div class="syntax-tag"><span class="t-caption legend-id">02</span><span class="syn-op">OPERATOR</span></div>
+        <div class="syntax-tag"><span class="t-caption legend-id">03</span><span class="syn-pu">PUNCT</span></div>
+        <div class="syntax-tag"><span class="t-caption legend-id">04</span><span class="syn-ty">TYPE</span></div>
+        <div class="syntax-tag"><span class="t-caption legend-id">05</span><span class="syn-bi">BUILTIN</span></div>
+        <div class="syntax-tag"><span class="t-caption legend-id">06</span><span class="syn-fn">FUNCTION</span></div>
+        <div class="syntax-tag"><span class="t-caption legend-id">07</span><span class="syn-pr">PROPERTY</span></div>
+        <div class="syntax-tag"><span class="t-caption legend-id">08</span><span class="syn-st">STRING</span></div>
+        <div class="syntax-tag"><span class="t-caption legend-id">09</span><span class="syn-nu">NUMBER</span></div>
+        <div class="syntax-tag"><span class="t-caption legend-id">10</span><span class="syn-at">ATOM</span></div>
+        <div class="syntax-tag"><span class="t-caption legend-id">11</span><span class="syn-cm">COMMENT</span></div>
+        <div class="syntax-tag"><span class="t-caption legend-id">12</span><span class="syn-er">ERROR</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- (F) 모달 -->
+  <section class="section">
+    <h2 class="t-badge section-heading">MODAL — 테이블 삭제</h2>
+    <div class="modal-scrim">
+      <div class="modal-card">
+        <p class="t-body modal-title">테이블 삭제</p>
+        <div class="modal-table-tag"><span class="shape shape-hatch small"></span><span class="t-caption">orders</span></div>
+        <p class="t-caption modal-body">
+          orders 테이블을 삭제하면 12,480개 행과 관련 인덱스가 모두 사라집니다.
+          이 작업은 되돌릴 수 없습니다.
+        </p>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-secondary">취소</button>
+          <button type="button" class="btn btn-destructive"><span class="shape shape-hatch small"></span>삭제</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- (G) 푸터 -->
+  <footer class="section footer">
+    <h2 class="t-badge section-heading">DESIGN NOTES</h2>
+    <ul class="footer-list t-caption">
+      <li><strong>상태 4종</strong> — 점(connected, 솔리드)·삼각형(connecting, pulse 애니메이션)·빗금사각(error)·빈사각(idle) 4어휘로 톤 계단과 결합. 배지의 성공/경고/오류/중립도 같은 어휘를 재사용했다 — <code>--tv-success</code>/<code>--tv-warning</code>(그린/오렌지)은 토큰엔 남기되 화면엔 안 썼다: 이 테마의 "유채색 금지"는 예외가 명시된 gradient 1건 외엔 카드/전역 상관없이 전부 적용된다고 읽었다.</li>
+      <li><strong>구문 강조 12종</strong> — light 는 5단 톤 사다리(#101010→#c8c8c8, keyword/function 2·builtin/type/number 3·property/atom/string 3·operator/comment 2·punct 1)에 italic·underline·tracking 을 얹어 9종은 AA(4.5:1) 이상, operator·comment·punct 3종은 코드 에디터 관례대로 의도적 저대비. dark 는 4단으로 접힌다 — <code>#101010</code> 을 dark 배경(<code>#101010</code>) 위 텍스트로 두면 대비 1:1(실측)로 사라져서, light 의 4·5단을 하나(<code>#555555</code>, 2.55:1)로 합쳤다.</li>
+      <li><strong>destructive / status-error 는 유채색을 안 썼다</strong> — 금지 목록에 이 둘만의 예외가 없고, 이 페이지의 핵심 실험(무채색으로 상태를 구분하기)을 가장 위험한 지점에서 스스로 깨는 걸 피했다. 대신 Charcoal 솔리드 필 + 흑백 이색 빗금 글리프를 썼다 — 빗금은 라이트/다크 어느 벽 색과도 자기대비가 항상 최대라서, 톤 하나로는 못 푸는 "다크에서 검정이 검정 위에서 사라지는" 문제를 우회한다.</li>
+      <li><strong>dark 모드</strong>는 벽을 <code>#101010</code> 으로 뒤집은 해석이다 — 8색 팔레트 밖으로 안 나가고, light 에서 배경 쪽 끝에 있던 톤들(border-subtle → border-soft)을 dark 에서 반대쪽 끝 톤(muted-hard → muted)이 같은 랭크로 이어받는다. popover 만 두 모드에서 값이 같다(<code>#222222</code>) — "모달만 어두운 판(plinth)"이라는 팔레트 표의 역할 설명을 문자 그대로 따른 결과다.</li>
+      <li><strong>AA 대비 예외</strong> — 팔레트 표는 Muted Soft(#999999)를 "섹션 헤딩"에도 쓰라고 하지만 흰 배경 위 실측 대비가 2.85:1로 3:1 미달이라, 실제 읽는 텍스트에는 Muted(#555555, 7.45:1)를 쓰고 #999999는 아이콘·hover 테두리(비텍스트, 기준 예외)로만 한정했다. dark 배경에서는 같은 #999999가 6.68:1이라 muted-foreground 로 정상 승격된다.</li>
+      <li><strong>뺀 것</strong> — 얼룩말 줄무늬(hairline 로 이미 행이 분리돼 있어 패턴 과다 방지), box/drop shadow 전부, 산세리프 전부. 인스펙터 JSON 트리의 key/leaf/delete 색만은 SPEC 이 "테마 무변, 그대로 복사"로 못박은 전역 아이덴티티라 이 테마의 무채색 규칙 밖에 둔다.</li>
+    </ul>
+  </footer>
+
+</div>
+
+<script>
+  (function () {
+    var html = document.documentElement;
+    var btn = document.getElementById("mode-toggle");
+    function sync() {
+      var isDark = html.getAttribute("data-mode") === "dark";
+      btn.textContent = isDark ? "light 모드" : "dark 모드";
+      btn.setAttribute("aria-pressed", String(isDark));
+    }
+    btn.addEventListener("click", function () {
+      var next = html.getAttribute("data-mode") === "dark" ? "light" : "dark";
+      html.setAttribute("data-mode", next);
+      sync();
+    });
+    sync();
+  })();
+</script>
+</body>
+</html>

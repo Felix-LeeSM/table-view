@@ -1,0 +1,175 @@
+/*
+ * Visual — "따뜻한 편집 잡지. 크림 종이, 세리프 포스터, 모노 여백주석, 노란 형광펜 자국 하나."
+ * table-view 테마 토큰. src/themes.css 에 이 두 블록을 그대로 붙여 넣는다.
+ *
+ * 표면은 거의 무채(Vellum/Paper/Carbon)고 위계는 색 대비가 아니라 1px hairline
+ * 굵기로 낸다 — --tv-border(hairline, Ash) 와 --tv-border-strong(구조 경계,
+ * Olive Char/Sage) 두 단만 쓴다. 그림자는 어디에도 없다.
+ *
+ * 타이포는 두 축: --tv-font-display(Fraunces 세리프, 헤딩/디스플레이 전용) 와
+ * --tv-font-sans/--tv-font-mono(둘 다 IBM Plex Mono — 이 시스템은 UI 텍스트
+ * 전부를 등폭으로 통일하므로 sans 역할도 mono 스택을 그대로 가리킨다).
+ *
+ * Highlighter Yellow(#fff347)는 SPEC 고정 토큰 --tv-highlight(#eab308, 앱
+ * 전역 검색-매치용)와 다른 값이라 별도 로컬 토큰 --tv-highlighter 로 뺐다 —
+ * 화면당 4회 이하로 쓴다(팔레트 swatch 1 · 히어로 태그라인 마크 1 · 그리드
+ * 편집 셀 마커 1 · SQL 에디터 Run 버튼의 ⌘↵ 칩 배경 1).
+ */
+
+[data-theme="visual"][data-mode="light"] {
+  /* 표면 / 텍스트 */
+  --tv-background: #f6f6f4; /* Vellum */
+  --tv-foreground: #000000; /* Ink */
+  --tv-card: #ffffff; /* Paper */
+  --tv-card-foreground: #000000;
+  --tv-popover: #ffffff;
+  --tv-popover-foreground: #000000;
+  --tv-primary: #2c2c26; /* Carbon — neutral filled button */
+  --tv-primary-foreground: #ffffff;
+  --tv-secondary: #e8e7d9; /* Bone */
+  --tv-secondary-foreground: #57584b; /* Olive Char */
+  --tv-muted: #d0d0c8; /* Ash */
+  --tv-muted-foreground: #6d6e5e; /* Lichen — 4.80:1 on background, AA */
+  --tv-accent: #e8e7d9; /* Bone */
+  --tv-accent-foreground: #000000;
+  --tv-border: #d0d0c8; /* Ash hairline */
+  --tv-input: #d0d0c8;
+  --tv-ring: #2c2c26;
+  --tv-primary-tint: 44 44 38; /* #2c2c26 */
+  --tv-status-connected: #16a34a;
+  --tv-status-connecting: #f59e0b;
+  --tv-status-error: #ef4444;
+  --tv-status-idle: #aaab9c; /* Moss — warm neutral, no cool gray */
+
+  /* 구문 강조 12종 — 팔레트 고유 hue(~60°) 중심 warm gold-olive-green 호(弧),
+     error 만 경보 인지를 위해 rust-red(~18°)로 예외. Paper(#fff) 위 AA 4.6:1+ 확인. */
+  --tv-syntax-keyword: #86741f;
+  --tv-syntax-operator: #777920;
+  --tv-syntax-punct: #73794a;
+  --tv-syntax-type: #588037;
+  --tv-syntax-builtin: #867342;
+  --tv-syntax-function: #7c773a;
+  --tv-syntax-property: #697c29;
+  --tv-syntax-string: #5a8029;
+  --tv-syntax-number: #976d26;
+  --tv-syntax-atom: #458326;
+  --tv-syntax-comment: #6c7a4e;
+  --tv-syntax-error: #ba592f;
+
+  /* 공통 고정값 (테마 무관) */
+  --tv-destructive: #ef4444;
+  --tv-success: #16a34a;
+  --tv-warning: #ea580c;
+  --tv-highlight: #eab308;
+  --tv-radius: 0.1875rem; /* 3px — 내비/태그/버튼 */
+  --tv-radius-card: 0.5rem; /* 8px — 카드/패널/모달 */
+  --tv-font-sans: "IBM Plex Mono", "JetBrains Mono", ui-monospace,
+    SFMono-Regular, Menlo, Consolas, "Liberation Mono", "Apple SD Gothic Neo",
+    "Malgun Gothic", monospace; /* UI 텍스트 전부 등폭 — sans 역할도 mono */
+  --tv-font-mono: "IBM Plex Mono", "JetBrains Mono", ui-monospace,
+    SFMono-Regular, Menlo, Consolas, "Liberation Mono", "Apple SD Gothic Neo",
+    "Malgun Gothic", monospace;
+  --tv-font-display: "Fraunces", "Instrument Serif", Georgia,
+    "Apple SD Gothic Neo", "Malgun Gothic", serif; /* 헤딩·디스플레이 전용 */
+
+  /* 정체성 색 (테마 무관, 그대로 복사) */
+  --tv-value-key: #0369a1;
+  --tv-value-leaf: #047857;
+  --tv-value-delete: #f43f5e;
+
+  /* 프로토타입 로컬 확장 (SPEC 4절 필수 목록 밖, --tv- 네임스페이스는 유지) */
+  --tv-border-strong: #57584b; /* Olive Char — 앱 셸 외곽·주요 구획선 */
+  --tv-highlighter: #fff347; /* Highlighter Yellow — 장식 강조, ≤4/화면 */
+  --tv-footer-bg: #2c2c26; /* 어두운 푸터, 모드 무관 고정 (Carbon) */
+  --tv-tag-border: #aaa674; /* Khaki Olive — PK/FK·태그 테두리 전용 */
+  --tv-sage: #979886; /* Sage — 라이트에는 대응 토큰이 없어 팔레트 스와치 전용으로 고정 */
+  --tv-paper: #ffffff; /* Paper — 푸터가 모드 무관 고정 Carbon 배경이라 흰 텍스트도 고정 */
+  --tv-ink: #000000; /* Ink — 노란 형광펜 패치는 모드 불문 항상 검정 텍스트가 필요 */
+  /* (B) 팔레트 스와치 전용 고정 참조값 — 나머지는 --tv-background 등 의미 토큰이
+     라이트에서 우연히 같은 값이라 재사용했지만, 이 다섯은 의미 토큰이 다크에서
+     다른 원색으로 바뀌어(예: primary 는 다크에서 Vellum) 스와치가 자기 라벨과
+     달라 보인다 — 팔레트 카드는 모드와 무관하게 원색 그대로 보여줘야 한다. */
+  --tv-vellum: #f6f6f4;
+  --tv-ash: #d0d0c8;
+  --tv-olive-char: #57584b;
+  --tv-lichen: #6d6e5e;
+  --tv-bone: #e8e7d9;
+}
+
+[data-theme="visual"][data-mode="dark"] {
+  /* 표면 / 텍스트 — "밤 인쇄" 판: Carbon 을 배경으로 올리고 같은 올리브-세이지
+     색군을 반전 없이 그대로 재사용한다 (Sage/Moss 는 원래 다크 표면용으로
+     주어진 색이다 — 라이트에서는 대비 미달이라 쓰지 않았다). */
+  --tv-background: #2c2c26; /* Carbon */
+  --tv-foreground: #f6f6f4; /* Vellum */
+  --tv-card: #2c2c26; /* card = background, flat */
+  --tv-card-foreground: #f6f6f4;
+  --tv-popover: #35352e; /* Carbon 한 단 밝힌 값 */
+  --tv-popover-foreground: #f6f6f4;
+  --tv-primary: #f6f6f4; /* 인버트: 밝은 버튼 */
+  --tv-primary-foreground: #2c2c26;
+  --tv-secondary: #57584b; /* Olive Char */
+  --tv-secondary-foreground: #e8e7d9; /* Bone */
+  --tv-muted: #3e3e35;
+  --tv-muted-foreground: #979886; /* Sage — 4.78:1 on background, AA */
+  --tv-accent: #3e3e35;
+  --tv-accent-foreground: #f6f6f4;
+  --tv-border: #57584b; /* Olive Char hairline */
+  --tv-input: #57584b;
+  --tv-ring: #f6f6f4;
+  --tv-primary-tint: 246 246 244; /* #f6f6f4 */
+  --tv-status-connected: #22c55e;
+  --tv-status-connecting: #f59e0b;
+  --tv-status-error: #ef4444;
+  --tv-status-idle: #aaab9c;
+
+  /* 구문 강조 12종 — 같은 12 hue, Carbon(#2c2c26) 배경 위 밝게 재조정, AA 4.6:1+ */
+  --tv-syntax-keyword: #a99328;
+  --tv-syntax-operator: #969929;
+  --tv-syntax-punct: #91995d;
+  --tv-syntax-type: #6fa245;
+  --tv-syntax-builtin: #a89253;
+  --tv-syntax-function: #9c9749;
+  --tv-syntax-property: #859e34;
+  --tv-syntax-string: #72a233;
+  --tv-syntax-number: #bf8a30;
+  --tv-syntax-atom: #57a630;
+  --tv-syntax-comment: #889b63;
+  --tv-syntax-error: #d57d57;
+
+  /* 공통 고정값 (테마 무관, dark 값) */
+  --tv-destructive: #f87171;
+  --tv-success: #22c55e;
+  --tv-warning: #fb923c;
+  --tv-highlight: #facc15;
+  --tv-radius: 0.1875rem;
+  --tv-radius-card: 0.5rem;
+  --tv-font-sans: "IBM Plex Mono", "JetBrains Mono", ui-monospace,
+    SFMono-Regular, Menlo, Consolas, "Liberation Mono", "Apple SD Gothic Neo",
+    "Malgun Gothic", monospace;
+  --tv-font-mono: "IBM Plex Mono", "JetBrains Mono", ui-monospace,
+    SFMono-Regular, Menlo, Consolas, "Liberation Mono", "Apple SD Gothic Neo",
+    "Malgun Gothic", monospace;
+  --tv-font-display: "Fraunces", "Instrument Serif", Georgia,
+    "Apple SD Gothic Neo", "Malgun Gothic", serif;
+
+  /* 정체성 색 (테마 무관, 그대로 복사) */
+  --tv-value-key: #7dd3fc;
+  --tv-value-leaf: #6ee7b7;
+  --tv-value-delete: #f43f5e;
+
+  /* 프로토타입 로컬 확장 */
+  --tv-border-strong: #979886; /* Sage — 다크에서 밝은 쪽이 강한 경계 */
+  --tv-highlighter: #fff347; /* 다크에서도 동일 절제(≤4/화면) */
+  --tv-footer-bg: #2c2c26; /* 라이트와 동일 — 이미 배경과 같은 색이라
+    앱 셸 프레임 border-top(--tv-border) 로만 시각 분리한다 */
+  --tv-tag-border: #aaa674; /* Khaki Olive — Carbon 배경 위에서도 충분히 밝다 */
+  --tv-sage: #979886; /* 다크의 muted-foreground 와 같은 값 — 참고용 고정 스와치 */
+  --tv-paper: #ffffff; /* 라이트와 동일 — 푸터 고정 텍스트용 */
+  --tv-ink: #000000; /* 라이트와 동일 — 노란 형광펜 패치용 고정 검정 */
+  --tv-vellum: #f6f6f4;
+  --tv-ash: #d0d0c8;
+  --tv-olive-char: #57584b;
+  --tv-lichen: #6d6e5e;
+  --tv-bone: #e8e7d9;
+}

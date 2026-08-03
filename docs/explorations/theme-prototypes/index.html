@@ -1,0 +1,1221 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Table View — 테마 프로토타입 81종</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#0b0d10; --fg:#e8eaed; --dim:#8b929c; --line:#1e2227; --card:#12151a;
+    --acc:#7c8cff; --sans:"Inter","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
+    --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font-family:var(--sans);
+         -webkit-font-smoothing:antialiased; }
+  .wrap { max-width:1280px; margin:0 auto; padding:48px 24px 96px; }
+  header { border-bottom:1px solid var(--line); padding-bottom:28px; margin-bottom:36px; }
+  h1 { font-size:32px; font-weight:600; letter-spacing:-0.02em; margin:0 0 10px; }
+  .sub { color:var(--dim); font-size:15px; line-height:1.6; max-width:760px; margin:0; }
+  .sub code { font-family:var(--mono); font-size:13px; color:var(--acc); }
+  .tools { display:flex; gap:12px; align-items:center; margin-top:24px; flex-wrap:wrap; }
+  #q { flex:1; min-width:240px; background:var(--card); border:1px solid var(--line);
+       color:var(--fg); border-radius:8px; padding:9px 13px; font:inherit; font-size:14px; }
+  #q:focus { outline:none; border-color:var(--acc); }
+  #q::placeholder { color:var(--dim); }
+  .count { font-family:var(--mono); font-size:13px; color:var(--dim); white-space:nowrap; }
+  .gal-cta { display:block; margin-top:24px; padding:16px 18px; text-decoration:none; color:inherit;
+             background:var(--card); border:1px solid var(--acc); border-radius:12px; transition:.14s; }
+  .gal-cta:hover { transform:translateY(-2px); box-shadow:0 6px 24px rgb(124 140 255 / .18); }
+  .gal-k { display:block; font-family:var(--mono); font-size:10px; letter-spacing:.12em;
+           text-transform:uppercase; color:var(--acc); margin-bottom:5px; }
+  .gal-t { display:block; font-size:16px; font-weight:600; letter-spacing:-0.01em; }
+  .gal-d { display:block; margin-top:6px; font-size:13px; line-height:1.6; color:var(--dim); }
+  .gal-d code { font-family:var(--mono); font-size:12px; color:var(--acc); }
+  h2 { font-size:13px; font-weight:600; letter-spacing:0.12em; text-transform:uppercase;
+       color:var(--dim); margin:52px 0 6px; }
+  h2:first-of-type { margin-top:8px; }
+  .lead { color:var(--dim); font-size:14px; line-height:1.6; margin:0 0 22px; max-width:760px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(232px,1fr)); gap:16px; }
+  .card { display:block; text-decoration:none; color:inherit; background:var(--card);
+          border:1px solid var(--line); border-radius:12px; padding:12px; transition:.14s; }
+  .card:hover { border-color:var(--acc); transform:translateY(-2px); }
+  .card.hide { display:none; }
+  /* 미니 앱 목업 — 각 카드가 자기 테마 색으로 그린다 */
+  .mock { display:flex; height:112px; border-radius:7px; overflow:hidden;
+          background:var(--c-bg); border:1px solid var(--c-bd); }
+  .mk-side { width:46px; flex:none; background:var(--c-sec); border-right:1px solid var(--c-bd);
+             padding:7px 6px; display:flex; flex-direction:column; gap:6px; }
+  .mk-side .s { height:5px; border-radius:2px; background:var(--c-mu); opacity:.5; }
+  .mk-side .s.on { background:var(--c-pri); opacity:1; }
+  .mk-main { flex:1; display:flex; flex-direction:column; min-width:0; }
+  .mk-tabs { display:flex; gap:4px; padding:6px 7px; border-bottom:1px solid var(--c-bd); }
+  .mk-tabs .t { width:26px; height:6px; border-radius:2px; background:var(--c-mu); opacity:.4; }
+  .mk-tabs .t.on { background:var(--c-fg); opacity:.85; width:32px; }
+  .mk-grid { flex:1; padding:5px 7px; display:flex; flex-direction:column; gap:4px; }
+  .mk-grid .r { display:block; height:5px; border-bottom:1px solid var(--c-bd); }
+  .mk-grid .r b { display:block; height:4px; border-radius:1px; background:var(--c-fg); opacity:.42; }
+  .mk-foot { display:flex; align-items:center; gap:4px; padding:5px 7px;
+             border-top:1px solid var(--c-bd); background:var(--c-card); }
+  .dot { width:5px; height:5px; border-radius:50%; }
+  .d1 { background:#16a34a; } .d2 { background:#f59e0b; } .d3 { background:#ef4444; }
+  .btn { margin-left:auto; width:26px; height:9px; border-radius:3px; background:var(--c-pri); }
+  .meta { display:flex; align-items:center; gap:6px; margin-top:11px; }
+  .nm { font-size:14px; font-weight:600; letter-spacing:-0.01em; }
+  .bd { font-family:var(--mono); font-size:9px; letter-spacing:.06em; text-transform:uppercase;
+        color:var(--dim); border:1px solid var(--line); border-radius:3px; padding:1px 4px; }
+  .vb { font-size:12px; color:var(--dim); margin-top:3px; line-height:1.4; }
+  .id { display:block; font-family:var(--mono); font-size:10px; color:var(--dim);
+        opacity:.6; margin-top:6px; }
+  .card.feat .nm::after { content:"●"; color:var(--acc); font-size:8px;
+                          vertical-align:super; margin-left:4px; }
+  footer { margin-top:72px; padding-top:24px; border-top:1px solid var(--line);
+           color:var(--dim); font-size:13px; line-height:1.7; }
+  footer code { font-family:var(--mono); font-size:12px; }
+  footer a { color:var(--acc); text-decoration:none; }
+  footer a:hover { text-decoration:underline; }
+  .fl { margin:0 0 10px; }
+  .empty { color:var(--dim); font-size:14px; padding:32px 0; display:none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>테마 프로토타입 81종</h1>
+  <p class="sub">
+    각 카드는 <strong>독립 HTML 페이지</strong> 하나로 이어진다. 페이지마다 팔레트 스와치,
+    커넥션 사이드바 · 탭 · 데이터 그리드 · SQL 에디터 · 인스펙터를 갖춘 앱 셸 목업,
+    컴포넌트 표본, 모달, light/dark 토글이 들어 있다. 공통 규격은 <code>SPEC.md</code>.
+  </p>
+  <a class="gal-cta" href="gallery.html">
+    <span class="gal-k">동작하는 갤러리 프로토타입</span>
+    <span class="gal-t">전체 81종을 훑고 ★ 로 즐겨찾기에 담는다 →</span>
+    <span class="gal-d">앱 셸 안에서 전체화면 오버레이로 열린다. 즐겨찾기한 테마만 사이드바 피커에 올라간다.
+      지금 앱이 <code>FEATURED_THEME_IDS</code> 8개만 노출하는 것을, 사용자가 직접 고르는 방식으로 바꾸면 어떻게 되는지 본다.</span>
+  </a>
+  <div class="tools">
+    <input id="q" type="search" placeholder="테마 이름 · id · 분위기로 거르기 (예: dark, terminal, editorial)" autocomplete="off">
+    <span class="count" id="count"></span>
+  </div>
+</header>
+
+<h2>refero 디자인 시스템 — 새로 만든 9종</h2>
+<p class="lead">
+  refero.design 의 스타일 정의 9개를 읽고 색뿐 아니라 타이포그래피 · radius · 그림자 · 간격까지
+  옮긴 신규 테마다. 각 페이지 옆에 <code>&lt;id&gt;.tokens.css</code> 가 함께 있고,
+  그대로 <code>src/themes.css</code> 에 붙일 수 있는 <code>--tv-*</code> 블록이 들어 있다.
+</p>
+<div class="grid" id="g-refero">
+<a class="card" href="refero/authkit.html" style="--c-bg:#05060f;--c-fg:#d1e4fa;--c-card:#0b0e1c;--c-pri:#663af3;--c-bd:#243049;--c-mu:#9da7ba;--c-sec:#11162a" data-q="authkit AuthKit 한밤의 서리 유리 대성당">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">AuthKit</span><span class="bd">dark-first</span></div>
+  <div class="vb">한밤의 서리 유리 대성당</div>
+  <code class="id">authkit</code>
+</a>
+<a class="card" href="refero/lattice.html" style="--c-bg:#f7f6f2;--c-fg:#001f1f;--c-card:#ffffff;--c-pri:#001f1f;--c-bd:#d9dcd4;--c-mu:#5c7070;--c-sec:#eff5ce" data-q="lattice Lattice 따뜻한 양피지 위의 식물 관찰 노트">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">Lattice</span></div>
+  <div class="vb">따뜻한 양피지 위의 식물 관찰 노트</div>
+  <code class="id">lattice</code>
+</a>
+<a class="card" href="refero/visual.html" style="--c-bg:#f6f6f4;--c-fg:#000000;--c-card:#ffffff;--c-pri:#2c2c26;--c-bd:#d0d0c8;--c-mu:#6d6e5e;--c-sec:#e8e7d9" data-q="visual Visual 따뜻한 편집 잡지 · 노란 형광펜 하나">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">Visual</span></div>
+  <div class="vb">따뜻한 편집 잡지 · 노란 형광펜 하나</div>
+  <code class="id">visual</code>
+</a>
+<a class="card" href="refero/shop.html" style="--c-bg:#f2f4f5;--c-fg:#000000;--c-card:#ffffff;--c-pri:#5433eb;--c-bd:#ebebeb;--c-mu:#787574;--c-sec:#f2f4f5" data-q="shop Shop 흰 대리석 위에 떠 있는 쇼핑 성좌">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">Shop</span></div>
+  <div class="vb">흰 대리석 위에 떠 있는 쇼핑 성좌</div>
+  <code class="id">shop</code>
+</a>
+<a class="card" href="refero/supply.html" style="--c-bg:#ffffff;--c-fg:#101010;--c-card:#ffffff;--c-pri:#101010;--c-bd:#e0e0e0;--c-mu:#999999;--c-sec:#f4f4f4" data-q="supply 099 SUPPLY 검은 오브젝트가 걸린 흰 갤러리 벽">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">099 SUPPLY</span></div>
+  <div class="vb">검은 오브젝트가 걸린 흰 갤러리 벽</div>
+  <code class="id">supply</code>
+</a>
+<a class="card" href="refero/henry.html" style="--c-bg:#fafafa;--c-fg:#2a2722;--c-card:#ffffff;--c-pri:#2a2722;--c-bd:#eeeeee;--c-mu:#666666;--c-sec:#f2f1ee" data-q="henry Henry 크림 종이 위의 고딕 브로드사이드">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">Henry</span></div>
+  <div class="vb">크림 종이 위의 고딕 브로드사이드</div>
+  <code class="id">henry</code>
+</a>
+<a class="card" href="refero/ease.html" style="--c-bg:#fffefc;--c-fg:#0f3e17;--c-card:#e1f4df;--c-pri:#0f3e17;--c-bd:#efeeeb;--c-mu:#4a6b50;--c-sec:#cfe7d3" data-q="ease Ease Health 크림 종이 위의 식물 온실">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">Ease Health</span></div>
+  <div class="vb">크림 종이 위의 식물 온실</div>
+  <code class="id">ease</code>
+</a>
+<a class="card" href="refero/karl.html" style="--c-bg:#ffe600;--c-fg:#333333;--c-card:#ffffff;--c-pri:#007fff;--c-bd:#333333;--c-mu:#5a5a5a;--c-sec:#fff27f" data-q="karl Karl 화창한 오후의 팝업북 디오라마">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">Karl</span></div>
+  <div class="vb">화창한 오후의 팝업북 디오라마</div>
+  <code class="id">karl</code>
+</a>
+<a class="card" href="refero/console.html" style="--c-bg:#08090a;--c-fg:#f7f8f8;--c-card:#141516;--c-pri:#f7f8f8;--c-bd:#34343a;--c-mu:#8a8f98;--c-sec:#1c1c1f" data-q="console Linear Console 어두운 유리 뒤의 천문대 콘솔">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">Linear Console</span><span class="bd">dark-first</span></div>
+  <div class="vb">어두운 유리 뒤의 천문대 콘솔</div>
+  <code class="id">console</code>
+</a>
+</div>
+
+<h2>기존 카탈로그 — 72종 전수</h2>
+<p class="lead">
+  <code>src/themes.css</code> 에 이미 정의돼 있지만 ThemePicker 는 <code>FEATURED_THEME_IDS</code>
+  8개만 노출한다(● 표시). 나머지 64종은 저장된 값으로만 존재했고 화면으로 확인된 적이 없다.
+  색은 전부 <code>src/themes.css</code> 에서 그대로 읽어 왔다.
+</p>
+<div class="grid" id="g-catalog">
+<a class="card" href="catalog/slate.html" style="--c-bg:#ffffff;--c-fg:#0f172a;--c-card:#ffffff;--c-pri:#4f46e5;--c-bd:#e2e8f0;--c-mu:#94a3b8;--c-sec:#f8fafc" data-q="slate Slate (default) shadcn default">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">Slate (default)</span></div>
+  <div class="vb">shadcn default</div>
+  <code class="id">slate</code>
+</a>
+<a class="card" href="catalog/github.html" style="--c-bg:#ffffff;--c-fg:#0f172a;--c-card:#ffffff;--c-pri:#0969da;--c-bd:#e2e8f0;--c-mu:#94a3b8;--c-sec:#f8fafc" data-q="github GitHub Primer calm professional">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">GitHub Primer</span></div>
+  <div class="vb">calm professional</div>
+  <code class="id">github</code>
+</a>
+<a class="card" href="catalog/linear.html" style="--c-bg:#fafbfc;--c-fg:#0f172a;--c-card:#fafbfc;--c-pri:#5e6ad2;--c-bd:#e2e8f0;--c-mu:#94a3b8;--c-sec:#f8fafc" data-q="linear Linear refined productivity">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">Linear</span></div>
+  <div class="vb">refined productivity</div>
+  <code class="id">linear</code>
+</a>
+<a class="card" href="catalog/vercel.html" style="--c-bg:#ffffff;--c-fg:#0f172a;--c-card:#ffffff;--c-pri:#000000;--c-bd:#e2e8f0;--c-mu:#94a3b8;--c-sec:#f8fafc" data-q="vercel Vercel pure monochrome">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">Vercel</span></div>
+  <div class="vb">pure monochrome</div>
+  <code class="id">vercel</code>
+</a>
+<a class="card" href="catalog/stripe.html" style="--c-bg:#ffffff;--c-fg:#0f172a;--c-card:#ffffff;--c-pri:#635bff;--c-bd:#e2e8f0;--c-mu:#94a3b8;--c-sec:#f8fafc" data-q="stripe Stripe fintech gradient">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">Stripe</span></div>
+  <div class="vb">fintech gradient</div>
+  <code class="id">stripe</code>
+</a>
+<a class="card" href="catalog/notion.html" style="--c-bg:#ffffff;--c-fg:#0f172a;--c-card:#ffffff;--c-pri:#2e2a24;--c-bd:#e2e8f0;--c-mu:#94a3b8;--c-sec:#f8fafc" data-q="notion Notion minimal warm">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">Notion</span></div>
+  <div class="vb">minimal warm</div>
+  <code class="id">notion</code>
+</a>
+<a class="card" href="catalog/arc.html" style="--c-bg:#fafafa;--c-fg:#0f172a;--c-card:#fafafa;--c-pri:#ff6b9d;--c-bd:#e2e8f0;--c-mu:#94a3b8;--c-sec:#f8fafc" data-q="arc Arc Browser colorful playful">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">Arc Browser</span></div>
+  <div class="vb">colorful playful</div>
+  <code class="id">arc</code>
+</a>
+<a class="card" href="catalog/apple.html" style="--c-bg:#ffffff;--c-fg:#0f172a;--c-card:#ffffff;--c-pri:#007aff;--c-bd:#e2e8f0;--c-mu:#94a3b8;--c-sec:#f8fafc" data-q="apple Apple HIG system native">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">Apple HIG</span></div>
+  <div class="vb">system native</div>
+  <code class="id">apple</code>
+</a>
+<a class="card" href="catalog/darcula.html" style="--c-bg:#f7f7f7;--c-fg:#0f172a;--c-card:#f7f7f7;--c-pri:#cc7832;--c-bd:#e2e8f0;--c-mu:#94a3b8;--c-sec:#f8fafc" data-q="darcula JetBrains Darcula classic IDE">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">JetBrains Darcula</span></div>
+  <div class="vb">classic IDE</div>
+  <code class="id">darcula</code>
+</a>
+<a class="card" href="catalog/supabase.html" style="--c-bg:#ffffff;--c-fg:#0f172a;--c-card:#ffffff;--c-pri:#3ecf8e;--c-bd:#e2e8f0;--c-mu:#94a3b8;--c-sec:#f8fafc" data-q="supabase Supabase developer tool">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">Supabase</span></div>
+  <div class="vb">developer tool</div>
+  <code class="id">supabase</code>
+</a>
+<a class="card" href="catalog/raycast.html" style="--c-bg:#ffffff;--c-fg:#0f172a;--c-card:#ffffff;--c-pri:#ff6363;--c-bd:#e2e8f0;--c-mu:#94a3b8;--c-sec:#f8fafc" data-q="raycast Raycast command palette">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">Raycast</span></div>
+  <div class="vb">command palette</div>
+  <code class="id">raycast</code>
+</a>
+<a class="card" href="catalog/warp.html" style="--c-bg:#fafafa;--c-fg:#0f172a;--c-card:#fafafa;--c-pri:#ff3a8c;--c-bd:#e2e8f0;--c-mu:#94a3b8;--c-sec:#f8fafc" data-q="warp Warp modern terminal">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">Warp</span></div>
+  <div class="vb">modern terminal</div>
+  <code class="id">warp</code>
+</a>
+<a class="card" href="catalog/clickhouse.html" style="--c-bg:#ffffff;--c-fg:#0f172a;--c-card:#ffffff;--c-pri:#faff69;--c-bd:#e2e8f0;--c-mu:#94a3b8;--c-sec:#f8fafc" data-q="clickhouse ClickHouse fast analytics">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">ClickHouse</span></div>
+  <div class="vb">fast analytics</div>
+  <code class="id">clickhouse</code>
+</a>
+<a class="card" href="catalog/posthog.html" style="--c-bg:#eeefe9;--c-fg:#0f172a;--c-card:#eeefe9;--c-pri:#f54e00;--c-bd:#e2e8f0;--c-mu:#94a3b8;--c-sec:#f8fafc" data-q="posthog PostHog playful analytics">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">PostHog</span></div>
+  <div class="vb">playful analytics</div>
+  <code class="id">posthog</code>
+</a>
+<a class="card" href="catalog/sentry.html" style="--c-bg:#ffffff;--c-fg:#0f172a;--c-card:#ffffff;--c-pri:#7553ff;--c-bd:#e2e8f0;--c-mu:#94a3b8;--c-sec:#f8fafc" data-q="sentry Sentry error monitoring">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">Sentry</span></div>
+  <div class="vb">error monitoring</div>
+  <code class="id">sentry</code>
+</a>
+<a class="card" href="catalog/cursor.html" style="--c-bg:#ffffff;--c-fg:#0f172a;--c-card:#ffffff;--c-pri:#000000;--c-bd:#e2e8f0;--c-mu:#94a3b8;--c-sec:#f8fafc" data-q="cursor Cursor AI IDE">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">Cursor</span></div>
+  <div class="vb">AI IDE</div>
+  <code class="id">cursor</code>
+</a>
+<a class="card" href="catalog/resend.html" style="--c-bg:#ffffff;--c-fg:#0f172a;--c-card:#ffffff;--c-pri:#000000;--c-bd:#e2e8f0;--c-mu:#94a3b8;--c-sec:#f8fafc" data-q="resend Resend email infra">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">Resend</span></div>
+  <div class="vb">email infra</div>
+  <code class="id">resend</code>
+</a>
+<a class="card" href="catalog/airtable.html" style="--c-bg:#ffffff;--c-fg:#0f172a;--c-card:#ffffff;--c-pri:#166ee1;--c-bd:#e2e8f0;--c-mu:#94a3b8;--c-sec:#f8fafc" data-q="airtable Airtable friendly table tool">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">Airtable</span></div>
+  <div class="vb">friendly table tool</div>
+  <code class="id">airtable</code>
+</a>
+<a class="card" href="catalog/mongodb.html" style="--c-bg:#ffffff;--c-fg:#0f172a;--c-card:#ffffff;--c-pri:#00684a;--c-bd:#e2e8f0;--c-mu:#94a3b8;--c-sec:#f8fafc" data-q="mongodb MongoDB database classic">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">MongoDB</span></div>
+  <div class="vb">database classic</div>
+  <code class="id">mongodb</code>
+</a>
+<a class="card" href="catalog/mastercard.html" style="--c-bg:#ffffff;--c-fg:#0f172a;--c-card:#ffffff;--c-pri:#eb001b;--c-bd:#e2e8f0;--c-mu:#94a3b8;--c-sec:#f8fafc" data-q="mastercard Mastercard payment card">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">Mastercard</span></div>
+  <div class="vb">payment card</div>
+  <code class="id">mastercard</code>
+</a>
+<a class="card" href="catalog/ibm.html" style="--c-bg:#f4f4f4;--c-fg:#0f172a;--c-card:#f4f4f4;--c-pri:#0f62fe;--c-bd:#e2e8f0;--c-mu:#94a3b8;--c-sec:#f8fafc" data-q="ibm IBM Carbon enterprise">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">IBM Carbon</span></div>
+  <div class="vb">enterprise</div>
+  <code class="id">ibm</code>
+</a>
+<a class="card" href="catalog/lamborghini.html" style="--c-bg:#000000;--c-fg:#fafafa;--c-card:#000000;--c-pri:#b59410;--c-bd:#27272a;--c-mu:#71717a;--c-sec:#1a1a1a" data-q="lamborghini Lamborghini luxury automotive">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">Lamborghini</span></div>
+  <div class="vb">luxury automotive</div>
+  <code class="id">lamborghini</code>
+</a>
+<a class="card" href="catalog/figma.html" style="--c-bg:#ffffff;--c-fg:#0f172a;--c-card:#ffffff;--c-pri:#0acf83;--c-bd:#e2e8f0;--c-mu:#94a3b8;--c-sec:#f8fafc" data-q="figma Figma design canvas">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">Figma</span></div>
+  <div class="vb">design canvas</div>
+  <code class="id">figma</code>
+</a>
+<a class="card" href="catalog/spotify.html" style="--c-bg:#ffffff;--c-fg:#0f172a;--c-card:#ffffff;--c-pri:#1db954;--c-bd:#e2e8f0;--c-mu:#94a3b8;--c-sec:#f8fafc" data-q="spotify Spotify music player">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">Spotify</span></div>
+  <div class="vb">music player</div>
+  <code class="id">spotify</code>
+</a>
+<a class="card" href="catalog/uber.html" style="--c-bg:#ffffff;--c-fg:#0f172a;--c-card:#ffffff;--c-pri:#000000;--c-bd:#e2e8f0;--c-mu:#94a3b8;--c-sec:#f8fafc" data-q="uber Uber mobility">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">Uber</span></div>
+  <div class="vb">mobility</div>
+  <code class="id">uber</code>
+</a>
+<a class="card" href="catalog/framer.html" style="--c-bg:#ffffff;--c-fg:#0f172a;--c-card:#ffffff;--c-pri:#0099ff;--c-bd:#e2e8f0;--c-mu:#94a3b8;--c-sec:#f8fafc" data-q="framer Framer motion design">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">Framer</span></div>
+  <div class="vb">motion design</div>
+  <code class="id">framer</code>
+</a>
+<a class="card" href="catalog/claude.html" style="--c-bg:#faf9f5;--c-fg:#0f172a;--c-card:#faf9f5;--c-pri:#c15f3c;--c-bd:#e2e8f0;--c-mu:#94a3b8;--c-sec:#f8fafc" data-q="claude Claude anthropic warm">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">Claude</span></div>
+  <div class="vb">anthropic warm</div>
+  <code class="id">claude</code>
+</a>
+<a class="card" href="catalog/expo.html" style="--c-bg:#ffffff;--c-fg:#0f172a;--c-card:#ffffff;--c-pri:#000020;--c-bd:#e2e8f0;--c-mu:#94a3b8;--c-sec:#f8fafc" data-q="expo Expo mobile RN">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">Expo</span></div>
+  <div class="vb">mobile RN</div>
+  <code class="id">expo</code>
+</a>
+<a class="card" href="catalog/playstation.html" style="--c-bg:#ffffff;--c-fg:#0f172a;--c-card:#ffffff;--c-pri:#0070d1;--c-bd:#e2e8f0;--c-mu:#94a3b8;--c-sec:#f8fafc" data-q="playstation PlayStation gaming console">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">PlayStation</span></div>
+  <div class="vb">gaming console</div>
+  <code class="id">playstation</code>
+</a>
+<a class="card" href="catalog/starbucks.html" style="--c-bg:#f9f9f9;--c-fg:#0f172a;--c-card:#f9f9f9;--c-pri:#006241;--c-bd:#e2e8f0;--c-mu:#94a3b8;--c-sec:#f8fafc" data-q="starbucks Starbucks coffee premium">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">Starbucks</span></div>
+  <div class="vb">coffee premium</div>
+  <code class="id">starbucks</code>
+</a>
+<a class="card" href="catalog/theverge.html" style="--c-bg:#ffffff;--c-fg:#0f172a;--c-card:#ffffff;--c-pri:#ff4a00;--c-bd:#e2e8f0;--c-mu:#94a3b8;--c-sec:#f8fafc" data-q="theverge The Verge tech editorial">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">The Verge</span></div>
+  <div class="vb">tech editorial</div>
+  <code class="id">theverge</code>
+</a>
+<a class="card" href="catalog/vodafone.html" style="--c-bg:#ffffff;--c-fg:#0f172a;--c-card:#ffffff;--c-pri:#e60000;--c-bd:#e2e8f0;--c-mu:#94a3b8;--c-sec:#f8fafc" data-q="vodafone Vodafone telecom">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">Vodafone</span></div>
+  <div class="vb">telecom</div>
+  <code class="id">vodafone</code>
+</a>
+<a class="card" href="catalog/wired.html" style="--c-bg:#ffffff;--c-fg:#0f172a;--c-card:#ffffff;--c-pri:#000000;--c-bd:#e2e8f0;--c-mu:#94a3b8;--c-sec:#f8fafc" data-q="wired Wired bold editorial">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">Wired</span></div>
+  <div class="vb">bold editorial</div>
+  <code class="id">wired</code>
+</a>
+<a class="card" href="catalog/binance.html" style="--c-bg:#ffffff;--c-fg:#0f172a;--c-card:#ffffff;--c-pri:#f0b90b;--c-bd:#e2e8f0;--c-mu:#94a3b8;--c-sec:#f8fafc" data-q="binance Binance crypto exchange">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">Binance</span></div>
+  <div class="vb">crypto exchange</div>
+  <code class="id">binance</code>
+</a>
+<a class="card" href="catalog/bmw.html" style="--c-bg:#ffffff;--c-fg:#0f172a;--c-card:#ffffff;--c-pri:#1c69d4;--c-bd:#e2e8f0;--c-mu:#94a3b8;--c-sec:#f8fafc" data-q="bmw BMW premium auto">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">BMW</span></div>
+  <div class="vb">premium auto</div>
+  <code class="id">bmw</code>
+</a>
+<a class="card" href="catalog/bugatti.html" style="--c-bg:#f5f5f5;--c-fg:#0f172a;--c-card:#f5f5f5;--c-pri:#00387a;--c-bd:#e2e8f0;--c-mu:#94a3b8;--c-sec:#f8fafc" data-q="bugatti Bugatti hypercar luxury">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">Bugatti</span></div>
+  <div class="vb">hypercar luxury</div>
+  <code class="id">bugatti</code>
+</a>
+<a class="card" href="catalog/cal.html" style="--c-bg:#ffffff;--c-fg:#0f172a;--c-card:#ffffff;--c-pri:#111827;--c-bd:#e2e8f0;--c-mu:#94a3b8;--c-sec:#f8fafc" data-q="cal Cal.com scheduling">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">Cal.com</span></div>
+  <div class="vb">scheduling</div>
+  <code class="id">cal</code>
+</a>
+<a class="card" href="catalog/clay.html" style="--c-bg:#f6f5f4;--c-fg:#0f172a;--c-card:#f6f5f4;--c-pri:#6c5ce7;--c-bd:#e2e8f0;--c-mu:#94a3b8;--c-sec:#f8fafc" data-q="clay Clay data enrichment">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">Clay</span></div>
+  <div class="vb">data enrichment</div>
+  <code class="id">clay</code>
+</a>
+<a class="card" href="catalog/cohere.html" style="--c-bg:#fafafa;--c-fg:#0f172a;--c-card:#fafafa;--c-pri:#ff7759;--c-bd:#e2e8f0;--c-mu:#94a3b8;--c-sec:#f8fafc" data-q="cohere Cohere AI platform">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">Cohere</span></div>
+  <div class="vb">AI platform</div>
+  <code class="id">cohere</code>
+</a>
+<a class="card" href="catalog/coinbase.html" style="--c-bg:#ffffff;--c-fg:#0f172a;--c-card:#ffffff;--c-pri:#0052ff;--c-bd:#e2e8f0;--c-mu:#94a3b8;--c-sec:#f8fafc" data-q="coinbase Coinbase crypto retail">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">Coinbase</span></div>
+  <div class="vb">crypto retail</div>
+  <code class="id">coinbase</code>
+</a>
+<a class="card" href="catalog/composio.html" style="--c-bg:#ffffff;--c-fg:#0f172a;--c-card:#ffffff;--c-pri:#6366f1;--c-bd:#e2e8f0;--c-mu:#94a3b8;--c-sec:#f8fafc" data-q="composio Composio agent tooling">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">Composio</span></div>
+  <div class="vb">agent tooling</div>
+  <code class="id">composio</code>
+</a>
+<a class="card" href="catalog/elevenlabs.html" style="--c-bg:#ffffff;--c-fg:#0f172a;--c-card:#ffffff;--c-pri:#000000;--c-bd:#e2e8f0;--c-mu:#94a3b8;--c-sec:#f8fafc" data-q="elevenlabs ElevenLabs voice AI">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">ElevenLabs</span></div>
+  <div class="vb">voice AI</div>
+  <code class="id">elevenlabs</code>
+</a>
+<a class="card" href="catalog/ferrari.html" style="--c-bg:#ffffff;--c-fg:#0f172a;--c-card:#ffffff;--c-pri:#da291c;--c-bd:#e2e8f0;--c-mu:#94a3b8;--c-sec:#f8fafc" data-q="ferrari Ferrari racing heritage">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">Ferrari</span></div>
+  <div class="vb">racing heritage</div>
+  <code class="id">ferrari</code>
+</a>
+<a class="card" href="catalog/hashicorp.html" style="--c-bg:#ffffff;--c-fg:#0f172a;--c-card:#ffffff;--c-pri:#000000;--c-bd:#e2e8f0;--c-mu:#94a3b8;--c-sec:#f8fafc" data-q="hashicorp HashiCorp infrastructure">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">HashiCorp</span></div>
+  <div class="vb">infrastructure</div>
+  <code class="id">hashicorp</code>
+</a>
+<a class="card" href="catalog/intercom.html" style="--c-bg:#ffffff;--c-fg:#0f172a;--c-card:#ffffff;--c-pri:#286efa;--c-bd:#e2e8f0;--c-mu:#94a3b8;--c-sec:#f8fafc" data-q="intercom Intercom customer messaging">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">Intercom</span></div>
+  <div class="vb">customer messaging</div>
+  <code class="id">intercom</code>
+</a>
+<a class="card" href="catalog/kraken.html" style="--c-bg:#ffffff;--c-fg:#0f172a;--c-card:#ffffff;--c-pri:#7132f5;--c-bd:#e2e8f0;--c-mu:#94a3b8;--c-sec:#f8fafc" data-q="kraken Kraken crypto pro">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">Kraken</span></div>
+  <div class="vb">crypto pro</div>
+  <code class="id">kraken</code>
+</a>
+<a class="card" href="catalog/lovable.html" style="--c-bg:#ffffff;--c-fg:#0f172a;--c-card:#ffffff;--c-pri:#f97316;--c-bd:#e2e8f0;--c-mu:#94a3b8;--c-sec:#f8fafc" data-q="lovable Lovable vibe coding">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">Lovable</span></div>
+  <div class="vb">vibe coding</div>
+  <code class="id">lovable</code>
+</a>
+<a class="card" href="catalog/meta.html" style="--c-bg:#ffffff;--c-fg:#0f172a;--c-card:#ffffff;--c-pri:#0866ff;--c-bd:#e2e8f0;--c-mu:#94a3b8;--c-sec:#f8fafc" data-q="meta Meta social platform">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">Meta</span></div>
+  <div class="vb">social platform</div>
+  <code class="id">meta</code>
+</a>
+<a class="card" href="catalog/minimax.html" style="--c-bg:#ffffff;--c-fg:#0f172a;--c-card:#ffffff;--c-pri:#ff5c8a;--c-bd:#e2e8f0;--c-mu:#94a3b8;--c-sec:#f8fafc" data-q="minimax MiniMax AI creative">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">MiniMax</span></div>
+  <div class="vb">AI creative</div>
+  <code class="id">minimax</code>
+</a>
+<a class="card" href="catalog/mintlify.html" style="--c-bg:#ffffff;--c-fg:#0f172a;--c-card:#ffffff;--c-pri:#16a34a;--c-bd:#e2e8f0;--c-mu:#94a3b8;--c-sec:#f8fafc" data-q="mintlify Mintlify developer docs">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">Mintlify</span></div>
+  <div class="vb">developer docs</div>
+  <code class="id">mintlify</code>
+</a>
+<a class="card" href="catalog/miro.html" style="--c-bg:#ffffff;--c-fg:#0f172a;--c-card:#ffffff;--c-pri:#ffd02f;--c-bd:#e2e8f0;--c-mu:#94a3b8;--c-sec:#f8fafc" data-q="miro Miro whiteboard">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">Miro</span></div>
+  <div class="vb">whiteboard</div>
+  <code class="id">miro</code>
+</a>
+<a class="card" href="catalog/mistral.html" style="--c-bg:#faf7f0;--c-fg:#0f172a;--c-card:#faf7f0;--c-pri:#fa520f;--c-bd:#e2e8f0;--c-mu:#94a3b8;--c-sec:#f8fafc" data-q="mistral Mistral AI open AI">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">Mistral AI</span></div>
+  <div class="vb">open AI</div>
+  <code class="id">mistral</code>
+</a>
+<a class="card" href="catalog/nike.html" style="--c-bg:#ffffff;--c-fg:#0f172a;--c-card:#ffffff;--c-pri:#000000;--c-bd:#e2e8f0;--c-mu:#94a3b8;--c-sec:#f8fafc" data-q="nike Nike athletic bold">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">Nike</span></div>
+  <div class="vb">athletic bold</div>
+  <code class="id">nike</code>
+</a>
+<a class="card" href="catalog/nvidia.html" style="--c-bg:#ffffff;--c-fg:#0f172a;--c-card:#ffffff;--c-pri:#76b900;--c-bd:#e2e8f0;--c-mu:#94a3b8;--c-sec:#f8fafc" data-q="nvidia NVIDIA compute platform">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">NVIDIA</span></div>
+  <div class="vb">compute platform</div>
+  <code class="id">nvidia</code>
+</a>
+<a class="card" href="catalog/ollama.html" style="--c-bg:#ffffff;--c-fg:#0f172a;--c-card:#ffffff;--c-pri:#000000;--c-bd:#e2e8f0;--c-mu:#94a3b8;--c-sec:#f8fafc" data-q="ollama Ollama local LLM">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">Ollama</span></div>
+  <div class="vb">local LLM</div>
+  <code class="id">ollama</code>
+</a>
+<a class="card" href="catalog/opencode.html" style="--c-bg:#fafaf7;--c-fg:#0f172a;--c-card:#fafaf7;--c-pri:#fab283;--c-bd:#e2e8f0;--c-mu:#94a3b8;--c-sec:#f8fafc" data-q="opencode opencode open coding agent">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">opencode</span></div>
+  <div class="vb">open coding agent</div>
+  <code class="id">opencode</code>
+</a>
+<a class="card" href="catalog/pinterest.html" style="--c-bg:#ffffff;--c-fg:#0f172a;--c-card:#ffffff;--c-pri:#e60023;--c-bd:#e2e8f0;--c-mu:#94a3b8;--c-sec:#f8fafc" data-q="pinterest Pinterest visual discovery">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">Pinterest</span></div>
+  <div class="vb">visual discovery</div>
+  <code class="id">pinterest</code>
+</a>
+<a class="card" href="catalog/renault.html" style="--c-bg:#ffffff;--c-fg:#0f172a;--c-card:#ffffff;--c-pri:#ffcc33;--c-bd:#e2e8f0;--c-mu:#94a3b8;--c-sec:#f8fafc" data-q="renault Renault european auto">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">Renault</span></div>
+  <div class="vb">european auto</div>
+  <code class="id">renault</code>
+</a>
+<a class="card" href="catalog/replicate.html" style="--c-bg:#ffffff;--c-fg:#0f172a;--c-card:#ffffff;--c-pri:#000000;--c-bd:#e2e8f0;--c-mu:#94a3b8;--c-sec:#f8fafc" data-q="replicate Replicate model hosting">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">Replicate</span></div>
+  <div class="vb">model hosting</div>
+  <code class="id">replicate</code>
+</a>
+<a class="card" href="catalog/revolut.html" style="--c-bg:#ffffff;--c-fg:#0f172a;--c-card:#ffffff;--c-pri:#0075eb;--c-bd:#e2e8f0;--c-mu:#94a3b8;--c-sec:#f8fafc" data-q="revolut Revolut neobank">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">Revolut</span></div>
+  <div class="vb">neobank</div>
+  <code class="id">revolut</code>
+</a>
+<a class="card" href="catalog/runway.html" style="--c-bg:#ffffff;--c-fg:#0f172a;--c-card:#ffffff;--c-pri:#000000;--c-bd:#e2e8f0;--c-mu:#94a3b8;--c-sec:#f8fafc" data-q="runway Runway ML video AI">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">Runway ML</span></div>
+  <div class="vb">video AI</div>
+  <code class="id">runway</code>
+</a>
+<a class="card" href="catalog/sanity.html" style="--c-bg:#ffffff;--c-fg:#0f172a;--c-card:#ffffff;--c-pri:#f03e2f;--c-bd:#e2e8f0;--c-mu:#94a3b8;--c-sec:#f8fafc" data-q="sanity Sanity headless CMS">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">Sanity</span></div>
+  <div class="vb">headless CMS</div>
+  <code class="id">sanity</code>
+</a>
+<a class="card" href="catalog/shopify.html" style="--c-bg:#ffffff;--c-fg:#0f172a;--c-card:#ffffff;--c-pri:#008060;--c-bd:#e2e8f0;--c-mu:#94a3b8;--c-sec:#f8fafc" data-q="shopify Shopify commerce">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">Shopify</span></div>
+  <div class="vb">commerce</div>
+  <code class="id">shopify</code>
+</a>
+<a class="card" href="catalog/spacex.html" style="--c-bg:#ffffff;--c-fg:#0f172a;--c-card:#ffffff;--c-pri:#005288;--c-bd:#e2e8f0;--c-mu:#94a3b8;--c-sec:#f8fafc" data-q="spacex SpaceX aerospace">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">SpaceX</span></div>
+  <div class="vb">aerospace</div>
+  <code class="id">spacex</code>
+</a>
+<a class="card" href="catalog/superhuman.html" style="--c-bg:#ffffff;--c-fg:#0f172a;--c-card:#ffffff;--c-pri:#7c3aed;--c-bd:#e2e8f0;--c-mu:#94a3b8;--c-sec:#f8fafc" data-q="superhuman Superhuman email premium">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">Superhuman</span></div>
+  <div class="vb">email premium</div>
+  <code class="id">superhuman</code>
+</a>
+<a class="card" href="catalog/tesla.html" style="--c-bg:#ffffff;--c-fg:#0f172a;--c-card:#ffffff;--c-pri:#e31937;--c-bd:#e2e8f0;--c-mu:#94a3b8;--c-sec:#f8fafc" data-q="tesla Tesla EV minimal">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">Tesla</span></div>
+  <div class="vb">EV minimal</div>
+  <code class="id">tesla</code>
+</a>
+<a class="card" href="catalog/together.html" style="--c-bg:#ffffff;--c-fg:#0f172a;--c-card:#ffffff;--c-pri:#0f6fff;--c-bd:#e2e8f0;--c-mu:#94a3b8;--c-sec:#f8fafc" data-q="together together.ai AI cloud">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">together.ai</span></div>
+  <div class="vb">AI cloud</div>
+  <code class="id">together</code>
+</a>
+<a class="card" href="catalog/voltagent.html" style="--c-bg:#ffffff;--c-fg:#0f172a;--c-card:#ffffff;--c-pri:#facc15;--c-bd:#e2e8f0;--c-mu:#94a3b8;--c-sec:#f8fafc" data-q="voltagent VoltAgent agent framework">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">VoltAgent</span></div>
+  <div class="vb">agent framework</div>
+  <code class="id">voltagent</code>
+</a>
+<a class="card" href="catalog/webflow.html" style="--c-bg:#ffffff;--c-fg:#0f172a;--c-card:#ffffff;--c-pri:#4353ff;--c-bd:#e2e8f0;--c-mu:#94a3b8;--c-sec:#f8fafc" data-q="webflow Webflow no-code web">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">Webflow</span></div>
+  <div class="vb">no-code web</div>
+  <code class="id">webflow</code>
+</a>
+<a class="card" href="catalog/wise.html" style="--c-bg:#ffffff;--c-fg:#0f172a;--c-card:#ffffff;--c-pri:#163300;--c-bd:#e2e8f0;--c-mu:#94a3b8;--c-sec:#f8fafc" data-q="wise Wise global money">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">Wise</span></div>
+  <div class="vb">global money</div>
+  <code class="id">wise</code>
+</a>
+<a class="card" href="catalog/xai.html" style="--c-bg:#ffffff;--c-fg:#0f172a;--c-card:#ffffff;--c-pri:#000000;--c-bd:#e2e8f0;--c-mu:#94a3b8;--c-sec:#f8fafc" data-q="xai xAI cosmic bold">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">xAI</span></div>
+  <div class="vb">cosmic bold</div>
+  <code class="id">xai</code>
+</a>
+<a class="card" href="catalog/zapier.html" style="--c-bg:#ffffff;--c-fg:#0f172a;--c-card:#ffffff;--c-pri:#ff4a00;--c-bd:#e2e8f0;--c-mu:#94a3b8;--c-sec:#f8fafc" data-q="zapier Zapier automation">
+  <div class="mock">
+    <div class="mk-side"><i class="s"></i><i class="s"></i><i class="s on"></i><i class="s"></i></div>
+    <div class="mk-main">
+      <div class="mk-tabs"><i class="t on"></i><i class="t"></i><i class="t"></i></div>
+      <div class="mk-grid"><i class="r"><b style="width:64%"></b></i><i class="r"><b style="width:88%"></b></i><i class="r"><b style="width:52%"></b></i><i class="r"><b style="width:76%"></b></i><i class="r"><b style="width:60%"></b></i><i class="r"><b style="width:82%"></b></i></div>
+      <div class="mk-foot"><i class="dot d1"></i><i class="dot d2"></i><i class="dot d3"></i><i class="btn"></i></div>
+    </div>
+  </div>
+  <div class="meta"><span class="nm">Zapier</span></div>
+  <div class="vb">automation</div>
+  <code class="id">zapier</code>
+</a>
+</div>
+
+<p class="empty" id="empty">일치하는 테마가 없다.</p>
+
+<footer>
+  <p class="fl"><strong>같이 읽을 문서</strong> —
+    <a href="SPEC.md">SPEC.md</a> 81장이 공유하는 화면 규격과 토큰 이름 ·
+    <a href="gallery.html">gallery.html</a> 동작하는 갤러리 + 즐겨찾기 프로토타입 ·
+    <a href="CONTRAST.md">CONTRAST.md</a> 72 테마 × 2 모드 대비 전수 실측
+    (primary 버튼 글자 64/144 조합이 AA 미달, 그중 30개는 3:1 미만)</p>
+  <p class="fl">경로 — refero 9종 <code>refero/&lt;id&gt;.html</code> ·
+    카탈로그 72종 <code>catalog/&lt;id&gt;.html</code> ·
+    refero 테마의 <code>--tv-*</code> 블록은 <code>refero/&lt;id&gt;.tokens.css</code></p>
+  <p class="fl">카드의 미니 목업 색은 각 테마의 light 모드 토큰(<code>--tv-background</code>
+    <code>--tv-foreground</code> <code>--tv-primary</code> <code>--tv-border</code>
+    <code>--tv-secondary</code> <code>--tv-muted-foreground</code>)에서 뽑았다.
+    dark-first 테마는 dark 토큰으로 그린다.</p>
+</footer>
+</div>
+
+<script>
+  // 8개 featured 표시
+  var FEATURED = ["slate","github","arc","claude","darcula","posthog","ibm","kraken"];
+  document.querySelectorAll("#g-catalog .card").forEach(function (el) {
+    if (FEATURED.indexOf(el.querySelector(".id").textContent) !== -1) el.classList.add("feat");
+  });
+
+  var cards = [].slice.call(document.querySelectorAll(".card"));
+  var q = document.getElementById("q");
+  var countEl = document.getElementById("count");
+  var emptyEl = document.getElementById("empty");
+
+  function apply() {
+    var term = q.value.trim().toLowerCase();
+    var shown = 0;
+    cards.forEach(function (el) {
+      var hit = !term || el.dataset.q.toLowerCase().indexOf(term) !== -1;
+      el.classList.toggle("hide", !hit);
+      if (hit) shown++;
+    });
+    countEl.textContent = shown + " / " + cards.length + " 종";
+    emptyEl.style.display = shown ? "none" : "block";
+  }
+  q.addEventListener("input", apply);
+  apply();
+</script>
+</body>
+</html>

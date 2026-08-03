@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="ko" data-theme="shopify" data-mode="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shopify &mdash; table-view 테마 프로토타입</title>
+<style>
+/* Common tokens — invariant across every table-view theme (SPEC §4). */
+:root {
+  --tv-value-key: #0369a1;
+  --tv-value-leaf: #047857;
+  --tv-value-delete: #f43f5e;
+  --tv-destructive: #ef4444;
+  --tv-destructive-foreground: #ffffff;
+  --tv-success: #16a34a;
+  --tv-success-foreground: #ffffff;
+  --tv-warning: #ea580c;
+  --tv-warning-foreground: #ffffff;
+  --tv-highlight: #eab308;
+  --tv-radius: 0.5rem;
+  --tv-font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+    "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --tv-font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono",
+    "Apple SD Gothic Neo", monospace;
+}
+[data-mode="dark"] {
+  --tv-destructive: #f87171;
+  --tv-success: #22c55e;
+  --tv-highlight: #facc15;
+  --tv-warning: #fb923c;
+  --tv-value-key: #7dd3fc;
+  --tv-value-leaf: #6ee7b7;
+  --tv-value-delete: #f43f5e;
+}
+
+[data-theme="shopify"][data-mode="light"] {
+  --tv-background: #ffffff;
+  --tv-foreground: #0f172a;
+  --tv-card: #ffffff;
+  --tv-card-foreground: #0f172a;
+  --tv-popover: #ffffff;
+  --tv-popover-foreground: #0f172a;
+  --tv-primary: #008060;
+  --tv-primary-foreground: #fff;
+  --tv-secondary: #f8fafc;
+  --tv-secondary-foreground: #475569;
+  --tv-muted: #f1f5f9;
+  --tv-muted-foreground: #94a3b8;
+  --tv-accent: #f1f5f9;
+  --tv-accent-foreground: #0f172a;
+  --tv-border: #e2e8f0;
+  --tv-input: #e2e8f0;
+  --tv-ring: #008060;
+  --tv-primary-tint: 0 128 96;
+  --tv-status-connected: #16a34a;
+  --tv-status-connecting: #f59e0b;
+  --tv-status-error: #ef4444;
+  --tv-status-idle: #94a3b8;
+}
+[data-theme="shopify"][data-mode="dark"] {
+  --tv-background: #1a1a1a;
+  --tv-foreground: #f1f5f9;
+  --tv-card: #1a1a1a;
+  --tv-card-foreground: #f1f5f9;
+  --tv-popover: #1f1f1f;
+  --tv-popover-foreground: #f1f5f9;
+  --tv-primary: #00a37a;
+  --tv-primary-foreground: #ffffff;
+  --tv-secondary: #1f1f1f;
+  --tv-secondary-foreground: #cbd5e1;
+  --tv-muted: #222222;
+  --tv-muted-foreground: #94a3b8;
+  --tv-accent: #222222;
+  --tv-accent-foreground: #f1f5f9;
+  --tv-border: #292929;
+  --tv-input: #292929;
+  --tv-ring: #00a37a;
+  --tv-primary-tint: 0 163 122;
+  --tv-status-connected: #22c55e;
+  --tv-status-connecting: #f59e0b;
+  --tv-status-error: #ef4444;
+  --tv-status-idle: #64748b;
+}
+[data-theme="shopify"][data-mode="light"] {
+  --tv-syntax-keyword: #7c3aed;
+  --tv-syntax-operator: #475569;
+  --tv-syntax-punct: #64748b;
+  --tv-syntax-type: #2563eb;
+  --tv-syntax-builtin: #0891b2;
+  --tv-syntax-function: #0891b2;
+  --tv-syntax-property: #0f766e;
+  --tv-syntax-string: #15803d;
+  --tv-syntax-number: #c2410c;
+  --tv-syntax-atom: #be185d;
+  --tv-syntax-comment: #64748b;
+  --tv-syntax-error: #dc2626;
+}
+[data-theme="shopify"][data-mode="dark"] {
+  --tv-syntax-keyword: #86efac;
+  --tv-syntax-operator: #cbd5e1;
+  --tv-syntax-punct: #94a3b8;
+  --tv-syntax-type: #93c5fd;
+  --tv-syntax-builtin: #67e8f9;
+  --tv-syntax-function: #67e8f9;
+  --tv-syntax-property: #5eead4;
+  --tv-syntax-string: #86efac;
+  --tv-syntax-number: #fdba74;
+  --tv-syntax-atom: #f9a8d4;
+  --tv-syntax-comment: #64748b;
+  --tv-syntax-error: #f87171;
+}
+
+* , *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: var(--tv-background);
+  color: var(--tv-foreground);
+  font-family: var(--tv-font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  transition: background-color .15s ease, color .15s ease;
+}
+.page { max-width: 1280px; margin: 0 auto; padding: 28px 24px 64px; animation: page-in .35s ease both; }
+@keyframes page-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+a { color: inherit; }
+button { font: inherit; cursor: default; border: none; }
+input, select { font: inherit; }
+h1, h2, h3, p, ul { margin: 0; }
+
+/* (A) header */
+.top-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-bottom: 20px; margin-bottom: 28px; border-bottom: 1px solid var(--tv-border); }
+.top-header .brand { display: flex; flex-direction: column; gap: 4px; }
+.top-header .brand h1 { font-size: 21px; font-weight: 700; letter-spacing: -0.01em; }
+.top-header .brand p { color: var(--tv-muted-foreground); font-size: 13px; }
+.top-header .actions { display: flex; align-items: center; gap: 10px; }
+.back-link { font-size: 13px; color: var(--tv-muted-foreground); text-decoration: none; padding: 7px 10px; border-radius: var(--tv-radius); }
+.back-link:hover { background: var(--tv-accent); color: var(--tv-accent-foreground); }
+.mode-toggle { display: inline-flex; align-items: center; gap: 7px; padding: 7px 14px; border-radius: var(--tv-radius); border: 1px solid var(--tv-border); background: var(--tv-card); color: var(--tv-foreground); font-size: 13px; font-weight: 600; }
+.mode-toggle:hover { border-color: var(--tv-primary); }
+
+/* (B) palette */
+.palette { margin-bottom: 32px; }
+.section-label { font-size: 11.5px; text-transform: uppercase; letter-spacing: .08em; color: var(--tv-muted-foreground); font-weight: 700; margin: 0 0 14px; }
+.swatch-groups { display: flex; flex-direction: column; gap: 16px; }
+.swatch-group h3 { font-size: 11px; color: var(--tv-muted-foreground); font-weight: 600; margin: 0 0 8px; }
+.swatch-row { display: flex; flex-wrap: wrap; gap: 10px; }
+.swatch { display: flex; flex-direction: column; gap: 6px; width: 138px; padding: 10px; border: 1px solid var(--tv-border); border-radius: var(--tv-radius); background: var(--tv-card); }
+.swatch-chip { width: 100%; height: 34px; border-radius: calc(var(--tv-radius) - 2px); border: 1px solid var(--tv-border); }
+.swatch-name { font-size: 12px; font-weight: 600; font-family: var(--tv-font-mono); }
+.swatch-hex { font-family: var(--tv-font-mono); font-size: 10px; color: var(--tv-muted-foreground); }
+
+/* (C) app shell */
+.app-shell { border: 1px solid var(--tv-border); border-radius: var(--tv-radius); background: var(--tv-card); overflow: hidden; margin-bottom: 32px; display: flex; flex-direction: column; min-height: 620px; box-shadow: 0 1px 2px rgb(0 0 0 / 0.05); }
+.app-row { display: flex; flex: 1; min-height: 0; }
+
+.sidebar { width: 248px; flex-shrink: 0; border-right: 1px solid var(--tv-border); background: var(--tv-secondary); display: flex; flex-direction: column; }
+.sidebar-search { padding: 10px; border-bottom: 1px solid var(--tv-border); }
+.sidebar-search input { width: 100%; padding: 6px 9px; border-radius: var(--tv-radius); border: 1px solid var(--tv-input); background: var(--tv-background); color: var(--tv-foreground); font-size: 12.5px; }
+.conn-list { flex: 1; overflow-y: auto; padding: 6px; }
+.conn-item { display: flex; align-items: center; gap: 7px; padding: 6px 8px; border-radius: calc(var(--tv-radius) - 2px); font-size: 12.5px; }
+.conn-item.is-active-conn { background: var(--tv-accent); font-weight: 600; }
+.status-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; display: inline-block; }
+.status-dot.connected { background: var(--tv-status-connected); }
+.status-dot.connecting { background: var(--tv-status-connecting); }
+.status-dot.error { background: var(--tv-status-error); }
+.status-dot.idle { background: var(--tv-status-idle); }
+.conn-meta { color: var(--tv-muted-foreground); font-size: 11px; margin-left: auto; }
+.tree-root { padding: 6px 8px 2px 12px; font-size: 12.5px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+.tree-group-label { padding: 5px 8px 3px 26px; font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--tv-muted-foreground); }
+.tree-item { display: flex; align-items: center; gap: 6px; padding: 5px 8px 5px 38px; border-radius: calc(var(--tv-radius) - 2px); font-size: 12.5px; color: var(--tv-secondary-foreground); }
+.tree-item .tv-icon { color: var(--tv-muted-foreground); font-size: 11px; width: 12px; display: inline-block; }
+.tree-item.is-selected { background: rgb(var(--tv-primary-tint) / 0.14); color: var(--tv-foreground); font-weight: 600; box-shadow: inset 2px 0 0 var(--tv-primary); }
+.tree-item:hover:not(.is-selected) { background: var(--tv-accent); }
+
+.main-pane { flex: 1 1 auto; display: flex; flex-direction: column; min-width: 0; background: var(--tv-card); }
+.tab-bar { display: flex; align-items: flex-end; border-bottom: 1px solid var(--tv-border); padding: 0 8px; gap: 2px; background: var(--tv-secondary); }
+.tab { padding: 9px 16px; font-size: 12.5px; color: var(--tv-muted-foreground); border-bottom: 2px solid transparent; display: flex; align-items: center; gap: 6px; }
+.tab.is-active { color: var(--tv-foreground); font-weight: 600; background: var(--tv-card); border-bottom-color: var(--tv-primary); border-radius: calc(var(--tv-radius) - 2px) calc(var(--tv-radius) - 2px) 0 0; }
+.tab .tab-close { opacity: .5; font-size: 11px; }
+.tab.tab-add { padding: 9px 13px; font-weight: 700; }
+
+.scrubber { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--tv-border); background: var(--tv-secondary); }
+.scrubber-label { font-size: 10px; letter-spacing: .08em; color: var(--tv-muted-foreground); font-family: var(--tv-font-mono); }
+.scrubber-track { position: relative; flex: 1; height: 4px; border-radius: 2px; background: var(--tv-muted); }
+.scrubber-progress { position: absolute; left: 0; top: 0; bottom: 0; width: 28%; border-radius: 2px; background: var(--tv-primary); }
+.scrubber-head { position: absolute; left: 28%; top: 50%; width: 10px; height: 10px; margin: -5px 0 0 -5px; border-radius: 50%; background: var(--tv-primary); box-shadow: 0 0 0 3px rgb(var(--tv-primary-tint) / .25); }
+.scrubber-time { font-family: var(--tv-font-mono); font-size: 10.5px; color: var(--tv-muted-foreground); }
+
+.toolbar { display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-bottom: 1px solid var(--tv-border); }
+.filter-wrap { position: relative; display: flex; align-items: center; flex: 0 1 300px; }
+.field-wide { width: 100%; }
+.toolbar .spacer { flex: 1; }
+.row-count { font-family: var(--tv-font-mono); font-size: 11.5px; color: var(--tv-muted-foreground); }
+
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: var(--tv-radius); font-size: 12.5px; font-weight: 600; border: 1px solid transparent; }
+.btn-primary { background: var(--tv-primary); color: var(--tv-primary-foreground); }
+.btn-secondary { background: var(--tv-secondary); color: var(--tv-secondary-foreground); border-color: var(--tv-border); }
+.btn-ghost { background: transparent; color: var(--tv-foreground); }
+.btn-ghost:hover { background: var(--tv-accent); }
+.btn-destructive { background: var(--tv-destructive); color: var(--tv-destructive-foreground); }
+.btn:hover { filter: brightness(1.06); }
+kbd.key-hint { margin-left: 2px; font-family: var(--tv-font-mono); font-size: 10px; padding: 1px 5px; border-radius: 4px; background: rgb(255 255 255 / .16); border: 1px solid rgb(255 255 255 / .2); }
+.btn-secondary kbd.key-hint { background: rgb(127 127 127 / .16); border-color: var(--tv-border); }
+kbd.key-hint-input { position: absolute; right: 8px; background: var(--tv-muted); color: var(--tv-muted-foreground); border: 1px solid var(--tv-border); font-family: var(--tv-font-mono); font-size: 10px; padding: 1px 5px; border-radius: 4px; }
+
+.field { padding: 6px 10px; border-radius: var(--tv-radius); border: 1px solid var(--tv-input); background: var(--tv-background); color: var(--tv-foreground); font-size: 12.5px; width: 170px; }
+.field.is-focus-demo { outline: 2px solid var(--tv-ring); outline-offset: 0; border-color: transparent; }
+.field-error { border-color: var(--tv-destructive); }
+
+.grid-wrap { flex: 1 1 auto; overflow: auto; }
+table.data-grid { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.data-grid thead th { position: sticky; top: 0; z-index: 1; text-align: left; background: var(--tv-secondary); border-bottom: 1px solid var(--tv-border); padding: 6px 12px; white-space: nowrap; }
+.data-grid thead th.th-num { text-align: right; }
+.data-grid .th-name { display: block; font-weight: 600; }
+.data-grid .col-type { display: block; font-weight: 400; font-family: var(--tv-font-mono); font-size: 10.5px; color: var(--tv-syntax-type); margin-top: 2px; }
+.data-grid .sort-arrow { margin-left: 4px; color: var(--tv-primary); font-size: 9px; }
+.data-grid tbody td { padding: 0 12px; height: 30px; border-bottom: 1px solid var(--tv-border); white-space: nowrap; }
+.data-grid tbody tr:hover td { background: var(--tv-accent); }
+.data-grid tbody tr.row-selected td { background: rgb(var(--tv-primary-tint) / 0.13); }
+.data-grid tbody tr.row-selected td:first-child { box-shadow: inset 3px 0 0 var(--tv-primary); }
+.data-grid tbody tr.row-editing td:first-child { box-shadow: inset 3px 0 0 var(--tv-warning); }
+.col-num { text-align: right; font-family: var(--tv-font-mono); }
+.col-mono { font-family: var(--tv-font-mono); }
+.val-null { color: var(--tv-muted-foreground); font-style: italic; }
+td.cell-dirty { box-shadow: inset 0 0 0 1px var(--tv-warning); position: relative; }
+td.cell-dirty::after { content: ""; position: absolute; top: 4px; right: 4px; width: 5px; height: 5px; border-radius: 50%; background: var(--tv-warning); }
+.data-grid.zebra tbody tr:nth-child(even):not(.row-selected):not(.row-editing) td { background: var(--tv-muted); }
+
+.badge { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+.badge-success { background: rgb(22 163 74 / .12); color: var(--tv-success); }
+.badge-warning { background: rgb(234 88 12 / .12); color: var(--tv-warning); }
+.badge-error { background: rgb(239 68 68 / .12); color: var(--tv-destructive); }
+.badge-neutral { background: var(--tv-muted); color: var(--tv-muted-foreground); }
+
+.sql-editor { height: 184px; border-top: 1px solid var(--tv-border); display: flex; flex-direction: column; background: var(--tv-card); flex-shrink: 0; }
+.sql-editor-head { display: flex; align-items: center; justify-content: space-between; padding: 6px 12px; border-bottom: 1px solid var(--tv-border); font-size: 10.5px; color: var(--tv-muted-foreground); text-transform: uppercase; letter-spacing: .06em; }
+.sql-body { flex: 1; display: flex; overflow: auto; font-family: var(--tv-font-mono); font-size: 12.5px; line-height: 1.65; }
+.sql-gutter { padding: 10px 10px 10px 14px; text-align: right; color: var(--tv-muted-foreground); user-select: none; background: var(--tv-secondary); border-right: 1px solid var(--tv-border); }
+.sql-gutter div { min-width: 16px; }
+.sql-code { padding: 10px 16px; white-space: pre; flex: 1; }
+.sql-foot { display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding: 6px 12px; border-top: 1px solid var(--tv-border); }
+.sql-hint { font-size: 11px; color: var(--tv-muted-foreground); }
+.btn-run { background: var(--tv-primary); color: var(--tv-primary-foreground); padding: 6px 14px; font-size: 12px; font-weight: 700; }
+.tok-kw { color: var(--tv-syntax-keyword); font-weight: 600; }
+.tok-op { color: var(--tv-syntax-operator); }
+.tok-punct { color: var(--tv-syntax-punct); }
+.tok-type { color: var(--tv-syntax-type); }
+.tok-builtin { color: var(--tv-syntax-builtin); }
+.tok-fn { color: var(--tv-syntax-function); }
+.tok-prop { color: var(--tv-syntax-property); }
+.tok-str { color: var(--tv-syntax-string); }
+.tok-num { color: var(--tv-syntax-number); }
+.tok-atom { color: var(--tv-syntax-atom); }
+.tok-comment { color: var(--tv-syntax-comment); font-style: italic; }
+.tok-error { color: var(--tv-syntax-error); text-decoration: underline wavy var(--tv-syntax-error); }
+
+.inspector { width: 264px; flex-shrink: 0; border-left: 1px solid var(--tv-border); padding: 14px; overflow-y: auto; background: var(--tv-card); }
+.inspector h3 { font-size: 12.5px; font-weight: 700; margin-bottom: 3px; }
+.insp-sub { margin-bottom: 14px; font-size: 11px; color: var(--tv-muted-foreground); font-family: var(--tv-font-mono); }
+.kv-row { display: flex; justify-content: space-between; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--tv-border); font-size: 12px; }
+.kv-key { color: var(--tv-muted-foreground); }
+.kv-val { font-family: var(--tv-font-mono); text-align: right; word-break: break-all; }
+.field-type-chip { margin-left: 6px; font-family: var(--tv-font-mono); font-size: 9.5px; color: var(--tv-muted-foreground); background: var(--tv-muted); padding: 1px 5px; border-radius: 4px; }
+.json-tree { margin-top: 14px; font-family: var(--tv-font-mono); font-size: 11.5px; line-height: 1.75; background: var(--tv-secondary); border: 1px solid var(--tv-border); border-radius: var(--tv-radius); padding: 10px 12px; }
+.json-key { color: var(--tv-value-key); }
+.json-leaf { color: var(--tv-value-leaf); }
+.json-punct { color: var(--tv-syntax-punct); }
+.json-removed { color: var(--tv-value-delete); text-decoration: line-through; opacity: .85; }
+.json-indent { padding-left: 14px; }
+
+.status-bar { display: flex; align-items: center; gap: 16px; padding: 7px 14px; border-top: 1px solid var(--tv-border); background: var(--tv-secondary); font-size: 11.5px; color: var(--tv-secondary-foreground); }
+.status-bar .sep { flex: 1; }
+.status-bar .mono { font-family: var(--tv-font-mono); }
+.telemetry-live { display: inline-flex; align-items: center; gap: 5px; font-size: 10.5px; letter-spacing: .08em; color: var(--tv-status-connected); font-family: var(--tv-font-mono); }
+.live-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--tv-status-connected); animation: live-pulse 1.6s ease-in-out infinite; }
+@keyframes live-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+
+/* (E) components */
+.components { margin: 32px 0; padding: 20px; border: 1px solid var(--tv-border); border-radius: var(--tv-radius); background: var(--tv-card); }
+.comp-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--tv-border); flex-wrap: wrap; }
+.comp-row:last-child { border-bottom: none; }
+.comp-row .comp-label { width: 100px; flex-shrink: 0; font-size: 11px; color: var(--tv-muted-foreground); text-transform: uppercase; letter-spacing: .04em; }
+.switch { position: relative; width: 36px; height: 20px; border-radius: 999px; background: var(--tv-muted); display: inline-block; }
+.switch.is-on { background: var(--tv-primary); }
+.switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--tv-card); transition: transform .15s; }
+.switch.is-on::after { transform: translateX(16px); }
+.checkbox { width: 16px; height: 16px; border-radius: 4px; border: 1px solid var(--tv-input); display: inline-flex; align-items: center; justify-content: center; background: var(--tv-background); font-size: 11px; }
+.checkbox.is-checked { background: var(--tv-primary); border-color: var(--tv-primary); color: var(--tv-primary-foreground); }
+.select-fake { display: inline-flex; align-items: center; justify-content: space-between; gap: 10px; width: 170px; padding: 6px 10px; border-radius: var(--tv-radius); border: 1px solid var(--tv-input); background: var(--tv-background); font-size: 12.5px; }
+.select-fake .chev { color: var(--tv-muted-foreground); font-size: 10px; }
+
+/* (F) modal */
+.modal-demo { margin: 32px 0; }
+.modal-demo .section-label { margin-bottom: 14px; }
+.modal-stage { position: relative; border-radius: var(--tv-radius); overflow: hidden; min-height: 260px; background: rgb(15 23 42 / .55); display: flex; align-items: center; justify-content: center; padding: 40px 20px; }
+.modal-card { width: 100%; max-width: 400px; background: var(--tv-popover); color: var(--tv-popover-foreground); border: 1px solid var(--tv-border); border-radius: var(--tv-radius); box-shadow: 0 20px 45px -12px rgb(0 0 0 / .4); overflow: hidden; }
+.modal-card-head { padding: 16px 20px; border-bottom: 1px solid var(--tv-border); display: flex; align-items: center; gap: 10px; }
+.modal-icon { width: 32px; height: 32px; border-radius: 50%; background: rgb(239 68 68 / .12); color: var(--tv-destructive); display: flex; align-items: center; justify-content: center; font-size: 15px; flex-shrink: 0; }
+.modal-card-head h3 { font-size: 14.5px; }
+.modal-card-body { padding: 16px 20px; font-size: 12.5px; line-height: 1.6; }
+.modal-card-body p { margin-bottom: 10px; }
+.modal-card-body code { font-family: var(--tv-font-mono); background: var(--tv-muted); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+.modal-card-foot { padding: 14px 20px; display: flex; justify-content: flex-end; gap: 8px; border-top: 1px solid var(--tv-border); }
+
+/* (G) footer */
+.page-footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid var(--tv-border); font-size: 12.5px; color: var(--tv-muted-foreground); }
+.page-footer ul { padding-left: 18px; display: flex; flex-direction: column; gap: 6px; }
+.page-footer li strong { color: var(--tv-foreground); }
+
+
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header class="top-header">
+    <div class="brand">
+      <h1>Shopify</h1>
+      <p>commerce</p>
+    </div>
+    <div class="actions">
+      <a class="back-link" href="../index.html">&larr; 전체 목록</a>
+      <button class="mode-toggle" type="button" data-toggle-mode>
+        <span data-mode-icon>&#127769;</span><span data-mode-label>모드 전환</span>
+      </button>
+    </div>
+  </header>
+
+  <section class="palette">
+    <p class="section-label">(B) 팔레트</p>
+    <div class="swatch-groups"><div class="swatch-group"><h3>표면</h3><div class="swatch-row"><div class="swatch"><span class="swatch-chip" style="background: var(--tv-background)"></span><span class="swatch-name">background</span><span class="swatch-hex">L #ffffff &middot; D #1a1a1a</span></div><div class="swatch"><span class="swatch-chip" style="background: var(--tv-card)"></span><span class="swatch-name">card</span><span class="swatch-hex">L #ffffff &middot; D #1a1a1a</span></div><div class="swatch"><span class="swatch-chip" style="background: var(--tv-popover)"></span><span class="swatch-name">popover</span><span class="swatch-hex">L #ffffff &middot; D #1f1f1f</span></div><div class="swatch"><span class="swatch-chip" style="background: var(--tv-secondary)"></span><span class="swatch-name">secondary</span><span class="swatch-hex">L #f8fafc &middot; D #1f1f1f</span></div><div class="swatch"><span class="swatch-chip" style="background: var(--tv-accent)"></span><span class="swatch-name">accent</span><span class="swatch-hex">L #f1f5f9 &middot; D #222222</span></div><div class="swatch"><span class="swatch-chip" style="background: var(--tv-muted)"></span><span class="swatch-name">muted</span><span class="swatch-hex">L #f1f5f9 &middot; D #222222</span></div></div></div>
+<div class="swatch-group"><h3>텍스트</h3><div class="swatch-row"><div class="swatch"><span class="swatch-chip" style="background: var(--tv-foreground)"></span><span class="swatch-name">foreground</span><span class="swatch-hex">L #0f172a &middot; D #f1f5f9</span></div><div class="swatch"><span class="swatch-chip" style="background: var(--tv-muted-foreground)"></span><span class="swatch-name">muted-foreground</span><span class="swatch-hex">L #94a3b8 &middot; D #94a3b8</span></div></div></div>
+<div class="swatch-group"><h3>브랜드 · 테두리</h3><div class="swatch-row"><div class="swatch"><span class="swatch-chip" style="background: var(--tv-primary)"></span><span class="swatch-name">primary</span><span class="swatch-hex">L #008060 &middot; D #00a37a</span></div><div class="swatch"><span class="swatch-chip" style="background: var(--tv-primary-foreground)"></span><span class="swatch-name">primary-foreground</span><span class="swatch-hex">L #fff &middot; D #ffffff</span></div><div class="swatch"><span class="swatch-chip" style="background: var(--tv-border)"></span><span class="swatch-name">border</span><span class="swatch-hex">L #e2e8f0 &middot; D #292929</span></div><div class="swatch"><span class="swatch-chip" style="background: var(--tv-input)"></span><span class="swatch-name">input</span><span class="swatch-hex">L #e2e8f0 &middot; D #292929</span></div></div></div>
+<div class="swatch-group"><h3>시맨틱 (테마 무관 공통값)</h3><div class="swatch-row"><div class="swatch"><span class="swatch-chip" style="background: var(--tv-destructive)"></span><span class="swatch-name">destructive</span><span class="swatch-hex">L #ef4444 &middot; D #f87171</span></div><div class="swatch"><span class="swatch-chip" style="background: var(--tv-success)"></span><span class="swatch-name">success</span><span class="swatch-hex">L #16a34a &middot; D #22c55e</span></div><div class="swatch"><span class="swatch-chip" style="background: var(--tv-warning)"></span><span class="swatch-name">warning</span><span class="swatch-hex">L #ea580c &middot; D #fb923c</span></div><div class="swatch"><span class="swatch-chip" style="background: var(--tv-highlight)"></span><span class="swatch-name">highlight</span><span class="swatch-hex">L #eab308 &middot; D #facc15</span></div></div></div>
+<div class="swatch-group"><h3>연결 상태</h3><div class="swatch-row"><div class="swatch"><span class="swatch-chip" style="background: var(--tv-status-connected)"></span><span class="swatch-name">status-connected</span><span class="swatch-hex">L #16a34a &middot; D #22c55e</span></div><div class="swatch"><span class="swatch-chip" style="background: var(--tv-status-connecting)"></span><span class="swatch-name">status-connecting</span><span class="swatch-hex">L #f59e0b &middot; D #f59e0b</span></div><div class="swatch"><span class="swatch-chip" style="background: var(--tv-status-error)"></span><span class="swatch-name">status-error</span><span class="swatch-hex">L #ef4444 &middot; D #ef4444</span></div><div class="swatch"><span class="swatch-chip" style="background: var(--tv-status-idle)"></span><span class="swatch-name">status-idle</span><span class="swatch-hex">L #94a3b8 &middot; D #64748b</span></div></div></div>
+<div class="swatch-group"><h3>값 표시 (테마 무관 고정값)</h3><div class="swatch-row"><div class="swatch"><span class="swatch-chip" style="background: var(--tv-value-key)"></span><span class="swatch-name">value-key</span><span class="swatch-hex">L #0369a1 &middot; D #7dd3fc</span></div><div class="swatch"><span class="swatch-chip" style="background: var(--tv-value-leaf)"></span><span class="swatch-name">value-leaf</span><span class="swatch-hex">L #047857 &middot; D #6ee7b7</span></div><div class="swatch"><span class="swatch-chip" style="background: var(--tv-value-delete)"></span><span class="swatch-name">value-delete</span><span class="swatch-hex">L #f43f5e &middot; D #f43f5e</span></div></div></div></div>
+  </section>
+
+  <section>
+    <p class="section-label">(C) 앱 셸 목업</p>
+    <div class="app-shell">
+      <div class="app-row">
+        <aside class="sidebar">
+          <div class="sidebar-search"><input type="text" placeholder="커넥션 검색…" /></div>
+          <div class="conn-list">
+            <div class="conn-item is-active-conn">
+              <span class="status-dot connected"></span>
+              <span>prod-analytics</span>
+              <span class="conn-meta">PostgreSQL</span>
+            </div>
+            <div class="tree-root"><span class="tv-icon">▾</span>public</div>
+            <div class="tree-group-label">Tables</div>
+            <div class="tree-item"><span class="tv-icon">▦</span>users</div>
+            <div class="tree-item is-selected"><span class="tv-icon">▦</span>orders</div>
+            <div class="tree-item"><span class="tv-icon">▦</span>order_items</div>
+            <div class="tree-item"><span class="tv-icon">▦</span>payments</div>
+            <div class="tree-item"><span class="tv-icon">▦</span>sessions</div>
+            <div class="tree-group-label">Views</div>
+            <div class="tree-item"><span class="tv-icon">◇</span>v_revenue_daily</div>
+            <div class="tree-group-label">Functions</div>
+            <div class="tree-item"><span class="tv-icon">ƒ</span>calc_ltv()</div>
+            <div class="conn-item">
+              <span class="status-dot connecting"></span>
+              <span>staging-cache</span>
+              <span class="conn-meta">Redis</span>
+            </div>
+            <div class="conn-item">
+              <span class="status-dot error"></span>
+              <span>legacy-orders</span>
+              <span class="conn-meta">MySQL</span>
+            </div>
+          </div>
+        </aside>
+        <main class="main-pane">
+          <div class="tab-bar">
+          <span class="tab is-active">orders<span class="tab-close">&times;</span></span>
+          <span class="tab">users<span class="tab-close">&times;</span></span>
+          <span class="tab">Query 1<span class="tab-close">&times;</span></span>
+          <span class="tab tab-add">+</span>
+        </div>
+          
+          <div class="toolbar">
+          <div class="filter-wrap">
+            <input class="field field-wide" type="text" placeholder="필터 (예: status = 'completed')" />
+            
+          </div>
+          <span class="spacer"></span>
+          <button class="btn btn-secondary" type="button">Refresh</button>
+          <button class="btn btn-secondary" type="button">Add row</button>
+          <button class="btn btn-primary" type="button">Commit</button>
+          <span class="row-count">1,248 rows</span>
+        </div>
+          <div class="grid-wrap">
+          <table class="data-grid zebra">
+            <thead><tr>
+              <th class="th-num"><span class="th-name">id<span class="sort-arrow">&#9650;</span></span><span class="col-type">int8 &middot; PK</span></th>
+              <th class="th-num"><span class="th-name">customer_id</span><span class="col-type">int8 &middot; FK</span></th>
+              <th><span class="th-name">status</span><span class="col-type">text</span></th>
+              <th class="th-num"><span class="th-name">total_amount</span><span class="col-type">numeric</span></th>
+              <th><span class="th-name">created_at</span><span class="col-type">timestamptz</span></th>
+              <th><span class="th-name">note</span><span class="col-type">text</span></th>
+            </tr></thead>
+            <tbody>
+            <tr><td class="col-num">10482</td><td class="col-num">3391</td><td><span class="badge badge-success">completed</span></td><td class="col-num">128.50</td><td class="col-mono">2026-07-05 09:14:22+00</td><td><span class="val-null">NULL</span></td></tr>
+<tr><td class="col-num">10483</td><td class="col-num">2210</td><td><span class="badge badge-warning">pending</span></td><td class="col-num">64.00</td><td class="col-mono">2026-07-05 09:20:11+00</td><td>선물 포장 요청</td></tr>
+<tr><td class="col-num">10484</td><td class="col-num">5502</td><td><span class="badge badge-success">completed</span></td><td class="col-num">342.10</td><td class="col-mono">2026-07-05 10:02:47+00</td><td><span class="val-null">NULL</span></td></tr>
+<tr><td class="col-num">10485</td><td class="col-num">1187</td><td><span class="badge badge-neutral">refunded</span></td><td class="col-num">89.99</td><td class="col-mono">2026-07-05 10:15:03+00</td><td>고객 변심</td></tr>
+<tr class="row-selected"><td class="col-num">10486</td><td class="col-num">3391</td><td><span class="badge badge-success">completed</span></td><td class="col-num">15.00</td><td class="col-mono">2026-07-05 11:41:09+00</td><td><span class="val-null">NULL</span></td></tr>
+<tr><td class="col-num">10487</td><td class="col-num">9012</td><td><span class="badge badge-error">cancelled</span></td><td class="col-num">210.00</td><td class="col-mono">2026-07-05 12:03:55+00</td><td><span class="val-null">NULL</span></td></tr>
+<tr class="row-editing"><td class="col-num">10488</td><td class="col-num">4456</td><td><span class="badge badge-success">completed</span></td><td class="col-num cell-dirty" title="저장되지 않음 · 이전 값 58.20 → 62.00">62.00</td><td class="col-mono">2026-07-05 12:47:31+00</td><td><span class="val-null">NULL</span></td></tr>
+<tr><td class="col-num">10489</td><td class="col-num">7723</td><td><span class="badge badge-warning">pending</span></td><td class="col-num">133.75</td><td class="col-mono">2026-07-05 13:12:00+00</td><td>빠른 배송</td></tr>
+<tr><td class="col-num">10490</td><td class="col-num">2210</td><td><span class="badge badge-success">completed</span></td><td class="col-num">44.40</td><td class="col-mono">2026-07-05 13:55:18+00</td><td><span class="val-null">NULL</span></td></tr>
+<tr><td class="col-num">10491</td><td class="col-num">6634</td><td><span class="badge badge-success">completed</span></td><td class="col-num">302.00</td><td class="col-mono">2026-07-05 14:20:44+00</td><td><span class="val-null">NULL</span></td></tr>
+<tr><td class="col-num">10492</td><td class="col-num">1187</td><td><span class="badge badge-error">failed</span></td><td class="col-num">76.50</td><td class="col-mono">2026-07-05 14:58:12+00</td><td>카드 거절됨</td></tr>
+<tr><td class="col-num">10493</td><td class="col-num">3391</td><td><span class="badge badge-success">completed</span></td><td class="col-num">19.99</td><td class="col-mono">2026-07-05 15:30:27+00</td><td><span class="val-null">NULL</span></td></tr>
+<tr><td class="col-num">10494</td><td class="col-num">8845</td><td><span class="badge badge-success">completed</span></td><td class="col-num">265.30</td><td class="col-mono">2026-07-05 16:02:09+00</td><td><span class="val-null">NULL</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+          <div class="sql-editor">
+          <div class="sql-editor-head"><span>SQL Editor &middot; Query 1</span><span>PostgreSQL</span></div>
+          <div class="sql-body">
+            <div class="sql-gutter"><div>1</div><div>2</div><div>3</div><div>4</div><div>5</div><div>6</div><div>7</div><div>8</div><div>9</div><div>10</div></div>
+            <div class="sql-code"><span class="tok-comment">-- 최근 30일 고객별 매출</span>
+<span class="tok-kw">SELECT</span> <span class="tok-atom">c</span><span class="tok-punct">.</span><span class="tok-prop">id</span><span class="tok-punct">,</span> <span class="tok-atom">c</span><span class="tok-punct">.</span><span class="tok-prop">name</span><span class="tok-punct">,</span> <span class="tok-fn">SUM</span><span class="tok-punct">(</span><span class="tok-atom">o</span><span class="tok-punct">.</span><span class="tok-prop">total_amount</span><span class="tok-punct">)</span> <span class="tok-kw">AS</span> <span class="tok-prop">revenue</span>
+<span class="tok-kw">FROM</span> <span class="tok-type">orders</span> <span class="tok-atom">o</span>
+&nbsp;&nbsp;<span class="tok-kw">JOIN</span> <span class="tok-type">customers</span> <span class="tok-atom">c</span> <span class="tok-kw">ON</span> <span class="tok-atom">c</span><span class="tok-punct">.</span><span class="tok-prop">id</span> <span class="tok-op">=</span> <span class="tok-atom">o</span><span class="tok-punct">.</span><span class="tok-prop">customer_id</span>
+<span class="tok-kw">WHERE</span> <span class="tok-atom">o</span><span class="tok-punct">.</span><span class="tok-prop">created_at</span> <span class="tok-op">&gt;=</span> <span class="tok-builtin">NOW</span><span class="tok-punct">()</span> <span class="tok-op">-</span> <span class="tok-kw">INTERVAL</span> <span class="tok-str">&#39;30 days&#39;</span>
+&nbsp;&nbsp;<span class="tok-kw">AND</span> <span class="tok-atom">o</span><span class="tok-punct">.</span><span class="tok-prop">status</span> <span class="tok-op">&lt;&gt;</span> <span class="tok-str">&#39;cancelled&#39;</span>
+<span class="tok-kw">GROUP BY</span> <span class="tok-atom">c</span><span class="tok-punct">.</span><span class="tok-prop">id</span><span class="tok-punct">,</span> <span class="tok-atom">c</span><span class="tok-punct">.</span><span class="tok-prop">name</span>
+<span class="tok-kw">HAVING</span> <span class="tok-fn">SUM</span><span class="tok-punct">(</span><span class="tok-atom">o</span><span class="tok-punct">.</span><span class="tok-prop">total_amount</span><span class="tok-punct">)</span> <span class="tok-op">&gt;</span> <span class="tok-num">1000</span>
+<span class="tok-kw">ORDER BY</span> <span class="tok-prop">revenue</span> <span class="tok-kw">DESC</span>
+<span class="tok-kw">LIMIT</span> <span class="tok-num">50</span><span class="tok-error" title="lint: 세미콜론 뒤 공백 없음 — --tv-syntax-error 데모용 표시">;</span></div>
+          </div>
+          <div class="sql-foot">
+            <span class="sql-hint">물결 밑줄 = --tv-syntax-error 데모</span>
+            <button class="btn btn-run" type="button">Run <kbd class="key-hint">&#8984;&#8629;</kbd></button>
+          </div>
+        </div>
+        </main>
+        <aside class="inspector">
+          <h3>orders &middot; #10486</h3>
+          <p class="insp-sub">선택된 행</p>
+          <div class="kv-row"><span class="kv-key">id</span><span class="kv-val">10486</span></div>
+          <div class="kv-row"><span class="kv-key">customer_id</span><span class="kv-val">3391</span></div>
+          <div class="kv-row"><span class="kv-key">status</span><span class="kv-val">completed</span></div>
+          <div class="kv-row"><span class="kv-key">total_amount</span><span class="kv-val">15.00</span></div>
+          <div class="kv-row"><span class="kv-key">created_at</span><span class="kv-val">2026-07-05 11:41:09+00</span></div>
+          <div class="kv-row"><span class="kv-key">note</span><span class="kv-val"><span class="val-null">NULL</span></span></div>
+          <div class="json-tree">
+            <div><span class="json-key">metadata</span><span class="json-punct">: {</span></div>
+          <div class="json-indent">
+            <div><span class="json-key">shipping</span><span class="json-punct">: {</span></div>
+            <div class="json-indent">
+              <div><span class="json-key">method</span><span class="json-punct">: </span><span class="json-leaf">"standard"</span><span class="json-punct">,</span></div>
+              <div><span class="json-key">tracking</span><span class="json-punct">: </span><span class="json-leaf">null</span></div>
+            </div>
+            <div><span class="json-punct">},</span></div>
+            <div><span class="json-key">gift</span><span class="json-punct">: </span><span class="json-leaf">true</span><span class="json-punct">,</span></div>
+            <div><span class="json-removed">legacy_note</span><span class="json-punct">: (removed)</span></div>
+          </div>
+          <div><span class="json-punct">}</span></div>
+          </div>
+        </aside>
+      </div>
+      <div class="status-bar">
+          <span class="status-dot connected"></span>
+          <span>prod-analytics &middot; public</span>
+          <span class="mono">1,248 rows</span>
+          <span class="mono">실행 42ms</span>
+          
+          <span class="sep"></span>
+          <span>PostgreSQL 16.2</span>
+        </div>
+    </div>
+  </section>
+
+  <section class="components">
+      <p class="section-label">(E) 컴포넌트 표본</p>
+      <div class="comp-row">
+        <span class="comp-label">Buttons</span>
+        <button class="btn btn-primary" type="button">Commit</button>
+        <button class="btn btn-secondary" type="button">Refresh</button>
+        <button class="btn btn-ghost" type="button">Cancel</button>
+        <button class="btn btn-destructive" type="button">Delete</button>
+      </div>
+      <div class="comp-row">
+        <span class="comp-label">Inputs</span>
+        <input class="field" placeholder="기본" />
+        <input class="field is-focus-demo" placeholder="포커스" />
+        <input class="field field-error" placeholder="user@invalid" />
+      </div>
+      <div class="comp-row">
+        <span class="comp-label">Badges</span>
+        <span class="badge badge-success">success</span>
+        <span class="badge badge-warning">warning</span>
+        <span class="badge badge-error">error</span>
+        <span class="badge badge-neutral">neutral</span>
+      </div>
+      <div class="comp-row">
+        <span class="comp-label">Toggle</span>
+        <span class="switch is-on"></span>
+        <span class="switch"></span>
+      </div>
+      <div class="comp-row">
+        <span class="comp-label">Checkbox</span>
+        <span class="checkbox is-checked">&#10003;</span>
+        <span class="checkbox"></span>
+      </div>
+      <div class="comp-row">
+        <span class="comp-label">Select</span>
+        <span class="select-fake"><span>PostgreSQL 16.2</span><span class="chev">&#9662;</span></span>
+      </div>
+    </section>
+
+  <section class="modal-demo">
+      <p class="section-label">(F) 모달 &middot; 테이블 삭제</p>
+      <div class="modal-stage">
+        <div class="modal-card">
+          <div class="modal-card-head">
+            <span class="modal-icon">&#9888;</span>
+            <h3>테이블 삭제</h3>
+          </div>
+          <div class="modal-card-body">
+            <p><code>orders</code> 테이블을 삭제합니다. 되돌릴 수 없으며 1,248개 행이 모두 사라집니다.</p>
+            <p>계속하려면 테이블 이름을 입력하세요.</p>
+            <input class="field field-error field-wide" placeholder="orders" />
+          </div>
+          <div class="modal-card-foot">
+            <button class="btn btn-secondary" type="button">취소</button>
+            <button class="btn btn-destructive" type="button">영구 삭제</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  <footer class="page-footer">
+      <p class="section-label">(G) 디자인 노트</p>
+      <ul>
+        <li>강조: 주문 상태를 그리드에서 바로 판별하도록 상태 배지 체계를 강화했다 (성공/대기/환불/취소/실패 5색).</li>
+        <li>절제: 사이드바·인스펙터는 기본 구조 그대로 둬 상태 판별이라는 한 가지 개선에 집중했다.</li>
+        <li>vibe 조정: status 컬럼을 텍스트 대신 배지로 바꾸고, 짝수 행에 옅은 zebra 줄무늬를 넣어 정산 스프레드시트 느낌을 냈다.</li>
+        <li>light/dark: 라이트가 기본값이고, 다크는 표면을 #1a1a1a로 낮추고 primary를 더 밝은 그린(#00a37a)으로 올렸다.</li>
+      </ul>
+    </footer>
+
+</div>
+<script>
+(function () {
+  var root = document.documentElement;
+  var btn = document.querySelector('[data-toggle-mode]');
+  var icon = btn.querySelector('[data-mode-icon]');
+  var label = btn.querySelector('[data-mode-label]');
+  function sync() {
+    var mode = root.getAttribute('data-mode');
+    icon.textContent = mode === 'dark' ? '\u2600\uFE0F' : '\uD83C\uDF19';
+    label.textContent = mode === 'dark' ? 'Light로 보기' : 'Dark로 보기';
+  }
+  btn.addEventListener('click', function () {
+    var next = root.getAttribute('data-mode') === 'dark' ? 'light' : 'dark';
+    root.setAttribute('data-mode', next);
+    sync();
+  });
+  sync();
+})();
+</script>
+</body>
+</html>

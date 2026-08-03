@@ -1,0 +1,131 @@
+/*
+ * Ease Health — "크림 종이 위의 식물 온실"
+ * table-view 테마 토큰. src/themes.css 에 이 두 블록을 그대로 붙여 넣는다.
+ *
+ * 표면 겹침 순서 (그림자 없이 틴트로만 깊이를 만든다):
+ *   light: Cream(bg) → Keylime(card) → Mint(accent) → Sage(secondary) → Slate(popover)
+ *   dark : 같은 순서, 다크 포레스트 bg 에서 밝아지는 방향으로 뒤집음
+ *
+ * 카드 패딩(21px 이상) 규칙은 카드/패널 전용이고, 데이터 그리드 셀은
+ * 별도로 11px/7px 밀도 패딩을 쓴다 — 실제 값은 ease.html 의 컴포넌트 CSS 참고.
+ */
+
+[data-theme="ease"][data-mode="light"] {
+  /* 표면 / 텍스트 */
+  --tv-background: #fffefc;
+  --tv-foreground: #222222;
+  --tv-card: #e1f4df;
+  --tv-card-foreground: #222222;
+  --tv-popover: #b6ced5;
+  --tv-popover-foreground: #222222;
+  --tv-primary: #0f3e17;
+  --tv-primary-foreground: #fffefc;
+  --tv-secondary: #b1dbb8;
+  --tv-secondary-foreground: #222222;
+  --tv-muted: #efeeeb;
+  --tv-muted-foreground: #54655a;
+  --tv-accent: #cfe7d3;
+  --tv-accent-foreground: #222222;
+  --tv-border: #efeeeb;
+  --tv-input: #dfe6df;
+  --tv-ring: #0f3e17;
+  --tv-primary-tint: 15 62 23; /* #0f3e17 */
+  --tv-status-connected: #1f7a34;
+  --tv-status-connecting: #b8790f;
+  --tv-status-error: #ef4444;
+  --tv-status-idle: #5f7267;
+
+  /* 구문 강조 12종 — Forest Ink 계열 + Olive/Teal/Plum, Cream 배경 위 AA 4.5:1 확인됨 */
+  --tv-syntax-keyword: #0f3e17;
+  --tv-syntax-operator: #5c5115;
+  --tv-syntax-punct: #4a564f;
+  --tv-syntax-type: #0d6459;
+  --tv-syntax-builtin: #6d3564;
+  --tv-syntax-function: #256b32;
+  --tv-syntax-property: #78681f;
+  --tv-syntax-string: #96375a;
+  --tv-syntax-number: #8a5a12;
+  --tv-syntax-atom: #227b6d;
+  --tv-syntax-comment: #5f6d63;
+  --tv-syntax-error: #b3261e;
+
+  /* 공통 고정값 (테마 무관) */
+  --tv-destructive: #ef4444;
+  --tv-success: #16a34a;
+  --tv-warning: #ea580c;
+  --tv-highlight: #eab308;
+  --tv-radius: 0.875rem; /* 카드/버튼 14px — 이 시스템의 지배적 radius */
+  --tv-radius-nav: 0.4375rem; /* 내비 7px */
+  --tv-radius-pill: 999px; /* 배지/태그, 완전 캡슐 */
+  --tv-font-sans: "Suisse Intl", "Inter", -apple-system, BlinkMacSystemFont,
+    "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --tv-font-display: "Faire Octave", "Cormorant Garamond", "Playfair Display",
+    serif;
+  --tv-font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Consolas,
+    "Liberation Mono", monospace;
+
+  /* 정체성 색 (테마 무관, 그대로 복사) */
+  --tv-value-key: #0369a1;
+  --tv-value-leaf: #047857;
+  --tv-value-delete: #f43f5e;
+}
+
+[data-theme="ease"][data-mode="dark"] {
+  /* 표면 / 텍스트 — 온실을 밤으로: Forest Shadow 를 바닥으로 같은 순서를 밝게 쌓는다 */
+  --tv-background: #0c2f10;
+  --tv-foreground: #eef6ea;
+  --tv-card: #17381b;
+  --tv-card-foreground: #eef6ea;
+  --tv-popover: #37625d;
+  --tv-popover-foreground: #eef6ea;
+  --tv-primary: #8ee2a0;
+  --tv-primary-foreground: #0c2f10;
+  --tv-secondary: #2b5730;
+  --tv-secondary-foreground: #eef6ea;
+  --tv-muted: #1d251e;
+  --tv-muted-foreground: #9fb3a2;
+  --tv-accent: #1f4924;
+  --tv-accent-foreground: #eef6ea;
+  --tv-border: #2b3b2d;
+  --tv-input: #2b3b2d;
+  --tv-ring: #8ee2a0;
+  --tv-primary-tint: 142 226 160; /* #8ee2a0 */
+  --tv-status-connected: #5fd67e;
+  --tv-status-connecting: #e0a940;
+  --tv-status-error: #f87171;
+  --tv-status-idle: #7c9382;
+
+  /* 구문 강조 12종 — 같은 역할, 다크 배경(#0c2f10) 위 AA 4.5:1 확인됨 */
+  --tv-syntax-keyword: #8ee2a0;
+  --tv-syntax-operator: #e0c565;
+  --tv-syntax-punct: #9fb3a2;
+  --tv-syntax-type: #6fd1c4;
+  --tv-syntax-builtin: #e0a0d0;
+  --tv-syntax-function: #a8e08a;
+  --tv-syntax-property: #d9c877;
+  --tv-syntax-string: #f0a8c0;
+  --tv-syntax-number: #e8b978;
+  --tv-syntax-atom: #7fd6c8;
+  --tv-syntax-comment: #8aa090;
+  --tv-syntax-error: #f87171;
+
+  /* 공통 고정값 (테마 무관, dark 값) */
+  --tv-destructive: #f87171;
+  --tv-success: #22c55e;
+  --tv-warning: #fb923c;
+  --tv-highlight: #facc15;
+  --tv-radius: 0.875rem;
+  --tv-radius-nav: 0.4375rem;
+  --tv-radius-pill: 999px;
+  --tv-font-sans: "Suisse Intl", "Inter", -apple-system, BlinkMacSystemFont,
+    "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --tv-font-display: "Faire Octave", "Cormorant Garamond", "Playfair Display",
+    serif;
+  --tv-font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Consolas,
+    "Liberation Mono", monospace;
+
+  /* 정체성 색 (테마 무관, 그대로 복사) */
+  --tv-value-key: #7dd3fc;
+  --tv-value-leaf: #6ee7b7;
+  --tv-value-delete: #f43f5e;
+}

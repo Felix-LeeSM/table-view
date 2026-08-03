@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="ko" data-theme="henry" data-mode="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Henry — table-view 테마 프로토타입</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&family=Fraunces:opsz,wght@9..144,400&family=Oswald:wght@700&display=swap" rel="stylesheet">
+<style>
+  /* ============================================================
+   * RESET
+   * ============================================================ */
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  ul, ol, dl, dd { margin: 0; padding: 0; list-style: none; }
+  button, input { font: inherit; color: inherit; }
+  table { border-collapse: collapse; }
+
+  /* ============================================================
+   * TOKENS — Henry, monochrome. Two surfaces only: Paper / Ink.
+   * (identical to henry.tokens.css; inlined so this file opens standalone)
+   * ============================================================ */
+  [data-theme="henry"][data-mode="light"] {
+    --tv-background: #fafafa;
+    --tv-foreground: #2a2722;
+    --tv-card: #fafafa;
+    --tv-card-foreground: #2a2722;
+    --tv-popover: #2a2722;
+    --tv-popover-foreground: #fafafa;
+    --tv-primary: #2a2722;
+    --tv-primary-foreground: #fafafa;
+    --tv-secondary: #fafafa;
+    --tv-secondary-foreground: #2a2722;
+    --tv-muted: #fafafa;
+    --tv-muted-foreground: #666666;
+    --tv-accent: #2a2722;
+    --tv-accent-foreground: #fafafa;
+    --tv-border: #eeeeee;
+    --tv-input: #666666;
+    --tv-ring: #2a2722;
+    --tv-primary-tint: 42 39 34;
+    --tv-status-connected: #2a2722;
+    --tv-status-connecting: #666666;
+    --tv-status-error: #2a2722;
+    --tv-status-idle: #b3b3b3;
+    --tv-syntax-keyword: #2a2722;
+    --tv-syntax-type: #2a2722;
+    --tv-syntax-atom: #2a2722;
+    --tv-syntax-error: #2a2722;
+    --tv-syntax-function: #3e3b36;
+    --tv-syntax-builtin: #3e3b36;
+    --tv-syntax-property: #3e3b36;
+    --tv-syntax-string: #3e3b36;
+    --tv-syntax-operator: #666666;
+    --tv-syntax-punct: #666666;
+    --tv-syntax-number: #666666;
+    --tv-syntax-comment: #666666;
+    --tv-destructive: #2a2722;
+    --tv-success: #2a2722;
+    --tv-warning: #2a2722;
+    --tv-highlight: #2a2722;
+    --tv-radius: 12px;
+    --tv-font-sans: "Neue Montreal", Inter, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+    --tv-font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    --tv-value-key: #0369a1;
+    --tv-value-leaf: #047857;
+    --tv-value-delete: #f43f5e;
+  }
+  [data-theme="henry"][data-mode="dark"] {
+    --tv-background: #2a2722;
+    --tv-foreground: #fafafa;
+    --tv-card: #2a2722;
+    --tv-card-foreground: #fafafa;
+    --tv-popover: #fafafa;
+    --tv-popover-foreground: #2a2722;
+    --tv-primary: #fafafa;
+    --tv-primary-foreground: #2a2722;
+    --tv-secondary: #2a2722;
+    --tv-secondary-foreground: #fafafa;
+    --tv-muted: #2a2722;
+    --tv-muted-foreground: #9f9f9f;
+    --tv-accent: #fafafa;
+    --tv-accent-foreground: #2a2722;
+    --tv-border: #3e3b36;
+    --tv-input: #9f9f9f;
+    --tv-ring: #fafafa;
+    --tv-primary-tint: 250 250 250;
+    --tv-status-connected: #fafafa;
+    --tv-status-connecting: #b3b3b3;
+    --tv-status-error: #fafafa;
+    --tv-status-idle: #9f9f9f;
+    --tv-syntax-keyword: #fafafa;
+    --tv-syntax-type: #fafafa;
+    --tv-syntax-atom: #fafafa;
+    --tv-syntax-error: #fafafa;
+    --tv-syntax-function: #b3b3b3;
+    --tv-syntax-builtin: #b3b3b3;
+    --tv-syntax-property: #b3b3b3;
+    --tv-syntax-string: #b3b3b3;
+    --tv-syntax-operator: #9f9f9f;
+    --tv-syntax-punct: #9f9f9f;
+    --tv-syntax-number: #9f9f9f;
+    --tv-syntax-comment: #9f9f9f;
+    --tv-destructive: #fafafa;
+    --tv-success: #fafafa;
+    --tv-warning: #fafafa;
+    --tv-highlight: #fafafa;
+    --tv-radius: 12px;
+    --tv-font-sans: "Neue Montreal", Inter, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+    --tv-font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    --tv-value-key: #7dd3fc;
+    --tv-value-leaf: #6ee7b7;
+    --tv-value-delete: #f43f5e;
+  }
+  /* mode-invariant literals — the two raw surfaces, and the palette's five
+     mid-tones, used for the swatch reference (B) and for the masthead /
+     workspace-wrapper / footer bands that stay Ink regardless of data-mode
+     (dark mode "totalizes" the Ink band; see footer for the reasoning) */
+  [data-theme="henry"] {
+    --henry-paper: #fafafa;
+    --henry-hairline: #eeeeee;
+    --henry-midstone: #9f9f9f;
+    --henry-ash: #666666;
+    --henry-pebble: #b3b3b3;
+    --henry-sepia: #3e3b36;
+    --henry-ink: #2a2722;
+    --henry-ink-muted: #9f9f9f; /* Midstone — the one mid-tone that still clears 3:1 against Ink */
+    --henry-font-display: "Louize Display", "Fraunces", "Apple SD Gothic Neo", serif;
+    --henry-font-serif: "Louize", "Fraunces", "Apple SD Gothic Neo", serif;
+    --henry-font-mast: "Manuka", "Oswald", "Apple SD Gothic Neo", sans-serif;
+  }
+
+  /* ============================================================
+   * BASE / TYPE SCALE
+   * ============================================================ */
+  html { color-scheme: light; }
+  html[data-mode="dark"] { color-scheme: dark; }
+  body {
+    background: var(--tv-background);
+    color: var(--tv-foreground);
+    font-family: var(--tv-font-sans);
+    font-optical-sizing: auto;
+    font-size: 16px;
+    line-height: 1.5;
+    letter-spacing: -0.01em;
+    -webkit-font-smoothing: antialiased;
+  }
+  .mono { font-family: var(--tv-font-mono); letter-spacing: 0; }
+  .wrap { max-width: 1280px; margin: 0 auto; padding: 0 32px; }
+  .sec { padding: 80px 0; border-top: 1px solid var(--tv-border); }
+  .band { background: var(--henry-ink); color: var(--henry-paper); border-color: var(--henry-sepia); }
+  .band .eyebrow, .band .sub { color: var(--henry-ink-muted); }
+  .eyebrow {
+    font-size: 12px; font-weight: 700; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--tv-muted-foreground); margin: 0 0 12px;
+  }
+  .disp {
+    font-family: var(--henry-font-display); font-weight: 400;
+    font-size: clamp(40px, 6vw, 77px); line-height: 0.95; letter-spacing: 0;
+    margin: 0 0 16px;
+  }
+  .sub {
+    font-size: 16px; line-height: 1.5; letter-spacing: -0.01em;
+    color: var(--tv-muted-foreground); max-width: 640px; margin: 0 0 48px;
+  }
+
+  /* ============================================================
+   * A — MASTHEAD (always Ink; toggle + back-link live here)
+   * ============================================================ */
+  .mast__top {
+    display: flex; align-items: center; justify-content: space-between;
+    padding-top: 32px; padding-bottom: 224px; flex-wrap: wrap; gap: 16px;
+  }
+  .back { color: var(--henry-paper); text-decoration: underline; text-underline-offset: 3px; font-size: 14px; }
+  .toggle {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: transparent; border: 1px solid var(--henry-paper); color: var(--henry-paper);
+    border-radius: var(--tv-radius); padding: 8px 16px; font-size: 13px; font-weight: 700;
+    cursor: pointer; letter-spacing: 0.02em; text-transform: uppercase;
+  }
+  .toggle:hover { background: var(--henry-sepia); }
+  .toggle__dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+  .mast__word {
+    font-family: var(--henry-font-mast); font-weight: 700; text-transform: uppercase;
+    font-size: clamp(96px, 20vw, 320px); line-height: 0.78; letter-spacing: 0; margin: 0;
+  }
+  .mast__vibe { font-size: 20px; line-height: 1.3; letter-spacing: -0.01em; margin: 24px 0 0; max-width: 640px; color: var(--henry-ink-muted); }
+  .mast__deck {
+    font-family: var(--henry-font-serif); font-weight: 400; font-size: 20px; line-height: 1.3;
+    letter-spacing: -0.01em; margin: 12px 0 80px; color: var(--henry-paper);
+  }
+
+  /* ============================================================
+   * B — PALETTE + STATUS/SYNTAX LEGEND
+   * ============================================================ */
+  .swatches { display: flex; flex-wrap: wrap; gap: 32px; margin: 0 0 64px; }
+  .swatch { width: 96px; }
+  .swatch__chip { display: block; width: 96px; height: 64px; border-radius: var(--tv-radius); border: 1px solid var(--tv-border); margin-bottom: 12px; }
+  .swatch__name { display: block; font-size: 14px; font-weight: 700; }
+  .swatch__hex { display: block; font-family: var(--tv-font-mono); font-size: 12px; color: var(--tv-muted-foreground); }
+  .legend { display: grid; grid-template-columns: repeat(2, minmax(240px, 1fr)); gap: 64px; }
+  .status-list li { display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--tv-border); font-size: 14px; }
+  .syntax-list { display: flex; flex-wrap: wrap; gap: 12px 20px; font-size: 14px; }
+  .dot { display: inline-block; width: 10px; height: 10px; flex: 0 0 auto; border-radius: 50%; }
+  .dot--connected { background: var(--tv-status-connected); }
+  .dot--connecting { background: var(--tv-status-connecting); animation: henry-pulse 1.6s ease-in-out infinite; }
+  .dot--error { background: var(--tv-status-error); border-radius: 2px; transform: rotate(45deg); }
+  .dot--idle { background: transparent; border: 1.5px solid var(--tv-status-idle); }
+  @keyframes henry-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+  /* ============================================================
+   * SYNTAX — 12 roles. Only 3 (light) / 4 (dark) tones exist, so each
+   * family leans on weight + italic + underline to stay legible; see
+   * the legend above and the footer note on why no hue was added.
+   * ============================================================ */
+  .syn-keyword  { color: var(--tv-syntax-keyword);  font-weight: 700; }
+  .syn-type     { color: var(--tv-syntax-type);     font-weight: 400; text-decoration: underline; text-underline-offset: 2px; }
+  .syn-atom     { color: var(--tv-syntax-atom);     font-weight: 400; font-style: italic; }
+  .syn-error    { color: var(--tv-syntax-error);    font-weight: 700; text-decoration: underline wavy; text-underline-offset: 3px; }
+  .syn-function { color: var(--tv-syntax-function); font-weight: 700; }
+  .syn-builtin  { color: var(--tv-syntax-builtin);  font-weight: 700; font-style: italic; }
+  .syn-property { color: var(--tv-syntax-property); font-weight: 400; }
+  .syn-string   { color: var(--tv-syntax-string);   font-weight: 400; font-style: italic; }
+  .syn-operator { color: var(--tv-syntax-operator); font-weight: 400; }
+  .syn-punct    { color: var(--tv-syntax-punct);    font-weight: 400; }
+  .syn-number   { color: var(--tv-syntax-number);   font-weight: 700; }
+  .syn-comment  { color: var(--tv-syntax-comment);  font-weight: 400; font-style: italic; }
+
+  /* ============================================================
+   * C — APP SHELL (the one dense block; Paper card afloat on Ink band)
+   * ============================================================ */
+  .shell {
+    background: var(--tv-card); color: var(--tv-card-foreground);
+    border: 1px solid var(--tv-border); border-radius: var(--tv-radius);
+    min-height: 620px; display: grid;
+    grid-template-columns: 248px 1fr 260px; grid-template-rows: 1fr auto;
+    overflow: hidden; font-size: 13px;
+  }
+  .shell__sidebar { grid-column: 1; grid-row: 1; border-right: 1px solid var(--tv-border); display: flex; flex-direction: column; min-height: 0; overflow: auto; }
+  .shell__main { grid-column: 2; grid-row: 1; display: flex; flex-direction: column; min-width: 0; }
+  .shell__inspector { grid-column: 3; grid-row: 1; border-left: 1px solid var(--tv-border); overflow: auto; }
+  .shell__statusbar { grid-column: 1 / -1; grid-row: 2; border-top: 1px solid var(--tv-border); }
+
+  .tree__search { padding: 12px; border-bottom: 1px solid var(--tv-border); }
+  .tree__search-input { width: 100%; }
+  .tree__children { padding-left: 16px; }
+  .tree__row {
+    display: flex; align-items: center; gap: 8px; width: 100%;
+    padding: 6px 12px; font-size: 13px; background: none; border: none; color: inherit;
+    font-family: var(--tv-font-sans); text-align: left; cursor: pointer; border-radius: var(--tv-radius);
+  }
+  .tree__row:hover { background: var(--tv-muted); text-decoration: underline; }
+  .tree__row--conn { font-weight: 700; }
+  .tree__meta { margin-left: auto; font-size: 11px; color: var(--tv-muted-foreground); }
+  .tree__row--branch { display: block; padding: 6px 12px; font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--tv-muted-foreground); }
+  .tree__row--selected { background: var(--tv-accent); color: var(--tv-accent-foreground); font-weight: 700; }
+  .tree__row--selected:hover { text-decoration: none; }
+
+  .tabs { display: flex; align-items: center; border-bottom: 1px solid var(--tv-border); padding: 0 8px; flex: 0 0 auto; }
+  .tab { font-size: 13px; padding: 10px 16px; background: none; border: none; border-bottom: 2px solid transparent; color: var(--tv-muted-foreground); cursor: pointer; }
+  .tab:hover { color: var(--tv-foreground); }
+  .tab.is-active { color: var(--tv-foreground); font-weight: 700; border-bottom-color: var(--tv-foreground); }
+  .tab--add { font-weight: 700; }
+
+  .toolbar { display: flex; align-items: center; gap: 8px; padding: 10px 16px; border-bottom: 1px solid var(--tv-border); flex: 0 0 auto; }
+  .toolbar__filter { flex: 1; min-width: 120px; }
+  .toolbar__count { margin-left: auto; font-family: var(--tv-font-mono); font-size: 12px; color: var(--tv-muted-foreground); white-space: nowrap; }
+
+  .grid-wrap { flex: 1; overflow: auto; min-height: 0; }
+  .grid { width: 100%; font-size: 13px; }
+  .grid th {
+    position: sticky; top: 0; background: var(--tv-card); text-align: left; font-weight: 700;
+    padding: 6px 12px; border-bottom: 1px solid var(--tv-border); white-space: nowrap;
+  }
+  .grid td { padding: 0 12px; height: 32px; border-bottom: 1px solid var(--tv-border); white-space: nowrap; }
+  .grid th.is-num, .grid td.is-num { text-align: right; }
+  .grid__type { font-weight: 400; color: var(--tv-muted-foreground); font-size: 11px; margin-left: 4px; }
+  .grid__pk { font-size: 10px; font-weight: 700; background: var(--tv-primary); color: var(--tv-primary-foreground); padding: 1px 6px; border-radius: var(--tv-radius); margin-left: 4px; }
+  .grid__fk { font-size: 10px; font-weight: 700; border: 1px solid var(--tv-input); padding: 1px 6px; border-radius: var(--tv-radius); margin-left: 4px; }
+  .grid__sort { margin-left: 4px; font-size: 10px; }
+  .is-null { color: var(--tv-muted-foreground); font-style: italic; }
+  .is-selected td { background: var(--tv-accent); color: var(--tv-accent-foreground); }
+  .is-selected .is-null { color: var(--tv-accent-foreground); opacity: 0.75; }
+  .is-selected .cell-badge { background: transparent; border: 1px solid var(--tv-accent-foreground); color: var(--tv-accent-foreground); text-decoration: none; font-style: normal; }
+  .is-edited { outline: 2px solid var(--tv-foreground); outline-offset: -2px; font-weight: 700; }
+  tbody tr:not(.is-selected):hover td { background: var(--tv-muted); text-decoration: underline; text-decoration-color: var(--tv-border); }
+
+  .cell-badge { display: inline-block; font-size: 11px; padding: 2px 9px; border-radius: var(--tv-radius); border: 1px solid var(--tv-border); }
+  .cell-badge--success { background: var(--tv-success); color: var(--tv-primary-foreground); font-weight: 700; border-color: transparent; }
+  .cell-badge--warning { background: transparent; color: var(--tv-warning); font-weight: 700; font-style: italic; border: 1.5px solid var(--tv-warning); }
+  .cell-badge--neutral { color: var(--tv-muted-foreground); }
+  .cell-badge--error { background: var(--tv-destructive); color: var(--tv-primary-foreground); font-weight: 700; text-decoration: underline; border-color: transparent; }
+
+  .sql { position: relative; display: flex; height: 200px; border-top: 1px solid var(--tv-border); background: var(--tv-card); flex: 0 0 auto; }
+  .sql__lines { padding: 8px 10px; text-align: right; color: var(--tv-muted-foreground); font-size: 12px; line-height: 18px; border-right: 1px solid var(--tv-border); user-select: none; }
+  .sql__code { flex: 1; margin: 0; padding: 8px 16px; font-size: 12.5px; line-height: 18px; overflow: auto; }
+  .sql__run { position: absolute; right: 16px; bottom: 12px; }
+
+  .inspector { padding: 16px; font-size: 13px; }
+  .inspector__title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--tv-muted-foreground); margin: 0 0 16px; }
+  .kv__row { padding: 8px 0; border-bottom: 1px solid var(--tv-border); }
+  .kv__row dt { font-size: 11px; color: var(--tv-muted-foreground); margin-bottom: 2px; }
+  .kv__row dd { margin: 0; }
+  .json-tree { margin: 4px 0 0; padding-left: 12px; border-left: 1px solid var(--tv-border); font-size: 12px; }
+  .json-tree li { padding: 2px 0; }
+  .json-key { color: var(--tv-value-key); }
+  .json-leaf { color: var(--tv-value-leaf); }
+
+  .statusbar { display: flex; align-items: center; gap: 8px; padding: 6px 16px; font-size: 11px; color: var(--tv-muted-foreground); }
+  .statusbar__sep { opacity: 0.5; }
+  .statusbar__right { margin-left: auto; font-family: var(--tv-font-mono); }
+
+  /* ============================================================
+   * E — COMPONENT SAMPLES
+   * ============================================================ */
+  .sample { margin-bottom: 40px; }
+  .sample__label { font-size: 12px; font-weight: 700; color: var(--tv-muted-foreground); text-transform: uppercase; letter-spacing: 0.06em; margin: 0 0 16px; }
+  .sample__row { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; }
+
+  .btn {
+    font-size: 14px; font-weight: 700; letter-spacing: -0.01em; padding: 10px 22px;
+    border-radius: var(--tv-radius); border: 1px solid transparent; cursor: pointer; background: transparent;
+  }
+  .btn:hover { opacity: 0.82; }
+  .btn--primary { background: var(--tv-primary); color: var(--tv-primary-foreground); }
+  .btn--secondary { background: var(--tv-secondary); color: var(--tv-secondary-foreground); border-color: var(--tv-input); font-weight: 400; }
+  .btn--ghost { background: transparent; color: var(--tv-foreground); border-color: var(--tv-border); font-weight: 400; }
+  .btn--destructive { background: var(--tv-destructive); color: var(--tv-primary-foreground); text-decoration: underline; text-underline-offset: 3px; text-transform: uppercase; letter-spacing: 0.03em; }
+  .btn--sm { padding: 7px 16px; font-size: 13px; }
+
+  .input {
+    font-family: var(--tv-font-sans); font-size: 14px; padding: 8px 12px;
+    border-radius: var(--tv-radius); border: 1px solid var(--tv-input);
+    background: var(--tv-card); color: var(--tv-card-foreground);
+  }
+  .input--focus { border: 2px solid var(--tv-ring); padding: 7px 11px; }
+  .input--error { border: 3px double var(--tv-foreground); padding: 6px 10px; }
+  .field-error { font-size: 12px; font-weight: 700; margin: 8px 0 0; max-width: 260px; }
+
+  .badge { display: inline-flex; align-items: center; font-size: 12px; padding: 4px 12px; border-radius: var(--tv-radius); border: 1px solid var(--tv-border); }
+  .badge--neutral { background: var(--tv-card); color: var(--tv-muted-foreground); }
+  .badge--success { background: var(--tv-success); color: var(--tv-primary-foreground); font-weight: 700; border-color: transparent; }
+  .badge--warning { background: transparent; color: var(--tv-warning); font-weight: 700; font-style: italic; border: 2px solid var(--tv-warning); }
+  .badge--error { background: var(--tv-destructive); color: var(--tv-primary-foreground); font-weight: 700; text-decoration: underline; border-color: transparent; }
+
+  .switch { width: 44px; height: 24px; border-radius: var(--tv-radius); border: 1px solid var(--tv-input); background: var(--tv-card); position: relative; padding: 2px; cursor: pointer; }
+  .switch[aria-checked="true"] { background: var(--tv-primary); border-color: var(--tv-primary); }
+  .switch__thumb { display: block; width: 18px; height: 18px; border-radius: var(--tv-radius); background: var(--tv-input); }
+  .switch[aria-checked="true"] .switch__thumb { transform: translateX(20px); background: var(--tv-primary-foreground); }
+  .switch-label { display: inline-flex; align-items: center; gap: 10px; font-size: 13px; }
+
+  .checkbox { display: inline-block; width: 20px; height: 20px; border-radius: var(--tv-radius); border: 2px solid var(--tv-input); background: var(--tv-card); position: relative; vertical-align: middle; }
+  .checkbox--checked { background: var(--tv-primary); border-color: var(--tv-primary); }
+  .checkbox--checked::after { content: ""; position: absolute; left: 6px; top: 2px; width: 5px; height: 10px; border: solid var(--tv-primary-foreground); border-width: 0 2px 2px 0; transform: rotate(40deg); }
+  .checkbox-label { display: inline-flex; align-items: center; gap: 10px; font-size: 13px; }
+
+  .select { display: inline-flex; align-items: center; gap: 10px; font-size: 14px; padding: 8px 12px; border-radius: var(--tv-radius); border: 1px solid var(--tv-input); background: var(--tv-card); color: var(--tv-card-foreground); cursor: pointer; }
+  .select__chevron { font-size: 11px; color: var(--tv-muted-foreground); }
+
+  /* ============================================================
+   * F — MODAL
+   * ============================================================ */
+  .modal {
+    max-width: 460px; background: var(--tv-popover); color: var(--tv-popover-foreground);
+    border-radius: var(--tv-radius); border: 1px solid var(--tv-popover-foreground); padding: 32px;
+  }
+  .modal__eyebrow { font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.7; margin: 0 0 12px; font-weight: 700; }
+  .modal__title { font-size: 24px; line-height: 1.2; letter-spacing: -0.01em; margin: 0 0 16px; font-weight: 700; }
+  .modal__body { font-size: 14px; line-height: 1.5; margin: 0 0 20px; }
+  .modal__body strong { text-decoration: underline; text-underline-offset: 2px; }
+  .modal__confirm-input { width: 100%; margin-bottom: 20px; background: transparent; border-color: var(--tv-popover-foreground); color: var(--tv-popover-foreground); }
+  .modal__actions { display: flex; justify-content: flex-end; gap: 12px; }
+  .btn--modal-ghost { background: transparent; border: 1px solid var(--tv-popover-foreground); color: var(--tv-popover-foreground); font-weight: 400; }
+  .btn--modal-destructive { background: var(--tv-popover-foreground); color: var(--tv-popover); font-weight: 700; text-decoration: underline; text-underline-offset: 3px; text-transform: uppercase; letter-spacing: 0.03em; }
+
+  /* ============================================================
+   * G — FOOTER (always Ink, bookends the masthead)
+   * ============================================================ */
+  .foot { padding: 64px 0; }
+  .foot__grid { display: grid; grid-template-columns: minmax(160px, 280px) 1fr; gap: 48px; }
+  .foot__word { font-family: var(--henry-font-mast); font-size: 32px; margin: 0 0 8px; letter-spacing: 0; }
+  .foot__meta { font-size: 13px; color: var(--henry-ink-muted); margin: 0; }
+  .foot__notes { display: flex; flex-direction: column; gap: 12px; font-size: 14px; line-height: 1.5; counter-reset: note; }
+  .foot__notes li { counter-increment: note; padding-left: 28px; position: relative; }
+  .foot__notes li::before { content: counter(note); position: absolute; left: 0; top: 0; font-family: var(--tv-font-mono); font-size: 12px; color: var(--henry-ink-muted); }
+
+  @media (max-width: 720px) {
+    .shell { grid-template-columns: 1fr; grid-template-rows: auto auto auto auto; min-height: 0; }
+    .shell__sidebar, .shell__inspector { border: none; border-top: 1px solid var(--tv-border); max-height: 240px; }
+    .shell__statusbar { grid-column: 1; }
+    .legend, .foot__grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+  <!-- (A) 헤더 바 / 마스트헤드 -->
+  <header class="band mast">
+    <div class="wrap">
+      <div class="mast__top">
+        <a class="back" href="../index.html">← 전체 목록</a>
+        <button class="toggle" id="modeToggle" type="button" aria-pressed="false">
+          <span class="toggle__dot" aria-hidden="true"></span>
+          <span id="toggleLabel">Light</span>
+        </button>
+      </div>
+      <h1 class="mast__word">Henry</h1>
+      <p class="mast__vibe">따뜻한 크림 종이 위의 고딕 브로드사이드 포스터 — 유채색 없이, 종이와 잉크의 반전만으로 강조한다.</p>
+      <p class="mast__deck">Ink &amp; paper. Nothing else.</p>
+    </div>
+  </header>
+
+  <!-- (B) 팔레트 스와치 + 상태/구문 범례 -->
+  <section class="sec sec--b">
+    <div class="wrap">
+      <p class="eyebrow">Palette</p>
+      <h2 class="disp">Palette</h2>
+      <p class="sub">색 7개. 표면은 Paper와 Ink 두 단계뿐이고, 나머지 다섯은 전부 텍스트·테두리 전용 톤이다.</p>
+
+      <ul class="swatches">
+        <li class="swatch"><span class="swatch__chip" style="background:var(--henry-paper)"></span><span class="swatch__name">Paper</span><span class="swatch__hex">#fafafa</span></li>
+        <li class="swatch"><span class="swatch__chip" style="background:var(--henry-hairline)"></span><span class="swatch__name">Hairline</span><span class="swatch__hex">#eeeeee</span></li>
+        <li class="swatch"><span class="swatch__chip" style="background:var(--henry-midstone)"></span><span class="swatch__name">Midstone</span><span class="swatch__hex">#9f9f9f</span></li>
+        <li class="swatch"><span class="swatch__chip" style="background:var(--henry-ash)"></span><span class="swatch__name">Ash</span><span class="swatch__hex">#666666</span></li>
+        <li class="swatch"><span class="swatch__chip" style="background:var(--henry-pebble)"></span><span class="swatch__name">Pebble</span><span class="swatch__hex">#b3b3b3</span></li>
+        <li class="swatch"><span class="swatch__chip" style="background:var(--henry-sepia)"></span><span class="swatch__name">Sepia</span><span class="swatch__hex">#3e3b36</span></li>
+        <li class="swatch"><span class="swatch__chip" style="background:var(--henry-ink)"></span><span class="swatch__name">Headline Ink</span><span class="swatch__hex">#2a2722</span></li>
+      </ul>
+
+      <div class="legend">
+        <div>
+          <p class="eyebrow">Status · 4종</p>
+          <ul class="status-list">
+            <li><i class="dot dot--connected" aria-hidden="true"></i>connected · 연결됨 — 원, 가장 짙은 톤</li>
+            <li><i class="dot dot--connecting" aria-hidden="true"></i>connecting · 연결 중 — 원, 중간 톤 + 펄스</li>
+            <li><i class="dot dot--error" aria-hidden="true"></i>error · 오류 — 다이아몬드, 형태로 구분</li>
+            <li><i class="dot dot--idle" aria-hidden="true"></i>idle · 유휴 — 속이 빈 테두리 원</li>
+          </ul>
+        </div>
+        <div>
+          <p class="eyebrow">Syntax · 12종</p>
+          <ul class="syntax-list mono">
+            <li class="syn-keyword">keyword</li>
+            <li class="syn-type">type</li>
+            <li class="syn-atom">atom</li>
+            <li class="syn-error">error</li>
+            <li class="syn-function">function</li>
+            <li class="syn-builtin">builtin</li>
+            <li class="syn-property">property</li>
+            <li class="syn-string">string</li>
+            <li class="syn-operator">operator</li>
+            <li class="syn-punct">punct</li>
+            <li class="syn-number">number</li>
+            <li class="syn-comment">comment</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- (C) 앱 셸 목업 + (D) 상태 바(셸 맨 아래 한 줄) -->
+  <section class="sec sec--c band">
+    <div class="wrap">
+      <p class="eyebrow">Workspace</p>
+      <h2 class="disp">The Workspace</h2>
+      <p class="sub">이 페이지에서 유일하게 조밀한 도구 UI. Paper 카드가 Ink 밴드 위에 얹혀 이 시스템의 반전 문법을 그대로 보여준다.</p>
+
+      <div class="shell">
+        <nav class="shell__sidebar">
+          <div class="tree__search"><input class="input tree__search-input" placeholder="검색"></div>
+          <ul>
+            <li>
+              <button class="tree__row tree__row--conn">
+                <i class="dot dot--connected" aria-hidden="true"></i>
+                <span>prod-analytics</span>
+                <span class="tree__meta">PostgreSQL</span>
+              </button>
+              <ul class="tree__children">
+                <li>
+                  <span class="tree__row tree__row--branch">public</span>
+                  <ul class="tree__children">
+                    <li>
+                      <span class="tree__row tree__row--branch">Tables</span>
+                      <ul class="tree__children">
+                        <li><button class="tree__row">users</button></li>
+                        <li><button class="tree__row tree__row--selected">orders</button></li>
+                        <li><button class="tree__row">order_items</button></li>
+                        <li><button class="tree__row">payments</button></li>
+                        <li><button class="tree__row">sessions</button></li>
+                      </ul>
+                    </li>
+                    <li>
+                      <span class="tree__row tree__row--branch">Views</span>
+                      <ul class="tree__children">
+                        <li><button class="tree__row">v_revenue_daily</button></li>
+                      </ul>
+                    </li>
+                    <li>
+                      <span class="tree__row tree__row--branch">Functions</span>
+                      <ul class="tree__children">
+                        <li><button class="tree__row mono">calc_ltv()</button></li>
+                      </ul>
+                    </li>
+                  </ul>
+                </li>
+              </ul>
+            </li>
+            <li>
+              <button class="tree__row tree__row--conn">
+                <i class="dot dot--connecting" aria-hidden="true"></i>
+                <span>staging-cache</span>
+                <span class="tree__meta">Redis</span>
+              </button>
+            </li>
+            <li>
+              <button class="tree__row tree__row--conn">
+                <i class="dot dot--error" aria-hidden="true"></i>
+                <span>legacy-orders</span>
+                <span class="tree__meta">MySQL</span>
+              </button>
+            </li>
+          </ul>
+        </nav>
+
+        <div class="shell__main">
+          <div class="tabs">
+            <button class="tab is-active">orders</button>
+            <button class="tab">users</button>
+            <button class="tab">Query 1</button>
+            <button class="tab tab--add" aria-label="새 탭">+</button>
+          </div>
+
+          <div class="toolbar">
+            <input class="input toolbar__filter" placeholder="필터 · 예: status = 'completed'">
+            <button class="btn btn--secondary btn--sm">Refresh</button>
+            <button class="btn btn--secondary btn--sm">Add row</button>
+            <button class="btn btn--primary btn--sm">Commit</button>
+            <span class="toolbar__count">1,248 rows</span>
+          </div>
+
+          <div class="grid-wrap">
+            <table class="grid">
+              <thead>
+                <tr>
+                  <th class="is-num">id<span class="grid__type">int8</span><span class="grid__pk">PK</span><span class="grid__sort">▲</span></th>
+                  <th class="is-num">customer_id<span class="grid__type">int8</span><span class="grid__fk">FK</span></th>
+                  <th>status<span class="grid__type">text</span></th>
+                  <th class="is-num">total_amount<span class="grid__type">numeric</span></th>
+                  <th>created_at<span class="grid__type">timestamptz</span></th>
+                  <th>note<span class="grid__type">text</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td class="mono is-num">1001</td><td class="mono is-num">4821</td><td><span class="cell-badge cell-badge--success">completed</span></td><td class="mono is-num">128.50</td><td class="mono">2026-07-05 09:14</td><td class="is-null">NULL</td></tr>
+                <tr><td class="mono is-num">1002</td><td class="mono is-num">3390</td><td><span class="cell-badge cell-badge--warning">pending</span></td><td class="mono is-num">64.00</td><td class="mono">2026-07-05 10:02</td><td>Gift wrap requested</td></tr>
+                <tr><td class="mono is-num">1003</td><td class="mono is-num">4821</td><td><span class="cell-badge cell-badge--success">completed</span></td><td class="mono is-num">210.75</td><td class="mono">2026-07-06 11:45</td><td class="is-null">NULL</td></tr>
+                <tr><td class="mono is-num">1004</td><td class="mono is-num">1187</td><td><span class="cell-badge cell-badge--neutral">cancelled</span></td><td class="mono is-num">45.20</td><td class="mono">2026-07-06 14:18</td><td>Customer changed mind</td></tr>
+                <tr class="is-selected"><td class="mono is-num">1005</td><td class="mono is-num">9923</td><td><span class="cell-badge cell-badge--success">completed</span></td><td class="mono is-num">512.00</td><td class="mono">2026-07-07 08:33</td><td class="is-null">NULL</td></tr>
+                <tr><td class="mono is-num">1006</td><td class="mono is-num">5502</td><td><span class="cell-badge cell-badge--error">refunded</span></td><td class="mono is-num">88.90</td><td class="mono">2026-07-07 16:07</td><td>Damaged in transit</td></tr>
+                <tr><td class="mono is-num">1007</td><td class="mono is-num">3390</td><td><span class="cell-badge cell-badge--success">completed</span></td><td class="mono is-num">33.10</td><td class="mono">2026-07-08 09:59</td><td class="is-null">NULL</td></tr>
+                <tr><td class="mono is-num">1008</td><td class="mono is-num">7714</td><td><span class="cell-badge cell-badge--warning">pending</span></td><td class="mono is-num is-edited">176.40</td><td class="mono">2026-07-08 13:21</td><td class="is-null">NULL</td></tr>
+                <tr><td class="mono is-num">1009</td><td class="mono is-num">4821</td><td><span class="cell-badge cell-badge--success">completed</span></td><td class="mono is-num">92.00</td><td class="mono">2026-07-09 10:11</td><td class="is-null">NULL</td></tr>
+                <tr><td class="mono is-num">1010</td><td class="mono is-num">2266</td><td><span class="cell-badge cell-badge--success">completed</span></td><td class="mono is-num">301.60</td><td class="mono">2026-07-09 15:44</td><td>Rush delivery</td></tr>
+                <tr><td class="mono is-num">1011</td><td class="mono is-num">9923</td><td><span class="cell-badge cell-badge--neutral">cancelled</span></td><td class="mono is-num">18.00</td><td class="mono">2026-07-10 07:52</td><td class="is-null">NULL</td></tr>
+                <tr><td class="mono is-num">1012</td><td class="mono is-num">1187</td><td><span class="cell-badge cell-badge--success">completed</span></td><td class="mono is-num">145.25</td><td class="mono">2026-07-10 12:36</td><td class="is-null">NULL</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="sql">
+            <div class="sql__lines mono" aria-hidden="true">1<br>2<br>3<br>4<br>5<br>6<br>7<br>8<br>9<br>10</div>
+            <pre class="sql__code mono"><code><span class="syn-comment">-- 최근 30일 고객별 매출</span>
+<span class="syn-keyword">SELECT</span> <span class="syn-type">c</span><span class="syn-punct">.</span><span class="syn-property">id</span><span class="syn-punct">,</span> <span class="syn-type">c</span><span class="syn-punct">.</span><span class="syn-property">name</span><span class="syn-punct">,</span> <span class="syn-function">SUM</span><span class="syn-punct">(</span><span class="syn-type">o</span><span class="syn-punct">.</span><span class="syn-property">total_amount</span><span class="syn-punct">)</span> <span class="syn-keyword">AS</span> <span class="syn-property">revenue</span>
+<span class="syn-keyword">FROM</span> <span class="syn-type">orders</span> <span class="syn-type">o</span>
+  <span class="syn-keyword">JOIN</span> <span class="syn-type">customers</span> <span class="syn-type">c</span> <span class="syn-keyword">ON</span> <span class="syn-type">c</span><span class="syn-punct">.</span><span class="syn-property">id</span> <span class="syn-operator">=</span> <span class="syn-type">o</span><span class="syn-punct">.</span><span class="syn-property">customer_id</span>
+<span class="syn-keyword">WHERE</span> <span class="syn-type">o</span><span class="syn-punct">.</span><span class="syn-property">created_at</span> <span class="syn-operator">&gt;=</span> <span class="syn-builtin">NOW</span><span class="syn-punct">()</span> <span class="syn-operator">-</span> <span class="syn-keyword">INTERVAL</span> <span class="syn-string">'30 days'</span>
+  <span class="syn-keyword">AND</span> <span class="syn-type">o</span><span class="syn-punct">.</span><span class="syn-property">status</span> <span class="syn-operator">&lt;&gt;</span> <span class="syn-string">'cancelled'</span>
+<span class="syn-keyword">GROUP BY</span> <span class="syn-type">c</span><span class="syn-punct">.</span><span class="syn-property">id</span><span class="syn-punct">,</span> <span class="syn-type">c</span><span class="syn-punct">.</span><span class="syn-property">name</span>
+<span class="syn-keyword">HAVING</span> <span class="syn-function">SUM</span><span class="syn-punct">(</span><span class="syn-type">o</span><span class="syn-punct">.</span><span class="syn-property">total_amount</span><span class="syn-punct">)</span> <span class="syn-operator">&gt;</span> <span class="syn-number">1000</span>
+<span class="syn-keyword">ORDER BY</span> <span class="syn-property">revenue</span> <span class="syn-atom">DESC</span>
+<span class="syn-keyword">LIMIT</span> <span class="syn-number">50</span><span class="syn-punct">;</span></code></pre>
+            <button class="btn btn--primary btn--sm sql__run">Run ⌘↵</button>
+          </div>
+        </div>
+
+        <aside class="shell__inspector">
+          <p class="inspector__title">선택한 행 · orders #1005</p>
+          <dl class="kv">
+            <div class="kv__row"><dt>id</dt><dd class="mono">1005</dd></div>
+            <div class="kv__row"><dt>customer_id</dt><dd class="mono">9923</dd></div>
+            <div class="kv__row"><dt>status</dt><dd>completed</dd></div>
+            <div class="kv__row"><dt>total_amount</dt><dd class="mono">512.00</dd></div>
+            <div class="kv__row"><dt>created_at</dt><dd class="mono">2026-07-07 08:33:00+00</dd></div>
+            <div class="kv__row"><dt>note</dt><dd class="is-null">NULL</dd></div>
+            <div class="kv__row">
+              <dt>metadata</dt>
+              <dd>
+                <ul class="json-tree mono">
+                  <li><span class="json-key">source</span>: <span class="json-leaf">"web"</span></li>
+                  <li><span class="json-key">campaign</span>: <span class="json-leaf">"summer_sale"</span></li>
+                  <li><span class="json-key">items</span>: <span class="json-leaf">3</span></li>
+                </ul>
+              </dd>
+            </div>
+          </dl>
+        </aside>
+
+        <div class="shell__statusbar statusbar">
+          <i class="dot dot--connected" aria-hidden="true"></i>
+          <span>prod-analytics · public</span>
+          <span class="statusbar__sep">·</span>
+          <span>1,248 rows</span>
+          <span class="statusbar__sep">·</span>
+          <span>실행 42ms</span>
+          <span class="statusbar__right">PostgreSQL 16.2</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- (E) 컴포넌트 표본 -->
+  <section class="sec sec--e">
+    <div class="wrap">
+      <p class="eyebrow">Components</p>
+      <h2 class="disp">Components</h2>
+      <p class="sub">유채색 없이 굵기 · 반전 · 밑줄 · 테두리 두께로만 상태를 구분한다.</p>
+
+      <div class="sample">
+        <p class="sample__label">Buttons</p>
+        <div class="sample__row">
+          <button class="btn btn--primary">Primary</button>
+          <button class="btn btn--secondary">Secondary</button>
+          <button class="btn btn--ghost">Ghost</button>
+          <button class="btn btn--destructive">Destructive</button>
+        </div>
+      </div>
+
+      <div class="sample">
+        <p class="sample__label">Inputs</p>
+        <div class="sample__row">
+          <input class="input" placeholder="기본 (default)">
+          <input class="input input--focus" value="orders">
+          <div>
+            <input class="input input--error" value="invalid table name!!">
+            <p class="field-error">테이블 이름에 사용할 수 없는 문자입니다.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="sample">
+        <p class="sample__label">Badges</p>
+        <div class="sample__row">
+          <span class="badge badge--success">Success</span>
+          <span class="badge badge--warning">Warning</span>
+          <span class="badge badge--error">Error</span>
+          <span class="badge badge--neutral">Neutral</span>
+        </div>
+      </div>
+
+      <div class="sample">
+        <p class="sample__label">Toggle · Checkbox · Select</p>
+        <div class="sample__row">
+          <span class="switch-label"><button class="switch" role="switch" aria-checked="true"><span class="switch__thumb"></span></button>on</span>
+          <span class="switch-label"><button class="switch" role="switch" aria-checked="false"><span class="switch__thumb"></span></button>off</span>
+          <span class="checkbox-label"><span class="checkbox checkbox--checked" role="checkbox" aria-checked="true"></span>checked</span>
+          <span class="checkbox-label"><span class="checkbox" role="checkbox" aria-checked="false"></span>unchecked</span>
+          <button class="select">public.orders <span class="select__chevron">▾</span></button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- (F) 모달 -->
+  <section class="sec sec--f">
+    <div class="wrap">
+      <p class="eyebrow">Confirm</p>
+      <h2 class="disp">Confirm</h2>
+      <p class="sub">삭제 확인 다이얼로그 — popover 표면은 페이지 반전(Ink-on-Paper)으로, 위험 강조는 굵기·대문자·밑줄로 처리한다.</p>
+
+      <div class="modal">
+        <p class="modal__eyebrow">테이블 삭제</p>
+        <h3 class="modal__title">orders 테이블을 삭제하시겠습니까?</h3>
+        <p class="modal__body">이 작업은 되돌릴 수 없습니다. 12개 열, 1,248개 행이 모두 삭제됩니다. 계속하려면 <strong>orders</strong>를 입력하세요.</p>
+        <input class="input modal__confirm-input" placeholder="orders">
+        <div class="modal__actions">
+          <button class="btn btn--modal-ghost">취소</button>
+          <button class="btn btn--modal-destructive">테이블 삭제</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- (G) 푸터 -->
+  <footer class="band foot">
+    <div class="wrap foot__grid">
+      <div>
+        <p class="foot__word">Henry</p>
+        <p class="foot__meta">table-view 테마 프로토타입 · light-first · 100% 단색</p>
+      </div>
+      <ol class="foot__notes">
+        <li>유채색 강조는 하나도 없다. 상태 4종은 톤 계단과 원·다이아몬드 모양으로, 구문 강조 12종은 Ink·Sepia·Ash 세 톤에 굵기·이탤릭·밑줄을 얹어 구분했다.</li>
+        <li><code class="mono">--tv-destructive</code>와 <code class="mono">--tv-status-error</code>도 스펙 기본값(빨강) 대신 잉크 반전 + 밑줄로 처리했다. "100% 단색"을 표방하면서 삭제 버튼만 빨갛다면 그 자체로 모순이라 판단했고, 흑백 화면에서도 굵기·반전·확인 입력만으로 위험 신호는 충분히 전달된다고 봤다.</li>
+        <li>표면은 Paper와 Ink 두 단계뿐이라 얼룩말 줄무늬, 회색 패널, 세 번째 톤의 카드 배경은 전부 뺐다. 카드와 배경이 같은 색이라 구분은 hairline 테두리 하나가 담당한다.</li>
+        <li>라이트 모드는 Paper 위에 Ink 밴드가 간간이 끼어드는 브로드사이드고, 다크 모드는 그 Ink 밴드가 페이지 전체로 번진 판본이다. 마스트헤드·워크스페이스 밴드·푸터는 모드와 무관하게 항상 Ink라서, 다크로 전환하면 나머지 구간이 거기 합쳐지며 전체가 하나의 어두운 면이 된다.</li>
+        <li>JSON 트리의 key/leaf 색과 <code class="mono">--tv-value-delete</code>만 스펙 고정값(파랑·초록·장미)을 그대로 뒀다. 테마와 무관하다고 명시된 값이라 이 테마의 단색 규칙 밖에 둔다.</li>
+      </ol>
+    </div>
+  </footer>
+
+<script>
+(function () {
+  var html = document.documentElement;
+  var btn = document.getElementById('modeToggle');
+  var label = document.getElementById('toggleLabel');
+  btn.addEventListener('click', function () {
+    var next = html.getAttribute('data-mode') === 'light' ? 'dark' : 'light';
+    html.setAttribute('data-mode', next);
+    label.textContent = next === 'light' ? 'Light' : 'Dark';
+    btn.setAttribute('aria-pressed', String(next === 'dark'));
+  });
+})();
+</script>
+</body>
+</html>

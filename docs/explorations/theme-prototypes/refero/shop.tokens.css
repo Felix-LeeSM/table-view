@@ -1,0 +1,123 @@
+/* ============================================================
+ * Shop — "흰 대리석 위에 떠 있는 쇼핑 성좌"
+ * Drop-in theme block for src/themes.css. Matches the [data-theme="x"]
+ * [data-mode="y"] convention used by the other 72 theme sets in that file.
+ * ============================================================ */
+
+[data-theme="shop"][data-mode="light"] {
+  /* 표면/텍스트 */
+  --tv-background: #f2f4f5; /* Canvas Mist */
+  --tv-foreground: #000000; /* Ink Black */
+  --tv-card: #ffffff; /* Pure White */
+  --tv-card-foreground: #000000;
+  --tv-popover: #ffffff;
+  --tv-popover-foreground: #000000;
+  --tv-primary: #5433eb; /* Shop Violet — accent-only per design brief */
+  --tv-primary-foreground: #ffffff;
+  --tv-secondary: #f2f4f5;
+  --tv-secondary-foreground: #000000;
+  --tv-muted: #f2f4f5;
+  --tv-muted-foreground: #787574; /* Muted Gray */
+  --tv-accent: #f2f4f5;
+  --tv-accent-foreground: #000000;
+  --tv-border: #ebebeb; /* Faint Border */
+  --tv-input: #ebebeb;
+  --tv-ring: #5433eb;
+  --tv-primary-tint: 84 51 235; /* rgb(#5433eb) */
+  --tv-status-connected: #16a34a;
+  --tv-status-connecting: #f59e0b;
+  --tv-status-error: #ef4444;
+  --tv-status-idle: #cccccc; /* Cool Stone */
+
+  /* 구문 강조 12종 — desaturated so it sits inside the one-accent system */
+  --tv-syntax-keyword: #5b4b9e;
+  --tv-syntax-operator: #55524d;
+  --tv-syntax-punct: #706c66;
+  --tv-syntax-type: #3f6076;
+  --tv-syntax-builtin: #3f7a6e;
+  --tv-syntax-function: #8a6a3f;
+  --tv-syntax-property: #6b6f3f;
+  --tv-syntax-string: #4f7a52;
+  --tv-syntax-number: #a15c3f;
+  --tv-syntax-atom: #96556f;
+  --tv-syntax-comment: #7d7a73;
+  --tv-syntax-error: #b3453f;
+
+  /* 공통 (테마 무관, 값 고정) */
+  --tv-destructive: #ef4444;
+  --tv-success: #16a34a;
+  --tv-warning: #ea580c;
+  --tv-highlight: #eab308;
+  --tv-radius: 9999px; /* pill is the dominant component shape; card/image
+    radii (28px / 20px) are set directly on those components, not derived
+    from this token — see shop.html footer for the reconciliation note. */
+  --tv-font-sans:
+    "GT Standard", "Inter", system-ui, -apple-system, BlinkMacSystemFont,
+    "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --tv-font-mono:
+    ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    "Liberation Mono", monospace;
+
+  /* 정체성 색 (테마 무변, 그대로 복사) */
+  --tv-value-key: #0369a1;
+  --tv-value-leaf: #047857;
+  --tv-value-delete: #f43f5e;
+}
+
+[data-theme="shop"][data-mode="dark"] {
+  /* 표면/텍스트 — Slate Ink / Ash Veil raised as surfaces (see brief) */
+  --tv-background: #1e1b1a;
+  --tv-foreground: #f1ede9;
+  --tv-card: #332f2d; /* Slate Ink */
+  --tv-card-foreground: #f1ede9;
+  --tv-popover: #3a3532;
+  --tv-popover-foreground: #f1ede9;
+  --tv-primary: #9a8bfb; /* lightened Shop Violet for dark contrast */
+  --tv-primary-foreground: #1c1917;
+  --tv-secondary: #665a54; /* Ash Veil */
+  --tv-secondary-foreground: #f1ede9;
+  --tv-muted: #282422;
+  --tv-muted-foreground: #a89f98;
+  --tv-accent: #2f2b29;
+  --tv-accent-foreground: #f1ede9;
+  --tv-border: #433e3b;
+  --tv-input: #433e3b;
+  --tv-ring: #9a8bfb;
+  --tv-primary-tint: 154 139 251; /* rgb(#9a8bfb) */
+  --tv-status-connected: #22c55e;
+  --tv-status-connecting: #f59e0b;
+  --tv-status-error: #f87171;
+  --tv-status-idle: #8a8179;
+
+  /* 구문 강조 12종 — lightened for the dark card surface */
+  --tv-syntax-keyword: #b3a4e8;
+  --tv-syntax-operator: #cbc6bd;
+  --tv-syntax-punct: #a39d93;
+  --tv-syntax-type: #9dc3d9;
+  --tv-syntax-builtin: #8fd9c4;
+  --tv-syntax-function: #d9b581;
+  --tv-syntax-property: #c9cd8f;
+  --tv-syntax-string: #a3d9a8;
+  --tv-syntax-number: #e0a183;
+  --tv-syntax-atom: #d99cb3;
+  --tv-syntax-comment: #a39d93;
+  --tv-syntax-error: #e0857a;
+
+  /* 공통 (테마 무관, 값 고정) */
+  --tv-destructive: #f87171;
+  --tv-success: #22c55e;
+  --tv-warning: #fb923c;
+  --tv-highlight: #facc15;
+  --tv-radius: 9999px;
+  --tv-font-sans:
+    "GT Standard", "Inter", system-ui, -apple-system, BlinkMacSystemFont,
+    "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --tv-font-mono:
+    ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    "Liberation Mono", monospace;
+
+  /* 정체성 색 (테마 무변, 그대로 복사) */
+  --tv-value-key: #7dd3fc;
+  --tv-value-leaf: #6ee7b7;
+  --tv-value-delete: #f43f5e;
+}

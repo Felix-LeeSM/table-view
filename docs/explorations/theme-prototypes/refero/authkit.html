@@ -1,0 +1,1113 @@
+<!DOCTYPE html>
+<html lang="ko" data-theme="authkit" data-mode="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AuthKit — table-view theme prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link
+  href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500&family=JetBrains+Mono:wght@400&display=swap"
+  rel="stylesheet"
+/>
+<style>
+  /* ============================================================
+   * Tokens — mirrors authkit.tokens.css exactly (the pasteable file).
+   * Extra `--panel-solid` / `--text-body` / `--shadow-*` / `--gradient-*`
+   * / `--grid-line` / `--input-fill` / `--input-focus-ring` vars below
+   * are page-local presentation aids, NOT part of the --tv-* contract.
+   * ============================================================ */
+  * { box-sizing: border-box; }
+
+  [data-theme="authkit"] {
+    /* brand palette — static reference, mode-invariant */
+    --brand-void-violet: #663af3;
+    --brand-blueprint-blue: #b6d9fc;
+    --brand-ember-glow: #e46d4c;
+    --brand-signal-blue: #027dea;
+    --brand-deep-teal: #269684;
+    --brand-midnight-canvas: #05060f;
+    --brand-steel-plate: #2f343e;
+    --brand-gridline-blue: #3f4959;
+    --brand-fog-veil: #9da7ba;
+    --brand-glass-edge: #bad7f71f;
+    --brand-luminous-fill: #c7d3ea1f;
+    --brand-moon-mist: #c7d3ea;
+    --brand-frost-glow: #d1e4fa;
+    --brand-ice-highlight: #d8ecf8;
+    --brand-pure-white: #ffffff;
+
+    --font-display: "aeonikPro", "Space Grotesk", -apple-system, BlinkMacSystemFont,
+      "Segoe UI", Roboto, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+    --shadow-sm: #bacff752 0 0 6px 0;
+    --shadow-md: #eebaf73d 0 0 12px 0;
+  }
+
+  [data-theme="authkit"][data-mode="light"] {
+    /* == --tv-* contract (mirrors authkit.tokens.css light block) == */
+    --tv-background: #e9edf6;
+    --tv-foreground: #05060f;
+    --tv-card: #ffffff8c;
+    --tv-card-foreground: #05060f;
+    --tv-popover: #ffffffd1;
+    --tv-popover-foreground: #05060f;
+    --tv-primary: #663af3;
+    --tv-primary-foreground: #ffffff;
+    --tv-secondary: #05060f0d;
+    --tv-secondary-foreground: #05060f;
+    --tv-muted: #05060f0f;
+    --tv-muted-foreground: #4b5468;
+    --tv-accent: #663af31f;
+    --tv-accent-foreground: #05060f;
+    --tv-border: #05060f1f;
+    --tv-input: #05060f1f;
+    --tv-ring: #663af3;
+    --tv-primary-tint: 102 58 243;
+    --tv-status-connected: #1c7b6e;
+    --tv-status-connecting: #0568bd;
+    --tv-status-error: #c94d30;
+    --tv-status-idle: #4b5468;
+    --tv-syntax-keyword: #7c3aed;
+    --tv-syntax-operator: #475569;
+    --tv-syntax-punct: #64748b;
+    --tv-syntax-type: #2563eb;
+    --tv-syntax-builtin: #0a7a95;
+    --tv-syntax-function: #0a7a95;
+    --tv-syntax-property: #0f766e;
+    --tv-syntax-string: #15803d;
+    --tv-syntax-number: #c2410c;
+    --tv-syntax-atom: #be185d;
+    --tv-syntax-comment: #64748b;
+    --tv-syntax-error: #dc2626;
+    --tv-destructive: #ef4444;
+    --tv-destructive-foreground: #ffffff;
+    --tv-success: #16a34a;
+    --tv-success-foreground: #ffffff;
+    --tv-warning: #ea580c;
+    --tv-warning-foreground: #ffffff;
+    --tv-highlight: #eab308;
+    --tv-radius: 0.375rem;
+    --tv-font-sans: "Untitled Sans", "Inter", -apple-system, BlinkMacSystemFont,
+      "Segoe UI", Roboto, "Helvetica Neue", Arial, "Apple SD Gothic Neo",
+      "Malgun Gothic", sans-serif;
+    --tv-font-mono: "dotDigital", "JetBrains Mono", ui-monospace, SFMono-Regular,
+      "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    --tv-value-key: #0369a1;
+    --tv-value-leaf: #047857;
+    --tv-value-delete: #f43f5e;
+
+    /* == page-local, mode-aware extras (not part of the --tv- contract) == */
+    --panel-solid: #f5f7fc;
+    --text-body: #23283a;
+    --shadow-subtle: #05060f1f 0 0 0 1px inset;
+    --shadow-card: #c7d3ea1f 0 1px 1px inset, #c7d3ea0d 0 24px 48px inset,
+      #05060f26 0 24px 32px;
+    --input-fill: #05060f0f;
+    --input-focus-ring: #05060f3d;
+    --gradient-skywash: linear-gradient(0deg, #12305c 0%, #05060f 100%);
+    --grid-line: #3f495914;
+    color-scheme: light;
+  }
+
+  [data-theme="authkit"][data-mode="dark"] {
+    /* == --tv-* contract (mirrors authkit.tokens.css dark block) == */
+    --tv-background: #05060f;
+    --tv-foreground: #d1e4fa;
+    --tv-card: #bad6f708;
+    --tv-card-foreground: #d1e4fa;
+    --tv-popover: #05060ff7;
+    --tv-popover-foreground: #d1e4fa;
+    --tv-primary: #663af3;
+    --tv-primary-foreground: #ffffff;
+    --tv-secondary: #bad6f70f;
+    --tv-secondary-foreground: #ffffff;
+    --tv-muted: #c7d3ea1f;
+    --tv-muted-foreground: #9da7ba;
+    --tv-accent: #663af329;
+    --tv-accent-foreground: #d1e4fa;
+    --tv-border: #bad7f71f;
+    --tv-input: #bad7f71f;
+    --tv-ring: #663af3;
+    --tv-primary-tint: 102 58 243;
+    --tv-status-connected: #269684;
+    --tv-status-connecting: #027dea;
+    --tv-status-error: #e46d4c;
+    --tv-status-idle: #9da7ba;
+    --tv-syntax-keyword: #c4b5fd;
+    --tv-syntax-operator: #cbd5e1;
+    --tv-syntax-punct: #94a3b8;
+    --tv-syntax-type: #93c5fd;
+    --tv-syntax-builtin: #67e8f9;
+    --tv-syntax-function: #67e8f9;
+    --tv-syntax-property: #5eead4;
+    --tv-syntax-string: #86efac;
+    --tv-syntax-number: #fdba74;
+    --tv-syntax-atom: #f9a8d4;
+    --tv-syntax-comment: #64748b;
+    --tv-syntax-error: #f87171;
+    --tv-destructive: #f87171;
+    --tv-destructive-foreground: #ffffff;
+    --tv-success: #22c55e;
+    --tv-success-foreground: #ffffff;
+    --tv-warning: #fb923c;
+    --tv-warning-foreground: #ffffff;
+    --tv-highlight: #facc15;
+    --tv-radius: 0.375rem;
+    --tv-font-sans: "Untitled Sans", "Inter", -apple-system, BlinkMacSystemFont,
+      "Segoe UI", Roboto, "Helvetica Neue", Arial, "Apple SD Gothic Neo",
+      "Malgun Gothic", sans-serif;
+    --tv-font-mono: "dotDigital", "JetBrains Mono", ui-monospace, SFMono-Regular,
+      "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    --tv-value-key: #7dd3fc;
+    --tv-value-leaf: #6ee7b7;
+    --tv-value-delete: #f43f5e;
+
+    /* == page-local, mode-aware extras (not part of the --tv- contract) == */
+    --panel-solid: #2f343e;
+    --text-body: #c7d3ea;
+    --shadow-subtle: #bad7f71f 0 0 0 1px inset;
+    --shadow-card: var(--tv-muted) 0 1px 1px inset, #c7d3ea0d 0 24px 48px inset,
+      #06060eb2 0 24px 32px;
+    --input-fill: #c7d3ea0f;
+    --input-focus-ring: #bad7f73d;
+    --gradient-skywash: linear-gradient(0deg, #d8ecf8 0%, #98c0ef 100%);
+    --grid-line: #3f495926;
+    color-scheme: dark;
+  }
+
+  /* ============================================================
+   * Base
+   * ============================================================ */
+  html, body { margin: 0; padding: 0; }
+  body {
+    background-color: var(--tv-background);
+    color: var(--tv-foreground);
+    font-family: var(--tv-font-sans);
+    font-size: 16px;
+    line-height: 1.5;
+    letter-spacing: -0.16px;
+    background-image:
+      linear-gradient(var(--grid-line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+    background-size: 32px 32px;
+    transition: background-color .2s ease, color .2s ease;
+  }
+  .page { max-width: 1280px; margin: 0 auto; padding: 0 32px 56px; }
+  a { color: inherit; }
+  input, select, button, textarea { font: inherit; color: inherit; }
+  table { border-collapse: collapse; }
+
+  ::selection { background: var(--tv-accent); color: var(--tv-accent-foreground); }
+
+  /* ============================================================
+   * Type scale (SPEC section "타이포")
+   * ============================================================ */
+  .text-caption { font-size: 12px; line-height: 1.33; letter-spacing: -0.01em; }
+  .text-body-sm { font-size: 14px; line-height: 1.43; letter-spacing: -0.01em; }
+  .text-body { font-size: 16px; line-height: 1.5; letter-spacing: -0.16px; }
+  .text-subheading { font-size: 18px; line-height: 1.33; letter-spacing: -0.01em; font-weight: 500; }
+  .text-heading-sm { font-size: 24px; line-height: 1.17; letter-spacing: -0.24px; font-weight: 600; }
+  .text-heading { font-family: var(--font-display); font-size: 28px; line-height: 1.14; font-weight: 500; margin: 0; }
+  .text-heading-lg { font-family: var(--font-display); font-size: 44px; line-height: 1.16; font-weight: 500; margin: 0; }
+  .text-display { font-family: var(--font-display); font-size: 48px; line-height: 1.17; font-weight: 500; margin: 0; }
+  .text-mono { font-family: var(--tv-font-mono); }
+  .text-muted { color: var(--tv-muted-foreground); }
+
+  .eyebrow {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-family: var(--tv-font-mono);
+    font-size: 15px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--brand-moon-mist);
+    margin: 0 0 12px;
+  }
+  .eyebrow::before, .eyebrow::after { content: ""; flex: 1; height: 1px; }
+  .eyebrow::before { background: linear-gradient(90deg, transparent, var(--tv-border)); }
+  .eyebrow::after { background: linear-gradient(90deg, var(--tv-border), transparent); }
+
+  /* ============================================================
+   * Section rhythm
+   * ============================================================ */
+  .section { margin-top: 120px; }
+  .section:first-of-type { margin-top: 0; }
+
+  /* ============================================================
+   * (A) Header
+   * ============================================================ */
+  .site-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 24px;
+    flex-wrap: wrap;
+    padding: 40px 0 32px;
+    box-shadow: 0 1px 0 0 var(--tv-border);
+  }
+  .wordmark {
+    display: inline-block;
+    font-family: var(--font-display);
+    font-weight: 500;
+    font-size: 44px;
+    line-height: 1.16;
+    background: var(--gradient-skywash);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+  }
+  .vibe { margin: 8px 0 0; color: var(--text-body); font-size: 16px; }
+  .header-actions { display: flex; align-items: center; gap: 20px; padding-bottom: 8px; }
+  .back-link { font-size: 14px; color: var(--tv-muted-foreground); text-decoration: none; }
+  .back-link:hover { color: var(--tv-foreground); }
+  .mode-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--tv-secondary);
+    color: var(--tv-secondary-foreground);
+    border: 0;
+    border-radius: 999px;
+    padding: 8px 16px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    box-shadow: var(--shadow-subtle);
+  }
+  .mode-toggle:hover { box-shadow: var(--shadow-subtle), var(--shadow-sm); }
+  .mode-toggle:focus-visible { box-shadow: var(--shadow-subtle), 0 0 0 3px var(--input-focus-ring); }
+
+  /* ============================================================
+   * (B) Palette swatches
+   * ============================================================ */
+  .swatch-group-title { margin: 32px 0 16px; color: var(--text-body); }
+  .swatch-group-title:first-of-type { margin-top: 16px; }
+  .swatch-grid {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 16px;
+  }
+  .swatch { display: flex; flex-direction: column; gap: 8px; }
+  .swatch-chip {
+    height: 56px;
+    border-radius: 12px;
+    box-shadow: var(--shadow-subtle);
+  }
+  .swatch-name { font-size: 13px; font-weight: 500; }
+  .swatch-hex { font-family: var(--tv-font-mono); font-size: 12px; color: var(--tv-muted-foreground); }
+
+  /* ============================================================
+   * (C) App shell mockup
+   * ============================================================ */
+  .app-shell {
+    display: grid;
+    grid-template-columns: 240px 1fr 260px;
+    grid-template-rows: 1fr auto;
+    min-height: 620px;
+    border-radius: 16px;
+    overflow: hidden;
+    background: var(--tv-card);
+    box-shadow: var(--shadow-card);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+  }
+
+  /* -- sidebar -- */
+  .shell-sidebar {
+    grid-column: 1;
+    grid-row: 1;
+    background: var(--panel-solid);
+    box-shadow: -1px 0 0 0 var(--tv-border) inset;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow-y: auto;
+  }
+  .sidebar-search-wrap { padding: 16px; box-shadow: 0 -1px 0 0 var(--tv-border) inset; }
+  .sidebar-search {
+    width: 100%;
+    background: var(--input-fill);
+    box-shadow: var(--shadow-subtle);
+    border: 0;
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-size: 13px;
+    color: var(--tv-foreground);
+  }
+  .sidebar-search::placeholder { color: var(--tv-muted-foreground); }
+  .conn-tree { padding: 8px; flex: 1; }
+  .conn-tree ul { list-style: none; margin: 0; padding: 0; }
+  .conn-root > .row { font-weight: 500; }
+  .tree-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: 6px;
+    font-size: 13px;
+    cursor: default;
+  }
+  .tree-row .disclosure { width: 10px; color: var(--tv-muted-foreground); font-size: 10px; }
+  .tree-row.is-selected { background: var(--tv-accent); color: var(--tv-accent-foreground); }
+  .tree-row .engine-badge {
+    width: 16px; height: 16px;
+    border-radius: 9999px;
+    display: inline-grid;
+    place-content: center;
+    font-family: var(--tv-font-mono);
+    font-size: 9px;
+    font-weight: 700;
+    background: var(--tv-muted);
+    color: var(--tv-foreground);
+    flex: none;
+  }
+  .status-dot { width: 6px; height: 6px; border-radius: 9999px; flex: none; }
+  .status-dot.connected { background: var(--tv-status-connected); }
+  .status-dot.connecting { background: var(--tv-status-connecting); }
+  .status-dot.error { background: var(--tv-status-error); }
+  .tree-nest-1 { padding-left: 18px; }
+  .tree-nest-2 { padding-left: 34px; }
+  .tree-nest-3 { padding-left: 50px; }
+  .tree-group-label { color: var(--tv-muted-foreground); font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; padding: 4px 8px 4px 34px; }
+
+  /* -- main -- */
+  .shell-main { grid-column: 2; grid-row: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+  .tabbar { display: flex; align-items: stretch; box-shadow: 0 -1px 0 0 var(--tv-border) inset; flex: none; }
+  .tab {
+    padding: 12px 20px;
+    font-size: 13px;
+    color: var(--tv-muted-foreground);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .tab.is-active {
+    color: var(--tv-foreground);
+    font-weight: 500;
+    box-shadow: 0 -2px 0 0 var(--tv-primary) inset;
+  }
+  .tab-add { margin-left: 4px; color: var(--tv-muted-foreground); }
+
+  .toolbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    box-shadow: 0 -1px 0 0 var(--tv-border) inset;
+    flex: none;
+  }
+  .toolbar-filter {
+    background: var(--input-fill);
+    box-shadow: var(--shadow-subtle);
+    border: 0;
+    border-radius: 6px;
+    padding: 7px 12px;
+    font-size: 13px;
+    width: 220px;
+    color: var(--tv-foreground);
+  }
+  .toolbar-filter::placeholder { color: var(--tv-muted-foreground); }
+  .toolbar-spacer { flex: 1; }
+  .row-count { font-family: var(--tv-font-mono); font-size: 12px; color: var(--tv-muted-foreground); }
+
+  .grid-wrap { flex: 1; overflow: auto; min-height: 0; }
+  .data-grid { width: 100%; font-size: 13px; }
+  .data-grid thead th {
+    position: sticky;
+    top: 0;
+    background: var(--panel-solid);
+    text-align: left;
+    padding: 6px 12px;
+    box-shadow: 0 -1px 0 0 var(--tv-border) inset;
+    white-space: nowrap;
+  }
+  .data-grid th .col-name { display: flex; align-items: center; gap: 6px; font-weight: 500; }
+  .data-grid th .col-type { display: block; font-family: var(--tv-font-mono); font-size: 10px; color: var(--tv-muted-foreground); font-weight: 400; margin-top: 2px; }
+  .data-grid th.is-numeric .col-name { justify-content: flex-end; }
+  .col-tag {
+    font-family: var(--tv-font-mono);
+    font-size: 9px;
+    font-weight: 700;
+    padding: 1px 5px;
+    border-radius: 999px;
+    background: var(--tv-muted);
+    color: var(--tv-muted-foreground);
+  }
+  .sort-arrow { color: var(--tv-primary); font-size: 10px; }
+  .data-grid td {
+    padding: 0 12px;
+    height: 32px;
+    white-space: nowrap;
+    box-shadow: 0 -1px 0 0 var(--tv-border) inset;
+  }
+  .data-grid td.is-numeric { text-align: right; font-family: var(--tv-font-mono); }
+  .data-grid td.is-timestamp { font-family: var(--tv-font-mono); }
+  .data-grid td.is-null { font-style: italic; color: var(--tv-muted-foreground); }
+  .data-grid tbody tr:hover td { background: var(--tv-muted); }
+  .data-grid tbody tr.is-selected td { background: var(--tv-accent); color: var(--tv-accent-foreground); }
+  .data-grid tbody tr.is-selected td.is-null { color: var(--tv-accent-foreground); opacity: 0.7; }
+  .data-grid td.is-editing {
+    box-shadow: 0 0 0 1px var(--tv-highlight) inset, 0 -1px 0 0 var(--tv-border) inset;
+    background: color-mix(in srgb, var(--tv-highlight) 14%, transparent);
+  }
+  .data-grid td .dirty-dot {
+    display: inline-block;
+    width: 5px; height: 5px;
+    border-radius: 9999px;
+    background: var(--tv-highlight);
+    margin-right: 6px;
+  }
+
+  .sql-panel {
+    flex: none;
+    height: 190px;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 -1px 0 0 var(--tv-border) inset;
+    background: var(--tv-popover);
+  }
+  .sql-panel-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 16px;
+    box-shadow: 0 -1px 0 0 var(--tv-border) inset;
+  }
+  .syntax-legend { display: flex; flex-wrap: wrap; gap: 10px 14px; }
+  .syntax-legend span { font-family: var(--tv-font-mono); font-size: 10px; letter-spacing: 0.02em; }
+  .run-btn {
+    font-family: var(--tv-font-mono);
+    font-size: 11px;
+    background: var(--tv-primary);
+    color: var(--tv-primary-foreground);
+    border: 0;
+    border-radius: 6px;
+    padding: 6px 12px;
+    align-self: flex-end;
+    margin: 8px 16px;
+    cursor: pointer;
+  }
+  .sql-body { flex: 1; overflow: auto; display: flex; font-family: var(--tv-font-mono); font-size: 13px; padding: 10px 0; }
+  .sql-lines { flex: none; padding: 0 12px; text-align: right; color: var(--tv-muted-foreground); user-select: none; }
+  .sql-code { flex: 1; padding: 0 16px 0 4px; white-space: pre; }
+  .sql-code div { line-height: 20px; }
+  .tok-kw { color: var(--tv-syntax-keyword); font-weight: 600; }
+  .tok-op { color: var(--tv-syntax-operator); }
+  .tok-punct { color: var(--tv-syntax-punct); }
+  .tok-type { color: var(--tv-syntax-type); font-weight: 500; }
+  .tok-builtin { color: var(--tv-syntax-builtin); }
+  .tok-fn { color: var(--tv-syntax-function); }
+  .tok-prop { color: var(--tv-syntax-property); font-weight: 500; }
+  .tok-str { color: var(--tv-syntax-string); }
+  .tok-num { color: var(--tv-syntax-number); }
+  .tok-atom { color: var(--tv-syntax-atom); }
+  .tok-comment { color: var(--tv-syntax-comment); font-style: italic; }
+  .tok-error { color: var(--tv-syntax-error); }
+
+  /* -- inspector -- */
+  .shell-inspector {
+    grid-column: 3;
+    grid-row: 1;
+    background: var(--tv-card);
+    box-shadow: 1px 0 0 0 var(--tv-border) inset;
+    padding: 16px;
+    overflow-y: auto;
+    min-height: 0;
+  }
+  .inspector-title { margin: 0 0 12px; color: var(--tv-muted-foreground); }
+  .kv-row { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; box-shadow: 0 -1px 0 0 var(--tv-border) inset; font-size: 13px; }
+  .kv-row:first-child { box-shadow: none; }
+  .kv-key { color: var(--tv-muted-foreground); }
+  .kv-val { font-family: var(--tv-font-mono); text-align: right; }
+  .kv-val.is-null { font-style: italic; color: var(--tv-muted-foreground); }
+  .json-tree { margin-top: 4px; font-family: var(--tv-font-mono); font-size: 12px; }
+  .json-tree .jt-key { color: var(--tv-value-key); }
+  .json-tree .jt-leaf { color: var(--tv-value-leaf); }
+  .json-tree .jt-del { color: var(--tv-value-delete); text-decoration: line-through; opacity: 0.8; }
+  .json-tree .jt-indent { padding-left: 14px; }
+
+  /* -- (D) status bar -- */
+  .shell-statusbar {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 6px 16px;
+    box-shadow: 0 -1px 0 0 var(--tv-border) inset;
+    background: var(--panel-solid);
+    font-size: 12px;
+    color: var(--tv-muted-foreground);
+  }
+  .shell-statusbar .text-mono { color: var(--tv-foreground); }
+  .shell-statusbar .spacer { flex: 1; }
+
+  /* ============================================================
+   * (E) Component samples
+   * ============================================================ */
+  .sample-row { display: flex; flex-wrap: wrap; align-items: center; gap: 32px; margin-bottom: 32px; }
+  .sample-group { display: flex; flex-direction: column; gap: 10px; }
+  .sample-group-label { color: var(--tv-muted-foreground); }
+  .sample-controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+
+  .btn {
+    font-family: var(--tv-font-sans);
+    font-weight: 500;
+    font-size: 14px;
+    letter-spacing: -0.01em;
+    border: 0;
+    cursor: pointer;
+  }
+  .btn-primary { background: var(--tv-primary); color: var(--tv-primary-foreground); border-radius: 6px; padding: 12px 24px; }
+  .btn-primary:hover { filter: brightness(1.08); }
+  .btn-primary:focus-visible { box-shadow: 0 0 0 3px var(--input-focus-ring); }
+  .btn-destructive { background: var(--tv-destructive); color: var(--tv-destructive-foreground); border-radius: 6px; padding: 12px 24px; }
+  .btn-destructive:hover { filter: brightness(1.08); }
+  .btn-destructive:focus-visible { box-shadow: 0 0 0 3px var(--input-focus-ring); }
+  /* Ghost = brief's literal "Ghost pill" (barely-there glass wash, white text).
+     Secondary = same pill family (radius 999px, no radius-mixing) but on the
+     opaque Steel Plate panel tone, so it reads as a step more present than
+     Ghost — the brief only names Primary/Ghost, so this is the deliberate
+     in-between tier the component gallery needs to show 4 distinct buttons. */
+  .btn-ghost {
+    background: var(--tv-secondary);
+    color: var(--tv-secondary-foreground);
+    border-radius: 999px;
+    padding: 8px 16px;
+    box-shadow: var(--shadow-subtle);
+  }
+  .btn-secondary {
+    background: var(--panel-solid);
+    color: var(--tv-foreground);
+    border-radius: 999px;
+    padding: 8px 16px;
+    box-shadow: var(--shadow-subtle);
+  }
+  .btn-ghost:hover, .btn-secondary:hover { box-shadow: var(--shadow-subtle), var(--shadow-sm); }
+  .btn-ghost:focus-visible, .btn-secondary:focus-visible { box-shadow: var(--shadow-subtle), 0 0 0 3px var(--input-focus-ring); }
+
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field-label { font-size: 12px; color: var(--tv-muted-foreground); }
+  .input {
+    background: var(--input-fill);
+    box-shadow: var(--shadow-subtle);
+    border: 0;
+    border-radius: 6px;
+    padding: 9px 12px;
+    font-size: 14px;
+    color: var(--tv-foreground);
+    width: 190px;
+  }
+  .input::placeholder { color: var(--tv-muted-foreground); }
+  .input.is-focus-demo { box-shadow: 0 0 0 1px var(--tv-ring) inset, 0 0 0 3px var(--input-focus-ring); }
+  .input.is-error { box-shadow: 0 0 0 1px var(--tv-destructive) inset; }
+  .field-error { font-size: 11px; color: var(--tv-destructive); }
+
+  .badge { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; border-radius: 6px; padding: 4px 10px; }
+  .badge-success { background: color-mix(in srgb, var(--tv-success) 18%, transparent); color: var(--tv-success); }
+  .badge-warning { background: color-mix(in srgb, var(--tv-warning) 18%, transparent); color: var(--tv-warning); }
+  .badge-error { background: color-mix(in srgb, var(--tv-destructive) 18%, transparent); color: var(--tv-destructive); }
+  .badge-neutral { background: var(--tv-muted); color: var(--tv-foreground); }
+
+  .visually-hidden-checkbox { position: absolute; width: 1px; height: 1px; opacity: 0; }
+  .checkbox-row, .switch-row { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; font-size: 14px; }
+  .checkbox-box {
+    width: 18px; height: 18px; border-radius: 6px;
+    display: inline-grid; place-content: center;
+    box-shadow: var(--shadow-subtle);
+    color: var(--tv-primary-foreground);
+    flex: none;
+  }
+  .checkbox-box .check-icon { opacity: 0; }
+  .visually-hidden-checkbox:checked + .checkbox-box { background: var(--tv-primary); box-shadow: none; }
+  .visually-hidden-checkbox:checked + .checkbox-box .check-icon { opacity: 1; }
+  .visually-hidden-checkbox:focus-visible + .checkbox-box { box-shadow: 0 0 0 3px var(--input-focus-ring); }
+
+  .switch-track {
+    width: 36px; height: 20px; border-radius: 999px;
+    background: var(--tv-muted);
+    box-shadow: var(--shadow-subtle);
+    position: relative;
+    flex: none;
+  }
+  .switch-thumb {
+    position: absolute; top: 2px; left: 2px;
+    width: 16px; height: 16px; border-radius: 9999px;
+    background: var(--tv-muted-foreground);
+    transition: transform .15s ease, background .15s ease;
+  }
+  .visually-hidden-checkbox:checked + .switch-track { background: var(--tv-primary); }
+  .visually-hidden-checkbox:checked + .switch-track .switch-thumb { transform: translateX(16px); background: var(--tv-primary-foreground); }
+  .visually-hidden-checkbox:focus-visible + .switch-track { box-shadow: var(--shadow-subtle), 0 0 0 3px var(--input-focus-ring); }
+
+  .select-wrap { position: relative; display: inline-flex; }
+  .select-field {
+    appearance: none;
+    -webkit-appearance: none;
+    background: var(--input-fill);
+    box-shadow: var(--shadow-subtle);
+    border: 0;
+    border-radius: 6px;
+    padding: 9px 32px 9px 12px;
+    font-size: 14px;
+    color: var(--tv-foreground);
+  }
+  .select-wrap::after {
+    content: "▾";
+    position: absolute;
+    right: 12px; top: 50%;
+    transform: translateY(-50%);
+    color: var(--tv-muted-foreground);
+    font-size: 11px;
+    pointer-events: none;
+  }
+
+  /* ============================================================
+   * (F) Modal (statically painted, not a real overlay)
+   * ============================================================ */
+  .modal-frame {
+    border-radius: 16px;
+    background: var(--panel-solid);
+    box-shadow: var(--shadow-subtle);
+    padding: 56px 24px;
+    display: flex;
+    justify-content: center;
+  }
+  .modal-card {
+    width: 420px;
+    max-width: 100%;
+    background: var(--tv-popover);
+    color: var(--tv-popover-foreground);
+    border-radius: 16px;
+    padding: 24px;
+    box-shadow: var(--shadow-card);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+  }
+  .modal-card h3 { margin: 0 0 8px; }
+  .modal-card p { margin: 0 0 16px; color: var(--text-body); font-size: 14px; line-height: 1.5; }
+  .modal-card .field { margin-bottom: 20px; }
+  .modal-actions { display: flex; justify-content: flex-end; gap: 12px; }
+
+  /* ============================================================
+   * (G) Footer
+   * ============================================================ */
+  .site-footer { padding-top: 32px; box-shadow: 1px 0 0 0 transparent; }
+  .site-footer ul { margin: 16px 0 0; padding-left: 20px; color: var(--text-body); font-size: 14px; line-height: 1.6; }
+  .site-footer li { margin-bottom: 8px; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- (A) 헤더 바 -->
+  <header class="site-header section">
+    <div>
+      <span class="wordmark">AuthKit</span>
+      <p class="vibe">Frosted glass cathedral at midnight</p>
+    </div>
+    <div class="header-actions">
+      <a class="back-link" href="../index.html">← 전체 목록</a>
+      <button id="mode-toggle" class="mode-toggle" type="button" aria-pressed="false">
+        <span aria-hidden="true">◐</span>
+        <span class="mode-toggle-label">Dark</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- (B) 팔레트 스와치 -->
+  <section class="section" aria-labelledby="palette-heading">
+    <p class="eyebrow">Palette</p>
+    <h2 id="palette-heading" class="text-heading-sm">색</h2>
+
+    <h3 class="text-subheading swatch-group-title">Live tokens · 현재 모드</h3>
+    <ul class="swatch-grid" id="live-swatches">
+      <li class="swatch"><span class="swatch-chip" style="background:var(--tv-background)"></span><span class="swatch-name">background</span><span class="swatch-hex" data-token="--tv-background"></span></li>
+      <li class="swatch"><span class="swatch-chip" style="background:var(--tv-foreground)"></span><span class="swatch-name">foreground</span><span class="swatch-hex" data-token="--tv-foreground"></span></li>
+      <li class="swatch"><span class="swatch-chip" style="background:var(--tv-primary)"></span><span class="swatch-name">primary</span><span class="swatch-hex" data-token="--tv-primary"></span></li>
+      <li class="swatch"><span class="swatch-chip" style="background:var(--tv-border)"></span><span class="swatch-name">border</span><span class="swatch-hex" data-token="--tv-border"></span></li>
+      <li class="swatch"><span class="swatch-chip" style="background:var(--tv-muted)"></span><span class="swatch-name">muted</span><span class="swatch-hex" data-token="--tv-muted"></span></li>
+      <li class="swatch"><span class="swatch-chip" style="background:var(--tv-status-connected)"></span><span class="swatch-name">status-connected</span><span class="swatch-hex" data-token="--tv-status-connected"></span></li>
+      <li class="swatch"><span class="swatch-chip" style="background:var(--tv-status-connecting)"></span><span class="swatch-name">status-connecting</span><span class="swatch-hex" data-token="--tv-status-connecting"></span></li>
+      <li class="swatch"><span class="swatch-chip" style="background:var(--tv-status-error)"></span><span class="swatch-name">status-error</span><span class="swatch-hex" data-token="--tv-status-error"></span></li>
+      <li class="swatch"><span class="swatch-chip" style="background:var(--tv-status-idle)"></span><span class="swatch-name">status-idle</span><span class="swatch-hex" data-token="--tv-status-idle"></span></li>
+    </ul>
+
+    <h3 class="text-subheading swatch-group-title">Brand palette · 고정 (요청 명칭)</h3>
+    <ul class="swatch-grid">
+      <li class="swatch"><span class="swatch-chip" style="background:var(--brand-void-violet)"></span><span class="swatch-name">Void Violet</span><span class="swatch-hex">#663af3</span></li>
+      <li class="swatch"><span class="swatch-chip" style="background:var(--brand-blueprint-blue)"></span><span class="swatch-name">Blueprint Blue</span><span class="swatch-hex">#b6d9fc</span></li>
+      <li class="swatch"><span class="swatch-chip" style="background:var(--brand-ember-glow)"></span><span class="swatch-name">Ember Glow</span><span class="swatch-hex">#e46d4c</span></li>
+      <li class="swatch"><span class="swatch-chip" style="background:var(--brand-signal-blue)"></span><span class="swatch-name">Signal Blue</span><span class="swatch-hex">#027dea</span></li>
+      <li class="swatch"><span class="swatch-chip" style="background:var(--brand-deep-teal)"></span><span class="swatch-name">Deep Teal</span><span class="swatch-hex">#269684</span></li>
+      <li class="swatch"><span class="swatch-chip" style="background:var(--brand-midnight-canvas)"></span><span class="swatch-name">Midnight Canvas</span><span class="swatch-hex">#05060f</span></li>
+      <li class="swatch"><span class="swatch-chip" style="background:var(--brand-steel-plate)"></span><span class="swatch-name">Steel Plate</span><span class="swatch-hex">#2f343e</span></li>
+      <li class="swatch"><span class="swatch-chip" style="background:var(--brand-gridline-blue)"></span><span class="swatch-name">Gridline Blue</span><span class="swatch-hex">#3f4959</span></li>
+      <li class="swatch"><span class="swatch-chip" style="background:var(--brand-fog-veil)"></span><span class="swatch-name">Fog Veil</span><span class="swatch-hex">#9da7ba</span></li>
+      <li class="swatch"><span class="swatch-chip" style="background:var(--brand-glass-edge)"></span><span class="swatch-name">Glass Edge</span><span class="swatch-hex">#bad7f71f</span></li>
+      <li class="swatch"><span class="swatch-chip" style="background:var(--brand-luminous-fill)"></span><span class="swatch-name">Luminous Fill</span><span class="swatch-hex">#c7d3ea1f</span></li>
+      <li class="swatch"><span class="swatch-chip" style="background:var(--brand-moon-mist)"></span><span class="swatch-name">Moon Mist</span><span class="swatch-hex">#c7d3ea</span></li>
+      <li class="swatch"><span class="swatch-chip" style="background:var(--brand-frost-glow)"></span><span class="swatch-name">Frost Glow</span><span class="swatch-hex">#d1e4fa</span></li>
+      <li class="swatch"><span class="swatch-chip" style="background:var(--brand-ice-highlight)"></span><span class="swatch-name">Ice Highlight</span><span class="swatch-hex">#d8ecf8</span></li>
+      <li class="swatch"><span class="swatch-chip" style="background:var(--brand-pure-white);box-shadow:var(--shadow-subtle)"></span><span class="swatch-name">Pure White</span><span class="swatch-hex">#ffffff</span></li>
+      <li class="swatch"><span class="swatch-chip" style="background:var(--gradient-skywash)"></span><span class="swatch-name">Skywash (wordmark만)</span><span class="swatch-hex">gradient</span></li>
+    </ul>
+  </section>
+
+  <!-- (C) 앱 셸 목업 + (D) 상태 바 -->
+  <section class="section" aria-labelledby="shell-heading">
+    <p class="eyebrow">Product</p>
+    <h2 id="shell-heading" class="text-heading-sm">AuthKit 을 입은 table-view</h2>
+    <div style="height:24px"></div>
+
+    <div class="app-shell">
+      <!-- sidebar: connection tree -->
+      <aside class="shell-sidebar">
+        <div class="sidebar-search-wrap">
+          <input class="sidebar-search" type="text" placeholder="Search…" />
+        </div>
+        <nav class="conn-tree">
+          <ul>
+            <li class="conn-root">
+              <div class="tree-row">
+                <span class="disclosure">▾</span>
+                <span class="engine-badge">P</span>
+                <span class="status-dot connected"></span>
+                <span>prod-analytics</span>
+              </div>
+              <ul>
+                <li class="tree-nest-1 text-caption text-muted">public</li>
+                <li class="tree-group-label">Tables</li>
+                <li><div class="tree-row tree-nest-2"><span>users</span></div></li>
+                <li><div class="tree-row tree-nest-2 is-selected"><span>orders</span></div></li>
+                <li><div class="tree-row tree-nest-2"><span>order_items</span></div></li>
+                <li><div class="tree-row tree-nest-2"><span>payments</span></div></li>
+                <li><div class="tree-row tree-nest-2"><span>sessions</span></div></li>
+                <li class="tree-group-label">Views</li>
+                <li><div class="tree-row tree-nest-2"><span>v_revenue_daily</span></div></li>
+                <li class="tree-group-label">Functions</li>
+                <li><div class="tree-row tree-nest-2"><span class="text-mono">calc_ltv()</span></div></li>
+              </ul>
+            </li>
+            <li class="conn-root">
+              <div class="tree-row">
+                <span class="disclosure">▸</span>
+                <span class="engine-badge">R</span>
+                <span class="status-dot connecting"></span>
+                <span>staging-cache</span>
+              </div>
+            </li>
+            <li class="conn-root">
+              <div class="tree-row">
+                <span class="disclosure">▸</span>
+                <span class="engine-badge">M</span>
+                <span class="status-dot error"></span>
+                <span>legacy-orders</span>
+              </div>
+            </li>
+          </ul>
+        </nav>
+      </aside>
+
+      <!-- main: tabs + toolbar + grid + sql editor -->
+      <div class="shell-main">
+        <div class="tabbar">
+          <div class="tab is-active">orders</div>
+          <div class="tab">users</div>
+          <div class="tab">Query 1</div>
+          <div class="tab tab-add">+</div>
+        </div>
+
+        <div class="toolbar">
+          <input class="toolbar-filter" type="text" placeholder="Filter rows…" />
+          <button class="btn btn-secondary">Refresh</button>
+          <button class="btn btn-secondary">Add row</button>
+          <button class="btn btn-primary" style="padding:8px 16px;">Commit</button>
+          <span class="toolbar-spacer"></span>
+          <span class="row-count">1,248 rows</span>
+        </div>
+
+        <div class="grid-wrap">
+          <table class="data-grid">
+            <thead>
+              <tr>
+                <th class="is-numeric"><span class="col-name">id <span class="col-tag">PK</span> <span class="sort-arrow">▲</span></span><span class="col-type">int8</span></th>
+                <th class="is-numeric"><span class="col-name">customer_id <span class="col-tag">FK</span></span><span class="col-type">int8</span></th>
+                <th><span class="col-name">status</span><span class="col-type">text</span></th>
+                <th class="is-numeric"><span class="col-name">total_amount</span><span class="col-type">numeric</span></th>
+                <th><span class="col-name">created_at</span><span class="col-type">timestamptz</span></th>
+                <th><span class="col-name">note</span><span class="col-type">text</span></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="is-numeric">10241</td><td class="is-numeric">5002</td><td>completed</td>
+                <td class="is-numeric">128.50</td><td class="is-timestamp">2026-07-28 14:22:10+00</td>
+                <td class="is-null">NULL</td>
+              </tr>
+              <tr>
+                <td class="is-numeric">10242</td><td class="is-numeric">5088</td><td>completed</td>
+                <td class="is-numeric">64.00</td><td class="is-timestamp">2026-07-28 15:03:44+00</td>
+                <td>Gift wrap requested</td>
+              </tr>
+              <tr>
+                <td class="is-numeric">10243</td><td class="is-numeric">5011</td><td>pending</td>
+                <td class="is-numeric">212.75</td><td class="is-timestamp">2026-07-28 16:10:02+00</td>
+                <td class="is-null">NULL</td>
+              </tr>
+              <tr class="is-selected">
+                <td class="is-numeric">10244</td><td class="is-numeric">5002</td><td>completed</td>
+                <td class="is-numeric">39.99</td><td class="is-timestamp">2026-07-29 09:15:30+00</td>
+                <td class="is-null">NULL</td>
+              </tr>
+              <tr>
+                <td class="is-numeric">10245</td><td class="is-numeric">5091</td>
+                <td class="is-editing"><span class="dirty-dot"></span>refunded</td>
+                <td class="is-numeric">88.20</td><td class="is-timestamp">2026-07-29 10:02:18+00</td>
+                <td>Refund issued 07-30</td>
+              </tr>
+              <tr>
+                <td class="is-numeric">10246</td><td class="is-numeric">5033</td><td>completed</td>
+                <td class="is-numeric">156.40</td><td class="is-timestamp">2026-07-29 11:45:09+00</td>
+                <td class="is-null">NULL</td>
+              </tr>
+              <tr>
+                <td class="is-numeric">10247</td><td class="is-numeric">5002</td><td>cancelled</td>
+                <td class="is-numeric">0.00</td><td class="is-timestamp">2026-07-29 12:30:55+00</td>
+                <td>Duplicate order</td>
+              </tr>
+              <tr>
+                <td class="is-numeric">10248</td><td class="is-numeric">5077</td><td>completed</td>
+                <td class="is-numeric">342.10</td><td class="is-timestamp">2026-07-29 13:12:40+00</td>
+                <td class="is-null">NULL</td>
+              </tr>
+              <tr>
+                <td class="is-numeric">10249</td><td class="is-numeric">5019</td><td>pending</td>
+                <td class="is-numeric">19.99</td><td class="is-timestamp">2026-07-29 14:58:21+00</td>
+                <td class="is-null">NULL</td>
+              </tr>
+              <tr>
+                <td class="is-numeric">10250</td><td class="is-numeric">5044</td><td>completed</td>
+                <td class="is-numeric">501.00</td><td class="is-timestamp">2026-07-30 08:05:12+00</td>
+                <td>VIP customer</td>
+              </tr>
+              <tr>
+                <td class="is-numeric">10251</td><td class="is-numeric">5002</td><td>completed</td>
+                <td class="is-numeric">74.30</td><td class="is-timestamp">2026-07-30 09:40:03+00</td>
+                <td class="is-null">NULL</td>
+              </tr>
+              <tr>
+                <td class="is-numeric">10252</td><td class="is-numeric">5066</td><td>completed</td>
+                <td class="is-numeric">12.50</td><td class="is-timestamp">2026-07-30 10:22:47+00</td>
+                <td class="is-null">NULL</td>
+              </tr>
+              <tr>
+                <td class="is-numeric">10253</td><td class="is-numeric">5091</td><td>pending</td>
+                <td class="is-numeric">96.60</td><td class="is-timestamp">2026-07-30 11:01:19+00</td>
+                <td class="is-null">NULL</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="sql-panel">
+          <div class="sql-panel-bar">
+            <span class="text-caption text-muted">Query 1</span>
+            <div class="syntax-legend">
+              <span class="tok-kw">keyword</span><span class="tok-op">operator</span><span class="tok-punct">punct</span>
+              <span class="tok-type">type</span><span class="tok-builtin">builtin</span><span class="tok-fn">function</span>
+              <span class="tok-prop">property</span><span class="tok-str">string</span><span class="tok-num">number</span>
+              <span class="tok-atom">atom</span><span class="tok-comment">comment</span><span class="tok-error">error</span>
+            </div>
+          </div>
+          <div class="sql-body">
+            <div class="sql-lines">
+              <div>1</div><div>2</div><div>3</div><div>4</div><div>5</div>
+              <div>6</div><div>7</div><div>8</div><div>9</div><div>10</div>
+            </div>
+            <div class="sql-code"><div><span class="tok-comment">-- 최근 30일 고객별 매출</span></div><div><span class="tok-kw">SELECT</span> c<span class="tok-punct">.</span><span class="tok-prop">id</span><span class="tok-punct">,</span> c<span class="tok-punct">.</span><span class="tok-prop">name</span><span class="tok-punct">,</span> <span class="tok-fn">SUM</span><span class="tok-punct">(</span>o<span class="tok-punct">.</span><span class="tok-prop">total_amount</span><span class="tok-punct">)</span> <span class="tok-kw">AS</span> revenue</div><div><span class="tok-kw">FROM</span> orders o</div><div>  <span class="tok-kw">JOIN</span> customers c <span class="tok-kw">ON</span> c<span class="tok-punct">.</span><span class="tok-prop">id</span> <span class="tok-op">=</span> o<span class="tok-punct">.</span><span class="tok-prop">customer_id</span></div><div><span class="tok-kw">WHERE</span> o<span class="tok-punct">.</span><span class="tok-prop">created_at</span> <span class="tok-op">&gt;=</span> <span class="tok-builtin">NOW</span><span class="tok-punct">()</span> <span class="tok-op">-</span> <span class="tok-type">INTERVAL</span> <span class="tok-str">'30 days'</span></div><div>  <span class="tok-kw">AND</span> o<span class="tok-punct">.</span><span class="tok-prop">status</span> <span class="tok-op">&lt;&gt;</span> <span class="tok-str">'cancelled'</span></div><div><span class="tok-kw">GROUP BY</span> c<span class="tok-punct">.</span><span class="tok-prop">id</span><span class="tok-punct">,</span> c<span class="tok-punct">.</span><span class="tok-prop">name</span></div><div><span class="tok-kw">HAVING</span> <span class="tok-fn">SUM</span><span class="tok-punct">(</span>o<span class="tok-punct">.</span><span class="tok-prop">total_amount</span><span class="tok-punct">)</span> <span class="tok-op">&gt;</span> <span class="tok-num">1000</span></div><div><span class="tok-kw">ORDER BY</span> revenue <span class="tok-atom">DESC</span></div><div><span class="tok-kw">LIMIT</span> <span class="tok-num">50</span><span class="tok-punct">;</span></div></div>
+          </div>
+          <button class="run-btn" type="button">Run ⌘↵</button>
+        </div>
+      </div>
+
+      <!-- inspector -->
+      <aside class="shell-inspector">
+        <p class="text-caption inspector-title">SELECTED ROW · orders#10244</p>
+        <div class="kv-row"><span class="kv-key">id</span><span class="kv-val">10244</span></div>
+        <div class="kv-row"><span class="kv-key">customer_id</span><span class="kv-val">5002</span></div>
+        <div class="kv-row"><span class="kv-key">status</span><span class="kv-val">completed</span></div>
+        <div class="kv-row"><span class="kv-key">total_amount</span><span class="kv-val">39.99</span></div>
+        <div class="kv-row"><span class="kv-key">created_at</span><span class="kv-val">2026-07-29T09:15:30Z</span></div>
+        <div class="kv-row"><span class="kv-key">note</span><span class="kv-val is-null">NULL</span></div>
+        <div class="kv-row" style="display:block;">
+          <span class="kv-key">metadata</span>
+          <div class="json-tree">
+            <div>{</div>
+            <div class="jt-indent"><span class="jt-key">"shipping"</span>: {</div>
+            <div class="jt-indent" style="padding-left:28px;"><span class="jt-key">"carrier"</span>: <span class="jt-leaf">"fedex"</span></div>
+            <div class="jt-indent" style="padding-left:28px;"><span class="jt-key">"express"</span>: <span class="jt-leaf">true</span></div>
+            <div class="jt-indent">}</div>
+            <div class="jt-indent"><span class="jt-del">"gift": null</span></div>
+            <div>}</div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- (D) 상태 바 -->
+      <div class="shell-statusbar">
+        <span class="status-dot connected"></span>
+        <span>prod-analytics · public</span>
+        <span class="text-mono">1,248 rows</span>
+        <span>실행 <span class="text-mono">42ms</span></span>
+        <span class="spacer"></span>
+        <span>PostgreSQL 16.2</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- (E) 컴포넌트 표본 -->
+  <section class="section" aria-labelledby="components-heading">
+    <p class="eyebrow">Components</p>
+    <h2 id="components-heading" class="text-heading-sm">표본</h2>
+    <div style="height:24px"></div>
+
+    <div class="sample-row">
+      <div class="sample-group">
+        <span class="text-caption sample-group-label">Buttons</span>
+        <div class="sample-controls">
+          <button class="btn btn-primary" style="padding:8px 16px;">Primary</button>
+          <button class="btn btn-secondary">Secondary</button>
+          <button class="btn btn-ghost">Ghost</button>
+          <button class="btn btn-destructive" style="padding:8px 16px;">Destructive</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="sample-row">
+      <div class="sample-group">
+        <span class="text-caption sample-group-label">Inputs</span>
+        <div class="sample-controls">
+          <div class="field"><input class="input" placeholder="기본" /></div>
+          <div class="field"><input class="input is-focus-demo" placeholder="포커스" value="focused value" /></div>
+          <div class="field">
+            <input class="input is-error" placeholder="에러" />
+            <span class="field-error">필수 입력입니다</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sample-row">
+      <div class="sample-group">
+        <span class="text-caption sample-group-label">Badges</span>
+        <div class="sample-controls">
+          <span class="badge badge-success">성공</span>
+          <span class="badge badge-warning">경고</span>
+          <span class="badge badge-error">오류</span>
+          <span class="badge badge-neutral">중립</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="sample-row">
+      <div class="sample-group">
+        <span class="text-caption sample-group-label">Toggle · Checkbox · Select</span>
+        <div class="sample-controls">
+          <label class="switch-row">
+            <input type="checkbox" class="visually-hidden-checkbox" checked />
+            <span class="switch-track"><span class="switch-thumb"></span></span>
+            자동 커밋
+          </label>
+          <label class="checkbox-row">
+            <input type="checkbox" class="visually-hidden-checkbox" checked />
+            <span class="checkbox-box">
+              <svg class="check-icon" viewBox="0 0 16 16" width="11" height="11" aria-hidden="true">
+                <path d="M3 8.5l3.2 3.2L13 4.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </span>
+            NULL 표시
+          </label>
+          <span class="select-wrap">
+            <select class="select-field">
+              <option>PostgreSQL 16.2</option>
+              <option>MySQL 8.0</option>
+              <option>Redis 7.2</option>
+            </select>
+          </span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- (F) 모달 -->
+  <section class="section" aria-labelledby="modal-heading">
+    <p class="eyebrow">Dialog</p>
+    <h2 id="modal-heading" class="text-heading-sm">테이블 삭제 확인</h2>
+    <div style="height:24px"></div>
+    <div class="modal-frame">
+      <div class="modal-card">
+        <h3 class="text-subheading">테이블 삭제</h3>
+        <p><strong class="text-mono">orders</strong> 테이블을 삭제합니다. 이 작업은 되돌릴 수 없고, 연결된 12,480개 행이 함께 삭제됩니다.</p>
+        <div class="field">
+          <label class="field-label">계속하려면 <span class="text-mono">orders</span> 를 입력하세요</label>
+          <input class="input" style="width:100%;" placeholder="orders" />
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-ghost">취소</button>
+          <button class="btn btn-destructive" style="padding:8px 16px;">테이블 삭제</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- (G) 푸터 -->
+  <footer class="site-footer section" aria-labelledby="footer-heading">
+    <p class="eyebrow">Notes</p>
+    <h2 id="footer-heading" class="text-heading-sm">디자인 결정</h2>
+    <ul>
+      <li>기능색은 Void Violet 하나뿐이다. 상태 점(connected/connecting/error) 세 개만 예외로 브리프가 "데모용"이라 명시한 Deep Teal·Signal Blue·Ember Glow 를 썼다 — 버튼·배지·링크 같은 브랜드 크롬에는 쓰지 않았다.</li>
+      <li>SQL 구문 강조는 새 색을 만들지 않고 src/themes.css 가 이미 쓰는 AA 검증된 cool_dark/cool_light 프리셋을 그대로 재사용했다 (keyword 가 이미 바이올렛 계열이라 톤이 맞는다). light 모드 builtin/function 만 0891b2→0a7a95 로 살짝 깊게 조정 (대비 3.14:1→4.23:1, 배경이 순백이 아니라 살짝 어두운 안개색이라).</li>
+      <li>라디우스는 컴포넌트별 스펙을 요약줄보다 우선했다: solid 버튼(Primary/Destructive)·배지·인풋 6px, ghost/secondary pill·토글 999px, 카드·모달 16px, 아이콘 컨테이너(엔진 배지) 9999px — 한 컴포넌트 안에서는 섞지 않았다.</li>
+      <li>얼룩말 줄무늬는 뺐다. 유리·여백 위주 무드에 줄무늬가 어울리지 않는다고 판단.</li>
+      <li>light 모드는 반전이 아니라 해석: 배경을 흰색이 아니라 옅은 안개빛 하늘색으로 바꾸고, 잉크 극성을 뒤집었다(어두운 유리 위 밝은 텍스트 → 밝은 유리 위 어두운 텍스트). hairline·글래스 알파값은 dark 와 동일 문법을 유지, 워드마크 Skywash 그라디언트만 밝은 하늘색 → 짙은 네이비 그라디언트로 다시 튜닝했다(원래 그라디언트는 밝은 배경에서 거의 안 보인다). 상태 점 3종은 AA 3:1 을 넘기려고 밝은 배경용으로 더 짙게 조정했다(계산: 위 Live tokens 스와치 참고).</li>
+    </ul>
+  </footer>
+
+</div>
+
+<script>
+(function () {
+  var html = document.documentElement;
+  var btn = document.getElementById('mode-toggle');
+  var label = btn.querySelector('.mode-toggle-label');
+  var liveTokens = [
+    '--tv-background', '--tv-foreground', '--tv-primary', '--tv-border', '--tv-muted',
+    '--tv-status-connected', '--tv-status-connecting', '--tv-status-error', '--tv-status-idle'
+  ];
+  function syncSwatchLabels() {
+    var computed = getComputedStyle(html);
+    liveTokens.forEach(function (token) {
+      var el = document.querySelector('.swatch-hex[data-token="' + token + '"]');
+      if (el) el.textContent = computed.getPropertyValue(token).trim();
+    });
+  }
+  function setMode(mode) {
+    html.setAttribute('data-mode', mode);
+    label.textContent = mode === 'dark' ? 'Dark' : 'Light';
+    btn.setAttribute('aria-pressed', String(mode === 'light'));
+    syncSwatchLabels();
+  }
+  btn.addEventListener('click', function () {
+    setMode(html.getAttribute('data-mode') === 'dark' ? 'light' : 'dark');
+  });
+  syncSwatchLabels();
+})();
+</script>
+</body>
+</html>

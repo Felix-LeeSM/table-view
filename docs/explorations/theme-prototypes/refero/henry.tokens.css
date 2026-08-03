@@ -1,0 +1,130 @@
+/* ============================================================
+ * Henry — "따뜻한 크림 종이 위의 고딕 브로드사이드 포스터"
+ * 100% monochrome. Two surfaces only: Paper #fafafa / Ink #2a2722.
+ * No hue anywhere — status, syntax, destructive/success/warning/highlight
+ * are all encoded with the Paper<->Ink tone ladder + weight/italic/
+ * underline/inversion. See henry.html footer (block G) for the reasoning,
+ * in particular why --tv-destructive / --tv-status-error stay monochrome
+ * instead of using the spec's default red.
+ * radius overridden to 12px system-wide (spec explicitly allows this).
+ * Drop straight into src/themes.css next to the other [data-theme] blocks.
+ * ============================================================ */
+[data-theme="henry"][data-mode="light"] {
+  /* surfaces/text — only two tones exist (Paper/Ink); card and muted
+     reuse background verbatim, separated only by --tv-border hairlines */
+  --tv-background: #fafafa;
+  --tv-foreground: #2a2722;
+  --tv-card: #fafafa;
+  --tv-card-foreground: #2a2722;
+  /* popover inverts relative to the page (Ink-on-Paper) so the modal/
+     popover surface always reads as a distinct, popped-out layer */
+  --tv-popover: #2a2722;
+  --tv-popover-foreground: #fafafa;
+  --tv-primary: #2a2722;
+  --tv-primary-foreground: #fafafa;
+  --tv-secondary: #fafafa;
+  --tv-secondary-foreground: #2a2722;
+  --tv-muted: #fafafa;
+  --tv-muted-foreground: #666666;
+  --tv-accent: #2a2722;
+  --tv-accent-foreground: #fafafa;
+  --tv-border: #eeeeee;
+  --tv-input: #666666;
+  --tv-ring: #2a2722;
+  --tv-primary-tint: 42 39 34;
+
+  /* status 4종 — grayscale + shape only, no hue (see legend in section B) */
+  --tv-status-connected: #2a2722;
+  --tv-status-connecting: #666666;
+  --tv-status-error: #2a2722;
+  --tv-status-idle: #b3b3b3;
+
+  /* syntax 12종 — Ink/Sepia/Ash families, weight+italic+underline applied
+     in component CSS (see .syn-* rules in henry.html) carry the split
+     within each family */
+  --tv-syntax-keyword: #2a2722;
+  --tv-syntax-type: #2a2722;
+  --tv-syntax-atom: #2a2722;
+  --tv-syntax-error: #2a2722;
+  --tv-syntax-function: #3e3b36;
+  --tv-syntax-builtin: #3e3b36;
+  --tv-syntax-property: #3e3b36;
+  --tv-syntax-string: #3e3b36;
+  --tv-syntax-operator: #666666;
+  --tv-syntax-punct: #666666;
+  --tv-syntax-number: #666666;
+  --tv-syntax-comment: #666666;
+
+  /* common tokens — overridden monochrome for Henry instead of the spec
+     default red/green/orange/yellow; see henry.html footer (G) */
+  --tv-destructive: #2a2722;
+  --tv-success: #2a2722;
+  --tv-warning: #2a2722;
+  --tv-highlight: #2a2722;
+  --tv-radius: 12px;
+  --tv-font-sans:
+    "Neue Montreal", Inter, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --tv-font-mono:
+    ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    "Liberation Mono", monospace;
+
+  /* identity colors — theme-invariant per spec section 4, copied as-is */
+  --tv-value-key: #0369a1;
+  --tv-value-leaf: #047857;
+  --tv-value-delete: #f43f5e;
+}
+[data-theme="henry"][data-mode="dark"] {
+  /* dark = the Ink band made global: background/foreground simply swap,
+     same two tones, same 12px radius, same monochrome rules */
+  --tv-background: #2a2722;
+  --tv-foreground: #fafafa;
+  --tv-card: #2a2722;
+  --tv-card-foreground: #fafafa;
+  --tv-popover: #fafafa;
+  --tv-popover-foreground: #2a2722;
+  --tv-primary: #fafafa;
+  --tv-primary-foreground: #2a2722;
+  --tv-secondary: #2a2722;
+  --tv-secondary-foreground: #fafafa;
+  --tv-muted: #2a2722;
+  --tv-muted-foreground: #9f9f9f;
+  --tv-accent: #fafafa;
+  --tv-accent-foreground: #2a2722;
+  --tv-border: #3e3b36;
+  --tv-input: #9f9f9f;
+  --tv-ring: #fafafa;
+  --tv-primary-tint: 250 250 250;
+
+  --tv-status-connected: #fafafa;
+  --tv-status-connecting: #b3b3b3;
+  --tv-status-error: #fafafa;
+  --tv-status-idle: #9f9f9f;
+
+  --tv-syntax-keyword: #fafafa;
+  --tv-syntax-type: #fafafa;
+  --tv-syntax-atom: #fafafa;
+  --tv-syntax-error: #fafafa;
+  --tv-syntax-function: #b3b3b3;
+  --tv-syntax-builtin: #b3b3b3;
+  --tv-syntax-property: #b3b3b3;
+  --tv-syntax-string: #b3b3b3;
+  --tv-syntax-operator: #9f9f9f;
+  --tv-syntax-punct: #9f9f9f;
+  --tv-syntax-number: #9f9f9f;
+  --tv-syntax-comment: #9f9f9f;
+
+  --tv-destructive: #fafafa;
+  --tv-success: #fafafa;
+  --tv-warning: #fafafa;
+  --tv-highlight: #fafafa;
+  --tv-radius: 12px;
+  --tv-font-sans:
+    "Neue Montreal", Inter, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --tv-font-mono:
+    ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    "Liberation Mono", monospace;
+
+  --tv-value-key: #7dd3fc;
+  --tv-value-leaf: #6ee7b7;
+  --tv-value-delete: #f43f5e;
+}

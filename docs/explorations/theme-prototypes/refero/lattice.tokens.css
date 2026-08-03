@@ -1,0 +1,138 @@
+/* ============================================================
+ * Lattice — "따뜻한 양피지 위의 식물 관찰 노트"
+ * Portable --tv-* token contract. Paste straight into src/themes.css
+ * next to the other [data-theme="…"] blocks.
+ *
+ * Contrast notes (WCAG relative-luminance, computed, not eyeballed):
+ *   --tv-foreground on --tv-background   15.97:1  (light)  / 15.97:1 (dark)
+ *   --tv-muted-foreground on --tv-muted    3.33:1+ both modes (>= 3:1 floor)
+ *   --tv-primary-foreground on --tv-primary 17.27:1 (light) / 15.97:1 (dark)
+ * Lattice-specific extras (pastel surfaces, data-viz hues, shadow, hairline)
+ * are NOT part of this contract — they live in lattice.html's own <style>
+ * as --lattice-* locals so this file stays a clean, exact match to
+ * SPEC.md §4 and drops into src/themes.css without unknown variables.
+ * ============================================================ */
+
+[data-theme="lattice"][data-mode="light"] {
+  /* surface / text */
+  --tv-background: #f7f6f2;
+  --tv-foreground: #001f1f;
+  --tv-card: #ffffff;
+  --tv-card-foreground: #001f1f;
+  --tv-popover: #ffffff;
+  --tv-popover-foreground: #001f1f;
+  --tv-primary: #001f1f;
+  --tv-primary-foreground: #ffffff;
+  --tv-secondary: #e5e6e2;
+  --tv-secondary-foreground: #5c7070;
+  --tv-muted: #dbdcd8;
+  --tv-muted-foreground: #6a7878;
+  --tv-accent: #e0e4e4;
+  --tv-accent-foreground: #001f1f;
+  --tv-border: #455252;
+  --tv-input: #455252;
+  --tv-ring: #001f1f;
+  --tv-primary-tint: 0 31 31;
+  --tv-status-connected: #cdface;
+  --tv-status-connecting: #fff3c2;
+  --tv-status-error: #ef4444;
+  --tv-status-idle: #889494;
+
+  /* syntax — 6 data-viz hues carry keyword/type/builtin/function/property/string,
+     value-key/value-leaf double as atom/number, ink neutrals carry
+     operator/punct/comment, error reuses --tv-destructive */
+  --tv-syntax-keyword: #652ea3; /* Iris */
+  --tv-syntax-operator: #455252; /* Slate */
+  --tv-syntax-punct: #6a7878; /* Stone */
+  --tv-syntax-type: #a36a14; /* Saffron */
+  --tv-syntax-builtin: #4c7777; /* Deep Teal, lightened 30% toward white — raw #003d3d reads as near-black text at 13px, indistinguishable from plain ink (verified: 12.1:1 contrast vs white, the highest of the 6 data-viz hues, so it fails to pop as "colored" even though it technically passes AA) */
+  --tv-syntax-function: #7a2251; /* Plum */
+  --tv-syntax-property: #2a4e1c; /* Deep Forest */
+  --tv-syntax-string: #515c0b; /* Olive */
+  --tv-syntax-number: #047857; /* = --tv-value-leaf */
+  --tv-syntax-atom: #0369a1; /* = --tv-value-key */
+  --tv-syntax-comment: #889494; /* Mist */
+  --tv-syntax-error: #ef4444; /* = --tv-destructive */
+
+  /* common — fixed across all 72 themes */
+  --tv-destructive: #ef4444;
+  --tv-destructive-foreground: #ffffff;
+  --tv-success: #16a34a;
+  --tv-warning: #ea580c;
+  --tv-highlight: #eab308;
+  --tv-radius: 0.75rem; /* 12px, the input radius — cards/badges/buttons use their own larger radii in component CSS */
+  --tv-font-sans:
+    "Matter", "DM Sans", -apple-system, BlinkMacSystemFont,
+    "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --tv-font-mono:
+    "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas,
+    "Malgun Gothic", monospace;
+
+  /* identity — theme-invariant, copied as-is */
+  --tv-value-key: #0369a1;
+  --tv-value-leaf: #047857;
+  --tv-value-delete: #f43f5e;
+}
+
+[data-theme="lattice"][data-mode="dark"] {
+  /* "밤의 숲 바닥" — light-mode ink/paper pair inverts: Forest Ink becomes
+     the canvas, Parchment becomes the ink. Surfaces step up from Forest Ink
+     toward Slate; pastels and data-viz hues desaturate toward the dark
+     canvas so they read as specimens pinned on night ink. See lattice.html
+     footer (block G) for the full explanation. */
+  --tv-background: #001f1f;
+  --tv-foreground: #f7f6f2;
+  --tv-card: #0a2626;
+  --tv-card-foreground: #f7f6f2;
+  --tv-popover: #0e2b2b;
+  --tv-popover-foreground: #f7f6f2;
+  --tv-primary: #f7f6f2;
+  --tv-primary-foreground: #001f1f;
+  --tv-secondary: #0d2a2a;
+  --tv-secondary-foreground: #889494;
+  --tv-muted: #0c2828;
+  --tv-muted-foreground: #6a7878;
+  --tv-accent: #123232;
+  --tv-accent-foreground: #f7f6f2;
+  --tv-border: #2f4a48;
+  --tv-input: #2f4a48;
+  --tv-ring: #f7f6f2;
+  --tv-primary-tint: 247 246 242;
+  --tv-status-connected: #71977f;
+  --tv-status-connecting: #8c9479;
+  --tv-status-error: #f87171;
+  --tv-status-idle: #5c7070;
+
+  /* syntax — same 6 data-viz hues lightened toward parchment (t≈0.55) so
+     each clears >=6.2:1 on the dark card; neutrals swap rank (Mist reads
+     lightest against ink, so it takes the operator slot here) */
+  --tv-syntax-keyword: #baa1d6; /* Iris, lightened */
+  --tv-syntax-operator: #889494; /* Mist */
+  --tv-syntax-punct: #6a7878; /* Stone */
+  --tv-syntax-type: #d6bc95; /* Saffron, lightened */
+  --tv-syntax-builtin: #8ca8a8; /* Deep Teal, lightened */
+  --tv-syntax-function: #c39cb1; /* Plum, lightened */
+  --tv-syntax-property: #9faf99; /* Deep Forest, lightened */
+  --tv-syntax-string: #b1b691; /* Olive, lightened */
+  --tv-syntax-number: #6ee7b7; /* = --tv-value-leaf */
+  --tv-syntax-atom: #7dd3fc; /* = --tv-value-key */
+  --tv-syntax-comment: #5c7070; /* Lichen Gray */
+  --tv-syntax-error: #f87171; /* = --tv-destructive */
+
+  --tv-destructive: #f87171;
+  --tv-destructive-foreground: #001f1f;
+  --tv-success: #22c55e;
+  --tv-warning: #fb923c;
+  --tv-highlight: #facc15;
+  --tv-radius: 0.75rem;
+  --tv-font-sans:
+    "Matter", "DM Sans", -apple-system, BlinkMacSystemFont,
+    "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --tv-font-mono:
+    "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas,
+    "Malgun Gothic", monospace;
+
+  --tv-value-key: #7dd3fc;
+  --tv-value-leaf: #6ee7b7;
+  --tv-value-delete: #f43f5e;
+}

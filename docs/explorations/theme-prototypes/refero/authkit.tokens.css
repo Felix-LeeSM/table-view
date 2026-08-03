@@ -1,0 +1,151 @@
+/* ============================================================
+ * AuthKit — "Frosted glass cathedral at midnight"
+ * Theme prototype tokens (refero family). Dark-first: [data-mode="dark"]
+ * is the system's native reading. [data-mode="light"] is an interpretation
+ * inside the same grammar (frosted glass, hairline borders, one violet
+ * accent), not a mechanical inversion — see authkit.html block (G) for
+ * what changed and why.
+ *
+ * Paste this whole block into src/themes.css to register the theme.
+ * Token names match src/themes.css exactly (SPEC.md section 4).
+ * Preview: docs/explorations/theme-prototypes/refero/authkit.html
+ * ============================================================ */
+
+/* === authkit === */
+[data-theme="authkit"][data-mode="light"] {
+  /* surface / text — "bright mist glass": pale overcast-sky canvas,
+     translucent white glass on top, dark ink hairlines (ink polarity
+     flipped from dark mode, same alpha grammar) */
+  --tv-background: #e9edf6;
+  --tv-foreground: #05060f;
+  --tv-card: #ffffff8c;
+  --tv-card-foreground: #05060f;
+  --tv-popover: #ffffffd1;
+  --tv-popover-foreground: #05060f;
+  --tv-primary: #663af3;
+  --tv-primary-foreground: #ffffff;
+  --tv-secondary: #05060f0d;
+  --tv-secondary-foreground: #05060f;
+  --tv-muted: #05060f0f;
+  --tv-muted-foreground: #4b5468;
+  --tv-accent: #663af31f;
+  --tv-accent-foreground: #05060f;
+  --tv-border: #05060f1f;
+  --tv-input: #05060f1f;
+  --tv-ring: #663af3;
+  --tv-primary-tint: 102 58 243;
+  /* status dots deepened from the brand demo hexes (Deep Teal/Signal
+     Blue/Ember Glow) for AA non-text contrast on a pale canvas — see
+     authkit.html footer for the exact contrast numbers. */
+  --tv-status-connected: #1c7b6e;
+  --tv-status-connecting: #0568bd;
+  --tv-status-error: #c94d30;
+  --tv-status-idle: #4b5468;
+
+  /* syntax — cool_light preset (shared with slate/linear/vercel light),
+     builtin/function deepened 0891b2→0a7a95 for this theme's slightly
+     darker canvas (4.23:1 vs 3.14:1 on #e9edf6). */
+  --tv-syntax-keyword: #7c3aed;
+  --tv-syntax-operator: #475569;
+  --tv-syntax-punct: #64748b;
+  --tv-syntax-type: #2563eb;
+  --tv-syntax-builtin: #0a7a95;
+  --tv-syntax-function: #0a7a95;
+  --tv-syntax-property: #0f766e;
+  --tv-syntax-string: #15803d;
+  --tv-syntax-number: #c2410c;
+  --tv-syntax-atom: #be185d;
+  --tv-syntax-comment: #64748b;
+  --tv-syntax-error: #dc2626;
+
+  /* common — theme-invariant, copied from SPEC.md section 4 */
+  --tv-destructive: #ef4444;
+  --tv-destructive-foreground: #ffffff;
+  --tv-success: #16a34a;
+  --tv-success-foreground: #ffffff;
+  --tv-warning: #ea580c;
+  --tv-warning-foreground: #ffffff;
+  --tv-highlight: #eab308;
+  --tv-radius: 0.375rem;
+  --tv-font-sans:
+    "Untitled Sans", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Roboto, "Helvetica Neue", Arial, "Apple SD Gothic Neo", "Malgun Gothic",
+    sans-serif;
+  --tv-font-mono:
+    "dotDigital", "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono",
+    Menlo, Consolas, "Liberation Mono", monospace;
+
+  /* identity colors — theme-invariant, copied from SPEC.md section 4 */
+  --tv-value-key: #0369a1;
+  --tv-value-leaf: #047857;
+  --tv-value-delete: #f43f5e;
+}
+[data-theme="authkit"][data-mode="dark"] {
+  /* surface / text — native reading: Midnight Canvas void, frosted-glass
+     surfaces (Blueprint-tinted translucent fills), Frost Glow ink */
+  --tv-background: #05060f;
+  --tv-foreground: #d1e4fa;
+  --tv-card: #bad6f708;
+  --tv-card-foreground: #d1e4fa;
+  --tv-popover: #05060ff7;
+  --tv-popover-foreground: #d1e4fa;
+  --tv-primary: #663af3;
+  --tv-primary-foreground: #ffffff;
+  --tv-secondary: #bad6f70f;
+  --tv-secondary-foreground: #ffffff;
+  --tv-muted: #c7d3ea1f;
+  --tv-muted-foreground: #9da7ba;
+  --tv-accent: #663af329;
+  --tv-accent-foreground: #d1e4fa;
+  --tv-border: #bad7f71f;
+  --tv-input: #bad7f71f;
+  --tv-ring: #663af3;
+  --tv-primary-tint: 102 58 243;
+  /* status dots use the brief's "decorative/demo" swatches (Deep Teal /
+     Signal Blue / Ember Glow) — the one legitimate spot in this
+     violet-only system for extra hue, same precedent as every other
+     theme in src/themes.css keeping colorful status dots regardless of
+     how monochrome its primary brand color is (see e.g. "vercel"). */
+  --tv-status-connected: #269684;
+  --tv-status-connecting: #027dea;
+  --tv-status-error: #e46d4c;
+  --tv-status-idle: #9da7ba;
+
+  /* syntax — cool_dark preset, reused verbatim from slate/linear/vercel
+     dark (already AA-tuned in production; keyword violet already fits
+     this theme's family). */
+  --tv-syntax-keyword: #c4b5fd;
+  --tv-syntax-operator: #cbd5e1;
+  --tv-syntax-punct: #94a3b8;
+  --tv-syntax-type: #93c5fd;
+  --tv-syntax-builtin: #67e8f9;
+  --tv-syntax-function: #67e8f9;
+  --tv-syntax-property: #5eead4;
+  --tv-syntax-string: #86efac;
+  --tv-syntax-number: #fdba74;
+  --tv-syntax-atom: #f9a8d4;
+  --tv-syntax-comment: #64748b;
+  --tv-syntax-error: #f87171;
+
+  /* common — theme-invariant, copied from SPEC.md section 4 */
+  --tv-destructive: #f87171;
+  --tv-destructive-foreground: #ffffff;
+  --tv-success: #22c55e;
+  --tv-success-foreground: #ffffff;
+  --tv-warning: #fb923c;
+  --tv-warning-foreground: #ffffff;
+  --tv-highlight: #facc15;
+  --tv-radius: 0.375rem;
+  --tv-font-sans:
+    "Untitled Sans", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Roboto, "Helvetica Neue", Arial, "Apple SD Gothic Neo", "Malgun Gothic",
+    sans-serif;
+  --tv-font-mono:
+    "dotDigital", "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono",
+    Menlo, Consolas, "Liberation Mono", monospace;
+
+  /* identity colors — theme-invariant, copied from SPEC.md section 4 */
+  --tv-value-key: #7dd3fc;
+  --tv-value-leaf: #6ee7b7;
+  --tv-value-delete: #f43f5e;
+}

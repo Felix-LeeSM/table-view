@@ -1,0 +1,823 @@
+<!DOCTYPE html>
+<html lang="ko" data-theme="ease" data-mode="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ease Health — table-view 테마 프로토타입</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+<style>
+  /* ============ 0. 토큰 — ease.tokens.css 와 값 동일, src/themes.css 로 그대로 이식 ============ */
+  /*
+   * (B) 팔레트는 이 시스템의 캐논(light) 값을 고정으로 보여주는 카탈로그다 — "light 우선
+   * 시스템, dark 는 시스템 규칙 안의 해석"이므로 모드 토글에 따라 값이 바뀌지 않는다.
+   * var(--tv-*) 를 그대로 스와치에 쓰면 다크 모드에서 칩 색은 바뀌는데 옆의 hex 텍스트는
+   * 고정 문자열이라 라벨과 실제 색이 어긋난다 — 그래서 표면/상태 스와치 전용 고정 변수를 둔다.
+   */
+  :root {
+    --ease-cream-paper: #fffefc;
+    --ease-keylime-wash: #e1f4df;
+    --ease-mint-veil: #cfe7d3;
+    --ease-sage-mist: #b1dbb8;
+    --ease-slate-hush: #b6ced5;
+    --ease-forest-ink: #0f3e17;
+    --ease-charcoal: #222222;
+    --ease-border-mist: #efeeeb;
+    --ease-forest-shadow: #0c2f10;
+    --ease-muted-foreground: #54655a;
+    --ease-status-connected: #1f7a34;
+    --ease-status-connecting: #b8790f;
+    --ease-status-error: #ef4444;
+    --ease-status-idle: #5f7267;
+  }
+
+  [data-theme="ease"][data-mode="light"] {
+    color-scheme: light;
+    --tv-background: #fffefc;
+    --tv-foreground: #222222;
+    --tv-card: #e1f4df;
+    --tv-card-foreground: #222222;
+    --tv-popover: #b6ced5;
+    --tv-popover-foreground: #222222;
+    --tv-primary: #0f3e17;
+    --tv-primary-foreground: #fffefc;
+    --tv-secondary: #b1dbb8;
+    --tv-secondary-foreground: #222222;
+    --tv-muted: #efeeeb;
+    --tv-muted-foreground: #54655a;
+    --tv-accent: #cfe7d3;
+    --tv-accent-foreground: #222222;
+    --tv-border: #efeeeb;
+    --tv-input: #dfe6df;
+    --tv-ring: #0f3e17;
+    --tv-primary-tint: 15 62 23;
+    --tv-status-connected: #1f7a34;
+    --tv-status-connecting: #b8790f;
+    --tv-status-error: #ef4444;
+    --tv-status-idle: #5f7267;
+
+    --tv-syntax-keyword: #0f3e17;
+    --tv-syntax-operator: #5c5115;
+    --tv-syntax-punct: #4a564f;
+    --tv-syntax-type: #0d6459;
+    --tv-syntax-builtin: #6d3564;
+    --tv-syntax-function: #256b32;
+    --tv-syntax-property: #78681f;
+    --tv-syntax-string: #96375a;
+    --tv-syntax-number: #8a5a12;
+    --tv-syntax-atom: #227b6d;
+    --tv-syntax-comment: #5f6d63;
+    --tv-syntax-error: #b3261e;
+
+    --tv-destructive: #ef4444;
+    --tv-success: #16a34a;
+    --tv-warning: #ea580c;
+    --tv-highlight: #eab308;
+    --tv-radius: 0.875rem;
+    --tv-radius-nav: 0.4375rem;
+    --tv-radius-pill: 999px;
+    --tv-font-sans: "Suisse Intl", "Inter", -apple-system, BlinkMacSystemFont,
+      "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+    --tv-font-display: "Faire Octave", "Cormorant Garamond", "Playfair Display",
+      serif;
+    --tv-font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Consolas,
+      "Liberation Mono", monospace;
+
+    --tv-value-key: #0369a1;
+    --tv-value-leaf: #047857;
+    --tv-value-delete: #f43f5e;
+  }
+
+  [data-theme="ease"][data-mode="dark"] {
+    color-scheme: dark;
+    --tv-background: #0c2f10;
+    --tv-foreground: #eef6ea;
+    --tv-card: #17381b;
+    --tv-card-foreground: #eef6ea;
+    --tv-popover: #37625d;
+    --tv-popover-foreground: #eef6ea;
+    --tv-primary: #8ee2a0;
+    --tv-primary-foreground: #0c2f10;
+    --tv-secondary: #2b5730;
+    --tv-secondary-foreground: #eef6ea;
+    --tv-muted: #1d251e;
+    --tv-muted-foreground: #9fb3a2;
+    --tv-accent: #1f4924;
+    --tv-accent-foreground: #eef6ea;
+    --tv-border: #2b3b2d;
+    --tv-input: #2b3b2d;
+    --tv-ring: #8ee2a0;
+    --tv-primary-tint: 142 226 160;
+    --tv-status-connected: #5fd67e;
+    --tv-status-connecting: #e0a940;
+    --tv-status-error: #f87171;
+    --tv-status-idle: #7c9382;
+
+    --tv-syntax-keyword: #8ee2a0;
+    --tv-syntax-operator: #e0c565;
+    --tv-syntax-punct: #9fb3a2;
+    --tv-syntax-type: #6fd1c4;
+    --tv-syntax-builtin: #e0a0d0;
+    --tv-syntax-function: #a8e08a;
+    --tv-syntax-property: #d9c877;
+    --tv-syntax-string: #f0a8c0;
+    --tv-syntax-number: #e8b978;
+    --tv-syntax-atom: #7fd6c8;
+    --tv-syntax-comment: #8aa090;
+    --tv-syntax-error: #f87171;
+
+    --tv-destructive: #f87171;
+    --tv-success: #22c55e;
+    --tv-warning: #fb923c;
+    --tv-highlight: #facc15;
+    --tv-radius: 0.875rem;
+    --tv-radius-nav: 0.4375rem;
+    --tv-radius-pill: 999px;
+    --tv-font-sans: "Suisse Intl", "Inter", -apple-system, BlinkMacSystemFont,
+      "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+    --tv-font-display: "Faire Octave", "Cormorant Garamond", "Playfair Display",
+      serif;
+    --tv-font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Consolas,
+      "Liberation Mono", monospace;
+
+    --tv-value-key: #7dd3fc;
+    --tv-value-leaf: #6ee7b7;
+    --tv-value-delete: #f43f5e;
+  }
+
+  /* ============ 1. 리셋 · 베이스 ============ */
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--tv-background);
+    color: var(--tv-foreground);
+    font-family: var(--tv-font-sans);
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    transition: background-color .2s ease, color .2s ease;
+  }
+  a { color: var(--tv-primary); }
+  .mono { font-family: var(--tv-font-mono); }
+  .page { max-width: 1280px; margin: 0 auto; padding: 0 24px 156px; }
+
+  h1, h2, h3 {
+    font-family: var(--tv-font-display);
+    font-weight: 300; /* Faire Octave 는 항상 300 — 헤딩 weight 혼용 금지 */
+    color: var(--tv-primary);
+    margin: 0;
+  }
+
+  .eyebrow {
+    font-family: var(--tv-font-sans);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--tv-muted-foreground);
+  }
+
+  .block { margin-top: 76px; }
+  .block-heading { font-size: 40px; line-height: 1.35; letter-spacing: -0.4px; margin-bottom: 7px; }
+  .block-sub { font-size: 14px; color: var(--tv-muted-foreground); margin: 0 0 28px; max-width: 640px; }
+
+  /* ============ 2. (A) 헤더 ============ */
+  .top-bar { padding: 56px 0 42px; border-bottom: 1px solid var(--tv-border); }
+  .top-bar__utility { display: flex; align-items: center; justify-content: space-between; margin-bottom: 42px; }
+  .back-link { font-size: 14px; font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; gap: 7px; }
+  .back-link:hover { text-decoration: underline; }
+
+  .mode-toggle {
+    display: inline-flex; align-items: center; gap: 9px;
+    background: var(--tv-secondary); color: var(--tv-secondary-foreground);
+    border: none; border-radius: var(--tv-radius-pill);
+    padding: 9px 18px; font-family: var(--tv-font-sans); font-size: 14px; font-weight: 600;
+    cursor: pointer;
+  }
+  .mode-toggle:focus-visible { outline: 2px solid var(--tv-ring); outline-offset: 2px; }
+  .mode-toggle__dot {
+    width: 9px; height: 9px; border-radius: 999px; background: var(--tv-primary);
+    transition: background-color .2s ease;
+  }
+
+  .masthead { display: flex; flex-direction: column; gap: 14px; }
+  .masthead h1 { font-size: 74px; line-height: 1.05; letter-spacing: -2.22px; }
+  .masthead .tagline { font-size: 18px; line-height: 1.3; font-weight: 400; color: var(--tv-foreground); max-width: 640px; margin: 0; }
+
+  /* ============ 3. (B) 팔레트 — 캐논(light) 고정 카탈로그, 토글에 반응하지 않는다 ============ */
+  .swatch-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 14px; }
+  .swatch {
+    background: var(--ease-keylime-wash); border: 1px solid var(--ease-border-mist);
+    border-radius: var(--tv-radius); padding: 21px;
+  }
+  .swatch__chip { height: 56px; border-radius: calc(var(--tv-radius) - 5px); margin-bottom: 11px; border: 1px solid var(--ease-border-mist); }
+  .swatch__name { font-size: 14px; font-weight: 600; margin-bottom: 4px; color: var(--ease-charcoal); }
+  .swatch__hex { font-family: var(--tv-font-mono); font-size: 12px; color: var(--ease-muted-foreground); display: block; margin-bottom: 7px; }
+  .swatch__role { font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ease-forest-ink); }
+
+  .swatch-grid--status .swatch__chip { height: 40px; }
+
+  /* ============ 4. (C+D) 앱 셸 ============ */
+  .app-window {
+    min-height: 656px; display: flex; flex-direction: column;
+    border: 1px solid var(--tv-border); border-radius: var(--tv-radius);
+    overflow: hidden; background: var(--tv-background);
+  }
+  .app-row { display: flex; flex: 1; min-height: 620px; }
+
+  /* -- 사이드바 (Keylime) -- */
+  .sidebar {
+    width: 248px; flex-shrink: 0; background: var(--tv-card); color: var(--tv-card-foreground);
+    border-right: 1px solid var(--tv-border); display: flex; flex-direction: column;
+  }
+  .sidebar__search { padding: 14px; }
+  .sidebar__search input {
+    width: 100%; border: 1px solid var(--tv-input); border-radius: var(--tv-radius-pill);
+    background: var(--tv-background); color: var(--tv-foreground);
+    padding: 7px 14px; font-size: 14px; font-family: var(--tv-font-sans);
+  }
+  .sidebar__search input:focus-visible { outline: 2px solid var(--tv-ring); outline-offset: 1px; }
+  .tree, .tree-children { list-style: none; margin: 0; padding: 0; }
+  .tree { padding-bottom: 14px; overflow-y: auto; }
+  .tree-item__row {
+    display: flex; align-items: center; gap: 7px; padding: 7px 14px;
+    font-size: 14px; cursor: default;
+  }
+  .tree-item__caret { width: 11px; color: var(--tv-muted-foreground); font-size: 10px; flex-shrink: 0; }
+  .tree-item__dot { width: 7px; height: 7px; border-radius: 999px; flex-shrink: 0; }
+  .tree-item__dot--connected { background: var(--tv-status-connected); }
+  .tree-item__dot--connecting { background: var(--tv-status-connecting); animation: pulse 1.6s ease-in-out infinite; }
+  .tree-item__dot--error { background: var(--tv-status-error); }
+  @media (prefers-reduced-motion: reduce) { .tree-item__dot--connecting { animation: none; } }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+  .tree-item__name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tree-item__type { margin-left: auto; font-size: 11px; color: var(--tv-muted-foreground); flex-shrink: 0; }
+
+  .schema-node > .tree-item__row { padding-left: 28px; }
+  .schema-group { padding: 7px 14px 4px 42px; }
+  .tree-leaf {
+    padding: 7px 14px 7px 56px; font-size: 14px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .tree-leaf--selected {
+    background: var(--tv-accent); color: var(--tv-accent-foreground);
+    font-weight: 600; border-left: 2px solid var(--tv-primary);
+    padding-left: 54px;
+  }
+
+  /* -- 중앙 컬럼 -- */
+  .center-col { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--tv-background); }
+
+  .tabbar { display: flex; align-items: flex-end; border-bottom: 1px solid var(--tv-border); padding: 0 14px; gap: 4px; }
+  .tab {
+    padding: 9px 18px; font-size: 14px; color: var(--tv-muted-foreground);
+    border-bottom: 2px solid transparent; margin-bottom: -1px;
+  }
+  .tab--active { color: var(--tv-primary); font-weight: 600; border-bottom-color: var(--tv-primary); }
+  .tab--add { color: var(--tv-muted-foreground); font-weight: 600; padding: 9px 14px; }
+
+  .toolbar {
+    display: flex; align-items: center; gap: 11px; padding: 9px 14px;
+    background: var(--tv-secondary); color: var(--tv-secondary-foreground);
+    border-bottom: 1px solid var(--tv-border);
+  }
+  .toolbar__filter {
+    border: 1px solid var(--tv-input); border-radius: var(--tv-radius);
+    background: var(--tv-background); color: var(--tv-foreground);
+    padding: 7px 11px; font-size: 14px; font-family: var(--tv-font-sans);
+    width: 220px; max-width: 40%;
+  }
+  .toolbar__filter:focus-visible { outline: 2px solid var(--tv-ring); outline-offset: 1px; }
+  .toolbar__actions { display: flex; gap: 9px; }
+  .toolbar__count { margin-left: auto; font-family: var(--tv-font-mono); font-size: 12px; color: var(--tv-secondary-foreground); }
+
+  .btn {
+    font-family: var(--tv-font-sans); font-size: 14px; font-weight: 600;
+    border-radius: var(--tv-radius); padding: 7px 16px; border: 1px solid transparent;
+    cursor: pointer; line-height: 1.4;
+  }
+  .btn:focus-visible { outline: 2px solid var(--tv-ring); outline-offset: 2px; }
+  .btn-primary { background: var(--tv-primary); color: var(--tv-primary-foreground); }
+  .btn-secondary { background: var(--tv-background); color: var(--tv-foreground); border-color: var(--tv-input); }
+  .btn-ghost { background: transparent; color: var(--tv-primary); border-color: transparent; }
+  .btn-ghost:hover { background: var(--tv-accent); }
+  /*
+   * destructive 는 SPEC 고정값(#ef4444 / dark #f87171)이라 바꾸지 않는다. 그 위에
+   * 흰 텍스트는 라이트 3.73:1 로 AA 미달이라, 라이트=foreground(4.23:1)·다크=background(5.31:1)
+   * 로 다크앵커링해서 최선의 대비를 확보했다. 배지도 같은 패턴을 쓴다.
+   */
+  .btn-destructive { background: var(--tv-destructive); color: var(--tv-foreground); }
+  [data-mode="dark"] .btn-destructive { color: var(--tv-background); }
+
+  .grid-panel { padding: 28px; flex: 1; min-height: 0; display: flex; }
+  .grid-scroll { flex: 1; overflow: auto; border: 1px solid var(--tv-border); border-radius: calc(var(--tv-radius) - 6px); max-height: 360px; }
+  table.data-grid { border-collapse: collapse; width: 100%; font-size: 14px; }
+  .data-grid thead th {
+    position: sticky; top: 0; background: var(--tv-muted); text-align: left;
+    padding: 7px 11px; border-bottom: 1px solid var(--tv-border); white-space: nowrap;
+  }
+  .col-head { display: flex; flex-direction: column; gap: 2px; }
+  .col-name { font-weight: 600; font-size: 14px; display: inline-flex; align-items: center; gap: 5px; }
+  .col-type { font-family: var(--tv-font-mono); font-size: 10px; color: var(--tv-muted-foreground); }
+  .col-pk, .col-fk {
+    font-size: 9px; font-weight: 600; letter-spacing: .03em; padding: 1px 5px;
+    border-radius: var(--tv-radius-pill); background: var(--tv-accent); color: var(--tv-accent-foreground);
+  }
+  .sort-arrow { font-size: 9px; color: var(--tv-primary); margin-left: 4px; }
+  .data-grid th.col-num, .data-grid td.num { text-align: right; }
+  .data-grid td {
+    padding: 7px 11px; line-height: 18px; border-bottom: 1px solid var(--tv-border);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px;
+  }
+  .data-grid tbody tr:last-child td { border-bottom: none; }
+  .cell-null { color: var(--tv-muted-foreground); font-style: italic; }
+  tr.row--selected td { background: var(--tv-accent); color: var(--tv-accent-foreground); }
+  td.cell--dirty { position: relative; border-left: 2px solid var(--tv-warning); background: var(--tv-muted); }
+  .dirty-dot {
+    display: inline-block; width: 5px; height: 5px; border-radius: 999px;
+    background: var(--tv-warning); margin-right: 5px; vertical-align: middle;
+  }
+
+  .editor-panel { border-top: 1px solid var(--tv-border); padding: 21px; height: 200px; flex-shrink: 0; position: relative; background: var(--tv-background); }
+  .editor-body { display: flex; height: 100%; overflow-y: auto; font-family: var(--tv-font-mono); font-size: 13px; line-height: 15px; }
+  .editor-gutter { flex-shrink: 0; text-align: right; padding-right: 14px; color: var(--tv-muted-foreground); user-select: none; }
+  .editor-gutter div { padding: 0; }
+  .editor-code { flex: 1; min-width: 0; }
+  .code-line { white-space: pre; }
+  .code-line--indent { padding-left: 18px; }
+  .editor-run {
+    position: absolute; right: 21px; bottom: 21px;
+    display: inline-flex; align-items: center; gap: 7px;
+  }
+  .editor-run kbd {
+    font-family: var(--tv-font-mono); font-size: 11px; background: rgb(var(--tv-primary-tint) / 0.18);
+    padding: 1px 5px; border-radius: 4px;
+  }
+
+  .tok-keyword { color: var(--tv-syntax-keyword); font-weight: 600; }
+  .tok-operator { color: var(--tv-syntax-operator); }
+  .tok-punct { color: var(--tv-syntax-punct); }
+  .tok-type { color: var(--tv-syntax-type); }
+  .tok-builtin { color: var(--tv-syntax-builtin); }
+  .tok-function { color: var(--tv-syntax-function); }
+  .tok-property { color: var(--tv-syntax-property); }
+  .tok-string { color: var(--tv-syntax-string); }
+  .tok-number { color: var(--tv-syntax-number); }
+  .tok-atom { color: var(--tv-syntax-atom); }
+  .tok-comment { color: var(--tv-syntax-comment); font-style: italic; }
+  /* tok-error: 유효한 SQL 이라 실제 오류가 없으므로, 구식 <> 연산자에 린트성 물결 밑줄로 시연 */
+  .tok-error { text-decoration: wavy underline var(--tv-syntax-error); text-underline-offset: 3px; }
+
+  /* -- 우측 인스펙터 (Slate Hush) -- */
+  .inspector {
+    width: 264px; flex-shrink: 0; background: var(--tv-popover); color: var(--tv-popover-foreground);
+    border-left: 1px solid var(--tv-border); padding: 21px; overflow-y: auto;
+  }
+  .inspector__head { margin-bottom: 14px; }
+  .inspector__list { margin: 0; }
+  .inspector__row { display: flex; flex-direction: column; gap: 2px; padding: 7px 0; border-bottom: 1px solid var(--tv-border); }
+  .inspector__row dt { font-size: 11px; color: var(--tv-muted-foreground); }
+  .inspector__row dd { margin: 0; font-size: 14px; }
+  .inspector__row--tree { border-bottom: none; }
+
+  .json-tree { font-family: var(--tv-font-mono); font-size: 12px; line-height: 1.7; background: var(--tv-background); color: var(--tv-foreground); border-radius: calc(var(--tv-radius) - 6px); padding: 9px 11px; margin-top: 4px; }
+  .json-row { white-space: pre; }
+  .json-indent { padding-left: 14px; }
+  .json-indent2 { padding-left: 28px; }
+  .json-key { color: var(--tv-value-key); }
+  .json-leaf { color: var(--tv-value-leaf); }
+  .json-null { color: var(--tv-muted-foreground); font-style: italic; }
+  .json-punct { color: var(--tv-muted-foreground); }
+  .json-remove {
+    color: var(--tv-value-delete); font-weight: 700; margin-left: 7px; cursor: default;
+  }
+
+  /* -- 상태 바 (Sage) -- */
+  .status-bar {
+    display: flex; align-items: center; gap: 11px; padding: 7px 14px;
+    background: var(--tv-secondary); color: var(--tv-secondary-foreground);
+    font-size: 12px; font-family: var(--tv-font-mono); border-top: 1px solid var(--tv-border);
+  }
+  .status-bar__dot { width: 7px; height: 7px; border-radius: 999px; background: var(--tv-status-connected); flex-shrink: 0; }
+  .status-bar__sep { color: var(--tv-muted-foreground); }
+  .status-bar__right { margin-left: auto; }
+
+  /* ============ 5. (E) 컴포넌트 표본 ============ */
+  .component-card { background: var(--tv-card); border: 1px solid var(--tv-border); border-radius: var(--tv-radius); padding: 35px; }
+  .component-row { display: flex; align-items: center; gap: 21px; padding: 14px 0; border-bottom: 1px solid var(--tv-border); flex-wrap: wrap; }
+  .component-row:last-child { border-bottom: none; padding-bottom: 0; }
+  .component-row:first-child { padding-top: 0; }
+  .component-row__label { width: 96px; flex-shrink: 0; font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--tv-muted-foreground); }
+  .component-row__samples { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+
+  .field { border: 1px solid var(--tv-input); border-radius: var(--tv-radius); background: var(--tv-background); color: var(--tv-foreground); padding: 9px 14px; font-size: 14px; font-family: var(--tv-font-sans); width: 168px; }
+  .field.is-focus { outline: 2px solid var(--tv-ring); outline-offset: 2px; border-color: var(--tv-ring); }
+  .field.is-error { border-color: var(--tv-destructive); }
+  .field-wrap { display: flex; flex-direction: column; gap: 5px; }
+  .field-hint { font-size: 11px; display: flex; align-items: center; gap: 5px; }
+  .field-hint--error { color: var(--tv-foreground); } /* --tv-foreground already flips correctly per mode */
+  .field-hint__dot { width: 6px; height: 6px; border-radius: 999px; background: var(--tv-destructive); flex-shrink: 0; }
+
+  .badge {
+    display: inline-flex; align-items: center; font-size: 11px; font-weight: 600;
+    padding: 4px 11px; border-radius: var(--tv-radius-pill); color: var(--tv-foreground);
+  }
+  [data-mode="dark"] .badge { color: var(--tv-background); }
+  .badge--success { background: var(--tv-success); }
+  .badge--warning { background: var(--tv-warning); }
+  .badge--error { background: var(--tv-destructive); }
+  /* .badge.badge--neutral: 두 클래스로 특이도를 [data-mode=dark] .badge 와 맞춰 뒤 선언이 이기게 함 */
+  .badge.badge--neutral { background: var(--tv-muted); color: var(--tv-muted-foreground); }
+
+  .switch { display: inline-flex; align-items: center; gap: 9px; font-size: 13px; }
+  .switch__track {
+    width: 34px; height: 20px; border-radius: 999px; position: relative; flex-shrink: 0;
+    background: var(--tv-input);
+  }
+  .switch__track::after {
+    content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px;
+    border-radius: 999px; background: var(--tv-background); transition: left .15s ease;
+  }
+  .switch--on .switch__track { background: var(--tv-primary); }
+  .switch--on .switch__track::after { left: 16px; background: var(--tv-primary-foreground); }
+
+  .checkbox { display: inline-flex; align-items: center; gap: 9px; font-size: 13px; }
+  .checkbox__box {
+    width: 18px; height: 18px; border-radius: 5px; border: 1px solid var(--tv-input);
+    display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+    background: var(--tv-background); font-size: 12px; color: var(--tv-primary-foreground);
+  }
+  .checkbox--checked .checkbox__box { background: var(--tv-primary); border-color: var(--tv-primary); }
+
+  .select {
+    appearance: none; -webkit-appearance: none;
+    border: 1px solid var(--tv-input); border-radius: var(--tv-radius);
+    background: var(--tv-background) url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 6"><path d="M1 1l4 4 4-4" fill="none" stroke="%2354655a" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>') no-repeat right 11px center;
+    color: var(--tv-foreground); padding: 9px 32px 9px 14px; font-size: 14px; font-family: var(--tv-font-sans);
+    width: 180px;
+  }
+  .select:focus-visible { outline: 2px solid var(--tv-ring); outline-offset: 2px; }
+
+  /* ============ 6. (F) 모달 ============ */
+  .modal-demo { position: relative; height: 340px; border-radius: var(--tv-radius); overflow: hidden; border: 1px solid var(--tv-border); }
+  .modal-demo__backdrop { position: absolute; inset: 0; background: rgb(var(--tv-primary-tint) / 0.32); }
+  .modal-demo__dialog {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    width: 380px; max-width: calc(100% - 56px);
+    background: var(--tv-popover); color: var(--tv-popover-foreground);
+    border-radius: var(--tv-radius); padding: 42px;
+  }
+  .modal-demo__dialog h3 { font-size: 23px; font-weight: 400; letter-spacing: 0; line-height: 1.5; margin-bottom: 11px; color: var(--tv-popover-foreground); font-family: var(--tv-font-sans); }
+  .modal-demo__dialog p { margin: 0 0 28px; font-size: 14px; line-height: 1.5; }
+  .modal-demo__actions { display: flex; justify-content: flex-end; gap: 9px; }
+
+  /* ============ 7. (G) 푸터 ============ */
+  .footer-block { padding-bottom: 76px; }
+  .footer-block ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 11px; }
+  .footer-block li { font-size: 14px; line-height: 1.6; max-width: 880px; }
+  .footer-block strong { color: var(--tv-primary); font-weight: 600; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- (A) 헤더 -->
+  <header class="top-bar">
+    <div class="top-bar__utility">
+      <a class="back-link" href="../index.html">← 전체 목록</a>
+      <button class="mode-toggle" id="modeToggle" type="button" aria-pressed="false">
+        <span class="mode-toggle__dot" aria-hidden="true"></span>
+        <span id="modeToggleLabel">Dark mode</span>
+      </button>
+    </div>
+    <div class="masthead">
+      <span class="eyebrow">table-view · theme prototype</span>
+      <h1>Ease Health</h1>
+      <p class="tagline">크림 종이 위의 식물 온실 — 임상적 식물학의 언어, 그림자 없이 틴트를 겹쳐 쌓는 깊이.</p>
+    </div>
+  </header>
+
+  <!-- (B) 팔레트 -->
+  <section class="block" aria-labelledby="palette-heading">
+    <h2 class="block-heading" id="palette-heading">팔레트</h2>
+    <p class="block-sub">표면 겹침 순서 그대로: Cream → Keylime → Mint → Sage → Slate. Forest Ink 는 액션·헤딩 전용, 배경 틴트로는 쓰지 않는다.</p>
+
+    <div class="swatch-grid">
+      <div class="swatch"><div class="swatch__chip" style="background:var(--ease-cream-paper)"></div><span class="swatch__name">Cream Paper</span><code class="swatch__hex">#fffefc</code><span class="swatch__role">background · 그리드 · 에디터</span></div>
+      <div class="swatch"><div class="swatch__chip" style="background:var(--ease-keylime-wash)"></div><span class="swatch__name">Keylime Wash</span><code class="swatch__hex">#e1f4df</code><span class="swatch__role">card · 사이드바</span></div>
+      <div class="swatch"><div class="swatch__chip" style="background:var(--ease-mint-veil)"></div><span class="swatch__name">Mint Veil</span><code class="swatch__hex">#cfe7d3</code><span class="swatch__role">accent · 선택 행</span></div>
+      <div class="swatch"><div class="swatch__chip" style="background:var(--ease-sage-mist)"></div><span class="swatch__name">Sage Mist</span><code class="swatch__hex">#b1dbb8</code><span class="swatch__role">secondary · 툴바/상태바</span></div>
+      <div class="swatch"><div class="swatch__chip" style="background:var(--ease-slate-hush)"></div><span class="swatch__name">Slate Hush</span><code class="swatch__hex">#b6ced5</code><span class="swatch__role">popover · 인스펙터</span></div>
+      <div class="swatch"><div class="swatch__chip" style="background:var(--ease-forest-ink)"></div><span class="swatch__name">Forest Ink</span><code class="swatch__hex">#0f3e17</code><span class="swatch__role">primary</span></div>
+      <div class="swatch"><div class="swatch__chip" style="background:var(--ease-charcoal)"></div><span class="swatch__name">Charcoal</span><code class="swatch__hex">#222222</code><span class="swatch__role">foreground</span></div>
+      <div class="swatch"><div class="swatch__chip" style="background:var(--ease-border-mist)"></div><span class="swatch__name">Border Mist</span><code class="swatch__hex">#efeeeb</code><span class="swatch__role">border · muted</span></div>
+      <div class="swatch"><div class="swatch__chip" style="background:var(--ease-forest-shadow)"></div><span class="swatch__name">Forest Shadow</span><code class="swatch__hex">#0c2f10</code><span class="swatch__role">dark bg 전용 · 장식</span></div>
+    </div>
+
+    <div class="swatch-grid swatch-grid--status" style="margin-top:14px">
+      <div class="swatch"><div class="swatch__chip" style="background:var(--ease-status-connected)"></div><span class="swatch__name">status-connected</span><code class="swatch__hex">#1f7a34</code><span class="swatch__role">연결됨</span></div>
+      <div class="swatch"><div class="swatch__chip" style="background:var(--ease-status-connecting)"></div><span class="swatch__name">status-connecting</span><code class="swatch__hex">#b8790f</code><span class="swatch__role">연결 중</span></div>
+      <div class="swatch"><div class="swatch__chip" style="background:var(--ease-status-error)"></div><span class="swatch__name">status-error</span><code class="swatch__hex">#ef4444</code><span class="swatch__role">오류</span></div>
+      <div class="swatch"><div class="swatch__chip" style="background:var(--ease-status-idle)"></div><span class="swatch__name">status-idle</span><code class="swatch__hex">#5f7267</code><span class="swatch__role">대기</span></div>
+    </div>
+  </section>
+
+  <!-- (C)+(D) 앱 셸 -->
+  <section class="block" aria-labelledby="shell-heading">
+    <h2 class="block-heading" id="shell-heading">앱 셸 미리보기</h2>
+    <p class="block-sub">사이드바 Keylime → 그리드/에디터 Cream → 선택 행 Mint → 인스펙터 Slate Hush — 표면을 실제로 색으로 쌓았다.</p>
+
+    <div class="app-window">
+      <div class="app-row">
+        <!-- 사이드바 -->
+        <nav class="sidebar" aria-label="커넥션 목록">
+          <div class="sidebar__search">
+            <input type="search" placeholder="커넥션 검색" aria-label="커넥션 검색">
+          </div>
+          <ul class="tree" role="tree">
+            <li role="treeitem" aria-expanded="true">
+              <div class="tree-item__row">
+                <span class="tree-item__caret" aria-hidden="true">▾</span>
+                <span class="tree-item__dot tree-item__dot--connected" aria-hidden="true"></span>
+                <span class="tree-item__name">prod-analytics</span>
+                <span class="tree-item__type">PostgreSQL</span>
+              </div>
+              <ul class="tree-children">
+                <li class="schema-node">
+                  <div class="tree-item__row">
+                    <span class="tree-item__caret" aria-hidden="true">▾</span>
+                    <span class="tree-item__name">public</span>
+                  </div>
+                  <ul class="tree-children">
+                    <li class="schema-group eyebrow">Tables</li>
+                    <li class="tree-leaf">users</li>
+                    <li class="tree-leaf tree-leaf--selected">orders</li>
+                    <li class="tree-leaf">order_items</li>
+                    <li class="tree-leaf">payments</li>
+                    <li class="tree-leaf">sessions</li>
+                    <li class="schema-group eyebrow">Views</li>
+                    <li class="tree-leaf">v_revenue_daily</li>
+                    <li class="schema-group eyebrow">Functions</li>
+                    <li class="tree-leaf">calc_ltv()</li>
+                  </ul>
+                </li>
+              </ul>
+            </li>
+            <li role="treeitem" aria-expanded="false">
+              <div class="tree-item__row">
+                <span class="tree-item__caret" aria-hidden="true">▸</span>
+                <span class="tree-item__dot tree-item__dot--connecting" aria-hidden="true"></span>
+                <span class="tree-item__name">staging-cache</span>
+                <span class="tree-item__type">Redis</span>
+              </div>
+            </li>
+            <li role="treeitem" aria-expanded="false">
+              <div class="tree-item__row">
+                <span class="tree-item__caret" aria-hidden="true">▸</span>
+                <span class="tree-item__dot tree-item__dot--error" aria-hidden="true"></span>
+                <span class="tree-item__name">legacy-orders</span>
+                <span class="tree-item__type">MySQL</span>
+              </div>
+            </li>
+          </ul>
+        </nav>
+
+        <!-- 중앙 -->
+        <div class="center-col">
+          <div class="tabbar">
+            <span class="tab tab--active">orders</span>
+            <span class="tab">users</span>
+            <span class="tab">Query 1</span>
+            <span class="tab tab--add" aria-hidden="true">+</span>
+          </div>
+
+          <div class="toolbar">
+            <input class="toolbar__filter" type="text" placeholder="Filter rows" aria-label="행 필터">
+            <div class="toolbar__actions">
+              <button class="btn btn-secondary" type="button">Refresh</button>
+              <button class="btn btn-secondary" type="button">Add row</button>
+              <button class="btn btn-primary" type="button">Commit</button>
+            </div>
+            <span class="toolbar__count">1,248 rows</span>
+          </div>
+
+          <div class="grid-panel">
+            <div class="grid-scroll">
+              <table class="data-grid">
+                <thead>
+                  <tr>
+                    <th class="col-num"><div class="col-head"><span class="col-name">id <span class="col-pk" title="Primary Key">PK</span><span class="sort-arrow" aria-hidden="true">▲</span></span><span class="col-type">int8</span></div></th>
+                    <th class="col-num"><div class="col-head"><span class="col-name">customer_id <span class="col-fk" title="Foreign Key">FK</span></span><span class="col-type">int8</span></div></th>
+                    <th><div class="col-head"><span class="col-name">status</span><span class="col-type">text</span></div></th>
+                    <th class="col-num"><div class="col-head"><span class="col-name">total_amount</span><span class="col-type">numeric</span></div></th>
+                    <th><div class="col-head"><span class="col-name">created_at</span><span class="col-type">timestamptz</span></div></th>
+                    <th><div class="col-head"><span class="col-name">note</span><span class="col-type">text</span></div></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr><td class="mono num">10231</td><td class="mono num">4821</td><td>completed</td><td class="mono num">128.50</td><td class="mono">2026-07-18 09:24:11</td><td class="cell-null">NULL</td></tr>
+                  <tr><td class="mono num">10232</td><td class="mono num">5502</td><td>completed</td><td class="mono num">2,400.00</td><td class="mono">2026-07-18 10:02:47</td><td>Gift wrap requested</td></tr>
+                  <tr><td class="mono num">10233</td><td class="mono num">4821</td><td>pending</td><td class="mono num">76.20</td><td class="mono">2026-07-18 10:15:03</td><td class="cell-null">NULL</td></tr>
+                  <tr><td class="mono num">10234</td><td class="mono num">6104</td><td>refunded</td><td class="mono num">340.00</td><td class="mono">2026-07-18 11:47:22</td><td>Refund requested by customer</td></tr>
+                  <tr><td class="mono num">10235</td><td class="mono num">3390</td><td>completed</td><td class="mono num">58.99</td><td class="mono">2026-07-18 12:03:56</td><td class="cell-null">NULL</td></tr>
+                  <tr class="row--selected"><td class="mono num">10236</td><td class="mono num">5502</td><td>processing</td><td class="mono num">912.40</td><td class="mono">2026-07-18 13:21:09</td><td class="cell-null">NULL</td></tr>
+                  <tr><td class="mono num">10237</td><td class="mono num">7788</td><td>completed</td><td class="mono num">45.00</td><td class="mono">2026-07-18 14:09:33</td><td class="cell-null">NULL</td></tr>
+                  <tr><td class="mono num">10238</td><td class="mono num">4821</td><td class="cell--dirty"><span class="dirty-dot" aria-hidden="true"></span>completed</td><td class="mono num">1,204.75</td><td class="mono">2026-07-18 14:55:18</td><td>VIP priority shipping</td></tr>
+                  <tr><td class="mono num">10239</td><td class="mono num">6104</td><td>cancelled</td><td class="mono num">210.00</td><td class="mono">2026-07-18 15:32:41</td><td>Customer cancelled</td></tr>
+                  <tr><td class="mono num">10240</td><td class="mono num">3390</td><td>pending</td><td class="mono num">89.10</td><td class="mono">2026-07-18 16:08:14</td><td class="cell-null">NULL</td></tr>
+                  <tr><td class="mono num">10241</td><td class="mono num">7788</td><td>completed</td><td class="mono num">634.20</td><td class="mono">2026-07-18 16:44:59</td><td class="cell-null">NULL</td></tr>
+                  <tr><td class="mono num">10242</td><td class="mono num">5502</td><td>processing</td><td class="mono num">155.60</td><td class="mono">2026-07-18 17:12:37</td><td class="cell-null">NULL</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="editor-panel">
+            <div class="editor-body">
+              <div class="editor-gutter">
+                <div>1</div><div>2</div><div>3</div><div>4</div><div>5</div><div>6</div><div>7</div><div>8</div><div>9</div><div>10</div>
+              </div>
+              <div class="editor-code">
+                <div class="code-line"><span class="tok-comment">-- 최근 30일 고객별 매출</span></div>
+                <div class="code-line"><span class="tok-keyword">SELECT</span> <span class="tok-atom">c</span><span class="tok-punct">.</span><span class="tok-property">id</span><span class="tok-punct">,</span> <span class="tok-atom">c</span><span class="tok-punct">.</span><span class="tok-property">name</span><span class="tok-punct">,</span> <span class="tok-function">SUM</span><span class="tok-punct">(</span><span class="tok-atom">o</span><span class="tok-punct">.</span><span class="tok-property">total_amount</span><span class="tok-punct">)</span> <span class="tok-keyword">AS</span> revenue</div>
+                <div class="code-line"><span class="tok-keyword">FROM</span> orders <span class="tok-atom">o</span></div>
+                <div class="code-line code-line--indent"><span class="tok-keyword">JOIN</span> customers <span class="tok-atom">c</span> <span class="tok-keyword">ON</span> <span class="tok-atom">c</span><span class="tok-punct">.</span><span class="tok-property">id</span> <span class="tok-operator">=</span> <span class="tok-atom">o</span><span class="tok-punct">.</span><span class="tok-property">customer_id</span></div>
+                <div class="code-line"><span class="tok-keyword">WHERE</span> <span class="tok-atom">o</span><span class="tok-punct">.</span><span class="tok-property">created_at</span> <span class="tok-operator">&gt;=</span> <span class="tok-builtin">NOW</span><span class="tok-punct">()</span> <span class="tok-operator">-</span> <span class="tok-type">INTERVAL</span> <span class="tok-string">'30 days'</span></div>
+                <div class="code-line code-line--indent"><span class="tok-keyword">AND</span> <span class="tok-atom">o</span><span class="tok-punct">.</span><span class="tok-property">status</span> <span class="tok-operator tok-error">&lt;&gt;</span> <span class="tok-string">'cancelled'</span></div>
+                <div class="code-line"><span class="tok-keyword">GROUP BY</span> <span class="tok-atom">c</span><span class="tok-punct">.</span><span class="tok-property">id</span><span class="tok-punct">,</span> <span class="tok-atom">c</span><span class="tok-punct">.</span><span class="tok-property">name</span></div>
+                <div class="code-line"><span class="tok-keyword">HAVING</span> <span class="tok-function">SUM</span><span class="tok-punct">(</span><span class="tok-atom">o</span><span class="tok-punct">.</span><span class="tok-property">total_amount</span><span class="tok-punct">)</span> <span class="tok-operator">&gt;</span> <span class="tok-number">1000</span></div>
+                <div class="code-line"><span class="tok-keyword">ORDER BY</span> revenue <span class="tok-keyword">DESC</span></div>
+                <div class="code-line"><span class="tok-keyword">LIMIT</span> <span class="tok-number">50</span><span class="tok-punct">;</span></div>
+              </div>
+            </div>
+            <div class="editor-run">
+              <button class="btn btn-primary" type="button">Run <kbd>⌘↵</kbd></button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 인스펙터 -->
+        <aside class="inspector" aria-label="선택된 행 상세">
+          <div class="inspector__head eyebrow">선택된 행 · orders #10236</div>
+          <dl class="inspector__list">
+            <div class="inspector__row"><dt>id</dt><dd class="mono">10236</dd></div>
+            <div class="inspector__row"><dt>customer_id</dt><dd class="mono">5502</dd></div>
+            <div class="inspector__row"><dt>status</dt><dd>processing</dd></div>
+            <div class="inspector__row"><dt>total_amount</dt><dd class="mono">912.40</dd></div>
+            <div class="inspector__row"><dt>created_at</dt><dd class="mono">2026-07-18 13:21:09+00</dd></div>
+            <div class="inspector__row"><dt>note</dt><dd class="cell-null">NULL</dd></div>
+            <div class="inspector__row inspector__row--tree">
+              <dt>metadata</dt>
+              <dd>
+                <div class="json-tree">
+                  <div class="json-row"><span class="json-key">channel</span><span class="json-punct">:</span> <span class="json-leaf">"web"</span></div>
+                  <div class="json-row"><span class="json-key">referrer</span><span class="json-punct">:</span> <span class="json-null">null</span></div>
+                  <div class="json-row"><span class="json-key">flags</span><span class="json-punct">: [</span></div>
+                  <div class="json-row json-indent"><span class="json-leaf">"priority"</span><span class="json-remove" title="필드 제거">×</span></div>
+                  <div class="json-row"><span class="json-punct">]</span></div>
+                </div>
+              </dd>
+            </div>
+          </dl>
+        </aside>
+      </div>
+
+      <!-- (D) 상태 바 -->
+      <div class="status-bar">
+        <span class="status-bar__dot" aria-hidden="true"></span>
+        <span>prod-analytics · public</span>
+        <span class="status-bar__sep">·</span>
+        <span>1,248 rows</span>
+        <span class="status-bar__sep">·</span>
+        <span>실행 42ms</span>
+        <span class="status-bar__right">PostgreSQL 16.2</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- (E) 컴포넌트 표본 -->
+  <section class="block" aria-labelledby="components-heading">
+    <h2 class="block-heading" id="components-heading">컴포넌트</h2>
+    <p class="block-sub">카드 표면(Keylime) 위에 얹은 표준 컴포넌트 표본 — 그림자 없이 hairline 과 색만으로 상태를 구분한다.</p>
+
+    <div class="component-card">
+      <div class="component-row">
+        <span class="component-row__label">버튼</span>
+        <div class="component-row__samples">
+          <button class="btn btn-primary" type="button">Primary</button>
+          <button class="btn btn-secondary" type="button">Secondary</button>
+          <button class="btn btn-ghost" type="button">Ghost</button>
+          <button class="btn btn-destructive" type="button">Destructive</button>
+        </div>
+      </div>
+
+      <div class="component-row">
+        <span class="component-row__label">인풋</span>
+        <div class="component-row__samples">
+          <div class="field-wrap">
+            <input class="field" type="text" placeholder="기본" aria-label="기본 인풋">
+          </div>
+          <div class="field-wrap">
+            <input class="field is-focus" type="text" value="포커스" aria-label="포커스 인풋">
+          </div>
+          <div class="field-wrap">
+            <input class="field is-error" type="text" value="orders_v2" aria-label="에러 인풋">
+            <span class="field-hint field-hint--error"><span class="field-hint__dot" aria-hidden="true"></span>이미 존재하는 테이블 이름입니다</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="component-row">
+        <span class="component-row__label">배지</span>
+        <div class="component-row__samples">
+          <span class="badge badge--success">성공</span>
+          <span class="badge badge--warning">경고</span>
+          <span class="badge badge--error">오류</span>
+          <span class="badge badge--neutral">중립</span>
+        </div>
+      </div>
+
+      <div class="component-row">
+        <span class="component-row__label">토글</span>
+        <div class="component-row__samples">
+          <span class="switch switch--on"><span class="switch__track" aria-hidden="true"></span>자동 커밋</span>
+          <span class="switch"><span class="switch__track" aria-hidden="true"></span>읽기 전용</span>
+        </div>
+      </div>
+
+      <div class="component-row">
+        <span class="component-row__label">체크박스</span>
+        <div class="component-row__samples">
+          <span class="checkbox checkbox--checked"><span class="checkbox__box" aria-hidden="true">✓</span>NULL 포함</span>
+          <span class="checkbox"><span class="checkbox__box" aria-hidden="true"></span>대소문자 구분</span>
+        </div>
+      </div>
+
+      <div class="component-row">
+        <span class="component-row__label">셀렉트</span>
+        <div class="component-row__samples">
+          <select class="select" aria-label="스키마 선택">
+            <option>public</option>
+            <option>analytics</option>
+            <option>staging</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- (F) 모달 -->
+  <section class="block" aria-labelledby="modal-heading">
+    <h2 class="block-heading" id="modal-heading">모달</h2>
+    <p class="block-sub">popover 표면(Slate Hush) + destructive 강조. 실제 오버레이가 아니라 페이지에 고정해 그렸다.</p>
+
+    <div class="modal-demo">
+      <div class="modal-demo__backdrop"></div>
+      <div class="modal-demo__dialog" role="alertdialog" aria-labelledby="modalTitle" aria-describedby="modalDesc">
+        <h3 id="modalTitle">테이블 삭제</h3>
+        <p id="modalDesc"><strong>orders</strong> 테이블을 삭제하면 되돌릴 수 없습니다. 1,248개 행과 연결된 인덱스가 모두 제거됩니다.</p>
+        <div class="modal-demo__actions">
+          <button class="btn btn-ghost" type="button">취소</button>
+          <button class="btn btn-destructive" type="button">테이블 삭제</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- (G) 푸터 -->
+  <section class="block footer-block" aria-labelledby="footer-heading">
+    <h2 class="block-heading" id="footer-heading">디자인 노트</h2>
+    <ul>
+      <li><strong>표면 겹침.</strong> 그림자 없이 틴트 5겹만으로 깊이를 만들었다 — Cream(배경·그리드·에디터) → Keylime(카드·사이드바) → Mint(선택·강조) → Sage(툴바·상태바) → Slate(팝오버·인스펙터). 페이지 전체에 box-shadow 는 하나도 없다.</li>
+      <li><strong>카드 패딩 vs 그리드 밀도.</strong> "카드 패딩 21px 이상" 규칙은 카드/패널의 바깥 프레임에만 적용했다 — 그리드를 감싸는 패널은 28px, SQL 에디터 패널은 21px. 그 안쪽은 도구 밀도를 우선해 그리드 셀 11px/7px, 사이드바 트리 행 11px/7px 로 조밀하게 갔다. 매트에 끼운 인화지처럼, 여백은 프레임이 갖고 데이터 자체는 촘촘하다.</li>
+      <li><strong>dark 모드.</strong> 반전이 아니라 "온실을 밤으로 옮긴 판본"이다. 바닥을 Forest Shadow로 낮추고 같은 다섯 겹 순서를 이번엔 밝아지는 방향으로 다시 쌓았다(카드→액센트→세컨더리→팝오버 순으로 점점 밝고 차가워진다). 그림자 없음과 radius 는 그대로 두고, primary 만 Forest Ink 대신 밝은 스프링그린으로 뒤집어 어두운 배경 위에서 읽히게 했다.</li>
+      <li><strong>구문 강조.</strong> Forest Ink·Olive·Teal·Plum 네 계열을 12개 역할에 나눠 썼고, sage/keylime 같은 밝은 표면색은 금지 규칙대로 텍스트에 한 번도 쓰지 않았다 — 전부 배경 대비 4.5:1 이상 확인 후 확정했다(라이트 5.05~12.10:1, 다크 4.44~9.58:1).</li>
+      <li><strong>고정 시맨틱 색.</strong> destructive/success/warning/highlight 는 SPEC 이 고정한 값이라 손대지 않았다. 대신 옅은 배경 위 텍스트로는 한 번도 쓰지 않고 항상 배지·버튼의 배경으로 채운 뒤 라이트는 Charcoal, 다크는 Forest Shadow 로 텍스트를 앵커링했다 — destructive 라이트 버튼만 4.23:1 로 4.5 에 살짝 못 미치는데, SPEC 이 고정한 레드 자체의 한계다.</li>
+    </ul>
+  </section>
+
+</div>
+
+<script>
+  (function () {
+    var html = document.documentElement;
+    var btn = document.getElementById('modeToggle');
+    var label = document.getElementById('modeToggleLabel');
+
+    function sync() {
+      var isDark = html.getAttribute('data-mode') === 'dark';
+      btn.setAttribute('aria-pressed', String(isDark));
+      label.textContent = isDark ? 'Light mode' : 'Dark mode';
+    }
+
+    btn.addEventListener('click', function () {
+      html.setAttribute('data-mode', html.getAttribute('data-mode') === 'dark' ? 'light' : 'dark');
+      sync();
+    });
+
+    sync();
+  })();
+</script>
+</body>
+</html>

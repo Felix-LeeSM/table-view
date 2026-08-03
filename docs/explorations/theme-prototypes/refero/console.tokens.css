@@ -1,0 +1,147 @@
+/* ============================================================
+ * Linear Console — "어두운 유리 뒤의 천문대 콘솔"
+ * Theme prototype tokens (refero family). Dark-first: [data-mode="dark"]
+ * is the system's native reading — a near-black canvas with a 14-step
+ * achromatic surface ladder (Void → Snow) and hairline strokes instead
+ * of drop shadows. [data-mode="light"] ("낮의 천문대") is an interpretation
+ * inside the same grammar, not a mechanical inversion — see console.html
+ * block (G) for what changed and why.
+ *
+ * NOT the same theme as the existing [data-theme="linear"] in
+ * src/themes.css (primary #5e6ad2 purple accent, generic shadcn slate
+ * ramp). This is a separate, stricter id: zero chromatic brand accent,
+ * a named 14-step neutral ladder, and outline-pill-only buttons.
+ *
+ * Paste this whole block into src/themes.css to register the theme.
+ * Token names match src/themes.css exactly (SPEC.md section 4).
+ * Preview: docs/explorations/theme-prototypes/refero/console.html
+ *
+ * 14단 계단 중 아래 10단만 --tv-* 이름을 받는다 (SPEC 토큰에 자리가 있는 역할).
+ * 나머지 4단 — Void #030404(recess/그림자 색조) · Iron Surface #2d2e31(pressed)
+ * · Steel Text #62666d(3차 텍스트, dark 에서만) · Pewter Text #7f7f80(placeholder,
+ * dark 에서만) — 은 SPEC 토큰 목록에 대응 슬롯이 없어 새 --tv-* 를 만들지 않고
+ * console.html 의 컴포넌트 CSS 에서 hex 를 직접 참조한다(주석으로 출처 표기).
+ * ============================================================ */
+
+/* === console === */
+[data-theme="console"][data-mode="dark"] {
+  /* 표면/텍스트 — 14단 계단 중 10단을 표면 층 구분에 그대로 배정 */
+  --tv-background: #08090a; /* Onyx Canvas — 페이지 배경, 주 표면 */
+  --tv-foreground: #f7f8f8; /* Snow — 주 텍스트 */
+  --tv-card: #141516; /* Carbon Surface — 융기 카드, 인풋 필드 */
+  --tv-card-foreground: #f7f8f8;
+  --tv-popover: #1c1c1f; /* Graphite Surface — 팝오버/모달 평면 */
+  --tv-popover-foreground: #f7f8f8;
+  --tv-primary: #f7f8f8; /* Snow — 채운 버튼 금지, 흰 테두리 아웃라인 pill 잉크 */
+  --tv-primary-foreground: #08090a; /* Onyx Canvas — primary 가 fill 로 쓰일 때만(체크박스 등) */
+  --tv-secondary: #141516; /* Carbon Surface, card 와 같은 평면 */
+  --tv-secondary-foreground: #d0d6e0; /* Mist Text — 보조 텍스트, 설명 */
+  --tv-muted: #1c1c1f; /* Graphite Surface, popover 와 같은 평면(테이블 헤더 등) */
+  --tv-muted-foreground: #8a8f98; /* Fog Text — muted 본문, 메타데이터 */
+  --tv-accent: #23252a; /* Smoke Surface — hover */
+  --tv-accent-foreground: #e4e5e9; /* Chalk Border — hover 위 밝은 아이콘 강조 */
+  --tv-border: #34343a; /* Ash Border — 주 hairline 테두리 */
+  --tv-input: #34343a;
+  --tv-ring: #3e3e44; /* Ferrite Border — inner shadow 획, 포커스 테두리 */
+  --tv-primary-tint: 247 248 248; /* rgb(#f7f8f8) — 알파 합성용 */
+  --tv-status-connected: #22c55e;
+  --tv-status-connecting: #f59e0b;
+  --tv-status-error: #ef4444;
+  --tv-status-idle: #62666d; /* Steel Text — 유일하게 채도 없는 상태색(판단 근거는 G) */
+
+  /* 구문 강조 12종 — 무게/구조가 1차, 채도 낮은 색상이 2차. error 만 고정
+     destructive 를 재사용(G에 전략 설명) */
+  --tv-syntax-keyword: #b3a9d6;
+  --tv-syntax-operator: #9a9fa8;
+  --tv-syntax-punct: #6f737c;
+  --tv-syntax-type: #8fb6d9;
+  --tv-syntax-builtin: #7fc4c9;
+  --tv-syntax-function: #7fc4c9;
+  --tv-syntax-property: #7fb89e;
+  --tv-syntax-string: #9bc78a;
+  --tv-syntax-number: #d1a877;
+  --tv-syntax-atom: #d493b3;
+  --tv-syntax-comment: #62666d;
+  --tv-syntax-error: #f87171;
+
+  /* 공통 (테마 무관, 값 고정) — SPEC.md 4절 그대로 복사 */
+  --tv-destructive: #f87171;
+  --tv-success: #22c55e;
+  --tv-warning: #fb923c;
+  --tv-highlight: #facc15;
+  --tv-radius: 0.5rem; /* 카드 8px 요구와 일치. 파생 --radius-sm(-4px)=4px 가 태그/인풋 4px 요구와
+    자동 일치. 아이콘 4.4625px · 버튼/내비 pill 9999px 는 이 토큰에서 파생하지 않고
+    컴포넌트 CSS 에 직접 지정(문자 그대로 브리프 값) — shop.tokens.css 와 동일한 처리 방식. */
+  --tv-font-sans:
+    "Inter Variable", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Roboto, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --tv-font-mono:
+    "Berkeley Mono", "JetBrains Mono", "IBM Plex Mono", ui-monospace,
+    SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+  /* 정체성 색 (테마 무변, 그대로 복사) */
+  --tv-value-key: #7dd3fc;
+  --tv-value-leaf: #6ee7b7;
+  --tv-value-delete: #f43f5e;
+}
+
+[data-theme="console"][data-mode="light"] {
+  /* "낮의 천문대" — 반전이 아니라 같은 14단 계단을 뒤집어 다시 쌓은 해석.
+     bg 는 브리프가 지정한 Snow 를 문자 그대로 재사용(= dark 의 foreground),
+     ink 는 Onyx Canvas 를 재사용(= dark 의 background) — 같은 물리적 rung 이
+     역할만 뒤집힌다. card/popover/secondary 는 Snow 보다 더 밝은 곳이 없어
+     흰색(신규)으로 "떠 있는" 평면을 만들고, hover/pressed 는 반대 방향인
+     회색 쪽으로 내려간다(빛 대신 재질이 어두워지는 통상적 라이트 UI 관례).
+     border/ring/muted-foreground 는 각각 Chalk/Mist/Steel 을 재사용. */
+  --tv-background: #f7f8f8; /* Snow (dark 의 --tv-foreground 재사용) */
+  --tv-foreground: #08090a; /* Onyx Canvas (dark 의 --tv-background 재사용) */
+  --tv-card: #ffffff; /* 신규 — Snow 위에 뜨는 순백 카드 */
+  --tv-card-foreground: #08090a;
+  --tv-popover: #ffffff; /* card 와 같은 평면, 위계는 stroke/shadow 무게로 표현 */
+  --tv-popover-foreground: #08090a;
+  --tv-primary: #08090a; /* Onyx Canvas — 검정 테두리 아웃라인 pill 잉크 */
+  --tv-primary-foreground: #f7f8f8;
+  --tv-secondary: #ffffff;
+  --tv-secondary-foreground: #494b52; /* 신규 — Steel(muted-fg)과 Ash 사이 보간, 팔레트 undertone 유지 */
+  --tv-muted: #eef0f2; /* 신규 — 회색 쪽으로 내려간 receded 평면 */
+  --tv-muted-foreground: #62666d; /* Steel Text 재사용(dark 의 3차 텍스트 역할 → light 의 muted-fg) */
+  --tv-accent: #e7e9ec; /* 신규 — hover, muted 보다 한 단 더 진함 */
+  --tv-accent-foreground: #08090a;
+  --tv-border: #e4e5e9; /* Chalk Border 재사용(dark 의 밝은 아이콘 강조 → light 의 hairline) */
+  --tv-input: #e4e5e9;
+  --tv-ring: #d0d6e0; /* Mist Text 재사용(dark 의 보조 텍스트 → light 의 포커스 테두리) */
+  --tv-primary-tint: 8 9 10; /* rgb(#08090a) */
+  --tv-status-connected: #16a34a;
+  --tv-status-connecting: #f59e0b;
+  --tv-status-error: #ef4444;
+  --tv-status-idle: #8a8f98; /* Fog Text 재사용 */
+
+  --tv-syntax-keyword: #6b5ca3;
+  --tv-syntax-operator: #52565e;
+  --tv-syntax-punct: #797d84;
+  --tv-syntax-type: #3d6f96;
+  --tv-syntax-builtin: #2f7e83;
+  --tv-syntax-function: #2f7e83;
+  --tv-syntax-property: #3f7a5f;
+  --tv-syntax-string: #4d7a2e;
+  --tv-syntax-number: #91591c;
+  --tv-syntax-atom: #9c4a72;
+  --tv-syntax-comment: #7f7f80; /* Pewter Text — Fog(#8a8f98) 는 editor 배경(muted) 대비 2.84:1 로 3:1 미달, 재검증 후 교체 */
+  --tv-syntax-error: #ef4444;
+
+  --tv-destructive: #ef4444;
+  --tv-success: #16a34a;
+  --tv-warning: #ea580c;
+  --tv-highlight: #eab308;
+  --tv-radius: 0.5rem;
+  --tv-font-sans:
+    "Inter Variable", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Roboto, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --tv-font-mono:
+    "Berkeley Mono", "JetBrains Mono", "IBM Plex Mono", ui-monospace,
+    SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+  --tv-value-key: #0369a1;
+  --tv-value-leaf: #047857;
+  --tv-value-delete: #f43f5e;
+}
