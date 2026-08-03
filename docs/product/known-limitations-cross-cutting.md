@@ -92,24 +92,44 @@ security dashboard. Search live HTTP/admin promotion remains owned by the Search
 roadmap/milestone, not non-RDBMS lazy-loading workbench hardening. Global audit
 logs, role/user/permission UI, credential rotation UI, keyring diagnostics,
 actual live Search index/settings admin execution, and a general security
-dashboard are not implemented. PostgreSQL and MySQL/MariaDB connections honor
-`tls_enabled`/`trustServerCertificate` when set (encryption required with full
-certificate verification, or verification skipped when the certificate is
-trusted) and reject contradictory combinations instead of silently downgrading
-to plaintext. Per ADR 0053 (#1063), the connection form now exposes an sslmode
-dropdown (`disable`/`prefer`/`require`/`verify-full`) for
-PostgreSQL/MySQL/MariaDB — a view over the stored `(tls_enabled,
-trust_server_certificate)` pair, unset staying the opportunistic driver `prefer`
-default with a hint; the on/off TLS engines
+dashboard are not implemented. Per ADR 0058 (#1649), every TLS-capable engine
+now stores one uniform posture — `sslMode`, one of
+`disable`/`prefer`/`require`/`verify-ca`/`verify-full`, plus an optional
+`caCertPath` — replacing the ADR 0053 (#1063) `(tls_enabled,
+trust_server_certificate)` boolean pair, which is read only to migrate stored
+connections and is never written back. Unset stays the opportunistic driver
+`prefer` default with a hint. The migration keeps every posture that previously
+connected; the one pair the pre-#1649 backend refused to connect at all — trust
+the certificate with encryption off, which a pasted
+`sqlserver://…?encrypt=false&trustServerCertificate=true` could store — folds to
+`require` (encryption forced, certificate verification skipped), so a
+contradictory combination still never becomes a plaintext connection. `verify-ca`
+adds the CA file the user selects to the driver's trust anchors *in addition to*
+the built-in public roots, with hostname verification kept on; it is wired that
+way on PostgreSQL/MySQL/MariaDB and SQL Server only. On MongoDB, Redis/Valkey,
+and Elasticsearch/OpenSearch the CA file is ignored and `verify-ca` verifies
+against the built-in public roots alone — never weaker than `verify-full`, but a
+private-CA server stays unreachable on those five until their drivers' own CA
+options are wired (#1649 follow-up). A `verify-ca` posture with no CA file is
+rejected both at the storage write boundary and at connect time. The sslmode
+dropdown for PostgreSQL/MySQL/MariaDB offers four of the five values
+(`disable`/`prefer`/`require`/`verify-full`); `verify-ca` renders only for a
+connection already stored with it, because the CA file picker is the follow-up
+slice, so URL paste still reports `sslmode=verify-ca` as a parameter it could not
+reflect rather than dropping it silently. The on/off TLS engines
 (MongoDB/Redis/Valkey/Elasticsearch/OpenSearch) expose an explicit opt-in "trust
-server certificate" (skip-verify) checkbox, gated on TLS being on and carrying
-an in-form warning; SQL Server keeps its `trust=true` default with an added
-skip-verify warning; and URL paste honors `sslmode`/`ssl-mode`/`tls` parameters,
-surfacing a notice for values it cannot map (e.g. `verify-ca`) rather than
-dropping them silently. Switching the dbType never carries a skip-verify choice
-onto the next engine. Advanced depth — CA files, client certificates,
-`verify-ca`, 1-stage-engine sslmode expansion, and TOFU certificate pinning —
-remains a follow-up (#1649).
+server certificate" (skip-verify) checkbox, gated on TLS being on and carrying an
+in-form warning; SQL Server keeps its skip-verify default when the engine is
+first selected, with the same warning, and turning its encryption checkbox off
+and back on returns to full verification rather than to skip-verify. Switching
+the dbType never carries a skip-verify choice onto the next engine. Export strips
+`caCertPath` the way it strips the Oracle wallet path, and import folds a
+`verify-ca` envelope to `verify-full` and drops the CA reference, so the CA file
+is re-selected on the importing machine exactly as the password is re-entered.
+Oracle rejects any posture above `prefer` — its mTLS wallet is the only Oracle
+TLS trigger. Advanced depth — client certificates, TOFU certificate pinning, the
+in-form CA file picker, and private trust anchors on the five on/off TLS engines
+— remains a follow-up (#1649).
 
 ### Runtime E2E smoke coverage
 
