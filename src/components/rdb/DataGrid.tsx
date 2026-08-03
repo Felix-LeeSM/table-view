@@ -145,15 +145,24 @@ export default function DataGrid({
   const totalPages = data ? Math.ceil(data.total_count / pageSize) : 0;
 
   // #1734 (5) — F6 walks focus grid ↔ panel, and every close path hands focus
-  // back to the grid cell the user came from.
+  // back to the grid cell the user came from. `focusAnchorRef` is what the grid
+  // publishes its virtualization-aware focuser into; without it the RDB grid's
+  // anchor row can be scrolled out of the DOM and the restore silently no-ops.
+  const focusAnchorRef = useRef<(() => void) | null>(null);
   const quickLookOpen =
     showQuickLook && editState.selectedRowIds.size > 0 && data !== null;
-  const { rootRef, panelRef, focusGridCell } = useQuickLookFocus(quickLookOpen);
+  const { rootRef, panelRef, focusGridCell } = useQuickLookFocus(
+    quickLookOpen,
+    focusAnchorRef,
+  );
 
+  // Branches on the MOUNT condition, not on `showQuickLook`: with the flag on
+  // but no row selected the panel is not rendered, and restoring focus then
+  // would yank it out of whatever the user is actually in (FilterBar, toolbar).
   const toggleQuickLook = useCallback(() => {
-    if (showQuickLook) focusGridCell();
+    if (quickLookOpen) focusGridCell();
     setShowQuickLook((visible) => !visible);
-  }, [showQuickLook, focusGridCell]);
+  }, [quickLookOpen, focusGridCell]);
 
   const closeQuickLook = useCallback(() => {
     setShowQuickLook(false);
@@ -291,6 +300,7 @@ export default function DataGrid({
         onNavigateToFk={handleNavigateToFk}
         onClearFilters={filters.clearAllFilters}
         onCancelRefetch={handleCancelRefetch}
+        focusAnchorRef={focusAnchorRef}
       />
 
       {quickLookOpen && data && (

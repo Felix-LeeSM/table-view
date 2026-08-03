@@ -257,6 +257,16 @@ export default function DocumentDataGrid({
     focusGridCell();
   }, [focusGridCell]);
 
+  // Every path that closes the panel goes through here, so none of them can
+  // drop focus on `<body>`. Branching on the MOUNT condition rather than on
+  // `showQuickLook` matters: with the flag on but no row selected the panel is
+  // not rendered, and restoring focus then would yank it out of whatever the
+  // user is actually in.
+  const toggleQuickLook = useCallback(() => {
+    if (showQuickLookMounted) focusGridCell();
+    setShowQuickLook((prev) => !prev);
+  }, [showQuickLookMounted, focusGridCell]);
+
   // Cmd+L (Mac) / Ctrl+L (other) toggles the Quick Look panel. Same shape
   // as `DataGrid.tsx` so keyboard behaviour stays consistent across
   // paradigms.
@@ -264,13 +274,12 @@ export default function DocumentDataGrid({
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "l" && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
-        if (showQuickLook) focusGridCell();
-        setShowQuickLook((prev) => !prev);
+        toggleQuickLook();
       }
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [showQuickLook, focusGridCell]);
+  }, [toggleQuickLook]);
 
   const rowKeyOf = useCallback(
     (rowIdx: number) => `row-${page}-${rowIdx}`,
@@ -619,7 +628,7 @@ export default function DocumentDataGrid({
           setPage(1);
         }}
         onToggleFilters={() => setShowFilters((prev) => !prev)}
-        onToggleQuickLook={() => setShowQuickLook((prev) => !prev)}
+        onToggleQuickLook={toggleQuickLook}
         onAddRow={handleAddClick}
         onApplyFilter={(filter) => {
           setActiveFilter(filter);

@@ -1,9 +1,11 @@
 // Issue #1734 (5) — keyboard focus visibility between the grid and Quick Look.
 //
-// The grid publishes a single tab stop (roving tabindex), so Tab cannot reach
-// the panel and come back. `F6` does that walk, and every path that closes the
-// panel returns focus to the grid cell the user came from — otherwise focus
-// falls to `<body>` and the next arrow key goes nowhere.
+// The grid publishes a single tab stop (roving tabindex), so Tab reaches the
+// panel only by walking its controls and re-enters the grid at that one tab
+// stop rather than at the cell the user left. `F6` is the direct walk in both
+// directions, and every path that closes the panel returns focus to the grid
+// cell the user came from — otherwise focus falls to `<body>` and the next
+// arrow key goes nowhere.
 //
 // Also pins the owner's stated default from the 2026-08-02 decision comment:
 // moving the row selection while the panel is open re-syncs the detail body.
@@ -172,7 +174,6 @@ describe("DataGrid — Quick Look focus exchange (#1734 (5))", () => {
     renderDataGrid();
     await screen.findByText("3 rows");
     const cell = await selectRowAndOpenPanel(0);
-    expect(panel()).toBeInTheDocument();
     expect(document.activeElement).toBe(cell);
 
     await act(async () => {
@@ -185,7 +186,9 @@ describe("DataGrid — Quick Look focus exchange (#1734 (5))", () => {
     });
     expect(document.activeElement).toBe(rovingAnchor());
     // Round trip, not a one-way door: the panel is still open.
-    expect(panel()).toBeInTheDocument();
+    expect(
+      screen.queryByRole("region", { name: "Row Details" }),
+    ).toBeInTheDocument();
   });
 
   // Reason: the panel is reachable only programmatically (`tabIndex={-1}`), so
@@ -215,7 +218,9 @@ describe("DataGrid — Quick Look focus exchange (#1734 (5))", () => {
       fireEvent.keyDown(panel(), { key: "Escape" });
     });
     expect(document.activeElement).toBe(rovingAnchor());
-    expect(panel()).toBeInTheDocument();
+    expect(
+      screen.queryByRole("region", { name: "Row Details" }),
+    ).toBeInTheDocument();
   });
 
   // Reason: Escape inside a field already means "revert this draft"
@@ -296,6 +301,37 @@ describe("DataGrid — Quick Look focus exchange (#1734 (5))", () => {
     expect(
       within(panel()).queryByDisplayValue("Alice"),
     ).not.toBeInTheDocument();
+  });
+
+  // Reason: round 2 (B1) — the restore must not depend on the anchor being
+  // findable by `[data-grid-row][tabindex="0"]`. Past 200 rows the RDB grid
+  // virtualizes and that selector matches nothing while the anchor row is
+  // scrolled out, which is what made round 1 drop focus on <body>. jsdom has no
+  // layout so the virtualizer cannot be driven faithfully here; demoting the
+  // attribute reproduces the same observable — the fallback lookup cannot find
+  // the cell — and proves `DataGrid` really wired the grid's own focuser
+  // through `RdbDataGridContent`. The scroll-in + retry that focuser performs
+  // is covered by `useGridRoving.test.tsx`.
+  it("closing restores focus even when the anchor is not findable by the tabindex lookup", async () => {
+    renderDataGrid();
+    await screen.findByText("3 rows");
+    const cell = await selectRowAndOpenPanel(0);
+
+    await act(async () => {
+      fireEvent.keyDown(window, { key: "F6" });
+    });
+    expect(document.activeElement).toBe(panel());
+    // Still programmatically focusable, just no longer the tab stop the
+    // fallback selector looks for.
+    cell.setAttribute("tabindex", "-1");
+    expect(document.querySelector('[data-grid-row][tabindex="0"]')).toBeNull();
+
+    const closeButton = within(panel()).getByLabelText(/Close row details/i);
+    await act(async () => {
+      fireEvent.click(closeButton);
+    });
+
+    expect(document.activeElement).toBe(cell);
   });
 
   // Reason: F6 is a new global binding — it must stay inert when the panel is

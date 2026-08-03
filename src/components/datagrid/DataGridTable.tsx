@@ -149,6 +149,14 @@ export interface DataGridTableProps {
    * `get_datagrid_prefs` and drag-end via `set_datagrid_prefs`.
    */
   columnPrefsPk?: ColumnPrefsPk;
+  /**
+   * Issue #1734 (5) — outward handle for "put focus back on the roving anchor
+   * cell". The grid publishes `useGridRoving`'s scroll-in + retry focuser here
+   * so a sibling of the grid (Quick Look) can restore focus even when the
+   * anchor row has been virtualized out of the DOM. Omit it and nothing is
+   * published; the caller then has whatever fallback it brought.
+   */
+  focusAnchorRef?: React.RefObject<(() => void) | null>;
 }
 
 function getColumnCategory(c: { category?: ColumnCategory }): ColumnCategory {
@@ -202,6 +210,7 @@ function DataGridTable({
   onNavigateToFk,
   setPendingEdits,
   columnPrefsPk,
+  focusAnchorRef,
 }: DataGridTableProps) {
   const { t } = useTranslation("datagrid");
 
@@ -466,6 +475,18 @@ function DataGridTable({
       },
     },
   );
+
+  // #1734 (5) — publish the anchor focuser for a grid-external caller (Quick
+  // Look). Kept as a ref rather than a callback prop so re-publishing when the
+  // anchor moves costs the parent no render.
+  const rovingFocusAnchor = roving.focusAnchorCell;
+  useEffect(() => {
+    if (!focusAnchorRef) return;
+    focusAnchorRef.current = rovingFocusAnchor;
+    return () => {
+      focusAnchorRef.current = null;
+    };
+  }, [focusAnchorRef, rovingFocusAnchor]);
 
   // Issue #1446 (F13) — per-row pending-edit slices with stable identity so
   // the memoized `DataRow` only re-renders the row whose edit changed.

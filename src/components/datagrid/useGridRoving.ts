@@ -35,6 +35,15 @@ export interface GridRoving {
    */
   onKeyDown: (e: React.KeyboardEvent) => void;
   cellTabIndex: (row: number, col: number) => 0 | -1;
+  /**
+   * Issue #1734 (5) — focuses the current anchor cell through the same
+   * scroll-in + bounded rAF retry the arrow keys use. Grid-external callers
+   * (Quick Look's focus exchange) need this: a plain
+   * `querySelector('[data-grid-row][tabindex="0"]')` returns null while the
+   * anchor row sits outside the virtual window, and `.focus()` on null is a
+   * silent no-op that drops focus to `<body>`.
+   */
+  focusAnchorCell: () => void;
 }
 
 const clamp = (v: number, max: number) => Math.min(Math.max(v, 0), max);
@@ -81,6 +90,14 @@ export function useGridRoving(
     setFocusedCell(next);
   }, []);
 
+  const cellAt = useCallback(
+    (row: number, col: number) =>
+      containerRef.current?.querySelector<HTMLElement>(
+        `[data-grid-row="${row}"][data-grid-col="${col}"]`,
+      ) ?? null,
+    [containerRef],
+  );
+
   // bounded rAF retry: cell 이 DOM 에 있으면 첫 프레임에 focus (Document grid
   // 는 항상 여기). 첫 프레임에 없으면 row 가 virtual window 밖이므로
   // scrollRowIntoView 로 스크롤-인 후 몇 프레임 재시도 (RDB virtualized grid).
@@ -88,9 +105,7 @@ export function useGridRoving(
     (row: number, col: number) => {
       let attempt = 0;
       const tryFocus = () => {
-        const el = containerRef.current?.querySelector<HTMLElement>(
-          `[data-grid-row="${row}"][data-grid-col="${col}"]`,
-        );
+        const el = cellAt(row, col);
         if (el) {
           el.focus();
           return;
@@ -103,8 +118,23 @@ export function useGridRoving(
       };
       requestAnimationFrame(tryFocus);
     },
-    [containerRef],
+    [cellAt],
   );
+
+  // #1734 (5) — same target as `[data-grid-row][tabindex="0"]`, but survives the
+  // anchor row being virtualized out. Synchronous when the cell is already
+  // rendered (the common case, and what keeps close-the-panel focus restoration
+  // from flashing through `<body>`); otherwise it falls into `focusCell`'s
+  // scroll-in + retry. `onKeyDown` deliberately keeps its unconditional rAF
+  // defer — see the focus-split note in this file's header.
+  const focusAnchorCell = useCallback(() => {
+    const el = cellAt(clampedRow, clampedCol);
+    if (el) {
+      el.focus();
+      return;
+    }
+    focusCell(clampedRow, clampedCol);
+  }, [cellAt, focusCell, clampedRow, clampedCol]);
 
   const onKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -180,5 +210,6 @@ export function useGridRoving(
     syncFocus,
     onKeyDown,
     cellTabIndex,
+    focusAnchorCell,
   };
 }
