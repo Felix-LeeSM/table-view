@@ -186,8 +186,7 @@ export interface DataSourceCapabilities {
     // stats, unrelated). Re-declare when the #1077 profiler dashboard promotes
     // a server-stats surface.
     readonly serverInfo: boolean;
-    // Issue #1077 Stage 2 — read-only users/roles listing. True for PG,
-    // MySQL/MariaDB, and SQL Server; Oracle is the remaining RDB gap.
+    // Issue #1077 Stage 2 — read-only users/roles listing (PG-first).
     // #1462 — consumed by the OperationsPanel flyout's Users tab.
     readonly users: boolean;
   };
@@ -458,11 +457,9 @@ export const ORACLE_CAPABILITIES = capabilities({
   // Issue #1073 — Oracle admin ops parity. Backed by the OracleAdapter v$
   // sources (v$session / v$sql / v$instance; ALTER SYSTEM KILL SESSION). The
   // v$ reads fail loud when the login lacks catalog-read privilege rather than
-  // returning a silent empty list. `users` stays false — Oracle users listing
-  // (`dba_users` with an `all_users` fallback) is the remaining #1077 Stage 2
-  // slice; MySQL/SQL Server ship in Stage 2. `locks` has no adapter override on
-  // any engine. Same shape as MySQL/MongoDB, so the OperationsPanel flyout
-  // surfaces the tabs unchanged.
+  // returning a silent empty list. `users` stays false (#1077 Stage 2 is
+  // PG-first); `locks` has no adapter override on any engine. Same shape as
+  // MySQL/MongoDB, so the OperationsPanel flyout surfaces the tabs unchanged.
   operations: {
     activity: true,
     slowQueries: true,

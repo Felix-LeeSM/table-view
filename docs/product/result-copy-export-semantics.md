@@ -13,16 +13,8 @@ catalog browse/schema/indexes/constraints/relationships, query, multi-statement,
 cancel, tabular result, and editRows through frontend SQL batch with primary-key
 projection 는 active capability 다. #907 adds representative Runtime Happy Path
 smoke for connect, seeded catalog browse, SELECT/DML, destructive Safe Mode
-confirmation, cancellation, and grid edit. #1077 Stage 2 는 read-only
-users/roles listing (`sys.server_principals` — principal name + capability
-flag 만, `sys.sql_logins.password_hash` 미조회) 을 추가한다. 해당 catalog view
-는 metadata-visibility 필터가 걸리므로 adapter 가 `VIEW ANY DEFINITION` 을 먼저
-probe 하고, 권한이 없으면 잘린 목록을 렌더하는 대신 `CapabilityNotEnabled` 로
-fail loud 한다. 단 probe 는 server scope 답만 주므로 개별
-`DENY VIEW DEFINITION ON LOGIN::x` 가 걸린 principal 은 그대로 조용히 빠진다
-([known-limitations-rdbms](known-limitations-rdbms.md)). Structured DDL,
-admin/security/jobs 및 user/role write management (create/alter/drop),
-import/export, profiler/activity, full T-SQL
+confirmation, cancellation, and grid edit. Structured DDL,
+admin/security/jobs/users/roles, import/export, profiler/activity, full T-SQL
 semantics, full workbench parity, sqlcmd/meta-command/procedure-body scripting,
 은 claim 하지 않는다. Oracle 은 #905/#906 에서 service-name
 lifecycle, catalog metadata, SELECT/DML batch, cooperative cancel, tabular

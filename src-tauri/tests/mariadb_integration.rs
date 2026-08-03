@@ -1,10 +1,8 @@
 //! Issue #1077 Stage 2 (2026-08-02) — MariaDB users-listing gate.
 //!
 //! 작성 이유: MariaDB 는 `MysqlAdapter` 를 공유하므로 대부분의 surface 는 MySQL
-//! 컨테이너가 대표한다. `mysql.user` 만 예외다 — MariaDB 10.4 가 그것을
-//! `mysql.global_priv` 위의 view 로 바꾸면서 `account_locked` 컬럼을 없애고
-//! `is_role` 을 넣었다. 그래서 users listing 은 두 벤더가 서로 다른 SQL 을 보내는
-//! 유일한 경로이고, 진짜 MariaDB 서버만 채점할 수 있다.
+//! 컨테이너가 대표한다. `mysql.user` 만 예외다 — users listing 은 두 벤더가 서로
+//! 다른 SQL 을 보내는 유일한 경로이고, 진짜 MariaDB 서버만 채점할 수 있다.
 //!
 //! 이 파일이 없던 동안 무슨 일이 있었나 (round-2 B1): 공유 상수 하나가
 //! `CONVERT(account_locked USING utf8mb4)` 를 골랐고, 모든 MariaDB 에서 Users 탭이

@@ -12,22 +12,7 @@
   baseline 이 있다. SQLite 는 deterministic file workflow smoke baseline 이 있다.
   DuckDB 는 `.duckdb` Runtime Happy Path smoke 와 registered local file
   analytics Runtime Happy Path smoke/source-scoped evidence/history/privacy
-  boundary 를 분리해서 좁힌다. Read-only users/roles listing 은 PostgreSQL
-  (`pg_roles`) 에 더해 MySQL/MariaDB (`mysql.user` — `User`/`Host` + 권한 flag
-  만, `authentication_string`/`Password` 미조회) 와 SQL Server 에서도 지원한다
-  (#1077 Stage 2). 잠금 상태는 두 벤더가 저장하는 곳이 달라 어댑터가 SQL 을 나눠
-  보낸다 — MySQL 은 `mysql.user.account_locked` 컬럼(MySQL 5.7.6+), MariaDB 는
-  같은 이름의 뷰가 그 컬럼을 가진 적이 없어 `mysql.global_priv` 의 `Priv` JSON 에서
-  `$.account_locked` 만 뽑는다(MariaDB 10.4+). 둘 다 그보다 낮은 버전에서는 잠긴
-  계정을 로그인 가능으로 잘못 표시하는 대신 fail loud 한다. MariaDB 역할은 같은 뷰에
-  올라와 bare name 으로 non-loginable 표시되는데, 판별은 빈 `Host` 가 아니라
-  `is_role` 컬럼이다 — `CREATE USER x@''` 도 `Host` 가 비어 있지만 정상 로그인
-  계정이기 때문이다. `max_user_connections` 는 PG
-  `rolconnlimit` sentinel 로 정규화한다 (`0` = 무제한 → `-1`, MariaDB 의 음수
-  cap → `0`). role membership (`mysql.role_edges`), MySQL 8 dynamic privilege,
-  password expiry, per-schema grant, user/role write management
-  (create/alter/drop) 은 지원하지 않고, `can_create_db` 과대보고는
-  [known-limitations-rdbms](known-limitations-rdbms.md) 에 기록했다.
+  boundary 를 분리해서 좁힌다.
 - SQLite/DuckDB file workflow: local file open/create/browse/query 중심. SQLite
   는 writable-file DML 과 key-projected row edit, DuckDB 는 `.duckdb`
   catalog/read query 와 registered local CSV/Parquet/JSON/NDJSON preview,
@@ -88,19 +73,11 @@
   #907 wires representative Runtime Happy Path smoke for connect, seeded catalog
   browse, SELECT/DML, destructive Safe Mode confirmation, cancellation, and grid
   edit.
-  Structured DDL, admin/security/jobs and user/role write management
-  (create/alter/drop), import/export,
+  Structured DDL, admin/security/jobs/users/roles, import/export,
   full profiler/activity admin parity, full T-SQL semantic parity, full workbench
   parity, and SQLCMD/meta-command/procedure-body scripting stay out of scope; the
   shared server activity/slow-query (profiler) panels are capability-gated
-  auto-polling dashboards with a session-local, non-persistent trend, and a
-  read-only users/roles listing from `sys.server_principals` is available
-  (#1077 Stage 2) — it requires `VIEW ANY DEFINITION` and fails loud without it,
-  because that catalog view silently truncates for an unprivileged login. That
-  probe answers for the server scope only, so a principal that denies
-  `VIEW DEFINITION` to the connected login individually is still missing from
-  the list without an error
-  ([known-limitations-rdbms](known-limitations-rdbms.md)).
+  auto-polling dashboards with a session-local, non-persistent trend.
   Parser/completion support is bounded editor assistance only.
 - Oracle: bounded catalog/query/cancel/tabular/edit-row runtime support is active
   for issues #905/#906. Its profile exposes source-specific service-name lifecycle,
@@ -118,11 +95,8 @@
   users/roles/grants/session/storage, and full workbench
   parity stay unsupported or unclaimed.
   Full admin parity, import/export, full profiler/activity admin parity,
-  user/role write management (create/alter/drop), permission-editing UI, and
-  broad scripting remain out of scope for both enterprise RDBMS profiles, with
-  one exception: SQL Server serves the read-only users/roles listing described
-  in the MSSQL bullet above (#1077 Stage 2). Oracle keeps the whole boundary.
-  The shared server activity/slow-query (profiler)
+  role/user/permission UI, and broad scripting remain out of scope for both
+  enterprise RDBMS profiles; the shared server activity/slow-query (profiler)
   panels are capability-gated auto-polling dashboards with a session-local,
   non-persistent trend, and no activity/slow-query history is persisted to
   disk or DB (ADR 0036/0042).

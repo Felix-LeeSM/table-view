@@ -14,27 +14,10 @@
   게이트를 통과한다 — 즉 자동 실행/자동 import 가 아니다. Stage 2 의 첫
   슬라이스는 read-only users/roles listing 이다: PG 는 `list_database_users`
   가 `pg_roles` (password-masked catalog view — `pg_authid`/`pg_shadow` 는
-  참조 안 함) 를 읽어 계정/역할 + 소속 role 을 조회 전용으로 노출한다. 같은
-  read-only listing 이 MySQL/MariaDB (`mysql.user` — `User`/`Host` + 권한 flag
-  만, `authentication_string`/`Password` 는 미조회) 와 SQL Server
-  (`sys.server_principals` — principal name + capability flag 만,
-  `sys.sql_logins.password_hash` 는 미조회) 로 확장됐다. MySQL 과 MariaDB 는
-  어댑터는 같지만 SQL 이 다르다 — MariaDB 10.4 가 `mysql.user` 를
-  `mysql.global_priv` 위의 뷰로 바꿔 `account_locked` 를 없앴기 때문에 잠금
-  상태는 그 뷰의 `Priv` JSON 에서, 역할은 `is_role` 컬럼에서 읽는다. backend
-  `Unsupported` 게이트는 override 가 없는 나머지 RDB 어댑터(Oracle · SQLite ·
-  DuckDB · `MssqlConnectionOnlyAdapter`)와 non-RDB paradigm 에 남는다 (Oracle
-  은 `dba_users`/`all_users` 로 Stage 2 잔여, issue #1077 참조). SQL Server 는
-  `sys.server_principals` 가 DMV 가 아니라 metadata-visibility 필터가 걸리는
-  catalog view 라, `VIEW ANY DEFINITION` 없는 로그인에게는 목록이 조용히 잘려
-  돌아온다 — 그래서 adapter 가 `HAS_PERMS_BY_NAME` 으로 먼저 probe 하고 권한이
-  없으면 `CapabilityNotEnabled` 로 fail loud 한다 (server-scope 권한 부재로 인한
-  부분 목록을 완전한 목록처럼 렌더하지 않기 위함). 이 probe 로 닫히지 않는
-  잔여는 principal 단위 `DENY VIEW DEFINITION ON LOGIN::x` 다 — probe 는 통과하고
-  해당 행만 조용히 빠진다
-  ([known-limitations-rdbms](known-limitations-rdbms.md)).
-  role 생성/변경/삭제 (CRUD) 는 depth step 후속.
-  Stage 1 의 첫 슬라이스들 (SQL-file import, grid export
+  참조 안 함) 를 읽어 계정/역할 + 소속 role 을 조회 전용으로 노출한다. PG-first
+  parity lane 이라 non-PG RDB 와 non-RDB paradigm 은 backend 에서
+  `Unsupported` 로 게이트된다 (frontend 분기 아님). role 생성/변경/삭제 (CRUD)
+  는 depth step 후속. Stage 1 의 첫 슬라이스들 (SQL-file import, grid export
   계열, 테이블/쿼리 결과 tabular JSON export #1638 — headers 를 key 로 하는
   array-of-objects, CSV row-level import PG-first #1639 preview + #1640 commit —
   컬럼 매핑 후 행마다 single-row INSERT 를 한 트랜잭션의 `execute_query_batch`

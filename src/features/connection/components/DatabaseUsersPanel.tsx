@@ -1,10 +1,8 @@
 // Issue #1077 Stage 2 (2026-07-06) — read-only users/roles panel. PG →
-// pg_roles (password-masked), MySQL/MariaDB → mysql.user, SQL Server →
-// sys.server_principals. Read-only by design: this slice lists
+// pg_roles (password-masked). Read-only by design: this slice lists
 // accounts/permissions only; CREATE/ALTER/DROP ROLE land in a later depth
-// step (breadth-first). No secret column crosses the wire — no adapter reads
-// pg_authid/pg_shadow, authentication_string/Password, or
-// sys.sql_logins.password_hash.
+// step (breadth-first). No secret column crosses the wire — the backend
+// sources pg_roles, never pg_authid/pg_shadow.
 
 import { Loader2, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";

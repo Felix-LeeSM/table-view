@@ -383,10 +383,8 @@ async fn mysql_endpoint() -> Option<MysqlEndpoint> {
 ///
 /// MariaDB shares `MysqlAdapter`, so for most surfaces the MySQL container is
 /// representative and a second container would be pure cost. `mysql.user` is
-/// the exception: MariaDB 10.4 replaced it with a view over
-/// `mysql.global_priv`, dropping `account_locked` and adding `is_role`, so the
-/// users listing is the one code path where the two vendors run different SQL
-/// and only a real MariaDB can grade it.
+/// the exception: the users listing is the one code path where the two vendors
+/// run different SQL and only a real MariaDB can grade it.
 ///
 /// Same two stages as MySQL — `MARIADB_HOST` reuses an external server
 /// (docker-compose publishes `mariadb:11` on 13307), otherwise testcontainers

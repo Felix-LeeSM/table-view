@@ -54,22 +54,7 @@ routine bodies or scripting. CHECK/constraint catalog metadata uses live MySQL
 routine/event bodies, broad CALL expressions, control-flow scripting,
 `DELIMITER`, and `LOAD DATA` are explicit unsupported editor/backend boundaries.
 Trigger metadata is read-only in Structure; structured trigger create/drop and
-DB-level import/export/dump parity remain unsupported/follow-up. #1077 Stage 2
-adds a read-only users/roles listing from `mysql.user` (`User`/`Host` +
-privilege flags; `authentication_string`/`Password` are never selected). It
-reports `can_login` from the account's lock flag plus the `mysql_no_login`
-plugin. The lock flag has no shared source, so the adapter sends different SQL
-per vendor: MySQL reads the `mysql.user.account_locked` column (MySQL 5.7.6+),
-while MariaDB — whose `mysql.user` is a view over `mysql.global_priv` and has
-never had that column — reads `$.account_locked` out of the `global_priv` `Priv`
-JSON (MariaDB 10.4+). Both fail loud on an older build rather than mislabelling
-a locked account as loginable. It also
-normalises `max_user_connections` onto the PG `rolconnlimit` wire sentinel
-(`0` = unlimited becomes `-1`, a negative MariaDB cap becomes `0`). Role
-membership (`mysql.role_edges`), MySQL 8 dynamic privileges, password expiry,
-per-schema grants, and user/role write management (create/alter/drop) stay
-unsupported; `can_create_db` over-reports and is documented in
-[known-limitations-rdbms](known-limitations-rdbms.md)
+DB-level import/export/dump parity remain unsupported/follow-up
 
 ## MariaDB
 
@@ -98,12 +83,7 @@ server-accepted, but the app exposes it only as a DML envelope with no returned
 rows and no affected-row count. The app does not claim a MariaDB `RETURNING`
 runtime/version returned-row gate; raw execution remains server-resolved.
 MySQL-only evidence does not become a MariaDB runtime/admin/import/export claim
-without MariaDB-specific tests/docs. The #1077 Stage 2 read-only `mysql.user`
-users/roles listing runs through the same adapter as MySQL but not the same SQL:
-MariaDB 10.4 made `mysql.user` a view over `mysql.global_priv`, so the lock flag
-comes from that view's `Priv` JSON and roles from its `is_role` column. MariaDB
-roles appear under their bare name and are reported as non-loginable, but
-MariaDB-specific role-graph coverage is not claimed
+without MariaDB-specific tests/docs
 
 ## SQLite
 
@@ -276,14 +256,9 @@ Runtime Happy Path smoke for connect, seeded catalog browse, SELECT/DML,
 destructive Safe Mode confirmation, cancellation, and grid edit.
 `switchDatabase` remains disabled under the current connection contract. Named
 instances, Windows authentication, Azure AD/authSource modes, structured DDL,
-admin/security/jobs and user/role write management (create/alter/drop),
-import/export, profiler/activity, full T-SQL
+admin/security/jobs/users/roles, import/export, profiler/activity, full T-SQL
 semantic parity, full workbench parity, and sqlcmd/meta-command/procedure-body
-scripting remain unclaimed. A read-only users/roles listing from
-`sys.server_principals` (principal name + capability flags, never
-`sys.sql_logins.password_hash`) is active behind a `VIEW ANY DEFINITION` probe
-that fails loud as `CapabilityNotEnabled` rather than serving the silently
-truncated list an unprivileged login would see (#1077 Stage 2).
+scripting remain unclaimed.
 
 ## Oracle
 

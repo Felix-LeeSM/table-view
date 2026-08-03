@@ -71,11 +71,7 @@ raw-SQL-only because structured trigger dialogs are not mapped to MySQL's inline
 trigger body model. Grid CSV/TSV export is generic; MySQL-family schema dumps
 are now restorable (backtick identifiers + MySQL-escaped INSERTs, #1641), while
 DB-level backup/restore/import/export and byte-faithful binary/BLOB dump
-round-trip are not claimed. A read-only users/roles listing from `mysql.user`
-(`User`/`Host` + privilege flags, never `authentication_string`/`Password`) is
-in scope (#1077 Stage 2); role membership (`mysql.role_edges`), MySQL 8 dynamic
-privileges, password expiry, per-schema grants, and user/role write management
-(create/alter/drop) are not.
+round-trip are not claimed.
 
 ## MariaDB SQL
 
@@ -108,13 +104,7 @@ returned-row support guarantee in the app; raw execution is sent to MariaDB and
 the server remains the final judge. Broader MariaDB-only syntax, routine
 execution beyond the seeded narrow CALL probe, broad CALL expressions, procedure
 body authoring/management, trigger create/drop, admin/import/export, and
-completion-runtime claims still need separate tests/docs before promotion. The
-`mysql.user` read-only users/roles listing (#1077 Stage 2) runs through the same
-adapter as MySQL but not the same SQL: MariaDB 10.4 made `mysql.user` a view over
-`mysql.global_priv`, dropping `account_locked` and adding `is_role`, so the
-adapter branches on the connection's engine. MariaDB roles appear under their
-bare name and are reported as non-loginable, and MariaDB-specific role-graph
-coverage is not claimed.
+completion-runtime claims still need separate tests/docs before promotion.
 
 ## SQLite SQL
 
@@ -311,16 +301,10 @@ Parser/Safe Mode and completion own bounded editor assistance plus
 unsupported-boundary recognition for tested T-SQL scripting/admin heads.
 
 **Current boundary**: SQL Server structured DDL,
-admin/security/backup/jobs and user/role write management (create/alter/drop),
-broad parser/completion semantics,
+admin/security/backup/jobs/users/roles, broad parser/completion semantics,
 SQLCMD/batch scripting, procedure-body scripting, import/export,
 profiler/activity, full workbench parity, and full T-SQL semantics remain out of
-scope. A read-only users/roles listing from `sys.server_principals` (principal
-name + capability flags, never `password_hash`) behind a `VIEW ANY DEFINITION`
-probe is in scope (#1077 Stage 2) — see
-[known-limitations-rdbms](known-limitations-rdbms.md) for the residual
-per-principal `DENY VIEW DEFINITION` truncation that the server-scope probe does
-not close.
+scope.
 
 ## Oracle SQL
 

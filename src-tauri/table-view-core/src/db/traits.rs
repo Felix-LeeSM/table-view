@@ -885,18 +885,11 @@ pub trait RdbAdapter: DbAdapter {
         })
     }
 
-    /// Issue #1077 Stage 2 — read-only accounts/permissions listing. Exactly
-    /// three adapters override it: PG (`pg_roles`, which masks passwords),
-    /// MySQL/MariaDB (`mysql.user`, never `authentication_string`/`Password`),
-    /// and SQL Server (`sys.server_principals`, never
-    /// `sys.sql_logins.password_hash`). Every other `RdbAdapter` inherits
-    /// `Unsupported` — Oracle (`dba_users`/`all_users` is the unbuilt
-    /// candidate), SQLite and DuckDB (file-backed, no server account table),
-    /// and `MssqlConnectionOnlyAdapter` — as does every non-RDB paradigm.
-    ///
-    /// This default is the backend capability gate — an engine without an
-    /// override cannot serve the panel even if the frontend forgot to hide it.
-    /// No override may select a credential column.
+    /// Issue #1077 Stage 2 — read-only accounts/permissions listing. PG
+    /// override queries the `pg_roles` catalog view (which masks passwords);
+    /// non-PG RDB adapters inherit `Unsupported` (PG-first parity lane). This
+    /// default is the backend capability gate — an engine without an override
+    /// cannot serve the panel even if the frontend forgot to hide it.
     fn list_database_users<'a>(
         &'a self,
     ) -> BoxFuture<'a, Result<Vec<crate::models::DatabaseUserRow>, AppError>> {

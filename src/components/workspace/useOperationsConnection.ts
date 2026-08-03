@@ -27,8 +27,7 @@ export interface OperationsConnection {
     activity: boolean;
     serverInfo: boolean;
     slowQueries: boolean;
-    // #1462 — read-only users/roles listing (DatabaseUsersPanel). #1077 Stage 2:
-    // PG + MySQL/MariaDB + SQL Server; Oracle is the remaining RDB gap.
+    // #1462 — read-only users/roles listing (DatabaseUsersPanel), PG-only today.
     users: boolean;
   };
 }

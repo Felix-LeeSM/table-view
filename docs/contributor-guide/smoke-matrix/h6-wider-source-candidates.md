@@ -49,9 +49,7 @@ Current evidence:
 `.github/workflows/e2e-smoke.yml`,
 `e2e/fixtures/seed.mssql.sql`, `e2e/smoke/mssql.spec.ts`, `docs/ROADMAP.md`,
 `docs/product/README.md`, `docs/product/query-language-support.md`,
-`docs/product/known-limitations.md`,
-`src-tauri/table-view-core/src/db/mssql/admin.rs`,
-`src-tauri/tests/mssql_integration.rs`, #903/#907/#1077
+`docs/product/known-limitations.md`, #903/#907
 
 Current gap / routing:
 
@@ -60,26 +58,7 @@ labels/defaults, URL parsing, and seed/spec inventory. It has bounded
 connection/catalog/query/cancel/tabular/edit-row runtime support plus
 representative Runtime Happy Path smoke for connect, seeded catalog browse,
 SELECT/DML, destructive Safe Mode confirmation, cancellation, and grid edit.
-A read-only users/roles listing from `sys.server_principals` behind a `VIEW ANY
-DEFINITION` probe is active (#1077 Stage 2), on its own docker-gated
-`src-tauri/tests/mssql_integration.rs` evidence rather than the smoke row —
-`test_mssql_list_database_users_row_shape_1077`,
-`test_mssql_users_null_role_membership_and_non_login_principals_1077`, and
-`test_mssql_users_listing_drops_no_principal_type_1077`, with the `USERS_SQL`
-credential/type/flag guards as `db/mssql/admin.rs` units. Those three gates skip
-when SQL Server is unreachable, so `src-tauri/tests/common/mod.rs` fails loud
-instead of skipping when `CI` is set. The guard covers both ways the suite can
-become unavailable, which is what makes the claim below hold: `mssql_endpoint`
-fails when no endpoint resolves, and `setup_mssql_adapter` fails when the
-connect exhausts its five retries. Since a gate reaches its body exactly when
-`setup_mssql_adapter` returned `Some`, a green `Integration Tests (Docker)`
-proves the three gates ran — which a silent skip under nextest's `push` profile
-(`success-output = "never"`, `status-level = "slow"`, so the `SKIP:` println and
-the test name are both swallowed) could not. The workflow sets neither
-`MSSQL_HOST` nor `MSSQL_DISABLE`, so neither branch is bypassed in CI
-(`git grep -n MSSQL_DISABLE -- .github/` is empty).
-Structured DDL, admin/security/jobs and user/role write management
-(create/alter/drop), import/export,
+Structured DDL, admin/security/jobs/users/roles, import/export,
 profiler/activity, full T-SQL semantics, SQLCMD/procedure scripting, full
 parser/completion promotion, and full workbench parity remain unsupported or
 unclaimed until separate evidence lands.

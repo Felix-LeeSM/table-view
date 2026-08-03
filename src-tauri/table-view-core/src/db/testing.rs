@@ -175,8 +175,8 @@ pub struct StubRdbAdapter {
     pub slow_queries_fn: Option<FnOne<i64, Vec<crate::models::SlowQueryRow>>>,
 
     // Issue #1077 Stage 2 — override slot for RDB list_database_users. When
-    // unset the stub returns `Unsupported`, mirroring an un-overridden RDB
-    // engine (the backend capability gate) rather than a silent empty list.
+    // unset the stub returns `Unsupported`, mirroring a non-PG RDB engine
+    // (the backend capability gate) rather than a silent empty list.
     pub list_database_users_fn: Option<FnZero<Vec<crate::models::DatabaseUserRow>>>,
 }
 
