@@ -297,9 +297,7 @@ const RDB_CAPABILITIES: &[BackendAdapterCapability] = &[
 // add/drop, index create/drop. So the declaration claims
 // `RelationalSchemaMutation` to match the wired path. What stays `Unsupported`
 // is what needs a table rebuild: `add_constraint` / `drop_constraint` and an
-// in-place column type/nullability/default change. This flag means "some
-// structural DDL", not full DDL — the exact surface is the per-action
-// `ddl.*` capability set in `src/types/dataSource.ts`.
+// in-place column type/nullability/default change.
 const SQLITE_RDB_CAPABILITIES: &[BackendAdapterCapability] = &[
     BackendAdapterCapability::Lifecycle,
     BackendAdapterCapability::RelationalCatalog,
