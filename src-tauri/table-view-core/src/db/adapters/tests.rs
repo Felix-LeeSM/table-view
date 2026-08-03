@@ -33,8 +33,9 @@ fn sqlite_adapter_topology_preserves_public_paths_and_contracts() {
         BackendAdapterContractKind::Rdb
     );
     assert!(profile.has_backend_capability(BackendAdapterCapability::RelationalQuery));
-    // Wired SqliteAdapter implements bounded structured DDL (create_table), so
-    // the declaration claims RelationalSchemaMutation (#1044).
+    // Wired SqliteAdapter implements structured DDL — create_table (#1044) plus
+    // the natively supported drop/rename/column/index surfaces (#1804) — so the
+    // declaration claims RelationalSchemaMutation.
     assert!(profile.has_backend_capability(BackendAdapterCapability::RelationalSchemaMutation));
 }
 
