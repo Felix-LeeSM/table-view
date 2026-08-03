@@ -34,6 +34,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { render } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import { THEME_CATALOG } from "@/lib/themeCatalog";
 import type { TableData } from "@/types/schema";
 import DataGridTable from "./DataGridTable";
 import { SELECTED_ROW_FILL } from "./rowState";
@@ -167,30 +168,42 @@ function palettes(): Palette[] {
     out.push({ name: `(fallback) ${mode}`, tokens: tokensOf(block[1]!) });
   }
 
-  assertSweepIsComplete(themes, out.length);
+  assertSweepIsComplete(out);
   return out;
 }
 
 /**
  * The sweep is only evidence if it really covers the file. A regex that quietly
  * stops matching, or a `--tv-background` filter that drops a real theme, would
- * turn every assertion below green — so the expected count is re-derived from a
- * different anchor: the distinct theme names on the selectors themselves, times
- * the two modes, plus the two fallbacks. The two agree only if the token filter
- * kept exactly one block per theme and mode.
+ * turn every assertion below green.
+ *
+ * The anchor is therefore `THEME_CATALOG` — the list the theme picker renders,
+ * which is not CSS and cannot break in the same edit. Round 2 anchored on a
+ * second regex over the same file instead, and that regex was a PREFIX of the
+ * sweep's: changing the selector shape (swapping the two attributes, say) sent
+ * both to zero at once, leaving `expected` = 2 and `found` = 2 (the `index.css`
+ * fallbacks) — green while measuring 2 palettes instead of 146.
+ *
+ * Names, not just the count: a theme in the catalog with no block in
+ * `themes.css` is unmeasured, and a block with no catalog entry is unreachable
+ * from the picker. Both are reported.
  */
-function assertSweepIsComplete(themesCss: string, found: number): void {
-  const names = new Set(
-    [
-      ...themesCss.matchAll(
-        /\[data-theme="([^"]+)"\]\[data-mode="(?:light|dark)"\]/g,
-      ),
-    ].map((m) => m[1]!),
+function assertSweepIsComplete(covered: Palette[]): void {
+  const swept = new Set(
+    covered
+      .filter((p) => !p.name.startsWith("(fallback) "))
+      .map((p) => p.name.replace(/ (light|dark)$/, "")),
   );
-  const expected = names.size * 2 + 2;
-  if (found !== expected) {
+  const catalog = new Set<string>(THEME_CATALOG.map((t) => t.id));
+  const missing = [...catalog].filter((id) => !swept.has(id));
+  const extra = [...swept].filter((id) => !catalog.has(id));
+  const expected = catalog.size * 2 + 2;
+  if (missing.length > 0 || extra.length > 0 || covered.length !== expected) {
     throw new Error(
-      `palette sweep covers ${found} blocks but src/themes.css names ${names.size} themes (expected ${expected})`,
+      `palette sweep covers ${covered.length} blocks over ${swept.size} themes; ` +
+        `THEME_CATALOG lists ${catalog.size} (expected ${expected} blocks). ` +
+        `Missing from src/themes.css: [${missing.join(", ")}]. ` +
+        `Not in THEME_CATALOG: [${extra.join(", ")}].`,
     );
   }
 }
