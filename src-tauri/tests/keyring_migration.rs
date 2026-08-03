@@ -490,6 +490,10 @@ fn issue_1814_unreadable_leftover_key_file_does_not_break_boot() {
 /// 암호문 앞에서 migration 을 완주하면 (d) 가 그 `.key` 를 지우고, 그 순간
 /// 저장된 password 전량이 영구 복호화 불가가 된다. probe 는 그 파괴를 막는
 /// 유일한 관문이므로 「디스크 `.key` 가 읽을 수 있는 채로 남았는가」까지 본다.
+/// 단 그 관문은 `password` 필드에만 열려 있다 — probe 도
+/// `data_has_password_ciphertext` 도 `conn.get("password")` 만 읽어
+/// `SECRET_FIELDS` 의 `wallet_password` 를 안 본다. wallet password 만 가진
+/// 프로필은 probe 를 통과해 (d) 까지 간다 (프로덕션 결함, raw #2111).
 #[test]
 fn path_b_ciphertext_probe_failure_preserves_the_key_and_leaves_a_sentinel() {
     let dir = TempDir::new().unwrap();
