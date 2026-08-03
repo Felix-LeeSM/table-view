@@ -88,7 +88,7 @@ describe("ServerInfoPanel (Sprint 339 U4 live wire)", () => {
   describe("Mongo deployment row (#1821)", () => {
     it.each([
       ["standalone", "Standalone"],
-      ["replicaSet", "Replica set"],
+      ["replicaSet", "Replica Set"],
       ["sharded", "Sharded cluster"],
     ])("renders the %s topology as a labelled row", async (topology, label) => {
       infoMock.mockResolvedValueOnce(mongoStub);
@@ -110,9 +110,10 @@ describe("ServerInfoPanel (Sprint 339 U4 live wire)", () => {
     });
 
     it("shows an explicit unidentified row rather than hiding it (fail-closed is visible)", async () => {
-      // This is the state in which every later version/topology gate closes.
-      // A hidden row would leave the user unable to tell "not a cluster" from
-      // "the server never answered the handshake".
+      // This is the state in which every gate naming a topology closes; a
+      // version-only requirement can still open, which the gate's own suite
+      // pins. A hidden row would leave the user unable to tell "not a cluster"
+      // from "the server never answered the handshake".
       infoMock.mockResolvedValueOnce(mongoStub);
       runtimeMock.mockResolvedValueOnce({ topology: "unknown" });
 

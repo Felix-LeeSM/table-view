@@ -1,8 +1,10 @@
 // Sprint 339 (2026-05-15) — U4 live wire. Replaces the
 // BackendPendingPlaceholder with a paradigm-neutral identity grid sourced
 // from `version()` + `pg_settings` (PG) or `buildInfo` + `serverStatus`
-// (Mongo). All paradigm-specific fields land in `extras` so the grid stays
-// paradigm-stable.
+// (Mongo). `server_info`'s paradigm-specific fields all land in `extras`, so
+// the rows it feeds are paradigm-stable; the Mongo deployment row added for
+// #1821 is the one row outside that, and it renders only for a document
+// connection.
 
 import { Loader2, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
@@ -25,10 +27,10 @@ import { PanelLoadingSkeleton } from "./PanelLoadingSkeleton";
  * lives only in the capability the adapter probed at `connect()`, so it needs
  * its own (cached, round-trip-free) read.
  *
- * `"unknown"` gets a row of its own rather than being hidden: it is the state
- * in which every later version/topology gate closes, and a blank row would
- * leave the user with no way to tell "not a cluster" from "the server never
- * answered".
+ * `"unknown"` gets a row of its own rather than being hidden: it closes every
+ * gate that names a topology — a version-only requirement can still open, which
+ * `dataSource.mongoRuntime.test.ts` pins — and a blank row would leave the user
+ * with no way to tell "not a cluster" from "the server never answered".
  *
  * Its value cell is the one in this grid without `font-mono`, on purpose: it
  * renders a translated label, not a verbatim server string like the version,

@@ -1,11 +1,13 @@
 /**
  * Issue #1821 — the MongoDB runtime capability gate.
  *
- * These assertions pin the *fail-closed* half of the contract: every way of
- * not knowing what the server is must close the feature. A green
+ * These assertions pin the *fail-closed* half of the contract: a requirement
+ * must close on each axis it names whenever that axis is unknown. A green
  * `meetsMongoRuntimeRequirement` that returned `true` on unknown input would
  * be worse than no gate at all — it would look like a check while letting
- * every unidentified server through.
+ * every unidentified server through. The axes are judged independently, so an
+ * unidentified topology still clears a *version-only* requirement; that is
+ * pinned below as intended behaviour, not treated as a leak.
  */
 import { describe, expect, it } from "vitest";
 import {

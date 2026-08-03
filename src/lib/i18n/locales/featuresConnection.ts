@@ -239,7 +239,9 @@ export const en = {
     rowVersion: "Version",
     rowDeployment: "Deployment",
     topologyStandalone: "Standalone",
-    topologyReplicaSet: "Replica set",
+    // `form.labelReplicaSet` 과 같은 표기 — 같은 개념을 연결 폼과 서버 패널이
+    // 다르게 적지 않게 맞춘다 (en 은 대소문자까지).
+    topologyReplicaSet: "Replica Set",
     topologySharded: "Sharded cluster",
     topologyUnknown: "Not identified",
     rowHost: "Host",
@@ -593,7 +595,10 @@ export const ko = {
     rowDeployment: "배포 형태",
     topologyStandalone: "단일 노드",
     // 아래 `labelReplicaSet` 과 같은 낱말 — 연결 폼과 서버 패널이 같은 개념을
-    // 다르게 부르지 않게 맞춘다.
+    // 다르게 부르지 않게 맞춘다. 맞춘 것은 replica set 뿐이다: 위
+    // `topologyStandalone` 의 "단일 노드" 는 `featuresMisc` 의
+    // `mongo.transactionsNotSupported` 가 쓰는 "독립 실행형" 과 아직 다르다
+    // (PR #2105 리뷰 non-blocking 6 — 문구 통일은 이 이슈 범위 밖).
     topologyReplicaSet: "레플리카 셋",
     topologySharded: "샤드 클러스터",
     topologyUnknown: "확인 불가",
