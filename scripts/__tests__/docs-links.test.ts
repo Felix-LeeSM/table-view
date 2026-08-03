@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -29,7 +30,7 @@ const SEEDED_ISSUES = [
   `${fixture}:11 -> ./no-such-file.md :: missing target ${SEEDED_FIXTURE_DIR}/no-such-file.md`,
   `${fixture}:12 -> ./target.md#no-such-heading :: missing anchor #no-such-heading in ${SEEDED_FIXTURE_DIR}/target.md`,
   `${fixture}:13 -> ./nested#top :: anchor on non-file target ${SEEDED_FIXTURE_DIR}/nested`,
-  `${fixture}:14 -> ../../../../outside-the-repo.md :: missing target ../outside-the-repo.md`,
+  `${fixture}:14 -> ../../../../outside-the-repo.md :: target outside the repository ../outside-the-repo.md`,
   `${fixture}:15 -> ./no-such-image.png :: missing target ${SEEDED_FIXTURE_DIR}/no-such-image.png`,
   `${fixture}:16 -> ./no-such-page.md :: missing target ${SEEDED_FIXTURE_DIR}/no-such-page.md`,
   `${fixture}:19 -> ./no-such-reference.md :: missing target ${SEEDED_FIXTURE_DIR}/no-such-reference.md`,
@@ -45,19 +46,40 @@ describe("docs internal link gate", () => {
     expect(report.issues.map(formatIssue)).toEqual([]);
   });
 
-  // Reason: an enumeration that silently returned nothing would make every
-  // assertion above pass while checking no file at all. The floors are far
-  // below the measured corpus (172 sources / 791 internal links on
-  // f9846aaa) so ordinary doc churn never touches them.
-  it("scans the whole repository, not an empty set", () => {
-    const report = scan();
-    expect(report.sources.length).toBeGreaterThan(150);
-    expect(report.linksChecked).toBeGreaterThan(500);
-    expect(report.sources).toContain("AGENTS.md");
-    expect(report.sources).toContain("memory/index/by-surface.md");
-    expect(report.sources).toContain(
-      "docs/decisions/0044-e2e-smoke-remote-required/memory.md",
-    );
+  // Reason: an enumeration that quietly shrank would make every assertion above
+  // pass over a corpus that no longer contains the file that broke. A floor
+  // cannot catch that — dropping `memory/workflow/**` from the scan's pathspec
+  // still leaves git exiting 0 with a list far above any floor worth writing.
+  // So the scan is pinned to the whole set, recomputed here from a listing the
+  // pathspec cannot narrow: every tracked path, filtered by extension in JS.
+  it("scans every tracked markdown outside the exclusions", () => {
+    const tracked = execFileSync("git", ["ls-files", "-z"], {
+      cwd: repoRoot,
+      encoding: "utf8",
+      maxBuffer: 64 * 1024 * 1024,
+    })
+      .split("\0")
+      .filter((path) => path.endsWith(".md"))
+      .filter(
+        (path) =>
+          !EXCLUDED_SOURCE_DIRS.some(
+            (dir) => path === dir || path.startsWith(`${dir}/`),
+          ),
+      )
+      .sort();
+
+    expect(tracked.length).toBeGreaterThan(0);
+    expect(scan().sources).toEqual(tracked);
+  });
+
+  // Reason: the set above fixes which files are read, not how much of each one
+  // is parsed — a fence or regex change that quietly stopped matching would
+  // keep every source and lose the links inside them. 700 sits below the 792
+  // this scan reports on the merge of #2141 — vitest prints the actual count
+  // when the assertion fails — with room for ordinary doc churn, and far above
+  // what a broken parser leaves.
+  it("parses links out of the sources it reads", () => {
+    expect(scan().linksChecked).toBeGreaterThan(700);
   });
 
   // Reason: a green scan proves nothing about detection — the seeded fixture is
@@ -91,7 +113,17 @@ describe("docs internal link gate", () => {
     expect(links.map((link) => link.rawTarget)).not.toContain(
       "./no-such-inline.md",
     );
-    expect(SEEDED_ISSUES).toHaveLength(7);
+  });
+
+  // Reason: a fence with no closing run used to blank every line after it, so
+  // one stray ``` in a long file silently retired the rest of that file from
+  // the gate — green, and checking less than it says. Only closed blocks are
+  // skipped now; the dangling opener's own line goes back to being prose.
+  it("keeps scanning past a code fence that is never closed", () => {
+    const links = parseLinks(
+      ["```sh", "not markdown", "", "[after](./below.md)", ""].join("\n"),
+    );
+    expect(links.map((link) => link.rawTarget)).toEqual(["./below.md"]);
   });
 
   // Reason: an exclusion that filters nothing makes the scan look narrower than

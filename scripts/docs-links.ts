@@ -53,6 +53,11 @@ export const SEEDED_FIXTURE_DIR = "tests/fixtures/docs-links";
  * `docs/explorations` is deliberately absent even though `.ignore` hides it
  * from `rg`: it currently suppresses nothing, and an exclusion that filters
  * nothing only makes the scan look narrower than it is.
+ *
+ * The test that guards this list proves each entry hides something, not that
+ * what it hides deserves hiding — adding a directory that has just acquired a
+ * real dead link would satisfy that test. Widening the list is a review call,
+ * not a mechanical one.
  */
 export const EXCLUDED_SOURCE_DIRS = [
   "docs/archives",
@@ -118,10 +123,18 @@ interface LinkReference {
  * with one regex: ``` and ~~~ both open a block, only a closing run at least as
  * long ends it, and a fence indented inside a list item still counts. Docs here
  * routinely show markdown samples whose paths are illustrations, not links.
+ *
+ * Only a *closed* block is blanked. An opener with no closer leaves the rest of
+ * the file scanned as prose, which is where the deleted checker's paired regex
+ * landed too — blanking to end of file would silently drop every link below a
+ * stray fence, turning a malformed doc into an unchecked one.
  */
 function blankCodeFences(markdown: string): string[] {
+  const lines = markdown.split(/\r?\n/);
+  const blanked = [...lines];
   let openFence: string | null = null;
-  return markdown.split(/\r?\n/).map((line) => {
+  let openedAt = -1;
+  lines.forEach((line, index) => {
     const fence = /^\s{0,3}(`{3,}|~{3,})(.*)$/.exec(line);
     const marker = fence?.[1];
     const info = fence?.[2] ?? "";
@@ -130,8 +143,9 @@ function blankCodeFences(markdown: string): string[] {
       // such as ``` `a` and `b` ``` from being read as a fence opener.
       if (marker && !(marker.startsWith("`") && info.includes("`"))) {
         openFence = marker;
+        openedAt = index;
       }
-      return openFence === null ? line : "";
+      return;
     }
     if (
       marker &&
@@ -139,10 +153,11 @@ function blankCodeFences(markdown: string): string[] {
       marker.length >= openFence.length &&
       info.trim() === ""
     ) {
+      blanked.fill("", openedAt, index + 1);
       openFence = null;
     }
-    return "";
   });
+  return blanked;
 }
 
 /** Blanks inline code spans: `` `[a](b)` `` renders as text, not as a link. */
@@ -212,13 +227,14 @@ function resolveTarget(sourcePath: string, targetPath: string): string {
 }
 
 /**
- * Both sides of an anchor comparison pass through here, which is what lets the
- * two slugger conventions in circulation agree. GitHub turns `## A — B` into
- * `#a--b` (the em dash leaves its surrounding spaces behind); most other
- * renderers, and the checker PR #2033 deleted, collapse that to `#a-b`.
- * Collapsing hyphen runs and dropping `_` on both the heading and the link
- * fragment makes either spelling resolve. The ceiling is deliberate: a link
- * that only one of the two conventions resolves is not reported.
+ * Reconciles the two slugger conventions in circulation. GitHub turns
+ * `## A — B` into `#a--b` (the em dash leaves its surrounding spaces behind);
+ * most other renderers, and the checker PR #2033 deleted, collapse that to
+ * `#a-b`. Collapsing hyphen runs and dropping `_` makes either spelling
+ * resolve. Applied to the link fragment and to `id=` / `name=` attributes;
+ * heading slugs skip it because `slugify` already emits this form. The ceiling
+ * is deliberate: a link that only one of the two conventions resolves is not
+ * reported.
  */
 function normalizeFragment(fragment: string): string {
   return fragment
@@ -283,11 +299,19 @@ function validate(
     reason,
   });
 
+  // A target that climbs out of the repository gets its own reason rather than
+  // sharing `missing target`: on disk it may well exist — a sibling clone of
+  // this same repo puts `../<clone>/README.md` right there — so folding it into
+  // the existence check would make the guard invisible to any test and let the
+  // link pass on the machines that happen to have a sibling checkout.
+  if (target.startsWith("../")) {
+    return issue(`target outside the repository ${target}`);
+  }
   // Existence is read off the disk, not out of the git index. The two agree
   // today (measured: zero links resolve to an existing untracked path), and an
   // index lookup is the upgrade if a link to a build artifact ever starts
   // passing locally while a clean CI checkout has no such file.
-  if (target.startsWith("../") || !existsSync(absolute)) {
+  if (!existsSync(absolute)) {
     return issue(`missing target ${target}`);
   }
   if (anchor === "") return null;
