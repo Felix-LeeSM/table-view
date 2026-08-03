@@ -148,9 +148,13 @@ const RULES = [
   [/^src\/components\/document\//, DOCUMENT],
 ];
 
-// Anything the rules do not name runs the full suite (fail-closed): shared
-// frontend core, `src-tauri/src/**` outside an adapter, package.json,
-// pnpm-lock.yaml, wdio*, vite.config.ts, e2e/smoke/**, e2e/fixtures/**.
+// Anything `RULES` above does not name runs the full suite (fail-closed):
+// shared frontend core, all of `src-tauri/src/**` (#1769 left no adapter in the
+// app crate, so no rule narrows it), every `table-view-core` path outside the
+// adapter prefixes named above — its `storage/`, `models/`, `error.rs` and the
+// shared `db/` roots such as `traits.rs` and `raw_where.rs` — plus
+// package.json, pnpm-lock.yaml, wdio*, vite.config.ts, e2e/smoke/**,
+// e2e/fixtures/**.
 export function selectSpecKeys(changedPaths) {
   const selected = new Set();
   for (const raw of changedPaths) {

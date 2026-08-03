@@ -457,7 +457,7 @@ jobs:
 
       # #1769 — `cargo fmt` / `cargo clippy` only touch the package they are
       # invoked on, never its path dependencies. `table-view-core` holds the
-      # db/models/storage/error tree, so without these two steps ~60% of the
+      # db/models/storage/error tree, so without the core steps below ~60% of the
       # Rust source would leave both gates while CI stayed green. clippy reads
       # `clippy.toml` from CARGO_MANIFEST_DIR, hence the crate's own copy.
       - name: Rustfmt (table-view-core)

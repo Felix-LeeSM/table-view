@@ -2,7 +2,7 @@
 title: 코딩 컨벤션
 type: memory
 updated: 2026-07-16
-keywords: 디렉토리 depth, cargo fmt, cargo clippy, unwrap(), console.log, Coverage gate, vite.config.ts, pnpm vitest run, pnpm tsc --noEmit, pnpm lint, 금지 사항, Conventional Commits
+keywords: 디렉토리 depth, 포맷 린트 SOT, unwrap(), console.log, Coverage gate, vite.config.ts, pnpm vitest run, pnpm tsc --noEmit, pnpm lint, 금지 사항, Conventional Commits
 ---
 
 # 코딩 컨벤션
@@ -20,7 +20,8 @@ Rust / TypeScript / 테스트 / 커밋 / 금지 사항. 작업 전 훑어볼 것
 
 ## Rust
 
-- `cargo fmt` 포맷, `cargo clippy` 린트 필수 통과.
+- 포맷/린트 명령은 [rust](./rust/memory.md) 「포맷팅 / 린트」 가 SOT. manifest 를
+  안 주면 path dependency 인 core 에 안 닿는다.
 - 에러: `thiserror`로 `AppError` 정의, `Result<T, AppError>` 반환. `unwrap()` 금지 (테스트 제외) — `?` 또는 `map_err` 사용.
 - 공개 API는 `///` 문서 주석.
 - 모듈: `mod.rs`에서 공개 인터페이스 노출, 파일 1개 = 주요 struct/trait 1개, 순환 참조 금지.

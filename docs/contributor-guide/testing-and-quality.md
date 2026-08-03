@@ -124,7 +124,7 @@ Required local evidence:
   `run -- --run --coverage ...` and treats everything after `--` as non-flag
   arguments. It exited 0 without collecting coverage or applying the
   vite.config.ts thresholds, so this lane produced no coverage evidence.
-- Rust lane, five commands in this order:
+- Rust lane, in this order:
   `cargo test --manifest-path src-tauri/Cargo.toml --lib --test storage_integration`,
   `cargo test --manifest-path src-tauri/table-view-core/Cargo.toml --lib`,
   `cargo test --manifest-path src-tauri/sql-parser-core/Cargo.toml --lib`,

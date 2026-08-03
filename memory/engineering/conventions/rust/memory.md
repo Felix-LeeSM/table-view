@@ -4,7 +4,7 @@ type: convention
 updated: 2026-08-01
 surface: src-tauri/**/*.rs
 task: rust-impl, refactor
-keywords: cargo fmt, cargo clippy, thiserror, unwrap(), spawn_blocking, tokio::sync::Mutex, cargo-mutants, --in-place, include_str!, sqlparser, raw_where.rs, SECURITY RE-AUDIT ON sqlparser BUMP
+keywords: cargo fmt --manifest-path, cargo clippy --manifest-path, thiserror, unwrap(), spawn_blocking, tokio::sync::Mutex, cargo-mutants, --in-place, include_str!, sqlparser, raw_where.rs, SECURITY RE-AUDIT ON sqlparser BUMP
 trigger:
   signal: src-tauri/**/*.rs 편집 시
   layer: none — 자동 로드 없음, 직접 열어야 함
@@ -16,8 +16,13 @@ trigger:
 
 ## 포맷팅 / 린트
 
-- `cargo fmt` 통과 필수
-- `cargo clippy --all-targets --all-features -- -D warnings` 통과 필수
+- 포맷은 `pnpm format:rust`. manifest 를 안 준 호출은 저장소 루트에 cargo
+  manifest 가 없어 exit 1 이고, `src-tauri` 에서 돌려도 path dependency 인 core
+  에는 안 닿는다 — 돌 manifest 목록은 `package.json` 의 `format:rust` 가 갖는다.
+- clippy 는 manifest 마다 한 번씩
+  `cargo clippy --manifest-path <manifest> --all-targets --all-features -- -D warnings`.
+  로컬 훅이 없어 이 줄이 유일한 지시이고, 대상 manifest 목록은
+  `.github/workflows/ci.yml` 의 `Rust Static Analysis` 잡이 갖는다.
 - 들여쓰기: 4 spaces
 
 ## 에러 처리
@@ -74,12 +79,14 @@ fn get_user(id: u64) -> Result<User, AppError> {
 - SQL injection 방지: 파라미터화된 쿼리
 - 민감 정보 (비밀번호 등) 로그 출력 금지
 - 안전한 직렬화/역직렬화
-- **`sqlparser` 범프 시 `db/raw_where.rs` 재감사 필수** (#1620 F1). `is_safe_value_expr`
-  / `is_predicate` 의 allowlist 는 `Expr` variant + child field 를 열거하는데,
-  `..` rest 패턴과 `_ => false` 때문에 범프로 기존 variant 에 새 subquery-bearing
-  field 가 추가되면 검사 없이 조용히 흡수됨 (#1549 류 우회 재발). Cargo.lock
-  `sqlparser` 버전 변경 PR 은 `Expr` diff 후 매칭된 variant 의 미검증 child 부재를
-  재확인. 코드 주석(SECURITY RE-AUDIT ON sqlparser BUMP)이 대응 지점.
+- **`sqlparser` 범프 시 `src-tauri/table-view-core/src/db/raw_where.rs` 재감사
+  필수** (#1620 F1). `is_safe_value_expr` / `is_predicate` 의 allowlist 는 `Expr`
+  variant + child field 를 열거하는데, `..` rest 패턴과 `_ => false` 때문에 범프로
+  기존 variant 에 새 subquery-bearing field 가 추가되면 검사 없이 조용히 흡수됨
+  (#1549 류 우회 재발). `sqlparser` 는 `src-tauri/Cargo.lock` 과
+  `src-tauri/table-view-core/Cargo.lock` 에 따로 잠기니 어느 쪽 diff 든 트리거로
+  보고, `Expr` diff 후 매칭된 variant 의 미검증 child 부재를 재확인. 코드
+  주석(SECURITY RE-AUDIT ON sqlparser BUMP)이 대응 지점.
 
 ## 관련
 

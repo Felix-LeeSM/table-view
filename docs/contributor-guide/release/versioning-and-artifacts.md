@@ -37,8 +37,9 @@ Two workflows drive a release:
 
 - [`.github/workflows/auto-tag-release.yml`](../../../.github/workflows/auto-tag-release.yml)
   (Option B): when a version-bump PR merges to `main` and changes
-  `src-tauri/tauri.conf.json`, it reads the version, checks that `Cargo.toml`
-  and `package.json` both agree (all three source-of-truth files must match), and
+  `src-tauri/tauri.conf.json`, it reads the version, checks that
+  `src-tauri/Cargo.toml` and `package.json` both agree (every source-of-truth
+  version file the workflow reads must match), and
   — if the `vX.Y.Z` tag does not already exist — creates and pushes it. The tag
   is pushed with the `RELEASE_PAT` secret, because a `GITHUB_TOKEN`-pushed tag
   would not trigger downstream workflows. This is the normal way a release tag is

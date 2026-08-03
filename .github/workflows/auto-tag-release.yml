@@ -107,11 +107,11 @@ jobs:
             exit 1
           fi
 
-          # Cargo.toml must agree with tauri.conf.json — a half-done bump would
-          # otherwise ship a tag whose crate version disagrees with the app.
+          # src-tauri/Cargo.toml must agree with tauri.conf.json — a half-done
+          # bump would ship a tag whose crate version disagrees with the app.
           cargo_version="$(grep -m1 '^version' src-tauri/Cargo.toml | sed -E 's/.*"([^"]+)".*/\1/')"
           if [ "$version" != "$cargo_version" ]; then
-            echo "::error::version mismatch: tauri.conf.json=$version Cargo.toml=$cargo_version" >&2
+            echo "::error::version mismatch: tauri.conf.json=$version src-tauri/Cargo.toml=$cargo_version" >&2
             exit 1
           fi
 
