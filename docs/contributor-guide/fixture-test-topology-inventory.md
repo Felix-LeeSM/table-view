@@ -34,7 +34,7 @@ Required inventory commands:
 
 | Command | Result |
 |---|---|
-| `rg --files fixtures tests/fixtures e2e/fixtures` | 31 tracked fixture-root paths, measured 2026-08-03; the #755 baseline was 26. |
+| `rg --files fixtures tests/fixtures e2e/fixtures` | 31 tracked fixture-root paths, measured 2026-08-03. The #755 baseline was 23, not the 26 this row carried until then — the two supporting checks below measure both ends. |
 | `rg -n "FixtureHarness\|dbms-seeds\|seed\\." src-tauri tests e2e --glob '!src-tauri/target/**' --glob '!target/**' --glob '!node_modules/**'` | 71 tracked-source matches; cache and dependency hits are excluded from topology decisions by the repository topology SOT. |
 | `pnpm exec vitest run tests/fixtures/*.test.ts` | Fixture contract tests. |
 
@@ -43,6 +43,8 @@ Supporting checks:
 | Command | Result |
 |---|---|
 | `git ls-files fixtures tests/fixtures e2e/fixtures` | Same 31 tracked fixture-root paths. |
+| `git ls-tree -r --name-only 6f3b7d52 -- fixtures tests/fixtures e2e/fixtures \| wc -l` | 23 at 6f3b7d52, the commit that made this page the #755 closure SOT. The 26 this row carried came from 46ca4799 (PR #2034, 2026-07-31), which measured that day's tree but left `updated:` at 2026-06-12 — so it read as a #755-era value and was never one. |
+| `git diff --name-status 6f3b7d52 -- fixtures tests/fixtures e2e/fixtures` | 9 added and 1 deleted (`e2e/fixtures/smoke-routing-decisions.json`) since the baseline, so 23 + 9 − 1 = 31. Net growth is 8; the count of new paths is 9. |
 | `git check-ignore -v fixtures tests/fixtures e2e/fixtures tests/fixtures/data-source-profile-parity.report.json` | No ignored tracked fixture roots reported. |
 | `rg -n "data-source-profile-parity\\.report\|PROFILE_PARITY_REPORT\|profile parity report\|reportVersion" . --glob '!src-tauri/target/**' --glob '!target/**' --glob '!node_modules/**'` | Report fixture is consumed by TS and Rust parity tests; no writer was found in the repo. |
 | `rg -n "writeFile\|writeFileSync\|fixture.*report\|report\\.json" src src-tauri tests package.json --glob '!src-tauri/target/**' --glob '!target/**' --glob '!node_modules/**'` | No `writeFile`/`writeFileSync` hit at all; the four matches are the parity report's own consumers and two unrelated Rust test names. Nothing in tracked source writes a fixture-root file. |

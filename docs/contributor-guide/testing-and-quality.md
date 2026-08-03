@@ -184,9 +184,10 @@ Required local evidence:
   **No formatter covers docs markdown, on purpose.** Prettier was removed when
   Biome landed, `biome.jsonc` excludes `docs/` outright, and Biome 2.5.6 does
   not format markdown at all — so there is nothing to run and this lane must not
-  be written as if there were. Link targets are the only machine-checked part of
-  a docs change: prose, structure, external URLs, and whether a resolving link
-  points at the right document remain reviewer judgement.
+  be written as if there were. Link targets are what this lane's machine checks
+  read out of the text; `git diff --check` warns about whitespace errors and
+  conflict markers, not meaning. Prose, structure, external URLs, and whether a
+  resolving link points at the right document remain reviewer judgement.
 
 Required remote evidence on the exact release SHA:
 

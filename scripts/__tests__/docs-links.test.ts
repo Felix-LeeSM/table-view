@@ -68,8 +68,13 @@ describe("docs internal link gate", () => {
       )
       .sort();
 
+    const { sources } = scan();
     expect(tracked.length).toBeGreaterThan(0);
-    expect(scan().sources).toEqual(tracked);
+    expect(sources).toEqual(tracked);
+    // The equality above rebuilds the exclusion from the same constant the scan
+    // reads, so it survives an edit to that list. This literal does not: the
+    // repository's universal agent entry cannot leave the scan while it passes.
+    expect(sources).toContain("AGENTS.md");
   });
 
   // Reason: the set above fixes which files are read, not how much of each one
