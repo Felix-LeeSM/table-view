@@ -347,7 +347,9 @@ jobs:
           # members), so the standalone `--manifest-path .../Cargo.toml` tests
           # below compile into their OWN target dirs. Caching only
           # `src-tauri -> target` left them uncached, recompiling every run
-          # (audit 2026-07-03). List each target as a separate workspace.
+          # (audit 2026-07-03). List each target as a separate workspace —
+          # unless a cold compile is cheaper than invalidating this list, which
+          # is the mongosh-parser-core step's reasoning at the end of this job.
           workspaces: |
             src-tauri -> target
             src-tauri/sql-parser-core -> target
@@ -399,6 +401,33 @@ jobs:
             --test keyring_migration \
             --test keyring_new_user \
             --test keyring_linux_fallback
+
+      # #2098 — a third crate whose lib tests no gate ran: pinned to the base
+      # commit, `git grep -n mongosh-parser dd1d9d0a -- .github` returns 0 hits.
+      # The cause differs from the two steps above, though. Those crates are
+      # path dependencies, which the app manifest compiles without running their
+      # tests; this one is absent from the app's dependency graph entirely
+      # (`git grep -n mongosh -- src-tauri/Cargo.lock` returns 0 hits), so no
+      # flag on the app manifest could have reached it. lefthook names the crate
+      # too but for a different gap — its cargo-fmt hooks skip it because CI
+      # does not fmt-check it either, which is about formatting, not tests.
+      # The 55 tests (parser 38, lexer 12, lib 4, completion 1) pass and always
+      # did; they simply gated nothing.
+      # Deliberately left out of the rust-cache `workspaces:` list above, so
+      # this crate compiles cold every run: 12 crates from an absent target dir,
+      # 6.65s, a 6s step of a 4m12s job (run 30779382990). Its native dep graph
+      # is serde + serde_json; the wasm-bindgen deps sit behind the
+      # off-by-default `wasm` feature.
+      # Listing the path would change the actions/cache version and stop every
+      # entry saved so far from restoring — a one-time transition, not a
+      # per-run cost, because `save-if` above saves only on main: the branch
+      # pays cold runs until it merges, then main re-saves under the new
+      # version (~23m for a cold pass, per this job's timeout comment). So the
+      # trade is 6.65s every run against ~23m once, break-even near 200 runs —
+      # taken because a ~23m pass also eats most of the 35m cap. Revisit if
+      # this crate's dependency graph grows.
+      - name: Run mongosh-parser-core unit tests
+        run: cargo test --manifest-path src-tauri/mongosh-parser-core/Cargo.toml --lib
 
   rust-static:
     name: Rust Static Analysis

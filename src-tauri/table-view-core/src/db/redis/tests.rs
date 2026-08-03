@@ -11,7 +11,7 @@ use crate::db::{
     KvValueReadRequest, KvWriteSafety,
 };
 use crate::error::AppError;
-use crate::models::{ConnectionConfig, DatabaseType};
+use crate::models::{ConnectionConfig, DatabaseType, SslMode};
 use tokio_util::sync::CancellationToken;
 
 fn config(database: &str) -> ConnectionConfig {
@@ -32,8 +32,8 @@ fn config(database: &str) -> ConnectionConfig {
         environment: None,
         auth_source: None,
         replica_set: None,
-        tls_enabled: None,
-        trust_server_certificate: None,
+        ssl_mode: SslMode::Prefer,
+        ca_cert_path: None,
         oracle_use_sid: None,
         wallet_path: None,
         wallet_password: String::new(),
@@ -150,34 +150,40 @@ fn connection_info_keeps_credentials_in_structured_fields_not_a_url() {
 }
 
 #[test]
-fn connection_info_uses_tcp_tls_target_when_tls_is_enabled() {
-    let mut config = config("5");
-    config.tls_enabled = Some(true);
+fn connection_info_uses_verifying_tcp_tls_target_for_verifying_postures() {
+    // Reason: #1649 — the plain TLS on/off toggle became the sslmode ladder, so
+    // "encrypt and authenticate the server" is two variants: `verify-ca` and
+    // `verify-full` both take the TcpTls target with `insecure: false`. redis-rs
+    // exposes no CA-file option here, so `verify-ca` verifies against the public
+    // roots — never weaker than `verify-full`. (2026-08-02)
+    for mode in [SslMode::VerifyCa, SslMode::VerifyFull] {
+        let mut config = config("5");
+        config.ssl_mode = mode;
 
-    let (info, db) = connection_info(&config).unwrap();
+        let (info, db) = connection_info(&config).unwrap();
 
-    assert_eq!(db, 5);
-    assert_eq!(
-        info.addr,
-        ::redis::ConnectionAddr::TcpTls {
-            host: "redis.local".into(),
-            port: 6379,
-            insecure: false,
-            tls_params: None,
-        }
-    );
-    assert_eq!(info.redis.password.as_deref(), Some("p@ss"));
+        assert_eq!(db, 5);
+        assert_eq!(
+            info.addr,
+            ::redis::ConnectionAddr::TcpTls {
+                host: "redis.local".into(),
+                port: 6379,
+                insecure: false,
+                tls_params: None,
+            },
+            "{mode:?} must keep certificate verification on the TLS target"
+        );
+        assert_eq!(info.redis.password.as_deref(), Some("p@ss"));
+    }
 }
 
 #[test]
-fn connection_info_trust_maps_to_insecure_tls_target() {
-    // Reason: #1063 — redis/valkey gain the shared skip-verify opt-in; a
-    // `trust_server_certificate = true` draft must set `insecure: true` on the
-    // TcpTls target, while the default (trust absent) keeps verification.
-    // (2026-07-17)
+fn connection_info_require_maps_to_insecure_tls_target() {
+    // Reason: #1063 / #1649 — redis/valkey carry the shared skip-verify opt-in,
+    // now spelled `SslMode::Require`: it must set `insecure: true` on the TcpTls
+    // target, while every verifying posture keeps verification. (2026-08-02)
     let mut config = config("5");
-    config.tls_enabled = Some(true);
-    config.trust_server_certificate = Some(true);
+    config.ssl_mode = SslMode::Require;
 
     let (info, _db) = connection_info(&config).unwrap();
 

@@ -18,6 +18,7 @@ import {
   pendingEditAnchorMatches,
   rowIdentityKey,
 } from "../dataGridEditFsm";
+import { SELECTED_ROW_FILL } from "../rowState";
 import { isBlobColumn, parseFkReference } from "./columnUtils";
 import type { CellNavigationDirection } from "./useCellNavigation";
 
@@ -628,12 +629,22 @@ function DataRow({
       // this row holds the roving anchor. Uses an inset box-shadow left bar
       // (ring token) rather than a left border: a border would push body cells
       // 2px out of alignment with the header, whereas the shadow is a separate
-      // paint channel from the selection `bg-accent/20`, so a selected+focused
-      // row reads both. Distinct tokens per state: ring=focus, accent=select,
-      // primary=edit.
+      // paint channel from the selection fill, so a selected+focused row reads
+      // both.
+      //
+      // #1734 (3) moved the selection fill off `accent`, which sat within a
+      // hair of `--tv-background` in every theme (`bg-accent/20` peaks at 1.046
+      // across all 144 theme x mode blocks) — the owner measured it as
+      // invisible. The replacement and the reason it is a neutral rather than a
+      // hue live in `datagrid/rowState.ts`.
+      //
+      // Channels stay separate: ring token = roving focus, `SELECTED_ROW_FILL`
+      // = selection, `bg-primary/10` + `ring-1 ring-inset ring-primary`
+      // (`inlineEdit.ts`, stacked on top of the row fill) = editing cell,
+      // highlight = pending.
       className={`min-h-8 border-b border-border hover:bg-muted${
         tabCol !== null ? " shadow-[inset_2px_0_0_0_var(--color-ring)]" : ""
-      }${isSelected ? " bg-accent/20" : ""}${isDeleted ? " line-through opacity-50" : ""}`}
+      }${isSelected ? ` ${SELECTED_ROW_FILL}` : ""}${isDeleted ? " line-through opacity-50" : ""}`}
       style={mergedStyle}
       onClick={(e) => onSelectRow(rowIdx, e.metaKey || e.ctrlKey, e.shiftKey)}
       onContextMenu={(e) => {

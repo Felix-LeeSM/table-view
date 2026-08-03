@@ -5,6 +5,7 @@ import {
   openNewConnectionDialog,
   openNewQueryTab,
   runQuery,
+  setInput,
   step,
   switchToWorkspaceWindow,
   waitForKvKeyVisible,
@@ -310,11 +311,4 @@ async function selectValkeyDatabaseType() {
     if (!option) throw new Error("Valkey option did not appear");
     option.click();
   });
-}
-
-async function setInput(selector: string, value: string) {
-  const input = await $(selector);
-  await input.waitForDisplayed({ timeout: 5000 });
-  await input.clearValue();
-  await input.setValue(value);
 }

@@ -388,8 +388,9 @@ describe("ConnectionDialog", () => {
       port: 1521,
       user: "system",
       database: "FREEPDB1",
-      tlsEnabled: null,
-      trustServerCertificate: null,
+      // Oracle's form exposes no TLS control, so the switch resets the posture
+      // to the driver default rather than carrying one over.
+      sslMode: "prefer",
     });
   });
 
@@ -1057,7 +1058,7 @@ describe("ConnectionDialog", () => {
       expect(screen.getByLabelText("Database (optional)")).toBeInTheDocument();
     });
 
-    it("includes authSource, replicaSet, tlsEnabled in the saved draft", async () => {
+    it("includes authSource, replicaSet, sslMode in the saved draft", async () => {
       const user = userEvent.setup();
       renderDialog();
       const nameInput = screen.getByLabelText("Name") as HTMLInputElement;
@@ -1093,7 +1094,7 @@ describe("ConnectionDialog", () => {
       expect(draft.paradigm).toBe("document");
       expect(draft.authSource).toBe("admin");
       expect(draft.replicaSet).toBe("rs0");
-      expect(draft.tlsEnabled).toBe(true);
+      expect(draft.sslMode).toBe("verify-full");
     });
 
     // Sprint 381 (2026-05-17) — db-contract α: Mongo connection 의
@@ -1206,7 +1207,7 @@ describe("ConnectionDialog", () => {
       expect(draft.dbType).toBe("elasticsearch");
       expect(draft.paradigm).toBe("search");
       expect(draft.database).toBe("");
-      expect(draft.tlsEnabled).toBe(true);
+      expect(draft.sslMode).toBe("verify-full");
     });
   });
 
@@ -1781,7 +1782,7 @@ describe("ConnectionDialog", () => {
       expect(screen.queryByLabelText("Password")).not.toBeInTheDocument();
     });
 
-    it("AC-S138-01 Mongo: authSource / replicaSet / tlsEnabled present + user defaults to empty", async () => {
+    it("AC-S138-01 Mongo: authSource / replicaSet / Enable TLS present + user defaults to empty", async () => {
       const user = userEvent.setup();
       renderDialog();
       const trigger = screen.getByLabelText("Database Type");
@@ -1832,7 +1833,7 @@ describe("ConnectionDialog", () => {
       expect(screen.getByLabelText("Trust server certificate")).toBeChecked();
     });
 
-    it("MSSQL save clears trustServerCertificate when encryption is disabled with bounded runtime claims", async () => {
+    it("MSSQL save records the disable posture when encryption is turned off, with bounded runtime claims", async () => {
       const user = userEvent.setup();
       renderDialog();
       await act(async () => {
@@ -1860,8 +1861,9 @@ describe("ConnectionDialog", () => {
       expect(mockAddConnection).toHaveBeenCalledTimes(1);
       const draft = mockAddConnection.mock.calls[0]![0] as ConnectionDraft;
       expect(draft.dbType).toBe("mssql");
-      expect(draft.tlsEnabled).toBe(false);
-      expect(draft.trustServerCertificate).toBe(false);
+      // Unchecking encryption forces plaintext and drops the skip-verify
+      // choice with it — one posture, no stale companion flag.
+      expect(draft.sslMode).toBe("disable");
       expect(
         dataSourceProfiles.getDataSourceProfile("mssql").capabilities,
       ).toMatchObject({
@@ -1984,15 +1986,17 @@ describe("ConnectionDialog", () => {
       expect(mockAddConnection).not.toHaveBeenCalled();
     });
 
-    it("does not default missing trustServerCertificate to true when editing an existing MSSQL connection", async () => {
+    // Reason: #1649 — a stored verify-full MSSQL connection is a deliberate
+    // "encrypt and verify" choice; opening it must not pre-check skip-verify.
+    // (2026-08-02)
+    it("opens a stored verify-full MSSQL connection with skip-verify unchecked", async () => {
       renderDialog({
         connection: makeConnection({
           dbType: "mssql",
           port: 1433,
           user: "sa",
           database: "master",
-          tlsEnabled: true,
-          trustServerCertificate: undefined,
+          sslMode: "verify-full",
         }),
       });
 
@@ -2010,7 +2014,7 @@ describe("ConnectionDialog", () => {
       });
 
       const draft = mockUpdateConnection.mock.calls[0]![0] as ConnectionDraft;
-      expect(draft.trustServerCertificate).toBe(true);
+      expect(draft.sslMode).toBe("require");
     });
   });
 

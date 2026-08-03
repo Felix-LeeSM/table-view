@@ -16,7 +16,7 @@ use crate::models::{
 };
 use crate::storage;
 
-const SQLITE_POOL_MAX_CONNECTIONS: u32 = 5;
+pub(super) const SQLITE_POOL_MAX_CONNECTIONS: u32 = 5;
 const SQLITE_POOL_ACQUIRE_TIMEOUT_MAX_SECS: u64 = 30;
 const SQLITE_POOL_ACQUIRE_TIMEOUT_DEFAULT_SECS: u32 = 300;
 pub(super) const SQLITE_NAMESPACE: &str = "main";

@@ -367,6 +367,11 @@ pub fn save_connection_with_wallet(
     new_password: Option<String>,
     new_wallet_password: Option<String>,
 ) -> Result<(), AppError> {
+    // #1649 (ADR 0058) — the single chokepoint every file-SOT writer passes
+    // through (the `save_connection` IPC, the dual-write `persist_connection`
+    // IPC, and import). Guarding here rather than in each caller is what keeps
+    // `verify-ca` from ever being stored without the CA file it names.
+    crate::db::tls::validate_tls_posture(&conn)?;
     with_lock(|| {
         let mut data = load_storage_raw()?;
 
@@ -478,6 +483,7 @@ pub fn move_connection_to_group(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::models::SslMode;
     use crate::models::{ConnectionConfig, ConnectionGroup, DatabaseType};
     use serial_test::serial;
     use tempfile::TempDir;
@@ -540,8 +546,8 @@ mod tests {
             environment: None,
             auth_source: None,
             replica_set: None,
-            tls_enabled: None,
-            trust_server_certificate: None,
+            ssl_mode: SslMode::Prefer,
+            ca_cert_path: None,
             oracle_use_sid: None,
             wallet_path: None,
             wallet_password: String::new(),
@@ -555,6 +561,51 @@ mod tests {
             color: None,
             collapsed: false,
         }
+    }
+
+    #[test]
+    #[serial]
+    fn save_connection_rejects_verify_ca_without_a_ca_file() {
+        // Reason: #1649 (ADR 0058) — this is the chokepoint half of the
+        // fail-closed contract. `db::tls` owns the rule, but only a test here
+        // proves the writer actually consults it: every file-SOT writer (the
+        // `save_connection` IPC, the dual-write `persist_connection` IPC, and
+        // import) routes through this function, so deleting the
+        // `validate_tls_posture` call would leave the rule's own unit tests green
+        // while unanchored `verify-ca` rows started landing on disk. The
+        // "nothing was written" assertion is what separates a rejection from a
+        // write-then-error. (2026-08-02)
+        let _dir = setup_test_env();
+
+        let mut conn = sample_connection("c-ca", "PG private CA");
+        conn.ssl_mode = SslMode::VerifyCa;
+        conn.ca_cert_path = None;
+        let err = save_conn(conn.clone())
+            .expect_err("verify-ca without a CA file must not reach the file SOT");
+        assert!(
+            matches!(err, AppError::Validation(ref msg) if msg.contains("verify-ca")
+                && msg.contains("CA certificate")),
+            "the rejection must name the missing CA file, got: {err:?}"
+        );
+        assert!(
+            load_storage().unwrap().connections.is_empty(),
+            "a rejected posture must leave the file SOT untouched"
+        );
+
+        // The same connection with a CA file stores, and the path survives the
+        // round trip — the mirror has no column for it, so this file is its only
+        // home.
+        conn.ca_cert_path = Some("/opt/corp/private/corp-ca.pem".into());
+        save_conn(conn).unwrap();
+        let stored = load_storage().unwrap().connections;
+        assert_eq!(stored.len(), 1);
+        assert_eq!(stored[0].ssl_mode, SslMode::VerifyCa);
+        assert_eq!(
+            stored[0].ca_cert_path.as_deref(),
+            Some("/opt/corp/private/corp-ca.pem")
+        );
+
+        cleanup_test_env();
     }
 
     // AC-01: load_storage creates default empty storage when file doesn't exist

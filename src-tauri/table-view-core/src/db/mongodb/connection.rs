@@ -1,9 +1,11 @@
 //! MongoAdapter struct + connection lifecycle + `impl DbAdapter`.
 //!
 //! Sprint 197 split — extracted from `db/mongodb.rs`. Holds:
-//!   * the adapter struct (shared `(client, default_db, active_db)` slots)
+//!   * the adapter struct (shared `(client, default_db, active_db,
+//!     runtime_capabilities)` slots)
 //!   * `build_options` / `test` / `current_client` / `switch_active_db`
-//!     / `current_active_db` / `resolved_db_name` (lifecycle inherent)
+//!     / `current_active_db` / `runtime_capabilities` / `resolved_db_name`
+//!     (lifecycle inherent)
 //!   * `impl DbAdapter for MongoAdapter` (`kind` / `connect` / `disconnect`
 //!     / `ping`)
 //!
@@ -46,9 +48,6 @@ pub struct MongoAdapter {
     /// whose probe was refused holds `Some(MongoRuntimeCapabilities::unknown())`
     /// — both read as fail-closed at the accessor, but the distinction keeps
     /// `disconnect()` honest.
-    ///
-    /// Lock order is after `client`, matching `active_db` (see
-    /// `switch_active_db`). Nothing takes two of these at once today.
     pub(super) runtime_capabilities: Arc<Mutex<Option<MongoRuntimeCapabilities>>>,
 }
 
@@ -109,12 +108,15 @@ impl MongoAdapter {
             opts.repl_set_name = Some(rs.to_string());
         }
 
-        if matches!(config.tls_enabled, Some(true)) {
-            // #1063 — `trust_server_certificate = true` is the shared skip-verify
+        if config.ssl_mode.tls_on() {
+            // #1063 / #1649 — the `require` posture is the shared skip-verify
             // opt-in; for MongoDB it maps onto `allow_invalid_certificates`, so a
             // self-signed cluster is reachable without turning TLS off entirely.
-            // Absent/false trust keeps the driver's full CA + hostname check.
-            let tls_options = if matches!(config.trust_server_certificate, Some(true)) {
+            // Every verifying posture keeps the driver's full CA + hostname
+            // check. `verify-ca`'s private anchor is not wired here — the mongo
+            // driver would take `TlsOptions::ca_file_path`, which is #1649
+            // follow-up depth, so verify-ca verifies against the public roots.
+            let tls_options = if config.ssl_mode.skip_verify() {
                 TlsOptions::builder()
                     .allow_invalid_certificates(true)
                     .build()
@@ -231,6 +233,15 @@ impl MongoAdapter {
         self.active_db.lock().await.clone()
     }
 
+    /// Issue #1821 — the runtime capability probed during `connect()`.
+    pub async fn runtime_capabilities(&self) -> MongoRuntimeCapabilities {
+        self.runtime_capabilities
+            .lock()
+            .await
+            .clone()
+            .unwrap_or_else(MongoRuntimeCapabilities::unknown)
+    }
+
     /// Sprint 137 (AC-S137-01) — resolve which Mongo database name a
     /// metadata fetch should run against.
     ///
@@ -258,21 +269,6 @@ impl MongoAdapter {
     /// should surface that as an `AppError::Validation` so the frontend
     /// gets an actionable error instead of a silent empty list.
     ///
-    /// Issue #1821 — the runtime capability probed during `connect()`.
-    ///
-    /// Reads the cached value; never hits the driver, so UI gates can call it
-    /// per render without a round trip. Fail-closed on every "we do not know"
-    /// path: a disconnected adapter and a connected-but-unprobed session both
-    /// answer `MongoRuntimeCapabilities::unknown()`, which no positive gate
-    /// matches.
-    pub async fn runtime_capabilities(&self) -> MongoRuntimeCapabilities {
-        self.runtime_capabilities
-            .lock()
-            .await
-            .clone()
-            .unwrap_or_else(MongoRuntimeCapabilities::unknown)
-    }
-
     /// Pure helper — no driver round-trip — so it is unit-testable
     /// without a live MongoDB instance.
     pub async fn resolved_db_name(&self, requested: Option<&str>) -> Option<String> {
@@ -423,6 +419,7 @@ fn mongo_connection_error(context: &'static str, err: impl std::fmt::Display) ->
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::models::SslMode;
 
     #[test]
     fn new_adapter_reports_mongodb_kind() {
@@ -504,8 +501,8 @@ mod tests {
             environment: None,
             auth_source: Some("admin".into()),
             replica_set: Some("rs0".into()),
-            tls_enabled: Some(true),
-            trust_server_certificate: None,
+            ssl_mode: SslMode::VerifyFull,
+            ca_cert_path: None,
             oracle_use_sid: None,
             wallet_path: None,
             wallet_password: String::new(),
@@ -547,28 +544,41 @@ mod tests {
     }
 
     #[test]
-    fn build_options_trust_maps_to_allow_invalid_certificates() {
-        // Reason: #1063 — MongoDB gains the shared skip-verify opt-in; a
-        // `trust_server_certificate = true` draft must surface as
-        // `allow_invalid_certificates` on the driver TlsOptions, while the
-        // default (trust absent) keeps full verification. (2026-07-17)
+    fn build_options_require_maps_to_allow_invalid_certificates() {
+        // Reason: #1063 / #1649 — MongoDB carries the shared skip-verify opt-in,
+        // now spelled `SslMode::Require`: it must surface as
+        // `allow_invalid_certificates` on the driver TlsOptions, while every
+        // verifying posture keeps the driver's full CA + hostname check. #1649
+        // also widens which postures turn TLS on at all — the old code keyed off
+        // `tls_enabled == Some(true)` alone, so `require`, `verify-ca` and
+        // `verify-full` must each reach `Tls::Enabled`. (2026-08-02)
         let mut cfg = sample_config();
-        cfg.trust_server_certificate = Some(true);
+        cfg.ssl_mode = SslMode::Require;
         let opts = MongoAdapter::build_options(&cfg).expect("build_options should succeed");
         match &opts.tls {
             Some(Tls::Enabled(t)) => assert_eq!(
                 t.allow_invalid_certificates,
                 Some(true),
-                "trust=true must skip certificate verification"
+                "require must skip certificate verification"
             ),
             other => panic!("expected TLS enabled, got {other:?}"),
         }
 
-        // Trust absent keeps the driver's full verification (no skip flag set).
-        let opts = MongoAdapter::build_options(&sample_config()).expect("build_options ok");
-        match &opts.tls {
-            Some(Tls::Enabled(t)) => assert_ne!(t.allow_invalid_certificates, Some(true)),
-            other => panic!("expected TLS enabled, got {other:?}"),
+        // Both verifying postures encrypt and keep the driver's full
+        // verification (no skip flag set). `verify-ca`'s private anchor is not
+        // wired into the mongo driver yet, so it verifies like `verify-full`.
+        for mode in [SslMode::VerifyCa, SslMode::VerifyFull] {
+            let mut cfg = sample_config();
+            cfg.ssl_mode = mode;
+            let opts = MongoAdapter::build_options(&cfg).expect("build_options ok");
+            match &opts.tls {
+                Some(Tls::Enabled(t)) => assert_ne!(
+                    t.allow_invalid_certificates,
+                    Some(true),
+                    "{mode:?} must keep certificate verification"
+                ),
+                other => panic!("expected TLS enabled for {mode:?}, got {other:?}"),
+            }
         }
     }
 
@@ -591,8 +601,8 @@ mod tests {
             environment: None,
             auth_source: None,
             replica_set: None,
-            tls_enabled: None,
-            trust_server_certificate: None,
+            ssl_mode: SslMode::Prefer,
+            ca_cert_path: None,
             oracle_use_sid: None,
             wallet_path: None,
             wallet_password: String::new(),
@@ -600,6 +610,9 @@ mod tests {
         let opts = MongoAdapter::build_options(&cfg).expect("build_options should succeed");
         assert!(opts.credential.is_none());
         assert!(opts.repl_set_name.is_none());
+        // Reason: #1649 — `Prefer` is the default posture and despite its name
+        // sets no TLS option at all, leaving the driver's own default; only the
+        // three `tls_on()` postures reach `Tls::Enabled`. (2026-08-02)
         assert!(opts.tls.is_none());
         assert!(opts.connect_timeout.is_none());
     }

@@ -1,5 +1,9 @@
 import { sanitizeMessage } from "@/features/connection/components/ConnectionDialog/sanitize";
-import { canonicalEnvironmentTag } from "@/features/connection/model";
+import {
+  canonicalEnvironmentTag,
+  SSL_MODES,
+  type SslMode,
+} from "@/features/connection/model";
 import { logger } from "@/lib/logger";
 import type { ConnectionConfig, ConnectionStatus } from "@/types/connection";
 import type {
@@ -52,6 +56,20 @@ function optionalNumber(value: unknown): number | undefined {
 function optionalString(value: unknown): string | null | undefined {
   if (value === undefined) return undefined;
   return typeof value === "string" ? value : null;
+}
+
+/**
+ * #1649 — narrow an untrusted wire value to an `SslMode`. Anything unknown
+ * (a hand-edited payload, a future backend value this build predates) falls
+ * back to the driver default instead of throwing, matching how every other
+ * reader in this file degrades. `prefer` is never weaker than the pre-#1062
+ * behavior.
+ */
+function asSslMode(value: unknown): SslMode {
+  return typeof value === "string" &&
+    (SSL_MODES as readonly string[]).includes(value)
+    ? (value as SslMode)
+    : "prefer";
 }
 
 function optionalBool(value: unknown): boolean | null | undefined {
@@ -272,10 +290,13 @@ export function normalizeConnectionConfig(value: unknown): ConnectionConfig {
         : "rdb",
     authSource: optionalString(pick(r, "authSource", "auth_source")),
     replicaSet: optionalString(pick(r, "replicaSet", "replica_set")),
-    tlsEnabled: optionalBool(pick(r, "tlsEnabled", "tls_enabled")),
-    trustServerCertificate: optionalBool(
-      pick(r, "trustServerCertificate", "trust_server_certificate"),
-    ),
+    // #1649 — the backend already folds any legacy `(tlsEnabled,
+    // trustServerCertificate)` pair into `sslMode` before it reaches the wire,
+    // so this reader only has to accept the two casings of the new fields. An
+    // unknown value falls back to the driver default rather than throwing on a
+    // hand-authored payload.
+    sslMode: asSslMode(pick(r, "sslMode", "ssl_mode")),
+    caCertPath: optionalString(pick(r, "caCertPath", "ca_cert_path")),
     oracleUseSid: optionalBool(pick(r, "oracleUseSid", "oracle_use_sid")),
     walletPath: optionalString(pick(r, "walletPath", "wallet_path")),
     hasWalletPassword:

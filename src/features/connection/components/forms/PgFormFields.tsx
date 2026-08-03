@@ -159,11 +159,10 @@ export default function PgFormFields({
       </div>
 
       {/* TLS — #1063 promotes the previous two-checkbox toggle to the shared
-          sslmode dropdown (disable/prefer/require/verify-full). PG routes
-          through the `resolve_tls_decision` trust boundary (#1062), so the
-          dropdown maps each option onto a valid `(tlsEnabled, trust)` pair;
-          the invalid `trust=None` while TLS is on is never authored. Unset
-          stays `prefer` so localhost dev connects without friction. */}
+          sslmode dropdown; #1649 makes the selection the persisted `sslMode`
+          rather than a view over a boolean pair, so PG's old invalid residue
+          (TLS on with no trust decision) is no longer expressible. Unset stays
+          `prefer` so localhost dev connects without friction. */}
       <SslModeField
         draft={draft}
         onChange={onChange}

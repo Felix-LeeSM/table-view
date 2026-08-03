@@ -46,6 +46,40 @@ landed and live GitHub showed no open Refactor 04 child issues.
 | MariaDB deltas | Keep `RETURNING` returned-row runtime support, routine/default behavior, procedure-management, trigger CRUD, completion-runtime, admin/import/export, and full workbench claims behind separate MariaDB-specific promotion gates. Current `RETURNING` evidence is profile/completion plus a version-aware completion suggestion gate, structural parser/Safe Mode classification, and focused `mariadb:11` runtime characterization showing server-accepted `DELETE ... RETURNING` side effect with no returned-row or affected-row-count adapter support claim; current row-edit and bounded table/index/constraint DDL evidence is limited to the tested MySQL-family path under MariaDB identity, with smoke coverage for the bounded Structure DDL path. |
 | Fixture inventory | Nothing checks that the fixture inventory matches the docs. Read `e2e/fixtures/<dbms>/` before product docs cite fixture evidence. |
 
+## What The Rust Coverage Gate Grades
+
+On job `91580953608` (head `44beea9c`) the `Integration Tests (Docker)` llvm-cov
+gate's per-file table carries 65 rows, none under `table-view-core`, over a
+`TOTAL` of 30,195 regions / 2,831 functions / 21,550 lines.
+
+Measured on `dd1d9d0a` (macOS):
+
+```bash
+cd src-tauri
+cargo llvm-cov nextest --profile push --lib --ignore-run-fail --json \
+  | jq '{files: [.data[0].files[].filename]
+           | {total: length, core: map(select(test("table-view-core"))) | length},
+         totals: .data[0].totals
+           | {regions: .regions.count, functions: .functions.count, lines: .lines.count}}'
+```
+
+It reports 64 files, 0 of them under `table-view-core`, over totals of 30,475
+regions / 2,842 functions / 21,694 lines.
+
+The crate's own unit coverage on `dd1d9d0a` is 69.17% regions / 65.76%
+functions / 69.54% lines over 1,204 tests, and its `TOTAL` row counts 65,446
+regions. Run this one from the repo root, not from the `src-tauri` directory the
+block above leaves you in:
+
+```bash
+cargo llvm-cov --manifest-path src-tauri/table-view-core/Cargo.toml --lib --summary-only
+```
+
+Read a job with
+`gh api --allow-escape-sequences repos/{owner}/{repo}/actions/jobs/<job-id>/logs`
+while GitHub still retains that run's logs; without that flag `gh` prints a
+one-line notice instead of the log.
+
 ## Local Development And CI
 
 | Area | Follow-up |
@@ -128,15 +162,21 @@ Required local evidence:
   `cargo test --manifest-path src-tauri/Cargo.toml --lib --test storage_integration`,
   `cargo test --manifest-path src-tauri/table-view-core/Cargo.toml --lib`,
   `cargo test --manifest-path src-tauri/sql-parser-core/Cargo.toml --lib`,
-  `cargo test --manifest-path src-tauri/Cargo.toml --test parse_sql_backend`, and
-  `cargo test --manifest-path src-tauri/Cargo.toml --test keyring_migration --test keyring_new_user --test keyring_linux_fallback`.
+  `cargo test --manifest-path src-tauri/Cargo.toml --test parse_sql_backend`,
+  `cargo test --manifest-path src-tauri/Cargo.toml --test keyring_migration --test keyring_new_user --test keyring_linux_fallback`,
+  and `cargo test --manifest-path src-tauri/mongosh-parser-core/Cargo.toml --lib`.
   `table-view-core` and `sql-parser-core` are path dependencies, not workspace
-  members, so the app manifest's `--lib` never reaches either one. `--test` is an
-  allowlist on top of that: an integration binary that no line names never runs,
-  which is how the three `keyring_*` binaries stayed outside CI until #1815. Drop
-  a line and the lane still exits 0 with those crates' unit tests — or those
-  binaries — unrun, the same reason CI wires them as separate steps
-  (`.github/workflows/ci.yml:358-401`).
+  members: the app manifest's `--lib` compiles them but never runs their own
+  unit tests. `mongosh-parser-core` sits one step further out — it is not in
+  the app's dependency graph at all (`git grep -n mongosh -- src-tauri/Cargo.lock`
+  returns 0 hits), so no flag on the app manifest can reach it and only its own
+  `--manifest-path` line runs it. That is how its lib tests stayed outside every
+  gate until #2098. `--test` is an allowlist on top of that: an integration
+  binary that no line names never runs, which is how the three `keyring_*`
+  binaries stayed outside CI until #1815. Drop a line and the lane still exits 0
+  with those crates' unit tests — or those binaries — unrun, the same reason CI
+  wires them as separate steps (the `Rust Unit And Storage Tests` job in
+  `.github/workflows/ci.yml`).
 - Docker integration lane: with required services available,
   `cargo test --manifest-path src-tauri/Cargo.toml --test schema_integration --test query_integration --test mongo_integration --test fixture_loading --test redis_integration`.
 - Documentation lane: `git diff --check` on the touched docs plus local

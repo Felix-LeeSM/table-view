@@ -1,5 +1,5 @@
 use super::*;
-use crate::models::{ColumnChange, ColumnDefinition, ConstraintDefinition};
+use crate::models::{ColumnChange, ColumnDefinition, ConstraintDefinition, SslMode};
 use oracle_rs::config::ServiceMethod;
 use tokio_util::sync::CancellationToken;
 
@@ -21,8 +21,8 @@ fn oracle_config() -> ConnectionConfig {
         environment: None,
         auth_source: None,
         replica_set: None,
-        tls_enabled: None,
-        trust_server_certificate: None,
+        ssl_mode: SslMode::Prefer,
+        ca_cert_path: None,
         oracle_use_sid: None,
         wallet_path: None,
         wallet_password: String::new(),
@@ -51,11 +51,15 @@ fn connect_config_uses_service_name_without_sid_wallet_or_tls() {
         ServiceMethod::ServiceName(ref service) if service == "XEPDB1"
     ));
 
-    let mut explicit_false = oracle_config();
-    explicit_false.tls_enabled = Some(false);
-    explicit_false.trust_server_certificate = Some(false);
-    OracleAdapter::connect_config(&explicit_false, 30)
-        .expect("explicit false TLS flags should not enable unsupported Oracle TLS mode");
+    // Reason: #1649 — `SslMode::Disable` is where the old explicitly-off pair
+    // (`tls_enabled = Some(false)`, `trust_server_certificate = Some(false)`)
+    // lands after the migration fold. Together with the default `Prefer` config
+    // above it pins the accepted half of the Oracle posture boundary: neither
+    // plaintext posture may trip the sslmode rejection. (2026-08-02)
+    let mut disabled = oracle_config();
+    disabled.ssl_mode = SslMode::Disable;
+    OracleAdapter::connect_config(&disabled, 30)
+        .expect("an explicitly disabled TLS posture must not trip the Oracle sslmode rejection");
 }
 
 #[test]
@@ -94,10 +98,10 @@ fn connect_config_rejects_empty_required_fields() {
 }
 
 #[test]
-fn connect_config_still_rejects_advanced_auth_and_mssql_tls_toggles() {
+fn connect_config_still_rejects_advanced_auth_and_tls_enabling_ssl_modes() {
     // Reason: #1065 opens SID + wallet but keeps rejecting password-less
-    // external auth and the MSSQL-only tls/trust toggles (Oracle exposes
-    // neither; the wallet field is the only Oracle TLS trigger). (2026-07-17)
+    // external auth and any TLS-enabling posture (Oracle exposes no sslmode
+    // toggle; the wallet field is the only Oracle TLS trigger). (2026-07-17)
     let mut advanced = oracle_config();
     advanced.password.clear();
     assert!(matches!(
@@ -120,19 +124,27 @@ fn connect_config_still_rejects_advanced_auth_and_mssql_tls_toggles() {
         Err(AppError::Validation(_))
     ));
 
-    let mut tls = oracle_config();
-    tls.tls_enabled = Some(true);
-    assert!(matches!(
-        OracleAdapter::connect_config(&tls, 5),
-        Err(AppError::Validation(message)) if message.contains("wallet")
-    ));
-
-    let mut trust = oracle_config();
-    trust.trust_server_certificate = Some(true);
-    assert!(matches!(
-        OracleAdapter::connect_config(&trust, 5),
-        Err(AppError::Validation(message)) if message.contains("wallet")
-    ));
+    // Reason: #1649 — the rejection now keys off `SslMode::tls_on()` instead of
+    // the `(tls_enabled, trust_server_certificate)` pair, so the boundary moved:
+    // every TLS-enabling posture is rejected, while `disable`/`prefer` stay
+    // accepted (asserted in
+    // `connect_config_uses_service_name_without_sid_wallet_or_tls`). The old
+    // "trust without TLS" case folds to `prefer` and is therefore no longer a
+    // rejection at all. (2026-08-02)
+    for ssl_mode in [SslMode::Require, SslMode::VerifyCa, SslMode::VerifyFull] {
+        let mut tls = oracle_config();
+        tls.ssl_mode = ssl_mode;
+        // `.err()` drops the Ok config: the crate's derived `Debug` prints
+        // `password` verbatim (threat model §0.1/§2.5), so it must never reach a
+        // panic message.
+        match OracleAdapter::connect_config(&tls, 5).err() {
+            Some(AppError::Validation(message)) => assert!(
+                message.contains("mTLS wallet") && message.contains("sslmode toggle"),
+                "{ssl_mode:?} rejected with the wrong guidance: {message}"
+            ),
+            other => panic!("{ssl_mode:?} must be rejected, got {other:?}"),
+        }
+    }
 }
 
 #[test]

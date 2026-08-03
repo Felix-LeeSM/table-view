@@ -1,6 +1,6 @@
 import { $, browser, expect } from "@wdio/globals";
 import {
-  activateTab,
+  activateVisibleTab,
   editGridCellInRow,
   executeSqlPreview,
   expandIfCollapsed,
@@ -88,11 +88,6 @@ async function openSeededUsersTable(database: string, dbLabel: string) {
     15000,
     `seeded ${dbLabel} users row did not appear in grid`,
   );
-}
-
-async function activateVisibleTab(label: string) {
-  await switchToWorkspaceWindow();
-  await activateTab(label);
 }
 
 async function browseMariaDbCatalogMetadata(database: string) {

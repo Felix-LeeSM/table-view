@@ -17,7 +17,9 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 
 use crate::error::AppError;
-use crate::models::{ConnectionConfig, ConnectionConfigPublic, ConnectionGroup, DatabaseType};
+use crate::models::{
+    ConnectionConfig, ConnectionConfigPublic, ConnectionGroup, DatabaseType, SslMode,
+};
 use crate::storage;
 
 const EXPORT_SCHEMA_VERSION: u32 = 1;
@@ -86,6 +88,11 @@ pub fn export_connections(ids: Vec<String>) -> Result<String, AppError> {
             // username / internal topology), mirroring the DuckDB absolute-path
             // strip above. Import forces the user to re-select the wallet.
             p.wallet_path = None;
+            // #1649 (ADR 0058) — strip the verify-ca CA path for the same reason
+            // (leaks the home-directory username / internal topology). The
+            // sslmode posture itself is not a secret and round-trips; the user
+            // re-selects the CA file after import.
+            p.ca_cert_path = None;
             p
         })
         .collect();
@@ -270,8 +277,22 @@ pub fn import_connections(json: String) -> Result<ImportResult, AppError> {
             environment: conn.environment.clone(),
             auth_source: conn.auth_source.clone(),
             replica_set: conn.replica_set.clone(),
-            tls_enabled: conn.tls_enabled,
-            trust_server_certificate: conn.trust_server_certificate,
+            // #1649 — the sslmode posture round-trips (not a secret), but the
+            // CA path is stripped on both export and import, so `verify-ca`
+            // cannot survive the trip: it would land as a posture naming a trust
+            // anchor the importing machine does not have, which the storage write
+            // boundary and the connect path both reject (fail closed). Fold it to
+            // `verify-full` — the same verification against a *narrower* anchor
+            // set (built-in public roots only, minus the private CA this machine
+            // lacks), i.e. safe-side, and the same fold `SslMode::to_legacy`
+            // already applies for the SQLite mirror. A private-CA server then
+            // fails the handshake loudly and the user re-selects the CA file,
+            // exactly as they must re-enter the password.
+            ssl_mode: match conn.ssl_mode {
+                SslMode::VerifyCa => SslMode::VerifyFull,
+                mode => mode,
+            },
+            ca_cert_path: None,
             // #1065 — the connect mode is not a secret, so it round-trips.
             oracle_use_sid: conn.oracle_use_sid,
             // Wallet path is stripped on export and never imported — the user
@@ -471,6 +492,56 @@ mod tests {
     }
 
     #[test]
+    #[serial]
+    fn export_strips_the_ca_path_and_import_folds_verify_ca_to_verify_full() {
+        // Reason: #1649 (ADR 0058) — the CA path leaks a home-directory username
+        // / internal topology exactly like the Oracle wallet path, so export
+        // strips it. Because import cannot restore it, a `verify-ca` row would
+        // land naming a trust anchor the importing machine does not have, which
+        // the storage write boundary now rejects outright — the whole import
+        // would fail. It folds to `verify-full` instead: the same verification
+        // against a narrower anchor set, the safe side. Both halves are pinned
+        // here, so deleting either line in `export_connections` /
+        // `import_connections` fails. (2026-08-02)
+        let _dir = setup_test_env();
+        let ca_path = "/opt/corp/private/corp-ca.pem";
+        let mut conn = sample_connection("pg-ca", "PG private CA");
+        conn.ssl_mode = SslMode::VerifyCa;
+        conn.ca_cert_path = Some(ca_path.into());
+        storage_save_conn(conn).unwrap();
+
+        let exported = export_connections(vec!["pg-ca".into()]).unwrap();
+        assert!(
+            !exported.contains(ca_path),
+            "export must not carry the CA path: {exported}"
+        );
+        let payload: ExportPayload = serde_json::from_str(&exported).unwrap();
+        assert_eq!(payload.connections[0].ca_cert_path, None);
+        assert_eq!(
+            payload.connections[0].ssl_mode,
+            SslMode::VerifyCa,
+            "the posture itself is not a secret and round-trips"
+        );
+
+        import_connections(exported).unwrap();
+        let imported = load_storage()
+            .unwrap()
+            .connections
+            .into_iter()
+            .find(|c| c.id != "pg-ca")
+            .expect("imported copy");
+        assert_eq!(imported.ca_cert_path, None);
+        assert_eq!(
+            imported.ssl_mode,
+            SslMode::VerifyFull,
+            "verify-ca cannot survive the CA strip — it must fold to verify-full, \
+             never land unanchored"
+        );
+
+        cleanup_test_env();
+    }
+
+    #[test]
     fn export_database_name_strips_windows_absolute_path() {
         assert_eq!(
             export_database_name(&DatabaseType::Duckdb, r"C:\Users\felix\private\app.duckdb"),
@@ -506,8 +577,8 @@ mod tests {
                 paradigm: crate::models::Paradigm::Rdb,
                 auth_source: None,
                 replica_set: None,
-                tls_enabled: None,
-                trust_server_certificate: None,
+                ssl_mode: SslMode::Prefer,
+                ca_cert_path: None,
                 oracle_use_sid: None,
                 wallet_path: None,
                 has_wallet_password: false,
@@ -685,8 +756,8 @@ mod tests {
                 paradigm: crate::models::Paradigm::Rdb,
                 auth_source: None,
                 replica_set: None,
-                tls_enabled: None,
-                trust_server_certificate: None,
+                ssl_mode: SslMode::Prefer,
+                ca_cert_path: None,
                 oracle_use_sid: None,
                 wallet_path: None,
                 has_wallet_password: false,
@@ -730,8 +801,8 @@ mod tests {
                 paradigm: crate::models::Paradigm::Rdb,
                 auth_source: None,
                 replica_set: None,
-                tls_enabled: None,
-                trust_server_certificate: None,
+                ssl_mode: SslMode::Prefer,
+                ca_cert_path: None,
                 oracle_use_sid: None,
                 wallet_path: None,
                 has_wallet_password: false,
@@ -777,8 +848,8 @@ mod tests {
                 paradigm: crate::models::Paradigm::Rdb,
                 auth_source: None,
                 replica_set: None,
-                tls_enabled: None,
-                trust_server_certificate: None,
+                ssl_mode: SslMode::Prefer,
+                ca_cert_path: None,
                 oracle_use_sid: None,
                 wallet_path: None,
                 has_wallet_password: false,
@@ -865,8 +936,8 @@ mod tests {
                 paradigm: crate::models::Paradigm::Rdb,
                 auth_source: None,
                 replica_set: None,
-                tls_enabled: None,
-                trust_server_certificate: None,
+                ssl_mode: SslMode::Prefer,
+                ca_cert_path: None,
                 oracle_use_sid: None,
                 wallet_path: None,
                 has_wallet_password: false,
@@ -1024,8 +1095,8 @@ mod tests {
                 paradigm: crate::models::Paradigm::Rdb,
                 auth_source: None,
                 replica_set: None,
-                tls_enabled: None,
-                trust_server_certificate: None,
+                ssl_mode: SslMode::Prefer,
+                ca_cert_path: None,
                 oracle_use_sid: None,
                 wallet_path: None,
                 has_wallet_password: false,

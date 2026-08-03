@@ -5,13 +5,22 @@
 //!
 //! SQLite currently supports connection lifecycle, explicit file creation,
 //! baseline catalog reads, table preview, single-statement query execution,
-//! transactional DML batch execution, dry-run, and PK-scoped row edits for
-//! writable files. DDL, export, and richer PostgreSQL parity surfaces remain
-//! explicit `Unsupported` until their feature-order slices land.
+//! transactional DML batch execution, dry-run, PK-scoped row edits, and the
+//! structured DDL SQLite performs natively — table create/drop/rename, column
+//! add/drop, index create/drop — for writable files (#1804).
+//!
+//! What stays `Unsupported` here is what SQLite cannot express without
+//! rebuilding the table: `add_constraint` and `drop_constraint`, because a
+//! constraint can only be declared at CREATE TABLE time. The in-place column
+//! alteration that needs the same rebuild is refused inside `ddl_native`, next
+//! to the changes it can apply. Export and richer PostgreSQL parity surfaces
+//! remain explicit `Unsupported` until their feature-order slices land.
 
 mod batch;
 mod connection;
 mod ddl;
+mod ddl_errors;
+mod ddl_native;
 mod queries;
 mod sql_text;
 
@@ -31,8 +40,17 @@ use crate::models::{
 
 use crate::db::{DbAdapter, NamespaceInfo, NamespaceLabel, RdbAdapter, RdbQueryResult};
 
+/// The two surfaces SQLite cannot reach natively. `feature` names the blocked
+/// operation; the sentence names why, because "not yet" alone reads as a
+/// missing slice when it is a dialect limit — SQLite attaches constraints only
+/// at CREATE TABLE time, so add/drop needs the table rebuild that #1804 left
+/// out of scope.
 fn sqlite_unsupported(feature: &str) -> AppError {
-    AppError::Unsupported(format!("SQLite adapter does not support {feature} yet"))
+    AppError::Unsupported(format!(
+        "SQLite adapter does not support {feature}: SQLite can only declare constraints when \
+         the table is created, so changing them needs a full table rebuild, which this app \
+         does not do. Recreate the table with the constraints you want instead."
+    ))
 }
 
 impl DbAdapter for SqliteAdapter {
@@ -174,37 +192,37 @@ impl RdbAdapter for SqliteAdapter {
 
     fn drop_table<'a>(
         &'a self,
-        _req: &'a DropTableRequest,
+        req: &'a DropTableRequest,
     ) -> Pin<Box<dyn Future<Output = Result<SchemaChangeResult, AppError>> + Send + 'a>> {
-        Box::pin(async { Err(sqlite_unsupported("table drop")) })
+        Box::pin(async move { self.drop_table(req).await })
     }
 
     fn rename_table<'a>(
         &'a self,
-        _req: &'a RenameTableRequest,
+        req: &'a RenameTableRequest,
     ) -> Pin<Box<dyn Future<Output = Result<SchemaChangeResult, AppError>> + Send + 'a>> {
-        Box::pin(async { Err(sqlite_unsupported("table rename")) })
+        Box::pin(async move { self.rename_table(req).await })
     }
 
     fn alter_table<'a>(
         &'a self,
-        _req: &'a AlterTableRequest,
+        req: &'a AlterTableRequest,
     ) -> Pin<Box<dyn Future<Output = Result<SchemaChangeResult, AppError>> + Send + 'a>> {
-        Box::pin(async { Err(sqlite_unsupported("table alteration")) })
+        Box::pin(async move { self.alter_table(req).await })
     }
 
     fn add_column<'a>(
         &'a self,
-        _req: &'a AddColumnRequest,
+        req: &'a AddColumnRequest,
     ) -> Pin<Box<dyn Future<Output = Result<SchemaChangeResult, AppError>> + Send + 'a>> {
-        Box::pin(async { Err(sqlite_unsupported("column creation")) })
+        Box::pin(async move { self.add_column(req).await })
     }
 
     fn drop_column<'a>(
         &'a self,
-        _req: &'a DropColumnRequest,
+        req: &'a DropColumnRequest,
     ) -> Pin<Box<dyn Future<Output = Result<SchemaChangeResult, AppError>> + Send + 'a>> {
-        Box::pin(async { Err(sqlite_unsupported("column drop")) })
+        Box::pin(async move { self.drop_column(req).await })
     }
 
     fn create_table<'a>(
@@ -223,16 +241,16 @@ impl RdbAdapter for SqliteAdapter {
 
     fn create_index<'a>(
         &'a self,
-        _req: &'a CreateIndexRequest,
+        req: &'a CreateIndexRequest,
     ) -> Pin<Box<dyn Future<Output = Result<SchemaChangeResult, AppError>> + Send + 'a>> {
-        Box::pin(async { Err(sqlite_unsupported("index creation")) })
+        Box::pin(async move { self.create_index(req).await })
     }
 
     fn drop_index<'a>(
         &'a self,
-        _req: &'a DropIndexRequest,
+        req: &'a DropIndexRequest,
     ) -> Pin<Box<dyn Future<Output = Result<SchemaChangeResult, AppError>> + Send + 'a>> {
-        Box::pin(async { Err(sqlite_unsupported("index drop")) })
+        Box::pin(async move { self.drop_index(req).await })
     }
 
     fn add_constraint<'a>(

@@ -1,15 +1,22 @@
-//! SQLite structured DDL first slice.
+//! SQLite structured table creation, and the batch runner every structured DDL
+//! entry point shares.
 //!
-//! Scope: table creation only for writable user files. Raw SQL DDL, ALTER
-//! rebuilds, indexes, drops, renames, constraints, nested JSON edit, and
-//! extension semantics stay unsupported.
+//! Scope: writable user files only. Raw SQL DDL, rebuild-only alterations,
+//! constraint DDL, nested JSON edit and extension semantics stay unsupported.
+//! The natively supported drops, renames, column changes and indexes live in
+//! [`super::ddl_native`] and run through [`SqliteAdapter::run_ddl_or_preview`]
+//! below, so the read-only rejection and the restriction-message mapping have
+//! one home rather than one per entry point.
 
 use crate::error::AppError;
 use crate::models::{
-    ColumnDefinition, CreateTablePlanRequest, CreateTableRequest, SchemaChangeResult,
+    ColumnDefinition, CreateIndexRequest, CreateTablePlanRequest, CreateTableRequest,
+    SchemaChangeResult,
 };
 
 use super::connection::{quote_identifier, validate_namespace, SqliteAdapter};
+use super::ddl_errors::ddl_failure;
+use super::ddl_native::build_create_index_sql;
 
 const SQLITE_IDENTIFIER_MAX_BYTES: usize = 128;
 const SQLITE_DATA_TYPE_UNSUPPORTED_TOKENS: &[&str] = &[
@@ -62,21 +69,58 @@ const SQLITE_DEFAULT_UNSUPPORTED_TOKENS: &[&str] = &[
     "INDEX",
 ];
 
+/// One statement of a DDL batch, plus the column it targets when it is a
+/// single-column `ALTER TABLE`. SQLite's `ADD COLUMN` restriction errors never
+/// name the column, so the runner carries it in from the request to build the
+/// message (`ddl_errors`).
+#[derive(Debug)]
+pub(super) struct SqliteDdlStatement {
+    pub(super) sql: String,
+    pub(super) column: Option<String>,
+}
+
+impl SqliteDdlStatement {
+    pub(super) fn plain(sql: String) -> Self {
+        Self { sql, column: None }
+    }
+
+    pub(super) fn for_column(sql: String, column: &str) -> Self {
+        Self {
+            sql,
+            column: Some(column.to_string()),
+        }
+    }
+}
+
 impl SqliteAdapter {
-    pub async fn create_table(
+    /// Preview short-circuits to the joined SQL text. Execute runs every
+    /// statement inside one transaction, so a multi-change `alter_table` never
+    /// leaves the table half-altered — SQLite applies one alteration per
+    /// `ALTER TABLE`, which makes a rollback boundary mandatory rather than
+    /// decorative.
+    ///
+    /// The read-only rejection sits here, once, for every DDL entry point.
+    /// It is defense in depth — command dispatch already gates on Safe Mode
+    /// and the pool itself opens read-only — but it keeps the adapter honest
+    /// and unit-testable on its own.
+    pub(super) async fn run_ddl_or_preview(
         &self,
-        req: &CreateTableRequest,
+        preview_only: bool,
+        statements: Vec<SqliteDdlStatement>,
     ) -> Result<SchemaChangeResult, AppError> {
-        let sql = build_create_table_sql(req)?;
-        if req.preview_only {
+        let sql = statements
+            .iter()
+            .map(|statement| statement.sql.as_str())
+            .collect::<Vec<_>>()
+            .join(";\n");
+        if preview_only {
             return Ok(SchemaChangeResult { sql });
         }
 
         let (pool, read_only) = self.active_pool_with_mode().await?;
         if read_only {
             return Err(AppError::Unsupported(
-                "Cannot execute SQLite structured table creation on a read-only SQLite connection."
-                    .into(),
+                "Cannot execute structured DDL on a read-only SQLite connection.".into(),
             ));
         }
 
@@ -84,46 +128,104 @@ impl SqliteAdapter {
             .begin()
             .await
             .map_err(|e| AppError::Database(e.to_string()))?;
-        if let Err(error) = sqlx::query(&sql).execute(&mut *tx).await {
-            let _ = tx.rollback().await;
-            return Err(AppError::Database(format!(
-                "SQLite create table failed: {}",
-                error
-            )));
+        // SQLite parses `ALTER TABLE` against the schema its *connection* has
+        // cached, and the pool hands out up to `SQLITE_POOL_MAX_CONNECTIONS`
+        // of them. A connection that has not read the file since another one
+        // ran DDL still holds the old copy, and sqlx's deferred `BEGIN` has not
+        // opened a read transaction yet, so nothing has revalidated the schema
+        // cookie — dropping a column added moments earlier fails with
+        // `no such column`. This read opens the transaction and forces the
+        // reload. Measured: without it, add-column-then-drop-column in one
+        // session fails every time on the 5-connection pool and never on a
+        // 1-connection one.
+        sqlx::query("SELECT count(*) FROM sqlite_schema")
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| AppError::Database(format!("SQLite schema refresh failed: {e}")))?;
+        for statement in &statements {
+            if let Err(error) = sqlx::query(&statement.sql).execute(&mut *tx).await {
+                let _ = tx.rollback().await;
+                return Err(ddl_failure(statement.column.as_deref(), &error.to_string()));
+            }
         }
         tx.commit()
             .await
-            .map_err(|e| AppError::Database(format!("SQLite create table commit failed: {e}")))?;
+            .map_err(|e| AppError::Database(format!("SQLite DDL commit failed: {e}")))?;
 
         Ok(SchemaChangeResult { sql })
+    }
+
+    pub async fn create_table(
+        &self,
+        req: &CreateTableRequest,
+    ) -> Result<SchemaChangeResult, AppError> {
+        let sql = build_create_table_sql(req)?;
+        self.run_ddl_or_preview(req.preview_only, vec![SqliteDdlStatement::plain(sql)])
+            .await
     }
 
     pub async fn create_table_plan(
         &self,
         req: &CreateTablePlanRequest,
     ) -> Result<SchemaChangeResult, AppError> {
-        if !req.indexes.is_empty() {
-            return Err(AppError::Unsupported(
-                "SQLite structured DDL first slice does not support index creation".into(),
-            ));
-        }
+        // Pre-block the whole plan rather than creating the table and only then
+        // failing on the constraint leg: SQLite can only attach a constraint at
+        // CREATE TABLE time, so a plan carrying standalone constraint rows can
+        // never complete and a half-applied plan behind an opaque error is
+        // worse than an upfront refusal.
         if !req.constraints.is_empty() {
             return Err(AppError::Unsupported(
-                "SQLite structured DDL first slice does not support standalone constraints".into(),
+                "SQLite can only declare constraints when the table is created, so standalone \
+                 constraint rows cannot be applied: remove the FOREIGN KEY / CHECK / UNIQUE rows \
+                 and create the table without them."
+                    .into(),
             ));
         }
 
-        let table_req = CreateTableRequest {
-            connection_id: req.connection_id.clone(),
-            schema: req.schema.clone(),
-            name: req.name.clone(),
-            columns: req.columns.clone(),
-            primary_key: req.primary_key.clone(),
-            preview_only: req.preview_only,
-            table_comment: req.table_comment.clone(),
-            expected_database: None,
-        };
-        self.create_table(&table_req).await
+        // Indexes are native (#1804), so the plan carries them instead of being
+        // refused for having any. Every statement is built before any of them
+        // runs, and they all run in the one transaction `run_ddl_or_preview`
+        // opens: a rejected plan touches nothing, and an index that fails at
+        // execution (a name that collides with an existing object, say — which
+        // no preview can predict) takes the CREATE TABLE back with it. Chaining
+        // separate transactions here would have replaced the pre-#1804
+        // all-or-nothing refusal with a table that outlives its failed plan.
+        let mut statements = vec![SqliteDdlStatement::plain(build_create_table_sql(
+            &CreateTableRequest {
+                connection_id: req.connection_id.clone(),
+                schema: req.schema.clone(),
+                name: req.name.clone(),
+                columns: req.columns.clone(),
+                primary_key: req.primary_key.clone(),
+                preview_only: req.preview_only,
+                table_comment: req.table_comment.clone(),
+                expected_database: None,
+            },
+        )?)];
+        for index in &req.indexes {
+            let sql = build_create_index_sql(&CreateIndexRequest {
+                connection_id: req.connection_id.clone(),
+                schema: req.schema.clone(),
+                table: req.name.clone(),
+                index_name: index.index_name.clone(),
+                columns: index.columns.clone(),
+                index_type: index.index_type.clone(),
+                is_unique: index.is_unique,
+                preview_only: req.preview_only,
+                expected_database: None,
+            })
+            // Name the failing row so the dialog can point at it — the builder
+            // errors describe the fault, not which index carried it.
+            .map_err(|e| match e {
+                AppError::Validation(message) => {
+                    AppError::Validation(format!("Index \"{}\": {message}", index.index_name))
+                }
+                other => other,
+            })?;
+            statements.push(SqliteDdlStatement::plain(sql));
+        }
+
+        self.run_ddl_or_preview(req.preview_only, statements).await
     }
 }
 
@@ -171,7 +273,7 @@ fn build_create_table_sql(req: &CreateTableRequest) -> Result<String, AppError> 
     ))
 }
 
-fn build_column_definition(column: &ColumnDefinition) -> Result<String, AppError> {
+pub(super) fn build_column_definition(column: &ColumnDefinition) -> Result<String, AppError> {
     validate_identifier(&column.name, "Column name")?;
     reject_non_empty_comment(column.comment.as_deref(), "Column comments")?;
     if column.is_identity {
@@ -388,7 +490,7 @@ fn unsupported_sql_token_error(label: &str, token: &str) -> Result<(), AppError>
     )))
 }
 
-fn validate_identifier(name: &str, label: &str) -> Result<(), AppError> {
+pub(super) fn validate_identifier(name: &str, label: &str) -> Result<(), AppError> {
     let trimmed = name.trim();
     if trimmed.is_empty() {
         return Err(AppError::Validation(format!("{label} must not be empty")));
@@ -418,7 +520,7 @@ fn validate_identifier(name: &str, label: &str) -> Result<(), AppError> {
     Ok(())
 }
 
-fn validate_sqlite_object_name(name: &str, label: &str) -> Result<(), AppError> {
+pub(super) fn validate_sqlite_object_name(name: &str, label: &str) -> Result<(), AppError> {
     if name.trim().to_ascii_lowercase().starts_with("sqlite_") {
         return Err(AppError::Validation(format!(
             "{label} must not start with reserved SQLite prefix sqlite_"

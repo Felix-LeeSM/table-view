@@ -1,11 +1,13 @@
 import { $, browser, expect } from "@wdio/globals";
 import {
-  activateTab,
+  activateVisibleTab,
   createPostgresConnection,
   expandIfCollapsed,
   openConnection,
   openNewQueryTab,
   runQuery,
+  setInputByAria,
+  setNthInputByAria,
   step,
   switchToWorkspaceWindow,
   typeQuery,
@@ -144,49 +146,6 @@ function randomAlphaSuffix(): string {
     .slice(0, 8);
 }
 
-async function setInputByAria(label: string, value: string) {
-  await setNthInputByAria(label, 0, value);
-}
-
-async function setNthInputByAria(label: string, index: number, value: string) {
-  await browser.waitUntil(
-    async () =>
-      await browser.execute(
-        (ariaLabel, nth) =>
-          document.querySelectorAll<HTMLInputElement>(
-            `input[aria-label="${ariaLabel}"]`,
-          ).length > nth,
-        label,
-        index,
-      ),
-    {
-      timeout: 10000,
-      timeoutMsg: `${label} input #${index} did not appear`,
-    },
-  );
-  await browser.execute(
-    (ariaLabel, nth, nextValue) => {
-      const input = document.querySelectorAll<HTMLInputElement>(
-        `input[aria-label="${ariaLabel}"]`,
-      )[nth];
-      if (!input) throw new Error(`${ariaLabel} input #${nth} did not appear`);
-      const setter = Object.getOwnPropertyDescriptor(
-        window.HTMLInputElement.prototype,
-        "value",
-      )?.set;
-      if (!setter) throw new Error("HTMLInputElement value setter missing");
-      input.focus();
-      setter.call(input, nextValue);
-      input.dispatchEvent(new InputEvent("input", { bubbles: true }));
-      input.dispatchEvent(new Event("change", { bubbles: true }));
-      input.blur();
-    },
-    label,
-    index,
-    value,
-  );
-}
-
 async function clickAria(label: string) {
   await browser.waitUntil(
     async () =>
@@ -271,11 +230,6 @@ async function clickEnabledButtonText(text: string) {
     if (!button) throw new Error(`${needle} enabled button did not appear`);
     button.click();
   }, text);
-}
-
-async function activateVisibleTab(label: string) {
-  await switchToWorkspaceWindow();
-  await activateTab(label);
 }
 
 async function waitForDdlPreview(snippets: string[]) {

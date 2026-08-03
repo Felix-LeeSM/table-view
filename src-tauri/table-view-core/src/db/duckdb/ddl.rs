@@ -629,6 +629,7 @@ fn validate_identifier(name: &str, label: &str) -> Result<(), AppError> {
 
 #[cfg(test)]
 mod tests {
+    use crate::models::SslMode;
     // Purpose: DuckDB Stage 2 structural DDL (ADR 0051, #1070) — SQL-builder
     // shape contracts plus round-trip execution (data preservation, rollback,
     // read-only rejection, preview) against a real DuckDB file (2026-07-25).
@@ -869,8 +870,8 @@ mod tests {
             environment: None,
             auth_source: None,
             replica_set: None,
-            tls_enabled: None,
-            trust_server_certificate: None,
+            ssl_mode: SslMode::Prefer,
+            ca_cert_path: None,
             oracle_use_sid: None,
             wallet_path: None,
             wallet_password: String::new(),

@@ -5,7 +5,7 @@ use table_view_lib::commands::connection::{
     TestConnectionRequest,
 };
 use table_view_lib::error::AppError;
-use table_view_lib::models::{ConnectionConfigPublic, DatabaseType};
+use table_view_lib::models::{ConnectionConfigPublic, DatabaseType, SslMode};
 use table_view_lib::storage::local as app_sqlite_state;
 use tempfile::TempDir;
 
@@ -28,8 +28,8 @@ fn sqlite_public(path: &str) -> ConnectionConfigPublic {
         paradigm: DatabaseType::Sqlite.paradigm(),
         auth_source: None,
         replica_set: None,
-        tls_enabled: None,
-        trust_server_certificate: None,
+        ssl_mode: SslMode::Prefer,
+        ca_cert_path: None,
         oracle_use_sid: None,
         wallet_path: None,
         has_wallet_password: false,
