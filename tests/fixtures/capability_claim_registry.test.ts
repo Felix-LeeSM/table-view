@@ -223,8 +223,7 @@ describe("capability claim registry (#2116)", () => {
     // (a) deleted, (b) generated, or (c) registered. Nothing was generated —
     // eight product/roadmap pages phrase the same boundary differently and for
     // different readers, so a generator would have produced worse prose than
-    // it replaced — and only `current-boundaries.md` needed a correction, so
-    // in practice every frozen path is registered. A path may leave this check
+    // it replaced. A path may leave this check
     // only by losing its prose entirely, which the sweep would then confirm.
     // Deliberately NOT conditioned on the file still being swept: that would
     // let someone narrow a pattern until a frozen file stops matching and call

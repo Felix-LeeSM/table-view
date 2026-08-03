@@ -93,14 +93,13 @@
   the app's client-side support claim.
 - SQLite is a file-backed DBMS lane. Current support is scoped to file
   create/open/test, read-only mode, catalog/table browse, read queries,
-  writable-file DML, transactional DML batch/dry-run, key-projected row edits,
-  and bounded structured table creation. GitHub Runtime Happy Path now runs
-  deterministic SQLite desktop smoke for file create/open, table browse, read
-  query, writable DML, row edit, bounded structured table creation with schema
-  refresh proof, read-only write rejection, and internal app-state DB
-  rejection. Structured DDL beyond bounded table creation, automatic ALTER
-  rebuilds, extension/capability semantics, sqlite-cli command execution, and
-  nested JSON edits remain future promotion gates.
+  writable-file DML, transactional DML batch/dry-run, and key-projected row
+  edits. GitHub Runtime Happy Path now runs deterministic SQLite desktop smoke
+  for file create/open, table browse, read query, writable DML, row edit,
+  read-only write rejection, and internal app-state DB rejection. SQLite
+  structured DDL, automatic ALTER rebuilds, extension/capability semantics,
+  sqlite-cli command execution, and nested JSON edits remain future promotion
+  gates.
 - Routine runtime smoke currently proves the GitHub Runtime Happy Path for
   PostgreSQL, MySQL, MariaDB, SQLite, DuckDB `.duckdb`, MongoDB, Redis, Valkey,
   Elasticsearch, OpenSearch, MSSQL, and Oracle. MSSQL/Oracle smoke is bounded to

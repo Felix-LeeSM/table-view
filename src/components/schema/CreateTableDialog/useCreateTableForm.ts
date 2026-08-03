@@ -59,10 +59,7 @@ export interface UseCreateTableFormArgs {
  * component owns only the tab layout JSX. The lifecycle hook
  * (`useDdlPreviewExecution`) is reused unchanged — this hook owns the draft
  * lists, the auto-refresh debounce, and the single-IPC `createTablePlan`
- * preview/commit closures. The adapter owns the atomic policy and defaults to
- * partial-atomic policy C: index/constraint failures do not roll back the
- * CREATE TABLE. SQLite is stricter since #1804 (one transaction for the whole
- * plan), so no caller may assume the table survives.
+ * preview/commit closures.
  */
 export function useCreateTableForm({
   connectionId,

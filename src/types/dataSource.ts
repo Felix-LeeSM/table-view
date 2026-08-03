@@ -587,18 +587,7 @@ export const SQLITE_CAPABILITIES = capabilities({
     requiresPrimaryKeyForEdit: true,
   },
   ddl: {
-    // Issue #1460 / #1804 — this claim is deliberately narrower than the wired
-    // adapter. `SqliteAdapter` implemented only `create_table` /
-    // `create_table_plan` until #1804 opened everything SQLite performs
-    // natively — table drop/rename, column add/drop, index create/drop — in
-    // src-tauri/table-view-core/src/db/adapters/sqlite/ddl_native.rs. Only
-    // `add_constraint` / `drop_constraint` still return `sqlite_unsupported(...)`
-    // (mod.rs), and an in-place column type/nullability/default change is
-    // rejected as a rebuild. The UI half of #1804 has not landed, so SQLite
-    // claims create_table alone here: the alter/index/drop flags stay false and
-    // the matching entry points stay hidden (#1046). Widening them is that
-    // slice's job, and this comment is the record of why the two sides differ.
-    // `identityColumn` (#1070) also stays at the base `false`: SQLite's
+    // `identityColumn` (#1070) stays at the base `false`: SQLite's
     // `build_column_definition` rejects `is_identity` with `Unsupported`, so
     // the Identity checkbox is hidden here too.
     createTable: true,
@@ -974,10 +963,8 @@ export function hasConnectionCapability(
  * DDL entries.
  *
  * Issue #1460 — schema-tree DDL entries (Create / Rename / Drop) no longer ride
- * on this flag; they read the per-action `ddl.*` capability via `supportsDdl`
- * (each grounded on whether the wired adapter's DDL trait method executes vs.
- * returns `Unsupported`, and sometimes narrower than that — `supportsDdl`'s
- * doc carries the scope). This flag now gates only the DataGrid row editor.
+ * on this flag; they read the per-action `ddl.*` capability via `supportsDdl`.
+ * This flag now gates only the DataGrid row editor.
  */
 export function supportsRowEditing(
   dbType: DatabaseType | null | undefined,
@@ -1037,20 +1024,10 @@ export function supportsBulkWrite(
 export type DdlCapabilityName = keyof DataSourceCapabilities["ddl"];
 
 /**
- * Issue #1460 — whether the product opens a given structured DDL action for the
- * engine. The flag is per action, not per request: an opened action still
- * rejects options its adapter has not implemented — today SQLite table
- * comments, MSSQL default-constraint changes, and `DROP … CASCADE` on MSSQL /
- * Oracle. A flag may also sit narrower than what the engine's wired backend
- * adapter can actually execute, while a backend slice waits for its UI half,
- * which is where SQLite has been since #1804. Reads the per-action
- * `capabilities.ddl.*` flag (single source of truth) instead of the coarse
- * `editRows` proxy, so a partial roster (e.g. SQLite: `createTable` true,
- * alter/index/drop false) surfaces only a subset of
- * the entry points the adapter really supports. Unsupported actions are HIDDEN,
- * not shown-then-erroring (#1046). An unknown / still-loading dbType returns
- * true so affordances aren't stripped before the connection resolves (same
- * fallback as `supportsRowEditing` / `supportsCatalogFeature`).
+ * Issue #1460 — reads the per-action `capabilities.ddl.*` flag (single source
+ * of truth) instead of the coarse `editRows` proxy. An unknown / still-loading
+ * dbType returns true so affordances aren't stripped before the connection
+ * resolves (same fallback as `supportsRowEditing` / `supportsCatalogFeature`).
  */
 export function supportsDdl(
   dbType: DatabaseType | null | undefined,

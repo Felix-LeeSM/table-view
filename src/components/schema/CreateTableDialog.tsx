@@ -32,11 +32,7 @@ import {
  * preview/commit chain live in `useCreateTableForm`; each tab body is a
  * presentational sub-component. The modal owns only the 3-region compound
  * layout (Header / scrolling Body / pinned Footer with the inline DDL
- * preview + Execute button). Commit follows the adapter's atomic policy, which
- * defaults to partial-atomic policy C: index / constraint failures do not roll
- * back the CREATE TABLE. An adapter may be stricter — SQLite runs the whole
- * plan in one transaction since #1804 — so the dialog must not promise the
- * table survives a failed child.
+ * preview + Execute button).
  */
 export type CreateTableDialogProps = UseCreateTableFormArgs;
 

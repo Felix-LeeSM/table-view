@@ -1,12 +1,9 @@
 //! SQLite structured DDL that the engine performs natively (#1804).
 //!
 //! The bundled SQLite is 3.46 (`libsqlite3-sys 0.30.1`), so `DROP TABLE`,
-//! `ALTER TABLE … RENAME TO` (3.25+), `ADD COLUMN`, `DROP COLUMN` (3.35+) and
-//! `CREATE`/`DROP INDEX` all run as single statements. Only those are opened
-//! here. Column rename is not one of them: the engine has had
-//! `RENAME COLUMN` since 3.25, but `ColumnChange`
-//! (`models/schema/ddl.rs`) models Add / Modify / Drop only, so no request can
-//! reach it and this module emits no such statement.
+//! `ALTER TABLE … RENAME TO` / `RENAME COLUMN` (3.25+), `ADD COLUMN`,
+//! `DROP COLUMN` (3.35+) and `CREATE`/`DROP INDEX` all run as single
+//! statements. Only those are opened here.
 //!
 //! Everything that SQLite can express solely by rebuilding the table — a
 //! column's type, nullability or default, and adding or dropping a constraint —

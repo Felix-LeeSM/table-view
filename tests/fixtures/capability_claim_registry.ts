@@ -221,10 +221,9 @@ const SQLITE_BEYOND_CREATE_TABLE: readonly ClaimFact[] = [
 
 /**
  * The three checks #1804 opened in the Rust SQLite adapter without moving the
- * flag: the UI half of that slice has not landed, so the adapter executes what
- * the ledger still calls unsupported. `ddl.alterConstraint` is deliberately not
- * here — SQLite cannot add or drop a constraint without a table rebuild, so
- * that one is unsupported on both sides.
+ * flag, so the adapter executes what the ledger still calls unsupported.
+ * `ddl.alterConstraint` is deliberately not here — SQLite cannot add or drop a
+ * constraint without a table rebuild, so that one is unsupported on both sides.
  */
 const SQLITE_ADAPTER_AHEAD_OF_LEDGER: readonly ClaimFact[] = [
   { dbType: "sqlite", check: "ddl.alterTable", state: "unsupported" },
@@ -315,15 +314,14 @@ export const CAPABILITY_CLAIM_REGISTRY: readonly CapabilityClaimRow[] = [
   },
   {
     path: "docs/product/current-boundaries.md",
-    phrases: ["bounded structured table creation", "structured ddl beyond"],
+    phrases: ["sqlite structured ddl"],
     disposition: "ledger-dependent",
     claims: [...SQLITE_CREATE_TABLE, ...SQLITE_BEYOND_CREATE_TABLE],
     reason:
-      "Issue #2116 corrected this bullet: it read 'SQLite structured DDL … " +
-      "remain future promotion gates' while the ledger has claimed " +
-      "ddl.createTable since #874. The frozen inventory could not see it — " +
-      "the phrase wrapped across a line and the frozen alternative required a " +
-      "trailing comma.",
+      "The SQLite bullet reads 'SQLite structured DDL … remain future " +
+      "promotion gates' while the ledger has claimed ddl.createTable since " +
+      "#874. The frozen inventory could not see it — the phrase wraps across " +
+      "a line and the frozen alternative required a trailing comma.",
   },
   {
     path: "docs/product/current-support-snapshot.md",
@@ -530,16 +528,17 @@ export const CAPABILITY_CLAIM_REGISTRY: readonly CapabilityClaimRow[] = [
   },
   {
     path: "src-tauri/table-view-core/src/models/data_source.rs",
-    phrases: ["create_table alone", "stay hidden"],
+    phrases: [],
     disposition: "ledger-dependent",
     claims: [...SQLITE_CREATE_TABLE, ...SQLITE_ADAPTER_AHEAD_OF_LEDGER],
     reason:
-      "SQLITE_RDB_CAPABILITIES declaration comment. It used to end 'the exact " +
-      "surface is the per-action ddl.* capability set in " +
-      "src/types/dataSource.ts', which #1804 made false — the adapter is now " +
-      "wider than that set. It instead records that the ledger claims " +
-      "create_table alone and the rest stay hidden in the UI, which is the " +
-      "sentence a ledger move falsifies.",
+      "Retired phrase, live claim. The SQLITE_RDB_CAPABILITIES declaration " +
+      "comment ended 'the exact surface is the per-action ddl.* capability " +
+      "set in src/types/dataSource.ts', which #1804 made false — the adapter " +
+      "is now wider than that set — so that sentence is deleted and nothing " +
+      "left in the file matches a pattern class. What is left still " +
+      "enumerates which DDL the wired adapter runs, so the row carries the " +
+      "facts a ledger move has to name the file for.",
   },
   {
     path: "src-tauri/table-view-core/src/models/schema/ddl.rs",
@@ -599,32 +598,24 @@ export const CAPABILITY_CLAIM_REGISTRY: readonly CapabilityClaimRow[] = [
   },
   {
     path: "src/components/schema/CreateTableDialog.tsx",
-    phrases: [
-      "atomic policy",
-      "partial-atomic",
-      "policy c",
-      "roll back the create table",
-    ],
+    phrases: [],
     disposition: "not-a-claim",
     reason:
-      "Component doc for the commit path's rollback contract. It used to " +
-      "state policy C flatly; #1804 made that false for SQLite, so it now " +
-      "defers to the adapter and names SQLite as the stricter one. " +
-      "Transaction semantics, which the ledger models no check for.",
+      "Component doc for the commit path. It stated policy C flatly, which " +
+      "#1804 made false for SQLite, so the sentence is deleted and the file " +
+      "sweeps clean. The atomic-policy SOT is db/traits.rs (:425-433) and " +
+      "models/schema/ddl.rs, both of which #1804 updated. Transaction " +
+      "semantics either way, which the ledger models no check for.",
   },
   {
     path: "src/components/schema/CreateTableDialog/useCreateTableForm.ts",
-    phrases: [
-      "atomic policy",
-      "partial-atomic",
-      "policy c",
-      "roll back the create table",
-    ],
+    phrases: ["atomic policy"],
     disposition: "not-a-claim",
     reason:
-      "Hook docs for the preview/commit closures under the same contract, " +
-      "corrected the same way: the adapter owns the policy and SQLite is " +
-      "stricter since #1804. Transaction semantics, not capability.",
+      "Hook docs for the preview/commit closures. The policy-C sentence in " +
+      "the module doc, which #1804 made false for SQLite, is deleted; what " +
+      "still matches is the inline comment on the execute path (:504). " +
+      "Transaction semantics, not capability.",
   },
   {
     path: "src/components/schema/SchemaTree.tsx",
@@ -746,67 +737,51 @@ export const CAPABILITY_CLAIM_REGISTRY: readonly CapabilityClaimRow[] = [
   },
   {
     path: "src/types/dataSource.test.ts",
-    phrases: ["only create_table"],
+    phrases: [],
     disposition: "ledger-dependent",
     claims: [...SQLITE_CREATE_TABLE, ...SQLITE_BEYOND_CREATE_TABLE],
     reason:
-      "Both comments justify the SQLite `ddl` flag literals the test " +
-      "asserts. They used to ground those literals on the adapter refusing " +
-      "everything but create_table, which #1804 falsified; they now say the " +
-      "ledger claims only create_table and the flags are what pin the gap.",
+      "Retired phrase, live claim. Both comments grounded the SQLite `ddl` " +
+      "flag literals on the adapter refusing everything but create_table, " +
+      "which #1804 falsified, so both are deleted and the file sweeps clean. " +
+      "The assertions themselves still pin the four flags, so a ledger move " +
+      "has to name this file.",
   },
   {
     path: "src/types/dataSource.ts",
-    phrases: [
-      "adapter can actually execute",
-      "adapter can run",
-      "create_table alone",
-      "entry points the adapter really supports",
-      "stay hidden",
-      "stays hidden",
-    ],
+    phrases: ["adapter can run", "stay hidden", "stays hidden"],
     disposition: "ledger-dependent",
-    claims: [
-      ...SQLITE_CREATE_TABLE,
-      ...SQLITE_BEYOND_CREATE_TABLE,
-      ...HIDDEN_CONSTRAINT_CONTROLS,
-    ],
+    claims: HIDDEN_CONSTRAINT_CONTROLS,
     reason:
-      "This file feeds the ledger, and every one of these phrases sits in a " +
-      "block that names engines: the alterConstraint and identityColumn docs " +
+      "This file feeds the ledger, and all three surviving phrases sit in " +
+      "the alterConstraint and identityColumn docs, which name engines " +
       "('SQLite/DuckDB keep this false so the constraint controls stay " +
-      "hidden'), the `supportsDdl` doc ('e.g. SQLite: createTable true, " +
-      "alter/index/drop false'), and SQLite's own `ddl` block, which since " +
-      "#1804 records why the ledger claims create_table alone while the Rust " +
-      "adapter executes more.",
-  },
-  {
-    path: "src/types/dataSource.ts",
-    phrases: ["adapter's ddl trait method executes"],
-    disposition: "not-a-claim",
-    reason:
-      "`supportsRowEditing`'s doc, in the paragraph explaining that " +
-      "schema-tree DDL entries left this flag for `supportsDdl`. A blank " +
-      "comment line bounds it away from the DuckDB paragraph above, so what " +
-      "is left states how `ddl.*` is grounded in general and names no engine.",
+      "hidden', 'they keep the base false and the checkbox stays hidden'). " +
+      "The `supportsDdl` doc, `supportsRowEditing`'s DDL paragraph and " +
+      "SQLite's own `ddl` block each grounded a flag on what the wired " +
+      "adapter can execute, which #1804 falsified, so those sentences are " +
+      "deleted — with them go the create_table-only claims this row carried.",
   },
   {
     path: "src/types/schema.ts",
-    phrases: ["atomic policy", "partial-atomic"],
+    phrases: [],
     disposition: "not-a-claim",
     reason:
-      "Schema DTO doc for the commit-time rollback contract, corrected to " +
-      "say the adapter owns the policy and SQLite runs the whole plan in one " +
-      "transaction since #1804. Transaction semantics, not capability.",
+      "Retired phrase. The `CreateTablePlanRequest` doc stated policy C for " +
+      "every engine, which #1804 made false for SQLite, so the sentence is " +
+      "deleted and the file sweeps clean. Transaction semantics either way, " +
+      "which the ledger models no check for.",
   },
   {
     path: "src/types/supportsDdl.test.ts",
-    phrases: ["adapter can actually execute", "create_table alone"],
+    phrases: ["create_table alone"],
     disposition: "ledger-dependent",
     claims: [...SQLITE_CREATE_TABLE, ...SQLITE_BEYOND_CREATE_TABLE],
     reason:
-      "The guard test for `supportsDdl`. Its header lists per-engine grounds " +
-      "— SQLite's corrected for #1804 — and one case is named 'claims only " +
-      "createTable for SQLite (adapter wires create_table alone)'.",
+      "The guard test for `supportsDdl`. Its header grounded the SQLite row " +
+      "on the adapter refusing everything but create_table, which #1804 " +
+      "falsified, so that bullet is deleted. What still matches is the case " +
+      "name 'claims only createTable for SQLite (adapter wires create_table " +
+      "alone)'.",
   },
 ];

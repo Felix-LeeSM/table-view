@@ -4,7 +4,7 @@ type: checklist
 updated: 2026-07-17
 surface: src-tauri/table-view-core/src/db/**, src/types/dataSource*, src/types/queryLanguage*, tests/fixtures/**
 task: data-source, support-claim, adapter, fixture
-keywords: Required Contract, DatabaseType, ConnectionKind, AppError::connection_redacted, QueryLanguageId, Capability Flip, Surface Sync, BackendAdapterCapability, cargo test --lib, capability_claim_registry, adapterConformance, ADR Gate, Handoff Checklist, fixture-only
+keywords: Required Contract, DatabaseType, ConnectionKind, AppError::connection_redacted, QueryLanguageId, Capability Flip, 4-Surface Sync, BackendAdapterCapability, cargo test --lib, ADR Gate, Handoff Checklist, fixture-only
 trigger:
   signal: DBMS 추가 / source promotion / fixture-backed slice 승격
   layer: index
@@ -40,13 +40,12 @@ Feature enablement 은 profile/capability contract 에서 온다. `DatabaseType`
 `queryMode` 는 old tab/history compatibility 이다. 새 query routing 은
 `queryLanguage`, result rendering 은 typed result envelope 를 쓴다.
 
-## Capability Flip — Surface Sync
+## Capability Flip — 4-Surface Sync
 
-Backend adapter capability (`BackendAdapterCapability`) 를 flip 하면 아래를 함께
-갱신한다. Rust contract · TS capabilities · parity fixture 누락은
-`cargo test --lib` 의 contract assertion 과
-`src/types/dataSourceProfileParity.test.ts` 가 CI 에서 잡는다. Docker 경계
-테스트를 잡는 것은 없다:
+Backend adapter capability (`BackendAdapterCapability`) 를 flip 하면 4곳을 함께
+갱신한다. 1-3 누락은 `cargo test --lib` 의 contract assertion 과
+`src/types/dataSourceProfileParity.test.ts` 가 CI 에서 잡는다. 4 를 잡는 것은
+없다:
 
 1. Rust adapter contract — `src-tauri/table-view-core/src/models/data_source.rs` 의 `adapter_contract`
    capability set (+ `src-tauri/table-view-core/src/db/adapters/tests.rs` contract assertion).
@@ -54,12 +53,6 @@ Backend adapter capability (`BackendAdapterCapability`) 를 flip 하면 아래�
    (query/catalog/edit/ddl/intelligence).
 3. Parity fixture — `tests/fixtures/data-source-profile-parity.report.json`.
 4. Docker integration boundary test.
-5. Capability 서술 원장 — `tests/fixtures/capability_claim_registry.ts` (#2116).
-   `src/types/adapterConformance.ts` 가 capability/DDL 사실의 유일 원장이고, 그
-   사실을 산문으로 옮겨 적은 파일은 전부 이 registry 에 사유와 함께 등록돼
-   있다. 2번을 움직이면 그 사실을 인용한 row 도 같이 움직여야 한다. 등록 안 된
-   새 서술과 낡은 row 는 `tests/fixtures/capability_claim_registry.test.ts` 가
-   required lane 에서 파일명과 함께 잡는다.
 
 예외: `operations` capability 는 TS-only (`dataSource.ts` 의 `operations` 객체) —
 Rust 필드/parity report 는 추적하지 않는다 (MySQL 선례 커밋 `d495f330`).
