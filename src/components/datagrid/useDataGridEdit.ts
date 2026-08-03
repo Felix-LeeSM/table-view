@@ -256,6 +256,40 @@ export function useDataGridEdit({
     canEditRows,
   ]);
 
+  // Issue #1734 (4) — stage one cell's value WITHOUT opening the inline editor.
+  // The Quick Look panel owns its own field editors, so it has a value ready
+  // and nothing to open. It used to drive `handleStartEdit` → `setEditValue` →
+  // `saveCurrentEdit` in one call, which cannot work: `saveCurrentEdit` reads
+  // `editingCell` from the render closure, and that is still `null` in the same
+  // tick, so it returned at its first line. The typed value never reached
+  // `pendingEdits` and the leftover `editingCell` pulled focus into a grid
+  // editor the user never opened. Always-on panel editing made that the default
+  // path, so the write goes straight to the pending map instead.
+  const stageEdit = useCallback(
+    (rowIdx: number, colIdx: number, value: string | null) => {
+      if (!canEditRows) return;
+      const key = editKey(rowIdx, colIdx);
+      const originalValue = cellToEditValue(data?.rows[rowIdx]?.[colIdx]);
+      const next = applyEditOrClear(pendingEdits, key, value, originalValue);
+      // Same no-op rule as `saveCurrentEdit`: re-typing the original value
+      // clears the entry and must not push an undo snapshot.
+      if (next !== pendingEdits) {
+        pushSnapshot();
+        setPendingEdits(next);
+      }
+      if (activeTabId) promoteTab(activeTabId);
+    },
+    [
+      canEditRows,
+      data,
+      pendingEdits,
+      pushSnapshot,
+      setPendingEdits,
+      activeTabId,
+      promoteTab,
+    ],
+  );
+
   const cancelEdit = useCallback(() => {
     setEditingCell(null);
     setEditValue("");
@@ -546,6 +580,7 @@ export function useDataGridEdit({
     hasPendingChanges,
     isCommitFlashing,
     saveCurrentEdit,
+    stageEdit,
     cancelEdit,
     handleStartEdit,
     handleSelectRow,

@@ -1,11 +1,8 @@
 /**
  * Issue #1821 — the MongoDB runtime capability gate.
  *
- * These assertions pin the *fail-closed* half of the contract: every way of
- * not knowing what the server is must close the feature. A green
- * `meetsMongoRuntimeRequirement` that returned `true` on unknown input would
- * be worse than no gate at all — it would look like a check while letting
- * every unidentified server through.
+ * These assertions pin the *fail-closed* half of the contract: a requirement
+ * must close on each axis it names whenever that axis is unknown.
  */
 import { describe, expect, it } from "vitest";
 import {
@@ -110,6 +107,22 @@ describe("meetsMongoRuntimeRequirement — version axis", () => {
     expect(
       meetsMongoRuntimeRequirement(releaseCandidate, { minVersion: [4, 2, 0] }),
     ).toBe(true);
+  });
+
+  it("clears a version-only requirement even on an unidentified topology", () => {
+    expect(
+      meetsMongoRuntimeRequirement(
+        { topology: "unknown", version: REPLICA_SET_7_0.version },
+        { minVersion: [4, 0, 0] },
+      ),
+    ).toBe(true);
+    // Naming the deployment is what closes it.
+    expect(
+      meetsMongoRuntimeRequirement(
+        { topology: "unknown", version: REPLICA_SET_7_0.version },
+        { minVersion: [4, 0, 0], topologies: ["replicaSet", "sharded"] },
+      ),
+    ).toBe(false);
   });
 
   it("closes when the server version could not be determined", () => {

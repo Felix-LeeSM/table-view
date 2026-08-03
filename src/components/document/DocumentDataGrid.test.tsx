@@ -243,6 +243,35 @@ describe("DocumentDataGrid", () => {
     ).not.toBeInTheDocument();
   });
 
+  // Reason: #1734 (5) round 2 — the focus exchange had no document-side test at
+  // all, and this grid takes the OTHER branch of the restore: it publishes no
+  // `focusAnchorRef` (it never virtualizes), so it exercises the live
+  // `[data-grid-row][tabindex="0"]` lookup rather than the grid's own focuser.
+  it("F6 reaches the panel and closing it hands focus back to the grid cell", async () => {
+    renderGrid();
+
+    await waitFor(() => expect(screen.getByText("Alice")).toBeInTheDocument());
+    fireEvent.click(
+      screen.getByText("Alice").closest('[role="row"]') as HTMLElement,
+    );
+    fireEvent.keyDown(document, { key: "l", metaKey: true });
+    const panel = await screen.findByRole("region", {
+      name: "Document Details",
+    });
+
+    fireEvent.keyDown(window, { key: "F6" });
+    expect(document.activeElement).toBe(panel);
+
+    fireEvent.keyDown(document, { key: "l", metaKey: true });
+
+    expect(
+      screen.queryByRole("region", { name: "Document Details" }),
+    ).not.toBeInTheDocument();
+    expect(document.activeElement).toBe(
+      document.querySelector('[data-grid-row][tabindex="0"]'),
+    );
+  });
+
   it("mounts QuickLookPanel with BsonTreeViewer after selecting a row and pressing Cmd+L", async () => {
     renderGrid();
 

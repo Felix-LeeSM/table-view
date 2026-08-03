@@ -15,10 +15,15 @@
 //   columns, so `onBlobView` is a no-op.
 // - FieldRows render iff `editing && editState && data` are all present;
 //   otherwise the BSON tree stays mounted.
+// - #1734 (4) removed the Edit toggle from the RDB body but kept it here: in
+//   document mode the control switches the *view* (BSON tree ↔ field list),
+//   and always-on fields would delete the nested-document read view. The
+//   toggle is opt-in on the shell, so this body is the only one that passes
+//   `editing` / `onToggleEdit`.
 
 import type { DataGridEditState } from "@components/datagrid/useDataGridEdit";
 import BsonTreeViewer from "@components/shared/BsonTreeViewer";
-import type { KeyboardEvent, MouseEvent } from "react";
+import type { KeyboardEvent, MouseEvent, Ref } from "react";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import type { TableData } from "@/types/schema";
@@ -40,6 +45,7 @@ export interface DocumentQuickLookBodyProps {
   data?: TableData;
   editing: boolean;
   onToggleEdit: () => void;
+  panelRef?: Ref<HTMLDivElement>;
 }
 
 export default function DocumentQuickLookBody({
@@ -56,6 +62,7 @@ export default function DocumentQuickLookBody({
   data,
   editing,
   onToggleEdit,
+  panelRef,
 }: DocumentQuickLookBodyProps) {
   const { t } = useTranslation("shared");
   // Out-of-range or missing selection → pass `null` so BsonTreeViewer's
@@ -121,11 +128,14 @@ export default function DocumentQuickLookBody({
       onToggleEdit={onToggleEdit}
       onClose={onClose}
       editState={editState}
+      panelRef={panelRef}
     >
       {showFieldRows && editRow && data ? (
         data.columns.map((col, idx) => (
           <FieldRow
-            key={col.name}
+            // See `RdbQuickLookBody` — row index in the key so a selection move
+            // remounts the fields instead of keeping the previous row's draft.
+            key={`${firstSelectedId}-${col.name}`}
             column={col}
             value={editRow[idx]}
             rowIdx={firstSelectedId ?? 0}
@@ -133,7 +143,6 @@ export default function DocumentQuickLookBody({
             onBlobView={() => {
               /* Document mode doesn't have BLOB columns in V1. */
             }}
-            editing={editing}
             editState={editState}
           />
         ))

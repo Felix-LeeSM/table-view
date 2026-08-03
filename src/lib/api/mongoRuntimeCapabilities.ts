@@ -10,8 +10,68 @@
 import { invoke } from "@tauri-apps/api/core";
 import {
   type MongoRuntimeCapabilities,
+  type MongoServerVersion,
+  type MongoTopology,
   UNKNOWN_MONGO_RUNTIME_CAPABILITIES,
 } from "@/types/dataSource";
+
+/**
+ * The wire enum, as a `Record` rather than an array so that a missing member
+ * is a compile error (TS2741) instead of a silently narrower check.
+ */
+const KNOWN_TOPOLOGIES: Record<MongoTopology, true> = {
+  standalone: true,
+  replicaSet: true,
+  sharded: true,
+  unknown: true,
+};
+
+/** Own-property lookup, so inherited members are not topologies. */
+const isKnownTopology = (value: string): value is MongoTopology =>
+  Object.prototype.hasOwnProperty.call(KNOWN_TOPOLOGIES, value);
+
+/** Rust serializes the triplet as three `u32`s. */
+const isU32 = (value: unknown): value is number =>
+  typeof value === "number" &&
+  Number.isInteger(value) &&
+  value >= 0 &&
+  value <= 0xffff_ffff;
+
+/**
+ * Narrow the raw IPC payload to the wire contract — `invoke<T>()` is a cast,
+ * not a check.
+ */
+function narrowCapabilities(payload: unknown): MongoRuntimeCapabilities {
+  if (typeof payload !== "object" || payload === null) {
+    return UNKNOWN_MONGO_RUNTIME_CAPABILITIES;
+  }
+  const { topology, version } = payload as {
+    topology?: unknown;
+    version?: unknown;
+  };
+  if (typeof topology !== "string" || !isKnownTopology(topology)) {
+    return UNKNOWN_MONGO_RUNTIME_CAPABILITIES;
+  }
+  return {
+    topology,
+    version: narrowVersion(version),
+  };
+}
+
+/** `undefined` for anything that is not a complete parsed triplet. */
+function narrowVersion(version: unknown): MongoServerVersion | undefined {
+  if (typeof version !== "object" || version === null) return undefined;
+  const { major, minor, patch, raw } = version as Record<string, unknown>;
+  if (
+    !isU32(major) ||
+    !isU32(minor) ||
+    !isU32(patch) ||
+    typeof raw !== "string"
+  ) {
+    return undefined;
+  }
+  return { major, minor, patch, raw };
+}
 
 /**
  * Resolve the runtime capability for `connectionId`.
@@ -33,9 +93,8 @@ export async function mongoRuntimeCapabilities(
   connectionId: string,
 ): Promise<MongoRuntimeCapabilities> {
   try {
-    return await invoke<MongoRuntimeCapabilities>(
-      "mongo_runtime_capabilities",
-      { connectionId },
+    return narrowCapabilities(
+      await invoke<unknown>("mongo_runtime_capabilities", { connectionId }),
     );
   } catch {
     return UNKNOWN_MONGO_RUNTIME_CAPABILITIES;

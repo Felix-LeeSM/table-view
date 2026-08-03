@@ -35,6 +35,8 @@ export {
   rowKeyFn,
   UNDO_STACK_MAX,
 } from "./dataGridEditFsm";
+// Issue #1734 (3) — the selected-row fill both paradigm grids paint.
+export { SELECTED_ROW_FILL } from "./rowState";
 export type {
   DataGridEditState,
   UseDataGridEditParams,
