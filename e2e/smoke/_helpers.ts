@@ -648,6 +648,89 @@ export async function setInput(selector: string, value: string) {
 }
 
 /**
+ * Set the `index`-th `<input>` carrying `aria-label={label}`, for dialogs that
+ * repeat a field (the Create Table column rows). Same React prototype-setter
+ * reason as `setInput`.
+ *
+ * The label is matched on the attribute value rather than through a CSS
+ * `[aria-label="..."]` selector, so a label containing a quote or a backslash
+ * cannot break the query. Wait, write and verify all use that one predicate:
+ * waiting on a looser one lets the wait pass while no matching `<input>`
+ * exists, which turns a readable timeout into a thrown error from inside
+ * `browser.execute`.
+ */
+export async function setNthInputByAria(
+  label: string,
+  index: number,
+  value: string,
+) {
+  await browser.waitUntil(
+    async () =>
+      await browser.execute(
+        (ariaLabel, nth) =>
+          Array.from(
+            document.querySelectorAll<HTMLInputElement>("input[aria-label]"),
+          ).filter(
+            (candidate) => candidate.getAttribute("aria-label") === ariaLabel,
+          ).length > nth,
+        label,
+        index,
+      ),
+    {
+      timeout: 10000,
+      timeoutMsg: `${label} input #${index} did not appear`,
+    },
+  );
+  await browser.execute(
+    (ariaLabel, nth, nextValue) => {
+      const input = Array.from(
+        document.querySelectorAll<HTMLInputElement>("input[aria-label]"),
+      ).filter(
+        (candidate) => candidate.getAttribute("aria-label") === ariaLabel,
+      )[nth];
+      if (!input) throw new Error(`${ariaLabel} input #${nth} did not appear`);
+
+      const setter = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype,
+        "value",
+      )?.set;
+      if (!setter) throw new Error("HTMLInputElement value setter missing");
+
+      input.focus();
+      setter.call(input, nextValue);
+      input.dispatchEvent(new InputEvent("input", { bubbles: true }));
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+      input.blur();
+    },
+    label,
+    index,
+    value,
+  );
+  await browser.waitUntil(
+    async () =>
+      await browser.execute(
+        (ariaLabel, nth, expected) =>
+          Array.from(
+            document.querySelectorAll<HTMLInputElement>("input[aria-label]"),
+          ).filter(
+            (candidate) => candidate.getAttribute("aria-label") === ariaLabel,
+          )[nth]?.value === expected,
+        label,
+        index,
+        value,
+      ),
+    {
+      timeout: 5000,
+      timeoutMsg: `${label} input #${index} did not update`,
+    },
+  );
+}
+
+export async function setInputByAria(label: string, value: string) {
+  await setNthInputByAria(label, 0, value);
+}
+
+/**
  * Read the current value of an `<input>` / `<textarea>` by selector, or `""`
  * when the element is absent. Deliberately does not wait: every caller polls
  * this inside its own `waitUntil`, and a nested wait would reject the outer
@@ -669,10 +752,7 @@ export async function readFieldValue(selector: string): Promise<string> {
  * Radix `TabsTrigger` has no `onClick` — it changes the active value from
  * `onMouseDown` / `onKeyDown` / `onFocus`, so a bare `HTMLElement.click()`
  * fires a `click` event that nothing listens to and the tab never activates
- * (#1815, PR #2095 round 1). The focus + pointer + mouse + click sequence
- * below is the one `postgres-structure-ddl.spec.ts` and
- * `mysql-family-baseline.ts` proved out; both now call this instead of
- * keeping their own copy.
+ * (#1815). Hence the focus + pointer + mouse + click sequence below.
  */
 export async function activateTab(label: string) {
   await browser.waitUntil(
@@ -752,6 +832,16 @@ export async function activateTab(label: string) {
       timeoutMsg: `${label} tab did not become active`,
     },
   );
+}
+
+/**
+ * `activateTab` for tabs that live in the workspace window. Spec files reach
+ * the tab strip only after the driver is on that window, so the pair is the
+ * form every caller outside this file actually needs.
+ */
+export async function activateVisibleTab(label: string) {
+  await switchToWorkspaceWindow();
+  await activateTab(label);
 }
 
 export async function saveConnectionDialog(dialog: WebdriverIO.Element) {

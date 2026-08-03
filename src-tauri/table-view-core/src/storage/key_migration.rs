@@ -589,36 +589,23 @@ fn rekey_after_disk_exposure<B: KeyringBackend>(
     Ok(from_keyring(new_key, true))
 }
 
-/// Validate that every non-empty `password_enc` in `connections.json`
-/// decrypts under `key`. Returns Ok if (a) file absent, (b) file present
-/// but no non-empty passwords, or (c) all passwords decrypt cleanly.
-/// Returns Err on the first failure.
+/// Path B (c) probe — `connections.json` 의 모든 secret 암호문이 `key` 로 풀리는가.
+/// Ok 인 경우는 셋이다: 파일 부재, 파일은 있지만 비어있지 않은 secret 이 없음,
+/// 전부 복호화 성공. 첫 실패에서 Err.
+///
+/// 판정 대상은 `SECRET_FIELDS` 전체다 — 재키잉·orphan 가드가 지키는 집합과 같아야
+/// 한다. `password` 만 훑던 동안 secret 이 `wallet_password` 뿐인 프로필은 probe 를
+/// 헛통과해 (d) secure delete 까지 갔다 (#2124). 같은 집합을 도는
+/// `secrets_decrypt_under` 대신 여기서 직접 도는 이유는 실패 사유를 보존하기
+/// 위해서다 — 호출자가 그 문자열을 boot WARN 에 싣는다.
 fn validate_ciphertexts_decrypt(data_dir: &Path, key: &[u8]) -> Result<(), AppError> {
-    let conn_path = data_dir.join("connections.json");
-    if !conn_path.exists() {
-        return Ok(());
-    }
-    let raw = fs::read_to_string(&conn_path)?;
-    let parsed: serde_json::Value = match serde_json::from_str(&raw) {
-        Ok(v) => v,
-        Err(_) => {
-            // Corrupt JSON — `load_storage_raw()` will quarantine on the
-            // next call. From this step's perspective there is no
-            // ciphertext to validate against. We do not block migration.
-            return Ok(());
-        }
-    };
-    let Some(connections) = parsed.get("connections").and_then(|v| v.as_array()) else {
+    let ConnectionsDoc::Parsed(doc) = read_connections_doc(data_dir)? else {
+        // 파일 부재, 또는 Corrupt — 후자는 `load_storage_raw()` 가 다음 호출에서
+        // 격리한다. 이 step 이 검증할 암호문이 없으니 migration 을 막지 않는다.
         return Ok(());
     };
-    for conn in connections {
-        let Some(pw_enc) = conn.get("password").and_then(|v| v.as_str()) else {
-            continue;
-        };
-        if pw_enc.is_empty() {
-            continue;
-        }
-        crate::storage::crypto::decrypt(pw_enc, key)
+    for enc in secret_values(&doc) {
+        crate::storage::crypto::decrypt(enc, key)
             .map_err(|e| AppError::Encryption(format!("Ciphertext probe decrypt failed: {e}")))?;
     }
     Ok(())
@@ -1147,6 +1134,50 @@ mod tests {
         assert!(
             migration_failed_sentinel_path(dir.path()).exists(),
             "failure sentinel set"
+        );
+    }
+
+    /// #2124 — Path B 의 (c) probe 가 `conn.get("password")` 만 읽던 동안, secret 이
+    /// `wallet_password` 뿐인 프로필은 「검증할 암호문 없음」으로 probe 를 헛통과해
+    /// (d) secure delete 까지 갔다. 디스크 `.key` 로 안 열리는 암호문이 하나라도
+    /// 있으면 probe 는 fail-closed 여야 한다 — 디스크 `.key` 보존 + sentinel.
+    #[test]
+    fn migrate_path_b_wallet_only_ciphertext_failing_probe_preserves_disk_key() {
+        let dir = TempDir::new().unwrap();
+        let disk_key: Vec<u8> = (0..32u8).collect();
+        // 이 프로필의 wallet 암호문은 이 머신 어디에도 없는 키로 감싸여 있다 —
+        // 디스크 `.key` 를 그대로 이주시켜도 데이터는 안 열린다.
+        let lost_key: Vec<u8> = (200..232u8).collect();
+        seed_disk_key(dir.path(), &disk_key);
+        let doc = serde_json::json!({
+            "connections": [{
+                "id": "c1",
+                "password": "",
+                "wallet_password": encrypt("wallet-pw", &lost_key).unwrap(),
+            }],
+            "groups": [],
+        });
+        fs::write(dir.path().join("connections.json"), doc.to_string()).unwrap();
+        let backend = InMemoryKeyringBackend::new_available();
+
+        let outcome =
+            migrate_or_initialize(&backend, dir.path()).expect("a failed probe must not fail boot");
+
+        assert_eq!(outcome.source, KeySource::DiskFallback);
+        assert!(outcome.fallback_to_disk);
+        let disk_path = disk_key_path(dir.path());
+        assert!(
+            disk_path.exists(),
+            "a wallet-password-only profile must not walk the probe into the secure delete"
+        );
+        assert_eq!(
+            read_disk_key(&disk_path).unwrap(),
+            disk_key,
+            "the preserved .key must be intact, not zero-overwritten"
+        );
+        assert!(
+            migration_failed_sentinel_path(dir.path()).exists(),
+            "the next boot needs the retry marker"
         );
     }
 

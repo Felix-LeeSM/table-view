@@ -32,8 +32,7 @@ import {
  * preview/commit chain live in `useCreateTableForm`; each tab body is a
  * presentational sub-component. The modal owns only the 3-region compound
  * layout (Header / scrolling Body / pinned Footer with the inline DDL
- * preview + Execute button). Commit follows partial-atomic policy C: index
- * / constraint failures do not roll back the CREATE TABLE.
+ * preview + Execute button).
  */
 export type CreateTableDialogProps = UseCreateTableFormArgs;
 

@@ -1,10 +1,12 @@
-import { $, $$, browser } from "@wdio/globals";
+import { $, browser } from "@wdio/globals";
 import {
+  activateVisibleTab,
   expandIfCollapsed,
   openNewQueryTab,
   runQuery,
+  setInputByAria,
+  setNthInputByAria,
   step,
-  switchToWorkspaceWindow,
   typeQuery,
   waitForGridTextAll,
   waitForWorkspaceTextAll,
@@ -208,144 +210,6 @@ async function verifyMysqlFamilyPhysicalDdl({
     ],
     15000,
     `${dbLabel} physical FK ${fkName} did not appear in information_schema.KEY_COLUMN_USAGE`,
-  );
-}
-
-async function activateVisibleTab(label: string) {
-  await switchToWorkspaceWindow();
-  await browser.waitUntil(
-    async () =>
-      await browser.execute((expectedLabel) => {
-        return Array.from(
-          document.querySelectorAll<HTMLElement>('[role="tab"]'),
-        ).some(
-          (candidate) =>
-            candidate.offsetParent !== null &&
-            candidate.textContent?.trim() === expectedLabel,
-        );
-      }, label),
-    {
-      timeout: 10000,
-      timeoutMsg: `${label} tab did not appear in the workspace`,
-    },
-  );
-
-  await browser.execute((expectedLabel) => {
-    const tab = Array.from(
-      document.querySelectorAll<HTMLElement>('[role="tab"]'),
-    ).find(
-      (candidate) =>
-        candidate.offsetParent !== null &&
-        candidate.textContent?.trim() === expectedLabel,
-    );
-    if (!tab) throw new Error(`${expectedLabel} tab did not appear`);
-
-    tab.focus();
-
-    const pointerInit = {
-      bubbles: true,
-      cancelable: true,
-      pointerType: "mouse",
-      button: 0,
-    };
-    if (typeof PointerEvent === "function") {
-      tab.dispatchEvent(
-        new PointerEvent("pointerdown", { ...pointerInit, buttons: 1 }),
-      );
-      tab.dispatchEvent(new PointerEvent("pointerup", pointerInit));
-    }
-
-    tab.dispatchEvent(
-      new MouseEvent("mousedown", {
-        bubbles: true,
-        cancelable: true,
-        button: 0,
-        buttons: 1,
-      }),
-    );
-    tab.dispatchEvent(
-      new MouseEvent("mouseup", {
-        bubbles: true,
-        cancelable: true,
-        button: 0,
-      }),
-    );
-    tab.click();
-  }, label);
-
-  await browser.waitUntil(
-    async () =>
-      await browser.execute((expectedLabel) => {
-        const tab = Array.from(
-          document.querySelectorAll<HTMLElement>('[role="tab"]'),
-        ).find(
-          (candidate) =>
-            candidate.offsetParent !== null &&
-            candidate.textContent?.trim() === expectedLabel,
-        );
-        return tab?.getAttribute("aria-selected") === "true";
-      }, label),
-    {
-      timeout: 10000,
-      timeoutMsg: `${label} tab did not become active in the workspace`,
-    },
-  );
-}
-
-async function setInputByAria(label: string, value: string) {
-  await setNthInputByAria(label, 0, value);
-}
-
-async function setNthInputByAria(label: string, index: number, value: string) {
-  await browser.waitUntil(
-    async () => (await $$(ariaSelector(label))).length > index,
-    {
-      timeout: 10000,
-      timeoutMsg: `${label} input #${index} did not appear`,
-    },
-  );
-  await browser.execute(
-    (ariaLabel, nth, nextValue) => {
-      const input = Array.from(
-        document.querySelectorAll<HTMLInputElement>("input[aria-label]"),
-      ).filter(
-        (candidate) => candidate.getAttribute("aria-label") === ariaLabel,
-      )[nth];
-      if (!input) throw new Error(`${ariaLabel} input #${nth} did not appear`);
-
-      const setter = Object.getOwnPropertyDescriptor(
-        window.HTMLInputElement.prototype,
-        "value",
-      )?.set;
-      if (!setter) throw new Error("HTMLInputElement value setter missing");
-
-      input.focus();
-      setter.call(input, nextValue);
-      input.dispatchEvent(new InputEvent("input", { bubbles: true }));
-      input.dispatchEvent(new Event("change", { bubbles: true }));
-      input.blur();
-    },
-    label,
-    index,
-    value,
-  );
-  await browser.waitUntil(
-    async () =>
-      await browser.execute(
-        (ariaLabel, nth, expected) =>
-          Array.from(
-            document.querySelectorAll<HTMLInputElement>("input[aria-label]"),
-          ).filter(
-            (candidate) => candidate.getAttribute("aria-label") === ariaLabel,
-          )[nth]?.value === expected,
-        label,
-        index,
-        value,
-      ),
-    {
-      timeout: 5000,
-      timeoutMsg: `${label} input #${index} did not update`,
-    },
   );
 }
 

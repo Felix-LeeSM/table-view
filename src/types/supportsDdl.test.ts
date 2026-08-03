@@ -1,12 +1,9 @@
 // Issue #1460 — `supportsDdl(dbType, action)` reads the per-action `ddl.*`
-// capability so the four schema-mutation entry points (Create Table / Alter
-// Table / Create Index / Drop object) surface only where the wired backend
-// adapter can actually execute that DDL. Grounds (adapter code):
+// capability for the four schema-mutation entry points (Create Table / Alter
+// Table / Create Index / Drop object). Grounds (adapter code):
 //   - PostgreSQL / MySQL / MariaDB / MSSQL / Oracle — every DDL trait method
 //     delegates to a real executor → all four true (MSSQL wired by #1071,
 //     Oracle by #1072).
-//   - SQLite — only `create_table` delegates; drop/rename/alter/index/constraint
-//     return `sqlite_unsupported(...)` → `createTable` true, the rest false.
 //   - DuckDB — #1070 (ADR 0051 Stage 2) wires native structural DDL: table
 //     create/drop/rename, column add/drop/type, index create/drop → the four
 //     base actions true. `alterConstraint` stays false (DuckDB `ALTER TABLE`
