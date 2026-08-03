@@ -378,11 +378,15 @@ pub struct CreateTablePlanConstraint {
 /// N `create_index` + M `add_constraint`); Sprint 240 collapses this
 /// to a single `create_table_plan` IPC.
 ///
-/// Atomic policy = C (partial-atomic) — the parent CREATE TABLE
-/// statement runs inside its own transaction (with COMMENTs); each
-/// child index / constraint runs in its own transaction. This matches
-/// the per-call behaviour the dialog had before, just over one round
-/// trip instead of N+1.
+/// Atomic policy is the adapter's, not this struct's. The default is
+/// C (partial-atomic) — the parent CREATE TABLE statement runs inside
+/// its own transaction (with COMMENTs) and each child index /
+/// constraint runs in its own, which matches the per-call behaviour
+/// the dialog had before, just over one round trip instead of N+1.
+/// An adapter may be stricter: the SQLite override runs the whole plan
+/// in one transaction since #1804, so a failing child index rolls the
+/// CREATE TABLE back (`db/adapters/sqlite/ddl.rs`). Callers must not
+/// assume the parent survives a child failure.
 ///
 /// `preview_only` (default `false`) toggles between SQL emission and
 /// execution. In preview mode the adapter joins each child's emitted

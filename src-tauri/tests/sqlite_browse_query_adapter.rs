@@ -538,7 +538,7 @@ async fn sqlite_contract_create_table_plan_supports_table_only_slice() {
 }
 
 #[tokio::test]
-async fn sqlite_contract_create_table_plan_rejects_indexes_before_creating_table() {
+async fn sqlite_contract_create_table_plan_applies_native_index_creation_with_the_table() {
     let (_dir, adapter) = connected_fixture().await;
 
     let result = adapter
@@ -559,11 +559,27 @@ async fn sqlite_contract_create_table_plan_rejects_indexes_before_creating_table
             preview_only: false,
             expected_database: None,
         })
-        .await;
+        .await
+        .unwrap();
 
-    assert_sqlite_ddl_unsupported(result, "index creation");
+    assert!(
+        result.sql.contains("CREATE TABLE \"people\""),
+        "{}",
+        result.sql
+    );
+    assert!(
+        result
+            .sql
+            .contains("CREATE INDEX \"idx_people_name\" ON \"people\" (\"name\")"),
+        "{}",
+        result.sql
+    );
     let tables = adapter.list_tables("main").await.unwrap();
-    assert!(!tables.iter().any(|table| table.name == "people"));
+    assert!(tables.iter().any(|table| table.name == "people"));
+    let indexes = RdbAdapter::get_table_indexes(&adapter, "main", "people", None)
+        .await
+        .unwrap();
+    assert!(indexes.iter().any(|index| index.name == "idx_people_name"));
 }
 
 #[tokio::test]
@@ -590,7 +606,7 @@ async fn sqlite_contract_create_table_plan_rejects_constraints_before_creating_t
         })
         .await;
 
-    assert_sqlite_ddl_unsupported(result, "standalone constraints");
+    assert_sqlite_ddl_unsupported(result, "standalone constraint rows");
     let tables = adapter.list_tables("main").await.unwrap();
     assert!(!tables.iter().any(|table| table.name == "people"));
 }
@@ -677,57 +693,256 @@ async fn sqlite_contract_create_table_rejects_inline_constraint_fragments() {
     assert!(!tables.iter().any(|table| table.name == "people"));
 }
 
+/// #1804 — the boundary moved. The seven structural operations SQLite performs
+/// natively now run through the wired trait methods; only the two the engine
+/// cannot express outside `CREATE TABLE` stay refused.
 #[tokio::test]
-async fn sqlite_contract_rejects_structured_ddl_methods_explicitly() {
+async fn sqlite_contract_applies_native_structured_ddl_methods() {
     let (_dir, adapter) = connected_fixture().await;
 
-    assert_structured_ddl_methods_unsupported(&adapter, true).await;
-    assert_structured_ddl_methods_unsupported(&adapter, false).await;
+    // Preview first: each entry point returns its SQL and writes nothing.
+    let previews = native_ddl_previews(&adapter).await;
+    assert_eq!(
+        previews.len(),
+        7,
+        "every opened entry point must be covered"
+    );
+    for sql in &previews {
+        assert!(!sql.is_empty());
+    }
+    let untouched = adapter.get_columns("main", "users", None).await.unwrap();
+    assert!(untouched.iter().any(|column| column.name == "active"));
+
+    // Then execute, in an order the seeded fixture supports.
+    adapter
+        .add_column(&AddColumnRequest {
+            connection_id: "sqlite-contract".to_string(),
+            schema: "main".to_string(),
+            table: "users".to_string(),
+            column: ddl_column("nickname"),
+            check_expression: None,
+            preview_only: false,
+            expected_database: None,
+        })
+        .await
+        .unwrap();
+    adapter
+        .create_index(&CreateIndexRequest {
+            connection_id: "sqlite-contract".to_string(),
+            schema: "main".to_string(),
+            table: "users".to_string(),
+            index_name: "idx_users_nickname".to_string(),
+            columns: vec!["nickname".to_string()],
+            index_type: "BTREE".to_string(),
+            is_unique: false,
+            preview_only: false,
+            expected_database: None,
+        })
+        .await
+        .unwrap();
+    adapter
+        .alter_table(&AlterTableRequest {
+            connection_id: "sqlite-contract".to_string(),
+            schema: "main".to_string(),
+            table: "users".to_string(),
+            changes: vec![ColumnChange::Add {
+                name: "locale".to_string(),
+                data_type: "TEXT".to_string(),
+                nullable: true,
+                default_value: None,
+            }],
+            preview_only: false,
+            expected_database: None,
+        })
+        .await
+        .unwrap();
+    // `active` is deliberately not the drop target: the seeded `active_users`
+    // view selects it, and SQLite refuses that drop. The dependency case has
+    // its own test below.
+    adapter
+        .drop_column(&DropColumnRequest {
+            connection_id: "sqlite-contract".to_string(),
+            schema: "main".to_string(),
+            table: "users".to_string(),
+            column_name: "locale".to_string(),
+            cascade: false,
+            preview_only: false,
+            expected_database: None,
+        })
+        .await
+        .unwrap();
+
+    let columns: Vec<String> = adapter
+        .get_columns("main", "users", None)
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|column| column.name)
+        .collect();
+    assert!(columns.contains(&"nickname".to_string()), "{columns:?}");
+    assert!(!columns.contains(&"locale".to_string()), "{columns:?}");
+    assert!(columns.contains(&"active".to_string()), "{columns:?}");
+
+    adapter
+        .drop_index(&DropIndexRequest {
+            connection_id: "sqlite-contract".to_string(),
+            schema: "main".to_string(),
+            index_name: "idx_users_nickname".to_string(),
+            table: "users".to_string(),
+            if_exists: false,
+            preview_only: false,
+            expected_database: None,
+        })
+        .await
+        .unwrap();
+    // `orders` holds a populated FOREIGN KEY into `users`, and the fixture opens
+    // with `foreign_keys` ON, so the child table goes first — SQLite has no
+    // CASCADE to do it for us.
+    adapter
+        .drop_table(&DropTableRequest {
+            connection_id: "sqlite-contract".to_string(),
+            schema: "main".to_string(),
+            table: "orders".to_string(),
+            cascade: false,
+            preview_only: false,
+            expected_database: None,
+        })
+        .await
+        .unwrap();
+    adapter
+        .rename_table(&RenameTableRequest {
+            connection_id: "sqlite-contract".to_string(),
+            schema: "main".to_string(),
+            table: "users".to_string(),
+            new_name: "people".to_string(),
+            preview_only: false,
+            expected_database: None,
+        })
+        .await
+        .unwrap();
+    adapter
+        .drop_table(&DropTableRequest {
+            connection_id: "sqlite-contract".to_string(),
+            schema: "main".to_string(),
+            table: "people".to_string(),
+            cascade: false,
+            preview_only: false,
+            expected_database: None,
+        })
+        .await
+        .unwrap();
+
+    let tables = adapter.list_tables("main").await.unwrap();
+    assert!(tables.iter().all(|table| table.name != "users"));
+    assert!(tables.iter().all(|table| table.name != "people"));
 }
 
-async fn assert_structured_ddl_methods_unsupported(adapter: &SqliteAdapter, preview_only: bool) {
-    assert_sqlite_ddl_unsupported(
+/// The rebuild boundary at the trait edge: a column type change is refused
+/// rather than half-applied, and the table is left as it was.
+#[tokio::test]
+async fn sqlite_contract_refuses_rebuild_only_column_modification() {
+    let (_dir, adapter) = connected_fixture().await;
+
+    let result = adapter
+        .alter_table(&AlterTableRequest {
+            connection_id: "sqlite-contract".to_string(),
+            schema: "main".to_string(),
+            table: "users".to_string(),
+            changes: vec![ColumnChange::Modify {
+                name: "name".to_string(),
+                new_data_type: Some("INTEGER".to_string()),
+                new_nullable: None,
+                new_default_value: None,
+                using_expression: None,
+                new_comment: None,
+            }],
+            preview_only: false,
+            expected_database: None,
+        })
+        .await;
+
+    assert_sqlite_ddl_unsupported(result, "rebuild");
+    let name = adapter
+        .get_columns("main", "users", None)
+        .await
+        .unwrap()
+        .into_iter()
+        .find(|column| column.name == "name")
+        .unwrap();
+    assert_eq!(name.data_type.to_uppercase(), "TEXT");
+}
+
+/// The restriction message names the dependent object and the remedy, so a
+/// blocked `DROP COLUMN` is actionable without opening `sqlite_schema`. The
+/// engine's own text is kept beside it.
+#[tokio::test]
+async fn sqlite_contract_drop_column_names_the_blocking_view() {
+    let (_dir, adapter) = connected_fixture().await;
+
+    let result = adapter
+        .drop_column(&DropColumnRequest {
+            connection_id: "sqlite-contract".to_string(),
+            schema: "main".to_string(),
+            table: "users".to_string(),
+            column_name: "active".to_string(),
+            cascade: false,
+            preview_only: false,
+            expected_database: None,
+        })
+        .await;
+
+    let message = match result {
+        Err(AppError::Database(message)) => message,
+        other => panic!("Expected a mapped SQLite restriction, got: {other:?}"),
+    };
+    assert!(message.contains("view"), "{message}");
+    assert!(message.contains("\"active_users\""), "{message}");
+    assert!(message.contains("Drop or redefine"), "{message}");
+    assert!(message.contains("SQLite:"), "{message}");
+
+    let columns = adapter.get_columns("main", "users", None).await.unwrap();
+    assert!(columns.iter().any(|column| column.name == "active"));
+}
+
+/// A read-only file refuses all seven opened operations, so the existing
+/// rejection path did not widen with the capability.
+#[tokio::test]
+async fn sqlite_contract_read_only_connection_rejects_every_native_ddl_method() {
+    let (_dir, adapter) = connected_read_only_fixture().await;
+
+    let results = vec![
         adapter
             .drop_table(&DropTableRequest {
                 connection_id: "sqlite-contract".to_string(),
                 schema: "main".to_string(),
                 table: "users".to_string(),
                 cascade: false,
-                preview_only,
+                preview_only: false,
                 expected_database: None,
             })
             .await,
-        "table drop",
-    );
-    assert_sqlite_ddl_unsupported(
         adapter
             .rename_table(&RenameTableRequest {
                 connection_id: "sqlite-contract".to_string(),
                 schema: "main".to_string(),
                 table: "users".to_string(),
                 new_name: "people".to_string(),
-                preview_only,
+                preview_only: false,
                 expected_database: None,
             })
             .await,
-        "table rename",
-    );
-    assert_sqlite_ddl_unsupported(
         adapter
             .alter_table(&AlterTableRequest {
                 connection_id: "sqlite-contract".to_string(),
                 schema: "main".to_string(),
                 table: "users".to_string(),
                 changes: vec![ColumnChange::Drop {
-                    name: "name".to_string(),
+                    name: "active".to_string(),
                 }],
-                preview_only,
+                preview_only: false,
                 expected_database: None,
             })
             .await,
-        "table alteration",
-    );
-    assert_sqlite_ddl_unsupported(
         adapter
             .add_column(&AddColumnRequest {
                 connection_id: "sqlite-contract".to_string(),
@@ -735,27 +950,21 @@ async fn assert_structured_ddl_methods_unsupported(adapter: &SqliteAdapter, prev
                 table: "users".to_string(),
                 column: ddl_column("nickname"),
                 check_expression: None,
-                preview_only,
+                preview_only: false,
                 expected_database: None,
             })
             .await,
-        "column creation",
-    );
-    assert_sqlite_ddl_unsupported(
         adapter
             .drop_column(&DropColumnRequest {
                 connection_id: "sqlite-contract".to_string(),
                 schema: "main".to_string(),
                 table: "users".to_string(),
-                column_name: "name".to_string(),
+                column_name: "active".to_string(),
                 cascade: false,
-                preview_only,
+                preview_only: false,
                 expected_database: None,
             })
             .await,
-        "column drop",
-    );
-    assert_sqlite_ddl_unsupported(
         adapter
             .create_index(&CreateIndexRequest {
                 connection_id: "sqlite-contract".to_string(),
@@ -765,13 +974,10 @@ async fn assert_structured_ddl_methods_unsupported(adapter: &SqliteAdapter, prev
                 columns: vec!["email".to_string()],
                 index_type: "BTREE".to_string(),
                 is_unique: false,
-                preview_only,
+                preview_only: false,
                 expected_database: None,
             })
             .await,
-        "index creation",
-    );
-    assert_sqlite_ddl_unsupported(
         adapter
             .drop_index(&DropIndexRequest {
                 connection_id: "sqlite-contract".to_string(),
@@ -779,41 +985,158 @@ async fn assert_structured_ddl_methods_unsupported(adapter: &SqliteAdapter, prev
                 index_name: "idx_users_name".to_string(),
                 table: "users".to_string(),
                 if_exists: false,
-                preview_only,
+                preview_only: false,
                 expected_database: None,
             })
             .await,
-        "index drop",
-    );
-    assert_sqlite_ddl_unsupported(
+    ];
+
+    assert_eq!(results.len(), 7, "every opened entry point must be covered");
+    for result in results {
+        assert_sqlite_ddl_unsupported(result, "read-only SQLite connection");
+    }
+
+    let columns = adapter.get_columns("main", "users", None).await.unwrap();
+    assert!(columns.iter().any(|column| column.name == "active"));
+}
+
+/// Constraint DDL stays refused in both preview and execute: SQLite attaches a
+/// constraint only at `CREATE TABLE` time, so add/drop needs the table rebuild
+/// #1804 left out of scope.
+#[tokio::test]
+async fn sqlite_contract_still_rejects_constraint_ddl_explicitly() {
+    let (_dir, adapter) = connected_fixture().await;
+
+    for preview_only in [true, false] {
+        assert_sqlite_ddl_unsupported(
+            adapter
+                .add_constraint(&AddConstraintRequest {
+                    connection_id: "sqlite-contract".to_string(),
+                    schema: "main".to_string(),
+                    table: "users".to_string(),
+                    constraint_name: "users_email_unique".to_string(),
+                    definition: ConstraintDefinition::Unique {
+                        columns: vec!["email".to_string()],
+                    },
+                    preview_only,
+                    expected_database: None,
+                })
+                .await,
+            "constraint creation",
+        );
+        assert_sqlite_ddl_unsupported(
+            adapter
+                .drop_constraint(&DropConstraintRequest {
+                    connection_id: "sqlite-contract".to_string(),
+                    schema: "main".to_string(),
+                    table: "users".to_string(),
+                    constraint_name: "users_email_unique".to_string(),
+                    preview_only,
+                    expected_database: None,
+                })
+                .await,
+            "constraint drop",
+        );
+    }
+}
+
+/// Preview SQL for each of the seven, in one place, so the count above is a
+/// real roster rather than a number to keep in sync by hand.
+async fn native_ddl_previews(adapter: &SqliteAdapter) -> Vec<String> {
+    vec![
         adapter
-            .add_constraint(&AddConstraintRequest {
+            .drop_table(&DropTableRequest {
+                connection_id: "sqlite-contract".to_string(),
+                schema: "main".to_string(),
+                table: "orders".to_string(),
+                cascade: false,
+                preview_only: true,
+                expected_database: None,
+            })
+            .await
+            .unwrap()
+            .sql,
+        adapter
+            .rename_table(&RenameTableRequest {
                 connection_id: "sqlite-contract".to_string(),
                 schema: "main".to_string(),
                 table: "users".to_string(),
-                constraint_name: "users_email_unique".to_string(),
-                definition: ConstraintDefinition::Unique {
-                    columns: vec!["email".to_string()],
-                },
-                preview_only,
+                new_name: "people".to_string(),
+                preview_only: true,
                 expected_database: None,
             })
-            .await,
-        "constraint creation",
-    );
-    assert_sqlite_ddl_unsupported(
+            .await
+            .unwrap()
+            .sql,
         adapter
-            .drop_constraint(&DropConstraintRequest {
+            .alter_table(&AlterTableRequest {
                 connection_id: "sqlite-contract".to_string(),
                 schema: "main".to_string(),
                 table: "users".to_string(),
-                constraint_name: "users_email_unique".to_string(),
-                preview_only,
+                changes: vec![ColumnChange::Drop {
+                    name: "active".to_string(),
+                }],
+                preview_only: true,
                 expected_database: None,
             })
-            .await,
-        "constraint drop",
-    );
+            .await
+            .unwrap()
+            .sql,
+        adapter
+            .add_column(&AddColumnRequest {
+                connection_id: "sqlite-contract".to_string(),
+                schema: "main".to_string(),
+                table: "users".to_string(),
+                column: ddl_column("nickname"),
+                check_expression: None,
+                preview_only: true,
+                expected_database: None,
+            })
+            .await
+            .unwrap()
+            .sql,
+        adapter
+            .drop_column(&DropColumnRequest {
+                connection_id: "sqlite-contract".to_string(),
+                schema: "main".to_string(),
+                table: "users".to_string(),
+                column_name: "active".to_string(),
+                cascade: false,
+                preview_only: true,
+                expected_database: None,
+            })
+            .await
+            .unwrap()
+            .sql,
+        adapter
+            .create_index(&CreateIndexRequest {
+                connection_id: "sqlite-contract".to_string(),
+                schema: "main".to_string(),
+                table: "users".to_string(),
+                index_name: "idx_users_email".to_string(),
+                columns: vec!["email".to_string()],
+                index_type: "BTREE".to_string(),
+                is_unique: false,
+                preview_only: true,
+                expected_database: None,
+            })
+            .await
+            .unwrap()
+            .sql,
+        adapter
+            .drop_index(&DropIndexRequest {
+                connection_id: "sqlite-contract".to_string(),
+                schema: "main".to_string(),
+                index_name: "idx_users_name".to_string(),
+                table: "users".to_string(),
+                if_exists: false,
+                preview_only: true,
+                expected_database: None,
+            })
+            .await
+            .unwrap()
+            .sql,
+    ]
 }
 
 #[tokio::test]
