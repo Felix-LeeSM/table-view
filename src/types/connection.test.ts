@@ -131,6 +131,10 @@ describe("parseConnectionUrl paradigm tagging (Sprint 65)", () => {
       password: "pw",
       database: "4",
       sslMode: "verify-full",
+      // #1649 — a URL that states a posture also drops any CA anchor the draft
+      // was carrying: no reflectable URL value is `verify-ca`, so keeping the
+      // anchor would leave it attached to a posture that ignores it.
+      caCertPath: null,
       paradigm: "kv",
     });
   });
@@ -573,10 +577,21 @@ describe("parseConnectionUrl TLS parameters (#1063)", () => {
     expect(result).toMatchObject({ sslMode: "require" });
   });
 
-  it("maps mongodb tls=true onto the verify-full posture and nothing else", () => {
+  it("maps mongodb tls=true onto the verify-full posture and clears the CA", () => {
     const result = parseConnectionUrl("mongodb://u:p@h:27017/db?tls=true");
-    expect(result).toMatchObject({ sslMode: "verify-full" });
-    // A boolean tls param turns encryption on; it never authors a CA reference.
+    // #1649 — a boolean tls param never *authors* a CA reference, and it clears
+    // one the draft was carrying: the posture it states is not `verify-ca`, so
+    // an anchor left behind would survive into a posture that ignores it and
+    // could later be revived by the skip-verify round trip.
+    expect(result).toMatchObject({ sslMode: "verify-full", caCertPath: null });
+  });
+
+  // Reason: #1649 — the clearing above is tied to *stating* a posture, not to
+  // pasting a URL. A URL with no TLS parameter leaves both fields alone so the
+  // draft's own posture and anchor survive a host/database edit. (2026-08-03)
+  it("leaves the posture and the CA anchor untouched when the URL states no TLS param", () => {
+    const result = parseConnectionUrl("mongodb://u:p@h:27017/db");
+    expect(result).not.toHaveProperty("sslMode");
     expect(result).not.toHaveProperty("caCertPath");
   });
 

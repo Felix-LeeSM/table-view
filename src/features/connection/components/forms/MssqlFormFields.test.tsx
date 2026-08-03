@@ -100,9 +100,15 @@ describe("MssqlFormFields encryption toggle posture (#1649)", () => {
   it.each(["disable", "prefer"] as const)(
     "turning encryption on from %s selects the verifying posture, never skip-verify",
     (sslMode) => {
-      const { onChange } = renderMssql({ sslMode });
+      const { onChange } = renderMssql({ sslMode, caCertPath: "/stale.pem" });
       clickEncryption();
-      expect(onChange).toHaveBeenCalledWith({ sslMode: "verify-full" });
+      // The CA anchor goes on this branch too: `verify-full` does not read it,
+      // and leaving it would let the adjacent trust checkbox restore a
+      // `verify-ca` this connection never had (`draftVerifyingSslMode`).
+      expect(onChange).toHaveBeenCalledWith({
+        sslMode: "verify-full",
+        caCertPath: null,
+      });
     },
   );
 
@@ -120,5 +126,46 @@ describe("MssqlFormFields encryption toggle posture (#1649)", () => {
     expect(onChange).toHaveBeenCalledTimes(2);
     expect(draft.sslMode).toBe("verify-full");
     expect(screen.getByLabelText("Enable encryption (TLS)")).toBeChecked();
+  });
+});
+
+// Purpose: #1649 — the same round-trip rule on the adjacent control. The trust
+// checkbox is also controlled by the posture, so its unchecked branch has to
+// derive the verifying posture from the draft's CA anchor. SQL Server renders no
+// sslmode dropdown, so a `verify-ca` demoted here could not be restored from the
+// dialog at all. (2026-08-03)
+describe("MssqlFormFields trust toggle posture (#1649)", () => {
+  function clickTrust() {
+    fireEvent.click(screen.getByLabelText("Trust server certificate"));
+  }
+
+  it("restores verify-ca across a trust check/uncheck round trip", () => {
+    let draft: Partial<ConnectionDraft> = {
+      sslMode: "verify-ca",
+      caCertPath: "/opt/corp-ca.pem",
+    };
+    const { onChange, apply } = renderMssql(draft);
+    for (let click = 0; click < 2; click++) {
+      clickTrust();
+      draft = { ...draft, ...onChange.mock.calls[click]![0] };
+      apply(draft);
+    }
+    expect(onChange).toHaveBeenCalledTimes(2);
+    expect(draft).toMatchObject({
+      sslMode: "verify-ca",
+      caCertPath: "/opt/corp-ca.pem",
+    });
+    expect(screen.getByLabelText("Trust server certificate")).not.toBeChecked();
+  });
+
+  it("restores verify-full across a round trip when no CA anchor is set", () => {
+    let draft: Partial<ConnectionDraft> = { sslMode: "verify-full" };
+    const { onChange, apply } = renderMssql(draft);
+    for (let click = 0; click < 2; click++) {
+      clickTrust();
+      draft = { ...draft, ...onChange.mock.calls[click]![0] };
+      apply(draft);
+    }
+    expect(draft.sslMode).toBe("verify-full");
   });
 });

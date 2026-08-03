@@ -132,8 +132,11 @@ the full adding-data-source contract are locked.
 결정 섹션). 1차 = core 2필드 TLS 어휘 통일 + pg/mysql sslmode enum + warning-first 기본값
 (#1063), SSH 터널 잔여 축 (#1064, ADR 0052 위), Oracle A1 SID+Service (#1065).
 Advanced TLS depth-step — CA 파일·클라이언트 인증서·1단 엔진 sslmode 확장·`verify-ca`·TOFU 인증서
-핀 검토 — 는 #1649 로 후속 승격한다. Oracle 1-way TLS (TCPS + CA cert) 는 #1650 으로 advanced
-TLS CA 지원(#1649)에 의존해 묶는다.
+핀 검토 — 는 #1649 로 후속 승격한다. 그중 `verify-ca` 어휘, `caCertPath` 필드와 드라이버 배선,
+1단 엔진 sslmode 확장은 #1649 1차 (ADR 0058) 로 실렸다. 남은 것은 클라이언트 인증서, TOFU 인증서
+핀, 폼 안의 CA 파일 피커, 1단 엔진 5종(MongoDB·Redis/Valkey·Elasticsearch/OpenSearch)의 사설
+트러스트 앵커다 — `docs/product/known-limitations-cross-cutting.md` 의 TLS 문단과 같은 목록이다.
+Oracle 1-way TLS (TCPS + CA cert) 는 #1650 으로 advanced TLS CA 지원(#1649)에 의존해 묶는다.
 
 ### Security / ops policy
 

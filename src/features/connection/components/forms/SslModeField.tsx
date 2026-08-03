@@ -57,7 +57,17 @@ export default function SslModeField({
       </label>
       <Select
         value={mode}
-        onValueChange={(value) => onChange({ sslMode: value as SslMode })}
+        // #1649 — the CA anchor belongs to `verify-ca` alone, so any pick here
+        // drops it: a stored `verify-ca` the user moved away from must not be
+        // resurrected later by the skip-verify round trip
+        // (`draftVerifyingSslMode`), and an anchor no posture reads must not be
+        // persisted. Unconditional because `verify-ca` is never in
+        // `SSL_MODE_OPTIONS` — `sslModeChoices` only re-adds it when it is
+        // already the selected value, and a controlled Radix `Select` fires no
+        // change for the value it already holds.
+        onValueChange={(value) =>
+          onChange({ sslMode: value as SslMode, caCertPath: null })
+        }
       >
         <SelectTrigger
           id="conn-ssl-mode"

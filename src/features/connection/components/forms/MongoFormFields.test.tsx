@@ -82,7 +82,14 @@ describe("MongoFormFields", () => {
     act(() => {
       fireEvent.click(screen.getByLabelText("Enable TLS"));
     });
-    expect(onChange).toHaveBeenCalledWith({ sslMode: "verify-full" });
+    // #1649 — the TLS on/off checkbox clears the CA anchor on both branches:
+    // neither `verify-full` nor `prefer` reads it, and leaving it would let the
+    // adjacent skip-verify checkbox restore a `verify-ca` this connection never
+    // had (see `draftVerifyingSslMode`).
+    expect(onChange).toHaveBeenCalledWith({
+      sslMode: "verify-full",
+      caCertPath: null,
+    });
   });
 
   // Issue #1063 — the skip-verify opt-in (`trust server certificate`) only

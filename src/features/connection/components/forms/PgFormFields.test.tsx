@@ -124,7 +124,10 @@ describe("PgFormFields", () => {
       const onChange = renderPg({});
       await user.click(screen.getByLabelText("SSL mode"));
       await user.click(screen.getByRole("option", { name: /Disable/ }));
-      expect(onChange).toHaveBeenCalledWith({ sslMode: "disable" });
+      expect(onChange).toHaveBeenCalledWith({
+        sslMode: "disable",
+        caCertPath: null,
+      });
     });
 
     it("selecting Require patches the encrypt-but-skip-verify posture", async () => {
@@ -132,7 +135,36 @@ describe("PgFormFields", () => {
       const onChange = renderPg({});
       await user.click(screen.getByLabelText("SSL mode"));
       await user.click(screen.getByRole("option", { name: /Require/ }));
-      expect(onChange).toHaveBeenCalledWith({ sslMode: "require" });
+      expect(onChange).toHaveBeenCalledWith({
+        sslMode: "require",
+        caCertPath: null,
+      });
+    });
+
+    // Purpose: #1649 — the dropdown never offers `verify-ca`, but it renders it
+    // for a connection already stored that way (`sslModeChoices`). Moving off it
+    // must take the anchor with it: leaving `caCertPath` behind would let the
+    // skip-verify round trip (`draftVerifyingSslMode`) resurrect the posture the
+    // user just left, and would persist an anchor no posture reads. Re-picking
+    // `verify-ca` is not a case to cover — it is only ever the already-selected
+    // value here, and the assertion below measures that no patch is emitted for
+    // it. (2026-08-03)
+    it("drops the CA anchor when a stored verify-ca leaves for another posture", async () => {
+      const user = userEvent.setup();
+      const onChange = renderPg({
+        sslMode: "verify-ca",
+        caCertPath: "/opt/corp-ca.pem",
+      });
+      await user.click(screen.getByLabelText("SSL mode"));
+      await user.click(screen.getByRole("option", { name: /Verify CA/ }));
+      expect(onChange).not.toHaveBeenCalled();
+
+      await user.click(screen.getByLabelText("SSL mode"));
+      await user.click(screen.getByRole("option", { name: /Verify full/ }));
+      expect(onChange).toHaveBeenCalledWith({
+        sslMode: "verify-full",
+        caCertPath: null,
+      });
     });
 
     it("warns about skipped verification while Require is selected", () => {

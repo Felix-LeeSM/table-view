@@ -55,6 +55,18 @@ pub struct PersistConnectionRequest {
     /// `(tlsEnabled, trustServerCertificate)` pair; `#[serde(default)]` yields
     /// `prefer` so a payload that omits it behaves exactly as the omitted
     /// booleans did.
+    ///
+    /// Unlike [`ConnectionConfig`] there is deliberately no legacy-pair fold
+    /// here: that shim exists to migrate *stored* rows, and an IPC request is
+    /// not stored data. This struct also has no `deny_unknown_fields` (a caller
+    /// passing a whole frontend connection object carries keys this request does
+    /// not model), so a payload that sent the legacy pair instead of `sslMode`
+    /// would have both keys dropped and persist `prefer`. No such payload can
+    /// exist today — the frontend types no longer carry those keys, Tauri ships
+    /// both halves together so there is no version skew, and nothing calls this
+    /// IPC yet (`git grep -n "persistConnection" -- src/ e2e/`). A frontend
+    /// caller must send `sslMode`; wire the fold here if that ever stops being
+    /// guaranteed.
     #[serde(default)]
     pub ssl_mode: SslMode,
     /// #1649 (ADR 0058) — CA path for `verify-ca`. Rejected by the storage write

@@ -9,6 +9,7 @@ import { useTranslation } from "react-i18next";
 import {
   type ConnectionDraft,
   draftSslMode,
+  draftVerifyingSslMode,
   getMssqlConnectionUnsupportedMessage,
   sslModeTlsOn,
 } from "../../model";
@@ -209,11 +210,14 @@ export default function MssqlFormFields({
               // turning encryption off wrote `trust: false` and turning it back
               // on restored `(tls=true, trust=false)` = verify-full. Skip-verify
               // stays one deliberate click away on the adjacent checkbox.
-              // Off is the explicit forced-plaintext `disable` and drops the CA
-              // reference with it, matching the mongo/redis/search toggles.
+              // Off is the explicit forced-plaintext `disable`. Either way the
+              // CA reference goes, matching the mongo/redis/search toggles:
+              // neither posture reads it, and leaving it would let the adjacent
+              // trust checkbox restore a `verify-ca` this connection never had
+              // (see `draftVerifyingSslMode`).
               onChange({
                 sslMode: e.target.checked ? "verify-full" : "disable",
-                ...(e.target.checked ? {} : { caCertPath: null }),
+                caCertPath: null,
               })
             }
           />
@@ -227,8 +231,16 @@ export default function MssqlFormFields({
             checked={draftSslMode(draft) === "require"}
             disabled={!sslModeTlsOn(draft.sslMode)}
             onChange={(e) =>
+              // #1649 — same shape as `TlsSkipVerifyToggle`: the box is
+              // controlled by the posture, so the unchecked branch derives the
+              // verifying posture from the draft's CA anchor rather than
+              // hard-coding `verify-full`, which demoted a stored `verify-ca`
+              // on a single check/uncheck round trip. MSSQL has no sslmode
+              // dropdown, so that demotion was unrecoverable in the dialog.
               onChange({
-                sslMode: e.target.checked ? "require" : "verify-full",
+                sslMode: e.target.checked
+                  ? "require"
+                  : draftVerifyingSslMode(draft),
               })
             }
           />

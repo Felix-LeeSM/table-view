@@ -338,14 +338,6 @@ export type SslMode =
   | "verify-ca"
   | "verify-full";
 
-/**
- * The postures the dropdown offers. `verify-ca` is deliberately absent: it is
- * only usable with a CA file, and the file picker (plus its validation) is the
- * follow-up slice of #1649. Selecting it today would produce a draft the user
- * cannot complete, since the backend rejects `verify-ca` with no `caCertPath`.
- * A connection already stored as `verify-ca` still renders — see
- * `sslModeChoices`.
- */
 /** Every representable posture, in ladder order. The runtime counterpart of
  *  the `SslMode` union — used to narrow untrusted wire values. */
 export const SSL_MODES: readonly SslMode[] = [
@@ -356,6 +348,14 @@ export const SSL_MODES: readonly SslMode[] = [
   "verify-full",
 ];
 
+/**
+ * The postures the dropdown offers. `verify-ca` is deliberately absent: it is
+ * only usable with a CA file, and the file picker (plus its validation) is the
+ * follow-up slice of #1649. Selecting it today would produce a draft the user
+ * cannot complete, since the backend rejects `verify-ca` with no `caCertPath`.
+ * A connection already stored as `verify-ca` still renders — see
+ * `sslModeChoices`.
+ */
 export const SSL_MODE_OPTIONS: readonly SslMode[] = [
   "disable",
   "prefer",
@@ -374,6 +374,34 @@ export function draftSslMode(
   source: Pick<ConnectionConfig, "sslMode">,
 ): SslMode {
   return source.sslMode ?? "prefer";
+}
+
+/**
+ * The verifying posture a draft belongs in: `verify-ca` while it carries a CA
+ * anchor, plain `verify-full` otherwise.
+ *
+ * #1649 — the skip-verify checkboxes (`TlsSkipVerifyToggle`, the SQL Server
+ * "trust server certificate" box) are controlled by `sslMode` alone, so their
+ * handler cannot read back the posture that preceded the flip. Hard-coding
+ * `verify-full` on the unchecked branch demoted a stored `verify-ca` on a
+ * single check/uncheck round trip and left its `caCertPath` attached to a
+ * posture that ignores it. Deriving the branch from the anchor restores the
+ * posture instead, and it reads the right one because those two checkboxes are
+ * the only controls that move `sslMode` while keeping `caCertPath` — so a
+ * non-null anchor means `verify-ca`, or the `require` they park it in.
+ * Check with `git grep -n -A3 "sslMode:" -- src/features/connection ':!*test*'`:
+ * every other patch that moves the posture carries `caCertPath: null` with it,
+ * and the two hits that carry neither seed a draft rather than move one
+ * (`emptyDraft` has no anchor, `draftFromConnection` copies the stored pair
+ * intact).
+ *
+ * Whitespace-only is treated as absent, matching the backend's
+ * `require_ca_cert_path`.
+ */
+export function draftVerifyingSslMode(
+  source: Pick<ConnectionConfig, "caCertPath">,
+): SslMode {
+  return source.caCertPath?.trim() ? "verify-ca" : "verify-full";
 }
 
 /**
@@ -550,6 +578,15 @@ function resolveUrlTls(
   dbType: DatabaseType,
   searchParams: URLSearchParams,
 ): UrlTlsResolution {
+  // A reflected parameter replaces the posture, and no value this function can
+  // reflect is `verify-ca`, so the anchor a prior `verify-ca` draft carried is
+  // dropped with it. Leaving it would make a later skip-verify round trip
+  // resurrect a `verify-ca` the pasted URL moved away from
+  // (see `draftVerifyingSslMode`).
+  const reflected = (sslMode: SslMode): UrlTlsResolution => ({
+    fields: { sslMode, caCertPath: null },
+    unreflected: null,
+  });
   if (usesSslModeSelect(dbType)) {
     const found = findParamCaseInsensitive(searchParams, SSLMODE_PARAM_KEYS);
     if (!found) return { fields: {}, unreflected: null };
@@ -557,18 +594,18 @@ function resolveUrlTls(
     switch (rawValue.toLowerCase()) {
       case "disable":
       case "disabled":
-        return { fields: { sslMode: "disable" }, unreflected: null };
+        return reflected("disable");
       case "prefer":
       case "preferred":
         return { fields: {}, unreflected: null };
       case "require":
       case "required":
-        return { fields: { sslMode: "require" }, unreflected: null };
+        return reflected("require");
       case "verify-full":
       case "verify_full":
       case "verify-identity":
       case "verify_identity":
-        return { fields: { sslMode: "verify-full" }, unreflected: null };
+        return reflected("verify-full");
       default:
         // verify-ca (no CA picker yet), allow, and any unknown value.
         return { fields: {}, unreflected: `${key}=${rawValue}` };
@@ -579,12 +616,8 @@ function resolveUrlTls(
   if (!found) return { fields: {}, unreflected: null };
   const [key, rawValue] = found;
   const value = rawValue.toLowerCase();
-  if (["true", "1", "yes"].includes(value)) {
-    return { fields: { sslMode: "verify-full" }, unreflected: null };
-  }
-  if (["false", "0", "no"].includes(value)) {
-    return { fields: { sslMode: "prefer" }, unreflected: null };
-  }
+  if (["true", "1", "yes"].includes(value)) return reflected("verify-full");
+  if (["false", "0", "no"].includes(value)) return reflected("prefer");
   return { fields: {}, unreflected: `${key}=${rawValue}` };
 }
 
@@ -652,11 +685,16 @@ export function parseConnectionUrl(
       password: decodeURIComponent(parsed.password),
       database: isKvFamily(dbType) && database === "" ? "0" : database,
       ...urlTls.fields,
+      // Both overrides state a posture, and neither can state `verify-ca`, so
+      // they drop the anchor for the same reason `resolveUrlTls` does.
       ...(parsed.protocol === "rediss:"
-        ? { sslMode: "verify-full" as SslMode }
+        ? { sslMode: "verify-full" as SslMode, caCertPath: null }
         : {}),
       ...(dbType === "mssql"
-        ? { sslMode: sqlServerSslMode(sqlServerEncrypt, sqlServerTrust) }
+        ? {
+            sslMode: sqlServerSslMode(sqlServerEncrypt, sqlServerTrust),
+            caCertPath: null,
+          }
         : {}),
       paradigm: paradigmOf(dbType),
     };

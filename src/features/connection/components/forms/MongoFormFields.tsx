@@ -196,10 +196,12 @@ export default function MongoFormFields({
             onChange={(e) =>
               onChange({
                 // #1649 — on selects the verifying posture, off returns to the
-                // driver default. Turning TLS off drops any skip-verify choice
-                // and the CA reference with it (#1063 behavior, new vocabulary).
+                // driver default. Either way the CA reference goes: neither
+                // posture reads it, and leaving it would let the adjacent
+                // skip-verify checkbox restore a `verify-ca` this connection
+                // never had (see `draftVerifyingSslMode`).
                 sslMode: e.target.checked ? "verify-full" : "prefer",
-                ...(e.target.checked ? {} : { caCertPath: null }),
+                caCertPath: null,
               })
             }
           />
