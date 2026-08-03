@@ -483,8 +483,8 @@ async fn test_mssql_users_null_role_membership_and_non_login_principals_1077() {
 /// loss. The listing gated rows on `sp.type IN ('S', 'U', 'G', 'R', 'C', 'K')`,
 /// which silently dropped every `'E'` (Microsoft Entra login) and `'X'` (Entra
 /// group) principal: no row, no error. On an Entra-authenticated SQL Server /
-/// Azure SQL those two ARE the account population, so the audit screen rendered
-/// an empty-looking list as complete. The fix removes the type predicate
+/// Azure SQL those two are the primary login subjects, so the audit screen
+/// rendered a list missing them as complete. The fix removes the type predicate
 /// entirely, and this is its live gate: the adapter must return exactly the
 /// principals the server holds, whatever their type.
 ///
