@@ -88,10 +88,10 @@ name and are listed as non-loginable; the role test is the `is_role` column, not
 an empty `Host`, because `CREATE USER x@''` is an ordinary loginable account
 with an empty host. `can_create_db` over-reports: it renders `mysql.user.Create_priv`,
 MySQL's global `CREATE` privilege, in the PG `rolcreatedb` ("may create
-databases") wire slot, but global `CREATE` also covers `CREATE TABLE`/`CREATE
-INDEX`, so an account holding it for table DDL alone still shows as a database
-creator — and the flag does not consult `read_only`/`super_read_only`, which
-blocks `CREATE DATABASE` for a non-`SUPER` account regardless of the grant. Read
+databases") wire slot, but global `CREATE` also covers `CREATE TABLE`, so an
+account holding it for table DDL alone still shows as a database creator — and
+the flag does not consult `read_only`/`super_read_only`, which blocks
+`CREATE DATABASE` for a non-`SUPER` account regardless of the grant. Read
 it as "holds global `CREATE`". Role membership (`mysql.role_edges`), MySQL 8
 dynamic privileges such as `SYSTEM_USER`/`ROLE_ADMIN` (a holder is reported as
 non-superuser because only `Super_priv` is read), password expiry, per-schema
@@ -263,18 +263,19 @@ audit. `is_superuser`/`can_create_db`/`can_create_role` reflect
 `sysadmin`/`dbcreator`/`securityadmin` membership, each resolved from both
 `IS_SRVROLEMEMBER` and a recursive `sys.server_role_members` walk, because
 `IS_SRVROLEMEMBER` alone answers NULL for a certificate-/asymmetric-key-mapped
-principal and would report a real member as unprivileged. `can_login` is limited
-to principal types that can authenticate (SQL login, Windows login, Windows
-group, Microsoft Entra login `'E'`, Entra group `'X'`), so a server role or a
-certificate-/key-mapped principal is listed as non-loginable. Row selection
-itself applies no principal-type filter — an earlier `type IN
-('S','U','G','R','C','K')` whitelist dropped every Entra principal with no row
-and no error, which on an Entra-authenticated server is the whole account
-population, so the listing now returns every non-`##MS_*` principal whatever its
-type. Internal `##MS_*` principals are filtered out, and database-scoped
-users/permissions, per-login connection caps, password expiry, and server-role
-membership arrays are not exposed. Parser/completion support is bounded editor
-assistance and unsupported-boundary recognition only. Named instances, Windows
+principal and would report a real member as unprivileged. `can_login` requires
+an enabled principal (`is_disabled = 0`) of a type that can authenticate (SQL
+login, Windows login, Windows group, Microsoft Entra login `'E'`, Entra group
+`'X'`), so a disabled login, a server role, or a certificate-/key-mapped
+principal is listed as non-loginable. Row selection itself applies no
+principal-type filter — an earlier `type IN ('S','U','G','R','C','K')` whitelist
+dropped every Entra principal with no row and no error, so the listing now
+returns every non-`##MS_*` principal whatever its type. Internal `##MS_*`
+principals are filtered out; database-scoped users/permissions, password expiry,
+and server-role membership arrays are not exposed, and the connection-limit
+column is a hardcoded `-1` that the panel renders as "Unlimited" rather than a
+real per-login cap. Parser/completion support is bounded editor assistance and
+unsupported-boundary recognition only. Named instances, Windows
 authentication, Azure AD/authSource modes, backup/restore, and broader SQL
 Server operational workflows remain out of scope until a source-specific
 promotion issue proves them.

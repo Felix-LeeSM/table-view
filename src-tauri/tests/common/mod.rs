@@ -387,8 +387,9 @@ async fn mysql_endpoint() -> Option<MysqlEndpoint> {
 /// run different SQL and only a real MariaDB can grade it.
 ///
 /// Same two stages as MySQL — `MARIADB_HOST` reuses an external server
-/// (docker-compose publishes `mariadb:11` on 13307), otherwise testcontainers
-/// spawns `mariadb:11.3`, the module default. `MARIADB_DISABLE=1` opts out.
+/// (`docker-compose.yml` publishes `mariadb:11` on `${MARIADB_PORT:-23306}`),
+/// otherwise testcontainers spawns `mariadb:11.3`, the module default.
+/// `MARIADB_DISABLE=1` opts out.
 /// The two root env vars mirror the MySQL helper's: `MARIADB_ROOT_HOST=%` so
 /// the grant table matches through Docker Desktop's NAT, and an explicit
 /// password because sqlx's handshake needs one.
@@ -408,7 +409,7 @@ async fn mariadb_endpoint() -> Option<MysqlEndpoint> {
             port: std::env::var("MARIADB_PORT")
                 .ok()
                 .and_then(|s| s.parse().ok())
-                .unwrap_or(13307),
+                .unwrap_or(23306),
             user: std::env::var("MARIADB_USER").unwrap_or_else(|_| "testuser".into()),
             password: std::env::var("MARIADB_PASSWORD").unwrap_or_else(|_| "testpass".into()),
             database: std::env::var("MARIADB_DATABASE")
@@ -868,8 +869,8 @@ pub async fn setup_mariadb_adapter() -> Option<MysqlAdapter> {
         environment: None,
         auth_source: None,
         replica_set: None,
-        tls_enabled: None,
-        trust_server_certificate: None,
+        ssl_mode: SslMode::Prefer,
+        ca_cert_path: None,
         oracle_use_sid: None,
         wallet_path: None,
         wallet_password: String::new(),

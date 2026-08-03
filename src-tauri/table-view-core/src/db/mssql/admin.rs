@@ -549,7 +549,7 @@ mod tests {
     // Issue #1077 Stage 2 SECURITY (2026-07-25) — PR #1786 3rd review B4, data
     // loss. The row filter used to be `sp.type IN ('S', 'U', 'G', 'R', 'C', 'K')`,
     // which dropped every `'E'`/`'X'` Entra principal with no row and no error —
-    // on an Entra-authenticated server that is the whole account population,
+    // on an Entra-authenticated server those are the primary login subjects,
     // silently missing from an audit screen. A type whitelist has to be
     // re-edited for every principal type SQL Server adds, so the row filter must
     // stay name-only; loginability is decided per type in the projection above.

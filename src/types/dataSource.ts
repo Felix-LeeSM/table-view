@@ -458,8 +458,7 @@ export const ORACLE_CAPABILITIES = capabilities({
   // sources (v$session / v$sql / v$instance; ALTER SYSTEM KILL SESSION). The
   // v$ reads fail loud when the login lacks catalog-read privilege rather than
   // returning a silent empty list. `users` stays false (#1077 Stage 2 is
-  // PG-first); `locks` has no adapter override on any engine. Same shape as
-  // MySQL/MongoDB, so the OperationsPanel flyout surfaces the tabs unchanged.
+  // PG-first); `locks` has no adapter override on any engine.
   operations: {
     activity: true,
     slowQueries: true,
@@ -557,9 +556,9 @@ export const MYSQL_FAMILY_CAPABILITIES = capabilities({
   // STATUS+VARIABLES). Issue #1077 Stage 2 — `users` now sourced from the
   // `mysql.user` catalog (User/Host + privilege flags only; the
   // `authentication_string`/`Password` credential columns are never selected —
-  // see the `MYSQL_USERS_QUERY` guard fixture). `locks` has no adapter override
-  // on any engine. Same shape as MongoDB, so the OperationsPanel flyout
-  // surfaces activity/serverInfo/slowQueries/users without a panel change.
+  // see `MYSQL_USERS_QUERY`/`MARIADB_USERS_QUERY` and the Rust unit test
+  // `users_queries_never_select_a_credential_column`). `locks` has no adapter
+  // override on any engine.
   operations: {
     activity: true,
     slowQueries: true,
@@ -693,10 +692,9 @@ export const MSSQL_CAPABILITIES = capabilities({
   // KILL). The server-scoped DMVs fail loud without VIEW SERVER STATE rather
   // than returning a silent empty list. Issue #1077 Stage 2 — `users` now
   // sourced from `sys.server_principals` (login/role name + flags only; the
-  // `sys.sql_logins.password_hash` credential is never read — see the
-  // `USERS_SQL` guard fixture). `locks` has no adapter override on any engine.
-  // Same shape as MySQL/MongoDB, so the OperationsPanel flyout surfaces the
-  // tabs unchanged.
+  // `sys.sql_logins.password_hash` credential is never read — see `USERS_SQL`
+  // and the Rust unit test `users_sql_never_reads_login_credential`). `locks`
+  // has no adapter override on any engine.
   operations: {
     activity: true,
     slowQueries: true,

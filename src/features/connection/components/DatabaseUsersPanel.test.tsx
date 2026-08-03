@@ -82,12 +82,11 @@ describe("DatabaseUsersPanel (issue #1077 Stage 2)", () => {
     );
   });
 
-  // `AppError::CapabilityNotEnabled` is the only AppError variant that
-  // serializes as an object (`error.rs` `CapabilityEnvelope`), so Tauri rejects
-  // with a plain object rather than an Error. `String(e)` on it yields
-  // "[object Object]" and the GRANT hint never reaches the operator — the exact
-  // regression this asserts against. MSSQL raises it from the
-  // `VIEW ANY DEFINITION` probe in `db/mssql/admin.rs`.
+  // `AppError::CapabilityNotEnabled` serializes as an object (`error.rs`
+  // `CapabilityEnvelope`), so Tauri rejects with a plain object rather than an
+  // Error. `String(e)` on it yields "[object Object]" and the GRANT hint never
+  // reaches the operator — the exact regression this asserts against. MSSQL
+  // raises it from the `VIEW ANY DEFINITION` probe in `db/mssql/admin.rs`.
   it("renders a passive grant hint for the MSSQL VIEW ANY DEFINITION denial", async () => {
     listDatabaseUsersMock.mockRejectedValueOnce({
       type: "CapabilityNotEnabled",

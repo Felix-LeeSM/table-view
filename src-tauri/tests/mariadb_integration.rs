@@ -12,7 +12,7 @@
 //!
 //! 실행:
 //!   cargo test --manifest-path src-tauri/Cargo.toml --test mariadb_integration
-//!   MARIADB_HOST=localhost MARIADB_PORT=13307 cargo test ... (외부 재사용)
+//!   MARIADB_HOST=localhost MARIADB_PORT=23306 cargo test ... (외부 재사용)
 
 mod common;
 
