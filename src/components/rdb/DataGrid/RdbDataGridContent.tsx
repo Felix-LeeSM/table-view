@@ -37,6 +37,8 @@ interface RdbDataGridContentProps {
   ) => void;
   onClearFilters: () => void;
   onCancelRefetch: () => void;
+  /** #1734 (5) — see `DataGridTableProps.focusAnchorRef`. */
+  focusAnchorRef: React.RefObject<(() => void) | null>;
 }
 
 export function RdbDataGridContent({
@@ -64,6 +66,7 @@ export function RdbDataGridContent({
   onNavigateToFk,
   onClearFilters,
   onCancelRefetch,
+  focusAnchorRef,
 }: RdbDataGridContentProps) {
   return (
     <>
@@ -124,6 +127,7 @@ export function RdbDataGridContent({
           activeFilterCount={activeFilterCount}
           onClearFilters={onClearFilters}
           onCancelRefetch={onCancelRefetch}
+          focusAnchorRef={focusAnchorRef}
         />
       )}
     </>

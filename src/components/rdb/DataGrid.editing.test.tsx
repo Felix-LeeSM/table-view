@@ -12,6 +12,7 @@
 // install/restore lifecycle. Dynamic `await import(...)` calls in
 // the last two cases stay inline (vi.mock-avoidance is intentional).
 
+import { SELECTED_ROW_FILL } from "@components/datagrid";
 import { useConnectionStore } from "@stores/connectionStore";
 import {
   act,
@@ -663,6 +664,66 @@ describe("DataGrid", () => {
     expect(nameCell.className).toContain("bg-highlight/20");
   });
 
+  // ── #1734 (4): Quick Look field editing, against the real edit hook ──
+  //
+  // `QuickLookPanel.test.tsx` mocks `editState`, so it can only pin which
+  // functions the panel calls. That is exactly how the previous wiring passed
+  // review while doing nothing: it called `handleStartEdit` → `setEditValue` →
+  // `saveCurrentEdit` in one tick, and `saveCurrentEdit` reads `editingCell`
+  // from the render closure, which is still `null` that tick. Mocks cannot see
+  // that. These two run the real hook.
+  describe("Quick Look field edits reach pendingEdits (#1734 (4))", () => {
+    async function openPanelOnFirstRow() {
+      const cell = document.querySelector<HTMLElement>(
+        '[data-grid-row="0"][data-grid-col="0"]',
+      );
+      if (!cell) throw new Error("no first cell");
+      await act(async () => {
+        fireEvent.click(cell);
+        cell.focus();
+      });
+      await act(async () => {
+        fireEvent.keyDown(document, { key: "l", metaKey: true });
+      });
+      return screen.getByRole("region", { name: "Row Details" });
+    }
+
+    it("typing in a panel field and pressing Enter stages a pending edit", async () => {
+      renderDataGrid();
+      await screen.findByText("3 rows");
+      const panel = await openPanelOnFirstRow();
+
+      const nameInput = within(panel).getByLabelText("Edit value for name");
+      await act(async () => {
+        fireEvent.change(nameInput, { target: { value: "Zed" } });
+        fireEvent.keyDown(nameInput, { key: "Enter" });
+      });
+
+      expect(screen.getByText(/1 edit/)).toBeInTheDocument();
+      expect(screen.getByLabelText("Commit changes")).toBeInTheDocument();
+    });
+
+    // Reason: the same broken trio left `editingCell` set with nothing staged,
+    // and `DataGridTable`'s effect then focuses the inline editor for that
+    // cell — the user gets dropped into a grid editor they never opened, which
+    // is also where the panel's F6 hand-back was landing.
+    it("does not open a grid inline editor behind the panel", async () => {
+      renderDataGrid();
+      await screen.findByText("3 rows");
+      const panel = await openPanelOnFirstRow();
+
+      const nameInput = within(panel).getByLabelText("Edit value for name");
+      await act(async () => {
+        fireEvent.change(nameInput, { target: { value: "Zed" } });
+        fireEvent.keyDown(nameInput, { key: "Enter" });
+      });
+
+      expect(
+        document.querySelector("[data-grid-row] input"),
+      ).not.toBeInTheDocument();
+    });
+  });
+
   // ── Sprint 31: Commit & SQL Preview ──
 
   // Helper: make a pending edit
@@ -818,7 +879,7 @@ describe("DataGrid", () => {
 
     // The row should have a selected indicator
     const row = firstRowCell.closest('[role="row"]')!;
-    expect(row.className).toContain("bg-accent/20");
+    expect(row.className).toContain(SELECTED_ROW_FILL);
   });
 
   // 47. Delete Row button marks selected row for deletion
@@ -1055,14 +1116,14 @@ describe("DataGrid", () => {
     await act(async () => {
       fireEvent.click(cells[0]!);
     });
-    expect(rows[0]!.className).toContain("bg-accent/20");
+    expect(rows[0]!.className).toContain(SELECTED_ROW_FILL);
 
     // Cmd+Click second row (adds to selection)
     await act(async () => {
       fireEvent.click(cells[3]!, { metaKey: true });
     });
-    expect(rows[0]!.className).toContain("bg-accent/20");
-    expect(rows[1]!.className).toContain("bg-accent/20");
+    expect(rows[0]!.className).toContain(SELECTED_ROW_FILL);
+    expect(rows[1]!.className).toContain(SELECTED_ROW_FILL);
   });
 
   // 58. Shift+Click selects range
@@ -1088,9 +1149,9 @@ describe("DataGrid", () => {
     });
 
     // All three rows should be selected
-    expect(rows[0]!.className).toContain("bg-accent/20");
-    expect(rows[1]!.className).toContain("bg-accent/20");
-    expect(rows[2]!.className).toContain("bg-accent/20");
+    expect(rows[0]!.className).toContain(SELECTED_ROW_FILL);
+    expect(rows[1]!.className).toContain(SELECTED_ROW_FILL);
+    expect(rows[2]!.className).toContain(SELECTED_ROW_FILL);
   });
 
   // 59. Delete button deletes multiple selected rows
@@ -1164,8 +1225,8 @@ describe("DataGrid", () => {
     await act(async () => {
       fireEvent.click(cells[6]!, { metaKey: true });
     });
-    expect(rows[0]!.className).toContain("bg-accent/20");
-    expect(rows[2]!.className).toContain("bg-accent/20");
+    expect(rows[0]!.className).toContain(SELECTED_ROW_FILL);
+    expect(rows[2]!.className).toContain(SELECTED_ROW_FILL);
 
     // Normal click on second row
     await act(async () => {
@@ -1173,9 +1234,9 @@ describe("DataGrid", () => {
     });
 
     // Only second row should be selected
-    expect(rows[0]!.className).not.toContain("bg-accent/20");
-    expect(rows[1]!.className).toContain("bg-accent/20");
-    expect(rows[2]!.className).not.toContain("bg-accent/20");
+    expect(rows[0]!.className).not.toContain(SELECTED_ROW_FILL);
+    expect(rows[1]!.className).toContain(SELECTED_ROW_FILL);
+    expect(rows[2]!.className).not.toContain(SELECTED_ROW_FILL);
   });
 
   // Sprint 256 (2026-05-09): the AC-185-06 1px env color stripe above the
