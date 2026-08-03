@@ -125,7 +125,13 @@ export default function DocumentGridRows({
               }
               className={cn(
                 "min-h-8 cursor-pointer border-b border-border hover:bg-muted",
-                selected && "bg-accent dark:bg-accent/60",
+                // #1734 (3) — same selection fill as the RDB row
+                // (`DataGridTable/DataRow.tsx`), which owns the reasoning and
+                // the measured contrast. Before this the two paradigms drew the
+                // same state with different classes (`bg-accent dark:bg-accent/60`
+                // here vs `bg-accent/20` there), both off the near-background
+                // `accent` token.
+                selected && "bg-primary/15",
                 isDeleted &&
                   "bg-destructive/10 line-through opacity-60 hover:bg-destructive/20",
               )}

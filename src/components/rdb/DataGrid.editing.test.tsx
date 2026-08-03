@@ -818,7 +818,7 @@ describe("DataGrid", () => {
 
     // The row should have a selected indicator
     const row = firstRowCell.closest('[role="row"]')!;
-    expect(row.className).toContain("bg-accent/20");
+    expect(row.className).toContain("bg-primary/15");
   });
 
   // 47. Delete Row button marks selected row for deletion
@@ -1055,14 +1055,14 @@ describe("DataGrid", () => {
     await act(async () => {
       fireEvent.click(cells[0]!);
     });
-    expect(rows[0]!.className).toContain("bg-accent/20");
+    expect(rows[0]!.className).toContain("bg-primary/15");
 
     // Cmd+Click second row (adds to selection)
     await act(async () => {
       fireEvent.click(cells[3]!, { metaKey: true });
     });
-    expect(rows[0]!.className).toContain("bg-accent/20");
-    expect(rows[1]!.className).toContain("bg-accent/20");
+    expect(rows[0]!.className).toContain("bg-primary/15");
+    expect(rows[1]!.className).toContain("bg-primary/15");
   });
 
   // 58. Shift+Click selects range
@@ -1088,9 +1088,9 @@ describe("DataGrid", () => {
     });
 
     // All three rows should be selected
-    expect(rows[0]!.className).toContain("bg-accent/20");
-    expect(rows[1]!.className).toContain("bg-accent/20");
-    expect(rows[2]!.className).toContain("bg-accent/20");
+    expect(rows[0]!.className).toContain("bg-primary/15");
+    expect(rows[1]!.className).toContain("bg-primary/15");
+    expect(rows[2]!.className).toContain("bg-primary/15");
   });
 
   // 59. Delete button deletes multiple selected rows
@@ -1164,8 +1164,8 @@ describe("DataGrid", () => {
     await act(async () => {
       fireEvent.click(cells[6]!, { metaKey: true });
     });
-    expect(rows[0]!.className).toContain("bg-accent/20");
-    expect(rows[2]!.className).toContain("bg-accent/20");
+    expect(rows[0]!.className).toContain("bg-primary/15");
+    expect(rows[2]!.className).toContain("bg-primary/15");
 
     // Normal click on second row
     await act(async () => {
@@ -1173,9 +1173,9 @@ describe("DataGrid", () => {
     });
 
     // Only second row should be selected
-    expect(rows[0]!.className).not.toContain("bg-accent/20");
-    expect(rows[1]!.className).toContain("bg-accent/20");
-    expect(rows[2]!.className).not.toContain("bg-accent/20");
+    expect(rows[0]!.className).not.toContain("bg-primary/15");
+    expect(rows[1]!.className).toContain("bg-primary/15");
+    expect(rows[2]!.className).not.toContain("bg-primary/15");
   });
 
   // Sprint 256 (2026-05-09): the AC-185-06 1px env color stripe above the

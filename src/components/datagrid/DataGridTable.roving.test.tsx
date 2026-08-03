@@ -309,12 +309,13 @@ describe("DataGridTable roving-focus visual affordance", () => {
   });
 
   // Reason: selection + focus use different paint channels so a row that is
-  // both selected and focused must read both (bug fix must not clobber the
-  // pre-existing `bg-accent/20` selection highlight). (2026-07-17)
+  // both selected and focused must read both (the focus bar must not clobber
+  // the selection fill). (2026-07-17; fill re-tokenized to `bg-primary/15` by
+  // #1734 (3) — see `DataRow.tsx` for the measured contrast.)
   it("a selected + focused row keeps both the selection bg and the focus bar", () => {
     render(<DataGridTable {...makeProps({ selectedRowIds: new Set([0]) })} />);
     const row0 = rowOf(0);
-    expect(row0.className).toContain("bg-accent/20"); // selection channel
+    expect(row0.className).toContain("bg-primary/15"); // selection channel
     expect(row0.className).toContain(FOCUS_BAR); // focus channel (row 0 anchor)
   });
 
