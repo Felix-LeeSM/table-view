@@ -390,10 +390,10 @@ describe("SchemaErdCanvas", () => {
     expect(layoutErdModel).toHaveBeenCalledTimes(2);
   });
 
-  // PR #2100 review round 1: the panel prefetches columns per schema after
-  // first paint. A schema with no FKs gains no edges when they land, so a
-  // fingerprint that ignored card height left the first-paint layout in place
-  // and every card overlapped the one below it.
+  // The panel prefetches columns per schema after first paint. A schema with
+  // no FKs gains no edges when they land, so a fingerprint that ignored card
+  // height left the first-paint layout in place and every card overlapped
+  // the one below it.
   it("re-lays out when late columns grow the cards of an FK-less schema", async () => {
     vi.mocked(layoutErdModel).mockClear();
     const { rerender } = render(

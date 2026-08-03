@@ -156,8 +156,7 @@ export function buildErdModel(graph: SchemaGraph): ErdModel {
  *   constraint name when `getTableConstraints` resolves.
  * - The panel also prefetches columns per schema after first paint, and columns
  *   decide card height. Leaving height out let a schema with no FKs at all keep
- *   its first-paint layout while every card grew, so the cards overlapped
- *   (PR #2100 review round 1).
+ *   its first-paint layout while every card grew, so the cards overlapped.
  */
 export function erdModelFingerprint(model: ErdModel): string {
   const elkGraph = buildErdElkGraph(model);

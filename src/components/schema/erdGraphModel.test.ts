@@ -96,11 +96,11 @@ describe("erdModelFingerprint", () => {
     expect(erdModelFingerprint(enriched)).toBe(erdModelFingerprint(bare));
   });
 
-  // PR #2100 review round 1: `SchemaErdPanel` prefetches columns per schema
-  // after first paint, and columns decide card height. A schema with no FKs at
-  // all gains no edges when they land, so a fingerprint that skipped height
-  // held — the one layout that ever ran was sized for empty cards and every
-  // card then overlapped the one below it.
+  // `SchemaErdPanel` prefetches columns per schema after first paint, and
+  // columns decide card height. A schema with no FKs at all gains no edges
+  // when they land, so a fingerprint that skipped height held — the one
+  // layout that ever ran was sized for empty cards and every card then
+  // overlapped the one below it.
   it("changes when late columns grow the cards of an FK-less schema", () => {
     const beforeColumns = buildErdModel(
       extractSchemaGraph(fkFreeSnapshot({ withColumns: false })),
