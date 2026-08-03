@@ -26,9 +26,10 @@ Current evidence:
 Gap routing:
 
 H2/H4 strongest RDBMS parity lane. Structure DDL smoke covers table creation
-plus index creation only, and dense ERD smoke covers local diagram interactions
-only, not FK row navigation, roles/users, extensions, profiler, import/export,
-or broad admin flows.
+plus index creation only, and dense ERD smoke covers local canvas interactions
+only (render, layering, search, selection, node drag, zoom/fit), not FK row
+navigation, roles/users, extensions, profiler, import/export, or broad admin
+flows.
 
 ## MySQL connect -> browse/edit -> SELECT/CALL/DML batch -> cancellation + history evidence
 

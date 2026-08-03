@@ -7,6 +7,7 @@ import "@testing-library/jest-dom/vitest";
 // 쓰는 컴포넌트(ThemePicker / LanguageSwitcher 등)가 provider 없이도 동작.
 import "@lib/i18n";
 import { useDataGridEditStore } from "@stores/dataGridEditStore";
+import { __resetLayoutStoreForTests } from "@stores/layoutStore";
 import { useToastStore } from "@stores/toastStore";
 import { afterEach, beforeAll, beforeEach, vi } from "vitest";
 import { resetTauriMock } from "./test-utils/tauriMock";
@@ -136,6 +137,12 @@ beforeEach(async () => {
     "@stores/workspaceStore/persistence"
   );
   __resetPersistTimerForTests();
+  // #1734 — `layoutStore` is a process singleton like the stores above. A
+  // spec that collapses the sidebar or opens a bottom flyout would otherwise
+  // hand the next spec a hidden sidebar / a pressed toolbar toggle. Static
+  // import is safe here: the module is a bare `create()` with no IPC or
+  // `@lib/tauri` binding at load time, unlike the two dynamic imports above.
+  __resetLayoutStoreForTests();
 });
 
 // crypto.randomUUID polyfill for jsdom (used by FilterBar)

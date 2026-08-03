@@ -626,27 +626,18 @@ fn validate_ciphertexts_decrypt(data_dir: &Path, key: &[u8]) -> Result<(), AppEr
 
 /// 디스크에 ciphertext 가 있고 key 가 사라진 fatal 케이스 판정. AC-356-09.
 /// `crypto::get_or_create_key` (#1093 orphan guard) 도 같은 신호를 재사용한다.
+///
+/// 판정 대상은 `SECRET_FIELDS` 전체다 — 재키잉이 지키는 집합과 같아야 한다.
+/// `password` 만 훑던 동안 secret 이 `wallet_password` 뿐인 Oracle 프로필은
+/// 「지킬 암호문 없음」으로 판정돼 Path A 가 새 키를 찍었고, 그 순간 wallet
+/// 암호문이 영구 복호화 불가가 됐다 (#2111).
 pub(crate) fn data_has_password_ciphertext(data_dir: &Path) -> Result<bool, AppError> {
-    let conn_path = data_dir.join("connections.json");
-    if !conn_path.exists() {
-        return Ok(false);
-    }
-    let raw = fs::read_to_string(&conn_path)?;
-    let parsed: serde_json::Value = match serde_json::from_str(&raw) {
-        Ok(v) => v,
-        Err(_) => return Ok(false),
-    };
-    let Some(connections) = parsed.get("connections").and_then(|v| v.as_array()) else {
-        return Ok(false);
-    };
-    for conn in connections {
-        if let Some(pw_enc) = conn.get("password").and_then(|v| v.as_str()) {
-            if !pw_enc.is_empty() {
-                return Ok(true);
-            }
-        }
-    }
-    Ok(false)
+    Ok(match read_connections_doc(data_dir)? {
+        // Corrupt 는 판정 근거가 없다 — `load_storage_raw()` 가 다음 호출에서
+        // 격리한다. 여기서 true 를 내면 부팅이 safe mode 에 갇힌다.
+        ConnectionsDoc::Absent | ConnectionsDoc::Corrupt => false,
+        ConnectionsDoc::Parsed(doc) => has_secrets(&doc),
+    })
 }
 
 fn validate_key_len(bytes: &[u8]) -> Result<(), AppError> {
@@ -1283,6 +1274,40 @@ mod tests {
         // No new key written to disk or keyring (would orphan ciphertext).
         assert!(!disk_key_path(dir.path()).exists());
         assert!(backend.dump().is_empty());
+    }
+
+    /// #2111 — 같은 AC-356-09 인데 secret 이 `wallet_password` 뿐인 Oracle 프로필.
+    /// 가드가 `password` 필드만 훑던 동안 이 프로필은 「지킬 암호문 없음」으로
+    /// 판정돼 Path A 가 새 키를 찍었고, 그 순간 wallet 암호문은 영구 복호화
+    /// 불가가 됐다. `SECRET_FIELDS` 전체를 봐야 보존 경로(Fatal)로 간다.
+    #[test]
+    fn migrate_fatal_when_only_wallet_password_ciphertext_survives_key_loss() {
+        let dir = TempDir::new().unwrap();
+        let lost_key: Vec<u8> = (0..32u8).rev().collect();
+        let enc = encrypt("wallet-secret", &lost_key).unwrap();
+        fs::write(
+            dir.path().join("connections.json"),
+            serde_json::json!({
+                "connections": [{ "id": "c1", "password": "", "wallet_password": enc }],
+            })
+            .to_string(),
+        )
+        .unwrap();
+        let backend = InMemoryKeyringBackend::new_available();
+
+        let outcome = migrate_or_initialize(&backend, dir.path()).unwrap();
+
+        assert!(
+            outcome.is_fatal(),
+            "a wallet-password-only profile must not be treated as having nothing to protect"
+        );
+        assert_eq!(outcome.source, KeySource::Fatal);
+        assert!(outcome.key.is_empty(), "fatal must not carry a key");
+        assert!(
+            backend.dump().is_empty(),
+            "Path A must not mint a key that orphans the wallet ciphertext"
+        );
+        assert!(!disk_key_path(dir.path()).exists());
     }
 
     // ---------------- #1814 재키잉 — 실패 시 원본 보존 ----------------

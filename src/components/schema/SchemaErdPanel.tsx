@@ -19,7 +19,7 @@ import {
   type RuntimeRdbmsDatabaseType,
 } from "@/types/rdbmsDataSources";
 import type { SchemaGraphCatalogSnapshot } from "@/types/schemaGraph";
-import SchemaErdRenderer from "./SchemaErdRenderer";
+import SchemaErdCanvas from "./SchemaErdCanvas";
 import SchemaGraphDiffPanel from "./SchemaGraphDiffPanel";
 
 interface SchemaErdPanelProps {
@@ -307,7 +307,7 @@ export default function SchemaErdPanel({
           <SchemaGraphDiffPanel diff={schemaDiff} />
         </div>
       ) : null}
-      <SchemaErdRenderer
+      <SchemaErdCanvas
         graph={intelligence.graph}
         intelligence={intelligence}
         selectedTableId={selectedTableId}

@@ -76,12 +76,19 @@ smoke or measurement gates:
   window because of a Tauri-event mount race; guaranteed replay-on-mount for a
   fresh window is a follow-up.
 - Candidate-source UI accessibility smoke.
-- 1024x600 minimum viewport with max sidebar and dialog overlap.
+- 1024x600 minimum viewport with max sidebar and dialog overlap. The workspace
+  toolbar's Layout cluster collapses the schema sidebar, so a user cramped at
+  that size can reclaim the column by hand. The collapsed state is session-only
+  — reopening the workspace window starts expanded again, and the sidebar width
+  the user dragged is likewise not restored across a restart. The overlap
+  itself stays ungated.
 - Tauri production shortcut audit for `Cmd+Shift+I`.
 - `MainArea` empty-state MRU policy.
 - Narrow-column display for `pendingEditErrors`.
-- ERD desktop+narrow screenshot smoke. Dense-view smoke evidence is a future H4
-  matrix gate; there is no current dense-view smoke claim.
+- ERD layout persistence, semantic zoom, viewport virtualization, virtual FKs,
+  focus filters, and diagram export. The React Flow + elkjs canvas ships without
+  them; each is a separate follow-up issue. Dragged node positions are lost when
+  the ERD tab is reopened.
 - There is no internal-doc link checking, and Node package audit is deferred.
   Rust dependency security is covered by blocking PR/main `cargo deny check`;
   runtime dependency upgrades remain separate PRs.
