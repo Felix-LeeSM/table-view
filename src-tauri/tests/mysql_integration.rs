@@ -4976,12 +4976,10 @@ async fn test_mysql_create_drop_database_round_trip_1067() {
     adapter.disconnect_pool().await.ok();
 }
 
-/// Issue #1077 Stage 2 — row-shape gate for `list_database_users`. The unit
-/// guards in `db/mysql/schema.rs` only assert the SQL text and the pure
-/// mapper; two failure modes are only observable against a live server:
-///   1. `mysql.user.User`/`Host` are utf8mb3 `_bin` columns, which sqlx sees as
-///      VARBINARY — a raw `SELECT User` fails the whole panel with
-///      `mismatched types ... is not compatible with SQL type VARBINARY`.
+/// Issue #1077 Stage 2 — row-shape gate for `list_database_users`. Two traps:
+///   1. `mysql.user.User` is a utf8mb3 `_bin` column, which sqlx sees as
+///      BINARY — a raw `SELECT User` fails the whole panel with
+///      `mismatched types ... is not compatible with SQL type BINARY`.
 ///   2. `max_user_connections = 0` means *unlimited* on MySQL, while the wire
 ///      contract (`models::query::DatabaseUserRow::conn_limit`) is the PG
 ///      `rolconnlimit` sentinel where `-1` is unlimited and `0` means "no

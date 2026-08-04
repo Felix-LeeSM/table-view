@@ -338,10 +338,8 @@ async fn test_stream_table_rows_unsupported_for_duckdb() {
 
 /// Issue #1077 Stage 2 — row-shape gate for `list_database_users`. The unit
 /// guards in `db/mssql/admin.rs` only assert the SQL text; the decode path is
-/// only observable against a live server. tiberius rejects a non-NULL `I32`
-/// when `opt_i64` asks for `i64`, and `opt_i64` swallows that error into
-/// `None` — so a T-SQL `int` projection renders EVERY row as "No" with no
-/// error anywhere. `sa` is an enabled sysadmin, which pins the flags true.
+/// only observable against a live server. `sa` is an enabled sysadmin, which
+/// pins the flags true.
 #[tokio::test]
 #[serial_test::serial]
 async fn test_mssql_list_database_users_row_shape_1077() {
@@ -359,7 +357,7 @@ async fn test_mssql_list_database_users_row_shape_1077() {
         .iter()
         .find(|r| r.name == "sa")
         .expect("the sa login must be listed");
-    assert!(sa.can_login, "sa is enabled and not a role → can_login");
+    assert!(sa.can_login, "sa is an enabled 'S' login → can_login");
     assert!(sa.is_superuser, "sa is a sysadmin member → is_superuser");
     assert!(sa.can_create_db, "sysadmin implies CREATE DATABASE");
     assert!(
@@ -485,17 +483,15 @@ async fn test_mssql_users_null_role_membership_and_non_login_principals_1077() {
 /// group) principal: no row, no error. On an Entra-authenticated SQL Server /
 /// Azure SQL those two are the primary login subjects, so the audit screen
 /// rendered a list missing them as complete. The fix removes the type predicate
-/// entirely, and this is its live gate: the adapter must return exactly the
-/// principals the server holds, whatever their type.
+/// entirely, and this is its live gate.
 ///
 /// A container cannot provision an `'E'`/`'X'` principal (Entra logins need an
 /// Entra-configured instance), so the Entra membership of the `can_login`
-/// whitelist is pinned by the `USERS_SQL` text guards in `db/mssql/admin.rs`
-/// (`users_sql_limits_can_login_to_authenticatable_principal_types`,
-/// `users_sql_row_filter_drops_no_principal_type`). What this test owns is the
-/// class against a real catalog: reintroduce ANY type whitelist that misses a
-/// type this server actually holds (`'R'` roles, the `'C'`/`'K'` fixture logins
-/// of the sibling test, …) and the two sets diverge here.
+/// whitelist is pinned by the `USERS_SQL` text guard in `db/mssql/admin.rs`
+/// (`users_sql_limits_can_login_to_authenticatable_principal_types`). What this
+/// test owns is the class against a real catalog: reintroduce ANY type
+/// whitelist that misses a type this server actually holds (`'R'` roles) and
+/// the two sets diverge here.
 #[tokio::test]
 #[serial_test::serial]
 async fn test_mssql_users_listing_drops_no_principal_type_1077() {

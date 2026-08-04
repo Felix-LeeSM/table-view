@@ -86,11 +86,6 @@ const USERS_PERMISSION_PROBE_SQL: &str =
 /// joined or selected, mirroring the PG `pg_roles`-only posture (see the
 /// `users_sql_*` guard tests).
 ///
-/// Every flag is `CAST(... AS BIGINT)` for the same reason `ACTIVITY_SQL`
-/// documents above: tiberius' `i64` `FromSql` rejects a non-NULL `I32` with
-/// `Error::Conversion`, and `opt_i64` swallows that into `None`, so a T-SQL
-/// `int` projection would render every row as "No" with no error anywhere.
-///
 /// Every privilege flag is the OR of two independent sources, never a lone
 /// `ISNULL(IS_SRVROLEMEMBER(...), 0)`. Measured on SQL Server 2022
 /// (16.0.4265.3): `IS_SRVROLEMEMBER` returns NULL for a certificate-mapped
@@ -272,11 +267,10 @@ impl MssqlAdapter {
     /// and a certificate-/key-mapped principal are listed as non-loginable),
     /// `is_superuser` reflects `sysadmin` membership, and `can_create_db` /
     /// `can_create_role` follow the `dbcreator` / `securityadmin` fixed roles.
-    /// Every principal reaches the list regardless of type. SQL Server exposes no
-    /// per-login connection cap, password expiry, or portable role-membership
-    /// array on the server principal, so `conn_limit` is -1 (unlimited),
-    /// `valid_until` is None, and `member_of` is empty (the server-role graph
-    /// is a later #1077 depth step).
+    /// SQL Server exposes no per-login connection cap, password expiry, or
+    /// portable role-membership array on the server principal, so `conn_limit`
+    /// is -1 (unlimited), `valid_until` is None, and `member_of` is empty (the
+    /// server-role graph is a later #1077 depth step).
     ///
     /// `sys.server_principals` is a catalog view, so a login without `VIEW ANY
     /// DEFINITION` would receive a silently truncated list rather than an
@@ -474,16 +468,13 @@ mod tests {
 
     // Issue #1077 Stage 2 (2026-07-25) — GREEN half 1 of
     // `users_sql_projects_tsql_int_and_collapses_null_sysadmin_pre_impl`.
-    // tiberius' `i64` FromSql rejects a non-NULL `I32` with `Error::Conversion`
-    // and `opt_i64` swallows it into `None`, so a T-SQL `int` projection
-    // renders EVERY row as "No" with no error anywhere. `ACTIVITY_SQL` already
-    // documents the `CAST(... AS BIGINT)` discipline in this file.
+    // `ACTIVITY_SQL` already documents the `CAST(... AS BIGINT)` discipline in
+    // this file.
     #[test]
     fn users_sql_casts_flag_projections_to_bigint() {
         assert!(
             !USERS_SQL.contains(" AS INT)"),
-            "a T-SQL int projection decodes as I32 and is swallowed by opt_i64 — \
-             every integer flag must CAST(... AS BIGINT)"
+            "every integer flag must CAST(... AS BIGINT)"
         );
         assert_eq!(
             USERS_SQL.matches("AS BIGINT").count(),
@@ -590,8 +581,7 @@ mod tests {
     }
 
     // Issue #1077 Stage 2 (2026-07-25) — `##MS_*` are internal certificate/role
-    // principals. They are audit noise, and the certificate-mapped ones are
-    // exactly the rows where `IS_SRVROLEMEMBER` returns NULL.
+    // principals. They are audit noise.
     #[test]
     fn users_sql_filters_internal_ms_principals() {
         assert!(

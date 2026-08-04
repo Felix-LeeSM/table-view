@@ -28,13 +28,10 @@ use super::MysqlAdapter;
 /// table. Only the account identity (`User`/`Host`), the authentication plugin
 /// and non-secret privilege flags are projected — the `authentication_string` /
 /// `Password` credential columns are NEVER selected (mirrors the PG
-/// `pg_roles`-only posture; see the `mysql_users_query_*` guard tests).
+/// `pg_roles`-only posture; see `users_queries_never_select_a_credential_column`).
 ///
 /// Every text column goes through `CONVERT(... USING utf8mb4)` for the same
-/// reason `MysqlAdapter::list_schemas` documents below: `mysql.user` exposes
-/// `User`/`Host` (and the `enum('N','Y')` grant columns) with a utf8mb3 `_bin`
-/// collation that sqlx decodes as binary, so a raw select fails the entire
-/// listing with `mismatched types ... is not compatible with SQL type BINARY`.
+/// reason `MysqlAdapter::list_schemas` documents below.
 /// `max_user_connections` is `CAST(... AS SIGNED)` for the wire i64.
 ///
 /// **MySQL only — MariaDB takes [`MARIADB_USERS_QUERY`].** `account_locked` was
@@ -63,10 +60,8 @@ pub(crate) const MYSQL_USERS_QUERY: &str = "SELECT CONVERT(User USING utf8mb4), 
 /// itself would put a credential on the wire (guard test:
 /// `users_queries_never_select_a_credential_column`).
 ///
-/// `is_role` is a real column here and is the only reliable role discriminator:
-/// a MariaDB role has an empty `Host`, but so does an ordinary
-/// `CREATE USER x@''` account, so keying off the host reports a real account as
-/// non-loginable.
+/// `is_role` is a real column here, and it is what the mapper's role test keys
+/// off.
 ///
 /// The `LEFT JOIN` is deliberate. `mysql.user` is a view over `global_priv` so
 /// the two are 1:1 today, but an account-audit screen must never drop a
@@ -118,9 +113,7 @@ pub(super) type MysqlUserRow = (
 /// - **`can_login`** — `account_locked` alone over-reports. The `mysql_no_login`
 ///   plugin exists precisely to make an account non-loginable, and a MariaDB
 ///   10.4+ role lives in the same view (rendered under its bare role name, not
-///   `role@`) yet can never log in. The role test is the `is_role` column, NOT
-///   an empty `Host`: `CREATE USER x@''` is a perfectly loginable account with
-///   an empty host, so the host is not a role discriminator.
+///   `role@`) yet can never log in. The role test is the `is_role` column.
 pub(super) fn map_mysql_user_row(row: MysqlUserRow) -> crate::models::DatabaseUserRow {
     let (
         user,
@@ -1660,11 +1653,7 @@ mod tests {
     }
 
     // Issue #1077 Stage 2 (2026-07-25) — GREEN for
-    // `mysql_users_query_selects_identifiers_raw_pre_impl`. MySQL 8 exposes
-    // `mysql.user.User`/`Host` (and the `enum('N','Y')` grant columns) with a
-    // utf8mb3 `_bin` collation that sqlx decodes as binary, so a raw select
-    // fails the WHOLE listing (`mismatched types ... is not compatible with SQL
-    // type BINARY`, reproduced against the MySQL 8 testcontainer).
+    // `mysql_users_query_selects_identifiers_raw_pre_impl`.
     // `MysqlAdapter::list_schemas` documents the repo-wide rule; this guard
     // pins it for the users query so the discipline cannot regress into a
     // runtime-only failure again.
@@ -1682,8 +1671,7 @@ mod tests {
         ] {
             assert!(
                 MYSQL_USERS_QUERY.contains(&format!("CONVERT({column} USING utf8mb4)")),
-                "`{column}` must be wrapped in CONVERT(... USING utf8mb4) — a raw \
-                 select decodes as binary and fails the whole listing"
+                "`{column}` must be wrapped in CONVERT(... USING utf8mb4)"
             );
         }
     }
@@ -1705,8 +1693,7 @@ mod tests {
         ] {
             assert!(
                 MARIADB_USERS_QUERY.contains(&format!("CONVERT({column} USING utf8mb4)")),
-                "`{column}` must be wrapped in CONVERT(... USING utf8mb4) — a raw \
-                 select decodes as binary and fails the whole listing"
+                "`{column}` must be wrapped in CONVERT(... USING utf8mb4)"
             );
         }
     }
@@ -1785,18 +1772,15 @@ mod tests {
     }
 
     // Issue #1077 Stage 2 (2026-08-02) — round-2 B1 side finding. The role test
-    // used to be `!host.is_empty()`, which is not a role discriminator:
-    // `CREATE USER x@''` is an ordinary, loginable account with an empty host,
-    // and MariaDB records roles with the dedicated `is_role` column. The old
-    // rule reported such an account as unable to log in on BOTH vendors,
-    // because the mapper has no vendor branch.
+    // used to be `!host.is_empty()`; MariaDB records roles with the dedicated
+    // `is_role` column, and the mapper has no vendor branch.
     #[test]
     fn map_mysql_user_row_uses_is_role_not_an_empty_host_to_deny_login() {
         let empty_host_account =
             map_mysql_user_row(role_row("", "N", "mysql_native_password", 0, "N"));
         assert!(
             empty_host_account.can_login,
-            "an empty Host is not a role — CREATE USER x@'' can log in"
+            "an empty Host alone must not deny login — is_role decides"
         );
 
         let role_with_a_host = map_mysql_user_row(role_row("%", "N", "", 0, "Y"));

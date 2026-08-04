@@ -111,16 +111,14 @@ static MSSQL_CONTAINER: OnceCell<Option<Arc<ContainerAsync<MssqlImage>>>> = Once
 #[cfg(not(any(target_arch = "arm", target_arch = "aarch64")))]
 static ORACLE_CONTAINER: OnceCell<Option<Arc<ContainerAsync<OracleImage>>>> = OnceCell::const_new();
 
-/// Issue #1077 Stage 2 (2026-08-02) — the CI fail-loud rule for docker-gated
-/// suites, in one place.
+/// Issue #1077 Stage 2 (2026-08-02) — the CI fail-loud rule.
 ///
-/// Every docker-gated caller is shaped `match setup_x().await { Some(a) => a,
-/// None => return }`, and CI runs nextest `--profile push`, which sets
+/// CI runs nextest `--profile push`, which sets
 /// `success-output = "never"` and `status-level = "slow"`: a `SKIP:` println is
 /// swallowed and the test name is never printed. "The container never started"
 /// and "every gate ran" are therefore indistinguishable in the CI log, so a
 /// green `Integration Tests (Docker)` proves nothing about the suites that
-/// skipped. Under `CI` any unavailability is a failure instead.
+/// skipped.
 ///
 /// This covers BOTH unavailability paths — an unresolved endpoint and a
 /// connect that exhausts its retries. Guarding only the endpoint would leave
@@ -939,10 +937,9 @@ pub async fn setup_mssql_adapter() -> Option<MssqlAdapter> {
             }
             Err(e) => {
                 println!("SKIP: SQL Server connect failed after retries ({})", e);
-                // The endpoint resolved, so the container is up and its port is
-                // mapped — but every gate below still returns on `None`. Without
-                // this the CI guard would cover only half the unavailability
-                // surface (issue #1077 round-2 B2-b).
+                // Every gate below still returns on `None`. Without this the CI
+                // guard would cover only half the unavailability surface
+                // (issue #1077 round-2 B2-b).
                 fail_loud_under_ci(
                     "SQL Server",
                     "MSSQL_DISABLE",
@@ -956,11 +953,9 @@ pub async fn setup_mssql_adapter() -> Option<MssqlAdapter> {
 }
 
 /// Issue #1077 Stage 2 (2026-08-02) — run server-scoped MariaDB DDL
-/// (`CREATE ROLE`, `ALTER USER … ACCOUNT LOCK`) against the same server
-/// [`setup_mariadb_adapter`] uses. The adapter classifies these as
-/// `QueryType::Ddl` and refuses them by design (#903), so the fixture needs its
-/// own pool. Call only after `setup_mariadb_adapter()` returned `Some` — an
-/// absent endpoint is an error here, not a skip.
+/// (`CREATE ROLE`) against the same server [`setup_mariadb_adapter`] uses.
+/// Call only after `setup_mariadb_adapter()` returned `Some` — an absent
+/// endpoint is an error here, not a skip.
 #[allow(dead_code)]
 pub async fn mariadb_admin_sql(statements: &[&str]) -> Result<(), String> {
     use sqlx::mysql::{MySqlConnectOptions, MySqlPoolOptions};

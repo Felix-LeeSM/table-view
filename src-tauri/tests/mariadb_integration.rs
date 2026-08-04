@@ -18,8 +18,7 @@ mod common;
 
 use table_view_lib::error::AppError;
 
-/// Issue #1077 Stage 2 — the vendor gate. Three properties, each of which only
-/// a live MariaDB can decide:
+/// Issue #1077 Stage 2 — the vendor gate. Three properties of the MariaDB arm:
 ///
 ///   1. **The query runs at all.** This is the round-2 B1 regression: the MySQL
 ///      projection is rejected outright by every MariaDB build.
@@ -27,7 +26,7 @@ use table_view_lib::error::AppError;
 ///      locked in the official image, so a real locked principal is graded
 ///      without any fixture; `root` is the unlocked control.
 ///   3. **A role is reported as non-loginable via `is_role`.** The previous rule
-///      keyed off an empty `Host`, which is not a role discriminator.
+///      keyed off an empty `Host`.
 #[tokio::test]
 #[serial_test::serial]
 async fn test_mariadb_list_database_users_vendor_projection_1077() {
@@ -91,9 +90,7 @@ async fn test_mariadb_list_database_users_vendor_projection_1077() {
         "mariadb.sys is ACCOUNT LOCK-ed — the global_priv JSON lock flag must reach can_login"
     );
 
-    // A role carries an empty Host and renders bare. The old `!host.is_empty()`
-    // rule got this right by accident and got `CREATE USER x@''` wrong; only
-    // `is_role` separates the two.
+    // A role carries an empty Host and renders bare.
     let role = rows
         .iter()
         .find(|r| r.name == "tv_users_gate")
