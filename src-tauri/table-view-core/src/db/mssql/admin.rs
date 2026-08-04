@@ -114,10 +114,11 @@ const USERS_PERMISSION_PROBE_SQL: &str =
 /// every `'E'`/`'X'` Entra principal with no row and no error — on an
 /// Entra-authenticated server those are the primary login subjects, so the
 /// account-audit screen lost its main population silently. A type whitelist has
-/// to be re-edited for every principal type SQL Server adds; deciding
-/// loginability per type in the projection needs no such edit. `##MS_*` internal
-/// principals stay filtered — they are audit noise, never real accounts. Server
-/// principals expose no per-login connection cap or password expiry.
+/// to be re-edited for every principal type SQL Server adds, so the row filter
+/// must stay name-only; loginability is decided per type in the `can_login`
+/// projection. `##MS_*` internal principals stay filtered — they are audit
+/// noise, never real accounts. Server principals expose no per-login connection
+/// cap or password expiry.
 const USERS_SQL: &str = "\
 WITH fixed_role_members AS ( \
     SELECT r.name AS role_name, rm.member_principal_id \
@@ -305,10 +306,10 @@ impl MssqlAdapter {
             .await?;
         rows.iter()
             .map(|row| {
-                // Every flag projection is a `CASE`/`ISNULL` that cannot be
-                // NULL, so `req_i64` fails loud if a future edit reintroduces a
-                // nullable (or non-BIGINT) expression instead of silently
-                // reporting the account as unprivileged.
+                // Every flag projection is a `CASE` that cannot be NULL, so
+                // `req_i64` fails loud if a future edit reintroduces a nullable
+                // (or non-BIGINT) expression instead of silently reporting the
+                // account as unprivileged.
                 Ok(DatabaseUserRow {
                     name: opt_str(row, 0, "principal name")?.unwrap_or_default(),
                     can_login: req_i64(row, 1, "can_login flag")? == 1,
@@ -496,7 +497,7 @@ mod tests {
     // is `test_mssql_users_null_role_membership_and_non_login_principals_1077`
     // in `tests/mssql_integration.rs`.
     #[test]
-    fn users_sql_backs_every_privilege_flag_with_a_null_free_source() {
+    fn users_sql_backs_each_fixed_role_flag_with_a_null_free_source() {
         assert!(
             USERS_SQL.contains("sys.server_role_members"),
             "the catalog membership walk is the NULL-free membership source"
@@ -553,12 +554,20 @@ mod tests {
     // `tests/mssql_integration.rs`.
     #[test]
     fn users_sql_row_filter_drops_no_principal_type() {
-        // The whole WHERE clause, up to the CTE's closing paren: nothing else
-        // may be ANDed in, so a re-added type predicate fails here.
+        // The CTE's whole WHERE clause, up to its closing paren: nothing else
+        // may be ANDed in there, so a re-added type predicate fails here.
         assert!(
             USERS_SQL.contains("WHERE sp.name NOT LIKE '##MS_%' )"),
             "the listed-row filter must be the ##MS_* name filter only — a type \
              predicate would silently drop every type it forgets"
+        );
+        // The outer SELECT is the second place a row can be dropped and the
+        // needle above does not reach it. Pinning `FROM principal_flags`
+        // directly to its `ORDER BY` fails if a predicate is inserted between.
+        assert!(
+            USERS_SQL.contains("FROM principal_flags ORDER BY name"),
+            "the outer SELECT must stay filter-free — a WHERE here drops the \
+             rows the CTE filter deliberately kept"
         );
     }
 

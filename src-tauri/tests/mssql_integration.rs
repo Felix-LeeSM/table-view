@@ -373,10 +373,12 @@ async fn test_mssql_list_database_users_row_shape_1077() {
     assert!(!public_role.can_login, "a server role cannot log in");
 
     // `##MS_*` are internal certificate/role principals — audit noise, and the
-    // certificate-mapped ones make `IS_SRVROLEMEMBER` return NULL.
+    // certificate-mapped ones make `IS_SRVROLEMEMBER` return NULL. This checks
+    // the literal `##MS_` prefix, a narrower set than the SQL filter
+    // `NOT LIKE '##MS_%'` — T-SQL `_` is a single-character wildcard.
     assert!(
         rows.iter().all(|r| !r.name.starts_with("##MS_")),
-        "internal ##MS_* principals must not reach the panel"
+        "no principal carrying the internal `##MS_` prefix may reach the panel"
     );
 }
 

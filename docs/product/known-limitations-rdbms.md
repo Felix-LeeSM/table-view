@@ -76,11 +76,12 @@ available on both MySQL and MariaDB (#1077 Stage 2). The two vendors need
 different SQL and the adapter branches on the connection's engine: `mysql.user`
 is a real table on MySQL with an `account_locked` column (added in MySQL 5.7.6;
 an older build fails loud rather than mislabelling a locked account as
-loginable), whereas MariaDB 10.4 replaced it with a view over
-`mysql.global_priv` that does not carry that column (measured absent on 10.3,
-10.4 and 11.3) — there the lock flag is read from the `Priv` JSON document
-(`$.account_locked` only; that document also holds `authentication_string`,
-which is never projected), so MariaDB requires 10.4+ and fails loud below it. `can_login` also accounts for the
+loginable), whereas MariaDB's `mysql.user` does not carry that column (measured
+absent on 10.3, 10.4 and 11.3) — 10.4 replaced the table with a view over
+`mysql.global_priv`, and there the lock flag is read from the `Priv` JSON
+document (`$.account_locked` only; that document also holds
+`authentication_string`, which is never projected), so MariaDB requires 10.4+
+and fails loud below it. `can_login` also accounts for the
 `mysql_no_login` plugin, and `max_user_connections` is normalised onto the PG
 `rolconnlimit` wire sentinel (MySQL `0` = unlimited becomes `-1`, a negative
 MariaDB cap becomes `0`). MariaDB roles live in the same view under their bare
