@@ -554,7 +554,8 @@ export const MYSQL_FAMILY_CAPABILITIES = capabilities({
   // MysqlAdapter (information_schema.processlist / KILL /
   // performance_schema.events_statements_summary_by_digest / SHOW GLOBAL
   // STATUS+VARIABLES). Issue #1077 Stage 2 — `users` now sourced from the
-  // `mysql.user` catalog (User/Host + privilege flags only; the
+  // `mysql.user` catalog (User/Host, the privilege and lock flags, the auth
+  // plugin and max_user_connections; the
   // `authentication_string`/`Password` credential columns are never selected —
   // see `MYSQL_USERS_QUERY`/`MARIADB_USERS_QUERY` and the Rust unit test
   // `users_queries_never_select_a_credential_column`). `locks` has no adapter

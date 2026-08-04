@@ -77,16 +77,15 @@ different SQL and the adapter branches on the connection's engine: `mysql.user`
 is a real table on MySQL with an `account_locked` column (added in MySQL 5.7.6;
 an older build fails loud rather than mislabelling a locked account as
 loginable), whereas MariaDB 10.4 replaced it with a view over
-`mysql.global_priv` that has never carried that column — there the lock flag is
-read from the `Priv` JSON document (`$.account_locked` only; that document also
-holds `authentication_string`, which is never projected), so MariaDB requires
-10.4+ and fails loud below it. `can_login` also accounts for the
+`mysql.global_priv` that does not carry that column (measured absent on 10.3,
+10.4 and 11.3) — there the lock flag is read from the `Priv` JSON document
+(`$.account_locked` only; that document also holds `authentication_string`,
+which is never projected), so MariaDB requires 10.4+ and fails loud below it. `can_login` also accounts for the
 `mysql_no_login` plugin, and `max_user_connections` is normalised onto the PG
 `rolconnlimit` wire sentinel (MySQL `0` = unlimited becomes `-1`, a negative
 MariaDB cap becomes `0`). MariaDB roles live in the same view under their bare
 name and are listed as non-loginable; the role test is the `is_role` column, not
-an empty `Host`, because `CREATE USER x@''` is an ordinary loginable account
-with an empty host. `can_create_db` over-reports: it renders `mysql.user.Create_priv`,
+an empty `Host`. `can_create_db` over-reports: it renders `mysql.user.Create_priv`,
 MySQL's global `CREATE` privilege, in the PG `rolcreatedb` ("may create
 databases") wire slot, but global `CREATE` also covers `CREATE TABLE`, so an
 account holding it for table DDL alone still shows as a database creator — and
@@ -253,8 +252,10 @@ principal list — the adapter probes the permission with `HAS_PERMS_BY_NAME` an
 fails loud as `CapabilityNotEnabled` instead. The probe answers for the SERVER
 scope, so one truncation survives it: a principal that carries `DENY VIEW
 DEFINITION ON LOGIN::<principal>` against the connected login is silently absent
-from the rows even though the probe returned 1 (measured on SQL Server 2022
-16.0.4265.3 — a login holding `VIEW ANY DEFINITION` plus one such DENY sees the
+from the rows even though the probe returned 1 (reproduced on the SQL Server
+2022 image the docker gate spawns,
+`mcr.microsoft.com/mssql/server:2022-CU14-ubuntu-22.04`, `ProductVersion`
+16.0.4135.4 — a login holding `VIEW ANY DEFINITION` plus one such DENY sees the
 granting probe succeed and the denied principal missing, with no error).
 Detecting it would need per-principal permission reads that are themselves
 metadata-filtered, so the listing is complete only for a login with no

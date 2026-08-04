@@ -71,24 +71,25 @@ FROM sys.dm_os_sys_info si";
 /// account-audit screen would render a partial list as complete. Probing the
 /// effective permission first turns that into a loud `CapabilityNotEnabled`.
 ///
-/// Residual, measured on SQL Server 2022 (16.0.4265.3): the probe answers for
-/// the SERVER scope, so a caller holding `VIEW ANY DEFINITION` still loses a
-/// single principal that carries `DENY VIEW DEFINITION ON LOGIN::x` for it —
-/// probe `1`, row silently absent. Detecting that needs per-principal
-/// permission reads that are themselves metadata-filtered; the boundary is
-/// recorded in `docs/product/known-limitations-rdbms.md` instead.
+/// Residual, reproduced on the image `tests/common/mod.rs` spawns
+/// (`mcr.microsoft.com/mssql/server:2022-CU14-ubuntu-22.04`, `ProductVersion`
+/// 16.0.4135.4): the probe answers for the SERVER scope, so a caller holding
+/// `VIEW ANY DEFINITION` still loses a single principal that carries
+/// `DENY VIEW DEFINITION ON LOGIN::x` for it — probe `1`, row silently absent.
+/// Detecting that needs per-principal permission reads that are themselves
+/// metadata-filtered; the boundary is recorded in
+/// `docs/product/known-limitations-rdbms.md` instead.
 const USERS_PERMISSION_PROBE_SQL: &str =
     "SELECT CAST(ISNULL(HAS_PERMS_BY_NAME(NULL, NULL, 'VIEW ANY DEFINITION'), 0) AS BIGINT)";
 
 /// Issue #1077 Stage 2 — read-only logins/roles from `sys.server_principals`.
 /// Only the principal name + coarse capability flags are projected;
-/// `sys.sql_logins.password_hash` (the only server-login credential) is never
-/// joined or selected, mirroring the PG `pg_roles`-only posture (see the
-/// `users_sql_*` guard tests).
+/// `sys.sql_logins.password_hash` is never joined or selected, mirroring the PG
+/// `pg_roles` posture (see the `users_sql_*` guard tests).
 ///
-/// Every privilege flag is the OR of two independent sources, never a lone
-/// `ISNULL(IS_SRVROLEMEMBER(...), 0)`. Measured on SQL Server 2022
-/// (16.0.4265.3): `IS_SRVROLEMEMBER` returns NULL for a certificate-mapped
+/// Each fixed-role flag is the OR of two independent sources, never a lone
+/// `ISNULL(IS_SRVROLEMEMBER(...), 0)`. Reproduced on 16.0.4135.4:
+/// `IS_SRVROLEMEMBER` returns NULL for a certificate-mapped
 /// (`type = 'C'`) or asymmetric-key-mapped (`'K'`) principal and for a caller
 /// that cannot resolve the membership, so collapsing NULL to 0 turns "cannot
 /// resolve" into "not a member" — a false negative on an account-audit screen
@@ -113,8 +114,8 @@ const USERS_PERMISSION_PROBE_SQL: &str =
 /// every `'E'`/`'X'` Entra principal with no row and no error — on an
 /// Entra-authenticated server those are the primary login subjects, so the
 /// account-audit screen lost its main population silently. A type whitelist has
-/// to be re-edited for every principal type SQL Server adds; listing every row
-/// and deciding loginability per type cannot lose one. `##MS_*` internal
+/// to be re-edited for every principal type SQL Server adds; deciding
+/// loginability per type in the projection needs no such edit. `##MS_*` internal
 /// principals stay filtered — they are audit noise, never real accounts. Server
 /// principals expose no per-login connection cap or password expiry.
 const USERS_SQL: &str = "\
@@ -447,8 +448,7 @@ mod tests {
 
     // Issue #1077 Stage 2 SECURITY (2026-07-25) — the users query must read
     // `sys.server_principals` and must NEVER touch `sys.sql_logins` or select a
-    // `password_hash`, the only server-login credential. Fails if the query
-    // regresses toward a secret source.
+    // `password_hash`. Fails if the query regresses toward a secret source.
     #[test]
     fn users_sql_never_reads_login_credential() {
         assert!(
@@ -466,10 +466,9 @@ mod tests {
         );
     }
 
-    // Issue #1077 Stage 2 (2026-07-25) — GREEN half 1 of
-    // `users_sql_projects_tsql_int_and_collapses_null_sysadmin_pre_impl`.
-    // `ACTIVITY_SQL` already documents the `CAST(... AS BIGINT)` discipline in
-    // this file.
+    // Issue #1077 Stage 2 (2026-07-25) — the wire type is i64, so a T-SQL `INT`
+    // projection would make `req_i64` fail the whole listing. `ACTIVITY_SQL`
+    // already documents the `CAST(... AS BIGINT)` discipline in this file.
     #[test]
     fn users_sql_casts_flag_projections_to_bigint() {
         assert!(
@@ -484,16 +483,16 @@ mod tests {
         );
     }
 
-    // Issue #1077 Stage 2 SECURITY (2026-07-25) — GREEN half 2, widened to all
-    // three fixed roles after the re-review (PR #1786). Verified against SQL
-    // Server 2022 (16.0.4265.3): `IS_SRVROLEMEMBER` returns NULL for a
-    // certificate-/asymmetric-key-mapped principal, so a lone `ISNULL(..., 0)`
-    // reports "cannot resolve" as "not a member" — a real `dbcreator` renders
-    // as unable to create databases. The catalog membership walk is the
-    // NULL-free second source; OR-ing the two can only ever raise a flag, never
-    // lower it (`IS_SRVROLEMEMBER` still contributes the Windows-group-derived
-    // membership that `sys.server_role_members` does not record — e.g.
-    // `NT AUTHORITY\SYSTEM` via `BUILTIN\Administrators`). The behavioral gate
+    // Issue #1077 Stage 2 SECURITY (2026-07-25) — reproduced on 16.0.4135.4:
+    // `IS_SRVROLEMEMBER('dbcreator', <certificate-mapped login>)` is NULL while
+    // `sys.server_role_members` records the membership, so a lone
+    // `ISNULL(..., 0)` reports "cannot resolve" as "not a member" — a real
+    // `dbcreator` renders as unable to create databases. The catalog membership
+    // walk is the NULL-free second source, so the two are OR-ed rather than
+    // swapped: `IS_SRVROLEMEMBER` also reports Windows-group-derived membership
+    // that `sys.server_role_members` does not record (e.g. `NT AUTHORITY\SYSTEM`
+    // via `BUILTIN\Administrators`) — that half is not reachable from the Linux
+    // container gate and is not claimed as reproduced here. The behavioral gate
     // is `test_mssql_users_null_role_membership_and_non_login_principals_1077`
     // in `tests/mssql_integration.rs`.
     #[test]
@@ -508,26 +507,31 @@ mod tests {
              'not a member' — a privilege false negative"
         );
         for role in ["sysadmin", "dbcreator", "securityadmin"] {
+            // The whole disjunction, not the two operands apart. Swapping `OR`
+            // for `AND` keeps both operands present while flipping the flag from
+            // "can only be raised" to "can only be lowered" — the very false
+            // negative this guard exists to stop.
             assert!(
-                USERS_SQL.contains(&format!("IS_SRVROLEMEMBER('{role}'")),
-                "{role}: IS_SRVROLEMEMBER still contributes Windows-group-derived \
-                 membership"
-            );
-            assert!(
-                USERS_SQL.contains(&format!("WHERE fm.role_name = '{role}'")),
-                "{role}: the two membership sources must be OR-ed, not a lone \
-                 IS_SRVROLEMEMBER answer"
+                USERS_SQL.contains(&format!(
+                    "IS_SRVROLEMEMBER('{role}', sp.name) = 1 \
+                     OR EXISTS (SELECT 1 FROM fixed_role_members fm \
+                     WHERE fm.role_name = '{role}' \
+                     AND fm.member_principal_id = sp.principal_id)"
+                )),
+                "{role}: the two membership sources must be OR-ed — a lone \
+                 IS_SRVROLEMEMBER answer, or an AND, reintroduces the NULL \
+                 false negative"
             );
         }
     }
 
-    // Issue #1077 Stage 2 SECURITY (2026-07-25) — re-review (PR #1786): a
-    // certificate-mapped (`'C'`) or asymmetric-key-mapped (`'K'`) principal
-    // carries permissions for signed modules and can never authenticate, so
-    // `type <> 'R'` reported it as a loginable account. 3rd review B4 widened
-    // the whitelist to the Entra principals: `'E'` (Microsoft Entra login) and
-    // `'X'` (Entra group) authenticate exactly like a Windows login/group, and
-    // on an Entra-enabled server they are the primary login subjects.
+    // Issue #1077 Stage 2 SECURITY (2026-07-25) — a certificate-mapped (`'C'`)
+    // or asymmetric-key-mapped (`'K'`) principal carries permissions for signed
+    // modules and can never authenticate, so a `type <> 'R'` rule reports it as
+    // a loginable account. The whitelist therefore names the Entra principals
+    // too: `'E'` (Microsoft Entra login) and `'X'` (Entra group) authenticate
+    // exactly like a Windows login/group, and on an Entra-enabled server they
+    // are the primary login subjects.
     #[test]
     fn users_sql_limits_can_login_to_authenticatable_principal_types() {
         assert!(
@@ -537,8 +541,8 @@ mod tests {
         );
     }
 
-    // Issue #1077 Stage 2 SECURITY (2026-07-25) — PR #1786 3rd review B4, data
-    // loss. The row filter used to be `sp.type IN ('S', 'U', 'G', 'R', 'C', 'K')`,
+    // Issue #1077 Stage 2 SECURITY (2026-07-25) — data loss. The row filter used
+    // to be `sp.type IN ('S', 'U', 'G', 'R', 'C', 'K')`,
     // which dropped every `'E'`/`'X'` Entra principal with no row and no error —
     // on an Entra-authenticated server those are the primary login subjects,
     // silently missing from an audit screen. A type whitelist has to be

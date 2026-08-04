@@ -5005,10 +5005,7 @@ async fn test_mysql_list_database_users_row_shape_1077() {
         Err(e) => panic!("mysql.user listing must decode: {e}"),
     };
 
-    assert!(
-        !rows.is_empty(),
-        "mysql.user always carries at least the root account"
-    );
+    assert!(!rows.is_empty(), "the listing must not come back empty");
     assert!(
         rows.iter().all(|r| !r.name.is_empty()),
         "every account identity must decode to non-empty text"

@@ -337,9 +337,9 @@ async fn test_stream_table_rows_unsupported_for_duckdb() {
 }
 
 /// Issue #1077 Stage 2 — row-shape gate for `list_database_users`. The unit
-/// guards in `db/mssql/admin.rs` only assert the SQL text; the decode path is
-/// only observable against a live server. `sa` is an enabled sysadmin, which
-/// pins the flags true.
+/// guards in `db/mssql/admin.rs` pin the SQL text and the no-connection branch;
+/// the decode path needs a live server. `sa` is an enabled sysadmin, which pins
+/// the flags true.
 #[tokio::test]
 #[serial_test::serial]
 async fn test_mssql_list_database_users_row_shape_1077() {
@@ -380,23 +380,23 @@ async fn test_mssql_list_database_users_row_shape_1077() {
     );
 }
 
-/// Issue #1077 Stage 2 SECURITY — PR #1786 re-review (2026-07-25). Two defects
-/// only a real principal fixture can catch, both measured on SQL Server 2022
-/// (16.0.4265.3) through `sqlcmd` before this test existed:
+/// Issue #1077 Stage 2 SECURITY (2026-07-25) — the defect a real principal
+/// fixture is needed for: `IS_SRVROLEMEMBER('dbcreator', <certificate-mapped
+/// login>)` is NULL even though `sys.server_role_members` records the
+/// membership, so the previous `ISNULL(IS_SRVROLEMEMBER(...), 0)` reported a
+/// real `dbcreator` as unable to create databases — "cannot resolve" collapsed
+/// into "not a member" on an account-audit surface. Same for `securityadmin`
+/// and an asymmetric-key login. Reproduced on the image `tests/common/mod.rs`
+/// spawns (`mcr.microsoft.com/mssql/server:2022-CU14-ubuntu-22.04`,
+/// `ProductVersion` 16.0.4135.4).
 ///
-/// - `IS_SRVROLEMEMBER('dbcreator', <certificate-mapped login>)` is NULL even
-///   though `sys.server_role_members` records the membership, so the previous
-///   `ISNULL(IS_SRVROLEMEMBER(...), 0)` reported a real `dbcreator` as unable to
-///   create databases — "cannot resolve" collapsed into "not a member" on an
-///   account-audit surface. Same for `securityadmin` and an asymmetric-key login.
-/// - a `'C'`/`'K'` principal exists only to carry permissions for signed
-///   modules and can never authenticate, yet `type <> 'R'` reported it as a
-///   loginable account.
-///
-/// The unit guards in `db/mssql/admin.rs` only pin the SQL text; the server's
-/// NULL answer is the part that has to come from a live server. Fixture DDL
-/// goes through `common::mssql_admin_batch` because the adapter refuses raw DDL
-/// by design (#903).
+/// The sibling defect — a `'C'`/`'K'` principal reported as loginable by a
+/// `type <> 'R'` rule — needs no server and no fixture:
+/// `users_sql_limits_can_login_to_authenticatable_principal_types` in
+/// `db/mssql/admin.rs` fails on the SQL text alone. What has to come from a live
+/// server is the NULL answer above. Fixture DDL goes through
+/// `common::mssql_admin_batch` because the adapter refuses raw DDL by design
+/// (#903).
 #[tokio::test]
 #[serial_test::serial]
 async fn test_mssql_users_null_role_membership_and_non_login_principals_1077() {
@@ -419,9 +419,9 @@ async fn test_mssql_users_null_role_membership_and_non_login_principals_1077() {
         .await
         .expect("pre-clean principal fixture");
     common::mssql_admin_batch(
-        // A `#`-leading SUBJECT is read as RFC 4514 hex DN data and rejected
-        // with "certificate data is invalid" (error 15297), so no issue anchor
-        // here.
+        // A `#`-leading SUBJECT is rejected with "The certificate, asymmetric
+        // key, or private key data is invalid." (error 15297, reproduced on
+        // 16.0.4135.4), so this SUBJECT carries no `#1077` anchor.
         "CREATE CERTIFICATE tv1077_cert ENCRYPTION BY PASSWORD = 'Fixture!1077Pass' \
              WITH SUBJECT = 'issue 1077 stage 2 users listing fixture'; \
          CREATE LOGIN tv1077_cert_login FROM CERTIFICATE tv1077_cert; \
@@ -477,8 +477,8 @@ async fn test_mssql_users_null_role_membership_and_non_login_principals_1077() {
     );
 }
 
-/// Issue #1077 Stage 2 SECURITY — PR #1786 3rd review B4 (2026-07-25), data
-/// loss. The listing gated rows on `sp.type IN ('S', 'U', 'G', 'R', 'C', 'K')`,
+/// Issue #1077 Stage 2 SECURITY (2026-07-25) — data loss. The listing gated
+/// rows on `sp.type IN ('S', 'U', 'G', 'R', 'C', 'K')`,
 /// which silently dropped every `'E'` (Microsoft Entra login) and `'X'` (Entra
 /// group) principal: no row, no error. On an Entra-authenticated SQL Server /
 /// Azure SQL those two are the primary login subjects, so the audit screen
@@ -537,7 +537,7 @@ async fn test_mssql_users_listing_drops_no_principal_type_1077() {
 
     assert_eq!(
         listed, expected,
-        "every principal must reach the panel — a type filter drops accounts \
-         with no row and no error"
+        "every non-##MS_* principal must reach the panel — a type filter drops \
+         accounts with no row and no error"
     );
 }

@@ -2,13 +2,15 @@
 //!
 //! 작성 이유: MariaDB 는 `MysqlAdapter` 를 공유하므로 대부분의 surface 는 MySQL
 //! 컨테이너가 대표한다. `mysql.user` 만 예외다 — users listing 은 두 벤더가 서로
-//! 다른 SQL 을 보내는 유일한 경로이고, 진짜 MariaDB 서버만 채점할 수 있다.
+//! 다른 SQL 을 보내는 유일한 경로다. 이 게이트가 더하는 것은 그 SQL 을 진짜
+//! MariaDB 서버에 실행해 디코드하는 부분이고, 어느 arm 을 고르는지와 행 매핑은
+//! `db/mysql/schema.rs` 의 순수 유닛 테스트가 이미 덮는다.
 //!
-//! 이 파일이 없던 동안 무슨 일이 있었나 (round-2 B1): 공유 상수 하나가
-//! `CONVERT(account_locked USING utf8mb4)` 를 골랐고, 모든 MariaDB 에서 Users 탭이
-//! `1054 (42S22): Unknown column 'account_locked' in 'field list'` 로 죽었다. MySQL 전용
-//! `mysql_integration.rs` 도, offline 인 `mariadb_ddl_preview.rs` 도 그 경로를
-//! 지나지 않아 CI 가 green 이었다.
+//! 이 파일이 없던 동안 무슨 일이 있었나: 공유 상수 하나가
+//! `CONVERT(account_locked USING utf8mb4)` 를 골랐고, 그 컬럼이 없는 MariaDB 에서
+//! Users 탭이 `1054 (42S22): Unknown column 'account_locked' in 'field list'` 로
+//! 죽었다 (10.3 · 10.4 · 11.3 에서 실측). MySQL 전용 `mysql_integration.rs` 도,
+//! offline 인 `mariadb_ddl_preview.rs` 도 그 경로를 지나지 않아 CI 가 green 이었다.
 //!
 //! 실행:
 //!   cargo test --manifest-path src-tauri/Cargo.toml --test mariadb_integration
@@ -18,15 +20,20 @@ mod common;
 
 use table_view_lib::error::AppError;
 
-/// Issue #1077 Stage 2 — the vendor gate. Three properties of the MariaDB arm:
+/// Issue #1077 Stage 2 — the vendor gate. What a live MariaDB decides and no
+/// unit test can:
 ///
-///   1. **The query runs at all.** This is the round-2 B1 regression: the MySQL
-///      projection is rejected outright by every MariaDB build.
-///   2. **The lock flag decodes from `global_priv` JSON.** `mariadb.sys` ships
+///   1. **The query runs at all.** The MySQL projection names a column this
+///      server does not have, so it is rejected with `1054`; only executing the
+///      MariaDB arm shows that the server accepts it.
+///   2. **The lock flag decodes from `global_priv` JSON.** The extraction is in
+///      SQL, not in Rust, so no unit test reaches it. `mariadb.sys` ships
 ///      locked in the official image, so a real locked principal is graded
 ///      without any fixture; `root` is the unlocked control.
-///   3. **A role is reported as non-loginable via `is_role`.** The previous rule
-///      keyed off an empty `Host`.
+///
+/// The role rule (`is_role`, not an empty `Host`) is settled without a server by
+/// `map_mysql_user_row_uses_is_role_not_an_empty_host_to_deny_login`; the role
+/// assertion below is end-to-end confirmation, not the guard.
 #[tokio::test]
 #[serial_test::serial]
 async fn test_mariadb_list_database_users_vendor_projection_1077() {
@@ -55,14 +62,12 @@ async fn test_mariadb_list_database_users_vendor_projection_1077() {
             adapter.disconnect_pool().await.ok();
             return;
         }
-        // The B1 failure mode lands here: `1054 Unknown column 'account_locked'`.
+        // The shared-constant failure mode lands here: `1054 Unknown column
+        // 'account_locked'`.
         Err(e) => panic!("MariaDB users listing must execute and decode: {e}"),
     };
 
-    assert!(
-        !rows.is_empty(),
-        "mysql.user always carries at least the root account"
-    );
+    assert!(!rows.is_empty(), "the listing must not come back empty");
     assert!(
         rows.iter().all(|r| !r.name.is_empty()),
         "every account identity must decode to non-empty text"
@@ -79,8 +84,8 @@ async fn test_mariadb_list_database_users_vendor_projection_1077() {
         "max_user_connections = 0 (unlimited) must normalise to the PG -1 sentinel"
     );
 
-    // `mysql.global_priv` is the only place MariaDB records the lock, so this
-    // assertion fails if the JSON extraction is dropped or mis-keyed.
+    // A dropped or mis-keyed JSON extraction yields `'N'`, which reaches
+    // `can_login` as "not locked" — so this assertion is what fails.
     let sys = rows
         .iter()
         .find(|r| r.name.starts_with("mariadb.sys@"))

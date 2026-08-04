@@ -266,9 +266,11 @@ export const en = {
     yes: "Yes",
     no: "No",
     unlimited: "Unlimited",
-    // Keyed by the `AppError::CapabilityNotEnabled` code, same contract as
-    // `query:slowQuery.unavailable.<code>`. An unmodelled code falls back to
-    // the backend message rather than rendering a raw key.
+    // Keyed by the `AppError::CapabilityNotEnabled` code, same key shape as
+    // `query:slowQuery.unavailable.<code>`. Unlike that namespace, an unmodelled
+    // code here falls back to the backend message rather than rendering a raw
+    // key — `DatabaseUsersPanel` passes `defaultValue`, `SlowQueryPanel` does
+    // not.
     unavailable: {
       mssql_view_any_definition: {
         title: "VIEW ANY DEFINITION permission is required",

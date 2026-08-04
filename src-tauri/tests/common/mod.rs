@@ -382,7 +382,9 @@ async fn mysql_endpoint() -> Option<MysqlEndpoint> {
 /// MariaDB shares `MysqlAdapter`, so for most surfaces the MySQL container is
 /// representative and a second container would be pure cost. `mysql.user` is
 /// the exception: the users listing is the one code path where the two vendors
-/// run different SQL and only a real MariaDB can grade it.
+/// run different SQL. What this container adds is executing that SQL against a
+/// real MariaDB and decoding the result — the arm selection and the row mapping
+/// are already unit-covered in `db/mysql/schema.rs`.
 ///
 /// Same two stages as MySQL — `MARIADB_HOST` reuses an external server
 /// (`docker-compose.yml` publishes `mariadb:11` on `${MARIADB_PORT:-23306}`),
@@ -496,7 +498,8 @@ async fn mssql_endpoint() -> Option<MssqlEndpoint> {
 }
 
 /// The resolver proper. Returns `None` on every unavailable path so
-/// [`mssql_endpoint`] owns the single CI fail-loud decision.
+/// [`mssql_endpoint`] owns the endpoint-path CI fail-loud decision. The connect
+/// path has its own, in [`setup_mssql_adapter`].
 async fn mssql_endpoint_available() -> Option<MssqlEndpoint> {
     if let Ok(host) = std::env::var("MSSQL_HOST") {
         let port = std::env::var("MSSQL_PORT")
@@ -938,8 +941,9 @@ pub async fn setup_mssql_adapter() -> Option<MssqlAdapter> {
             Err(e) => {
                 println!("SKIP: SQL Server connect failed after retries ({})", e);
                 // Every gate below still returns on `None`. Without this the CI
-                // guard would cover only half the unavailability surface
-                // (issue #1077 round-2 B2-b).
+                // guard would cover only half the unavailability surface —
+                // an unresolved endpoint, but not a connect that runs out of
+                // retries (issue #1077).
                 fail_loud_under_ci(
                     "SQL Server",
                     "MSSQL_DISABLE",
