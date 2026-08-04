@@ -203,8 +203,10 @@ frontend SQL batch path with primary-key projection. #907 wires representative
 Runtime Happy Path smoke for connect, seeded catalog browse, SELECT/DML,
 destructive Safe Mode confirmation, cancellation, and grid edit. The `mssql`
 profile/dialect identity, SQL Server labels/defaults, URL parsing, and seed/spec
-inventory remain source-specific. `switchDatabase` stays disabled under the
-current connection contract. Bounded structured table/index/constraint DDL is
+inventory remain source-specific. `switchDatabase` is enabled since #2094 — the
+wired `MssqlAdapter` overrides `RdbAdapter::switch_database` and re-tests the
+connection config against the target catalog before swapping it, so the toolbar
+switcher is interactive. Bounded structured table/index/constraint DDL is
 now wired through the shared StructurePanel path (#1071). SQL Server schema
 dumps restore into SQL Server for text/numeric/boolean/JSON data:
 `export_schema_dump` emits `[bracket]`-quoted identifiers and Unicode-safe T-SQL

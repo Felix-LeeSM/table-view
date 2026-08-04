@@ -254,7 +254,9 @@ execution, cancellation, tabular result rendering, and editRows through the
 frontend SQL batch path with primary-key projection. #907 adds representative
 Runtime Happy Path smoke for connect, seeded catalog browse, SELECT/DML,
 destructive Safe Mode confirmation, cancellation, and grid edit.
-`switchDatabase` remains disabled under the current connection contract. Named
+#2094 turns `switchDatabase` on: the wired `MssqlAdapter` already overrode
+`RdbAdapter::switch_database` (`mssql/catalog.rs::switch_active_database`), so
+the toolbar `DbSwitcher` and the default-database self-heal are live. Named
 instances, Windows authentication, Azure AD/authSource modes, structured DDL,
 admin/security/jobs/users/roles, import/export, profiler/activity, full T-SQL
 semantic parity, full workbench parity, and sqlcmd/meta-command/procedure-body

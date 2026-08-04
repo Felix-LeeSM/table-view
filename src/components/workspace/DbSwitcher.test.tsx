@@ -290,6 +290,40 @@ describe("DbSwitcher", () => {
     ).not.toBeInTheDocument();
   });
 
+  // #2094 — SQL Server rendered the read-only chip while the wired
+  // `MssqlAdapter` already overrode `RdbAdapter::switch_database`
+  // (`src-tauri/table-view-core/src/db/mssql.rs` →
+  // `mssql/catalog.rs::switch_active_database`); only the capability
+  // declaration was missing. This is the user-facing end of that flip: the
+  // trigger must be the interactive switcher and the popover must list the
+  // databases the backend returns.
+  it("renders an active switcher for connected MSSQL (#2094)", async () => {
+    setStores({ paradigm: "rdb", connected: true, dbType: "mssql" });
+    listDatabasesMock.mockResolvedValueOnce([
+      { name: "master" },
+      { name: "app_db" },
+    ]);
+    render(<DbSwitcher />);
+    const trigger = screen.getByRole("button", {
+      name: /active database switcher/i,
+    });
+    expect(trigger).not.toHaveAttribute("aria-disabled", "true");
+    expect(
+      screen.queryByRole("button", { name: /active database \(read-only\)/i }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(trigger);
+
+    const listbox = await screen.findByRole("listbox", {
+      name: /available databases/i,
+    });
+    expect(
+      within(listbox)
+        .getAllByRole("option")
+        .map((o) => o.textContent?.trim()),
+    ).toEqual(["master", "app_db"]);
+  });
+
   // #1047 — Mongo (document) paradigm must not hide the toolbar switcher
   // (former `return null` violated the ui-parity gate: same action = same
   // entry point). It now surfaces the shared read-only chip whose Radix

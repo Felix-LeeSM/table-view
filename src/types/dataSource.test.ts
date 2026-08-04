@@ -143,7 +143,9 @@ describe("DataSourceProfile registry", () => {
       },
     }),
     mssql: expectedCapabilities({
-      connection: { test: true, readOnly: true },
+      // Issue #2094 — switchDatabase follows the wired `MssqlAdapter`
+      // `switch_database` override (see MSSQL_CAPABILITIES).
+      connection: { test: true, switchDatabase: true, readOnly: true },
       query: { query: true, cancel: true },
       catalog: {
         indexes: true,
@@ -501,7 +503,12 @@ describe("DataSourceProfile registry", () => {
     expect(hasConnectionCapability("postgresql", "switchDatabase")).toBe(true);
     expect(hasConnectionCapability("mysql", "switchDatabase")).toBe(true);
     expect(hasConnectionCapability("mariadb", "switchDatabase")).toBe(true);
-    expect(hasConnectionCapability("mssql", "switchDatabase")).toBe(false);
+    // Issue #2094 — declaration follows the wired adapter: `make_adapter`
+    // builds `MssqlAdapter`, whose `RdbAdapter::switch_database` override
+    // reaches `switch_active_database` instead of the trait's `Unsupported`
+    // default. Oracle keeps `false` because `OracleAdapter` declares no
+    // override and falls through to that default.
+    expect(hasConnectionCapability("mssql", "switchDatabase")).toBe(true);
     expect(hasConnectionCapability("oracle", "switchDatabase")).toBe(false);
     expect(hasConnectionCapability("sqlite", "switchDatabase")).toBe(false);
     expect(hasConnectionCapability("mongodb", "switchDatabase")).toBe(false);

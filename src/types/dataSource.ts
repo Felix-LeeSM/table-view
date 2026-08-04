@@ -655,6 +655,13 @@ export const DUCKDB_CAPABILITIES = capabilities({
 export const MSSQL_CAPABILITIES = capabilities({
   connection: {
     test: true,
+    // Issue #2094 — the wired adapter (`make_adapter` → `MssqlAdapter`)
+    // overrides `RdbAdapter::switch_database`, delegating to
+    // `mssql/catalog.rs::switch_active_database` (re-test the config against
+    // the target catalog, then swap `connected_config`), so it never reaches
+    // the trait's `Unsupported` default. The declaration was the only thing
+    // missing, which left `DbSwitcher` and `useAutoResolveActiveDb` gated off.
+    switchDatabase: true,
     // Issue #1529 — see ORACLE_CAPABILITIES: engine-agnostic backend gate.
     readOnly: true,
   },
