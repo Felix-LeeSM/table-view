@@ -25,8 +25,9 @@ copies across the repo had already gone stale by #1845.
 What the individual jobs own:
 
 - `Frontend Checks` aggregates the three-shard vitest matrix, applies
-  `vite.config.ts`'s coverage thresholds to the merged report, and runs
-  `pnpm lint` and `pnpm build`.
+  `vite.config.ts`'s coverage thresholds to the merged report, holds the band
+  above those floors with the `coverage-baseline.json` ratchet
+  (`scripts/check-coverage-ratchet.mjs`), and runs `pnpm lint` and `pnpm build`.
 
 - `Dependency Security` runs `cargo deny check bans licenses sources` in
   `src-tauri`. RUSTSEC advisories are decoupled into `Dependency Advisories`,

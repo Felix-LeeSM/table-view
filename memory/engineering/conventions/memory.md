@@ -45,8 +45,10 @@ Rust / TypeScript / 테스트 / 커밋 / 금지 사항. 작업 전 훑어볼 것
 - React: Vitest + React Testing Library. 파일은 컴포넌트 옆 `*.test.tsx` 또는 `__tests__/`. Zustand 스토어는 순수 함수처럼.
 - E2E: WebdriverIO + tauri-driver 로 핵심 플로우(연결 생성, 쿼리 실행, 결과 확인). 시나리오 설계 원칙은 [e2e-scenarios](e2e-scenarios/memory.md) 필독.
 - 시나리오 원칙: 비-E2E 는 [testing-scenarios](testing-scenarios/memory.md), E2E 는 [e2e-scenarios](e2e-scenarios/memory.md). 같은 P-시리즈로 일관.
-- Coverage gate: frontend `vite.config.ts` 기준 statements 85% / 라인 87% /
-  함수 87% / 브랜치 78% (`vite.config.ts` 가 SOT), Rust는 `.github/workflows/ci.yml` 의 llvm-cov 임계값을
+- Coverage gate: frontend 는 둘을 다 지나야 한다 — `vite.config.ts` 의 고정 바닥
+  (statements 85% / 라인 87% / 함수 87% / 브랜치 78%, `vite.config.ts` 가 SOT) 과
+  그 위 실측치를 잡아 두는 `coverage-baseline.json` 톱니
+  (`scripts/check-coverage-ratchet.mjs` 가 SOT). Rust는 `.github/workflows/ci.yml` 의 llvm-cov 임계값을
   따른다. 신규·수정 파일도 이 gate 를 낮추는 방향으로 들어가지 않는다.
 - 시나리오 체크: happy path, 빈/누락 입력, 에러 복구, 동시성(빠른 더블 클릭 등), 상태 전이. 이 목록이 전부다.
 - 변경 후 필수 검증: `pnpm vitest run`, `pnpm tsc --noEmit`, `pnpm lint`.

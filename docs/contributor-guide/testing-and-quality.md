@@ -111,9 +111,14 @@ reads the allowlists:
 | Hidden TS/TSX lint candidates | Only generated wasm artifacts under `src/lib/sql/wasm/**` and `src/lib/mongo/wasm/**` may be ignored. | The PR adding a broad ignore must either narrow it or document generated-artifact ownership. |
 | `src/features/**` imports | Feature production modules may use feature-local code, feature public APIs, `@lib`, `@/types`, and `@components/ui`; cross-feature internal imports fail and must route through `src/features/<domain>/index.ts`. Imports from legacy components, hooks, stores, pages, router, or app shell still fail unless they are an explicit public-facade exception. | The PR adding a feature dependency owns reusable extraction, public API export, or removal of the dependency. |
 
-Coverage thresholds are governed by `vite.config.ts` (frontend) and the
-`--fail-under-*` literals in `.github/workflows/ci.yml` (Rust integration) —
-those two files are the only places the numbers live. E2E breadth stays with #581, and
+Coverage thresholds sit in two layers. The floors: `vite.config.ts` (frontend)
+and the `--fail-under-*` literals in `.github/workflows/ci.yml` (Rust
+integration). Above the frontend floor, a ratchet: `coverage-baseline.json`
+carries the last measured frontend total and `scripts/check-coverage-ratchet.mjs`
+fails `Frontend Checks` when the merged report drops below it — that script's
+header owns the tolerance and the procedure for raising the baseline. So a
+frontend coverage red the `vite.config.ts` numbers cannot explain is the
+ratchet: look for `FAIL <metric>` in the job log. E2E breadth stays with #581, and
 CI cache or parallelism with #582. Static lint changes should not edit those
 gates.
 

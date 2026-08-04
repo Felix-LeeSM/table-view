@@ -1,0 +1,7 @@
+{
+  "//": "프런트엔드 커버리지 하락 톱니의 바닥. 절대 임계값은 vite.config.ts 의 coverage.thresholds 이고 여기는 그 위의 실측 baseline 이다. 올릴 때의 절차 · 허용 오차 · 이 값이 왜 로컬 통짜 실행값과 다른지는 scripts/check-coverage-ratchet.mjs 헤더가 SOT. 시딩: 2026-08-03 main 73458cbe 의 CI run 30863140947 (Frontend Checks 병합 실행) 실측치.",
+  "statements": 88.1,
+  "branches": 80.99,
+  "functions": 89.13,
+  "lines": 90.56
+}
