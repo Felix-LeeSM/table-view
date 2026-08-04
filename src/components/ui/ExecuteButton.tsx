@@ -17,9 +17,9 @@
  *   What the matrix guarantees is that the three fills resolve to three
  *   different colours in every theme and mode, and that each label clears
  *   a separation floor over its own fill — both swept in
- *   `ExecuteButton.test.tsx`. That floor is NOT WCAG AA: this catalog
- *   does not clear AA for these fills, and the sweep says so and prints
- *   the measured minimum on failure.
+ *   `ExecuteButton.test.tsx`. That floor is NOT WCAG AA: nearly every
+ *   label-over-fill pair in this catalog falls short of 4.5:1, and the
+ *   sweep says so and prints the measured minimum on failure.
  *     WARN + dev|null|local|testing|development  → `--tv-success`
  *     WARN + staging                              → `--tv-warning`
  *     WARN + production                           → `--tv-destructive`
@@ -110,7 +110,7 @@ function pickColorTokens(
       hoverBg: "color-mix(in srgb, var(--tv-warning) 90%, black)",
     };
   }
-  // dev / local / testing / development / null → success (green).
+  // dev / local / testing / development / null → `--tv-success`.
   return {
     bg: "var(--tv-success)",
     fg: "var(--tv-success-foreground)",

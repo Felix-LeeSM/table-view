@@ -3868,9 +3868,10 @@
 }
 
 /* === 099 SUPPLY — gallery wall neutral ===
- * One token diverges from the prototype, for the same reason `henry` below
- * diverges: `--tv-destructive` is left to the universal red instead of the
- * prototype's Ink/Paper. This codebase paints the query log's succeeded /
+ * `--tv-destructive` in both modes, and dark's paired
+ * `--tv-destructive-foreground`, diverge from the prototype for the same reason
+ * `henry` below diverges: they are left to the common-layer values instead of
+ * the prototype's Ink/Paper. This codebase paints the query log's succeeded /
  * cancelled / failed dots as three identical `rounded-full` spans with no
  * label, so `--tv-destructive` landing on the same value as
  * `--tv-status-connected` turns a failed query into a successful one. The
@@ -3928,7 +3929,7 @@
 }
 
 /* === Henry — gothic broadside mono ===
- * Two tokens diverge from the prototype, both because a paint rule this
+ * Two divergences from the prototype, both because a paint rule this
  * codebase has and the prototype page does not:
  *   - `--tv-destructive` / `--tv-success` / `--tv-warning` are left to the
  *     universal values instead of the prototype's monochrome Ink/Paper. The
@@ -4196,9 +4197,14 @@
  * overridden ones are --tv-radius, --tv-font-sans, --tv-font-mono,
  * --tv-highlight and --tv-destructive-foreground. Re-derive that list
  * instead of trusting this line, which the next theme rots:
- *   grep -c -- '--tv-<token>:' src/themes.css
- * (1 or 2 hits = declared only in the two common blocks below; more =
- * some theme block overrides it.) The sweeps in
+ *   grep -n -- '--tv-<token>:' src/themes.css
+ * Read the line numbers, not the count: the two common blocks below are
+ * the last place any of these tokens is declared, so every hit above
+ * them is a theme-block override. A count cannot separate the two cases,
+ * because the common layer contributes one hit for some of these tokens
+ * and two for others — --tv-destructive-foreground sits in :root only,
+ * so its "2 hits" is one theme override, not an untouched default. The
+ * sweeps in
  * `src/components/ui/ExecuteButton.test.tsx` and
  * `src/themes.color-channel.test.ts` resolve this cascade rather than
  * trusting a block alone.
@@ -4259,7 +4265,7 @@
    * `text-warning` family does not: `--color-warning` aliases
    * `--tv-status-connecting` (`src/index.css`). The only consumer is
    * `ExecuteButton`'s staging fill, solid under white —
-   *   git grep -n -- 'var(--tv-warning' -- src/
+   *   git grep -n -- 'var(--tv-warning)' -- src/
    * — and there, lightening costs contrast instead of buying it: #ea580c
    * under #ffffff measures 3.560:1 and #fb923c measures 2.263:1, the lowest
    * label ratio in the catalog and the case that sets the floor printed by

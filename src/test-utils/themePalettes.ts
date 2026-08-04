@@ -121,8 +121,16 @@ export interface ThemeBlock {
  * layers, lowest first: `:root`, then the top-level `[data-mode="dark"]` block
  * for dark blocks, then the theme block. The file holds two `[data-mode="dark"]`
  * blocks — one near the top carrying only `color-scheme` — so both are merged
- * rather than taking the first match. `src/index.css` declares none of these
- * tokens, only the `--color-*` aliases that read them.
+ * rather than taking the first match.
+ *
+ * `src/index.css` is left out of those layers, and not because it is empty:
+ * `git grep -c -- '--tv-' src/index.css` counts 140, in two
+ * `:where(:root[data-mode="light"|"dark"])` blocks. `:where()` has specificity
+ * 0, so wherever both files declare a token the `:root` layer above wins, and
+ * `src/index.css` shows through only for a token `themes.css` declares nowhere.
+ * It is a fallback under this cascade, not a layer inside it. The sibling sweep
+ * in `src/themes.test.ts` measures those two blocks as palettes in their own
+ * right, which is what its `extraBlocks = 2` counts.
  *
  * `--tv-background` is what selects the UI block: each theme and mode also
  * emits a second block carrying only `--tv-syntax-*`.

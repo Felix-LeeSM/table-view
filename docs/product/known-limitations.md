@@ -68,16 +68,20 @@ smoke or measurement gates:
   - Reproduce both, and every other pair, per theme and mode:
     `pnpm vitest run src/themes.color-channel.test.ts` and the ΔE table in that
     file's header.
-- Predates #2117 and still open: `--tv-highlight` equals `--tv-primary` in seven
-  pre-existing blocks (`voltagent dark` at ΔE 0), and #2117's `henry` adds two
-  more. The document grids signal "this cell has an unsaved edit" with only
-  `bg-highlight/20` or `ring-1 ring-highlight`
-  (`src/components/document/DocumentDataGrid/cellRenderers/DocumentGridRows.tsx`,
-  `src/components/query/EditableQueryResultGrid.tsx`), so in those blocks the
-  ring against a `bg-primary` fill disappears. The RDB grid does not have this
-  problem — #1139 gave it an `sr-only` label and a `●` glyph
+- Predates #2117 and still open: `--tv-highlight` sits within ΔE 15 of
+  `--tv-primary` — the same separation floor `src/themes.color-channel.test.ts`
+  applies to the query-log dots — in seven pre-existing blocks, of which one
+  (`voltagent dark`) is an exact match; #2117's `henry` adds two more, both
+  exact. Three surfaces signal "this cell has an unsaved edit" with colour and
+  nothing beside it:
+  `src/components/document/DocumentDataGrid/cellRenderers/DocumentGridRows.tsx`
+  (a `bg-highlight/20` cell wash, plus `ring-1 ring-highlight` on the expanded
+  row), `src/components/query/EditableQueryResultGrid.tsx` and
+  `src/components/document/NestedExpandPopover.tsx` (the wash only). In those
+  nine blocks the ring against a `bg-primary` fill disappears. The RDB grid does
+  not have this problem — #1139 gave it an `sr-only` label and a `●` glyph
   (`src/components/datagrid/DataGridTable/DataRow.tsx`). Porting that second
-  channel to the two document grids is untaken work.
+  channel to those three surfaces is untaken work.
 - SchemaTree 1k/10k table scroll FPS remains ungated. Current evidence is
   deterministic component fixtures plus advisory render p50/p95/env and
   virtualization DOM bounds only. SchemaTree now virtualizes by visible-row
