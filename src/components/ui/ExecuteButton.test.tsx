@@ -289,14 +289,14 @@ function cellsFromDom(): { key: string; fill: string; fg: string }[] {
 // accepting hex values `toRgb` could not expand. That header explains what the
 // shared version refuses to do silently.
 
-// Not a WCAG criterion: this catalog does not clear AA for these fills — the
-// dark-mode `--tv-warning` orange under white text is its floor case, and
-// lifting the whole catalog to 4.5:1 is a separate decision from ADR 0023. This
-// is the weaker "the label is not the fill" floor, set between two bounds this
-// file reproduces: restore the three monochrome `--tv-destructive`/`-success`/
-// `-warning` declarations to the henry blocks in `src/themes.css` and the first
-// assertion fails with the measured 1.044; leave them out and the catalog's own
-// minimum clears it with the ratio printed in any future failure.
+// Not a WCAG criterion: the dark-mode `--tv-warning` orange under white text is
+// its floor case, and lifting the whole catalog to 4.5:1 is a separate decision
+// from ADR 0023. This is the weaker "the label is not the fill" floor, set
+// between two bounds this file reproduces: restore the three monochrome
+// `--tv-destructive`/`-success`/`-warning` declarations to the henry blocks in
+// `src/themes.css` and the first assertion fails with the measured 1.044; leave
+// them out and the catalog's own minimum clears it with the ratio printed in
+// any future failure.
 const MIN_LABEL_RATIO = 2.0;
 
 describe("ExecuteButton severity x env across every theme (ADR 0023 (d))", () => {

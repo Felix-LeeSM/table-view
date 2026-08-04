@@ -123,14 +123,10 @@ export interface ThemeBlock {
  * blocks — one near the top carrying only `color-scheme` — so both are merged
  * rather than taking the first match.
  *
- * `src/index.css` is left out of those layers, and not because it is empty:
- * `git grep -c -- '--tv-' src/index.css` counts 140, in two
- * `:where(:root[data-mode="light"|"dark"])` blocks. `:where()` has specificity
- * 0, so wherever both files declare a token the `:root` layer above wins, and
+ * `src/index.css` is left out of those layers. `:where()` has specificity 0, so
+ * wherever both files declare a token the `:root` layer above wins, and
  * `src/index.css` shows through only for a token `themes.css` declares nowhere.
- * It is a fallback under this cascade, not a layer inside it. The sibling sweep
- * in `src/themes.test.ts` measures those two blocks as palettes in their own
- * right, which is what its `extraBlocks = 2` counts.
+ * It is a fallback under this cascade, not a layer inside it.
  *
  * `--tv-background` is what selects the UI block: each theme and mode also
  * emits a second block carrying only `--tv-syntax-*`.
@@ -172,26 +168,20 @@ export function themeBlocks(css: string): ThemeBlock[] {
  * catalog with no block in `themes.css` is unmeasured, and a block with no
  * catalog entry is unreachable from the picker. A count alone reports neither,
  * and one sweep here used to compare only `length` against `catalog * 2`.
- *
- * `extraBlocks` covers sweeps that also measure palettes from outside
- * `themes.css` (the two `src/index.css` fallbacks).
  */
-export function assertSweepIsComplete(
-  blockNames: string[],
-  extraBlocks = 0,
-): void {
+export function assertSweepIsComplete(blockNames: string[]): void {
   const swept = new Set(blockNames.map((n) => n.replace(/ (light|dark)$/, "")));
   const catalog = new Set<string>(THEME_CATALOG.map((t) => t.id));
   const missing = [...catalog].filter((id) => !swept.has(id));
   const extra = [...swept].filter((id) => !catalog.has(id));
-  const expected = catalog.size * 2 + extraBlocks;
+  const expected = catalog.size * 2;
   if (
     missing.length > 0 ||
     extra.length > 0 ||
-    blockNames.length + extraBlocks !== expected
+    blockNames.length !== expected
   ) {
     throw new Error(
-      `sweep covers ${blockNames.length + extraBlocks} blocks over ${swept.size} themes; ` +
+      `sweep covers ${blockNames.length} blocks over ${swept.size} themes; ` +
         `THEME_CATALOG lists ${catalog.size} (expected ${expected} blocks). ` +
         `Missing from src/themes.css: [${missing.join(", ")}]. ` +
         `Not in THEME_CATALOG: [${extra.join(", ")}].`,

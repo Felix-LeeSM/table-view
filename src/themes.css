@@ -3967,7 +3967,7 @@
   --tv-status-connecting: #666666;
   --tv-status-error: #2a2722;
   --tv-status-idle: #b3b3b3;
-  --tv-highlight: #2a2722;
+  --tv-highlight: #666666;
   --tv-radius: 12px;
   --tv-font-sans:
     "Neue Montreal", Inter, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
@@ -3995,7 +3995,7 @@
   --tv-status-connecting: #b3b3b3;
   --tv-status-error: #fafafa;
   --tv-status-idle: #9f9f9f;
-  --tv-highlight: #fafafa;
+  --tv-highlight: #9f9f9f;
   --tv-radius: 12px;
   --tv-font-sans:
     "Neue Montreal", Inter, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
@@ -4025,6 +4025,7 @@
   --tv-status-connecting: #b8790f;
   --tv-status-error: #ef4444;
   --tv-status-idle: #5f7267;
+  --tv-highlight: #b8790f;
   --tv-radius: 0.875rem;
   --tv-font-sans:
     "Suisse Intl", "Inter", -apple-system, BlinkMacSystemFont,

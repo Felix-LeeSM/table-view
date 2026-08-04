@@ -103,10 +103,8 @@ describe("colour-only status channels across every theme (#2117)", () => {
     expect(() => {
       assertSweepIsComplete(blocks.map((b) => b.name));
     }).not.toThrow();
-    // All three sweeps call the helper as `not.toThrow()`, which a body of
-    // `return;` satisfies in all three at once. Feeding it a short list is what
-    // makes the line above mean "the sweep is complete" instead of "the helper
-    // ran".
+    // Feeding it a short list is what makes the line above mean "the sweep is
+    // complete" instead of "the helper ran".
     expect(() => {
       assertSweepIsComplete(blocks.slice(1).map((b) => b.name));
     }).toThrow(/sweep covers/);

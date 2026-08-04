@@ -164,16 +164,14 @@ function palettes(): Palette[] {
     out.push({ name: `(fallback) ${mode}`, tokens: declarations(block[1]!) });
   }
 
-  // The two `index.css` fallbacks are not catalog themes, so they are counted
-  // rather than name-matched. Round 2 of PR #2115 anchored the completeness
-  // check on a second regex over the same file, and that regex was a PREFIX of
-  // the sweep's: changing the selector shape sent both to zero at once, leaving
-  // `expected` = 2 and `found` = 2 — green while measuring 2 palettes instead
-  // of 164. The shared helper anchors on `THEME_CATALOG` instead, which is not
-  // CSS and cannot break in the same edit.
+  // Round 2 of PR #2115 anchored the completeness check on a second regex over
+  // the same file, and that regex was a PREFIX of the sweep's: changing the
+  // selector shape sent both to zero at once, leaving `expected` = 2 and
+  // `found` = 2 — green while measuring 2 palettes instead of 164. The shared
+  // helper anchors on `THEME_CATALOG` instead, which is not CSS and cannot
+  // break in the same edit.
   assertSweepIsComplete(
     out.filter((p) => !p.name.startsWith("(fallback) ")).map((p) => p.name),
-    2,
   );
   return out;
 }
