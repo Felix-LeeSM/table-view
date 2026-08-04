@@ -32,9 +32,17 @@
 # ② `--test` 다음 이름이 줄바꿈 뒤에 오면 못 본다. 지금 workflow 는 이어붙임(`\`)
 #    을 써도 이름은 항상 `--test` 와 같은 줄에 있다.
 #
-# 반대로 새는 구멍 하나: `--test` 를 다른 crate 의 manifest 에 붙여도 이름만 보고
-# 호출로 센다. 지금은 호출 17종이 전부 src-tauri/tests 에 있어 차이가 없고, 새려면
-# 다른 crate 의 테스트가 src-tauri/tests 의 파일과 이름이 같아야 한다.
+# 주석 줄(첫 비공백이 `#`)은 수집에서 뺀다 — 안 빼면 이력 주석에 남은 `--test
+# <이름>` 이 호출로 집계된다. 이 저장소 `ci.yml` 은 「예전 줄은 `--test X` 였다」는
+# 이력 주석을 관례로 남기고 (`storage_integration` 을 그렇게 적은 줄이 지금도
+# 있다), 그 상태에서 진짜 호출을 지우고 주석만 남기면 게이트가 green 인 채로 그
+# binary 를 호출로 세고 allowlist 에도 안 넣는다 — 이 게이트가 막으려던 상태
+# 그대로다. 빼기 전후로 호출 집합은 같다 (base 2b7deab4 에서 양쪽 17종).
+#
+# 그러고도 반대로 새는 구멍 하나가 남는다: `--test` 를 다른 crate 의 manifest 에
+# 붙여도 이름만 보고 호출로 센다. 지금은 호출 17종이 전부 src-tauri/tests 에 있어
+# 차이가 없고, 새려면 다른 crate 의 테스트가 src-tauri/tests 의 파일과 이름이
+# 같아야 한다.
 
 set -uo pipefail
 
@@ -79,8 +87,17 @@ if [ "$targets_n" -eq 0 ]; then
 fi
 
 # grep 은 0 건일 때 1, 오류일 때 2 로 나간다. 둘을 안 가르면 workflow 를 못 읽은
-# 것이 "호출 0 건" 으로 둔갑한다.
-called_raw="$(grep -rhoE -e '--test[[:space:]]+[A-Za-z0-9_]+' "$WORKFLOWS_DIR")"
+# 것이 "호출 0 건" 으로 둔갑한다. 주석 줄 제거를 파이프로 잇지 않고 두 단계로
+# 쪼갠 것도 같은 이유다 — pipefail 은 오른쪽의 rc 1 을 왼쪽의 rc 2 위에 덮어써서
+# 저 구분을 없앤다. 주석을 빼는 사유는 이 파일 헤더에 있다.
+workflow_lines="$(grep -rhvE '^[[:space:]]*#' "$WORKFLOWS_DIR")"
+strip_rc=$?
+if [ "$strip_rc" -gt 1 ]; then
+	echo "ERROR: $WORKFLOWS_DIR 를 못 읽었다 (grep exit $strip_rc) — 검사 불성립" >&2
+	exit 2
+fi
+
+called_raw="$(printf '%s\n' "$workflow_lines" | grep -oE -e '--test[[:space:]]+[A-Za-z0-9_]+')"
 grep_rc=$?
 if [ "$grep_rc" -gt 1 ]; then
 	echo "ERROR: $WORKFLOWS_DIR 를 못 읽었다 (grep exit $grep_rc) — 검사 불성립" >&2

@@ -46,9 +46,10 @@ What the individual jobs own:
   — an absolute home or temp path, a `file:` URL, or a path inside a work copy.
   An empty body passes. The workflow does not listen for `edited`, so a red
   verdict clears on the next commit, not on a body edit. The job also carries
-  two contracts that have nothing to do with the body — the `CLAUDE.md` import
-  line and the `memory/` doc-size cap — so a red verdict here is not always
-  about the body. `memory/runbook/pr-merge-gates/memory.md` names all three and
+  three contracts that have nothing to do with the body — the `CLAUDE.md` import
+  line, the `memory/` doc-size cap, and the `src-tauri` test-binary allowlist
+  (`scripts/check-ci-test-calls.sh`) — so a red verdict here is not always
+  about the body. `memory/runbook/pr-merge-gates/memory.md` names all four and
   is where a red one is diagnosed.
 
 - `Runtime Happy Path` runs the smoke specs `e2e/scope-map.mjs` selects from the

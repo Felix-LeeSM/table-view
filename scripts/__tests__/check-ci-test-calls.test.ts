@@ -118,6 +118,20 @@ describe("check-ci-test-calls", () => {
     expect(run.status).toBe(1);
   });
 
+  // 위 픽스처의 이름만 바꾼 형태가 아니다. 이 저장소 `ci.yml` 은 「예전 줄은
+  // `--test X` 였다」는 이력 주석을 관례로 남기므로, 주석 안의 `--test <이름>`
+  // 을 호출로 세면 진짜 호출을 지우고 주석만 남긴 커밋이 게이트를 green 으로
+  // 통과한다 — 게이트가 막으려던 상태 그대로다.
+  it("does not count a --test name that only appears in a workflow comment", () => {
+    const root = seed({
+      tests: { ...CALLED, "guard_grep.rs": "fn main() {}\n" },
+      workflow: `${DEFAULT_WORKFLOW}      # 예전엔 cargo test --test guard_grep 였다\n`,
+    });
+    const run = runGate(root);
+    expect(run.out).toContain("FAIL guard_grep");
+    expect(run.status).toBe(1);
+  });
+
   // 집합 판정이 부분 일치로 미끄러지면 이름이 다른 호출의 접두사이기만 해도
   // 호출된 것으로 쳐서 통째로 새어 나간다 (`snapshot` 이 `snapshot_atomic` 을
   // 덮는 식). 아래는 그 미끄러짐에서만 red 다.
