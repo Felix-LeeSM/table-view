@@ -223,6 +223,12 @@ Required remote evidence on the exact release SHA:
 Deferred or non-blocking checks must stay explicit:
 
 - Theme contrast is advisory today.
+- Parser WASM size is advisory today (#2127). The CI
+  `WASM Size Budget (non-blocking)` job builds both parser crates with
+  wasm-pack and grades the gzip bytes against the budgets in
+  `scripts/check-wasm-size.sh`. That job name is absent from the `pr_to_main`
+  ruleset, so an over-budget PR reports red and still merges; promoting the
+  budget to blocking means adding the name to that ruleset.
 - A11y beyond the critical component smoke set, perf budgets, macOS/Windows
   desktop runtime smoke, and per-spec database fixture reset are not routine
   release blockers unless a release issue explicitly promotes one of them. Two

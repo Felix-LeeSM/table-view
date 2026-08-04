@@ -188,7 +188,13 @@ pnpm tauri dev          # Tauri 데스크톱 dev
 pnpm tauri build        # Tauri 데스크톱 production build
 ```
 
-Parser WASM 산출물은 `src/lib/**/wasm/` 아래에 체크인되어 있어 로컬 `wasm-pack` 없이도 앱을 빌드할 수 있습니다. gzip 상한(SQL parser 200 KiB, Mongo parser 53 KiB)을 재는 검사가 없으므로, 산출물이나 Rust parser crate를 바꾸면 크기를 직접 확인하세요.
+Parser WASM 산출물은 `src/lib/**/wasm/` 아래에 체크인되어 있어 로컬 `wasm-pack` 없이도 앱을 빌드할 수 있습니다. gzip 상한(SQL parser 120 KiB, Mongo parser 62 KiB)은 CI 의 `WASM Size Budget (non-blocking)` job 이 wasm-pack 으로 새로 빌드해서 잽니다. advisory 라 넘겨도 머지는 막히지 않으니, 산출물이나 Rust parser crate 를 바꾸면 그 job 을 직접 확인하세요. 로컬에서 체크인된 산출물을 재려면:
+
+```bash
+bash scripts/check-wasm-size.sh
+```
+
+새로 빌드한 산출물을 재려면 앞에 `pnpm run build:sql-wasm && pnpm run build:mongosh-wasm` 을 붙입니다. 이 두 명령은 체크인된 산출물과 그 디렉토리의 `.gitignore` 를 덮어쓰므로 작업 트리가 더러워집니다. 예산 근거와 재현 명령은 `scripts/check-wasm-size.sh` 머리말에 있습니다.
 
 ---
 
