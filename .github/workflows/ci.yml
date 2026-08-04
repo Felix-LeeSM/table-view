@@ -334,7 +334,11 @@ jobs:
       # `coverage-baseline.json` carries the measured value and the gate fails
       # when the merged report drops below it. Its input is the
       # `json-summary` reporter added to the merge command above — drop that
-      # flag and this exits 2, not 0.
+      # flag here and this exits 2, not 0. What makes that true is the runner,
+      # not the gate: the checkout is fresh and `/coverage/` is gitignored, so
+      # nothing else can have written the file. Locally the same edit can still
+      # exit 0 off a stale `coverage/coverage-summary.json`, because vitest's
+      # `--mergeReports` path never calls `coverage.clean`.
       # It rides `Frontend Checks` rather than a job of its own because a
       # required context is registered in the `pr_to_main` ruleset, live GitHub
       # state a PR cannot change, and a freshly registered context that has

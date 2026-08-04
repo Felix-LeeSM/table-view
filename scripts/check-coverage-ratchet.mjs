@@ -45,13 +45,21 @@ import { fileURLToPath } from "node:url";
 
 const METRICS = ["statements", "branches", "functions", "lines"];
 
-// 같은 소스 트리에 대한 CI 병합 실행이 실측으로 흔들린 폭은 branches covered 1개
-// (14,459 ↔ 14,460 = 0.01%p) 다. 2026-08-03 main 의 연속 5개 run
-// (30817139448 · 30816753894 · 30815720571 · 30812179641 · 30811094911) 이 분모
-// 17,853 을 공유하면서 covered 만 갈렸고, 나머지 세 지표의 covered 는 다섯 run 내내
-// 고정이었다. 재현: `gh run view <id> --log | grep -E '^Frontend Checks.*(Statements|Branches|Functions|Lines) +:'`.
-// 허용 오차는 그 실측 흔들림의 5배로 잡는다 — 0.05%p 는 statements 12개 · branches
-// 9개 · functions 3개 · lines 11개에 해당하므로, 뜻있는 회귀는 그대로 잡힌다.
+// 허용 오차는 실측된 run-to-run 흔들림에서 나왔다. 2026-08-03 main 의 연속 5개 run
+// 은 서로 다른 5개 커밋이지만, 그중 프런트엔드 트리가 안 바뀐 인접 구간이 둘 있고 두
+// 구간 양쪽에서 branches covered 가 1개(14,459 ↔ 14,460 = 0.01%p) 갈렸다:
+//   0f10bb40(30811094911) 14460 → f9846aaa(30812179641) 14460 → 864389e5(30815720571) 14459
+//   d3ea4493(30816753894) 14459 → 776028a6(30817139448) 14460
+// 각 구간에서 뒤따르는 커밋은 `src/`·`tests/` 를 하나도 안 건드린다. 앞머리 두
+// 커밋(0f10bb40 23개 · d3ea4493 8개)은 스스로 트리를 바꾸므로 그 지점을 가로지르는
+// 비교는 애초에 같은 트리 비교가 아니다. 분모 17,853 은 다섯 run 이 다 공유했고
+// 나머지 세 지표의 covered 는 내내 고정이었다.
+// 재현 — 커밋: `gh run view <id> --json headSha -q .headSha`, 트리 변경:
+// `git show --name-only --format="" <sha> | grep -cE '^(src/|tests/)'`, covered:
+// `gh run view --job "$(gh run view <id> --json jobs -q '.jobs[]|select(.name=="Frontend Checks")|.databaseId')" --log | grep -m1 -E 'Branches +:'`.
+// 허용 오차는 그 흔들림의 5배로 잡는다 — 위 절의 분모(24,953 / 17,853 / 6,138 /
+// 22,119)에서 0.05%p 는 statements 12개 · branches 9개 · functions 3개 · lines
+// 11개에 해당하므로, 뜻있는 회귀는 그대로 잡힌다.
 // 오차 없이 잠그면 게이트가 같은 코드에 대해 무작위로 red 가 된다.
 const TOLERANCE_PCT = 0.05;
 
@@ -136,18 +144,27 @@ const rises = [];
 for (const metric of METRICS) {
   const measured = total[metric].pct;
   const floor = baseline[metric];
-  // 두 값 다 istanbul 이 소수점 둘째 자리로 반올림한 pct 다. 차이를 그 자리에서
-  // 다시 반올림해 비교하면 경계에서 부동소수점 오차가 판정을 뒤집지 않는다 —
-  // `90.56 - 0.05` 는 90.51 이 아니라 90.50999999999999 다.
+  // 두 값 다 istanbul 이 소수점 둘째 자리로 **절사**한 pct 다
+  // (`istanbul-lib-coverage/lib/percent.js` 의 `Math.floor(tmp / 10) / 100`).
+  // 차이를 그 자리에서 반올림해야 경계에서 부동소수점 오차가 판정을 안 뒤집는다.
+  // 오분류가 실제로 나는 쪽은 상승이다 — `88.15 - 88.1` 은 0.05 가 아니라
+  // 0.05000000000001137 이라, 반올림 없이는 딱 오차만큼 오른 run 이 rises 로 새어
+  // baseline 갱신 안내를 낸다 (`node -e 'console.log(88.15 - 88.1)'`).
   const delta = Math.round((measured - floor) * 100) / 100;
   if (delta < -TOLERANCE_PCT) drops.push({ metric, measured, floor });
   else if (delta > TOLERANCE_PCT) rises.push({ metric, measured, floor });
 }
 
+// `Math.max` 가 톱니를 한 방향으로 잠근다. 아래 rises 분기는 **한 지표만** 올라도
+// 켜지므로, 네 값을 조건 없이 측정치로 채우면 오차 안에서 내려간 지표까지 같이
+// 찍힌다 — 헤더가 "그대로 붙여 커밋" 하라고 하니 갱신 한 번마다 그 지표의 바닥이
+// 오차만큼 내려가고, 갱신 N 회면 N × 오차만큼 침식된다.
 const nextBaseline = JSON.stringify(
   {
     "//": baseline["//"],
-    ...Object.fromEntries(METRICS.map((m) => [m, total[m].pct])),
+    ...Object.fromEntries(
+      METRICS.map((m) => [m, Math.max(total[m].pct, baseline[m])]),
+    ),
   },
   null,
   2,

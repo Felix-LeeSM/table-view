@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
+import { parse as parseYaml } from "yaml";
 
 // `scripts/check-coverage-ratchet.mjs` 는 `Frontend Checks` 잡에서 병합된
 // 커버리지를 받아 도는 blocking 게이트다. 그 잡은 게이트가 **실측치에 대해**
@@ -30,32 +31,53 @@ const SEEDED: Record<Metric, number> = {
   lines: 90.56,
 };
 
-function seed(
-  measured: Partial<Record<Metric, number>>,
-  baseline: unknown = SEEDED,
-  totalPerMetric = 10_000,
+/** 두 입력 파일을 있는 그대로 쓴다 — 형식이 깨진 픽스처는 여기로 온다. */
+function writeTree(
+  summary: unknown,
+  baseline: unknown,
 ): { summaryPath: string; baselinePath: string } {
   const root = mkdtempSync(join(tmpdir(), "coverage-ratchet-"));
   trees.push(root);
-  const pcts = { ...SEEDED, ...measured };
-  const summary = {
-    total: Object.fromEntries(
-      METRICS.map((m) => [
-        m,
-        {
-          total: totalPerMetric,
-          covered: Math.round((totalPerMetric * pcts[m]) / 100),
-          skipped: 0,
-          pct: pcts[m],
-        },
-      ]),
-    ),
-  };
   const summaryPath = join(root, "coverage-summary.json");
   const baselinePath = join(root, "coverage-baseline.json");
   writeFileSync(summaryPath, JSON.stringify(summary), "utf8");
   writeFileSync(baselinePath, JSON.stringify(baseline), "utf8");
   return { summaryPath, baselinePath };
+}
+
+type MetricEntry = {
+  total: number;
+  covered: number;
+  skipped: number;
+  pct?: number;
+};
+
+function totalFor(
+  pcts: Record<Metric, number>,
+  totalPerMetric: number,
+): Record<Metric, MetricEntry> {
+  return Object.fromEntries(
+    METRICS.map((m) => [
+      m,
+      {
+        total: totalPerMetric,
+        covered: Math.round((totalPerMetric * pcts[m]) / 100),
+        skipped: 0,
+        pct: pcts[m],
+      },
+    ]),
+  ) as Record<Metric, MetricEntry>;
+}
+
+function seed(
+  measured: Partial<Record<Metric, number>>,
+  baseline: unknown = SEEDED,
+  totalPerMetric = 10_000,
+): { summaryPath: string; baselinePath: string } {
+  return writeTree(
+    { total: totalFor({ ...SEEDED, ...measured }, totalPerMetric) },
+    baseline,
+  );
 }
 
 function runGate(summaryPath: string, baselinePath: string) {
@@ -128,6 +150,33 @@ describe("check-coverage-ratchet", () => {
     expect(run.status).toBe(0);
   });
 
+  // 오차 폭만큼 정확히 오른 run 은 오차 안이므로 갱신 안내를 내면 안 된다.
+  // `88.15 - 88.1` 이 0.05 가 아니라 0.05000000000001137 이라, 차이를 둘째 자리로
+  // 반올림하지 않으면 이 run 이 rises 로 새어 baseline 을 올리라고 안내한다.
+  it("stays silent when a metric rises by exactly the tolerance", () => {
+    const { summaryPath, baselinePath } = seed({ statements: 88.15 });
+    const run = runGate(summaryPath, baselinePath);
+    expect(run.out).not.toContain("::notice::");
+    expect(run.out).toMatch(/^ok: coverage ratchet 통과/m);
+    expect(run.status).toBe(0);
+  });
+
+  // 안내 블록은 톱니를 한 방향으로만 움직여야 한다. rises 분기는 한 지표만 올라도
+  // 켜지므로, 같은 run 에서 오차 안으로 내려간 지표까지 측정치로 덮으면 안내대로
+  // 붙여 커밋한 사람이 그 지표의 바닥을 같이 내린다 — 갱신할 때마다 오차 폭이
+  // 새로 열려 침식이 누적된다.
+  it("never lowers an untouched metric in the pasteable next baseline", () => {
+    const { summaryPath, baselinePath } = seed({
+      statements: 88.6,
+      lines: 90.52,
+    });
+    const run = runGate(summaryPath, baselinePath);
+    expect(run.out).toContain("::notice::coverage ratchet");
+    expect(run.out).toContain('"statements": 88.6');
+    expect(run.out).toContain('"lines": 90.56');
+    expect(run.status).toBe(0);
+  });
+
   // 아래 셋은 "재지 못한 것을 통과로 세지 않는다" 를 판다. 셋 다 exit 0 으로
   // 미끄러지면 게이트는 커버리지를 아무것도 안 보면서 green 이 된다.
   it("refuses a summary file that is not there", () => {
@@ -159,6 +208,41 @@ describe("check-coverage-ratchet", () => {
     expect(run.status).toBe(2);
   });
 
+  // 위 픽스처는 낯선 키 검사에서 먼저 걸리므로 "지표가 수인가" 분기를 못 판다.
+  // 네 지표가 다 있고 값만 수가 아닌 baseline 이 그 분기를 판다.
+  it("refuses a baseline whose metric is not a number", () => {
+    const { summaryPath, baselinePath } = seed(
+      {},
+      { ...SEEDED, statements: "88.1" },
+    );
+    const run = runGate(summaryPath, baselinePath);
+    expect(run.out).toContain("baseline 의 statements 이 수가 아니다");
+    expect(run.status).toBe(2);
+  });
+
+  // `--coverage.reporter=json-summary` 가 빠지면 파일 자체가 안 나오지만, 다른
+  // reporter 가 쓴 파일이 이 이름으로 있는 경우엔 `total` 이 없는 채로 읽힌다.
+  it("refuses a summary that carries no total", () => {
+    const { summaryPath, baselinePath } = writeTree(
+      { "src/lib/example.ts": totalFor(SEEDED, 10_000).statements },
+      SEEDED,
+    );
+    const run = runGate(summaryPath, baselinePath);
+    expect(run.out).toContain("coverage summary 에 total 이 없다");
+    expect(run.status).toBe(2);
+  });
+
+  it("refuses a summary whose metric has no pct", () => {
+    const total = totalFor(SEEDED, 10_000);
+    total.branches.pct = undefined;
+    const { summaryPath, baselinePath } = writeTree({ total }, SEEDED);
+    const run = runGate(summaryPath, baselinePath);
+    expect(run.out).toContain(
+      "coverage summary 의 branches.pct 가 수가 아니다",
+    );
+    expect(run.status).toBe(2);
+  });
+
   // 커밋된 baseline 자체가 게이트의 입력이다. 손으로 고치다 형식이 깨지면
   // 여기서 잡힌다 — CI 에서는 exit 2 로 red 지만 그때는 이미 push 뒤다.
   it("accepts the committed baseline and passes a run that matches it", () => {
@@ -174,11 +258,46 @@ describe("check-coverage-ratchet", () => {
     expect(run.status).toBe(0);
   });
 
-  // 스크립트가 통과해도 CI 가 안 부르면 아무것도 안 지킨다. 이 게이트가
-  // required lane 에 붙어 있다는 주장은 이 두 줄이 전부다.
-  it("is wired into the required Frontend Checks job", () => {
-    const ci = readFileSync(join(repoRoot, ".github/workflows/ci.yml"), "utf8");
-    expect(ci).toContain("--coverage.reporter=json-summary");
-    expect(ci).toContain(`node ${gate}`);
+  // 스크립트가 통과해도 CI 가 안 부르면 아무것도 안 지킨다. required 여부 자체는
+  // GitHub 라이브 상태라 repo 안에서 못 재지만, "어느 잡의 어느 스텝이 무슨 조건으로
+  // 도는가" 는 `ci.yml` 이 다 갖고 있다. 원문 문자열만 보면 `continue-on-error: true`
+  // 추가 · `if:` 추가 · 주석 처리 · 다른 잡으로 이동이 넷 다 green 을 유지한 채
+  // 게이트를 끈다 — 그래서 파싱해서 본다.
+  it("runs the gate unconditionally in Frontend Checks, after the step that writes its input", () => {
+    const workflow = parseYaml(
+      readFileSync(join(repoRoot, ".github/workflows/ci.yml"), "utf8"),
+    ) as {
+      jobs: Record<
+        string,
+        {
+          name?: string;
+          "continue-on-error"?: unknown;
+          steps?: Array<{
+            run?: string;
+            if?: unknown;
+            "continue-on-error"?: unknown;
+          }>;
+        }
+      >;
+    };
+    const job = Object.values(workflow.jobs).find(
+      (j) => j.name === "Frontend Checks",
+    );
+    expect(job, "no job is named `Frontend Checks`").toBeDefined();
+    // 잡 수준 `continue-on-error` 는 red 를 통째로 삼킨다.
+    expect(job?.["continue-on-error"]).toBeUndefined();
+
+    const steps = job?.steps ?? [];
+    const merge = steps.findIndex((s) =>
+      s.run?.includes("--coverage.reporter=json-summary"),
+    );
+    const ratchet = steps.findIndex((s) => s.run?.includes(`node ${gate}`));
+    expect(merge).toBeGreaterThanOrEqual(0);
+    // 게이트는 앞 스텝이 쓴 파일을 읽는다 — 순서가 뒤집히면 exit 2 다. 스텝이
+    // 통째로 사라지면 -1 이라 이 비교가 잡는다.
+    expect(ratchet).toBeGreaterThan(merge);
+    // 스텝 수준 modifier 둘은 잡을 green 으로 둔 채 게이트만 끈다.
+    expect(steps[ratchet]?.if).toBeUndefined();
+    expect(steps[ratchet]?.["continue-on-error"]).toBeUndefined();
   });
 });
