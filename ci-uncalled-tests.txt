@@ -1,0 +1,88 @@
+# ci-uncalled-tests.txt — CI 가 안 부르는 src-tauri 통합 테스트 binary 의 allowlist (issue #2113).
+#
+# `scripts/check-ci-test-calls.sh` 가 읽는다. src-tauri/tests 의 통합 테스트
+# target 중 .github/workflows 의 어떤 `--test` 도 안 부르는 것은 전부 여기 사유와
+# 함께 있어야 하고, 없으면 CI 의 `PR Body Contract` 가 red 다.
+#
+# 형식: 한 줄에 `<테스트 이름><공백><사유>`. `#` 로 시작하는 줄과 빈 줄은 무시하고,
+# 사유가 비면 위반이다. 정렬은 관례일 뿐 가드는 순서를 안 본다.
+#
+# ## 줄을 지워야 하는 때
+#
+# 이 파일은 줄어들기만 한다. 테스트를 workflow 의 `--test` 로 부르기 시작했거나
+# 파일을 지웠으면 여기 줄도 같은 PR 에서 지운다 — 둘 다 가드가 위반으로 잡는다.
+#
+# ## 사유 `seed-2113` 은 시딩분이다
+#
+# 아래 59 줄은 이 게이트가 생기기 전부터 미호출이던 전수다. 2026-08-05 에 base
+# 2b7deab4 에서 이 명령으로 뽑았다 (bash · zsh):
+#
+#   comm -23 <(ls -1 src-tauri/tests/*.rs | xargs -n1 basename | sed 's/\.rs$//' | sort) \
+#            <(git grep -ohE -e '--test +[a-z_0-9]+' -- .github/workflows/ \
+#              | awk '{print $2}' | sort -u)
+#
+# 각 줄을 "호출 편입" 과 "삭제" 중 무엇으로 닫을지 판정하는 것은 #2113 범위 밖이고
+# (오너 결정, 2026-08-03) 후속 이슈 몫이다. 그래서 seed 의 사유는 판정이 아니라
+# 출처다 — 남은 개수는 `grep -c ' seed-2113$' ci-uncalled-tests.txt` 로 센다
+# (헤더의 언급이 안 섞이도록 줄 끝으로 고정한 패턴이다).
+# 새로 추가하는 줄은 seed 가 아니므로 진짜 사유를 적어라.
+
+backend_adapter_contract_profile              seed-2113
+backend_query_result_contract                 seed-2113
+backend_safety_capability_contract            seed-2113
+cancel_error_classes                          seed-2113
+cancel_mongo                                  seed-2113
+cancel_mysql                                  seed-2113
+cancel_pg                                     seed-2113
+capability_allowlist_workspace_pattern        seed-2113
+catalog_explain_contract                      seed-2113
+clear_mru                                     seed-2113
+connection_status_serde                       seed-2113
+corrupt_body_recovery                         seed-2113
+corrupt_recovery                              seed-2113
+data_source_profile_parity                    seed-2113
+datagrid_prefs_field_reset                    seed-2113
+datagrid_prefs_get_default                    seed-2113
+datagrid_prefs_partial_patch                  seed-2113
+dual_write_connections                        seed-2113
+dual_write_reconcile                          seed-2113
+duckdb_browse_query_adapter                   seed-2113
+emit_state_changed_payload                    seed-2113
+enterprise_rdbms_declared_only_commands       seed-2113
+fixture_harness                               seed-2113
+guard_grep                                    seed-2113
+history_add_discriminated_union               seed-2113
+history_clear                                 seed-2113
+history_detail                                seed-2113
+history_executed_at_drift                     seed-2113
+history_list_filter                           seed-2113
+history_list_no_sql                           seed-2113
+history_retention_31d                         seed-2113
+history_tab_id_null_audit                     seed-2113
+introspection_pool_isolation                  seed-2113
+launcher_command_guard                        seed-2113
+legacy_file_cleanup                           seed-2113
+legacy_import                                 seed-2113
+mariadb_returning_runtime                     seed-2113
+migration_apply                               seed-2113
+migration_failure_preserves_db                seed-2113
+mismatch_metric                               seed-2113
+open_workspace_window_focus_event             seed-2113
+open_workspace_window_idempotent              seed-2113
+oracle_smoke_boundary_probe                   seed-2113
+persist_setting_state_changed_emit            seed-2113
+release_tab_connection_rollback               seed-2113
+reset_setting                                 seed-2113
+single_instance_2nd_launch                    seed-2113
+snapshot_atomic                               seed-2113
+snapshot_listener_buffer                      seed-2113
+snapshot_partial                              seed-2113
+snapshot_perf                                 seed-2113
+snapshot_shape                                seed-2113
+sql_redact                                    seed-2113
+sqlite_browse_query_adapter                   seed-2113
+sqlite_connection_command                     seed-2113
+tab_affinity_lazy                             seed-2113
+testcontainer_lifecycle_test                  seed-2113
+tls_verify_ca_fail_closed                     seed-2113
+workspace_sqlite_only                         seed-2113

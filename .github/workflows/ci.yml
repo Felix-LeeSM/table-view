@@ -114,6 +114,39 @@ jobs:
       - name: memory/ doc size cap
         run: bash scripts/check-memory-doc-size.sh
 
+      # A fourth contract rides here, for the same reason the second and third
+      # do (#2113). `--test` is an allowlist: an integration binary under
+      # src-tauri/tests that no workflow line names never runs, so a test
+      # written to turn CI red can sit green and gate nothing — the three
+      # `keyring_*` binaries did exactly that until #1815, and that was the
+      # third one-off addition of the same shape. At this PR's base
+      # (2b7deab4) 59 of the 76 targets were in that state, `guard_grep`,
+      # `sql_redact`, `launcher_command_guard`, `corrupt_recovery` and
+      # `snapshot_atomic` among them:
+      #
+      #   comm -23 <(ls -1 src-tauri/tests/*.rs | xargs -n1 basename | sed 's/\.rs$//' | sort) \
+      #            <(git grep -ohE -e '--test +[a-z_0-9]+' -- .github/workflows/ \
+      #              | awk '{print $2}' | sort -u) | wc -l
+      #
+      # The gate compares that difference against `ci-uncalled-tests.txt`,
+      # which carries those 59 with a reason each; a new uncalled binary that
+      # is not listed fails here. Draining the list — wiring each binary in or
+      # deleting it — is a follow-up issue, not this one (owner's call,
+      # 2026-08-03).
+      # It lands in this job rather than one of its own because a required
+      # context is registered in the `pr_to_main` ruleset, live GitHub state a
+      # PR cannot change, and a freshly registered context that has never
+      # reported pins every open PR at BLOCKED
+      # (memory/runbook/pr-merge-gates/memory.md). Riding an already-required
+      # context makes the comparison blocking the day this merges. The script
+      # needs no toolchain: 0.15s over 76 targets and 6 workflow files, median
+      # of 9 local runs of `/usr/bin/time -p bash scripts/check-ci-test-calls.sh`
+      # on macOS (the shell builtin `time` prints no `real` line under zsh, so
+      # the command is spelled with the binary). No runner measurement exists
+      # until this merges.
+      - name: src-tauri test binaries called or allowlisted
+        run: bash scripts/check-ci-test-calls.sh
+
   dependency-security:
     name: Dependency Security
     runs-on: ubuntu-latest

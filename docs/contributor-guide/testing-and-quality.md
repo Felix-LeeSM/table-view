@@ -180,7 +180,14 @@ Required local evidence:
   binaries stayed outside CI until #1815. Drop a line and the lane still exits 0
   with those crates' unit tests — or those binaries — unrun, the same reason CI
   wires them as separate steps (the `Rust Unit And Storage Tests` job in
-  `.github/workflows/ci.yml`).
+  `.github/workflows/ci.yml`). Since #2113 the difference is measured rather
+  than noticed one binary at a time: `scripts/check-ci-test-calls.sh` compares
+  every target under `src-tauri/tests` against the `--test` names in
+  `.github/workflows/**` and fails unless each uncalled one carries a reason in
+  `ci-uncalled-tests.txt`. It runs in the `PR Body Contract` job, so adding a
+  test binary without wiring it in is red. Seeding that file took 59 of the 76
+  targets, which is the size of the gap the guard freezes; closing those 59 is a
+  separate issue, and the file's header owns the reproduction command.
 - Docker integration lane: with required services available,
   `cargo test --manifest-path src-tauri/Cargo.toml --test schema_integration --test query_integration --test mongo_integration --test fixture_loading --test redis_integration`.
 - Documentation lane: `git diff --check` on the touched docs plus
