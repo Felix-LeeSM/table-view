@@ -120,8 +120,9 @@ tautological / assertion-roulette, testsmells.org).
 parity, redact/injection allowlist)면 유지 — 삭제 시 계약이 조용히 깨진다.
 
 **정리 규율(cleanup = refactor)**: 무의미 테스트 제거는 리팩터로 다룬다 —
-(a) 제거 라인이 다른 테스트로 이미 커버되어 `vite.config.ts` 의 coverage
-임계값이 유지되는지 확인(중립 제거) — ratchet 은 없고 고정 임계값이다, (b) 배치마다
+(a) 제거 라인이 다른 테스트로 이미 커버되어 커버리지가 안 내려가는지 확인(중립
+제거) — `vite.config.ts` 의 고정 바닥 위에 `coverage-baseline.json` 톱니가 있어서
+바닥이 멀쩡해도 실측치가 baseline 아래로 떨어지면 red 다, (b) 배치마다
 suite green, (c) 보안·데이터무결성 테스트(redact/injection/escape/crypto)는
 절대 얇게 만들지 않는다(P8), (d) 완전성/불변식 가드는 삭제가 아니라 behavioral
 재작성으로 대체(예: source-grep 라우팅 완전성 → 각 domain dispatch 실행 검증).
@@ -134,9 +135,10 @@ suite green, (c) 보안·데이터무결성 테스트(redact/injection/escape/cr
 - 단위: 같은 파일 하단 `#[cfg(test)] mod tests {}`. 통합: `src-tauri/tests/`.
 - 분기 매트릭스는 table-driven: `for (input, expected) in &[...] { ... }`.
 - `mockall` for trait, `#[tokio::test]` for async, `assert_matches!` for `Result::Err`.
-- 커버리지: frontend 전역 gate 는 `vite.config.ts` 의 statements 85 / lines 87 /
-  functions 87 / branches 78 하나뿐이다. Rust local target 은 sprint/contract 에
-  adapter/parser/command 위험도 기준으로 명시한다.
+- 커버리지: frontend 전역 gate 는 `vite.config.ts` 의 고정 바닥(statements 85 /
+  lines 87 / functions 87 / branches 78) 과 그 위의 `coverage-baseline.json` 톱니
+  (`scripts/check-coverage-ratchet.mjs`) 다. Rust local target 은 sprint/contract
+  에 adapter/parser/command 위험도 기준으로 명시한다.
 
 ### React component (vitest + RTL)
 - `userEvent` > `fireEvent` — 실제 키보드/포커스 시퀀스를 시뮬레이션.
