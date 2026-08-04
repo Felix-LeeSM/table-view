@@ -325,7 +325,26 @@ jobs:
             || { echo "expected 3 shard blobs, got $(ls .vitest-reports/blob-*.json | wc -l)"; exit 1; }
           pnpm exec vitest --mergeReports=.vitest-reports \
             --coverage \
-            --coverage.reporter=text-summary
+            --coverage.reporter=text-summary \
+            --coverage.reporter=json-summary
+
+      # #2126 — the step above enforces vite.config.ts's ABSOLUTE floors, which
+      # sit 2-3 percentage points under the measured total; coverage can leak
+      # that whole band without turning anything red. This step holds the band:
+      # `coverage-baseline.json` carries the measured value and the gate fails
+      # when the merged report drops below it. Its input is the
+      # `json-summary` reporter added to the merge command above — drop that
+      # flag and this exits 2, not 0.
+      # It rides `Frontend Checks` rather than a job of its own because a
+      # required context is registered in the `pr_to_main` ruleset, live GitHub
+      # state a PR cannot change, and a freshly registered context that has
+      # never reported pins every open PR at BLOCKED
+      # (memory/runbook/pr-merge-gates/memory.md). Of the required contexts this
+      # is the only one that measures frontend coverage, so the ratchet is
+      # blocking the day it merges. It reads a file the previous step already
+      # wrote: no toolchain, no extra suite run.
+      - name: Coverage ratchet
+        run: node scripts/check-coverage-ratchet.mjs
 
       - name: Build
         run: pnpm build
