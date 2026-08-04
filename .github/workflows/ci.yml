@@ -446,6 +446,80 @@ jobs:
       - name: Run mongosh-parser-core unit tests
         run: cargo test --manifest-path src-tauri/mongosh-parser-core/Cargo.toml --lib
 
+  # Advisory, and it stays advisory by construction (#2127, owner's call).
+  # Required contexts are listed in the `pr_to_main` ruleset — live GitHub state
+  # no PR can edit — so a job whose name is absent from that list cannot block a
+  # merge: an over-budget red here leaves `mergeStateStatus` at UNSTABLE, which
+  # still merges. memory/runbook/pr-merge-gates/memory.md owns that list;
+  # putting this name on it is what would make the budget blocking, and that is
+  # a separate decision, taken after the job has reported on main.
+  #
+  # Nothing in CI built the parser WASM before this job: pinned to this PR's
+  # base, `git grep -n wasm-pack a6032a14 -- .github/workflows` returns 0 hits.
+  # The gate this rebuilds (`git show 6cced3ab^:scripts/check-wasm-size.sh`,
+  # deleted by #2033) only measured the CHECKED-IN blob, so it graded whatever
+  # was last committed instead of what the PR's Rust source compiles to. This
+  # job builds first, then measures — which is why the build step is in scope.
+  #
+  # No `Swatinem/rust-cache` here on purpose. From an absent target dir the two
+  # crates build in 14.48s (sql) and 23.00s (mongo) locally — wasm-pack's own
+  # `Done in` line for each `wasm-pack build --target web --features wasm` — and
+  # rust-cache keys include the job name, so this job would open cache entries
+  # of its own that only main can save. Not worth the moving parts on an
+  # advisory job; add it if the cold build ever crowds the runner.
+  wasm-size:
+    name: WASM Size Budget (non-blocking)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.91.0
+          targets: wasm32-unknown-unknown
+
+      # Same pinned-prebuilt installer the integration job uses for
+      # cargo-llvm-cov/nextest, so no per-run source build lands here.
+      - name: Install wasm-pack
+        uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-pack@0.15.0
+
+      # pnpm and Node are here only to run the two `build:*-wasm` scripts, which
+      # own the wasm-pack flags (`--target web`, `--features wasm`, out-dir).
+      # Spelling wasm-pack out again in this file would fork those flags into a
+      # second copy that drifts. No `pnpm install`: neither script reads
+      # node_modules.
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 10.20.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22.14.0
+
+      # These write into the tracked `src/lib/**/wasm/` output dirs, which is
+      # exactly what the check below reads: on this ephemeral checkout the fresh
+      # build replaces the committed artifacts, so the measured bytes are the
+      # ones this PR's source produces. (Locally the same commands overwrite
+      # your checkout, including the comment-only `.gitignore` wasm-pack
+      # replaces with `*` — run the check alone to grade the committed blob.)
+      - name: Build parser WASM
+        run: |
+          pnpm run build:sql-wasm
+          pnpm run build:mongosh-wasm
+
+      # Budgets, their derivation and the reproduction commands live in the
+      # script's header, not here — one copy.
+      - name: Check WASM gzip size budgets
+        run: bash scripts/check-wasm-size.sh
+
   rust-static:
     name: Rust Static Analysis
     runs-on: ubuntu-latest
