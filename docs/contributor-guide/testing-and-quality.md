@@ -89,7 +89,6 @@ one-line notice instead of the log.
 | Right-click E2E | Add an alternate context-menu trigger or wait for tauri-driver W3C Actions support. |
 | E2E isolation | App-local state (`connections.json`, prefs, safe-mode flags) is emptied per session by `beforeSession` in `wdio.smoke.conf.ts` (`e2e/support/smoke-data-dir.ts`), so a `specFileRetries` retry no longer inherits the previous attempt's connections (#1836). Remaining: DB-server fixtures are still seeded once per spec-file run, not per retry. |
 | Masked E2E flakes | `wdio.smoke.conf.ts` sets `specFileRetries: 1`, so a first-attempt `no such window` crash is recovered in the same run and never shows in that run's pass/fail tally. No flake tally exists — nothing counts `no such window` or `RETRYING` markers; tracked in #1293. |
-| Link checker | Add an internal-doc link checker after archive routing settles. |
 | Dependency security | Track `hickory-proto` advisory exposure through `mongodb 3.6.0`, `rustls-pemfile` exposure through `oracle-rs 0.1.7`, and `quick-xml` DoS advisories (RUSTSEC-2026-0194/0195) through `plist 1.8.0`; remove deny ignores when upstream dependency updates make it possible. |
 
 ## Static Lint Gate
@@ -179,13 +178,16 @@ Required local evidence:
   `.github/workflows/ci.yml`).
 - Docker integration lane: with required services available,
   `cargo test --manifest-path src-tauri/Cargo.toml --test schema_integration --test query_integration --test mongo_integration --test fixture_loading --test redis_integration`.
-- Documentation lane: `git diff --check` on the touched docs plus local
-  link/target review. **No formatter covers docs markdown, on purpose.**
-  Prettier was removed when Biome landed, `biome.jsonc` excludes `docs/`
-  outright, and Biome 2.5.6 does not format markdown at all — so there is
-  nothing to run and this lane must not be written as if there were. Reviewer
-  judgement is the whole gate here; do not treat a docs-only change as
-  machine-verified.
+- Documentation lane: `git diff --check` on the touched docs plus
+  `pnpm docs:links`, which fails on an internal markdown link whose file or
+  heading does not exist and runs in CI inside the frontend test shards.
+  **No formatter covers docs markdown, on purpose.** Prettier was removed when
+  Biome landed, `biome.jsonc` excludes `docs/` outright, and Biome 2.5.6 does
+  not format markdown at all — so there is nothing to run and this lane must not
+  be written as if there were. Link targets are what this lane's machine checks
+  read out of the text; `git diff --check` warns about whitespace errors and
+  conflict markers, not meaning. Prose, structure, external URLs, and whether a
+  resolving link points at the right document remain reviewer judgement.
 
 Required remote evidence on the exact release SHA:
 
@@ -221,11 +223,14 @@ Required remote evidence on the exact release SHA:
 Deferred or non-blocking checks must stay explicit:
 
 - Theme contrast is advisory today.
-- Link checking, a11y beyond the critical component smoke set, perf budgets,
-  macOS/Windows desktop runtime smoke, and per-spec database fixture reset are
-  not routine release blockers unless a release issue explicitly promotes one of
-  them. (Rust llvm-cov integration cutoffs became a routine blocking check on
-  2026-07-03 — the CI `Integration Tests (Docker)` job enforces them.)
+- A11y beyond the critical component smoke set, perf budgets, macOS/Windows
+  desktop runtime smoke, and per-spec database fixture reset are not routine
+  release blockers unless a release issue explicitly promotes one of them. Two
+  entries have already left this list by being promoted: Rust llvm-cov
+  integration cutoffs on 2026-07-03, enforced by the CI
+  `Integration Tests (Docker)` job, and internal-doc link checking in #2125,
+  enforced by `scripts/__tests__/docs-links.test.ts` inside the frontend test
+  shards.
 - An E2E spec is CI evidence for the changes that select it and manual evidence
   otherwise. `e2e/scope-map.mjs` decides which specs a PR runs; the full suite
   runs on push to `main`, on the nightly schedule, and on `workflow_dispatch`.

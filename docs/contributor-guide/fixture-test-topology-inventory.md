@@ -3,7 +3,7 @@ title: Fixture And Test Topology Inventory
 type: refactor-evidence
 issue: 750
 closure_issue: 755
-updated: 2026-06-12
+updated: 2026-08-03
 ---
 
 # Fixture And Test Topology Inventory
@@ -34,7 +34,7 @@ Required inventory commands:
 
 | Command | Result |
 |---|---|
-| `rg --files fixtures tests/fixtures e2e/fixtures` | 26 tracked fixture-root paths. |
+| `rg --files fixtures tests/fixtures e2e/fixtures` | 31 tracked fixture-root paths, measured 2026-08-03. The #755 baseline was 23, not the 26 this row carried until then — the two supporting checks below measure both ends. |
 | `rg -n "FixtureHarness\|dbms-seeds\|seed\\." src-tauri tests e2e --glob '!src-tauri/target/**' --glob '!target/**' --glob '!node_modules/**'` | 71 tracked-source matches; cache and dependency hits are excluded from topology decisions by the repository topology SOT. |
 | `pnpm exec vitest run tests/fixtures/*.test.ts` | Fixture contract tests. |
 
@@ -42,7 +42,9 @@ Supporting checks:
 
 | Command | Result |
 |---|---|
-| `git ls-files fixtures tests/fixtures e2e/fixtures` | Same 26 tracked fixture-root paths. |
+| `git ls-files fixtures tests/fixtures e2e/fixtures` | Same 31 tracked fixture-root paths. |
+| `git ls-tree -r --name-only 6f3b7d52 -- fixtures tests/fixtures e2e/fixtures \| wc -l` | 23 at 6f3b7d52, the commit that made this page the #755 closure SOT. The 26 this row carried came from 46ca4799 (PR #2034, 2026-07-31), which measured that day's tree but left `updated:` at 2026-06-12 — so it read as a #755-era value and was never one. |
+| `git diff --name-status 6f3b7d52 -- fixtures tests/fixtures e2e/fixtures` | 9 added and 1 deleted (`e2e/fixtures/smoke-routing-decisions.json`) since the baseline, so 23 + 9 − 1 = 31. Net growth is 8; the count of new paths is 9. |
 | `git check-ignore -v fixtures tests/fixtures e2e/fixtures tests/fixtures/data-source-profile-parity.report.json` | No ignored tracked fixture roots reported. |
 | `rg -n "data-source-profile-parity\\.report\|PROFILE_PARITY_REPORT\|profile parity report\|reportVersion" . --glob '!src-tauri/target/**' --glob '!target/**' --glob '!node_modules/**'` | Report fixture is consumed by TS and Rust parity tests; no writer was found in the repo. |
 | `rg -n "writeFile\|writeFileSync\|fixture.*report\|report\\.json" src src-tauri tests package.json --glob '!src-tauri/target/**' --glob '!target/**' --glob '!node_modules/**'` | No `writeFile`/`writeFileSync` hit at all; the four matches are the parity report's own consumers and two unrelated Rust test names. Nothing in tracked source writes a fixture-root file. |
@@ -58,6 +60,15 @@ Supporting checks:
 
 ## Fixture Topology Table
 
+Rows cover 25 of the 31 tracked fixture-root paths. The other six landed after
+the #755 inventory and have no row yet:
+`e2e/fixtures/duckdb/file-analytics/sales.csv`,
+`e2e/fixtures/duckdb/schema-filter/seed.sql`, `e2e/fixtures/seed-paths.ts`,
+`tests/fixtures/classifier-parity.json`, and the
+`tests/fixtures/capability_claim_registry.ts` / `.test.ts` pair from #2122.
+Nothing checks this table against the enumeration above; re-running those two
+commands is what finds the gap.
+
 | fixture path | dbms/profile | lifecycle | consumed by tests | evidence tier | product docs row | smoke routing | action |
 |---|---|---|---|---|---|---|---|
 | `fixtures/base.yaml` | shared fixture generator schema for PostgreSQL, MongoDB, MySQL, SQLite, DuckDB, MariaDB, MSSQL, Oracle, Redis | authored static generator spec | nothing reads it | generator contract only; not product/runtime evidence | none | none | unread; keep pending an owning issue |
@@ -68,6 +79,9 @@ Supporting checks:
 | `tests/fixtures/fk_reference_samples.test.ts` | RDB FK reference loader test | authored Vitest loader test colocated with fixture | `pnpm exec vitest run tests/fixtures/fk_reference_samples.test.ts` when selected by frontend tests | fixture loader evidence | none | none | consumed; keep as test source |
 | `tests/fixtures/unsupported_boundary_contracts.json` | unsupported/partial-support support-boundary rows | authored static JSON fixture | `tests/fixtures/unsupported_boundary_contracts.test.ts` | negative support-boundary evidence only; not runtime support | known-limitations/query-language boundary rows | none | consumed; keep |
 | `tests/fixtures/unsupported_boundary_contracts.test.ts` | unsupported-boundary loader/contract test | authored Vitest contract test colocated with fixture | `pnpm exec vitest run tests/fixtures/unsupported_boundary_contracts.test.ts` | support-boundary guard | none | none | consumed; keep as test source |
+| `tests/fixtures/docs-links/dead-links.md` | none; the internal doc-link gate's seeded input | authored static markdown carrying one deliberately dead link per detected failure kind, plus the live links that must stay unreported | `scripts/__tests__/docs-links.test.ts`, which lifts the gate's own exclusion to scan it | detection evidence for the link gate; line numbers are pinned, so editing the file edits that test | none | none | consumed; keep as gate input, never as documentation |
+| `tests/fixtures/docs-links/target.md` | none; resolving target for the fixture above | authored static markdown with a repeated heading and an explicit `id=` anchor | `scripts/__tests__/docs-links.test.ts` | control evidence: GitHub's `-1` repeat suffix and the `id=` branch must resolve | none | none | consumed; keep |
+| `tests/fixtures/docs-links/nested/sample.txt` | none; non-markdown control for the fixture above | authored static text file inside a directory that exists | `scripts/__tests__/docs-links.test.ts` | control evidence: a fragment on the directory is an error, a `#L2` line range on a non-`.md` file is not | none | none | consumed; keep |
 | `e2e/fixtures/seed-smoke.ts` | PostgreSQL, MongoDB, MySQL, MariaDB, Redis, Valkey, Elasticsearch, OpenSearch, MSSQL, Oracle | authored smoke seed orchestrator | run by hand as `E2E_SPEC_KEY=<spec> tsx e2e/fixtures/seed-smoke.ts` | Runtime Happy Path seed routing for external-service smoke targets | `docs/product/current-support-snapshot.md` and `docs/product/fixture-coverage-snapshot.md` rows for the routed DBMSs; MSSQL/Oracle bounded runtime and #907 smoke rows | run before the specs; maps SQLite/DuckDB to no external seed | consumed; keep |
 | `e2e/fixtures/postgresql/query/seed.sql` | PostgreSQL | authored idempotent SQL seed | `e2e/fixtures/seed-smoke.ts` | wired Runtime Happy Path seed | PostgreSQL row; Fixture Coverage Snapshot PostgreSQL row | `postgres`, `postgres-safe-mode`, `postgres-explain`, `postgres-extension-completion`, `postgres-cancellation`, `postgres-structure-ddl` specs via seed target `postgres` | consumed; keep |
 | `e2e/fixtures/mysql/query/seed.sql` | MySQL | authored idempotent SQL seed | `e2e/fixtures/seed-smoke.ts` | wired Runtime Happy Path seed | MySQL row; Fixture Coverage Snapshot MySQL row | `mysql` spec via seed target `mysql` | consumed; keep |

@@ -1,0 +1,3 @@
+Two roles in one file: `nested/` is a directory that exists, so a link carrying
+a fragment to it is an "anchor on non-file target"; this file is not markdown,
+so `sample.txt#L2` is a line range and its fragment is not looked up.

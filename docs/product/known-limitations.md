@@ -108,9 +108,16 @@ smoke or measurement gates:
   focus filters, and diagram export. The React Flow + elkjs canvas ships without
   them; each is a separate follow-up issue. Dragged node positions are lost when
   the ERD tab is reopened.
-- There is no internal-doc link checking, and Node package audit is deferred.
-  Rust dependency security is covered by blocking PR/main `cargo deny check`;
-  runtime dependency upgrades remain separate PRs.
+- Node package audit is deferred. Internal-doc link checking is not: a blocking
+  frontend test (`scripts/docs-links.ts`) fails a PR whose markdown points at a
+  file or heading that does not exist. What it still leaves open is external
+  URLs, which are never fetched; frozen history under `docs/archives`, which is
+  excluded from the scan; dead pointers inside frozen ADR bodies, which the
+  checker carries in a named allowlist instead of repairing, so a live page can
+  hold one; and an anchor that resolves under only one of the two heading-slug
+  conventions in circulation, which is not reported. Rust dependency security is
+  covered by blocking PR/main `cargo deny check`; runtime dependency upgrades
+  remain separate PRs.
 - Broader E2E fixture reset coverage. Current runtime smoke separates app data
   directories from external DB resets and resets the matching fixture before
   each wired spec. That does not add Cassandra, DynamoDB, graph, vector, stream,
