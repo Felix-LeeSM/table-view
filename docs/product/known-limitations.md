@@ -50,6 +50,34 @@ smoke or measurement gates:
   `src/components/datagrid/DataGridTable.selection-contrast.test.tsx`. That is a
   separation floor between the fill and its own row background, not a WCAG
   criterion, and it covers no other pairing.
+- Monochrome themes trade colour-carried emphasis for their look. `supply` and
+  `henry` (#2117) spend a handful of tones across the whole palette, so two
+  semantic tokens land on the same value. Where that would make one *state* read
+  as another state, it is a defect and is gated —
+  `src/themes.color-channel.test.ts` holds the query log's succeeded / cancelled
+  / failed dots apart in every theme and mode, because those three dots are one
+  shape with no label. Where it only costs emphasis, it is accepted, because the
+  information is still on screen as text:
+  - `text-success` is the body-text colour in `supply` light/dark and `henry`
+    light/dark (`--tv-status-connected` == `--tv-foreground`, ΔE 0), so a
+    success line reads as ordinary prose.
+  - The slow-query nudge (`src/components/query/QueryRunningState.tsx`) stops
+    standing out in `supply` light/dark and `henry` light (`--tv-status-connecting`
+    == `--tv-muted-foreground`, ΔE 0; `henry` dark ΔE 7.5). The elapsed seconds
+    tick on screen either way, which is the signal the colour was emphasising.
+  - Reproduce both, and every other pair, per theme and mode:
+    `pnpm vitest run src/themes.color-channel.test.ts` and the ΔE table in that
+    file's header.
+- Predates #2117 and still open: `--tv-highlight` equals `--tv-primary` in seven
+  pre-existing blocks (`voltagent dark` at ΔE 0), and #2117's `henry` adds two
+  more. The document grids signal "this cell has an unsaved edit" with only
+  `bg-highlight/20` or `ring-1 ring-highlight`
+  (`src/components/document/DocumentDataGrid/cellRenderers/DocumentGridRows.tsx`,
+  `src/components/query/EditableQueryResultGrid.tsx`), so in those blocks the
+  ring against a `bg-primary` fill disappears. The RDB grid does not have this
+  problem — #1139 gave it an `sr-only` label and a `●` glyph
+  (`src/components/datagrid/DataGridTable/DataRow.tsx`). Porting that second
+  channel to the two document grids is untaken work.
 - SchemaTree 1k/10k table scroll FPS remains ungated. Current evidence is
   deterministic component fixtures plus advisory render p50/p95/env and
   virtualization DOM bounds only. SchemaTree now virtualizes by visible-row

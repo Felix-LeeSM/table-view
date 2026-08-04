@@ -3867,7 +3867,17 @@
     "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
 }
 
-/* === 099 SUPPLY — gallery wall neutral === */
+/* === 099 SUPPLY — gallery wall neutral ===
+ * One token diverges from the prototype, for the same reason `henry` below
+ * diverges: `--tv-destructive` is left to the universal red instead of the
+ * prototype's Ink/Paper. This codebase paints the query log's succeeded /
+ * cancelled / failed dots as three identical `rounded-full` spans with no
+ * label, so `--tv-destructive` landing on the same value as
+ * `--tv-status-connected` turns a failed query into a successful one. The
+ * light block's `#000000` was a near miss of the same kind, one ΔE 4.7 from
+ * its `#101010` neighbour. `src/themes.color-channel.test.ts` measures the
+ * separation in every block; `--tv-status-*` and the rest of the palette stay
+ * monochrome. */
 [data-theme="supply"][data-mode="light"] {
   --tv-background: #ffffff;
   --tv-foreground: #101010;
@@ -3891,7 +3901,6 @@
   --tv-status-connecting: #555555;
   --tv-status-error: #000000;
   --tv-status-idle: #c8c8c8;
-  --tv-destructive: #000000;
 }
 [data-theme="supply"][data-mode="dark"] {
   --tv-background: #101010;
@@ -3916,8 +3925,6 @@
   --tv-status-connecting: #999999;
   --tv-status-error: #000000;
   --tv-status-idle: #555555;
-  --tv-destructive: #ffffff;
-  --tv-destructive-foreground: #101010;
 }
 
 /* === Henry — gothic broadside mono ===
@@ -4185,21 +4192,30 @@
  * Common tokens — the default every [data-theme] inherits, with the
  * dark-mode override below carrying only what actually differs.
  * "Default", not "invariant": a theme block may override any of these,
- * and the refero 9 (#2117) are the first that do — --tv-radius,
- * --tv-font-sans, --tv-font-mono, --tv-destructive,
- * --tv-destructive-foreground, --tv-highlight. The --tv-env-* six and
- * the --tv-success / --tv-warning pairs are the ones no theme block
- * touches; the sweeps in `src/components/ui/ExecuteButton.test.tsx`
- * resolve this cascade rather than trusting the block alone.
+ * and the refero 9 (#2117) are the first that do — as of that PR the
+ * overridden ones are --tv-radius, --tv-font-sans, --tv-font-mono,
+ * --tv-highlight and --tv-destructive-foreground. Re-derive that list
+ * instead of trusting this line, which the next theme rots:
+ *   grep -c -- '--tv-<token>:' src/themes.css
+ * (1 or 2 hits = declared only in the two common blocks below; more =
+ * some theme block overrides it.) The sweeps in
+ * `src/components/ui/ExecuteButton.test.tsx` and
+ * `src/themes.color-channel.test.ts` resolve this cascade rather than
+ * trusting a block alone.
  * ============================================================ */
 :root {
   --tv-destructive: #ef4444;
   --tv-destructive-foreground: #ffffff;
-  /* Sprint 256 (ADR 0023, AC-256-05) — common `--tv-success` for the
-   * ExecuteButton WARN + dev|null|local|testing|development cell. Alias
-   * to `--tv-status-connected` so light/dark mode still inherits the
-   * theme's green; redeclared at the `:root` level so all 81 themes
-   * resolve the same token uniformly without per-theme overrides. */
+  /* Sprint 256 (ADR 0023, AC-256-05) — `--tv-success` for the
+   * ExecuteButton WARN + dev|null|local|testing|development cell. A
+   * literal at the common layer, not an alias: no theme block overrides
+   * it, so the cell resolves the same in every block. Not to be confused
+   * with `--color-success` in `src/index.css`, which is what `bg-success`
+   * / `text-success` read and which does alias `--tv-status-connected` —
+   * a token every theme block sets for itself, the monochrome ones
+   * included. That indirection is why a theme with a white
+   * `--tv-status-connected` could paint a "succeeded" dot white while
+   * this cell stayed green. */
   --tv-success: #16a34a;
   --tv-success-foreground: #ffffff;
   --tv-warning-foreground: #ffffff;
@@ -4210,8 +4226,9 @@
    * from "warning/staging"; a theme may substitute its own palette tone
    * for that state, and #2117 added the first ones that do. What holds
    * without exception is the other direction — `--tv-warning` never goes
-   * back to amber. `src/themes.test.ts` asserts both, and carries the
-   * command that counts the amber blocks. */
+   * back to amber. `src/themes.test.ts` asserts both: the substituting
+   * themes by name (a count-based floor let most of the catalog drop
+   * amber and stay green), and the never-amber direction outright. */
   --tv-warning: #ea580c;
   /* Sprint 253 (ADR 0023, AC-253-01) — environment-specific tokens for
    * the upcoming Chrome H stripe (Sprint 256) + ConfirmDestructiveDialog
@@ -4236,15 +4253,20 @@
   --tv-destructive: #f87171;
   --tv-success: #22c55e;
   --tv-highlight: #facc15;
-  /* Lighten warning for dark backgrounds (orange-600 #ea580c ≈ 4.2:1 on dark
-   * — borderline for small text). Most usage is a `text-warning` /
-   * `border-warning` / `bg-warning/N` wash, where lightening only helps.
-   * The one solid fill under white text is `ExecuteButton`'s staging cell,
-   * which this value leaves at the catalog's lowest label ratio — measured,
-   * with its floor, in `src/components/ui/ExecuteButton.test.tsx`. Note the
-   * `text-warning` family does not read this token at all: `--color-warning`
-   * aliases `--tv-status-connecting` (`src/index.css`). Stays in the orange
-   * family and #f59e0b amber is never reintroduced. */
+  /* Sprint 253 lightened warning for dark backgrounds, reasoning that
+   * orange-600 #ea580c was borderline for small text there. That reasoning
+   * does not survive a look at who reads the token: the
+   * `text-warning` family does not: `--color-warning` aliases
+   * `--tv-status-connecting` (`src/index.css`). The only consumer is
+   * `ExecuteButton`'s staging fill, solid under white —
+   *   git grep -n -- 'var(--tv-warning' -- src/
+   * — and there, lightening costs contrast instead of buying it: #ea580c
+   * under #ffffff measures 3.560:1 and #fb923c measures 2.263:1, the lowest
+   * label ratio in the catalog and the case that sets the floor printed by
+   * `src/components/ui/ExecuteButton.test.tsx`. Left as shipped: the value is
+   * older than #2117 and applies to all 162 blocks, so moving it is its own
+   * decision, not a theme-import side effect. Stays in the orange family and
+   * #f59e0b amber is never reintroduced. */
   --tv-warning: #fb923c;
 }
 /* ============================================================

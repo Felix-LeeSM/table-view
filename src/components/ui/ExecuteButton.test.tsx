@@ -20,7 +20,12 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { THEME_CATALOG } from "@/lib/themeCatalog";
+import {
+  assertSweepIsComplete,
+  contrastRatio,
+  themeBlocks,
+  toRgb,
+} from "@/test-utils/themePalettes";
 import ExecuteButton from "./ExecuteButton";
 
 describe("ExecuteButton", () => {
@@ -279,91 +284,10 @@ function cellsFromDom(): { key: string; fill: string; fg: string }[] {
   });
 }
 
-type Rgb = [number, number, number];
-
-function toRgb(hex: string): Rgb {
-  const h =
-    hex.length === 4
-      ? `#${hex[1]}${hex[1]}${hex[2]}${hex[2]}${hex[3]}${hex[3]}`
-      : hex;
-  return [1, 3, 5].map((i) => Number.parseInt(h.slice(i, i + 2), 16)) as Rgb;
-}
-
-/** WCAG 2.x relative luminance. */
-function luminance([r, g, b]: Rgb): number {
-  const [rs, gs, bs] = [r, g, b].map((c) => {
-    const s = c / 255;
-    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
-  }) as Rgb;
-  return 0.2126 * rs + 0.7152 * gs + 0.0722 * bs;
-}
-
-function contrast(a: string, b: string): number {
-  const [hi, lo] = [luminance(toRgb(a)), luminance(toRgb(b))].sort(
-    (x, y) => y - x,
-  ) as [number, number];
-  return (hi + 0.05) / (lo + 0.05);
-}
-
-function declarations(body: string): Map<string, string> {
-  const out = new Map<string, string>();
-  for (const m of body.matchAll(
-    /--tv-([a-z0-9-]+):\s*(#[0-9a-fA-F]{3,8})\b/g,
-  )) {
-    out.set(m[1]!, m[2]!);
-  }
-  return out;
-}
-
-interface Block {
-  /** `henry dark`, … — used in failure messages. */
-  name: string;
-  /** Token value as the cascade resolves it for this theme and mode. */
-  resolve: (token: string) => string | undefined;
-}
-
-/**
- * Every `[data-theme][data-mode]` block, each with the cascade that decides
- * what its tokens resolve to.
- *
- * A theme block declares only what it overrides, so measuring the block alone
- * would report "not set" for the very tokens this test is about. The layers,
- * lowest first: `:root`, then the top-level `[data-mode="dark"]` block for dark
- * blocks, then the theme block. `src/themes.css` holds two `[data-mode="dark"]`
- * blocks — one near the top carrying only `color-scheme` — so both are merged
- * rather than taking the first match. `src/index.css` declares none of these
- * tokens, only the `--color-*` aliases that read them.
- *
- * `--tv-background` is what selects the UI block: each theme and mode also
- * emits a second block carrying only `--tv-syntax-*`.
- */
-function blocks(): Block[] {
-  const css = readFileSync(
-    resolve(__dirname, "../..", "themes.css"),
-    "utf8",
-  ).replace(/\/\*[\s\S]*?\*\//g, "");
-  const layer = (re: RegExp) =>
-    new Map(
-      [...css.matchAll(re)].flatMap((m) => [...declarations(m[1]!).entries()]),
-    );
-  const root = layer(/(?:^|\n):root\s*\{([^}]*)\}/g);
-  const darkBase = layer(/(?:^|\n)\[data-mode="dark"\]\s*\{([^}]*)\}/g);
-
-  const out: Block[] = [];
-  for (const m of css.matchAll(
-    /\[data-theme="([^"]+)"\]\[data-mode="(light|dark)"\]\s*\{([^}]*)\}/g,
-  )) {
-    const own = declarations(m[3]!);
-    if (!own.has("background")) continue;
-    const dark = m[2] === "dark";
-    out.push({
-      name: `${m[1]} ${m[2]}`,
-      resolve: (t) =>
-        own.get(t) ?? (dark ? darkBase.get(t) : undefined) ?? root.get(t),
-    });
-  }
-  return out;
-}
+// The colour math and the block cascade live in `src/test-utils/themePalettes.ts`
+// — this file used to carry its own copy, and the copy had drifted into
+// accepting hex values `toRgb` could not expand. That header explains what the
+// shared version refuses to do silently.
 
 // Not a WCAG criterion: this catalog does not clear AA for these fills — the
 // dark-mode `--tv-warning` orange under white text is its floor case, and
@@ -376,12 +300,19 @@ function blocks(): Block[] {
 const MIN_LABEL_RATIO = 2.0;
 
 describe("ExecuteButton severity x env across every theme (ADR 0023 (d))", () => {
-  const all = blocks();
+  const all = themeBlocks(
+    readFileSync(resolve(__dirname, "../..", "themes.css"), "utf8"),
+  );
   const cells = cellsFromDom();
 
   it("sweeps every theme and mode block in src/themes.css", () => {
-    // A regex that quietly stops matching would turn both assertions green.
-    expect(all.length).toBe(THEME_CATALOG.length * 2);
+    // A regex that quietly stops matching would turn every assertion below
+    // green. Names, not a count: this used to compare `all.length` against
+    // `THEME_CATALOG.length * 2`, which is satisfied by any 162 blocks —
+    // including 162 wrong ones.
+    expect(() => {
+      assertSweepIsComplete(all.map((b) => b.name));
+    }).not.toThrow();
   });
 
   it("the label stays readable on its fill in every theme and mode", () => {
@@ -396,7 +327,7 @@ describe("ExecuteButton severity x env across every theme (ADR 0023 (d))", () =>
           failures.push(`${block.name} ${key}=unresolved(${fill}/${fg})`);
           continue;
         }
-        const ratio = contrast(bg, text);
+        const ratio = contrastRatio(toRgb(bg), toRgb(text));
         if (ratio <= MIN_LABEL_RATIO)
           failures.push(`${block.name} ${key}=${ratio.toFixed(3)}`);
       }
@@ -410,7 +341,13 @@ describe("ExecuteButton severity x env across every theme (ADR 0023 (d))", () =>
   // distinct fills by construction (danger and production share one), so any
   // block collapsing them below three has dropped a cell.
   it("keeps the matrix fills distinct in every theme and mode", () => {
-    const distinct = new Set(cells.map((c) => c.fill)).size;
+    // Pinned, not derived from `cells`: `new Set(cells.map(c => c.fill)).size`
+    // moves with `CELLS`, so deleting a matrix cell would lower the bar it is
+    // being checked against and stay green. 4 cells over 3 fills is ADR 0023
+    // (d) itself — WARN+dev, WARN+staging, and the destructive pair.
+    expect(CELLS).toHaveLength(4);
+    const distinct = 3;
+    expect(new Set(cells.map((c) => c.fill)).size).toBe(distinct);
     const collapsed = all
       .map((b) => ({
         name: b.name,

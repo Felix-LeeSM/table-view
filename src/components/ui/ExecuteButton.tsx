@@ -12,11 +12,14 @@
  *   - `<ConfirmDestructiveDialog>`    (footer Confirm / Execute)
  *
  *   severity × environment matrix — the cells are named by token, not by
- *   colour word: a theme may repaint any of the three, and the supply
- *   theme (#2117) does exactly that with a monochrome `--tv-destructive`.
- *   What the matrix guarantees is that the three resolve to three
- *   different colours in every theme, and that each stays legible under
- *   its own `-foreground` — both swept in `ExecuteButton.test.tsx`.
+ *   colour word, because what a token resolves to is the theme's call
+ *   (`lattice` dark repaints `--tv-destructive-foreground`, #2117).
+ *   What the matrix guarantees is that the three fills resolve to three
+ *   different colours in every theme and mode, and that each label clears
+ *   a separation floor over its own fill — both swept in
+ *   `ExecuteButton.test.tsx`. That floor is NOT WCAG AA: this catalog
+ *   does not clear AA for these fills, and the sweep says so and prints
+ *   the measured minimum on failure.
  *     WARN + dev|null|local|testing|development  → `--tv-success`
  *     WARN + staging                              → `--tv-warning`
  *     WARN + production                           → `--tv-destructive`

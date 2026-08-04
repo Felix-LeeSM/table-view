@@ -270,7 +270,7 @@ function DataRow({
       typeof cell === "object";
     const isExpandedHere = isNestedCapable && expandedCol === dIdx;
     // Count nested pending edits on this cell so we can flag it
-    // with the same amber highlight a top-level pending uses.
+    // with the same `--tv-highlight` wash a top-level pending uses.
     let nestedPendingCount = 0;
     // Issue #1174 — nested edits anchor under the base cell key, so the
     // same row-identity gate applies before counting them.

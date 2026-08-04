@@ -11,7 +11,8 @@
 // inheritance 를 신뢰성 있게 풀지 않는다 (jsdom 의 CSS engine 이
 // custom property cascade 를 부분만 구현). 토큰 정의는 css 파일에
 // 들어 있는 *문자열* 자체가 contract 이므로, regex 매칭으로 정의
-// 존재 + 값 정확성 + status-connecting amber 보존을 동시에 단언한다.
+// 존재 + 값 정확성 + `--tv-status-connecting` 의 amber 기본값을 갈아
+// 끼운 theme 이 어느 것인지를 단언한다.
 //
 // 왜 fs.readFileSync (`require` 우회) 인가: Vite 6 의 css 플러그인은
 // `import x from "*.css?raw"` 와 `import.meta.glob("*.css", {query:"?raw"})`
@@ -73,15 +74,37 @@ describe("themes.css — Sprint 253 token foundation (AC-253-01, AC-253-02)", ()
     expect(themes).toMatch(/--tv-warning:\s*#ea580c/);
   });
 
-  // AC-253-02 — `--tv-status-connecting` 은 amber `#f59e0b` 그대로 보존.
+  // AC-253-02 — amber `#f59e0b` 가 `--tv-status-connecting` 의 기본값이다.
   // "connecting" 의미와 "warning/staging" 의미를 시각적으로 분리한다.
-  it("keeps --tv-status-connecting amber (#f59e0b) across the theme blocks", () => {
-    // 바닥값 72 는 "amber 가 통째로 사라지지 않았다" 를 보는 하한이지 전수가
-    // 아니다. refero 9종(#2117) 중 유채색을 아예 안 쓰는 supply·henry 와, 자기
-    // 팔레트 톤으로 갈아 끼운 authkit·lattice·ease 는 amber 를 쓰지 않는다.
-    // 현재 건수: grep -c -- '--tv-status-connecting: #f59e0b' src/themes.css
-    const matches = themes.match(/--tv-status-connecting:\s*#f59e0b/g) ?? [];
-    expect(matches.length).toBeGreaterThanOrEqual(72);
+  //
+  // 갈아 끼운 theme 을 **이름으로** 단언한다. 개수 하한(직전 판: 실측 152 에
+  // 바닥 72)은 80블록이 amber 를 잃어도 green 이라 "기본값" 을 지키지 못했다.
+  // 이름 집합은 amber theme 이 새로 늘어도 안 흔들리고, 갈아 끼우는 theme 이
+  // 늘면 그때만 이 줄을 같이 고치게 만든다.
+  it("keeps amber (#f59e0b) the --tv-status-connecting default outside the themes that substitute their own tone", () => {
+    // #2117 이 들여온 refero 9종 중 유채색을 안 쓰는 supply·henry 와 자기
+    // 팔레트 톤을 쓰는 authkit·lattice·ease. 나머지 전 블록은 amber 다.
+    const SUBSTITUTES = ["authkit", "ease", "henry", "lattice", "supply"];
+    const substituting = new Set<string>();
+    let uiBlocks = 0;
+    let amber = 0;
+    for (const m of themes
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .matchAll(
+        /\[data-theme="([^"]+)"\]\[data-mode="(?:light|dark)"\]\s*\{([^}]*)\}/g,
+      )) {
+      const body = m[2] ?? "";
+      // syntax-only 블록은 `--tv-background` 가 없다 (ADR 0031 의 2블록 분할).
+      if (!/--tv-background:/.test(body)) continue;
+      uiBlocks += 1;
+      // 선언 누락은 skip 이 아니라 substitute 로 센다 — 조용한 skip 은 안 잰
+      // 블록을 "통과" 로 보고하는 경로다.
+      if (/--tv-status-connecting:\s*#f59e0b\b/.test(body)) amber += 1;
+      else substituting.add(m[1] ?? "");
+    }
+    expect([...substituting].sort()).toEqual(SUBSTITUTES);
+    // 세는 명령: grep -c -- '--tv-status-connecting: #f59e0b' src/themes.css
+    expect(amber).toBe(uiBlocks - SUBSTITUTES.length * 2);
   });
 
   // 회귀 가드 — `--tv-warning` 이 다시 amber 로 회귀하지 않도록.

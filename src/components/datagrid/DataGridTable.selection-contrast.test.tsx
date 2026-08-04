@@ -34,7 +34,13 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { render } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { THEME_CATALOG } from "@/lib/themeCatalog";
+import {
+  assertSweepIsComplete,
+  composite,
+  contrastRatio,
+  declarations,
+  toRgb,
+} from "@/test-utils/themePalettes";
 import type { TableData } from "@/types/schema";
 import DataGridTable from "./DataGridTable";
 import { SELECTED_ROW_FILL } from "./rowState";
@@ -128,16 +134,6 @@ interface Palette {
 
 const CSS_DIR = resolve(__dirname, "../..");
 
-function tokensOf(body: string): Map<string, string> {
-  const out = new Map<string, string>();
-  for (const m of body.matchAll(
-    /--tv-([a-z0-9-]+):\s*(#[0-9a-fA-F]{3,6})\b/g,
-  )) {
-    out.set(m[1]!, m[2]!);
-  }
-  return out;
-}
-
 /**
  * Every palette the app can render a row against.
  *
@@ -155,7 +151,7 @@ function palettes(): Palette[] {
   for (const m of themes.matchAll(
     /\[data-theme="([^"]+)"\]\[data-mode="(light|dark)"\]\s*\{([^}]*)\}/g,
   )) {
-    const tokens = tokensOf(m[3]!);
+    const tokens = declarations(m[3]!);
     if (!tokens.has("background")) continue;
     out.push({ name: `${m[1]} ${m[2]}`, tokens });
   }
@@ -165,92 +161,21 @@ function palettes(): Palette[] {
       new RegExp(`:where\\(:root\\[data-mode="${mode}"\\]\\)\\s*\\{([^}]*)\\}`),
     );
     if (!block) throw new Error(`no ${mode} fallback block in src/index.css`);
-    out.push({ name: `(fallback) ${mode}`, tokens: tokensOf(block[1]!) });
+    out.push({ name: `(fallback) ${mode}`, tokens: declarations(block[1]!) });
   }
 
-  assertSweepIsComplete(out);
-  return out;
-}
-
-/**
- * The sweep is only evidence if it really covers the file. A regex that quietly
- * stops matching, or a `--tv-background` filter that drops a real theme, would
- * turn every assertion below green.
- *
- * The anchor is therefore `THEME_CATALOG` — the list the theme picker renders,
- * which is not CSS and cannot break in the same edit. Round 2 anchored on a
- * second regex over the same file instead, and that regex was a PREFIX of the
- * sweep's: changing the selector shape (swapping the two attributes, say) sent
- * both to zero at once, leaving `expected` = 2 and `found` = 2 (the `index.css`
- * fallbacks) — green while measuring 2 palettes instead of 164.
- *
- * Names, not just the count: a theme in the catalog with no block in
- * `themes.css` is unmeasured, and a block with no catalog entry is unreachable
- * from the picker. Both are reported.
- */
-function assertSweepIsComplete(covered: Palette[]): void {
-  const swept = new Set(
-    covered
-      .filter((p) => !p.name.startsWith("(fallback) "))
-      .map((p) => p.name.replace(/ (light|dark)$/, "")),
+  // The two `index.css` fallbacks are not catalog themes, so they are counted
+  // rather than name-matched. Round 2 of PR #2115 anchored the completeness
+  // check on a second regex over the same file, and that regex was a PREFIX of
+  // the sweep's: changing the selector shape sent both to zero at once, leaving
+  // `expected` = 2 and `found` = 2 — green while measuring 2 palettes instead
+  // of 164. The shared helper anchors on `THEME_CATALOG` instead, which is not
+  // CSS and cannot break in the same edit.
+  assertSweepIsComplete(
+    out.filter((p) => !p.name.startsWith("(fallback) ")).map((p) => p.name),
+    2,
   );
-  const catalog = new Set<string>(THEME_CATALOG.map((t) => t.id));
-  const missing = [...catalog].filter((id) => !swept.has(id));
-  const extra = [...swept].filter((id) => !catalog.has(id));
-  const expected = catalog.size * 2 + 2;
-  if (missing.length > 0 || extra.length > 0 || covered.length !== expected) {
-    throw new Error(
-      `palette sweep covers ${covered.length} blocks over ${swept.size} themes; ` +
-        `THEME_CATALOG lists ${catalog.size} (expected ${expected} blocks). ` +
-        `Missing from src/themes.css: [${missing.join(", ")}]. ` +
-        `Not in THEME_CATALOG: [${extra.join(", ")}].`,
-    );
-  }
-}
-
-function toRgb(hex: string): [number, number, number] {
-  const h =
-    hex.length === 4
-      ? `#${hex[1]}${hex[1]}${hex[2]}${hex[2]}${hex[3]}${hex[3]}`
-      : hex;
-  return [1, 3, 5].map((i) => Number.parseInt(h.slice(i, i + 2), 16)) as [
-    number,
-    number,
-    number,
-  ];
-}
-
-/** Source-over composite of `fg` at `alpha` onto opaque `bg`. */
-function composite(
-  fg: [number, number, number],
-  alpha: number,
-  bg: [number, number, number],
-): [number, number, number] {
-  return fg.map((c, i) => c * alpha + bg[i]! * (1 - alpha)) as [
-    number,
-    number,
-    number,
-  ];
-}
-
-/** WCAG 2.x relative luminance. */
-function luminance([r, g, b]: [number, number, number]): number {
-  const [rs, gs, bs] = [r, g, b].map((c) => {
-    const s = c / 255;
-    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
-  }) as [number, number, number];
-  return 0.2126 * rs + 0.7152 * gs + 0.0722 * bs;
-}
-
-function contrast(
-  a: [number, number, number],
-  b: [number, number, number],
-): number {
-  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x) as [
-    number,
-    number,
-  ];
-  return (hi + 0.05) / (lo + 0.05);
+  return out;
 }
 
 /**
@@ -264,7 +189,7 @@ function tintRatio(p: Palette, token: string, alpha: number): number {
   const tint = p.tokens.get(token);
   if (!tint) throw new Error(`${p.name}: no --tv-${token}`);
   const bg = toRgb(background);
-  return contrast(composite(toRgb(tint), alpha, bg), bg);
+  return contrastRatio(composite(toRgb(tint), alpha, bg), bg);
 }
 
 // See the header: a separation floor, not a WCAG criterion. Both bounds that
