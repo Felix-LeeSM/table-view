@@ -126,17 +126,29 @@ parity remain separate promotion gates.
 
 SQLite user-DBMS files support absolute-path connection, create-new-file,
 browsing, read queries, writable-file DML, transactional DML batch/dry-run,
-cancellation, read-only mode, primary-key-scoped row edits, and bounded
-structured table creation for writable files. The user DBMS file is explicitly
-separated from internal app SQLite state. GitHub Runtime Happy Path now wires a
-SQLite desktop smoke for file create/open, table browse, read query, writable
-DML, row edit, structured table creation with schema refresh proof, read-only
-write rejection, and internal app-state DB rejection. Raw SQL DDL execution
-remains rejected by the query adapter, and broader structured DDL parity is not
-implemented: unsupported `ALTER TABLE` rebuilds, table/index removal or rename,
-index creation, standalone constraint changes, nested JSON edits, sqlite-cli
-execution, and JSON1/FTS/RTREE/loadable-extension semantics remain separate
-gates. Read-only file connections reject writes and table creation.
+cancellation, read-only mode, primary-key-scoped row edits, and the structured
+DDL SQLite runs natively on a writable file: `CREATE TABLE`, `DROP TABLE`,
+`ALTER TABLE … RENAME TO`, `ADD COLUMN`, `DROP COLUMN`, `CREATE INDEX` and
+`DROP INDEX`. The user DBMS file is explicitly separated from internal app
+SQLite state. GitHub Runtime Happy Path now wires a SQLite desktop smoke for
+file create/open, table browse, read query, writable DML, row edit, structured
+table creation with schema refresh proof, read-only write rejection, and
+internal app-state DB rejection.
+
+Changes SQLite cannot make without rewriting the whole table are the boundary
+and stay unimplemented: a column's type, NOT NULL or DEFAULT, and adding or
+dropping a constraint after `CREATE TABLE`. SQLite fixes both when the table is
+created, so changing one means a 12-step rebuild — a data-loss path this app
+deliberately does not run. The Structure UI withholds those two controls and
+names the reason on screen instead of failing on click. `ADD COLUMN` and
+`DROP COLUMN` also carry SQLite's own conditions (a NOT NULL column with no
+default on a non-empty table, a non-constant default, or dropping a column a
+PRIMARY KEY / UNIQUE / index / view / trigger depends on); those are reported
+after the attempt with the blocking object named, because the same statement
+succeeds or fails depending on the rows present. Raw SQL DDL execution remains
+rejected by the query adapter, and nested JSON edits, sqlite-cli execution, and
+JSON1/FTS/RTREE/loadable-extension semantics remain separate gates. Read-only
+file connections reject writes and every structured DDL entry point.
 
 ### DuckDB
 

@@ -154,6 +154,27 @@ export interface DataSourceCapabilities {
      */
     readonly identityColumn: boolean;
     /**
+     * Issue #1804 — split out of `alterTable`: whether the adapter can change
+     * an existing column's definition in place (`ColumnChange::Modify` — type,
+     * NOT NULL, DEFAULT). Every other `alterTable` action stays on `alterTable`
+     * itself: add column, drop column and table rename.
+     *
+     * The split exists because SQLite fixes a column's type, NOT NULL and
+     * DEFAULT when the table is created. Changing one means building a shadow
+     * table, copying every row, swapping the names and recreating the dependent
+     * indexes, triggers and views — the 12-step rebuild, which is a data-loss
+     * path this app deliberately does not run (2026-07-25 owner grill, #1804).
+     * The adapter refuses `Modify` outright, and refuses it during preview too,
+     * so the SQL preview pane cannot even render one
+     * (`src-tauri/table-view-core/src/db/adapters/sqlite/ddl_native.rs`).
+     *
+     * Same shape as `alterConstraint` (#1070): one ALTER TABLE surface an
+     * engine can serve only in part. Gates ONLY the ColumnsEditor per-row edit
+     * affordance; SQLite keeps it false so that affordance is hidden (#1046
+     * disable-at-source) instead of click-then-error.
+     */
+    readonly modifyColumn: boolean;
+    /**
      * Issue #1735 — whether the wired adapter emits a column-comment change
      * (`COMMENT ON COLUMN … IS …`) through `alter_table`. Deliberately
      * distinct from `alterTable`: MySQL and MSSQL run structural ALTERs but
@@ -366,6 +387,7 @@ export function createEmptyDataSourceCapabilities(): DataSourceCapabilities {
       dropObject: false,
       alterConstraint: false,
       identityColumn: false,
+      modifyColumn: false,
       editColumnComment: false,
     },
     intelligence: {
@@ -447,6 +469,9 @@ export const ORACLE_CAPABILITIES = capabilities({
     dropObject: true,
     alterConstraint: true,
     identityColumn: true,
+    // Issue #1804 — Oracle runs `ALTER TABLE … MODIFY`, so the per-row column
+    // edit is a truthful claim (the flag only splits SQLite off).
+    modifyColumn: true,
     // Issue #1735 — Oracle emits COMMENT ON COLUMN through alter_table
     // (shares the ANSI syntax with PG).
     editColumnComment: true,
@@ -501,6 +526,9 @@ export const POSTGRESQL_CAPABILITIES = capabilities({
     dropObject: true,
     alterConstraint: true,
     identityColumn: true,
+    // Issue #1804 — PG runs `ALTER TABLE … ALTER COLUMN` (incl. the USING
+    // recast the editor offers), so the per-row column edit is truthful.
+    modifyColumn: true,
     // Issue #1735 — PG emits COMMENT ON COLUMN through alter_table.
     editColumnComment: true,
   },
@@ -547,6 +575,9 @@ export const MYSQL_FAMILY_CAPABILITIES = capabilities({
     dropObject: true,
     alterConstraint: true,
     identityColumn: true,
+    // Issue #1804 — MySQL/MariaDB run `ALTER TABLE … MODIFY COLUMN`, so the
+    // per-row column edit is truthful.
+    modifyColumn: true,
   },
   intelligence: {
     erd: true,
@@ -591,6 +622,18 @@ export const SQLITE_CAPABILITIES = capabilities({
     // `build_column_definition` rejects `is_identity` with `Unsupported`, so
     // the Identity checkbox is hidden here too.
     createTable: true,
+    // Issue #1804 — the wired adapter runs these natively on a writable file
+    // (`src-tauri/table-view-core/src/db/adapters/sqlite/ddl_native.rs`):
+    // `alterTable` covers ADD COLUMN / DROP COLUMN and `ALTER TABLE … RENAME
+    // TO`, `createIndex` covers `CREATE [UNIQUE] INDEX`, `dropObject` covers
+    // `DROP TABLE` / `DROP INDEX`.
+    alterTable: true,
+    createIndex: true,
+    dropObject: true,
+    // `modifyColumn` and `alterConstraint` stay at the base `false`: both need
+    // the 12-step table rebuild SQLite requires for an in-place column or
+    // constraint change, which this app deliberately does not run (2026-07-25
+    // owner grill). The adapter refuses both, preview included.
   },
   intelligence: {
     erd: true,
@@ -649,6 +692,9 @@ export const DUCKDB_CAPABILITIES = capabilities({
     alterTable: true,
     createIndex: true,
     dropObject: true,
+    // Issue #1804 — DuckDB runs native `ALTER TABLE … ALTER COLUMN`, so the
+    // per-row column edit is truthful (the flag only splits SQLite off).
+    modifyColumn: true,
   },
 });
 
@@ -681,6 +727,9 @@ export const MSSQL_CAPABILITIES = capabilities({
     dropObject: true,
     alterConstraint: true,
     identityColumn: true,
+    // Issue #1804 — SQL Server runs `ALTER TABLE … ALTER COLUMN`, so the
+    // per-row column edit is truthful.
+    modifyColumn: true,
   },
   intelligence: {
     erd: true,

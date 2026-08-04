@@ -87,17 +87,20 @@ without MariaDB-specific tests/docs
 
 ## SQLite
 
-**Runtime**: file adapter + read/writable-file DML + bounded structured table
-creation
+**Runtime**: file adapter + read/writable-file DML + the structured DDL SQLite
+runs natively
 
 **현재 판단**: user DBMS adapter 는 internal SQLite state 와 분리됨. 쓰기는 writable file 의
 DML/PK-projected row edit 로 제한된다. GitHub Runtime Happy Path now runs a
 deterministic SQLite desktop smoke for file create/open, table browse, read
-query, writable DML, row edit, bounded structured table creation with schema
+query, writable DML, row edit, structured table creation with schema
 refresh proof, read-only write rejection, and internal app-state DB rejection.
-raw SQL DDL, unsupported `ALTER TABLE` rebuild, table/index removal or rename,
-index creation, standalone constraint changes, nested JSON edit, sqlite-cli
-execution, extension/capability semantics 는 unsupported
+SQLite structured DDL 은 엔진이 네이티브로 실행하는 범위다 — `CREATE TABLE` /
+`DROP TABLE` / `ALTER TABLE … RENAME TO` / `ADD COLUMN` / `DROP COLUMN` /
+`CREATE INDEX` / `DROP INDEX`. 테이블을 통째로 다시 써야 하는 변경(컬럼의 타입·NOT NULL·DEFAULT,
+`CREATE TABLE` 이후의 제약 추가·삭제)은 12-step rebuild 가 필요해 unsupported 이고,
+Structure UI 가 해당 컨트롤을 내리고 사유를 화면에 적는다. raw SQL DDL, nested JSON
+edit, sqlite-cli execution, extension/capability semantics 는 unsupported
 
 ## DuckDB
 

@@ -14,7 +14,7 @@ TablePlus처럼 빠르게 연결하고, 스키마와 컬렉션을 탐색하고, 
 
 - **PostgreSQL**: 스키마, 테이블, 뷰, 인덱스, 제약 조건(PK/FK/CHECK/UNIQUE), 함수/트리거 소스 조회, 테이블/컬럼/인덱스/제약 DDL UI를 지원합니다.
 - **MySQL/MariaDB**: 데이터베이스 전환, 테이블/컬럼/인덱스/제약/뷰/함수/트리거 조회, SQL 실행, 테이블 페이징/필터/정렬, 주요 DDL UI 백엔드가 연결되어 있습니다. MySQL과 MariaDB는 connect/browse/query/edit/cancel runtime smoke baseline이 있고, MySQL-family 고유 문법의 클라이언트 분석은 아직 부분 지원입니다.
-- **SQLite**: 파일 기반 연결과 DB 파일 생성, 테이블/컬럼 탐색, 테이블 미리보기, 단일 쿼리 실행, 배치 실행과 dry-run을 지원합니다. DDL UI와 export parity는 아직 명시적으로 제한됩니다.
+- **SQLite**: 파일 기반 연결과 DB 파일 생성, 테이블/컬럼 탐색, 테이블 미리보기, 단일 쿼리 실행, 배치 실행과 dry-run을 지원합니다. writable 파일에서는 SQLite 가 네이티브로 실행하는 구조화 DDL(테이블 생성/삭제/이름 변경, 컬럼 추가/삭제, 인덱스 생성/삭제)이 노출됩니다(#1804). 이미 있는 컬럼의 타입·NOT NULL·DEFAULT 변경과 `CREATE TABLE` 이후의 제약 추가/삭제는 테이블을 통째로 다시 만들어야 해서 제공하지 않고, export parity 도 아직 명시적으로 제한됩니다.
 - **DuckDB**: 파일 기반 `.duckdb` 연결과 raw SQL 실행, 로컬 CSV/Parquet/JSON/NDJSON 등록/preview, 등록된 source alias 대상 global editor SELECT smoke 경로를 지원합니다. writable connection 에서는 grid row edit 과 native 구조화 DDL(테이블 생성/삭제/이름 변경, 컬럼 추가/삭제/타입, 인덱스 생성/삭제)이 노출됩니다(ADR 0051 Stage 1/2, #1070). 제약 추가/삭제와 identity 컬럼(Stage 2b), dry-run/다중 statement 트랜잭션(Stage 3), COPY/ATTACH/DETACH, extension install/load, 자동 import/export, admin parity는 아직 명시적으로 제한됩니다.
 - **MongoDB**: 데이터베이스/컬렉션 탐색, 도큐먼트 그리드, find/aggregate/insert/update/delete/bulkWrite, 인덱스와 validator 관리, collection/server 진단 명령을 지원합니다. 임의 JavaScript를 실행하지 않고 허용된 `db....` 워크플로우만 파싱해 dispatch 합니다.
 - **Redis**: 연결/profile, key browser, value preview/edit UI, guarded string write, TTL 변경, exact-key delete confirmation, bounded command editor를 지원합니다. full CLI/admin parity, stream consumer UI, cluster/pubsub/modules, broader command coverage는 후속입니다.

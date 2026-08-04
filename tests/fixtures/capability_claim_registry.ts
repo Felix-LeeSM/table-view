@@ -211,24 +211,33 @@ const SQLITE_CREATE_TABLE: readonly ClaimFact[] = [
   { dbType: "sqlite", check: "ddl.createTable", state: "supported" },
 ];
 
-/** Everything SQLite's wired adapter still answers `Unsupported` to. */
-const SQLITE_BEYOND_CREATE_TABLE: readonly ClaimFact[] = [
-  { dbType: "sqlite", check: "ddl.alterTable", state: "unsupported" },
-  { dbType: "sqlite", check: "ddl.createIndex", state: "unsupported" },
-  { dbType: "sqlite", check: "ddl.dropObject", state: "unsupported" },
-  { dbType: "sqlite", check: "ddl.alterConstraint", state: "unsupported" },
+/**
+ * The DDL SQLite runs natively. #2103 opened these three in the Rust adapter
+ * and #1804 moved the ledger to match, closing the drift the previous
+ * `SQLITE_ADAPTER_AHEAD_OF_LEDGER` set existed to record.
+ */
+const SQLITE_NATIVE_DDL: readonly ClaimFact[] = [
+  { dbType: "sqlite", check: "ddl.alterTable", state: "supported" },
+  { dbType: "sqlite", check: "ddl.createIndex", state: "supported" },
+  { dbType: "sqlite", check: "ddl.dropObject", state: "supported" },
 ];
 
 /**
- * The three checks #1804 opened in the Rust SQLite adapter without moving the
- * flag, so the adapter executes what the ledger still calls unsupported.
- * `ddl.alterConstraint` is deliberately not here — SQLite cannot add or drop a
- * constraint without a table rebuild, so that one is unsupported on both sides.
+ * The boundary #1804 deliberately did not cross. SQLite fixes a column's type,
+ * NOT NULL and DEFAULT — and any constraint — when the table is created, so
+ * changing one needs the 12-step rebuild the 2026-07-25 owner grill ruled out.
+ * Unsupported on both sides: the adapter refuses both, preview included.
  */
-const SQLITE_ADAPTER_AHEAD_OF_LEDGER: readonly ClaimFact[] = [
-  { dbType: "sqlite", check: "ddl.alterTable", state: "unsupported" },
-  { dbType: "sqlite", check: "ddl.createIndex", state: "unsupported" },
-  { dbType: "sqlite", check: "ddl.dropObject", state: "unsupported" },
+const SQLITE_NEEDS_REBUILD: readonly ClaimFact[] = [
+  { dbType: "sqlite", check: "ddl.modifyColumn", state: "unsupported" },
+  { dbType: "sqlite", check: "ddl.alterConstraint", state: "unsupported" },
+];
+
+/** What a page states when it describes the whole SQLite DDL boundary. */
+const SQLITE_DDL_BOUNDARY: readonly ClaimFact[] = [
+  ...SQLITE_CREATE_TABLE,
+  ...SQLITE_NATIVE_DDL,
+  ...SQLITE_NEEDS_REBUILD,
 ];
 
 /** DuckDB's ADR 0051 Stage 2b slices — planned, so deferred, not unsupported. */
@@ -290,23 +299,21 @@ const HIDDEN_CONSTRAINT_CONTROLS: readonly ClaimFact[] = [
 export const CAPABILITY_CLAIM_REGISTRY: readonly CapabilityClaimRow[] = [
   {
     path: "docs/contributor-guide/release/release-notes-support-matrix.md",
-    phrases: ["structured ddl parity"],
+    phrases: [],
     disposition: "ledger-dependent",
-    claims: SQLITE_BEYOND_CREATE_TABLE,
+    claims: [...SQLITE_NATIVE_DDL, ...SQLITE_NEEDS_REBUILD],
     reason:
-      "Release-notes matrix row for SQLite: 'Structured DDL parity and " +
-      "sqlite-cli execution remain unsupported.' Product-facing, so it states " +
-      "the boundary rather than pointing at a TypeScript module.",
+      "Retired phrase, live claim. The SQLite row said 'Structured DDL parity " +
+      "and sqlite-cli execution remain unsupported'; #1804 reworded it to name " +
+      "what SQLite runs natively and what a table rebuild would be needed for, " +
+      "which no pattern class matches. Product-facing, so it states the " +
+      "boundary rather than pointing at a TypeScript module.",
   },
   {
     path: "docs/contributor-guide/smoke-matrix/sqlite-file-dbms.md",
-    phrases: [
-      "bounded structured table creation",
-      "structured ddl beyond",
-      "structured ddl parity",
-    ],
+    phrases: [],
     disposition: "ledger-dependent",
-    claims: [...SQLITE_CREATE_TABLE, ...SQLITE_BEYOND_CREATE_TABLE],
+    claims: SQLITE_DDL_BOUNDARY,
     reason:
       "Smoke matrix states what the SQLite desktop smoke does and does not " +
       "cover; the evidence map is the page's whole purpose and cannot be " +
@@ -314,9 +321,9 @@ export const CAPABILITY_CLAIM_REGISTRY: readonly CapabilityClaimRow[] = [
   },
   {
     path: "docs/product/current-boundaries.md",
-    phrases: ["sqlite structured ddl"],
+    phrases: [],
     disposition: "ledger-dependent",
-    claims: [...SQLITE_CREATE_TABLE, ...SQLITE_BEYOND_CREATE_TABLE],
+    claims: SQLITE_DDL_BOUNDARY,
     reason:
       "The SQLite bullet reads 'SQLite structured DDL … remain future " +
       "promotion gates' while the ledger has claimed ddl.createTable since " +
@@ -325,16 +332,16 @@ export const CAPABILITY_CLAIM_REGISTRY: readonly CapabilityClaimRow[] = [
   },
   {
     path: "docs/product/current-support-snapshot.md",
-    phrases: [
-      "bounded structured table creation",
-      "table/index removal or rename",
-    ],
+    phrases: ["sqlite structured ddl"],
     disposition: "ledger-dependent",
-    claims: [...SQLITE_CREATE_TABLE, ...SQLITE_BEYOND_CREATE_TABLE],
+    claims: SQLITE_DDL_BOUNDARY,
     reason:
-      "Both phrases sit in the `## SQLite` section (:96 and :98), which is " +
-      "where a reader looks for the current boundary, so the sentences stay " +
-      "and these claims are what a ledger move measures them against.",
+      "The phrase opens the `## SQLite` section's DDL sentence, which is " +
+      "where a reader looks for the current boundary, so the sentence stays " +
+      "and these claims are what a ledger move measures it against. It has " +
+      "to be a phrase rather than a retired one: the file's other row keeps " +
+      "`structured ddl parity` for the PostgreSQL section, so this file never " +
+      "sweeps clean and a phrase-less row here would be red.",
   },
   {
     path: "docs/product/current-support-snapshot.md",
@@ -373,18 +380,9 @@ export const CAPABILITY_CLAIM_REGISTRY: readonly CapabilityClaimRow[] = [
   },
   {
     path: "docs/product/known-limitations-rdbms.md",
-    phrases: [
-      "bounded structured table creation",
-      "structured ddl parity",
-      "table/index removal or rename",
-      "stay hidden",
-    ],
+    phrases: ["stay hidden"],
     disposition: "ledger-dependent",
-    claims: [
-      ...SQLITE_CREATE_TABLE,
-      ...SQLITE_BEYOND_CREATE_TABLE,
-      ...DUCKDB_STAGE_2B,
-    ],
+    claims: [...SQLITE_DDL_BOUNDARY, ...DUCKDB_STAGE_2B],
     reason:
       "The three scope-narrowing phrases sit in `### SQLite` (:127-:136). " +
       "'stay hidden' occurs twice and in neither case for SQLite: :79 is the " +
@@ -395,17 +393,9 @@ export const CAPABILITY_CLAIM_REGISTRY: readonly CapabilityClaimRow[] = [
   },
   {
     path: "docs/product/query-language-support-surface-matrix.md",
-    phrases: [
-      "bounded structured table creation",
-      "table/index removal or rename",
-      "stay hidden",
-    ],
+    phrases: ["stay hidden"],
     disposition: "ledger-dependent",
-    claims: [
-      ...SQLITE_CREATE_TABLE,
-      ...SQLITE_BEYOND_CREATE_TABLE,
-      ...DUCKDB_STAGE_2B,
-    ],
+    claims: [...SQLITE_DDL_BOUNDARY, ...DUCKDB_STAGE_2B],
     reason:
       "`## SQLite SQL` (:113, :122) states the CREATE TABLE-only boundary, " +
       "and `## DuckDB SQL` (:162) ties hidden controls to ddl.alterConstraint " +
@@ -424,22 +414,21 @@ export const CAPABILITY_CLAIM_REGISTRY: readonly CapabilityClaimRow[] = [
   },
   {
     path: "docs/roadmap/follow-up-queue.md",
-    phrases: ["bounded structured table creation"],
+    phrases: [],
     disposition: "ledger-dependent",
-    claims: SQLITE_CREATE_TABLE,
+    claims: SQLITE_DDL_BOUNDARY,
     reason:
-      "Scopes queued SQLite file-DBMS work to the shipped slice; widening the " +
-      "ledger is exactly the event that should reopen this queue entry.",
+      "Retired phrase, live claim. The entry scoped queued SQLite file-DBMS " +
+      "work to the 'bounded structured table creation' slice; #1804 reworded " +
+      "it to the DDL SQLite runs natively plus the rebuild-requiring changes " +
+      "held back, which no pattern class matches. It is still the queue entry " +
+      "a ledger move has to reopen, so it carries the whole boundary.",
   },
   {
     path: "docs/roadmap/h2.md",
-    phrases: [
-      "bounded structured table creation",
-      "structured ddl parity",
-      "table/index removal or rename",
-    ],
+    phrases: [],
     disposition: "ledger-dependent",
-    claims: [...SQLITE_CREATE_TABLE, ...SQLITE_BEYOND_CREATE_TABLE],
+    claims: SQLITE_DDL_BOUNDARY,
     reason:
       "H2 roadmap records what #874 did and did not promote; the non-claim " +
       "list is the point of the entry.",
@@ -458,7 +447,7 @@ export const CAPABILITY_CLAIM_REGISTRY: readonly CapabilityClaimRow[] = [
     path: "src-tauri/table-view-core/src/db/adapters/sqlite/ddl_native.rs",
     phrases: ["sqlite structured ddl"],
     disposition: "ledger-dependent",
-    claims: SQLITE_ADAPTER_AHEAD_OF_LEDGER,
+    claims: SQLITE_NATIVE_DDL,
     reason:
       "Module header for the DDL #1804 opened natively. It states what the " +
       "adapter executes, which is currently wider than what the ledger " +
@@ -530,7 +519,7 @@ export const CAPABILITY_CLAIM_REGISTRY: readonly CapabilityClaimRow[] = [
     path: "src-tauri/table-view-core/src/models/data_source.rs",
     phrases: [],
     disposition: "ledger-dependent",
-    claims: [...SQLITE_CREATE_TABLE, ...SQLITE_ADAPTER_AHEAD_OF_LEDGER],
+    claims: [...SQLITE_CREATE_TABLE, ...SQLITE_NATIVE_DDL],
     reason:
       "Retired phrase, live claim. The SQLITE_RDB_CAPABILITIES declaration " +
       "comment ended 'the exact surface is the per-action ddl.* capability " +
@@ -621,22 +610,17 @@ export const CAPABILITY_CLAIM_REGISTRY: readonly CapabilityClaimRow[] = [
     path: "src/components/schema/SchemaTree.tsx",
     phrases: ["adapter can execute"],
     disposition: "ledger-dependent",
-    claims: [
-      ...SQLITE_CREATE_TABLE,
-      { dbType: "sqlite", check: "ddl.alterTable", state: "unsupported" },
-      { dbType: "sqlite", check: "ddl.dropObject", state: "unsupported" },
-      ...supportedDdl(
-        ["duckdb", "mssql", "oracle"],
-        ["ddl.createTable", "ddl.alterTable", "ddl.dropObject"],
-      ),
-    ],
+    claims: supportedDdl(
+      ["sqlite", "duckdb", "mssql", "oracle"],
+      ["ddl.createTable", "ddl.alterTable", "ddl.dropObject"],
+    ),
     reason:
       "The comment states the gate rule and then works four engines through " +
-      "it (:135-140): 'SQLite claims only createTable, so its Rename/Drop " +
-      "entries are hidden … DuckDB (#1070), MSSQL (#1071) and Oracle (#1072) " +
+      "it: 'DuckDB (#1070), MSSQL (#1071), Oracle (#1072) and SQLite (#1804) " +
       "claim all three, so every entry shows.' Each of those is a ledger " +
       "fact, which is why this row is not the engine-agnostic gate note it " +
-      "was first registered as.",
+      "was first registered as. SQLite moved into the claiming set with " +
+      "#1804 — it was the one engine the sentence used to carve out.",
   },
   {
     path: "src/components/schema/SchemaTree/rows.tsx",
@@ -652,20 +636,18 @@ export const CAPABILITY_CLAIM_REGISTRY: readonly CapabilityClaimRow[] = [
     disposition: "ledger-dependent",
     claims: [
       { dbType: "duckdb", check: "ddl.alterConstraint", state: "deferred" },
-      ...SQLITE_CREATE_TABLE,
-      { dbType: "sqlite", check: "ddl.alterTable", state: "unsupported" },
-      { dbType: "sqlite", check: "ddl.createIndex", state: "unsupported" },
-      { dbType: "sqlite", check: "ddl.dropObject", state: "unsupported" },
+      ...SQLITE_DDL_BOUNDARY,
       ...supportedDdl(["postgresql"], BASE_DDL_ACTIONS),
     ],
     reason:
-      "The header (:1-15) names three engines and asserts a ledger fact for " +
-      "each: 'SQLite (createTable only) — Columns tab hides + Column …; " +
-      "Indexes tab hides Create index + drop-index', 'PostgreSQL (all DDL " +
-      "true) — both editors keep their mutation controls', and 'DuckDB — Add " +
-      "constraint stays hidden (alterConstraint false)'. Carrying only the " +
-      "DuckDB one, as this row used to, left a sqlite ddl.alterTable flip " +
-      "unable to name the file whose header asserts it.",
+      "The header names three engines and asserts a ledger fact for each: " +
+      "'SQLite — Columns tab shows + Column and per-row Delete, Indexes tab " +
+      "shows Create index + drop-index, per-row Edit stays hidden on " +
+      "modifyColumn', 'PostgreSQL (all DDL true) — both editors keep their " +
+      "mutation controls', and 'DuckDB — Add constraint stays hidden " +
+      "(alterConstraint false)'. Carrying only the DuckDB one, as this row " +
+      "once did, left a sqlite ddl.alterTable flip unable to name the file " +
+      "whose header asserts it.",
   },
   {
     path: "src/components/schema/StructurePanel.ddl-gate.test.tsx",
@@ -690,8 +672,7 @@ export const CAPABILITY_CLAIM_REGISTRY: readonly CapabilityClaimRow[] = [
     phrases: ["adapter rejects the write"],
     disposition: "ledger-dependent",
     claims: [
-      ...SQLITE_CREATE_TABLE,
-      ...SQLITE_BEYOND_CREATE_TABLE,
+      ...SQLITE_DDL_BOUNDARY,
       ...supportedDdl(["duckdb", "mssql", "oracle"], BASE_DDL_ACTIONS),
     ],
     reason:
@@ -739,7 +720,7 @@ export const CAPABILITY_CLAIM_REGISTRY: readonly CapabilityClaimRow[] = [
     path: "src/types/dataSource.test.ts",
     phrases: [],
     disposition: "ledger-dependent",
-    claims: [...SQLITE_CREATE_TABLE, ...SQLITE_BEYOND_CREATE_TABLE],
+    claims: SQLITE_DDL_BOUNDARY,
     reason:
       "Retired phrase, live claim. Both comments grounded the SQLite `ddl` " +
       "flag literals on the adapter refusing everything but create_table, " +
@@ -774,9 +755,9 @@ export const CAPABILITY_CLAIM_REGISTRY: readonly CapabilityClaimRow[] = [
   },
   {
     path: "src/types/supportsDdl.test.ts",
-    phrases: ["create_table alone"],
+    phrases: [],
     disposition: "ledger-dependent",
-    claims: [...SQLITE_CREATE_TABLE, ...SQLITE_BEYOND_CREATE_TABLE],
+    claims: SQLITE_DDL_BOUNDARY,
     reason:
       "The guard test for `supportsDdl`. Its header grounded the SQLite row " +
       "on the adapter refusing everything but create_table, which #1804 " +

@@ -30,6 +30,11 @@ export const en = {
     deleteTitle: "Delete",
     reviewSqlAria: "Review SQL ({{count}})",
     reviewSqlLabel: "Review SQL ({{count}})",
+    // Issue #1804 — shown where the engine adds and drops columns but cannot
+    // change one in place, so the missing Edit action is explained rather than
+    // silently absent (#1046 parity gate).
+    modifyNeedsRebuildHint:
+      "This engine fixes a column's type, NOT NULL and DEFAULT when the table is created — changing one would need a full table rebuild, which this app does not do. Add or drop columns here, and recreate the table to change an existing column.",
     nullableYes: "YES",
     nullableNo: "NO",
   },
@@ -137,6 +142,8 @@ export const ko = {
     deleteTitle: "삭제",
     reviewSqlAria: "SQL 검토 ({{count}})",
     reviewSqlLabel: "SQL 검토 ({{count}})",
+    modifyNeedsRebuildHint:
+      "이 엔진은 테이블을 만들 때 열의 타입과 NOT NULL, DEFAULT 를 고정한다. 이미 있는 열을 바꾸려면 테이블을 통째로 다시 만들어야 하는데 이 앱은 그렇게 하지 않는다. 여기서는 열을 추가하거나 지울 수 있고, 기존 열을 바꾸려면 테이블을 새로 만들어라.",
     nullableYes: "예",
     nullableNo: "아니오",
   },

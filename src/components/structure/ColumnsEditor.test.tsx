@@ -850,4 +850,54 @@ describe("ColumnsEditor — #1735 column comment edit", () => {
       screen.queryByLabelText("Comment for email"),
     ).not.toBeInTheDocument();
   });
+
+  // Reason: #1804 — an engine that adds and drops columns but needs a full
+  // table rebuild to change one (SQLite) keeps `canAlterTable` true and
+  // `canModifyColumn` false. Add + Delete stay live, the per-row Edit goes, and
+  // the banner explains the absence instead of leaving the user to guess.
+  it("hides only the per-row Edit when canModifyColumn is false, and says why", () => {
+    render(
+      <ColumnsEditor
+        connectionId="conn-1"
+        table="users"
+        schema="public"
+        columns={[SAMPLE_COLUMN]}
+        onRefresh={vi.fn().mockResolvedValue(undefined)}
+        canModifyColumn={false}
+      />,
+    );
+    expect(
+      screen.queryByRole("button", { name: /Edit column email/i }),
+    ).not.toBeInTheDocument();
+    // ADD COLUMN / DROP COLUMN ride `canAlterTable`, which is still true.
+    expect(
+      screen.getByRole("button", { name: /Add column/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Delete column email/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByTestId("column-modify-rebuild-hint"),
+    ).toBeInTheDocument();
+  });
+
+  // The banner is bound to the gate, not to the editor: an engine that can
+  // rewrite a column must not be told it cannot.
+  it("shows no rebuild banner while canModifyColumn holds", () => {
+    render(
+      <ColumnsEditor
+        connectionId="conn-1"
+        table="users"
+        schema="public"
+        columns={[SAMPLE_COLUMN]}
+        onRefresh={vi.fn().mockResolvedValue(undefined)}
+      />,
+    );
+    expect(
+      screen.getByRole("button", { name: /Edit column email/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByTestId("column-modify-rebuild-hint"),
+    ).not.toBeInTheDocument();
+  });
 });

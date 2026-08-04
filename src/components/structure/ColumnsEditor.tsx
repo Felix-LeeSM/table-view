@@ -81,6 +81,14 @@ interface EditableColumnRowProps {
    */
   canAlterTable: boolean;
   /**
+   * Issue #1804 — when false the per-row Edit affordance is hidden while
+   * Delete stays live: the engine can add and drop a column but cannot change
+   * an existing one in place. Separate from `canAlterTable` because those are
+   * different statements — SQLite runs ADD/DROP COLUMN natively and needs a
+   * full table rebuild only for a type / NOT NULL / DEFAULT change.
+   */
+  canModifyColumn: boolean;
+  /**
    * Issue #1735 — when false the comment cell stays read-only even in edit
    * mode (the engine's adapter defers COMMENT ON COLUMN emit — MySQL/MSSQL/
    * SQLite/DuckDB). True only for PG + Oracle. Separate from `canAlterTable`
@@ -102,6 +110,7 @@ function EditableColumnRow({
   schema,
   tableName,
   canAlterTable,
+  canModifyColumn,
   canEditColumnComment,
 }: EditableColumnRowProps) {
   const { t } = useTranslation("structure");
@@ -404,15 +413,21 @@ function EditableColumnRow({
               </>
             ) : (
               <>
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  onClick={onStartEdit}
-                  aria-label={t("col.editAria", { name: col.name })}
-                  title={t("col.editTitle")}
-                >
-                  <Pencil />
-                </Button>
+                {/* #1804 — Edit is the only in-place column change (ALTER
+                    COLUMN); hidden on its own gate so an engine that runs
+                    ADD/DROP COLUMN but needs a table rebuild to change one
+                    keeps Delete live. */}
+                {canModifyColumn && (
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    onClick={onStartEdit}
+                    aria-label={t("col.editAria", { name: col.name })}
+                    title={t("col.editTitle")}
+                  >
+                    <Pencil />
+                  </Button>
+                )}
                 <Button
                   variant="ghost"
                   size="icon-xs"
@@ -475,6 +490,14 @@ interface ColumnsEditorProps {
    */
   canAlterTable?: boolean;
   /**
+   * Issue #1804 — whether the engine can change an existing column in place.
+   * Gates the per-row Edit action only; `+ Column` and per-row Delete stay on
+   * `canAlterTable`. Defaults to `true` (same affordance-preserving fallback as
+   * `canAlterTable`); the production caller passes
+   * `supportsDdl(dbType, "modifyColumn")`.
+   */
+  canModifyColumn?: boolean;
+  /**
    * Issue #1735 — whether the comment cell is editable (engine emits
    * COMMENT ON COLUMN). Defaults to `true` so callers that don't gate keep the
    * editable surface (same affordance-preserving fallback as `canAlterTable`);
@@ -492,6 +515,7 @@ export default function ColumnsEditor({
   onRefresh,
   paradigm,
   canAlterTable = true,
+  canModifyColumn = true,
   canEditColumnComment = true,
 }: ColumnsEditorProps) {
   const { t } = useTranslation("structure");
@@ -668,6 +692,19 @@ export default function ColumnsEditor({
         }
       />
 
+      {/* #1804 — the engine adds and drops columns but cannot change one in
+          place. Hiding the Edit pencil alone would leave the user guessing, so
+          the absence is explained and the remedy named, the same way the
+          MySQL/MariaDB trigger controls do it (#1046 parity gate). */}
+      {canAlterTable && !canModifyColumn && (
+        <p
+          data-testid="column-modify-rebuild-hint"
+          className="mx-3 mt-3 rounded-md border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground"
+        >
+          {t("col.modifyNeedsRebuildHint")}
+        </p>
+      )}
+
       {columns.length > 0 && (
         <StructureTable fixed>
           <thead className={STRUCTURE_THEAD}>
@@ -713,6 +750,7 @@ export default function ColumnsEditor({
                 schema={schema}
                 tableName={table}
                 canAlterTable={canAlterTable}
+                canModifyColumn={canModifyColumn}
                 canEditColumnComment={canEditColumnComment}
               />
             ))}

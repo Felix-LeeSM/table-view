@@ -96,10 +96,13 @@
   writable-file DML, transactional DML batch/dry-run, and key-projected row
   edits. GitHub Runtime Happy Path now runs deterministic SQLite desktop smoke
   for file create/open, table browse, read query, writable DML, row edit,
-  read-only write rejection, and internal app-state DB rejection. SQLite
-  structured DDL, automatic ALTER rebuilds, extension/capability semantics,
-  sqlite-cli command execution, and nested JSON edits remain future promotion
-  gates.
+  read-only write rejection, and internal app-state DB rejection. Structured DDL
+  is open for what SQLite runs natively on a writable file (`CREATE TABLE`,
+  `DROP TABLE`, `ALTER TABLE … RENAME TO`, `ADD COLUMN`, `DROP COLUMN`,
+  `CREATE INDEX`, `DROP INDEX`). Automatic ALTER rebuilds — the path a column
+  type / NOT NULL / DEFAULT change or a post-creation constraint change would
+  need — plus extension/capability semantics, sqlite-cli command execution, and
+  nested JSON edits remain future promotion gates.
 - Routine runtime smoke currently proves the GitHub Runtime Happy Path for
   PostgreSQL, MySQL, MariaDB, SQLite, DuckDB `.duckdb`, MongoDB, Redis, Valkey,
   Elasticsearch, OpenSearch, MSSQL, and Oracle. MSSQL/Oracle smoke is bounded to

@@ -303,6 +303,7 @@ describe("adapter conformance matrix", () => {
       "ddl.dropObject",
       "ddl.alterConstraint",
       "ddl.identityColumn",
+      "ddl.modifyColumn",
     ]);
     expect(mssql.areas.connection.unsupported).toEqual([
       "connection.switchDatabase",
@@ -341,6 +342,8 @@ describe("adapter conformance matrix", () => {
       "ddl.dropObject",
       "ddl.alterConstraint",
       "ddl.identityColumn",
+      // Issue #1804 — Oracle runs native `ALTER TABLE … MODIFY`.
+      "ddl.modifyColumn",
       // Issue #1735 — Oracle emits COMMENT ON COLUMN via alter_table.
       "ddl.editColumnComment",
     ]);
@@ -390,6 +393,8 @@ describe("adapter conformance matrix", () => {
       "ddl.alterTable",
       "ddl.createIndex",
       "ddl.dropObject",
+      // Issue #1804 — DuckDB runs native `ALTER TABLE … ALTER COLUMN`.
+      "ddl.modifyColumn",
     ]);
     expect(duckdb.areas.ddl.deferred).toEqual([
       "ddl.alterConstraint",

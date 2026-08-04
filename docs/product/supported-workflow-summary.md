@@ -14,7 +14,8 @@
   analytics Runtime Happy Path smoke/source-scoped evidence/history/privacy
   boundary 를 분리해서 좁힌다.
 - SQLite/DuckDB file workflow: local file open/create/browse/query 중심. SQLite
-  는 writable-file DML 과 key-projected row edit, DuckDB 는 `.duckdb`
+  는 writable-file DML, key-projected row edit, 그리고 엔진이 네이티브로 실행하는
+  구조 DDL (테이블 생성/삭제/이름 변경, 컬럼 추가/삭제, 인덱스 생성/삭제), DuckDB 는 `.duckdb`
   catalog/read query 와 registered local CSV/Parquet/JSON/NDJSON preview,
   source-scoped SELECT, global editor SELECT slice 를 지원한다.
 - MongoDB workflow: whitelisted mongosh/MQL document query/edit/admin slices 와

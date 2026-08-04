@@ -20,9 +20,9 @@ Current gap / routing:
 
 GitHub Runtime Happy Path now runs a SQLite desktop smoke for deterministic file
 create/open, table browse, read query, writable DML, row edit, read-only write
-rejection, and internal app-state DB rejection. Structured DDL beyond bounded
-table creation and extension-boundary non-claims stay routed to #460/#461 rather
-than broadening this smoke.
+rejection, and internal app-state DB rejection. The DDL #1804 opened is proved
+by adapter-level tests against real SQLite files, and extension-boundary
+non-claims stay routed to #460/#461, rather than broadening this smoke.
 
 ## File connection lifecycle
 
@@ -103,13 +103,26 @@ Current evidence:
 
 Current gap / routing:
 
-Raw SQL DDL is rejected by the SQLite query adapter. Structured DDL is a bounded
-slice: `create_table` / `create_table_plan` build and run `CREATE TABLE` for
-writable files (the wired adapter declares the `RelationalSchemaMutation`
-capability), while every other structured DDL trait method (drop/rename/alter
-table, add/drop column, index, constraint) returns explicit `Unsupported`.
-Unsupported ALTER behavior is adapter rejection today; automatic table rebuild
-remains a future ADR-backed implementation decision.
+Raw SQL DDL is rejected by the SQLite query adapter. Structured DDL covers what
+SQLite executes natively on a writable file (the wired adapter declares the
+`RelationalSchemaMutation` capability): `create_table` / `create_table_plan`,
+`drop_table`, `rename_table`, `add_column`, `drop_column`, `create_index` and
+`drop_index`. `alter_table` runs `ColumnChange::Add` and `Drop`, one statement
+per change inside a single transaction (#1804).
+
+Two trait methods still return explicit `Unsupported`: `add_constraint` and
+`drop_constraint`. So does `alter_table`'s `ColumnChange::Modify`, and a batch
+containing one is refused whole so nothing is half-applied. All three need the
+12-step table rebuild, which the 2026-07-25 owner grill ruled out as a data-loss
+path — reintroducing it would need its own ADR carrying backup, dry-run,
+dependent-object-recreation and large-table evidence. Refusal happens during
+preview too, so the SQL preview pane never renders one of those statements.
+
+`ADD COLUMN` and `DROP COLUMN` failures that depend on the rows or on dependent
+objects are mapped after the attempt rather than predicted: the same statement
+succeeds on an empty table and fails on a populated one, so the request alone
+cannot decide it. `ddl_errors.rs` names the column and the blocking object and
+keeps the driver text.
 
 ## Completion and extension boundary
 
@@ -141,8 +154,7 @@ Current gap / routing:
 Product-visible SQLite docs now agree that runtime support is the wired file
 smoke plus adapter evidence, parser/Safe Mode remains bounded, sqlite-cli dot
 commands are non-executable completion vocabulary, and extension/capability,
-structured DDL beyond bounded table creation, ALTER, and nested JSON support
-stays unsupported or future.
+rebuild-requiring ALTER, and nested JSON support stays unsupported or future.
 
 ## Test coverage recheck
 
@@ -179,9 +191,9 @@ Current evidence:
 Current gap / routing:
 
 Product-visible support claims match this evidence map: SQLite support is
-file-backed DBMS runtime/query/edit plus deterministic file smoke and bounded
-structured table creation, not structured DDL parity beyond table creation,
-admin, or vendor CLI parity. DuckDB/file analytics remains a separate H3 lane,
+file-backed DBMS runtime/query/edit plus deterministic file smoke and the DDL
+SQLite runs natively, not rebuild-requiring DDL, admin, or vendor CLI parity.
+DuckDB/file analytics remains a separate H3 lane,
 and fixture-only inventory does not become live runtime evidence.
 
 ## Fixture inventory
