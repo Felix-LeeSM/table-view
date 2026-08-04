@@ -84,8 +84,8 @@ function tokenOf(cls: string, alias: Map<string, string>): string {
 // A separation floor, not a WCAG criterion — WCAG says nothing about two dots
 // that are never adjacent. It is picked between two measured bounds, both
 // asserted below: the catalog's own tightest pair clears it, and the two values
-// this PR shipped and removed fail it. The lower of those two is the one that
-// matters — `supply light` paired `#101010` against `#000000`, which is not an
+// this PR shipped and removed fail it. The higher of those two is the one that
+// binds — `supply light` paired `#101010` against `#000000`, which is not an
 // equal pair and is still one colour to the eye at 8px.
 const MIN_CHANNEL_DISTANCE = 15;
 
@@ -103,6 +103,33 @@ describe("colour-only status channels across every theme (#2117)", () => {
     expect(() => {
       assertSweepIsComplete(blocks.map((b) => b.name));
     }).not.toThrow();
+    // All three sweeps call the helper as `not.toThrow()`, which a body of
+    // `return;` satisfies in all three at once. Feeding it a short list is what
+    // makes the line above mean "the sweep is complete" instead of "the helper
+    // ran".
+    expect(() => {
+      assertSweepIsComplete(blocks.slice(1).map((b) => b.name));
+    }).toThrow(/sweep covers/);
+  });
+
+  // Reason: every measurement below reads this list. Emptying `COLOR_ONLY_SITES`
+  // registers zero `it.each` cases, and dropping `"bg-destructive"` from
+  // `classes` stops measuring the succeeded-vs-failed pair this file exists for
+  // — both silently green. Pinned by name rather than derived from the list,
+  // for the reason `src/components/ui/ExecuteButton.test.tsx:344-349` gives: a
+  // bar computed from the thing it checks moves with the edit that breaks it.
+  it("still measures the pair this file exists for", () => {
+    expect(COLOR_ONLY_SITES).toHaveLength(1);
+    expect(COLOR_ONLY_SITES[0]!.classes).toEqual([
+      "bg-success",
+      "bg-muted-foreground",
+      "bg-destructive",
+    ]);
+    expect(COLOR_ONLY_SITES[0]!.anchors).toEqual(["rounded-full"]);
+    expect(COLOR_ONLY_SITES[0]!.files).toEqual([
+      "src/components/query/QueryLog.tsx",
+      "src/components/query/QueryHistoryPanel.tsx",
+    ]);
   });
 
   it.each(COLOR_ONLY_SITES)(

@@ -27,6 +27,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import { assertSweepIsComplete } from "@/test-utils/themePalettes";
 
 // process.cwd() at vitest invocation = repo root (where vite.config.ts
 // lives). `src/themes.css` is the canonical SoT path for theme tokens.
@@ -86,22 +87,27 @@ describe("themes.css — Sprint 253 token foundation (AC-253-01, AC-253-02)", ()
     // 팔레트 톤을 쓰는 authkit·lattice·ease. 나머지 전 블록은 amber 다.
     const SUBSTITUTES = ["authkit", "ease", "henry", "lattice", "supply"];
     const substituting = new Set<string>();
-    let uiBlocks = 0;
+    const blockNames: string[] = [];
     let amber = 0;
     for (const m of themes
       .replace(/\/\*[\s\S]*?\*\//g, "")
       .matchAll(
-        /\[data-theme="([^"]+)"\]\[data-mode="(?:light|dark)"\]\s*\{([^}]*)\}/g,
+        /\[data-theme="([^"]+)"\]\[data-mode="(light|dark)"\]\s*\{([^}]*)\}/g,
       )) {
-      const body = m[2] ?? "";
+      const body = m[3] ?? "";
       // syntax-only 블록은 `--tv-background` 가 없다 (ADR 0031 의 2블록 분할).
       if (!/--tv-background:/.test(body)) continue;
-      uiBlocks += 1;
+      blockNames.push(`${m[1]} ${m[2]}`);
       // 선언 누락은 skip 이 아니라 substitute 로 센다 — 조용한 skip 은 안 잰
       // 블록을 "통과" 로 보고하는 경로다.
       if (/--tv-status-connecting:\s*#f59e0b\b/.test(body)) amber += 1;
       else substituting.add(m[1] ?? "");
     }
+    // 형제 스윕 셋이 이미 쓰는 완전성 앵커. 없으면 아래 `uiBlocks` 가 고정이
+    // 아니라 측정값이라, 블록 정규식이 절반만 깨져도 `amber === uiBlocks - 10`
+    // 이 그대로 성립하며 green 이다.
+    assertSweepIsComplete(blockNames);
+    const uiBlocks = blockNames.length;
     expect([...substituting].sort()).toEqual(SUBSTITUTES);
     // 세는 명령: grep -c -- '--tv-status-connecting: #f59e0b' src/themes.css
     expect(amber).toBe(uiBlocks - SUBSTITUTES.length * 2);
