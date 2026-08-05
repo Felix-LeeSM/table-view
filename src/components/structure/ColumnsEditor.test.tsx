@@ -881,10 +881,15 @@ describe("ColumnsEditor — #1735 column comment edit", () => {
 
   // The blocked control must stay reachable, or the reason it carries is a
   // pointer-only fact. A natively `disabled` button leaves the tab order and
-  // takes no focus, so `aria-disabled` + `preventDefault` is the form
+  // takes no focus, so `aria-disabled` is the form
   // (`src/components/document/MongoIndexesPanel.tsx` uses the same one).
-  // Mutation check: swap `aria-disabled="true"` back to `disabled` and both
-  // assertions below go red.
+  //
+  // Mutation check — swap `aria-disabled="true"` back to `disabled`: only two
+  // of the three assertions below carry it. `not.toBeDisabled()` (jest-dom
+  // reads the native attribute, not `aria-disabled`) and `toHaveFocus()`
+  // (jsdom makes `focus()` a silent no-op on a disabled button) both go red.
+  // The tooltip assertion does NOT — React fires focus handlers regardless of
+  // `disabled`, so it only locks the copy and the i18n key, not the form.
   it("keeps the blocked Edit focusable so the reason reaches a keyboard user", async () => {
     render(
       <ColumnsEditor
@@ -911,6 +916,12 @@ describe("ColumnsEditor — #1735 column comment edit", () => {
 
   // Reachable must not mean operable: clicking (or Enter, which the browser
   // turns into a click) may not open the editor the adapter would refuse.
+  //
+  // Ceiling — this does NOT lock the `preventDefault` on that button. The
+  // blocked branch wires no `onStartEdit` and the `<tr>` has no `onClick`, so
+  // deleting `preventDefault` leaves this green. It stays because the cited
+  // precedent carries it and because a later row-level click handler would
+  // make it load-bearing; what this test locks is the outcome, not the guard.
   it("opens no editor when the blocked Edit is clicked", () => {
     render(
       <ColumnsEditor
