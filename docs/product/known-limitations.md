@@ -45,11 +45,7 @@ smoke or measurement gates:
 - Critical component smoke covers SchemaTree tree/treeitem roles, DataGrid
   grid/gridcell/edit feedback, Connection and Import/Export dialog labels/error
   regions, and secret-free alert/status/aria-live credential feedback.
-- Full 81-theme light/dark WCAG AA measurement. One surface is swept: the
-  selected data-row fill is asserted per theme and mode by
-  `src/components/datagrid/DataGridTable.selection-contrast.test.tsx`. That is a
-  separation floor between the fill and its own row background, not a WCAG
-  criterion, and it covers no other pairing.
+- Full 81-theme light/dark WCAG AA measurement.
 - Monochrome themes trade colour-carried emphasis for their look. `supply` and
   `henry` (#2117) spend a handful of tones across the whole palette, so two
   semantic tokens land on the same value. Where that would make one *state* read

@@ -3928,22 +3928,7 @@
   --tv-status-idle: #555555;
 }
 
-/* === Henry — gothic broadside mono ===
- * Two divergences from the prototype, both because a paint rule this
- * codebase has and the prototype page does not:
- *   - `--tv-destructive` / `--tv-success` / `--tv-warning` are left to the
- *     universal values instead of the prototype's monochrome Ink/Paper. The
- *     prototype carries danger on weight + inversion + underline, but
- *     `ExecuteButton` (ADR 0023 (d)) encodes `severity x env` on colour alone
- *     — one fill under `--tv-<token>-foreground`, no weight or underline
- *     channel — so monochrome collapses its four cells to one colour and, in
- *     dark, puts a near-white label on a near-white fill.
- *   - `--tv-accent` takes the theme's hairline tone rather than the
- *     prototype's ink, which as a 20% row wash cleared the separation floor
- *     that fill must stay under; `--tv-accent-foreground` follows it.
- * `--tv-highlight` and `--tv-status-*` do stay monochrome — washes and text
- * colours, no paired foreground. Both divergences are measured, by
- * `ExecuteButton.test.tsx` and `DataGridTable.selection-contrast.test.tsx`. */
+/* === Henry — gothic broadside mono === */
 [data-theme="henry"][data-mode="light"] {
   --tv-background: #fafafa;
   --tv-foreground: #2a2722;

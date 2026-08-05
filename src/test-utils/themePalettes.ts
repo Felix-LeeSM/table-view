@@ -1,15 +1,6 @@
 // Shared colour math for the theme sweeps.
 //
-// Three test files measure `src/themes.css` per `[data-theme][data-mode]`
-// block: the ExecuteButton severity matrix, the selected-row fill, and the
-// status channels below. They had two hand-copied versions of the same
-// parsing and the same WCAG formula, and the copies had already drifted — one
-// accepted `#[0-9a-fA-F]{3,8}` while `toRgb` expanded only `#RGB`, so a
-// four-digit `#RGBA` value parsed to `[171, 205, NaN]` and every `NaN <= floor`
-// comparison read as "passes". One copy is the fix; the divergence cannot come
-// back.
-//
-// Two rules hold everything here honest, both learned from that hole:
+// Two rules hold everything here honest:
 //   - A value this math cannot handle throws. It never degrades to a number.
 //   - A declaration is captured whatever its syntax, so `var(…)` /
 //     `color-mix(…)` / `oklch(…)` reads as *present and unsupported* rather
