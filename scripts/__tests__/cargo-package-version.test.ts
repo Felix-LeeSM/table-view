@@ -10,8 +10,9 @@ import { describe, expect, it } from "vitest";
 // 이미 돌리고, vite.config.ts 의 `test.exclude` 는 scripts/ 를 빼지 않는다.
 // 아무도 안 돌리는 스위트는 red 가 될 수 없다.
 //
-// 네트워크를 타지 않는다. 입력은 스위트가 만드는 manifest 픽스처와 저장소의
-// `src-tauri/Cargo.toml` 이다.
+// 네트워크를 타지 않는다. 입력은 스위트가 만드는 manifest 픽스처, 저장소의
+// `src-tauri/Cargo.toml`, 그리고 배선 단계가 읽는 `auto-tag-release.yml` 과 그
+// 태그 스텝의 기대본(`scripts/release/fixtures/auto-tag-release-tag-step.txt`)이다.
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "..", "..");
 const suite = "scripts/release/cargo-package-version.test.sh";
