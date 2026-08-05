@@ -12,7 +12,7 @@ import { describe, expect, it } from "vitest";
 //
 // 네트워크를 타지 않는다. 입력은 스위트가 만드는 manifest 픽스처, 저장소의
 // `src-tauri/Cargo.toml`, 그리고 배선 단계가 읽는 `auto-tag-release.yml` 과 그
-// 태그 스텝의 기대 블록(`scripts/release/fixtures/auto-tag-release-tag-step.txt`)이다.
+// 태그 스텝의 기대본(`scripts/release/fixtures/auto-tag-release-tag-step.txt`)이다.
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "..", "..");
 const suite = "scripts/release/cargo-package-version.test.sh";

@@ -1,3 +1,5 @@
+      - name: Tag release if version bumped
+        run: |
           set -euo pipefail
 
           version="$(jq -r .version src-tauri/tauri.conf.json)"
