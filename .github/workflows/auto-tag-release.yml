@@ -109,7 +109,12 @@ jobs:
 
           # src-tauri/Cargo.toml must agree with tauri.conf.json — a half-done
           # bump would ship a tag whose crate version disagrees with the app.
-          cargo_version="$(grep -m1 '^version' src-tauri/Cargo.toml | sed -E 's/.*"([^"]+)".*/\1/')"
+          # The read is section-aware and exits non-zero when it finds nothing
+          # (#2169): a `version` outside [package] — [workspace.package] once
+          # #2161 lands — or a quoted trailing comment must not be picked up,
+          # because a wrong value here compares green against the wrong crate.
+          # Regression suite: scripts/release/cargo-package-version.test.sh
+          cargo_version="$(bash scripts/release/cargo-package-version.sh src-tauri/Cargo.toml)"
           if [ "$version" != "$cargo_version" ]; then
             echo "::error::version mismatch: tauri.conf.json=$version src-tauri/Cargo.toml=$cargo_version" >&2
             exit 1
