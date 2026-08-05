@@ -82,7 +82,7 @@ export interface ConfirmDestructiveDialogProps {
    * Sprint 256 (ADR 0023, AC-256-05) — connection display name for the
    * env-aware footer ExecuteButton ("Execute on <conn>"). Optional;
    * legacy callers default to the plain "Confirm" affordance via the
-   * STOP-tier red regardless of connection identity.
+   * STOP-tier `--tv-destructive` fill regardless of connection identity.
    */
   connectionLabel?: string | null;
   onConfirm: () => void;

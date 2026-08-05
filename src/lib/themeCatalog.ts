@@ -223,6 +223,60 @@ export const THEME_CATALOG = [
   { id: "wise", name: "Wise", vibe: "global money", swatch: "#163300" },
   { id: "xai", name: "xAI", vibe: "cosmic bold", swatch: "#000000" },
   { id: "zapier", name: "Zapier", vibe: "automation", swatch: "#ff4a00" },
+  {
+    id: "authkit",
+    name: "AuthKit",
+    vibe: "frosted glass violet",
+    swatch: "#663af3",
+  },
+  {
+    id: "lattice",
+    name: "Lattice",
+    vibe: "botanical field notes",
+    swatch: "#001f1f",
+  },
+  {
+    id: "visual",
+    name: "Visual",
+    vibe: "warm editorial serif",
+    swatch: "#2c2c26",
+  },
+  {
+    id: "shop",
+    name: "Shop",
+    vibe: "marble pill commerce",
+    swatch: "#5433eb",
+  },
+  {
+    id: "supply",
+    name: "099 SUPPLY",
+    vibe: "gallery wall neutral",
+    swatch: "#101010",
+  },
+  {
+    id: "henry",
+    name: "Henry",
+    vibe: "gothic broadside mono",
+    swatch: "#2a2722",
+  },
+  {
+    id: "ease",
+    name: "Ease Health",
+    vibe: "greenhouse cream",
+    swatch: "#0f3e17",
+  },
+  {
+    id: "karl",
+    name: "Karl",
+    vibe: "sunlit popup diorama",
+    swatch: "#007fff",
+  },
+  {
+    id: "console",
+    name: "Linear Console",
+    vibe: "dark observatory",
+    swatch: "#f7f8f8",
+  },
 ] as const satisfies readonly ThemeCatalogEntry[];
 
 export type ThemeId = (typeof THEME_CATALOG)[number]["id"];

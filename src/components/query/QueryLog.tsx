@@ -121,9 +121,12 @@ export default function QueryLog() {
               onClick={() => setDetailId(row.id)}
               data-testid={`query-log-row-${row.id}`}
             >
-              {/* Cancelled queries paint a muted dot, not destructive
-                  red, so a self-abort is visually distinct from a real
-                  error. */}
+              {/* Cancelled queries paint a muted dot, not the destructive
+                  one, so a self-abort is visually distinct from a real
+                  error. Colour is the whole signal here — the three dots
+                  are one shape and the `title` needs a hover — so the
+                  three tokens are held apart per theme and mode by
+                  `src/themes.color-channel.test.ts`. */}
               <span
                 className={`inline-block h-2 w-2 shrink-0 rounded-full ${
                   row.status === "success"
