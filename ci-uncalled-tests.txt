@@ -1,8 +1,10 @@
 # ci-uncalled-tests.txt — CI 가 안 부르는 src-tauri 통합 테스트 binary 의 allowlist (issue #2113).
 #
-# `scripts/check-ci-test-calls.sh` 가 읽는다. src-tauri/tests 의 통합 테스트
-# target 중 .github/workflows 의 어떤 `--test` 도 안 부르는 것은 전부 여기 사유와
-# 함께 있어야 하고, 없으면 CI 의 `PR Body Contract` 가 red 다.
+# `scripts/check-ci-test-calls.sh` 가 읽는다. 그 스크립트가 미호출로 판정한 통합
+# 테스트 target 은 전부 여기 사유와 함께 있어야 하고, 없으면 CI 의
+# `PR Body Contract` 가 red 다. 무엇을 target 으로 치고 무엇을 호출로 치는지는 그
+# 스크립트 헤더가 SOT 다 — 같은 규칙을 여기 다시 적으면 게이트가 바뀌는 날 이
+# 사본만 낡는다.
 #
 # 형식: 한 줄에 `<테스트 이름><공백><사유>`. `#` 로 시작하는 줄과 빈 줄은 무시하고,
 # 사유가 비면 위반이다. 정렬은 관례일 뿐 가드는 순서를 안 본다.
@@ -14,18 +16,17 @@
 #
 # ## 사유 `seed-2113` 은 시딩분이다
 #
-# 아래 59 줄은 이 게이트가 생기기 전부터 미호출이던 전수다. 2026-08-05 에 base
-# 2b7deab4 에서 이 명령으로 뽑았다 (bash · zsh):
-#
-#   comm -23 <(ls -1 src-tauri/tests/*.rs | xargs -n1 basename | sed 's/\.rs$//' | sort) \
-#            <(git grep -ohE -e '--test +[a-z_0-9]+' -- .github/workflows/ \
-#              | awk '{print $2}' | sort -u)
-#
-# 각 줄을 "호출 편입" 과 "삭제" 중 무엇으로 닫을지 판정하는 것은 #2113 범위 밖이고
+# `seed-2113` 이 붙은 줄은 이 게이트가 생기기 전부터 미호출이던 것이다. 각 줄을
+# "호출 편입" 과 "삭제" 중 무엇으로 닫을지 판정하는 것은 #2113 범위 밖이고
 # (오너 결정, 2026-08-03) 후속 이슈 몫이다. 그래서 seed 의 사유는 판정이 아니라
-# 출처다 — 남은 개수는 `grep -c ' seed-2113$' ci-uncalled-tests.txt` 로 센다
+# 출처다 — 남은 것은 `grep -c ' seed-2113$' ci-uncalled-tests.txt` 로 센다
 # (헤더의 언급이 안 섞이도록 줄 끝으로 고정한 패턴이다).
 # 새로 추가하는 줄은 seed 가 아니므로 진짜 사유를 적어라.
+#
+# 이 파일의 이름 집합은 게이트가 세는 미호출 집합과 정확히 같아야 한다. 지금 값은
+# 게이트를 돌리면 마지막 줄에 나온다:
+#
+#   bash scripts/check-ci-test-calls.sh
 
 backend_adapter_contract_profile              seed-2113
 backend_query_result_contract                 seed-2113
