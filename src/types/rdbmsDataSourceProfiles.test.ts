@@ -35,7 +35,10 @@ function expectedCapabilities(
 
 const expectedMssqlRuntimeCapabilities = expectedCapabilities({
   // Issue #1529 — read-only toggle for every write-capable server RDB.
-  connection: { test: true, readOnly: true },
+  // Issue #2094 — switchDatabase follows the wired `MssqlAdapter`, which
+  // overrides `RdbAdapter::switch_database` (`switch_active_database`) instead
+  // of falling through to the trait's `Unsupported` default.
+  connection: { test: true, switchDatabase: true, readOnly: true },
   query: { query: true, cancel: true },
   catalog: {
     indexes: true,
@@ -110,6 +113,9 @@ describe("RDBMS data source profiles", () => {
     });
     expect(mssql.capabilities).toEqual(expectedMssqlRuntimeCapabilities);
     expect(mssql.capabilities.connection.test).toBe(true);
+    // Issue #2094 — the toolbar DbSwitcher gate; contrast with Oracle below,
+    // which has no `switch_database` override and stays false.
+    expect(mssql.capabilities.connection.switchDatabase).toBe(true);
     expect(mssql.capabilities.query.query).toBe(true);
     expect(mssql.capabilities.query.cancel).toBe(true);
     expect(mssql.capabilities.query.explain).toBe(false);
