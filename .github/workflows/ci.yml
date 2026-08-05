@@ -97,6 +97,47 @@ jobs:
       - name: CLAUDE.md import intact
         run: grep -qxF '@AGENTS.md' CLAUDE.md && test -f AGENTS.md
 
+      # A third contract rides here for the same reason the second one does
+      # (#2128). AGENTS.md 「강제 룰」 caps every `memory/**/memory.md` at 200
+      # lines and 12,000 CHARACTERS, and until now nothing measured it. It lands
+      # in this job rather than a job of its own because a required context is
+      # registered in the `pr_to_main` ruleset — live GitHub state this PR
+      # cannot change — and a freshly registered context that has never
+      # reported pins every open PR at BLOCKED
+      # (memory/runbook/pr-merge-gates/memory.md). Riding a context that is
+      # already required makes the cap blocking the day this merges. The script
+      # needs no toolchain, so it adds no setup to the cheapest job: 0.17s over
+      # 40 files, median of 9 local runs of
+      # `/usr/bin/time -p bash scripts/check-memory-doc-size.sh` (the shell
+      # builtin `time` prints no `real` line under zsh, so the command is
+      # spelled with the binary).
+      - name: memory/ doc size cap
+        run: bash scripts/check-memory-doc-size.sh
+
+      # A fourth contract rides here, for the same reason the second and third
+      # do (#2113). `--test` is an allowlist: an integration binary under
+      # src-tauri/tests that no workflow line names never runs, so a test
+      # written to turn CI red can sit green and gate nothing — the `keyring_*`
+      # binaries did exactly that until #1815. Which binaries count as uncalled
+      # is decided by `scripts/check-ci-test-calls.sh` alone; its header states
+      # the rule and running it prints the current tally. Every uncalled binary
+      # has to carry a reason in `ci-uncalled-tests.txt`, and one that does not
+      # fails here. Draining that file — wiring each binary in or deleting it —
+      # is a follow-up issue, not this one (owner's call, 2026-08-03).
+      # It lands in this job rather than one of its own because a required
+      # context is registered in the `pr_to_main` ruleset, live GitHub state a
+      # PR cannot change, and a freshly registered context that has never
+      # reported pins every open PR at BLOCKED
+      # (memory/runbook/pr-merge-gates/memory.md). Riding an already-required
+      # context makes the comparison blocking the day this merges. The script
+      # needs no toolchain: 0.18s, median of 9 local runs of
+      # `/usr/bin/time -p bash scripts/check-ci-test-calls.sh` on macOS against
+      # this branch's tree (the shell builtin `time` prints no `real` line under
+      # zsh, so the command is spelled with the binary). No runner measurement
+      # exists until this merges.
+      - name: src-tauri test binaries called or allowlisted
+        run: bash scripts/check-ci-test-calls.sh
+
   dependency-security:
     name: Dependency Security
     runs-on: ubuntu-latest
@@ -314,7 +355,30 @@ jobs:
             || { echo "expected 3 shard blobs, got $(ls .vitest-reports/blob-*.json | wc -l)"; exit 1; }
           pnpm exec vitest --mergeReports=.vitest-reports \
             --coverage \
-            --coverage.reporter=text-summary
+            --coverage.reporter=text-summary \
+            --coverage.reporter=json-summary
+
+      # #2126 — the step above enforces vite.config.ts's ABSOLUTE floors, which
+      # sit 2-3 percentage points under the measured total; coverage can leak
+      # that whole band without turning anything red. This step holds the band:
+      # `coverage-baseline.json` carries the measured value and the gate fails
+      # when the merged report drops below it. Its input is the
+      # `json-summary` reporter added to the merge command above — drop that
+      # flag here and this exits 2, not 0. What makes that true is the runner,
+      # not the gate: the checkout is fresh and `/coverage/` is gitignored, so
+      # nothing else can have written the file. Locally the same edit can still
+      # exit 0 off a stale `coverage/coverage-summary.json`, because vitest's
+      # `--mergeReports` path never calls `coverage.clean`.
+      # It rides `Frontend Checks` rather than a job of its own because a
+      # required context is registered in the `pr_to_main` ruleset, live GitHub
+      # state a PR cannot change, and a freshly registered context that has
+      # never reported pins every open PR at BLOCKED
+      # (memory/runbook/pr-merge-gates/memory.md). Of the required contexts this
+      # is the only one that measures frontend coverage, so the ratchet is
+      # blocking the day it merges. It reads a file the previous step already
+      # wrote: no toolchain, no extra suite run.
+      - name: Coverage ratchet
+        run: node scripts/check-coverage-ratchet.mjs
 
       - name: Build
         run: pnpm build
@@ -434,6 +498,80 @@ jobs:
       # this crate's dependency graph grows.
       - name: Run mongosh-parser-core unit tests
         run: cargo test --manifest-path src-tauri/mongosh-parser-core/Cargo.toml --lib
+
+  # Advisory, and it stays advisory by construction (#2127, owner's call).
+  # Required contexts are listed in the `pr_to_main` ruleset — live GitHub state
+  # no PR can edit — so a job whose name is absent from that list cannot block a
+  # merge: an over-budget red here leaves `mergeStateStatus` at UNSTABLE, which
+  # still merges. memory/runbook/pr-merge-gates/memory.md owns that list;
+  # putting this name on it is what would make the budget blocking, and that is
+  # a separate decision, taken after the job has reported on main.
+  #
+  # Nothing in CI built the parser WASM before this job: pinned to this PR's
+  # base, `git grep -n wasm-pack a6032a14 -- .github/workflows` returns 0 hits.
+  # The gate this rebuilds (`git show 6cced3ab^:scripts/check-wasm-size.sh`,
+  # deleted by #2033) only measured the CHECKED-IN blob, so it graded whatever
+  # was last committed instead of what the PR's Rust source compiles to. This
+  # job builds first, then measures — which is why the build step is in scope.
+  #
+  # No `Swatinem/rust-cache` here on purpose. From an absent target dir the two
+  # crates build in 14.48s (sql) and 23.00s (mongo) locally — wasm-pack's own
+  # `Done in` line for each `wasm-pack build --target web --features wasm` — and
+  # rust-cache keys include the job name, so this job would open cache entries
+  # of its own that only main can save. Not worth the moving parts on an
+  # advisory job; add it if the cold build ever crowds the runner.
+  wasm-size:
+    name: WASM Size Budget (non-blocking)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.91.0
+          targets: wasm32-unknown-unknown
+
+      # Same pinned-prebuilt installer the integration job uses for
+      # cargo-llvm-cov/nextest, so no per-run source build lands here.
+      - name: Install wasm-pack
+        uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-pack@0.15.0
+
+      # pnpm and Node are here only to run the two `build:*-wasm` scripts, which
+      # own the wasm-pack flags (`--target web`, `--features wasm`, out-dir).
+      # Spelling wasm-pack out again in this file would fork those flags into a
+      # second copy that drifts. No `pnpm install`: neither script reads
+      # node_modules.
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 10.20.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22.14.0
+
+      # These write into the tracked `src/lib/**/wasm/` output dirs, which is
+      # exactly what the check below reads: on this ephemeral checkout the fresh
+      # build replaces the committed artifacts, so the measured bytes are the
+      # ones this PR's source produces. (Locally the same commands overwrite
+      # your checkout, including the comment-only `.gitignore` wasm-pack
+      # replaces with `*` — run the check alone to grade the committed blob.)
+      - name: Build parser WASM
+        run: |
+          pnpm run build:sql-wasm
+          pnpm run build:mongosh-wasm
+
+      # Budgets, their derivation and the reproduction commands live in the
+      # script's header, not here — one copy.
+      - name: Check WASM gzip size budgets
+        run: bash scripts/check-wasm-size.sh
 
   rust-static:
     name: Rust Static Analysis
@@ -644,6 +782,7 @@ jobs:
             --test mysql_integration \
             --test duckdb_file_analytics \
             --test mariadb_ddl_preview \
+            --test mariadb_integration \
             --test mssql_connection_routing \
             --test mssql_integration \
             --test oracle_integration \

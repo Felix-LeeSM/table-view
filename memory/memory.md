@@ -1,8 +1,8 @@
 ---
 title: Table View — 팔레스 입구
 type: index
-updated: 2026-08-01
-keywords: 팔레스, 방 지도, index, by-surface, by-task, 200줄, 12000 chars, wc -m
+updated: 2026-08-03
+keywords: 팔레스, 방 지도, index, by-surface, by-task, 200줄, 12000 chars, wc -m, check-memory-doc-size, doc size cap, lines >, chars >
 ---
 
 # 팔레스 입구
@@ -67,10 +67,12 @@ keywords: 팔레스, 방 지도, index, by-surface, by-task, 200줄, 12000 chars
 - 손작성 active rule 파일은 `memory.md` 만 허용. 각 `memory.md` 는 200줄 이하
   및 12,000 chars 이하 (둘 다 지켜야 함). 어느 하나라도 초과 시 하위 주제로
   방을 쪼갠다.
-  - chars 는 **문자 수** (`wc -m`) 다 — byte 수 (`wc -c`) 가 아니다. 재는
-    장치가 없으니 `wc -m` 을 직접 돌린다.
-    한글 본문은 UTF-8 에서 문자당 3 byte 라 `wc -c` 와 크게 벌어진다. 크기를
-    인용할 때는 단위를 함께 적는다.
+  - chars 는 **문자 수** (`wc -m`) 다 — byte 수 (`wc -c`) 가 아니다. 한글 본문은
+    UTF-8 에서 문자당 3 byte 라 `wc -c` 와 크게 벌어진다. 크기를 인용할 때는
+    단위를 함께 적는다.
+  - 두 상한은 `bash scripts/check-memory-doc-size.sh` 가 잰다. CI 의 required
+    `PR Body Contract` 잡에서 도니까 초과한 채로는 머지가 안 된다 (#2128).
+    로컬에서 먼저 돌려라 — 위반은 `FAIL <path>: <실측> lines > 200` 으로 나온다.
 - `memory/index/by-task.md`, `memory/index/by-surface.md` 는 cross-link 예외다.
   rule SOT 가 아니다. 손으로 갱신한다 — 방을 추가/삭제하면 by-task 를 갱신하고,
   `surface:` 필드가 있는 방이면 by-surface 도 같이 고친다.

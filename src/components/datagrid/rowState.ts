@@ -8,7 +8,7 @@
 /**
  * Selected-row fill.
  *
- * Why `foreground` and not a hue: the fill must stay visible in all 144
+ * Why `foreground` and not a hue: the fill must stay visible in all 162
  * `[data-theme][data-mode]` blocks of `src/themes.css`, and no hue token in the
  * palette has a guaranteed luminance direction there. `--tv-primary` is a
  * near-white yellow in the clickhouse / miro / binance / voltagent / renault

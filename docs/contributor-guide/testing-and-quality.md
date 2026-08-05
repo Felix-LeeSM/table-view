@@ -89,7 +89,6 @@ one-line notice instead of the log.
 | Right-click E2E | Add an alternate context-menu trigger or wait for tauri-driver W3C Actions support. |
 | E2E isolation | App-local state (`connections.json`, prefs, safe-mode flags) is emptied per session by `beforeSession` in `wdio.smoke.conf.ts` (`e2e/support/smoke-data-dir.ts`), so a `specFileRetries` retry no longer inherits the previous attempt's connections (#1836). Remaining: DB-server fixtures are still seeded once per spec-file run, not per retry. |
 | Masked E2E flakes | `wdio.smoke.conf.ts` sets `specFileRetries: 1`, so a first-attempt `no such window` crash is recovered in the same run and never shows in that run's pass/fail tally. No flake tally exists — nothing counts `no such window` or `RETRYING` markers; tracked in #1293. |
-| Link checker | Add an internal-doc link checker after archive routing settles. |
 | Dependency security | Track `hickory-proto` advisory exposure through `mongodb 3.6.0`, `rustls-pemfile` exposure through `oracle-rs 0.1.7`, and `quick-xml` DoS advisories (RUSTSEC-2026-0194/0195) through `plist 1.8.0`; remove deny ignores when upstream dependency updates make it possible. |
 
 ## Static Lint Gate
@@ -112,9 +111,14 @@ reads the allowlists:
 | Hidden TS/TSX lint candidates | Only generated wasm artifacts under `src/lib/sql/wasm/**` and `src/lib/mongo/wasm/**` may be ignored. | The PR adding a broad ignore must either narrow it or document generated-artifact ownership. |
 | `src/features/**` imports | Feature production modules may use feature-local code, feature public APIs, `@lib`, `@/types`, and `@components/ui`; cross-feature internal imports fail and must route through `src/features/<domain>/index.ts`. Imports from legacy components, hooks, stores, pages, router, or app shell still fail unless they are an explicit public-facade exception. | The PR adding a feature dependency owns reusable extraction, public API export, or removal of the dependency. |
 
-Coverage thresholds are governed by `vite.config.ts` (frontend) and the
-`--fail-under-*` literals in `.github/workflows/ci.yml` (Rust integration) —
-those two files are the only places the numbers live. E2E breadth stays with #581, and
+Coverage thresholds sit in two layers. The floors: `vite.config.ts` (frontend)
+and the `--fail-under-*` literals in `.github/workflows/ci.yml` (Rust
+integration). Above the frontend floor, a ratchet: `coverage-baseline.json`
+carries the last measured frontend total and `scripts/check-coverage-ratchet.mjs`
+fails `Frontend Checks` when the merged report drops below it — that script's
+header owns the tolerance and the procedure for raising the baseline. So a
+frontend coverage red the `vite.config.ts` numbers cannot explain is the
+ratchet: look for `FAIL <metric>` in the job log. E2E breadth stays with #581, and
 CI cache or parallelism with #582. Static lint changes should not edit those
 gates.
 
@@ -176,16 +180,27 @@ Required local evidence:
   binaries stayed outside CI until #1815. Drop a line and the lane still exits 0
   with those crates' unit tests — or those binaries — unrun, the same reason CI
   wires them as separate steps (the `Rust Unit And Storage Tests` job in
-  `.github/workflows/ci.yml`).
+  `.github/workflows/ci.yml`). Since #2113 the difference is measured rather
+  than noticed one binary at a time: `scripts/check-ci-test-calls.sh` compares
+  the integration targets under `src-tauri/tests` against the `--test` names CI
+  calls, and fails unless each uncalled one carries a reason in
+  `ci-uncalled-tests.txt`. It runs in the `PR Body Contract` job, so adding a
+  test binary without wiring it in is red. That script's header states what it
+  counts as a target and as a call, and running it prints the current tally —
+  quote that output rather than re-deriving the comparison by hand. Closing the
+  entries the file was seeded with is a separate issue.
 - Docker integration lane: with required services available,
   `cargo test --manifest-path src-tauri/Cargo.toml --test schema_integration --test query_integration --test mongo_integration --test fixture_loading --test redis_integration`.
-- Documentation lane: `git diff --check` on the touched docs plus local
-  link/target review. **No formatter covers docs markdown, on purpose.**
-  Prettier was removed when Biome landed, `biome.jsonc` excludes `docs/`
-  outright, and Biome 2.5.6 does not format markdown at all — so there is
-  nothing to run and this lane must not be written as if there were. Reviewer
-  judgement is the whole gate here; do not treat a docs-only change as
-  machine-verified.
+- Documentation lane: `git diff --check` on the touched docs plus
+  `pnpm docs:links`, which fails on an internal markdown link whose file or
+  heading does not exist and runs in CI inside the frontend test shards.
+  **No formatter covers docs markdown, on purpose.** Prettier was removed when
+  Biome landed, `biome.jsonc` excludes `docs/` outright, and Biome 2.5.6 does
+  not format markdown at all — so there is nothing to run and this lane must not
+  be written as if there were. Link targets are what this lane's machine checks
+  read out of the text; `git diff --check` warns about whitespace errors and
+  conflict markers, not meaning. Prose, structure, external URLs, and whether a
+  resolving link points at the right document remain reviewer judgement.
 
 Required remote evidence on the exact release SHA:
 
@@ -221,11 +236,20 @@ Required remote evidence on the exact release SHA:
 Deferred or non-blocking checks must stay explicit:
 
 - Theme contrast is advisory today.
-- Link checking, a11y beyond the critical component smoke set, perf budgets,
-  macOS/Windows desktop runtime smoke, and per-spec database fixture reset are
-  not routine release blockers unless a release issue explicitly promotes one of
-  them. (Rust llvm-cov integration cutoffs became a routine blocking check on
-  2026-07-03 — the CI `Integration Tests (Docker)` job enforces them.)
+- Parser WASM size is advisory today (#2127). The CI
+  `WASM Size Budget (non-blocking)` job builds both parser crates with
+  wasm-pack and grades the gzip bytes against the budgets in
+  `scripts/check-wasm-size.sh`. That job name is absent from the `pr_to_main`
+  ruleset, so an over-budget PR reports red and still merges; promoting the
+  budget to blocking means adding the name to that ruleset.
+- A11y beyond the critical component smoke set, perf budgets, macOS/Windows
+  desktop runtime smoke, and per-spec database fixture reset are not routine
+  release blockers unless a release issue explicitly promotes one of them. Two
+  entries have already left this list by being promoted: Rust llvm-cov
+  integration cutoffs on 2026-07-03, enforced by the CI
+  `Integration Tests (Docker)` job, and internal-doc link checking in #2125,
+  enforced by `scripts/__tests__/docs-links.test.ts` inside the frontend test
+  shards.
 - An E2E spec is CI evidence for the changes that select it and manual evidence
   otherwise. `e2e/scope-map.mjs` decides which specs a PR runs; the full suite
   runs on push to `main`, on the nightly schedule, and on `workflow_dispatch`.

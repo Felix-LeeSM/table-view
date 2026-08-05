@@ -25,8 +25,9 @@ copies across the repo had already gone stale by #1845.
 What the individual jobs own:
 
 - `Frontend Checks` aggregates the three-shard vitest matrix, applies
-  `vite.config.ts`'s coverage thresholds to the merged report, and runs
-  `pnpm lint` and `pnpm build`.
+  `vite.config.ts`'s coverage thresholds to the merged report, holds the band
+  above those floors with the `coverage-baseline.json` ratchet
+  (`scripts/check-coverage-ratchet.mjs`), and runs `pnpm lint` and `pnpm build`.
 
 - `Dependency Security` runs `cargo deny check bans licenses sources` in
   `src-tauri`. RUSTSEC advisories are decoupled into `Dependency Advisories`,
@@ -44,7 +45,12 @@ What the individual jobs own:
 - `PR Body Contract` rejects a PR body carrying a path only the author can open
   — an absolute home or temp path, a `file:` URL, or a path inside a work copy.
   An empty body passes. The workflow does not listen for `edited`, so a red
-  verdict clears on the next commit, not on a body edit.
+  verdict clears on the next commit, not on a body edit. The job also carries
+  three contracts that have nothing to do with the body — the `CLAUDE.md` import
+  line, the `memory/` doc-size cap, and the `src-tauri` test-binary allowlist
+  (`scripts/check-ci-test-calls.sh`) — so a red verdict here is not always
+  about the body. `memory/runbook/pr-merge-gates/memory.md` names all four and
+  is where a red one is diagnosed.
 
 - `Runtime Happy Path` runs the smoke specs `e2e/scope-map.mjs` selects from the
   changed paths, and it fails when they fail.
@@ -232,7 +238,7 @@ Critical component smoke covers SchemaTree tree/treeitem roles, DataGrid
 grid/gridcell/edit feedback, ConnectionDialog labels/error feedback,
 Import/Export labels/error feedback, and secret-free alert/status/aria-live
 regions for credential/recovery paths. Routine VoiceOver/NVDA, focus-order,
-Quick Open, candidate-source UI, and 72-theme strict WCAG gates are not wired.
+Quick Open, candidate-source UI, and 81-theme strict WCAG gates are not wired.
 Promote from the follow-up table only when a feature lane gives the check a
 concrete owner and budget.
 
@@ -259,12 +265,24 @@ FPS/latency budgets only with owner, runtime cost, and failure triage.
 
 ## Link checking
 
+Current evidence:
+
+- `scripts/docs-links.ts`
+- `scripts/__tests__/docs-links.test.ts`
+- `tests/fixtures/docs-links/`
+
 Current gap / routing:
 
-No link checker exists. Nothing verifies that a relative markdown target or
-anchor resolves, in any doc root, so touched links are reviewed by hand.
-Introducing a check remains future work after owner, runtime cost, and
-actionability settle.
+Internal markdown link targets are automated and blocking. The gate runs as a
+vitest file inside `Frontend Tests (shard N/3)`, so a relative target or heading
+anchor that does not resolve turns `Frontend Checks` red; it reads every `*.md`
+git tracks except frozen `docs/archives` and its own fixture directory. What
+stays manual: external URLs are never fetched, an anchor that only one of the
+two slugger conventions resolves is not reported, and whether a resolving link
+points at the *right* document is still reviewer judgement. Dead links inside
+frozen ADR bodies are parked in a named allowlist in `scripts/docs-links.ts`
+rather than repaired. Promoting any of those needs the same owner, runtime cost,
+and actionability this one had to show.
 
 ## Platform smoke
 

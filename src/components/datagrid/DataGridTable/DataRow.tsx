@@ -270,7 +270,7 @@ function DataRow({
       typeof cell === "object";
     const isExpandedHere = isNestedCapable && expandedCol === dIdx;
     // Count nested pending edits on this cell so we can flag it
-    // with the same amber highlight a top-level pending uses.
+    // with the same `--tv-highlight` wash a top-level pending uses.
     let nestedPendingCount = 0;
     // Issue #1174 — nested edits anchor under the base cell key, so the
     // same row-identity gate applies before counting them.
@@ -633,10 +633,12 @@ function DataRow({
       // both.
       //
       // #1734 (3) moved the selection fill off `accent`, which sat within a
-      // hair of `--tv-background` in every theme (`bg-accent/20` peaks at 1.046
-      // across all 144 theme x mode blocks) — the owner measured it as
-      // invisible. The replacement and the reason it is a neutral rather than a
-      // hue live in `datagrid/rowState.ts`.
+      // hair of `--tv-background` in every theme — the owner measured it as
+      // invisible. `DataGridTable.selection-contrast.test.tsx` pins the bound
+      // rather than a peak that goes stale on the next theme added: across all
+      // 162 theme x mode blocks, `bg-accent/20` never clears the separation
+      // floor the shipped fill never falls to. The replacement and the reason
+      // it is a neutral rather than a hue live in `datagrid/rowState.ts`.
       //
       // Channels stay separate: ring token = roving focus, `SELECTED_ROW_FILL`
       // = selection, `bg-primary/10` + `ring-1 ring-inset ring-primary`

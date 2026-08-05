@@ -227,9 +227,15 @@ describe("ConnectionItem", () => {
   });
 
   // -----------------------------------------------------------------------
-  // AC-06: Status indicator (connected=green, error=red+tooltip, disconnected=gray)
+  // AC-06: Status indicator — connected `text-success`, error
+  // `text-destructive` + tooltip, disconnected `text-muted-foreground`. Named
+  // by class, not by colour: `--color-success` aliases `--tv-status-connected`
+  // (`src/index.css`), which was one green across the whole catalog until
+  // #2117's monochrome themes repainted it, and the other two tokens can go the
+  // same way. The assertions below read the `aria-label`, which is the channel
+  // that does not move.
   // -----------------------------------------------------------------------
-  it("renders green indicator when connected", () => {
+  it("renders the connected indicator", () => {
     setStoreState({
       activeStatuses: { "conn-1": { type: "connected" } },
     });
@@ -240,7 +246,7 @@ describe("ConnectionItem", () => {
     expect(indicator).toBeInTheDocument();
   });
 
-  it("renders red indicator with error tooltip when error", () => {
+  it("renders the error indicator with its tooltip", () => {
     setStoreState({
       activeStatuses: {
         "conn-1": { type: "error", message: "Connection refused" },
@@ -276,7 +282,7 @@ describe("ConnectionItem", () => {
     expect(document.body.textContent).not.toContain("S3cretPw1");
   });
 
-  it("renders gray indicator when disconnected", () => {
+  it("renders the disconnected indicator", () => {
     setStoreState({
       activeStatuses: { "conn-1": { type: "disconnected" } },
     });
