@@ -112,7 +112,8 @@ describe("connection export / import round trip", () => {
 
     await step("the payload is an envelope, not a plain export", async () => {
       const parsed = JSON.parse(envelopeJson) as Record<string, unknown>;
-      // Pins the `EncryptedEnvelope` schema (src-tauri/src/storage/crypto.rs)
+      // Pins the `EncryptedEnvelope` schema
+      // (src-tauri/table-view-core/src/storage/crypto.rs)
       // — the two keys the backend's own envelope detection keys off. A
       // regression to the plain `export_connections` path would already have
       // died at the recovery-phrase wait above, which is why this is a schema

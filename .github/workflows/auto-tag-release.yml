@@ -107,8 +107,8 @@ jobs:
             exit 1
           fi
 
-          # Cargo.toml must agree with tauri.conf.json — a half-done bump would
-          # otherwise ship a tag whose crate version disagrees with the app.
+          # src-tauri/Cargo.toml must agree with tauri.conf.json — a half-done
+          # bump would ship a tag whose crate version disagrees with the app.
           # The read is section-aware and exits non-zero when it finds nothing
           # (#2169): a `version` outside [package] — [workspace.package] once
           # #2161 lands — or a quoted trailing comment must not be picked up,
@@ -116,7 +116,7 @@ jobs:
           # Regression suite: scripts/release/cargo-package-version.test.sh
           cargo_version="$(bash scripts/release/cargo-package-version.sh src-tauri/Cargo.toml)"
           if [ "$version" != "$cargo_version" ]; then
-            echo "::error::version mismatch: tauri.conf.json=$version Cargo.toml=$cargo_version" >&2
+            echo "::error::version mismatch: tauri.conf.json=$version src-tauri/Cargo.toml=$cargo_version" >&2
             exit 1
           fi
 
