@@ -200,7 +200,7 @@ describe("useSchemaCache", () => {
   });
 
   it("[AC-1219-4] eager threshold counts user schemas only, ignoring system schemas", async () => {
-    // Regression from PR #1263 round 1: the backend `list_namespaces` returns
+    // Regression from PR #1263: the backend `list_namespaces` returns
     // system schemas (DuckDB `main` / `temp`) alongside the 4 user schemas, so
     // the raw list length (6) tipped a small DB into the lazy path and the
     // first-schema seed hid `core.*`. The threshold must count only user

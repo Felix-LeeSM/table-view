@@ -119,7 +119,7 @@ describe("useQuickLookFocus", () => {
     expect(document.activeElement).toBe(anchor());
   });
 
-  // Reason: round 2 blocking — the restore has to survive paths that remove the
+  // Reason: #1734 (5) — the restore has to survive paths that remove the
   // panel without calling anything. Nothing here calls a restore; the panel is
   // taken out of the tree and the hook sees only its ref detaching, which is
   // what a successful commit and a shrinking refetch look like from here.

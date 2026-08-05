@@ -243,7 +243,7 @@ describe("DocumentDataGrid", () => {
     ).not.toBeInTheDocument();
   });
 
-  // Reason: #1734 (5) round 2 — the focus exchange had no document-side test at
+  // Reason: #1734 (5) — the focus exchange had no document-side test at
   // all, and this grid takes the OTHER branch of the restore: it publishes no
   // `focusAnchorRef` (it never virtualizes), so it exercises the live
   // `[data-grid-row][tabindex="0"]` lookup rather than the grid's own focuser.

@@ -158,8 +158,7 @@ async function expectLayeredByForeignKeyDirection(viewportName: string) {
  * The pointer sequence is synthesized in-page, the pattern every other spec
  * here uses (`e2e/smoke/grid-edit.ts`, `e2e/smoke/postgres-structure-ddl.spec.ts`).
  * WebdriverIO's Actions-API `dragAndDrop` was tried first and moved the node 0px
- * under tauri-driver — twice, in the first run and the retry (PR #2100 review
- * round 1).
+ * under tauri-driver — twice, in the first run and the retry (PR #2100).
  */
 async function expectNodeIsDraggable(viewportName: string, ariaLabel: string) {
   const before = await readNodeTransform(ORDERS_NODE_ID);

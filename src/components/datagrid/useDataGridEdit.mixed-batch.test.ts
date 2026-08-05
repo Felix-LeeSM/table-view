@@ -1024,8 +1024,8 @@ describe("useDataGridEdit — Sprint 184 mixed-batch + perf smoke", () => {
     // Reason: PR #1483 review B1 — the adapter reports applied inserts from
     // preview-time sources, but after the FIRST prune the live pendingNewRows
     // array has shifted left. A positional index from preview time then
-    // deletes the wrong row: staged [A,B,C], round 1 applies A (pruned),
-    // round 2 applies B but the stale index pointed at C — losing C (never
+    // deletes the wrong row: staged [A,B,C], pass 1 applies A (pruned),
+    // pass 2 applies B but the stale index pointed at C — losing C (never
     // applied) and keeping B (already applied → duplicate on re-commit).
     // Applied inserts must be identified by row identity. (2026-07-10)
     const { result } = renderDocHook();

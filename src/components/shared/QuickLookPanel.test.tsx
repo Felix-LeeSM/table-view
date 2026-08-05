@@ -429,7 +429,7 @@ describe("QuickLookPanel", () => {
         ).toBeInTheDocument();
       });
 
-      // #1734 (4) round 2 — this used to pin the `handleStartEdit` →
+      // #1734 (4) — this used to pin the `handleStartEdit` →
       // `setEditValue` → `saveCurrentEdit` trio and its ordering, all three
       // mocked. Against the real hook the trio is a no-op: `saveCurrentEdit`
       // reads `editingCell` from the render closure and it is still `null` one

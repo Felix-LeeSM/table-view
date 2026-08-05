@@ -316,13 +316,13 @@ describe("DataGrid — Quick Look focus exchange (#1734 (5))", () => {
     ).not.toBeInTheDocument();
   });
 
-  // Reason: round 2 (B1) — the restore must not depend on the anchor being
+  // Reason: #1734 (5) B1 — the restore must not depend on the anchor being
   // findable by `[data-grid-row][tabindex="0"]`. Past 200 rows the RDB grid
   // virtualizes and that selector matches nothing while the anchor row is
-  // scrolled out, which is what made round 1 drop focus on <body>. jsdom has no
-  // layout so the virtualizer cannot be driven faithfully here; demoting the
-  // attribute reproduces the same observable — the fallback lookup cannot find
-  // the cell — and proves `DataGrid` really wired the grid's own focuser
+  // scrolled out, which is what made the tabindex-only restore drop focus on
+  // <body>. jsdom has no layout so the virtualizer cannot be driven faithfully
+  // here; demoting the attribute reproduces the same observable — the fallback
+  // lookup cannot find the cell — and proves `DataGrid` really wired its focuser
   // through `RdbDataGridContent`. The scroll-in + retry that focuser performs
   // is covered by `useGridRoving.test.tsx`.
   it("closing restores focus even when the anchor is not findable by the tabindex lookup", async () => {
@@ -347,10 +347,10 @@ describe("DataGrid — Quick Look focus exchange (#1734 (5))", () => {
     expect(document.activeElement).toBe(cell);
   });
 
-  // Reason: round 2 blocking — the two paths that remove the panel without
+  // Reason: #1734 (5) — the two paths that remove the panel without
   // going through any close handler. Both were live regressions of the same
-  // shape round 1 fixed for the handler paths: the panel vanishes and focus is
-  // left on `<body>`, so the next arrow key goes nowhere. They are here rather
+  // shape the close-handler restore already fixed: the panel vanishes and focus
+  // is left on `<body>`, so the next arrow key goes nowhere. They are here rather
   // than in `useQuickLookFocus.test.tsx` because what they pin is the real
   // wiring — a commit and a refetch, neither of which knows Quick Look exists.
   describe("paths that remove the panel without a close handler", () => {
@@ -373,7 +373,7 @@ describe("DataGrid — Quick Look focus exchange (#1734 (5))", () => {
 
     // Reason: commit success runs `clearPendingAfterCommit` →`clearSelection`,
     // and the panel's mount gate is `selectedRowIds.size > 0`. No close handler
-    // is involved, so before round 2's fix the restore simply never ran.
+    // is involved, so a handler-driven restore simply never ran here.
     it("a successful commit empties the selection and the panel it unmounts hands focus back", async () => {
       renderDataGrid();
       await screen.findByText("3 rows");
