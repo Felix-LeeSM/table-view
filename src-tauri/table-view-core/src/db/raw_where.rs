@@ -232,9 +232,10 @@ fn binary_operator_is_safe(op: &BinaryOperator) -> bool {
 // field to an already-listed variant is absorbed silently — the new field
 // escapes validation and could smuggle a `(SELECT ...)` past the allowlist
 // (the exact class of bug #1549 / #1620 F1 fixed for Convert/Trim/Overlay/...).
-// So on any Cargo.lock `sqlparser` version bump: diff `sqlparser::ast::Expr`
-// and re-confirm every variant matched here still carries no unvalidated
-// `Expr`/`Query` child. Rule mirrored in
+// `sqlparser` is pinned in `src-tauri/Cargo.lock` and
+// `src-tauri/table-view-core/Cargo.lock`; a version bump in either one is
+// the trigger: diff `sqlparser::ast::Expr` and re-confirm every variant matched
+// here still carries no unvalidated `Expr`/`Query` child. Rule mirrored in
 // `memory/engineering/conventions/rust/memory.md` (보안).
 fn is_safe_value_expr(expr: &Expr) -> bool {
     match expr {

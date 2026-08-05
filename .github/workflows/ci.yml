@@ -246,6 +246,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          # `scripts/__tests__/core-split-prose.test.ts` runs the core-split
+          # sweep, which reads the #2082 split merge commit with `git diff-tree`.
+          # The default depth-1 checkout has no such object, so the script dies
+          # with `bad object` and the shard fails on empty output.
+          fetch-depth: 0
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
@@ -624,8 +630,8 @@ jobs:
 
       # #1769 — `cargo fmt` / `cargo clippy` only touch the package they are
       # invoked on, never its path dependencies. `table-view-core` holds the
-      # db/models/storage/error tree, so without these two steps ~60% of the
-      # Rust source would leave both gates while CI stayed green. clippy reads
+      # db/models/storage/error tree, so without the core steps below over half
+      # of the Rust source would leave both gates while CI stayed green. clippy reads
       # `clippy.toml` from CARGO_MANIFEST_DIR, hence the crate's own copy.
       - name: Rustfmt (table-view-core)
         working-directory: src-tauri/table-view-core
