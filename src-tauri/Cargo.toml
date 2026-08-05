@@ -35,7 +35,7 @@ table-view-core = { path = "table-view-core", version = "0.1.0", features = ["te
 # iteration). docker daemon 이 없는 환경 (CI sandbox 등) 에서는 즉시
 # 실패하므로, docker 가 있는 CI `Integration Tests (Docker)` job 에서만 돈다.
 testcontainers = "0.27"
-testcontainers-modules = { version = "0.15", features = ["postgres", "mongo", "mysql", "mssql_server", "oracle", "redis"] }
+testcontainers-modules = { version = "0.15", features = ["postgres", "mongo", "mysql", "mariadb", "mssql_server", "oracle", "redis"] }
 
 [dependencies]
 # #1769 — DB adapter / wire model / 로컬 저장소 본체. `sql-parser-core` 와 같은

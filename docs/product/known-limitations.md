@@ -45,11 +45,34 @@ smoke or measurement gates:
 - Critical component smoke covers SchemaTree tree/treeitem roles, DataGrid
   grid/gridcell/edit feedback, Connection and Import/Export dialog labels/error
   regions, and secret-free alert/status/aria-live credential feedback.
-- Full 72-theme light/dark WCAG AA measurement. One surface is swept: the
-  selected data-row fill is asserted per theme and mode by
-  `src/components/datagrid/DataGridTable.selection-contrast.test.tsx`. That is a
-  separation floor between the fill and its own row background, not a WCAG
-  criterion, and it covers no other pairing.
+- Full 81-theme light/dark WCAG AA measurement.
+- Monochrome themes trade colour-carried emphasis for their look. `supply` and
+  `henry` (#2117) spend a handful of tones across the whole palette, so two
+  semantic tokens land on the same value. Where that would make one *state* read
+  as another state, it is a defect and is gated —
+  `src/themes.color-channel.test.ts` holds the query log's succeeded / cancelled
+  / failed dots apart in every theme and mode, because those three dots are one
+  shape with no label. Where it only costs emphasis, it is accepted, because the
+  information is still on screen as text:
+  - `text-success` is the body-text colour in `supply` light/dark and `henry`
+    light/dark (`--tv-status-connected` == `--tv-foreground`, ΔE 0), so a
+    success line reads as ordinary prose.
+  - The slow-query nudge (`src/components/query/QueryRunningState.tsx`) stops
+    standing out in `supply` light/dark and `henry` light (`--tv-status-connecting`
+    == `--tv-muted-foreground`, ΔE 0; `henry` dark ΔE 7.5). The elapsed seconds
+    tick on screen either way, which is the signal the colour was emphasising.
+- Predates #2117 and still open: `--tv-highlight` sits within ΔE 15 of
+  `--tv-primary` — the same separation floor `src/themes.color-channel.test.ts`
+  applies to the query-log dots — in seven pre-existing blocks, of which one
+  (`voltagent dark`) is an exact match. Three surfaces signal "this cell has an
+  unsaved edit" with colour and nothing beside it:
+  `src/components/document/DocumentDataGrid/cellRenderers/DocumentGridRows.tsx`
+  (a `bg-highlight/20` cell wash, plus `ring-1 ring-highlight` on the expanded
+  row), `src/components/query/EditableQueryResultGrid.tsx` and
+  `src/components/document/NestedExpandPopover.tsx` (the wash only). The RDB
+  grid does not have this problem — #1139 gave it an `sr-only` label and a `●`
+  glyph (`src/components/datagrid/DataGridTable/DataRow.tsx`). Porting that second
+  channel to those three surfaces is untaken work.
 - SchemaTree 1k/10k table scroll FPS remains ungated. Current evidence is
   deterministic component fixtures plus advisory render p50/p95/env and
   virtualization DOM bounds only. SchemaTree now virtualizes by visible-row

@@ -187,8 +187,9 @@ describe("useAutoResolveActiveDb", () => {
     },
   );
 
-  // Reason: mssql/oracle are RDB but NOT switch-capable (no switchDatabase
-  // capability), so they render a read-only switcher — must be excluded too.
+  // Reason: oracle is RDB but NOT switch-capable (`OracleAdapter` declares no
+  // `switch_database` override, so the trait default returns Unsupported), and
+  // it renders a read-only switcher — must be excluded too.
   it("does not auto-resolve for a non-switch-capable RDB (oracle)", async () => {
     setFakeWindowConnectionId("c1");
     listDatabasesMock.mockResolvedValue([{ name: "FREEPDB1" }]);
@@ -199,6 +200,29 @@ describe("useAutoResolveActiveDb", () => {
     renderHook(() => useAutoResolveActiveDb());
     await Promise.resolve();
     expect(listDatabasesMock).not.toHaveBeenCalled();
+  });
+
+  // Reason: issue #2094 — the capability flip makes MSSQL the second consumer
+  // of this hook's gate, not just DbSwitcher's. A SQL Server connection opened
+  // with an empty `database` must self-heal the same way PG does, otherwise the
+  // workspace key keeps deriving `db=""` and the schema tree stays blank.
+  it("auto-resolves for MSSQL now that it is switch-capable (#2094)", async () => {
+    setFakeWindowConnectionId("c1");
+    listDatabasesMock.mockResolvedValue([
+      { name: "app_db" },
+      { name: "other" },
+    ]);
+    switchActiveDbMock.mockResolvedValue(undefined);
+    seedConn(makeConnection({ id: "c1", paradigm: "rdb", dbType: "mssql" }), {
+      type: "connected",
+    });
+
+    renderHook(() => useAutoResolveActiveDb());
+
+    await waitFor(() => {
+      expect(switchActiveDbMock).toHaveBeenCalledWith("c1", "app_db");
+    });
+    await waitFor(() => expect(activeDbOf("c1")).toBe("app_db"));
   });
 
   // Reason: a disconnected connection has no live pool — auto-resolve must wait

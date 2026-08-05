@@ -605,7 +605,7 @@ describe("DataGrid", () => {
     // Cell should still show original value
     expect(nameCell.textContent).toContain("Alice");
 
-    // No yellow bg
+    // No highlight bg
     expect(nameCell.className).not.toContain("bg-highlight/20");
   });
 
@@ -792,7 +792,7 @@ describe("DataGrid", () => {
 
     // Pending edits should be cleared
     expect(screen.queryByText(/edit/)).not.toBeInTheDocument();
-    // Yellow bg should be gone
+    // Highlight bg should be gone
     const cells = screen.getAllByRole("gridcell");
     expect(cells[1]!.className).not.toContain("bg-highlight/20");
   });

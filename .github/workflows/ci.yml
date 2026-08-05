@@ -785,6 +785,7 @@ jobs:
             --test mysql_integration \
             --test duckdb_file_analytics \
             --test mariadb_ddl_preview \
+            --test mariadb_integration \
             --test mssql_connection_routing \
             --test mssql_integration \
             --test oracle_integration \

@@ -65,8 +65,14 @@ describe("DataSourceProfile registry", () => {
       identityColumn: true,
     },
     intelligence: { erd: true },
-    // Issue #1073 — MySQL/MariaDB admin ops parity (no users: #1077 PG-first).
-    operations: { activity: true, slowQueries: true, serverInfo: true },
+    // Issue #1073 — MySQL/MariaDB admin ops parity. Issue #1077 Stage 2 — users
+    // listing from mysql.user (no password/authentication_string column).
+    operations: {
+      activity: true,
+      slowQueries: true,
+      serverInfo: true,
+      users: true,
+    },
   });
 
   const expectedCapabilitiesByType: Record<
@@ -143,7 +149,9 @@ describe("DataSourceProfile registry", () => {
       },
     }),
     mssql: expectedCapabilities({
-      connection: { test: true, readOnly: true },
+      // Issue #2094 — switchDatabase follows the wired `MssqlAdapter`
+      // `switch_database` override (see MSSQL_CAPABILITIES).
+      connection: { test: true, switchDatabase: true, readOnly: true },
       query: { query: true, cancel: true },
       catalog: {
         indexes: true,
@@ -160,8 +168,14 @@ describe("DataSourceProfile registry", () => {
         identityColumn: true,
       },
       intelligence: { erd: true },
-      // Issue #1073 — SQL Server admin ops parity (no users: #1077 PG-first).
-      operations: { activity: true, slowQueries: true, serverInfo: true },
+      // Issue #1073 — SQL Server admin ops parity. Issue #1077 Stage 2 — users
+      // listing from sys.server_principals (no password_hash / sys.sql_logins).
+      operations: {
+        activity: true,
+        slowQueries: true,
+        serverInfo: true,
+        users: true,
+      },
     }),
     oracle: expectedCapabilities({
       connection: { test: true, readOnly: true },
@@ -501,7 +515,12 @@ describe("DataSourceProfile registry", () => {
     expect(hasConnectionCapability("postgresql", "switchDatabase")).toBe(true);
     expect(hasConnectionCapability("mysql", "switchDatabase")).toBe(true);
     expect(hasConnectionCapability("mariadb", "switchDatabase")).toBe(true);
-    expect(hasConnectionCapability("mssql", "switchDatabase")).toBe(false);
+    // Issue #2094 — declaration follows the wired adapter: `make_adapter`
+    // builds `MssqlAdapter`, whose `RdbAdapter::switch_database` override
+    // reaches `switch_active_database` instead of the trait's `Unsupported`
+    // default. Oracle keeps `false` because `OracleAdapter` declares no
+    // override and falls through to that default.
+    expect(hasConnectionCapability("mssql", "switchDatabase")).toBe(true);
     expect(hasConnectionCapability("oracle", "switchDatabase")).toBe(false);
     expect(hasConnectionCapability("sqlite", "switchDatabase")).toBe(false);
     expect(hasConnectionCapability("mongodb", "switchDatabase")).toBe(false);

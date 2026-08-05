@@ -11,11 +11,19 @@
  *   - `<EditableQueryResultGrid>`     (raw query toolbar Execute)
  *   - `<ConfirmDestructiveDialog>`    (footer Confirm / Execute)
  *
- *   severity × environment matrix:
- *     WARN + dev|null|local|testing|development  → `--tv-success`     (green)
- *     WARN + staging                              → `--tv-warning`     (orange)
- *     WARN + production                           → `--tv-destructive` (red)
- *     STOP + any                                  → `--tv-destructive` (red)
+ *   severity × environment matrix — the cells are named by token, not by
+ *   colour word, because what a token resolves to is the theme's call
+ *   (`lattice` dark repaints `--tv-destructive-foreground`, #2117).
+ *   What the matrix guarantees is that the three fills resolve to three
+ *   different colours in every theme and mode, and that each label clears
+ *   a separation floor over its own fill — both swept in
+ *   `ExecuteButton.test.tsx`. That floor is NOT WCAG AA: nearly every
+ *   label-over-fill pair in this catalog falls short of 4.5:1, and the
+ *   sweep says so and prints the measured minimum on failure.
+ *     WARN + dev|null|local|testing|development  → `--tv-success`
+ *     WARN + staging                              → `--tv-warning`
+ *     WARN + production                           → `--tv-destructive`
+ *     STOP + any                                  → `--tv-destructive`
  *
  * Label format:
  *   - env null/dev (local/testing/development) → "Execute"
@@ -37,8 +45,8 @@ export type ExecuteSeverity = "warn" | "danger";
 export interface ExecuteButtonProps {
   /**
    * Statement severity. `warn` = proceed-with-confirm; `danger` = STOP
-   * tier (always red regardless of env). Maps to ADR 0023's 3-tier
-   * classifier (info / warn / danger).
+   * tier (always `--tv-destructive` regardless of env). Maps to ADR
+   * 0023's 3-tier classifier (info / warn / danger).
    */
   severity: ExecuteSeverity;
   /**
@@ -102,7 +110,7 @@ function pickColorTokens(
       hoverBg: "color-mix(in srgb, var(--tv-warning) 90%, black)",
     };
   }
-  // dev / local / testing / development / null → success (green).
+  // dev / local / testing / development / null → `--tv-success`.
   return {
     bg: "var(--tv-success)",
     fg: "var(--tv-success-foreground)",
@@ -160,7 +168,7 @@ export default function ExecuteButton({
       className={cn(
         "min-w-0 transition-colors",
         // The Button base owns paddings + height; we layer color via
-        // inline style so all 72 themes inherit the env tokens.
+        // inline style so all 81 themes inherit the env tokens.
         className,
       )}
       style={{

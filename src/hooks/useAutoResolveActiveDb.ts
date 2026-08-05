@@ -21,11 +21,11 @@ import { hasConnectionCapability } from "@/types/dataSource";
  * store, then persists via `setActiveDb` → `persistActiveStatuses` so the
  * *next* reload is already healed.
  *
- * Scope: RDB switch-capable only (postgresql / mysql / mariadb). document
- * (Mongo) and search (ES) keep DB scope elsewhere and have no `switchDatabase`
- * capability; kv (Redis/Valkey) is switch-capable but paradigm "kv" with its
- * own numeric "0" fallback — the `paradigm === "rdb"` guard excludes it.
- * Non-switch-capable RDB (sqlite/duckdb/mssql/oracle) render a read-only
+ * Scope: RDB switch-capable only (postgresql / mysql / mariadb, and mssql since
+ * #2094). document (Mongo) and search (ES) keep DB scope elsewhere and have no
+ * `switchDatabase` capability; kv (Redis/Valkey) is switch-capable but paradigm
+ * "kv" with its own numeric "0" fallback — the `paradigm === "rdb"` guard
+ * excludes it. Non-switch-capable RDB (sqlite/duckdb/oracle) render a read-only
  * switcher and are excluded by the capability check.
  *
  * Keyed on `useCurrentWindowConnectionId()` (the window's pinned connection),

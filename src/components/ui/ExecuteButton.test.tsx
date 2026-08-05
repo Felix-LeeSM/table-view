@@ -6,7 +6,9 @@
 // Tests cover the AC-256-05 contract:
 //   - 4 severity × env color matrix (WARN+dev/null=success,
 //     WARN+staging=warning, WARN+prod=destructive, STOP=destructive
-//     regardless of env)
+//     regardless of env) — named by token, because what a token resolves
+//     to is the theme's call, and the sweep at the bottom of this file is
+//     where the resolved colours are held to the contract
 //   - label format: env null/dev → "Execute"; staging/prod → "Execute on <conn>"
 //   - icon swap: Play (idle) ↔ Loader2 animate-spin (loading)
 //   - disabled state propagation
@@ -14,12 +16,20 @@
 //     stays discoverable.
 // AC mapping: AC-256-05.
 
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import {
+  assertSweepIsComplete,
+  contrastRatio,
+  themeBlocks,
+  toRgb,
+} from "@/test-utils/themePalettes";
 import ExecuteButton from "./ExecuteButton";
 
 describe("ExecuteButton", () => {
-  it("[AC-256-05a] WARN + dev → green (success token)", () => {
+  it("[AC-256-05a] WARN + dev → --tv-success", () => {
     render(
       <ExecuteButton
         severity="warn"
@@ -35,7 +45,7 @@ describe("ExecuteButton", () => {
     expect(btn.getAttribute("style")).toMatch(/--tv-success\)/);
   });
 
-  it("[AC-256-05a] WARN + null environment → green (success token)", () => {
+  it("[AC-256-05a] WARN + null environment → --tv-success", () => {
     render(
       <ExecuteButton
         severity="warn"
@@ -51,7 +61,7 @@ describe("ExecuteButton", () => {
     expect(btn.getAttribute("style")).toMatch(/--tv-success\)/);
   });
 
-  it("[AC-256-05b] WARN + staging → orange (warning token)", () => {
+  it("[AC-256-05b] WARN + staging → --tv-warning", () => {
     render(
       <ExecuteButton
         severity="warn"
@@ -67,7 +77,7 @@ describe("ExecuteButton", () => {
     expect(btn.getAttribute("style")).toMatch(/--tv-warning\)/);
   });
 
-  it("[AC-256-05c] WARN + production → red (destructive token)", () => {
+  it("[AC-256-05c] WARN + production → --tv-destructive", () => {
     render(
       <ExecuteButton
         severity="warn"
@@ -83,7 +93,7 @@ describe("ExecuteButton", () => {
     expect(btn.getAttribute("style")).toMatch(/--tv-destructive\)/);
   });
 
-  it("[AC-256-05d] STOP severity → red regardless of env", () => {
+  it("[AC-256-05d] STOP severity → --tv-destructive regardless of env", () => {
     for (const env of [null, "local", "staging", "production"]) {
       const { unmount } = render(
         <ExecuteButton
@@ -222,5 +232,129 @@ describe("ExecuteButton", () => {
     expect(
       screen.getByRole("button", { name: "Run dry-run" }),
     ).toBeInTheDocument();
+  });
+});
+
+// The matrix above is asserted at token-NAME level, which is blind to what the
+// tokens resolve to in a given theme: #2117 shipped a theme whose block set all
+// three fills to one near-white value and inherited the `:root` white
+// foreground, so the four cells rendered as one colour and the label measured
+// 1.044:1. Both halves of ADR 0023 (d) — "severity x env colour" and a legible
+// target label — are theme-resolved properties, so they are measured here
+// against every block the app can render, not against the default palette.
+
+const CELLS = [
+  { severity: "warn", environment: "development" },
+  { severity: "warn", environment: "staging" },
+  { severity: "warn", environment: "production" },
+  { severity: "danger", environment: null },
+] as const;
+
+/**
+ * `{ key, fill, fg }` per matrix cell, read from the inline style the component
+ * actually emits. Reading it instead of listing the tokens here is what keeps
+ * this honest: repoint `pickColorTokens` at another token and the sweep below
+ * follows it rather than silently measuring the old one.
+ */
+function cellsFromDom(): { key: string; fill: string; fg: string }[] {
+  return CELLS.map(({ severity, environment }) => {
+    const { container, unmount } = render(
+      <ExecuteButton
+        severity={severity}
+        environment={environment}
+        connectionLabel="conn"
+        loading={false}
+        disabled={false}
+        onClick={vi.fn()}
+      />,
+    );
+    const btn = container.querySelector("button");
+    const style = btn?.getAttribute("style") ?? "";
+    const key = btn?.getAttribute("data-severity-env") ?? "";
+    unmount();
+    const fill = style.match(
+      /background-color:\s*var\(--tv-([a-z0-9-]+)\)/,
+    )?.[1];
+    const fg = style.match(/(?:^|;)\s*color:\s*var\(--tv-([a-z0-9-]+)\)/)?.[1];
+    if (!fill || !fg)
+      throw new Error(
+        `${key}: no var() fill/foreground pair in style: ${style}`,
+      );
+    return { key, fill, fg };
+  });
+}
+
+// The colour math and the block cascade live in `src/test-utils/themePalettes.ts`
+// — this file used to carry its own copy, and the copy had drifted into
+// accepting hex values `toRgb` could not expand. That header explains what the
+// shared version refuses to do silently.
+
+// Not a WCAG criterion: the dark-mode `--tv-warning` orange under white text is
+// its floor case, and lifting the whole catalog to 4.5:1 is a separate decision
+// from ADR 0023. This is the weaker "the label is not the fill" floor, set
+// between two bounds this file reproduces: restore the three monochrome
+// `--tv-destructive`/`-success`/`-warning` declarations to the henry blocks in
+// `src/themes.css` and the first assertion fails with the measured 1.044; leave
+// them out and the catalog's own minimum clears it with the ratio printed in
+// any future failure.
+const MIN_LABEL_RATIO = 2.0;
+
+describe("ExecuteButton severity x env across every theme (ADR 0023 (d))", () => {
+  const all = themeBlocks(
+    readFileSync(resolve(__dirname, "../..", "themes.css"), "utf8"),
+  );
+  const cells = cellsFromDom();
+
+  it("sweeps every theme and mode block in src/themes.css", () => {
+    // A regex that quietly stops matching would turn every assertion below
+    // green. Names, not a count: this used to compare `all.length` against
+    // `THEME_CATALOG.length * 2`, which is satisfied by any 162 blocks —
+    // including 162 wrong ones.
+    expect(() => {
+      assertSweepIsComplete(all.map((b) => b.name));
+    }).not.toThrow();
+  });
+
+  it("the label stays readable on its fill in every theme and mode", () => {
+    const failures: string[] = [];
+    for (const block of all) {
+      for (const { key, fill, fg } of cells) {
+        const bg = block.resolve(fill);
+        const text = block.resolve(fg);
+        // Unresolved is a failure, not a skip: a silent skip is how a sweep
+        // reports "no failures" on a cell it never measured.
+        if (!bg || !text) {
+          failures.push(`${block.name} ${key}=unresolved(${fill}/${fg})`);
+          continue;
+        }
+        const ratio = contrastRatio(toRgb(bg), toRgb(text));
+        if (ratio <= MIN_LABEL_RATIO)
+          failures.push(`${block.name} ${key}=${ratio.toFixed(3)}`);
+      }
+    }
+    expect(failures).toEqual([]);
+  });
+
+  // Reason: the floor above is met by a theme that paints all four cells one
+  // legible colour, which is the ADR's env signal gone while every ratio looks
+  // fine. This is the half with no threshold to tune — the matrix has three
+  // distinct fills by construction (danger and production share one), so any
+  // block collapsing them below three has dropped a cell.
+  it("keeps the matrix fills distinct in every theme and mode", () => {
+    // Pinned, not derived from `cells`: `new Set(cells.map(c => c.fill)).size`
+    // moves with `CELLS`, so deleting a matrix cell would lower the bar it is
+    // being checked against and stay green. 4 cells over 3 fills is ADR 0023
+    // (d) itself — WARN+dev, WARN+staging, and the destructive pair.
+    expect(CELLS).toHaveLength(4);
+    const distinct = 3;
+    expect(new Set(cells.map((c) => c.fill)).size).toBe(distinct);
+    const collapsed = all
+      .map((b) => ({
+        name: b.name,
+        fills: [...new Set(cells.map((c) => b.resolve(c.fill)))],
+      }))
+      .filter((r) => r.fills.length < distinct)
+      .map((r) => `${r.name}=[${r.fills.join(", ")}]`);
+    expect(collapsed).toEqual([]);
   });
 });
