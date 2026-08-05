@@ -39,7 +39,7 @@ describe("schemaGraphToMermaid", () => {
     );
   });
 
-  // Reason: #1661 blocking ⑥ — `pk` 로 **시작**하고 뒤에 ASCII 단어 문자가 아닌
+  // Reason: #2097 blocking ⑥ — `pk` 로 **시작**하고 뒤에 ASCII 단어 문자가 아닌
   // 것이 오면 mermaid 렉서가 키 표시자를 떼어 내 문서 전체가 Parse error 다.
   // 구분자(`pk-id`)와 비ASCII 글자(`pk이름`)가 같은 한 규칙에서 나오므로 둘 다
   // 고정한다 — 이전 코드는 완전 일치만 봐서 둘 다 통과시켰다 (2026-08-03)
@@ -110,14 +110,14 @@ describe("schemaGraphToMermaid", () => {
 
   // Reason: 모듈 상단 주석이 "SQLite 합성 FK 는 그대로 실린다" 고 주장하는데 그
   // 경로를 도는 fixture 가 없었다 — 라벨에 내부 이름이 찍히는 것도 함께 고정한다
-  // (#1661, 2026-08-02)
+  // (#2097, 2026-08-02)
   it("draws foreign keys synthesised from column flags, internal constraint name and all", () => {
     expect(schemaGraphToMermaid(sqliteLikeSnapshot())).toContain(
       '    "main.orders" }o--|o "main.users" : "__synthetic_foreign_key_user_id"',
     );
   });
 
-  // Reason: #1661 blocking ② — 실제 파서가 거부한 네 입력을 고정한다.
+  // Reason: #2097 blocking ② — 실제 파서가 거부한 네 입력을 고정한다.
   // `%` `\` 는 따옴표 문자열 토큰이, 선행 숫자와 `@` 는 단어 토큰이 거부한다 (2026-08-02)
   it("neutralises every character the mermaid lexer rejects", () => {
     expect(schemaGraphToMermaid(hostileSnapshot())).toBe(
@@ -133,7 +133,7 @@ describe("schemaGraphToMermaid", () => {
     );
   });
 
-  // Reason: #1661 blocking ④ — ASCII 밖을 전부 `_` 로 내리던 이전 코드는
+  // Reason: #2097 blocking ④ — ASCII 밖을 전부 `_` 로 내리던 이전 코드는
   // 한 엔티티 안의 `이름`·`나이` 를 같은 토큰으로 접어 다이어그램이 가리키는
   // 대상을 소멸시켰다. mermaid 는 유니코드 식별자를 그대로 받는다 (2026-08-02)
   it("keeps non-ASCII identifiers intact and distinct", () => {
@@ -146,7 +146,7 @@ describe("schemaGraphToMermaid", () => {
 
   // Reason: 컬럼 순서는 id(퍼센트 인코딩) 순이 아니라 `ordinal` 순이어야 한다.
   // 한글 컬럼은 두 순서가 어긋나는 조합이라 정렬을 지워도 안 걸리던 구멍을 막는다
-  // (#1661, 2026-08-02)
+  // (#2097, 2026-08-02)
   it("orders columns by graph ordinal even when the encoded ids sort differently", () => {
     const columns = schemaGraphToMermaid(koreanSnapshot())
       .split("\n")
@@ -156,7 +156,7 @@ describe("schemaGraphToMermaid", () => {
     expect(columns).toEqual(["ab", "나이", "이름"]);
   });
 
-  // Reason: #1661 — 정리 뒤 이름이 겹치면 mermaid 는 파싱은
+  // Reason: #2097 — 정리 뒤 이름이 겹치면 mermaid 는 파싱은
   // 하지만 컬럼 둘이 한 줄로, 테이블 둘이 한 엔티티로 합쳐진다. DBML 과 같은
   // 규칙으로 가른다는 결정을 두 포맷 모두에서 고정한다 (2026-08-02)
   it("keeps sanitised attribute names unique inside an entity", () => {
@@ -190,14 +190,14 @@ describe("schemaGraphToMermaid", () => {
   });
 
   // Reason: 컬럼이 아직 안 올라온 테이블도 다이어그램에는 남아야 한다 — mermaid 는
-  // 빈 엔티티 블록을 받는다 (#1661 blocking ① 의 짝, 2026-08-02)
+  // 빈 엔티티 블록을 받는다 (#2097 blocking ① 의 짝, 2026-08-02)
   it("keeps a column-less table as an empty entity block", () => {
     expect(schemaGraphToMermaid(columnlessSnapshot())).toBe(
       ["erDiagram", '    "public.orders" {', "    }", ""].join("\n"),
     );
   });
 
-  // Reason: 양끝 공백이 두 포맷에서 다르게 나가지 않도록 (#1661, 2026-08-02)
+  // Reason: 양끝 공백이 두 포맷에서 다르게 나가지 않도록 (#2097, 2026-08-02)
   it("trims surrounding whitespace from an entity name", () => {
     expect(schemaGraphToMermaid(paddedNameSnapshot())).toContain(
       '    "public.spaced" {',
@@ -205,7 +205,7 @@ describe("schemaGraphToMermaid", () => {
   });
 
   // Reason: 이름이 통째로 비면 `""` 가 나가고 mermaid 가 Parse error 다.
-  // 이 fallback 을 지워도 25개가 전부 통과한 적이 있다 (2026-08-02)
+  // 이 fallback 을 지워도 스위트가 통과한 적이 있다 (2026-08-02)
   it("names an entity whose catalog name is empty", () => {
     expect(schemaGraphToMermaid(unnamedTableSnapshot())).toContain(
       '    "public.unnamed" {',
@@ -256,7 +256,7 @@ describe("schemaGraphToDbml", () => {
     );
   });
 
-  // Reason: #1661 blocking ① — 본문 없는 `Table` 블록 하나가 `@dbml/core` 에서
+  // Reason: #2097 blocking ① — 본문 없는 `Table` 블록 하나가 `@dbml/core` 에서
   // 문서 전체를 무효로 만든다. 카탈로그가 컬럼을 비동기로 채우므로 흔한 상태다 (2026-08-02)
   it("replaces a column-less table with a comment instead of an empty block", () => {
     const dbml = schemaGraphToDbml(columnlessSnapshot());
@@ -268,7 +268,7 @@ describe("schemaGraphToDbml", () => {
   });
 
   // Reason: 생략한 테이블을 가리키는 `Ref:` 가 남으면 문서 전체가 다시 무효가 된다
-  // (#1661 blocking ① 의 두 번째 절반, 2026-08-02)
+  // (#2097 blocking ① 의 두 번째 절반, 2026-08-02)
   it("drops a Ref whose endpoint table was skipped for having no columns", () => {
     const dbml = schemaGraphToDbml(shopSnapshot({ columnsForUsers: [] }));
 
@@ -301,7 +301,7 @@ describe("schemaGraphToDbml", () => {
     expect(dbml).toContain('  "a_b_2" integer');
   });
 
-  // Reason: #1661 blocking ③ — DBML 식별자에는 escape 문법이 없다. `\"` 도
+  // Reason: #2097 blocking ③ — DBML 식별자에는 escape 문법이 없다. `\"` 도
   // `""` 도 파서가 거부하므로 `"` 는 내리고 backslash 는 문자 그대로 둔다.
   // 이전 기대값은 파싱 불가능한 문자열을 정답으로 박아 뒀다 (2026-08-02)
   it("lowers quotes and leaves backslashes alone inside quoted identifiers", () => {
@@ -317,7 +317,7 @@ describe("schemaGraphToDbml", () => {
     );
   });
 
-  // Reason: #1661 blocking ③ — 빈 식별자 `""` 를 파서가 거부한다. 공백뿐인
+  // Reason: #2097 blocking ③ — 빈 식별자 `""` 를 파서가 거부한다. 공백뿐인
   // 이름은 trim 뒤 비므로 placeholder 가 필요하다 (2026-08-02)
   it("falls back to placeholders for a blank identifier and a blank type", () => {
     expect(schemaGraphToDbml(blankNameSnapshot())).toBe(
@@ -331,7 +331,7 @@ describe("schemaGraphToDbml", () => {
     );
   });
 
-  // Reason: #1661 blocking ③ — 이름 전체가 비면 테이블 식별자도 비어 파서가
+  // Reason: #2097 blocking ③ — 이름 전체가 비면 테이블 식별자도 비어 파서가
   // 거부한다. mermaid 쪽 placeholder 의 DBML 대응물 (2026-08-02)
   it("names a table whose catalog name is empty", () => {
     expect(schemaGraphToDbml(unnamedTableSnapshot())).toContain(
@@ -341,14 +341,14 @@ describe("schemaGraphToDbml", () => {
 
   // Reason: 완전히 같은 `Ref:` 두 줄을 @dbml/core 가 거부한다. 같은 컬럼쌍에
   // 이름만 다른 FK 제약이 둘이면 이 모듈은 이름을 안 실어 두 줄이 같아진다
-  // (#1661 — 실측으로 승격, 2026-08-02)
+  // (#2097 — 실측으로 승격, 2026-08-02)
   it("folds byte-identical Ref lines into one", () => {
     const dbml = schemaGraphToDbml(duplicateForeignKeySnapshot());
 
     expect(dbml.match(/^Ref: /gm)).toHaveLength(1);
   });
 
-  // Reason: mermaid 와 같은 기준으로 양끝 공백을 턴다 (#1661, 2026-08-02)
+  // Reason: mermaid 와 같은 기준으로 양끝 공백을 턴다 (#2097, 2026-08-02)
   it("trims surrounding whitespace from quoted identifiers", () => {
     expect(schemaGraphToDbml(paddedNameSnapshot())).toContain(
       'Table "public"."spaced" {',
@@ -710,7 +710,7 @@ function handBuiltGraph(): SchemaGraph {
 
 /**
  * 왕복 검증에 넣는 입력 전체. 문자열 단언이 고정하는 산출물이 **실제 파서를
- * 통과하는지**를 이 목록이 증명한다 — #1661 의 blocking 4건이 전부
+ * 통과하는지**를 이 목록이 증명한다 — #2097 의 blocking 은
  * 「추측한 문법으로 만든 텍스트」였고, 그때는 저장소에 파서가 없어 문자열 단언이
  * 무효 출력을 정답으로 고정할 수 있었다.
  */
@@ -737,12 +737,12 @@ const ROUND_TRIP_INPUTS: ReadonlyArray<[string, SchemaGraphTextExportInput]> = [
 ];
 
 /**
- * 입력 공간 스윕 — 예시가 아니라 공간을 쓴다. #1661 blocking ⑤(`pk`·`fk`·`uk`
+ * 입력 공간 스윕 — 예시가 아니라 공간을 쓴다. #2097 blocking ⑤(`pk`·`fk`·`uk`
  * 예약어)는 fixture 를 더 붙이는 방식으로는 안 잡혔고, 위험 문자와 예약어 후보를
  * 식별자 자리에 전수로 꽂아 두 파서에 먹이는 이 스윕이 집어냈다. 새 문자·낱말
  * 축이 생기면 여기에 토큰을 더해라 — fixture 하나를 더 만들 이유가 없다.
  *
- * 식별자는 이 목록의 토큰 **두 개를 이어 붙여** 만든다. #1661 blocking ⑥ 은
+ * 식별자는 이 목록의 토큰 **두 개를 이어 붙여** 만든다. #2097 blocking ⑥ 은
  * 토큰을 식별자 전체로만 꽂던 생성기가 `pk` + 구분자 모양을 아예 못 만들어
  * 통과했다 — 리뷰어가 쓴 케이스 모양을 생성기가 그대로 물려받아 사각까지 복제한
  * 것이 그 회고의 진단이었다. 쌍으로 만들면 접두(`pk` + `-`)·접미(`-` +
@@ -754,7 +754,7 @@ const SWEEP_TOKENS: readonly string[] = [
   ..."!\"#$%&'()*+,-./:;<=>?@[\\]^`{|}~ ".split(""),
   // 낱말 축 — 두 문법에서 뜻을 가질 만한 후보. 예약어 후보는 대소문자 조합을
   // 전부 싣는다 — 가드가 `/i` 라 지금은 안 걸리지만 목록이 비대칭이면 가드를
-  // 대소문자 구분으로 좁혔을 때 스윕이 그 사실을 반만 말한다 (#1661)
+  // 대소문자 구분으로 좁혔을 때 스윕이 그 사실을 반만 말한다 (#2097)
   "pk",
   "PK",
   "Pk",
@@ -812,7 +812,7 @@ const SWEEP_TOKENS: readonly string[] = [
 // `schema`·`table` 은 따옴표 문자열 토큰(`mermaidSafeText`), `column`·`type` 은
 // 따옴표 못 쓰는 단어 토큰(`mermaidWord`), `constraint` 는 관계선 라벨이다.
 // 다섯째 자리는 FK 를 걸어야 나오므로 그 자리를 쓸 때만 대상 테이블을 붙인다
-// (#1661 — 자리 목록에 한 줄이 빠져 있었다).
+// (#2097 — 자리 목록에 한 줄이 빠져 있었다).
 const SWEEP_POSITIONS = [
   "schema",
   "table",
@@ -874,10 +874,10 @@ function parserError(error: unknown): string {
 }
 
 // Purpose: exporter 산출물을 실제 파서에 먹여 문법 판단을 추측에서 실측으로
-// 바꾼다 — devDependency `mermaid` · `@dbml/core` (2026-08-02, #1661 결정)
+// 바꾼다 — devDependency `mermaid` · `@dbml/core` (2026-08-02, #2097 결정)
 describe("exporter output parses with the real parsers", () => {
   // Reason: mermaid 가 산출물을 렌더 대상으로 받는지가 이 포맷의 유일한 합격
-  // 기준이다. #1661 blocking ②④ 가 여기서 잡혔을 결함이다 (2026-08-02)
+  // 기준이다. #2097 blocking ②④ 가 여기서 잡혔을 결함이다 (2026-08-02)
   it.each(ROUND_TRIP_INPUTS)(
     "mermaid.parse accepts %s",
     async (_name, input) => {
@@ -890,14 +890,14 @@ describe("exporter output parses with the real parsers", () => {
   );
 
   // Reason: DBML 은 토큰 하나가 깨지면 문서 전체가 무효라 부분 통과가 없다.
-  // #1661 blocking ① 과 blocking ③ 이 이 검사의 대상이다 (2026-08-02)
+  // #2097 blocking ① 과 blocking ③ 이 이 검사의 대상이다 (2026-08-02)
   it.each(ROUND_TRIP_INPUTS)("Parser.parse accepts %s", (_name, input) => {
     expect(() => Parser.parse(schemaGraphToDbml(input), "dbml")).not.toThrow();
   });
 
-  // Reason: #1661 blocking ⑤ — 문자 클래스는 맞았는데 `pk`·`fk`·`uk` 라는 낱말
+  // Reason: #2097 blocking ⑤ — 문자 클래스는 맞았는데 `pk`·`fk`·`uk` 라는 낱말
   // 축이 통째로 빠져 있었다. 예시 fixture 는 다음 예약어를 못 잡으므로 입력 공간을
-  // 쓴다. #1661 blocking ⑥ 은 그 공간이 낱개 토큰뿐이라 `pk` + 구분자를 못
+  // 쓴다. #2097 blocking ⑥ 은 그 공간이 낱개 토큰뿐이라 `pk` + 구분자를 못
   // 만들어 통과했다 — 토큰 쌍을 이어 붙여 다섯 자리에 꽂는다 (2026-08-02)
   it("keeps every sweep token pair parseable in all five identifier positions", async () => {
     const failures: string[] = [];

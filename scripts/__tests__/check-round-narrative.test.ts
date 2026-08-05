@@ -24,7 +24,7 @@ afterEach(() => {
 
 /**
  * 임시 git 트리를 만들고 파일을 index 에 올린다. `git grep` 은 추적 파일만 보므로
- * `git add` 없이는 어떤 픽스처도 안 보인다 — 그러면 전부 거짓 green 이 된다.
+ * `git add` 없이는 어떤 픽스처도 안 보인다 — 그러면 거짓 green 이 된다.
  */
 function seed(files: Record<string, string>): string {
   const root = mkdtempSync(join(tmpdir(), "round-narrative-"));
@@ -67,8 +67,8 @@ describe("check-round-narrative", () => {
   });
 
   // 표기 세 변형을 각각 판다. 처음 판정은 소문자 `round` 하나만 봤고, 그때도
-  // 같은 세 경로에 대문자 11줄 · 한국어 38줄이 살아 있었다 — 게이트는 "0 줄" 로
-  // green 이었다. 문안은 그 49줄에서 그대로 가져온다: 대상이 안 쓰는 표기로
+  // 같은 세 경로에 대문자 표기와 한국어 표기가 살아 있었는데 게이트는 green
+  // 이었다. 문안은 그때 남아 있던 줄에서 그대로 가져온다 — 대상이 안 쓰는 표기로
   // 변형을 만들면 가장 흔한 회귀를 못 잡는다.
   const notations = [
     {
@@ -99,9 +99,9 @@ describe("check-round-narrative", () => {
   }
 
   // #2108 의 전수 명령은 리터럴이 `review round [0-9]` 라 `review` 낱말이 없는
-  // 변형과 `e2e/` 경로를 통째로 놓쳤다 (같은 클래스의 43%). 이 픽스처는 그 두
-  // 누락을 한 줄에 겹쳐 둔다 — `e2e/` 안이고, wrap 때문에 `review` 가 앞 줄에
-  // 남아 이 줄에는 없다. 리터럴이나 경로가 그때로 되돌아가면 여기가 red 다.
+  // 변형과 `e2e/` 경로를 놓쳤다. 이 픽스처는 그 두 누락을 한 줄에 겹쳐 둔다 —
+  // `e2e/` 안이고, wrap 때문에 `review` 가 앞 줄에 남아 이 줄에는 없다. 리터럴
+  // 이나 경로가 그때로 되돌아가면 여기가 red 다.
   it("catches a wrapped e2e/ hit that carries no `review` word", () => {
     const root = seed({
       "e2e/smoke/erd-dense.spec.ts":
@@ -122,10 +122,10 @@ describe("check-round-narrative", () => {
     expect(run.status).toBe(1);
   });
 
-  // `라운드` 를 품고 있지만 회차가 아닌 낱말이 이 트리에 실재한다 — `라운드트립`
-  // (src-tauri/tests/mongo_integration.rs) 과 `백그라운드` (src/lib/i18n). 판정이
-  // 낱말 경계를 잃고 `라운드` 만 보게 되면 여기가 red 다.
-  it("does not flag 라운드트립 / 백그라운드", () => {
+  // `라운드` 를 품은 낱말이 이 트리에 실재한다 — `라운드트립`
+  // (src-tauri/tests/mongo_integration.rs) 과 `백그라운드` (src/lib/i18n). 판정은
+  // 뒤에 공백+숫자가 붙는지만 보므로 그 낱말 자체로는 안 걸린다.
+  it("ignores 라운드트립 / 백그라운드 when no digit follows", () => {
     const root = seed({
       "src/lib/i18n/locales/shared.ts":
         '  asyncError: "백그라운드 작업이 실패했습니다: {{message}}",\n',
@@ -137,10 +137,23 @@ describe("check-round-narrative", () => {
     expect(run.status).toBe(0);
   });
 
-  // 게이트 스텝 이름 `Stop at review round 3` 은 measure-rounds.sh ·
-  // .test.sh · docs/contributor-guide/pr-review.md 가 문자 그대로 들고 있는
-  // 커플링 assertion 이라 살아 있어야 한다. 세 경로가 곧 필터이므로 예외 목록
-  // 없이 빠진다 — 범위를 넓히면 여기가 red 다.
+  // 판정에는 낱말 경계가 없다. `백그라운드` 는 `라운드` 로 끝나므로 뒤에 숫자가
+  // 오면 걸린다 — 오너가 못박은 명령의 성질이지 결함이 아니라서 정규식은 안
+  // 건드린다. 위 케이스가 "이 낱말은 안전하다" 로 읽히지 않게 한계를 여기 고정해
+  // 둔다. 걸리면 낱말과 숫자를 떼어 쓰면 된다.
+  it("does flag 백그라운드 when a digit follows — the pattern has no word boundary", () => {
+    const root = seed({
+      "src/lib/i18n/locales/shared.ts": "  // 백그라운드 3 개를 띄운다\n",
+    });
+    const run = runGate(root);
+    expect(run.out).toContain("src/lib/i18n/locales/shared.ts:1");
+    expect(run.status).toBe(1);
+  });
+
+  // 게이트 스텝 이름 `Stop at review round 3` 은 여러 파일이 문자 그대로 들고
+  // 있는 커플링 assertion 이라 살아 있어야 한다. 그 자리들은 판정의 세 경로 밖에
+  // 있어 예외 목록 없이 빠진다 — 범위를 넓히면 여기가 red 다. 아래 픽스처는 그
+  // 자리들의 형태를 흉내 낸 것이지 전수가 아니다.
   it("leaves the `Stop at review round 3` coupling literal alone", () => {
     const root = seed({
       "src/app.ts": "export const ok = 1;\n",

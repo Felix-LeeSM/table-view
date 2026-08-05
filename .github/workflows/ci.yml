@@ -141,19 +141,19 @@ jobs:
       # A fifth contract rides here for the same reason the second, third and
       # fourth do (#2114). Review-round narrative in source comments was swept
       # once by #2112 with no guard behind it, and the sweep's own command
-      # (`review round [0-9]` over src/ and src-tauri/) caught 43% of the class:
-      # the `review` word was optional and `e2e/` was outside the paths. The
-      # class then regrew by 14 lines over the four days after that merge — 49
-      # at its merge commit, 63 at this PR's base, summing
+      # (`review round [0-9]` over src/ and src-tauri/) did not cover the class:
+      # the `review` word was optional and `e2e/` was outside the paths.
+      # The class then regrew between that merge and this PR's base — compare
       # `git grep -cEi "round [0-9]|라운드 [0-9]" <rev> -- 'src/' 'src-tauri/'
-      # 'e2e/'` over 642da83f and 38134c3c. A sweep is only worth doing with the
-      # gate in the same PR. What counts as a violation is decided by
+      # 'e2e/'` at 642da83f against 38134c3c. A sweep without the gate in the
+      # same PR does not hold. What counts as a violation is decided by
       # `scripts/check-round-narrative.sh` alone; its header states the rule.
-      # Had this gate run on this PR's base it would have failed on 63 lines
-      # across 15 files — every line this PR removes (`git grep -nEi "round
-      # [0-9]|라운드 [0-9]" 38134c3c -- 'src/' 'src-tauri/' 'e2e/' | wc -l`).
-      # PR and issue numbers stay: they are the regression anchor the
-      # testing-scenarios convention asks for.
+      # Had this gate run on this PR's base it would have failed on the lines
+      # this PR removes — the two counts match, from `git grep -nEi "round
+      # [0-9]|라운드 [0-9]" 38134c3c -- 'src/' 'src-tauri/' 'e2e/' | wc -l` and
+      # `git diff -U0 38134c3c -- 'src/' 'src-tauri/' 'e2e/' | grep '^-' |
+      # grep -cEi "round [0-9]|라운드 [0-9]"`. PR and issue numbers stay: they
+      # are the regression anchor the testing-scenarios convention asks for.
       # It lands in this job rather than one of its own because a required
       # context is registered in the `pr_to_main` ruleset, live GitHub state a
       # PR cannot change, and a freshly registered context that has never
