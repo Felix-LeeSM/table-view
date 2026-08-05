@@ -181,11 +181,11 @@ jobs:
       # by `scripts/check-non-blocking-jobs.sh` alone; its header states the
       # rule. The script needs no toolchain — awk and the shell — so it adds no
       # setup to the cheapest job. No timing figure is quoted here on purpose:
-      # the sibling figures in this job do not reproduce (review of #2178
-      # measured this script at a median of 0.04s where 0.02s was written, and
-      # `check-ci-test-calls.sh` at 0.07-0.08s where 0.18s is written), so the
-      # repo has not pinned the measurement conditions. Pinning them is a
-      # separate cleanup, owned by that review, not by this job.
+      # the figures on the sibling steps above do not reproduce, and the repo
+      # has never pinned the machine, load, or warm/cold state that would make
+      # them comparable. That gap is registered in
+      # docs/roadmap/follow-up-queue.md under Quality gates; pinning the
+      # conditions is that item's job, not this one's.
       - name: (non-blocking) job names carry continue-on-error
         run: bash scripts/check-non-blocking-jobs.sh
 
